@@ -60,6 +60,16 @@ public class CatalogAssetPortalService {
     /** 页码上限，避免 page * size 转 int 时溢出为负 */
     private static final int MAX_PAGE_INDEX = 100_000;
 
+    /**
+     * 可见性折算的固定取样窗口。
+     *
+     * <p>可见性判定无法下推到 SQL，因此 total 必须由「原始总数 − 不可见行数」估算。
+     * 关键在于这个估算必须与当前页码无关：早先按当前页测量隐藏行，导致每翻一页 total 就变，
+     * 分页器页数随之跳变（第 1 页显示 6 页、第 4 页显示 5 页、再看又变 4 页）。
+     * 固定窗口使同一查询在任何页码下得到同一个 total。
+     */
+    private static final int VISIBILITY_SAMPLE_WINDOW = 200;
+
     private final OpenMetadataAssetCacheRepository assetRepository;
     private final OpenMetadataColumnCacheRepository columnRepository;
     private final OpenMetadataLineageCacheRepository lineageRepository;
@@ -148,6 +158,74 @@ public class CatalogAssetPortalService {
         return CatalogAssetOverviewAggregator.aggregate(rows, rows.size(), truncated);
     }
 
+    /**
+     * OpenMetadata 侧的可见资产总数。
+     *
+     * <p>当前页恰好落在取样窗口内时直接复用已取到的行，避免多打一次查询；否则单独取一次窗口。
+     * 无论走哪条路，同一查询在任何页码下得到的结果都相同。
+     */
+    private long estimateVisibleOpenMetadataTotal(
+        AssetQuery query,
+        String activeDept,
+        long rawTotal,
+        int page,
+        int fetchedOnPage,
+        int visibleOnPage
+    ) {
+        if (rawTotal <= 0) {
+            return 0;
+        }
+        // 首页且已覆盖整个取样窗口时，直接用手头的数据，不再多查一次
+        if (page == 0 && fetchedOnPage >= Math.min(rawTotal, VISIBILITY_SAMPLE_WINDOW)) {
+            return scaleVisible(visibleOnPage, fetchedOnPage, rawTotal);
+        }
+        int sampleSize = (int) Math.min(rawTotal, VISIBILITY_SAMPLE_WINDOW);
+        var sample = assetRepository.findAll(
+            buildSpec(query),
+            PageRequest.of(0, sampleSize, Sort.by(Sort.Direction.DESC, "lastSyncedAt").and(Sort.by("fqn").ascending()))
+        );
+        CandidateMetadata metadata = loadCandidateMetadata(sample.getContent());
+        long visible = sample
+            .getContent()
+            .stream()
+            .filter(asset -> {
+                CatalogAssetExtension extension = metadata.extensionsByAssetId().get(asset.getId());
+                CatalogAssetMapping mapping = metadata.mappingsByFqn().get(normalizedFqn(asset.getFqn()));
+                CatalogDataset legacy = metadata.legacyById().get(resolveLegacyDatasetId(extension, mapping));
+                return canRead(extension, legacy, activeDept);
+            })
+            .count();
+        return scaleVisible(visible, sample.getNumberOfElements(), rawTotal);
+    }
+
+    /** legacy 侧的可见资产总数，同样按固定窗口测量，与页码无关。 */
+    private long estimateVisibleLegacyTotal(AssetQuery query, String activeDept, List<UUID> excludedIds, long rawTotal) {
+        if (rawTotal <= 0) {
+            return 0;
+        }
+        int sampleSize = (int) Math.min(rawTotal, VISIBILITY_SAMPLE_WINDOW);
+        Sort sort = Sort.by(Sort.Direction.DESC, "lastModifiedDate").and(Sort.by(Sort.Direction.DESC, "createdDate"));
+        Page<CatalogDataset> sample = datasetRepository.findAll(buildLegacySpec(query), PageRequest.of(0, sampleSize, sort));
+        long visible = sample
+            .getContent()
+            .stream()
+            .filter(dataset -> dataset.getId() == null || excludedIds == null || !excludedIds.contains(dataset.getId()))
+            .filter(dataset -> canRead(null, dataset, activeDept))
+            .count();
+        return scaleVisible(visible, sample.getNumberOfElements(), rawTotal);
+    }
+
+    /** 把窗口内观测到的可见比例放大到全量；窗口覆盖全部数据时即为精确值。 */
+    private long scaleVisible(long visibleInSample, int sampleSize, long rawTotal) {
+        if (sampleSize <= 0) {
+            return 0;
+        }
+        if (rawTotal <= sampleSize) {
+            return visibleInSample;
+        }
+        return Math.round((double) visibleInSample / sampleSize * rawTotal);
+    }
+
     public AssetPage listAssets(AssetQuery query, String activeDept) {
         if (!query.tagIds().isEmpty()) {
             return listAssetsByTags(query, activeDept);
@@ -195,8 +273,15 @@ public class CatalogAssetPortalService {
             items.addAll(legacyPage.content());
         }
         items = hydrateAssetTags(items);
-        long hiddenOnCurrentPage = Math.max(0, pageData.getNumberOfElements() - openMetadataReturned);
-        long total = Math.max(0, pageData.getTotalElements() - hiddenOnCurrentPage) + legacyPage.total();
+        long openMetadataTotal = estimateVisibleOpenMetadataTotal(
+            query,
+            activeDept,
+            pageData.getTotalElements(),
+            page,
+            pageData.getNumberOfElements(),
+            openMetadataReturned
+        );
+        long total = openMetadataTotal + legacyPage.total();
         String source = openMetadataReturned > 0 && legacyPage.returned() > 0
             ? "openmetadata-cache+dts-catalog"
             : openMetadataReturned > 0 ? "openmetadata-cache" : "dts-catalog";
@@ -388,8 +473,7 @@ public class CatalogAssetPortalService {
         // 精确化需要对整个 legacy 结果集重跑一遍 canRead（扩展/映射/legacy 三方解析 + JWT 密级回退链，
         // 无法下推到 SQL），即一次额外的全量枚举，与「每次地图加载已跑两轮全量扫描」的成本问题直接冲突。
         // 故记录为已知限制。若要修，应连同该成本问题一并设计（例如缓存 domainStats）。
-        long hidden = Math.max(0, legacyPage.getNumberOfElements() - visible.size());
-        long total = Math.max(0, legacyPage.getTotalElements() - hidden);
+        long total = estimateVisibleLegacyTotal(query, activeDept, excludedIds, legacyPage.getTotalElements());
         return new AssetPage(items, total, 0, fetchSize, items.size(), "dts-catalog");
     }
 

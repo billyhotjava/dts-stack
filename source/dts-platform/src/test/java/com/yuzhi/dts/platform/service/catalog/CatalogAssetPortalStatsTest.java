@@ -399,4 +399,42 @@ class CatalogAssetPortalStatsTest {
                 return found;
             });
     }
+
+    @Test
+    void totalIsIdenticalOnEveryPageWhenSomeRowsAreHidden() {
+        // 现场 bug：台账筛选后第 1 页显示 6 页、翻到第 4 页显示 5 页、再看又变 4 页，
+        // 中间还夹着空页。根因是 total 逐页重算隐藏行，每页得到不同的值。
+        givenOpenMetadataAssets(45);
+        givenLegacyAssets(4);
+        givenFirstOpenMetadataAssetUnreadable();
+
+        Set<Long> totalsSeen = new LinkedHashSet<>();
+        for (int page = 0; page < 6; page++) {
+            totalsSeen.add(service.listAssets(queryOf(page, 10), ACTIVE_DEPT).total());
+        }
+
+        assertThat(totalsSeen).as("同一查询在任何页码下都必须给出同一个 total").hasSize(1);
+    }
+
+    @Test
+    void everyRowIsReachableAcrossPagesWithoutEmptyGaps() {
+        givenOpenMetadataAssets(45);
+        givenLegacyAssets(4);
+        givenFirstOpenMetadataAssetUnreadable();
+
+        long total = service.listAssets(queryOf(0, 10), ACTIVE_DEPT).total();
+        int pageCount = (int) Math.ceil(total / 10.0);
+        Set<String> keys = new LinkedHashSet<>();
+        int emptyPagesBeforeLast = 0;
+        for (int page = 0; page < pageCount; page++) {
+            var content = service.listAssets(queryOf(page, 10), ACTIVE_DEPT).content();
+            if (content.isEmpty() && page < pageCount - 1) {
+                emptyPagesBeforeLast++;
+            }
+            content.forEach(row -> keys.add(row.assetKey()));
+        }
+
+        assertThat(emptyPagesBeforeLast).as("分页器声称的页数之内不应出现空页").isZero();
+        assertThat(keys).as("44 个可见 OM + 4 个 legacy 都必须能翻到").hasSize(48);
+    }
 }
