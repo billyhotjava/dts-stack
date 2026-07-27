@@ -73,13 +73,8 @@ export default function Page() {
 	);
 	const [assetType, setAssetType] = useState<string>("ALL");
 	const [classification, setClassification] = useState<string>("ALL");
-	const [warehouseLayer, setWarehouseLayer] = useState<string>(() => {
-		try {
-			return new URLSearchParams(window.location.search).get("layer") || "ALL";
-		} catch {
-			return "ALL";
-		}
-	});
+	// layer 是可被工具栏改写的本地筛选，只在挂载时取深链初值；范围(domain)则完全由 URL 派生
+	const [warehouseLayer, setWarehouseLayer] = useState<string>(() => searchParams.get("layer") || "ALL");
 	const [governanceStatus, setGovernanceStatus] = useState<string>("ALL");
 	const [matchStatus, setMatchStatus] = useState<string>("ALL");
 	const [loading, setLoading] = useState(false);
@@ -112,10 +107,7 @@ export default function Page() {
 	useEffect(() => {
 		try {
 			// 地图矩阵下钻等深链显式携带 layer/domain 时，URL 优先于本地缓存的筛选
-			const hasDeepLinkFilters = Boolean(
-				new URLSearchParams(window.location.search).get("layer") ||
-					new URLSearchParams(window.location.search).get("domain"),
-			);
+			const hasDeepLinkFilters = Boolean(searchParams.get("layer") || searchParams.get("domain"));
 			const raw = localStorage.getItem(DATASET_FILTER_STORAGE_KEY);
 			if (!raw) return;
 			const saved = JSON.parse(raw);
