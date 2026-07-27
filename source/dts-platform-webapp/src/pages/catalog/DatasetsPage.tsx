@@ -375,8 +375,11 @@ export default function Page() {
 		setMatchStatus("ALL");
 		// 一次导航搞定：分两次调用时，第二次基于渲染期的陈旧快照，会把刚清掉的 domain 写回来
 		const params = writeTagIds(searchParams, []);
+		// 三个筛选都要从 URL 清掉：漏掉任何一个，URL 就会宣称一个本地已重置的筛选，
+		// 刷新后它又被重新应用，用户看到"重置没生效"
 		params.delete("domain");
 		params.delete("governance");
+		params.delete("layer");
 		setSearchParams(params, { replace: true });
 	};
 

@@ -82,6 +82,8 @@ class CatalogAssetPortalStatsTest {
     private final List<CatalogDataset> legacyAssets = new ArrayList<>();
     private UUID hiddenAssetId;
     private boolean hiddenEveryPageFirst;
+    private UUID linkedOmAssetId;
+    private CatalogDataset linkedLegacyDataset;
 
     @BeforeEach
     void setUp() {
@@ -115,6 +117,9 @@ class CatalogAssetPortalStatsTest {
         CatalogAssetExtension extension = enabledExtension(asset);
         if (hiddenAssetId != null && hiddenAssetId.equals(asset.getId())) {
             extension.setEnabled(false);
+        }
+        if (linkedOmAssetId != null && linkedOmAssetId.equals(asset.getId()) && linkedLegacyDataset != null) {
+            extension.setLegacyDatasetId(linkedLegacyDataset.getId());
         }
         if (hiddenEveryPageFirst) {
             int index = openMetadataAssets.indexOf(asset);
@@ -357,5 +362,41 @@ class CatalogAssetPortalStatsTest {
     private void givenFirstLegacyAssetUnreadable() {
         CatalogDataset hidden = legacyAssets.get(0);
         lenient().when(accessChecker.canRead(hidden)).thenReturn(false);
+    }
+
+    @Test
+    void aLegacyDatasetLinkedToAnOpenMetadataAssetIsNotEmittedTwice() {
+        // 这条路径此前从未被测过：所有测试的 visibleLegacyIds 都是空的。
+        // CatalogAssetContractMapper 让 OM 行沿用 legacy 的 assetKey，两行在统计口径上是同一资产。
+        // SQL 侧的 NOT EXISTS 是主防线（单元测试无法验证，Specification 不会真正执行），
+        // 本测试锁定的是应用层这道网：即便数据库没排除，同一页内也不得发两次。
+        givenOpenMetadataAssets(2);
+        givenLegacyAssets(2);
+        givenFirstOpenMetadataAssetLinkedToFirstLegacyDataset();
+
+        List<String> keys = new ArrayList<>();
+        service.listAssets(queryOf(0, 10), ACTIVE_DEPT).content().forEach(row -> keys.add(row.assetKey()));
+
+        assertThat(keys).doesNotHaveDuplicates();
+        // 2 个 OM（其一即 legacy0 的另一副面孔）+ 1 个独立 legacy = 3 行
+        assertThat(keys).hasSize(3);
+    }
+
+    /** 把首个 OM 资产关联到首个 legacy 数据集，制造「同一资产两副面孔」的局面。 */
+    private void givenFirstOpenMetadataAssetLinkedToFirstLegacyDataset() {
+        linkedOmAssetId = openMetadataAssets.get(0).getId();
+        linkedLegacyDataset = legacyAssets.get(0);
+        lenient()
+            .when(datasetRepository.findAllById(any()))
+            .thenAnswer(invocation -> {
+                Iterable<UUID> ids = invocation.getArgument(0);
+                List<CatalogDataset> found = new ArrayList<>();
+                for (UUID id : ids) {
+                    if (linkedLegacyDataset != null && linkedLegacyDataset.getId().equals(id)) {
+                        found.add(linkedLegacyDataset);
+                    }
+                }
+                return found;
+            });
     }
 }

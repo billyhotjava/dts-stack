@@ -480,7 +480,11 @@ export default function AssetDetailPage() {
 			dataIndex: "lifecycleStatus",
 			render: (value) => {
 				const normalized = String(value || "").toUpperCase();
-				if (STALE_LIFECYCLE_STATUSES.has(normalized)) return <Tag color="red">失效</Tag>;
+				// 失效三态用红色统一标识，但仍显示各自的中文名——
+				// 已弃用/已归档/已阻断的后续处置动作不同，压成一个"失效"会丢掉这个区分
+				if (STALE_LIFECYCLE_STATUSES.has(normalized)) {
+					return <Tag color="red">{resolveEnumLabel(LIFECYCLE_STATUS_DICT, value, "失效")}</Tag>;
+				}
 				return <Tag>{resolveEnumLabel(LIFECYCLE_STATUS_DICT, value, "未设定")}</Tag>;
 			},
 		},

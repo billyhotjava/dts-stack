@@ -356,8 +356,10 @@ public class CatalogAssetPortalService {
      */
     private AssetPage listLegacyAssets(AssetQuery query, String activeDept, int offset, int limit, List<UUID> excludedIds) {
         Sort sort = Sort.by(Sort.Direction.DESC, "lastModifiedDate").and(Sort.by(Sort.Direction.DESC, "createdDate"));
-        // 取数窗口随 offset 变化，但 total 不能跟着变：否则 OM-only 的页只取 1 行，
-        // 整个 legacy 总数就会取决于那一行是否可见。用固定窗口估算隐藏比例。
+        // 取数窗口 = offset + limit。大页码会让窗口变得很大，但 legacyOffset 只有在页码
+        // 越过 OpenMetadata 全部行之后才增长，而 MAX_PAGE_INDEX 已把 page 钳到 10 万，
+        // 窗口上界因此有限。用 count 先算总数再短路虽能收窄窗口，却给每次调用都加一次
+        // count 查询，与「每次地图加载已跑两轮全量扫描」的成本问题相悖，得不偿失。
         int fetchSize = Math.max(1, offset + Math.max(limit, 1));
         Page<CatalogDataset> legacyPage = datasetRepository.findAll(buildLegacySpec(query), PageRequest.of(0, fetchSize, sort));
         // offset 数的是「过滤前」的槽位（与 OM 侧用未过滤总数做边界保持一致），
@@ -377,9 +379,15 @@ public class CatalogAssetPortalService {
             .filter(dataset -> dataset.getId() == null || excludedIds == null || !excludedIds.contains(dataset.getId()))
             .filter(dataset -> canRead(null, dataset, activeDept))
             .toList();
-        // 已知近似：hidden 按当前取数窗口观测，窗口随 offset 变化时 total 会有小幅波动。
-        // 这是本方法固有的估算方式（OM 侧同理），非本次改动引入；精确化需要额外一次全量计数查询，
-        // 与「每次地图加载已跑两轮全量扫描」的成本问题冲突，故记录为已知限制而非在此修复。
+        // 已知限制（非本次引入，但影响不止于显示）：
+        // hidden 按当前取数窗口观测，而窗口大小随 offset 变化——OM-only 的页上 fetchSize 可低至 1，
+        // 此时整个 legacy 总数取决于那一行是否可见，波动幅度不是「小幅」而是可达数千。
+        // hidden 还会吸收被 excludedIds 移除的行（即已关联到 OM 资产的数据集），使波动进一步放大。
+        // 更要紧的是：overview() 用这个 total 作为扫描循环的终止条件，因此它同时影响 truncated
+        // 是否被正确判定——不是纯展示字段。
+        // 精确化需要对整个 legacy 结果集重跑一遍 canRead（扩展/映射/legacy 三方解析 + JWT 密级回退链，
+        // 无法下推到 SQL），即一次额外的全量枚举，与「每次地图加载已跑两轮全量扫描」的成本问题直接冲突。
+        // 故记录为已知限制。若要修，应连同该成本问题一并设计（例如缓存 domainStats）。
         long hidden = Math.max(0, legacyPage.getNumberOfElements() - visible.size());
         long total = Math.max(0, legacyPage.getTotalElements() - hidden);
         return new AssetPage(items, total, 0, fetchSize, items.size(), "dts-catalog");
