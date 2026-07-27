@@ -14,7 +14,7 @@
 这三个现象不是文案问题，而是三条契约同时失位：
 
 1. **导航契约**：主题域树只传递"名字"，不传递"体量与健康度"，导航无法承担"决定下一步看哪里"的职责；
-2. **统计口径契约**：`total` 把全局 legacy 计数叠加到分页后的 OpenMetadata 计数上，导致 `truncated` 恒真，警告恒亮；
+2. **统计口径契约**：legacy 资产与 OpenMetadata 资产共用同一分页索引，导致 legacy 行在 OM 有满页时完全取不到，`rows` 永远凑不齐 `total`，`truncated` 恒真、警告恒亮；
 3. **页面职责契约**：`AssetOverviewPage` 的文件注释已声明"纯统计概览、零输入控件、执行动作在台账"，但实际仍带三个操作按钮，其中"进入台账"与全局菜单一级入口重复。
 
 本 Sprint 不新增菜单、不新增页面、不改动可见性规则，只在既有路由内重构导航与统计口径。
@@ -105,8 +105,8 @@ CatalogDomainResource.tree(withStats=true)
 | L04 | 矩阵列硬编码 `slice(0, 8)`，截断无提示 | `AssetOverviewPage.tsx:180` |
 | L05 | 矩阵列名依赖 `listDomains(0, 200)`，与树的 `getDomainTree()` 是两个数据源 | `AssetOverviewPage.tsx:84`、`:98` |
 | L06 | `overview` 扫描上限为 2000（`scanPageSize 200 × scanMaxPages 10`） | `CatalogAssetPortalService.java:88-89` |
-| L07 | `total = 分页后 OM 计数 + legacyPage.total()`（**全局值**），每页都并入 | `CatalogAssetPortalService.java:155` |
-| L08 | `truncated = rows.size() < total`，因 L07 恒真 → 警告恒亮 | `CatalogAssetPortalService.java:96` |
+| L07 | **分页组合缺陷**：`listLegacyAssets` 与 OM 共用同一 `page` 索引和 `size`，且 `remainingSlots = size - items.size()`。OM 填满首页时 `remainingSlots = 0`（legacy 行被 `.limit(0)` 丢弃），下一页 legacy 却按 offset=page×size 查询而落空 → **legacy 资产在 OM 有满页时完全不可见**。`total`（OM 总数 + legacy 总数）算术正确，问题在内容取不到 | `CatalogAssetPortalService.java:151`、`:307-334` |
+| L08 | `truncated = rows.size() < total`；因 L07 使 rows 永远凑不齐 total → 警告恒亮 | `CatalogAssetPortalService.java:96` |
 | L09 | `overview` 每行 `findFirstByOmAsset` + `findFirstByFqnIgnoreCase` → N+1 | `CatalogAssetPortalService.java:138-139` |
 | L10 | 批量路径 `loadCandidateMetadata` 已存在，目前仅标签筛选分支使用 | `CatalogAssetPortalService.java:248`、`:187` |
 | L11 | `canRead` 依赖三方解析 + 显式授权 + JWT 回退链，无法用纯 SQL 复现 | `CatalogAssetPortalService.java:712`、`AccessChecker.java:46,135` |
