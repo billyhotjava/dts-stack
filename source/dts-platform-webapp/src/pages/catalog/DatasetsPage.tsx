@@ -1,12 +1,11 @@
 import {
-	ApartmentOutlined,
 	DatabaseOutlined,
 	SafetyCertificateOutlined,
 	TableOutlined,
 	WarningOutlined,
 } from "@ant-design/icons";
-import { Alert, Button, Card, Collapse, Layout, Pagination, Space, Spin, Tabs, Tree } from "antd";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Alert, Button, Card, Collapse, Layout, Pagination, Space, Tabs } from "antd";
+import {useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import {
 	getCatalogAssetsV2Diagnostics,
@@ -23,6 +22,7 @@ import {
 } from "@/api/platformApi";
 import { readTagIds, writeTagIds } from "@/components/catalog/tags/catalogTagUrlState";
 import { EmptyState } from "@/components/empty-state";
+import { DomainScopeNav } from "@/components/catalog/DomainScopeNav";
 import { PageHeader } from "@/components/page-header";
 import { useRouter } from "@/routes/hooks";
 import { resolveAssetReadiness, STALE_LIFECYCLE_STATUSES } from "./assetPortalUx.helpers";
@@ -40,7 +40,7 @@ import type {
 } from "./assets/assetPageShared";
 import {
 	ASSET_PORTAL_V2_ENABLED,
-	buildTreeNodes,
+	buildDomainScopeNodes,
 	classificationText,
 	DATASET_FILTER_STORAGE_KEY,
 	formatTime,
@@ -59,13 +59,18 @@ export default function Page() {
 	const effectiveSelectedTagIds = ASSET_PORTAL_V2_ENABLED ? selectedTagIds : [];
 	const selectedTagIdsKey = effectiveSelectedTagIds.join("\u0000");
 	const [keyword, setKeyword] = useState("");
-	const [domain, setDomain] = useState<string | undefined>(() => {
-		try {
-			return new URLSearchParams(window.location.search).get("domain") || undefined;
-		} catch {
-			return undefined;
-		}
-	});
+	// 范围进 URL：此前只在挂载时读一次，选中后不回写，导致刷新/分享丢失范围。
+	// 必须基于当前 searchParams 复制后再改，台账还有标签等其他筛选参数不能被覆盖。
+	const domain = searchParams.get("domain") || undefined;
+	const setDomain = useCallback(
+		(next: string | undefined) => {
+			const params = new URLSearchParams(searchParams);
+			if (next) params.set("domain", next);
+			else params.delete("domain");
+			setSearchParams(params);
+		},
+		[searchParams, setSearchParams],
+	);
 	const [assetType, setAssetType] = useState<string>("ALL");
 	const [classification, setClassification] = useState<string>("ALL");
 	const [warehouseLayer, setWarehouseLayer] = useState<string>(() => {
@@ -358,22 +363,7 @@ export default function Page() {
 	const lineageFailureRows: LineageFailureRow[] = Array.isArray(lineageFailureReport?.content)
 		? lineageFailureReport.content
 		: [];
-	const treeData = useMemo(
-		() => [
-			{
-				key: "ALL",
-				title: "全部资产",
-				children: [
-					{
-						key: UNASSIGNED_DOMAIN_KEY,
-						title: "未归域",
-					},
-					...buildTreeNodes(domainTree),
-				],
-			},
-		],
-		[domainTree],
-	);
+	const scopeNodes = useMemo(() => buildDomainScopeNodes(domainTree), [domainTree]);
 
 	const resetFilters = () => {
 		setKeyword("");
@@ -544,33 +534,18 @@ export default function Page() {
 			<Layout className="min-h-full" style={{ background: "transparent" }}>
 				<Layout.Sider
 					width={248}
-					breakpoint="md"
+					breakpoint="lg"
 					collapsedWidth={0}
 					theme="light"
-				style={{
-					background: "#fff",
-					borderRight: "1px solid #f0f0f0",
-					padding: "12px 8px",
-					overflowY: "auto",
-					height: "calc(100vh - 64px)",
-				}}
-			>
-				<div className="mb-3 flex items-center gap-2 px-2 text-sm font-semibold text-slate-700">
-					<ApartmentOutlined />
-					主题域
-				</div>
-				<Spin spinning={treeLoading}>
-					<Tree
-						showLine
-						defaultExpandAll
-						treeData={treeData}
-						selectedKeys={[domain || "ALL"]}
-						onSelect={(keys) => {
-							const selected = String(keys?.[0] ?? "ALL");
-							setDomain(selected === "ALL" || selected.startsWith("fallback-") ? undefined : selected);
-						}}
-					/>
-				</Spin>
+					style={{
+						background: "#fff",
+						borderRight: "1px solid #f0f0f0",
+						padding: "12px 8px",
+						overflowY: "auto",
+						height: "calc(100vh - 64px)",
+					}}
+				>
+					<DomainScopeNav nodes={scopeNodes} value={domain} onChange={setDomain} loading={treeLoading} />
 			</Layout.Sider>
 			<Layout.Content style={{ padding: "0 16px" }}>
 				<div className="space-y-4">
