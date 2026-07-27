@@ -24,7 +24,8 @@ const normalize = (value?: string | null) => String(value || "").trim().toUpperC
 
 // 失效生命周期取值。历史代码比较的 "DISABLED" 属治理状态而非生命周期，
 // 且 "STALE" 不在 CatalogAssetLifecycleStatus 中，两者均不可达。
-const STALE_LIFECYCLE_STATUSES = new Set(["DEPRECATED", "ARCHIVED", "BLOCKED"]);
+// 导出供 DatasetsPage / AssetDetailPage 等页面共享，避免各处重复字面量。
+export const STALE_LIFECYCLE_STATUSES = new Set(["DEPRECATED", "ARCHIVED", "BLOCKED"]);
 
 export function resolveAssetReadiness(asset: AssetReadinessInput): AssetReadiness {
 	const classification = normalize(asset.classification);

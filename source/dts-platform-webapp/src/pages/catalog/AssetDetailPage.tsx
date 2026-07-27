@@ -22,6 +22,7 @@ import { EmptyState } from "@/components/empty-state";
 import { CompactTable } from "@/components/table";
 import { useRouter } from "@/routes/hooks";
 import { AssetGovernanceOverview } from "./AssetGovernanceOverview";
+import { STALE_LIFECYCLE_STATUSES } from "./assetPortalUx.helpers";
 import type {
 	AssetRow,
 	ColumnRow,
@@ -474,9 +475,9 @@ export default function AssetDetailPage() {
 		{
 			title: "同步状态",
 			dataIndex: "lifecycleStatus",
-			render: (value, row) => {
+			render: (value) => {
 				const normalized = String(value || "").toUpperCase();
-				if (normalized === "STALE" || row.status === "停用") return <Tag color="red">失效</Tag>;
+				if (STALE_LIFECYCLE_STATUSES.has(normalized)) return <Tag color="red">失效</Tag>;
 				if (normalized === "SYNCED") return <Tag color="green">已同步</Tag>;
 				return <Tag>未同步</Tag>;
 			},

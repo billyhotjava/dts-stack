@@ -25,7 +25,7 @@ import { readTagIds, writeTagIds } from "@/components/catalog/tags/catalogTagUrl
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { useRouter } from "@/routes/hooks";
-import { resolveAssetReadiness } from "./assetPortalUx.helpers";
+import { resolveAssetReadiness, STALE_LIFECYCLE_STATUSES } from "./assetPortalUx.helpers";
 import { AssetLedgerDialogs } from "./assets/AssetLedgerDialogs";
 import { AssetLedgerToolbar } from "./assets/AssetLedgerToolbar";
 import { AssetLedgerView } from "./assets/AssetLedgerView";
@@ -337,9 +337,7 @@ export default function Page() {
 
 	const unclassifiedCount = records.filter((row) => !row.classification).length;
 	const missingDomainCount = records.filter((row) => !row.domain && !row.domainId).length;
-	const staleCount = records.filter(
-		(row) => ["DEPRECATED", "ARCHIVED", "BLOCKED"].includes(String(row.lifecycleStatus || "").toUpperCase()),
-	).length;
+	const staleCount = records.filter((row) => STALE_LIFECYCLE_STATUSES.has(String(row.lifecycleStatus || "").toUpperCase())).length;
 	const activeCount = records.filter((row) => row.status === "启用").length;
 	const readinessCounts = records.reduce<Record<string, number>>((acc, row) => {
 		const state = resolveAssetReadiness(row).state;
