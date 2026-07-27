@@ -86,7 +86,7 @@ test("model detail separates design fields and standards without trusting query 
 	assert.match(standards, /配置字段标准/);
 	assert.match(standards, /listMeasurementUnits/);
 	assert.match(page, /onSaveStandardBindings/);
-	assert.match(page, /readOnly=!canEdit/);
+	assert.match(page, /readOnly=\{!canEdit\}/);
 	assert.match(platformApi, /\/governance\/measurement-units/);
 	assert.match(modelSpecApi, /\/dependencies/);
 	assert.match(dependencies, /当前版本/);

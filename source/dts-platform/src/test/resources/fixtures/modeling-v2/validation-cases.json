@@ -368,7 +368,11 @@
           "securityLevel": null
         }
       ],
-      "generationStrategy": { "type": "REFERENCE", "reference": null }
+      "generationStrategy": { "type": "REFERENCE", "reference": null },
+      "dimensionDefinitionRef": {
+        "dimensionDefinitionId": "60000000-0000-0000-0000-000000000001",
+        "revision": 1
+      }
     },
     "expectedIssueCodes": [],
     "schemaValid": true
@@ -402,7 +406,11 @@
       "description": null,
       "factShape": null,
       "timeSemantics": null,
-      "sourceRefs": []
+      "sourceRefs": [],
+      "dimensionDefinitionRef": {
+        "dimensionDefinitionId": "60000000-0000-0000-0000-000000000001",
+        "revision": 1
+      }
     },
     "expectedIssueCodes": [],
     "schemaValid": true
@@ -414,7 +422,11 @@
       "factShape": null,
       "timeSemantics": null,
       "grain": { "statement": "one row per record", "keys": ["record_id", " record_id "] },
-      "sourceRefs": []
+      "sourceRefs": [],
+      "dimensionDefinitionRef": {
+        "dimensionDefinitionId": "60000000-0000-0000-0000-000000000001",
+        "revision": 1
+      }
     },
     "expectedIssueCodes": [],
     "schemaValid": true
@@ -426,7 +438,11 @@
       "factShape": null,
       "timeSemantics": null,
       "grain": { "statement": "one row per record", "keys": ["record_id", "record_id"] },
-      "sourceRefs": []
+      "sourceRefs": [],
+      "dimensionDefinitionRef": {
+        "dimensionDefinitionId": "60000000-0000-0000-0000-000000000001",
+        "revision": 1
+      }
     },
     "expectedIssueCodes": [],
     "schemaValid": true
@@ -441,7 +457,11 @@
       "fields": [
         { "name": "dimension_id", "dataType": "varchar", "nullable": false, "role": "KEY" }
       ],
-      "sourceRefs": []
+      "sourceRefs": [],
+      "dimensionDefinitionRef": {
+        "dimensionDefinitionId": "60000000-0000-0000-0000-000000000001",
+        "revision": 1
+      }
     },
     "expectedIssueCodes": [],
     "schemaValid": true
@@ -457,6 +477,10 @@
       "implementationMode": "DESIGNER_GENERATED",
       "grain": { "statement": "one row per record", "keys": ["record_id"] },
       "fields": [{ "name": "record_id", "dataType": "varchar", "nullable": false, "role": "KEY" }],
+      "dimensionDefinitionRef": {
+        "dimensionDefinitionId": "60000000-0000-0000-0000-000000000001",
+        "revision": 1
+      },
       "idempotencyKey": "minimal-dimension"
     },
     "expectedIssueCodes": [],

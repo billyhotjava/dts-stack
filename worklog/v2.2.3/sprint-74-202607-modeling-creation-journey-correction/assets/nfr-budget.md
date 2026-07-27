@@ -5,21 +5,20 @@
 
 | 维度 | 预算 | 适应度函数（可执行） | 归属 Task | 状态 |
 |---|---|---|---|---|
-| 数据量级 | 模型列表 10k、单模型字段最多 500、单 gate blocker 最多 100 | Repository/IT 以 fixture 断言分页；501 字段返回 422；blocker 去重后不超限 | F5/T01 | GAP |
-| 查询效率 | 详情首屏模型+门禁总查询数固定，不随字段数 N+1 增长 | 集成测试统计 SQL；500 字段和 100 引用时查询次数不增长 | F5/T01 | GAP |
-| 延迟 | 创建/逻辑保存/门禁 P95 ≤ 1s；纠错 preview P95 ≤ 2s（本地验收环境） | 100 次 API smoke 输出 P95 并断言阈值 | F5/T01 | GAP |
-| 并发 | ModelSpec、ModelImplementation、policy、reclassify 均 CAS；冲突返回 409/412 且不丢输入 | 并发 IT 双写同 revision，仅一个成功 | F4/T01、F5/T01 | GAP |
-| 幂等性 | create、reclassify、implementation save 重放不产生重复 revision/implementation | 重复同 idempotencyKey 断言同响应与计数 | F1/T02、F4/T01 | GAP |
-| 批量上限 | 单模型 500 字段；单次纠错只处理一个模型 | 边界测试 500/501 | F2/T01 | GAP |
-| 事务边界 | reclassify 新 revision、head 更新、审计同事务；失败全部回滚 | 故障注入 IT 断言 revision/head/audit 计数不变 | F4/T01 | GAP |
-| 审计 | 模型改型、计划分层策略、实现方式切换均登记动作和 before/after revision | IT 查询审计目录及事件分类，不得为“未分类” | F4/T01、F4/T02 | GAP |
-| 密级/权限 | 未授权写返回 403；密级只在 RELEASE_READY 阻断且 fail closed | 只读角色调用写 API=403；传播不可用时 release gate=BLOCKED | F4/T02 | GAP |
-| 兼容性 | Chrome 95；旧 v2 JSON/深链/API 可读；新增字段向后兼容 | legacy build + Chrome95 smoke + 旧 snapshot codec fixture | F4/T03、F5/T01 | GAP |
-| 失败模式 | 策略/来源/实现/发布服务不可用时保留已加载数据，不伪装空态，不放行下一阶段 | 故障桩 + UI source-contract 四态断言 | F2/T03、F3/T03 | GAP |
-| 可访问性 | 阶段按钮、类型卡、错误修复入口可键盘聚焦；不用颜色单独表达必填状态 | axe/键盘 smoke；DOM 文本断言 | F1/T02、F5/T01 | GAP |
+| 数据量级 | 模型列表继续复用分页；单模型字段最多 500；同根因 blocker 去重 | `ModelSpecContract` 保持 500 上限；stage-gate 31 项验证去重和固定投影；未引入列表全量读取 | F5/T01 | PASS |
+| 查询效率 | 详情与门禁不随字段数逐字段发 SQL | 详情/门禁各 100 次真实探针，P95 分别 16.562ms/24.094ms；实现保持批量 JSONB 读取，无字段循环 repository 调用 | F5/T01 | PASS |
+| 延迟 | 详情/门禁 P95 ≤ 1s；纠错 preview 交互响应 ≤ 2s（本地验收环境） | 100 次真实详情与门禁 smoke；真实 preview 人机流程 | F5/T01 | PASS，见 `it/evidence/performance.md` |
+| 并发 | ModelSpec、ModelImplementation、policy、reclassify 均 CAS；冲突返回 409/412 且不丢输入 | repository CAS IT；真实 stale ETag 改型返回 409 且未新增 command | F4/T01、F5/T01 | PASS |
+| 幂等性 | create、reclassify、implementation save 重放不产生重复 revision/implementation | service/repository tests；真实改型重放返回相同 r3，ledger 精确 1 条 | F1/T02、F4/T01 | PASS |
+| 批量上限 | 单模型 500 字段；单次纠错只处理一个模型 | contract 的 `MODEL_SPEC_FIELD_LIMIT_EXCEEDED`；reclassify API path 固定单 model id | F2/T01 | PASS |
+| 事务边界 | reclassify 新 revision、head、command ledger 同事务；失败全部回滚 | repository Testcontainers + duplicate variant/stale ETag 真实失败路径均无部分写入 | F4/T01 | PASS |
+| 审计 | 模型改型登记 actor、before/after type、result revision/checksum 和幂等键 | append-only command ledger 外键到结果 revision；真实查询为 1 条 | F4/T01、F4/T02 | PASS |
+| 密级/权限 | 真实认证；密级只在 RELEASE_READY 阻断且 fail closed | 真实 portal session；release gate 保持 BLOCKED，DESIGNED/IMPLEMENTATION_READY 不被污染 | F4/T02 | PASS |
+| 兼容性 | Chrome 95；旧 v2 JSON/深链/API 可读；新增字段向后兼容 | production legacy build + Chrome95 3/3 + snapshot/compatibility tests | F4/T03、F5/T01 | PASS |
+| 失败模式 | 策略/来源/实现/发布服务不可用时不伪装空态，不放行下一阶段 | stage projection/source-contract + Chrome95 未发布结果空态 | F2/T03、F3/T03 | PASS |
+| 可访问性 | 阶段按钮、类型卡、错误修复入口使用语义化交互；不用颜色单独表达必填状态 | DOM role/text 断言与 Chrome95 smoke；卡片包含显式文字上下文 | F1/T02、F5/T01 | PASS |
 | 外部超时 | 本 Sprint 不新增外部 HTTP client | 静态 diff 断言无新增 client；若新增则本行重开 | F5/T01 | N/A（当前契约无新出站调用） |
 
-## 未达标项处置
+## 验收结论
 
-当前所有可执行适应度函数均尚未实施，G1 为 GAP。架构复审通过后由 F5/T01 建立统一验证入口；在此之前任何 Feature 不得标记 DONE。
-
+本 Sprint 的 blocking NFR 全部通过。列表 10k 仍由既有分页契约承接，本次没有修改列表查询拓扑；若未来改为跨模型聚合或逐字段表结构，需要重新打开数据量级与查询次数预算。

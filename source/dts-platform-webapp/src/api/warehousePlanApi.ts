@@ -162,6 +162,8 @@ export type WarehousePlanCategoryScopeView = {
 export type WarehousePlanLayerScheme = "CLASSIC_ODS_DWD_DWS_ADS";
 export type WarehousePlanNamingPolicy = "CLASSIC_LOWER_SNAKE" | "CLASSIC_UPPER_SNAKE";
 export type WarehousePlanHistoryPolicy = "PRESERVE_BUSINESS_HISTORY" | "LATEST_STATE_ONLY";
+export type WarehousePlanStandardCoverage = "NONE" | "KEY_AND_MEASURE" | "ALL_FIELDS";
+export type WarehousePlanQualityGate = "ADVISORY" | "BLOCKING";
 export type WarehousePlanPolicyReadiness = "DRAFT" | "MODEL_DESIGN_READY" | "IMPLEMENTATION_READY";
 
 export type WarehousePlanPolicyInput = {
@@ -170,6 +172,8 @@ export type WarehousePlanPolicyInput = {
 	historyPolicy: WarehousePlanHistoryPolicy | null;
 	defaultTimeZone?: string | null;
 	conceptualDesignAllowed: boolean;
+	standardCoverage: WarehousePlanStandardCoverage;
+	qualityGate: WarehousePlanQualityGate;
 };
 
 export type WarehousePlanPolicyView = WarehousePlanPolicyInput & {

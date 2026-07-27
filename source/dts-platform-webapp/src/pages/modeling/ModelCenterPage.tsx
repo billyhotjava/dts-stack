@@ -1,6 +1,6 @@
 import { Alert, App, Button, Card, Empty, Input, Select, Space, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { PackageOpen, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { PackageOpen, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { createModelSpec, deleteModelSpec, listModelSpecs } from "@/api/modelSpecApi";
@@ -13,6 +13,7 @@ import { useUserRoles } from "@/store/userStore";
 import { ModelSpecCreateDrawer } from "./components/ModelSpecCreateDrawer";
 import { ImportModelPackageWizard } from "./model-package-import/ImportModelPackageWizard";
 import { buildModelPackageImportQuery } from "./model-package-import/modelPackageImportNavigation";
+import { modelSpecDetailPath } from "./modelSpecDetailNavigation";
 import type { ModelSpecType, ModelSpecView } from "./modelSpecV2Contract";
 import { MODEL_STATUS_LABELS, MODEL_TYPE_LABELS } from "./modelSpecWorkbench";
 import { hasWarehousePlanCreateAccess } from "./warehousePlanCreateFlow";
@@ -51,7 +52,7 @@ export default function ModelCenterPage() {
 	const lightweightCreate = searchParams.get("create") === "lightweight";
 	const importOpen = searchParams.get("modelImport") === "open";
 	const importRunId = searchParams.get("importRunId")?.trim() || "";
-	const initialType = requestedModelType(searchParams.get("modelType")) || "FACT";
+	const initialType = requestedModelType(searchParams.get("modelType")) || undefined;
 	const [models, setModels] = useState<ModelSpecView[]>([]);
 	const [plans, setPlans] = useState<WarehousePlanHeader[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -61,7 +62,7 @@ export default function ModelCenterPage() {
 	const [typeFilter, setTypeFilter] = useState<ModelTypeFilter>(
 		requestedModelType(searchParams.get("modelType")) || "ALL",
 	);
-	const [createType, setCreateType] = useState<ModelSpecType>(initialType);
+	const [createType, setCreateType] = useState<ModelSpecType | undefined>(initialType);
 	const [createOpen, setCreateOpen] = useState(false);
 	const guidedViewOpened = useRef(false);
 	const { labelByKey } = useCatalogDomainOptions();
@@ -193,18 +194,36 @@ export default function ModelCenterPage() {
 			title: "操作",
 			dataIndex: "actions",
 			width: 150,
-			render: (_value, model) => (
-				<Space size={0}>
-					<Button type="link" size="small" onClick={() => navigate(`/modeling/models/${encodeURIComponent(model.id)}`)}>
-						查看
-					</Button>
-					{canEdit && model.status === "DRAFT" && model.compatibilityMode === "CANONICAL" ? (
-						<Button type="link" danger size="small" icon={<Trash2 size={14} />} onClick={() => confirmDelete(model)}>
-							删除
-						</Button>
-					) : null}
-				</Space>
-			),
+			render: (_value, model) => {
+				const editable = canEdit && model.status === "DRAFT" && model.compatibilityMode === "CANONICAL";
+				return (
+					<Space size={0}>
+						{editable ? (
+							<Button
+								type="link"
+								size="small"
+								icon={<Pencil size={14} />}
+								onClick={() => navigate(modelSpecDetailPath(model.id, "logical", model.planId))}
+							>
+								编辑
+							</Button>
+						) : (
+							<Button
+								type="link"
+								size="small"
+								onClick={() => navigate(`/modeling/models/${encodeURIComponent(model.id)}`)}
+							>
+								查看
+							</Button>
+						)}
+						{editable ? (
+							<Button type="link" danger size="small" icon={<Trash2 size={14} />} onClick={() => confirmDelete(model)}>
+								删除
+							</Button>
+						) : null}
+					</Space>
+				);
+			},
 		},
 	];
 

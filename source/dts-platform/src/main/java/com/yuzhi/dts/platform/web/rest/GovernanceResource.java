@@ -334,7 +334,7 @@ public class GovernanceResource {
         Map<String, Object> item = new LinkedHashMap<>();
         item.put("runId", run.getId());
         item.put("time", run.getFinishedAt() != null ? run.getFinishedAt() : run.getStartedAt());
-        item.put("status", isQualityRunPassed(run.getStatus()) ? "PASSED" : "FAILED");
+        item.put("status", normalizeQualityRunHistoryStatus(run.getStatus()));
         item.put("passRate", calculatePassRate(run));
         item.put("failingRows", run.getFailingRowCount() != null ? run.getFailingRowCount() : 0);
         return item;
@@ -344,7 +344,17 @@ public class GovernanceResource {
         return "SUCCESS".equalsIgnoreCase(status) || "SUCCEEDED".equalsIgnoreCase(status) || "PASSED".equalsIgnoreCase(status);
     }
 
+    private String normalizeQualityRunHistoryStatus(String status) {
+        if ("SKIPPED".equalsIgnoreCase(status)) {
+            return "SKIPPED";
+        }
+        return isQualityRunPassed(status) ? "PASSED" : "FAILED";
+    }
+
     private Integer calculatePassRate(QualityRunDto run) {
+        if ("SKIPPED".equalsIgnoreCase(run.getStatus())) {
+            return null;
+        }
         Integer total = run.getRowsTotal();
         if (total != null && total > 0) {
             int failing = run.getFailingRowCount() != null ? run.getFailingRowCount() : 0;

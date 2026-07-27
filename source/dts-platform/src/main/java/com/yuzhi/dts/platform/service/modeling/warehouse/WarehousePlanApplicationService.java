@@ -134,6 +134,16 @@ public class WarehousePlanApplicationService {
             return replayCreateResult(existing);
         }
 
+        jdbcTemplate.update(
+            """
+            insert into modeling_warehouse_plan_policy (
+                plan_id, tenant_id, layer_policy_code, naming_policy_ref, history_policy, default_time_zone,
+                conceptual_design_allowed, standard_coverage, quality_gate, created_date, last_modified_date
+            ) values (?, ?, null, null, null, null, false, 'KEY_AND_MEASURE', 'BLOCKING', current_timestamp, current_timestamp)
+            """,
+            id,
+            serverTenantId
+        );
         for (InitialSourceRef source : sortedInitialSourceRefs(command.initialSourceRefs())) {
             jdbcTemplate.update(
                 """
@@ -361,7 +371,11 @@ public class WarehousePlanApplicationService {
     ) {
         requireServerTenant(serverTenantId);
         get(serverTenantId, planId);
-        PlanningPolicyView view = WarehousePlanContract.evaluatePlanningPolicy(command);
+        PlanningPolicyCommand mergedCommand = mergeGovernancePolicy(
+            command,
+            loadPlanningPolicyCommand(serverTenantId, planId)
+        );
+        PlanningPolicyView view = WarehousePlanContract.evaluatePlanningPolicy(mergedCommand);
         if (WarehousePlanContract.hasInvalidPolicyValues(view)) {
             throw new WarehousePlanException(
                 "WAREHOUSE_PLAN_POLICY_INVALID",
@@ -376,7 +390,7 @@ public class WarehousePlanApplicationService {
             """
             update modeling_warehouse_plan_policy
                set layer_policy_code = ?, naming_policy_ref = ?, history_policy = ?, default_time_zone = ?,
-                   conceptual_design_allowed = ?,
+                   conceptual_design_allowed = ?, standard_coverage = ?, quality_gate = ?,
                    last_modified_date = current_timestamp
              where tenant_id = ? and plan_id = ?
             """,
@@ -385,6 +399,8 @@ public class WarehousePlanApplicationService {
             enumName(view.historyPolicy()),
             view.defaultTimeZone(),
             view.conceptualDesignAllowed(),
+            enumName(view.standardCoverage()),
+            enumName(view.qualityGate()),
             serverTenantId,
             planId
         );
@@ -393,8 +409,8 @@ public class WarehousePlanApplicationService {
                 """
                 insert into modeling_warehouse_plan_policy
                     (plan_id, tenant_id, layer_policy_code, naming_policy_ref, history_policy, default_time_zone,
-                     conceptual_design_allowed, created_date, last_modified_date)
-                values (?, ?, ?, ?, ?, ?, ?, current_timestamp, current_timestamp)
+                     conceptual_design_allowed, standard_coverage, quality_gate, created_date, last_modified_date)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, current_timestamp, current_timestamp)
                 """,
                 planId,
                 serverTenantId,
@@ -402,7 +418,9 @@ public class WarehousePlanApplicationService {
                 enumName(view.namingPolicy()),
                 enumName(view.historyPolicy()),
                 view.defaultTimeZone(),
-                view.conceptualDesignAllowed()
+                view.conceptualDesignAllowed(),
+                enumName(view.standardCoverage()),
+                enumName(view.qualityGate())
             );
         }
         auditService.auditAction(
@@ -844,8 +862,8 @@ public class WarehousePlanApplicationService {
                 """
                 insert into modeling_warehouse_plan_policy
                     (plan_id, tenant_id, layer_policy_code, naming_policy_ref, history_policy, default_time_zone,
-                     created_date, last_modified_date)
-                values (?, ?, ?, ?, ?, ?, current_timestamp, current_timestamp)
+                     standard_coverage, quality_gate, created_date, last_modified_date)
+                values (?, ?, ?, ?, ?, ?, 'ALL_FIELDS', 'BLOCKING', current_timestamp, current_timestamp)
                 """,
                 planId,
                 serverTenantId,
@@ -1146,7 +1164,7 @@ public class WarehousePlanApplicationService {
             .query(
                 """
                 select layer_policy_code, naming_policy_ref, history_policy, default_time_zone,
-                       conceptual_design_allowed
+                       conceptual_design_allowed, standard_coverage, quality_gate
                   from modeling_warehouse_plan_policy
                  where tenant_id = ? and plan_id = ?
                 """,
@@ -1156,14 +1174,37 @@ public class WarehousePlanApplicationService {
                         row.getString("naming_policy_ref"),
                         row.getString("history_policy"),
                         row.getString("default_time_zone"),
-                        row.getBoolean("conceptual_design_allowed")
+                        row.getBoolean("conceptual_design_allowed"),
+                        row.getString("standard_coverage"),
+                        row.getString("quality_gate")
                     ),
                 tenantId,
                 planId
             )
             .stream()
             .findFirst()
-            .orElseGet(() -> new PlanningPolicyCommand(null, null, null, null));
+            .orElseGet(() -> new PlanningPolicyCommand(null, null, null, null, false, "ALL_FIELDS", "BLOCKING"));
+    }
+
+    private static PlanningPolicyCommand mergeGovernancePolicy(
+        PlanningPolicyCommand requested,
+        PlanningPolicyCommand stored
+    ) {
+        PlanningPolicyCommand value = requested == null
+            ? new PlanningPolicyCommand(null, null, null, null)
+            : requested;
+        PlanningPolicyCommand current = stored == null
+            ? new PlanningPolicyCommand(null, null, null, null, false, "ALL_FIELDS", "BLOCKING")
+            : stored;
+        return new PlanningPolicyCommand(
+            value.layerScheme(),
+            value.namingPolicy(),
+            value.historyPolicy(),
+            value.defaultTimeZone(),
+            value.conceptualDesignAllowed(),
+            value.standardCoverage() == null ? current.standardCoverage() : value.standardCoverage(),
+            value.qualityGate() == null ? current.qualityGate() : value.qualityGate()
+        );
     }
 
     private PlanningBaseline loadBaseline(

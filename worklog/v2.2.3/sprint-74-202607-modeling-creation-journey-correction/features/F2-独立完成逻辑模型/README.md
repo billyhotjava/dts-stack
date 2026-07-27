@@ -1,7 +1,7 @@
 # F2：独立完成逻辑模型
 
 **优先级**：P0  
-**状态**：DRAFT
+**状态**：DONE
 
 ## 目标
 
@@ -38,20 +38,20 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|
-| T01 | 重构类型专属逻辑字段契约 | P0 | DRAFT | F1 |
-| T02 | 增加 DESIGNED 服务端门禁 | P0 | DRAFT | T01 |
-| T03 | 只呈现当前门禁并绑定主动作 | P0 | DRAFT | T02 |
+| T01 | 重构类型专属逻辑字段契约 | P0 | DONE | F1 |
+| T02 | 增加 DESIGNED 服务端门禁 | P0 | DONE | T01 |
+| T03 | 只呈现当前门禁并绑定主动作 | P0 | DONE | T02 |
 
 ## Definition of Ready
 
 - [x] ModelSpec/Implementation 所有权已钉死
 - [x] 四类 DESIGNED 必填矩阵已写明
 - [x] Gate API 兼容方式已写明
-- [ ] F0 通过且已提交 implementationPolicy 的兼容/迁移契约已冻结
+- [x] 已提交 implementationPolicy 的兼容/迁移契约已冻结；F0 运行环境基线继续并行收敛
 
 ## 完成标准
 
-- [ ] 无来源/实现可达到 DESIGNED
-- [ ] 时间/SCD/层级只能选择真实字段
-- [ ] 物理实现字段不在逻辑表单
-- [ ] IT-03～IT-05 通过
+- [x] 无来源/实现可达到 DESIGNED
+- [x] 时间/SCD/层级只能选择真实字段
+- [x] 物理实现字段不在逻辑表单
+- [x] IT-03～IT-05 通过

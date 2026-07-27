@@ -5,14 +5,19 @@ import test from "node:test";
 const pageUrl = new URL("./ModelSpecDetailPage.tsx", import.meta.url);
 const logicalUrl = new URL("./components/ModelSpecLogicalDesignStage.tsx", import.meta.url);
 const implementationUrl = new URL("./components/ModelSpecImplementationStage.tsx", import.meta.url);
+const implementationPresentationUrl = new URL("./components/ModelSpecImplementationPresentation.tsx", import.meta.url);
 const physicalUrl = new URL("./components/ModelSpecPhysicalAssetStage.tsx", import.meta.url);
 const read = (url: URL) => readFileSync(url, "utf8");
 
 test("three-stage detail isolates logical design, canonical implementation and physical evidence", () => {
-	for (const url of [pageUrl, logicalUrl, implementationUrl, physicalUrl]) assert.equal(existsSync(url), true, `${url.pathname} is missing`);
+	for (const url of [pageUrl, logicalUrl, implementationUrl, implementationPresentationUrl, physicalUrl]) {
+		assert.equal(existsSync(url), true, `${url.pathname} is missing`);
+	}
 	const page = read(pageUrl);
 	const logical = read(logicalUrl);
 	const implementation = read(implementationUrl);
+	const implementationPresentation = read(implementationPresentationUrl);
+	const implementationSurface = `${implementation}\n${implementationPresentation}`;
 	const physical = read(physicalUrl);
 
 	assert.doesNotMatch(page, /ModelSpecEditorFields/);
@@ -25,23 +30,55 @@ test("three-stage detail isolates logical design, canonical implementation and p
 	assert.match(logical, /grainStatement|grainKeysText/);
 	assert.match(logical, /factShape|timeSemanticsType|dimensionRefIds/);
 	assert.match(logical, /dimensionScdType/);
+	assert.doesNotMatch(
+		logical,
+		/name="physicalName"|name="loadStrategy"|name="retentionDays"|name="partitionFieldsText"/,
+	);
+	assert.match(logical, /timeFieldOptions/);
+	assert.match(logical, /name="timeFieldNames"/);
+	assert.match(logical, /mode="multiple"/);
 	assert.doesNotMatch(logical, /sourceBindingId|saveModelImplementation/);
+	assert.match(
+		read(new URL("./components/ModelSpecFieldsTab.tsx", import.meta.url)),
+		/name=\{\[field\.name, "displayName"\]\}/,
+	);
 	assert.match(implementation, /inputMode.*PHYSICAL_ASSET/s);
 	assert.match(implementation, /model\.modelType === "DIMENSION"/);
 	assert.match(implementation, /model\.modelType === "FACT"/);
 	assert.doesNotMatch(implementation, /CONTROLLED_SEED/);
-	assert.match(implementation, /name="inputIds"/);
-	assert.match(implementation, /mode="multiple".*inputOptions/s);
+	assert.match(implementationSurface, /数据来源方式/);
+	assert.match(implementation, /已登记的数据表/);
+	assert.match(implementation, /已有模型输出/);
+	assert.match(implementation, /系统生成（仅日期维度）/);
+	assert.match(implementation, /generationStrategy\?\.type === "DATE_DIMENSION"/);
+	assert.match(implementation, /canUseDateGenerator/);
+	assert.match(implementation, /currentImplementation\?\.inputMode === "GENERATED"/);
+	assert.match(implementationSurface, /name="inputIds"/);
+	assert.match(implementationSurface, /mode="multiple".*inputOptions/s);
 	assert.match(implementation, /settings\.joins/);
-	assert.match(implementation, /src_0、src_1/);
+	assert.match(implementationSurface, /src_0、src_1/);
 	assert.match(implementation, /inputIndex: index \+ 1/);
 	assert.match(implementation, /input\.resolvedVersion/);
 	assert.match(implementation, /input\.checksum/);
 	assert.match(implementation, /generatedImplementationIdentity/);
-	assert.match(implementation, /自动生成并保持稳定，无需人工维护/);
+	assert.match(implementationPresentation, /高级信息：系统技术标识与预处理/);
 	assert.doesNotMatch(implementation, /name="projectKey"|name="dbtUniqueId"/);
-	assert.match(implementation, /fieldMappings|deduplicateBy|castType|ownership/);
-	assert.doesNotMatch(implementation, /Input\.TextArea|JSON\.parse/);
+	assert.match(implementationSurface, /fieldMappings|deduplicateBy|castType|ownership/);
+	assert.match(implementation, /initializeFieldMappings/);
+	assert.match(implementationPresentation, /按模型字段初始化/);
+	assert.match(implementationPresentation, /模型字段/);
+	assert.match(implementationPresentation, /目标表摘要/);
+	assert.doesNotMatch(implementationPresentation, /model\.implementationPolicy|来自逻辑设计，如需调整/);
+	assert.match(implementation, /settings\.targetPhysicalName/);
+	assert.match(implementation, /settings\.loadStrategy/);
+	assert.match(implementation, /settings\.partitionFields/);
+	assert.match(implementation, /settings\.retentionDays/);
+	assert.match(implementationPresentation, /装载策略/);
+	assert.match(implementationPresentation, /数据保留/);
+	assert.match(implementation, /表（完整物化）/);
+	assert.match(implementation, /视图（查询时计算）/);
+	assert.match(implementation, /增量表（只处理变化）/);
+	assert.doesNotMatch(implementationSurface, /Input\.TextArea|JSON\.parse/);
 	assert.match(implementation, /persistedDraft/);
 	assert.match(implementation, /ModelImplementationCasToken/);
 	assert.match(implementation, /resolvePhysicalAssetImplementationInputs/);
@@ -52,16 +89,18 @@ test("three-stage detail isolates logical design, canonical implementation and p
 	assert.match(implementation, /缺少完整实现 pin/);
 	assert.match(implementation, /adoptedCurrentPinIdSet/);
 	assert.match(implementation, /adoptCurrentPins/);
-	assert.match(implementation, />\s*采用当前版本\s*</);
-	assert.match(implementation, /已固定/);
-	assert.match(implementation, /待固定/);
-	assert.match(implementation, /采用当前实现 \/ 升级引用/);
-	assert.match(implementation, /普通保存会原样保留 modelSpec 与 implementation 六元 pin/);
-	assert.match(implementation, /修复 Landing 来源/);
-	assert.match(implementation, /系统管理.*ephemeral.*无物理表/s);
+	assert.match(implementationSurface, />\s*采用当前版本\s*</);
+	assert.match(implementationSurface, /已固定/);
+	assert.match(implementationSurface, /待固定/);
+	assert.match(implementationSurface, /采用当前实现 \/ 升级引用/);
+	assert.match(implementationSurface, /普通保存会原样保留 modelSpec 与 implementation 六元 pin/);
+	assert.match(implementationSurface, /管理规划来源/);
+	assert.match(implementationPresentation, /系统管理.*ephemeral.*无物理表/s);
 	assert.match(physical, /physicalAssetRef/);
 	assert.match(physical, /compile|编译/);
 	assert.match(physical, /血缘时间线/);
+	assert.doesNotMatch(physical, /高级 dbt|onOpenAdvanced/);
+	assert.match(implementationSurface, /进入高级 dbt 工作台/);
 });
 
 test("source and physical failures stay local while conflict and readonly preserve the current stage", () => {

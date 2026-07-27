@@ -344,6 +344,10 @@ export default function Page() {
 				toast.error("规则定义不是有效的 JSON");
 				return;
 			}
+			const resolvedDefinition =
+				values.createMode === "template" && previewedSql.trim()
+					? { sql: previewedSql.trim() }
+					: parsedDefinition || undefined;
 			const payload: any = {
 				code: values.code || undefined,
 				name: values.name,
@@ -353,7 +357,7 @@ export default function Page() {
 				bindings: values.datasetId ? [{ datasetId: values.datasetId, scopeType: "DATASET" }] : [],
 				enabled: values.enabled ?? true,
 				publishNow: values.publishNow ?? true,
-				definition: parsedDefinition || undefined,
+				definition: resolvedDefinition,
 				actionOnFail: values.actionOnFail || "WARN",
 				autoTrigger: values.autoTrigger ?? false,
 				templateId: values.createMode === "template" ? values.templateId : undefined,
@@ -422,7 +426,7 @@ export default function Page() {
 		if (!rule?.id) return;
 		try {
 			await triggerQualityRun({ ruleId: rule.id });
-			toast.success("已触发执行，可在质量报告查看结果");
+			toast.success("检测任务已提交，最终结果请在质量报告查看");
 			openQualityReportForRule(rule);
 		} catch (error: any) {
 			toast.error(error?.message || "触发失败");

@@ -8,7 +8,10 @@ test("stage projection follows the logical to physical primary-action sequence",
 	assert.equal(existsSync(helperUrl), true, "model detail stage projection helper is missing");
 	const { getModelSpecDetailStageProjection } = await import(helperUrl.href);
 
-	assert.equal(getModelSpecDetailStageProjection({ stage: "logical", logicalDirty: true, canEdit: true }).primaryAction.label, "保存逻辑设计");
+	assert.equal(
+		getModelSpecDetailStageProjection({ stage: "logical", logicalDirty: true, canEdit: true }).primaryAction.label,
+		"保存逻辑设计",
+	);
 	assert.equal(
 		getModelSpecDetailStageProjection({ stage: "logical", logicalDirty: false, canEdit: true }).primaryAction.label,
 		"配置数据实现",
@@ -89,4 +92,19 @@ test("stage projection keeps a single disabled recovery action for permissions, 
 	}
 	assert.equal(cases[1].primaryAction.label, "配置数据实现");
 	assert.equal(cases[1].primaryAction.recoveryMessage, "来源版本已漂移");
+});
+
+test("implementation remains behind the server DESIGNED gate", async () => {
+	const { getModelSpecDetailStageProjection } = await import(helperUrl.href);
+
+	const projection = getModelSpecDetailStageProjection({
+		stage: "implementation",
+		logicalDirty: false,
+		designedReady: false,
+		canEdit: true,
+	});
+
+	assert.equal(projection.primaryAction.label, "保存逻辑设计");
+	assert.equal(projection.primaryAction.recoveryStage, "logical");
+	assert.equal(projection.primaryAction.disabled, false);
 });

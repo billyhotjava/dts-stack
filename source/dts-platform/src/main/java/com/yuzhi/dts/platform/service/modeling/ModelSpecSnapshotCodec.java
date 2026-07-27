@@ -2,6 +2,7 @@ package com.yuzhi.dts.platform.service.modeling;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
@@ -54,6 +55,13 @@ public class ModelSpecSnapshotCodec {
         return sha256(writeCanonical(content(view)));
     }
 
+    public boolean matchesStoredContentChecksum(String snapshotJson, ModelSpecView view, String expectedChecksum) {
+        if (expectedChecksum == null || view == null) return false;
+        if (expectedChecksum.equals(contentChecksum(view))) return true;
+        if (!isHistoricalExtendedSnapshotBeforeDisplayName(snapshotJson, view)) return false;
+        return expectedChecksum.equals(sha256(writeCanonical(historicalExtendedContent(view))));
+    }
+
     public ModelSpecView toCreatedView(UUID id, CreateModelSpecCommand command, Instant now) {
         return toView(id, command, ModelStatus.DRAFT, 1, contentChecksum(command), now, now, command.dimensionDefinitionRef());
     }
@@ -69,6 +77,24 @@ public class ModelSpecSnapshotCodec {
             current.createdAt(),
             now,
             current.dimensionDefinitionRef()
+        );
+    }
+
+    public ModelSpecView toReclassifiedView(
+        ModelSpecView current,
+        CreateModelSpecCommand projectedContent,
+        int revision,
+        Instant now
+    ) {
+        return toView(
+            current.id(),
+            projectedContent,
+            current.status(),
+            revision,
+            contentChecksum(projectedContent),
+            current.createdAt(),
+            now,
+            projectedContent.dimensionDefinitionRef()
         );
     }
 
@@ -387,6 +413,50 @@ public class ModelSpecSnapshotCodec {
         );
     }
 
+    private Object historicalExtendedContent(ModelSpecView view) {
+        return new HistoricalExtendedModelContent(
+            view.planId(),
+            view.domainId(),
+            view.modelType(),
+            view.layer(),
+            view.name(),
+            view.description(),
+            view.implementationMode(),
+            view.materialization(),
+            view.businessActivityRef(),
+            view.consumptionScenario(),
+            view.grain(),
+            view.factShape(),
+            view.timeSemantics(),
+            view.fields().stream().map(HistoricalExtendedModelField::from).toList(),
+            view.sourceRefs(),
+            view.dependsOn(),
+            view.dimensionRefs(),
+            view.metricRefs(),
+            view.standardBindings(),
+            view.generationStrategy(),
+            view.dimensionProfile(),
+            view.dimensionDefinitionRef(),
+            view.dataMartId(),
+            view.variantCode(),
+            view.implementationPolicy()
+        );
+    }
+
+    private boolean isHistoricalExtendedSnapshotBeforeDisplayName(String snapshotJson, ModelSpecView view) {
+        if (snapshotJson == null || snapshotJson.isBlank() || !hasExtendedMetadata(view)) return false;
+        try {
+            JsonNode fields = objectMapper.readTree(snapshotJson).path("fields");
+            if (!fields.isArray() || fields.isEmpty()) return false;
+            for (JsonNode field : fields) {
+                if (!field.isObject() || field.has("displayName")) return false;
+            }
+            return true;
+        } catch (JsonProcessingException exception) {
+            return false;
+        }
+    }
+
     private static String sha256(String value) {
         try {
             return java.util.HexFormat.of().formatHex(
@@ -418,7 +488,8 @@ public class ModelSpecSnapshotCodec {
     private static boolean hasExtendedMetadata(ModelSpecContract.ModelField field) {
         return (
             field != null &&
-            (field.dimensionAttributeCode() != null ||
+            (field.displayName() != null ||
+                field.dimensionAttributeCode() != null ||
                 Boolean.TRUE.equals(field.redundant()) ||
                 field.redundancySourceRef() != null)
         );
@@ -493,6 +564,62 @@ public class ModelSpecSnapshotCodec {
         ModelSpecContract.FactShape factShape,
         ModelSpecContract.TimeSemantics timeSemantics,
         java.util.List<ModelSpecContract.ModelField> fields,
+        java.util.List<ModelSpecContract.SourceRef> sourceRefs,
+        java.util.List<ModelSpecContract.ModelRevisionRef> dependsOn,
+        java.util.List<ModelSpecContract.ModelRevisionRef> dimensionRefs,
+        java.util.List<ModelSpecContract.MetricRef> metricRefs,
+        java.util.List<ModelSpecContract.StandardBinding> standardBindings,
+        ModelSpecContract.GenerationStrategy generationStrategy,
+        @JsonInclude(JsonInclude.Include.NON_NULL) ModelSpecContract.DimensionProfile dimensionProfile,
+        @JsonInclude(JsonInclude.Include.NON_NULL) DimensionDefinitionRef dimensionDefinitionRef,
+        @JsonInclude(JsonInclude.Include.NON_NULL) UUID dataMartId,
+        String variantCode,
+        @JsonInclude(JsonInclude.Include.NON_NULL) ModelSpecContract.ImplementationPolicy implementationPolicy
+    ) {}
+
+    private record HistoricalExtendedModelField(
+        String name,
+        String dataType,
+        Boolean nullable,
+        String sourceFieldRef,
+        ModelSpecContract.FieldRole role,
+        String securityLevel,
+        String dimensionAttributeCode,
+        Boolean redundant,
+        String redundancySourceRef
+    ) {
+        private static HistoricalExtendedModelField from(ModelSpecContract.ModelField field) {
+            return field == null
+                ? null
+                : new HistoricalExtendedModelField(
+                    field.name(),
+                    field.dataType(),
+                    field.nullable(),
+                    field.sourceFieldRef(),
+                    field.role(),
+                    field.securityLevel(),
+                    field.dimensionAttributeCode(),
+                    field.redundant(),
+                    field.redundancySourceRef()
+                );
+        }
+    }
+
+    private record HistoricalExtendedModelContent(
+        UUID planId,
+        UUID domainId,
+        ModelSpecContract.ModelType modelType,
+        ModelSpecContract.Layer layer,
+        String name,
+        String description,
+        ModelSpecContract.ImplementationMode implementationMode,
+        String materialization,
+        String businessActivityRef,
+        String consumptionScenario,
+        ModelSpecContract.Grain grain,
+        ModelSpecContract.FactShape factShape,
+        ModelSpecContract.TimeSemantics timeSemantics,
+        java.util.List<HistoricalExtendedModelField> fields,
         java.util.List<ModelSpecContract.SourceRef> sourceRefs,
         java.util.List<ModelSpecContract.ModelRevisionRef> dependsOn,
         java.util.List<ModelSpecContract.ModelRevisionRef> dimensionRefs,

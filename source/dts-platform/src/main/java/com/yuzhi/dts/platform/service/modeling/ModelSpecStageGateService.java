@@ -32,6 +32,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +40,8 @@ import org.springframework.transaction.annotation.Transactional;
 /** Evaluates revision-bound ModelSpec gates without mutating lifecycle state. */
 @Service
 public class ModelSpecStageGateService {
+
+    private static final Pattern FIELD_CODE = Pattern.compile("^[a-z][a-z0-9_]{0,62}$");
 
     private final ModelSpecApplicationService modelSpecs;
     private final ModelSpecRepository repository;
@@ -49,6 +52,7 @@ public class ModelSpecStageGateService {
     private final ModelSpecDomainReadAccessPort domainReadAccess;
     private final ModelImplementationCompatibilityAdapter implementationCompatibility;
     private final ModelClassificationPublishGate classificationGate;
+    private final ModelGovernancePolicyPort governancePolicy;
 
     public ModelSpecStageGateService(
         ModelSpecApplicationService modelSpecs,
@@ -102,7 +106,6 @@ public class ModelSpecStageGateService {
         );
     }
 
-    @Autowired
     public ModelSpecStageGateService(
         ModelSpecApplicationService modelSpecs,
         ModelSpecRepository repository,
@@ -114,6 +117,33 @@ public class ModelSpecStageGateService {
         ModelImplementationCompatibilityAdapter implementationCompatibility,
         ModelClassificationPublishGate classificationGate
     ) {
+        this(
+            modelSpecs,
+            repository,
+            standardEvidence,
+            lifecycle,
+            sourceValidation,
+            dimensionDefinitions,
+            domainReadAccess,
+            implementationCompatibility,
+            classificationGate,
+            null
+        );
+    }
+
+    @Autowired
+    public ModelSpecStageGateService(
+        ModelSpecApplicationService modelSpecs,
+        ModelSpecRepository repository,
+        ModelSpecStandardEvidencePort standardEvidence,
+        ModelLifecycleRepository lifecycle,
+        ModelSpecSourceValidationPort sourceValidation,
+        DimensionDefinitionRepository dimensionDefinitions,
+        ModelSpecDomainReadAccessPort domainReadAccess,
+        ModelImplementationCompatibilityAdapter implementationCompatibility,
+        ModelClassificationPublishGate classificationGate,
+        ModelGovernancePolicyPort governancePolicy
+    ) {
         this.modelSpecs = modelSpecs;
         this.repository = repository;
         this.dimensionDefinitions = dimensionDefinitions;
@@ -123,14 +153,26 @@ public class ModelSpecStageGateService {
         this.domainReadAccess = domainReadAccess;
         this.implementationCompatibility = implementationCompatibility;
         this.classificationGate = classificationGate;
+        this.governancePolicy = governancePolicy;
     }
 
     @Transactional(readOnly = true)
     public List<GateView> evaluateAll(String tenantId, UUID modelSpecId) {
         ModelSpecView view = modelSpecs.get(tenantId, modelSpecId);
         GateEvidence evidence = evidence(tenantId, view);
+        GateView release = withGovernancePolicy(
+            tenantId,
+            view,
+            evidence,
+            withImplementationInputEvidence(
+                tenantId,
+                view,
+                withDimensionDefinitionEvidence(tenantId, view, evaluate(view, Stage.RELEASE_READY, evidence))
+            )
+        );
         return List.of(
             evaluate(view, Stage.DRAFT_SAVE, evidence),
+            withDimensionDefinitionEvidence(tenantId, view, evaluate(view, Stage.DESIGNED, evidence)),
             withImplementationInputEvidence(
                 tenantId,
                 view,
@@ -139,12 +181,142 @@ public class ModelSpecStageGateService {
             withClassificationEvidence(
                 tenantId,
                 view,
-                withImplementationInputEvidence(
-                    tenantId,
-                    view,
-                    withDimensionDefinitionEvidence(tenantId, view, evaluate(view, Stage.RELEASE_READY, evidence))
-                )
+                release
             )
+        );
+    }
+
+    private GateView withGovernancePolicy(
+        String tenantId,
+        ModelSpecView view,
+        GateEvidence evidence,
+        GateView gate
+    ) {
+        if (gate.stage() != Stage.RELEASE_READY || gate.blockers().stream().anyMatch(blocker ->
+            "MODEL_SPEC_GATE_EVIDENCE_STALE".equals(blocker.code())
+        )) {
+            return gate;
+        }
+        ModelGovernancePolicyPort.Policy policy = resolveGovernancePolicy(tenantId, view.planId());
+        if (!policy.available()) {
+            LinkedHashMap<String, GateBlocker> unavailable = blockersWithoutGovernanceEvidence(gate);
+            add(
+                unavailable,
+                blocker(
+                    view,
+                    "MODEL_GOVERNANCE_POLICY_UNAVAILABLE",
+                    "planId",
+                    "当前数仓规划的发布治理策略不可用，请先修复规划策略",
+                    "standards"
+                )
+            );
+            return gateWithBlockers(gate, unavailable);
+        }
+
+        LinkedHashMap<String, GateBlocker> blockers = blockersWithoutGovernanceEvidence(gate);
+        applyStandardCoverage(tenantId, view, policy.standardCoverage(), blockers);
+        if (policy.qualityGate() == ModelGovernancePolicyPort.QualityGate.BLOCKING) {
+            evidenceBlocker(
+                view,
+                evidence.quality(),
+                "MODEL_SPEC_QUALITY_EVIDENCE",
+                "当前规划要求质量测试通过后才能发布",
+                "fields",
+                blockers
+            );
+        }
+        return gateWithBlockers(gate, blockers);
+    }
+
+    private ModelGovernancePolicyPort.Policy resolveGovernancePolicy(String tenantId, UUID planId) {
+        if (governancePolicy == null) {
+            return ModelGovernancePolicyPort.Policy.available(
+                ModelGovernancePolicyPort.StandardCoverage.ALL_FIELDS,
+                ModelGovernancePolicyPort.QualityGate.BLOCKING
+            );
+        }
+        try {
+            ModelGovernancePolicyPort.Policy policy = governancePolicy.resolve(tenantId, planId);
+            return policy == null
+                ? ModelGovernancePolicyPort.Policy.unavailable("WAREHOUSE_PLAN_POLICY_UNREADABLE")
+                : policy;
+        } catch (RuntimeException unavailable) {
+            return ModelGovernancePolicyPort.Policy.unavailable("WAREHOUSE_PLAN_POLICY_UNREADABLE");
+        }
+    }
+
+    private void applyStandardCoverage(
+        String tenantId,
+        ModelSpecView view,
+        ModelGovernancePolicyPort.StandardCoverage coverage,
+        LinkedHashMap<String, GateBlocker> blockers
+    ) {
+        if (coverage == ModelGovernancePolicyPort.StandardCoverage.NONE) {
+            return;
+        }
+        List<ModelField> required = standardRequiredFields(view, coverage);
+        Map<String, StandardBinding> bindings = standardBindings(view);
+        List<String> missing = required
+            .stream()
+            .filter(field -> !hasVersionedStandard(bindings.get(field.name())))
+            .map(field -> notBlank(field.displayName()) ? field.displayName() + "（" + field.name() + "）" : field.name())
+            .toList();
+        if (!missing.isEmpty()) {
+            add(
+                blockers,
+                blocker(
+                    view,
+                    "MODEL_SPEC_STANDARD_EVIDENCE_STALE",
+                    "standardBindings",
+                    "发布策略要求以下字段绑定标准：" + String.join("、", missing),
+                    "standards"
+                )
+            );
+            return;
+        }
+        StandardEvidence ownerEvidence;
+        try {
+            ownerEvidence = standardEvidence.evaluate(tenantId, view);
+        } catch (RuntimeException unavailable) {
+            ownerEvidence = StandardEvidence.UNKNOWN;
+        }
+        EvidenceState state = switch (ownerEvidence == null ? StandardEvidence.UNKNOWN : ownerEvidence) {
+            case CURRENT -> EvidenceState.CURRENT;
+            case STALE -> EvidenceState.STALE;
+            case UNKNOWN -> EvidenceState.UNKNOWN;
+        };
+        evidenceBlocker(
+            view,
+            state,
+            "MODEL_SPEC_STANDARD_EVIDENCE",
+            "字段标准的专业主数据证据不可用",
+            "standards",
+            blockers
+        );
+    }
+
+    private static LinkedHashMap<String, GateBlocker> blockersWithoutGovernanceEvidence(GateView gate) {
+        LinkedHashMap<String, GateBlocker> blockers = new LinkedHashMap<>();
+        gate.blockers()
+            .stream()
+            .filter(blocker ->
+                !blocker.code().startsWith("MODEL_SPEC_STANDARD_EVIDENCE") &&
+                !blocker.code().startsWith("MODEL_SPEC_QUALITY_EVIDENCE") &&
+                !"MODEL_GOVERNANCE_POLICY_UNAVAILABLE".equals(blocker.code())
+            )
+            .forEach(blocker -> add(blockers, blocker));
+        return blockers;
+    }
+
+    private static GateView gateWithBlockers(GateView gate, LinkedHashMap<String, GateBlocker> blockers) {
+        List<GateBlocker> result = List.copyOf(blockers.values());
+        return new GateView(
+            gate.modelSpecId(),
+            gate.revision(),
+            gate.checksum(),
+            gate.stage(),
+            result.isEmpty() ? GateStatus.READY : GateStatus.BLOCKED,
+            result
         );
     }
 
@@ -188,7 +360,7 @@ public class ModelSpecStageGateService {
     }
 
     private GateView withImplementationInputEvidence(String tenantId, ModelSpecView view, GateView gate) {
-        if (gate.stage() == Stage.DRAFT_SAVE || implementationCompatibility == null) return gate;
+        if (gate.stage() == Stage.DRAFT_SAVE || gate.stage() == Stage.DESIGNED || implementationCompatibility == null) return gate;
         ImplementationView implementation = lifecycle == null ? null : lifecycle.findImplementation(tenantId, view.id()).orElse(null);
         ModelImplementationCompatibilityAdapter.ValidationResult result;
         if (implementation == null) {
@@ -204,16 +376,33 @@ public class ModelSpecStageGateService {
                     implementation.ownership(), implementation.materialization(), "gate-input-evidence"
                 )
             );
+            if (result.valid() && !implementationSettingsComplete(implementation)) {
+                result = ModelImplementationCompatibilityAdapter.ValidationResult.invalid(
+                    "MODEL_IMPLEMENTATION_SETTINGS_REQUIRED"
+                );
+            }
         }
         if (result.valid()) return withoutLegacyInputBlockers(view, gate);
         LinkedHashMap<String, GateBlocker> blockers = new LinkedHashMap<>();
-        for (GateBlocker blocker : gate.blockers()) add(blockers, blocker);
+        for (GateBlocker blocker : withoutLegacyInputBlockers(view, gate).blockers()) add(blockers, blocker);
         add(
             blockers,
             blocker(view, result.code(), "implementation.inputs", "实现输入未通过当前来源与依赖校验", "implementation")
         );
         List<GateBlocker> values = List.copyOf(blockers.values());
         return new GateView(view.id(), view.revision(), view.checksum(), gate.stage(), GateStatus.BLOCKED, values);
+    }
+
+    private static boolean implementationSettingsComplete(ImplementationView implementation) {
+        if (implementation == null) return false;
+        Object targetPhysicalName = implementation.settings().get("targetPhysicalName");
+        Object loadStrategy = implementation.settings().get("loadStrategy");
+        Object partitionFields = implementation.settings().get("partitionFields");
+        return targetPhysicalName instanceof String target &&
+            !target.isBlank() &&
+            loadStrategy instanceof String strategy &&
+            Set.of("FULL", "INCREMENTAL", "SNAPSHOT").contains(strategy) &&
+            partitionFields instanceof List<?>;
     }
 
     private static GateView withoutLegacyInputBlockers(ModelSpecView view, GateView gate) {
@@ -363,7 +552,10 @@ public class ModelSpecStageGateService {
                 add(blockers, blocker(view, issue.code(), issue.field(), issue.message(), repairTab(issue.field())));
             }
         }
-        if (stage != Stage.DRAFT_SAVE) implementationBlockers(view, effectiveEvidence, blockers);
+        if (stage != Stage.DRAFT_SAVE) designedBlockers(view, blockers);
+        if (stage == Stage.IMPLEMENTATION_READY || stage == Stage.RELEASE_READY) {
+            implementationBlockers(view, effectiveEvidence, blockers);
+        }
         if (stage == Stage.RELEASE_READY) releaseBlockers(view, effectiveEvidence, blockers);
         List<GateBlocker> result = List.copyOf(blockers.values());
         return new GateView(
@@ -488,56 +680,33 @@ public class ModelSpecStageGateService {
         GateEvidence evidence,
         LinkedHashMap<String, GateBlocker> blockers
     ) {
-        validateKeyClosure(view, blockers);
-        if (view.modelType() == ModelType.DIMENSION && view.implementationPolicy() == null) {
-            add(
-                blockers,
-                blocker(
-                    view,
-                    "MODEL_SPEC_IMPLEMENTATION_POLICY_REQUIRED",
-                    "implementationPolicy",
-                    "请补充物理名称、装载策略和分区策略",
-                    "design"
-                )
-            );
-        } else if (view.modelType() == ModelType.DIMENSION) {
-            if (view.implementationPolicy().physicalName() == null) {
-                add(
-                    blockers,
-                    blocker(
-                        view,
-                        "MODEL_SPEC_PHYSICAL_NAME_REQUIRED",
-                        "implementationPolicy.physicalName",
-                        "请设置实现表的物理名称",
-                        "design"
-                    )
-                );
-            }
-            if (view.implementationPolicy().loadStrategy() == null) {
-                add(
-                    blockers,
-                    blocker(
-                        view,
-                        "MODEL_SPEC_LOAD_STRATEGY_REQUIRED",
-                        "implementationPolicy.loadStrategy",
-                        "请选择全量、增量或快照装载策略",
-                        "design"
-                    )
-                );
-            }
-        }
         switch (view.modelType()) {
-            case DIMENSION -> dimensionBlockers(view, evidence, blockers);
-            case FACT -> factBlockers(view, evidence, blockers);
+            case DIMENSION -> dimensionInputBlockers(view, evidence, blockers);
+            case FACT -> factInputBlockers(view, evidence, blockers);
             case SUMMARY -> {
                 referenceEvidence(view, evidence.dependencies(), "MODEL_SPEC_UPSTREAM_EVIDENCE", "上游模型版本已变化", blockers);
+            }
+            case APPLICATION ->
+                referenceEvidence(view, evidence.dependencies(), "MODEL_SPEC_UPSTREAM_EVIDENCE", "上游模型版本已变化", blockers);
+        }
+    }
+
+    private static void designedBlockers(
+        ModelSpecView view,
+        LinkedHashMap<String, GateBlocker> blockers
+    ) {
+        validateKeyClosure(view, blockers);
+        validateFieldNames(view, blockers);
+        switch (view.modelType()) {
+            case DIMENSION -> dimensionDesignBlockers(view, blockers);
+            case FACT -> factDesignBlockers(view, blockers);
+            case SUMMARY -> {
                 boolean hasMeasure = view.fields().stream().anyMatch(field -> field != null && field.role() == FieldRole.MEASURE);
                 if (!hasMeasure && view.metricRefs().isEmpty()) {
                     add(blockers, blocker(view, "MODEL_SPEC_SUMMARY_MEASURE_REQUIRED", "fields", "汇总表需声明汇总字段或指标引用", "fields"));
                 }
             }
             case APPLICATION -> {
-                referenceEvidence(view, evidence.dependencies(), "MODEL_SPEC_UPSTREAM_EVIDENCE", "上游模型版本已变化", blockers);
                 if (view.fields().isEmpty()) {
                     add(blockers, blocker(view, "MODEL_SPEC_APPLICATION_OUTPUT_REQUIRED", "fields", "应用表需声明输出字段契约", "fields"));
                 }
@@ -545,9 +714,8 @@ public class ModelSpecStageGateService {
         }
     }
 
-    private static void dimensionBlockers(
+    private static void dimensionDesignBlockers(
         ModelSpecView view,
-        GateEvidence evidence,
         LinkedHashMap<String, GateBlocker> blockers
     ) {
         DimensionProfile profile = view.dimensionProfile();
@@ -560,6 +728,13 @@ public class ModelSpecStageGateService {
         if (view.description() == null || view.description().isBlank()) {
             add(blockers, blocker(view, "MODEL_SPEC_DIMENSION_DEFINITION_REQUIRED", "description", "请补充维度定义", "design"));
         }
+    }
+
+    private static void dimensionInputBlockers(
+        ModelSpecView view,
+        GateEvidence evidence,
+        LinkedHashMap<String, GateBlocker> blockers
+    ) {
         if (view.sourceRefs().isEmpty() && view.generationStrategy() == null) {
             add(blockers, blocker(view, "MODEL_SPEC_DIMENSION_INPUT_REQUIRED", "sourceRefs", "请至少选择来源或生成策略", "design"));
         }
@@ -568,25 +743,10 @@ public class ModelSpecStageGateService {
         }
     }
 
-    private static void factBlockers(
+    private static void factDesignBlockers(
         ModelSpecView view,
-        GateEvidence evidence,
         LinkedHashMap<String, GateBlocker> blockers
     ) {
-        boolean hasDirectSources = !view.sourceRefs().isEmpty();
-        boolean hasUpstreamModels = !view.dependsOn().isEmpty();
-        if (!hasDirectSources && !hasUpstreamModels) {
-            add(
-                blockers,
-                blocker(
-                    view,
-                    "MODEL_SPEC_FACT_INPUT_REQUIRED",
-                    "sourceRefs",
-                    "请至少选择已确认的上游输入来源或锁定上游模型",
-                    "design"
-                )
-            );
-        }
         if (view.factShape() == null) {
             add(blockers, blocker(view, "MODEL_SPEC_FACT_SHAPE_REQUIRED", "factShape", "请选择事实形态", "design"));
         }
@@ -609,6 +769,27 @@ public class ModelSpecStageGateService {
                 add(blockers, blocker(view, "MODEL_SPEC_TIME_FIELD_INVALID", "timeSemantics", "业务时间必须引用 TIME 字段", "fields"));
             }
         }
+    }
+
+    private static void factInputBlockers(
+        ModelSpecView view,
+        GateEvidence evidence,
+        LinkedHashMap<String, GateBlocker> blockers
+    ) {
+        boolean hasDirectSources = !view.sourceRefs().isEmpty();
+        boolean hasUpstreamModels = !view.dependsOn().isEmpty();
+        if (!hasDirectSources && !hasUpstreamModels) {
+            add(
+                blockers,
+                blocker(
+                    view,
+                    "MODEL_SPEC_FACT_INPUT_REQUIRED",
+                    "sourceRefs",
+                    "请至少选择已确认的上游输入来源或锁定上游模型",
+                    "implementation"
+                )
+            );
+        }
         if (hasDirectSources) {
             referenceEvidence(view, evidence.sources(), "MODEL_SPEC_SOURCE_EVIDENCE", "明细表来源已失效或版本漂移", blockers);
         }
@@ -616,6 +797,24 @@ public class ModelSpecStageGateService {
             referenceEvidence(view, evidence.dependencies(), "MODEL_SPEC_UPSTREAM_EVIDENCE", "上游模型版本已变化", blockers);
         }
         referenceEvidence(view, evidence.dimensions(), "MODEL_SPEC_DIMENSION_EVIDENCE", "维度引用已失效或版本漂移", blockers);
+    }
+
+    private static void validateFieldNames(
+        ModelSpecView view,
+        LinkedHashMap<String, GateBlocker> blockers
+    ) {
+        boolean legacyCode = view.fields().stream().anyMatch(field ->
+            field != null && field.name() != null && !FIELD_CODE.matcher(field.name()).matches()
+        );
+        if (legacyCode) {
+            add(blockers, blocker(view, "MODEL_SPEC_FIELD_CODE_INVALID", "fields", "字段技术编码必须使用小写英文、数字和下划线", "fields"));
+        }
+        boolean missingDisplayName = view.fields().stream().anyMatch(field ->
+            field != null && (field.displayName() == null || field.displayName().isBlank())
+        );
+        if (missingDisplayName) {
+            add(blockers, blocker(view, "MODEL_SPEC_FIELD_DISPLAY_NAME_REQUIRED", "fields", "请为每个字段填写业务名称", "fields"));
+        }
     }
 
     private static void releaseBlockers(
@@ -717,12 +916,36 @@ public class ModelSpecStageGateService {
     }
 
     private static boolean standardsComplete(ModelSpecView view) {
+        Map<String, StandardBinding> bindings = standardBindings(view);
+        return !view.fields().isEmpty() &&
+            view.fields().stream().allMatch(field -> field != null && hasVersionedStandard(bindings.get(field.name())));
+    }
+
+    private static Map<String, StandardBinding> standardBindings(ModelSpecView view) {
         Map<String, StandardBinding> bindings = new HashMap<>();
         for (StandardBinding binding : view.standardBindings()) {
             if (binding != null && binding.fieldName() != null) bindings.put(binding.fieldName(), binding);
         }
-        return !view.fields().isEmpty() &&
-            view.fields().stream().allMatch(field -> field != null && hasVersionedStandard(bindings.get(field.name())));
+        return bindings;
+    }
+
+    private static List<ModelField> standardRequiredFields(
+        ModelSpecView view,
+        ModelGovernancePolicyPort.StandardCoverage coverage
+    ) {
+        if (coverage == ModelGovernancePolicyPort.StandardCoverage.NONE) {
+            return List.of();
+        }
+        return view
+            .fields()
+            .stream()
+            .filter(Objects::nonNull)
+            .filter(field ->
+                coverage == ModelGovernancePolicyPort.StandardCoverage.ALL_FIELDS ||
+                field.role() == FieldRole.KEY ||
+                field.role() == FieldRole.MEASURE
+            )
+            .toList();
     }
 
     private static boolean hasVersionedStandard(StandardBinding binding) {
@@ -794,6 +1017,7 @@ public class ModelSpecStageGateService {
 
     public enum Stage {
         DRAFT_SAVE,
+        DESIGNED,
         IMPLEMENTATION_READY,
         RELEASE_READY,
     }

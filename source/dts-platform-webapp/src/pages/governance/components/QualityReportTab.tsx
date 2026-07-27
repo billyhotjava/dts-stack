@@ -99,12 +99,16 @@ function RuleHistoryInline({ ruleId }: { ruleId: string }) {
 			title: "结果",
 			dataIndex: "status",
 			width: 80,
-			render: (v: string) =>
-				v === "PASSED" ? (
+			render: (v: string) => {
+				if (v === "SKIPPED") {
+					return <Tag>跳过</Tag>;
+				}
+				return v === "PASSED" ? (
 					<CheckCircleOutlined className="text-green-500" />
 				) : (
 					<CloseCircleOutlined className="text-red-500" />
-				),
+				);
+			},
 		},
 		{
 			title: "通过率",
@@ -257,6 +261,7 @@ export default function QualityReportTab() {
 		() => (datasetId ? rules.filter((r) => String(r.datasetId) === datasetId) : rules),
 		[rules, datasetId],
 	);
+	const hasEffectiveRuns = Boolean(scoreData && (scoreData.dimensions.length > 0 || scoreData.trend.length > 0));
 
 	/* ---------- Trend Chart Option ---------- */
 	const trendOption = useMemo(() => {
@@ -392,7 +397,7 @@ export default function QualityReportTab() {
 				<div className="flex items-center justify-center py-12">
 					<Spin size="large" />
 				</div>
-			) : scoreData ? (
+			) : scoreData && hasEffectiveRuns ? (
 				<Row gutter={[16, 16]}>
 					<Col xs={24} sm={12} md={8} lg={4}>
 						<ScoreCard label="综合评分" score={scoreData.overall} delta={scoreData.overallDelta} />
@@ -405,7 +410,7 @@ export default function QualityReportTab() {
 				</Row>
 			) : (
 				<div className="flex items-center justify-center py-12 text-gray-400">
-					{datasetId ? "暂无评分数据" : "请选择数据集"}
+					{datasetId ? "暂无有效检测结果" : "请选择数据集"}
 				</div>
 			)}
 

@@ -1,7 +1,7 @@
 # T01：收敛 ModelImplementation 实现设置所有权
 
 **优先级**：P0  
-**状态**：DRAFT  
+**状态**：DONE
 **依赖**：F2
 
 ## 目标
@@ -34,13 +34,13 @@ ModelLifecycleContract/Resource/Service、implementation checksum、Implementati
 
 ## 验证（RED→GREEN）
 
-- [ ] settings round-trip/checksum/CAS
-- [ ] target name/partition field/load strategy 边界
-- [ ] 切换后 ModelSpec snapshot 不再新增或修改 implementationPolicy；既有值仍可回读
-- [ ] stale model/implementation fail closed
+- [x] settings round-trip/checksum/CAS
+- [x] target name/partition field/load strategy 边界
+- [x] 切换后 ModelSpec snapshot 不再新增或修改 implementationPolicy；既有值仍可回读
+- [x] stale model/implementation fail closed
 
 ## Definition of Done
 
-- [ ] 架构：实现设置唯一 owner
-- [ ] UI：配置位置与含义一致
-- [ ] 切片：普通模式保存并达到 IMPLEMENTATION_READY
+- [x] 架构：实现设置唯一 owner
+- [x] UI：配置位置与含义一致
+- [x] 切片：普通模式保存并达到 IMPLEMENTATION_READY

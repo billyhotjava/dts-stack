@@ -1,0 +1,12 @@
+version: 2
+
+models:
+  - name: ads_s74_finance_dashboard
+    description: "Sprint-74 高级 dbt 实现与发布结果验收模型"
+    columns:
+      - name: project_code
+        description: "项目编码"
+        data_type: text
+      - name: total_amount
+        description: "累计金额"
+        data_type: numeric(18,2)

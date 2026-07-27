@@ -1,7 +1,7 @@
 # T02：统一普通配置与高级 dbt 实现入口
 
 **优先级**：P0  
-**状态**：DRAFT  
+**状态**：DONE
 **依赖**：F3/T01
 
 ## 目标
@@ -30,14 +30,13 @@ ImplementationStage、dbt workbench navigation、claim/convert APIs、source-con
 
 ## 验证（RED→GREEN）
 
-- [ ] 两种 ownership 绑定同一 ModelSpec
-- [ ] 普通转 dbt 不创建第二个逻辑模型
-- [ ] dbt 自定义不会被普通表单覆盖
-- [ ] 旧 implementation revision 无法进入高级工作台
+- [x] 两种 ownership 绑定同一 ModelSpec
+- [x] 普通转 dbt 不创建第二个逻辑模型
+- [x] dbt 自定义不会被普通表单覆盖
+- [x] 旧 implementation revision 无法进入高级工作台
 
 ## Definition of Done
 
-- [ ] 架构：dbt 只是实现 owner
-- [ ] UI：入口、切换和风险说明清楚
-- [ ] 切片：IT-06/IT-07 通过
-
+- [x] 架构：dbt 只是实现 owner
+- [x] UI：入口、切换和风险说明清楚
+- [x] 切片：IT-06/IT-07 通过

@@ -7,7 +7,6 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import java.io.InputStream;
 import java.lang.reflect.Modifier;
 import java.util.List;
 import java.util.Map;
@@ -39,7 +38,7 @@ class ModelSpecCreateRequestDecoderTest {
     }
 
     @Test
-    void decoderReturnsStableShapeIssuesForNullCollectionsAndWrongPrimitiveTypes() throws Exception {
+    void decoderRejectsLogicalCollectionsAndKeepsPrimitiveShapeIssuesStable() throws Exception {
         ObjectNode nullCollection = genericFact();
         nullCollection.putNull("fields");
         ObjectNode wrongPrimitive = genericFact();
@@ -47,16 +46,15 @@ class ModelSpecCreateRequestDecoderTest {
 
         assertThat(decoder.decode(nullCollection).issues())
             .extracting(ModelSpecContract.FieldIssue::code, ModelSpecContract.FieldIssue::field)
-            .containsExactly(tuple("MODEL_SPEC_COLLECTION_INVALID", "fields"));
+            .containsExactly(tuple("MODEL_SPEC_FIELD_NOT_ALLOWED", "fields"));
         assertThat(decoder.decode(wrongPrimitive).issues())
             .extracting(ModelSpecContract.FieldIssue::code, ModelSpecContract.FieldIssue::field)
             .containsExactly(tuple("MODEL_SPEC_NAME_INVALID", "name"));
     }
 
     @Test
-    void decoderAcceptsAFactDraftBeforeItsPhysicalSourceIsMapped() throws Exception {
+    void decoderAcceptsAFactDraftWithoutPhysicalSourceMapping() throws Exception {
         ObjectNode candidate = genericFact();
-        candidate.putArray("sourceRefs");
 
         ModelSpecCreateRequestDecoder.DecodeResult result = decoder.decode(candidate);
 
@@ -71,7 +69,6 @@ class ModelSpecCreateRequestDecoderTest {
             .put("dimensionDefinitionId", "60000000-0000-0000-0000-000000000001")
             .put("revision", 3);
         candidate.putNull("description");
-        ((ObjectNode) candidate.get("grain")).putArray("keys").add("missing_dimension_key");
 
         ModelSpecCreateRequestDecoder.DecodeResult result = decoder.decode(candidate);
 
@@ -80,7 +77,7 @@ class ModelSpecCreateRequestDecoderTest {
     }
 
     @Test
-    void decoderAcceptsLogicalDimensionProfileWithoutLegacyIdentityFields() throws Exception {
+    void decoderDefersTheDimensionProfileToLogicalDesign() throws Exception {
         ObjectNode candidate = genericDimension();
         candidate.putObject("dimensionDefinitionRef")
             .put("dimensionDefinitionId", "60000000-0000-0000-0000-000000000001")
@@ -91,9 +88,10 @@ class ModelSpecCreateRequestDecoderTest {
 
         ModelSpecCreateRequestDecoder.DecodeResult result = decoder.decode(candidate);
 
-        assertThat(result.issues()).isEmpty();
-        assertThat(result.command()).isNotNull();
-        assertThat(result.command().dimensionProfile().scdPolicy().type()).isEqualTo(ModelSpecContract.ScdType.TYPE1);
+        assertThat(result.command()).isNull();
+        assertThat(result.issues())
+            .extracting(ModelSpecContract.FieldIssue::code, ModelSpecContract.FieldIssue::field)
+            .containsExactly(tuple("MODEL_SPEC_FIELD_NOT_ALLOWED", "dimensionProfile"));
     }
 
     @Test
@@ -120,7 +118,7 @@ class ModelSpecCreateRequestDecoderTest {
     }
 
     @Test
-    void decoderRejectsLegacyDimensionIdentityFieldsButKeepsLogicalDesignFields() throws Exception {
+    void decoderRejectsLegacyDimensionIdentityFieldsFromCreate() throws Exception {
         ObjectNode legacyProfile = genericDimension();
         legacyProfile.putObject("dimensionDefinitionRef")
             .put("dimensionDefinitionId", "60000000-0000-0000-0000-000000000001")
@@ -132,7 +130,7 @@ class ModelSpecCreateRequestDecoderTest {
 
         assertThat(decoder.decode(legacyProfile).issues())
             .extracting(ModelSpecContract.FieldIssue::code, ModelSpecContract.FieldIssue::field)
-            .containsExactly(tuple("MODEL_SPEC_DIMENSION_PROFILE_INVALID", "dimensionProfile"));
+            .containsExactly(tuple("MODEL_SPEC_FIELD_NOT_ALLOWED", "dimensionProfile"));
     }
 
     @Test
@@ -179,6 +177,33 @@ class ModelSpecCreateRequestDecoderTest {
     }
 
     @Test
+    void decoderRejectsLogicalAndImplementationFieldsFromTheFirstDraftRequest() {
+        ObjectNode candidate = lenientMapper
+            .createObjectNode()
+            .put("planId", "10000000-0000-0000-0000-000000000001")
+            .put("domainId", "20000000-0000-0000-0000-000000000001")
+            .put("modelType", "FACT")
+            .put("name", "finance_project")
+            .put("idempotencyKey", "minimal-finance-project");
+        candidate.put("layer", "DWD");
+        candidate.put("implementationMode", "DESIGNER_GENERATED");
+        candidate.putObject("grain").put("statement", "one row per finance project").putArray("keys").add("project_id");
+        candidate.putObject("implementationPolicy").put("physicalName", "dwd_finance_project");
+
+        ModelSpecCreateRequestDecoder.DecodeResult result = decoder.decode(candidate);
+
+        assertThat(result.command()).isNull();
+        assertThat(result.issues())
+            .extracting(ModelSpecContract.FieldIssue::code, ModelSpecContract.FieldIssue::field)
+            .containsExactlyInAnyOrder(
+                tuple("MODEL_SPEC_FIELD_NOT_ALLOWED", "grain"),
+                tuple("MODEL_SPEC_FIELD_NOT_ALLOWED", "implementationMode"),
+                tuple("MODEL_SPEC_FIELD_NOT_ALLOWED", "implementationPolicy"),
+                tuple("MODEL_SPEC_FIELD_NOT_ALLOWED", "layer")
+            );
+    }
+
+    @Test
     void decoderIsTheOnlyPublicWireValidationEntry() throws Exception {
         assertThat(
             Modifier.isPublic(ModelSpecContract.class.getDeclaredMethod("validateCreateFieldNames", Set.class).getModifiers())
@@ -197,10 +222,14 @@ class ModelSpecCreateRequestDecoderTest {
     }
 
     private ObjectNode genericFact() throws Exception {
-        try (InputStream stream = getClass().getResourceAsStream("/fixtures/modeling-v2/generic-fact.json")) {
-            assertThat(stream).isNotNull();
-            return (ObjectNode) lenientMapper.readTree(stream);
-        }
+        return lenientMapper
+            .createObjectNode()
+            .put("planId", "10000000-0000-0000-0000-000000000001")
+            .put("domainId", "20000000-0000-0000-0000-000000000001")
+            .put("modelType", "FACT")
+            .put("name", "generic_event_detail")
+            .put("description", "Generic cross-industry event detail model")
+            .put("idempotencyKey", "generic-fact-fixture-v2");
     }
 
     private ObjectNode genericDimension() throws Exception {
@@ -208,9 +237,6 @@ class ModelSpecCreateRequestDecoderTest {
         candidate.put("modelType", "DIMENSION");
         candidate.put("name", "generic_dimension");
         candidate.putNull("description");
-        candidate.putNull("factShape");
-        candidate.putNull("timeSemantics");
-        candidate.putArray("sourceRefs");
         return candidate;
     }
 }

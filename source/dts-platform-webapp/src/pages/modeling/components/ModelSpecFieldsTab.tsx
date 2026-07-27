@@ -72,11 +72,17 @@ export function ModelSpecFieldsTab({ readOnly, persistedFieldNames, dimensionAtt
 										) : null}
 									</div>
 									<Row gutter={12}>
-										<Col xs={24} md={8}>
+										<Col xs={24} md={6}>
 											<Form.Item
 												name={[field.name, "name"]}
-												label="字段名"
-												rules={[{ required: true, whitespace: true, message: "请输入字段名" }]}
+												label="技术编码"
+												rules={[
+													{ required: true, whitespace: true, message: "请输入技术编码" },
+													{
+														pattern: /^[a-z][a-z0-9_]{0,62}$/,
+														message: "使用小写英文、数字和下划线，最长 63 个字符",
+													},
+												]}
 											>
 												<Input
 													disabled={readOnly || protectedName}
@@ -85,7 +91,16 @@ export function ModelSpecFieldsTab({ readOnly, persistedFieldNames, dimensionAtt
 												/>
 											</Form.Item>
 										</Col>
-										<Col xs={24} md={8}>
+										<Col xs={24} md={6}>
+											<Form.Item
+												name={[field.name, "displayName"]}
+												label="业务名称"
+												rules={[{ required: true, whitespace: true, message: "请输入业务名称" }]}
+											>
+												<Input disabled={readOnly} placeholder="例如：客户编号" />
+											</Form.Item>
+										</Col>
+										<Col xs={24} md={6}>
 											<Form.Item
 												name={[field.name, "dataType"]}
 												label="数据类型"
@@ -94,7 +109,7 @@ export function ModelSpecFieldsTab({ readOnly, persistedFieldNames, dimensionAtt
 												<Input disabled={readOnly} placeholder="例如：string" />
 											</Form.Item>
 										</Col>
-										<Col xs={24} md={8}>
+										<Col xs={24} md={6}>
 											<Form.Item name={[field.name, "role"]} label="字段作用" rules={[{ required: true }]}>
 												<Select disabled={readOnly} options={fieldRoleOptions} />
 											</Form.Item>
@@ -201,6 +216,7 @@ export function ModelSpecFieldsTab({ readOnly, persistedFieldNames, dimensionAtt
 								onClick={() =>
 									add({
 										name: "",
+										displayName: "",
 										dataType: "string",
 										nullable: true,
 										role: "ATTRIBUTE",

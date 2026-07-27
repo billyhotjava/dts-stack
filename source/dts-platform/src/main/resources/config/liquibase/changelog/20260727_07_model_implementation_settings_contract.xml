@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260727-07-model-implementation-settings-contract" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT">
+            <tableExists tableName="modeling_model_implementation"/>
+            <tableExists tableName="modeling_model_implementation_revision"/>
+        </preConditions>
+        <comment>Align the database implementation-settings guard with the Sprint-74 canonical ModelImplementation owner.</comment>
+
+        <sql splitStatements="false"><![CDATA[
+            CREATE OR REPLACE FUNCTION modeling_implementation_input_payload_valid(
+                mode varchar,
+                inputs jsonb,
+                mappings jsonb,
+                settings jsonb
+            ) RETURNS boolean
+            LANGUAGE plpgsql
+            IMMUTABLE
+            AS $$
+            DECLARE item jsonb;
+            DECLARE setting_key text;
+            DECLARE cast_key text;
+            DECLARE cast_type text;
+            BEGIN
+                IF mode NOT IN ('PHYSICAL_ASSET', 'UPSTREAM_MODEL', 'GENERATED')
+                   OR jsonb_typeof(inputs) <> 'array' OR jsonb_array_length(inputs) = 0
+                   OR jsonb_typeof(mappings) <> 'array' OR jsonb_typeof(settings) <> 'object' THEN
+                    RETURN false;
+                END IF;
+                FOR item IN SELECT value FROM jsonb_array_elements(inputs) LOOP
+                    IF jsonb_typeof(item) <> 'object'
+                       OR (SELECT count(*) FROM jsonb_object_keys(item)) <> (CASE WHEN mode = 'UPSTREAM_MODEL' THEN 3 ELSE 2 END) THEN
+                        RETURN false;
+                    END IF;
+                    IF mode = 'PHYSICAL_ASSET' AND (
+                        NOT (item ? 'sourceBindingId' AND item ? 'resolvedVersion')
+                        OR jsonb_typeof(item -> 'sourceBindingId') <> 'string'
+                        OR jsonb_typeof(item -> 'resolvedVersion') <> 'string'
+                        OR btrim(item ->> 'sourceBindingId') = '' OR btrim(item ->> 'resolvedVersion') = ''
+                    ) THEN RETURN false; END IF;
+                    IF mode = 'UPSTREAM_MODEL' AND (
+                        NOT (item ? 'modelSpecId' AND item ? 'revision' AND item ? 'checksum')
+                        OR jsonb_typeof(item -> 'modelSpecId') <> 'string'
+                        OR jsonb_typeof(item -> 'revision') <> 'number'
+                        OR jsonb_typeof(item -> 'checksum') <> 'string'
+                        OR btrim(item ->> 'modelSpecId') = '' OR (item ->> 'revision') !~ '^[1-9][0-9]*$'
+                        OR (item ->> 'checksum') !~ '^[0-9a-f]{64}$'
+                    ) THEN RETURN false; END IF;
+                    IF mode = 'GENERATED' AND (
+                        NOT (item ? 'generatorType' AND item ? 'config')
+                        OR jsonb_typeof(item -> 'generatorType') <> 'string'
+                        OR jsonb_typeof(item -> 'config') <> 'object'
+                        OR btrim(item ->> 'generatorType') = ''
+                    ) THEN RETURN false; END IF;
+                END LOOP;
+                FOR item IN SELECT value FROM jsonb_array_elements(mappings) LOOP
+                    IF jsonb_typeof(item) <> 'object' OR (SELECT count(*) FROM jsonb_object_keys(item)) <> 2
+                       OR NOT (item ? 'sourceField' AND item ? 'targetField')
+                       OR jsonb_typeof(item -> 'sourceField') <> 'string'
+                       OR jsonb_typeof(item -> 'targetField') <> 'string'
+                       OR (item ->> 'sourceField') !~ '^(src_[0-9]+\.)?[A-Za-z_][A-Za-z0-9_]*$'
+                       OR (item ->> 'targetField') !~ '^[A-Za-z_][A-Za-z0-9_]*$' THEN
+                        RETURN false;
+                    END IF;
+                END LOOP;
+                FOR setting_key IN SELECT key FROM jsonb_object_keys(settings) key LOOP
+                    IF setting_key NOT IN (
+                        'casts',
+                        'deduplicateBy',
+                        'dedupBy',
+                        'joins',
+                        'targetPhysicalName',
+                        'loadStrategy',
+                        'partitionFields',
+                        'retentionDays'
+                    ) THEN RETURN false; END IF;
+                END LOOP;
+                IF settings ? 'casts' THEN
+                    IF jsonb_typeof(settings -> 'casts') <> 'object' THEN RETURN false; END IF;
+                    FOR cast_key, cast_type IN SELECT key, value #>> '{}' FROM jsonb_each(settings -> 'casts') LOOP
+                        IF cast_key !~ '^[A-Za-z_][A-Za-z0-9_]*$'
+                           OR lower(cast_type) NOT IN ('string', 'integer', 'bigint', 'decimal', 'date', 'timestamp', 'boolean') THEN
+                            RETURN false;
+                        END IF;
+                    END LOOP;
+                END IF;
+                FOR setting_key IN SELECT key FROM jsonb_object_keys(settings) key WHERE key IN ('deduplicateBy', 'dedupBy') LOOP
+                    IF jsonb_typeof(settings -> setting_key) <> 'array' OR jsonb_array_length(settings -> setting_key) = 0 THEN
+                        RETURN false;
+                    END IF;
+                    FOR item IN SELECT value FROM jsonb_array_elements(settings -> setting_key) LOOP
+                        IF jsonb_typeof(item) <> 'string' OR (item #>> '{}') !~ '^[A-Za-z_][A-Za-z0-9_]*$' THEN
+                            RETURN false;
+                        END IF;
+                    END LOOP;
+                END LOOP;
+                IF settings ? 'joins' AND jsonb_typeof(settings -> 'joins') <> 'array' THEN RETURN false; END IF;
+                IF settings ? 'targetPhysicalName' AND (
+                    jsonb_typeof(settings -> 'targetPhysicalName') <> 'string'
+                    OR (settings ->> 'targetPhysicalName') !~ '^[a-z][a-z0-9_]{0,62}$'
+                ) THEN RETURN false; END IF;
+                IF settings ? 'loadStrategy' AND (
+                    jsonb_typeof(settings -> 'loadStrategy') <> 'string'
+                    OR (settings ->> 'loadStrategy') NOT IN ('FULL', 'INCREMENTAL', 'SNAPSHOT')
+                ) THEN RETURN false; END IF;
+                IF settings ? 'partitionFields' THEN
+                    IF jsonb_typeof(settings -> 'partitionFields') <> 'array' THEN RETURN false; END IF;
+                    FOR item IN SELECT value FROM jsonb_array_elements(settings -> 'partitionFields') LOOP
+                        IF jsonb_typeof(item) <> 'string' OR (item #>> '{}') !~ '^[A-Za-z_][A-Za-z0-9_]*$' THEN
+                            RETURN false;
+                        END IF;
+                    END LOOP;
+                END IF;
+                IF settings ? 'retentionDays' AND (
+                    jsonb_typeof(settings -> 'retentionDays') <> 'number'
+                    OR (settings ->> 'retentionDays') !~ '^(0|[1-9][0-9]*)$'
+                    OR (settings ->> 'retentionDays')::numeric > 36000
+                ) THEN RETURN false; END IF;
+                IF mode = 'GENERATED' THEN
+                    IF jsonb_array_length(inputs) <> 1
+                       OR (settings ? 'joins' AND jsonb_array_length(settings -> 'joins') <> 0) THEN RETURN false; END IF;
+                ELSIF jsonb_array_length(inputs) = 1 THEN
+                    IF settings ? 'joins' AND jsonb_array_length(settings -> 'joins') <> 0 THEN RETURN false; END IF;
+                ELSE
+                    IF NOT (settings ? 'joins')
+                       OR jsonb_array_length(settings -> 'joins') <> jsonb_array_length(inputs) - 1 THEN RETURN false; END IF;
+                    IF (
+                        SELECT count(DISTINCT (join_item ->> 'inputIndex')::numeric)
+                          FROM jsonb_array_elements(settings -> 'joins') join_item
+                         WHERE jsonb_typeof(join_item) = 'object'
+                           AND (SELECT count(*) FROM jsonb_object_keys(join_item)) = 4
+                           AND join_item ?& array['inputIndex', 'type', 'leftField', 'rightField']
+                           AND jsonb_typeof(join_item -> 'inputIndex') = 'number'
+                           AND (join_item ->> 'inputIndex') ~ '^[1-9][0-9]*$'
+                           AND (join_item ->> 'inputIndex')::numeric < jsonb_array_length(inputs)
+                           AND upper(join_item ->> 'type') IN ('INNER', 'LEFT', 'RIGHT', 'FULL')
+                           AND (join_item ->> 'leftField') ~ '^src_[0-9]+\.[A-Za-z_][A-Za-z0-9_]*$'
+                           AND (join_item ->> 'rightField') ~ '^src_[0-9]+\.[A-Za-z_][A-Za-z0-9_]*$'
+                           AND substring(join_item ->> 'leftField' from '^src_([0-9]+)\.')::numeric
+                               < (join_item ->> 'inputIndex')::numeric
+                           AND substring(join_item ->> 'rightField' from '^src_([0-9]+)\.')::numeric
+                               = (join_item ->> 'inputIndex')::numeric
+                    ) <> jsonb_array_length(inputs) - 1 THEN RETURN false; END IF;
+                END IF;
+                RETURN true;
+            END;
+            $$;
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    RAISE EXCEPTION 'ROLLBACK_BLOCKED_MODEL_IMPLEMENTATION_SETTINGS_CONTRACT_FORWARD_ONLY: implementation revisions may already use Sprint-74 settings';
+                END $$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

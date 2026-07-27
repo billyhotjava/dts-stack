@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.web.rest;
 
+import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ClaimImplementationCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.CompileView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
@@ -20,6 +21,8 @@ import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.TestEviden
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.TimelineView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService.ImplementationValidationView;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService.ImplementationMigrationBatch;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService.ImplementationMigrationRollback;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService.ExpectedImplementationVersion;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.ExpectedVersion;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
@@ -108,6 +111,42 @@ public class ModelLifecycleResource {
         @RequestBody ImplementationWriteRequest request
     ) {
         return ApiResponses.ok(service.validateImplementation(tenantId, actorId(), id, expected(id, ifMatch), decode(request)));
+    }
+
+    @PostMapping("/implementation-migrations/dry-run")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ApiResponse<ImplementationMigrationBatch> previewImplementationMigrations(
+        @RequestBody(required = false) ImplementationMigrationScopeRequest request
+    ) {
+        return ApiResponses.ok(
+            service.previewImplementationMigrations(
+                tenantId,
+                request == null ? List.of() : request.modelSpecIds()
+            )
+        );
+    }
+
+    @PostMapping("/implementation-migrations/apply")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ApiResponse<ImplementationMigrationBatch> applyImplementationMigrations(
+        @RequestBody ImplementationMigrationApplyRequest request
+    ) {
+        return ApiResponses.ok(
+            service.applyImplementationMigrations(
+                tenantId,
+                actorId(),
+                request.modelSpecIds(),
+                request.previewChecksum()
+            )
+        );
+    }
+
+    @PostMapping("/implementation-migrations/rollback")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ApiResponse<ImplementationMigrationRollback> rollbackImplementationMigration(
+        @RequestBody ImplementationMigrationRollbackRequest request
+    ) {
+        return ApiResponses.ok(service.rollbackImplementationMigration(request.previewChecksum()));
     }
 
     @PostMapping("/{id}/implementation/convert-to-designer-generated")
@@ -354,6 +393,43 @@ public class ModelLifecycleResource {
         String materialization,
         String idempotencyKey
     ) {}
+
+    public record ImplementationMigrationScopeRequest(List<UUID> modelSpecIds) {
+        public ImplementationMigrationScopeRequest {
+            modelSpecIds = modelSpecIds == null ? List.of() : List.copyOf(modelSpecIds);
+        }
+
+        @JsonAnySetter
+        public void rejectUnknownField(String fieldName, Object ignored) {
+            throw invalidMigrationCommand(fieldName);
+        }
+    }
+
+    public record ImplementationMigrationApplyRequest(List<UUID> modelSpecIds, String previewChecksum) {
+        public ImplementationMigrationApplyRequest {
+            modelSpecIds = modelSpecIds == null ? List.of() : List.copyOf(modelSpecIds);
+        }
+
+        @JsonAnySetter
+        public void rejectUnknownField(String fieldName, Object ignored) {
+            throw invalidMigrationCommand(fieldName);
+        }
+    }
+
+    public record ImplementationMigrationRollbackRequest(String previewChecksum) {
+        @JsonAnySetter
+        public void rejectUnknownField(String fieldName, Object ignored) {
+            throw invalidMigrationCommand(fieldName);
+        }
+    }
+
+    private static ModelSpecException invalidMigrationCommand(String fieldName) {
+        return new ModelSpecException(
+            "MODEL_IMPLEMENTATION_MIGRATION_COMMAND_INVALID",
+            "Unsupported implementation migration field: " + fieldName,
+            ModelSpecException.Kind.BAD_REQUEST
+        );
+    }
 
     public record ImplementationInputRequest(
         UUID sourceBindingId,

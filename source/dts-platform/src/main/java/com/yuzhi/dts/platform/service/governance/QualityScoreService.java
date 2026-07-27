@@ -63,10 +63,12 @@ public class QualityScoreService {
             datasetId, previousPeriodStart
         );
 
-        List<GovQualityRun> currentRuns = allRuns.stream()
+        List<GovQualityRun> effectiveRuns = allRuns.stream().filter(this::isScorableRun).toList();
+
+        List<GovQualityRun> currentRuns = effectiveRuns.stream()
             .filter(r -> r.getFinishedAt() != null && !r.getFinishedAt().isBefore(periodStart))
             .toList();
-        List<GovQualityRun> previousRuns = allRuns.stream()
+        List<GovQualityRun> previousRuns = effectiveRuns.stream()
             .filter(r -> r.getFinishedAt() != null && r.getFinishedAt().isBefore(periodStart))
             .toList();
 
@@ -181,14 +183,29 @@ public class QualityScoreService {
         }
         // Legacy data: no rowsTotal — use status-based scoring
         String status = run.getStatus();
-        if ("SUCCEEDED".equalsIgnoreCase(status)) {
+        if (
+            "SUCCEEDED".equalsIgnoreCase(status) ||
+            "SUCCESS".equalsIgnoreCase(status) ||
+            "PASSED".equalsIgnoreCase(status) ||
+            "COMPLETED".equalsIgnoreCase(status)
+        ) {
             return 100;
         }
         if ("FAILED".equalsIgnoreCase(status)) {
             return 0;
         }
-        // Unknown/interim status (RUNNING, QUEUED, SKIPPED) — treat as neutral
-        return 100;
+        return 0;
+    }
+
+    private boolean isScorableRun(GovQualityRun run) {
+        String status = run != null ? run.getStatus() : null;
+        return (
+            "SUCCEEDED".equalsIgnoreCase(status) ||
+            "SUCCESS".equalsIgnoreCase(status) ||
+            "PASSED".equalsIgnoreCase(status) ||
+            "COMPLETED".equalsIgnoreCase(status) ||
+            "FAILED".equalsIgnoreCase(status)
+        );
     }
 
     private String resolveType(GovQualityRun run) {

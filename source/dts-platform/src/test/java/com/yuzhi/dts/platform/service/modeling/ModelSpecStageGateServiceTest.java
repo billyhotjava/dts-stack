@@ -2,6 +2,7 @@ package com.yuzhi.dts.platform.service.modeling;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -49,10 +50,46 @@ class ModelSpecStageGateServiceTest {
     }
 
     @Test
+    void implementationGateReportsOnlyTheCanonicalImplementationOwnerWhenNoImplementationExists() {
+        ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
+        ModelSpecRepository repository = mock(ModelSpecRepository.class);
+        ModelLifecycleRepository lifecycle = mock(ModelLifecycleRepository.class);
+        ModelImplementationCompatibilityAdapter adapter = mock(ModelImplementationCompatibilityAdapter.class);
+        ModelSpecView model = view(
+            ModelType.FACT,
+            null,
+            FactShape.TRANSACTION,
+            new TimeSemantics(TimeSemanticsType.EVENT_TIME, List.of("event_time")),
+            List.of(),
+            List.of(),
+            List.of(),
+            null
+        );
+        when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(model);
+        when(lifecycle.findImplementation("tenant-a", MODEL_ID)).thenReturn(Optional.empty());
+
+        ModelSpecStageGateService gates = new ModelSpecStageGateService(
+            modelSpecs,
+            repository,
+            mock(ModelSpecStandardEvidencePort.class),
+            lifecycle,
+            null,
+            null,
+            null,
+            adapter
+        );
+
+        assertThat(implementationGate(gates).blockers())
+            .extracting(ModelSpecStageGateService.GateBlocker::code)
+            .containsExactly("MODEL_IMPLEMENTATION_REQUIRED");
+    }
+
+    @Test
     void addsStableImplementationInputBlockerWhenPersistedPhysicalSourceIsNoLongerConfirmed() {
         ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
         ModelSpecRepository repository = mock(ModelSpecRepository.class);
         ModelSpecSourceValidationPort sourceValidation = mock(ModelSpecSourceValidationPort.class);
+        ModelLifecycleRepository lifecycle = mock(ModelLifecycleRepository.class);
         ModelSpecView model = dimension(
             new DimensionProfile("organization", List.of(), new ScdPolicy(ScdType.TYPE1, null, null, null), ReuseScope.PLAN),
             sources(),
@@ -60,17 +97,45 @@ class ModelSpecStageGateServiceTest {
         );
         when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(model);
         when(sourceValidation.isCurrentBindingForGate("tenant-a", model.planId(), model.sourceRefs().get(0))).thenReturn(false);
+        ImplementationView implementation = new ImplementationView(
+            UUID.randomUUID(),
+            model.id(),
+            model.planId(),
+            model.revision(),
+            model.checksum(),
+            ImplementationMode.DESIGNER_GENERATED,
+            null,
+            "model.test.dimension",
+            "ACTIVE",
+            1,
+            "b".repeat(64),
+            ModelLifecycleContract.InputMode.PHYSICAL_ASSET,
+            List.of(
+                new ModelLifecycleContract.PhysicalAssetInput(
+                    model.sourceRefs().getFirst().sourceBindingId(),
+                    model.sourceRefs().getFirst().resolvedVersion()
+                )
+            ),
+            List.of(),
+            java.util.Map.of(
+                "targetPhysicalName", "dwd_dimension",
+                "loadStrategy", "FULL",
+                "partitionFields", List.of("event_time")
+            ),
+            "table"
+        );
+        when(lifecycle.findImplementation("tenant-a", MODEL_ID)).thenReturn(Optional.of(implementation));
         ModelImplementationCompatibilityAdapter adapter = new ModelImplementationCompatibilityAdapter(
             modelSpecs,
             repository,
-            mock(ModelLifecycleRepository.class),
+            lifecycle,
             sourceValidation
         );
         ModelSpecStageGateService gates = new ModelSpecStageGateService(
             modelSpecs,
             repository,
             mock(ModelSpecStandardEvidencePort.class),
-            null,
+            lifecycle,
             sourceValidation,
             null,
             null,
@@ -201,7 +266,7 @@ class ModelSpecStageGateServiceTest {
         assertThat(implementation.blockers())
             .extracting(ModelSpecStageGateService.GateBlocker::code)
             .contains("DIMENSION_DEFINITION_NOT_CURRENT");
-        verify(domainReadAccess).canRead(definitionDomainId);
+        verify(domainReadAccess, times(3)).canRead(definitionDomainId);
     }
 
     @Test
@@ -239,6 +304,28 @@ class ModelSpecStageGateServiceTest {
         );
 
         assertThat(ModelSpecStageGateService.evaluate(model, Stage.DRAFT_SAVE, GateEvidence.currentFor(model)).status())
+            .isEqualTo(GateStatus.READY);
+        assertThat(
+            ModelSpecStageGateService.evaluate(model, Stage.IMPLEMENTATION_READY, GateEvidence.currentFor(model)).blockers()
+        )
+            .extracting(ModelSpecStageGateService.GateBlocker::code)
+            .containsExactly("MODEL_SPEC_FACT_INPUT_REQUIRED");
+    }
+
+    @Test
+    void factLogicalDesignCanCompleteWithoutImplementationInput() {
+        ModelSpecView model = view(
+            ModelType.FACT,
+            null,
+            FactShape.TRANSACTION,
+            new TimeSemantics(TimeSemanticsType.EVENT_TIME, List.of("event_time")),
+            List.of(),
+            List.of(),
+            List.of(),
+            null
+        );
+
+        assertThat(ModelSpecStageGateService.evaluate(model, Stage.DESIGNED, GateEvidence.currentFor(model)).status())
             .isEqualTo(GateStatus.READY);
         assertThat(
             ModelSpecStageGateService.evaluate(model, Stage.IMPLEMENTATION_READY, GateEvidence.currentFor(model)).blockers()
@@ -512,6 +599,101 @@ class ModelSpecStageGateServiceTest {
         assertThat(release.blockers())
             .extracting(ModelSpecStageGateService.GateBlocker::code)
             .contains("MODEL_SPEC_STANDARD_EVIDENCE_STALE");
+    }
+
+    @Test
+    void releaseGateAppliesKeyAndMeasureCoverageAndAdvisoryQualityOnlyAtRelease() {
+        ModelSpecView model = withStandardsForRoles(releaseReadyFact(), Set.of(FieldRole.KEY, FieldRole.MEASURE));
+        ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
+        ModelSpecRepository repository = mock(ModelSpecRepository.class);
+        ModelSpecStandardEvidencePort standards = mock(ModelSpecStandardEvidencePort.class);
+        ModelGovernancePolicyPort governancePolicy = mock(ModelGovernancePolicyPort.class);
+        when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(model);
+        when(standards.evaluate("tenant-a", model)).thenReturn(StandardEvidence.CURRENT);
+        when(governancePolicy.resolve("tenant-a", model.planId())).thenReturn(
+            ModelGovernancePolicyPort.Policy.available(
+                ModelGovernancePolicyPort.StandardCoverage.KEY_AND_MEASURE,
+                ModelGovernancePolicyPort.QualityGate.ADVISORY
+            )
+        );
+
+        ModelSpecStageGateService gates = new ModelSpecStageGateService(
+            modelSpecs,
+            repository,
+            standards,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            governancePolicy
+        );
+        List<GateView> decisions = gates.evaluateAll("tenant-a", MODEL_ID);
+        GateView designed = decisions.stream().filter(gate -> gate.stage() == Stage.DESIGNED).findFirst().orElseThrow();
+        GateView release = decisions.stream().filter(gate -> gate.stage() == Stage.RELEASE_READY).findFirst().orElseThrow();
+
+        assertThat(designed.blockers())
+            .extracting(ModelSpecStageGateService.GateBlocker::code)
+            .doesNotContain(
+                "MODEL_SPEC_STANDARD_EVIDENCE_STALE",
+                "MODEL_SPEC_QUALITY_EVIDENCE_UNKNOWN",
+                "MODEL_GOVERNANCE_POLICY_UNAVAILABLE"
+            );
+        assertThat(release.blockers())
+            .extracting(ModelSpecStageGateService.GateBlocker::code)
+            .doesNotContain(
+                "MODEL_SPEC_STANDARD_EVIDENCE_STALE",
+                "MODEL_SPEC_QUALITY_EVIDENCE_UNKNOWN",
+                "MODEL_GOVERNANCE_POLICY_UNAVAILABLE"
+            );
+    }
+
+    @Test
+    void releaseGateRequiresAllFieldsWhenConfiguredAndFailsClosedWhenPolicyIsUnreadable() {
+        ModelSpecView model = withStandardsForRoles(releaseReadyFact(), Set.of(FieldRole.KEY));
+        ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
+        ModelSpecRepository repository = mock(ModelSpecRepository.class);
+        ModelSpecStandardEvidencePort standards = mock(ModelSpecStandardEvidencePort.class);
+        ModelGovernancePolicyPort governancePolicy = mock(ModelGovernancePolicyPort.class);
+        when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(model);
+        when(standards.evaluate("tenant-a", model)).thenReturn(StandardEvidence.CURRENT);
+        when(governancePolicy.resolve("tenant-a", model.planId()))
+            .thenReturn(
+                ModelGovernancePolicyPort.Policy.available(
+                    ModelGovernancePolicyPort.StandardCoverage.ALL_FIELDS,
+                    ModelGovernancePolicyPort.QualityGate.BLOCKING
+                )
+            )
+            .thenReturn(ModelGovernancePolicyPort.Policy.unavailable("WAREHOUSE_PLAN_POLICY_UNREADABLE"));
+
+        ModelSpecStageGateService gates = new ModelSpecStageGateService(
+            modelSpecs,
+            repository,
+            standards,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            governancePolicy
+        );
+        GateView strict = gates.evaluateAll("tenant-a", MODEL_ID).stream()
+            .filter(gate -> gate.stage() == Stage.RELEASE_READY)
+            .findFirst()
+            .orElseThrow();
+        GateView unavailable = gates.evaluateAll("tenant-a", MODEL_ID).stream()
+            .filter(gate -> gate.stage() == Stage.RELEASE_READY)
+            .findFirst()
+            .orElseThrow();
+
+        assertThat(strict.blockers())
+            .extracting(ModelSpecStageGateService.GateBlocker::code)
+            .contains("MODEL_SPEC_STANDARD_EVIDENCE_STALE", "MODEL_SPEC_QUALITY_EVIDENCE_UNKNOWN");
+        assertThat(unavailable.blockers())
+            .extracting(ModelSpecStageGateService.GateBlocker::code)
+            .contains("MODEL_GOVERNANCE_POLICY_UNAVAILABLE");
     }
 
     @Test
@@ -942,6 +1124,53 @@ class ModelSpecStageGateServiceTest {
         UUID unitId = UUID.fromString("60000000-0000-0000-0000-000000000001");
         List<StandardBinding> bindings = model.fields().stream()
             .map(field -> new StandardBinding(field.name(), null, null, null, null, unitId, 1, field.securityLevel()))
+            .toList();
+        return new ModelSpecView(
+            model.contractVersion(),
+            model.id(),
+            model.planId(),
+            model.domainId(),
+            model.modelType(),
+            model.layer(),
+            model.name(),
+            model.description(),
+            model.implementationMode(),
+            model.materialization(),
+            model.businessActivityRef(),
+            model.consumptionScenario(),
+            model.grain(),
+            model.factShape(),
+            model.timeSemantics(),
+            model.fields(),
+            model.sourceRefs(),
+            model.dependsOn(),
+            model.dimensionRefs(),
+            model.metricRefs(),
+            bindings,
+            model.generationStrategy(),
+            model.dimensionProfile(),
+            model.dimensionDefinitionRef(),
+            model.status(),
+            model.revision(),
+            model.checksum(),
+            model.createdAt(),
+            model.updatedAt(),
+            model.compatibilityMode(),
+            model.legacyRefs(),
+            model.dataMartId(),
+            model.variantCode(),
+            model.implementationPolicy()
+        );
+    }
+
+    private static ModelSpecView withStandardsForRoles(ModelSpecView model, Set<FieldRole> roles) {
+        UUID unitId = UUID.fromString("60000000-0000-0000-0000-000000000002");
+        List<StandardBinding> bindings = model.fields().stream()
+            .map(field ->
+                roles.contains(field.role())
+                    ? new StandardBinding(field.name(), null, null, null, null, unitId, 1, field.securityLevel())
+                    : new StandardBinding(field.name(), null, null, null, null, null, null, field.securityLevel())
+            )
             .toList();
         return new ModelSpecView(
             model.contractVersion(),

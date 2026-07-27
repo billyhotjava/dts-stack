@@ -2,7 +2,7 @@
 
 **勘察日期**：2026-07-26  
 **数据来源**：当前 `v223-dts-pg-1 / dts_platform` 实例，只读查询  
-**结论**：可据此设计创建与纠错主线；样本规模和类型覆盖不足，真实 E2E 数据基线仍有缺口
+**结论**：初始画像用于设计创建与纠错主线；2026-07-27 已通过隔离验收计划补齐四类模型、两种实现和真实 E2E，见 `it/evidence/`
 
 ## 1. 统一语言
 
@@ -112,10 +112,10 @@ lifecycle=NONE
 | 权限 | 现阶段只接入既有 read/write/export 粒度 | 是；细粒度权限不在本 Sprint 伪造 |
 | 历史留存 | revision、checksum、发布证据不可原地覆盖 | 是 |
 
-## 6. 未决与基线缺口
+## 6. 基线缺口关闭记录
 
-- 自动化环境无法解析 `dts.local`，真实登录/API/Chrome95 需 F0/T01 修复；
-- 当前运行镜像早于 Sprint-73 提交，数据库缺 20260727 前置迁移，需 F0/T01 先对齐部署基线；
-- 现网只有 3 条 v2 草稿，缺 SUMMARY/APPLICATION 和已发布资产样本，需 F0/T02 建立隔离 fixture；
-- Sprint-73 已提交 `implementationPolicy`；编码前必须更新 GitNexus、确认各环境 snapshot 现状并冻结兼容迁移边界；
-- 当前工作树另有 Sprint-74 范围外的 Liquibase 用户修改，必须保持原样并从本 Sprint 提交中排除。
+- DNS/login：改用 `bi.yuzhicloud.com` 显式 resolver 与真实 `portal_session`，Chrome95 3/3 PASS；
+- 镜像/schema：当前后端与 webapp 已部署，PostgreSQL 已登记 20260727 changeset 01～07；
+- 样本：隔离计划已包含 DIMENSION、FACT、SUMMARY、APPLICATION，3 个普通实现、1 个 dbt 实现与 COMPILE/PASSED；
+- compatibility：旧 `implementationPolicy` dry-run/apply/rollback 契约、旧 snapshot 读取和 current implementation 冲突均已覆盖；
+- 范围外工作树：质量治理与仓库说明修改保持原样，最终范围检查单独报告。

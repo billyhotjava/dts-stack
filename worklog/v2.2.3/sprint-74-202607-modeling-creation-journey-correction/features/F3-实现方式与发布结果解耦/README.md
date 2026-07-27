@@ -1,7 +1,7 @@
 # F3：实现方式与发布结果解耦
 
 **优先级**：P0  
-**状态**：DRAFT
+**状态**：DONE
 
 ## 目标
 
@@ -49,20 +49,20 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|
-| T01 | 收敛ModelImplementation实现设置所有权 | P0 | DRAFT | F2 |
-| T02 | 统一普通配置与高级dbt实现入口 | P0 | DRAFT | T01 |
-| T03 | 将物理资产阶段收敛为发布结果 | P0 | DRAFT | T01、T02 |
+| T01 | 收敛ModelImplementation实现设置所有权 | P0 | DONE | F2 |
+| T02 | 统一普通配置与高级dbt实现入口 | P0 | DONE | T01 |
+| T03 | 将物理资产阶段收敛为发布结果 | P0 | DONE | T01、T02 |
 
 ## Definition of Ready
 
 - [x] Implementation command 和 settings owner 已钉死
 - [x] dbt/physical boundary 已钉死
 - [x] 发布结果只读 contract 已钉死
-- [ ] F2 DESIGNED gate 通过实现
+- [x] F2 DESIGNED gate 通过实现
 
 ## 完成标准
 
-- [ ] 逻辑页不保存实现设置
-- [ ] 普通/dbt 绑定同一 modelSpec revision
-- [ ] 发布结果无 dbt 编辑入口
-- [ ] IT-06～IT-08 通过
+- [x] 逻辑页不保存实现设置
+- [x] 普通/dbt 绑定同一 modelSpec revision
+- [x] 发布结果无 dbt 编辑入口
+- [x] IT-06～IT-08 通过

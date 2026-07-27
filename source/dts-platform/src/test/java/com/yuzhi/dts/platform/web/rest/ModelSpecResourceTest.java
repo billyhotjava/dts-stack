@@ -271,6 +271,62 @@ class ModelSpecResourceTest {
     }
 
     @Test
+    void previewsAndAppliesExplicitDraftReclassificationWithTheStrongModelEtag() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", null));
+        ModelSpecApplicationService.ReclassificationPreview preview = new ModelSpecApplicationService.ReclassificationPreview(
+            true,
+            ModelType.FACT,
+            ModelType.DIMENSION,
+            Layer.DWD,
+            List.of("name", "description", "fields"),
+            List.of("dimensionDefinitionRef", "grain", "fields.KEY"),
+            List.of("grain", "factShape", "timeSemantics"),
+            List.of(),
+            1,
+            CHECKSUM
+        );
+        when(service.previewReclassification(eq("server-tenant"), eq("alice"), eq(MODEL_ID), any()))
+            .thenReturn(preview);
+        when(service.reclassify(eq("server-tenant"), eq("alice"), eq(MODEL_ID), any(), any())).thenReturn(view());
+
+        mockMvc
+            .perform(
+                post("/api/modeling/model-specs/{id}/reclassify-preview", MODEL_ID)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"targetType":"DIMENSION",
+                         "dimensionDefinitionRef":{"dimensionDefinitionId":"60000000-0000-0000-0000-000000000001","revision":1}}
+                        """
+                    )
+            )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.eligible").value(true))
+            .andExpect(jsonPath("$.data.clearFields[0]").value("grain"))
+            .andExpect(jsonPath("$.data.requiredFields[0]").value("dimensionDefinitionRef"));
+
+        mockMvc
+            .perform(
+                post("/api/modeling/model-specs/{id}/reclassify", MODEL_ID)
+                    .header("If-Match", ETAG)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"targetType":"DIMENSION",
+                         "dimensionDefinitionRef":{"dimensionDefinitionId":"60000000-0000-0000-0000-000000000001","revision":1},
+                         "acceptedClearFields":["grain","factShape","timeSemantics"],
+                         "idempotencyKey":"finance-r4-to-dimension"}
+                        """
+                    )
+            )
+            .andExpect(status().isOk())
+            .andExpect(header().string("ETag", ETAG));
+
+        verify(service).previewReclassification(eq("server-tenant"), eq("alice"), eq(MODEL_ID), any());
+        verify(service).reclassify(eq("server-tenant"), eq("alice"), eq(MODEL_ID), any(), any());
+    }
+
+    @Test
     void mapsHiddenAndMissingPinnedRevisionsToTheSameNotFoundContract() throws Exception {
         ModelSpecException hiddenOrMissing = new ModelSpecException(
             "MODEL_SPEC_NOT_FOUND",
@@ -366,11 +422,7 @@ class ModelSpecResourceTest {
         return """
             {"planId":"10000000-0000-0000-0000-000000000001",
              "domainId":"20000000-0000-0000-0000-000000000001",
-             "modelType":"FACT","layer":"DWD","name":"customer_detail",
-             "implementationMode":"DESIGNER_GENERATED",
-             "grain":{"statement":"one row per customer event","keys":["customer_id"]},
-             "sourceRefs":[{"kind":"TABLE","ref":"ods.customer","layer":"ODS","role":"PRIMARY","sortOrder":0,
-                            "sourceBindingId":"50000000-0000-0000-0000-000000000001","resolvedVersion":"v1"}],
+             "modelType":"FACT","name":"customer_detail",
              "idempotencyKey":"create-1"}
             """;
     }

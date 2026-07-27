@@ -78,6 +78,7 @@ export type ModelSpecDimensionHierarchyDraft = {
 	code: string;
 	name: string;
 	levelFieldsText: string;
+	levelFieldNames?: string[];
 };
 
 export type ModelSpecDraft = {
@@ -99,6 +100,7 @@ export type ModelSpecDraft = {
 	factShape?: ModelSpecFactShape;
 	timeSemanticsType?: ModelSpecTimeSemanticsType;
 	timeFieldsText: string;
+	timeFieldNames: string[];
 	businessActivityRef: string;
 	upstreamIds: string[];
 	dimensionRefIds: string[];
@@ -151,6 +153,7 @@ export function createEmptyModelSpecDraft(
 		keyDataType: "string",
 		sources: [],
 		timeFieldsText: "",
+		timeFieldNames: [],
 		businessActivityRef: "",
 		upstreamIds: [],
 		dimensionRefIds: [],
@@ -182,6 +185,7 @@ const buildFields = (draft: ModelSpecDraft, grainKeys: string[]): ModelSpecField
 	const fields = (draft.fields ?? []).map((field) => ({
 		...field,
 		name: field.name.trim(),
+		displayName: optionalText(field.displayName),
 		dataType: field.dataType.trim(),
 		sourceFieldRef: optionalText(field.sourceFieldRef),
 		securityLevel: optionalText(field.securityLevel),
@@ -195,6 +199,7 @@ const buildFields = (draft: ModelSpecDraft, grainKeys: string[]): ModelSpecField
 			// 系统按粒度声明补齐的主键字段：无来源映射、未定密级、非冗余。
 			fields.push({
 				name: key,
+				displayName: key,
 				dataType: draft.keyDataType.trim() || "string",
 				sourceFieldRef: undefined,
 				securityLevel: undefined,
@@ -261,14 +266,16 @@ export function buildModelSpecCreateCommand(
 	_candidates: ModelSpecRevisionCandidate[],
 	idempotencyKey: string,
 ): CreateModelSpecCommand {
+	const dataMartId = optionalText(draft.dataMartId);
+	const variantCode = optionalText(draft.variantCode)?.toUpperCase();
 	const command = {
 		planId: draft.planId.trim(),
 		domainId: draft.domainId.trim(),
 		modelType: draft.modelType,
 		name: draft.name.trim(),
 		description: optionalText(draft.description),
-		dataMartId: optionalText(draft.dataMartId),
-		variantCode: optionalText(draft.variantCode)?.toUpperCase(),
+		...(dataMartId ? { dataMartId } : {}),
+		...(variantCode ? { variantCode } : {}),
 		idempotencyKey,
 	};
 	if (draft.modelType === "DIMENSION") {
@@ -290,7 +297,11 @@ const buildModelSpecFullCommand = (
 	const isDerived = draft.modelType === "SUMMARY" || draft.modelType === "APPLICATION";
 	const acceptsUpstreamModels = isFact || isDerived;
 	const isApplication = draft.modelType === "APPLICATION";
-	const timeFields = isFact ? parseModelFieldNames(draft.timeFieldsText || "") : [];
+	const timeFields = isFact
+		? draft.timeFieldNames?.length
+			? Array.from(new Set(draft.timeFieldNames.map((field) => field.trim()).filter(Boolean)))
+			: parseModelFieldNames(draft.timeFieldsText || "")
+		: [];
 	const generationType = optionalText(draft.generationStrategyType);
 	const dimensionCode = draft.modelType === "DIMENSION" ? optionalText(draft.dimensionCode)?.toUpperCase() : undefined;
 	return {
@@ -333,7 +344,10 @@ const buildModelSpecFullCommand = (
 					hierarchies: (draft.dimensionHierarchies ?? []).map((hierarchy) => ({
 						code: hierarchy.code.trim().toUpperCase(),
 						name: hierarchy.name.trim(),
-						levels: parseModelFieldNames(hierarchy.levelFieldsText).map((fieldName, index) => ({
+						levels: (hierarchy.levelFieldNames?.length
+							? hierarchy.levelFieldNames
+							: parseModelFieldNames(hierarchy.levelFieldsText)
+						).map((fieldName, index) => ({
 							fieldName,
 							order: index + 1,
 						})),
@@ -372,11 +386,11 @@ export function buildModelSpecUpdateCommand(
 	draft: ModelSpecDraft,
 	candidates: ModelSpecRevisionCandidate[],
 ): UpdateModelSpecCommand {
-	const { idempotencyKey: _idempotencyKey, ...command } = buildModelSpecFullCommand(
-		draft,
-		candidates,
-		"model-spec-update",
-	);
+	const {
+		idempotencyKey: _idempotencyKey,
+		implementationPolicy: _legacyImplementationPolicy,
+		...command
+	} = buildModelSpecFullCommand(draft, candidates, "model-spec-update");
 	return command;
 }
 
@@ -410,6 +424,7 @@ export function modelSpecDraftFromView(view: CanonicalModelSpecView): ModelSpecD
 		factShape: view.factShape || undefined,
 		timeSemanticsType: view.timeSemantics?.type,
 		timeFieldsText: view.timeSemantics?.fields.join(", ") || "",
+		timeFieldNames: view.timeSemantics?.fields || [],
 		businessActivityRef: view.businessActivityRef || "",
 		upstreamIds: view.dependsOn.map((reference) => reference.modelSpecId),
 		dimensionRefIds: view.dimensionRefs.map((reference) => reference.modelSpecId),
@@ -421,6 +436,10 @@ export function modelSpecDraftFromView(view: CanonicalModelSpecView): ModelSpecD
 			view.dimensionProfile?.hierarchies.map((hierarchy) => ({
 				code: hierarchy.code,
 				name: hierarchy.name,
+				levelFieldNames: hierarchy.levels
+					.slice()
+					.sort((left, right) => left.order - right.order)
+					.map((level) => level.fieldName),
 				levelFieldsText: hierarchy.levels
 					.slice()
 					.sort((left, right) => left.order - right.order)

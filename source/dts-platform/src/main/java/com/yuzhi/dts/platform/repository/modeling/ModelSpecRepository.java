@@ -88,6 +88,89 @@ public class ModelSpecRepository {
         return Boolean.TRUE.equals(referenced);
     }
 
+    public boolean hasReclassificationEvidence(String tenantId, UUID modelSpecId) {
+        Boolean exists = jdbcTemplate.queryForObject(
+            """
+            select exists (
+                select 1
+                  from modeling_model_implementation
+                 where tenant_id = ? and model_spec_id = ?
+                union all
+                select 1
+                  from modeling_model_lifecycle_event
+                 where tenant_id = ? and model_spec_id = ?
+                union all
+                select 1
+                  from modeling_model_release_candidate_entry
+                 where tenant_id = ? and model_spec_id = ?
+            )
+            """,
+            Boolean.class,
+            tenantId,
+            modelSpecId,
+            tenantId,
+            modelSpecId,
+            tenantId,
+            modelSpecId
+        );
+        return Boolean.TRUE.equals(exists);
+    }
+
+    public Optional<ReclassificationReplay> findReclassificationReplay(
+        String tenantId,
+        UUID modelSpecId,
+        String idempotencyKey
+    ) {
+        return jdbcTemplate
+            .query(
+                """
+                select result_revision, result_checksum
+                  from modeling_model_reclassification_command
+                 where tenant_id = ? and model_spec_id = ? and idempotency_key = ?
+                """,
+                (row, rowNumber) -> new ReclassificationReplay(
+                    row.getInt("result_revision"),
+                    row.getString("result_checksum")
+                ),
+                tenantId,
+                modelSpecId,
+                idempotencyKey
+            )
+            .stream()
+            .findFirst();
+    }
+
+    public void insertReclassificationCommand(
+        String tenantId,
+        String actorId,
+        UUID modelSpecId,
+        String idempotencyKey,
+        ModelType fromType,
+        ModelType toType,
+        int resultRevision,
+        String resultChecksum,
+        Instant createdAt
+    ) {
+        jdbcTemplate.update(
+            """
+            insert into modeling_model_reclassification_command (
+                id, tenant_id, model_spec_id, idempotency_key, from_type, to_type,
+                result_revision, result_checksum, created_by, created_date
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            UUID.randomUUID(),
+            tenantId,
+            modelSpecId,
+            idempotencyKey,
+            fromType.name(),
+            toType.name(),
+            resultRevision,
+            resultChecksum,
+            actorId,
+            Timestamp.from(createdAt)
+        );
+    }
+
     public Optional<StoredModelSpec> findByIdempotencyKey(String tenantId, String idempotencyKey) {
         return jdbcTemplate
             .query(
@@ -745,6 +828,8 @@ public class ModelSpecRepository {
         String planOwnerId,
         String planOwnerDepartmentId
     ) {}
+
+    public record ReclassificationReplay(int revision, String checksum) {}
 
     public record PhysicalSourceProjection(SourceKind kind, String ref, Layer layer, String resolvedVersion) {}
 }

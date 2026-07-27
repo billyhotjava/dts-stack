@@ -2,7 +2,7 @@
 
 **复审日期**：2026-07-26  
 **复审范围**：目标旅程、对象所有权、阶段门禁、DataWorks 参考边界、dbt 边界、存量兼容、发布治理
-**结论**：REVIEW_PENDING——已按二次复审移除 DIM/五层扩展，并把 Sprint-73 冲突改为已提交兼容迁移；待用户再次确认、G0 恢复且 GitNexus/部署基线追上 HEAD 前不得编码
+**结论**：PASS——二次复审移除 DIM/五层扩展并冻结兼容迁移边界；2026-07-27 G0、GitNexus、部署、真实 API/PG/dbt/Chrome95 均已闭环
 
 ## 1. 结论摘要
 
@@ -84,10 +84,10 @@ Sprint-73 提交 `645ea2800` 已把 `implementationPolicy` 加入 ModelSpec 及�
 | 字段 `displayName` 影响 checksum/snapshot | 高 | JSONB expand；旧 snapshot 原样可读；只在新 revision 写入 |
 | 改型导致类型专属字段被静默清空 | 高 | preview 列出 `acceptedClearFields`；用户确认后才 apply |
 | Sprint-73 已提交 implementationPolicy 与新 owner 冲突 | 高 | expand/migrate/contract；历史可读、canonical 新写唯一、current implementation 优先 |
-| 当前镜像和数据库落后 Sprint-73 提交 | 高 | F0 先构建当前提交并应用/核对迁移，旧镜像不得作为 Sprint-74 验收基线 |
-| GitNexus 索引落后 HEAD | 高 | F0 更新索引后才允许影响分析和编码 |
+| 当前镜像和数据库落后 Sprint-73 提交 | 高 | 已构建部署当前后端/webapp 并核对 20260727 changeset 01～07 |
+| GitNexus 索引落后 HEAD | 高 | 2026-07-27 已对齐 `c7e085de3`；后续提交批次继续执行 symbol impact 和 detect-changes |
 | 门禁减少被误解为降低治理 | 中 | 只调整执行阶段，不删除 RELEASE_READY 治理门禁 |
-| 真实浏览器仍无法自动验收 | 高 | F0/T01 先修 DNS/login/API harness，失败则 Feature 保持 DRAFT |
+| 真实浏览器无法自动验收 | 高 | 已用显式 resolver、真实 Cookie 与 Chromium 95 完成 3/3 旅程 |
 
 ## 5. 复审决定
 
@@ -98,4 +98,10 @@ Sprint-73 提交 `645ea2800` 已把 `implementationPolicy` 加入 ModelSpec 及�
 3. 高级 dbt 入口从“物理资产”移到“数据实现”；
 4. 模型类型与数仓层在概念/UI 上解耦，但本 Sprint 保持 v2.2.3 经典映射，不新增 DIM 或五层策略。
 
-在用户确认前，Sprint 状态和全部 Task 保持 DRAFT。
+## 6. 三次复审决定（2026-07-27）
+
+用户已确认继续执行 Sprint-74，并要求通过 goal 完成。上述四条冻结决定保持不变。
+
+本次新增页面改动中，草稿编辑入口、数据集市调整、日期维度生成器约束和实现页业务化重排可以保留；“目标表摘要来自逻辑设计”、逻辑页继续写 `implementationPolicy`、物理结果页保留高级 dbt 入口，以及前后端 ARCHIVED 引用判定不一致，均不能作为新架构接受，必须按 README §3.1 修复后才能关闭 Sprint。
+
+结论：架构 Gate 与实施复核均为 PASS；Sprint-74 已按该边界实现并通过真实验收。质量治理、`AGENTS.md`、`CLAUDE.md` 等并行修改仍不归本 Sprint 所有，也未被回退。

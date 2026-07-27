@@ -1,7 +1,7 @@
 # T01：建立契约测试与真实 Chrome95 端到端验收
 
 **优先级**：P0  
-**状态**：DRAFT  
+**状态**：DONE
 **依赖**：F1～F4
 
 ## 目标
@@ -27,14 +27,13 @@
 
 ## 验证（RED→GREEN）
 
-- [ ] 先固化当前失败：默认 FACT、无 DESIGNED、全 gate 展示、dbt 错位
-- [ ] F1～F4 实现后对应测试转绿
-- [ ] production build 和 Chrome95 通过
-- [ ] NFR 所有 GAP 转 PASS 或 Sprint 不关闭
+- [x] 先固化当前失败：默认 FACT、无 DESIGNED、全 gate 展示、dbt 错位
+- [x] F1～F4 实现后对应测试转绿
+- [x] production build 和 Chrome95 通过
+- [x] NFR 所有 blocking GAP 转 PASS
 
 ## Definition of Done
 
-- [ ] 架构：契约/迁移/并发/兼容测试全绿
-- [ ] UI：IT-01～IT-12 真实证据
-- [ ] 切片：真实 Spring Security+PG+dbt+发布结果通过
-
+- [x] 架构：契约/迁移/并发/兼容测试全绿
+- [x] UI：IT-01～IT-12 真实证据
+- [x] 切片：真实 Spring Security+PG+dbt+发布结果通过

@@ -163,6 +163,16 @@ const exactGuidance: Record<string, ModelSpecGateGuidance> = {
 		"模型 revision 或校验值已变化，请基于当前版本重新生成实现与发布证据。",
 		"检查当前版本",
 	),
+	PENDING_CLASSIFICATION: physical(
+		"上游输入尚无已封存的密级证据",
+		"该证据来自已锁定的上游来源或模型版本；请先完成上游密级确认与传播，再重新检查当前发布条件。",
+		"检查密级证据",
+	),
+	CLASSIFICATION_PROPAGATION_PENDING: physical(
+		"上游密级传播尚未完成",
+		"上游已存在密级证据，但传播结果尚未收敛；请稍后重试或检查上游密级任务。",
+		"检查密级传播",
+	),
 };
 
 export const modelSpecGateGuidance = (blocker: ModelSpecGateBlocker): ModelSpecGateGuidance => {

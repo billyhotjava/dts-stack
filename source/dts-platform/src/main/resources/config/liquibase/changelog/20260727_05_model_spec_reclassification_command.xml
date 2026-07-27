@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260727-05-model-spec-reclassification-command" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT">
+            <tableExists tableName="modeling_model_spec"/>
+            <tableExists tableName="modeling_model_spec_revision"/>
+            <tableExists tableName="modeling_model_implementation"/>
+            <tableExists tableName="modeling_model_lifecycle_event"/>
+            <tableExists tableName="modeling_model_release_candidate_entry"/>
+        </preConditions>
+        <comment>Append-only idempotency and audit ledger for explicit DRAFT ModelSpec type adjustment.</comment>
+
+        <createTable tableName="modeling_model_reclassification_command">
+            <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="model_spec_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="idempotency_key" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="from_type" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="to_type" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="result_revision" type="int"><constraints nullable="false"/></column>
+            <column name="result_checksum" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="created_by" type="varchar(128)"/>
+            <column name="created_date" type="timestamptz"><constraints nullable="false"/></column>
+        </createTable>
+        <addUniqueConstraint
+            tableName="modeling_model_reclassification_command"
+            columnNames="tenant_id,id"
+            constraintName="uk_model_reclassification_command_tenant_id"/>
+        <addUniqueConstraint
+            tableName="modeling_model_reclassification_command"
+            columnNames="tenant_id,model_spec_id,idempotency_key"
+            constraintName="uk_model_reclassification_command_idempotency"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_model_reclassification_command"
+            baseColumnNames="model_spec_id"
+            constraintName="fk_model_reclassification_command_spec"
+            referencedTableName="modeling_model_spec"
+            referencedColumnNames="id"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_model_reclassification_command"
+            baseColumnNames="model_spec_id,result_revision"
+            constraintName="fk_model_reclassification_command_revision"
+            referencedTableName="modeling_model_spec_revision"
+            referencedColumnNames="model_spec_id,revision"/>
+        <sql splitStatements="false"><![CDATA[
+            CREATE OR REPLACE FUNCTION modeling_reject_reclassification_command_mutation()
+            RETURNS trigger AS $$
+            BEGIN
+                RAISE EXCEPTION 'modeling_model_reclassification_command is append-only';
+            END;
+            $$ LANGUAGE plpgsql;
+
+            CREATE TRIGGER trg_model_reclassification_command_append_only
+            BEFORE UPDATE OR DELETE OR TRUNCATE ON modeling_model_reclassification_command
+            FOR EACH STATEMENT
+            EXECUTE FUNCTION modeling_reject_reclassification_command_mutation();
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    IF EXISTS (SELECT 1 FROM modeling_model_reclassification_command) THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_MODEL_RECLASSIFICATION_COMMAND_EXISTS';
+                    END IF;
+                END $$;
+                DROP TRIGGER IF EXISTS trg_model_reclassification_command_append_only
+                    ON modeling_model_reclassification_command;
+                DROP TABLE modeling_model_reclassification_command;
+                DROP FUNCTION IF EXISTS modeling_reject_reclassification_command_mutation();
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

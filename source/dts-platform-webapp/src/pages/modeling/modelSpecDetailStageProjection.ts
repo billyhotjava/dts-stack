@@ -1,11 +1,6 @@
 import type { ModelSpecDetailStage } from "./modelSpecDetailNavigation";
 
-export const MODEL_SPEC_DETAIL_PRIMARY_ACTIONS = [
-	"保存逻辑设计",
-	"配置数据实现",
-	"验证实现",
-	"生成并发布",
-] as const;
+export const MODEL_SPEC_DETAIL_PRIMARY_ACTIONS = ["保存逻辑设计", "配置数据实现", "验证实现", "生成并发布"] as const;
 
 export type ModelSpecDetailPrimaryActionLabel = (typeof MODEL_SPEC_DETAIL_PRIMARY_ACTIONS)[number];
 export type ModelSpecDetailLifecycleStatus =
@@ -27,6 +22,7 @@ export type ModelSpecDetailStageProjectionInput = {
 	implementationConfigured?: boolean;
 	implementationDirty?: boolean;
 	implementationValidated?: boolean;
+	designedReady?: boolean;
 	canEdit: boolean;
 	blocker?: ModelSpecDetailBlocker | null;
 	lifecycleStatus?: ModelSpecDetailLifecycleStatus;
@@ -50,8 +46,11 @@ const primaryActionForStage = (stage: ModelSpecDetailStage): ModelSpecDetailPrim
 	return "生成并发布";
 };
 
-const nextAction = (input: ModelSpecDetailStageProjectionInput): Pick<ModelSpecDetailPrimaryAction, "label" | "recoveryStage"> => {
+const nextAction = (
+	input: ModelSpecDetailStageProjectionInput,
+): Pick<ModelSpecDetailPrimaryAction, "label" | "recoveryStage"> => {
 	if (input.logicalDirty) return { label: "保存逻辑设计", recoveryStage: "logical" };
+	if (input.designedReady === false) return { label: "保存逻辑设计", recoveryStage: "logical" };
 	if (input.stage === "logical") return { label: "配置数据实现", recoveryStage: "implementation" };
 	if (!input.implementationConfigured || input.implementationDirty) {
 		return { label: "配置数据实现", recoveryStage: "implementation" };

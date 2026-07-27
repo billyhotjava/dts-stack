@@ -119,6 +119,9 @@ public class QualityRunService {
         boolean dryRun = request != null && Boolean.TRUE.equals(request.getDryRun());
         GovRule rule = resolveRule(request.getRuleId());
         GovRuleVersion version = resolveVersion(rule);
+        if (resolveStatements(version).isEmpty()) {
+            throw new IllegalArgumentException("质量规则未配置可执行检测语句，请先编辑并发布规则");
+        }
         List<GovRuleBinding> bindings = resolveBindings(version, request.getBindingId(), request.getDatasetId());
         bindings.forEach(binding -> defaultLakeDatasetGuard.requireDefaultLakeDataset(binding.getDatasetId()));
         if (bindings.isEmpty()) {
@@ -619,16 +622,22 @@ public class QualityRunService {
                 if (statements instanceof Map<?, ?> map) {
                     Map<String, String> resolved = new LinkedHashMap<>();
                     map.forEach((key, value) -> {
-                        if (key != null && value != null) {
+                        if (key != null && value != null && StringUtils.isNotBlank(String.valueOf(value))) {
                             resolved.put(String.valueOf(key), String.valueOf(value));
                         }
                     });
-                    return resolved;
+                    if (!resolved.isEmpty()) {
+                        return resolved;
+                    }
                 }
             }
             if (raw.containsKey("sql")) {
-                String sql = String.valueOf(raw.get("sql"));
-                return Map.of("sql", sql);
+                Object sqlValue = raw.get("sql");
+                if (sqlValue == null) {
+                    return Collections.emptyMap();
+                }
+                String sql = String.valueOf(sqlValue);
+                return StringUtils.isNotBlank(sql) ? Map.of("sql", sql) : Collections.emptyMap();
             }
         } catch (Exception ex) {
             log.warn("Failed to parse rule definition: {}", ex.getMessage());

@@ -187,6 +187,19 @@ test("planning policy preserves the explicit conceptual-design decision", () => 
 	assert.match(savePolicyFlow, /setPlanningPolicy\(savedPolicy\)/);
 });
 
+test("planning policy owns release-time standard coverage and quality enforcement", () => {
+	assert.match(api, /WarehousePlanStandardCoverage\s*=\s*"NONE"\s*\|\s*"KEY_AND_MEASURE"\s*\|\s*"ALL_FIELDS"/);
+	assert.match(api, /WarehousePlanQualityGate\s*=\s*"ADVISORY"\s*\|\s*"BLOCKING"/);
+	assert.match(api, /type WarehousePlanPolicyInput[\s\S]*?standardCoverage:[\s\S]*?qualityGate:/);
+	assert.match(parent, /standardCoverage:\s*policyResult\.value\.value\.standardCoverage/);
+	assert.match(parent, /qualityGate:\s*policyResult\.value\.value\.qualityGate/);
+	assert.match(parent, /standardCoverage:\s*values\.standardCoverage/);
+	assert.match(parent, /qualityGate:\s*values\.qualityGate/);
+	assert.match(parent, /发布治理要求/);
+	assert.match(parent, /键字段和度量字段/);
+	assert.match(parent, /仅提示，不阻止发布/);
+});
+
 test("an initial load failure does not masquerade as an empty inventory", () => {
 	assert.match(component, /if \(loadFailed\s*&&\s*!inventory\)/);
 });

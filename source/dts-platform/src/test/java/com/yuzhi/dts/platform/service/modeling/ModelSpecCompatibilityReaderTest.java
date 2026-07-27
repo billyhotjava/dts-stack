@@ -386,6 +386,70 @@ class ModelSpecCompatibilityReaderTest {
     }
 
     @Test
+    void acceptsHistoricalExtendedSnapshotsThatPredateFieldDisplayNames() {
+        ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
+        ModelSpecSnapshotCodec codec = new ModelSpecSnapshotCodec(mapper);
+        ModelSpecCompatibilityReader reader = new ModelSpecCompatibilityReader(repository, codec, mapper);
+        String snapshotJson = historicalExtendedSnapshot();
+        ModelSpecContract.ModelSpecView snapshot = codec.readView(snapshotJson);
+        StoredModelSpec row = new StoredModelSpec(
+            2,
+            "server-tenant",
+            snapshot.id(),
+            snapshot.planId(),
+            snapshot.domainId(),
+            snapshot.status(),
+            snapshot.revision(),
+            snapshot.checksum(),
+            snapshotJson,
+            null,
+            null,
+            null,
+            snapshotJson,
+            snapshot.createdAt(),
+            snapshot.updatedAt()
+        );
+
+        ModelSpecContract.ModelSpecView result = reader.read(row);
+
+        assertThat(result.id()).isEqualTo(snapshot.id());
+        assertThat(result.checksum()).isEqualTo(snapshot.checksum());
+        assertThat(result.fields()).singleElement().extracting(ModelSpecContract.ModelField::name)
+            .isEqualTo("project_code");
+    }
+
+    @Test
+    void rejectsTamperedHistoricalExtendedSnapshotsEvenWhenTheyPredateFieldDisplayNames() {
+        ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
+        ModelSpecSnapshotCodec codec = new ModelSpecSnapshotCodec(mapper);
+        ModelSpecCompatibilityReader reader = new ModelSpecCompatibilityReader(repository, codec, mapper);
+        String snapshotJson = historicalExtendedSnapshot().replace("\"name\":\"project_code\"", "\"name\":\"tampered\"");
+        ModelSpecContract.ModelSpecView snapshot = codec.readView(snapshotJson);
+        StoredModelSpec row = new StoredModelSpec(
+            2,
+            "server-tenant",
+            snapshot.id(),
+            snapshot.planId(),
+            snapshot.domainId(),
+            snapshot.status(),
+            snapshot.revision(),
+            snapshot.checksum(),
+            snapshotJson,
+            null,
+            null,
+            null,
+            snapshotJson,
+            snapshot.createdAt(),
+            snapshot.updatedAt()
+        );
+
+        assertThatThrownBy(() -> reader.read(row))
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("MODEL_SPEC_SNAPSHOT_INVALID");
+    }
+
+    @Test
     void rejectsCanonicalSnapshotsWithNonCanonicalModeOrDivergentLedgerChecksums() throws Exception {
         ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
         ModelSpecSnapshotCodec codec = new ModelSpecSnapshotCodec(mapper);
@@ -425,5 +489,57 @@ class ModelSpecCompatibilityReaderTest {
             .isInstanceOf(ModelSpecException.class)
             .extracting(error -> ((ModelSpecException) error).code())
             .isEqualTo("MODEL_SPEC_SNAPSHOT_INVALID");
+    }
+
+    private static String historicalExtendedSnapshot() {
+        return """
+            {
+              "id":"e0b7a417-47db-40d5-ad90-9aa02effaef3",
+              "name":"财务项目",
+              "grain":{"keys":["project_code"],"statement":"项目数据"},
+              "layer":"DWD",
+              "fields":[{
+                "name":"project_code",
+                "role":"KEY",
+                "dataType":"string",
+                "nullable":false,
+                "redundant":false,
+                "securityLevel":null,
+                "sourceFieldRef":null,
+                "redundancySourceRef":null,
+                "dimensionAttributeCode":null
+              }],
+              "planId":"fa404d61-d4e6-443b-80f2-0719eb585b29",
+              "status":"DRAFT",
+              "checksum":"a11fab45b290c571abb1f15e07555313208becd5fda081ab4aa7b9356ba3063a",
+              "domainId":"e1f7371f-8c17-44e4-9a81-6a0754dce096",
+              "revision":2,
+              "createdAt":"2026-07-26T15:06:29.303886617Z",
+              "dependsOn":[],
+              "factShape":null,
+              "modelType":"DIMENSION",
+              "updatedAt":"2026-07-26T15:12:31.198181258Z",
+              "dataMartId":"490d1935-93ab-4448-a2a3-1e95c6feadec",
+              "legacyRefs":null,
+              "metricRefs":[],
+              "sourceRefs":[],
+              "description":null,
+              "variantCode":null,
+              "dimensionRefs":[],
+              "timeSemantics":null,
+              "contractVersion":2,
+              "materialization":null,
+              "standardBindings":[],
+              "compatibilityMode":"CANONICAL",
+              "generationStrategy":null,
+              "implementationMode":"DESIGNER_GENERATED",
+              "businessActivityRef":null,
+              "consumptionScenario":null,
+              "dimensionDefinitionRef":{
+                "revision":5,
+                "dimensionDefinitionId":"352e8558-9cad-4a7b-8ce7-9b629608cdbb"
+              }
+            }
+            """;
     }
 }

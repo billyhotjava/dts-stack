@@ -15,11 +15,22 @@ import java.util.regex.Pattern;
 public final class ModelLifecycleContract {
 
     private static final Pattern IDENTIFIER = Pattern.compile("^[A-Za-z_][A-Za-z0-9_]*$");
+    private static final Pattern PHYSICAL_NAME = Pattern.compile("^[a-z][a-z0-9_]{0,62}$");
     private static final Pattern SOURCE_FIELD = Pattern.compile("^(?:src_([0-9]+)\\.)?[A-Za-z_][A-Za-z0-9_]*$");
     private static final Pattern SHA_256 = Pattern.compile("^[0-9a-f]{64}$");
     private static final Set<String> MATERIALIZATIONS = Set.of("table", "view", "incremental");
     private static final Set<String> CAST_TYPES = Set.of("string", "integer", "bigint", "decimal", "date", "timestamp", "boolean");
-    private static final Set<String> IMPLEMENTATION_SETTING_KEYS = Set.of("casts", "deduplicateBy", "dedupBy", "joins");
+    private static final Set<String> IMPLEMENTATION_SETTING_KEYS = Set.of(
+        "casts",
+        "deduplicateBy",
+        "dedupBy",
+        "joins",
+        "targetPhysicalName",
+        "loadStrategy",
+        "partitionFields",
+        "retentionDays"
+    );
+    private static final Set<String> LOAD_STRATEGIES = Set.of("FULL", "INCREMENTAL", "SNAPSHOT");
     private static final Set<String> JOIN_TYPES = Set.of("INNER", "LEFT", "RIGHT", "FULL");
     private static final Set<String> JOIN_KEYS = Set.of("inputIndex", "type", "leftField", "rightField");
 
@@ -420,7 +431,32 @@ public final class ModelLifecycleContract {
         }
         validateIdentifierList(settings.get("deduplicateBy"), "deduplicateBy");
         validateIdentifierList(settings.get("dedupBy"), "dedupBy");
+        validateIdentifierList(settings.get("partitionFields"), "partitionFields", true);
         validateJoinShape(settings.get("joins"));
+        Object targetPhysicalName = settings.get("targetPhysicalName");
+        if (
+            targetPhysicalName != null &&
+            (!(targetPhysicalName instanceof String name) || !PHYSICAL_NAME.matcher(name).matches())
+        ) {
+            throw new IllegalArgumentException("targetPhysicalName must use lower-case snake_case");
+        }
+        Object loadStrategy = settings.get("loadStrategy");
+        if (
+            loadStrategy != null &&
+            (!(loadStrategy instanceof String strategy) || !LOAD_STRATEGIES.contains(strategy))
+        ) {
+            throw new IllegalArgumentException("loadStrategy is not allowed");
+        }
+        Object retentionDays = settings.get("retentionDays");
+        if (
+            retentionDays != null &&
+            (!(retentionDays instanceof Number days) ||
+                days.longValue() != days.doubleValue() ||
+                days.longValue() < 0 ||
+                days.longValue() > 36_000)
+        ) {
+            throw new IllegalArgumentException("retentionDays must be between 0 and 36000");
+        }
         return settings;
     }
 
@@ -482,8 +518,14 @@ public final class ModelLifecycleContract {
     }
 
     private static void validateIdentifierList(Object value, String name) {
+        validateIdentifierList(value, name, false);
+    }
+
+    private static void validateIdentifierList(Object value, String name, boolean allowEmpty) {
         if (value == null) return;
-        if (!(value instanceof List<?> values) || values.isEmpty()) throw new IllegalArgumentException(name + " must be a non-empty list");
+        if (!(value instanceof List<?> values) || (!allowEmpty && values.isEmpty())) {
+            throw new IllegalArgumentException(name + " must be a " + (allowEmpty ? "list" : "non-empty list"));
+        }
         for (Object item : values) requiredIdentifier(item == null ? null : item.toString(), name);
     }
 

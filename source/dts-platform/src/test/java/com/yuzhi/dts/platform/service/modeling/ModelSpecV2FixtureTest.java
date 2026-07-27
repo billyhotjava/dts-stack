@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.StreamReadFeature;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -11,6 +12,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
@@ -23,9 +25,9 @@ class ModelSpecV2FixtureTest {
     private final ModelSpecCreateRequestDecoder decoder = new ModelSpecCreateRequestDecoder(objectMapper);
 
     @Test
-    void schemaFixtureAndJavaCommandExposeTheSameCreateFields() throws Exception {
+    void internalSchemaAndJavaCommandExposeTheSameCreateFields() throws Exception {
         JsonNode schema = resourceJson("/config/modeling/model-spec-v2.schema.json");
-        JsonNode fixture = resourceJson("/fixtures/modeling-v2/generic-fact.json");
+        ObjectNode fixture = (ObjectNode) resourceJson("/fixtures/modeling-v2/generic-fact.json");
         Set<String> schemaFields = names(schema.path("$defs").path("createModelSpecCommand").path("properties"));
         Set<String> fixtureFields = names(fixture);
         Set<String> javaFields = Arrays.stream(ModelSpecContract.CreateModelSpecCommand.class.getRecordComponents())
@@ -46,14 +48,38 @@ class ModelSpecV2FixtureTest {
             ).map(JsonNode::asInt)
         ).containsExactly(1, 2);
         assertThat(schemaFields).containsExactlyInAnyOrderElementsOf(javaFields);
-        assertThat(fixtureFields).containsExactlyInAnyOrderElementsOf(javaFields);
-        assertThat(decoder.decode(fixture).issues()).isEmpty();
+        assertThat(javaFields).containsAll(fixtureFields);
+        assertThat(validateInternalCreate(fixture)).isEmpty();
+    }
+
+    @Test
+    void rootSchemaAndProductionDecoderExposeOnlyTheMinimalInteractiveCreateRequest() throws Exception {
+        JsonNode schema = resourceJson("/config/modeling/model-spec-v2.schema.json");
+        JsonNode interactive = schema.path("$defs").path("interactiveCreateModelSpecRequest");
+        ObjectNode request = objectMapper
+            .createObjectNode()
+            .put("planId", "10000000-0000-0000-0000-000000000001")
+            .put("domainId", "20000000-0000-0000-0000-000000000001")
+            .put("modelType", "FACT")
+            .put("name", "finance_project")
+            .put("idempotencyKey", "finance-project-create");
+
+        assertThat(schema.path("$ref").asText()).isEqualTo("#/$defs/interactiveCreateModelSpecRequest");
+        assertThat(names(interactive.path("properties")))
+            .containsExactlyInAnyOrderElementsOf(ModelSpecContract.INTERACTIVE_CREATE_FIELDS);
+        assertThat(decoder.decode(request).issues()).isEmpty();
     }
 
     @Test
     void strictDecoderRejectsRetiredAndUnknownFieldsAsStableIssues() throws Exception {
-        JsonNode fixture = resourceJson("/fixtures/modeling-v2/generic-fact.json");
-        ((com.fasterxml.jackson.databind.node.ObjectNode) fixture).put("objectId", "retired-object");
+        ObjectNode fixture = objectMapper
+            .createObjectNode()
+            .put("planId", "10000000-0000-0000-0000-000000000001")
+            .put("domainId", "20000000-0000-0000-0000-000000000001")
+            .put("modelType", "FACT")
+            .put("name", "finance_project")
+            .put("idempotencyKey", "finance-project-create")
+            .put("objectId", "retired-object");
 
         assertThat(decoder.decode(fixture).issues())
             .extracting(ModelSpecContract.FieldIssue::code, ModelSpecContract.FieldIssue::field)
@@ -132,7 +158,7 @@ class ModelSpecV2FixtureTest {
             ObjectNode candidate = testCase.has("request") ? (ObjectNode) testCase.path("request").deepCopy() : base.deepCopy();
             testCase.path("deleteFields").forEach(field -> candidate.remove(field.asText()));
             testCase.path("overrides").fields().forEachRemaining(entry -> candidate.set(entry.getKey(), entry.getValue()));
-            List<ModelSpecContract.FieldIssue> issues = decoder.decode(candidate).issues();
+            List<ModelSpecContract.FieldIssue> issues = validateInternalCreate(candidate);
 
             assertThat(issues)
                 .as(testCase.path("name").asText())
@@ -142,6 +168,28 @@ class ModelSpecV2FixtureTest {
                         .map(JsonNode::asText)
                         .toList()
                 );
+        }
+    }
+
+    private List<ModelSpecContract.FieldIssue> validateInternalCreate(ObjectNode candidate) {
+        Map<String, Object> raw = objectMapper.convertValue(candidate, new TypeReference<>() {});
+        List<ModelSpecContract.FieldIssue> shapeIssues = ModelSpecContract.validateCreateShape(raw);
+        if (!shapeIssues.isEmpty()) return shapeIssues;
+        try {
+            ModelSpecContract.CreateModelSpecCommand command = objectMapper.treeToValue(
+                candidate,
+                ModelSpecContract.CreateModelSpecCommand.class
+            );
+            return ModelSpecContract.validateCreate(command);
+        } catch (Exception exception) {
+            return List.of(
+                new ModelSpecContract.FieldIssue(
+                    "MODEL_SPEC_REQUEST_INVALID",
+                    "$",
+                    ModelSpecContract.IssueSeverity.ERROR,
+                    "Internal fixture cannot be decoded"
+                )
+            );
         }
     }
 

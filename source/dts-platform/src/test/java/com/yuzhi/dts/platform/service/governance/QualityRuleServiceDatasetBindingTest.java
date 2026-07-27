@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.governance;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -20,6 +21,7 @@ import com.yuzhi.dts.platform.service.governance.request.QualityRuleUpsertReques
 import com.yuzhi.dts.platform.service.security.AccessChecker;
 import com.yuzhi.dts.platform.service.security.OrganizationVisibilityService;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -127,6 +129,7 @@ class QualityRuleServiceDatasetBindingTest {
         request.setEnabled(true);
         request.setPublishNow(true);
         request.setDatasetId(DATASET_ID);
+        request.setDefinition(Map.of("sql", "select 1"));
 
         service.createRule(request, "actor");
 
@@ -134,5 +137,43 @@ class QualityRuleServiceDatasetBindingTest {
         verify(bindingRepository).save(binding.capture());
         assertThat(binding.getValue().getDatasetId()).isEqualTo(DATASET_ID);
         assertThat(binding.getValue().getRuleVersion().getId()).isEqualTo(VERSION_ID);
+    }
+
+    @Test
+    void rejectsPublishingAVersionWithoutExecutableStatements() {
+        GovRule rule = new GovRule();
+        rule.setId(RULE_ID);
+        rule.setName("空规则");
+
+        GovRuleVersion version = new GovRuleVersion();
+        version.setId(VERSION_ID);
+        version.setRule(rule);
+        version.setVersion(1);
+        version.setStatus("DRAFT");
+        version.setDefinition("{}");
+
+        when(ruleRepository.findById(RULE_ID)).thenReturn(Optional.of(rule));
+        when(versionRepository.findByRuleIdOrderByVersionDesc(RULE_ID)).thenReturn(List.of(version));
+
+        assertThatThrownBy(() ->
+            service.changeRuleVersionStatus(RULE_ID, 1, "PUBLISHED", null, "actor", null)
+        )
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("未配置可执行检测语句");
+    }
+
+    @Test
+    void rejectsCreatingAPublishedRuleWithoutExecutableStatements() {
+        when(ruleRepository.findByCode(any())).thenReturn(Optional.empty());
+
+        QualityRuleUpsertRequest request = new QualityRuleUpsertRequest();
+        request.setName("空规则");
+        request.setExecutor("hive");
+        request.setPublishNow(true);
+        request.setDefinition(Map.of());
+
+        assertThatThrownBy(() -> service.createRule(request, "actor"))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("未配置可执行检测语句");
     }
 }

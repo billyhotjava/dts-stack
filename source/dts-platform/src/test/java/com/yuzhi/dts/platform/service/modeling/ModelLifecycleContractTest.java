@@ -291,4 +291,55 @@ class ModelLifecycleContractTest {
             "bad-multi-source"
         )).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("inputIndex");
     }
+
+    @Test
+    void implementationOwnsPhysicalTargetLoadPartitionAndRetentionSettings() {
+        UUID sourceBindingId = UUID.fromString("50000000-0000-0000-0000-000000000069");
+        Map<String, Object> settings = Map.of(
+            "targetPhysicalName", "dwd_finance_project",
+            "loadStrategy", "INCREMENTAL",
+            "partitionFields", List.of("business_date"),
+            "retentionDays", 365
+        );
+
+        SaveImplementationCommand command = new SaveImplementationCommand(
+            InputMode.PHYSICAL_ASSET,
+            List.of(new PhysicalAssetInput(sourceBindingId, "source-v7")),
+            List.of(new FieldMapping("project_id", "project_id")),
+            settings,
+            ImplementationMode.DESIGNER_GENERATED,
+            "incremental",
+            "implementation-settings"
+        );
+
+        assertThat(command.settings()).containsAllEntriesOf(settings);
+        SaveImplementationCommand unpartitioned = new SaveImplementationCommand(
+            command.inputMode(),
+            command.inputs(),
+            command.fieldMappings(),
+            Map.of("targetPhysicalName", "dwd_finance_project", "loadStrategy", "FULL", "partitionFields", List.of()),
+            command.ownership(),
+            "table",
+            "unpartitioned-target"
+        );
+        assertThat(unpartitioned.settings()).containsEntry("partitionFields", List.of());
+        assertThatThrownBy(() -> new SaveImplementationCommand(
+            command.inputMode(),
+            command.inputs(),
+            command.fieldMappings(),
+            Map.of("targetPhysicalName", "DWD Finance Project", "loadStrategy", "FULL"),
+            command.ownership(),
+            "table",
+            "invalid-target"
+        )).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("targetPhysicalName");
+        assertThatThrownBy(() -> new SaveImplementationCommand(
+            command.inputMode(),
+            command.inputs(),
+            command.fieldMappings(),
+            Map.of("targetPhysicalName", "dwd_finance_project", "loadStrategy", "FULL", "retentionDays", 36_001),
+            command.ownership(),
+            "table",
+            "invalid-retention"
+        )).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("retentionDays");
+    }
 }

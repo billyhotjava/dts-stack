@@ -1,7 +1,7 @@
 # T01：实现 DRAFT 模型改型预检与追加 revision
 
 **优先级**：P0  
-**状态**：DRAFT  
+**状态**：DONE
 **依赖**：F1、F2
 
 ## 目标
@@ -44,13 +44,13 @@ ModelSpecResource/ApplicationService/codec/repository、审计字典、详情页
 
 ## 验证（RED→GREEN）
 
-- [ ] preview 零写入
-- [ ] apply 幂等且追加 revision
-- [ ] 有 implementation/lifecycle/release 任一项即 fail closed
-- [ ] CAS 冲突不清空 UI 输入
+- [x] preview 零写入
+- [x] apply 幂等且追加 revision
+- [x] 有 implementation/lifecycle/release 任一项即 fail closed
+- [x] CAS 冲突不清空 UI 输入
 
 ## Definition of Done
 
-- [ ] 架构：历史和证据不被覆盖
-- [ ] UI：影响可理解且需显式确认
-- [ ] 切片：IT-09 真实财务模型纠错通过
+- [x] 架构：历史和证据不被覆盖
+- [x] UI：影响可理解且需显式确认
+- [x] 切片：IT-09 隔离财务样本真实纠错通过，用户模型未修改

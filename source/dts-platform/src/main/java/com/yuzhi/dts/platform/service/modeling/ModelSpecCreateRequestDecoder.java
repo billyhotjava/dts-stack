@@ -8,6 +8,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Component;
@@ -34,6 +36,22 @@ public final class ModelSpecCreateRequestDecoder {
         }
 
         ObjectNode normalized = ((ObjectNode) request).deepCopy();
+        Map<String, Object> interactiveRaw;
+        try {
+            interactiveRaw = objectMapper.convertValue(normalized, RAW_REQUEST_TYPE);
+        } catch (IllegalArgumentException exception) {
+            return rejected(requestIssue("ModelSpec create request cannot be decoded"));
+        }
+
+        List<ModelSpecContract.FieldIssue> shapeIssues = new ArrayList<>(
+            ModelSpecContract.validateInteractiveCreateFieldNames(interactiveRaw.keySet())
+        );
+        Iterator<String> normalizedFields = normalized.fieldNames();
+        while (normalizedFields.hasNext()) {
+            if (!ModelSpecContract.INTERACTIVE_CREATE_FIELDS.contains(normalizedFields.next())) {
+                normalizedFields.remove();
+            }
+        }
         applyCreateDefaults(normalized);
         Map<String, Object> raw;
         try {
@@ -42,7 +60,7 @@ public final class ModelSpecCreateRequestDecoder {
             return rejected(requestIssue("ModelSpec create request cannot be decoded"));
         }
 
-        List<ModelSpecContract.FieldIssue> shapeIssues = ModelSpecContract.validateCreateShape(raw);
+        shapeIssues.addAll(ModelSpecContract.validateCreateShape(raw));
         if (!shapeIssues.isEmpty()) return new DecodeResult(null, shapeIssues);
 
         ModelSpecContract.CreateModelSpecCommand command;

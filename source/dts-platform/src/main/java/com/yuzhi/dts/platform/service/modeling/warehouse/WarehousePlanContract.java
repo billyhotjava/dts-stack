@@ -81,6 +81,17 @@ public final class WarehousePlanContract {
         LATEST_STATE_ONLY,
     }
 
+    public enum StandardCoverage {
+        NONE,
+        KEY_AND_MEASURE,
+        ALL_FIELDS,
+    }
+
+    public enum QualityGate {
+        ADVISORY,
+        BLOCKING,
+    }
+
     public enum PlanningPolicyReadiness {
         DRAFT,
         MODEL_DESIGN_READY,
@@ -324,10 +335,22 @@ public final class WarehousePlanContract {
         String namingPolicy,
         String historyPolicy,
         String defaultTimeZone,
-        Boolean conceptualDesignAllowed
+        Boolean conceptualDesignAllowed,
+        String standardCoverage,
+        String qualityGate
     ) {
         public PlanningPolicyCommand(String layerScheme, String namingPolicy, String historyPolicy, String defaultTimeZone) {
-            this(layerScheme, namingPolicy, historyPolicy, defaultTimeZone, false);
+            this(layerScheme, namingPolicy, historyPolicy, defaultTimeZone, false, null, null);
+        }
+
+        public PlanningPolicyCommand(
+            String layerScheme,
+            String namingPolicy,
+            String historyPolicy,
+            String defaultTimeZone,
+            Boolean conceptualDesignAllowed
+        ) {
+            this(layerScheme, namingPolicy, historyPolicy, defaultTimeZone, conceptualDesignAllowed, null, null);
         }
 
         public PlanningPolicyCommand {
@@ -336,6 +359,8 @@ public final class WarehousePlanContract {
             historyPolicy = trimToNull(historyPolicy);
             defaultTimeZone = trimToNull(defaultTimeZone);
             conceptualDesignAllowed = Boolean.TRUE.equals(conceptualDesignAllowed);
+            standardCoverage = trimToNull(standardCoverage);
+            qualityGate = trimToNull(qualityGate);
         }
     }
 
@@ -345,6 +370,8 @@ public final class WarehousePlanContract {
         HistoryPolicy historyPolicy,
         String defaultTimeZone,
         boolean conceptualDesignAllowed,
+        StandardCoverage standardCoverage,
+        QualityGate qualityGate,
         PlanningPolicyReadiness readiness,
         List<DomainIssue> issues
     ) {
@@ -356,7 +383,39 @@ public final class WarehousePlanContract {
             PlanningPolicyReadiness readiness,
             List<DomainIssue> issues
         ) {
-            this(layerScheme, namingPolicy, historyPolicy, defaultTimeZone, false, readiness, issues);
+            this(
+                layerScheme,
+                namingPolicy,
+                historyPolicy,
+                defaultTimeZone,
+                false,
+                StandardCoverage.KEY_AND_MEASURE,
+                QualityGate.BLOCKING,
+                readiness,
+                issues
+            );
+        }
+
+        public PlanningPolicyView(
+            LayerScheme layerScheme,
+            NamingPolicy namingPolicy,
+            HistoryPolicy historyPolicy,
+            String defaultTimeZone,
+            boolean conceptualDesignAllowed,
+            PlanningPolicyReadiness readiness,
+            List<DomainIssue> issues
+        ) {
+            this(
+                layerScheme,
+                namingPolicy,
+                historyPolicy,
+                defaultTimeZone,
+                conceptualDesignAllowed,
+                StandardCoverage.KEY_AND_MEASURE,
+                QualityGate.BLOCKING,
+                readiness,
+                issues
+            );
         }
 
         public PlanningPolicyView {
@@ -843,6 +902,22 @@ public final class WarehousePlanContract {
                 )
             );
         }
+        StandardCoverage standardCoverage = parseOptionalEnum(
+            StandardCoverage.class,
+            value.standardCoverage(),
+            StandardCoverage.KEY_AND_MEASURE,
+            "STANDARD_COVERAGE_UNSUPPORTED",
+            "standardCoverage",
+            issues
+        );
+        QualityGate qualityGate = parseOptionalEnum(
+            QualityGate.class,
+            value.qualityGate(),
+            QualityGate.BLOCKING,
+            "QUALITY_GATE_UNSUPPORTED",
+            "qualityGate",
+            issues
+        );
 
         PlanningPolicyReadiness readiness = layerScheme == null
             ? PlanningPolicyReadiness.DRAFT
@@ -855,6 +930,8 @@ public final class WarehousePlanContract {
             historyPolicy,
             value.defaultTimeZone(),
             Boolean.TRUE.equals(value.conceptualDesignAllowed()),
+            standardCoverage,
+            qualityGate,
             readiness,
             issues
         );
@@ -953,6 +1030,25 @@ public final class WarehousePlanContract {
         if (isBlank(value)) {
             issues.add(new DomainIssue(requiredCode, field + " is required for this readiness level", field));
             return null;
+        }
+        try {
+            return Enum.valueOf(type, value);
+        } catch (IllegalArgumentException exception) {
+            issues.add(new DomainIssue(unsupportedCode, "Unsupported " + field, field));
+            return null;
+        }
+    }
+
+    private static <E extends Enum<E>> E parseOptionalEnum(
+        Class<E> type,
+        String value,
+        E defaultValue,
+        String unsupportedCode,
+        String field,
+        List<DomainIssue> issues
+    ) {
+        if (isBlank(value)) {
+            return defaultValue;
         }
         try {
             return Enum.valueOf(type, value);

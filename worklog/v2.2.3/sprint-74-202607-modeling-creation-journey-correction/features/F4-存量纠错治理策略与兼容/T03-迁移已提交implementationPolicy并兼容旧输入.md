@@ -1,7 +1,7 @@
 # T03：迁移已提交 implementationPolicy 并兼容旧输入
 
 **优先级**：P0  
-**状态**：DRAFT  
+**状态**：DONE
 **依赖**：F3
 
 ## 目标
@@ -33,14 +33,14 @@ CompatibilityAdapter、snapshot codec、migration command、gate blocker 去重�
 
 ## 验证（RED→GREEN）
 
-- [ ] 旧三种输入各自正确投影
-- [ ] 已提交 implementationPolicy settings 正确投影
-- [ ] 旧客户端原样 round-trip 不清空历史值，修改旧字段得到明确迁移提示
-- [ ] current implementation 冲突不覆盖
-- [ ] dry-run/apply 重跑/rollback/计数对账
+- [x] 旧三种输入各自正确投影
+- [x] 已提交 implementationPolicy settings 正确投影
+- [x] 旧客户端原样 round-trip 不清空历史值，修改旧字段得到明确迁移提示
+- [x] current implementation 冲突不覆盖
+- [x] dry-run/apply 重跑/rollback/计数对账
 
 ## Definition of Done
 
-- [ ] 架构：新写零双写、零平行 owner，历史 snapshot 保持可读
-- [ ] UI：兼容问题可修复，不伪装为空
-- [ ] 切片：IT-11 通过
+- [x] 架构：新写零双写、零平行 owner，历史 snapshot 保持可读
+- [x] UI：兼容问题可修复，不伪装为空
+- [x] 切片：IT-11 通过

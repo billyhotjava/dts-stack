@@ -461,6 +461,9 @@ public class QualityRuleService {
         String nextStatus = normalizeVersionStatus(targetStatus, target.getStatus());
         String currentStatus = normalizeVersionStatus(target.getStatus(), STATUS_DRAFT);
         ensureStatusTransitionAllowed(currentStatus, nextStatus);
+        if (STATUS_PUBLISHED.equals(nextStatus)) {
+            requireExecutableDefinition(target.getDefinition());
+        }
         target.setStatus(nextStatus);
         if (StringUtils.isNotBlank(notes)) {
             target.setNotes(notes.trim());
@@ -528,6 +531,9 @@ public class QualityRuleService {
         version.setRule(rule);
         version.setVersion(versionNumber);
         String targetStatus = resolveInitialVersionStatus(request);
+        if (STATUS_PUBLISHED.equals(targetStatus)) {
+            requireExecutableDefinition(request.getDefinition());
+        }
         version.setStatus(targetStatus);
         version.setDefinition(writeDefinition(request.getDefinition()));
         if (STATUS_PUBLISHED.equals(targetStatus)) {
@@ -621,6 +627,37 @@ public class QualityRuleService {
             log.warn("Failed to serialize rule definition: {}", e.getMessage());
             return "{}";
         }
+    }
+
+    private void requireExecutableDefinition(String definition) {
+        if (StringUtils.isBlank(definition)) {
+            throw new IllegalArgumentException("质量规则未配置可执行检测语句");
+        }
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> parsed = objectMapper.readValue(definition, Map.class);
+            requireExecutableDefinition(parsed);
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("质量规则定义不是有效的 JSON", e);
+        }
+    }
+
+    private void requireExecutableDefinition(Map<String, Object> definition) {
+        if (definition == null) {
+            throw new IllegalArgumentException("质量规则未配置可执行检测语句");
+        }
+        Object sql = definition.get("sql");
+        if (sql != null && StringUtils.isNotBlank(String.valueOf(sql))) {
+            return;
+        }
+        Object statements = definition.get("statements");
+        if (
+            statements instanceof Map<?, ?> statementMap &&
+            statementMap.values().stream().anyMatch(value -> value != null && StringUtils.isNotBlank(String.valueOf(value)))
+        ) {
+            return;
+        }
+        throw new IllegalArgumentException("质量规则未配置可执行检测语句");
     }
 
     private Map<String, Object> toRuleAuditView(GovRule rule) {

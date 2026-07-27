@@ -13,11 +13,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.yuzhi.dts.platform.security.session.PortalSessionInactivityFilter;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.CompileView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationCompatibilityAdapter;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService.ImplementationMigrationBatch;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService.ImplementationMigrationResult;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService.ImplementationValidationView;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider.WarehousePlanActor;
 import com.yuzhi.dts.platform.web.filter.AuditLoggingFilter;
 import java.util.UUID;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration;
@@ -121,5 +126,65 @@ class ModelLifecycleResourceTest {
             .andExpect(jsonPath("$.code").value("MODEL_IMPLEMENTATION_INPUT_REQUIRED"));
 
         verify(service, never()).validateImplementation(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void migrationDryRunAndApplyUseNarrowStrictCommandsAndServerActor() throws Exception {
+        String previewChecksum = "b".repeat(64);
+        var decision = new ModelImplementationCompatibilityAdapter.MigrationDecision(
+            MODEL_ID,
+            ModelImplementationCompatibilityAdapter.MigrationStatus.ELIGIBLE,
+            "LEGACY_IMPLEMENTATION_PROJECTED",
+            7,
+            null,
+            null,
+            com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.InputMode.PHYSICAL_ASSET,
+            Map.of("targetPhysicalName", "dwd_finance_project")
+        );
+        var batch = new ImplementationMigrationBatch(
+            previewChecksum,
+            1,
+            1,
+            0,
+            0,
+            0,
+            0,
+            List.of(new ImplementationMigrationResult(decision, false, null, null))
+        );
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", "department"));
+        when(service.previewImplementationMigrations("server-tenant", List.of(MODEL_ID))).thenReturn(batch);
+        when(service.applyImplementationMigrations("server-tenant", "alice", List.of(MODEL_ID), previewChecksum))
+            .thenReturn(batch);
+
+        mockMvc.perform(
+            post("/api/modeling/model-specs/implementation-migrations/dry-run")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"modelSpecIds\":[\"" + MODEL_ID + "\"]}")
+        )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.previewChecksum").value(previewChecksum))
+            .andExpect(jsonPath("$.data.eligible").value(1));
+
+        mockMvc.perform(
+            post("/api/modeling/model-specs/implementation-migrations/apply")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"modelSpecIds\":[\"" + MODEL_ID + "\"],\"previewChecksum\":\"" + previewChecksum + "\"}"
+                )
+        ).andExpect(status().isOk());
+
+        verify(service).previewImplementationMigrations("server-tenant", List.of(MODEL_ID));
+        verify(service).applyImplementationMigrations("server-tenant", "alice", List.of(MODEL_ID), previewChecksum);
+    }
+
+    @Test
+    void migrationCommandsRejectUnknownFields() throws Exception {
+        mockMvc.perform(
+            post("/api/modeling/model-specs/implementation-migrations/dry-run")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"modelSpecIds\":[],\"overwriteCurrent\":true}")
+        ).andExpect(status().isBadRequest());
+
+        verify(service, never()).previewImplementationMigrations(any(), any());
     }
 }

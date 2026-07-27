@@ -1,7 +1,7 @@
 # T02：增加 DESIGNED 服务端门禁
 
 **优先级**：P0  
-**状态**：DRAFT  
+**状态**：DONE
 **依赖**：F2/T01
 
 ## 目标
@@ -28,14 +28,13 @@ ModelSpecStageGateService、API enum/type、gate guidance、backend/frontend tes
 
 ## 验证（RED→GREEN）
 
-- [ ] 无来源/无实现但逻辑闭合：DESIGNED READY、IMPLEMENTATION_READY BLOCKED
-- [ ] 未闭合逻辑但已有旧实现：DESIGNED/后续均 BLOCKED
-- [ ] 每类 DESIGNED 规则参数化测试
-- [ ] 同一根因只出现一个 blocker
+- [x] 无来源/无实现但逻辑闭合：DESIGNED READY、IMPLEMENTATION_READY BLOCKED
+- [x] 未闭合逻辑但已有旧实现：DESIGNED/后续均 BLOCKED
+- [x] 每类 DESIGNED 规则参数化测试
+- [x] 同一根因只出现一个 blocker
 
 ## Definition of Done
 
-- [ ] 架构：阶段依赖单向且服务端权威
-- [ ] UI：repairRoute 对应真实控件
-- [ ] 切片：IT-03/IT-04 gate 结果正确
-
+- [x] 架构：阶段依赖单向且服务端权威
+- [x] UI：repairRoute 对应真实控件
+- [x] 切片：IT-03/IT-04 gate 结果正确

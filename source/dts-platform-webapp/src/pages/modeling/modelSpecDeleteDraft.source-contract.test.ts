@@ -15,6 +15,15 @@ test("model center deletes only canonical drafts with explicit confirmation", ()
 	assert.match(center, /model\.status === "ARCHIVED"/);
 });
 
+test("canonical drafts expose the logical design edit entry", () => {
+	assert.match(
+		center,
+		/const editable = canEdit && model\.status === "DRAFT" && model\.compatibilityMode === "CANONICAL"/,
+	);
+	assert.match(center, /modelSpecDetailPath\(model\.id, "logical", model\.planId\)/);
+	assert.match(center, />\s*编辑\s*</);
+});
+
 test("draft deletion uses the canonical model etag", () => {
 	assert.match(api, /export const deleteModelSpec/);
 	assert.match(api, /api\.delete/);

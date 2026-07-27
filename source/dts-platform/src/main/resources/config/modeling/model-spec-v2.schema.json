@@ -3,7 +3,7 @@
   "$id": "https://dts.local/schema/model-spec-v2.json",
   "title": "DTS Canonical ModelSpec v2 Contract",
   "$comment": "x-dtsUniqueBy is a DTS semantic extension. Validators must execute it with trimmed string keys.",
-  "$ref": "#/$defs/createModelSpecCommand",
+  "$ref": "#/$defs/interactiveCreateModelSpecRequest",
   "$defs": {
     "layer": { "enum": ["ODS", "STG", "DWD", "DWS", "ADS"] },
     "modelType": { "enum": ["FACT", "DIMENSION", "SUMMARY", "APPLICATION"] },
@@ -32,11 +32,15 @@
       "required": ["name", "dataType", "nullable", "role"],
       "properties": {
         "name": { "type": "string", "minLength": 1, "pattern": ".*\\S.*" },
+        "displayName": { "type": ["string", "null"] },
         "dataType": { "type": "string", "minLength": 1, "pattern": ".*\\S.*" },
         "nullable": { "type": "boolean" },
         "sourceFieldRef": { "type": ["string", "null"] },
         "role": { "enum": ["KEY", "ATTRIBUTE", "TIME", "MEASURE"] },
-        "securityLevel": { "type": ["string", "null"] }
+        "securityLevel": { "type": ["string", "null"] },
+        "dimensionAttributeCode": { "type": ["string", "null"] },
+        "redundant": { "type": ["boolean", "null"] },
+        "redundancySourceRef": { "type": ["string", "null"] }
       },
       "additionalProperties": false
     },
@@ -282,6 +286,28 @@
       },
       "additionalProperties": false
     },
+    "dimensionDefinitionRef": {
+      "type": "object",
+      "required": ["dimensionDefinitionId", "revision"],
+      "properties": {
+        "dimensionDefinitionId": { "type": "string", "format": "uuid" },
+        "revision": { "type": "integer", "minimum": 1, "maximum": 2147483647 }
+      },
+      "additionalProperties": false
+    },
+    "implementationPolicy": {
+      "type": "object",
+      "properties": {
+        "physicalName": { "type": ["string", "null"], "pattern": "^[a-z][a-z0-9_]{0,62}$" },
+        "loadStrategy": { "enum": ["FULL", "INCREMENTAL", "SNAPSHOT", null] },
+        "retentionDays": { "type": ["integer", "null"], "minimum": 0, "maximum": 36000 },
+        "partitionFields": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "pattern": ".*\\S.*" }
+        }
+      },
+      "additionalProperties": false
+    },
     "modelTypeSaveBoundaries": {
       "type": "object",
       "allOf": [
@@ -352,6 +378,29 @@
         }
       ]
     },
+    "interactiveCreateModelSpecRequest": {
+      "type": "object",
+      "required": ["planId", "domainId", "modelType", "name", "idempotencyKey"],
+      "properties": {
+        "planId": { "type": "string", "format": "uuid", "x-dts-requiredIssueCode": "MODEL_SPEC_PLAN_REQUIRED" },
+        "domainId": { "type": "string", "format": "uuid", "x-dts-requiredIssueCode": "MODEL_SPEC_DOMAIN_REQUIRED" },
+        "modelType": { "$ref": "#/$defs/modelType", "x-dts-requiredIssueCode": "MODEL_SPEC_TYPE_REQUIRED" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 256, "pattern": ".*\\S.*", "x-dts-requiredIssueCode": "MODEL_SPEC_NAME_REQUIRED" },
+        "description": { "type": ["string", "null"] },
+        "dimensionDefinitionRef": { "anyOf": [{ "$ref": "#/$defs/dimensionDefinitionRef" }, { "type": "null" }] },
+        "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": ".*\\S.*", "x-dts-requiredIssueCode": "MODEL_SPEC_IDEMPOTENCY_KEY_REQUIRED" },
+        "dataMartId": { "type": ["string", "null"], "format": "uuid" },
+        "variantCode": { "type": ["string", "null"], "pattern": "^[A-Z][A-Z0-9_]{0,31}$" }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "modelType": { "const": "DIMENSION" } }, "required": ["modelType"] },
+          "then": { "required": ["dimensionDefinitionRef"] },
+          "else": { "properties": { "dimensionDefinitionRef": { "type": "null" } } }
+        }
+      ]
+    },
     "createModelSpecCommand": {
       "type": "object",
       "required": ["planId", "domainId", "modelType", "layer", "name", "implementationMode", "idempotencyKey"],
@@ -377,7 +426,11 @@
         "standardBindings": { "type": "array", "items": { "$ref": "#/$defs/standardBinding" } },
         "generationStrategy": { "anyOf": [{ "$ref": "#/$defs/generationStrategy" }, { "type": "null" }] },
         "dimensionProfile": { "anyOf": [{ "$ref": "#/$defs/dimensionProfile" }, { "type": "null" }] },
-        "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": ".*\\S.*", "x-dts-requiredIssueCode": "MODEL_SPEC_IDEMPOTENCY_KEY_REQUIRED" }
+        "dimensionDefinitionRef": { "anyOf": [{ "$ref": "#/$defs/dimensionDefinitionRef" }, { "type": "null" }] },
+        "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": ".*\\S.*", "x-dts-requiredIssueCode": "MODEL_SPEC_IDEMPOTENCY_KEY_REQUIRED" },
+        "dataMartId": { "type": ["string", "null"], "format": "uuid" },
+        "variantCode": { "type": ["string", "null"], "pattern": "^[A-Z][A-Z0-9_]{0,31}$" },
+        "implementationPolicy": { "anyOf": [{ "$ref": "#/$defs/implementationPolicy" }, { "type": "null" }] }
       },
       "additionalProperties": false,
       "allOf": [{ "$ref": "#/$defs/modelTypeSaveBoundaries" }]
@@ -406,7 +459,9 @@
         "metricRefs": { "$ref": "#/$defs/createModelSpecCommand/properties/metricRefs" },
         "standardBindings": { "$ref": "#/$defs/createModelSpecCommand/properties/standardBindings" },
         "generationStrategy": { "$ref": "#/$defs/createModelSpecCommand/properties/generationStrategy" },
-        "dimensionProfile": { "$ref": "#/$defs/createModelSpecCommand/properties/dimensionProfile" }
+        "dimensionProfile": { "$ref": "#/$defs/createModelSpecCommand/properties/dimensionProfile" },
+        "dataMartId": { "$ref": "#/$defs/createModelSpecCommand/properties/dataMartId" },
+        "variantCode": { "$ref": "#/$defs/createModelSpecCommand/properties/variantCode" }
       },
       "additionalProperties": false,
       "allOf": [{ "$ref": "#/$defs/modelTypeSaveBoundaries" }]
@@ -438,13 +493,17 @@
         "standardBindings": { "type": "array", "items": { "anyOf": [{ "$ref": "#/$defs/standardBinding" }, { "$ref": "#/$defs/legacyStandardBinding" }] } },
         "generationStrategy": { "anyOf": [{ "$ref": "#/$defs/generationStrategy" }, { "type": "null" }] },
         "dimensionProfile": { "anyOf": [{ "$ref": "#/$defs/dimensionProfile" }, { "type": "null" }] },
+        "dimensionDefinitionRef": { "anyOf": [{ "$ref": "#/$defs/dimensionDefinitionRef" }, { "type": "null" }] },
         "status": { "enum": ["DRAFT", "DESIGNING", "VALIDATING", "READY_TO_PUBLISH", "PUBLISHED", "ARCHIVED"] },
         "revision": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
         "checksum": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" },
         "compatibilityMode": { "enum": ["CANONICAL", "LEGACY_READONLY"] },
-        "legacyRefs": { "anyOf": [{ "$ref": "#/$defs/legacyRefs" }, { "type": "null" }] }
+        "legacyRefs": { "anyOf": [{ "$ref": "#/$defs/legacyRefs" }, { "type": "null" }] },
+        "dataMartId": { "type": ["string", "null"], "format": "uuid" },
+        "variantCode": { "type": ["string", "null"], "pattern": "^[A-Z][A-Z0-9_]{0,31}$" },
+        "implementationPolicy": { "anyOf": [{ "$ref": "#/$defs/implementationPolicy" }, { "type": "null" }] }
       },
       "additionalProperties": false,
       "allOf": [

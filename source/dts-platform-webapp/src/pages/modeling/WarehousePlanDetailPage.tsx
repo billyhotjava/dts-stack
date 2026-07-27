@@ -217,8 +217,10 @@ export default function WarehousePlanDetailPage() {
 					layerScheme: policyResult.value.value.layerScheme,
 					namingPolicy: policyResult.value.value.namingPolicy,
 					historyPolicy: policyResult.value.value.historyPolicy,
-					defaultTimeZone: policyResult.value.value.defaultTimeZone || null,
-					conceptualDesignAllowed: policyResult.value.value.conceptualDesignAllowed,
+						defaultTimeZone: policyResult.value.value.defaultTimeZone || null,
+						conceptualDesignAllowed: policyResult.value.value.conceptualDesignAllowed,
+						standardCoverage: policyResult.value.value.standardCoverage,
+						qualityGate: policyResult.value.value.qualityGate,
 				});
 				setPolicyDirty(false);
 				setPolicyConflictVersion(null);
@@ -349,6 +351,8 @@ export default function WarehousePlanDetailPage() {
 				historyPolicy: values.historyPolicy || null,
 				defaultTimeZone: values.defaultTimeZone?.trim() || null,
 				conceptualDesignAllowed: values.conceptualDesignAllowed,
+				standardCoverage: values.standardCoverage,
+				qualityGate: values.qualityGate,
 			});
 			if (!isCurrent()) return;
 			setPlanningPolicy(savedPolicy);
@@ -890,9 +894,46 @@ export default function WarehousePlanDetailPage() {
 														/>
 													</Form.Item>
 												</div>
-												<div className="rounded-xl border border-slate-200 p-4">
-													<div className="mb-4">
-														<div className="font-medium">其他实现默认值</div>
+													<div className="rounded-xl border border-slate-200 p-4">
+														<div className="mb-4">
+															<div className="font-medium">发布治理要求</div>
+															<Text type="secondary">
+																这些要求不影响保存草稿或完成逻辑设计，只在模型发布前形成必须修复的门禁。
+															</Text>
+														</div>
+														<div className="grid gap-4 md:grid-cols-2">
+															<Form.Item
+																name="standardCoverage"
+																label="字段标准覆盖范围"
+																rules={[{ required: true, message: "请选择字段标准覆盖范围" }]}
+																extra="发布门禁只检查选定范围内的字段，并会列出具体待处理字段。"
+															>
+																<Select
+																	options={[
+																		{ value: "NONE", label: "不作为发布门禁" },
+																		{ value: "KEY_AND_MEASURE", label: "键字段和度量字段" },
+																		{ value: "ALL_FIELDS", label: "全部字段" },
+																	]}
+																/>
+															</Form.Item>
+															<Form.Item
+																name="qualityGate"
+																label="质量测试要求"
+																rules={[{ required: true, message: "请选择质量测试要求" }]}
+																extra="阻断模式要求当前模型版本有通过的测试证据。"
+															>
+																<Select
+																	options={[
+																		{ value: "BLOCKING", label: "必须通过，否则阻止发布" },
+																		{ value: "ADVISORY", label: "仅提示，不阻止发布" },
+																	]}
+																/>
+															</Form.Item>
+														</div>
+													</div>
+													<div className="rounded-xl border border-slate-200 p-4">
+														<div className="mb-4">
+															<div className="font-medium">其他实现默认值</div>
 														<Text type="secondary">设置模型实现时使用的公共默认值。</Text>
 													</div>
 													<Form.Item

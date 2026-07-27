@@ -4,18 +4,22 @@ import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelLifecycleRepository;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.GeneratedInput;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationInput;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.InputMode;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.PhysicalAssetInput;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.SaveImplementationCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.UpstreamModelInput;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.GenerationStrategy;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationPolicy;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelRevisionRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelStatus;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceRef;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -94,6 +98,131 @@ public class ModelImplementationCompatibilityAdapter {
         return CompatibilityProjection.of(
             InputMode.GENERATED,
             List.of(new GeneratedInput(strategy.type(), strategy.reference() == null ? java.util.Map.of() : java.util.Map.of("reference", strategy.reference())))
+        );
+    }
+
+    /**
+     * Deterministically projects legacy ModelSpec implementation evidence without writing. Existing
+     * ModelImplementation remains authoritative and is never overwritten by this migration path.
+     */
+    public MigrationProjection previewMigration(String tenantId, ModelSpecView model) {
+        if (model == null || model.id() == null) {
+            return migration(null, MigrationStatus.ORPHAN, "MODEL_SPEC_NOT_FOUND", null, null);
+        }
+        boolean hasLegacyEvidence =
+            model.implementationPolicy() != null ||
+            !model.sourceRefs().isEmpty() ||
+            !model.dependsOn().isEmpty() ||
+            model.generationStrategy() != null;
+        if (!hasLegacyEvidence) {
+            return migration(model, MigrationStatus.SKIPPED, "NO_LEGACY_IMPLEMENTATION", null, null);
+        }
+
+        CompatibilityProjection legacy = projectLegacy(tenantId, model);
+        if (!legacy.valid()) {
+            MigrationStatus status = "MODEL_IMPLEMENTATION_LEGACY_INPUT_CONFLICT".equals(legacy.code())
+                ? MigrationStatus.CONFLICT
+                : MigrationStatus.ORPHAN;
+            return migration(model, status, legacy.code(), null, null);
+        }
+
+        SaveImplementationCommand command;
+        try {
+            command = new SaveImplementationCommand(
+                legacy.inputMode(),
+                legacy.inputs(),
+                List.of(),
+                migrationSettings(model),
+                model.implementationMode(),
+                isBlank(model.materialization()) ? "table" : model.materialization(),
+                "implementation-policy-migration:" + model.id() + ":" + model.revision()
+            );
+        } catch (RuntimeException invalid) {
+            return migration(model, MigrationStatus.ORPHAN, "MODEL_IMPLEMENTATION_SETTINGS_INVALID", null, null);
+        }
+
+        ValidationResult validation = validate(tenantId, model, command);
+        if (!validation.valid()) {
+            return migration(model, MigrationStatus.ORPHAN, validation.code(), command, null);
+        }
+
+        ImplementationView current = lifecycle == null
+            ? null
+            : lifecycle.findImplementation(tenantId, model.id()).orElse(null);
+        if (current != null) {
+            boolean identical =
+                current.revision() == model.revision() &&
+                Objects.equals(current.modelChecksum(), model.checksum()) &&
+                current.ownership() == command.ownership() &&
+                current.inputMode() == command.inputMode() &&
+                Objects.equals(current.inputs(), command.inputs()) &&
+                Objects.equals(current.fieldMappings(), command.fieldMappings()) &&
+                Objects.equals(current.settings(), command.settings()) &&
+                Objects.equals(current.materialization(), command.materialization());
+            return migration(
+                model,
+                identical ? MigrationStatus.SKIPPED : MigrationStatus.CONFLICT,
+                identical ? "ALREADY_MIGRATED" : "CURRENT_IMPLEMENTATION_WINS",
+                command,
+                current
+            );
+        }
+        return migration(model, MigrationStatus.ELIGIBLE, "LEGACY_IMPLEMENTATION_PROJECTED", command, null);
+    }
+
+    private static Map<String, Object> migrationSettings(ModelSpecView model) {
+        ImplementationPolicy policy = model.implementationPolicy();
+        LinkedHashMap<String, Object> settings = new LinkedHashMap<>();
+        settings.put(
+            "targetPhysicalName",
+            policy != null && !isBlank(policy.physicalName())
+                ? policy.physicalName()
+                : defaultPhysicalName(model)
+        );
+        settings.put(
+            "loadStrategy",
+            policy != null && policy.loadStrategy() != null ? policy.loadStrategy().name() : "FULL"
+        );
+        settings.put(
+            "partitionFields",
+            policy == null || policy.partitionFields() == null ? List.of() : policy.partitionFields()
+        );
+        if (policy != null && policy.retentionDays() != null) {
+            settings.put("retentionDays", policy.retentionDays());
+        }
+        return Map.copyOf(settings);
+    }
+
+    private static String defaultPhysicalName(ModelSpecView model) {
+        String layer = model.layer() == null ? "model" : model.layer().name().toLowerCase();
+        String rawName = isBlank(model.name()) ? "model_" + model.id().toString().substring(0, 8) : model.name();
+        String name = rawName.toLowerCase().replaceAll("[^a-z0-9_]+", "_").replaceAll("^_+|_+$", "");
+        if (name.isEmpty() || !Character.isLetter(name.charAt(0))) {
+            name = "model_" + name;
+        }
+        String result = layer + "_" + name;
+        return result.length() <= 63 ? result : result.substring(0, 63).replaceAll("_+$", "");
+    }
+
+    private static MigrationProjection migration(
+        ModelSpecView model,
+        MigrationStatus status,
+        String reasonCode,
+        SaveImplementationCommand command,
+        ImplementationView current
+    ) {
+        return new MigrationProjection(
+            new MigrationDecision(
+                model == null ? null : model.id(),
+                status,
+                reasonCode,
+                model == null ? 0 : model.revision(),
+                current == null ? null : current.implementationRevision(),
+                current == null ? null : current.implementationChecksum(),
+                command == null ? null : command.inputMode(),
+                command == null ? Map.of() : command.settings()
+            ),
+            command
         );
     }
 
@@ -308,4 +437,28 @@ public class ModelImplementationCompatibilityAdapter {
             return new ValidationResult(false, code);
         }
     }
+
+    public enum MigrationStatus {
+        ELIGIBLE,
+        CONFLICT,
+        ORPHAN,
+        SKIPPED,
+    }
+
+    public record MigrationDecision(
+        UUID modelSpecId,
+        MigrationStatus status,
+        String reasonCode,
+        int modelRevision,
+        Integer currentImplementationRevision,
+        String currentImplementationChecksum,
+        InputMode targetInputMode,
+        Map<String, Object> targetSettings
+    ) {
+        public MigrationDecision {
+            targetSettings = targetSettings == null ? Map.of() : Map.copyOf(targetSettings);
+        }
+    }
+
+    public record MigrationProjection(MigrationDecision decision, SaveImplementationCommand command) {}
 }

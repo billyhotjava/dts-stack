@@ -4,7 +4,6 @@ import type { CanonicalModelSpecView } from "./modelSpecV2Contract.ts";
 import {
 	adoptCurrentDimensionRevisions,
 	adoptCurrentUpstreamRevisions,
-	buildModelSpecCreateCommand,
 	buildModelSpecUpdateCommand,
 	createEmptyModelSpecDraft,
 	isModelSpecStatusReadonly,
@@ -40,8 +39,8 @@ const baseDraft = (overrides: Partial<ModelSpecDraft> = {}): ModelSpecDraft => (
 	...overrides,
 });
 
-test("FACT command keeps grain, source, optional time semantics and optional activity on ModelSpec", () => {
-	const command = buildModelSpecCreateCommand(
+test("FACT logical update keeps grain, source, optional time semantics and optional activity on ModelSpec", () => {
+	const command = buildModelSpecUpdateCommand(
 		baseDraft({
 			factShape: "TRANSACTION",
 			timeSemanticsType: "EVENT_TIME",
@@ -50,7 +49,6 @@ test("FACT command keeps grain, source, optional time semantics and optional act
 			dimensionRefIds: [DIMENSION_ID],
 		}),
 		[{ id: DIMENSION_ID, revision: 4, modelType: "DIMENSION" }],
-		"create-fact-1",
 	);
 
 	assert.equal(command.modelType, "FACT");
@@ -63,26 +61,24 @@ test("FACT command keeps grain, source, optional time semantics and optional act
 	assert.equal("processId" in command, false);
 });
 
-test("FACT draft may defer input mapping or pin an upstream model revision", () => {
-	const withoutInput = buildModelSpecCreateCommand(
+test("FACT logical update may defer input mapping or pin an upstream model revision", () => {
+	const withoutInput = buildModelSpecUpdateCommand(
 		baseDraft({ sources: [], upstreamIds: [] }),
 		[],
-		"create-fact-without-input",
 	);
 	assert.deepEqual(withoutInput.sourceRefs, []);
 	assert.deepEqual(withoutInput.dependsOn, []);
 
-	const withUpstream = buildModelSpecCreateCommand(
+	const withUpstream = buildModelSpecUpdateCommand(
 		baseDraft({ sources: [], upstreamIds: [UPSTREAM_ID] }),
 		[{ id: UPSTREAM_ID, revision: 7, modelType: "FACT" }],
-		"create-fact-with-upstream",
 	);
 	assert.deepEqual(withUpstream.sourceRefs, []);
 	assert.deepEqual(withUpstream.dependsOn, [{ modelSpecId: UPSTREAM_ID, revision: 7 }]);
 });
 
-test("DIMENSION command creates key fields without requiring business activity", () => {
-	const command = buildModelSpecCreateCommand(
+test("DIMENSION logical update creates key fields without requiring business activity", () => {
+	const command = buildModelSpecUpdateCommand(
 		baseDraft({
 			modelType: "DIMENSION",
 			layer: "DWD",
@@ -100,11 +96,23 @@ test("DIMENSION command creates key fields without requiring business activity",
 			businessActivityRef: "must-not-leak",
 		}),
 		[],
-		"create-dimension-1",
 	);
 
 	assert.equal(command.modelType, "DIMENSION");
-	assert.deepEqual(command.fields, [{ name: "organization_id", dataType: "string", nullable: false, role: "KEY" }]);
+	assert.deepEqual(command.fields, [
+		{
+			name: "organization_id",
+			displayName: "organization_id",
+			dataType: "string",
+			sourceFieldRef: undefined,
+			securityLevel: undefined,
+			dimensionAttributeCode: undefined,
+			redundant: false,
+			redundancySourceRef: undefined,
+			nullable: false,
+			role: "KEY",
+		},
+	]);
 	assert.deepEqual(command.generationStrategy, { type: "REFERENCE", reference: "组织主数据" });
 	assert.deepEqual(command.dimensionProfile, {
 		dimensionCode: "DIM_ORGANIZATION",
@@ -115,7 +123,7 @@ test("DIMENSION command creates key fields without requiring business activity",
 	assert.equal(command.businessActivityRef, undefined);
 });
 
-test("DIMENSION command normalizes optional values omitted by conditional form fields", () => {
+test("DIMENSION logical update normalizes optional values omitted by conditional form fields", () => {
 	const sparseFormValues = {
 		...baseDraft({
 			modelType: "DIMENSION",
@@ -133,9 +141,22 @@ test("DIMENSION command normalizes optional values omitted by conditional form f
 		existingDimensionPins: undefined,
 	} as unknown as ModelSpecDraft;
 
-	const command = buildModelSpecCreateCommand(sparseFormValues, [], "create-dimension-sparse-form");
+	const command = buildModelSpecUpdateCommand(sparseFormValues, []);
 
-	assert.deepEqual(command.fields, [{ name: "organization_id", dataType: "string", nullable: false, role: "KEY" }]);
+	assert.deepEqual(command.fields, [
+		{
+			name: "organization_id",
+			displayName: "organization_id",
+			dataType: "string",
+			sourceFieldRef: undefined,
+			securityLevel: undefined,
+			dimensionAttributeCode: undefined,
+			redundant: false,
+			redundancySourceRef: undefined,
+			nullable: false,
+			role: "KEY",
+		},
+	]);
 	assert.deepEqual(command.metricRefs, []);
 	assert.deepEqual(command.standardBindings, []);
 	assert.equal(command.timeSemantics, undefined);
@@ -174,8 +195,8 @@ test("fixed target-layer validation has a business-readable issue message", () =
 	);
 });
 
-test("command parsing trims and deduplicates grain and time field names across supported separators", () => {
-	const command = buildModelSpecCreateCommand(
+test("logical update parsing trims and deduplicates grain and time field names across supported separators", () => {
+	const command = buildModelSpecUpdateCommand(
 		baseDraft({
 			grainKeysText: " customer_id， event_id\ncustomer_id ",
 			fields: [{ name: "customer_id", dataType: "string", nullable: false, role: "KEY" }],
@@ -184,7 +205,6 @@ test("command parsing trims and deduplicates grain and time field names across s
 			timeFieldsText: " event_time，created_at\nevent_time ",
 		}),
 		[],
-		"create-fact-shared-parser",
 	);
 
 	assert.deepEqual(command.grain?.keys, ["customer_id", "event_id"]);
@@ -197,7 +217,7 @@ test("command parsing trims and deduplicates grain and time field names across s
 
 test("SUMMARY and APPLICATION pin selected upstream revisions and keep their own grain", () => {
 	const upstream = [{ id: UPSTREAM_ID, revision: 7, modelType: "FACT" as const }];
-	const summary = buildModelSpecCreateCommand(
+	const summary = buildModelSpecUpdateCommand(
 		baseDraft({
 			modelType: "SUMMARY",
 			layer: "DWS",
@@ -208,9 +228,8 @@ test("SUMMARY and APPLICATION pin selected upstream revisions and keep their own
 			upstreamIds: [UPSTREAM_ID],
 		}),
 		upstream,
-		"create-summary-1",
 	);
-	const application = buildModelSpecCreateCommand(
+	const application = buildModelSpecUpdateCommand(
 		baseDraft({
 			modelType: "APPLICATION",
 			layer: "ADS",
@@ -222,7 +241,6 @@ test("SUMMARY and APPLICATION pin selected upstream revisions and keep their own
 			consumptionScenario: "客户运营报表",
 		}),
 		upstream,
-		"create-application-1",
 	);
 
 	assert.deepEqual(summary.dependsOn, [{ modelSpecId: UPSTREAM_ID, revision: 7 }]);

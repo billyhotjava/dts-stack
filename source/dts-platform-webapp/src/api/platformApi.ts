@@ -1133,7 +1133,7 @@ export interface RuleRunHistory {
 	runId: string;
 	time: string;
 	status: string;
-	passRate: number;
+	passRate: number | null;
 	failingRows: number;
 }
 

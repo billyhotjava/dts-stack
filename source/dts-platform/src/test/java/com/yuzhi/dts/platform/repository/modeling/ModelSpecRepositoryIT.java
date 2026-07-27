@@ -225,6 +225,65 @@ class ModelSpecRepositoryIT {
         ).isTrue();
     }
 
+    @Test
+    void appendsReclassificationRevisionAndPersistsDeterministicReplayEvidence() throws Exception {
+        String tenant = "model-spec-reclassify-it-" + UUID.randomUUID();
+        String actor = "owner-1";
+        UUID planId = UUID.randomUUID();
+        UUID domainId = UUID.randomUUID();
+        UUID sourceBindingId = UUID.randomUUID();
+        seedContext(tenant, actor, planId, domainId, sourceBindingId);
+        ModelSpecSnapshotCodec codec = new ModelSpecSnapshotCodec(objectMapper);
+        CreateModelSpecCommand create = command(planId, domainId, sourceBindingId);
+        Instant createdAt = Instant.parse("2026-07-27T01:02:03Z");
+        ModelSpecView first = codec.toCreatedView(UUID.randomUUID(), create, createdAt);
+        String firstSnapshot = codec.write(first);
+        assertThat(repository.insertV2(tenant, actor, create, first, codec.requestHash(create), firstSnapshot)).isEqualTo(1);
+        repository.insertV2Revision(tenant, actor, first, firstSnapshot);
+
+        CreateModelSpecCommand projected = dimensionCommand(
+            planId,
+            domainId,
+            null,
+            create.idempotencyKey(),
+            first.name()
+        );
+        ModelSpecView second = codec.toReclassifiedView(first, projected, 2, createdAt.plusSeconds(60));
+        String secondSnapshot = codec.write(second);
+        assertThat(repository.compareAndSetV2(tenant, actor, 1, first.checksum(), second, secondSnapshot)).isEqualTo(1);
+        repository.insertV2Revision(tenant, actor, second, secondSnapshot);
+        repository.insertReclassificationCommand(
+            tenant,
+            actor,
+            first.id(),
+            "fact-to-dimension",
+            ModelType.FACT,
+            ModelType.DIMENSION,
+            second.revision(),
+            second.checksum(),
+            createdAt.plusSeconds(60)
+        );
+
+        assertThat(repository.findRevision(tenant, first.id(), 1)).isPresent();
+        assertThat(repository.findRevision(tenant, first.id(), 2)).isPresent();
+        assertThat(repository.findReclassificationReplay(tenant, first.id(), "fact-to-dimension"))
+            .get()
+            .isEqualTo(new ModelSpecRepository.ReclassificationReplay(2, second.checksum()));
+        assertThat(
+            jdbcTemplate.queryForObject(
+                """
+                select created_date
+                  from modeling_model_reclassification_command
+                 where tenant_id = ? and model_spec_id = ? and idempotency_key = ?
+                """,
+                Instant.class,
+                tenant,
+                first.id(),
+                "fact-to-dimension"
+            )
+        ).isEqualTo(createdAt.plusSeconds(60));
+    }
+
     private void seedContext(String tenant, String actor, UUID planId, UUID domainId, UUID sourceBindingId) {
         jdbcTemplate.update(
             "insert into catalog_domain (id, name, code, lifecycle_status, access_policy) values (?, ?, ?, 'ACTIVE', 'PUBLIC')",

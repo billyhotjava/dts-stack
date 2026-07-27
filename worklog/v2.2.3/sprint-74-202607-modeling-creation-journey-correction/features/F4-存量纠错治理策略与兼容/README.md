@@ -1,7 +1,7 @@
 # F4：存量纠错、治理策略与兼容
 
 **优先级**：P0  
-**状态**：DRAFT
+**状态**：DONE
 
 ## 目标
 
@@ -28,20 +28,20 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|
-| T01 | 实现DRAFT模型改型预检与追加revision | P0 | DRAFT | F1、F2 |
-| T02 | 将治理必填收敛到计划发布策略 | P0 | DRAFT | F2、Sprint-72/69 |
-| T03 | 迁移已提交implementationPolicy并兼容旧输入 | P0 | DRAFT | F3 |
+| T01 | 实现DRAFT模型改型预检与追加revision | P0 | DONE | F1、F2 |
+| T02 | 将治理必填收敛到计划发布策略 | P0 | DONE | F2、Sprint-72/69 |
+| T03 | 迁移已提交implementationPolicy并兼容旧输入 | P0 | DONE | F3 |
 
 ## Definition of Ready
 
 - [x] eligibility 和 preview/apply DTO 已钉死
 - [x] 治理阶段边界已钉死
 - [x] compatibility owner 已钉死
-- [ ] GitNexus 更新到当前 HEAD，Sprint-73 owning symbols 影响审计完成
+- [x] GitNexus 更新到当前 HEAD，Sprint-73 owning symbols 影响审计完成
 
 ## 完成标准
 
-- [ ] 财务 r4 可预检后生成新 revision
-- [ ] 有实现/发布证据的模型不可原地改型
-- [ ] 标准/密级/质量不阻断 DESIGNED
-- [ ] IT-09～IT-11 通过
+- [x] 隔离财务 FACT 样本可预检后生成新 revision，用户模型不被自动修改
+- [x] 有实现/发布证据的模型不可原地改型
+- [x] 标准/密级/质量不阻断 DESIGNED
+- [x] IT-09～IT-11 通过

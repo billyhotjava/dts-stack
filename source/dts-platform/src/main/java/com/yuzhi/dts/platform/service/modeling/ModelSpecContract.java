@@ -47,6 +47,18 @@ public final class ModelSpecContract {
         "implementationPolicy"
     );
 
+    public static final Set<String> INTERACTIVE_CREATE_FIELDS = Set.of(
+        "planId",
+        "domainId",
+        "modelType",
+        "name",
+        "description",
+        "dimensionDefinitionRef",
+        "idempotencyKey",
+        "dataMartId",
+        "variantCode"
+    );
+
     public static final Set<String> UPDATE_FIELDS = Set.of(
         "planId",
         "domainId",
@@ -70,8 +82,7 @@ public final class ModelSpecContract {
         "generationStrategy",
         "dimensionProfile",
         "dataMartId",
-        "variantCode",
-        "implementationPolicy"
+        "variantCode"
     );
 
     public static final Map<String, String> REQUIRED_FIELD_CODES = Map.of(
@@ -104,6 +115,7 @@ public final class ModelSpecContract {
         "fields",
         Set.of(
             "name",
+            "displayName",
             "dataType",
             "nullable",
             "sourceFieldRef",
@@ -215,7 +227,7 @@ public final class ModelSpecContract {
         APPLICATION,
     }
 
-    static Layer targetLayer(ModelType modelType) {
+    public static Layer targetLayer(ModelType modelType) {
         if (modelType == null) return null;
         return switch (modelType) {
             case DIMENSION, FACT -> Layer.DWD;
@@ -271,7 +283,11 @@ public final class ModelSpecContract {
     }
 
     static boolean isCanonicalReferenceTarget(ModelSpecView view) {
-        return isCanonicalModel(view) && !hasHistoricalTypeBoundaryViolation(view);
+        return (
+            isCanonicalModel(view) &&
+            view.status() != ModelStatus.ARCHIVED &&
+            !hasHistoricalTypeBoundaryViolation(view)
+        );
     }
 
     public enum ImplementationMode {
@@ -393,6 +409,7 @@ public final class ModelSpecContract {
 
     public record ModelField(
         String name,
+        String displayName,
         String dataType,
         Boolean nullable,
         String sourceFieldRef,
@@ -408,13 +425,39 @@ public final class ModelSpecContract {
             Boolean nullable,
             String sourceFieldRef,
             FieldRole role,
+            String securityLevel,
+            String dimensionAttributeCode,
+            Boolean redundant,
+            String redundancySourceRef
+        ) {
+            this(
+                name,
+                name,
+                dataType,
+                nullable,
+                sourceFieldRef,
+                role,
+                securityLevel,
+                dimensionAttributeCode,
+                redundant,
+                redundancySourceRef
+            );
+        }
+
+        public ModelField(
+            String name,
+            String dataType,
+            Boolean nullable,
+            String sourceFieldRef,
+            FieldRole role,
             String securityLevel
         ) {
-            this(name, dataType, nullable, sourceFieldRef, role, securityLevel, null, false, null);
+            this(name, name, dataType, nullable, sourceFieldRef, role, securityLevel, null, false, null);
         }
 
         public ModelField {
             name = trimToNull(name);
+            displayName = trimToNull(displayName);
             dataType = trimToNull(dataType);
             sourceFieldRef = trimToNull(sourceFieldRef);
             securityLevel = trimToNull(securityLevel);
@@ -1020,6 +1063,15 @@ public final class ModelSpecContract {
             .filter(field -> !CREATE_FIELDS.contains(field))
             .sorted()
             .map(field -> issue("MODEL_SPEC_FIELD_NOT_ALLOWED", field, "Field is not part of the canonical ModelSpec create contract"))
+            .toList();
+    }
+
+    static List<FieldIssue> validateInteractiveCreateFieldNames(Set<String> fieldNames) {
+        if (fieldNames == null) return List.of(issue("MODEL_SPEC_REQUEST_INVALID", "$", "Request must be a JSON object"));
+        return fieldNames.stream()
+            .filter(field -> !INTERACTIVE_CREATE_FIELDS.contains(field))
+            .sorted()
+            .map(field -> issue("MODEL_SPEC_FIELD_NOT_ALLOWED", field, "Field is not part of the minimal ModelSpec create contract"))
             .toList();
     }
 
@@ -1796,6 +1848,7 @@ public final class ModelSpecContract {
     private static boolean invalidRawField(Map<?, ?> field) {
         return (
             !isNonBlankText(field.get("name")) ||
+            !isNullableText(field.get("displayName")) ||
             !isNonBlankText(field.get("dataType")) ||
             !(field.get("nullable") instanceof Boolean) ||
             !isEnumText(field.get("role"), FIELD_ROLES) ||

@@ -1,4 +1,4 @@
-import { Alert, Button, Drawer, Form, Input, Select, Space } from "antd";
+import { Alert, Button, Drawer, Form, Input, Radio, Select, Space, Typography } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
@@ -25,7 +25,7 @@ import {
 
 type Props = {
 	open: boolean;
-	initialModelType: ModelSpecType;
+	initialModelType?: ModelSpecType;
 	lockModelType?: boolean;
 	lockedPlanId?: string;
 	initialDomainId?: string;
@@ -39,11 +39,46 @@ type Props = {
 
 type SelectOption = { value: string; label: string };
 
-const modelTypeOptions: SelectOption[] = [
-	{ value: "DIMENSION", label: "维度表" },
-	{ value: "FACT", label: "明细表" },
-	{ value: "SUMMARY", label: "汇总表" },
-	{ value: "APPLICATION", label: "应用表" },
+const modelPurposeOptions: Array<{
+	value: ModelSpecType;
+	title: string;
+	tableType: string;
+	suitableFor: string;
+	avoidWhen: string;
+	example: string;
+}> = [
+	{
+		value: "DIMENSION",
+		title: "稳定对象",
+		tableType: "维度表",
+		suitableFor: "项目、客户、组织等相对稳定、需要复用筛选的对象",
+		avoidWhen: "要记录付款、交易或状态变化等一次业务事件",
+		example: "项目主数据、客户维度",
+	},
+	{
+		value: "FACT",
+		title: "业务事件",
+		tableType: "明细表",
+		suitableFor: "记录一次业务事件，或按固定周期记录一份业务快照",
+		avoidWhen: "只需要稳定对象字典，或数据已经按粒度汇总",
+		example: "付款明细、每日库存快照",
+	},
+	{
+		value: "SUMMARY",
+		title: "聚合结果",
+		tableType: "汇总表",
+		suitableFor: "从明细或其他模型按固定粒度计算可复用汇总",
+		avoidWhen: "必须保留每一笔原始事件，或只服务一个最终页面",
+		example: "项目月度收支汇总",
+	},
+	{
+		value: "APPLICATION",
+		title: "消费输出",
+		tableType: "应用表",
+		suitableFor: "面向报表、接口或具体业务场景交付最终结果",
+		avoidWhen: "结果还需要作为通用明细或公共汇总被多处复用",
+		example: "财务驾驶舱宽表、监管报送表",
+	},
 ];
 
 const confirmedCategoryOptions = (bindings: WarehousePlanCategoryBindingView[]): SelectOption[] =>
@@ -237,12 +272,13 @@ export function ModelSpecCreateDrawer({
 		const requestId = ++planRequestRef.current;
 		form.resetFields();
 		form.setFieldsValue(
-			createEmptyModelSpecDraft(initialModelType, {
+			createEmptyModelSpecDraft(initialModelType || "FACT", {
 				planId: lockedPlanId,
 				domainId: initialDomainId,
 				dataMartId: initialDataMartId,
 			}),
 		);
+		if (!initialModelType) form.setFieldValue("modelType", undefined);
 		idempotencyKeyRef.current = createModelSpecIdempotencyKey();
 		setSubmitError("");
 		setConflictRepairRoute("");
@@ -405,7 +441,7 @@ export function ModelSpecCreateDrawer({
 			aria-label="新建模型"
 			open={open}
 			onClose={onClose}
-			width={540}
+			width={680}
 			maskClosable={!saving}
 			footer={
 				<div className="flex justify-end">
@@ -420,6 +456,7 @@ export function ModelSpecCreateDrawer({
 								loadingPlans ||
 								loadingDomains ||
 								loadingDataMarts ||
+								!selectedModelType ||
 								(selectedModelType === "DIMENSION" && loadingDefinitions)
 							}
 							onClick={() => void submit()}
@@ -508,12 +545,38 @@ export function ModelSpecCreateDrawer({
 							}}
 						/>
 					</Form.Item>
-					<Form.Item name="modelType" label="模型类型" rules={[{ required: true, message: "请选择模型类型" }]}>
-						<Select
-							options={modelTypeOptions}
+					<Form.Item
+						name="modelType"
+						label="先确定要描述什么"
+						extra="模型类型描述业务语义；目标数仓层由系统按当前版本规则确定。"
+						rules={[{ required: true, message: "请选择业务目的和模型类型" }]}
+					>
+						<Radio.Group
+							className="w-full"
 							disabled={lockModelType}
-							onChange={(value) => changeModelType(value as ModelSpecType)}
-						/>
+							onChange={(event) => changeModelType(event.target.value as ModelSpecType)}
+						>
+							<div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+								{modelPurposeOptions.map((option) => (
+									<Radio.Button key={option.value} value={option.value} className="!h-auto !w-full !p-3">
+										<div className="font-medium">
+											{option.title} · {option.tableType}
+										</div>
+										<div className="mt-1 space-y-0.5 whitespace-normal text-xs">
+											<Typography.Text type="secondary" className="block">
+												适合：{option.suitableFor}
+											</Typography.Text>
+											<Typography.Text type="secondary" className="block">
+												不适合：{option.avoidWhen}
+											</Typography.Text>
+											<Typography.Text type="secondary" className="block">
+												例子：{option.example}
+											</Typography.Text>
+										</div>
+									</Radio.Button>
+								))}
+							</div>
+						</Radio.Group>
 					</Form.Item>
 					{selectedModelType === "DIMENSION" ? (
 						<Form.Item label="业务维度（需已确认）" required>

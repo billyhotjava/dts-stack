@@ -128,6 +128,34 @@ public class ModelSpecResource {
         return ApiResponses.ok(service.dependencyGraph(serverTenantId, id));
     }
 
+    @PostMapping("/{id}/reclassify-preview")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ApiResponse<ModelSpecApplicationService.ReclassificationPreview> previewReclassification(
+        @PathVariable UUID id,
+        @RequestBody ModelSpecApplicationService.ReclassificationPreviewRequest request
+    ) {
+        return ApiResponses.ok(service.previewReclassification(serverTenantId, actorId(), id, request));
+    }
+
+    @PostMapping("/{id}/reclassify")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<ModelSpecView>> reclassify(
+        @PathVariable UUID id,
+        @RequestHeader(value = "If-Match", required = false) String ifMatch,
+        @RequestBody ModelSpecApplicationService.ReclassificationCommand command
+    ) {
+        ExpectedVersion expected = parseExpected(ifMatch);
+        if (!id.equals(expected.modelSpecId())) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_IF_MATCH_INVALID",
+                "If-Match identifies a different ModelSpec",
+                ModelSpecException.Kind.BAD_REQUEST
+            );
+        }
+        ModelSpecView view = service.reclassify(serverTenantId, actorId(), id, expected, command);
+        return ResponseEntity.ok().eTag(ModelSpecApplicationService.etag(view)).body(ApiResponses.ok(view));
+    }
+
     @PutMapping("/{id}")
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<ModelSpecView>> update(

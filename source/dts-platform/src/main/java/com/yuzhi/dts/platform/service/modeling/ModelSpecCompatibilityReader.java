@@ -95,7 +95,6 @@ public class ModelSpecCompatibilityReader {
             throw snapshotConflict("Canonical ModelSpec revision snapshot is missing");
         }
         ModelSpecView view = codec.readView(stored.currentSnapshot());
-        String contentChecksum = codec.contentChecksum(view);
         if (
             view.contractVersion() != ModelSpecContract.CONTRACT_VERSION ||
             view.compatibilityMode() != CompatibilityMode.CANONICAL ||
@@ -104,7 +103,7 @@ public class ModelSpecCompatibilityReader {
             !Objects.equals(view.domainId(), stored.domainId()) ||
             view.status() != stored.status() ||
             view.revision() != stored.revision() ||
-            !Objects.equals(view.checksum(), contentChecksum) ||
+            !codec.matchesStoredContentChecksum(stored.currentSnapshot(), view, view.checksum()) ||
             !Objects.equals(view.checksum(), stored.revisionChecksum()) ||
             (stored.currentHead() &&
                 (stored.currentChecksum() == null ||

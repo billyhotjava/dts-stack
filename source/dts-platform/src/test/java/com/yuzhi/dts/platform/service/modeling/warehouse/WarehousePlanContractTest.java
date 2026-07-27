@@ -322,12 +322,16 @@ class WarehousePlanContractTest {
             .containsExactly("NAMING_POLICY_REQUIRED", "HISTORY_POLICY_REQUIRED");
         assertThat(implementationReady.readiness()).isEqualTo(PlanningPolicyReadiness.IMPLEMENTATION_READY);
         assertThat(implementationReady.issues()).isEmpty();
+        assertThat(implementationReady.standardCoverage())
+            .isEqualTo(WarehousePlanContract.StandardCoverage.KEY_AND_MEASURE);
+        assertThat(implementationReady.qualityGate())
+            .isEqualTo(WarehousePlanContract.QualityGate.BLOCKING);
     }
 
     @Test
     void rejectsUnsupportedPolicyEnumsAndInvalidNonBlankZoneIdWithoutInventingADefault() {
         PlanningPolicyView invalid = WarehousePlanContract.evaluatePlanningPolicy(
-            new PlanningPolicyCommand("LAKEHOUSE", "CAMEL_CASE", "OVERWRITE_ALL", "UTC+8")
+            new PlanningPolicyCommand("LAKEHOUSE", "CAMEL_CASE", "OVERWRITE_ALL", "UTC+8", false, "SOME_FIELDS", "OPTIONAL")
         );
 
         assertThat(invalid.readiness()).isEqualTo(PlanningPolicyReadiness.DRAFT);
@@ -338,11 +342,33 @@ class WarehousePlanContractTest {
                 "LAYER_SCHEME_UNSUPPORTED",
                 "NAMING_POLICY_UNSUPPORTED",
                 "HISTORY_POLICY_UNSUPPORTED",
-                "DEFAULT_TIME_ZONE_INVALID"
+                "DEFAULT_TIME_ZONE_INVALID",
+                "STANDARD_COVERAGE_UNSUPPORTED",
+                "QUALITY_GATE_UNSUPPORTED"
             );
         assertThat(WarehousePlanContract.evaluatePlanningPolicy(
             new PlanningPolicyCommand("CLASSIC_ODS_DWD_DWS_ADS", "CLASSIC_UPPER_SNAKE", "LATEST_STATE_ONLY", null)
         ).readiness()).isEqualTo(PlanningPolicyReadiness.IMPLEMENTATION_READY);
+    }
+
+    @Test
+    void resolvesExplicitGovernancePolicyWithoutChangingPlanningReadiness() {
+        PlanningPolicyView policy = WarehousePlanContract.evaluatePlanningPolicy(
+            new PlanningPolicyCommand(
+                "CLASSIC_ODS_DWD_DWS_ADS",
+                "CLASSIC_LOWER_SNAKE",
+                "PRESERVE_BUSINESS_HISTORY",
+                "Asia/Shanghai",
+                false,
+                "NONE",
+                "ADVISORY"
+            )
+        );
+
+        assertThat(policy.readiness()).isEqualTo(PlanningPolicyReadiness.IMPLEMENTATION_READY);
+        assertThat(policy.standardCoverage()).isEqualTo(WarehousePlanContract.StandardCoverage.NONE);
+        assertThat(policy.qualityGate()).isEqualTo(WarehousePlanContract.QualityGate.ADVISORY);
+        assertThat(policy.issues()).isEmpty();
     }
 
     @Test

@@ -102,6 +102,119 @@ class ModelLifecycleServiceTest {
     }
 
     @Test
+    void implementationMigrationDryRunAppliesOnlyEligibleProjectionWithModelAndImplementationCas() {
+        ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
+        ModelSpecRepository modelSpecRepository = mock(ModelSpecRepository.class);
+        ModelLifecycleRepository lifecycle = mock(ModelLifecycleRepository.class);
+        ModelSpecPlanWriteAccessPort writeAccess = mock(ModelSpecPlanWriteAccessPort.class);
+        ModelImplementationCompatibilityAdapter adapter = mock(ModelImplementationCompatibilityAdapter.class);
+        ModelSpecView model = mock(ModelSpecView.class);
+        when(model.id()).thenReturn(MODEL_ID);
+        when(model.planId()).thenReturn(PLAN_ID);
+        when(model.revision()).thenReturn(7);
+        when(model.checksum()).thenReturn(CHECKSUM);
+        when(model.implementationMode()).thenReturn(ImplementationMode.DESIGNER_GENERATED);
+        when(modelSpecs.list("tenant-a", null, null, null, null)).thenReturn(List.of(model));
+        when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(model);
+        when(modelSpecRepository.lockPlan("tenant-a", PLAN_ID)).thenReturn(Optional.of(new PlanState(PLAN_ID, "DRAFT")));
+        when(writeAccess.canMaintain("tenant-a", PLAN_ID, "alice")).thenReturn(true);
+        SaveImplementationCommand command = new SaveImplementationCommand(
+            InputMode.GENERATED,
+            List.of(new GeneratedInput("DATE_DIMENSION", Map.of())),
+            List.of(),
+            Map.of("targetPhysicalName", "dwd_calendar", "loadStrategy", "FULL", "partitionFields", List.of()),
+            ImplementationMode.DESIGNER_GENERATED,
+            "table",
+            "implementation-policy-migration:" + MODEL_ID + ":7"
+        );
+        var decision = new ModelImplementationCompatibilityAdapter.MigrationDecision(
+            MODEL_ID,
+            ModelImplementationCompatibilityAdapter.MigrationStatus.ELIGIBLE,
+            "LEGACY_IMPLEMENTATION_PROJECTED",
+            7,
+            null,
+            null,
+            InputMode.GENERATED,
+            command.settings()
+        );
+        when(adapter.previewMigration("tenant-a", model))
+            .thenReturn(new ModelImplementationCompatibilityAdapter.MigrationProjection(decision, command));
+        when(adapter.pinCurrentUpstreamImplementations("tenant-a", command)).thenReturn(command);
+        when(adapter.validate("tenant-a", model, command))
+            .thenReturn(new ModelImplementationCompatibilityAdapter.ValidationResult(true, null));
+        ImplementationView saved = new ImplementationView(
+            UUID.randomUUID(),
+            MODEL_ID,
+            PLAN_ID,
+            7,
+            CHECKSUM,
+            ImplementationMode.DESIGNER_GENERATED,
+            "compatibility-migration",
+            "model.compatibility." + MODEL_ID.toString().replace("-", ""),
+            "ACTIVE",
+            1,
+            "b".repeat(64),
+            InputMode.GENERATED,
+            command.inputs(),
+            command.fieldMappings(),
+            command.settings(),
+            command.materialization()
+        );
+        when(lifecycle.findImplementation("tenant-a", MODEL_ID))
+            .thenReturn(Optional.empty(), Optional.of(saved));
+        when(lifecycle.saveImplementation(
+            eq("tenant-a"),
+            eq("alice"),
+            eq(model),
+            eq("compatibility-migration"),
+            eq("model.compatibility." + MODEL_ID.toString().replace("-", "")),
+            eq(command),
+            eq(0),
+            nullable(String.class),
+            eq(NOW)
+        )).thenReturn(1);
+        ModelLifecycleService service = new ModelLifecycleService(
+            modelSpecs,
+            modelSpecRepository,
+            lifecycle,
+            mock(ModelSpecStageGateService.class),
+            writeAccess,
+            mock(ModelLifecycleCompilerPort.class),
+            mock(ModelReleaseRegistrationPort.class),
+            mock(ModelLifecycleTestEvidencePort.class),
+            mock(ModelLifecyclePublicationService.class),
+            mock(ModelingVNextApplicationService.class),
+            adapter,
+            Clock.fixed(NOW, ZoneOffset.UTC)
+        );
+
+        ModelLifecycleService.ImplementationMigrationBatch preview =
+            service.previewImplementationMigrations("tenant-a", List.of());
+        ModelLifecycleService.ImplementationMigrationBatch applied =
+            service.applyImplementationMigrations("tenant-a", "alice", List.of(), preview.previewChecksum());
+
+        assertThat(preview).extracting(
+            ModelLifecycleService.ImplementationMigrationBatch::total,
+            ModelLifecycleService.ImplementationMigrationBatch::eligible,
+            ModelLifecycleService.ImplementationMigrationBatch::applied
+        ).containsExactly(1, 1, 0);
+        assertThat(applied.applied()).isEqualTo(1);
+        assertThat(applied.results().getFirst().targetImplementationRevision()).isEqualTo(1);
+        assertThat(applied.results().getFirst().targetImplementationChecksum()).isEqualTo("b".repeat(64));
+        verify(lifecycle).saveImplementation(
+            eq("tenant-a"),
+            eq("alice"),
+            eq(model),
+            eq("compatibility-migration"),
+            eq("model.compatibility." + MODEL_ID.toString().replace("-", "")),
+            eq(command),
+            eq(0),
+            nullable(String.class),
+            eq(NOW)
+        );
+    }
+
+    @Test
     void recordsTestStatusFromPersistedDbtRunInsteadOfClientAssertion() {
         ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
         ModelSpecRepository modelSpecRepository = mock(ModelSpecRepository.class);

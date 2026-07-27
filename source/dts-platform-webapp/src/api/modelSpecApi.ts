@@ -30,7 +30,7 @@ export type ModelSpecRevisionConflict = {
 	data: ModelSpecRevisionConflictDetails;
 };
 
-export type ModelSpecStage = "DRAFT_SAVE" | "IMPLEMENTATION_READY" | "RELEASE_READY";
+export type ModelSpecStage = "DRAFT_SAVE" | "DESIGNED" | "IMPLEMENTATION_READY" | "RELEASE_READY";
 export type ModelSpecGateStatus = "READY" | "BLOCKED";
 export type ModelSpecGateBlocker = {
 	code: string;
@@ -45,6 +45,58 @@ export type ModelSpecStageGate = {
 	stage: ModelSpecStage;
 	status: ModelSpecGateStatus;
 	blockers: ModelSpecGateBlocker[];
+};
+
+export type ModelSpecReclassificationPreview = {
+	eligible: boolean;
+	fromType: ModelSpecType;
+	toType: ModelSpecType;
+	targetLayer: ModelSpecLayer;
+	retainedFields: string[];
+	requiredFields: string[];
+	clearFields: string[];
+	reasonCodes: string[];
+	currentRevision: number;
+	checksum: string;
+};
+
+export type ModelSpecReclassificationRequest = {
+	targetType: ModelSpecType;
+	dimensionDefinitionRef?: { dimensionDefinitionId: string; revision: number } | null;
+};
+
+export type ModelImplementationMigrationStatus = "ELIGIBLE" | "CONFLICT" | "ORPHAN" | "SKIPPED";
+export type ModelImplementationMigrationDecision = {
+	modelSpecId?: string | null;
+	status: ModelImplementationMigrationStatus;
+	reasonCode: string;
+	modelRevision: number;
+	currentImplementationRevision?: number | null;
+	currentImplementationChecksum?: string | null;
+	targetInputMode?: "PHYSICAL_ASSET" | "UPSTREAM_MODEL" | "GENERATED" | null;
+	targetSettings: Record<string, unknown>;
+};
+export type ModelImplementationMigrationResult = {
+	decision: ModelImplementationMigrationDecision;
+	applied: boolean;
+	targetImplementationRevision?: number | null;
+	targetImplementationChecksum?: string | null;
+};
+export type ModelImplementationMigrationBatch = {
+	previewChecksum: string;
+	total: number;
+	eligible: number;
+	conflict: number;
+	orphan: number;
+	skipped: number;
+	applied: number;
+	results: ModelImplementationMigrationResult[];
+};
+export type ModelImplementationMigrationRollback = {
+	previewChecksum: string;
+	compatibilityReadRetained: boolean;
+	deletedImplementationRevisions: number;
+	reasonCode: string;
 };
 
 export type ModelSpecNamingValidation = {
@@ -185,6 +237,45 @@ export const updateModelSpec = (expected: ModelSpecCasToken, data: UpdateModelSp
 		url: `${MODEL_SPEC_RESOURCE}/${encodeURIComponent(expected.id)}`,
 		headers: { "If-Match": toModelSpecEtag(expected) },
 		data,
+		_skipErrorToast: true,
+	} as any);
+
+export const previewModelSpecReclassification = (id: string, data: ModelSpecReclassificationRequest) =>
+	api.post<ModelSpecReclassificationPreview>({
+		url: `${MODEL_SPEC_RESOURCE}/${encodeURIComponent(id)}/reclassify-preview`,
+		data,
+		_skipErrorToast: true,
+	} as any);
+
+export const reclassifyModelSpec = (
+	expected: ModelSpecCasToken,
+	data: ModelSpecReclassificationRequest & { acceptedClearFields: string[]; idempotencyKey: string },
+) =>
+	api.post<CanonicalModelSpecView>({
+		url: `${MODEL_SPEC_RESOURCE}/${encodeURIComponent(expected.id)}/reclassify`,
+		headers: { "If-Match": toModelSpecEtag(expected) },
+		data,
+		_skipErrorToast: true,
+	} as any);
+
+export const previewModelImplementationMigrations = (modelSpecIds: string[]) =>
+	api.post<ModelImplementationMigrationBatch>({
+		url: `${MODEL_SPEC_RESOURCE}/implementation-migrations/dry-run`,
+		data: { modelSpecIds },
+		_skipErrorToast: true,
+	} as any);
+
+export const applyModelImplementationMigrations = (modelSpecIds: string[], previewChecksum: string) =>
+	api.post<ModelImplementationMigrationBatch>({
+		url: `${MODEL_SPEC_RESOURCE}/implementation-migrations/apply`,
+		data: { modelSpecIds, previewChecksum },
+		_skipErrorToast: true,
+	} as any);
+
+export const rollbackModelImplementationMigration = (previewChecksum: string) =>
+	api.post<ModelImplementationMigrationRollback>({
+		url: `${MODEL_SPEC_RESOURCE}/implementation-migrations/rollback`,
+		data: { previewChecksum },
 		_skipErrorToast: true,
 	} as any);
 

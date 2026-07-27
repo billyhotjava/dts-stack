@@ -243,6 +243,17 @@ export default function RuleCreateWizard({ open, onClose, onSuccess, editingRule
 			let definition: any;
 			if (method === "custom" && values.customSql) {
 				definition = { sql: values.customSql };
+			} else if (method === "template" && selectedTemplate) {
+				const paramValues: Record<string, any> = {};
+				for (const p of templateParams) {
+					paramValues[p.name] = values.templateParams?.[p.name];
+				}
+				const result: any = await previewTemplateSQL(selectedTemplate.id, paramValues);
+				const renderedSql = typeof result === "string" ? result : result?.sql;
+				if (!renderedSql?.trim()) {
+					throw new Error("模板未生成可执行检测语句");
+				}
+				definition = { sql: renderedSql };
 			}
 
 			const payload: any = {

@@ -28,10 +28,17 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecStageGateService.GateSta
 import com.yuzhi.dts.platform.service.modeling.ModelSpecStageGateService.Stage;
 import java.time.Clock;
 import java.time.Instant;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.TreeMap;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -225,6 +232,193 @@ public class ModelLifecycleService {
             throw conflict("MODEL_IMPLEMENTATION_REVISION_CONFLICT", "Implementation revision changed; refresh before saving");
         }
         return lifecycle.findImplementation(tenantId, modelSpecId).orElseThrow();
+    }
+
+    @Transactional(readOnly = true)
+    public ImplementationMigrationBatch previewImplementationMigrations(
+        String tenantId,
+        List<UUID> modelSpecIds
+    ) {
+        List<ImplementationMigrationResult> results = migrationModels(tenantId, modelSpecIds)
+            .stream()
+            .map(model ->
+                migrationResult(
+                    implementationCompatibility.previewMigration(tenantId, model).decision(),
+                    false,
+                    null
+                )
+            )
+            .toList();
+        return migrationBatch(results, 0, migrationChecksum(results));
+    }
+
+    @Transactional
+    public ImplementationMigrationBatch applyImplementationMigrations(
+        String tenantId,
+        String actorId,
+        List<UUID> modelSpecIds,
+        String expectedPreviewChecksum
+    ) {
+        ImplementationMigrationBatch preview = previewImplementationMigrations(tenantId, modelSpecIds);
+        if (
+            expectedPreviewChecksum == null ||
+            expectedPreviewChecksum.isBlank() ||
+            !expectedPreviewChecksum.equals(preview.previewChecksum())
+        ) {
+            boolean alreadyApplied = !preview.results().isEmpty() && preview.results().stream().allMatch(result ->
+                result.decision().status() == ModelImplementationCompatibilityAdapter.MigrationStatus.SKIPPED &&
+                "ALREADY_MIGRATED".equals(result.decision().reasonCode())
+            );
+            if (alreadyApplied) return preview;
+            throw conflict(
+                "MODEL_IMPLEMENTATION_MIGRATION_PREVIEW_STALE",
+                "Implementation migration candidates changed after dry-run"
+            );
+        }
+
+        List<ImplementationMigrationResult> results = new ArrayList<>(preview.results().size());
+        int applied = 0;
+        for (ModelSpecView model : migrationModels(tenantId, modelSpecIds)) {
+            ModelImplementationCompatibilityAdapter.MigrationProjection projection =
+                implementationCompatibility.previewMigration(tenantId, model);
+            if (projection.decision().status() != ModelImplementationCompatibilityAdapter.MigrationStatus.ELIGIBLE) {
+                results.add(migrationResult(projection.decision(), false, null));
+                continue;
+            }
+            try {
+                ImplementationView saved = saveImplementation(
+                    tenantId,
+                    actorId,
+                    model.id(),
+                    new ExpectedVersion(model.id(), model.revision(), model.checksum()),
+                    new ExpectedImplementationVersion(model.id(), 0, null),
+                    "compatibility-migration",
+                    "model.compatibility." + model.id().toString().replace("-", ""),
+                    projection.command()
+                );
+                results.add(migrationResult(projection.decision(), true, saved));
+                applied++;
+            } catch (ModelSpecException conflict) {
+                results.add(
+                    migrationResult(
+                        new ModelImplementationCompatibilityAdapter.MigrationDecision(
+                            model.id(),
+                            ModelImplementationCompatibilityAdapter.MigrationStatus.CONFLICT,
+                            conflict.code(),
+                            model.revision(),
+                            null,
+                            null,
+                            projection.decision().targetInputMode(),
+                            projection.decision().targetSettings()
+                        ),
+                        false,
+                        null
+                    )
+                );
+            }
+        }
+        return migrationBatch(results, applied, expectedPreviewChecksum);
+    }
+
+    @Transactional(readOnly = true)
+    public ImplementationMigrationRollback rollbackImplementationMigration(String previewChecksum) {
+        if (previewChecksum == null || !previewChecksum.matches("^[0-9a-f]{64}$")) {
+            throw unprocessable(
+                "MODEL_IMPLEMENTATION_MIGRATION_CHECKSUM_REQUIRED",
+                "A valid migration preview checksum is required"
+            );
+        }
+        return new ImplementationMigrationRollback(
+            previewChecksum,
+            true,
+            0,
+            "COMPATIBILITY_READ_RETAINED"
+        );
+    }
+
+    private List<ModelSpecView> migrationModels(String tenantId, List<UUID> modelSpecIds) {
+        if (modelSpecIds == null || modelSpecIds.isEmpty()) {
+            return modelSpecs.list(tenantId, null, null, null, null)
+                .stream()
+                .sorted(Comparator.comparing(ModelSpecView::id))
+                .toList();
+        }
+        return modelSpecIds
+            .stream()
+            .filter(Objects::nonNull)
+            .distinct()
+            .sorted()
+            .map(id -> modelSpecs.get(tenantId, id))
+            .toList();
+    }
+
+    private static ImplementationMigrationResult migrationResult(
+        ModelImplementationCompatibilityAdapter.MigrationDecision decision,
+        boolean applied,
+        ImplementationView target
+    ) {
+        return new ImplementationMigrationResult(
+            decision,
+            applied,
+            target == null ? decision.currentImplementationRevision() : Integer.valueOf(target.implementationRevision()),
+            target == null ? decision.currentImplementationChecksum() : target.implementationChecksum()
+        );
+    }
+
+    private static ImplementationMigrationBatch migrationBatch(
+        List<ImplementationMigrationResult> results,
+        int applied,
+        String checksum
+    ) {
+        long eligible = count(results, ModelImplementationCompatibilityAdapter.MigrationStatus.ELIGIBLE);
+        long conflict = count(results, ModelImplementationCompatibilityAdapter.MigrationStatus.CONFLICT);
+        long orphan = count(results, ModelImplementationCompatibilityAdapter.MigrationStatus.ORPHAN);
+        long skipped = count(results, ModelImplementationCompatibilityAdapter.MigrationStatus.SKIPPED);
+        return new ImplementationMigrationBatch(
+            checksum,
+            results.size(),
+            Math.toIntExact(eligible),
+            Math.toIntExact(conflict),
+            Math.toIntExact(orphan),
+            Math.toIntExact(skipped),
+            applied,
+            results
+        );
+    }
+
+    private static long count(
+        List<ImplementationMigrationResult> results,
+        ModelImplementationCompatibilityAdapter.MigrationStatus status
+    ) {
+        return results.stream().filter(result -> result.decision().status() == status).count();
+    }
+
+    private static String migrationChecksum(List<ImplementationMigrationResult> results) {
+        String canonical = results
+            .stream()
+            .map(result -> {
+                ModelImplementationCompatibilityAdapter.MigrationDecision decision = result.decision();
+                return String.join(
+                    "|",
+                    String.valueOf(decision.modelSpecId()),
+                    decision.status().name(),
+                    String.valueOf(decision.reasonCode()),
+                    Integer.toString(decision.modelRevision()),
+                    String.valueOf(decision.currentImplementationRevision()),
+                    String.valueOf(decision.currentImplementationChecksum()),
+                    String.valueOf(decision.targetInputMode()),
+                    new TreeMap<>(decision.targetSettings()).toString()
+                );
+            })
+            .reduce((left, right) -> left + "\n" + right)
+            .orElse("");
+        try {
+            return HexFormat.of().formatHex(
+                MessageDigest.getInstance("SHA-256").digest(canonical.getBytes(StandardCharsets.UTF_8))
+            );
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException("SHA-256 is unavailable", impossible);
+        }
     }
 
     /**
@@ -978,6 +1172,35 @@ public class ModelLifecycleService {
     }
 
     public record ImplementationValidationView(boolean valid, String code) {}
+
+    public record ImplementationMigrationResult(
+        ModelImplementationCompatibilityAdapter.MigrationDecision decision,
+        boolean applied,
+        Integer targetImplementationRevision,
+        String targetImplementationChecksum
+    ) {}
+
+    public record ImplementationMigrationBatch(
+        String previewChecksum,
+        int total,
+        int eligible,
+        int conflict,
+        int orphan,
+        int skipped,
+        int applied,
+        List<ImplementationMigrationResult> results
+    ) {
+        public ImplementationMigrationBatch {
+            results = results == null ? List.of() : List.copyOf(results);
+        }
+    }
+
+    public record ImplementationMigrationRollback(
+        String previewChecksum,
+        boolean compatibilityReadRetained,
+        int deletedImplementationRevisions,
+        String reasonCode
+    ) {}
 
     /** Explicit CAS token for implementation-input writers; revision zero represents a missing head. */
     public record ExpectedImplementationVersion(UUID modelSpecId, int revision, String checksum) {

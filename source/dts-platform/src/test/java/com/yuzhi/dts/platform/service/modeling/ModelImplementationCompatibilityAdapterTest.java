@@ -16,6 +16,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.UpstreamMo
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.GenerationStrategy;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.CompatibilityMode;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationPolicy;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.Layer;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelRevisionRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
@@ -24,6 +25,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceKind;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceRole;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.LoadStrategy;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -55,9 +57,10 @@ class ModelImplementationCompatibilityAdapterTest {
         UUID upstreamId = UUID.randomUUID();
         ModelRevisionRef upstreamRef = new ModelRevisionRef(upstreamId, 2);
         ModelSpecView upstreamTarget = owner(ModelType.FACT);
+        String upstreamChecksum = upstreamTarget.checksum();
         when(models.revision(TENANT, upstreamRef)).thenReturn(upstreamTarget);
         when(lifecycle.findImplementation(TENANT, upstreamId)).thenReturn(
-            Optional.of(implementation(upstreamId, 2, upstreamTarget.checksum()))
+            Optional.of(implementation(upstreamId, 2, upstreamChecksum))
         );
         when(upstream.dependsOn()).thenReturn(List.of(upstreamRef));
         assertThat(adapter.projectLegacy(TENANT, upstream).inputMode()).isEqualTo(InputMode.UPSTREAM_MODEL);
@@ -137,6 +140,76 @@ class ModelImplementationCompatibilityAdapterTest {
         when(crossPlan.dependsOn()).thenReturn(List.of(new ModelRevisionRef(OWNER_ID, 1)));
         assertThat(adapter.validate(TENANT, owner(ModelType.SUMMARY), upstream(upstreamId, 3)).code())
             .isEqualTo("MODEL_IMPLEMENTATION_SELF_REFERENCE");
+    }
+
+    @Test
+    void previewsLegacyInputsAndImplementationPolicyAsOneCanonicalImplementationCommand() {
+        ModelLifecycleRepository lifecycle = mock(ModelLifecycleRepository.class);
+        ModelSpecSourceValidationPort validation = mock(ModelSpecSourceValidationPort.class);
+        ModelSpecView legacy = owner(ModelType.DIMENSION);
+        UUID binding = UUID.randomUUID();
+        when(legacy.sourceRefs()).thenReturn(List.of(source(binding, "v1")));
+        when(legacy.implementationPolicy()).thenReturn(
+            new ImplementationPolicy("dwd_finance_project", LoadStrategy.INCREMENTAL, 365, List.of("business_date"))
+        );
+        when(validation.isCurrentBindingForGate(TENANT, PLAN_ID, binding, "v1")).thenReturn(true);
+        ModelImplementationCompatibilityAdapter adapter = new ModelImplementationCompatibilityAdapter(
+            mock(ModelSpecApplicationService.class),
+            mock(ModelSpecRepository.class),
+            lifecycle,
+            validation
+        );
+
+        ModelImplementationCompatibilityAdapter.MigrationProjection projection = adapter.previewMigration(TENANT, legacy);
+
+        assertThat(projection.decision().status())
+            .isEqualTo(ModelImplementationCompatibilityAdapter.MigrationStatus.ELIGIBLE);
+        assertThat(projection.command().inputMode()).isEqualTo(InputMode.PHYSICAL_ASSET);
+        assertThat(projection.command().settings())
+            .containsEntry("targetPhysicalName", "dwd_finance_project")
+            .containsEntry("loadStrategy", "INCREMENTAL")
+            .containsEntry("partitionFields", List.of("business_date"))
+            .containsEntry("retentionDays", 365);
+    }
+
+    @Test
+    void currentImplementationWinsAndNoLegacyEvidenceIsSkipped() {
+        ModelLifecycleRepository lifecycle = mock(ModelLifecycleRepository.class);
+        ModelSpecView legacy = owner(ModelType.DIMENSION);
+        when(legacy.generationStrategy()).thenReturn(new GenerationStrategy("DATE_DIMENSION", "calendar"));
+        int legacyRevision = legacy.revision();
+        String legacyChecksum = legacy.checksum();
+        when(lifecycle.findImplementation(TENANT, OWNER_ID)).thenReturn(
+            Optional.of(implementation(OWNER_ID, legacyRevision, legacyChecksum))
+        );
+        ModelImplementationCompatibilityAdapter adapter = new ModelImplementationCompatibilityAdapter(
+            mock(ModelSpecApplicationService.class),
+            mock(ModelSpecRepository.class),
+            lifecycle,
+            mock(ModelSpecSourceValidationPort.class)
+        );
+
+        assertThat(adapter.previewMigration(TENANT, legacy).decision())
+            .extracting(
+                ModelImplementationCompatibilityAdapter.MigrationDecision::status,
+                ModelImplementationCompatibilityAdapter.MigrationDecision::reasonCode
+            )
+            .containsExactly(
+                ModelImplementationCompatibilityAdapter.MigrationStatus.CONFLICT,
+                "CURRENT_IMPLEMENTATION_WINS"
+            );
+
+        ModelSpecView empty = owner(ModelType.FACT);
+        when(lifecycle.findImplementation(TENANT, OWNER_ID)).thenReturn(Optional.empty());
+        assertThat(adapter.previewMigration(TENANT, empty).decision())
+            .extracting(
+                ModelImplementationCompatibilityAdapter.MigrationDecision::status,
+                ModelImplementationCompatibilityAdapter.MigrationDecision::reasonCode
+            )
+            .containsExactly(
+                ModelImplementationCompatibilityAdapter.MigrationStatus.SKIPPED,
+                "NO_LEGACY_IMPLEMENTATION"
+            );
     }
 
     private static ModelImplementationCompatibilityAdapter adapter(ModelSpecSourceValidationPort sourceValidation) {

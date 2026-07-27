@@ -1,7 +1,7 @@
 # F5：集成验收与安全交付
 
 **优先级**：P0  
-**状态**：DRAFT
+**状态**：DONE
 
 ## 目标
 
@@ -24,20 +24,19 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|
-| T01 | 建立契约测试与真实Chrome95端到端验收 | P0 | DRAFT | F1～F4 |
-| T02 | 完成迁移发布回滚与运维证据 | P0 | DRAFT | T01 |
+| T01 | 建立契约测试与真实Chrome95端到端验收 | P0 | DONE | F1～F4 |
+| T02 | 完成迁移发布回滚与运维证据 | P0 | DONE | T01 |
 
 ## Definition of Ready
 
 - [x] IT journey 和 NFR 预算已写明
 - [x] 最终集中验证节奏已确定
-- [ ] F0 PASS
-- [ ] F1～F4 实现与 focused tests 完成
+- [x] F0 PASS
+- [x] F1～F4 实现与 focused tests 完成
 
 ## 完成标准
 
-- [ ] IT-01～IT-12 全绿
-- [ ] NFR fitness functions 全绿
-- [ ] clean DB migration、dry-run、rollback rehearsal 通过
-- [ ] GitNexus detect_changes 范围与 Sprint 一致
-
+- [x] IT-01～IT-12 全绿
+- [x] NFR fitness functions 全绿
+- [x] clean DB migration、dry-run、rollback rehearsal 通过
+- [x] GitNexus detect_changes：risk=LOW、0 affected process；范围外用户修改已保留并在交付说明中分离

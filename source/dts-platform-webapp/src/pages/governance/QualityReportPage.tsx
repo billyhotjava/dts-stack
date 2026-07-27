@@ -1,11 +1,8 @@
-import { PageHeader } from "@/components/page-header";
-import QualityReportTab from "./components/QualityReportTab";
+import { Navigate, useSearchParams } from "react-router";
 
 export default function QualityReportPage() {
-	return (
-		<div className="space-y-4 p-5" data-testid="governance-quality-report-page">
-			<PageHeader title="数据治理中心 · 质量报告" />
-			<QualityReportTab />
-		</div>
-	);
+	const [searchParams] = useSearchParams();
+	const params = new URLSearchParams(searchParams);
+	params.set("tab", "report");
+	return <Navigate to={`/governance/rules?${params.toString()}`} replace />;
 }

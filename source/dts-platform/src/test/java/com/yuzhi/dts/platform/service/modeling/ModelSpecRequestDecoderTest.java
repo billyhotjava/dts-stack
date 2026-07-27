@@ -17,7 +17,7 @@ class ModelSpecRequestDecoderTest {
 
     @Test
     void decodesStrictCreateAndUpdateContractsIndependently() throws Exception {
-        CreateModelSpecCommand create = createDecoder.decode(objectMapper.readTree(validCreateJson())).command();
+        CreateModelSpecCommand create = createDecoder.decode(objectMapper.readTree(minimalCreateJson())).command();
         ObjectNode updateJson = (ObjectNode) objectMapper.readTree(validCreateJson());
         updateJson.remove("idempotencyKey");
         UpdateModelSpecCommand update = updateDecoder.decode(updateJson).command();
@@ -28,7 +28,7 @@ class ModelSpecRequestDecoderTest {
 
     @Test
     void rejectsServerManagedAndCreateOnlyFieldsBeforeTypedDeserialization() throws Exception {
-        ObjectNode legacyCreate = (ObjectNode) objectMapper.readTree(validCreateJson());
+        ObjectNode legacyCreate = (ObjectNode) objectMapper.readTree(minimalCreateJson());
         legacyCreate.put("objectId", "legacy");
         assertThat(createDecoder.decode(legacyCreate).issues())
             .extracting(ModelSpecContract.FieldIssue::code)
@@ -52,6 +52,20 @@ class ModelSpecRequestDecoderTest {
             .containsExactly(tuple("MODEL_SPEC_FIELD_NOT_ALLOWED", "dimensionDefinitionRef"));
     }
 
+    @Test
+    void redirectsLegacyImplementationPolicyWritesToDataImplementation() throws Exception {
+        ObjectNode update = (ObjectNode) objectMapper.readTree(validCreateJson());
+        update.remove("idempotencyKey");
+        update.putObject("implementationPolicy")
+            .put("physicalName", "dwd_customer_detail")
+            .put("loadStrategy", "FULL")
+            .putArray("partitionFields");
+
+        assertThat(updateDecoder.decode(update).issues())
+            .extracting(ModelSpecContract.FieldIssue::code, ModelSpecContract.FieldIssue::field)
+            .containsExactly(tuple("MODEL_SPEC_IMPLEMENTATION_POLICY_MOVED", "implementationPolicy"));
+    }
+
     private static String validCreateJson() {
         return """
             {"planId":"10000000-0000-0000-0000-000000000001",
@@ -61,6 +75,15 @@ class ModelSpecRequestDecoderTest {
              "grain":{"statement":"one row per customer event","keys":["customer_id"]},
              "sourceRefs":[{"kind":"TABLE","ref":"ods.customer","layer":"ODS","role":"PRIMARY","sortOrder":0,
                             "sourceBindingId":"50000000-0000-0000-0000-000000000001","resolvedVersion":"v1"}],
+             "idempotencyKey":"create-1"}
+            """;
+    }
+
+    private static String minimalCreateJson() {
+        return """
+            {"planId":"10000000-0000-0000-0000-000000000001",
+             "domainId":"20000000-0000-0000-0000-000000000001",
+             "modelType":"FACT","name":"customer_detail",
              "idempotencyKey":"create-1"}
             """;
     }

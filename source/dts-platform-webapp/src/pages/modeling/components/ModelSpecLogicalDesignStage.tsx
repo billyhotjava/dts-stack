@@ -1,10 +1,14 @@
 import type { FormInstance } from "antd";
-import { Alert, Button, Col, Form, Input, InputNumber, Row, Select, Space, Tabs, Typography } from "antd";
+import { Alert, Button, Col, Form, Input, Row, Select, Space, Tabs, Typography } from "antd";
 import { Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
+import { getWarehousePlanDataMarts, listDataMarts } from "@/api/dataMartApi";
 import { getDimensionDefinitionRevision } from "@/api/dimensionDefinitionApi";
-import { validateModelSpecPhysicalName } from "@/api/modelSpecApi";
+import {
+	getWarehousePlanPolicy,
+	type WarehousePlanStandardCoverage,
+} from "@/api/warehousePlanApi";
 import type { ModelSpecDetailTab } from "../modelSpecDetailNavigation";
 import { resolveModelSpecDetailTab } from "../modelSpecDetailNavigation";
 import { nextDimensionHierarchyCode } from "../modelSpecSystemCode";
@@ -62,13 +66,86 @@ export function ModelSpecLogicalDesignStage({
 	const [dimensionAttributeOptions, setDimensionAttributeOptions] = useState<Array<{ value: string; label: string }>>(
 		[],
 	);
+	const [dataMartOptions, setDataMartOptions] = useState<ModelSpecSelectOption[]>([]);
+	const [dataMartLoading, setDataMartLoading] = useState(false);
+	const [dataMartError, setDataMartError] = useState("");
+	const [standardCoverage, setStandardCoverage] = useState<WarehousePlanStandardCoverage | null>(null);
+	const [governancePolicyError, setGovernancePolicyError] = useState(false);
 	const modelType = (Form.useWatch("modelType", form) || "FACT") as ModelSpecType;
-	const planId = Form.useWatch("planId", form) as string | undefined;
 	const dimensionScdType = Form.useWatch("dimensionScdType", form);
+	const modelFields = Form.useWatch("fields", form) || [];
 	const editorCopy = modelSpecEditorCopy(modelType);
 	const targetLayer = MODEL_SPEC_TARGET_LAYER_BY_TYPE[modelType];
 	const upstreamRequired = modelType === "SUMMARY" || modelType === "APPLICATION";
+	const fieldOptions = modelFields
+		.filter((field) => field?.name?.trim())
+		.map((field) => ({
+			value: field.name.trim(),
+			label: field.displayName?.trim() ? `${field.displayName.trim()}（${field.name.trim()}）` : field.name.trim(),
+		}));
+	const timeFieldOptions = modelFields
+		.filter((field) => field?.role === "TIME" && field.name?.trim())
+		.map((field) => ({
+			value: field.name.trim(),
+			label: field.displayName?.trim() ? `${field.displayName.trim()}（${field.name.trim()}）` : field.name.trim(),
+		}));
 	useEffect(() => setActiveTab(requestedTab), [requestedTab]);
+	useEffect(() => {
+		let active = true;
+		setGovernancePolicyError(false);
+		void getWarehousePlanPolicy(model.planId)
+			.then((policy) => {
+				if (active) setStandardCoverage(policy.value.standardCoverage);
+			})
+			.catch(() => {
+				if (!active) return;
+				setStandardCoverage(null);
+				setGovernancePolicyError(true);
+			});
+		return () => {
+			active = false;
+		};
+	}, [model.planId]);
+	useEffect(() => {
+		let active = true;
+		const currentDataMartId = model.dataMartId || "";
+		setDataMartLoading(true);
+		setDataMartError("");
+		void Promise.all([
+			getWarehousePlanDataMarts(model.planId),
+			listDataMarts({ domainId: model.domainId, status: "CURRENT", offset: 0, limit: 100 }),
+		])
+			.then(([baseline, current]) => {
+				if (!active) return;
+				const included = new Set(baseline.dataMartIds);
+				const options: ModelSpecSelectOption[] = current
+					.filter((item) => included.has(item.id))
+					.map((item) => ({ value: item.id, label: `${item.name}（${item.code}）` }));
+				if (currentDataMartId && !options.some((option) => option.value === currentDataMartId)) {
+					options.unshift({
+						value: currentDataMartId,
+						label: `当前绑定（${currentDataMartId}）已不在规划基线`,
+						disabled: true,
+					});
+				}
+				setDataMartOptions(options);
+			})
+			.catch(() => {
+				if (!active) return;
+				setDataMartOptions(
+					currentDataMartId
+						? [{ value: currentDataMartId, label: `当前绑定（${currentDataMartId}）`, disabled: true }]
+						: [],
+				);
+				setDataMartError("数据集市选项加载失败，已保留当前绑定；重新加载后再调整");
+			})
+			.finally(() => {
+				if (active) setDataMartLoading(false);
+			});
+		return () => {
+			active = false;
+		};
+	}, [model.dataMartId, model.domainId, model.planId]);
 	useEffect(() => {
 		const reference = model.dimensionDefinitionRef;
 		if (model.modelType !== "DIMENSION" || !reference) {
@@ -101,13 +178,6 @@ export function ModelSpecLogicalDesignStage({
 			throw new Error("存在不符合当前模型类别依赖规则的上游模型，请移除后重新选择");
 		}
 	};
-	const validatePhysicalName = async (_: unknown, value?: string) => {
-		const physicalName = value?.trim();
-		if (!physicalName || !planId) return;
-		const result = await validateModelSpecPhysicalName(planId, modelType, targetLayer, physicalName);
-		if (!result.valid) throw new Error(result.issues[0]?.message || "物理表名不符合命名规范");
-	};
-
 	return (
 		<div className="min-w-0" data-testid="model-spec-logical-stage">
 			<Alert
@@ -144,9 +214,20 @@ export function ModelSpecLogicalDesignStage({
 										<Form.Item
 											name="dataMartId"
 											label="数据集市"
-											extra="模型创建时从建设规划中选择；为空表示业务域级概念模型。"
+											extra={
+												dataMartError ||
+												"可从当前计划已纳入且覆盖当前业务分类的数据集市中调整；留空表示业务域级概念模型。"
+											}
 										>
-											<Input disabled placeholder="未指定数据集市" />
+											<Select
+												allowClear
+												showSearch
+												optionFilterProp="label"
+												options={dataMartOptions}
+												loading={dataMartLoading}
+												disabled={readOnly || dataMartLoading}
+												placeholder="未指定数据集市"
+											/>
 										</Form.Item>
 									</Col>
 									<Col xs={24} md={12}>
@@ -252,17 +333,17 @@ export function ModelSpecLogicalDesignStage({
 														label="生效时间字段"
 														rules={[{ required: true }]}
 													>
-														<Input disabled={readOnly} placeholder="effective_from" />
+														<Select disabled={readOnly} options={timeFieldOptions} placeholder="选择 TIME 字段" />
 													</Form.Item>
 												</Col>
 												<Col xs={24} md={8}>
 													<Form.Item name="dimensionEffectiveToField" label="失效时间字段" rules={[{ required: true }]}>
-														<Input disabled={readOnly} placeholder="effective_to" />
+														<Select disabled={readOnly} options={timeFieldOptions} placeholder="选择 TIME 字段" />
 													</Form.Item>
 												</Col>
 												<Col xs={24} md={8}>
 													<Form.Item name="dimensionCurrentFlagField" label="当前记录标志" rules={[{ required: true }]}>
-														<Input disabled={readOnly} placeholder="is_current" />
+														<Select disabled={readOnly} options={fieldOptions} placeholder="选择当前记录标志字段" />
 													</Form.Item>
 												</Col>
 											</Row>
@@ -289,11 +370,16 @@ export function ModelSpecLogicalDesignStage({
 																</Col>
 																<Col xs={20} md={9}>
 																	<Form.Item
-																		name={[field.name, "levelFieldsText"]}
+																		name={[field.name, "levelFieldNames"]}
 																		label="层级字段"
 																		rules={[{ required: true }]}
 																	>
-																		<Input disabled={readOnly} placeholder="group_id, department_id" />
+																		<Select
+																			mode="multiple"
+																			disabled={readOnly}
+																			options={fieldOptions}
+																			placeholder="按层级顺序选择字段"
+																		/>
 																	</Form.Item>
 																</Col>
 																<Col xs={4} md={2}>
@@ -318,6 +404,7 @@ export function ModelSpecLogicalDesignStage({
 																		code: nextDimensionHierarchyCode(form.getFieldValue("dimensionHierarchies") || []),
 																		name: "",
 																		levelFieldsText: "",
+																		levelFieldNames: [],
 																	})
 																}
 															>
@@ -363,11 +450,16 @@ export function ModelSpecLogicalDesignStage({
 											</Col>
 											<Col xs={24} md={8}>
 												<Form.Item
-													name="timeFieldsText"
+													name="timeFieldNames"
 													label="时间字段"
 													extra="来自本模型“字段设计”中作用为“时间（TIME）”的字段；不是数据库类型，也不会从来源表自动猜测。"
 												>
-													<Input disabled={readOnly} placeholder="例如：occurred_at；多个用逗号分隔" />
+													<Select
+														mode="multiple"
+														disabled={readOnly}
+														options={timeFieldOptions}
+														placeholder="选择一个或多个 TIME 字段"
+													/>
 												</Form.Item>
 											</Col>
 										</Row>
@@ -417,72 +509,6 @@ export function ModelSpecLogicalDesignStage({
 										<Input.TextArea disabled={readOnly} rows={2} />
 									</Form.Item>
 								) : null}
-								<div className="rounded-lg border border-blue-100 bg-blue-50/40 p-4">
-									<div className="mb-3">
-										<Text strong>进入数据实现前补齐</Text>
-										<Text type="secondary" className="ml-2">
-											物理名称、装载与保留策略属于模型实现，不改变模型的中文业务名称或 SCD 逻辑。
-										</Text>
-									</div>
-									<Row gutter={12}>
-										<Col xs={24} md={12}>
-											<Form.Item
-												name="physicalName"
-												label="物理表名"
-												validateTrigger="onBlur"
-												rules={[
-													{
-														pattern: /^[a-z][a-z0-9_]{0,62}$/,
-														message: "使用小写 snake_case，最长 63 个字符",
-													},
-													{ validator: validatePhysicalName },
-												]}
-											>
-												<Input disabled={readOnly} placeholder="例如：dwd_finance_project" />
-											</Form.Item>
-										</Col>
-										<Col xs={24} md={12}>
-											<Form.Item name="loadStrategy" label="装载策略">
-												<Select
-													allowClear
-													disabled={readOnly}
-													options={[
-														{ value: "FULL", label: "全量覆盖" },
-														{ value: "INCREMENTAL", label: "增量装载" },
-														{ value: "SNAPSHOT", label: "周期快照" },
-													]}
-												/>
-											</Form.Item>
-										</Col>
-									</Row>
-									<Row gutter={12}>
-										<Col xs={24} md={12}>
-											<Form.Item
-												name="retentionDays"
-												label="数据保留天数（可选）"
-												extra="这是物理数据保留期限，不是维度 SCD 历史策略。"
-												rules={[{ type: "number", min: 0, max: 36000, message: "请输入 0 到 36000 天" }]}
-											>
-												<InputNumber
-													className="w-full"
-													min={0}
-													max={36000}
-													disabled={readOnly}
-													placeholder="留空表示不设置默认期限"
-												/>
-											</Form.Item>
-										</Col>
-										<Col xs={24} md={12}>
-											<Form.Item
-												name="partitionFieldsText"
-												label="分区字段（可选）"
-												extra="必须引用字段设计中已登记的字段，多个用逗号分隔。"
-											>
-												<Input disabled={readOnly} placeholder="例如：biz_date" />
-											</Form.Item>
-										</Col>
-									</Row>
-								</div>
 							</Space>
 						),
 					},
@@ -498,19 +524,39 @@ export function ModelSpecLogicalDesignStage({
 							/>
 						),
 					},
-					{
-						key: "standards",
-						label: "字段标准",
-						forceRender: true,
-						children: (
-							<ModelSpecStandardsTab
-								model={model}
-								canEdit={!readOnly}
-								saving={saving}
-								onSaveStandardBindings={onSaveStandardBindings}
-							/>
-						),
-					},
+						{
+							key: "standards",
+							label: "字段标准",
+							forceRender: true,
+							children: (
+								<Space direction="vertical" size={16} className="w-full">
+									<Alert
+										showIcon
+										type={governancePolicyError ? "warning" : "info"}
+										message={
+											governancePolicyError
+												? "发布策略暂不可读"
+												: standardCoverage === "ALL_FIELDS"
+													? "当前可选；发布前全部字段必须绑定标准"
+													: standardCoverage === "NONE"
+														? "当前可选；发布策略不要求字段标准"
+														: "当前可选；发布前键字段和度量字段必须绑定标准"
+										}
+										description={
+											governancePolicyError
+												? "这不影响保存草稿或完成逻辑设计；发布门禁会保持阻断，直至数仓规划策略恢复。"
+												: "可以在逻辑设计阶段提前补充；系统只会在发布阶段检查规划策略要求的字段。"
+										}
+									/>
+									<ModelSpecStandardsTab
+										model={model}
+										canEdit={!readOnly}
+										saving={saving}
+										onSaveStandardBindings={onSaveStandardBindings}
+									/>
+								</Space>
+							),
+						},
 					{
 						key: "dependencies",
 						label: "依赖关系",

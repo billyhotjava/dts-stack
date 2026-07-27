@@ -18,7 +18,7 @@ test("create and detail forms query the selected plan's canonical source invento
 });
 
 test("switching plans clears the minimum-draft category context without loading sources", () => {
-	assert.match(drawer, /form\.setFieldsValue\(\{ domainId: "", dimensionDefinitionRef: undefined \}\)/);
+	assert.match(drawer, /form\.setFieldsValue\(\{ domainId: "", dataMartId: "", dimensionDefinitionRef: undefined \}\)/);
 	assert.match(drawer, /loadDomains\(planId\)/);
 	assert.doesNotMatch(drawer, /sourceRequestRef|loadSources\(planId\)|form\.setFieldValue\("sources"/);
 });

@@ -1,0 +1,12 @@
+name: "sprint74_acceptance"
+version: "1.0.0"
+config-version: 2
+
+profile: "dts"
+model-paths: ["models"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  sprint74_acceptance:
+    +materialized: table

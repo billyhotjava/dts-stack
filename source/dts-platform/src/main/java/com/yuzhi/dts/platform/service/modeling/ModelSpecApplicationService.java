@@ -256,6 +256,7 @@ public class ModelSpecApplicationService {
             command.dimensionDefinitionRef(),
             command.dataMartId(),
             command.fields(),
+            true,
             true
         );
         UUID modelSpecId = previewedModelSpecId == null ? idGenerator.get() : previewedModelSpecId;
@@ -344,6 +345,22 @@ public class ModelSpecApplicationService {
                 ModelSpecException.Kind.CONFLICT
             );
         }
+        if (current.modelType() != command.modelType()) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_TYPE_IMMUTABLE",
+                "Use the explicit model type adjustment workflow to change a draft model type",
+                ModelSpecException.Kind.UNPROCESSABLE,
+                Map.of("currentType", current.modelType(), "requestedType", command.modelType())
+            );
+        }
+        if (current.layer() != command.layer()) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_LAYER_IMMUTABLE",
+                "The target layer is derived from the model type and cannot be edited directly",
+                ModelSpecException.Kind.UNPROCESSABLE,
+                Map.of("currentLayer", current.layer(), "requestedLayer", command.layer())
+            );
+        }
         rejectIssues(ModelSpecContract.validateUpdate(command));
         if (!Objects.equals(current.planId(), command.planId())) {
             throw new ModelSpecException(
@@ -386,6 +403,7 @@ public class ModelSpecApplicationService {
             replacement.dimensionDefinitionRef(),
             replacement.dataMartId(),
             replacement.fields(),
+            false,
             false
         );
         validateReferences(
@@ -417,6 +435,326 @@ public class ModelSpecApplicationService {
         }
         repository.insertV2Revision(serverTenantId, actorId, replacement, snapshot);
         return replacement;
+    }
+
+    @Transactional
+    public ReclassificationPreview previewReclassification(
+        String serverTenantId,
+        String actorId,
+        UUID modelSpecId,
+        ReclassificationPreviewRequest request
+    ) {
+        requireServerContext(serverTenantId, actorId);
+        requireCanonicalWriteEnabled();
+        if (modelSpecId == null) throw notFound(null);
+        if (request == null || request.targetType() == null) {
+            throw new ModelSpecException(
+                "MODEL_RECLASSIFY_TARGET_REQUIRED",
+                "Select the intended model type",
+                ModelSpecException.Kind.BAD_REQUEST
+            );
+        }
+        ModelSpecView current = currentForReclassification(serverTenantId, actorId, modelSpecId);
+        return previewReclassification(serverTenantId, current, request);
+    }
+
+    @Transactional
+    public ModelSpecView reclassify(
+        String serverTenantId,
+        String actorId,
+        UUID modelSpecId,
+        ExpectedVersion expected,
+        ReclassificationCommand command
+    ) {
+        requireServerContext(serverTenantId, actorId);
+        requireCanonicalWriteEnabled();
+        if (modelSpecId == null) throw notFound(null);
+        if (expected == null) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_IF_MATCH_REQUIRED",
+                "A strong If-Match precondition is required",
+                ModelSpecException.Kind.PRECONDITION_REQUIRED
+            );
+        }
+        if (!modelSpecId.equals(expected.modelSpecId())) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_IF_MATCH_INVALID",
+                "If-Match identifies a different ModelSpec",
+                ModelSpecException.Kind.BAD_REQUEST
+            );
+        }
+        if (
+            command == null ||
+            command.targetType() == null ||
+            command.idempotencyKey() == null ||
+            command.idempotencyKey().isBlank() ||
+            command.idempotencyKey().length() > 128
+        ) {
+            throw new ModelSpecException(
+                "MODEL_RECLASSIFY_REQUEST_INVALID",
+                "Target type and an idempotency key of at most 128 characters are required",
+                ModelSpecException.Kind.BAD_REQUEST
+            );
+        }
+
+        ModelSpecRepository.ReclassificationReplay replay = repository
+            .findReclassificationReplay(serverTenantId, modelSpecId, command.idempotencyKey())
+            .orElse(null);
+        if (replay != null) {
+            StoredModelSpec storedReplay = repository
+                .findRevision(serverTenantId, modelSpecId, replay.revision())
+                .orElseThrow(() -> notFound(modelSpecId));
+            validateReplayAccess(serverTenantId, actorId, storedReplay);
+            ModelSpecView replayed = compatibilityReader.read(storedReplay);
+            if (!Objects.equals(replayed.checksum(), replay.checksum())) {
+                throw new ModelSpecException(
+                    "MODEL_RECLASSIFY_REPLAY_INVALID",
+                    "The stored reclassification result no longer matches its audit record",
+                    ModelSpecException.Kind.CONFLICT
+                );
+            }
+            return replayed;
+        }
+
+        ModelSpecView current = currentForReclassification(serverTenantId, actorId, modelSpecId);
+        requireExpected(current, expected);
+        ReclassificationPreview preview = previewReclassification(
+            serverTenantId,
+            current,
+            new ReclassificationPreviewRequest(command.targetType(), command.dimensionDefinitionRef())
+        );
+        if (!preview.eligible()) {
+            throw new ModelSpecException(
+                "MODEL_RECLASSIFY_NOT_ALLOWED",
+                "This draft already has runtime evidence or is not eligible for in-place type adjustment",
+                ModelSpecException.Kind.CONFLICT,
+                preview
+            );
+        }
+        Set<String> accepted = command.acceptedClearFields() == null
+            ? Set.of()
+            : Set.copyOf(command.acceptedClearFields());
+        List<String> missingAcceptances = preview.clearFields().stream().filter(field -> !accepted.contains(field)).toList();
+        if (!missingAcceptances.isEmpty()) {
+            throw new ModelSpecException(
+                "MODEL_RECLASSIFY_CLEAR_FIELDS_NOT_ACCEPTED",
+                "Confirm every field that will be cleared before applying the type adjustment",
+                ModelSpecException.Kind.UNPROCESSABLE,
+                Map.of("missingAcceptedClearFields", missingAcceptances)
+            );
+        }
+
+        CreateModelSpecCommand projected = projectReclassification(current, command);
+        ModelSpecView replacement = codec.toReclassifiedView(
+            current,
+            projected,
+            current.revision() + 1,
+            clock.instant()
+        );
+        requireDimensionDefinitionRef(replacement);
+        validateDimensionDefinition(
+            serverTenantId,
+            replacement.modelType(),
+            replacement.dimensionDefinitionRef(),
+            replacement.dataMartId(),
+            replacement.fields(),
+            true,
+            true
+        );
+        requireUniqueDimensionVariant(serverTenantId, replacement, current.id());
+        String snapshot = codec.write(replacement);
+        int updated = repository.compareAndSetV2(
+            serverTenantId,
+            actorId,
+            current.revision(),
+            current.checksum(),
+            replacement,
+            snapshot
+        );
+        if (updated == 0) {
+            StoredModelSpec latest = repository.findCurrent(serverTenantId, modelSpecId).orElseThrow(() -> notFound(modelSpecId));
+            throw revisionConflict(compatibilityReader.read(latest));
+        }
+        repository.insertV2Revision(serverTenantId, actorId, replacement, snapshot);
+        repository.insertReclassificationCommand(
+            serverTenantId,
+            actorId,
+            modelSpecId,
+            command.idempotencyKey(),
+            current.modelType(),
+            replacement.modelType(),
+            replacement.revision(),
+            replacement.checksum(),
+            clock.instant()
+        );
+        return replacement;
+    }
+
+    private ModelSpecView currentForReclassification(String tenantId, String actorId, UUID modelSpecId) {
+        StoredModelSpec stored = repository.findCurrent(tenantId, modelSpecId).orElseThrow(() -> notFound(modelSpecId));
+        if (stored.contractVersion() != ModelSpecContract.CONTRACT_VERSION) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_LEGACY_READONLY",
+                "Legacy ModelSpec rows cannot be reclassified",
+                ModelSpecException.Kind.CONFLICT
+            );
+        }
+        ModelSpecView current = compatibilityReader.read(stored);
+        validateWriteContext(tenantId, actorId, current.planId(), current.domainId());
+        return current;
+    }
+
+    private ReclassificationPreview previewReclassification(
+        String tenantId,
+        ModelSpecView current,
+        ReclassificationPreviewRequest request
+    ) {
+        List<String> reasons = new ArrayList<>();
+        if (current.status() != ModelStatus.DRAFT) reasons.add("MODEL_RECLASSIFY_DRAFT_REQUIRED");
+        if (current.compatibilityMode() != ModelSpecContract.CompatibilityMode.CANONICAL) {
+            reasons.add("MODEL_RECLASSIFY_CANONICAL_REQUIRED");
+        }
+        if (current.modelType() == request.targetType()) reasons.add("MODEL_RECLASSIFY_TYPE_UNCHANGED");
+        if (repository.hasReclassificationEvidence(tenantId, current.id())) {
+            reasons.add("MODEL_RECLASSIFY_RUNTIME_EVIDENCE_EXISTS");
+        }
+        if (request.targetType() == ModelType.DIMENSION && request.dimensionDefinitionRef() == null) {
+            reasons.add("MODEL_RECLASSIFY_DIMENSION_DEFINITION_REQUIRED");
+        }
+        if (request.targetType() == ModelType.DIMENSION && request.dimensionDefinitionRef() != null) {
+            validateDimensionDefinition(
+                tenantId,
+                request.targetType(),
+                request.dimensionDefinitionRef(),
+                current.dataMartId(),
+                current.fields(),
+                true,
+                false
+            );
+        }
+        return new ReclassificationPreview(
+            reasons.isEmpty(),
+            current.modelType(),
+            request.targetType(),
+            ModelSpecContract.targetLayer(request.targetType()),
+            retainedFields(current, request.targetType()),
+            requiredFields(request.targetType()),
+            clearFields(current, request.targetType()),
+            List.copyOf(reasons),
+            current.revision(),
+            current.checksum()
+        );
+    }
+
+    private static CreateModelSpecCommand projectReclassification(
+        ModelSpecView current,
+        ReclassificationCommand command
+    ) {
+        List<ModelSpecContract.ModelField> fields = command.targetType() == ModelType.DIMENSION
+            ? current
+                .fields()
+                .stream()
+                .map(field ->
+                    field != null && (field.role() == ModelSpecContract.FieldRole.TIME || field.role() == ModelSpecContract.FieldRole.MEASURE)
+                        ? new ModelSpecContract.ModelField(
+                            field.name(),
+                            field.displayName(),
+                            field.dataType(),
+                            field.nullable(),
+                            field.sourceFieldRef(),
+                            ModelSpecContract.FieldRole.ATTRIBUTE,
+                            field.securityLevel(),
+                            field.dimensionAttributeCode(),
+                            field.redundant(),
+                            field.redundancySourceRef()
+                        )
+                        : field
+                )
+                .toList()
+            : current.fields();
+        boolean directInput = command.targetType() == ModelType.DIMENSION || command.targetType() == ModelType.FACT;
+        return new CreateModelSpecCommand(
+            current.planId(),
+            current.domainId(),
+            command.targetType(),
+            ModelSpecContract.targetLayer(command.targetType()),
+            current.name(),
+            current.description(),
+            ModelSpecContract.ImplementationMode.DESIGNER_GENERATED,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            fields,
+            directInput ? current.sourceRefs() : List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            current.standardBindings(),
+            null,
+            null,
+            command.targetType() == ModelType.DIMENSION ? command.dimensionDefinitionRef() : null,
+            null,
+            current.dataMartId(),
+            command.targetType() == ModelType.DIMENSION ? current.variantCode() : null,
+            null
+        );
+    }
+
+    private static List<String> retainedFields(ModelSpecView current, ModelType targetType) {
+        List<String> retained = new ArrayList<>(List.of("name", "description", "fields", "standardBindings"));
+        if (current.dataMartId() != null) retained.add("dataMartId");
+        if ((targetType == ModelType.DIMENSION || targetType == ModelType.FACT) && !current.sourceRefs().isEmpty()) {
+            retained.add("sourceRefs");
+        }
+        return List.copyOf(retained);
+    }
+
+    private static List<String> requiredFields(ModelType targetType) {
+        return switch (targetType) {
+            case DIMENSION -> List.of("dimensionDefinitionRef", "grain", "fields.KEY", "dimensionProfile.scdPolicy");
+            case FACT -> List.of("grain", "factShape", "timeSemantics", "fields.TIME");
+            case SUMMARY -> List.of("grain", "dependsOn", "fields.MEASURE");
+            case APPLICATION -> List.of("consumptionScenario", "dependsOn");
+        };
+    }
+
+    private static List<String> clearFields(ModelSpecView current, ModelType targetType) {
+        List<String> fields = new ArrayList<>();
+        if (current.materialization() != null) fields.add("materialization");
+        if (current.grain() != null) fields.add("grain");
+        if (current.businessActivityRef() != null) fields.add("businessActivityRef");
+        if (current.consumptionScenario() != null) fields.add("consumptionScenario");
+        if (current.factShape() != null) fields.add("factShape");
+        if (current.timeSemantics() != null) fields.add("timeSemantics");
+        if (targetType != ModelType.DIMENSION && targetType != ModelType.FACT && !current.sourceRefs().isEmpty()) {
+            fields.add("sourceRefs");
+        }
+        if (!current.dependsOn().isEmpty()) fields.add("dependsOn");
+        if (!current.dimensionRefs().isEmpty()) fields.add("dimensionRefs");
+        if (!current.metricRefs().isEmpty()) fields.add("metricRefs");
+        if (current.generationStrategy() != null) fields.add("generationStrategy");
+        if (current.dimensionProfile() != null) fields.add("dimensionProfile");
+        if (targetType != ModelType.DIMENSION && current.dimensionDefinitionRef() != null) {
+            fields.add("dimensionDefinitionRef");
+        }
+        if (targetType != ModelType.DIMENSION && current.variantCode() != null) fields.add("variantCode");
+        if (current.implementationPolicy() != null) fields.add("implementationPolicy");
+        if (
+            targetType == ModelType.DIMENSION &&
+            current
+                .fields()
+                .stream()
+                .anyMatch(field ->
+                    field != null &&
+                    (field.role() == ModelSpecContract.FieldRole.TIME || field.role() == ModelSpecContract.FieldRole.MEASURE)
+                )
+        ) {
+            fields.add("fields.roles");
+        }
+        return List.copyOf(fields);
     }
 
     @Transactional
@@ -625,7 +963,8 @@ public class ModelSpecApplicationService {
         ModelSpecContract.DimensionDefinitionRef reference,
         UUID dataMartId,
         List<ModelSpecContract.ModelField> fields,
-        boolean creation
+        boolean requireCurrentRevision,
+        boolean lockCurrent
     ) {
         if (modelType != ModelType.DIMENSION || reference == null || dimensionDefinitions == null) return;
         StoredDimensionDefinition pinned = dimensionDefinitions
@@ -633,14 +972,14 @@ public class ModelSpecApplicationService {
             .orElseThrow(() -> dimensionDefinitionNotCurrent(reference));
         if (!domainReadAccess.canRead(pinned.domainId())) throw dimensionDefinitionNotCurrent(reference);
         StoredDimensionDefinition current = (
-                creation
+                lockCurrent
                     ? dimensionDefinitions.findCurrentForShare(tenantId, reference.dimensionDefinitionId())
                     : dimensionDefinitions.findCurrent(tenantId, reference.dimensionDefinitionId())
             )
             .orElseThrow(() -> dimensionDefinitionNotCurrent(reference));
         if (
             current.status() != DimensionDefinitionContract.Status.CURRENT ||
-            (creation && current.revision() != reference.revision())
+            (requireCurrentRevision && current.revision() != reference.revision())
         ) {
             throw dimensionDefinitionNotCurrent(reference);
         }
@@ -1127,6 +1466,43 @@ public class ModelSpecApplicationService {
     public record CreateResult(ModelSpecView modelSpec, boolean replayed) {}
 
     public record ExpectedVersion(UUID modelSpecId, int revision, String checksum) {}
+
+    public record ReclassificationPreviewRequest(
+        ModelType targetType,
+        ModelSpecContract.DimensionDefinitionRef dimensionDefinitionRef
+    ) {}
+
+    public record ReclassificationCommand(
+        ModelType targetType,
+        ModelSpecContract.DimensionDefinitionRef dimensionDefinitionRef,
+        List<String> acceptedClearFields,
+        String idempotencyKey
+    ) {
+        public ReclassificationCommand {
+            acceptedClearFields = acceptedClearFields == null ? List.of() : List.copyOf(acceptedClearFields);
+            idempotencyKey = idempotencyKey == null ? null : idempotencyKey.trim();
+        }
+    }
+
+    public record ReclassificationPreview(
+        boolean eligible,
+        ModelType fromType,
+        ModelType toType,
+        Layer targetLayer,
+        List<String> retainedFields,
+        List<String> requiredFields,
+        List<String> clearFields,
+        List<String> reasonCodes,
+        int currentRevision,
+        String checksum
+    ) {
+        public ReclassificationPreview {
+            retainedFields = List.copyOf(retainedFields);
+            requiredFields = List.copyOf(requiredFields);
+            clearFields = List.copyOf(clearFields);
+            reasonCodes = List.copyOf(reasonCodes);
+        }
+    }
 
     public record DependencyGraph(UUID rootModelSpecId, List<DependencyNode> nodes, List<DependencyEdge> edges) {}
 

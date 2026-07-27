@@ -10,7 +10,6 @@ export const MODEL_SPEC_CREATE_FIELDS = [
 	"idempotencyKey",
 	"dataMartId",
 	"variantCode",
-	"implementationPolicy",
 ] as const;
 
 export const MODEL_SPEC_UPDATE_FIELDS = [
@@ -37,7 +36,6 @@ export const MODEL_SPEC_UPDATE_FIELDS = [
 	"dimensionProfile",
 	"dataMartId",
 	"variantCode",
-	"implementationPolicy",
 ] as const;
 
 export const MODEL_SPEC_REQUIRED_FIELD_CODES = {
@@ -109,6 +107,7 @@ export type ModelSpecGrain = { statement: string; keys: string[] };
 export type ModelSpecTimeSemantics = { type: ModelSpecTimeSemanticsType; fields: string[] };
 export type ModelSpecField = {
 	name: string;
+	displayName?: string | null;
 	dataType: string;
 	nullable: boolean;
 	sourceFieldRef?: string | null;
@@ -210,7 +209,6 @@ type CreateModelSpecBase = {
 	idempotencyKey: string;
 	dataMartId?: string | null;
 	variantCode?: string | null;
-	implementationPolicy?: ModelSpecImplementationPolicy | null;
 };
 
 export type CreateModelSpecCommand =
@@ -308,6 +306,7 @@ export type ModelSpecView = CanonicalModelSpecView | LegacyModelSpecView;
 export const isCanonicalModelSpecReferenceTarget = (candidate: ModelSpecView): candidate is CanonicalModelSpecView =>
 	candidate.contractVersion === MODEL_SPEC_CONTRACT_VERSION &&
 	candidate.compatibilityMode === "CANONICAL" &&
+	candidate.status !== "ARCHIVED" &&
 	MODEL_SPEC_TARGET_LAYER_BY_TYPE[candidate.modelType] === candidate.layer &&
 	candidate.sourceRefs.every((source) => isModelSpecDirectInputLayerAllowed(source.layer)) &&
 	!hasModelSpecTypeBoundaryMismatch(candidate);
@@ -358,6 +357,7 @@ const MODEL_SPEC_NESTED_COLLECTION_FIELDS: Record<
 > = {
 	fields: new Set([
 		"name",
+		"displayName",
 		"dataType",
 		"nullable",
 		"sourceFieldRef",
@@ -607,6 +607,7 @@ const rawModelSpecIssues = (raw: Record<string, unknown>): ModelSpecFieldIssue[]
 		"fields",
 		(item) =>
 			!isNonBlankString(item.name) ||
+			!isNullableString(item.displayName) ||
 			!isNonBlankString(item.dataType) ||
 			typeof item.nullable !== "boolean" ||
 			!MODEL_SPEC_FIELD_ROLES.has(item.role as ModelSpecFieldRole) ||
@@ -679,8 +680,18 @@ export const validateModelSpecCreate = (input: unknown): ModelSpecFieldIssue[] =
 		issues.push(issue("MODEL_SPEC_NAME_INVALID", "name", "Model name must be text"));
 	if (input.description != null && !isNullableString(input.description))
 		issues.push(issue("MODEL_SPEC_FIELD_INVALID", "description", "Optional text field must be text or null"));
-	if (input.idempotencyKey != null && typeof input.idempotencyKey !== "string")
-		issues.push(issue("MODEL_SPEC_IDEMPOTENCY_KEY_INVALID", "idempotencyKey", "Idempotency key must be text"));
+	if (
+		input.idempotencyKey != null &&
+		(typeof input.idempotencyKey !== "string" || input.idempotencyKey.trim().length > 128)
+	) {
+		issues.push(
+			issue(
+				"MODEL_SPEC_IDEMPOTENCY_KEY_INVALID",
+				"idempotencyKey",
+				"Idempotency key must be text and must not exceed 128 characters",
+			),
+		);
+	}
 	const definitionRef = input.dimensionDefinitionRef;
 	const validDefinitionRef =
 		isRecord(definitionRef) &&

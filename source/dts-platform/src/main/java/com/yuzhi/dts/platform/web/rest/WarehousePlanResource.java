@@ -175,7 +175,7 @@ public class WarehousePlanResource {
             request == null ||
             request.modelType() == null ||
             request.layer() == null ||
-            expectedLayer(request.modelType()) != request.layer()
+            ModelSpecContract.targetLayer(request.modelType()) != request.layer()
         ) {
             issues.add(
                 new FieldIssue(
@@ -366,15 +366,6 @@ public class WarehousePlanResource {
             actor == null ? null : actor.ownerId(),
             actor == null ? null : actor.ownerDepartmentId()
         );
-    }
-
-    private static Layer expectedLayer(ModelType modelType) {
-        if (modelType == null) return null;
-        return switch (modelType) {
-            case DIMENSION, FACT -> Layer.DWD;
-            case SUMMARY -> Layer.DWS;
-            case APPLICATION -> Layer.ADS;
-        };
     }
 
     private WarehousePlanActor requirePlanMaintenance(UUID planId) {

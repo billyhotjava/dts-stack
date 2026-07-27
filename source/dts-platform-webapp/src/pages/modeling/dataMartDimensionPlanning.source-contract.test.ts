@@ -46,6 +46,9 @@ test("dimension table maps pinned attributes and separates implementation polici
 	const createDrawer = read("./components/ModelSpecCreateDrawer.tsx");
 	const fields = read("./components/ModelSpecFieldsTab.tsx");
 	const logical = read("./components/ModelSpecLogicalDesignStage.tsx");
+	const implementation = read("./components/ModelSpecImplementationStage.tsx");
+	const implementationPresentation = read("./components/ModelSpecImplementationPresentation.tsx");
+	const implementationSurface = `${implementation}\n${implementationPresentation}`;
 	const api = read("../../api/modelSpecApi.ts");
 
 	assert.match(createDrawer, /数据集市（可选）/);
@@ -55,9 +58,15 @@ test("dimension table maps pinned attributes and separates implementation polici
 	assert.match(fields, /冗余维度字段/);
 	assert.match(fields, /冗余来源依据/);
 	assert.match(logical, /getDimensionDefinitionRevision/);
-	for (const label of ["物理表名", "装载策略", "数据保留天数（可选）", "SCD 逻辑策略"]) {
-		assert.match(logical, new RegExp(label));
+	assert.match(logical, /getWarehousePlanDataMarts/);
+	assert.match(logical, /listDataMarts\(\{ domainId: model\.domainId, status: "CURRENT"/);
+	assert.match(logical, /disabled=\{readOnly \|\| dataMartLoading\}/);
+	assert.doesNotMatch(logical, /<Input disabled placeholder="未指定数据集市"/);
+	for (const label of ["目标物理名称", "装载策略", "数据保留天数（可选）"]) {
+		assert.doesNotMatch(logical, new RegExp(label));
+		assert.match(implementationSurface, new RegExp(label));
 	}
-	assert.match(logical, /max=\{36000\}/);
+	assert.match(logical, /SCD 逻辑策略/);
+	assert.match(implementation, /max=\{36000\}/);
 	assert.match(api, /warehouse-plans\/\$\{encodeURIComponent\(planId\)\}\/naming\/validate/);
 });

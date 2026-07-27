@@ -10,7 +10,7 @@ test("model creation collects draft identity plus explicit optional planning sco
 		"建设计划",
 		"业务分类",
 		"数据集市（可选）",
-		"模型类型",
+		"先确定要描述什么",
 		"模型名称",
 		"实现变体（可选）",
 		"用途说明（可选）",
@@ -39,6 +39,19 @@ test("draft creation requires explicit plan and category recovery instead of gue
 	assert.match(drawer, /当前建设计划还没有可用于建模的已确认业务分类。请先在规划基线中确认业务分类后返回。/);
 	assert.match(drawer, /const changeDomain = \(domainId: string\) => \{[\s\S]{0,240}setContextError\(""\)/);
 	assert.doesNotMatch(drawer, /options\.length === 1[\s\S]{0,160}setFieldValue\("domainId"/);
+});
+
+test("draft creation starts from an explicit business purpose without defaulting to FACT", () => {
+	assert.doesNotMatch(center, /requestedModelType\(searchParams\.get\("modelType"\)\) \|\| "FACT"/);
+	assert.match(drawer, /initialModelType\?: ModelSpecType/);
+	assert.match(drawer, /先确定要描述什么/);
+	for (const purpose of ["稳定对象", "业务事件", "聚合结果", "消费输出"]) {
+		assert.match(drawer, new RegExp(purpose));
+	}
+	for (const contextLabel of ["适合：", "不适合：", "例子："]) {
+		assert.match(drawer, new RegExp(contextLabel));
+	}
+	assert.match(drawer, /请选择业务目的和模型类型/);
 });
 
 test("DIMENSION creation lists only current definitions and pins the selected revision", () => {

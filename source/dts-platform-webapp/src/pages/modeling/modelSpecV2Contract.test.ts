@@ -4,7 +4,6 @@ import test from "node:test";
 import Ajv2020 from "ajv/dist/2020.js";
 import {
 	type CanonicalModelSpecView,
-	type CreateModelSpecCommand,
 	hasModelSpecTypeBoundaryMismatch,
 	isCanonicalModelSpecReferenceTarget,
 	isModelSpecDimensionRefAllowed,
@@ -15,9 +14,11 @@ import {
 	MODEL_SPEC_CREATE_FIELDS,
 	MODEL_SPEC_REQUIRED_FIELD_CODES,
 	MODEL_SPEC_UPDATE_FIELDS,
+	type ModelSpecType,
 	modelSpecRevisionRefKey,
 	toModelSpecEtag,
-	validateModelSpecCreate,
+	type UpdateModelSpecCommand,
+	validateModelSpecCreate as validateInteractiveModelSpecCreate,
 	validateModelSpecUpdate,
 } from "./modelSpecV2Contract.ts";
 
@@ -82,7 +83,32 @@ const createContractAjv = () => {
 	return ajv;
 };
 
-const valid = (modelType: CreateModelSpecCommand["modelType"]): CreateModelSpecCommand => ({
+type FullModelSpecCommand = UpdateModelSpecCommand & {
+	idempotencyKey: string;
+	dimensionDefinitionRef?: { dimensionDefinitionId: string; revision: number };
+};
+
+const validateModelSpecCreate = (input: unknown) => {
+	if (!input || typeof input !== "object" || Array.isArray(input)) return validateModelSpecUpdate(input);
+	const {
+		idempotencyKey,
+		planId,
+		domainId,
+		modelType,
+		name,
+		description,
+		dimensionDefinitionRef: _dimensionDefinitionRef,
+		...update
+	} = input as Record<string, unknown>;
+	return [
+		...validateModelSpecUpdate({ planId, domainId, modelType, name, description, ...update }),
+		...validateInteractiveModelSpecCreate({ planId, domainId, modelType, name, idempotencyKey }).filter(
+			(issue) => issue.field === "idempotencyKey",
+		),
+	];
+};
+
+const valid = (modelType: ModelSpecType): FullModelSpecCommand => ({
 	planId: "10000000-0000-0000-0000-000000000001",
 	domainId: "20000000-0000-0000-0000-000000000001",
 	modelType,
@@ -120,12 +146,20 @@ const valid = (modelType: CreateModelSpecCommand["modelType"]): CreateModelSpecC
 	dimensionRefs: [],
 	metricRefs: [],
 	standardBindings: [],
+	...(modelType === "DIMENSION"
+		? {
+				dimensionDefinitionRef: {
+					dimensionDefinitionId: "60000000-0000-0000-0000-000000000001",
+					revision: 1,
+				},
+			}
+		: {}),
 	generationStrategy:
 		modelType === "DIMENSION" ? { type: "REFERENCE", reference: "catalog.dataset.source" } : undefined,
 	idempotencyKey: `model-spec-contract-test-${modelType.toLowerCase()}`,
 });
 
-const minimal = (modelType: CreateModelSpecCommand["modelType"]): CreateModelSpecCommand => ({
+const minimal = (modelType: ModelSpecType): FullModelSpecCommand => ({
 	planId: "10000000-0000-0000-0000-000000000001",
 	domainId: "20000000-0000-0000-0000-000000000001",
 	modelType,
@@ -134,7 +168,13 @@ const minimal = (modelType: CreateModelSpecCommand["modelType"]): CreateModelSpe
 	implementationMode: "DESIGNER_GENERATED",
 	grain: { statement: "one row per record", keys: ["record_id"] },
 	...(modelType === "DIMENSION"
-		? { fields: [{ name: "record_id", dataType: "varchar", nullable: false, role: "KEY" as const }] }
+		? {
+				fields: [{ name: "record_id", dataType: "varchar", nullable: false, role: "KEY" as const }],
+				dimensionDefinitionRef: {
+					dimensionDefinitionId: "60000000-0000-0000-0000-000000000001",
+					revision: 1,
+				},
+			}
 		: {}),
 	...(modelType === "FACT"
 		? {
@@ -190,6 +230,21 @@ test("canonical create fields exclude client-owned and retired metadata", () => 
 	]) {
 		assert.equal((MODEL_SPEC_CREATE_FIELDS as readonly string[]).includes(forbidden), false, forbidden);
 	}
+});
+
+test("interactive create accepts only the minimum draft identity and never accepts a client-owned layer", () => {
+	const command = {
+		planId: "10000000-0000-0000-0000-000000000001",
+		domainId: "20000000-0000-0000-0000-000000000001",
+		modelType: "FACT",
+		name: "finance_project_event",
+		idempotencyKey: "interactive-create-contract",
+	} as const;
+	assert.deepEqual(validateInteractiveModelSpecCreate(command), []);
+	assert.deepEqual(
+		validateInteractiveModelSpecCreate({ ...command, layer: "DWD" }).map((issue) => issue.code),
+		["MODEL_SPEC_FIELD_NOT_ALLOWED"],
+	);
 });
 
 test("canonical update is a full replacement without create-only or retired metadata", () => {
@@ -275,6 +330,9 @@ test("reference targets require an exact canonical unpolluted revision and the o
 	assert.equal(isModelSpecReferenceTargetAllowed(owner, samePlanFact, "DEPENDENCY"), true);
 	assert.equal(modelSpecRevisionRefKey({ modelSpecId: samePlanFact.id, revision: 2 }), `${samePlanFact.id}@2`);
 
+	const archived = { ...samePlanFact, status: "ARCHIVED" as const };
+	assert.equal(isCanonicalModelSpecReferenceTarget(archived), false);
+	assert.equal(isModelSpecReferenceTargetAllowed(owner, archived, "DEPENDENCY"), false);
 	assert.equal(isCanonicalModelSpecReferenceTarget({ ...samePlanFact, layer: "ADS" }), false);
 	assert.equal(
 		isCanonicalModelSpecReferenceTarget({
@@ -636,9 +694,7 @@ test("required field codes stay explicit and backend-compatible", () => {
 		planId: "MODEL_SPEC_PLAN_REQUIRED",
 		domainId: "MODEL_SPEC_DOMAIN_REQUIRED",
 		modelType: "MODEL_SPEC_TYPE_REQUIRED",
-		layer: "MODEL_SPEC_LAYER_REQUIRED",
 		name: "MODEL_SPEC_NAME_REQUIRED",
-		implementationMode: "MODEL_SPEC_IMPLEMENTATION_MODE_REQUIRED",
 		idempotencyKey: "MODEL_SPEC_IDEMPOTENCY_KEY_REQUIRED",
 	});
 	const invalid = { ...valid("FACT"), planId: "", domainId: "", modelType: undefined } as unknown;
@@ -666,7 +722,10 @@ test("shared fixtures keep Java and TypeScript validation issue codes aligned", 
 			"utf8",
 		),
 	);
-	const validateSchema = createContractAjv().compile(schema);
+	const ajv = createContractAjv();
+	ajv.addSchema(schema);
+	const validateSchema = ajv.getSchema(`${schema.$id}#/$defs/createModelSpecCommand`);
+	assert.ok(validateSchema);
 	for (const testCase of cases) {
 		assert.equal(typeof testCase.schemaValid, "boolean", `${testCase.name}: schemaValid must be explicit`);
 		const candidate = (
@@ -805,7 +864,10 @@ test("JSON Schema directly accepts the generic wire fixture including explicit n
 			"utf8",
 		),
 	);
-	const validate = createContractAjv().compile(schema);
+	const ajv = createContractAjv();
+	ajv.addSchema(schema);
+	const validate = ajv.getSchema(`${schema.$id}#/$defs/createModelSpecCommand`);
+	assert.ok(validate);
 
 	assert.equal(validate(genericFact), true, JSON.stringify(validate.errors));
 });
@@ -900,7 +962,9 @@ test("JSON Schema enforces all four model-type save boundaries", () => {
 		),
 	);
 	const ajv = createContractAjv();
-	const validate = ajv.compile(schema);
+	ajv.addSchema(schema);
+	const validate = ajv.getSchema(`${schema.$id}#/$defs/createModelSpecCommand`);
+	assert.ok(validate);
 
 	for (const modelType of ["DIMENSION", "FACT", "SUMMARY", "APPLICATION"] as const) {
 		assert.equal(validate(valid(modelType)), true, `${modelType}: ${JSON.stringify(validate.errors)}`);

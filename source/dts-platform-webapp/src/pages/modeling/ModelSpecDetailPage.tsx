@@ -3,14 +3,14 @@ import { ArrowLeft, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import {
+	getModelLifecycle,
 	getModelSpec,
 	getModelSpecRevision,
 	getModelSpecStageGates,
-	getModelLifecycle,
 	listModelSpecs,
-	retryModelReleaseRegistration,
 	type ModelLifecycleTimeline,
 	type ModelSpecStageGate,
+	retryModelReleaseRegistration,
 	updateModelSpec,
 } from "@/api/modelSpecApi";
 import { getWarehousePlanSources, type WarehousePlanSourceInventoryView } from "@/api/warehousePlanApi";
@@ -18,9 +18,14 @@ import { useCatalogDomainOptions } from "@/hooks/useCatalogDomainOptions";
 import { useParams } from "@/routes/hooks";
 import { useUserRoles } from "@/store/userStore";
 import { ModelSpecBlockerPanel } from "./components/ModelSpecBlockerPanel";
-import { ModelSpecImplementationStage, type ModelSpecImplementationStageActionRef } from "./components/ModelSpecImplementationStage";
+import {
+	ModelSpecImplementationStage,
+	type ModelSpecImplementationStageActionRef,
+} from "./components/ModelSpecImplementationStage";
+import { ModelSpecImplementationMigrationPanel } from "./components/ModelSpecImplementationMigrationPanel";
 import { ModelSpecLogicalDesignStage, type ModelSpecSelectOption } from "./components/ModelSpecLogicalDesignStage";
 import { ModelSpecPhysicalAssetStage } from "./components/ModelSpecPhysicalAssetStage";
+import { ModelSpecReclassificationWizard } from "./components/ModelSpecReclassificationWizard";
 import { ModelSpecSourceInventoryModal } from "./components/ModelSpecSourceInventoryModal";
 import { modelSpecCatalogPath, modelSpecDetailPath, resolveModelSpecDetailStage } from "./modelSpecDetailNavigation";
 import { getModelSpecDetailStageProjection } from "./modelSpecDetailStageProjection";
@@ -172,9 +177,8 @@ export default function ModelSpecDetailPage() {
 		() =>
 			Boolean(
 				persistedLogicalDraft &&
-				logicalFormValues &&
-				JSON.stringify(stableFormValue(logicalFormValues)) !==
-					JSON.stringify(stableFormValue(persistedLogicalDraft)),
+					logicalFormValues &&
+					JSON.stringify(stableFormValue(logicalFormValues)) !== JSON.stringify(stableFormValue(persistedLogicalDraft)),
 			),
 		[logicalFormValues, persistedLogicalDraft],
 	);
@@ -228,19 +232,21 @@ export default function ModelSpecDetailPage() {
 	const currentImplementationChecksum = currentImplementation?.implementationChecksum;
 	const advancedImplementationReady = Boolean(
 		canonicalModel &&
-		currentImplementation &&
-		currentImplementationRevision &&
-		currentImplementationChecksum &&
-		currentImplementation.modelSpecId === canonicalModel.id &&
-		currentImplementation.planId === canonicalModel.planId &&
-		currentImplementation.revision === canonicalModel.revision &&
-		currentImplementation.modelChecksum === canonicalModel.checksum &&
-		currentImplementation.ownership === canonicalModel.implementationMode,
+			currentImplementation &&
+			currentImplementationRevision &&
+			currentImplementationChecksum &&
+			currentImplementation.modelSpecId === canonicalModel.id &&
+			currentImplementation.planId === canonicalModel.planId &&
+			currentImplementation.revision === canonicalModel.revision &&
+			currentImplementation.modelChecksum === canonicalModel.checksum &&
+			currentImplementation.ownership === canonicalModel.implementationMode,
 	);
-	const implementationPath = advancedImplementationReady && canonicalModel
-		? `/studio/sql-modeling?planId=${encodeURIComponent(canonicalModel.planId)}&modelSpecId=${encodeURIComponent(canonicalModel.id)}&revision=${canonicalModel.revision}&implementationRevision=${currentImplementationRevision}&implementationChecksum=${encodeURIComponent(currentImplementationChecksum || "")}&implementationMode=${encodeURIComponent(canonicalModel.implementationMode)}`
-		: "";
-	const implementationRecoveryMessage = "当前实现绑定缺失或已不是此 ModelSpec 的当前版本；请返回数据实现阶段刷新并保存新的实现 revision。";
+	const implementationPath =
+		advancedImplementationReady && canonicalModel
+			? `/studio/sql-modeling?planId=${encodeURIComponent(canonicalModel.planId)}&modelSpecId=${encodeURIComponent(canonicalModel.id)}&revision=${canonicalModel.revision}&implementationRevision=${currentImplementationRevision}&implementationChecksum=${encodeURIComponent(currentImplementationChecksum || "")}&implementationMode=${encodeURIComponent(canonicalModel.implementationMode)}`
+			: "";
+	const implementationRecoveryMessage =
+		"当前实现绑定缺失或已不是此 ModelSpec 的当前版本；请返回数据实现阶段刷新并保存新的实现 revision。";
 
 	const loadStageGates = useCallback(async () => {
 		const requestId = ++gateRequestRef.current;
@@ -605,18 +611,12 @@ export default function ModelSpecDetailPage() {
 			setPhysicalError("");
 			try {
 				await retryModelReleaseRegistration(modelSpecId, releaseId);
-				if (
-					requestId !== releaseRetryRequestRef.current ||
-					pageRequestId !== loadRequestRef.current
-				) {
+				if (requestId !== releaseRetryRequestRef.current || pageRequestId !== loadRequestRef.current) {
 					return;
 				}
 				await loadPhysicalTimeline();
 			} catch {
-				if (
-					requestId !== releaseRetryRequestRef.current ||
-					pageRequestId !== loadRequestRef.current
-				) {
+				if (requestId !== releaseRetryRequestRef.current || pageRequestId !== loadRequestRef.current) {
 					return;
 				}
 				setPhysicalError("发布登记重试失败；服务端状态未被本地覆盖，请稍后重试。");
@@ -665,6 +665,7 @@ export default function ModelSpecDetailPage() {
 		? getModelSpecDetailStageProjection({
 				stage: activeStage,
 				logicalDirty,
+				designedReady: stageGates.find((gate) => gate.stage === "DESIGNED")?.status === "READY",
 				implementationConfigured: implementationState.configured,
 				implementationDirty: implementationState.dirty,
 				implementationValidated: implementationState.validated,
@@ -711,16 +712,52 @@ export default function ModelSpecDetailPage() {
 						<Text type="secondary">版本 r{model.revision}</Text>
 					</Space>
 				</div>
-				{stageProjection ? <Button type="primary" loading={saving} disabled={stageProjection.primaryAction.disabled || (stageProjection.primaryAction.label === "生成并发布" && !advancedImplementationReady)} title={stageProjection.primaryAction.recoveryMessage || (stageProjection.primaryAction.label === "生成并发布" && !advancedImplementationReady ? implementationRecoveryMessage : undefined)} onClick={() => void runPrimaryAction()}>{stageProjection.primaryAction.label}</Button> : null}
+				{stageProjection ? (
+					<Space wrap>
+						{canonicalModel?.status === "DRAFT" ? (
+							<ModelSpecReclassificationWizard
+								model={canonicalModel}
+								canMaintain={canEdit}
+								onApplied={async () => {
+									await load();
+								}}
+							/>
+						) : null}
+						<Button
+							type="primary"
+							loading={saving}
+							disabled={
+								stageProjection.primaryAction.disabled ||
+								(stageProjection.primaryAction.label === "生成并发布" && !advancedImplementationReady)
+							}
+							title={
+								stageProjection.primaryAction.recoveryMessage ||
+								(stageProjection.primaryAction.label === "生成并发布" && !advancedImplementationReady
+									? implementationRecoveryMessage
+									: undefined)
+							}
+							onClick={() => void runPrimaryAction()}
+						>
+							{stageProjection.primaryAction.label}
+						</Button>
+					</Space>
+				) : null}
 			</div>
 
 			{model.compatibilityMode === "LEGACY_READONLY" ? (
-				<Alert
-					className="mb-3"
-					type="warning"
-					showIcon
-					message="这是迁移期历史模型，可浏览但不能在 canonical 页面修改"
-				/>
+				<>
+					<Alert
+						className="mb-3"
+						type="warning"
+						showIcon
+						message="这是迁移期历史模型，可浏览但不能在 canonical 页面修改"
+					/>
+					<ModelSpecImplementationMigrationPanel
+						model={model}
+						canMaintain={roleAllowsEdit && !writeDenied}
+						onMigrated={() => void load()}
+					/>
+				</>
 			) : null}
 			{dependencyContractMismatch ? (
 				<Alert
@@ -797,28 +834,99 @@ export default function ModelSpecDetailPage() {
 					onReload={() => void loadStageGates()}
 				/>
 			) : null}
-			{canonicalModel && activeStage === "physical" && !physicalLoading && !advancedImplementationReady ? (
-				<Alert
-					className="mb-3"
-					type="warning"
-					showIcon
-					data-testid="model-spec-advanced-implementation-recovery"
-					message="高级 dbt 入口已锁定"
-					description={implementationRecoveryMessage}
-					action={<Button size="small" onClick={() => changeStage("implementation")}>返回数据实现</Button>}
-				/>
-			) : null}
 			{canonicalModel ? (
 				<div className="mb-3 grid grid-cols-3 gap-2 max-[390px]:grid-cols-1" role="tablist" aria-label="模型阶段">
-					{(["logical", "implementation", "physical"] as const).map((stage) => <Button key={stage} type={activeStage === stage ? "primary" : "default"} onClick={() => changeStage(stage)}>{stage === "logical" ? "逻辑设计" : stage === "implementation" ? "数据实现" : "物理资产"}</Button>)}
+					{(["logical", "implementation", "physical"] as const).map((stage) => {
+						const designedReady = stageGates.find((gate) => gate.stage === "DESIGNED")?.status === "READY";
+						const disabled = stage === "implementation" && !designedReady;
+						return (
+							<Button
+								key={stage}
+								type={activeStage === stage ? "primary" : "default"}
+								disabled={disabled}
+								title={disabled ? "先完成逻辑设计后再配置数据实现" : undefined}
+								onClick={() => changeStage(stage)}
+							>
+								{stage === "logical" ? "逻辑设计" : stage === "implementation" ? "数据实现" : "发布结果"}
+							</Button>
+						);
+					})}
 				</div>
 			) : null}
 
 			{canonicalModel ? (
 				<Card>
-					{activeStage === "logical" ? <Form form={form} layout="vertical" requiredMark={false} disabled={saving}><ModelSpecLogicalDesignStage form={form} model={canonicalModel} planOptions={planOptions} domainOptions={domainOptions} upstreamOptions={upstreamOptions} dimensionOptions={dimensionOptions} upstreamValidationAvailable={dependencyMetadataLoaded} readOnly={!canEdit} saving={saving} persistedFieldNames={canonicalModel.fields.map((field) => field.name)} onSaveStandardBindings={onSaveStandardBindings} /></Form> : null}
-					{activeStage === "implementation" ? <ModelSpecImplementationStage ref={implementationActionRef} model={canonicalModel} expected={{ id: canonicalModel.id, revision: canonicalModel.revision, checksum: canonicalModel.checksum }} implementation={physicalTimeline?.implementation || null} implementationLoading={physicalLoading} sourceOptions={sourceOptions} upstreamOptions={implementationUpstreamOptions} sourceLoading={sourceLoading} sourceError={sourceError} sourcePermissionDenied={sourcePermissionDenied} readOnly={!canEdit} onReloadSources={() => { const currentSources = (form.getFieldValue("sources") as ModelSpecDraft["sources"] | undefined) || []; void loadSources(canonicalModel.planId, currentSources); }} onManageSources={canEdit ? () => setSourceInventoryOpen(true) : undefined} onStateChange={setImplementationState} onImplementationSaved={(implementation) => { if (implementation.modelSpecId !== canonicalModel.id || implementation.revision !== canonicalModel.revision || implementation.modelChecksum !== canonicalModel.checksum) return; setPhysicalTimeline((current) => ({ implementation, artifacts: current?.artifacts || [], events: current?.events || [] })); }} /> : null}
-					{activeStage === "physical" ? <ModelSpecPhysicalAssetStage model={canonicalModel} timeline={physicalTimeline} loading={physicalLoading} error={physicalError} onRetry={() => void loadPhysicalTimeline()} onRetryReleaseRegistration={retryReleaseRegistration} advancedEntryDisabled={!advancedImplementationReady} onReturnToImplementation={() => changeStage("implementation")} onOpenAdvanced={() => navigate(implementationPath)} /> : null}
+					{activeStage === "logical" ? (
+						<Form form={form} layout="vertical" requiredMark={false} disabled={saving}>
+							<ModelSpecLogicalDesignStage
+								form={form}
+								model={canonicalModel}
+								planOptions={planOptions}
+								domainOptions={domainOptions}
+								upstreamOptions={upstreamOptions}
+								dimensionOptions={dimensionOptions}
+								upstreamValidationAvailable={dependencyMetadataLoaded}
+								readOnly={!canEdit}
+								saving={saving}
+								persistedFieldNames={canonicalModel.fields.map((field) => field.name)}
+								onSaveStandardBindings={onSaveStandardBindings}
+							/>
+						</Form>
+					) : null}
+					{activeStage === "implementation" ? (
+						<>
+							<ModelSpecImplementationMigrationPanel
+								model={canonicalModel}
+								canMaintain={canEdit}
+								onMigrated={() => void loadPhysicalTimeline()}
+							/>
+							<ModelSpecImplementationStage
+								ref={implementationActionRef}
+								model={canonicalModel}
+								expected={{ id: canonicalModel.id, revision: canonicalModel.revision, checksum: canonicalModel.checksum }}
+								implementation={physicalTimeline?.implementation || null}
+								implementationLoading={physicalLoading}
+								sourceOptions={sourceOptions}
+								upstreamOptions={implementationUpstreamOptions}
+								sourceLoading={sourceLoading}
+								sourceError={sourceError}
+								sourcePermissionDenied={sourcePermissionDenied}
+								readOnly={!canEdit}
+								onReloadSources={() => {
+									const currentSources =
+										(form.getFieldValue("sources") as ModelSpecDraft["sources"] | undefined) || [];
+									void loadSources(canonicalModel.planId, currentSources);
+								}}
+								onManageSources={canEdit ? () => setSourceInventoryOpen(true) : undefined}
+								onStateChange={setImplementationState}
+								onImplementationSaved={(implementation) => {
+									if (
+										implementation.modelSpecId !== canonicalModel.id ||
+										implementation.revision !== canonicalModel.revision ||
+										implementation.modelChecksum !== canonicalModel.checksum
+									)
+										return;
+									setPhysicalTimeline((current) => ({
+										implementation,
+										artifacts: current?.artifacts || [],
+										events: current?.events || [],
+									}));
+								}}
+								advancedEntryDisabled={!advancedImplementationReady}
+								onOpenAdvanced={() => navigate(implementationPath)}
+							/>
+						</>
+					) : null}
+					{activeStage === "physical" ? (
+						<ModelSpecPhysicalAssetStage
+							model={canonicalModel}
+							timeline={physicalTimeline}
+							loading={physicalLoading}
+							error={physicalError}
+							onRetry={() => void loadPhysicalTimeline()}
+							onRetryReleaseRegistration={retryReleaseRegistration}
+						/>
+					) : null}
 				</Card>
 			) : (
 				<Card>

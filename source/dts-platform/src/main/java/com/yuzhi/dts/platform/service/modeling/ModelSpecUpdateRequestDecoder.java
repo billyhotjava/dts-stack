@@ -29,6 +29,16 @@ public final class ModelSpecUpdateRequestDecoder {
 
     public DecodeResult decode(JsonNode request) {
         if (request == null || !request.isObject()) return rejected(requestIssue("ModelSpec update request must be a JSON object"));
+        if (request.has("implementationPolicy")) {
+            return rejected(
+                new ModelSpecContract.FieldIssue(
+                    "MODEL_SPEC_IMPLEMENTATION_POLICY_MOVED",
+                    "implementationPolicy",
+                    ModelSpecContract.IssueSeverity.ERROR,
+                    "Physical target, load, partition and retention settings are maintained in data implementation"
+                )
+            );
+        }
 
         Map<String, Object> raw;
         try {

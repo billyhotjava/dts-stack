@@ -34,6 +34,8 @@ import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.P
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningPolicy;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningPolicyCommand;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningPolicyReadiness;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.QualityGate;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.StandardCoverage;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.ProcessBinding;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBinding;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBusinessMapping;
@@ -580,6 +582,48 @@ class WarehousePlanApplicationServiceIT {
             );
             assertThat(service.getCategoryScope(tenant, plan.id()).version()).isEqualTo(3);
             assertThat(service.getPlanningPolicy(tenant, plan.id()).version()).isEqualTo(2);
+        } finally {
+            deleteTenant(tenant);
+        }
+    }
+
+    @Test
+    void newPlansDefaultGovernancePolicyAndOldClientUpdatesPreserveExplicitValues() {
+        String tenant = tenant("governance-policy-compatibility");
+
+        try {
+            WarehousePlanHeader plan = service.create(
+                tenant,
+                createCommand(BUSINESS_FIRST, "governance-policy-compatibility-" + UUID.randomUUID())
+            ).plan();
+
+            Versioned<WarehousePlanContract.PlanningPolicyView> initial = service.getPlanningPolicy(tenant, plan.id());
+            assertThat(initial.value().standardCoverage()).isEqualTo(StandardCoverage.KEY_AND_MEASURE);
+            assertThat(initial.value().qualityGate()).isEqualTo(QualityGate.BLOCKING);
+
+            Versioned<WarehousePlanContract.PlanningPolicyView> explicit = service.savePlanningPolicy(
+                tenant,
+                plan.id(),
+                initial.version(),
+                new PlanningPolicyCommand(
+                    "CLASSIC_ODS_DWD_DWS_ADS",
+                    null,
+                    null,
+                    null,
+                    false,
+                    "ALL_FIELDS",
+                    "ADVISORY"
+                )
+            );
+            Versioned<WarehousePlanContract.PlanningPolicyView> preserved = service.savePlanningPolicy(
+                tenant,
+                plan.id(),
+                explicit.version(),
+                new PlanningPolicyCommand("CLASSIC_ODS_DWD_DWS_ADS", null, null, null, false)
+            );
+
+            assertThat(preserved.value().standardCoverage()).isEqualTo(StandardCoverage.ALL_FIELDS);
+            assertThat(preserved.value().qualityGate()).isEqualTo(QualityGate.ADVISORY);
         } finally {
             deleteTenant(tenant);
         }

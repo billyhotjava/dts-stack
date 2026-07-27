@@ -149,6 +149,15 @@ class ModelSpecContractTest {
     }
 
     @Test
+    void archivedModelsCannotBecomeNewCanonicalReferenceTargets() {
+        ModelSpecView active = view(validCommand(ModelType.FACT, null));
+        ModelSpecView archived = withStatus(active, ModelSpecContract.ModelStatus.ARCHIVED);
+
+        assertThat(ModelSpecContract.isCanonicalReferenceTarget(active)).isTrue();
+        assertThat(ModelSpecContract.isCanonicalReferenceTarget(archived)).isFalse();
+    }
+
+    @Test
     void viewOwnsServerVersionAndCompatibilityMetadata() {
         Set<String> fields = Arrays.stream(ModelSpecView.class.getRecordComponents())
             .map(RecordComponent::getName)
@@ -373,11 +382,11 @@ class ModelSpecContractTest {
     @Test
     void jacksonRequiredScalarsUseBoxedTypesSoMissingValuesCannotBecomeFalseOrZero() {
         assertThat(Arrays.stream(ModelField.class.getRecordComponents()).filter(component -> component.getName().equals("nullable")))
-            .extracting(RecordComponent::getType)
-            .containsExactly(Boolean.class);
+            .map(component -> component.getType().getName())
+            .containsExactly(Boolean.class.getName());
         assertThat(Arrays.stream(SourceRef.class.getRecordComponents()).filter(component -> component.getName().equals("sortOrder")))
-            .extracting(RecordComponent::getType)
-            .containsExactly(Integer.class);
+            .map(component -> component.getType().getName())
+            .containsExactly(Integer.class.getName());
     }
 
     @Test
@@ -788,6 +797,45 @@ class ModelSpecContractTest {
             base.updatedAt(),
             base.compatibilityMode(),
             base.legacyRefs()
+        );
+    }
+
+    private static ModelSpecView withStatus(ModelSpecView base, ModelSpecContract.ModelStatus status) {
+        return new ModelSpecView(
+            base.contractVersion(),
+            base.id(),
+            base.planId(),
+            base.domainId(),
+            base.modelType(),
+            base.layer(),
+            base.name(),
+            base.description(),
+            base.implementationMode(),
+            base.materialization(),
+            base.businessActivityRef(),
+            base.consumptionScenario(),
+            base.grain(),
+            base.factShape(),
+            base.timeSemantics(),
+            base.fields(),
+            base.sourceRefs(),
+            base.dependsOn(),
+            base.dimensionRefs(),
+            base.metricRefs(),
+            base.standardBindings(),
+            base.generationStrategy(),
+            base.dimensionProfile(),
+            base.dimensionDefinitionRef(),
+            status,
+            base.revision(),
+            base.checksum(),
+            base.createdAt(),
+            base.updatedAt(),
+            base.compatibilityMode(),
+            base.legacyRefs(),
+            base.dataMartId(),
+            base.variantCode(),
+            base.implementationPolicy()
         );
     }
 }

@@ -35,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.annotation.Transactional;
 
 @ExtendWith(MockitoExtension.class)
 class ModelSpecApplicationServiceTest {
@@ -442,21 +443,8 @@ class ModelSpecApplicationServiceTest {
                 )
         )
             .isInstanceOf(ModelSpecException.class)
-            .satisfies(error -> {
-                ModelSpecException validation = (ModelSpecException) error;
-                assertThat(validation.code()).isEqualTo("MODEL_SPEC_VALIDATION_FAILED");
-                assertThat((List<?>) validation.details())
-                    .extracting(
-                        issue -> ((FieldIssue) issue).code(),
-                        issue -> ((FieldIssue) issue).field()
-                    )
-                    .contains(
-                        org.assertj.core.groups.Tuple.tuple(
-                            "MODEL_SPEC_DIMENSION_DEFINITION_NOT_ALLOWED",
-                            "dimensionDefinitionRef"
-                        )
-                    );
-            });
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("MODEL_SPEC_TYPE_IMMUTABLE");
         verify(repository, never()).compareAndSetV2(any(), any(), anyInt(), anyString(), any(), anyString());
         verify(repository, never()).insertV2Revision(any(), any(), any(), any());
     }
@@ -1369,6 +1357,153 @@ class ModelSpecApplicationServiceTest {
                 );
             });
         verify(repository, never()).insertV2Revision(eq(TENANT), eq(ACTOR), any(), anyString());
+    }
+
+    @Test
+    void previewsDraftReclassificationWithoutWritingAndExplainsTheRequiredCleanup() {
+        ModelSpecView current = withFactOnlyFields(
+            codec.toCreatedView(MODEL_ID, command("finance-r4", "finance_project"), NOW),
+            FactShape.TRANSACTION,
+            new TimeSemantics(TimeSemanticsType.EVENT_TIME, List.of("event_time")),
+            List.of()
+        );
+        when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(stored(current, null, null)));
+        when(compatibilityReader.read(any())).thenReturn(current);
+
+        ModelSpecApplicationService.ReclassificationPreview preview = service.previewReclassification(
+            TENANT,
+            ACTOR,
+            MODEL_ID,
+            new ModelSpecApplicationService.ReclassificationPreviewRequest(
+                ModelType.DIMENSION,
+                new DimensionDefinitionRef(UUID.fromString("60000000-0000-0000-0000-000000000001"), 1)
+            )
+        );
+
+        assertThat(preview.eligible()).isTrue();
+        assertThat(preview.fromType()).isEqualTo(ModelType.FACT);
+        assertThat(preview.toType()).isEqualTo(ModelType.DIMENSION);
+        assertThat(preview.targetLayer()).isEqualTo(Layer.DWD);
+        assertThat(preview.clearFields()).contains("factShape", "timeSemantics");
+        assertThat(preview.requiredFields()).contains("dimensionDefinitionRef", "grain", "fields.KEY");
+        assertThat(preview.currentRevision()).isEqualTo(1);
+        assertThat(preview.checksum()).isEqualTo(current.checksum());
+        verify(dimensionDefinitions).findCurrent(
+            TENANT,
+            UUID.fromString("60000000-0000-0000-0000-000000000001")
+        );
+        verify(dimensionDefinitions, never()).findCurrentForShare(
+            TENANT,
+            UUID.fromString("60000000-0000-0000-0000-000000000001")
+        );
+        verify(repository, never()).compareAndSetV2(any(), any(), anyInt(), anyString(), any(), anyString());
+        verify(repository, never()).insertV2Revision(any(), any(), any(), anyString());
+    }
+
+    @Test
+    void reclassificationPreviewTransactionPermitsTheExistingSharedAccessChecks() throws NoSuchMethodException {
+        Transactional transaction = ModelSpecApplicationService.class
+            .getMethod(
+                "previewReclassification",
+                String.class,
+                String.class,
+                UUID.class,
+                ModelSpecApplicationService.ReclassificationPreviewRequest.class
+            )
+            .getAnnotation(Transactional.class);
+
+        assertThat(transaction).isNotNull();
+        assertThat(transaction.readOnly()).isFalse();
+    }
+
+    @Test
+    void reclassifiesByAppendingARevisionOnlyAfterEveryClearFieldIsAccepted() {
+        ModelSpecView current = codec.toCreatedView(MODEL_ID, command("finance-r4-apply", "finance_project"), NOW);
+        when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(stored(current, null, null)));
+        when(compatibilityReader.read(any())).thenReturn(current);
+        when(repository.findReclassificationReplay(TENANT, MODEL_ID, "finance-r4-to-dimension")).thenReturn(Optional.empty());
+        when(repository.compareAndSetV2(eq(TENANT), eq(ACTOR), eq(1), eq(current.checksum()), any(), anyString()))
+            .thenReturn(1);
+
+        ModelSpecApplicationService.ReclassificationPreview preview = service.previewReclassification(
+            TENANT,
+            ACTOR,
+            MODEL_ID,
+            new ModelSpecApplicationService.ReclassificationPreviewRequest(
+                ModelType.DIMENSION,
+                new DimensionDefinitionRef(UUID.fromString("60000000-0000-0000-0000-000000000001"), 1)
+            )
+        );
+        ModelSpecView result = service.reclassify(
+            TENANT,
+            ACTOR,
+            MODEL_ID,
+            new ExpectedVersion(MODEL_ID, current.revision(), current.checksum()),
+            new ModelSpecApplicationService.ReclassificationCommand(
+                ModelType.DIMENSION,
+                new DimensionDefinitionRef(UUID.fromString("60000000-0000-0000-0000-000000000001"), 1),
+                preview.clearFields(),
+                "finance-r4-to-dimension"
+            )
+        );
+
+        assertThat(result.id()).isEqualTo(current.id());
+        assertThat(result.revision()).isEqualTo(2);
+        assertThat(result.modelType()).isEqualTo(ModelType.DIMENSION);
+        assertThat(result.layer()).isEqualTo(Layer.DWD);
+        assertThat(result.factShape()).isNull();
+        assertThat(result.timeSemantics()).isNull();
+        assertThat(result.dimensionDefinitionRef()).isNotNull();
+        verify(repository).insertV2Revision(eq(TENANT), eq(ACTOR), eq(result), anyString());
+        verify(repository).insertReclassificationCommand(
+            TENANT,
+            ACTOR,
+            MODEL_ID,
+            "finance-r4-to-dimension",
+            ModelType.FACT,
+            ModelType.DIMENSION,
+            result.revision(),
+            result.checksum(),
+            NOW
+        );
+    }
+
+    @Test
+    void reclassificationFailsClosedWhenAnyRuntimeOrReleaseEvidenceExists() {
+        ModelSpecView current = codec.toCreatedView(MODEL_ID, command("finance-r4-evidence", "finance_project"), NOW);
+        when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(stored(current, null, null)));
+        when(compatibilityReader.read(any())).thenReturn(current);
+        when(repository.hasReclassificationEvidence(TENANT, MODEL_ID)).thenReturn(true);
+
+        ModelSpecApplicationService.ReclassificationPreview preview = service.previewReclassification(
+            TENANT,
+            ACTOR,
+            MODEL_ID,
+            new ModelSpecApplicationService.ReclassificationPreviewRequest(
+                ModelType.DIMENSION,
+                new DimensionDefinitionRef(UUID.fromString("60000000-0000-0000-0000-000000000001"), 1)
+            )
+        );
+
+        assertThat(preview.eligible()).isFalse();
+        assertThat(preview.reasonCodes()).containsExactly("MODEL_RECLASSIFY_RUNTIME_EVIDENCE_EXISTS");
+    }
+
+    @Test
+    void ordinaryDraftUpdateCannotBypassTheExplicitReclassificationWorkflow() {
+        ModelSpecView current = codec.toCreatedView(MODEL_ID, command("finance-r4-update", "finance_project"), NOW);
+        UpdateModelSpecCommand requested = update(pinnedDimensionCommand("ignored", null));
+        when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(stored(current, null, null)));
+        when(compatibilityReader.read(any())).thenReturn(current);
+
+        assertThatThrownBy(
+            () -> service.update(TENANT, ACTOR, MODEL_ID, new ExpectedVersion(MODEL_ID, 1, current.checksum()), requested)
+        )
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("MODEL_SPEC_TYPE_IMMUTABLE");
+
+        verify(repository, never()).compareAndSetV2(any(), any(), anyInt(), anyString(), any(), anyString());
     }
 
     @Test
