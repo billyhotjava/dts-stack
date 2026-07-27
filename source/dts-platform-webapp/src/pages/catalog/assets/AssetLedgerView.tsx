@@ -9,6 +9,7 @@ import {
 import { AssetTagChips } from "@/components/catalog/tags/AssetTagChips";
 import { useRouter } from "@/routes/hooks";
 import { resolveAssetReadiness } from "../assetPortalUx.helpers";
+import { ASSET_TYPE_DICT, GOVERNANCE_STATUS_DICT, resolveEnumLabel } from "./assetEnumLabels";
 import { AssetLifecycleWorkbenchDrawer } from "./AssetLifecycleWorkbenchDrawer";
 import type { AssetRow } from "./assetPageShared";
 import {
@@ -163,7 +164,7 @@ export function AssetLedgerView({
 							width: 150,
 							render: (_, row) => (
 								<Space direction="vertical" size={2}>
-									<Tag>{row.type || "未知"}</Tag>
+									<Tag>{resolveEnumLabel(ASSET_TYPE_DICT, row.type, "未知类型")}</Tag>
 									<Tag color={LAYER_META[normalizeLayer(row.warehouseLayer)].color}>
 										{LAYER_META[normalizeLayer(row.warehouseLayer)].label}
 									</Tag>
@@ -179,7 +180,8 @@ export function AssetLedgerView({
 									<Space direction="vertical" size={2}>
 										<Tag color={readiness.color}>{readiness.label}</Tag>
 										<span className="text-xs text-slate-500">
-											{readiness.reasons.slice(0, 2).join(" / ") || row.governanceStatus || "-"}
+											{readiness.reasons.slice(0, 2).join(" / ") ||
+												resolveEnumLabel(GOVERNANCE_STATUS_DICT, row.governanceStatus, "-")}
 										</span>
 									</Space>
 								);

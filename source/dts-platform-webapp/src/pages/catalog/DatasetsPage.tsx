@@ -23,6 +23,7 @@ import {
 import { readTagIds, writeTagIds } from "@/components/catalog/tags/catalogTagUrlState";
 import { EmptyState } from "@/components/empty-state";
 import { DomainScopeNav } from "@/components/catalog/DomainScopeNav";
+import { ASSET_TYPE_DICT, LIFECYCLE_STATUS_DICT, resolveEnumLabel } from "./assets/assetEnumLabels";
 import { PageHeader } from "@/components/page-header";
 import { useRouter } from "@/routes/hooks";
 import { resolveAssetReadiness, STALE_LIFECYCLE_STATUSES } from "./assetPortalUx.helpers";
@@ -486,11 +487,11 @@ export default function Page() {
 				[
 					row.name,
 					row.hiveDatabase && row.hiveTable ? `${row.hiveDatabase}.${row.hiveTable}` : row.description || row.id,
-					row.type,
+					resolveEnumLabel(ASSET_TYPE_DICT, row.type, "未知类型"),
 					LAYER_META[normalizeLayer(row.warehouseLayer)].label,
 					row.domain || (row.domainId ? domainMap.get(row.domainId) : undefined) || "未归域",
 					classificationText(row.classification),
-					row.status || "",
+					resolveEnumLabel(LIFECYCLE_STATUS_DICT, row.lifecycleStatus, row.status || ""),
 					resolveAssetReadiness(row).label,
 					row.owner || row.ownerDept || "",
 					formatTime(row.snapshotTime || row.updatedAt),
