@@ -120,9 +120,13 @@ export default function Page() {
 			setClassification(
 				typeof saved?.classification === "string" && saved.classification ? saved.classification : "ALL",
 			);
-			setGovernanceStatus(
-				typeof saved?.governanceStatus === "string" && saved.governanceStatus ? saved.governanceStatus : "ALL",
-			);
+			// 必须放在深链判定之内：否则本地缓存会无条件覆盖 URL 带来的 governance，
+			// 老用户点地图缺口下钻时 URL 显示已筛、实际筛的是缓存值
+			if (!searchParams.get("governance")) {
+				setGovernanceStatus(
+					typeof saved?.governanceStatus === "string" && saved.governanceStatus ? saved.governanceStatus : "ALL",
+				);
+			}
 			setMatchStatus(typeof saved?.matchStatus === "string" && saved.matchStatus ? saved.matchStatus : "ALL");
 			if (!hasDeepLinkFilters) {
 				// 恢复本地缓存属于「纠正 URL」而非用户导航，用 replace 避免多压一条历史

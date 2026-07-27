@@ -22,6 +22,8 @@ import com.yuzhi.dts.platform.service.catalog.dto.AssetRef;
 import com.yuzhi.dts.platform.service.catalog.dto.CatalogTagDto;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -358,17 +360,22 @@ public class CatalogAssetPortalService {
         // 整个 legacy 总数就会取决于那一行是否可见。用固定窗口估算隐藏比例。
         int fetchSize = Math.max(1, offset + Math.max(limit, 1));
         Page<CatalogDataset> legacyPage = datasetRepository.findAll(buildLegacySpec(query), PageRequest.of(0, fetchSize, sort));
-        List<CatalogDataset> visible = legacyPage
-            .getContent()
+        // offset 数的是「过滤前」的槽位（与 OM 侧用未过滤总数做边界保持一致），
+        // 所以 skip 必须作用在原始行上。若先过滤再 skip，被隐藏的行会让 offset 多跳过
+        // 同样数量的可见行，那些行在任何页码下都取不到。
+        List<CatalogDataset> raw = legacyPage.getContent();
+        List<AssetSummary> items = raw
+            .stream()
+            .skip(offset)
+            .filter(dataset -> dataset.getId() == null || excludedIds == null || !excludedIds.contains(dataset.getId()))
+            .filter(dataset -> canRead(null, dataset, activeDept))
+            .limit(Math.max(0, limit))
+            .map(this::toLegacySummary)
+            .toList();
+        List<CatalogDataset> visible = raw
             .stream()
             .filter(dataset -> dataset.getId() == null || excludedIds == null || !excludedIds.contains(dataset.getId()))
             .filter(dataset -> canRead(null, dataset, activeDept))
-            .toList();
-        List<AssetSummary> items = visible
-            .stream()
-            .skip(offset)
-            .limit(Math.max(0, limit))
-            .map(this::toLegacySummary)
             .toList();
         // 已知近似：hidden 按当前取数窗口观测，窗口随 offset 变化时 total 会有小幅波动。
         // 这是本方法固有的估算方式（OM 侧同理），非本次改动引入；精确化需要额外一次全量计数查询，
@@ -692,6 +699,23 @@ public class CatalogAssetPortalService {
         return (root, cq, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(cb.or(cb.isNull(root.get("enabled")), cb.isTrue(root.get("enabled"))));
+            // 排除已被 OpenMetadata 资产关联的 legacy 数据集。这类数据集会以 OM 行的身份出现，
+            // 且 CatalogAssetContractMapper 让 OM 行沿用 legacy 的 assetKey——再作为 legacy 行
+            // 发一次就是同一资产的重复，且跨页去重无从做起（visibleLegacyIds 只在单页内有效）。
+            // 可见性无损失：OM 行的 canRead 在 legacy 非空时走的正是同一套 legacy 判定。
+            if (cq != null) {
+                Subquery<UUID> linkedByExtension = cq.subquery(UUID.class);
+                Root<CatalogAssetExtension> extensionRoot = linkedByExtension.from(CatalogAssetExtension.class);
+                linkedByExtension.select(extensionRoot.get("legacyDatasetId"));
+                linkedByExtension.where(cb.equal(extensionRoot.get("legacyDatasetId"), root.get("id")));
+                predicates.add(cb.not(cb.exists(linkedByExtension)));
+
+                Subquery<UUID> linkedByMapping = cq.subquery(UUID.class);
+                Root<CatalogAssetMapping> mappingRoot = linkedByMapping.from(CatalogAssetMapping.class);
+                linkedByMapping.select(mappingRoot.get("legacyDatasetId"));
+                linkedByMapping.where(cb.equal(mappingRoot.get("legacyDatasetId"), root.get("id")));
+                predicates.add(cb.not(cb.exists(linkedByMapping)));
+            }
             if (query.domainUnassigned()) {
                 predicates.add(cb.isNull(root.get("domain").get("id")));
             } else if (query.domainId() != null) {

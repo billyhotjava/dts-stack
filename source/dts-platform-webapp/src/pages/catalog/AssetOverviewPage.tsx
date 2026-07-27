@@ -24,6 +24,9 @@ import {
 /** 矩阵最多展示的主题域列数，超出合并为「其他 N 个域」并明示 */
 const MATRIX_MAX_COLUMNS = 8;
 
+/** 合并列的伪 key。它不是真实域 id，下钻时必须特殊处理，否则台账按 UUID 绑定会 400。 */
+const MERGED_DOMAIN_KEY = "__OTHERS__";
+
 type MatrixCell = { layer: string; domainId: string | null; total: number; attention: number };
 
 type AssetOverview = {
@@ -174,7 +177,11 @@ export default function AssetOverviewPage() {
 	const drillToLedger = (layer?: string, domainKey?: string | null) => {
 		const params = new URLSearchParams();
 		if (layer && layer !== "ALL") params.set("layer", layer);
-		if (domainKey === null) {
+		if (domainKey === MERGED_DOMAIN_KEY) {
+			// 「其他 N 个域」是展示用的聚合列，不是真实域 id；台账把 domain 当 UUID 绑定，
+			// 传过去会 400。这里只带分层，域维度不加筛选。
+			if (domain) params.set("domain", domain);
+		} else if (domainKey === null) {
 			params.set("domain", UNASSIGNED_DOMAIN_KEY);
 		} else if (domainKey) {
 			params.set("domain", domainKey);
@@ -207,7 +214,7 @@ export default function AssetOverviewPage() {
 		return [
 			...head,
 			{
-				key: "__OTHERS__" as const,
+				key: MERGED_DOMAIN_KEY,
 				name: `其他 ${rest.length} 个域`,
 				total: rest.reduce((sum, item) => sum + item.total, 0),
 				mergedNames: rest.map((item) => item.name),
@@ -233,14 +240,14 @@ export default function AssetOverviewPage() {
 	const matrixCellMap = useMemo(() => {
 		const map = new Map<string, MatrixCell>();
 		const mergedKeys = new Set(
-			(matrixColumns.find((col) => col.key === "__OTHERS__") as any)?.mergedKeys ?? [],
+			(matrixColumns.find((col) => col.key === MERGED_DOMAIN_KEY) as any)?.mergedKeys ?? [],
 		);
 		for (const cell of overview?.matrix || []) {
 			const domainKey = cell.domainId === null ? "__NULL__" : cell.domainId;
 			map.set(`${cell.layer}|${domainKey}`, cell);
 			// 被合并进「其他 N 个域」的列必须预聚合，否则该列每格都查不到而恒显示 "-"
 			if (mergedKeys.has(domainKey)) {
-				const key = `${cell.layer}|__OTHERS__`;
+					const key = `${cell.layer}|${MERGED_DOMAIN_KEY}`;
 				const prev = map.get(key);
 				map.set(
 					key,

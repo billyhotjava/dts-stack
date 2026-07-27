@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { CatalogTagDto } from "@/api/catalogTagsApi";
 import type { DomainScopeNode, DomainScopeStats } from "@/components/catalog/DomainScopeNav";
+import { GOVERNANCE_STATUS_DICT } from "./assetEnumLabels";
 
 // DatasetsPage（资产地图/台账）拆分出的共享层：类型、常量、纯工具与指标卡片。
 // 视图组件与页面容器均从此处取用，保持单一事实源。
@@ -48,13 +49,11 @@ export const CLASSIFICATION_OPTIONS = [
 	{ label: "机密", value: "CONFIDENTIAL" },
 ];
 
+// 由字典派生，避免选项表与字典各维护一份而漏掉 PENDING_GOVERNANCE 等实际在用的值——
+// 漏掉的值会让筛选框直接显示英文原值。
 export const GOVERNANCE_OPTIONS = [
 	{ label: "全部治理状态", value: "ALL" },
-	{ label: "已治理", value: "GOVERNED" },
-	{ label: "待认领", value: "PENDING_CLAIM" },
-	{ label: "待定级", value: "PENDING_CLASSIFICATION" },
-	{ label: "待归域", value: "PENDING_DOMAIN" },
-	{ label: "停用", value: "DISABLED" },
+	...Object.entries(GOVERNANCE_STATUS_DICT).map(([value, label]) => ({ label, value })),
 ];
 
 export const MATCH_OPTIONS = [

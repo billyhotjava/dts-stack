@@ -218,6 +218,12 @@ class CatalogAssetPortalStatsTest {
 
     /** 按 pageable 切片装配 OpenMetadata 侧的分页返回。 */
     private void givenOpenMetadataAssets(int count) {
+        if (count == 0) {
+            lenient()
+                .when(assetRepository.findAll(any(Specification.class), any(PageRequest.class)))
+                .thenAnswer(invocation -> slice(openMetadataAssets, invocation.getArgument(1)));
+            return;
+        }
         for (int i = 0; i < count; i++) {
             OpenMetadataAssetCache asset = new OpenMetadataAssetCache();
             asset.setId(UUID.nameUUIDFromBytes(("om-" + i).getBytes()));
@@ -330,5 +336,26 @@ class CatalogAssetPortalStatsTest {
     private void givenOpenMetadataAssetsWithOneHiddenPerPage(int count) {
         givenOpenMetadataAssets(count);
         hiddenEveryPageFirst = true;
+    }
+
+    @Test
+    void hiddenLegacyRowsDoNotMakeLaterRowsUnreachable() {
+        givenOpenMetadataAssets(0);
+        givenLegacyAssets(4);
+        givenFirstLegacyAssetUnreadable();
+
+        List<String> keys = new ArrayList<>();
+        for (int page = 0; page < 4; page++) {
+            service.listAssets(queryOf(page, 2), ACTIVE_DEPT).content().forEach(row -> keys.add(row.assetKey()));
+        }
+
+        // 4 条中 1 条不可见，其余 3 条必须都能被翻到，一条不漏一条不重
+        assertThat(keys).hasSize(3).doesNotHaveDuplicates();
+    }
+
+    /** 让首个 legacy 资产在可见性校验中被拒。 */
+    private void givenFirstLegacyAssetUnreadable() {
+        CatalogDataset hidden = legacyAssets.get(0);
+        lenient().when(accessChecker.canRead(hidden)).thenReturn(false);
     }
 }
