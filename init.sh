@@ -472,30 +472,11 @@ prepare_data_dirs(){
 
 prepare_dbt_runtime_profile_root(){
   local runtime_root="/dev/shm/dts-dbt-runtime"
-  local expected_uid="${DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID}"
-  if [[ -L "${runtime_root}" ]]; then
-    echo "[init.sh] ERROR: dbt runtime profile root must not be a symbolic link: ${runtime_root}" >&2
-    return 1
-  fi
-  if [[ -e "${runtime_root}" && ! -d "${runtime_root}" ]]; then
-    echo "[init.sh] ERROR: dbt runtime profile root is not a directory: ${runtime_root}" >&2
-    return 1
-  fi
-  mkdir -p -- "${runtime_root}"
-  chmod 0700 -- "${runtime_root}"
-  local actual_uid
-  actual_uid="$(stat -c '%u' "${runtime_root}")"
-  if [[ "${actual_uid}" != "${expected_uid}" ]]; then
-    echo "[init.sh] ERROR: dbt runtime profile root uid=${actual_uid}; expected ${expected_uid}." >&2
-    echo "[init.sh] ERROR: fix ownership explicitly before starting the production materialization path." >&2
-    return 1
-  fi
-  local filesystem_type
-  filesystem_type="$(stat -f -c '%T' "${runtime_root}")"
-  if [[ "${filesystem_type}" != "tmpfs" && "${filesystem_type}" != "ramfs" ]]; then
-    echo "[init.sh] ERROR: dbt runtime profile root must be tmpfs/ramfs; found ${filesystem_type}." >&2
-    return 1
-  fi
+  local helper="${SCRIPT_DIR}/services/dts-platform/prepare-dbt-runtime-profile-root.sh"
+  DTS_DBT_RUNTIME_PROFILE_ROOT="${runtime_root}" \
+  DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID="${DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID}" \
+  DTS_DBT_RUNTIME_PROFILE_REPAIR_DOCKER_CREATED_ROOT="true" \
+    sh "${helper}"
 }
 
 ensure_airflow_openmetadata_plugin() {

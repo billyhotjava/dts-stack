@@ -1,7 +1,7 @@
 # T03：汇聚构建状态并实现 adapter 能力 fail-closed
 
 **优先级**：P0
-**状态**：DRAFT
+**状态**：DONE
 **依赖**：T02、F2/T03
 
 ## 目标
@@ -11,7 +11,9 @@
 ## 技术设计（Contract-first）
 
 - **输入契约**：candidate entries、current pipeline runs、current observations、capability registry。
-- **输出契约**：candidate build evidence 每 entry 包含 `runState,relationState,locator,observedAt,repairCode`；聚合状态 `RUNNING|BUILD_FAILED|BUILT|STALE`。
+- **输出契约**：本 Task 先形成 append-only observation 与 current repository
+  projection；F5 只读映射为每 entry 的
+  `runState,relationState,locator,observedAt,repairCode`，不得另建状态真值。
 - **聚合规则**：
   - 任一 RUNNING/UNKNOWN → candidate 保持 BUILDING；
   - 任一 dbt failed 或 exists=false → BUILD_FAILED；
@@ -30,13 +32,16 @@
 
 ## 验证（RED→GREEN）
 
-- [ ] 多 entry 全排列状态表测试。
-- [ ] relation 删除后旧 run success 不通过。
-- [ ] unknown adapter fail-closed。
-- [ ] generic dbt asset sync 兼容回归。
+- [x] 双 entry 混合结果验证“全部 verified 才 BUILT”；单 entry 覆盖成功、缺失、
+  type drift、column drift 与 Candidate 转换失败。
+- [x] relation absence 时旧 run_results success 不通过。
+- [x] unknown adapter fail-closed。
+- [x] generic `DBT_MANAGED` asset sync 兼容回归 13/13 通过。
 
 ## Definition of Done
 
-- [ ] BUILT 有唯一、可审计判定。
-- [ ] 任何缺证据状态都不会显示成功。
-- [ ] capability 扩展不修改核心聚合逻辑。
+- [x] BUILT 有唯一、可审计判定。
+- [x] 任何缺证据状态都不会显示成功。
+- [x] capability 通过 inspector registry 扩展，不修改核心聚合逻辑。
+
+证据：`../../it/evidence/f3-real-physical-relation/README.md`。

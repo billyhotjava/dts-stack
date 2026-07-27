@@ -17,7 +17,7 @@ import {
 	previewTemplateSQL,
 	createQualityRule,
 } from "@/api/platformApi";
-import { DatasetPicker } from "@/components/catalog/DatasetPicker";
+import { DatasetPicker, type DatasetSelection } from "@/components/catalog/DatasetPicker";
 import { ingestionTaskAPI } from "@/api/ingestion";
 
 /* ------------------------------------------------------------------ */
@@ -40,7 +40,7 @@ type TemplateOption = {
 	description?: string;
 	category?: string;
 	sqlTemplate?: string;
-	paramSchema?: string;
+	paramSchema?: unknown;
 	severityDefault?: string;
 	actionDefault?: string;
 };
@@ -79,16 +79,23 @@ const STEP_ITEMS = [
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
-function parseParamSchema(raw?: string): ParamDef[] {
+function parseParamSchema(raw?: unknown): ParamDef[] {
 	if (!raw) return [];
 	try {
-		const parsed = JSON.parse(raw);
-		if (Array.isArray(parsed?.params)) return parsed.params;
-		if (Array.isArray(parsed)) return parsed;
+		const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+		if (Array.isArray(parsed)) return parsed as ParamDef[];
+		if (parsed && typeof parsed === "object" && "params" in parsed) {
+			const params = (parsed as { params?: unknown }).params;
+			if (Array.isArray(params)) return params as ParamDef[];
+		}
 		return [];
 	} catch {
 		return [];
 	}
+}
+
+function isBoundTargetTableParam(param: ParamDef) {
+	return param.type === "table_select" && (param.name === "table" || param.label === "目标表");
 }
 
 function renderParamField(param: ParamDef) {
@@ -181,6 +188,38 @@ export default function RuleCreateWizard({ open, onClose, onSuccess, editingRule
 		() => parseParamSchema(selectedTemplate?.paramSchema),
 		[selectedTemplate],
 	);
+	const boundTargetTableParam = useMemo(
+		() => templateParams.find(isBoundTargetTableParam),
+		[templateParams],
+	);
+	const configurationParams = useMemo(
+		() => templateParams.filter((param) => !isBoundTargetTableParam(param)),
+		[templateParams],
+	);
+
+	const clearBindingContext = () => {
+		setPreviewSql("");
+		form.setFieldValue("templateParams", undefined);
+		form.setFieldValue("datasetId", undefined);
+	};
+
+	const handleMethodSelect = (nextMethod: CreateMethod) => {
+		setMethod(nextMethod);
+		setSelectedTemplate(null);
+		clearBindingContext();
+	};
+
+	const handleTemplateSelect = (template: TemplateOption) => {
+		setSelectedTemplate(template);
+		clearBindingContext();
+	};
+
+	const handleDatasetSelected = (dataset: DatasetSelection | undefined) => {
+		setPreviewSql("");
+		if (!boundTargetTableParam) return;
+		const targetTable = dataset?.hiveTable?.trim();
+		form.setFieldValue(["templateParams", boundTargetTableParam.name], targetTable || undefined);
+	};
 
 	/* --- SQL preview --- */
 
@@ -233,6 +272,9 @@ export default function RuleCreateWizard({ open, onClose, onSuccess, editingRule
 		setSaving(true);
 		try {
 			const values = form.getFieldsValue(true);
+			if (publishNow && !values.datasetId) {
+				throw new Error("请选择质量检测对象");
+			}
 
 			// Build templateParams JSON string if template mode
 			let templateParamsStr: string | undefined;
@@ -293,7 +335,7 @@ export default function RuleCreateWizard({ open, onClose, onSuccess, editingRule
 			<div className="mx-auto flex max-w-xl gap-4">
 				{/* Template card */}
 				<div
-					onClick={() => { setMethod("template"); setSelectedTemplate(null); }}
+					onClick={() => handleMethodSelect("template")}
 					className={`flex flex-1 cursor-pointer flex-col items-center rounded-xl border-2 p-6 transition-all hover:shadow-md ${
 						method === "template"
 							? "border-blue-500 bg-blue-50 shadow-md"
@@ -306,7 +348,7 @@ export default function RuleCreateWizard({ open, onClose, onSuccess, editingRule
 				</div>
 				{/* Custom card */}
 				<div
-					onClick={() => { setMethod("custom"); setSelectedTemplate(null); }}
+					onClick={() => handleMethodSelect("custom")}
 					className={`flex flex-1 cursor-pointer flex-col items-center rounded-xl border-2 p-6 transition-all hover:shadow-md ${
 						method === "custom"
 							? "border-blue-500 bg-blue-50 shadow-md"
@@ -330,7 +372,7 @@ export default function RuleCreateWizard({ open, onClose, onSuccess, editingRule
 							{templates.map((tpl) => (
 								<div
 									key={tpl.id}
-									onClick={() => setSelectedTemplate(tpl)}
+									onClick={() => handleTemplateSelect(tpl)}
 									className={`cursor-pointer rounded-lg border px-3 py-3 text-center transition-all hover:shadow ${
 										selectedTemplate?.id === tpl.id
 											? "border-blue-500 bg-blue-50 shadow"
@@ -389,7 +431,15 @@ export default function RuleCreateWizard({ open, onClose, onSuccess, editingRule
 						<div className="mb-3 mt-4 text-sm font-medium text-gray-500">
 							模板参数 — {selectedTemplate.name || selectedTemplate.code}
 						</div>
-						{templateParams.map((param) => (
+						{boundTargetTableParam && (
+							<Alert
+								className="mb-4"
+								type="info"
+								showIcon
+								message="目标表将在下一步根据绑定的数据资产自动确定"
+							/>
+						)}
+						{configurationParams.map((param) => (
 							<Form.Item
 								key={param.name}
 								label={param.label}
@@ -400,7 +450,15 @@ export default function RuleCreateWizard({ open, onClose, onSuccess, editingRule
 							</Form.Item>
 						))}
 						<div className="mb-4 flex items-center gap-2">
-							<Button onClick={handlePreviewSql}>预览 SQL</Button>
+							<Button
+								onClick={handlePreviewSql}
+								disabled={Boolean(
+									boundTargetTableParam &&
+										!form.getFieldValue(["templateParams", boundTargetTableParam.name]),
+								)}
+							>
+								预览 SQL
+							</Button>
 							{previewSql && <Tag color="green">已生成</Tag>}
 						</div>
 						{previewSql && (
@@ -450,6 +508,7 @@ export default function RuleCreateWizard({ open, onClose, onSuccess, editingRule
 						placeholder="选择默认数据湖中的数据资产（支持主题域筛选和关键字搜索）"
 						sourceId={defaultLakeSourceId}
 						sourceName={defaultLakeName}
+						onDatasetSelected={handleDatasetSelected}
 						disabled={!defaultLakeSourceId}
 					/>
 				</Form.Item>

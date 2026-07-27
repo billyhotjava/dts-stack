@@ -46,7 +46,10 @@
 - [x] Publish Intent 与 reviewer/operator 人工边界已固定。
 - [x] mandatory local failure/partial/retry 与 external sync degraded 边界已固定。
 - [ ] F3 evidence contract GREEN。
-- [ ] Sprint-36/F3 实际 domain/migration/API/IT 已存在并 DONE；不能把其 READY 文档、actor separation 或页面隐藏冒充资产动作授权。
+- [x] Sprint-36/F3 实际 domain/migration/API/IT 已存在并 DONE；不能把其 READY 文档、actor separation 或页面隐藏冒充资产动作授权。
+
+当前阻断仅为 F3/T04 typed-column contract。F4 保持 DRAFT，禁止提前编码 Candidate
+发布或 Catalog registration。
 
 ## 完成标准
 

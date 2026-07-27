@@ -241,9 +241,9 @@ export default function ConnectorRegistryPage() {
 						<Button size="small" onClick={() => openDataSourceCreate(record.connectorKey)}>
 							创建数据源
 						</Button>
-							<Button size="small" onClick={() => openConnectorDrawer(record, "config")}>
-								配置要求
-							</Button>
+						<Button size="small" onClick={() => openConnectorDrawer(record, "config")}>
+							配置要求
+						</Button>
 					</Space>
 				),
 			},
@@ -314,12 +314,12 @@ export default function ConnectorRegistryPage() {
 				>
 					{selected ? (
 						<Space direction="vertical" size="large" className="w-full">
-								{drawerMode === "config" ? (
-									<Text type="secondary">按连接器配置要求创建数据源，实际连接参数在数据源页录入。</Text>
-								) : null}
-								{drawerMode === "detail" ? (
-									<Text type="secondary">连接器定义统一声明源类型、执行引擎、能力边界、配置要求和部署兼容性。</Text>
-								) : null}
+							{drawerMode === "config" ? (
+								<Text type="secondary">按连接器配置要求创建数据源，实际连接参数在数据源页录入。</Text>
+							) : null}
+							{drawerMode === "detail" ? (
+								<Text type="secondary">连接器定义统一声明源类型、执行引擎、能力边界、配置要求和部署兼容性。</Text>
+							) : null}
 
 							<Descriptions bordered size="small" column={2}>
 								<Descriptions.Item label="连接器 Key">{selected.connectorKey}</Descriptions.Item>
@@ -343,25 +343,25 @@ export default function ConnectorRegistryPage() {
 								</div>
 							</div>
 
-								<div>
-									<Text strong>配置要求</Text>
-									<div className="mt-2">
-										<Descriptions bordered size="small" column={1}>
-											<Descriptions.Item label="必填字段">
-												{toArray(selected.configSchema?.required).join(", ") || "-"}
-											</Descriptions.Item>
-											<Descriptions.Item label="可选字段">
-												{toArray(selected.configSchema?.optional).join(", ") || "-"}
-											</Descriptions.Item>
-											<Descriptions.Item label="新建默认值">
-												{renderJson(selected.configSchema?.defaults)}
-											</Descriptions.Item>
-											<Descriptions.Item label="敏感字段">
-												{selected.sensitiveFields?.length ? selected.sensitiveFields.join(", ") : "-"}
-											</Descriptions.Item>
-										</Descriptions>
-									</div>
+							<div>
+								<Text strong>配置要求</Text>
+								<div className="mt-2">
+									<Descriptions bordered size="small" column={1}>
+										<Descriptions.Item label="必填字段">
+											{toArray(selected.configSchema?.required).join(", ") || "-"}
+										</Descriptions.Item>
+										<Descriptions.Item label="可选字段">
+											{toArray(selected.configSchema?.optional).join(", ") || "-"}
+										</Descriptions.Item>
+										<Descriptions.Item label="新建默认值">
+											{renderJson(selected.configSchema?.defaults)}
+										</Descriptions.Item>
+										<Descriptions.Item label="敏感字段">
+											{selected.sensitiveFields?.length ? selected.sensitiveFields.join(", ") : "-"}
+										</Descriptions.Item>
+									</Descriptions>
 								</div>
+							</div>
 
 							<div>
 								<Text strong>部署兼容性</Text>

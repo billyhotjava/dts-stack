@@ -545,6 +545,7 @@
                         <testInclude>**/service/etl/DbtScopedProjectServiceTest.java</testInclude>
                         <testInclude>**/service/etl/DbtScopedProjectServiceRealCompileIT.java</testInclude>
                         <testInclude>**/service/etl/DbtDagServiceTest.java</testInclude>
+                        <testInclude>**/service/etl/DbtAssetSyncServiceTest.java</testInclude>
                         <testInclude>**/service/etl/AirflowDbtExecutionGatewayTest.java</testInclude>
                         <testInclude>**/service/etl/DbtConfigServiceTest.java</testInclude>
                         <testInclude>**/service/etl/DbtRuntimeProfile*.java</testInclude>

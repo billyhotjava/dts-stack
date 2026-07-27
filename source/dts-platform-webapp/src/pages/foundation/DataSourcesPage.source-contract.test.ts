@@ -68,7 +68,10 @@ test("api data source form exposes the plaintext HTTP policy explicitly", () => 
 
 test("api connection test submits the complete source config", () => {
 	assert.match(DATA_SOURCE_FORM_SOURCE, /sourceConfig:\s*buildApiProps\(/);
-	assert.doesNotMatch(DATA_SOURCE_FORM_SOURCE, /sourceConfig:\s*asRecord\(\s*[\s\S]*?buildApiProps[\s\S]*?\.readerConfig/);
+	assert.doesNotMatch(
+		DATA_SOURCE_FORM_SOURCE,
+		/sourceConfig:\s*asRecord\(\s*[\s\S]*?buildApiProps[\s\S]*?\.readerConfig/,
+	);
 });
 
 test("data source rows can start the end-to-end journey with source context", () => {

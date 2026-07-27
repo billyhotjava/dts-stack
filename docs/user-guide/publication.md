@@ -36,7 +36,6 @@ sed '1s/^# .*/# 使用说明/' README.md | pandoc \
   --standalone \
   --toc \
   --toc-depth=2 \
-  --number-sections \
   --resource-path=. \
   --metadata lang="zh-Hans" \
   --metadata title="DTS 用户操作手册" \

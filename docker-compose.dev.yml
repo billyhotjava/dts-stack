@@ -1367,12 +1367,46 @@ services:
         source: ./logs/postgresql
         target: /var/lib/postgresql/data/log
         type: bind
+  dts-dbt-runtime-init:
+    cap_add:
+      - CHOWN
+      - FOWNER
+    cap_drop:
+      - ALL
+    command:
+      - /opt/dts/bin/prepare-dbt-runtime-profile-root.sh
+    entrypoint: /bin/sh
+    environment:
+      DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID: ${DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID:-0}
+      DTS_DBT_RUNTIME_PROFILE_REPAIR_DOCKER_CREATED_ROOT: "true"
+      DTS_DBT_RUNTIME_PROFILE_ROOT: /host-dev-shm/dts-dbt-runtime
+    image: ${IMAGE_MAVEN}
+    network_mode: none
+    read_only: true
+    restart: "no"
+    security_opt:
+      - label=disable
+      - no-new-privileges:true
+    user: "0:0"
+    volumes:
+      - bind:
+          create_host_path: false
+        source: /dev/shm
+        target: /host-dev-shm
+        type: bind
+      - bind:
+          create_host_path: false
+        read_only: true
+        source: ./services/dts-platform/prepare-dbt-runtime-profile-root.sh
+        target: /opt/dts/bin/prepare-dbt-runtime-profile-root.sh
+        type: bind
   dts-platform:
     command:
       - bash
       - -lc
       - |
         set -e
+        sh /opt/dts/bin/prepare-dbt-runtime-profile-root.sh
         wipe_target_dir() {
           local dir="$1"
           if [[ -z "$$dir" || "$$dir" == "/" ]]; then
@@ -1404,6 +1438,9 @@ services:
       dts-admin:
         condition: service_healthy
         required: true
+      dts-dbt-runtime-init:
+        condition: service_completed_successfully
+        required: true
       dts-keycloak:
         condition: service_healthy
         required: true
@@ -1434,6 +1471,7 @@ services:
       DTS_DBT_PROFILES_DIR: /opt/dts/dbt-profiles
       DTS_DBT_PROJECT_DIR: /opt/dts/dbt
       DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID: ${DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID:-0}
+      DTS_DBT_RUNTIME_PROFILE_REPAIR_DOCKER_CREATED_ROOT: "true"
       DTS_DBT_RUNTIME_PROFILE_ROOT: /run/dts-dbt-runtime
       DTS_MODEL_RUNTIME_SPEC_SIGNING_KEY: ${DTS_MODEL_RUNTIME_SPEC_SIGNING_KEY:-}
       DTS_FEATURE_PLATFORM_KC_LOCALIZATION: "true"
@@ -1523,9 +1561,16 @@ services:
       - seccomp=unconfined
     volumes:
       - bind:
-          create_host_path: false
+          create_host_path: true
+          selinux: z
         source: /dev/shm/dts-dbt-runtime
         target: /run/dts-dbt-runtime
+        type: bind
+      - bind:
+          create_host_path: false
+        read_only: true
+        source: ./services/dts-platform/prepare-dbt-runtime-profile-root.sh
+        target: /opt/dts/bin/prepare-dbt-runtime-profile-root.sh
         type: bind
       - bind:
           create_host_path: true

@@ -479,8 +479,36 @@ services:
       - "traefik.http.routers.dts-admin-swagger.priority=200"
       - "traefik.http.routers.dts-admin-swagger.middlewares=admin-ipwhitelist@docker,cors-allow@file,security-headers@file"
 
+  dts-dbt-runtime-init:
+    image: ${IMAGE_DTS_PLATFORM:?Set IMAGE_DTS_PLATFORM in imgversion.conf or .env}
+    entrypoint: /bin/sh
+    command:
+      - /opt/dts/bin/prepare-dbt-runtime-profile-root.sh
+    environment:
+      DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID: ${DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID:-0}
+      DTS_DBT_RUNTIME_PROFILE_REPAIR_DOCKER_CREATED_ROOT: "true"
+      DTS_DBT_RUNTIME_PROFILE_ROOT: /host-dev-shm/dts-dbt-runtime
+    network_mode: none
+    read_only: true
+    user: "0:0"
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - FOWNER
+    security_opt:
+      - label=disable
+      - no-new-privileges:true
+    volumes:
+      - /dev/shm:/host-dev-shm
+      - ./services/dts-platform/prepare-dbt-runtime-profile-root.sh:/opt/dts/bin/prepare-dbt-runtime-profile-root.sh:ro
+    restart: "no"
+
   dts-platform:
     image: ${IMAGE_DTS_PLATFORM:?Set IMAGE_DTS_PLATFORM in imgversion.conf or .env}
+    entrypoint: /bin/sh
+    command:
+      - /opt/dts/bin/dts-platform-entrypoint.sh
     ports: []
     depends_on:
       dts-pg:
@@ -489,6 +517,8 @@ services:
       #  condition: service_started
       dts-admin:
         condition: service_healthy
+      dts-dbt-runtime-init:
+        condition: service_completed_successfully
       dts-ingestion:
         condition: service_healthy
     environment:
@@ -532,6 +562,7 @@ services:
       DTS_DBT_PROFILES_DIR: /opt/dts/dbt-profiles
       DTS_DBT_CONFIG_PATH: /opt/dts/upload/dbt-config.json
       DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID: ${DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID:-0}
+      DTS_DBT_RUNTIME_PROFILE_REPAIR_DOCKER_CREATED_ROOT: "true"
       DTS_DBT_RUNTIME_PROFILE_ROOT: /run/dts-dbt-runtime
       DTS_MODEL_RUNTIME_SPEC_SIGNING_KEY: ${DTS_MODEL_RUNTIME_SPEC_SIGNING_KEY:-}
       # Host-side absolute path mapping to DTS_DBT_PROJECT_DIR. Required when the backend
@@ -594,7 +625,9 @@ services:
       - ./services/dts-platform/upload:/opt/dts/upload:Z
       - ./services/dts-dbt:/opt/dts/dbt:Z
       - ./services/dts-dbt/profiles:/opt/dts/dbt-profiles:Z
-      - /dev/shm/dts-dbt-runtime:/run/dts-dbt-runtime
+      - /dev/shm/dts-dbt-runtime:/run/dts-dbt-runtime:z
+      - ./services/dts-platform/prepare-dbt-runtime-profile-root.sh:/opt/dts/bin/prepare-dbt-runtime-profile-root.sh:ro
+      - ./services/dts-platform/dts-platform-entrypoint.sh:/opt/dts/bin/dts-platform-entrypoint.sh:ro
       - ./services/dts-airflow/dags:/opt/airflow/dags:Z
     networks:
       - dts-core

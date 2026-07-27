@@ -7,11 +7,11 @@ import {
 	Input,
 	InputNumber,
 	Modal,
+	message,
 	Select,
 	Space,
 	Switch,
 	Typography,
-	message,
 } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -22,8 +22,8 @@ import {
 } from "@/api/ingestion";
 import connectorsService, { type InfraConnector } from "@/api/services/connectorsService";
 import dataSourcesService, {
-	type DataSourceUpsertPayload,
 	type DataSourceUpdateImpact,
+	type DataSourceUpsertPayload,
 	type ExcelImportParseResponse,
 	type ExcelImportPrepareResponse,
 	type InfraDataSource,
@@ -735,44 +735,44 @@ export default function DataSourceFormModal({
 					<Form.Item name="name" label="名称" rules={[{ required: true, message: "请输入名称" }]}>
 						<Input placeholder="例如：ERP 数据库" />
 					</Form.Item>
-						<Form.Item name="connectorKey" label="连接器" rules={[{ required: true, message: "请选择连接器" }]}>
-							<Select
-								options={connectorOptions}
-								placeholder={connectorsLoading ? "连接器加载中..." : "请选择连接器"}
-								loading={connectorsLoading}
-								disabled={connectorsLoading || connectorOptions.length === 0}
-								showSearch
-								optionFilterProp="label"
-								onChange={(value) => applyConnectorDefaults(value)}
-							/>
-						</Form.Item>
-						{connectorsError ? (
-							<Alert
-								type="error"
-								showIcon
-								className="mb-4"
-								message="连接器目录不可用"
-								description={connectorsError}
-								action={
-									<Button size="small" onClick={() => void loadConnectors()} loading={connectorsLoading}>
-										重新加载
-									</Button>
-								}
-							/>
-						) : null}
-						{selectedConnector?.description ? (
-							<Text type="secondary" className="block -mt-2 mb-3">
-								{selectedConnector.description}
-							</Text>
-						) : null}
-						<Form.Item
-							name="type"
-							label="源类型"
-							tooltip="源类型由连接器目录统一维护，选择连接器后自动填充"
-							rules={[{ required: true, message: "请选择连接器以确定源类型" }]}
-						>
-							<Input disabled placeholder="选择连接器后自动填充" />
-						</Form.Item>
+					<Form.Item name="connectorKey" label="连接器" rules={[{ required: true, message: "请选择连接器" }]}>
+						<Select
+							options={connectorOptions}
+							placeholder={connectorsLoading ? "连接器加载中..." : "请选择连接器"}
+							loading={connectorsLoading}
+							disabled={connectorsLoading || connectorOptions.length === 0}
+							showSearch
+							optionFilterProp="label"
+							onChange={(value) => applyConnectorDefaults(value)}
+						/>
+					</Form.Item>
+					{connectorsError ? (
+						<Alert
+							type="error"
+							showIcon
+							className="mb-4"
+							message="连接器目录不可用"
+							description={connectorsError}
+							action={
+								<Button size="small" onClick={() => void loadConnectors()} loading={connectorsLoading}>
+									重新加载
+								</Button>
+							}
+						/>
+					) : null}
+					{selectedConnector?.description ? (
+						<Text type="secondary" className="block -mt-2 mb-3">
+							{selectedConnector.description}
+						</Text>
+					) : null}
+					<Form.Item
+						name="type"
+						label="源类型"
+						tooltip="源类型由连接器目录统一维护，选择连接器后自动填充"
+						rules={[{ required: true, message: "请选择连接器以确定源类型" }]}
+					>
+						<Input disabled placeholder="选择连接器后自动填充" />
+					</Form.Item>
 					{apiSource && (
 						<>
 							<Alert

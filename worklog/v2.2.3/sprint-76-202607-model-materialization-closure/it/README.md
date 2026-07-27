@@ -1,6 +1,6 @@
 # Sprint-76 集成验收
 
-**状态**：PLANNED
+**状态**：IN_PROGRESS（F1/F3 增量证据已落地，F6 总验收未开始）
 **规则**：以下 IT 必须在真实 PostgreSQL、Airflow、dbt、Spring Security 和 Chrome95 环境执行。单元测试、mock、手工补库或仅截图不能替代端到端证据。
 
 | IT | 场景 | 必须断言 | 证据位置 |
@@ -49,3 +49,4 @@ README 需求
 | F1/T01 | `evidence/f1-t01-execution-plan/README.md` | canonical execution plan；不代表 dbt 已运行 |
 | F1/T02 | `evidence/f1-t02-compiler-artifacts/README.md` | 真实 dbt compile + manifest graph；不代表目标 relation 存在 |
 | F1/T03 | `evidence/f1-t03-scoped-dbt-project/README.md` | immutable scoped bundle、fail-closed 与可清理 runtime；不代表 Airflow 已调度 |
+| F3/T01～T03 | `evidence/f3-real-physical-relation/README.md` | 真实 PostgreSQL relation probe、append-only observation 与 BUILT 门禁；不代表真实 Airflow/dbt 全链或生产发布已验收 |
