@@ -25,8 +25,13 @@
 
 | 用途 | 命令（工作目录） |
 |---|---|
-| 源码契约测试 | `node --experimental-strip-types --test <file>`（`source/dts-platform-webapp`）|
-| 组件测试 | `npx vitest run <file>`（`source/dts-platform-webapp`）|
+| 源码契约测试（纯 `.ts`，无 JSX） | `node --experimental-strip-types --test <file>`（`source/dts-platform-webapp`）|
+| 组件测试 / 任何触及 `.tsx` 的测试 | `npx vitest run <file>`（`source/dts-platform-webapp`）|
+
+> **运行器归属（已实测确认，勿凭直觉选）**：`node --experimental-strip-types --test` **无法 import `.tsx`**，
+> 会报 `ERR_UNKNOWN_FILE_EXTENSION`。凡是 import `.tsx`、本身是 `.tsx`、或用 `describe/expect/it` 的测试，
+> 一律用 `npx vitest run`。`readFileSync` 把源码当**文本**读的契约测试不受此限，留在 node:test。
+> 现存归属：`assetPortalUx.helpers.test.ts`、`*.test.tsx` → vitest；`*.source-contract.test.ts` → node:test。
 | 类型检查 | `npx tsc --noEmit`（`source/dts-platform-webapp`）|
 | 前端构建 | `pnpm build`（`source/dts-platform-webapp`）|
 | Java 单测 | `./mvnw test -Dtest=<ClassName>`（`source/dts-platform`）|
@@ -263,28 +268,39 @@ git commit -m "feat: 建立资产枚举中文字典与漏译降级策略"
 
 - [ ] **Step 1: 追加失败测试**
 
-把以下两个测试追加到 `assetEnumLabels.test.ts` 末尾：
+> **运行器约束**：`node --experimental-strip-types --test` 无法 import `.tsx`（`ERR_UNKNOWN_FILE_EXTENSION`）。
+> `assetPageShared.tsx` 含 JSX，所以断言 `LAYER_META` 的测试必须用 **vitest**；只读 `.ts` 的防漂移测试留在 node:test 文件里。
+
+**1a.** 新建 `source/dts-platform-webapp/src/pages/catalog/assets/assetPageShared.layers.test.ts`：
+
+```ts
+import { describe, expect, it } from "vitest";
+import { LAYER_META, LAYER_ORDER } from "./assetPageShared";
+
+describe("数仓分层标签", () => {
+	it("label 为中文，code 保留英文代号", () => {
+		const expected: Record<string, { label: string; code?: string }> = {
+			SOURCE: { label: "来源层", code: "SOURCE" },
+			ODS: { label: "贴源层", code: "ODS" },
+			STG: { label: "暂存层", code: "STG" },
+			DWD: { label: "明细层", code: "DWD" },
+			DIM: { label: "维度层", code: "DIM" },
+			DWS: { label: "汇总层", code: "DWS" },
+			ADS: { label: "应用层", code: "ADS" },
+			OTHER: { label: "未分层", code: undefined },
+		};
+		for (const key of LAYER_ORDER) {
+			expect(LAYER_META[key].label, `${key} 的中文 label 不符`).toBe(expected[key].label);
+			expect(LAYER_META[key].code, `${key} 的代号不符`).toBe(expected[key].code);
+		}
+	});
+});
+```
+
+**1b.** 把下面这个防漂移测试追加到 `assetEnumLabels.test.ts` 末尾（它只读 `.ts` 与 Java 源文件，留在 node:test）：
 
 ```ts
 import { readFileSync } from "node:fs";
-import { LAYER_META, LAYER_ORDER } from "./assetPageShared.tsx";
-
-test("分层 label 为中文，code 保留英文代号", () => {
-	const expected: Record<string, { label: string; code?: string }> = {
-		SOURCE: { label: "来源层", code: "SOURCE" },
-		ODS: { label: "贴源层", code: "ODS" },
-		STG: { label: "暂存层", code: "STG" },
-		DWD: { label: "明细层", code: "DWD" },
-		DIM: { label: "维度层", code: "DIM" },
-		DWS: { label: "汇总层", code: "DWS" },
-		ADS: { label: "应用层", code: "ADS" },
-		OTHER: { label: "未分层", code: undefined },
-	};
-	for (const key of LAYER_ORDER) {
-		assert.equal(LAYER_META[key].label, expected[key].label, `${key} 的中文 label 不符`);
-		assert.equal(LAYER_META[key].code, expected[key].code, `${key} 的代号不符`);
-	}
-});
 
 test("生命周期字典与后端 Java 枚举逐个对齐（防漂移）", () => {
 	const javaSource = readFileSync(
@@ -313,10 +329,11 @@ test("生命周期字典与后端 Java 枚举逐个对齐（防漂移）", () =>
 - [ ] **Step 2: 运行测试确认失败**
 
 ```bash
+npx vitest run src/pages/catalog/assets/assetPageShared.layers.test.ts
 node --experimental-strip-types --test src/pages/catalog/assets/assetEnumLabels.test.ts
 ```
 
-预期：FAIL，`ODS 的中文 label 不符`（现值为 `"ODS"`，期望 `"贴源层"`）
+预期：vitest FAIL，`ODS 的中文 label 不符`（现值为 `"ODS"`，期望 `"贴源层"`）
 
 - [ ] **Step 3: 改 LAYER_META**
 
@@ -338,11 +355,12 @@ export const LAYER_META: Record<string, { label: string; code?: string; color: s
 - [ ] **Step 4: 运行测试确认通过**
 
 ```bash
+npx vitest run src/pages/catalog/assets/assetPageShared.layers.test.ts
 node --experimental-strip-types --test src/pages/catalog/assets/assetEnumLabels.test.ts
 npx tsc --noEmit
 ```
 
-预期：测试 9 passed；tsc 无错误
+预期：vitest 1 passed；node:test 8 passed；tsc 无错误
 
 - [ ] **Step 5: 提交**
 
@@ -437,11 +455,12 @@ void unreachableStaleTokenIsNoLongerCounted() {
 
 - [ ] **Step 5: 写失败测试（前端）**
 
-追加到 `source/dts-platform-webapp/src/pages/catalog/assetPortalUx.helpers.test.ts`：
+追加到 `source/dts-platform-webapp/src/pages/catalog/assetPortalUx.helpers.test.ts`。
+**该文件是 vitest 测试**（顶部 `import { describe, expect, it } from "vitest"`），必须沿用 vitest 风格，不要引入 `node:test`：
 
 ```ts
-test("已弃用/已归档/已阻断的资产判为阻断态", () => {
-	for (const status of ["DEPRECATED", "ARCHIVED", "BLOCKED"]) {
+describe("失效生命周期判定", () => {
+	it.each(["DEPRECATED", "ARCHIVED", "BLOCKED"])("%s 判为阻断态", (status) => {
 		const readiness = resolveAssetReadiness({
 			classification: "INTERNAL",
 			domainId: "d1",
@@ -450,20 +469,20 @@ test("已弃用/已归档/已阻断的资产判为阻断态", () => {
 			governanceStatus: "GOVERNED",
 			matchStatus: "MATCHED",
 		});
-		assert.equal(readiness.state, "BLOCKED", `${status} 应判为阻断`);
-	}
-});
-
-test("不再比较不可达的 DISABLED 生命周期值", () => {
-	const readiness = resolveAssetReadiness({
-		classification: "INTERNAL",
-		domainId: "d1",
-		ownerDept: "dept",
-		lifecycleStatus: "DISABLED",
-		governanceStatus: "GOVERNED",
-		matchStatus: "MATCHED",
+		expect(readiness.state).toBe("BLOCKED");
 	});
-	assert.equal(readiness.state, "READY");
+
+	it("不再比较不可达的 DISABLED 生命周期值", () => {
+		const readiness = resolveAssetReadiness({
+			classification: "INTERNAL",
+			domainId: "d1",
+			ownerDept: "dept",
+			lifecycleStatus: "DISABLED",
+			governanceStatus: "GOVERNED",
+			matchStatus: "MATCHED",
+		});
+		expect(readiness.state).toBe("READY");
+	});
 });
 ```
 
@@ -472,10 +491,10 @@ test("不再比较不可达的 DISABLED 生命周期值", () => {
 工作目录 `source/dts-platform-webapp`：
 
 ```bash
-node --experimental-strip-types --test src/pages/catalog/assetPortalUx.helpers.test.ts
+npx vitest run src/pages/catalog/assetPortalUx.helpers.test.ts
 ```
 
-预期：FAIL，`DEPRECATED 应判为阻断`
+预期：FAIL，`DEPRECATED 判为阻断态` 得到 `"READY"`
 
 - [ ] **Step 7: 改前端判定**
 
@@ -511,11 +530,11 @@ const STALE_LIFECYCLE_STATUSES = new Set(["DEPRECATED", "ARCHIVED", "BLOCKED"]);
 - [ ] **Step 8: 运行测试确认通过**
 
 ```bash
-node --experimental-strip-types --test src/pages/catalog/assetPortalUx.helpers.test.ts
+npx vitest run src/pages/catalog/assetPortalUx.helpers.test.ts
 npx tsc --noEmit
 ```
 
-预期：全部 PASS
+预期：全部 PASS（原有 3 个 + 新增 4 个）
 
 - [ ] **Step 9: 提交**
 
@@ -1711,8 +1730,7 @@ node --experimental-strip-types --test src/pages/catalog/assets/AssetLedgerView.
 
 ```bash
 node --experimental-strip-types --test src/pages/catalog/assets/AssetLedgerView.i18n.source-contract.test.ts
-node --experimental-strip-types --test src/pages/catalog/assetEnumLabels.test.ts 2>/dev/null || \
-	node --experimental-strip-types --test src/pages/catalog/assets/assetEnumLabels.test.ts
+node --experimental-strip-types --test src/pages/catalog/assets/assetEnumLabels.test.ts
 npx tsc --noEmit
 ```
 
@@ -1744,7 +1762,6 @@ git commit -m "fix: 台账表格与导出改经枚举字典，消除英文原值
 
 ```bash
 node --experimental-strip-types --test src/pages/catalog/assets/assetEnumLabels.test.ts
-node --experimental-strip-types --test src/pages/catalog/assetPortalUx.helpers.test.ts
 node --experimental-strip-types --test src/pages/catalog/AssetOverviewPage.source-contract.test.ts
 node --experimental-strip-types --test src/pages/catalog/DatasetsPage.domain-scope.source-contract.test.ts
 node --experimental-strip-types --test src/pages/catalog/DatasetsPage.tags.source-contract.test.ts
@@ -1752,10 +1769,18 @@ node --experimental-strip-types --test src/pages/catalog/DatasetsPage.toolbar-co
 node --experimental-strip-types --test src/pages/catalog/DatasetsPage.asset-map-visual.source-contract.test.ts
 node --experimental-strip-types --test src/pages/catalog/DataAssetPortalMenu.source-contract.test.ts
 node --experimental-strip-types --test src/pages/catalog/assets/AssetLedgerView.i18n.source-contract.test.ts
-npx vitest run src/components/catalog/DomainScopeNav.test.tsx src/pages/catalog/assets/GovernanceGapPanel.test.tsx
+npx vitest run \
+	src/pages/catalog/assetPortalUx.helpers.test.ts \
+	src/pages/catalog/assets/assetPageShared.layers.test.ts \
+	src/components/catalog/DomainScopeNav.test.tsx \
+	src/pages/catalog/assets/GovernanceGapPanel.test.tsx
 ```
 
 预期：全部 PASS。任何 FAIL 都要修到通过，不得跳过。
+
+> **运行器归属**：`node --experimental-strip-types --test` 只能跑纯 `.ts`（无 JSX）的文件；
+> 凡是 import `.tsx` 或本身是 `.tsx` 的测试一律用 `npx vitest run`。
+> `assetPortalUx.helpers.test.ts` 与 `assetPageShared.layers.test.ts` 属于 vitest。
 
 - [ ] **Step 2: 跑通全部 Java 测试**
 
