@@ -1,8 +1,8 @@
 # T01：建立 Publish Intent 与角色感知候选命令
 
 **优先级**：P0
-**状态**：DRAFT
-**依赖**：F2/T03、F3/T03；生产启用外部依赖 Sprint-36/F3 DONE
+**状态**：BLOCKED（等待 F2/T03 关闭 replacement/retry 并发原子性与 Airflow exactly-once 证据）
+**依赖**：F2/T03、F3/T04；生产启用外部依赖 Sprint-36/F3 DONE
 
 ## 目标
 
@@ -19,7 +19,15 @@
 - **候选命令**：补齐 `quality`,`reviews`,`reviews/approve`,`reviews/reject`,`publish`,`registration/retry`,`rollback`,`cancel`；所有 mutation 使用 Candidate ETag + Idempotency-Key。
 - **领域职责 authority**：沿用现有 Keycloak realm role/管理员分配链登记 `ROLE_MODEL_MAINTAINER/ROLE_MODEL_RELEASE_REVIEWER/ROLE_MODEL_RELEASE_OPERATOR`，分别映射为内部三类 duty role；不把 CATALOG_MAINTAINERS、admin/auth-admin/auditor 静默提升为发布职责。
 - **领域职责 resolver**：服务端从真实 authenticated authorities 解析 `MODEL_MAINTAINER/RELEASE_REVIEWER/RELEASE_OPERATOR`；`allowedActions` 与 command authorization 调同一个 resolver，禁止现有固定 MODEL_MAINTAINER、客户端 role 和只隐藏按钮。异步 reconciler 执行动作前重新校验 current authority。
+- **后台撤权复核**：请求线程从 JWT 解析职责；异步 reconciler 不保存/重放用户 token，
+  必须通过 `ReleaseDutyDirectoryPort.hasDuty(actorId,duty)` 查询当前角色。P0 adapter
+  复用 dts-admin 已有 `KeycloakAdminClient`，提供 pairwise service-auth 的最小只读
+  internal API；admin/Keycloak 不可用、用户不存在或 authority 已撤销均停留在 blocker，
+  不得用请求时 authority snapshot 继续 `SUBMIT_REVIEW`。
 - **职责动作**：maintainer=`START_BUILD/RETRY/RUN_QUALITY/SUBMIT_REVIEW/CANCEL`；reviewer=`APPROVE/REJECT`；operator=`PUBLISH/ROLLBACK/REGISTRATION_RETRY/SCHEDULE_ENABLE/SCHEDULE_DISABLE`。同一 actor 的提交/审核/发布隔离由 immutable command ledger 校验。
+- **三人隔离**：`submittedBy != approvedBy` 且 `publishedBy` 同时不同于
+  `submittedBy/approvedBy`；一个账号即使同时拥有多个专用 authority 也不能跨越同一
+  Candidate 的身份边界。
 - **M05 边界**：Candidate 职责 resolver 不能冒充资产动作矩阵。Sprint-36/F3 已 DONE；发布创建/更新 CatalogDataset 等资产时必须消费其 deny-by-default `AccessChecker.canPerform(...)`，本 Task 不复制 `IamAssetActionPolicy`。端口不可用、策略缺失或本地接入未完成时，PROD publish/schedule actions 一律返回稳定权限 blocker。
 - **审计员边界**：安全审计员只读审计证据，不因 auditor authority 获得 reviewer/operator action。
 - **兼容**：不新增菜单/发布中心；现有模型详情/高级页与交付工作台读取同一 workspace。
@@ -41,6 +49,20 @@
 - Sprint-36/F3 action-policy integration port（只消费，不复制）
 - ModelSpecDetailPage/SqlModelingPage/release workbench
 - dts-admin audit resource dictionary
+- dts-admin/Keycloak current-duty internal read adapter
+
+## 当前代码落差（2026-07-28）
+
+- `ModelReleaseCandidateResource` 所有读写仍统一使用 `CATALOG_MAINTAINERS`，不存在三类
+  专用 authority。
+- Resource 只提供 create/scope/lock/retry/refresh/replacement；现有
+  `transition(targetStatus)` 是状态迁移原语，不能直接暴露成客户端任意目标状态 API。
+- `ModelReleaseCandidateApplicationService.allowedActions` 仍固定按 maintainer 视角；
+  必须与 mutation 共用同一 resolver，而不是页面二次推导。
+- `services/dts-keycloak/realm-dts.json` 尚无三个 release duty realm role；角色定义、
+  管理员分配链、真实测试账号与撤权测试都是 T01 交付物。
+- 后台没有当前用户角色查询端口，因此“撤权后异步停止”在本 Task 增加
+  `ReleaseDutyDirectoryPort` 前不成立。
 
 ## 验证（RED→GREEN）
 
@@ -51,6 +73,9 @@
 - [ ] reviewer/operator allowedActions 与 actor separation/authority 一致。
 - [ ] 三类真实测试账号直接调用 API 时只能执行其职责动作；客户端 role/action 注入无效。
 - [ ] admin/auth-admin/auditor/catalog maintainer 未显式拥有专用 authority 时不能执行 release duty；撤权后异步推进停止。
+- [ ] dts-admin/Keycloak current-duty 查询超时、403、用户缺失时 reconciler fail-closed，
+  不保存 token、不回退到请求时角色。
+- [ ] publisher 与 submitter/reviewer 任一身份相同均被拒；多 authority 账号不能规避。
 - [ ] Sprint-36/F3 不可用或未配置 policy 时 PROD publish/schedule deny-by-default；DEV/TEST 构建不被误报为细粒度 RBAC 完成。
 - [ ] 审计员可读取但不可执行审核、发布和调度 mutation。
 - [ ] Chrome95 完成“提交上线→等待审核→等待发布”的状态走查。

@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260728-02-physical-relation-observation-adapter" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="modeling_physical_relation_observation"/>
+            <columnExists tableName="modeling_physical_relation_observation" columnName="adapter"/>
+            <sqlCheck expectedResult="1">
+                SELECT count(*)
+                  FROM pg_constraint
+                 WHERE conname = 'ck_physical_relation_observation'
+                   AND conrelid = 'modeling_physical_relation_observation'::regclass
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Widen the physical relation evidence adapter contract without rewriting the already
+            executed table-creation changeSet.
+        </comment>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE modeling_physical_relation_observation
+                DROP CONSTRAINT ck_physical_relation_observation;
+            ALTER TABLE modeling_physical_relation_observation
+                ADD CONSTRAINT ck_physical_relation_observation
+                CHECK (
+                    btrim(tenant_id) <> ''
+                    AND release_candidate_version > 0
+                    AND model_revision > 0
+                    AND implementation_revision > 0
+                    AND observation_attempt > 0
+                    AND model_checksum ~ '^[0-9a-f]{64}$'
+                    AND implementation_checksum ~ '^[0-9a-f]{64}$'
+                    AND scoped_bundle_checksum ~ '^[0-9a-f]{64}$'
+                    AND credential_version_ref ~ '^sha256:[0-9a-f]{64}$'
+                    AND expected_columns_checksum ~ '^[0-9a-f]{64}$'
+                    AND adapter ~ '^[a-z][a-z0-9_]{0,63}$'
+                    AND schema_name ~ '^[A-Za-z_][A-Za-z0-9_]{0,127}$'
+                    AND identifier ~ '^[A-Za-z_][A-Za-z0-9_]{0,127}$'
+                    AND expected_type IN ('TABLE', 'VIEW', 'MATERIALIZED_VIEW')
+                    AND column_count >= 0
+                    AND (
+                        (
+                            relation_exists
+                            AND actual_type IN ('TABLE', 'VIEW', 'MATERIALIZED_VIEW')
+                            AND columns_checksum ~ '^[0-9a-f]{64}$'
+                            AND actual_columns IS NOT NULL
+                            AND metadata_checksum ~ '^[0-9a-f]{64}$'
+                            AND column_count > 0
+                        )
+                        OR (
+                            NOT relation_exists
+                            AND actual_type IS NULL
+                            AND columns_checksum IS NULL
+                            AND actual_columns IS NULL
+                            AND metadata_checksum IS NULL
+                            AND column_count = 0
+                        )
+                    )
+                    AND (
+                        (verified AND relation_exists AND error_code IS NULL)
+                        OR (
+                            NOT verified
+                            AND error_code IS NOT NULL
+                            AND btrim(error_code) <> ''
+                        )
+                    )
+                );
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="true" endDelimiter=";"><![CDATA[
+                ALTER TABLE modeling_physical_relation_observation
+                    DROP CONSTRAINT ck_physical_relation_observation;
+                ALTER TABLE modeling_physical_relation_observation
+                    ADD CONSTRAINT ck_physical_relation_observation
+                    CHECK (
+                        btrim(tenant_id) <> ''
+                        AND release_candidate_version > 0
+                        AND model_revision > 0
+                        AND implementation_revision > 0
+                        AND observation_attempt > 0
+                        AND model_checksum ~ '^[0-9a-f]{64}$'
+                        AND implementation_checksum ~ '^[0-9a-f]{64}$'
+                        AND scoped_bundle_checksum ~ '^[0-9a-f]{64}$'
+                        AND credential_version_ref ~ '^sha256:[0-9a-f]{64}$'
+                        AND expected_columns_checksum ~ '^[0-9a-f]{64}$'
+                        AND adapter = 'postgres'
+                        AND schema_name ~ '^[A-Za-z_][A-Za-z0-9_]{0,127}$'
+                        AND identifier ~ '^[A-Za-z_][A-Za-z0-9_]{0,127}$'
+                        AND expected_type IN ('TABLE', 'VIEW', 'MATERIALIZED_VIEW')
+                        AND column_count >= 0
+                        AND (
+                            (
+                                relation_exists
+                                AND actual_type IN ('TABLE', 'VIEW', 'MATERIALIZED_VIEW')
+                                AND columns_checksum ~ '^[0-9a-f]{64}$'
+                                AND actual_columns IS NOT NULL
+                                AND metadata_checksum ~ '^[0-9a-f]{64}$'
+                                AND column_count > 0
+                            )
+                            OR (
+                                NOT relation_exists
+                                AND actual_type IS NULL
+                                AND columns_checksum IS NULL
+                                AND actual_columns IS NULL
+                                AND metadata_checksum IS NULL
+                                AND column_count = 0
+                            )
+                        )
+                        AND (
+                            (verified AND relation_exists AND error_code IS NULL)
+                            OR (
+                                NOT verified
+                                AND error_code IS NOT NULL
+                                AND btrim(error_code) <> ''
+                            )
+                        )
+                    );
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

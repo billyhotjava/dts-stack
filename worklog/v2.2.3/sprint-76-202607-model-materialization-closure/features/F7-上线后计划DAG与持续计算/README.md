@@ -45,7 +45,7 @@ prepare_runtime → dbt_build → sync_manifest_and_probe_relation → finalize_
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|
-| T01 | 建立计划执行绑定、范围快照与运行用途契约 | P0 | DRAFT | F4/T02、F2/T04 |
+| T01 | 接管发布绑定并建立调度部署与运行用途契约 | P0 | DRAFT | F4/T02、F2/T04 |
 | T02 | 基于现有 Airflow 部署稳定计划 DAG 并接通手工/CRON | P0 | DRAFT | T01、F2/T02、F3/T03 |
 | T03 | 呈现 Airflow 实际调度与运行历史并关闭失效修复 | P0 | DRAFT | T02、F5/T02 |
 

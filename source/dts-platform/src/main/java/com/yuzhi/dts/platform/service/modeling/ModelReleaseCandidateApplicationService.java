@@ -172,6 +172,16 @@ public class ModelReleaseCandidateApplicationService {
         DeliveryStatus target = existing == null
             ? retryTarget(current)
             : replayRetryTarget(candidateId, existing);
+        if (target == DeliveryStatus.BUILDING) {
+            return materializationStarts.retry(
+                access.tenantId(),
+                access.actorId(),
+                candidateId,
+                expectedVersion,
+                idempotencyKey,
+                reason
+            );
+        }
         return commands.transition(
             access.tenantId(),
             access.actorId(),
@@ -196,6 +206,30 @@ public class ModelReleaseCandidateApplicationService {
             access.actorId(),
             candidateId,
             new TransitionCommand(expectedVersion, DeliveryStatus.STALE, idempotencyKey, reason)
+        );
+    }
+
+    public CommandResult cancel(
+        String tenantId,
+        String actorId,
+        UUID planId,
+        UUID candidateId,
+        int expectedVersion,
+        String idempotencyKey,
+        String reason
+    ) {
+        Access access = authorize(tenantId, actorId, planId);
+        candidateForPlan(access.tenantId(), access.planId(), candidateId);
+        return commands.transition(
+            access.tenantId(),
+            access.actorId(),
+            candidateId,
+            new TransitionCommand(
+                expectedVersion,
+                DeliveryStatus.CANCELLED,
+                idempotencyKey,
+                reason
+            )
         );
     }
 
@@ -245,6 +279,15 @@ public class ModelReleaseCandidateApplicationService {
     }
 
     private WorkbenchView project(CandidateView candidate, String actorId) {
+        if (candidate.status() == DeliveryStatus.CANCELLED) {
+            return blocked(
+                candidate,
+                WorkbenchState.BLOCKED,
+                "MODEL_RELEASE_CANDIDATE_REPLACEMENT_REQUIRED",
+                "Create a replacement candidate to continue delivery",
+                List.of(WorkspaceAction.CREATE_REPLACEMENT_CANDIDATE)
+            );
+        }
         if (candidate.entries().isEmpty()) {
             return new WorkbenchView(
                 candidate.planId(),
@@ -256,7 +299,7 @@ public class ModelReleaseCandidateApplicationService {
                     "Select at least one current model before starting delivery"
                 ),
                 candidate.status() == DeliveryStatus.DRAFT
-                    ? List.of(WorkspaceAction.UPDATE_SCOPE)
+                    ? List.of(WorkspaceAction.UPDATE_SCOPE, WorkspaceAction.CANCEL_CANDIDATE)
                     : List.of(),
                 etag(candidate)
             );
@@ -288,7 +331,7 @@ public class ModelReleaseCandidateApplicationService {
                 WorkbenchState.BLOCKED,
                 "MODEL_RELEASE_CANDIDATE_BUILD_FAILED",
                 "The latest build failed and must be retried",
-                List.of(WorkspaceAction.RETRY_BUILD)
+                List.of(WorkspaceAction.RETRY_BUILD, WorkspaceAction.CANCEL_CANDIDATE)
             );
         }
         if (candidate.status() == DeliveryStatus.QUALITY_FAILED) {
@@ -297,10 +340,13 @@ public class ModelReleaseCandidateApplicationService {
                 WorkbenchState.BLOCKED,
                 "MODEL_RELEASE_CANDIDATE_QUALITY_FAILED",
                 "The latest quality run failed and must be rerun",
-                List.of(WorkspaceAction.RUN_QUALITY)
+                List.of(WorkspaceAction.RUN_QUALITY, WorkspaceAction.CANCEL_CANDIDATE)
             );
         }
-        if (candidate.status() == DeliveryStatus.REJECTED || candidate.status() == DeliveryStatus.ROLLED_BACK) {
+        if (
+            candidate.status() == DeliveryStatus.REJECTED ||
+            candidate.status() == DeliveryStatus.ROLLED_BACK
+        ) {
             return blocked(
                 candidate,
                 WorkbenchState.BLOCKED,
@@ -340,7 +386,11 @@ public class ModelReleaseCandidateApplicationService {
 
     private List<WorkspaceAction> actions(CandidateView candidate, String actorId) {
         if (candidate.status() == DeliveryStatus.DRAFT) {
-            return List.of(WorkspaceAction.UPDATE_SCOPE, WorkspaceAction.START_BUILD);
+            return List.of(
+                WorkspaceAction.UPDATE_SCOPE,
+                WorkspaceAction.START_BUILD,
+                WorkspaceAction.CANCEL_CANDIDATE
+            );
         }
         return candidate
             .status()
@@ -436,7 +486,11 @@ public class ModelReleaseCandidateApplicationService {
 
     private static DeliveryStatus replayRetryTarget(UUID candidateId, CommandEventView event) {
         boolean buildRetry =
-            event.fromStatus() == DeliveryStatus.BUILD_FAILED && event.toStatus() == DeliveryStatus.BUILDING;
+            event.fromStatus() == DeliveryStatus.BUILD_FAILED &&
+            (
+                event.toStatus() == DeliveryStatus.BUILDING ||
+                event.toStatus() == DeliveryStatus.STALE
+            );
         boolean qualityRetry =
             event.fromStatus() == DeliveryStatus.QUALITY_FAILED && event.toStatus() == DeliveryStatus.QUALITY_RUNNING;
         if (!candidateId.equals(event.candidateId()) || (!buildRetry && !qualityRetry)) {
@@ -447,7 +501,9 @@ public class ModelReleaseCandidateApplicationService {
                 Map.of("idempotencyKey", event.idempotencyKey(), "candidateId", event.candidateId())
             );
         }
-        return event.toStatus();
+        return buildRetry
+            ? DeliveryStatus.BUILDING
+            : DeliveryStatus.QUALITY_RUNNING;
     }
 
     private static boolean isActive(CandidateView candidate) {
@@ -455,7 +511,12 @@ public class ModelReleaseCandidateApplicationService {
     }
 
     private static boolean isReplacementSource(DeliveryStatus status) {
-        return status == DeliveryStatus.REJECTED || status == DeliveryStatus.ROLLED_BACK || status == DeliveryStatus.STALE;
+        return (
+            status == DeliveryStatus.REJECTED ||
+            status == DeliveryStatus.ROLLED_BACK ||
+            status == DeliveryStatus.CANCELLED ||
+            status == DeliveryStatus.STALE
+        );
     }
 
     private record Access(String tenantId, String actorId, UUID planId) {}

@@ -1,8 +1,8 @@
 # F3 真实物理关系与强绑定证据
 
 **日期**：2026-07-27  
-**结论**：T01～T03 DEV/TEST GREEN；2026-07-28 复审新增 T04 typed-column
-强契约，F3 重新置为 IN_PROGRESS；Sprint-76 仍为 PROD NO-GO。
+**结论**：T01～T04 DEV/TEST GREEN，F3=DONE；Sprint-76 仍为 PROD NO-GO，
+F4/F7/F6 及三个生产门槛不得由本证据替代。
 
 ## RED
 
@@ -29,25 +29,34 @@
 - 双 entry 候选中任一 relation 缺失时，全部 dbt success 仍不能进入 BUILT。
 - inspector registry 仅开放 PostgreSQL；未知 adapter fail-closed。原高级
   `DBT_MANAGED` asset sync 兼容测试保持通过。
+- DESIGNER_GENERATED 从 current ModelSpec 投影 immutable typed fields，compiler
+  仅允许白名单逻辑类型，并在最终 model SQL 生成受控 cast、在 schema.yml 写入
+  physical `data_type` 和 DTS type meta。
+- manifest column type 进入 RelationLocator 与 expected checksum；名称/顺序相同但
+  numeric→text 时写 failed observation，并阻断 Candidate BUILT。
+- DBT_MANAGED 声明完整 data_type 时严格核验；全部未声明时保留空 expected-type
+  contract，由真实 observation 作为物理 schema 事实；部分声明 fail-closed。
 
 ## 自动化结果
 
 | 命令/报告 | 结果 |
 |---|---|
-| `ModelMaterializationRunArtifactServiceTest` | 11 tests，0 failures，0 errors |
+| `ModelSpecCompilerProjectionTest` | 7 tests，0 failures，0 errors |
+| `ModelingDbtCompilerTest` | 13 tests，0 failures，0 errors |
+| `ModelMaterializationRunArtifactServiceTest` | 14 tests，0 failures，0 errors |
 | `PostgresPhysicalRelationInspectorTest` | 2 tests，0 failures，0 errors |
+| `ModelMaterializationDispatchServiceTest` | 4 tests，0 failures，0 errors |
 | `ModelMaterializationStartServiceIT`（真实 PostgreSQL Testcontainer） | 2 tests，0 failures，0 errors |
-| `DbtAssetSyncServiceTest` | 13 tests，0 failures，0 errors |
 
-合计 28 tests，0 failures，0 errors。为遵守不重复消耗原则，本轮没有重跑 G0 登录、
-Chrome95 或整包构建。
+T04 当前证据合计 42 tests，0 failures，0 errors。T01～T03 已有的
+`DbtAssetSyncServiceTest` 13 tests 兼容证据未因无相关漂移而重复执行。为遵守不重复
+消耗原则，本轮没有重跑 G0 登录、Chrome95、整包构建或真实 dbt compile。
 
 ## 复审边界
 
 1. 当前 dbt manifest 为 F3 提供期望列名和顺序，因此可以严格阻断列缺失/改名/顺序
    漂移；实际数据类型与 nullable 已记录并参与物理 metadata checksum。
-2. 复审已确认字段类型是发布前强门禁：canonical ModelSpec 已要求 `dataType`，因此
-   DESIGNER_GENERATED 必须由 T04 扩展 compiler artifact contract，并由 inspector
-   聚合层完成 expected-vs-actual 数据类型比较。
+2. 字段类型已成为发布前强门禁：canonical ModelSpec 的 `dataType` 已投影到 compiler
+   artifact，并由 inspector 聚合层完成 expected-vs-actual 数据类型比较。
 3. 本证据没有替代 F6 的真实 Airflow → dbt → PostgreSQL → 页面全链、升级回滚、
    安全/NFR 和 Chrome95 验收。

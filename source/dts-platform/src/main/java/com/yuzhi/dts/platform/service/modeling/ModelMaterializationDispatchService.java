@@ -135,6 +135,25 @@ public class ModelMaterializationDispatchService {
                 );
             }
 
+            Optional<ReleaseBuildRequest> recoveryRequest =
+                recoveryRequest(dispatch);
+            if (recoveryRequest.isPresent()) {
+                Optional<SubmissionResult> reconciled =
+                    gateway.reconcileReleaseBuild(
+                        recoveryRequest.orElseThrow()
+                    );
+                if (reconciled.isPresent()) {
+                    externalBoundaryCrossed = true;
+                    return Optional.of(
+                        applySubmission(
+                            dispatch,
+                            reconciled.orElseThrow(),
+                            now
+                        )
+                    );
+                }
+            }
+
             ScopedCandidateProject project =
                 scopedProjects.prepareCandidate(toArtifacts(scope));
             ModelRuntimeSpecTokenCodec.IssuedToken runtimeToken =
@@ -183,44 +202,8 @@ public class ModelMaterializationDispatchService {
                     project.bundleChecksum()
                 )
             );
-            if (submitted.status() == SubmissionStatus.SUBMITTED) {
-                dispatches.markSubmitted(
-                    dispatch.id(),
-                    submitted.recovered(),
-                    now
-                );
-                return Optional.of(
-                    new DispatchResult(
-                        dispatch.id(),
-                        "SUBMITTED",
-                        submitted.dagRunId(),
-                        submitted.recovered(),
-                        null
-                    )
-                );
-            }
-            if (
-                submitted.status() ==
-                SubmissionStatus.RETRYABLE_UNKNOWN
-            ) {
-                dispatches.markUnknown(
-                    dispatch.id(),
-                    submitted.errorCode(),
-                    now.plus(RETRY_DELAY),
-                    now
-                );
-                return Optional.of(
-                    new DispatchResult(
-                        dispatch.id(),
-                        "UNKNOWN",
-                        dispatch.airflowRunId(),
-                        false,
-                        submitted.errorCode()
-                    )
-                );
-            }
             return Optional.of(
-                block(dispatch, submitted.errorCode(), now)
+                applySubmission(dispatch, submitted, now)
             );
         } catch (
             DbtScopedProjectService.ScopedProjectException failure
@@ -259,6 +242,89 @@ public class ModelMaterializationDispatchService {
                 )
             );
         }
+    }
+
+    private Optional<ReleaseBuildRequest> recoveryRequest(
+        DispatchRecord dispatch
+    ) {
+        if (
+            dispatch.scopedBundleChecksum() == null &&
+            dispatch.runtimeTokenDigest() == null &&
+            dispatch.runtimeTokenExpiresAt() == null
+        ) {
+            return Optional.empty();
+        }
+        if (
+            dispatch.scopedBundleChecksum() == null ||
+            dispatch.runtimeTokenDigest() == null ||
+            dispatch.runtimeTokenExpiresAt() == null
+        ) {
+            throw new IllegalStateException(
+                "Prepared dispatch recovery metadata is incomplete"
+            );
+        }
+        ModelRuntimeSpecTokenCodec.IssuedToken restored =
+            tokens.restore(
+                dispatch.id(),
+                dispatch.runtimeTokenExpiresAt()
+            );
+        if (!restored.digest().equals(dispatch.runtimeTokenDigest())) {
+            throw new IllegalStateException(
+                "Prepared dispatch runtime token has drifted"
+            );
+        }
+        return Optional.of(
+            new ReleaseBuildRequest(
+                dispatch.id(),
+                dispatch.candidateId(),
+                dispatch.candidateVersion(),
+                dispatch.attempt(),
+                dispatch.airflowDagId(),
+                dispatch.airflowRunId(),
+                restored.token(),
+                dispatch.scopedBundleChecksum()
+            )
+        );
+    }
+
+    private DispatchResult applySubmission(
+        DispatchRecord dispatch,
+        SubmissionResult submitted,
+        Instant now
+    ) {
+        if (submitted.status() == SubmissionStatus.SUBMITTED) {
+            dispatches.markSubmitted(
+                dispatch.id(),
+                submitted.recovered(),
+                now
+            );
+            return new DispatchResult(
+                dispatch.id(),
+                "SUBMITTED",
+                submitted.dagRunId(),
+                submitted.recovered(),
+                null
+            );
+        }
+        if (
+            submitted.status() ==
+            SubmissionStatus.RETRYABLE_UNKNOWN
+        ) {
+            dispatches.markUnknown(
+                dispatch.id(),
+                submitted.errorCode(),
+                now.plus(RETRY_DELAY),
+                now
+            );
+            return new DispatchResult(
+                dispatch.id(),
+                "UNKNOWN",
+                dispatch.airflowRunId(),
+                false,
+                submitted.errorCode()
+            );
+        }
+        return block(dispatch, submitted.errorCode(), now);
     }
 
     private ModelRuntimeSpecTokenCodec.IssuedToken runtimeToken(

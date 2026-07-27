@@ -100,6 +100,37 @@ public class ModelMaterializationStartService {
         return new StartResult(result, build);
     }
 
+    @Transactional
+    public CommandResult retry(
+        String tenantId,
+        String actorId,
+        UUID candidateId,
+        int expectedVersion,
+        String idempotencyKey,
+        String reason
+    ) {
+        CommandResult result = candidateCommands.transition(
+            tenantId,
+            actorId,
+            candidateId,
+            new TransitionCommand(
+                expectedVersion,
+                DeliveryStatus.BUILDING,
+                idempotencyKey,
+                reason
+            )
+        );
+        if (result.candidate().status() != DeliveryStatus.BUILDING) {
+            return result;
+        }
+        if (result.replayed()) {
+            builds.requireQueuedBuild(result.candidate());
+        } else {
+            builds.createRetryQueuedBuild(result.candidate(), clock.instant());
+        }
+        return result;
+    }
+
     public record StartResult(CommandResult command, QueuedBuildGroup build) {
         public StartResult {
             Objects.requireNonNull(command, "command is required");

@@ -2,12 +2,15 @@ package com.yuzhi.dts.platform.repository.modeling;
 
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryAuditView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus;
+import com.yuzhi.dts.platform.service.modeling.ModelMaterializationClaimKey;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CandidateOrigin;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CandidateView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CommandEventType;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CommandEventView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CurrentModelReference;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.EntryView;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateException;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateException.Kind;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -18,7 +21,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
@@ -135,6 +140,204 @@ public class ModelReleaseCandidateRepository {
         )
             .stream()
             .findFirst();
+    }
+
+    /**
+     * Moves a terminal candidate's model claims to its replacement DRAFT in one transaction.
+     *
+     * <p>The source is cleared before the replacement is reserved so PostgreSQL can enforce the
+     * unique key. A competing reservation still sees one atomic transaction: any uniqueness
+     * conflict rolls both updates back and leaves the source claim intact.
+     */
+    @Transactional
+    public void transferActiveClaims(
+        CandidateView source,
+        CandidateView replacement
+    ) {
+        if (source == null || replacement == null) {
+            throw new IllegalArgumentException(
+                "source and replacement candidates are required"
+            );
+        }
+        if (
+            !source.tenantId().equals(replacement.tenantId()) ||
+            !source.planId().equals(replacement.planId()) ||
+            replacement.status() != DeliveryStatus.DRAFT ||
+            !Set.of(
+                DeliveryStatus.REJECTED,
+                DeliveryStatus.ROLLED_BACK,
+                DeliveryStatus.STALE,
+                DeliveryStatus.CANCELLED
+            )
+                .contains(source.status())
+        ) {
+            throw claimTransferFailure(
+                "MODEL_RELEASE_CANDIDATE_CLAIM_TRANSFER_INVALID",
+                "Only a terminal candidate can transfer claims to its DRAFT replacement",
+                source,
+                replacement
+            );
+        }
+        List<ClaimRow> sourceRows = jdbcTemplate.query(
+            """
+            select e.model_spec_id, e.active_claim_key
+              from modeling_model_release_candidate c
+              join modeling_model_release_candidate_entry e
+                on e.tenant_id = c.tenant_id and e.candidate_id = c.id
+             where c.tenant_id = ? and c.id = ? and c.version = ?
+               and c.status = ? and e.status = ?
+             order by e.model_spec_id, e.id
+             for update of c, e
+            """,
+            (row, rowNumber) ->
+                new ClaimRow(
+                    row.getObject("model_spec_id", UUID.class),
+                    row.getString("active_claim_key")
+                ),
+            source.tenantId(),
+            source.id(),
+            source.version(),
+            source.status().name(),
+            source.status().name()
+        );
+        if (sourceRows.isEmpty()) {
+            if (source.entries().isEmpty()) return;
+            throw claimTransferFailure(
+                "MODEL_RELEASE_CANDIDATE_CLAIM_TRANSFER_CONFLICT",
+                "The source candidate changed before claim transfer",
+                source,
+                replacement
+            );
+        }
+        List<ClaimRow> claimed = sourceRows
+            .stream()
+            .filter(row -> row.activeClaimKey() != null)
+            .toList();
+        if (claimed.isEmpty()) return;
+        if (claimed.size() != sourceRows.size()) {
+            throw claimTransferFailure(
+                "MODEL_RELEASE_CANDIDATE_CLAIM_INVARIANT_BROKEN",
+                "The source candidate contains a partial model claim set",
+                source,
+                replacement
+            );
+        }
+        Map<UUID, UUID> replacementEntries = jdbcTemplate.query(
+            """
+            select e.model_spec_id, e.id
+              from modeling_model_release_candidate c
+              join modeling_model_release_candidate_entry e
+                on e.tenant_id = c.tenant_id and e.candidate_id = c.id
+             where c.tenant_id = ? and c.id = ? and c.version = 1
+               and c.status = 'DRAFT' and e.status = 'DRAFT'
+             order by e.model_spec_id, e.id
+             for update of c, e
+            """,
+            (row, rowNumber) ->
+                Map.entry(
+                    row.getObject("model_spec_id", UUID.class),
+                    row.getObject("id", UUID.class)
+                ),
+            replacement.tenantId(),
+            replacement.id()
+        )
+            .stream()
+            .collect(
+                java.util.stream.Collectors.toMap(
+                    Map.Entry::getKey,
+                    Map.Entry::getValue,
+                    (left, right) -> left,
+                    LinkedHashMap::new
+                )
+            );
+        Set<UUID> sourceModels = sourceRows
+            .stream()
+            .map(ClaimRow::modelSpecId)
+            .collect(java.util.stream.Collectors.toSet());
+        if (!sourceModels.equals(replacementEntries.keySet())) {
+            throw claimTransferFailure(
+                "MODEL_RELEASE_CANDIDATE_REPLACEMENT_SCOPE_MISMATCH",
+                "A claimed replacement must retain the exact ModelSpec scope",
+                source,
+                replacement
+            );
+        }
+
+        int released = jdbcTemplate.update(
+            """
+            update modeling_model_release_candidate_entry
+               set active_claim_key = null
+             where tenant_id = ? and candidate_id = ?
+               and active_claim_key is not null
+            """,
+            source.tenantId(),
+            source.id()
+        );
+        if (released != claimed.size()) {
+            throw claimTransferFailure(
+                "MODEL_RELEASE_CANDIDATE_CLAIM_TRANSFER_CONFLICT",
+                "The source candidate claim set changed during transfer",
+                source,
+                replacement
+            );
+        }
+        try {
+            for (UUID modelSpecId : sourceModels) {
+                int reserved = jdbcTemplate.update(
+                    """
+                    update modeling_model_release_candidate_entry
+                       set active_claim_key = ?
+                     where tenant_id = ? and candidate_id = ? and id = ?
+                       and model_spec_id = ? and status = 'DRAFT'
+                       and implementation_revision is null
+                       and active_claim_key is null
+                    """,
+                    ModelMaterializationClaimKey.derive(
+                        replacement.tenantId(),
+                        replacement.environment(),
+                        modelSpecId
+                    ),
+                    replacement.tenantId(),
+                    replacement.id(),
+                    replacementEntries.get(modelSpecId),
+                    modelSpecId
+                );
+                if (reserved != 1) {
+                    throw claimTransferFailure(
+                        "MODEL_RELEASE_CANDIDATE_CLAIM_TRANSFER_CONFLICT",
+                        "The replacement claim reservation could not be written",
+                        source,
+                        replacement
+                    );
+                }
+            }
+        } catch (DataIntegrityViolationException conflict) {
+            throw claimTransferFailure(
+                "MODEL_ACTIVE_CANDIDATE_CLAIM_CONFLICT",
+                "Another candidate already owns a replacement model claim",
+                source,
+                replacement
+            );
+        }
+    }
+
+    private static ModelReleaseCandidateException claimTransferFailure(
+        String code,
+        String message,
+        CandidateView source,
+        CandidateView replacement
+    ) {
+        return new ModelReleaseCandidateException(
+            code,
+            message,
+            Kind.CONFLICT,
+            Map.of(
+                "sourceCandidateId",
+                source.id(),
+                "replacementCandidateId",
+                replacement.id()
+            )
+        );
     }
 
     public Optional<CommandEventView> findCommandByIdempotencyKey(String tenantId, String idempotencyKey) {
@@ -264,7 +467,7 @@ public class ModelReleaseCandidateRepository {
             """
              where tenant_id = ? and plan_id = ?
              order by case
-                        when status not in ('REJECTED', 'ROLLED_BACK', 'STALE') then 0
+                        when status not in ('REJECTED', 'ROLLED_BACK', 'CANCELLED', 'STALE') then 0
                         else 1
                       end,
                       last_modified_date desc,
@@ -273,7 +476,7 @@ public class ModelReleaseCandidateRepository {
             """,
             """
             case
-              when c.status not in ('REJECTED', 'ROLLED_BACK', 'STALE') then 0
+              when c.status not in ('REJECTED', 'ROLLED_BACK', 'CANCELLED', 'STALE') then 0
               else 1
             end,
             c.last_modified_date desc,
@@ -358,9 +561,14 @@ public class ModelReleaseCandidateRepository {
             jdbcTemplate.update(
                 """
                 update modeling_model_release_candidate_entry
-                   set status = ?
+                   set status = ?,
+                       active_claim_key = case
+                           when ? = 'CANCELLED' then null
+                           else active_claim_key
+                       end
                  where tenant_id = ? and candidate_id = ?
                 """,
+                replacementStatus.name(),
                 replacementStatus.name(),
                 tenantId.trim(),
                 id
@@ -760,6 +968,8 @@ public class ModelReleaseCandidateRepository {
         String profileKey,
         String targetName
     ) {}
+
+    private record ClaimRow(UUID modelSpecId, String activeClaimKey) {}
 
     public static final class IdempotencyCollisionException extends RuntimeException {
 

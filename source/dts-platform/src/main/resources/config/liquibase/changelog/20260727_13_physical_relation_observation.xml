@@ -5,6 +5,7 @@
     xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
 
     <changeSet id="20260727-13-physical-relation-observation" author="codex" dbms="postgresql">
+        <validCheckSum>9:134dbfe7347c0dcece2c6ad64bfe12b1</validCheckSum>
         <preConditions onFail="HALT" onError="HALT">
             <tableExists tableName="modeling_model_release_candidate"/>
             <tableExists tableName="modeling_pipeline_run"/>
@@ -140,7 +141,7 @@
                     AND scoped_bundle_checksum ~ '^[0-9a-f]{64}$'
                     AND credential_version_ref ~ '^sha256:[0-9a-f]{64}$'
                     AND expected_columns_checksum ~ '^[0-9a-f]{64}$'
-                    AND adapter ~ '^[a-z][a-z0-9_]{0,63}$'
+                    AND adapter = 'postgres'
                     AND schema_name ~ '^[A-Za-z_][A-Za-z0-9_]{0,127}$'
                     AND identifier ~ '^[A-Za-z_][A-Za-z0-9_]{0,127}$'
                     AND expected_type IN ('TABLE', 'VIEW', 'MATERIALIZED_VIEW')

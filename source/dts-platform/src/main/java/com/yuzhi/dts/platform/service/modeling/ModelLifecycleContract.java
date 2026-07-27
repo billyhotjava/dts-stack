@@ -79,6 +79,7 @@ public final class ModelLifecycleContract {
         PARTIAL,
         PUBLISHED,
         ROLLED_BACK,
+        CANCELLED,
         STALE;
 
         private static final Map<DeliveryStatus, Set<DeliveryStatus>> TRANSITIONS = transitions();
@@ -97,12 +98,12 @@ public final class ModelLifecycleContract {
 
         private static Map<DeliveryStatus, Set<DeliveryStatus>> transitions() {
             Map<DeliveryStatus, Set<DeliveryStatus>> result = new EnumMap<>(DeliveryStatus.class);
-            result.put(DRAFT, EnumSet.of(BUILDING));
+            result.put(DRAFT, EnumSet.of(BUILDING, CANCELLED));
             result.put(BUILDING, EnumSet.of(BUILD_FAILED, BUILT));
-            result.put(BUILD_FAILED, EnumSet.of(BUILDING));
+            result.put(BUILD_FAILED, EnumSet.of(BUILDING, CANCELLED));
             result.put(BUILT, EnumSet.of(QUALITY_RUNNING));
             result.put(QUALITY_RUNNING, EnumSet.of(QUALITY_FAILED, QUALITY_PASSED));
-            result.put(QUALITY_FAILED, EnumSet.of(QUALITY_RUNNING));
+            result.put(QUALITY_FAILED, EnumSet.of(QUALITY_RUNNING, CANCELLED));
             result.put(QUALITY_PASSED, EnumSet.of(REVIEW_PENDING));
             result.put(REVIEW_PENDING, EnumSet.of(REJECTED, APPROVED));
             result.put(APPROVED, EnumSet.of(PUBLISHING));
@@ -110,7 +111,7 @@ public final class ModelLifecycleContract {
             result.put(PARTIAL, EnumSet.of(PUBLISHED, ROLLED_BACK));
             result.put(PUBLISHED, EnumSet.of(ROLLED_BACK));
             for (DeliveryStatus status : values()) {
-                if (status != REJECTED && status != ROLLED_BACK && status != STALE) {
+                if (status != REJECTED && status != ROLLED_BACK && status != CANCELLED && status != STALE) {
                     result.computeIfAbsent(status, ignored -> EnumSet.noneOf(DeliveryStatus.class)).add(STALE);
                 }
             }
@@ -121,12 +122,12 @@ public final class ModelLifecycleContract {
 
         private static Map<DeliveryStatus, List<DeliveryAction>> actions() {
             Map<DeliveryStatus, List<DeliveryAction>> result = new EnumMap<>(DeliveryStatus.class);
-            result.put(DRAFT, List.of(DeliveryAction.START_BUILD));
+            result.put(DRAFT, List.of(DeliveryAction.START_BUILD, DeliveryAction.CANCEL_CANDIDATE));
             result.put(BUILDING, List.of());
-            result.put(BUILD_FAILED, List.of(DeliveryAction.RETRY_BUILD));
+            result.put(BUILD_FAILED, List.of(DeliveryAction.RETRY_BUILD, DeliveryAction.CANCEL_CANDIDATE));
             result.put(BUILT, List.of(DeliveryAction.RUN_QUALITY));
             result.put(QUALITY_RUNNING, List.of());
-            result.put(QUALITY_FAILED, List.of(DeliveryAction.RUN_QUALITY));
+            result.put(QUALITY_FAILED, List.of(DeliveryAction.RUN_QUALITY, DeliveryAction.CANCEL_CANDIDATE));
             result.put(QUALITY_PASSED, List.of(DeliveryAction.SUBMIT_REVIEW));
             result.put(REVIEW_PENDING, List.of(DeliveryAction.APPROVE, DeliveryAction.REJECT));
             result.put(REJECTED, List.of(DeliveryAction.CREATE_REPLACEMENT_CANDIDATE));
@@ -135,6 +136,7 @@ public final class ModelLifecycleContract {
             result.put(PARTIAL, List.of(DeliveryAction.RETRY_REGISTRATION, DeliveryAction.ROLLBACK));
             result.put(PUBLISHED, List.of(DeliveryAction.ROLLBACK));
             result.put(ROLLED_BACK, List.of(DeliveryAction.CREATE_REPLACEMENT_CANDIDATE));
+            result.put(CANCELLED, List.of(DeliveryAction.CREATE_REPLACEMENT_CANDIDATE));
             result.put(STALE, List.of(DeliveryAction.CREATE_REPLACEMENT_CANDIDATE));
             return Map.copyOf(result);
         }
@@ -151,6 +153,7 @@ public final class ModelLifecycleContract {
         RETRY_BUILD(DeliveryActorRole.MODEL_MAINTAINER),
         RUN_QUALITY(DeliveryActorRole.MODEL_MAINTAINER),
         SUBMIT_REVIEW(DeliveryActorRole.MODEL_MAINTAINER),
+        CANCEL_CANDIDATE(DeliveryActorRole.MODEL_MAINTAINER),
         APPROVE(DeliveryActorRole.RELEASE_REVIEWER),
         REJECT(DeliveryActorRole.RELEASE_REVIEWER),
         CREATE_REPLACEMENT_CANDIDATE(DeliveryActorRole.MODEL_MAINTAINER),

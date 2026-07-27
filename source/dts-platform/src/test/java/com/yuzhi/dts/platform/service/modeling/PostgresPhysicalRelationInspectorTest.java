@@ -76,6 +76,20 @@ class PostgresPhysicalRelationInspectorTest {
             .matches("^[0-9a-f]{64}$");
         assertThat(observation.observedAt()).isEqualTo(NOW);
         assertThat(observation.errorCode()).isNull();
+        assertThat(
+            inspector.dataTypeMatches(
+                "numeric(18,2)",
+                observation.columns().get(1).dataType()
+            )
+        )
+            .isTrue();
+        assertThat(
+            inspector.dataTypeMatches(
+                "numeric(18,2)",
+                "text"
+            )
+        )
+            .isFalse();
         verify(relation).setQueryTimeout(10);
         verify(columns).setQueryTimeout(10);
         verify(relation).setString(1, "finance");

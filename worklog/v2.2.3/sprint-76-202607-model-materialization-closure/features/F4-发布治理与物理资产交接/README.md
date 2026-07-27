@@ -1,7 +1,7 @@
 # F4：发布治理与物理资产交接
 
 **优先级**：P0
-**状态**：DRAFT
+**状态**：BLOCKED（F2/T02 的 Airflow exactly-once effect / at-least-once dispatch 证据尚未完成）
 **依赖**：F2、F3、Sprint-69/72 既有门禁；生产启用外部依赖 Sprint-36/F3 DONE
 
 ## 目标
@@ -35,7 +35,7 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|
-| T01 | 建立 Publish Intent 与角色感知候选命令 | P0 | DRAFT | F2/T03、F3/T03；PROD: Sprint-36/F3 |
+| T01 | 建立 Publish Intent 与角色感知候选命令 | P0 | BLOCKED | F2/T03、F3/T04；PROD: Sprint-36/F3 |
 | T02 | 以 Candidate 为唯一 owner 完成审核发布与本地原子提交 | P0 | DRAFT | T01、F3/T03；PROD: Sprint-36/F3 |
 | T03 | 登记输出资产字段血缘并修正 physicalAssetRef | P0 | DRAFT | T02 |
 
@@ -45,11 +45,15 @@
 - [x] Catalog identity、引用和血缘方向已固定。
 - [x] Publish Intent 与 reviewer/operator 人工边界已固定。
 - [x] mandatory local failure/partial/retry 与 external sync degraded 边界已固定。
-- [ ] F3 evidence contract GREEN。
+- [x] F3 evidence contract GREEN。
 - [x] Sprint-36/F3 实际 domain/migration/API/IT 已存在并 DONE；不能把其 READY 文档、actor separation 或页面隐藏冒充资产动作授权。
+- [x] F2/T03 已提供可重放的 `CANCEL_CANDIDATE` 命令、终态 `CANCELLED`、active claim 释放与运行证据保留。
 
-当前阻断仅为 F3/T04 typed-column contract。F4 保持 DRAFT，禁止提前编码 Candidate
-发布或 Catalog registration。
+F3/T04 typed-column，以及 F2/T03 cancel、五类 drift、replacement claim 原子交接、
+START_BUILD/retry 双线程竞争均已解除。当前只剩 F2/T02 必须以确定性 dagRunId
+关闭 Airflow submit timeout/duplicate/reconcile 的 exactly-once effect /
+at-least-once dispatch 证据；完成并归档 focused evidence 后，F4 才能进入 READY。
+在此之前不得编码 T01～T03 或 Catalog registration。
 
 ## 完成标准
 

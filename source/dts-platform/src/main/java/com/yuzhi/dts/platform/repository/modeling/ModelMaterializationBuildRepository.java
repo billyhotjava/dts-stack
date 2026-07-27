@@ -3,9 +3,12 @@ package com.yuzhi.dts.platform.repository.modeling;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.config.ModelMaterializationProperties;
+import com.yuzhi.dts.platform.service.modeling.ModelMaterializationClaimKey;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CandidateView;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.DriftReasonView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateException;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateException.Kind;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateRetryDriftGate;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -17,6 +20,7 @@ import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -32,7 +36,8 @@ import org.springframework.transaction.annotation.Transactional;
  * and append-only receipt back to DRAFT.
  */
 @Repository
-public class ModelMaterializationBuildRepository {
+public class ModelMaterializationBuildRepository
+    implements ModelReleaseCandidateRetryDriftGate {
 
     private static final Pattern CHECKSUM = Pattern.compile("^[0-9a-f]{64}$");
     private static final Pattern DBT_UNIQUE_ID = Pattern.compile(
@@ -192,6 +197,294 @@ public class ModelMaterializationBuildRepository {
         );
     }
 
+    @Transactional
+    public QueuedBuildGroup createRetryQueuedBuild(
+        CandidateView candidate,
+        Instant now
+    ) {
+        requireBuildingCandidate(candidate, now);
+        RetryDispatch previous = lockLatestRetryDispatch(candidate);
+        if (
+            !"FAILED".equals(previous.status()) ||
+            previous.candidateVersion() >= candidate.version()
+        ) {
+            throw retryReconciliationRequired(candidate, previous.status());
+        }
+        List<RetryEntryRow> entries = lockRetryEntries(
+            candidate,
+            previous
+        );
+        if (
+            entries.size() != candidate.entries().size() ||
+            entries.isEmpty()
+        ) {
+            throw retryReconciliationRequired(
+                candidate,
+                "INCOMPLETE_TERMINAL_SCOPE"
+            );
+        }
+        requireRetrySnapshotCurrent(candidate, previous, entries);
+        int attempt = previous.attempt() + 1;
+        UUID groupId = stableUuid(
+            "release-build-group:" + candidate.id() + ":a" + attempt
+        );
+        UUID invocationId = stableUuid(
+            "dbt-invocation:" + candidate.id() + ":a" + attempt
+        );
+        String dagRunId =
+            "dts_rc_" +
+            candidate.id().toString().replace("-", "") +
+            "_a" +
+            attempt;
+        List<QueuedBuildRun> runs = entries
+            .stream()
+            .map(entry ->
+                insertRetryQueuedRun(
+                    candidate,
+                    entry,
+                    previous,
+                    groupId,
+                    invocationId,
+                    dagRunId,
+                    attempt,
+                    now
+                )
+            )
+            .toList();
+        insertRetryDispatch(
+            candidate,
+            previous,
+            groupId,
+            dagRunId,
+            attempt,
+            now
+        );
+        return new QueuedBuildGroup(
+            candidate.id(),
+            candidate.version(),
+            groupId,
+            invocationId,
+            previous.executionTargetKey(),
+            previous.airflowDagId(),
+            dagRunId,
+            previous.artifactBundleChecksum(),
+            runs
+        );
+    }
+
+    @Override
+    @Transactional
+    public List<DriftReasonView> detect(CandidateView candidate) {
+        if (
+            candidate == null ||
+            candidate.status() !=
+            com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus.BUILD_FAILED
+        ) {
+            return List.of();
+        }
+        ExecutionTarget currentTarget;
+        try {
+            currentTarget = executionTarget();
+        } catch (ModelReleaseCandidateException unavailable) {
+            return retryDriftReasons(
+                candidate,
+                "The current execution target is unavailable or changed"
+            );
+        }
+        List<RetryDriftRow> rows = lockCurrentRetryEntries(candidate);
+        Map<UUID, RetryDriftRow> rowsByModel = new LinkedHashMap<>();
+        rows.forEach(row -> rowsByModel.put(row.current().modelSpecId(), row));
+        Map<UUID, BuildEntryRow> currentModels = new LinkedHashMap<>();
+        rows.forEach(row ->
+            currentModels.put(
+                row.current().modelSpecId(),
+                row.current()
+            )
+        );
+        boolean targetMatches =
+            Objects.equals(
+                candidate.executionTargetKey(),
+                currentTarget.executionTargetKey()
+            ) &&
+            Objects.equals(candidate.adapter(), currentTarget.adapter()) &&
+            Objects.equals(
+                candidate.profileKey(),
+                currentTarget.profileKey()
+            ) &&
+            Objects.equals(candidate.targetName(), currentTarget.targetName());
+
+        List<DriftReasonView> drift = new ArrayList<>();
+        for (var entry : candidate.entries()) {
+            RetryDriftRow row = rowsByModel.get(entry.modelSpecId());
+            if (row == null) {
+                drift.add(
+                    retryDriftReason(
+                        entry.modelSpecId(),
+                        entry.revision(),
+                        entry.checksum(),
+                        "The current active implementation is missing"
+                    )
+                );
+                continue;
+            }
+            PreparedEntry prepared;
+            try {
+                prepared = prepareEntry(
+                    candidate,
+                    row.current(),
+                    currentModels
+                );
+            } catch (ModelReleaseCandidateException changed) {
+                drift.add(
+                    retryDriftReason(
+                        entry.modelSpecId(),
+                        entry.revision(),
+                        entry.checksum(),
+                        "The current implementation or runnable artifact is no longer valid"
+                    )
+                );
+                continue;
+            }
+            if (
+                !targetMatches ||
+                !row.matches(prepared)
+            ) {
+                drift.add(
+                    retryDriftReason(
+                        entry.modelSpecId(),
+                        entry.revision(),
+                        entry.checksum(),
+                        "The current implementation, artifact, dependency or execution target changed after the previous attempt"
+                    )
+                );
+            }
+        }
+        return List.copyOf(drift);
+    }
+
+    private List<RetryDriftRow> lockCurrentRetryEntries(
+        CandidateView candidate
+    ) {
+        return jdbcTemplate.query(
+            """
+            select e.id as entry_id, e.model_spec_id,
+                   e.revision as model_revision,
+                   e.checksum as model_checksum,
+                   e.implementation_mode,
+                   e.implementation_id as locked_implementation_id,
+                   e.implementation_revision as locked_implementation_revision,
+                   e.implementation_checksum as locked_implementation_checksum,
+                   e.dbt_unique_id as locked_dbt_unique_id,
+                   e.target_identifier as locked_target_identifier,
+                   e.artifact_bundle_checksum as locked_artifact_bundle_checksum,
+                   e.dependency_snapshot_checksum as locked_dependency_snapshot_checksum,
+                   e.active_claim_key as locked_active_claim_key,
+                   i.id as current_implementation_id,
+                   i.implementation_revision as current_implementation_revision,
+                   i.current_implementation_checksum as current_implementation_checksum,
+                   i.ownership, i.project_key, i.dbt_unique_id,
+                   i.input_mode, i.inputs_json::text as inputs_json,
+                   i.settings_json::text as settings_json,
+                   i.materialization
+              from modeling_model_release_candidate c
+              join modeling_model_release_candidate_entry e
+                on e.tenant_id = c.tenant_id and e.candidate_id = c.id
+              join modeling_model_implementation i
+                on i.tenant_id = e.tenant_id
+               and i.plan_id = e.plan_id
+               and i.model_spec_id = e.model_spec_id
+               and i.model_revision = e.revision
+               and i.model_checksum = e.checksum
+               and i.ownership = e.implementation_mode
+               and i.status = 'ACTIVE'
+             where c.tenant_id = ? and c.id = ? and c.version = ?
+               and c.status = 'BUILD_FAILED'
+               and e.status = 'BUILD_FAILED'
+             order by e.sort_order, e.id
+             for update of c, e, i
+            """,
+            (row, rowNumber) -> {
+                BuildEntryRow current = new BuildEntryRow(
+                    row.getObject("entry_id", UUID.class),
+                    row.getObject("model_spec_id", UUID.class),
+                    row.getInt("model_revision"),
+                    row.getString("model_checksum"),
+                    row.getString("implementation_mode"),
+                    row.getObject(
+                        "current_implementation_id",
+                        UUID.class
+                    ),
+                    row.getInt("current_implementation_revision"),
+                    row.getString("current_implementation_checksum"),
+                    row.getString("ownership"),
+                    row.getString("project_key"),
+                    row.getString("dbt_unique_id"),
+                    row.getString("input_mode"),
+                    row.getString("inputs_json"),
+                    row.getString("settings_json"),
+                    row.getString("materialization")
+                );
+                return new RetryDriftRow(
+                    row.getObject(
+                        "locked_implementation_id",
+                        UUID.class
+                    ),
+                    row.getObject(
+                        "locked_implementation_revision",
+                        Integer.class
+                    ),
+                    row.getString("locked_implementation_checksum"),
+                    row.getString("locked_dbt_unique_id"),
+                    row.getString("locked_target_identifier"),
+                    row.getString("locked_artifact_bundle_checksum"),
+                    row.getString(
+                        "locked_dependency_snapshot_checksum"
+                    ),
+                    row.getString("locked_active_claim_key"),
+                    current
+                );
+            },
+            candidate.tenantId(),
+            candidate.id(),
+            candidate.version()
+        );
+    }
+
+    private static List<DriftReasonView> retryDriftReasons(
+        CandidateView candidate,
+        String message
+    ) {
+        return candidate
+            .entries()
+            .stream()
+            .map(entry ->
+                retryDriftReason(
+                    entry.modelSpecId(),
+                    entry.revision(),
+                    entry.checksum(),
+                    message
+                )
+            )
+            .toList();
+    }
+
+    private static DriftReasonView retryDriftReason(
+        UUID modelSpecId,
+        int revision,
+        String checksum,
+        String message
+    ) {
+        return new DriftReasonView(
+            modelSpecId,
+            revision,
+            checksum,
+            revision,
+            checksum,
+            "MODEL_MATERIALIZATION_RETRY_SNAPSHOT_STALE",
+            message
+        );
+    }
+
     @Transactional(readOnly = true)
     public QueuedBuildGroup requireQueuedBuild(CandidateView candidate) {
         if (candidate == null) throw new IllegalArgumentException("candidate is required");
@@ -260,6 +553,376 @@ public class ModelMaterializationBuildRepository {
             first.airflowRunId(),
             first.artifactBundleChecksum(),
             List.copyOf(runs)
+        );
+    }
+
+    private static void requireBuildingCandidate(
+        CandidateView candidate,
+        Instant now
+    ) {
+        if (
+            candidate == null ||
+            candidate.status() !=
+            com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus.BUILDING
+        ) {
+            throw failure(
+                "MODEL_MATERIALIZATION_BUILDING_REQUIRED",
+                "A BUILDING release candidate is required before queueing materialization",
+                Kind.CONFLICT,
+                Map.of()
+            );
+        }
+        if (now == null) {
+            throw new IllegalArgumentException("now is required");
+        }
+    }
+
+    private RetryDispatch lockLatestRetryDispatch(
+        CandidateView candidate
+    ) {
+        return jdbcTemplate
+            .query(
+                """
+                select candidate_version, attempt, execution_target_key,
+                       airflow_dag_id, artifact_bundle_checksum, status
+                  from modeling_materialization_dispatch
+                 where tenant_id = ? and candidate_id = ?
+                 order by attempt desc
+                 limit 1
+                 for update
+                """,
+                (row, rowNumber) ->
+                    new RetryDispatch(
+                        row.getInt("candidate_version"),
+                        row.getInt("attempt"),
+                        row.getString("execution_target_key"),
+                        row.getString("airflow_dag_id"),
+                        row.getString("artifact_bundle_checksum"),
+                        row.getString("status")
+                    ),
+                candidate.tenantId(),
+                candidate.id()
+            )
+            .stream()
+            .findFirst()
+            .orElseThrow(() ->
+                retryReconciliationRequired(
+                    candidate,
+                    "MISSING_PREVIOUS_ATTEMPT"
+                )
+            );
+    }
+
+    private List<RetryEntryRow> lockRetryEntries(
+        CandidateView candidate,
+        RetryDispatch previous
+    ) {
+        return jdbcTemplate.query(
+            """
+            select e.id as entry_id, e.model_spec_id,
+                   e.revision as model_revision,
+                   e.checksum as model_checksum,
+                   e.implementation_revision,
+                   e.implementation_checksum,
+                   e.dbt_unique_id,
+                   e.target_identifier as entry_target_identifier,
+                   e.artifact_bundle_checksum,
+                   e.dependency_snapshot_checksum,
+                   e.active_claim_key,
+                   pr.model_revision as previous_model_revision,
+                   pr.model_checksum as previous_model_checksum,
+                   pr.implementation_revision as previous_implementation_revision,
+                   pr.implementation_checksum as previous_implementation_checksum,
+                   pr.dbt_selector,
+                   pr.target as previous_target_identifier,
+                   pr.artifact_bundle_checksum as previous_group_artifact_checksum,
+                   pr.status
+              from modeling_model_release_candidate_entry e
+              join modeling_pipeline_run pr
+                on pr.tenant_id = e.tenant_id
+               and pr.release_candidate_id = e.candidate_id
+               and pr.release_candidate_entry_id = e.id
+               and pr.attempt = ?
+               and pr.run_purpose = 'RELEASE_BUILD'
+             where e.tenant_id = ? and e.candidate_id = ?
+               and e.status = 'BUILDING'
+               and e.implementation_revision is not null
+               and e.implementation_checksum is not null
+               and e.dbt_unique_id is not null
+               and e.target_identifier is not null
+               and e.artifact_bundle_checksum is not null
+               and e.dependency_snapshot_checksum is not null
+               and e.active_claim_key is not null
+               and pr.status in ('FAILED', 'BUILT')
+             order by e.sort_order, e.id
+             for update of e, pr
+            """,
+            (row, rowNumber) ->
+                new RetryEntryRow(
+                    row.getObject("entry_id", UUID.class),
+                    row.getObject("model_spec_id", UUID.class),
+                    row.getInt("model_revision"),
+                    row.getString("model_checksum"),
+                    row.getInt("implementation_revision"),
+                    row.getString("implementation_checksum"),
+                    row.getString("dbt_unique_id"),
+                    row.getString("dbt_selector"),
+                    row.getString("entry_target_identifier"),
+                    row.getString("artifact_bundle_checksum"),
+                    row.getString("dependency_snapshot_checksum"),
+                    row.getString("active_claim_key"),
+                    row.getInt("previous_model_revision"),
+                    row.getString("previous_model_checksum"),
+                    row.getInt("previous_implementation_revision"),
+                    row.getString("previous_implementation_checksum"),
+                    row.getString("previous_target_identifier"),
+                    row.getString("previous_group_artifact_checksum")
+                ),
+            previous.attempt(),
+            candidate.tenantId(),
+            candidate.id()
+        );
+    }
+
+    private static void requireRetrySnapshotCurrent(
+        CandidateView candidate,
+        RetryDispatch previous,
+        List<RetryEntryRow> entries
+    ) {
+        boolean identityMatches =
+            Objects.equals(
+                candidate.executionTargetKey(),
+                previous.executionTargetKey()
+            ) &&
+            entries
+                .stream()
+                .allMatch(entry ->
+                    entry.modelRevision() ==
+                    entry.previousModelRevision() &&
+                    Objects.equals(
+                        entry.modelChecksum(),
+                        entry.previousModelChecksum()
+                    ) &&
+                    entry.implementationRevision() ==
+                    entry.previousImplementationRevision() &&
+                    Objects.equals(
+                        entry.implementationChecksum(),
+                        entry.previousImplementationChecksum()
+                    ) &&
+                    Objects.equals(
+                        entry.selector(),
+                        dbtSelector(entry.dbtUniqueId())
+                    ) &&
+                    Objects.equals(
+                        entry.targetIdentifier(),
+                        entry.previousTargetIdentifier()
+                    ) &&
+                    Objects.equals(
+                        previous.artifactBundleChecksum(),
+                        entry.previousGroupArtifactChecksum()
+                    ) &&
+                    Objects.equals(
+                        entry.activeClaimKey(),
+                        ModelMaterializationClaimKey.derive(
+                            candidate.tenantId(),
+                            candidate.environment(),
+                            entry.modelSpecId()
+                        )
+                    )
+                );
+        String aggregate = digest(
+            entries
+                .stream()
+                .sorted(
+                    Comparator.comparing(RetryEntryRow::modelSpecId)
+                )
+                .flatMap(entry ->
+                    List.of(
+                        entry.modelSpecId().toString(),
+                        entry.artifactBundleChecksum(),
+                        entry.dependencySnapshotChecksum()
+                    )
+                        .stream()
+                )
+                .toList()
+        );
+        if (
+            !identityMatches ||
+            !previous.artifactBundleChecksum().equals(aggregate)
+        ) {
+            throw failure(
+                "MODEL_MATERIALIZATION_RETRY_SNAPSHOT_STALE",
+                "The immutable materialization snapshot changed after the previous attempt",
+                Kind.CONFLICT,
+                Map.of(
+                    "candidateId",
+                    candidate.id(),
+                    "attempt",
+                    previous.attempt()
+                )
+            );
+        }
+    }
+
+    private QueuedBuildRun insertRetryQueuedRun(
+        CandidateView candidate,
+        RetryEntryRow entry,
+        RetryDispatch previous,
+        UUID groupId,
+        UUID invocationId,
+        String dagRunId,
+        int attempt,
+        Instant now
+    ) {
+        UUID runId = stableUuid(
+            "pipeline-run:" +
+            candidate.id() +
+            ":a" +
+            attempt +
+            ":" +
+            entry.entryId()
+        );
+        String idempotencyKey =
+            "release-build:" +
+            candidate.id() +
+            ":a" +
+            attempt +
+            ":" +
+            entry.entryId();
+        int inserted = jdbcTemplate.update(
+            """
+            insert into modeling_pipeline_run (
+                id, tenant_id, model_spec_id, plan_id, model_revision, model_checksum,
+                repair_path, idempotency_key, status, airflow_dag_id, airflow_run_id,
+                dbt_selector, target, message, version, created_date, last_modified_date,
+                release_candidate_id, release_candidate_entry_id, release_candidate_version,
+                pipeline_run_group_id, implementation_revision, implementation_checksum,
+                environment, run_purpose, attempt, artifact_bundle_checksum,
+                scoped_bundle_checksum, dbt_invocation_id
+            ) values (
+                ?, ?, ?, ?, ?, ?, ?, ?, 'QUEUED', ?, ?, ?, ?, ?, 1, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, 'RELEASE_BUILD', ?, ?, null, ?
+            )
+            """,
+            runId,
+            candidate.tenantId(),
+            entry.modelSpecId(),
+            candidate.planId(),
+            entry.modelRevision(),
+            entry.modelChecksum(),
+            "/modeling/models/" +
+            entry.modelSpecId() +
+            "?tab=implementation&planId=" +
+            candidate.planId(),
+            idempotencyKey,
+            previous.airflowDagId(),
+            dagRunId,
+            entry.selector(),
+            entry.targetIdentifier(),
+            "Release candidate build retry queued",
+            Timestamp.from(now),
+            Timestamp.from(now),
+            candidate.id(),
+            entry.entryId(),
+            candidate.version(),
+            groupId,
+            entry.implementationRevision(),
+            entry.implementationChecksum(),
+            candidate.environment(),
+            attempt,
+            previous.artifactBundleChecksum(),
+            invocationId
+        );
+        if (inserted != 1) {
+            throw failure(
+                "MODEL_PIPELINE_RUN_CREATE_FAILED",
+                "Durable release build retry could not be created",
+                Kind.CONFLICT,
+                Map.of(
+                    "candidateId",
+                    candidate.id(),
+                    "modelSpecId",
+                    entry.modelSpecId(),
+                    "attempt",
+                    attempt
+                )
+            );
+        }
+        return new QueuedBuildRun(
+            runId,
+            entry.entryId(),
+            entry.modelSpecId(),
+            groupId,
+            invocationId,
+            previous.airflowDagId(),
+            dagRunId,
+            entry.selector(),
+            entry.targetIdentifier(),
+            "QUEUED",
+            attempt,
+            previous.artifactBundleChecksum()
+        );
+    }
+
+    private void insertRetryDispatch(
+        CandidateView candidate,
+        RetryDispatch previous,
+        UUID groupId,
+        String dagRunId,
+        int attempt,
+        Instant now
+    ) {
+        int inserted = jdbcTemplate.update(
+            """
+            insert into modeling_materialization_dispatch (
+                id, tenant_id, candidate_id, candidate_version, attempt,
+                execution_target_key, airflow_dag_id, airflow_run_id,
+                artifact_bundle_checksum, status, dispatch_attempts,
+                next_attempt_at, recovered, created_at, last_modified_at
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', 0, ?, false, ?, ?)
+            """,
+            groupId,
+            candidate.tenantId(),
+            candidate.id(),
+            candidate.version(),
+            attempt,
+            previous.executionTargetKey(),
+            previous.airflowDagId(),
+            dagRunId,
+            previous.artifactBundleChecksum(),
+            Timestamp.from(now),
+            Timestamp.from(now),
+            Timestamp.from(now)
+        );
+        if (inserted != 1) {
+            throw failure(
+                "MODEL_MATERIALIZATION_DISPATCH_CREATE_FAILED",
+                "Durable materialization retry dispatch could not be created",
+                Kind.CONFLICT,
+                Map.of(
+                    "candidateId",
+                    candidate.id(),
+                    "attempt",
+                    attempt
+                )
+            );
+        }
+    }
+
+    private static ModelReleaseCandidateException retryReconciliationRequired(
+        CandidateView candidate,
+        String status
+    ) {
+        return failure(
+            "MODEL_MATERIALIZATION_RETRY_RECONCILIATION_REQUIRED",
+            "The previous materialization attempt must be reconciled as failed before retry",
+            Kind.CONFLICT,
+            Map.of(
+                "candidateId",
+                candidate.id(),
+                "previousStatus",
+                status
+            )
         );
     }
 
@@ -519,12 +1182,10 @@ public class ModelMaterializationBuildRepository {
                 artifactBundleChecksum
             )
         );
-        String activeClaimKey = digest(
-            List.of(
-                candidate.tenantId(),
-                candidate.environment(),
-                row.modelSpecId().toString()
-            )
+        String activeClaimKey = ModelMaterializationClaimKey.derive(
+            candidate.tenantId(),
+            candidate.environment(),
+            row.modelSpecId()
         );
         return new PreparedEntry(
             row,
@@ -675,7 +1336,7 @@ public class ModelMaterializationBuildRepository {
                    active_claim_key = ?
              where tenant_id = ? and candidate_id = ? and id = ? and status = 'BUILDING'
                and implementation_revision is null and implementation_checksum is null
-               and active_claim_key is null
+               and (active_claim_key is null or active_claim_key = ?)
             """,
             row.implementationId(),
             row.implementationRevision(),
@@ -687,7 +1348,8 @@ public class ModelMaterializationBuildRepository {
             entry.activeClaimKey(),
             candidate.tenantId(),
             candidate.id(),
-            row.entryId()
+            row.entryId(),
+            entry.activeClaimKey()
         );
         if (updated != 1) {
             throw failure(
@@ -913,6 +1575,7 @@ public class ModelMaterializationBuildRepository {
             row.modelChecksum(),
             row.implementationRevision(),
             row.implementationChecksum(),
+            row.implementationMode(),
             row.dbtUniqueId(),
             row.targetIdentifier(),
             artifacts
@@ -1118,6 +1781,85 @@ public class ModelMaterializationBuildRepository {
         String releaseBuildDagId
     ) {}
 
+    private record RetryDispatch(
+        int candidateVersion,
+        int attempt,
+        String executionTargetKey,
+        String airflowDagId,
+        String artifactBundleChecksum,
+        String status
+    ) {}
+
+    private record RetryEntryRow(
+        UUID entryId,
+        UUID modelSpecId,
+        int modelRevision,
+        String modelChecksum,
+        int implementationRevision,
+        String implementationChecksum,
+        String dbtUniqueId,
+        String selector,
+        String targetIdentifier,
+        String artifactBundleChecksum,
+        String dependencySnapshotChecksum,
+        String activeClaimKey,
+        int previousModelRevision,
+        String previousModelChecksum,
+        int previousImplementationRevision,
+        String previousImplementationChecksum,
+        String previousTargetIdentifier,
+        String previousGroupArtifactChecksum
+    ) {}
+
+    private record RetryDriftRow(
+        UUID lockedImplementationId,
+        Integer lockedImplementationRevision,
+        String lockedImplementationChecksum,
+        String lockedDbtUniqueId,
+        String lockedTargetIdentifier,
+        String lockedArtifactBundleChecksum,
+        String lockedDependencySnapshotChecksum,
+        String lockedActiveClaimKey,
+        BuildEntryRow current
+    ) {
+        private boolean matches(PreparedEntry prepared) {
+            return (
+                Objects.equals(
+                    lockedImplementationId,
+                    current.implementationId()
+                ) &&
+                Objects.equals(
+                    lockedImplementationRevision,
+                    current.implementationRevision()
+                ) &&
+                Objects.equals(
+                    lockedImplementationChecksum,
+                    current.implementationChecksum()
+                ) &&
+                Objects.equals(
+                    lockedDbtUniqueId,
+                    current.dbtUniqueId()
+                ) &&
+                Objects.equals(
+                    lockedTargetIdentifier,
+                    prepared.targetIdentifier()
+                ) &&
+                Objects.equals(
+                    lockedArtifactBundleChecksum,
+                    prepared.artifactBundleChecksum()
+                ) &&
+                Objects.equals(
+                    lockedDependencySnapshotChecksum,
+                    prepared.dependencySnapshotChecksum()
+                ) &&
+                Objects.equals(
+                    lockedActiveClaimKey,
+                    prepared.activeClaimKey()
+                )
+            );
+        }
+    }
+
     public record QueuedBuildRun(
         UUID id,
         UUID candidateEntryId,
@@ -1158,11 +1900,21 @@ public class ModelMaterializationBuildRepository {
         String modelChecksum,
         int implementationRevision,
         String implementationChecksum,
+        String implementationMode,
         String dbtUniqueId,
         String targetIdentifier,
         List<BuildArtifact> artifacts
     ) {
         public CandidateBuildEntry {
+            if (
+                implementationMode == null ||
+                implementationMode.isBlank()
+            ) {
+                throw new IllegalArgumentException(
+                    "implementationMode is required"
+                );
+            }
+            implementationMode = implementationMode.trim();
             artifacts = artifacts == null
                 ? List.of()
                 : List.copyOf(artifacts);

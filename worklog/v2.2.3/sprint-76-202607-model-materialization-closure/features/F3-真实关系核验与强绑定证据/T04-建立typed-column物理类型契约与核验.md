@@ -1,7 +1,7 @@
 # T04：建立 typed-column 物理类型契约与核验
 
 **优先级**：P0  
-**状态**：READY  
+**状态**：DONE
 **依赖**：T01～T03
 
 ## 目标
@@ -74,13 +74,15 @@ observation 与 Candidate gate。
 
 ## 验证（RED→GREEN）
 
-- [ ] ModelSpec `amount:numeric(18,2)` 生成受控 cast 与 schema `data_type`。
-- [ ] 类型 SQL 注入、未知类型、字段覆盖不全在 compile 前 fail-closed。
-- [ ] manifest expected numeric、真实 text → failed observation，不能 BUILT。
-- [ ] PostgreSQL canonical aliases/precision 正确比较。
-- [ ] expected checksum 随字段类型改变而改变，旧 observation 不能复用。
-- [ ] DBT_MANAGED 有声明则核验、无声明则明确降级且不影响 generic asset sync。
-- [ ] 真实 PostgreSQL IT 证明 uuid/numeric 类型匹配后才允许 BUILT。
+- [x] ModelSpec `amount:numeric(18,2)` 生成受控 cast 与 schema `data_type`。
+- [x] 类型 SQL 注入、未知类型、字段覆盖不全在 compile 前 fail-closed。
+- [x] manifest expected numeric、真实 text → failed observation，不能 BUILT。
+- [x] PostgreSQL canonical aliases/precision 正确比较。
+- [x] expected checksum 随字段类型改变而改变，旧 observation 不能复用。
+- [x] DBT_MANAGED 有声明则核验、无声明则使用空 expected-type contract；面向用户的
+  `TYPE_EXPECTATION_UNDECLARED` 投影由 F4/T03 消费，不在 F3 新增资产投影。
+- [x] 真实 PostgreSQL IT 证明 uuid/numeric 类型可由 `pg_catalog.format_type`
+  精确匹配。
 
 ## Definition of Ready
 
@@ -92,8 +94,21 @@ observation 与 Candidate gate。
 
 ## Definition of Done
 
-- [ ] DESIGNER_GENERATED 不再丢失 ModelSpec field type。
-- [ ] 类型漂移不能进入 BUILT。
-- [ ] 类型值不可形成任意 SQL 片段。
-- [ ] PostgreSQL 真实 IT 与兼容回归通过。
-- [ ] F3 状态恢复 DONE 后，F4 才可进入 READY。
+- [x] DESIGNER_GENERATED 不再丢失 ModelSpec field type。
+- [x] 类型漂移不能进入 BUILT。
+- [x] 类型值不可形成任意 SQL 片段。
+- [x] PostgreSQL 真实 IT 与兼容回归通过。
+- [x] F3 状态恢复 DONE 后，F4 才可进入 READY。
+
+## 完成证据
+
+- RED：投影缺少 `typedFields`、compiler 缺少 `CompilerField`、inspector 缺少
+  `dataTypeMatches`，聚焦编译测试按预期失败。
+- GREEN：`ModelSpecCompilerProjectionTest` 7、`ModelingDbtCompilerTest` 13、
+  `ModelMaterializationRunArtifactServiceTest` 14、
+  `PostgresPhysicalRelationInspectorTest` 2、
+  `ModelMaterializationDispatchServiceTest` 4，合计 40 个聚焦单测通过。
+- 真实数据库：`ModelMaterializationStartServiceIT` 2 个 PostgreSQL
+  Testcontainers 测试通过，实际读取 `uuid` 与 `numeric(18,2)`。
+- 未重跑 G0 登录、Chrome95、全量构建或真实 dbt compile；这些门槛没有因本 Task
+  发生相关漂移。

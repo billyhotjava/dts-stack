@@ -34,7 +34,8 @@ class ModelLifecycleContractTest {
                 .filter(status ->
                     status != DeliveryStatus.REJECTED &&
                     status != DeliveryStatus.ROLLED_BACK &&
-                    status != DeliveryStatus.STALE
+                    status != DeliveryStatus.STALE &&
+                    status != DeliveryStatus.CANCELLED
                 )
                 .allMatch(status -> DeliveryStatus.canTransition(status, DeliveryStatus.STALE))
         ).isTrue();
@@ -47,9 +48,27 @@ class ModelLifecycleContractTest {
             .containsExactly(DeliveryAction.CREATE_REPLACEMENT_CANDIDATE);
         assertThat(DeliveryStatus.STALE.allowedActions())
             .containsExactly(DeliveryAction.CREATE_REPLACEMENT_CANDIDATE);
+        assertThat(DeliveryStatus.CANCELLED.allowedActions())
+            .containsExactly(DeliveryAction.CREATE_REPLACEMENT_CANDIDATE);
         // F1-T02/T03 creates the replacement with a new candidate ID; this candidate remains terminal.
         assertThat(DeliveryStatus.canTransition(DeliveryStatus.QUALITY_PASSED, DeliveryStatus.PUBLISHED)).isFalse();
         assertThat(DeliveryStatus.canTransition(DeliveryStatus.PUBLISHED, DeliveryStatus.DRAFT)).isFalse();
+    }
+
+    @Test
+    void cancellationIsMaintainerOwnedTerminalAndOnlyAvailableBeforeReview() {
+        assertThat(DeliveryStatus.canTransition(DeliveryStatus.DRAFT, DeliveryStatus.CANCELLED)).isTrue();
+        assertThat(DeliveryStatus.canTransition(DeliveryStatus.BUILD_FAILED, DeliveryStatus.CANCELLED)).isTrue();
+        assertThat(DeliveryStatus.canTransition(DeliveryStatus.QUALITY_FAILED, DeliveryStatus.CANCELLED)).isTrue();
+        assertThat(DeliveryStatus.canTransition(DeliveryStatus.BUILDING, DeliveryStatus.CANCELLED)).isFalse();
+        assertThat(DeliveryStatus.canTransition(DeliveryStatus.BUILT, DeliveryStatus.CANCELLED)).isFalse();
+        assertThat(DeliveryStatus.canTransition(DeliveryStatus.REVIEW_PENDING, DeliveryStatus.CANCELLED)).isFalse();
+        assertThat(DeliveryStatus.canTransition(DeliveryStatus.CANCELLED, DeliveryStatus.DRAFT)).isFalse();
+        assertThat(DeliveryStatus.canTransition(DeliveryStatus.CANCELLED, DeliveryStatus.STALE)).isFalse();
+        assertThat(DeliveryStatus.DRAFT.allowedActions()).contains(DeliveryAction.CANCEL_CANDIDATE);
+        assertThat(DeliveryStatus.BUILD_FAILED.allowedActions()).contains(DeliveryAction.CANCEL_CANDIDATE);
+        assertThat(DeliveryStatus.QUALITY_FAILED.allowedActions()).contains(DeliveryAction.CANCEL_CANDIDATE);
+        assertThat(DeliveryAction.CANCEL_CANDIDATE.requiredRole()).isEqualTo(DeliveryActorRole.MODEL_MAINTAINER);
     }
 
     @Test

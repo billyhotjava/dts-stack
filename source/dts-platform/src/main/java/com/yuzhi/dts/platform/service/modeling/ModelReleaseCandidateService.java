@@ -62,14 +62,23 @@ public class ModelReleaseCandidateService {
     private final Clock clock;
     private final Supplier<UUID> idGenerator;
     private final ModelClassificationPublishGate classificationGate;
+    private final ModelReleaseCandidateRetryDriftGate retryDriftGate;
 
     @Autowired
     public ModelReleaseCandidateService(
         ModelReleaseCandidateRepository repository,
         ObjectMapper objectMapper,
-        ModelClassificationPublishGate classificationGate
+        ModelClassificationPublishGate classificationGate,
+        ModelReleaseCandidateRetryDriftGate retryDriftGate
     ) {
-        this(repository, objectMapper, Clock.systemUTC(), UUID::randomUUID, classificationGate);
+        this(
+            repository,
+            objectMapper,
+            Clock.systemUTC(),
+            UUID::randomUUID,
+            classificationGate,
+            retryDriftGate
+        );
     }
 
     ModelReleaseCandidateService(
@@ -78,7 +87,14 @@ public class ModelReleaseCandidateService {
         Clock clock,
         Supplier<UUID> idGenerator
     ) {
-        this(repository, objectMapper, clock, idGenerator, null);
+        this(
+            repository,
+            objectMapper,
+            clock,
+            idGenerator,
+            null,
+            candidate -> List.of()
+        );
     }
 
     ModelReleaseCandidateService(
@@ -88,11 +104,33 @@ public class ModelReleaseCandidateService {
         Supplier<UUID> idGenerator,
         ModelClassificationPublishGate classificationGate
     ) {
+        this(
+            repository,
+            objectMapper,
+            clock,
+            idGenerator,
+            classificationGate,
+            candidate -> List.of()
+        );
+    }
+
+    ModelReleaseCandidateService(
+        ModelReleaseCandidateRepository repository,
+        ObjectMapper objectMapper,
+        Clock clock,
+        Supplier<UUID> idGenerator,
+        ModelClassificationPublishGate classificationGate,
+        ModelReleaseCandidateRetryDriftGate retryDriftGate
+    ) {
         this.repository = Objects.requireNonNull(repository, "repository is required");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper is required");
         this.clock = Objects.requireNonNull(clock, "clock is required");
         this.idGenerator = Objects.requireNonNull(idGenerator, "idGenerator is required");
         this.classificationGate = classificationGate;
+        this.retryDriftGate = Objects.requireNonNull(
+            retryDriftGate,
+            "retryDriftGate is required"
+        );
         this.canonicalWriter = objectMapper
             .copy()
             .setSerializationInclusion(JsonInclude.Include.ALWAYS)
@@ -244,7 +282,7 @@ public class ModelReleaseCandidateService {
         if (!isReplacementSource(source.status())) {
             throw new ModelReleaseCandidateException(
                 REPLACEMENT_NOT_ALLOWED,
-                "Only rejected, stale or rolled-back candidates can be replaced",
+                "Only rejected, stale, cancelled or rolled-back candidates can be replaced",
                 Kind.CONFLICT,
                 Map.of("candidateId", source.id(), "status", source.status())
             );
@@ -264,7 +302,16 @@ public class ModelReleaseCandidateService {
             command.idempotencyKey(),
             command.reason() + " [replaces " + source.id() + "]"
         );
-        return createWithOrigin(tenant, actorId, replacement, source.origin());
+        CommandResult result = createWithOrigin(
+            tenant,
+            actorId,
+            replacement,
+            source.origin()
+        );
+        if (!result.replayed()) {
+            repository.transferActiveClaims(source, result.candidate());
+        }
+        return result;
     }
 
     @Transactional
@@ -389,7 +436,8 @@ public class ModelReleaseCandidateService {
         if (isReplacementSource(current.status())) {
             throw invalidTransition(current, command.targetStatus());
         }
-        if (current.entries().isEmpty()) {
+        boolean cancellation = command.targetStatus() == DeliveryStatus.CANCELLED;
+        if (current.entries().isEmpty() && !cancellation) {
             throw new ModelReleaseCandidateException(
                 ModelReleaseCandidateContract.SCOPE_EMPTY_ERROR_CODE,
                 "Select at least one current ModelSpec before locking the candidate scope",
@@ -398,7 +446,19 @@ public class ModelReleaseCandidateService {
             );
         }
 
-        List<DriftReasonView> driftReasons = scopeDriftEntries(tenant, current.planId(), current.entries(), true);
+        List<DriftReasonView> driftReasons = cancellation
+            ? List.of()
+            : scopeDriftEntries(tenant, current.planId(), current.entries(), true);
+        if (
+            driftReasons.isEmpty() &&
+            current.status() == DeliveryStatus.BUILD_FAILED &&
+            command.targetStatus() == DeliveryStatus.BUILDING
+        ) {
+            List<DriftReasonView> retryDrift = retryDriftGate.detect(current);
+            driftReasons = retryDrift == null
+                ? List.of()
+                : List.copyOf(retryDrift);
+        }
         if (command.targetStatus() == DeliveryStatus.STALE && driftReasons.isEmpty()) {
             throw new ModelReleaseCandidateException(
                 "MODEL_RELEASE_CANDIDATE_DRIFT_REQUIRED",
@@ -953,7 +1013,12 @@ public class ModelReleaseCandidateService {
     }
 
     private static boolean isReplacementSource(DeliveryStatus status) {
-        return status == DeliveryStatus.REJECTED || status == DeliveryStatus.STALE || status == DeliveryStatus.ROLLED_BACK;
+        return (
+            status == DeliveryStatus.REJECTED ||
+            status == DeliveryStatus.STALE ||
+            status == DeliveryStatus.ROLLED_BACK ||
+            status == DeliveryStatus.CANCELLED
+        );
     }
 
     private static String driftReason(List<DriftReasonView> reasons) {

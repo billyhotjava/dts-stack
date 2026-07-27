@@ -82,11 +82,13 @@ public final class ModelingDbtCompiler {
         String layer = model.layer().name().toLowerCase();
         String outputDirectory = "models/" + layer + "/" + name + "/v" + model.revision() + "/i" + projection.implementationRevision();
         List<String> columns = selectedColumns(model);
+        Map<String, ValidatedField> fieldTypes =
+            validateTypedFields(projection, columns);
         String stgName = "stg_" + name;
         Map<String, String> files = new java.util.LinkedHashMap<>();
         files.put(stgName + ".sql", renderEphemeralStg(projection, columns));
-        files.put(name + ".sql", renderModelSql(projection, columns, stgName, executionPlan));
-        files.put(name + ".yml", renderRunnableSchema(model, columns, name));
+        files.put(name + ".sql", renderModelSql(projection, columns, fieldTypes, stgName, executionPlan));
+        files.put(name + ".yml", renderRunnableSchema(model, columns, fieldTypes, name));
         return new CompiledArtifacts(outputDirectory, Map.copyOf(files));
     }
 
@@ -134,11 +136,22 @@ public final class ModelingDbtCompiler {
     private static String renderModelSql(
         ModelSpecCompilerProjection.ImplementationProjection projection,
         List<String> columns,
+        Map<String, ValidatedField> fieldTypes,
         String stgName,
         ModelImplementationExecutionPlanner.ExecutionPlan executionPlan
     ) {
         ModelingVNextContract.ModelSpec model = projection.model();
-        String select = columns.stream().map(column -> "    " + column).collect(Collectors.joining(",\n"));
+        String select = columns
+            .stream()
+            .map(column ->
+                "    cast(" +
+                column +
+                " as " +
+                fieldTypes.get(column).type().postgresType() +
+                ") as " +
+                column
+            )
+            .collect(Collectors.joining(",\n"));
         String uniqueKey = executionPlan.uniqueKey()
             .stream()
             .map(value -> "'" + jinjaString(value) + "'")
@@ -308,6 +321,62 @@ public final class ModelingDbtCompiler {
         return result;
     }
 
+    private static Map<String, ValidatedField> validateTypedFields(
+        ModelSpecCompilerProjection.ImplementationProjection projection,
+        List<String> columns
+    ) {
+        if (
+            projection.typedFields() == null ||
+            projection.typedFields().isEmpty()
+        ) {
+            throw new CompileException(
+                "MODEL_IMPLEMENTATION_FIELD_TYPE_REQUIRED"
+            );
+        }
+        Map<String, ValidatedField> fields =
+            new java.util.LinkedHashMap<>();
+        for (
+            ModelSpecCompilerProjection.CompilerField field
+            : projection.typedFields()
+        ) {
+            if (field == null || !identifier(field.name())) {
+                throw new CompileException(
+                    "MODEL_IMPLEMENTATION_FIELD_TYPE_COVERAGE_INVALID"
+                );
+            }
+            ModelFieldPhysicalTypeContract.TypeDescriptor type;
+            try {
+                type = ModelFieldPhysicalTypeContract.requireSupported(
+                    field.dataType()
+                );
+            } catch (IllegalArgumentException unsupported) {
+                throw new CompileException(
+                    "MODEL_IMPLEMENTATION_FIELD_TYPE_UNSUPPORTED"
+                );
+            }
+            if (
+                fields.putIfAbsent(
+                    field.name(),
+                    new ValidatedField(field, type)
+                ) !=
+                null
+            ) {
+                throw new CompileException(
+                    "MODEL_IMPLEMENTATION_FIELD_TYPE_COVERAGE_INVALID"
+                );
+            }
+        }
+        if (
+            fields.size() != columns.size() ||
+            !fields.keySet().containsAll(columns)
+        ) {
+            throw new CompileException(
+                "MODEL_IMPLEMENTATION_FIELD_TYPE_COVERAGE_INVALID"
+            );
+        }
+        return Map.copyOf(fields);
+    }
+
     private static String renderMappedColumn(String column, Map<String, String> mappings, Map<String, String> casts) {
         String expression = mappings.getOrDefault(column, column);
         String type = casts.get(column);
@@ -393,14 +462,37 @@ public final class ModelingDbtCompiler {
     private static String renderRunnableSchema(
         ModelingVNextContract.ModelSpec model,
         List<String> columns,
+        Map<String, ValidatedField> fieldTypes,
         String resourceName
     ) {
-        return renderSchema(model, columns, resourceName, true);
+        return renderSchema(
+            model,
+            columns,
+            fieldTypes,
+            resourceName,
+            true
+        );
     }
 
     private static String renderSchema(
         ModelingVNextContract.ModelSpec model,
         List<String> columns,
+        String resourceName,
+        boolean includeModelTests
+    ) {
+        return renderSchema(
+            model,
+            columns,
+            Map.of(),
+            resourceName,
+            includeModelTests
+        );
+    }
+
+    private static String renderSchema(
+        ModelingVNextContract.ModelSpec model,
+        List<String> columns,
+        Map<String, ValidatedField> fieldTypes,
         String resourceName,
         boolean includeModelTests
     ) {
@@ -422,6 +514,23 @@ public final class ModelingDbtCompiler {
                 ? null
                 : model.standardBindings().stream().filter(binding -> binding != null && column.equals(binding.fieldName())).map(ModelingVNextContract.StandardBinding::standardElementId).filter(ModelingDbtCompiler::notBlank).findFirst().orElse(null);
             yaml.append("      - name: ").append(column).append("\n        description: \"").append(escape(standard == null ? "模型字段" : "数据标准 " + standard)).append("\"\n");
+            ValidatedField fieldType =
+                fieldTypes.get(column);
+            if (fieldType != null) {
+                yaml
+                    .append("        data_type: ")
+                    .append(fieldType.type().postgresType())
+                    .append("\n        meta:\n")
+                    .append("          dts_logical_data_type: \"")
+                    .append(escape(fieldType.type().logicalType()))
+                    .append("\"\n")
+                    .append("          dts_expected_physical_type: \"")
+                    .append(escape(fieldType.type().postgresType()))
+                    .append("\"\n")
+                    .append("          dts_nullable: ")
+                    .append(fieldType.field().nullable())
+                    .append("\n");
+            }
             if (model.grain().keys().stream().anyMatch(key -> column.equals(key))) {
                 yaml.append("        tests:\n          - not_null\n");
             }
@@ -469,4 +578,9 @@ public final class ModelingDbtCompiler {
     private static boolean isBlank(String value) {
         return value == null || value.isBlank();
     }
+
+    private record ValidatedField(
+        ModelSpecCompilerProjection.CompilerField field,
+        ModelFieldPhysicalTypeContract.TypeDescriptor type
+    ) {}
 }

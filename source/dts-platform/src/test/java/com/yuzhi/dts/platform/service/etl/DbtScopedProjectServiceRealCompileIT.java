@@ -236,7 +236,17 @@ class DbtScopedProjectServiceRealCompileIT {
                 settings,
                 materialization,
                 List.of("project_id"),
-                "76000000-0000-0000-0000-000000000000"
+                "76000000-0000-0000-0000-000000000000",
+                columns
+                    .stream()
+                    .map(column ->
+                        new ModelSpecCompilerProjection.CompilerField(
+                            column,
+                            casts.getOrDefault(column, "string"),
+                            false
+                        )
+                    )
+                    .toList()
             );
         ModelingDbtCompiler.CompiledArtifacts compiled = ModelingDbtCompiler.compile(projection);
         List<DbtScopedProjectService.CandidateArtifact> artifacts = compiled

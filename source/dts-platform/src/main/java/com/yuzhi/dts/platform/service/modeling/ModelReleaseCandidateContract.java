@@ -486,6 +486,7 @@ public final class ModelReleaseCandidateContract {
         RETRY_BUILD,
         RUN_QUALITY,
         SUBMIT_REVIEW,
+        CANCEL_CANDIDATE,
         APPROVE,
         REJECT,
         CREATE_REPLACEMENT_CANDIDATE,

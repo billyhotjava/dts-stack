@@ -84,6 +84,17 @@ public class PostgresPhysicalRelationInspector
     }
 
     @Override
+    public boolean dataTypeMatches(
+        String expectedType,
+        String actualType
+    ) {
+        return ModelFieldPhysicalTypeContract.postgresTypesMatch(
+            expectedType,
+            actualType
+        );
+    }
+
+    @Override
     public PhysicalRelationObservation observe(
         TargetContext context,
         RelationLocator locator

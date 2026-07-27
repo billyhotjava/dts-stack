@@ -1,7 +1,7 @@
 # T02：复用现有 dbt/Airflow 通道完成可靠调度与回收
 
 **优先级**：P0
-**状态**：DRAFT
+**状态**：IN_PROGRESS
 **依赖**：T01、T04
 
 ## 目标
@@ -45,15 +45,15 @@
 
 ## 验证（RED→GREEN）
 
-- [ ] fake gateway 的 timeout/restart/duplicate callback tests。
-- [ ] “Airflow 已接收但 HTTP 超时”只存在一个确定性 dagRunId。
-- [ ] duplicate dagRunId 响应走对账，不生成第二次外部执行。
-- [ ] candidate 多 entry 只触发一个 DAG run。
+- [x] fake gateway 的 timeout/restart/duplicate callback tests。
+- [x] “Airflow 已接收但 HTTP 超时”只存在一个确定性 dagRunId。
+- [x] duplicate dagRunId 响应走对账，不生成第二次外部执行。
+- [x] candidate 多 entry 只触发一个 DAG run。
 - [ ] 普通与高级页面的构建请求落到同一 executor DAG/runtime spec。
 - [ ] RELEASE_BUILD/plan DAG 静态检查只 import 同一 task factory；仓库中没有第二个 canonical Docker dbt runtime builder。
 - [ ] manifest 每个 entry 必须匹配 model/implementation meta。
 - [ ] sync/probe 失败时 Airflow DagRun 与 pipeline run 均失败。
-- [ ] projectDir/selector/target/credential 的 conf 注入被拒。
+- [x] projectDir/selector/target/credential 的 conf 注入被拒。
 - [ ] service token 缺失/伪造、runtimeSpecToken 重放、profile lease 过期或路径穿越均在启动 dbt 前失败。
 - [ ] Airflow UI/API 无法覆盖 image/path/command/callable，dbt 生产 DAG namespace 中非平台受管 Python DAG 为 0。
 - [ ] 旧 per-tag DAG 迁移后触发数为 0，并完成 pause/rollback 演练。
@@ -62,8 +62,41 @@
 ## Definition of Done
 
 - [ ] candidateId 能串联到 dagRunId/invocationId。
-- [ ] `(candidateId,version,attempt)` 与 dagRunId 一一对应。
+- [x] `(candidateId,version,attempt)` 与 dagRunId 一一对应。
 - [ ] 无需用户手工配置 DAG，且 DAG 数量不按模型数增长。
 - [ ] 两类 DAG 的运行逻辑只有一个版本化 Python owner；Java renderer 不含 runtime shell。
 - [ ] 页面刷新/服务重启不丢状态。
 - [ ] DBT_SUCCEEDED 与关系核验状态严格分离。
+
+## 当前实现证据（2026-07-28）
+
+- START_BUILD 已先在数据库事务内写入 deterministic `dagRunId`、QUEUED
+  pipeline rows 与 PENDING dispatch；scheduled dispatcher 在事务外认领并调用仓库
+  唯一 `AirflowClient`。
+- `DbtExecutionGateway` 现区分“只读对账”和“允许提交”：首次提交前无法证明
+  DagRun 不存在时保持 UNKNOWN，不盲触发；HTTP timeout/duplicate 后只按精确
+  `dagId + dagRunId` 恢复。
+- 已存在 DagRun 必须同时匹配 durable conf
+  `pipelineRunGroupId/candidateId/version/attempt/purpose/token/bundle`；同 run id
+  不同 conf 返回 `MODEL_AIRFLOW_RUN_IDENTITY_CONFLICT`，不能冒名恢复。
+- UNKNOWN/stale-claim 恢复优先使用已持久化 token digest、expiry 和 scoped
+  checksum 做只读对账；即使 runtime token 已过期，只要 Airflow 已接收正确
+  DagRun，仍可恢复 SUBMITTED，不会误写 BLOCKED 或再次 POST。
+- 聚焦 Java 测试：`AirflowDbtExecutionGatewayTest`、`ModelMaterializationDispatchServiceTest`
+  与 `DbtDagServiceTest` 全部通过；覆盖 timeout-after-accept、existing duplicate、
+  reconciliation unavailable、conf identity conflict、local commit failure、expired-token
+  recovery、多 entry 单次 submission 和 thin DAG 原子写。
+- Python factory 4/4 通过：固定 root/opaque lease、参数数组
+  `subprocess.run(check=True)`、DagRun conf override/path traversal 拒绝，且 factory
+  只有一个 Docker runtime owner。
+
+## 剩余门槛
+
+1. 当前证据证明本地 exactly-once effect 协议，但尚未在真实 Airflow 上执行
+   “接收后 HTTP timeout / duplicate 409 / platform restart”故障注入，因此 Task
+   保持 IN_PROGRESS，不能据此解除 PROD NO-GO。
+2. 高级 SQL 旧 route 仍是 legacy 兼容入口；普通与高级页面统一委托
+   Candidate Build Intent、计划 DAG 复用同一 factory 分别由 F5/T01 与 F7/T02
+   完成，不能在本 Task 直接把旧任意 selector/conf 接到 canonical runtime。
+3. service token、profile lease、真实 sync/probe/finalize 失败传播与 secret scan
+   仍等待 T04/F6 的集成证据。

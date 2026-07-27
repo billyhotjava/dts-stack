@@ -1,7 +1,7 @@
 # F3：真实关系核验与强绑定证据
 
 **优先级**：P0
-**状态**：IN_PROGRESS（T01～T03 GREEN；typed-column T04 READY）
+**状态**：DONE（T01～T04 GREEN）
 **依赖**：F2
 
 ## 目标
@@ -33,7 +33,7 @@
 | T01 | 建立RelationLocator与目标库实时探针 | P0 | DONE | F2/T02 |
 | T02 | 建立append-only核验证据与新鲜度约束 | P0 | DONE | T01 |
 | T03 | 汇聚构建状态并实现adapter能力fail-closed | P0 | DONE | T02、F2/T03 |
-| T04 | 建立 typed-column 物理类型契约与核验 | P0 | READY | T01～T03 |
+| T04 | 建立 typed-column 物理类型契约与核验 | P0 | DONE | T01～T03 |
 
 ## Definition of Ready
 
@@ -46,7 +46,7 @@
 
 - [x] run_results success 不能绕过 relation absence。
 - [x] target identifier、relation type、列名及顺序与 current artifact 对齐。
-- [ ] DESIGNER_GENERATED 的字段数据类型与 current ModelSpec/dbt artifact/真实 relation 对齐。
+- [x] DESIGNER_GENERATED 的字段数据类型与 current ModelSpec/dbt artifact/真实 relation 对齐。
 - [x] observation append-only、可追踪且不能跨 revision。
 - [x] unsupported adapter 不产生 false positive。
 
@@ -61,4 +61,5 @@
 - P0 只注册 PostgreSQL inspector；未知 adapter 明确 fail-closed。原
   `DBT_MANAGED` 资产同步兼容测试保持通过。
 - 2026-07-28 架构复审确认：`ModelSpec.dataType` 已是必填契约，投影时丢失属于正确性
-  缺陷，不是可选 hardening。F3 新增 T04，在其 GREEN 前不得进入 F4 发布实现。
+  缺陷，不是可选 hardening。T04 已以 40 个聚焦单测和 2 个真实 PostgreSQL IT
+  关闭；F4 只因此解除 typed-column 阻断，不代表发布治理已实现。

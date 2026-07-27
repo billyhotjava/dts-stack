@@ -251,6 +251,51 @@ class ModelReleaseCandidateResourceTest {
     }
 
     @Test
+    void cancelRequiresStrongEtagAndDelegatesOnlyTheServerOwnedCancelCommand() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", null));
+        CandidateView cancelled = new CandidateView(
+            candidate().id(),
+            candidate().tenantId(),
+            candidate().planId(),
+            candidate().environment(),
+            DeliveryStatus.CANCELLED,
+            5,
+            candidate().idempotencyKey(),
+            candidate().requestHash(),
+            candidate().audit(),
+            "alice",
+            candidate().lastModifiedAt().plusSeconds(1),
+            List.of()
+        );
+        when(service.cancel(
+            "server-tenant",
+            "alice",
+            PLAN_ID,
+            CANDIDATE_ID,
+            4,
+            "cancel-1",
+            "abandon failed build"
+        ))
+            .thenReturn(new CommandResult(cancelled, false, List.of()));
+
+        mockMvc
+            .perform(
+                post(
+                    "/api/modeling/plans/{planId}/release-candidates/{candidateId}/cancel",
+                    PLAN_ID,
+                    CANDIDATE_ID
+                )
+                    .header("If-Match", ETAG)
+                    .header("Idempotency-Key", "cancel-1")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"reason\":\"abandon failed build\"}")
+            )
+            .andExpect(status().isOk())
+            .andExpect(header().string("ETag", "\"release-candidate:" + CANDIDATE_ID + ":5\""))
+            .andExpect(jsonPath("$.data.candidate.status").value("CANCELLED"));
+    }
+
+    @Test
     void missingIdempotencyKeyIsRejectedBeforeCallingTheService() throws Exception {
         mockMvc
             .perform(
