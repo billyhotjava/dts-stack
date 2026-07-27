@@ -48,6 +48,12 @@ public class CatalogAssetPortalService {
 
     static final long MAX_TAG_FILTER_CANDIDATES = 5_000;
 
+    /**
+     * 概览统计的内存聚合扫描上限。批量元数据加载消除逐行查询后，与标签筛选候选上限同档。
+     * 达到该上限即视为截断，与 total 的精确性无关。
+     */
+    static final int ASSET_STATS_SCAN_CAP = 5_000;
+
     private final OpenMetadataAssetCacheRepository assetRepository;
     private final OpenMetadataColumnCacheRepository columnRepository;
     private final OpenMetadataLineageCacheRepository lineageRepository;
@@ -86,7 +92,7 @@ public class CatalogAssetPortalService {
     /** 资产概览聚合（地图页数据源）：内部翻页复用 listAssets，可见性规则单一来源。 */
     public CatalogAssetOverviewAggregator.AssetOverview overview(AssetQuery query, String activeDept) {
         final int scanPageSize = 200;
-        final int scanMaxPages = 10; // 首版内存聚合上限 2000 条，超限置 truncated
+        final int scanMaxPages = ASSET_STATS_SCAN_CAP / scanPageSize;
         List<AssetSummary> rows = new ArrayList<>();
         long total = 0;
         for (int page = 0; page < scanMaxPages; page++) {
@@ -116,7 +122,9 @@ public class CatalogAssetPortalService {
                 break;
             }
         }
-        boolean truncated = rows.size() < total;
+        // 截断只由扫描上限决定。此前用 rows.size() < total 判定，一旦 total 因任何原因
+        // 大于实际可枚举的行数（例如 legacy 行取不到），该条件恒真，警告便长期误报。
+        boolean truncated = rows.size() >= ASSET_STATS_SCAN_CAP;
         return CatalogAssetOverviewAggregator.aggregate(rows, rows.size(), truncated);
     }
 
@@ -132,12 +140,15 @@ public class CatalogAssetPortalService {
         int size = Math.max(1, Math.min(query.size(), 200));
         var pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "lastSyncedAt").and(Sort.by("fqn").ascending()));
         var pageData = assetRepository.findAll(buildSpec(query), pageable);
+        // 批量预载扩展/映射/legacy，避免逐行 findFirstByOmAsset + findFirstByFqnIgnoreCase 的 N+1；
+        // 可见性判定仍逐行走 canRead，规则不变。
+        CandidateMetadata candidateMetadata = loadCandidateMetadata(pageData.getContent());
         List<AssetSummary> items = new ArrayList<>();
         List<UUID> visibleLegacyIds = new ArrayList<>();
         for (OpenMetadataAssetCache asset : pageData.getContent()) {
-            CatalogAssetExtension extension = extensionRepository.findFirstByOmAsset(asset).orElse(null);
-            CatalogAssetMapping mapping = mappingRepository.findFirstByFqnIgnoreCase(asset.getFqn()).orElse(null);
-            CatalogDataset legacy = resolveContractLegacy(extension, mapping);
+            CatalogAssetExtension extension = candidateMetadata.extensionsByAssetId().get(asset.getId());
+            CatalogAssetMapping mapping = candidateMetadata.mappingsByFqn().get(normalizedFqn(asset.getFqn()));
+            CatalogDataset legacy = candidateMetadata.legacyById().get(resolveLegacyDatasetId(extension, mapping));
             if (!canRead(extension, legacy, activeDept)) {
                 continue;
             }

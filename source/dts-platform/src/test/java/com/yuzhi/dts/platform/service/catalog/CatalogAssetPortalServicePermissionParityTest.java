@@ -19,6 +19,7 @@ import com.yuzhi.dts.platform.service.security.AccessChecker;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -80,8 +81,8 @@ class CatalogAssetPortalServicePermissionParityTest {
         asset.setTableName("orders");
         when(assetRepository.findAll(any(Specification.class), any(PageRequest.class)))
             .thenReturn(new PageImpl<>(List.of(asset), PageRequest.of(0, 20), 1));
-        when(extensionRepository.findFirstByOmAsset(asset)).thenReturn(Optional.empty());
-        when(mappingRepository.findFirstByFqnIgnoreCase("dwd.orders")).thenReturn(Optional.empty());
+        when(extensionRepository.findByOmAssetIn(List.of(asset))).thenReturn(List.of());
+        when(mappingRepository.findByNormalizedFqnIn(Set.of("dwd.orders"))).thenReturn(List.of());
         when(datasetRepository.findAll(any(Specification.class), any(PageRequest.class)))
             .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
@@ -124,8 +125,8 @@ class CatalogAssetPortalServicePermissionParityTest {
 
         when(assetRepository.findAll(any(Specification.class), any(PageRequest.class)))
             .thenReturn(new PageImpl<>(List.of(asset), PageRequest.of(0, 10), 50));
-        when(extensionRepository.findFirstByOmAsset(asset)).thenReturn(Optional.of(extension));
-        when(mappingRepository.findFirstByFqnIgnoreCase("dwd.customers")).thenReturn(Optional.empty());
+        when(extensionRepository.findByOmAssetIn(List.of(asset))).thenReturn(List.of(extension));
+        when(mappingRepository.findByNormalizedFqnIn(Set.of("dwd.customers"))).thenReturn(List.of());
         when(datasetRepository.findAll(any(Specification.class), any(PageRequest.class)))
             .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
         when(accessChecker.canRead(any(CatalogDataset.class))).thenReturn(true);

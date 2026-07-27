@@ -3,6 +3,9 @@ package com.yuzhi.dts.platform.service.catalog;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.platform.domain.catalog.CatalogAssetExtension;
@@ -19,7 +22,6 @@ import com.yuzhi.dts.platform.repository.catalog.OpenMetadataLineageCacheReposit
 import com.yuzhi.dts.platform.service.security.AccessChecker;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -76,6 +78,7 @@ class CatalogAssetPortalStatsTest {
 
     private final List<OpenMetadataAssetCache> openMetadataAssets = new ArrayList<>();
     private final List<CatalogDataset> legacyAssets = new ArrayList<>();
+    private UUID hiddenAssetId;
 
     @BeforeEach
     void setUp() {
@@ -94,11 +97,23 @@ class CatalogAssetPortalStatsTest {
             );
         lenient().when(accessChecker.canRead(any())).thenReturn(true);
         lenient().when(accessChecker.departmentAllowed(any(), any())).thenReturn(true);
-        lenient().when(mappingRepository.findFirstByFqnIgnoreCase(any())).thenReturn(Optional.empty());
+        lenient().when(mappingRepository.findByNormalizedFqnIn(any())).thenReturn(List.of());
         // canRead 在 extension 为 null 时直接判不可见，所以可见的 OpenMetadata 资产必须配一个启用的扩展。
         lenient()
-            .when(extensionRepository.findFirstByOmAsset(any()))
-            .thenAnswer(invocation -> Optional.of(enabledExtension(invocation.getArgument(0))));
+            .when(extensionRepository.findByOmAssetIn(any()))
+            .thenAnswer(invocation -> {
+                List<OpenMetadataAssetCache> batch = invocation.getArgument(0);
+                return batch.stream().map(this::extensionFor).toList();
+            });
+    }
+
+    /** 首个资产用于验证可见性拒绝，其余一律启用。 */
+    private CatalogAssetExtension extensionFor(OpenMetadataAssetCache asset) {
+        CatalogAssetExtension extension = enabledExtension(asset);
+        if (hiddenAssetId != null && hiddenAssetId.equals(asset.getId())) {
+            extension.setEnabled(false);
+        }
+        return extension;
     }
 
     private CatalogAssetExtension enabledExtension(OpenMetadataAssetCache asset) {
@@ -155,6 +170,43 @@ class CatalogAssetPortalStatsTest {
         assertThat(page.content()).hasSize(4);
     }
 
+    @Test
+    void truncatedIsFalseWhenRowsFitWithinScanCap() {
+        givenOpenMetadataAssets(2500);
+        givenLegacyAssets(0);
+
+        CatalogAssetOverviewAggregator.AssetOverview overview = service.overview(queryOf(0, 200), ACTIVE_DEPT);
+
+        assertThat(overview.scanned()).isEqualTo(2500);
+        assertThat(overview.truncated()).isFalse();
+    }
+
+    @Test
+    void truncatedBecomesTrueAtScanCap() {
+        givenOpenMetadataAssets(CatalogAssetPortalService.ASSET_STATS_SCAN_CAP + 500);
+        givenLegacyAssets(0);
+
+        CatalogAssetOverviewAggregator.AssetOverview overview = service.overview(queryOf(0, 200), ACTIVE_DEPT);
+
+        assertThat(overview.scanned()).isEqualTo(CatalogAssetPortalService.ASSET_STATS_SCAN_CAP);
+        assertThat(overview.truncated()).isTrue();
+    }
+
+    @Test
+    void listingLoadsMetadataInBatchesInsteadOfPerRow() {
+        givenOpenMetadataAssets(50);
+        givenLegacyAssets(0);
+
+        service.listAssets(queryOf(0, 50), ACTIVE_DEPT);
+
+        // 逐行 findFirstByOmAsset / findFirstByFqnIgnoreCase 会随行数线性增长；
+        // 批量路径对每页各查一次，行数再多也不增加查询次数。
+        verify(extensionRepository, never()).findFirstByOmAsset(any());
+        verify(mappingRepository, never()).findFirstByFqnIgnoreCase(any());
+        verify(extensionRepository, times(1)).findByOmAssetIn(any());
+        verify(mappingRepository, times(1)).findByNormalizedFqnIn(any());
+    }
+
     /** 按 pageable 切片装配 OpenMetadata 侧的分页返回。 */
     private void givenOpenMetadataAssets(int count) {
         for (int i = 0; i < count; i++) {
@@ -170,6 +222,12 @@ class CatalogAssetPortalStatsTest {
 
     /** 按 pageable 切片装配 legacy 侧的分页返回。 */
     private void givenLegacyAssets(int count) {
+        if (count == 0) {
+            lenient()
+                .when(datasetRepository.findAll(any(Specification.class), any(PageRequest.class)))
+                .thenAnswer(invocation -> slice(legacyAssets, invocation.getArgument(1)));
+            return;
+        }
         for (int i = 0; i < count; i++) {
             CatalogDataset dataset = new CatalogDataset();
             dataset.setId(UUID.nameUUIDFromBytes(("legacy-" + i).getBytes()));
@@ -185,14 +243,7 @@ class CatalogAssetPortalStatsTest {
 
     /** 让首个 OpenMetadata 资产在可见性校验中被拒：扩展存在但已停用。 */
     private void givenFirstOpenMetadataAssetUnreadable() {
-        OpenMetadataAssetCache hidden = openMetadataAssets.get(0);
-        lenient()
-            .when(extensionRepository.findFirstByOmAsset(hidden))
-            .thenAnswer(invocation -> {
-                CatalogAssetExtension disabled = enabledExtension(hidden);
-                disabled.setEnabled(false);
-                return Optional.of(disabled);
-            });
+        hiddenAssetId = openMetadataAssets.get(0).getId();
     }
 
     private <T> PageImpl<T> slice(List<T> source, PageRequest pageable) {
