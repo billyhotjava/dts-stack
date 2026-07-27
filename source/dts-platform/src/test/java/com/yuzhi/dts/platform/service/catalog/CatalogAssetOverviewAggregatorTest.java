@@ -48,7 +48,7 @@ class CatalogAssetOverviewAggregatorTest {
         List<AssetSummary> rows = List.of(
             summary("ODS", domainA, "INTERNAL", "ACTIVE", "GOVERNED"),
             summary("ods", domainA, null, "ACTIVE", "PENDING_CLASSIFICATION"), // 未定密 + PENDING → attention，层大小写归一
-            summary("DWD", null, "SECRET", "STALE", "GOVERNED"), // 未归域 + STALE → attention
+            summary("DWD", null, "SECRET", "DEPRECATED", "GOVERNED"), // 未归域 + 已弃用 → attention
             summary("未知层", domainA, "INTERNAL", "ACTIVE", "GOVERNED") // 非法层 → OTHER
         );
 
@@ -88,5 +88,32 @@ class CatalogAssetOverviewAggregatorTest {
         assertThat(overview.total()).isZero();
         assertThat(overview.truncated()).isTrue();
         assertThat(overview.matrix()).isEmpty();
+    }
+
+    private AssetSummary summaryWithLifecycle(String lifecycle) {
+        return summary("ODS", UUID.randomUUID(), "INTERNAL", lifecycle, "GOVERNED");
+    }
+
+    @Test
+    void staleCountsUseReachableLifecycleStatuses() {
+        var rows = List.of(
+            summaryWithLifecycle("DEPRECATED"),
+            summaryWithLifecycle("ARCHIVED"),
+            summaryWithLifecycle("BLOCKED"),
+            summaryWithLifecycle("ACTIVE")
+        );
+
+        var overview = CatalogAssetOverviewAggregator.aggregate(rows, rows.size(), false);
+
+        assertThat(overview.stale()).isEqualTo(3);
+    }
+
+    @Test
+    void unreachableStaleTokenIsNoLongerCounted() {
+        var rows = List.of(summaryWithLifecycle("STALE"));
+
+        var overview = CatalogAssetOverviewAggregator.aggregate(rows, rows.size(), false);
+
+        assertThat(overview.stale()).isZero();
     }
 }

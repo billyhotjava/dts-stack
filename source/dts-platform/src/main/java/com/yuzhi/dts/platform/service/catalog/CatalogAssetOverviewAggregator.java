@@ -11,13 +11,19 @@ import org.springframework.util.StringUtils;
 
 /**
  * 资产概览聚合（地图页数据源）：对 listAssets 产出的行做全量统计。
- * attention = 未定密 ∨ 未归域 ∨ 生命周期 STALE ∨ 治理状态 PENDING_xx 或 DISABLED。
+ * attention = 未定密 ∨ 未归域 ∨ 生命周期已弃用/已归档/已阻断 ∨ 治理状态 PENDING_xx 或 DISABLED。
  * 纯函数，可见性/过滤完全由调用方（listAssets）保证。
  */
 public final class CatalogAssetOverviewAggregator {
 
     /** 与前端 LAYER_ORDER 对齐；未识别的归 OTHER。 */
     private static final Set<String> KNOWN_LAYERS = Set.of("SOURCE", "ODS", "STG", "DWD", "DIM", "DWS", "ADS");
+
+    /**
+     * 失效资产的生命周期取值。历史代码比较的 "STALE" 不在
+     * CatalogAssetLifecycleStatus 中且从未被写入，导致该指标恒为 0。
+     */
+    private static final Set<String> STALE_LIFECYCLE_STATUSES = Set.of("DEPRECATED", "ARCHIVED", "BLOCKED");
 
     private CatalogAssetOverviewAggregator() {}
 
@@ -48,7 +54,7 @@ public final class CatalogAssetOverviewAggregator {
         for (AssetSummary row : rows) {
             boolean rowUnclassified = !StringUtils.hasText(row.classification());
             boolean rowMissingDomain = row.domainId() == null;
-            boolean rowStale = "STALE".equalsIgnoreCase(String.valueOf(row.lifecycleStatus()));
+            boolean rowStale = STALE_LIFECYCLE_STATUSES.contains(normalizeUpper(row.lifecycleStatus()));
             String governanceStatus = normalizeUpper(row.governanceStatus());
             boolean rowGovernancePending =
                 governanceStatus.startsWith("PENDING_") || "DISABLED".equals(governanceStatus);

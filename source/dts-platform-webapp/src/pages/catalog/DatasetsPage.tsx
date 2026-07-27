@@ -338,7 +338,7 @@ export default function Page() {
 	const unclassifiedCount = records.filter((row) => !row.classification).length;
 	const missingDomainCount = records.filter((row) => !row.domain && !row.domainId).length;
 	const staleCount = records.filter(
-		(row) => String(row.lifecycleStatus || "").toUpperCase() === "STALE" || row.status === "停用",
+		(row) => ["DEPRECATED", "ARCHIVED", "BLOCKED"].includes(String(row.lifecycleStatus || "").toUpperCase()),
 	).length;
 	const activeCount = records.filter((row) => row.status === "启用").length;
 	const readinessCounts = records.reduce<Record<string, number>>((acc, row) => {

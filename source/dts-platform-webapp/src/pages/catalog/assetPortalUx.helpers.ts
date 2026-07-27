@@ -22,6 +22,10 @@ export type AssetReadiness = {
 
 const normalize = (value?: string | null) => String(value || "").trim().toUpperCase();
 
+// 失效生命周期取值。历史代码比较的 "DISABLED" 属治理状态而非生命周期，
+// 且 "STALE" 不在 CatalogAssetLifecycleStatus 中，两者均不可达。
+const STALE_LIFECYCLE_STATUSES = new Set(["DEPRECATED", "ARCHIVED", "BLOCKED"]);
+
 export function resolveAssetReadiness(asset: AssetReadinessInput): AssetReadiness {
 	const classification = normalize(asset.classification);
 	const lifecycleStatus = normalize(asset.lifecycleStatus);
@@ -34,12 +38,12 @@ export function resolveAssetReadiness(asset: AssetReadinessInput): AssetReadines
 	if (!asset.domain && !asset.domainId) reasons.push("缺少主题域");
 	if (!asset.ownerDept && !asset.owner) reasons.push("缺少归属部门");
 
-	if (lifecycleStatus === "DISABLED") {
+	if (STALE_LIFECYCLE_STATUSES.has(lifecycleStatus)) {
 		return {
 			state: "BLOCKED",
-			label: "已停用",
+			label: "已失效",
 			color: "red",
-			reasons: ["资产生命周期已停用", ...reasons],
+			reasons: ["资产生命周期已失效", ...reasons],
 		};
 	}
 

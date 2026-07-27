@@ -37,3 +37,29 @@ describe("assetPortalUx helpers", () => {
 		);
 	});
 });
+
+describe("失效生命周期判定", () => {
+	it.each(["DEPRECATED", "ARCHIVED", "BLOCKED"])("%s 判为阻断态", (status) => {
+		const readiness = resolveAssetReadiness({
+			classification: "INTERNAL",
+			domainId: "d1",
+			ownerDept: "dept",
+			lifecycleStatus: status,
+			governanceStatus: "GOVERNED",
+			matchStatus: "MATCHED",
+		});
+		expect(readiness.state).toBe("BLOCKED");
+	});
+
+	it("不再比较不可达的 DISABLED 生命周期值", () => {
+		const readiness = resolveAssetReadiness({
+			classification: "INTERNAL",
+			domainId: "d1",
+			ownerDept: "dept",
+			lifecycleStatus: "DISABLED",
+			governanceStatus: "GOVERNED",
+			matchStatus: "MATCHED",
+		});
+		expect(readiness.state).toBe("READY");
+	});
+});
