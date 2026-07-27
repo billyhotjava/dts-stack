@@ -425,6 +425,14 @@ DRAFT / BUILD_FAILED / QUALITY_FAILED
 | L50 | 普通模型 schema.yml 只输出 column name/description/test，不输出 `data_type`；最终 model SQL 也不对每个输出列做 canonical type cast | `ModelingDbtCompiler.java:105-178,373-420` |
 | L51 | PostgreSQL inspector 已通过 `pg_catalog.format_type` 获取精确实际类型并计入 columns checksum，但 `RelationLocator` 只携带 expected column name，聚合层未比较字段类型 | `PostgresPhysicalRelationInspector.java:31-58,245-294`; `PhysicalRelationInspector.java:67-105`; `ModelMaterializationRunArtifactService.java:651-680` |
 | L52 | F4 现有控制面尚不满足 DoR：Candidate REST 只有 create/scope/lock/retry/refresh/replacement 且统一 CATALOG_MAINTAINERS；registration 对部分普通模型仍可合成 `dts_modeling.model_<uuid>`，未消费 F3 observation 作为唯一输出 locator | `ModelReleaseCandidateResource.java:32-226`; `CanonicalModelReleaseRegistrationAdapter.java:51-158` |
+| L53 | T04 已把 current ModelSpec typed fields 贯通 compiler cast/schema、manifest expected type、RelationLocator checksum 和 PostgreSQL adapter compare；numeric→text 阻断 BUILT，DBT_MANAGED 全未声明时保留空 expected-type contract | T04 40 个聚焦单测 + `ModelMaterializationStartServiceIT` 2 个真实 PostgreSQL 测试，2026-07-28 |
+| L54 | F4/T02 要求发布事务写默认 binding，但原 F7/T01 又依赖 F4/T02 才创建 binding 表，形成不可实现的循环；最小 binding persistence 已改由 F4/T02 唯一拥有，F7 只做 additive runtime 扩展 | F4/T02、F7/T01 契约复审，2026-07-28 |
+| L55 | Publish Intent 异步撤权复核不能依赖请求时 JWT snapshot；当前 platform 无按 actor 查询 current realm role 的端口，必须复用 dts-admin KeycloakAdminClient 提供 fail-closed current-duty adapter | dts-admin Keycloak role assignment/read 实现与 F4/T01 复审，2026-07-28 |
+| L56 | 当前 catalog registration 仍可合成输出表名、使用逐 step REQUIRES_NEW，并且 catalog_dataset 无 output locator 唯一键；三者均会破坏 observation 真值与 Candidate 级原子发布 | `CanonicalModelReleaseRegistrationAdapter`、`CatalogDataset`/Liquibase 复审，2026-07-28 |
+| L57 | F4 声明依赖 F2/T03，但当前 Candidate contract/resource 不存在 `CANCEL_CANDIDATE/CANCELLED`，无法证明取消只开放于允许状态、释放 active claim 且保留 run/observation；F4 READY 结论撤回 | F2/T03 contract 与当前 Candidate API 复审，2026-07-28 |
+| L58 | L57 的 cancel 缺口已关闭：Candidate 终态、命令账本、REST、claim 释放、迁移约束和真实 PostgreSQL 保留证据均已落地；同一轮补齐 retry attempt 递增、UNKNOWN 对账阻断，以及 model/implementation/artifact/dependency/target 五类 drift 用原 retry 收据原子迁移 STALE。F2/T03 仍缺 replacement/retry 并发和 Airflow exactly-once 证据，因此 F4 继续 BLOCKED | F2/T03 聚焦单测与真实 PostgreSQL retry/cancel/drift 矩阵，2026-07-28 |
+| L59 | replacement claim 现由事务从旧终态 Candidate 原子转移至 claim-only DRAFT，START_BUILD 再补齐 current snapshot；真实 PostgreSQL 双线程矩阵证明 replacement、START_BUILD 与 retry 在相同/不同 key 竞争下分别收敛为一个 claim、一个 durable run 和唯一 attempt 2。F2/T03 本地并发缺口关闭；F4 只继续等待 F2/T02 的 Airflow submit timeout/duplicate/reconcile exactly-once effect 证据 | `20260728_03_model_release_candidate_claim_transfer.xml`、`ModelMaterializationStartServiceIT#retrySnapshotDriftTransitionsCandidateStaleWithoutAttemptTwo`，2026-07-28 |
+| L60 | F2/T02 的本地协议已补强为只读 reconcile 与 submit 分离：无法证明 DagRun 不存在时不盲触发；existing run 必须匹配 durable conf；HTTP timeout、duplicate、local commit failure 和 token 过期均复用同一 deterministic dagRunId。Java 聚焦测试与 Python factory 4/4 通过；真实 Airflow 故障注入、service token/profile lease 和页面/计划统一入口尚未完成，因此 F4 与 PROD 继续 BLOCKED | `DbtExecutionGateway`、`AirflowDbtExecutionGateway`、`ModelMaterializationDispatchService` 及聚焦测试，2026-07-28 |
 
 勘察到此停止。实施 Task 必须引用 Lxx，禁止重复全仓扫描；如出现新事实，只能追加账本。
 
@@ -454,9 +462,9 @@ G0 已以同日归档证据关闭实施入口：四个目标关系不存在、pi
 |---|---|---:|---|---|
 | F0 | 架构冻结与真实验收基线 | 2 | P0 | DONE |
 | F1 | 普通实现可运行 dbt 制品 | 3 | P0 | IN_PROGRESS |
-| F2 | 候选驱动物化编排与运行真值 | 4 | P0 | DRAFT |
-| F3 | 真实关系核验与强绑定证据 | 4 | P0 | IN_PROGRESS |
-| F4 | 发布治理与物理资产交接 | 3 | P0 | DRAFT |
+| F2 | 候选驱动物化编排与运行真值 | 4 | P0 | IN_PROGRESS |
+| F3 | 真实关系核验与强绑定证据 | 4 | P0 | DONE |
+| F4 | 发布治理与物理资产交接 | 3 | P0 | BLOCKED |
 | F5 | 建模与交付页面产品闭环 | 3 | P0 | DRAFT |
 | F7 | 上线后计划 DAG 与持续计算 | 3 | P0 | DRAFT |
 | F6 | 真实集成验收与安全交付 | 3 | P0 | DRAFT |

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.platform.config.AirflowProperties;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -33,7 +34,16 @@ class AirflowDbtExecutionGatewayTest {
             Optional.of(Map.of("dag_id", DAG_ID, "is_paused", false))
         );
         when(airflow.getDagRun(DAG_ID, DAG_RUN_ID)).thenReturn(
-            Optional.of(Map.of("dag_run_id", DAG_RUN_ID, "state", "queued"))
+            Optional.of(
+                Map.of(
+                    "dag_run_id",
+                    DAG_RUN_ID,
+                    "state",
+                    "queued",
+                    "conf",
+                    expectedConf()
+                )
+            )
         );
         AirflowDbtExecutionGateway gateway = gateway(airflow);
 
@@ -57,7 +67,14 @@ class AirflowDbtExecutionGatewayTest {
             .thenReturn(Optional.empty())
             .thenReturn(
                 Optional.of(
-                    Map.of("dag_run_id", DAG_RUN_ID, "state", "queued")
+                    Map.of(
+                        "dag_run_id",
+                        DAG_RUN_ID,
+                        "state",
+                        "queued",
+                        "conf",
+                        expectedConf()
+                    )
                 )
             );
         when(airflow.triggerDag(eq(DAG_ID), any()))
@@ -71,6 +88,68 @@ class AirflowDbtExecutionGatewayTest {
             .isEqualTo(DbtExecutionGateway.SubmissionStatus.SUBMITTED);
         assertThat(result.recovered()).isTrue();
         verify(airflow).triggerDag(eq(DAG_ID), any());
+    }
+
+    @Test
+    void deterministicRunIdWithDifferentConfFailsClosed() {
+        AirflowClient airflow = mock(AirflowClient.class);
+        Map<String, Object> mismatchedConf = new LinkedHashMap<>(
+            expectedConf()
+        );
+        mismatchedConf.put(
+            "candidateId",
+            "90000000-0000-0000-0000-000000000009"
+        );
+        when(airflow.getDag(DAG_ID)).thenReturn(
+            Optional.of(Map.of("dag_id", DAG_ID, "is_paused", false))
+        );
+        when(airflow.getDagRun(DAG_ID, DAG_RUN_ID)).thenReturn(
+            Optional.of(
+                Map.of(
+                    "dag_run_id",
+                    DAG_RUN_ID,
+                    "state",
+                    "queued",
+                    "conf",
+                    mismatchedConf
+                )
+            )
+        );
+        AirflowDbtExecutionGateway gateway = gateway(airflow);
+
+        DbtExecutionGateway.SubmissionResult result =
+            gateway.submitReleaseBuild(request());
+
+        assertThat(result.status())
+            .isEqualTo(DbtExecutionGateway.SubmissionStatus.BLOCKED);
+        assertThat(result.errorCode()).isEqualTo(
+            "MODEL_AIRFLOW_RUN_IDENTITY_CONFLICT"
+        );
+        verify(airflow, never()).triggerDag(any(), any());
+    }
+
+    @Test
+    void unavailableReconciliationNeverBlindTriggers() {
+        AirflowClient airflow = mock(AirflowClient.class);
+        when(airflow.getDag(DAG_ID)).thenReturn(
+            Optional.of(Map.of("dag_id", DAG_ID, "is_paused", false))
+        );
+        when(airflow.getDagRun(DAG_ID, DAG_RUN_ID)).thenThrow(
+            new RuntimeException("Airflow read unavailable")
+        );
+        AirflowDbtExecutionGateway gateway = gateway(airflow);
+
+        DbtExecutionGateway.SubmissionResult result =
+            gateway.submitReleaseBuild(request());
+
+        assertThat(result.status())
+            .isEqualTo(
+                DbtExecutionGateway.SubmissionStatus.RETRYABLE_UNKNOWN
+            );
+        assertThat(result.errorCode()).isEqualTo(
+            "MODEL_AIRFLOW_RECONCILIATION_UNAVAILABLE"
+        );
+        verify(airflow, never()).triggerDag(any(), any());
     }
 
     @Test
@@ -160,6 +239,25 @@ class AirflowDbtExecutionGatewayTest {
             DAG_ID,
             DAG_RUN_ID,
             "runtime-token",
+            "a".repeat(64)
+        );
+    }
+
+    private static Map<String, Object> expectedConf() {
+        return Map.of(
+            "pipelineRunGroupId",
+            GROUP_ID.toString(),
+            "candidateId",
+            CANDIDATE_ID.toString(),
+            "candidateVersion",
+            3,
+            "attempt",
+            1,
+            "runPurpose",
+            "RELEASE_BUILD",
+            "runtimeSpecToken",
+            "runtime-token",
+            "bundleChecksum",
             "a".repeat(64)
         );
     }

@@ -88,7 +88,10 @@ class ModelReleaseCandidateApplicationServiceTest {
         var view = service.workspace(TENANT, ACTOR, PLAN_ID);
 
         assertThat(view.state()).isEqualTo(WorkbenchState.EMPTY);
-        assertThat(view.allowedActions()).containsExactly(WorkspaceAction.UPDATE_SCOPE);
+        assertThat(view.allowedActions()).containsExactly(
+            WorkspaceAction.UPDATE_SCOPE,
+            WorkspaceAction.CANCEL_CANDIDATE
+        );
         assertThat(view.primaryBlocker().code()).isEqualTo(ModelReleaseCandidateContract.SCOPE_EMPTY_ERROR_CODE);
         assertThat(view.etag()).isEqualTo("\"release-candidate:" + CANDIDATE_ID + ":4\"");
     }
@@ -106,7 +109,8 @@ class ModelReleaseCandidateApplicationServiceTest {
         assertThat(view.state()).isEqualTo(WorkbenchState.READY);
         assertThat(view.allowedActions()).containsExactly(
             WorkspaceAction.UPDATE_SCOPE,
-            WorkspaceAction.START_BUILD
+            WorkspaceAction.START_BUILD,
+            WorkspaceAction.CANCEL_CANDIDATE
         );
         assertThat(view.primaryBlocker()).isNull();
         assertThat(view.etag()).isEqualTo("\"release-candidate:" + CANDIDATE_ID + ":4\"");
@@ -277,17 +281,12 @@ class ModelReleaseCandidateApplicationServiceTest {
         );
         when(materializationStarts.start(TENANT, ACTOR, CANDIDATE_ID, 4, "lock-key", "scope confirmed"))
             .thenReturn(building);
-        when(commands.transition(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
-            .thenReturn(new CommandResult(
-                candidate(DeliveryStatus.BUILDING, List.of(entry(DeliveryStatus.BUILDING))),
-                false,
-                List.of()
-            ));
+        when(materializationStarts.retry(TENANT, ACTOR, CANDIDATE_ID, 4, "retry-key", "repair complete"))
+            .thenReturn(building);
 
         service.lock(TENANT, ACTOR, PLAN_ID, CANDIDATE_ID, 4, "lock-key", "scope confirmed");
         service.retry(TENANT, ACTOR, PLAN_ID, CANDIDATE_ID, 4, "retry-key", "repair complete");
 
-        ArgumentCaptor<TransitionCommand> commandsCaptor = ArgumentCaptor.forClass(TransitionCommand.class);
         verify(materializationStarts).start(
             TENANT,
             ACTOR,
@@ -296,13 +295,78 @@ class ModelReleaseCandidateApplicationServiceTest {
             "lock-key",
             "scope confirmed"
         );
+        verify(materializationStarts).retry(
+            TENANT,
+            ACTOR,
+            CANDIDATE_ID,
+            4,
+            "retry-key",
+            "repair complete"
+        );
+        verify(commands, never()).transition(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any()
+        );
+    }
+
+    @Test
+    void cancelUsesTheServerOwnedTerminalTransition() {
+        CandidateView failed = candidate(
+            DeliveryStatus.BUILD_FAILED,
+            List.of(entry(DeliveryStatus.BUILD_FAILED))
+        );
+        CandidateView cancelled = candidate(
+            DeliveryStatus.CANCELLED,
+            List.of(entry(DeliveryStatus.CANCELLED))
+        );
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(failed));
+        when(commands.transition(
+            org.mockito.ArgumentMatchers.eq(TENANT),
+            org.mockito.ArgumentMatchers.eq(ACTOR),
+            org.mockito.ArgumentMatchers.eq(CANDIDATE_ID),
+            org.mockito.ArgumentMatchers.any()
+        ))
+            .thenReturn(new CommandResult(cancelled, false, List.of()));
+
+        service.cancel(
+            TENANT,
+            ACTOR,
+            PLAN_ID,
+            CANDIDATE_ID,
+            4,
+            "cancel-key",
+            "abandon failed build"
+        );
+
+        ArgumentCaptor<TransitionCommand> command = ArgumentCaptor.forClass(TransitionCommand.class);
         verify(commands).transition(
             org.mockito.ArgumentMatchers.eq(TENANT),
             org.mockito.ArgumentMatchers.eq(ACTOR),
             org.mockito.ArgumentMatchers.eq(CANDIDATE_ID),
-            commandsCaptor.capture()
+            command.capture()
         );
-        assertThat(commandsCaptor.getValue().targetStatus()).isEqualTo(DeliveryStatus.BUILDING);
+        assertThat(command.getValue())
+            .extracting(
+                TransitionCommand::expectedVersion,
+                TransitionCommand::targetStatus,
+                TransitionCommand::idempotencyKey,
+                TransitionCommand::reason
+            )
+            .containsExactly(4, DeliveryStatus.CANCELLED, "cancel-key", "abandon failed build");
+    }
+
+    @Test
+    void cancelledEmptyCandidateOffersReplacementWithoutReopeningIt() {
+        CandidateView cancelled = candidate(DeliveryStatus.CANCELLED, List.of());
+        when(repository.listForWorkbench(TENANT, PLAN_ID)).thenReturn(List.of(cancelled));
+
+        var view = service.workspace(TENANT, ACTOR, PLAN_ID);
+
+        assertThat(view.state()).isEqualTo(WorkbenchState.BLOCKED);
+        assertThat(view.primaryBlocker().code()).isEqualTo("MODEL_RELEASE_CANDIDATE_REPLACEMENT_REQUIRED");
+        assertThat(view.allowedActions()).containsExactly(WorkspaceAction.CREATE_REPLACEMENT_CANDIDATE);
     }
 
     @Test
@@ -329,25 +393,93 @@ class ModelReleaseCandidateApplicationServiceTest {
         );
         when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(alreadyBuilding));
         when(repository.findCommandByIdempotencyKey(TENANT, "retry-key")).thenReturn(Optional.of(receipt));
-        when(commands.transition(
-            org.mockito.ArgumentMatchers.eq(TENANT),
-            org.mockito.ArgumentMatchers.eq(ACTOR),
-            org.mockito.ArgumentMatchers.eq(CANDIDATE_ID),
-            org.mockito.ArgumentMatchers.any()
+        when(materializationStarts.retry(
+            TENANT,
+            ACTOR,
+            CANDIDATE_ID,
+            4,
+            "retry-key",
+            "repair complete"
         ))
             .thenReturn(new CommandResult(alreadyBuilding, true, List.of()));
 
         service.retry(TENANT, ACTOR, PLAN_ID, CANDIDATE_ID, 4, "retry-key", "repair complete");
 
-        ArgumentCaptor<TransitionCommand> command = ArgumentCaptor.forClass(TransitionCommand.class);
-        verify(commands).transition(
-            org.mockito.ArgumentMatchers.eq(TENANT),
-            org.mockito.ArgumentMatchers.eq(ACTOR),
-            org.mockito.ArgumentMatchers.eq(CANDIDATE_ID),
-            command.capture()
+        verify(materializationStarts).retry(
+            TENANT,
+            ACTOR,
+            CANDIDATE_ID,
+            4,
+            "retry-key",
+            "repair complete"
         );
-        assertThat(command.getValue().targetStatus()).isEqualTo(DeliveryStatus.BUILDING);
-        assertThat(command.getValue().expectedVersion()).isEqualTo(4);
+        verify(commands, never()).transition(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any()
+        );
+    }
+
+    @Test
+    void retryReplayOfSnapshotDriftReentersTheOriginalBuildRetryCommand() {
+        CandidateView stale = candidate(
+            DeliveryStatus.STALE,
+            List.of(entry(DeliveryStatus.STALE))
+        );
+        CommandEventView receipt = new CommandEventView(
+            UUID.randomUUID(),
+            TENANT,
+            CANDIDATE_ID,
+            PLAN_ID,
+            5,
+            CommandEventType.STALE_DETECTED,
+            DeliveryStatus.BUILD_FAILED,
+            DeliveryStatus.STALE,
+            ACTOR,
+            NOW,
+            "implementation drift",
+            "retry-drift-key",
+            "a".repeat(64),
+            "{}"
+        );
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(stale));
+        when(repository.findCommandByIdempotencyKey(TENANT, "retry-drift-key"))
+            .thenReturn(Optional.of(receipt));
+        when(materializationStarts.retry(
+            TENANT,
+            ACTOR,
+            CANDIDATE_ID,
+            4,
+            "retry-drift-key",
+            "retry failed build"
+        ))
+            .thenReturn(new CommandResult(stale, true, List.of()));
+
+        service.retry(
+            TENANT,
+            ACTOR,
+            PLAN_ID,
+            CANDIDATE_ID,
+            4,
+            "retry-drift-key",
+            "retry failed build"
+        );
+
+        verify(materializationStarts).retry(
+            TENANT,
+            ACTOR,
+            CANDIDATE_ID,
+            4,
+            "retry-drift-key",
+            "retry failed build"
+        );
+        verify(commands, never()).transition(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any()
+        );
     }
 
     @Test

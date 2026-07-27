@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.etl;
 
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -13,6 +14,16 @@ import java.util.regex.Pattern;
 public interface DbtExecutionGateway {
 
     SubmissionResult submitReleaseBuild(ReleaseBuildRequest request);
+
+    /**
+     * Reads one deterministic DagRun without creating an external side effect.
+     *
+     * <p>An empty result means Airflow authoritatively returned "not found". A present UNKNOWN
+     * result means absence could not be proven and callers must not submit a second request.
+     */
+    Optional<SubmissionResult> reconcileReleaseBuild(
+        ReleaseBuildRequest request
+    );
 
     enum SubmissionStatus {
         SUBMITTED,

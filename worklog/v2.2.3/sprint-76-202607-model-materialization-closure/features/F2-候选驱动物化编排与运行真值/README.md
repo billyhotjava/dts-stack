@@ -1,7 +1,7 @@
 # F2：候选驱动物化编排与运行真值
 
 **优先级**：P0
-**状态**：DRAFT
+**状态**：IN_PROGRESS
 **依赖**：F1
 
 ## 目标
@@ -31,8 +31,8 @@
 |---|---|---|---|---|
 | T01 | 将START_BUILD与pipeline run原子绑定 | P0 | DRAFT | F1/T03 |
 | T04 | 收敛dbt运行凭据与单目标能力边界 | P0 | DRAFT | T01 |
-| T02 | 复用现有dbt/Airflow通道完成可靠调度与回收 | P0 | DRAFT | T01、T04 |
-| T03 | 实现幂等重放漂移阻断与失败重试 | P0 | DRAFT | T02 |
+| T02 | 复用现有dbt/Airflow通道完成可靠调度与回收 | P0 | IN_PROGRESS | T01、T04 |
+| T03 | 实现幂等重放漂移阻断与失败重试 | P0 | IN_PROGRESS | T02 |
 
 ## Definition of Ready
 

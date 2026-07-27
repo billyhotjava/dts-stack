@@ -556,7 +556,11 @@
                         <testInclude>**/service/modeling/ModelMaterializationDispatchServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelMaterializationRunArtifactServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelMaterializationRuntimeSpecServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelMaterializationStartServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/PostgresPhysicalRelationInspectorTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelReleaseCandidateApplicationServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelReleaseCandidateCancelLiquibaseTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelReleaseCandidateReplacementLiquibaseTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelReleaseCandidateServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelingDbtCompilerTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelSpecCompilerProjectionTest.java</testInclude>
@@ -572,6 +576,7 @@
                         <testInclude>**/web/filter/ModelArchiveUploadLimitFilterTest.java</testInclude>
                         <testInclude>**/web/rest/ModelSpecResourceTest.java</testInclude>
                         <testInclude>**/web/rest/ModelLifecycleResourceTest.java</testInclude>
+                        <testInclude>**/web/rest/ModelReleaseCandidateResourceTest.java</testInclude>
                         <testInclude>**/web/rest/ModelSpecImport*.java</testInclude>
                         <testInclude>**/repository/catalog/CatalogAssetTag*.java</testInclude>
                         <testInclude>**/repository/catalog/CatalogExternalAssetIdentityLiquibaseIT.java</testInclude>

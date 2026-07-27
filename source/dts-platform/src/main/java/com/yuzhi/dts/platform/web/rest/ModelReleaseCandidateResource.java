@@ -198,6 +198,31 @@ public class ModelReleaseCandidateResource {
         );
     }
 
+    @PostMapping("/{candidateId}/cancel")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<CommandResult>> cancel(
+        @PathVariable UUID planId,
+        @PathVariable UUID candidateId,
+        @RequestHeader(value = "If-Match", required = false) String ifMatch,
+        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+        @RequestBody(required = false) ReasonRequest request
+    ) {
+        int expectedVersion = expectedVersion(candidateId, ifMatch);
+        String key = requiredIdempotencyKey(idempotencyKey);
+        ReasonRequest body = requiredRequest(request, "cancel request");
+        return write(
+            service.cancel(
+                serverTenantId,
+                actorId(),
+                planId,
+                candidateId,
+                expectedVersion,
+                key,
+                body.reason()
+            )
+        );
+    }
+
     @PostMapping("/{candidateId}/replacement")
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<CommandResult>> createReplacement(

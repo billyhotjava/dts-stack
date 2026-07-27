@@ -246,6 +246,71 @@ class ModelMaterializationDispatchServiceTest {
         );
     }
 
+    @Test
+    void expiredRuntimeTokenStillRecoversPreviouslyAcceptedAirflowRun() {
+        Fixture fixture = fixture();
+        DispatchRecord prepared = new DispatchRecord(
+            GROUP_ID,
+            "tenant-a",
+            CANDIDATE_ID,
+            3,
+            1,
+            "postgres-primary",
+            DAG_ID,
+            DAG_RUN_ID,
+            ARTIFACT_CHECKSUM,
+            "CLAIMED",
+            SCOPED_CHECKSUM,
+            "sha256:" + "c".repeat(64),
+            NOW.minusSeconds(1)
+        );
+        when(
+            fixture.dispatches.claimNext(
+                eq(NOW),
+                eq(Duration.ofMinutes(2))
+            )
+        ).thenReturn(Optional.of(prepared));
+        when(fixture.builds.loadCandidateBuildScope("tenant-a", GROUP_ID))
+            .thenReturn(scope());
+        when(
+            fixture.tokens.restore(
+                GROUP_ID,
+                NOW.minusSeconds(1)
+            )
+        ).thenReturn(
+            new ModelRuntimeSpecTokenCodec.IssuedToken(
+                "runtime-token",
+                "sha256:" + "c".repeat(64),
+                NOW.minusSeconds(1)
+            )
+        );
+        when(fixture.gateway.reconcileReleaseBuild(any())).thenReturn(
+            Optional.of(
+                DbtExecutionGateway.SubmissionResult.submitted(
+                    DAG_RUN_ID,
+                    true
+                )
+            )
+        );
+
+        var result = fixture.service.dispatchNext().orElseThrow();
+
+        assertThat(result.status()).isEqualTo("SUBMITTED");
+        assertThat(result.recovered()).isTrue();
+        verify(fixture.dispatches).markSubmitted(
+            GROUP_ID,
+            true,
+            NOW
+        );
+        verify(fixture.scoped, never()).prepareCandidate(any());
+        verify(fixture.gateway, never()).submitReleaseBuild(any());
+        verify(fixture.dispatches, never()).markBlocked(
+            eq(GROUP_ID),
+            any(),
+            eq(NOW)
+        );
+    }
+
     private static Fixture fixture() {
         var dispatches = mock(
             ModelMaterializationDispatchRepository.class
@@ -339,6 +404,7 @@ class ModelMaterializationDispatchServiceTest {
             "1".repeat(64),
             4,
             "2".repeat(64),
+            "DESIGNER_GENERATED",
             uniqueId,
             uniqueId.substring(
                 uniqueId.lastIndexOf('.') + 1

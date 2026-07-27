@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -19,8 +20,10 @@ import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.Can
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CandidateView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CommandEventType;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CommandEventView;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CommandResult;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CreateCandidateCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CurrentModelReference;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.DriftReasonView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.EntryView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.ReplaceScopeCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.ScopeEntryCommand;
@@ -56,6 +59,9 @@ class ModelReleaseCandidateServiceTest {
     @Mock
     private ModelReleaseCandidateRepository repository;
 
+    @Mock
+    private ModelReleaseCandidateRetryDriftGate retryDriftGate;
+
     private ModelReleaseCandidateService service;
 
     @BeforeEach
@@ -64,7 +70,9 @@ class ModelReleaseCandidateServiceTest {
             repository,
             new ObjectMapper().findAndRegisterModules(),
             Clock.fixed(NOW, ZoneOffset.UTC),
-            UUID::randomUUID
+            UUID::randomUUID,
+            null,
+            retryDriftGate
         );
     }
 
@@ -382,6 +390,84 @@ class ModelReleaseCandidateServiceTest {
     }
 
     @Test
+    void retrySnapshotDriftUsesTheOriginalCommandReceiptToTransitionStale() {
+        EntryView locked = entry(DeliveryStatus.BUILD_FAILED, 1, CHECKSUM);
+        CandidateView current = candidate(
+            DeliveryStatus.BUILD_FAILED,
+            3,
+            createdAudit(),
+            List.of(locked)
+        );
+        DriftReasonView implementationDrift = new DriftReasonView(
+            MODEL_ID,
+            1,
+            CHECKSUM,
+            1,
+            CHECKSUM,
+            "MODEL_MATERIALIZATION_RETRY_SNAPSHOT_STALE",
+            "Current implementation snapshot changed after attempt 1"
+        );
+        when(repository.findCommandByIdempotencyKey(TENANT, "retry-drift-key"))
+            .thenReturn(Optional.empty());
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(current));
+        when(repository.findCurrentModelReferences(TENANT, PLAN_ID, List.of(MODEL_ID)))
+            .thenReturn(Map.of(MODEL_ID, currentReference(1, CHECKSUM)));
+        when(retryDriftGate.detect(current)).thenReturn(List.of(implementationDrift));
+        when(repository.transitionAndAppend(
+            any(),
+            anyInt(),
+            any(),
+            any(),
+            anyString(),
+            any(),
+            any()
+        ))
+            .thenReturn(1);
+
+        CommandResult result = service.transition(
+            TENANT,
+            ACTOR,
+            CANDIDATE_ID,
+            new TransitionCommand(
+                3,
+                DeliveryStatus.BUILDING,
+                "retry-drift-key",
+                "retry failed build"
+            )
+        );
+
+        assertThat(result.candidate())
+            .extracting(CandidateView::status, CandidateView::version)
+            .containsExactly(DeliveryStatus.STALE, 4);
+        assertThat(result.driftReasons()).containsExactly(implementationDrift);
+        ArgumentCaptor<CommandEventView> event = ArgumentCaptor.forClass(
+            CommandEventView.class
+        );
+        verify(repository).transitionAndAppend(
+            any(),
+            anyInt(),
+            eq(DeliveryStatus.STALE),
+            any(),
+            anyString(),
+            any(),
+            event.capture()
+        );
+        assertThat(event.getValue())
+            .extracting(
+                CommandEventView::eventType,
+                CommandEventView::fromStatus,
+                CommandEventView::toStatus,
+                CommandEventView::idempotencyKey
+            )
+            .containsExactly(
+                CommandEventType.STALE_DETECTED,
+                DeliveryStatus.BUILD_FAILED,
+                DeliveryStatus.STALE,
+                "retry-drift-key"
+            );
+    }
+
+    @Test
     void rejectsAnIllegalTransitionWithoutWritingAnEvent() {
         CandidateView current = candidate(
             DeliveryStatus.DRAFT,
@@ -429,6 +515,110 @@ class ModelReleaseCandidateServiceTest {
             .satisfies(error ->
                 assertThat(((ModelReleaseCandidateException) error).code())
                     .isEqualTo(ModelReleaseCandidateContract.SCOPE_EMPTY_ERROR_CODE)
+            );
+        verify(repository, never()).transitionAndAppend(any(), anyInt(), any(), any(), anyString(), any(), any());
+    }
+
+    @Test
+    void cancelsAnEmptyDraftAndPersistsActorReasonAndIdempotentReceipt() {
+        CandidateView current = candidate(DeliveryStatus.DRAFT, 1, createdAudit(), List.of());
+        when(repository.findCommandByIdempotencyKey(TENANT, "cancel-key")).thenReturn(Optional.empty());
+        when(repository.findByIdempotencyKey(TENANT, "cancel-key")).thenReturn(Optional.empty());
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(current));
+        when(repository.transitionAndAppend(any(), anyInt(), any(), any(), anyString(), any(), any())).thenReturn(1);
+
+        TransitionCommand command = new TransitionCommand(
+            1,
+            DeliveryStatus.CANCELLED,
+            "cancel-key",
+            "no longer required"
+        );
+        var cancelled = service.transition(TENANT, ACTOR, CANDIDATE_ID, command);
+
+        assertThat(cancelled.candidate().status()).isEqualTo(DeliveryStatus.CANCELLED);
+        assertThat(cancelled.candidate().version()).isEqualTo(2);
+        assertThat(cancelled.allowedActions()).isEmpty();
+        ArgumentCaptor<CommandEventView> receipt = ArgumentCaptor.forClass(CommandEventView.class);
+        verify(repository).transitionAndAppend(
+            any(),
+            anyInt(),
+            any(),
+            any(),
+            anyString(),
+            any(),
+            receipt.capture()
+        );
+        assertThat(receipt.getValue())
+            .extracting(
+                CommandEventView::fromStatus,
+                CommandEventView::toStatus,
+                CommandEventView::actorId,
+                CommandEventView::reason,
+                CommandEventView::idempotencyKey
+            )
+            .containsExactly(
+                DeliveryStatus.DRAFT,
+                DeliveryStatus.CANCELLED,
+                ACTOR,
+                "no longer required",
+                "cancel-key"
+            );
+
+        when(repository.findCommandByIdempotencyKey(TENANT, "cancel-key")).thenReturn(Optional.of(receipt.getValue()));
+        var replay = service.transition(TENANT, ACTOR, CANDIDATE_ID, command);
+        assertThat(replay.replayed()).isTrue();
+        assertThat(replay.candidate()).isEqualTo(cancelled.candidate());
+    }
+
+    @Test
+    void cancelDoesNotTurnIntoStaleWhenCanonicalScopeHasDrifted() {
+        CandidateView failed = candidate(
+            DeliveryStatus.BUILD_FAILED,
+            4,
+            createdAudit(),
+            List.of(entry(DeliveryStatus.BUILD_FAILED, 1, CHECKSUM))
+        );
+        when(repository.findCommandByIdempotencyKey(TENANT, "cancel-drift-key")).thenReturn(Optional.empty());
+        when(repository.findByIdempotencyKey(TENANT, "cancel-drift-key")).thenReturn(Optional.empty());
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(failed));
+        when(repository.transitionAndAppend(any(), anyInt(), any(), any(), anyString(), any(), any())).thenReturn(1);
+
+        var result = service.transition(
+            TENANT,
+            ACTOR,
+            CANDIDATE_ID,
+            new TransitionCommand(4, DeliveryStatus.CANCELLED, "cancel-drift-key", "abandon failed build")
+        );
+
+        assertThat(result.candidate().status()).isEqualTo(DeliveryStatus.CANCELLED);
+        assertThat(result.driftReasons()).isEmpty();
+        verify(repository, never()).findCurrentModelReferences(anyString(), any(), anyList());
+    }
+
+    @Test
+    void builtCandidateCannotBeCancelled() {
+        CandidateView built = candidate(
+            DeliveryStatus.BUILT,
+            4,
+            createdAudit(),
+            List.of(entry(DeliveryStatus.BUILT, 1, CHECKSUM))
+        );
+        when(repository.findCommandByIdempotencyKey(TENANT, "late-cancel-key")).thenReturn(Optional.empty());
+        when(repository.findByIdempotencyKey(TENANT, "late-cancel-key")).thenReturn(Optional.empty());
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(built));
+
+        assertThatThrownBy(() ->
+            service.transition(
+                TENANT,
+                ACTOR,
+                CANDIDATE_ID,
+                new TransitionCommand(4, DeliveryStatus.CANCELLED, "late-cancel-key", "too late")
+            )
+        )
+            .isInstanceOf(ModelReleaseCandidateException.class)
+            .satisfies(error ->
+                assertThat(((ModelReleaseCandidateException) error).code())
+                    .isEqualTo(ModelReleaseCandidateContract.INVALID_TRANSITION_ERROR_CODE)
             );
         verify(repository, never()).transitionAndAppend(any(), anyInt(), any(), any(), anyString(), any(), any());
     }
@@ -536,6 +726,80 @@ class ModelReleaseCandidateServiceTest {
         assertThat(result.allowedActions()).isEmpty();
         assertThat(rolledBack.audit()).isEqualTo(oldAudit);
         verify(repository, never()).transitionAndAppend(any(), anyInt(), any(), any(), anyString(), any(), any());
+    }
+
+    @Test
+    void cancelledCandidateCreatesAReplacementFromCurrentReferences() {
+        CandidateView cancelled = candidate(
+            DeliveryStatus.CANCELLED,
+            5,
+            createdAudit(),
+            List.of(entry(DeliveryStatus.CANCELLED, 1, CHECKSUM))
+        );
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(cancelled));
+        when(repository.findCommandByIdempotencyKey(TENANT, "cancelled-replacement-key")).thenReturn(Optional.empty());
+        when(repository.findByIdempotencyKey(TENANT, "cancelled-replacement-key")).thenReturn(Optional.empty());
+        when(repository.findCurrentModelReferences(TENANT, PLAN_ID, List.of(MODEL_ID))).thenReturn(
+            Map.of(MODEL_ID, currentReference(2, "b".repeat(64)))
+        );
+        when(repository.insert(any())).thenReturn(1);
+        when(repository.appendCommand(any())).thenReturn(1);
+
+        var result = service.createReplacement(
+            TENANT,
+            ACTOR,
+            CANDIDATE_ID,
+            5,
+            new CreateCandidateCommand(
+                PLAN_ID,
+                "prod",
+                List.of(new ScopeEntryCommand(MODEL_ID, 0, "current revision")),
+                "cancelled-replacement-key",
+                "restart delivery"
+            )
+        );
+
+        assertThat(result.candidate().status()).isEqualTo(DeliveryStatus.DRAFT);
+        assertThat(result.candidate().entries())
+            .singleElement()
+            .extracting(EntryView::revision, EntryView::checksum)
+            .containsExactly(2, "b".repeat(64));
+    }
+
+    @Test
+    void staleReplacementTransfersTheExistingClaimToTheNewDraft() {
+        CandidateView stale = candidate(
+            DeliveryStatus.STALE,
+            4,
+            createdAudit(),
+            List.of(entry(DeliveryStatus.STALE, 1, CHECKSUM))
+        );
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(stale));
+        when(repository.findCommandByIdempotencyKey(TENANT, "stale-replacement-key"))
+            .thenReturn(Optional.empty());
+        when(repository.findByIdempotencyKey(TENANT, "stale-replacement-key"))
+            .thenReturn(Optional.empty());
+        when(repository.findCurrentModelReferences(TENANT, PLAN_ID, List.of(MODEL_ID)))
+            .thenReturn(Map.of(MODEL_ID, currentReference(1, CHECKSUM)));
+        when(repository.insert(any())).thenReturn(1);
+        when(repository.appendCommand(any())).thenReturn(1);
+
+        CommandResult result = service.createReplacement(
+            TENANT,
+            ACTOR,
+            CANDIDATE_ID,
+            4,
+            new CreateCandidateCommand(
+                PLAN_ID,
+                "prod",
+                List.of(new ScopeEntryCommand(MODEL_ID, 0, "current revision")),
+                "stale-replacement-key",
+                "replace stale snapshot"
+            )
+        );
+
+        verify(repository).transferActiveClaims(stale, result.candidate());
+        assertThat(result.candidate().status()).isEqualTo(DeliveryStatus.DRAFT);
     }
 
     @Test

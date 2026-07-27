@@ -86,6 +86,15 @@ name: dts
 version: 1.0.0
 EOF_FILE
 
+cat > "${TEST_REPO}/services/dts-dbt/profiles/profiles.yml" <<'EOF_FILE'
+dts:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      password: local-secret-must-not-be-packaged
+EOF_FILE
+
 cat > "${TEST_REPO}/bin/test-helper.sh" <<'EOF_FILE'
 #!/usr/bin/env bash
 echo helper
@@ -178,6 +187,11 @@ chmod +x "${FAKE_BIN}/df"
 
 PATH="${FAKE_BIN}:${PATH}" "${TEST_REPO}/builds/dts-build.sh" --pack --no-images --output "${PACKAGE_PATH}" >/dev/null
 ARCHIVE_CONTENTS="$(tar -tzf "${PACKAGE_PATH}")"
+
+if grep -qx 'dts-stack/services/dts-dbt/profiles/profiles.yml' <<<"${ARCHIVE_CONTENTS}"; then
+  echo "deployment package leaked the local dbt profiles.yml" >&2
+  exit 1
+fi
 
 if ! grep -qx 'dts-stack/bin/test-helper.sh' <<<"${ARCHIVE_CONTENTS}"; then
   echo "expected packaged archive to include bin/test-helper.sh" >&2

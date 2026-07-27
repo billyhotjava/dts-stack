@@ -1,8 +1,11 @@
 package com.yuzhi.dts.platform.service.modeling;
 
 import java.time.Instant;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -21,6 +24,11 @@ public interface PhysicalRelationInspector {
     PhysicalRelationObservation observe(
         TargetContext target,
         RelationLocator locator
+    );
+
+    boolean dataTypeMatches(
+        String expectedType,
+        String actualType
     );
 
     enum ExpectedRelationType {
@@ -72,8 +80,26 @@ public interface PhysicalRelationInspector {
         String schemaName,
         String identifier,
         ExpectedRelationType expectedType,
-        List<String> expectedColumns
+        List<String> expectedColumns,
+        Map<String, String> expectedColumnTypes
     ) {
+        public RelationLocator(
+            String databaseName,
+            String schemaName,
+            String identifier,
+            ExpectedRelationType expectedType,
+            List<String> expectedColumns
+        ) {
+            this(
+                databaseName,
+                schemaName,
+                identifier,
+                expectedType,
+                expectedColumns,
+                Map.of()
+            );
+        }
+
         public RelationLocator {
             databaseName = required(
                 databaseName,
@@ -113,6 +139,41 @@ public interface PhysicalRelationInspector {
                     "expectedColumns must contain 1 to 1000 unique identifiers"
                 );
             }
+            Map<String, String> canonicalTypes =
+                new LinkedHashMap<>();
+            if (expectedColumnTypes != null) {
+                for (
+                    Map.Entry<String, String> entry
+                    : expectedColumnTypes.entrySet()
+                ) {
+                    String column = canonicalIdentifier(
+                        entry.getKey(),
+                        "expectedColumnType"
+                    );
+                    String type =
+                        ModelFieldPhysicalTypeContract.canonicalPostgresType(
+                            entry.getValue()
+                        );
+                    canonicalTypes.put(column, type);
+                }
+            }
+            if (
+                !canonicalTypes.isEmpty() &&
+                (
+                    canonicalTypes.size() !=
+                    expectedColumns.size() ||
+                    !canonicalTypes
+                        .keySet()
+                        .containsAll(expectedColumns)
+                )
+            ) {
+                throw new IllegalArgumentException(
+                    "expectedColumnTypes must cover expectedColumns"
+                );
+            }
+            expectedColumnTypes = Collections.unmodifiableMap(
+                canonicalTypes
+            );
         }
     }
 

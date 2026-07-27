@@ -50,25 +50,14 @@ public class AirflowDbtExecutionGateway implements DbtExecutionGateway {
             );
         }
 
-        Optional<Map<String, Object>> existing = lookup(request);
-        if (existing.isPresent()) {
-            return recovered(request, existing.orElseThrow());
-        }
-
-        Map<String, Object> conf = new LinkedHashMap<>();
-        conf.put(
-            "pipelineRunGroupId",
-            request.pipelineRunGroupId().toString()
+        Optional<SubmissionResult> existing = reconcileReleaseBuild(
+            request
         );
-        conf.put("candidateId", request.candidateId().toString());
-        conf.put("candidateVersion", request.candidateVersion());
-        conf.put("attempt", request.attempt());
-        conf.put("runPurpose", "RELEASE_BUILD");
-        conf.put("runtimeSpecToken", request.runtimeSpecToken());
-        conf.put("bundleChecksum", request.bundleChecksum());
+        if (existing.isPresent()) return existing.orElseThrow();
+
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("dag_run_id", request.dagRunId());
-        payload.put("conf", Map.copyOf(conf));
+        payload.put("conf", requestConf(request));
         try {
             Map<String, Object> response = airflow
                 .triggerDag(request.dagId(), Map.copyOf(payload))
@@ -87,27 +76,39 @@ public class AirflowDbtExecutionGateway implements DbtExecutionGateway {
             }
             return SubmissionResult.submitted(actualRunId, false);
         } catch (RuntimeException uncertain) {
-            Optional<Map<String, Object>> recovered = lookup(request);
-            if (recovered.isPresent()) {
-                return recovered(request, recovered.orElseThrow());
-            }
-            return SubmissionResult.retryableUnknown(
-                request.dagRunId(),
-                "MODEL_AIRFLOW_TRIGGER_UNKNOWN"
-            );
+            return reconcileReleaseBuild(request)
+                .orElseGet(() ->
+                    SubmissionResult.retryableUnknown(
+                        request.dagRunId(),
+                        "MODEL_AIRFLOW_TRIGGER_UNKNOWN"
+                    )
+                );
         }
     }
 
-    private Optional<Map<String, Object>> lookup(
+    @Override
+    public Optional<SubmissionResult> reconcileReleaseBuild(
         ReleaseBuildRequest request
     ) {
+        if (!properties.isEnabled()) {
+            return Optional.of(
+                SubmissionResult.blocked("MODEL_AIRFLOW_DISABLED")
+            );
+        }
         try {
-            return airflow.getDagRun(
+            return airflow
+                .getDagRun(
                 request.dagId(),
                 request.dagRunId()
-            );
+                )
+                .map(existing -> recovered(request, existing));
         } catch (RuntimeException unavailable) {
-            return Optional.empty();
+            return Optional.of(
+                SubmissionResult.retryableUnknown(
+                    request.dagRunId(),
+                    "MODEL_AIRFLOW_RECONCILIATION_UNAVAILABLE"
+                )
+            );
         }
     }
 
@@ -116,13 +117,32 @@ public class AirflowDbtExecutionGateway implements DbtExecutionGateway {
         Map<String, Object> existing
     ) {
         String actualRunId = runId(existing);
-        if (!request.dagRunId().equals(actualRunId)) {
-            return SubmissionResult.retryableUnknown(
-                request.dagRunId(),
-                "MODEL_AIRFLOW_RUN_ID_MISMATCH"
+        if (
+            !request.dagRunId().equals(actualRunId) ||
+            !requestConf(request).equals(existing.get("conf"))
+        ) {
+            return SubmissionResult.blocked(
+                "MODEL_AIRFLOW_RUN_IDENTITY_CONFLICT"
             );
         }
         return SubmissionResult.submitted(actualRunId, true);
+    }
+
+    private static Map<String, Object> requestConf(
+        ReleaseBuildRequest request
+    ) {
+        Map<String, Object> conf = new LinkedHashMap<>();
+        conf.put(
+            "pipelineRunGroupId",
+            request.pipelineRunGroupId().toString()
+        );
+        conf.put("candidateId", request.candidateId().toString());
+        conf.put("candidateVersion", request.candidateVersion());
+        conf.put("attempt", request.attempt());
+        conf.put("runPurpose", "RELEASE_BUILD");
+        conf.put("runtimeSpecToken", request.runtimeSpecToken());
+        conf.put("bundleChecksum", request.bundleChecksum());
+        return Map.copyOf(conf);
     }
 
     private static String runId(Map<String, Object> value) {

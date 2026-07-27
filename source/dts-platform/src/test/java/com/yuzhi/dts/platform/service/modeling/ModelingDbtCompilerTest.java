@@ -81,13 +81,7 @@ class ModelingDbtCompilerTest {
             "table",
             List.of("project_no"),
             "plan-a",
-            List.of(
-                new ModelSpecCompilerProjection.CompilerField(
-                    "project_no",
-                    "string",
-                    false
-                )
-            )
+            typedFields(model)
         );
 
         ModelingDbtCompiler.CompiledArtifacts first = ModelingDbtCompiler.compile(implementation);
@@ -169,6 +163,57 @@ class ModelingDbtCompilerTest {
     }
 
     @Test
+    void rejectsIncompleteFieldTypeCoverage() {
+        ModelingVNextContract.ModelSpec model =
+            PjmModelingFixture.projectNode().modelSpec();
+        ModelSpecCompilerProjection.ImplementationProjection implementation =
+            new ModelSpecCompilerProjection.ImplementationProjection(
+                model,
+                "tenant-a",
+                "a".repeat(64),
+                3,
+                "b".repeat(64),
+                "model.pjm.project_node_detail",
+                InputMode.PHYSICAL_ASSET,
+                List.of(),
+                List.of(
+                    new FieldMapping(
+                        "raw_project_no",
+                        "project_no"
+                    )
+                ),
+                Map.of(
+                    "targetPhysicalName",
+                    "project_node_detail",
+                    "loadStrategy",
+                    "FULL",
+                    "partitionFields",
+                    List.of()
+                ),
+                "table",
+                List.of("project_no"),
+                "plan-a",
+                List.of(
+                    new ModelSpecCompilerProjection.CompilerField(
+                        "project_no",
+                        "string",
+                        false
+                    )
+                )
+            );
+
+        assertThatThrownBy(() ->
+            ModelingDbtCompiler.compile(implementation)
+        )
+            .isInstanceOf(
+                ModelingDbtCompiler.CompileException.class
+            )
+            .hasMessageContaining(
+                "MODEL_IMPLEMENTATION_FIELD_TYPE_COVERAGE_INVALID"
+            );
+    }
+
+    @Test
     void compilesTheRealUiSettingsThroughTheCanonicalExecutionPlan() {
         ModelingVNextContract.ModelSpec model = new ModelingVNextContract.ModelSpec(
             "finance-detail",
@@ -206,7 +251,8 @@ class ModelingDbtCompilerTest {
                 "casts", Map.of("project_no", "string"),
                 "deduplicateBy", List.of("project_no")
             ),
-            "incremental"
+            "incremental",
+            typedFields(model)
         );
 
         String sql = ModelingDbtCompiler.compile(implementation).files().get("project_node_detail.sql");
@@ -236,7 +282,8 @@ class ModelingDbtCompilerTest {
                     "loadStrategy", "FULL",
                     "partitionFields", List.of()
                 ),
-                "view"
+                "view",
+                typedFields(model)
             );
 
         String sql = ModelingDbtCompiler.compile(implementation).files().get("project_node_detail.sql");
@@ -284,7 +331,8 @@ class ModelingDbtCompilerTest {
                     "loadStrategy", "FULL",
                     "partitionFields", List.of()
                 ),
-                "table"
+                "table",
+                typedFields(derived)
             );
 
         String stg = ModelingDbtCompiler.compile(implementation).files().get("stg_project_node_detail.sql");
@@ -329,7 +377,8 @@ class ModelingDbtCompilerTest {
                 "loadStrategy", "FULL",
                 "partitionFields", List.of()
             ),
-            "table"
+            "table",
+            typedFields(generated)
         ));
 
         assertThat(artifacts.files().get("stg_calendar_day.sql")).contains("generated_input");
@@ -372,7 +421,8 @@ class ModelingDbtCompilerTest {
                 "loadStrategy", "FULL",
                 "partitionFields", List.of()
             ),
-            "table"
+            "table",
+            typedFields(localized)
         ));
 
         assertThat(artifacts.outputDirectory()).contains("/model_456/");
@@ -424,7 +474,8 @@ class ModelingDbtCompilerTest {
                     "rightField", "src_1.customer_id"
                 ))
             ),
-            "table"
+            "table",
+            typedFields(model)
         );
 
         String sql = ModelingDbtCompiler.compile(projection).files().get("stg_model_456.sql");
@@ -448,11 +499,48 @@ class ModelingDbtCompilerTest {
             List.of(),
             List.of(new FieldMapping("raw_project_no", "project_no")),
             Map.of("filter", "is_deleted = false"),
-            "table"
+            "table",
+            typedFields(model)
         );
 
         assertThatThrownBy(() -> ModelingDbtCompiler.compile(projection))
             .isInstanceOf(ModelingDbtCompiler.CompileException.class)
             .hasMessageContaining("IMPLEMENTATION_SETTING_NOT_ALLOWED");
+    }
+
+    private static List<ModelSpecCompilerProjection.CompilerField> typedFields(
+        ModelingVNextContract.ModelSpec model
+    ) {
+        java.util.LinkedHashSet<String> names =
+            new java.util.LinkedHashSet<>();
+        if (model.grain() != null) {
+            names.addAll(model.grain().keys());
+        }
+        if (model.standardBindings() != null) {
+            model
+                .standardBindings()
+                .stream()
+                .filter(java.util.Objects::nonNull)
+                .map(
+                    ModelingVNextContract.StandardBinding::fieldName
+                )
+                .forEach(names::add);
+        }
+        if (model.dimensions() != null) {
+            names.addAll(model.dimensions());
+        }
+        if (model.metrics() != null) {
+            names.addAll(model.metrics());
+        }
+        return names
+            .stream()
+            .map(name ->
+                new ModelSpecCompilerProjection.CompilerField(
+                    name,
+                    "string",
+                    false
+                )
+            )
+            .toList();
     }
 }

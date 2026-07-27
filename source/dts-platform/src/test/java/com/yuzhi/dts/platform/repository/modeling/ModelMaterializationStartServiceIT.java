@@ -14,12 +14,18 @@ import com.yuzhi.dts.platform.service.etl.DbtTargetConnectionFactory.RuntimeTarg
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryAuditView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus;
 import com.yuzhi.dts.platform.service.modeling.ModelMaterializationStartService;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateService;
 import com.yuzhi.dts.platform.service.modeling.PhysicalRelationInspector.ExpectedRelationType;
 import com.yuzhi.dts.platform.service.modeling.PhysicalRelationInspector.RelationLocator;
 import com.yuzhi.dts.platform.service.modeling.PhysicalRelationInspector.TargetContext;
 import com.yuzhi.dts.platform.service.modeling.PostgresPhysicalRelationInspector;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CandidateView;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CommandResult;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CreateCandidateCommand;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.DriftReasonView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.EntryView;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.ScopeEntryCommand;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.TransitionCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateException;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
 import java.nio.charset.StandardCharsets;
@@ -33,7 +39,13 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -52,6 +64,9 @@ class ModelMaterializationStartServiceIT {
 
     @Autowired
     private ModelMaterializationStartService starts;
+
+    @Autowired
+    private ModelReleaseCandidateService candidateCommands;
 
     @Autowired
     private DbtRuntimeProfileLeaseRepository profileLeases;
@@ -316,7 +331,13 @@ class ModelMaterializationStartServiceIT {
                     "public",
                     scope.targetIdentifier(),
                     ExpectedRelationType.TABLE,
-                    List.of("project_id", "amount")
+                    List.of("project_id", "amount"),
+                    Map.of(
+                        "project_id",
+                        "uuid",
+                        "amount",
+                        "numeric(18,2)"
+                    )
                 )
             );
             assertThat(physical.exists()).isTrue();
@@ -325,6 +346,16 @@ class ModelMaterializationStartServiceIT {
             assertThat(physical.columns())
                 .extracting(column -> column.name())
                 .containsExactly("project_id", "amount");
+            assertThat(
+                inspector(
+                    targetFactory,
+                    dispatchAt.plusSeconds(2)
+                ).dataTypeMatches(
+                    "numeric(18,2)",
+                    physical.columns().get(1).dataType()
+                )
+            )
+                .isTrue();
             ObservationWrite observation = new ObservationWrite(
                 scope.tenant(),
                 scope.candidateId(),
@@ -498,6 +529,1220 @@ class ModelMaterializationStartServiceIT {
                 .isZero();
         } finally {
             transaction.executeWithoutResult(status -> cleanup(scope));
+        }
+    }
+
+    @Test
+    void retryRequiresReconciledFailureAndCreatesAttemptTwo() {
+        Scope scope = scope("retry-attempt-two");
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        Instant attemptAt = Instant.now().plusSeconds(60);
+        UUID firstGroupId = transaction.execute(status -> {
+                seed(scope, true);
+                CandidateView building = starts
+                    .start(
+                        scope.tenant(),
+                        "builder-a",
+                        scope.candidateId(),
+                        1,
+                        "retry-start-key",
+                        "start first attempt"
+                    )
+                    .candidate();
+                assertThat(building.version()).isEqualTo(2);
+
+                var claimed = dispatches
+                    .claimNext(attemptAt, Duration.ofMinutes(2))
+                    .orElseThrow();
+                dispatches.markUnknown(
+                    claimed.id(),
+                    "MODEL_AIRFLOW_TRIGGER_UNKNOWN",
+                    attemptAt.plusSeconds(30),
+                    attemptAt
+                );
+                CandidateView failed = candidateCommands
+                    .transition(
+                        scope.tenant(),
+                        "builder-a",
+                        scope.candidateId(),
+                        new TransitionCommand(
+                            2,
+                            DeliveryStatus.BUILD_FAILED,
+                            "retry-failed-state-key",
+                            "simulate failed state before dispatch reconciliation"
+                        )
+                    )
+                    .candidate();
+                assertThat(failed.version()).isEqualTo(3);
+                return claimed.id();
+            });
+
+            assertThat(firstGroupId).isNotNull();
+            assertThatThrownBy(() ->
+                starts.retry(
+                    scope.tenant(),
+                    "builder-a",
+                    scope.candidateId(),
+                    3,
+                    "retry-before-reconcile-key",
+                    "retry before unknown is reconciled"
+                )
+            )
+                .isInstanceOf(ModelReleaseCandidateException.class)
+                .satisfies(error ->
+                    assertThat(((ModelReleaseCandidateException) error).code())
+                        .isEqualTo("MODEL_MATERIALIZATION_RETRY_RECONCILIATION_REQUIRED")
+                );
+            assertThat(candidates.find(scope.tenant(), scope.candidateId()))
+                .get()
+                .extracting(CandidateView::status, CandidateView::version)
+                .containsExactly(DeliveryStatus.BUILD_FAILED, 3);
+
+            materializationRuns.markFailed(
+                firstGroupId,
+                "MODEL_DBT_AIRFLOW_UPSTREAM_FAILED",
+                attemptAt.plusSeconds(1)
+            );
+            CandidateView retrying = starts
+                .retry(
+                    scope.tenant(),
+                    "builder-a",
+                    scope.candidateId(),
+                    3,
+                    "retry-after-reconcile-key",
+                    "retry reconciled failure"
+                )
+                .candidate();
+
+            assertThat(retrying)
+                .extracting(CandidateView::status, CandidateView::version)
+                .containsExactly(DeliveryStatus.BUILDING, 4);
+            assertThat(
+                jdbcTemplate.queryForList(
+                    """
+                    select attempt, status
+                      from modeling_pipeline_run
+                     where tenant_id = ? and release_candidate_id = ?
+                     order by attempt
+                    """,
+                    scope.tenant(),
+                    scope.candidateId()
+                )
+            )
+                .extracting(row -> row.get("attempt"), row -> row.get("status"))
+                .containsExactly(
+                    org.assertj.core.groups.Tuple.tuple(1, "FAILED"),
+                    org.assertj.core.groups.Tuple.tuple(2, "QUEUED")
+                );
+            assertThat(
+                jdbcTemplate.queryForList(
+                    """
+                    select attempt, status, airflow_run_id
+                      from modeling_materialization_dispatch
+                     where tenant_id = ? and candidate_id = ?
+                     order by attempt
+                    """,
+                    scope.tenant(),
+                    scope.candidateId()
+                )
+            )
+                .satisfies(rows -> {
+                    assertThat(rows).hasSize(2);
+                    assertThat(rows.get(0))
+                        .containsEntry("attempt", 1)
+                        .containsEntry("status", "FAILED");
+                    assertThat(rows.get(1))
+                        .containsEntry("attempt", 2)
+                        .containsEntry("status", "PENDING")
+                        .containsEntry(
+                            "airflow_run_id",
+                            "dts_rc_" +
+                            scope.candidateId().toString().replace("-", "") +
+                            "_a2"
+                        );
+                });
+    }
+
+    @Test
+    void retrySnapshotDriftTransitionsCandidateStaleWithoutAttemptTwo()
+        throws Exception {
+        Scope model = scope("retry-model-drift");
+        assertRetryDriftTransitionsStale(
+            model,
+            "model",
+            "MODEL_RELEASE_CANDIDATE_STALE",
+            () -> {
+                String currentChecksum = "6".repeat(64);
+                jdbcTemplate.update(
+                    """
+                    insert into modeling_model_spec_revision (
+                        id, model_spec_id, revision, spec_json, status,
+                        content_checksum, created_date, last_modified_date,
+                        tenant_id, contract_version, snapshot_json, created_by
+                    ) values (
+                        ?, ?, 2, null, 'DRAFT', ?, current_timestamp,
+                        current_timestamp, ?, 2, cast('{}' as jsonb), 'builder-a'
+                    )
+                    """,
+                    UUID.randomUUID(),
+                    model.modelId(),
+                    currentChecksum,
+                    model.tenant()
+                );
+                assertThat(
+                    jdbcTemplate.update(
+                        """
+                        update modeling_model_spec
+                           set revision = 2, current_checksum = ?,
+                               last_modified_date = current_timestamp
+                         where tenant_id = ? and id = ?
+                        """,
+                        currentChecksum,
+                        model.tenant(),
+                        model.modelId()
+                    )
+                )
+                    .isEqualTo(1);
+            }
+        );
+
+        Scope implementation = scope("retry-implementation-drift");
+        assertRetryDriftTransitionsStale(
+            implementation,
+            "implementation",
+            "MODEL_MATERIALIZATION_RETRY_SNAPSHOT_STALE",
+            () ->
+                assertThat(
+                    jdbcTemplate.update(
+                        """
+                        update modeling_model_implementation
+                           set dbt_unique_id = ?,
+                               last_modified_date = current_timestamp
+                         where tenant_id = ? and id = ? and status = 'ACTIVE'
+                        """,
+                        "model.dts." + implementation.selector() + "_changed",
+                        implementation.tenant(),
+                        implementation.implementationId()
+                    )
+                )
+                    .isEqualTo(1)
+        );
+
+        Scope artifact = scope("retry-artifact-drift");
+        CommandResult artifactStale = assertRetryDriftTransitionsStale(
+            artifact,
+            "artifact",
+            "MODEL_MATERIALIZATION_RETRY_SNAPSHOT_STALE",
+            () -> {
+                String sql =
+                    "{{ config(materialized='table',alias='" +
+                    artifact.targetIdentifier() +
+                    "') }}\nselect 2 as project_id\n";
+                assertThat(
+                    jdbcTemplate.update(
+                        """
+                        insert into modeling_dbt_artifact (
+                            id, model_spec_id, plan_id, project_key,
+                            dbt_unique_id, artifact_key, artifact_type, path,
+                            content_checksum, content, status, revision,
+                            model_checksum, ownership, idempotency_key,
+                            implementation_revision, node_kind,
+                            materialization, physical_asset_ref, created_date,
+                            last_modified_date
+                        ) values (
+                            ?, ?, ?, 'dts', ?, ?, 'SCHEMA', ?, ?, ?,
+                            'COMPILED', 1, ?, 'DESIGNER_GENERATED', ?, 1,
+                            'MODEL', 'table', null, current_timestamp,
+                            current_timestamp
+                        )
+                        """,
+                        UUID.randomUUID(),
+                        artifact.modelId(),
+                        artifact.planId(),
+                        artifact.dbtUniqueId(),
+                        "SCHEMA:models/dwd/" + artifact.selector() + ".yml",
+                        "models/dwd/" + artifact.selector() + ".yml",
+                        sha256(sql),
+                        sql,
+                        artifact.modelChecksum(),
+                        "artifact-drift-" + artifact.modelId()
+                    )
+                )
+                    .isEqualTo(1);
+            }
+        );
+        CommandResult replacement = candidateCommands.createReplacement(
+            artifact.tenant(),
+            "builder-a",
+            artifact.candidateId(),
+            artifactStale.candidate().version(),
+            new CreateCandidateCommand(
+                artifact.planId(),
+                "PROD",
+                List.of(
+                    new ScopeEntryCommand(
+                        artifact.modelId(),
+                        0,
+                        "current revision"
+                    )
+                ),
+                "artifact-replacement-key",
+                "replace stale artifact snapshot"
+            )
+        );
+        assertThat(replacement.candidate().status())
+            .isEqualTo(DeliveryStatus.DRAFT);
+        assertThat(
+            jdbcTemplate.queryForList(
+                """
+                select candidate_id, active_claim_key
+                  from modeling_model_release_candidate_entry
+                 where tenant_id = ? and candidate_id in (?, ?)
+                 order by candidate_id
+                """,
+                artifact.tenant(),
+                artifact.candidateId(),
+                replacement.candidate().id()
+            )
+        )
+            .satisfies(rows -> {
+                assertThat(rows).hasSize(2);
+                Map<String, Object> old = rows
+                    .stream()
+                    .filter(row ->
+                        artifact.candidateId().equals(
+                            row.get("candidate_id")
+                        )
+                    )
+                    .findFirst()
+                    .orElseThrow();
+                Map<String, Object> current = rows
+                    .stream()
+                    .filter(row ->
+                        replacement
+                            .candidate()
+                            .id()
+                            .equals(row.get("candidate_id"))
+                    )
+                    .findFirst()
+                    .orElseThrow();
+                assertThat(old.get("active_claim_key")).isNull();
+                assertThat(current.get("active_claim_key"))
+                    .asString()
+                    .matches("^[0-9a-f]{64}$");
+            });
+        CandidateView replacementBuilding = starts
+            .start(
+                artifact.tenant(),
+                "builder-a",
+                replacement.candidate().id(),
+                1,
+                "artifact-replacement-start-key",
+                "build replacement snapshot"
+            )
+            .candidate();
+        assertThat(replacementBuilding.status())
+            .isEqualTo(DeliveryStatus.BUILDING);
+
+        Scope dependency = scope("retry-dependency-drift");
+        assertRetryDriftTransitionsStale(
+            dependency,
+            "dependency",
+            "MODEL_MATERIALIZATION_RETRY_SNAPSHOT_STALE",
+            () ->
+                assertThat(
+                    jdbcTemplate.update(
+                        """
+                        update modeling_model_implementation
+                           set inputs_json = cast(? as jsonb),
+                               last_modified_date = current_timestamp
+                         where tenant_id = ? and id = ? and status = 'ACTIVE'
+                        """,
+                        """
+                        [{"generatorType":"RELEASE_IT","config":{"variant":"changed"}}]
+                        """,
+                        dependency.tenant(),
+                        dependency.implementationId()
+                    )
+                )
+                    .isEqualTo(1)
+        );
+
+        Scope target = scope("retry-target-drift");
+        assertRetryDriftTransitionsStale(
+            target,
+            "target",
+            "MODEL_MATERIALIZATION_RETRY_SNAPSHOT_STALE",
+            () ->
+                assertThat(
+                    jdbcTemplate.update(
+                        """
+                        update modeling_model_implementation
+                           set settings_json = jsonb_set(
+                                   settings_json,
+                                   '{targetPhysicalName}',
+                                   to_jsonb(cast(? as text)),
+                                   false
+                               ),
+                               last_modified_date = current_timestamp
+                         where tenant_id = ? and id = ? and status = 'ACTIVE'
+                        """,
+                        target.targetIdentifier() + "_changed",
+                        target.tenant(),
+                        target.implementationId()
+                    )
+                )
+                    .isEqualTo(1)
+        );
+
+        Scope concurrent = scope("retry-replacement-concurrency");
+        CommandResult concurrentStale = assertRetryDriftTransitionsStale(
+            concurrent,
+            "replacement-concurrency",
+            "MODEL_MATERIALIZATION_RETRY_SNAPSHOT_STALE",
+            () ->
+                assertThat(
+                    jdbcTemplate.update(
+                        """
+                        update modeling_model_implementation
+                           set dbt_unique_id = ?,
+                               last_modified_date = current_timestamp
+                         where tenant_id = ? and id = ? and status = 'ACTIVE'
+                        """,
+                        "model.dts." + concurrent.selector() + "_changed",
+                        concurrent.tenant(),
+                        concurrent.implementationId()
+                    )
+                )
+                    .isEqualTo(1)
+        );
+        assertConcurrentReplacementHasOneClaimOwner(
+            concurrent,
+            concurrentStale
+        );
+        assertConcurrentRetryReplaysExactlyOnce(
+            scope("concurrent-retry-same-key")
+        );
+        assertConcurrentRetryWithDifferentKeysKeepsOneAttemptTwo(
+            scope("concurrent-retry-different-keys")
+        );
+        assertConcurrentStartReplaysExactlyOnce(
+            scope("concurrent-start-same-key")
+        );
+        assertConcurrentStartWithDifferentKeysKeepsOneActiveRun(
+            scope("concurrent-start-different-keys")
+        );
+    }
+
+    private void assertConcurrentReplacementHasOneClaimOwner(
+        Scope scope,
+        CommandResult stale
+    ) throws Exception {
+        List<Object> outcomes = executeConcurrently(key ->
+            candidateCommands.createReplacement(
+                scope.tenant(),
+                "builder-" + key,
+                scope.candidateId(),
+                stale.candidate().version(),
+                new CreateCandidateCommand(
+                    scope.planId(),
+                    "PROD",
+                    List.of(
+                        new ScopeEntryCommand(
+                            scope.modelId(),
+                            0,
+                            "current revision"
+                        )
+                    ),
+                    "concurrent-replacement-" + key,
+                    "replace stale snapshot concurrently"
+                )
+            )
+        );
+
+        assertThat(outcomes)
+            .filteredOn(CommandResult.class::isInstance)
+            .hasSize(1);
+        assertThat(outcomes)
+            .filteredOn(ModelReleaseCandidateException.class::isInstance)
+            .singleElement()
+            .satisfies(failure ->
+                assertThat(
+                    ((ModelReleaseCandidateException) failure).code()
+                )
+                    .isEqualTo("MODEL_RELEASE_CANDIDATE_WRITE_CONFLICT")
+            );
+
+        CommandResult winner = outcomes
+            .stream()
+            .filter(CommandResult.class::isInstance)
+            .map(CommandResult.class::cast)
+            .findFirst()
+            .orElseThrow();
+        assertThat(
+            jdbcTemplate.queryForObject(
+                """
+                select count(*)
+                  from modeling_model_release_candidate
+                 where tenant_id = ? and plan_id = ?
+                """,
+                Integer.class,
+                scope.tenant(),
+                scope.planId()
+            )
+        )
+            .isEqualTo(2);
+        assertThat(
+            jdbcTemplate.queryForObject(
+                """
+                select count(*)
+                  from modeling_model_release_candidate_entry
+                 where tenant_id = ? and candidate_id = ?
+                   and active_claim_key is null
+                """,
+                Integer.class,
+                scope.tenant(),
+                scope.candidateId()
+            )
+        )
+            .isEqualTo(1);
+        assertThat(
+            jdbcTemplate.queryForObject(
+                """
+                select count(*)
+                  from modeling_model_release_candidate_entry
+                 where tenant_id = ? and candidate_id = ?
+                   and active_claim_key ~ '^[0-9a-f]{64}$'
+                """,
+                Integer.class,
+                scope.tenant(),
+                winner.candidate().id()
+            )
+        )
+            .isEqualTo(1);
+        assertThat(
+            jdbcTemplate.queryForObject(
+                """
+                select count(*)
+                  from modeling_model_release_candidate_command
+                 where tenant_id = ? and candidate_id = ?
+                   and event_type = 'CREATED'
+                """,
+                Integer.class,
+                scope.tenant(),
+                winner.candidate().id()
+            )
+        )
+            .isEqualTo(1);
+    }
+
+    private void assertConcurrentRetryReplaysExactlyOnce(Scope scope)
+        throws Exception {
+        prepareFailedAttemptForRetry(scope, "same-key");
+        List<Object> outcomes = executeConcurrently(key ->
+            starts.retry(
+                scope.tenant(),
+                "builder-a",
+                scope.candidateId(),
+                3,
+                "concurrent-retry-same-key",
+                "retry exactly once"
+            )
+        );
+
+        assertThat(outcomes)
+            .allSatisfy(outcome ->
+                assertThat(outcome).isInstanceOf(CommandResult.class)
+            );
+        assertThat(outcomes)
+            .map(CommandResult.class::cast)
+            .extracting(CommandResult::replayed)
+            .containsExactlyInAnyOrder(false, true);
+        assertSingleAttemptTwo(scope, "concurrent-retry-same-key");
+    }
+
+    private void assertConcurrentRetryWithDifferentKeysKeepsOneAttemptTwo(
+        Scope scope
+    ) throws Exception {
+        prepareFailedAttemptForRetry(scope, "different-keys");
+        List<Object> outcomes = executeConcurrently(key ->
+            starts.retry(
+                scope.tenant(),
+                "builder-" + key,
+                scope.candidateId(),
+                3,
+                "concurrent-retry-" + key,
+                "retry with a competing key"
+            )
+        );
+
+        assertThat(outcomes)
+            .filteredOn(CommandResult.class::isInstance)
+            .singleElement();
+        assertThat(outcomes)
+            .filteredOn(ModelReleaseCandidateException.class::isInstance)
+            .singleElement()
+            .satisfies(failure ->
+                assertThat(
+                    ((ModelReleaseCandidateException) failure).code()
+                )
+                    .isEqualTo(
+                        "MODEL_RELEASE_CANDIDATE_VERSION_CONFLICT"
+                    )
+            );
+        assertSingleAttemptTwo(scope, null);
+    }
+
+    private void prepareFailedAttemptForRetry(
+        Scope scope,
+        String key
+    ) {
+        jdbcTemplate.update(
+            """
+            update modeling_materialization_dispatch
+               set status = 'FAILED',
+                   last_error_code = 'TEST_RETIRED_PENDING_DISPATCH'
+             where status = 'PENDING'
+            """
+        );
+        new TransactionTemplate(transactionManager).executeWithoutResult(
+            status -> {
+                seed(scope, true);
+                starts.start(
+                    scope.tenant(),
+                    "builder-a",
+                    scope.candidateId(),
+                    1,
+                    "concurrent-retry-start-" + key,
+                    "start attempt one"
+                );
+                UUID groupId = jdbcTemplate.queryForObject(
+                    """
+                    select pipeline_run_group_id
+                      from modeling_pipeline_run
+                     where tenant_id = ? and release_candidate_id = ?
+                       and attempt = 1
+                    """,
+                    UUID.class,
+                    scope.tenant(),
+                    scope.candidateId()
+                );
+                var claimed = dispatches
+                    .claimNext(
+                        Instant.now().plusSeconds(60),
+                        Duration.ofMinutes(2)
+                    )
+                    .orElseThrow();
+                assertThat(claimed.id()).isEqualTo(groupId);
+                materializationRuns.markFailed(
+                    groupId,
+                    "MODEL_DBT_AIRFLOW_UPSTREAM_FAILED",
+                    Instant.now().plusSeconds(61)
+                );
+                CandidateView failed = candidateCommands
+                    .transition(
+                        scope.tenant(),
+                        "builder-a",
+                        scope.candidateId(),
+                        new TransitionCommand(
+                            2,
+                            DeliveryStatus.BUILD_FAILED,
+                            "concurrent-retry-failed-" + key,
+                            "record failed attempt"
+                        )
+                    )
+                    .candidate();
+                assertThat(failed)
+                    .extracting(
+                        CandidateView::status,
+                        CandidateView::version
+                    )
+                    .containsExactly(DeliveryStatus.BUILD_FAILED, 3);
+            }
+        );
+    }
+
+    private void assertSingleAttemptTwo(
+        Scope scope,
+        String idempotencyKey
+    ) {
+        assertThat(candidates.find(scope.tenant(), scope.candidateId()))
+            .get()
+            .extracting(CandidateView::status, CandidateView::version)
+            .containsExactly(DeliveryStatus.BUILDING, 4);
+        assertThat(
+            jdbcTemplate.queryForList(
+                """
+                select attempt, status
+                  from modeling_pipeline_run
+                 where tenant_id = ? and release_candidate_id = ?
+                 order by attempt
+                """,
+                scope.tenant(),
+                scope.candidateId()
+            )
+        )
+            .extracting(row -> row.get("attempt"), row -> row.get("status"))
+            .containsExactly(
+                org.assertj.core.groups.Tuple.tuple(1, "FAILED"),
+                org.assertj.core.groups.Tuple.tuple(2, "QUEUED")
+            );
+        assertThat(
+            jdbcTemplate.queryForList(
+                """
+                select attempt, status
+                  from modeling_materialization_dispatch
+                 where tenant_id = ? and candidate_id = ?
+                 order by attempt
+                """,
+                scope.tenant(),
+                scope.candidateId()
+            )
+        )
+            .extracting(row -> row.get("attempt"), row -> row.get("status"))
+            .containsExactly(
+                org.assertj.core.groups.Tuple.tuple(1, "FAILED"),
+                org.assertj.core.groups.Tuple.tuple(2, "PENDING")
+            );
+        if (idempotencyKey != null) {
+            assertThat(
+                jdbcTemplate.queryForObject(
+                    """
+                    select count(*)
+                      from modeling_model_release_candidate_command
+                     where tenant_id = ? and candidate_id = ?
+                       and idempotency_key = ?
+                    """,
+                    Integer.class,
+                    scope.tenant(),
+                    scope.candidateId(),
+                    idempotencyKey
+                )
+            )
+                .isEqualTo(1);
+        }
+    }
+
+    private void assertConcurrentStartReplaysExactlyOnce(Scope scope)
+        throws Exception {
+        new TransactionTemplate(transactionManager).executeWithoutResult(
+            status -> seed(scope, true)
+        );
+        List<Object> outcomes = executeConcurrently(key ->
+            starts.start(
+                scope.tenant(),
+                "builder-a",
+                scope.candidateId(),
+                1,
+                "concurrent-start-same-key",
+                "start exactly once"
+            )
+        );
+
+        assertThat(outcomes)
+            .allSatisfy(outcome ->
+                assertThat(outcome).isInstanceOf(CommandResult.class)
+            );
+        assertThat(outcomes)
+            .map(CommandResult.class::cast)
+            .extracting(CommandResult::replayed)
+            .containsExactlyInAnyOrder(false, true);
+        assertSingleActiveBuild(scope, "concurrent-start-same-key");
+    }
+
+    private void assertConcurrentStartWithDifferentKeysKeepsOneActiveRun(
+        Scope scope
+    ) throws Exception {
+        new TransactionTemplate(transactionManager).executeWithoutResult(
+            status -> seed(scope, true)
+        );
+        List<Object> outcomes = executeConcurrently(key ->
+            starts.start(
+                scope.tenant(),
+                "builder-" + key,
+                scope.candidateId(),
+                1,
+                "concurrent-start-" + key,
+                "start with a competing key"
+            )
+        );
+
+        assertThat(outcomes)
+            .filteredOn(CommandResult.class::isInstance)
+            .singleElement();
+        assertThat(outcomes)
+            .filteredOn(ModelReleaseCandidateException.class::isInstance)
+            .singleElement()
+            .satisfies(failure ->
+                assertThat(
+                    ((ModelReleaseCandidateException) failure).code()
+                )
+                    .isEqualTo(
+                        "MODEL_RELEASE_CANDIDATE_VERSION_CONFLICT"
+                    )
+            );
+        assertSingleActiveBuild(scope, null);
+    }
+
+    private void assertSingleActiveBuild(
+        Scope scope,
+        String idempotencyKey
+    ) {
+        assertThat(candidates.find(scope.tenant(), scope.candidateId()))
+            .get()
+            .extracting(CandidateView::status, CandidateView::version)
+            .containsExactly(DeliveryStatus.BUILDING, 2);
+        assertThat(
+            jdbcTemplate.queryForObject(
+                """
+                select count(*)
+                  from modeling_pipeline_run
+                 where tenant_id = ? and release_candidate_id = ?
+                   and status = 'QUEUED'
+                """,
+                Integer.class,
+                scope.tenant(),
+                scope.candidateId()
+            )
+        )
+            .isEqualTo(1);
+        assertThat(
+            jdbcTemplate.queryForObject(
+                """
+                select count(*)
+                  from modeling_materialization_dispatch
+                 where tenant_id = ? and candidate_id = ?
+                   and status = 'PENDING'
+                """,
+                Integer.class,
+                scope.tenant(),
+                scope.candidateId()
+            )
+        )
+            .isEqualTo(1);
+        assertThat(
+            jdbcTemplate.queryForObject(
+                """
+                select count(*)
+                  from modeling_model_release_candidate_entry
+                 where tenant_id = ? and candidate_id = ?
+                   and active_claim_key ~ '^[0-9a-f]{64}$'
+                """,
+                Integer.class,
+                scope.tenant(),
+                scope.candidateId()
+            )
+        )
+            .isEqualTo(1);
+        if (idempotencyKey != null) {
+            assertThat(
+                jdbcTemplate.queryForObject(
+                    """
+                    select count(*)
+                      from modeling_model_release_candidate_command
+                     where tenant_id = ? and candidate_id = ?
+                       and idempotency_key = ?
+                    """,
+                    Integer.class,
+                    scope.tenant(),
+                    scope.candidateId(),
+                    idempotencyKey
+                )
+            )
+                .isEqualTo(1);
+        }
+    }
+
+    private List<Object> executeConcurrently(
+        Function<String, Object> operation
+    ) throws Exception {
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch release = new CountDownLatch(1);
+        var executor = Executors.newFixedThreadPool(2);
+        Function<String, Object> synchronizedOperation = key -> {
+            ready.countDown();
+            try {
+                if (!release.await(10, TimeUnit.SECONDS)) {
+                    return new IllegalStateException(
+                        "Concurrent operation start barrier timed out"
+                    );
+                }
+                return operation.apply(key);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return interrupted;
+            } catch (RuntimeException failure) {
+                return failure;
+            }
+        };
+
+        try {
+            var first = CompletableFuture.supplyAsync(
+                () -> synchronizedOperation.apply("a"),
+                executor
+            );
+            var second = CompletableFuture.supplyAsync(
+                () -> synchronizedOperation.apply("b"),
+                executor
+            );
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            release.countDown();
+            return List.of(
+                first.get(30, TimeUnit.SECONDS),
+                second.get(30, TimeUnit.SECONDS)
+            );
+        } finally {
+            release.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    private CommandResult assertRetryDriftTransitionsStale(
+        Scope scope,
+        String key,
+        String expectedDriftCode,
+        Runnable mutateCurrentSnapshot
+    ) {
+        TransactionTemplate transaction = new TransactionTemplate(
+            transactionManager
+        );
+        Instant attemptAt = Instant.now().plusSeconds(60);
+        UUID firstGroupId = transaction.execute(status -> {
+            seed(scope, true);
+            starts.start(
+                scope.tenant(),
+                "builder-a",
+                scope.candidateId(),
+                1,
+                key + "-drift-start-key",
+                "start first attempt"
+            );
+            var claimed = dispatches
+                .claimNext(attemptAt, Duration.ofMinutes(2))
+                .orElseThrow();
+            materializationRuns.markFailed(
+                claimed.id(),
+                "MODEL_DBT_AIRFLOW_UPSTREAM_FAILED",
+                attemptAt.plusSeconds(1)
+            );
+            CandidateView failed = candidateCommands
+                .transition(
+                    scope.tenant(),
+                    "builder-a",
+                    scope.candidateId(),
+                    new TransitionCommand(
+                        2,
+                        DeliveryStatus.BUILD_FAILED,
+                        key + "-drift-failed-state-key",
+                        "record failed attempt"
+                    )
+                )
+                .candidate();
+            assertThat(failed)
+                .extracting(CandidateView::status, CandidateView::version)
+                .containsExactly(DeliveryStatus.BUILD_FAILED, 3);
+            return claimed.id();
+        });
+
+        assertThat(firstGroupId).isNotNull();
+        mutateCurrentSnapshot.run();
+
+        CommandResult stale = starts.retry(
+            scope.tenant(),
+            "builder-a",
+            scope.candidateId(),
+            3,
+            key + "-retry-drift-key",
+            "retry after current snapshot changed"
+        );
+
+        assertThat(stale.candidate())
+            .extracting(CandidateView::status, CandidateView::version)
+            .containsExactly(DeliveryStatus.STALE, 4);
+        assertThat(stale.driftReasons())
+            .extracting(DriftReasonView::code)
+            .containsExactly(expectedDriftCode);
+        assertThat(
+            jdbcTemplate.queryForObject(
+                """
+                select count(*)
+                  from modeling_pipeline_run
+                 where tenant_id = ? and release_candidate_id = ?
+                """,
+                Integer.class,
+                scope.tenant(),
+                scope.candidateId()
+            )
+        )
+            .isEqualTo(1);
+        assertThat(
+            jdbcTemplate.queryForObject(
+                """
+                select count(*)
+                  from modeling_materialization_dispatch
+                 where tenant_id = ? and candidate_id = ?
+                """,
+                Integer.class,
+                scope.tenant(),
+                scope.candidateId()
+            )
+        )
+            .isEqualTo(1);
+        assertThat(
+            jdbcTemplate.queryForMap(
+                """
+                select event_type, from_status, to_status, candidate_version
+                  from modeling_model_release_candidate_command
+                 where tenant_id = ? and idempotency_key = ?
+                """,
+                scope.tenant(),
+                key + "-retry-drift-key"
+            )
+        )
+            .containsEntry("event_type", "STALE_DETECTED")
+            .containsEntry("from_status", "BUILD_FAILED")
+            .containsEntry("to_status", "STALE")
+            .containsEntry("candidate_version", 4);
+        return stale;
+    }
+
+    @Test
+    void cancellationReleasesClaimsButRetainsRunObservationSnapshotAndRelation() {
+        Scope scope = scope("cancel-preserves-evidence");
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        jdbcTemplate.execute(
+            "create table public." +
+            scope.targetIdentifier() +
+            " (project_id uuid not null, amount numeric(18,2))"
+        );
+        try {
+            transaction.executeWithoutResult(status -> {
+                seed(scope, true);
+                CandidateView building = starts
+                    .start(
+                        scope.tenant(),
+                        "builder-a",
+                        scope.candidateId(),
+                        1,
+                        "cancel-start-key",
+                        "start release build before failure"
+                    )
+                    .candidate();
+                assertThat(building.status()).isEqualTo(DeliveryStatus.BUILDING);
+
+                Map<String, Object> pipeline = jdbcTemplate.queryForMap(
+                    """
+                    select id, pipeline_run_group_id, dbt_invocation_id
+                      from modeling_pipeline_run
+                     where tenant_id = ? and release_candidate_id = ?
+                    """,
+                    scope.tenant(),
+                    scope.candidateId()
+                );
+                UUID pipelineRunId = (UUID) pipeline.get("id");
+                UUID pipelineRunGroupId = (UUID) pipeline.get("pipeline_run_group_id");
+                UUID dbtInvocationId = (UUID) pipeline.get("dbt_invocation_id");
+                String scopedBundleChecksum = "9".repeat(64);
+                Instant evidenceAt = Instant.now();
+                jdbcTemplate.update(
+                    """
+                    update modeling_pipeline_run
+                       set status = 'DBT_SUCCEEDED',
+                           scoped_bundle_checksum = ?,
+                           started_date = ?,
+                           last_modified_date = ?
+                     where id = ?
+                    """,
+                    scopedBundleChecksum,
+                    java.sql.Timestamp.from(evidenceAt),
+                    java.sql.Timestamp.from(evidenceAt),
+                    pipelineRunId
+                );
+                observations.appendAll(
+                    List.of(
+                        new ObservationWrite(
+                            scope.tenant(),
+                            scope.candidateId(),
+                            2,
+                            pipelineRunGroupId,
+                            pipelineRunId,
+                            scope.modelId(),
+                            1,
+                            scope.modelChecksum(),
+                            1,
+                            scope.implementationChecksum(),
+                            dbtInvocationId,
+                            scopedBundleChecksum,
+                            "postgres",
+                            "sha256:" + "a".repeat(64),
+                            "release_it",
+                            "public",
+                            scope.targetIdentifier(),
+                            ExpectedRelationType.TABLE,
+                            null,
+                            false,
+                            false,
+                            List.of(),
+                            "b".repeat(64),
+                            null,
+                            null,
+                            "RELATION_PROBE_FAILED",
+                            evidenceAt.plusSeconds(1),
+                            evidenceAt.plusSeconds(1)
+                        )
+                    )
+                );
+                var claimed = dispatches
+                    .claimNext(evidenceAt.plusSeconds(2), Duration.ofMinutes(2))
+                    .orElseThrow();
+                assertThat(claimed.id()).isEqualTo(pipelineRunGroupId);
+                materializationRuns.markFailed(
+                    pipelineRunGroupId,
+                    "AIRFLOW_DBT_BUILD_FAILED",
+                    evidenceAt.plusSeconds(3)
+                );
+
+                CandidateView failed = candidateCommands
+                    .transition(
+                        scope.tenant(),
+                        "builder-a",
+                        scope.candidateId(),
+                        new TransitionCommand(
+                            2,
+                            DeliveryStatus.BUILD_FAILED,
+                            "cancel-failure-key",
+                            "record failed build"
+                        )
+                    )
+                    .candidate();
+                assertThat(failed.status()).isEqualTo(DeliveryStatus.BUILD_FAILED);
+                assertThat(
+                    jdbcTemplate.queryForObject(
+                        """
+                        select count(*)
+                          from modeling_model_release_candidate_entry
+                         where tenant_id = ? and candidate_id = ?
+                           and active_claim_key ~ '^[0-9a-f]{64}$'
+                        """,
+                        Integer.class,
+                        scope.tenant(),
+                        scope.candidateId()
+                    )
+                )
+                    .isEqualTo(1);
+
+                var cancelled = candidateCommands.transition(
+                    scope.tenant(),
+                    "builder-a",
+                    scope.candidateId(),
+                    new TransitionCommand(
+                        3,
+                        DeliveryStatus.CANCELLED,
+                        "cancel-command-key",
+                        "abandon failed delivery"
+                    )
+                );
+
+                assertThat(cancelled.candidate())
+                    .extracting(CandidateView::status, CandidateView::version)
+                    .containsExactly(DeliveryStatus.CANCELLED, 4);
+                assertThat(
+                    jdbcTemplate.queryForMap(
+                        """
+                        select active_claim_key, implementation_revision,
+                               implementation_checksum, artifact_bundle_checksum,
+                               dependency_snapshot_checksum
+                          from modeling_model_release_candidate_entry
+                         where tenant_id = ? and candidate_id = ?
+                        """,
+                        scope.tenant(),
+                        scope.candidateId()
+                    )
+                )
+                    .satisfies(snapshot -> {
+                        assertThat(snapshot.get("active_claim_key")).isNull();
+                        assertThat(snapshot.get("implementation_revision")).isEqualTo(1);
+                        assertThat(snapshot.get("implementation_checksum")).isEqualTo(scope.implementationChecksum());
+                        assertThat(snapshot.get("artifact_bundle_checksum")).isNotNull();
+                        assertThat(snapshot.get("dependency_snapshot_checksum")).isNotNull();
+                    });
+                assertThat(
+                    jdbcTemplate.queryForObject(
+                        "select count(*) from modeling_pipeline_run where release_candidate_id = ?",
+                        Integer.class,
+                        scope.candidateId()
+                    )
+                )
+                    .isEqualTo(1);
+                assertThat(
+                    jdbcTemplate.queryForObject(
+                        "select count(*) from modeling_physical_relation_observation where release_candidate_id = ?",
+                        Integer.class,
+                        scope.candidateId()
+                    )
+                )
+                    .isEqualTo(1);
+                assertThat(
+                    jdbcTemplate.queryForObject(
+                        "select to_regclass(?) is not null",
+                        Boolean.class,
+                        "public." + scope.targetIdentifier()
+                    )
+                )
+                    .isTrue();
+
+                var replacement = candidateCommands.createReplacement(
+                    scope.tenant(),
+                    "builder-a",
+                    scope.candidateId(),
+                    4,
+                    new CreateCandidateCommand(
+                        scope.planId(),
+                        "PROD",
+                        List.of(new ScopeEntryCommand(scope.modelId(), 0, "current revision")),
+                        "cancel-replacement-key",
+                        "restart from current revision"
+                    )
+                );
+                assertThat(replacement.candidate().status()).isEqualTo(DeliveryStatus.DRAFT);
+                assertThat(replacement.candidate().id()).isNotEqualTo(scope.candidateId());
+
+                starts.start(
+                    scope.tenant(),
+                    "builder-a",
+                    replacement.candidate().id(),
+                    1,
+                    "cancel-replacement-start-key",
+                    "prove released claim can be acquired"
+                );
+                assertThat(
+                    jdbcTemplate.queryForObject(
+                        """
+                        select count(*)
+                          from modeling_model_release_candidate_entry
+                         where tenant_id = ? and candidate_id = ?
+                           and active_claim_key ~ '^[0-9a-f]{64}$'
+                        """,
+                        Integer.class,
+                        scope.tenant(),
+                        replacement.candidate().id()
+                    )
+                )
+                    .isEqualTo(1);
+                assertThat(
+                    jdbcTemplate.queryForObject(
+                        "select count(*) from modeling_physical_relation_observation where release_candidate_id = ?",
+                        Integer.class,
+                        scope.candidateId()
+                    )
+                )
+                    .isEqualTo(1);
+                status.setRollbackOnly();
+            });
+        } finally {
+            jdbcTemplate.execute(
+                "drop table if exists public." + scope.targetIdentifier()
+            );
         }
     }
 

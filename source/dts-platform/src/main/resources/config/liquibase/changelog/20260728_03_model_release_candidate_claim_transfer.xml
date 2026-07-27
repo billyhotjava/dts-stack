@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260728-03-model-release-candidate-claim-transfer" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="modeling_model_release_candidate_entry"/>
+            <columnExists tableName="modeling_model_release_candidate_entry" columnName="active_claim_key"/>
+            <indexExists indexName="uk_model_release_candidate_entry_active_claim"/>
+        </preConditions>
+        <comment>
+            Permit an active model claim to move atomically from a terminal candidate to its DRAFT
+            replacement. The replacement keeps a claim-only reservation until START_BUILD fills
+            the new immutable implementation and artifact snapshot.
+        </comment>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE modeling_model_release_candidate_entry
+                DROP CONSTRAINT ck_model_release_candidate_entry_build_snapshot;
+
+            ALTER TABLE modeling_model_release_candidate_entry
+                ADD CONSTRAINT ck_model_release_candidate_entry_build_snapshot
+                CHECK (
+                    (
+                        implementation_revision IS NULL
+                        AND implementation_checksum IS NULL
+                        AND dbt_unique_id IS NULL
+                        AND target_identifier IS NULL
+                        AND artifact_bundle_checksum IS NULL
+                        AND dependency_snapshot_checksum IS NULL
+                        AND (
+                            active_claim_key IS NULL
+                            OR (
+                                status IN ('DRAFT', 'BUILDING')
+                                AND active_claim_key ~ '^[0-9a-f]{64}$'
+                            )
+                        )
+                    )
+                    OR (
+                        implementation_id IS NOT NULL
+                        AND implementation_revision > 0
+                        AND implementation_checksum ~ '^[0-9a-f]{64}$'
+                        AND dbt_unique_id ~ '^model\.[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$'
+                        AND target_identifier ~ '^[A-Za-z_][A-Za-z0-9_]*$'
+                        AND artifact_bundle_checksum ~ '^[0-9a-f]{64}$'
+                        AND dependency_snapshot_checksum ~ '^[0-9a-f]{64}$'
+                        AND (
+                            (status = 'CANCELLED' AND active_claim_key IS NULL)
+                            OR (
+                                status IN ('REJECTED', 'ROLLED_BACK', 'STALE')
+                                AND (
+                                    active_claim_key IS NULL
+                                    OR active_claim_key ~ '^[0-9a-f]{64}$'
+                                )
+                            )
+                            OR (
+                                status NOT IN ('CANCELLED', 'REJECTED', 'ROLLED_BACK', 'STALE')
+                                AND active_claim_key ~ '^[0-9a-f]{64}$'
+                            )
+                        )
+                    )
+                );
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    LOCK TABLE modeling_model_release_candidate_entry
+                        IN ACCESS EXCLUSIVE MODE;
+                    IF EXISTS (
+                        SELECT 1
+                          FROM modeling_model_release_candidate_entry
+                         WHERE (
+                                implementation_revision IS NULL
+                                AND active_claim_key IS NOT NULL
+                            )
+                            OR (
+                                implementation_revision IS NOT NULL
+                                AND status IN ('REJECTED', 'ROLLED_BACK', 'STALE')
+                                AND active_claim_key IS NULL
+                            )
+                    ) THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_MODEL_RELEASE_CANDIDATE_CLAIM_TRANSFER_DATA_EXISTS';
+                    END IF;
+                END $$;
+            ]]></sql>
+            <sql splitStatements="true" endDelimiter=";"><![CDATA[
+                ALTER TABLE modeling_model_release_candidate_entry
+                    DROP CONSTRAINT ck_model_release_candidate_entry_build_snapshot;
+                ALTER TABLE modeling_model_release_candidate_entry
+                    ADD CONSTRAINT ck_model_release_candidate_entry_build_snapshot
+                    CHECK (
+                        (
+                            implementation_revision IS NULL
+                            AND implementation_checksum IS NULL
+                            AND dbt_unique_id IS NULL
+                            AND target_identifier IS NULL
+                            AND artifact_bundle_checksum IS NULL
+                            AND dependency_snapshot_checksum IS NULL
+                            AND active_claim_key IS NULL
+                        )
+                        OR (
+                            implementation_id IS NOT NULL
+                            AND implementation_revision > 0
+                            AND implementation_checksum ~ '^[0-9a-f]{64}$'
+                            AND dbt_unique_id ~ '^model\.[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$'
+                            AND target_identifier ~ '^[A-Za-z_][A-Za-z0-9_]*$'
+                            AND artifact_bundle_checksum ~ '^[0-9a-f]{64}$'
+                            AND dependency_snapshot_checksum ~ '^[0-9a-f]{64}$'
+                            AND (
+                                (status = 'CANCELLED' AND active_claim_key IS NULL)
+                                OR (
+                                    status <> 'CANCELLED'
+                                    AND active_claim_key ~ '^[0-9a-f]{64}$'
+                                )
+                            )
+                        )
+                    );
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

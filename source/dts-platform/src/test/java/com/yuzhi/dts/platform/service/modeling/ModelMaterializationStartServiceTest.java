@@ -101,6 +101,60 @@ class ModelMaterializationStartServiceTest {
     }
 
     @Test
+    void retryQueuesTheNextAttemptAfterTheCanonicalBuildingTransition() {
+        CandidateView building = candidate(DeliveryStatus.BUILDING);
+        when(candidateCommands.transition(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), any()))
+            .thenReturn(new CommandResult(building, false, List.of()));
+        when(builds.createRetryQueuedBuild(building, NOW))
+            .thenReturn(mock(ModelMaterializationBuildRepository.QueuedBuildGroup.class));
+
+        CommandResult result = service.retry(
+            TENANT,
+            ACTOR,
+            CANDIDATE_ID,
+            4,
+            "retry-key",
+            "retry failed build"
+        );
+
+        assertThat(result.candidate()).isSameAs(building);
+        ArgumentCaptor<TransitionCommand> command =
+            ArgumentCaptor.forClass(TransitionCommand.class);
+        verify(candidateCommands).transition(
+            eq(TENANT),
+            eq(ACTOR),
+            eq(CANDIDATE_ID),
+            command.capture()
+        );
+        assertThat(command.getValue().targetStatus()).isEqualTo(DeliveryStatus.BUILDING);
+        verify(builds).createRetryQueuedBuild(building, NOW);
+        verify(builds, never()).createQueuedBuild(any(), any());
+        verify(builds, never()).requireQueuedBuild(any());
+    }
+
+    @Test
+    void retryReplayRequiresTheCommittedNextAttemptWithoutCreatingAnother() {
+        CandidateView building = candidate(DeliveryStatus.BUILDING);
+        when(candidateCommands.transition(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), any()))
+            .thenReturn(new CommandResult(building, true, List.of()));
+        when(builds.requireQueuedBuild(building))
+            .thenReturn(mock(ModelMaterializationBuildRepository.QueuedBuildGroup.class));
+
+        service.retry(
+            TENANT,
+            ACTOR,
+            CANDIDATE_ID,
+            4,
+            "retry-key",
+            "retry failed build"
+        );
+
+        verify(builds).requireQueuedBuild(building);
+        verify(builds, never()).createRetryQueuedBuild(any(), any());
+        verify(builds, never()).createQueuedBuild(any(), any());
+    }
+
+    @Test
     void canonicalDriftToStaleCreatesNoPipelineRun() {
         CandidateView stale = candidate(DeliveryStatus.STALE);
         when(candidateCommands.transition(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), any()))

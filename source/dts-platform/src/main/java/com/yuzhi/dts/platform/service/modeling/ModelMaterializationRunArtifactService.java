@@ -539,7 +539,11 @@ public class ModelMaterializationRunArtifactService {
                             .path("materialized")
                             .asText("")
                     ),
-                    expectedColumns(node.path("columns"))
+                    expectedColumns(node.path("columns")),
+                    expectedColumnTypes(
+                        node.path("columns"),
+                        entry.implementationMode()
+                    )
                 );
             } catch (IllegalArgumentException invalid) {
                 throw failure(
@@ -590,12 +594,13 @@ public class ModelMaterializationRunArtifactService {
                 );
             }
             String errorCode = verificationError(
+                inspector,
                 locator,
                 observed
             );
             boolean verified = errorCode == null;
             String expectedColumnsChecksum = digest(
-                locator.expectedColumns()
+                expectedColumnContract(locator)
             );
             String metadataChecksum = observed.exists()
                 ? digest(
@@ -658,6 +663,7 @@ public class ModelMaterializationRunArtifactService {
     }
 
     private static String verificationError(
+        PhysicalRelationInspector inspector,
         RelationLocator locator,
         PhysicalRelationObservation observed
     ) {
@@ -667,7 +673,7 @@ public class ModelMaterializationRunArtifactService {
         if (locator.expectedType() != observed.actualType()) {
             return "MODEL_PHYSICAL_RELATION_TYPE_MISMATCH";
         }
-        List<String> actualColumns = observed
+        List<PhysicalColumn> actualColumns = observed
             .columns()
             .stream()
             .sorted(
@@ -675,10 +681,32 @@ public class ModelMaterializationRunArtifactService {
                     PhysicalColumn::ordinalPosition
                 )
             )
-            .map(PhysicalColumn::name)
             .toList();
-        if (!locator.expectedColumns().equals(actualColumns)) {
+        if (
+            !locator
+                .expectedColumns()
+                .equals(
+                    actualColumns
+                        .stream()
+                        .map(PhysicalColumn::name)
+                        .toList()
+                )
+        ) {
             return "MODEL_PHYSICAL_RELATION_COLUMNS_MISMATCH";
+        }
+        for (PhysicalColumn actual : actualColumns) {
+            String expected = locator
+                .expectedColumnTypes()
+                .get(actual.name());
+            if (
+                expected != null &&
+                !inspector.dataTypeMatches(
+                    expected,
+                    actual.dataType()
+                )
+            ) {
+                return "MODEL_PHYSICAL_RELATION_COLUMN_TYPE_MISMATCH";
+            }
         }
         return null;
     }
@@ -721,6 +749,90 @@ public class ModelMaterializationRunArtifactService {
                 names.add(name);
             });
         return List.copyOf(names);
+    }
+
+    private static Map<String, String> expectedColumnTypes(
+        JsonNode columns,
+        String implementationMode
+    ) {
+        if (!columns.isObject()) {
+            return Map.of();
+        }
+        boolean designerGenerated =
+            "DESIGNER_GENERATED".equals(implementationMode);
+        boolean dbtManaged = "DBT_MANAGED".equals(
+            implementationMode
+        );
+        if (!designerGenerated && !dbtManaged) {
+            throw failure(
+                "MODEL_DBT_MANIFEST_IMPLEMENTATION_MODE_INVALID",
+                "Candidate implementation mode is invalid"
+            );
+        }
+        Map<String, String> types = new LinkedHashMap<>();
+        int columnCount = 0;
+        var fields = columns.fields();
+        while (fields.hasNext()) {
+            Map.Entry<String, JsonNode> entry = fields.next();
+            columnCount++;
+            String name = entry
+                .getValue()
+                .path("name")
+                .asText(entry.getKey());
+            String declared = entry
+                .getValue()
+                .path("data_type")
+                .asText("");
+            if (declared.isBlank()) {
+                if (designerGenerated) {
+                    throw failure(
+                        "MODEL_DBT_MANIFEST_COLUMN_TYPE_REQUIRED",
+                        "Generated model manifest must declare every column type"
+                    );
+                }
+                continue;
+            }
+            try {
+                types.put(
+                    name,
+                    ModelFieldPhysicalTypeContract.canonicalPostgresType(
+                        declared
+                    )
+                );
+            } catch (IllegalArgumentException unsupported) {
+                throw failure(
+                    "MODEL_DBT_MANIFEST_COLUMN_TYPE_UNSUPPORTED",
+                    "dbt manifest declares an unsupported column type"
+                );
+            }
+        }
+        if (
+            dbtManaged &&
+            !types.isEmpty() &&
+            types.size() != columnCount
+        ) {
+            throw failure(
+                "MODEL_DBT_MANIFEST_COLUMN_TYPE_PARTIAL",
+                "dbt-managed manifest column types must be complete or omitted"
+            );
+        }
+        return Map.copyOf(types);
+    }
+
+    private static List<String> expectedColumnContract(
+        RelationLocator locator
+    ) {
+        return locator
+            .expectedColumns()
+            .stream()
+            .map(column ->
+                column +
+                "\u0000" +
+                locator
+                    .expectedColumnTypes()
+                    .getOrDefault(column, "")
+            )
+            .toList();
     }
 
     private void transitionCandidate(

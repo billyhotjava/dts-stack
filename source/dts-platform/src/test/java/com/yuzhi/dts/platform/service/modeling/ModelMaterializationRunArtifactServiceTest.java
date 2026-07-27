@@ -16,6 +16,7 @@ import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationBuildRepos
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationRunRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationRunRepository.RunGroupRecord;
 import com.yuzhi.dts.platform.repository.modeling.PhysicalRelationObservationRepository;
+import com.yuzhi.dts.platform.repository.modeling.PhysicalRelationObservationRepository.ObservationWrite;
 import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService;
 import com.yuzhi.dts.platform.service.modeling.PhysicalRelationInspector.ExpectedRelationType;
 import com.yuzhi.dts.platform.service.modeling.PhysicalRelationInspector.PhysicalColumn;
@@ -23,11 +24,15 @@ import com.yuzhi.dts.platform.service.modeling.PhysicalRelationInspector.Physica
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.HexFormat;
 import java.util.UUID;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -168,7 +173,29 @@ class ModelMaterializationRunArtifactServiceTest {
             1,
             NOW
         );
-        verify(observations).appendAll(any());
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<ObservationWrite>> observationsCaptor =
+            ArgumentCaptor.forClass(List.class);
+        verify(observations).appendAll(
+            observationsCaptor.capture()
+        );
+        assertThat(
+            observationsCaptor
+                .getValue()
+                .getFirst()
+                .expectedColumnsChecksum()
+        )
+            .isEqualTo(
+                digest(
+                    List.of(
+                        "project_id\u0000uuid",
+                        "amount\u0000numeric(18,2)"
+                    )
+                )
+            )
+            .isNotEqualTo(
+                digest(List.of("project_id", "amount"))
+            );
         verify(runs).markRelationsVerified(
             GROUP_ID,
             1,
@@ -547,6 +574,59 @@ class ModelMaterializationRunArtifactServiceTest {
     }
 
     @Test
+    void generatedModelManifestMustDeclareEveryColumnType()
+        throws Exception {
+        writeArtifacts("success", "b".repeat(64));
+        removeManifestColumnTypes();
+
+        assertThatThrownBy(() ->
+            service.syncAndProbe(
+                GROUP_ID,
+                new ModelMaterializationRunArtifactService.SyncProbeCommand(
+                    "RELEASE_BUILD",
+                    BUNDLE
+                )
+            )
+        )
+            .isInstanceOf(
+                ModelMaterializationRuntimeException.class
+            )
+            .extracting(error ->
+                (
+                    (ModelMaterializationRuntimeException) error
+                ).code()
+            )
+            .isEqualTo(
+                "MODEL_DBT_MANIFEST_COLUMN_TYPE_REQUIRED"
+            );
+        verify(observations, never()).appendAll(any());
+    }
+
+    @Test
+    void dbtManagedManifestMayExplicitlyOmitAllColumnTypes()
+        throws Exception {
+        when(builds.loadCandidateBuildScope("tenant-a", GROUP_ID))
+            .thenReturn(scope("DBT_MANAGED"));
+        writeArtifacts("success", "b".repeat(64));
+        removeManifestColumnTypes();
+
+        var result = service.syncAndProbe(
+            GROUP_ID,
+            new ModelMaterializationRunArtifactService.SyncProbeCommand(
+                "RELEASE_BUILD",
+                BUNDLE
+            )
+        );
+
+        assertThat(result.status()).isEqualTo("BUILT");
+        verify(runs).markRelationsVerified(
+            GROUP_ID,
+            1,
+            NOW
+        );
+    }
+
+    @Test
     void unsupportedAdapterFailsClosedWithoutInventingEvidence()
         throws Exception {
         writeArtifacts("success", "b".repeat(64));
@@ -845,7 +925,38 @@ class ModelMaterializationRunArtifactServiceTest {
         );
     }
 
+    private void removeManifestColumnTypes() throws Exception {
+        Path manifestPath = project.resolve("target/manifest.json");
+        ObjectMapper mapper = new ObjectMapper();
+        var manifest = mapper.readTree(manifestPath.toFile());
+        var columns = manifest
+            .path("nodes")
+            .path(UNIQUE_ID)
+            .path("columns");
+        (
+            (com.fasterxml.jackson.databind.node.ObjectNode) columns.path(
+                    "project_id"
+                )
+        ).remove("data_type");
+        (
+            (com.fasterxml.jackson.databind.node.ObjectNode) columns.path(
+                    "amount"
+                )
+        ).remove("data_type");
+        Files.writeString(
+            manifestPath,
+            mapper.writeValueAsString(manifest),
+            StandardCharsets.UTF_8
+        );
+    }
+
     private static CandidateBuildScope scope() {
+        return scope("DESIGNER_GENERATED");
+    }
+
+    private static CandidateBuildScope scope(
+        String implementationMode
+    ) {
         return new CandidateBuildScope(
             "tenant-a",
             CANDIDATE_ID,
@@ -863,6 +974,7 @@ class ModelMaterializationRunArtifactServiceTest {
                     "c".repeat(64),
                     5,
                     "b".repeat(64),
+                    implementationMode,
                     UNIQUE_ID,
                     "dwd_finance",
                     List.of()
@@ -890,6 +1002,7 @@ class ModelMaterializationRunArtifactServiceTest {
                     "1".repeat(64),
                     6,
                     "2".repeat(64),
+                    "DESIGNER_GENERATED",
                     SECOND_UNIQUE_ID,
                     "dwd_finance_summary",
                     List.of()
@@ -905,5 +1018,21 @@ class ModelMaterializationRunArtifactServiceTest {
                 return action.doInTransaction(null);
             }
         };
+    }
+
+    private static String digest(List<String> values) {
+        MessageDigest digest;
+        try {
+            digest = MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException(impossible);
+        }
+        for (String value : values) {
+            digest.update(
+                value.getBytes(StandardCharsets.UTF_8)
+            );
+            digest.update((byte) 0);
+        }
+        return HexFormat.of().formatHex(digest.digest());
     }
 }
