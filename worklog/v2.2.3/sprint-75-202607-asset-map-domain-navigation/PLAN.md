@@ -1823,13 +1823,18 @@ npx vitest run \
 工作目录 `source/dts-platform`：
 
 ```bash
-./mvnw test -Dtest='CatalogAssetPortal*Test,CatalogAssetOverviewAggregatorTest,CatalogDomain*Test'
+./mvnw test -Dtest='CatalogAssetPortalServicePermissionParityTest,CatalogAssetPortalTagFilterTest,CatalogAssetPortalStatsTest,CatalogAssetOverviewAggregatorTest'
 ```
 
-预期：全部 PASS。
+预期：全部 PASS。这四个类是本 sprint 触及且**确认在白名单内**的（前两个原本就在，后两个由 Task 3/4 加入）。
 
-> 若任何一项报 `No tests matching pattern`，说明该测试文件没进 `pom.xml` 的 `<testIncludes>` 白名单——
-> 那不是"没有测试"，是测试**没被编译**。补白名单后重跑。
+> **不要**用 `CatalogDomain*Test` 之类的通配：`CatalogDomainVisibilityServiceTest`、
+> `CatalogDomainFactsLiquibaseTest` 均不在白名单，通配会让整条命令报
+> `No tests matching pattern` 而失败。
+>
+> **本仓库的 Java 测试是 opt-in 的**：374 个测试源文件中只有 76 个进了
+> `pom.xml` 的 `<testIncludes>`，其余 298 个从不编译也从不运行。这不是本 sprint 要修的问题，
+> 但它意味着"Java 测试全绿"只覆盖白名单内的部分——验收时不要把它当成全量回归证据。
 
 - [ ] **Step 3: 类型检查与构建**
 
