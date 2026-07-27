@@ -4,7 +4,13 @@ This ingestion job pushes dbt test results into the metadata service so the plat
 
 Prerequisites
 - Put your dbt project under services/dts-dbt (dbt_project.yml, models, etc.).
-- Ensure profiles.yml exists under services/dts-dbt/profiles.
+- Canonical model materialization obtains a one-run profile from the platform's
+  tmpfs lease and does not use the shared profiles directory.
+- For manual local dbt/OpenMetadata commands only, copy
+  `services/dts-dbt/profiles/profiles.example.yml` to the ignored
+  `services/dts-dbt/profiles/profiles.yml` and inject the documented
+  `DTS_DBT_DEV_*` environment variables. Never package or commit that local
+  file.
 
 Run dbt test (inside the dbt container)
 - docker compose run --rm dts-dbt dbt deps --profiles-dir /root/.dbt

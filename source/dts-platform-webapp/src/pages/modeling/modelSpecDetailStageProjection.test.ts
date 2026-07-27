@@ -34,7 +34,17 @@ test("stage projection follows the logical to physical primary-action sequence",
 			implementationValidated: true,
 			canEdit: true,
 		}).primaryAction.label,
-		"生成并发布",
+		"构建与提交上线",
+	);
+	assert.equal(
+		getModelSpecDetailStageProjection({
+			stage: "physical",
+			logicalDirty: false,
+			implementationConfigured: true,
+			implementationValidated: true,
+			canEdit: true,
+		}).primaryAction.recoveryStage,
+		"implementation",
 	);
 });
 

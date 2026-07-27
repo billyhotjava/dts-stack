@@ -682,8 +682,7 @@ export default function ModelSpecDetailPage() {
 		if (stageProjection.primaryAction.label === "保存逻辑设计") await save();
 		else if (stageProjection.primaryAction.label === "配置数据实现") await implementationActionRef.current?.save();
 		else if (stageProjection.primaryAction.label === "验证实现") await implementationActionRef.current?.validate();
-		else if (advancedImplementationReady) navigate(implementationPath);
-		else changeStage("implementation");
+		else document.getElementById("model-spec-delivery-intents")?.scrollIntoView({ behavior: "smooth", block: "start" });
 	};
 
 	return (
@@ -728,11 +727,11 @@ export default function ModelSpecDetailPage() {
 							loading={saving}
 							disabled={
 								stageProjection.primaryAction.disabled ||
-								(stageProjection.primaryAction.label === "生成并发布" && !advancedImplementationReady)
+								(stageProjection.primaryAction.label === "构建与提交上线" && !advancedImplementationReady)
 							}
 							title={
 								stageProjection.primaryAction.recoveryMessage ||
-								(stageProjection.primaryAction.label === "生成并发布" && !advancedImplementationReady
+								(stageProjection.primaryAction.label === "构建与提交上线" && !advancedImplementationReady
 									? implementationRecoveryMessage
 									: undefined)
 							}
@@ -883,7 +882,11 @@ export default function ModelSpecDetailPage() {
 							<ModelSpecImplementationStage
 								ref={implementationActionRef}
 								model={canonicalModel}
-								expected={{ id: canonicalModel.id, revision: canonicalModel.revision, checksum: canonicalModel.checksum }}
+								expected={{
+									id: canonicalModel.id,
+									revision: canonicalModel.revision,
+									checksum: canonicalModel.checksum,
+								}}
 								implementation={physicalTimeline?.implementation || null}
 								implementationLoading={physicalLoading}
 								sourceOptions={sourceOptions}
@@ -892,9 +895,9 @@ export default function ModelSpecDetailPage() {
 								sourceError={sourceError}
 								sourcePermissionDenied={sourcePermissionDenied}
 								readOnly={!canEdit}
+								deliveryReady={stageGates.find((gate) => gate.stage === "IMPLEMENTATION_READY")?.status === "READY"}
 								onReloadSources={() => {
-									const currentSources =
-										(form.getFieldValue("sources") as ModelSpecDraft["sources"] | undefined) || [];
+									const currentSources = (form.getFieldValue("sources") as ModelSpecDraft["sources"] | undefined) || [];
 									void loadSources(canonicalModel.planId, currentSources);
 								}}
 								onManageSources={canEdit ? () => setSourceInventoryOpen(true) : undefined}
@@ -911,6 +914,7 @@ export default function ModelSpecDetailPage() {
 										artifacts: current?.artifacts || [],
 										events: current?.events || [],
 									}));
+									void loadStageGates();
 								}}
 								advancedEntryDisabled={!advancedImplementationReady}
 								onOpenAdvanced={() => navigate(implementationPath)}

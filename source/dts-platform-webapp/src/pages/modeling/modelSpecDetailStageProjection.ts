@@ -1,6 +1,11 @@
 import type { ModelSpecDetailStage } from "./modelSpecDetailNavigation";
 
-export const MODEL_SPEC_DETAIL_PRIMARY_ACTIONS = ["保存逻辑设计", "配置数据实现", "验证实现", "生成并发布"] as const;
+export const MODEL_SPEC_DETAIL_PRIMARY_ACTIONS = [
+	"保存逻辑设计",
+	"配置数据实现",
+	"验证实现",
+	"构建与提交上线",
+] as const;
 
 export type ModelSpecDetailPrimaryActionLabel = (typeof MODEL_SPEC_DETAIL_PRIMARY_ACTIONS)[number];
 export type ModelSpecDetailLifecycleStatus =
@@ -43,7 +48,7 @@ export type ModelSpecDetailStageProjection = {
 const primaryActionForStage = (stage: ModelSpecDetailStage): ModelSpecDetailPrimaryActionLabel => {
 	if (stage === "logical") return "保存逻辑设计";
 	if (stage === "implementation") return "配置数据实现";
-	return "生成并发布";
+	return "构建与提交上线";
 };
 
 const nextAction = (
@@ -56,7 +61,7 @@ const nextAction = (
 		return { label: "配置数据实现", recoveryStage: "implementation" };
 	}
 	if (!input.implementationValidated) return { label: "验证实现", recoveryStage: "implementation" };
-	return { label: "生成并发布", recoveryStage: "physical" };
+	return { label: "构建与提交上线", recoveryStage: "implementation" };
 };
 
 const lifecycleRecoveryMessage = (status: ModelSpecDetailLifecycleStatus): string =>

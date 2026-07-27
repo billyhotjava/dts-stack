@@ -69,6 +69,76 @@ class DbtTaskFactoryTest(unittest.TestCase):
                         {**allowed, forbidden: "attacker-controlled"}
                     )
 
+    def test_accepts_only_server_owned_manual_operational_run_conf(self):
+        allowed = {
+            "pipelineRunGroupId": "10000000-0000-0000-0000-000000000001",
+            "bindingId": "40000000-0000-0000-0000-000000000004",
+            "bindingVersion": 2,
+            "runPurpose": "OPERATIONAL_RUN",
+            "triggerType": "MANUAL",
+            "runtimeSpecToken": "opaque",
+            "bundleChecksum": "c" * 64,
+        }
+
+        self.assertEqual(
+            self.factory._validate_operational_run_conf(allowed),
+            allowed,
+        )
+        for forbidden in ("projectDir", "selector", "target", "profile"):
+            with self.subTest(forbidden=forbidden):
+                with self.assertRaisesRegex(ValueError, "unsupported"):
+                    self.factory._validate_operational_run_conf(
+                        {**allowed, forbidden: "attacker-controlled"}
+                    )
+
+    def test_cron_prepare_opens_the_durable_run_before_consuming_runtime(self):
+        class DagRun:
+            conf = {}
+            dag_run_id = "scheduled__2026-07-28T02:00:00+00:00"
+            logical_date = "2026-07-28T02:00:00+00:00"
+            run_type = "scheduled"
+
+        calls = []
+        original = self.factory._platform_request
+
+        def fake_request(path, **kwargs):
+            calls.append((path, kwargs))
+            if path.endswith("/scheduled-runs/open"):
+                return {
+                    "pipelineRunGroupId":
+                        "10000000-0000-0000-0000-000000000001",
+                    "bindingId":
+                        "40000000-0000-0000-0000-000000000004",
+                    "bindingVersion": 2,
+                    "runPurpose": "OPERATIONAL_RUN",
+                    "triggerType": "CRON",
+                    "runtimeSpecToken": "opaque",
+                    "bundleChecksum": "c" * 64,
+                }
+            return {
+                **self.runtime_spec(),
+                "runPurpose": "OPERATIONAL_RUN",
+                "projectBundleChecksum": "c" * 64,
+            }
+
+        self.factory._platform_request = fake_request
+        try:
+            runtime = self.factory._prepare_runtime_task(
+                purpose="OPERATIONAL_RUN",
+                binding_id="40000000-0000-0000-0000-000000000004",
+                dag_run=DagRun(),
+            )
+        finally:
+            self.factory._platform_request = original
+
+        self.assertEqual(runtime["runPurpose"], "OPERATIONAL_RUN")
+        self.assertTrue(calls[0][0].endswith("/scheduled-runs/open"))
+        self.assertEqual(
+            calls[0][1]["payload"]["dagRunId"],
+            DagRun.dag_run_id,
+        )
+        self.assertTrue(calls[1][0].endswith("/runtime-specs/consume"))
+
     def test_builds_argument_array_from_fixed_roots_and_opaque_ids(self):
         command = self.factory._build_docker_command(
             self.runtime_spec(),

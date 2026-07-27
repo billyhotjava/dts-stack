@@ -39,3 +39,4 @@ services/dts-airflow/logs
 services/dts-airflow/dags
 services/dts-dbt/target
 services/dts-dbt/logs
+services/dts-dbt/profiles/profiles.yml

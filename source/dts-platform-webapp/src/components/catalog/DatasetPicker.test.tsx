@@ -39,7 +39,24 @@ vi.mock("antd", async () => {
 								"选择首个数据资产",
 							),
 						)
-					: React.createElement("button", { type: "button", onClick: () => onChange?.("domain-2") }, "选择测试主题域"),
+					: React.createElement(
+							React.Fragment,
+							null,
+							React.createElement("button", { type: "button", onClick: () => onChange?.("domain-2") }, "选择测试业务域"),
+							options.some((option: any) => option.label === "未归属业务域")
+								? React.createElement(
+										"button",
+										{
+											type: "button",
+											onClick: () =>
+												onChange?.(
+													options.find((option: any) => option.label === "未归属业务域")?.value,
+												),
+										},
+										"选择未归属业务域",
+									)
+								: null,
+						),
 				options.map((option: any) =>
 					React.createElement("div", { key: option.value, "data-value": option.value }, option.label),
 				),
@@ -284,6 +301,32 @@ describe("DatasetPicker", () => {
 			hiveTable: "ods_orders",
 			warehouseLayer: "ODS",
 		});
+		unmount();
+	});
+
+	it("offers unassigned business-domain assets and sends the server-side unassigned filter", async () => {
+		listDomains.mockResolvedValue({
+			content: [{ id: "domain-1", name: "财务域" }],
+		});
+		const { DatasetPicker } = await import("./DatasetPicker");
+		const { container, unmount } = await renderAndFlush(<DatasetPicker sourceId="lake-1" />);
+
+		expect(container.textContent).toContain("未归属业务域");
+		act(() => {
+			(
+				Array.from(container.querySelectorAll("button")).find(
+					(button) => button.textContent === "选择未归属业务域",
+				) as HTMLButtonElement
+			).click();
+		});
+		await flushAsyncWork();
+
+		expect(listDatasets.mock.calls.at(-1)?.[0]).toMatchObject({
+			sourceId: "lake-1",
+			domainUnassigned: true,
+			page: 0,
+		});
+		expect(listDatasets.mock.calls.at(-1)?.[0]).not.toHaveProperty("domainId");
 		unmount();
 	});
 });

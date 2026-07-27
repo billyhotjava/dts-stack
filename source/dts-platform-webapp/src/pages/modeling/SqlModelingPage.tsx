@@ -55,7 +55,6 @@ import {
 	listModelingPlans,
 	syncDbtModels,
 	getDbtSyncStatus,
-	submitDbtRelease,
 	triggerDbtCompile,
 	triggerDbtTest,
 	triggerDbtDocs,
@@ -79,19 +78,17 @@ import {
 } from "@/api/platformApi";
 import { validateGrainApi } from "@/api/sprint64GovernanceApi";
 import {
-	approveModelReview,
 	compileModelLifecycle,
 	getModelLifecycle,
 	getModelSpec,
-	publishModelLifecycle,
 	recordModelTestEvidence,
-	submitModelReview,
 	type ModelLifecycleTimeline,
 } from "@/api/modelSpecApi";
 import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
 import BatchImportModal from "./BatchImportModal";
 import BatchDeleteResultModal from "./components/BatchDeleteResultModal";
 import GovernanceModal from "./components/GovernanceModal";
+import { ModelDeliveryIntentActions } from "./components/ModelDeliveryIntentActions";
 import ModelFileBrowser from "./components/ModelFileBrowser";
 import ModelEditDrawer from "./components/ModelEditDrawer";
 import ImportModelModal from "./components/ImportModelModal";
@@ -110,7 +107,6 @@ import {
 	buildOperationCompletedMessage,
 	buildOperationQueuedMessage,
 	buildOperationSkippedMessage,
-	buildReleaseSelector,
 	createFailedBuildSummary,
 	createPendingBuildSummary,
 	describeBuildSummary,
@@ -173,7 +169,6 @@ import type {
 	DbtSourceItem,
 	DbtRefItem,
 	SqlModelOdsGenerateResult,
-	DbtReleaseSubmitResult,
 	SqlModelContractImpact,
 	SqlModelStandardBinding,
 	SqlModelStandardBindingResult,
@@ -186,7 +181,6 @@ import type {
 	OdsSkippedSeverity,
 	OdsSkippedEntry,
 } from "./sqlModeling.types";
-import { resolveReleaseSubmitOutcome } from "./sqlModelReleaseSubmit.helpers";
 import { resolveDimensionCandidateGate } from "./dimensionCandidateGate";
 import { resolveGrainDeclaration, type GrainDeclaration } from "./grainDeclaration";
 import { ConformedDimensionRecommendations } from "./semantic-workspace/ConformedDimensionRecommendations";
@@ -293,18 +287,16 @@ const layerTag = (layer?: string) => {
 	return <Tag color={color}>{layer}</Tag>;
 };
 
-const buildRunModalTitle = (mode: "compile" | "test" | "build" | "release") => {
+const buildRunModalTitle = (mode: "compile" | "test" | "build") => {
 	if (mode === "compile") return "编译 (dbt compile)";
 	if (mode === "test") return "测试 (dbt test)";
-	if (mode === "build") return "构建 (dbt build)";
-	return "上线 (dbt build)";
+	return "构建 (dbt build)";
 };
 
-const buildRunModalOkText = (mode: "compile" | "test" | "build" | "release") => {
+const buildRunModalOkText = (mode: "compile" | "test" | "build") => {
 	if (mode === "compile") return "开始编译";
 	if (mode === "test") return "开始测试";
-	if (mode === "build") return "开始构建";
-	return "提交";
+	return "开始构建";
 };
 
 const resolveModelKey = (model: SqlModel, fallback: string) => model.id || model.name || fallback;
@@ -378,7 +370,7 @@ export default function SqlModelingPage() {
 	const [runsLoading, setRunsLoading] = useState(false);
 	const [runs, setRuns] = useState<DagRun[]>([]);
 	const [runOpen, setRunOpen] = useState(false);
-	const [runMode, setRunMode] = useState<"compile" | "test" | "build" | "release">("release");
+	const [runMode, setRunMode] = useState<"compile" | "test" | "build">("build");
 	const [runSubmitting, setRunSubmitting] = useState(false);
 	const [runSelectedModelIds, setRunSelectedModelIds] = useState<string[]>([]);
 	const [runModelKeyword, setRunModelKeyword] = useState("");
@@ -1272,14 +1264,11 @@ export default function SqlModelingPage() {
 		}
 	};
 
-	const openRun = (mode: "compile" | "test" | "build" | "release" = "release") => {
+	const openRun = (mode: "compile" | "test" | "build" = "build") => {
 		runForm.resetFields();
 		runForm.setFieldsValue({
 			target: dbtConfig?.config?.targetName || "",
 			vars: "",
-			gitRef: "",
-			commitSha: "",
-			strictMode: false,
 		});
 		const activeId = String(activeModel?.id || "").trim();
 		const checkedIds = Array.from(
@@ -1635,152 +1624,6 @@ export default function SqlModelingPage() {
 				await syncLifecycleBuildEvidence(operation, completed);
 				toast.success(buildOperationCompletedMessage(operation));
 				return;
-			}
-			if (groups.length > 1) {
-				Modal.warning({
-					title: "跨项目空间上线",
-					content: (
-						<div style={{ fontSize: 12 }}>
-							<p>勾选的模型分布在多个项目空间，上线需按空间分别提交。当前勾选分组：</p>
-							<ul style={{ paddingLeft: 18, margin: 0 }}>
-								{groups.map((g, idx) => (
-									<li key={`${g.dagSelector || "none"}-${idx}`}>
-										{(g.planName || g.dagSelector || "未分配")} · {g.names.length} 个模型
-									</li>
-								))}
-							</ul>
-						</div>
-					),
-				});
-				return;
-			}
-			const onlyGroup = groups[0];
-			const modelsSelector = onlyGroup.names.join(" ");
-			const payload = {
-				models: modelsSelector,
-				dagSelector: onlyGroup.dagSelector,
-				target: normalizeText(values.target) || undefined,
-				vars: tryParseJsonObject(values.vars),
-				gitRef: normalizeText(values.gitRef) || undefined,
-				commitSha: normalizeText(values.commitSha) || undefined,
-				strictMode: values.strictMode !== false,
-				...lifecycleRunContext(),
-			};
-			const submitRelease = async (confirmWarnings = false) =>
-				(await submitDbtRelease({
-					...payload,
-					confirmWarnings,
-				})) as DbtReleaseSubmitResult;
-
-			const lifecycleBaseline = requestedModelSpecId
-				? ((await getDbtSyncStatus(modelsSelector ? { models: modelsSelector } : undefined)) as DbtSyncStatus)
-				: null;
-			let releaseResult = await submitRelease(false);
-			const firstOutcome = resolveReleaseSubmitOutcome(releaseResult);
-			if (firstOutcome === "blocked") {
-				Modal.error({
-					title: "上线阻断",
-					content: (
-						<div style={{ fontSize: 12 }}>
-							<p>当前不满足上线条件，请先修复后重试。</p>
-							<ul style={{ paddingLeft: 18, margin: 0 }}>
-								{(releaseResult.blockers || []).map((item, idx) => (
-									<li key={`${item}-${idx}`}>{item}</li>
-								))}
-							</ul>
-						</div>
-					),
-				});
-				return;
-			}
-			if (firstOutcome === "warning") {
-				const confirmed = await new Promise<boolean>((resolve) =>
-					Modal.confirm({
-						title: "上线告警",
-						content: (
-							<div style={{ fontSize: 12 }}>
-								<p>检测到以下告警，是否继续提交变更？</p>
-								<ul style={{ paddingLeft: 18, margin: 0 }}>
-									{(releaseResult.warnings || []).map((item, idx) => (
-										<li key={`${item}-${idx}`}>{item}</li>
-									))}
-								</ul>
-							</div>
-						),
-						okText: "继续上线",
-						cancelText: "取消",
-						onOk: () => resolve(true),
-						onCancel: () => resolve(false),
-					}),
-				);
-				if (!confirmed) {
-					return;
-				}
-				releaseResult = await submitRelease(true);
-				if (resolveReleaseSubmitOutcome(releaseResult) !== "submitted") {
-					Modal.error({
-						title: "上线提交失败",
-						content: (
-							<div style={{ fontSize: 12 }}>
-								<p>后端未返回成功提交结果，请检查以下信息后重试。</p>
-									<ul style={{ paddingLeft: 18, margin: 0 }}>
-										{[...(releaseResult.blockers || []), ...(releaseResult.warnings || [])].map((item, idx) => (
-											<li key={`${item}-${idx}`}>{item}</li>
-										))}
-									</ul>
-							</div>
-						),
-					});
-					return;
-				}
-			}
-			const dagRunId = normalizeText(releaseResult?.dagRunId);
-			const dagId = normalizeText(releaseResult?.dagId);
-			setRunResult({
-				...createPendingBuildSummary("build", buildReleaseSelector(modelsSelector)),
-				dagRunId,
-				dagId,
-			});
-			toast.success("dbt build 已提交");
-			setRunOpen(false);
-			void loadRuns({ dagId: dagId || undefined, selector: modelsSelector });
-			if (requestedModelSpecId) {
-				const settled = await waitForBuildResult(
-					"build",
-					modelsSelector,
-					dagId || undefined,
-						dagRunId || undefined,
-						lifecycleBaseline?.latestRun || null,
-					);
-					if (settled.timedOut) {
-						throw new Error("dbt build 等待超时，ModelSpec 未提交审核或发布");
-					}
-					const completed = settled.latestRun || null;
-				if (settled.dagState === "failed" || normalizeUpper(completed?.status) !== "SUCCESS") {
-					throw new Error("dbt build 未成功，ModelSpec 未提交审核或发布");
-				}
-				await syncLifecycleBuildEvidence("build", { ...completed!, dagRunId: dagRunId || completed?.dagRunId });
-				const binding = await ensureLifecycleOwnership();
-				if (!binding) throw new Error("ModelSpec lifecycle context is unavailable");
-				const runKey = normalizeText(completed?.invocationId || dagRunId);
-				await submitModelReview(binding.modelSpec, binding.implementation, {
-					comment: "dbt build 已通过，提交模型审核",
-					idempotencyKey: `review-submit:${runKey}`,
-				});
-				await approveModelReview(binding.modelSpec, binding.implementation, {
-					comment: "高级建模上线审核通过",
-					idempotencyKey: `review-approve:${runKey}`,
-				});
-				const release = await publishModelLifecycle(binding.modelSpec, binding.implementation, {
-					comment: "dbt build 与模型门禁均通过",
-					idempotencyKey: `release:${runKey}`,
-				});
-				if (release.status === "PUBLISHED") {
-					setLifecycleModel((current) => current ? { ...current, status: "PUBLISHED" } : current);
-					toast.success("ModelSpec 已发布并完成资产、BI、血缘注册");
-				} else {
-					toast.warning("发布尚未完成：目录资产或血缘登记仍待处理，可在运行证据中查看并重试");
-				}
 			}
 		} catch (err: any) {
 			const message = normalizeText(err?.message) || "dbt 运行提交失败";
@@ -3360,62 +3203,98 @@ export default function SqlModelingPage() {
 								title={activeModel ? "带入当前模型创建数据产品" : "先选择一个模型"}
 							>
 								创建数据产品
-							</Button>
-							{createPrimaryModelingActions().map((action) => {
-								if (action.key === "compile") {
+								</Button>
+								{createPrimaryModelingActions().map((action) => {
+									if (action.key === "compile") {
+										return (
+											<Button
+												key={action.key}
+												onClick={() => openRun("compile")}
+												loading={buildTriggering === "compile"}
+												disabled={
+													sqlModels.length === 0 ||
+													!configEnabled ||
+													!workspaceOk ||
+													buildTriggering != null
+												}
+												data-testid="platform-sql-modeling-compile"
+											>
+												{action.label}
+											</Button>
+										);
+									}
+									if (action.key === "test") {
+										return (
+											<Button
+												key={action.key}
+												onClick={() => openRun("test")}
+												loading={buildTriggering === "test"}
+												disabled={
+													sqlModels.length === 0 ||
+													!configEnabled ||
+													!workspaceOk ||
+													buildTriggering != null
+												}
+												data-testid="platform-sql-modeling-test"
+											>
+												{action.label}
+											</Button>
+										);
+									}
+									if (action.key === "build") {
+										if (requestedModelSpecId) return null;
+										return (
+											<Button
+												key={action.key}
+												type="primary"
+												onClick={() => openRun("build")}
+												loading={buildTriggering === "build"}
+												disabled={
+													sqlModels.length === 0 ||
+													!configEnabled ||
+													!workspaceOk ||
+													buildTriggering != null
+												}
+												data-testid="platform-sql-modeling-build"
+											>
+												{action.label}
+											</Button>
+										);
+									}
+									if (requestedModelSpecId) return null;
 									return (
-									<Button
-										key={action.key}
-										onClick={() => openRun("compile")}
-										loading={buildTriggering === "compile"}
-										disabled={sqlModels.length === 0 || !configEnabled || !workspaceOk || buildTriggering != null}
-										data-testid="platform-sql-modeling-compile"
-									>
-										{action.label}
-									</Button>
-								);
-							}
-								if (action.key === "test") {
-									return (
-										<Button
-										key={action.key}
-										onClick={() => openRun("test")}
-										loading={buildTriggering === "test"}
-										disabled={sqlModels.length === 0 || !configEnabled || !workspaceOk || buildTriggering != null}
-										data-testid="platform-sql-modeling-test"
-									>
-										{action.label}
-										</Button>
+										<Tooltip key={action.key} title="先从模型详情绑定 canonical ModelSpec；未绑定工作区只允许技术构建。">
+											<Button disabled data-testid="platform-sql-modeling-release">
+												{action.label}
+											</Button>
+										</Tooltip>
 									);
-								}
-								if (action.key === "build") {
-									return (
-										<Button
-											key={action.key}
-											type="primary"
-											onClick={() => openRun("build")}
-											loading={buildTriggering === "build"}
-											disabled={sqlModels.length === 0 || !configEnabled || !workspaceOk || buildTriggering != null}
-											data-testid="platform-sql-modeling-build"
-										>
-											{action.label}
-										</Button>
-									);
-								}
-								return (
-									<Button
-										key={action.key}
-										onClick={() => openRun("release")}
-										disabled={!workspaceOk}
-										data-testid="platform-sql-modeling-release"
-									>
-										{action.label}
-									</Button>
-								);
-							})}
-						<Dropdown
-								menu={{
-									items: createSecondaryModelingActions().map((action) => {
+								})}
+								{requestedModelSpecId && lifecycleModel ? (
+									<ModelDeliveryIntentActions
+										id="advanced-model-delivery-intents"
+										compact
+										model={lifecycleModel}
+										implementationReady={Boolean(
+											lifecycleImplementation &&
+												activeModel?.modelSpecId === requestedModelSpecId &&
+												lifecycleImplementation.modelSpecId === requestedModelSpecId,
+										)}
+										readOnly={
+											lifecycleLoading ||
+											Boolean(lifecycleError) ||
+											activeModel?.modelSpecId !== requestedModelSpecId
+										}
+									/>
+								) : requestedModelSpecId ? (
+									<Space>
+										<Button disabled>构建</Button>
+										<Button disabled>提交上线</Button>
+									</Space>
+								) : null}
+								<Dropdown
+									menu={{
+										items: createSecondaryModelingActions().map((action) => {
 										if (action.key === "commit") {
 											return {
 												key: action.key,
@@ -3842,8 +3721,18 @@ export default function SqlModelingPage() {
 										<Tag>质量门禁</Tag>
 										<Tag>权限门禁</Tag>
 									</div>
-									<Button size="small" className="mt-2" disabled={!activeModel?.id} onClick={() => openRun("release")}>
-										打开发布门禁
+									<Button
+										size="small"
+										className="mt-2"
+										disabled={!requestedModelSpecId || !lifecycleModel}
+										title={!requestedModelSpecId ? "先从模型详情绑定 canonical ModelSpec" : undefined}
+										onClick={() =>
+											document
+												.getElementById("advanced-model-delivery-intents")
+												?.scrollIntoView({ behavior: "smooth", block: "center" })
+										}
+									>
+										查看构建与上线状态
 									</Button>
 								</div>
 								<Divider className="my-2" />
@@ -4652,29 +4541,6 @@ export default function SqlModelingPage() {
 					<Form.Item name="target" label="目标">
 						<Input placeholder="dev" />
 					</Form.Item>
-					{runMode === "release" && (
-						<>
-							<div className="grid gap-3 md:grid-cols-2">
-								<Form.Item
-									name="gitRef"
-									label="Git 分支"
-									tooltip="可选。仅在环境维护 Git 版本追溯时填写，允许 main/master/release/*/hotfix/*"
-								>
-									<Input placeholder="可选，例如：release/2.2.1" />
-								</Form.Item>
-								<Form.Item
-									name="commitSha"
-									label="Commit SHA"
-									tooltip="可选。用于将本次发布与具体代码版本绑定"
-								>
-									<Input placeholder="可选，例如：a1b2c3d4" />
-								</Form.Item>
-							</div>
-							<Form.Item name="strictMode" valuePropName="checked">
-								<Checkbox>启用严格发布门禁（客户环境无 Git 时可关闭）</Checkbox>
-							</Form.Item>
-						</>
-					)}
 					<Form.Item name="vars" label="运行变量">
 						<Input.TextArea rows={3} placeholder='JSON 结构，例如 {"run_date":"2026-01-19"}' />
 					</Form.Item>

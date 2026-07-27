@@ -1,7 +1,7 @@
 # T04：收敛 dbt 运行凭据与单目标能力边界
 
 **优先级**：P0
-**状态**：DRAFT
+**状态**：IN_PROGRESS
 **依赖**：T01
 
 ## 目标
@@ -34,21 +34,38 @@
 - compose/deployment documentation
 - secret scan/security tests
 
+## 当前进展（2026-07-28）
+
+- canonical RELEASE_BUILD 已使用 `DbtTargetConnectionFactory` →
+  `DbtRuntimeProfileLeaseService` → host tmpfs lease；Airflow 只消费
+  leaseId，并从固定 root 派生只读 mount。
+- `init.sh`、app/dev/legacy compose、启动 preflight 与 readiness 已统一
+  tmpfs、owner、0700/0600、symlink 和固定路径 fail-closed 约束。
+- Airflow → platform 已使用 pairwise token、精确 principal/method/path
+  allowlist；runtime spec、lease consume/release、sync-probe/finalize 不再
+  依赖 header-only 身份。
+- tracked `profiles.yml` 已删除；本地 fixture 被 Git 与 Docker context
+  忽略，部署打包函数强制剔除；原 profile 已知凭据值在当前 tracked
+  工作树中的出现次数为 0。
+- 尚未关闭：OPERATIONAL_RUN 复用同一 resolver、真实 Airflow 场景中的
+  kill/restart/TTL/rotation/secret scan，以及缺失 token 的真实 HTTP
+  401/403 证据。
+
 ## 验证（RED→GREEN）
 
-- [ ] tracked profile secret RED scan 可复现，迁移后扫描为 0。
+- [x] tracked profile secret RED scan 可复现，迁移后已知值扫描为 0。
 - [ ] RELEASE_BUILD/OPERATIONAL_RUN 使用同一 executionTargetKey/tmpfs profile lease resolver。
 - [ ] DagRun conf/XCom/API/DB/audit/evidence/task logs warehouse secret scan为 0。
 - [ ] target key 注入、未知 target、secret missing/decrypt denied、伪造 service header/token 均 fail-closed。
-- [ ] production 非 tmpfs root 启动失败；tmpfs root 0700、profile 0600、固定路径派生、只读 mount、release/TTL 清理测试通过。
-- [ ] path traversal、symlink、任意 mount path、过期/重复 lease 消费均被拒绝。
+- [x] production 非 tmpfs root 启动失败；tmpfs root 0700、profile 0600、固定路径派生、只读 mount、release/TTL 清理测试通过。
+- [x] path traversal、symlink、任意 mount path、过期/重复 lease 消费均被拒绝。
 - [ ] prepare/open/sync/probe/finalize/release 缺 pairwise token 时返回 401/403，且不会执行 dbt 或伪装成功。
 - [ ] credential rotation 后 dagId/binding/model revision 不变，新任务成功。
-- [ ] 本地/CI 安全 fixture 与生产数据源 secret 分离。
+- [x] 本地/CI 安全 fixture 与生产数据源 secret 分离。
 
 ## Definition of Done
 
-- [ ] 仓库不再包含真实 dbt 数据库密码。
+- [x] 原 tracked dbt profile 与其已知凭据值已从当前 tracked 工作树清除。
 - [ ] 运行凭据不经过用户请求、API payload、环境变量和业务持久化，只短暂存在于平台进程与宿主机 tmpfs lease。
 - [ ] P0 单目标能力有真实证据，未支持目标不显示为可选。
 - [ ] 数据源 secret/lease/service auth 不可用时明确阻断，绝不回退到 tracked plaintext。

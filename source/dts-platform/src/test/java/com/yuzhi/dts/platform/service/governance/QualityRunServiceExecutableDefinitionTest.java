@@ -4,17 +4,18 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.config.GovernanceProperties;
+import com.yuzhi.dts.platform.domain.governance.GovQualityMetric;
 import com.yuzhi.dts.platform.domain.governance.GovQualityRun;
 import com.yuzhi.dts.platform.domain.governance.GovRule;
 import com.yuzhi.dts.platform.domain.governance.GovRuleBinding;
 import com.yuzhi.dts.platform.domain.governance.GovRuleVersion;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
-import com.yuzhi.dts.platform.repository.governance.GovQualityFailingRowRepository;
 import com.yuzhi.dts.platform.repository.governance.GovQualityMetricRepository;
 import com.yuzhi.dts.platform.repository.governance.GovQualityRunRepository;
 import com.yuzhi.dts.platform.repository.governance.GovRuleBindingRepository;
@@ -23,7 +24,7 @@ import com.yuzhi.dts.platform.repository.governance.GovRuleVersionRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.governance.dto.QualityRunDto;
 import com.yuzhi.dts.platform.service.governance.request.QualityRunTriggerRequest;
-import com.yuzhi.dts.platform.service.security.HiveStatementExecutor;
+import com.yuzhi.dts.platform.service.security.dto.StatementExecutionResult;
 import java.util.Optional;
 import java.util.List;
 import java.util.Set;
@@ -33,6 +34,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
 
@@ -60,16 +62,13 @@ class QualityRunServiceExecutableDefinitionTest {
     private GovQualityMetricRepository metricRepository;
 
     @Mock
-    private GovQualityFailingRowRepository failingRowRepository;
-
-    @Mock
     private CatalogDatasetRepository datasetRepository;
 
     @Mock
     private Executor taskExecutor;
 
     @Mock
-    private HiveStatementExecutor hiveExecutor;
+    private QualityDatasetStatementExecutor statementExecutor;
 
     @Mock
     private AuditService auditService;
@@ -93,10 +92,9 @@ class QualityRunServiceExecutableDefinitionTest {
             bindingRepository,
             runRepository,
             metricRepository,
-            failingRowRepository,
             datasetRepository,
             taskExecutor,
-            hiveExecutor,
+            statementExecutor,
             auditService,
             issueTicketService,
             new ObjectMapper(),
@@ -240,5 +238,126 @@ class QualityRunServiceExecutableDefinitionTest {
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getStatus()).isEqualTo("QUEUED");
         verify(runRepository).save(any(GovQualityRun.class));
+    }
+
+    @Test
+    void dryRunUsesTheBoundDatasetExecutorInsteadOfTheHiveOnlyExecutor() {
+        GovRule rule = new GovRule();
+        rule.setId(RULE_ID);
+        rule.setName("默认数仓非空检查");
+        rule.setSeverity("MEDIUM");
+
+        GovRuleVersion version = new GovRuleVersion();
+        version.setId(VERSION_ID);
+        version.setRule(rule);
+        version.setVersion(1);
+        version.setStatus("PUBLISHED");
+        version.setDefinition("{\"sql\":\"select id from ods_budget_v2 where project_no is null\"}");
+
+        GovRuleBinding binding = new GovRuleBinding();
+        binding.setId(BINDING_ID);
+        binding.setRuleVersion(version);
+        binding.setDatasetId(DATASET_ID);
+        version.setBindings(Set.of(binding));
+        rule.setLatestVersion(version);
+
+        GovQualityRun[] persistedRun = new GovQualityRun[1];
+        when(ruleRepository.findById(RULE_ID)).thenReturn(Optional.of(rule));
+        when(runRepository.save(any(GovQualityRun.class))).thenAnswer(invocation -> {
+            GovQualityRun run = invocation.getArgument(0);
+            if (run.getId() == null) {
+                run.setId(UUID.fromString("50000000-0000-0000-0000-000000000012"));
+            }
+            persistedRun[0] = run;
+            return run;
+        });
+        when(runRepository.findById(any())).thenAnswer(invocation -> Optional.ofNullable(persistedRun[0]));
+        when(statementExecutor.execute(any(), any())).thenReturn(
+            new QualityDatasetStatementExecutor.Execution(
+                List.of(new StatementExecutionResult("sql", "select 1", StatementExecutionResult.Status.SUCCEEDED, "未发现异常数据")),
+                25,
+                0
+            )
+        );
+
+        QualityRunTriggerRequest request = new QualityRunTriggerRequest();
+        request.setRuleId(RULE_ID);
+        request.setDryRun(true);
+
+        List<QualityRunDto> result = service.trigger(request, "actor");
+
+        assertThat(result).singleElement().satisfies(run -> {
+            assertThat(run.getStatus()).isEqualTo("SUCCEEDED");
+            assertThat(run.getRowsTotal()).isEqualTo(25);
+            assertThat(run.getFailingRowCount()).isZero();
+        });
+    }
+
+    @Test
+    void executionContractErrorZerosEveryFailedMetricInTheRun() {
+        GovRule rule = new GovRule();
+        rule.setId(RULE_ID);
+        rule.setName("字段不存在的检查");
+        rule.setSeverity("MEDIUM");
+
+        GovRuleVersion version = new GovRuleVersion();
+        version.setId(VERSION_ID);
+        version.setRule(rule);
+        version.setVersion(1);
+        version.setStatus("PUBLISHED");
+        version.setDefinition("{\"sql\":\"select id from ods_budget_v2 where project_code is null\"}");
+
+        GovRuleBinding binding = new GovRuleBinding();
+        binding.setId(BINDING_ID);
+        binding.setRuleVersion(version);
+        binding.setDatasetId(DATASET_ID);
+        version.setBindings(Set.of(binding));
+        rule.setLatestVersion(version);
+
+        GovQualityRun[] persistedRun = new GovQualityRun[1];
+        when(ruleRepository.findById(RULE_ID)).thenReturn(Optional.of(rule));
+        when(runRepository.save(any(GovQualityRun.class))).thenAnswer(invocation -> {
+            GovQualityRun run = invocation.getArgument(0);
+            if (run.getId() == null) {
+                run.setId(UUID.fromString("50000000-0000-0000-0000-000000000013"));
+            }
+            persistedRun[0] = run;
+            return run;
+        });
+        when(runRepository.findById(any())).thenAnswer(invocation -> Optional.ofNullable(persistedRun[0]));
+        when(statementExecutor.execute(any(), any())).thenReturn(
+            new QualityDatasetStatementExecutor.Execution(
+                List.of(
+                    new StatementExecutionResult(
+                        "sql",
+                        "select id from ods_budget_v2 where project_code is null",
+                        StatementExecutionResult.Status.FAILED,
+                        "发现 1 条不符合规则的数据"
+                    ),
+                    new StatementExecutionResult(
+                        "__failed_rows__",
+                        "",
+                        StatementExecutionResult.Status.FAILED,
+                        "质量检测结果必须返回稳定的 id 字段",
+                        "RESULT_ID_REQUIRED"
+                    )
+                ),
+                25,
+                0
+            )
+        );
+
+        QualityRunTriggerRequest request = new QualityRunTriggerRequest();
+        request.setRuleId(RULE_ID);
+        request.setDryRun(true);
+
+        List<QualityRunDto> result = service.trigger(request, "actor");
+
+        assertThat(result).singleElement().satisfies(run -> assertThat(run.getStatus()).isEqualTo("FAILED"));
+        ArgumentCaptor<GovQualityMetric> metric = ArgumentCaptor.forClass(GovQualityMetric.class);
+        verify(metricRepository, times(2)).save(metric.capture());
+        assertThat(metric.getAllValues()).allSatisfy(item ->
+            assertThat(item.getMetricValue()).isEqualByComparingTo("0")
+        );
     }
 }

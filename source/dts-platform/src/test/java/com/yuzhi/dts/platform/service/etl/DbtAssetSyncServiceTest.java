@@ -6,7 +6,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.config.DbtProperties;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
@@ -33,7 +32,6 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -102,7 +100,11 @@ class DbtAssetSyncServiceTest {
     }
 
     @Test
-    void syncRegistersSuccessfulMaterializedRelationWithControlledModelLayerAndRunEvidence() throws Exception {
+    void syncImportsLifecycleArtifactsWithoutCreatingCatalogPhysicalAsset() throws Exception {
+        java.util.UUID targetSourceId =
+            java.util.UUID.fromString(
+                "90000000-0000-0000-0000-000000000001"
+            );
         writeArtifacts(
             """
             {"metadata":{"invocation_id":"run-orders","generated_at":"2026-07-24T08:00:00Z","project_name":"dts"},"nodes":{"model.dts.orders":{"resource_type":"model","name":"orders","database":"warehouse","schema":"analytics","identifier":"orders_relation","original_file_path":"models/dwd/orders.sql","raw_code":"select order_id from source_orders","columns":{"order_id":{"name":"order_id","data_type":"bigint"}},"config":{"materialized":"table","meta":{"tenantId":"tenant-a","modelSpecId":"10000000-0000-0000-0000-000000000001","revision":7,"modelChecksum":"sha256:model-v7","implementationRevision":3,"implementationChecksum":"sha256:implementation-v3","projectKey":"dts","layer":"DWD"}},"depends_on":{"nodes":[]}}},"sources":{}}
@@ -111,10 +113,6 @@ class DbtAssetSyncServiceTest {
             {"metadata":{"invocation_id":"run-orders","generated_at":"2026-07-24T08:00:00Z"},"results":[{"unique_id":"model.dts.orders","status":"success"}]}
             """
         );
-        when(datasetRepository.findFirstByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase("analytics", "orders_relation")).thenReturn(Optional.empty());
-        when(datasetRepository.save(any(CatalogDataset.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(tableRepository.findFirstByDatasetAndNameIgnoreCase(any(CatalogDataset.class), any())).thenReturn(Optional.empty());
-        when(tableRepository.save(any(CatalogTableSchema.class))).thenAnswer(invocation -> invocation.getArgument(0));
         ModelLifecycleContract.ImplementationView implementation = currentImplementation();
         when(
             lifecycleRepository.findImplementation(
@@ -129,24 +127,13 @@ class DbtAssetSyncServiceTest {
         when(modelSpec.implementationMode()).thenReturn(ModelSpecContract.ImplementationMode.DBT_MANAGED);
         when(modelSpecReader.get("tenant-a", implementation.modelSpecId())).thenReturn(modelSpec);
 
-        DbtAssetSyncService.DbtAssetSyncResult result = service().syncFromManifest(tempDir.toString());
+        DbtAssetSyncService.DbtAssetSyncResult result = service(
+            targetSourceId
+        ).syncFromManifest(tempDir.toString());
 
-        ArgumentCaptor<CatalogDataset> dataset = ArgumentCaptor.forClass(CatalogDataset.class);
-        verify(datasetRepository).save(dataset.capture());
-        assertThat(result.stats().getCreated()).isEqualTo(1);
-        assertThat(dataset.getValue()).extracting(CatalogDataset::getHiveDatabase, CatalogDataset::getHiveTable, CatalogDataset::getWarehouseLayer)
-            .containsExactly("analytics", "orders_relation", "DWD");
-        JsonNode tags = new ObjectMapper().readTree(dataset.getValue().getTags());
-        assertThat(tags.path("modelSpecId").asText()).isEqualTo("10000000-0000-0000-0000-000000000001");
-        assertThat(tags.path("revision").asInt()).isEqualTo(7);
-        assertThat(tags.path("implementationRevision").asInt()).isEqualTo(3);
-        assertThat(tags.path("implementationChecksum").asText()).isEqualTo("sha256:implementation-v3");
-        assertThat(tags.path("dbtUniqueId").asText()).isEqualTo("model.dts.orders");
-        assertThat(tags.path("dbtProject").asText()).isEqualTo("dts");
-        assertThat(tags.path("dbtWorkspace").asText()).isEqualTo(workspaceKey());
-        assertThat(tags.path("runStatus").asText()).isEqualTo("SUCCESS");
-        assertThat(tags.path("runInvocationId").asText()).isEqualTo("run-orders");
-        assertThat(tags.path("materializedTruth").asBoolean()).isTrue();
+        assertThat(result.stats().getCreated()).isZero();
+        verify(datasetRepository, never()).save(any(CatalogDataset.class));
+        verify(tableRepository, never()).save(any(CatalogTableSchema.class));
         verify(lifecycleRepository, org.mockito.Mockito.times(2)).findImplementation(
             "tenant-a",
             java.util.UUID.fromString("10000000-0000-0000-0000-000000000001")
@@ -525,6 +512,12 @@ class DbtAssetSyncServiceTest {
     }
 
     private DbtAssetSyncService service() {
+        return service(null);
+    }
+
+    private DbtAssetSyncService service(
+        java.util.UUID targetSourceId
+    ) {
         DbtProperties properties = new DbtProperties();
         properties.setEnabled(true);
         DbtConfigService.DbtWorkspaceConfig config = new DbtConfigService.DbtWorkspaceConfig(
@@ -533,7 +526,7 @@ class DbtAssetSyncServiceTest {
             tempDir.resolve("profiles").toString(),
             "dts",
             "dev",
-            null,
+            targetSourceId,
             null,
             null,
             Map.of()

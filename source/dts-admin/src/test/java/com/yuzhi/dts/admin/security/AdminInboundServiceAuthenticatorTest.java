@@ -1,0 +1,56 @@
+package com.yuzhi.dts.admin.security;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.yuzhi.dts.admin.config.AdminInboundServiceAuthProperties;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockHttpServletRequest;
+
+class AdminInboundServiceAuthenticatorTest {
+
+    @Test
+    void acceptsOnlyTheConfiguredPairwiseServiceAndToken() {
+        var properties = new AdminInboundServiceAuthProperties();
+        properties.setTrustedServices(Map.of("dts-platform", "pairwise-secret"));
+        var authenticator = new AdminInboundServiceAuthenticator(properties);
+        var accepted = request("dts-platform", "pairwise-secret");
+        var wrongService = request("dts-airflow", "pairwise-secret");
+        var wrongToken = request("dts-platform", "wrong");
+
+        assertThat(authenticator.authenticate(accepted, "dts-platform").accepted())
+            .isTrue();
+        assertThat(
+            authenticator.authenticate(wrongService, "dts-platform").accepted()
+        )
+            .isFalse();
+        assertThat(
+            authenticator.authenticate(wrongToken, "dts-platform").accepted()
+        )
+            .isFalse();
+    }
+
+    @Test
+    void rejectsWhenThePairwiseTokenIsNotConfigured() {
+        var authenticator = new AdminInboundServiceAuthenticator(
+            new AdminInboundServiceAuthProperties()
+        );
+
+        assertThat(
+            authenticator
+                .authenticate(request("dts-platform", "anything"), "dts-platform")
+                .accepted()
+        )
+            .isFalse();
+    }
+
+    private static MockHttpServletRequest request(
+        String service,
+        String token
+    ) {
+        var request = new MockHttpServletRequest();
+        request.addHeader(AdminInboundServiceAuthenticator.SERVICE_HEADER, service);
+        request.addHeader(AdminInboundServiceAuthenticator.TOKEN_HEADER, token);
+        return request;
+    }
+}

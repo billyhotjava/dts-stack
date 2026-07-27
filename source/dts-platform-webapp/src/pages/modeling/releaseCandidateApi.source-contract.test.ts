@@ -34,3 +34,22 @@ test("release candidate workbench preserves transport states and server-owned dr
 	assert.match(refresh, /headers: releaseCandidateWriteHeaders\(idempotencyKey, expected\)/);
 	assert.match(refresh, /data: \{ reason \}/);
 });
+
+test("single-model build and publication intents send only business context with strong preconditions", () => {
+	const buildIntent = API.slice(
+		API.indexOf("export const startModelBuildIntent"),
+		API.indexOf("export const startModelPublicationIntent"),
+	);
+	assert.match(buildIntent, /\/build-intents/);
+	assert.match(buildIntent, /"If-Match": toModelSpecEtag\(expected\)/);
+	assert.match(buildIntent, /"Idempotency-Key": idempotencyKey/);
+	assert.doesNotMatch(buildIntent, /dagId|selector|profileKey|targetName/);
+
+	const publishIntent = API.slice(
+		API.indexOf("export const startModelPublicationIntent"),
+		API.indexOf("export const createReleaseCandidate"),
+	);
+	assert.match(publishIntent, /\/publish-intents/);
+	assert.match(publishIntent, /headers: releaseCandidateWriteHeaders\(idempotencyKey, expected\)/);
+	assert.match(publishIntent, /data: \{ candidateId: expected\.id, reason \}/);
+});

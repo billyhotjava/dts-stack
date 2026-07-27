@@ -273,6 +273,7 @@ public class CatalogResourceHelper {
 
     public Specification<CatalogDataset> buildDatasetListSpecification(
         UUID domainId,
+        boolean domainUnassigned,
         UUID sourceId,
         String keyword,
         String classification,
@@ -294,7 +295,9 @@ public class CatalogResourceHelper {
         String exposedByText = trimToNull(exposedBy);
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
-            if (domainId != null) {
+            if (domainUnassigned) {
+                predicates.add(cb.isNull(root.get("domain")));
+            } else if (domainId != null) {
                 predicates.add(cb.equal(root.get("domain").get("id"), domainId));
             }
             if (sourceId != null) {

@@ -5,6 +5,8 @@
 **类型**：Model Materialization / dbt Runtime / DAG Workflow / Release Governance / Physical Asset / Full-stack
 **目标**：让普通维度建模和高级 dbt 建模都以“构建、提交上线”进入同一条受治理执行链：系统自动把已验证的 ModelImplementation 转成可运行 dbt 节点，纳入 ReleaseCandidate，通过现有 Airflow/dbt 通道在目标数据库生成并核验 current revision 的 table/view；经独立审核和发布后原子登记本地物理资产，部署默认 `MANUAL_ONLY` 计划绑定。Airflow 是唯一调度真值；绑定 ACTIVE 且关系健康时才显示“上线完成”，后续由同一 dbt 任务模板完成手工或 CRON 计算。
 
+**当前实施快照（2026-07-28）**：F5/T02 已完成服务端工作台证据投影和模型详情页接入，构建状态、dbt/Airflow run 与真实关系核验分栏展示，且候选深链严格按请求 ID fail-closed；后端定向测试 30/30、前端契约测试 34/34、TypeScript 与 Biome 均通过。真实 Airflow 联调、F7 计划 DAG/持续计算和 Chrome95 验收仍未关闭。
+
 ## 1. 背景与问题定义
 
 Sprint-74 已完成逻辑设计、数据实现和发布结果三阶段边界纠偏，但其正确验收边界是“编译证据可见、没有真实物理资产时不伪造结果”。本轮复查确认，当前产品还不能把普通逻辑模型可靠地变成关联表：
@@ -117,6 +119,9 @@ Sprint-74 已完成逻辑设计、数据实现和发布结果三阶段边界纠�
 | ADR-76-38 | Airflow 内部服务身份 | prepare/open/sync/probe/finalize/release 全部使用 pairwise `X-DTS-Service + X-DTS-Service-Token`，过滤器按 `service:dts-airflow` 和路径白名单收敛；canonical 链禁止 `|| true` | 当前仅 header 的回写无法通过生产鉴权且会静默失败，不能作为成功证据 | F2/T02/T04、F7/T02、IT-19/20 |
 | ADR-76-39 | 生产权限双门禁 | Sprint-76 通过三个专用 Keycloak realm authority 完成 maintainer/reviewer/operator 职责解析与同人隔离，不从 catalog/admin/auditor 静默提升；Sprint-36/F3 负责资产动作矩阵，发布注册同时通过两层才允许 PROD | actor separation 不能替代资产动作授权，M05 矩阵也不能替代 Candidate 审核职责；禁止在 Sprint-76 复制权限表 | F4/T01～T02、F6/T01、IT-14 |
 | ADR-76-40 | typed-column 物理契约 | F4 发布前，DESIGNER_GENERATED 必须把 current ModelSpec 的字段类型投影到 dbt artifact，并对 PostgreSQL 实际列类型做 adapter-aware 强校验；DBT_MANAGED 有声明则校验，无声明时以真实 observation 为物理 schema 事实并明确降级，不伪造 expected type | `ModelSpec.dataType` 是必填业务契约，当前投影丢失后仅核对列名会让 numeric→text 等错误进入 BUILT；但不能用 PostgreSQL 规则强迫所有高级 dbt 项目声明同一逻辑类型体系 | F3/T04、F4/T03、IT-07/10 |
+| ADR-76-41 | binding 环境隔离与历史事实 | binding scope 必须同时匹配 plan、environment、executionTargetKey；任何 current PUBLISHED 模型缺少当前 release facts 时以 `MODEL_PLAN_BINDING_RELEASE_FACTS_REQUIRED` fail-closed，不跨环境聚合、不静默漏模型、不从旧命名推断目标 | 连续发布必须聚合 A+B，但不能把 TEST 模型带入 PROD；历史数据迁移属于显式治理动作，不能在发布事务中猜测 | F4/T02、F7/T01、PostgreSQL IT |
+| ADR-76-42 | 物理资产唯一身份 | 输出 CatalogDataset 以 execution target 解析出的 `sourceId + lower(trim(schema)) + lower(trim(table))` 为唯一 locator；数据库 expression/partial unique index 是最终 authority，Candidate 与 generic dbt sync 共用稳定 UUID；升级前唯一 `source_id is null` 同表资产可被事务认领，多个候选一律 fail-closed | ModelSpec/revision 是发布证据而不是物理表身份；按 revision 生成资产会让重发产生新台账，也无法抵御 Candidate 与 dbt sync 并发 | F4/T03、IT-10/11 |
+| ADR-76-43 | 外部同步健康语义 | local outbox 与目标消费者 ACK 分层：outbox `PENDING/SENT/FAILED` 只代表 handoff，不能证明 OpenMetadata/BI 已应用；目标消费者必须按 event/candidate/version/target 幂等处理并回写 ACK，目标失败只投影 `DEGRADED`，不回退 PUBLISHED | 当前 OpenMetadata client 只有 GET/缓存拉取，Kafka dispatcher 无消费者 ACK 且 FAILED 不会自动重试；把 SENT 当 HEALTHY 会制造假绿 | F4/T02～T03、F6/T03、IT-11 |
 
 ## 4. 对象所有权
 
@@ -172,8 +177,8 @@ Sprint-74 已完成逻辑设计、数据实现和发布结果三阶段边界纠�
 | 层 | 契约/落点 | 签名要点 |
 |---|---|---|
 | 模型详情/高级建模 UI | 模型详情 implementation stage、`/studio/sql-modeling` | 显示“构建/提交上线”；均只调用 Build/Publish Intent，不直接拼装审核、批准、发布或 Airflow 调用 |
-| Build Intent facade | `POST /api/modeling/model-specs/{id}/build-intents`（预定） | headers=`If-Match,Idempotency-Key`；body=`planId,environment`；仅创建/精确复用 SINGLE_MODEL_INTENT，遇批量候选返回 409 |
-| Publish Intent facade | `POST /api/modeling/model-specs/{id}/publish-intents`（预定） | headers=`If-Match(candidate ETag),Idempotency-Key`；body=`candidateId,reason`；只接受 exact SINGLE candidate，记录 intent 后推进质量与提交审核，在人工边界停止 |
+| Build Intent facade | `POST /api/modeling/model-specs/{id}/build-intents`（已落地） | headers=`If-Match,Idempotency-Key`；body=`planId,environment`；仅创建/精确复用 SINGLE_MODEL_INTENT，遇批量候选返回 409 |
+| Publish Intent facade | `POST /api/modeling/model-specs/{id}/publish-intents`（已落地） | headers=`If-Match(candidate ETag),Idempotency-Key`；body=`candidateId,reason`；只接受 exact SINGLE candidate，记录 intent 后推进质量与提交审核，在人工边界停止 |
 | 交付工作台 UI | `/modeling/plans/:planId/implementation?modelSpecId=:id&revision=:rev` | 提供批量 scope、完整候选、质量、reviewer APPROVE/REJECT、operator PUBLISH、DAG 与运行证据；与快捷入口读取同一 workspace |
 | 候选命令 API | `POST .../{candidateId}/{lock|quality|reviews|reviews/approve|reviews/reject|publish|registration/retry|rollback|cancel}` | 所有 mutation 使用 candidate If-Match + Idempotency-Key；服务端解析 actor role，页面不得串行动作 |
 | 实现校验 API | `POST /api/modeling/model-specs/{id}/implementation/inputs/validate` | 返回兼容 `valid/code` + `blockers[]` + `executionPlan` |
@@ -433,6 +438,15 @@ DRAFT / BUILD_FAILED / QUALITY_FAILED
 | L58 | L57 的 cancel 缺口已关闭：Candidate 终态、命令账本、REST、claim 释放、迁移约束和真实 PostgreSQL 保留证据均已落地；同一轮补齐 retry attempt 递增、UNKNOWN 对账阻断，以及 model/implementation/artifact/dependency/target 五类 drift 用原 retry 收据原子迁移 STALE。F2/T03 仍缺 replacement/retry 并发和 Airflow exactly-once 证据，因此 F4 继续 BLOCKED | F2/T03 聚焦单测与真实 PostgreSQL retry/cancel/drift 矩阵，2026-07-28 |
 | L59 | replacement claim 现由事务从旧终态 Candidate 原子转移至 claim-only DRAFT，START_BUILD 再补齐 current snapshot；真实 PostgreSQL 双线程矩阵证明 replacement、START_BUILD 与 retry 在相同/不同 key 竞争下分别收敛为一个 claim、一个 durable run 和唯一 attempt 2。F2/T03 本地并发缺口关闭；F4 只继续等待 F2/T02 的 Airflow submit timeout/duplicate/reconcile exactly-once effect 证据 | `20260728_03_model_release_candidate_claim_transfer.xml`、`ModelMaterializationStartServiceIT#retrySnapshotDriftTransitionsCandidateStaleWithoutAttemptTwo`，2026-07-28 |
 | L60 | F2/T02 的本地协议已补强为只读 reconcile 与 submit 分离：无法证明 DagRun 不存在时不盲触发；existing run 必须匹配 durable conf；HTTP timeout、duplicate、local commit failure 和 token 过期均复用同一 deterministic dagRunId。Java 聚焦测试与 Python factory 4/4 通过；真实 Airflow 故障注入、service token/profile lease 和页面/计划统一入口尚未完成，因此 F4 与 PROD 继续 BLOCKED | `DbtExecutionGateway`、`AirflowDbtExecutionGateway`、`ModelMaterializationDispatchService` 及聚焦测试，2026-07-28 |
+| L61 | F2/T04 的 RELEASE_BUILD 本地安全链已贯通 encrypted data-source secret → platform tmpfs lease → Airflow 固定 root 只读 mount；tracked profile、本地 Docker context 与离线包泄漏路径已关闭，原 profile 已知凭据值扫描为 0。Java 4 组聚焦测试、Python factory 4/4、tmpfs/compose preflight 与 package test 通过；OPERATIONAL_RUN 共用 resolver 和真实 Airflow rotation/restart/401/403/secret-scan 证据仍待完成 | `DbtRuntimeProfileLeaseService`、`dbt_task_factory.py`、三套 compose、`test_dbt_runtime_profile_preflight.sh`、`test_dts_build_pack_contents.sh`，2026-07-28 |
+| L62 | F2/T02 真实 Airflow 故障注入已证明 accept-after-timeout、duplicate 409、durable conf 精确一致、唯一 DagRun 及 Platform 重启后唯一性；无效 token 运行 fail-closed，dbt/sync 未执行。同期发现 thin DAG 被 Airflow discovery safe mode 静默跳过，renderer 已以无执行语义 marker 修复并通过 HIGH 影响范围的 renderer/dispatch 聚焦测试；F4 的唯一外部副作用阻断解除 | `it/evidence/f2-airflow-exactly-once/README.md`、`DbtDagService` 及聚焦测试，2026-07-28 |
+| L63 | F4/T01 后端控制面已进入实施态：专用 duty role/resolver、Publish Intent 原子收据、现有 dbt build 质量证据 reconciler、dts-admin/Keycloak current-duty fail-closed adapter、三人隔离和构建后完整快照漂移门禁已通过聚焦测试；真实 Keycloak 账号/撤权、Sprint-36/F3 资产动作本地接入、旧 lifecycle 委托和 Chrome95 尚未关闭，因此 T01/F4 只能标记 IN_PROGRESS，PROD 继续 NO-GO | `ModelPublicationIntentServiceTest`、`ModelPublicationReviewReconcilerTest`、`ModelMaterializationStartServiceIT`、dts-admin current-duty tests，2026-07-28 |
+| L64 | F4/T03 本地主链已关闭：Candidate 与 generic dbt sync 共用 source/schema/table 稳定身份，迁移前重复清单 fail-closed，current observation actual columns 投影到 Catalog，artifact 只指向输出资产；真实 PostgreSQL 6/6 进一步证明双线程 writer 收敛、DBT_MANAGED 字段/双层血缘重试幂等、rollback 按当前 Candidate 的 physicalAssetId 归档，以及 100-entry 末端故障全回滚、PARTIAL 零可见、单次 retry 后一次性可见。回滚在写入前要求 ARCHIVE，且仍不自动 DROP 关系。T03 继续等待 external sync health、页面及 PROD 真实账号证据 | `CatalogPhysicalLocator`、`CandidatePublicationAdmissionService`、`20260728_06_catalog_dataset_physical_locator.xml`、`CandidatePublicationRepositoryIT`，2026-07-28 |
+| L65 | external sync 不能由现有 outbox 状态直接关闭：OpenMetadata client 只有 GET/拉取缓存，Kafka outbox 的 SENT 只证明 broker handoff；dispatcher 把首次失败写成终态 FAILED，当前没有目标消费者、ACK 或幂等 retry 契约。必须先落地 consumer/ACK truth，再投影 target sync health；否则保持 PUBLISHED 且显示同步状态未知/降级，禁止假报 HEALTHY | `OpenMetadataClient`、`PlatformEventOutboxService`、`PlatformEventKafkaDispatcher` 定向复审，2026-07-28 |
+| L66 | F4 本地权限矩阵已关闭：无专用 release duty（含仅 admin/auth-admin/auditor/op-admin）时 publish/registration retry/rollback 在读取 Candidate 前 403；M05 policy 缺失、过期、DENY 返回 false，evaluator 异常转换为稳定 `MODEL_RELEASE_ASSET_POLICY_UNAVAILABLE`/403 并在任何 Candidate/Catalog/field/lineage/physicalAssetRef 写入前停止。本轮定向测试 29/29 GREEN；PROD 仍须以三类真实账号、撤权和跨租户 API 证据验收 | `ReleaseDutyResolver`、`CandidatePublicationAdmissionService`、`ModelReleaseCandidateApplicationServiceTest`，2026-07-28 |
+| L67 | 发布前隔离遗留缺口已关闭：原 `DbtAssetSyncService` 对带 lifecycle pin 的成功物化节点仍会 upsert Catalog，现改为只导入 current dbt artifacts 并保留旧 PUBLISHED 资产，不创建/更新 Catalog/table/column/lineage；无 `modelSpecId` 的普通外部 dbt 同步保持不变。dbt sync 13/13 GREEN；100-entry PostgreSQL 方法定向 1/1 证明 publication 前本地可消费事实为 0、提交后一次性可见，未重复运行整套 IT | `DbtAssetSyncService`、`DbtAssetSyncServiceTest`、`CandidatePublicationRepositoryIT#oneHundredEntryPublicationIsInvisibleAfterFailureAndVisibleAfterOneRetry`，2026-07-28 |
+| L68 | F5/T03 页面已停止从 artifact/source/path 猜测发布资产：只有当前最后一个 publication event 为 RELEASE/PUBLISHED 时才展示 artifact output physicalAssetRef，并深链真实 Catalog dataset；build-only 仅展示 DDL/构建产物，PARTIAL 明确本地登记已回滚，ROLLBACK 不再展示历史引用。source-contract 2/2 与 TypeScript GREEN。binding deployment、relation health 和 external ACK 尚无统一 DTO，页面不得自行推断“上线完成/运行异常/同步健康” | `ModelSpecPhysicalAssetStage.tsx`、`modelSpecThreeStageDetail.source-contract.test.ts`，2026-07-28 |
+| L69 | F5/T01 已接入共享单模型交付入口：模型详情和带 canonical context 的高级 SQL 页均调用同一 Build/Publish Intent，严格匹配 current SINGLE_MODEL Candidate；未绑定 ModelSpec 的高级页只保留技术 build 并禁用上线。原高级页 build 后自动 submit review/approve/publish 旁路已删除；PUBLISHED 明确不等于上线完成。TypeScript GREEN、source-contract 14/14；交付工作台 candidate 证据消费、OPERATIONAL_RUN、统一健康 DTO 和 Chrome95 仍待完成 | `ModelDeliveryIntentActions.tsx`、`modelSpecApi.ts`、`SqlModelingPage.tsx`，2026-07-28 |
 
 勘察到此停止。实施 Task 必须引用 Lxx，禁止重复全仓扫描；如出现新事实，只能追加账本。
 
@@ -446,7 +460,7 @@ DRAFT / BUILD_FAILED / QUALITY_FAILED
 | G1 | 端到端契约链 | PASS | 本文 §6～§7、`assets/model-to-dag-execution-contract.md` | - |
 | G1 | 非功能预算 | PASS | `assets/nfr-budget.md` | - |
 | G1 | 架构与方向复审 | GO（DEV/TEST）/ PROD NO-GO | `assets/architecture-review-agenda.md` | - |
-| G1/PG-01 | dbt credential/target 安全 | GAP | L40～L44、L48、`assets/production-readiness-gates.md` | F2/T04 |
+| G1/PG-01 | dbt credential/target 安全 | LOCAL_GREEN / REAL_IT_PENDING | L40～L44、L48、L61、`assets/production-readiness-gates.md` | F2/T04、F6/T02 |
 | G1/PG-02 | 两类 DAG 单一 runtime template | GAP | L33、L45、`assets/production-readiness-gates.md` | F2/T02、F7/T02 |
 | G2 | 影响分析与变更范围 | PENDING | 每个 Task 编码前 GitNexus impact | 各实现 Task |
 | G3/PG-03 | 生产权限、职责分离与审计 | DEPENDENCY_READY / LOCAL_INTEGRATION_PENDING | L46～L47；Sprint-36/F3=DONE | F4/T01～T02、F6/T01、IT-14 |
@@ -464,7 +478,7 @@ G0 已以同日归档证据关闭实施入口：四个目标关系不存在、pi
 | F1 | 普通实现可运行 dbt 制品 | 3 | P0 | IN_PROGRESS |
 | F2 | 候选驱动物化编排与运行真值 | 4 | P0 | IN_PROGRESS |
 | F3 | 真实关系核验与强绑定证据 | 4 | P0 | DONE |
-| F4 | 发布治理与物理资产交接 | 3 | P0 | BLOCKED |
+| F4 | 发布治理与物理资产交接 | 3 | P0 | IN_PROGRESS |
 | F5 | 建模与交付页面产品闭环 | 3 | P0 | DRAFT |
 | F7 | 上线后计划 DAG 与持续计算 | 3 | P0 | DRAFT |
 | F6 | 真实集成验收与安全交付 | 3 | P0 | DRAFT |

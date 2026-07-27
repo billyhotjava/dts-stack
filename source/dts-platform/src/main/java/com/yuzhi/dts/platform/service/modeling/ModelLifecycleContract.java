@@ -177,7 +177,8 @@ public final class ModelLifecycleContract {
             }
             if (!requiresSubmitterSeparation()) return true;
             if (audit == null || !audit.canBeApprovedBy(actorId)) return false;
-            return this != PUBLISH || audit.hasApproval();
+            if (this != PUBLISH) return true;
+            return audit.hasApproval() && !actorId.trim().equals(audit.approvedBy());
         }
 
         private boolean requiresSubmitterSeparation() {

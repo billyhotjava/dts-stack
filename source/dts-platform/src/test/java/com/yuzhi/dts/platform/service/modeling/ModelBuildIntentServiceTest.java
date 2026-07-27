@@ -176,6 +176,62 @@ class ModelBuildIntentServiceTest {
     }
 
     @Test
+    void cancelledCandidateDoesNotBlockANewSingleModelBuildIntent() {
+        CandidateView cancelled = candidate(
+            DeliveryStatus.CANCELLED,
+            CandidateOrigin.SINGLE_MODEL_INTENT
+        );
+        CandidateView draft = candidate(
+            DeliveryStatus.DRAFT,
+            CandidateOrigin.SINGLE_MODEL_INTENT
+        );
+        CandidateView building = candidate(
+            DeliveryStatus.BUILDING,
+            CandidateOrigin.SINGLE_MODEL_INTENT
+        );
+        QueuedBuildGroup group = group();
+        ModelSpecView model = model(ModelStatus.READY_TO_PUBLISH);
+        when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model);
+        when(candidates.listForWorkbench(TENANT, PLAN_ID))
+            .thenReturn(List.of(cancelled));
+        when(candidateCommands.createSingleModelIntent(eq(TENANT), eq(ACTOR), any()))
+            .thenReturn(new CommandResult(draft, false, List.of()));
+        when(
+            materializationStarts.startWithBuild(
+                TENANT,
+                ACTOR,
+                CANDIDATE_ID,
+                1,
+                ModelBuildIntentService.startCommandKey("replacement-key"),
+                "Build current model materialization"
+            )
+        )
+            .thenReturn(
+                new ModelMaterializationStartService.StartResult(
+                    new CommandResult(building, false, List.of()),
+                    group
+                )
+            );
+
+        ModelBuildIntentService.BuildIntentResult result = service.start(
+            TENANT,
+            ACTOR,
+            MODEL_ID,
+            new ExpectedVersion(MODEL_ID, 3, CHECKSUM),
+            new ModelBuildIntentService.BuildIntentCommand(
+                PLAN_ID,
+                "DEV",
+                "replacement-key"
+            )
+        );
+
+        assertThat(result.candidate()).isSameAs(building);
+        assertThat(result.build()).isSameAs(group);
+        assertThat(result.replayed()).isFalse();
+        verify(candidateCommands).createSingleModelIntent(eq(TENANT), eq(ACTOR), any());
+    }
+
+    @Test
     void neverMutatesOrShrinksAnActiveBatchCandidate() {
         CandidateView batch = candidate(
             DeliveryStatus.DRAFT,

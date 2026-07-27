@@ -536,6 +536,7 @@
                         <testInclude>**/repository/modeling/DataMartRepositoryTest.java</testInclude>
                         <testInclude>**/repository/modeling/ModelLifecycleRepositoryTest.java</testInclude>
                         <testInclude>**/repository/modeling/ModelMaterializationStartServiceIT.java</testInclude>
+                        <testInclude>**/repository/modeling/CandidatePublicationRepositoryIT.java</testInclude>
                         <testInclude>**/repository/modeling/ModelReleaseCandidateRepositoryIT.java</testInclude>
                         <testInclude>**/repository/modeling/ModelSpecRepositoryIT.java</testInclude>
                         <testInclude>**/repository/modeling/Sprint74ModelImplementationSettingsRepositoryIT.java</testInclude>
@@ -550,6 +551,9 @@
                         <testInclude>**/service/etl/DbtConfigServiceTest.java</testInclude>
                         <testInclude>**/service/etl/DbtRuntimeProfile*.java</testInclude>
                         <testInclude>**/service/etl/DbtTargetConnectionFactoryTest.java</testInclude>
+                        <testInclude>**/service/admin/gateway/directory/AdminReleaseDutyDirectoryAdapterTest.java</testInclude>
+                        <testInclude>**/service/governance/QualityDatasetStatementExecutorTest.java</testInclude>
+                        <testInclude>**/service/governance/QualityRunServiceExecutableDefinitionTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelLifecycleContractTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelLifecycleServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelBuildIntentServiceTest.java</testInclude>
@@ -559,6 +563,19 @@
                         <testInclude>**/service/modeling/ModelMaterializationStartServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/PostgresPhysicalRelationInspectorTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelReleaseCandidateApplicationServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/CandidatePublicationAdmissionServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/CandidatePublicationCommitServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/CandidatePublicationCoordinatorTest.java</testInclude>
+                        <testInclude>**/service/modeling/CandidateRollbackCommitServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelExecutionTargetCatalogResolverTest.java</testInclude>
+                        <testInclude>**/service/modeling/CatalogPhysicalLocatorLiquibaseTest.java</testInclude>
+                        <testInclude>**/service/modeling/LegacyModelLifecycleCandidateAdapterTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelPlanExecutionBindingLiquibaseTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelPublicationIntentServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelPublicationQualityReconcilerTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelPublicationRequestedLiquibaseTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelPublicationReviewReconcilerTest.java</testInclude>
+                        <testInclude>**/service/modeling/ReleaseDutyResolverTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelReleaseCandidateCancelLiquibaseTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelReleaseCandidateReplacementLiquibaseTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelReleaseCandidateServiceTest.java</testInclude>
@@ -576,12 +593,15 @@
                         <testInclude>**/web/filter/ModelArchiveUploadLimitFilterTest.java</testInclude>
                         <testInclude>**/web/rest/ModelSpecResourceTest.java</testInclude>
                         <testInclude>**/web/rest/ModelLifecycleResourceTest.java</testInclude>
+                        <testInclude>**/web/rest/ModelBuildIntentResourceTest.java</testInclude>
+                        <testInclude>**/web/rest/ModelPublicationIntentResourceTest.java</testInclude>
                         <testInclude>**/web/rest/ModelReleaseCandidateResourceTest.java</testInclude>
                         <testInclude>**/web/rest/ModelSpecImport*.java</testInclude>
                         <testInclude>**/repository/catalog/CatalogAssetTag*.java</testInclude>
                         <testInclude>**/repository/catalog/CatalogExternalAssetIdentityLiquibaseIT.java</testInclude>
                         <testInclude>**/repository/catalog/CatalogTagLiquibaseIT.java</testInclude>
                         <testInclude>**/service/catalog/CatalogAssetOverviewAggregatorTest.java</testInclude>
+                        <testInclude>**/service/catalog/CatalogPhysicalLocatorTest.java</testInclude>
                         <testInclude>**/repository/iam/IamAssetActionPolicyRepositoryIT.java</testInclude>
                         <testInclude>**/security/policy/AssetActionTest.java</testInclude>
                         <testInclude>**/service/security/AccessCheckerCanPerformTest.java</testInclude>

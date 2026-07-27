@@ -87,6 +87,7 @@ source/dts-platform-webapp/test-results/
 source/dts-platform-webapp/playwright-report/
 .claude
 services/dts-dbt/.dts-scoped-runs
+services/dts-dbt/profiles/profiles.yml
 graphify-out/
 graphify-out-fullcode/
 docs/intergration/graphify-out/

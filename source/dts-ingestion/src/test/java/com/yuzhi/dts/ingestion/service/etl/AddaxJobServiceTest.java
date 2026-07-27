@@ -467,7 +467,7 @@ class AddaxJobServiceTest {
         );
         Map<String, Object> writerConfig = Map.of(
             "username", "biadmin",
-            "password", "Devops123@",
+            "password", "fixture-only-password",
             "connection", Map.of(
                 "jdbcUrl", "jdbc:postgresql://127.0.0.1:5432/biadmin",
                 "table", java.util.List.of("ods_customer", "ods_employee")
@@ -530,7 +530,7 @@ class AddaxJobServiceTest {
         Map<String, Object> writerConfig = Map.of(
             "jdbcUrl", "jdbc:postgresql://127.0.0.1:5432/biadmin",
             "username", "biadmin",
-            "password", "Devops123@",
+            "password", "fixture-only-password",
             "table", "ods_patent_info"
         );
 
@@ -571,7 +571,7 @@ class AddaxJobServiceTest {
         );
         Map<String, Object> writerConfig = Map.of(
             "username", "biadmin",
-            "password", "Devops123@",
+            "password", "fixture-only-password",
             "connection", Map.of(
                 "jdbcUrl", "jdbc:postgresql://127.0.0.1:5432/biadmin",
                 "table", java.util.List.of("ods_customer")
@@ -623,7 +623,7 @@ class AddaxJobServiceTest {
         Map<String, Object> writerConfig = Map.of(
             "jdbcUrl", "jdbc:postgresql://127.0.0.1:5432/biadmin",
             "username", "biadmin",
-            "password", "Devops123@",
+            "password", "fixture-only-password",
             "table", "ods_project_plan"
         );
 
@@ -672,7 +672,7 @@ class AddaxJobServiceTest {
         Map<String, Object> writerConfig = Map.of(
             "jdbcUrl", "jdbc:postgresql://127.0.0.1:5432/biadmin",
             "username", "biadmin",
-            "password", "Devops123@",
+            "password", "fixture-only-password",
             "table", "ods_duplicate_columns"
         );
 
@@ -717,7 +717,7 @@ class AddaxJobServiceTest {
         Map<String, Object> writerConfig = Map.of(
             "jdbcUrl", "jdbc:postgresql://127.0.0.1:5432/biadmin",
             "username", "biadmin",
-            "password", "Devops123@",
+            "password", "fixture-only-password",
             "table", "ods_patent_info"
         );
 
@@ -761,7 +761,7 @@ class AddaxJobServiceTest {
         Map<String, Object> writerConfig = Map.of(
             "jdbcUrl", "jdbc:postgresql://127.0.0.1:5432/biadmin",
             "username", "biadmin",
-            "password", "Devops123@",
+            "password", "fixture-only-password",
             "table", "ods_project_subject_domain"
         );
 

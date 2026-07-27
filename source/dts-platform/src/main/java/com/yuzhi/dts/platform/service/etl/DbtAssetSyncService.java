@@ -25,6 +25,7 @@ import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
 import com.yuzhi.dts.platform.service.catalog.CatalogClassificationPropagationJobService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService.ColumnSpec;
+import com.yuzhi.dts.platform.service.catalog.CatalogPhysicalLocator;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ArtifactWrite;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecCompatibilityReader;
@@ -151,6 +152,7 @@ public class DbtAssetSyncService {
             Map<String, CatalogTableSchema> tableByUniqueId = new HashMap<>();
             Set<String> retainedOrAcceptedPhysicalAssetKeys = new LinkedHashSet<>();
             String workspaceKey = dbtWorkspaceKey(projectDir);
+            UUID targetSourceId = resolveTargetSourceId(view);
 
             SyncStats stats = new SyncStats();
             stats.odsUpdated = syncOdsMappings(datasetByTable, view, stats);
@@ -194,21 +196,29 @@ public class DbtAssetSyncService {
                     continue;
                 }
                 if (!isMaterializedRelation(meta)) {
-                    markMaterializedStale(meta, stats);
+                    markMaterializedStale(meta, targetSourceId, stats);
                     if (meta.runEvidence != null && !StringUtils.hasText(meta.runEvidence.staleReason())) {
                         retainedOrAcceptedPhysicalAssetKeys.add(physicalMaterializationKey(meta));
                     }
                     continue;
                 }
                 if (!hasValidImplementationPin(meta)) {
-                    markMaterializedStale(meta, "IMPLEMENTATION_PIN_INVALID", stats);
+                    markMaterializedStale(
+                        meta,
+                        targetSourceId,
+                        "IMPLEMENTATION_PIN_INVALID",
+                        stats
+                    );
                     continue;
                 }
                 importCurrentDbtArtifacts(meta);
                 retainedOrAcceptedPhysicalAssetKeys.add(physicalMaterializationKey(meta));
+                if (isLifecycleBoundModel(meta)) {
+                    continue;
+                }
                 String controlledLayer = resolveControlledLayer(meta);
                 CatalogDataset dataset = upsertDataset(
-                    toNodeMeta(meta),
+                    toNodeMeta(meta, targetSourceId),
                     view,
                     controlledLayer,
                     buildMaterializedTags(meta, controlledLayer, manifestEvidence.projectName(), workspaceKey),
@@ -816,6 +826,15 @@ public class DbtAssetSyncService {
         boolean created = false;
         if (dataset == null) {
             dataset = new CatalogDataset();
+            if (meta.sourceId != null) {
+                dataset.setId(
+                    new CatalogPhysicalLocator(
+                        meta.sourceId,
+                        meta.schema,
+                        meta.table
+                    ).assetId()
+                );
+            }
             created = true;
         }
         dataset.setName(defaultIfBlank(dataset.getName(), meta.table));
@@ -929,15 +948,28 @@ public class DbtAssetSyncService {
 
     private CatalogDataset findDataset(NodeMeta meta) {
         if (meta.sourceId != null) {
-            Optional<CatalogDataset> existing =
-                datasetRepository.findFirstBySourceIdAndHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(
-                    meta.sourceId,
+            List<CatalogDataset> matches = datasetRepository
+                .findByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(
                     meta.schema,
                     meta.table
+                )
+                .stream()
+                .filter(dataset ->
+                    dataset.getSourceId() == null ||
+                    meta.sourceId.equals(dataset.getSourceId())
+                )
+                .toList();
+            if (matches.size() > 1) {
+                throw new IllegalStateException(
+                    "CATALOG_DATASET_PHYSICAL_LOCATOR_AMBIGUOUS: " +
+                    meta.sourceId +
+                    ":" +
+                    meta.schema +
+                    "." +
+                    meta.table
                 );
-            if (existing.isPresent()) {
-                return existing.orElseThrow();
             }
+            return matches.isEmpty() ? null : matches.getFirst();
         }
         return datasetRepository
             .findFirstByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(meta.schema, meta.table)
@@ -1182,6 +1214,12 @@ public class DbtAssetSyncService {
         );
     }
 
+    private boolean isLifecycleBoundModel(ModelMeta model) {
+        return model != null &&
+        model.meta != null &&
+        StringUtils.hasText(text(model.meta.get("modelSpecId")));
+    }
+
     private void importCurrentDbtArtifacts(ModelMeta model) throws com.fasterxml.jackson.core.JsonProcessingException {
         String tenantId = text(model.meta.get("tenantId"));
         UUID modelSpecId = parseUuid(text(model.meta.get("modelSpecId")));
@@ -1265,15 +1303,33 @@ public class DbtAssetSyncService {
         };
     }
 
-    private void markMaterializedStale(ModelMeta model, SyncStats stats) {
-        markMaterializedStale(model, model == null || model.runEvidence == null ? null : model.runEvidence.staleReason(), stats);
+    private void markMaterializedStale(
+        ModelMeta model,
+        UUID targetSourceId,
+        SyncStats stats
+    ) {
+        markMaterializedStale(
+            model,
+            targetSourceId,
+            model == null || model.runEvidence == null
+                ? null
+                : model.runEvidence.staleReason(),
+            stats
+        );
     }
 
-    private void markMaterializedStale(ModelMeta model, String staleReason, SyncStats stats) {
+    private void markMaterializedStale(
+        ModelMeta model,
+        UUID targetSourceId,
+        String staleReason,
+        SyncStats stats
+    ) {
         if (model == null || !StringUtils.hasText(staleReason)) {
             return;
         }
-        CatalogDataset dataset = findDataset(toNodeMeta(model));
+        CatalogDataset dataset = findDataset(
+            toNodeMeta(model, targetSourceId)
+        );
         if (dataset == null) {
             return;
         }
@@ -1500,12 +1556,38 @@ public class DbtAssetSyncService {
         return new NodeMeta(uniqueId, schema != null ? schema : database, table, null, description, columns, filePath);
     }
 
-    private NodeMeta toNodeMeta(ModelMeta meta) {
+    private NodeMeta toNodeMeta(
+        ModelMeta meta,
+        UUID targetSourceId
+    ) {
         if (meta == null) {
             return null;
         }
         String schema = StringUtils.hasText(meta.schema) ? meta.schema : meta.database;
-        return new NodeMeta(meta.uniqueId, schema, meta.table, null, meta.description, meta.columns, meta.originalFilePath);
+        return new NodeMeta(
+            meta.uniqueId,
+            schema,
+            meta.table,
+            targetSourceId,
+            meta.description,
+            meta.columns,
+            meta.originalFilePath
+        );
+    }
+
+    private UUID resolveTargetSourceId(
+        DbtConfigService.DbtConfigView view
+    ) {
+        if (
+            view != null &&
+            view.config() != null &&
+            view.config().targetDataSourceId() != null
+        ) {
+            return view.config().targetDataSourceId();
+        }
+        return view != null && view.target() != null
+            ? view.target().id()
+            : null;
     }
 
     private List<String> extractDepends(Object value) {

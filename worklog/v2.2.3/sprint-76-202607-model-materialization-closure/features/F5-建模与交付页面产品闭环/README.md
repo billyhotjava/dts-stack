@@ -1,7 +1,7 @@
 # F5：建模与交付页面产品闭环
 
 **优先级**：P0
-**状态**：DRAFT
+**状态**：IN_PROGRESS（T01 共享 Build/Publish Intent、T02 真实构建/关系证据工作台、T03 current PUBLISHED 输出资产隔离已实施；统一上线健康投影与 Chrome95 待完成）
 **依赖**：F2/F3 契约冻结，最终验收依赖 F4
 
 ## 目标
@@ -45,22 +45,22 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|
-| T01 | 提供模型详情快捷构建与提交上线并复用候选控制面 | P0 | DRAFT | F1/T01、F2/T01、F4/T01 |
-| T02 | 在交付工作台呈现真实构建与关系核验证据 | P0 | DRAFT | F2/T03、F3/T03 |
-| T03 | 将发布结果绑定真实输出资产与失败恢复 | P0 | DRAFT | F4/T03 |
+| T01 | 提供模型详情快捷构建与提交上线并复用候选控制面 | P0 | IN_PROGRESS | F1/T01、F2/T01、F4/T01 |
+| T02 | 在交付工作台呈现真实构建与关系核验证据 | P0 | IN_PROGRESS | F2/T03、F3/T03 |
+| T03 | 将发布结果绑定真实输出资产与失败恢复 | P0 | IN_PROGRESS | F4/T03 |
 
 ## Definition of Ready
 
 - [x] 页面/路由/控件命名完成。
 - [x] 每个动作对应唯一 API。
 - [x] 四态和 happy path 完整。
-- [ ] 后端 screen DTO 契约冻结。
+- [x] 后端 screen DTO 契约冻结。
 
 ## 完成标准
 
 - [ ] 任何页面不把 compile 显示为物化。
-- [ ] 模型详情和高级页面均不能绕过 ReleaseCandidate。
-- [ ] “提交上线”只推进质量与提交审核，reviewer/operator action 仅存在于交付工作台。
-- [ ] 单模型用户无需先手工创建 candidate 或填写 DAG 技术字段。
-- [ ] 构建证据和发布资产分区清晰。
+- [x] 模型详情和高级页面均不能绕过 ReleaseCandidate；未绑定 ModelSpec 的高级页只能技术构建。
+- [x] “提交上线”只推进质量与提交审核，reviewer/operator action 不在建模页面出现。
+- [x] 单模型用户无需先手工创建 candidate 或填写 DAG 技术字段。
+- [x] 构建证据和发布资产分区清晰。
 - [ ] Chrome95、窄屏、键盘和错误恢复可用。

@@ -225,4 +225,8 @@
     <include file="config/liquibase/changelog/20260728_01_model_release_candidate_cancel.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260728_02_physical_relation_observation_adapter.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260728_03_model_release_candidate_claim_transfer.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260728_04_model_release_publication_requested.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260728_05_model_plan_execution_binding.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260728_06_catalog_dataset_physical_locator.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260728_07_plan_operational_run.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.web.rest;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -33,6 +34,7 @@ import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvi
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider.WarehousePlanActor;
 import com.yuzhi.dts.platform.web.filter.AuditLoggingFilter;
 import java.time.Instant;
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -44,7 +46,11 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 
 @WebMvcTest(
     value = ModelReleaseCandidateResource.class,
@@ -251,6 +257,93 @@ class ModelReleaseCandidateResourceTest {
     }
 
     @Test
+    void registrationRetryUsesItsOwnCandidateCommandInsteadOfBuildRetry() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", null));
+        CandidateView published = candidateAtVersion(5);
+        when(
+            service.retryRegistration(
+                "server-tenant",
+                "alice",
+                PLAN_ID,
+                CANDIDATE_ID,
+                4,
+                "registration-retry-1",
+                "retry atomic local publication"
+            )
+        )
+            .thenReturn(new CommandResult(published, false, List.of()));
+
+        mockMvc
+            .perform(
+                post(
+                    "/api/modeling/plans/{planId}/release-candidates/{candidateId}/registration/retry",
+                    PLAN_ID,
+                    CANDIDATE_ID
+                )
+                    .header("If-Match", ETAG)
+                    .header("Idempotency-Key", "registration-retry-1")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"reason\":\"retry atomic local publication\"}")
+            )
+            .andExpect(status().isOk())
+            .andExpect(header().string("ETag", "\"release-candidate:" + CANDIDATE_ID + ":5\""));
+
+        verify(service).retryRegistration(
+            "server-tenant",
+            "alice",
+            PLAN_ID,
+            CANDIDATE_ID,
+            4,
+            "registration-retry-1",
+            "retry atomic local publication"
+        );
+        verify(service, never()).retry(any(), any(), any(), any(), anyInt(), any(), any());
+    }
+
+    @Test
+    void rollbackDelegatesToCandidateOwnedAtomicRollback() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", null));
+        CandidateView rolledBack = candidateAtVersion(5);
+        when(
+            service.rollback(
+                "server-tenant",
+                "alice",
+                PLAN_ID,
+                CANDIDATE_ID,
+                4,
+                "rollback-1",
+                "withdraw published release"
+            )
+        )
+            .thenReturn(new CommandResult(rolledBack, false, List.of()));
+
+        mockMvc
+            .perform(
+                post(
+                    "/api/modeling/plans/{planId}/release-candidates/{candidateId}/rollback",
+                    PLAN_ID,
+                    CANDIDATE_ID
+                )
+                    .header("If-Match", ETAG)
+                    .header("Idempotency-Key", "rollback-1")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"reason\":\"withdraw published release\"}")
+            )
+            .andExpect(status().isOk())
+            .andExpect(header().string("ETag", "\"release-candidate:" + CANDIDATE_ID + ":5\""));
+
+        verify(service).rollback(
+            "server-tenant",
+            "alice",
+            PLAN_ID,
+            CANDIDATE_ID,
+            4,
+            "rollback-1",
+            "withdraw published release"
+        );
+    }
+
+    @Test
     void cancelRequiresStrongEtagAndDelegatesOnlyTheServerOwnedCancelCommand() throws Exception {
         when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", null));
         CandidateView cancelled = new CandidateView(
@@ -401,6 +494,67 @@ class ModelReleaseCandidateResourceTest {
             eq(4),
             any()
         );
+    }
+
+    @Test
+    void approveRouteUsesCandidatePreconditionsAndDedicatedCommand() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("reviewer", null));
+        when(service.approve(
+            "server-tenant",
+            "reviewer",
+            PLAN_ID,
+            CANDIDATE_ID,
+            4,
+            "approve-1",
+            "quality evidence accepted"
+        ))
+            .thenReturn(new CommandResult(candidateAtVersion(5), false, List.of()));
+
+        mockMvc
+            .perform(
+                post(
+                    "/api/modeling/plans/{planId}/release-candidates/{candidateId}/reviews/approve",
+                    PLAN_ID,
+                    CANDIDATE_ID
+                )
+                    .header("If-Match", ETAG)
+                    .header("Idempotency-Key", "approve-1")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"reason\":\"quality evidence accepted\"}")
+            )
+            .andExpect(status().isOk())
+            .andExpect(header().string("ETag", "\"release-candidate:" + CANDIDATE_ID + ":5\""));
+
+        verify(service).approve(
+            "server-tenant",
+            "reviewer",
+            PLAN_ID,
+            CANDIDATE_ID,
+            4,
+            "approve-1",
+            "quality evidence accepted"
+        );
+    }
+
+    @Test
+    void everyCandidateRouteRequiresOneOfTheDedicatedReleaseDuties() {
+        String expected =
+            "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).MODEL_RELEASE_DUTIES)";
+
+        assertThat(
+            Arrays
+                .stream(ModelReleaseCandidateResource.class.getDeclaredMethods())
+                .filter(ModelReleaseCandidateResourceTest::isMappedRoute)
+                .map(method -> method.getAnnotation(PreAuthorize.class))
+        )
+            .isNotEmpty()
+            .allSatisfy(annotation -> assertThat(annotation).isNotNull().extracting(PreAuthorize::value).isEqualTo(expected));
+    }
+
+    private static boolean isMappedRoute(Method method) {
+        return method.isAnnotationPresent(GetMapping.class) ||
+            method.isAnnotationPresent(PostMapping.class) ||
+            method.isAnnotationPresent(PutMapping.class);
     }
 
     private static WorkbenchView workbench() {

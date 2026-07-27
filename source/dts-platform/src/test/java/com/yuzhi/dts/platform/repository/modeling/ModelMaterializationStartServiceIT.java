@@ -78,6 +78,9 @@ class ModelMaterializationStartServiceIT {
     private ModelMaterializationRunRepository materializationRuns;
 
     @Autowired
+    private ModelPublicationQualityEvidenceRepository qualityEvidence;
+
+    @Autowired
     private PhysicalRelationObservationRepository observations;
 
     @Autowired
@@ -459,6 +462,40 @@ class ModelMaterializationStartServiceIT {
                 .get()
                 .extracting(LeaseRecord::status)
                 .isEqualTo(LeaseStatus.RELEASED);
+            CandidateView built = candidateCommands
+                .transition(
+                    scope.tenant(),
+                    "builder-a",
+                    scope.candidateId(),
+                    new TransitionCommand(
+                        2,
+                        DeliveryStatus.BUILT,
+                        "quality-evidence-built-key",
+                        "record completed release build"
+                    )
+                )
+                .candidate();
+            candidateCommands.publicationRequested(
+                scope.tenant(),
+                "builder-a",
+                scope.candidateId(),
+                new TransitionCommand(
+                    built.version(),
+                    DeliveryStatus.QUALITY_RUNNING,
+                    "quality-evidence-publication-key",
+                    "submit completed dbt build evidence"
+                )
+            );
+            assertThat(qualityEvidence.findQualityRunning(20))
+                .singleElement()
+                .satisfies(work -> {
+                    assertThat(work.candidateId())
+                        .isEqualTo(scope.candidateId());
+                    assertThat(work.evidenceState())
+                        .isEqualTo(
+                            ModelPublicationQualityEvidenceRepository.EvidenceState.PASSED
+                        );
+                });
             status.setRollbackOnly();
             });
         } finally {
@@ -467,6 +504,72 @@ class ModelMaterializationStartServiceIT {
                 scope.targetIdentifier()
             );
         }
+    }
+
+    @Test
+    void postBuildCommandUsesTheLockedMaterializationSnapshotForDriftDetection() {
+        Scope scope = scope("post-build-drift");
+        TransactionTemplate transaction = new TransactionTemplate(
+            transactionManager
+        );
+
+        transaction.executeWithoutResult(status -> {
+            seed(scope, true);
+            CandidateView building = starts
+                .start(
+                    scope.tenant(),
+                    "builder-a",
+                    scope.candidateId(),
+                    1,
+                    "post-build-start-key",
+                    "lock materialization snapshot"
+                )
+                .candidate();
+            CandidateView built = candidateCommands
+                .transition(
+                    scope.tenant(),
+                    "builder-a",
+                    scope.candidateId(),
+                    new TransitionCommand(
+                        building.version(),
+                        DeliveryStatus.BUILT,
+                        "post-build-built-key",
+                        "record successful build"
+                    )
+                )
+                .candidate();
+            jdbcTemplate.update(
+                """
+                update modeling_model_implementation
+                   set current_implementation_checksum = ?
+                 where tenant_id = ? and id = ?
+                """,
+                "e".repeat(64),
+                scope.tenant(),
+                scope.implementationId()
+            );
+
+            CommandResult result = candidateCommands.transition(
+                scope.tenant(),
+                "builder-a",
+                scope.candidateId(),
+                new TransitionCommand(
+                    built.version(),
+                    DeliveryStatus.QUALITY_RUNNING,
+                    "post-build-quality-key",
+                    "run quality against current snapshot"
+                )
+            );
+
+            assertThat(result.candidate().status())
+                .isEqualTo(DeliveryStatus.STALE);
+            assertThat(result.driftReasons())
+                .extracting(DriftReasonView::code)
+                .containsExactly(
+                    "MODEL_MATERIALIZATION_RETRY_SNAPSHOT_STALE"
+                );
+            status.setRollbackOnly();
+        });
     }
 
     @Test

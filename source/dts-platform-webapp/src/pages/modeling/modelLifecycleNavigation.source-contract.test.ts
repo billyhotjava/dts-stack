@@ -12,9 +12,8 @@ test("implementation handoff preserves canonical model identity and revision", (
 	assert.match(DETAIL, /implementationPath/);
 	assert.match(DETAIL, /modelSpecId=.*revision=.*implementationMode=/);
 	assert.match(DETAIL, /implementationRevision=\$\{currentImplementationRevision\}/);
-	assert.match(DETAIL, /model-spec-advanced-implementation-recovery/);
 	assert.match(DETAIL, /advancedEntryDisabled=\{!advancedImplementationReady\}/);
-	assert.match(DETAIL, /返回数据实现/);
+	assert.match(DETAIL, /model-spec-delivery-intents/);
 	assert.match(SQL, /canonical-model-implementation-context/);
 	assert.match(SQL, /requestedModelSpecId/);
 	assert.match(SQL, /requestedImplementationRevision/);
@@ -50,11 +49,12 @@ test("advanced SQL workspace binds ModelSpec identity and freezes only after lif
 	assert.match(SQL, /await reloadLifecycleContext\(\)/);
 	assert.match(SQL, /ModelSpec lifecycle timeline 未返回本次构建证据/);
 	assert.match(SQL, /modelSpecId: editingModel\?\.modelSpecId \|\| requestedModelSpecId/);
+	const IMPLEMENTATION = read(new URL("./components/ModelSpecImplementationStage.tsx", import.meta.url));
 	const PHYSICAL = read(new URL("./components/ModelSpecPhysicalAssetStage.tsx", import.meta.url));
-	assert.match(PHYSICAL, /advancedEntryDisabled/);
-	assert.match(PHYSICAL, /model-spec-physical-advanced-entry-locked/);
-	assert.match(PHYSICAL, /disabled=\{advancedEntryDisabled\}/);
-	assert.match(PHYSICAL, /onReturnToImplementation/);
+	assert.match(IMPLEMENTATION, /advancedEntryDisabled/);
+	assert.match(IMPLEMENTATION, /disabled=\{advancedEntryDisabled\}/);
+	assert.match(IMPLEMENTATION, /ModelDeliveryIntentActions/);
+	assert.doesNotMatch(PHYSICAL, /advancedEntryDisabled|onReturnToImplementation/);
 });
 
 test("bound SQL runs wait for one exact model and fail closed before lifecycle evidence", () => {
@@ -68,11 +68,29 @@ test("bound SQL runs wait for one exact model and fail closed before lifecycle e
 	assert.match(SQL, /settled\.timedOut/);
 	assert.match(SQL, /normalizeUpper\(completed\.status\) !== "SUCCESS"/);
 	assert.match(SQL, /await syncLifecycleBuildEvidence\(operation, completed\)/);
-	assert.match(SQL, /if \(settled\.timedOut\) \{\s*throw new Error\("dbt build 等待超时，ModelSpec 未提交审核或发布"\)/);
 	assert.match(
 		SQL,
 		/if \(settled\.timedOut\) \{\s*toast\.warning\(`dbt \$\{operation\} 仍在运行，请稍后刷新结果`\);\s*return;\s*\}\s*const finalStatus/,
 	);
+});
+
+test("canonical build and publication use shared intents without automatic human actions", () => {
+	const ACTIONS = read(new URL("./components/ModelDeliveryIntentActions.tsx", import.meta.url));
+	assert.match(SQL, /ModelDeliveryIntentActions/);
+	assert.match(SQL, /requestedModelSpecId && lifecycleModel/);
+	assert.doesNotMatch(SQL, /openRun\("release"\)/);
+	assert.doesNotMatch(SQL, /submitModelReview|approveModelReview|publishModelLifecycle/);
+	assert.match(ACTIONS, /startModelBuildIntent/);
+	assert.match(ACTIONS, /startModelPublicationIntent/);
+	assert.match(ACTIONS, /candidate\.origin !== "SINGLE_MODEL_INTENT"/);
+	assert.match(ACTIONS, /candidate\.entries\.length !== 1/);
+	assert.match(ACTIONS, /REPLACEABLE_TERMINAL_STATUSES/);
+	assert.match(ACTIONS, /"CANCELLED"/);
+	assert.match(ACTIONS, /发布不等于上线完成/);
+	assert.match(API, /\/build-intents/);
+	assert.match(API, /\/publish-intents/);
+	assert.match(API, /"If-Match": toModelSpecEtag\(expected\)/);
+	assert.match(API, /headers: releaseCandidateWriteHeaders\(idempotencyKey, expected\)/);
 });
 
 test("bound SQL drafts require a loaded matching unfrozen lifecycle context", () => {

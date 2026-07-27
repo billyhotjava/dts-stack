@@ -59,14 +59,14 @@ test("three-stage detail isolates logical design, canonical implementation and p
 	assert.match(implementationSurface, /src_0、src_1/);
 	assert.match(implementation, /inputIndex: index \+ 1/);
 	assert.match(implementation, /input\.resolvedVersion/);
-		assert.match(implementation, /input\.checksum/);
-		assert.match(implementation, /generatedImplementationIdentity/);
-		assert.match(implementation, /const projectKey = "dts"/);
-		assert.match(
-			implementation,
-			/const implementationIdentity = useMemo\(\s*\(\) => generatedImplementationIdentity\(model\)/s,
-		);
-		assert.match(implementationPresentation, /高级信息：系统技术标识与预处理/);
+	assert.match(implementation, /input\.checksum/);
+	assert.match(implementation, /generatedImplementationIdentity/);
+	assert.match(implementation, /const projectKey = "dts"/);
+	assert.match(
+		implementation,
+		/const implementationIdentity = useMemo\(\s*\(\) => generatedImplementationIdentity\(model\)/s,
+	);
+	assert.match(implementationPresentation, /高级信息：系统技术标识与预处理/);
 	assert.doesNotMatch(implementation, /name="projectKey"|name="dbtUniqueId"/);
 	assert.match(implementationSurface, /fieldMappings|deduplicateBy|castType|ownership/);
 	assert.match(implementation, /initializeFieldMappings/);
@@ -102,6 +102,13 @@ test("three-stage detail isolates logical design, canonical implementation and p
 	assert.match(implementationSurface, /管理规划来源/);
 	assert.match(implementationPresentation, /系统管理.*ephemeral.*无物理表/s);
 	assert.match(physical, /physicalAssetRef/);
+	assert.match(physical, /latestPublicationEvent\?\.eventType === "RELEASE".*status === "PUBLISHED"/s);
+	assert.match(physical, /event\.eventType === "RELEASE" \|\| event\.eventType === "ROLLBACK"/);
+	assert.match(physical, /publishedAssetRefs/);
+	assert.match(physical, /\/catalog\/datasets\/\$\{encodeURIComponent\(assetRef\)\}/);
+	assert.match(physical, /页面不会根据输入来源或表名推断资产/);
+	assert.match(physical, /构建产物已生成，但尚未发布为可消费资产/);
+	assert.doesNotMatch(physical, /发布已完成，但部分资产登记尚未完成/);
 	assert.match(physical, /compile|编译/);
 	assert.match(physical, /血缘时间线/);
 	assert.doesNotMatch(physical, /高级 dbt|onOpenAdvanced/);
@@ -132,6 +139,6 @@ test("source and physical failures stay local while conflict and readonly preser
 	assert.doesNotMatch(implementation, /changeStage\(/);
 	assert.match(page, /readOnly=\{!canEdit\}/);
 	assert.match(page, /retryModelReleaseRegistration/);
-	assert.match(physical, /latestRelease\.status === "PARTIAL".*latestRelease\.status === "PENDING"/s);
+	assert.match(physical, /latestPublicationEvent\.status === "PARTIAL".*latestPublicationEvent\.status === "PENDING"/s);
 	assert.match(page, /max-\[390px\]:grid-cols-1/);
 });

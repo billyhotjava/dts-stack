@@ -140,7 +140,9 @@ public class PhysicalRelationObservationRepository {
             """
             insert into modeling_physical_relation_observation (
                 id, tenant_id, release_candidate_id,
-                release_candidate_version, pipeline_run_group_id,
+                release_candidate_version, run_purpose,
+                execution_binding_id, binding_version,
+                pipeline_run_group_id,
                 pipeline_run_id, model_spec_id, model_revision,
                 model_checksum, implementation_revision,
                 implementation_checksum, dbt_invocation_id,
@@ -152,15 +154,22 @@ public class PhysicalRelationObservationRepository {
                 actual_columns, metadata_checksum, error_code,
                 observed_at, created_date
             ) values (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), ?, ?,
                 ?, ?
             )
             """,
             id,
             observation.tenantId(),
             observation.candidateId(),
-            observation.candidateVersion(),
+            observation.candidateId() == null
+                ? null
+                : observation.candidateVersion(),
+            observation.runPurpose(),
+            observation.executionBindingId(),
+            observation.executionBindingId() == null
+                ? null
+                : observation.bindingVersion(),
             observation.pipelineRunGroupId(),
             observation.pipelineRunId(),
             observation.modelSpecId(),
@@ -227,6 +236,8 @@ public class PhysicalRelationObservationRepository {
                 """
                 select tenant_id, release_candidate_id,
                        release_candidate_version,
+                       run_purpose, execution_binding_id,
+                       binding_version,
                        pipeline_run_group_id, model_spec_id,
                        model_revision, model_checksum,
                        implementation_revision,
@@ -235,7 +246,9 @@ public class PhysicalRelationObservationRepository {
                        status, started_date
                   from modeling_pipeline_run
                  where id = ?
-                   and run_purpose = 'RELEASE_BUILD'
+                   and run_purpose in (
+                       'RELEASE_BUILD', 'OPERATIONAL_RUN'
+                   )
                  for update
                 """,
                 (row, rowNumber) ->
@@ -248,6 +261,12 @@ public class PhysicalRelationObservationRepository {
                         row.getInt(
                             "release_candidate_version"
                         ),
+                        row.getString("run_purpose"),
+                        row.getObject(
+                            "execution_binding_id",
+                            UUID.class
+                        ),
+                        row.getInt("binding_version"),
                         row.getObject(
                             "pipeline_run_group_id",
                             UUID.class
@@ -298,12 +317,7 @@ public class PhysicalRelationObservationRepository {
                 observation.tenantId(),
                 pipeline.tenantId()
             ) ||
-            !Objects.equals(
-                observation.candidateId(),
-                pipeline.candidateId()
-            ) ||
-            observation.candidateVersion() !=
-            pipeline.candidateVersion() ||
+            !ownershipMatches(observation, pipeline) ||
             !Objects.equals(
                 observation.pipelineRunGroupId(),
                 pipeline.pipelineRunGroupId()
@@ -347,6 +361,41 @@ public class PhysicalRelationObservationRepository {
         }
     }
 
+    private static boolean ownershipMatches(
+        ObservationWrite observation,
+        PipelineIdentity pipeline
+    ) {
+        if (
+            !Objects.equals(
+                observation.runPurpose(),
+                pipeline.runPurpose()
+            )
+        ) {
+            return false;
+        }
+        if ("RELEASE_BUILD".equals(pipeline.runPurpose())) {
+            return (
+                observation.executionBindingId() == null &&
+                Objects.equals(
+                    observation.candidateId(),
+                    pipeline.candidateId()
+                ) &&
+                observation.candidateVersion() ==
+                pipeline.candidateVersion()
+            );
+        }
+        return (
+            "OPERATIONAL_RUN".equals(pipeline.runPurpose()) &&
+            observation.candidateId() == null &&
+            Objects.equals(
+                observation.executionBindingId(),
+                pipeline.executionBindingId()
+            ) &&
+            observation.bindingVersion() ==
+            pipeline.bindingVersion()
+        );
+    }
+
     private String json(List<PhysicalColumn> columns) {
         try {
             return objectMapper.writeValueAsString(columns);
@@ -362,6 +411,9 @@ public class PhysicalRelationObservationRepository {
         String tenantId,
         UUID candidateId,
         int candidateVersion,
+        String runPurpose,
+        UUID executionBindingId,
+        int bindingVersion,
         UUID pipelineRunGroupId,
         UUID modelSpecId,
         int modelRevision,
@@ -402,8 +454,76 @@ public class PhysicalRelationObservationRepository {
         String metadataChecksum,
         String errorCode,
         Instant observedAt,
-        Instant createdAt
+        Instant createdAt,
+        String runPurpose,
+        UUID executionBindingId,
+        int bindingVersion
     ) {
+        public ObservationWrite(
+            String tenantId,
+            UUID candidateId,
+            int candidateVersion,
+            UUID pipelineRunGroupId,
+            UUID pipelineRunId,
+            UUID modelSpecId,
+            int modelRevision,
+            String modelChecksum,
+            int implementationRevision,
+            String implementationChecksum,
+            UUID dbtInvocationId,
+            String scopedBundleChecksum,
+            String adapter,
+            String credentialVersionRef,
+            String databaseName,
+            String schemaName,
+            String identifier,
+            ExpectedRelationType expectedType,
+            ExpectedRelationType actualType,
+            boolean relationExists,
+            boolean verified,
+            List<PhysicalColumn> actualColumns,
+            String expectedColumnsChecksum,
+            String columnsChecksum,
+            String metadataChecksum,
+            String errorCode,
+            Instant observedAt,
+            Instant createdAt
+        ) {
+            this(
+                tenantId,
+                candidateId,
+                candidateVersion,
+                pipelineRunGroupId,
+                pipelineRunId,
+                modelSpecId,
+                modelRevision,
+                modelChecksum,
+                implementationRevision,
+                implementationChecksum,
+                dbtInvocationId,
+                scopedBundleChecksum,
+                adapter,
+                credentialVersionRef,
+                databaseName,
+                schemaName,
+                identifier,
+                expectedType,
+                actualType,
+                relationExists,
+                verified,
+                actualColumns,
+                expectedColumnsChecksum,
+                columnsChecksum,
+                metadataChecksum,
+                errorCode,
+                observedAt,
+                createdAt,
+                "RELEASE_BUILD",
+                null,
+                0
+            );
+        }
+
         public ObservationWrite {
             actualColumns = actualColumns == null
                 ? List.of()

@@ -10,6 +10,7 @@ import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -110,6 +111,7 @@ class DbtDagServiceTest {
 
         String dagSource = Files.readString(dagFile);
         assertThat(dagSource)
+            .contains("# airflow DAG")
             .contains(
                 "from dts_runtime.dbt_task_factory import build_dbt_dag"
             )
@@ -128,5 +130,55 @@ class DbtDagServiceTest {
             .doesNotContain("profiles.yml")
             .doesNotContain("shell=True")
             .doesNotContain("|| true");
+    }
+
+    @Test
+    void shouldGenerateStablePlanDagFromBindingMetadataOnly() throws Exception {
+        AirflowProperties airflowProperties = new AirflowProperties();
+        airflowProperties.setDagsDir(tempDir.toString());
+        DbtDagService service = new DbtDagService(
+            airflowProperties,
+            mock(DbtConfigService.class),
+            mock(InfraDataSourceRepository.class),
+            new ObjectMapper()
+        );
+        UUID bindingId = UUID.fromString(
+            "10000000-0000-0000-0000-000000000076"
+        );
+
+        DbtDagService.ManagedDagDeployment manual = service.ensurePlanDag(
+            "dts_plan_finance_prod_primary",
+            bindingId,
+            null,
+            "Asia/Shanghai",
+            "a".repeat(64)
+        );
+        DbtDagService.ManagedDagDeployment cron = service.ensurePlanDag(
+            "dts_plan_finance_prod_primary",
+            bindingId,
+            "0 2 * * *",
+            "Asia/Shanghai",
+            "b".repeat(64)
+        );
+
+        assertThat(manual.dagId()).isEqualTo(cron.dagId());
+        assertThat(manual.deploymentChecksum())
+            .isNotEqualTo(cron.deploymentChecksum());
+        String dagSource = Files.readString(
+            tempDir.resolve("dts_plan_finance_prod_primary.py")
+        );
+        assertThat(dagSource)
+            .contains(
+                "from dts_runtime.dbt_task_factory import build_dbt_dag"
+            )
+            .contains("purpose=\"OPERATIONAL_RUN\"")
+            .contains("schedule=\"0 2 * * *\"")
+            .contains("timezone=\"Asia/Shanghai\"")
+            .contains("binding_id=\"" + bindingId + "\"")
+            .contains("max_active_runs")
+            .doesNotContain("docker run")
+            .doesNotContain("BashOperator")
+            .doesNotContain("projectDir")
+            .doesNotContain("selector=");
     }
 }

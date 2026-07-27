@@ -281,6 +281,13 @@ auditing:
 
 
 dts:
+  admin:
+    inbound:
+      service-auth:
+        # Pairwise credential used only by narrow /api/platform/internal APIs.
+        # Empty or missing credentials fail closed.
+        trusted-services:
+          dts-platform: ${DTS_INBOUND_FROM_PLATFORM:${DTS_ADMIN_SERVICE_TOKEN:}}
   keycloak:
     admin-client-id: "${DTS_KEYCLOAK_ADMIN_CLIENT_ID:${OAUTH2_ADMIN_CLIENT_ID:${SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_ID:}}}"
     admin-client-secret: "${DTS_KEYCLOAK_ADMIN_CLIENT_SECRET:${OAUTH2_ADMIN_CLIENT_SECRET:${SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_SECRET:}}}"

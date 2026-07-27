@@ -129,6 +129,7 @@ public class CatalogDatasetResource {
     @Transactional(readOnly = true)
     public ApiResponse<Map<String, Object>> listDatasets(
         @RequestParam(required = false) UUID domainId,
+        @RequestParam(required = false, defaultValue = "false") boolean domainUnassigned,
         @RequestParam(required = false) String keyword,
         @RequestParam(required = false) String classification,
         @RequestParam(required = false) String ownerDept,
@@ -160,6 +161,7 @@ public class CatalogDatasetResource {
         Page<CatalogDataset> pageData = datasetRepo.findAll(
             helper.buildDatasetListSpecification(
                 domainId,
+                domainUnassigned,
                 sourceId,
                 keyword,
                 classification,
@@ -209,6 +211,9 @@ public class CatalogDatasetResource {
         }
         if (domainId != null) {
             auditPayload.put("domainId", domainId.toString());
+        }
+        if (domainUnassigned) {
+            auditPayload.put("domainUnassigned", true);
         }
         if (sourceId != null) {
             auditPayload.put("sourceId", sourceId.toString());

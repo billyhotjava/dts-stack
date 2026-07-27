@@ -32,6 +32,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 @ExtendWith(MockitoExtension.class)
 class ModelBuildIntentResourceTest {
@@ -140,6 +141,22 @@ class ModelBuildIntentResourceTest {
         assertThat(command.getValue().planId()).isEqualTo(PLAN_ID);
         assertThat(command.getValue().environment()).isEqualTo("DEV");
         assertThat(command.getValue().idempotencyKey()).isEqualTo("intent-key");
+    }
+
+    @Test
+    void buildIntentRequiresTheDedicatedModelMaintainerAuthority() throws Exception {
+        PreAuthorize authorization = ModelBuildIntentResource.class
+            .getDeclaredMethod(
+                "start",
+                UUID.class,
+                String.class,
+                String.class,
+                com.fasterxml.jackson.databind.JsonNode.class
+            )
+            .getAnnotation(PreAuthorize.class);
+
+        assertThat(authorization.value())
+            .isEqualTo("hasAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).MODEL_MAINTAINER)");
     }
 
     @Test

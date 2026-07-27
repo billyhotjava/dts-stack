@@ -75,7 +75,9 @@ class CatalogAssetTagPermissionReadAdapterIT {
                     hive_database varchar(128),
                     hive_table varchar(128),
                     name varchar(128),
-                    owner_dept varchar(128)
+                    owner_dept varchar(128),
+                    classification varchar(64),
+                    enabled boolean
                 )
                 """
             );
@@ -221,6 +223,58 @@ class CatalogAssetTagPermissionReadAdapterIT {
                     CatalogAssetKey.openMetadataDataset(identity.fqn())
                 )
                 .containsExactlyInAnyOrderElementsOf(keys);
+        }
+    }
+
+    @Test
+    void legacyDatasetLookupRetainsSecurityFieldsRequiredByReadVisibility()
+        throws Exception {
+        UUID datasetId = UUID.fromString(
+            "6e45fd13-d781-4667-90b6-3554380500b1"
+        );
+        UUID sourceId = UUID.fromString(
+            "a0000000-0000-0000-0000-000000000001"
+        );
+        try (Connection connection = connectionInSchema()) {
+            try (
+                PreparedStatement statement = connection.prepareStatement(
+                    """
+                    insert into catalog_dataset (
+                        id, source_id, hive_database, hive_table, name,
+                        owner_dept, classification, enabled
+                    ) values (?, ?, ?, ?, ?, ?, ?, ?)
+                    """
+                )
+            ) {
+                statement.setObject(1, datasetId);
+                statement.setObject(2, sourceId);
+                statement.setString(3, "public");
+                statement.setString(4, "ods_risk_info_v2");
+                statement.setString(5, "ods_risk_info_v2");
+                statement.setString(6, null);
+                statement.setString(7, "INTERNAL");
+                statement.setBoolean(8, true);
+                statement.executeUpdate();
+            }
+
+            BatchLookup result = adapter(connection).loadBatch(
+                new BatchLookupRequest(
+                    Set.of(
+                        "source:a0000000-0000-0000-0000-000000000001/schema:public/table:ods_risk_info_v2"
+                    ),
+                    Set.of(),
+                    java.util.Map.of()
+                )
+            );
+
+            assertThat(result.legacyDatasets())
+                .singleElement()
+                .satisfies(dataset -> {
+                    assertThat(dataset.getId()).isEqualTo(datasetId);
+                    assertThat(dataset.getClassification())
+                        .isEqualTo("INTERNAL");
+                    assertThat(dataset.getEnabled()).isTrue();
+                });
         }
     }
 

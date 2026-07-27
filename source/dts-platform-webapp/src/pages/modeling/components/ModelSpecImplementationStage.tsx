@@ -22,6 +22,7 @@ import {
 	ModelImplementationTargetSummary,
 	ModelImplementationTechnicalDetails,
 } from "./ModelSpecImplementationPresentation";
+import { ModelDeliveryIntentActions } from "./ModelDeliveryIntentActions";
 import type { ModelSpecSelectOption } from "./ModelSpecLogicalDesignStage";
 
 type ImplementationDraft = {
@@ -62,6 +63,7 @@ type Props = {
 	sourceError: string;
 	sourcePermissionDenied: boolean;
 	readOnly: boolean;
+	deliveryReady: boolean;
 	onReloadSources: () => void;
 	onManageSources?: () => void;
 	onStateChange: (state: { configured: boolean; dirty: boolean; validated: boolean }) => void;
@@ -217,6 +219,7 @@ export const ModelSpecImplementationStage = forwardRef<ModelSpecImplementationSt
 			sourceError,
 			sourcePermissionDenied,
 			readOnly,
+			deliveryReady,
 			onReloadSources,
 			onManageSources,
 			onStateChange,
@@ -263,10 +266,7 @@ export const ModelSpecImplementationStage = forwardRef<ModelSpecImplementationSt
 			() => new Map(persistedUpstreamInputs.map((input) => [input.modelSpecId, input])),
 			[persistedUpstreamInputs],
 		);
-		const implementationIdentity = useMemo(
-			() => generatedImplementationIdentity(model),
-			[model],
-		);
+		const implementationIdentity = useMemo(() => generatedImplementationIdentity(model), [model]);
 		const inputModeOptions = useMemo(() => {
 			const options = [
 				{ value: "PHYSICAL_ASSET", label: "已登记的数据表" },
@@ -724,6 +724,12 @@ export const ModelSpecImplementationStage = forwardRef<ModelSpecImplementationSt
 						) : null}
 					</Space>
 				</Card>
+				<ModelDeliveryIntentActions
+					id="model-spec-delivery-intents"
+					model={model}
+					implementationReady={deliveryReady && Boolean(currentImplementation) && configured && !versionConflict}
+					readOnly={readOnly || saving || rebasing || implementationLoading}
+				/>
 				<ModelImplementationTargetSummary
 					model={model}
 					settings={{ targetPhysicalName, loadStrategy, partitionFields, retentionDays }}

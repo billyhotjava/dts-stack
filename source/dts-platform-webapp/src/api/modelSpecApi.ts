@@ -448,6 +448,7 @@ export type ReleaseCandidateDeliveryStatus =
 	| "PARTIAL"
 	| "PUBLISHED"
 	| "ROLLED_BACK"
+	| "CANCELLED"
 	| "STALE";
 
 export type ReleaseCandidateLifecycleAction =
@@ -455,6 +456,7 @@ export type ReleaseCandidateLifecycleAction =
 	| "RETRY_BUILD"
 	| "RUN_QUALITY"
 	| "SUBMIT_REVIEW"
+	| "CANCEL_CANDIDATE"
 	| "APPROVE"
 	| "REJECT"
 	| "CREATE_REPLACEMENT_CANDIDATE"
@@ -479,6 +481,13 @@ export type ReleaseCandidateEvidenceType =
 
 export type ReleaseCandidateEvidenceState = "UNAVAILABLE" | "RUNNING" | "PASSED" | "FAILED" | "STALE";
 export type ReleaseCandidateWorkbenchState = "EMPTY" | "READY" | "BLOCKED" | "STALE";
+export type ReleaseCandidateRelationEvidenceState =
+	| "NOT_STARTED"
+	| "PENDING"
+	| "PROBING"
+	| "VERIFIED"
+	| "FAILED"
+	| "UNKNOWN";
 
 export type ReleaseCandidateScopeEntryInput = {
 	modelSpecId: string;
@@ -525,6 +534,69 @@ export type ReleaseCandidate = {
 	lastModifiedBy: string;
 	lastModifiedAt: string;
 	entries: ReleaseCandidateEntry[];
+	origin: "SINGLE_MODEL_INTENT" | "BATCH_WORKBENCH";
+	executionTargetKey?: string | null;
+	adapter?: string | null;
+	profileKey?: string | null;
+	targetName?: string | null;
+};
+
+export type ModelBuildRun = {
+	id: string;
+	candidateEntryId: string;
+	modelSpecId: string;
+	pipelineRunGroupId: string;
+	dbtInvocationId: string;
+	airflowDagId: string;
+	airflowRunId: string;
+	dbtSelector: string;
+	targetIdentifier: string;
+	status: string;
+	attempt: number;
+	artifactBundleChecksum: string;
+};
+
+export type ModelBuildGroup = {
+	candidateId: string;
+	candidateVersion: number;
+	pipelineRunGroupId: string;
+	dbtInvocationId: string;
+	executionTargetKey: string;
+	airflowDagId: string;
+	airflowRunId: string;
+	artifactBundleChecksum: string;
+	runs: ModelBuildRun[];
+};
+
+export type ModelBuildIntentResult = {
+	candidate: ReleaseCandidate;
+	build: ModelBuildGroup | null;
+	replayed: boolean;
+};
+
+export type ModelPublicationOutcome =
+	| "QUALITY_RUNNING"
+	| "QUALITY_FAILED"
+	| "REVIEW_SUBMISSION_PENDING"
+	| "REVIEW_PENDING"
+	| "APPROVED"
+	| "PUBLISHING"
+	| "PARTIAL"
+	| "PUBLISHED";
+
+export type ModelPublicationNextHumanAction = "NONE" | "RETRY_QUALITY" | "REVIEW" | "PUBLISH" | "REPAIR_REGISTRATION";
+export type ModelOnlineReadiness = "NOT_READY" | "PROCESSING" | "DEGRADED" | "READY";
+
+export type ModelPublicationIntentResult = {
+	candidateId: string;
+	candidateVersion: number;
+	candidateStatus: ReleaseCandidateDeliveryStatus;
+	outcome: ModelPublicationOutcome;
+	nextHumanAction: ModelPublicationNextHumanAction;
+	blocker?: ReleaseCandidateBlocker | null;
+	onlineReadiness: ModelOnlineReadiness;
+	workbenchUrl: string;
+	replayed: boolean;
 };
 
 export type ReleaseCandidateEvidenceSummary = {
@@ -532,6 +604,26 @@ export type ReleaseCandidateEvidenceSummary = {
 	state: ReleaseCandidateEvidenceState;
 	code?: string | null;
 	message?: string | null;
+};
+
+export type ReleaseCandidateEntryEvidence = {
+	candidateEntryId: string;
+	modelSpecId: string;
+	modelName: string;
+	modelRevision: number;
+	implementationRevision?: number | null;
+	targetRelation?: string | null;
+	runStatus?: string | null;
+	relationState: ReleaseCandidateRelationEvidenceState;
+	pipelineRunGroupId?: string | null;
+	dbtInvocationId?: string | null;
+	airflowDagId?: string | null;
+	airflowRunId?: string | null;
+	attempt?: number | null;
+	startedAt?: string | null;
+	finishedAt?: string | null;
+	observedAt?: string | null;
+	repairCode?: string | null;
 };
 
 export type ReleaseCandidateBlocker = {
@@ -544,9 +636,92 @@ export type ReleaseCandidateWorkbench = {
 	state: ReleaseCandidateWorkbenchState;
 	candidate: ReleaseCandidate | null;
 	evidence: ReleaseCandidateEvidenceSummary[];
+	entryEvidence: ReleaseCandidateEntryEvidence[];
 	primaryBlocker: ReleaseCandidateBlocker | null;
 	allowedActions: ReleaseCandidateWorkspaceAction[];
 	etag: string | null;
+};
+
+export type PlanExecutionDagRun = {
+	dagRunId?: string | null;
+	state?: string | null;
+	logicalDate?: string | null;
+	startedAt?: string | null;
+	finishedAt?: string | null;
+};
+
+export type PlanOperationalRun = {
+	pipelineRunGroupId?: string | null;
+	airflowRunId?: string | null;
+	triggerType?: string | null;
+	status?: string | null;
+	errorCode?: string | null;
+	createdAt?: string | null;
+	startedAt?: string | null;
+	finishedAt?: string | null;
+};
+
+export type PlanExecutionRelationEvidence = {
+	verified?: boolean | null;
+	exists?: boolean | null;
+	errorCode?: string | null;
+	physicalRelation?: string | null;
+	observedAt?: string | null;
+};
+
+export type PlanExecutionBlocker = {
+	code: string;
+	message: string;
+	owner: "MODEL_MAINTAINER" | "RELEASE_OPERATOR" | "PLATFORM_OPERATOR";
+};
+
+export type PlanExecutionBinding = {
+	id: string;
+	version: number;
+	environment: string;
+	state: "ONLINE" | "DEPLOYING" | "DISABLED" | "DEGRADED" | "UNKNOWN";
+	scheduleMode: "MANUAL_ONLY" | "CRON_ENABLED";
+	desiredSchedule?: string | null;
+	desiredTimezone?: string | null;
+	effectiveSchedule?: string | null;
+	effectiveTimezone?: string | null;
+	deploymentStatus: string;
+	desiredDeploymentChecksum: string;
+	deployedChecksum?: string | null;
+	airflowDagId: string;
+	airflowState: "OBSERVED" | "NOT_REGISTERED" | "UNKNOWN";
+	actualSchedule?: string | null;
+	actualTimezone?: string | null;
+	airflowPaused?: boolean | null;
+	nextRunAt?: string | null;
+	latestDagRun?: PlanExecutionDagRun | null;
+	latestOperationalRun: PlanOperationalRun;
+	latestRelation: PlanExecutionRelationEvidence;
+	primaryBlocker?: PlanExecutionBlocker | null;
+	allowedActions: ("RUN_NOW" | "REPAIR_DEPLOYMENT")[];
+};
+
+export type PlanExecutionWorkspace = {
+	planId: string;
+	state: "NOT_DEPLOYED" | "READY";
+	bindings: PlanExecutionBinding[];
+};
+
+export type PlanOperationalRunResult = {
+	pipelineRunGroupId: string;
+	bindingId: string;
+	bindingVersion: number;
+	triggerType: "MANUAL" | "CRON";
+	airflowDagId: string;
+	airflowRunId: string;
+	status: string;
+	replayed: boolean;
+};
+
+export type PlanExecutionRepairResult = {
+	bindingId: string;
+	bindingVersion: number;
+	deploymentStatus: "DEPLOYING";
 };
 
 export type ReleaseCandidateDriftReason = {
@@ -613,6 +788,57 @@ const releaseCandidateWriteHeaders = (idempotencyKey: string, expected?: Release
 export const getReleaseCandidateWorkbench = (planId: string) =>
 	api.get<ReleaseCandidateWorkbench>({
 		url: `${releaseCandidateResource(planId)}/workspace`,
+		_skipErrorToast: true,
+	} as any);
+
+const planExecutionBindingResource = (planId: string) =>
+	`/modeling/plans/${encodeURIComponent(planId)}/execution-bindings`;
+
+export const getPlanExecutionWorkspace = (planId: string) =>
+	api.get<PlanExecutionWorkspace>({
+		url: `${planExecutionBindingResource(planId)}/workspace`,
+		_skipErrorToast: true,
+	} as any);
+
+export const runPlanExecutionNow = (planId: string, bindingId: string, idempotencyKey: string) =>
+	api.post<PlanOperationalRunResult>({
+		url: `${planExecutionBindingResource(planId)}/${encodeURIComponent(bindingId)}/runs`,
+		headers: { "Idempotency-Key": idempotencyKey },
+		_skipErrorToast: true,
+	} as any);
+
+export const repairPlanExecutionBinding = (planId: string, bindingId: string, bindingVersion: number) =>
+	api.post<PlanExecutionRepairResult>({
+		url: `${planExecutionBindingResource(planId)}/${encodeURIComponent(bindingId)}/repair`,
+		headers: { "If-Match": `"plan-execution-binding:${bindingId}:${bindingVersion}"` },
+		_skipErrorToast: true,
+	} as any);
+
+export const startModelBuildIntent = (
+	expected: ModelSpecCasToken,
+	idempotencyKey: string,
+	data: { planId: string; environment: string },
+) =>
+	api.post<ModelBuildIntentResult>({
+		url: `${MODEL_SPEC_RESOURCE}/${encodeURIComponent(expected.id)}/build-intents`,
+		headers: {
+			"If-Match": toModelSpecEtag(expected),
+			"Idempotency-Key": idempotencyKey,
+		},
+		data,
+		_skipErrorToast: true,
+	} as any);
+
+export const startModelPublicationIntent = (
+	modelSpecId: string,
+	expected: ReleaseCandidateCasToken,
+	idempotencyKey: string,
+	reason: string,
+) =>
+	api.post<ModelPublicationIntentResult>({
+		url: `${MODEL_SPEC_RESOURCE}/${encodeURIComponent(modelSpecId)}/publish-intents`,
+		headers: releaseCandidateWriteHeaders(idempotencyKey, expected),
+		data: { candidateId: expected.id, reason },
 		_skipErrorToast: true,
 	} as any);
 

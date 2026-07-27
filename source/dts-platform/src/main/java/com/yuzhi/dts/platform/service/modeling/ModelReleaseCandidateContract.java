@@ -337,6 +337,7 @@ public final class ModelReleaseCandidateContract {
         CREATED,
         SCOPE_REPLACED,
         STATUS_CHANGED,
+        PUBLICATION_REQUESTED,
         STALE_DETECTED,
     }
 
@@ -512,6 +513,53 @@ public final class ModelReleaseCandidateContract {
         }
     }
 
+    public enum RelationEvidenceState {
+        NOT_STARTED,
+        PENDING,
+        PROBING,
+        VERIFIED,
+        FAILED,
+        UNKNOWN,
+    }
+
+    /** Persisted run and relation truth for one immutable Candidate entry. */
+    public record EntryEvidenceView(
+        UUID candidateEntryId,
+        UUID modelSpecId,
+        String modelName,
+        int modelRevision,
+        Integer implementationRevision,
+        String targetRelation,
+        String runStatus,
+        RelationEvidenceState relationState,
+        UUID pipelineRunGroupId,
+        UUID dbtInvocationId,
+        String airflowDagId,
+        String airflowRunId,
+        Integer attempt,
+        Instant startedAt,
+        Instant finishedAt,
+        Instant observedAt,
+        String repairCode
+    ) {
+        public EntryEvidenceView {
+            candidateEntryId = requiredUuid(candidateEntryId, "candidateEntryId");
+            modelSpecId = requiredUuid(modelSpecId, "modelSpecId");
+            modelName = requiredText(modelName, "modelName");
+            if (modelRevision < 1) throw new IllegalArgumentException("modelRevision must be positive");
+            if (implementationRevision != null && implementationRevision < 1) {
+                throw new IllegalArgumentException("implementationRevision must be positive");
+            }
+            targetRelation = optionalText(targetRelation);
+            runStatus = optionalText(runStatus);
+            if (relationState == null) throw new IllegalArgumentException("relationState is required");
+            airflowDagId = optionalText(airflowDagId);
+            airflowRunId = optionalText(airflowRunId);
+            if (attempt != null && attempt < 1) throw new IllegalArgumentException("attempt must be positive");
+            repairCode = optionalText(repairCode);
+        }
+    }
+
     public record BlockerView(String code, String message) {
         public BlockerView {
             code = requiredText(code, "code");
@@ -525,10 +573,23 @@ public final class ModelReleaseCandidateContract {
         WorkbenchState state,
         CandidateView candidate,
         List<EvidenceSummaryView> evidence,
+        List<EntryEvidenceView> entryEvidence,
         BlockerView primaryBlocker,
         List<WorkspaceAction> allowedActions,
         String etag
     ) {
+        public WorkbenchView(
+            UUID planId,
+            WorkbenchState state,
+            CandidateView candidate,
+            List<EvidenceSummaryView> evidence,
+            BlockerView primaryBlocker,
+            List<WorkspaceAction> allowedActions,
+            String etag
+        ) {
+            this(planId, state, candidate, evidence, List.of(), primaryBlocker, allowedActions, etag);
+        }
+
         public WorkbenchView {
             planId = requiredUuid(planId, "planId");
             if (state == null) throw new IllegalArgumentException("state is required");
@@ -544,6 +605,33 @@ public final class ModelReleaseCandidateContract {
                 throw new IllegalArgumentException("evidence must contain every delivery evidence type exactly once");
             }
             evidence = List.copyOf(evidenceItems);
+            List<EntryEvidenceView> entryItems = entryEvidence == null ? List.of() : entryEvidence;
+            if (entryItems.stream().anyMatch(item -> item == null)) {
+                throw new IllegalArgumentException("entryEvidence must not contain null items");
+            }
+            if (candidate == null && !entryItems.isEmpty()) {
+                throw new IllegalArgumentException("entryEvidence requires a candidate");
+            }
+            if (
+                candidate != null &&
+                !entryItems.isEmpty() &&
+                !entryItems
+                    .stream()
+                    .map(EntryEvidenceView::candidateEntryId)
+                    .collect(java.util.stream.Collectors.toSet())
+                    .equals(
+                        candidate
+                            .entries()
+                            .stream()
+                            .map(EntryView::id)
+                            .collect(java.util.stream.Collectors.toSet())
+                    )
+            ) {
+                throw new IllegalArgumentException(
+                    "entryEvidence must match the exact candidate scope"
+                );
+            }
+            entryEvidence = List.copyOf(entryItems);
             List<WorkspaceAction> actions = allowedActions == null ? List.of() : allowedActions;
             if (actions.stream().anyMatch(action -> action == null) || actions.stream().distinct().count() != actions.size()) {
                 throw new IllegalArgumentException("allowedActions must be unique and non-null");

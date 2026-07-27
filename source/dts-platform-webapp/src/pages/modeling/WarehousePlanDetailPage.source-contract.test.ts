@@ -35,6 +35,14 @@ test("six tabs organize editing without becoming a second completion state", () 
 	assert.doesNotMatch(page, /setTabComplete|completedTabs|tabProgress|markComplete/);
 });
 
+test("implementation deep link consumes the exact candidate and model evidence scope", () => {
+	assert.match(page, /ReleaseCandidateWorkbenchPanel/);
+	assert.match(page, /searchParams\.get\("candidateId"\)/);
+	assert.match(page, /searchParams\.get\("modelSpecId"\)/);
+	assert.match(page, /requestedCandidateId=/);
+	assert.match(page, /requestedModelSpecId=/);
+});
+
 test("editing follows the backend maintainer-role gate as well as lifecycle", () => {
 	assert.match(page, /useUserRoles/);
 	assert.match(page, /hasWarehousePlanCreateAccess\(userRoles\)/);

@@ -2,11 +2,17 @@ package com.yuzhi.dts.platform.service.modeling;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.platform.repository.modeling.ModelReleaseCandidateRepository;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryActorRole;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryAuditView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CandidateView;
@@ -14,7 +20,10 @@ import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.Com
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CommandEventView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CommandResult;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CreateCandidateCommand;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.EntryEvidenceView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.EntryView;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.EvidenceState;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.RelationEvidenceState;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.ScopeEntryCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.TransitionCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.WorkbenchState;
@@ -23,11 +32,13 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationM
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -53,6 +64,21 @@ class ModelReleaseCandidateApplicationServiceTest {
     @Mock
     private ModelSpecPlanWriteAccessPort planAccess;
 
+    @Mock
+    private ReleaseDutyResolver dutyResolver;
+
+    @Mock
+    private CandidatePublicationAdmissionService publicationAdmission;
+
+    @Mock
+    private CandidatePublicationCoordinator publicationCoordinator;
+
+    @Mock
+    private CandidateRollbackCommitService rollbackCommits;
+
+    @Mock
+    private ReleaseCandidateWorkbenchEvidencePort workbenchEvidence;
+
     private ModelReleaseCandidateApplicationService service;
 
     @BeforeEach
@@ -61,9 +87,17 @@ class ModelReleaseCandidateApplicationServiceTest {
             repository,
             commands,
             materializationStarts,
-            planAccess
+            planAccess,
+            dutyResolver,
+            publicationAdmission,
+            publicationCoordinator,
+            rollbackCommits,
+            workbenchEvidence
         );
-        when(planAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
+        lenient().when(planAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
+        lenient()
+            .when(dutyResolver.currentDuties())
+            .thenReturn(Set.of(DeliveryActorRole.MODEL_MAINTAINER));
     }
 
     @Test
@@ -114,6 +148,128 @@ class ModelReleaseCandidateApplicationServiceTest {
         );
         assertThat(view.primaryBlocker()).isNull();
         assertThat(view.etag()).isEqualTo("\"release-candidate:" + CANDIDATE_ID + ":4\"");
+    }
+
+    @Test
+    void builtCandidateProjectsPersistedRunAndVerifiedRelationEvidence() {
+        CandidateView candidate = candidate(
+            DeliveryStatus.BUILT,
+            List.of(entry(DeliveryStatus.BUILT))
+        );
+        EntryEvidenceView entryEvidence = new EntryEvidenceView(
+            UUID.fromString("40000000-0000-0000-0000-000000000001"),
+            MODEL_ID,
+            "财务项目模型",
+            2,
+            3,
+            "finance.dwd.finance_project",
+            "BUILT",
+            RelationEvidenceState.VERIFIED,
+            UUID.fromString("50000000-0000-0000-0000-000000000001"),
+            UUID.fromString("60000000-0000-0000-0000-000000000001"),
+            "dts_release_build_postgres_primary",
+            "manual__candidate_1",
+            1,
+            NOW.minusSeconds(30),
+            NOW,
+            NOW.minusSeconds(1),
+            null
+        );
+        when(repository.listForWorkbench(TENANT, PLAN_ID)).thenReturn(List.of(candidate));
+        when(workbenchEvidence.findCurrent(candidate)).thenReturn(List.of(entryEvidence));
+
+        var view = service.workspace(TENANT, ACTOR, PLAN_ID);
+
+        assertThat(view.entryEvidence()).containsExactly(entryEvidence);
+        assertThat(view.evidence())
+            .filteredOn(summary ->
+                summary.type() == com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryEvidenceType.ARTIFACT ||
+                summary.type() == com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryEvidenceType.BUILD_RUN
+            )
+            .allSatisfy(summary -> assertThat(summary.state()).isEqualTo(EvidenceState.PASSED));
+    }
+
+    @Test
+    void oneFailedRelationKeepsAMultiEntryCandidateFromReportingBuildSuccess() {
+        UUID secondModelId = UUID.fromString("30000000-0000-0000-0000-000000000002");
+        UUID secondEntryId = UUID.fromString("40000000-0000-0000-0000-000000000002");
+        CandidateView candidate = candidate(
+            DeliveryStatus.BUILD_FAILED,
+            List.of(
+                entry(DeliveryStatus.BUILD_FAILED),
+                new EntryView(
+                    secondEntryId,
+                    TENANT,
+                    CANDIDATE_ID,
+                    PLAN_ID,
+                    secondModelId,
+                    1,
+                    "c".repeat(64),
+                    null,
+                    ImplementationMode.DESIGNER_GENERATED,
+                    DeliveryStatus.BUILD_FAILED,
+                    1,
+                    "dependent model"
+                )
+            )
+        );
+        UUID groupId = UUID.fromString("50000000-0000-0000-0000-000000000001");
+        List<EntryEvidenceView> evidence = List.of(
+            new EntryEvidenceView(
+                entry(DeliveryStatus.BUILD_FAILED).id(),
+                MODEL_ID,
+                "财务项目模型",
+                2,
+                3,
+                "finance.dwd.finance_project",
+                "BUILT",
+                RelationEvidenceState.VERIFIED,
+                groupId,
+                UUID.fromString("60000000-0000-0000-0000-000000000001"),
+                "dts_release_build_postgres_primary",
+                "manual__candidate_1",
+                1,
+                NOW.minusSeconds(30),
+                NOW,
+                NOW.minusSeconds(1),
+                null
+            ),
+            new EntryEvidenceView(
+                secondEntryId,
+                secondModelId,
+                "财务项目明细",
+                1,
+                1,
+                "finance.dwd.finance_project_detail",
+                "FAILED",
+                RelationEvidenceState.FAILED,
+                groupId,
+                UUID.fromString("60000000-0000-0000-0000-000000000001"),
+                "dts_release_build_postgres_primary",
+                "manual__candidate_1",
+                1,
+                NOW.minusSeconds(30),
+                NOW,
+                NOW.minusSeconds(1),
+                "MODEL_PHYSICAL_RELATION_NOT_FOUND"
+            )
+        );
+        when(repository.listForWorkbench(TENANT, PLAN_ID)).thenReturn(List.of(candidate));
+        when(commands.detectDrift(TENANT, candidate)).thenReturn(List.of());
+        when(workbenchEvidence.findCurrent(candidate)).thenReturn(evidence);
+
+        var view = service.workspace(TENANT, ACTOR, PLAN_ID);
+
+        assertThat(view.evidence())
+            .filteredOn(summary ->
+                summary.type() ==
+                com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryEvidenceType.BUILD_RUN
+            )
+            .singleElement()
+            .satisfies(summary -> {
+                assertThat(summary.state()).isEqualTo(EvidenceState.FAILED);
+                assertThat(summary.code()).isEqualTo("MODEL_PHYSICAL_RELATION_NOT_FOUND");
+            });
     }
 
     @Test
@@ -170,7 +326,7 @@ class ModelReleaseCandidateApplicationServiceTest {
         when(repository.findByIdempotencyKey(TENANT, active.idempotencyKey())).thenReturn(Optional.of(active));
         when(commands.create(TENANT, ACTOR, command)).thenReturn(replay);
 
-        assertThat(service.create(TENANT, ACTOR, PLAN_ID, command)).isSameAs(replay);
+        assertThat(service.create(TENANT, ACTOR, PLAN_ID, command)).isEqualTo(replay);
 
         verify(commands).create(TENANT, ACTOR, command);
         verify(repository, never()).listForWorkbench(TENANT, PLAN_ID);
@@ -526,7 +682,457 @@ class ModelReleaseCandidateApplicationServiceTest {
         );
     }
 
+    @Test
+    void reviewerProjectionAndApproveCommandUseTheSameResolvedDuty() {
+        DeliveryAuditView submitted = new DeliveryAuditView(
+            "creator",
+            NOW.minusSeconds(120),
+            "submitter",
+            NOW.minusSeconds(60),
+            null,
+            null,
+            null,
+            null
+        );
+        CandidateView pending = candidate(
+            DeliveryStatus.REVIEW_PENDING,
+            List.of(entry(DeliveryStatus.REVIEW_PENDING)),
+            submitted
+        );
+        DeliveryAuditView approvedAudit = new DeliveryAuditView(
+            submitted.createdBy(),
+            submitted.createdAt(),
+            submitted.submittedBy(),
+            submitted.submittedAt(),
+            ACTOR,
+            NOW,
+            null,
+            null
+        );
+        CandidateView approved = candidate(
+            DeliveryStatus.APPROVED,
+            List.of(entry(DeliveryStatus.APPROVED)),
+            approvedAudit
+        );
+        when(dutyResolver.currentDuties()).thenReturn(Set.of(DeliveryActorRole.RELEASE_REVIEWER));
+        when(repository.listForWorkbench(TENANT, PLAN_ID)).thenReturn(List.of(pending));
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(pending));
+        when(commands.transition(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), any()))
+            .thenReturn(new CommandResult(approved, false, List.of()));
+
+        var workspace = service.workspace(TENANT, ACTOR, PLAN_ID);
+        var result = service.approve(
+            TENANT,
+            ACTOR,
+            PLAN_ID,
+            CANDIDATE_ID,
+            4,
+            "approve-key",
+            "quality evidence accepted"
+        );
+
+        assertThat(workspace.allowedActions()).containsExactly(WorkspaceAction.APPROVE, WorkspaceAction.REJECT);
+        assertThat(result.allowedActions()).isEmpty();
+        ArgumentCaptor<TransitionCommand> transition = ArgumentCaptor.forClass(TransitionCommand.class);
+        verify(commands).transition(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), transition.capture());
+        assertThat(transition.getValue().targetStatus()).isEqualTo(DeliveryStatus.APPROVED);
+    }
+
+    @Test
+    void maintainerCannotExecuteReviewerCommandEvenWithPlanMaintenanceAccess() {
+        DeliveryAuditView submitted = new DeliveryAuditView(
+            "creator",
+            NOW.minusSeconds(120),
+            "submitter",
+            NOW.minusSeconds(60),
+            null,
+            null,
+            null,
+            null
+        );
+        CandidateView pending = candidate(
+            DeliveryStatus.REVIEW_PENDING,
+            List.of(entry(DeliveryStatus.REVIEW_PENDING)),
+            submitted
+        );
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(pending));
+
+        assertThatThrownBy(() ->
+            service.approve(
+                TENANT,
+                ACTOR,
+                PLAN_ID,
+                CANDIDATE_ID,
+                4,
+                "approve-key",
+                "attempt privilege escalation"
+            )
+        )
+            .isInstanceOf(ModelReleaseCandidateException.class)
+            .satisfies(error ->
+                assertThat(((ModelReleaseCandidateException) error).kind())
+                    .isEqualTo(ModelReleaseCandidateException.Kind.FORBIDDEN)
+            );
+
+        verify(commands, never()).transition(any(), any(), any(), any());
+    }
+
+    @Test
+    void noResolvedReleaseDutyCannotReachAnyPublicationMutation() {
+        when(dutyResolver.currentDuties()).thenReturn(Set.of());
+
+        assertThatThrownBy(() ->
+            service.publish(
+                TENANT,
+                ACTOR,
+                PLAN_ID,
+                CANDIDATE_ID,
+                4,
+                "publish-key",
+                "publish approved release"
+            )
+        )
+            .isInstanceOf(ModelReleaseCandidateException.class)
+            .satisfies(error ->
+                assertThat(((ModelReleaseCandidateException) error).kind())
+                    .isEqualTo(ModelReleaseCandidateException.Kind.FORBIDDEN)
+            );
+        assertThatThrownBy(() ->
+            service.retryRegistration(
+                TENANT,
+                ACTOR,
+                PLAN_ID,
+                CANDIDATE_ID,
+                4,
+                "registration-retry-key",
+                "retry local publication"
+            )
+        )
+            .isInstanceOf(ModelReleaseCandidateException.class)
+            .satisfies(error ->
+                assertThat(((ModelReleaseCandidateException) error).kind())
+                    .isEqualTo(ModelReleaseCandidateException.Kind.FORBIDDEN)
+            );
+        assertThatThrownBy(() ->
+            service.rollback(
+                TENANT,
+                ACTOR,
+                PLAN_ID,
+                CANDIDATE_ID,
+                4,
+                "rollback-key",
+                "withdraw release"
+            )
+        )
+            .isInstanceOf(ModelReleaseCandidateException.class)
+            .satisfies(error ->
+                assertThat(((ModelReleaseCandidateException) error).kind())
+                    .isEqualTo(ModelReleaseCandidateException.Kind.FORBIDDEN)
+            );
+
+        verify(repository, never()).find(any(), any());
+        verifyNoInteractions(publicationAdmission, publicationCoordinator, rollbackCommits);
+    }
+
+    @Test
+    void publishAppliesAssetGateBeforePublishingTransitionAndLocalCommit() {
+        DeliveryAuditView approvedAudit = new DeliveryAuditView(
+            "creator",
+            NOW.minusSeconds(180),
+            "submitter",
+            NOW.minusSeconds(120),
+            "reviewer",
+            NOW.minusSeconds(60),
+            null,
+            null
+        );
+        CandidateView approved = candidate(
+            DeliveryStatus.APPROVED,
+            List.of(entry(DeliveryStatus.APPROVED)),
+            approvedAudit
+        );
+        CandidateView publishing = candidate(
+            DeliveryStatus.PUBLISHING,
+            List.of(entry(DeliveryStatus.PUBLISHING)),
+            approvedAudit
+        );
+        DeliveryAuditView publishedAudit = new DeliveryAuditView(
+            approvedAudit.createdBy(),
+            approvedAudit.createdAt(),
+            approvedAudit.submittedBy(),
+            approvedAudit.submittedAt(),
+            approvedAudit.approvedBy(),
+            approvedAudit.approvedAt(),
+            ACTOR,
+            NOW
+        );
+        CandidateView published = candidate(
+            DeliveryStatus.PUBLISHED,
+            List.of(entry(DeliveryStatus.PUBLISHED)),
+            publishedAudit
+        );
+        when(dutyResolver.currentDuties()).thenReturn(Set.of(DeliveryActorRole.RELEASE_OPERATOR));
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(approved));
+        when(commands.transition(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), any()))
+            .thenReturn(new CommandResult(publishing, false, List.of()));
+        when(
+            publicationCoordinator.publish(
+                TENANT,
+                ACTOR,
+                publishing,
+                "publish-key",
+                "publish approved release"
+            )
+        )
+            .thenReturn(new CommandResult(published, false, List.of()));
+
+        CommandResult result = service.publish(
+            TENANT,
+            ACTOR,
+            PLAN_ID,
+            CANDIDATE_ID,
+            4,
+            "publish-key",
+            "publish approved release"
+        );
+
+        assertThat(result.candidate().status()).isEqualTo(DeliveryStatus.PUBLISHED);
+        InOrder order = org.mockito.Mockito.inOrder(publicationAdmission, commands, publicationCoordinator);
+        order.verify(publicationAdmission).requireAllowed(approved);
+        order.verify(commands).transition(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), any());
+        order
+            .verify(publicationCoordinator)
+            .publish(TENANT, ACTOR, publishing, "publish-key", "publish approved release");
+    }
+
+    @Test
+    void deniedAssetGateLeavesApprovedCandidateUntouched() {
+        DeliveryAuditView approvedAudit = new DeliveryAuditView(
+            "creator",
+            NOW.minusSeconds(180),
+            "submitter",
+            NOW.minusSeconds(120),
+            "reviewer",
+            NOW.minusSeconds(60),
+            null,
+            null
+        );
+        CandidateView approved = candidate(
+            DeliveryStatus.APPROVED,
+            List.of(entry(DeliveryStatus.APPROVED)),
+            approvedAudit
+        );
+        when(dutyResolver.currentDuties()).thenReturn(Set.of(DeliveryActorRole.RELEASE_OPERATOR));
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(approved));
+        when(publicationAdmission.requireAllowed(approved))
+            .thenThrow(
+                new ModelReleaseCandidateException(
+                    "MODEL_RELEASE_ASSET_ACTION_FORBIDDEN",
+                    "denied",
+                    ModelReleaseCandidateException.Kind.FORBIDDEN
+                )
+            );
+
+        assertThatThrownBy(() ->
+            service.publish(
+                TENANT,
+                ACTOR,
+                PLAN_ID,
+                CANDIDATE_ID,
+                4,
+                "publish-key",
+                "publish approved release"
+            )
+        )
+            .isInstanceOf(ModelReleaseCandidateException.class)
+            .satisfies(error ->
+                assertThat(((ModelReleaseCandidateException) error).code())
+                    .isEqualTo("MODEL_RELEASE_ASSET_ACTION_FORBIDDEN")
+            );
+
+        verify(commands, never()).transition(any(), any(), any(), any());
+        verify(publicationCoordinator, never()).publish(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void publishReplayReturnsCurrentPublishedProjectionWithoutRepeatingLocalWrites() {
+        DeliveryAuditView publishedAudit = new DeliveryAuditView(
+            "creator",
+            NOW.minusSeconds(180),
+            "submitter",
+            NOW.minusSeconds(120),
+            "reviewer",
+            NOW.minusSeconds(60),
+            ACTOR,
+            NOW
+        );
+        CandidateView published = candidate(
+            DeliveryStatus.PUBLISHED,
+            List.of(entry(DeliveryStatus.PUBLISHED)),
+            publishedAudit
+        );
+        CommandEventView receipt = new CommandEventView(
+            UUID.fromString("70000000-0000-0000-0000-000000000001"),
+            TENANT,
+            CANDIDATE_ID,
+            PLAN_ID,
+            5,
+            CommandEventType.STATUS_CHANGED,
+            DeliveryStatus.APPROVED,
+            DeliveryStatus.PUBLISHING,
+            ACTOR,
+            NOW.minusSeconds(30),
+            "publish approved release",
+            "publish-key",
+            "d".repeat(64),
+            "{}"
+        );
+        when(dutyResolver.currentDuties()).thenReturn(Set.of(DeliveryActorRole.RELEASE_OPERATOR));
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(published));
+        when(repository.findCommandByIdempotencyKey(TENANT, "publish-key")).thenReturn(Optional.of(receipt));
+        when(commands.transition(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), any()))
+            .thenReturn(new CommandResult(published, true, List.of()));
+
+        CommandResult replay = service.publish(
+            TENANT,
+            ACTOR,
+            PLAN_ID,
+            CANDIDATE_ID,
+            4,
+            "publish-key",
+            "publish approved release"
+        );
+
+        assertThat(replay.replayed()).isTrue();
+        assertThat(replay.candidate()).isEqualTo(published);
+        verify(publicationAdmission, never()).requireAllowed(any());
+        verify(publicationCoordinator, never()).publish(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void registrationRetryConsumesTheSamePhysicalEvidenceWithoutCallingBuildStart() {
+        DeliveryAuditView partialAudit = new DeliveryAuditView(
+            "creator",
+            NOW.minusSeconds(180),
+            "submitter",
+            NOW.minusSeconds(120),
+            "reviewer",
+            NOW.minusSeconds(60),
+            ACTOR,
+            NOW.minusSeconds(30)
+        );
+        CandidateView partial = candidate(
+            DeliveryStatus.PARTIAL,
+            List.of(entry(DeliveryStatus.PARTIAL)),
+            partialAudit
+        );
+        CandidateView published = candidate(
+            DeliveryStatus.PUBLISHED,
+            List.of(entry(DeliveryStatus.PUBLISHED)),
+            new DeliveryAuditView(
+                partialAudit.createdBy(),
+                partialAudit.createdAt(),
+                partialAudit.submittedBy(),
+                partialAudit.submittedAt(),
+                partialAudit.approvedBy(),
+                partialAudit.approvedAt(),
+                partialAudit.publishedBy(),
+                partialAudit.publishedAt()
+            )
+        );
+        when(dutyResolver.currentDuties()).thenReturn(Set.of(DeliveryActorRole.RELEASE_OPERATOR));
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(partial));
+        when(
+            publicationCoordinator.publish(
+                TENANT,
+                ACTOR,
+                partial,
+                "registration-retry-key",
+                "retry local publication"
+            )
+        )
+            .thenReturn(new CommandResult(published, false, List.of()));
+
+        CommandResult result = service.retryRegistration(
+            TENANT,
+            ACTOR,
+            PLAN_ID,
+            CANDIDATE_ID,
+            4,
+            "registration-retry-key",
+            "retry local publication"
+        );
+
+        assertThat(result.candidate().status()).isEqualTo(DeliveryStatus.PUBLISHED);
+        InOrder order = org.mockito.Mockito.inOrder(publicationAdmission, publicationCoordinator);
+        order.verify(publicationAdmission).requireAllowed(partial);
+        order
+            .verify(publicationCoordinator)
+            .publish(TENANT, ACTOR, partial, "registration-retry-key", "retry local publication");
+        verify(materializationStarts, never()).start(any(), any(), any(), anyInt(), any(), any());
+        verify(materializationStarts, never()).retry(any(), any(), any(), anyInt(), any(), any());
+    }
+
+    @Test
+    void rollbackUsesTheAssetGateAndCandidateAtomicRollbackInsteadOfLegacyLifecycleMutation() {
+        DeliveryAuditView publishedAudit = new DeliveryAuditView(
+            "creator",
+            NOW.minusSeconds(180),
+            "submitter",
+            NOW.minusSeconds(120),
+            "reviewer",
+            NOW.minusSeconds(60),
+            ACTOR,
+            NOW.minusSeconds(30)
+        );
+        CandidateView published = candidate(
+            DeliveryStatus.PUBLISHED,
+            List.of(entry(DeliveryStatus.PUBLISHED)),
+            publishedAudit
+        );
+        CandidateView rolledBack = candidate(
+            DeliveryStatus.ROLLED_BACK,
+            List.of(entry(DeliveryStatus.ROLLED_BACK)),
+            publishedAudit
+        );
+        when(dutyResolver.currentDuties()).thenReturn(Set.of(DeliveryActorRole.RELEASE_OPERATOR));
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(published));
+        when(
+            rollbackCommits.rollback(
+                TENANT,
+                ACTOR,
+                published,
+                "rollback-key",
+                "withdraw release"
+            )
+        )
+            .thenReturn(new CommandResult(rolledBack, false, List.of()));
+
+        CommandResult result = service.rollback(
+            TENANT,
+            ACTOR,
+            PLAN_ID,
+            CANDIDATE_ID,
+            4,
+            "rollback-key",
+            "withdraw release"
+        );
+
+        assertThat(result.candidate().status()).isEqualTo(DeliveryStatus.ROLLED_BACK);
+        InOrder order = org.mockito.Mockito.inOrder(publicationAdmission, rollbackCommits);
+        order.verify(publicationAdmission).requireArchiveAllowed(published);
+        order.verify(rollbackCommits).rollback(TENANT, ACTOR, published, "rollback-key", "withdraw release");
+    }
+
     private static CandidateView candidate(DeliveryStatus status, List<EntryView> entries) {
+        return candidate(status, entries, audit());
+    }
+
+    private static CandidateView candidate(
+        DeliveryStatus status,
+        List<EntryView> entries,
+        DeliveryAuditView audit
+    ) {
         return new CandidateView(
             CANDIDATE_ID,
             TENANT,
@@ -536,7 +1142,7 @@ class ModelReleaseCandidateApplicationServiceTest {
             4,
             "create-key",
             "a".repeat(64),
-            audit(),
+            audit,
             ACTOR,
             NOW,
             entries

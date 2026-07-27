@@ -1,11 +1,10 @@
 import { Alert, Button, Card, Empty, List, Space, Spin, Tag, Timeline, Typography } from "antd";
 import { useEffect, useState } from "react";
 import type { ModelLifecycleArtifact, ModelLifecycleTimeline } from "@/api/modelSpecApi";
+import { resolveAppHref } from "@/routes/constants";
 import type { CanonicalModelSpecView } from "../modelSpecV2Contract";
 
 const { Text } = Typography;
-
-type PhysicalArtifact = ModelLifecycleArtifact & { physicalAssetRef?: string | null };
 
 type Props = {
 	model: CanonicalModelSpecView;
@@ -36,24 +35,48 @@ export function ModelSpecPhysicalAssetStage({
 }: Props) {
 	const [registrationRetrying, setRegistrationRetrying] = useState(false);
 	const [registrationRetryError, setRegistrationRetryError] = useState("");
-	const realArtifacts = ((timeline?.artifacts || []) as PhysicalArtifact[]).filter(
+	const currentArtifacts = (timeline?.artifacts || []).filter(
 		(artifact) =>
-			Boolean(artifact.physicalAssetRef) &&
 			artifact.revision === model.revision &&
 			artifact.modelChecksum === model.checksum &&
 			artifact.implementationRevision === timeline?.implementation?.implementationRevision,
 	);
-	const latestRelease = [...(timeline?.events || [])]
+	const latestPublicationEvent = [...(timeline?.events || [])]
 		.filter(
 			(event) =>
-				event.eventType === "RELEASE" && event.revision === model.revision && event.modelChecksum === model.checksum,
+				(event.eventType === "RELEASE" || event.eventType === "ROLLBACK") &&
+				event.revision === model.revision &&
+				event.modelChecksum === model.checksum,
 		)
 		.sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+	const publicationIsCurrent =
+		latestPublicationEvent?.eventType === "RELEASE" && latestPublicationEvent.status === "PUBLISHED";
+	const publishedAssetRefs = publicationIsCurrent
+		? Array.from(
+				new Set(
+					currentArtifacts
+						.map((artifact) => artifact.physicalAssetRef)
+						.filter((assetRef): assetRef is string => Boolean(assetRef)),
+				),
+			)
+		: [];
 	const recoverableRelease =
-		latestRelease && (latestRelease.status === "PARTIAL" || latestRelease.status === "PENDING")
-			? latestRelease
+		latestPublicationEvent?.eventType === "RELEASE" &&
+		(latestPublicationEvent.status === "PARTIAL" || latestPublicationEvent.status === "PENDING")
+			? latestPublicationEvent
 			: undefined;
+	const emptyAssetDescription =
+		latestPublicationEvent?.eventType === "ROLLBACK"
+			? "当前发布已回滚；历史事件仍保留，但不展示为可消费资产。"
+			: recoverableRelease
+				? "发布登记尚未完成；当前没有可消费输出资产。"
+				: publicationIsCurrent
+					? "当前发布记录缺少输出资产引用；页面不会根据输入来源或表名推断资产。"
+					: currentArtifacts.length
+						? "构建产物已生成，但尚未发布为可消费资产。"
+						: "尚无构建产物或已发布输出资产。";
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Reset retry state when the server model identity changes.
 	useEffect(() => {
 		setRegistrationRetrying(false);
 		setRegistrationRetryError("");
@@ -98,10 +121,12 @@ export function ModelSpecPhysicalAssetStage({
 					className="mb-4"
 					type="warning"
 					showIcon
-					message={
-						recoverableRelease.status === "PARTIAL" ? "发布已完成，但部分资产登记尚未完成" : "发布登记仍在等待完成"
+					message={recoverableRelease.status === "PARTIAL" ? "发布未完成，本地资产登记已回滚" : "发布登记仍在等待完成"}
+					description={
+						recoverableRelease.status === "PARTIAL"
+							? "所有条目保持不可消费；重试后页面会重新读取服务端真值，不会展示部分资产。"
+							: "页面会等待服务端完成登记，不会用本地状态推测发布结果。"
 					}
-					description="重试后页面会重新读取服务端生命周期，不会用本地状态推测发布结果。"
 					action={
 						<Button size="small" type="primary" loading={registrationRetrying} onClick={() => void retryRegistration()}>
 							重试发布登记
@@ -124,12 +149,31 @@ export function ModelSpecPhysicalAssetStage({
 					<Spin tip="正在读取物理资产" />
 				</div>
 			) : null}
-			<Card className="mb-4" size="small" title="真实物理资产与 DDL / 构建产物">
-				{realArtifacts.length ? (
+			<Card className="mb-4" size="small" title="已发布输出资产">
+				{publishedAssetRefs.length ? (
 					<List
 						size="small"
-						dataSource={realArtifacts}
-						renderItem={(artifact) => (
+						dataSource={publishedAssetRefs}
+						renderItem={(assetRef) => (
+							<List.Item>
+								<Space wrap>
+									<Tag color="success">PUBLISHED</Tag>
+									<Text type="secondary">{assetRef}</Text>
+									<a href={resolveAppHref(`/catalog/datasets/${encodeURIComponent(assetRef)}`)}>查看资产详情</a>
+								</Space>
+							</List.Item>
+						)}
+					/>
+				) : (
+					<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyAssetDescription} />
+				)}
+			</Card>
+			<Card className="mb-4" size="small" title="DDL / 构建产物">
+				{currentArtifacts.length ? (
+					<List
+						size="small"
+						dataSource={currentArtifacts}
+						renderItem={(artifact: ModelLifecycleArtifact) => (
 							<List.Item>
 								<Space direction="vertical" size={1}>
 									<Space wrap>
@@ -137,18 +181,13 @@ export function ModelSpecPhysicalAssetStage({
 										<Tag>{artifact.artifactType}</Tag>
 										<Tag color={artifact.status === "READY" ? "success" : "default"}>{artifact.status}</Tag>
 									</Space>
-									<Text type="secondary">
-										物理资产 {artifact.physicalAssetRef} · 校验 {artifact.checksum}
-									</Text>
+									<Text type="secondary">校验 {artifact.checksum}</Text>
 								</Space>
 							</List.Item>
 						)}
 					/>
 				) : (
-					<Empty
-						image={Empty.PRESENTED_IMAGE_SIMPLE}
-						description="尚无已登记的真实物理资产；完成编译、测试和发布后将在这里显示。"
-					/>
+					<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚无当前版本的编译或构建产物。" />
 				)}
 			</Card>
 			<Card size="small" title="编译、测试、部署与血缘时间线">

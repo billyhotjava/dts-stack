@@ -12,7 +12,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.yuzhi.dts.platform.security.session.PortalSessionInactivityFilter;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.CompileView;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ReleaseView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService;
+import com.yuzhi.dts.platform.service.modeling.LegacyModelLifecycleCandidateAdapter;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateException;
 import com.yuzhi.dts.platform.service.modeling.ModelImplementationCompatibilityAdapter;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService.ImplementationMigrationBatch;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService.ImplementationMigrationResult;
@@ -55,6 +58,9 @@ class ModelLifecycleResourceTest {
     private ModelLifecycleService service;
 
     @MockBean
+    private LegacyModelLifecycleCandidateAdapter candidateCompatibility;
+
+    @MockBean
     private WarehousePlanActorProvider actorProvider;
 
     @MockBean
@@ -79,6 +85,66 @@ class ModelLifecycleResourceTest {
         ).andExpect(status().isOk());
 
         verify(service).compile(eq("server-tenant"), eq("alice"), eq(MODEL_ID), any(), any(), eq("compile-7"));
+    }
+
+    @Test
+    void legacyPublishRouteDelegatesToCandidateCompatibilityOwner() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", "department"));
+        when(
+            candidateCompatibility.publish(
+                eq("server-tenant"),
+                eq("alice"),
+                eq(MODEL_ID),
+                any(),
+                any(),
+                any()
+            )
+        )
+            .thenReturn(mock(ReleaseView.class));
+
+        mockMvc
+            .perform(
+                post("/api/modeling/model-specs/{id}/lifecycle/publish", MODEL_ID)
+                    .header("If-Match", ETAG)
+                    .header("If-Match-Implementation", IMPLEMENTATION_ETAG)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"comment\":\"publish candidate\",\"idempotencyKey\":\"publish-7\"}")
+            )
+            .andExpect(status().isOk());
+
+        verify(candidateCompatibility).publish(
+            eq("server-tenant"),
+            eq("alice"),
+            eq(MODEL_ID),
+            any(),
+            any(),
+            any()
+        );
+        verify(service, never()).publish(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void legacyPublishPreservesCandidateConflictResponse() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", "department"));
+        when(candidateCompatibility.publish(eq("server-tenant"), eq("alice"), eq(MODEL_ID), any(), any(), any()))
+            .thenThrow(
+                new ModelReleaseCandidateException(
+                    "MODEL_RELEASE_CANDIDATE_SCOPE_STALE",
+                    "Candidate scope changed",
+                    ModelReleaseCandidateException.Kind.CONFLICT
+                )
+            );
+
+        mockMvc
+            .perform(
+                post("/api/modeling/model-specs/{id}/lifecycle/publish", MODEL_ID)
+                    .header("If-Match", ETAG)
+                    .header("If-Match-Implementation", IMPLEMENTATION_ETAG)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"comment\":\"publish candidate\",\"idempotencyKey\":\"publish-7\"}")
+            )
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code").value("MODEL_RELEASE_CANDIDATE_SCOPE_STALE"));
     }
 
     @Test

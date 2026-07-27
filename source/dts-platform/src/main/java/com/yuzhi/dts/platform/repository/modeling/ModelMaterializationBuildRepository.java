@@ -275,10 +275,28 @@ public class ModelMaterializationBuildRepository
     @Override
     @Transactional
     public List<DriftReasonView> detect(CandidateView candidate) {
+        return detect(candidate, true);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<DriftReasonView> detectForRead(CandidateView candidate) {
+        return detect(candidate, false);
+    }
+
+    private List<DriftReasonView> detect(
+        CandidateView candidate,
+        boolean lockRows
+    ) {
         if (
             candidate == null ||
-            candidate.status() !=
-            com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus.BUILD_FAILED
+            candidate.status() ==
+            com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus.DRAFT ||
+            (
+                candidate.status() ==
+                    com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus.BUILDING &&
+                candidate.executionTargetKey() == null
+            )
         ) {
             return List.of();
         }
@@ -291,7 +309,9 @@ public class ModelMaterializationBuildRepository
                 "The current execution target is unavailable or changed"
             );
         }
-        List<RetryDriftRow> rows = lockCurrentRetryEntries(candidate);
+        List<RetryDriftRow> rows = lockRows
+            ? lockCurrentRetryEntries(candidate)
+            : readCurrentSnapshotEntries(candidate);
         Map<UUID, RetryDriftRow> rowsByModel = new LinkedHashMap<>();
         rows.forEach(row -> rowsByModel.put(row.current().modelSpecId(), row));
         Map<UUID, BuildEntryRow> currentModels = new LinkedHashMap<>();
@@ -365,7 +385,20 @@ public class ModelMaterializationBuildRepository
     private List<RetryDriftRow> lockCurrentRetryEntries(
         CandidateView candidate
     ) {
-        return jdbcTemplate.query(
+        return currentSnapshotEntries(candidate, true);
+    }
+
+    private List<RetryDriftRow> readCurrentSnapshotEntries(
+        CandidateView candidate
+    ) {
+        return currentSnapshotEntries(candidate, false);
+    }
+
+    private List<RetryDriftRow> currentSnapshotEntries(
+        CandidateView candidate,
+        boolean lockRows
+    ) {
+        String query =
             """
             select e.id as entry_id, e.model_spec_id,
                    e.revision as model_revision,
@@ -398,11 +431,13 @@ public class ModelMaterializationBuildRepository
                and i.ownership = e.implementation_mode
                and i.status = 'ACTIVE'
              where c.tenant_id = ? and c.id = ? and c.version = ?
-               and c.status = 'BUILD_FAILED'
-               and e.status = 'BUILD_FAILED'
+               and c.status = ?
+               and e.status = ?
              order by e.sort_order, e.id
-             for update of c, e, i
-            """,
+            """ +
+            (lockRows ? " for update of c, e, i" : "");
+        return jdbcTemplate.query(
+            query,
             (row, rowNumber) -> {
                 BuildEntryRow current = new BuildEntryRow(
                     row.getObject("entry_id", UUID.class),
@@ -446,7 +481,9 @@ public class ModelMaterializationBuildRepository
             },
             candidate.tenantId(),
             candidate.id(),
-            candidate.version()
+            candidate.version(),
+            candidate.status().name(),
+            candidate.status().name()
         );
     }
 

@@ -89,14 +89,18 @@
 - Python factory 4/4 通过：固定 root/opaque lease、参数数组
   `subprocess.run(check=True)`、DagRun conf override/path traversal 拒绝，且 factory
   只有一个 Docker runtime owner。
+- 真实 Airflow 故障注入已通过：Airflow 接受 trigger 后客户端 timeout；同一
+  runId 重放返回 409，Airflow 中始终只有一个 DagRun；dts-platform 单服务
+  重建后 run 与 durable conf 仍完整且唯一。无效 runtime token 使 prepare/finalize
+  failed，dbt_build/sync_probe upstream_failed，不产生 profile lease 或目标表。
+- 同轮修复 thin DAG 被 Airflow discovery safe mode 静默跳过的问题；renderer
+  增加无执行语义的 discovery marker，真实 Airflow 精确解析一个受管 DAG。
+  证据见 `../../it/evidence/f2-airflow-exactly-once/README.md`。
 
 ## 剩余门槛
 
-1. 当前证据证明本地 exactly-once effect 协议，但尚未在真实 Airflow 上执行
-   “接收后 HTTP timeout / duplicate 409 / platform restart”故障注入，因此 Task
-   保持 IN_PROGRESS，不能据此解除 PROD NO-GO。
-2. 高级 SQL 旧 route 仍是 legacy 兼容入口；普通与高级页面统一委托
+1. 高级 SQL 旧 route 仍是 legacy 兼容入口；普通与高级页面统一委托
    Candidate Build Intent、计划 DAG 复用同一 factory 分别由 F5/T01 与 F7/T02
    完成，不能在本 Task 直接把旧任意 selector/conf 接到 canonical runtime。
-3. service token、profile lease、真实 sync/probe/finalize 失败传播与 secret scan
+2. service token、profile lease、真实 sync/probe/finalize 失败传播与 secret scan
    仍等待 T04/F6 的集成证据。

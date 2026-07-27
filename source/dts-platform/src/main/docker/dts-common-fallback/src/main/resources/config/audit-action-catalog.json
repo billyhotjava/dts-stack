@@ -1034,6 +1034,30 @@
                 "SUCCESS"
               ],
               "supportsFlow": false
+            },
+            {
+              "code": "MODEL_RELEASE_CANDIDATE_PUBLISH",
+              "display": "发布模型候选版本",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "MODEL_RELEASE_CANDIDATE_REGISTRATION_RETRY",
+              "display": "重试模型候选版本登记",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "MODEL_RELEASE_CANDIDATE_ROLLBACK",
+              "display": "回滚模型候选版本",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
             }
           ]
         },

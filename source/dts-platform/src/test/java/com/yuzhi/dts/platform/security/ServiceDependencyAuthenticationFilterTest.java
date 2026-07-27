@@ -53,6 +53,12 @@ class ServiceDependencyAuthenticationFilterTest {
         "/api/internal/modeling/materialization/runtime-specs/consume";
     private static final String AIRFLOW_RUN_GROUP =
         "/api/internal/modeling/materialization/run-groups/10000000-0000-0000-0000-000000000001";
+    private static final String AIRFLOW_PLAN_BINDING =
+        "/api/internal/modeling/execution-bindings/10000000-0000-0000-0000-000000000001";
+    private static final String AIRFLOW_PLAN_RUNTIME_SPEC =
+        "/api/internal/modeling/execution-bindings/runtime-specs/consume";
+    private static final String AIRFLOW_PLAN_RUN_GROUP =
+        "/api/internal/modeling/execution-bindings/run-groups/10000000-0000-0000-0000-000000000001";
 
     private PlatformInboundServiceAuthProperties props;
     private SvcTokenAuthService svcTokenAuthService;
@@ -223,6 +229,10 @@ class ServiceDependencyAuthenticationFilterTest {
         assertAirflowCanAccess("DELETE", AIRFLOW_PROFILE_LEASE);
         assertAirflowCanAccess("POST", AIRFLOW_RUN_GROUP + "/sync-probe");
         assertAirflowCanAccess("POST", AIRFLOW_RUN_GROUP + "/finalize");
+        assertAirflowCanAccess("POST", AIRFLOW_PLAN_BINDING + "/scheduled-runs/open");
+        assertAirflowCanAccess("POST", AIRFLOW_PLAN_RUNTIME_SPEC);
+        assertAirflowCanAccess("POST", AIRFLOW_PLAN_RUN_GROUP + "/sync-probe");
+        assertAirflowCanAccess("POST", AIRFLOW_PLAN_RUN_GROUP + "/finalize");
 
         SecurityContextHolder.clearContext();
         ServiceDependencyAuthenticationFilter filter =
@@ -239,6 +249,27 @@ class ServiceDependencyAuthenticationFilterTest {
         filter.doFilter(req, new MockHttpServletResponse(), chain);
 
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+
+        SecurityContextHolder.clearContext();
+        MockHttpServletRequest adjacent =
+            new MockHttpServletRequest();
+        adjacent.addHeader(SERVICE_HEADER, "dts-airflow");
+        adjacent.addHeader(TOKEN_HEADER, "airflow-secret");
+        adjacent.setMethod("POST");
+        adjacent.setRequestURI(
+            AIRFLOW_PLAN_BINDING + "/scheduled-runs/delete"
+        );
+
+        filter.doFilter(
+            adjacent,
+            new MockHttpServletResponse(),
+            chain
+        );
+
+        assertThat(
+            SecurityContextHolder.getContext().getAuthentication()
+        )
+            .isNull();
     }
 
     @Test

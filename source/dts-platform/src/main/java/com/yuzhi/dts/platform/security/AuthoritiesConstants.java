@@ -17,6 +17,16 @@ public final class AuthoritiesConstants {
     // Authenticated service-to-service caller. Endpoint-level policies decide what each service may do.
     public static final String SERVICE_INTERNAL = "ROLE_SERVICE_INTERNAL";
 
+    // Modeling release duties. These are deliberately not implied by catalog or platform administrator roles.
+    public static final String MODEL_MAINTAINER = "ROLE_MODEL_MAINTAINER";
+    public static final String MODEL_RELEASE_REVIEWER = "ROLE_MODEL_RELEASE_REVIEWER";
+    public static final String MODEL_RELEASE_OPERATOR = "ROLE_MODEL_RELEASE_OPERATOR";
+    public static final String[] MODEL_RELEASE_DUTIES = new String[] {
+        MODEL_MAINTAINER,
+        MODEL_RELEASE_REVIEWER,
+        MODEL_RELEASE_OPERATOR
+    };
+
     public static final String USER = "ROLE_USER";
 
     public static final String ANONYMOUS = "ROLE_ANONYMOUS";

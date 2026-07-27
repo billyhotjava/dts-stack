@@ -35,8 +35,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/modeling/plans/{planId}/release-candidates")
 public class ModelReleaseCandidateResource {
 
-    private static final String MODELING_MAINTAINER_EXPRESSION =
-        "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).CATALOG_MAINTAINERS)";
+    private static final String RELEASE_DUTY_EXPRESSION =
+        "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).MODEL_RELEASE_DUTIES)";
     private static final Pattern STRONG_ETAG = Pattern.compile(
         "^\\\"release-candidate:([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}):([1-9][0-9]*)\\\"$"
     );
@@ -56,7 +56,7 @@ public class ModelReleaseCandidateResource {
     }
 
     @GetMapping("/workspace")
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    @PreAuthorize(RELEASE_DUTY_EXPRESSION)
     public ResponseEntity<ApiResponse<WorkbenchView>> workspace(@PathVariable UUID planId) {
         WorkbenchView view = service.workspace(serverTenantId, actorId(), planId);
         ResponseEntity.BodyBuilder response = ResponseEntity.ok();
@@ -65,7 +65,7 @@ public class ModelReleaseCandidateResource {
     }
 
     @GetMapping("/{candidateId}")
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    @PreAuthorize(RELEASE_DUTY_EXPRESSION)
     public ResponseEntity<ApiResponse<CandidateView>> get(
         @PathVariable UUID planId,
         @PathVariable UUID candidateId
@@ -78,7 +78,7 @@ public class ModelReleaseCandidateResource {
     }
 
     @PostMapping
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    @PreAuthorize(RELEASE_DUTY_EXPRESSION)
     public ResponseEntity<ApiResponse<CommandResult>> create(
         @PathVariable UUID planId,
         @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
@@ -101,7 +101,7 @@ public class ModelReleaseCandidateResource {
     }
 
     @PutMapping("/{candidateId}/scope")
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    @PreAuthorize(RELEASE_DUTY_EXPRESSION)
     public ResponseEntity<ApiResponse<CommandResult>> replaceScope(
         @PathVariable UUID planId,
         @PathVariable UUID candidateId,
@@ -124,7 +124,7 @@ public class ModelReleaseCandidateResource {
     }
 
     @PostMapping("/{candidateId}/lock")
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    @PreAuthorize(RELEASE_DUTY_EXPRESSION)
     public ResponseEntity<ApiResponse<CommandResult>> lock(
         @PathVariable UUID planId,
         @PathVariable UUID candidateId,
@@ -149,7 +149,7 @@ public class ModelReleaseCandidateResource {
     }
 
     @PostMapping("/{candidateId}/retry")
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    @PreAuthorize(RELEASE_DUTY_EXPRESSION)
     public ResponseEntity<ApiResponse<CommandResult>> retry(
         @PathVariable UUID planId,
         @PathVariable UUID candidateId,
@@ -174,7 +174,7 @@ public class ModelReleaseCandidateResource {
     }
 
     @PostMapping("/{candidateId}/refresh")
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    @PreAuthorize(RELEASE_DUTY_EXPRESSION)
     public ResponseEntity<ApiResponse<CommandResult>> refreshDrift(
         @PathVariable UUID planId,
         @PathVariable UUID candidateId,
@@ -199,7 +199,7 @@ public class ModelReleaseCandidateResource {
     }
 
     @PostMapping("/{candidateId}/cancel")
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    @PreAuthorize(RELEASE_DUTY_EXPRESSION)
     public ResponseEntity<ApiResponse<CommandResult>> cancel(
         @PathVariable UUID planId,
         @PathVariable UUID candidateId,
@@ -224,7 +224,7 @@ public class ModelReleaseCandidateResource {
     }
 
     @PostMapping("/{candidateId}/replacement")
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    @PreAuthorize(RELEASE_DUTY_EXPRESSION)
     public ResponseEntity<ApiResponse<CommandResult>> createReplacement(
         @PathVariable UUID planId,
         @PathVariable UUID candidateId,
@@ -248,6 +248,160 @@ public class ModelReleaseCandidateResource {
             .location(candidateLocation(planId, result.candidate().id()))
             .eTag(ModelReleaseCandidateApplicationService.etag(result.candidate()))
             .body(ApiResponses.ok(result));
+    }
+
+    @PostMapping("/{candidateId}/quality")
+    @PreAuthorize(RELEASE_DUTY_EXPRESSION)
+    public ResponseEntity<ApiResponse<CommandResult>> runQuality(
+        @PathVariable UUID planId,
+        @PathVariable UUID candidateId,
+        @RequestHeader(value = "If-Match", required = false) String ifMatch,
+        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+        @RequestBody(required = false) ReasonRequest request
+    ) {
+        return write(
+            service.runQuality(
+                serverTenantId,
+                actorId(),
+                planId,
+                candidateId,
+                expectedVersion(candidateId, ifMatch),
+                requiredIdempotencyKey(idempotencyKey),
+                requiredRequest(request, "quality request").reason()
+            )
+        );
+    }
+
+    @PostMapping("/{candidateId}/reviews")
+    @PreAuthorize(RELEASE_DUTY_EXPRESSION)
+    public ResponseEntity<ApiResponse<CommandResult>> submitReview(
+        @PathVariable UUID planId,
+        @PathVariable UUID candidateId,
+        @RequestHeader(value = "If-Match", required = false) String ifMatch,
+        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+        @RequestBody(required = false) ReasonRequest request
+    ) {
+        return write(
+            service.submitReview(
+                serverTenantId,
+                actorId(),
+                planId,
+                candidateId,
+                expectedVersion(candidateId, ifMatch),
+                requiredIdempotencyKey(idempotencyKey),
+                requiredRequest(request, "review request").reason()
+            )
+        );
+    }
+
+    @PostMapping("/{candidateId}/reviews/approve")
+    @PreAuthorize(RELEASE_DUTY_EXPRESSION)
+    public ResponseEntity<ApiResponse<CommandResult>> approve(
+        @PathVariable UUID planId,
+        @PathVariable UUID candidateId,
+        @RequestHeader(value = "If-Match", required = false) String ifMatch,
+        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+        @RequestBody(required = false) ReasonRequest request
+    ) {
+        return write(
+            service.approve(
+                serverTenantId,
+                actorId(),
+                planId,
+                candidateId,
+                expectedVersion(candidateId, ifMatch),
+                requiredIdempotencyKey(idempotencyKey),
+                requiredRequest(request, "approval request").reason()
+            )
+        );
+    }
+
+    @PostMapping("/{candidateId}/reviews/reject")
+    @PreAuthorize(RELEASE_DUTY_EXPRESSION)
+    public ResponseEntity<ApiResponse<CommandResult>> reject(
+        @PathVariable UUID planId,
+        @PathVariable UUID candidateId,
+        @RequestHeader(value = "If-Match", required = false) String ifMatch,
+        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+        @RequestBody(required = false) ReasonRequest request
+    ) {
+        return write(
+            service.reject(
+                serverTenantId,
+                actorId(),
+                planId,
+                candidateId,
+                expectedVersion(candidateId, ifMatch),
+                requiredIdempotencyKey(idempotencyKey),
+                requiredRequest(request, "rejection request").reason()
+            )
+        );
+    }
+
+    @PostMapping("/{candidateId}/publish")
+    @PreAuthorize(RELEASE_DUTY_EXPRESSION)
+    public ResponseEntity<ApiResponse<CommandResult>> publish(
+        @PathVariable UUID planId,
+        @PathVariable UUID candidateId,
+        @RequestHeader(value = "If-Match", required = false) String ifMatch,
+        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+        @RequestBody(required = false) ReasonRequest request
+    ) {
+        return write(
+            service.publish(
+                serverTenantId,
+                actorId(),
+                planId,
+                candidateId,
+                expectedVersion(candidateId, ifMatch),
+                requiredIdempotencyKey(idempotencyKey),
+                requiredRequest(request, "publish request").reason()
+            )
+        );
+    }
+
+    @PostMapping("/{candidateId}/registration/retry")
+    @PreAuthorize(RELEASE_DUTY_EXPRESSION)
+    public ResponseEntity<ApiResponse<CommandResult>> retryRegistration(
+        @PathVariable UUID planId,
+        @PathVariable UUID candidateId,
+        @RequestHeader(value = "If-Match", required = false) String ifMatch,
+        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+        @RequestBody(required = false) ReasonRequest request
+    ) {
+        return write(
+            service.retryRegistration(
+                serverTenantId,
+                actorId(),
+                planId,
+                candidateId,
+                expectedVersion(candidateId, ifMatch),
+                requiredIdempotencyKey(idempotencyKey),
+                requiredRequest(request, "registration retry request").reason()
+            )
+        );
+    }
+
+    @PostMapping("/{candidateId}/rollback")
+    @PreAuthorize(RELEASE_DUTY_EXPRESSION)
+    public ResponseEntity<ApiResponse<CommandResult>> rollback(
+        @PathVariable UUID planId,
+        @PathVariable UUID candidateId,
+        @RequestHeader(value = "If-Match", required = false) String ifMatch,
+        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+        @RequestBody(required = false) ReasonRequest request
+    ) {
+        return write(
+            service.rollback(
+                serverTenantId,
+                actorId(),
+                planId,
+                candidateId,
+                expectedVersion(candidateId, ifMatch),
+                requiredIdempotencyKey(idempotencyKey),
+                requiredRequest(request, "rollback request").reason()
+            )
+        );
     }
 
     @ExceptionHandler(ModelReleaseCandidateException.class)

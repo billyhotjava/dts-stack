@@ -175,6 +175,7 @@ class ModelLifecycleContractTest {
             null
         );
         assertThat(DeliveryAction.PUBLISH.isAllowedFor(DeliveryStatus.APPROVED, DeliveryActorRole.RELEASE_OPERATOR, "publisher", approved)).isTrue();
+        assertThat(DeliveryAction.PUBLISH.isAllowedFor(DeliveryStatus.APPROVED, DeliveryActorRole.RELEASE_OPERATOR, "reviewer", approved)).isFalse();
 
         DeliveryAuditView unsubmitted = new DeliveryAuditView(
             "creator",

@@ -255,6 +255,7 @@ public class ModelBuildIntentService {
         return (
             candidate.status() != DeliveryStatus.REJECTED &&
             candidate.status() != DeliveryStatus.ROLLED_BACK &&
+            candidate.status() != DeliveryStatus.CANCELLED &&
             candidate.status() != DeliveryStatus.STALE
         );
     }

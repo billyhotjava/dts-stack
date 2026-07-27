@@ -416,6 +416,46 @@ public class ModelReleaseCandidateService {
         UUID candidateId,
         TransitionCommand command
     ) {
+        return transition(
+            tenantId,
+            actorId,
+            candidateId,
+            command,
+            CommandEventType.STATUS_CHANGED
+        );
+    }
+
+    @Transactional
+    public CommandResult publicationRequested(
+        String tenantId,
+        String actorId,
+        UUID candidateId,
+        TransitionCommand command
+    ) {
+        if (
+            command == null ||
+            command.targetStatus() != DeliveryStatus.QUALITY_RUNNING
+        ) {
+            throw invalid(
+                "publication request must start the canonical quality transition"
+            );
+        }
+        return transition(
+            tenantId,
+            actorId,
+            candidateId,
+            command,
+            CommandEventType.PUBLICATION_REQUESTED
+        );
+    }
+
+    private CommandResult transition(
+        String tenantId,
+        String actorId,
+        UUID candidateId,
+        TransitionCommand command,
+        CommandEventType requestedEventType
+    ) {
         String tenant = requiredText(tenantId, "tenantId");
         String actor = requiredText(actorId, "actorId");
         if (candidateId == null) throw notFound(null);
@@ -451,13 +491,15 @@ public class ModelReleaseCandidateService {
             : scopeDriftEntries(tenant, current.planId(), current.entries(), true);
         if (
             driftReasons.isEmpty() &&
-            current.status() == DeliveryStatus.BUILD_FAILED &&
-            command.targetStatus() == DeliveryStatus.BUILDING
+            requiresMaterializationSnapshotValidation(
+                current,
+                command.targetStatus()
+            )
         ) {
-            List<DriftReasonView> retryDrift = retryDriftGate.detect(current);
-            driftReasons = retryDrift == null
+            List<DriftReasonView> snapshotDrift = retryDriftGate.detect(current);
+            driftReasons = snapshotDrift == null
                 ? List.of()
-                : List.copyOf(retryDrift);
+                : List.copyOf(snapshotDrift);
         }
         if (command.targetStatus() == DeliveryStatus.STALE && driftReasons.isEmpty()) {
             throw new ModelReleaseCandidateException(
@@ -518,7 +560,9 @@ public class ModelReleaseCandidateService {
         CommandEventView event = event(
             tenant,
             transitioned,
-            driftReasons.isEmpty() ? CommandEventType.STATUS_CHANGED : CommandEventType.STALE_DETECTED,
+            driftReasons.isEmpty()
+                ? requestedEventType
+                : CommandEventType.STALE_DETECTED,
             current.status(),
             actor,
             now,
@@ -595,7 +639,53 @@ public class ModelReleaseCandidateService {
         if (candidate == null || !tenant.equals(candidate.tenantId())) {
             throw invalid("candidate must belong to tenant");
         }
-        return scopeDriftEntries(tenant, candidate.planId(), candidate.entries(), false);
+        List<DriftReasonView> scopeDrift = scopeDriftEntries(
+            tenant,
+            candidate.planId(),
+            candidate.entries(),
+            false
+        );
+        if (
+            !scopeDrift.isEmpty() ||
+            !requiresMaterializationSnapshotValidation(candidate, null)
+        ) {
+            return scopeDrift;
+        }
+        List<DriftReasonView> snapshotDrift = retryDriftGate.detectForRead(
+            candidate
+        );
+        return snapshotDrift == null
+            ? List.of()
+            : List.copyOf(snapshotDrift);
+    }
+
+    private static boolean requiresMaterializationSnapshotValidation(
+        CandidateView candidate,
+        DeliveryStatus target
+    ) {
+        if (
+            candidate == null ||
+            target == DeliveryStatus.CANCELLED ||
+            target == DeliveryStatus.ROLLED_BACK
+        ) {
+            return false;
+        }
+        if (candidate.executionTargetKey() != null) {
+            return true;
+        }
+        return switch (candidate.status()) {
+            case BUILD_FAILED,
+                BUILT,
+                QUALITY_RUNNING,
+                QUALITY_FAILED,
+                QUALITY_PASSED,
+                REVIEW_PENDING,
+                APPROVED,
+                PUBLISHING,
+                PARTIAL,
+                PUBLISHED -> true;
+            default -> false;
+        };
     }
 
     private CommandResult convergeAfterCas(
@@ -926,6 +1016,19 @@ public class ModelReleaseCandidateService {
                 "MODEL_RELEASE_CANDIDATE_APPROVAL_REQUIRED",
                 "Candidate must be approved before publishing",
                 Kind.UNPROCESSABLE
+            );
+        }
+        if (
+            (target == DeliveryStatus.PUBLISHING ||
+                target == DeliveryStatus.PARTIAL ||
+                target == DeliveryStatus.PUBLISHED) &&
+            approvedBy != null &&
+            approvedBy.equals(actorId)
+        ) {
+            throw new ModelReleaseCandidateException(
+                "MODEL_RELEASE_CANDIDATE_ACTOR_SEPARATION_REQUIRED",
+                "Reviewer cannot publish the same candidate",
+                Kind.FORBIDDEN
             );
         }
         if (target == DeliveryStatus.REVIEW_PENDING && submittedAt == null) {

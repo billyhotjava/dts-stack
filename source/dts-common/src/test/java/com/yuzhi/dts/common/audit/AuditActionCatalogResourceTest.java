@@ -19,6 +19,9 @@ class AuditActionCatalogResourceTest {
             .contains("\"code\": \"MODELING_WAREHOUSE_CATEGORY_SCOPE_SAVE\"")
             .contains("\"code\": \"MODELING_WAREHOUSE_POLICY_SAVE\"")
             .contains("\"code\": \"MODELING_WAREHOUSE_SOURCE_INVENTORY_SAVE\"")
+            .contains("\"code\": \"MODEL_RELEASE_CANDIDATE_PUBLISH\"")
+            .contains("\"code\": \"MODEL_RELEASE_CANDIDATE_REGISTRATION_RETRY\"")
+            .contains("\"code\": \"MODEL_RELEASE_CANDIDATE_ROLLBACK\"")
             .contains("\"key\": \"modeling.plan\"");
     }
 }

@@ -154,6 +154,7 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
         if ("dts-airflow".equals(service)) {
             return isAirflowProfileLease(method, path)
                 || isAirflowMaterializationRunGroup(method, path)
+                || isAirflowPlanExecution(method, path)
                 || isPost(
                     method,
                     path,
@@ -186,6 +187,61 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
         }
         try {
             java.util.UUID.fromString(leaseId);
+            return true;
+        } catch (IllegalArgumentException ignored) {
+            return false;
+        }
+    }
+
+    private boolean isAirflowPlanExecution(
+        String method,
+        String path
+    ) {
+        if (!HttpMethod.POST.matches(method) || path == null) {
+            return false;
+        }
+        if (
+            path.equals(
+                "/api/internal/modeling/execution-bindings/runtime-specs/consume"
+            )
+        ) {
+            return true;
+        }
+        String prefix =
+            "/api/internal/modeling/execution-bindings/";
+        if (!path.startsWith(prefix)) return false;
+        String remainder = path.substring(prefix.length());
+        String id;
+        if (remainder.startsWith("run-groups/")) {
+            String runRemainder = remainder.substring(
+                "run-groups/".length()
+            );
+            int runSeparator = runRemainder.indexOf('/');
+            if (
+                runSeparator < 1 ||
+                runSeparator != runRemainder.lastIndexOf('/')
+            ) {
+                return false;
+            }
+            id = runRemainder.substring(0, runSeparator);
+            String action = runRemainder.substring(runSeparator + 1);
+            if (
+                !"sync-probe".equals(action) &&
+                !"finalize".equals(action)
+            ) {
+                return false;
+            }
+        } else {
+            String suffix = "/scheduled-runs/open";
+            if (!remainder.endsWith(suffix)) return false;
+            id = remainder.substring(
+                0,
+                remainder.length() - suffix.length()
+            );
+            if (id.isEmpty() || id.contains("/")) return false;
+        }
+        try {
+            java.util.UUID.fromString(id);
             return true;
         } catch (IllegalArgumentException ignored) {
             return false;

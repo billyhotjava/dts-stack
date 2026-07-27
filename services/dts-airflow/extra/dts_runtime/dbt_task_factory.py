@@ -36,6 +36,17 @@ _RELEASE_BUILD_CONF_KEYS = frozenset(
         "bundleChecksum",
     }
 )
+_OPERATIONAL_RUN_CONF_KEYS = frozenset(
+    {
+        "pipelineRunGroupId",
+        "bindingId",
+        "bindingVersion",
+        "runPurpose",
+        "triggerType",
+        "runtimeSpecToken",
+        "bundleChecksum",
+    }
+)
 _RUNTIME_SPEC_KEYS = frozenset(
     {
         "pipelineRunGroupId",
@@ -115,6 +126,43 @@ def _validate_release_build_conf(conf: Any) -> dict[str, Any]:
     if _required_text(conf["runPurpose"], "runPurpose") != "RELEASE_BUILD":
         raise ValueError("runPurpose is not supported by the executor DAG")
     normalized["runPurpose"] = "RELEASE_BUILD"
+    normalized["runtimeSpecToken"] = _required_text(
+        conf["runtimeSpecToken"], "runtimeSpecToken"
+    )
+    normalized["bundleChecksum"] = _checksum(
+        conf["bundleChecksum"], "bundleChecksum"
+    )
+    return normalized
+
+
+def _validate_operational_run_conf(conf: Any) -> dict[str, Any]:
+    if not isinstance(conf, dict):
+        raise ValueError("DagRun conf must be an object")
+    unsupported = sorted(set(conf) - _OPERATIONAL_RUN_CONF_KEYS)
+    if unsupported:
+        raise ValueError(
+            "DagRun conf contains unsupported keys: " + ", ".join(unsupported)
+        )
+    missing = sorted(key for key in _OPERATIONAL_RUN_CONF_KEYS if key not in conf)
+    if missing:
+        raise ValueError(
+            "DagRun conf is missing required keys: " + ", ".join(missing)
+        )
+    normalized = dict(conf)
+    normalized["pipelineRunGroupId"] = _uuid_text(
+        conf["pipelineRunGroupId"], "pipelineRunGroupId"
+    )
+    normalized["bindingId"] = _uuid_text(conf["bindingId"], "bindingId")
+    normalized["bindingVersion"] = int(conf["bindingVersion"])
+    if normalized["bindingVersion"] < 1:
+        raise ValueError("bindingVersion must be positive")
+    if _required_text(conf["runPurpose"], "runPurpose") != "OPERATIONAL_RUN":
+        raise ValueError("runPurpose is not supported by the plan DAG")
+    normalized["runPurpose"] = "OPERATIONAL_RUN"
+    trigger_type = _required_text(conf["triggerType"], "triggerType").upper()
+    if trigger_type not in {"MANUAL", "CRON"}:
+        raise ValueError("triggerType is invalid")
+    normalized["triggerType"] = trigger_type
     normalized["runtimeSpecToken"] = _required_text(
         conf["runtimeSpecToken"], "runtimeSpecToken"
     )
@@ -260,14 +308,60 @@ def _platform_request(
     return decoded
 
 
-def _prepare_runtime_task(**context: Any) -> dict[str, str]:
-    dag_run = context.get("dag_run")
-    conf = _validate_release_build_conf(
-        getattr(dag_run, "conf", None)
+def _scheduled_operational_conf(binding_id: str, dag_run: Any) -> dict[str, Any]:
+    run_type = str(getattr(dag_run, "run_type", "")).lower()
+    if not run_type.endswith("scheduled"):
+        raise ValueError("Manual OPERATIONAL_RUN requires durable DagRun conf")
+    logical_date = getattr(dag_run, "logical_date", None)
+    logical_date_text = (
+        logical_date.isoformat()
+        if hasattr(logical_date, "isoformat")
+        else _required_text(logical_date, "logical date")
     )
+    opened = _platform_request(
+        f"/api/internal/modeling/execution-bindings/{binding_id}"
+        "/scheduled-runs/open",
+        payload={
+            "dagRunId": _required_text(
+                getattr(dag_run, "dag_run_id", None), "DagRun id"
+            ),
+            "logicalDate": logical_date_text,
+        },
+    )
+    return _validate_operational_run_conf(opened)
+
+
+def _prepare_runtime_task(
+    *,
+    purpose: str,
+    binding_id: str | None,
+    **context: Any,
+) -> dict[str, str]:
+    dag_run = context.get("dag_run")
+    if purpose == "RELEASE_BUILD":
+        if binding_id is not None:
+            raise ValueError("RELEASE_BUILD must not declare a binding")
+        conf = _validate_release_build_conf(getattr(dag_run, "conf", None))
+    elif purpose == "OPERATIONAL_RUN":
+        binding = _uuid_text(binding_id, "binding id")
+        supplied = getattr(dag_run, "conf", None)
+        conf = (
+            _validate_operational_run_conf(supplied)
+            if supplied
+            else _scheduled_operational_conf(binding, dag_run)
+        )
+        if conf["bindingId"] != binding:
+            raise RuntimeError("DagRun binding does not match the plan DAG")
+    else:
+        raise ValueError("purpose is invalid")
     runtime = _validate_runtime_spec(
         _platform_request(
-            "/api/internal/modeling/materialization/runtime-specs/consume",
+            (
+                "/api/internal/modeling/materialization/runtime-specs/consume"
+                if purpose == "RELEASE_BUILD"
+                else
+                "/api/internal/modeling/execution-bindings/runtime-specs/consume"
+            ),
             runtime_spec_token=conf["runtimeSpecToken"],
         )
     )
@@ -320,8 +414,13 @@ def _dbt_build_task(**context: Any) -> None:
 def _sync_manifest_and_probe_task(**context: Any) -> None:
     runtime = _runtime_from_xcom(context["ti"])
     group_id = runtime["pipelineRunGroupId"]
+    owner = (
+        "materialization"
+        if runtime["runPurpose"] == "RELEASE_BUILD"
+        else "execution-bindings"
+    )
     _platform_request(
-        "/api/internal/modeling/materialization/run-groups/"
+        f"/api/internal/modeling/{owner}/run-groups/"
         f"{group_id}/sync-probe",
         payload={
             "runPurpose": runtime["runPurpose"],
@@ -350,8 +449,13 @@ def _finalize_task(**context: Any) -> None:
             )
         )
         _platform_request(
-            "/api/internal/modeling/materialization/run-groups/"
-            f"{runtime['pipelineRunGroupId']}/finalize",
+            (
+                "/api/internal/modeling/materialization/run-groups/"
+                if runtime["runPurpose"] == "RELEASE_BUILD"
+                else
+                "/api/internal/modeling/execution-bindings/run-groups/"
+            )
+            + f"{runtime['pipelineRunGroupId']}/finalize",
             payload={"outcome": "SUCCEEDED" if succeeded else "FAILED"},
         )
     finally:
@@ -388,6 +492,10 @@ def build_dbt_dag(
         raise ValueError("purpose is invalid")
     if purpose == "RELEASE_BUILD" and schedule is not None:
         raise ValueError("RELEASE_BUILD executor must not have a schedule")
+    if purpose == "RELEASE_BUILD" and binding_id is not None:
+        raise ValueError("RELEASE_BUILD executor must not have a binding")
+    if purpose == "OPERATIONAL_RUN" and binding_id is None:
+        raise ValueError("OPERATIONAL_RUN executor requires a binding")
     _checksum(deployment_checksum, "deployment checksum")
     _required_text(template_version, "template version")
     if binding_id is not None:
@@ -410,6 +518,10 @@ def build_dbt_dag(
         prepare = PythonOperator(
             task_id=_PREPARE_TASK_ID,
             python_callable=_prepare_runtime_task,
+            op_kwargs={
+                "purpose": purpose,
+                "binding_id": binding_id,
+            },
         )
         build = PythonOperator(
             task_id=_BUILD_TASK_ID,

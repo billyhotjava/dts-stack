@@ -408,7 +408,8 @@ public class CatalogAssetTagPermissionReadAdapter {
             ) +
             """
             )
-            select id, source_id, hive_database, hive_table, name, owner_dept
+            select id, source_id, hive_database, hive_table, name, owner_dept,
+                   classification, enabled
               from (
                     select d.id,
                            d.source_id,
@@ -416,6 +417,8 @@ public class CatalogAssetTagPermissionReadAdapter {
                            d.hive_table,
                            d.name,
                            d.owner_dept,
+                           d.classification,
+                           d.enabled,
                            row_number() over (
                                partition by r.source_id, r.schema_name, r.table_name
                                order by d.id
@@ -566,6 +569,14 @@ public class CatalogAssetTagPermissionReadAdapter {
         dataset.setHiveTable(resultSet.getString("hive_table"));
         dataset.setName(resultSet.getString("name"));
         dataset.setOwnerDept(resultSet.getString("owner_dept"));
+        if (columnPresent(resultSet, "classification")) {
+            dataset.setClassification(resultSet.getString("classification"));
+        }
+        if (columnPresent(resultSet, "enabled")) {
+            dataset.setEnabled(
+                resultSet.getObject("enabled", Boolean.class)
+            );
+        }
         return dataset;
     }
 

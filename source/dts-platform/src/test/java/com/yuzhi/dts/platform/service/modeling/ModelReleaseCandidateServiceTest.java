@@ -468,6 +468,89 @@ class ModelReleaseCandidateServiceTest {
     }
 
     @Test
+    void postBuildTransitionBecomesStaleWhenMaterializationSnapshotDrifts() {
+        CandidateView current = materializedCandidate(
+            DeliveryStatus.BUILT,
+            7,
+            createdAudit()
+        );
+        DriftReasonView implementationDrift = new DriftReasonView(
+            MODEL_ID,
+            1,
+            CHECKSUM,
+            1,
+            CHECKSUM,
+            "MODEL_MATERIALIZATION_RETRY_SNAPSHOT_STALE",
+            "Current implementation snapshot changed after build"
+        );
+        when(repository.findCommandByIdempotencyKey(TENANT, "quality-drift-key"))
+            .thenReturn(Optional.empty());
+        when(repository.findByIdempotencyKey(TENANT, "quality-drift-key"))
+            .thenReturn(Optional.empty());
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(current));
+        when(repository.findCurrentModelReferences(TENANT, PLAN_ID, List.of(MODEL_ID)))
+            .thenReturn(Map.of(MODEL_ID, currentReference(1, CHECKSUM)));
+        when(retryDriftGate.detect(current))
+            .thenReturn(List.of(implementationDrift));
+        when(repository.transitionAndAppend(
+            any(),
+            anyInt(),
+            any(),
+            any(),
+            anyString(),
+            any(),
+            any()
+        ))
+            .thenReturn(1);
+
+        CommandResult result = service.transition(
+            TENANT,
+            ACTOR,
+            CANDIDATE_ID,
+            new TransitionCommand(
+                7,
+                DeliveryStatus.QUALITY_RUNNING,
+                "quality-drift-key",
+                "run quality"
+            )
+        );
+
+        assertThat(result.candidate().status()).isEqualTo(DeliveryStatus.STALE);
+        assertThat(result.driftReasons()).containsExactly(implementationDrift);
+        verify(retryDriftGate).detect(current);
+    }
+
+    @Test
+    void readProjectionIncludesMaterializationSnapshotDriftWithoutTakingWriteLocks() {
+        CandidateView current = materializedCandidate(
+            DeliveryStatus.QUALITY_PASSED,
+            9,
+            submittedAudit()
+        );
+        DriftReasonView implementationDrift = new DriftReasonView(
+            MODEL_ID,
+            1,
+            CHECKSUM,
+            1,
+            CHECKSUM,
+            "MODEL_MATERIALIZATION_RETRY_SNAPSHOT_STALE",
+            "Current dependency snapshot changed after build"
+        );
+        when(repository.findCurrentModelReferencesForRead(
+            TENANT,
+            PLAN_ID,
+            List.of(MODEL_ID)
+        ))
+            .thenReturn(Map.of(MODEL_ID, currentReference(1, CHECKSUM)));
+        when(retryDriftGate.detectForRead(current))
+            .thenReturn(List.of(implementationDrift));
+
+        assertThat(service.detectDrift(TENANT, current))
+            .containsExactly(implementationDrift);
+        verify(retryDriftGate).detectForRead(current);
+    }
+
+    @Test
     void rejectsAnIllegalTransitionWithoutWritingAnEvent() {
         CandidateView current = candidate(
             DeliveryStatus.DRAFT,
@@ -495,6 +578,48 @@ class ModelReleaseCandidateServiceTest {
                     .isEqualTo(ModelReleaseCandidateContract.INVALID_TRANSITION_ERROR_CODE)
             );
         verify(repository, never()).transitionAndAppend(any(), anyInt(), any(), any(), anyString(), any(), any());
+    }
+
+    @Test
+    void publicationRequestIsTheSingleAtomicLedgerEventForStartingQuality() {
+        CandidateView built = candidate(
+            DeliveryStatus.BUILT,
+            7,
+            createdAudit(),
+            List.of(entry(DeliveryStatus.BUILT, 1, CHECKSUM))
+        );
+        when(repository.findCommandByIdempotencyKey(TENANT, "publish-intent-key")).thenReturn(Optional.empty());
+        when(repository.findByIdempotencyKey(TENANT, "publish-intent-key")).thenReturn(Optional.empty());
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(built));
+        when(repository.findCurrentModelReferences(TENANT, PLAN_ID, List.of(MODEL_ID))).thenReturn(
+            Map.of(MODEL_ID, currentReference(1, CHECKSUM))
+        );
+        when(repository.transitionAndAppend(any(), anyInt(), any(), any(), anyString(), any(), any())).thenReturn(1);
+
+        var result = service.publicationRequested(
+            TENANT,
+            ACTOR,
+            CANDIDATE_ID,
+            new TransitionCommand(
+                7,
+                DeliveryStatus.QUALITY_RUNNING,
+                "publish-intent-key",
+                "submit current model for publication"
+            )
+        );
+
+        assertThat(result.candidate().status()).isEqualTo(DeliveryStatus.QUALITY_RUNNING);
+        ArgumentCaptor<CommandEventView> receipt = ArgumentCaptor.forClass(CommandEventView.class);
+        verify(repository).transitionAndAppend(
+            any(),
+            eq(7),
+            eq(DeliveryStatus.QUALITY_RUNNING),
+            any(),
+            eq(ACTOR),
+            eq(NOW),
+            receipt.capture()
+        );
+        assertThat(receipt.getValue().eventType()).isEqualTo(CommandEventType.PUBLICATION_REQUESTED);
     }
 
     @Test
@@ -936,6 +1061,32 @@ class ModelReleaseCandidateServiceTest {
             ACTOR,
             NOW,
             entries
+        );
+    }
+
+    private static CandidateView materializedCandidate(
+        DeliveryStatus status,
+        int version,
+        DeliveryAuditView audit
+    ) {
+        return new CandidateView(
+            CANDIDATE_ID,
+            TENANT,
+            PLAN_ID,
+            "prod",
+            status,
+            version,
+            "original-create-key",
+            "f".repeat(64),
+            audit,
+            ACTOR,
+            NOW,
+            List.of(entry(status, 1, CHECKSUM)),
+            CandidateOrigin.SINGLE_MODEL_INTENT,
+            "postgres:warehouse:prod",
+            "postgres",
+            "warehouse",
+            "prod"
         );
     }
 

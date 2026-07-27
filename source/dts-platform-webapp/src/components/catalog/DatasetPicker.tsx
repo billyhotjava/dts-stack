@@ -24,6 +24,7 @@ type Props = {
 
 const PAGE_SIZE = 50;
 const LOAD_MORE_THRESHOLD = 24;
+const UNASSIGNED_DOMAIN_VALUE = "__unassigned__";
 
 const LAYER_COLOR: Record<string, string> = {
 	ODS: "default",
@@ -94,7 +95,11 @@ export function DatasetPicker({
 			try {
 				const params: any = { page: nextPage, size: PAGE_SIZE, enabledOnly: true };
 				if (kw) params.keyword = kw;
-				if (dId) params.domainId = dId;
+				if (dId === UNASSIGNED_DOMAIN_VALUE) {
+					params.domainUnassigned = true;
+				} else if (dId) {
+					params.domainId = dId;
+				}
 				if (sourceId) params.sourceId = sourceId;
 				const resp: any = await listDatasets(params);
 				if (requestVersion !== requestVersionRef.current) return;
@@ -192,11 +197,14 @@ export function DatasetPicker({
 		<div style={{ width: "100%", ...style }}>
 			<Space style={{ width: "100%" }} wrap>
 				<Select
-					placeholder="筛选主题域"
+					placeholder="筛选业务域"
 					allowClear
 					style={{ width: 160 }}
 					disabled={disabled}
-					options={domains.map((d) => ({ label: d.name, value: d.id }))}
+					options={[
+						{ label: "未归属业务域", value: UNASSIGNED_DOMAIN_VALUE },
+						...domains.map((d) => ({ label: d.name, value: d.id })),
+					]}
 					onChange={(v) => setSelectedDomainId(v || undefined)}
 				/>
 				<Select

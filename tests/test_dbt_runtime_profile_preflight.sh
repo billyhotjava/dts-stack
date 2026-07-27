@@ -76,6 +76,7 @@ fi
 
 python3 - <<'PY' "${REPO_ROOT}"
 import pathlib
+import subprocess
 import sys
 import yaml
 
@@ -171,4 +172,35 @@ for filename in compose_files:
 
 if errors:
     raise SystemExit("\n".join(errors))
+
+tracked_profile = subprocess.run(
+    [
+        "git",
+        "-C",
+        str(repo),
+        "ls-files",
+        "--error-unmatch",
+        "services/dts-dbt/profiles/profiles.yml",
+    ],
+    check=False,
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL,
+)
+if (
+    tracked_profile.returncode == 0
+    and (repo / "services/dts-dbt/profiles/profiles.yml").exists()
+):
+    raise SystemExit(
+        "services/dts-dbt/profiles/profiles.yml must remain untracked"
+    )
+
+dockerignore = (repo / ".dockerignore").read_text(encoding="utf-8").splitlines()
+if "services/dts-dbt/profiles/profiles.yml" not in dockerignore:
+    raise SystemExit("local profiles.yml must be excluded from Docker contexts")
+
+example = (
+    repo / "services/dts-dbt/profiles/profiles.example.yml"
+).read_text(encoding="utf-8")
+if "DTS_DBT_DEV_PASSWORD" not in example or "env_var(" not in example:
+    raise SystemExit("tracked dbt profile example must use environment placeholders")
 PY

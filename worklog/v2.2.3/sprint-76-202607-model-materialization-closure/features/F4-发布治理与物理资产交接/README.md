@@ -1,7 +1,7 @@
 # F4：发布治理与物理资产交接
 
 **优先级**：P0
-**状态**：BLOCKED（F2/T02 的 Airflow exactly-once effect / at-least-once dispatch 证据尚未完成）
+**状态**：IN_PROGRESS（T01/T02 后端核心、T03 本地 locator/actual-column/DBT_MANAGED lineage/并发收敛/physicalAssetRef/发布前隔离/rollback-ARCHIVE、PARTIAL 可见性、100-entry 全链原子性与双门禁本地契约 GREEN；external sync health、页面及 PROD 真实账号证据未关闭）
 **依赖**：F2、F3、Sprint-69/72 既有门禁；生产启用外部依赖 Sprint-36/F3 DONE
 
 ## 目标
@@ -17,7 +17,7 @@
 | 候选动作 | candidate quality/review/approve/publish commands | Candidate ETag + Idempotency-Key + server actor role |
 | 权限双门禁 | domain duty resolver + Sprint-36/F3 `canPerform` | maintainer/reviewer/operator 职责隔离 + 资产动作 deny-by-default |
 | 本地提交 | `CandidatePublicationCommitService` | Candidate/ModelSpec/Catalog/field/lineage/physicalAssetRef/MANUAL_ONLY binding scope 原子可见 |
-| Catalog 注册 | `CanonicalModelReleaseRegistrationAdapter` | observation → CatalogDataset |
+| Catalog 注册 | `CandidatePublicationCommitService` + transaction-participating repository | current observation → CatalogDataset；旧 `REQUIRES_NEW` adapter 不进入 mandatory commit |
 | 资产身份 | `CatalogAssetKey.dataset(dataset)` | 统一 type/key |
 | artifact 引用 | `physicalAssetRef` | 输出 CatalogDataset UUID |
 | 血缘 | 输入资产/上游模型 → 输出 dataset | current revision/invocation |
@@ -35,9 +35,9 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|
-| T01 | 建立 Publish Intent 与角色感知候选命令 | P0 | BLOCKED | F2/T03、F3/T04；PROD: Sprint-36/F3 |
-| T02 | 以 Candidate 为唯一 owner 完成审核发布与本地原子提交 | P0 | DRAFT | T01、F3/T03；PROD: Sprint-36/F3 |
-| T03 | 登记输出资产字段血缘并修正 physicalAssetRef | P0 | DRAFT | T02 |
+| T01 | 建立 Publish Intent 与角色感知候选命令 | P0 | IN_PROGRESS | F2/T03、F3/T04；PROD: Sprint-36/F3 |
+| T02 | 以 Candidate 为唯一 owner 完成审核发布与本地原子提交 | P0 | IN_PROGRESS | T01、F3/T03；PROD: Sprint-36/F3 |
+| T03 | 登记输出资产字段血缘并修正 physicalAssetRef | P0 | IN_PROGRESS | T02 |
 
 ## Definition of Ready
 
@@ -50,18 +50,18 @@
 - [x] F2/T03 已提供可重放的 `CANCEL_CANDIDATE` 命令、终态 `CANCELLED`、active claim 释放与运行证据保留。
 
 F3/T04 typed-column，以及 F2/T03 cancel、五类 drift、replacement claim 原子交接、
-START_BUILD/retry 双线程竞争均已解除。当前只剩 F2/T02 必须以确定性 dagRunId
-关闭 Airflow submit timeout/duplicate/reconcile 的 exactly-once effect /
-at-least-once dispatch 证据；完成并归档 focused evidence 后，F4 才能进入 READY。
-在此之前不得编码 T01～T03 或 Catalog registration。
+START_BUILD/retry 双线程竞争均已解除。F2/T02 已以真实 Airflow 的
+accept-after-timeout、duplicate 409、唯一 DagRun 和 Platform 重启后唯一性关闭
+exactly-once effect / at-least-once dispatch 门槛，证据已归档；F4 现可从 T01
+按顺序实施。
 
 ## 完成标准
 
-- [ ] 未发布关系不进入可消费资产台账。
+- [x] 未发布关系不进入可消费资产台账。
 - [ ] 发布只消费 current observation。
 - [ ] Publish Intent 自动推进最多到 REVIEW_PENDING。
 - [ ] Candidate 是唯一发布 owner，旧 lifecycle route 只作兼容委托。
-- [ ] mandatory local publication 全有或全无。
-- [ ] Candidate duty role 与 M05 asset action 双门禁 fail-closed，审计员只读。
-- [ ] Catalog/field/lineage idempotent。
-- [ ] physicalAssetRef 永远指向输出。
+- [x] mandatory local publication 全有或全无。
+- [x] Candidate duty role 与 M05 asset action 双门禁 fail-closed，审计员只读（本地契约）。
+- [x] Catalog/field/lineage 本地 registration 重试幂等。
+- [x] Candidate publication/rollback 的 physicalAssetRef 永远指向输出。

@@ -14,6 +14,8 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.DateTimeException;
+import java.time.ZoneId;
 import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Map;
@@ -90,6 +92,54 @@ public class DbtDagService {
         );
         String source = buildManagedReleaseDagSource(id, deploymentChecksum);
         Path directory = Path.of(resolveDagsDir(null)).toAbsolutePath().normalize();
+        Path dagFile = directory.resolve(id + ".py").normalize();
+        if (!directory.equals(dagFile.getParent())) {
+            throw new IllegalArgumentException("Managed DAG path is invalid");
+        }
+        writeAtomically(dagFile, source);
+        return new ManagedDagDeployment(
+            id,
+            MANAGED_TEMPLATE_VERSION,
+            deploymentChecksum,
+            dagFile
+        );
+    }
+
+    /**
+     * Deploys one stable plan-level OPERATIONAL_RUN DAG.
+     *
+     * <p>The caller supplies persisted binding metadata only. Runtime selector, project path,
+     * target and credentials are intentionally absent and are resolved by the shared task factory
+     * after a durable pipeline run has been opened.
+     */
+    public ManagedDagDeployment ensurePlanDag(
+        String dagId,
+        UUID bindingId,
+        String schedule,
+        String timezone,
+        String desiredDeploymentChecksum
+    ) {
+        String id = requireManagedDagId(dagId);
+        UUID binding = java.util.Objects.requireNonNull(
+            bindingId,
+            "bindingId is required"
+        );
+        String zone = requireTimezone(timezone);
+        String cron = requireSchedule(schedule);
+        String deploymentChecksum = requireChecksum(
+            desiredDeploymentChecksum,
+            "desiredDeploymentChecksum"
+        );
+        String source = buildManagedPlanDagSource(
+            id,
+            binding,
+            cron,
+            zone,
+            deploymentChecksum
+        );
+        Path directory = Path.of(resolveDagsDir(null))
+            .toAbsolutePath()
+            .normalize();
         Path dagFile = directory.resolve(id + ".py").normalize();
         if (!directory.equals(dagFile.getParent())) {
             throw new IllegalArgumentException("Managed DAG path is invalid");
@@ -481,6 +531,7 @@ public class DbtDagService {
         String deploymentChecksum
     ) {
         return """
+            # airflow DAG discovery marker; execution stays in the shared factory.
             from dts_runtime.dbt_task_factory import build_dbt_dag
 
             dag = build_dbt_dag(
@@ -496,6 +547,37 @@ public class DbtDagService {
             dagId,
             MANAGED_TEMPLATE_VERSION,
             deploymentChecksum
+        );
+    }
+
+    private String buildManagedPlanDagSource(
+        String dagId,
+        UUID bindingId,
+        String schedule,
+        String timezone,
+        String deploymentChecksum
+    ) {
+        return """
+            # airflow DAG discovery marker; shared factory enforces max_active_runs=1.
+            from dts_runtime.dbt_task_factory import build_dbt_dag
+
+            dag = build_dbt_dag(
+                dag_id=%s,
+                purpose="OPERATIONAL_RUN",
+                schedule=%s,
+                timezone=%s,
+                template_version=%s,
+                deployment_checksum=%s,
+                binding_id=%s,
+                tags=["dts-managed", "dbt", "plan-run"],
+            )
+            """.formatted(
+            pythonLiteral(dagId),
+            schedule == null ? "None" : pythonLiteral(schedule),
+            pythonLiteral(timezone),
+            pythonLiteral(MANAGED_TEMPLATE_VERSION),
+            pythonLiteral(deploymentChecksum),
+            pythonLiteral(bindingId.toString())
         );
     }
 
@@ -586,6 +668,55 @@ public class DbtDagService {
             throw new IllegalArgumentException("Managed DAG id is invalid");
         }
         return id;
+    }
+
+    private static String requireSchedule(String schedule) {
+        if (schedule == null) return null;
+        String cron = schedule.trim();
+        if (
+            cron.isEmpty() ||
+            cron.length() > 128 ||
+            cron.contains("\n") ||
+            cron.contains("\r") ||
+            cron.split("\\s+").length != 5
+        ) {
+            throw new IllegalArgumentException(
+                "Airflow cron schedule must contain five fields"
+            );
+        }
+        return cron;
+    }
+
+    private static String requireTimezone(String timezone) {
+        String zone = timezone == null ? "" : timezone.trim();
+        try {
+            if (zone.isEmpty()) throw new DateTimeException("empty timezone");
+            return ZoneId.of(zone).getId();
+        } catch (DateTimeException invalid) {
+            throw new IllegalArgumentException(
+                "Airflow timezone is invalid",
+                invalid
+            );
+        }
+    }
+
+    private static String requireChecksum(String value, String name) {
+        String checksum = value == null ? "" : value.trim();
+        if (!checksum.matches("^[0-9a-f]{64}$")) {
+            throw new IllegalArgumentException(name + " is invalid");
+        }
+        return checksum;
+    }
+
+    private String pythonLiteral(String value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException impossible) {
+            throw new IllegalStateException(
+                "Managed DAG metadata could not be encoded",
+                impossible
+            );
+        }
     }
 
     private static String sha256(String value) {

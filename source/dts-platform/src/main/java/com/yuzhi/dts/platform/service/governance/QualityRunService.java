@@ -3,14 +3,12 @@ package com.yuzhi.dts.platform.service.governance;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.config.GovernanceProperties;
-import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.governance.GovQualityMetric;
 import com.yuzhi.dts.platform.domain.governance.GovQualityRun;
 import com.yuzhi.dts.platform.domain.governance.GovRule;
 import com.yuzhi.dts.platform.domain.governance.GovRuleBinding;
 import com.yuzhi.dts.platform.domain.governance.GovRuleVersion;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
-import com.yuzhi.dts.platform.repository.governance.GovQualityFailingRowRepository;
 import com.yuzhi.dts.platform.repository.governance.GovQualityMetricRepository;
 import com.yuzhi.dts.platform.repository.governance.GovQualityRunRepository;
 import com.yuzhi.dts.platform.repository.governance.GovRuleBindingRepository;
@@ -20,7 +18,6 @@ import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.governance.request.IssueTicketUpsertRequest;
 import com.yuzhi.dts.platform.service.governance.dto.QualityRunDto;
 import com.yuzhi.dts.platform.service.governance.request.QualityRunTriggerRequest;
-import com.yuzhi.dts.platform.service.security.HiveStatementExecutor;
 import com.yuzhi.dts.platform.service.security.dto.StatementExecutionResult;
 import jakarta.persistence.EntityNotFoundException;
 import java.math.BigDecimal;
@@ -57,17 +54,14 @@ public class QualityRunService {
     private static final Logger log = LoggerFactory.getLogger(QualityRunService.class);
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
-    private static final String SAFE_IDENTIFIER = "^[a-zA-Z_][a-zA-Z0-9_.]*$";
-
     private final GovRuleRepository ruleRepository;
     private final GovRuleVersionRepository versionRepository;
     private final GovRuleBindingRepository bindingRepository;
     private final GovQualityRunRepository runRepository;
     private final GovQualityMetricRepository metricRepository;
-    private final GovQualityFailingRowRepository failingRowRepository;
     private final CatalogDatasetRepository datasetRepository;
     private final Executor taskExecutor;
-    private final HiveStatementExecutor hiveExecutor;
+    private final QualityDatasetStatementExecutor statementExecutor;
     private final AuditService auditService;
     private final IssueTicketService issueTicketService;
     private final ObjectMapper objectMapper;
@@ -81,10 +75,9 @@ public class QualityRunService {
         GovRuleBindingRepository bindingRepository,
         GovQualityRunRepository runRepository,
         GovQualityMetricRepository metricRepository,
-        GovQualityFailingRowRepository failingRowRepository,
         CatalogDatasetRepository datasetRepository,
         @Qualifier("taskExecutor") Executor taskExecutor,
-        HiveStatementExecutor hiveExecutor,
+        QualityDatasetStatementExecutor statementExecutor,
         AuditService auditService,
         IssueTicketService issueTicketService,
         ObjectMapper objectMapper,
@@ -97,10 +90,9 @@ public class QualityRunService {
         this.bindingRepository = bindingRepository;
         this.runRepository = runRepository;
         this.metricRepository = metricRepository;
-        this.failingRowRepository = failingRowRepository;
         this.datasetRepository = datasetRepository;
         this.taskExecutor = taskExecutor;
-        this.hiveExecutor = hiveExecutor;
+        this.statementExecutor = statementExecutor;
         this.auditService = auditService;
         this.issueTicketService = issueTicketService;
         this.objectMapper = objectMapper;
@@ -267,9 +259,6 @@ public class QualityRunService {
         runRepository.save(run);
 
         try {
-            // Count total rows in target table before executing checks
-            countRowsTotal(run);
-
             Map<String, String> statements = resolveStatements(run.getRuleVersion());
             if (statements.isEmpty()) {
                 run.setStatus("SKIPPED");
@@ -294,11 +283,11 @@ public class QualityRunService {
             }
 
             Map<String, String> rendered = renderParams(statements, params);
-            List<StatementExecutionResult> results = hiveExecutor.execute(rendered, run.getRule() != null ? run.getRule().getOwner() : null);
+            QualityDatasetStatementExecutor.Execution execution = statementExecutor.execute(run, rendered);
+            List<StatementExecutionResult> results = execution.results();
+            run.setRowsTotal(execution.rowsTotal());
+            run.setFailingRowCount(execution.failingRowCount());
             persistMetrics(run, results);
-            // Update failing row count from the failing_row table
-            long failCount = failingRowRepository.countByRunId(run.getId());
-            run.setFailingRowCount((int) failCount);
             StatementExecutionResult.Status aggregate = aggregateStatus(results);
             run.setStatus(mapStatus(aggregate));
             run.setMessage(summaryMessage(results));
@@ -517,50 +506,6 @@ public class QualityRunService {
         return tags.isEmpty() ? Collections.emptyMap() : tags;
     }
 
-    private void countRowsTotal(GovQualityRun run) {
-        String tableName = resolveTableName(run);
-        if (tableName == null || !tableName.matches(SAFE_IDENTIFIER)) {
-            return;
-        }
-        try {
-            String countSql = "SELECT count(*) FROM " + tableName;
-            List<StatementExecutionResult> countResults = hiveExecutor.execute(
-                Map.of("__count__", countSql),
-                run.getRule() != null ? run.getRule().getOwner() : null
-            );
-            if (!countResults.isEmpty()) {
-                StatementExecutionResult first = countResults.getFirst();
-                if (first.status() == StatementExecutionResult.Status.SUCCEEDED && first.message() != null) {
-                    try {
-                        String msg = first.message().trim();
-                        // The message may contain the count result; try to parse it
-                        run.setRowsTotal(Integer.parseInt(msg));
-                    } catch (NumberFormatException ignored) {
-                        // Count result not parsable from message
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.warn("Failed to count rows for {}: {}", tableName, e.getMessage());
-        }
-    }
-
-    private String resolveTableName(GovQualityRun run) {
-        if (run.getDatasetId() == null) {
-            return null;
-        }
-        CatalogDataset dataset = defaultLakeDatasetGuard.requireDefaultLakeDataset(run.getDatasetId());
-        String db = dataset.getHiveDatabase();
-        String table = dataset.getHiveTable();
-        if (StringUtils.isBlank(table)) {
-            return null;
-        }
-        if (StringUtils.isNotBlank(db)) {
-            return db + "." + table;
-        }
-        return table;
-    }
-
     private boolean isDefaultLakeRun(GovQualityRun run, UUID defaultLakeSourceId) {
         if (run == null || run.getDatasetId() == null) {
             return false;
@@ -671,6 +616,12 @@ public class QualityRunService {
 
     private void persistMetrics(GovQualityRun run, List<StatementExecutionResult> results) {
         metricRepository.findByRunId(run.getId()).forEach(metricRepository::delete);
+        boolean hasExecutionError = results
+            .stream()
+            .anyMatch(result ->
+                result.status() == StatementExecutionResult.Status.FAILED &&
+                StringUtils.isNotBlank(result.errorCode())
+            );
         for (StatementExecutionResult result : results) {
             GovQualityMetric metric = new GovQualityMetric();
             metric.setRun(run);
@@ -680,8 +631,10 @@ public class QualityRunService {
             // Compute metric_value: pass rate based on rowsTotal and failingRowCount
             Integer rowsTotal = run.getRowsTotal();
             Integer failingRows = run.getFailingRowCount();
-            if (rowsTotal != null && rowsTotal > 0) {
-                int failing = failingRows != null ? failingRows : 0;
+            if (hasExecutionError && result.status() == StatementExecutionResult.Status.FAILED) {
+                metric.setMetricValue(BigDecimal.ZERO);
+            } else if (rowsTotal != null && rowsTotal > 0) {
+                int failing = Math.min(rowsTotal, Math.max(0, failingRows != null ? failingRows : 0));
                 BigDecimal passRate = BigDecimal.valueOf(rowsTotal - failing)
                     .multiply(BigDecimal.valueOf(100))
                     .divide(BigDecimal.valueOf(rowsTotal), 6, RoundingMode.HALF_UP);
