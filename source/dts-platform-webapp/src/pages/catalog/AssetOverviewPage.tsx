@@ -1,11 +1,4 @@
-import {
-	ApartmentOutlined,
-	BranchesOutlined,
-	DatabaseOutlined,
-	SafetyCertificateOutlined,
-	TableOutlined,
-	WarningOutlined,
-} from "@ant-design/icons";
+import { DatabaseOutlined, TableOutlined } from "@ant-design/icons";
 import { Alert, Button, Layout, Spin, Tabs, Tag, Tooltip } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
@@ -16,6 +9,8 @@ import { PageHeader } from "@/components/page-header";
 import { useCatalogTagGovernanceAccess } from "@/hooks/useModuleManageAccess";
 import { useRouter } from "@/routes/hooks";
 import { resolveAssetReadiness } from "./assetPortalUx.helpers";
+import { GOVERNANCE_STATUS_DICT, resolveEnumLabel } from "./assets/assetEnumLabels";
+import { GovernanceGapPanel } from "./assets/GovernanceGapPanel";
 import type { AssetRow, DomainNode } from "./assets/assetPageShared";
 import {
 	buildDomainScopeNodes,
@@ -39,14 +34,6 @@ type AssetOverview = {
 	matrix?: MatrixCell[];
 	scanned?: number;
 	truncated?: boolean;
-};
-
-const GOVERNANCE_STATUS_LABELS: Record<string, string> = {
-	GOVERNED: "已治理",
-	PENDING_CLAIM: "待认领",
-	PENDING_CLASSIFICATION: "待定级",
-	PENDING_DOMAIN: "待归域",
-	DISABLED: "停用",
 };
 
 /**
@@ -219,12 +206,34 @@ export default function AssetOverviewPage() {
 		return map;
 	}, [overview]);
 
-	const governanceChips = useMemo(
-		() =>
-			Object.entries(overview?.governanceStatusCounts || {})
-				.sort((a, b) => b[1] - a[1])
-				.slice(0, 6),
-		[overview],
+	// 缺口原因合并三处口径：治理状态分布 + 未定密 + 失效，避免同一件事讲三遍
+	const gapReasons = useMemo(() => {
+		const counts = overview?.governanceStatusCounts || {};
+		const fromGovernance = Object.entries(counts)
+			.filter(([status]) => status !== "GOVERNED")
+			.map(([status, count]) => ({
+				key: status,
+				label: resolveEnumLabel(GOVERNANCE_STATUS_DICT, status),
+				count: Number(count) || 0,
+			}));
+		return [
+			...fromGovernance,
+			{ key: "UNCLASSIFIED", label: "未定密", count: overview?.unclassified ?? 0 },
+			{ key: "STALE", label: "失效", count: overview?.stale ?? 0 },
+		].sort((a, b) => b.count - a.count);
+	}, [overview]);
+
+	const drillToLedgerByReason = useCallback(
+		(key: string) => {
+			const params = new URLSearchParams();
+			if (domain) params.set("domain", domain);
+			if (key === "UNCLASSIFIED") params.set("classification", "UNSET");
+			else if (key === "STALE") params.set("lifecycle", "STALE");
+			else params.set("governance", key);
+			const rest = params.toString();
+			router.push(`/catalog/assets/ledger${rest ? `?${rest}` : ""}`);
+		},
+		[domain, router],
 	);
 
 	const scopeNodes = useMemo(
@@ -312,50 +321,22 @@ export default function AssetOverviewPage() {
 						<Alert type="warning" showIcon message={`资产数量超过扫描上限，以下统计基于前 ${overview.scanned} 条`} />
 					) : null}
 
-					<div className="grid gap-3 md:grid-cols-5">
+					<div className="grid gap-3 md:grid-cols-[minmax(180px,240px)_1fr]">
 						<MetricTile
 							icon={<DatabaseOutlined />}
 							label="资产总量"
-							value={overview?.total ?? 0}
+							value={overview?.truncated ? `≥${overview?.total ?? 0}` : (overview?.total ?? 0)}
 							footnote={domain ? domainMap.get(domain) || "未归域" : "全部主题域"}
 						/>
-						<MetricTile
-							icon={<WarningOutlined />}
-							label="待处置"
-							value={overview?.attention ?? 0}
-							footnote="未定密 / 未归域 / 失效 / 待治理"
-							tone={(overview?.attention ?? 0) > 0 ? "text-amber-600" : "text-green-600"}
-						/>
-						<MetricTile
-							icon={<SafetyCertificateOutlined />}
-							label="未定密"
-							value={overview?.unclassified ?? 0}
-							tone={(overview?.unclassified ?? 0) > 0 ? "text-amber-600" : "text-green-600"}
-						/>
-						<MetricTile
-							icon={<ApartmentOutlined />}
-							label="未归域"
-							value={overview?.missingDomain ?? 0}
-							tone={(overview?.missingDomain ?? 0) > 0 ? "text-amber-600" : "text-green-600"}
-						/>
-						<MetricTile
-							icon={<BranchesOutlined />}
-							label="失效资产"
-							value={overview?.stale ?? 0}
-							tone={(overview?.stale ?? 0) > 0 ? "text-red-600" : "text-green-600"}
+						<GovernanceGapPanel
+							total={overview?.total ?? 0}
+							attention={overview?.attention ?? 0}
+							reasons={gapReasons}
+							onReasonClick={drillToLedgerByReason}
+							loading={overviewLoading}
+							truncated={Boolean(overview?.truncated)}
 						/>
 					</div>
-
-					{governanceChips.length ? (
-						<div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3">
-							<span className="text-xs text-slate-500">治理状态分布</span>
-							{governanceChips.map(([status, count]) => (
-								<Tag key={status} color={status === "GOVERNED" ? "green" : "orange"}>
-									{GOVERNANCE_STATUS_LABELS[status] || status} {count}
-								</Tag>
-							))}
-						</div>
-					) : null}
 
 					<div className="rounded-xl border border-slate-200 bg-white p-4" data-testid="asset-overview-matrix">
 						<div className="mb-3 flex flex-wrap items-center justify-between gap-3">
