@@ -219,4 +219,7 @@
     <include file="config/liquibase/changelog/20260727_08_iam_asset_action_policy.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260727_09_iam_asset_action_policy_request.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260727_10_model_materialization_build.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260727_11_dbt_runtime_profile_lease.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260727_12_model_materialization_dispatch.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260727_13_physical_relation_observation.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

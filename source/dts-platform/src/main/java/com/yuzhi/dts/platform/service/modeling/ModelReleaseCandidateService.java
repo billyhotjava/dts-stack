@@ -150,6 +150,7 @@ public class ModelReleaseCandidateService {
                 command.idempotencyKey()
             );
         }
+        repository.lockPlanForCandidate(tenant, command.planId());
         Map<UUID, CurrentModelReference> currentReferences = resolveCurrentScope(
             tenant,
             command.planId(),

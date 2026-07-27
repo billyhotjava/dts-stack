@@ -81,4 +81,52 @@ class DbtDagServiceTest {
         assertThat(dagSource).doesNotContain("DockerOperator(");
         assertThat(dagSource).doesNotContain("from airflow.providers.docker.operators.docker import DockerOperator");
     }
+
+    @Test
+    void shouldGenerateReleaseBuildAsAtomicThinManagedDag() throws Exception {
+        AirflowProperties airflowProperties = new AirflowProperties();
+        airflowProperties.setDagsDir(tempDir.toString());
+
+        DbtDagService service = new DbtDagService(
+            airflowProperties,
+            mock(DbtConfigService.class),
+            mock(InfraDataSourceRepository.class),
+            new ObjectMapper()
+        );
+
+        DbtDagService.ManagedDagDeployment deployment = service.ensureReleaseBuildDag(
+            "dts_release_build_postgres_primary"
+        );
+        Path dagFile = tempDir.resolve("dts_release_build_postgres_primary.py");
+
+        assertThat(deployment.dagId()).isEqualTo(
+            "dts_release_build_postgres_primary"
+        );
+        assertThat(deployment.templateVersion()).isEqualTo("sprint76-v1");
+        assertThat(deployment.deploymentChecksum()).matches("[0-9a-f]{64}");
+        assertThat(dagFile).exists();
+        assertThat(Files.list(tempDir).map(Path::getFileName).map(Path::toString))
+            .noneMatch(name -> name.contains(".tmp-"));
+
+        String dagSource = Files.readString(dagFile);
+        assertThat(dagSource)
+            .contains(
+                "from dts_runtime.dbt_task_factory import build_dbt_dag"
+            )
+            .contains("purpose=\"RELEASE_BUILD\"")
+            .contains("schedule=None")
+            .contains("template_version=\"sprint76-v1\"")
+            .contains(
+                "deployment_checksum=\"" +
+                deployment.deploymentChecksum() +
+                "\""
+            )
+            .doesNotContain("docker run")
+            .doesNotContain("BashOperator")
+            .doesNotContain("dag_run.conf")
+            .doesNotContain("projectDir")
+            .doesNotContain("profiles.yml")
+            .doesNotContain("shell=True")
+            .doesNotContain("|| true");
+    }
 }

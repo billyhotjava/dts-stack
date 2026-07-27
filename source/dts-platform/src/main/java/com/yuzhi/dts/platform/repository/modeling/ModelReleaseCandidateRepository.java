@@ -47,6 +47,27 @@ public class ModelReleaseCandidateRepository {
         this.jdbcTemplate = jdbcTemplate;
     }
 
+    /**
+     * Serializes active-candidate decisions on the canonical warehouse-plan row.
+     *
+     * <p>The row lock is transaction-scoped. Callers still rely on the active-candidate unique
+     * constraint as the final database invariant.
+     */
+    public void lockPlanForCandidate(String tenantId, UUID planId) {
+        requireTenantAndId(tenantId, planId);
+        jdbcTemplate.query(
+            """
+            select id
+              from modeling_warehouse_plan
+             where tenant_id = ? and id = ?
+             for update
+            """,
+            (resultSet, rowNumber) -> resultSet.getObject("id", UUID.class),
+            tenantId.trim(),
+            planId
+        );
+    }
+
     @Transactional
     public int insert(CandidateView candidate) {
         if (candidate == null) throw new IllegalArgumentException("candidate is required");

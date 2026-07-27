@@ -1,6 +1,6 @@
-import { useEffect, useState, useCallback, useRef } from "react";
-import { Select, Space, Spin, Tag } from "antd";
-import { listDatasets, listDomains, getDatasetFields, type DatasetField } from "@/api/platformApi";
+import { Select, Space, Spin, Tag, Typography } from "antd";
+import { type UIEvent, useCallback, useEffect, useRef, useState } from "react";
+import { type DatasetField, getDatasetFields, listDatasets, listDomains } from "@/api/platformApi";
 
 type DatasetOption = {
 	id: string;
@@ -16,7 +16,11 @@ type Props = {
 	style?: React.CSSProperties;
 	disabled?: boolean;
 	sourceId?: string;
+	sourceName?: string;
 };
+
+const PAGE_SIZE = 50;
+const LOAD_MORE_THRESHOLD = 24;
 
 const LAYER_COLOR: Record<string, string> = {
 	ODS: "default",
@@ -25,12 +29,32 @@ const LAYER_COLOR: Record<string, string> = {
 	ADS: "green",
 };
 
-export function DatasetPicker({ value, onChange, onFieldsLoaded, placeholder, style, disabled, sourceId }: Props) {
+function mergeDatasetOptions(current: DatasetOption[], incoming: DatasetOption[]) {
+	const merged = new Map(current.map((item) => [item.id, item]));
+	incoming.forEach((item) => merged.set(item.id, item));
+	return Array.from(merged.values());
+}
+
+export function DatasetPicker({
+	value,
+	onChange,
+	onFieldsLoaded,
+	placeholder,
+	style,
+	disabled,
+	sourceId,
+	sourceName,
+}: Props) {
 	const [options, setOptions] = useState<DatasetOption[]>([]);
 	const [loading, setLoading] = useState(false);
+	const [loadingMore, setLoadingMore] = useState(false);
 	const [fieldsLoading, setFieldsLoading] = useState(false);
 	const [keyword, setKeyword] = useState("");
+	const [page, setPage] = useState(0);
+	const [total, setTotal] = useState<number>();
 	const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const requestVersionRef = useRef(0);
+	const loadingMoreRef = useRef(false);
 
 	const handleSearch = (v: string) => {
 		if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
@@ -55,34 +79,67 @@ export function DatasetPicker({ value, onChange, onFieldsLoaded, placeholder, st
 		})();
 	}, []);
 
-	const loadDatasets = useCallback(async (kw: string, dId?: string) => {
-		setLoading(true);
-		try {
-			const params: any = { page: 0, size: 50, enabledOnly: true };
-			if (kw) params.keyword = kw;
-			if (dId) params.domainId = dId;
-			if (sourceId) params.sourceId = sourceId;
-			const resp: any = await listDatasets(params);
-			const content = Array.isArray(resp?.content) ? resp.content : [];
-			setOptions(
-				content.map((d: any) => ({
+	const loadDatasets = useCallback(
+		async (kw: string, dId: string | undefined, nextPage: number, append: boolean, requestVersion: number) => {
+			if (append) {
+				loadingMoreRef.current = true;
+				setLoadingMore(true);
+			} else {
+				setLoading(true);
+			}
+			try {
+				const params: any = { page: nextPage, size: PAGE_SIZE, enabledOnly: true };
+				if (kw) params.keyword = kw;
+				if (dId) params.domainId = dId;
+				if (sourceId) params.sourceId = sourceId;
+				const resp: any = await listDatasets(params);
+				if (requestVersion !== requestVersionRef.current) return;
+				const content = Array.isArray(resp?.content) ? resp.content : [];
+				const nextOptions = content.map((d: any) => ({
 					id: String(d.id || ""),
 					name: String(d.name || ""),
 					warehouseLayer: d.warehouseLayer,
-				})),
-			);
-		} catch {
-			/* global interceptor handles */
-		} finally {
-			setLoading(false);
-		}
-	}, [sourceId]);
+				}));
+				setOptions((current) => (append ? mergeDatasetOptions(current, nextOptions) : nextOptions));
+				const responseTotal = Number(resp?.total);
+				setTotal((current) =>
+					Number.isFinite(responseTotal)
+						? responseTotal
+						: append
+							? (current ?? 0) + nextOptions.length
+							: nextOptions.length,
+				);
+				setPage(nextPage);
+			} catch {
+				/* global interceptor handles */
+			} finally {
+				if (requestVersion === requestVersionRef.current) {
+					setLoading(false);
+					setLoadingMore(false);
+					loadingMoreRef.current = false;
+				}
+			}
+		},
+		[sourceId],
+	);
 
 	useEffect(() => {
-		void loadDatasets(keyword, selectedDomainId);
-	}, [keyword, selectedDomainId, loadDatasets]);
+		const requestVersion = requestVersionRef.current + 1;
+		requestVersionRef.current = requestVersion;
+		loadingMoreRef.current = false;
+		setOptions([]);
+		setPage(0);
+		setTotal(undefined);
+		setLoadingMore(false);
+		if (disabled) {
+			setLoading(false);
+			return;
+		}
+		void loadDatasets(keyword, selectedDomainId, 0, false, requestVersion);
+	}, [disabled, keyword, selectedDomainId, loadDatasets]);
 
 	// Fix 1: trigger onFieldsLoaded when controlled value is injected externally (e.g. form.setFieldsValue)
+	// biome-ignore lint/correctness/useExhaustiveDependencies: the controlled value is the trigger; existing callers pass inline callbacks.
 	useEffect(() => {
 		if (value && onFieldsLoaded) {
 			void getDatasetFields(value)
@@ -115,42 +172,72 @@ export function DatasetPicker({ value, onChange, onFieldsLoaded, placeholder, st
 		}
 	};
 
+	const handlePopupScroll = (event: UIEvent<HTMLDivElement>) => {
+		const target = event.currentTarget;
+		const reachedEnd = target.scrollTop + target.clientHeight >= target.scrollHeight - LOAD_MORE_THRESHOLD;
+		if (!reachedEnd || loading || loadingMoreRef.current || total === undefined || options.length >= total) {
+			return;
+		}
+		void loadDatasets(keyword, selectedDomainId, page + 1, true, requestVersionRef.current);
+	};
+
 	return (
-		<Space style={{ width: "100%", ...style }} wrap>
-			<Select
-				placeholder="筛选主题域"
-				allowClear
-				style={{ width: 160 }}
-				disabled={disabled}
-				options={domains.map((d) => ({ label: d.name, value: d.id }))}
-				onChange={(v) => setSelectedDomainId(v || undefined)}
-			/>
-			<Select
-				showSearch
-				style={{ minWidth: 260 }}
-				placeholder={placeholder ?? "选择数据集"}
-				filterOption={false}
-				loading={loading}
-				value={value}
-				onChange={handleChange}
-				onSearch={handleSearch}
-				allowClear
-				disabled={disabled}
-				options={options.map((d) => ({
-					label: (
-						<Space size={4}>
-							<span>{d.name}</span>
-							{d.warehouseLayer && (
-								<Tag color={LAYER_COLOR[d.warehouseLayer] ?? "processing"} style={{ fontSize: 10 }}>
-									{d.warehouseLayer}
-								</Tag>
+		<div style={{ width: "100%", ...style }}>
+			<Space style={{ width: "100%" }} wrap>
+				<Select
+					placeholder="筛选主题域"
+					allowClear
+					style={{ width: 160 }}
+					disabled={disabled}
+					options={domains.map((d) => ({ label: d.name, value: d.id }))}
+					onChange={(v) => setSelectedDomainId(v || undefined)}
+				/>
+				<Select
+					showSearch
+					style={{ minWidth: 260 }}
+					placeholder={placeholder ?? "选择数据资产"}
+					filterOption={false}
+					loading={loading}
+					value={value}
+					onChange={handleChange}
+					onSearch={handleSearch}
+					onPopupScroll={handlePopupScroll}
+					allowClear
+					disabled={disabled}
+					dropdownRender={(menu) => (
+						<>
+							{menu}
+							{loadingMore && (
+								<div className="py-2 text-center text-gray-400">
+									<Spin size="small" /> 正在加载更多
+								</div>
 							)}
-						</Space>
-					),
-					value: d.id,
-				}))}
-			/>
-			{fieldsLoading && <Spin size="small" />}
-		</Space>
+						</>
+					)}
+					options={options.map((d) => ({
+						label: (
+							<Space size={4}>
+								<span>{d.name}</span>
+								{d.warehouseLayer && (
+									<Tag color={LAYER_COLOR[d.warehouseLayer] ?? "processing"} style={{ fontSize: 10 }}>
+										{d.warehouseLayer}
+									</Tag>
+								)}
+							</Space>
+						),
+						value: d.id,
+					}))}
+				/>
+				{fieldsLoading && <Spin size="small" />}
+			</Space>
+			{sourceName && (
+				<div className="mt-2">
+					<Typography.Text type="secondary">
+						当前来源：{sourceName}
+						{total !== undefined ? ` · 共 ${total} 条可选数据资产` : ""}
+					</Typography.Text>
+				</div>
+			)}
+		</div>
 	);
 }

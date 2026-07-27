@@ -15,3 +15,10 @@ test("quality rule creation persists the selected dataset as a version binding",
 test("quality rule editing persists the selected dataset as a version binding", () => {
 	assert.match(RULES_PAGE, DATASET_BINDING_PAYLOAD);
 });
+
+test("quality rule creation presents the binding target as a data asset", () => {
+	assert.match(CREATE_WIZARD, /\{ title: "绑定数据资产" \}/);
+	assert.match(CREATE_WIZARD, /label="质量检测对象"/);
+	assert.match(CREATE_WIZARD, /当前支持默认数据湖中的数据集（表\/视图）/);
+	assert.match(CREATE_WIZARD, /sourceName=\{defaultLakeName\}/);
+});

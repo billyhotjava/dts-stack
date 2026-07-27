@@ -126,6 +126,7 @@ class ModelBuildIntentServiceTest {
         assertThat(result.candidate()).isSameAs(building);
         assertThat(result.build()).isSameAs(group);
         assertThat(result.replayed()).isFalse();
+        verify(candidates).lockPlanForCandidate(TENANT, PLAN_ID);
         ArgumentCaptor<CreateCandidateCommand> create =
             ArgumentCaptor.forClass(CreateCandidateCommand.class);
         verify(candidateCommands).createSingleModelIntent(

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { PlusOutlined } from "@ant-design/icons";
 import {
 	Alert,
 	Button,
@@ -13,9 +13,14 @@ import {
 	Typography,
 	message,
 } from "antd";
-import { PlusOutlined } from "@ant-design/icons";
-import { Upload } from "@/components/upload";
-import { getOrgTree, type OrgNode } from "@/api/services/directoryService";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+	type ApiAuthProviderDescriptorDTO,
+	type ApiConnectionTestResultDTO,
+	type ApiConnectorContractDTO,
+	ingestionTaskAPI,
+} from "@/api/ingestion";
+import connectorsService, { type InfraConnector } from "@/api/services/connectorsService";
 import dataSourcesService, {
 	type DataSourceUpsertPayload,
 	type DataSourceUpdateImpact,
@@ -23,18 +28,10 @@ import dataSourcesService, {
 	type ExcelImportPrepareResponse,
 	type InfraDataSource,
 } from "@/api/services/dataSourcesService";
-import connectorsService, { type InfraConnector } from "@/api/services/connectorsService";
-import dictionaryService, { type PlatformSystemType } from "@/api/services/dictionaryService";
+import { getOrgTree, type OrgNode } from "@/api/services/directoryService";
 import jdbcDriversService, { type InfraJdbcDriver } from "@/api/services/jdbcDriversService";
+import { Upload } from "@/components/upload";
 import {
-	ingestionTaskAPI,
-	type ApiConnectionTestResultDTO,
-	type ApiAuthProviderDescriptorDTO,
-	type ApiConnectorContractDTO,
-} from "@/api/ingestion";
-import { useRouter } from "@/routes/hooks";
-import {
-	TYPE_OPTIONS,
 	asRecord,
 	buildApiAuthFieldInput,
 	cleanRecord,
@@ -95,18 +92,6 @@ const resolveDriverMatch = (record: InfraDataSource | null, driverList: InfraJdb
 	});
 };
 
-const resolveSystemTypeValue = (item: PlatformSystemType) =>
-	normalizeConnectorKey(item.value || item.code || item.key || item.type);
-
-const resolveSystemTypeLabel = (item: PlatformSystemType, value: string) =>
-	String(item.label || item.displayName || item.name || value).trim();
-
-const isSystemTypeEnabled = (item: PlatformSystemType) => {
-	if (item.enabled === false) return false;
-	const status = String(item.status || "").trim().toUpperCase();
-	return !status || status === "ACTIVE" || status === "ENABLED" || status === "PUBLISHED";
-};
-
 const showImpact = (impact: DataSourceUpdateImpact | null) => {
 	if (!impact || !impact.connectionChanged) return;
 	const affected = impact.affectedTasks ?? 0;
@@ -135,15 +120,11 @@ export default function DataSourceFormModal({
 	onClose,
 	onSaved,
 }: DataSourceFormModalProps) {
-	const router = useRouter();
 	const [form] = Form.useForm();
 	const [saving, setSaving] = useState(false);
 	const [connectors, setConnectors] = useState<InfraConnector[]>([]);
 	const [connectorsLoading, setConnectorsLoading] = useState(false);
-	const [systemTypes, setSystemTypes] = useState<PlatformSystemType[]>([]);
-	const [systemTypesLoading, setSystemTypesLoading] = useState(false);
-	const [systemTypesLoaded, setSystemTypesLoaded] = useState(false);
-	const [systemTypesError, setSystemTypesError] = useState<string | null>(null);
+	const [connectorsError, setConnectorsError] = useState<string | null>(null);
 	const [drivers, setDrivers] = useState<InfraJdbcDriver[]>([]);
 	const [driversLoading, setDriversLoading] = useState(false);
 	const [apiContract, setApiContract] = useState<ApiConnectorContractDTO | null>(null);
@@ -171,26 +152,14 @@ export default function DataSourceFormModal({
 		setConnectorsLoading(true);
 		try {
 			const data = await connectorsService.list();
-			setConnectors(Array.isArray(data) ? data : []);
+			const records = Array.isArray(data) ? data : [];
+			setConnectors(records);
+			setConnectorsError(records.length ? null : "连接器目录为空，请先在连接器目录同步内置定义。");
 		} catch {
 			setConnectors([]);
+			setConnectorsError("连接器目录暂不可用，无法确定数据源类型，请稍后重试。");
 		} finally {
 			setConnectorsLoading(false);
-		}
-	}, []);
-
-	const loadSystemTypes = useCallback(async () => {
-		setSystemTypesLoading(true);
-		try {
-			const data = await dictionaryService.listSystemTypes();
-			setSystemTypes(Array.isArray(data) ? data.filter(isSystemTypeEnabled) : []);
-			setSystemTypesError(null);
-		} catch {
-			setSystemTypes([]);
-			setSystemTypesError("系统类型字典暂不可用，当前使用内置兜底选项。");
-		} finally {
-			setSystemTypesLoaded(true);
-			setSystemTypesLoading(false);
 		}
 	}, []);
 
@@ -245,10 +214,9 @@ export default function DataSourceFormModal({
 	useEffect(() => {
 		if (!open) return;
 		void loadConnectors();
-		void loadSystemTypes();
 		void loadDrivers();
 		void loadDepts();
-	}, [open, loadConnectors, loadSystemTypes, loadDrivers, loadDepts]);
+	}, [open, loadConnectors, loadDrivers, loadDepts]);
 
 	// 初始化表单：editing 变化或 open 上升沿都需要刷新
 	useEffect(() => {
@@ -325,33 +293,11 @@ export default function DataSourceFormModal({
 	);
 
 	const connectorOptions = useMemo(() => {
-		if (!connectors.length) {
-			return TYPE_OPTIONS.map((option) => ({ ...option, value: inferConnectorKey(option.value) || option.value }));
-		}
 		return connectors.map((connector) => ({
 			value: connector.connectorKey,
 			label: `${connector.name}${connector.defaultEngine ? ` · ${connector.defaultEngine}` : ""}`,
 		}));
 	}, [connectors]);
-
-	const systemTypeOptions = useMemo(() => {
-		const seen = new Set<string>();
-		const options = systemTypes
-			.map((item) => {
-				const value = resolveSystemTypeValue(item);
-				if (!value || seen.has(value)) return null;
-				seen.add(value);
-				return {
-					value,
-					label: resolveSystemTypeLabel(item, value),
-				};
-			})
-			.filter(Boolean) as Array<{ value: string; label: string }>;
-		return options.length ? options : TYPE_OPTIONS;
-	}, [systemTypes]);
-
-	const systemTypesFallbackActive = systemTypesLoaded && systemTypeOptions === TYPE_OPTIONS;
-	const systemTypesFallbackMessage = systemTypesError || "系统类型字典为空，当前使用内置兜底选项。";
 
 	const selectedConnector = useMemo(
 		() => connectors.find((item) => item.connectorKey === connectorValue),
@@ -400,16 +346,21 @@ export default function DataSourceFormModal({
 	const applyConnectorDefaults = useCallback(
 		(connectorKey?: string) => {
 			const connector = connectors.find((item) => item.connectorKey === connectorKey);
-			const fallback = TYPE_OPTIONS.find((option) => inferConnectorKey(option.value) === connectorKey);
-			if (!connector && !fallback) return;
-			const nextType = connector?.sourceType || fallback?.value || connectorKey;
+			if (!connector) return;
+			const nextType = connector.sourceType;
 			if (!nextType) return;
+			const defaults = asRecord(connector.configSchema?.defaults);
 			form.setFieldsValue({
 				type: nextType,
+				driverId: undefined,
+				driverClass: typeof defaults?.driverClass === "string" ? defaults.driverClass : undefined,
+				driverVersion: typeof defaults?.driverVersion === "string" ? defaults.driverVersion : undefined,
 				readerType:
 					connectorKey === "http-api"
 						? apiContract?.defaultReaderType || "httpreader"
-						: form.getFieldValue("readerType"),
+						: typeof defaults?.readerType === "string"
+							? defaults.readerType
+							: form.getFieldValue("readerType"),
 			});
 			handleTypeChange(nextType);
 		},
@@ -784,51 +735,44 @@ export default function DataSourceFormModal({
 					<Form.Item name="name" label="名称" rules={[{ required: true, message: "请输入名称" }]}>
 						<Input placeholder="例如：ERP 数据库" />
 					</Form.Item>
-					<Form.Item name="connectorKey" label="连接器" rules={[{ required: true, message: "请选择连接器" }]}>
-						<Select
-							options={connectorOptions}
-							placeholder={connectorsLoading ? "连接器加载中..." : "请选择连接器"}
-							loading={connectorsLoading}
-							showSearch
-							optionFilterProp="label"
-							onChange={(value) => applyConnectorDefaults(value)}
-						/>
-					</Form.Item>
-					{selectedConnector?.description ? (
-						<Text type="secondary" className="block -mt-2 mb-3">
-							{selectedConnector.description}
-						</Text>
-					) : null}
-					{systemTypesFallbackActive ? (
-						<Alert
-							type="warning"
-							showIcon
-							className="mb-4"
-							message="系统类型字典未接通"
-							description={
-								<Space direction="vertical" size={4}>
-									<Text>{systemTypesFallbackMessage}</Text>
-									<Space size={8} wrap>
-										<Button type="link" className="h-auto p-0" onClick={() => router.push("/governance/standards/reference")}>
-											去参考码维护
-										</Button>
-										<Button type="link" className="h-auto p-0" onClick={() => router.push("/foundation/connectors")}>
-											查看连接器目录
-										</Button>
-									</Space>
-								</Space>
-							}
-						/>
-					) : null}
-					<Form.Item name="type" label="源类型" rules={[{ required: true, message: "请选择源类型" }]}>
-						<Select
-							options={systemTypeOptions}
-							placeholder={systemTypesLoading ? "系统类型加载中..." : "由连接器自动填充"}
-							loading={systemTypesLoading}
-							disabled={Boolean(connectorValue)}
-							onChange={(value) => handleTypeChange(value)}
-						/>
-					</Form.Item>
+						<Form.Item name="connectorKey" label="连接器" rules={[{ required: true, message: "请选择连接器" }]}>
+							<Select
+								options={connectorOptions}
+								placeholder={connectorsLoading ? "连接器加载中..." : "请选择连接器"}
+								loading={connectorsLoading}
+								disabled={connectorsLoading || connectorOptions.length === 0}
+								showSearch
+								optionFilterProp="label"
+								onChange={(value) => applyConnectorDefaults(value)}
+							/>
+						</Form.Item>
+						{connectorsError ? (
+							<Alert
+								type="error"
+								showIcon
+								className="mb-4"
+								message="连接器目录不可用"
+								description={connectorsError}
+								action={
+									<Button size="small" onClick={() => void loadConnectors()} loading={connectorsLoading}>
+										重新加载
+									</Button>
+								}
+							/>
+						) : null}
+						{selectedConnector?.description ? (
+							<Text type="secondary" className="block -mt-2 mb-3">
+								{selectedConnector.description}
+							</Text>
+						) : null}
+						<Form.Item
+							name="type"
+							label="源类型"
+							tooltip="源类型由连接器目录统一维护，选择连接器后自动填充"
+							rules={[{ required: true, message: "请选择连接器以确定源类型" }]}
+						>
+							<Input disabled placeholder="选择连接器后自动填充" />
+						</Form.Item>
 					{apiSource && (
 						<>
 							<Alert

@@ -151,7 +151,81 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
                 || isMetricsLineageDryRun(method, path)
                 || isMetricsDbtPublishGateway(method, path);
         }
+        if ("dts-airflow".equals(service)) {
+            return isAirflowProfileLease(method, path)
+                || isAirflowMaterializationRunGroup(method, path)
+                || isPost(
+                    method,
+                    path,
+                    "/api/internal/modeling/materialization/runtime-specs/consume"
+                );
+        }
         return false;
+    }
+
+    private boolean isAirflowProfileLease(String method, String path) {
+        String prefix =
+            "/api/internal/modeling/materialization/profile-leases/";
+        if (path == null || !path.startsWith(prefix)) {
+            return false;
+        }
+        String remainder = path.substring(prefix.length());
+        boolean consume = HttpMethod.POST.matches(method) &&
+            remainder.endsWith("/consume");
+        String leaseId = consume
+            ? remainder.substring(
+                0,
+                remainder.length() - "/consume".length()
+            )
+            : remainder;
+        if (!consume && !HttpMethod.DELETE.matches(method)) {
+            return false;
+        }
+        if (leaseId.contains("/")) {
+            return false;
+        }
+        try {
+            java.util.UUID.fromString(leaseId);
+            return true;
+        } catch (IllegalArgumentException ignored) {
+            return false;
+        }
+    }
+
+    private boolean isAirflowMaterializationRunGroup(
+        String method,
+        String path
+    ) {
+        if (!HttpMethod.POST.matches(method) || path == null) {
+            return false;
+        }
+        String prefix =
+            "/api/internal/modeling/materialization/run-groups/";
+        if (!path.startsWith(prefix)) {
+            return false;
+        }
+        String remainder = path.substring(prefix.length());
+        int separator = remainder.indexOf('/');
+        if (
+            separator < 1 ||
+            separator != remainder.lastIndexOf('/')
+        ) {
+            return false;
+        }
+        String groupId = remainder.substring(0, separator);
+        String action = remainder.substring(separator + 1);
+        if (
+            !"sync-probe".equals(action) &&
+            !"finalize".equals(action)
+        ) {
+            return false;
+        }
+        try {
+            java.util.UUID.fromString(groupId);
+            return true;
+        } catch (IllegalArgumentException ignored) {
+            return false;
+        }
     }
 
     private boolean isAnalyticsAssetPermission(String method, String path) {

@@ -500,6 +500,7 @@ services:
       APP_TEST_API_TOKEN: "${APP_TEST_API_TOKEN:-}"
       # Service-to-service auth(platform 入站 + 出站客户端); init.sh writes explicit values for legacy Compose.
       DTS_INBOUND_FROM_ANALYTICS: ${DTS_INBOUND_FROM_ANALYTICS:-}
+      DTS_INBOUND_FROM_AIRFLOW: ${DTS_INBOUND_FROM_AIRFLOW:-}
       DTS_INBOUND_FROM_INGESTION: ${DTS_INBOUND_FROM_INGESTION:-}
       DTS_INBOUND_FROM_METRICS: ${DTS_INBOUND_FROM_METRICS:-}
       DTS_PLATFORM_TO_ADMIN_TOKEN: ${DTS_PLATFORM_TO_ADMIN_TOKEN:-}
@@ -530,6 +531,9 @@ services:
       DTS_DBT_PROJECT_DIR: /opt/dts/dbt
       DTS_DBT_PROFILES_DIR: /opt/dts/dbt-profiles
       DTS_DBT_CONFIG_PATH: /opt/dts/upload/dbt-config.json
+      DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID: ${DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID:-0}
+      DTS_DBT_RUNTIME_PROFILE_ROOT: /run/dts-dbt-runtime
+      DTS_MODEL_RUNTIME_SPEC_SIGNING_KEY: ${DTS_MODEL_RUNTIME_SPEC_SIGNING_KEY:-}
       # Host-side absolute path mapping to DTS_DBT_PROJECT_DIR. Required when the backend
       # runs in a container and services/dts-dbt is bind-mounted to /opt/dts/dbt. Airflow
       # runs docker with `-v HOST:CONTAINER` bind mounts, so this must resolve to the same
@@ -590,6 +594,7 @@ services:
       - ./services/dts-platform/upload:/opt/dts/upload:Z
       - ./services/dts-dbt:/opt/dts/dbt:Z
       - ./services/dts-dbt/profiles:/opt/dts/dbt-profiles:Z
+      - /dev/shm/dts-dbt-runtime:/run/dts-dbt-runtime
       - ./services/dts-airflow/dags:/opt/airflow/dags:Z
     networks:
       - dts-core
@@ -1201,6 +1206,10 @@ services:
       DTS_TARGET_DB_NAME: ${PG_DB_BIADMIN:-biadmin}
       DTS_TARGET_DB_USER: ${PG_USER_BIADMIN:-biadmin}
       DTS_TARGET_DB_PASSWORD: ${PG_PWD_BIADMIN}
+      DTS_AIRFLOW_TO_PLATFORM_TOKEN: ${DTS_AIRFLOW_TO_PLATFORM:-}
+      DTS_DBT_PROJECT_HOST_ROOT: ${DTS_DBT_HOST_PROJECT_DIR}
+      DTS_DBT_RUNTIME_PROFILE_HOST_ROOT: /dev/shm/dts-dbt-runtime
+      DTS_PLATFORM_INTERNAL_BASE_URL: http://dts-platform:8081
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__CORE__DAG_IGNORE_FILE_SYNTAX: "regexp"

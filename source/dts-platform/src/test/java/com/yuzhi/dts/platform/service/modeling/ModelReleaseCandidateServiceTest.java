@@ -90,6 +90,7 @@ class ModelReleaseCandidateServiceTest {
         assertThat(replay.replayed()).isTrue();
         assertThat(replay.candidate()).isEqualTo(first.candidate());
         assertThat(event.getValue().eventType()).isEqualTo(CommandEventType.CREATED);
+        verify(repository).lockPlanForCandidate(TENANT, PLAN_ID);
         verify(repository).insert(any());
     }
 

@@ -171,6 +171,14 @@ public class ModelMaterializationBuildRepository {
                 Map.of("candidateId", candidate.id())
             );
         }
+        insertDispatch(
+            candidate,
+            target,
+            groupId,
+            dagRunId,
+            candidateArtifactChecksum,
+            now
+        );
         return new QueuedBuildGroup(
             candidate.id(),
             candidate.version(),
@@ -252,6 +260,140 @@ public class ModelMaterializationBuildRepository {
             first.airflowRunId(),
             first.artifactBundleChecksum(),
             List.copyOf(runs)
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public CandidateBuildScope loadCandidateBuildScope(
+        String tenantId,
+        UUID pipelineRunGroupId
+    ) {
+        if (
+            tenantId == null ||
+            tenantId.isBlank() ||
+            pipelineRunGroupId == null
+        ) {
+            throw new IllegalArgumentException(
+                "tenantId and pipelineRunGroupId are required"
+            );
+        }
+        List<CandidateBuildRow> rows = jdbcTemplate.query(
+            """
+            select pr.id as pipeline_run_id,
+                   pr.model_spec_id, pr.model_revision, pr.model_checksum,
+                   pr.implementation_revision, pr.implementation_checksum,
+                   pr.release_candidate_id, pr.release_candidate_version,
+                   pr.pipeline_run_group_id, pr.artifact_bundle_checksum as group_artifact_checksum,
+                   e.implementation_mode, e.dbt_unique_id,
+                   e.target_identifier,
+                   e.artifact_bundle_checksum as entry_artifact_checksum,
+                   e.dependency_snapshot_checksum,
+                   c.execution_target_key
+              from modeling_pipeline_run pr
+              join modeling_model_release_candidate c
+                on c.tenant_id = pr.tenant_id
+               and c.id = pr.release_candidate_id
+              join modeling_model_release_candidate_entry e
+                on e.tenant_id = pr.tenant_id
+               and e.id = pr.release_candidate_entry_id
+             where pr.tenant_id = ?
+               and pr.pipeline_run_group_id = ?
+               and pr.run_purpose = 'RELEASE_BUILD'
+             order by pr.model_spec_id, pr.id
+            """,
+            (row, rowNumber) ->
+                new CandidateBuildRow(
+                    row.getObject("pipeline_run_id", UUID.class),
+                    row.getObject("model_spec_id", UUID.class),
+                    row.getInt("model_revision"),
+                    row.getString("model_checksum"),
+                    row.getInt("implementation_revision"),
+                    row.getString("implementation_checksum"),
+                    row.getObject("release_candidate_id", UUID.class),
+                    row.getInt("release_candidate_version"),
+                    row.getObject("pipeline_run_group_id", UUID.class),
+                    row.getString("group_artifact_checksum"),
+                    row.getString("implementation_mode"),
+                    row.getString("dbt_unique_id"),
+                    row.getString("target_identifier"),
+                    row.getString("entry_artifact_checksum"),
+                    row.getString("dependency_snapshot_checksum"),
+                    row.getString("execution_target_key")
+                ),
+            tenantId.trim(),
+            pipelineRunGroupId
+        );
+        if (rows.isEmpty()) {
+            throw failure(
+                "MODEL_PIPELINE_RUN_GROUP_NOT_FOUND",
+                "Candidate build group does not exist",
+                Kind.CONFLICT,
+                Map.of("pipelineRunGroupId", pipelineRunGroupId)
+            );
+        }
+        CandidateBuildRow first = rows.getFirst();
+        boolean sameGroup = rows
+            .stream()
+            .allMatch(row ->
+                first.candidateId().equals(row.candidateId()) &&
+                first.candidateVersion() == row.candidateVersion() &&
+                first.pipelineRunGroupId().equals(
+                    row.pipelineRunGroupId()
+                ) &&
+                first.groupArtifactChecksum().equals(
+                    row.groupArtifactChecksum()
+                ) &&
+                first.executionTargetKey().equals(
+                    row.executionTargetKey()
+                )
+            );
+        if (!sameGroup) {
+            throw failure(
+                "MODEL_PIPELINE_RUN_GROUP_CONFLICT",
+                "Candidate build rows disagree on immutable group identity",
+                Kind.CONFLICT,
+                Map.of("pipelineRunGroupId", pipelineRunGroupId)
+            );
+        }
+
+        List<CandidateBuildEntry> entries = rows
+            .stream()
+            .map(row -> loadCandidateBuildEntry(tenantId.trim(), row))
+            .toList();
+        String aggregate = digest(
+            rows
+                .stream()
+                .sorted(
+                    Comparator.comparing(
+                        CandidateBuildRow::modelSpecId
+                    )
+                )
+                .flatMap(row ->
+                    List.of(
+                        row.modelSpecId().toString(),
+                        row.entryArtifactChecksum(),
+                        row.dependencySnapshotChecksum()
+                    )
+                        .stream()
+                )
+                .toList()
+        );
+        if (!aggregate.equals(first.groupArtifactChecksum())) {
+            throw failure(
+                "MATERIALIZATION_ARTIFACT_BUNDLE_DRIFT",
+                "Candidate artifact group checksum has drifted",
+                Kind.CONFLICT,
+                Map.of("pipelineRunGroupId", pipelineRunGroupId)
+            );
+        }
+        return new CandidateBuildScope(
+            tenantId.trim(),
+            first.candidateId(),
+            first.candidateVersion(),
+            first.pipelineRunGroupId(),
+            first.executionTargetKey(),
+            first.groupArtifactChecksum(),
+            entries
         );
     }
 
@@ -650,6 +792,142 @@ public class ModelMaterializationBuildRepository {
         );
     }
 
+    private void insertDispatch(
+        CandidateView candidate,
+        ExecutionTarget target,
+        UUID groupId,
+        String dagRunId,
+        String artifactBundleChecksum,
+        Instant now
+    ) {
+        int inserted = jdbcTemplate.update(
+            """
+            insert into modeling_materialization_dispatch (
+                id, tenant_id, candidate_id, candidate_version, attempt,
+                execution_target_key, airflow_dag_id, airflow_run_id,
+                artifact_bundle_checksum, status, dispatch_attempts,
+                next_attempt_at, recovered, created_at, last_modified_at
+            ) values (?, ?, ?, ?, 1, ?, ?, ?, ?, 'PENDING', 0, ?, false, ?, ?)
+            """,
+            groupId,
+            candidate.tenantId(),
+            candidate.id(),
+            candidate.version(),
+            target.executionTargetKey(),
+            target.releaseBuildDagId(),
+            dagRunId,
+            artifactBundleChecksum,
+            Timestamp.from(now),
+            Timestamp.from(now),
+            Timestamp.from(now)
+        );
+        if (inserted != 1) {
+            throw failure(
+                "MODEL_MATERIALIZATION_DISPATCH_CREATE_FAILED",
+                "Durable materialization dispatch could not be created",
+                Kind.CONFLICT,
+                Map.of("candidateId", candidate.id())
+            );
+        }
+    }
+
+    private CandidateBuildEntry loadCandidateBuildEntry(
+        String tenantId,
+        CandidateBuildRow row
+    ) {
+        List<ArtifactRow> artifacts = jdbcTemplate.query(
+            """
+            select artifact_key, path, content_checksum, content,
+                   artifact_type, node_kind, dbt_unique_id
+              from modeling_dbt_artifact
+             where model_spec_id = ? and revision = ?
+               and model_checksum = ? and implementation_revision = ?
+               and ownership = ? and status = 'COMPILED'
+             order by artifact_key, id
+            """,
+            (result, rowNumber) ->
+                new ArtifactRow(
+                    result.getString("artifact_key"),
+                    result.getString("path"),
+                    result.getString("content_checksum"),
+                    result.getString("content"),
+                    result.getString("artifact_type"),
+                    result.getString("node_kind"),
+                    result.getString("dbt_unique_id")
+                ),
+            row.modelSpecId(),
+            row.modelRevision(),
+            row.modelChecksum(),
+            row.implementationRevision(),
+            row.implementationMode()
+        );
+        if (artifacts.isEmpty()) {
+            throw failure(
+                "MATERIALIZATION_ARTIFACT_MISSING",
+                "Candidate build artifact is unavailable",
+                Kind.CONFLICT,
+                Map.of("modelSpecId", row.modelSpecId())
+            );
+        }
+        for (ArtifactRow artifact : artifacts) {
+            if (
+                artifact.content() == null ||
+                artifact.contentChecksum() == null ||
+                !artifact.contentChecksum().equals(
+                    sha256(artifact.content())
+                )
+            ) {
+                throw failure(
+                    "MATERIALIZATION_ARTIFACT_STALE",
+                    "Candidate build artifact content has drifted",
+                    Kind.CONFLICT,
+                    Map.of("modelSpecId", row.modelSpecId())
+                );
+            }
+        }
+        String actualArtifactChecksum = digest(
+            artifacts
+                .stream()
+                .flatMap(artifact ->
+                    List.of(
+                        artifact.artifactKey(),
+                        artifact.path(),
+                        artifact.contentChecksum()
+                    )
+                        .stream()
+                )
+                .toList()
+        );
+        if (!actualArtifactChecksum.equals(row.entryArtifactChecksum())) {
+            throw failure(
+                "MATERIALIZATION_ARTIFACT_BUNDLE_DRIFT",
+                "Candidate entry artifact checksum has drifted",
+                Kind.CONFLICT,
+                Map.of("modelSpecId", row.modelSpecId())
+            );
+        }
+        return new CandidateBuildEntry(
+            row.pipelineRunId(),
+            row.modelSpecId(),
+            row.modelRevision(),
+            row.modelChecksum(),
+            row.implementationRevision(),
+            row.implementationChecksum(),
+            row.dbtUniqueId(),
+            row.targetIdentifier(),
+            artifacts
+                .stream()
+                .map(artifact ->
+                    new BuildArtifact(
+                        artifact.path(),
+                        artifact.contentChecksum(),
+                        artifact.content()
+                    )
+                )
+                .toList()
+        );
+    }
+
     private ExecutionTarget executionTarget() {
         if (!properties.isEnabled()) {
             throw failure(
@@ -813,6 +1091,25 @@ public class ModelMaterializationBuildRepository {
         String activeClaimKey
     ) {}
 
+    private record CandidateBuildRow(
+        UUID pipelineRunId,
+        UUID modelSpecId,
+        int modelRevision,
+        String modelChecksum,
+        int implementationRevision,
+        String implementationChecksum,
+        UUID candidateId,
+        int candidateVersion,
+        UUID pipelineRunGroupId,
+        String groupArtifactChecksum,
+        String implementationMode,
+        String dbtUniqueId,
+        String targetIdentifier,
+        String entryArtifactChecksum,
+        String dependencySnapshotChecksum,
+        String executionTargetKey
+    ) {}
+
     private record ExecutionTarget(
         String executionTargetKey,
         String adapter,
@@ -847,4 +1144,42 @@ public class ModelMaterializationBuildRepository {
         String artifactBundleChecksum,
         List<QueuedBuildRun> runs
     ) {}
+
+    public record BuildArtifact(
+        String path,
+        String contentChecksum,
+        String content
+    ) {}
+
+    public record CandidateBuildEntry(
+        UUID pipelineRunId,
+        UUID modelSpecId,
+        int modelRevision,
+        String modelChecksum,
+        int implementationRevision,
+        String implementationChecksum,
+        String dbtUniqueId,
+        String targetIdentifier,
+        List<BuildArtifact> artifacts
+    ) {
+        public CandidateBuildEntry {
+            artifacts = artifacts == null
+                ? List.of()
+                : List.copyOf(artifacts);
+        }
+    }
+
+    public record CandidateBuildScope(
+        String tenantId,
+        UUID candidateId,
+        int candidateVersion,
+        UUID pipelineRunGroupId,
+        String executionTargetKey,
+        String artifactBundleChecksum,
+        List<CandidateBuildEntry> entries
+    ) {
+        public CandidateBuildScope {
+            entries = entries == null ? List.of() : List.copyOf(entries);
+        }
+    }
 }

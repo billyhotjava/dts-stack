@@ -47,6 +47,12 @@ class ServiceDependencyAuthenticationFilterTest {
     private static final String METRICS_PERMISSION_DENIED_AUDIT_CSV = "/api/internal/v1/asset-permission/audit/denied.csv";
     private static final String METRICS_POLICY_INJECTION_AUDIT = "/api/internal/v1/asset-permission/audit/policy-injection";
     private static final String METRICS_MODEL_VALIDATION = "/api/internal/metrics/model-validation";
+    private static final String AIRFLOW_PROFILE_LEASE =
+        "/api/internal/modeling/materialization/profile-leases/10000000-0000-0000-0000-000000000001";
+    private static final String AIRFLOW_RUNTIME_SPEC =
+        "/api/internal/modeling/materialization/runtime-specs/consume";
+    private static final String AIRFLOW_RUN_GROUP =
+        "/api/internal/modeling/materialization/run-groups/10000000-0000-0000-0000-000000000001";
 
     private PlatformInboundServiceAuthProperties props;
     private SvcTokenAuthService svcTokenAuthService;
@@ -59,6 +65,7 @@ class ServiceDependencyAuthenticationFilterTest {
         trusted.put("dts-ingestion", "ingestion-secret");
         trusted.put("dts-analytics", "analytics-secret");
         trusted.put("dts-metrics", "metrics-secret");
+        trusted.put("dts-airflow", "airflow-secret");
         props.setTrustedServices(trusted);
         props.setSharedSecret("shared-fallback");
         svcTokenAuthService = mock(SvcTokenAuthService.class);
@@ -206,6 +213,32 @@ class ServiceDependencyAuthenticationFilterTest {
     void metricsMatchingToken_canResolvePlatformDomainsAndDataStandards() throws Exception {
         assertMetricsCanAccess("POST", INTERNAL_DOMAINS_RESOLVE);
         assertMetricsCanAccess("POST", INTERNAL_DATA_STANDARDS_RESOLVE);
+    }
+
+    @Test
+    void airflowPairwiseTokenCanOnlyUseExactMaterializationRuntimePaths()
+        throws Exception {
+        assertAirflowCanAccess("POST", AIRFLOW_RUNTIME_SPEC);
+        assertAirflowCanAccess("POST", AIRFLOW_PROFILE_LEASE + "/consume");
+        assertAirflowCanAccess("DELETE", AIRFLOW_PROFILE_LEASE);
+        assertAirflowCanAccess("POST", AIRFLOW_RUN_GROUP + "/sync-probe");
+        assertAirflowCanAccess("POST", AIRFLOW_RUN_GROUP + "/finalize");
+
+        SecurityContextHolder.clearContext();
+        ServiceDependencyAuthenticationFilter filter =
+            new ServiceDependencyAuthenticationFilter(
+                props,
+                svcTokenAuthService
+            );
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.addHeader(SERVICE_HEADER, "dts-airflow");
+        req.addHeader(TOKEN_HEADER, "airflow-secret");
+        req.setMethod("POST");
+        req.setRequestURI(AIRFLOW_PROFILE_LEASE + "/arbitrary");
+
+        filter.doFilter(req, new MockHttpServletResponse(), chain);
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
     }
 
     @Test
@@ -405,6 +438,32 @@ class ServiceDependencyAuthenticationFilterTest {
         assertThat(auth).isNotNull();
         assertThat(auth.getPrincipal()).isEqualTo("service:dts-metrics");
         assertThat(auth.getAuthorities()).extracting(Object::toString).contains(AuthoritiesConstants.SERVICE_INTERNAL);
+        verify(localChain).doFilter(any(), any());
+    }
+
+    private void assertAirflowCanAccess(String method, String path)
+        throws Exception {
+        SecurityContextHolder.clearContext();
+        FilterChain localChain = mock(FilterChain.class);
+        ServiceDependencyAuthenticationFilter filter =
+            new ServiceDependencyAuthenticationFilter(
+                props,
+                svcTokenAuthService
+            );
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.addHeader(SERVICE_HEADER, "dts-airflow");
+        req.addHeader(TOKEN_HEADER, "airflow-secret");
+        req.setMethod(method);
+        req.setRequestURI(path);
+
+        filter.doFilter(req, new MockHttpServletResponse(), localChain);
+
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        assertThat(auth).isNotNull();
+        assertThat(auth.getPrincipal()).isEqualTo("service:dts-airflow");
+        assertThat(auth.getAuthorities())
+            .extracting(Object::toString)
+            .contains(AuthoritiesConstants.SERVICE_INTERNAL);
         verify(localChain).doFilter(any(), any());
     }
 }

@@ -6,6 +6,7 @@ import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
@@ -128,6 +129,59 @@ public class DbtScopedProjectService {
             throw new ScopedProjectException(
                 "MATERIALIZATION_BUNDLE_RELEASE_FAILED",
                 "Unable to release the candidate dbt project",
+                failure
+            );
+        }
+    }
+
+    /**
+     * Resolves a deterministic candidate project for artifact synchronization and verifies that
+     * dbt did not mutate any immutable input. Runtime-owned target/log output is deliberately
+     * excluded from the original bundle digest.
+     */
+    public Path verifyCandidateProject(String bundleChecksum) {
+        if (bundleChecksum == null || !SHA_256.matcher(bundleChecksum).matches()) {
+            throw new ScopedProjectException("MATERIALIZATION_BUNDLE_INVALID", "Invalid candidate bundle checksum");
+        }
+        Path workspaceDir = resolveWorkspaceDir();
+        Path scopedRoot = workspaceDir.resolve(SCOPED_ROOT_DIR).normalize();
+        Path project = scopedRoot.resolve("candidate-" + bundleChecksum).normalize();
+        ensureInside(scopedRoot, project);
+        if (
+            Files.isSymbolicLink(project) ||
+            !Files.isDirectory(project, LinkOption.NOFOLLOW_LINKS)
+        ) {
+            throw new ScopedProjectException(
+                "MATERIALIZATION_BUNDLE_MISSING",
+                "Candidate dbt project is unavailable"
+            );
+        }
+        try (var walk = Files.walk(project)) {
+            if (walk.anyMatch(Files::isSymbolicLink)) {
+                throw new ScopedProjectException(
+                    "MATERIALIZATION_BUNDLE_CONFLICT",
+                    "Candidate dbt project contains a symbolic link"
+                );
+            }
+        } catch (IOException failure) {
+            throw new ScopedProjectException(
+                "MATERIALIZATION_BUNDLE_READ_FAILED",
+                "Unable to inspect the candidate dbt project",
+                failure
+            );
+        }
+        try {
+            if (!bundleChecksum.equals(digestDirectory(project).checksum())) {
+                throw new ScopedProjectException(
+                    "MATERIALIZATION_BUNDLE_CONFLICT",
+                    "Candidate dbt project input does not match its bundle checksum"
+                );
+            }
+            return project;
+        } catch (IOException failure) {
+            throw new ScopedProjectException(
+                "MATERIALIZATION_BUNDLE_READ_FAILED",
+                "Unable to verify the candidate dbt project",
                 failure
             );
         }
@@ -553,6 +607,7 @@ public class DbtScopedProjectService {
             List<Path> files = walk
                 .filter(Files::isRegularFile)
                 .filter(path -> !ACTIVE_MARKER.equals(path.getFileName().toString()))
+                .filter(path -> !isDbtRuntimeOutput(directory, path))
                 .sorted(Comparator.comparing(path -> directory.relativize(path).toString()))
                 .toList();
             for (Path file : files) {
@@ -577,6 +632,15 @@ public class DbtScopedProjectService {
             }
         }
         return new BundleDigest(HexFormat.of().formatHex(digest.digest()), totalBytes);
+    }
+
+    private static boolean isDbtRuntimeOutput(Path directory, Path path) {
+        Path relative = directory.relativize(path);
+        if (relative.getNameCount() == 0) {
+            return false;
+        }
+        String root = relative.getName(0).toString();
+        return "target".equals(root) || "logs".equals(root);
     }
 
     private void promoteCandidateProject(

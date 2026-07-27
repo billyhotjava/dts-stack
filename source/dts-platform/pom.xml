@@ -535,6 +535,8 @@
                         <testInclude>**/config/TestSecurityConfiguration.java</testInclude>
                         <testInclude>**/repository/modeling/DataMartRepositoryTest.java</testInclude>
                         <testInclude>**/repository/modeling/ModelLifecycleRepositoryTest.java</testInclude>
+                        <testInclude>**/repository/modeling/ModelMaterializationStartServiceIT.java</testInclude>
+                        <testInclude>**/repository/modeling/ModelReleaseCandidateRepositoryIT.java</testInclude>
                         <testInclude>**/repository/modeling/ModelSpecRepositoryIT.java</testInclude>
                         <testInclude>**/repository/modeling/Sprint74ModelImplementationSettingsRepositoryIT.java</testInclude>
                         <testInclude>**/service/modeling/ModelImplementationCompatibilityAdapterTest.java</testInclude>
@@ -542,8 +544,19 @@
                         <testInclude>**/service/modeling/CanonicalModelLifecycleCompilerAdapterTest.java</testInclude>
                         <testInclude>**/service/etl/DbtScopedProjectServiceTest.java</testInclude>
                         <testInclude>**/service/etl/DbtScopedProjectServiceRealCompileIT.java</testInclude>
+                        <testInclude>**/service/etl/DbtDagServiceTest.java</testInclude>
+                        <testInclude>**/service/etl/AirflowDbtExecutionGatewayTest.java</testInclude>
+                        <testInclude>**/service/etl/DbtConfigServiceTest.java</testInclude>
+                        <testInclude>**/service/etl/DbtRuntimeProfile*.java</testInclude>
+                        <testInclude>**/service/etl/DbtTargetConnectionFactoryTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelLifecycleContractTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelLifecycleServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelBuildIntentServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelMaterializationDispatchServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelMaterializationRunArtifactServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelMaterializationRuntimeSpecServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/PostgresPhysicalRelationInspectorTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelReleaseCandidateServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelingDbtCompilerTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelSpecCompilerProjectionTest.java</testInclude>
                         <testInclude>**/service/modeling/PjmModelingFixture.java</testInclude>
@@ -583,6 +596,9 @@
                         <testInclude>**/web/rest/catalog/CatalogAssetTagSearchResourceTest.java</testInclude>
                         <testInclude>**/web/rest/catalog/CatalogTag*.java</testInclude>
                         <testInclude>**/web/rest/internal/CatalogExternalAssetIdentity*.java</testInclude>
+                        <testInclude>**/web/rest/internal/DbtRuntimeProfile*.java</testInclude>
+                        <testInclude>**/web/rest/internal/ModelMaterializationRunInternalResourceTest.java</testInclude>
+                        <testInclude>**/web/rest/internal/ModelMaterializationRuntimeSpecInternalResourceTest.java</testInclude>
                     </testIncludes>
                     <testExcludes>
                         <!-- TODO: restore when cf5ff765 session refactor tests are updated -->

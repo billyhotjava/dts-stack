@@ -470,6 +470,34 @@ prepare_data_dirs(){
   fi
 }
 
+prepare_dbt_runtime_profile_root(){
+  local runtime_root="/dev/shm/dts-dbt-runtime"
+  local expected_uid="${DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID}"
+  if [[ -L "${runtime_root}" ]]; then
+    echo "[init.sh] ERROR: dbt runtime profile root must not be a symbolic link: ${runtime_root}" >&2
+    return 1
+  fi
+  if [[ -e "${runtime_root}" && ! -d "${runtime_root}" ]]; then
+    echo "[init.sh] ERROR: dbt runtime profile root is not a directory: ${runtime_root}" >&2
+    return 1
+  fi
+  mkdir -p -- "${runtime_root}"
+  chmod 0700 -- "${runtime_root}"
+  local actual_uid
+  actual_uid="$(stat -c '%u' "${runtime_root}")"
+  if [[ "${actual_uid}" != "${expected_uid}" ]]; then
+    echo "[init.sh] ERROR: dbt runtime profile root uid=${actual_uid}; expected ${expected_uid}." >&2
+    echo "[init.sh] ERROR: fix ownership explicitly before starting the production materialization path." >&2
+    return 1
+  fi
+  local filesystem_type
+  filesystem_type="$(stat -f -c '%T' "${runtime_root}")"
+  if [[ "${filesystem_type}" != "tmpfs" && "${filesystem_type}" != "ramfs" ]]; then
+    echo "[init.sh] ERROR: dbt runtime profile root must be tmpfs/ramfs; found ${filesystem_type}." >&2
+    return 1
+  fi
+}
+
 ensure_airflow_openmetadata_plugin() {
   local plugin_dir="services/dts-airflow/extra/openmetadata_managed_apis"
   local metadata_dir="services/dts-airflow/extra/metadata"
@@ -858,6 +886,7 @@ generate_env_base(){
   : "${DTS_DBT_PROJECT_DIR:=/opt/dts/dbt}"
   : "${DTS_DBT_PROFILES_DIR:=/opt/dts/dbt-profiles}"
   : "${DTS_DBT_CONFIG_PATH:=/opt/dts/upload/dbt-config.json}"
+  : "${DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID:=$(id -u)}"
   # Host-side mapping for DTS_DBT_PROJECT_DIR — reuses DBT_PROJECT_DIR (stack-root relative).
   # The platform backend returns this path to Airflow as the HOST side of docker -v mounts.
   : "${DTS_DBT_HOST_PROJECT_DIR:=${DBT_PROJECT_DIR}}"
@@ -919,8 +948,11 @@ generate_env_base(){
   : "${DTS_PLATFORM_TO_ADMIN_TOKEN:=${SECRET}}"
   : "${DTS_INBOUND_FROM_INGESTION:=${SECRET}}"
   : "${DTS_INBOUND_FROM_ANALYTICS:=${SECRET}}"
+  : "${DTS_INBOUND_FROM_AIRFLOW:=${SECRET}}"
   : "${DTS_INGESTION_TO_PLATFORM:=${DTS_INBOUND_FROM_INGESTION}}"
   : "${DTS_ANALYTICS_TO_PLATFORM:=${DTS_INBOUND_FROM_ANALYTICS}}"
+  : "${DTS_AIRFLOW_TO_PLATFORM:=${DTS_INBOUND_FROM_AIRFLOW}}"
+  : "${DTS_MODEL_RUNTIME_SPEC_SIGNING_KEY:=$(generate_fernet)}"
   : "${DTS_ANALYTICS_TO_ADMIN_TOKEN:=${DTS_PLATFORM_TO_ADMIN_TOKEN}}"
   if [ "${DTS_ANALYTICS_TO_ADMIN_TOKEN}" = "${DTS_PLATFORM_TO_ADMIN_TOKEN}" ]; then
     : "${AUDIT_INGEST_SERVICE_TOKENS:=${DTS_PLATFORM_TO_ADMIN_TOKEN}}"
@@ -1208,8 +1240,11 @@ DTS_ADMIN_JAVA_TOOL_OPTIONS_EXTRA="${DTS_ADMIN_JAVA_TOOL_OPTIONS_EXTRA_ENV}"
 DTS_PLATFORM_TO_ADMIN_TOKEN=${DTS_PLATFORM_TO_ADMIN_TOKEN}
 DTS_INBOUND_FROM_INGESTION=${DTS_INBOUND_FROM_INGESTION}
 DTS_INBOUND_FROM_ANALYTICS=${DTS_INBOUND_FROM_ANALYTICS}
+DTS_INBOUND_FROM_AIRFLOW=${DTS_INBOUND_FROM_AIRFLOW}
 DTS_INGESTION_TO_PLATFORM=${DTS_INGESTION_TO_PLATFORM}
 DTS_ANALYTICS_TO_PLATFORM=${DTS_ANALYTICS_TO_PLATFORM}
+DTS_AIRFLOW_TO_PLATFORM=${DTS_AIRFLOW_TO_PLATFORM}
+DTS_MODEL_RUNTIME_SPEC_SIGNING_KEY=${DTS_MODEL_RUNTIME_SPEC_SIGNING_KEY}
 DTS_ANALYTICS_TO_ADMIN_TOKEN=${DTS_ANALYTICS_TO_ADMIN_TOKEN}
 AUDIT_INGEST_SERVICE_TOKENS=${AUDIT_INGEST_SERVICE_TOKENS}
 
@@ -1286,6 +1321,7 @@ DTS_DBT_PROJECT_DIR=${DTS_DBT_PROJECT_DIR}
 DTS_DBT_PROFILES_DIR=${DTS_DBT_PROFILES_DIR}
 DTS_DBT_CONFIG_PATH=${DTS_DBT_CONFIG_PATH}
 DTS_DBT_HOST_PROJECT_DIR=${DTS_DBT_HOST_PROJECT_DIR}
+DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID=${DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID}
 DOCKER_GID=${DOCKER_GID}
 IMAGE_ADDAX=${IMAGE_ADDAX}
 ADDAX_DOCKER_NETWORK=${ADDAX_DOCKER_NETWORK}
@@ -1541,6 +1577,7 @@ if [[ "${RESET_PG_DATA}" == "true" ]]; then
   reset_pg_data_dir
 fi
 prepare_data_dirs
+prepare_dbt_runtime_profile_root
 
 ensure_airflow_openmetadata_plugin
 
