@@ -1,4 +1,4 @@
-import { DatabaseOutlined, TableOutlined } from "@ant-design/icons";
+import { DatabaseOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Alert, Button, Layout, Spin, Tabs, Tag, Tooltip } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
@@ -20,6 +20,9 @@ import {
 	normalizeLayer,
 	UNASSIGNED_DOMAIN_KEY,
 } from "./assets/assetPageShared";
+
+/** 矩阵最多展示的主题域列数，超出合并为「其他 N 个域」并明示 */
+const MATRIX_MAX_COLUMNS = 8;
 
 type MatrixCell = { layer: string; domainId: string | null; total: number; attention: number };
 
@@ -68,6 +71,7 @@ export default function AssetOverviewPage() {
 		truncated?: boolean;
 	}>({});
 	const [treeLoading, setTreeLoading] = useState(false);
+	const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
 
 	// ?view=table 旧深链兼容：台账已是独立路由
 	useEffect(() => {
@@ -134,6 +138,7 @@ export default function AssetOverviewPage() {
 				listCatalogAssetsV2({ page: 0, size: 50, ...scope }) as Promise<any>,
 			]);
 			setOverview(overviewResp || null);
+			setLastUpdatedAt(new Date());
 			const rows: AssetRow[] = Array.isArray(rowsResp?.content)
 				? rowsResp.content.map((item: any) => ({
 						id: String(item.id || ""),
@@ -189,14 +194,40 @@ export default function AssetOverviewPage() {
 			entry.total += cell.total;
 			totals.set(key, entry);
 		}
-		return [...totals.values()]
-			.sort((a, b) => b.total - a.total)
-			.slice(0, 8)
-			.map((entry) => ({
-				key: entry.key,
-				name: entry.key === null ? "未归域" : domainMap.get(entry.key) || "未知主题域",
-			}));
+		const sorted = [...totals.values()].sort((a, b) => b.total - a.total);
+		const named = sorted.map((entry) => ({
+			key: entry.key,
+			name: entry.key === null ? "未归域" : domainMap.get(entry.key) || "未知主题域",
+			total: entry.total,
+		}));
+		if (named.length <= MATRIX_MAX_COLUMNS) return named;
+		// 截断必须明示：此前静默 slice(0,8)，域多了用户不知道自己看的是局部
+		const head = named.slice(0, MATRIX_MAX_COLUMNS);
+		const rest = named.slice(MATRIX_MAX_COLUMNS);
+		return [
+			...head,
+			{
+				key: "__OTHERS__" as const,
+				name: `其他 ${rest.length} 个域`,
+				total: rest.reduce((sum, item) => sum + item.total, 0),
+				mergedNames: rest.map((item) => item.name),
+			},
+		];
 	}, [overview, domainMap]);
+
+	const lastUpdatedText = useMemo(
+		() => (lastUpdatedAt ? lastUpdatedAt.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : "—"),
+		[lastUpdatedAt],
+	);
+
+	// 可见域 <=1 时矩阵退化为单行分层分布：否则会画出 8 行 x 1 列、其中多行是「-」的空表
+	const isSingleDomainScope = matrixColumns.length === 1;
+
+	const scopeLabel = domain
+		? domain === UNASSIGNED_DOMAIN_KEY
+			? "未归域"
+			: domainMap.get(domain) || "当前主题域"
+		: "全部主题域";
 
 	const matrixCellMap = useMemo(() => {
 		const map = new Map<string, MatrixCell>();
@@ -304,21 +335,36 @@ export default function AssetOverviewPage() {
 					<PageHeader
 						title="资产地图"
 						actions={
-							<div className="flex gap-2">
-								<Button type="primary" ghost icon={<TableOutlined />} onClick={() => drillToLedger()}>
-									进入台账
-								</Button>
-								<Button onClick={() => void loadOverview()} loading={overviewLoading}>
-									刷新
-								</Button>
+							<div className="flex items-center gap-2 text-xs text-slate-500">
+								<span>统计更新于 {lastUpdatedText}</span>
+								<Button
+									type="text"
+									size="small"
+									icon={<ReloadOutlined />}
+									aria-label="刷新统计"
+									loading={overviewLoading}
+									onClick={() => void loadOverview()}
+								/>
 							</div>
 						}
 					/>
-					<div className="rounded-md border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
-						统计概览视图：数字基于当前主题域范围的全量聚合。查找具体资产、筛选、导出与运维诊断请进入台账。
+					<div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+						<span>统计概览：查找、筛选与处置在台账完成。</span>
+						<button
+							type="button"
+							data-testid="scope-echo"
+							onClick={() => drillToLedger()}
+							className="rounded bg-slate-100 px-2 py-0.5 text-slate-700 transition hover:bg-slate-200"
+						>
+							当前范围：{scopeLabel}
+						</button>
 					</div>
 					{overview?.truncated ? (
-						<Alert type="warning" showIcon message={`资产数量超过扫描上限，以下统计基于前 ${overview.scanned} 条`} />
+						<Alert
+							type="warning"
+							showIcon
+							message={`统计基于前 ${overview.scanned} 条可见资产（已达统计上限），实际总量可能更多`}
+						/>
 					) : null}
 
 					<div className="grid gap-3 md:grid-cols-[minmax(180px,240px)_1fr]">
@@ -341,14 +387,47 @@ export default function AssetOverviewPage() {
 					<div className="rounded-xl border border-slate-200 bg-white p-4" data-testid="asset-overview-matrix">
 						<div className="mb-3 flex flex-wrap items-center justify-between gap-3">
 							<div>
-								<div className="text-sm font-semibold text-slate-900">分层×主题域矩阵</div>
+								<div className="text-sm font-semibold text-slate-900">
+									{isSingleDomainScope ? "分层分布" : "分层×主题域矩阵"}
+								</div>
 								<div className="mt-1 text-xs text-slate-500">
-									格子 = 该分层×主题域下的资产数，点击进入台账查看明细。
+									{isSingleDomainScope
+										? "当前范围只有一个主题域，按分层展示；点击进入台账查看明细。"
+										: "格子 = 该分层×主题域下的资产数，点击进入台账查看明细。"}
 								</div>
 							</div>
 							<Spin spinning={overviewLoading} size="small" />
 						</div>
-						{matrixColumns.length ? (
+						{isSingleDomainScope ? (
+							<div className="flex flex-wrap gap-2" data-testid="layer-distribution">
+								{[...LAYER_ORDER].map((layer) => {
+									const cell = matrixCellMap.get(
+										`${layer}|${matrixColumns[0].key === null ? "__NULL__" : matrixColumns[0].key}`,
+									);
+									const meta = LAYER_META[layer];
+									return (
+										<button
+											key={layer}
+											type="button"
+											disabled={!cell}
+											onClick={() => cell && drillToLedger(layer, matrixColumns[0].key)}
+											className={`rounded-md border px-3 py-2 text-left text-xs transition ${
+												cell ? `${meta.tone} hover:ring-2 hover:ring-blue-200` : "border-slate-100 bg-slate-50 text-slate-300"
+											}`}
+										>
+											<div className="font-medium text-slate-700">
+												{meta.label}
+												{meta.code ? <span className="ml-1 text-[10px] text-slate-400">{meta.code}</span> : null}
+											</div>
+											<div className="mt-0.5 tabular-nums font-semibold text-slate-900">{cell ? cell.total : "—"}</div>
+											{cell && cell.attention > 0 ? (
+												<div className="text-[10px] text-amber-600">待处置 {cell.attention}</div>
+											) : null}
+										</button>
+									);
+								})}
+							</div>
+						) : matrixColumns.length ? (
 							<div className="overflow-x-auto">
 								<table className="w-full min-w-[720px] border-separate" style={{ borderSpacing: 4 }}>
 									<thead>
@@ -409,9 +488,6 @@ export default function AssetOverviewPage() {
 					<div className="rounded-xl border border-slate-200 bg-white p-4">
 						<div className="mb-3 flex items-center justify-between gap-3">
 							<div className="text-sm font-semibold text-slate-900">待处置 Top 5</div>
-							<Button size="small" onClick={() => drillToLedger()}>
-								去台账处置
-							</Button>
 						</div>
 						{attentionRows.length ? (
 							<div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">

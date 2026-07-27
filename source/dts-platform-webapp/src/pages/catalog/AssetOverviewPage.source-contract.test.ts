@@ -80,3 +80,37 @@ test("不再存在 fallback- 静默降级", () => {
 	assert.doesNotMatch(PAGE, /fallback-/);
 });
 
+test("地图页 chrome 按钮不超过 1 个", () => {
+	const buttons = [...PAGE.matchAll(/<Button\b/g)];
+	assert.ok(buttons.length <= 1, `地图页应只保留 1 个 icon-only 刷新按钮，实际 ${buttons.length} 个`);
+});
+
+test("不再有进入台账与去台账处置按钮", () => {
+	// 只断言不存在这两个按钮；说明文字里出现「进入台账查看明细」是允许的
+	assert.doesNotMatch(PAGE, /<Button[^>]*>\s*进入台账/);
+	assert.doesNotMatch(PAGE, /去台账处置\s*<\/Button>/);
+	assert.doesNotMatch(PAGE, /去台账处置/);
+});
+
+test("矩阵列不再硬编码截断且单域时退化", () => {
+	assert.doesNotMatch(PAGE, /\.slice\(0,\s*8\)/);
+	assert.match(PAGE, /isSingleDomainScope/);
+	assert.match(PAGE, /其他 \$\{rest\.length\} 个域/);
+});
+
+test("分层呈现带中文 label 与弱化代号", () => {
+	assert.match(PAGE, /meta\.code/);
+});
+
+test("截断警告文案反映真实原因", () => {
+	assert.doesNotMatch(PAGE, /资产数量超过扫描上限/);
+	assert.match(PAGE, /统计上限/);
+});
+
+test("五张 KPI 卡已收敛为总量卡 + 缺口面板", () => {
+	assert.match(PAGE, /GovernanceGapPanel/);
+	assert.equal([...PAGE.matchAll(/<MetricTile/g)].length, 1);
+	// 旧的 chips 渲染块已删除（注释中提及合并口径是允许的）
+	assert.doesNotMatch(PAGE, /governanceChips/);
+});
+
