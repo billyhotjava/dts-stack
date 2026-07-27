@@ -147,7 +147,12 @@ public class CatalogAssetPortalService {
             }
         }
         int openMetadataReturned = items.size();
-        AssetPage legacyPage = listLegacyAssets(query, activeDept, page, size, visibleLegacyIds, Math.max(0, size - items.size()));
+        // legacy 排在 OpenMetadata 之后组成同一个逻辑列表，其偏移量必须以「未过滤的」
+        // OpenMetadata 总数为边界：该值是纯 DB count，逐页恒定。若改用「减去本页隐藏行」
+        // 的近似值，边界会逐页漂移，翻页时出现重复或漏行。
+        int legacyOffset = (int) Math.max(0, (long) page * size - pageData.getTotalElements());
+        int legacyLimit = Math.max(0, size - openMetadataReturned);
+        AssetPage legacyPage = listLegacyAssets(query, activeDept, legacyOffset, legacyLimit, visibleLegacyIds);
         if (!legacyPage.content().isEmpty()) {
             items.addAll(legacyPage.content());
         }
@@ -304,34 +309,32 @@ public class CatalogAssetPortalService {
         Map<UUID, CatalogDataset> legacyById
     ) {}
 
-    private AssetPage listLegacyAssets(
-        AssetQuery query,
-        String activeDept,
-        int page,
-        int size,
-        List<UUID> excludedIds,
-        int remainingSlots
-    ) {
-        var pageable = PageRequest.of(
-            page,
-            size,
-            Sort.by(Sort.Direction.DESC, "lastModifiedDate").and(Sort.by(Sort.Direction.DESC, "createdDate"))
-        );
-        Page<CatalogDataset> legacyPage = datasetRepository.findAll(buildLegacySpec(query), pageable);
-        List<CatalogDataset> visiblePage = legacyPage
+    /**
+     * 取 legacy 目录中位于组合列表 {@code offset} 之后的至多 {@code limit} 行。
+     *
+     * <p>legacy 与 OpenMetadata 是两个独立数据源，拼成一个逻辑列表时必须按组合偏移量取数。
+     * 历史实现沿用 OpenMetadata 的页码，导致 OpenMetadata 占满首页时 legacy 行永远取不到。
+     * 可见性过滤在查询之后进行，因此 skip 必须作用于「已过滤」的行，而不是原始行。
+     */
+    private AssetPage listLegacyAssets(AssetQuery query, String activeDept, int offset, int limit, List<UUID> excludedIds) {
+        Sort sort = Sort.by(Sort.Direction.DESC, "lastModifiedDate").and(Sort.by(Sort.Direction.DESC, "createdDate"));
+        int fetchSize = Math.max(1, offset + Math.max(limit, 1));
+        Page<CatalogDataset> legacyPage = datasetRepository.findAll(buildLegacySpec(query), PageRequest.of(0, fetchSize, sort));
+        List<CatalogDataset> visible = legacyPage
             .getContent()
             .stream()
             .filter(dataset -> dataset.getId() == null || excludedIds == null || !excludedIds.contains(dataset.getId()))
             .filter(dataset -> canRead(null, dataset, activeDept))
             .toList();
-        List<AssetSummary> items = visiblePage
+        List<AssetSummary> items = visible
             .stream()
-            .limit(Math.max(0, remainingSlots))
+            .skip(offset)
+            .limit(Math.max(0, limit))
             .map(this::toLegacySummary)
             .toList();
-        long hiddenOnCurrentPage = Math.max(0, legacyPage.getNumberOfElements() - visiblePage.size());
-        long total = Math.max(0, legacyPage.getTotalElements() - hiddenOnCurrentPage);
-        return new AssetPage(items, total, page, size, items.size(), "dts-catalog");
+        long hidden = Math.max(0, legacyPage.getNumberOfElements() - visible.size());
+        long total = Math.max(0, legacyPage.getTotalElements() - hidden);
+        return new AssetPage(items, total, 0, fetchSize, items.size(), "dts-catalog");
     }
 
     public AssetDetail getAsset(UUID id, String activeDept) {

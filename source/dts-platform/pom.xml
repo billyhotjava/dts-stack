@@ -558,6 +558,7 @@
                         <testInclude>**/service/catalog/CatalogAssetOverviewAggregatorTest.java</testInclude>
                         <testInclude>**/service/catalog/CatalogAssetPortalServicePermissionParityTest.java</testInclude>
                         <testInclude>**/service/catalog/CatalogAssetPortalTagFilterTest.java</testInclude>
+                        <testInclude>**/service/catalog/CatalogAssetPortalStatsTest.java</testInclude>
                         <testInclude>**/service/catalog/CatalogAssetTag*.java</testInclude>
                         <testInclude>**/service/catalog/CodeAssetGrantWriterTest.java</testInclude>
                         <testInclude>**/service/catalog/CatalogExternalAssetIdentity*.java</testInclude>
