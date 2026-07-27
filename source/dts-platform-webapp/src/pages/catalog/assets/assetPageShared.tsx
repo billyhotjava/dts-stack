@@ -74,14 +74,14 @@ export const CLASSIFICATION_LABEL: Record<string, string> = {
 	CONFIDENTIAL: "机密",
 };
 
-export const LAYER_META: Record<string, { label: string; color: string; tone: string }> = {
-	SOURCE: { label: "来源", color: "magenta", tone: "border-pink-200 bg-pink-50/60" },
-	ODS: { label: "ODS", color: "default", tone: "border-slate-200 bg-slate-50/70" },
-	STG: { label: "STG", color: "geekblue", tone: "border-indigo-200 bg-indigo-50/60" },
-	DWD: { label: "DWD", color: "blue", tone: "border-blue-200 bg-blue-50/60" },
-	DIM: { label: "DIM", color: "purple", tone: "border-purple-200 bg-purple-50/60" },
-	DWS: { label: "DWS", color: "cyan", tone: "border-cyan-200 bg-cyan-50/60" },
-	ADS: { label: "ADS", color: "green", tone: "border-green-200 bg-green-50/60" },
+export const LAYER_META: Record<string, { label: string; code?: string; color: string; tone: string }> = {
+	SOURCE: { label: "来源层", code: "SOURCE", color: "magenta", tone: "border-pink-200 bg-pink-50/60" },
+	ODS: { label: "贴源层", code: "ODS", color: "default", tone: "border-slate-200 bg-slate-50/70" },
+	STG: { label: "暂存层", code: "STG", color: "geekblue", tone: "border-indigo-200 bg-indigo-50/60" },
+	DWD: { label: "明细层", code: "DWD", color: "blue", tone: "border-blue-200 bg-blue-50/60" },
+	DIM: { label: "维度层", code: "DIM", color: "purple", tone: "border-purple-200 bg-purple-50/60" },
+	DWS: { label: "汇总层", code: "DWS", color: "cyan", tone: "border-cyan-200 bg-cyan-50/60" },
+	ADS: { label: "应用层", code: "ADS", color: "green", tone: "border-green-200 bg-green-50/60" },
 	OTHER: { label: "未分层", color: "default", tone: "border-slate-200 bg-white" },
 };
 

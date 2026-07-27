@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import {
 	GOVERNANCE_STATUS_DICT,
 	LIFECYCLE_STATUS_DICT,
@@ -56,5 +57,28 @@ test("生命周期字典覆盖 CatalogAssetLifecycleStatus 全部枚举", () => 
 		"PENDING_REVIEW",
 	]) {
 		assert.ok(LIFECYCLE_STATUS_DICT[key], `生命周期字典缺少 ${key}`);
+	}
+});
+
+test("生命周期字典与后端 Java 枚举逐个对齐（防漂移）", () => {
+	const javaSource = readFileSync(
+		new URL(
+			"../../../../../dts-platform/src/main/java/com/yuzhi/dts/platform/service/catalog/CatalogAssetLifecycleStatus.java",
+			import.meta.url,
+		),
+		"utf8",
+	);
+	const body = javaSource.slice(
+		javaSource.indexOf("{"),
+		javaSource.indexOf(";", javaSource.indexOf("{")),
+	);
+	const javaEnums = [...body.matchAll(/^\s{4}([A-Z][A-Z_]*)\s*,?\s*$/gm)].map((m) => m[1]);
+
+	assert.ok(javaEnums.length >= 9, `解析到的 Java 枚举过少：${javaEnums.join(",")}`);
+	for (const name of javaEnums) {
+		assert.ok(
+			LIFECYCLE_STATUS_DICT[name],
+			`后端新增枚举 ${name} 未补中文翻译，请更新 LIFECYCLE_STATUS_DICT`,
+		);
 	}
 });
