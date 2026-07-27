@@ -37,23 +37,52 @@ class CanonicalModelLifecycleCompilerAdapterTest {
         ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
         ModelSpecView model = model(ImplementationMode.DESIGNER_GENERATED);
         ImplementationView implementation = implementation(ImplementationMode.DESIGNER_GENERATED);
+        CanonicalModelLifecycleCompilerAdapter compiler = new CanonicalModelLifecycleCompilerAdapter(modelSpecs, null);
 
-        List<ModelLifecycleContract.ArtifactWrite> artifacts = new CanonicalModelLifecycleCompilerAdapter(modelSpecs, null)
-            .compile("tenant-a", model, implementation);
+        List<ModelLifecycleContract.ArtifactWrite> artifacts = compiler.compile("tenant-a", model, implementation);
+        List<ModelLifecycleContract.ArtifactWrite> replay = compiler.compile("tenant-a", model, implementation);
+        List<ModelLifecycleContract.ArtifactWrite> renamedTarget = compiler.compile(
+            "tenant-a",
+            model,
+            implementation(ImplementationMode.DESIGNER_GENERATED, "dwd_customer_detail_v2", "c".repeat(64))
+        );
 
+        assertThat(replay).isEqualTo(artifacts);
+        assertThat(renamedTarget).extracting(ModelLifecycleContract.ArtifactWrite::path)
+            .containsExactlyInAnyOrderElementsOf(
+                artifacts.stream().map(ModelLifecycleContract.ArtifactWrite::path).toList()
+            );
+        assertThat(renamedTarget).filteredOn(artifact -> artifact.artifactType().equals("SQL")).singleElement().satisfies(
+            renamed -> {
+                ModelLifecycleContract.ArtifactWrite current = artifacts
+                    .stream()
+                    .filter(artifact -> artifact.artifactType().equals("SQL"))
+                    .findFirst()
+                    .orElseThrow();
+                assertThat(renamed.content()).contains("alias='dwd_customer_detail_v2'");
+                assertThat(renamed.checksum()).isNotEqualTo(current.checksum());
+            }
+        );
         assertThat(artifacts).extracting(ModelLifecycleContract.ArtifactWrite::artifactType)
             .containsExactlyInAnyOrder("STG_SQL", "SQL", "SCHEMA", "TEST");
+        assertThat(artifacts).allSatisfy(artifact -> assertThat(artifact.physicalAssetRef()).isNull());
         assertThat(artifacts).filteredOn(artifact -> artifact.artifactType().equals("STG_SQL")).singleElement().satisfies(artifact -> {
-            assertThat(artifact.path()).endsWith("/stg_customer_detail.sql");
+            assertThat(artifact.path()).endsWith("/stg_model_30000000_0000_0000_0000_000000000001.sql");
             assertThat(artifact.content()).startsWith("{{ config(materialized='ephemeral') }}");
             assertThat(artifact.nodeKind()).isEqualTo("STG");
             assertThat(artifact.materialization()).isEqualTo("ephemeral");
-            assertThat(artifact.physicalAssetRef()).isEqualTo(UUID.fromString("50000000-0000-0000-0000-000000000001"));
         });
         assertThat(artifacts).filteredOn(artifact -> artifact.artifactType().equals("SQL")).singleElement()
             .extracting(ModelLifecycleContract.ArtifactWrite::content)
             .asString()
-            .contains("{{ ref('stg_customer_detail') }}");
+            .contains("materialized='table'")
+            .contains("alias='dwd_customer_detail'")
+            .contains("'tenantId':'tenant-a'")
+            .contains("'planId':'10000000-0000-0000-0000-000000000001'")
+            .contains("'modelSpecId':'30000000-0000-0000-0000-000000000001'")
+            .contains("'revision':2")
+            .contains("'implementationRevision':5")
+            .contains("{{ ref('stg_model_30000000_0000_0000_0000_000000000001') }}");
     }
 
     @Test
@@ -99,6 +128,14 @@ class CanonicalModelLifecycleCompilerAdapterTest {
     }
 
     private static ImplementationView implementation(ImplementationMode ownership) {
+        return implementation(ownership, "dwd_customer_detail", "b".repeat(64));
+    }
+
+    private static ImplementationView implementation(
+        ImplementationMode ownership,
+        String targetPhysicalName,
+        String implementationChecksum
+    ) {
         return new ImplementationView(
             UUID.fromString("60000000-0000-0000-0000-000000000001"),
             MODEL_ID,
@@ -106,15 +143,19 @@ class CanonicalModelLifecycleCompilerAdapterTest {
             2,
             "a".repeat(64),
             ownership,
-            "warehouse",
-            "model.warehouse.customer_detail",
+            "plan_10000000_0000_0000_0000_000000000001",
+            "model.plan_10000000_0000_0000_0000_000000000001.model_30000000_0000_0000_0000_000000000001",
             "ACTIVE",
             5,
-            "b".repeat(64),
+            implementationChecksum,
             InputMode.PHYSICAL_ASSET,
             List.of(new PhysicalAssetInput(UUID.fromString("50000000-0000-0000-0000-000000000001"), "source-v2")),
             List.of(),
-            Map.of(),
+            Map.of(
+                "targetPhysicalName", targetPhysicalName,
+                "loadStrategy", "FULL",
+                "partitionFields", List.of()
+            ),
             "table"
         );
     }

@@ -72,6 +72,9 @@ class ModelingDbtCompilerTest {
             List.of(),
             List.of(new FieldMapping("raw_project_no", "project_no")),
             Map.of(
+                "targetPhysicalName", "project_node_detail",
+                "loadStrategy", "FULL",
+                "partitionFields", List.of(),
                 "casts", Map.of("project_no", "string"),
                 "deduplicateBy", List.of("project_no")
             ),
@@ -85,17 +88,144 @@ class ModelingDbtCompilerTest {
         assertThat(first.files()).containsOnlyKeys(
             "stg_project_node_detail.sql",
             "project_node_detail.sql",
-            "project_node_detail.yml",
-            "project_node_detail.tests.yml"
+            "project_node_detail.yml"
         );
         assertThat(first.files()).isEqualTo(replay.files());
         assertThat(first.files().get("stg_project_node_detail.sql"))
             .startsWith("{{ config(materialized='ephemeral') }}")
-            .contains("cast(raw_project_no as string) as project_no")
+            .contains("cast(raw_project_no as text) as project_no")
             .doesNotContain("left join")
             .doesNotContain("where is_deleted")
             .contains("row_number() over (partition by project_no order by project_no)");
         assertThat(first.files().get("project_node_detail.sql")).contains("{{ ref('stg_project_node_detail') }}");
+        assertThat(first.files().get("project_node_detail.yml"))
+            .contains("tests:")
+            .contains("unique:")
+            .contains("column_name: project_no");
+    }
+
+    @Test
+    void compilesTheRealUiSettingsThroughTheCanonicalExecutionPlan() {
+        ModelingVNextContract.ModelSpec model = new ModelingVNextContract.ModelSpec(
+            "finance-detail",
+            null,
+            null,
+            ModelingVNextContract.Layer.DWD,
+            ModelingVNextContract.ModelType.FACT,
+            ModelingVNextContract.ImplementationMode.DESIGNER_GENERATED,
+            "finance_detail",
+            new ModelingVNextContract.Grain("one row per finance event", List.of("project_no")),
+            List.of(),
+            List.of(new ModelingVNextContract.SourceRef("TABLE", "ods.finance_event", ModelingVNextContract.Layer.ODS)),
+            List.of("project_no"),
+            List.of(),
+            "table",
+            1,
+            List.of(),
+            null
+        );
+        ModelSpecCompilerProjection.ImplementationProjection implementation = new ModelSpecCompilerProjection.ImplementationProjection(
+            model,
+            "tenant-a",
+            "a".repeat(64),
+            3,
+            "b".repeat(64),
+            "model.pjm.project_node_detail",
+            InputMode.PHYSICAL_ASSET,
+            List.of(),
+            List.of(new FieldMapping("raw_project_no", "project_no")),
+            Map.of(
+                "targetPhysicalName", "dwd_project_node",
+                "loadStrategy", "INCREMENTAL",
+                "partitionFields", List.of(),
+                "retentionDays", 365,
+                "casts", Map.of("project_no", "string"),
+                "deduplicateBy", List.of("project_no")
+            ),
+            "incremental"
+        );
+
+        String sql = ModelingDbtCompiler.compile(implementation).files().get("project_node_detail.sql");
+
+        assertThat(sql)
+            .contains("materialized='incremental'")
+            .contains("alias='dwd_project_node'")
+            .contains("unique_key=['project_no']");
+    }
+
+    @Test
+    void compilesFullViewWithoutInventingAnIncrementalKey() {
+        ModelingVNextContract.ModelSpec model = PjmModelingFixture.projectNode().modelSpec();
+        ModelSpecCompilerProjection.ImplementationProjection implementation =
+            new ModelSpecCompilerProjection.ImplementationProjection(
+                model,
+                "tenant-a",
+                "a".repeat(64),
+                3,
+                "b".repeat(64),
+                "model.pjm.project_node_detail",
+                InputMode.PHYSICAL_ASSET,
+                List.of(),
+                List.of(new FieldMapping("raw_project_no", "project_no")),
+                Map.of(
+                    "targetPhysicalName", "vw_project_node_detail",
+                    "loadStrategy", "FULL",
+                    "partitionFields", List.of()
+                ),
+                "view"
+            );
+
+        String sql = ModelingDbtCompiler.compile(implementation).files().get("project_node_detail.sql");
+
+        assertThat(sql)
+            .contains("materialized='view'")
+            .contains("alias='vw_project_node_detail'")
+            .doesNotContain("unique_key=");
+    }
+
+    @Test
+    void projectsPinnedUpstreamModelsAsDbtRefsInTheOrdinaryStgNode() {
+        ModelingVNextContract.ModelSpec base = PjmModelingFixture.projectNode().modelSpec();
+        ModelingVNextContract.ModelSpec derived = new ModelingVNextContract.ModelSpec(
+            base.id(),
+            base.objectId(),
+            base.processId(),
+            base.layer(),
+            base.modelType(),
+            base.implementationMode(),
+            base.name(),
+            base.grain(),
+            base.standardBindings(),
+            List.of(new ModelingVNextContract.SourceRef("DBT_MODEL", "upstream_finance_node", ModelingVNextContract.Layer.DWD)),
+            base.dimensions(),
+            base.metrics(),
+            base.materialization(),
+            base.revision(),
+            base.dependsOn(),
+            base.legacyRef()
+        );
+        ModelSpecCompilerProjection.ImplementationProjection implementation =
+            new ModelSpecCompilerProjection.ImplementationProjection(
+                derived,
+                "tenant-a",
+                "a".repeat(64),
+                3,
+                "b".repeat(64),
+                "model.pjm.project_node_detail",
+                InputMode.UPSTREAM_MODEL,
+                List.of(),
+                List.of(new FieldMapping("raw_project_no", "project_no")),
+                Map.of(
+                    "targetPhysicalName", "project_node_detail",
+                    "loadStrategy", "FULL",
+                    "partitionFields", List.of()
+                ),
+                "table"
+            );
+
+        String stg = ModelingDbtCompiler.compile(implementation).files().get("stg_project_node_detail.sql");
+
+        assertThat(stg).contains("from {{ ref('upstream_finance_node') }}");
     }
 
     @Test
@@ -130,7 +260,11 @@ class ModelingDbtCompilerTest {
             InputMode.GENERATED,
             List.of(new GeneratedInput("DATE_DIMENSION", Map.of())),
             List.of(),
-            Map.of(),
+            Map.of(
+                "targetPhysicalName", "calendar_day",
+                "loadStrategy", "FULL",
+                "partitionFields", List.of()
+            ),
             "table"
         ));
 
@@ -169,12 +303,16 @@ class ModelingDbtCompilerTest {
             InputMode.PHYSICAL_ASSET,
             List.of(),
             List.of(new FieldMapping("raw_project_no", "project_no")),
-            Map.of(),
+            Map.of(
+                "targetPhysicalName", "model_456",
+                "loadStrategy", "FULL",
+                "partitionFields", List.of()
+            ),
             "table"
         ));
 
         assertThat(artifacts.outputDirectory()).contains("/model_456/");
-        assertThat(artifacts.files()).containsKeys("model_456.sql", "model_456.yml", "model_456.tests.yml");
+        assertThat(artifacts.files()).containsKeys("model_456.sql", "model_456.yml");
         assertThat(artifacts.files().get("model_456.yml")).contains("- name: model_456").doesNotContain("- name: 项目节点明细");
     }
 
@@ -211,12 +349,17 @@ class ModelingDbtCompilerTest {
             InputMode.PHYSICAL_ASSET,
             List.of(),
             List.of(new FieldMapping("src_0.customer_id", "customer_id")),
-            Map.of("joins", List.of(Map.of(
-                "inputIndex", 1,
-                "type", "LEFT",
-                "leftField", "src_0.customer_id",
-                "rightField", "src_1.customer_id"
-            ))),
+            Map.of(
+                "targetPhysicalName", "model_456",
+                "loadStrategy", "FULL",
+                "partitionFields", List.of(),
+                "joins", List.of(Map.of(
+                    "inputIndex", 1,
+                    "type", "LEFT",
+                    "leftField", "src_0.customer_id",
+                    "rightField", "src_1.customer_id"
+                ))
+            ),
             "table"
         );
 

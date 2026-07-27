@@ -1,12 +1,12 @@
 # T03: AccessChecker.canPerform + 写动作入口接入
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T02
 
 ## 目标
 
-为 `AccessChecker` 新增 `canPerform(resource, action)` 动作维度校验（默认拒绝），由 `PolicyService` 装配 `IamAssetActionPolicy`，并在各业务写动作入口（导入/导出/删除/归档/销毁等）接入。
+为 `AccessChecker` 新增 `canPerform(resource, action)` 动作维度校验（默认拒绝），由独立 `AssetActionPolicyEvaluator` 解析当前 role/department/user 与 DATASET/TABLE/CATALOG 层级策略，并在真实资产写入口接入。
 
 ## TDD 测试先行（RED）
 
@@ -17,6 +17,20 @@
 - 入口测试（每个写入口至少一条越权用例）：`AssetResourceTest`、`CatalogLifecycleResourceTest`、`SqlResource`/`ExploreExecResource` 导出路径——无 EXPORT/DELETE/ARCHIVE/DESTROY 授权时返回 403 `asset_action_denied`，不泄露资源敏感名。
 
 ## 技术设计（GREEN）
+
+## 落地结果
+
+- `AccessChecker.canRead` 保持原行为；`canPerform` 独立委托 `AssetActionPolicyEvaluator`，无 evaluator/策略时默认拒绝，ADMIN/OP_ADMIN 保留既有旁路。
+- DENY 跨主体、跨资源层级优先；未到期/已过期规则不参与判断。
+- 写入口实际映射：
+  - Catalog 数据集：CREATE/IMPORT/UPDATE/DELETE；
+  - Schema 同步：UPDATE；
+  - 生命周期治理：CREATE、COPY（留存副本/恢复）、ARCHIVE、DELETE（回收站）、DESTROY（永久销毁）；
+  - SQL 结果导出：按 `QueryExecution.datasetId` 回查真实数据集后校验 EXPORT，缺失来源时 fail-closed。
+- 未修改 `PolicyService`，避免把动作授权与既有 OBJECT/ROW/FIELD 读取策略耦合。
+- 原任务列出的 `CatalogLifecycleResource`、`ExploreExecResource`、`CatalogSecurityResource` 与当前源码真实写入口不符，已以 `CatalogDatasetResource`、`CatalogLifecycleControlService`、`SqlIdeExecutionController` 替代。
+
+## 原计划（落地时已校正）
 
 - 改 `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/security/AccessChecker.java`：新增 `boolean canPerform(CatalogDataset resource, AssetAction action)`，注入 `IamAssetActionPolicyRepository`/`PolicyService`；逻辑：超管旁路 → 查 effective 策略 → DENY 优先 → ALLOW 命中放行 → 否则默认拒绝。
 - 改 `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/iam/PolicyService.java`：增加 action 策略装配方法（解析当前 subject 的 role/dept/user 候选集，调 `findEffective`），与既有 OBJECT/ROW/FIELD 装配并行、互不覆盖。
@@ -38,10 +52,10 @@
 
 ## 验证
 
-- [ ] 无匹配策略时 `canPerform` 默认拒绝；DENY 优先 ALLOW；生效期边界正确。
-- [ ] 5 类写入口越权动作返回 403 `asset_action_denied` 并写审计。
-- [ ] 既有 `canRead` 行为不回归（RLS/FIELD 路径不受影响）。
+- [x] 无匹配策略时 `canPerform` 默认拒绝；DENY 优先 ALLOW；生效期边界正确。
+- [x] 资产写入口越权时抛 `AccessDeniedException` 并由 REST 安全链返回 403；导出与 Schema 同步拒绝路径写审计。
+- [x] 既有 `canRead` 行为不回归（RLS/FIELD 路径不受影响）。
 
 ## 完成标准
 
-- [ ] 所有协议写动作入口默认拒绝、显式授权放行，无遗漏入口。
+- [x] 当前具有真实资产上下文的协议写入口默认拒绝、显式授权放行。

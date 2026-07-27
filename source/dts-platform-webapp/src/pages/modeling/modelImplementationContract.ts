@@ -169,4 +169,49 @@ export const toModelImplementationEtag = ({
 export type ModelImplementationValidation = {
 	valid: boolean;
 	code: string | null;
+	blockers?: ModelImplementationBlocker[];
+	executionPlan?: ModelImplementationExecutionPlan | null;
+};
+
+export type ModelImplementationBlocker = {
+	code: string;
+	field: string;
+	message: string;
+	repairAction: string;
+};
+
+export type ModelImplementationExecutionPlan = {
+	engine: "DBT";
+	adapter: string;
+	nodeUniqueId: string;
+	selector: string;
+	targetIdentifier: string;
+	effectiveMaterialization: "table" | "view" | "incremental";
+	physicalExpected: boolean;
+	uniqueKey: string[];
+	capabilityCodes: string[];
+};
+
+export const modelImplementationValidationMessage = (
+	result: ModelImplementationValidation,
+): string => {
+	const guidance: Record<string, string> = {
+		IMPLEMENTATION_SETTING_NOT_ALLOWED: "当前实现包含不支持的高级设置，请移除后重试。",
+		IMPLEMENTATION_ADAPTER_UNSUPPORTED: "当前执行目标尚未通过物化能力验证，请选择已支持的执行目标。",
+		IMPLEMENTATION_TARGET_REQUIRED: "请填写目标物理表名。",
+		IMPLEMENTATION_TARGET_IDENTIFIER_INVALID: "目标物理表名只能使用小写字母、数字和下划线，且必须以字母开头。",
+		IMPLEMENTATION_LOAD_STRATEGY_REQUIRED: "请选择数据装载策略。",
+		IMPLEMENTATION_SNAPSHOT_STRATEGY_REQUIRED: "当前版本暂不支持周期快照，请改用全量或增量装载。",
+		IMPLEMENTATION_LOAD_STRATEGY_UNSUPPORTED: "当前装载策略暂不支持构建。",
+		IMPLEMENTATION_PARTITION_UNSUPPORTED: "当前 PostgreSQL 执行目标不支持普通模式分区转译，请先移除分区字段。",
+		IMPLEMENTATION_MATERIALIZATION_CONFLICT: "数据装载策略与物化方式不一致：增量装载必须使用 incremental。",
+		IMPLEMENTATION_INCREMENTAL_KEY_REQUIRED: "增量装载至少需要一个 KEY 字段，请先回到逻辑设计补充。",
+		IMPLEMENTATION_DBT_UNIQUE_ID_INVALID: "系统生成的 dbt 节点标识无效，请刷新页面后重试。",
+	};
+	return (
+		(result.code ? guidance[result.code] : undefined) ||
+		result.blockers?.[0]?.message ||
+		result.code ||
+		"当前实现未通过验证，配置已保留。"
+	);
 };

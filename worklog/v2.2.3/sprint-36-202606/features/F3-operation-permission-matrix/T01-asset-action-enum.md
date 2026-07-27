@@ -1,7 +1,7 @@
 # T01: AssetAction 动作枚举
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: —
 
 ## 目标
@@ -17,6 +17,14 @@
 
 ## 技术设计（GREEN）
 
+## 落地结果
+
+- 新增 `security/policy/AssetAction.java`，动作集固定为协议要求的 8 项。
+- `OperationTypeNormalizer` 补齐 COPY/DESTROY 的中英文别名，未知动作 fail-fast。
+- `AssetActionTest` 与 `OperationTypeNormalizerTest` 合计 59 个断言通过。
+
+## 原计划（落地时已校正）
+
 - 新增 `dts-platform/src/main/java/com/yuzhi/dts/platform/security/policy/AssetAction.java`：`enum`，字段 `code`、`displayName`、`mutating`，提供 `from(String)`（参照 `AuditOperationType.from` 的归一化风格）。
 - 语义对齐：6 个动作复用 `dts-admin/.../service/audit/AuditOperationType.java`（已含 CREATE/UPDATE/DELETE/ARCHIVE/IMPORT/EXPORT）的 code 与中文名；`COPY`/`DESTROY` 在 `AuditOperationType` 中缺失，于 `dts-platform/.../service/audit/OperationTypeNormalizer.java` 增补别名映射，保证审计与授权动作语义一致。
 - 不在本 task 引入实体/表，仅枚举 + 单测，供 T02 复用。
@@ -29,10 +37,10 @@
 
 ## 验证
 
-- [ ] 枚举含且仅含 8 个协议动作，code/displayName 与断言一致。
-- [ ] `from` 解析中文/英文/大小写，未知动作 fail-fast 抛异常。
-- [ ] 6 动作与 `AuditOperationType` 对齐，COPY/DESTROY 已在归一化器补别名。
+- [x] 枚举含且仅含 8 个协议动作，code/displayName 与断言一致。
+- [x] `from` 解析中文/英文/大小写，未知动作 fail-fast 抛异常。
+- [x] 6 动作与 `AuditOperationType` 对齐，COPY/DESTROY 已在归一化器补别名。
 
 ## 完成标准
 
-- [ ] `AssetAction` 作为唯一动作源被 T02/T03 引用，无第二套动作字符串常量。
+- [x] `AssetAction` 作为唯一动作源被 T02/T03 引用，无第二套动作字符串常量。

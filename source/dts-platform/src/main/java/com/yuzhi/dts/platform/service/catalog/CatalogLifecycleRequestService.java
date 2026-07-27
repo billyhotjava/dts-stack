@@ -8,6 +8,7 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogLifecycleRequestReposito
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
+import com.yuzhi.dts.platform.security.policy.AssetAction;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.dto.LifecycleRequestDto;
 import com.yuzhi.dts.platform.service.catalog.request.LifecycleRequestCreateRequest;
@@ -144,6 +145,7 @@ public class CatalogLifecycleRequestService {
         ensureDatasetAllowed(dataset, activeDeptHeader);
 
         String requestType = normalizeRequestType(input.getRequestType());
+        ensureActionAllowed(dataset, actionForRequestType(requestType));
         String requestedLifecycleStatus = resolveRequestedLifecycleStatus(requestType);
         String pendingLifecycleStatus = resolvePendingLifecycleStatus(requestType);
 
@@ -209,6 +211,7 @@ public class CatalogLifecycleRequestService {
         ensureDatasetAllowed(dataset, activeDeptHeader);
 
         if (approved) {
+            ensureActionAllowed(dataset, actionForRequestType(request.getRequestType()));
             applyApprovedChange(request, dataset, effectiveActor);
             request.setStatus(STATUS_APPROVED);
         } else {
@@ -319,6 +322,21 @@ public class CatalogLifecycleRequestService {
         if (!accessChecker.departmentAllowed(dataset, activeDept)) {
             throw new AccessDeniedException("无权访问该数据集");
         }
+    }
+
+    private void ensureActionAllowed(CatalogDataset dataset, AssetAction action) {
+        if (!accessChecker.canPerform(dataset, action)) {
+            throw new AccessDeniedException("asset_action_not_allowed:" + action.code());
+        }
+    }
+
+    private AssetAction actionForRequestType(String requestType) {
+        return switch (normalizeRequestType(requestType)) {
+            case TYPE_ARCHIVE -> AssetAction.ARCHIVE;
+            case TYPE_DISPOSE -> AssetAction.DELETE;
+            case TYPE_EXTEND -> AssetAction.UPDATE;
+            default -> throw new IllegalArgumentException("不支持的申请类型");
+        };
     }
 
     private void applyApprovedChange(

@@ -22,7 +22,7 @@ import {
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { } from "@ant-design/icons";
-import { useSearchParams } from "react-router";
+import { Navigate, useNavigate, useSearchParams } from "react-router";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import {
 	listQualityRules,
@@ -42,7 +42,6 @@ import { ingestionTaskAPI } from "@/api/ingestion";
 import { formatTime } from "@/utils/textUtils";
 import QualityDashboard from "./components/QualityDashboard";
 import QualityTasksTab from "./components/QualityTasksTab";
-import QualityReportTab from "./components/QualityReportTab";
 import DataRepairTab from "./components/DataRepairTab";
 import RuleCreateWizard from "./components/RuleCreateWizard";
 
@@ -157,6 +156,7 @@ const parseDefinition = (value?: string) => {
 
 export default function Page() {
 	const [searchParams, setSearchParams] = useSearchParams();
+	const navigate = useNavigate();
 	const [rules, setRules] = useState<Rule[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [modalOpen, setModalOpen] = useState(false);
@@ -408,14 +408,11 @@ export default function Page() {
 	};
 
 	const openQualityReportForRule = (rule: Rule) => {
-		const params = new URLSearchParams(searchParams);
-		params.set("tab", "report");
+		const params = new URLSearchParams();
 		if (rule?.datasetId) {
 			params.set("datasetId", String(rule.datasetId));
-		} else {
-			params.delete("datasetId");
 		}
-		setSearchParams(params, { replace: true });
+		navigate(`/governance/quality?${params.toString()}`);
 	};
 
 	const triggerRun = async (rule: Rule) => {
@@ -597,6 +594,13 @@ export default function Page() {
 		setSearchParams(params, { replace: true });
 	};
 
+	if (activeTab === "report") {
+		const reportParams = new URLSearchParams(searchParams);
+		reportParams.delete("tab");
+		const query = reportParams.toString();
+		return <Navigate to={`/governance/quality${query ? `?${query}` : ""}`} replace />;
+	}
+
 	return (
 		<div className="space-y-4">
 			<Tabs
@@ -621,11 +625,6 @@ export default function Page() {
 						key: "tasks",
 						label: "检查任务",
 						children: <QualityTasksTab />,
-					},
-					{
-						key: "report",
-						label: "质量报告",
-						children: <QualityReportTab />,
 					},
 					{
 						key: "repair",

@@ -36,6 +36,7 @@ import {
 	getDatasetSecurityMapping,
 	upsertDatasetSecurityMapping,
 } from "@/api/platformApi";
+import { AssetActionMatrixPanel } from "./AssetActionMatrixPanel";
 
 const { Text } = Typography;
 const SECURITY_LINKAGE_VERSION_KEY = "catalog.security.linkage.version";
@@ -652,6 +653,16 @@ export default function Page() {
 									</>
 								),
 							},
+						{
+							key: "actionMatrix",
+							label: "操作权限矩阵",
+							children: (
+								<AssetActionMatrixPanel
+									datasets={datasets}
+									initialDatasetId={selectedDataset}
+								/>
+							),
+						},
 					]}
 				/>
 			</Card>

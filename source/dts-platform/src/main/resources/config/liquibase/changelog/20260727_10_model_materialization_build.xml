@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260727-10-model-materialization-build" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="modeling_model_release_candidate"/>
+            <tableExists tableName="modeling_model_release_candidate_entry"/>
+            <tableExists tableName="modeling_pipeline_run"/>
+            <tableExists tableName="modeling_model_implementation"/>
+            <tableExists tableName="modeling_dbt_artifact"/>
+            <not>
+                <columnExists tableName="modeling_model_release_candidate_entry" columnName="active_claim_key"/>
+            </not>
+        </preConditions>
+        <comment>
+            Bind START_BUILD to immutable implementation/artifact snapshots, one active model claim,
+            and durable per-entry RELEASE_BUILD pipeline rows.
+        </comment>
+
+        <addColumn tableName="modeling_model_release_candidate">
+            <column name="origin" type="varchar(32)" defaultValue="BATCH_WORKBENCH">
+                <constraints nullable="false"/>
+            </column>
+            <column name="execution_target_key" type="varchar(256)"/>
+            <column name="adapter" type="varchar(64)"/>
+            <column name="profile_key" type="varchar(128)"/>
+            <column name="target_name" type="varchar(128)"/>
+        </addColumn>
+
+        <addColumn tableName="modeling_model_release_candidate_entry">
+            <column name="implementation_revision" type="int"/>
+            <column name="implementation_checksum" type="varchar(64)"/>
+            <column name="dbt_unique_id" type="varchar(256)"/>
+            <column name="target_identifier" type="varchar(128)"/>
+            <column name="artifact_bundle_checksum" type="varchar(64)"/>
+            <column name="dependency_snapshot_checksum" type="varchar(64)"/>
+            <column name="active_claim_key" type="varchar(64)"/>
+        </addColumn>
+
+        <addColumn tableName="modeling_pipeline_run">
+            <column name="release_candidate_id" type="${uuidType}"/>
+            <column name="release_candidate_entry_id" type="${uuidType}"/>
+            <column name="release_candidate_version" type="int"/>
+            <column name="pipeline_run_group_id" type="${uuidType}"/>
+            <column name="implementation_revision" type="int"/>
+            <column name="implementation_checksum" type="varchar(64)"/>
+            <column name="environment" type="varchar(64)"/>
+            <column name="run_purpose" type="varchar(32)"/>
+            <column name="attempt" type="int"/>
+            <column name="artifact_bundle_checksum" type="varchar(64)"/>
+            <column name="scoped_bundle_checksum" type="varchar(64)"/>
+            <column name="dbt_invocation_id" type="${uuidType}"/>
+        </addColumn>
+
+        <addForeignKeyConstraint
+            baseTableName="modeling_pipeline_run"
+            baseColumnNames="tenant_id, release_candidate_id"
+            constraintName="fk_pipeline_run_release_candidate"
+            referencedTableName="modeling_model_release_candidate"
+            referencedColumnNames="tenant_id, id"
+            onDelete="RESTRICT"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_pipeline_run"
+            baseColumnNames="tenant_id, release_candidate_entry_id"
+            constraintName="fk_pipeline_run_release_candidate_entry"
+            referencedTableName="modeling_model_release_candidate_entry"
+            referencedColumnNames="tenant_id, id"
+            onDelete="RESTRICT"/>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE modeling_model_release_candidate
+                ADD CONSTRAINT ck_model_release_candidate_materialization_context
+                CHECK (
+                    origin IN ('SINGLE_MODEL_INTENT', 'BATCH_WORKBENCH')
+                    AND (
+                        (
+                            execution_target_key IS NULL
+                            AND adapter IS NULL
+                            AND profile_key IS NULL
+                            AND target_name IS NULL
+                        )
+                        OR (
+                            btrim(execution_target_key) <> ''
+                            AND execution_target_key = btrim(execution_target_key)
+                            AND btrim(adapter) <> ''
+                            AND adapter = btrim(adapter)
+                            AND btrim(profile_key) <> ''
+                            AND profile_key = btrim(profile_key)
+                            AND btrim(target_name) <> ''
+                            AND target_name = btrim(target_name)
+                        )
+                    )
+                );
+
+            ALTER TABLE modeling_model_release_candidate_entry
+                ADD CONSTRAINT ck_model_release_candidate_entry_build_snapshot
+                CHECK (
+                    (
+                        implementation_revision IS NULL
+                        AND implementation_checksum IS NULL
+                        AND dbt_unique_id IS NULL
+                        AND target_identifier IS NULL
+                        AND artifact_bundle_checksum IS NULL
+                        AND dependency_snapshot_checksum IS NULL
+                        AND active_claim_key IS NULL
+                    )
+                    OR (
+                        implementation_id IS NOT NULL
+                        AND implementation_revision > 0
+                        AND implementation_checksum ~ '^[0-9a-f]{64}$'
+                        AND dbt_unique_id ~ '^model\.[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$'
+                        AND target_identifier ~ '^[A-Za-z_][A-Za-z0-9_]*$'
+                        AND artifact_bundle_checksum ~ '^[0-9a-f]{64}$'
+                        AND dependency_snapshot_checksum ~ '^[0-9a-f]{64}$'
+                        AND active_claim_key ~ '^[0-9a-f]{64}$'
+                    )
+                );
+
+            ALTER TABLE modeling_pipeline_run
+                ADD CONSTRAINT ck_modeling_pipeline_run_candidate_build
+                CHECK (
+                    (
+                        release_candidate_id IS NULL
+                        AND release_candidate_entry_id IS NULL
+                        AND release_candidate_version IS NULL
+                        AND pipeline_run_group_id IS NULL
+                        AND implementation_revision IS NULL
+                        AND implementation_checksum IS NULL
+                        AND environment IS NULL
+                        AND run_purpose IS NULL
+                        AND attempt IS NULL
+                        AND artifact_bundle_checksum IS NULL
+                        AND scoped_bundle_checksum IS NULL
+                        AND dbt_invocation_id IS NULL
+                    )
+                    OR (
+                        release_candidate_id IS NOT NULL
+                        AND release_candidate_entry_id IS NOT NULL
+                        AND release_candidate_version > 0
+                        AND pipeline_run_group_id IS NOT NULL
+                        AND implementation_revision > 0
+                        AND implementation_checksum ~ '^[0-9a-f]{64}$'
+                        AND btrim(environment) <> ''
+                        AND environment = btrim(environment)
+                        AND run_purpose IN ('RELEASE_BUILD', 'OPERATIONAL_RUN')
+                        AND attempt > 0
+                        AND artifact_bundle_checksum ~ '^[0-9a-f]{64}$'
+                        AND (
+                            scoped_bundle_checksum IS NULL
+                            OR scoped_bundle_checksum ~ '^[0-9a-f]{64}$'
+                        )
+                        AND dbt_invocation_id IS NOT NULL
+                        AND btrim(airflow_dag_id) <> ''
+                        AND btrim(airflow_run_id) <> ''
+                        AND btrim(dbt_selector) <> ''
+                        AND btrim(target) <> ''
+                    )
+                );
+
+            CREATE UNIQUE INDEX uk_model_release_candidate_entry_active_claim
+                ON modeling_model_release_candidate_entry (active_claim_key)
+                WHERE active_claim_key IS NOT NULL;
+
+            CREATE UNIQUE INDEX uk_pipeline_run_candidate_entry_attempt
+                ON modeling_pipeline_run (
+                    tenant_id, release_candidate_id, release_candidate_entry_id, attempt
+                )
+                WHERE release_candidate_id IS NOT NULL;
+
+            CREATE INDEX idx_pipeline_run_candidate_group
+                ON modeling_pipeline_run (
+                    tenant_id, release_candidate_id, pipeline_run_group_id, attempt
+                )
+                WHERE release_candidate_id IS NOT NULL;
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    LOCK TABLE
+                        modeling_model_release_candidate,
+                        modeling_model_release_candidate_entry,
+                        modeling_pipeline_run
+                    IN ACCESS EXCLUSIVE MODE;
+                    IF EXISTS (
+                        SELECT 1
+                          FROM modeling_pipeline_run
+                         WHERE release_candidate_id IS NOT NULL
+                    ) OR EXISTS (
+                        SELECT 1
+                          FROM modeling_model_release_candidate_entry
+                         WHERE implementation_revision IS NOT NULL
+                            OR active_claim_key IS NOT NULL
+                    ) OR EXISTS (
+                        SELECT 1
+                          FROM modeling_model_release_candidate
+                         WHERE origin <> 'BATCH_WORKBENCH'
+                            OR execution_target_key IS NOT NULL
+                    ) THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_MODEL_MATERIALIZATION_BUILD_DATA_EXISTS';
+                    END IF;
+                END $$;
+            ]]></sql>
+            <sql>
+                DROP INDEX IF EXISTS idx_pipeline_run_candidate_group;
+                DROP INDEX IF EXISTS uk_pipeline_run_candidate_entry_attempt;
+                DROP INDEX IF EXISTS uk_model_release_candidate_entry_active_claim;
+            </sql>
+            <dropForeignKeyConstraint
+                baseTableName="modeling_pipeline_run"
+                constraintName="fk_pipeline_run_release_candidate_entry"/>
+            <dropForeignKeyConstraint
+                baseTableName="modeling_pipeline_run"
+                constraintName="fk_pipeline_run_release_candidate"/>
+            <dropColumn tableName="modeling_pipeline_run" columnName="dbt_invocation_id"/>
+            <dropColumn tableName="modeling_pipeline_run" columnName="scoped_bundle_checksum"/>
+            <dropColumn tableName="modeling_pipeline_run" columnName="artifact_bundle_checksum"/>
+            <dropColumn tableName="modeling_pipeline_run" columnName="attempt"/>
+            <dropColumn tableName="modeling_pipeline_run" columnName="run_purpose"/>
+            <dropColumn tableName="modeling_pipeline_run" columnName="environment"/>
+            <dropColumn tableName="modeling_pipeline_run" columnName="implementation_checksum"/>
+            <dropColumn tableName="modeling_pipeline_run" columnName="implementation_revision"/>
+            <dropColumn tableName="modeling_pipeline_run" columnName="pipeline_run_group_id"/>
+            <dropColumn tableName="modeling_pipeline_run" columnName="release_candidate_version"/>
+            <dropColumn tableName="modeling_pipeline_run" columnName="release_candidate_entry_id"/>
+            <dropColumn tableName="modeling_pipeline_run" columnName="release_candidate_id"/>
+            <dropColumn tableName="modeling_model_release_candidate_entry" columnName="active_claim_key"/>
+            <dropColumn tableName="modeling_model_release_candidate_entry" columnName="dependency_snapshot_checksum"/>
+            <dropColumn tableName="modeling_model_release_candidate_entry" columnName="artifact_bundle_checksum"/>
+            <dropColumn tableName="modeling_model_release_candidate_entry" columnName="target_identifier"/>
+            <dropColumn tableName="modeling_model_release_candidate_entry" columnName="dbt_unique_id"/>
+            <dropColumn tableName="modeling_model_release_candidate_entry" columnName="implementation_checksum"/>
+            <dropColumn tableName="modeling_model_release_candidate_entry" columnName="implementation_revision"/>
+            <dropColumn tableName="modeling_model_release_candidate" columnName="profile_key"/>
+            <dropColumn tableName="modeling_model_release_candidate" columnName="target_name"/>
+            <dropColumn tableName="modeling_model_release_candidate" columnName="adapter"/>
+            <dropColumn tableName="modeling_model_release_candidate" columnName="execution_target_key"/>
+            <dropColumn tableName="modeling_model_release_candidate" columnName="origin"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

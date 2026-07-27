@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
 	isUpstreamModelImplementationPinned,
+	modelImplementationValidationMessage,
 	resolvePhysicalAssetImplementationInputs,
 	resolveUpstreamModelImplementationInputs,
 } from "./modelImplementationContract.ts";
@@ -80,4 +81,33 @@ test("implementation input resolution uses current selectable references for new
 	);
 	assert.deepEqual(newUpstream, [{ modelSpecId: "model-new", revision: 1, checksum: "checksum-v1" }]);
 	assert.equal(isUpstreamModelImplementationPinned(newUpstream[0]), false);
+});
+
+test("implementation validation prefers the server-owned blocker guidance", () => {
+	assert.equal(
+		modelImplementationValidationMessage({
+			valid: false,
+			code: "IMPLEMENTATION_PARTITION_UNSUPPORTED",
+			blockers: [
+				{
+					code: "IMPLEMENTATION_PARTITION_UNSUPPORTED",
+					field: "settings.partitionFields",
+					message: "当前 PostgreSQL 执行目标不支持普通模式分区转译",
+					repairAction: "REMOVE_PARTITION_FIELDS",
+				},
+			],
+			executionPlan: null,
+		}),
+		"当前 PostgreSQL 执行目标不支持普通模式分区转译，请先移除分区字段。",
+	);
+});
+
+test("implementation validation remains compatible with an older response shape", () => {
+	assert.equal(
+		modelImplementationValidationMessage({
+			valid: false,
+			code: "IMPLEMENTATION_INCREMENTAL_KEY_REQUIRED",
+		}),
+		"增量装载至少需要一个 KEY 字段，请先回到逻辑设计补充。",
+	);
 });

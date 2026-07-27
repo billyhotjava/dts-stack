@@ -57,27 +57,30 @@ public class CanonicalModelLifecycleCompilerAdapter implements ModelLifecycleCom
         ModelingDbtCompiler.CompiledArtifacts compiled = ModelingDbtCompiler.compile(projection);
         List<ArtifactWrite> result = new ArrayList<>();
         for (Map.Entry<String, String> file : compiled.files().entrySet()) {
-            result.add(
-                new ArtifactWrite(
-                    artifactType(file.getKey()),
-                    compiled.outputDirectory() + "/" + file.getKey(),
-                    checksum(file.getValue()),
-                    file.getValue(),
-                    nodeKind(file.getKey()),
-                    materialization(file.getKey(), implementation),
-                    physicalAssetRef(implementation)
-                )
-            );
+            String path = compiled.outputDirectory() + "/" + file.getKey();
+            String contentChecksum = checksum(file.getValue());
+            for (String artifactType : artifactTypes(file.getKey())) {
+                result.add(
+                    new ArtifactWrite(
+                        artifactType,
+                        path,
+                        contentChecksum,
+                        file.getValue(),
+                        nodeKind(file.getKey()),
+                        materialization(file.getKey(), implementation),
+                        null
+                    )
+                );
+            }
         }
         return List.copyOf(result);
     }
 
-    private static String artifactType(String path) {
-        if (path.startsWith("stg_") && path.endsWith(".sql")) return "STG_SQL";
-        if (path.endsWith(".tests.yml")) return "TEST";
-        if (path.endsWith(".yml") || path.endsWith(".yaml")) return "SCHEMA";
-        if (path.endsWith(".sql")) return "SQL";
-        return "DOC";
+    private static List<String> artifactTypes(String path) {
+        if (path.startsWith("stg_") && path.endsWith(".sql")) return List.of("STG_SQL");
+        if (path.endsWith(".yml") || path.endsWith(".yaml")) return List.of("SCHEMA", "TEST");
+        if (path.endsWith(".sql")) return List.of("SQL");
+        return List.of("DOC");
     }
 
     private static String nodeKind(String path) {
@@ -86,16 +89,6 @@ public class CanonicalModelLifecycleCompilerAdapter implements ModelLifecycleCom
 
     private static String materialization(String path, ImplementationView implementation) {
         return path.startsWith("stg_") && path.endsWith(".sql") ? "ephemeral" : implementation.materialization();
-    }
-
-    private static java.util.UUID physicalAssetRef(ImplementationView implementation) {
-        if (implementation.inputMode() != ModelLifecycleContract.InputMode.PHYSICAL_ASSET) return null;
-        return implementation.inputs().stream()
-            .filter(ModelLifecycleContract.PhysicalAssetInput.class::isInstance)
-            .map(ModelLifecycleContract.PhysicalAssetInput.class::cast)
-            .map(ModelLifecycleContract.PhysicalAssetInput::sourceBindingId)
-            .findFirst()
-            .orElse(null);
     }
 
     private static String checksum(String value) {

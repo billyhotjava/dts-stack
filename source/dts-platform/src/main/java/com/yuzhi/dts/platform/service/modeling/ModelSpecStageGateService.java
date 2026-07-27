@@ -362,47 +362,57 @@ public class ModelSpecStageGateService {
     private GateView withImplementationInputEvidence(String tenantId, ModelSpecView view, GateView gate) {
         if (gate.stage() == Stage.DRAFT_SAVE || gate.stage() == Stage.DESIGNED || implementationCompatibility == null) return gate;
         ImplementationView implementation = lifecycle == null ? null : lifecycle.findImplementation(tenantId, view.id()).orElse(null);
-        ModelImplementationCompatibilityAdapter.ValidationResult result;
+        String blockerCode = null;
+        String blockerField = "implementation.inputs";
+        String blockerMessage = "实现输入未通过当前来源与依赖校验";
         if (implementation == null) {
-            result = ModelImplementationCompatibilityAdapter.ValidationResult.invalid("MODEL_IMPLEMENTATION_REQUIRED");
+            blockerCode = "MODEL_IMPLEMENTATION_REQUIRED";
         } else if (isLegacyClaim(implementation)) {
-            result = ModelImplementationCompatibilityAdapter.ValidationResult.invalid("MODEL_IMPLEMENTATION_INPUT_MIGRATION_REQUIRED");
+            blockerCode = "MODEL_IMPLEMENTATION_INPUT_MIGRATION_REQUIRED";
         } else {
-            result = implementationCompatibility.validate(
+            SaveImplementationCommand command = new SaveImplementationCommand(
+                implementation.inputMode(),
+                implementation.inputs(),
+                implementation.fieldMappings(),
+                implementation.settings(),
+                implementation.ownership(),
+                implementation.materialization(),
+                "gate-input-evidence"
+            );
+            ModelImplementationCompatibilityAdapter.ValidationResult inputValidation =
+                implementationCompatibility.validate(
                 tenantId,
                 view,
-                new SaveImplementationCommand(
-                    implementation.inputMode(), implementation.inputs(), implementation.fieldMappings(), implementation.settings(),
-                    implementation.ownership(), implementation.materialization(), "gate-input-evidence"
-                )
+                command
             );
-            if (result.valid() && !implementationSettingsComplete(implementation)) {
-                result = ModelImplementationCompatibilityAdapter.ValidationResult.invalid(
-                    "MODEL_IMPLEMENTATION_SETTINGS_REQUIRED"
-                );
+            if (!inputValidation.valid()) {
+                blockerCode = inputValidation.code();
+            } else {
+                ModelImplementationExecutionPlanner.ValidationResult execution =
+                    ModelImplementationExecutionPlanner.plan(view, command, implementation.dbtUniqueId());
+                if (!execution.valid()) {
+                    ModelImplementationExecutionPlanner.Blocker blocker = execution.blockers().getFirst();
+                    blockerCode = blocker.code();
+                    blockerField = blocker.field();
+                    blockerMessage = blocker.message();
+                }
             }
         }
-        if (result.valid()) return withoutLegacyInputBlockers(view, gate);
+        if (blockerCode == null) return withoutLegacyInputBlockers(view, gate);
         LinkedHashMap<String, GateBlocker> blockers = new LinkedHashMap<>();
         for (GateBlocker blocker : withoutLegacyInputBlockers(view, gate).blockers()) add(blockers, blocker);
         add(
             blockers,
-            blocker(view, result.code(), "implementation.inputs", "实现输入未通过当前来源与依赖校验", "implementation")
+            blocker(
+                view,
+                blockerCode,
+                blockerField,
+                blockerMessage,
+                "implementation"
+            )
         );
         List<GateBlocker> values = List.copyOf(blockers.values());
         return new GateView(view.id(), view.revision(), view.checksum(), gate.stage(), GateStatus.BLOCKED, values);
-    }
-
-    private static boolean implementationSettingsComplete(ImplementationView implementation) {
-        if (implementation == null) return false;
-        Object targetPhysicalName = implementation.settings().get("targetPhysicalName");
-        Object loadStrategy = implementation.settings().get("loadStrategy");
-        Object partitionFields = implementation.settings().get("partitionFields");
-        return targetPhysicalName instanceof String target &&
-            !target.isBlank() &&
-            loadStrategy instanceof String strategy &&
-            Set.of("FULL", "INCREMENTAL", "SNAPSHOT").contains(strategy) &&
-            partitionFields instanceof List<?>;
     }
 
     private static GateView withoutLegacyInputBlockers(ModelSpecView view, GateView gate) {

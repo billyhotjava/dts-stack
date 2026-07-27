@@ -6,6 +6,8 @@ import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import com.yuzhi.dts.platform.domain.catalog.CatalogClassificationSnapshot;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.security.policy.AssetAction;
+import com.yuzhi.dts.platform.service.security.AccessChecker;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.sql.ResultSet;
@@ -22,6 +24,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -46,6 +49,7 @@ public class CatalogLifecycleControlService {
     private final CatalogClassificationPropagationService propagationService;
     private final List<CatalogManagedCopyDestructionAdapter> destructionAdapters;
     private final ObjectMapper objectMapper;
+    private final AccessChecker accessChecker;
 
     public CatalogLifecycleControlService(
         JdbcTemplate jdbcTemplate,
@@ -53,7 +57,8 @@ public class CatalogLifecycleControlService {
         CatalogClassificationService classificationService,
         CatalogClassificationPropagationService propagationService,
         List<CatalogManagedCopyDestructionAdapter> destructionAdapters,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        AccessChecker accessChecker
     ) {
         this.jdbcTemplate = jdbcTemplate;
         this.datasetRepository = datasetRepository;
@@ -61,6 +66,7 @@ public class CatalogLifecycleControlService {
         this.propagationService = propagationService;
         this.destructionAdapters = List.copyOf(destructionAdapters);
         this.objectMapper = objectMapper;
+        this.accessChecker = accessChecker;
     }
 
     public ActionView submit(SubmitCommand command, String actor) {
@@ -69,6 +75,7 @@ public class CatalogLifecycleControlService {
         String requester = required(actor, "actor", 128);
         String payloadChecksum = checksum(command.payloadChecksum());
         CatalogDataset dataset = requiredDataset(command.datasetId());
+        requireAction(dataset, assetAction(actionType));
         CatalogClassificationSnapshot seal = currentSeal(dataset);
         requireSeal(command.sealId(), command.sealVersion(), seal);
 
@@ -134,6 +141,7 @@ public class CatalogLifecycleControlService {
         Integer retentionDays
     ) {
         CatalogDataset dataset = requiredDataset(datasetId);
+        requireAction(dataset, AssetAction.DELETE);
         CatalogClassificationSnapshot seal = currentSeal(dataset);
         UUID actionId = UUID.randomUUID();
         Instant now = Instant.now();
@@ -186,6 +194,7 @@ public class CatalogLifecycleControlService {
     public ApprovalResult approve(UUID actionId, String actor, String notes) {
         String approver = required(actor, "actor", 128);
         ActionRow row = lockAction(actionId);
+        requireAction(requiredDataset(row.datasetId()), assetAction(row.actionType()));
         if (!List.of("PENDING", "SECOND_APPROVAL_PENDING").contains(row.status())) {
             throw new IllegalStateException("Lifecycle action is not awaiting approval");
         }
@@ -328,6 +337,7 @@ public class CatalogLifecycleControlService {
         ) {
             throw new IllegalStateException("Only an approved failed permanent destruction can be retried");
         }
+        requireAction(requiredDataset(row.datasetId()), AssetAction.DESTROY);
         Instant now = Instant.now();
         jdbcTemplate.update(
             """
@@ -947,6 +957,23 @@ public class CatalogLifecycleControlService {
         return datasetRepository
             .findById(datasetId)
             .orElseThrow(() -> new IllegalArgumentException("Dataset does not exist: " + datasetId));
+    }
+
+    private void requireAction(CatalogDataset dataset, AssetAction action) {
+        if (!accessChecker.canPerform(dataset, action)) {
+            throw new AccessDeniedException("asset_action_not_allowed:" + action.code());
+        }
+    }
+
+    private AssetAction assetAction(String lifecycleAction) {
+        return switch (actionType(lifecycleAction)) {
+            case "CREATE" -> AssetAction.CREATE;
+            case "STORE", "RESTORE" -> AssetAction.COPY;
+            case "ARCHIVE" -> AssetAction.ARCHIVE;
+            case "TRASH" -> AssetAction.DELETE;
+            case "PERMANENT_DESTROY" -> AssetAction.DESTROY;
+            default -> throw new IllegalArgumentException("Unsupported lifecycle action type: " + lifecycleAction);
+        };
     }
 
     private CatalogClassificationSnapshot currentSeal(CatalogDataset dataset) {

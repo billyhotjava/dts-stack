@@ -13,12 +13,14 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.governance.GovIndicatorDefinitionRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.SecurityUtils;
+import com.yuzhi.dts.platform.security.policy.AssetAction;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogDbtLineageService;
 import com.yuzhi.dts.platform.service.catalog.CatalogDomainVisibilityService;
 import com.yuzhi.dts.platform.service.catalog.CatalogMetadataService;
 import com.yuzhi.dts.platform.service.openmetadata.OpenMetadataService;
 import com.yuzhi.dts.platform.service.security.OrganizationVisibilityService;
+import com.yuzhi.dts.platform.service.security.AccessChecker;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import com.yuzhi.dts.platform.web.rest.ApiResponses;
 import jakarta.validation.Valid;
@@ -53,6 +55,7 @@ public class CatalogDatasetResource {
     private final CatalogResourceHelper helper;
     private final GovIndicatorDefinitionRepository indicatorRepo;
     private final CatalogDbtLineageService dbtLineageService;
+    private final AccessChecker accessChecker;
 
     public CatalogDatasetResource(
         CatalogDatasetRepository datasetRepo,
@@ -68,7 +71,8 @@ public class CatalogDatasetResource {
         CatalogMetadataService catalogMetadataService,
         CatalogResourceHelper helper,
         GovIndicatorDefinitionRepository indicatorRepo,
-        CatalogDbtLineageService dbtLineageService
+        CatalogDbtLineageService dbtLineageService,
+        AccessChecker accessChecker
     ) {
         this.datasetRepo = datasetRepo;
         this.domainVisibilityService = domainVisibilityService;
@@ -84,6 +88,7 @@ public class CatalogDatasetResource {
         this.helper = helper;
         this.indicatorRepo = indicatorRepo;
         this.dbtLineageService = dbtLineageService;
+        this.accessChecker = accessChecker;
     }
 
     @GetMapping("/config")
@@ -541,6 +546,7 @@ public class CatalogDatasetResource {
         helper.applyOwnerDepartmentPolicy(dataset, null, false);
         helper.ensurePrimarySourceIfRequired(dataset);
         helper.ensureDatasetEditPermission(dataset);
+        requireAction(dataset, AssetAction.CREATE);
         Map<String, Object> before = java.util.Collections.emptyMap();
         Map<String, Object> attempted = helper.datasetSnapshot(dataset);
         try {
@@ -579,6 +585,7 @@ public class CatalogDatasetResource {
             helper.applyOwnerDepartmentPolicy(item, null, false);
             helper.ensurePrimarySourceIfRequired(item);
             helper.ensureDatasetEditPermission(item);
+            requireAction(item, AssetAction.IMPORT);
             prepared.add(item);
         }
         List<CatalogDataset> saved = datasetRepo.saveAll(prepared);
@@ -592,6 +599,7 @@ public class CatalogDatasetResource {
     public ApiResponse<CatalogDataset> updateDataset(@PathVariable UUID id, @Valid @RequestBody CatalogDataset patch) {
         CatalogDataset existing = datasetRepo.findById(id).orElseThrow();
         helper.ensureDatasetEditPermission(existing);
+        requireAction(existing, AssetAction.UPDATE);
         Map<String, Object> before = helper.datasetSnapshot(existing);
         try {
             String previousOwnerDept = existing.getOwnerDept();
@@ -644,6 +652,7 @@ public class CatalogDatasetResource {
     public ApiResponse<Map<String, Object>> publishDataset(@PathVariable UUID id) {
         CatalogDataset dataset = datasetRepo.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在"));
         helper.ensureDatasetEditPermission(dataset);
+        requireAction(dataset, AssetAction.UPDATE);
         Map<String, Object> before = helper.datasetSnapshot(dataset);
         dataset.setEnabled(Boolean.TRUE);
         CatalogDataset saved = datasetRepo.save(dataset);
@@ -663,6 +672,7 @@ public class CatalogDatasetResource {
     public ApiResponse<Map<String, Object>> offlineDataset(@PathVariable UUID id) {
         CatalogDataset dataset = datasetRepo.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在"));
         helper.ensureDatasetEditPermission(dataset);
+        requireAction(dataset, AssetAction.UPDATE);
         Map<String, Object> before = helper.datasetSnapshot(dataset);
         dataset.setEnabled(Boolean.FALSE);
         CatalogDataset saved = datasetRepo.save(dataset);
@@ -682,6 +692,7 @@ public class CatalogDatasetResource {
     public ApiResponse<Boolean> deleteDataset(@PathVariable UUID id) {
         CatalogDataset existing = datasetRepo.findById(id).orElseThrow();
         helper.ensureDatasetEditPermission(existing);
+        requireAction(existing, AssetAction.DELETE);
         Map<String, Object> before = helper.datasetSnapshot(existing);
         try {
             datasetRepo.delete(existing);
@@ -744,5 +755,13 @@ public class CatalogDatasetResource {
         Map<String, Object> result = dbtLineageService.importManifest(file);
         audit.auditAction("CATALOG_LINEAGE_DBT_IMPORT_CREATE", AuditStage.SUCCESS, "file=" + file.getOriginalFilename(), null);
         return ApiResponses.ok(result);
+    }
+
+    private void requireAction(CatalogDataset dataset, AssetAction action) {
+        if (!accessChecker.canPerform(dataset, action)) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                "asset_action_not_allowed:" + action.code()
+            );
+        }
     }
 }

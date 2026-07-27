@@ -59,9 +59,14 @@ test("three-stage detail isolates logical design, canonical implementation and p
 	assert.match(implementationSurface, /src_0、src_1/);
 	assert.match(implementation, /inputIndex: index \+ 1/);
 	assert.match(implementation, /input\.resolvedVersion/);
-	assert.match(implementation, /input\.checksum/);
-	assert.match(implementation, /generatedImplementationIdentity/);
-	assert.match(implementationPresentation, /高级信息：系统技术标识与预处理/);
+		assert.match(implementation, /input\.checksum/);
+		assert.match(implementation, /generatedImplementationIdentity/);
+		assert.match(implementation, /const projectKey = "dts"/);
+		assert.match(
+			implementation,
+			/const implementationIdentity = useMemo\(\s*\(\) => generatedImplementationIdentity\(model\)/s,
+		);
+		assert.match(implementationPresentation, /高级信息：系统技术标识与预处理/);
 	assert.doesNotMatch(implementation, /name="projectKey"|name="dbtUniqueId"/);
 	assert.match(implementationSurface, /fieldMappings|deduplicateBy|castType|ownership/);
 	assert.match(implementation, /initializeFieldMappings/);

@@ -12,6 +12,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryAu
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryActorRole;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryAction;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CandidateOrigin;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CandidateView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CommandEventType;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CommandEventView;
@@ -103,15 +104,52 @@ public class ModelReleaseCandidateService {
 
     @Transactional
     public CommandResult create(String tenantId, String actorId, CreateCandidateCommand command) {
+        return createWithOrigin(
+            tenantId,
+            actorId,
+            command,
+            CandidateOrigin.BATCH_WORKBENCH
+        );
+    }
+
+    @Transactional
+    public CommandResult createSingleModelIntent(
+        String tenantId,
+        String actorId,
+        CreateCandidateCommand command
+    ) {
+        return createWithOrigin(
+            tenantId,
+            actorId,
+            command,
+            CandidateOrigin.SINGLE_MODEL_INTENT
+        );
+    }
+
+    private CommandResult createWithOrigin(
+        String tenantId,
+        String actorId,
+        CreateCandidateCommand command,
+        CandidateOrigin origin
+    ) {
         String tenant = requiredText(tenantId, "tenantId");
         String actor = requiredText(actorId, "actorId");
         if (command == null) throw invalid("create command is required");
-        String requestHash = hash(command);
+        if (origin == null) throw invalid("candidate origin is required");
+        String requestHash = origin == CandidateOrigin.BATCH_WORKBENCH
+            ? hash(command)
+            : hash(Map.of("command", command, "origin", origin.name()));
         CommandResult eventReplay = replayCommand(tenant, null, command.idempotencyKey(), requestHash, actor);
-        if (eventReplay != null) return eventReplay;
+        if (eventReplay != null) return requireOrigin(eventReplay, origin, command.idempotencyKey());
 
         CandidateView headerReplay = repository.findByIdempotencyKey(tenant, command.idempotencyKey()).orElse(null);
-        if (headerReplay != null) return replayHeader(headerReplay, requestHash, actor);
+        if (headerReplay != null) {
+            return requireOrigin(
+                replayHeader(headerReplay, requestHash, actor),
+                origin,
+                command.idempotencyKey()
+            );
+        }
         Map<UUID, CurrentModelReference> currentReferences = resolveCurrentScope(
             tenant,
             command.planId(),
@@ -141,7 +179,8 @@ public class ModelReleaseCandidateService {
             audit,
             actor,
             now,
-            entries
+            entries,
+            origin
         );
         CommandResult result = result(created, false, List.of(), actor);
         CommandEventView event = event(
@@ -165,11 +204,21 @@ public class ModelReleaseCandidateService {
                 requestHash,
                 actor
             );
-            if (concurrentReplay != null) return concurrentReplay;
+            if (concurrentReplay != null) {
+                return requireOrigin(
+                    concurrentReplay,
+                    origin,
+                    command.idempotencyKey()
+                );
+            }
             CandidateView concurrent = repository
                 .findByIdempotencyKey(tenant, command.idempotencyKey())
                 .orElseThrow(() -> conflict("Concurrent candidate creation did not converge", null));
-            return replayHeader(concurrent, requestHash, actor);
+            return requireOrigin(
+                replayHeader(concurrent, requestHash, actor),
+                origin,
+                command.idempotencyKey()
+            );
         }
         if (repository.appendCommand(event) == 0) {
             throw idempotencyConflict(command.idempotencyKey(), null);
@@ -214,7 +263,7 @@ public class ModelReleaseCandidateService {
             command.idempotencyKey(),
             command.reason() + " [replaces " + source.id() + "]"
         );
-        return create(tenant, actorId, replacement);
+        return createWithOrigin(tenant, actorId, replacement, source.origin());
     }
 
     @Transactional
@@ -558,6 +607,17 @@ public class ModelReleaseCandidateService {
         return result(existing, true, List.of(), actorId);
     }
 
+    private static CommandResult requireOrigin(
+        CommandResult result,
+        CandidateOrigin expectedOrigin,
+        String idempotencyKey
+    ) {
+        if (result.candidate().origin() != expectedOrigin) {
+            throw idempotencyConflict(idempotencyKey, result.candidate().id());
+        }
+        return result;
+    }
+
     private static CommandResult result(
         CandidateView candidate,
         boolean replayed,
@@ -764,7 +824,12 @@ public class ModelReleaseCandidateService {
             audit,
             actorId,
             occurredAt,
-            entries
+            entries,
+            current.origin(),
+            current.executionTargetKey(),
+            current.adapter(),
+            current.profileKey(),
+            current.targetName()
         );
     }
 

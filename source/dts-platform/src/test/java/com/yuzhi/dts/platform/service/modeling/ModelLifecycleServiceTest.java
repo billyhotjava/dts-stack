@@ -3,10 +3,12 @@ package com.yuzhi.dts.platform.service.modeling;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -26,7 +28,9 @@ import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.Registrati
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.TestEvidenceCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.ExpectedVersion;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService.ExpectedImplementationVersion;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.FieldRole;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelField;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
 import java.time.Clock;
@@ -46,6 +50,9 @@ class ModelLifecycleServiceTest {
     private static final UUID PLAN_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
     private static final String CHECKSUM = "a".repeat(64);
     private static final Instant NOW = Instant.parse("2026-07-20T08:00:00Z");
+    private static final String SYSTEM_PROJECT_KEY = "dts";
+    private static final String SYSTEM_DBT_UNIQUE_ID =
+        "model." + SYSTEM_PROJECT_KEY + ".model_30000000_0000_0000_0000_000000000001";
 
     @Test
     void validationReturnsStableInputKindErrorBeforeSaving() {
@@ -102,6 +109,114 @@ class ModelLifecycleServiceTest {
     }
 
     @Test
+    void validationReturnsTheCanonicalExecutionPlanForTheRealUiSettings() {
+        ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
+        ModelSpecRepository modelSpecRepository = mock(ModelSpecRepository.class);
+        ModelLifecycleRepository lifecycle = mock(ModelLifecycleRepository.class);
+        ModelSpecPlanWriteAccessPort writeAccess = mock(ModelSpecPlanWriteAccessPort.class);
+        ModelSpecView model = mock(ModelSpecView.class);
+        when(model.id()).thenReturn(MODEL_ID);
+        when(model.planId()).thenReturn(PLAN_ID);
+        when(model.revision()).thenReturn(7);
+        when(model.checksum()).thenReturn(CHECKSUM);
+        when(model.modelType()).thenReturn(ModelType.DIMENSION);
+        when(model.implementationMode()).thenReturn(ImplementationMode.DESIGNER_GENERATED);
+        when(model.fields()).thenReturn(
+            List.of(new ModelField("calendar_date", "date", false, null, FieldRole.KEY, null))
+        );
+        when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(model);
+        when(modelSpecRepository.lockPlan("tenant-a", PLAN_ID)).thenReturn(Optional.of(new PlanState(PLAN_ID, "DRAFT")));
+        when(writeAccess.canMaintain("tenant-a", PLAN_ID, "alice")).thenReturn(true);
+        ModelImplementationCompatibilityAdapter adapter = new ModelImplementationCompatibilityAdapter(
+            modelSpecs, modelSpecRepository, lifecycle, mock(ModelSpecSourceValidationPort.class)
+        );
+        ModelLifecycleService service = new ModelLifecycleService(
+            modelSpecs,
+            modelSpecRepository,
+            lifecycle,
+            mock(ModelSpecStageGateService.class),
+            writeAccess,
+            mock(ModelLifecycleCompilerPort.class),
+            mock(ModelReleaseRegistrationPort.class),
+            mock(ModelLifecycleTestEvidencePort.class),
+            mock(ModelLifecyclePublicationService.class),
+            mock(ModelingVNextApplicationService.class),
+            adapter,
+            Clock.fixed(NOW, ZoneOffset.UTC)
+        );
+
+        ModelLifecycleService.ImplementationValidationView result = service.validateImplementation(
+            "tenant-a",
+            "alice",
+            MODEL_ID,
+            new ExpectedVersion(MODEL_ID, 7, CHECKSUM),
+            new SaveImplementationCommand(
+                InputMode.GENERATED,
+                List.of(new GeneratedInput("DATE_DIMENSION", Map.of())),
+                List.of(),
+                Map.of(
+                    "targetPhysicalName", "dwd_calendar_day",
+                    "loadStrategy", "FULL",
+                    "partitionFields", List.of(),
+                    "retentionDays", 365
+                ),
+                ImplementationMode.DESIGNER_GENERATED,
+                "table",
+                "validate-calendar"
+            )
+        );
+
+        assertThat(result.valid()).isTrue();
+        assertThat(result.code()).isEqualTo("MODEL_IMPLEMENTATION_VALID");
+        assertThat(result.blockers()).isEmpty();
+        assertThat(result.executionPlan()).satisfies(plan -> {
+            assertThat(plan.nodeUniqueId()).isEqualTo(
+                "model.dts.model_30000000_0000_0000_0000_000000000001"
+            );
+            assertThat(plan.targetIdentifier()).isEqualTo("dwd_calendar_day");
+            assertThat(plan.effectiveMaterialization()).isEqualTo("table");
+        });
+
+        SaveImplementationCommand unsupportedPartition = new SaveImplementationCommand(
+            InputMode.GENERATED,
+            List.of(new GeneratedInput("DATE_DIMENSION", Map.of())),
+            List.of(),
+            Map.of(
+                "targetPhysicalName", "dwd_calendar_day",
+                "loadStrategy", "FULL",
+                "partitionFields", List.of("calendar_date")
+            ),
+            ImplementationMode.DESIGNER_GENERATED,
+            "table",
+            "save-calendar"
+        );
+        assertThatThrownBy(() -> service.saveImplementation(
+            "tenant-a",
+            "alice",
+            MODEL_ID,
+            new ExpectedVersion(MODEL_ID, 7, CHECKSUM),
+            new ExpectedImplementationVersion(MODEL_ID, 0, null),
+            "plan_finance",
+            "model.plan_finance.model_calendar_day",
+            unsupportedPartition
+        ))
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("IMPLEMENTATION_PARTITION_UNSUPPORTED");
+        verify(lifecycle, never()).saveImplementation(
+            eq("tenant-a"),
+            eq("alice"),
+            eq(model),
+            any(String.class),
+            any(String.class),
+            any(SaveImplementationCommand.class),
+            anyInt(),
+            nullable(String.class),
+            any(Instant.class)
+        );
+    }
+
+    @Test
     void implementationMigrationDryRunAppliesOnlyEligibleProjectionWithModelAndImplementationCas() {
         ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
         ModelSpecRepository modelSpecRepository = mock(ModelSpecRepository.class);
@@ -149,8 +264,8 @@ class ModelLifecycleServiceTest {
             7,
             CHECKSUM,
             ImplementationMode.DESIGNER_GENERATED,
-            "compatibility-migration",
-            "model.compatibility." + MODEL_ID.toString().replace("-", ""),
+            SYSTEM_PROJECT_KEY,
+            SYSTEM_DBT_UNIQUE_ID,
             "ACTIVE",
             1,
             "b".repeat(64),
@@ -166,8 +281,8 @@ class ModelLifecycleServiceTest {
             eq("tenant-a"),
             eq("alice"),
             eq(model),
-            eq("compatibility-migration"),
-            eq("model.compatibility." + MODEL_ID.toString().replace("-", "")),
+            eq(SYSTEM_PROJECT_KEY),
+            eq(SYSTEM_DBT_UNIQUE_ID),
             eq(command),
             eq(0),
             nullable(String.class),
@@ -205,8 +320,8 @@ class ModelLifecycleServiceTest {
             eq("tenant-a"),
             eq("alice"),
             eq(model),
-            eq("compatibility-migration"),
-            eq("model.compatibility." + MODEL_ID.toString().replace("-", "")),
+            eq(SYSTEM_PROJECT_KEY),
+            eq(SYSTEM_DBT_UNIQUE_ID),
             eq(command),
             eq(0),
             nullable(String.class),

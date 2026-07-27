@@ -216,4 +216,7 @@
     <include file="config/liquibase/changelog/20260727_05_model_spec_reclassification_command.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260727_06_warehouse_plan_governance_policy.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260727_07_model_implementation_settings_contract.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260727_08_iam_asset_action_policy.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260727_09_iam_asset_action_policy_request.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260727_10_model_materialization_build.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

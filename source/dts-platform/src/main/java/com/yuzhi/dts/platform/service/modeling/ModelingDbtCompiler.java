@@ -14,8 +14,22 @@ public final class ModelingDbtCompiler {
 
     private static final Pattern IDENTIFIER = Pattern.compile("^[A-Za-z_][A-Za-z0-9_]*$");
     private static final Pattern SOURCE_FIELD = Pattern.compile("^src_[0-9]+\\.[A-Za-z_][A-Za-z0-9_]*$");
-    private static final Set<String> CAST_TYPES = Set.of("string", "integer", "bigint", "decimal", "date", "timestamp", "boolean");
-    private static final Set<String> SETTINGS = Set.of("casts", "deduplicateBy", "dedupBy", "joins");
+    private static final Map<String, String> POSTGRES_CAST_TYPES = Map.of(
+        "string",
+        "text",
+        "integer",
+        "integer",
+        "bigint",
+        "bigint",
+        "decimal",
+        "numeric",
+        "date",
+        "date",
+        "timestamp",
+        "timestamp",
+        "boolean",
+        "boolean"
+    );
     private static final Set<String> JOIN_TYPES = Set.of("INNER", "LEFT", "RIGHT", "FULL");
 
     private ModelingDbtCompiler() {}
@@ -57,7 +71,8 @@ public final class ModelingDbtCompiler {
      */
     public static CompiledArtifacts compile(ModelSpecCompilerProjection.ImplementationProjection projection) {
         if (projection == null) throw new CompileException("MODEL_IMPLEMENTATION_REQUIRED");
-        validateImplementationProjection(projection);
+        ModelImplementationExecutionPlanner.ExecutionPlan executionPlan =
+            validateImplementationProjection(projection);
         ModelingVNextContract.ModelSpec model = projection.model();
         validate(model, projection.inputMode() != ModelLifecycleContract.InputMode.GENERATED);
         if (model.implementationMode() != ModelingVNextContract.ImplementationMode.DESIGNER_GENERATED) {
@@ -70,9 +85,8 @@ public final class ModelingDbtCompiler {
         String stgName = "stg_" + name;
         Map<String, String> files = new java.util.LinkedHashMap<>();
         files.put(stgName + ".sql", renderEphemeralStg(projection, columns));
-        files.put(name + ".sql", renderModelSql(projection, columns, stgName));
-        files.put(name + ".yml", renderSchema(model, columns, name));
-        files.put(name + ".tests.yml", renderTests(model, name));
+        files.put(name + ".sql", renderModelSql(projection, columns, stgName, executionPlan));
+        files.put(name + ".yml", renderRunnableSchema(model, columns, name));
         return new CompiledArtifacts(outputDirectory, Map.copyOf(files));
     }
 
@@ -120,18 +134,40 @@ public final class ModelingDbtCompiler {
     private static String renderModelSql(
         ModelSpecCompilerProjection.ImplementationProjection projection,
         List<String> columns,
-        String stgName
+        String stgName,
+        ModelImplementationExecutionPlanner.ExecutionPlan executionPlan
     ) {
         ModelingVNextContract.ModelSpec model = projection.model();
         String select = columns.stream().map(column -> "    " + column).collect(Collectors.joining(",\n"));
-        String config = "{{ config(materialized='" + projection.materialization() + "', meta={"
-            + "'tenantId':'" + jinjaString(projection.tenantId()) + "',"
-            + "'modelSpecId':'" + model.id() + "',"
-            + "'revision':" + model.revision() + ","
-            + "'modelChecksum':'" + projection.modelChecksum() + "',"
-            + "'implementationRevision':" + projection.implementationRevision() + ","
-            + "'implementationChecksum':'" + projection.implementationChecksum() + "'"
-            + "}) }}\n";
+        String uniqueKey = executionPlan.uniqueKey()
+            .stream()
+            .map(value -> "'" + jinjaString(value) + "'")
+            .collect(Collectors.joining(",", "[", "]"));
+        StringBuilder config = new StringBuilder("{{ config(materialized='")
+            .append(executionPlan.effectiveMaterialization())
+            .append("', alias='")
+            .append(jinjaString(executionPlan.targetIdentifier()))
+            .append("'");
+        if ("incremental".equals(executionPlan.effectiveMaterialization())) {
+            config.append(", unique_key=").append(uniqueKey);
+        }
+        config.append(", meta={")
+            .append("'tenantId':'").append(jinjaString(projection.tenantId())).append("',")
+            .append("'planId':'").append(jinjaString(projection.planId())).append("',")
+            .append("'modelSpecId':'").append(model.id()).append("',")
+            .append("'revision':").append(model.revision()).append(",")
+            .append("'modelRevision':").append(model.revision()).append(",")
+            .append("'modelChecksum':'").append(projection.modelChecksum()).append("',")
+            .append("'implementationRevision':").append(projection.implementationRevision()).append(",")
+            .append("'implementationChecksum':'").append(projection.implementationChecksum()).append("',")
+            .append("'layer':'").append(model.layer().name()).append("',")
+            .append("'targetIdentifier':'").append(jinjaString(executionPlan.targetIdentifier())).append("',")
+            .append("'loadStrategy':'")
+            .append(jinjaString(text(projection.settings().get("loadStrategy")).toUpperCase()))
+            .append("'");
+        Object retentionDays = projection.settings().get("retentionDays");
+        if (retentionDays instanceof Number days) config.append(",'retentionDays':").append(days.longValue());
+        config.append("}) }}\n");
         return config + "-- generated by DTS modeling vNext, revision " + model.revision() + "\nselect\n"
             + select + "\nfrom {{ ref('" + stgName + "') }}\n";
     }
@@ -266,7 +302,7 @@ public final class ModelingDbtCompiler {
         Map<String, String> result = new TreeMap<>();
         for (Map.Entry<?, ?> entry : values.entrySet()) {
             if (entry.getKey() != null && entry.getValue() != null && !entry.getKey().toString().isBlank() && !entry.getValue().toString().isBlank()) {
-                result.put(entry.getKey().toString(), entry.getValue().toString());
+                result.put(entry.getKey().toString(), entry.getValue().toString().toLowerCase());
             }
         }
         return result;
@@ -276,7 +312,7 @@ public final class ModelingDbtCompiler {
         String expression = mappings.getOrDefault(column, column);
         String type = casts.get(column);
         if (type == null) type = casts.get(expression);
-        if (type != null) expression = "cast(" + expression + " as " + type + ")";
+        if (type != null) expression = "cast(" + expression + " as " + POSTGRES_CAST_TYPES.get(type) + ")";
         return "        " + expression + (expression.equals(column) ? "" : " as " + column);
     }
 
@@ -286,8 +322,18 @@ public final class ModelingDbtCompiler {
         return values.stream().filter(Objects::nonNull).map(Object::toString).map(String::trim).filter(ModelingDbtCompiler::notBlank).toList();
     }
 
-    private static void validateImplementationProjection(ModelSpecCompilerProjection.ImplementationProjection projection) {
-        if (!SETTINGS.containsAll(projection.settings().keySet())) throw new CompileException("IMPLEMENTATION_SETTING_NOT_ALLOWED");
+    private static ModelImplementationExecutionPlanner.ExecutionPlan validateImplementationProjection(
+        ModelSpecCompilerProjection.ImplementationProjection projection
+    ) {
+        ModelImplementationExecutionPlanner.ValidationResult execution =
+            ModelImplementationExecutionPlanner.plan(
+                projection.keyFields(),
+                projection.settings(),
+                projection.materialization(),
+                projection.dbtUniqueId(),
+                ModelImplementationExecutionPlanner.DEFAULT_ADAPTER
+            );
+        if (!execution.valid()) throw new CompileException(execution.code());
         for (ModelLifecycleContract.FieldMapping mapping : projection.fieldMappings()) {
             if (
                 mapping == null ||
@@ -301,13 +347,14 @@ public final class ModelingDbtCompiler {
         if (casts != null) {
             if (!(casts instanceof Map<?, ?> values)) throw new CompileException("IMPLEMENTATION_CAST_INVALID");
             for (Map.Entry<?, ?> entry : values.entrySet()) {
-                if (entry.getKey() == null || entry.getValue() == null || !identifier(entry.getKey().toString()) || !CAST_TYPES.contains(entry.getValue().toString().toLowerCase())) {
+                if (entry.getKey() == null || entry.getValue() == null || !identifier(entry.getKey().toString()) || !POSTGRES_CAST_TYPES.containsKey(entry.getValue().toString().toLowerCase())) {
                     throw new CompileException("IMPLEMENTATION_CAST_INVALID");
                 }
             }
         }
         validateIdentifierSetting(projection.settings(), "deduplicateBy");
         validateIdentifierSetting(projection.settings(), "dedupBy");
+        return execution.executionPlan();
     }
 
     private static void validateIdentifierSetting(Map<String, Object> settings, String key) {
@@ -340,7 +387,36 @@ public final class ModelingDbtCompiler {
     }
 
     private static String renderSchema(ModelingVNextContract.ModelSpec model, List<String> columns, String resourceName) {
-        StringBuilder yaml = new StringBuilder("version: 2\nmodels:\n  - name: ").append(resourceName).append("\n    description: \"").append(escape(model.grain().statement())).append("\"\n    columns:\n");
+        return renderSchema(model, columns, resourceName, false);
+    }
+
+    private static String renderRunnableSchema(
+        ModelingVNextContract.ModelSpec model,
+        List<String> columns,
+        String resourceName
+    ) {
+        return renderSchema(model, columns, resourceName, true);
+    }
+
+    private static String renderSchema(
+        ModelingVNextContract.ModelSpec model,
+        List<String> columns,
+        String resourceName,
+        boolean includeModelTests
+    ) {
+        StringBuilder yaml = new StringBuilder("version: 2\nmodels:\n  - name: ")
+            .append(resourceName)
+            .append("\n    description: \"")
+            .append(escape(model.grain().statement()))
+            .append("\"\n");
+        if (includeModelTests) {
+            String key = model.grain().keys().stream().filter(ModelingDbtCompiler::notBlank).findFirst().orElseThrow();
+            yaml
+                .append("    tests:\n      - unique:\n          column_name: ")
+                .append(key)
+                .append("\n");
+        }
+        yaml.append("    columns:\n");
         for (String column : columns) {
             String standard = model.standardBindings() == null
                 ? null

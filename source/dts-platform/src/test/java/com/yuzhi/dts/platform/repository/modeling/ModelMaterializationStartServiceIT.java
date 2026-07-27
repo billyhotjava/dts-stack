@@ -1,0 +1,435 @@
+package com.yuzhi.dts.platform.repository.modeling;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import com.yuzhi.dts.platform.IntegrationTest;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryAuditView;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus;
+import com.yuzhi.dts.platform.service.modeling.ModelMaterializationStartService;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CandidateView;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.EntryView;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateException;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.Instant;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+
+@IntegrationTest
+class ModelMaterializationStartServiceIT {
+
+    private static final Instant NOW = Instant.parse("2026-07-27T12:00:00Z");
+
+    @Autowired
+    private ModelReleaseCandidateRepository candidates;
+
+    @Autowired
+    private ModelMaterializationStartService starts;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
+    @Test
+    void commitsBuildingSnapshotClaimAndOneQueuedRunAsOneUnit() {
+        Scope scope = scope("atomic-success");
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+
+        transaction.executeWithoutResult(status -> {
+            seed(scope, true);
+
+            var result = starts.start(
+                scope.tenant(),
+                "builder-a",
+                scope.candidateId(),
+                1,
+                "start-build-success",
+                "start release build"
+            );
+
+            assertThat(result.candidate().status()).isEqualTo(DeliveryStatus.BUILDING);
+            assertThat(
+                jdbcTemplate.queryForObject(
+                    """
+                    select count(*) from modeling_pipeline_run
+                     where tenant_id = ? and release_candidate_id = ?
+                       and release_candidate_version = 2 and run_purpose = 'RELEASE_BUILD'
+                       and status = 'QUEUED' and implementation_revision = 1
+                       and implementation_checksum = ?
+                       and artifact_bundle_checksum ~ '^[0-9a-f]{64}$'
+                       and airflow_run_id = ?
+                    """,
+                    Integer.class,
+                    scope.tenant(),
+                    scope.candidateId(),
+                    scope.implementationChecksum(),
+                    "dts_rc_" +
+                    scope.candidateId().toString().replace("-", "") +
+                    "_v2_a1"
+                )
+            )
+                .isEqualTo(1);
+            assertThat(
+                jdbcTemplate.queryForObject(
+                    """
+                    select count(*) from modeling_model_release_candidate_entry
+                     where tenant_id = ? and candidate_id = ?
+                       and implementation_id = ? and implementation_revision = 1
+                       and implementation_checksum = ?
+                       and dbt_unique_id = ? and target_identifier = 'dwd_s76_atomic'
+                       and artifact_bundle_checksum ~ '^[0-9a-f]{64}$'
+                       and dependency_snapshot_checksum ~ '^[0-9a-f]{64}$'
+                       and active_claim_key ~ '^[0-9a-f]{64}$'
+                    """,
+                    Integer.class,
+                    scope.tenant(),
+                    scope.candidateId(),
+                    scope.implementationId(),
+                    scope.implementationChecksum(),
+                    scope.dbtUniqueId()
+                )
+            )
+                .isEqualTo(1);
+            assertThat(
+                jdbcTemplate.queryForObject(
+                    """
+                    select count(*) from modeling_model_release_candidate
+                     where tenant_id = ? and id = ? and status = 'BUILDING' and version = 2
+                       and execution_target_key = 'postgres-primary'
+                       and adapter = 'postgres' and profile_key = 'dts'
+                       and target_name = 'dev'
+                    """,
+                    Integer.class,
+                    scope.tenant(),
+                    scope.candidateId()
+                )
+            )
+                .isEqualTo(1);
+            status.setRollbackOnly();
+        });
+    }
+
+    @Test
+    void missingArtifactRollsCandidateCommandAndRunsBackToDraft() {
+        Scope scope = scope("atomic-rollback");
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        transaction.executeWithoutResult(status -> seed(scope, false));
+
+        try {
+            assertThatThrownBy(() ->
+                starts.start(
+                    scope.tenant(),
+                    "builder-a",
+                    scope.candidateId(),
+                    1,
+                    "start-build-failure",
+                    "start release build"
+                )
+            )
+                .isInstanceOf(ModelReleaseCandidateException.class)
+                .satisfies(error ->
+                    assertThat(((ModelReleaseCandidateException) error).code())
+                        .isEqualTo("MATERIALIZATION_ARTIFACT_MISSING")
+                );
+
+            assertThat(candidates.find(scope.tenant(), scope.candidateId()))
+                .get()
+                .extracting(CandidateView::status, CandidateView::version)
+                .containsExactly(DeliveryStatus.DRAFT, 1);
+            assertThat(
+                jdbcTemplate.queryForObject(
+                    "select count(*) from modeling_pipeline_run where tenant_id = ? and release_candidate_id = ?",
+                    Integer.class,
+                    scope.tenant(),
+                    scope.candidateId()
+                )
+            )
+                .isZero();
+            assertThat(
+                jdbcTemplate.queryForObject(
+                    "select count(*) from modeling_model_release_candidate_command where tenant_id = ? and candidate_id = ?",
+                    Integer.class,
+                    scope.tenant(),
+                    scope.candidateId()
+                )
+            )
+                .isZero();
+        } finally {
+            transaction.executeWithoutResult(status -> cleanup(scope));
+        }
+    }
+
+    private void seed(Scope scope, boolean withArtifact) {
+        jdbcTemplate.update(
+            """
+            insert into modeling_warehouse_plan (
+                id, tenant_id, owner, code, name, owner_id, onboarding_mode, lifecycle_status,
+                status, version, created_date, last_modified_date
+            ) values (?, ?, 'builder-a', ?, 'Sprint 76 plan', 'builder-a',
+                      'BUSINESS_FIRST', 'DRAFT', 'DRAFT', 1, current_timestamp, current_timestamp)
+            """,
+            scope.planId(),
+            scope.tenant(),
+            "s76_" + scope.planId().toString().replace("-", "")
+        );
+        jdbcTemplate.update(
+            """
+            insert into catalog_domain (id, name, code, lifecycle_status, access_policy)
+            values (?, 'Sprint 76 domain', ?, 'ACTIVE', 'PUBLIC')
+            """,
+            scope.domainId(),
+            "S76_" + scope.domainId().toString().replace("-", "")
+        );
+        jdbcTemplate.update(
+            """
+            insert into modeling_model_spec (
+                id, tenant_id, object_id, plan_id, process_id, layer, model_type,
+                implementation_mode, name, status, revision, version, created_date,
+                last_modified_date, contract_version, domain_id, current_checksum,
+                idempotency_key, idempotency_request_hash, idempotency_response_snapshot
+            ) values (
+                ?, ?, null, ?, null, 'DWD', 'FACT', 'DESIGNER_GENERATED',
+                'Sprint 76 atomic model', 'DRAFT', 1, 1, current_timestamp,
+                current_timestamp, 2, ?, ?, ?, ?, cast('{}' as jsonb)
+            )
+            """,
+            scope.modelId(),
+            scope.tenant(),
+            scope.planId(),
+            scope.domainId(),
+            scope.modelChecksum(),
+            "model-" + scope.modelId(),
+            "f".repeat(64)
+        );
+        jdbcTemplate.update(
+            """
+            insert into modeling_model_spec_revision (
+                id, model_spec_id, revision, spec_json, status, content_checksum, created_date,
+                last_modified_date, tenant_id, contract_version, snapshot_json, created_by
+            ) values (?, ?, 1, null, 'DRAFT', ?, current_timestamp, current_timestamp, ?, 2,
+                      cast('{}' as jsonb), 'builder-a')
+            """,
+            UUID.randomUUID(),
+            scope.modelId(),
+            scope.modelChecksum(),
+            scope.tenant()
+        );
+        Integer inserted = jdbcTemplate.queryForObject(
+            """
+            with implementation_head as (
+                insert into modeling_model_implementation (
+                    id, tenant_id, model_spec_id, plan_id, model_revision, model_checksum,
+                    ownership, project_key, dbt_unique_id, status, idempotency_key, created_by,
+                    created_date, last_modified_date, implementation_revision,
+                    current_implementation_checksum, input_mode, inputs_json,
+                    field_mappings_json, settings_json, materialization
+                ) values (
+                    ?, ?, ?, ?, 1, ?, 'DESIGNER_GENERATED', 'dts', ?, 'ACTIVE', ?,
+                    'builder-a', current_timestamp, current_timestamp, 1, ?, 'GENERATED',
+                    cast('[{"generatorType":"RELEASE_IT","config":{}}]' as jsonb),
+                    cast('[]' as jsonb),
+                    cast('{"targetPhysicalName":"dwd_s76_atomic","loadStrategy":"FULL","partitionFields":[]}' as jsonb),
+                    'table'
+                )
+                returning tenant_id, id, implementation_revision,
+                          current_implementation_checksum, input_mode, inputs_json,
+                          field_mappings_json, settings_json, ownership, materialization
+            ), implementation_revision as (
+                insert into modeling_model_implementation_revision (
+                    id, tenant_id, implementation_id, revision, content_checksum, input_mode,
+                    inputs_json, field_mappings_json, settings_json, ownership,
+                    materialization, created_by, created_date
+                )
+                select ?, tenant_id, id, implementation_revision,
+                       current_implementation_checksum, input_mode, inputs_json,
+                       field_mappings_json, settings_json, ownership, materialization,
+                       'builder-a', current_timestamp
+                  from implementation_head
+                returning 1
+            )
+            select count(*)::int from implementation_revision
+            """,
+            Integer.class,
+            scope.implementationId(),
+            scope.tenant(),
+            scope.modelId(),
+            scope.planId(),
+            scope.modelChecksum(),
+            scope.dbtUniqueId(),
+            "implementation-" + scope.implementationId(),
+            scope.implementationChecksum(),
+            UUID.randomUUID()
+        );
+        assertThat(inserted).isEqualTo(1);
+        if (withArtifact) {
+            String sql =
+                "{{ config(materialized='table',alias='dwd_s76_atomic') }}\nselect 1 as project_id\n";
+            jdbcTemplate.update(
+                """
+                insert into modeling_dbt_artifact (
+                    id, model_spec_id, plan_id, project_key, dbt_unique_id, artifact_key,
+                    artifact_type, path, content_checksum, content, status, revision,
+                    model_checksum, ownership, idempotency_key, implementation_revision,
+                    node_kind, materialization, physical_asset_ref, created_date,
+                    last_modified_date
+                ) values (
+                    ?, ?, ?, 'dts', ?, ?, 'SQL', ?, ?, ?, 'COMPILED', 1, ?,
+                    'DESIGNER_GENERATED', ?, 1, 'MODEL', 'table', null,
+                    current_timestamp, current_timestamp
+                )
+                """,
+                UUID.randomUUID(),
+                scope.modelId(),
+                scope.planId(),
+                scope.dbtUniqueId(),
+                "SQL:models/dwd/" + scope.selector() + ".sql",
+                "models/dwd/" + scope.selector() + ".sql",
+                sha256(sql),
+                sql,
+                scope.modelChecksum(),
+                "artifact-" + scope.modelId()
+            );
+        }
+        CandidateView candidate = new CandidateView(
+            scope.candidateId(),
+            scope.tenant(),
+            scope.planId(),
+            "PROD",
+            DeliveryStatus.DRAFT,
+            1,
+            "candidate-" + scope.candidateId(),
+            "e".repeat(64),
+            new DeliveryAuditView(
+                "builder-a",
+                NOW,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+            ),
+            "builder-a",
+            NOW,
+            List.of(
+                new EntryView(
+                    scope.entryId(),
+                    scope.tenant(),
+                    scope.candidateId(),
+                    scope.planId(),
+                    scope.modelId(),
+                    1,
+                    scope.modelChecksum(),
+                    null,
+                    ImplementationMode.DESIGNER_GENERATED,
+                    DeliveryStatus.DRAFT,
+                    0,
+                    "primary"
+                )
+            )
+        );
+        assertThat(candidates.insert(candidate)).isEqualTo(1);
+    }
+
+    private void cleanup(Scope scope) {
+        jdbcTemplate.update(
+            "delete from modeling_pipeline_run where tenant_id = ? and release_candidate_id = ?",
+            scope.tenant(),
+            scope.candidateId()
+        );
+        jdbcTemplate.update(
+            "delete from modeling_model_release_candidate_entry where tenant_id = ? and candidate_id = ?",
+            scope.tenant(),
+            scope.candidateId()
+        );
+        jdbcTemplate.update(
+            "delete from modeling_model_release_candidate where tenant_id = ? and id = ?",
+            scope.tenant(),
+            scope.candidateId()
+        );
+        jdbcTemplate.update(
+            "delete from modeling_dbt_artifact where model_spec_id = ?",
+            scope.modelId()
+        );
+        jdbcTemplate.update(
+            "delete from modeling_model_implementation_revision where tenant_id = ? and implementation_id = ?",
+            scope.tenant(),
+            scope.implementationId()
+        );
+        jdbcTemplate.update(
+            "delete from modeling_model_implementation where tenant_id = ? and id = ?",
+            scope.tenant(),
+            scope.implementationId()
+        );
+        jdbcTemplate.update(
+            "delete from modeling_model_spec_revision where tenant_id = ? and model_spec_id = ?",
+            scope.tenant(),
+            scope.modelId()
+        );
+        jdbcTemplate.update(
+            "delete from modeling_model_spec where tenant_id = ? and id = ?",
+            scope.tenant(),
+            scope.modelId()
+        );
+        jdbcTemplate.update("delete from catalog_domain where id = ?", scope.domainId());
+        jdbcTemplate.update(
+            "delete from modeling_warehouse_plan where tenant_id = ? and id = ?",
+            scope.tenant(),
+            scope.planId()
+        );
+    }
+
+    private static Scope scope(String suffix) {
+        UUID modelId = UUID.randomUUID();
+        return new Scope(
+            "s76-" + suffix + "-" + UUID.randomUUID(),
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            modelId,
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            sha256("model:" + modelId),
+            sha256("implementation:" + modelId),
+            "model.dts.model_" + modelId.toString().replace("-", "_")
+        );
+    }
+
+    private static String sha256(String value) {
+        try {
+            return HexFormat.of().formatHex(
+                MessageDigest.getInstance("SHA-256")
+                    .digest(value.getBytes(StandardCharsets.UTF_8))
+            );
+        } catch (Exception failure) {
+            throw new IllegalStateException(failure);
+        }
+    }
+
+    private record Scope(
+        String tenant,
+        UUID planId,
+        UUID domainId,
+        UUID modelId,
+        UUID implementationId,
+        UUID candidateId,
+        UUID entryId,
+        String modelChecksum,
+        String implementationChecksum,
+        String dbtUniqueId
+    ) {
+        String selector() {
+            return dbtUniqueId.substring(dbtUniqueId.lastIndexOf('.') + 1);
+        }
+    }
+}
