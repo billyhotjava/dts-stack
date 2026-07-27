@@ -106,6 +106,7 @@ public class CatalogAssetPortalService {
         final int scanMaxPages = ASSET_STATS_SCAN_CAP / scanPageSize;
         List<AssetSummary> rows = new ArrayList<>();
         long total = 0;
+        boolean exhausted = false;
         for (int page = 0; page < scanMaxPages; page++) {
             AssetPage result = listAssets(
                 new AssetQuery(
@@ -130,12 +131,14 @@ public class CatalogAssetPortalService {
             rows.addAll(result.content());
             total = result.total();
             if (result.content().isEmpty() || rows.size() >= total) {
+                exhausted = true;
                 break;
             }
         }
-        // 截断只由扫描上限决定。此前用 rows.size() < total 判定，一旦 total 因任何原因
-        // 大于实际可枚举的行数（例如 legacy 行取不到），该条件恒真，警告便长期误报。
-        boolean truncated = rows.size() >= ASSET_STATS_SCAN_CAP;
+        // 截断 = 循环用尽页数预算却仍未走完数据。
+        // 不能用 rows.size() >= 上限 判定：可见性会让每页不足 scanPageSize，
+        // 25 页可能只扫到 4500 行就耗尽预算，此时统计确实不完整却会被判为完整。
+        boolean truncated = !exhausted;
         return CatalogAssetOverviewAggregator.aggregate(rows, rows.size(), truncated);
     }
 
@@ -172,8 +175,13 @@ public class CatalogAssetPortalService {
         // legacy 排在 OpenMetadata 之后组成同一个逻辑列表，其偏移量必须以「未过滤的」
         // OpenMetadata 总数为边界：该值是纯 DB count，逐页恒定。若改用「减去本页隐藏行」
         // 的近似值，边界会逐页漂移，翻页时出现重复或漏行。
-        int legacyOffset = (int) Math.max(0, (long) page * size - pageData.getTotalElements());
-        int legacyLimit = Math.max(0, size - openMetadataReturned);
+        long openMetadataSlots = pageData.getTotalElements();
+        int legacyOffset = (int) Math.max(0, (long) page * size - openMetadataSlots);
+        // limit 必须与 offset 用同一条边界。若改用「本页还差几行」（size - 已取 OM 行数）去填满页面，
+        // 一旦有 OM 行被可见性隐藏，本页就会借走后面页仍会再发一次的 legacy 行，造成重复。
+        // 宁可让落在 OM 区间内的页短一些——有行被隐藏时本来就会短。
+        long wanted = (long) (page + 1) * size - openMetadataSlots;
+        int legacyLimit = (int) Math.max(0, Math.min(size, wanted));
         AssetPage legacyPage = listLegacyAssets(query, activeDept, legacyOffset, legacyLimit, visibleLegacyIds);
         if (!legacyPage.content().isEmpty()) {
             items.addAll(legacyPage.content());

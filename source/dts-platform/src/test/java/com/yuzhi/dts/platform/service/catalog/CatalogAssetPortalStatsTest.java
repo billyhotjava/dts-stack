@@ -21,7 +21,9 @@ import com.yuzhi.dts.platform.repository.catalog.OpenMetadataColumnCacheReposito
 import com.yuzhi.dts.platform.repository.catalog.OpenMetadataLineageCacheRepository;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -79,6 +81,7 @@ class CatalogAssetPortalStatsTest {
     private final List<OpenMetadataAssetCache> openMetadataAssets = new ArrayList<>();
     private final List<CatalogDataset> legacyAssets = new ArrayList<>();
     private UUID hiddenAssetId;
+    private boolean hiddenEveryPageFirst;
 
     @BeforeEach
     void setUp() {
@@ -112,6 +115,12 @@ class CatalogAssetPortalStatsTest {
         CatalogAssetExtension extension = enabledExtension(asset);
         if (hiddenAssetId != null && hiddenAssetId.equals(asset.getId())) {
             extension.setEnabled(false);
+        }
+        if (hiddenEveryPageFirst) {
+            int index = openMetadataAssets.indexOf(asset);
+            if (index >= 0 && index % 200 == 0) {
+                extension.setEnabled(false);
+            }
         }
         return extension;
     }
@@ -270,5 +279,56 @@ class CatalogAssetPortalStatsTest {
             page,
             size
         );
+    }
+
+    @Test
+    void pagingNeverServesALegacyRowTwiceWhenOpenMetadataRowsAreHidden() {
+        givenOpenMetadataAssets(4);
+        givenLegacyAssets(2);
+        givenFirstOpenMetadataAssetUnreadable();
+
+        List<String> keys = new ArrayList<>();
+        for (int page = 0; page < 4; page++) {
+            service.listAssets(queryOf(page, 2), ACTIVE_DEPT).content().forEach(row -> keys.add(row.assetKey()));
+        }
+
+        // 3 个可见 OM + 2 个 legacy，一个不多一个不少
+        assertThat(keys).hasSize(5).doesNotHaveDuplicates();
+    }
+
+    @Test
+    void overviewCountsMatchLedgerEnumerationWhenRowsAreHidden() {
+        // G-75-01：概览计数必须与台账逐页枚举出的可见行数一致。
+        // 必须跨越 overview 内部的 200 条/页边界，否则只有一页、走不到分页组合的重复路径。
+        givenOpenMetadataAssetsWithOneHiddenPerPage(250);
+        givenLegacyAssets(3);
+
+        CatalogAssetOverviewAggregator.AssetOverview overview = service.overview(queryOf(0, 200), ACTIVE_DEPT);
+
+        Set<String> ledgerKeys = new LinkedHashSet<>();
+        for (int page = 0; page < 10; page++) {
+            service.listAssets(queryOf(page, 200), ACTIVE_DEPT).content().forEach(row -> ledgerKeys.add(row.assetKey()));
+        }
+
+        assertThat(overview.scanned()).isEqualTo(ledgerKeys.size());
+        assertThat(overview.total()).isEqualTo(ledgerKeys.size());
+    }
+
+    @Test
+    void truncatedIsTrueWhenPageBudgetRunsOutBeforeDataDoes() {
+        // 每页因可见性隐藏 1 行 → 25 页只能扫到 25*199 行，达不到 5000 却已耗尽预算
+        givenOpenMetadataAssetsWithOneHiddenPerPage(6000);
+        givenLegacyAssets(0);
+
+        CatalogAssetOverviewAggregator.AssetOverview overview = service.overview(queryOf(0, 200), ACTIVE_DEPT);
+
+        assertThat(overview.scanned()).isLessThan(CatalogAssetPortalService.ASSET_STATS_SCAN_CAP);
+        assertThat(overview.truncated()).isTrue();
+    }
+
+    /** 造出「每页都有一行被隐藏」的数据集：每 200 条中的第一条不可见。 */
+    private void givenOpenMetadataAssetsWithOneHiddenPerPage(int count) {
+        givenOpenMetadataAssets(count);
+        hiddenEveryPageFirst = true;
     }
 }
