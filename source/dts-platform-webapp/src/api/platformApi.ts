@@ -798,7 +798,8 @@ export const createDatasetGrant = (datasetId: string, data: any) =>
 export const deleteDatasetGrant = (datasetId: string, grantId: string) =>
 	api.delete({ url: `/catalog/datasets/${datasetId}/grants/${grantId}` });
 
-export const getDomainTree = () => api.get({ url: "/catalog/domains/tree" });
+export const getDomainTree = (options?: { withStats?: boolean }) =>
+	api.get({ url: `/catalog/domains/tree${options?.withStats ? "?withStats=true" : ""}` });
 export const moveDomain = (id: string, data: { newParentId?: string | null }) =>
 	api.post({ url: `/catalog/domains/${id}/move`, data });
 export const getDomainAssetStats = (domainId: string): Promise<{

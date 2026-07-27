@@ -89,6 +89,17 @@ public class CatalogAssetPortalService {
         this.assetTagService = assetTagService;
     }
 
+    /**
+     * 主题域范围导航所需的域级统计（全局范围，不加任何筛选）。
+     *
+     * <p>可见性与 {@link #listAssets} 同源——禁止为此另写一套 SQL 聚合：
+     * canRead 依赖扩展/映射/legacy 三方解析、显式授权与 JWT 人员密级回退链，
+     * 在 SQL 中重写必然与台账口径漂移。
+     */
+    public CatalogAssetOverviewAggregator.AssetOverview domainStats(String activeDept) {
+        return overview(AssetQuery.unscoped(), activeDept);
+    }
+
     /** 资产概览聚合（地图页数据源）：内部翻页复用 listAssets，可见性规则单一来源。 */
     public CatalogAssetOverviewAggregator.AssetOverview overview(AssetQuery query, String activeDept) {
         final int scanPageSize = 200;
@@ -997,6 +1008,11 @@ public class CatalogAssetPortalService {
     ) {
         public AssetQuery {
             tagIds = tagIds == null ? List.of() : List.copyOf(tagIds);
+        }
+
+        /** 无任何筛选的全局查询，用于概览统计。 */
+        public static AssetQuery unscoped() {
+            return new AssetQuery(null, null, null, null, null, null, null, null, null, null, null, null, false, List.of(), 0, 200);
         }
 
         public AssetQuery(

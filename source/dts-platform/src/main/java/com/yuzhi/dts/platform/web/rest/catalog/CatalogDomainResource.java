@@ -7,6 +7,8 @@ import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetOverviewAggregator;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetPortalService;
 import com.yuzhi.dts.platform.service.catalog.CatalogDomainVisibilityService;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import com.yuzhi.dts.platform.web.rest.ApiResponses;
@@ -32,17 +34,23 @@ public class CatalogDomainResource {
     private final CatalogDatasetRepository datasetRepo;
     private final AuditService audit;
     private final CatalogDomainVisibilityService visibilityService;
+    private final CatalogAssetPortalService assetPortalService;
+    private final CatalogResourceHelper helper;
 
     public CatalogDomainResource(
         CatalogDomainRepository domainRepo,
         CatalogDatasetRepository datasetRepo,
         AuditService audit,
-        CatalogDomainVisibilityService visibilityService
+        CatalogDomainVisibilityService visibilityService,
+        CatalogAssetPortalService assetPortalService,
+        CatalogResourceHelper helper
     ) {
         this.domainRepo = domainRepo;
         this.datasetRepo = datasetRepo;
         this.audit = audit;
         this.visibilityService = visibilityService;
+        this.assetPortalService = assetPortalService;
+        this.helper = helper;
     }
 
     @GetMapping("/domains")
@@ -136,9 +144,43 @@ public class CatalogDomainResource {
         return ApiResponses.ok(Boolean.TRUE);
     }
 
+    /**
+     * 主题域树。{@code withStats=true} 时额外返回域级资产统计，供资产地图左侧范围导航使用。
+     *
+     * <p>统计复用 {@link CatalogAssetPortalService#domainStats} —— 即 listAssets 的可见性口径，
+     * 不另写 SQL 聚合，避免导航数字与台账口径漂移。缺省不带统计，既有调用方零影响。
+     */
     @GetMapping("/domains/tree")
     @Transactional(readOnly = true)
-    public ApiResponse<List<Map<String, Object>>> getDomainTree() {
+    public ApiResponse<Object> getDomainTree(
+        @RequestParam(name = "withStats", defaultValue = "false") boolean withStats,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        List<Map<String, Object>> roots = buildDomainTree();
+        if (!withStats) {
+            audit.auditAction("CATALOG_DOMAIN_TREE", AuditStage.SUCCESS, "tree", null);
+            return ApiResponses.ok(roots);
+        }
+        // 与资产台账同一口径：优先请求头，回退 JWT 的 dept_code
+        String effDept = activeDept != null ? activeDept : helper.claim("dept_code");
+        CatalogAssetOverviewAggregator.AssetOverview overview = assetPortalService.domainStats(effDept);
+        Map<String, Object> stats = new LinkedHashMap<>();
+        stats.put("all", Map.of("total", overview.total(), "attention", overview.attention()));
+        stats.put("unassigned", Map.of("total", overview.missingDomain(), "attention", overview.missingDomain()));
+        stats.put("byDomain", overview.byDomain());
+        stats.put("scanned", overview.scanned());
+        stats.put("truncated", overview.truncated());
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("tree", roots);
+        payload.put("stats", stats);
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("scanned", overview.scanned());
+        auditPayload.put("truncated", overview.truncated());
+        audit.auditAction("CATALOG_DOMAIN_TREE", AuditStage.SUCCESS, "tree-with-stats", auditPayload);
+        return ApiResponses.ok(payload);
+    }
+
+    private List<Map<String, Object>> buildDomainTree() {
         List<CatalogDomain> all = visibilityService.findAllVisible();
         Map<UUID, Map<String, Object>> nodeMap = new LinkedHashMap<>();
         for (CatalogDomain d : all) {
@@ -166,8 +208,7 @@ public class CatalogDomainResource {
                 roots.add(m);
             }
         }
-        audit.auditAction("CATALOG_DOMAIN_TREE", AuditStage.SUCCESS, "tree", null);
-        return ApiResponses.ok(roots);
+        return roots;
     }
 
     @GetMapping("/domains/{id}/asset-stats")

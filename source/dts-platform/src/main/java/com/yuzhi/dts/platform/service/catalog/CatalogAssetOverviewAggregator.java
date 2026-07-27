@@ -29,6 +29,9 @@ public final class CatalogAssetOverviewAggregator {
 
     public record MatrixCell(String layer, String domainId, long total, long attention) {}
 
+    /** 单个主题域下的资产体量与待处置数，供左侧范围导航展示。 */
+    public record DomainStats(long total, long attention) {}
+
     public record AssetOverview(
         long total,
         long unclassified,
@@ -38,6 +41,7 @@ public final class CatalogAssetOverviewAggregator {
         Map<String, Long> byLayer,
         Map<String, Long> governanceStatusCounts,
         List<MatrixCell> matrix,
+        Map<String, DomainStats> byDomain,
         int scanned,
         boolean truncated
     ) {}
@@ -89,6 +93,17 @@ public final class CatalogAssetOverviewAggregator {
             matrix.add(new MatrixCell(layer, domainId, entry.getValue()[0], entry.getValue()[1]));
         }
 
+        // 域级 rollup 由 matrix 的 domainId 维度归并而来，不引入第二套统计口径。
+        // domainId 为 null 的行属于"未归域"，由 missingDomain 表达，不进入本表。
+        Map<String, DomainStats> byDomain = new LinkedHashMap<>();
+        for (MatrixCell cell : matrix) {
+            if (cell.domainId() == null) {
+                continue;
+            }
+            DomainStats current = byDomain.getOrDefault(cell.domainId(), new DomainStats(0, 0));
+            byDomain.put(cell.domainId(), new DomainStats(current.total() + cell.total(), current.attention() + cell.attention()));
+        }
+
         return new AssetOverview(
             rows.size(),
             unclassified,
@@ -98,6 +113,7 @@ public final class CatalogAssetOverviewAggregator {
             byLayer,
             governanceStatusCounts,
             matrix,
+            byDomain,
             scanned,
             truncated
         );

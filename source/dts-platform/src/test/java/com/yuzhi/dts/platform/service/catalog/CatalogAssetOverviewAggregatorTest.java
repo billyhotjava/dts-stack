@@ -116,4 +116,30 @@ class CatalogAssetOverviewAggregatorTest {
 
         assertThat(overview.stale()).isZero();
     }
+
+    @Test
+    void byDomainRollsUpTotalsAndAttentionPerDomain() {
+        UUID domainA = UUID.randomUUID();
+        var rows = List.of(
+            summary("ODS", domainA, "INTERNAL", "ACTIVE", "GOVERNED"),
+            summary("ODS", domainA, null, "ACTIVE", "GOVERNED"),
+            summary("ODS", null, "INTERNAL", "ACTIVE", "GOVERNED")
+        );
+
+        var overview = CatalogAssetOverviewAggregator.aggregate(rows, rows.size(), false);
+
+        assertThat(overview.byDomain()).containsOnlyKeys(domainA.toString());
+        assertThat(overview.byDomain().get(domainA.toString()).total()).isEqualTo(2);
+        assertThat(overview.byDomain().get(domainA.toString()).attention()).isEqualTo(1);
+    }
+
+    @Test
+    void byDomainExcludesUnassignedRows() {
+        var rows = List.of(summary("ODS", null, "INTERNAL", "ACTIVE", "GOVERNED"));
+
+        var overview = CatalogAssetOverviewAggregator.aggregate(rows, rows.size(), false);
+
+        assertThat(overview.byDomain()).isEmpty();
+        assertThat(overview.missingDomain()).isEqualTo(1);
+    }
 }
