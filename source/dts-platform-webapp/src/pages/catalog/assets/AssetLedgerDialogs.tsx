@@ -1,5 +1,6 @@
 import { Alert, Button, Modal, Space, Tabs, Tag } from "antd";
 import { CompactTable } from "@/components/table";
+import { GOVERNANCE_STATUS_DICT, LIFECYCLE_STATUS_DICT, resolveEnumLabel } from "./assetEnumLabels";
 import {
 	formatTime,
 	type GovernanceGapRow,
@@ -136,8 +137,10 @@ export function AssetLedgerDialogs({
 											width: 160,
 											render: (_, row) => (
 												<Space direction="vertical" size={2}>
-													<Tag>{row.governanceStatus || "-"}</Tag>
-													<span className="text-xs text-slate-500">{row.lifecycleStatus || "-"}</span>
+													<Tag>{resolveEnumLabel(GOVERNANCE_STATUS_DICT, row.governanceStatus, "-")}</Tag>
+													<span className="text-xs text-slate-500">
+														{resolveEnumLabel(LIFECYCLE_STATUS_DICT, row.lifecycleStatus, "-")}
+													</span>
 												</Space>
 											),
 										},

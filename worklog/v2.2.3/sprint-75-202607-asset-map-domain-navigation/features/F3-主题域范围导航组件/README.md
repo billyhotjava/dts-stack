@@ -51,7 +51,7 @@ export interface DomainScopeNavProps {
 - **选中态**：3px 左侧主色条 + 中性加深底 + 文字加粗。不用 antd 默认淡蓝块。
 - **空域**：整行 40% 不透明，使"五个域全空"一眼可见。
 - **缺标识域**：disabled + tooltip「该主题域缺少标识，无法作为筛选条件」。禁止静默降级为"全部"。
-- **控件最少化**：无折叠按钮（靠 `Sider breakpoint="lg"`）、无行级 hover 按钮、无右键菜单。整行是唯一交互（ADR-75-09）。
+- **控件最少化**：无折叠按钮（靠 `Sider breakpoint="md"`）、无行级 hover 按钮、无右键菜单。整行是唯一交互（ADR-75-09）。
 - **无虚线**：去掉 `showLine`，层级用 12px 缩进 + hover 左侧色条表达。
 
 ### 四态
@@ -85,7 +85,7 @@ export interface DomainScopeNavProps {
 ## Definition of Ready
 
 - [ ] 已确认台账页现有 searchParams 键名，避免 `domain` 与既有筛选键冲突
-- [ ] 已确认 `Layout.Sider breakpoint` 在两页的既有差异（地图页无、台账页 `md`）统一为 `lg` 不影响既有布局
+- [ ] 已确认 `Layout.Sider breakpoint` 在两页的既有差异（地图页无、台账页 `md`）统一为 `md`（Sprint-72 契约已钉住台账为 md） 不影响既有布局
 - [ ] 已确认项目内是否已有同类"分区式导航"组件可复用，避免第三种实现
 
 ## Definition of Done

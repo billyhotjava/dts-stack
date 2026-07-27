@@ -23,7 +23,7 @@ import {
 import { readTagIds, writeTagIds } from "@/components/catalog/tags/catalogTagUrlState";
 import { EmptyState } from "@/components/empty-state";
 import { DomainScopeNav } from "@/components/catalog/DomainScopeNav";
-import { ASSET_TYPE_DICT, LIFECYCLE_STATUS_DICT, resolveEnumLabel } from "./assets/assetEnumLabels";
+import { ASSET_TYPE_DICT, LIFECYCLE_STATUS_DICT, MATCH_STATUS_DICT, resolveEnumLabel } from "./assets/assetEnumLabels";
 import { PageHeader } from "@/components/page-header";
 import { useRouter } from "@/routes/hooks";
 import { resolveAssetReadiness, STALE_LIFECYCLE_STATUSES } from "./assetPortalUx.helpers";
@@ -527,7 +527,7 @@ export default function Page() {
 			<Layout className="min-h-full" style={{ background: "transparent" }}>
 				<Layout.Sider
 					width={248}
-					breakpoint="lg"
+					breakpoint="md"
 					collapsedWidth={0}
 					theme="light"
 					style={{
@@ -581,7 +581,7 @@ export default function Page() {
 								Array.isArray(diagnostics.issues) && diagnostics.issues.length > 0
 									? diagnostics.issues
 											.slice(0, 3)
-											.map((item: any) => `${item.fqn || "-"}：${item.matchReason || item.matchStatus || "-"}`)
+											.map((item: any) => `${item.fqn || "-"}：${item.matchReason || resolveEnumLabel(MATCH_STATUS_DICT, item.matchStatus, "-")}`)
 											.join("；")
 									: undefined
 							}

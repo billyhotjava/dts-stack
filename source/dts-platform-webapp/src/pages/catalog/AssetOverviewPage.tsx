@@ -314,7 +314,7 @@ export default function AssetOverviewPage() {
 		<Layout className="min-h-full bg-transparent">
 			<Layout.Sider
 				width={240}
-				breakpoint="lg"
+				breakpoint="md"
 				collapsedWidth={0}
 				theme="light"
 				className="rounded-lg border border-slate-200 bg-white p-3"

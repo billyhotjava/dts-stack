@@ -1345,7 +1345,7 @@ node --experimental-strip-types --test src/pages/catalog/AssetOverviewPage.sourc
 4. `Layout.Sider` 内容整体替换为：
 
 ```tsx
-			<Layout.Sider width={240} breakpoint="lg" collapsedWidth={0} theme="light" className="rounded-lg border border-slate-200 bg-white p-3">
+			<Layout.Sider width={240} breakpoint="md" collapsedWidth={0} theme="light" className="rounded-lg border border-slate-200 bg-white p-3">
 				<DomainScopeNav
 					nodes={scopeNodes}
 					allStats={domainStats.all}
@@ -1423,7 +1423,7 @@ node --experimental-strip-types --test src/pages/catalog/DatasetsPage.domain-sco
 
 - [ ] **Step 3: 替换台账左侧**
 
-按 Task 8 相同做法改造 `DatasetsPage.tsx`：`domain` 从 `searchParams` 派生、`treeData` 换 `buildDomainScopeNodes`、`Layout.Sider` 内容换成 `DomainScopeNav`（`breakpoint` 统一为 `lg`）。
+按 Task 8 相同做法改造 `DatasetsPage.tsx`：`domain` 从 `searchParams` 派生、`treeData` 换 `buildDomainScopeNodes`、`Layout.Sider` 内容换成 `DomainScopeNav`（`breakpoint` 统一为 `md`（Sprint-72 契约已钉住台账为 md））。
 
 台账已有其他筛选参数，`setDomain` 必须基于当前 `searchParams` 复制后再改动，不得整体覆盖：
 
