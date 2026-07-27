@@ -1,0 +1,60 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import {
+	GOVERNANCE_STATUS_DICT,
+	LIFECYCLE_STATUS_DICT,
+	resolveEnumLabel,
+} from "./assetEnumLabels.ts";
+
+test("resolveEnumLabel 返回字典中文", () => {
+	assert.equal(resolveEnumLabel(GOVERNANCE_STATUS_DICT, "PENDING_DOMAIN"), "待归域");
+});
+
+test("resolveEnumLabel 大小写与空白不敏感", () => {
+	assert.equal(resolveEnumLabel(GOVERNANCE_STATUS_DICT, "  pending_domain "), "待归域");
+});
+
+test("未收录枚举降级为可见的未知标记，而不是裸原值", () => {
+	assert.equal(resolveEnumLabel(GOVERNANCE_STATUS_DICT, "SOMETHING_NEW"), "未知（SOMETHING_NEW）");
+});
+
+test("空值返回未设定", () => {
+	assert.equal(resolveEnumLabel(GOVERNANCE_STATUS_DICT, ""), "未设定");
+	assert.equal(resolveEnumLabel(GOVERNANCE_STATUS_DICT, null), "未设定");
+});
+
+test("空值可用 fallback 覆盖", () => {
+	assert.equal(resolveEnumLabel(GOVERNANCE_STATUS_DICT, null, "全部"), "全部");
+});
+
+test("治理状态字典覆盖后端实有的 8 个值", () => {
+	for (const key of [
+		"GOVERNED",
+		"PENDING_CLAIM",
+		"PENDING_CLASSIFICATION",
+		"PENDING_DOMAIN",
+		"PENDING_GOVERNANCE",
+		"PENDING_APPROVAL",
+		"PENDING_LINEAGE",
+		"PENDING_REVIEW",
+		"DISABLED",
+	]) {
+		assert.ok(GOVERNANCE_STATUS_DICT[key], `治理状态字典缺少 ${key}`);
+	}
+});
+
+test("生命周期字典覆盖 CatalogAssetLifecycleStatus 全部枚举", () => {
+	for (const key of [
+		"DISCOVERED",
+		"PENDING_GOVERNANCE",
+		"DRAFT_GOVERNANCE",
+		"TESTING",
+		"ACTIVE",
+		"DEPRECATED",
+		"ARCHIVED",
+		"BLOCKED",
+		"PENDING_REVIEW",
+	]) {
+		assert.ok(LIFECYCLE_STATUS_DICT[key], `生命周期字典缺少 ${key}`);
+	}
+});
