@@ -22,6 +22,7 @@ import { EmptyState } from "@/components/empty-state";
 import { CompactTable } from "@/components/table";
 import { useRouter } from "@/routes/hooks";
 import { AssetGovernanceOverview } from "./AssetGovernanceOverview";
+import { LIFECYCLE_STATUS_DICT, resolveEnumLabel } from "./assets/assetEnumLabels";
 import { STALE_LIFECYCLE_STATUSES } from "./assetPortalUx.helpers";
 import type {
 	AssetRow,
@@ -473,13 +474,14 @@ export default function AssetDetailPage() {
 			render: (value) => value || "-",
 		},
 		{
-			title: "同步状态",
+			// 原标题为「同步状态」但 dataIndex 取的是 lifecycleStatus，且判定的 SYNCED
+			// 不存在于任何行字段，该分支恒不命中——标题与数据不符，已按实际含义更正。
+			title: "生命周期",
 			dataIndex: "lifecycleStatus",
 			render: (value) => {
 				const normalized = String(value || "").toUpperCase();
 				if (STALE_LIFECYCLE_STATUSES.has(normalized)) return <Tag color="red">失效</Tag>;
-				if (normalized === "SYNCED") return <Tag color="green">已同步</Tag>;
-				return <Tag>未同步</Tag>;
+				return <Tag>{resolveEnumLabel(LIFECYCLE_STATUS_DICT, value, "未设定")}</Tag>;
 			},
 		},
 		{

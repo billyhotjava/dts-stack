@@ -211,6 +211,7 @@ export default function AssetOverviewPage() {
 				name: `其他 ${rest.length} 个域`,
 				total: rest.reduce((sum, item) => sum + item.total, 0),
 				mergedNames: rest.map((item) => item.name),
+				mergedKeys: rest.map((item) => (item.key === null ? "__NULL__" : item.key)),
 			},
 		];
 	}, [overview, domainMap]);
@@ -231,11 +232,26 @@ export default function AssetOverviewPage() {
 
 	const matrixCellMap = useMemo(() => {
 		const map = new Map<string, MatrixCell>();
+		const mergedKeys = new Set(
+			(matrixColumns.find((col) => col.key === "__OTHERS__") as any)?.mergedKeys ?? [],
+		);
 		for (const cell of overview?.matrix || []) {
-			map.set(`${cell.layer}|${cell.domainId === null ? "__NULL__" : cell.domainId}`, cell);
+			const domainKey = cell.domainId === null ? "__NULL__" : cell.domainId;
+			map.set(`${cell.layer}|${domainKey}`, cell);
+			// 被合并进「其他 N 个域」的列必须预聚合，否则该列每格都查不到而恒显示 "-"
+			if (mergedKeys.has(domainKey)) {
+				const key = `${cell.layer}|__OTHERS__`;
+				const prev = map.get(key);
+				map.set(
+					key,
+					prev
+						? { ...prev, total: prev.total + cell.total, attention: prev.attention + cell.attention }
+						: { layer: cell.layer, domainId: "__OTHERS__", total: cell.total, attention: cell.attention },
+				);
+			}
 		}
 		return map;
-	}, [overview]);
+	}, [overview, matrixColumns]);
 
 	// 缺口原因合并三处口径：治理状态分布 + 未定密 + 失效，避免同一件事讲三遍
 	const gapReasons = useMemo(() => {
@@ -258,9 +274,12 @@ export default function AssetOverviewPage() {
 		(key: string) => {
 			const params = new URLSearchParams();
 			if (domain) params.set("domain", domain);
-			if (key === "UNCLASSIFIED") params.set("classification", "UNSET");
-			else if (key === "STALE") params.set("lifecycle", "STALE");
-			else params.set("governance", key);
+			// 只传台账真正会读取的参数。未定密/失效在台账没有对应筛选位，
+			// 传了也不会生效，反而让用户以为筛过了——宁可只带范围。
+			// 尤其不能传 lifecycle=STALE：该取值不在 CatalogAssetLifecycleStatus 中，恒不命中。
+			if (key !== "UNCLASSIFIED" && key !== "STALE") {
+				params.set("governance", key);
+			}
 			const rest = params.toString();
 			router.push(`/catalog/assets/ledger${rest ? `?${rest}` : ""}`);
 		},
@@ -435,7 +454,9 @@ export default function AssetOverviewPage() {
 											<th className="px-2 py-1 text-left text-xs font-medium text-slate-400">分层 \ 主题域</th>
 											{matrixColumns.map((col) => (
 												<th key={String(col.key)} className="px-2 py-1 text-left text-xs font-medium text-slate-600">
-													<span className="line-clamp-1">{col.name}</span>
+													<span className="line-clamp-1" title={(col as any).mergedNames?.join("、")}>
+														{col.name}
+													</span>
 												</th>
 											))}
 										</tr>

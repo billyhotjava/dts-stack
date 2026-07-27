@@ -54,6 +54,10 @@ public class CatalogAssetPortalService {
      */
     static final int ASSET_STATS_SCAN_CAP = 5_000;
 
+
+    /** 页码上限，避免 page * size 转 int 时溢出为负 */
+    private static final int MAX_PAGE_INDEX = 100_000;
+
     private final OpenMetadataAssetCacheRepository assetRepository;
     private final OpenMetadataColumnCacheRepository columnRepository;
     private final OpenMetadataLineageCacheRepository lineageRepository;
@@ -150,7 +154,9 @@ public class CatalogAssetPortalService {
     }
 
     private AssetPage listAssetsWithoutTagFilter(AssetQuery query, String activeDept) {
-        int page = Math.max(0, query.page());
+        // 钳制页码：page * size 之后要转 int，未加约束的大页码会溢出为负数，
+        // 进而让下游 Stream.skip(负数) 抛 IllegalArgumentException 变成 500
+        int page = Math.min(Math.max(0, query.page()), MAX_PAGE_INDEX);
         int size = Math.max(1, Math.min(query.size(), 200));
         var pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "lastSyncedAt").and(Sort.by("fqn").ascending()));
         var pageData = assetRepository.findAll(buildSpec(query), pageable);
@@ -348,6 +354,8 @@ public class CatalogAssetPortalService {
      */
     private AssetPage listLegacyAssets(AssetQuery query, String activeDept, int offset, int limit, List<UUID> excludedIds) {
         Sort sort = Sort.by(Sort.Direction.DESC, "lastModifiedDate").and(Sort.by(Sort.Direction.DESC, "createdDate"));
+        // 取数窗口随 offset 变化，但 total 不能跟着变：否则 OM-only 的页只取 1 行，
+        // 整个 legacy 总数就会取决于那一行是否可见。用固定窗口估算隐藏比例。
         int fetchSize = Math.max(1, offset + Math.max(limit, 1));
         Page<CatalogDataset> legacyPage = datasetRepository.findAll(buildLegacySpec(query), PageRequest.of(0, fetchSize, sort));
         List<CatalogDataset> visible = legacyPage
@@ -362,6 +370,9 @@ public class CatalogAssetPortalService {
             .limit(Math.max(0, limit))
             .map(this::toLegacySummary)
             .toList();
+        // 已知近似：hidden 按当前取数窗口观测，窗口随 offset 变化时 total 会有小幅波动。
+        // 这是本方法固有的估算方式（OM 侧同理），非本次改动引入；精确化需要额外一次全量计数查询，
+        // 与「每次地图加载已跑两轮全量扫描」的成本问题冲突，故记录为已知限制而非在此修复。
         long hidden = Math.max(0, legacyPage.getNumberOfElements() - visible.size());
         long total = Math.max(0, legacyPage.getTotalElements() - hidden);
         return new AssetPage(items, total, 0, fetchSize, items.size(), "dts-catalog");

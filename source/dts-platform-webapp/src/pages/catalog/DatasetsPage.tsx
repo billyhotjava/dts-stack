@@ -64,11 +64,11 @@ export default function Page() {
 	// 必须基于当前 searchParams 复制后再改，台账还有标签等其他筛选参数不能被覆盖。
 	const domain = searchParams.get("domain") || undefined;
 	const setDomain = useCallback(
-		(next: string | undefined) => {
+		(next: string | undefined, options?: { replace?: boolean }) => {
 			const params = new URLSearchParams(searchParams);
 			if (next) params.set("domain", next);
 			else params.delete("domain");
-			setSearchParams(params);
+			setSearchParams(params, options?.replace ? { replace: true } : undefined);
 		},
 		[searchParams, setSearchParams],
 	);
@@ -76,7 +76,8 @@ export default function Page() {
 	const [classification, setClassification] = useState<string>("ALL");
 	// layer 是可被工具栏改写的本地筛选，只在挂载时取深链初值；范围(domain)则完全由 URL 派生
 	const [warehouseLayer, setWarehouseLayer] = useState<string>(() => searchParams.get("layer") || "ALL");
-	const [governanceStatus, setGovernanceStatus] = useState<string>("ALL");
+	// 地图页缺口面板下钻会带 ?governance=，必须真正接进筛选，否则用户以为筛了实际没筛
+	const [governanceStatus, setGovernanceStatus] = useState<string>(() => searchParams.get("governance") || "ALL");
 	const [matchStatus, setMatchStatus] = useState<string>("ALL");
 	const [loading, setLoading] = useState(false);
 	const [syncing, setSyncing] = useState(false);
@@ -108,7 +109,9 @@ export default function Page() {
 	useEffect(() => {
 		try {
 			// 地图矩阵下钻等深链显式携带 layer/domain 时，URL 优先于本地缓存的筛选
-			const hasDeepLinkFilters = Boolean(searchParams.get("layer") || searchParams.get("domain"));
+			const hasDeepLinkFilters = Boolean(
+				searchParams.get("layer") || searchParams.get("domain") || searchParams.get("governance"),
+			);
 			const raw = localStorage.getItem(DATASET_FILTER_STORAGE_KEY);
 			if (!raw) return;
 			const saved = JSON.parse(raw);
@@ -122,7 +125,8 @@ export default function Page() {
 			);
 			setMatchStatus(typeof saved?.matchStatus === "string" && saved.matchStatus ? saved.matchStatus : "ALL");
 			if (!hasDeepLinkFilters) {
-				setDomain(undefined);
+				// 恢复本地缓存属于「纠正 URL」而非用户导航，用 replace 避免多压一条历史
+				setDomain(undefined, { replace: true });
 				setWarehouseLayer(
 					typeof saved?.warehouseLayer === "string" && saved.warehouseLayer ? saved.warehouseLayer : "ALL",
 				);
@@ -360,13 +364,16 @@ export default function Page() {
 
 	const resetFilters = () => {
 		setKeyword("");
-		setDomain(undefined);
 		setAssetType("ALL");
 		setClassification("ALL");
 		setWarehouseLayer("ALL");
 		setGovernanceStatus("ALL");
 		setMatchStatus("ALL");
-		setSearchParams(writeTagIds(searchParams, []), { replace: true });
+		// 一次导航搞定：分两次调用时，第二次基于渲染期的陈旧快照，会把刚清掉的 domain 写回来
+		const params = writeTagIds(searchParams, []);
+		params.delete("domain");
+		params.delete("governance");
+		setSearchParams(params, { replace: true });
 	};
 
 	const syncOpenMetadataAssets = async () => {
