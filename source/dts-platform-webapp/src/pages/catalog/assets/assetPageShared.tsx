@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { CatalogTagDto } from "@/api/catalogTagsApi";
+import type { DomainScopeNode, DomainScopeStats } from "@/components/catalog/DomainScopeNav";
 
 // DatasetsPage（资产地图/台账）拆分出的共享层：类型、常量、纯工具与指标卡片。
 // 视图组件与页面容器均从此处取用，保持单一事实源。
@@ -165,12 +166,22 @@ export const formatTime = (value?: string | null) => {
 	}
 };
 
-export const buildTreeNodes = (nodes: DomainNode[], prefix = "domain"): any[] =>
-	nodes.map((node, index) => ({
-		key: node.id || `fallback-${prefix}-${index}`,
-		title: node.name ?? node.code ?? "未命名",
-		children: node.children?.length ? buildTreeNodes(node.children, `${prefix}-${index}`) : undefined,
-	}));
+// 缺少标识的域保留 id: null，由 DomainScopeNav 渲染为禁用并给出说明；
+// 不再生成 fallback key —— 那会让点击被静默判成「全部资产」，用户以为筛了实际没筛。
+export const buildDomainScopeNodes = (
+	nodes: DomainNode[],
+	stats?: Record<string, DomainScopeStats>,
+): DomainScopeNode[] =>
+	nodes.map((node) => {
+		const id = node.id ? String(node.id) : null;
+		return {
+			id,
+			name: node.name ?? node.code ?? "未命名",
+			code: node.code,
+			stats: id ? stats?.[id] : undefined,
+			children: node.children?.length ? buildDomainScopeNodes(node.children, stats) : undefined,
+		};
+	});
 
 export const MetricTile = ({
 	icon,
