@@ -58,3 +58,25 @@ test("overview and ledger are two routes", () => {
 	assert.match(DYNAMIC_RESOLVER, /"\/catalog\/assets": "\/pages\/catalog\/AssetOverviewPage"/);
 	assert.match(DYNAMIC_RESOLVER, /"\/catalog\/assets\/ledger": "\/pages\/catalog\/DatasetsPage"/);
 });
+
+test("范围选择进入 URL 而非组件内部 state", () => {
+	assert.match(PAGE, /searchParams\.get\("domain"\)/);
+	assert.doesNotMatch(PAGE, /useState<string \| undefined>\(\)/);
+});
+
+test("使用共享导航组件，不再自建 antd Tree", () => {
+	assert.match(PAGE, /DomainScopeNav/);
+	assert.doesNotMatch(PAGE, /<Tree\b/);
+});
+
+test("域树请求带上统计参数，且不再单独调用 listDomains", () => {
+	assert.match(PAGE, /getDomainTree\(\{\s*withStats:\s*true\s*\}\)/);
+	// 只断言"没有调用"，注释里提及旧实现是允许的
+	assert.doesNotMatch(PAGE, /listDomains\s*\(/);
+	assert.doesNotMatch(PAGE, /import\s*\{[^}]*listDomains/);
+});
+
+test("不再存在 fallback- 静默降级", () => {
+	assert.doesNotMatch(PAGE, /fallback-/);
+});
+

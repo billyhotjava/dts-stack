@@ -6,10 +6,11 @@ import {
 	TableOutlined,
 	WarningOutlined,
 } from "@ant-design/icons";
-import { Alert, Button, Layout, Spin, Tabs, Tag, Tooltip, Tree } from "antd";
+import { Alert, Button, Layout, Spin, Tabs, Tag, Tooltip } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
-import { getCatalogAssetsOverview, getDomainTree, listCatalogAssetsV2, listDomains } from "@/api/platformApi";
+import { getCatalogAssetsOverview, getDomainTree, listCatalogAssetsV2 } from "@/api/platformApi";
+import { DomainScopeNav, type DomainScopeStats } from "@/components/catalog/DomainScopeNav";
 import { TagManagementTab } from "@/components/catalog/tags/TagManagementTab";
 import { PageHeader } from "@/components/page-header";
 import { useCatalogTagGovernanceAccess } from "@/hooks/useModuleManageAccess";
@@ -17,7 +18,7 @@ import { useRouter } from "@/routes/hooks";
 import { resolveAssetReadiness } from "./assetPortalUx.helpers";
 import type { AssetRow, DomainNode } from "./assets/assetPageShared";
 import {
-	buildTreeNodes,
+	buildDomainScopeNodes,
 	LAYER_META,
 	LAYER_ORDER,
 	MetricTile,
@@ -59,12 +60,26 @@ export default function AssetOverviewPage() {
 	const activeTab = searchParams.get("tab") === "catalog-tags" ? "catalog-tags" : "asset-map";
 	const isLegacyLedgerRedirect = searchParams.get("view") === "table";
 	const isAssetMapActive = activeTab === "asset-map" && !isLegacyLedgerRedirect;
-	const [domain, setDomain] = useState<string | undefined>();
+	const domain = searchParams.get("domain") || undefined;
+	const setDomain = useCallback(
+		(next: string | undefined) => {
+			const params = new URLSearchParams(searchParams);
+			if (next) params.set("domain", next);
+			else params.delete("domain");
+			setSearchParams(params);
+		},
+		[searchParams, setSearchParams],
+	);
 	const [overview, setOverview] = useState<AssetOverview | null>(null);
 	const [overviewLoading, setOverviewLoading] = useState(false);
 	const [attentionRows, setAttentionRows] = useState<AssetRow[]>([]);
-	const [domains, setDomains] = useState<{ id: string; name: string }[]>([]);
 	const [domainTree, setDomainTree] = useState<DomainNode[]>([]);
+	const [domainStats, setDomainStats] = useState<{
+		all?: DomainScopeStats;
+		unassigned?: DomainScopeStats;
+		byDomain?: Record<string, DomainScopeStats>;
+		truncated?: boolean;
+	}>({});
 	const [treeLoading, setTreeLoading] = useState(false);
 
 	// ?view=table 旧深链兼容：台账已是独立路由
@@ -80,23 +95,24 @@ export default function AssetOverviewPage() {
 	useEffect(() => {
 		if (!isAssetMapActive) return;
 		void (async () => {
-			try {
-				const resp: any = await listDomains(0, 200, "");
-				const list = Array.isArray(resp?.content) ? resp.content : [];
-				setDomains(
-					list
-						.map((item: any) => ({ id: String(item.id || ""), name: String(item.name || "").trim() }))
-						.filter((item: any) => item.id && item.name),
-				);
-			} catch {
-				// error toast handled by global interceptor
-			}
-		})();
-		void (async () => {
 			setTreeLoading(true);
 			try {
-				const tree = (await getDomainTree()) as any;
-				setDomainTree(Array.isArray(tree) ? tree : Array.isArray(tree?.data) ? tree.data : []);
+				// 单次请求同时拿树与统计，消除「树取 getDomainTree、矩阵列名取 listDomains」的双数据源漂移
+				const resp = (await getDomainTree({ withStats: true })) as any;
+				const payload = resp?.data ?? resp;
+				const tree = Array.isArray(payload) ? payload : payload?.tree;
+				setDomainTree(Array.isArray(tree) ? tree : []);
+				const stats = payload?.stats;
+				setDomainStats(
+					stats
+						? {
+								all: stats.all,
+								unassigned: stats.unassigned,
+								byDomain: stats.byDomain || {},
+								truncated: Boolean(stats.truncated),
+							}
+						: {},
+				);
 			} catch {
 				// error toast handled by global interceptor
 			} finally {
@@ -105,7 +121,18 @@ export default function AssetOverviewPage() {
 		})();
 	}, [isAssetMapActive]);
 
-	const domainMap = useMemo(() => new Map(domains.map((item) => [item.id, item.name])), [domains]);
+	// 矩阵列名与导航同源，避免域超过 listDomains 的取数上限时列名掉成「未知主题域」
+	const domainMap = useMemo(() => {
+		const map = new Map<string, string>();
+		const walk = (nodes: DomainNode[]) => {
+			for (const node of nodes) {
+				if (node.id) map.set(String(node.id), node.name ?? node.code ?? "未命名");
+				if (node.children?.length) walk(node.children);
+			}
+		};
+		walk(domainTree);
+		return map;
+	}, [domainTree]);
 
 	const loadOverview = useCallback(async () => {
 		if (!isAssetMapActive) return;
@@ -200,15 +227,9 @@ export default function AssetOverviewPage() {
 		[overview],
 	);
 
-	const treeData = useMemo(
-		() => [
-			{
-				key: "ALL",
-				title: "全部资产",
-				children: [{ key: UNASSIGNED_DOMAIN_KEY, title: "未归域" }, ...buildTreeNodes(domainTree)],
-			},
-		],
-		[domainTree],
+	const scopeNodes = useMemo(
+		() => buildDomainScopeNodes(domainTree, domainStats.byDomain),
+		[domainTree, domainStats.byDomain],
 	);
 
 	const handleTabChange = (key: string) => {
@@ -251,23 +272,22 @@ export default function AssetOverviewPage() {
 
 	return (
 		<Layout className="min-h-full bg-transparent">
-			<Layout.Sider width={240} theme="light" className="rounded-lg border border-slate-200 bg-white p-3">
-				<div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-900">
-					<ApartmentOutlined />
-					主题域
-				</div>
-				<Spin spinning={treeLoading}>
-					<Tree
-						showLine
-						defaultExpandAll
-						treeData={treeData}
-						selectedKeys={[domain || "ALL"]}
-						onSelect={(keys) => {
-							const selected = String(keys?.[0] ?? "ALL");
-							setDomain(selected === "ALL" || selected.startsWith("fallback-") ? undefined : selected);
-						}}
-					/>
-				</Spin>
+			<Layout.Sider
+				width={240}
+				breakpoint="lg"
+				collapsedWidth={0}
+				theme="light"
+				className="rounded-lg border border-slate-200 bg-white p-3"
+			>
+				<DomainScopeNav
+					nodes={scopeNodes}
+					allStats={domainStats.all}
+					unassignedStats={domainStats.unassigned}
+					value={domain}
+					onChange={setDomain}
+					loading={treeLoading}
+					truncated={domainStats.truncated}
+				/>
 			</Layout.Sider>
 			<Layout.Content style={{ padding: "0 16px" }}>
 				{assetTabs}
