@@ -20,6 +20,10 @@
 - **文件规模**：单文件 ≤800 行，新组件目标 200～400 行。
 - **Optional**：Java 侧禁用 `Optional.get()`，一律 `orElseThrow()`（`modernizer-maven-plugin` 构建期强制）。
 - **提交信息**：约定式提交（`feat:` / `fix:` / `refactor:` / `test:` / `docs:`），无 Co-Authored-By（全局关闭归属）。
+- **Java 测试白名单（实测发现，必守）**：`source/dts-platform/pom.xml:526-600` 的 `maven-compiler-plugin` 配了显式
+  `<testIncludes>` 允许清单（45 项）。**未列入的测试文件不会被编译**，`./mvnw test -Dtest=X` 会报
+  `No tests matching pattern "X" were executed`。新增或启用任何 Java 测试，必须同时把该文件加进这份清单。
+  已知 `CatalogAssetOverviewAggregatorTest` **不在清单内**——它当前是死测试代码，从未运行过。
 
 ## 命令速查
 
@@ -388,7 +392,13 @@ git commit -m "feat: 数仓分层改中文主+代号弱化并加枚举防漂移�
 
 - [ ] **Step 1: 写失败测试（Java）**
 
-追加到 `CatalogAssetOverviewAggregatorTest.java`。若该文件已有 `AssetSummary` 构造辅助方法，复用之；否则按文件内既有测试的构造方式创建行。
+追加到 `CatalogAssetOverviewAggregatorTest.java`。该文件**已有**构造辅助（`:13`），直接复用，不要另造：
+
+```java
+private AssetSummary summary(String layer, UUID domainId, String classification, String lifecycle, String governanceStatus)
+```
+
+下面测试里的 `summaryWithLifecycle(x)` 即 `summary("ODS", UUID.randomUUID(), "INTERNAL", x, "GOVERNED")`。
 
 ```java
 @Test
@@ -415,6 +425,17 @@ void unreachableStaleTokenIsNoLongerCounted() {
 }
 ```
 
+- [ ] **Step 1b: 把该测试加入 pom 白名单（否则它根本不会被编译）**
+
+`source/dts-platform/pom.xml` 的 `<testIncludes>` 块（约 :560，紧邻其他 `service/catalog` 条目）加入：
+
+```xml
+                        <testInclude>**/service/catalog/CatalogAssetOverviewAggregatorTest.java</testInclude>
+```
+
+> 该文件此前不在白名单，从未被编译或运行。不加这一行，下一步会报
+> `No tests matching pattern "CatalogAssetOverviewAggregatorTest" were executed`，而不是你期望的断言失败。
+
 - [ ] **Step 2: 运行测试确认失败**
 
 工作目录 `source/dts-platform`：
@@ -423,7 +444,8 @@ void unreachableStaleTokenIsNoLongerCounted() {
 ./mvnw test -Dtest=CatalogAssetOverviewAggregatorTest
 ```
 
-预期：FAIL，`staleCountsUseReachableLifecycleStatuses` 得到 0，期望 3
+预期：FAIL，`staleCountsUseReachableLifecycleStatuses` 得到 0，期望 3。
+若报 "No tests matching pattern"，说明 Step 1b 的白名单没加对，先修白名单再继续。
 
 - [ ] **Step 3: 改 Java 判定**
 
@@ -643,13 +665,24 @@ class CatalogAssetPortalStatsTest {
 
 实现时补齐 `service`、`queryOf`、`ACTIVE_DEPT` 与 `givenXxx` 辅助方法——照抄 `CatalogAssetPortalServicePermissionParityTest` 的 `@Mock` 字段清单与 `@BeforeEach` 构造，`givenXxx` 用 `when(...).thenReturn(new PageImpl<>(...))` 装配。
 
+- [ ] **Step 1b: 把新测试文件加入 pom 白名单**
+
+`source/dts-platform/pom.xml` 的 `<testIncludes>` 块加入：
+
+```xml
+                        <testInclude>**/service/catalog/CatalogAssetPortalStatsTest.java</testInclude>
+```
+
+> 不加这一行，新建的测试文件不会被编译，`-Dtest=` 会报 "No tests matching pattern"。
+
 - [ ] **Step 2: 运行测试确认失败**
 
 ```bash
 ./mvnw test -Dtest=CatalogAssetPortalStatsTest
 ```
 
-预期：FAIL，`legacyAssetsAreReachableWhenOpenMetadataFillsFirstPage` 得到空内容——legacy 行在 page=2 落空
+预期：FAIL，`legacyAssetsAreReachableWhenOpenMetadataFillsFirstPage` 得到空内容——legacy 行在 page=2 落空。
+若报 "No tests matching pattern"，说明 Step 1b 的白名单没加对。
 
 - [ ] **Step 3: 把 legacy 取数从页码改为偏移量**
 
@@ -866,6 +899,9 @@ git commit -m "fix: 消除概览聚合的 N+1 并修正 truncated 误报
   - 前端 `getDomainTree(options?: { withStats?: boolean })`
 
 - [ ] **Step 1: 写失败测试（聚合器）**
+
+复用同一个既有辅助（`CatalogAssetOverviewAggregatorTest:13`）：
+`summaryWithDomain(d, c)` 即 `summary("ODS", d, c, "ACTIVE", "GOVERNED")`。
 
 ```java
 @Test
@@ -1790,7 +1826,10 @@ npx vitest run \
 ./mvnw test -Dtest='CatalogAssetPortal*Test,CatalogAssetOverviewAggregatorTest,CatalogDomain*Test'
 ```
 
-预期：全部 PASS
+预期：全部 PASS。
+
+> 若任何一项报 `No tests matching pattern`，说明该测试文件没进 `pom.xml` 的 `<testIncludes>` 白名单——
+> 那不是"没有测试"，是测试**没被编译**。补白名单后重跑。
 
 - [ ] **Step 3: 类型检查与构建**
 
