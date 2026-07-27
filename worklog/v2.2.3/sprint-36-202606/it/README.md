@@ -10,7 +10,7 @@
 |------|------|------|
 | 口令策略与失败锁定 | `it/evidence/password-policy-lockout/` | READY |
 | 会话安全整改 | `it/evidence/session-security/` | READY |
-| 操作权限矩阵 | `it/evidence/permission-matrix/` | READY |
+| 操作权限矩阵 | `it/evidence/operation-permission-matrix/` | DONE |
 | 敏感数据自动识别 | `it/evidence/sensitive-discovery/` | READY |
 | BMB 符合性台账 | `it/evidence/bmb-baseline-ledger/` | READY |
 | 安全评审 gate | `it/evidence/security-review/` | READY |

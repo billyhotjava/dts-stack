@@ -5,9 +5,11 @@ import { getModelLifecycle } from "@/api/modelSpecApi";
 import {
 	isUpstreamModelImplementationPinned,
 	type ModelImplementationCasToken,
+	type ModelImplementationExecutionPlan,
 	type ModelImplementationInputMode,
 	type ModelImplementationView,
 	type ModelImplementationWriteCommand,
+	modelImplementationValidationMessage,
 	resolvePhysicalAssetImplementationInputs,
 	resolveUpstreamModelImplementationInputs,
 } from "../modelImplementationContract";
@@ -94,7 +96,7 @@ const isImplementationVersionConflict = (error: unknown): boolean => {
 };
 
 const generatedImplementationIdentity = (model: CanonicalModelSpecView) => {
-	const projectKey = `plan_${model.planId.replaceAll("-", "_")}`;
+	const projectKey = "dts";
 	const nodeName = `model_${model.id.replaceAll("-", "_")}`;
 	return {
 		projectKey,
@@ -229,6 +231,7 @@ export const ModelSpecImplementationStage = forwardRef<ModelSpecImplementationSt
 		const [rebasing, setRebasing] = useState(false);
 		const [error, setError] = useState("");
 		const [recoveryNotice, setRecoveryNotice] = useState("");
+		const [executionPlan, setExecutionPlan] = useState<ModelImplementationExecutionPlan | null>(null);
 		const [versionConflict, setVersionConflict] = useState(false);
 		const [configured, setConfigured] = useState(false);
 		const [implementationCas, setImplementationCas] = useState<ModelImplementationCasToken | null>(null);
@@ -261,14 +264,8 @@ export const ModelSpecImplementationStage = forwardRef<ModelSpecImplementationSt
 			[persistedUpstreamInputs],
 		);
 		const implementationIdentity = useMemo(
-			() =>
-				currentImplementation
-					? {
-							projectKey: currentImplementation.projectKey,
-							dbtUniqueId: currentImplementation.dbtUniqueId,
-						}
-					: generatedImplementationIdentity(model),
-			[currentImplementation, model],
+			() => generatedImplementationIdentity(model),
+			[model],
 		);
 		const inputModeOptions = useMemo(() => {
 			const options = [
@@ -678,7 +675,8 @@ export const ModelSpecImplementationStage = forwardRef<ModelSpecImplementationSt
 				setSaving(true);
 				const result = await validateModelImplementation(expected, command);
 				if (requestId !== operationRequestRef.current) return false;
-				if (!result.valid) setError(result.code || "当前实现未通过验证，配置已保留。");
+				setExecutionPlan(result.valid ? result.executionPlan || null : null);
+				if (!result.valid) setError(modelImplementationValidationMessage(result));
 				onStateChange({ configured, dirty: !configured, validated: result.valid });
 				return result.valid;
 			} catch (validationFailure) {
@@ -749,6 +747,15 @@ export const ModelSpecImplementationStage = forwardRef<ModelSpecImplementationSt
 					/>
 				) : null}
 				{recoveryNotice ? <Alert className="mb-4" type="info" showIcon message={recoveryNotice} /> : null}
+				{executionPlan ? (
+					<Alert
+						className="mb-4"
+						type="success"
+						showIcon
+						message="当前实现可构建"
+						description={`${executionPlan.adapter} · ${executionPlan.targetIdentifier} · ${executionPlan.effectiveMaterialization}`}
+					/>
+				) : null}
 				<Form
 					form={form}
 					layout="vertical"
@@ -764,6 +771,7 @@ export const ModelSpecImplementationStage = forwardRef<ModelSpecImplementationSt
 							setAdoptedCurrentPinIds((current) => current.filter((id) => changedInputIds.includes(id)));
 						}
 						setRecoveryNotice("");
+						setExecutionPlan(null);
 						onStateChange({ configured, dirty: true, validated: false });
 					}}
 				>

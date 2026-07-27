@@ -196,7 +196,16 @@ public class ModelLifecycleService {
     ) {
         ModelSpecView model = writableCurrent(tenantId, actorId, modelSpecId, expected);
         SaveImplementationCommand pinned = implementationCompatibility.pinCurrentUpstreamImplementations(tenantId, command);
-        return validation(implementationCompatibility.validate(tenantId, model, pinned));
+        ModelImplementationCompatibilityAdapter.ValidationResult inputValidation =
+            implementationCompatibility.validate(tenantId, model, pinned);
+        if (!inputValidation.valid()) return validation(inputValidation);
+        return validation(
+            ModelImplementationExecutionPlanner.plan(
+                model,
+                pinned,
+                ModelImplementationExecutionPlanner.systemManagedDbtUniqueId(model)
+            )
+        );
     }
 
     @Transactional
@@ -212,9 +221,9 @@ public class ModelLifecycleService {
     ) {
         ModelSpecView model = writableCurrent(tenantId, actorId, modelSpecId, expected);
         SaveImplementationCommand pinned = implementationCompatibility.pinCurrentUpstreamImplementations(tenantId, command);
-        validateForWrite(tenantId, model, pinned);
-        requireText(projectKey, "MODEL_IMPLEMENTATION_PROJECT_REQUIRED");
-        requireText(dbtUniqueId, "MODEL_IMPLEMENTATION_DBT_ID_REQUIRED");
+        String systemProjectKey = ModelImplementationExecutionPlanner.systemManagedDbtProjectKey(model);
+        String systemDbtUniqueId = ModelImplementationExecutionPlanner.systemManagedDbtUniqueId(model);
+        validateForWrite(tenantId, model, pinned, systemDbtUniqueId);
         ImplementationView current = lifecycle.findImplementation(tenantId, modelSpecId).orElse(null);
         requireImplementationPrecondition(modelSpecId, current, expectedImplementation);
         if (current != null && current.ownership() == ImplementationMode.DBT_MANAGED) {
@@ -225,7 +234,7 @@ public class ModelLifecycleService {
         }
         if (
             lifecycle.saveImplementation(
-                tenantId, actorId, model, projectKey.trim(), dbtUniqueId.trim(), pinned,
+                tenantId, actorId, model, systemProjectKey, systemDbtUniqueId, pinned,
                 expectedImplementation.revision(), expectedImplementation.checksum(), clock.instant()
             ) == 0
         ) {
@@ -286,14 +295,15 @@ public class ModelLifecycleService {
                 continue;
             }
             try {
+                String dbtUniqueId = ModelImplementationExecutionPlanner.systemManagedDbtUniqueId(model);
                 ImplementationView saved = saveImplementation(
                     tenantId,
                     actorId,
                     model.id(),
                     new ExpectedVersion(model.id(), model.revision(), model.checksum()),
                     new ExpectedImplementationVersion(model.id(), 0, null),
-                    "compatibility-migration",
-                    "model.compatibility." + model.id().toString().replace("-", ""),
+                    ModelImplementationExecutionPlanner.systemManagedDbtProjectKey(model),
+                    dbtUniqueId,
                     projection.command()
                 );
                 results.add(migrationResult(projection.decision(), true, saved));
@@ -493,9 +503,9 @@ public class ModelLifecycleService {
     ) {
         ModelSpecView model = writableCurrent(tenantId, actorId, modelSpecId, expected);
         SaveImplementationCommand pinned = implementationCompatibility.pinCurrentUpstreamImplementations(tenantId, command);
-        validateForWrite(tenantId, model, pinned);
-        requireText(projectKey, "MODEL_IMPLEMENTATION_PROJECT_REQUIRED");
-        requireText(dbtUniqueId, "MODEL_IMPLEMENTATION_DBT_ID_REQUIRED");
+        String systemProjectKey = ModelImplementationExecutionPlanner.systemManagedDbtProjectKey(model);
+        String systemDbtUniqueId = ModelImplementationExecutionPlanner.systemManagedDbtUniqueId(model);
+        validateForWrite(tenantId, model, pinned, systemDbtUniqueId);
         if (model.implementationMode() != ImplementationMode.DESIGNER_GENERATED || pinned.ownership() != ImplementationMode.DESIGNER_GENERATED) {
             throw conflict("MODEL_IMPLEMENTATION_NORMAL_MODE_REQUIRED", "Convert the canonical ModelSpec to designer-generated mode before replacing DBT ownership");
         }
@@ -503,7 +513,7 @@ public class ModelLifecycleService {
         requireImplementationPrecondition(modelSpecId, current, expectedImplementation);
         if (
             lifecycle.convertImplementationOwnership(
-                tenantId, actorId, model, projectKey.trim(), dbtUniqueId.trim(), pinned,
+                tenantId, actorId, model, systemProjectKey, systemDbtUniqueId, pinned,
                 expectedImplementation.revision(), expectedImplementation.checksum(), clock.instant()
             ) == 0
         ) {
@@ -1105,10 +1115,20 @@ public class ModelLifecycleService {
         return value == null ? null : value.trim().toUpperCase();
     }
 
-    private void validateForWrite(String tenantId, ModelSpecView model, SaveImplementationCommand command) {
+    private void validateForWrite(
+        String tenantId,
+        ModelSpecView model,
+        SaveImplementationCommand command,
+        String dbtUniqueId
+    ) {
         if (command == null) throw unprocessable("MODEL_IMPLEMENTATION_INPUT_REQUIRED", "Implementation input is required");
         ModelImplementationCompatibilityAdapter.ValidationResult result = implementationCompatibility.validate(tenantId, model, command);
         if (!result.valid()) throw unprocessable(result.code(), "Implementation input does not satisfy the current ModelSpec");
+        ModelImplementationExecutionPlanner.ValidationResult execution =
+            ModelImplementationExecutionPlanner.plan(model, command, dbtUniqueId);
+        if (!execution.valid()) {
+            throw unprocessable(execution.code(), execution.blockers().getFirst().message());
+        }
     }
 
     private static void requireImportedDbtCommand(
@@ -1147,7 +1167,33 @@ public class ModelLifecycleService {
     }
 
     private static ImplementationValidationView validation(ModelImplementationCompatibilityAdapter.ValidationResult result) {
-        return new ImplementationValidationView(result.valid(), result.code());
+        if (result.valid()) {
+            return new ImplementationValidationView(true, "MODEL_IMPLEMENTATION_VALID", List.of(), null);
+        }
+        return new ImplementationValidationView(
+            false,
+            result.code(),
+            List.of(
+                new ModelImplementationExecutionPlanner.Blocker(
+                    result.code(),
+                    "inputs",
+                    "Implementation input does not satisfy the current ModelSpec",
+                    "RESELECT_IMPLEMENTATION_INPUT"
+                )
+            ),
+            null
+        );
+    }
+
+    private static ImplementationValidationView validation(
+        ModelImplementationExecutionPlanner.ValidationResult result
+    ) {
+        return new ImplementationValidationView(
+            result.valid(),
+            result.code(),
+            result.blockers(),
+            result.executionPlan()
+        );
     }
 
     private static void requireText(String value, String code) {
@@ -1171,7 +1217,20 @@ public class ModelLifecycleService {
         return new ModelSpecException("MODEL_LIFECYCLE_NOT_FOUND", message, ModelSpecException.Kind.NOT_FOUND);
     }
 
-    public record ImplementationValidationView(boolean valid, String code) {}
+    public record ImplementationValidationView(
+        boolean valid,
+        String code,
+        List<ModelImplementationExecutionPlanner.Blocker> blockers,
+        ModelImplementationExecutionPlanner.ExecutionPlan executionPlan
+    ) {
+        public ImplementationValidationView(boolean valid, String code) {
+            this(valid, code, List.of(), null);
+        }
+
+        public ImplementationValidationView {
+            blockers = blockers == null ? List.of() : List.copyOf(blockers);
+        }
+    }
 
     public record ImplementationMigrationResult(
         ModelImplementationCompatibilityAdapter.MigrationDecision decision,

@@ -1579,21 +1579,21 @@
 ## Sprint-74: 建模创建旅程与阶段边界纠偏 (202607)
 
 **目录**: `worklog/v2.2.3/sprint-74-202607-modeling-creation-journey-correction`
-**状态**: DRAFT（已按二次复审修订，待再次确认；禁止编码）
+**状态**: DONE（2026-07-27 实现、部署、验收与影响审计完成）
 **类型**: Product Journey / Modeling Contract / UI Convergence / Safe Compatibility
 **目标**: 让建模人员先根据业务目的选择正确模型类型，独立完成逻辑设计，再按需选择普通配置或高级 dbt 形成实现，并只在真实发布后查看物理结果；每个阶段只提示当前必须处理的事项。
 **依赖**: 复用 Sprint-67 的四层 canonical 对象、Sprint-69 发布控制面、Sprint-72 密级传播和 Sprint-73 数据集市/维度建模；不新建第二套模型、实现、发布或物理资产台账。
 
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
-| F0-评审与可验收基线 | P0 | 2 | DRAFT |
-| F1-先选对模型再保存草稿 | P0 | 3 | DRAFT |
-| F2-独立完成逻辑模型 | P0 | 3 | DRAFT |
-| F3-实现方式与发布结果解耦 | P0 | 3 | DRAFT |
-| F4-存量纠错治理策略与兼容 | P0 | 3 | DRAFT |
-| F5-集成验收与安全交付 | P0 | 2 | DRAFT |
+| F0-评审与可验收基线 | P0 | 2 | DONE |
+| F1-先选对模型再保存草稿 | P0 | 3 | DONE |
+| F2-独立完成逻辑模型 | P0 | 3 | DONE |
+| F3-实现方式与发布结果解耦 | P0 | 3 | DONE |
+| F4-存量纠错治理策略与兼容 | P0 | 3 | DONE |
+| F5-集成验收与安全交付 | P0 | 2 | DONE |
 
-**统计**: DRAFT=16, READY=0, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: DRAFT=0, READY=0, IN_PROGRESS=0, DONE=16, BLOCKED=0
 **执行顺序**: F0 → F1 → F2 → F3 → F4 → F5；F1 类型/目标层边界和 F2 逻辑字段契约冻结后可做有限并行，F5 是唯一 Go/No-Go 出口。
 
 **关键决策**:
@@ -1607,4 +1607,70 @@
 - 页面默认只显示当前下一道门禁；未来发布要求和可选建议不计入当前待修复数量。
 - 仅 DRAFT 且无实现/生命周期/发布候选时允许预检后追加 revision 改型，适用于当前“财务项目模型”候选纠错。
 
-**已知风险**: 自动化环境尚不能解析 `dts.local`；当前镜像/数据库落后 Sprint-73 提交和 20260727 迁移；GitNexus 落后 HEAD 2 个提交。Sprint-73 已提交 `implementationPolicy`，必须按 expand/migrate/contract 迁入唯一 ModelImplementation owner；当前范围外 Liquibase 用户修改不得吸收或回退。
+**完成证据**: `it/evidence/acceptance-summary.md`；真实认证 API、PostgreSQL、dbt compile、Chrome95、迁移和影响审计均已通过。IT-08 的完成边界是“未发布时不伪造物理资产”，真实物化闭环由 Sprint-76 承担。
+
+## Sprint-75: 资产地图主题域导航与统计口径纠偏 (202607)
+
+**目录**: `worklog/v2.2.3/sprint-75-202607-asset-map-domain-navigation`
+**状态**: DRAFT（设计已确认，待 spec 复审；禁止编码）
+**类型**: Navigation IA / Statistics Contract / UI Convergence / Bug Fix
+**目标**: 让用户在资产地图左侧一眼看出哪个主题域有资产、哪个域有待处置，修正统计误报并把地图页收敛为纯概览入口。
+**依赖**: 复用既有 CatalogDomain、CatalogAssetPortalService、canRead 可见性规则、资产地图和资产台账；不新增菜单或平行统计口径。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F0-评审与可验收基线 | P0 | 3 | DRAFT |
+| F1-统计口径与可见性单一事实源 | P0 | 6 | DRAFT |
+| F2-带统计的主题域树契约 | P0 | 3 | DRAFT |
+| F3-主题域范围导航组件 | P0 | 4 | DRAFT |
+| F4-地图页信息架构与控件收敛 | P1 | 4 | DRAFT |
+| F5-界面中文化与枚举字典 | P0 | 5 | DRAFT |
+
+**统计**: DRAFT=25, READY=0, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**执行顺序**: F0 → F1/F5-T01 → F2 → F3 → F4；F5 字典先于新组件接入。
+**关键决策**: 可见性统计复用 `canRead`；主题域树和统计单一接口；`?domain=` 深链；资产地图只做概览，执行动作回资产台账；界面枚举走统一中文字典。
+**已知风险**: 真实数据规模、浏览器登录基线和统计性能尚待 G0 复测。
+
+## Sprint-76: 模型真实物化与物理资产闭环 (202607)
+
+**目录**: `worklog/v2.2.3/sprint-76-202607-model-materialization-closure`
+**状态**: IN_PROGRESS（架构已冻结，允许 DEV/TEST 实施；PG-01/02/03 与 F6 未关闭前 PROD NO-GO）
+**类型**: Model Materialization / dbt Runtime / DAG Workflow / Release Governance / Physical Asset / Full-stack
+**目标**: 让普通维度建模和高级 dbt 建模都通过“构建、提交上线”进入同一 ReleaseCandidate/dbt/Airflow 链，真实生成并核验 table/view；经独立审核/发布后原子登记物理资产与 MANUAL_ONLY plan binding。Airflow 是唯一调度真值，手工/CRON 共用 dbt task template，并在 ACTIVE+relation healthy 时显示上线完成。
+**依赖**: 复用 Sprint-69 ReleaseCandidate、Sprint-72 密级门禁、Sprint-74 三阶段建模、现有 `modeling_pipeline_run`、DbtReleaseSubmissionService、DbtScopedProjectService 和 CatalogAssetKey；Build/Publish Intent 只能编排 canonical Candidate commands 且不拥有状态，禁止新建平行模型、运行、发布或资产台账。Sprint-36/F3 已 DONE，外部资产动作端口就绪；PROD 发布/CRON 仍等待 Sprint-76 Candidate duty resolver、本地双门接入和 IT-14。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F0-架构冻结与真实验收基线 | P0 | 2 | DONE |
+| F1-普通实现可运行dbt制品 | P0 | 3 | DONE |
+| F2-候选驱动物化编排与运行真值 | P0 | 4 | DRAFT |
+| F3-真实关系核验与强绑定证据 | P0 | 3 | DRAFT |
+| F4-发布治理与物理资产交接 | P0 | 3 | DRAFT |
+| F5-建模与交付页面产品闭环 | P0 | 3 | DRAFT |
+| F7-上线后计划DAG与持续计算 | P0 | 3 | DRAFT |
+| F6-真实集成验收与安全交付 | P0 | 3 | DRAFT |
+
+**统计**: DRAFT=19, READY=0, IN_PROGRESS=0, DONE=5, BLOCKED=0
+**执行顺序**: F0 → F1 → F2 → F3 → F4 → F7 → F6；F5 在 F2/F3 契约冻结后可并行，最终等待 F4/F7。
+**关键决策**:
+
+- compile 不等于物化；必须同时具备 dbt build SUCCESS 与目标库 relation EXISTS。
+- ReleaseCandidate.START_BUILD 是唯一构建状态迁移；模型详情和高级页可用同一 Build/Publish Intent 快捷入口，但 facade 不拥有状态。
+- 快捷构建只创建/精确复用 SINGLE_MODEL candidate，批量候选冲突严格阻断；active claim 数据库唯一，客户端不能提交技术执行字段。
+- Candidate 只允许一个 environment/executionTargetKey；P0 仅开放唯一实测 Postgres target；Airflow dagRunId 由 candidate/version/attempt 确定生成并用于超时对账。
+- DRAFT 不占 active claim；失败候选保留 claim 供恢复，显式 CANCEL_CANDIDATE 审计化释放且不 DROP 已有关系；pipeline UNKNOWN 对账前禁止 retry。
+- “提交上线”只记录 Publish Intent 并推进 RUN_QUALITY→SUBMIT_REVIEW；reviewer/operator 在 Candidate 工作台独立批准/发布，旧 lifecycle route 只兼容委托。
+- mandatory local publication 在 Candidate 维度全有或全无；external sync 失败只降级健康；发布默认创建聚合全部 current PUBLISHED scope 的 MANUAL_ONLY binding。
+- 普通 artifact 以 overlay 进入既有 scoped dbt project，不镜像成第二个 SQL 模型 owner。
+- 普通实现的 source/ref 形成 dbt dependency graph；RELEASE_BUILD executor DAG 与 OPERATIONAL plan DAG 都 import `services/dts-airflow/extra` 中唯一版本化 Python task factory，Java 只生成 thin DAG，用户不手工连 DAG。
+- 扩展 `modeling_pipeline_run` 作为唯一运行真值；RelationObservation 只保存强绑定核验证据。
+- build-only relation 不登记为可消费资产；PUBLISHED 时统一写 CatalogDataset、输出 physicalAssetRef 和 lineage。
+- Airflow 是 CRON/nextRun/DagRun/TaskInstance 唯一真值；平台只保存 desired binding 和业务 pipeline run，不自建 scheduler。
+- 手工运行先落 durable OPERATIONAL_RUN 再触发 Airflow；CRON DagRun 首任务原子 open OPERATIONAL_RUN。
+- binding 唯一 `(tenant,plan,environment,executionTargetKey)`，一个 schedule、无 scheduleKey；DAG 原子写入并经 Airflow parse/checksum/schedule 对账后 ACTIVE。
+- tracked/shared dbt credential 必须迁移到既有数据源 secrets；平台只在宿主机 tmpfs 签发 task-scoped profile lease，Airflow 用固定 root+leaseId 只读挂载；warehouse secret 不得进入 Git/DAG/conf/XCom/API/DB/env/log/evidence。
+- Airflow prepare/open/sync/probe/finalize/release 必须使用 pairwise service token 和 principal/path allowlist，禁止 header-only 与 `|| true` 伪成功。
+- Candidate 生产权限采用 domain duty resolver + Sprint-36/F3 asset action policy 双门禁；Sprint-76 不复制权限表。
+- PostgreSQL 是本 Sprint P0 真实 adapter；MySQL/达梦未实测时 capability fail-closed。
+
+**已知风险**: 当前四个代表目标关系均不存在，candidate/run 记录为 0，现有 dbt DAG 为 schedule=None；共享 profile、Airflow callback 鉴权/静默失败、重复 DAG runtime 模板均为 PG-01/02 GAP；Sprint-36/F3 已交付 `canPerform`，但 Candidate 发布/计划链尚未消费，PG-03 为 DEPENDENCY_READY / LOCAL_INTEGRATION_PENDING。架构已允许 DEV/TEST 实施，但生产结论仍为 NO-GO；登录、Chrome95 和整包构建只在相关漂移或 F6 最终验收时定点执行。

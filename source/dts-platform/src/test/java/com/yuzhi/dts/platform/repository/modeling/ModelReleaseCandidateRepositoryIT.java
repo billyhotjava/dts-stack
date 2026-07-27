@@ -121,7 +121,7 @@ class ModelReleaseCandidateRepositoryIT {
             )
         )
             .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("approved audit");
+            .hasMessageContaining("submitted audit");
         assertThatThrownBy(() ->
             candidate(
                 tenant,
@@ -1442,9 +1442,9 @@ class ModelReleaseCandidateRepositoryIT {
             jdbcTemplate.update(
                 """
                 insert into modeling_model_spec_revision (
-                    id, model_spec_id, revision, spec_json, content_checksum, created_date,
+                    id, model_spec_id, revision, spec_json, status, content_checksum, created_date,
                     last_modified_date, tenant_id, contract_version, created_by
-                ) values (?, ?, 1, '{}', ?, current_timestamp, current_timestamp, ?, 1, 'owner-1')
+                ) values (?, ?, 1, '{}', 'DRAFT', ?, current_timestamp, current_timestamp, ?, 1, 'owner-1')
                 """,
                 UUID.randomUUID(),
                 modelId,
@@ -1486,10 +1486,10 @@ class ModelReleaseCandidateRepositoryIT {
         jdbcTemplate.update(
             """
             insert into modeling_model_spec_revision (
-                id, model_spec_id, revision, spec_json, content_checksum, created_date,
+                id, model_spec_id, revision, spec_json, status, content_checksum, created_date,
                 last_modified_date, tenant_id, contract_version, snapshot_json, created_by
             ) values (
-                ?, ?, 2, null, ?, current_timestamp, current_timestamp, ?, 2,
+                ?, ?, 2, null, 'DRAFT', ?, current_timestamp, current_timestamp, ?, 2,
                 cast('{}' as jsonb), 'owner-1'
             )
             """,

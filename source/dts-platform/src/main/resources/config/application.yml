@@ -256,6 +256,13 @@ dts:
     runtime:
       # Keep first deployment safe; enable after Addax and Airflow endpoints are reachable.
       enabled: ${DTS_MODELING_RUNTIME_ENABLED:false}
+    materialization:
+      enabled: ${DTS_MODEL_MATERIALIZATION_ENABLED:true}
+      execution-target-key: ${DTS_MODEL_EXECUTION_TARGET_KEY:postgres-primary}
+      adapter: ${DTS_MODEL_EXECUTION_ADAPTER:postgres}
+      profile-key: ${DTS_MODEL_EXECUTION_PROFILE_KEY:dts}
+      target-name: ${DTS_MODEL_EXECUTION_TARGET_NAME:dev}
+      release-build-dag-id: ${DTS_MODEL_RELEASE_BUILD_DAG_ID:dts_release_build_postgres_primary}
   dbt:
     enabled: ${DTS_DBT_ENABLED:true}
     config-path: ${DTS_DBT_CONFIG_PATH:/opt/dts/upload/dbt-config.json}

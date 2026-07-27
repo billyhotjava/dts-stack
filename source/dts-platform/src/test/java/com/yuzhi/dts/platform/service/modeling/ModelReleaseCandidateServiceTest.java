@@ -15,6 +15,7 @@ import com.yuzhi.dts.platform.repository.modeling.ModelReleaseCandidateRepositor
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryAuditView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryAction;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CandidateOrigin;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CandidateView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CommandEventType;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CommandEventView;
@@ -90,6 +91,68 @@ class ModelReleaseCandidateServiceTest {
         assertThat(replay.candidate()).isEqualTo(first.candidate());
         assertThat(event.getValue().eventType()).isEqualTo(CommandEventType.CREATED);
         verify(repository).insert(any());
+    }
+
+    @Test
+    void singleModelOriginIsCreatedAndReplayedWithoutChangingBatchRequestHashes() {
+        CreateCandidateCommand command = createCommand(
+            "single-create-key",
+            "single model intent"
+        );
+        when(
+            repository.findCommandByIdempotencyKey(
+                TENANT,
+                "single-create-key"
+            )
+        )
+            .thenReturn(Optional.empty());
+        when(
+            repository.findByIdempotencyKey(TENANT, "single-create-key")
+        )
+            .thenReturn(Optional.empty());
+        when(
+            repository.findCurrentModelReferences(
+                TENANT,
+                PLAN_ID,
+                List.of(MODEL_ID)
+            )
+        )
+            .thenReturn(Map.of(MODEL_ID, currentReference(1, CHECKSUM)));
+        when(repository.insert(any())).thenReturn(1);
+        when(repository.appendCommand(any())).thenReturn(1);
+
+        var first = service.createSingleModelIntent(TENANT, ACTOR, command);
+        ArgumentCaptor<CandidateView> candidate =
+            ArgumentCaptor.forClass(CandidateView.class);
+        verify(repository).insert(candidate.capture());
+        assertThat(candidate.getValue().origin())
+            .isEqualTo(CandidateOrigin.SINGLE_MODEL_INTENT);
+
+        ArgumentCaptor<CommandEventView> event =
+            ArgumentCaptor.forClass(CommandEventView.class);
+        verify(repository).appendCommand(event.capture());
+        when(
+            repository.findCommandByIdempotencyKey(
+                TENANT,
+                "single-create-key"
+            )
+        )
+            .thenReturn(Optional.of(event.getValue()));
+
+        var replay = service.createSingleModelIntent(TENANT, ACTOR, command);
+
+        assertThat(first.replayed()).isFalse();
+        assertThat(replay.replayed()).isTrue();
+        assertThat(replay.candidate().origin())
+            .isEqualTo(CandidateOrigin.SINGLE_MODEL_INTENT);
+        assertThatThrownBy(() -> service.create(TENANT, ACTOR, command))
+            .isInstanceOf(ModelReleaseCandidateException.class)
+            .satisfies(error ->
+                assertThat(((ModelReleaseCandidateException) error).code())
+                    .isEqualTo(
+                        ModelReleaseCandidateContract.IDEMPOTENCY_CONFLICT_ERROR_CODE
+                    )
+            );
     }
 
     @Test

@@ -86,6 +86,12 @@ public class OperationTypeNormalizer {
         if (upper.contains("ARCHIVE") || containsAny(lower, "归档", "封存", "archive")) {
             return "ARCHIVE";
         }
+        if (upper.contains("DESTROY") || containsAny(lower, "销毁", "彻底删除", "destroy")) {
+            return "DESTROY";
+        }
+        if (upper.contains("COPY") || containsAny(lower, "复制", "拷贝", "copy")) {
+            return "COPY";
+        }
         if (upper.contains("PUBLISH") || containsAny(lower, "发布", "publish")) {
             return "PUBLISH";
         }

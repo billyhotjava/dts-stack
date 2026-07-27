@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260727-08-iam-asset-action-policy" author="codex" dbms="postgresql">
+        <comment>Add deny-by-default subject-resource-action policies for the M05 operation matrix.</comment>
+        <createTable tableName="iam_asset_action_policy">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="subject_type" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="subject_id" type="varchar(160)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="subject_name" type="varchar(160)"/>
+            <column name="resource_type" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="resource_id" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="resource_name" type="varchar(256)"/>
+            <column name="action" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="effect" type="varchar(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="valid_from" type="timestamp with time zone"/>
+            <column name="valid_to" type="timestamp with time zone"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp with time zone"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp with time zone"/>
+        </createTable>
+
+        <addUniqueConstraint
+            tableName="iam_asset_action_policy"
+            columnNames="subject_type,subject_id,resource_type,resource_id,action"
+            constraintName="uk_iam_asset_action_policy_tuple"/>
+        <createIndex indexName="idx_iam_asset_action_policy_decision" tableName="iam_asset_action_policy">
+            <column name="resource_type"/>
+            <column name="resource_id"/>
+            <column name="action"/>
+            <column name="valid_from"/>
+            <column name="valid_to"/>
+        </createIndex>
+        <createIndex indexName="idx_iam_asset_action_policy_subject" tableName="iam_asset_action_policy">
+            <column name="subject_type"/>
+            <column name="subject_id"/>
+        </createIndex>
+
+        <sql>
+            ALTER TABLE iam_asset_action_policy
+                ADD CONSTRAINT ck_iam_asset_action_policy_subject_type
+                CHECK (subject_type IN ('ROLE', 'DEPARTMENT', 'USER')),
+                ADD CONSTRAINT ck_iam_asset_action_policy_resource_type
+                CHECK (resource_type IN ('CATALOG', 'TABLE', 'DATASET')),
+                ADD CONSTRAINT ck_iam_asset_action_policy_action
+                CHECK (action IN ('CREATE', 'DELETE', 'UPDATE', 'COPY', 'IMPORT', 'EXPORT', 'ARCHIVE', 'DESTROY')),
+                ADD CONSTRAINT ck_iam_asset_action_policy_effect
+                CHECK (effect IN ('ALLOW', 'DENY')),
+                ADD CONSTRAINT ck_iam_asset_action_policy_validity
+                CHECK (valid_to IS NULL OR valid_from IS NULL OR valid_to &gt;= valid_from);
+        </sql>
+
+        <rollback>
+            <dropTable tableName="iam_asset_action_policy"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

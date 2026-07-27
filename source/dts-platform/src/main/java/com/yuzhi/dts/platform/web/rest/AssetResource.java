@@ -10,6 +10,7 @@ import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.security.DatasetSecurityMetadataResolver;
 import com.yuzhi.dts.platform.security.policy.DataLevel;
+import com.yuzhi.dts.platform.security.policy.AssetAction;
 import com.yuzhi.dts.platform.service.query.QueryGateway;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.service.catalog.DatasetJobService;
@@ -94,6 +95,17 @@ public class AssetResource {
                 Map.of("reason", "DATASET_NOT_FOUND")
             );
             return ApiResponses.error("数据集不存在或已被删除");
+        }
+        if (!accessChecker.canPerform(dataset, AssetAction.UPDATE)) {
+            audit.auditAction(
+                "CATALOG_ASSET_EDIT",
+                AuditStage.FAIL,
+                id.toString(),
+                Map.of("reason", "ASSET_ACTION_NOT_ALLOWED", "action", AssetAction.UPDATE.code())
+            );
+            throw new org.springframework.security.access.AccessDeniedException(
+                "asset_action_not_allowed:" + AssetAction.UPDATE.code()
+            );
         }
         try {
             CatalogDatasetJob job = datasetJobService.submitSchemaSync(id, body != null ? body : Map.of(), SecurityUtils.getCurrentUserLogin().orElse("anonymous"));

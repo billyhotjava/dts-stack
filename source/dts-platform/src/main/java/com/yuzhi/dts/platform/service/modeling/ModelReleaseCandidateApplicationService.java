@@ -40,15 +40,18 @@ public class ModelReleaseCandidateApplicationService {
 
     private final ModelReleaseCandidateRepository repository;
     private final ModelReleaseCandidateService commands;
+    private final ModelMaterializationStartService materializationStarts;
     private final ModelSpecPlanWriteAccessPort planAccess;
 
     public ModelReleaseCandidateApplicationService(
         ModelReleaseCandidateRepository repository,
         ModelReleaseCandidateService commands,
+        ModelMaterializationStartService materializationStarts,
         ModelSpecPlanWriteAccessPort planAccess
     ) {
         this.repository = repository;
         this.commands = commands;
+        this.materializationStarts = materializationStarts;
         this.planAccess = planAccess;
     }
 
@@ -144,11 +147,13 @@ public class ModelReleaseCandidateApplicationService {
     ) {
         Access access = authorize(tenantId, actorId, planId);
         candidateForPlan(access.tenantId(), access.planId(), candidateId);
-        return commands.transition(
+        return materializationStarts.start(
             access.tenantId(),
             access.actorId(),
             candidateId,
-            new TransitionCommand(expectedVersion, DeliveryStatus.BUILDING, idempotencyKey, reason)
+            expectedVersion,
+            idempotencyKey,
+            reason
         );
     }
 

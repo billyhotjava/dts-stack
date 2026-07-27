@@ -2,6 +2,9 @@ package com.yuzhi.dts.platform.web.rest.sql;
 
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.security.SecurityUtils;
+import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.repository.explore.QueryExecutionRepository;
+import com.yuzhi.dts.platform.security.policy.AssetAction;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.audit.SqlIdeAuditActions;
 import com.yuzhi.dts.platform.service.sql.SqlExecutionExportRateLimiter;
@@ -9,12 +12,14 @@ import com.yuzhi.dts.platform.service.sql.SqlResultStreamService;
 import com.yuzhi.dts.platform.service.sql.dto.QueryLogDto;
 import com.yuzhi.dts.platform.service.sql.dto.ResultMetaDto;
 import com.yuzhi.dts.platform.service.sql.dto.ResultPageDto;
+import com.yuzhi.dts.platform.service.security.AccessChecker;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import com.yuzhi.dts.platform.web.rest.ApiResponses;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -38,15 +43,24 @@ public class SqlIdeExecutionController {
     private final SqlResultStreamService streamService;
     private final AuditService auditService;
     private final SqlExecutionExportRateLimiter rateLimiter;
+    private final QueryExecutionRepository executionRepository;
+    private final CatalogDatasetRepository datasetRepository;
+    private final AccessChecker accessChecker;
 
     public SqlIdeExecutionController(
         SqlResultStreamService streamService,
         AuditService auditService,
-        SqlExecutionExportRateLimiter rateLimiter
+        SqlExecutionExportRateLimiter rateLimiter,
+        QueryExecutionRepository executionRepository,
+        CatalogDatasetRepository datasetRepository,
+        AccessChecker accessChecker
     ) {
         this.streamService = streamService;
         this.auditService = auditService;
         this.rateLimiter = rateLimiter;
+        this.executionRepository = executionRepository;
+        this.datasetRepository = datasetRepository;
+        this.accessChecker = accessChecker;
     }
 
     @GetMapping("/{id}/meta")
@@ -93,6 +107,7 @@ public class SqlIdeExecutionController {
         @PathVariable UUID id,
         @RequestParam(defaultValue = "csv") String format
     ) {
+        requireExportAllowed(id);
         String user = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
         if (!rateLimiter.tryAcquire(user)) {
             auditService.auditAction(
@@ -136,5 +151,23 @@ public class SqlIdeExecutionController {
             .header("Content-Type", contentType)
             .header("Content-Disposition", "attachment; filename=execution-" + id.toString().substring(0, 8) + "." + ext)
             .body(body);
+    }
+
+    private void requireExportAllowed(UUID executionId) {
+        var execution = executionRepository
+            .findById(executionId)
+            .orElseThrow(() -> new AccessDeniedException("asset_action_not_allowed:EXPORT"));
+        var dataset = execution.getDatasetId() == null
+            ? null
+            : datasetRepository.findById(execution.getDatasetId()).orElse(null);
+        if (dataset == null || !accessChecker.canPerform(dataset, AssetAction.EXPORT)) {
+            auditService.auditAction(
+                SqlIdeAuditActions.CODE_RESULT_EXPORT,
+                AuditStage.FAIL,
+                executionId.toString(),
+                Map.of("reason", "ASSET_ACTION_NOT_ALLOWED", "action", AssetAction.EXPORT.code())
+            );
+            throw new AccessDeniedException("asset_action_not_allowed:" + AssetAction.EXPORT.code());
+        }
     }
 }

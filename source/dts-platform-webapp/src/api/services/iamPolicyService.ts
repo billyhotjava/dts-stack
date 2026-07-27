@@ -68,6 +68,72 @@ export interface ConflictItem {
 	next: string;
 }
 
+export type AssetAction =
+	| "CREATE"
+	| "DELETE"
+	| "UPDATE"
+	| "COPY"
+	| "IMPORT"
+	| "EXPORT"
+	| "ARCHIVE"
+	| "DESTROY";
+
+export type AssetActionEffect = "ALLOW" | "DENY" | "NONE";
+export type AssetActionSubjectType = "ROLE" | "DEPARTMENT" | "USER";
+export type AssetActionResourceType = "CATALOG" | "TABLE" | "DATASET";
+
+export interface AssetActionCell {
+	action: AssetAction;
+	displayName: string;
+	effect: AssetActionEffect;
+	validFrom?: string | null;
+	validTo?: string | null;
+	policyStatus: "UNCONFIGURED" | "SCHEDULED" | "ACTIVE" | "EXPIRED";
+}
+
+export interface AssetActionPolicyRequest {
+	id: string;
+	subjectType: AssetActionSubjectType;
+	subjectId: string;
+	subjectName?: string | null;
+	resourceType: AssetActionResourceType;
+	resourceId: string;
+	resourceName?: string | null;
+	changesJson: string;
+	beforeSnapshotJson?: string | null;
+	validFrom?: string | null;
+	validTo?: string | null;
+	reason: string;
+	status: "PENDING" | "APPROVED" | "REJECTED";
+	requestedBy: string;
+	decidedBy?: string | null;
+	decidedAt?: string | null;
+	decisionNotes?: string | null;
+	createdDate?: string | null;
+}
+
+export interface AssetActionMatrix {
+	subjectType: AssetActionSubjectType;
+	subjectId: string;
+	resourceType: AssetActionResourceType;
+	resourceId: string;
+	actions: AssetActionCell[];
+	pendingRequest?: AssetActionPolicyRequest | null;
+}
+
+export interface AssetActionPolicyChangeInput {
+	subjectType: AssetActionSubjectType;
+	subjectId: string;
+	subjectName?: string;
+	resourceType: AssetActionResourceType;
+	resourceId: string;
+	resourceName?: string;
+	desiredEffects: Partial<Record<AssetAction, AssetActionEffect>>;
+	validFrom?: string;
+	validTo?: string;
+	reason: string;
+}
+
 import { listDepartments } from "@/api/services/deptService";
 import roleService from "@/api/services/roleService";
 
@@ -106,5 +172,25 @@ export default {
 	},
 	applyBatch(input: BatchAuthorizationInput): Promise<{ ok: boolean; appliedAt: string }> {
 		return apiClient.post({ url: "/iam/policies/apply", data: input });
+	},
+	getAssetActionMatrix(params: {
+		subjectType: AssetActionSubjectType;
+		subjectId: string;
+		resourceType: AssetActionResourceType;
+		resourceId: string;
+	}): Promise<AssetActionMatrix> {
+		return apiClient.get({ url: "/iam/action-policies/matrix", params });
+	},
+	listAssetActionPolicyRequests(status = "PENDING"): Promise<AssetActionPolicyRequest[]> {
+		return apiClient.get({ url: "/iam/action-policies/requests", params: { status } });
+	},
+	requestAssetActionPolicyChange(input: AssetActionPolicyChangeInput): Promise<AssetActionPolicyRequest> {
+		return apiClient.post({ url: "/iam/action-policies/requests", data: input });
+	},
+	decideAssetActionPolicyRequest(
+		requestId: string,
+		input: { decision: "APPROVE" | "REJECT"; notes?: string },
+	): Promise<AssetActionPolicyRequest> {
+		return apiClient.post({ url: `/iam/action-policies/requests/${requestId}/decision`, data: input });
 	},
 };

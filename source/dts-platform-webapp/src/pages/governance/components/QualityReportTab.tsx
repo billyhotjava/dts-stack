@@ -197,7 +197,7 @@ export default function QualityReportTab() {
 	const handleDatasetChange = (nextDatasetId?: string) => {
 		setDatasetId(nextDatasetId);
 		const params = new URLSearchParams(searchParams);
-		params.set("tab", "report");
+		params.delete("tab");
 		if (nextDatasetId) {
 			params.set("datasetId", nextDatasetId);
 		} else {

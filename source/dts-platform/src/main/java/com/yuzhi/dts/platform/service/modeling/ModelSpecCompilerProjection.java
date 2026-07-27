@@ -34,8 +34,40 @@ public final class ModelSpecCompilerProjection {
         List<ImplementationInput> inputs,
         List<FieldMapping> fieldMappings,
         Map<String, Object> settings,
-        String materialization
+        String materialization,
+        List<String> keyFields,
+        String planId
     ) {
+        public ImplementationProjection(
+            ModelingVNextContract.ModelSpec model,
+            String tenantId,
+            String modelChecksum,
+            int implementationRevision,
+            String implementationChecksum,
+            String dbtUniqueId,
+            InputMode inputMode,
+            List<ImplementationInput> inputs,
+            List<FieldMapping> fieldMappings,
+            Map<String, Object> settings,
+            String materialization
+        ) {
+            this(
+                model,
+                tenantId,
+                modelChecksum,
+                implementationRevision,
+                implementationChecksum,
+                dbtUniqueId,
+                inputMode,
+                inputs,
+                fieldMappings,
+                settings,
+                materialization,
+                grainKeys(model),
+                "unscoped"
+            );
+        }
+
         public ImplementationProjection {
             Objects.requireNonNull(model, "model is required");
             if (tenantId == null || tenantId.isBlank()) throw new IllegalArgumentException("tenantId is required");
@@ -53,6 +85,9 @@ public final class ModelSpecCompilerProjection {
             settings = Map.copyOf(settings == null ? Map.of() : new TreeMap<>(settings));
             if (materialization == null || materialization.isBlank()) throw new IllegalArgumentException("materialization is required");
             materialization = materialization.trim();
+            keyFields = List.copyOf(keyFields == null ? List.of() : keyFields);
+            if (planId == null || planId.isBlank()) throw new IllegalArgumentException("planId is required");
+            planId = planId.trim();
         }
     }
 
@@ -159,8 +194,29 @@ public final class ModelSpecCompilerProjection {
             implementation.inputs(),
             implementation.fieldMappings(),
             implementation.settings(),
-            implementation.materialization()
+            implementation.materialization(),
+            canonicalKeyFields(view),
+            view.planId().toString()
         );
+    }
+
+    private static List<String> canonicalKeyFields(ModelSpecView view) {
+        if (view == null || view.fields() == null) return List.of();
+        return view
+            .fields()
+            .stream()
+            .filter(Objects::nonNull)
+            .filter(field -> field.role() == FieldRole.KEY)
+            .map(ModelSpecContract.ModelField::name)
+            .filter(ModelSpecCompilerProjection::notBlank)
+            .distinct()
+            .toList();
+    }
+
+    private static List<String> grainKeys(ModelingVNextContract.ModelSpec model) {
+        return model == null || model.grain() == null || model.grain().keys() == null
+            ? List.of()
+            : model.grain().keys();
     }
 
     /** Compiler inputs are authoritative: canonical sourceRefs are validation evidence only. */

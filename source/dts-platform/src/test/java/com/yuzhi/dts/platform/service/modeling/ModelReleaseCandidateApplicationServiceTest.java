@@ -48,13 +48,21 @@ class ModelReleaseCandidateApplicationServiceTest {
     private ModelReleaseCandidateService commands;
 
     @Mock
+    private ModelMaterializationStartService materializationStarts;
+
+    @Mock
     private ModelSpecPlanWriteAccessPort planAccess;
 
     private ModelReleaseCandidateApplicationService service;
 
     @BeforeEach
     void setUp() {
-        service = new ModelReleaseCandidateApplicationService(repository, commands, planAccess);
+        service = new ModelReleaseCandidateApplicationService(
+            repository,
+            commands,
+            materializationStarts,
+            planAccess
+        );
         when(planAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
     }
 
@@ -262,6 +270,13 @@ class ModelReleaseCandidateApplicationServiceTest {
         CandidateView draft = candidate(DeliveryStatus.DRAFT, List.of(entry(DeliveryStatus.DRAFT)));
         CandidateView failed = candidate(DeliveryStatus.BUILD_FAILED, List.of(entry(DeliveryStatus.BUILD_FAILED)));
         when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(draft), Optional.of(failed));
+        CommandResult building = new CommandResult(
+            candidate(DeliveryStatus.BUILDING, List.of(entry(DeliveryStatus.BUILDING))),
+            false,
+            List.of()
+        );
+        when(materializationStarts.start(TENANT, ACTOR, CANDIDATE_ID, 4, "lock-key", "scope confirmed"))
+            .thenReturn(building);
         when(commands.transition(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
             .thenReturn(new CommandResult(
                 candidate(DeliveryStatus.BUILDING, List.of(entry(DeliveryStatus.BUILDING))),
@@ -273,15 +288,21 @@ class ModelReleaseCandidateApplicationServiceTest {
         service.retry(TENANT, ACTOR, PLAN_ID, CANDIDATE_ID, 4, "retry-key", "repair complete");
 
         ArgumentCaptor<TransitionCommand> commandsCaptor = ArgumentCaptor.forClass(TransitionCommand.class);
-        verify(commands, org.mockito.Mockito.times(2)).transition(
+        verify(materializationStarts).start(
+            TENANT,
+            ACTOR,
+            CANDIDATE_ID,
+            4,
+            "lock-key",
+            "scope confirmed"
+        );
+        verify(commands).transition(
             org.mockito.ArgumentMatchers.eq(TENANT),
             org.mockito.ArgumentMatchers.eq(ACTOR),
             org.mockito.ArgumentMatchers.eq(CANDIDATE_ID),
             commandsCaptor.capture()
         );
-        assertThat(commandsCaptor.getAllValues())
-            .extracting(TransitionCommand::targetStatus)
-            .containsExactly(DeliveryStatus.BUILDING, DeliveryStatus.BUILDING);
+        assertThat(commandsCaptor.getValue().targetStatus()).isEqualTo(DeliveryStatus.BUILDING);
     }
 
     @Test
@@ -360,6 +381,14 @@ class ModelReleaseCandidateApplicationServiceTest {
         verify(commands, never()).transition(
             org.mockito.ArgumentMatchers.any(),
             org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any()
+        );
+        verify(materializationStarts, never()).start(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.anyInt(),
             org.mockito.ArgumentMatchers.any(),
             org.mockito.ArgumentMatchers.any()
         );

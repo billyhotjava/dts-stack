@@ -116,6 +116,7 @@ class ModelSpecCompilerProjectionTest {
         assertThat(projected.inputMode()).isEqualTo(InputMode.GENERATED);
         assertThat(projected.fieldMappings()).containsExactly(new FieldMapping("calendar_date", "customer_id"));
         assertThat(projected.settings().keySet()).containsExactly("deduplicateBy");
+        assertThat(projected.keyFields()).containsExactly("customer_id");
     }
 
     @Test

@@ -24,7 +24,7 @@ import java.util.regex.Pattern;
 public final class ModelReleaseCandidateContract {
 
     private static final Pattern CHECKSUM = Pattern.compile("^[0-9a-f]{64}$");
-    public static final int MAX_SCOPE_ENTRIES = 200;
+    public static final int MAX_SCOPE_ENTRIES = 100;
     public static final int MAX_COMMAND_REASON_BYTES = 3_500;
     public static final int MAX_SELECTED_REASON_BYTES = 1_024;
     public static final int MAX_RESPONSE_SNAPSHOT_BYTES = 1_048_576;
@@ -36,6 +36,11 @@ public final class ModelReleaseCandidateContract {
     public static final String STALE_ERROR_CODE = "MODEL_RELEASE_CANDIDATE_STALE";
 
     private ModelReleaseCandidateContract() {}
+
+    public enum CandidateOrigin {
+        SINGLE_MODEL_INTENT,
+        BATCH_WORKBENCH,
+    }
 
     public record EntryView(
         UUID id,
@@ -78,7 +83,12 @@ public final class ModelReleaseCandidateContract {
         DeliveryAuditView audit,
         String lastModifiedBy,
         Instant lastModifiedAt,
-        List<EntryView> entries
+        List<EntryView> entries,
+        CandidateOrigin origin,
+        String executionTargetKey,
+        String adapter,
+        String profileKey,
+        String targetName
     ) {
         public CandidateView {
             id = requiredUuid(id, "id");
@@ -105,6 +115,22 @@ public final class ModelReleaseCandidateContract {
             ensureAuditOrder(audit);
             ensureAuditForStatus(status, audit);
             ensureAuditNotAfterLastModified(audit, lastModifiedAt);
+            origin = origin == null ? CandidateOrigin.BATCH_WORKBENCH : origin;
+            boolean hasExecutionContext =
+                executionTargetKey != null ||
+                adapter != null ||
+                profileKey != null ||
+                targetName != null;
+            if (hasExecutionContext) {
+                executionTargetKey = requiredText(
+                    executionTargetKey,
+                    "executionTargetKey",
+                    256
+                );
+                adapter = requiredText(adapter, "adapter", 64);
+                profileKey = requiredText(profileKey, "profileKey", 128);
+                targetName = requiredText(targetName, "targetName", 128);
+            }
 
             List<EntryView> candidateEntries = entries == null ? List.of() : entries;
             if (candidateEntries.stream().anyMatch(entry -> entry == null)) {
@@ -137,6 +163,78 @@ public final class ModelReleaseCandidateContract {
                 }
             }
             entries = List.copyOf(stableEntries);
+        }
+
+        /** Compatibility constructor for pre-Sprint-76 batch candidates and stored response snapshots. */
+        public CandidateView(
+            UUID id,
+            String tenantId,
+            UUID planId,
+            String environment,
+            DeliveryStatus status,
+            int version,
+            String idempotencyKey,
+            String requestHash,
+            DeliveryAuditView audit,
+            String lastModifiedBy,
+            Instant lastModifiedAt,
+            List<EntryView> entries
+        ) {
+            this(
+                id,
+                tenantId,
+                planId,
+                environment,
+                status,
+                version,
+                idempotencyKey,
+                requestHash,
+                audit,
+                lastModifiedBy,
+                lastModifiedAt,
+                entries,
+                CandidateOrigin.BATCH_WORKBENCH,
+                null,
+                null,
+                null,
+                null
+            );
+        }
+
+        public CandidateView(
+            UUID id,
+            String tenantId,
+            UUID planId,
+            String environment,
+            DeliveryStatus status,
+            int version,
+            String idempotencyKey,
+            String requestHash,
+            DeliveryAuditView audit,
+            String lastModifiedBy,
+            Instant lastModifiedAt,
+            List<EntryView> entries,
+            CandidateOrigin origin
+        ) {
+            this(
+                id,
+                tenantId,
+                planId,
+                environment,
+                status,
+                version,
+                idempotencyKey,
+                requestHash,
+                audit,
+                lastModifiedBy,
+                lastModifiedAt,
+                entries,
+                origin,
+                null,
+                null,
+                null,
+                null
+            );
         }
     }
 

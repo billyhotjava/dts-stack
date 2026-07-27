@@ -2,6 +2,7 @@ package com.yuzhi.dts.platform.repository.modeling;
 
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryAuditView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CandidateOrigin;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CandidateView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CommandEventType;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CommandEventView;
@@ -35,7 +36,8 @@ public class ModelReleaseCandidateRepository {
     private static final String HEADER_SELECTION = """
         select id, tenant_id, plan_id, environment, status, version, idempotency_key, request_hash,
                created_by, created_date, submitted_by, submitted_date, approved_by, approved_date,
-               published_by, published_date, last_modified_by, last_modified_date
+               published_by, published_date, last_modified_by, last_modified_date, origin,
+               execution_target_key, adapter, profile_key, target_name
           from modeling_model_release_candidate
         """;
 
@@ -54,8 +56,9 @@ public class ModelReleaseCandidateRepository {
             insert into modeling_model_release_candidate (
                 id, tenant_id, plan_id, environment, status, version, idempotency_key, request_hash,
                 created_by, created_date, submitted_by, submitted_date, approved_by, approved_date,
-                published_by, published_date, last_modified_by, last_modified_date
-            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                published_by, published_date, last_modified_by, last_modified_date, origin,
+                execution_target_key, adapter, profile_key, target_name
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             on conflict do nothing
             """,
             candidate.id(),
@@ -75,7 +78,12 @@ public class ModelReleaseCandidateRepository {
             audit.publishedBy(),
             timestamp(audit.publishedAt()),
             candidate.lastModifiedBy(),
-            Timestamp.from(candidate.lastModifiedAt())
+            Timestamp.from(candidate.lastModifiedAt()),
+            candidate.origin().name(),
+            candidate.executionTargetKey(),
+            candidate.adapter(),
+            candidate.profileKey(),
+            candidate.targetName()
         );
         if (inserted == 0) return 0;
         for (EntryView entry : candidate.entries()) {
@@ -522,6 +530,11 @@ public class ModelReleaseCandidateRepository {
                    c.published_date as candidate_published_date,
                    c.last_modified_by as candidate_last_modified_by,
                    c.last_modified_date as candidate_last_modified_date,
+                   c.origin as candidate_origin,
+                   c.execution_target_key as candidate_execution_target_key,
+                   c.adapter as candidate_adapter,
+                   c.profile_key as candidate_profile_key,
+                   c.target_name as candidate_target_name,
                    e.id as entry_id,
                    e.tenant_id as entry_tenant_id,
                    e.candidate_id as entry_candidate_id,
@@ -585,7 +598,12 @@ public class ModelReleaseCandidateRepository {
                     instant(row, "candidate_published_date")
                 ),
                 row.getString("candidate_last_modified_by"),
-                instant(row, "candidate_last_modified_date")
+                instant(row, "candidate_last_modified_date"),
+                CandidateOrigin.valueOf(row.getString("candidate_origin")),
+                row.getString("candidate_execution_target_key"),
+                row.getString("candidate_adapter"),
+                row.getString("candidate_profile_key"),
+                row.getString("candidate_target_name")
             );
         } catch (SQLException error) {
             throw new IllegalStateException("Failed to map release candidate header", error);
@@ -626,7 +644,12 @@ public class ModelReleaseCandidateRepository {
             header.audit(),
             header.lastModifiedBy(),
             header.lastModifiedAt(),
-            entries
+            entries,
+            header.origin(),
+            header.executionTargetKey(),
+            header.adapter(),
+            header.profileKey(),
+            header.targetName()
         );
     }
 
@@ -709,7 +732,12 @@ public class ModelReleaseCandidateRepository {
         String requestHash,
         DeliveryAuditView audit,
         String lastModifiedBy,
-        Instant lastModifiedAt
+        Instant lastModifiedAt,
+        CandidateOrigin origin,
+        String executionTargetKey,
+        String adapter,
+        String profileKey,
+        String targetName
     ) {}
 
     public static final class IdempotencyCollisionException extends RuntimeException {

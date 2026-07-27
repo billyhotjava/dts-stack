@@ -42,18 +42,18 @@
 |----|---------|--------|---------|------|------|
 | F1 | 口令策略与登录失败锁定 | P0 | 5 | READY | — |
 | F2 | 会话安全 P0 整改 | P0 | 5 | READY | — |
-| F3 | 操作权限矩阵 | P0 | 5 | READY | — |
+| F3 | 操作权限矩阵 | P0 | 5 | DONE | — |
 | F4 | 敏感数据自动识别引擎 | P1 | 5 | READY | — |
 | F5 | BMB17.x 符合性映射与测评整改台账 | P0 | 5 | READY | F1, F2, F3 |
 | F6 | 安全合规评审、回归与 IT 准入 | P0 | 5 | READY | F1-F5 |
 
-**统计**: READY=30, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: READY=25, IN_PROGRESS=0, DONE=5, BLOCKED=0
 
 ## 完成标准
 
 - [ ] Keycloak realm 配置 `passwordPolicy`（长度 ≥12、大小写+数字+特殊字符、口令历史、有效期）+ `bruteForceProtected:true` + 失败锁定阈值；dts-admin 启动时校验策略存在，缺失则 fail-fast。
 - [ ] 前端不再持久化裸 token（迁移到 httpOnly cookie 或受控存储），生产构建 strip 所有 `console.log(Authorization)`，`TEST_SESSION_ENABLED`/`handleDevFallback` 旁路在生产 profile 下硬关闭并有启动断言。
-- [ ] 操作权限矩阵：`IamAssetActionPolicy` 支持 资产/库表 × 角色 × {新增/删除/修改/复制/导入/导出/归档/销毁} 集中配置；各业务动作入口接入 `AccessChecker.canPerform(resource, action)`；前端角色/资产授权页提供动作矩阵勾选并落审批流。
+- [x] 操作权限矩阵：`IamAssetActionPolicy` 支持 资产/库表 × 角色/部门/用户 × {新增/删除/修改/复制/导入/导出/归档/销毁} 集中配置；各业务动作入口接入 `AccessChecker.canPerform(resource, action)`；前端数据安全页提供动作矩阵并通过独立审批流生效。
 - [ ] 敏感识别：`SensitiveRule`（REGEX/DICTIONARY/AI）CRUD + `SensitiveScanService` 对 catalog 字段元数据 + 抽样数据扫描产出候选敏感字段；提供敏感数据监控查询视图；扫描建议可一键生成 `CatalogMaskingRule`。
 - [ ] `SecurityBaselineService.DEFINITIONS` 由 6 项笼统基线扩展为按 BMB17.1/17.2-2024 条款编号的可追溯检查项；建立测评整改工作流（NOT_STARTED→IN_PROGRESS→DONE/WAIVED，支持两轮迭代）+ `exportReport` 产出测评整改证据包。
 - [ ] 全部新增/改动代码 TDD：单元 + 集成测试先行，覆盖率 ≥80%；安全敏感改动经 security-reviewer 评审无 CRITICAL/HIGH。

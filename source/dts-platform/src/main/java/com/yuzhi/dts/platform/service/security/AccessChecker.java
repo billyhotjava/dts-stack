@@ -7,6 +7,7 @@ import com.yuzhi.dts.platform.security.ClassificationUtils;
 import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.security.policy.DataLevel;
+import com.yuzhi.dts.platform.security.policy.AssetAction;
 import com.yuzhi.dts.platform.security.policy.PersonnelLevel;
 import java.lang.reflect.Array;
 import java.util.Arrays;
@@ -21,6 +22,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -32,15 +34,27 @@ public class AccessChecker {
     private final ClassificationUtils classificationUtils;
     private final CatalogDatasetGrantRepository grantRepository;
     private final OrganizationVisibilityService organizationVisibilityService;
+    private final AssetActionPolicyEvaluator actionPolicyEvaluator;
 
     public AccessChecker(
         ClassificationUtils classificationUtils,
         CatalogDatasetGrantRepository grantRepository,
         OrganizationVisibilityService organizationVisibilityService
     ) {
+        this(classificationUtils, grantRepository, organizationVisibilityService, null);
+    }
+
+    @Autowired
+    public AccessChecker(
+        ClassificationUtils classificationUtils,
+        CatalogDatasetGrantRepository grantRepository,
+        OrganizationVisibilityService organizationVisibilityService,
+        AssetActionPolicyEvaluator actionPolicyEvaluator
+    ) {
         this.classificationUtils = classificationUtils;
         this.grantRepository = grantRepository;
         this.organizationVisibilityService = organizationVisibilityService;
+        this.actionPolicyEvaluator = actionPolicyEvaluator;
     }
 
     public boolean canRead(CatalogDataset dataset) {
@@ -66,6 +80,16 @@ public class AccessChecker {
             return false;
         }
         return true;
+    }
+
+    public boolean canPerform(CatalogDataset dataset, AssetAction action) {
+        if (dataset == null || action == null) {
+            return false;
+        }
+        if (isSuperAdmin()) {
+            return true;
+        }
+        return actionPolicyEvaluator != null && actionPolicyEvaluator.canPerform(dataset, action);
     }
 
     private boolean levelAllowed(CatalogDataset dataset) {

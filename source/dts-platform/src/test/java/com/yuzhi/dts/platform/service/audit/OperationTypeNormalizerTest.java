@@ -33,6 +33,8 @@ class OperationTypeNormalizerTest {
         "DISABLE,DISABLE",
         "PUBLISH,PUBLISH",
         "ARCHIVE,ARCHIVE",
+        "COPY,COPY",
+        "DESTROY,DESTROY",
         "PURGE,CLEAN",
         "CLEAN,CLEAN",
         "EXECUTE,EXECUTE",
@@ -69,7 +71,9 @@ class OperationTypeNormalizerTest {
         "注销登录,LOGOUT",
         "下载文件,DOWNLOAD",
         "上传文件,UPLOAD",
-        "刷新数据,REFRESH"
+        "刷新数据,REFRESH",
+        "复制资产,COPY",
+        "销毁资产,DESTROY"
     })
     void chineseVerbsCanonicalised(String input, String expected) {
         assertThat(normalizer.canonicalOperationType(input)).isEqualTo(expected);
