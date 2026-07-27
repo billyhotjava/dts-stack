@@ -90,6 +90,7 @@ public class ModelBuildIntentService {
                 Kind.FORBIDDEN
             );
         }
+        candidates.lockPlanForCandidate(tenant, planId);
 
         ModelSpecView model = modelSpecs.get(tenant, modelSpecId);
         requireCurrentModel(model, planId, expected);

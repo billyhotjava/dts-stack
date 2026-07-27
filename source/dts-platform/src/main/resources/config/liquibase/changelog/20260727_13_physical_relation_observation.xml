@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260727-13-physical-relation-observation" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="modeling_model_release_candidate"/>
+            <tableExists tableName="modeling_pipeline_run"/>
+            <tableExists tableName="modeling_model_spec"/>
+            <not>
+                <tableExists tableName="modeling_physical_relation_observation"/>
+            </not>
+        </preConditions>
+        <comment>
+            Add append-only, revision-bound evidence from live warehouse relation probes.
+            No JDBC URL, username, password or raw runtime token is persisted.
+        </comment>
+
+        <createTable tableName="modeling_physical_relation_observation">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" primaryKeyName="pk_physical_relation_observation" nullable="false"/>
+            </column>
+            <column name="tenant_id" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="release_candidate_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="release_candidate_version" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="pipeline_run_group_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="pipeline_run_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="model_spec_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="model_revision" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="model_checksum" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="implementation_revision" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="implementation_checksum" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="dbt_invocation_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="scoped_bundle_checksum" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="observation_attempt" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="adapter" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="credential_version_ref" type="varchar(71)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="database_name" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="schema_name" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="identifier" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expected_type" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="actual_type" type="varchar(32)"/>
+            <column name="relation_exists" type="boolean">
+                <constraints nullable="false"/>
+            </column>
+            <column name="verified" type="boolean">
+                <constraints nullable="false"/>
+            </column>
+            <column name="column_count" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expected_columns_checksum" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="columns_checksum" type="varchar(64)"/>
+            <column name="actual_columns" type="jsonb"/>
+            <column name="metadata_checksum" type="varchar(64)"/>
+            <column name="error_code" type="varchar(128)"/>
+            <column name="observed_at" type="${datetimeType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="${datetimeType}">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="modeling_physical_relation_observation"
+            baseColumnNames="tenant_id, release_candidate_id"
+            constraintName="fk_relation_observation_candidate"
+            referencedTableName="modeling_model_release_candidate"
+            referencedColumnNames="tenant_id, id"
+            onDelete="RESTRICT"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_physical_relation_observation"
+            baseColumnNames="pipeline_run_id"
+            constraintName="fk_relation_observation_pipeline_run"
+            referencedTableName="modeling_pipeline_run"
+            referencedColumnNames="id"
+            onDelete="RESTRICT"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_physical_relation_observation"
+            baseColumnNames="model_spec_id"
+            constraintName="fk_relation_observation_model_spec"
+            referencedTableName="modeling_model_spec"
+            referencedColumnNames="id"
+            onDelete="RESTRICT"/>
+
+        <sql splitStatements="false"><![CDATA[
+            ALTER TABLE modeling_physical_relation_observation
+                ADD CONSTRAINT ck_physical_relation_observation
+                CHECK (
+                    btrim(tenant_id) <> ''
+                    AND release_candidate_version > 0
+                    AND model_revision > 0
+                    AND implementation_revision > 0
+                    AND observation_attempt > 0
+                    AND model_checksum ~ '^[0-9a-f]{64}$'
+                    AND implementation_checksum ~ '^[0-9a-f]{64}$'
+                    AND scoped_bundle_checksum ~ '^[0-9a-f]{64}$'
+                    AND credential_version_ref ~ '^sha256:[0-9a-f]{64}$'
+                    AND expected_columns_checksum ~ '^[0-9a-f]{64}$'
+                    AND adapter = 'postgres'
+                    AND schema_name ~ '^[A-Za-z_][A-Za-z0-9_]{0,127}$'
+                    AND identifier ~ '^[A-Za-z_][A-Za-z0-9_]{0,127}$'
+                    AND expected_type IN ('TABLE', 'VIEW', 'MATERIALIZED_VIEW')
+                    AND column_count >= 0
+                    AND (
+                        (
+                            relation_exists
+                            AND actual_type IN ('TABLE', 'VIEW', 'MATERIALIZED_VIEW')
+                            AND columns_checksum ~ '^[0-9a-f]{64}$'
+                            AND actual_columns IS NOT NULL
+                            AND metadata_checksum ~ '^[0-9a-f]{64}$'
+                            AND column_count > 0
+                        )
+                        OR (
+                            NOT relation_exists
+                            AND actual_type IS NULL
+                            AND columns_checksum IS NULL
+                            AND actual_columns IS NULL
+                            AND metadata_checksum IS NULL
+                            AND column_count = 0
+                        )
+                    )
+                    AND (
+                        (verified AND relation_exists AND error_code IS NULL)
+                        OR (
+                            NOT verified
+                            AND error_code IS NOT NULL
+                            AND btrim(error_code) <> ''
+                        )
+                    )
+                );
+
+            CREATE UNIQUE INDEX uk_relation_observation_attempt
+                ON modeling_physical_relation_observation (
+                    pipeline_run_id, model_spec_id,
+                    implementation_revision, observation_attempt
+                );
+
+            CREATE INDEX idx_relation_observation_candidate
+                ON modeling_physical_relation_observation (
+                    tenant_id, release_candidate_id,
+                    release_candidate_version, observed_at DESC
+                );
+
+            CREATE INDEX idx_relation_observation_model
+                ON modeling_physical_relation_observation (
+                    tenant_id, model_spec_id,
+                    implementation_revision, observed_at DESC
+                );
+
+            CREATE INDEX idx_relation_observation_run
+                ON modeling_physical_relation_observation (
+                    pipeline_run_group_id, pipeline_run_id,
+                    observed_at DESC
+                );
+
+            CREATE OR REPLACE FUNCTION reject_physical_relation_observation_mutation()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            AS $$
+            BEGIN
+                RAISE EXCEPTION 'PHYSICAL_RELATION_OBSERVATION_IS_APPEND_ONLY';
+            END;
+            $$;
+
+            CREATE TRIGGER trg_physical_relation_observation_append_only
+                BEFORE UPDATE OR DELETE
+                ON modeling_physical_relation_observation
+                FOR EACH ROW
+                EXECUTE FUNCTION reject_physical_relation_observation_mutation();
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    IF EXISTS (
+                        SELECT 1
+                          FROM modeling_physical_relation_observation
+                    ) THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_PHYSICAL_RELATION_EVIDENCE_EXISTS';
+                    END IF;
+                END $$;
+            ]]></sql>
+            <dropTable tableName="modeling_physical_relation_observation"/>
+            <sql>
+                DROP FUNCTION IF EXISTS reject_physical_relation_observation_mutation();
+            </sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

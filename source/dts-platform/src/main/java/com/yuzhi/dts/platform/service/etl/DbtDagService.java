@@ -6,12 +6,18 @@ import com.yuzhi.dts.platform.config.AirflowProperties;
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import java.io.IOException;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,6 +29,10 @@ public class DbtDagService {
 
     private static final Logger LOG = LoggerFactory.getLogger(DbtDagService.class);
     private static final Pattern NON_SAFE = Pattern.compile("[^a-z0-9_]+");
+    private static final Pattern MANAGED_DAG_ID = Pattern.compile(
+        "^[a-z][a-z0-9_]{2,199}$"
+    );
+    private static final String MANAGED_TEMPLATE_VERSION = "sprint76-v1";
 
     private final AirflowProperties airflowProperties;
     private final DbtConfigService dbtConfigService;
@@ -58,6 +68,39 @@ public class DbtDagService {
         String dagId = layer + "_" + slugify(sourceKey) + "_dbt_" + freq;
         writeDagFile(dagId, normalizedTag, sourceKey, layer);
         return dagId;
+    }
+
+    /**
+     * Deploys the stable RELEASE_BUILD executor DAG.
+     *
+     * <p>This canonical Sprint-76 DAG is intentionally only a versioned import of the Airflow
+     * runtime factory. The legacy per-tag renderer remains isolated below for compatibility and is
+     * not used by release-candidate builds.
+     */
+    public ManagedDagDeployment ensureReleaseBuildDag(String dagId) {
+        String id = requireManagedDagId(dagId);
+        String deploymentChecksum = sha256(
+            String.join(
+                "\u0000",
+                MANAGED_TEMPLATE_VERSION,
+                id,
+                "RELEASE_BUILD",
+                "schedule:none"
+            )
+        );
+        String source = buildManagedReleaseDagSource(id, deploymentChecksum);
+        Path directory = Path.of(resolveDagsDir(null)).toAbsolutePath().normalize();
+        Path dagFile = directory.resolve(id + ".py").normalize();
+        if (!directory.equals(dagFile.getParent())) {
+            throw new IllegalArgumentException("Managed DAG path is invalid");
+        }
+        writeAtomically(dagFile, source);
+        return new ManagedDagDeployment(
+            id,
+            MANAGED_TEMPLATE_VERSION,
+            deploymentChecksum,
+            dagFile
+        );
     }
 
     public String extractTag(String selector) {
@@ -433,6 +476,133 @@ public class DbtDagService {
         );
     }
 
+    private String buildManagedReleaseDagSource(
+        String dagId,
+        String deploymentChecksum
+    ) {
+        return """
+            from dts_runtime.dbt_task_factory import build_dbt_dag
+
+            dag = build_dbt_dag(
+                dag_id="%s",
+                purpose="RELEASE_BUILD",
+                schedule=None,
+                timezone="UTC",
+                template_version="%s",
+                deployment_checksum="%s",
+                tags=["dts-managed", "dbt", "release-build"],
+            )
+            """.formatted(
+            dagId,
+            MANAGED_TEMPLATE_VERSION,
+            deploymentChecksum
+        );
+    }
+
+    private void writeAtomically(Path target, String content) {
+        Path temporary = null;
+        try {
+            Files.createDirectories(target.getParent());
+            if (
+                Files.isRegularFile(target) &&
+                Files.readString(target, StandardCharsets.UTF_8).equals(content)
+            ) {
+                return;
+            }
+            temporary = target
+                .getParent()
+                .resolve(
+                    "." +
+                    target.getFileName() +
+                    ".tmp-" +
+                    UUID.randomUUID()
+                );
+            Files.writeString(
+                temporary,
+                content,
+                StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE_NEW,
+                StandardOpenOption.WRITE
+            );
+            try (
+                FileChannel file = FileChannel.open(
+                    temporary,
+                    StandardOpenOption.WRITE
+                )
+            ) {
+                file.force(true);
+            }
+            try {
+                Files.move(
+                    temporary,
+                    target,
+                    StandardCopyOption.ATOMIC_MOVE,
+                    StandardCopyOption.REPLACE_EXISTING
+                );
+            } catch (
+                java.nio.file.AtomicMoveNotSupportedException unsupported
+            ) {
+                Files.move(
+                    temporary,
+                    target,
+                    StandardCopyOption.REPLACE_EXISTING
+                );
+            }
+            temporary = null;
+            try (
+                FileChannel directory = FileChannel.open(
+                    target.getParent(),
+                    StandardOpenOption.READ
+                )
+            ) {
+                directory.force(true);
+            }
+            LOG.info(
+                "[dbt] deployed managed DAG id={} template={} checksum={}",
+                target.getFileName(),
+                MANAGED_TEMPLATE_VERSION,
+                sha256(content)
+            );
+        } catch (IOException failure) {
+            throw new IllegalStateException(
+                "Managed Airflow DAG could not be deployed: " +
+                target.getFileName(),
+                failure
+            );
+        } finally {
+            if (temporary != null) {
+                try {
+                    Files.deleteIfExists(temporary);
+                } catch (IOException ignored) {
+                    // A same-directory orphan is harmless and never has a .py suffix.
+                }
+            }
+        }
+    }
+
+    private static String requireManagedDagId(String dagId) {
+        String id = dagId == null ? "" : dagId.trim();
+        if (!MANAGED_DAG_ID.matcher(id).matches()) {
+            throw new IllegalArgumentException("Managed DAG id is invalid");
+        }
+        return id;
+    }
+
+    private static String sha256(String value) {
+        try {
+            return HexFormat.of()
+                .formatHex(
+                    MessageDigest.getInstance("SHA-256")
+                        .digest(value.getBytes(StandardCharsets.UTF_8))
+                );
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException(
+                "SHA-256 is unavailable",
+                impossible
+            );
+        }
+    }
+
     private Map<String, Object> parseProps(String raw) {
         if (!StringUtils.hasText(raw)) {
             return Map.of();
@@ -490,4 +660,11 @@ public class DbtDagService {
     }
 
     private record SelectorContext(String tag, String layerGroup) {}
+
+    public record ManagedDagDeployment(
+        String dagId,
+        String templateVersion,
+        String deploymentChecksum,
+        Path file
+    ) {}
 }

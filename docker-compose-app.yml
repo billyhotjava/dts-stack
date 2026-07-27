@@ -307,6 +307,10 @@ services:
       DTS_TARGET_DB_NAME: ${PG_DB_BIADMIN:-biadmin}
       DTS_TARGET_DB_USER: ${PG_USER_BIADMIN:-biadmin}
       DTS_TARGET_DB_PASSWORD: ${PG_PWD_BIADMIN}
+      DTS_AIRFLOW_TO_PLATFORM_TOKEN: ${DTS_AIRFLOW_TO_PLATFORM:-}
+      DTS_DBT_PROJECT_HOST_ROOT: ${DTS_DBT_HOST_PROJECT_DIR}
+      DTS_DBT_RUNTIME_PROFILE_HOST_ROOT: /dev/shm/dts-dbt-runtime
+      DTS_PLATFORM_INTERNAL_BASE_URL: http://dts-platform:8081
       AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
       AIRFLOW__CORE__DAG_IGNORE_FILE_SYNTAX: regexp
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
@@ -1200,6 +1204,7 @@ services:
       DTS_ADMIN_BASE_URL: http://dts-admin:8081
       DTS_ANALYTICS_BASE_URL: ${DTS_ANALYTICS_BASE_URL:-http://dts-analytics:3000}
       DTS_INBOUND_FROM_ANALYTICS: ${DTS_INBOUND_FROM_ANALYTICS:-${DTS_ADMIN_SERVICE_TOKEN:-}}
+      DTS_INBOUND_FROM_AIRFLOW: ${DTS_INBOUND_FROM_AIRFLOW:-}
       DTS_INBOUND_FROM_INGESTION: ${DTS_INBOUND_FROM_INGESTION:-${DTS_ADMIN_SERVICE_TOKEN:-}}
       DTS_PLATFORM_TO_ADMIN_TOKEN: ${DTS_PLATFORM_TO_ADMIN_TOKEN:-${DTS_ADMIN_SERVICE_TOKEN:-}}
       DTS_AIRFLOW_BASE_URL: ${DTS_AIRFLOW_BASE_URL:-http://dts-airflow-webserver:8080}
@@ -1210,6 +1215,9 @@ services:
       DTS_DBT_HOST_PROJECT_DIR: ${DTS_DBT_HOST_PROJECT_DIR:-${DBT_PROJECT_DIR}}
       DTS_DBT_PROFILES_DIR: /opt/dts/dbt-profiles
       DTS_DBT_PROJECT_DIR: /opt/dts/dbt
+      DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID: ${DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID:-0}
+      DTS_DBT_RUNTIME_PROFILE_ROOT: /run/dts-dbt-runtime
+      DTS_MODEL_RUNTIME_SPEC_SIGNING_KEY: ${DTS_MODEL_RUNTIME_SPEC_SIGNING_KEY:-}
       DTS_FEATURE_PLATFORM_KC_LOCALIZATION: "true"
       DTS_INGESTION_BASE_URL: ${DTS_INGESTION_BASE_URL:-http://dts-ingestion:8083}
       DTS_INGESTION_SERVICE_NAME: ${DTS_INGESTION_SERVICE_NAME:-dts-platform}
@@ -1295,6 +1303,11 @@ services:
       # 落此 tmpfs(内存)，不写宿主机磁盘层；200MB 上限故 size 较大；mode=1700 仅 root 可读写。
       - /apptmp:size=805306368,mode=1700
     volumes:
+      - bind:
+          create_host_path: false
+        source: /dev/shm/dts-dbt-runtime
+        target: /run/dts-dbt-runtime
+        type: bind
       - bind:
           create_host_path: true
           selinux: z

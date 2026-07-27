@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.config;
 
+import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
@@ -17,6 +18,12 @@ public class ModelMaterializationProperties {
     private String profileKey = "dts";
     private String targetName = "dev";
     private String releaseBuildDagId = "dts_release_build_postgres_primary";
+    private String runtimeProfileRoot = "/run/dts-dbt-runtime";
+    private boolean runtimeProfileRequireTmpfs = true;
+    private long runtimeProfileExpectedUid = 0;
+    private Duration runtimeProfileLeaseTtl = Duration.ofMinutes(10);
+    private String runtimeSpecSigningKey;
+    private Duration runtimeSpecTokenTtl = Duration.ofMinutes(15);
 
     public boolean isEnabled() {
         return enabled;
@@ -64,5 +71,55 @@ public class ModelMaterializationProperties {
 
     public void setReleaseBuildDagId(String releaseBuildDagId) {
         this.releaseBuildDagId = releaseBuildDagId;
+    }
+
+    public String getRuntimeProfileRoot() {
+        return runtimeProfileRoot;
+    }
+
+    public void setRuntimeProfileRoot(String runtimeProfileRoot) {
+        this.runtimeProfileRoot = runtimeProfileRoot;
+    }
+
+    public boolean isRuntimeProfileRequireTmpfs() {
+        return runtimeProfileRequireTmpfs;
+    }
+
+    public void setRuntimeProfileRequireTmpfs(
+        boolean runtimeProfileRequireTmpfs
+    ) {
+        this.runtimeProfileRequireTmpfs = runtimeProfileRequireTmpfs;
+    }
+
+    public long getRuntimeProfileExpectedUid() {
+        return runtimeProfileExpectedUid;
+    }
+
+    public void setRuntimeProfileExpectedUid(long runtimeProfileExpectedUid) {
+        this.runtimeProfileExpectedUid = runtimeProfileExpectedUid;
+    }
+
+    public Duration getRuntimeProfileLeaseTtl() {
+        return runtimeProfileLeaseTtl;
+    }
+
+    public void setRuntimeProfileLeaseTtl(Duration runtimeProfileLeaseTtl) {
+        this.runtimeProfileLeaseTtl = runtimeProfileLeaseTtl;
+    }
+
+    public String getRuntimeSpecSigningKey() {
+        return runtimeSpecSigningKey;
+    }
+
+    public void setRuntimeSpecSigningKey(String runtimeSpecSigningKey) {
+        this.runtimeSpecSigningKey = runtimeSpecSigningKey;
+    }
+
+    public Duration getRuntimeSpecTokenTtl() {
+        return runtimeSpecTokenTtl;
+    }
+
+    public void setRuntimeSpecTokenTtl(Duration runtimeSpecTokenTtl) {
+        this.runtimeSpecTokenTtl = runtimeSpecTokenTtl;
     }
 }

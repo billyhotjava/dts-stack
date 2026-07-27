@@ -263,6 +263,12 @@ dts:
       profile-key: ${DTS_MODEL_EXECUTION_PROFILE_KEY:dts}
       target-name: ${DTS_MODEL_EXECUTION_TARGET_NAME:dev}
       release-build-dag-id: ${DTS_MODEL_RELEASE_BUILD_DAG_ID:dts_release_build_postgres_primary}
+      runtime-profile-root: ${DTS_DBT_RUNTIME_PROFILE_ROOT:/run/dts-dbt-runtime}
+      runtime-profile-require-tmpfs: ${DTS_DBT_RUNTIME_PROFILE_REQUIRE_TMPFS:true}
+      runtime-profile-expected-uid: ${DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID:0}
+      runtime-profile-lease-ttl: ${DTS_DBT_RUNTIME_PROFILE_LEASE_TTL:10m}
+      runtime-spec-signing-key: ${DTS_MODEL_RUNTIME_SPEC_SIGNING_KEY:}
+      runtime-spec-token-ttl: ${DTS_MODEL_RUNTIME_SPEC_TOKEN_TTL:15m}
   dbt:
     enabled: ${DTS_DBT_ENABLED:true}
     config-path: ${DTS_DBT_CONFIG_PATH:/opt/dts/upload/dbt-config.json}

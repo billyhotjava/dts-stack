@@ -96,6 +96,42 @@ class DbtScopedProjectServiceTest {
     }
 
     @Test
+    void verifiesImmutableCandidateInputsAfterDbtWritesRuntimeOutputs() throws Exception {
+        DbtScopedProjectService.ScopedCandidateProject prepared = service.prepareCandidate(
+            List.of(candidateEntry())
+        );
+        Path project = Path.of(prepared.projectDir());
+        Files.createDirectories(project.resolve("target"));
+        Files.writeString(
+            project.resolve("target/manifest.json"),
+            "{\"metadata\":{\"invocation_id\":\"runtime-output\"}}\n",
+            StandardCharsets.UTF_8
+        );
+        Files.createDirectories(project.resolve("logs"));
+        Files.writeString(
+            project.resolve("logs/dbt.log"),
+            "runtime log\n",
+            StandardCharsets.UTF_8
+        );
+
+        assertThat(
+            service.verifyCandidateProject(prepared.bundleChecksum())
+        ).isEqualTo(project);
+
+        Files.writeString(
+            project.resolve("dbt_project.yml"),
+            "name: tampered\n",
+            StandardCharsets.UTF_8
+        );
+        assertFailureCode(
+            () -> service.verifyCandidateProject(
+                prepared.bundleChecksum()
+            ),
+            "MATERIALIZATION_BUNDLE_CONFLICT"
+        );
+    }
+
+    @Test
     void failsClosedForNodeConflictStaleChecksumAndMissingDependency() throws Exception {
         DbtScopedProjectService.CandidateArtifactEntry entry = candidateEntry();
         Files.writeString(

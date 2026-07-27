@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.etl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -12,7 +13,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -55,8 +55,6 @@ class DbtConfigServiceTest {
 
         when(dataSourceRepository.findByStatusIgnoreCase("ACTIVE")).thenReturn(List.of(warehouse));
         when(dataSourceRepository.findById(warehouse.getId())).thenReturn(Optional.of(warehouse));
-        when(secretService.readSecrets(warehouse)).thenReturn(Map.of("password", ""));
-
         DbtConfigService service = new DbtConfigService(new ObjectMapper(), dataSourceRepository, secretService, properties);
         service.ensureConfigFile();
 
@@ -65,8 +63,10 @@ class DbtConfigServiceTest {
         assertThat(view.enabled()).isTrue();
         assertThat(view.workspaceStatus().ok()).isTrue();
         assertThat(view.config().targetDataSourceId()).isEqualTo(warehouse.getId());
-        assertThat(view.profileStatus().generated()).isTrue();
-        assertThat(Files.exists(profilesDir.resolve("profiles.yml"))).isTrue();
+        assertThat(view.profileStatus().generated()).isFalse();
+        assertThat(view.profileStatus().message()).contains("tmpfs profile lease");
+        assertThat(Files.exists(profilesDir.resolve("profiles.yml"))).isFalse();
+        verifyNoInteractions(secretService);
     }
 
     @Test
@@ -113,8 +113,6 @@ class DbtConfigServiceTest {
         when(dataSourceRepository.findById(staleTargetId)).thenReturn(Optional.empty());
         when(dataSourceRepository.findByStatusIgnoreCase("ACTIVE")).thenReturn(List.of(warehouse));
         when(dataSourceRepository.findById(warehouse.getId())).thenReturn(Optional.of(warehouse));
-        when(secretService.readSecrets(warehouse)).thenReturn(Map.of("password", ""));
-
         DbtConfigService service = new DbtConfigService(new ObjectMapper(), dataSourceRepository, secretService, properties);
 
         DbtConfigService.DbtConfigView view = service.loadConfig();
@@ -123,7 +121,8 @@ class DbtConfigServiceTest {
         assertThat(view.target()).isNotNull();
         assertThat(view.target().id()).isEqualTo(warehouse.getId());
         assertThat(view.config().targetDataSourceId()).isEqualTo(warehouse.getId());
-        assertThat(view.profileStatus().generated()).isTrue();
-        assertThat(Files.exists(profilesDir.resolve("profiles.yml"))).isTrue();
+        assertThat(view.profileStatus().generated()).isFalse();
+        assertThat(Files.exists(profilesDir.resolve("profiles.yml"))).isFalse();
+        verifyNoInteractions(secretService);
     }
 }

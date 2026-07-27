@@ -432,6 +432,10 @@ services:
       - DTS_TARGET_DB_NAME=${PG_DB_BIADMIN:-biadmin}
       - DTS_TARGET_DB_USER=${PG_USER_BIADMIN:-biadmin}
       - DTS_TARGET_DB_PASSWORD=${PG_PWD_BIADMIN}
+      - DTS_AIRFLOW_TO_PLATFORM_TOKEN=${DTS_AIRFLOW_TO_PLATFORM:-}
+      - DTS_DBT_PROJECT_HOST_ROOT=${DTS_DBT_HOST_PROJECT_DIR}
+      - DTS_DBT_RUNTIME_PROFILE_HOST_ROOT=/dev/shm/dts-dbt-runtime
+      - DTS_PLATFORM_INTERNAL_BASE_URL=http://dts-platform:8081
       - AIRFLOW_HOME=/opt/airflow
       - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
       - AIRFLOW__CORE__DAG_IGNORE_FILE_SYNTAX=regexp
@@ -1429,6 +1433,9 @@ services:
       DTS_DBT_HOST_PROJECT_DIR: ${DTS_DBT_HOST_PROJECT_DIR:-${DBT_PROJECT_DIR}}
       DTS_DBT_PROFILES_DIR: /opt/dts/dbt-profiles
       DTS_DBT_PROJECT_DIR: /opt/dts/dbt
+      DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID: ${DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID:-0}
+      DTS_DBT_RUNTIME_PROFILE_ROOT: /run/dts-dbt-runtime
+      DTS_MODEL_RUNTIME_SPEC_SIGNING_KEY: ${DTS_MODEL_RUNTIME_SPEC_SIGNING_KEY:-}
       DTS_FEATURE_PLATFORM_KC_LOCALIZATION: "true"
       DTS_HTTP_ACCESS_LOG: "true"
       DTS_ANALYTICS_BASE_URL: ${DTS_ANALYTICS_BASE_URL:-http://dts-analytics:3000}
@@ -1458,6 +1465,7 @@ services:
       JHIPSTER_CORS_ALLOWED_ORIGINS: http://localhost:3001,http://127.0.0.1:3001,http://localhost:5173,http://127.0.0.1:5173,http://localhost:18011,http://127.0.0.1:18011,http://localhost:18012,http://127.0.0.1:18012,https://${HOST_ADMIN_UI},https://${HOST_PLATFORM_UI},https://${HOST_API},https://${HOST_SSO},https://192.168.8.150,http://192.168.8.150:18011,http://192.168.8.150:18012
       LOG_ROOT: ${LOG_ROOT:-/workspace/logs}
       DTS_INBOUND_FROM_ANALYTICS: ${DTS_INBOUND_FROM_ANALYTICS:-${DTS_ADMIN_SERVICE_TOKEN:-}}
+      DTS_INBOUND_FROM_AIRFLOW: ${DTS_INBOUND_FROM_AIRFLOW:-}
       DTS_INBOUND_FROM_INGESTION: ${DTS_INBOUND_FROM_INGESTION:-${DTS_ADMIN_SERVICE_TOKEN:-}}
       DTS_PLATFORM_TO_ADMIN_TOKEN: ${DTS_PLATFORM_TO_ADMIN_TOKEN:-${DTS_ADMIN_SERVICE_TOKEN:-}}
       SPRING_CLOUD_CONFIG_ENABLED: ${SPRING_CLOUD_CONFIG_ENABLED:-false}
@@ -1514,6 +1522,11 @@ services:
     security_opt:
       - seccomp=unconfined
     volumes:
+      - bind:
+          create_host_path: false
+        source: /dev/shm/dts-dbt-runtime
+        target: /run/dts-dbt-runtime
+        type: bind
       - bind:
           create_host_path: true
           selinux: z

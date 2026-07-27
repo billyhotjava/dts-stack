@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.yuzhi.dts.platform.IntegrationTest;
+import com.yuzhi.dts.platform.repository.modeling.DbtRuntimeProfileLeaseRepository.LeaseRecord;
+import com.yuzhi.dts.platform.repository.modeling.DbtRuntimeProfileLeaseRepository.LeaseStatus;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryAuditView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus;
 import com.yuzhi.dts.platform.service.modeling.ModelMaterializationStartService;
@@ -13,6 +15,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateException;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
@@ -33,6 +36,15 @@ class ModelMaterializationStartServiceIT {
 
     @Autowired
     private ModelMaterializationStartService starts;
+
+    @Autowired
+    private DbtRuntimeProfileLeaseRepository profileLeases;
+
+    @Autowired
+    private ModelMaterializationDispatchRepository dispatches;
+
+    @Autowired
+    private ModelMaterializationRunRepository materializationRuns;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -82,6 +94,30 @@ class ModelMaterializationStartServiceIT {
             assertThat(
                 jdbcTemplate.queryForObject(
                     """
+                    select count(*)
+                      from modeling_materialization_dispatch d
+                      join modeling_pipeline_run pr
+                        on pr.pipeline_run_group_id = d.id
+                       and pr.tenant_id = d.tenant_id
+                     where d.tenant_id = ?
+                       and d.candidate_id = ?
+                       and d.candidate_version = 2
+                       and d.attempt = 1
+                       and d.status = 'PENDING'
+                       and d.airflow_dag_id = pr.airflow_dag_id
+                       and d.airflow_run_id = pr.airflow_run_id
+                       and d.artifact_bundle_checksum =
+                           pr.artifact_bundle_checksum
+                    """,
+                    Integer.class,
+                    scope.tenant(),
+                    scope.candidateId()
+                )
+            )
+                .isEqualTo(1);
+            assertThat(
+                jdbcTemplate.queryForObject(
+                    """
                     select count(*) from modeling_model_release_candidate_entry
                      where tenant_id = ? and candidate_id = ?
                        and implementation_id = ? and implementation_revision = 1
@@ -115,6 +151,138 @@ class ModelMaterializationStartServiceIT {
                 )
             )
                 .isEqualTo(1);
+            UUID pipelineRunId = jdbcTemplate.queryForObject(
+                """
+                select id
+                  from modeling_pipeline_run
+                 where tenant_id = ? and release_candidate_id = ?
+                   and run_purpose = 'RELEASE_BUILD'
+                """,
+                UUID.class,
+                scope.tenant(),
+                scope.candidateId()
+            );
+            Instant dispatchAt = Instant.now().plusSeconds(60);
+            var claimed = dispatches
+                .claimNext(dispatchAt, Duration.ofMinutes(2))
+                .orElseThrow();
+            assertThat(claimed.candidateId())
+                .isEqualTo(scope.candidateId());
+            assertThat(claimed.status()).isEqualTo("CLAIMED");
+            String scopedBundleChecksum = "9".repeat(64);
+            String runtimeTokenDigest =
+                "sha256:" + "8".repeat(64);
+            dispatches.markPrepared(
+                claimed.id(),
+                scopedBundleChecksum,
+                runtimeTokenDigest,
+                dispatchAt.plusSeconds(300),
+                dispatchAt
+            );
+            var runtime = dispatches
+                .lockRuntimeSpec(runtimeTokenDigest)
+                .orElseThrow();
+            assertThat(runtime.dispatchId())
+                .isEqualTo(claimed.id());
+            assertThat(runtime.selector())
+                .isEqualTo(scope.selector());
+            assertThat(runtime.pipelineRunId())
+                .isEqualTo(pipelineRunId);
+            UUID leaseId = UUID.randomUUID();
+            profileLeases.issue(
+                new LeaseRecord(
+                    leaseId,
+                    scope.tenant(),
+                    pipelineRunId,
+                    "dts_rc_" +
+                    scope
+                        .candidateId()
+                        .toString()
+                        .replace("-", "") +
+                    "_v2_a1",
+                    "DEV",
+                    "postgres-primary",
+                    "dev",
+                    "sha256:" + "a".repeat(64),
+                    LeaseStatus.ISSUED,
+                    NOW,
+                    NOW.plusSeconds(300),
+                    null,
+                    null
+                )
+            );
+            assertThat(
+                dispatches.attachRuntimeLease(
+                    claimed.id(),
+                    leaseId,
+                    dispatchAt
+                )
+            )
+                .isTrue();
+            dispatches.markSubmitted(
+                claimed.id(),
+                false,
+                dispatchAt
+            );
+            UUID dbtInvocationId = UUID.randomUUID();
+            materializationRuns.markDbtSucceeded(
+                claimed.id(),
+                dbtInvocationId,
+                1,
+                dispatchAt.plusSeconds(1)
+            );
+            assertThat(
+                jdbcTemplate.queryForObject(
+                    """
+                    select status
+                      from modeling_pipeline_run
+                     where id = ?
+                    """,
+                    String.class,
+                    pipelineRunId
+                )
+            )
+                .isEqualTo("DBT_SUCCEEDED");
+            assertThat(
+                materializationRuns.finalizeSucceeded(
+                    claimed.id(),
+                    dispatchAt.plusSeconds(2)
+                )
+            )
+                .isEqualTo(1);
+            assertThat(
+                materializationRuns
+                    .findRunGroup(claimed.id())
+                    .orElseThrow()
+                    .dispatchStatus()
+            )
+                .isEqualTo("COMPLETED");
+            assertThat(profileLeases.find(leaseId))
+                .get()
+                .extracting(LeaseRecord::status)
+                .isEqualTo(LeaseStatus.ISSUED);
+            assertThat(
+                profileLeases.consume(
+                    leaseId,
+                    NOW.plusSeconds(1)
+                )
+            )
+                .isTrue();
+            assertThat(
+                profileLeases.consume(
+                    leaseId,
+                    NOW.plusSeconds(2)
+                )
+            )
+                .isFalse();
+            profileLeases.release(
+                leaseId,
+                NOW.plusSeconds(3)
+            );
+            assertThat(profileLeases.find(leaseId))
+                .get()
+                .extracting(LeaseRecord::status)
+                .isEqualTo(LeaseStatus.RELEASED);
             status.setRollbackOnly();
         });
     }
@@ -149,6 +317,19 @@ class ModelMaterializationStartServiceIT {
             assertThat(
                 jdbcTemplate.queryForObject(
                     "select count(*) from modeling_pipeline_run where tenant_id = ? and release_candidate_id = ?",
+                    Integer.class,
+                    scope.tenant(),
+                    scope.candidateId()
+                )
+            )
+                .isZero();
+            assertThat(
+                jdbcTemplate.queryForObject(
+                    """
+                    select count(*)
+                      from modeling_materialization_dispatch
+                     where tenant_id = ? and candidate_id = ?
+                    """,
                     Integer.class,
                     scope.tenant(),
                     scope.candidateId()
@@ -342,6 +523,11 @@ class ModelMaterializationStartServiceIT {
     }
 
     private void cleanup(Scope scope) {
+        jdbcTemplate.update(
+            "delete from modeling_materialization_dispatch where tenant_id = ? and candidate_id = ?",
+            scope.tenant(),
+            scope.candidateId()
+        );
         jdbcTemplate.update(
             "delete from modeling_pipeline_run where tenant_id = ? and release_candidate_id = ?",
             scope.tenant(),

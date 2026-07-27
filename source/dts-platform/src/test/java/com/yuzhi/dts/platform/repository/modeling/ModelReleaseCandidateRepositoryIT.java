@@ -30,6 +30,7 @@ import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -203,7 +204,9 @@ class ModelReleaseCandidateRepositoryIT {
             .extracting(CandidateView::id)
             .containsExactly(loadedId, rolledBackId);
         assertThatThrownBy(() -> repository.list(tenant, planId, null, 0, 201))
-            .isInstanceOf(IllegalArgumentException.class);
+            .isInstanceOf(InvalidDataAccessApiUsageException.class)
+            .hasRootCauseInstanceOf(IllegalArgumentException.class)
+            .hasRootCauseMessage("limit must be between 1 and 200");
     }
 
     @Test
@@ -1470,7 +1473,7 @@ class ModelReleaseCandidateRepositoryIT {
                 contract_version, domain_id, current_checksum, idempotency_key,
                 idempotency_request_hash, idempotency_response_snapshot
             ) values (
-                ?, ?, null, ?, null, 'DWD', 'FACT', 'DBT_MANAGED', 'Canonical release model',
+                ?, ?, null, ?, null, 'DWD', 'FACT', 'DBT_MANAGED', ?,
                 'DRAFT', 2, 1, current_timestamp, current_timestamp, 2, ?, ?, ?,
                 ?, cast('{}' as jsonb)
             )
@@ -1478,6 +1481,7 @@ class ModelReleaseCandidateRepositoryIT {
             modelId,
             tenant,
             planId,
+            "Canonical release model " + modelId,
             domainId,
             currentChecksum,
             "canonical-" + modelId,

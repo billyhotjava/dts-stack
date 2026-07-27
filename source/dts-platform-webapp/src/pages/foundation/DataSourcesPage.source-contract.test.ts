@@ -7,10 +7,6 @@ const DATA_SOURCES_SOURCE = readFileSync(new URL("./DataSourcesPage.tsx", import
 const DATA_SOURCE_DETAIL_SOURCE = readFileSync(new URL("./DataSourceDetailPage.tsx", import.meta.url), "utf8");
 const DATA_SOURCE_FORM_SOURCE = readFileSync(new URL("./DataSourceFormModal.tsx", import.meta.url), "utf8");
 const INGESTION_API_SOURCE = readFileSync(new URL("../../api/ingestion.ts", import.meta.url), "utf8");
-const DICTIONARY_SERVICE_SOURCE = readFileSync(
-	new URL("../../api/services/dictionaryService.ts", import.meta.url),
-	"utf8",
-);
 
 test("connector registry carries connector context into data source creation", () => {
 	assert.match(CONNECTOR_REGISTRY_SOURCE, /const openDataSourceCreate = useCallback/);
@@ -36,17 +32,18 @@ test("data source form applies the initial connector and its defaults", () => {
 	assert.match(DATA_SOURCE_FORM_SOURCE, /applyConnectorDefaults\(initialConnectorKey\)/);
 });
 
-test("data source form reads system types from platform dictionary before fallback", () => {
-	assert.match(DICTIONARY_SERVICE_SOURCE, /url:\s*"\/platform\/dict\/system-types"/);
-	assert.match(DICTIONARY_SERVICE_SOURCE, /_skipErrorToast:\s*true/);
-	assert.match(DATA_SOURCE_FORM_SOURCE, /dictionaryService\.listSystemTypes\(\)/);
-	assert.match(DATA_SOURCE_FORM_SOURCE, /const systemTypeOptions = useMemo/);
-	assert.match(DATA_SOURCE_FORM_SOURCE, /options=\{systemTypeOptions\}/);
-	assert.doesNotMatch(DATA_SOURCE_FORM_SOURCE, /options=\{TYPE_OPTIONS\}/);
-	assert.match(DATA_SOURCE_FORM_SOURCE, /系统类型字典暂不可用，当前使用内置兜底选项/);
-	assert.match(DATA_SOURCE_FORM_SOURCE, /系统类型字典未接通/);
-	assert.match(DATA_SOURCE_FORM_SOURCE, /router\.push\("\/governance\/standards\/reference"\)/);
-	assert.match(DATA_SOURCE_FORM_SOURCE, /router\.push\("\/foundation\/connectors"\)/);
+test("data source form derives source type and defaults from connector registry", () => {
+	assert.match(DATA_SOURCE_FORM_SOURCE, /connectorsService\.list\(\)/);
+	assert.match(DATA_SOURCE_FORM_SOURCE, /return connectors\.map\(\(connector\) => \(\{/);
+	assert.match(DATA_SOURCE_FORM_SOURCE, /const nextType = connector\.sourceType/);
+	assert.match(DATA_SOURCE_FORM_SOURCE, /const defaults = asRecord\(connector\.configSchema\?\.defaults\)/);
+	assert.match(DATA_SOURCE_FORM_SOURCE, /driverClass:\s*typeof defaults\?\.driverClass === "string"/);
+	assert.match(DATA_SOURCE_FORM_SOURCE, /tooltip="源类型由连接器目录统一维护，选择连接器后自动填充"/);
+	assert.match(DATA_SOURCE_FORM_SOURCE, /<Input disabled placeholder="选择连接器后自动填充" \/>/);
+	assert.doesNotMatch(DATA_SOURCE_FORM_SOURCE, /dictionaryService|systemTypesFallbackActive|TYPE_OPTIONS/);
+	assert.doesNotMatch(DATA_SOURCE_FORM_SOURCE, /系统类型字典未接通|去参考码维护/);
+	assert.match(DATA_SOURCE_FORM_SOURCE, /message="连接器目录不可用"/);
+	assert.match(DATA_SOURCE_FORM_SOURCE, />\s*重新加载\s*</);
 });
 
 test("api data source form keeps auth providers aligned with runtime contract", () => {

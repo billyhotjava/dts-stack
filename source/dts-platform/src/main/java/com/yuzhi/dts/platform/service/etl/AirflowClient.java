@@ -74,6 +74,61 @@ public class AirflowClient {
         return Optional.empty();
     }
 
+    /**
+     * Looks up one deterministic DagRun without falling back to a list scan.
+     *
+     * <p>A 404 is a normal empty result. Connectivity and other HTTP failures remain explicit so
+     * dispatch reconciliation cannot mistake "Airflow unavailable" for "run does not exist".
+     */
+    public Optional<Map<String, Object>> getDagRun(
+        String dagId,
+        String dagRunId
+    ) {
+        if (
+            !properties.isEnabled() ||
+            !StringUtils.hasText(dagId) ||
+            !StringUtils.hasText(dagRunId)
+        ) {
+            return Optional.empty();
+        }
+        URI uri = buildUri(
+            "/dags/" + dagId.trim() + "/dagRuns/" + dagRunId.trim()
+        );
+        try {
+            HttpHeaders headers = defaultHeaders();
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            ResponseEntity<Map> response = restTemplate.exchange(
+                uri,
+                HttpMethod.GET,
+                entity,
+                Map.class
+            );
+            return Optional.ofNullable(response.getBody());
+        } catch (HttpStatusCodeException failure) {
+            if (failure.getStatusCode().value() == 404) {
+                return Optional.empty();
+            }
+            throw new AirflowApiException(
+                "查询 DAG Run 失败 (" +
+                dagId +
+                "/" +
+                dagRunId +
+                "): HTTP " +
+                failure.getStatusCode().value(),
+                failure
+            );
+        } catch (RuntimeException failure) {
+            throw new AirflowApiException(
+                "查询 DAG Run 失败 (" +
+                dagId +
+                "/" +
+                dagRunId +
+                ")",
+                failure
+            );
+        }
+    }
+
     public Optional<Map<String, Object>> listDags(int limit) {
         if (!properties.isEnabled()) {
             return Optional.empty();

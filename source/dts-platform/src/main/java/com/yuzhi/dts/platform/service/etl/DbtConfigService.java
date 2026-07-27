@@ -94,6 +94,21 @@ public class DbtConfigService {
     }
 
     /**
+     * Reads the explicitly configured runtime target without bootstrapping the workspace,
+     * generating a shared profile or silently selecting a replacement data source.
+     */
+    public DbtWorkspaceConfig loadRuntimeConfig() {
+        if (!properties.isEnabled()) {
+            throw new IllegalStateException("dbt 配置未启用");
+        }
+        DbtWorkspaceConfig config = readConfig();
+        if (config == null || config.targetDataSourceId() == null) {
+            throw new IllegalStateException("未配置目标数仓");
+        }
+        return config;
+    }
+
+    /**
      * Lightweight method that only reads the config file to resolve the project directory.
      * Does NOT validate workspace, probe file system, or bootstrap directories.
      * Use this when you only need the project path (e.g., for file deletion).
@@ -389,50 +404,9 @@ public class DbtConfigService {
     }
 
     private DbtProfileStatus buildProfile(DbtWorkspaceConfig config) {
-        if (config == null || !StringUtils.hasText(config.profilesDir())) {
-            return DbtProfileStatus.skipped("未选择目标数仓或 profiles 目录");
-        }
-        InfraDataSource source = resolveTargetSource(config);
-        if (source == null) {
-            return DbtProfileStatus.skipped("目标数仓不存在");
-        }
-        Map<String, Object> secrets = secretService.readSecrets(source);
-        String password = secrets == null ? null : stringValue(secrets.get("password"));
-        JdbcEndpoint endpoint = JdbcEndpoint.parse(source.getJdbcUrl());
-        if (endpoint == null) {
-            return DbtProfileStatus.skipped("暂不支持的 JDBC 地址格式");
-        }
-        String adapter = resolveAdapter(source.getType());
-        if (!StringUtils.hasText(adapter)) {
-            return DbtProfileStatus.skipped("暂不支持的数据库类型");
-        }
-        endpoint = endpoint.withDefaultPort(defaultPort(adapter));
-
-        Map<String, Object> output = new LinkedHashMap<>();
-        output.put("type", adapter);
-        output.put("host", endpoint.host());
-        output.put("port", endpoint.port());
-        output.put("user", safeText(source.getUsername(), ""));
-        output.put("password", safeText(password, ""));
-        output.put("dbname", safeText(config.database(), endpoint.database()));
-        output.put("schema", safeText(config.schema(), endpoint.database() == null ? "public" : endpoint.database()));
-        output.put("threads", 4);
-
-        Map<String, Object> profile = new LinkedHashMap<>();
-        profile.put("target", config.targetName());
-        profile.put("outputs", Map.of(config.targetName(), output));
-
-        Map<String, Object> root = Map.of(config.profileName(), profile);
-        try {
-            Path profilesDir = Path.of(config.profilesDir());
-            Files.createDirectories(profilesDir);
-            Path profileFile = profilesDir.resolve("profiles.yml");
-            String yaml = YamlWriter.toYaml(root);
-            Files.writeString(profileFile, yaml, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-            return DbtProfileStatus.success(profileFile.toString());
-        } catch (IOException ex) {
-            return DbtProfileStatus.skipped("写入 profiles.yml 失败: " + ex.getMessage());
-        }
+        return DbtProfileStatus.skipped(
+            "运行凭据由物化任务的一次性 tmpfs profile lease 提供"
+        );
     }
 
     private InfraDataSourceDto resolveTarget(DbtWorkspaceConfig config) {
@@ -579,22 +553,9 @@ public class DbtConfigService {
         return Path.of(StringUtils.hasText(path) ? path : "/opt/dts/upload/dbt-config.json");
     }
 
-    private String resolveAdapter(String type) {
-        String normalized = type == null ? "" : type.trim().toLowerCase();
-        if (normalized.contains("postgres")) return "postgres";
-        if (normalized.contains("mysql")) return "mysql";
-        return null;
-    }
-
     private String safeText(String value, String fallback) {
         if (!StringUtils.hasText(value)) return fallback;
         return value.trim();
-    }
-
-    private String stringValue(Object value) {
-        if (value == null) return null;
-        String text = String.valueOf(value).trim();
-        return text.isEmpty() ? null : text;
     }
 
     public record DbtWorkspaceConfig(
@@ -690,9 +651,6 @@ public class DbtConfigService {
             return new DbtProfileStatus(false, message, null);
         }
 
-        public static DbtProfileStatus success(String path) {
-            return new DbtProfileStatus(true, "profiles.yml 已更新", path);
-        }
     }
 
     public record DbtConfigView(
@@ -717,44 +675,6 @@ public class DbtConfigService {
         static DbtWorkspaceStatus failed(String message) {
             return new DbtWorkspaceStatus(false, message, Map.of());
         }
-    }
-
-    private record JdbcEndpoint(String host, int port, String database) {
-        static JdbcEndpoint parse(String jdbcUrl) {
-            if (!StringUtils.hasText(jdbcUrl)) return null;
-            String url = jdbcUrl.trim();
-            if (!url.startsWith("jdbc:")) return null;
-            String withoutPrefix = url.substring(5);
-            int schemeIdx = withoutPrefix.indexOf("://");
-            if (schemeIdx < 0) return null;
-            String remainder = withoutPrefix.substring(schemeIdx + 3);
-            String[] parts = remainder.split("/", 2);
-            String hostPart = parts[0];
-            String database = parts.length > 1 ? parts[1].split("\\?")[0] : null;
-            String host = hostPart;
-            int port = 0;
-            int colonIdx = hostPart.indexOf(":");
-            if (colonIdx >= 0) {
-                host = hostPart.substring(0, colonIdx);
-                try {
-                    port = Integer.parseInt(hostPart.substring(colonIdx + 1));
-                } catch (Exception ignored) {
-                    port = 0;
-                }
-            }
-            return new JdbcEndpoint(host, port == 0 ? 0 : port, database);
-        }
-
-        JdbcEndpoint withDefaultPort(int fallbackPort) {
-            if (port > 0) return this;
-            return new JdbcEndpoint(host, fallbackPort, database);
-        }
-    }
-
-    private int defaultPort(String adapter) {
-        if ("mysql".equalsIgnoreCase(adapter)) return 3306;
-        if ("postgres".equalsIgnoreCase(adapter)) return 5432;
-        return 0;
     }
 
     private DbtWorkspaceStatus validateWorkspace(DbtWorkspaceConfig config, boolean createIfMissing) {
@@ -846,28 +766,6 @@ public class DbtConfigService {
             return probeWritable(parent);
         } catch (Exception ex) {
             return false;
-        }
-    }
-
-    private static final class YamlWriter {
-        private static String toYaml(Map<String, Object> root) throws IOException {
-            StringBuilder sb = new StringBuilder();
-            writeMap(sb, root, 0);
-            return sb.toString();
-        }
-
-        private static void writeMap(StringBuilder sb, Map<String, Object> map, int indent) {
-            String prefix = " ".repeat(Math.max(0, indent));
-            for (Map.Entry<String, Object> entry : map.entrySet()) {
-                sb.append(prefix).append(entry.getKey()).append(":");
-                Object value = entry.getValue();
-                if (value instanceof Map<?, ?> nested) {
-                    sb.append("\n");
-                    writeMap(sb, (Map<String, Object>) nested, indent + 2);
-                } else {
-                    sb.append(" ").append(value == null ? "\"\"" : value).append("\n");
-                }
-            }
         }
     }
 

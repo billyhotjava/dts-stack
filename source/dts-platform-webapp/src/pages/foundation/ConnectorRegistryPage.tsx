@@ -11,10 +11,10 @@ import { formatTime } from "@/utils/textUtils";
 const { Text } = Typography;
 
 const CAPABILITY_COLUMN_WIDTH = 160;
-const CONNECTOR_ACTION_COLUMN_WIDTH = 280;
+const CONNECTOR_ACTION_COLUMN_WIDTH = 220;
 const CONNECTOR_TABLE_SCROLL_X = 1160;
 
-type ConnectorDrawerMode = "detail" | "config" | "template";
+type ConnectorDrawerMode = "detail" | "config";
 
 const CATEGORY_OPTIONS = [
 	{ label: "全部", value: "" },
@@ -82,10 +82,7 @@ const getDrawerTitle = (connector: InfraConnector | null, mode: ConnectorDrawerM
 	if (mode === "config") {
 		return `${base} / 配置要求`;
 	}
-	if (mode === "template") {
-		return `${base} / 配置模板`;
-	}
-	return `${base} / 详情`;
+	return `${base} / 连接器定义`;
 };
 
 function CapabilityTags({ connector, compact = false }: { connector: InfraConnector; compact?: boolean }) {
@@ -244,12 +241,9 @@ export default function ConnectorRegistryPage() {
 						<Button size="small" onClick={() => openDataSourceCreate(record.connectorKey)}>
 							创建数据源
 						</Button>
-						<Button size="small" onClick={() => openConnectorDrawer(record, "config")}>
-							配置
-						</Button>
-						<Button size="small" onClick={() => openConnectorDrawer(record, "template")}>
-							查看模板
-						</Button>
+							<Button size="small" onClick={() => openConnectorDrawer(record, "config")}>
+								配置要求
+							</Button>
 					</Space>
 				),
 			},
@@ -320,12 +314,12 @@ export default function ConnectorRegistryPage() {
 				>
 					{selected ? (
 						<Space direction="vertical" size="large" className="w-full">
-							{drawerMode === "config" ? (
-								<Text type="secondary">按连接器配置要求创建数据源，实际连接参数在数据源页录入。</Text>
-							) : null}
-							{drawerMode === "template" ? (
-								<Text type="secondary">模板来自连接器目录的默认值、敏感字段和部署兼容性定义。</Text>
-							) : null}
+								{drawerMode === "config" ? (
+									<Text type="secondary">按连接器配置要求创建数据源，实际连接参数在数据源页录入。</Text>
+								) : null}
+								{drawerMode === "detail" ? (
+									<Text type="secondary">连接器定义统一声明源类型、执行引擎、能力边界、配置要求和部署兼容性。</Text>
+								) : null}
 
 							<Descriptions bordered size="small" column={2}>
 								<Descriptions.Item label="连接器 Key">{selected.connectorKey}</Descriptions.Item>
@@ -349,9 +343,8 @@ export default function ConnectorRegistryPage() {
 								</div>
 							</div>
 
-							{drawerMode === "detail" || drawerMode === "config" ? (
 								<div>
-									<Text strong>配置 Schema</Text>
+									<Text strong>配置要求</Text>
 									<div className="mt-2">
 										<Descriptions bordered size="small" column={1}>
 											<Descriptions.Item label="必填字段">
@@ -360,7 +353,7 @@ export default function ConnectorRegistryPage() {
 											<Descriptions.Item label="可选字段">
 												{toArray(selected.configSchema?.optional).join(", ") || "-"}
 											</Descriptions.Item>
-											<Descriptions.Item label="默认值">
+											<Descriptions.Item label="新建默认值">
 												{renderJson(selected.configSchema?.defaults)}
 											</Descriptions.Item>
 											<Descriptions.Item label="敏感字段">
@@ -369,29 +362,6 @@ export default function ConnectorRegistryPage() {
 										</Descriptions>
 									</div>
 								</div>
-							) : null}
-
-							{drawerMode === "template" ? (
-								<div>
-									<Text strong>配置模板</Text>
-									<div className="mt-2">
-										<Descriptions bordered size="small" column={1}>
-											<Descriptions.Item label="默认值模板">
-												{renderJson(selected.configSchema?.defaults)}
-											</Descriptions.Item>
-											<Descriptions.Item label="必填字段">
-												{toArray(selected.configSchema?.required).join(", ") || "-"}
-											</Descriptions.Item>
-											<Descriptions.Item label="可选字段">
-												{toArray(selected.configSchema?.optional).join(", ") || "-"}
-											</Descriptions.Item>
-											<Descriptions.Item label="敏感字段">
-												{selected.sensitiveFields?.length ? selected.sensitiveFields.join(", ") : "-"}
-											</Descriptions.Item>
-										</Descriptions>
-									</div>
-								</div>
-							) : null}
 
 							<div>
 								<Text strong>部署兼容性</Text>

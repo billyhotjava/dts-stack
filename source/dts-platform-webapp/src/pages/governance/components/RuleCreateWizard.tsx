@@ -72,7 +72,7 @@ const ACTION_OPTIONS = [
 const STEP_ITEMS = [
 	{ title: "选择方式" },
 	{ title: "配置规则" },
-	{ title: "绑定数据集" },
+	{ title: "绑定数据资产" },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -117,6 +117,7 @@ export default function RuleCreateWizard({ open, onClose, onSuccess, editingRule
 	const [previewSql, setPreviewSql] = useState("");
 	const [saving, setSaving] = useState(false);
 	const [defaultLakeSourceId, setDefaultLakeSourceId] = useState<string>();
+	const [defaultLakeName, setDefaultLakeName] = useState<string>();
 	const [defaultLakeMessage, setDefaultLakeMessage] = useState<string>();
 
 	const [form] = Form.useForm();
@@ -131,6 +132,7 @@ export default function RuleCreateWizard({ open, onClose, onSuccess, editingRule
 		setSelectedTemplate(null);
 		setPreviewSql("");
 		setDefaultLakeSourceId(undefined);
+		setDefaultLakeName(undefined);
 		setDefaultLakeMessage(undefined);
 		form.resetFields();
 
@@ -145,15 +147,18 @@ export default function RuleCreateWizard({ open, onClose, onSuccess, editingRule
 				if (cancelled) return;
 				if (!lake?.available || !lake.dataSourceId) {
 					setDefaultLakeSourceId(undefined);
+					setDefaultLakeName(undefined);
 					setDefaultLakeMessage(lake?.message || "未识别默认数据湖连接");
 					return;
 				}
 				setDefaultLakeSourceId(lake.dataSourceId);
+				setDefaultLakeName(lake.destinationName?.trim() || "默认数据湖");
 				setDefaultLakeMessage(undefined);
 			})
 			.catch((err: any) => {
 				if (cancelled) return;
 				setDefaultLakeSourceId(undefined);
+				setDefaultLakeName(undefined);
 				setDefaultLakeMessage(err?.message || "默认数据湖连接读取失败");
 			});
 		return () => {
@@ -432,18 +437,19 @@ export default function RuleCreateWizard({ open, onClose, onSuccess, editingRule
 						className="mb-4"
 						type="warning"
 						showIcon
-						message="质量规则仅允许绑定默认数据湖下的数据集"
+						message="质量规则仅允许绑定默认数据湖中的数据资产"
 						description={defaultLakeMessage}
 					/>
 				)}
 				<Form.Item
-					label="绑定数据集"
+					label="质量检测对象"
 					name="datasetId"
-					extra="选择此规则绑定的数据集"
+					extra="当前支持默认数据湖中的数据集（表/视图）"
 				>
 					<DatasetPicker
-						placeholder="选择默认数据湖数据集（支持域筛选和关键字搜索）"
+						placeholder="选择默认数据湖中的数据资产（支持主题域筛选和关键字搜索）"
 						sourceId={defaultLakeSourceId}
+						sourceName={defaultLakeName}
 						disabled={!defaultLakeSourceId}
 					/>
 				</Form.Item>

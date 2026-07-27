@@ -16,7 +16,7 @@ test("connector registry table keeps capability tags readable in fixed table lay
 });
 
 test("connector registry action column stays stable for Chrome95 table rendering", () => {
-	assert.match(PAGE_SOURCE, /CONNECTOR_ACTION_COLUMN_WIDTH\s*=\s*280/);
+	assert.match(PAGE_SOURCE, /CONNECTOR_ACTION_COLUMN_WIDTH\s*=\s*220/);
 	assert.match(PAGE_SOURCE, /title:\s*"操作"[\s\S]*width:\s*CONNECTOR_ACTION_COLUMN_WIDTH[\s\S]*fixed:\s*"right"/);
 	assert.match(PAGE_SOURCE, /className="connector-registry-actions"/);
 	assert.match(PAGE_SOURCE, /className="connector-registry-table"/);
@@ -28,8 +28,8 @@ test("connector registry action column stays stable for Chrome95 table rendering
 	assert.match(GLOBAL_CSS, /\.connector-registry-actions\s*\{[\s\S]*white-space:\s*nowrap;[\s\S]*flex-wrap:\s*nowrap;/);
 });
 
-test("connector registry action buttons open explicit drawer workflows", () => {
-	assert.match(PAGE_SOURCE, /type ConnectorDrawerMode\s*=\s*"detail"\s*\|\s*"config"\s*\|\s*"template"/);
+test("connector registry separates connector definition from configuration requirements", () => {
+	assert.match(PAGE_SOURCE, /type ConnectorDrawerMode\s*=\s*"detail"\s*\|\s*"config"/);
 	assert.match(PAGE_SOURCE, /const \[drawerMode,\s*setDrawerMode\]\s*=\s*useState<ConnectorDrawerMode>\("detail"\)/);
 	assert.match(
 		PAGE_SOURCE,
@@ -37,9 +37,10 @@ test("connector registry action buttons open explicit drawer workflows", () => {
 	);
 	assert.match(PAGE_SOURCE, /onClick=\{\(\) => openConnectorDrawer\(record,\s*"detail"\)\}/);
 	assert.match(PAGE_SOURCE, /onClick=\{\(\) => openConnectorDrawer\(record,\s*"config"\)\}/);
-	assert.match(PAGE_SOURCE, /onClick=\{\(\) => openConnectorDrawer\(record,\s*"template"\)\}/);
 	assert.match(PAGE_SOURCE, /drawerMode === "config"/);
-	assert.match(PAGE_SOURCE, /drawerMode === "template"/);
+	assert.match(PAGE_SOURCE, />\s*配置要求\s*</);
+	assert.match(PAGE_SOURCE, /连接器定义统一声明源类型、执行引擎、能力边界、配置要求和部署兼容性/);
+	assert.doesNotMatch(PAGE_SOURCE, /"template"|查看模板|配置模板/);
 	assert.match(PAGE_SOURCE, /footer=\{/);
 	assert.match(PAGE_SOURCE, /openDataSourceCreate\(selected\.connectorKey\)/);
 });
