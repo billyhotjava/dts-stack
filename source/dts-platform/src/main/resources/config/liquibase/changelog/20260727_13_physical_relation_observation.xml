@@ -140,7 +140,7 @@
                     AND scoped_bundle_checksum ~ '^[0-9a-f]{64}$'
                     AND credential_version_ref ~ '^sha256:[0-9a-f]{64}$'
                     AND expected_columns_checksum ~ '^[0-9a-f]{64}$'
-                    AND adapter = 'postgres'
+                    AND adapter ~ '^[a-z][a-z0-9_]{0,63}$'
                     AND schema_name ~ '^[A-Za-z_][A-Za-z0-9_]{0,127}$'
                     AND identifier ~ '^[A-Za-z_][A-Za-z0-9_]{0,127}$'
                     AND expected_type IN ('TABLE', 'VIEW', 'MATERIALIZED_VIEW')

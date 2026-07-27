@@ -117,6 +117,19 @@ class ModelSpecCompilerProjectionTest {
         assertThat(projected.fieldMappings()).containsExactly(new FieldMapping("calendar_date", "customer_id"));
         assertThat(projected.settings().keySet()).containsExactly("deduplicateBy");
         assertThat(projected.keyFields()).containsExactly("customer_id");
+        assertThat(projected.typedFields())
+            .containsExactly(
+                new ModelSpecCompilerProjection.CompilerField(
+                    "customer_id",
+                    "varchar",
+                    false
+                ),
+                new ModelSpecCompilerProjection.CompilerField(
+                    "amount",
+                    "numeric",
+                    true
+                )
+            );
     }
 
     @Test

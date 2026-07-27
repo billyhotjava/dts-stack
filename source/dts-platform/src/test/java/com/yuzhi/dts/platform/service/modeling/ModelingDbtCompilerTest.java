@@ -78,7 +78,16 @@ class ModelingDbtCompilerTest {
                 "casts", Map.of("project_no", "string"),
                 "deduplicateBy", List.of("project_no")
             ),
-            "table"
+            "table",
+            List.of("project_no"),
+            "plan-a",
+            List.of(
+                new ModelSpecCompilerProjection.CompilerField(
+                    "project_no",
+                    "string",
+                    false
+                )
+            )
         );
 
         ModelingDbtCompiler.CompiledArtifacts first = ModelingDbtCompiler.compile(implementation);
@@ -97,11 +106,66 @@ class ModelingDbtCompilerTest {
             .doesNotContain("left join")
             .doesNotContain("where is_deleted")
             .contains("row_number() over (partition by project_no order by project_no)");
-        assertThat(first.files().get("project_node_detail.sql")).contains("{{ ref('stg_project_node_detail') }}");
+        assertThat(first.files().get("project_node_detail.sql"))
+            .contains("cast(project_no as text) as project_no")
+            .contains("{{ ref('stg_project_node_detail') }}");
         assertThat(first.files().get("project_node_detail.yml"))
             .contains("tests:")
             .contains("unique:")
-            .contains("column_name: project_no");
+            .contains("column_name: project_no")
+            .contains("data_type: text")
+            .contains("dts_logical_data_type: \"string\"");
+    }
+
+    @Test
+    void rejectsUntrustedOrUnsupportedFieldTypeSyntax() {
+        ModelingVNextContract.ModelSpec model =
+            PjmModelingFixture.projectNode().modelSpec();
+        ModelSpecCompilerProjection.ImplementationProjection implementation =
+            new ModelSpecCompilerProjection.ImplementationProjection(
+                model,
+                "tenant-a",
+                "a".repeat(64),
+                3,
+                "b".repeat(64),
+                "model.pjm.project_node_detail",
+                InputMode.PHYSICAL_ASSET,
+                List.of(),
+                List.of(
+                    new FieldMapping(
+                        "raw_project_no",
+                        "project_no"
+                    )
+                ),
+                Map.of(
+                    "targetPhysicalName",
+                    "project_node_detail",
+                    "loadStrategy",
+                    "FULL",
+                    "partitionFields",
+                    List.of()
+                ),
+                "table",
+                List.of("project_no"),
+                "plan-a",
+                List.of(
+                    new ModelSpecCompilerProjection.CompilerField(
+                        "project_no",
+                        "text); drop table catalog_dataset; --",
+                        false
+                    )
+                )
+            );
+
+        assertThatThrownBy(() ->
+            ModelingDbtCompiler.compile(implementation)
+        )
+            .isInstanceOf(
+                ModelingDbtCompiler.CompileException.class
+            )
+            .hasMessageContaining(
+                "MODEL_IMPLEMENTATION_FIELD_TYPE_UNSUPPORTED"
+            );
     }
 
     @Test

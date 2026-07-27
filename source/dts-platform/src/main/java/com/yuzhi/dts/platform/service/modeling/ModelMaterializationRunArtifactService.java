@@ -37,12 +37,16 @@ import java.util.Objects;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionOperations;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Synchronizes dbt runtime artifacts into durable pipeline truth.
  *
- * <p>T02 deliberately stops at DBT_SUCCEEDED. A later relation-observation gate promotes each
- * entry to BUILT only after the warehouse relation is independently observed.
+ * <p>dbt success and append-only probe evidence are persisted first. Pipeline rows and the
+ * candidate are then promoted to BUILT in one transaction only when every current warehouse
+ * relation is independently verified.
  */
 @Service
 public class ModelMaterializationRunArtifactService {
@@ -58,6 +62,7 @@ public class ModelMaterializationRunArtifactService {
     private final ModelReleaseCandidateService candidates;
     private final ObjectMapper objectMapper;
     private final Clock clock;
+    private final TransactionOperations transactions;
 
     @Autowired
     public ModelMaterializationRunArtifactService(
@@ -67,7 +72,8 @@ public class ModelMaterializationRunArtifactService {
         PhysicalRelationInspectorRegistry inspectors,
         PhysicalRelationObservationRepository observations,
         ModelReleaseCandidateService candidates,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        PlatformTransactionManager transactionManager
     ) {
         this(
             runs,
@@ -77,7 +83,8 @@ public class ModelMaterializationRunArtifactService {
             observations,
             candidates,
             objectMapper,
-            Clock.systemUTC()
+            Clock.systemUTC(),
+            new TransactionTemplate(transactionManager)
         );
     }
 
@@ -89,7 +96,8 @@ public class ModelMaterializationRunArtifactService {
         PhysicalRelationObservationRepository observations,
         ModelReleaseCandidateService candidates,
         ObjectMapper objectMapper,
-        Clock clock
+        Clock clock,
+        TransactionOperations transactions
     ) {
         this.runs = Objects.requireNonNull(runs, "runs is required");
         this.builds = Objects.requireNonNull(
@@ -117,6 +125,10 @@ public class ModelMaterializationRunArtifactService {
             "objectMapper is required"
         );
         this.clock = Objects.requireNonNull(clock, "clock is required");
+        this.transactions = Objects.requireNonNull(
+            transactions,
+            "transactions is required"
+        );
     }
 
     public RunArtifactView syncAndProbe(
@@ -130,7 +142,7 @@ public class ModelMaterializationRunArtifactService {
             );
         }
         RunGroupRecord group = requireGroup(groupId);
-        boolean relationsVerified = false;
+        boolean terminalStatePersisted = false;
         try {
             requireSyncIdentity(group, command);
             CandidateBuildScope scope =
@@ -159,12 +171,6 @@ public class ModelMaterializationRunArtifactService {
                 validateManifest(scope, manifest);
             validateRunResults(scope, results);
             Instant now = clock.instant();
-            runs.markDbtSucceeded(
-                groupId,
-                invocationId,
-                scope.entries().size(),
-                now
-            );
             List<ObservationWrite> evidence =
                 observeRelations(
                     group,
@@ -173,7 +179,15 @@ public class ModelMaterializationRunArtifactService {
                     locators,
                     now
                 );
-            observations.appendAll(evidence);
+            transactions.executeWithoutResult(status -> {
+                runs.markDbtSucceeded(
+                    groupId,
+                    invocationId,
+                    scope.entries().size(),
+                    now
+                );
+                observations.appendAll(evidence);
+            });
             ObservationWrite failed = evidence
                 .stream()
                 .filter(observation ->
@@ -187,18 +201,20 @@ public class ModelMaterializationRunArtifactService {
                     "Physical relation verification failed"
                 );
             }
-            runs.markRelationsVerified(
-                groupId,
-                scope.entries().size(),
-                now
-            );
-            relationsVerified = true;
-            transitionCandidate(
-                group,
-                DeliveryStatus.BUILT,
-                "materialization-built-" + groupId,
-                "dbt build and physical relation evidence verified"
-            );
+            transactions.executeWithoutResult(status -> {
+                runs.markRelationsVerified(
+                    groupId,
+                    scope.entries().size(),
+                    now
+                );
+                transitionCandidate(
+                    group,
+                    DeliveryStatus.BUILT,
+                    "materialization-built-" + groupId,
+                    "dbt build and physical relation evidence verified"
+                );
+            });
+            terminalStatePersisted = true;
             return new RunArtifactView(
                 groupId,
                 "BUILT",
@@ -208,25 +224,23 @@ public class ModelMaterializationRunArtifactService {
         } catch (RuntimeException failure) {
             ModelMaterializationRuntimeException stable =
                 stableFailure(failure);
-            if (!relationsVerified) {
+            if (!terminalStatePersisted) {
                 try {
-                    runs.markFailed(
-                        groupId,
-                        stable.code(),
-                        clock.instant()
-                    );
-                } catch (RuntimeException persistenceFailure) {
-                    stable.addSuppressed(persistenceFailure);
-                }
-                try {
-                    transitionCandidate(
-                        group,
-                        DeliveryStatus.BUILD_FAILED,
-                        "materialization-failed-" + groupId,
-                        stable.code()
-                    );
-                } catch (RuntimeException transitionFailure) {
-                    stable.addSuppressed(transitionFailure);
+                    transactions.executeWithoutResult(status -> {
+                        runs.markFailed(
+                            groupId,
+                            stable.code(),
+                            clock.instant()
+                        );
+                        transitionCandidate(
+                            group,
+                            DeliveryStatus.BUILD_FAILED,
+                            "materialization-failed-" + groupId,
+                            stable.code()
+                        );
+                    });
+                } catch (RuntimeException failurePersistence) {
+                    stable.addSuppressed(failurePersistence);
                 }
             }
             throw stable;
@@ -260,17 +274,26 @@ public class ModelMaterializationRunArtifactService {
                 );
             }
         } else if ("FAILED".equals(outcome)) {
-            modelCount = runs.finalizeFailed(
-                groupId,
-                "MODEL_DBT_AIRFLOW_UPSTREAM_FAILED",
-                now
-            );
-            transitionCandidate(
-                group,
-                DeliveryStatus.BUILD_FAILED,
-                "materialization-failed-" + groupId,
-                "MODEL_DBT_AIRFLOW_UPSTREAM_FAILED"
-            );
+            modelCount = transactions.execute(status -> {
+                int failed = runs.finalizeFailed(
+                    groupId,
+                    "MODEL_DBT_AIRFLOW_UPSTREAM_FAILED",
+                    now
+                );
+                transitionCandidate(
+                    group,
+                    DeliveryStatus.BUILD_FAILED,
+                    "materialization-failed-" + groupId,
+                    "MODEL_DBT_AIRFLOW_UPSTREAM_FAILED"
+                );
+                return failed;
+            });
+            if (modelCount < 1) {
+                throw failure(
+                    "MODEL_DBT_FINALIZE_PRECONDITION_FAILED",
+                    "Run group cannot be finalized as failed"
+                );
+            }
         } else {
             throw failure(
                 "MODEL_DBT_RUN_REQUEST_INVALID",

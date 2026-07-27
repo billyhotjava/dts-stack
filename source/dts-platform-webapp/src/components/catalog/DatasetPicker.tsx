@@ -2,15 +2,18 @@ import { Select, Space, Spin, Tag, Typography } from "antd";
 import { type UIEvent, useCallback, useEffect, useRef, useState } from "react";
 import { type DatasetField, getDatasetFields, listDatasets, listDomains } from "@/api/platformApi";
 
-type DatasetOption = {
+export type DatasetSelection = {
 	id: string;
 	name: string;
+	hiveDatabase?: string;
+	hiveTable?: string;
 	warehouseLayer?: string;
 };
 
 type Props = {
 	value?: string;
 	onChange?: (datasetId: string | undefined) => void;
+	onDatasetSelected?: (dataset: DatasetSelection | undefined) => void;
 	onFieldsLoaded?: (fields: DatasetField[]) => void;
 	placeholder?: string;
 	style?: React.CSSProperties;
@@ -29,7 +32,7 @@ const LAYER_COLOR: Record<string, string> = {
 	ADS: "green",
 };
 
-function mergeDatasetOptions(current: DatasetOption[], incoming: DatasetOption[]) {
+function mergeDatasetOptions(current: DatasetSelection[], incoming: DatasetSelection[]) {
 	const merged = new Map(current.map((item) => [item.id, item]));
 	incoming.forEach((item) => merged.set(item.id, item));
 	return Array.from(merged.values());
@@ -38,6 +41,7 @@ function mergeDatasetOptions(current: DatasetOption[], incoming: DatasetOption[]
 export function DatasetPicker({
 	value,
 	onChange,
+	onDatasetSelected,
 	onFieldsLoaded,
 	placeholder,
 	style,
@@ -45,7 +49,7 @@ export function DatasetPicker({
 	sourceId,
 	sourceName,
 }: Props) {
-	const [options, setOptions] = useState<DatasetOption[]>([]);
+	const [options, setOptions] = useState<DatasetSelection[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [loadingMore, setLoadingMore] = useState(false);
 	const [fieldsLoading, setFieldsLoading] = useState(false);
@@ -98,6 +102,8 @@ export function DatasetPicker({
 				const nextOptions = content.map((d: any) => ({
 					id: String(d.id || ""),
 					name: String(d.name || ""),
+					hiveDatabase: typeof d.hiveDatabase === "string" ? d.hiveDatabase.trim() || undefined : undefined,
+					hiveTable: typeof d.hiveTable === "string" ? d.hiveTable.trim() || undefined : undefined,
 					warehouseLayer: d.warehouseLayer,
 				}));
 				setOptions((current) => (append ? mergeDatasetOptions(current, nextOptions) : nextOptions));
@@ -158,6 +164,7 @@ export function DatasetPicker({
 	}, []);
 
 	const handleChange = async (datasetId: string | undefined) => {
+		onDatasetSelected?.(datasetId ? options.find((option) => option.id === datasetId) : undefined);
 		onChange?.(datasetId);
 		if (datasetId && onFieldsLoaded) {
 			setFieldsLoading(true);

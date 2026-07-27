@@ -29,7 +29,16 @@ vi.mock("antd", async () => {
 					onScroll: onPopupScroll,
 				},
 				showSearch
-					? React.createElement("button", { type: "button", onClick: () => onSearch?.("budget") }, "搜索预算资产")
+					? React.createElement(
+							React.Fragment,
+							null,
+							React.createElement("button", { type: "button", onClick: () => onSearch?.("budget") }, "搜索预算资产"),
+							React.createElement(
+								"button",
+								{ type: "button", onClick: () => onChange?.(options[0]?.value) },
+								"选择首个数据资产",
+							),
+						)
 					: React.createElement("button", { type: "button", onClick: () => onChange?.("domain-2") }, "选择测试主题域"),
 				options.map((option: any) =>
 					React.createElement("div", { key: option.value, "data-value": option.value }, option.label),
@@ -235,6 +244,46 @@ describe("DatasetPicker", () => {
 
 		expect(container.textContent).toContain("当前来源：数仓 (biadmin)");
 		expect(container.textContent).toContain("共 75 条可选数据资产");
+		unmount();
+	});
+
+	it("returns the selected physical dataset metadata without waiting for the field request", async () => {
+		listDatasets.mockResolvedValue({
+			content: [
+				{
+					id: "asset-1",
+					name: "订单资产",
+					hiveDatabase: "public",
+					hiveTable: "ods_orders",
+					warehouseLayer: "ODS",
+				},
+			],
+			total: 1,
+			page: 0,
+			size: 50,
+		});
+		const onDatasetSelected = vi.fn();
+		const { DatasetPicker } = await import("./DatasetPicker");
+		const PickerWithSelection = DatasetPicker as any;
+		const { container, unmount } = await renderAndFlush(
+			<PickerWithSelection sourceId="lake-1" onDatasetSelected={onDatasetSelected} />,
+		);
+
+		act(() => {
+			(
+				Array.from(container.querySelectorAll("button")).find(
+					(button) => button.textContent === "选择首个数据资产",
+				) as HTMLButtonElement
+			).click();
+		});
+
+		expect(onDatasetSelected).toHaveBeenCalledWith({
+			id: "asset-1",
+			name: "订单资产",
+			hiveDatabase: "public",
+			hiveTable: "ods_orders",
+			warehouseLayer: "ODS",
+		});
 		unmount();
 	});
 });

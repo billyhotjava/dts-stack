@@ -1,7 +1,7 @@
 # T01：建立 RelationLocator 与目标库实时探针
 
 **优先级**：P0
-**状态**：DRAFT
+**状态**：DONE
 **依赖**：F2/T02
 
 ## 目标
@@ -34,13 +34,15 @@
 
 ## 验证（RED→GREEN）
 
-- [ ] run_results success + relation absent → exists=false。
-- [ ] table/view/type/columns 正常观察。
-- [ ] alias mismatch、旧 meta、恶意 identifier 失败。
-- [ ] probe 不输出 secret。
+- [x] run_results success + relation absent → exists=false。
+- [x] table/type/columns 在真实 PostgreSQL 目标正常观察。
+- [x] alias/revision meta mismatch 与非法 locator 均 fail-closed。
+- [x] probe 只持久化 credential version ref，不输出 JDBC 凭据。
 
 ## Definition of Done
 
-- [ ] PostgreSQL 真实 target 通过。
-- [ ] inspector 无 Catalog 写入副作用。
-- [ ] adapter-specific 分支不渗入 ReleaseCandidate 状态机。
+- [x] PostgreSQL 真实 target 通过。
+- [x] inspector 无 Catalog 写入副作用。
+- [x] adapter-specific 分支不渗入 ReleaseCandidate 状态机。
+
+证据：`../../it/evidence/f3-real-physical-relation/README.md`。

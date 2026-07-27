@@ -116,6 +116,7 @@ Sprint-74 已完成逻辑设计、数据实现和发布结果三阶段边界纠�
 | ADR-76-37 | 单一 Airflow dbt runtime | 在 `services/dts-airflow/extra` 提供一个版本化 Python task factory；RELEASE_BUILD 与 OPERATIONAL DAG 都由 Java renderer 生成薄定义并 import 同一 factory | 当前 Airflow 已挂载 extra 且通过 Docker socket运行 ephemeral dbt；复用运行架构但消除每个 DAG 复制 Bash 的漂移面 | F2/T02、F7/T02、IT-20 |
 | ADR-76-38 | Airflow 内部服务身份 | prepare/open/sync/probe/finalize/release 全部使用 pairwise `X-DTS-Service + X-DTS-Service-Token`，过滤器按 `service:dts-airflow` 和路径白名单收敛；canonical 链禁止 `|| true` | 当前仅 header 的回写无法通过生产鉴权且会静默失败，不能作为成功证据 | F2/T02/T04、F7/T02、IT-19/20 |
 | ADR-76-39 | 生产权限双门禁 | Sprint-76 通过三个专用 Keycloak realm authority 完成 maintainer/reviewer/operator 职责解析与同人隔离，不从 catalog/admin/auditor 静默提升；Sprint-36/F3 负责资产动作矩阵，发布注册同时通过两层才允许 PROD | actor separation 不能替代资产动作授权，M05 矩阵也不能替代 Candidate 审核职责；禁止在 Sprint-76 复制权限表 | F4/T01～T02、F6/T01、IT-14 |
+| ADR-76-40 | typed-column 物理契约 | F4 发布前，DESIGNER_GENERATED 必须把 current ModelSpec 的字段类型投影到 dbt artifact，并对 PostgreSQL 实际列类型做 adapter-aware 强校验；DBT_MANAGED 有声明则校验，无声明时以真实 observation 为物理 schema 事实并明确降级，不伪造 expected type | `ModelSpec.dataType` 是必填业务契约，当前投影丢失后仅核对列名会让 numeric→text 等错误进入 BUILT；但不能用 PostgreSQL 规则强迫所有高级 dbt 项目声明同一逻辑类型体系 | F3/T04、F4/T03、IT-07/10 |
 
 ## 4. 对象所有权
 
@@ -182,7 +183,7 @@ Sprint-74 已完成逻辑设计、数据实现和发布结果三阶段边界纠�
 | 外部执行 | `DbtExecutionGateway.submitReleaseBuild(...)` | 先持久化 dagRunId=`dts_rc_<candidateId>_v<version>_a<attempt>`；触发共享 `schedule=None` executor DAG；conf 无 project/selector/target/secret |
 | 状态回收 | `MaterializationRunReconciler.reconcile(candidateId, dagRunId)` | 读取 Airflow + manifest + run_results + relation probe；逐 entry 更新 pipeline run |
 | 关系核验 port | `PhysicalRelationInspector.observe(TargetContext, RelationLocator)` | 返回 `exists,relationType,columns,observedAt,metadataChecksum`；不存在即 BUILD_FAILED |
-| 观察数据 | `modeling_physical_relation_observation` | append-only；唯一 `(tenant_id,pipeline_run_id,model_spec_id,implementation_revision)` |
+| 观察数据 | `modeling_physical_relation_observation` | append-only；按 `(pipeline_run_id,model_spec_id,implementation_revision,observation_attempt)` 保留每次尝试 |
 | 发布 | Sprint-69 candidate `PUBLISH` 命令 | operator-only；只消费 current SUCCESS run + current EXISTS observation + quality/approval，进入 PUBLISHING |
 | 本地发布提交 | `CandidatePublicationCommitService.commit(candidateId)`（预定） | 同事务提交 local publication、Catalog/field/lineage/physicalAssetRef、candidate PUBLISHED 和聚合全 plan scope 的 MANUAL_ONLY binding DEPLOYING |
 | 外部同步 | publication outbox worker | PUBLISHED 后同步 OpenMetadata/BI；失败仅 syncHealth=DEGRADED，可幂等重试 |
@@ -191,7 +192,7 @@ Sprint-74 已完成逻辑设计、数据实现和发布结果三阶段边界纠�
 | 手工生产计算 | `POST .../execution-bindings/{bindingId}/runs` | 平台先写 durable OPERATIONAL_RUN/outbox，再触发同一个 plan DAG |
 | CRON 生产计算 | `POST /api/internal/modeling/execution-bindings/{bindingId}/scheduled-runs/open` | Airflow 首任务按 dagRunId/logicalDate 原子 open run，再读取 server-controlled runtime spec |
 | 发布结果 UI | 模型详情 `activeStage=physical` | 区分未发布、发布处理中、已发布/部署中、上线完成、已发布/运行异常；build-only 不冒充已发布 |
-| 迁移 | `20260727_08_model_materialization_evidence.xml`（预定） | expand `modeling_pipeline_run` + 新 observation/execution binding 表、约束、索引、rollback |
+| 迁移 | 已落地的 Sprint-76 分步 changeSet；F3 observation 为 `20260727_13_physical_relation_observation.xml` | expand `modeling_pipeline_run` + 新 observation/execution binding 表、约束、索引、rollback |
 
 ### 6.1 Publish Intent 契约
 
@@ -420,6 +421,10 @@ DRAFT / BUILD_FAILED / QUALITY_FAILED
 | L46 | Sprint-36/F3 已 DONE；`AssetAction`、`IamAssetActionPolicy`/request、migration、审批 API、矩阵 UI 与 deny-by-default `AccessChecker.canPerform` 已存在，90 个后端聚焦测试通过；Sprint-76 Candidate 发布/计划链尚未消费该端口 | Sprint-36/F3 实现与测试复查，2026-07-27 |
 | L47 | Candidate REST 全部使用 CATALOG_MAINTAINERS；plan access 仅 owner；workspace allowedActions 固定以 MODEL_MAINTAINER 计算 | `ModelReleaseCandidateResource.java`; `ModelSpecPlanWriteAccessAdapter.java`; `ModelReleaseCandidateApplicationService.java` |
 | L48 | Airflow 通过宿主机 Docker socket 启动任务，属于高权限受信 execution plane；当前架构不能声明敌对多租户隔离 | `docker-compose-app.yml` Airflow volumes；PG-01 threat boundary |
+| L49 | canonical `ModelSpec.ModelField.dataType` 为必填，但 `ModelSpecCompilerProjection.project` 只投影字段名到 `ModelingVNextContract.ModelSpec.dimensions/metrics`，类型在 dbt compiler 边界丢失 | `ModelSpecContract.java:407-466,1360-1380`; `ModelSpecCompilerProjection.java:91-134` |
+| L50 | 普通模型 schema.yml 只输出 column name/description/test，不输出 `data_type`；最终 model SQL 也不对每个输出列做 canonical type cast | `ModelingDbtCompiler.java:105-178,373-420` |
+| L51 | PostgreSQL inspector 已通过 `pg_catalog.format_type` 获取精确实际类型并计入 columns checksum，但 `RelationLocator` 只携带 expected column name，聚合层未比较字段类型 | `PostgresPhysicalRelationInspector.java:31-58,245-294`; `PhysicalRelationInspector.java:67-105`; `ModelMaterializationRunArtifactService.java:651-680` |
+| L52 | F4 现有控制面尚不满足 DoR：Candidate REST 只有 create/scope/lock/retry/refresh/replacement 且统一 CATALOG_MAINTAINERS；registration 对部分普通模型仍可合成 `dts_modeling.model_<uuid>`，未消费 F3 observation 作为唯一输出 locator | `ModelReleaseCandidateResource.java:32-226`; `CanonicalModelReleaseRegistrationAdapter.java:51-158` |
 
 勘察到此停止。实施 Task 必须引用 Lxx，禁止重复全仓扫描；如出现新事实，只能追加账本。
 
@@ -450,7 +455,7 @@ G0 已以同日归档证据关闭实施入口：四个目标关系不存在、pi
 | F0 | 架构冻结与真实验收基线 | 2 | P0 | DONE |
 | F1 | 普通实现可运行 dbt 制品 | 3 | P0 | IN_PROGRESS |
 | F2 | 候选驱动物化编排与运行真值 | 4 | P0 | DRAFT |
-| F3 | 真实关系核验与强绑定证据 | 3 | P0 | DRAFT |
+| F3 | 真实关系核验与强绑定证据 | 4 | P0 | IN_PROGRESS |
 | F4 | 发布治理与物理资产交接 | 3 | P0 | DRAFT |
 | F5 | 建模与交付页面产品闭环 | 3 | P0 | DRAFT |
 | F7 | 上线后计划 DAG 与持续计算 | 3 | P0 | DRAFT |
