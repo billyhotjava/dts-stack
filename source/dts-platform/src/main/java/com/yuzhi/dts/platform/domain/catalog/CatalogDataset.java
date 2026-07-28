@@ -69,6 +69,9 @@ public class CatalogDataset extends AbstractAuditingEntity<UUID> implements Seri
     @Column(name = "lifecycle_status", length = 32)
     private String lifecycleStatus;
 
+    @Column(name = "harvest_status", length = 32)
+    private String harvestStatus;
+
     @Column(name = "retention_days")
     private Integer retentionDays;
 
@@ -213,6 +216,14 @@ public class CatalogDataset extends AbstractAuditingEntity<UUID> implements Seri
 
     public void setLifecycleStatus(String lifecycleStatus) {
         this.lifecycleStatus = lifecycleStatus;
+    }
+
+    public String getHarvestStatus() {
+        return harvestStatus;
+    }
+
+    public void setHarvestStatus(String harvestStatus) {
+        this.harvestStatus = harvestStatus;
     }
 
     public Integer getRetentionDays() {

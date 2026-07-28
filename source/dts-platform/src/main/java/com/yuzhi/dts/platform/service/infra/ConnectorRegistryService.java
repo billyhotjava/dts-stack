@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.domain.infra.InfraConnector;
 import com.yuzhi.dts.platform.repository.infra.InfraConnectorRepository;
 import com.yuzhi.dts.platform.service.infra.dto.InfraConnectorDto;
+import com.yuzhi.dts.platform.service.infra.dto.InfraJdbcDriverDto;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -28,10 +29,16 @@ public class ConnectorRegistryService {
 
     private final InfraConnectorRepository connectorRepository;
     private final ObjectMapper objectMapper;
+    private final ConnectorDriverBindingService driverBindingService;
 
-    public ConnectorRegistryService(InfraConnectorRepository connectorRepository, ObjectMapper objectMapper) {
+    public ConnectorRegistryService(
+        InfraConnectorRepository connectorRepository,
+        ObjectMapper objectMapper,
+        ConnectorDriverBindingService driverBindingService
+    ) {
         this.connectorRepository = connectorRepository;
         this.objectMapper = objectMapper;
+        this.driverBindingService = driverBindingService;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -55,6 +62,7 @@ public class ConnectorRegistryService {
         }
     }
 
+    @Transactional
     public List<InfraConnectorDto> list(String category, boolean includeDisabled) {
         List<InfraConnector> connectors;
         if (includeDisabled) {
@@ -77,16 +85,19 @@ public class ConnectorRegistryService {
             String expected = category.trim();
             connectors = connectors.stream().filter(connector -> expected.equalsIgnoreCase(connector.getCategory())).toList();
         }
-        return connectors.stream().map(this::toDto).toList();
+        List<InfraJdbcDriverDto> installedDrivers = driverBindingService.installedDrivers();
+        return connectors.stream().map(connector -> toDto(connector, installedDrivers)).toList();
     }
 
+    @Transactional
     public InfraConnectorDto get(String connectorKey) {
         if (!StringUtils.hasText(connectorKey)) {
             throw new EntityNotFoundException("connectorKey is required");
         }
-        return connectorRepository.findByConnectorKeyIgnoreCase(connectorKey.trim()).map(this::toDto).orElseThrow(() ->
-            new EntityNotFoundException("Connector not found: " + connectorKey)
-        );
+        InfraConnector connector = connectorRepository
+            .findByConnectorKeyIgnoreCase(connectorKey.trim())
+            .orElseThrow(() -> new EntityNotFoundException("Connector not found: " + connectorKey));
+        return toDto(connector, driverBindingService.installedDrivers());
     }
 
     private void applySpec(InfraConnector connector, BuiltInConnector spec) {
@@ -104,7 +115,7 @@ public class ConnectorRegistryService {
         connector.setCompatibilityPayload(writeJson(spec.compatibility()));
     }
 
-    private InfraConnectorDto toDto(InfraConnector connector) {
+    private InfraConnectorDto toDto(InfraConnector connector, List<InfraJdbcDriverDto> installedDrivers) {
         return new InfraConnectorDto(
             connector.getId(),
             connector.getConnectorKey(),
@@ -119,6 +130,7 @@ public class ConnectorRegistryService {
             readMap(connector.getConfigSchemaPayload()),
             readList(connector.getSensitiveFieldsPayload()),
             readMap(connector.getCompatibilityPayload()),
+            driverBindingService.resolve(connector, installedDrivers),
             connector.getCreatedDate(),
             connector.getLastModifiedDate()
         );
@@ -169,7 +181,7 @@ public class ConnectorRegistryService {
             jdbc("kingbase", "人大金仓", "kingbase", "com.kingbase8.Driver", 60, true, true),
             jdbc("gbase", "GBase", "gbase", "com.gbase.jdbc.Driver", 70, true, true),
             jdbc("hive", "Hive", "hive", "org.apache.hive.jdbc.HiveDriver", 80, true, false),
-            jdbc("inceptor", "Inceptor", "inceptor", "com.transwarp.jdbc.InceptorDriver", 90, true, false),
+            jdbc("inceptor", "Inceptor", "inceptor", "io.transwarp.jdbc.QuarkDriver", 90, true, false),
             jdbc("jdbc", "通用 JDBC", "jdbc", "", 100, true, false),
             file("excel", "Excel", "excel", 200, List.of("file", "sheet", "headerRow", "targetTable")),
             file("csv", "CSV", "csv", 210, List.of("file", "delimiter", "encoding", "targetTable")),
@@ -218,8 +230,21 @@ public class ConnectorRegistryService {
             capabilities,
             configSchema,
             List.of("password"),
-            Map.of("deployment", List.of("docker-compose", "offline"), "arch", List.of("x86_64", "arm64"), "driverClass", driverClass)
+            Map.of(
+                "deployment",
+                List.of("docker-compose", "offline"),
+                "arch",
+                List.of("x86_64", "arm64"),
+                "driverClass",
+                driverClass,
+                "driverPolicy",
+                driverPolicy(connectorKey)
+            )
         );
+    }
+
+    private String driverPolicy(String connectorKey) {
+        return ConnectorDriverBindingService.defaultPolicy(connectorKey);
     }
 
     private BuiltInConnector file(String connectorKey, String name, String sourceType, int displayOrder, List<String> fields) {

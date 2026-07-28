@@ -19,6 +19,7 @@ public record InfraConnectorDto(
     Map<String, Object> configSchema,
     List<String> sensitiveFields,
     Map<String, Object> compatibility,
+    ConnectorDriverBindingDto driver,
     Instant createdAt,
     Instant lastUpdatedAt
 ) {}

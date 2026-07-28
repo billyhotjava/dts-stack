@@ -1052,7 +1052,7 @@ services:
         - CMD-SHELL
         - >-
           timeout 5s bash -ec 'exec 3<>/dev/tcp/127.0.0.1/8080;
-          printf "GET /realms/S10/.well-known/openid-configuration HTTP/1.1\r\nHost: ${HOST_SSO}\r\nConnection: close\r\n\r\n" >&3;
+          printf "GET /realms/master/.well-known/openid-configuration HTTP/1.1\r\nHost: ${HOST_SSO}\r\nConnection: close\r\n\r\n" >&3;
           head -n 1 <&3 | grep -q " 200 "'
       interval: 10s
       timeout: 10s

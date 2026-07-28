@@ -1360,18 +1360,22 @@ test("published metric model creates field-anchored draft and binds exact owner 
 		status: "PUBLISHED",
 		version: "v2",
 	};
-	let referenceBody: Record<string, unknown> | null = null;
+	let draftBody: Record<string, unknown> | null = null;
 	let metricIfMatch = "";
 
 	await page.route("**/api/**", async (route) => {
 		const request = route.request();
 		const pathName = new URL(request.url()).pathname;
+		if (!pathName.startsWith("/api/")) {
+			await route.continue();
+			return;
+		}
 		if (request.method() === "GET" && pathName === "/api/modeling/model-specs") {
 			await fulfill(route, [publishedModel]);
 			return;
 		}
 		if (request.method() === "GET" && pathName === "/api/governance/indicators") {
-			await fulfill(route, { content: [publishedIndicator], total: 1, page: 0, size: 200, totalPages: 1 });
+			await fulfill(route, { content: [publishedIndicator], total: 1, page: 0, size: 10, totalPages: 1 });
 			return;
 		}
 		if (request.method() === "GET" && pathName === "/api/governance/measurement-units") {
@@ -1394,7 +1398,8 @@ test("published metric model creates field-anchored draft and binds exact owner 
 			]);
 			return;
 		}
-		if (request.method() === "POST" && pathName === "/api/governance/indicators") {
+		if (request.method() === "POST" && pathName === "/api/governance/indicators/model-field-drafts") {
+			draftBody = request.postDataJSON() as Record<string, unknown>;
 			await fulfill(route, {
 				id: draftIndicatorId,
 				code: "ORDER_AMOUNT_DRAFT",
@@ -1404,9 +1409,17 @@ test("published metric model creates field-anchored draft and binds exact owner 
 			});
 			return;
 		}
-		if (request.method() === "POST" && pathName === `/api/governance/indicators/${draftIndicatorId}/references`) {
-			referenceBody = request.postDataJSON() as Record<string, unknown>;
-			await fulfill(route, { id: "reference-1" });
+		if (request.method() === "GET" && pathName === `/api/governance/indicators/${draftIndicatorId}`) {
+			await fulfill(route, {
+				id: draftIndicatorId,
+				code: "ORDER_AMOUNT_DRAFT",
+				name: "订单事实-amount",
+				status: "DRAFT",
+				version: "v1",
+				category: "ATOMIC",
+				measureField: "amount",
+				aggregationType: "SUM",
+			});
 			return;
 		}
 		if (request.method() === "PUT" && pathName === `/api/modeling/model-specs/${modelId}/metric-refs`) {
@@ -1426,13 +1439,15 @@ test("published metric model creates field-anchored draft and binds exact owner 
 	await expect(page.getByText("人民币 (¥) v3", { exact: false })).toBeVisible();
 	await page.getByRole("button", { name: "创建原子指标草稿" }).click();
 	await page.getByRole("button", { name: /确\s*定/ }).click();
-	await expect(page).toHaveURL(/governance\/indicators\/dictionary/);
-	expect(referenceBody).toMatchObject({
-		refType: "MODEL_SPEC_FIELD",
-		refTarget: `${modelId}@5#amount`,
+	await expect(page).toHaveURL(/modeling\/metric-workbench.*view=definition.*indicatorId=/);
+	await expect(page.getByTestId("metric-indicator-owner")).toBeVisible();
+	expect(draftBody).toMatchObject({
+		modelSpecId: modelId,
+		modelRevision: 5,
+		fieldName: "amount",
+		measurementUnitId: unitId,
+		measurementUnitVersion: 3,
 	});
-	const notes = JSON.parse(String(referenceBody?.notes || "{}"));
-	expect(notes).toMatchObject({ measurementUnitId: unitId, measurementUnitVersion: 3 });
 
 	await page.goto(`/#/modeling/metric-workbench?modelSpecId=${modelId}`);
 	await page.getByRole("button", { name: "关联已发布指标" }).click();
@@ -1442,6 +1457,30 @@ test("published metric model creates field-anchored draft and binds exact owner 
 	await expect(page.getByRole("dialog", { name: "关联已发布指标版本" })).toBeHidden();
 	await expect(page.getByText("当前", { exact: true }).first()).toBeVisible();
 	expect(metricIfMatch).toBe(`"model-spec:${modelId}:5:${"e".repeat(64)}"`);
+
+	await page.getByText("3 模板复用", { exact: true }).click();
+	await expect(page).toHaveURL(/view=templates/);
+	await expect(page.getByText("指标模板管理", { exact: true })).toBeVisible();
+	await page.getByText("4 运行与消费", { exact: true }).click();
+	await expect(page).toHaveURL(/view=consumption/);
+	await expect(page.getByText("指标看板", { exact: true })).toBeVisible();
+	await page.getByRole("tab", { name: "指标商店" }).click();
+	await expect(page.getByText("指标商店", { exact: true }).last()).toBeVisible();
+	await page.getByRole("tab", { name: "我的订阅" }).click();
+	await expect(page.getByText("我的指标看板", { exact: true })).toBeVisible();
+
+	await page.setViewportSize({ width: 390, height: 844 });
+	const viewportMetrics = await page.evaluate(() => ({
+		innerWidth: window.innerWidth,
+		documentWidth: document.documentElement.scrollWidth,
+		bodyWidth: document.body.scrollWidth,
+	}));
+	expect(viewportMetrics.documentWidth).toBeLessThanOrEqual(viewportMetrics.innerWidth);
+	expect(viewportMetrics.bodyWidth).toBeLessThanOrEqual(viewportMetrics.innerWidth);
+	await expect(page.getByTestId("metric-workbench-navigation").getByRole("button")).toHaveCount(4);
+	await expect(page.getByRole("button", { name: "1 定义与发布" })).toBeVisible();
+	await expect(page.getByRole("button", { name: "4 运行与消费" })).toBeVisible();
+	await page.waitForTimeout(3500);
 	await page.screenshot({ path: path.join(evidenceDir, "f6-model-metric-handoff-chromium95.png"), fullPage: true });
 	assertCleanBrowser(probe);
 });

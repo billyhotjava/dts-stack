@@ -85,6 +85,7 @@ public class InfraManagementService {
     private final JdbcCatalogSyncService jdbcCatalogSyncService;
     private final InfraCatalogSyncRunRepository syncRunRepository;
     private final InfraConnectorRepository connectorRepository;
+    private final ConnectorDriverBindingService driverBindingService;
     private final AuditService auditService;
     private final AdminInfraClient adminInfraClient;
 
@@ -149,6 +150,7 @@ public class InfraManagementService {
         JdbcCatalogSyncService jdbcCatalogSyncService,
         InfraCatalogSyncRunRepository syncRunRepository,
         InfraConnectorRepository connectorRepository,
+        ConnectorDriverBindingService driverBindingService,
         AuditService auditService,
         AdminInfraClient adminInfraClient,
         ApiSecretMetadataService apiSecretMetadataService
@@ -168,6 +170,7 @@ public class InfraManagementService {
         this.jdbcCatalogSyncService = jdbcCatalogSyncService;
         this.syncRunRepository = syncRunRepository;
         this.connectorRepository = connectorRepository;
+        this.driverBindingService = driverBindingService;
         this.auditService = auditService;
         this.adminInfraClient = adminInfraClient;
         this.apiSecretMetadataService = apiSecretMetadataService;
@@ -1044,14 +1047,15 @@ public class InfraManagementService {
         if (!StringUtils.hasText(connectorKey)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择连接器");
         }
-        if (connectorRepository.findByConnectorKeyIgnoreCase(connectorKey).isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "连接器不存在或未启用: " + connectorKey);
-        }
+        InfraConnector connector = connectorRepository
+            .findByConnectorKeyIgnoreCase(connectorKey)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "连接器不存在或未启用: " + connectorKey));
         if (ApiDataSourceSupport.isApiType(request.type())) {
             ApiDataSourceSupport.validateRequest(request);
             return;
         }
         if (isJdbcRequest(request)) {
+            driverBindingService.requireUsable(connector, request.props());
             if (!StringUtils.hasText(request.jdbcUrl())) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "JDBC 地址不能为空");
             }

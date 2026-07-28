@@ -19,7 +19,7 @@ import { MODEL_STATUS_LABELS, MODEL_TYPE_LABELS } from "./modelSpecWorkbench";
 import { hasWarehousePlanCreateAccess } from "./warehousePlanCreateFlow";
 import { canEditWarehousePlanHeader } from "./warehousePlanViewModel";
 
-const { Text, Title } = Typography;
+const { Title } = Typography;
 type ModelTypeFilter = ModelSpecType | "ALL";
 
 const modelTypeOptions = [
@@ -234,7 +234,6 @@ export default function ModelCenterPage() {
 					<Title level={3} className="!mb-1">
 						模型中心
 					</Title>
-					<Text type="secondary">直接创建维度表、明细表、汇总表和应用表，所有设计保存在同一模型版本中。</Text>
 				</div>
 				<Space wrap>
 					<Button
@@ -315,7 +314,7 @@ export default function ModelCenterPage() {
 					loading={loading}
 					columns={columns}
 					dataSource={visibleModels}
-					locale={{ emptyText: <Empty description="还没有模型，点击“新建模型”选择一种表类型" /> }}
+					locale={{ emptyText: <Empty description="暂无模型" /> }}
 				/>
 			</Card>
 

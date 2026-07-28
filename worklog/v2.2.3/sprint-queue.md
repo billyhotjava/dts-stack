@@ -1674,3 +1674,22 @@
 - PostgreSQL 是本 Sprint P0 真实 adapter；MySQL/达梦未实测时 capability fail-closed。
 
 **已知风险**: 当前四个代表目标关系均不存在，candidate/run 记录为 0，现有 dbt DAG 为 schedule=None；共享 profile、Airflow callback 鉴权/静默失败、重复 DAG runtime 模板均为 PG-01/02 GAP；Sprint-36/F3 已交付 `canPerform`，但 Candidate 发布/计划链尚未消费，PG-03 为 DEPENDENCY_READY / LOCAL_INTEGRATION_PENDING。架构已允许 DEV/TEST 实施，但生产结论仍为 NO-GO；登录、Chrome95 和整包构建只在相关漂移或 F6 最终验收时定点执行。
+
+## Sprint-77: DTS 全局帮助中心与页面说明收敛 (202607)
+
+**目录**: `worklog/v2.2.3/sprint-77-202607-dts-global-help-center`
+**状态**: IN_PROGRESS（源代码实施已获授权；真实登录与浏览器验收仍由 F0 阻断，未满足前不得标记 DONE）
+**类型**: UI Productization / Global Help / Content Convergence
+**目标**: 让首次使用 DTS 的用户从任意登录后页面打开全局帮助，获得与当前页面匹配的任务说明，并在完整帮助中心检索整个 DTS；建模页面不再承载通用产品教程。
+**依赖**: 复用现有 Dashboard Header、Sheet、静态路由、Ctrl/Cmd+K 和 `docs/user-guide` 内容资产；不新增业务菜单、后端 API、数据库表或第二套权限体系。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F0-可验收基线 | P0 | 1 | BLOCKED |
+| F1-全局帮助入口与主题中心 | P0 | 3 | IN_PROGRESS |
+| F2-建模页面说明收敛 | P0 | 2 | IN_PROGRESS |
+
+**统计**: DRAFT=0, READY=0, IN_PROGRESS=2, DONE=3, BLOCKED=1
+**执行顺序**: F0 基线缺口登记 → F1/F2 连续编码 → 一次合并构建与契约验证 → 登录恢复后补真实 UI 证据。
+**关键决策**: Header 问号而非右下角齿轮；右侧上下文 Sheet + `/settings/help` 完整中心；本地静态主题注册表；通用说明迁移、运行态信息原位保留。
+**已知风险**: 默认 E2E 账号当前返回 401，共享 Playwright 会话被占用；本轮按用户要求不反复测试，最终只做一次合并验证，真实 UI DoD 仍需有效登录。

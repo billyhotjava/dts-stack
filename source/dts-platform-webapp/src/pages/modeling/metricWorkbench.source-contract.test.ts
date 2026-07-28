@@ -37,6 +37,7 @@ test("metric workbench carries only canonical end-to-end context", () => {
 	assert.match(WORKBENCH, /modelSpecId/);
 	assert.match(WORKBENCH, /standardDraftId/);
 	assert.match(WORKBENCH, /metricId/);
+	assert.doesNotMatch(WORKBENCH, /围绕定义、模型生成、模板复用和业务消费/);
 	assert.doesNotMatch(WORKBENCH, /processId|businessObject/);
 });
 

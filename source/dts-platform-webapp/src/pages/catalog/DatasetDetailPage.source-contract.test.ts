@@ -45,6 +45,12 @@ test("dataset detail page exposes enterprise asset workbench tabs", () => {
 	assert.match(SOURCE, /DatasetLineageImpactTab/);
 });
 
+test("legacy datasets enter the editable governance panel without requiring a mapping id", () => {
+	assert.match(SOURCE, /dataset\.__source === "dts-catalog"/);
+	assert.match(SOURCE, /<LegacyGovernanceNotice dataset=\{dataset\} onChanged=\{setDataset\}/);
+	assert.doesNotMatch(SOURCE, /\) : dataset\.__legacyDatasetId \? \(\s*<LegacyGovernanceNotice/);
+});
+
 test("dataset detail page uses SPA navigation for catalog internal actions", () => {
 	assert.match(SUPPORT_SOURCE, /router\.push\("\/catalog\/lineage\/graph"\)/);
 	assert.doesNotMatch(`${SOURCE}\n${SUPPORT_SOURCE}`, /href=\{`\/catalog\/lineage\/graph`\}/);

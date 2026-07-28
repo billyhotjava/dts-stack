@@ -12,7 +12,7 @@ const { Text } = Typography;
 
 const CAPABILITY_COLUMN_WIDTH = 160;
 const CONNECTOR_ACTION_COLUMN_WIDTH = 220;
-const CONNECTOR_TABLE_SCROLL_X = 1160;
+const CONNECTOR_TABLE_SCROLL_X = 1280;
 
 type ConnectorDrawerMode = "detail" | "config";
 
@@ -49,6 +49,25 @@ const ENGINE_COLORS: Record<string, string> = {
 	API_RUNTIME: "purple",
 	FILE: "cyan",
 	FUTURE: "default",
+};
+
+const CONNECTOR_STATUS_LABELS: Record<string, string> = {
+	ACTIVE: "可选用",
+	INACTIVE: "已停用",
+};
+
+const DRIVER_STATUS_LABELS: Record<string, string> = {
+	READY: "驱动就绪",
+	MISSING: "缺少驱动",
+	CUSTOM_REQUIRED: "自定义驱动",
+	NOT_REQUIRED: "无需驱动",
+};
+
+const DRIVER_POLICY_LABELS: Record<string, string> = {
+	BUNDLED: "随连接器内置",
+	ADMIN_PROVIDED: "管理员补充",
+	CUSTOM: "自定义",
+	NOT_REQUIRED: "无需驱动",
 };
 
 const toArray = (value: unknown): string[] => {
@@ -106,6 +125,19 @@ function CapabilityTags({ connector, compact = false }: { connector: InfraConnec
 			{overflow > 0 ? <Tag className="whitespace-nowrap">+{overflow}</Tag> : null}
 		</Space>
 	);
+}
+
+function DriverStatusTag({ connector }: { connector: InfraConnector }) {
+	const status = connector.driver?.status;
+	const color =
+		status === "READY"
+			? "success"
+			: status === "MISSING"
+				? "error"
+				: status === "CUSTOM_REQUIRED"
+					? "processing"
+					: "default";
+	return <Tag color={color}>{DRIVER_STATUS_LABELS[status || ""] || "未检测"}</Tag>;
 }
 
 export default function ConnectorRegistryPage() {
@@ -213,11 +245,21 @@ export default function ConnectorRegistryPage() {
 				render: (_: unknown, record) => <CapabilityTags connector={record} compact />,
 			},
 			{
-				title: "状态",
+				title: "驱动",
+				key: "driver",
+				width: 120,
+				render: (_: unknown, record) => <DriverStatusTag connector={record} />,
+			},
+			{
+				title: "目录状态",
 				dataIndex: "status",
 				key: "status",
-				width: 90,
-				render: (value: string) => <Tag color={value === "ACTIVE" ? "success" : "default"}>{value || "-"}</Tag>,
+				width: 100,
+				render: (value: string) => (
+					<Text type={value === "ACTIVE" ? "success" : "secondary"}>
+						{CONNECTOR_STATUS_LABELS[value] || value || "-"}
+					</Text>
+				),
 			},
 			{
 				title: "更新时间",
@@ -238,7 +280,11 @@ export default function ConnectorRegistryPage() {
 				fixed: "right",
 				render: (_: unknown, record) => (
 					<Space size="small" className="connector-registry-actions">
-						<Button size="small" onClick={() => openDataSourceCreate(record.connectorKey)}>
+						<Button
+							size="small"
+							disabled={record.driver?.status === "MISSING"}
+							onClick={() => openDataSourceCreate(record.connectorKey)}
+						>
 							创建数据源
 						</Button>
 						<Button size="small" onClick={() => openConnectorDrawer(record, "config")}>
@@ -305,7 +351,11 @@ export default function ConnectorRegistryPage() {
 						selected ? (
 							<Space className="w-full justify-end">
 								<Button onClick={() => setSelected(null)}>关闭</Button>
-								<Button type="primary" onClick={() => openDataSourceCreate(selected.connectorKey)}>
+								<Button
+									type="primary"
+									disabled={selected.driver?.status === "MISSING"}
+									onClick={() => openDataSourceCreate(selected.connectorKey)}
+								>
 									创建数据源
 								</Button>
 							</Space>
@@ -323,11 +373,25 @@ export default function ConnectorRegistryPage() {
 
 							<Descriptions bordered size="small" column={2}>
 								<Descriptions.Item label="连接器 Key">{selected.connectorKey}</Descriptions.Item>
-								<Descriptions.Item label="状态">{selected.status || "-"}</Descriptions.Item>
+								<Descriptions.Item label="目录状态">
+									{selected.status ? CONNECTOR_STATUS_LABELS[selected.status] || selected.status : "-"}
+								</Descriptions.Item>
 								<Descriptions.Item label="分类">{selected.category || "-"}</Descriptions.Item>
 								<Descriptions.Item label="源类型">{selected.sourceType || "-"}</Descriptions.Item>
 								<Descriptions.Item label="默认引擎">{selected.defaultEngine || "-"}</Descriptions.Item>
 								<Descriptions.Item label="排序">{selected.displayOrder ?? "-"}</Descriptions.Item>
+								<Descriptions.Item label="驱动状态">
+									<DriverStatusTag connector={selected} />
+								</Descriptions.Item>
+								<Descriptions.Item label="驱动策略">
+									{DRIVER_POLICY_LABELS[selected.driver?.policy || ""] || "-"}
+								</Descriptions.Item>
+								<Descriptions.Item label="驱动主类" span={2}>
+									{selected.driver?.driverClass || "-"}
+								</Descriptions.Item>
+								<Descriptions.Item label="驱动文件" span={2}>
+									{selected.driver?.fileName || selected.driver?.message || "-"}
+								</Descriptions.Item>
 								<Descriptions.Item label="更新时间" span={2}>
 									{formatTime(selected.lastUpdatedAt)}
 								</Descriptions.Item>

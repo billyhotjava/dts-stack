@@ -70,6 +70,8 @@ class ModelLifecycleRepositoryTest {
             .contains("implementation_revision, node_kind, materialization")
             .contains("on conflict (model_spec_id, revision, implementation_revision, artifact_key)")
             .contains("modeling_dbt_artifact.ownership <> 'DBT_MANAGED'");
+        assertThat(sql.getValue().chars().filter(character -> character == '?').count())
+            .isEqualTo((long) arguments.getValue().length);
         assertThat(arguments.getValue()).containsSequence(6, "STG", "ephemeral", null);
     }
 

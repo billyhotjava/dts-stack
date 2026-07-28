@@ -17,16 +17,6 @@ public final class AuthoritiesConstants {
     // Authenticated service-to-service caller. Endpoint-level policies decide what each service may do.
     public static final String SERVICE_INTERNAL = "ROLE_SERVICE_INTERNAL";
 
-    // Modeling release duties. These are deliberately not implied by catalog or platform administrator roles.
-    public static final String MODEL_MAINTAINER = "ROLE_MODEL_MAINTAINER";
-    public static final String MODEL_RELEASE_REVIEWER = "ROLE_MODEL_RELEASE_REVIEWER";
-    public static final String MODEL_RELEASE_OPERATOR = "ROLE_MODEL_RELEASE_OPERATOR";
-    public static final String[] MODEL_RELEASE_DUTIES = new String[] {
-        MODEL_MAINTAINER,
-        MODEL_RELEASE_REVIEWER,
-        MODEL_RELEASE_OPERATOR
-    };
-
     public static final String USER = "ROLE_USER";
 
     public static final String ANONYMOUS = "ROLE_ANONYMOUS";
@@ -37,6 +27,25 @@ public final class AuthoritiesConstants {
     public static final String DEPT_DATA_OWNER = "ROLE_DEPT_DATA_OWNER";
     public static final String DEPT_LEADER = "ROLE_DEPT_LEADER";
     public static final String EMPLOYEE = "ROLE_EMPLOYEE";
+
+    // Modeling release duties are projections of existing organization roles, not new Keycloak roles.
+    public static final String[] MODEL_MAINTAINERS = new String[] {
+        INST_DATA_OWNER,
+        INST_LEADER,
+        OP_ADMIN
+    };
+    public static final String[] MODEL_RELEASE_REVIEWERS = new String[] {
+        INST_LEADER,
+        OP_ADMIN
+    };
+    public static final String[] MODEL_RELEASE_OPERATORS = new String[] {
+        OP_ADMIN
+    };
+    public static final String[] MODEL_RELEASE_DUTIES = new String[] {
+        INST_DATA_OWNER,
+        INST_LEADER,
+        OP_ADMIN
+    };
 
     // 平台模块统一的维护者/特权角色集合
     public static final String[] INSTITUTE_PRIVILEGED_ROLES = new String[] {

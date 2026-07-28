@@ -34,6 +34,8 @@ public class PlanExecutionBindingResource {
 
     private static final String RELEASE_DUTY_EXPRESSION =
         "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).MODEL_RELEASE_DUTIES)";
+    private static final String RELEASE_OPERATOR_EXPRESSION =
+        "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).MODEL_RELEASE_OPERATORS)";
     private static final Pattern BINDING_ETAG = Pattern.compile(
         "^\\\"plan-execution-binding:([0-9a-fA-F-]{36}):([1-9][0-9]*)\\\"$"
     );
@@ -59,11 +61,7 @@ public class PlanExecutionBindingResource {
     }
 
     @PostMapping("/{bindingId}/repair")
-    @PreAuthorize(
-        "hasAuthority('" +
-        AuthoritiesConstants.MODEL_RELEASE_OPERATOR +
-        "')"
-    )
+    @PreAuthorize(RELEASE_OPERATOR_EXPRESSION)
     public ResponseEntity<ApiResponse<RepairView>> repair(
         @PathVariable UUID planId,
         @PathVariable UUID bindingId,
@@ -93,11 +91,7 @@ public class PlanExecutionBindingResource {
     }
 
     @PostMapping("/{bindingId}/runs")
-    @PreAuthorize(
-        "hasAuthority('" +
-        AuthoritiesConstants.MODEL_RELEASE_OPERATOR +
-        "')"
-    )
+    @PreAuthorize(RELEASE_OPERATOR_EXPRESSION)
     public ResponseEntity<ApiResponse<OperationalRunView>> runNow(
         @PathVariable UUID planId,
         @PathVariable UUID bindingId,
@@ -152,16 +146,26 @@ public class PlanExecutionBindingResource {
         Matcher match = BINDING_ETAG.matcher(
             value == null ? "" : value.trim()
         );
-        if (
-            !match.matches() ||
-            !expectedBindingId.equals(UUID.fromString(match.group(1)))
-        ) {
+        if (!match.matches()) {
             throw new PlanExecutionException(
                 "MODEL_PLAN_EXECUTION_ETAG_REQUIRED",
                 "A current plan execution binding ETag is required",
                 PlanExecutionException.Kind.INVALID
             );
         }
-        return Integer.parseInt(match.group(2));
+        try {
+            UUID bindingId = UUID.fromString(match.group(1));
+            int version = Integer.parseInt(match.group(2));
+            if (!expectedBindingId.equals(bindingId)) {
+                throw new IllegalArgumentException();
+            }
+            return version;
+        } catch (IllegalArgumentException invalid) {
+            throw new PlanExecutionException(
+                "MODEL_PLAN_EXECUTION_ETAG_REQUIRED",
+                "A current plan execution binding ETag is required",
+                PlanExecutionException.Kind.INVALID
+            );
+        }
     }
 }

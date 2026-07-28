@@ -70,6 +70,11 @@ public class CatalogAssetPortalService {
      */
     private static final int VISIBILITY_SAMPLE_WINDOW = 200;
 
+    private enum VisibilityScope {
+        CONSUMER,
+        GOVERNANCE_INTAKE,
+    }
+
     private final OpenMetadataAssetCacheRepository assetRepository;
     private final OpenMetadataColumnCacheRepository columnRepository;
     private final OpenMetadataLineageCacheRepository lineageRepository;
@@ -170,7 +175,8 @@ public class CatalogAssetPortalService {
         long rawTotal,
         int page,
         int fetchedOnPage,
-        int visibleOnPage
+        int visibleOnPage,
+        VisibilityScope visibilityScope
     ) {
         if (rawTotal <= 0) {
             return 0;
@@ -192,14 +198,20 @@ public class CatalogAssetPortalService {
                 CatalogAssetExtension extension = metadata.extensionsByAssetId().get(asset.getId());
                 CatalogAssetMapping mapping = metadata.mappingsByFqn().get(normalizedFqn(asset.getFqn()));
                 CatalogDataset legacy = metadata.legacyById().get(resolveLegacyDatasetId(extension, mapping));
-                return canRead(extension, legacy, activeDept);
+                return isVisible(extension, legacy, activeDept, visibilityScope);
             })
             .count();
         return scaleVisible(visible, sample.getNumberOfElements(), rawTotal);
     }
 
     /** legacy 侧的可见资产总数，同样按固定窗口测量，与页码无关。 */
-    private long estimateVisibleLegacyTotal(AssetQuery query, String activeDept, List<UUID> excludedIds, long rawTotal) {
+    private long estimateVisibleLegacyTotal(
+        AssetQuery query,
+        String activeDept,
+        List<UUID> excludedIds,
+        long rawTotal,
+        VisibilityScope visibilityScope
+    ) {
         if (rawTotal <= 0) {
             return 0;
         }
@@ -210,7 +222,7 @@ public class CatalogAssetPortalService {
             .getContent()
             .stream()
             .filter(dataset -> dataset.getId() == null || excludedIds == null || !excludedIds.contains(dataset.getId()))
-            .filter(dataset -> canRead(null, dataset, activeDept))
+            .filter(dataset -> isVisible(null, dataset, activeDept, visibilityScope))
             .count();
         return scaleVisible(visible, sample.getNumberOfElements(), rawTotal);
     }
@@ -230,10 +242,17 @@ public class CatalogAssetPortalService {
         if (!query.tagIds().isEmpty()) {
             return listAssetsByTags(query, activeDept);
         }
-        return listAssetsWithoutTagFilter(query, activeDept);
+        return listAssetsWithoutTagFilter(query, activeDept, VisibilityScope.CONSUMER);
     }
 
-    private AssetPage listAssetsWithoutTagFilter(AssetQuery query, String activeDept) {
+    public AssetPage listGovernanceIntakeAssets(AssetQuery query, String activeDept) {
+        if (!query.tagIds().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "治理待办入口不支持标签筛选");
+        }
+        return listAssetsWithoutTagFilter(query, activeDept, VisibilityScope.GOVERNANCE_INTAKE);
+    }
+
+    private AssetPage listAssetsWithoutTagFilter(AssetQuery query, String activeDept, VisibilityScope visibilityScope) {
         // 钳制页码：page * size 之后要转 int，未加约束的大页码会溢出为负数，
         // 进而让下游 Stream.skip(负数) 抛 IllegalArgumentException 变成 500
         int page = Math.min(Math.max(0, query.page()), MAX_PAGE_INDEX);
@@ -249,7 +268,7 @@ public class CatalogAssetPortalService {
             CatalogAssetExtension extension = candidateMetadata.extensionsByAssetId().get(asset.getId());
             CatalogAssetMapping mapping = candidateMetadata.mappingsByFqn().get(normalizedFqn(asset.getFqn()));
             CatalogDataset legacy = candidateMetadata.legacyById().get(resolveLegacyDatasetId(extension, mapping));
-            if (!canRead(extension, legacy, activeDept)) {
+            if (!isVisible(extension, legacy, activeDept, visibilityScope)) {
                 continue;
             }
             items.add(toSummary(asset, extension, mapping, legacy));
@@ -268,7 +287,7 @@ public class CatalogAssetPortalService {
         // 宁可让落在 OM 区间内的页短一些——有行被隐藏时本来就会短。
         long wanted = (long) (page + 1) * size - openMetadataSlots;
         int legacyLimit = (int) Math.max(0, Math.min(size, wanted));
-        AssetPage legacyPage = listLegacyAssets(query, activeDept, legacyOffset, legacyLimit, visibleLegacyIds);
+        AssetPage legacyPage = listLegacyAssets(query, activeDept, legacyOffset, legacyLimit, visibleLegacyIds, visibilityScope);
         if (!legacyPage.content().isEmpty()) {
             items.addAll(legacyPage.content());
         }
@@ -279,7 +298,8 @@ public class CatalogAssetPortalService {
             pageData.getTotalElements(),
             page,
             pageData.getNumberOfElements(),
-            openMetadataReturned
+            openMetadataReturned,
+            visibilityScope
         );
         long total = openMetadataTotal + legacyPage.total();
         String source = openMetadataReturned > 0 && legacyPage.returned() > 0
@@ -439,7 +459,14 @@ public class CatalogAssetPortalService {
      * 历史实现沿用 OpenMetadata 的页码，导致 OpenMetadata 占满首页时 legacy 行永远取不到。
      * 可见性过滤在查询之后进行，因此 skip 必须作用于「已过滤」的行，而不是原始行。
      */
-    private AssetPage listLegacyAssets(AssetQuery query, String activeDept, int offset, int limit, List<UUID> excludedIds) {
+    private AssetPage listLegacyAssets(
+        AssetQuery query,
+        String activeDept,
+        int offset,
+        int limit,
+        List<UUID> excludedIds,
+        VisibilityScope visibilityScope
+    ) {
         Sort sort = Sort.by(Sort.Direction.DESC, "lastModifiedDate").and(Sort.by(Sort.Direction.DESC, "createdDate"));
         // 取数窗口 = offset + limit。大页码会让窗口变得很大，但 legacyOffset 只有在页码
         // 越过 OpenMetadata 全部行之后才增长，而 MAX_PAGE_INDEX 已把 page 钳到 10 万，
@@ -455,14 +482,14 @@ public class CatalogAssetPortalService {
             .stream()
             .skip(offset)
             .filter(dataset -> dataset.getId() == null || excludedIds == null || !excludedIds.contains(dataset.getId()))
-            .filter(dataset -> canRead(null, dataset, activeDept))
+            .filter(dataset -> isVisible(null, dataset, activeDept, visibilityScope))
             .limit(Math.max(0, limit))
             .map(this::toLegacySummary)
             .toList();
         List<CatalogDataset> visible = raw
             .stream()
             .filter(dataset -> dataset.getId() == null || excludedIds == null || !excludedIds.contains(dataset.getId()))
-            .filter(dataset -> canRead(null, dataset, activeDept))
+            .filter(dataset -> isVisible(null, dataset, activeDept, visibilityScope))
             .toList();
         // 已知限制（非本次引入，但影响不止于显示）：
         // hidden 按当前取数窗口观测，而窗口大小随 offset 变化——OM-only 的页上 fetchSize 可低至 1，
@@ -473,7 +500,7 @@ public class CatalogAssetPortalService {
         // 精确化需要对整个 legacy 结果集重跑一遍 canRead（扩展/映射/legacy 三方解析 + JWT 密级回退链，
         // 无法下推到 SQL），即一次额外的全量枚举，与「每次地图加载已跑两轮全量扫描」的成本问题直接冲突。
         // 故记录为已知限制。若要修，应连同该成本问题一并设计（例如缓存 domainStats）。
-        long total = estimateVisibleLegacyTotal(query, activeDept, excludedIds, legacyPage.getTotalElements());
+        long total = estimateVisibleLegacyTotal(query, activeDept, excludedIds, legacyPage.getTotalElements(), visibilityScope);
         return new AssetPage(items, total, 0, fetchSize, items.size(), "dts-catalog");
     }
 
@@ -885,6 +912,34 @@ public class CatalogAssetPortalService {
         synthetic.setClassification(extension.getClassification());
         synthetic.setOwnerDept(extension.getOwnerDept());
         return accessChecker.canRead(synthetic) && accessChecker.departmentAllowed(synthetic, activeDept);
+    }
+
+    private boolean isVisible(
+        CatalogAssetExtension extension,
+        CatalogDataset legacy,
+        String activeDept,
+        VisibilityScope visibilityScope
+    ) {
+        if (VisibilityScope.CONSUMER.equals(visibilityScope)) {
+            return canRead(extension, legacy, activeDept);
+        }
+        if (legacy != null) {
+            if (StringUtils.hasText(legacy.getClassification())) {
+                return canRead(extension, legacy, activeDept);
+            }
+            return !Boolean.FALSE.equals(legacy.getEnabled()) && accessChecker.departmentAllowed(legacy, activeDept);
+        }
+        if (extension != null && Boolean.FALSE.equals(extension.getEnabled())) {
+            return false;
+        }
+        if (extension != null && StringUtils.hasText(extension.getClassification())) {
+            return canRead(extension, null, activeDept);
+        }
+        CatalogDataset synthetic = new CatalogDataset();
+        synthetic.setName("openmetadata-governance-intake");
+        synthetic.setEnabled(Boolean.TRUE);
+        synthetic.setOwnerDept(extension != null ? extension.getOwnerDept() : null);
+        return accessChecker.departmentAllowed(synthetic, activeDept);
     }
 
     private boolean isSuperAdmin() {

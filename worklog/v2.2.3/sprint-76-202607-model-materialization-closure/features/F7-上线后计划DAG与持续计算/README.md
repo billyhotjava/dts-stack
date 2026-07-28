@@ -1,7 +1,7 @@
 # F7：上线后 Airflow 计划 DAG 与持续计算
 
 **优先级**：P0
-**状态**：DRAFT
+**状态**：IN_PROGRESS（代码闭环已落地，等待真实 Airflow/PG/Chrome95 验收）
 **依赖**：F2、F3、F4
 
 ## 目标
@@ -45,9 +45,17 @@ prepare_runtime → dbt_build → sync_manifest_and_probe_relation → finalize_
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|
-| T01 | 接管发布绑定并建立调度部署与运行用途契约 | P0 | DRAFT | F4/T02、F2/T04 |
-| T02 | 基于现有 Airflow 部署稳定计划 DAG 并接通手工/CRON | P0 | DRAFT | T01、F2/T02、F3/T03 |
-| T03 | 呈现 Airflow 实际调度与运行历史并关闭失效修复 | P0 | DRAFT | T02、F5/T02 |
+| T01 | 接管发布绑定并建立调度部署与运行用途契约 | P0 | IN_PROGRESS | F4/T02、F2/T04 |
+| T02 | 基于现有 Airflow 部署稳定计划 DAG 并接通手工/CRON | P0 | IN_PROGRESS | T01、F2/T02、F3/T03 |
+| T03 | 呈现 Airflow 实际调度与运行历史并关闭失效修复 | P0 | IN_PROGRESS | T02、F5/T02 |
+
+## 当前实现快照（2026-07-28）
+
+- 已完成 additive migration：不新增第二张业务 run 表；`modeling_pipeline_run` 承载 `OPERATIONAL_RUN`，独立表仅作为 Airflow dispatch outbox。
+- 已完成稳定 plan DAG、共享 Python dbt factory、MANUAL/CRON 两条 durable open 顺序、runtime lease、manifest/关系核验和终态回收。
+- 已完成 exact Airflow service path、server-side operator/plan access、CAS repair 和统一执行健康投影。
+- 已在计划交付页增加“上线计算”，分栏显示 desired/effective、Airflow actual、业务运行和物理关系；不暴露 token、credential、projectDir 或 selector。
+- 已通过定向 Java/Python/TypeScript/source-contract；尚未取得真实 PostgreSQL upgrade、Airflow scheduler/DagRun、Chrome95 用户旅程证据，因此 F7 不标 DONE。
 
 ## Definition of Ready
 
@@ -62,11 +70,11 @@ prepare_runtime → dbt_build → sync_manifest_and_probe_relation → finalize_
 
 ## 完成标准
 
-- [ ] PUBLISHED 后才生成/更新 binding，scope 覆盖 plan 下全部 current PUBLISHED 模型。
+- [x] PUBLISHED 后才生成/更新 binding，scope 覆盖 plan 下全部 current PUBLISHED 模型（代码/仓储契约）。
 - [ ] 本地发布写 `MANUAL_ONLY + DEPLOYING`；CRON 通过独立 CAS 命令修改同一 DAG。
-- [ ] Airflow 注册、checksum、schedule 和 pause 实际状态一致后 binding 才 ACTIVE。
-- [ ] 手工/CRON 都产生 durable OPERATIONAL_RUN，且不存在外部运行孤儿。
-- [ ] 同 binding 最多一个 active run；碰撞可解释、可审计。
+- [x] Airflow 注册、checksum、schedule 和 pause 实际状态一致后 binding 才 ACTIVE（服务与单元测试）。
+- [x] 手工/CRON 均先建立或认领 durable OPERATIONAL_RUN；MANUAL 超时按 deterministic DagRun ID 对账。
+- [x] 同 binding 最多一个 active run；数据库 claim + outbox 回收已实现。
 - [ ] 只有 publication current + binding ACTIVE + relation healthy 才是 onlineReadiness READY。
-- [ ] DAG 数量随 plan/environment/target 变化，不随模型、Candidate、release 或 schedule 变化。
-- [ ] RELEASE_BUILD/plan DAG 中不存在第二份 dbt Docker runtime 实现。
+- [x] DAG 数量随 plan/environment/target 变化，不随模型、Candidate、release 或 schedule 变化。
+- [x] RELEASE_BUILD/plan DAG 共用唯一 dbt Docker runtime factory。

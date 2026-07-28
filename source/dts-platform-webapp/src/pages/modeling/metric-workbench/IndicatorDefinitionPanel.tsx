@@ -35,6 +35,7 @@ import {
 	runIndicatorPreflight,
 	shouldApplyIndicatorDetailResponse,
 } from "../indicatorDefinitionWorkflow";
+import { loadAllIndicatorPages } from "../indicatorPagination";
 import { IndicatorDefinitionForm, type IndicatorFormValues } from "./IndicatorDefinitionForm";
 import { type IndicatorVersion, IndicatorVersionHistory } from "./IndicatorVersionHistory";
 
@@ -43,12 +44,6 @@ const STATUS_COLORS: Record<string, string> = {
 	PUBLISHED: "green",
 	ARCHIVED: "red",
 	DEPRECATED: "orange",
-};
-
-const asPageContent = (value: unknown): IndicatorDefinition[] => {
-	if (Array.isArray(value)) return value as IndicatorDefinition[];
-	const content = (value as { content?: unknown })?.content;
-	return Array.isArray(content) ? (content as IndicatorDefinition[]) : [];
 };
 
 const parseDimensionCodes = (value: unknown): string[] => {
@@ -189,9 +184,14 @@ export function IndicatorDefinitionPanel() {
 	const loadList = useCallback(async () => {
 		setLoading(true);
 		try {
-			const result = await listIndicators({ page: 0, size: 500 });
-			const nextItems = asPageContent(result);
-			setItems(nextItems);
+			setItems(
+				await loadAllIndicatorPages<IndicatorDefinition>(
+					(page, size) =>
+						listIndicators({ page, size }) as Promise<
+							{ content?: IndicatorDefinition[]; totalPages?: number } | IndicatorDefinition[]
+						>,
+				),
+			);
 		} catch (error: any) {
 			setItems([]);
 			toast.error(error?.message || "指标列表加载失败");

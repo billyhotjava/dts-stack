@@ -76,6 +76,14 @@ for scope in ("legacy", "app"):
             errors.append(f"{scope}:dts-platform-webapp depends_on {upstream} expected service_healthy, got {cond!r}")
 
 for scope in ("legacy", "app", "dev"):
+    keycloak = (((docs[scope] or {}).get("services") or {}).get("dts-keycloak") or {})
+    health = keycloak.get("healthcheck") or {}
+    health_cmd = " ".join(str(item) for item in health.get("test") or [])
+    if "/realms/S10/" in health_cmd:
+        errors.append(f"{scope}:dts-keycloak healthcheck must not depend on manually imported S10 realm")
+    if "/realms/master/.well-known/openid-configuration" not in health_cmd:
+        errors.append(f"{scope}:dts-keycloak healthcheck must probe the built-in master realm")
+
     admin = (((docs[scope] or {}).get("services") or {}).get("dts-admin") or {})
     depends_on = admin.get("depends_on")
     if not isinstance(depends_on, dict):
@@ -83,7 +91,7 @@ for scope in ("legacy", "app", "dev"):
         continue
     for upstream in ("dts-pg", "dts-keycloak", "dts-proxy"):
         cond = ((depends_on.get(upstream) or {}).get("condition"))
-        expected = "service_healthy" if upstream == "dts-pg" else "service_started"
+        expected = "service_healthy"
         if cond != expected:
             errors.append(f"{scope}:dts-admin depends_on {upstream} expected {expected}, got {cond!r}")
 

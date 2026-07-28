@@ -403,7 +403,9 @@
                 ON modeling_operational_run_dispatch (
                     status, next_attempt_at, created_at, id
                 )
-                WHERE status IN ('PENDING', 'CLAIMED', 'UNKNOWN');
+                WHERE status IN (
+                    'PENDING', 'CLAIMED', 'SUBMITTED', 'UNKNOWN'
+                );
         ]]></sql>
 
         <rollback>

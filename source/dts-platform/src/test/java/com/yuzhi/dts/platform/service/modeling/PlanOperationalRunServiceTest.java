@@ -38,6 +38,8 @@ class PlanOperationalRunServiceTest {
         UUID.fromString("20000000-0000-0000-0000-000000000002");
     private static final UUID GROUP_ID =
         UUID.fromString("30000000-0000-0000-0000-000000000003");
+    private static final String DEPLOYMENT_CHECKSUM =
+        "d".repeat(64);
 
     @Test
     void persistsRunBeforeTriggeringAirflow() {
@@ -52,6 +54,7 @@ class PlanOperationalRunServiceTest {
                 eq("MANUAL"),
                 eq(null),
                 eq("prod"),
+                eq(null),
                 eq(NOW)
             )
         ).thenReturn(opened);
@@ -106,6 +109,7 @@ class PlanOperationalRunServiceTest {
                 eq("MANUAL"),
                 eq(null),
                 eq("prod"),
+                eq(null),
                 eq(NOW)
             );
         order.verify(fixture.airflow)
@@ -118,7 +122,19 @@ class PlanOperationalRunServiceTest {
     @Test
     void terminalIdempotencyReplayDoesNotPrepareOrTriggerAgain() {
         Fixture fixture = fixture();
-        when(fixture.runs.open(any(), any(), any(), any(), any(), any(), any(), any()))
+        when(
+            fixture.runs.open(
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any()
+            )
+        )
             .thenReturn(opened("COMPLETED", true));
 
         var result = fixture.service.openManual(
@@ -153,6 +169,7 @@ class PlanOperationalRunServiceTest {
                 "CRON",
                 logicalDate,
                 "prod",
+                DEPLOYMENT_CHECKSUM,
                 NOW
             )
         ).thenReturn(opened("PENDING", false));
@@ -187,7 +204,8 @@ class PlanOperationalRunServiceTest {
         var result = fixture.service.openScheduled(
             BINDING_ID,
             "scheduled__2026-07-28T08:00:00+00:00",
-            logicalDate
+            logicalDate,
+            DEPLOYMENT_CHECKSUM
         );
 
         assertThat(result.triggerType()).isEqualTo("CRON");

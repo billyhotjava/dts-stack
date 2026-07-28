@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -31,13 +32,17 @@ import org.springframework.web.bind.annotation.RestController;
 public class ReleaseDutyInternalResource {
 
     private static final String PLATFORM_SERVICE = "dts-platform";
-    private static final Map<String, String> DUTY_ROLES = Map.of(
+    private static final Map<String, Set<String>> DUTY_ROLES = Map.of(
         "MODEL_MAINTAINER",
-        "ROLE_MODEL_MAINTAINER",
+        Set.of(
+            "ROLE_INST_DATA_OWNER",
+            "ROLE_INST_LEADER",
+            "ROLE_OP_ADMIN"
+        ),
         "RELEASE_REVIEWER",
-        "ROLE_MODEL_RELEASE_REVIEWER",
+        Set.of("ROLE_INST_LEADER", "ROLE_OP_ADMIN"),
         "RELEASE_OPERATOR",
-        "ROLE_MODEL_RELEASE_OPERATOR"
+        Set.of("ROLE_OP_ADMIN")
     );
 
     private final AdminInboundServiceAuthenticator authenticator;
@@ -85,8 +90,8 @@ public class ReleaseDutyInternalResource {
         }
         String actor = actorId.trim();
         String requestedDuty = duty.trim().toUpperCase(Locale.ROOT);
-        String role = DUTY_ROLES.get(requestedDuty);
-        if (role == null) {
+        Set<String> requiredRoles = DUTY_ROLES.get(requestedDuty);
+        if (requiredRoles == null) {
             return ResponseEntity
                 .badRequest()
                 .body(ApiResponse.error("unsupported release duty"));
@@ -114,7 +119,7 @@ public class ReleaseDutyInternalResource {
                     )
                     .orElse(List.of())
                 : List.of();
-            boolean hasDuty = roles.stream().anyMatch(role::equals);
+            boolean hasDuty = roles.stream().anyMatch(requiredRoles::contains);
             return ResponseEntity.ok(
                 ApiResponse.ok(
                     new DutyCheckResponse(

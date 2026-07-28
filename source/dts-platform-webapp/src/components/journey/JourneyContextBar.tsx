@@ -13,7 +13,7 @@ import {
 	type JourneyContextParamKey,
 } from "./journeyContext";
 import { toArtifactValidationMap, type ArtifactValidationMap, type ArtifactValidationResult } from "./journeyArtifactValidation";
-import { DATA_PRODUCT_JOURNEY_STAGE_DEFINITIONS, resolveDataProductJourneyStageState } from "./journeyStageState";
+import { resolveDataProductJourneyStageState } from "./journeyStageState";
 import { useDataProductJourneyContext } from "./useDataProductJourneyContext";
 
 const { Text } = Typography;
@@ -75,7 +75,6 @@ export function JourneyContextBar({ stage, className, validations }: JourneyCont
 
 	if (barMode === "hidden") return null;
 	if (barMode === "joinable") {
-		const stageIndex = DATA_PRODUCT_JOURNEY_STAGE_DEFINITIONS.findIndex((item) => item.stageKey === stage) + 1;
 		return (
 			<div
 				className={cn(
@@ -84,9 +83,7 @@ export function JourneyContextBar({ stage, className, validations }: JourneyCont
 				)}
 				data-testid="journey-join-hint"
 			>
-				<Text type="secondary">
-					此页面是数据产品旅程的第 {stageIndex} 步（{context.stageLabel}）· 从工作台开始可获得完整的上下文与下一步引导
-				</Text>
+				<Text type="secondary">端到端旅程</Text>
 				<Space size={4}>
 					<Button
 						size="small"

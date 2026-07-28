@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260728-08-catalog-dataset-harvest-status" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="catalog_dataset"/>
+            <columnExists tableName="catalog_dataset" columnName="lifecycle_status"/>
+            <not>
+                <columnExists tableName="catalog_dataset" columnName="harvest_status"/>
+            </not>
+        </preConditions>
+        <comment>
+            Separate technical structure-harvest state from the governed business lifecycle.
+            Legacy SYNCED and STALE lifecycle values are preserved in harvest_status.
+        </comment>
+        <addColumn tableName="catalog_dataset">
+            <column name="harvest_status" type="varchar(32)"/>
+        </addColumn>
+        <sql splitStatements="false"><![CDATA[
+            UPDATE catalog_dataset
+               SET harvest_status = upper(lifecycle_status),
+                   lifecycle_status = 'PENDING_GOVERNANCE'
+             WHERE upper(lifecycle_status) IN ('SYNCED', 'STALE');
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                UPDATE catalog_dataset
+                   SET lifecycle_status = harvest_status
+                 WHERE lifecycle_status = 'PENDING_GOVERNANCE'
+                   AND harvest_status IN ('SYNCED', 'STALE');
+            ]]></sql>
+            <dropColumn tableName="catalog_dataset" columnName="harvest_status"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -4270,67 +4270,6 @@ export default function SqlModelingPage() {
 									</div>
 								),
 							},
-							{
-								key: "guide",
-								label: "操作说明",
-								children: (
-									<div className="p-4 text-sm leading-relaxed overflow-auto" style={{ maxHeight: 240 }}>
-										<div className="font-semibold text-base mb-3">建模与上线操作流程</div>
-
-										<div className="font-medium mb-1">一、数据准备</div>
-										<ol className="list-decimal pl-5 text-xs text-muted-foreground mb-3">
-											<li>在「数据集成」中完成 Excel / 数据库的入湖任务，生成 ODS 层表。</li>
-											<li>回到本页，点击「ODS 一键生成」选择源表，系统自动生成 DWD/DWS/ADS 模型模板。</li>
-										</ol>
-
-										<div className="font-medium mb-1">二、模型编辑</div>
-										<ol className="list-decimal pl-5 text-xs text-muted-foreground mb-3">
-											<li>在左侧模型树选择模型，右侧 SQL 编辑器中修改逻辑。</li>
-											<li>点击工具栏「编译」验证 SQL 语法（dbt compile）。</li>
-											<li>点击「测试」运行数据质量测试（dbt test）。</li>
-											<li>在「数据预览」Tab 查看模型输出数据。</li>
-										</ol>
-
-										<div className="font-medium mb-1">三、上线发布</div>
-										<ol className="list-decimal pl-5 text-xs text-muted-foreground mb-3">
-											<li>点击工具栏「上线」按钮，填写模型选择器（如 <code>tag:erp</code>）。</li>
-											<li>系统依次执行三道检查：
-												<ul className="list-disc pl-5 mt-1">
-													<li><strong>DAG 就绪检查</strong> — 确认 Airflow 已注册执行计划（约 30 秒）</li>
-													<li><strong>质量门禁</strong> — 检查模型是否有编译错误或测试失败</li>
-													<li><strong>发布门禁</strong> — 检查 Git 提交状态、依赖完整性</li>
-												</ul>
-											</li>
-											<li>检查通过后，提交 <code>dbt build --select tag:erp</code> 到 Airflow 执行。</li>
-											<li>Airflow 启动 Docker 容器运行 dbt，按依赖顺序建表 / 刷数据。</li>
-											<li>执行完成后结果自动同步回平台，可在「操作记录 → 运行记录」查看。</li>
-										</ol>
-
-										<div className="font-medium mb-1">四、重建表</div>
-										<ol className="list-decimal pl-5 text-xs text-muted-foreground mb-3">
-											<li>右键模型 →「数据输出」→ 选择「重建」。</li>
-											<li>系统使用 <code>dbt build --full-refresh</code> 安全重建，构建失败时保留原表数据。</li>
-										</ol>
-
-										<div className="font-medium mb-1">五、常见问题</div>
-										<ul className="list-disc pl-5 text-xs text-muted-foreground">
-											<li><strong>DAG 未就绪</strong>：新模型首次上线需等待约 30 秒让 Airflow 注册 DAG，稍后重试即可。</li>
-											<li><strong>质量门禁阻断</strong>：先执行编译 + 测试修复问题，再尝试上线。</li>
-											<li><strong>执行超时</strong>：检查「操作记录 → 执行日志」中的 Airflow 日志定位原因。</li>
-											<li><strong>数据预览为空</strong>：确认模型已成功执行（状态为 SUCCESS），再点击加载预览。</li>
-										</ul>
-
-										<Space className="mt-4" size={8}>
-											<Button size="small" onClick={() => router.push("/foundation/data-sources")}>
-												去 ODS 接入
-											</Button>
-											<Button size="small" type="primary" ghost onClick={openOdsGenerateModel} disabled={!workspaceOk}>
-												打开一键生成
-											</Button>
-										</Space>
-									</div>
-								),
-							},
 						]}
 					/>
 				</div>

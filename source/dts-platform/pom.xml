@@ -554,6 +554,9 @@
                         <testInclude>**/service/admin/gateway/directory/AdminReleaseDutyDirectoryAdapterTest.java</testInclude>
                         <testInclude>**/service/governance/QualityDatasetStatementExecutorTest.java</testInclude>
                         <testInclude>**/service/governance/QualityRunServiceExecutableDefinitionTest.java</testInclude>
+                        <testInclude>**/service/infra/ConnectorDriverBindingServiceTest.java</testInclude>
+                        <testInclude>**/service/infra/ConnectorRegistryServiceTest.java</testInclude>
+                        <testInclude>**/service/infra/InfraManagementServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelLifecycleContractTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelLifecycleServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelBuildIntentServiceTest.java</testInclude>
@@ -596,6 +599,7 @@
                         <testInclude>**/web/rest/ModelBuildIntentResourceTest.java</testInclude>
                         <testInclude>**/web/rest/ModelPublicationIntentResourceTest.java</testInclude>
                         <testInclude>**/web/rest/ModelReleaseCandidateResourceTest.java</testInclude>
+                        <testInclude>**/web/rest/ModelReleaseSuperAdminAuthorizationTest.java</testInclude>
                         <testInclude>**/web/rest/ModelSpecImport*.java</testInclude>
                         <testInclude>**/repository/catalog/CatalogAssetTag*.java</testInclude>
                         <testInclude>**/repository/catalog/CatalogExternalAssetIdentityLiquibaseIT.java</testInclude>

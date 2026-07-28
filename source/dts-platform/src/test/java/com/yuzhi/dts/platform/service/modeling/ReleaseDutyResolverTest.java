@@ -10,14 +10,49 @@ import org.junit.jupiter.api.Test;
 class ReleaseDutyResolverTest {
 
     @Test
-    void mapsOnlyDedicatedReleaseAuthoritiesToDeliveryDuties() {
+    void mapsInstituteDataOwnerToModelMaintainer() {
+        assertThat(
+            ReleaseDutyResolver.resolveAuthorities(
+                List.of(AuthoritiesConstants.INST_DATA_OWNER)
+            )
+        )
+            .containsExactly(DeliveryActorRole.MODEL_MAINTAINER);
+    }
+
+    @Test
+    void instituteLeaderInheritsMaintainerAndReviewerDuties() {
+        assertThat(
+            ReleaseDutyResolver.resolveAuthorities(
+                List.of(AuthoritiesConstants.INST_LEADER)
+            )
+        )
+            .containsExactlyInAnyOrder(
+                DeliveryActorRole.MODEL_MAINTAINER,
+                DeliveryActorRole.RELEASE_REVIEWER
+            );
+    }
+
+    @Test
+    void doesNotPromoteDepartmentOrUnrelatedPlatformRoles() {
         assertThat(
             ReleaseDutyResolver.resolveAuthorities(
                 List.of(
-                    AuthoritiesConstants.MODEL_MAINTAINER,
-                    AuthoritiesConstants.MODEL_RELEASE_REVIEWER,
-                    AuthoritiesConstants.MODEL_RELEASE_OPERATOR
+                    AuthoritiesConstants.ADMIN,
+                    AuthoritiesConstants.AUTH_ADMIN,
+                    AuthoritiesConstants.AUDITOR_ADMIN,
+                    AuthoritiesConstants.DEPT_DATA_OWNER,
+                    AuthoritiesConstants.DEPT_LEADER
                 )
+            )
+        )
+            .isEmpty();
+    }
+
+    @Test
+    void promotesOpAdminToAllReleaseDuties() {
+        assertThat(
+            ReleaseDutyResolver.resolveAuthorities(
+                List.of(AuthoritiesConstants.OP_ADMIN)
             )
         )
             .containsExactlyInAnyOrder(
@@ -25,22 +60,5 @@ class ReleaseDutyResolverTest {
                 DeliveryActorRole.RELEASE_REVIEWER,
                 DeliveryActorRole.RELEASE_OPERATOR
             );
-    }
-
-    @Test
-    void doesNotPromoteLegacyMaintainersOrPlatformAdministrators() {
-        assertThat(
-            ReleaseDutyResolver.resolveAuthorities(
-                List.of(
-                    AuthoritiesConstants.ADMIN,
-                    AuthoritiesConstants.AUTH_ADMIN,
-                    AuthoritiesConstants.AUDITOR_ADMIN,
-                    AuthoritiesConstants.OP_ADMIN,
-                    AuthoritiesConstants.INST_DATA_OWNER,
-                    AuthoritiesConstants.DEPT_DATA_OWNER
-                )
-            )
-        )
-            .isEmpty();
     }
 }

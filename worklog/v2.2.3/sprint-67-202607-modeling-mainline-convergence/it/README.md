@@ -163,6 +163,8 @@ F3-T08/T09/T10 和 F6-T08 是 2026-07-24 四层对象纠偏的新增门禁。只
 
 F6-T01 已于 2026-07-25 因指标 owner 回归重开。平台已恢复 legacy dictionary 深链、完整指标正文、原子/派生校验、不可覆盖的发布修订与历史版本；自动化与构建证据分别记录在 `frontend/f6-t01-indicator-owner-restoration.txt` 和 `backend-contract/f6-t01-indicator-owner-lifecycle.txt`。模型创建草稿到精确发布版本回绑的真实登录 Chrome 95/API/PostgreSQL 旅程尚未执行，不得用 source-contract、mock 或编译结果替代，因此本 Task 仍为 IN_PROGRESS。
 
+2026-07-28 已完成指标工作台四任务分区、模板/运行/消费能力回收、模型字段草稿事务接口、模型/字段/单位版本服务端门禁、10 条分页和 390px 导航修正。Node 6/6、后端 2/2、TypeScript、production legacy build 与 mock Chrome 增量旅程通过，证据见 `frontend/f6-t01-workbench-refactor.txt` 和 `chrome95/f6-model-metric-handoff-chromium95.png`。production preview 真实登录接口返回 HTTP 500，故不替代真实 API/PostgreSQL 旅程，Task 保持 IN_PROGRESS。
+
 ## 6. 发布决策
 
 只有 G1-G10 全部通过才能将 Sprint 标记 DONE。若新主线可用但旧调用未归零，允许发布为“业务对象对外退役、旧表只读”，不允许宣称物理删除完成；退出项必须留在 F5 证据中持续追踪。

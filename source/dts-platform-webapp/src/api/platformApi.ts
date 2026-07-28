@@ -1256,6 +1256,8 @@ export const getGovernanceReleaseGate = (params: { days?: number } = {}) =>
 export const listIndicators = (params: any = {}) => api.get({ url: "/governance/indicators", params });
 export const getIndicator = (id: string) => api.get({ url: `/governance/indicators/${id}` });
 export const createIndicator = (data: any) => api.post({ url: "/governance/indicators", data });
+export const createModelFieldIndicatorDraft = (data: any) =>
+	api.post({ url: "/governance/indicators/model-field-drafts", data });
 export const updateIndicator = (id: string, data: any) => api.put({ url: `/governance/indicators/${id}`, data });
 export const deleteIndicator = (id: string) => api.delete({ url: `/governance/indicators/${id}` });
 export const publishIndicator = (id: string) => api.post({ url: `/governance/indicators/${id}/publish` });

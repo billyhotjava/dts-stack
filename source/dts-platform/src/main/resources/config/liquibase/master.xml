@@ -229,4 +229,5 @@
     <include file="config/liquibase/changelog/20260728_05_model_plan_execution_binding.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260728_06_catalog_dataset_physical_locator.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260728_07_plan_operational_run.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260728_08_catalog_dataset_harvest_status.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

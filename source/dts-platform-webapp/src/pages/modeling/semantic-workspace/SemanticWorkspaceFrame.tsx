@@ -64,7 +64,7 @@ export function SemanticWorkspaceFrame({
 }: {
 	activeKey: SemanticWorkspaceKey;
 	title: string;
-	description: string;
+	description?: string;
 	stats?: SemanticWorkspaceStat[];
 	actions?: ReactNode;
 	children: ReactNode;
@@ -81,10 +81,12 @@ export function SemanticWorkspaceFrame({
 
 			<div className="rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
 				<div className="flex flex-wrap items-center justify-between gap-3">
-					<div className="min-w-0">
-						<div className="text-sm font-medium text-gray-900">{description}</div>
-					</div>
-					<div className="flex flex-wrap gap-2">
+					{description ? (
+						<div className="min-w-0">
+							<div className="text-sm font-medium text-gray-900">{description}</div>
+						</div>
+					) : null}
+					<div className={cn("flex flex-wrap gap-2", !description && "ml-auto")}>
 						{stats.map((item) => (
 							<span
 								key={item.label}

@@ -129,6 +129,7 @@ public class PlanOperationalRunService {
             "MANUAL",
             null,
             target.targetName(),
+            null,
             now
         );
         if (
@@ -149,7 +150,8 @@ public class PlanOperationalRunService {
     public ScheduledOpenView openScheduled(
         UUID bindingId,
         String dagRunId,
-        Instant logicalDate
+        Instant logicalDate,
+        String deploymentChecksum
     ) {
         if (bindingId == null || logicalDate == null) {
             throw failure(
@@ -169,18 +171,41 @@ public class PlanOperationalRunService {
             "CRON",
             logicalDate,
             target.targetName(),
+            required(
+                deploymentChecksum,
+                "deploymentChecksum"
+            ),
             now
         );
-        Prepared prepared = prepare(opened, target, true, now);
-        return new ScheduledOpenView(
-            opened.pipelineRunGroupId(),
-            opened.bindingId(),
-            opened.bindingVersion(),
-            "OPERATIONAL_RUN",
-            "CRON",
-            prepared.token(),
-            prepared.projectBundleChecksum()
-        );
+        if (
+            opened.replayed() &&
+            Set.of("COMPLETED", "FAILED").contains(opened.status())
+        ) {
+            throw failure(
+                "MODEL_OPERATIONAL_CRON_RUN_TERMINAL",
+                "Scheduled DagRun already reached a terminal platform state",
+                Kind.CONFLICT
+            );
+        }
+        try {
+            Prepared prepared = prepare(opened, target, true, now);
+            return new ScheduledOpenView(
+                opened.pipelineRunGroupId(),
+                opened.bindingId(),
+                opened.bindingVersion(),
+                "OPERATIONAL_RUN",
+                "CRON",
+                prepared.token(),
+                prepared.projectBundleChecksum()
+            );
+        } catch (RuntimeException failed) {
+            runs.finalizeFailed(
+                opened.pipelineRunGroupId(),
+                "MODEL_OPERATIONAL_CRON_PREPARE_FAILED",
+                now
+            );
+            throw failed;
+        }
     }
 
     @Scheduled(
@@ -202,17 +227,56 @@ public class PlanOperationalRunService {
     private void reconcileManual(OpenedRun opened) {
         Instant now = clock.instant();
         try {
-            if (
-                !"PENDING".equals(opened.status()) &&
-                airflow
-                    .getDagRun(
+            if (!"PENDING".equals(opened.status())) {
+                Optional<Map<String, Object>> actual =
+                    airflow.getDagRun(
                         opened.airflowDagId(),
                         opened.airflowRunId()
+                    );
+                if (actual.isPresent()) {
+                    String state = String.valueOf(
+                        actual.orElseThrow().get("state")
                     )
-                    .isPresent()
-            ) {
-                runs.markSubmitted(opened.pipelineRunGroupId(), now);
-                return;
+                        .trim()
+                        .toLowerCase();
+                    if (
+                        Set.of(
+                            "failed",
+                            "upstream_failed"
+                        ).contains(state)
+                    ) {
+                        runs.finalizeFailed(
+                            opened.pipelineRunGroupId(),
+                            "MODEL_OPERATIONAL_AIRFLOW_RUN_FAILED",
+                            now
+                        );
+                        return;
+                    }
+                    if (
+                        "success".equals(state) &&
+                        "SUBMITTED".equals(opened.status())
+                    ) {
+                        runs.finalizeFailed(
+                            opened.pipelineRunGroupId(),
+                            "MODEL_OPERATIONAL_FINALIZE_CALLBACK_MISSING",
+                            now
+                        );
+                        return;
+                    }
+                    runs.markSubmitted(
+                        opened.pipelineRunGroupId(),
+                        now
+                    );
+                    return;
+                }
+                if ("SUBMITTED".equals(opened.status())) {
+                    runs.markUnknown(
+                        opened.pipelineRunGroupId(),
+                        "MODEL_OPERATIONAL_AIRFLOW_RUN_MISSING",
+                        now
+                    );
+                    return;
+                }
             }
             Target target = currentTarget();
             Prepared prepared = prepare(

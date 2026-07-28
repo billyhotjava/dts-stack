@@ -326,7 +326,7 @@ services:
         - CMD-SHELL
         - >-
           timeout 5s bash -ec 'exec 3<>/dev/tcp/127.0.0.1/8080;
-          printf "GET /realms/S10/.well-known/openid-configuration HTTP/1.1\r\nHost: ${HOST_SSO}\r\nConnection: close\r\n\r\n" >&3;
+          printf "GET /realms/master/.well-known/openid-configuration HTTP/1.1\r\nHost: ${HOST_SSO}\r\nConnection: close\r\n\r\n" >&3;
           head -n 1 <&3 | grep -q " 200 "'
       interval: 10s
       timeout: 10s
@@ -479,31 +479,6 @@ services:
       - "traefik.http.routers.dts-admin-swagger.priority=200"
       - "traefik.http.routers.dts-admin-swagger.middlewares=admin-ipwhitelist@docker,cors-allow@file,security-headers@file"
 
-  dts-dbt-runtime-init:
-    image: ${IMAGE_DTS_PLATFORM:?Set IMAGE_DTS_PLATFORM in imgversion.conf or .env}
-    entrypoint: /bin/sh
-    command:
-      - /opt/dts/bin/prepare-dbt-runtime-profile-root.sh
-    environment:
-      DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID: ${DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID:-0}
-      DTS_DBT_RUNTIME_PROFILE_REPAIR_DOCKER_CREATED_ROOT: "true"
-      DTS_DBT_RUNTIME_PROFILE_ROOT: /host-dev-shm/dts-dbt-runtime
-    network_mode: none
-    read_only: true
-    user: "0:0"
-    cap_drop:
-      - ALL
-    cap_add:
-      - CHOWN
-      - FOWNER
-    security_opt:
-      - label=disable
-      - no-new-privileges:true
-    volumes:
-      - /dev/shm:/host-dev-shm
-      - ./services/dts-platform/prepare-dbt-runtime-profile-root.sh:/opt/dts/bin/prepare-dbt-runtime-profile-root.sh:ro
-    restart: "no"
-
   dts-platform:
     image: ${IMAGE_DTS_PLATFORM:?Set IMAGE_DTS_PLATFORM in imgversion.conf or .env}
     entrypoint: /bin/sh
@@ -517,8 +492,6 @@ services:
       #  condition: service_started
       dts-admin:
         condition: service_healthy
-      dts-dbt-runtime-init:
-        condition: service_completed_successfully
       dts-ingestion:
         condition: service_healthy
     environment:
@@ -626,8 +599,8 @@ services:
       - ./services/dts-dbt:/opt/dts/dbt:Z
       - ./services/dts-dbt/profiles:/opt/dts/dbt-profiles:Z
       - /dev/shm/dts-dbt-runtime:/run/dts-dbt-runtime:z
-      - ./services/dts-platform/prepare-dbt-runtime-profile-root.sh:/opt/dts/bin/prepare-dbt-runtime-profile-root.sh:ro
-      - ./services/dts-platform/dts-platform-entrypoint.sh:/opt/dts/bin/dts-platform-entrypoint.sh:ro
+      - ./services/dts-platform/prepare-dbt-runtime-profile-root.sh:/opt/dts/bin/prepare-dbt-runtime-profile-root.sh:ro,z
+      - ./services/dts-platform/dts-platform-entrypoint.sh:/opt/dts/bin/dts-platform-entrypoint.sh:ro,z
       - ./services/dts-airflow/dags:/opt/airflow/dags:Z
     networks:
       - dts-core

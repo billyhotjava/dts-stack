@@ -29,7 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ModelPublicationIntentResource {
 
     private static final String MODEL_MAINTAINER_EXPRESSION =
-        "hasAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).MODEL_MAINTAINER)";
+        "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).MODEL_MAINTAINERS)";
     private static final Pattern STRONG_ETAG = Pattern.compile(
         "^\\\"release-candidate:([0-9a-fA-F-]{36}):([1-9][0-9]*)\\\"$"
     );

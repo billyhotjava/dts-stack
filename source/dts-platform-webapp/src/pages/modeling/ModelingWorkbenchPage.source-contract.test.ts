@@ -36,6 +36,8 @@ test("ledger create handoff opens the existing create flow without creating a se
 test("empty and active plans each expose one unambiguous primary action", () => {
 	assert.match(entry, /data-testid="warehouse-plan-empty-primary-action"/);
 	assert.match(entry, /data-testid="warehouse-plan-next-action"/);
+	assert.match(entry, /description="暂无建设规划"/);
+	assert.doesNotMatch(entry, /Data construction|围绕一个建设计划|先建立一个数据建设计划|九站证据链/);
 	assert.match(entry, /StageProjection/);
 	assert.match(entry, /primaryBlocker/);
 	assert.match(entry, /nextAction/);
@@ -130,6 +132,7 @@ test("semantic workspace exposes the generic four-stage journey", () => {
 	for (const label of ["范围与来源", "逻辑模型", "实现与验证", "发布与运行"]) {
 		assert.ok(frame.includes(label));
 	}
+	assert.match(frame, /description\?: string/);
 	assert.doesNotMatch(frame, /index < activeIndex/);
 	assert.doesNotMatch(frame, /ModelingConceptCards/);
 });

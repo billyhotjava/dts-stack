@@ -91,7 +91,7 @@ class ReleaseDutyInternalResourceTest {
         )
             .thenReturn(
                 List.of(
-                    "ROLE_MODEL_MAINTAINER",
+                    "ROLE_INST_DATA_OWNER",
                     "ROLE_CATALOG_MAINTAINER"
                 )
             );

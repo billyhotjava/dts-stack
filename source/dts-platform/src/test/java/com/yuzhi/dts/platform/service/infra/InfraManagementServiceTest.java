@@ -2,6 +2,7 @@ package com.yuzhi.dts.platform.service.infra;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -97,6 +98,9 @@ class InfraManagementServiceTest {
     private InfraConnectorRepository connectorRepository;
 
     @Mock
+    private ConnectorDriverBindingService driverBindingService;
+
+    @Mock
     private AuditService auditService;
 
     @Mock
@@ -113,6 +117,41 @@ class InfraManagementServiceTest {
     @AfterEach
     void clearSecurityContext() {
         SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void createDataSourceRejectsConnectorWhoseDriverIsNotReady() {
+        InfraConnector connector = new InfraConnector();
+        connector.setConnectorKey("oracle");
+        connector.setName("Oracle");
+        connector.setCategory("DATABASE");
+        connector.setStatus("ACTIVE");
+        when(connectorRepository.findByConnectorKeyIgnoreCase("oracle")).thenReturn(Optional.of(connector));
+        doThrow(new ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Oracle 需要管理员补充 JDBC 驱动"))
+            .when(driverBindingService)
+            .requireUsable(connector, Map.of());
+
+        assertThatThrownBy(() ->
+            service.createDataSource(
+                new DataSourceRequest(
+                    "Oracle ERP",
+                    "oracle",
+                    "oracle",
+                    "jdbc:oracle:thin:@//erp:1521/ORCL",
+                    "erp_user",
+                    null,
+                    null,
+                    Map.of(),
+                    Map.of("password", "secret")
+                ),
+                "admin",
+                null
+            )
+        )
+            .isInstanceOfSatisfying(
+                ResponseStatusException.class,
+                ex -> assertThat(ex.getReason()).contains("Oracle").contains("JDBC 驱动")
+            );
     }
 
     @Test

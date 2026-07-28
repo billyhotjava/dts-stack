@@ -4,11 +4,15 @@ import test from "node:test";
 
 const PAGE_SOURCE = readFileSync(new URL("./ConnectorRegistryPage.tsx", import.meta.url), "utf8");
 const GLOBAL_CSS = readFileSync(new URL("../../global.css", import.meta.url), "utf8");
+const CONNECTOR_SERVICE_SOURCE = readFileSync(
+	new URL("../../api/services/connectorsService.ts", import.meta.url),
+	"utf8",
+);
 
 test("connector registry table keeps capability tags readable in fixed table layout", () => {
 	assert.match(PAGE_SOURCE, /function CapabilityTags/);
 	assert.match(PAGE_SOURCE, /CAPABILITY_COLUMN_WIDTH\s*=\s*160/);
-	assert.match(PAGE_SOURCE, /CONNECTOR_TABLE_SCROLL_X\s*=\s*1160/);
+	assert.match(PAGE_SOURCE, /CONNECTOR_TABLE_SCROLL_X\s*=\s*1280/);
 	assert.match(PAGE_SOURCE, /compact\s*\?\s*keys\.slice\(0,\s*2\)/);
 	assert.match(PAGE_SOURCE, /title:\s*"能力"[\s\S]*width:\s*CAPABILITY_COLUMN_WIDTH/);
 	assert.match(PAGE_SOURCE, /connector-registry-capability-tags max-w-full min-w-0/);
@@ -52,4 +56,27 @@ test("connector registry does not expose unavailable enable or disable controls"
 	assert.doesNotMatch(PAGE_SOURCE, /includeDisabled/);
 	assert.doesNotMatch(PAGE_SOURCE, />启用</);
 	assert.doesNotMatch(PAGE_SOURCE, />停用</);
+});
+
+test("connector registry exposes actual driver readiness and blocks unusable database connectors", () => {
+	assert.match(CONNECTOR_SERVICE_SOURCE, /export type ConnectorDriverBinding/);
+	assert.match(CONNECTOR_SERVICE_SOURCE, /driver\?: ConnectorDriverBinding/);
+	assert.match(PAGE_SOURCE, /function DriverStatusTag/);
+	assert.match(PAGE_SOURCE, /title:\s*"驱动"/);
+	assert.match(PAGE_SOURCE, /record\.driver\?\.status === "MISSING"/);
+	assert.match(PAGE_SOURCE, /disabled=\{selected\.driver\?\.status === "MISSING"\}/);
+	assert.match(PAGE_SOURCE, /label="驱动策略"/);
+	assert.match(PAGE_SOURCE, /label="驱动文件"/);
+});
+
+test("connector registry labels catalog availability without implying a successful connection", () => {
+	assert.match(PAGE_SOURCE, /ACTIVE:\s*"可选用"/);
+	assert.match(PAGE_SOURCE, /title:\s*"目录状态"/);
+	assert.match(PAGE_SOURCE, /label="目录状态"/);
+	assert.match(PAGE_SOURCE, /CONNECTOR_STATUS_LABELS\[value\]\s*\|\|\s*value\s*\|\|\s*"-"/);
+	assert.match(
+		PAGE_SOURCE,
+		/render:\s*\(value: string\) => \(\s*<Text type=\{value === "ACTIVE" \? "success" : "secondary"\}>/,
+	);
+	assert.doesNotMatch(PAGE_SOURCE, /title:\s*"状态"[\s\S]*dataIndex:\s*"status"/);
 });

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Button, Card, Modal, Progress, Space, Tag, Typography, message } from "antd";
+import { Alert, Button, Card, Modal, Progress, Select, Space, Tag, Typography, message } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { } from "@ant-design/icons";
@@ -16,6 +16,14 @@ import { resolveAsyncRunSubmitFeedback, mapExecutionToProgressView } from "./tra
 import { formatTimestamp } from "@/utils/format";
 
 const { Text } = Typography;
+
+const TASK_STATUS_OPTIONS = [
+	{ label: "全部（不含已删除）", value: "" },
+	{ label: "草稿", value: "draft" },
+	{ label: "活跃", value: "active" },
+	{ label: "暂停", value: "paused" },
+	{ label: "已删除", value: "deleted" },
+];
 
 type ExecutionProgressView = {
 	percent: number;
@@ -497,45 +505,37 @@ export default function TransformPage() {
 		<div className="space-y-4" data-testid="platform-transform-page">
 			<PageHeader
 				title="数据开发中心 / ETL 转换与入湖任务"
-				actions={
-					<Space wrap>
-						<Button onClick={() => router.push("/ops/overview")}>查看运维</Button>
-						<Button onClick={() => router.push("/explore/etl/transform/new")}>新建转换</Button>
-						<Button type="primary" onClick={() => router.push("/explore/etl/transform/new")}>
-							创建入湖任务
-						</Button>
-					</Space>
-				}
+				actions={<Button onClick={() => router.push("/ops/overview")}>查看运维</Button>}
 			/>
 			<Card
-				title="入湖任务中心"
+				title={
+					<Space size="small">
+						<span>任务清单</span>
+						<Tag color="blue">{pagination.total || tasks.length} 条任务</Tag>
+					</Space>
+				}
 				extra={
 					<Space wrap>
-						{[
-							{ label: "全部", value: undefined },
-							{ label: "草稿", value: "draft" },
-							{ label: "活跃", value: "active" },
-							{ label: "暂停", value: "paused" },
-							{ label: "已删除", value: "deleted" },
-						].map((item) => (
-							<Button
-								key={item.label}
-								type={statusFilter === item.value ? "primary" : "default"}
-								size="small"
-								onClick={() => setStatusFilter(item.value)}
-							>
-								{item.label}
-							</Button>
-						))}
-							<Button
-								className="rounded-2xl"
-								onClick={() => {
-									void loadTasks();
-									void loadRunCenterOverview();
-								}}
-								loading={loading || overviewLoading}
-								data-testid="platform-transform-refresh"
-							>
+						<Select
+							aria-label="任务状态筛选"
+							value={statusFilter || ""}
+							options={TASK_STATUS_OPTIONS}
+							style={{ width: 168 }}
+							onChange={(value) => {
+								setPagination((current) => ({ ...current, current: 1 }));
+								setStatusFilter(value || undefined);
+							}}
+							data-testid="platform-transform-status-filter"
+						/>
+						<Button
+							className="rounded-2xl"
+							onClick={() => {
+								void loadTasks();
+								void loadRunCenterOverview();
+							}}
+							loading={loading || overviewLoading}
+							data-testid="platform-transform-refresh"
+						>
 							刷新
 						</Button>
 						<Button
@@ -548,9 +548,7 @@ export default function TransformPage() {
 						</Button>
 					</Space>
 				}
-			/>
-
-			<Card title="任务清单" extra={<Tag color="blue">{pagination.total || tasks.length} 条任务</Tag>}>
+			>
 				<div className="mb-4 grid gap-3 md:grid-cols-4">
 					<div className="rounded border border-slate-200 p-3">
 						<Text type="secondary">7日执行</Text>

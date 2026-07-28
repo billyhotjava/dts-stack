@@ -65,7 +65,8 @@ public class PlanExecutionInternalResource {
         return runs.openScheduled(
             bindingId,
             request.dagRunId(),
-            request.logicalDate()
+            request.logicalDate(),
+            request.deploymentChecksum()
         );
     }
 
@@ -119,6 +120,7 @@ public class PlanExecutionInternalResource {
 
     public record ScheduledOpenRequest(
         String dagRunId,
-        Instant logicalDate
+        Instant logicalDate,
+        String deploymentChecksum
     ) {}
 }

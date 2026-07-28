@@ -126,6 +126,7 @@ class DbtTaskFactoryTest(unittest.TestCase):
             runtime = self.factory._prepare_runtime_task(
                 purpose="OPERATIONAL_RUN",
                 binding_id="40000000-0000-0000-0000-000000000004",
+                deployment_checksum="d" * 64,
                 dag_run=DagRun(),
             )
         finally:
@@ -136,6 +137,10 @@ class DbtTaskFactoryTest(unittest.TestCase):
         self.assertEqual(
             calls[0][1]["payload"]["dagRunId"],
             DagRun.dag_run_id,
+        )
+        self.assertEqual(
+            calls[0][1]["payload"]["deploymentChecksum"],
+            "d" * 64,
         )
         self.assertTrue(calls[1][0].endswith("/runtime-specs/consume"))
 

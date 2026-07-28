@@ -113,6 +113,49 @@ class CatalogAssetPortalServicePermissionParityTest {
     }
 
     @Test
+    void governanceIntake_shouldExposeUnclassifiedLegacyAssetOnlyWithinDepartmentScope() {
+        CatalogDataset dataset = new CatalogDataset();
+        dataset.setId(UUID.fromString("25252525-2525-2525-2525-252525252525"));
+        dataset.setName("Unclassified orders");
+        dataset.setHiveDatabase("dwd");
+        dataset.setHiveTable("orders");
+        dataset.setEnabled(true);
+        when(assetRepository.findAll(any(Specification.class), any(PageRequest.class)))
+            .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+        when(datasetRepository.findAll(any(Specification.class), any(PageRequest.class)))
+            .thenReturn(new PageImpl<>(List.of(dataset), PageRequest.of(0, 20), 1));
+        when(accessChecker.departmentAllowed(dataset, "D01")).thenReturn(true);
+        when(assetTagService.listAssetTags(any())).thenReturn(Map.of());
+
+        CatalogAssetPortalService.AssetPage result = service.listGovernanceIntakeAssets(query(), "D01");
+
+        assertThat(result.content()).hasSize(1);
+        assertThat(result.content().get(0).legacyDatasetId()).isEqualTo(dataset.getId());
+        assertThat(result.total()).isEqualTo(1);
+    }
+
+    @Test
+    void governanceIntake_shouldNotBypassClassificationGateForClassifiedAssets() {
+        CatalogDataset dataset = new CatalogDataset();
+        dataset.setId(UUID.fromString("26262626-2626-2626-2626-262626262626"));
+        dataset.setName("Secret orders");
+        dataset.setHiveDatabase("dwd");
+        dataset.setHiveTable("orders");
+        dataset.setEnabled(true);
+        dataset.setClassification("DATA_SECRET");
+        when(assetRepository.findAll(any(Specification.class), any(PageRequest.class)))
+            .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+        when(datasetRepository.findAll(any(Specification.class), any(PageRequest.class)))
+            .thenReturn(new PageImpl<>(List.of(dataset), PageRequest.of(0, 20), 1));
+        when(accessChecker.canRead(dataset)).thenReturn(false);
+
+        CatalogAssetPortalService.AssetPage result = service.listGovernanceIntakeAssets(query(), "D01");
+
+        assertThat(result.content()).isEmpty();
+        assertThat(result.total()).isZero();
+    }
+
+    @Test
     void listAssets_shouldKeepTheFilteredTotalWhenTheCurrentPageIsSmaller() {
         OpenMetadataAssetCache asset = new OpenMetadataAssetCache();
         asset.setId(UUID.fromString("33333333-3333-3333-3333-333333333333"));

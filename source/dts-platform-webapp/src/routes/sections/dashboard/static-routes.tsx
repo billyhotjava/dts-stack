@@ -61,6 +61,7 @@ const SearchPage = lazy(() => import("@/analytics/pages/SearchPage"));
 const ProjectCockpitPage = lazy(() => import("@/analytics/pages/project-cockpit/ProjectCockpitPage"));
 
 const ProfilePage = lazy(() => import("@/pages/settings/profile/ProfilePage"));
+const HelpCenterPage = lazy(() => import("@/features/help-center/HelpCenterPage"));
 const ExploreSessionsPage = lazy(() => import("@/analytics/pages/ExploreSessionsPage"));
 const ReportFactoryPage = lazy(() => import("@/analytics/pages/ReportFactoryPage"));
 const MetricLensPage = lazy(() => import("@/analytics/pages/MetricLensPage"));
@@ -188,6 +189,14 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		element: (
 			<S>
 				<ProfilePage />
+			</S>
+		),
+	},
+	{
+		path: "settings/help",
+		element: (
+			<S>
+				<HelpCenterPage />
 			</S>
 		),
 	},

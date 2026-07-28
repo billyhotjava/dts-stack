@@ -1,7 +1,7 @@
 # T02：基于现有 Airflow 部署稳定计划 DAG 并接通手工/CRON
 
 **优先级**：P0
-**状态**：DRAFT
+**状态**：IN_PROGRESS（实现完成，等待真实 Airflow/数仓验收）
 **依赖**：T01、F2/T02、F3/T03
 
 ## 目标
@@ -35,18 +35,26 @@
 - operational run coordinator/internal service API
 - Airflow/dbt integration tests
 
+## 当前实现
+
+- `DbtDagService.ensurePlanDag` 原子生成稳定 thin DAG；`PlanDagDeploymentService` 只有在 Airflow 返回精确 deployment tag 且未暂停时才置 ACTIVE。
+- RELEASE_BUILD 与 OPERATIONAL_RUN 共用 `dbt_task_factory.py`；CRON 首任务先调用 scheduled-open，MANUAL 先本地落账再触发 Airflow。
+- runtime spec 只返回 credential-free lease 引用；sync/probe 会核对 invocation、发布实现、列名与字段类型，并写新的真实关系 observation。
+- MANUAL outbox 会按同一 DagRun ID 恢复；已提交但缺少终态回调的运行 fail-closed，不制造第二个 DagRun。
+- 真实 Airflow 注册延迟、scheduler 重启、Docker dbt 计算和数仓关系生成尚未在本环境完成验收。
+
 ## 验证（RED→GREEN）
 
 - [ ] 连续 100-entry scope 只有一个稳定 plan DAG。
 - [ ] cron/timezone 修改前后 dagId 不变，Airflow 实际 schedule/next run 正确。
 - [ ] scheduler 扫描期间原子替换无 partial parse error。
-- [ ] plan DAG 与 RELEASE_BUILD DAG 都只 import 同一 task factory，templateVersion/checksum 可对账。
-- [ ] MANUAL：平台 run 先于 DagRun；timeout 对账不重复触发。
-- [ ] CRON：DagRun 先于 scheduled open；重复 open 返回同一 run。
+- [x] plan DAG 与 RELEASE_BUILD DAG 都只 import 同一 task factory，templateVersion/checksum 可对账。
+- [x] MANUAL：平台 run 先于 DagRun；timeout 对账使用同一 deterministic DagRun ID。
+- [x] CRON：DagRun 先于 scheduled open；重复 open 返回同一 durable run。
 - [ ] CRON/手工竞争只有一个 dbt build，另一个可审计 SKIPPED_CONCURRENT。
 - [ ] manifest graph 按 ref 执行必要上游和目标模型。
-- [ ] sync/probe 故障使 DagRun FAILED，绝不显示 SUCCESS。
-- [ ] service token/lease 缺失、过期、伪造或路径越界在 dbt 前 fail-closed。
+- [x] sync/probe 故障使 DagRun FAILED，绝不显示 SUCCESS（代码与 Python 单测）。
+- [x] service token/lease 缺失、过期、伪造或路径越界在 dbt 前 fail-closed（定向测试）。
 - [ ] Airflow 重启/注册延迟后 reconciler 恢复，不生成新 dagId。
 
 ## Definition of Done

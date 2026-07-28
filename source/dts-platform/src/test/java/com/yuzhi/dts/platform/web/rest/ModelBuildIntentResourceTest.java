@@ -144,7 +144,7 @@ class ModelBuildIntentResourceTest {
     }
 
     @Test
-    void buildIntentRequiresTheDedicatedModelMaintainerAuthority() throws Exception {
+    void buildIntentUsesExistingInstituteMaintainerAuthorities() throws Exception {
         PreAuthorize authorization = ModelBuildIntentResource.class
             .getDeclaredMethod(
                 "start",
@@ -156,7 +156,9 @@ class ModelBuildIntentResourceTest {
             .getAnnotation(PreAuthorize.class);
 
         assertThat(authorization.value())
-            .isEqualTo("hasAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).MODEL_MAINTAINER)");
+            .isEqualTo(
+                "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).MODEL_MAINTAINERS)"
+            );
     }
 
     @Test

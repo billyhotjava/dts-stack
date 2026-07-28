@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
 
+import HelpCenter from "@/features/help-center/HelpCenter";
 import { useSettings } from "@/store/settingStore";
 import { cn } from "@/utils";
 import AccountDropdown from "../components/account-dropdown";
 import BreadCrumb from "../components/bread-crumb";
 import SearchBar from "../components/search-bar";
-
 
 interface HeaderProps {
 	leftSlot?: ReactNode;
@@ -35,6 +35,7 @@ export default function Header({ leftSlot }: HeaderProps) {
 
 				<div className="flex items-center gap-2">
 					<SearchBar />
+					<HelpCenter />
 					<AccountDropdown />
 				</div>
 			</div>

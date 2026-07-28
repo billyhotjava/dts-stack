@@ -308,7 +308,11 @@ def _platform_request(
     return decoded
 
 
-def _scheduled_operational_conf(binding_id: str, dag_run: Any) -> dict[str, Any]:
+def _scheduled_operational_conf(
+    binding_id: str,
+    deployment_checksum: str,
+    dag_run: Any,
+) -> dict[str, Any]:
     run_type = str(getattr(dag_run, "run_type", "")).lower()
     if not run_type.endswith("scheduled"):
         raise ValueError("Manual OPERATIONAL_RUN requires durable DagRun conf")
@@ -326,6 +330,9 @@ def _scheduled_operational_conf(binding_id: str, dag_run: Any) -> dict[str, Any]
                 getattr(dag_run, "dag_run_id", None), "DagRun id"
             ),
             "logicalDate": logical_date_text,
+            "deploymentChecksum": _checksum(
+                deployment_checksum, "deployment checksum"
+            ),
         },
     )
     return _validate_operational_run_conf(opened)
@@ -335,6 +342,7 @@ def _prepare_runtime_task(
     *,
     purpose: str,
     binding_id: str | None,
+    deployment_checksum: str | None = None,
     **context: Any,
 ) -> dict[str, str]:
     dag_run = context.get("dag_run")
@@ -348,7 +356,14 @@ def _prepare_runtime_task(
         conf = (
             _validate_operational_run_conf(supplied)
             if supplied
-            else _scheduled_operational_conf(binding, dag_run)
+            else _scheduled_operational_conf(
+                binding,
+                _checksum(
+                    deployment_checksum,
+                    "deployment checksum",
+                ),
+                dag_run,
+            )
         )
         if conf["bindingId"] != binding:
             raise RuntimeError("DagRun binding does not match the plan DAG")
@@ -521,6 +536,7 @@ def build_dbt_dag(
             op_kwargs={
                 "purpose": purpose,
                 "binding_id": binding_id,
+                "deployment_checksum": deployment_checksum,
             },
         )
         build = PythonOperator(

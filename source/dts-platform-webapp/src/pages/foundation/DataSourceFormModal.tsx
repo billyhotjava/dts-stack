@@ -31,6 +31,8 @@ import dataSourcesService, {
 import { getOrgTree, type OrgNode } from "@/api/services/directoryService";
 import jdbcDriversService, { type InfraJdbcDriver } from "@/api/services/jdbcDriversService";
 import { Upload } from "@/components/upload";
+import { useRouter } from "@/routes/hooks";
+import { ConnectorDriverNotice } from "./components/ConnectorDriverNotice";
 import {
 	asRecord,
 	buildApiAuthFieldInput,
@@ -120,6 +122,7 @@ export default function DataSourceFormModal({
 	onClose,
 	onSaved,
 }: DataSourceFormModalProps) {
+	const router = useRouter();
 	const [form] = Form.useForm();
 	const [saving, setSaving] = useState(false);
 	const [connectors, setConnectors] = useState<InfraConnector[]>([]);
@@ -285,10 +288,12 @@ export default function DataSourceFormModal({
 
 	const driverOptions = useMemo(
 		() =>
-			drivers.map((driver) => ({
-				value: driver.id,
-				label: `${driver.fileName}${driver.version ? ` (${driver.version})` : ""}${driver.driverClass ? ` · ${driver.driverClass}` : ""}`,
-			})),
+			drivers
+				.filter((driver) => !driver.missing)
+				.map((driver) => ({
+					value: driver.id,
+					label: `${driver.fileName}${driver.version ? ` (${driver.version})` : ""}${driver.driverClass ? ` · ${driver.driverClass}` : ""}`,
+				})),
 		[drivers],
 	);
 
@@ -303,6 +308,8 @@ export default function DataSourceFormModal({
 		() => connectors.find((item) => item.connectorKey === connectorValue),
 		[connectorValue, connectors],
 	);
+	const connectorUsesCustomDriver = selectedConnector?.driver?.status === "CUSTOM_REQUIRED";
+	const connectorDriverBlocked = selectedConnector?.driver?.status === "MISSING";
 
 	const apiAuthProviders = useMemo(
 		() =>
@@ -353,8 +360,13 @@ export default function DataSourceFormModal({
 			form.setFieldsValue({
 				type: nextType,
 				driverId: undefined,
-				driverClass: typeof defaults?.driverClass === "string" ? defaults.driverClass : undefined,
-				driverVersion: typeof defaults?.driverVersion === "string" ? defaults.driverVersion : undefined,
+				driverClass:
+					connector.driver?.driverClass ||
+					(typeof defaults?.driverClass === "string" ? defaults.driverClass : undefined),
+				driverVersion:
+					connector.driver?.fileName ||
+					connector.driver?.version ||
+					(typeof defaults?.driverVersion === "string" ? defaults.driverVersion : undefined),
 				readerType:
 					connectorKey === "http-api"
 						? apiContract?.defaultReaderType || "httpreader"
@@ -538,6 +550,10 @@ export default function DataSourceFormModal({
 	};
 
 	const handleSave = async () => {
+		if (connectorDriverBlocked) {
+			message.error(selectedConnector?.driver?.message || "连接器驱动未就绪，请联系管理员补充驱动");
+			return;
+		}
 		try {
 			const values = await form.validateFields();
 			setSaving(true);
@@ -729,6 +745,7 @@ export default function DataSourceFormModal({
 				onOk={handleSave}
 				okText="保存"
 				confirmLoading={saving}
+				okButtonProps={{ disabled: connectorDriverBlocked }}
 				destroyOnClose
 			>
 				<Form layout="vertical" form={form} preserve={false}>
@@ -765,6 +782,10 @@ export default function DataSourceFormModal({
 							{selectedConnector.description}
 						</Text>
 					) : null}
+					<ConnectorDriverNotice
+						driver={selectedConnector?.driver}
+						onManageDrivers={() => router.push("/foundation/jdbc-drivers")}
+					/>
 					<Form.Item
 						name="type"
 						label="源类型"
@@ -920,8 +941,12 @@ export default function DataSourceFormModal({
 							</Form.Item>
 						</>
 					)}
-					{jdbcRequired && (
-						<Form.Item name="driverId" label="JDBC 驱动">
+					{jdbcRequired && connectorUsesCustomDriver && (
+						<Form.Item
+							name="driverId"
+							label="JDBC 驱动"
+							rules={[{ required: true, message: "请选择管理员已安装的 JDBC 驱动" }]}
+						>
 							<Select
 								options={driverOptions}
 								placeholder={driversLoading ? "驱动加载中..." : "选择驱动以自动填充"}
@@ -933,16 +958,26 @@ export default function DataSourceFormModal({
 							/>
 						</Form.Item>
 					)}
-					{jdbcRequired && (
+					{jdbcRequired && connectorUsesCustomDriver && (
 						<Form.Item name="driverClass" label="驱动主类">
 							<Input placeholder="可自动填充，例如：org.postgresql.Driver" />
 						</Form.Item>
 					)}
-					{jdbcRequired && (
+					{jdbcRequired && connectorUsesCustomDriver && (
 						<Form.Item name="driverVersion" label="驱动文件/版本">
 							<Input placeholder="可填 jar 文件名或版本号" />
 						</Form.Item>
 					)}
+					{jdbcRequired && !connectorUsesCustomDriver ? (
+						<>
+							<Form.Item name="driverClass" hidden>
+								<Input />
+							</Form.Item>
+							<Form.Item name="driverVersion" hidden>
+								<Input />
+							</Form.Item>
+						</>
+					) : null}
 					{!apiSource && (
 						<>
 							<Form.Item

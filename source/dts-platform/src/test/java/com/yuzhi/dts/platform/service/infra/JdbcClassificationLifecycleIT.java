@@ -187,6 +187,10 @@ class JdbcClassificationLifecycleIT {
             .save(savedDatasets.capture());
         assertThat(savedDatasets.getAllValues().get(savedDatasets.getAllValues().size() - 1).getClassification())
             .isEqualTo("SECRET");
+        assertThat(savedDatasets.getAllValues().get(savedDatasets.getAllValues().size() - 1).getLifecycleStatus())
+            .isEqualTo("PENDING_GOVERNANCE");
+        assertThat(savedDatasets.getAllValues().get(savedDatasets.getAllValues().size() - 1).getHarvestStatus())
+            .isEqualTo("SYNCED");
     }
 
     private JdbcCatalogSyncService service() {

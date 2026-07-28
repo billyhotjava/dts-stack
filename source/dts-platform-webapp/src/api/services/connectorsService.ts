@@ -1,5 +1,15 @@
 import apiClient from "../apiClient";
 
+export type ConnectorDriverBinding = {
+	policy: "BUNDLED" | "ADMIN_PROVIDED" | "CUSTOM" | "NOT_REQUIRED";
+	status: "READY" | "MISSING" | "CUSTOM_REQUIRED" | "NOT_REQUIRED";
+	driverClass?: string;
+	fileName?: string;
+	version?: string;
+	jdkSpec?: string;
+	message?: string;
+};
+
 export type InfraConnector = {
 	id: string;
 	connectorKey: string;
@@ -14,6 +24,7 @@ export type InfraConnector = {
 	configSchema?: Record<string, any>;
 	sensitiveFields?: string[];
 	compatibility?: Record<string, any>;
+	driver?: ConnectorDriverBinding;
 	createdAt?: string;
 	lastUpdatedAt?: string;
 };

@@ -253,46 +253,69 @@ public class OpenMetadataAssetSyncService {
         mapping.setOmEntityId(asset.getOmEntityId());
         mapping.setLastCheckedAt(Instant.now());
 
-        Optional<CatalogDataset> matched = findLegacyDataset(asset);
-        if (matched.isPresent()) {
-            CatalogDataset dataset = matched.orElseThrow();
+        List<CatalogDataset> candidates = findLegacyCandidates(asset);
+        if (candidates.size() == 1) {
+            CatalogDataset dataset = candidates.get(0);
             mapping.setLegacyDatasetId(dataset.getId());
             mapping.setSourceId(dataset.getSourceId());
             mapping.setMatchStatus("MATCHED");
-            mapping.setMatchReason("matched by schema/table");
+            mapping.setMatchReason("unique schema/database and table candidate");
             mapping.setConfidence(90);
             mappingRepository.save(mapping);
             upsertExtension(asset, dataset);
             return;
         }
 
-        mapping.setMatchStatus("UNMATCHED");
-        mapping.setMatchReason("no legacy catalog_dataset matched schema/table");
+        mapping.setLegacyDatasetId(null);
+        mapping.setSourceId(null);
+        if (candidates.size() > 1) {
+            mapping.setMatchStatus("MANUAL_REVIEW");
+            mapping.setMatchReason("multiple legacy catalog_dataset candidates: " + candidates.size());
+        } else {
+            mapping.setMatchStatus("UNMATCHED");
+            mapping.setMatchReason("no legacy catalog_dataset matched schema/database and table");
+        }
         mapping.setConfidence(0);
         mappingRepository.save(mapping);
         ensurePendingExtension(asset);
     }
 
-    private Optional<CatalogDataset> findLegacyDataset(OpenMetadataAssetCache asset) {
+    private List<CatalogDataset> findLegacyCandidates(OpenMetadataAssetCache asset) {
         String table = asset.getTableName();
         if (!StringUtils.hasText(table)) {
-            return Optional.empty();
+            return List.of();
         }
+        Map<String, CatalogDataset> candidates = new LinkedHashMap<>();
         String schema = asset.getSchemaName();
         if (StringUtils.hasText(schema)) {
-            List<CatalogDataset> matches = datasetRepository.findByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(schema, table);
-            if (!matches.isEmpty()) {
-                return Optional.of(matches.get(0));
-            }
+            addLegacyCandidates(
+                candidates,
+                datasetRepository.findByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(schema, table)
+            );
         }
         String database = asset.getDatabaseName();
         if (StringUtils.hasText(database)) {
-            List<CatalogDataset> matches = datasetRepository.findByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(database, table);
-            if (!matches.isEmpty()) {
-                return Optional.of(matches.get(0));
-            }
+            addLegacyCandidates(
+                candidates,
+                datasetRepository.findByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(database, table)
+            );
         }
-        return Optional.empty();
+        return List.copyOf(candidates.values());
+    }
+
+    private void addLegacyCandidates(Map<String, CatalogDataset> candidates, List<CatalogDataset> matches) {
+        for (CatalogDataset dataset : matches) {
+            String key = dataset.getId() != null
+                ? "id:" + dataset.getId()
+                : String.join(
+                    ":",
+                    "physical",
+                    String.valueOf(dataset.getSourceId()),
+                    String.valueOf(dataset.getHiveDatabase()).toLowerCase(),
+                    String.valueOf(dataset.getHiveTable()).toLowerCase()
+                );
+            candidates.putIfAbsent(key, dataset);
+        }
     }
 
     private void upsertExtension(OpenMetadataAssetCache asset, CatalogDataset dataset) {
@@ -302,13 +325,27 @@ public class OpenMetadataAssetSyncService {
             .orElseGet(CatalogAssetExtension::new);
         extension.setOmAsset(asset);
         extension.setLegacyDatasetId(dataset.getId());
-        extension.setDomainId(dataset.getDomain() != null ? dataset.getDomain().getId() : null);
-        extension.setClassification(dataset.getClassification());
-        extension.setWarehouseLayer(dataset.getWarehouseLayer());
-        extension.setOwnerDept(dataset.getOwnerDept());
-        extension.setBusinessOwner(dataset.getOwner());
-        extension.setLifecycleStatus(dataset.getLifecycleStatus());
-        extension.setEnabled(dataset.getEnabled() == null ? Boolean.TRUE : dataset.getEnabled());
+        if (extension.getDomainId() == null && dataset.getDomain() != null) {
+            extension.setDomainId(dataset.getDomain().getId());
+        }
+        if (!StringUtils.hasText(extension.getClassification())) {
+            extension.setClassification(dataset.getClassification());
+        }
+        if (!StringUtils.hasText(extension.getWarehouseLayer())) {
+            extension.setWarehouseLayer(dataset.getWarehouseLayer());
+        }
+        if (!StringUtils.hasText(extension.getOwnerDept())) {
+            extension.setOwnerDept(dataset.getOwnerDept());
+        }
+        if (!StringUtils.hasText(extension.getBusinessOwner())) {
+            extension.setBusinessOwner(dataset.getOwner());
+        }
+        if (!StringUtils.hasText(extension.getLifecycleStatus())) {
+            extension.setLifecycleStatus(CatalogAssetGovernancePolicy.normalizeLifecycle(dataset.getLifecycleStatus()));
+        }
+        if (extension.getEnabled() == null) {
+            extension.setEnabled(dataset.getEnabled() == null ? Boolean.TRUE : dataset.getEnabled());
+        }
         extension.setGovernanceStatus(resolveGovernanceStatus(extension));
         extensionRepository.save(extension);
     }
@@ -316,7 +353,10 @@ public class OpenMetadataAssetSyncService {
     private void ensurePendingExtension(OpenMetadataAssetCache asset) {
         CatalogAssetExtension extension = extensionRepository.findFirstByOmAsset(asset).orElseGet(CatalogAssetExtension::new);
         extension.setOmAsset(asset);
-        extension.setEnabled(Boolean.TRUE);
+        extension.setLegacyDatasetId(null);
+        if (extension.getEnabled() == null) {
+            extension.setEnabled(Boolean.TRUE);
+        }
         extension.setGovernanceStatus(resolveGovernanceStatus(extension));
         extensionRepository.save(extension);
     }

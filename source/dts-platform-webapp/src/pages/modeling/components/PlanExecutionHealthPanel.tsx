@@ -166,7 +166,9 @@ export function PlanExecutionHealthPanel({ planId }: { planId: string }) {
 							title: "Airflow 实际状态",
 							render: (_, row) => (
 								<Space direction="vertical" size={2}>
-									<Text>{row.airflowState === "OBSERVED" ? (row.airflowPaused ? "已暂停" : "运行中") : "无法确认"}</Text>
+									<Text>
+										{row.airflowState === "OBSERVED" ? (row.airflowPaused ? "已暂停" : "运行中") : "无法确认"}
+									</Text>
 									<Text type="secondary">
 										{row.scheduleMode === "CRON_ENABLED" ? row.actualSchedule || "实际计划未知" : "无定时计划"}
 									</Text>
@@ -218,11 +220,7 @@ export function PlanExecutionHealthPanel({ planId }: { planId: string }) {
 							render: (_, row) => (
 								<Space>
 									{row.allowedActions.includes("REPAIR_DEPLOYMENT") ? (
-										<Button
-											danger
-											loading={runningBindingId === row.id}
-											onClick={() => void repair(row)}
-										>
+										<Button danger loading={runningBindingId === row.id} onClick={() => void repair(row)}>
 											修复部署
 										</Button>
 									) : (

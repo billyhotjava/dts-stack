@@ -5,7 +5,7 @@
 **类型**：Model Materialization / dbt Runtime / DAG Workflow / Release Governance / Physical Asset / Full-stack
 **目标**：让普通维度建模和高级 dbt 建模都以“构建、提交上线”进入同一条受治理执行链：系统自动把已验证的 ModelImplementation 转成可运行 dbt 节点，纳入 ReleaseCandidate，通过现有 Airflow/dbt 通道在目标数据库生成并核验 current revision 的 table/view；经独立审核和发布后原子登记本地物理资产，部署默认 `MANUAL_ONLY` 计划绑定。Airflow 是唯一调度真值；绑定 ACTIVE 且关系健康时才显示“上线完成”，后续由同一 dbt 任务模板完成手工或 CRON 计算。
 
-**当前实施快照（2026-07-28）**：F5/T02 已完成服务端工作台证据投影和模型详情页接入，构建状态、dbt/Airflow run 与真实关系核验分栏展示，且候选深链严格按请求 ID fail-closed；后端定向测试 30/30、前端契约测试 34/34、TypeScript 与 Biome 均通过。真实 Airflow 联调、F7 计划 DAG/持续计算和 Chrome95 验收仍未关闭。
+**当前实施快照（2026-07-28）**：F5/T02 已完成候选证据投影与模型详情接入；F7 已落地稳定 plan DAG、共享 dbt/Airflow runtime、MANUAL/CRON durable run、真实关系复核、失败恢复、统一上线健康投影与 operator-only run/repair。Java/Python/TypeScript/source-contract 定向验证已通过；真实 PostgreSQL migration、Airflow scheduler+dbt+数仓关系和 Chrome95 验收仍未关闭，PROD 继续 NO-GO。
 
 ## 1. 背景与问题定义
 
@@ -447,6 +447,7 @@ DRAFT / BUILD_FAILED / QUALITY_FAILED
 | L67 | 发布前隔离遗留缺口已关闭：原 `DbtAssetSyncService` 对带 lifecycle pin 的成功物化节点仍会 upsert Catalog，现改为只导入 current dbt artifacts 并保留旧 PUBLISHED 资产，不创建/更新 Catalog/table/column/lineage；无 `modelSpecId` 的普通外部 dbt 同步保持不变。dbt sync 13/13 GREEN；100-entry PostgreSQL 方法定向 1/1 证明 publication 前本地可消费事实为 0、提交后一次性可见，未重复运行整套 IT | `DbtAssetSyncService`、`DbtAssetSyncServiceTest`、`CandidatePublicationRepositoryIT#oneHundredEntryPublicationIsInvisibleAfterFailureAndVisibleAfterOneRetry`，2026-07-28 |
 | L68 | F5/T03 页面已停止从 artifact/source/path 猜测发布资产：只有当前最后一个 publication event 为 RELEASE/PUBLISHED 时才展示 artifact output physicalAssetRef，并深链真实 Catalog dataset；build-only 仅展示 DDL/构建产物，PARTIAL 明确本地登记已回滚，ROLLBACK 不再展示历史引用。source-contract 2/2 与 TypeScript GREEN。binding deployment、relation health 和 external ACK 尚无统一 DTO，页面不得自行推断“上线完成/运行异常/同步健康” | `ModelSpecPhysicalAssetStage.tsx`、`modelSpecThreeStageDetail.source-contract.test.ts`，2026-07-28 |
 | L69 | F5/T01 已接入共享单模型交付入口：模型详情和带 canonical context 的高级 SQL 页均调用同一 Build/Publish Intent，严格匹配 current SINGLE_MODEL Candidate；未绑定 ModelSpec 的高级页只保留技术 build 并禁用上线。原高级页 build 后自动 submit review/approve/publish 旁路已删除；PUBLISHED 明确不等于上线完成。TypeScript GREEN、source-contract 14/14；交付工作台 candidate 证据消费、OPERATIONAL_RUN、统一健康 DTO 和 Chrome95 仍待完成 | `ModelDeliveryIntentActions.tsx`、`modelSpecApi.ts`、`SqlModelingPage.tsx`，2026-07-28 |
+| L70 | F7 本地代码闭环已落地且继续服从现有 Airflow 架构：publication binding 生成稳定 thin plan DAG，RELEASE_BUILD/OPERATIONAL_RUN 共用唯一 Python factory；MANUAL 平台先落账、CRON Airflow 先建 DagRun，两者共用 `modeling_pipeline_run` 和真实关系 observation。统一健康 DTO 分离 desired/effective、Airflow actual、业务运行与关系证据；operator run/repair 由服务端 duty+plan access 和 ETag/CAS 控制。迁移约束已允许运行准备写 scoped bundle，outbox 支持 deterministic DagRun 恢复与缺失回调 fail-closed。真实 PG/Airflow/Chrome95 尚待 F6 验收，F7 保持 IN_PROGRESS | `20260728_07_plan_operational_run.xml`、`DbtDagService`、`PlanOperationalRunService`、`PlanExecutionHealthService`、`PlanExecutionHealthPanel.tsx`，2026-07-28 |
 
 勘察到此停止。实施 Task 必须引用 Lxx，禁止重复全仓扫描；如出现新事实，只能追加账本。
 
@@ -479,8 +480,8 @@ G0 已以同日归档证据关闭实施入口：四个目标关系不存在、pi
 | F2 | 候选驱动物化编排与运行真值 | 4 | P0 | IN_PROGRESS |
 | F3 | 真实关系核验与强绑定证据 | 4 | P0 | DONE |
 | F4 | 发布治理与物理资产交接 | 3 | P0 | IN_PROGRESS |
-| F5 | 建模与交付页面产品闭环 | 3 | P0 | DRAFT |
-| F7 | 上线后计划 DAG 与持续计算 | 3 | P0 | DRAFT |
+| F5 | 建模与交付页面产品闭环 | 3 | P0 | IN_PROGRESS |
+| F7 | 上线后计划 DAG 与持续计算 | 3 | P0 | IN_PROGRESS |
 | F6 | 真实集成验收与安全交付 | 3 | P0 | DRAFT |
 
 **依赖顺序**：

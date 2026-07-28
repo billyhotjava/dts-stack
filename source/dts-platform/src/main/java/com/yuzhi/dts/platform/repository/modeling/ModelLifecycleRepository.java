@@ -601,7 +601,7 @@ public class ModelLifecycleRepository {
                     path, content_checksum, content, status, revision, model_checksum,
                     ownership, idempotency_key, implementation_revision, node_kind, materialization,
                     physical_asset_ref, created_date, last_modified_date
-                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'COMPILED', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'COMPILED', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """ + conflictClause,
                 UUID.randomUUID(),
                 model.id(),

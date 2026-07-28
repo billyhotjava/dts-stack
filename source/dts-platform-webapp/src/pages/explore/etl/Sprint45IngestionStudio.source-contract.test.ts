@@ -21,18 +21,21 @@ test("Sprint-45 data source entry exposes connection, schema, ODS, task, and gol
 });
 
 test("Sprint-45 connector and driver pages behave as access assets instead of isolated admin tables", () => {
-	for (const action of ["连接器目录", "创建数据源", "启用", "停用", "配置", "查看模板", "同步内置"]) {
+	for (const action of ["连接器目录", "创建数据源", "配置要求", "同步内置", "驱动就绪", "缺少驱动"]) {
 		assert.match(CONNECTORS_SOURCE, new RegExp(action));
 	}
-	for (const action of ["JDBC 驱动管理", "上传驱动", "校验", "启用", "禁用", "删除", "查看详情"]) {
+	for (const action of ["JDBC 驱动库", "上传驱动", "校验", "启用", "禁用", "删除", "查看详情"]) {
 		assert.match(JDBC_SOURCE, new RegExp(action));
 	}
+	assert.doesNotMatch(CONNECTORS_SOURCE, />启用</);
+	assert.doesNotMatch(CONNECTORS_SOURCE, />停用</);
+	assert.doesNotMatch(CONNECTORS_SOURCE, /查看模板/);
 	assert.match(CONNECTORS_SOURCE, /PageHeader/);
 	assert.match(JDBC_SOURCE, /PageHeader/);
 });
 
 test("Sprint-45 ETL transform and orchestration pages connect runtime actions back to ops", () => {
-	for (const action of ["新建转换", "运行", "停止", "重跑", "补数", "查看日志", "查看实例", "查看运维"]) {
+	for (const action of ["创建入湖任务", "运行", "停止", "重跑", "补数", "查看日志", "查看实例", "查看运维"]) {
 		assert.match(TRANSFORM_SOURCE, new RegExp(action));
 	}
 	for (const route of ["/ops/instances", "/ops/backfill"]) {
@@ -42,6 +45,16 @@ test("Sprint-45 ETL transform and orchestration pages connect runtime actions ba
 		assert.match(ORCHESTRATION_SOURCE, new RegExp(action));
 	}
 	assert.match(ORCHESTRATION_SOURCE, /PageHeader/);
+});
+
+test("ETL task page consolidates filters and actions into one task toolbar", () => {
+	assert.equal((TRANSFORM_SOURCE.match(/>\s*创建入湖任务\s*</g) || []).length, 1);
+	assert.doesNotMatch(TRANSFORM_SOURCE, /title="入湖任务中心"/);
+	assert.doesNotMatch(TRANSFORM_SOURCE, />\s*新建转换\s*</);
+	assert.match(TRANSFORM_SOURCE, /全部（不含已删除）/);
+	assert.match(TRANSFORM_SOURCE, /data-testid="platform-transform-status-filter"/);
+	assert.match(TRANSFORM_SOURCE, /data-testid="platform-transform-refresh"/);
+	assert.match(TRANSFORM_SOURCE, /data-testid="platform-transform-create"/);
 });
 
 test("Sprint-45 Studio surfaces project, SQL modeling, dbt, and release-gate handoffs", () => {

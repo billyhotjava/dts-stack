@@ -69,10 +69,12 @@ test("sql modeling page exposes stable workbench actions for standard and dbt li
 	assert.match(sqlModelingPage, /data-testid="platform-sql-modeling-test"/);
 	assert.match(sqlModelingPage, /data-testid="platform-sql-modeling-build"/);
 	assert.match(sqlModelingPage, /data-testid="platform-sql-modeling-release"/);
-	assert.match(sqlModelingPage, /sqlModels\.length === 0 \|\| !configEnabled \|\| !workspaceOk \|\| buildTriggering != null/);
-	assert.match(sqlModelingPage, /建模与上线操作流程/);
+	assert.match(
+		sqlModelingPage,
+		/sqlModels\.length === 0 \|\|[\s\S]{0,120}!configEnabled \|\|[\s\S]{0,120}!workspaceOk \|\|[\s\S]{0,120}buildTriggering != null/,
+	);
+	assert.doesNotMatch(sqlModelingPage, /建模与上线操作流程|key: "guide"|label: "操作说明"/);
 	assert.match(sqlModelingPage, /质量门禁/);
-	assert.match(sqlModelingPage, /发布门禁/);
 	assert.match(sqlModelingPage, /data-testid="platform-sql-modeling-standard-readiness"/);
 	assert.match(sqlModelingPage, /data-testid="platform-sql-modeling-standard-gate-check"/);
 	assert.match(sqlModelingPage, /data-testid="platform-sql-modeling-schema-yml-generate"/);
@@ -127,6 +129,7 @@ test("model fields own canonical standards while legacy SQL drafts remain read-o
 	assert.match(modelCenterPage, /data-testid="model-center-page"/);
 	assert.match(modelCenterPage, /旧低代码入口已并入模型中心/);
 	assert.match(modelCenterPage, /ModelSpecCreateDrawer/);
+	assert.doesNotMatch(modelCenterPage, /直接创建维度表、明细表、汇总表和应用表|还没有模型，点击/);
 
 	assert.match(sqlModelingPage, /getStandardBindingDraft/);
 	assert.match(sqlModelingPage, /getStandardBindingDraftSnapshot/);
@@ -150,7 +153,9 @@ test("sql modeling exposes release gates and routes run evidence back to ops", (
 	assert.match(sqlModelingPage, /标准门禁/);
 	assert.match(sqlModelingPage, /质量门禁/);
 	assert.match(sqlModelingPage, /权限门禁/);
-	assert.match(sqlModelingPage, /\/ops\/instances\?[^"`]*journey=e2e-data-product/);
+	assert.match(sqlModelingPage, /const buildOpsInstanceRoute/);
+	assert.match(sqlModelingPage, /journey:\s*"e2e-data-product"/);
+	assert.match(sqlModelingPage, /return `\/ops\/instances\?\$\{params\.toString\(\)\}`/);
 });
 
 test("dbt file browser is a file evidence surface and hands publishing back to SQL modeling", () => {

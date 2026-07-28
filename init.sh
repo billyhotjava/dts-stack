@@ -471,12 +471,31 @@ prepare_data_dirs(){
 }
 
 prepare_dbt_runtime_profile_root(){
-  local runtime_root="/dev/shm/dts-dbt-runtime"
   local helper="${SCRIPT_DIR}/services/dts-platform/prepare-dbt-runtime-profile-root.sh"
-  DTS_DBT_RUNTIME_PROFILE_ROOT="${runtime_root}" \
-  DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID="${DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID}" \
-  DTS_DBT_RUNTIME_PROFILE_REPAIR_DOCKER_CREATED_ROOT="true" \
-    sh "${helper}"
+  if [[ "${LEGACY_STACK}" == "true" ]]; then
+    echo "[init.sh] Preparing dbt runtime profile root via privileged Docker preflight (legacy mode)..."
+    docker run --rm \
+      --network none \
+      --read-only \
+      --user 0:0 \
+      --cap-drop ALL \
+      --cap-add CHOWN \
+      --cap-add FOWNER \
+      --security-opt label=disable \
+      --security-opt no-new-privileges \
+      -e "DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID=${DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID}" \
+      -e "DTS_DBT_RUNTIME_PROFILE_REPAIR_DOCKER_CREATED_ROOT=true" \
+      -e "DTS_DBT_RUNTIME_PROFILE_ROOT=/host-dev-shm/dts-dbt-runtime" \
+      -v "/dev/shm:/host-dev-shm" \
+      -v "${helper}:/opt/dts/bin/prepare-dbt-runtime-profile-root.sh:ro" \
+      --entrypoint /bin/sh \
+      "${IMAGE_DTS_PLATFORM}" \
+      /opt/dts/bin/prepare-dbt-runtime-profile-root.sh
+    return
+  fi
+
+  echo "[init.sh] Preparing dbt runtime profile root via privileged Compose preflight..."
+  "${compose_run[@]}" run --rm --no-deps dts-dbt-runtime-init
 }
 
 ensure_airflow_openmetadata_plugin() {
@@ -1558,7 +1577,6 @@ if [[ "${RESET_PG_DATA}" == "true" ]]; then
   reset_pg_data_dir
 fi
 prepare_data_dirs
-prepare_dbt_runtime_profile_root
 
 ensure_airflow_openmetadata_plugin
 
@@ -1581,7 +1599,7 @@ else
 fi
 
 if [[ "${LEGACY_STACK}" == "true" ]]; then
-  echo "[init.sh] Legacy stack enabled; using docker-compose.legacy.yml (docker-compose 1.22 compatible)."
+  echo "[init.sh] Legacy stack enabled; using docker-compose.legacy.yml."
 fi
 
 echo "[init.sh] Starting with ${COMPOSE_FILE} ..."
@@ -1670,6 +1688,8 @@ fi
 if [[ -n "${COMPOSE_FILE}" ]]; then
   compose_run+=(-f "${COMPOSE_FILE}")
 fi
+
+prepare_dbt_runtime_profile_root
 
 wait_for_service_healthy() {
   local svc="$1"

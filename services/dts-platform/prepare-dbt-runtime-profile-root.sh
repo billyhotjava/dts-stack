@@ -69,8 +69,10 @@ if [ "${actual_uid}" != "${expected_uid}" ] || [ "${actual_mode}" != "700" ]; th
   repair_allowed="false"
   if [ "${created_by_preflight}" = "true" ]; then
     repair_allowed="true"
+  # Docker bind creation commonly leaves 0755; an earlier root preflight can
+  # legitimately leave an empty 0700 directory after the expected UID changes.
   elif [ "${repair_docker_created_root}" = "true" ] &&
-    [ "${actual_mode}" = "755" ] &&
+    { [ "${actual_mode}" = "700" ] || [ "${actual_mode}" = "755" ]; } &&
     { [ "${actual_uid}" = "0" ] || [ "${actual_uid}" = "${expected_uid}" ]; }; then
     repair_allowed="true"
   fi

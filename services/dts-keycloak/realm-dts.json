@@ -131,33 +131,6 @@
         "clientRole": false,
         "containerId": "2db241c5-602d-4828-8b64-91dfd8926b60",
         "attributes": {}
-      },
-      {
-        "id": "7130bbb3-8308-4cfa-89d3-2b7e42aa8da1",
-        "name": "ROLE_MODEL_MAINTAINER",
-        "description": "模型发布维护者",
-        "composite": false,
-        "clientRole": false,
-        "containerId": "2db241c5-602d-4828-8b64-91dfd8926b60",
-        "attributes": {}
-      },
-      {
-        "id": "db96c963-c04b-44c4-adc7-ceb2f519ae5b",
-        "name": "ROLE_MODEL_RELEASE_REVIEWER",
-        "description": "模型发布审核者",
-        "composite": false,
-        "clientRole": false,
-        "containerId": "2db241c5-602d-4828-8b64-91dfd8926b60",
-        "attributes": {}
-      },
-      {
-        "id": "2b40f1a3-9d15-4cda-aa6f-86c1fc44e84d",
-        "name": "ROLE_MODEL_RELEASE_OPERATOR",
-        "description": "模型发布操作员",
-        "composite": false,
-        "clientRole": false,
-        "containerId": "2db241c5-602d-4828-8b64-91dfd8926b60",
-        "attributes": {}
       }
     ],
     "client": {

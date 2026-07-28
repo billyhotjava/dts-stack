@@ -43,6 +43,7 @@ public class PlanOperationalRunRepository {
         String triggerType,
         Instant logicalDate,
         String targetName,
+        String expectedDeploymentChecksum,
         Instant now
     ) {
         String tenant = required(tenantId, "tenantId");
@@ -67,6 +68,27 @@ public class PlanOperationalRunRepository {
             planId,
             bindingId
         );
+        if (
+            "CRON".equals(trigger) &&
+            (
+                expectedDeploymentChecksum == null ||
+                !expectedDeploymentChecksum.matches(
+                    "^[0-9a-f]{64}$"
+                ) ||
+                !expectedDeploymentChecksum.equals(
+                    binding.desiredDeploymentChecksum()
+                ) ||
+                !expectedDeploymentChecksum.equals(
+                    binding.deployedChecksum()
+                )
+            )
+        ) {
+            throw failure(
+                "MODEL_PLAN_DAG_DEPLOYMENT_STALE",
+                "Scheduled DagRun belongs to a stale plan deployment",
+                Kind.CONFLICT
+            );
+        }
         Optional<OpenedRun> replay = findOpened(
             tenant,
             bindingId,
@@ -404,6 +426,7 @@ public class PlanOperationalRunRepository {
         Instant now
     ) {
         Instant staleClaim = now.minusSeconds(30);
+        Instant staleSubmission = now.minusSeconds(300);
         Instant nextAttempt = now.plusSeconds(30);
         List<UUID> claimed = jdbcTemplate.query(
             """
@@ -411,7 +434,13 @@ public class PlanOperationalRunRepository {
                 select d.id
                   from modeling_operational_run_dispatch d
                  where d.trigger_type = 'MANUAL'
-                   and d.status in ('PENDING', 'CLAIMED', 'UNKNOWN')
+                   and d.status in (
+                       'PENDING', 'CLAIMED', 'SUBMITTED', 'UNKNOWN'
+                   )
+                   and (
+                       d.status <> 'SUBMITTED'
+                       or d.last_modified_at <= ?
+                   )
                    and (
                        d.next_attempt_at is null
                        or d.next_attempt_at <= ?
@@ -434,6 +463,7 @@ public class PlanOperationalRunRepository {
             returning d.id
             """,
             (row, rowNumber) -> row.getObject("id", UUID.class),
+            Timestamp.from(staleSubmission),
             Timestamp.from(now),
             Timestamp.from(staleClaim),
             Timestamp.from(now),
@@ -582,7 +612,7 @@ public class PlanOperationalRunRepository {
                    set status = 'UNKNOWN', last_error_code = ?,
                        next_attempt_at = ?, last_modified_at = ?
                  where id = ? and status in (
-                     'PENDING', 'CLAIMED', 'UNKNOWN'
+                     'PENDING', 'CLAIMED', 'SUBMITTED', 'UNKNOWN'
                  )
                 """,
                 required(errorCode, "errorCode"),
@@ -966,7 +996,7 @@ public class PlanOperationalRunRepository {
     }
 
     private List<ScopeEntry> loadEntries(BindingScope binding) {
-        return jdbcTemplate.query(
+        List<ScopeEntry> entries = jdbcTemplate.query(
             """
             select e.model_spec_id, e.model_revision,
                    s.current_checksum as model_checksum,
@@ -1003,6 +1033,30 @@ public class PlanOperationalRunRepository {
             binding.tenantId(),
             binding.id()
         );
+        if (
+            entries
+                .stream()
+                .anyMatch(entry ->
+                    entry.modelSpecId() == null ||
+                    entry.modelRevision() < 1 ||
+                    entry.modelChecksum() == null ||
+                    !entry.modelChecksum().matches("^[0-9a-f]{64}$") ||
+                    entry.implementationRevision() < 1 ||
+                    entry.implementationChecksum() == null ||
+                    !entry
+                        .implementationChecksum()
+                        .matches("^[0-9a-f]{64}$") ||
+                    entry.dbtUniqueId() == null ||
+                    entry.dbtUniqueId().isBlank()
+                )
+        ) {
+            throw failure(
+                "MODEL_PLAN_BINDING_SCOPE_INVALID",
+                "Published plan scope is incomplete",
+                Kind.CONFLICT
+            );
+        }
+        return List.copyOf(entries);
     }
 
     private Optional<OpenedRun> findOpened(

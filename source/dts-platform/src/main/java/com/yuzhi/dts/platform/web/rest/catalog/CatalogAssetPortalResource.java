@@ -121,6 +121,48 @@ public class CatalogAssetPortalResource {
         return ApiResponses.ok(result);
     }
 
+    @GetMapping("/governance-intake")
+    @Transactional(readOnly = true)
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
+    public ApiResponse<CatalogAssetPortalService.AssetPage> governanceIntake(
+        @RequestParam(value = "keyword", required = false) String keyword,
+        @RequestParam(value = "classification", required = false) String classification,
+        @RequestParam(value = "governanceStatus", required = false) String governanceStatus,
+        @RequestParam(value = "matchStatus", required = false) String matchStatus,
+        @RequestParam(value = "page", required = false, defaultValue = "0") int page,
+        @RequestParam(value = "size", required = false, defaultValue = "20") int size,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        String effDept = activeDept != null ? activeDept : helper.claim("dept_code");
+        CatalogAssetPortalService.AssetPage result = assetPortalService.listGovernanceIntakeAssets(
+            new CatalogAssetPortalService.AssetQuery(
+                keyword,
+                null,
+                null,
+                null,
+                null,
+                null,
+                classification,
+                null,
+                null,
+                governanceStatus,
+                matchStatus,
+                null,
+                false,
+                page,
+                size
+            ),
+            effDept
+        );
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("summary", "查看待治理资产入口");
+        payload.put("returned", result.returned());
+        payload.put("total", result.total());
+        helper.putIfHasText(payload, "activeDept", effDept);
+        audit.auditAction("CATALOG_GOVERNANCE_INTAKE_VIEW", AuditStage.SUCCESS, "assets-v2-governance-intake", payload);
+        return ApiResponses.ok(result);
+    }
+
     @GetMapping("/overview")
     @Transactional(readOnly = true)
     public ApiResponse<CatalogAssetOverviewAggregator.AssetOverview> overview(

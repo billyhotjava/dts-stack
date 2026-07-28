@@ -41,7 +41,7 @@ import {
 	validateWarehousePlanInitialSources,
 } from "./warehousePlanCreateFlow";
 
-const { Paragraph, Text, Title } = Typography;
+const { Text, Title } = Typography;
 
 type CreatePlanForm = Omit<CreateWarehousePlanInput, "idempotencyKey" | "onboardingMode" | "ownerId" | "ownerDepartmentId">;
 
@@ -362,13 +362,7 @@ export default function ModelingWorkbenchPage() {
 			>
 				<div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 					<div className="max-w-3xl">
-						<div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-							<Layers3 size={15} /> Data construction
-						</div>
 						<Title level={2} style={{ margin: 0 }}>数据建设工作台</Title>
-						<Paragraph className="mb-0 mt-2 max-w-2xl text-slate-600">
-							围绕一个建设计划查看真实证据、首要阻塞和下一步。专业配置仍在各自模块完成。
-						</Paragraph>
 					</div>
 					<div className="flex flex-wrap items-center gap-2">
 						{plans.length > 0 ? (
@@ -433,12 +427,7 @@ export default function ModelingWorkbenchPage() {
 				<Card className="border-slate-200" styles={{ body: { padding: "72px 24px" } }}>
 					<Empty
 						image={Empty.PRESENTED_IMAGE_SIMPLE}
-						description={
-							<div className="mx-auto max-w-lg text-center">
-								<div className="mb-2 text-lg font-semibold text-slate-900">先建立一个数据建设计划</div>
-								<div className="text-sm leading-6 text-slate-500">无论从业务目标还是现有数据开始，都会进入同一套规划基线与九站证据链。</div>
-							</div>
-						}
+						description="暂无建设规划"
 					>
 						<Button
 							type="primary"

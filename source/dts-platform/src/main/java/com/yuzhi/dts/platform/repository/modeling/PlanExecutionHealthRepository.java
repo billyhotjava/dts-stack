@@ -60,8 +60,8 @@ public class PlanExecutionHealthRepository {
                            d.trigger_type, d.status as run_status,
                            d.last_error_code as run_error_code,
                            d.created_at,
-                           aggregate.started_at,
-                           aggregate.finished_at
+                           run_times.started_at,
+                           run_times.finished_at
                       from modeling_operational_run_dispatch d
                       left join lateral (
                             select min(pr.started_date) as started_at,
@@ -70,21 +70,28 @@ public class PlanExecutionHealthRepository {
                              where pr.tenant_id = d.tenant_id
                                and pr.pipeline_run_group_id = d.id
                                and pr.run_purpose = 'OPERATIONAL_RUN'
-                      ) aggregate on true
+                      ) run_times on true
                      where d.tenant_id = b.tenant_id
                        and d.binding_id = b.id
                      order by d.created_at desc, d.id desc
                      limit 1
               ) latest on true
               left join lateral (
-                    select o.verified, o.relation_exists, o.error_code,
-                           o.schema_name, o.identifier, o.observed_at
+                    select bool_and(o.verified) as verified,
+                           bool_and(o.relation_exists) as relation_exists,
+                           max(o.error_code) filter (
+                               where not o.verified
+                           ) as error_code,
+                           string_agg(
+                               o.schema_name || '.' || o.identifier,
+                               ', ' order by o.model_spec_id
+                           ) as relation_name,
+                           max(o.observed_at) as observed_at
                       from modeling_physical_relation_observation o
                      where o.tenant_id = b.tenant_id
                        and o.execution_binding_id = b.id
                        and o.run_purpose = 'OPERATIONAL_RUN'
-                     order by o.observed_at desc, o.id desc
-                     limit 1
+                       and o.pipeline_run_group_id = latest.group_id
               ) observation on true
              where b.tenant_id = ? and b.plan_id = ?
              group by
@@ -101,8 +108,9 @@ public class PlanExecutionHealthRepository {
                    latest.run_error_code, latest.created_at,
                    latest.started_at, latest.finished_at,
                    observation.verified, observation.relation_exists,
-                   observation.error_code, observation.schema_name,
-                   observation.identifier, observation.observed_at
+                   observation.error_code,
+                   observation.relation_name,
+                   observation.observed_at
              order by b.environment, b.id
             """,
             this::map,
@@ -144,17 +152,9 @@ public class PlanExecutionHealthRepository {
             (Boolean) row.getObject("relation_verified"),
             (Boolean) row.getObject("relation_exists"),
             row.getString("relation_error_code"),
-            relationName(
-                row.getString("schema_name"),
-                row.getString("identifier")
-            ),
+            row.getString("relation_name"),
             instant(row.getTimestamp("observed_at"))
         );
-    }
-
-    private static String relationName(String schema, String identifier) {
-        if (schema == null || identifier == null) return null;
-        return schema + "." + identifier;
     }
 
     private static Instant instant(Timestamp value) {

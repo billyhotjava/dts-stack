@@ -1,7 +1,12 @@
 import { Alert, Button, Descriptions, Space, Spin, Tabs, Tag } from "antd";
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useParams, useSearchParams } from "react-router";
-import { getCatalogAssetV2, getCatalogAssetV2Contract, getCatalogAssetV2SchemaContract, getDataset } from "@/api/platformApi";
+import {
+	getCatalogAssetV2,
+	getCatalogAssetV2Contract,
+	getCatalogAssetV2SchemaContract,
+	getDataset,
+} from "@/api/platformApi";
 import { AssetTagPanel } from "@/components/catalog/tags/AssetTagPanel";
 import { useRouter } from "@/routes/hooks";
 import { buildAssetGrantUrl, resolveAssetReadiness } from "./assetPortalUx.helpers";
@@ -100,22 +105,22 @@ export default function DatasetDetailPage() {
 			setLoading(false);
 			return;
 		}
-			setLoading(true);
-			void (async () => {
+		setLoading(true);
+		void (async () => {
+			try {
+				const legacyDataset: any = await getDataset(id);
+				if (sequence === datasetRequestSequence.current) {
+					setDataset({ ...legacyDataset, __source: "dts-catalog" });
+				}
+			} catch {
+				if (sequence !== datasetRequestSequence.current) return;
 				try {
-					const legacyDataset: any = await getDataset(id);
+					const detail = await getCatalogAssetV2(id);
 					if (sequence === datasetRequestSequence.current) {
-						setDataset({ ...legacyDataset, __source: "dts-catalog" });
+						setDataset(toDatasetFromAssetV2Detail(id, detail));
 					}
 				} catch {
-					if (sequence !== datasetRequestSequence.current) return;
-					try {
-						const detail = await getCatalogAssetV2(id);
-						if (sequence === datasetRequestSequence.current) {
-							setDataset(toDatasetFromAssetV2Detail(id, detail));
-						}
-					} catch {
-						if (sequence === datasetRequestSequence.current) setDataset(null);
+					if (sequence === datasetRequestSequence.current) setDataset(null);
 				}
 			}
 		})().finally(() => {
@@ -321,8 +326,8 @@ export default function DatasetDetailPage() {
 									onChanged={setDataset}
 									onOpenLifecycle={() => setLifecycleWorkbenchOpen(true)}
 								/>
-							) : dataset.__legacyDatasetId ? (
-								<LegacyGovernanceNotice dataset={dataset} />
+							) : dataset.__source === "dts-catalog" ? (
+								<LegacyGovernanceNotice dataset={dataset} onChanged={setDataset} />
 							) : (
 								<div className="py-4 text-sm text-slate-500">暂无治理责任数据。</div>
 							),

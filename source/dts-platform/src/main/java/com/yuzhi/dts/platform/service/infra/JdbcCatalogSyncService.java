@@ -16,6 +16,7 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraSchemaDiscoverCacheRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.catalog.CatalogAutoLineageService;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetGovernancePolicy;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
 import com.yuzhi.dts.platform.service.catalog.CatalogClassificationService;
 import com.yuzhi.dts.platform.service.catalog.SchemaDriftDetector;
@@ -66,8 +67,8 @@ public class JdbcCatalogSyncService {
     private static final String TYPE_INCEPTOR = "INCEPTOR";
     private static final String DEFAULT_OWNER = "system";
     private static final String DEFAULT_EXPOSED_BY = "VIEW";
-    private static final String LIFECYCLE_SYNCED = "SYNCED";
-    private static final String LIFECYCLE_STALE = "STALE";
+    private static final String HARVEST_STATUS_SYNCED = "SYNCED";
+    private static final String HARVEST_STATUS_STALE = "STALE";
     private static final String STALE_MODE_MARK = "MARK";
     private static final String STALE_MODE_PURGE = "PURGE";
 
@@ -230,7 +231,8 @@ public class JdbcCatalogSyncService {
                     dataset.setOwner(defaultIfBlank(dataset.getOwner(), defaultOwner(source)));
                     dataset.setExposedBy(defaultIfBlank(dataset.getExposedBy(), DEFAULT_EXPOSED_BY));
                     dataset.setEnabled(Boolean.TRUE);
-                    dataset.setLifecycleStatus(LIFECYCLE_SYNCED);
+                    dataset.setLifecycleStatus(CatalogAssetGovernancePolicy.normalizeLifecycle(dataset.getLifecycleStatus()));
+                    dataset.setHarvestStatus(HARVEST_STATUS_SYNCED);
 
                     CatalogDataset savedDataset = datasetRepository.save(dataset);
                     if (isNewDataset) {
@@ -1336,7 +1338,8 @@ public class JdbcCatalogSyncService {
         }
         try {
             dataset.setEnabled(Boolean.FALSE);
-            dataset.setLifecycleStatus(LIFECYCLE_STALE);
+            dataset.setLifecycleStatus(CatalogAssetGovernancePolicy.normalizeLifecycle(dataset.getLifecycleStatus()));
+            dataset.setHarvestStatus(HARVEST_STATUS_STALE);
             dataset.setSnapshotTime(snapshotTime != null ? snapshotTime : Instant.now());
             datasetRepository.save(dataset);
         } catch (Exception ex) {
