@@ -62,6 +62,8 @@ class CatalogAssetPortalTagFilterTest {
     @Mock
     private AccessChecker accessChecker;
     @Mock
+    private CatalogClassificationService classificationService;
+    @Mock
     private CatalogAssetTagService assetTagService;
 
     private CatalogAssetPortalService service;
@@ -79,6 +81,7 @@ class CatalogAssetPortalTagFilterTest {
                 tableSchemaRepository,
                 catalogColumnSchemaRepository,
                 accessChecker,
+                classificationService,
                 assetTagService
             );
     }

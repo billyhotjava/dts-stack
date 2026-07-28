@@ -1,4 +1,18 @@
+import type { ClassificationLevel } from "@/utils/classification";
 import api from "./apiClient";
+
+export type ClassificationSealReference = {
+	sealId: string;
+	subjectType: string;
+	subjectKey: string;
+	assetType?: string | null;
+	effectiveLevel: ClassificationLevel | string;
+	snapshotVersion: number;
+	checksum: string;
+	sealedAt: string;
+	propagationStatus?: string;
+	fileFloor?: ClassificationLevel | string;
+};
 
 export interface IngestionTaskDTO {
 	id?: number;
@@ -14,6 +28,8 @@ export interface IngestionTaskDTO {
 	syncPrefix?: string;
 	syncConfig?: Record<string, any>;
 	graphDsl?: Record<string, any>;
+	classificationSeal?: ClassificationSealReference;
+	fieldClassifications?: Record<string, ClassificationLevel | string>;
 	tableMapping?: Array<{ source: string; target: string }>;
 	addaxJobPath?: string;
 	addaxConfig?: Record<string, any>;
@@ -245,6 +261,9 @@ export interface FileUploadResult {
 	errorCount?: number;
 	sourceFileType?: string;
 	sheets?: Array<{ index: number; name: string }>;
+	classification?: ClassificationLevel;
+	classificationSeal?: ClassificationSealReference;
+	fieldClassifications?: Record<string, ClassificationLevel>;
 }
 
 export interface DefaultDestinationStatus {
@@ -448,6 +467,11 @@ class IngestionTaskAPI {
 		return api.put({ url: `/ingestion/tasks/${id}`, data });
 	}
 
+	async admitTask(id: number): Promise<IngestionTaskDTO> {
+		const payload: any = await api.post({ url: `/ingestion/tasks/${id}/admit` });
+		return this.resolveWrappedResponse<IngestionTaskDTO>(payload);
+	}
+
 	/**
 	 * 删除任务（软删除）
 	 */
@@ -612,10 +636,16 @@ class IngestionTaskAPI {
 
 	async uploadAndParseFile(
 		file: File,
-		options?: { previewLimit?: number; sheetIndex?: number; sheetName?: string }
+		options: {
+			classification: ClassificationLevel;
+			previewLimit?: number;
+			sheetIndex?: number;
+			sheetName?: string;
+		},
 	): Promise<FileUploadResult> {
 		const formData = new FormData();
 		formData.append("file", file);
+		formData.append("classification", options.classification);
 		if (options?.previewLimit != null) {
 			formData.append("previewLimit", String(options.previewLimit));
 		}

@@ -16,6 +16,32 @@
             <not>
                 <tableExists tableName="catalog_harvest_status_migration_backup"/>
             </not>
+            <not>
+                <indexExists indexName="uk_catalog_asset_mapping_legacy_dataset"/>
+            </not>
+            <not>
+                <indexExists indexName="uk_catalog_asset_extension_legacy_dataset"/>
+            </not>
+            <sqlCheck expectedResult="0">
+                SELECT
+                    (SELECT count(*)
+                       FROM (
+                           SELECT legacy_dataset_id
+                             FROM catalog_asset_mapping
+                            WHERE legacy_dataset_id IS NOT NULL
+                            GROUP BY legacy_dataset_id
+                           HAVING count(*) &gt; 1
+                       ) mapping_duplicates)
+                    +
+                    (SELECT count(*)
+                       FROM (
+                           SELECT legacy_dataset_id
+                             FROM catalog_asset_extension
+                            WHERE legacy_dataset_id IS NOT NULL
+                            GROUP BY legacy_dataset_id
+                           HAVING count(*) &gt; 1
+                       ) extension_duplicates)
+            </sqlCheck>
         </preConditions>
         <comment>
             Separate technical structure-harvest state from the governed business lifecycle.
@@ -40,6 +66,18 @@
         <addColumn tableName="catalog_dataset">
             <column name="harvest_status" type="varchar(32)"/>
         </addColumn>
+        <createIndex
+            tableName="catalog_asset_mapping"
+            indexName="uk_catalog_asset_mapping_legacy_dataset"
+            unique="true">
+            <column name="legacy_dataset_id"/>
+        </createIndex>
+        <createIndex
+            tableName="catalog_asset_extension"
+            indexName="uk_catalog_asset_extension_legacy_dataset"
+            unique="true">
+            <column name="legacy_dataset_id"/>
+        </createIndex>
         <sql splitStatements="true"><![CDATA[
             INSERT INTO catalog_harvest_status_migration_backup (
                 entity_type,
@@ -78,14 +116,25 @@
                    SET lifecycle_status = backup.previous_lifecycle_status
                   FROM catalog_harvest_status_migration_backup backup
                  WHERE backup.entity_type = 'CATALOG_ASSET_EXTENSION'
-                   AND backup.entity_id = extension_row.id;
+                   AND backup.entity_id = extension_row.id
+                   AND upper(extension_row.lifecycle_status) = 'PENDING_GOVERNANCE';
 
                 UPDATE catalog_dataset dataset_row
-                   SET lifecycle_status = backup.previous_lifecycle_status
+                   SET lifecycle_status = coalesce(
+                       nullif(upper(trim(dataset_row.harvest_status)), ''),
+                       backup.previous_lifecycle_status
+                   )
                   FROM catalog_harvest_status_migration_backup backup
                  WHERE backup.entity_type = 'CATALOG_DATASET'
-                   AND backup.entity_id = dataset_row.id;
+                   AND backup.entity_id = dataset_row.id
+                   AND upper(dataset_row.lifecycle_status) = 'PENDING_GOVERNANCE';
             ]]></sql>
+            <dropIndex
+                tableName="catalog_asset_extension"
+                indexName="uk_catalog_asset_extension_legacy_dataset"/>
+            <dropIndex
+                tableName="catalog_asset_mapping"
+                indexName="uk_catalog_asset_mapping_legacy_dataset"/>
             <dropTable tableName="catalog_harvest_status_migration_backup"/>
             <dropColumn tableName="catalog_dataset" columnName="harvest_status"/>
         </rollback>

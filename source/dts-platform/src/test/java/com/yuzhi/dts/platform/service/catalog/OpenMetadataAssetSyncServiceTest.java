@@ -21,6 +21,8 @@ import com.yuzhi.dts.platform.repository.catalog.OpenMetadataColumnCacheReposito
 import com.yuzhi.dts.platform.repository.catalog.OpenMetadataLineageCacheRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.openmetadata.OpenMetadataClient;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -58,6 +60,9 @@ class OpenMetadataAssetSyncServiceTest {
     @Mock
     private InfraDataSourceRepository dataSourceRepository;
 
+    @Mock
+    private EntityManager entityManager;
+
     private OpenMetadataAssetSyncService service;
 
     @BeforeEach
@@ -75,6 +80,7 @@ class OpenMetadataAssetSyncServiceTest {
                 extensionRepository,
                 datasetRepository,
                 dataSourceRepository,
+                entityManager,
                 new ObjectMapper()
             );
         when(client.listTables(anyInt(), anyString())).thenReturn(Optional.of(Map.of("data", List.of(tablePayload()))));
@@ -194,6 +200,61 @@ class OpenMetadataAssetSyncServiceTest {
         assertThat(mapping.getMatchStatus()).isEqualTo("MANUAL_REVIEW");
         assertThat(mapping.getMatchReason()).contains("no reliable OpenMetadata service-to-source mapping");
         assertThat(mapping.getLegacyDatasetId()).isNull();
+    }
+
+    @Test
+    void existingInternallyConsistentMatchIsRetainedDuringExplicitServiceConfigurationTransition() {
+        CatalogDataset dataset = dataset("69696969-6969-6969-6969-696969696969", "source-a");
+        CatalogAssetMapping mapping = new CatalogAssetMapping();
+        mapping.setFqn("svc.db.public.orders");
+        mapping.setMatchStatus("MATCHED");
+        mapping.setLegacyDatasetId(dataset.getId());
+        mapping.setSourceId(dataset.getSourceId());
+
+        when(mappingRepository.findFirstByFqnIgnoreCase("svc.db.public.orders")).thenReturn(Optional.of(mapping));
+        when(datasetRepository.findByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase("public", "orders"))
+            .thenReturn(List.of(dataset));
+        when(datasetRepository.findByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase("db", "orders"))
+            .thenReturn(List.of(dataset));
+
+        OpenMetadataAssetSyncService.SyncResult result = service.syncTables(50);
+
+        assertThat(result.mappedCount()).isEqualTo(1);
+        assertThat(mapping.getLegacyDatasetId()).isEqualTo(dataset.getId());
+        assertThat(mapping.getSourceId()).isEqualTo(dataset.getSourceId());
+        assertThat(mapping.getMatchStatus()).isEqualTo("MATCHED");
+        assertThat(mapping.getMatchReason()).contains("retained");
+        org.mockito.InOrder claimOrder = org.mockito.Mockito.inOrder(entityManager, mappingRepository);
+        claimOrder.verify(entityManager).lock(dataset, LockModeType.PESSIMISTIC_WRITE);
+        claimOrder.verify(mappingRepository).findFirstByLegacyDatasetId(dataset.getId());
+    }
+
+    @Test
+    void existingMatchIsNotRetainedWhenExplicitServiceConfigurationMismatches() {
+        CatalogDataset dataset = dataset("70696969-6969-6969-6969-696969696969", "source-a");
+        CatalogAssetMapping mapping = new CatalogAssetMapping();
+        mapping.setFqn("svc.db.public.orders");
+        mapping.setMatchStatus("MATCHED");
+        mapping.setLegacyDatasetId(dataset.getId());
+        mapping.setSourceId(dataset.getSourceId());
+        InfraDataSource source = new InfraDataSource();
+        source.setId(dataset.getSourceId());
+        source.setProps("{\"openmetadataServiceName\":\"different-svc\"}");
+
+        when(mappingRepository.findFirstByFqnIgnoreCase("svc.db.public.orders")).thenReturn(Optional.of(mapping));
+        when(datasetRepository.findByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase("public", "orders"))
+            .thenReturn(List.of(dataset));
+        when(datasetRepository.findByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase("db", "orders"))
+            .thenReturn(List.of(dataset));
+        when(dataSourceRepository.findById(dataset.getSourceId())).thenReturn(Optional.of(source));
+
+        OpenMetadataAssetSyncService.SyncResult result = service.syncTables(50);
+
+        assertThat(result.mappedCount()).isZero();
+        assertThat(mapping.getMatchStatus()).isEqualTo("MANUAL_REVIEW");
+        assertThat(mapping.getMatchReason()).contains("no reliable OpenMetadata service-to-source mapping");
+        assertThat(mapping.getLegacyDatasetId()).isNull();
+        assertThat(mapping.getSourceId()).isNull();
     }
 
     @Test

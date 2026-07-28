@@ -94,14 +94,30 @@ export type CatalogAssetV2Query = {
 	page?: number;
 	size?: number;
 };
+export type CatalogAssetV2Page = {
+	content?: Record<string, unknown>[];
+	page?: number;
+	size?: number;
+	total?: number;
+};
+export type CatalogAssetV2GovernanceUpdate = {
+	classification?: string;
+	warehouseLayer?: string;
+	ownerDept?: string;
+	businessOwner?: string;
+	lifecycleStatus?: string;
+	enabled?: boolean;
+	domainId?: string;
+	securityPolicyRefs?: string;
+};
 export const listCatalogAssetsV2 = (params: CatalogAssetV2Query = {}) =>
-	api.get({
+	api.get<CatalogAssetV2Page>({
 		url: "/catalog/assets-v2",
 		params,
 		paramsSerializer: { indexes: null },
 	});
 export const listCatalogGovernanceIntakeAssets = (params: CatalogAssetV2Query = {}) =>
-	api.get({
+	api.get<CatalogAssetV2Page>({
 		url: "/catalog/assets-v2/governance-intake",
 		params,
 	});
@@ -119,8 +135,8 @@ export const getCatalogAssetsV2LineageFailures = (params: CatalogAssetV2Query = 
 	api.get<Record<string, any>>({ url: "/catalog/assets-v2/lineage-failures", params });
 export const getCatalogAssetsV2MigrationDryRun = () =>
 	api.get<Record<string, any>>({ url: "/catalog/assets-v2/migration/dry-run" });
-export const updateCatalogAssetV2Governance = (id: string, data: any) =>
-	api.patch({ url: `/catalog/assets-v2/${id}/governance`, data });
+export const updateCatalogAssetV2Governance = (id: string, data: CatalogAssetV2GovernanceUpdate) =>
+	api.patch<Record<string, unknown>>({ url: `/catalog/assets-v2/${id}/governance`, data });
 export const getCatalogAssetV2Lineage = (id: string) => api.get({ url: `/catalog/assets-v2/${id}/lineage` });
 export const syncCatalogAssetV2Lineage = (id: string, params?: { upstreamDepth?: number; downstreamDepth?: number }) =>
 	api.post({ url: `/catalog/assets-v2/${id}/lineage/sync`, params });

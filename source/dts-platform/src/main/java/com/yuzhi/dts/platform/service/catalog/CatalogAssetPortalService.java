@@ -1,7 +1,9 @@
 package com.yuzhi.dts.platform.service.catalog;
 
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import com.yuzhi.dts.platform.domain.catalog.CatalogAssetExtension;
 import com.yuzhi.dts.platform.domain.catalog.CatalogAssetMapping;
+import com.yuzhi.dts.platform.domain.catalog.CatalogClassificationSnapshot;
 import com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
@@ -34,6 +36,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.apache.commons.codec.digest.DigestUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -84,6 +87,7 @@ public class CatalogAssetPortalService {
     private final CatalogTableSchemaRepository tableSchemaRepository;
     private final CatalogColumnSchemaRepository catalogColumnSchemaRepository;
     private final AccessChecker accessChecker;
+    private final CatalogClassificationService classificationService;
     private final CatalogAssetTagService assetTagService;
 
     public CatalogAssetPortalService(
@@ -96,6 +100,7 @@ public class CatalogAssetPortalService {
         CatalogTableSchemaRepository tableSchemaRepository,
         CatalogColumnSchemaRepository catalogColumnSchemaRepository,
         AccessChecker accessChecker,
+        CatalogClassificationService classificationService,
         CatalogAssetTagService assetTagService
     ) {
         this.assetRepository = assetRepository;
@@ -107,6 +112,7 @@ public class CatalogAssetPortalService {
         this.tableSchemaRepository = tableSchemaRepository;
         this.catalogColumnSchemaRepository = catalogColumnSchemaRepository;
         this.accessChecker = accessChecker;
+        this.classificationService = classificationService;
         this.assetTagService = assetTagService;
     }
 
@@ -636,16 +642,15 @@ public class CatalogAssetPortalService {
 
     @Transactional
     public AssetDetail updateGovernance(UUID id, GovernanceUpdate update, String activeDept) {
-        OpenMetadataAssetCache asset = assetRepository
-            .findById(id)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "资产不存在"));
+        Optional<OpenMetadataAssetCache> assetOptional = assetRepository.findById(id);
+        if (assetOptional.isEmpty()) {
+            return updateLegacyGovernance(id, update, activeDept);
+        }
+        OpenMetadataAssetCache asset = assetOptional.orElseThrow();
         CatalogAssetExtension extension = extensionRepository.findFirstByOmAsset(asset).orElseGet(CatalogAssetExtension::new);
         CatalogAssetMapping mapping = mappingRepository.findFirstByFqnIgnoreCase(asset.getFqn()).orElse(null);
         CatalogDataset legacy = resolveContractLegacy(extension, mapping);
-        if (
-            !canRead(extension, legacy, activeDept) &&
-            (!isCatalogMaintainer() || !isVisible(extension, legacy, activeDept, VisibilityScope.GOVERNANCE_INTAKE))
-        ) {
+        if (!canMaintainGovernance(extension, legacy, activeDept)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "资产不存在或无权访问");
         }
         extension.setOmAsset(asset);
@@ -654,12 +659,22 @@ public class CatalogAssetPortalService {
                 extension.setDomainId(update.domainId());
             }
             if (update.classification() != null) {
-                extension.setClassification(normalize(update.classification()));
+                CatalogAssetContract contract = CatalogAssetContractMapper.fromOpenMetadata(asset, extension, mapping, legacy);
+                extension.setClassification(
+                    sealGovernanceClassification(
+                        id,
+                        contract,
+                        update.classification(),
+                        extension.getClassification(),
+                        legacy != null ? legacy.getClassification() : null
+                    )
+                );
             }
             if (update.warehouseLayer() != null) {
                 extension.setWarehouseLayer(normalize(update.warehouseLayer()));
             }
             if (update.ownerDept() != null) {
+                validateGovernanceOwnerAssignment(update.ownerDept(), activeDept);
                 extension.setOwnerDept(blankToNull(update.ownerDept()));
             }
             if (update.businessOwner() != null) {
@@ -686,6 +701,118 @@ public class CatalogAssetPortalService {
         }
         List<ColumnSummary> columns = columnRepository.findByAssetOrderByOrdinalPositionAsc(asset).stream().map(this::toColumn).toList();
         return new AssetDetail(summary, columns, asset.getRawJson(), asset.getProfileJson());
+    }
+
+    private AssetDetail updateLegacyGovernance(UUID id, GovernanceUpdate update, String activeDept) {
+        CatalogDataset legacy = datasetRepository
+            .findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "资产不存在"));
+        if (!canMaintainGovernance(null, legacy, activeDept)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "资产不存在或无权访问");
+        }
+        if (update != null) {
+            if (update.domainId() != null || update.securityPolicyRefs() != null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "该资产的主题域和安全策略请在资产治理页维护");
+            }
+            if (update.classification() != null) {
+                CatalogAssetContract contract = CatalogAssetContractMapper.fromLegacy(legacy);
+                legacy.setClassification(
+                    sealGovernanceClassification(id, contract, update.classification(), legacy.getClassification())
+                );
+            }
+            if (update.warehouseLayer() != null) {
+                legacy.setWarehouseLayer(normalize(update.warehouseLayer()));
+            }
+            if (update.ownerDept() != null) {
+                validateGovernanceOwnerAssignment(update.ownerDept(), activeDept);
+                legacy.setOwnerDept(blankToNull(update.ownerDept()));
+            }
+            if (update.businessOwner() != null) {
+                legacy.setOwner(blankToNull(update.businessOwner()));
+            }
+            if (update.lifecycleStatus() != null) {
+                legacy.setLifecycleStatus(normalize(update.lifecycleStatus()));
+            }
+            if (update.enabled() != null) {
+                legacy.setEnabled(update.enabled());
+            }
+        }
+        CatalogDataset saved = datasetRepository.save(legacy);
+        AssetSummary summary = hydrateAssetTags(List.of(toLegacySummary(saved))).get(0);
+        return new AssetDetail(summary, List.of(), null, null);
+    }
+
+    private String sealGovernanceClassification(
+        UUID resourceId,
+        CatalogAssetContract contract,
+        String requestedClassification,
+        String... currentClassifications
+    ) {
+        String candidate = SecurityLevelCatalog.normalizeDataCode(requestedClassification);
+        if (!StringUtils.hasText(candidate)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "资产密级无效");
+        }
+        String current = highestKnownClassification(currentClassifications);
+        rejectClassificationDowngrade(current, candidate);
+        String sealedClassification = classificationService
+            .resolve("ASSET", contract.assetKey())
+            .map(CatalogClassificationSnapshot::getEffectiveLevel)
+            .orElse(null);
+        rejectClassificationDowngrade(highestKnownClassification(current, sealedClassification), candidate);
+        String originRef = "catalog-assets-v2:" + resourceId;
+        String evidenceJson =
+            "{\"assetId\":\"" + resourceId + "\",\"classification\":\"" + candidate + "\"}";
+        try {
+            CatalogClassificationSnapshot snapshot = classificationService.sealOrRaise(
+                new CatalogClassificationService.SealCommand(
+                    "ASSET",
+                    contract.assetKey(),
+                    contract.assetType(),
+                    null,
+                    null,
+                    candidate,
+                    List.of(),
+                    "MANUAL_FLOOR",
+                    originRef,
+                    DigestUtils.sha256Hex(originRef + ":" + candidate),
+                    evidenceJson
+                )
+            );
+            String effective = SecurityLevelCatalog.normalizeDataCode(snapshot.getEffectiveLevel());
+            if (!StringUtils.hasText(effective)) {
+                throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "密级封存结果无效");
+            }
+            return effective;
+        } catch (CatalogClassificationException exception) {
+            HttpStatus status = "CLASSIFICATION_DOWNGRADE_FORBIDDEN".equals(exception.getCode())
+                ? HttpStatus.CONFLICT
+                : HttpStatus.UNPROCESSABLE_ENTITY;
+            throw new ResponseStatusException(status, exception.getMessage(), exception);
+        }
+    }
+
+    private String highestKnownClassification(String... classifications) {
+        String highest = null;
+        if (classifications == null) {
+            return null;
+        }
+        for (String classification : classifications) {
+            if (!StringUtils.hasText(classification)) {
+                continue;
+            }
+            String normalized = SecurityLevelCatalog.normalizeDataCode(classification);
+            if (!StringUtils.hasText(normalized)) {
+                throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "现有资产密级无法识别，禁止变更");
+            }
+            highest = SecurityLevelCatalog.maxDataCode(highest, normalized);
+        }
+        return highest;
+    }
+
+    private void rejectClassificationDowngrade(String current, String candidate) {
+        if (StringUtils.hasText(current) && SecurityLevelCatalog.isDataDowngrade(current, candidate)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "资产密级只允许升高，不能降级");
+        }
     }
 
     public LineageView getLineage(UUID id, String activeDept) {
@@ -910,21 +1037,106 @@ public class CatalogAssetPortalService {
     }
 
     private boolean canRead(CatalogAssetExtension extension, CatalogDataset legacy, String activeDept) {
-        if (legacy != null) {
-            return accessChecker.canRead(legacy) && accessChecker.departmentAllowed(legacy, activeDept);
-        }
         if (isSuperAdmin()) {
             return true;
         }
-        if (extension == null || Boolean.FALSE.equals(extension.getEnabled())) {
+        if (extension == null && legacy == null) {
             return false;
         }
-        CatalogDataset synthetic = new CatalogDataset();
-        synthetic.setName("openmetadata-asset");
-        synthetic.setEnabled(extension.getEnabled());
-        synthetic.setClassification(extension.getClassification());
-        synthetic.setOwnerDept(extension.getOwnerDept());
-        return accessChecker.canRead(synthetic) && accessChecker.departmentAllowed(synthetic, activeDept);
+        String subjectKey = classificationSubjectKey(extension, legacy);
+        String sealedClassification = StringUtils.hasText(subjectKey)
+            ? classificationService.resolve("ASSET", subjectKey).map(CatalogClassificationSnapshot::getEffectiveLevel).orElse(null)
+            : null;
+        if (extension == null && legacy != null && !StringUtils.hasText(sealedClassification)) {
+            return accessChecker.canRead(legacy) && accessChecker.departmentAllowed(legacy, activeDept);
+        }
+        CatalogDataset effective = new CatalogDataset();
+        effective.setId(legacy != null ? legacy.getId() : null);
+        effective.setName(legacy != null ? legacy.getName() : "openmetadata-asset");
+        effective.setEnabled(
+            (extension == null || !Boolean.FALSE.equals(extension.getEnabled())) &&
+            (legacy == null || !Boolean.FALSE.equals(legacy.getEnabled()))
+        );
+        effective.setClassification(
+            highestReadableClassification(
+                extension != null ? extension.getClassification() : null,
+                legacy != null ? legacy.getClassification() : null,
+                sealedClassification
+            )
+        );
+        effective.setOwnerDept(
+            firstNonBlank(
+                extension != null ? extension.getOwnerDept() : null,
+                legacy != null ? legacy.getOwnerDept() : null
+            )
+        );
+        return accessChecker.canRead(effective) && accessChecker.departmentAllowed(effective, activeDept);
+    }
+
+    private String classificationSubjectKey(CatalogAssetExtension extension, CatalogDataset legacy) {
+        if (legacy != null) {
+            return CatalogAssetContractMapper.fromLegacy(legacy).assetKey();
+        }
+        if (extension != null && extension.getOmAsset() != null) {
+            return CatalogAssetContractMapper.fromOpenMetadata(extension.getOmAsset(), extension, null, null).assetKey();
+        }
+        return null;
+    }
+
+    private String highestReadableClassification(String... classifications) {
+        String highest = null;
+        if (classifications == null) {
+            return null;
+        }
+        for (String classification : classifications) {
+            if (!StringUtils.hasText(classification)) {
+                continue;
+            }
+            String normalized = SecurityLevelCatalog.normalizeDataCode(classification);
+            if (!StringUtils.hasText(normalized)) {
+                return null;
+            }
+            highest = SecurityLevelCatalog.maxDataCode(highest, normalized);
+        }
+        return highest;
+    }
+
+    private boolean canMaintainGovernance(CatalogAssetExtension extension, CatalogDataset legacy, String activeDept) {
+        if (!isCatalogMaintainer()) {
+            return false;
+        }
+        if (isInstitutePrivileged()) {
+            return true;
+        }
+        String ownerDept = firstNonBlank(
+            extension != null ? extension.getOwnerDept() : null,
+            legacy != null ? legacy.getOwnerDept() : null
+        );
+        if (!StringUtils.hasText(ownerDept)) {
+            return false;
+        }
+        CatalogDataset effective = new CatalogDataset();
+        effective.setName("openmetadata-governance-maintenance");
+        effective.setEnabled(Boolean.TRUE);
+        effective.setOwnerDept(ownerDept);
+        return accessChecker.departmentAllowedExact(effective, activeDept);
+    }
+
+    private void validateGovernanceOwnerAssignment(String ownerDept, String activeDept) {
+        if (isInstitutePrivileged()) {
+            return;
+        }
+        String proposedOwnerDept = blankToNull(ownerDept);
+        if (!StringUtils.hasText(proposedOwnerDept)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "部门维护者不能清空资产责任部门");
+        }
+        CatalogDataset proposed = new CatalogDataset();
+        proposed.setName("openmetadata-governance-owner-assignment");
+        proposed.setEnabled(Boolean.TRUE);
+        proposed.setOwnerDept(proposedOwnerDept);
+        if (!accessChecker.departmentAllowedExact(proposed, activeDept)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "部门维护者只能设置当前部门为资产责任部门");
+        }
     }
 
     private boolean isVisible(
@@ -1043,7 +1255,7 @@ public class CatalogAssetPortalService {
             dataset.getId(),
             null,
             null,
-            Boolean.FALSE.equals(dataset.getEnabled()) ? "DISABLED" : "SYNCED",
+            firstNonBlank(dataset.getHarvestStatus(), Boolean.FALSE.equals(dataset.getEnabled()) ? "DISABLED" : "SYNCED"),
             null,
             dataset.getLastModifiedDate() != null ? dataset.getLastModifiedDate() : dataset.getCreatedDate(),
             "dts-catalog",

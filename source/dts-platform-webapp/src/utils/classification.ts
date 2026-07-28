@@ -15,20 +15,39 @@ export const CLASSIFICATION_LABELS_EN: Record<ClassificationLevel, string> = {
 };
 
 const CLASSIFICATION_ALIAS_MAP: Record<string, ClassificationLevel> = {
+	"0": "PUBLIC",
 	PUBLIC: "PUBLIC",
 	DATA_PUBLIC: "PUBLIC",
+	NON_SECRET: "PUBLIC",
+	NONE_SECRET: "PUBLIC",
+	NS: "PUBLIC",
+	非密: "PUBLIC",
 	公开: "PUBLIC",
+	公开级: "PUBLIC",
+	"1": "INTERNAL",
 	INTERNAL: "INTERNAL",
 	DATA_INTERNAL: "INTERNAL",
+	GENERAL: "INTERNAL",
+	一般: "INTERNAL",
 	内部: "INTERNAL",
+	内部级: "INTERNAL",
+	"2": "SECRET",
 	SECRET: "SECRET",
 	DATA_SECRET: "SECRET",
 	SECRET_LEVEL: "SECRET",
+	IMPORTANT: "SECRET",
+	重要: "SECRET",
 	秘密: "SECRET",
+	秘密级: "SECRET",
+	"3": "CONFIDENTIAL",
 	CONFIDENTIAL: "CONFIDENTIAL",
 	DATA_CONFIDENTIAL: "CONFIDENTIAL",
 	CONFIDENTIAL_LEVEL: "CONFIDENTIAL",
+	CORE: "CONFIDENTIAL",
+	CORE_SECRET: "CONFIDENTIAL",
+	核心: "CONFIDENTIAL",
 	机密: "CONFIDENTIAL",
+	机密级: "CONFIDENTIAL",
 	TOP_SECRET: "CONFIDENTIAL",
 	TOPSECRET: "CONFIDENTIAL",
 	"TOP SECRET": "CONFIDENTIAL",
@@ -73,18 +92,12 @@ export function normalizeClassification(
 	return fallback;
 }
 
-export function classificationToLabelZh(
-	value?: string,
-	fallback: string = CLASSIFICATION_LABELS_ZH.INTERNAL,
-): string {
+export function classificationToLabelZh(value?: string, fallback: string = CLASSIFICATION_LABELS_ZH.INTERNAL): string {
 	const normalized = normalizeClassification(value);
 	return normalized ? CLASSIFICATION_LABELS_ZH[normalized] : fallback;
 }
 
-export function classificationToLabelEn(
-	value?: string,
-	fallback: string = CLASSIFICATION_LABELS_EN.INTERNAL,
-): string {
+export function classificationToLabelEn(value?: string, fallback: string = CLASSIFICATION_LABELS_EN.INTERNAL): string {
 	const normalized = normalizeClassification(value);
 	return normalized ? CLASSIFICATION_LABELS_EN[normalized] : fallback;
 }
@@ -95,6 +108,11 @@ const CLASSIFICATION_RANK: Record<ClassificationLevel, number> = {
 	SECRET: 2,
 	CONFIDENTIAL: 3,
 };
+
+export function classificationRank(value?: string): number | undefined {
+	const normalized = normalizeClassification(value, undefined);
+	return normalized ? CLASSIFICATION_RANK[normalized] : undefined;
+}
 
 const FILE_CLASSIFICATION_KEYWORDS: { keyword: string; level: ClassificationLevel }[] = [
 	{ keyword: "机密", level: "CONFIDENTIAL" },

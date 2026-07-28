@@ -4,7 +4,6 @@ import {
 	Button,
 	Card,
 	Descriptions,
-	Dropdown,
 	Space,
 	Tabs,
 	Tag,
@@ -20,7 +19,6 @@ import {
 	Alert,
 } from "antd";
 import { CompactTable } from "@/components/table";
-import { } from "@ant-design/icons";
 import { useRouter } from "@/routes/hooks";
 import {
 	ingestionTaskAPI,
@@ -36,6 +34,8 @@ import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSou
 import { listSqlModels } from "@/api/platformApi";
 import RollbackImpactModal, { type RollbackRequest } from "@/components/rollback/RollbackImpactModal";
 import ExecutionHistoryTable from "./components/ExecutionHistoryTable";
+import TransformAdmissionActions from "./components/TransformAdmissionActions";
+import { resolveTaskAdmissionState } from "./fileClassificationAdmission.helpers";
 import { resolveAsyncRunSubmitFeedback, mapExecutionToProgressView } from "./transformCreateAsyncRun.helpers";
 import { normalizeText } from "@/utils/textUtils";
 
@@ -68,6 +68,7 @@ export default function TransformDetailPage() {
 	const [logLoading, setLogLoading] = useState(false);
 	const [logContent, setLogContent] = useState("");
 	const [logMeta, setLogMeta] = useState<IngestionExecutionLog | null>(null);
+	const [admitSubmitting, setAdmitSubmitting] = useState(false);
 	const [executeSubmitting, setExecuteSubmitting] = useState(false);
 	const [incrementalStates, setIncrementalStates] = useState<IngestionIncrementalStateDTO[]>([]);
 	const [incrementalStatesLoading, setIncrementalStatesLoading] = useState(false);
@@ -394,6 +395,11 @@ export default function TransformDetailPage() {
 
 	const handleExecute = async () => {
 		if (!task?.id) return;
+		const admission = resolveTaskAdmissionState(task);
+		if (!admission.canExecute) {
+			message.warning(admission.reason);
+			return;
+		}
 		setExecuteSubmitting(true);
 		try {
 			const submit = await ingestionTaskAPI.executeTaskAsync(Number(task.id));
@@ -408,6 +414,26 @@ export default function TransformDetailPage() {
 			message.error(feedback.message);
 		} finally {
 			setExecuteSubmitting(false);
+		}
+	};
+
+	const handleAdmit = async () => {
+		if (!task?.id) return;
+		const admission = resolveTaskAdmissionState(task);
+		if (!admission.canAdmit) {
+			message.error(admission.reason);
+			return;
+		}
+		setAdmitSubmitting(true);
+		try {
+			const admitted = await ingestionTaskAPI.admitTask(Number(task.id));
+			setTask(admitted);
+			message.success("密级与准入已完成，任务现在可以执行");
+			await loadTask();
+		} catch (error: any) {
+			message.error(error?.message || "密级与准入失败");
+		} finally {
+			setAdmitSubmitting(false);
 		}
 	};
 
@@ -531,67 +557,21 @@ export default function TransformDetailPage() {
 			<Card
 				title={task.name}
 				extra={
-					<Space wrap>
-						<Button onClick={() => router.push("/explore/etl/transform")}>
-							返回
-						</Button>
-						<Button onClick={() => router.push(`/explore/etl/transform/${id}/executions`)}>
-							执行历史
-						</Button>
-						<Button
-							onClick={openLatestLog}
-							disabled={!task.lastExecutedAt}
-							data-testid="platform-transform-open-log"
-						>
-							最新日志
-						</Button>
-						<Button
-							onClick={() => router.push(`/explore/etl/transform/${id}/edit`)}
-							disabled={task.status === "deleted"}
-						>
-							编辑
-						</Button>
-						<Button
-							onClick={handleRebuildDag}
-							disabled={task.status === "deleted" || task.airflowEnabled === false}
-						>
-							重建 DAG
-						</Button>
-						<Dropdown
-							menu={{
-								items: [
-									{ key: "1", label: "Level 1 — 清空数据", onClick: () => openRollback(1) },
-									{ key: "2", label: "Level 2 — 重建表结构", onClick: () => openRollback(2), danger: false },
-									{ key: "3", label: "Level 3 — 全链路回退", onClick: () => openRollback(3), danger: true },
-								],
-							}}
-							disabled={task.status === "deleted"}
-						>
-							<Button danger>
-								数据回退
-							</Button>
-						</Dropdown>
-						<Button
-							type="primary"
-							onClick={handleExecute}
-							loading={executeSubmitting || (executeProgressOpen && !executeProgress.terminal)}
-							disabled={
-								task.status === "deleted" ||
-								executeSubmitting ||
-								(executeProgressOpen && !executeProgress.terminal) ||
-								["preparing", "running"].includes((task.lastExecutionStatus || "").toLowerCase())
-							}
-							data-testid="platform-transform-execute"
-						>
-							{executeSubmitting
-								? "提交中..."
-								: (task.lastExecutionStatus || "").toLowerCase() === "preparing"
-									? "准备中"
-									: executeProgressOpen && !executeProgress.terminal
-										? "执行中"
-										: "执行任务"}
-						</Button>
-					</Space>
+					<TransformAdmissionActions
+						task={task}
+						admitSubmitting={admitSubmitting}
+						executeSubmitting={executeSubmitting}
+						executeProgressOpen={executeProgressOpen}
+						executeProgressTerminal={executeProgress.terminal}
+						onBack={() => router.push("/explore/etl/transform")}
+						onHistory={() => router.push(`/explore/etl/transform/${id}/executions`)}
+						onOpenLog={openLatestLog}
+						onEdit={() => router.push(`/explore/etl/transform/${id}/edit`)}
+						onRebuildDag={handleRebuildDag}
+						onRollback={openRollback}
+						onAdmit={handleAdmit}
+						onExecute={handleExecute}
+					/>
 				}
 			/>
 

@@ -73,7 +73,9 @@ public class CacheConfiguration {
         }
         Config config = new Config();
         config.setInstanceName("dtsPlatform");
+        config.setClusterName(env.getProperty("spring.application.name", "dtsPlatform"));
         config.setProperty("hazelcast.phone.home.enabled", "false");
+        config.getNetworkConfig().getJoin().getAutoDetectionConfig().setEnabled(false);
         config.getNetworkConfig().getJoin().getMulticastConfig().setEnabled(false);
         config.getNetworkConfig().getJoin().getTcpIpConfig().setEnabled(false);
         if (this.registration == null) {

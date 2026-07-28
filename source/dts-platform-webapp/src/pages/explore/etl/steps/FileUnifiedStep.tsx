@@ -17,8 +17,6 @@ import {
 	Typography,
 } from "antd";
 import { CompactTable } from "@/components/table";
-import { InboxOutlined, } from "@ant-design/icons";
-import { Upload } from "@/components/upload";
 import { toast } from "sonner";
 import type { FormInstance } from "antd/es/form";
 import type { FileUploadResult } from "@/api/ingestion";
@@ -32,6 +30,14 @@ import {
 	buildFileBaseName,
 } from "../ingestionFormHelpers";
 import { filterBusinessFileMappingColumns } from "../fileColumnSystemFields.helpers";
+import {
+	mergeFileClassificationAdmission,
+	renameFileFieldClassification,
+} from "../fileClassificationAdmission.helpers";
+import FileClassificationIntake, {
+	FileFieldClassificationSelect,
+	ParsedFileSummary,
+} from "./FileClassificationIntake";
 import OdsLandingContractCard from "./OdsLandingContractCard";
 
 const { Text } = Typography;
@@ -170,7 +176,6 @@ export default function FileUnifiedStep({
 	const effectiveUnmatchedFields = odsMatchApplied
 		? unmatchedOdsFields.map((column) => column?.name).filter((name): name is string => Boolean(name))
 		: manualUnmatchedOdsFields;
-
 	useEffect(() => {
 		setManualOdsMatchApplied(false);
 		setManualMatchedCount(0);
@@ -222,83 +227,27 @@ export default function FileUnifiedStep({
 
 			{/* ─── 文件上传 ─── */}
 			<Divider orientation="left">文件上传</Divider>
-			<Form.Item label="上传文件" required>
-				<Upload
-					secretModule
-					accept=".xlsx,.csv"
-					maxCount={1}
-					showUploadList={false}
-					customRequest={async ({ file, onSuccess, onError }) => {
-						onFileUpload(file as File, onSuccess, onError);
-					}}
-					disabled={uploadingFile}
-				>
-					<p className="ant-upload-drag-icon">
-						<InboxOutlined />
-					</p>
-					<p className="ant-upload-text">
-						{uploadingFile ? "上传中..." : "点击或拖拽上传 Excel / CSV 文件"}
-					</p>
-					<p className="ant-upload-hint">支持 .xlsx, .csv 格式</p>
-				</Upload>
-			</Form.Item>
-			{fileUploadResult && (
-				<Card type="inner" title={`已解析文件: ${fileUploadResult.originalName}`} className="mb-4">
-					<Text type="secondary" className="block mb-2">
-						文件类型: <Tag>{fileUploadResult.sourceFileType || fileUploadResult.fileType}</Tag>
-						检测到 {fileUploadResult.columns?.length || 0} 列
-						{typeof fileUploadResult.rowCount === "number" && (
-							<>
-								{" · "}预览总行数: <Tag color="blue">{fileUploadResult.rowCount}</Tag>
-							</>
-						)}
-						{typeof fileUploadResult.errorCount === "number" && (
-							<>
-								{" · "}错误行:{" "}
-								<Tag color={fileUploadResult.errorCount > 0 ? "red" : "green"}>
-									{fileUploadResult.errorCount}
-								</Tag>
-							</>
-						)}
-					</Text>
-					{Array.isArray(fileUploadResult.sheets) && fileUploadResult.sheets.length > 1 && (
-						<Space className="mb-3" wrap>
-							<Text type="secondary">选择 Sheet：</Text>
-							<Select
-								style={{ minWidth: 200 }}
-								value={fileUploadResult.sheetIndex}
-								options={fileUploadResult.sheets.map((sheet) => ({
-									label: sheet.name,
-									value: sheet.index,
-								}))}
-								onChange={(value) => onSheetChange(value)}
-							/>
-						</Space>
-					)}
-					<Space className="mb-3" wrap>
-						<Text type="secondary">预览行数</Text>
-						<InputNumber
-							min={1}
-							max={2000}
-							value={filePreviewRows}
-							onChange={(value) => setFilePreviewRows(value ? Number(value) : 20)}
+			<FileClassificationIntake
+				form={form}
+				fileUploadResult={fileUploadResult}
+				setFileUploadResult={setFileUploadResult}
+				uploadingFile={uploadingFile}
+				onFileUpload={onFileUpload}
+				/>
+				{fileUploadResult && (
+					<Card type="inner" title={`已解析文件: ${fileUploadResult.originalName}`} className="mb-4">
+						<ParsedFileSummary
+							file={fileUploadResult}
+							onSheetChange={onSheetChange}
+							previewRows={filePreviewRows}
+							setPreviewRows={setFilePreviewRows}
+							previewCols={filePreviewCols}
+							setPreviewCols={setFilePreviewCols}
+							refreshPreview={refreshFilePreview}
+							previewRefreshing={previewRefreshing}
+							openErrorPreview={openErrorPreview}
+							errorPreviewLoading={errorPreviewLoading}
 						/>
-						<Text type="secondary">预览列数</Text>
-						<InputNumber
-							min={1}
-							max={50}
-							value={filePreviewCols}
-							onChange={(value) => setFilePreviewCols(value ? Number(value) : 8)}
-						/>
-						<Button size="small" onClick={refreshFilePreview} loading={previewRefreshing}>
-							刷新预览
-						</Button>
-						{(fileUploadResult.errorCount || 0) > 0 && (
-							<Button size="small" onClick={openErrorPreview} loading={errorPreviewLoading}>
-								查看错误行
-							</Button>
-						)}
-					</Space>
 					{/* ODS 表关联 */}
 					{(fileUploadResult.columns?.length ?? 0) > 0 && (
 						<div style={{ marginBottom: 12, padding: "8px 12px", background: "#fafafa", borderRadius: 6, border: "1px solid #f0f0f0" }}>
@@ -365,7 +314,8 @@ export default function FileUnifiedStep({
 							{
 								title: "显示名称",
 								dataIndex: "label",
-								sorter: (a, b) => (a.label || "").localeCompare(b.label || ""),
+								sorter: (a: any, b: any) =>
+									(a.label || "").localeCompare(b.label || ""),
 								render: (value: string, _: any, index: number) => (
 									<Input
 										size="small"
@@ -382,7 +332,7 @@ export default function FileUnifiedStep({
 							{
 								title: "字段名",
 								dataIndex: "name",
-								sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
+								sorter: (a: any, b: any) => (a.name || "").localeCompare(b.name || ""),
 								render: (value: string, record: any, index: number) => (
 									<Space size={4}>
 										<Input
@@ -392,8 +342,15 @@ export default function FileUnifiedStep({
 											style={record._odsExtra ? { color: "#999" } : undefined}
 											onChange={(e) => {
 												const cols = [...(fileUploadResult.columns || [])];
+												const previousName = cols[index].name;
 												cols[index] = { ...cols[index], name: e.target.value };
-												setFileUploadResult({ ...fileUploadResult, columns: cols });
+												setFileUploadResult(
+													renameFileFieldClassification(
+														{ ...fileUploadResult, columns: cols },
+														previousName,
+														e.target.value,
+													),
+												);
 											}}
 										/>
 										{effectiveOdsMatchApplied && record._odsMatched && (
@@ -436,6 +393,18 @@ export default function FileUnifiedStep({
 											{ label: "TIMESTAMP", value: "timestamp" },
 											{ label: "JSONB", value: "jsonb" },
 										]}
+									/>
+								),
+							},
+							{
+								title: "字段密级",
+								dataIndex: "classification",
+								width: 170,
+								render: (_: unknown, record: { name: string }) => (
+									<FileFieldClassificationSelect
+										file={fileUploadResult}
+										fieldName={record.name}
+										onChange={setFileUploadResult}
 									/>
 								),
 							},
@@ -551,7 +520,12 @@ export default function FileUnifiedStep({
 								return;
 							}
 							const mappingResult = applyPastedOdsFieldsToFileColumns(fileUploadResult.columns || [], pastedFields);
-							setFileUploadResult({ ...fileUploadResult, columns: mappingResult.columns });
+							setFileUploadResult(
+								mergeFileClassificationAdmission(
+									{ ...fileUploadResult, columns: mappingResult.columns },
+									fileUploadResult,
+								),
+							);
 							setManualOdsMatchApplied(true);
 							setManualMatchedCount(mappingResult.matchedCount);
 							setManualUnmatchedOdsFields(mappingResult.unmatchedFields);

@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO;
 import com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver;
 import com.yuzhi.dts.ingestion.service.etl.JdbcMetadataService;
+import com.yuzhi.dts.ingestion.service.infra.InfraServiceSettingsRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -48,8 +49,11 @@ class IngestionTaskIntegrationTest {
     @MockBean
     private IngestionSourceResolver sourceResolver;
 
+    @MockBean
+    private InfraServiceSettingsRepository infraServiceSettingsRepository;
+
     @Test
-    @WithMockUser(authorities = "INFRA_MAINTAINERS")
+    @WithMockUser(authorities = "ROLE_ADMIN")
     void shouldCreateAndManageTaskCompleteFlow() throws Exception {
         mockSourceResolver();
         // Step 1: Create task
@@ -81,35 +85,38 @@ class IngestionTaskIntegrationTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.description").value("Updated description"));
 
-        // Step 5: Execute task (may fail if Airflow not available, that's ok for test)
+        // Step 5: Admit the draft with immutable classification evidence
+        admitTask(taskId);
+
+        // Step 6: Execute task (may fail if Airflow not available, that's ok for test)
         mockMvc.perform(post("/api/ingestion/tasks/{id}/execute", taskId))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value("running"));
 
-        // Step 6: Get execution history
+        // Step 7: Get execution history
         mockMvc.perform(get("/api/ingestion/tasks/{id}/executions", taskId)
                 .param("page", "0")
                 .param("size", "20"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.content").isArray());
 
-        // Step 7: Get latest execution
+        // Step 8: Get latest execution
         mockMvc.perform(get("/api/ingestion/tasks/{id}/executions/latest", taskId))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.taskId").value(taskId));
 
-        // Step 8: Delete task (soft delete)
+        // Step 9: Delete task (soft delete)
         mockMvc.perform(delete("/api/ingestion/tasks/{id}", taskId))
             .andExpect(status().isNoContent());
 
-        // Step 9: Verify task is soft-deleted
+        // Step 10: Verify task is soft-deleted
         mockMvc.perform(get("/api/ingestion/tasks/{id}", taskId))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value("deleted"));
     }
 
     @Test
-    @WithMockUser(authorities = "INFRA_MAINTAINERS")
+    @WithMockUser(authorities = "ROLE_ADMIN")
     void shouldFilterTasksByStatus() throws Exception {
         mockSourceResolver();
         // Create tasks with different statuses
@@ -133,7 +140,7 @@ class IngestionTaskIntegrationTest {
     }
 
     @Test
-    @WithMockUser(authorities = "INFRA_MAINTAINERS")
+    @WithMockUser(authorities = "ROLE_ADMIN")
     void shouldHandleInvalidTaskId() throws Exception {
         mockSourceResolver();
         Long invalidId = 999999L;
@@ -161,7 +168,7 @@ class IngestionTaskIntegrationTest {
     void shouldDenyAccessWithoutAuthentication() throws Exception {
         // Attempt to access without authentication
         mockMvc.perform(get("/api/ingestion/tasks/list"))
-            .andExpect(status().isUnauthorized());
+            .andExpect(status().isForbidden());
     }
 
     // Helper methods
@@ -184,6 +191,10 @@ class IngestionTaskIntegrationTest {
 
     private void createTaskWithStatus(String name, String status) throws Exception {
         IngestionTaskDTO createdTask = createTask(name);
+        if ("active".equalsIgnoreCase(status)) {
+            admitTask(createdTask.getId());
+            return;
+        }
         createdTask.setStatus(status);
         String updateJson = objectMapper.writeValueAsString(createdTask);
 
@@ -193,10 +204,25 @@ class IngestionTaskIntegrationTest {
             .andExpect(status().isOk());
     }
 
+    private void admitTask(Long taskId) throws Exception {
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.set("classificationSeal", buildClassificationSeal());
+        payload.set("fieldClassifications", objectMapper.createObjectNode());
+
+        mockMvc.perform(post("/api/ingestion/tasks/{id}/admit", taskId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(payload)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("active"));
+    }
+
     private ObjectNode buildTaskRequest(String name) {
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put("name", name);
         payload.put("description", "Integration test task");
+        payload.put("draft", true);
+        payload.set("classificationSeal", buildClassificationSeal());
+        payload.set("fieldClassifications", objectMapper.createObjectNode());
 
         ObjectNode source = payload.putObject("source");
         source.put("dataSourceId", UUID.randomUUID().toString());
@@ -214,6 +240,18 @@ class IngestionTaskIntegrationTest {
 
         payload.put("runNow", false);
         return payload;
+    }
+
+    private ObjectNode buildClassificationSeal() {
+        ObjectNode seal = objectMapper.createObjectNode();
+        seal.put("sealId", "integration-seal");
+        seal.put("subjectType", "ASSET");
+        seal.put("subjectKey", "ingestion-task:integration");
+        seal.put("effectiveLevel", "INTERNAL");
+        seal.put("snapshotVersion", 1L);
+        seal.put("checksum", "0123456789abcdef0123456789abcdef");
+        seal.put("sealedAt", "2026-07-28T00:00:00Z");
+        return seal;
     }
 
     private ObjectNode buildJdbcConfig(String jdbcUrl, String table) {

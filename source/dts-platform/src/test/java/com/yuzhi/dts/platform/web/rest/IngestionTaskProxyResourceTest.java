@@ -3,8 +3,11 @@ package com.yuzhi.dts.platform.web.rest;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.anyMap;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -17,6 +20,7 @@ import com.yuzhi.dts.platform.service.catalog.CatalogClassificationService;
 import com.yuzhi.dts.platform.service.infra.DefaultDestinationSyncService;
 import com.yuzhi.dts.platform.service.infra.DefaultDestinationSyncService.DefaultDestinationSnapshot;
 import com.yuzhi.dts.platform.service.etl.OdsTableMappingSyncService;
+import com.yuzhi.dts.platform.service.ingestion.IngestionClassificationAdmissionService;
 import com.yuzhi.dts.platform.service.ingestion.IngestionServiceClient;
 import com.yuzhi.dts.platform.service.ops.ExternalRunLogService;
 import com.yuzhi.dts.platform.security.session.PortalSessionInactivityFilter;
@@ -31,8 +35,11 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.mock.web.MockMultipartFile;
 
+@Import(IngestionClassificationAdmissionService.class)
 @WebMvcTest(
     value = IngestionTaskProxyResource.class,
     excludeAutoConfiguration = OAuth2ClientAutoConfiguration.class,
@@ -180,7 +187,7 @@ class IngestionTaskProxyResourceTest {
         CatalogClassificationSnapshot fileSnapshot = snapshot(
             fileSealId,
             "FILE",
-            "external-exchange-file:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "ingestion-upload:file-001",
             "SECRET"
         );
         CatalogClassificationSnapshot taskSnapshot = snapshot(
@@ -208,6 +215,10 @@ class IngestionTaskProxyResourceTest {
                           "snapshotVersion":1,
                           "checksum":"%s"
                         },
+                        "_fileId":"file-001",
+                        "_fileHash":"%s",
+                        "_encrypted":true,
+                        "_fileColumns":[{"name":"name"},{"name":"identity_no"}],
                         "fieldClassifications":{
                           "name":"SECRET",
                           "identity_no":"CONFIDENTIAL"
@@ -215,7 +226,12 @@ class IngestionTaskProxyResourceTest {
                       }},
                       "destination":{"config":{"table":["ods_file"]}}
                     }
-                    """.formatted(fileSealId, fileSnapshot.getSubjectKey(), fileSnapshot.getEvidenceChecksum())
+                    """.formatted(
+                        fileSealId,
+                        fileSnapshot.getSubjectKey(),
+                        fileSnapshot.getEvidenceChecksum(),
+                        fileSnapshot.getEvidenceChecksum()
+                    )
                 ))
             .andExpect(status().isOk());
 
@@ -225,17 +241,126 @@ class IngestionTaskProxyResourceTest {
         assertThat(seal)
             .containsEntry("subjectType", "ASSET")
             .containsEntry("effectiveLevel", "CONFIDENTIAL")
-            .containsEntry("fileFloor", "SECRET");
+            .containsEntry("fileFloor", "SECRET")
+            .containsEntry("fileChecksum", fileSnapshot.getEvidenceChecksum());
         assertThat((Map<String, String>) payload.getValue().get("fieldClassifications"))
             .containsEntry("name", "SECRET")
             .containsEntry("identity_no", "CONFIDENTIAL");
 
         ArgumentCaptor<CatalogClassificationService.SealCommand> command =
             ArgumentCaptor.forClass(CatalogClassificationService.SealCommand.class);
-        verify(classificationService).sealOrRaise(command.capture());
-        assertThat(command.getValue().declaredLevel()).isEqualTo("SECRET");
-        assertThat(command.getValue().upstreamLevels().stream().map(String::valueOf).toList())
+        verify(classificationService, times(3)).sealOrRaise(command.capture());
+        assertThat(command.getAllValues())
+            .filteredOn(item -> "COLUMN".equals(item.subjectType()))
+            .extracting(CatalogClassificationService.SealCommand::declaredLevel)
             .containsExactlyInAnyOrder("SECRET", "CONFIDENTIAL");
+        CatalogClassificationService.SealCommand taskCommand = command
+            .getAllValues()
+            .stream()
+            .filter(item -> "ASSET".equals(item.subjectType()))
+            .findFirst()
+            .orElseThrow();
+        assertThat(taskCommand.declaredLevel()).isEqualTo("SECRET");
+        assertThat(taskCommand.upstreamLevels().stream().map(String::valueOf).toList())
+            .containsExactlyInAnyOrder("SECRET", "CONFIDENTIAL");
+    }
+
+    @Test
+    void fileTaskRejectsFieldClassificationBelowTheFileFloorBeforeForwarding() throws Exception {
+        DefaultDestinationSnapshot destination = new DefaultDestinationSnapshot(
+            "rdbmswriter",
+            "lake",
+            Map.of("connection", java.util.List.of(Map.of("jdbcUrl", java.util.List.of("jdbc:pg")))),
+            "11111111-2222-3333-4444-555555555555"
+        );
+        when(destinationSyncService.ensureDefaultDestination()).thenReturn(destination);
+
+        UUID fileSealId = UUID.randomUUID();
+        CatalogClassificationSnapshot fileSnapshot = snapshot(
+            fileSealId,
+            "FILE",
+            "ingestion-upload:file-001",
+            "SECRET"
+        );
+        when(classificationService.resolve("FILE", fileSnapshot.getSubjectKey()))
+            .thenReturn(java.util.Optional.of(fileSnapshot));
+
+        mockMvc.perform(post("/api/ingestion/tasks")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "name":"file-task",
+                      "source":{"config":{
+                        "classificationSeal":{
+                          "sealId":"%s",
+                          "subjectType":"FILE",
+                          "subjectKey":"%s",
+                          "snapshotVersion":1,
+                          "checksum":"%s"
+                        },
+                        "_fileId":"file-001",
+                        "_fileHash":"%s",
+                        "_encrypted":true,
+                        "fieldClassifications":{"name":"PUBLIC"},
+                        "_fileColumns":[{"name":"name"}]
+                      }},
+                      "destination":{"config":{"table":["ods_file"]}}
+                    }
+                    """.formatted(
+                        fileSealId,
+                        fileSnapshot.getSubjectKey(),
+                        fileSnapshot.getEvidenceChecksum(),
+                        fileSnapshot.getEvidenceChecksum()
+                    )
+                ))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code").value("CLASSIFICATION_DOWNGRADE_FORBIDDEN"));
+
+        verify(ingestionClient, never()).createIngestionTask(anyMap());
+    }
+
+    @Test
+    void fileTaskCannotBypassFileSealWithTopLevelAssetSeal() throws Exception {
+        DefaultDestinationSnapshot destination = new DefaultDestinationSnapshot(
+            "rdbmswriter",
+            "lake",
+            Map.of("connection", java.util.List.of(Map.of("jdbcUrl", java.util.List.of("jdbc:pg")))),
+            "11111111-2222-3333-4444-555555555555"
+        );
+        when(destinationSyncService.ensureDefaultDestination()).thenReturn(destination);
+        when(ingestionClient.createIngestionTask(anyMap()))
+            .thenReturn(new ApiResponse<>(200, "ok", Map.of("task", "should-not-forward")));
+
+        mockMvc.perform(post("/api/ingestion/tasks")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "name":"file-task-without-file-seal",
+                      "sourceType":"txtfilereader",
+                      "sourceConfig":{
+                        "_fileId":"file-001",
+                        "_fileHash":"abcdef",
+                        "_encrypted":true
+                      },
+                      "classificationSeal":{
+                        "sealId":"11111111-2222-3333-4444-555555555555",
+                        "subjectType":"ASSET",
+                        "subjectKey":"ingestion-file:forged",
+                        "snapshotVersion":1,
+                        "checksum":"abcdef",
+                        "effectiveLevel":"PUBLIC"
+                      },
+                      "fieldClassifications":{},
+                      "destination":{"config":{"table":["ods_file"]}}
+                    }
+                    """
+                ))
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.code").value("FILE_CLASSIFICATION_SEAL_REQUIRED"));
+
+        verify(ingestionClient, never()).createIngestionTask(anyMap());
     }
 
     @Test
@@ -402,6 +527,142 @@ class IngestionTaskProxyResourceTest {
             .andExpect(jsonPath("$.data.async").value(true));
 
         verify(ingestionClient).retryExecutionAsync(1L, 2L, Map.of("mode", "FAILED_ONLY"));
+    }
+
+    @Test
+    void uploadAndParseRequiresFileClassificationBeforeForwarding() throws Exception {
+        MockMultipartFile file = new MockMultipartFile(
+            "file",
+            "customers.csv",
+            "text/csv",
+            "name,identity_no\nAlice,110101".getBytes(java.nio.charset.StandardCharsets.UTF_8)
+        );
+
+        mockMvc.perform(multipart("/api/ingestion/files/upload-and-parse").file(file))
+            .andExpect(status().isBadRequest());
+
+        verify(ingestionClient, never()).uploadAndParse(any(), any(), any(), any());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void uploadAndParseSealsEncryptedUploadAndReturnsFieldFloors() throws Exception {
+        MockMultipartFile file = new MockMultipartFile(
+            "file",
+            "customers.csv",
+            "text/csv",
+            "name,identity_no\nAlice,110101".getBytes(java.nio.charset.StandardCharsets.UTF_8)
+        );
+        Map<String, Object> upstreamData = new java.util.LinkedHashMap<>();
+        upstreamData.put("fileId", "file-001");
+        upstreamData.put("fileHash", "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789");
+        upstreamData.put("originalName", "customers.csv");
+        upstreamData.put("encrypted", true);
+        upstreamData.put(
+            "columns",
+            java.util.List.of(
+                Map.of("name", "name", "type", "string"),
+                Map.of("name", "identity_no", "type", "string")
+            )
+        );
+        when(ingestionClient.uploadAndParse(any(), any(), any(), any()))
+            .thenReturn(new ApiResponse<>(200, "ok", upstreamData));
+        CatalogClassificationSnapshot fileSnapshot = snapshot(
+            UUID.randomUUID(),
+            "FILE",
+            "ingestion-upload:file-001",
+            "SECRET"
+        );
+        when(classificationService.seal(any(CatalogClassificationService.SealCommand.class)))
+            .thenReturn(fileSnapshot);
+
+        mockMvc.perform(multipart("/api/ingestion/files/upload-and-parse")
+                .file(file)
+                .param("classification", "SECRET"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.classification").value("SECRET"))
+            .andExpect(jsonPath("$.data.classificationSeal.subjectType").value("FILE"))
+            .andExpect(jsonPath("$.data.classificationSeal.subjectKey").value("ingestion-upload:file-001"))
+            .andExpect(jsonPath("$.data.classificationSeal.fileFloor").value("SECRET"))
+            .andExpect(jsonPath("$.data.fieldClassifications.name").value("SECRET"))
+            .andExpect(jsonPath("$.data.fieldClassifications.identity_no").value("SECRET"));
+
+        ArgumentCaptor<CatalogClassificationService.SealCommand> command =
+            ArgumentCaptor.forClass(CatalogClassificationService.SealCommand.class);
+        verify(classificationService).seal(command.capture());
+        assertThat(command.getValue().subjectType()).isEqualTo("FILE");
+        assertThat(command.getValue().subjectKey()).isEqualTo("ingestion-upload:file-001");
+        assertThat(command.getValue().declaredLevel()).isEqualTo("SECRET");
+        assertThat(command.getValue().evidenceChecksum()).isEqualTo(upstreamData.get("fileHash"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void admitTaskRevalidatesStoredFileSealAndActivatesTask() throws Exception {
+        CatalogClassificationSnapshot fileSnapshot = snapshot(
+            UUID.randomUUID(),
+            "FILE",
+            "ingestion-upload:file-001",
+            "SECRET"
+        );
+        CatalogClassificationSnapshot taskSnapshot = snapshot(
+            UUID.randomUUID(),
+            "ASSET",
+            "ingestion-file:sealed-task",
+            "CONFIDENTIAL"
+        );
+        Map<String, Object> fileSeal = new java.util.LinkedHashMap<>();
+        fileSeal.put("sealId", fileSnapshot.getId());
+        fileSeal.put("subjectType", "FILE");
+        fileSeal.put("subjectKey", fileSnapshot.getSubjectKey());
+        fileSeal.put("snapshotVersion", fileSnapshot.getRecordVersion());
+        fileSeal.put("checksum", fileSnapshot.getEvidenceChecksum());
+        fileSeal.put("fileFloor", "SECRET");
+        Map<String, Object> task = new java.util.LinkedHashMap<>();
+        task.put("id", 7);
+        task.put("name", "file-draft");
+        task.put("status", "draft");
+        task.put("sourceType", "csvreader");
+        task.put(
+            "sourceConfig",
+            Map.of(
+                "classificationSeal",
+                fileSeal,
+                "_fileId",
+                "file-001",
+                "_fileHash",
+                fileSnapshot.getEvidenceChecksum(),
+                "_encrypted",
+                true,
+                "fieldClassifications",
+                Map.of("identity_no", "CONFIDENTIAL"),
+                "_fileColumns",
+                java.util.List.of(Map.of("name", "name"), Map.of("name", "identity_no"))
+            )
+        );
+        task.put("fieldClassifications", Map.of("identity_no", "CONFIDENTIAL"));
+        when(ingestionClient.getTask(7L)).thenReturn(new ApiResponse<>(200, "ok", task));
+        when(classificationService.resolve("FILE", fileSnapshot.getSubjectKey()))
+            .thenReturn(java.util.Optional.of(fileSnapshot));
+        when(classificationService.sealOrRaise(any(CatalogClassificationService.SealCommand.class)))
+            .thenReturn(taskSnapshot);
+        when(ingestionClient.admitTask(any(Long.class), anyMap()))
+            .thenReturn(new ApiResponse<>(200, "ok", Map.of("id", 7, "status", "active")));
+
+        mockMvc.perform(post("/api/ingestion/tasks/7/admit"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.id").value(7))
+            .andExpect(jsonPath("$.data.status").value("active"));
+
+        ArgumentCaptor<Map<String, Object>> admission = ArgumentCaptor.forClass(Map.class);
+        verify(ingestionClient).admitTask(org.mockito.ArgumentMatchers.eq(7L), admission.capture());
+        assertThat((Map<String, Object>) admission.getValue().get("classificationSeal"))
+            .containsEntry("subjectType", "ASSET")
+            .containsEntry("effectiveLevel", "CONFIDENTIAL")
+            .containsEntry("fileFloor", "SECRET")
+            .containsEntry("fileChecksum", fileSnapshot.getEvidenceChecksum());
+        assertThat((Map<String, String>) admission.getValue().get("fieldClassifications"))
+            .containsExactlyInAnyOrderEntriesOf(Map.of("name", "SECRET", "identity_no", "CONFIDENTIAL"));
     }
 
     private void configureClassifiedSource(String sourceId) {

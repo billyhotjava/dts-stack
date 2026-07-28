@@ -19,12 +19,15 @@ import com.yuzhi.dts.platform.repository.catalog.OpenMetadataColumnCacheReposito
 import com.yuzhi.dts.platform.repository.catalog.OpenMetadataLineageCacheRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.openmetadata.OpenMetadataClient;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -43,6 +46,7 @@ public class OpenMetadataAssetSyncService {
     private final CatalogAssetExtensionRepository extensionRepository;
     private final CatalogDatasetRepository datasetRepository;
     private final InfraDataSourceRepository dataSourceRepository;
+    private final EntityManager entityManager;
     private final ObjectMapper objectMapper;
 
     public OpenMetadataAssetSyncService(
@@ -55,6 +59,7 @@ public class OpenMetadataAssetSyncService {
         CatalogAssetExtensionRepository extensionRepository,
         CatalogDatasetRepository datasetRepository,
         InfraDataSourceRepository dataSourceRepository,
+        EntityManager entityManager,
         ObjectMapper objectMapper
     ) {
         this.client = client;
@@ -66,6 +71,7 @@ public class OpenMetadataAssetSyncService {
         this.extensionRepository = extensionRepository;
         this.datasetRepository = datasetRepository;
         this.dataSourceRepository = dataSourceRepository;
+        this.entityManager = entityManager;
         this.objectMapper = objectMapper;
     }
 
@@ -260,12 +266,18 @@ public class OpenMetadataAssetSyncService {
         mapping.setLastCheckedAt(Instant.now());
 
         List<CatalogDataset> physicalCandidates = findLegacyCandidates(asset);
+        Map<UUID, String> explicitServicesBySource = resolveExplicitServicesBySource(physicalCandidates);
         List<CatalogDataset> candidates = physicalCandidates
             .stream()
-            .filter(candidate -> hasReliableServiceMapping(asset, candidate))
+            .filter(candidate -> hasReliableServiceMapping(asset, candidate, explicitServicesBySource))
             .toList();
-        if (candidates.size() == 1) {
-            CatalogDataset dataset = candidates.get(0);
+        boolean hasExplicitServiceConfiguration = explicitServicesBySource.values().stream().anyMatch(StringUtils::hasText);
+        CatalogDataset retainedExisting = candidates.isEmpty() && !hasExplicitServiceConfiguration
+            ? findInternallyConsistentExistingCandidate(mapping, physicalCandidates)
+            : null;
+        if (candidates.size() == 1 || retainedExisting != null) {
+            CatalogDataset dataset = retainedExisting != null ? retainedExisting : candidates.get(0);
+            entityManager.lock(dataset, LockModeType.PESSIMISTIC_WRITE);
             String claimConflict = legacyClaimConflict(asset, mapping, dataset);
             if (StringUtils.hasText(claimConflict)) {
                 markManualReview(mapping, claimConflict, asset);
@@ -274,8 +286,12 @@ public class OpenMetadataAssetSyncService {
             mapping.setLegacyDatasetId(dataset.getId());
             mapping.setSourceId(dataset.getSourceId());
             mapping.setMatchStatus("MATCHED");
-            mapping.setMatchReason("explicit OpenMetadata service-to-source mapping and unique table candidate");
-            mapping.setConfidence(100);
+            mapping.setMatchReason(
+                retainedExisting != null
+                    ? "existing internally consistent mapping retained pending explicit OpenMetadata service configuration"
+                    : "explicit OpenMetadata service-to-source mapping and unique table candidate"
+            );
+            mapping.setConfidence(retainedExisting != null ? 90 : 100);
             mappingRepository.save(mapping);
             upsertExtension(asset, dataset);
             return;
@@ -304,7 +320,46 @@ public class OpenMetadataAssetSyncService {
         ensurePendingExtension(asset);
     }
 
-    private boolean hasReliableServiceMapping(OpenMetadataAssetCache asset, CatalogDataset dataset) {
+    private CatalogDataset findInternallyConsistentExistingCandidate(
+        CatalogAssetMapping mapping,
+        List<CatalogDataset> physicalCandidates
+    ) {
+        if (
+            mapping == null ||
+            !"MATCHED".equalsIgnoreCase(mapping.getMatchStatus()) ||
+            mapping.getLegacyDatasetId() == null ||
+            mapping.getSourceId() == null
+        ) {
+            return null;
+        }
+        return physicalCandidates
+            .stream()
+            .filter(candidate -> mapping.getLegacyDatasetId().equals(candidate.getId()))
+            .filter(candidate -> mapping.getSourceId().equals(candidate.getSourceId()))
+            .findFirst()
+            .orElse(null);
+    }
+
+    private Map<UUID, String> resolveExplicitServicesBySource(List<CatalogDataset> candidates) {
+        Map<UUID, String> services = new LinkedHashMap<>();
+        for (CatalogDataset candidate : candidates) {
+            UUID sourceId = candidate.getSourceId();
+            if (sourceId == null || services.containsKey(sourceId)) {
+                continue;
+            }
+            services.put(
+                sourceId,
+                dataSourceRepository.findById(sourceId).map(this::explicitOpenMetadataServiceName).orElse(null)
+            );
+        }
+        return services;
+    }
+
+    private boolean hasReliableServiceMapping(
+        OpenMetadataAssetCache asset,
+        CatalogDataset dataset,
+        Map<UUID, String> explicitServicesBySource
+    ) {
         if (
             asset == null ||
             dataset == null ||
@@ -313,12 +368,8 @@ public class OpenMetadataAssetSyncService {
         ) {
             return false;
         }
-        return dataSourceRepository
-            .findById(dataset.getSourceId())
-            .map(this::explicitOpenMetadataServiceName)
-            .filter(StringUtils::hasText)
-            .map(service -> service.equalsIgnoreCase(asset.getServiceName().trim()))
-            .orElse(false);
+        String configuredService = explicitServicesBySource.get(dataset.getSourceId());
+        return StringUtils.hasText(configuredService) && configuredService.equalsIgnoreCase(asset.getServiceName().trim());
     }
 
     private String explicitOpenMetadataServiceName(InfraDataSource source) {

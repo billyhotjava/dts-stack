@@ -194,6 +194,12 @@ public class IngestionTaskService {
         }
 
         IngestionTask task = taskMapper.toEntity(dto);
+        String initialStatus = normalizeInitialStatus(dto.getStatus());
+        task.setStatus(initialStatus);
+        if ("active".equals(initialStatus)) {
+            classificationSealGuard.requireProductionSeal(task);
+            verifyManagedFileTask(task);
+        }
 
         if (!skipJob) {
             // 生成Addax Job JSON
@@ -229,7 +235,6 @@ public class IngestionTaskService {
             }
         }
 
-        task.setStatus("draft");
         IngestionTask savedTask = taskRepository.save(task);
         if (!skipJob) {
             savedTask = ensureAirflowDag(savedTask);
@@ -252,11 +257,64 @@ public class IngestionTaskService {
         );
 
         // Preheat: asynchronously poll Airflow so the DAG is registered before the user clicks execute
-        if (StringUtils.hasText(savedTask.getAirflowDagId())) {
+        if (statusEquals(savedTask.getStatus(), "active") && StringUtils.hasText(savedTask.getAirflowDagId())) {
             dagPreheatService.preheatDag(savedTask.getAirflowDagId());
         }
 
         return taskMapper.toDto(savedTask);
+    }
+
+    /**
+     * Atomically promotes a draft task into the executable state after validating
+     * the immutable classification evidence. Active tasks accept idempotent replay.
+     */
+    public IngestionTaskDTO admit(Long id, JsonNode classificationSeal, JsonNode fieldClassifications) {
+        IngestionTask task = taskRepository.findByIdForUpdate(id)
+            .orElseThrow(() -> new IllegalArgumentException("Task not found: " + id));
+        if (!statusEquals(task.getStatus(), "draft") && !statusEquals(task.getStatus(), "active")) {
+            throw new IllegalStateException("Task is not in admissible status: " + task.getStatus());
+        }
+        if (statusEquals(task.getStatus(), "active")) {
+            if (!java.util.Objects.equals(task.getClassificationSeal(), classificationSeal)
+                || !java.util.Objects.equals(task.getFieldClassifications(), fieldClassifications)) {
+                throw new IllegalStateException("Task is already active with different classification evidence");
+            }
+            classificationSealGuard.requireProductionSeal(task);
+            return taskMapper.toDto(task);
+        }
+        if (task.getClassificationSeal() == null
+            || task.getClassificationSeal().isNull()
+            || classificationSeal == null
+            || classificationSeal.isNull()
+            || task.getFieldClassifications() == null
+            || task.getFieldClassifications().isNull()
+            || fieldClassifications == null
+            || fieldClassifications.isNull()
+            || !java.util.Objects.equals(task.getClassificationSeal(), classificationSeal)
+            || !java.util.Objects.equals(task.getFieldClassifications(), fieldClassifications)) {
+            throw new IllegalStateException(
+                "CLASSIFICATION_SEAL_STALE: draft classification evidence changed; refresh before admission"
+            );
+        }
+
+        IngestionTask validationCandidate = classificationValidationCandidate(
+            task,
+            classificationSeal,
+            fieldClassifications
+        );
+        classificationSealGuard.requireProductionSeal(validationCandidate);
+        verifyManagedFileTask(task);
+
+        task.setClassificationSeal(classificationSeal);
+        task.setFieldClassifications(fieldClassifications);
+        task.setStatus("active");
+        task = taskRepository.save(task);
+        task = ensureAddaxJobExists(task);
+        task = ensureAirflowDag(task);
+        if (StringUtils.hasText(task.getAirflowDagId())) {
+            dagPreheatService.preheatDag(task.getAirflowDagId());
+        }
+        return taskMapper.toDto(task);
     }
 
     /**
@@ -270,12 +328,28 @@ public class IngestionTaskService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "来源数据源不能为空，请先选择数据源");
         }
 
-        return taskRepository.findById(id)
+        return taskRepository.findByIdForUpdate(id)
             .map(existingTask -> {
+                if (!statusEquals(existingTask.getStatus(), "active") && statusEquals(dto.getStatus(), "active")) {
+                    throw new IllegalStateException("Task must enter active status through /admit");
+                }
+                boolean wasActive = statusEquals(existingTask.getStatus(), "active");
+                JsonNode previousClassificationSeal = copyJsonNode(existingTask.getClassificationSeal());
+                JsonNode previousFieldClassifications = copyJsonNode(existingTask.getFieldClassifications());
                 IngestionTask before = snapshot(existingTask);
                 taskMapper.partialUpdate(existingTask, dto);
                 if (dto.getSyncConfig() != null) {
                     existingTask.setSyncConfig(dto.getSyncConfig());
+                }
+                boolean remainsActive = statusEquals(existingTask.getStatus(), "active");
+                if (wasActive
+                    && remainsActive
+                    && (!java.util.Objects.equals(previousClassificationSeal, existingTask.getClassificationSeal())
+                        || !java.util.Objects.equals(previousFieldClassifications, existingTask.getFieldClassifications()))) {
+                    throw new IllegalStateException("Active task classification evidence can only be changed after moving to draft");
+                }
+                if (remainsActive) {
+                    classificationSealGuard.requireProductionSeal(existingTask);
                 }
                 boolean apiSourceTask = isApiSourceTask(existingTask);
                 // 如果配置改变，重新生成Addax Job JSON
@@ -288,6 +362,11 @@ public class IngestionTaskService {
                     || !java.util.Objects.equals(before.getDestinationConfig(), existingTask.getDestinationConfig())
                     || !java.util.Objects.equals(before.getTableMapping(), existingTask.getTableMapping())
                     || !java.util.Objects.equals(before.getAddaxConfig(), existingTask.getAddaxConfig());
+                if (wasActive && remainsActive && configChanged) {
+                    throw new IllegalStateException(
+                        "Active task execution configuration can only be changed after moving to draft"
+                    );
+                }
 
                 if (configChanged && apiSourceTask) {
                     // API tasks don't generate Addax JSON; clear any stale path so the
@@ -320,7 +399,7 @@ public class IngestionTaskService {
                 }
 
                 // Preheat: asynchronously poll Airflow so the DAG is registered before the user clicks execute
-                if (StringUtils.hasText(updatedTask.getAirflowDagId())) {
+                if (statusEquals(updatedTask.getStatus(), "active") && StringUtils.hasText(updatedTask.getAirflowDagId())) {
                     dagPreheatService.preheatDag(updatedTask.getAirflowDagId());
                 }
 
@@ -492,7 +571,9 @@ public class IngestionTaskService {
     }
 
     public void validateAsyncRetryRequest(Long taskId, Long executionId, String retryMode) {
-        validateRetryRequest(taskId, executionId, retryMode);
+        ValidatedRetryRequest validated = validateRetryRequest(taskId, executionId, retryMode);
+        validateRetryEligibility(validated);
+        loadExecutableTask(taskId);
     }
 
     private IngestionExecutionDTO execute(Long taskId, String triggerMode) {
@@ -554,7 +635,6 @@ public class IngestionTaskService {
         execution = executionRepository.save(execution);
 
         task.setLastExecutionStatus("preparing");
-        task.setStatus("active");
         taskRepository.save(task);
 
         // Phase 2 (asynchronous): job generation, DAG wait, Airflow trigger
@@ -619,6 +699,7 @@ public class IngestionTaskService {
 
         boolean airflowTriggered = false;
         try {
+            requireActiveProductionTask(task);
             // Governance queue wait (if applicable)
             if (StringUtils.hasText(governanceBlockedReason) && "QUEUE".equalsIgnoreCase(policy.rejectPolicy())) {
                 boolean ready = waitForGovernanceSlot(task, policy, execution.getId(), GOVERNANCE_QUEUE_MAX_WAIT, GOVERNANCE_QUEUE_POLL_INTERVAL);
@@ -628,6 +709,7 @@ public class IngestionTaskService {
                     );
                 }
             }
+            verifyManagedFileTask(task);
 
             boolean airflowEnabled = isAirflowEnabled(task);
             com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource source = resolveSource(task, null);
@@ -980,16 +1062,11 @@ public class IngestionTaskService {
 
     public IngestionExecutionDTO retryExecution(Long taskId, Long executionId, String retryMode) {
         ValidatedRetryRequest validated = validateRetryRequest(taskId, executionId, retryMode);
-        IngestionTask task = validated.task();
+        validateRetryEligibility(validated);
+        IngestionTask task = loadExecutableTask(taskId);
         IngestionExecution execution = validated.execution();
         String mode = validated.mode();
         String previousStatus = toText(execution.getStatus());
-        if ("FAILED_ONLY".equals(mode)) {
-            boolean canRetry = "failed".equalsIgnoreCase(previousStatus) || "error".equalsIgnoreCase(previousStatus);
-            if (!canRetry) {
-                throw new IllegalStateException("仅失败执行可使用 FAILED_ONLY 重试模式");
-            }
-        }
         String previousError = toText(execution.getErrorMessage());
         String previousCategory = StringUtils.hasText(execution.getFailureCategory())
             ? execution.getFailureCategory()
@@ -1023,10 +1100,7 @@ public class IngestionTaskService {
         IngestionTask task = taskRepository.findById(taskId)
             .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
 
-        if (!"active".equals(task.getStatus()) && !"draft".equals(task.getStatus())) {
-            throw new IllegalStateException("Task is not in executable status: " + task.getStatus());
-        }
-        classificationSealGuard.requireProductionSeal(task);
+        requireActiveProductionTask(task);
         GovernancePolicy policy = resolveGovernancePolicy(task);
         if (!isWithinExecutionWindow(policy)) {
             throw new IllegalStateException("不在允许执行窗口内，当前策略窗口: " + policy.windowDisplay());
@@ -1039,6 +1113,88 @@ public class IngestionTaskService {
             throw new IllegalStateException("任务仍在运行中，请稍后重试");
         }
         return task;
+    }
+
+    private String normalizeInitialStatus(String status) {
+        if (!StringUtils.hasText(status) || statusEquals(status, "draft")) {
+            return "draft";
+        }
+        if (statusEquals(status, "active")) {
+            return "active";
+        }
+        throw new IllegalArgumentException("Unsupported initial task status: " + status);
+    }
+
+    private boolean statusEquals(String status, String expected) {
+        return StringUtils.hasText(status) && expected.equalsIgnoreCase(status.trim());
+    }
+
+    private void requireActiveProductionTask(IngestionTask task) {
+        if (!statusEquals(task.getStatus(), "active")) {
+            throw new IllegalStateException("Task is not in executable status: " + task.getStatus());
+        }
+        classificationSealGuard.requireProductionSeal(task);
+    }
+
+    private void verifyManagedFileTask(IngestionTask task) {
+        if (task == null || !isFileSourceType(task.getSourceType())) {
+            return;
+        }
+        JsonNode sourceConfig = task.getSourceConfig();
+        String fileId = sourceConfig == null ? null : sourceConfig.path("_fileId").asText(null);
+        if (!StringUtils.hasText(fileId)) {
+            throw new IllegalStateException("MANAGED_FILE_ID_REQUIRED: 文件任务缺少 _fileId");
+        }
+        JsonNode seal = task.getClassificationSeal();
+        String sealedFileId = seal == null ? null : seal.path("fileId").asText(null);
+        String sealedFileSubjectKey = seal == null ? null : seal.path("fileSubjectKey").asText(null);
+        if (
+            !fileId.equals(sealedFileId)
+                || !("ingestion-upload:" + fileId).equals(sealedFileSubjectKey)
+        ) {
+            throw new IllegalStateException(
+                "FILE_UPLOAD_EVIDENCE_MISMATCH: 文件任务引用与密级封存不一致"
+            );
+        }
+        String fileChecksum = seal == null ? null : seal.path("fileChecksum").asText(null);
+        if (!StringUtils.hasText(fileChecksum)) {
+            throw new IllegalStateException("FILE_CHECKSUM_REQUIRED: 文件封存缺少 fileChecksum");
+        }
+        FileUploadService.ManagedUpload verified = fileUploadService.verifyManagedUpload(
+            fileId,
+            fileChecksum
+        );
+        com.fasterxml.jackson.databind.node.ObjectNode canonicalConfig =
+            sourceConfig != null && sourceConfig.isObject()
+                ? ((com.fasterxml.jackson.databind.node.ObjectNode) sourceConfig).deepCopy()
+                : OBJECT_MAPPER.createObjectNode();
+        canonicalConfig.remove(List.of("hostPath", "filePath", "path", "containerPath"));
+        canonicalConfig.put("_fileId", verified.fileId());
+        canonicalConfig.put("_filePath", verified.hostPath());
+        canonicalConfig.put("_containerPath", verified.containerPath());
+        canonicalConfig.put("_fileHash", verified.fileHash());
+        canonicalConfig.put("_encrypted", true);
+        task.setSourceConfig(canonicalConfig);
+    }
+
+    private JsonNode copyJsonNode(JsonNode value) {
+        return value == null ? null : value.deepCopy();
+    }
+
+    private IngestionTask classificationValidationCandidate(
+        IngestionTask source,
+        JsonNode classificationSeal,
+        JsonNode fieldClassifications
+    ) {
+        IngestionTask candidate = new IngestionTask();
+        candidate.setId(source.getId());
+        candidate.setName(source.getName());
+        candidate.setSourceType(source.getSourceType());
+        candidate.setSourceDataSourceId(source.getSourceDataSourceId());
+        candidate.setStatus(source.getStatus());
+        candidate.setClassificationSeal(classificationSeal);
+        candidate.setFieldClassifications(fieldClassifications);
+        return candidate;
     }
 
     private ValidatedRetryRequest validateRetryRequest(Long taskId, Long executionId, String retryMode) {
@@ -1057,6 +1213,17 @@ public class IngestionTaskService {
             throw new IllegalArgumentException("Unsupported retry mode: " + retryMode);
         }
         return new ValidatedRetryRequest(task, execution, mode);
+    }
+
+    private void validateRetryEligibility(ValidatedRetryRequest validated) {
+        if (!"FAILED_ONLY".equals(validated.mode())) {
+            return;
+        }
+        String previousStatus = toText(validated.execution().getStatus());
+        boolean canRetry = "failed".equalsIgnoreCase(previousStatus) || "error".equalsIgnoreCase(previousStatus);
+        if (!canRetry) {
+            throw new IllegalStateException("仅失败执行可使用 FAILED_ONLY 重试模式");
+        }
     }
 
     private record ValidatedRetryRequest(IngestionTask task, IngestionExecution execution, String mode) {}
@@ -2316,6 +2483,7 @@ public class IngestionTaskService {
     public IngestionTaskDTO rebuildDag(Long taskId) {
         IngestionTask task = taskRepository.findById(taskId)
             .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+        requireActiveProductionTask(task);
         if (!Boolean.TRUE.equals(task.getAirflowEnabled())) {
             throw new IllegalStateException("未启用 Airflow 编排");
         }
@@ -2351,9 +2519,9 @@ public class IngestionTaskService {
                 items.add(apiDagMigrationItem(taskId, taskName, "skipped", "not api source", null));
                 continue;
             }
-            if ("deleted".equalsIgnoreCase(toText(task.getStatus()))) {
+            if (!statusEquals(task.getStatus(), "active")) {
                 skipped++;
-                items.add(apiDagMigrationItem(taskId, taskName, "skipped", "task deleted", null));
+                items.add(apiDagMigrationItem(taskId, taskName, "skipped", "task not active", null));
                 continue;
             }
             if (Boolean.FALSE.equals(task.getAirflowEnabled())) {
@@ -2362,6 +2530,7 @@ public class IngestionTaskService {
                 continue;
             }
             try {
+                classificationSealGuard.requireProductionSeal(task);
                 String dagId = airflowDagService.rebuildDagForTask(task);
                 if (!StringUtils.hasText(dagId)) {
                     throw new IllegalStateException("DAG 生成失败");
@@ -2415,7 +2584,19 @@ public class IngestionTaskService {
     }
 
     private IngestionTask ensureAirflowDag(IngestionTask task, boolean forceRebuild) {
-        if (task == null || !isAirflowEnabled(task)) {
+        if (task == null) {
+            return task;
+        }
+        if (!statusEquals(task.getStatus(), "active")) {
+            airflowDagService.deleteDagForTask(task);
+            if (StringUtils.hasText(task.getAirflowDagId())) {
+                task.setAirflowDagId(null);
+                return taskRepository.save(task);
+            }
+            return task;
+        }
+        classificationSealGuard.requireProductionSeal(task);
+        if (!isAirflowEnabled(task)) {
             return task;
         }
         // Split multi-content-block job into per-table files so each Airflow operator

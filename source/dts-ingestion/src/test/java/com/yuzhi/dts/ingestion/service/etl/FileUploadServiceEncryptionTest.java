@@ -125,6 +125,42 @@ class FileUploadServiceEncryptionTest {
     }
 
     @Test
+    void verifyManagedUpload_resolvesCanonicalEncryptedFileAndPlaintextChecksum() throws Exception {
+        byte[] plain = makeXlsx();
+        FileUploadService service = newService(crypto);
+        var upload = service.handleUpload(
+            new MockMultipartFile("file", "people.xlsx", null, plain)
+        );
+
+        FileUploadService.ManagedUpload verified = service.verifyManagedUpload(
+            upload.fileId(),
+            sha256Hex(plain)
+        );
+
+        assertThat(verified.fileId()).isEqualTo(upload.fileId());
+        assertThat(verified.hostPath()).isEqualTo(Path.of(upload.hostPath()).toRealPath().toString());
+        assertThat(verified.containerPath()).isEqualTo(upload.containerPath());
+        assertThat(verified.fileHash()).isEqualTo(sha256Hex(plain));
+    }
+
+    @Test
+    void verifyManagedUpload_rejectsChecksumThatDoesNotMatchDecryptedPayload() throws Exception {
+        FileUploadService service = newService(crypto);
+        var upload = service.handleUpload(
+            new MockMultipartFile("file", "people.xlsx", null, makeXlsx())
+        );
+
+        assertThatThrownBy(() ->
+            service.verifyManagedUpload(
+                upload.fileId(),
+                "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+            )
+        )
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("FILE_CHECKSUM_MISMATCH");
+    }
+
+    @Test
     void upload_eachUpload_usesUniqueIv() throws Exception {
         byte[] plain = makeXlsx();
         FileUploadService service = newService(crypto);

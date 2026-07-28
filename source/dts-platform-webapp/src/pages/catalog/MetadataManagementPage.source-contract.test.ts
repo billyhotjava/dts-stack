@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { classificationRank, normalizeClassification } from "../../utils/classification.ts";
 
 const PAGE_URL = new URL("./MetadataManagementPage.tsx", import.meta.url);
 const PAGE_PATH = fileURLToPath(PAGE_URL);
@@ -41,6 +42,13 @@ test("metadata management is asset semantic governance, not collection console",
 	assert.match(PAGE_SOURCE, /已分级资产仍遵循原有密级和部门权限/);
 	assert.match(PAGE_SOURCE, /资产元数据加载失败/);
 	assert.match(PAGE_SOURCE, /isBlank\(row\.classification\) \? null/);
+	assert.match(PAGE_SOURCE, /updateCatalogAssetV2Governance/);
+	assert.match(PAGE_SOURCE, /补齐密级/);
+	assert.match(PAGE_SOURCE, /保存密级/);
+	assert.match(PAGE_SOURCE, /密级只允许升高、不能降级/);
+	assert.match(PAGE_SOURCE, /disabled: currentRank !== undefined/);
+	assert.match(PAGE_SOURCE, /loadAssetsImmediately/);
+	assert.match(PAGE_SOURCE, /clearTimeout/);
 	assert.match(PAGE_SOURCE, /\/catalog\/metadata/);
 	assert.doesNotMatch(PAGE_SOURCE, /采集任务与触发|采集历史|Schema 漂移工单/);
 });
@@ -50,4 +58,14 @@ test("metadata management no longer hosts the data-asset tag dictionary", () => 
 	assert.doesNotMatch(PAGE_SOURCE, /catalog-tags|label:\s*"数据标签"/);
 	assert.doesNotMatch(PAGE_SOURCE, /useCatalogTagGovernanceAccess/);
 	assert.equal((PAGE_SOURCE.match(/同步 OpenMetadata/g) || []).length, 0);
+});
+
+test("classification rank accepts backend-compatible legacy aliases", () => {
+	assert.equal(normalizeClassification("DATA_SECRET", undefined), "SECRET");
+	assert.equal(normalizeClassification("IMPORTANT", undefined), "SECRET");
+	assert.equal(normalizeClassification("CORE", undefined), "CONFIDENTIAL");
+	assert.equal(normalizeClassification("3", undefined), "CONFIDENTIAL");
+	assert.equal(normalizeClassification("机密级", undefined), "CONFIDENTIAL");
+	assert.equal(classificationRank("DATA_SECRET"), 2);
+	assert.equal(classificationRank("CORE"), 3);
 });

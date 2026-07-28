@@ -141,6 +141,10 @@ public class IngestionServiceClient {
         return exchangeTask("/api/ingestion/tasks/" + id, HttpMethod.PUT, payload, null);
     }
 
+    public ApiResponse<Map<String, Object>> admitTask(Long id, Object payload) {
+        return exchangeTask("/api/ingestion/tasks/" + id + "/admit", HttpMethod.POST, payload, null);
+    }
+
     public ApiResponse<Map<String, Object>> deleteTask(Long id) {
         return exchangeTask("/api/ingestion/tasks/" + id, HttpMethod.DELETE, null, null);
     }

@@ -33,6 +33,12 @@ import {
 	buildSheetChangeFileParseInput,
 } from "./transformCreateFileParse.helpers";
 import { buildFilePostParseOutcome } from "./transformCreateFilePostParse.helpers";
+import { buildTransformFileSourceConfig, buildTransformFileTaskAdmissionFields, uploadTransformFileWithAdmission } from "./transformCreateFileFlow.helpers";
+import {
+	mergeFileClassificationAdmission,
+	resolveFileAdmissionState,
+	restoreFileAdmissionFromTask,
+} from "./fileClassificationAdmission.helpers";
 import { buildTemplateRenderRequest, resolveTemplateApplyOutcome } from "./transformCreateTemplate.helpers";
 import {
 	buildTransformEditRestoreState,
@@ -693,7 +699,14 @@ export default function TransformCreatePage() {
 				});
 				form.setFieldsValue(restoreState.formValues);
 				if (restoreState.fileUploadResult) {
-					setFileUploadResult(restoreState.fileUploadResult);
+					const restoredFile = restoreFileAdmissionFromTask(
+						restoreState.fileUploadResult,
+						task,
+					);
+					setFileUploadResult(restoredFile);
+					if (restoredFile?.classification) {
+						form.setFieldValue("fileClassification", restoredFile.classification);
+					}
 				}
 				if (restoreState.sourceCategory) {
 					form.setFieldValue("sourceCategory", restoreState.sourceCategory);
@@ -825,18 +838,7 @@ export default function TransformCreatePage() {
 			let readerConfig: Record<string, any> | undefined;
 			let writerConfig: Record<string, any> | undefined;
 			if (isFileDraft && fileUploadResult) {
-				readerConfig = {
-					_filePath: fileUploadResult.hostPath,
-					_containerPath: fileUploadResult.containerPath,
-					_keyVersion: fileUploadResult.keyVersion,
-					_encrypted: fileUploadResult.encrypted,
-					_fileHash: fileUploadResult.fileHash,
-					_fileSize: fileUploadResult.fileSize,
-					_fileType: fileUploadResult.fileType || "csv",
-					_fileColumns: fileUploadResult.columns,
-					_originalName: fileUploadResult.originalName,
-					_autoId: Boolean(values?.fileAutoId ?? true),
-				};
+				readerConfig = buildTransformFileSourceConfig(fileUploadResult, Boolean(values?.fileAutoId ?? true));
 			} else if (isApiDraft) {
 				readerConfig = buildApiReaderConfig(values);
 			} else if (isJsonMode) {
@@ -944,7 +946,7 @@ export default function TransformCreatePage() {
 			sheetIndex,
 			sheetName,
 		});
-		return {
+		return mergeFileClassificationAdmission({
 			...parseResult,
 			fileId: parseResult.fileId || fileId,
 			batchCode: parseResult.batchCode || batchCode || fileId,
@@ -952,7 +954,7 @@ export default function TransformCreatePage() {
 			sheets: parseResult.sheets && parseResult.sheets.length ? parseResult.sheets : sheets || [],
 			sheetIndex: parseResult.sheetIndex ?? sheetIndex,
 			sheetName: parseResult.sheetName || sheetName,
-		};
+		}, fileUploadResult);
 	};
 
 	// --- ODS 表关联 ---
@@ -1005,7 +1007,12 @@ export default function TransformCreatePage() {
 		for (let i = odsLen; i < excelLen; i++) {
 			excelCols[i] = { ...excelCols[i], _odsExtra: true } as any;
 		}
-		setFileUploadResult({ ...fileUploadResult, columns: excelCols });
+		setFileUploadResult(
+			mergeFileClassificationAdmission(
+				{ ...fileUploadResult, columns: excelCols },
+				fileUploadResult,
+			),
+		);
 		setOdsMatchApplied(true);
 	}, [odsColumns, fileUploadResult]);
 
@@ -1247,6 +1254,11 @@ export default function TransformCreatePage() {
 					toast.error("请先上传文件");
 					return;
 				}
+				const admission = resolveFileAdmissionState(fileUploadResult);
+				if (!admission.ready) {
+					toast.error(admission.reason);
+					return;
+				}
 			}
 			setCurrentStep((prev) => prev + 1);
 			return;
@@ -1291,6 +1303,12 @@ export default function TransformCreatePage() {
 				}
 				if (isFileSource && !fileUploadResult) {
 					throw new Error("请先上传文件");
+				}
+				if (mergedValues.sourceCategory === "file") {
+					const admission = resolveFileAdmissionState(fileUploadResult);
+					if (!admission.ready) {
+						throw new Error(admission.reason);
+					}
 				}
 			if (isApiSource) {
 				const readerConfig = buildApiReaderConfig(mergedValues);
@@ -1393,18 +1411,7 @@ export default function TransformCreatePage() {
 			const isJsonMode = mergedValues.editorMode === "json";
 			let readerConfig: Record<string, any>;
 			if (isFileSource) {
-				readerConfig = {
-					_filePath: fileUploadResult.hostPath,
-					_containerPath: fileUploadResult.containerPath,
-					_keyVersion: fileUploadResult.keyVersion,
-					_encrypted: fileUploadResult.encrypted,
-					_fileHash: fileUploadResult.fileHash,
-					_fileSize: fileUploadResult.fileSize,
-					_fileType: fileUploadResult.fileType || "csv",
-					_fileColumns: fileUploadResult.columns,
-					_originalName: fileUploadResult.originalName,
-					_autoId: Boolean(mergedValues?.fileAutoId ?? true),
-				};
+				readerConfig = buildTransformFileSourceConfig(fileUploadResult, Boolean(mergedValues?.fileAutoId ?? true));
 			} else {
 				readerConfig = (isJsonMode
 					? parseJson(mergedValues.readerConfig, "Reader 配置")
@@ -1467,8 +1474,10 @@ export default function TransformCreatePage() {
 						id: editId,
 						name: taskName,
 						description: normalizeText(mergedValues.description) || undefined,
+						status: "draft",
 						sourceType: resolvedReaderType,
 						sourceConfig: readerConfig,
+						...buildTransformFileTaskAdmissionFields(fileUploadResult),
 						destinationType: defaultWriterType,
 						destinationConfig: writerConfig,
 						syncMode: "full_refresh",
@@ -1482,7 +1491,7 @@ export default function TransformCreatePage() {
 						dbtDagSelector: dagSelector || undefined,
 					};
 					await ingestionTaskAPI.updateTask(editId, updatePayload);
-					toast.success("入湖任务已更新");
+					toast.success("已转为草稿，请重新完成密级与准入");
 					router.push(`/explore/etl/transform/${editId}`);
 				} else {
 					const payload = {
@@ -1515,11 +1524,21 @@ export default function TransformCreatePage() {
 							modelSelector: modelSelector || undefined,
 							dagSelector: dagSelector || undefined,
 						},
-						runNow: Boolean(mergedValues.runNow),
+						runNow: false,
+						draft: true,
 						jobConfig: jobConfig || undefined,
 					};
 					const createResult = await createIngestionTask(payload);
-					handleCreateTaskResult(createResult, Boolean(payload.runNow), taskName);
+					const createdTaskId = resolveCreatedTaskId(createResult);
+					clearDraft();
+					setHasDraft(false);
+					if (createdTaskId) {
+						setSubmittedTaskId(createdTaskId);
+						toast.success("文件任务草稿已保存，请完成密级与准入");
+						router.push(`/explore/etl/transform/${createdTaskId}`);
+					} else {
+						handleCreateTaskResult(createResult, false, taskName);
+					}
 				}
 				return;
 			}
@@ -1688,18 +1707,7 @@ export default function TransformCreatePage() {
 			}
 			mergedValues.readerType = "txtfilereader";
 			mergedValues.readerConfig = JSON.stringify(
-				{
-					_filePath: fileUploadResult.hostPath,
-					_containerPath: fileUploadResult.containerPath,
-					_keyVersion: fileUploadResult.keyVersion,
-					_encrypted: fileUploadResult.encrypted,
-					_fileHash: fileUploadResult.fileHash,
-					_fileSize: fileUploadResult.fileSize,
-					_fileType: fileUploadResult.fileType || "csv",
-					_fileColumns: fileUploadResult.columns,
-					_originalName: fileUploadResult.originalName,
-					_autoId: Boolean(mergedValues?.fileAutoId ?? true),
-				},
+				buildTransformFileSourceConfig(fileUploadResult, Boolean(mergedValues?.fileAutoId ?? true)),
 				null,
 				2
 			);
@@ -1864,10 +1872,16 @@ export default function TransformCreatePage() {
 									onFileUpload={async (file, onSuccess, onError) => {
 										try {
 											setUploadingFile(true);
-											const prevColumns = fileUploadResult?.columns;
+											const previousFileAdmission = fileUploadResult;
 											setFileUploadResult(null);
-											const parsed = await ingestionTaskAPI.uploadAndParseFile(file, {
+											const parsed = await uploadTransformFileWithAdmission({
+												file,
+												classification: form.getFieldValue("fileClassification"),
 												previewLimit: filePreviewRows,
+												previousFile: previousFileAdmission,
+												preserveSavedMapping: isEdit,
+												uploadAndParse: (uploadFile, options) =>
+													ingestionTaskAPI.uploadAndParseFile(uploadFile, options),
 											});
 											const outcome = buildFilePostParseOutcome({
 												parsed,
@@ -1875,22 +1889,6 @@ export default function TransformCreatePage() {
 												syncPrefix: form.getFieldValue("syncPrefix"),
 												reason: "upload",
 											});
-											// 编辑模式：复用已保存的字段映射，不清空
-											if (isEdit && prevColumns?.length && parsed.columns?.length) {
-												const prevByLabel = new Map<string, any>();
-												for (const col of prevColumns) {
-													const label = ((col as any).label || '').trim().toLowerCase();
-													if (label) prevByLabel.set(label, col);
-												}
-												parsed.columns = parsed.columns.map((newCol: any) => {
-													const newLabel = (newCol.label || newCol.name || '').trim().toLowerCase();
-													const prev = prevByLabel.get(newLabel);
-													if (prev?.name && (prev as any)._odsMatched) {
-														return { ...newCol, name: prev.name, _odsMatched: true };
-													}
-													return newCol;
-												});
-											}
 											setFileUploadResult(parsed);
 											if (outcome.shouldResetOds) {
 												setSelectedOdsTable(undefined); setOdsColumns([]); setOdsMatchApplied(false);
@@ -1902,6 +1900,7 @@ export default function TransformCreatePage() {
 											onSuccess?.(parsed);
 											toast.success(outcome.successMessage);
 										} catch (err: any) {
+											toast.error(err?.message || "文件上传失败");
 											onError?.(err);
 										} finally {
 											setUploadingFile(false);

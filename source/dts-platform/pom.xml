@@ -533,6 +533,7 @@
                         <testInclude>**/config/SqlTestContainer.java</testInclude>
                         <testInclude>**/config/SqlTestContainersSpringContextCustomizerFactory.java</testInclude>
                         <testInclude>**/config/TestSecurityConfiguration.java</testInclude>
+                        <testInclude>**/config/CacheConfigurationIsolationTest.java</testInclude>
                         <testInclude>**/repository/modeling/DataMartRepositoryTest.java</testInclude>
                         <testInclude>**/repository/modeling/ModelLifecycleRepositoryTest.java</testInclude>
                         <testInclude>**/repository/modeling/ModelMaterializationStartServiceIT.java</testInclude>
@@ -557,6 +558,7 @@
                         <testInclude>**/service/infra/ConnectorDriverBindingServiceTest.java</testInclude>
                         <testInclude>**/service/infra/ConnectorRegistryServiceTest.java</testInclude>
                         <testInclude>**/service/infra/InfraManagementServiceTest.java</testInclude>
+                        <testInclude>**/service/sql/SqlMetadataServiceCacheTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelLifecycleContractTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelLifecycleServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelBuildIntentServiceTest.java</testInclude>
@@ -603,6 +605,7 @@
                         <testInclude>**/web/rest/ModelSpecImport*.java</testInclude>
                         <testInclude>**/repository/catalog/CatalogAssetTag*.java</testInclude>
                         <testInclude>**/repository/catalog/CatalogExternalAssetIdentityLiquibaseIT.java</testInclude>
+                        <testInclude>**/repository/catalog/CatalogHarvestStatusLiquibaseIT.java</testInclude>
                         <testInclude>**/repository/catalog/CatalogTagLiquibaseIT.java</testInclude>
                         <testInclude>**/service/catalog/CatalogAssetOverviewAggregatorTest.java</testInclude>
                         <testInclude>**/service/catalog/CatalogPhysicalLocatorTest.java</testInclude>

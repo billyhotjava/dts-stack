@@ -1,6 +1,7 @@
 package com.yuzhi.dts.ingestion.web.rest;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.ingestion.security.SecurityUtils;
@@ -145,6 +146,11 @@ public class IngestionTaskResource {
         Boolean draft
     ) {}
 
+    public record IngestionTaskAdmissionRequest(
+        JsonNode classificationSeal,
+        JsonNode fieldClassifications
+    ) {}
+
     public record SourceSpec(
         java.util.UUID dataSourceId,
         String type,
@@ -273,7 +279,7 @@ public class IngestionTaskResource {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "任务名称不能为空");
             }
             boolean isDraft = Boolean.TRUE.equals(request.draft());
-            boolean runNow = Boolean.TRUE.equals(request.runNow());
+            boolean runNow = !isDraft && Boolean.TRUE.equals(request.runNow());
             if (request.source() == null) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少源端配置");
             }
@@ -351,6 +357,7 @@ public class IngestionTaskResource {
                     new com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO();
                 taskDTO.setName(request.name());
                 taskDTO.setDescription(request.description());
+                taskDTO.setStatus(isDraft ? "draft" : "active");
                 taskDTO.setClassificationSeal(toJsonNode(request.classificationSeal()));
                 taskDTO.setFieldClassifications(toJsonNode(request.fieldClassifications()));
                 taskDTO.setSourceType(ApiConnectorTypes.DEFAULT_READER_TYPE);
@@ -437,6 +444,7 @@ public class IngestionTaskResource {
                     new com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO();
                 taskDTO.setName(request.name());
                 taskDTO.setDescription(request.description());
+                taskDTO.setStatus("draft");
                 taskDTO.setClassificationSeal(toJsonNode(request.classificationSeal()));
                 taskDTO.setFieldClassifications(toJsonNode(request.fieldClassifications()));
                 taskDTO.setSourceType(readerType);
@@ -555,6 +563,7 @@ public class IngestionTaskResource {
                 new com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO();
             taskDTO.setName(request.name());
             taskDTO.setDescription(request.description());
+            taskDTO.setStatus("active");
             taskDTO.setClassificationSeal(toJsonNode(request.classificationSeal()));
             taskDTO.setFieldClassifications(toJsonNode(request.fieldClassifications()));
             taskDTO.setSourceType(readerType);
@@ -690,6 +699,17 @@ public class IngestionTaskResource {
                 )
             );
             return ApiResponses.ok(result);
+        } catch (IllegalStateException ex) {
+            Map<String, Object> meta = new LinkedHashMap<>();
+            meta.put("summary", "创建入湖任务失败");
+            meta.put("name", taskName);
+            meta.put("operator", operator);
+            String error = trimMessage(ex.getMessage());
+            if (StringUtils.hasText(error)) {
+                meta.put("error", error);
+            }
+            auditService.auditAction("INGESTION_TASK_CREATE", AuditStage.FAIL, taskName, meta);
+            throw new ResponseStatusException(HttpStatus.CONFLICT, ex.getMessage());
         } catch (RuntimeException ex) {
             Map<String, Object> meta = new LinkedHashMap<>();
             meta.put("summary", "创建入湖任务失败");
@@ -2048,6 +2068,47 @@ public class IngestionTaskResource {
     }
 
     /**
+     * POST /api/ingestion/tasks/{id}/admit : validate classification evidence and activate a draft.
+     */
+    @PostMapping("/tasks/{id}/admit")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO> admitTask(
+        @PathVariable Long id,
+        @RequestBody IngestionTaskAdmissionRequest request
+    ) {
+        JsonNode classificationSeal = request == null ? null : request.classificationSeal();
+        JsonNode fieldClassifications = request == null ? null : request.fieldClassifications();
+        String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
+        try {
+            com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO admitted =
+                ingestionTaskService.admit(id, classificationSeal, fieldClassifications);
+            auditService.auditAction(
+                "INGESTION_TASK_UPDATE",
+                AuditStage.SUCCESS,
+                admitted.getName(),
+                IngestionTaskAdmissionAuditMetadata.success(id, operator)
+            );
+            return ResponseEntity.ok(admitted);
+        } catch (IllegalArgumentException ex) {
+            auditService.auditAction(
+                "INGESTION_TASK_UPDATE",
+                AuditStage.FAIL,
+                String.valueOf(id),
+                IngestionTaskAdmissionAuditMetadata.failure(id, operator, ex)
+            );
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage());
+        } catch (IllegalStateException ex) {
+            auditService.auditAction(
+                "INGESTION_TASK_UPDATE",
+                AuditStage.FAIL,
+                String.valueOf(id),
+                IngestionTaskAdmissionAuditMetadata.failure(id, operator, ex)
+            );
+            throw new ResponseStatusException(HttpStatus.CONFLICT, ex.getMessage());
+        }
+    }
+
+    /**
      * PUT /api/ingestion/tasks/{id} : 更新任务
      */
     @PutMapping("/tasks/{id}")
@@ -2222,6 +2283,22 @@ public class IngestionTaskResource {
                 meta
             );
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
+        } catch (IllegalStateException ex) {
+            Map<String, Object> meta = new LinkedHashMap<>();
+            meta.put("summary", "更新入湖任务失败");
+            meta.put("taskId", id);
+            meta.put("operator", operator);
+            String error = trimMessage(ex.getMessage());
+            if (StringUtils.hasText(error)) {
+                meta.put("error", error);
+            }
+            auditService.auditAction(
+                "INGESTION_TASK_UPDATE",
+                AuditStage.FAIL,
+                taskDTO.getName(),
+                meta
+            );
+            throw new ResponseStatusException(HttpStatus.CONFLICT, ex.getMessage());
         }
     }
 

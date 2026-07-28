@@ -5,14 +5,19 @@ import {
 	SafetyCertificateOutlined,
 	TeamOutlined,
 } from "@ant-design/icons";
-import { Alert, Button, Card, Input, Select, Space, Spin, Tag } from "antd";
+import { Alert, App, Button, Card, Input, Modal, Select, Space, Spin, Tag } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { listCatalogAssetsV2, listCatalogGovernanceIntakeAssets } from "@/api/platformApi";
+import {
+	listCatalogAssetsV2,
+	listCatalogGovernanceIntakeAssets,
+	updateCatalogAssetV2Governance,
+} from "@/api/platformApi";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { CompactTable } from "@/components/table";
 import { useCatalogMaintainerAccess } from "@/hooks/useModuleManageAccess";
 import { useRouter } from "@/routes/hooks";
+import { classificationRank } from "@/utils/classification";
 import {
 	CLASSIFICATION_OPTIONS,
 	classificationText,
@@ -44,24 +49,41 @@ type MetadataAssetRow = {
 
 const isBlank = (value?: string) => !String(value || "").trim();
 
-const normalizeAsset = (item: any): MetadataAssetRow => ({
-	id: String(item.id || ""),
-	name: String(item.displayName || item.table || item.name || item.fqn || "-"),
-	type: item.type || undefined,
-	description: item.description || undefined,
-	owner: item.owner || undefined,
-	ownerDept: item.ownerDept || undefined,
-	classification: item.classification || undefined,
-	domainId: item.domainId ? String(item.domainId) : undefined,
-	domain: item.domainName || item.domain || undefined,
-	lifecycleStatus: item.lifecycleStatus || undefined,
-	governanceStatus: item.governanceStatus || undefined,
-	matchStatus: item.matchStatus || undefined,
-	metadataSource: item.metadataSource || undefined,
-	legacyDatasetId: item.legacyDatasetId ? String(item.legacyDatasetId) : undefined,
-	columnCount: Number.isFinite(Number(item.columnCount)) ? Number(item.columnCount) : undefined,
-	updatedAt: item.lastSyncedAt || item.lastModifiedDate || item.updatedAt || item.createdDate || undefined,
-});
+const optionalText = (value: unknown) => {
+	const text = String(value ?? "").trim();
+	return text || undefined;
+};
+
+const normalizeAsset = (item: Record<string, unknown>): MetadataAssetRow => {
+	const columnCount = Number(item.columnCount);
+	return {
+		id: optionalText(item.id) || "",
+		name:
+			optionalText(item.displayName) ||
+			optionalText(item.table) ||
+			optionalText(item.name) ||
+			optionalText(item.fqn) ||
+			"-",
+		type: optionalText(item.type),
+		description: optionalText(item.description),
+		owner: optionalText(item.owner),
+		ownerDept: optionalText(item.ownerDept),
+		classification: optionalText(item.classification),
+		domainId: optionalText(item.domainId),
+		domain: optionalText(item.domainName) || optionalText(item.domain),
+		lifecycleStatus: optionalText(item.lifecycleStatus),
+		governanceStatus: optionalText(item.governanceStatus),
+		matchStatus: optionalText(item.matchStatus),
+		metadataSource: optionalText(item.metadataSource),
+		legacyDatasetId: optionalText(item.legacyDatasetId),
+		columnCount: Number.isFinite(columnCount) ? columnCount : undefined,
+		updatedAt:
+			optionalText(item.lastSyncedAt) ||
+			optionalText(item.lastModifiedDate) ||
+			optionalText(item.updatedAt) ||
+			optionalText(item.createdDate),
+	};
+};
 
 const needsMetadataCompletion = (row: MetadataAssetRow) =>
 	isBlank(row.description) ||
@@ -78,8 +100,11 @@ const isOpenMetadataUnmapped = (row: MetadataAssetRow) =>
 
 export default function MetadataManagementPage() {
 	const router = useRouter();
+	const { message: toast } = App.useApp();
 	const canManage = useCatalogMaintainerAccess();
 	const requestSeqRef = useRef(0);
+	const pageSizeRef = useRef(LEDGER_PAGE_SIZE);
+	const scheduledLoadRef = useRef<number | null>(null);
 	const [keyword, setKeyword] = useState("");
 	const [classification, setClassification] = useState("ALL");
 	const [governanceStatus, setGovernanceStatus] = useState("ALL");
@@ -88,6 +113,9 @@ export default function MetadataManagementPage() {
 	const [loadError, setLoadError] = useState<string | null>(null);
 	const [records, setRecords] = useState<MetadataAssetRow[]>([]);
 	const [pageState, setPageState] = useState({ page: 1, size: LEDGER_PAGE_SIZE, total: 0 });
+	const [classificationAsset, setClassificationAsset] = useState<MetadataAssetRow | null>(null);
+	const [classificationValue, setClassificationValue] = useState<string>();
+	const [classificationSaving, setClassificationSaving] = useState(false);
 
 	const assetQuery = useCallback(
 		(page = 1, size = LEDGER_PAGE_SIZE) => ({
@@ -104,10 +132,11 @@ export default function MetadataManagementPage() {
 	const loadAssets = useCallback(
 		async (page = 1, size = LEDGER_PAGE_SIZE) => {
 			const reqId = ++requestSeqRef.current;
+			pageSizeRef.current = size;
 			setLoading(true);
 			try {
 				const loader = canManage ? listCatalogGovernanceIntakeAssets : listCatalogAssetsV2;
-				const resp: any = await loader(assetQuery(page, size));
+				const resp = await loader(assetQuery(page, size));
 				if (reqId !== requestSeqRef.current) return;
 				const content = Array.isArray(resp?.content) ? resp.content : [];
 				setRecords(content.map(normalizeAsset).filter((row: MetadataAssetRow) => row.id));
@@ -132,12 +161,67 @@ export default function MetadataManagementPage() {
 		[assetQuery, canManage],
 	);
 
+	const cancelScheduledLoad = useCallback(() => {
+		if (scheduledLoadRef.current !== null) {
+			window.clearTimeout(scheduledLoadRef.current);
+			scheduledLoadRef.current = null;
+		}
+	}, []);
+
+	const loadAssetsImmediately = useCallback(
+		(page = 1, size = LEDGER_PAGE_SIZE) => {
+			cancelScheduledLoad();
+			return loadAssets(page, size);
+		},
+		[cancelScheduledLoad, loadAssets],
+	);
+
 	useEffect(() => {
-		const timer = window.setTimeout(() => {
-			void loadAssets(1, pageState.size);
+		requestSeqRef.current += 1;
+		cancelScheduledLoad();
+		scheduledLoadRef.current = window.setTimeout(() => {
+			scheduledLoadRef.current = null;
+			void loadAssets(1, pageSizeRef.current);
 		}, 260);
-		return () => window.clearTimeout(timer);
-	}, [loadAssets, pageState.size]);
+		return cancelScheduledLoad;
+	}, [cancelScheduledLoad, loadAssets]);
+
+	const classificationOptions = useMemo(() => {
+		const currentRank = classificationRank(classificationAsset?.classification);
+		return CLASSIFICATION_OPTIONS.filter((option) => option.value !== "ALL").map((option) => {
+			const optionRank = classificationRank(option.value);
+			return {
+				...option,
+				disabled: currentRank !== undefined && optionRank !== undefined && optionRank < currentRank,
+			};
+		});
+	}, [classificationAsset?.classification]);
+
+	const openClassificationEditor = (row: MetadataAssetRow) => {
+		setClassificationAsset(row);
+		setClassificationValue(row.classification);
+	};
+
+	const saveClassification = async () => {
+		if (!classificationAsset || !classificationValue) {
+			toast.warning("请选择资产密级");
+			return;
+		}
+		setClassificationSaving(true);
+		try {
+			await updateCatalogAssetV2Governance(classificationAsset.id, {
+				classification: classificationValue,
+			});
+			toast.success("资产密级已保存");
+			setClassificationAsset(null);
+			setClassificationValue(undefined);
+			await loadAssetsImmediately(pageState.page, pageState.size);
+		} catch {
+			toast.error("资产密级保存失败，请检查治理权限后重试");
+		} finally {
+			setClassificationSaving(false);
+		}
+	};
 
 	const stats = useMemo(() => {
 		const missingOwner = records.filter((row) => isBlank(row.owner)).length;
@@ -241,6 +325,13 @@ export default function MetadataManagementPage() {
 					</Button>
 					{canManage ? (
 						<>
+							<Button
+								size="small"
+								type={isBlank(row.classification) ? "primary" : "default"}
+								onClick={() => openClassificationEditor(row)}
+							>
+								{isBlank(row.classification) ? "补齐密级" : "维护密级"}
+							</Button>
 							<Button size="small" onClick={() => router.push(`/catalog/datasets/${row.id}?tab=governance`)}>
 								治理属性
 							</Button>
@@ -320,7 +411,7 @@ export default function MetadataManagementPage() {
 							allowClear
 							value={keyword}
 							onChange={(event) => setKeyword(event.target.value)}
-							onSearch={() => void loadAssets(1, pageState.size)}
+							onSearch={() => void loadAssetsImmediately(1, pageState.size)}
 							placeholder="搜索资产、表名或业务描述"
 							style={{ width: 280 }}
 						/>
@@ -337,7 +428,7 @@ export default function MetadataManagementPage() {
 							style={{ width: 160 }}
 						/>
 						<Select value={matchStatus} onChange={setMatchStatus} options={MATCH_OPTIONS} style={{ width: 150 }} />
-						<Button onClick={() => void loadAssets(1, pageState.size)}>刷新</Button>
+						<Button onClick={() => void loadAssetsImmediately(1, pageState.size)}>刷新</Button>
 					</Space>
 					{loadError ? <Alert type="error" showIcon message={loadError} /> : null}
 					<Spin spinning={loading}>
@@ -352,7 +443,7 @@ export default function MetadataManagementPage() {
 									pageSize: pageState.size,
 									total: pageState.total,
 									showSizeChanger: true,
-									onChange: (page, size) => void loadAssets(size !== pageState.size ? 1 : page, size),
+									onChange: (page, size) => void loadAssetsImmediately(size !== pageState.size ? 1 : page, size),
 								}}
 							/>
 						) : loadError ? null : (
@@ -368,6 +459,33 @@ export default function MetadataManagementPage() {
 					</Spin>
 				</Space>
 			</Card>
+			<Modal
+				title={classificationAsset ? `维护密级：${classificationAsset.name}` : "维护资产密级"}
+				open={Boolean(classificationAsset)}
+				okText="保存密级"
+				cancelText="取消"
+				confirmLoading={classificationSaving}
+				onOk={() => void saveClassification()}
+				onCancel={() => {
+					if (!classificationSaving) {
+						setClassificationAsset(null);
+						setClassificationValue(undefined);
+					}
+				}}
+			>
+				<Space direction="vertical" size={12} className="w-full">
+					<div className="text-sm text-slate-500">
+						密级保存后将立即参与资产访问控制；部门维护者只能维护本部门资产，密级只允许升高、不能降级。
+					</div>
+					<Select
+						className="w-full"
+						placeholder="请选择资产密级"
+						value={classificationValue}
+						options={classificationOptions}
+						onChange={setClassificationValue}
+					/>
+				</Space>
+			</Modal>
 		</div>
 	);
 }

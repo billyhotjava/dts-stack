@@ -611,6 +611,7 @@ class AddaxJobServiceTest {
     @SuppressWarnings("unchecked")
     void shouldInjectFileLineageColumnsIntoFileSourceJob() throws Exception {
         Map<String, Object> readerConfig = Map.of(
+            "_fileId", "file-001",
             "_fileColumns", java.util.List.of(
                 Map.of("safeName", "project_code", "type", "string"),
                 Map.of("safeName", "plan_date", "type", "date")
@@ -638,6 +639,8 @@ class AddaxJobServiceTest {
 
         Map<String, Object> job = (Map<String, Object>) result.jobConfig().get("job");
         Map<String, Object> content = (Map<String, Object>) ((java.util.List<?>) job.get("content")).get(0);
+        Map<String, Object> reader = (Map<String, Object>) content.get("reader");
+        Map<String, Object> readerParams = (Map<String, Object>) reader.get("parameter");
         Map<String, Object> writer = (Map<String, Object>) content.get("writer");
         Map<String, Object> writerParams = (Map<String, Object>) writer.get("parameter");
         java.util.List<String> preSql = (java.util.List<String>) writerParams.get("preSql");
@@ -647,6 +650,7 @@ class AddaxJobServiceTest {
             .findFirst()
             .orElseThrow();
 
+        assertThat(readerParams).doesNotContainKey("_fileId");
         assertThat(createSql).contains("\"_dts_source_file\" VARCHAR(500) DEFAULT '项目计划.xlsx'");
         assertThat(createSql).contains("\"_dts_source_sheet\" VARCHAR(500) DEFAULT '计划表'");
         assertThat(createSql).contains("\"_dts_file_hash\" VARCHAR(500) DEFAULT 'sha256-demo'");

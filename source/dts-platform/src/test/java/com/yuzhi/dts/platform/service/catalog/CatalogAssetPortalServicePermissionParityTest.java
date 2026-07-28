@@ -4,10 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.platform.domain.catalog.CatalogAssetExtension;
+import com.yuzhi.dts.platform.domain.catalog.CatalogClassificationSnapshot;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.OpenMetadataAssetCache;
 import com.yuzhi.dts.platform.repository.catalog.CatalogAssetExtensionRepository;
@@ -29,6 +32,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
@@ -63,6 +67,8 @@ class CatalogAssetPortalServicePermissionParityTest {
     @Mock
     private AccessChecker accessChecker;
     @Mock
+    private CatalogClassificationService classificationService;
+    @Mock
     private CatalogAssetTagService assetTagService;
 
     private CatalogAssetPortalService service;
@@ -80,6 +86,7 @@ class CatalogAssetPortalServicePermissionParityTest {
                 tableSchemaRepository,
                 catalogColumnSchemaRepository,
                 accessChecker,
+                classificationService,
                 assetTagService
             );
     }
@@ -265,6 +272,7 @@ class CatalogAssetPortalServicePermissionParityTest {
         when(accessChecker.departmentAllowedExact(any(CatalogDataset.class), eq("D01"))).thenReturn(true);
         when(extensionRepository.save(any(CatalogAssetExtension.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(assetTagService.listAssetTags(any())).thenReturn(Map.of());
+        when(classificationService.sealOrRaise(any())).thenReturn(classificationSnapshot("INTERNAL"));
 
         CatalogAssetPortalService.AssetDetail detail = service.updateGovernance(
             asset.getId(),
@@ -281,11 +289,288 @@ class CatalogAssetPortalServicePermissionParityTest {
             "D01"
         );
 
-        assertThat(extension.getClassification()).isEqualTo("DATA_INTERNAL");
+        assertThat(extension.getClassification()).isEqualTo("INTERNAL");
         assertThat(detail.rawJson()).isNull();
         assertThat(detail.profileJson()).isNull();
         assertThat(detail.columns()).isEmpty();
         verifyNoInteractions(columnRepository);
+    }
+
+    @Test
+    void governanceClassificationCannotBeDowngraded() {
+        authenticate(AuthoritiesConstants.DEPT_DATA_OWNER, "D01");
+        OpenMetadataAssetCache asset = new OpenMetadataAssetCache();
+        asset.setId(UUID.fromString("32313131-3131-3131-3131-313131313131"));
+        asset.setFqn("svc.db.public.orders");
+        asset.setTableName("orders");
+        CatalogAssetExtension extension = new CatalogAssetExtension();
+        extension.setOmAsset(asset);
+        extension.setEnabled(Boolean.TRUE);
+        extension.setOwnerDept("D01");
+        extension.setClassification("DATA_SECRET");
+        when(assetRepository.findById(asset.getId())).thenReturn(Optional.of(asset));
+        when(extensionRepository.findFirstByOmAsset(asset)).thenReturn(Optional.of(extension));
+        when(accessChecker.departmentAllowedExact(any(CatalogDataset.class), eq("D01"))).thenReturn(true);
+
+        assertThatThrownBy(() ->
+            service.updateGovernance(
+                asset.getId(),
+                new CatalogAssetPortalService.GovernanceUpdate(
+                    null,
+                    "PUBLIC",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null
+                ),
+                "D01"
+            )
+        )
+            .isInstanceOfSatisfying(
+                ResponseStatusException.class,
+                ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.CONFLICT)
+            );
+
+        assertThat(extension.getClassification()).isEqualTo("DATA_SECRET");
+        verifyNoInteractions(classificationService);
+        verify(extensionRepository, never()).save(any(CatalogAssetExtension.class));
+    }
+
+    @Test
+    void mappedGovernanceUsesHighestLegacyClassificationAsFloor() {
+        authenticate(AuthoritiesConstants.DEPT_DATA_OWNER, "D01");
+        OpenMetadataAssetCache asset = new OpenMetadataAssetCache();
+        asset.setId(UUID.fromString("33313131-3131-3131-3131-313131313131"));
+        asset.setFqn("svc.db.public.orders");
+        asset.setTableName("orders");
+        CatalogDataset legacy = new CatalogDataset();
+        legacy.setId(UUID.fromString("34313131-3131-3131-3131-313131313131"));
+        legacy.setClassification("DATA_SECRET");
+        legacy.setOwnerDept("D01");
+        CatalogAssetExtension extension = new CatalogAssetExtension();
+        extension.setOmAsset(asset);
+        extension.setLegacyDatasetId(legacy.getId());
+        extension.setEnabled(Boolean.TRUE);
+        extension.setOwnerDept("D01");
+        extension.setClassification("INTERNAL");
+        when(assetRepository.findById(asset.getId())).thenReturn(Optional.of(asset));
+        when(extensionRepository.findFirstByOmAsset(asset)).thenReturn(Optional.of(extension));
+        when(datasetRepository.findById(legacy.getId())).thenReturn(Optional.of(legacy));
+        when(accessChecker.departmentAllowedExact(any(CatalogDataset.class), eq("D01"))).thenReturn(true);
+
+        assertThatThrownBy(() ->
+            service.updateGovernance(
+                asset.getId(),
+                new CatalogAssetPortalService.GovernanceUpdate(
+                    null,
+                    "INTERNAL",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null
+                ),
+                "D01"
+            )
+        )
+            .isInstanceOfSatisfying(
+                ResponseStatusException.class,
+                ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.CONFLICT)
+            );
+
+        assertThat(extension.getClassification()).isEqualTo("INTERNAL");
+        assertThat(legacy.getClassification()).isEqualTo("DATA_SECRET");
+        verifyNoInteractions(classificationService);
+        verify(extensionRepository, never()).save(any(CatalogAssetExtension.class));
+    }
+
+    @Test
+    void mappedAssetReadUsesExtensionGovernanceInsteadOfLegacyGovernance() {
+        OpenMetadataAssetCache asset = new OpenMetadataAssetCache();
+        asset.setId(UUID.fromString("32323232-3232-3232-3232-323232323232"));
+        asset.setFqn("svc.db.public.orders");
+        asset.setTableName("orders");
+        CatalogDataset legacy = new CatalogDataset();
+        legacy.setId(UUID.fromString("33323232-3232-3232-3232-323232323232"));
+        legacy.setEnabled(Boolean.TRUE);
+        legacy.setClassification("DATA_PUBLIC");
+        legacy.setOwnerDept("D01");
+        CatalogAssetExtension extension = new CatalogAssetExtension();
+        extension.setOmAsset(asset);
+        extension.setLegacyDatasetId(legacy.getId());
+        extension.setEnabled(Boolean.TRUE);
+        extension.setClassification("DATA_SECRET");
+        extension.setOwnerDept("D02");
+        when(assetRepository.findById(asset.getId())).thenReturn(Optional.of(asset));
+        when(extensionRepository.findFirstByOmAsset(asset)).thenReturn(Optional.of(extension));
+        when(datasetRepository.findById(legacy.getId())).thenReturn(Optional.of(legacy));
+        when(accessChecker.canRead(any(CatalogDataset.class))).thenReturn(true);
+        when(accessChecker.departmentAllowed(any(CatalogDataset.class), eq("D01"))).thenReturn(false);
+
+        assertThatThrownBy(() -> service.getAsset(asset.getId(), "D01"))
+            .isInstanceOfSatisfying(
+                ResponseStatusException.class,
+                ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND)
+            );
+
+        ArgumentCaptor<CatalogDataset> effectiveGovernance = ArgumentCaptor.forClass(CatalogDataset.class);
+        verify(accessChecker).canRead(effectiveGovernance.capture());
+        assertThat(effectiveGovernance.getValue().getClassification()).isEqualTo("SECRET");
+        assertThat(effectiveGovernance.getValue().getOwnerDept()).isEqualTo("D02");
+    }
+
+    @Test
+    void mappedAssetReadUsesHighestSealedClassification() {
+        OpenMetadataAssetCache asset = new OpenMetadataAssetCache();
+        asset.setId(UUID.fromString("33323232-3232-3232-3232-323232323232"));
+        asset.setFqn("svc.db.public.orders");
+        asset.setTableName("orders");
+        CatalogDataset legacy = new CatalogDataset();
+        legacy.setId(UUID.fromString("34323232-3232-3232-3232-323232323232"));
+        legacy.setName("orders");
+        legacy.setHiveDatabase("public");
+        legacy.setHiveTable("orders");
+        legacy.setEnabled(Boolean.TRUE);
+        legacy.setClassification("DATA_SECRET");
+        legacy.setOwnerDept("D01");
+        CatalogAssetExtension extension = new CatalogAssetExtension();
+        extension.setOmAsset(asset);
+        extension.setLegacyDatasetId(legacy.getId());
+        extension.setEnabled(Boolean.TRUE);
+        extension.setClassification("INTERNAL");
+        extension.setOwnerDept("D01");
+        CatalogClassificationSnapshot sealed = classificationSnapshot("CONFIDENTIAL");
+        when(assetRepository.findById(asset.getId())).thenReturn(Optional.of(asset));
+        when(extensionRepository.findFirstByOmAsset(asset)).thenReturn(Optional.of(extension));
+        when(datasetRepository.findById(legacy.getId())).thenReturn(Optional.of(legacy));
+        when(classificationService.resolve("ASSET", CatalogAssetKey.dataset(legacy))).thenReturn(Optional.of(sealed));
+        when(accessChecker.canRead(any(CatalogDataset.class)))
+            .thenAnswer(invocation -> !"CONFIDENTIAL".equals(invocation.<CatalogDataset>getArgument(0).getClassification()));
+
+        assertThatThrownBy(() -> service.getAsset(asset.getId(), "D01"))
+            .isInstanceOfSatisfying(
+                ResponseStatusException.class,
+                ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND)
+            );
+
+        ArgumentCaptor<CatalogDataset> effectiveGovernance = ArgumentCaptor.forClass(CatalogDataset.class);
+        verify(accessChecker).canRead(effectiveGovernance.capture());
+        assertThat(effectiveGovernance.getValue().getClassification()).isEqualTo("CONFIDENTIAL");
+    }
+
+    @Test
+    void classifiedCrossDepartmentAssetCannotBeGovernedByDepartmentMaintainer() {
+        authenticate(AuthoritiesConstants.DEPT_DATA_OWNER, "D01");
+        OpenMetadataAssetCache asset = new OpenMetadataAssetCache();
+        asset.setId(UUID.fromString("34343434-3434-3434-3434-343434343434"));
+        asset.setFqn("svc.db.public.orders");
+        CatalogAssetExtension extension = new CatalogAssetExtension();
+        extension.setOmAsset(asset);
+        extension.setEnabled(Boolean.TRUE);
+        extension.setClassification("DATA_INTERNAL");
+        extension.setOwnerDept("D02");
+        when(assetRepository.findById(asset.getId())).thenReturn(Optional.of(asset));
+        when(extensionRepository.findFirstByOmAsset(asset)).thenReturn(Optional.of(extension));
+        when(accessChecker.departmentAllowedExact(any(CatalogDataset.class), eq("D01"))).thenReturn(false);
+
+        assertThatThrownBy(() ->
+            service.updateGovernance(
+                asset.getId(),
+                new CatalogAssetPortalService.GovernanceUpdate(
+                    null,
+                    "DATA_SECRET",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null
+                ),
+                "D01"
+            )
+        )
+            .isInstanceOfSatisfying(
+                ResponseStatusException.class,
+                ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND)
+            );
+        verify(extensionRepository, never()).save(any(CatalogAssetExtension.class));
+    }
+
+    @Test
+    void departmentMaintainerCannotReassignAssetToAnotherDepartment() {
+        authenticate(AuthoritiesConstants.DEPT_DATA_OWNER, "D01");
+        OpenMetadataAssetCache asset = new OpenMetadataAssetCache();
+        asset.setId(UUID.fromString("35353535-3535-3535-3535-353535353535"));
+        asset.setFqn("svc.db.public.orders");
+        CatalogAssetExtension extension = new CatalogAssetExtension();
+        extension.setOmAsset(asset);
+        extension.setEnabled(Boolean.TRUE);
+        extension.setOwnerDept("D01");
+        when(assetRepository.findById(asset.getId())).thenReturn(Optional.of(asset));
+        when(extensionRepository.findFirstByOmAsset(asset)).thenReturn(Optional.of(extension));
+        when(accessChecker.departmentAllowedExact(any(CatalogDataset.class), eq("D01")))
+            .thenAnswer(invocation -> "D01".equals(invocation.<CatalogDataset>getArgument(0).getOwnerDept()));
+
+        assertThatThrownBy(() ->
+            service.updateGovernance(
+                asset.getId(),
+                new CatalogAssetPortalService.GovernanceUpdate(
+                    null,
+                    null,
+                    null,
+                    "D02",
+                    null,
+                    null,
+                    null,
+                    null
+                ),
+                "D01"
+            )
+        )
+            .isInstanceOfSatisfying(
+                ResponseStatusException.class,
+                ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN)
+            );
+        assertThat(extension.getOwnerDept()).isEqualTo("D01");
+        verify(extensionRepository, never()).save(any(CatalogAssetExtension.class));
+    }
+
+    @Test
+    void governanceMaintainerCanClassifyLegacyAssetFromTheUnifiedIntake() {
+        authenticate(AuthoritiesConstants.DEPT_DATA_OWNER, "D01");
+        UUID datasetId = UUID.fromString("36363636-3636-3636-3636-363636363636");
+        CatalogDataset legacy = new CatalogDataset();
+        legacy.setId(datasetId);
+        legacy.setName("Legacy orders");
+        legacy.setEnabled(Boolean.TRUE);
+        legacy.setOwnerDept("D01");
+        when(datasetRepository.findById(datasetId)).thenReturn(Optional.of(legacy));
+        when(accessChecker.departmentAllowedExact(any(CatalogDataset.class), eq("D01"))).thenReturn(true);
+        when(datasetRepository.save(legacy)).thenReturn(legacy);
+        when(assetTagService.listAssetTags(any())).thenReturn(Map.of());
+        when(classificationService.sealOrRaise(any())).thenReturn(classificationSnapshot("INTERNAL"));
+
+        CatalogAssetPortalService.AssetDetail detail = service.updateGovernance(
+            datasetId,
+            new CatalogAssetPortalService.GovernanceUpdate(
+                null,
+                "DATA_INTERNAL",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+            ),
+            "D01"
+        );
+
+        assertThat(legacy.getClassification()).isEqualTo("INTERNAL");
+        assertThat(detail.asset().classification()).isEqualTo("INTERNAL");
+        assertThat(detail.columns()).isEmpty();
     }
 
     @Test
@@ -364,6 +649,7 @@ class CatalogAssetPortalServicePermissionParityTest {
         dataset.setHiveTable("customers");
         dataset.setEnabled(true);
         dataset.setClassification("DATA_INTERNAL");
+        dataset.setHarvestStatus("STALE");
 
         when(assetRepository.findAll(any(Specification.class), any(PageRequest.class)))
             .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
@@ -396,10 +682,17 @@ class CatalogAssetPortalServicePermissionParityTest {
 
         assertThat(result.content()).hasSize(1);
         assertThat(result.total()).isEqualTo(50);
+        assertThat(result.content().get(0).syncStatus()).isEqualTo("STALE");
     }
 
     private CatalogAssetPortalService.AssetQuery query() {
         return new CatalogAssetPortalService.AssetQuery(null, null, null, null, null, null, null, null, null, null, null, null, false, 0, 20);
+    }
+
+    private CatalogClassificationSnapshot classificationSnapshot(String effectiveLevel) {
+        CatalogClassificationSnapshot snapshot = new CatalogClassificationSnapshot();
+        snapshot.setEffectiveLevel(effectiveLevel);
+        return snapshot;
     }
 
     private void authenticate(String authority, String department) {

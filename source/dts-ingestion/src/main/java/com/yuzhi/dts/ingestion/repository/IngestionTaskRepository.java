@@ -1,9 +1,13 @@
 package com.yuzhi.dts.ingestion.repository;
 
 import com.yuzhi.dts.ingestion.domain.IngestionTask;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -13,6 +17,10 @@ import java.util.Optional;
  */
 @Repository
 public interface IngestionTaskRepository extends JpaRepository<IngestionTask, Long> {
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select task from IngestionTask task where task.id = :id")
+    Optional<IngestionTask> findByIdForUpdate(@Param("id") Long id);
 
     /**
      * 根据状态查询任务列表

@@ -16,7 +16,8 @@ import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -30,32 +31,44 @@ public class SqlMetadataService {
 
     private static final Logger LOG = LoggerFactory.getLogger(SqlMetadataService.class);
     private static final String[] TABLE_TYPES = {"TABLE", "VIEW"};
+    private static final String TABLE_CACHE_NAME = "sqlIdeTables";
+    private static final String COLUMN_CACHE_NAME = "sqlIdeColumns";
+    private static final String TABLE_CACHE_KEY_PREFIX = "metadata:tables:";
+    private static final String COLUMN_CACHE_KEY_PREFIX = "metadata:columns:";
 
     private final InfraDataSourceRepository dataSourceRepository;
     private final InfraSecretService secretService;
     private final AdminInfraClient adminInfraClient;
     private final DataSourceAccessGuard accessGuard;
+    private final CacheManager cacheManager;
 
     public SqlMetadataService(
         InfraDataSourceRepository dataSourceRepository,
         InfraSecretService secretService,
         AdminInfraClient adminInfraClient,
-        DataSourceAccessGuard accessGuard
+        DataSourceAccessGuard accessGuard,
+        CacheManager cacheManager
     ) {
         this.dataSourceRepository = dataSourceRepository;
         this.secretService = secretService;
         this.adminInfraClient = adminInfraClient;
         this.accessGuard = accessGuard;
+        this.cacheManager = cacheManager;
     }
 
     /**
      * 列出数据源中的所有表。结果由 {@code sqlIdeTables} 缓存承载（TTL 5 分钟，
-     * 见 {@code CacheConfiguration.buildSqlIdeMapConfig}）。依据 datasourceId 单独作 key，
-     * activeDept 仅影响权限校验不影响列表内容。
+     * 见 {@code CacheConfiguration.buildSqlIdeMapConfig}）。依据元数据命名空间与 datasourceId 作 key，
+     * activeDept 仅影响权限校验不影响列表内容。空结果不进入缓存，避免数据源初始化或建表前的
+     * 瞬时空清单遮蔽后续创建的表。
      */
-    @Cacheable(cacheNames = "sqlIdeTables", key = "#datasourceId")
     public List<TableInfo> listTables(UUID datasourceId, String activeDept) {
         accessGuard.assertReadable(datasourceId, activeDept);
+        String cacheKey = TABLE_CACHE_KEY_PREFIX + datasourceId;
+        List<TableInfo> cached = getCachedList(TABLE_CACHE_NAME, cacheKey);
+        if (cached != null) {
+            return cached;
+        }
         JdbcConnectionTarget target = resolveConnectionTarget(datasourceId);
 
         List<TableInfo> tables = new ArrayList<>();
@@ -106,15 +119,22 @@ public class SqlMetadataService {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "获取表列表失败: " + ex.getMessage());
         }
 
+        if (!tables.isEmpty()) {
+            cacheList(TABLE_CACHE_NAME, cacheKey, tables);
+        }
         return tables;
     }
 
     /**
      * 列出表的列信息
      */
-    @Cacheable(cacheNames = "sqlIdeColumns", key = "#datasourceId + ':' + #schema + '.' + #tableName")
     public List<Map<String, String>> listColumns(UUID datasourceId, String schema, String tableName, String activeDept) {
         accessGuard.assertReadable(datasourceId, activeDept);
+        String cacheKey = COLUMN_CACHE_KEY_PREFIX + datasourceId + ":" + schema + "." + tableName;
+        List<Map<String, String>> cached = getCachedList(COLUMN_CACHE_NAME, cacheKey);
+        if (cached != null) {
+            return cached;
+        }
         JdbcConnectionTarget target = resolveConnectionTarget(datasourceId);
 
         List<Map<String, String>> columns = new ArrayList<>();
@@ -134,7 +154,30 @@ public class SqlMetadataService {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "获取列信息失败: " + ex.getMessage());
         }
 
+        if (!columns.isEmpty()) {
+            cacheList(COLUMN_CACHE_NAME, cacheKey, columns);
+        }
         return columns;
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> List<T> getCachedList(String cacheName, Object key) {
+        Cache cache = cacheManager.getCache(cacheName);
+        if (cache == null) {
+            return null;
+        }
+        Cache.ValueWrapper value = cache.get(key);
+        if (value == null || !(value.get() instanceof List<?> list)) {
+            return null;
+        }
+        return (List<T>) list;
+    }
+
+    private void cacheList(String cacheName, Object key, List<?> value) {
+        Cache cache = cacheManager.getCache(cacheName);
+        if (cache != null) {
+            cache.put(key, value);
+        }
     }
 
     private JdbcConnectionTarget resolveConnectionTarget(UUID datasourceId) {

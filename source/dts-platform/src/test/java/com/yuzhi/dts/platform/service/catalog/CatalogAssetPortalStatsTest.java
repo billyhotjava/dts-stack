@@ -74,6 +74,9 @@ class CatalogAssetPortalStatsTest {
     private AccessChecker accessChecker;
 
     @Mock
+    private CatalogClassificationService classificationService;
+
+    @Mock
     private CatalogAssetTagService assetTagService;
 
     private CatalogAssetPortalService service;
@@ -98,6 +101,7 @@ class CatalogAssetPortalStatsTest {
                 tableSchemaRepository,
                 catalogColumnSchemaRepository,
                 accessChecker,
+                classificationService,
                 assetTagService
             );
         lenient().when(accessChecker.canRead(any())).thenReturn(true);

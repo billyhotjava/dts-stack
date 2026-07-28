@@ -11,6 +11,7 @@ import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogClassificationException;
 import com.yuzhi.dts.platform.service.catalog.CatalogClassificationService;
+import com.yuzhi.dts.platform.service.ingestion.IngestionClassificationAdmissionService;
 import com.yuzhi.dts.platform.service.ingestion.IngestionServiceClient;
 import com.yuzhi.dts.platform.service.infra.DefaultDestinationSyncService;
 import com.yuzhi.dts.platform.service.etl.OdsTableMappingSyncService;
@@ -23,6 +24,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.MediaType;
@@ -38,6 +40,7 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.util.StringUtils;
 
 @RestController
@@ -54,6 +57,7 @@ public class IngestionTaskProxyResource {
     private final ExternalRunLogService externalRunLogService;
     private final InfraDataSourceRepository dataSourceRepository;
     private final CatalogClassificationService classificationService;
+    private final IngestionClassificationAdmissionService classificationAdmissionService;
     private final ObjectMapper objectMapper;
 
     public IngestionTaskProxyResource(
@@ -64,6 +68,7 @@ public class IngestionTaskProxyResource {
         ExternalRunLogService externalRunLogService,
         InfraDataSourceRepository dataSourceRepository,
         CatalogClassificationService classificationService,
+        IngestionClassificationAdmissionService classificationAdmissionService,
         ObjectMapper objectMapper
     ) {
         this.ingestionClient = ingestionClient;
@@ -73,6 +78,7 @@ public class IngestionTaskProxyResource {
         this.externalRunLogService = externalRunLogService;
         this.dataSourceRepository = dataSourceRepository;
         this.classificationService = classificationService;
+        this.classificationAdmissionService = classificationAdmissionService;
         this.objectMapper = objectMapper;
     }
 
@@ -186,6 +192,42 @@ public class IngestionTaskProxyResource {
             }
         }
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/tasks/{id}/admit")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> admitTask(@PathVariable("id") Long id) {
+        ApiResponse<Map<String, Object>> existing = ingestionClient.getTask(id);
+        if (existing == null) {
+            return ResponseEntity.ok(new ApiResponse<>(503, "接入服务暂不可用", null));
+        }
+        if (existing.getStatus() < 200 || existing.getStatus() >= 300 || existing.getData() == null) {
+            return ResponseEntity.ok(existing);
+        }
+
+        Map<String, Object> sealedTask = attachClassificationSeal(existing.getData(), true);
+        Map<String, Object> admission = new LinkedHashMap<>();
+        admission.put("classificationSeal", sealedTask.get("classificationSeal"));
+        if (sealedTask.get("fieldClassifications") != null) {
+            admission.put("fieldClassifications", sealedTask.get("fieldClassifications"));
+        }
+        ApiResponse<Map<String, Object>> response = ingestionClient.admitTask(id, admission);
+        String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
+        boolean success = response != null && response.getStatus() >= 200 && response.getStatus() < 300;
+        auditService.auditAction(
+            "INGESTION_TASK_UPDATE",
+            success ? AuditStage.SUCCESS : AuditStage.FAIL,
+            String.valueOf(id),
+            Map.of(
+                "summary",
+                success ? "完成密级封存与生产准入" : "密级封存与生产准入失败",
+                "taskId",
+                id,
+                "operator",
+                operator
+            )
+        );
+        return ResponseEntity.ok(response == null ? new ApiResponse<>(503, "接入服务暂不可用", null) : response);
     }
 
     @DeleteMapping("/tasks/{id}")
@@ -501,11 +543,34 @@ public class IngestionTaskProxyResource {
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Object>> uploadAndParseFile(
         @RequestPart("file") MultipartFile file,
+        @RequestParam("classification") String classification,
         @RequestParam(value = "previewLimit", required = false) Integer previewLimit,
         @RequestParam(value = "sheetIndex", required = false) Integer sheetIndex,
         @RequestParam(value = "sheetName", required = false) String sheetName
     ) {
-        return ResponseEntity.ok(ingestionClient.uploadAndParse(file, previewLimit, sheetIndex, sheetName));
+        String declaredLevel;
+        try {
+            declaredLevel = SecurityLevelCatalog.requireDataLevel(classification).code();
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "必须明确选择文件密级", ex);
+        }
+        ApiResponse<Object> response = ingestionClient.uploadAndParse(file, previewLimit, sheetIndex, sheetName);
+        if (response == null) {
+            return ResponseEntity.ok(new ApiResponse<>(503, "接入服务暂不可用", null));
+        }
+        if (response.getStatus() >= 200 && response.getStatus() < 300) {
+            try {
+                response.setData(
+                    classificationAdmissionService.sealEncryptedUpload(
+                        response.getData(),
+                        declaredLevel
+                    )
+                );
+            } catch (CatalogClassificationException ex) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, ex.getMessage(), ex);
+            }
+        }
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/files/parse")
@@ -942,6 +1007,36 @@ public class IngestionTaskProxyResource {
 
     private Map<String, Object> attachClassificationSeal(Map<String, Object> payload, boolean required) {
         Map<String, Object> resolved = payload == null ? new LinkedHashMap<>() : new LinkedHashMap<>(payload);
+        Map<String, Object> source = mapValue(resolved.get("source"));
+        Map<String, Object> sourceConfig = source.get("config") instanceof Map<?, ?>
+            ? mapValue(source.get("config"))
+            : mapValue(resolved.get("sourceConfig"));
+        boolean fileTask = isFileTask(resolved, source, sourceConfig);
+        if (
+            fileTask &&
+            !(sourceConfig.get("classificationSeal") instanceof Map<?, ?>)
+        ) {
+            throw new CatalogClassificationException(
+                "FILE_CLASSIFICATION_SEAL_REQUIRED",
+                "文件接入任务必须保留上传阶段生成的文件密级封存"
+            );
+        }
+        if (sourceConfig.get("classificationSeal") instanceof Map<?, ?> fileSeal) {
+            Object rawFields = resolved.get("fieldClassifications") != null
+                ? resolved.get("fieldClassifications")
+                : sourceConfig.get("fieldClassifications");
+            Object rawColumns = sourceConfig.get("columns") != null
+                ? sourceConfig.get("columns")
+                : sourceConfig.get("_fileColumns");
+            return classificationAdmissionService.attachFileSeal(
+                resolved,
+                mapValue(fileSeal),
+                rawFields,
+                rawColumns,
+                sourceConfig,
+                required
+            );
+        }
         if (resolved.get("classificationSeal") instanceof Map<?, ?> providedSeal) {
             return attachProvidedClassificationSeal(
                 resolved,
@@ -949,18 +1044,12 @@ public class IngestionTaskProxyResource {
                 resolved.get("fieldClassifications")
             );
         }
-        Map<String, Object> source = mapValue(resolved.get("source"));
-        Map<String, Object> sourceConfig = mapValue(source.get("config"));
-        if (sourceConfig.get("classificationSeal") instanceof Map<?, ?> fileSeal) {
-            return attachFileClassificationSeal(
-                resolved,
-                mapValue(fileSeal),
-                sourceConfig.get("fieldClassifications"),
-                required
-            );
-        }
 
-        UUID sourceId = parseUuid(source.get("dataSourceId"));
+        UUID sourceId = parseUuid(
+            source.get("dataSourceId") != null
+                ? source.get("dataSourceId")
+                : resolved.get("sourceDataSourceId")
+        );
         if (sourceId == null) {
             if (required) {
                 throw new CatalogClassificationException(
@@ -1123,93 +1212,6 @@ public class IngestionTaskProxyResource {
         return resolved;
     }
 
-    private Map<String, Object> attachFileClassificationSeal(
-        Map<String, Object> resolved,
-        Map<String, Object> fileSeal,
-        Object rawFieldClassifications,
-        boolean required
-    ) {
-        String subjectType = String.valueOf(fileSeal.getOrDefault("subjectType", "")).trim();
-        String subjectKey = String.valueOf(fileSeal.getOrDefault("subjectKey", "")).trim();
-        if (!"FILE".equalsIgnoreCase(subjectType) || !StringUtils.hasText(subjectKey)) {
-            if (!required) {
-                resolved.put("classificationSeal", new LinkedHashMap<>(fileSeal));
-                return resolved;
-            }
-            throw new CatalogClassificationException(
-                "FILE_CLASSIFICATION_SEAL_INVALID",
-                "文件接入密级封存引用无效"
-            );
-        }
-        Map<String, String> fields = normalizeFieldClassifications(rawFieldClassifications);
-        if (required && fields.isEmpty()) {
-            throw new CatalogClassificationException(
-                "CLASSIFICATION_FIELD_SEAL_REQUIRED",
-                "文件接入必须先确认并封存字段密级"
-            );
-        }
-        CatalogClassificationSnapshot sourceSnapshot = classificationService
-            .resolve("FILE", subjectKey)
-            .orElseThrow(() ->
-                new CatalogClassificationException(
-                    "FILE_CLASSIFICATION_SEAL_NOT_FOUND",
-                    "文件密级封存不存在或已失效"
-                )
-            );
-        assertCurrentSeal(fileSeal, sourceSnapshot, "FILE_CLASSIFICATION_SEAL_STALE");
-        String fileFloor = SecurityLevelCatalog
-            .requireDataLevel(sourceSnapshot.getEffectiveLevel())
-            .code();
-        for (Map.Entry<String, String> entry : fields.entrySet()) {
-            if (SecurityLevelCatalog.isDataDowngrade(fileFloor, entry.getValue())) {
-                throw new CatalogClassificationException(
-                    "CLASSIFICATION_DOWNGRADE_FORBIDDEN",
-                    "字段 " + entry.getKey() + " 的密级不能低于文件密级 " + fileFloor
-                );
-            }
-        }
-        String compositeKey = "ingestion-file:" + subjectKey;
-        String evidenceSource =
-            sourceSnapshot.getId() +
-            ":" +
-            sourceSnapshot.getRecordVersion() +
-            ":" +
-            sourceSnapshot.getEvidenceChecksum() +
-            ":" +
-            new java.util.TreeMap<>(fields);
-        CatalogClassificationSnapshot taskSnapshot = classificationService.sealOrRaise(
-            new CatalogClassificationService.SealCommand(
-                "ASSET",
-                compositeKey,
-                "DATASET",
-                fileFloor,
-                null,
-                null,
-                fields.values(),
-                "FILE_DECLARATION",
-                subjectKey,
-                sha256(evidenceSource),
-                toJson(
-                    Map.of(
-                        "fileSealId",
-                        sourceSnapshot.getId(),
-                        "fileSubjectKey",
-                        subjectKey,
-                        "fileFloor",
-                        fileFloor,
-                        "fieldClassifications",
-                        fields
-                    )
-                )
-            )
-        );
-        Map<String, Object> seal = sealReference(taskSnapshot);
-        seal.put("fileFloor", fileFloor);
-        resolved.put("classificationSeal", seal);
-        resolved.put("fieldClassifications", new LinkedHashMap<>(fields));
-        return resolved;
-    }
-
     private void assertCurrentSeal(
         Map<String, Object> reference,
         CatalogClassificationSnapshot snapshot,
@@ -1330,6 +1332,35 @@ public class IngestionTaskProxyResource {
             map.forEach((key, item) -> result.put(String.valueOf(key), item));
         }
         return result;
+    }
+
+    private boolean isFileTask(
+        Map<String, Object> task,
+        Map<String, Object> source,
+        Map<String, Object> sourceConfig
+    ) {
+        if (
+            sourceConfig.containsKey("_fileId") ||
+            sourceConfig.containsKey("_fileHash") ||
+            sourceConfig.containsKey("_encrypted") ||
+            sourceConfig.containsKey("_fileColumns")
+        ) {
+            return true;
+        }
+        Object rawType = firstNonBlank(
+            task.get("sourceType"),
+            source.get("sourceType"),
+            source.get("type"),
+            sourceConfig.get("readerType")
+        );
+        if (rawType == null) {
+            return false;
+        }
+        String sourceType = rawType.toString().trim().toLowerCase(java.util.Locale.ROOT);
+        return switch (sourceType) {
+            case "file", "csv", "txt", "excel", "txtfilereader", "excelreader" -> true;
+            default -> sourceType.contains("file");
+        };
     }
 
     private UUID parseUuid(Object value) {

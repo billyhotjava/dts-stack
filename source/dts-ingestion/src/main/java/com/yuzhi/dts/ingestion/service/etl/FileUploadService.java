@@ -102,6 +102,14 @@ public class FileUploadService {
     ) {
     }
 
+    public record ManagedUpload(
+        String fileId,
+        String hostPath,
+        String containerPath,
+        String fileHash
+    ) {
+    }
+
     public FileUploadResult handleUpload(MultipartFile file) {
         return handleUpload(file, null);
     }
@@ -206,6 +214,55 @@ public class FileUploadService {
             return stored;
         } catch (Exception ex) {
             throw new IllegalStateException("读取上传文件失败: " + ex.getMessage(), ex);
+        }
+    }
+
+    public ManagedUpload verifyManagedUpload(String fileId, String expectedPlainSha256) {
+        String normalizedFileId = StringUtils.hasText(fileId) ? fileId.trim() : null;
+        if (
+            !StringUtils.hasText(normalizedFileId)
+                || !normalizedFileId.matches("[A-Za-z0-9][A-Za-z0-9_-]{0,127}")
+        ) {
+            throw new IllegalStateException("MANAGED_FILE_ID_INVALID: _fileId 无效");
+        }
+        if (!StringUtils.hasText(expectedPlainSha256)) {
+            throw new IllegalStateException("FILE_CHECKSUM_REQUIRED: 文件封存缺少 fileChecksum");
+        }
+
+        try {
+            Path uploadsDir = Paths.get(resolveJobDir(), UPLOADS_SUBDIR).toRealPath();
+            Path resolved = resolveUploadedPath(normalizedFileId);
+            if (
+                Files.isSymbolicLink(resolved)
+                    || !Files.isRegularFile(resolved, java.nio.file.LinkOption.NOFOLLOW_LINKS)
+                    || !resolved.getFileName().toString().endsWith(".enc")
+            ) {
+                throw new IllegalStateException("MANAGED_FILE_ENCRYPTION_REQUIRED: 受管上传必须是加密 .enc 文件");
+            }
+            Path canonicalHostPath = resolved.toRealPath(java.nio.file.LinkOption.NOFOLLOW_LINKS);
+            if (!uploadsDir.equals(canonicalHostPath.getParent())) {
+                throw new IllegalStateException("MANAGED_FILE_PATH_INVALID: 受管上传文件不在规范目录");
+            }
+
+            byte[] stored = Files.readAllBytes(canonicalHostPath);
+            if (!isEncryptedFile(canonicalHostPath.getFileName().toString(), stored)) {
+                throw new IllegalStateException("MANAGED_FILE_ENCRYPTION_REQUIRED: 受管上传不是有效密文");
+            }
+            byte[] plain = decryptStoredPayload(stored);
+            String actualPlainSha256 = sha256(plain);
+            if (!expectedPlainSha256.trim().equalsIgnoreCase(actualPlainSha256)) {
+                throw new IllegalStateException("FILE_CHECKSUM_MISMATCH: 文件明文摘要与密级封存不一致");
+            }
+            return new ManagedUpload(
+                normalizedFileId,
+                canonicalHostPath.toString(),
+                ADDAX_CONTAINER_DIR + "/" + UPLOADS_SUBDIR + "/" + canonicalHostPath.getFileName(),
+                actualPlainSha256
+            );
+        } catch (IllegalStateException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new IllegalStateException("MANAGED_FILE_VERIFICATION_FAILED: " + ex.getMessage(), ex);
         }
     }
 
