@@ -3,6 +3,8 @@ package com.yuzhi.dts.platform.web.rest.catalog;
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.domain.catalog.CatalogAssetResolutionFailure;
+import com.yuzhi.dts.platform.security.AuthoritiesConstants;
+import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetContract;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetIdentityResolutionAuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetMappingReportService;
@@ -23,6 +25,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -86,7 +89,7 @@ public class CatalogAssetPortalResource {
         @RequestParam(value = "size", required = false, defaultValue = "20") int size,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        String effDept = activeDept != null ? activeDept : helper.claim("dept_code");
+        String effDept = resolveActiveDepartment(activeDept);
         CatalogAssetPortalService.AssetPage result = assetPortalService.listAssets(
             new CatalogAssetPortalService.AssetQuery(
                 keyword,
@@ -133,7 +136,7 @@ public class CatalogAssetPortalResource {
         @RequestParam(value = "size", required = false, defaultValue = "20") int size,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        String effDept = activeDept != null ? activeDept : helper.claim("dept_code");
+        String effDept = resolveActiveDepartment(activeDept);
         CatalogAssetPortalService.AssetPage result = assetPortalService.listGovernanceIntakeAssets(
             new CatalogAssetPortalService.AssetQuery(
                 keyword,
@@ -170,7 +173,7 @@ public class CatalogAssetPortalResource {
         @RequestParam(value = "domainUnassigned", required = false, defaultValue = "false") boolean domainUnassigned,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        String effDept = activeDept != null ? activeDept : helper.claim("dept_code");
+        String effDept = resolveActiveDepartment(activeDept);
         CatalogAssetOverviewAggregator.AssetOverview overview = assetPortalService.overview(
             new CatalogAssetPortalService.AssetQuery(null, null, null, null, null, null, null, null, null, null, null, domainId, domainUnassigned, 0, 200),
             effDept
@@ -203,7 +206,7 @@ public class CatalogAssetPortalResource {
         @RequestParam(value = "size", required = false, defaultValue = "50") int size,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        String effDept = activeDept != null ? activeDept : helper.claim("dept_code");
+        String effDept = resolveActiveDepartment(activeDept);
         CatalogAssetPortalService.GovernanceGapReport result = assetPortalService.governanceGaps(
             new CatalogAssetPortalService.AssetQuery(
                 keyword,
@@ -254,7 +257,7 @@ public class CatalogAssetPortalResource {
         @RequestParam(value = "size", required = false, defaultValue = "50") int size,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        String effDept = activeDept != null ? activeDept : helper.claim("dept_code");
+        String effDept = resolveActiveDepartment(activeDept);
         CatalogLineageFailureReport result = assetPortalService.lineageFailures(
             new CatalogAssetPortalService.AssetQuery(
                 keyword,
@@ -307,7 +310,7 @@ public class CatalogAssetPortalResource {
         @PathVariable UUID id,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        String effDept = activeDept != null ? activeDept : helper.claim("dept_code");
+        String effDept = resolveActiveDepartment(activeDept);
         CatalogAssetPortalService.AssetDetail result = assetPortalService.getAsset(id, effDept);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("summary", "查看OpenMetadata主目录资产详情");
@@ -323,7 +326,7 @@ public class CatalogAssetPortalResource {
         @PathVariable UUID id,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        String effDept = activeDept != null ? activeDept : helper.claim("dept_code");
+        String effDept = resolveActiveDepartment(activeDept);
         CatalogAssetContract result = assetPortalService.getAssetContract(id, effDept);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("summary", "查看Catalog资产稳定读取契约");
@@ -344,7 +347,7 @@ public class CatalogAssetPortalResource {
         @PathVariable UUID id,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        String effDept = activeDept != null ? activeDept : helper.claim("dept_code");
+        String effDept = resolveActiveDepartment(activeDept);
         CatalogAssetSchemaContract result = assetPortalService.getAssetSchemaContract(id, effDept);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("summary", "查看Catalog资产字段读取契约");
@@ -366,7 +369,7 @@ public class CatalogAssetPortalResource {
         @RequestBody CatalogAssetPortalService.GovernanceUpdate body,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        String effDept = activeDept != null ? activeDept : helper.claim("dept_code");
+        String effDept = resolveActiveDepartment(activeDept);
         CatalogAssetPortalService.AssetDetail result = assetPortalService.updateGovernance(id, body, effDept);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("summary", "更新OpenMetadata资产治理扩展");
@@ -395,7 +398,7 @@ public class CatalogAssetPortalResource {
         @PathVariable UUID id,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        String effDept = activeDept != null ? activeDept : helper.claim("dept_code");
+        String effDept = resolveActiveDepartment(activeDept);
         CatalogAssetPortalService.LineageView result = assetPortalService.getLineage(id, effDept);
         audit.auditAction("CATALOG_LINEAGE_VIEW", AuditStage.SUCCESS, id.toString(), Map.of("summary", "查看OpenMetadata资产血缘缓存"));
         return ApiResponses.ok(result);
@@ -463,6 +466,17 @@ public class CatalogAssetPortalResource {
         payload.put("lineageEdgeCount", result.lineageEdgeCount());
         audit.auditAction("CATALOG_LINEAGE_SYNC", AuditStage.SUCCESS, id.toString(), payload);
         return ApiResponses.ok(result);
+    }
+
+    private String resolveActiveDepartment(String requestedActiveDept) {
+        String tokenDepartment = SecurityUtils.getCurrentUserDept().orElseGet(() -> helper.claim("dept_code"));
+        if (
+            SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES) &&
+            StringUtils.hasText(requestedActiveDept)
+        ) {
+            return requestedActiveDept.trim();
+        }
+        return StringUtils.hasText(tokenDepartment) ? tokenDepartment.trim() : null;
     }
 
     public record ResolutionFailureResponse(

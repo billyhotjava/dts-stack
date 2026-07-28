@@ -511,11 +511,18 @@ public class CatalogAssetPortalService {
         CatalogAssetExtension extension = extensionRepository.findFirstByOmAsset(asset).orElse(null);
         CatalogAssetMapping mapping = mappingRepository.findFirstByFqnIgnoreCase(asset.getFqn()).orElse(null);
         CatalogDataset legacy = resolveContractLegacy(extension, mapping);
-        if (!canRead(extension, legacy, activeDept)) {
+        boolean consumerReadable = canRead(extension, legacy, activeDept);
+        if (
+            !consumerReadable &&
+            (!isCatalogMaintainer() || !isVisible(extension, legacy, activeDept, VisibilityScope.GOVERNANCE_INTAKE))
+        ) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "资产不存在或无权访问");
         }
-        List<ColumnSummary> columns = columnRepository.findByAssetOrderByOrdinalPositionAsc(asset).stream().map(this::toColumn).toList();
         AssetSummary summary = hydrateAssetTags(List.of(toSummary(asset, extension, mapping, legacy))).get(0);
+        if (!consumerReadable) {
+            return new AssetDetail(summary, List.of(), null, null);
+        }
+        List<ColumnSummary> columns = columnRepository.findByAssetOrderByOrdinalPositionAsc(asset).stream().map(this::toColumn).toList();
         return new AssetDetail(summary, columns, asset.getRawJson(), asset.getProfileJson());
     }
 
@@ -635,7 +642,10 @@ public class CatalogAssetPortalService {
         CatalogAssetExtension extension = extensionRepository.findFirstByOmAsset(asset).orElseGet(CatalogAssetExtension::new);
         CatalogAssetMapping mapping = mappingRepository.findFirstByFqnIgnoreCase(asset.getFqn()).orElse(null);
         CatalogDataset legacy = resolveContractLegacy(extension, mapping);
-        if (!isSuperAdmin() && !canRead(extension, legacy, activeDept)) {
+        if (
+            !canRead(extension, legacy, activeDept) &&
+            (!isCatalogMaintainer() || !isVisible(extension, legacy, activeDept, VisibilityScope.GOVERNANCE_INTAKE))
+        ) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "资产不存在或无权访问");
         }
         extension.setOmAsset(asset);
@@ -670,8 +680,11 @@ public class CatalogAssetPortalService {
         }
         extension.setGovernanceStatus(resolveGovernanceStatus(extension));
         extensionRepository.save(extension);
-        List<ColumnSummary> columns = columnRepository.findByAssetOrderByOrdinalPositionAsc(asset).stream().map(this::toColumn).toList();
         AssetSummary summary = hydrateAssetTags(List.of(toSummary(asset, extension, mapping, legacy))).get(0);
+        if (!canRead(extension, legacy, activeDept)) {
+            return new AssetDetail(summary, List.of(), null, null);
+        }
+        List<ColumnSummary> columns = columnRepository.findByAssetOrderByOrdinalPositionAsc(asset).stream().map(this::toColumn).toList();
         return new AssetDetail(summary, columns, asset.getRawJson(), asset.getProfileJson());
     }
 
@@ -927,7 +940,10 @@ public class CatalogAssetPortalService {
             if (StringUtils.hasText(legacy.getClassification())) {
                 return canRead(extension, legacy, activeDept);
             }
-            return !Boolean.FALSE.equals(legacy.getEnabled()) && accessChecker.departmentAllowed(legacy, activeDept);
+            if (!StringUtils.hasText(legacy.getOwnerDept())) {
+                return isInstitutePrivileged();
+            }
+            return !Boolean.FALSE.equals(legacy.getEnabled()) && accessChecker.departmentAllowedExact(legacy, activeDept);
         }
         if (extension != null && Boolean.FALSE.equals(extension.getEnabled())) {
             return false;
@@ -935,11 +951,22 @@ public class CatalogAssetPortalService {
         if (extension != null && StringUtils.hasText(extension.getClassification())) {
             return canRead(extension, null, activeDept);
         }
+        if (extension == null || !StringUtils.hasText(extension.getOwnerDept())) {
+            return isInstitutePrivileged();
+        }
         CatalogDataset synthetic = new CatalogDataset();
         synthetic.setName("openmetadata-governance-intake");
         synthetic.setEnabled(Boolean.TRUE);
-        synthetic.setOwnerDept(extension != null ? extension.getOwnerDept() : null);
-        return accessChecker.departmentAllowed(synthetic, activeDept);
+        synthetic.setOwnerDept(extension.getOwnerDept());
+        return accessChecker.departmentAllowedExact(synthetic, activeDept);
+    }
+
+    private boolean isCatalogMaintainer() {
+        return SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.CATALOG_MAINTAINERS);
+    }
+
+    private boolean isInstitutePrivileged() {
+        return SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES);
     }
 
     private boolean isSuperAdmin() {

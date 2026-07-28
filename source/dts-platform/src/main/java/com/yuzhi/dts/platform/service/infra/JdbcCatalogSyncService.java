@@ -230,7 +230,6 @@ public class JdbcCatalogSyncService {
                     }
                     dataset.setOwner(defaultIfBlank(dataset.getOwner(), defaultOwner(source)));
                     dataset.setExposedBy(defaultIfBlank(dataset.getExposedBy(), DEFAULT_EXPOSED_BY));
-                    dataset.setEnabled(Boolean.TRUE);
                     dataset.setLifecycleStatus(CatalogAssetGovernancePolicy.normalizeLifecycle(dataset.getLifecycleStatus()));
                     dataset.setHarvestStatus(HARVEST_STATUS_SYNCED);
 
@@ -1337,7 +1336,6 @@ public class JdbcCatalogSyncService {
             return;
         }
         try {
-            dataset.setEnabled(Boolean.FALSE);
             dataset.setLifecycleStatus(CatalogAssetGovernancePolicy.normalizeLifecycle(dataset.getLifecycleStatus()));
             dataset.setHarvestStatus(HARVEST_STATUS_STALE);
             dataset.setSnapshotTime(snapshotTime != null ? snapshotTime : Instant.now());

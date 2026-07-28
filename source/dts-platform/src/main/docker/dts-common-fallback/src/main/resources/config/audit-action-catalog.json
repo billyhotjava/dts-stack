@@ -27,6 +27,14 @@
               "supportsFlow": false
             },
             {
+              "code": "CATALOG_GOVERNANCE_INTAKE_VIEW",
+              "display": "查看待治理资产入口",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
               "code": "CATALOG_ASSET_USAGE_VIEW",
               "display": "查看数据资产使用统计",
               "phases": [

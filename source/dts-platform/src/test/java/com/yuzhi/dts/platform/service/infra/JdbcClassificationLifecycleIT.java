@@ -122,6 +122,13 @@ class JdbcClassificationLifecycleIT {
     @Test
     void realJdbcMetadataImportSealsColumnsAndRaisesDatasetToHighestFieldLevel() {
         InfraDataSource source = source();
+        CatalogDataset existingDataset = new CatalogDataset();
+        existingDataset.setId(UUID.randomUUID());
+        existingDataset.setName(tableName);
+        existingDataset.setSourceId(source.getId());
+        existingDataset.setHiveDatabase("public");
+        existingDataset.setHiveTable(tableName);
+        existingDataset.setEnabled(Boolean.FALSE);
         when(secretService.readSecrets(source)).thenReturn(Map.of("password", POSTGRES.getPassword()));
         when(
             datasetRepository.findFirstBySourceIdAndHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(
@@ -129,7 +136,7 @@ class JdbcClassificationLifecycleIT {
                 "public",
                 tableName
             )
-        ).thenReturn(Optional.empty());
+        ).thenReturn(Optional.of(existingDataset));
         when(datasetRepository.save(any(CatalogDataset.class))).thenAnswer(invocation -> {
             CatalogDataset dataset = invocation.getArgument(0);
             if (dataset.getId() == null) {
@@ -191,6 +198,9 @@ class JdbcClassificationLifecycleIT {
             .isEqualTo("PENDING_GOVERNANCE");
         assertThat(savedDatasets.getAllValues().get(savedDatasets.getAllValues().size() - 1).getHarvestStatus())
             .isEqualTo("SYNCED");
+        assertThat(savedDatasets.getAllValues().get(savedDatasets.getAllValues().size() - 1).getEnabled())
+            .as("JDBC harvest must preserve the governed enabled flag")
+            .isFalse();
     }
 
     private JdbcCatalogSyncService service() {

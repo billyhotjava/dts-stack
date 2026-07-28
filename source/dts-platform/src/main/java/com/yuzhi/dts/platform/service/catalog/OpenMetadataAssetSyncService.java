@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.catalog;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.config.OpenMetadataProperties;
 import com.yuzhi.dts.platform.domain.catalog.CatalogAssetExtension;
@@ -9,12 +10,14 @@ import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.OpenMetadataAssetCache;
 import com.yuzhi.dts.platform.domain.catalog.OpenMetadataColumnCache;
 import com.yuzhi.dts.platform.domain.catalog.OpenMetadataLineageCache;
+import com.yuzhi.dts.platform.domain.service.InfraDataSource;
 import com.yuzhi.dts.platform.repository.catalog.CatalogAssetExtensionRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogAssetMappingRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.OpenMetadataAssetCacheRepository;
 import com.yuzhi.dts.platform.repository.catalog.OpenMetadataColumnCacheRepository;
 import com.yuzhi.dts.platform.repository.catalog.OpenMetadataLineageCacheRepository;
+import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.openmetadata.OpenMetadataClient;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -39,6 +42,7 @@ public class OpenMetadataAssetSyncService {
     private final CatalogAssetMappingRepository mappingRepository;
     private final CatalogAssetExtensionRepository extensionRepository;
     private final CatalogDatasetRepository datasetRepository;
+    private final InfraDataSourceRepository dataSourceRepository;
     private final ObjectMapper objectMapper;
 
     public OpenMetadataAssetSyncService(
@@ -50,6 +54,7 @@ public class OpenMetadataAssetSyncService {
         CatalogAssetMappingRepository mappingRepository,
         CatalogAssetExtensionRepository extensionRepository,
         CatalogDatasetRepository datasetRepository,
+        InfraDataSourceRepository dataSourceRepository,
         ObjectMapper objectMapper
     ) {
         this.client = client;
@@ -60,6 +65,7 @@ public class OpenMetadataAssetSyncService {
         this.mappingRepository = mappingRepository;
         this.extensionRepository = extensionRepository;
         this.datasetRepository = datasetRepository;
+        this.dataSourceRepository = dataSourceRepository;
         this.objectMapper = objectMapper;
     }
 
@@ -253,14 +259,23 @@ public class OpenMetadataAssetSyncService {
         mapping.setOmEntityId(asset.getOmEntityId());
         mapping.setLastCheckedAt(Instant.now());
 
-        List<CatalogDataset> candidates = findLegacyCandidates(asset);
+        List<CatalogDataset> physicalCandidates = findLegacyCandidates(asset);
+        List<CatalogDataset> candidates = physicalCandidates
+            .stream()
+            .filter(candidate -> hasReliableServiceMapping(asset, candidate))
+            .toList();
         if (candidates.size() == 1) {
             CatalogDataset dataset = candidates.get(0);
+            String claimConflict = legacyClaimConflict(asset, mapping, dataset);
+            if (StringUtils.hasText(claimConflict)) {
+                markManualReview(mapping, claimConflict, asset);
+                return;
+            }
             mapping.setLegacyDatasetId(dataset.getId());
             mapping.setSourceId(dataset.getSourceId());
             mapping.setMatchStatus("MATCHED");
-            mapping.setMatchReason("unique schema/database and table candidate");
-            mapping.setConfidence(90);
+            mapping.setMatchReason("explicit OpenMetadata service-to-source mapping and unique table candidate");
+            mapping.setConfidence(100);
             mappingRepository.save(mapping);
             upsertExtension(asset, dataset);
             return;
@@ -270,11 +285,120 @@ public class OpenMetadataAssetSyncService {
         mapping.setSourceId(null);
         if (candidates.size() > 1) {
             mapping.setMatchStatus("MANUAL_REVIEW");
-            mapping.setMatchReason("multiple legacy catalog_dataset candidates: " + candidates.size());
+            mapping.setMatchReason("multiple explicitly service-mapped legacy catalog_dataset candidates: " + candidates.size());
+        } else if (!physicalCandidates.isEmpty()) {
+            mapping.setMatchStatus("MANUAL_REVIEW");
+            mapping.setMatchReason(
+                "no reliable OpenMetadata service-to-source mapping for " +
+                asset.getServiceName() +
+                " across " +
+                physicalCandidates.size() +
+                " physical candidate(s)"
+            );
         } else {
             mapping.setMatchStatus("UNMATCHED");
             mapping.setMatchReason("no legacy catalog_dataset matched schema/database and table");
         }
+        mapping.setConfidence(0);
+        mappingRepository.save(mapping);
+        ensurePendingExtension(asset);
+    }
+
+    private boolean hasReliableServiceMapping(OpenMetadataAssetCache asset, CatalogDataset dataset) {
+        if (
+            asset == null ||
+            dataset == null ||
+            dataset.getSourceId() == null ||
+            !StringUtils.hasText(asset.getServiceName())
+        ) {
+            return false;
+        }
+        return dataSourceRepository
+            .findById(dataset.getSourceId())
+            .map(this::explicitOpenMetadataServiceName)
+            .filter(StringUtils::hasText)
+            .map(service -> service.equalsIgnoreCase(asset.getServiceName().trim()))
+            .orElse(false);
+    }
+
+    private String explicitOpenMetadataServiceName(InfraDataSource source) {
+        if (source == null || !StringUtils.hasText(source.getProps())) {
+            return null;
+        }
+        try {
+            Map<String, Object> sourceProperties = objectMapper.readValue(
+                source.getProps(),
+                new TypeReference<Map<String, Object>>() {}
+            );
+            String direct = firstText(
+                sourceProperties.get("openmetadataServiceName"),
+                sourceProperties.get("openMetadataServiceName"),
+                sourceProperties.get("omServiceName")
+            );
+            if (StringUtils.hasText(direct)) {
+                return direct;
+            }
+            Object nested = sourceProperties.get("openmetadata");
+            if (nested instanceof Map<?, ?> nestedProperties) {
+                return firstText(
+                    nestedProperties.get("serviceName"),
+                    nestedProperties.get("databaseServiceName")
+                );
+            }
+        } catch (JsonProcessingException ignored) {
+            return null;
+        }
+        return null;
+    }
+
+    private String legacyClaimConflict(
+        OpenMetadataAssetCache asset,
+        CatalogAssetMapping mapping,
+        CatalogDataset dataset
+    ) {
+        Optional<CatalogAssetMapping> mappingClaim = mappingRepository.findFirstByLegacyDatasetId(dataset.getId());
+        if (mappingClaim.isPresent()) {
+            CatalogAssetMapping claimedMapping = mappingClaim.orElseThrow();
+            if (
+                !StringUtils.hasText(claimedMapping.getFqn()) ||
+                !claimedMapping.getFqn().equalsIgnoreCase(mapping.getFqn())
+            ) {
+                return "legacy dataset is already claimed by OpenMetadata mapping " + claimedMapping.getFqn();
+            }
+        }
+        Optional<CatalogAssetExtension> extensionClaim = extensionRepository.findFirstByLegacyDatasetId(dataset.getId());
+        if (extensionClaim.isPresent()) {
+            CatalogAssetExtension claimedExtension = extensionClaim.orElseThrow();
+            if (
+                claimedExtension.getOmAsset() != null &&
+                !sameOpenMetadataAsset(claimedExtension.getOmAsset(), asset)
+            ) {
+                return "legacy dataset extension is already claimed by another OpenMetadata asset";
+            }
+        }
+        return null;
+    }
+
+    private boolean sameOpenMetadataAsset(OpenMetadataAssetCache left, OpenMetadataAssetCache right) {
+        if (left == right) {
+            return true;
+        }
+        if (left == null || right == null) {
+            return false;
+        }
+        if (left.getId() != null && right.getId() != null) {
+            return left.getId().equals(right.getId());
+        }
+        return StringUtils.hasText(left.getFqn()) &&
+            StringUtils.hasText(right.getFqn()) &&
+            left.getFqn().equalsIgnoreCase(right.getFqn());
+    }
+
+    private void markManualReview(CatalogAssetMapping mapping, String reason, OpenMetadataAssetCache asset) {
+        mapping.setLegacyDatasetId(null);
+        mapping.setSourceId(null);
+        mapping.setMatchStatus("MANUAL_REVIEW");
+        mapping.setMatchReason(reason);
         mapping.setConfidence(0);
         mappingRepository.save(mapping);
         ensurePendingExtension(asset);
@@ -319,10 +443,19 @@ public class OpenMetadataAssetSyncService {
     }
 
     private void upsertExtension(OpenMetadataAssetCache asset, CatalogDataset dataset) {
-        CatalogAssetExtension extension = extensionRepository
-            .findFirstByOmAsset(asset)
-            .or(() -> extensionRepository.findFirstByLegacyDatasetId(dataset.getId()))
-            .orElseGet(CatalogAssetExtension::new);
+        Optional<CatalogAssetExtension> extensionByAsset = extensionRepository.findFirstByOmAsset(asset);
+        Optional<CatalogAssetExtension> extensionByLegacy = extensionByAsset.isPresent()
+            ? Optional.empty()
+            : extensionRepository.findFirstByLegacyDatasetId(dataset.getId());
+        if (
+            extensionByLegacy.isPresent() &&
+            extensionByLegacy.orElseThrow().getOmAsset() != null &&
+            !sameOpenMetadataAsset(extensionByLegacy.orElseThrow().getOmAsset(), asset)
+        ) {
+            throw new IllegalStateException("legacy dataset extension is already claimed by another OpenMetadata asset");
+        }
+        boolean newExtension = extensionByAsset.isEmpty() && extensionByLegacy.isEmpty();
+        CatalogAssetExtension extension = extensionByAsset.or(() -> extensionByLegacy).orElseGet(CatalogAssetExtension::new);
         extension.setOmAsset(asset);
         extension.setLegacyDatasetId(dataset.getId());
         if (extension.getDomainId() == null && dataset.getDomain() != null) {
@@ -343,7 +476,7 @@ public class OpenMetadataAssetSyncService {
         if (!StringUtils.hasText(extension.getLifecycleStatus())) {
             extension.setLifecycleStatus(CatalogAssetGovernancePolicy.normalizeLifecycle(dataset.getLifecycleStatus()));
         }
-        if (extension.getEnabled() == null) {
+        if (newExtension || extension.getEnabled() == null) {
             extension.setEnabled(dataset.getEnabled() == null ? Boolean.TRUE : dataset.getEnabled());
         }
         extension.setGovernanceStatus(resolveGovernanceStatus(extension));

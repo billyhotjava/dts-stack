@@ -12,12 +12,14 @@ import com.yuzhi.dts.platform.domain.catalog.CatalogAssetExtension;
 import com.yuzhi.dts.platform.domain.catalog.CatalogAssetMapping;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.OpenMetadataAssetCache;
+import com.yuzhi.dts.platform.domain.service.InfraDataSource;
 import com.yuzhi.dts.platform.repository.catalog.CatalogAssetExtensionRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogAssetMappingRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.OpenMetadataAssetCacheRepository;
 import com.yuzhi.dts.platform.repository.catalog.OpenMetadataColumnCacheRepository;
 import com.yuzhi.dts.platform.repository.catalog.OpenMetadataLineageCacheRepository;
+import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.openmetadata.OpenMetadataClient;
 import java.util.List;
 import java.util.Map;
@@ -53,6 +55,9 @@ class OpenMetadataAssetSyncServiceTest {
     @Mock
     private CatalogDatasetRepository datasetRepository;
 
+    @Mock
+    private InfraDataSourceRepository dataSourceRepository;
+
     private OpenMetadataAssetSyncService service;
 
     @BeforeEach
@@ -69,6 +74,7 @@ class OpenMetadataAssetSyncServiceTest {
                 mappingRepository,
                 extensionRepository,
                 datasetRepository,
+                dataSourceRepository,
                 new ObjectMapper()
             );
         when(client.listTables(anyInt(), anyString())).thenReturn(Optional.of(Map.of("data", List.of(tablePayload()))));
@@ -101,7 +107,7 @@ class OpenMetadataAssetSyncServiceTest {
 
         OpenMetadataAssetSyncService.SyncResult result = service.syncTables(50);
 
-        assertThat(result.mapped()).isZero();
+        assertThat(result.mappedCount()).isZero();
         assertThat(mapping.getMatchStatus()).isEqualTo("MANUAL_REVIEW");
         assertThat(mapping.getMatchReason()).contains("2");
         assertThat(mapping.getLegacyDatasetId()).isNull();
@@ -132,10 +138,11 @@ class OpenMetadataAssetSyncServiceTest {
         when(datasetRepository.findByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase("db", "orders"))
             .thenReturn(List.of(dataset));
         when(extensionRepository.findFirstByOmAsset(any(OpenMetadataAssetCache.class))).thenReturn(Optional.of(extension));
+        mapServiceToSource(dataset);
 
         OpenMetadataAssetSyncService.SyncResult result = service.syncTables(50);
 
-        assertThat(result.mapped()).isEqualTo(1);
+        assertThat(result.mappedCount()).isEqualTo(1);
         assertThat(mapping.getMatchStatus()).isEqualTo("MATCHED");
         assertThat(mapping.getLegacyDatasetId()).isEqualTo(dataset.getId());
         assertThat(extension.getLegacyDatasetId()).isEqualTo(dataset.getId());
@@ -144,6 +151,125 @@ class OpenMetadataAssetSyncServiceTest {
         assertThat(extension.getBusinessOwner()).isEqualTo("manual-owner");
         assertThat(extension.getLifecycleStatus()).isEqualTo("ACTIVE");
         assertThat(extension.getEnabled()).isFalse();
+    }
+
+    @Test
+    void uniquePhysicalCandidateWithoutExplicitServiceMappingRequiresManualReview() {
+        CatalogDataset dataset = dataset("66666666-6666-6666-6666-666666666666", "source-a");
+        CatalogAssetMapping mapping = new CatalogAssetMapping();
+
+        when(mappingRepository.findFirstByFqnIgnoreCase("svc.db.public.orders")).thenReturn(Optional.of(mapping));
+        when(datasetRepository.findByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase("public", "orders"))
+            .thenReturn(List.of(dataset));
+        when(datasetRepository.findByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase("db", "orders"))
+            .thenReturn(List.of(dataset));
+
+        OpenMetadataAssetSyncService.SyncResult result = service.syncTables(50);
+
+        assertThat(result.mappedCount()).isZero();
+        assertThat(mapping.getMatchStatus()).isEqualTo("MANUAL_REVIEW");
+        assertThat(mapping.getMatchReason()).contains("no reliable OpenMetadata service-to-source mapping");
+        assertThat(mapping.getLegacyDatasetId()).isNull();
+        assertThat(mapping.getSourceId()).isNull();
+    }
+
+    @Test
+    void genericSourceServiceNameDoesNotCountAsExplicitOpenMetadataMapping() {
+        CatalogDataset dataset = dataset("67676767-6767-6767-6767-676767676767", "source-a");
+        CatalogAssetMapping mapping = new CatalogAssetMapping();
+        InfraDataSource source = new InfraDataSource();
+        source.setId(dataset.getSourceId());
+        source.setProps("{\"sourceServiceName\":\"svc\"}");
+
+        when(mappingRepository.findFirstByFqnIgnoreCase("svc.db.public.orders")).thenReturn(Optional.of(mapping));
+        when(datasetRepository.findByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase("public", "orders"))
+            .thenReturn(List.of(dataset));
+        when(datasetRepository.findByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase("db", "orders"))
+            .thenReturn(List.of(dataset));
+        when(dataSourceRepository.findById(dataset.getSourceId())).thenReturn(Optional.of(source));
+
+        OpenMetadataAssetSyncService.SyncResult result = service.syncTables(50);
+
+        assertThat(result.mappedCount()).isZero();
+        assertThat(mapping.getMatchStatus()).isEqualTo("MANUAL_REVIEW");
+        assertThat(mapping.getMatchReason()).contains("no reliable OpenMetadata service-to-source mapping");
+        assertThat(mapping.getLegacyDatasetId()).isNull();
+    }
+
+    @Test
+    void newExtensionInheritsDisabledLegacyGovernanceFlag() {
+        CatalogDataset dataset = dataset("77777777-7777-7777-7777-777777777777", "source-a");
+        dataset.setEnabled(Boolean.FALSE);
+        CatalogAssetMapping mapping = new CatalogAssetMapping();
+
+        when(mappingRepository.findFirstByFqnIgnoreCase("svc.db.public.orders")).thenReturn(Optional.of(mapping));
+        when(datasetRepository.findByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase("public", "orders"))
+            .thenReturn(List.of(dataset));
+        when(datasetRepository.findByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase("db", "orders"))
+            .thenReturn(List.of(dataset));
+        mapServiceToSource(dataset);
+
+        OpenMetadataAssetSyncService.SyncResult result = service.syncTables(50);
+
+        assertThat(result.mappedCount()).isEqualTo(1);
+        org.mockito.ArgumentCaptor<CatalogAssetExtension> savedExtension =
+            org.mockito.ArgumentCaptor.forClass(CatalogAssetExtension.class);
+        org.mockito.Mockito.verify(extensionRepository).save(savedExtension.capture());
+        assertThat(savedExtension.getValue().getLegacyDatasetId()).isEqualTo(dataset.getId());
+        assertThat(savedExtension.getValue().getEnabled()).isFalse();
+    }
+
+    @Test
+    void existingLegacyMappingCannotBeStolenByAnotherOpenMetadataAsset() {
+        CatalogDataset dataset = dataset("88888888-8888-8888-8888-888888888888", "source-a");
+        CatalogAssetMapping current = new CatalogAssetMapping();
+        CatalogAssetMapping claimed = new CatalogAssetMapping();
+        claimed.setFqn("other.db.public.orders");
+        claimed.setLegacyDatasetId(dataset.getId());
+
+        when(mappingRepository.findFirstByFqnIgnoreCase("svc.db.public.orders")).thenReturn(Optional.of(current));
+        when(mappingRepository.findFirstByLegacyDatasetId(dataset.getId())).thenReturn(Optional.of(claimed));
+        when(datasetRepository.findByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase("public", "orders"))
+            .thenReturn(List.of(dataset));
+        when(datasetRepository.findByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase("db", "orders"))
+            .thenReturn(List.of(dataset));
+        mapServiceToSource(dataset);
+
+        OpenMetadataAssetSyncService.SyncResult result = service.syncTables(50);
+
+        assertThat(result.mappedCount()).isZero();
+        assertThat(current.getMatchStatus()).isEqualTo("MANUAL_REVIEW");
+        assertThat(current.getMatchReason()).contains("already claimed");
+        assertThat(current.getLegacyDatasetId()).isNull();
+        assertThat(claimed.getLegacyDatasetId()).isEqualTo(dataset.getId());
+    }
+
+    @Test
+    void existingLegacyExtensionCannotBeReboundToAnotherOpenMetadataAsset() {
+        CatalogDataset dataset = dataset("99999999-9999-9999-9999-999999999999", "source-a");
+        CatalogAssetMapping mapping = new CatalogAssetMapping();
+        OpenMetadataAssetCache previousAsset = new OpenMetadataAssetCache();
+        previousAsset.setId(UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
+        previousAsset.setFqn("other.db.public.orders");
+        CatalogAssetExtension claimed = new CatalogAssetExtension();
+        claimed.setOmAsset(previousAsset);
+        claimed.setLegacyDatasetId(dataset.getId());
+
+        when(mappingRepository.findFirstByFqnIgnoreCase("svc.db.public.orders")).thenReturn(Optional.of(mapping));
+        when(extensionRepository.findFirstByLegacyDatasetId(dataset.getId())).thenReturn(Optional.of(claimed));
+        when(datasetRepository.findByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase("public", "orders"))
+            .thenReturn(List.of(dataset));
+        when(datasetRepository.findByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase("db", "orders"))
+            .thenReturn(List.of(dataset));
+        mapServiceToSource(dataset);
+
+        OpenMetadataAssetSyncService.SyncResult result = service.syncTables(50);
+
+        assertThat(result.mappedCount()).isZero();
+        assertThat(mapping.getMatchStatus()).isEqualTo("MANUAL_REVIEW");
+        assertThat(mapping.getMatchReason()).contains("extension is already claimed");
+        assertThat(claimed.getOmAsset()).isSameAs(previousAsset);
+        assertThat(claimed.getLegacyDatasetId()).isEqualTo(dataset.getId());
     }
 
     private CatalogDataset dataset(String id, String sourceName) {
@@ -155,6 +281,14 @@ class OpenMetadataAssetSyncServiceTest {
         dataset.setHiveTable("orders");
         dataset.setEnabled(Boolean.TRUE);
         return dataset;
+    }
+
+    private void mapServiceToSource(CatalogDataset dataset) {
+        InfraDataSource source = new InfraDataSource();
+        source.setId(dataset.getSourceId());
+        source.setName("source-a");
+        source.setProps("{\"openmetadataServiceName\":\"svc\"}");
+        when(dataSourceRepository.findById(dataset.getSourceId())).thenReturn(Optional.of(source));
     }
 
     private Map<String, Object> tablePayload() {

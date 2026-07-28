@@ -1,7 +1,10 @@
 package com.yuzhi.dts.platform.web.rest.catalog;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -9,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.yuzhi.dts.platform.domain.catalog.CatalogAssetResolutionFailure;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
+import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetContract;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetContractMapper;
@@ -21,11 +25,21 @@ import com.yuzhi.dts.platform.service.catalog.dto.AssetRef;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class CatalogAssetPortalResourceTest {
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
 
     @Test
     void listsResolutionFailuresForAssetPortal() {
@@ -96,5 +110,91 @@ class CatalogAssetPortalResourceTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.assetKey").value(assetKey))
             .andExpect(jsonPath("$.data.canTag").value(true));
+    }
+
+    @Test
+    void departmentMaintainerCannotSwitchScopeWithActiveDepartmentHeader() {
+        authenticate(AuthoritiesConstants.DEPT_DATA_OWNER, "dept-token");
+        CatalogAssetPortalService assetPortalService = mock(CatalogAssetPortalService.class);
+        CatalogAssetPortalService.AssetPage emptyPage = new CatalogAssetPortalService.AssetPage(
+            List.of(),
+            0,
+            0,
+            20,
+            0,
+            "openmetadata-cache"
+        );
+        when(
+            assetPortalService.listGovernanceIntakeAssets(
+                any(CatalogAssetPortalService.AssetQuery.class),
+                eq("dept-token")
+            )
+        ).thenReturn(emptyPage);
+        CatalogAssetPortalResource resource = resource(assetPortalService);
+
+        resource.governanceIntake(null, null, null, null, 0, 20, "dept-forged");
+
+        verify(assetPortalService).listGovernanceIntakeAssets(
+            any(CatalogAssetPortalService.AssetQuery.class),
+            eq("dept-token")
+        );
+    }
+
+    @Test
+    void instituteMaintainerMaySelectAnActiveDepartment() {
+        authenticate(AuthoritiesConstants.INST_DATA_OWNER, "institute-home");
+        CatalogAssetPortalService assetPortalService = mock(CatalogAssetPortalService.class);
+        CatalogAssetPortalService.AssetPage emptyPage = new CatalogAssetPortalService.AssetPage(
+            List.of(),
+            0,
+            0,
+            20,
+            0,
+            "openmetadata-cache"
+        );
+        when(
+            assetPortalService.listGovernanceIntakeAssets(
+                any(CatalogAssetPortalService.AssetQuery.class),
+                eq("dept-selected")
+            )
+        ).thenReturn(emptyPage);
+        CatalogAssetPortalResource resource = resource(assetPortalService);
+
+        resource.governanceIntake(null, null, null, null, 0, 20, " dept-selected ");
+
+        verify(assetPortalService).listGovernanceIntakeAssets(
+            any(CatalogAssetPortalService.AssetQuery.class),
+            eq("dept-selected")
+        );
+    }
+
+    private CatalogAssetPortalResource resource(CatalogAssetPortalService assetPortalService) {
+        return new CatalogAssetPortalResource(
+            assetPortalService,
+            mock(CatalogAssetMappingReportService.class),
+            mock(CatalogAssetIdentityResolutionAuditService.class),
+            mock(OpenMetadataAssetSyncService.class),
+            mock(AuditService.class),
+            mock(CatalogResourceHelper.class),
+            mock(CatalogAssetTagWriteGuard.class)
+        );
+    }
+
+    private void authenticate(String authority, String department) {
+        Jwt jwt = Jwt
+            .withTokenValue("token")
+            .header("alg", "none")
+            .claim("sub", "portal-test-user")
+            .claim("roles", List.of(authority))
+            .claim("dept_code", department)
+            .build();
+        SecurityContextHolder
+            .getContext()
+            .setAuthentication(
+                new JwtAuthenticationToken(
+                    jwt,
+                    List.of(new SimpleGrantedAuthority(authority))
+                )
+            );
     }
 }

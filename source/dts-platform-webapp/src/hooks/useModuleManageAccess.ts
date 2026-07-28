@@ -52,3 +52,7 @@ export const useCatalogTagGovernanceAccess = () => {
 	const roles = useUserRoles();
 	return useMemo(() => hasMaintainerRole(roles || []), [roles]);
 };
+
+// Catalog governance endpoints are role-gated on the backend. Keep this hook
+// role-only so the UI never advertises maintainer actions to permission-only users.
+export const useCatalogMaintainerAccess = useCatalogTagGovernanceAccess;

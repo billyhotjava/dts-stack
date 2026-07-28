@@ -1,18 +1,17 @@
 import {
-	CheckCircleOutlined,
 	DatabaseOutlined,
 	ExclamationCircleOutlined,
 	LinkOutlined,
-	ReloadOutlined,
 	SafetyCertificateOutlined,
 	TeamOutlined,
 } from "@ant-design/icons";
-import { Alert, Button, Card, Input, message, Select, Space, Spin, Tag } from "antd";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { getCatalogAssetsV2GovernanceGaps, listCatalogAssetsV2, syncCatalogAssetsV2 } from "@/api/platformApi";
+import { Alert, Button, Card, Input, Select, Space, Spin, Tag } from "antd";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { listCatalogAssetsV2, listCatalogGovernanceIntakeAssets } from "@/api/platformApi";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { CompactTable } from "@/components/table";
+import { useCatalogMaintainerAccess } from "@/hooks/useModuleManageAccess";
 import { useRouter } from "@/routes/hooks";
 import {
 	CLASSIFICATION_OPTIONS,
@@ -79,82 +78,66 @@ const isOpenMetadataUnmapped = (row: MetadataAssetRow) =>
 
 export default function MetadataManagementPage() {
 	const router = useRouter();
+	const canManage = useCatalogMaintainerAccess();
 	const requestSeqRef = useRef(0);
 	const [keyword, setKeyword] = useState("");
 	const [classification, setClassification] = useState("ALL");
 	const [governanceStatus, setGovernanceStatus] = useState("ALL");
 	const [matchStatus, setMatchStatus] = useState("ALL");
 	const [loading, setLoading] = useState(false);
-	const [syncing, setSyncing] = useState(false);
-	const [gapLoading, setGapLoading] = useState(false);
+	const [loadError, setLoadError] = useState<string | null>(null);
 	const [records, setRecords] = useState<MetadataAssetRow[]>([]);
-	const [governanceGapReport, setGovernanceGapReport] = useState<any | null>(null);
 	const [pageState, setPageState] = useState({ page: 1, size: LEDGER_PAGE_SIZE, total: 0 });
+
+	const assetQuery = useCallback(
+		(page = 1, size = LEDGER_PAGE_SIZE) => ({
+			page: page - 1,
+			size,
+			keyword: keyword.trim() || undefined,
+			classification: classification === "ALL" ? undefined : classification,
+			governanceStatus: governanceStatus === "ALL" ? undefined : governanceStatus,
+			matchStatus: matchStatus === "ALL" ? undefined : matchStatus,
+		}),
+		[keyword, classification, governanceStatus, matchStatus],
+	);
+
+	const loadAssets = useCallback(
+		async (page = 1, size = LEDGER_PAGE_SIZE) => {
+			const reqId = ++requestSeqRef.current;
+			setLoading(true);
+			try {
+				const loader = canManage ? listCatalogGovernanceIntakeAssets : listCatalogAssetsV2;
+				const resp: any = await loader(assetQuery(page, size));
+				if (reqId !== requestSeqRef.current) return;
+				const content = Array.isArray(resp?.content) ? resp.content : [];
+				setRecords(content.map(normalizeAsset).filter((row: MetadataAssetRow) => row.id));
+				setLoadError(null);
+				setPageState({
+					page: Number(resp?.page ?? page - 1) + 1,
+					size: Number(resp?.size ?? size),
+					total: Number(resp?.total ?? content.length),
+				});
+			} catch {
+				if (reqId === requestSeqRef.current) {
+					setRecords([]);
+					setPageState({ page: 1, size, total: 0 });
+					setLoadError("资产元数据加载失败，请检查目录权限或稍后重试。");
+				}
+			} finally {
+				if (reqId === requestSeqRef.current) {
+					setLoading(false);
+				}
+			}
+		},
+		[assetQuery, canManage],
+	);
 
 	useEffect(() => {
 		const timer = window.setTimeout(() => {
 			void loadAssets(1, pageState.size);
-			void loadGovernanceGaps();
 		}, 260);
 		return () => window.clearTimeout(timer);
-	}, [keyword, classification, governanceStatus, matchStatus, pageState.size]);
-
-	const assetQuery = (page = 1, size = LEDGER_PAGE_SIZE) => ({
-		page: page - 1,
-		size,
-		keyword: keyword.trim() || undefined,
-		classification: classification === "ALL" ? undefined : classification,
-		governanceStatus: governanceStatus === "ALL" ? undefined : governanceStatus,
-		matchStatus: matchStatus === "ALL" ? undefined : matchStatus,
-	});
-
-	const loadAssets = async (page = 1, size = LEDGER_PAGE_SIZE) => {
-		const reqId = ++requestSeqRef.current;
-		setLoading(true);
-		try {
-			const resp: any = await listCatalogAssetsV2(assetQuery(page, size));
-			if (reqId !== requestSeqRef.current) return;
-			const content = Array.isArray(resp?.content) ? resp.content : [];
-			setRecords(content.map(normalizeAsset).filter((row: MetadataAssetRow) => row.id));
-			setPageState({
-				page: Number(resp?.page ?? page - 1) + 1,
-				size: Number(resp?.size ?? size),
-				total: Number(resp?.total ?? content.length),
-			});
-		} catch {
-			if (reqId === requestSeqRef.current) {
-				setRecords([]);
-			}
-		} finally {
-			if (reqId === requestSeqRef.current) {
-				setLoading(false);
-			}
-		}
-	};
-
-	const loadGovernanceGaps = async () => {
-		setGapLoading(true);
-		try {
-			const result = await getCatalogAssetsV2GovernanceGaps(assetQuery(1, 50));
-			setGovernanceGapReport(result || null);
-		} catch {
-			setGovernanceGapReport(null);
-		} finally {
-			setGapLoading(false);
-		}
-	};
-
-	const syncOpenMetadata = async () => {
-		setSyncing(true);
-		try {
-			await syncCatalogAssetsV2(500);
-			await loadAssets(1, pageState.size);
-			await loadGovernanceGaps();
-			message.success("OpenMetadata 资产同步已触发");
-		} finally {
-			setSyncing(false);
-		}
-	};
+	}, [loadAssets, pageState.size]);
 
 	const stats = useMemo(() => {
 		const missingOwner = records.filter((row) => isBlank(row.owner)).length;
@@ -162,9 +145,8 @@ export default function MetadataManagementPage() {
 		const missingDomain = records.filter((row) => isBlank(row.domainId) && isBlank(row.domain)).length;
 		const completion = records.filter(needsMetadataCompletion).length;
 		const unmapped = records.filter(isOpenMetadataUnmapped).length;
-		const blocking = Number(governanceGapReport?.severityCounts?.BLOCKING || 0);
-		return { missingOwner, missingClassification, missingDomain, completion, unmapped, blocking };
-	}, [records, governanceGapReport]);
+		return { missingOwner, missingClassification, missingDomain, completion, unmapped };
+	}, [records]);
 
 	const columns = [
 		{
@@ -254,15 +236,21 @@ export default function MetadataManagementPage() {
 			fixed: "right" as const,
 			render: (_: unknown, row: MetadataAssetRow) => (
 				<Space size={6} wrap>
-					<Button size="small" onClick={() => router.push(`/catalog/datasets/${row.id}?tab=governance`)}>
-						治理属性
+					<Button size="small" onClick={() => router.push(`/catalog/datasets/${row.id}?tab=overview`)}>
+						查看资产
 					</Button>
-					<Button size="small" onClick={() => router.push(`/catalog/datasets/${row.id}?tab=schema-contract`)}>
-						字段契约
-					</Button>
-					<Button size="small" onClick={() => router.push("/catalog/metadata")}>
-						结构采集
-					</Button>
+					{canManage ? (
+						<>
+							<Button size="small" onClick={() => router.push(`/catalog/datasets/${row.id}?tab=governance`)}>
+								治理属性
+							</Button>
+							{isBlank(row.classification) ? null : (
+								<Button size="small" onClick={() => router.push(`/catalog/datasets/${row.id}?tab=schema-contract`)}>
+									字段契约
+								</Button>
+							)}
+						</>
+					) : null}
 				</Space>
 			),
 		},
@@ -273,14 +261,11 @@ export default function MetadataManagementPage() {
 			<PageHeader
 				title="元数据管理"
 				actions={
-					<>
+					canManage ? (
 						<Button icon={<DatabaseOutlined />} onClick={() => router.push("/catalog/metadata")}>
 							数据源结构采集
 						</Button>
-						<Button type="primary" icon={<ReloadOutlined />} loading={syncing} onClick={() => void syncOpenMetadata()}>
-							同步 OpenMetadata
-						</Button>
-					</>
+					) : null
 				}
 			/>
 			<div className="text-sm text-slate-500">
@@ -293,6 +278,16 @@ export default function MetadataManagementPage() {
 				message="采集与管理已拆分"
 				description="数据集成负责扫描表、字段和索引；数据资产负责补齐业务含义、权属和可消费前置条件。"
 			/>
+			<Alert
+				type={canManage ? "warning" : "info"}
+				showIcon
+				message={canManage ? "治理待办视图" : "只读资产视图"}
+				description={
+					canManage
+						? "当前视图允许目录维护人员发现缺密级资产并补齐治理属性；已分级资产仍遵循原有密级和部门权限。"
+						: "当前账号可查看已满足访问条件的资产；治理属性维护和结构采集仅对目录维护角色开放。"
+				}
+			/>
 
 			<div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
 				<MetricTile
@@ -303,24 +298,19 @@ export default function MetadataManagementPage() {
 				/>
 				<MetricTile
 					icon={<ExclamationCircleOutlined />}
-					label="待补齐"
+					label="当前页待补齐"
 					value={stats.completion}
 					tone="text-amber-600"
 				/>
-				<MetricTile icon={<TeamOutlined />} label="缺负责人" value={stats.missingOwner} tone="text-amber-600" />
+				<MetricTile icon={<TeamOutlined />} label="当前页缺负责人" value={stats.missingOwner} tone="text-amber-600" />
 				<MetricTile
 					icon={<SafetyCertificateOutlined />}
-					label="缺密级"
+					label="当前页缺密级"
 					value={stats.missingClassification}
 					tone="text-amber-600"
 				/>
-				<MetricTile icon={<LinkOutlined />} label="缺主题域" value={stats.missingDomain} tone="text-amber-600" />
-				<MetricTile
-					icon={<CheckCircleOutlined />}
-					label="OpenMetadata 未映射"
-					value={stats.unmapped}
-					tone="text-red-600"
-				/>
+				<MetricTile icon={<LinkOutlined />} label="当前页缺主题域" value={stats.missingDomain} tone="text-amber-600" />
+				<MetricTile icon={<LinkOutlined />} label="当前页未映射" value={stats.unmapped} tone="text-red-600" />
 			</div>
 
 			<Card>
@@ -349,15 +339,8 @@ export default function MetadataManagementPage() {
 						<Select value={matchStatus} onChange={setMatchStatus} options={MATCH_OPTIONS} style={{ width: 150 }} />
 						<Button onClick={() => void loadAssets(1, pageState.size)}>刷新</Button>
 					</Space>
-					{stats.blocking ? (
-						<Alert
-							type="warning"
-							showIcon
-							message={`治理阻断 ${stats.blocking} 项`}
-							description="请优先进入治理属性或字段契约补齐阻断项。"
-						/>
-					) : null}
-					<Spin spinning={loading || gapLoading}>
+					{loadError ? <Alert type="error" showIcon message={loadError} /> : null}
+					<Spin spinning={loading}>
 						{records.length ? (
 							<CompactTable
 								rowKey={(row: MetadataAssetRow) => row.id}
@@ -372,8 +355,15 @@ export default function MetadataManagementPage() {
 									onChange: (page, size) => void loadAssets(size !== pageState.size ? 1 : page, size),
 								}}
 							/>
-						) : (
-							<EmptyState title="暂无资产元数据" description="请先完成数据源结构采集，或调整当前筛选条件。" />
+						) : loadError ? null : (
+							<EmptyState
+								title="暂无资产元数据"
+								description={
+									canManage
+										? "请先完成数据源结构采集，或调整当前筛选条件。"
+										: "当前账号下暂无可见资产，请调整筛选条件或联系目录维护人员。"
+								}
+							/>
 						)}
 					</Spin>
 				</Space>

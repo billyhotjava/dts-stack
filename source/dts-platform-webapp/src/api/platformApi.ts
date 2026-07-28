@@ -100,6 +100,11 @@ export const listCatalogAssetsV2 = (params: CatalogAssetV2Query = {}) =>
 		params,
 		paramsSerializer: { indexes: null },
 	});
+export const listCatalogGovernanceIntakeAssets = (params: CatalogAssetV2Query = {}) =>
+	api.get({
+		url: "/catalog/assets-v2/governance-intake",
+		params,
+	});
 export const getCatalogAssetsOverview = (params: { domainId?: string; domainUnassigned?: boolean } = {}) =>
 	api.get({ url: "/catalog/assets-v2/overview", params });
 export const getCatalogAssetV2 = (id: string) =>
@@ -1267,7 +1272,8 @@ export const archiveIndicator = (id: string) => api.post({ url: `/governance/ind
 export const validateIndicator = (id: string) => api.post({ url: `/governance/indicators/${id}/validate` });
 export const validateIndicatorDerivation = (id: string) =>
 	api.post({ url: `/governance/indicators/${id}/derivation/validate` });
-export const getIndicatorDependencies = (params: any = {}) => api.get({ url: "/governance/indicators/dependencies", params });
+export const getIndicatorDependencies = (params: any = {}) =>
+	api.get({ url: "/governance/indicators/dependencies", params });
 export const listIndicatorVersions = (id: string) => api.get({ url: `/governance/indicators/${id}/versions` });
 export const getIndicatorVersion = (id: string, version: string) =>
 	api.get({ url: `/governance/indicators/${id}/versions/${version}` });

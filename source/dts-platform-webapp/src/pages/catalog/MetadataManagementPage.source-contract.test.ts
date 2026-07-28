@@ -28,15 +28,19 @@ test("metadata management has a real data asset page and route", () => {
 
 test("metadata management is asset semantic governance, not collection console", () => {
 	assert.match(PAGE_SOURCE, /listCatalogAssetsV2/);
-	assert.match(PAGE_SOURCE, /getCatalogAssetsV2GovernanceGaps/);
-	assert.match(PAGE_SOURCE, /syncCatalogAssetsV2/);
+	assert.match(PAGE_SOURCE, /listCatalogGovernanceIntakeAssets/);
+	assert.match(PAGE_SOURCE, /useCatalogMaintainerAccess/);
+	assert.doesNotMatch(PAGE_SOURCE, /syncCatalogAssetsV2|同步 OpenMetadata/);
 	assert.match(PAGE_SOURCE, /元数据管理/);
 	assert.match(PAGE_SOURCE, /资产语义元数据/);
-	assert.match(PAGE_SOURCE, /待补齐/);
-	assert.match(PAGE_SOURCE, /缺负责人/);
-	assert.match(PAGE_SOURCE, /缺密级/);
-	assert.match(PAGE_SOURCE, /缺主题域/);
+	assert.match(PAGE_SOURCE, /当前页待补齐/);
+	assert.match(PAGE_SOURCE, /当前页缺负责人/);
+	assert.match(PAGE_SOURCE, /当前页缺密级/);
+	assert.match(PAGE_SOURCE, /当前页缺主题域/);
 	assert.match(PAGE_SOURCE, /OpenMetadata 未映射/);
+	assert.match(PAGE_SOURCE, /已分级资产仍遵循原有密级和部门权限/);
+	assert.match(PAGE_SOURCE, /资产元数据加载失败/);
+	assert.match(PAGE_SOURCE, /isBlank\(row\.classification\) \? null/);
 	assert.match(PAGE_SOURCE, /\/catalog\/metadata/);
 	assert.doesNotMatch(PAGE_SOURCE, /采集任务与触发|采集历史|Schema 漂移工单/);
 });
@@ -45,9 +49,5 @@ test("metadata management no longer hosts the data-asset tag dictionary", () => 
 	assert.doesNotMatch(PAGE_SOURCE, /TagManagementTab/);
 	assert.doesNotMatch(PAGE_SOURCE, /catalog-tags|label:\s*"数据标签"/);
 	assert.doesNotMatch(PAGE_SOURCE, /useCatalogTagGovernanceAccess/);
-	assert.equal(
-		(PAGE_SOURCE.match(/同步 OpenMetadata/g) || []).length,
-		1,
-		"metadata synchronization must remain available after the tag dictionary moves",
-	);
+	assert.equal((PAGE_SOURCE.match(/同步 OpenMetadata/g) || []).length, 0);
 });
