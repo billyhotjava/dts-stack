@@ -1693,3 +1693,23 @@
 **执行顺序**: F0 基线缺口登记 → F1/F2 连续编码 → 一次合并构建与契约验证 → 登录恢复后补真实 UI 证据。
 **关键决策**: Header 问号而非右下角齿轮；右侧上下文 Sheet + `/settings/help` 完整中心；本地静态主题注册表；通用说明迁移、运行态信息原位保留。
 **已知风险**: 默认 E2E 账号当前返回 401，共享 Playwright 会话被占用；本轮按用户要求不反复测试，最终只做一次合并验证，真实 UI DoD 仍需有效登录。
+
+## Sprint-78: P0 安全与稳定性加固（评审缺口闭环） (202607)
+
+**目录**: `worklog/v2.2.3/sprint-78-202607-p0-security-stability-hardening`
+**状态**: READY（规划与契约已冻结，未实施）
+**类型**: Security Hardening / Ops Reliability / Delivery Cleanup
+**目标**: 关闭 2026-07-29 评审确认的四个 P0 风险——新建用户初始口令不再是公开常量、TLS 私钥不再随源码分发、PostgreSQL 具备定时备份与已验证恢复、Hetu 遗留代理从交付物中彻底移除。
+**依赖**: 复用 `KeycloakAdminClient.resetPassword` 既有 temporary 契约、`services/certs` 部署期证书链、init.sh 的 `PG_DB_*` 库清单口径、`biLinkUrl.ts` 既有 Hetu→`/bi` 重定向；不引入新容器、不改审批链路与角色边界、不动 `services/dts-pg/data`；浏览器验收基线缺口由 Sprint-77 F0 统一跟踪，本 Sprint 不重复立项。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-新建用户初始口令安全治理 | P0 | 3 | READY |
+| F2-TLS私钥出库与部署期注入 | P0 | 3 | READY |
+| F3-PostgreSQL定时备份与恢复验证 | P0 | 3 | READY |
+| F4-Hetu遗留代理移除与内置BI收敛 | P0 | 3 | READY |
+
+**统计**: DRAFT=0, READY=4, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**执行顺序**: 四个 Feature 相互独立可并行；Feature 内 T01 → T02 → T03；F4/T03 浏览器 smoke 段等待 Sprint-77 F0 基线。
+**关键决策**: 初始口令 SecureRandom 一次性生成 + temporary=true、明文只存在于执行响应内存（ADR-78-01/02）；TLS 私钥唯一来源为部署期 services/certs，Git 历史旧私钥以轮换关闭（ADR-78-04/05）；备份走宿主机 pg_dump + 14 天保留，不动 data 目录（ADR-78-06）；Hetu 路由层硬删除不留开关（ADR-78-07）。
+**已知风险**: Git 历史中的旧 p12 私钥不可召回，现场必须执行 F2/T03 轮换才算关闭；旧 Hetu 路径书签失效需在发布说明中告知；浏览器 smoke 证据段受共享登录基线 GAP 约束（`it/baseline.md`）。

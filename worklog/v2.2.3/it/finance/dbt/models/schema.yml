@@ -1,0 +1,125 @@
+version: 2
+
+models:
+  - name: it_fin_demo_dwd_dim_date
+    description: "财务分析共用公历日期维度。"
+    columns:
+      - name: date_key
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - unique:
+              config:
+                severity: error
+
+  - name: it_fin_demo_dwd_dim_cost_center
+    description: "财务 Demo 成本中心当前维度。"
+    columns:
+      - name: cost_center_code
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - unique:
+              config:
+                severity: error
+
+  - name: it_fin_demo_dwd_dim_budget_account
+    description: "财务 Demo 预算科目当前维度及标准码映射。"
+    columns:
+      - name: account_code
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - unique:
+              config:
+                severity: error
+      - name: account_category_code
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - BAC-PERSONNEL
+                  - BAC-EQUIPMENT
+                  - BAC-MATERIAL
+                  - BAC-SERVICE
+              config:
+                severity: error
+      - name: control_type_code
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - BCT-HARD
+                  - BCT-SOFT
+              config:
+                severity: error
+
+  - name: it_fin_demo_dwd_fct_budget_snapshot
+    description: "一个预算明细在一个快照日期一行的周期快照事实。"
+    columns:
+      - name: budget_snapshot_id
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - unique:
+              config:
+                severity: error
+      - name: snapshot_date
+        tests:
+          - not_null:
+              config:
+                severity: error
+      - name: cost_center_code
+        tests:
+          - relationships:
+              arguments:
+                to: ref('it_fin_demo_dwd_dim_cost_center')
+                field: cost_center_code
+              config:
+                severity: error
+      - name: account_code
+        tests:
+          - relationships:
+              arguments:
+                to: ref('it_fin_demo_dwd_dim_budget_account')
+                field: account_code
+              config:
+                severity: error
+
+  - name: it_fin_demo_dws_cost_center_budget
+    description: "按成本中心和快照日期汇总的预算执行模型。"
+    columns:
+      - name: cost_center_budget_id
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - unique:
+              config:
+                severity: error
+      - name: budget_health_code
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - BH-GREEN
+                  - BH-AMBER
+                  - BH-RED
+              config:
+                severity: error
+
+  - name: it_fin_demo_ads_finance_overview
+    description: "面向 BI、API 和数据产品的财务预算概览。"
+    columns:
+      - name: finance_overview_id
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - unique:
+              config:
+                severity: error

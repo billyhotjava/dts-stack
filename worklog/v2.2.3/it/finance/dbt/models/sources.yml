@@ -1,0 +1,57 @@
+version: 2
+
+sources:
+  - name: it_fin_demo_ods
+    schema: "{{ var('it_fin_demo_ods_schema', 'public') }}"
+    description: "DTS 财务 Demo 的三张隔离 ODS；不包含客户 ODS。"
+    tables:
+      - name: cost_center
+        identifier: ods_it_fin_demo_cost_center
+        description: "财务 Demo 成本中心主数据 ODS。"
+        columns:
+          - name: cost_center_code
+            tests:
+              - not_null:
+                  config:
+                    severity: error
+              - unique:
+                  config:
+                    severity: error
+
+      - name: budget_account
+        identifier: ods_it_fin_demo_budget_account
+        description: "财务 Demo 预算科目主数据 ODS。"
+        columns:
+          - name: account_code
+            tests:
+              - not_null:
+                  config:
+                    severity: error
+              - unique:
+                  config:
+                    severity: error
+
+      - name: budget_snapshot
+        identifier: ods_it_fin_demo_budget_snapshot
+        description: "财务 Demo 预算执行周期快照 ODS。"
+        columns:
+          - name: budget_line_code
+            tests:
+              - not_null:
+                  config:
+                    severity: error
+          - name: snapshot_date
+            tests:
+              - not_null:
+                  config:
+                    severity: error
+          - name: cost_center_code
+            tests:
+              - not_null:
+                  config:
+                    severity: error
+          - name: account_code
+            tests:
+              - not_null:
+                  config:
+                    severity: error
