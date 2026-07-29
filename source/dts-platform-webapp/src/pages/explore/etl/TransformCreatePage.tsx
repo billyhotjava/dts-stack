@@ -45,6 +45,12 @@ import {
 	parseTransformCreateDraft,
 	serializeTransformCreateDraft,
 } from "./transformCreateState.helpers";
+import {
+	buildTableMapping,
+	parseTableEntries,
+	resolveTableSelection,
+	resolveWriterTables,
+} from "./transformTableSelection.helpers";
 import { useTransformAsyncRunProgress } from "./useTransformAsyncRunProgress";
 import {
 	buildAutoSyncPrefix,
@@ -75,7 +81,6 @@ import {
 	hasTableEntries,
 	isApiDataSource,
 	isJdbcSource,
-	isSourceAlignedTables,
 	isSameTableList,
 	mapTaskToForm,
 	mergeTableSelections,
@@ -315,10 +320,14 @@ export default function TransformCreatePage() {
 			}
 		}
 		const prefix = normalizeText(vals?.syncPrefix);
-		const tables = mergeTableSelections(
-			selectedTableKeys,
-			splitLines(vals?.readerTables),
-		);
+		const { includeTables: tables } = resolveTableSelection({
+			mode: vals?.tableSelectionMode,
+			selectedTables: mergeTableSelections(
+				vals?.selectedTables,
+				selectedTableKeys,
+			),
+			fallbackTables: vals?.readerTables,
+		});
 		if (!tables.length) return [];
 		return tables.map((source) => {
 			const base = source.includes(".") ? source.split(".").pop() || source : source;
@@ -343,43 +352,69 @@ export default function TransformCreatePage() {
 		router.push("/explore/etl/transform");
 	};
 
-	const syncSelectedTablesToForm = (tables: string[], opts?: { silent?: boolean }) => {
+	const syncSelectedTablesToForm = (
+		tables: string[],
+		opts?: {
+			silent?: boolean;
+			preserveReaderInput?: boolean;
+			preserveSelectionMode?: boolean;
+		},
+	) => {
 		const nextTables = mergeTableSelections(tables);
 		setSelectedTableKeys(nextTables);
 		selectedTableKeysRef.current = nextTables;
 		form.setFieldValue("selectedTables", nextTables.join("\n"));
+		const values = form.getFieldsValue(true);
+		const isJsonMode = values.editorMode === "json";
+		const writerTables = applyPrefixToTables(nextTables, values.syncPrefix);
+		if (isJsonMode) {
+			try {
+				const readerConfig = parseJson(
+					values.readerConfig,
+					"Reader 配置",
+				) as Record<string, any> | undefined;
+				const nextReader = applyTablesToConfig(
+					readerConfig || {},
+					nextTables,
+				);
+				form.setFieldValue(
+					"readerConfig",
+					JSON.stringify(nextReader || {}, null, 2),
+				);
+				const writerConfig = parseJson(
+					values.writerConfig,
+					"Writer 配置",
+				) as Record<string, any> | undefined;
+				const nextWriter = applyTablesToConfig(
+					writerConfig || {},
+					writerTables,
+				);
+				form.setFieldValue(
+					"writerConfig",
+					JSON.stringify(nextWriter || {}, null, 2),
+				);
+			} catch (err: any) {
+				if (!opts?.silent) {
+					toast.error(err?.message || "更新表清单失败");
+				}
+			}
+		}
+		if (!opts?.preserveReaderInput) {
+			form.setFieldValue("readerTables", nextTables.join("\n"));
+		}
+		form.setFieldValue("writerTables", writerTables.join("\n"));
 		if (!nextTables.length) {
-			form.setFieldValue("tableSelectionMode", "all");
-			form.setFieldValue("readerTables", "");
-			form.setFieldValue("writerTables", "");
+			if (!opts?.preserveSelectionMode) {
+				form.setFieldValue("tableSelectionMode", "all");
+			}
 			if (!opts?.silent) {
 				toast.info("已清空表清单");
 			}
 			return;
 		}
-		const values = form.getFieldsValue(true);
-		const isJsonMode = values.editorMode === "json";
-		const writerTables = applyPrefixToTables(nextTables, values.syncPrefix);
-		try {
-			if (isJsonMode) {
-				const readerConfig = parseJson(values.readerConfig, "Reader 配置") as Record<string, any> | undefined;
-				const nextReader = applyTablesToConfig(readerConfig || {}, nextTables);
-				form.setFieldValue("readerConfig", JSON.stringify(nextReader || {}, null, 2));
-				const writerConfig = parseJson(values.writerConfig, "Writer 配置") as Record<string, any> | undefined;
-				const nextWriter = applyTablesToConfig(writerConfig || {}, writerTables);
-				form.setFieldValue("writerConfig", JSON.stringify(nextWriter || {}, null, 2));
-			}
-			// Always sync visual-mode fields so they persist across steps
-			form.setFieldValue("readerTables", nextTables.join("\n"));
-			form.setFieldValue("writerTables", writerTables.join("\n"));
-			form.setFieldValue("tableSelectionMode", "manual");
-			if (!opts?.silent) {
-				toast.success("已更新表清单");
-			}
-		} catch (err: any) {
-			if (!opts?.silent) {
-				toast.error(err?.message || "更新表清单失败");
-			}
+		form.setFieldValue("tableSelectionMode", "manual");
+		if (!opts?.silent) {
+			toast.success("已更新表清单");
 		}
 	};
 
@@ -387,11 +422,21 @@ export default function TransformCreatePage() {
 		const snapshot = values ?? form.getFieldsValue(true);
 		const selectionMode = normalizeText(snapshot?.tableSelectionMode) || "all";
 		const selected = snapshot?.selectedTables ?? form.getFieldValue("selectedTables");
-		const keys = mergeTableSelections(selectedTableKeysRef.current, selectedTableKeys);
+		const keys = mergeTableSelections(
+			selectedTableKeysRef.current,
+			selectedTableKeys,
+		);
 		if (selectionMode !== "manual") {
-			return mergeTableSelections(selected, keys);
+			return [];
 		}
-		return mergeTableSelections(selected, keys, snapshot?.readerTables, snapshot?.writerTables);
+		const canonical = mergeTableSelections(
+			parseTableEntries(selected),
+			keys,
+		);
+		if (canonical.length) {
+			return canonical;
+		}
+		return parseTableEntries(snapshot?.readerTables);
 	};
 
 	useEffect(() => {
@@ -721,7 +766,7 @@ export default function TransformCreatePage() {
 				if (restoreState.mappingTables.length) {
 					setSelectedTableKeys(restoreState.mappingTables);
 					form.setFieldValue("selectedTables", restoreState.mappingTables.join("\n"));
-					syncSelectedTablesToForm(restoreState.mappingTables, { silent: true });
+					selectedTableKeysRef.current = restoreState.mappingTables;
 				}
 			} catch {
 				// handled by global interceptor
@@ -858,31 +903,56 @@ export default function TransformCreatePage() {
 			}
 			readerConfig = applyReaderTypeToConfig(readerConfig, resolvedReaderType);
 			const jobConfig = safeParse(values.jobConfig, "作业参数");
-			const selectedTables = mergeTableSelections(
+			const canonicalTables = mergeTableSelections(
 				values.selectedTables,
 				selectedTableKeysRef.current,
-				resolveSelectedTables(values)
+				selectedTableKeys,
 			);
-			let selectionMode = normalizeText(values.tableSelectionMode) || "all";
-			if (isApiDraft) {
-				selectionMode = "manual";
-			} else if (selectedTables.length) {
-				selectionMode = "manual";
-			}
+			const tableSelection = resolveTableSelection({
+				mode: values.tableSelectionMode,
+				selectedTables: canonicalTables,
+				fallbackTables: mergeTableSelections(
+					extractReaderTables(readerConfig),
+					parseTableEntries(values.readerTables),
+				),
+				excludeTables: values.tableExclude,
+			});
+			const selectionMode = isApiDraft
+				? "manual"
+				: tableSelection.selection;
 			const apiResourceId = normalizeText((readerConfig?.resource as any)?.resourceId);
 			const includeTables =
 				isApiDraft
 					? apiResourceId
 						? [apiResourceId]
 						: []
-					: selectionMode === "manual"
-					? mergeTableSelections(selectedTables, selectedTableKeysRef.current)
-					: [];
-			const excludeTables = !isApiDraft && selectionMode === "all" ? splitLines(values.tableExclude) : [];
-			if (!isApiDraft && selectionMode === "manual" && includeTables.length) {
-				readerConfig = applyTablesToConfig(readerConfig, includeTables);
-				if (shouldApplyWriterTables(writerConfig, values)) {
-					writerConfig = applyTablesToConfig(writerConfig, includeTables);
+					: tableSelection.includeTables;
+			const excludeTables = isApiDraft
+				? []
+				: tableSelection.excludeTables;
+			if (!isFileDraft && !isApiDraft) {
+				if (selectionMode === "manual" && includeTables.length) {
+					readerConfig = applyTablesToConfig(readerConfig, includeTables);
+					if (shouldApplyWriterTables(writerConfig, values)) {
+						const writerTables = resolveWriterTables({
+							sourceTables: includeTables,
+							explicitTables: isJsonMode
+								? undefined
+								: values.writerTables,
+							existingTables: extractWriterTables(writerConfig),
+							prefix: values.syncPrefix,
+						});
+						writerConfig = applyTablesToConfig(
+							writerConfig ?? {},
+							writerTables,
+						);
+					}
+				} else if (selectionMode === "all") {
+					readerConfig =
+						applyTablesToConfig(readerConfig ?? {}, []) ?? {};
+					if (writerConfig) {
+						writerConfig = applyTablesToConfig(writerConfig, []);
+					}
 				}
 			}
 			const draftPayload = buildTransformCreateDraftPayload({
@@ -1091,8 +1161,6 @@ export default function TransformCreatePage() {
 			});
 			const tables = Array.isArray(rawTables) ? rawTables.map((item) => normalizeDiscoveredTable(item)) : [];
 			setDiscoveredTables(tables);
-			setSelectedTableKeys([]);
-			form.setFieldValue("selectedTables", "");
 			if (tables.length === 0) {
 				setDiscoverError("未发现可用表");
 			}
@@ -1101,14 +1169,6 @@ export default function TransformCreatePage() {
 		} finally {
 			setDiscoveringTables(false);
 		}
-	};
-
-	const handleApplyTables = () => {
-		if (!selectedTableKeys.length) {
-			toast.error("请先选择表");
-			return;
-		}
-		syncSelectedTablesToForm(selectedTableKeys);
 	};
 
 	const handleApiPreview = async () => {
@@ -1141,6 +1201,10 @@ export default function TransformCreatePage() {
 	};
 
 	const readerTablesValidator = (_: any, value: string) => {
+		const category = normalizeText(form.getFieldValue("sourceCategory"));
+		if (category && category !== "database") {
+			return Promise.resolve();
+		}
 		const mode = normalizeText(form.getFieldValue("tableSelectionMode")) || "all";
 		if (mode === "all") {
 			return Promise.resolve();
@@ -1148,7 +1212,7 @@ export default function TransformCreatePage() {
 		if (resolveSelectedTables().length) {
 			return Promise.resolve();
 		}
-		const tables = splitLines(value);
+		const tables = parseTableEntries(value);
 		if (tables.length) {
 			return Promise.resolve();
 		}
@@ -1206,8 +1270,8 @@ export default function TransformCreatePage() {
 		switch (stepIndex) {
 			case 0:
 				return isJsonMode
-					? ["name", "ownerDept", "sourceDataSourceId", "readerType", "readerConfig"]
-					: ["name", "ownerDept", "sourceDataSourceId", "readerType"];
+					? ["name", "ownerDept", "sourceDataSourceId", "readerType", "selectedTables", "readerConfig"]
+					: ["name", "ownerDept", "sourceDataSourceId", "readerType", "selectedTables"];
 			case 1:
 				return ["airflowEnabled", "runNow"];
 			default:
@@ -1542,73 +1606,74 @@ export default function TransformCreatePage() {
 				}
 				return;
 			}
-			const selectedTables = mergeTableSelections(
+			const canonicalTables = mergeTableSelections(
 				mergedValues.selectedTables,
 				selectedTableKeysRef.current,
-				resolveSelectedTables(mergedValues)
+				selectedTableKeys,
 			);
-			let selectionMode = normalizeText(mergedValues.tableSelectionMode) || "all";
-			if (selectedTables.length || selectedTableKeysRef.current.length) {
-				selectionMode = "manual";
-				mergedValues.tableSelectionMode = "manual";
-			}
 			let writerConfig = isJsonMode
 				? parseJson(mergedValues.writerConfig, "Writer 配置")
 				: buildWriterConfig(mergedValues);
 			writerConfig = withTargetDataSourceId(writerConfig, targetDataSourceId);
-			const inferredManualTables = mergeTableSelections(
-				selectedTables,
-				extractReaderTables(readerConfig),
-				extractWriterTables(writerConfig),
-				mergedValues.readerTables,
-				mergedValues.writerTables
-			);
-			if (selectionMode === "manual" && !selectedTables.length && inferredManualTables.length) {
-				mergedValues.selectedTables = inferredManualTables.join("\n");
-			}
-			if (selectionMode === "all" && inferredManualTables.length) {
-				selectionMode = "manual";
-				mergedValues.tableSelectionMode = "manual";
-			}
-			let includeTables: string[] = [];
+			const tableSelection = resolveTableSelection({
+				mode: mergedValues.tableSelectionMode,
+				selectedTables: canonicalTables,
+				fallbackTables: mergeTableSelections(
+					extractReaderTables(readerConfig),
+					parseTableEntries(mergedValues.readerTables),
+				),
+				excludeTables: mergedValues.tableExclude,
+			});
+			const selectionMode = tableSelection.selection;
+			const includeTables = tableSelection.includeTables;
+			const excludeTables = tableSelection.excludeTables;
+			mergedValues.tableSelectionMode = selectionMode;
 			if (selectionMode === "manual") {
-				includeTables = mergeTableSelections(selectedTables, selectedTableKeysRef.current, inferredManualTables);
-				if (!includeTables.length) {
-					includeTables = mergeTableSelections(selectedTableKeysRef.current, selectedTableKeys);
-				}
-				if (!includeTables.length) {
-					if (isJsonMode) {
-						includeTables = extractReaderTables(readerConfig);
-					} else {
-						includeTables = splitLines(mergedValues.readerTables);
-					}
-				}
-				if (!includeTables.length) {
-					includeTables = extractWriterTables(writerConfig);
-				}
-				if (!includeTables.length && !isJsonMode) {
-					includeTables = splitLines(mergedValues.writerTables);
-				}
 				if (!includeTables.length) {
 					throw new Error("请选择需要入湖的表");
 				}
-					readerConfig = applyTablesToConfig((readerConfig as Record<string, any>) ?? {}, includeTables) ?? {};
-					if (shouldApplyWriterTables((writerConfig as Record<string, any>) ?? {}, mergedValues)) {
-						const explicitWriterTables = splitLines(mergedValues.writerTables);
-						const normalizedExplicitWriterTables =
-							includeTables.length && isSourceAlignedTables(includeTables, explicitWriterTables)
-								? applyPrefixToTables(includeTables, mergedValues.syncPrefix)
-								: explicitWriterTables;
-						const existingWriterTables = extractWriterTables(writerConfig as Record<string, any>);
-						const derivedWriterTables = normalizedExplicitWriterTables.length
-							? normalizedExplicitWriterTables
-							: (!existingWriterTables.length || isSourceAlignedTables(includeTables, existingWriterTables))
-								? applyPrefixToTables(includeTables, mergedValues.syncPrefix)
-								: existingWriterTables;
-						writerConfig = applyTablesToConfig((writerConfig as Record<string, any>) ?? {}, derivedWriterTables) ?? {};
-					}
+				mergedValues.selectedTables = includeTables.join("\n");
+				readerConfig =
+					applyTablesToConfig(
+						(readerConfig as Record<string, any>) ?? {},
+						includeTables,
+					) ?? {};
+				if (
+					shouldApplyWriterTables(
+						(writerConfig as Record<string, any>) ?? {},
+						mergedValues,
+					)
+				) {
+					const derivedWriterTables = resolveWriterTables({
+						sourceTables: includeTables,
+						explicitTables: isJsonMode
+							? undefined
+							: mergedValues.writerTables,
+						existingTables: extractWriterTables(
+							writerConfig as Record<string, any>,
+						),
+						prefix: mergedValues.syncPrefix,
+					});
+					writerConfig =
+						applyTablesToConfig(
+							(writerConfig as Record<string, any>) ?? {},
+							derivedWriterTables,
+						) ?? {};
 				}
-			const excludeTables = selectionMode === "all" ? splitLines(mergedValues.tableExclude) : [];
+			} else {
+				mergedValues.selectedTables = "";
+				readerConfig =
+					applyTablesToConfig(
+						(readerConfig as Record<string, any>) ?? {},
+						[],
+					) ?? {};
+				if (writerConfig) {
+					writerConfig = applyTablesToConfig(
+						writerConfig as Record<string, any>,
+						[],
+					);
+				}
+			}
 			if (writerConfig && selectionMode !== "all" && !hasTableEntries(extractWriterTables(writerConfig))) {
 				throw new Error("Writer 配置缺少目标表，请填写表清单");
 			}
@@ -1627,12 +1692,16 @@ export default function TransformCreatePage() {
 					sourceType: normalizeText(resolvedReaderType) || "",
 					sourceDataSourceId: sourceDataSourceId,
 					sourceConfig: (readerConfig as Record<string, any>) || {},
-						destinationType: defaultWriterType,
-						destinationConfig: writerConfig as Record<string, any> | undefined,
-						syncMode: mergedValues.syncMode || editingTask?.syncMode || "full_refresh",
-						syncSchedule: buildSyncScheduleText(mergedValues),
-						syncConfig: (syncConfig ?? null) as any,
-						syncPrefix: normalizeText(mergedValues.syncPrefix) || undefined,
+					destinationType: defaultWriterType,
+					destinationConfig: writerConfig as Record<string, any> | undefined,
+					syncMode: mergedValues.syncMode || editingTask?.syncMode || "full_refresh",
+					syncSchedule: buildSyncScheduleText(mergedValues),
+					syncConfig: (syncConfig ?? null) as any,
+					syncPrefix: normalizeText(mergedValues.syncPrefix) || undefined,
+					tableMapping: buildTableMapping(
+						includeTables,
+						extractWriterTables(writerConfig),
+					),
 					addaxConfig: (jobConfig as Record<string, any>) || editingTask?.addaxConfig,
 					airflowEnabled: Boolean(mergedValues.airflowEnabled),
 					dbtModelSelector: modelSelector || undefined,
@@ -1818,7 +1887,12 @@ export default function TransformCreatePage() {
 						onChange={handleStepChange}
 						className="mb-6"
 					/>
-					<Form.Item name="selectedTables" hidden>
+					<Form.Item
+						name="selectedTables"
+						hidden
+						dependencies={["sourceCategory", "tableSelectionMode"]}
+						rules={[{ validator: readerTablesValidator }]}
+					>
 						<Input type="hidden" />
 					</Form.Item>
 					<Form.Item name="writerType" hidden rules={[{ required: true, message: "请选择 Writer 类型" }]}>
@@ -2014,7 +2088,6 @@ export default function TransformCreatePage() {
 									discoverError={discoverError}
 									loadingDataSources={loadingDataSources}
 									onDiscoverTables={handleDiscoverTables}
-									onApplyTables={handleApplyTables}
 									syncSelectedTablesToForm={syncSelectedTablesToForm}
 									readerTablesValidator={readerTablesValidator}
 									readerTypeValidator={readerTypeValidator}

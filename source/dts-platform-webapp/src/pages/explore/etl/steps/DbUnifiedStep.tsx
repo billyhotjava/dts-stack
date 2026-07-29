@@ -20,6 +20,7 @@ import type { InfraDataSource } from "@/api/services/dataSourcesService";
 import type { IngestionFormContext } from "./types";
 import { normalizeText } from "@/utils/textUtils";
 import { isApiDataSource, normalizeType } from "../ingestionFormHelpers";
+import { parseTableEntries } from "../transformTableSelection.helpers";
 
 const { Text } = Typography;
 
@@ -107,8 +108,14 @@ export type DbUnifiedStepProps = Pick<
 	discoverError: string;
 	loadingDataSources: boolean;
 	onDiscoverTables: () => void;
-	onApplyTables: () => void;
-	syncSelectedTablesToForm: (tables: string[], opts?: { silent?: boolean }) => void;
+	syncSelectedTablesToForm: (
+		tables: string[],
+		opts?: {
+			silent?: boolean;
+			preserveReaderInput?: boolean;
+			preserveSelectionMode?: boolean;
+		},
+	) => void;
 	readerTablesValidator: (_: any, value: string) => Promise<void>;
 	readerTypeValidator: (_: any, value: string) => Promise<void>;
 	deptOptions: { label: string; value: string }[];
@@ -146,7 +153,6 @@ export function DbUnifiedStep({
 	discoverError,
 	loadingDataSources,
 	onDiscoverTables,
-	onApplyTables,
 	syncSelectedTablesToForm,
 	readerTablesValidator,
 	readerTypeValidator,
@@ -251,6 +257,14 @@ export function DbUnifiedStep({
 						options={dataSourceOptions}
 						showSearch
 						optionFilterProp="label"
+						onChange={() => {
+							if (!apiFlow) {
+								syncSelectedTablesToForm([], {
+									silent: true,
+									preserveSelectionMode: true,
+								});
+							}
+						}}
 					/>
 				</Form.Item>
 				<Form.Item
@@ -359,6 +373,14 @@ export function DbUnifiedStep({
 				</>
 			) : (
 				<>
+					<div className="grid gap-4 md:grid-cols-2">
+						<Form.Item name="readerSchema" label="Schema（可选）">
+							<Input placeholder="例如 public" />
+						</Form.Item>
+						<Form.Item name="readerTablePattern" label="表名筛选（可选）">
+							<Input placeholder="支持 SQL LIKE，例如 ods_%" />
+						</Form.Item>
+					</div>
 					<Form.Item name="tableSelectionMode" label="入湖表选择">
 						<Radio.Group
 							onChange={(e) => {
@@ -374,8 +396,11 @@ export function DbUnifiedStep({
 					</Form.Item>
 					{tableSelectionMode === "all" ? (
 						<div className="grid gap-4 md:grid-cols-2">
-							<Form.Item name="tableExclude" label="排除表（每行一个，可选）">
-								<Input.TextArea rows={2} placeholder="schema.table 或 table_name" />
+							<Form.Item name="tableExclude" label="排除表（可选）">
+								<Input.TextArea
+									rows={2}
+									placeholder="支持换行或逗号分隔，例如 audit_log, tmp_table"
+								/>
 							</Form.Item>
 						</div>
 					) : null}
@@ -393,19 +418,9 @@ export function DbUnifiedStep({
 					) : (
 						<>
 							<div className="grid gap-4 md:grid-cols-2">
-								<Form.Item
-									name="readerTables"
-									label="Reader 表（每行一个）"
-									dependencies={["tableSelectionMode"]}
-									rules={[{ validator: readerTablesValidator }]}
-								>
-									<Input.TextArea rows={3} placeholder="source_table" />
-								</Form.Item>
 								<Form.Item name="readerColumns" label="Reader 字段（逗号分隔）">
 									<Input placeholder="* 或 id,name,created_at" />
 								</Form.Item>
-							</div>
-							<div className="grid gap-4 md:grid-cols-2">
 								<Form.Item name="readerWhere" label="Reader 过滤条件">
 									<Input placeholder="可选，例如：status = 1" />
 								</Form.Item>
@@ -432,7 +447,7 @@ export function DbUnifiedStep({
 						</>
 					)}
 				</>
-				)}
+			)}
 				<div className="grid gap-4 md:grid-cols-2">
 					<Form.Item
 						name="targetDataSourceId"
@@ -455,22 +470,14 @@ export function DbUnifiedStep({
 					<Alert type="warning" showIcon message={targetDataSourceMessage} className="mb-4" />
 				) : null}
 
-				{/* ─── 源端表发现 ─── */}
-			{!apiFlow ? (
+				{/* ─── 手动选择源表 ─── */}
+			{!apiFlow && tableSelectionMode === "manual" ? (
 				<>
-				<Divider orientation="left">源端表发现</Divider>
-				<Card type="inner">
-				<div className="grid gap-4 md:grid-cols-3">
-					<Form.Item name="readerSchema" label="Schema（可选）">
-						<Input placeholder="例如 public" />
-					</Form.Item>
-					<Form.Item name="readerTablePattern" label="表名筛选（可选）">
-						<Input placeholder="支持 SQL LIKE，例如 ods_%" />
-					</Form.Item>
-					<Form.Item label="操作">
-						<Space>
+					<Divider orientation="left">选择源表</Divider>
+					<Card type="inner">
+						<Space className="mb-3">
 							<Button onClick={onDiscoverTables} loading={loadingTables}>
-								获取表清单
+								刷新表清单
 							</Button>
 							<Button
 								onClick={() => {
@@ -484,49 +491,93 @@ export function DbUnifiedStep({
 							<Button
 								onClick={() => {
 									setSelectedTableKeys([]);
-									syncSelectedTablesToForm([], { silent: true });
+									syncSelectedTablesToForm([], {
+										silent: true,
+										preserveSelectionMode: true,
+									});
 								}}
 								disabled={!selectedTableKeys.length}
 							>
 								清空
 							</Button>
-							<Button onClick={onApplyTables} disabled={!selectedTableKeys.length}>
-								应用选择
-							</Button>
 						</Space>
-					</Form.Item>
-				</div>
-				{discoverError ? (
-					<Alert type="warning" message={discoverError} showIcon className="mb-3" />
-				) : null}
-				<CompactTable
-					rowKey={(record) => buildTableKey(record)}
-					size="small"
-					loading={loadingTables}
-					dataSource={availableTables}
-					rowSelection={{
-						selectedRowKeys: selectedTableKeys,
-						onChange: (keys) => {
-							const nextKeys = keys.map((key) => String(key));
-							syncSelectedTablesToForm(nextKeys, { silent: true });
-						},
-					}}
-					columns={[
-						{ title: "模式", dataIndex: "schema", width: 140 },
-						{ title: "表名", dataIndex: "name" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
-						{ title: "类型", dataIndex: "type", width: 120 },
-					]}
-					pagination={{
-						defaultPageSize: tablePageSize,
-						showSizeChanger: true,
-						pageSizeOptions: [10, 20, 50, 100],
-						onShowSizeChange: (_current: number, size: number) => setTablePageSize(size),
-					}}
-				/>
-				<Text type="secondary" className="block mt-2">
-					已发现 {availableTables.length} 张表，已选择 {selectedTableKeys.length} 张表
-				</Text>
-				</Card>
+						{discoverError ? (
+							<Alert type="warning" message={discoverError} showIcon className="mb-3" />
+						) : null}
+						<CompactTable
+							rowKey={(record) => buildTableKey(record)}
+							size="small"
+							loading={loadingTables}
+							dataSource={availableTables}
+							rowSelection={{
+								selectedRowKeys: selectedTableKeys,
+								onChange: (keys) => {
+									const nextKeys = keys.map((key) => String(key));
+									syncSelectedTablesToForm(nextKeys, { silent: true });
+								},
+							}}
+							columns={[
+								{ title: "模式", dataIndex: "schema", width: 140 },
+								{
+									title: "表名",
+									dataIndex: "name",
+									sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
+								},
+								{ title: "类型", dataIndex: "type", width: 120 },
+							]}
+							pagination={{
+								defaultPageSize: tablePageSize,
+								showSizeChanger: true,
+								pageSizeOptions: [10, 20, 50, 100],
+								onShowSizeChange: (_current: number, size: number) => setTablePageSize(size),
+							}}
+						/>
+						<Text type="secondary" className="block mt-2">
+							已发现 {availableTables.length} 张表，已选择 {selectedTableKeys.length} 张表
+						</Text>
+						<Collapse
+							ghost
+							className="mt-3"
+							items={[
+								{
+									key: "manual-table-input",
+									label: "批量录入表名（备用）",
+									children: (
+										<Form.Item
+											name="readerTables"
+											dependencies={["tableSelectionMode"]}
+											rules={[{ validator: readerTablesValidator }]}
+											extra="仅在无法发现源表时使用；支持换行或逗号分隔。"
+										>
+											<Input.TextArea
+												rows={3}
+												placeholder={"cost_center\nbudget_account\nbudget_execution_snapshot"}
+												onChange={(event) =>
+													syncSelectedTablesToForm(
+														parseTableEntries(event.target.value),
+														{
+															silent: true,
+															preserveReaderInput: true,
+															preserveSelectionMode: true,
+														},
+													)
+												}
+												onBlur={(event) =>
+													syncSelectedTablesToForm(
+														parseTableEntries(event.target.value),
+														{
+															silent: true,
+															preserveSelectionMode: true,
+														},
+													)
+												}
+											/>
+										</Form.Item>
+									),
+								},
+							]}
+						/>
+					</Card>
 				</>
 			) : null}
 
