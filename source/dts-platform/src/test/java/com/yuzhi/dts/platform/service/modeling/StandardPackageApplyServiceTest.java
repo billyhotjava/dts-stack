@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -64,6 +66,9 @@ class StandardPackageApplyServiceTest {
     @Mock
     private StdCodeMappingRepository codeMappingRepository;
 
+    @Mock
+    private StandardPackageMeasurementUnitService measurementUnitService;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private StandardPackageApplyService service;
@@ -79,8 +84,10 @@ class StandardPackageApplyServiceTest {
             codeDirectoryRepository,
             codeValueRepository,
             codeMappingRepository,
-            objectMapper
+            objectMapper,
+            measurementUnitService
         );
+        lenient().when(measurementUnitService.apply(anyList(), anyString())).thenReturn(List.of());
     }
 
     private StandardPackageImportRun previewedRun(UUID runId, String payloadJson) {
@@ -100,7 +107,7 @@ class StandardPackageApplyServiceTest {
         UUID runId = UUID.randomUUID();
         String payload =
             "{" +
-            "\"terms\":[{\"code\":\"T1\",\"name\":\"术语一\"}]," +
+            "\"terms\":[{\"code\":\"T1\",\"name\":\"术语一\",\"status\":\"DRAFT\"}]," +
             "\"elements\":[{\"fieldNameCn\":\"性别\",\"fieldNameEn\":\"gender\",\"dataType\":\"VARCHAR\",\"dataLength\":1," +
             "\"nullable\":false,\"domain\":\"人口\",\"description\":\"d\",\"sourceSystem\":\"MDM\",\"codeSet\":\"GENDER\",\"securityLevel\":\"INTERNAL\"}]," +
             "\"codeDirectories\":[{\"codeTypeCode\":\"GENDER\",\"codeTypeName\":\"性别代码\",\"status\":1}]," +
@@ -151,10 +158,47 @@ class StandardPackageApplyServiceTest {
         assertThat(items.get(3).getEntityType()).isEqualTo("ELEMENT");
         assertThat(items.get(4).getEntityType()).isEqualTo("CODE_MAPPING");
         assertThat(items).allSatisfy(item -> assertThat(item.getAction()).isEqualTo("CREATE"));
+        ArgumentCaptor<ModelingGlossaryTerm> termCaptor = ArgumentCaptor.forClass(ModelingGlossaryTerm.class);
+        verify(glossaryTermRepository).save(termCaptor.capture());
+        assertThat(termCaptor.getValue().getStatus()).isEqualTo("DRAFT");
 
         ArgumentCaptor<StandardPackageImportRun> runCaptor = ArgumentCaptor.forClass(StandardPackageImportRun.class);
         verify(runRepository).save(runCaptor.capture());
         assertThat(runCaptor.getValue().getStatus()).isEqualTo("APPLIED");
+    }
+
+    @Test
+    void apply_measurementUnitsUsesTheVersionedPackageAdapter() {
+        UUID runId = UUID.randomUUID();
+        UUID unitId = UUID.randomUUID();
+        String payload =
+            """
+            {"measurementUnits":[{"code":"M","name":"米","symbol":"m","quantityKind":"LENGTH","conversionFactor":1,"precision":3}]}
+            """;
+        when(runRepository.findById(runId)).thenReturn(Optional.of(previewedRun(runId, payload)));
+        when(measurementUnitService.apply(anyList(), eq("tester")))
+            .thenReturn(
+                List.of(
+                    new StandardPackageMeasurementUnitService.Change(
+                        unitId.toString(),
+                        "CREATE",
+                        Map.of("_appliedVersion", 1, "_appliedChecksum", "checksum")
+                    )
+                )
+            );
+
+        Map<String, Object> result = service.apply(runId, "tester");
+
+        assertThat(result.get("totalCreated")).isEqualTo(1);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<StandardPackageImportRunItem>> captor = ArgumentCaptor.forClass(List.class);
+        verify(runItemRepository).saveAll(captor.capture());
+        assertThat(captor.getValue())
+            .singleElement()
+            .satisfies(item -> {
+                assertThat(item.getEntityType()).isEqualTo("MEASUREMENT_UNIT");
+                assertThat(item.getBeforeJson()).contains("_appliedChecksum");
+            });
     }
 
     @Test
@@ -279,6 +323,38 @@ class StandardPackageApplyServiceTest {
         assertThat(result.get("deleted")).isEqualTo(1);
         verify(metadataStandardRepository).deleteById(elementId);
         verify(metadataStandardService, never()).delete(any(UUID.class));
+    }
+
+    @Test
+    @DisplayName("rollback：本次导入创建的计量单位写入停用版本，不计为物理删除")
+    void rollback_createdMeasurementUnit_reportsDeactivation() throws Exception {
+        UUID runId = UUID.randomUUID();
+        StandardPackageImportRun run = previewedRun(runId, "{}");
+        run.setStatus("APPLIED");
+        when(runRepository.findById(runId)).thenReturn(Optional.of(run));
+
+        UUID unitId = UUID.randomUUID();
+        StandardPackageImportRunItem createUnit = new StandardPackageImportRunItem();
+        createUnit.setRunId(runId);
+        createUnit.setSeq(1);
+        createUnit.setEntityType("MEASUREMENT_UNIT");
+        createUnit.setEntityId(unitId.toString());
+        createUnit.setAction("CREATE");
+        createUnit.setBeforeJson(
+            objectMapper.writeValueAsString(Map.of("_appliedVersion", 1, "_appliedChecksum", "checksum"))
+        );
+
+        when(runItemRepository.findByRunIdOrderBySeqDesc(runId)).thenReturn(List.of(createUnit));
+        when(measurementUnitService.rollbackCreate(eq(unitId), any(), eq("tester"))).thenReturn(true);
+
+        Map<String, Object> result = service.rollback(runId, "tester");
+
+        assertThat(result.get("deleted")).isEqualTo(0);
+        assertThat(result.get("deactivated")).isEqualTo(1);
+        verify(measurementUnitService).rollbackCreate(eq(unitId), any(), eq("tester"));
+        ArgumentCaptor<StandardPackageImportRun> runCaptor = ArgumentCaptor.forClass(StandardPackageImportRun.class);
+        verify(runRepository).save(runCaptor.capture());
+        assertThat(runCaptor.getValue().getSummary()).contains("停用 1");
     }
 
     @Test

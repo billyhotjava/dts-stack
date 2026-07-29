@@ -1,6 +1,7 @@
 package com.yuzhi.dts.ingestion.service.etl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 
@@ -59,6 +60,40 @@ class AirflowDagServiceTest {
         String dagSource = readDag("task_manual_demo");
         assertThat(dagSource).contains("schedule=None");
         assertThat(dagSource).doesNotContain("timedelta(");
+    }
+
+    @Test
+    void shouldRejectDagIdPathTraversalWithoutTouchingFilesOutsideDagDirectory() throws Exception {
+        String outsideStem = tempDir.getFileName() + "-outside";
+        Path outsideFile = tempDir.resolveSibling(outsideStem + ".py");
+        Files.writeString(outsideFile, "keep");
+        IngestionTask task = task("manual", "../" + outsideStem);
+
+        try {
+            assertThatThrownBy(() -> dagService.rebuildDagForTask(task))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("DAG ID");
+            assertThat(Files.readString(outsideFile)).isEqualTo("keep");
+        } finally {
+            Files.deleteIfExists(outsideFile);
+        }
+    }
+
+    @Test
+    void shouldBindRequestedDagIdToPersistedTaskIdentity() {
+        IngestionTask first = task("manual", "shared_dag");
+        first.setId(101L);
+        IngestionTask second = task("manual", "shared_dag");
+        second.setId(202L);
+
+        String firstDagId = dagService.rebuildDagForTask(first);
+        String secondDagId = dagService.rebuildDagForTask(second);
+
+        assertThat(firstDagId).isEqualTo("shared_dag_task_101");
+        assertThat(secondDagId).isEqualTo("shared_dag_task_202");
+        assertThat(firstDagId).isNotEqualTo(secondDagId);
+        assertThat(tempDir.resolve(firstDagId + ".py")).exists();
+        assertThat(tempDir.resolve(secondDagId + ".py")).exists();
     }
 
     @Test
@@ -163,9 +198,9 @@ class AirflowDagServiceTest {
             + "\"query\":{\"page\":1,\"size\":50},\"targetTable\":\"ods_api_orders\"}}"
         ));
 
-        dagService.rebuildDagForTask(task);
+        String dagId = dagService.rebuildDagForTask(task);
 
-        String dag = readDag("ods_api_orders_mock");
+        String dag = readDag(dagId);
         // API DAG uses PythonOperator as a thin trigger, not Addax DockerOperator or embedded API runtime.
         assertThat(dag).contains("from airflow.operators.python import PythonOperator");
         assertThat(dag).contains("python_callable=_trigger_api_ingestion");

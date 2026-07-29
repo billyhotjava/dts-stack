@@ -34,6 +34,7 @@ import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSou
 import { listSqlModels } from "@/api/platformApi";
 import RollbackImpactModal, { type RollbackRequest } from "@/components/rollback/RollbackImpactModal";
 import ExecutionHistoryTable from "./components/ExecutionHistoryTable";
+import TaskAdmissionBasis from "./components/TaskAdmissionBasis";
 import TransformAdmissionActions from "./components/TransformAdmissionActions";
 import { resolveTaskAdmissionState } from "./fileClassificationAdmission.helpers";
 import { resolveAsyncRunSubmitFeedback, mapExecutionToProgressView } from "./transformCreateAsyncRun.helpers";
@@ -573,7 +574,9 @@ export default function TransformDetailPage() {
 						onExecute={handleExecute}
 					/>
 				}
-			/>
+			>
+				<TaskAdmissionBasis task={task} />
+			</Card>
 
 			<Tabs
 				activeKey={activeTab}

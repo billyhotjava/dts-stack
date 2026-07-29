@@ -1,0 +1,4 @@
+term_code,term_name,aliases,definition,domain,owner_dept,owner,tags,version,status,version_notes
+COMMON_LEGAL_MEASUREMENT_UNIT,法定计量单位,国家法定单位,国家依法公布并统一使用的计量单位,通用基础,,,计量|参考术语,1.0.0,DRAFT,DTS参考表达
+COMMON_BASE_UNIT,基准计量单位,基准单位,同一量纲内换算关系的基准单位,通用基础,,,计量|参考术语,1.0.0,DRAFT,DTS建模表达
+COMMON_EFFECTIVE_PERIOD,有效期间,生效期间,业务记录或标准内容有效的起止日期范围,通用基础,,,时间|参考术语,1.0.0,DRAFT,DTS参考表达

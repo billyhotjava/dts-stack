@@ -1,0 +1,11 @@
+field_name_cn,field_name_en,data_type,data_length,data_precision,data_scale,nullable,domain,description,source_system,code_set,default_value,is_pk,security_level
+姓名,person_name,VARCHAR,100,,,N,人口基础,居民身份证登记的自然人姓名,,,,N,CONFIDENTIAL
+公民身份号码,citizen_id_number,CHAR,18,,,N,人口基础,18位公民身份号码；格式与校验规则参照现行GB 11643,,,,N,SECRET
+性别代码,gender_code,VARCHAR,1,,,N,人口基础,人的性别代码；值域引用GB/T 2261.1性别代码,,GENDER_GBT2261,,N,CONFIDENTIAL
+民族名称,nationality_name,VARCHAR,64,,,Y,人口基础,居民身份证登记的民族名称；本包不附完整民族代码表,,,,N,CONFIDENTIAL
+出生日期,birth_date,DATE,,,,N,人口基础,居民身份证登记的出生日期,,,,N,CONFIDENTIAL
+常住户口所在地住址,registered_residence_address,VARCHAR,512,,,N,人口基础,居民身份证登记的常住户口所在地住址,,,,N,SECRET
+签发机关,identity_card_issuing_authority,VARCHAR,256,,,Y,人口基础,居民身份证的签发机关名称,,,,N,CONFIDENTIAL
+证件有效期起始日期,identity_card_valid_from,DATE,,,,Y,人口基础,居民身份证有效期起始日期,,,,N,CONFIDENTIAL
+证件有效期截止日期,identity_card_valid_to,DATE,,,,Y,人口基础,居民身份证有效期截止日期；长期有效时可为空,,,,N,CONFIDENTIAL
+身份证相片引用,identity_card_photo_ref,VARCHAR,512,,,Y,人口基础,居民身份证本人相片的受控存储引用；不在数据标准包保存影像内容,,,,N,SECRET

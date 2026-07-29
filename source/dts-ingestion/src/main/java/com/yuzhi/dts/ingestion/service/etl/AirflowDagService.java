@@ -32,6 +32,7 @@ public class AirflowDagService {
 
     private static final Logger LOG = LoggerFactory.getLogger(AirflowDagService.class);
     private static final Pattern NON_SAFE = Pattern.compile("[^a-z0-9_]+");
+    private static final Pattern SAFE_DAG_ID = Pattern.compile("[A-Za-z0-9_][A-Za-z0-9_.-]{0,199}");
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private final AirflowProperties properties;
@@ -104,7 +105,7 @@ public class AirflowDagService {
             LOG.warn("[airflow] dagsDir not configured, skip delete dag file for dagId={}", dagId);
             return false;
         }
-        Path dagFile = dagDir.resolve(dagId + ".py");
+        Path dagFile = resolveDagFile(dagDir, dagId);
         try {
             boolean deleted = Files.deleteIfExists(dagFile);
             if (deleted) {
@@ -136,7 +137,7 @@ public class AirflowDagService {
             return null;
         }
         String dagId = resolveDagId(task);
-        String previousDagId = task.getAirflowDagId();
+        String previousDagId = resolveOwnedPreviousDagId(task);
         Path dagDir = resolveDagDir(task);
         Path baseDir = resolveDagsBasePath();
         if (dagDir == null) {
@@ -165,12 +166,12 @@ public class AirflowDagService {
                 return null;
             }
         }
-        Path dagFile = dagDir.resolve(dagId + ".py");
+        Path dagFile = resolveDagFile(dagDir, dagId);
         String content = buildDagSource(dagId, task, perTableJobs);
         boolean written = false;
         try {
             if (StringUtils.hasText(previousDagId) && !previousDagId.equals(dagId)) {
-                Path previousFile = dagDir.resolve(previousDagId + ".py");
+                Path previousFile = resolveDagFile(dagDir, previousDagId);
                 try {
                     if (Files.deleteIfExists(previousFile)) {
                         LOG.info("[airflow] removed old dag file {}", previousFile);
@@ -180,7 +181,7 @@ public class AirflowDagService {
                 }
             }
             if (baseDir != null && !baseDir.equals(dagDir)) {
-                Path legacyFile = baseDir.resolve(dagId + ".py");
+                Path legacyFile = resolveDagFile(baseDir, dagId);
                 try {
                     if (Files.deleteIfExists(legacyFile)) {
                         LOG.info("[airflow] removed legacy dag file {}", legacyFile);
@@ -268,15 +269,57 @@ public class AirflowDagService {
     }
 
     private String resolveDagId(IngestionTask task) {
+        String baseDagId;
         if (StringUtils.hasText(task.getAirflowDagId())) {
-            return task.getAirflowDagId().trim();
+            baseDagId = requireSafeDagId(task.getAirflowDagId());
+        } else {
+            String layer = normalizeSegment(resolveLayerDir(task), "ods");
+            String sourceKey = normalizeSegment(resolveSourceKey(task), "source");
+            String desc = normalizeSegment(task != null ? task.getName() : null, "ingestion");
+            String freq = normalizeSegment(resolveFrequency(task != null ? task.getSyncSchedule() : null), "manual");
+            baseDagId = requireSafeDagId(limitLength(String.format("%s_%s_%s_%s", layer, sourceKey, desc, freq), 200));
         }
-        String layer = normalizeSegment(resolveLayerDir(task), "ods");
-        String sourceKey = normalizeSegment(resolveSourceKey(task), "source");
-        String desc = normalizeSegment(task != null ? task.getName() : null, "ingestion");
-        String freq = normalizeSegment(resolveFrequency(task != null ? task.getSyncSchedule() : null), "manual");
-        String dagId = String.format("%s_%s_%s_%s", layer, sourceKey, desc, freq);
-        return limitLength(dagId, 200);
+        return bindDagIdToTask(baseDagId, task == null ? null : task.getId());
+    }
+
+    private String bindDagIdToTask(String baseDagId, Long taskId) {
+        String safeBase = requireSafeDagId(baseDagId);
+        if (taskId == null) {
+            return safeBase;
+        }
+        String suffix = "_task_" + taskId;
+        if (safeBase.endsWith(suffix)) {
+            return safeBase;
+        }
+        return requireSafeDagId(limitLength(safeBase, 200 - suffix.length()) + suffix);
+    }
+
+    private String resolveOwnedPreviousDagId(IngestionTask task) {
+        if (task == null || !StringUtils.hasText(task.getAirflowDagId())) {
+            return null;
+        }
+        String previousDagId = requireSafeDagId(task.getAirflowDagId());
+        if (task.getId() == null) {
+            return previousDagId;
+        }
+        return previousDagId.endsWith("_task_" + task.getId()) ? previousDagId : null;
+    }
+
+    private String requireSafeDagId(String value) {
+        String dagId = value == null ? "" : value.trim();
+        if (!SAFE_DAG_ID.matcher(dagId).matches()) {
+            throw new IllegalArgumentException("Invalid Airflow DAG ID");
+        }
+        return dagId;
+    }
+
+    private Path resolveDagFile(Path dagDir, String dagId) {
+        Path normalizedDir = dagDir.toAbsolutePath().normalize();
+        Path candidate = normalizedDir.resolve(requireSafeDagId(dagId) + ".py").normalize();
+        if (!candidate.startsWith(normalizedDir) || !normalizedDir.equals(candidate.getParent())) {
+            throw new IllegalArgumentException("Airflow DAG file must remain inside the configured DAG directory");
+        }
+        return candidate;
     }
 
     private String resolveSourceKey(IngestionTask task) {

@@ -251,8 +251,11 @@ class DbApiContractTest(TestCase):
     def test_resource_page_returns_objects_and_stable_pagination_metadata(self):
         module = load_app()
         database_result = (
-            ["id", "project_no", "_dts_source_system", "_dts_import_time"],
-            [[1, "P-001", "excel", "2026-07-28"], [2, "P-002", "excel", "2026-07-28"]],
+            ["id", "classification", "owner_dept", "project_no", "_dts_source_system", "_dts_import_time"],
+            [
+                [1, "INTERNAL", "DEPT_PJM_A", "P-001", "excel", "2026-07-28"],
+                [2, "SECRET", "DEPT_PJM_B", "P-002", "excel", "2026-07-28"],
+            ],
         )
 
         with (
@@ -270,7 +273,20 @@ class DbApiContractTest(TestCase):
         self.assertEqual(
             payload["data"],
             {
-                "items": [{"id": 1, "project_no": "P-001"}, {"id": 2, "project_no": "P-002"}],
+                "items": [
+                    {
+                        "id": 1,
+                        "classification": "INTERNAL",
+                        "owner_dept": "DEPT_PJM_A",
+                        "project_no": "P-001",
+                    },
+                    {
+                        "id": 2,
+                        "classification": "SECRET",
+                        "owner_dept": "DEPT_PJM_B",
+                        "project_no": "P-002",
+                    },
+                ],
                 "total": 3,
                 "page": 1,
                 "size": 2,

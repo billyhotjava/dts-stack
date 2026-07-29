@@ -37,7 +37,14 @@ PJM 白名单固定为：
   "code": 0,
   "message": "success",
   "data": {
-    "items": [{"id": 1, "project_no": "P-001"}],
+    "items": [
+      {
+        "id": 1,
+        "classification": "INTERNAL",
+        "owner_dept": "DEPT_PJM_A",
+        "project_no": "P-001"
+      }
+    ],
     "total": 1,
     "page": 1,
     "size": 20,
@@ -45,6 +52,11 @@ PJM 白名单固定为：
   }
 }
 ```
+
+`classification` 使用 DTS 标准密级码
+`PUBLIC / INTERNAL / SECRET / CONFIDENTIAL`；`owner_dept` 使用与
+Keycloak/DTS 组织体系一致的 ASCII 部门编码。两者都是模拟客户应用
+系统的业务字段，API 不会像 `_dts_*` 入湖技术字段一样将其隐藏。
 
 `page` 从 1 开始，`size` 上限由 `DBAPI_MAX_PAGE_SIZE` 控制。服务不开放任意 SQL 查询接口，只允许读取上表列出的固定资源。
 

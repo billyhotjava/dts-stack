@@ -33,7 +33,8 @@ public class StandardPackageBuiltinService {
         StandardPackageImportService.FILE_ELEMENTS,
         StandardPackageImportService.FILE_CODE_DIRECTORIES,
         StandardPackageImportService.FILE_CODE_ITEMS,
-        StandardPackageImportService.FILE_CODE_MAPPINGS
+        StandardPackageImportService.FILE_CODE_MAPPINGS,
+        StandardPackageImportService.FILE_MEASUREMENT_UNITS
     );
 
     private final StandardPackageImportService importService;

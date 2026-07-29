@@ -51,6 +51,35 @@ dbt run --profile dts
 dbt test --profile dts
 ```
 
+## MySQL 客户源系统模拟
+
+`ods_ddl/mysql/` 中的 10 张测试源表都包含两个客户应用业务字段：
+
+- `classification varchar(32) not null`：仅允许
+  `PUBLIC / INTERNAL / SECRET / CONFIDENTIAL`
+- `owner_dept varchar(64) not null`：所属部门编码，格式
+  `^[A-Za-z0-9._-]{1,64}$`
+
+它们与 DTS 入湖时追加的 `_dts_*` 技术字段不同，JDBC 直连和
+`tests/dbapi` API 都应原样采集。
+
+全新建库按以下顺序执行：
+
+1. `mysql/01_create_ods_source_tables.sql`
+2. `mysql/02_seed_golden.sql`
+3. `mysql/03_verify_golden.sql`
+
+已有测试库升级按以下顺序执行：
+
+1. 备份 `dts_pjm_test`
+2. `mysql/04_add_source_security_columns.sql`
+3. `mysql/05_backfill_source_security_values.sql`
+4. `mysql/06_enforce_source_security_columns.sql`
+5. `mysql/03_verify_golden.sql`
+
+该升级是前向迁移；删除这两列会丢失安全归属数据，不提供自动
+`DROP COLUMN` 回滚。需要回退时恢复升级前备份。
+
 ## 当前纳入语义链路的 ODS 表
 
 - `ods_project_subject_domain_v2`

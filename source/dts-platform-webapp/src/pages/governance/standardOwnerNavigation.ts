@@ -5,9 +5,23 @@ export type StandardOwnerReturnTarget = {
 	label: "返回模型字段标准" | "返回建设规划";
 };
 
+export type StandardPackageSource = "elements" | "glossary" | "reference" | "units";
+
+export type StandardPackageSourceMeta = {
+	source: StandardPackageSource;
+	path: string;
+	label: string;
+};
+
 const STANDARD_OWNER_ORIGIN = "http://dts.local";
 const OWNER_CONTEXT_KEYS = ["modelSpecId", "revision", "planId"] as const;
 const PLAN_BASELINE_TABS = new Set(["categories", "layers", "sources"]);
+const STANDARD_PACKAGE_SOURCES: Record<StandardPackageSource, StandardPackageSourceMeta> = {
+	elements: { source: "elements", path: "/governance/standards/elements", label: "返回数据元" },
+	glossary: { source: "glossary", path: "/governance/standards/glossary", label: "返回业务术语" },
+	reference: { source: "reference", path: "/governance/standards/reference", label: "返回公共码表" },
+	units: { source: "units", path: "/governance/standards/units", label: "返回计量单位" },
+};
 
 const normalized = (value: string | null | undefined) => value?.trim() || "";
 const singleValue = (params: URLSearchParams, key: string) =>
@@ -71,18 +85,35 @@ const copyOwnerContext = (source: URLSearchParams, target: URLSearchParams) => {
 	target.set("returnTo", returnTarget.href);
 };
 
-export const buildStandardPackageImportRoute = (searchParams: URLSearchParams): string => {
-	const params = new URLSearchParams({ from: "elements" });
-	copyOwnerContext(searchParams, params);
+export const getStandardPackageSourceMeta = (source: string | null | undefined): StandardPackageSourceMeta | null =>
+	source && source in STANDARD_PACKAGE_SOURCES ? STANDARD_PACKAGE_SOURCES[source as StandardPackageSource] : null;
+
+export const buildStandardPackageImportRoute = (
+	searchParams: URLSearchParams,
+	source: StandardPackageSource = "elements",
+): string => {
+	const params = new URLSearchParams({ from: source });
+	if (source === "elements") copyOwnerContext(searchParams, params);
 	return `/foundation/standard-package?${params.toString()}`;
+};
+
+export const buildStandardPackageReturnRoute = (
+	searchParams: URLSearchParams,
+	options: { applied?: boolean } = {},
+): string | null => {
+	const source = getStandardPackageSourceMeta(singleValue(searchParams, "from"));
+	if (!source) return null;
+	const params = new URLSearchParams({ from: "standard-package" });
+	if (source.source === "elements") copyOwnerContext(searchParams, params);
+	if (options.applied) params.set("applied", "1");
+	return `${source.path}?${params.toString()}`;
 };
 
 export const buildDataElementReturnRoute = (
 	searchParams: URLSearchParams,
 	options: { applied?: boolean } = {},
 ): string => {
-	const params = new URLSearchParams({ from: "standard-package" });
-	copyOwnerContext(searchParams, params);
-	if (options.applied) params.set("applied", "1");
-	return `/governance/standards/elements?${params.toString()}`;
+	const params = new URLSearchParams(searchParams);
+	params.set("from", "elements");
+	return buildStandardPackageReturnRoute(params, options) as string;
 };

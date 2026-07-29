@@ -1,0 +1,28 @@
+{
+  "packageCode": "dts-core-national-common",
+  "retrievedAt": "2026-07-29",
+  "licenseConclusion": "REVIEW_REQUIRED",
+  "sources": [
+    {
+      "id": "legal-measurement-units",
+      "organization": "中华人民共和国国务院",
+      "title": "国务院关于在我国统一实行法定计量单位的命令 国发〔1984〕28号",
+      "url": "https://xzfg.moj.gov.cn/front/law/detail?LawID=1454&Query=",
+      "contentUse": "使用行政法规公开附件中的单位名称和符号基础事实；不复制无关正文"
+    },
+    {
+      "id": "gb-3100-1993",
+      "organization": "国家市场监督管理总局 国家标准化管理委员会",
+      "title": "GB 3100-1993 国际单位制及其应用",
+      "url": "https://openstd.samr.gov.cn/bzgk/std/newGbInfo?hcno=ADAA308A0BE559EC29E773B71591F463",
+      "contentUse": "引用现行标准题录；标准采用ISO且受版权保护，包内不分发标准全文"
+    },
+    {
+      "id": "gbt-18391-current",
+      "organization": "国家市场监督管理总局 国家标准化管理委员会",
+      "title": "GB/T 18391.1-2009 信息技术 元数据注册系统(MDR) 第1部分：框架",
+      "url": "https://openstd.samr.gov.cn/bzgk/std/newGbInfo?hcno=C6322880EA6B375084D51224B598E7A3",
+      "contentUse": "引用当前现行题录作为数据元注册治理背景；2026版截至取证日尚未实施"
+    }
+  ]
+}

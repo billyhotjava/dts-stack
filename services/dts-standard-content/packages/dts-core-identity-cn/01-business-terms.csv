@@ -1,0 +1,6 @@
+term_code,term_name,aliases,definition,domain,owner_dept,owner,tags,version,status,version_notes
+IDENTITY_RESIDENT_CARD,居民身份证,身份证,用于证明居住在中华人民共和国境内公民身份的法定证件,人口基础,,,身份|参考术语,1.0.0,DRAFT,DTS参考表达
+IDENTITY_CITIZEN_NUMBER,公民身份号码,身份证号|公民身份代码,由公安机关按照国家标准编制且唯一终身不变的身份代码,人口基础,,,身份|敏感,1.0.0,DRAFT,依据居民身份证法形成参考表达
+IDENTITY_REGISTERED_ADDRESS,常住户口所在地住址,户籍地址,居民身份证登记的常住户口所在地地址,人口基础,,,身份|地址,1.0.0,DRAFT,DTS参考表达
+IDENTITY_ISSUING_AUTHORITY,签发机关,发证机关,签发居民身份证的公安机关,人口基础,,,身份,1.0.0,DRAFT,DTS参考表达
+IDENTITY_VALIDITY_PERIOD,证件有效期,身份证有效期,居民身份证允许使用的起止日期范围,人口基础,,,身份,1.0.0,DRAFT,DTS参考表达

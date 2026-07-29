@@ -555,6 +555,7 @@
                         <testInclude>**/service/admin/gateway/directory/AdminReleaseDutyDirectoryAdapterTest.java</testInclude>
                         <testInclude>**/service/governance/QualityDatasetStatementExecutorTest.java</testInclude>
                         <testInclude>**/service/governance/QualityRunServiceExecutableDefinitionTest.java</testInclude>
+                        <testInclude>**/service/governance/MeasurementUnitApplicationServiceTest.java</testInclude>
                         <testInclude>**/service/infra/ConnectorDriverBindingServiceTest.java</testInclude>
                         <testInclude>**/service/infra/ConnectorRegistryServiceTest.java</testInclude>
                         <testInclude>**/service/infra/InfraManagementServiceTest.java</testInclude>
@@ -591,6 +592,9 @@
                         <testInclude>**/service/modeling/ModelSpecStageGateServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/Sprint74ModelingLiquibaseTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelingDbtArtifactImportServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/StandardPackageApplyServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/StandardPackageImportServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/StandardPackageMeasurementUnitServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelingVNextApplicationServiceIT.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehousePlanApplicationServiceIT.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehousePlanContractTest.java</testInclude>

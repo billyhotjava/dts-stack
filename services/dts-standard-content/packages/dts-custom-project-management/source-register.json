@@ -1,0 +1,42 @@
+{
+  "packageCode": "dts-custom-project-management",
+  "retrievedAt": "2026-07-29",
+  "licenseConclusion": "REVIEW_REQUIRED",
+  "sources": [
+    {
+      "id": "customer-ods-ddl-v2",
+      "organization": "客户项目管理业务",
+      "title": "项目管理 ODS 建表 DDL v2",
+      "url": "workspace:services/dts-dbt/dbt_model/ods_ddl/ods_create_tables_v2.sql",
+      "contentUse": "以客户提供的10张ODS表字段和中文注释确定字段覆盖范围；不改变ODS原始字段"
+    },
+    {
+      "id": "gbt-37507-2025",
+      "organization": "国家市场监督管理总局 国家标准化管理委员会",
+      "title": "GB/T 37507-2025 项目、项目群和项目组合管理 项目管理指南",
+      "url": "https://openstd.samr.gov.cn/bzgk/std/newGbInfo?hcno=1A62CB6675D7C79A483323B77305F776",
+      "contentUse": "引用现行标准题录作为项目管理通用框架背景；该标准采用ISO且受版权保护，包内不分发标准正文"
+    },
+    {
+      "id": "iso-21502-2020",
+      "organization": "International Organization for Standardization",
+      "title": "ISO 21502:2020 Project, programme and portfolio management — Guidance on project management",
+      "url": "https://committee.iso.org/sites/tc258/home/projects/published/iso-21502.html",
+      "contentUse": "依据官方公开摘要理解项目管理通用适用范围；术语定义和数据元说明均为DTS重新表述"
+    },
+    {
+      "id": "iso-31000-2018",
+      "organization": "International Organization for Standardization",
+      "title": "ISO 31000:2018 Risk management — Guidelines",
+      "url": "https://www.iso.org/standard/65694.html",
+      "contentUse": "依据官方公开摘要形成风险识别评估应对监控和释放的通用码值框架；不复制标准正文"
+    },
+    {
+      "id": "iso-10006-2017",
+      "organization": "International Organization for Standardization",
+      "title": "ISO 10006:2017 Quality management — Guidelines for quality management in projects",
+      "url": "https://www.iso.org/standard/70376.html",
+      "contentUse": "依据官方公开摘要形成项目质量管理背景；质量问题和归零字段定义为DTS自有表达"
+    }
+  ]
+}

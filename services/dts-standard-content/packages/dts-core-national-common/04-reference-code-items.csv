@@ -1,0 +1,5 @@
+code_type_code,code_value,code_name,description,sort_num,parent_code,is_default
+BOOLEAN_YN_DTS,Y,是,肯定或成立,10,,N
+BOOLEAN_YN_DTS,N,否,否定或不成立,20,,N
+RECORD_STATUS_DTS,ACTIVE,启用,当前可用于业务处理,10,,Y
+RECORD_STATUS_DTS,INACTIVE,停用,保留历史但不再用于新增业务,20,,N

@@ -16,6 +16,8 @@ USE dts_pjm_test;
 
 CREATE TABLE IF NOT EXISTS ods_project_subject_domain_v2 (
   id                    BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  classification        VARCHAR(32) NOT NULL COMMENT '数据密级：PUBLIC/INTERNAL/SECRET/CONFIDENTIAL',
+  owner_dept            VARCHAR(64) NOT NULL COMMENT '所属部门编码',
   project_no            VARCHAR(128) NULL,
   subsystem             VARCHAR(255) NULL,
   node_task             TEXT NULL,
@@ -55,6 +57,8 @@ CREATE TABLE IF NOT EXISTS ods_project_subject_domain_v2 (
 
 CREATE TABLE IF NOT EXISTS ods_progress_measure_v2 (
   id                         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  classification             VARCHAR(32) NOT NULL COMMENT '数据密级：PUBLIC/INTERNAL/SECRET/CONFIDENTIAL',
+  owner_dept                 VARCHAR(64) NOT NULL COMMENT '所属部门编码',
   project_no                 VARCHAR(128) NULL,
   subsystem                  VARCHAR(255) NULL,
   node_task                  TEXT NULL,
@@ -84,6 +88,8 @@ CREATE TABLE IF NOT EXISTS ods_progress_measure_v2 (
 
 CREATE TABLE IF NOT EXISTS ods_quality_issue_v2 (
   id                    BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  classification        VARCHAR(32) NOT NULL COMMENT '数据密级：PUBLIC/INTERNAL/SECRET/CONFIDENTIAL',
+  owner_dept            VARCHAR(64) NOT NULL COMMENT '所属部门编码',
   project_no            VARCHAR(128) NULL,
   subsystem             VARCHAR(255) NULL,
   issue_name            TEXT NULL,
@@ -111,6 +117,8 @@ CREATE TABLE IF NOT EXISTS ods_quality_issue_v2 (
 
 CREATE TABLE IF NOT EXISTS ods_quality_measure_v2 (
   id                         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  classification             VARCHAR(32) NOT NULL COMMENT '数据密级：PUBLIC/INTERNAL/SECRET/CONFIDENTIAL',
+  owner_dept                 VARCHAR(64) NOT NULL COMMENT '所属部门编码',
   project_no                 VARCHAR(128) NULL,
   subsystem                  VARCHAR(255) NULL,
   issue_name                 TEXT NULL,
@@ -150,6 +158,8 @@ CREATE TABLE IF NOT EXISTS ods_quality_measure_v2 (
 
 CREATE TABLE IF NOT EXISTS ods_tech_state_v2 (
   id                       BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  classification           VARCHAR(32) NOT NULL COMMENT '数据密级：PUBLIC/INTERNAL/SECRET/CONFIDENTIAL',
+  owner_dept               VARCHAR(64) NOT NULL COMMENT '所属部门编码',
   project_no               VARCHAR(128) NULL,
   tech_state_name          TEXT NULL,
   change_item              TEXT NULL,
@@ -189,6 +199,8 @@ CREATE TABLE IF NOT EXISTS ods_tech_state_v2 (
 
 CREATE TABLE IF NOT EXISTS ods_tech_state_measure_v2 (
   id                         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  classification             VARCHAR(32) NOT NULL COMMENT '数据密级：PUBLIC/INTERNAL/SECRET/CONFIDENTIAL',
+  owner_dept                 VARCHAR(64) NOT NULL COMMENT '所属部门编码',
   project_no                 VARCHAR(128) NULL,
   tech_state_name            TEXT NULL,
   change_item                TEXT NULL,
@@ -236,6 +248,8 @@ CREATE TABLE IF NOT EXISTS ods_tech_state_measure_v2 (
 
 CREATE TABLE IF NOT EXISTS ods_risk_info_v2 (
   id                    BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  classification        VARCHAR(32) NOT NULL COMMENT '数据密级：PUBLIC/INTERNAL/SECRET/CONFIDENTIAL',
+  owner_dept            VARCHAR(64) NOT NULL COMMENT '所属部门编码',
   project_no            VARCHAR(128) NULL,
   risk_name             TEXT NULL,
   subsystem             VARCHAR(255) NULL,
@@ -273,6 +287,8 @@ CREATE TABLE IF NOT EXISTS ods_risk_info_v2 (
 
 CREATE TABLE IF NOT EXISTS ods_risk_measure_v2 (
   id                         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  classification             VARCHAR(32) NOT NULL COMMENT '数据密级：PUBLIC/INTERNAL/SECRET/CONFIDENTIAL',
+  owner_dept                 VARCHAR(64) NOT NULL COMMENT '所属部门编码',
   project_no                 VARCHAR(128) NULL,
   risk_name                  TEXT NULL,
   subsystem                  VARCHAR(255) NULL,
@@ -321,6 +337,8 @@ CREATE TABLE IF NOT EXISTS ods_risk_measure_v2 (
 
 CREATE TABLE IF NOT EXISTS ods_material_info_v2 (
   id                         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  classification             VARCHAR(32) NOT NULL COMMENT '数据密级：PUBLIC/INTERNAL/SECRET/CONFIDENTIAL',
+  owner_dept                 VARCHAR(64) NOT NULL COMMENT '所属部门编码',
   project_no                 VARCHAR(128) NULL,
   subsystem                  VARCHAR(255) NULL,
   pbs_no                     VARCHAR(128) NULL,
@@ -356,6 +374,8 @@ CREATE TABLE IF NOT EXISTS ods_material_info_v2 (
 
 CREATE TABLE IF NOT EXISTS ods_budget_v2 (
   id                       BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  classification           VARCHAR(32) NOT NULL COMMENT '数据密级：PUBLIC/INTERNAL/SECRET/CONFIDENTIAL',
+  owner_dept               VARCHAR(64) NOT NULL COMMENT '所属部门编码',
   project_no               VARCHAR(128) NULL,
   budget_no                VARCHAR(128) NULL,
   subtopic                 TEXT NULL,

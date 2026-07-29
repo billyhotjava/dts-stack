@@ -1,0 +1,28 @@
+{
+  "packageCode": "dts-core-identity-cn",
+  "retrievedAt": "2026-07-29",
+  "licenseConclusion": "REVIEW_REQUIRED",
+  "sources": [
+    {
+      "id": "resident-id-law",
+      "organization": "全国人民代表大会常务委员会",
+      "title": "中华人民共和国居民身份证法",
+      "url": "https://www.npc.gov.cn/WZWSREL3pncmR3L25wYy94aW53ZW4vMjAxMS0xMC8zMS9jb250ZW50XzE2Nzg0NjZfNS5odG0%3D",
+      "contentUse": "仅依据公开登记项目和法定概念形成DTS自有字段表达；不复制大段正文"
+    },
+    {
+      "id": "gb-11643",
+      "organization": "国家市场监督管理总局 国家标准化管理委员会",
+      "title": "GB 11643-1999 公民身份号码",
+      "url": "https://openstd.samr.gov.cn/bzgk/std/newGbInfo?hcno=080D6FBF2BB468F9007657F26D60013E&refer=outter",
+      "contentUse": "引用现行标准题录和18位字段约束；不随包分发标准全文"
+    },
+    {
+      "id": "gbt-2261-1",
+      "organization": "国家市场监督管理总局 国家标准化管理委员会",
+      "title": "GB/T 2261.1-2003 人的性别代码",
+      "url": "https://openstd.samr.gov.cn/bzgk/std/newGbInfo?hcno=0FC942D542BC6EE3C707B2647EF81CD8",
+      "contentUse": "包内仅保存对DTS既有性别代码包的依赖"
+    }
+  ]
+}

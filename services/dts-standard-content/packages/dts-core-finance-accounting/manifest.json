@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "2.0",
+  "packageCode": "dts-core-finance-accounting",
+  "packageName": "财务会计基础标准包",
+  "packageVersion": "1.0.0",
+  "standardNo": "财政部令第33号及修改；财会〔2024〕11号；GB/T 12406-2022参考",
+  "category": "财务数据标准",
+  "industry": "FINANCE",
+  "releasedAt": "2026-07-29T00:00:00Z",
+  "effectiveFrom": "2026-07-29",
+  "dependencies": [],
+  "replaces": [],
+  "deprecated": false,
+  "sourceRegisterRef": "source-register.json#dts-core-finance-accounting",
+  "licenseConclusion": "REVIEW_REQUIRED",
+  "description": "会计期间、凭证、科目、借贷方向、会计要素和常用金额数据元；币种值集仅含CNY起步子集。",
+  "files": {
+    "01-business-terms.csv": "f38905dfa643c2a1899b42fe35139b5e131b65eadf0db07330aed30df9a74bc0",
+    "02-data-elements.csv": "5db4f6cf5a71cee2a42eb4fa08f7370f8d7aa4f1224ac5f45bda12c6763de7ea",
+    "03-reference-code-directories.csv": "429825a3ff829ae92f741edcf2fab86f82ec9b93a0d45b332f5c59bce3bd9484",
+    "04-reference-code-items.csv": "c719699f758294d2da91fe11aa0b990b04c56db5df6ba51dea44c9c763207f6f",
+    "06-measurement-units.csv": "926fe2870d64ea2f5ca9ef09ed0d96e2355aaf4efe6a02d6b1db2bcfad07a61a",
+    "source-register.json": "3853fe0cb5292975d23d4cbf525c6b078fe8221e36a15d5d368a76566243b50e"
+  },
+  "contentChecksum": "4db0b75592c90dcdfc118af58c78958333476934124d3f664bba57407e332104"
+}

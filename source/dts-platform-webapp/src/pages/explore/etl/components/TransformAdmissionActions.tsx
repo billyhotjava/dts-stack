@@ -82,7 +82,7 @@ export default function TransformAdmissionActions({
 						disabled={!admission.canAdmit || admitSubmitting}
 						data-testid="platform-transform-admit"
 					>
-						完成密级与准入
+						确认密级并准入
 					</Button>
 				</Tooltip>
 			) : null}

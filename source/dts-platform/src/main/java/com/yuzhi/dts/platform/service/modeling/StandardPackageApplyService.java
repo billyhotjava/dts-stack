@@ -49,6 +49,7 @@ public class StandardPackageApplyService {
     private static final String TYPE_CODE_DIRECTORY = "CODE_DIRECTORY";
     private static final String TYPE_CODE_VALUE = "CODE_VALUE";
     private static final String TYPE_CODE_MAPPING = "CODE_MAPPING";
+    private static final String TYPE_MEASUREMENT_UNIT = StandardPackageMeasurementUnitService.ENTITY_TYPE;
 
     private static final String ACTION_CREATE = "CREATE";
     private static final String ACTION_UPDATE = "UPDATE";
@@ -62,6 +63,7 @@ public class StandardPackageApplyService {
     private final StdCodeValueRepository codeValueRepository;
     private final StdCodeMappingRepository codeMappingRepository;
     private final ObjectMapper objectMapper;
+    private final StandardPackageMeasurementUnitService measurementUnitService;
 
     public StandardPackageApplyService(
         StandardPackageImportRunRepository runRepository,
@@ -72,7 +74,8 @@ public class StandardPackageApplyService {
         StdCodeDirectoryRepository codeDirectoryRepository,
         StdCodeValueRepository codeValueRepository,
         StdCodeMappingRepository codeMappingRepository,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        StandardPackageMeasurementUnitService measurementUnitService
     ) {
         this.runRepository = runRepository;
         this.runItemRepository = runItemRepository;
@@ -83,6 +86,7 @@ public class StandardPackageApplyService {
         this.codeValueRepository = codeValueRepository;
         this.codeMappingRepository = codeMappingRepository;
         this.objectMapper = objectMapper;
+        this.measurementUnitService = measurementUnitService;
     }
 
     // ---------- apply ----------
@@ -103,6 +107,7 @@ public class StandardPackageApplyService {
 
         ApplyContext ctx = new ApplyContext(run.getId());
 
+        applyMeasurementUnits(listOf(payload, "measurementUnits"), actor, ctx);
         applyTerms(listOf(payload, "terms"), ctx);
         applyCodeDirectories(listOf(payload, "codeDirectories"), ctx);
         applyCodeItems(listOf(payload, "codeItems"), ctx);
@@ -122,6 +127,17 @@ public class StandardPackageApplyService {
         result.put("totalCreated", ctx.totalCreated());
         result.put("totalUpdated", ctx.totalUpdated());
         return result;
+    }
+
+    private void applyMeasurementUnits(List<Map<String, Object>> measurementUnits, String actor, ApplyContext ctx) {
+        for (StandardPackageMeasurementUnitService.Change change : measurementUnitService.apply(measurementUnits, actor)) {
+            ctx.record(TYPE_MEASUREMENT_UNIT, change.entityId(), change.action(), change.rollbackImage());
+            if (ACTION_CREATE.equals(change.action())) {
+                ctx.countCreate(TYPE_MEASUREMENT_UNIT);
+            } else {
+                ctx.countUpdate(TYPE_MEASUREMENT_UNIT);
+            }
+        }
     }
 
     private void applyTerms(List<Map<String, Object>> terms, ApplyContext ctx) {
@@ -160,8 +176,8 @@ public class StandardPackageApplyService {
         target.setOwnerDept(asString(source.get("ownerDept")));
         target.setTags(asString(source.get("tags")));
         target.setVersionNotes(asString(source.get("versionNotes")));
-        // 对齐 ModelingAuxResource.ensureGlossaryDefaults：术语作为简单台账，无状态工作流
-        target.setStatus("ACTIVE");
+        String status = asString(source.get("status"));
+        target.setStatus(StringUtils.hasText(status) ? status.trim().toUpperCase(Locale.ROOT) : "ACTIVE");
         String version = asString(source.get("version"));
         target.setVersion(StringUtils.hasText(version) ? version.trim() : "v1");
     }
@@ -367,12 +383,19 @@ public class StandardPackageApplyService {
 
         int restored = 0;
         int deleted = 0;
+        int deactivated = 0;
         List<Map<String, Object>> skipped = new ArrayList<>();
         for (StandardPackageImportRunItem item : runItemRepository.findByRunIdOrderBySeqDesc(runId)) {
-            boolean handled = ACTION_CREATE.equals(item.getAction()) ? rollbackCreate(item) : rollbackUpdate(item);
+            boolean handled = ACTION_CREATE.equals(item.getAction())
+                ? rollbackCreate(item, actor)
+                : rollbackUpdate(item, actor);
             if (handled) {
                 if (ACTION_CREATE.equals(item.getAction())) {
-                    deleted++;
+                    if (TYPE_MEASUREMENT_UNIT.equals(item.getEntityType())) {
+                        deactivated++;
+                    } else {
+                        deleted++;
+                    }
                 } else {
                     restored++;
                 }
@@ -387,19 +410,29 @@ public class StandardPackageApplyService {
         }
 
         run.setStatus(STATUS_ROLLED_BACK);
-        run.setSummary("标准包已回滚：删除 " + deleted + "，还原 " + restored + "，跳过 " + skipped.size());
+        run.setSummary(
+            "标准包已回滚：删除 " +
+            deleted +
+            "，停用 " +
+            deactivated +
+            "，还原 " +
+            restored +
+            "，跳过 " +
+            skipped.size()
+        );
         runRepository.save(run);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("runId", run.getId().toString());
         result.put("status", run.getStatus());
         result.put("deleted", deleted);
+        result.put("deactivated", deactivated);
         result.put("restored", restored);
         result.put("skipped", skipped);
         return result;
     }
 
-    private boolean rollbackCreate(StandardPackageImportRunItem item) {
+    private boolean rollbackCreate(StandardPackageImportRunItem item, String actor) {
         try {
             switch (item.getEntityType()) {
                 case TYPE_TERM -> {
@@ -426,6 +459,13 @@ public class StandardPackageApplyService {
                     if (!codeMappingRepository.existsById(id)) return false;
                     codeMappingRepository.deleteById(id);
                 }
+                case TYPE_MEASUREMENT_UNIT -> {
+                    return measurementUnitService.rollbackCreate(
+                        UUID.fromString(item.getEntityId()),
+                        readJsonMap(item.getBeforeJson()),
+                        actor
+                    );
+                }
                 default -> {
                     return false;
                 }
@@ -436,7 +476,7 @@ public class StandardPackageApplyService {
         }
     }
 
-    private boolean rollbackUpdate(StandardPackageImportRunItem item) {
+    private boolean rollbackUpdate(StandardPackageImportRunItem item, String actor) {
         Map<String, Object> before = readJsonMap(item.getBeforeJson());
         switch (item.getEntityType()) {
             case TYPE_TERM -> {
@@ -509,6 +549,9 @@ public class StandardPackageApplyService {
                 StdCodeMapping mapping = entity.orElseThrow();
                 mapping.setStdCode(asString(before.get("stdCode")));
                 codeMappingRepository.save(mapping);
+            }
+            case TYPE_MEASUREMENT_UNIT -> {
+                return measurementUnitService.rollbackUpdate(UUID.fromString(item.getEntityId()), before, actor);
             }
             default -> {
                 return false;

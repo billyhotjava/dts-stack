@@ -47,6 +47,7 @@ public class StandardPackageImportService {
     public static final String FILE_CODE_DIRECTORIES = "03-reference-code-directories.csv";
     public static final String FILE_CODE_ITEMS = "04-reference-code-items.csv";
     public static final String FILE_CODE_MAPPINGS = "05-reference-code-mappings.csv";
+    public static final String FILE_MEASUREMENT_UNITS = StandardPackageMeasurementUnitService.FILE_NAME;
     public static final String FILE_MANIFEST = "manifest.json";
 
     public static final String STATUS_PREVIEWED = "PREVIEWED";
@@ -58,6 +59,7 @@ public class StandardPackageImportService {
         FILE_CODE_DIRECTORIES,
         FILE_CODE_ITEMS,
         FILE_CODE_MAPPINGS,
+        FILE_MEASUREMENT_UNITS,
         FILE_MANIFEST
     );
 
@@ -72,6 +74,7 @@ public class StandardPackageImportService {
     private final StandardPackageImportRunRepository runRepository;
     private final ObjectMapper objectMapper;
     private final StandardPackageManifestContract manifestContract;
+    private final StandardPackageMeasurementUnitService measurementUnitService;
 
     public StandardPackageImportService(
         MetadataStandardRepository metadataStandardRepository,
@@ -80,7 +83,8 @@ public class StandardPackageImportService {
         StdCodeValueRepository codeValueRepository,
         StandardPackageImportRunRepository runRepository,
         ObjectMapper objectMapper,
-        StandardPackageManifestContract manifestContract
+        StandardPackageManifestContract manifestContract,
+        StandardPackageMeasurementUnitService measurementUnitService
     ) {
         this.metadataStandardRepository = metadataStandardRepository;
         this.glossaryTermRepository = glossaryTermRepository;
@@ -89,6 +93,7 @@ public class StandardPackageImportService {
         this.runRepository = runRepository;
         this.objectMapper = objectMapper;
         this.manifestContract = manifestContract;
+        this.measurementUnitService = measurementUnitService;
     }
 
     public Map<String, Object> previewZip(MultipartFile file, String actor) {
@@ -126,23 +131,28 @@ public class StandardPackageImportService {
                 parsed.put(known, parseCsv(known, content));
             }
         }
-        if (parsed.isEmpty()) {
-            throw new IllegalArgumentException("压缩包中未找到标准包 CSV 文件（01~05）");
+        if (parsed.isEmpty() && !entries.containsKey(FILE_MEASUREMENT_UNITS)) {
+            throw new IllegalArgumentException("压缩包中未找到标准包 CSV 文件（01~06）");
         }
 
         PackagePayload payload = new PackagePayload();
-        // 校验按依赖序（目录先于码值/映射/数据元），报告按 01~05 呈现
+        // 校验按依赖序（目录先于码值/映射/数据元），报告按 01~06 呈现
         List<Map<String, Object>> fileReports = new ArrayList<>();
         Map<String, Object> termsReport = validateTerms(parsed.get(FILE_TERMS), payload);
         Map<String, Object> dirReport = validateCodeDirectories(parsed.get(FILE_CODE_DIRECTORIES), payload);
         Map<String, Object> itemsReport = validateCodeItems(parsed.get(FILE_CODE_ITEMS), payload);
         Map<String, Object> mappingsReport = validateCodeMappings(parsed.get(FILE_CODE_MAPPINGS), payload);
         Map<String, Object> elementsReport = validateElements(parsed.get(FILE_ELEMENTS), payload);
+        StandardPackageMeasurementUnitService.Preview unitsPreview = measurementUnitService.preview(
+            entries.get(FILE_MEASUREMENT_UNITS)
+        );
+        payload.measurementUnits.addAll(unitsPreview.payload());
         fileReports.add(termsReport);
         fileReports.add(elementsReport);
         fileReports.add(dirReport);
         fileReports.add(itemsReport);
         fileReports.add(mappingsReport);
+        fileReports.add(unitsPreview.report());
 
         int totalErrors = 0;
         for (Map<String, Object> report : fileReports) {
@@ -531,7 +541,7 @@ public class StandardPackageImportService {
             for (RawRow row : csv.rows()) {
                 total++;
                 final RawRow currentRow = row;
-                MetadataStandardCsvSupport.ElementRow element = MetadataStandardCsvSupport.buildElementRow(key ->
+                MetadataStandardCsvSupport.ElementRow element = MetadataStandardCsvSupport.buildPackageElementRow(key ->
                     col(csv, currentRow, key)
                 );
                 if (element.hasError()) {
@@ -702,6 +712,7 @@ public class StandardPackageImportService {
         final List<Map<String, Object>> codeDirectories = new ArrayList<>();
         final List<Map<String, Object>> codeItems = new ArrayList<>();
         final List<Map<String, Object>> codeMappings = new ArrayList<>();
+        final List<Map<String, Object>> measurementUnits = new ArrayList<>();
 
         final Set<String> packageDirectoryCodes = new HashSet<>();
         final Map<String, Set<String>> packageItemValues = new HashMap<>();
@@ -715,6 +726,7 @@ public class StandardPackageImportService {
             map.put("codeDirectories", codeDirectories);
             map.put("codeItems", codeItems);
             map.put("codeMappings", codeMappings);
+            map.put("measurementUnits", measurementUnits);
             return map;
         }
     }

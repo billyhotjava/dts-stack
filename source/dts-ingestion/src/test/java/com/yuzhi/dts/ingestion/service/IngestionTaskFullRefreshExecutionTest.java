@@ -113,6 +113,9 @@ class IngestionTaskFullRefreshExecutionTest {
     private IngestionClassificationSealGuard classificationSealGuard;
 
     @Mock
+    private jakarta.persistence.EntityManager entityManager;
+
+    @Mock
     private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     private IngestionTaskService service;
@@ -144,6 +147,7 @@ class IngestionTaskFullRefreshExecutionTest {
             sourceConnectorRegistry,
             apiIngestionExecutor,
             classificationSealGuard,
+            entityManager,
             transactionManager,
             Runnable::run
         );
@@ -212,10 +216,12 @@ class IngestionTaskFullRefreshExecutionTest {
 
     @Test
     void execute_fullRefreshFile_shouldSkipTargetProvisioner() {
-        IngestionTask task = baseTask(102L, "excel", "full_refresh");
+        IngestionTask task = baseTask(102L, "csv", "full_refresh");
         task.setAddaxJobPath(null);
 
         when(taskRepository.findById(102L)).thenReturn(Optional.of(task));
+        when(fileUploadService.verifyManagedUpload("file-102", fileChecksum()))
+            .thenReturn(new FileUploadService.ManagedUpload("file-102", "/tmp/file-102.csv", "/opt/addax/jobs/uploads/file-102.csv", fileChecksum()));
         when(addaxJobService.createJobFromTask(eq(task), eq(null), eq(null), any(Map.class), any(Map.class)))
             .thenReturn(new AddaxJobService.AddaxJobResult("job.json", "/tmp/file-job.json", Map.of()));
         when(executionMapper.toDto(any(IngestionExecution.class))).thenReturn(new IngestionExecutionDTO());
@@ -237,6 +243,8 @@ class IngestionTaskFullRefreshExecutionTest {
         task.setSourceConfig(sourceConfig);
 
         when(taskRepository.findById(104L)).thenReturn(Optional.of(task));
+        when(fileUploadService.verifyManagedUpload("file-104", fileChecksum()))
+            .thenReturn(new FileUploadService.ManagedUpload("file-104", file.toString(), "/opt/addax/jobs/uploads/file-104.xlsx", fileChecksum()));
         when(fileUploadService.readPlainBytes(file)).thenReturn("x".getBytes(StandardCharsets.UTF_8));
         org.mockito.Mockito.doThrow(new IllegalArgumentException("Excel 公式预检失败：A2 公式无法解析 -> 1/0"))
             .when(excelParseService)
@@ -260,15 +268,18 @@ class IngestionTaskFullRefreshExecutionTest {
     }
 
     @Test
-    void execute_fileTaskWithHostPathFormula_shouldUseHostPath() throws Exception {
+    void execute_fileTaskWithHostPathFormula_shouldUseVerifiedManagedPath() throws Exception {
         IngestionTask task = baseTask(105L, "excel", "full_refresh");
-        java.nio.file.Path file = Files.createTempFile("formula-invalid-host", ".xlsx");
+        java.nio.file.Path clientFile = Files.createTempFile("formula-client-host", ".xlsx");
+        java.nio.file.Path managedFile = Files.createTempFile("formula-managed-host", ".xlsx");
         ObjectNode sourceConfig = (ObjectNode) task.getSourceConfig().deepCopy();
-        sourceConfig.put("hostPath", file.toString());
+        sourceConfig.put("hostPath", clientFile.toString());
         task.setSourceConfig(sourceConfig);
 
         when(taskRepository.findById(105L)).thenReturn(Optional.of(task));
-        when(fileUploadService.readPlainBytes(file)).thenReturn("y".getBytes(StandardCharsets.UTF_8));
+        when(fileUploadService.verifyManagedUpload("file-105", fileChecksum()))
+            .thenReturn(new FileUploadService.ManagedUpload("file-105", managedFile.toString(), "/opt/addax/jobs/uploads/file-105.xlsx", fileChecksum()));
+        when(fileUploadService.readPlainBytes(managedFile)).thenReturn("y".getBytes(StandardCharsets.UTF_8));
         org.mockito.Mockito.doThrow(new IllegalArgumentException("Excel 公式预检失败：A2 公式无法解析 -> not_existing_named_range"))
             .when(excelParseService)
             .validateFormulaCells(any(byte[].class));
@@ -279,7 +290,8 @@ class IngestionTaskFullRefreshExecutionTest {
         org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
             .forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit);
 
-        verify(fileUploadService).readPlainBytes(file);
+        verify(fileUploadService).readPlainBytes(managedFile);
+        verify(fileUploadService, never()).readPlainBytes(clientFile);
         verify(addaxJobService, never()).createJobFromTask(any(), any(), any(), any(), any());
         verify(targetTableProvisioner, never()).ensureTargetTables(any(), any(), any());
         ArgumentCaptor<IngestionExecution> captor = ArgumentCaptor.forClass(IngestionExecution.class);
@@ -336,7 +348,20 @@ class IngestionTaskFullRefreshExecutionTest {
 
         ObjectNode sourceConfig = objectMapper.createObjectNode();
         sourceConfig.put("host", "localhost");
+        if (sourceType != null && List.of("excel", "csv", "txt", "excelreader", "txtfilereader").contains(sourceType.toLowerCase())) {
+            String fileId = "file-" + id;
+            sourceConfig.put("_fileId", fileId);
+            ObjectNode seal = objectMapper.createObjectNode();
+            seal.put("fileId", fileId);
+            seal.put("fileSubjectKey", "ingestion-upload:" + fileId);
+            seal.put("fileChecksum", fileChecksum());
+            task.setClassificationSeal(seal);
+        }
         task.setSourceConfig(sourceConfig);
         return task;
+    }
+
+    private String fileChecksum() {
+        return "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     }
 }

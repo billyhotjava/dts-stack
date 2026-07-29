@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import { Navigate, type RouteObject, useLocation } from "react-router";
 import { LineLoading } from "@/components/loading";
+import { StandardPackageActions } from "@/pages/governance/StandardPackageActions";
 import { metricsServiceHrefFromPlatformLocation } from "./metricsServiceRoutes";
 
 // ── Platform pages ──
@@ -466,6 +467,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "governance/standards/units",
 		element: (
 			<S>
+				<StandardPackageActions source="units" />
 				<MeasurementUnitsPage />
 			</S>
 		),

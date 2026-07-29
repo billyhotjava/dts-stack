@@ -2,6 +2,8 @@ import { useMemo } from "react";
 import { Navigate, useLocation } from "react-router";
 import { LineLoading } from "@/components/loading";
 import { GLOBAL_CONFIG } from "@/global-config";
+import { StandardPackageActions } from "@/pages/governance/StandardPackageActions";
+import type { StandardPackageSource } from "@/pages/governance/standardOwnerNavigation";
 import { useMenuStore } from "@/store/menuStore";
 import {
 	findBestMenuMatch,
@@ -27,6 +29,22 @@ const workbenchComponentPath = GLOBAL_CONFIG.enableSqlIdeV2
 const PATH_REDIRECT_OVERRIDES: Record<string, string> = {
 	"/workbench/data-management": "/workbench?section=data-management",
 	"/services/consumption": "/workbench?section=consumption",
+};
+
+const STANDARD_PACKAGE_SOURCE_BY_PATH: Partial<Record<string, StandardPackageSource>> = {
+	"/governance/standards/glossary": "glossary",
+	"/governance/standards/elements": "elements",
+	"/governance/standards/reference": "reference",
+};
+
+const renderDashboardComponent = (componentPath: string, pathname: string) => {
+	const standardPackageSource = STANDARD_PACKAGE_SOURCE_BY_PATH[pathname];
+	return (
+		<>
+			{standardPackageSource ? <StandardPackageActions source={standardPackageSource} /> : null}
+			{Component(componentPath)}
+		</>
+	);
 };
 
 const buildDirectRedirectPath = (redirectPath: string, currentSearch: string) => {
@@ -189,7 +207,7 @@ export function DynamicMenuResolver({ base }: Props) {
 
 	if (!menusLoaded) {
 		if (directOverridePath) {
-			return <>{Component(directOverridePath)}</>;
+			return renderDashboardComponent(directOverridePath, pathname);
 		}
 		return <LineLoading />;
 	}
@@ -199,7 +217,7 @@ export function DynamicMenuResolver({ base }: Props) {
 		if (overrideParentPath && !directOverrideParent) {
 			return redirectToFallback();
 		}
-		return <>{Component(directOverridePath)}</>;
+		return renderDashboardComponent(directOverridePath, pathname);
 	}
 
 	if (!match) {
@@ -222,10 +240,10 @@ export function DynamicMenuResolver({ base }: Props) {
 		pathname !== resolvedPath &&
 		directOverridePath !== (overridePath || componentPath)
 	) {
-		return <>{Component(directOverridePath)}</>;
+		return renderDashboardComponent(directOverridePath, pathname);
 	}
 	if (componentPath || overridePath) {
-		return <>{Component(overridePath || componentPath)}</>;
+		return renderDashboardComponent(overridePath || componentPath, pathname);
 	}
 
 	const redirectPath = firstAccessibleChildPath(match);

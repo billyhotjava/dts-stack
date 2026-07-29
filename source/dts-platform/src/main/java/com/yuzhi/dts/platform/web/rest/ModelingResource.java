@@ -74,11 +74,15 @@ public class ModelingResource {
         "code_type_code,source_system,source_code,standard_code\n" +
         "EXAMPLE_STATUS,示例系统,1,ACTIVE\n" +
         "EXAMPLE_STATUS,示例系统,0,INACTIVE\n";
+    private static final String MEASUREMENT_UNIT_TEMPLATE =
+        "code,name,symbol,quantity_kind,conversion_factor,base_unit_code,precision,status\n" +
+        "M,米,m,LENGTH,1,,3,ACTIVE\n" +
+        "CM,厘米,cm,LENGTH,0.01,M,3,ACTIVE\n";
     private static final String DATA_STANDARD_PACKAGE_RULES =
         """
         数据标准包模板说明
 
-        这个模板用于把“业务术语 -> 数据元 -> 公共码表 -> SQL/dbt 字段落标”串成一套可验收的标准包。
+        这个模板用于把“业务术语 -> 数据元 -> 公共码表 -> 计量单位 -> SQL/dbt 字段落标”串成一套可验收的标准包。
         示例行只表示填写格式，不代表客户现场业务真值；现场落地时请替换为客户确认后的口径。
 
         文件清单
@@ -87,13 +91,15 @@ public class ModelingResource {
         3) 03-reference-code-directories.csv：公共码表目录。用于定义码表编码、名称、层级、业务分类、数据类型、状态和版本。
         4) 04-reference-code-items.csv：公共码表取值。用于定义标准码值、标准码名、排序、父级和值默认标识。
         5) 05-reference-code-mappings.csv：系统码值映射。用于把来源系统码值映射到标准码值。
+        6) 06-measurement-units.csv：计量单位。使用稳定 code 描述名称、符号、量纲、换算因子和基准单位。
 
         建议维护顺序
         1) 先在“数据域/主题域”确认 domain / biz_catalog 的归属。
         2) 维护业务术语，统一业务名词和口径边界。
         3) 维护公共码表目录、码值和来源系统映射。
-        4) 维护数据元；当字段使用枚举时，code_set 填公共码表的 code_type_code。
-        5) 在 SQL/dbt 模型中绑定数据元，执行标准闸口；schema.yml 可继承字段说明和标准绑定。
+        4) 维护计量单位；base_unit_code 只填写同包或库中已存在的稳定单位 code，不填写数据库 UUID。
+        5) 维护数据元；当字段使用枚举时，code_set 填公共码表的 code_type_code。
+        6) 在 SQL/dbt 模型中绑定数据元，执行标准闸口；schema.yml 可继承字段说明和标准绑定。
 
         数据元导入校验规则
         1) 必填字段：field_name_cn, field_name_en, data_type, nullable, domain, description, source_system。
@@ -255,12 +261,13 @@ public class ModelingResource {
             writeZipEntry(zos, "03-reference-code-directories.csv", REFERENCE_CODE_DIRECTORY_TEMPLATE);
             writeZipEntry(zos, "04-reference-code-items.csv", REFERENCE_CODE_ITEM_TEMPLATE);
             writeZipEntry(zos, "05-reference-code-mappings.csv", REFERENCE_CODE_MAPPING_TEMPLATE);
+            writeZipEntry(zos, "06-measurement-units.csv", MEASUREMENT_UNIT_TEMPLATE);
             writeZipEntry(zos, "README-data-standard-package.txt", DATA_STANDARD_PACKAGE_RULES);
 
             zos.finish();
             return baos.toByteArray();
         } catch (Exception ex) {
-            return DATA_ELEMENT_TEMPLATE.getBytes(StandardCharsets.UTF_8);
+            throw new IllegalStateException("数据标准包模板构建失败", ex);
         }
     }
 

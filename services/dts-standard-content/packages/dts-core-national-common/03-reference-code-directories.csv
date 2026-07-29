@@ -1,0 +1,3 @@
+code_type_id,code_type_code,code_type_name,std_level,biz_catalog,data_type,status,owner_dept,version
+,BOOLEAN_YN_DTS,是否代码,DTS通用,通用基础,VARCHAR,1,,1.0.0
+,RECORD_STATUS_DTS,记录状态代码,DTS通用,通用基础,VARCHAR,1,,1.0.0

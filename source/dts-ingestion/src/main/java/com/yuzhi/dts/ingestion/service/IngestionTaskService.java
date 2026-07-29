@@ -37,6 +37,8 @@ import com.yuzhi.dts.ingestion.service.infra.PlatformInfraClient;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionExecutionMapper;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionTaskMapper;
 import com.yuzhi.dts.common.audit.AuditStage;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
 import org.slf4j.Logger;
@@ -115,6 +117,7 @@ public class IngestionTaskService {
     private final SourceConnectorRegistry sourceConnectorRegistry;
     private final ApiIngestionExecutor apiIngestionExecutor;
     private final IngestionClassificationSealGuard classificationSealGuard;
+    private final EntityManager entityManager;
     private final TransactionTemplate txTemplate;
     private final Executor ingestionTaskExecutor;
 
@@ -141,6 +144,7 @@ public class IngestionTaskService {
         SourceConnectorRegistry sourceConnectorRegistry,
         ApiIngestionExecutor apiIngestionExecutor,
         IngestionClassificationSealGuard classificationSealGuard,
+        EntityManager entityManager,
         PlatformTransactionManager transactionManager,
         @org.springframework.beans.factory.annotation.Qualifier("ingestionTaskExecutor") Executor ingestionTaskExecutor
     ) {
@@ -166,6 +170,7 @@ public class IngestionTaskService {
         this.sourceConnectorRegistry = sourceConnectorRegistry;
         this.apiIngestionExecutor = apiIngestionExecutor;
         this.classificationSealGuard = classificationSealGuard;
+        this.entityManager = entityManager;
         this.txTemplate = new TransactionTemplate(transactionManager);
         this.ingestionTaskExecutor = ingestionTaskExecutor;
     }
@@ -353,15 +358,7 @@ public class IngestionTaskService {
                 }
                 boolean apiSourceTask = isApiSourceTask(existingTask);
                 // 如果配置改变，重新生成Addax Job JSON
-                boolean sourceChanged = !java.util.Objects.equals(before.getSourceDataSourceId(), existingTask.getSourceDataSourceId());
-                boolean configChanged = sourceChanged
-                    || !java.util.Objects.equals(before.getSourceConfig(), existingTask.getSourceConfig())
-                    || !java.util.Objects.equals(before.getSyncMode(), existingTask.getSyncMode())
-                    || !java.util.Objects.equals(before.getSyncConfig(), existingTask.getSyncConfig())
-                    || !java.util.Objects.equals(before.getDestinationType(), existingTask.getDestinationType())
-                    || !java.util.Objects.equals(before.getDestinationConfig(), existingTask.getDestinationConfig())
-                    || !java.util.Objects.equals(before.getTableMapping(), existingTask.getTableMapping())
-                    || !java.util.Objects.equals(before.getAddaxConfig(), existingTask.getAddaxConfig());
+                boolean configChanged = executionConfigChanged(before, existingTask);
                 if (wasActive && remainsActive && configChanged) {
                     throw new IllegalStateException(
                         "Active task execution configuration can only be changed after moving to draft"
@@ -388,8 +385,17 @@ public class IngestionTaskService {
                     }
                 }
 
+                if (!remainsActive) {
+                    IngestionTask dagCleanupTarget = wasActive ? before : existingTask;
+                    if (StringUtils.hasText(dagCleanupTarget.getAirflowDagId())) {
+                        airflowDagService.deleteDagForTask(dagCleanupTarget);
+                    }
+                    existingTask.setAirflowDagId(null);
+                }
                 IngestionTask updatedTask = taskRepository.save(existingTask);
-                updatedTask = ensureAirflowDag(updatedTask);
+                if (remainsActive) {
+                    updatedTask = ensureAirflowDag(updatedTask);
+                }
                 log.info("Updated ingestion task ID: {} by user: {}", id, updatedTask.getLastModifiedBy());
 
                 try {
@@ -708,6 +714,8 @@ public class IngestionTaskService {
                         "触发治理队列等待超时(" + GOVERNANCE_QUEUE_MAX_WAIT.toSeconds() + "s)：" + governanceBlockedReason
                     );
                 }
+                entityManager.refresh(task, LockModeType.PESSIMISTIC_WRITE);
+                requireActiveProductionTask(task);
             }
             verifyManagedFileTask(task);
 
@@ -2645,12 +2653,37 @@ public class IngestionTaskService {
         snap.setSyncSchedule(task.getSyncSchedule());
         snap.setTableMapping(task.getTableMapping());
         snap.setSyncConfig(task.getSyncConfig());
+        snap.setGraphDsl(task.getGraphDsl());
         snap.setAddaxConfig(task.getAddaxConfig());
         snap.setAirflowEnabled(task.getAirflowEnabled());
         snap.setAirflowDagId(task.getAirflowDagId());
         snap.setDbtModelSelector(task.getDbtModelSelector());
         snap.setDbtDagSelector(task.getDbtDagSelector());
+        snap.setQualityPreCheckEnabled(task.getQualityPreCheckEnabled());
+        snap.setStagingTableName(task.getStagingTableName());
+        snap.setPreCheckStatus(task.getPreCheckStatus());
         return snap;
+    }
+
+    private boolean executionConfigChanged(IngestionTask before, IngestionTask current) {
+        return !java.util.Objects.equals(before.getSourceType(), current.getSourceType())
+            || !java.util.Objects.equals(before.getSourceDataSourceId(), current.getSourceDataSourceId())
+            || !java.util.Objects.equals(before.getSourceConfig(), current.getSourceConfig())
+            || !java.util.Objects.equals(before.getDestinationType(), current.getDestinationType())
+            || !java.util.Objects.equals(before.getDestinationConfig(), current.getDestinationConfig())
+            || !java.util.Objects.equals(before.getSyncMode(), current.getSyncMode())
+            || !java.util.Objects.equals(before.getSyncSchedule(), current.getSyncSchedule())
+            || !java.util.Objects.equals(before.getTableMapping(), current.getTableMapping())
+            || !java.util.Objects.equals(before.getSyncConfig(), current.getSyncConfig())
+            || !java.util.Objects.equals(before.getGraphDsl(), current.getGraphDsl())
+            || !java.util.Objects.equals(before.getAddaxConfig(), current.getAddaxConfig())
+            || !java.util.Objects.equals(before.getAirflowEnabled(), current.getAirflowEnabled())
+            || !java.util.Objects.equals(before.getAirflowDagId(), current.getAirflowDagId())
+            || !java.util.Objects.equals(before.getDbtModelSelector(), current.getDbtModelSelector())
+            || !java.util.Objects.equals(before.getDbtDagSelector(), current.getDbtDagSelector())
+            || !java.util.Objects.equals(before.getQualityPreCheckEnabled(), current.getQualityPreCheckEnabled())
+            || !java.util.Objects.equals(before.getStagingTableName(), current.getStagingTableName())
+            || !java.util.Objects.equals(before.getPreCheckStatus(), current.getPreCheckStatus());
     }
 
     private void validateExcelFormulaOrFail(IngestionTask task) {

@@ -19,8 +19,7 @@ test("model-owned data element maintenance returns only to the matching model st
 			"/modeling/models/30000000-0000-0000-0000-000000000003?tab=standards&planId=10000000-0000-0000-0000-000000000001",
 	});
 	assert.deepEqual(navigation.resolveStandardOwnerReturnTo(params), {
-		href:
-			"/modeling/models/30000000-0000-0000-0000-000000000003?tab=standards&planId=10000000-0000-0000-0000-000000000001",
+		href: "/modeling/models/30000000-0000-0000-0000-000000000003?tab=standards&planId=10000000-0000-0000-0000-000000000001",
 		label: "返回模型字段标准",
 	});
 
@@ -42,12 +41,16 @@ test("plan-owned data element maintenance returns only to the matching canonical
 			"/modeling/plans/10000000-0000-0000-0000-000000000001/baseline?tab=categories&planId=10000000-0000-0000-0000-000000000001",
 	});
 	assert.deepEqual(navigation.resolveStandardOwnerReturnTo(params), {
-		href:
-			"/modeling/plans/10000000-0000-0000-0000-000000000001/baseline?tab=categories&planId=10000000-0000-0000-0000-000000000001",
+		href: "/modeling/plans/10000000-0000-0000-0000-000000000001/baseline?tab=categories&planId=10000000-0000-0000-0000-000000000001",
 		label: "返回建设规划",
 	});
 
-	for (const unsafe of ["https://evil.example", "//evil.example", "/ops/instances", "/modeling/plans/other/baseline?tab=categories&planId=other"]) {
+	for (const unsafe of [
+		"https://evil.example",
+		"//evil.example",
+		"/ops/instances",
+		"/modeling/plans/other/baseline?tab=categories&planId=other",
+	]) {
 		params.set("returnTo", unsafe);
 		assert.equal(navigation.resolveStandardOwnerReturnTo(params), null, unsafe);
 	}
@@ -98,4 +101,25 @@ test("standard package round trip preserves only canonical owner context", async
 
 	params.append("planId", "20000000-0000-0000-0000-000000000002");
 	assert.equal(navigation.resolveStandardOwnerReturnTo(params), null);
+});
+
+test("every standard owner has an isolated package round trip", async () => {
+	const navigation = await loadNavigation();
+	assert.ok(navigation, "standard owner navigation contract must exist");
+	if (!navigation) return;
+
+	for (const source of ["glossary", "reference", "units"] as const) {
+		const packageUrl = new URL(
+			navigation.buildStandardPackageImportRoute(new URLSearchParams({ keyword: "ignored" }), source),
+			"http://dts.local",
+		);
+		assert.deepEqual(Object.fromEntries(packageUrl.searchParams), { from: source });
+		const returnUrl = new URL(
+			navigation.buildStandardPackageReturnRoute(packageUrl.searchParams, { applied: true }) || "",
+			"http://dts.local",
+		);
+		assert.equal(returnUrl.pathname, `/governance/standards/${source}`);
+		assert.equal(returnUrl.searchParams.get("from"), "standard-package");
+		assert.equal(returnUrl.searchParams.get("applied"), "1");
+	}
 });

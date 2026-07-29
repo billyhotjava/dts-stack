@@ -136,6 +136,9 @@ class IngestionTaskServiceTest {
     private IngestionClassificationSealGuard classificationSealGuard;
 
     @Mock
+    private jakarta.persistence.EntityManager entityManager;
+
+    @Mock
     private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     private IngestionTaskService ingestionTaskService;
@@ -167,6 +170,7 @@ class IngestionTaskServiceTest {
             sourceConnectorRegistry,
             apiIngestionExecutor,
             classificationSealGuard,
+            entityManager,
             transactionManager,
             Runnable::run
         );
@@ -489,7 +493,18 @@ class IngestionTaskServiceTest {
         "destinationType",
         "tableMapping",
         "addaxConfig",
-        "syncMode"
+        "syncMode",
+        "syncConfig",
+        "sourceType",
+        "syncSchedule",
+        "graphDsl",
+        "airflowEnabled",
+        "airflowDagId",
+        "dbtModelSelector",
+        "dbtDagSelector",
+        "qualityPreCheckEnabled",
+        "stagingTableName",
+        "preCheckStatus"
     })
     void update_shouldRejectActiveExecutionConfigChangesUntilTaskReturnsToDraft(String changedField) {
         Long taskId = 1L;
@@ -530,6 +545,17 @@ class IngestionTaskServiceTest {
                 );
                 case "addaxConfig" -> target.setAddaxConfig(objectMapper.createObjectNode().put("speed", 2));
                 case "syncMode" -> target.setSyncMode("incremental");
+                case "syncConfig" -> target.setSyncConfig(objectMapper.createObjectNode().put("cursor", "updated_at"));
+                case "sourceType" -> target.setSourceType("postgresqlreader");
+                case "syncSchedule" -> target.setSyncSchedule("0 */5 * * * ?");
+                case "graphDsl" -> target.setGraphDsl(objectMapper.createObjectNode().put("node", "changed"));
+                case "airflowEnabled" -> target.setAirflowEnabled(true);
+                case "airflowDagId" -> target.setAirflowDagId("forged-active-dag");
+                case "dbtModelSelector" -> target.setDbtModelSelector("tag:changed");
+                case "dbtDagSelector" -> target.setDbtDagSelector("changed_dag");
+                case "qualityPreCheckEnabled" -> target.setQualityPreCheckEnabled(true);
+                case "stagingTableName" -> target.setStagingTableName("stg_changed");
+                case "preCheckStatus" -> target.setPreCheckStatus("PASSED");
                 default -> throw new IllegalArgumentException("Unsupported test field: " + changedField);
             }
             return null;
@@ -572,6 +598,7 @@ class IngestionTaskServiceTest {
             target.setClassificationSeal(update.getClassificationSeal());
             target.setFieldClassifications(update.getFieldClassifications());
             target.setSourceConfig(update.getSourceConfig());
+            target.setAirflowDagId("");
             return null;
         }).when(taskMapper).partialUpdate(existingTask, dto);
         when(addaxJobService.createJobFromTask(existingTask)).thenReturn(
@@ -585,7 +612,10 @@ class IngestionTaskServiceTest {
         assertThat(result).isSameAs(dto);
         assertThat(existingTask.getStatus()).isEqualTo("draft");
         assertThat(existingTask.getClassificationSeal()).isEqualTo(replacementSeal);
-        verify(airflowDagService).deleteDagForTask(existingTask);
+        ArgumentCaptor<IngestionTask> deletedDagTask = ArgumentCaptor.forClass(IngestionTask.class);
+        verify(airflowDagService).deleteDagForTask(deletedDagTask.capture());
+        assertThat(deletedDagTask.getValue()).isNotSameAs(existingTask);
+        assertThat(deletedDagTask.getValue().getAirflowDagId()).isEqualTo("active-task-dag");
         assertThat(existingTask.getAirflowDagId()).isNull();
         verify(addaxJobService).createJobFromTask(existingTask);
         assertThat(existingTask.getAddaxJobPath()).isEqualTo("/tmp/draft-job.json");
@@ -1014,6 +1044,42 @@ class IngestionTaskServiceTest {
                 && execution.getErrorMessage().contains("executable status")
         );
         verify(classificationSealGuard).requireProductionSeal(activeTask);
+        verifyNoInteractions(addaxJobService, airflowAdapter, airflowDagService, targetTableProvisioner);
+    }
+
+    @Test
+    void execute_shouldRefreshActiveStateAfterGovernanceQueueWait() {
+        Long taskId = 1L;
+        IngestionTask task = createTestTaskEntity();
+        task.setId(taskId);
+        task.setStatus("active");
+        task.setClassificationSeal(createValidClassificationSeal());
+        task.setFieldClassifications(objectMapper.createObjectNode());
+        ObjectNode governance = objectMapper.createObjectNode();
+        governance.put("maxConcurrentRuns", 1);
+        governance.put("rejectPolicy", "QUEUE");
+        task.setSyncConfig(objectMapper.createObjectNode().set("governance", governance));
+
+        when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
+        when(taskRepository.save(task)).thenReturn(task);
+        when(executionRepository.countByTaskIdAndStatusesIgnoreCase(taskId, List.of("running", "preparing")))
+            .thenReturn(1L);
+        when(executionRepository.findByStatusesIgnoreCase(List.of("running", "preparing")))
+            .thenReturn(List.of());
+        when(executionMapper.toDto(any(IngestionExecution.class))).thenReturn(new IngestionExecutionDTO());
+        doAnswer(invocation -> {
+            task.setStatus("draft");
+            return null;
+        }).when(entityManager).refresh(task, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+
+        ingestionTaskService.execute(taskId);
+        org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
+            .forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit);
+
+        verify(entityManager).refresh(task, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+        ArgumentCaptor<IngestionExecution> executions = ArgumentCaptor.forClass(IngestionExecution.class);
+        verify(executionRepository, atLeast(2)).save(executions.capture());
+        assertThat(executions.getAllValues()).anyMatch(execution -> "failed".equals(execution.getStatus()));
         verifyNoInteractions(addaxJobService, airflowAdapter, airflowDagService, targetTableProvisioner);
     }
 

@@ -57,10 +57,7 @@ test("builtin GB standard packs install through the same pipeline", () => {
 
 test("builtin pack resources ship the four GB packages", () => {
 	const manifest = readFileSync(
-		new URL(
-			"../../../../dts-platform/src/main/resources/standard-packages/manifest.json",
-			import.meta.url,
-		),
+		new URL("../../../../dts-platform/src/main/resources/standard-packages/manifest.json", import.meta.url),
 		"utf8",
 	);
 	assert.match(manifest, /gbt-2261-gender/);
@@ -74,18 +71,25 @@ test("standard package page is routable statically and via menu resolver", () =>
 	assert.match(DYNAMIC_RESOLVER, /"\/foundation\/standard-package": "\/pages\/foundation\/StandardPackagePage"/);
 });
 
-test("standard package page can return to the data element page when launched from elements", () => {
+test("standard package page returns to the standard owner that launched it", () => {
 	assert.match(PAGE, /useSearchParams/);
 	assert.match(PAGE, /useNavigate/);
-	assert.match(PAGE, /fromSource === "elements"/);
-	assert.match(PAGE, /buildDataElementReturnRoute/);
-	assert.match(PAGE, /返回数据元/);
+	assert.match(PAGE, /getStandardPackageSourceMeta/);
+	assert.match(PAGE, /buildStandardPackageReturnRoute/);
+	assert.match(PAGE, /sourceMeta\.label/);
+	assert.match(PAGE, /standard-package-return-\$\{sourceMeta\.source\}/);
 });
 
 test("standard package success returns to the global owner without creating a session draft", () => {
-	assert.match(PAGE, /buildDataElementReturnRoute/);
+	assert.match(PAGE, /buildStandardPackageReturnRoute/);
 	assert.match(PAGE, /applied:\s*true/);
-	assert.match(PAGE, /返回数据元/);
+	assert.match(PAGE, /appliedSourceReturnRoute/);
 	assert.doesNotMatch(PAGE, /JourneyContextBar/);
 	assert.doesNotMatch(PAGE, /bindingDraft=1|查看数据元并生成落标草稿/);
+});
+
+test("standard package preview and apply report measurement units as the sixth object type", () => {
+	assert.match(PAGE, /06-measurement-units\.csv/);
+	assert.match(PAGE, /MEASUREMENT_UNIT:\s*"计量单位"/);
+	assert.match(PAGE, /共 6 个 CSV/);
 });

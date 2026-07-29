@@ -1,6 +1,7 @@
 -- Fail-fast verification for the PJM v4 MySQL source schema and 55-row seed.
--- Run with the mysql CLI after 01_create_ods_source_tables.sql and
--- 02_seed_golden.sql. Any mismatch raises SQLSTATE 45000.
+-- Fresh setup: run after 01_create_ods_source_tables.sql and
+-- 02_seed_golden.sql. Existing schema upgrade: run this verifier only after
+-- 04, 05 and 06. Any mismatch raises SQLSTATE 45000.
 
 USE dts_pjm_test;
 
@@ -42,6 +43,130 @@ BEGIN
      AND column_name REGEXP '^_dts_';
   IF v_actual <> 0 THEN
     SET v_message = CONCAT('raw MySQL source contains ', v_actual, ' reserved _dts_* columns');
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = v_message;
+  END IF;
+
+  SELECT COUNT(*) INTO v_actual
+    FROM information_schema.columns
+   WHERE table_schema = DATABASE()
+     AND table_name IN (
+       'ods_project_subject_domain_v2',
+       'ods_progress_measure_v2',
+       'ods_quality_issue_v2',
+       'ods_quality_measure_v2',
+       'ods_tech_state_v2',
+       'ods_tech_state_measure_v2',
+       'ods_risk_info_v2',
+       'ods_risk_measure_v2',
+       'ods_material_info_v2',
+       'ods_budget_v2'
+     )
+     AND (
+       (column_name = 'classification' AND data_type = 'varchar' AND character_maximum_length = 32)
+       OR (column_name = 'owner_dept' AND data_type = 'varchar' AND character_maximum_length = 64)
+     );
+  IF v_actual <> 20 THEN
+    SET v_message = CONCAT('expected 20 source security columns, got ', v_actual);
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = v_message;
+  END IF;
+
+  SELECT COUNT(*) INTO v_actual
+    FROM information_schema.columns
+   WHERE table_schema = DATABASE()
+     AND table_name IN (
+       'ods_project_subject_domain_v2',
+       'ods_progress_measure_v2',
+       'ods_quality_issue_v2',
+       'ods_quality_measure_v2',
+       'ods_tech_state_v2',
+       'ods_tech_state_measure_v2',
+       'ods_risk_info_v2',
+       'ods_risk_measure_v2',
+       'ods_material_info_v2',
+       'ods_budget_v2'
+     )
+     AND column_name IN ('classification', 'owner_dept')
+     AND is_nullable = 'NO';
+  IF v_actual <> 20 THEN
+    SET v_message = CONCAT('expected 20 required source security columns, got ', v_actual);
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = v_message;
+  END IF;
+
+  SELECT COUNT(*) INTO v_actual
+    FROM information_schema.columns
+   WHERE table_schema = DATABASE()
+     AND table_name IN (
+       'ods_project_subject_domain_v2',
+       'ods_progress_measure_v2',
+       'ods_quality_issue_v2',
+       'ods_quality_measure_v2',
+       'ods_tech_state_v2',
+       'ods_tech_state_measure_v2',
+       'ods_risk_info_v2',
+       'ods_risk_measure_v2',
+       'ods_material_info_v2',
+       'ods_budget_v2'
+     )
+     AND column_name IN ('classification', 'owner_dept')
+     AND column_default IS NULL;
+  IF v_actual <> 20 THEN
+    SET v_message = CONCAT('expected 20 source security columns without fabricated defaults, got ', v_actual);
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = v_message;
+  END IF;
+
+  SELECT COUNT(*) INTO v_actual
+    FROM (
+      SELECT classification, owner_dept FROM ods_project_subject_domain_v2
+      UNION ALL SELECT classification, owner_dept FROM ods_progress_measure_v2
+      UNION ALL SELECT classification, owner_dept FROM ods_quality_issue_v2
+      UNION ALL SELECT classification, owner_dept FROM ods_quality_measure_v2
+      UNION ALL SELECT classification, owner_dept FROM ods_tech_state_v2
+      UNION ALL SELECT classification, owner_dept FROM ods_tech_state_measure_v2
+      UNION ALL SELECT classification, owner_dept FROM ods_risk_info_v2
+      UNION ALL SELECT classification, owner_dept FROM ods_risk_measure_v2
+      UNION ALL SELECT classification, owner_dept FROM ods_material_info_v2
+      UNION ALL SELECT classification, owner_dept FROM ods_budget_v2
+    ) source_rows
+   WHERE BINARY classification NOT IN ('PUBLIC', 'INTERNAL', 'SECRET', 'CONFIDENTIAL')
+      OR owner_dept NOT REGEXP '^[A-Za-z0-9._-]{1,64}$';
+  IF v_actual <> 0 THEN
+    SET v_message = CONCAT('expected canonical source security values, got ', v_actual, ' invalid rows');
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = v_message;
+  END IF;
+
+  SELECT COUNT(DISTINCT BINARY classification) INTO v_actual
+    FROM (
+      SELECT classification FROM ods_project_subject_domain_v2
+      UNION ALL SELECT classification FROM ods_progress_measure_v2
+      UNION ALL SELECT classification FROM ods_quality_issue_v2
+      UNION ALL SELECT classification FROM ods_quality_measure_v2
+      UNION ALL SELECT classification FROM ods_tech_state_v2
+      UNION ALL SELECT classification FROM ods_tech_state_measure_v2
+      UNION ALL SELECT classification FROM ods_risk_info_v2
+      UNION ALL SELECT classification FROM ods_risk_measure_v2
+      UNION ALL SELECT classification FROM ods_material_info_v2
+      UNION ALL SELECT classification FROM ods_budget_v2
+    ) source_levels;
+  IF v_actual <> 4 THEN
+    SET v_message = CONCAT('expected all 4 source classifications, got ', v_actual);
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = v_message;
+  END IF;
+
+  SELECT COUNT(DISTINCT owner_dept) INTO v_actual
+    FROM (
+      SELECT owner_dept FROM ods_project_subject_domain_v2
+      UNION ALL SELECT owner_dept FROM ods_progress_measure_v2
+      UNION ALL SELECT owner_dept FROM ods_quality_issue_v2
+      UNION ALL SELECT owner_dept FROM ods_quality_measure_v2
+      UNION ALL SELECT owner_dept FROM ods_tech_state_v2
+      UNION ALL SELECT owner_dept FROM ods_tech_state_measure_v2
+      UNION ALL SELECT owner_dept FROM ods_risk_info_v2
+      UNION ALL SELECT owner_dept FROM ods_risk_measure_v2
+      UNION ALL SELECT owner_dept FROM ods_material_info_v2
+      UNION ALL SELECT owner_dept FROM ods_budget_v2
+    ) source_departments;
+  IF v_actual <> 3 THEN
+    SET v_message = CONCAT('expected 3 source owner departments, got ', v_actual);
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = v_message;
   END IF;
 

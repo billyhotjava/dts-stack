@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "2.0",
+  "packageCode": "dts-custom-project-management",
+  "packageName": "项目管理综合自定义数据标准包",
+  "packageVersion": "1.0.0",
+  "standardNo": "客户项目管理ODS v2；GB/T 37507-2025题录；ISO 31000:2018与ISO 10006:2017公开摘要参考",
+  "category": "项目管理数据标准",
+  "industry": "PROJECT_MANAGEMENT",
+  "releasedAt": "2026-07-29T00:00:00Z",
+  "effectiveFrom": "2026-07-29",
+  "dependencies": [],
+  "replaces": [],
+  "deprecated": false,
+  "sourceRegisterRef": "source-register.json#dts-custom-project-management",
+  "licenseConclusion": "REVIEW_REQUIRED",
+  "description": "覆盖项目进度、跟进闭环、质量、技术状态、风险、重要物料和预算执行的客户自定义数据标准。",
+  "files": {
+    "01-business-terms.csv": "d825c4254d1dfe8bd7465a363dad6dae4d352f00980e24b5aa806ca7b8e2bb46",
+    "02-data-elements.csv": "dd2b275f6234612aa59685c11abb98bef21bfce5effc8bae0e89618b1609304d",
+    "03-reference-code-directories.csv": "2a8b7582026e71d4cfb11eff520393755c56ca12f5f0c0f7e7fad44edadb45d3",
+    "04-reference-code-items.csv": "283eec261e387e414fb307ee84789263b6fa57bfac486f59b7f9fb1da33bce3f",
+    "source-register.json": "3652b22eb0a8b40aae539d0cbc0d99a7073e26df7d1c36e16e971fcacb5477a4"
+  },
+  "contentChecksum": "7c9de3515afff0a10197fabf33d4654def157390a6c72b80c5c6dd6d25ea1c58"
+}

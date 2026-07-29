@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -55,6 +56,9 @@ class StandardPackageImportServiceTest {
     @Mock
     private StandardPackageImportRunRepository runRepository;
 
+    @Mock
+    private StandardPackageMeasurementUnitService measurementUnitService;
+
     private StandardPackageImportService service;
 
     @BeforeEach
@@ -66,7 +70,8 @@ class StandardPackageImportServiceTest {
             codeValueRepository,
             runRepository,
             new ObjectMapper(),
-            new StandardPackageManifestContract(new ObjectMapper())
+            new StandardPackageManifestContract(new ObjectMapper()),
+            measurementUnitService
         );
         lenient().when(glossaryTermRepository.findByCodeLowerIn(anyCollection())).thenReturn(List.of());
         lenient().when(codeDirectoryRepository.findByCodeTypeCodeIgnoreCase(anyString())).thenReturn(Optional.empty());
@@ -81,10 +86,24 @@ class StandardPackageImportServiceTest {
                 return run;
             });
         lenient().when(runRepository.findByStatusOrderByCreatedDateDesc("APPLIED")).thenReturn(List.of());
+        lenient()
+            .when(measurementUnitService.preview(nullable(byte[].class)))
+            .thenAnswer(invocation -> {
+                boolean present = invocation.getArgument(0) != null;
+                Map<String, Object> report = new LinkedHashMap<>();
+                report.put("file", "06-measurement-units.csv");
+                report.put("present", present);
+                report.put("total", 0);
+                report.put("toCreate", 0);
+                report.put("toUpdate", 0);
+                report.put("errorCount", 0);
+                report.put("errors", List.of());
+                return new StandardPackageMeasurementUnitService.Preview(report, List.of());
+            });
     }
 
     @Test
-    @DisplayName("合法包：五文件解析、跨文件 code_set 解析、run 记录 PREVIEWED")
+    @DisplayName("合法包：六文件报告、跨文件 code_set 解析、run 记录 PREVIEWED")
     void preview_validPackage_reportsCreatesAndPersistsRun() throws Exception {
         Map<String, String> files = new LinkedHashMap<>();
         files.put(
@@ -119,7 +138,7 @@ class StandardPackageImportServiceTest {
         assertThat(preview.get("runId")).isNotNull();
 
         List<Map<String, Object>> reports = castReports(preview);
-        assertThat(reports).hasSize(5);
+        assertThat(reports).hasSize(6);
         assertThat(reportFor(reports, "04-reference-code-items.csv").get("toCreate")).isEqualTo(2);
         assertThat(reportFor(reports, "02-data-elements.csv").get("toCreate")).isEqualTo(1);
 
@@ -144,6 +163,23 @@ class StandardPackageImportServiceTest {
         Map<String, Object> report = reportFor(castReports(preview), "02-data-elements.csv");
         assertThat(report.get("errorCount")).isEqualTo(1);
         assertThat(String.valueOf(report.get("errors"))).contains("MISSING_SET");
+    }
+
+    @Test
+    void preview_contentPackageAllowsCustomerOwnedSourceSystemToRemainBlank() throws Exception {
+        Map<String, String> files = Map.of(
+            "02-data-elements.csv",
+            "field_name_cn,field_name_en,data_type,data_length,data_precision,data_scale,nullable,domain,description,source_system,code_set,default_value,is_pk,security_level\n" +
+            "会计期间,accounting_period,VARCHAR,7,,,N,财务会计,会计核算所属期间,,,,N,INTERNAL\n"
+        );
+
+        Map<String, Object> preview = service.previewZip(zipOf(files), "tester");
+
+        assertThat(preview.get("blocking")).isEqualTo(false);
+        assertThat(reportFor(castReports(preview), "02-data-elements.csv").get("toCreate")).isEqualTo(1);
+        ArgumentCaptor<StandardPackageImportRun> captor = ArgumentCaptor.forClass(StandardPackageImportRun.class);
+        verify(runRepository).save(captor.capture());
+        assertThat(captor.getValue().getPayloadJson()).contains("\"sourceSystem\":null");
     }
 
     @Test

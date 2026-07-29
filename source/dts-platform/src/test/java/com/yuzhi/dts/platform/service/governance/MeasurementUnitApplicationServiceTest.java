@@ -138,6 +138,48 @@ class MeasurementUnitApplicationServiceTest {
     }
 
     @Test
+    void packageImportCanReactivateAnInactiveUnitWithoutBypassingTheRevisionLedger() {
+        MeasurementUnitView inactive = codec.toView(
+            UNIT_ID,
+            command("kg", "千克", "MASS", BigDecimal.ONE, null),
+            MeasurementUnitStatus.INACTIVE,
+            2,
+            NOW,
+            NOW
+        );
+        when(repository.findCurrent(UNIT_ID)).thenReturn(Optional.of(stored(inactive)));
+        when(repository.findByCode("KG")).thenReturn(Optional.of(stored(inactive)));
+        when(repository.compareAndSet(eq(stored(inactive)), any(), eq("package-import"))).thenReturn(1);
+
+        MeasurementUnitView reactivated = service.replaceForImport(
+            "package-import",
+            UNIT_ID,
+            expected(inactive),
+            command("kg", "千克", "MASS", BigDecimal.ONE, null),
+            MeasurementUnitStatus.ACTIVE
+        );
+
+        assertThat(reactivated.status()).isEqualTo(MeasurementUnitStatus.ACTIVE);
+        assertThat(reactivated.version()).isEqualTo(3);
+        verify(repository).insertRevision(eq(reactivated), anyString(), eq("package-import"));
+    }
+
+    @Test
+    void packageRollbackWritesAnInactiveTombstoneForAnUnreferencedCreatedUnit() {
+        MeasurementUnitView imported = view(UNIT_ID, "KG", "MASS", BigDecimal.ONE, null, 1);
+        when(repository.findCurrent(UNIT_ID)).thenReturn(Optional.of(stored(imported)));
+        when(repository.listUnitDependents(UNIT_ID)).thenReturn(List.of());
+        when(repository.listModelSpecReferences(TENANT, UNIT_ID)).thenReturn(List.of());
+        when(repository.compareAndSet(eq(stored(imported)), any(), eq("package-import"))).thenReturn(1);
+
+        MeasurementUnitView rolledBack = service.rollbackCreatedImport("package-import", UNIT_ID, expected(imported));
+
+        assertThat(rolledBack.status()).isEqualTo(MeasurementUnitStatus.INACTIVE);
+        assertThat(rolledBack.version()).isEqualTo(2);
+        verify(repository).insertRevision(eq(rolledBack), anyString(), eq("package-import"));
+    }
+
+    @Test
     void returnsVersionSnapshotsAndRedactsRestrictedModelReferences() {
         MeasurementUnitView current = view(UNIT_ID, "KG", "MASS", BigDecimal.ONE, null, 2);
         MeasurementUnitView first = view(UNIT_ID, "KG", "MASS", BigDecimal.ONE, null, 1);

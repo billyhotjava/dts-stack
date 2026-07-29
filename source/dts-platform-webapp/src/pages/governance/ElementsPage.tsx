@@ -1,24 +1,40 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
-import { Alert, Breadcrumb, Button, Card, Descriptions, Divider, Drawer, Form, Input, List, Modal, Select, Space, Spin, Tag, Typography } from "antd";
-import { CompactTable } from "@/components/table";
+import { ArrowLeftOutlined } from "@ant-design/icons";
+import {
+	Alert,
+	Breadcrumb,
+	Button,
+	Card,
+	Descriptions,
+	Divider,
+	Drawer,
+	Form,
+	Input,
+	List,
+	Modal,
+	Select,
+	Space,
+	Spin,
+	Tag,
+	Typography,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { ArrowLeftOutlined, DownloadOutlined, ImportOutlined } from "@ant-design/icons";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import { EmptyState } from "@/components/empty-state";
-import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
-import { PageHeader } from "@/components/page-header";
+import { toast } from "sonner";
 import {
 	createMetadataStandard,
 	deleteMetadataStandard,
-	downloadDataStandardPackageTemplate,
 	getMetadataStandardReferences,
 	listMetadataStandards,
 	listReferenceCodes,
 	updateMetadataStandard,
 } from "@/api/platformApi";
+import { EmptyState } from "@/components/empty-state";
+import { PageHeader } from "@/components/page-header";
+import { CompactTable } from "@/components/table";
+import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import { normalizeText } from "@/utils/textUtils";
-import { buildStandardPackageImportRoute, resolveStandardOwnerReturnTo } from "./standardOwnerNavigation";
+import { resolveStandardOwnerReturnTo } from "./standardOwnerNavigation";
 
 const { Text } = Typography;
 
@@ -81,7 +97,6 @@ export default function ElementsPage() {
 	const [referenceLoading, setReferenceLoading] = useState(false);
 	const [references, setReferences] = useState<AssetReferencePayload | null>(null);
 	const [codeOptions, setCodeOptions] = useState<ReferenceCodeDirectory[]>([]);
-	const [templateDownloading, setTemplateDownloading] = useState(false);
 	const [loadError, setLoadError] = useState("");
 	const [form] = Form.useForm();
 	const canManage = useGovernanceManageAccess();
@@ -160,30 +175,6 @@ export default function ElementsPage() {
 			setReferenceLoading(false);
 		}
 	}, []);
-
-	const downloadStandardPackageTemplate = async () => {
-		if (!canManage) {
-			toast.error("当前账号无治理维护权限");
-			return;
-		}
-		setTemplateDownloading(true);
-		try {
-			const blob = await downloadDataStandardPackageTemplate();
-			const url = URL.createObjectURL(blob);
-			const link = document.createElement("a");
-			link.href = url;
-			link.download = "data-standard-package-template.zip";
-			document.body.appendChild(link);
-			link.click();
-			link.remove();
-			URL.revokeObjectURL(url);
-			toast.success("标准包模板已下载");
-		} catch (err: any) {
-			toast.error(err?.message || "下载标准包模板失败");
-		} finally {
-			setTemplateDownloading(false);
-		}
-	};
 
 	const openModal = (row?: MetadataStandard) => {
 		setEditing(row || null);
@@ -358,23 +349,11 @@ export default function ElementsPage() {
 							</Button>
 						) : null}
 						<Button
-							icon={<DownloadOutlined />}
-							onClick={downloadStandardPackageTemplate}
-							loading={templateDownloading}
+							type="primary"
+							onClick={() => openModal()}
 							disabled={!canManage}
-							data-testid="governance-elements-template-download"
+							data-testid="governance-elements-create"
 						>
-							下载标准包模板
-						</Button>
-						<Button
-							icon={<ImportOutlined />}
-							onClick={() => navigate(buildStandardPackageImportRoute(searchParams))}
-							disabled={!canManage}
-							data-testid="governance-elements-standard-package-import"
-						>
-							导入标准包
-						</Button>
-						<Button type="primary" onClick={() => openModal()} disabled={!canManage} data-testid="governance-elements-create">
 							+ 新增数据元
 						</Button>
 					</Space>
@@ -400,7 +379,11 @@ export default function ElementsPage() {
 					type="error"
 					message="数据元加载失败"
 					description={loadError}
-					action={<Button size="small" onClick={() => void loadElements()}>重新加载</Button>}
+					action={
+						<Button size="small" onClick={() => void loadElements()}>
+							重新加载
+						</Button>
+					}
 				/>
 			) : null}
 			<div className="rounded-md border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
@@ -518,9 +501,10 @@ export default function ElementsPage() {
 								showSearch
 								placeholder="建议选择标准码表"
 								options={codeOptions.map((item) => ({
-									label: item.codeTypeName && item.codeTypeCode
-										? `${item.codeTypeName} (${item.codeTypeCode})`
-										: `${item.codeTypeName || item.codeTypeCode || ""}`.trim(),
+									label:
+										item.codeTypeName && item.codeTypeCode
+											? `${item.codeTypeName} (${item.codeTypeCode})`
+											: `${item.codeTypeName || item.codeTypeCode || ""}`.trim(),
 									value: item.codeTypeCode,
 								}))}
 							/>
@@ -580,13 +564,17 @@ export default function ElementsPage() {
 					<Descriptions.Item label="长度">{detailElement?.dataLength ?? "-"}</Descriptions.Item>
 					<Descriptions.Item label="精度">{detailElement?.dataPrecision ?? "-"}</Descriptions.Item>
 					<Descriptions.Item label="小数位">{detailElement?.dataScale ?? "-"}</Descriptions.Item>
-					<Descriptions.Item label="可空">{detailElement?.nullable == null ? "-" : detailElement?.nullable ? "是" : "否"}</Descriptions.Item>
+					<Descriptions.Item label="可空">
+						{detailElement?.nullable == null ? "-" : detailElement?.nullable ? "是" : "否"}
+					</Descriptions.Item>
 					<Descriptions.Item label="主题域">{detailElement?.domain || "-"}</Descriptions.Item>
 					<Descriptions.Item label="来源系统">{detailElement?.sourceSystem || "-"}</Descriptions.Item>
 					<Descriptions.Item label="格式规则">{detailElement?.description || "-"}</Descriptions.Item>
 					<Descriptions.Item label="码表编码">{detailElement?.codeSet || "-"}</Descriptions.Item>
 					<Descriptions.Item label="默认值">{detailElement?.defaultValue || "-"}</Descriptions.Item>
-					<Descriptions.Item label="主键字段">{detailElement?.isPk == null ? "-" : detailElement?.isPk ? "是" : "否"}</Descriptions.Item>
+					<Descriptions.Item label="主键字段">
+						{detailElement?.isPk == null ? "-" : detailElement?.isPk ? "是" : "否"}
+					</Descriptions.Item>
 					<Descriptions.Item label="脱敏等级">{detailElement?.securityLevel || "-"}</Descriptions.Item>
 				</Descriptions>
 				<Divider />

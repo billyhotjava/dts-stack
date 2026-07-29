@@ -1,13 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
-import { Button, Card, Popconfirm, Result, Space, Steps, Tabs, Tag, Typography, Upload } from "antd";
 import { ArrowLeftOutlined, DownloadOutlined, InboxOutlined } from "@ant-design/icons";
-import { useNavigate, useSearchParams } from "react-router";
+import { Button, Card, Popconfirm, Result, Space, Steps, Tabs, Tag, Typography, Upload } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { CompactTable } from "@/components/table";
-import { EmptyState } from "@/components/empty-state";
-import { PageHeader } from "@/components/page-header";
-import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router";
+import { toast } from "sonner";
 import {
 	applyStandardPackageImport,
 	downloadDataStandardPackageTemplate,
@@ -17,7 +13,11 @@ import {
 	previewStandardPackageImport,
 	rollbackStandardPackageRun,
 } from "@/api/platformApi";
-import { buildDataElementReturnRoute } from "../governance/standardOwnerNavigation";
+import { EmptyState } from "@/components/empty-state";
+import { PageHeader } from "@/components/page-header";
+import { CompactTable } from "@/components/table";
+import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
+import { buildStandardPackageReturnRoute, getStandardPackageSourceMeta } from "../governance/standardOwnerNavigation";
 
 const { Text } = Typography;
 
@@ -81,6 +81,7 @@ const FILE_LABELS: Record<string, string> = {
 	"03-reference-code-directories.csv": "码表目录",
 	"04-reference-code-items.csv": "码表码值",
 	"05-reference-code-mappings.csv": "码表映射",
+	"06-measurement-units.csv": "计量单位",
 };
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -102,6 +103,7 @@ const ENTITY_LABELS: Record<string, string> = {
 	CODE_DIRECTORY: "码表目录",
 	CODE_VALUE: "码表码值",
 	CODE_MAPPING: "码表映射",
+	MEASUREMENT_UNIT: "计量单位",
 };
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -120,9 +122,10 @@ export default function StandardPackagePage() {
 	const navigate = useNavigate();
 	const [searchParams] = useSearchParams();
 	const fromSource = searchParams.get("from");
-	const dataElementReturnRoute = useMemo(() => buildDataElementReturnRoute(searchParams), [searchParams]);
-	const appliedDataElementReturnRoute = useMemo(
-		() => buildDataElementReturnRoute(searchParams, { applied: true }),
+	const sourceMeta = useMemo(() => getStandardPackageSourceMeta(fromSource), [fromSource]);
+	const sourceReturnRoute = useMemo(() => buildStandardPackageReturnRoute(searchParams), [searchParams]);
+	const appliedSourceReturnRoute = useMemo(
+		() => buildStandardPackageReturnRoute(searchParams, { applied: true }),
 		[searchParams],
 	);
 	const [activeTab, setActiveTab] = useState("wizard");
@@ -193,7 +196,9 @@ export default function StandardPackagePage() {
 			if (resp?.applied === false) {
 				toast.error(`内置包 ${pkg.name || pkg.code} 校验未通过，请联系产品方修复资源`);
 			} else {
-				toast.success(`已安装 ${pkg.name || pkg.code}：新增 ${resp?.totalCreated ?? 0}，更新 ${resp?.totalUpdated ?? 0}`);
+				toast.success(
+					`已安装 ${pkg.name || pkg.code}：新增 ${resp?.totalCreated ?? 0}，更新 ${resp?.totalUpdated ?? 0}`,
+				);
 			}
 			void loadBuiltins();
 		} catch (err: any) {
@@ -265,7 +270,7 @@ export default function StandardPackagePage() {
 				lines.push(`${report.file},${error.row ?? ""},"${message}"`);
 			}
 		}
-		downloadBlob(new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" }), "standard-package-errors.csv");
+		downloadBlob(new Blob([`﻿${lines.join("\n")}`], { type: "text/csv;charset=utf-8" }), "standard-package-errors.csv");
 	};
 
 	const rollbackRun = async (runId: string) => {
@@ -388,10 +393,7 @@ export default function StandardPackagePage() {
 
 	const wizard = (
 		<Space direction="vertical" className="w-full" size={16}>
-			<Steps
-				current={step}
-				items={[{ title: "上传标准包" }, { title: "校验报告" }, { title: "应用结果" }]}
-			/>
+			<Steps current={step} items={[{ title: "上传标准包" }, { title: "校验报告" }, { title: "应用结果" }]} />
 			{step === 0 ? (
 				<Card>
 					<Space direction="vertical" className="w-full" size={16}>
@@ -410,7 +412,9 @@ export default function StandardPackagePage() {
 								<InboxOutlined />
 							</p>
 							<p className="ant-upload-text">点击或拖拽标准包 zip 到此处</p>
-							<p className="ant-upload-hint">包内包含业务术语、数据元、码表目录/码值/映射共 5 个 CSV，可按需提供部分文件</p>
+							<p className="ant-upload-hint">
+								包内包含业务术语、数据元、码表目录/码值/映射和计量单位共 6 个 CSV，可按需提供部分文件
+							</p>
 						</Upload.Dragger>
 						<Space>
 							<Button
@@ -465,12 +469,13 @@ export default function StandardPackagePage() {
 							<Button key="again" onClick={resetWizard}>
 								再导入一个
 							</Button>,
-							<Button
-								key="return-elements"
-								onClick={() => navigate(appliedDataElementReturnRoute)}
-							>
-								返回数据元
-							</Button>,
+							...(sourceMeta && appliedSourceReturnRoute
+								? [
+										<Button key="return-source" onClick={() => navigate(appliedSourceReturnRoute)}>
+											{sourceMeta.label}
+										</Button>,
+									]
+								: []),
 							<Button key="history" type="primary" onClick={() => setActiveTab("history")}>
 								查看导入历史
 							</Button>,
@@ -539,7 +544,9 @@ export default function StandardPackagePage() {
 				loading={runsLoading}
 				columns={runColumns}
 				dataSource={runs}
-				locale={{ emptyText: <EmptyState title="暂无导入记录" description="通过导入向导上传标准包后，历史会出现在这里。" /> }}
+				locale={{
+					emptyText: <EmptyState title="暂无导入记录" description="通过导入向导上传标准包后，历史会出现在这里。" />,
+				}}
 				pagination={{
 					current: pageNum,
 					pageSize,
@@ -563,19 +570,19 @@ export default function StandardPackagePage() {
 			<PageHeader
 				title="标准包导入"
 				actions={
-					fromSource === "elements" ? (
+					sourceMeta && sourceReturnRoute ? (
 						<Button
 							icon={<ArrowLeftOutlined />}
-							onClick={() => navigate(dataElementReturnRoute)}
-							data-testid="standard-package-return-elements"
+							onClick={() => navigate(sourceReturnRoute)}
+							data-testid={`standard-package-return-${sourceMeta.source}`}
 						>
-							返回数据元
+							{sourceMeta.label}
 						</Button>
 					) : null
 				}
 			/>
 			<div className="rounded-md border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
-				下载模板 → 填写业务术语/数据元/公共码表 → 上传校验 → 确认应用，支持整包回滚。
+				下载模板 → 填写业务术语/数据元/公共码表/计量单位 → 上传校验 → 确认应用，支持整包回滚。
 			</div>
 			<Tabs
 				activeKey={activeTab}

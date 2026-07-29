@@ -49,6 +49,18 @@ public final class MetadataStandardCsvSupport {
      * 出错时返回与既有单文件导入完全一致的消息体（不含行号前缀，由调用方补）。
      */
     public static ElementRow buildElementRow(Function<String, String> column) {
+        return buildElementRow(column, true);
+    }
+
+    /**
+     * Standard content packages may leave the customer-owned business source system unset. Interactive and
+     * legacy single-file imports keep the historical required-field behavior.
+     */
+    public static ElementRow buildPackageElementRow(Function<String, String> column) {
+        return buildElementRow(column, false);
+    }
+
+    private static ElementRow buildElementRow(Function<String, String> column, boolean requireSourceSystem) {
         String fieldNameCn = column.apply("field_name_cn");
         String fieldNameEn = column.apply("field_name_en");
         String dataTypeRaw = column.apply("data_type");
@@ -72,7 +84,7 @@ public final class MetadataStandardCsvSupport {
         if (!StringUtils.hasText(description)) {
             return new ElementRow(null, fieldNameEn + " description 为空，已跳过");
         }
-        if (!StringUtils.hasText(sourceSystem)) {
+        if (requireSourceSystem && !StringUtils.hasText(sourceSystem)) {
             return new ElementRow(null, fieldNameEn + " source_system 为空，已跳过");
         }
 
@@ -118,7 +130,7 @@ public final class MetadataStandardCsvSupport {
         req.setNullable(nullable);
         req.setDomain(domain.trim());
         req.setDescription(description.trim());
-        req.setSourceSystem(sourceSystem.trim());
+        req.setSourceSystem(trimToNull(sourceSystem));
         req.setCodeSet(trimToNull(column.apply("code_set")));
         req.setDefaultValue(trimToNull(column.apply("default_value")));
         req.setIsPk(parseBooleanYN(column.apply("is_pk")));

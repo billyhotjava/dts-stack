@@ -106,6 +106,9 @@ class IngestionTaskExecutionFilterTest {
     private IngestionClassificationSealGuard classificationSealGuard;
 
     @Mock
+    private jakarta.persistence.EntityManager entityManager;
+
+    @Mock
     private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     private IngestionTaskService ingestionTaskService;
@@ -135,6 +138,7 @@ class IngestionTaskExecutionFilterTest {
             sourceConnectorRegistry,
             apiIngestionExecutor,
             classificationSealGuard,
+            entityManager,
             transactionManager,
             command -> command.run()
         );

@@ -136,6 +136,77 @@ public class MeasurementUnitApplicationService {
         return replacement;
     }
 
+    /**
+     * Package-import write path. It preserves the same checksum/version/CAS invariants as interactive edits,
+     * while allowing a previously rolled-back (inactive) package unit to be reactivated.
+     */
+    @Transactional
+    public MeasurementUnitView replaceForImport(
+        String actorId,
+        UUID unitId,
+        ExpectedVersion expected,
+        MeasurementUnitCommand request,
+        MeasurementUnitStatus targetStatus
+    ) {
+        requireActor(actorId);
+        Objects.requireNonNull(targetStatus, "targetStatus");
+        repository.lockMutationGraph();
+        StoredUnit stored = findStored(unitId);
+        MeasurementUnitView current = toView(stored);
+        requireExpected(current, expected);
+        MeasurementUnitCommand command = validated(request);
+        rejectDuplicateCode(command.code(), unitId);
+        rejectIncompatibleDependents(unitId, current.quantityKind(), command.quantityKind());
+        if (targetStatus == MeasurementUnitStatus.ACTIVE) {
+            validateBase(unitId, command.quantityKind(), command.baseUnitRef());
+        } else {
+            rejectActiveDependents(unitId);
+        }
+        MeasurementUnitView replacement = codec.toView(
+            unitId,
+            command,
+            targetStatus,
+            current.version() + 1,
+            current.createdAt(),
+            clock.instant()
+        );
+        if (replacement.checksum().equals(current.checksum())) return current;
+        compareAndAppend(actorId, stored, replacement);
+        return replacement;
+    }
+
+    /**
+     * A created unit cannot be hard-deleted because its revision ledger is immutable. Package rollback therefore
+     * writes an INACTIVE tombstone and fails closed when a model started referencing the unit after import.
+     */
+    @Transactional
+    public MeasurementUnitView rollbackCreatedImport(String actorId, UUID unitId, ExpectedVersion expected) {
+        requireActor(actorId);
+        repository.lockMutationGraph();
+        StoredUnit stored = findStored(unitId);
+        MeasurementUnitView current = toView(stored);
+        requireExpected(current, expected);
+        rejectActiveDependents(unitId);
+        if (!repository.listModelSpecReferences(serverTenantId, unitId).isEmpty()) {
+            throw new MeasurementUnitException(
+                "MEASUREMENT_UNIT_IMPORT_ROLLBACK_REFERENCED",
+                "Imported measurement unit is referenced and cannot be rolled back",
+                MeasurementUnitException.Kind.CONFLICT
+            );
+        }
+        if (current.status() == MeasurementUnitStatus.INACTIVE) return current;
+        MeasurementUnitView replacement = codec.toView(
+            unitId,
+            MeasurementUnitContract.fromView(current),
+            MeasurementUnitStatus.INACTIVE,
+            current.version() + 1,
+            current.createdAt(),
+            clock.instant()
+        );
+        compareAndAppend(actorId, stored, replacement);
+        return replacement;
+    }
+
     @Transactional
     public MeasurementUnitView deactivate(String actorId, UUID unitId, ExpectedVersion expected) {
         requireActor(actorId);
