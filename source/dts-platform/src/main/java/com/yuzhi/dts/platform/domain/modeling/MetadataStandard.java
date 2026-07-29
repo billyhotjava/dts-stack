@@ -51,7 +51,7 @@ public class MetadataStandard extends AbstractAuditingEntity<UUID> implements Se
     @Column(name = "description", length = 2048, nullable = false)
     private String description;
 
-    @Column(name = "source_system", length = 64, nullable = false)
+    @Column(name = "source_system", length = 64, nullable = true)
     private String sourceSystem;
 
     @Column(name = "code_set", length = 128)

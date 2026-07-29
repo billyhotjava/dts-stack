@@ -1,0 +1,24 @@
+name: "it_demo_governance"
+version: "1.0.0"
+config-version: 2
+profile: "dts"
+
+model-paths: ["models"]
+test-paths: ["tests"]
+clean-targets: ["target", "dbt_packages", "logs"]
+
+vars:
+  it_demo_ods_schema: "public"
+
+models:
+  it_demo_governance:
+    +persist_docs:
+      relation: true
+      columns: true
+    +tags: ["it-demo"]
+    dwd:
+      +materialized: table
+    dws:
+      +materialized: table
+    ads:
+      +materialized: table

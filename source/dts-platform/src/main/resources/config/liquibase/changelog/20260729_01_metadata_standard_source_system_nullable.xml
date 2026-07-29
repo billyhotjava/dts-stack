@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260729-01-metadata-standard-source-system-nullable" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="metadata_standard"/>
+            <columnExists tableName="metadata_standard" columnName="source_system"/>
+        </preConditions>
+        <comment>
+            Standard content packages may defer customer-owned source-system assignment.
+            Interactive data-element maintenance continues to require sourceSystem through request validation.
+        </comment>
+        <dropNotNullConstraint
+            tableName="metadata_standard"
+            columnName="source_system"
+            columnDataType="varchar(64)"/>
+        <rollback>
+            <sql dbms="postgresql" splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    IF EXISTS (
+                        SELECT 1
+                          FROM metadata_standard
+                         WHERE source_system IS NULL
+                    ) THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_METADATA_STANDARD_NULL_SOURCE_SYSTEM';
+                    END IF;
+                END
+                $$;
+            ]]></sql>
+            <addNotNullConstraint
+                tableName="metadata_standard"
+                columnName="source_system"
+                columnDataType="varchar(64)"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

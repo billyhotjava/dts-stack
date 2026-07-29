@@ -540,6 +540,7 @@
                         <testInclude>**/repository/modeling/CandidatePublicationRepositoryIT.java</testInclude>
                         <testInclude>**/repository/modeling/ModelReleaseCandidateRepositoryIT.java</testInclude>
                         <testInclude>**/repository/modeling/ModelSpecRepositoryIT.java</testInclude>
+                        <testInclude>**/repository/modeling/MetadataStandardSourceSystemLiquibaseIT.java</testInclude>
                         <testInclude>**/repository/modeling/Sprint74ModelImplementationSettingsRepositoryIT.java</testInclude>
                         <testInclude>**/service/modeling/ModelImplementationCompatibilityAdapterTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelImplementationExecutionPlannerTest.java</testInclude>
@@ -562,6 +563,7 @@
                         <testInclude>**/service/sql/SqlMetadataServiceCacheTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelLifecycleContractTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelLifecycleServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/MetadataStandardSourceSystemPersistenceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelBuildIntentServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelMaterializationDispatchServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelMaterializationRunArtifactServiceTest.java</testInclude>

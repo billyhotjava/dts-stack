@@ -1,0 +1,57 @@
+version: 2
+
+sources:
+  - name: it_demo_ods
+    schema: "{{ var('it_demo_ods_schema', 'public') }}"
+    description: "DTS IT Demo 的三张隔离 ODS；不包含客户 ODS。"
+    tables:
+      - name: org
+        identifier: ods_it_demo_org
+        description: "Demo 组织主数据 ODS。"
+        columns:
+          - name: org_code
+            tests:
+              - not_null:
+                  config:
+                    severity: error
+              - unique:
+                  config:
+                    severity: error
+
+      - name: project
+        identifier: ods_it_demo_project
+        description: "Demo 项目主数据 ODS。"
+        columns:
+          - name: project_code
+            tests:
+              - not_null:
+                  config:
+                    severity: error
+              - unique:
+                  config:
+                    severity: error
+          - name: owner_org_code
+            tests:
+              - not_null:
+                  config:
+                    severity: error
+
+      - name: task_snapshot
+        identifier: ods_it_demo_task_snapshot
+        description: "Demo 项目任务周期快照 ODS。"
+        columns:
+          - name: task_code
+            tests:
+              - not_null:
+                  config:
+                    severity: error
+          - name: snapshot_date
+            tests:
+              - not_null:
+                  config:
+                    severity: error
+          - name: project_code
+            tests:
+              - not_null:
+                  config:
+                    severity: error
