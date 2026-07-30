@@ -3,13 +3,16 @@ import { useEffect, useMemo, useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router";
 import { listModelSpecs } from "@/api/modelSpecApi";
 import { LineLoading } from "@/components/loading";
+import { type LegacyObjectTarget, resolveModelingCompatibilityTarget } from "./modelingCompatibilityRoute";
 import type { ModelSpecView } from "./modelSpecV2Contract";
-import {
-	resolveModelingCompatibilityTarget,
-	type LegacyObjectTarget,
-} from "./modelingCompatibilityRoute";
 
 const { Paragraph, Text, Title } = Typography;
+
+type ObjectLookup = {
+	requestKey: string;
+	status: "idle" | "loading" | "ready" | "error";
+	mapped?: LegacyObjectTarget;
+};
 
 const legacyObjectTarget = (models: ModelSpecView[], objectId: string): LegacyObjectTarget | undefined => {
 	const model = models.find(
@@ -32,37 +35,45 @@ export default function ModelingCompatibilityPage() {
 	const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
 	const objectId = searchParams.get("objectId")?.trim() || "";
 	const needsObjectLookup = location.pathname === "/modeling/semantic/objects" && Boolean(objectId);
-	const [mappedObject, setMappedObject] = useState<LegacyObjectTarget>();
-	const [lookupState, setLookupState] = useState<"idle" | "loading" | "ready" | "error">("idle");
 	const [attempt, setAttempt] = useState(0);
+	const requestKey = needsObjectLookup ? `${location.pathname}:${objectId}:${attempt}` : "";
+	const [lookup, setLookup] = useState<ObjectLookup>({
+		requestKey: "",
+		status: "idle",
+	});
 
 	useEffect(() => {
 		if (!needsObjectLookup) {
-			setLookupState("ready");
-			setMappedObject(undefined);
+			setLookup({ requestKey: "", status: "ready" });
 			return;
 		}
 		let cancelled = false;
-		setLookupState("loading");
+		setLookup({ requestKey, status: "loading" });
 		void listModelSpecs()
 			.then((models) => {
 				if (cancelled) return;
-				setMappedObject(legacyObjectTarget(Array.isArray(models) ? models : [], objectId));
-				setLookupState("ready");
+				setLookup({
+					requestKey,
+					status: "ready",
+					mapped: legacyObjectTarget(Array.isArray(models) ? models : [], objectId),
+				});
 			})
 			.catch(() => {
-				if (!cancelled) setLookupState("error");
+				if (!cancelled) setLookup({ requestKey, status: "error" });
 			});
 		return () => {
 			cancelled = true;
 		};
-	}, [attempt, needsObjectLookup, objectId]);
+	}, [needsObjectLookup, objectId, requestKey]);
 
-	if (needsObjectLookup && (lookupState === "idle" || lookupState === "loading")) {
+	const currentLookup: ObjectLookup =
+		lookup.requestKey === requestKey ? lookup : { requestKey, status: needsObjectLookup ? "loading" : "ready" };
+
+	if (needsObjectLookup && (currentLookup.status === "idle" || currentLookup.status === "loading")) {
 		return <LineLoading />;
 	}
 
-	if (lookupState === "error") {
+	if (needsObjectLookup && currentLookup.status === "error") {
 		return (
 			<div className="mx-auto max-w-2xl p-4" data-testid="modeling-compatibility-error">
 				<Card>
@@ -78,7 +89,12 @@ export default function ModelingCompatibilityPage() {
 		);
 	}
 
-	const target = resolveModelingCompatibilityTarget(location.pathname, searchParams, mappedObject);
+	const target = resolveModelingCompatibilityTarget(
+		location.pathname,
+		searchParams,
+		currentLookup.mapped,
+		location.hash,
+	);
 	if (target.kind === "redirect") return <Navigate to={target.to} replace />;
 
 	return (

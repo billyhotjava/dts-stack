@@ -1,13 +1,15 @@
 const LEGACY_METRICS_PREFIX = "/bi-apps/metrics";
 const LEGACY_SEMANTIC_CENTER_PREFIX = "/modeling/semantic-center";
-const METRIC_WORKBENCH_PATH = "/modeling/metric-workbench";
+const METRIC_WORKBENCH_PATH = "/modeling/workbench?module=metrics&workspaceView=definitions";
+const MODEL_WORKBENCH_PATH = "/modeling/workbench?module=models&workspaceView=model-specs";
+const DIMENSION_WORKBENCH_PATH = "/modeling/workbench?module=models&workspaceView=dimensions";
 
 const SEMANTIC_PAGE_BY_SUFFIX: Record<string, string> = {
-	semantic: "/modeling/models",
-	"semantic/objects": "/modeling/dimensions",
+	semantic: MODEL_WORKBENCH_PATH,
+	"semantic/objects": DIMENSION_WORKBENCH_PATH,
 	"semantic/metrics": METRIC_WORKBENCH_PATH,
-	"semantic/models": "/modeling/models",
-	"semantic/publish": "/modeling/models?view=release",
+	"semantic/models": MODEL_WORKBENCH_PATH,
+	"semantic/publish": `${MODEL_WORKBENCH_PATH}&view=release`,
 	"semantic/runs": "/ops/instances",
 };
 
@@ -30,11 +32,16 @@ const platformPathFromMetricsSuffix = (suffix: string) => {
 	if (normalized === "subjects" || normalized === "semantic/subjects") {
 		return "/governance/subjects";
 	}
-	if (normalized === "operations" || normalized === "f5-security-it" || normalized === "runs" || normalized === "semantic/runs") {
+	if (
+		normalized === "operations" ||
+		normalized === "f5-security-it" ||
+		normalized === "runs" ||
+		normalized === "semantic/runs"
+	) {
 		return "/ops/instances";
 	}
 	if (normalized === "publish") {
-		return "/modeling/models?view=release";
+		return `${MODEL_WORKBENCH_PATH}&view=release`;
 	}
 
 	const semanticPage = SEMANTIC_PAGE_BY_SUFFIX[normalized];
@@ -63,24 +70,20 @@ export const metricsServicePathFromPlatformPath = (pathname: string) => {
 		return platformPathFromMetricsSuffix(suffix);
 	}
 	if (normalized === LEGACY_SEMANTIC_CENTER_PREFIX) {
-		return "/modeling/models";
+		return MODEL_WORKBENCH_PATH;
 	}
 	if (normalized.startsWith(`${LEGACY_SEMANTIC_CENTER_PREFIX}/`)) {
 		const suffix = normalized.slice(LEGACY_SEMANTIC_CENTER_PREFIX.length + 1);
 		return platformPathFromMetricsSuffix(`semantic/${suffix}`);
 	}
 	if (normalized === "/bi/semantic-modeling") {
-		return "/modeling/models";
+		return MODEL_WORKBENCH_PATH;
 	}
 
 	return normalized;
 };
 
-export const metricsServiceHrefFromPlatformLocation = (
-	pathname: string,
-	search = "",
-	hash = "",
-) => {
+export const metricsServiceHrefFromPlatformLocation = (pathname: string, search = "", hash = "") => {
 	const [targetPath, targetSearch = ""] = metricsServicePathFromPlatformPath(pathname).split("?");
 	const params = new URLSearchParams(targetSearch);
 	new URLSearchParams(search).forEach((value, key) => {

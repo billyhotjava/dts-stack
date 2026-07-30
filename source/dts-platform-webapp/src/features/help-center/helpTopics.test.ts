@@ -1,10 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-	HELP_TOPICS,
-	buildHelpTopicHref,
-	resolveHelpTopic,
-} from "./helpTopics.ts";
+import { buildHelpTopicHref, HELP_TOPICS, resolveHelpTopic } from "./helpTopics.ts";
 
 test("covers the DTS product areas from onboarding through administration", () => {
 	assert.deepEqual(
@@ -31,6 +27,9 @@ test("covers the DTS product areas from onboarding through administration", () =
 
 test("resolves the most specific route topic and falls back to overview", () => {
 	assert.equal(resolveHelpTopic("/modeling/workbench").id, "construction-planning");
+	assert.equal(resolveHelpTopic("/modeling/workbench", null, "?module=models").id, "model-center");
+	assert.equal(resolveHelpTopic("/modeling/workbench", null, "?module=metrics").id, "metric-workbench");
+	assert.equal(resolveHelpTopic("/modeling/workbench", null, "?module=standards").id, "governance");
 	assert.equal(resolveHelpTopic("/modeling/models").id, "model-center");
 	assert.equal(resolveHelpTopic("/studio/sql-modeling").id, "sql-modeling");
 	assert.equal(resolveHelpTopic("/modeling/metric-workbench").id, "metric-workbench");

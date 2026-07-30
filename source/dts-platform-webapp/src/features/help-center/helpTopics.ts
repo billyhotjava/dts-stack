@@ -83,11 +83,7 @@ export const HELP_TOPICS: HelpTopic[] = [
 		section: "数据建设",
 		summary: "围绕建设计划完成来源盘点、数仓规划、模型设计、构建和发布。",
 		keywords: ["建模", "建设计划", "数仓", "维度", "模型", "SQL", "dbt", "发布"],
-		routePrefixes: [
-			"/modeling",
-			"/studio/low-code-development",
-			"/studio/projects",
-		],
+		routePrefixes: ["/modeling", "/studio/low-code-development", "/studio/projects"],
 		prerequisites: ["至少有一个可用数据源", "已明确业务目标或现有数据范围"],
 		steps: [
 			"新建建设计划并选择业务分类。",
@@ -162,7 +158,10 @@ export const HELP_TOPICS: HelpTopic[] = [
 			"需要重建表时使用“数据输出 → 重建”；系统执行受控 full-refresh，失败时保留原有数据。",
 		],
 		blockers: [
-			{ problem: "DAG 未就绪", action: "等待 Airflow 完成注册并刷新状态；不要手工填写 DAG、selector、target 或运行凭据。" },
+			{
+				problem: "DAG 未就绪",
+				action: "等待 Airflow 完成注册并刷新状态；不要手工填写 DAG、selector、target 或运行凭据。",
+			},
 			{ problem: "质量或发布门禁阻断", action: "先修复编译、测试、依赖或版本问题，再重新提交。" },
 			{ problem: "执行超时或预览为空", action: "在操作记录中核对 Airflow 日志和最终运行状态，成功后再加载预览。" },
 		],
@@ -239,13 +238,7 @@ export const HELP_TOPICS: HelpTopic[] = [
 		section: "治理控制",
 		summary: "执行质量规则、分级分类、权限控制和血缘影响分析，形成发布门禁。",
 		keywords: ["质量", "安全", "血缘", "分级分类", "权限", "脱敏", "门禁"],
-		routePrefixes: [
-			"/governance/quality",
-			"/governance/rules",
-			"/security",
-			"/catalog/lineage",
-			"/catalog/quality",
-		],
+		routePrefixes: ["/governance/quality", "/governance/rules", "/security", "/catalog/lineage", "/catalog/quality"],
 		prerequisites: ["资产或模型已经存在", "已明确质量阈值和数据安全要求"],
 		steps: [
 			"为资产或模型字段配置质量规则。",
@@ -349,13 +342,28 @@ export function getHelpTopicById(topicId?: string | null): HelpTopic | undefined
 	return HELP_TOPIC_MAP.get(topicId);
 }
 
-export function resolveHelpTopic(pathname: string, requestedTopicId?: string | null): HelpTopic {
+export function resolveHelpTopic(pathname: string, requestedTopicId?: string | null, search = ""): HelpTopic {
 	const requestedTopic = getHelpTopicById(requestedTopicId);
 	if (requestedTopic) return requestedTopic;
 
-	const normalizedPath =
-		pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+	const normalizedPath = pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
 	if (normalizedPath === "/settings/help") return FALLBACK_TOPIC;
+	if (normalizedPath === "/modeling/workbench") {
+		const module = new URLSearchParams(search).get("module");
+		const topicId =
+			module === "models"
+				? "model-center"
+				: module === "metrics"
+					? "metric-workbench"
+					: module === "standards"
+						? "governance"
+						: module === "graph"
+							? "quality-security-lineage"
+							: module === "tools"
+								? "data-modeling"
+								: "construction-planning";
+		return HELP_TOPIC_MAP.get(topicId) || FALLBACK_TOPIC;
+	}
 
 	let bestMatch: HelpTopic | undefined;
 	let bestPrefixLength = -1;

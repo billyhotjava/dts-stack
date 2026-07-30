@@ -31,13 +31,7 @@ const WorkflowCenterPage = lazy(() => import("@/pages/workbench/WorkflowCenterPa
 const StudioProjectsPage = lazy(() => import("@/pages/modeling/ModelTemplatesPage"));
 const SqlModelingPage = lazy(() => import("@/pages/modeling/SqlModelingPage"));
 const ModelingCompatibilityPage = lazy(() => import("@/pages/modeling/ModelingCompatibilityPage"));
-const MetricWorkbenchPage = lazy(() => import("@/pages/modeling/MetricWorkbenchPage"));
 const ModelingWorkbenchPage = lazy(() => import("@/pages/modeling/ModelingWorkbenchPage"));
-const WarehousePlanLedgerPage = lazy(() => import("@/pages/modeling/WarehousePlanLedgerPage"));
-const WarehousePlanDetailPage = lazy(() => import("@/pages/modeling/WarehousePlanDetailPage"));
-const DimensionCatalogPage = lazy(() => import("@/pages/modeling/DimensionCatalogPage"));
-const ModelCenterPage = lazy(() => import("@/pages/modeling/ModelCenterPage"));
-const ModelSpecDetailPage = lazy(() => import("@/pages/modeling/ModelSpecDetailPage"));
 const MeasurementUnitsPage = lazy(() => import("@/pages/governance/MeasurementUnitsPage"));
 
 // ── Analytics pages (static routes — registered statically for reliability; menu controls visibility) ──
@@ -419,7 +413,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "modeling/plans",
 		element: (
 			<S>
-				<WarehousePlanLedgerPage />
+				<ModelingCompatibilityPage />
 			</S>
 		),
 	},
@@ -427,7 +421,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "modeling/plans/:planId/*",
 		element: (
 			<S>
-				<WarehousePlanDetailPage />
+				<ModelingCompatibilityPage />
 			</S>
 		),
 	},
@@ -435,7 +429,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "modeling/dimensions",
 		element: (
 			<S>
-				<DimensionCatalogPage />
+				<ModelingCompatibilityPage />
 			</S>
 		),
 	},
@@ -443,7 +437,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "modeling/models",
 		element: (
 			<S>
-				<ModelCenterPage />
+				<ModelingCompatibilityPage />
 			</S>
 		),
 	},
@@ -451,7 +445,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "modeling/models/:modelSpecId",
 		element: (
 			<S>
-				<ModelSpecDetailPage />
+				<ModelingCompatibilityPage />
 			</S>
 		),
 	},
@@ -459,7 +453,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "modeling/metric-workbench",
 		element: (
 			<S>
-				<MetricWorkbenchPage />
+				<ModelingCompatibilityPage />
 			</S>
 		),
 	},

@@ -26,7 +26,10 @@ type PortalLocale = {
 };
 
 const MENU_SEED = JSON.parse(
-	readFileSync(new URL("../../../../../dts-admin/src/main/resources/config/data/portal-menu-seed.json", import.meta.url), "utf8"),
+	readFileSync(
+		new URL("../../../../../dts-admin/src/main/resources/config/data/portal-menu-seed.json", import.meta.url),
+		"utf8",
+	),
 ) as { portalNavSections: MenuNode[] };
 const ROLE_DEFAULTS = readFileSync(
 	new URL("../../../../../dts-admin/src/main/resources/config/data/role-menu-defaults.json", import.meta.url),
@@ -71,6 +74,10 @@ const SPRINT67_MODELING_MENU_URL = new URL(
 	"../../../../../dts-admin/src/main/resources/config/liquibase/changelog/20260719-01_sprint67_modeling_menu_convergence.xml",
 	import.meta.url,
 );
+const SPRINT79_MODELING_MENU_URL = new URL(
+	"../../../../../dts-admin/src/main/resources/config/liquibase/changelog/20260730-01_sprint79_modeling_workspace_menu_convergence.xml",
+	import.meta.url,
+);
 
 const section = (key: string) => {
 	const found = MENU_SEED.portalNavSections.find((item) => item.key === key);
@@ -91,123 +98,102 @@ test("portal menu starts modeling with the generic workbench", () => {
 	);
 
 	assert.equal(section("resource").title, "数据集成");
-	assert.deepEqual(section("resource").children?.map((item) => item.key), [
-		"connectors",
-		"sources",
-		"jdbcDrivers",
-		"metadata",
-		"ingestion",
-		"changes",
-	]);
+	assert.deepEqual(
+		section("resource").children?.map((item) => item.key),
+		["connectors", "sources", "jdbcDrivers", "metadata", "ingestion", "changes"],
+	);
 
 	assert.equal(section("studio").title, "数据开发与运维");
-	assert.deepEqual(section("studio").children?.map((item) => item.key), [
-		"modeling",
-		"data-studio",
-		"ops-center",
-	]);
+	assert.deepEqual(
+		section("studio").children?.map((item) => item.key),
+		["modeling", "data-studio", "ops-center"],
+	);
 
 	const modeling = child(section("studio"), "modeling");
 	assert.equal(modeling.title, "数据建模");
-	assert.deepEqual(modeling.children?.map((item) => item.key), [
-		"modeling-workbench",
-		"warehouse-planning",
-		"standards",
-		"dimensional-modeling",
-		"data-metrics",
-	]);
+	assert.deepEqual(
+		modeling.children?.map((item) => item.key),
+		["modeling-workbench", "warehouse-planning", "standards", "dimensional-modeling"],
+	);
 	assert.equal(child(modeling, "modeling-workbench").title, "建模工作台");
 	assert.equal(child(modeling, "modeling-workbench").externalLink, "/modeling/workbench");
-	assert.deepEqual(child(modeling, "warehouse-planning").children?.map((item) => item.key), ["warehouse-plans", "subjects"]);
-	assert.equal(child(child(modeling, "warehouse-planning"), "warehouse-plans").title, "建设规划");
-	assert.equal(child(child(modeling, "warehouse-planning"), "warehouse-plans").externalLink, "/modeling/plans");
+	assert.deepEqual(
+		child(modeling, "warehouse-planning").children?.map((item) => item.key),
+		["subjects"],
+	);
 	assert.equal(child(child(modeling, "warehouse-planning"), "subjects").title, "业务分类");
 	assert.equal(child(child(modeling, "warehouse-planning"), "subjects").externalLink, "/governance/subjects");
-	assert.deepEqual(child(modeling, "standards").children?.map((item) => item.key), [
-		"glossary",
-		"elements",
-		"reference",
-		"units",
-	]);
-	assert.deepEqual(child(modeling, "dimensional-modeling").children?.map((item) => item.key), [
-		"semantic-objects",
-		"semantic-models",
-		"sql",
-	]);
+	assert.deepEqual(
+		child(modeling, "standards").children?.map((item) => item.key),
+		["glossary", "elements", "reference", "units"],
+	);
+	assert.deepEqual(
+		child(modeling, "dimensional-modeling").children?.map((item) => item.key),
+		["sql"],
+	);
 	assert.equal(child(child(modeling, "dimensional-modeling"), "sql").title, "高级建模（SQL/dbt）");
 	assert.equal(child(child(modeling, "dimensional-modeling"), "sql").externalLink, "/studio/sql-modeling");
-	assert.deepEqual(child(modeling, "data-metrics").children?.map((item) => item.key), ["metric-workbench"]);
 	assert.doesNotMatch(
 		JSON.stringify(modeling),
-		/low-code-development|dbt-files|semantic-metrics|semantic-publish|standard-package|governanceTemplates/,
+		/warehouse-plans|semantic-objects|semantic-models|metric-workbench|data-metrics|low-code-development|dbt-files|semantic-metrics|semantic-publish|standard-package|governanceTemplates/,
 	);
-	assert.doesNotMatch(JSON.stringify(modeling), /semantic-subjects|semantic-runs|\/modeling\/semantic\/subjects|\/modeling\/semantic\/runs/);
+	assert.doesNotMatch(
+		JSON.stringify(modeling),
+		/semantic-subjects|semantic-runs|\/modeling\/semantic\/subjects|\/modeling\/semantic\/runs/,
+	);
 
-	assert.deepEqual(child(section("studio"), "data-studio").children?.map((item) => item.key), ["scripts", "orchestration", "adhoc"]);
-	assert.deepEqual(child(section("studio"), "ops-center").children?.map((item) => item.key), [
-		"overview",
-		"instances",
-		"alerts",
-		"backfill",
-	]);
+	assert.deepEqual(
+		child(section("studio"), "data-studio").children?.map((item) => item.key),
+		["scripts", "orchestration", "adhoc"],
+	);
+	assert.deepEqual(
+		child(section("studio"), "ops-center").children?.map((item) => item.key),
+		["overview", "instances", "alerts", "backfill"],
+	);
 
 	assert.equal(section("governance").title, "数据治理");
-	assert.deepEqual(section("governance").children?.map((item) => item.key), ["assets", "qualityRules", "qualityReport", "classification"]);
-	assert.deepEqual(child(section("governance"), "assets").children?.map((item) => item.key), [
-		"map",
-		"search",
-		"metadata-management",
-		"detail",
-		"lineage",
-		"permission",
-	]);
+	assert.deepEqual(
+		section("governance").children?.map((item) => item.key),
+		["assets", "qualityRules", "qualityReport", "classification"],
+	);
+	assert.deepEqual(
+		child(section("governance"), "assets").children?.map((item) => item.key),
+		["map", "search", "metadata-management", "detail", "lineage", "permission"],
+	);
 
 	assert.equal(section("consumption").title, "数据分析与服务");
-	assert.deepEqual(section("consumption").children?.map((item) => item.key), ["bi-apps", "screens", "services"]);
+	assert.deepEqual(
+		section("consumption").children?.map((item) => item.key),
+		["bi-apps", "screens", "services"],
+	);
 	assert.equal(child(child(section("consumption"), "services"), "api").externalLink, "/services/apis");
-	assert.equal(child(child(child(section("consumption"), "bi-apps"), "bi"), "dashboards").externalLink, "/bi/dashboards");
+	assert.equal(
+		child(child(child(section("consumption"), "bi-apps"), "bi"), "dashboards").externalLink,
+		"/bi/dashboards",
+	);
 	assert.equal(child(section("consumption"), "screens").externalLink, "/bi/screens");
 	assert.equal(child(child(section("consumption"), "services"), "products").externalLink, "/catalog/data-products");
 });
 
-test("dimension modeling menu converges on the canonical dimension catalog and model center", () => {
+test("specialist modeling menu keeps only SQL/dbt after workbench convergence", () => {
 	const dimensionalModeling = child(child(section("studio"), "modeling"), "dimensional-modeling");
-	const dimensionCatalog = child(dimensionalModeling, "semantic-objects");
-	const modelCenter = child(dimensionalModeling, "semantic-models");
-
-	assert.equal(dimensionCatalog.title, "维度目录");
-	assert.equal(dimensionCatalog.externalLink, "/modeling/dimensions");
-	assert.equal(modelCenter.title, "模型中心");
-	assert.equal(modelCenter.externalLink, "/modeling/models");
-
 	const roleDefaultByCode = new Map(ROLE_DEFAULT_ENTRIES.map((entry) => [entry.code, entry]));
-	assert.deepEqual(roleDefaultByCode.get("sys.nav.portal.studioSemanticObjects"), {
-		code: "sys.nav.portal.studioSemanticObjects",
-		title: "维度目录",
-		route: "/modeling/dimensions",
-		requiredRoles: [],
-	});
-	assert.deepEqual(roleDefaultByCode.get("sys.nav.portal.studioSemanticModels"), {
-		code: "sys.nav.portal.studioSemanticModels",
-		title: "模型中心",
-		route: "/modeling/models",
-		requiredRoles: [],
-	});
-
-	assert.equal(ZH_PORTAL_LOCALE.studioSemanticObjects, "维度目录");
-	assert.equal(ZH_PORTAL_LOCALE.studioSemanticModels, "模型中心");
-	assert.equal(EN_PORTAL_LOCALE.studioSemanticObjects, "Dimension catalog");
-	assert.equal(EN_PORTAL_LOCALE.studioSemanticModels, "Model center");
+	assert.deepEqual(
+		dimensionalModeling.children?.map((item) => item.key),
+		["sql"],
+	);
+	for (const code of [
+		"sys.nav.portal.warehousePlans",
+		"sys.nav.portal.studioSemanticObjects",
+		"sys.nav.portal.studioSemanticModels",
+		"sys.nav.portal.studioMetricWorkbench",
+	]) {
+		assert.equal(roleDefaultByCode.has(code), false, `${code} must enter through the unified workbench`);
+	}
 });
 
 test("canonical role defaults contain only visible modeling leaves", () => {
 	const roleDefaultByCode = new Map(ROLE_DEFAULT_ENTRIES.map((entry) => [entry.code, entry]));
-	assert.deepEqual(roleDefaultByCode.get("sys.nav.portal.warehousePlans"), {
-		code: "sys.nav.portal.warehousePlans",
-		title: "建设规划",
-		route: "/modeling/plans",
-		requiredRoles: [],
-	});
 	assert.deepEqual(roleDefaultByCode.get("sys.nav.portal.governanceSubjects"), {
 		code: "sys.nav.portal.governanceSubjects",
 		title: "业务分类",
@@ -227,6 +213,10 @@ test("canonical role defaults contain only visible modeling leaves", () => {
 		"sys.nav.portal.studioDbtFiles",
 		"sys.nav.portal.studioSemanticMetrics",
 		"sys.nav.portal.studioSemanticPublish",
+		"sys.nav.portal.warehousePlans",
+		"sys.nav.portal.studioSemanticObjects",
+		"sys.nav.portal.studioSemanticModels",
+		"sys.nav.portal.studioMetricWorkbench",
 	]) {
 		assert.equal(roleDefaultByCode.has(retired), false, `${retired} must not be rebound for a new installation`);
 	}
@@ -256,11 +246,9 @@ test("golden line section titles have locale coverage and role routes stay canon
 
 	for (const route of [
 		"/modeling/workbench",
-		"/modeling/plans",
 		"/governance/subjects",
 		"/governance/standards/elements",
 		"/foundation/data-sources",
-		"/modeling/metric-workbench",
 		"/services/apis",
 		"/catalog/data-products",
 		"/bi/dashboards",
@@ -275,9 +263,32 @@ test("golden line section titles have locale coverage and role routes stay canon
 	assert.equal(EN_PORTAL_LOCALE.warehousePlans, "Warehouse plans");
 });
 
-test("canonical warehouse plan ledger route is exact and precedes the planId wildcard", () => {
-	assert.match(STATIC_ROUTES, /const WarehousePlanLedgerPage = lazy/);
-	assert.match(STATIC_ROUTES, /path: "modeling\/plans"[\s\S]*<WarehousePlanLedgerPage/);
+test("Sprint-79 menu migration soft-deletes old workbench leaves without deleting bindings", () => {
+	assert.match(LIQUIBASE_MASTER, /20260730-01_sprint79_modeling_workspace_menu_convergence\.xml/);
+	assert.equal(existsSync(SPRINT79_MODELING_MENU_URL), true);
+	const migration = readFileSync(SPRINT79_MODELING_MENU_URL, "utf8");
+	for (const code of [
+		"sys.nav.portal.warehousePlans",
+		"sys.nav.portal.studioSemanticObjects",
+		"sys.nav.portal.studioSemanticModels",
+		"sys.nav.portal.studioMetricWorkbench",
+		"sys.nav.portal.dataMetrics",
+	]) {
+		assert.match(migration, new RegExp(code.replaceAll(".", "\\.")));
+	}
+	assert.match(migration, /deleted = TRUE/);
+	assert.match(migration, /last_modified_by = 'sprint79-menu-convergence'/);
+	assert.match(
+		migration,
+		/<rollback>[\s\S]*deleted = TRUE[\s\S]*last_modified_by = 'sprint79-menu-convergence'/,
+	);
+	assert.doesNotMatch(migration, /DELETE FROM portal_menu_visibility|DELETE FROM portal_menu/);
+});
+
+test("warehouse plan deep links converge through the compatibility redirect in stable route order", () => {
+	assert.doesNotMatch(STATIC_ROUTES, /const WarehousePlanLedgerPage = lazy/);
+	assert.match(STATIC_ROUTES, /path: "modeling\/plans"[\s\S]*<ModelingCompatibilityPage/);
+	assert.match(STATIC_ROUTES, /path: "modeling\/plans\/:planId\/\*"[\s\S]*<ModelingCompatibilityPage/);
 	assert.ok(
 		STATIC_ROUTES.indexOf('path: "modeling/plans"') < STATIC_ROUTES.indexOf('path: "modeling/plans/:planId/*"'),
 		"exact ledger route must precede the plan detail wildcard",
@@ -297,12 +308,7 @@ test("Sprint-67 menu migration soft-deletes duplicates and preserves role visibi
 	assert.match(LIQUIBASE_MASTER, /20260719-01_sprint67_modeling_menu_convergence\.xml/);
 	assert.equal(existsSync(SPRINT67_MODELING_MENU_URL), true);
 	const migration = readFileSync(SPRINT67_MODELING_MENU_URL, "utf8");
-	for (const code of [
-		"studioDbtFiles",
-		"studioLowCodeDevelopment",
-		"studioSemanticMetrics",
-		"studioSemanticPublish",
-	]) {
+	for (const code of ["studioDbtFiles", "studioLowCodeDevelopment", "studioSemanticMetrics", "studioSemanticPublish"]) {
 		assert.match(migration, new RegExp(code));
 	}
 	assert.match(migration, /deleted = TRUE/);

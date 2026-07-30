@@ -7,9 +7,9 @@ const routes = readFileSync(new URL("../../routes/sections/dashboard/static-rout
 const api = readFileSync(new URL("../../api/warehousePlanApi.ts", import.meta.url), "utf8");
 const viewModel = readFileSync(new URL("./warehousePlanViewModel.ts", import.meta.url), "utf8");
 
-test("warehouse plan detail is registered as a stable planId wildcard route", () => {
-	assert.match(routes, /const WarehousePlanDetailPage = lazy/);
-	assert.match(routes, /path: "modeling\/plans\/:planId\/\*"[\s\S]*<WarehousePlanDetailPage/);
+test("warehouse plan detail is embedded by the workbench and its legacy deep link redirects", () => {
+	assert.doesNotMatch(routes, /const WarehousePlanDetailPage = lazy/);
+	assert.match(routes, /path: "modeling\/plans\/:planId\/\*"[\s\S]*<ModelingCompatibilityPage/);
 	assert.match(page, /useParams/);
 	assert.match(page, /planId/);
 });

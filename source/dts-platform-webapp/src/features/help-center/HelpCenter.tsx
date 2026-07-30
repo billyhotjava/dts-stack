@@ -4,21 +4,8 @@ import { Link, useLocation } from "react-router";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { ScrollArea } from "@/ui/scroll-area";
-import {
-	Sheet,
-	SheetContent,
-	SheetDescription,
-	SheetFooter,
-	SheetHeader,
-	SheetTitle,
-	SheetTrigger,
-} from "@/ui/sheet";
-import {
-	buildHelpTopicHref,
-	getRelatedHelpTopics,
-	resolveHelpTopic,
-	type HelpTopic,
-} from "./helpTopics";
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from "@/ui/sheet";
+import { buildHelpTopicHref, getRelatedHelpTopics, type HelpTopic, resolveHelpTopic } from "./helpTopics";
 
 type HelpTopicContentProps = {
 	topic: HelpTopic;
@@ -110,10 +97,8 @@ export default function HelpCenter() {
 	const location = useLocation();
 	const [open, setOpen] = useState(false);
 	const requestedTopicId =
-		location.pathname === "/settings/help"
-			? new URLSearchParams(location.search).get("topic")
-			: undefined;
-	const topic = resolveHelpTopic(location.pathname, requestedTopicId);
+		location.pathname === "/settings/help" ? new URLSearchParams(location.search).get("topic") : undefined;
+	const topic = resolveHelpTopic(location.pathname, requestedTopicId, location.search);
 
 	return (
 		<Sheet open={open} onOpenChange={setOpen}>
@@ -128,10 +113,7 @@ export default function HelpCenter() {
 					<CircleHelp aria-hidden="true" className="h-5 w-5" />
 				</Button>
 			</SheetTrigger>
-			<SheetContent
-				side="right"
-				className="w-full gap-0 p-0 sm:max-w-[480px]"
-			>
+			<SheetContent side="right" className="w-full gap-0 p-0 sm:max-w-[480px]">
 				<SheetHeader className="border-b border-border/70 px-5 py-5 pr-12">
 					<div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">
 						<BookOpen aria-hidden="true" className="h-4 w-4" />

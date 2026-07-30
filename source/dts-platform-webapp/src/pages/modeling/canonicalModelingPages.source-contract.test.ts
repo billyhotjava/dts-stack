@@ -52,16 +52,19 @@ test("model center handles compatibility views without restoring retired pages",
 	assert.doesNotMatch(models, /LowCodeDevelopmentPage|SemanticPublishPage/);
 });
 
-test("static and dynamic routing resolve canonical list and detail pages to the same targets", () => {
+test("legacy list and detail deep links converge through the unified-workbench redirect", () => {
 	const staticRoutes = read("../../routes/sections/dashboard/static-routes.tsx");
 	const dynamicRoutes = read("../../routes/sections/dashboard/dynamic-resolver.tsx");
 
 	for (const path of ["modeling/dimensions", "modeling/models", "modeling/models/:modelSpecId"]) {
 		assert.match(staticRoutes, new RegExp(`path: "${path.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}"`));
 	}
-	assert.match(dynamicRoutes, /"\/modeling\/dimensions": "\/pages\/modeling\/DimensionCatalogPage"/);
-	assert.match(dynamicRoutes, /"\/modeling\/models": "\/pages\/modeling\/ModelCenterPage"/);
-	assert.match(dynamicRoutes, /"\/modeling\/models\/:modelSpecId": "\/pages\/modeling\/ModelSpecDetailPage"/);
+	assert.match(staticRoutes, /path: "modeling\/dimensions"[\s\S]*<ModelingCompatibilityPage/);
+	assert.match(staticRoutes, /path: "modeling\/models"[\s\S]*<ModelingCompatibilityPage/);
+	assert.match(staticRoutes, /path: "modeling\/models\/:modelSpecId"[\s\S]*<ModelingCompatibilityPage/);
+	assert.match(dynamicRoutes, /"\/modeling\/dimensions": "\/pages\/modeling\/ModelingCompatibilityPage"/);
+	assert.match(dynamicRoutes, /"\/modeling\/models": "\/pages\/modeling\/ModelingCompatibilityPage"/);
+	assert.match(dynamicRoutes, /"\/modeling\/models\/:modelSpecId": "\/pages\/modeling\/ModelingCompatibilityPage"/);
 	assert.match(
 		dynamicRoutes,
 		/directOverridePath &&[\s\S]*pathname !== resolvedPath[\s\S]*renderDashboardComponent\(directOverridePath,\s*pathname\)/,

@@ -113,10 +113,11 @@ const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 	"/services/products": "/pages/services/DataProductsPage",
 	"/services/tokens": "/pages/services/TokensPage",
 	"/modeling/dbt-files": "/pages/modeling/ModelingCompatibilityPage",
-	"/modeling/dimensions": "/pages/modeling/DimensionCatalogPage",
-	"/modeling/models": "/pages/modeling/ModelCenterPage",
-	"/modeling/models/:modelSpecId": "/pages/modeling/ModelSpecDetailPage",
-	"/modeling/metric-workbench": "/pages/modeling/MetricWorkbenchPage",
+	"/modeling/plans": "/pages/modeling/ModelingCompatibilityPage",
+	"/modeling/dimensions": "/pages/modeling/ModelingCompatibilityPage",
+	"/modeling/models": "/pages/modeling/ModelingCompatibilityPage",
+	"/modeling/models/:modelSpecId": "/pages/modeling/ModelingCompatibilityPage",
+	"/modeling/metric-workbench": "/pages/modeling/ModelingCompatibilityPage",
 	"/modeling/semantic/subjects": "/pages/modeling/ModelingCompatibilityPage",
 	"/modeling/semantic/objects": "/pages/modeling/ModelingCompatibilityPage",
 	"/modeling/semantic/metrics": "/pages/modeling/ModelingCompatibilityPage",
@@ -162,6 +163,7 @@ const isWithinBase = (pathname: string, normalizedBase?: string) => {
 
 const directOverrideParentPath = (pathname: string) => {
 	if (pathname.startsWith("/catalog/datasets/")) return "/catalog/assets";
+	if (pathname.startsWith("/modeling/plans/")) return "/modeling/plans";
 	if (pathname.startsWith("/modeling/models/")) return "/modeling/models";
 	return "";
 };
