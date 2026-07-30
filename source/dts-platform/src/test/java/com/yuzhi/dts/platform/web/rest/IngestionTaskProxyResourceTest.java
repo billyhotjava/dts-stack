@@ -129,13 +129,13 @@ class IngestionTaskProxyResourceTest {
     @Test
     @SuppressWarnings("unchecked")
     void createTaskUsesSelectedTargetDataSourceWhenProvided() throws Exception {
-        String targetDataSourceId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+        String targetDataSourceId = "a0000000-0000-0000-0000-000000000001";
         String sourceDataSourceId = "11111111-2222-3333-4444-555555555555";
         configureClassifiedSource(sourceDataSourceId);
         DefaultDestinationSnapshot snapshot = new DefaultDestinationSnapshot(
             "postgresqlwriter",
-            "经营分析湖仓",
-            Map.of("jdbcUrl", "jdbc:postgresql://analytics-pg:5432/ads", "username", "biadmin"),
+            "数仓 (biadmin)",
+            Map.of("jdbcUrl", "jdbc:postgresql://dts-pg:5432/biadmin", "username", "biadmin"),
             targetDataSourceId
         );
         when(destinationSyncService.ensureDestination(targetDataSourceId)).thenReturn(snapshot);
@@ -151,7 +151,7 @@ class IngestionTaskProxyResourceTest {
                       "destination":{
                         "usePlatformDefault":true,
                         "config":{
-                          "targetDataSourceId":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                          "targetDataSourceId":"a0000000-0000-0000-0000-000000000001",
                           "connection":[{"table":["ods_orders"]}]
                         }
                       }
@@ -166,7 +166,7 @@ class IngestionTaskProxyResourceTest {
         Map<String, Object> config = (Map<String, Object>) destination.get("config");
         assertThat(destination.get("definitionId")).isEqualTo("postgresqlwriter");
         assertThat(config.get("targetDataSourceId")).isEqualTo(targetDataSourceId);
-        assertThat(config.get("jdbcUrl")).isEqualTo("jdbc:postgresql://analytics-pg:5432/ads");
+        assertThat(config.get("jdbcUrl")).isEqualTo("jdbc:postgresql://dts-pg:5432/biadmin");
         assertThat(config.get("username")).isEqualTo("biadmin");
     }
 

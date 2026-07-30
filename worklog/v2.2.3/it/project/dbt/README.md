@@ -1,6 +1,6 @@
 # IT Demo dbt 高级实现
 
-本项目为 `worklog/v2.2.3/it` 中 6 个 ModelSpec 提供高级 SQL/dbt 实现。它不创建第二套逻辑模型台账，也不创建物理 STG 表。
+本项目为 `worklog/v2.2.3/it/project` 中 6 个 ModelSpec 提供高级 SQL/dbt 实现。它不创建第二套逻辑模型台账，也不创建物理 STG 表。
 
 ## 目标关系
 

@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.catalog;
 
 import com.yuzhi.dts.platform.domain.catalog.CatalogClassificationSnapshot;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
@@ -66,7 +67,7 @@ public class CatalogGrantClassificationProjection implements CatalogClassificati
         if (datasetId == null) {
             return;
         }
-        Instant now = Instant.now();
+        Timestamp now = Timestamp.from(Instant.now());
         int datasetGrants = jdbcTemplate.update(
             """
             update catalog_dataset_grant

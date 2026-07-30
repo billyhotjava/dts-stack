@@ -15,7 +15,7 @@
 
 ```bash
 psql "$IT_DEMO_SOURCE_DSN" -v ON_ERROR_STOP=1 \
-  -f worklog/v2.2.3/it/sql/01-source-bootstrap.sql
+  -f worklog/v2.2.3/it/project/sql/01-source-bootstrap.sql
 ```
 
 不要在 shell 历史、截图或文档中显示密码。
@@ -357,7 +357,7 @@ dbt 工程中的 CTE 是技术实现，不新增物理 STG 表。
 
 ```bash
 psql "$IT_DEMO_SOURCE_DSN" -v ON_ERROR_STOP=1 \
-  -f worklog/v2.2.3/it/sql/02-source-dirty-cases.sql
+  -f worklog/v2.2.3/it/project/sql/02-source-dirty-cases.sql
 ```
 
 重跑入湖、模型和质量，预期组织引用、项目引用、状态、风险、进度、成本和日期规则失败。不得继续发布。
@@ -366,7 +366,7 @@ psql "$IT_DEMO_SOURCE_DSN" -v ON_ERROR_STOP=1 \
 
 ```bash
 psql "$IT_DEMO_SOURCE_DSN" -v ON_ERROR_STOP=1 \
-  -f worklog/v2.2.3/it/sql/03-source-remediation-and-increment.sql
+  -f worklog/v2.2.3/it/project/sql/03-source-remediation-and-increment.sql
 ```
 
 预期质量恢复通过，组织维度当前名称更新，事实新增 4 条 2026-08-04 快照。

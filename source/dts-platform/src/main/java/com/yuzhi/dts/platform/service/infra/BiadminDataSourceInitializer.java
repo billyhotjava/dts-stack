@@ -1,16 +1,19 @@
 package com.yuzhi.dts.platform.service.infra;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import java.util.Map;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 /**
@@ -24,9 +27,16 @@ public class BiadminDataSourceInitializer {
     private static final String BIADMIN_DATASOURCE_NAME = "数仓 (biadmin)";
     private static final String BIADMIN_TYPE = "postgres";
     private static final String STATUS_ACTIVE = "ACTIVE";
+    private static final UUID LEGACY_BIADMIN_DATA_SOURCE_ID = UUID.fromString(
+        "a0000000-0000-0000-0000-000000000001"
+    );
+    private static final String SOURCE_ADMIN_DEFAULT_DATA_LAKE = "admin-default-data-lake";
+    private static final String SOURCE_ADMIN_DATA_LAKE = "admin-data-lake";
+    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
     private final InfraDataSourceRepository dataSourceRepository;
     private final InfraSecretService secretService;
+    private final ObjectMapper objectMapper;
 
     @Value("${PG_HOST:dts-pg}")
     private String pgHost;
@@ -48,14 +58,16 @@ public class BiadminDataSourceInitializer {
 
     public BiadminDataSourceInitializer(
         InfraDataSourceRepository dataSourceRepository,
-        InfraSecretService secretService
+        InfraSecretService secretService,
+        ObjectMapper objectMapper
     ) {
         this.dataSourceRepository = dataSourceRepository;
         this.secretService = secretService;
+        this.objectMapper = objectMapper;
     }
 
     @EventListener(ApplicationReadyEvent.class)
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Order(Ordered.HIGHEST_PRECEDENCE)
     public void initializeBiadminDataSource() {
         if (!autoRegister) {
             LOG.info("[biadmin-init] Auto-registration disabled, skipping biadmin datasource initialization");
@@ -73,10 +85,7 @@ public class BiadminDataSourceInitializer {
             // 检查是否已存在 biadmin 数据源
             InfraDataSource existing = dataSourceRepository.findAll()
                 .stream()
-                .filter(ds -> ds != null && (
-                    BIADMIN_DATASOURCE_NAME.equalsIgnoreCase(ds.getName()) ||
-                    (ds.getJdbcUrl() != null && ds.getJdbcUrl().contains("/" + pgDbBiadmin))
-                ))
+                .filter(this::isExistingBiadminSource)
                 .findFirst()
                 .orElse(null);
 
@@ -113,8 +122,47 @@ public class BiadminDataSourceInitializer {
             LOG.info("[biadmin-init] Successfully registered biadmin datasource: {}", jdbcUrl);
 
         } catch (Exception ex) {
-            LOG.warn("[biadmin-init] Failed to initialize biadmin datasource: {}", ex.getMessage());
+            LOG.warn("[biadmin-init] Failed to initialize biadmin datasource: {}", ex.getClass().getSimpleName());
             // 不抛出异常，避免阻止系统启动
         }
+    }
+
+    private boolean isExistingBiadminSource(InfraDataSource source) {
+        if (source == null) {
+            return false;
+        }
+        if (LEGACY_BIADMIN_DATA_SOURCE_ID.equals(source.getId())) {
+            return true;
+        }
+        Map<String, Object> props = parseProps(source.getProps());
+        String marker = text(props.get("source"));
+        if (SOURCE_ADMIN_DEFAULT_DATA_LAKE.equalsIgnoreCase(marker) && isTrue(props.get("defaultLake"))) {
+            return true;
+        }
+        return SOURCE_ADMIN_DATA_LAKE.equalsIgnoreCase(marker) && isTrue(props.get("system"));
+    }
+
+    private Map<String, Object> parseProps(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return Map.of();
+        }
+        try {
+            return objectMapper.readValue(raw, MAP_TYPE);
+        } catch (Exception ex) {
+            LOG.warn("[biadmin-init] Ignoring invalid managed data source props");
+            return Map.of();
+        }
+    }
+
+    private String text(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = value.toString().trim();
+        return text.isEmpty() ? null : text;
+    }
+
+    private boolean isTrue(Object value) {
+        return Boolean.TRUE.equals(value) || "true".equalsIgnoreCase(text(value));
     }
 }

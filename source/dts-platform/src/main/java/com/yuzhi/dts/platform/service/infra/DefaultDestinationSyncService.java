@@ -8,10 +8,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -27,6 +31,43 @@ public class DefaultDestinationSyncService {
     private static final String TYPE_INCEPTOR = "INCEPTOR";
     private static final String BIADMIN_NAME = "数仓 (biadmin)";
     private static final String SOURCE_ADMIN_DEFAULT_DATA_LAKE = "admin-default-data-lake";
+    private static final String SOURCE_ADMIN_DATA_LAKE = "admin-data-lake";
+    private static final UUID LEGACY_BIADMIN_DATA_SOURCE_ID = UUID.fromString(
+        "a0000000-0000-0000-0000-000000000001"
+    );
+    private static final List<String> SENSITIVE_CONFIG_KEY_MARKERS = List.of(
+        "password",
+        "passwd",
+        "passphrase",
+        "pwd",
+        "secret",
+        "token",
+        "credential",
+        "authorization",
+        "apikey",
+        "accesskey",
+        "privatekey",
+        "clientkey",
+        "sshkey",
+        "keytab",
+        "krb5",
+        "bearer",
+        "cookie"
+    );
+    private static final Set<String> SAFE_PERSISTED_DESTINATION_CONFIG_KEYS = Set.of(
+        "database",
+        "host",
+        "jdbc",
+        "jdbcurl",
+        "port",
+        "schema",
+        "type",
+        "url",
+        "user",
+        "username",
+        "writer",
+        "writertype"
+    );
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
     private final AdminInfraClient adminInfraClient;
@@ -46,10 +87,27 @@ public class DefaultDestinationSyncService {
         this.objectMapper = objectMapper;
     }
 
+    @EventListener(ApplicationReadyEvent.class)
+    public void synchronizeManagedDefaultLakeOnStartup() {
+        try {
+            ensureDefaultDestination();
+        } catch (RuntimeException ex) {
+            LOG.warn(
+                "Default lake startup synchronization failed; managed default lake remains unavailable: {}",
+                ex.getClass().getSimpleName()
+            );
+        }
+    }
+
     public DefaultDestinationSnapshot ensureDefaultDestination() {
         LakeSnapshot lake = resolveDefaultLake().orElse(null);
         if (lake == null) {
             return null;
+        }
+        if (lake.isFromAdmin()) {
+            requireAdminLakeReady(lake);
+        } else if (lake.isManagedDefaultMirror()) {
+            throw defaultLakeUnavailable();
         }
         return buildDestinationSnapshot(lake, false);
     }
@@ -68,6 +126,21 @@ public class DefaultDestinationSyncService {
         InfraDataSource source = dataSourceRepository
             .findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "目标数据源不存在: " + normalizedId));
+        if (isManagedDefaultMirror(source)) {
+            LakeSnapshot adminLake = adminInfraClient
+                .fetchDefaultDataLake()
+                .map(LakeSnapshot::fromAdmin)
+                .orElseThrow(this::defaultLakeUnavailable);
+            requireAdminLakeReady(adminLake);
+            Map<String, Object> destinationConfig = resolveDestinationConfig(adminLake);
+            String writerType = resolveWriterType(adminLake, destinationConfig);
+            try {
+                synchronizeManagedDefaultMirror(source, adminLake, destinationConfig, writerType);
+            } catch (RuntimeException ex) {
+                throw defaultLakeSyncFailed(ex);
+            }
+            return buildDestinationSnapshot(adminLake.withDataSourceId(normalizedId), true);
+        }
         return buildDestinationSnapshot(toLocalLakeSnapshot(source), true);
     }
 
@@ -83,6 +156,7 @@ public class DefaultDestinationSyncService {
         }
         String destinationName = firstNonEmpty(lake.getDestinationName(), lake.getName(), "dts-addax-destination");
         String dataSourceId = selectedById ? lake.getDataSourceId() : resolveLocalDataSourceId(lake, destinationConfig, writerType);
+        applyCachedManagedPassword(lake, dataSourceId, destinationConfig);
         return new DefaultDestinationSnapshot(writerType, destinationName, destinationConfig, dataSourceId);
     }
 
@@ -91,6 +165,13 @@ public class DefaultDestinationSyncService {
         LakeSnapshot lake = resolveDefaultLake().orElse(null);
         if (lake == null) {
             return DefaultDestinationStatus.missing("未配置默认数据湖");
+        }
+        String adminReadinessError = adminLakeReadinessError(lake);
+        if (StringUtils.hasText(adminReadinessError)) {
+            return DefaultDestinationStatus.missing(adminReadinessError);
+        }
+        if (!lake.isFromAdmin() && lake.isManagedDefaultMirror()) {
+            return DefaultDestinationStatus.missing("dts-admin 默认数据湖配置暂不可用");
         }
         Map<String, Object> destinationConfig = resolveDestinationConfig(lake);
         String writerType = resolveWriterType(lake, destinationConfig);
@@ -107,7 +188,11 @@ public class DefaultDestinationSyncService {
         return new DefaultDestinationStatus(true, hasWriterType, hasConfig, destinationName, writerType, message, dataSourceId);
     }
 
-    private String resolveLocalDataSourceId(LakeSnapshot lake, Map<String, Object> destinationConfig, String writerType) {
+    private synchronized String resolveLocalDataSourceId(
+        LakeSnapshot lake,
+        Map<String, Object> destinationConfig,
+        String writerType
+    ) {
         if (lake == null) {
             return null;
         }
@@ -125,34 +210,18 @@ public class DefaultDestinationSyncService {
             if (candidates.isEmpty()) {
                 candidates = dataSourceRepository.findAll();
             }
-            InfraDataSource matched = null;
-            for (InfraDataSource source : candidates) {
-                String name = normalize(source.getName());
-                if (StringUtils.hasText(lakeName) && lakeName.equalsIgnoreCase(name)) {
-                    matched = source;
-                    break;
-                }
-                if (StringUtils.hasText(lakeDestName) && lakeDestName.equalsIgnoreCase(name)) {
-                    matched = source;
-                    break;
-                }
-            }
-            if (matched == null && StringUtils.hasText(lakeJdbc)) {
-                for (InfraDataSource source : candidates) {
-                    String jdbc = normalize(source.getJdbcUrl());
-                    if (StringUtils.hasText(jdbc) && lakeJdbc.equalsIgnoreCase(jdbc)) {
-                        matched = source;
-                        break;
-                    }
-                }
-            }
+            InfraDataSource matched = dataSourceRepository
+                .findById(LEGACY_BIADMIN_DATA_SOURCE_ID)
+                .filter(this::isManagedDefaultMirror)
+                .orElse(null);
             if (matched == null) {
-                matched = matchByJdbcDatabase(candidates, lakeJdbc);
+                matched = findManagedDefaultMirror(candidates, lake.getAdminDataLakeId());
             }
-            if (matched == null && looksLikeBiadmin(lakeName, lakeDestName, lakeJdbc)) {
-                matched = matchBestBiadminCandidate(candidates);
+            if (matched == null && !candidates.isEmpty()) {
+                matched = findManagedDefaultMirror(dataSourceRepository.findAll(), lake.getAdminDataLakeId());
             }
             if (matched != null && matched.getId() != null) {
+                synchronizeManagedDefaultMirror(matched, lake, destinationConfig, writerType);
                 return matched.getId().toString();
             }
             InfraDataSource created = createPlatformDataSource(lake, destinationConfig, writerType, lakeJdbc);
@@ -160,9 +229,159 @@ public class DefaultDestinationSyncService {
                 return created.getId().toString();
             }
         } catch (RuntimeException ex) {
-            LOG.debug("Failed to resolve local data source id for default lake: {}", ex.getMessage());
+            LOG.warn("Failed to synchronize managed default lake mirror: {}", ex.getClass().getSimpleName());
+            throw defaultLakeSyncFailed(ex);
         }
-        return null;
+        throw defaultLakeSyncFailed(null);
+    }
+
+    private InfraDataSource findManagedDefaultMirror(List<InfraDataSource> candidates, String adminDataLakeId) {
+        if (candidates == null || candidates.isEmpty()) {
+            return null;
+        }
+        InfraDataSource best = null;
+        int bestPriority = Integer.MIN_VALUE;
+        int managedCount = 0;
+        for (InfraDataSource candidate : candidates) {
+            int priority = managedDefaultMirrorPriority(candidate);
+            if (priority < 0) {
+                continue;
+            }
+            managedCount++;
+            Map<String, Object> props = parseMap(candidate.getProps());
+            if (
+                StringUtils.hasText(adminDataLakeId)
+                    && adminDataLakeId.equalsIgnoreCase(normalize(props.get("adminDataLakeId")))
+            ) {
+                priority += 50;
+            }
+            if (
+                priority > bestPriority
+                    || (
+                        priority == bestPriority
+                            && best != null
+                            && candidate.getId().toString().compareTo(best.getId().toString()) < 0
+                    )
+            ) {
+                best = candidate;
+                bestPriority = priority;
+            }
+        }
+        if (managedCount > 1) {
+            LOG.warn(
+                "Found {} managed default lake mirrors; retaining all references and selecting source {}",
+                managedCount,
+                best == null ? null : best.getId()
+            );
+        }
+        return best;
+    }
+
+    private int managedDefaultMirrorPriority(InfraDataSource source) {
+        if (source == null || source.getId() == null) {
+            return -1;
+        }
+        if (LEGACY_BIADMIN_DATA_SOURCE_ID.equals(source.getId())) {
+            return 300;
+        }
+        Map<String, Object> props = parseMap(source.getProps());
+        String marker = normalize(props.get("source"));
+        if (SOURCE_ADMIN_DEFAULT_DATA_LAKE.equalsIgnoreCase(marker) && isTrue(props.get("defaultLake"))) {
+            return 200;
+        }
+        if (SOURCE_ADMIN_DATA_LAKE.equalsIgnoreCase(marker) && isTrue(props.get("system"))) {
+            return 100;
+        }
+        return -1;
+    }
+
+    private boolean isManagedDefaultMirror(InfraDataSource source) {
+        return managedDefaultMirrorPriority(source) >= 0;
+    }
+
+    private boolean isTrue(Object value) {
+        return Boolean.TRUE.equals(value) || "true".equalsIgnoreCase(normalize(value));
+    }
+
+    private void synchronizeManagedDefaultMirror(
+        InfraDataSource source,
+        LakeSnapshot lake,
+        Map<String, Object> destinationConfig,
+        String writerType
+    ) {
+        if (source == null || lake == null) {
+            return;
+        }
+
+        String expectedName = firstNonEmpty(lake.getName(), lake.getDestinationName(), BIADMIN_NAME);
+        String expectedJdbcUrl = firstNonEmpty(
+            normalize(lake.getJdbcUrl()),
+            normalize(destinationConfig == null ? null : destinationConfig.get("jdbcUrl"))
+        );
+        String expectedType = inferSourceType(lake, writerType, expectedJdbcUrl);
+        String expectedConnectorKey = inferConnectorKey(expectedType);
+        String expectedUsername = firstNonEmpty(
+            lake.getUsername(),
+            normalize(destinationConfig == null ? null : destinationConfig.get("username"))
+        );
+        Map<String, Object> mergedProps = parseMap(source.getProps());
+        mergedProps.putAll(buildDefaultLakeProps(lake, destinationConfig, writerType));
+        String serializedProps = writeProps(mergedProps);
+        Map<String, Object> desiredSecrets = buildDefaultLakeSecrets(lake, destinationConfig);
+        Map<String, Object> currentSecrets = desiredSecrets.isEmpty()
+            ? Map.of()
+            : new LinkedHashMap<>(secretService.readSecrets(source));
+        Map<String, Object> mergedSecrets = new LinkedHashMap<>(currentSecrets);
+        mergedSecrets.putAll(desiredSecrets);
+        boolean secretsChanged = !desiredSecrets.isEmpty() && !mergedSecrets.equals(currentSecrets);
+
+        boolean connectionChanged = !Objects.equals(normalize(source.getJdbcUrl()), normalize(expectedJdbcUrl))
+            || !Objects.equals(normalize(source.getUsername()), normalize(expectedUsername))
+            || !Objects.equals(normalize(source.getType()), normalize(expectedType));
+        boolean changed = false;
+        if (StringUtils.hasText(expectedName) && !Objects.equals(source.getName(), expectedName)) {
+            source.setName(expectedName);
+            changed = true;
+        }
+        if (StringUtils.hasText(expectedJdbcUrl) && !Objects.equals(source.getJdbcUrl(), expectedJdbcUrl)) {
+            source.setJdbcUrl(expectedJdbcUrl);
+            changed = true;
+        }
+        if (StringUtils.hasText(expectedType) && !Objects.equals(source.getType(), expectedType)) {
+            source.setType(expectedType);
+            changed = true;
+        }
+        if (StringUtils.hasText(expectedConnectorKey) && !Objects.equals(source.getConnectorKey(), expectedConnectorKey)) {
+            source.setConnectorKey(expectedConnectorKey);
+            changed = true;
+        }
+        if (StringUtils.hasText(expectedUsername) && !Objects.equals(source.getUsername(), expectedUsername)) {
+            source.setUsername(expectedUsername);
+            changed = true;
+        }
+        if (!STATUS_ACTIVE.equalsIgnoreCase(normalize(source.getStatus()))) {
+            source.setStatus(STATUS_ACTIVE);
+            changed = true;
+        }
+
+        if (!Objects.equals(source.getProps(), serializedProps)) {
+            source.setProps(serializedProps);
+            changed = true;
+        }
+
+        if (secretsChanged) {
+            secretService.applySecrets(source, mergedSecrets);
+            changed = true;
+        }
+
+        if (connectionChanged && source.getLastVerifiedAt() != null) {
+            source.setLastVerifiedAt(null);
+            changed = true;
+        }
+        if (changed) {
+            source.setLastModifiedBy("system");
+            dataSourceRepository.save(source);
+        }
     }
 
     private InfraDataSource createPlatformDataSource(
@@ -235,6 +454,7 @@ public class DefaultDestinationSyncService {
         Map<String, Object> props = new LinkedHashMap<>();
         props.put("source", SOURCE_ADMIN_DEFAULT_DATA_LAKE);
         props.put("defaultLake", true);
+        putIfHasText(props, "adminDataLakeId", lake == null ? null : lake.getAdminDataLakeId());
         putIfHasText(props, "destinationName", lake == null ? null : lake.getDestinationName());
         putIfHasText(props, "destinationDefinitionId", firstNonEmpty(lake == null ? null : lake.getDestinationDefinitionId(), writerType));
         putIfHasText(props, "writerType", writerType);
@@ -261,16 +481,24 @@ public class DefaultDestinationSyncService {
         }
         Map<String, Object> safe = new LinkedHashMap<>();
         raw.forEach((key, value) -> {
-            if (key == null) {
+            if (key == null || isSecretKey(key) || !isSafePersistedDestinationConfigKey(key)) {
                 return;
             }
-            String normalized = key.toLowerCase(Locale.ROOT).replace("_", "").replace("-", "");
-            if (normalized.contains("password") || normalized.contains("secret") || normalized.contains("token")) {
-                return;
+            if (value instanceof String || value instanceof Number || value instanceof Boolean) {
+                safe.put(key, value);
             }
-            safe.put(key, value);
         });
         return safe;
+    }
+
+    private boolean isSafePersistedDestinationConfigKey(String key) {
+        String normalized = key.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
+        return SAFE_PERSISTED_DESTINATION_CONFIG_KEYS.contains(normalized);
+    }
+
+    private boolean isSecretKey(String key) {
+        String normalized = key.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
+        return SENSITIVE_CONFIG_KEY_MARKERS.stream().anyMatch(normalized::contains);
     }
 
     private void putIfHasText(Map<String, Object> target, String key, String value) {
@@ -286,68 +514,8 @@ public class DefaultDestinationSyncService {
         try {
             return objectMapper.writeValueAsString(props);
         } catch (Exception ex) {
-            LOG.debug("Failed to serialize default lake props: {}", ex.getMessage());
-            return "{}";
+            throw new IllegalStateException("Failed to serialize managed default lake props", ex);
         }
-    }
-
-    private InfraDataSource matchByJdbcDatabase(List<InfraDataSource> candidates, String lakeJdbc) {
-        String lakeDatabase = extractJdbcDatabaseName(lakeJdbc);
-        if (!StringUtils.hasText(lakeDatabase) || candidates == null || candidates.isEmpty()) {
-            return null;
-        }
-        InfraDataSource best = null;
-        int bestScore = Integer.MIN_VALUE;
-        for (InfraDataSource source : candidates) {
-            if (source == null || source.getId() == null) {
-                continue;
-            }
-            String sourceDatabase = extractJdbcDatabaseName(source.getJdbcUrl());
-            if (!lakeDatabase.equalsIgnoreCase(sourceDatabase)) {
-                continue;
-            }
-            int score = scoreLocalLake(source);
-            if (score > bestScore) {
-                best = source;
-                bestScore = score;
-            }
-        }
-        return best;
-    }
-
-    private InfraDataSource matchBestBiadminCandidate(List<InfraDataSource> candidates) {
-        if (candidates == null || candidates.isEmpty()) {
-            return null;
-        }
-        InfraDataSource best = null;
-        int bestScore = Integer.MIN_VALUE;
-        for (InfraDataSource source : candidates) {
-            if (source == null || source.getId() == null) {
-                continue;
-            }
-            if (!looksLikeBiadmin(source.getName(), source.getJdbcUrl())) {
-                continue;
-            }
-            int score = scoreLocalLake(source);
-            if (score > bestScore) {
-                best = source;
-                bestScore = score;
-            }
-        }
-        return best;
-    }
-
-    private boolean looksLikeBiadmin(String... values) {
-        if (values == null) {
-            return false;
-        }
-        for (String value : values) {
-            String text = normalize(value);
-            if (StringUtils.hasText(text) && text.toLowerCase(Locale.ROOT).contains("biadmin")) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private String extractJdbcDatabaseName(String jdbcUrl) {
@@ -370,6 +538,76 @@ public class DefaultDestinationSyncService {
             return null;
         }
         return normalize(withoutQuery.substring(slashIndex + 1));
+    }
+
+    private void applyCachedManagedPassword(
+        LakeSnapshot lake,
+        String dataSourceId,
+        Map<String, Object> destinationConfig
+    ) {
+        if (
+            lake == null
+                || !lake.isFromAdmin()
+                || !StringUtils.hasText(dataSourceId)
+                || destinationConfig == null
+                || StringUtils.hasText(normalize(destinationConfig.get("password")))
+        ) {
+            return;
+        }
+        try {
+            UUID sourceId = UUID.fromString(dataSourceId);
+            dataSourceRepository
+                .findById(sourceId)
+                .filter(this::isManagedDefaultMirror)
+                .map(secretService::readSecrets)
+                .map(secrets -> normalize(secrets.get("password")))
+                .filter(StringUtils::hasText)
+                .ifPresent(password -> destinationConfig.put("password", password));
+        } catch (IllegalArgumentException ex) {
+            LOG.debug("Managed default lake mirror id is invalid: {}", dataSourceId);
+        }
+    }
+
+    private ResponseStatusException defaultLakeUnavailable() {
+        return new ResponseStatusException(
+            HttpStatus.SERVICE_UNAVAILABLE,
+            "dts-admin 默认数据湖配置暂不可用，已拒绝使用未确认的本地镜像"
+        );
+    }
+
+    private ResponseStatusException defaultLakeSyncFailed(Throwable cause) {
+        return new ResponseStatusException(
+            HttpStatus.SERVICE_UNAVAILABLE,
+            "默认数据湖镜像同步失败，已拒绝生成不完整的入湖目标",
+            cause
+        );
+    }
+
+    private void requireAdminLakeReady(LakeSnapshot lake) {
+        String error = adminLakeReadinessError(lake);
+        if (StringUtils.hasText(error)) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, error);
+        }
+    }
+
+    private String adminLakeReadinessError(LakeSnapshot lake) {
+        if (lake == null || !lake.isFromAdmin()) {
+            return null;
+        }
+        String status = normalize(lake.getStatus());
+        if (!STATUS_ACTIVE.equalsIgnoreCase(status)) {
+            return StringUtils.hasText(status)
+                ? "dts-admin 默认数据湖状态为 " + status + "，当前不可用于入湖"
+                : "dts-admin 默认数据湖状态未知，当前不可用于入湖";
+        }
+        String heartbeatStatus = normalize(lake.getHeartbeatStatus());
+        if (
+            StringUtils.hasText(heartbeatStatus)
+                && !List.of("UP", "HEALTHY", "OK", "ACTIVE").contains(heartbeatStatus.toUpperCase(Locale.ROOT))
+        ) {
+            return "dts-admin 默认数据湖心跳状态为 " + heartbeatStatus + "，当前不可用于入湖";
+        }
+        return null;
     }
 
     private Optional<LakeSnapshot> resolveDefaultLake() {
@@ -431,10 +669,10 @@ public class DefaultDestinationSyncService {
         if (BIADMIN_NAME.equalsIgnoreCase(name)) {
             score += 100;
         }
-        if (StringUtils.hasText(name) && name.toLowerCase().contains("biadmin")) {
+        if ("biadmin".equalsIgnoreCase(name)) {
             score += 80;
         }
-        if (StringUtils.hasText(jdbcUrl) && jdbcUrl.toLowerCase().contains("/biadmin")) {
+        if ("biadmin".equalsIgnoreCase(extractJdbcDatabaseName(jdbcUrl))) {
             score += 70;
         }
         if ("postgres".equalsIgnoreCase(type) || "postgresql".equalsIgnoreCase(type)) {
@@ -498,7 +736,12 @@ public class DefaultDestinationSyncService {
             destinationName,
             destinationDefinitionId,
             destinationConfig,
-            sourceId == null ? null : sourceId.toString()
+            sourceId == null ? null : sourceId.toString(),
+            normalize(props.get("adminDataLakeId")),
+            false,
+            isManagedDefaultMirror(source),
+            normalize(source.getStatus()),
+            null
         );
     }
 
@@ -729,6 +972,11 @@ public class DefaultDestinationSyncService {
         private final String destinationDefinitionId;
         private final Map<String, Object> destinationConfig;
         private final String dataSourceId;
+        private final String adminDataLakeId;
+        private final boolean fromAdmin;
+        private final boolean managedDefaultMirror;
+        private final String status;
+        private final String heartbeatStatus;
 
         private LakeSnapshot(
             String name,
@@ -739,7 +987,12 @@ public class DefaultDestinationSyncService {
             String destinationName,
             String destinationDefinitionId,
             Map<String, Object> destinationConfig,
-            String dataSourceId
+            String dataSourceId,
+            String adminDataLakeId,
+            boolean fromAdmin,
+            boolean managedDefaultMirror,
+            String status,
+            String heartbeatStatus
         ) {
             this.name = name;
             this.type = type;
@@ -750,6 +1003,11 @@ public class DefaultDestinationSyncService {
             this.destinationDefinitionId = destinationDefinitionId;
             this.destinationConfig = destinationConfig == null ? Map.of() : new LinkedHashMap<>(destinationConfig);
             this.dataSourceId = dataSourceId;
+            this.adminDataLakeId = adminDataLakeId;
+            this.fromAdmin = fromAdmin;
+            this.managedDefaultMirror = managedDefaultMirror;
+            this.status = status;
+            this.heartbeatStatus = heartbeatStatus;
         }
 
         private static LakeSnapshot fromAdmin(AdminInfraClient.AdminDataLakeConfig lake) {
@@ -762,12 +1020,56 @@ public class DefaultDestinationSyncService {
                 lake.getDestinationName(),
                 lake.getDestinationDefinitionId(),
                 lake.getDestinationConfig(),
-                null
+                null,
+                lake.getId() == null ? null : lake.getId().toString(),
+                true,
+                true,
+                lake.getStatus(),
+                lake.getHeartbeatStatus()
+            );
+        }
+
+        private LakeSnapshot withDataSourceId(String resolvedDataSourceId) {
+            return new LakeSnapshot(
+                name,
+                type,
+                jdbcUrl,
+                username,
+                password,
+                destinationName,
+                destinationDefinitionId,
+                destinationConfig,
+                resolvedDataSourceId,
+                adminDataLakeId,
+                fromAdmin,
+                managedDefaultMirror,
+                status,
+                heartbeatStatus
             );
         }
 
         private String getDataSourceId() {
             return dataSourceId;
+        }
+
+        private String getAdminDataLakeId() {
+            return adminDataLakeId;
+        }
+
+        private boolean isFromAdmin() {
+            return fromAdmin;
+        }
+
+        private boolean isManagedDefaultMirror() {
+            return managedDefaultMirror;
+        }
+
+        private String getStatus() {
+            return status;
+        }
+
+        private String getHeartbeatStatus() {
+            return heartbeatStatus;
         }
 
         private String getName() {

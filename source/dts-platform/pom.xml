@@ -534,6 +534,7 @@
                         <testInclude>**/config/SqlTestContainersSpringContextCustomizerFactory.java</testInclude>
                         <testInclude>**/config/TestSecurityConfiguration.java</testInclude>
                         <testInclude>**/config/CacheConfigurationIsolationTest.java</testInclude>
+                        <testInclude>**/service/catalog/CatalogGrantClassificationProjectionPostgresIT.java</testInclude>
                         <testInclude>**/repository/modeling/DataMartRepositoryTest.java</testInclude>
                         <testInclude>**/repository/modeling/ModelLifecycleRepositoryTest.java</testInclude>
                         <testInclude>**/repository/modeling/ModelMaterializationStartServiceIT.java</testInclude>
@@ -559,7 +560,11 @@
                         <testInclude>**/service/governance/MeasurementUnitApplicationServiceTest.java</testInclude>
                         <testInclude>**/service/infra/ConnectorDriverBindingServiceTest.java</testInclude>
                         <testInclude>**/service/infra/ConnectorRegistryServiceTest.java</testInclude>
+                        <testInclude>**/service/infra/BiadminDataSourceInitializerTest.java</testInclude>
+                        <testInclude>**/service/infra/DataSourceSelectionServiceTest.java</testInclude>
+                        <testInclude>**/service/infra/DefaultDestinationSyncServiceTest.java</testInclude>
                         <testInclude>**/service/infra/InfraManagementServiceTest.java</testInclude>
+                        <testInclude>**/service/governance/DefaultLakeDatasetGuardTest.java</testInclude>
                         <testInclude>**/service/sql/SqlMetadataServiceCacheTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelLifecycleContractTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelLifecycleServiceTest.java</testInclude>
@@ -609,6 +614,7 @@
                         <testInclude>**/web/rest/ModelReleaseCandidateResourceTest.java</testInclude>
                         <testInclude>**/web/rest/ModelReleaseSuperAdminAuthorizationTest.java</testInclude>
                         <testInclude>**/web/rest/ModelSpecImport*.java</testInclude>
+                        <testInclude>**/web/rest/IngestionTaskProxyResourceTest.java</testInclude>
                         <testInclude>**/repository/catalog/CatalogAssetTag*.java</testInclude>
                         <testInclude>**/repository/catalog/CatalogExternalAssetIdentityLiquibaseIT.java</testInclude>
                         <testInclude>**/repository/catalog/CatalogHarvestStatusLiquibaseIT.java</testInclude>
