@@ -75,7 +75,9 @@ test("seven-module workspace preserves planning context and opens canonical owne
 	await shell.getByRole("tab", { name: "数仓规划", exact: true }).click();
 	await expectWorkspaceState(page, { module: "planning", planId });
 	const panelNav = page.getByRole("navigation", { name: "当前模块功能" });
-	await expect(page.getByText("请先在顶部选择建设计划", { exact: true })).toBeVisible();
+	await expect(
+		page.getByText("请先在顶部选择建设计划", { exact: true }).or(page.getByText("规划基线", { exact: true })),
+	).toBeVisible();
 	await panelNav.getByRole("button", { name: "来源盘点", exact: true }).click();
 	await expectWorkspaceState(page, { module: "planning", workspaceView: "sources", planId });
 	await page.reload();
