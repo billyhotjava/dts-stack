@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.service.modeling.warehouse;
 
+import com.yuzhi.dts.platform.config.ModelMaterializationProperties;
 import com.yuzhi.dts.platform.service.governance.IndicatorService;
 import com.yuzhi.dts.platform.service.governance.IndicatorService.IndicatorDependency;
 import com.yuzhi.dts.platform.service.governance.IndicatorService.RelationshipGraphProjection;
@@ -31,6 +32,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.text.Normalizer;
@@ -47,6 +49,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.stereotype.Service;
@@ -66,6 +70,9 @@ public class WarehousePlanRelationshipGraphService {
     private static final String CURSOR_VERSION = "1";
     private static final int MAX_CURSOR_LENGTH = 4096;
     private static final int MAX_CURSOR_NODE_ID_LENGTH = 2048;
+    private static final String HMAC_ALGORITHM = "HmacSHA256";
+    private static final String CURSOR_KEY_DOMAIN =
+        "dts:modeling:relationship-graph-cursor:v1";
 
     private static final Comparator<RelationshipNode> NODE_ORDER = Comparator
         .comparing(RelationshipNode::kind)
@@ -83,6 +90,7 @@ public class WarehousePlanRelationshipGraphService {
     private final IndicatorService indicators;
     private final ReferenceCodeService referenceCodes;
     private final MeasurementUnitApplicationService measurementUnits;
+    private final byte[] cursorSigningKey;
 
     @Autowired
     public WarehousePlanRelationshipGraphService(
@@ -91,7 +99,28 @@ public class WarehousePlanRelationshipGraphService {
         MetadataStandardService metadataStandards,
         IndicatorService indicators,
         ReferenceCodeService referenceCodes,
-        MeasurementUnitApplicationService measurementUnits
+        MeasurementUnitApplicationService measurementUnits,
+        ModelMaterializationProperties materializationProperties
+    ) {
+        this(
+            modelSpecs,
+            dimensionDefinitions,
+            metadataStandards,
+            indicators,
+            referenceCodes,
+            measurementUnits,
+            runtimeSpecSigningKey(materializationProperties)
+        );
+    }
+
+    WarehousePlanRelationshipGraphService(
+        ModelSpecApplicationService modelSpecs,
+        DimensionDefinitionApplicationService dimensionDefinitions,
+        MetadataStandardService metadataStandards,
+        IndicatorService indicators,
+        ReferenceCodeService referenceCodes,
+        MeasurementUnitApplicationService measurementUnits,
+        String cursorSigningSecret
     ) {
         this.modelSpecs = modelSpecs;
         this.dimensionDefinitions = dimensionDefinitions;
@@ -99,19 +128,40 @@ public class WarehousePlanRelationshipGraphService {
         this.indicators = indicators;
         this.referenceCodes = referenceCodes;
         this.measurementUnits = measurementUnits;
+        this.cursorSigningKey = deriveCursorSigningKey(cursorSigningSecret);
     }
 
     WarehousePlanRelationshipGraphService(
         ModelSpecApplicationService modelSpecs,
         DimensionDefinitionApplicationService dimensionDefinitions,
         MetadataStandardService metadataStandards,
-        IndicatorService indicators
+        IndicatorService indicators,
+        String cursorSigningSecret
     ) {
-        this(modelSpecs, dimensionDefinitions, metadataStandards, indicators, null, null);
+        this(
+            modelSpecs,
+            dimensionDefinitions,
+            metadataStandards,
+            indicators,
+            null,
+            null,
+            cursorSigningSecret
+        );
     }
 
-    WarehousePlanRelationshipGraphService(ModelSpecApplicationService modelSpecs) {
-        this(modelSpecs, null, null, null, null, null);
+    WarehousePlanRelationshipGraphService(
+        ModelSpecApplicationService modelSpecs,
+        String cursorSigningSecret
+    ) {
+        this(
+            modelSpecs,
+            null,
+            null,
+            null,
+            null,
+            null,
+            cursorSigningSecret
+        );
     }
 
     public RelationshipGraph read(String tenantId, WarehousePlanHeader plan) {
@@ -275,6 +325,13 @@ public class WarehousePlanRelationshipGraphService {
             .filter(node -> matchesQuery(node, query))
             .sorted(NODE_ORDER)
             .toList();
+        String currentWindowFingerprint = windowFingerprint(
+            afterId,
+            rootModels.values(),
+            hasMoreRoots,
+            matchingNodes
+        );
+        requireCurrentWindow(cursor, currentWindowFingerprint);
         int selectedStart = cursorNodeStart(matchingNodes, cursor);
         int selectedEnd = Math.min(selectedStart + limit, matchingNodes.size());
         List<RelationshipNode> selectedNodes = matchingNodes.subList(selectedStart, selectedEnd);
@@ -379,7 +436,11 @@ public class WarehousePlanRelationshipGraphService {
         if (!projectionIncomplete) {
             if (hasMoreMatchingNodes) {
                 nextCursor = encodeCursor(
-                    new GraphCursor(afterId, selectedNodes.getLast().id()),
+                    new GraphCursor(
+                        afterId,
+                        selectedNodes.getLast().id(),
+                        currentWindowFingerprint
+                    ),
                     tenantId,
                     plan.id(),
                     activeDepartmentId,
@@ -388,7 +449,7 @@ public class WarehousePlanRelationshipGraphService {
                 );
             } else if (hasMoreRoots && rootWindowEnd != null) {
                 nextCursor = encodeCursor(
-                    new GraphCursor(rootWindowEnd, null),
+                    new GraphCursor(rootWindowEnd, null, null),
                     tenantId,
                     plan.id(),
                     activeDepartmentId,
@@ -900,7 +961,7 @@ public class WarehousePlanRelationshipGraphService {
         return limit;
     }
 
-    private static GraphCursor parseCursor(
+    private GraphCursor parseCursor(
         String cursor,
         String tenantId,
         UUID planId,
@@ -915,36 +976,48 @@ public class WarehousePlanRelationshipGraphService {
             }
             String raw = decodeBase64Url(cursor);
             String[] parts = raw.split("\\.", -1);
-            if (parts.length != 5 || !CURSOR_VERSION.equals(parts[0])) {
+            if (parts.length != 6 || !CURSOR_VERSION.equals(parts[0])) {
                 throw new IllegalArgumentException("unsupported cursor version");
             }
-            String unsigned = String.join(".", parts[0], parts[1], parts[2], parts[3]);
+            String unsigned = String.join(
+                ".",
+                parts[0],
+                parts[1],
+                parts[2],
+                parts[3],
+                parts[4]
+            );
             if (
-                !isLowerHex(parts[3]) ||
                 !isLowerHex(parts[4]) ||
-                !constantTimeEquals(sha256(unsigned), parts[4])
+                !isLowerHex(parts[5]) ||
+                !constantTimeEquals(cursorSignature(unsigned), parts[5])
             ) {
                 throw new IllegalArgumentException("invalid cursor integrity");
             }
             String expectedScope = cursorScope(tenantId, planId, activeDepartmentId, kind, query);
-            if (!constantTimeEquals(expectedScope, parts[3])) {
+            if (!constantTimeEquals(expectedScope, parts[4])) {
                 throw new IllegalArgumentException("cursor scope mismatch");
             }
             UUID rootAfter = parts[1].isEmpty() ? null : parseCanonicalUuid(parts[1]);
             String nodeAfter = parts[2].isEmpty() ? null : decodeBase64Url(parts[2]);
+            String windowFingerprint = parts[3].isEmpty() ? null : parts[3];
             if (
                 (rootAfter == null && nodeAfter == null) ||
-                (nodeAfter != null && !validCursorNodeId(nodeAfter, kind))
+                (nodeAfter != null && !validCursorNodeId(nodeAfter, kind)) ||
+                (nodeAfter == null && windowFingerprint != null) ||
+                (nodeAfter != null &&
+                    (windowFingerprint == null ||
+                        !isLowerHex(windowFingerprint)))
             ) {
                 throw new IllegalArgumentException("invalid cursor position");
             }
-            return new GraphCursor(rootAfter, nodeAfter);
+            return new GraphCursor(rootAfter, nodeAfter, windowFingerprint);
         } catch (IllegalArgumentException invalid) {
             throw cursorInvalid();
         }
     }
 
-    private static String encodeCursor(
+    private String encodeCursor(
         GraphCursor cursor,
         String tenantId,
         UUID planId,
@@ -954,14 +1027,18 @@ public class WarehousePlanRelationshipGraphService {
     ) {
         String rootAfter = cursor.rootAfter() == null ? "" : cursor.rootAfter().toString();
         String nodeAfter = cursor.nodeAfter() == null ? "" : encodeBase64Url(cursor.nodeAfter());
+        String windowFingerprint = cursor.windowFingerprint() == null
+            ? ""
+            : cursor.windowFingerprint();
         String unsigned = String.join(
             ".",
             CURSOR_VERSION,
             rootAfter,
             nodeAfter,
+            windowFingerprint,
             cursorScope(tenantId, planId, activeDepartmentId, kind, query)
         );
-        return encodeBase64Url(unsigned + "." + sha256(unsigned));
+        return encodeBase64Url(unsigned + "." + cursorSignature(unsigned));
     }
 
     private static int cursorNodeStart(List<RelationshipNode> matchingNodes, GraphCursor cursor) {
@@ -972,6 +1049,79 @@ public class WarehousePlanRelationshipGraphService {
             }
         }
         throw cursorInvalid();
+    }
+
+    private static void requireCurrentWindow(
+        GraphCursor cursor,
+        String currentWindowFingerprint
+    ) {
+        if (
+            cursor == null ||
+            cursor.nodeAfter() == null ||
+            constantTimeEquals(
+                cursor.windowFingerprint(),
+                currentWindowFingerprint
+            )
+        ) {
+            return;
+        }
+        throw cursorStale();
+    }
+
+    private static String windowFingerprint(
+        UUID rootAfter,
+        Collection<ModelSpecView> rootModels,
+        boolean hasMoreRoots,
+        List<RelationshipNode> matchingNodes
+    ) {
+        StringBuilder canonical = new StringBuilder(
+            "dts:modeling:relationship-graph-window:v1"
+        );
+        appendFingerprintPart(
+            canonical,
+            rootAfter == null ? null : rootAfter.toString()
+        );
+        appendFingerprintPart(
+            canonical,
+            Boolean.toString(hasMoreRoots)
+        );
+        appendFingerprintPart(
+            canonical,
+            Integer.toString(rootModels.size())
+        );
+        for (ModelSpecView root : rootModels) {
+            appendFingerprintPart(
+                canonical,
+                root.id().toString()
+            );
+            appendFingerprintPart(
+                canonical,
+                Integer.toString(root.revision())
+            );
+        }
+        appendFingerprintPart(
+            canonical,
+            Integer.toString(matchingNodes.size())
+        );
+        for (RelationshipNode node : matchingNodes) {
+            appendFingerprintPart(canonical, node.kind().name());
+            appendFingerprintPart(
+                canonical,
+                node.label().toLowerCase(Locale.ROOT)
+            );
+            appendFingerprintPart(canonical, node.id());
+            appendFingerprintPart(canonical, node.label());
+            appendFingerprintPart(canonical, node.status());
+            appendFingerprintPart(canonical, node.route());
+        }
+        return sha256(canonical.toString());
+    }
+
+    private static void appendFingerprintPart(
+        StringBuilder target,
+        String value
+    ) {
+        target.append(cursorScopePart(value)).append(';');
     }
 
     private static UUID parseCanonicalUuid(String value) {
@@ -1088,7 +1238,59 @@ public class WarehousePlanRelationshipGraphService {
         }
     }
 
+    private String cursorSignature(String unsigned) {
+        if (cursorSigningKey == null) {
+            throw cursorSigningUnavailable();
+        }
+        return HexFormat
+            .of()
+            .formatHex(
+                hmac(
+                    cursorSigningKey,
+                    unsigned.getBytes(StandardCharsets.UTF_8)
+                )
+            );
+    }
+
+    private static byte[] deriveCursorSigningKey(
+        String signingSecret
+    ) {
+        if (
+            signingSecret == null ||
+            signingSecret.trim().length() < 32
+        ) return null;
+        return hmac(
+            signingSecret.trim().getBytes(StandardCharsets.UTF_8),
+            CURSOR_KEY_DOMAIN.getBytes(StandardCharsets.UTF_8)
+        );
+    }
+
+    private static String runtimeSpecSigningKey(
+        ModelMaterializationProperties materializationProperties
+    ) {
+        return Objects
+            .requireNonNull(
+                materializationProperties,
+                "materializationProperties is required"
+            )
+            .getRuntimeSpecSigningKey();
+    }
+
+    private static byte[] hmac(byte[] key, byte[] value) {
+        try {
+            Mac mac = Mac.getInstance(HMAC_ALGORITHM);
+            mac.init(new SecretKeySpec(key, HMAC_ALGORITHM));
+            return mac.doFinal(value);
+        } catch (GeneralSecurityException impossible) {
+            throw new IllegalStateException(
+                "Relationship graph cursor signing is unavailable",
+                impossible
+            );
+        }
+    }
+
     private static boolean constantTimeEquals(String left, String right) {
+        if (left == null || right == null) return false;
         return MessageDigest.isEqual(
             left.getBytes(StandardCharsets.US_ASCII),
             right.getBytes(StandardCharsets.US_ASCII)
@@ -1099,6 +1301,22 @@ public class WarehousePlanRelationshipGraphService {
         return new WarehousePlanException(
             "RELATIONSHIP_GRAPH_CURSOR_INVALID",
             "Relationship graph cursor is invalid",
+            null
+        );
+    }
+
+    private static WarehousePlanException cursorStale() {
+        return new WarehousePlanException(
+            "RELATIONSHIP_GRAPH_CURSOR_STALE",
+            "Relationship graph cursor is stale",
+            null
+        );
+    }
+
+    private static WarehousePlanException cursorSigningUnavailable() {
+        return new WarehousePlanException(
+            "RELATIONSHIP_GRAPH_CURSOR_SIGNING_UNAVAILABLE",
+            "Relationship graph cursor signing is unavailable",
             null
         );
     }
@@ -1211,7 +1429,11 @@ public class WarehousePlanRelationshipGraphService {
         return values == null ? List.of() : values;
     }
 
-    private record GraphCursor(UUID rootAfter, String nodeAfter) {}
+    private record GraphCursor(
+        UUID rootAfter,
+        String nodeAfter,
+        String windowFingerprint
+    ) {}
 
     private record ModelRevisionKey(UUID id, int revision) {}
 

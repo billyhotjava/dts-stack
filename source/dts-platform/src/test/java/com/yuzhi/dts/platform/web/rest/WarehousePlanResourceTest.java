@@ -932,6 +932,27 @@ class WarehousePlanResourceTest {
             .andExpect(jsonPath("$.code").value("RELATIONSHIP_GRAPH_TIMEOUT"));
     }
 
+    @Test
+    void mapsRelationshipGraphSigningUnavailableToAStableServiceUnavailableResponse() throws Exception {
+        WarehousePlanHeader plan = planHeader(1, DRAFT);
+        WarehousePlanActor actor = new WarehousePlanActor("owner-1", "department-1");
+        when(actorProvider.currentActor()).thenReturn(actor);
+        when(service.get("server-tenant", PLAN_ID)).thenReturn(plan);
+        when(relationshipGraphService.read("server-tenant", plan, "department-1", null, null, 500))
+            .thenThrow(
+                new WarehousePlanException(
+                    "RELATIONSHIP_GRAPH_CURSOR_SIGNING_UNAVAILABLE",
+                    "Relationship graph cursor signing is unavailable",
+                    null
+                )
+            );
+
+        mockMvc
+            .perform(get("/api/modeling/warehouse-plans/{id}/relationship-graph", PLAN_ID))
+            .andExpect(status().isServiceUnavailable())
+            .andExpect(jsonPath("$.code").value("RELATIONSHIP_GRAPH_CURSOR_SIGNING_UNAVAILABLE"));
+    }
+
     private static WarehousePlanHeader planHeader(
         int version,
         com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.LifecycleStatus status

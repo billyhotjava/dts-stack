@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import type { ReactElement } from "react";
+import type { ChangeEvent, ChangeEventHandler, KeyboardEvent, MouseEventHandler, ReactElement, ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react-dom/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -29,42 +29,86 @@ vi.mock("@/components/lineage/LineageGraph", () => ({
 	),
 }));
 
+type AlertMockProps = {
+	action?: ReactNode;
+	description?: ReactNode;
+	message?: ReactNode;
+};
+
+type ButtonMockProps = {
+	children?: ReactNode;
+	disabled?: boolean;
+	loading?: boolean;
+	onClick?: MouseEventHandler<HTMLButtonElement>;
+};
+
+type ChildrenMockProps = {
+	children?: ReactNode;
+};
+
+type EmptyMockProps = {
+	description?: ReactNode;
+};
+
+type SearchMockProps = {
+	onChange?: ChangeEventHandler<HTMLInputElement>;
+	onSearch?: (value: string) => void;
+	placeholder?: string;
+	value?: string;
+};
+
+type SelectMockOption = {
+	label: ReactNode;
+	value: string;
+};
+
+type SelectMockProps = {
+	onChange?: (value: string | undefined) => void;
+	options?: SelectMockOption[];
+	placeholder?: string;
+	value?: string;
+};
+
 vi.mock("antd", async () => {
 	const React = await import("react");
-	const Search = ({ value, onChange, onSearch, placeholder }: any) =>
+	const Search = ({ value, onChange, onSearch, placeholder }: SearchMockProps) =>
 		React.createElement("input", {
 			"aria-label": placeholder,
 			value,
 			onChange,
-			onKeyDown: (event: any) => {
-				if (event.key === "Enter") onSearch(event.currentTarget.value);
+			onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => {
+				if (event.key === "Enter") onSearch?.(event.currentTarget.value);
 			},
 		});
 	return {
-		Alert: ({ message, description, action }: any) =>
+		Alert: ({ message, description, action }: AlertMockProps) =>
 			React.createElement("div", { role: "alert" }, message, description, action),
-		Button: ({ children, onClick, disabled }: any) =>
-			React.createElement("button", { type: "button", onClick, disabled }, children),
-		Empty: ({ description }: any) => React.createElement("div", { "data-empty": "true" }, description),
+		Button: ({ children, onClick, disabled, loading }: ButtonMockProps) =>
+			React.createElement(
+				"button",
+				{ "aria-busy": loading || undefined, type: "button", onClick, disabled: disabled || loading },
+				children,
+			),
+		Empty: ({ description }: EmptyMockProps) => React.createElement("div", { "data-empty": "true" }, description),
 		Input: { Search },
-		Select: ({ value, onChange, placeholder, options }: any) =>
+		Select: ({ value, onChange, placeholder, options }: SelectMockProps) =>
 			React.createElement(
 				"select",
 				{
 					"aria-label": placeholder,
 					value: value || "",
-					onChange: (event: any) => onChange(event.currentTarget.value || undefined),
+					onChange: (event: ChangeEvent<HTMLSelectElement>) => onChange?.(event.currentTarget.value || undefined),
 				},
 				[
 					React.createElement("option", { key: "", value: "" }, "全部"),
-					...(options || []).map((option: any) =>
+					...(options || []).map((option) =>
 						React.createElement("option", { key: option.value, value: option.value }, option.label),
 					),
 				],
 			),
-		Space: ({ children }: any) => React.createElement("div", null, children),
+		Space: ({ children }: ChildrenMockProps) => React.createElement("div", null, children),
 		Spin: () => React.createElement("div", { "data-testid": "loading" }, "loading"),
-		Tag: ({ children }: any) => React.createElement("span", null, children),
+		Tag: ({ children }: ChildrenMockProps) => React.createElement("span", null, children),
 	};
 });
 
@@ -113,14 +157,18 @@ const render = async (ui: ReactElement): Promise<{ container: HTMLElement; root:
 	return { container, root };
 };
 
+const reactActEnvironment = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+let previousReactActEnvironment: boolean | undefined;
+
 describe("RelationshipGraphPanel cursor continuation", () => {
 	beforeEach(() => {
-		(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+		previousReactActEnvironment = reactActEnvironment.IS_REACT_ACT_ENVIRONMENT;
+		reactActEnvironment.IS_REACT_ACT_ENVIRONMENT = true;
 		getWarehousePlanRelationshipGraph.mockReset();
 	});
 
 	afterEach(() => {
-		(globalThis as any).IS_REACT_ACT_ENVIRONMENT = false;
+		reactActEnvironment.IS_REACT_ACT_ENVIRONMENT = previousReactActEnvironment;
 		document.body.innerHTML = "";
 	});
 
@@ -180,6 +228,71 @@ describe("RelationshipGraphPanel cursor continuation", () => {
 
 		expect(container.textContent).toContain("Filtered page");
 		expect(container.textContent).not.toContain("Stale page");
+		act(() => root.unmount());
+	});
+
+	it("refreshes from the first page without reusing nextCursor and clears the previous graph", async () => {
+		const refreshResult = deferred<WarehousePlanRelationshipGraph>();
+		getWarehousePlanRelationshipGraph
+			.mockResolvedValueOnce(graph("MODEL:first@1", "First page", "opaque-composite-cursor-v1"))
+			.mockReturnValueOnce(refreshResult.promise);
+		const { container, root } = await render(<RelationshipGraphPanel planId="plan-1" onNavigate={vi.fn()} />);
+
+		const refreshButton = Array.from(container.querySelectorAll("button")).find(
+			(button) => button.textContent === "刷新",
+		);
+		expect(refreshButton).toBeDefined();
+		await act(async () => refreshButton?.click());
+		await flush();
+
+		expect(getWarehousePlanRelationshipGraph).toHaveBeenNthCalledWith(
+			2,
+			"plan-1",
+			expect.objectContaining({ cursor: undefined }),
+		);
+		expect(container.textContent).not.toContain("First page");
+		expect(refreshButton?.disabled).toBe(true);
+
+		refreshResult.resolve(graph("MODEL:refreshed@1", "Refreshed page", null));
+		await flush();
+		expect(container.textContent).toContain("Refreshed page");
+		act(() => root.unmount());
+	});
+
+	it("retries a failed continuation from the first page and keeps the previous graph cleared", async () => {
+		const retryResult = deferred<WarehousePlanRelationshipGraph>();
+		getWarehousePlanRelationshipGraph
+			.mockResolvedValueOnce(graph("MODEL:first@1", "First page", "opaque-composite-cursor-v1"))
+			.mockRejectedValueOnce(new Error("cursor expired"))
+			.mockReturnValueOnce(retryResult.promise);
+		const { container, root } = await render(<RelationshipGraphPanel planId="plan-1" onNavigate={vi.fn()} />);
+
+		const continueButton = Array.from(container.querySelectorAll("button")).find((button) =>
+			button.textContent?.includes("继续搜索"),
+		);
+		await act(async () => continueButton?.click());
+		await flush();
+		expect(container.textContent).toContain("关系图不可用");
+		expect(container.textContent).not.toContain("First page");
+
+		const retryButton = Array.from(container.querySelectorAll("button")).find(
+			(button) => button.textContent === "重试",
+		);
+		expect(retryButton).toBeDefined();
+		await act(async () => retryButton?.click());
+		await flush();
+
+		expect(getWarehousePlanRelationshipGraph).toHaveBeenNthCalledWith(
+			3,
+			"plan-1",
+			expect.objectContaining({ cursor: undefined }),
+		);
+		expect(container.textContent).not.toContain("First page");
+		expect(container.textContent).not.toContain("关系图不可用");
+
+		retryResult.resolve(graph("MODEL:retried@1", "Retried page", null));
+		await flush();
+		expect(container.textContent).toContain("Retried page");
 		act(() => root.unmount());
 	});
 });

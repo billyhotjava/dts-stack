@@ -507,7 +507,10 @@ public class WarehousePlanResource {
     }
 
     private static HttpStatus status(String code) {
-        if ("RELATIONSHIP_GRAPH_TIMEOUT".equals(code)) {
+        if (
+            "RELATIONSHIP_GRAPH_TIMEOUT".equals(code) ||
+            "RELATIONSHIP_GRAPH_CURSOR_SIGNING_UNAVAILABLE".equals(code)
+        ) {
             return HttpStatus.SERVICE_UNAVAILABLE;
         }
         if ("WAREHOUSE_PLAN_NOT_FOUND".equals(code)) {

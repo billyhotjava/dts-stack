@@ -24,6 +24,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.yuzhi.dts.platform.config.ModelMaterializationProperties;
 import com.yuzhi.dts.platform.service.governance.IndicatorService;
 import com.yuzhi.dts.platform.service.governance.IndicatorService.IndicatorDependency;
 import com.yuzhi.dts.platform.service.governance.IndicatorService.RelationshipGraphProjection;
@@ -50,10 +51,15 @@ import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.W
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphContract.RelationshipEdge;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphContract.RelationshipGraph;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphContract.RelationshipNode;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.math.BigDecimal;
 import java.util.AbstractList;
 import java.util.ArrayList;
+import java.util.Base64;
+import java.util.HexFormat;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -70,6 +76,13 @@ class WarehousePlanRelationshipGraphServiceTest {
     private static final UUID UPSTREAM_ID = UUID.fromString("30000000-0000-0000-0000-000000000002");
     private static final UUID DIMENSION_ID = UUID.fromString("30000000-0000-0000-0000-000000000003");
     private static final UUID UNKNOWN_ID = UUID.fromString("30000000-0000-0000-0000-000000000099");
+    private static final String CURSOR_SIGNING_SECRET = Base64
+        .getEncoder()
+        .encodeToString(
+            "relationship-graph-test-signing-secret-v1".getBytes(
+                StandardCharsets.UTF_8
+            )
+        );
 
     @Test
     void projectsOnlyVisibleTypedModelReferencesWithStableIdsRoutesAndOrdering() {
@@ -96,7 +109,7 @@ class WarehousePlanRelationshipGraphServiceTest {
         )
             .thenReturn(List.of(dimension, upstream));
 
-        RelationshipGraph graph = new WarehousePlanRelationshipGraphService(modelSpecs).read(TENANT, plan());
+        RelationshipGraph graph = service(modelSpecs).read(TENANT, plan());
 
         assertThat(graph.planId()).isEqualTo(PLAN_ID);
         assertThat(graph.truncated()).isFalse();
@@ -165,7 +178,7 @@ class WarehousePlanRelationshipGraphServiceTest {
         when(standards.listForRelationshipGraph(java.util.Set.of(standardId), 500)).thenReturn(List.of(standard));
         when(indicators.projectForRelationshipGraph(java.util.Set.of(indicatorId), "department-1", 500, 1000))
             .thenReturn(new RelationshipGraphProjection(List.of(indicator), List.of(), false));
-        WarehousePlanRelationshipGraphService service = new WarehousePlanRelationshipGraphService(
+        WarehousePlanRelationshipGraphService service = service(
             modelSpecs,
             definitions,
             standards,
@@ -266,7 +279,7 @@ class WarehousePlanRelationshipGraphServiceTest {
                     )
                 )
             );
-        WarehousePlanRelationshipGraphService service = new WarehousePlanRelationshipGraphService(
+        WarehousePlanRelationshipGraphService service = service(
             modelSpecs,
             mock(DimensionDefinitionApplicationService.class),
             standards,
@@ -321,7 +334,7 @@ class WarehousePlanRelationshipGraphServiceTest {
                     false
                 )
             );
-        WarehousePlanRelationshipGraphService service = new WarehousePlanRelationshipGraphService(
+        WarehousePlanRelationshipGraphService service = service(
             modelSpecs,
             mock(DimensionDefinitionApplicationService.class),
             mock(MetadataStandardService.class),
@@ -367,7 +380,7 @@ class WarehousePlanRelationshipGraphServiceTest {
         when(modelSpecs.listForRelationshipGraph(TENANT, PLAN_ID, 501))
             .thenReturn(List.of(model(FACT_ID, "fact", oversized, List.of())));
 
-        RelationshipGraph graph = new WarehousePlanRelationshipGraphService(modelSpecs).read(TENANT, plan());
+        RelationshipGraph graph = service(modelSpecs).read(TENANT, plan());
 
         assertThat(graph.truncated()).isTrue();
         assertThat(graph.nextHint()).isEqualTo("FILTER_BY_KIND_OR_QUERY");
@@ -389,7 +402,7 @@ class WarehousePlanRelationshipGraphServiceTest {
         UUID firstCursor = new UUID(0, 500);
         when(modelSpecs.listForRelationshipGraph(TENANT, PLAN_ID, 501)).thenReturn(firstWindow);
         when(modelSpecs.listForRelationshipGraph(TENANT, PLAN_ID, firstCursor, 501)).thenReturn(secondWindow);
-        WarehousePlanRelationshipGraphService service = new WarehousePlanRelationshipGraphService(modelSpecs);
+        WarehousePlanRelationshipGraphService service = service(modelSpecs);
 
         RelationshipGraph first = service.read(TENANT, plan(), null, "model", null, 500, null);
         RelationshipGraph repeated = service.read(TENANT, plan(), null, "model", null, 500, null);
@@ -480,7 +493,7 @@ class WarehousePlanRelationshipGraphServiceTest {
         )
             .thenReturn(secondWindow);
         WarehousePlanRelationshipGraphService service =
-            new WarehousePlanRelationshipGraphService(modelSpecs);
+            service(modelSpecs);
 
         List<RelationshipNode> traversed = traverse(
             service,
@@ -553,7 +566,7 @@ class WarehousePlanRelationshipGraphServiceTest {
         )
             .thenReturn(standardViews);
         WarehousePlanRelationshipGraphService service =
-            new WarehousePlanRelationshipGraphService(
+            service(
                 modelSpecs,
                 mock(DimensionDefinitionApplicationService.class),
                 standards,
@@ -615,7 +628,7 @@ class WarehousePlanRelationshipGraphServiceTest {
         )
             .thenReturn(List.of(match));
         WarehousePlanRelationshipGraphService service =
-            new WarehousePlanRelationshipGraphService(modelSpecs);
+            service(modelSpecs);
 
         RelationshipGraph empty = service.read(
             TENANT,
@@ -650,7 +663,7 @@ class WarehousePlanRelationshipGraphServiceTest {
     }
 
     @Test
-    void rejectsTamperedNonCanonicalWrongFilterAndMissingNodeCursors() {
+    void rejectsTamperedNonCanonicalWrongFilterAndStaleCursors() {
         ModelSpecApplicationService modelSpecs = mock(
             ModelSpecApplicationService.class
         );
@@ -678,7 +691,7 @@ class WarehousePlanRelationshipGraphServiceTest {
         )
             .thenReturn(originalWindow, changedWindow);
         WarehousePlanRelationshipGraphService service =
-            new WarehousePlanRelationshipGraphService(modelSpecs);
+            service(modelSpecs);
         RelationshipGraph first = service.read(
             TENANT,
             plan(),
@@ -735,7 +748,7 @@ class WarehousePlanRelationshipGraphServiceTest {
                 cursor
             )
         );
-        assertInvalidCursor(() ->
+        assertStaleCursor(() ->
             service.read(
                 TENANT,
                 plan(),
@@ -744,6 +757,526 @@ class WarehousePlanRelationshipGraphServiceTest {
                 null,
                 10,
                 cursor
+            )
+        );
+    }
+
+    @Test
+    void rejectsCursorAsStaleWhenTheSameNodeChangesItsSortOrDisplayState() {
+        ModelSpecApplicationService modelSpecs = mock(
+            ModelSpecApplicationService.class
+        );
+        List<ModelSpecView> originalWindow = new ArrayList<>();
+        List<ModelSpecView> changedWindow = new ArrayList<>();
+        for (int index = 1; index <= 30; index++) {
+            UUID id = new UUID(0, index);
+            originalWindow.add(
+                model(
+                    id,
+                    "model-%03d".formatted(index),
+                    List.of(),
+                    List.of()
+                )
+            );
+            changedWindow.add(
+                model(
+                    id,
+                    index == 1 ? "zzzz-model-001" : "model-%03d".formatted(index),
+                    List.of(),
+                    List.of()
+                )
+            );
+        }
+        when(
+            modelSpecs.listForRelationshipGraph(
+                TENANT,
+                PLAN_ID,
+                501
+            )
+        )
+            .thenReturn(originalWindow, changedWindow);
+        WarehousePlanRelationshipGraphService service =
+            service(modelSpecs);
+        RelationshipGraph first = service.read(
+            TENANT,
+            plan(),
+            null,
+            "model",
+            null,
+            10,
+            null
+        );
+
+        assertStaleCursor(() ->
+            service.read(
+                TENANT,
+                plan(),
+                null,
+                "model",
+                null,
+                10,
+                first.nextCursor()
+            )
+        );
+    }
+
+    @Test
+    void rejectsCursorAsStaleWhenDerivedNodesAreAddedOrRemoved() {
+        ModelSpecApplicationService modelSpecs = mock(
+            ModelSpecApplicationService.class
+        );
+        IndicatorService indicators = mock(IndicatorService.class);
+        List<MetricRef> metricRefs = new ArrayList<>();
+        List<IndicatorDto> initialIndicators = new ArrayList<>();
+        Set<UUID> indicatorIds = new LinkedHashSet<>();
+        for (int index = 1; index <= 30; index++) {
+            UUID id = new UUID(8, index);
+            indicatorIds.add(id);
+            metricRefs.add(new MetricRef(id.toString(), 3));
+            initialIndicators.add(
+                indicator(
+                    id,
+                    "indicator-%03d".formatted(index),
+                    "v3"
+                )
+            );
+        }
+        UUID addedId = new UUID(8, 31);
+        List<IndicatorDto> addedIndicators = new ArrayList<>(
+            initialIndicators
+        );
+        addedIndicators.add(
+            indicator(addedId, "indicator-031", "v3")
+        );
+        when(
+            modelSpecs.listForRelationshipGraph(
+                TENANT,
+                PLAN_ID,
+                501
+            )
+        )
+            .thenReturn(
+                List.of(
+                    modelWithGovernance(
+                        metricRefs,
+                        List.of(),
+                        null
+                    )
+                )
+            );
+        when(
+            indicators.projectForRelationshipGraph(
+                indicatorIds,
+                "department-1",
+                500,
+                1000
+            )
+        )
+            .thenReturn(
+                new RelationshipGraphProjection(
+                    initialIndicators,
+                    List.of(),
+                    false
+                ),
+                new RelationshipGraphProjection(
+                    addedIndicators,
+                    List.of(
+                        new IndicatorDependency(
+                            initialIndicators.getFirst().getId(),
+                            addedId
+                        )
+                    ),
+                    false
+                ),
+                new RelationshipGraphProjection(
+                    initialIndicators.subList(
+                        0,
+                        initialIndicators.size() - 1
+                    ),
+                    List.of(),
+                    false
+                )
+            );
+        WarehousePlanRelationshipGraphService service =
+            service(
+                modelSpecs,
+                mock(DimensionDefinitionApplicationService.class),
+                mock(MetadataStandardService.class),
+                indicators
+            );
+        RelationshipGraph first = service.read(
+            TENANT,
+            plan(),
+            "department-1",
+            "indicator",
+            null,
+            10,
+            null
+        );
+
+        assertStaleCursor(() ->
+            service.read(
+                TENANT,
+                plan(),
+                "department-1",
+                "indicator",
+                null,
+                10,
+                first.nextCursor()
+            )
+        );
+        assertStaleCursor(() ->
+            service.read(
+                TENANT,
+                plan(),
+                "department-1",
+                "indicator",
+                null,
+                10,
+                first.nextCursor()
+            )
+        );
+    }
+
+    @Test
+    void rejectsCursorAsStaleWhenANonMatchingRootChanges() {
+        ModelSpecApplicationService modelSpecs = mock(
+            ModelSpecApplicationService.class
+        );
+        List<ModelSpecView> originalWindow = new ArrayList<>();
+        List<ModelSpecView> changedWindow = new ArrayList<>();
+        for (int index = 1; index <= 30; index++) {
+            UUID id = new UUID(0, index);
+            ModelSpecView root = model(
+                id,
+                index <= 20
+                    ? "match-%03d".formatted(index)
+                    : "other-%03d".formatted(index),
+                List.of(),
+                List.of()
+            );
+            originalWindow.add(root);
+            if (index < 30) changedWindow.add(root);
+        }
+        changedWindow.add(
+            model(
+                new UUID(0, 31),
+                "other-031",
+                List.of(),
+                List.of()
+            )
+        );
+        when(
+            modelSpecs.listForRelationshipGraph(
+                TENANT,
+                PLAN_ID,
+                501
+            )
+        )
+            .thenReturn(originalWindow, changedWindow);
+        WarehousePlanRelationshipGraphService service =
+            service(modelSpecs);
+        RelationshipGraph first = service.read(
+            TENANT,
+            plan(),
+            null,
+            "model",
+            "match",
+            10,
+            null
+        );
+
+        assertStaleCursor(() ->
+            service.read(
+                TENANT,
+                plan(),
+                null,
+                "model",
+                "match",
+                10,
+                first.nextCursor()
+            )
+        );
+    }
+
+    @Test
+    void rejectsAPlainShaResignedCursorThatMovesTheNodePosition() {
+        ModelSpecApplicationService modelSpecs = mock(
+            ModelSpecApplicationService.class
+        );
+        List<ModelSpecView> models = new ArrayList<>();
+        for (int index = 1; index <= 30; index++) {
+            models.add(
+                model(
+                    new UUID(0, index),
+                    "model-%03d".formatted(index),
+                    List.of(),
+                    List.of()
+                )
+            );
+        }
+        when(
+            modelSpecs.listForRelationshipGraph(
+                TENANT,
+                PLAN_ID,
+                501
+            )
+        )
+            .thenReturn(models);
+        WarehousePlanRelationshipGraphService service =
+            service(modelSpecs);
+        RelationshipGraph first = service.read(
+            TENANT,
+            plan(),
+            null,
+            "model",
+            null,
+            10,
+            null
+        );
+        String forged = forgeWithPlainSha(
+            first.nextCursor(),
+            "MODEL:" + new UUID(0, 20) + "@1"
+        );
+
+        assertInvalidCursor(() ->
+            service.read(
+                TENANT,
+                plan(),
+                null,
+                "model",
+                null,
+                10,
+                forged
+            )
+        );
+    }
+
+    @Test
+    void continuesAnUnchangedWindowWithTheCorrectSecretAndRejectsTheWrongSecret() {
+        ModelSpecApplicationService modelSpecs = mock(
+            ModelSpecApplicationService.class
+        );
+        List<ModelSpecView> models = new ArrayList<>();
+        for (int index = 1; index <= 30; index++) {
+            models.add(
+                model(
+                    new UUID(0, index),
+                    "model-%03d".formatted(index),
+                    List.of(),
+                    List.of()
+                )
+            );
+        }
+        when(
+            modelSpecs.listForRelationshipGraph(
+                TENANT,
+                PLAN_ID,
+                501
+            )
+        )
+            .thenReturn(models);
+        WarehousePlanRelationshipGraphService issuer = productionService(
+            modelSpecs,
+            materializationProperties(CURSOR_SIGNING_SECRET)
+        );
+        RelationshipGraph first = issuer.read(
+            TENANT,
+            plan(),
+            null,
+            "model",
+            null,
+            10,
+            null
+        );
+
+        RelationshipGraph second = issuer.read(
+            TENANT,
+            plan(),
+            null,
+            "model",
+            null,
+            10,
+            first.nextCursor()
+        );
+
+        assertThat(second.nodes())
+            .extracting(RelationshipNode::id)
+            .containsExactlyElementsOf(
+                models
+                    .subList(10, 20)
+                    .stream()
+                    .map(model ->
+                        "MODEL:" + model.id() + "@1"
+                    )
+                    .toList()
+            );
+        String wrongSecret = Base64
+            .getEncoder()
+            .encodeToString(
+                "relationship-graph-wrong-signing-secret".getBytes(
+                    StandardCharsets.UTF_8
+                )
+            );
+        WarehousePlanRelationshipGraphService wrongKeyService =
+            new WarehousePlanRelationshipGraphService(
+                modelSpecs,
+                wrongSecret
+            );
+        assertInvalidCursor(() ->
+            wrongKeyService.read(
+                TENANT,
+                plan(),
+                null,
+                "model",
+                null,
+                10,
+                first.nextCursor()
+            )
+        );
+    }
+
+    @Test
+    void springConstructorUsesTheExistingMaterializationSigningKeySeam() {
+        var constructors =
+            WarehousePlanRelationshipGraphService.class.getConstructors();
+
+        assertThat(constructors).hasSize(1);
+        Class<?>[] parameterTypes = constructors[0].getParameterTypes();
+        assertThat(parameterTypes[parameterTypes.length - 1])
+            .isEqualTo(ModelMaterializationProperties.class);
+    }
+
+    @Test
+    void missingOrShortSigningKeyFailsClosedOnlyWhenACursorIsUsed() {
+        ModelSpecApplicationService modelSpecs = mock(
+            ModelSpecApplicationService.class
+        );
+        List<ModelSpecView> models = new ArrayList<>();
+        for (int index = 1; index <= 30; index++) {
+            models.add(
+                model(
+                    new UUID(0, index),
+                    "model-%03d".formatted(index),
+                    List.of(),
+                    List.of()
+                )
+            );
+        }
+        when(
+            modelSpecs.listForRelationshipGraph(
+                TENANT,
+                PLAN_ID,
+                501
+            )
+        )
+            .thenReturn(
+                List.of(models.getFirst()),
+                models
+            );
+        WarehousePlanRelationshipGraphService missingKeyService =
+            productionService(
+                modelSpecs,
+                new ModelMaterializationProperties()
+            );
+
+        assertThat(
+            missingKeyService.read(
+                TENANT,
+                plan(),
+                null,
+                "model",
+                null,
+                10,
+                null
+            ).nextCursor()
+        )
+            .isNull();
+        assertSigningUnavailable(() ->
+            missingKeyService.read(
+                TENANT,
+                plan(),
+                null,
+                "model",
+                null,
+                10,
+                null
+            )
+        );
+
+        RelationshipGraph issued = service(modelSpecs).read(
+            TENANT,
+            plan(),
+            null,
+            "model",
+            null,
+            10,
+            null
+        );
+        WarehousePlanRelationshipGraphService shortKeyService =
+            productionService(
+                modelSpecs,
+                materializationProperties("too-short")
+            );
+        assertSigningUnavailable(() ->
+            shortKeyService.read(
+                TENANT,
+                plan(),
+                null,
+                "model",
+                null,
+                10,
+                issued.nextCursor()
+            )
+        );
+    }
+
+    @Test
+    void rejectsACursorWhoseWindowFingerprintWasModified() {
+        ModelSpecApplicationService modelSpecs = mock(
+            ModelSpecApplicationService.class
+        );
+        List<ModelSpecView> models = new ArrayList<>();
+        for (int index = 1; index <= 30; index++) {
+            models.add(
+                model(
+                    new UUID(0, index),
+                    "model-%03d".formatted(index),
+                    List.of(),
+                    List.of()
+                )
+            );
+        }
+        when(
+            modelSpecs.listForRelationshipGraph(
+                TENANT,
+                PLAN_ID,
+                501
+            )
+        )
+            .thenReturn(models);
+        WarehousePlanRelationshipGraphService service = service(
+            modelSpecs
+        );
+        RelationshipGraph first = service.read(
+            TENANT,
+            plan(),
+            null,
+            "model",
+            null,
+            10,
+            null
+        );
+
+        assertInvalidCursor(() ->
+            service.read(
+                TENANT,
+                plan(),
+                null,
+                "model",
+                null,
+                10,
+                mutateTokenPart(first.nextCursor(), 3)
             )
         );
     }
@@ -786,7 +1319,7 @@ class WarehousePlanRelationshipGraphServiceTest {
             .thenReturn(roots);
 
         RelationshipGraph graph =
-            new WarehousePlanRelationshipGraphService(modelSpecs).read(
+            service(modelSpecs).read(
                 TENANT,
                 plan(),
                 null,
@@ -843,7 +1376,7 @@ class WarehousePlanRelationshipGraphServiceTest {
             .thenReturn(roots);
 
         RelationshipGraph graph =
-            new WarehousePlanRelationshipGraphService(modelSpecs).read(
+            service(modelSpecs).read(
                 TENANT,
                 plan(),
                 null,
@@ -861,7 +1394,7 @@ class WarehousePlanRelationshipGraphServiceTest {
 
     @Test
     void rejectsMalformedCursorWithAStableBadRequestCode() {
-        WarehousePlanRelationshipGraphService service = new WarehousePlanRelationshipGraphService(
+        WarehousePlanRelationshipGraphService service = service(
             mock(ModelSpecApplicationService.class)
         );
 
@@ -881,7 +1414,7 @@ class WarehousePlanRelationshipGraphServiceTest {
         when(modelSpecs.listForRelationshipGraph(TENANT, PLAN_ID, 501))
             .thenReturn(List.of(model(FACT_ID, "fact", exactBudget, List.of())));
 
-        RelationshipGraph graph = new WarehousePlanRelationshipGraphService(modelSpecs).read(TENANT, plan());
+        RelationshipGraph graph = service(modelSpecs).read(TENANT, plan());
 
         assertThat(graph.truncated()).isFalse();
         assertThat(graph.nextHint()).isNull();
@@ -910,7 +1443,7 @@ class WarehousePlanRelationshipGraphServiceTest {
         when(model.metricRefs()).thenReturn(List.of());
         when(modelSpecs.listForRelationshipGraph(TENANT, PLAN_ID, 501)).thenReturn(List.of(model));
 
-        RelationshipGraph graph = new WarehousePlanRelationshipGraphService(modelSpecs).read(TENANT, plan());
+        RelationshipGraph graph = service(modelSpecs).read(TENANT, plan());
 
         assertThat(graph.truncated()).isTrue();
         assertThat(graph.nextHint()).isEqualTo("FILTER_BY_KIND_OR_QUERY");
@@ -919,7 +1452,7 @@ class WarehousePlanRelationshipGraphServiceTest {
 
     @Test
     void rejectsInvalidKindQueryAndLimitWithStableCodes() {
-        WarehousePlanRelationshipGraphService service = new WarehousePlanRelationshipGraphService(
+        WarehousePlanRelationshipGraphService service = service(
             mock(ModelSpecApplicationService.class)
         );
 
@@ -947,7 +1480,7 @@ class WarehousePlanRelationshipGraphServiceTest {
         }
         when(modelSpecs.listForRelationshipGraph(TENANT, PLAN_ID, 501)).thenReturn(visible);
 
-        RelationshipGraph graph = new WarehousePlanRelationshipGraphService(modelSpecs).read(TENANT, plan());
+        RelationshipGraph graph = service(modelSpecs).read(TENANT, plan());
 
         assertThat(graph.nodes()).hasSize(500);
         assertThat(graph.edges()).hasSize(499);
@@ -972,7 +1505,7 @@ class WarehousePlanRelationshipGraphServiceTest {
         }
         when(modelSpecs.listForRelationshipGraph(TENANT, PLAN_ID, 501)).thenReturn(visible);
 
-        WarehousePlanRelationshipGraphService service = new WarehousePlanRelationshipGraphService(modelSpecs);
+        WarehousePlanRelationshipGraphService service = service(modelSpecs);
         RelationshipGraph first = service.read(TENANT, plan());
         RelationshipGraph second = service.read(TENANT, plan());
 
@@ -980,6 +1513,73 @@ class WarehousePlanRelationshipGraphServiceTest {
         assertThat(first.edges()).hasSize(1000);
         assertThat(first.truncated()).isTrue();
         assertThat(second).isEqualTo(first);
+    }
+
+    private static WarehousePlanRelationshipGraphService service(
+        ModelSpecApplicationService modelSpecs
+    ) {
+        return new WarehousePlanRelationshipGraphService(
+            modelSpecs,
+            CURSOR_SIGNING_SECRET
+        );
+    }
+
+    private static WarehousePlanRelationshipGraphService productionService(
+        ModelSpecApplicationService modelSpecs,
+        ModelMaterializationProperties properties
+    ) {
+        return new WarehousePlanRelationshipGraphService(
+            modelSpecs,
+            mock(DimensionDefinitionApplicationService.class),
+            mock(MetadataStandardService.class),
+            mock(IndicatorService.class),
+            mock(ReferenceCodeService.class),
+            mock(MeasurementUnitApplicationService.class),
+            properties
+        );
+    }
+
+    private static ModelMaterializationProperties materializationProperties(
+        String signingKey
+    ) {
+        ModelMaterializationProperties properties =
+            new ModelMaterializationProperties();
+        properties.setRuntimeSpecSigningKey(signingKey);
+        return properties;
+    }
+
+    private static WarehousePlanRelationshipGraphService service(
+        ModelSpecApplicationService modelSpecs,
+        DimensionDefinitionApplicationService dimensionDefinitions,
+        MetadataStandardService metadataStandards,
+        IndicatorService indicators
+    ) {
+        return new WarehousePlanRelationshipGraphService(
+            modelSpecs,
+            dimensionDefinitions,
+            metadataStandards,
+            indicators,
+            CURSOR_SIGNING_SECRET
+        );
+    }
+
+    private static WarehousePlanRelationshipGraphService service(
+        ModelSpecApplicationService modelSpecs,
+        DimensionDefinitionApplicationService dimensionDefinitions,
+        MetadataStandardService metadataStandards,
+        IndicatorService indicators,
+        ReferenceCodeService referenceCodes,
+        MeasurementUnitApplicationService measurementUnits
+    ) {
+        return new WarehousePlanRelationshipGraphService(
+            modelSpecs,
+            dimensionDefinitions,
+            metadataStandards,
+            indicators,
+            referenceCodes,
+            measurementUnits,
+            CURSOR_SIGNING_SECRET
+        );
     }
 
     private static WarehousePlanHeader plan() {
@@ -1175,6 +1775,30 @@ class WarehousePlanRelationshipGraphServiceTest {
             .isEqualTo("RELATIONSHIP_GRAPH_CURSOR_INVALID");
     }
 
+    private static void assertStaleCursor(
+        org.assertj.core.api.ThrowableAssert.ThrowingCallable operation
+    ) {
+        assertThatThrownBy(operation)
+            .isInstanceOf(WarehousePlanException.class)
+            .extracting(error ->
+                ((WarehousePlanException) error).code()
+            )
+            .isEqualTo("RELATIONSHIP_GRAPH_CURSOR_STALE");
+    }
+
+    private static void assertSigningUnavailable(
+        org.assertj.core.api.ThrowableAssert.ThrowingCallable operation
+    ) {
+        assertThatThrownBy(operation)
+            .isInstanceOf(WarehousePlanException.class)
+            .extracting(error ->
+                ((WarehousePlanException) error).code()
+            )
+            .isEqualTo(
+                "RELATIONSHIP_GRAPH_CURSOR_SIGNING_UNAVAILABLE"
+            );
+    }
+
     private static String tamper(String cursor) {
         char last = cursor.charAt(cursor.length() - 1);
         return (
@@ -1183,15 +1807,92 @@ class WarehousePlanRelationshipGraphServiceTest {
         );
     }
 
+    private static String forgeWithPlainSha(
+        String cursor,
+        String nodeAfter
+    ) {
+        String raw = new String(
+            Base64.getUrlDecoder().decode(cursor),
+            StandardCharsets.UTF_8
+        );
+        String[] parts = raw.split("\\.", -1);
+        parts[2] = Base64
+            .getUrlEncoder()
+            .withoutPadding()
+            .encodeToString(
+                nodeAfter.getBytes(StandardCharsets.UTF_8)
+            );
+        int signatureIndex = parts.length - 1;
+        String unsigned = String.join(
+            ".",
+            java.util.Arrays.copyOf(parts, signatureIndex)
+        );
+        parts[signatureIndex] = sha256(unsigned);
+        return Base64
+            .getUrlEncoder()
+            .withoutPadding()
+            .encodeToString(
+                String.join(".", parts).getBytes(
+                    StandardCharsets.UTF_8
+                )
+            );
+    }
+
+    private static String mutateTokenPart(
+        String cursor,
+        int partIndex
+    ) {
+        String raw = new String(
+            Base64.getUrlDecoder().decode(cursor),
+            StandardCharsets.UTF_8
+        );
+        String[] parts = raw.split("\\.", -1);
+        char first = parts[partIndex].charAt(0);
+        parts[partIndex] =
+            (first == 'a' ? 'b' : 'a') +
+            parts[partIndex].substring(1);
+        return Base64
+            .getUrlEncoder()
+            .withoutPadding()
+            .encodeToString(
+                String.join(".", parts).getBytes(
+                    StandardCharsets.UTF_8
+                )
+            );
+    }
+
+    private static String sha256(String value) {
+        try {
+            return HexFormat
+                .of()
+                .formatHex(
+                    MessageDigest.getInstance("SHA-256")
+                        .digest(
+                            value.getBytes(StandardCharsets.UTF_8)
+                        )
+                );
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException(impossible);
+        }
+    }
+
     private static IndicatorDto indicator(UUID id) {
         return indicator(id, "v3");
     }
 
     private static IndicatorDto indicator(UUID id, String version) {
+        return indicator(id, "Customer count", version);
+    }
+
+    private static IndicatorDto indicator(
+        UUID id,
+        String label,
+        String version
+    ) {
         IndicatorDto value = new IndicatorDto();
         value.setId(id);
         value.setCode("CUSTOMER_COUNT");
-        value.setName("Customer count");
+        value.setName(label);
         value.setStatus("PUBLISHED");
         value.setVersion(version);
         return value;
