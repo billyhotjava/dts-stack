@@ -358,6 +358,7 @@ services:
       APP_TEST_API_TOKEN: "${APP_TEST_API_TOKEN:-}"
       # docker-compose 1.x mis-parses nested ${A:-${B:-}} defaults; init.sh writes explicit tokens to .env.
       AUDIT_INGEST_SERVICE_TOKENS: ${AUDIT_INGEST_SERVICE_TOKENS:-}
+      DTS_INBOUND_FROM_PLATFORM: ${DTS_PLATFORM_TO_ADMIN_TOKEN:-}
       SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_DTADMIN:-dts_admin}
       SPRING_DATASOURCE_USERNAME: ${PG_USER_DTADMIN:-dts_admin}
       SPRING_DATASOURCE_PASSWORD: ${PG_PWD_DTADMIN:-dts_admin}
