@@ -7,15 +7,19 @@ host tmpfs profile lease and never enter DagRun conf, XCom or task environment v
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import hashlib
+import http.client
 import json
 import logging
 import os
 from pathlib import Path
 import re
+import socket
 import subprocess
 from typing import Any
 from urllib import error as urllib_error
+from urllib.parse import quote
 from urllib import request as urllib_request
 from uuid import UUID
 
@@ -25,6 +29,7 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _DAG_ID = re.compile(r"^[a-z][a-z0-9_]{2,199}$")
 _SAFE_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]{0,127}$")
 _SAFE_IMAGE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,255}$")
+_DOCKER_CONTAINER_ID = re.compile(r"^[0-9a-f]{64}$")
 _RELEASE_BUILD_CONF_KEYS = frozenset(
     {
         "pipelineRunGroupId",
@@ -62,6 +67,24 @@ _RUNTIME_SPEC_KEYS = frozenset(
 _PREPARE_TASK_ID = "prepare_runtime"
 _BUILD_TASK_ID = "dbt_build"
 _SYNC_TASK_ID = "sync_manifest_and_probe"
+_PROFILE_LEASE_RENEW_MIN_INTERVAL_SECONDS = 5.0
+_PROFILE_LEASE_RENEW_MAX_INTERVAL_SECONDS = 60.0
+_PROCESS_TERMINATE_TIMEOUT_SECONDS = 10.0
+_PROCESS_KILL_TIMEOUT_SECONDS = 10.0
+_DOCKER_SOCKET_PATH = "/var/run/docker.sock"
+_DOCKER_ENGINE_HOST = f"unix://{_DOCKER_SOCKET_PATH}"
+_DOCKER_ENGINE_TIMEOUT_SECONDS = 12.0
+_DOCKER_ENGINE_MAX_RESPONSE_BYTES = 64 * 1024
+_PROFILE_LEASE_OWNER_LABEL = "com.yuzhi.dts.dbt.profile-lease-id"
+_PIPELINE_RUN_GROUP_OWNER_LABEL = (
+    "com.yuzhi.dts.dbt.pipeline-run-group-id"
+)
+
+
+class DbtBuildProcessError(RuntimeError):
+    def __init__(self, returncode: int) -> None:
+        self.returncode = returncode
+        super().__init__(f"dbt build process exited with code {returncode}")
 
 
 def _required_text(value: Any, name: str) -> str:
@@ -231,8 +254,17 @@ def _build_docker_command(
         / f"candidate-{runtime['projectBundleChecksum']}"
     )
     profile_directory = profile_root / runtime["profileLeaseId"]
+    container_name = _dbt_container_name(runtime["profileLeaseId"])
     command = [
-        "docker", "run", "--rm",
+        "docker", "--host", _DOCKER_ENGINE_HOST, "run", "--rm",
+        "--name", container_name,
+        "--label",
+        f"{_PROFILE_LEASE_OWNER_LABEL}={runtime['profileLeaseId']}",
+        "--label",
+        (
+            f"{_PIPELINE_RUN_GROUP_OWNER_LABEL}="
+            f"{runtime['pipelineRunGroupId']}"
+        ),
         "--network", safe_network,
         "-v", f"{project_directory}:/opt/dbt",
         "-v", f"{profile_directory}:/root/.dbt:ro",
@@ -244,6 +276,166 @@ def _build_docker_command(
         "--select", runtime["selector"],
     ]
     return command
+
+
+def _dbt_container_name(lease_id: str) -> str:
+    return "dts-dbt-" + _uuid_text(lease_id, "profileLeaseId")
+
+
+class _DockerSocketConnection(http.client.HTTPConnection):
+    def __init__(self) -> None:
+        super().__init__("localhost", timeout=_DOCKER_ENGINE_TIMEOUT_SECONDS)
+
+    def connect(self) -> None:
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.settimeout(self.timeout)
+        self.sock.connect(_DOCKER_SOCKET_PATH)
+
+
+def _docker_engine_request(method: str, path: str) -> tuple[int, bytes]:
+    if method not in {"GET", "POST"} or not path.startswith("/containers/"):
+        raise ValueError("Docker Engine request is invalid")
+    connection = _DockerSocketConnection()
+    try:
+        connection.request(method, path)
+        response = connection.getresponse()
+        payload = response.read(_DOCKER_ENGINE_MAX_RESPONSE_BYTES + 1)
+        if len(payload) > _DOCKER_ENGINE_MAX_RESPONSE_BYTES:
+            raise RuntimeError("Docker Engine response is too large")
+        return response.status, payload
+    finally:
+        connection.close()
+
+
+def _inspect_dbt_container(
+    container_reference: str,
+    lease_id: str,
+    pipeline_run_group_id: str,
+    *,
+    expected_container_id: str | None = None,
+) -> tuple[str, bool] | None:
+    expected_lease_id = _uuid_text(lease_id, "profileLeaseId")
+    expected_run_group_id = _uuid_text(
+        pipeline_run_group_id,
+        "pipelineRunGroupId",
+    )
+    if (
+        container_reference != _dbt_container_name(expected_lease_id)
+        and not _DOCKER_CONTAINER_ID.fullmatch(container_reference)
+    ):
+        raise ValueError("dbt container reference is invalid")
+    if (
+        expected_container_id is not None
+        and not _DOCKER_CONTAINER_ID.fullmatch(expected_container_id)
+    ):
+        raise ValueError("expected dbt container id is invalid")
+    encoded_reference = quote(container_reference, safe="")
+    status, payload = _docker_engine_request(
+        "GET",
+        f"/containers/{encoded_reference}/json",
+    )
+    if status == 404:
+        return None
+    if status != 200:
+        raise RuntimeError("Docker Engine container inspection failed")
+    try:
+        decoded = json.loads(payload.decode("utf-8"))
+        container_id = decoded["Id"]
+        labels = decoded["Config"]["Labels"]
+        running = decoded["State"]["Running"]
+        if (
+            not isinstance(container_id, str)
+            or not _DOCKER_CONTAINER_ID.fullmatch(container_id)
+            or not isinstance(labels, dict)
+            or not isinstance(running, bool)
+        ):
+            raise TypeError
+    except (AttributeError, UnicodeDecodeError, json.JSONDecodeError) as failure:
+        raise RuntimeError(
+            "Docker Engine container inspection response is invalid"
+        ) from failure
+    except (KeyError, TypeError) as failure:
+        raise RuntimeError(
+            "Docker Engine container inspection response is invalid"
+        ) from failure
+    if (
+        expected_container_id is not None
+        and container_id != expected_container_id
+    ):
+        raise RuntimeError(
+            "dbt container identity does not match inspected container"
+        )
+    if (
+        labels.get(_PROFILE_LEASE_OWNER_LABEL) != expected_lease_id
+        or labels.get(_PIPELINE_RUN_GROUP_OWNER_LABEL)
+        != expected_run_group_id
+    ):
+        raise RuntimeError("dbt container ownership does not match runtime")
+    return container_id, running
+
+
+def _stop_dbt_container(
+    container_name: str,
+    lease_id: str,
+    pipeline_run_group_id: str,
+) -> None:
+    expected_lease_id = _uuid_text(lease_id, "profileLeaseId")
+    if container_name != _dbt_container_name(expected_lease_id):
+        raise ValueError("dbt container name does not match profile lease")
+    inspected = _inspect_dbt_container(
+        container_name,
+        expected_lease_id,
+        pipeline_run_group_id,
+    )
+    if inspected is None:
+        return
+    container_id, running = inspected
+    if running is not True:
+        return
+    encoded_container_id = quote(container_id, safe="")
+    try:
+        _docker_engine_request(
+            "POST",
+            f"/containers/{encoded_container_id}/stop?t="
+            f"{int(_PROCESS_TERMINATE_TIMEOUT_SECONDS)}",
+        )
+    except (OSError, TimeoutError, http.client.HTTPException):
+        pass
+    inspected = _inspect_dbt_container(
+        container_id,
+        expected_lease_id,
+        pipeline_run_group_id,
+        expected_container_id=container_id,
+    )
+    if inspected is None:
+        return
+    _, running = inspected
+    if running is not True:
+        return
+    try:
+        _docker_engine_request(
+            "POST",
+            f"/containers/{encoded_container_id}/kill",
+        )
+    except (OSError, TimeoutError, http.client.HTTPException):
+        pass
+    try:
+        inspected = _inspect_dbt_container(
+            container_id,
+            expected_lease_id,
+            pipeline_run_group_id,
+            expected_container_id=container_id,
+        )
+        if inspected is None:
+            return
+        _, running = inspected
+        if running is not True:
+            return
+    except (OSError, TimeoutError, http.client.HTTPException) as failure:
+        raise RuntimeError(
+            "dbt container stop could not be confirmed"
+        ) from failure
+    raise RuntimeError("dbt container stop could not be confirmed stopped")
 
 
 def _platform_request(
@@ -293,12 +485,11 @@ def _platform_request(
             content = response.read()
     except urllib_error.HTTPError as failure:
         raise RuntimeError(
-            f"platform internal API rejected {method} {path}: "
-            f"HTTP {failure.code}"
+            f"platform internal API rejected {method}: HTTP {failure.code}"
         ) from failure
     except urllib_error.URLError as failure:
         raise RuntimeError(
-            f"platform internal API unavailable for {method} {path}"
+            f"platform internal API unavailable for {method}"
         ) from failure
     if not content:
         return {}
@@ -394,15 +585,92 @@ def _runtime_from_xcom(task_instance: Any) -> dict[str, str]:
     return _validate_runtime_spec(runtime)
 
 
+def _profile_lease_renew_interval(expires_at: Any, now: datetime) -> float:
+    try:
+        expires_at_text = _required_text(
+            expires_at,
+            "profile lease expiresAt",
+        )
+        expires = datetime.fromisoformat(
+            expires_at_text.replace("Z", "+00:00")
+        )
+    except (TypeError, ValueError) as failure:
+        raise RuntimeError("profile lease expiresAt is invalid") from failure
+    if expires.tzinfo is None or now.tzinfo is None:
+        raise RuntimeError("profile lease expiresAt is invalid")
+    remaining_seconds = (
+        expires.astimezone(timezone.utc) - now.astimezone(timezone.utc)
+    ).total_seconds()
+    if remaining_seconds <= 2 * _PROFILE_LEASE_RENEW_MIN_INTERVAL_SECONDS:
+        raise RuntimeError("profile lease expires too soon to execute dbt safely")
+    return min(
+        _PROFILE_LEASE_RENEW_MAX_INTERVAL_SECONDS,
+        max(
+            _PROFILE_LEASE_RENEW_MIN_INTERVAL_SECONDS,
+            remaining_seconds / 3,
+        ),
+    )
+
+
+def _validated_profile_lease_renew_interval(
+    response: dict[str, Any],
+    lease_id: str,
+    action: str,
+) -> float:
+    if str(response.get("profileLeaseId", "")) != lease_id:
+        raise RuntimeError(
+            f"profile lease {action} response does not match runtime"
+        )
+    return _profile_lease_renew_interval(
+        response.get("expiresAt"),
+        datetime.now(timezone.utc),
+    )
+
+
+def _terminate_and_wait(process: Any) -> None:
+    if process.poll() is not None:
+        return
+    try:
+        process.terminate()
+    except ProcessLookupError:
+        pass
+    try:
+        process.wait(timeout=_PROCESS_TERMINATE_TIMEOUT_SECONDS)
+        return
+    except subprocess.TimeoutExpired:
+        LOG.warning(
+            "event=dbt_materialization_terminate_timeout "
+            "timeout_seconds=%s",
+            _PROCESS_TERMINATE_TIMEOUT_SECONDS,
+        )
+    except OSError as failure:
+        LOG.warning(
+            "event=dbt_materialization_terminate_wait_failed "
+            "error_type=%s",
+            type(failure).__name__,
+        )
+    if process.poll() is not None:
+        return
+    try:
+        process.kill()
+    except ProcessLookupError:
+        pass
+    process.wait(timeout=_PROCESS_KILL_TIMEOUT_SECONDS)
+
+
 def _dbt_build_task(**context: Any) -> None:
     runtime = _runtime_from_xcom(context["ti"])
     lease_id = runtime["profileLeaseId"]
+    container_name = _dbt_container_name(lease_id)
     consumed = _platform_request(
         "/api/internal/modeling/materialization/profile-leases/"
         f"{lease_id}/consume",
     )
-    if str(consumed.get("leaseId", "")) != lease_id:
-        raise RuntimeError("profile lease consume response does not match runtime")
+    renew_interval = _validated_profile_lease_renew_interval(
+        consumed,
+        lease_id,
+        "consume",
+    )
     command = _build_docker_command(
         runtime,
         image=os.getenv("DBT_IMAGE", "dts-dbt:1.10.0"),
@@ -423,7 +691,58 @@ def _dbt_build_task(**context: Any) -> None:
         command[command.index("build") - 1],
         selector_checksum,
     )
-    subprocess.run(command, check=True)
+    process = None
+    try:
+        process = subprocess.Popen(command)
+        while True:
+            try:
+                return_code = process.wait(timeout=renew_interval)
+            except subprocess.TimeoutExpired:
+                renewed = _platform_request(
+                    "/api/internal/modeling/materialization/profile-leases/"
+                    f"{lease_id}/renew",
+                )
+                renew_interval = _validated_profile_lease_renew_interval(
+                    renewed,
+                    lease_id,
+                    "renew",
+                )
+                continue
+            if return_code != 0:
+                raise DbtBuildProcessError(return_code)
+            break
+    except BaseException as failure:
+        cleanup_failures: list[str] = []
+        try:
+            _stop_dbt_container(
+                container_name,
+                lease_id,
+                runtime["pipelineRunGroupId"],
+            )
+        except BaseException as cleanup_failure:
+            cleanup_failures.append(
+                "container:"
+                + type(cleanup_failure).__name__
+            )
+        if process is not None:
+            try:
+                _terminate_and_wait(process)
+            except BaseException as cleanup_failure:
+                cleanup_failures.append(
+                    "client:"
+                    + type(cleanup_failure).__name__
+                )
+        if cleanup_failures:
+            LOG.error(
+                "event=dbt_materialization_cleanup_unconfirmed failures=%s",
+                ",".join(cleanup_failures),
+            )
+            add_note = getattr(failure, "add_note", None)
+            if callable(add_note):
+                add_note(
+                    "dbt container cleanup could not be fully confirmed"
+                )
+        raise
 
 
 def _sync_manifest_and_probe_task(**context: Any) -> None:
@@ -475,6 +794,11 @@ def _finalize_task(**context: Any) -> None:
         )
     finally:
         if runtime is not None:
+            _stop_dbt_container(
+                _dbt_container_name(runtime["profileLeaseId"]),
+                runtime["profileLeaseId"],
+                runtime["pipelineRunGroupId"],
+            )
             _platform_request(
                 "/api/internal/modeling/materialization/profile-leases/"
                 f"{runtime['profileLeaseId']}",

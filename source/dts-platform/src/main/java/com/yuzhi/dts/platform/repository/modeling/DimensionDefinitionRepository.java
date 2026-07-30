@@ -10,6 +10,7 @@ import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.Reuse
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.ScopeType;
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.Status;
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.View;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.DimensionDefinitionRef;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -135,6 +136,64 @@ public class DimensionDefinitionRepository {
         return jdbcTemplate.query(sql.toString(), this::mapStored, arguments.toArray());
     }
 
+    public List<StoredDimensionDefinition> listRevisionsForRelationshipGraph(
+        String tenantId,
+        List<DimensionDefinitionRef> references,
+        Set<UUID> visibleDomainIds,
+        int limit
+    ) {
+        if (references == null || references.isEmpty() || visibleDomainIds == null || visibleDomainIds.isEmpty() || limit < 1) {
+            return List.of();
+        }
+        List<UUID> orderedVisibleDomainIds = visibleDomainIds.stream().filter(java.util.Objects::nonNull).sorted().toList();
+        if (orderedVisibleDomainIds.isEmpty()) {
+            return List.of();
+        }
+        List<DimensionDefinitionRef> boundedReferences = references
+            .stream()
+            .filter(java.util.Objects::nonNull)
+            .filter(reference -> reference.dimensionDefinitionId() != null && reference.revision() > 0)
+            .limit(limit)
+            .toList();
+        if (boundedReferences.isEmpty()) {
+            return List.of();
+        }
+        StringBuilder sql = new StringBuilder(
+            """
+            select false as current_head, r.tenant_id, r.dimension_definition_id as id, r.system_code,
+                   r.domain_id, r.name, r.definition, r.owner_id, r.reuse_scope,
+                   r.hierarchies_json::text as hierarchies_json, r.scope_type, r.data_mart_id,
+                   r.attributes_json::text as attributes_json, r.status, r.revision,
+                   null as current_checksum, r.content_checksum as revision_checksum,
+                   r.snapshot_json::text as current_snapshot, d.idempotency_key, d.idempotency_request_hash,
+                   d.idempotency_response_snapshot::text as idempotency_response_snapshot,
+                   d.created_date, r.created_date as last_modified_date
+              from modeling_dimension_definition_revision r
+              join modeling_dimension_definition d
+                on d.tenant_id = r.tenant_id and d.id = r.dimension_definition_id
+             where r.tenant_id = ?
+               and r.domain_id in (
+            """
+        );
+        List<Object> arguments = new ArrayList<>();
+        arguments.add(tenantId);
+        sql.append(String.join(", ", java.util.Collections.nCopies(orderedVisibleDomainIds.size(), "?"))).append(")");
+        arguments.addAll(orderedVisibleDomainIds);
+        sql.append(" and (");
+        for (int index = 0; index < boundedReferences.size(); index++) {
+            if (index > 0) {
+                sql.append(" or ");
+            }
+            sql.append("(r.dimension_definition_id = ? and r.revision = ?)");
+            DimensionDefinitionRef reference = boundedReferences.get(index);
+            arguments.add(reference.dimensionDefinitionId());
+            arguments.add(reference.revision());
+        }
+        sql.append(") order by r.name, r.dimension_definition_id, r.revision limit ?");
+        arguments.add(limit);
+        return jdbcTemplate.query(sql.toString(), this::mapStored, arguments.toArray());
+    }
+
     public Optional<StoredDimensionDefinition> findByIdempotencyKey(String tenantId, String key) {
         return jdbcTemplate
             .query(
@@ -207,6 +266,60 @@ public class DimensionDefinitionRepository {
             )
             .stream()
             .findFirst();
+    }
+
+    /**
+     * Bounded graph-only resolver for legacy DIMENSION projections.
+     *
+     * <p>The authoritative ModelSpec head supplies the domain guard for every map row, preventing
+     * cross-domain mappings without issuing one lookup per ModelSpec.
+     */
+    public List<LegacyDefinitionMapping> findLegacyDefinitionRefsForRelationshipGraph(
+        String tenantId,
+        List<UUID> legacyModelSpecIds,
+        int limit
+    ) {
+        if (legacyModelSpecIds == null || legacyModelSpecIds.isEmpty() || limit < 1) {
+            return List.of();
+        }
+        int boundedLimit = Math.min(limit, 501);
+        List<UUID> boundedIds = new ArrayList<>();
+        Set<UUID> seen = new java.util.LinkedHashSet<>();
+        int inspected = 0;
+        for (UUID id : legacyModelSpecIds) {
+            if (++inspected > boundedLimit || boundedIds.size() >= boundedLimit) break;
+            if (id != null && seen.add(id)) boundedIds.add(id);
+        }
+        if (boundedIds.isEmpty()) return List.of();
+        String placeholders = String.join(", ", java.util.Collections.nCopies(boundedIds.size(), "?"));
+        List<Object> arguments = new ArrayList<>();
+        arguments.add(tenantId);
+        arguments.addAll(boundedIds);
+        arguments.add(boundedLimit);
+        return jdbcTemplate.query(
+            """
+            select m.legacy_model_spec_id, m.dimension_definition_id, m.dimension_definition_revision
+              from modeling_dimension_definition_legacy_map m
+              join modeling_model_spec s
+                on s.tenant_id = m.tenant_id
+               and s.id = m.legacy_model_spec_id
+              join modeling_dimension_definition d
+                on d.tenant_id = m.tenant_id
+               and d.id = m.dimension_definition_id
+             where m.tenant_id = ?
+               and m.legacy_model_spec_id in (%s)
+               and d.domain_id = s.domain_id
+             order by m.legacy_model_spec_id
+             limit ?
+            """.formatted(placeholders),
+            (row, rowNumber) ->
+                new LegacyDefinitionMapping(
+                    row.getObject("legacy_model_spec_id", UUID.class),
+                    row.getObject("dimension_definition_id", UUID.class),
+                    row.getInt("dimension_definition_revision")
+                ),
+            arguments.toArray()
+        );
     }
 
     public boolean existsByDomainAndName(
@@ -552,6 +665,12 @@ public class DimensionDefinitionRepository {
     public record ExpectedVersion(UUID id, int revision, String checksum) {}
 
     public record LegacyDefinitionRef(UUID dimensionDefinitionId, int revision) {}
+
+    public record LegacyDefinitionMapping(
+        UUID legacyModelSpecId,
+        UUID dimensionDefinitionId,
+        int revision
+    ) {}
 
     public record StoredDimensionDefinition(
         boolean currentHead,

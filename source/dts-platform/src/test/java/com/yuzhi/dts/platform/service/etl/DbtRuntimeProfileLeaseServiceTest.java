@@ -93,46 +93,94 @@ class DbtRuntimeProfileLeaseServiceTest {
                 );
                 return true;
             });
+        when(
+            repository.renew(
+                any(UUID.class),
+                any(Instant.class),
+                any(Instant.class)
+            )
+        )
+            .thenAnswer(invocation -> {
+                LeaseRecord current = persisted.get();
+                Instant now = invocation.getArgument(1);
+                if (
+                    current == null ||
+                    current.status() != LeaseStatus.CONSUMED ||
+                    !now.isBefore(current.expiresAt())
+                ) {
+                    return false;
+                }
+                persisted.set(
+                    withExpiry(current, invocation.getArgument(2))
+                );
+                return true;
+            });
         doAnswer(invocation -> {
             LeaseRecord current = persisted.get();
-            if (current != null) {
-                persisted.set(
-                    withStatus(
-                        current,
-                        LeaseStatus.RELEASED,
-                        invocation.getArgument(1)
-                    )
-                );
+            UUID id = invocation.getArgument(0);
+            if (
+                current == null ||
+                !current.id().equals(id) ||
+                (current.status() != LeaseStatus.ISSUED &&
+                    current.status() != LeaseStatus.CONSUMED)
+            ) {
+                return false;
             }
-            return null;
+            persisted.set(
+                withStatus(
+                    current,
+                    LeaseStatus.RELEASED,
+                    invocation.getArgument(1)
+                )
+            );
+            return true;
         })
             .when(repository)
             .release(any(UUID.class), any(Instant.class));
         doAnswer(invocation -> {
             LeaseRecord current = persisted.get();
-            if (current != null) {
-                persisted.set(
-                    withStatus(
-                        current,
-                        LeaseStatus.EXPIRED,
-                        invocation.getArgument(1)
-                    )
-                );
+            UUID id = invocation.getArgument(0);
+            Instant expectedExpiresAt = invocation.getArgument(1);
+            Instant cutoff = invocation.getArgument(2);
+            Instant expiredAt = invocation.getArgument(3);
+            if (
+                current == null ||
+                !current.id().equals(id) ||
+                (current.status() != LeaseStatus.ISSUED &&
+                    current.status() != LeaseStatus.CONSUMED) ||
+                !current.expiresAt().equals(expectedExpiresAt) ||
+                current.expiresAt().isAfter(cutoff)
+            ) {
+                return false;
             }
-            return null;
+            persisted.set(
+                withStatus(
+                    current,
+                    LeaseStatus.EXPIRED,
+                    expiredAt
+                )
+            );
+            return true;
         })
             .when(repository)
-            .expire(any(UUID.class), any(Instant.class));
+            .expire(
+                any(UUID.class),
+                any(Instant.class),
+                any(Instant.class),
+                any(Instant.class)
+            );
         when(
             repository.findExpired(any(Instant.class), anyInt())
         )
             .thenAnswer(invocation -> {
                 LeaseRecord current = persisted.get();
                 Instant at = invocation.getArgument(0);
-                return current != null &&
-                    current.status() != LeaseStatus.RELEASED &&
-                    current.status() != LeaseStatus.EXPIRED &&
-                    !at.isBefore(current.expiresAt())
+                boolean activeAndDue =
+                    current != null &&
+                    (current.status() == LeaseStatus.ISSUED ||
+                        current.status() == LeaseStatus.CONSUMED) &&
+                    !at.isBefore(current.expiresAt());
+                return activeAndDue
                     ? java.util.List.of(current)
                     : java.util.List.of();
             });
@@ -185,14 +233,301 @@ class DbtRuntimeProfileLeaseServiceTest {
             .doesNotContain("warehouse_user");
 
         assertThat(service.consume(LEASE_ID)).isEqualTo(lease);
-        assertThatThrownBy(() -> service.consume(LEASE_ID))
-            .isInstanceOf(DbtRuntimeProfileException.class)
-            .extracting(error -> ((DbtRuntimeProfileException) error).code())
-            .isEqualTo("DBT_PROFILE_LEASE_ALREADY_CONSUMED");
+        assertThat(service.consume(LEASE_ID)).isEqualTo(lease);
 
         service.release(LEASE_ID);
         service.release(LEASE_ID);
         assertThat(leaseDir).doesNotExist();
+    }
+
+    @Test
+    void releaseCasFailureNeverDeletesOrClaimsSuccessForAnUnclaimedProfile() {
+        service.issue(
+            new DbtRuntimeProfileLeaseService.LeaseRequest(
+                "tenant-a",
+                PIPELINE_RUN_ID,
+                DAG_RUN_ID,
+                "DEV",
+                "postgres-primary"
+            )
+        );
+        doAnswer(invocation -> false)
+            .when(repository)
+            .release(LEASE_ID, NOW);
+
+        assertThatThrownBy(() -> service.release(LEASE_ID))
+            .isInstanceOf(DbtRuntimeProfileException.class)
+            .extracting(error ->
+                ((DbtRuntimeProfileException) error).code()
+            )
+            .isEqualTo("DBT_PROFILE_LEASE_RELEASE_FAILED");
+
+        assertThat(runtimeRoot.resolve(LEASE_ID.toString())).exists();
+        assertThat(persisted.get().status())
+            .isEqualTo(LeaseStatus.ISSUED);
+    }
+
+    @Test
+    void releaseDeletesTheProfileOnlyAfterItsMetadataClaimSucceeds() {
+        service.issue(
+            new DbtRuntimeProfileLeaseService.LeaseRequest(
+                "tenant-a",
+                PIPELINE_RUN_ID,
+                DAG_RUN_ID,
+                "DEV",
+                "postgres-primary"
+            )
+        );
+        Path leaseDirectory = runtimeRoot.resolve(LEASE_ID.toString());
+        doAnswer(invocation -> {
+                assertThat(leaseDirectory).exists();
+                persisted.set(
+                    withStatus(
+                        persisted.get(),
+                        LeaseStatus.RELEASED,
+                        invocation.getArgument(1)
+                    )
+                );
+                return true;
+            })
+            .when(repository)
+            .release(LEASE_ID, NOW);
+
+        service.release(LEASE_ID);
+
+        assertThat(leaseDirectory).doesNotExist();
+        assertThat(persisted.get().status())
+            .isEqualTo(LeaseStatus.RELEASED);
+    }
+
+    @Test
+    void repeatedReleaseRetriesAProfileDeletionThatFailedAfterTheClaim()
+        throws Exception {
+        service.issue(
+            new DbtRuntimeProfileLeaseService.LeaseRequest(
+                "tenant-a",
+                PIPELINE_RUN_ID,
+                DAG_RUN_ID,
+                "DEV",
+                "postgres-primary"
+            )
+        );
+        Path leaseDirectory = runtimeRoot.resolve(LEASE_ID.toString());
+        Path blocker = leaseDirectory.resolve("transient-blocker");
+        Files.writeString(blocker, "retry-me");
+
+        assertThatThrownBy(() -> service.release(LEASE_ID))
+            .isInstanceOf(DbtRuntimeProfileException.class)
+            .extracting(error ->
+                ((DbtRuntimeProfileException) error).code()
+            )
+            .isEqualTo("DBT_PROFILE_LEASE_RELEASE_FAILED");
+        assertThat(persisted.get().status())
+            .isEqualTo(LeaseStatus.RELEASED);
+        assertThat(leaseDirectory).exists();
+
+        Files.delete(blocker);
+        service.release(LEASE_ID);
+
+        assertThat(leaseDirectory).doesNotExist();
+    }
+
+    @Test
+    void renewsAConsumedLeaseSoTheJanitorCannotDeleteAnActiveProfile() {
+        var issued = service.issue(
+            new DbtRuntimeProfileLeaseService.LeaseRequest(
+                "tenant-a",
+                PIPELINE_RUN_ID,
+                DAG_RUN_ID,
+                "DEV",
+                "postgres-primary"
+            )
+        );
+        service.consume(LEASE_ID);
+
+        service = new DbtRuntimeProfileLeaseService(
+            properties,
+            targetFactory,
+            repository,
+            () -> UUID.randomUUID(),
+            Clock.fixed(NOW.plus(Duration.ofMinutes(4)), ZoneOffset.UTC)
+        );
+        var renewed = service.renew(LEASE_ID);
+
+        assertThat(renewed.profileLeaseId()).isEqualTo(issued.profileLeaseId());
+        assertThat(renewed.expiresAt())
+            .isEqualTo(NOW.plus(Duration.ofMinutes(9)));
+
+        service = new DbtRuntimeProfileLeaseService(
+            properties,
+            targetFactory,
+            repository,
+            () -> UUID.randomUUID(),
+            Clock.fixed(NOW.plus(Duration.ofMinutes(6)), ZoneOffset.UTC)
+        );
+        service.cleanupExpired();
+
+        assertThat(runtimeRoot.resolve(LEASE_ID.toString())).exists();
+        assertThat(service.viewActive(LEASE_ID).expiresAt())
+            .isEqualTo(renewed.expiresAt());
+    }
+
+    @Test
+    void staleJanitorCandidateNeverDeletesAProfileRenewedBeforeItsClaim() {
+        service.issue(
+            new DbtRuntimeProfileLeaseService.LeaseRequest(
+                "tenant-a",
+                PIPELINE_RUN_ID,
+                DAG_RUN_ID,
+                "DEV",
+                "postgres-primary"
+            )
+        );
+        service.consume(LEASE_ID);
+        LeaseRecord staleCandidate = persisted.get();
+        Instant janitorCutoff = NOW.plus(Duration.ofMinutes(6));
+        Instant renewedExpiry = NOW.plus(Duration.ofMinutes(9));
+        when(repository.findExpired(janitorCutoff, 100))
+            .thenReturn(java.util.List.of(staleCandidate));
+        doAnswer(invocation -> {
+                persisted.set(
+                    withExpiry(persisted.get(), renewedExpiry)
+                );
+                return false;
+            })
+            .when(repository)
+            .expire(
+                LEASE_ID,
+                staleCandidate.expiresAt(),
+                janitorCutoff,
+                janitorCutoff
+            );
+        service = new DbtRuntimeProfileLeaseService(
+            properties,
+            targetFactory,
+            repository,
+            UUID::randomUUID,
+            Clock.fixed(janitorCutoff, ZoneOffset.UTC)
+        );
+
+        service.cleanupExpired();
+
+        assertThat(runtimeRoot.resolve(LEASE_ID.toString())).exists();
+        assertThat(persisted.get().status())
+            .isEqualTo(LeaseStatus.CONSUMED);
+        assertThat(persisted.get().expiresAt())
+            .isEqualTo(renewedExpiry);
+    }
+
+    @Test
+    void removesAProfileLeftBehindAfterAnExpirationClaim() {
+        service.issue(
+            new DbtRuntimeProfileLeaseService.LeaseRequest(
+                "tenant-a",
+                PIPELINE_RUN_ID,
+                DAG_RUN_ID,
+                "DEV",
+                "postgres-primary"
+            )
+        );
+        persisted.set(
+            withStatus(
+                persisted.get(),
+                LeaseStatus.EXPIRED,
+                NOW.plus(Duration.ofMinutes(5))
+            )
+        );
+        try {
+            Files.setLastModifiedTime(
+                runtimeRoot.resolve(LEASE_ID.toString()),
+                FileTime.from(NOW.minus(Duration.ofMinutes(1)))
+            );
+        } catch (java.io.IOException failure) {
+            throw new AssertionError(failure);
+        }
+        Instant janitorCutoff = NOW.plus(Duration.ofMinutes(6));
+        service = new DbtRuntimeProfileLeaseService(
+            properties,
+            targetFactory,
+            repository,
+            UUID::randomUUID,
+            Clock.fixed(janitorCutoff, ZoneOffset.UTC)
+        );
+
+        service.cleanupExpired();
+
+        assertThat(runtimeRoot.resolve(LEASE_ID.toString()))
+            .doesNotExist();
+        assertThat(persisted.get().releasedAt())
+            .isEqualTo(NOW.plus(Duration.ofMinutes(5)));
+    }
+
+    @Test
+    void janitorImmediatelyRetriesTrackedTerminalProfileDirectories()
+        throws Exception {
+        service.issue(
+            new DbtRuntimeProfileLeaseService.LeaseRequest(
+                "tenant-a",
+                PIPELINE_RUN_ID,
+                DAG_RUN_ID,
+                "DEV",
+                "postgres-primary"
+            )
+        );
+        persisted.set(
+            withStatus(
+                persisted.get(),
+                LeaseStatus.RELEASED,
+                NOW
+            )
+        );
+        Path leaseDirectory = runtimeRoot.resolve(LEASE_ID.toString());
+        Files.setLastModifiedTime(
+            leaseDirectory,
+            FileTime.from(NOW)
+        );
+
+        service.cleanupExpired();
+
+        assertThat(leaseDirectory).doesNotExist();
+    }
+
+    @Test
+    void janitorKeepsTtlForUntrackedAndInvalidDirectories()
+        throws Exception {
+        Path agedUntracked = runtimeRoot.resolve(
+            "40000000-0000-0000-0000-000000000001"
+        );
+        Path freshUntracked = runtimeRoot.resolve(
+            "40000000-0000-0000-0000-000000000002"
+        );
+        Path agedInvalid = runtimeRoot.resolve(
+            "aged-invalid-lease-directory"
+        );
+        Path freshInvalid = runtimeRoot.resolve(
+            "fresh-invalid-lease-directory"
+        );
+        Files.createDirectory(agedUntracked);
+        Files.createDirectory(freshUntracked);
+        Files.createDirectory(agedInvalid);
+        Files.createDirectory(freshInvalid);
+        Files.setLastModifiedTime(
+            agedUntracked,
+            FileTime.from(NOW.minus(Duration.ofMinutes(6)))
+        );
+        Files.setLastModifiedTime(
+            agedInvalid,
+            FileTime.from(NOW.minus(Duration.ofMinutes(6)))
+        );
+        Files.setLastModifiedTime(freshUntracked, FileTime.from(NOW));
+        Files.setLastModifiedTime(freshInvalid, FileTime.from(NOW));
+
+        service.cleanupExpired();
+
+        assertThat(agedUntracked).doesNotExist();
+        assertThat(agedInvalid).doesNotExist();
+        assertThat(freshUntracked).exists();
+        assertThat(freshInvalid).exists();
     }
 
     @Test
@@ -370,6 +705,27 @@ class DbtRuntimeProfileLeaseServiceTest {
                 status == LeaseStatus.EXPIRED
                 ? at
                 : current.releasedAt()
+        );
+    }
+
+    private static LeaseRecord withExpiry(
+        LeaseRecord current,
+        Instant expiresAt
+    ) {
+        return new LeaseRecord(
+            current.id(),
+            current.tenantId(),
+            current.pipelineRunId(),
+            current.dagRunId(),
+            current.environment(),
+            current.executionTargetKey(),
+            current.targetName(),
+            current.credentialVersionRef(),
+            current.status(),
+            current.issuedAt(),
+            expiresAt,
+            current.consumedAt(),
+            current.releasedAt()
         );
     }
 }

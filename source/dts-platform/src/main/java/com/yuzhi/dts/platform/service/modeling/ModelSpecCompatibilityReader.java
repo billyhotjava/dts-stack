@@ -3,6 +3,7 @@ package com.yuzhi.dts.platform.service.modeling;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository;
+import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository.LegacyDefinitionMapping;
 import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository.LegacyDefinitionRef;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.ListFilter;
@@ -13,7 +14,9 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -90,7 +93,86 @@ public class ModelSpecCompatibilityReader {
         );
     }
 
+    /**
+     * Decodes the bounded relationship-graph window and resolves all legacy DIMENSION mappings in
+     * one query.
+     */
+    public List<ModelSpecView> readForRelationshipGraph(List<StoredModelSpec> storedModels) {
+        if (storedModels == null || storedModels.isEmpty()) return List.of();
+        if (storedModels.size() > 501) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_RELATIONSHIP_GRAPH_WINDOW_INVALID",
+                "Relationship graph ModelSpec window must not exceed 501",
+                ModelSpecException.Kind.BAD_REQUEST
+            );
+        }
+        List<StoredModelSpec> rows = storedModels.stream().filter(Objects::nonNull).toList();
+        List<ModelSpecView> decoded = new ArrayList<>(rows.size());
+        LinkedHashMap<UUID, StoredModelSpec> unresolved = new LinkedHashMap<>();
+        String tenantId = null;
+        for (StoredModelSpec stored : rows) {
+            if (tenantId == null) {
+                tenantId = stored.tenantId();
+            } else if (!Objects.equals(tenantId, stored.tenantId())) {
+                throw snapshotConflict("Relationship graph ModelSpec window mixes tenants");
+            }
+            ModelSpecView view = readWithoutLegacyDefinitionLookup(stored);
+            decoded.add(view);
+            if (
+                view.modelType() == ModelType.DIMENSION &&
+                view.dimensionDefinitionRef() == null &&
+                stored.domainId() != null
+            ) {
+                unresolved.putIfAbsent(stored.id(), stored);
+            }
+        }
+        if (unresolved.isEmpty() || dimensionDefinitions == null) return List.copyOf(decoded);
+        Map<UUID, DimensionDefinitionRef> resolved = new LinkedHashMap<>();
+        for (LegacyDefinitionMapping mapping : dimensionDefinitions.findLegacyDefinitionRefsForRelationshipGraph(
+            tenantId,
+            List.copyOf(unresolved.keySet()),
+            501
+        )) {
+            if (
+                mapping != null &&
+                mapping.legacyModelSpecId() != null &&
+                mapping.dimensionDefinitionId() != null &&
+                mapping.revision() > 0 &&
+                unresolved.containsKey(mapping.legacyModelSpecId())
+            ) {
+                resolved.putIfAbsent(
+                    mapping.legacyModelSpecId(),
+                    new DimensionDefinitionRef(mapping.dimensionDefinitionId(), mapping.revision())
+                );
+            }
+        }
+        List<ModelSpecView> projected = new ArrayList<>(decoded.size());
+        for (ModelSpecView view : decoded) {
+            DimensionDefinitionRef reference = resolved.get(view.id());
+            projected.add(reference == null ? view : withDimensionDefinitionRef(view, reference));
+        }
+        return List.copyOf(projected);
+    }
+
+    private ModelSpecView readWithoutLegacyDefinitionLookup(StoredModelSpec stored) {
+        if (stored.contractVersion() == ModelSpecContract.CONTRACT_VERSION) {
+            return readCanonical(stored, false);
+        }
+        if (stored.contractVersion() == ModelingVNextContract.CONTRACT_VERSION) {
+            return readLegacy(stored, false);
+        }
+        throw new ModelSpecException(
+            "MODEL_SPEC_CONTRACT_VERSION_UNSUPPORTED",
+            "Stored ModelSpec contract version is unsupported",
+            ModelSpecException.Kind.CONFLICT
+        );
+    }
+
     private ModelSpecView readCanonical(StoredModelSpec stored) {
+        return readCanonical(stored, true);
+    }
+
+    private ModelSpecView readCanonical(StoredModelSpec stored, boolean resolveLegacyDefinition) {
         if (stored.currentSnapshot() == null || stored.currentSnapshot().isBlank()) {
             throw snapshotConflict("Canonical ModelSpec revision snapshot is missing");
         }
@@ -111,17 +193,19 @@ public class ModelSpecCompatibilityReader {
         ) {
             throw snapshotConflict("Canonical ModelSpec revision snapshot does not match the ledger head");
         }
-        DimensionDefinitionRef projected = legacyDimensionDefinitionRef(
-            stored,
-            view.modelType(),
-            view.dimensionDefinitionRef()
-        );
+        DimensionDefinitionRef projected = resolveLegacyDefinition
+            ? legacyDimensionDefinitionRef(stored, view.modelType(), view.dimensionDefinitionRef())
+            : view.dimensionDefinitionRef();
         return projected == view.dimensionDefinitionRef()
             ? view
             : withDimensionDefinitionRef(view, projected);
     }
 
     private ModelSpecView readLegacy(StoredModelSpec stored) {
+        return readLegacy(stored, true);
+    }
+
+    private ModelSpecView readLegacy(StoredModelSpec stored, boolean resolveLegacyDefinition) {
         if (stored.legacySpecJson() == null || stored.legacySpecJson().isBlank()) {
             throw snapshotConflict("Legacy ModelSpec revision payload is missing");
         }
@@ -136,7 +220,9 @@ public class ModelSpecCompatibilityReader {
         Layer layer = Layer.valueOf(legacy.layer().name());
         List<ModelField> fields = legacyFields(legacy);
         List<SourceRef> sources = legacySources(legacy.sourceRefs());
-        DimensionDefinitionRef dimensionDefinitionRef = legacyDimensionDefinitionRef(stored, modelType, null);
+        DimensionDefinitionRef dimensionDefinitionRef = resolveLegacyDefinition
+            ? legacyDimensionDefinitionRef(stored, modelType, null)
+            : null;
         return new ModelSpecView(
             ModelingVNextContract.CONTRACT_VERSION,
             id,

@@ -37,6 +37,8 @@ import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.V
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.WarehousePlanHeader;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanStageProjectionService;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanStageProjectionService.StageProjection;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphContract.RelationshipGraph;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphService;
 import java.io.IOException;
 import java.net.URI;
 import java.util.List;
@@ -68,6 +70,7 @@ public class WarehousePlanResource {
 
     private final WarehousePlanApplicationService service;
     private final WarehousePlanStageProjectionService stageProjectionService;
+    private final WarehousePlanRelationshipGraphService relationshipGraphService;
     private final WarehousePlanActorProvider actorProvider;
     private final WarehousePlanAuthorizationGuard authorizationGuard;
     private final ObjectMapper objectMapper;
@@ -76,6 +79,7 @@ public class WarehousePlanResource {
     public WarehousePlanResource(
         WarehousePlanApplicationService service,
         WarehousePlanStageProjectionService stageProjectionService,
+        WarehousePlanRelationshipGraphService relationshipGraphService,
         WarehousePlanActorProvider actorProvider,
         WarehousePlanAuthorizationGuard authorizationGuard,
         ObjectMapper objectMapper,
@@ -83,6 +87,7 @@ public class WarehousePlanResource {
     ) {
         this.service = service;
         this.stageProjectionService = stageProjectionService;
+        this.relationshipGraphService = relationshipGraphService;
         this.actorProvider = actorProvider;
         this.authorizationGuard = authorizationGuard;
         this.objectMapper = objectMapper;
@@ -160,6 +165,38 @@ public class WarehousePlanResource {
     public ApiResponse<StageProjection> stageProjection(@PathVariable UUID id) {
         WarehousePlanActor actor = requirePlanRead(id);
         return ApiResponses.ok(stageProjectionService.project(serverTenantId, id, sourceAccessContext(actor)));
+    }
+
+    @GetMapping("/{id}/relationship-graph")
+    public ApiResponse<RelationshipGraph> relationshipGraph(
+        @PathVariable UUID id,
+        @RequestParam(required = false) String kind,
+        @RequestParam(required = false) String query,
+        @RequestParam(defaultValue = "500") int limit,
+        @RequestParam(required = false) String cursor
+    ) {
+        WarehousePlanHeader plan = service.get(serverTenantId, id);
+        WarehousePlanActor actor = actorProvider.currentActor();
+        authorizationGuard.requirePlanRead(plan, actor);
+        RelationshipGraph graph = cursor == null
+            ? relationshipGraphService.read(
+                serverTenantId,
+                plan,
+                actor == null ? null : actor.ownerDepartmentId(),
+                kind,
+                query,
+                limit
+            )
+            : relationshipGraphService.read(
+                serverTenantId,
+                plan,
+                actor == null ? null : actor.ownerDepartmentId(),
+                kind,
+                query,
+                limit,
+                cursor
+            );
+        return ApiResponses.ok(graph);
     }
 
     @PostMapping("/{id}/naming/validate")
@@ -470,6 +507,9 @@ public class WarehousePlanResource {
     }
 
     private static HttpStatus status(String code) {
+        if ("RELATIONSHIP_GRAPH_TIMEOUT".equals(code)) {
+            return HttpStatus.SERVICE_UNAVAILABLE;
+        }
         if ("WAREHOUSE_PLAN_NOT_FOUND".equals(code)) {
             return HttpStatus.NOT_FOUND;
         }

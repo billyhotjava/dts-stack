@@ -25,36 +25,40 @@ export default function RelationshipGraphPanel({ planId, onNavigate }: Relations
 	const [error, setError] = useState("");
 	const requestSequence = useRef(0);
 
-	const load = useCallback(async () => {
-		const currentRequest = ++requestSequence.current;
-		if (!planId) {
-			setGraph(null);
+	const load = useCallback(
+		async (cursor?: string) => {
+			const currentRequest = ++requestSequence.current;
+			if (!planId) {
+				setGraph(null);
+				setError("");
+				setLoading(false);
+				return;
+			}
+			setLoading(true);
 			setError("");
-			setLoading(false);
-			return;
-		}
-		setLoading(true);
-		setError("");
-		setGraph(null);
-		try {
-			const nextGraph = await getWarehousePlanRelationshipGraph(planId, {
-				kind: kind || undefined,
-				query: query || undefined,
-				limit: 500,
-			});
-			if (currentRequest !== requestSequence.current) return;
-			setGraph(nextGraph);
-		} catch (nextError) {
-			if (currentRequest !== requestSequence.current) return;
 			setGraph(null);
-			setError(errorText(nextError));
-		} finally {
-			if (currentRequest === requestSequence.current) setLoading(false);
-		}
-	}, [kind, planId, query]);
+			try {
+				const nextGraph = await getWarehousePlanRelationshipGraph(planId, {
+					kind: kind || undefined,
+					query: query || undefined,
+					limit: 500,
+					cursor: cursor || undefined,
+				});
+				if (currentRequest !== requestSequence.current) return;
+				setGraph(nextGraph);
+			} catch (nextError) {
+				if (currentRequest !== requestSequence.current) return;
+				setGraph(null);
+				setError(errorText(nextError));
+			} finally {
+				if (currentRequest === requestSequence.current) setLoading(false);
+			}
+		},
+		[kind, planId, query],
+	);
 
 	useEffect(() => {
-		void load();
+		void load(undefined);
 		return () => {
 			requestSequence.current += 1;
 		};
@@ -113,7 +117,7 @@ export default function RelationshipGraphPanel({ planId, onNavigate }: Relations
 						placeholder="按名称或标识搜索"
 						className="w-56"
 					/>
-					<Button icon={<RefreshCw size={16} />} loading={loading} onClick={() => void load()}>
+					<Button icon={<RefreshCw size={16} />} loading={loading} onClick={() => void load(undefined)}>
 						刷新
 					</Button>
 				</Space>
@@ -125,7 +129,7 @@ export default function RelationshipGraphPanel({ planId, onNavigate }: Relations
 					showIcon
 					message="关系图不可用"
 					description={error}
-					action={<Button onClick={() => void load()}>重试</Button>}
+					action={<Button onClick={() => void load(undefined)}>重试</Button>}
 				/>
 			) : null}
 			{graph?.truncated ? (
@@ -134,9 +138,18 @@ export default function RelationshipGraphPanel({ planId, onNavigate }: Relations
 					showIcon
 					message="关系图已按安全上限截断"
 					description={
-						graph.nextHint === "FILTER_BY_KIND_OR_QUERY"
-							? "请按节点类型或名称缩小范围后重试。"
-							: graph.nextHint || "请缩小筛选范围后重试。"
+						graph.nextCursor
+							? "当前筛选仍有后续结果，可继续搜索下一批。"
+							: graph.nextHint === "FILTER_BY_KIND_OR_QUERY"
+								? "请按节点类型或名称缩小范围后重试。"
+								: graph.nextHint || "请缩小筛选范围后重试。"
+					}
+					action={
+						graph.nextCursor ? (
+							<Button disabled={loading} onClick={() => void load(graph.nextCursor || undefined)}>
+								继续搜索 / 下一批
+							</Button>
+						) : undefined
 					}
 				/>
 			) : null}

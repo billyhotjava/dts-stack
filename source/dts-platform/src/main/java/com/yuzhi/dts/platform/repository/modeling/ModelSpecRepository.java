@@ -3,18 +3,23 @@ package com.yuzhi.dts.platform.repository.modeling;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.Layer;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelRevisionRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelStatus;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceKind;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecException;
+import com.yuzhi.dts.platform.service.modeling.ModelingVNextContract;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -208,6 +213,77 @@ public class ModelSpecRepository {
         return jdbcTemplate.query(sql.toString(), ModelSpecRepository::mapStored, arguments.toArray());
     }
 
+    /**
+     * Bounded, tenant-scoped read used only by the relationship graph projection.
+     *
+     * <p>Domain authorization is pushed into the query so the projection does not perform one
+     * permission lookup per ModelSpec.
+     */
+    public List<StoredModelSpec> listCurrentForRelationshipGraph(
+        String tenantId,
+        UUID planId,
+        Set<UUID> visibleDomainIds,
+        boolean canonicalReadEnabled,
+        int limit
+    ) {
+        return listCurrentForRelationshipGraph(
+            tenantId,
+            planId,
+            visibleDomainIds,
+            canonicalReadEnabled,
+            null,
+            limit
+        );
+    }
+
+    /**
+     * Stable UUID-keyset window for continuing a relationship graph projection.
+     *
+     * <p>The cursor is scoped by the same tenant, plan, contract and domain predicates as the
+     * initial window; it is never interpreted as a globally readable ModelSpec identifier.
+     */
+    public List<StoredModelSpec> listCurrentForRelationshipGraph(
+        String tenantId,
+        UUID planId,
+        Set<UUID> visibleDomainIds,
+        boolean canonicalReadEnabled,
+        UUID afterId,
+        int limit
+    ) {
+        if (planId == null || limit < 1) {
+            return List.of();
+        }
+        Set<UUID> effectiveVisibleDomainIds = visibleDomainIds == null ? Set.of() : visibleDomainIds;
+        List<UUID> orderedDomainIds = effectiveVisibleDomainIds.stream().filter(java.util.Objects::nonNull).sorted().toList();
+        StringBuilder sql = new StringBuilder(CURRENT_COLUMNS)
+            .append(" where s.tenant_id = ? and s.plan_id = ?");
+        List<Object> arguments = new ArrayList<>();
+        arguments.add(tenantId);
+        arguments.add(planId);
+        if (!canonicalReadEnabled) {
+            sql.append(" and s.contract_version <> ?");
+            arguments.add(ModelSpecContract.CONTRACT_VERSION);
+        }
+        if (afterId != null) {
+            sql.append(" and s.id > ?");
+            arguments.add(afterId);
+        }
+        sql.append(" and (");
+        if (orderedDomainIds.isEmpty()) {
+            sql.append("s.domain_id is null and s.contract_version = ?");
+        } else {
+            sql
+                .append("s.domain_id in (")
+                .append(String.join(", ", java.util.Collections.nCopies(orderedDomainIds.size(), "?")))
+                .append(") or (s.domain_id is null and s.contract_version = ?)");
+            arguments.addAll(orderedDomainIds);
+        }
+        arguments.add(ModelingVNextContract.CONTRACT_VERSION);
+        sql.append(") order by s.id limit ?");
+        arguments.add(limit);
+        return jdbcTemplate.query(sql.toString(), ModelSpecRepository::mapStored, arguments.toArray());
+    }
+
     public Optional<StoredModelSpec> findRevision(String tenantId, UUID modelSpecId, int revision) {
         return jdbcTemplate
             .query(
@@ -229,6 +305,86 @@ public class ModelSpecRepository {
             )
             .stream()
             .findFirst();
+    }
+
+    /**
+     * Bounded exact-revision projection used only by the relationship graph.
+     *
+     * <p>Every requested pair is matched in SQL and domain visibility is applied before snapshot
+     * decoding, so historical references never drift to the mutable current head.
+     */
+    public List<StoredModelSpec> listRevisionsForRelationshipGraph(
+        String tenantId,
+        List<ModelRevisionRef> references,
+        Set<UUID> visibleDomainIds,
+        boolean canonicalReadEnabled,
+        int limit
+    ) {
+        if (references == null || references.isEmpty() || limit < 1) return List.of();
+        int boundedLimit = Math.min(limit, 500);
+        Set<ModelRevisionRef> unique = new java.util.LinkedHashSet<>();
+        int inspected = 0;
+        for (ModelRevisionRef reference : references) {
+            if (++inspected > boundedLimit || unique.size() >= boundedLimit) break;
+            if (reference != null && reference.modelSpecId() != null && reference.revision() > 0) {
+                unique.add(reference);
+            }
+        }
+        List<ModelRevisionRef> boundedReferences = unique
+            .stream()
+            .sorted(
+                java.util.Comparator
+                    .comparing(ModelRevisionRef::modelSpecId)
+                    .thenComparingInt(ModelRevisionRef::revision)
+            )
+            .toList();
+        if (boundedReferences.isEmpty()) return List.of();
+        List<UUID> orderedDomainIds = (visibleDomainIds == null ? Set.<UUID>of() : visibleDomainIds)
+            .stream()
+            .filter(Objects::nonNull)
+            .sorted()
+            .toList();
+        StringBuilder sql = new StringBuilder(
+            """
+            select false as current_head, r.contract_version, r.tenant_id, s.id, s.plan_id, s.domain_id, r.status, r.revision,
+                   null as current_checksum, r.content_checksum as revision_checksum,
+                   r.snapshot_json::text as current_snapshot, r.spec_json as legacy_spec_json,
+                   s.idempotency_key, s.idempotency_request_hash,
+                   s.idempotency_response_snapshot::text as idempotency_response_snapshot,
+                   s.created_date, coalesce(r.last_modified_date, r.created_date) as last_modified_date
+              from modeling_model_spec_revision r
+              join modeling_model_spec s on s.id = r.model_spec_id and s.tenant_id = r.tenant_id
+             where r.tenant_id = ?
+            """
+        );
+        List<Object> arguments = new ArrayList<>();
+        arguments.add(tenantId);
+        if (!canonicalReadEnabled) {
+            sql.append(" and r.contract_version <> ?");
+            arguments.add(ModelSpecContract.CONTRACT_VERSION);
+        }
+        sql.append(" and (");
+        if (orderedDomainIds.isEmpty()) {
+            sql.append("s.domain_id is null and r.contract_version = ?");
+        } else {
+            sql
+                .append("s.domain_id in (")
+                .append(String.join(", ", java.util.Collections.nCopies(orderedDomainIds.size(), "?")))
+                .append(") or (s.domain_id is null and r.contract_version = ?)");
+            arguments.addAll(orderedDomainIds);
+        }
+        arguments.add(ModelingVNextContract.CONTRACT_VERSION);
+        sql.append(") and (");
+        for (int index = 0; index < boundedReferences.size(); index++) {
+            if (index > 0) sql.append(" or ");
+            sql.append("(r.model_spec_id = ? and r.revision = ?)");
+            ModelRevisionRef reference = boundedReferences.get(index);
+            arguments.add(reference.modelSpecId());
+            arguments.add(reference.revision());
+        }
+        sql.append(") order by s.name, s.id, r.revision limit ?");
+        arguments.add(boundedLimit);
+        return jdbcTemplate.query(sql.toString(), ModelSpecRepository::mapStored, arguments.toArray());
     }
 
     public Optional<PlanState> lockPlan(String tenantId, UUID planId) {

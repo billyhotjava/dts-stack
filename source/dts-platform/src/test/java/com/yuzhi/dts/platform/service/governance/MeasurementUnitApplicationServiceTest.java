@@ -83,6 +83,20 @@ class MeasurementUnitApplicationServiceTest {
     }
 
     @Test
+    void loadsRelationshipGraphUnitsInOneBoundedBatch() {
+        MeasurementUnitView first = view(UNIT_ID, "KG", "MASS", BigDecimal.ONE, null, 2);
+        MeasurementUnitView second = view(BASE_ID, "G", "MASS", new BigDecimal("0.001"), UNIT_ID, 4);
+        when(repository.listCurrentForRelationshipGraph(List.of(UNIT_ID, BASE_ID), 500))
+            .thenReturn(List.of(stored(second), stored(first)));
+
+        assertThat(service.listForRelationshipGraph(List.of(BASE_ID, UNIT_ID), 500))
+            .extracting(MeasurementUnitView::id)
+            .containsExactly(BASE_ID, UNIT_ID);
+
+        verify(repository).listCurrentForRelationshipGraph(List.of(UNIT_ID, BASE_ID), 500);
+    }
+
+    @Test
     void rejectsBaseUnitsFromAnotherQuantityKindAndCyclesWithoutLeakingTheirBody() {
         MeasurementUnitView current = view(UNIT_ID, "CM", "LENGTH", new BigDecimal("0.01"), BASE_ID, 1);
         StoredUnit storedCurrent = stored(current);

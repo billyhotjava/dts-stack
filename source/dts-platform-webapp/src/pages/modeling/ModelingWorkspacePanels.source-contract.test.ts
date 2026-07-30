@@ -79,3 +79,11 @@ test("metrics is embedded under workspace-owned views and graph uses the plan pr
 	assert.match(relationshipGraph, /<LineageGraph/);
 	assert.doesNotMatch(relationshipGraph, /listDatasets|fetch\(/);
 });
+
+test("relationship graph continuation keeps cursor, reset and stale-request handling explicit", () => {
+	assert.match(relationshipGraph, /nextCursor/);
+	assert.match(relationshipGraph, /cursor:\s*cursor \|\| undefined/);
+	assert.match(relationshipGraph, /继续搜索/);
+	assert.match(relationshipGraph, /currentRequest !== requestSequence\.current/);
+	assert.match(relationshipGraph, /setGraph\(null\)/);
+});

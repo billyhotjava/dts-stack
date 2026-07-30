@@ -8,7 +8,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -52,6 +54,28 @@ public class MeasurementUnitRepository {
 
     public List<StoredUnit> listCurrent() {
         return jdbcTemplate.query(CURRENT_COLUMNS + " order by code, id", MeasurementUnitRepository::mapStoredUnit);
+    }
+
+    /** Bounded current-owner batch used only by the relationship graph projection. */
+    public List<StoredUnit> listCurrentForRelationshipGraph(List<UUID> unitIds, int limit) {
+        if (unitIds == null || unitIds.isEmpty() || limit < 1) return List.of();
+        int boundedLimit = Math.min(limit, 500);
+        LinkedHashSet<UUID> unique = new LinkedHashSet<>();
+        int inspected = 0;
+        for (UUID unitId : unitIds) {
+            if (++inspected > boundedLimit || unique.size() >= boundedLimit) break;
+            if (unitId != null) unique.add(unitId);
+        }
+        List<UUID> boundedIds = unique.stream().sorted().toList();
+        if (boundedIds.isEmpty()) return List.of();
+        String placeholders = String.join(", ", java.util.Collections.nCopies(boundedIds.size(), "?"));
+        List<Object> arguments = new ArrayList<>(boundedIds);
+        arguments.add(boundedLimit);
+        return jdbcTemplate.query(
+            CURRENT_COLUMNS + " where id in (" + placeholders + ") order by code, id limit ?",
+            MeasurementUnitRepository::mapStoredUnit,
+            arguments.toArray()
+        );
     }
 
     /** Serialize the small owner graph so concurrent base-unit writes cannot create cross-row cycles. */

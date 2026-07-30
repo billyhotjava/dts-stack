@@ -284,6 +284,85 @@ class ModelSpecRepositoryIT {
         ).isEqualTo(createdAt.plusSeconds(60));
     }
 
+    @Test
+    void relationshipGraphReadIsTenantPlanPermissionAndLimitScopedInPostgresql() {
+        String tenantA = "graph-it-a-" + UUID.randomUUID();
+        String tenantB = "graph-it-b-" + UUID.randomUUID();
+        UUID planA = UUID.randomUUID();
+        UUID planB = UUID.randomUUID();
+        UUID domainA = UUID.randomUUID();
+        UUID domainB = UUID.randomUUID();
+        UUID sourceA = UUID.randomUUID();
+        UUID sourceB = UUID.randomUUID();
+        seedContext(tenantA, "owner-a", planA, domainA, sourceA);
+        seedContext(tenantB, "owner-b", planB, domainB, sourceB);
+        ModelSpecSnapshotCodec codec = new ModelSpecSnapshotCodec(objectMapper);
+        Instant now = Instant.parse("2026-07-30T00:00:00Z");
+        CreateModelSpecCommand commandA = command(planA, domainA, sourceA);
+        CreateModelSpecCommand commandB = command(planB, domainB, sourceB);
+        ModelSpecView modelA = codec.toCreatedView(UUID.randomUUID(), commandA, now);
+        ModelSpecView modelB = codec.toCreatedView(UUID.randomUUID(), commandB, now);
+        assertThat(repository.insertV2(tenantA, "owner-a", commandA, modelA, codec.requestHash(commandA), codec.write(modelA)))
+            .isEqualTo(1);
+        repository.insertV2Revision(tenantA, "owner-a", modelA, codec.write(modelA));
+        assertThat(repository.insertV2(tenantB, "owner-b", commandB, modelB, codec.requestHash(commandB), codec.write(modelB)))
+            .isEqualTo(1);
+        repository.insertV2Revision(tenantB, "owner-b", modelB, codec.write(modelB));
+
+        assertThat(repository.listCurrentForRelationshipGraph(tenantA, planA, java.util.Set.of(domainA), true, 1))
+            .extracting(ModelSpecRepository.StoredModelSpec::id)
+            .containsExactly(modelA.id());
+        assertThat(
+            repository.listCurrentForRelationshipGraph(
+                tenantA,
+                planA,
+                java.util.Set.of(domainA),
+                true,
+                modelA.id(),
+                1
+            )
+        )
+            .isEmpty();
+        assertThat(repository.listCurrentForRelationshipGraph(tenantA, planB, java.util.Set.of(domainA), true, 1))
+            .isEmpty();
+        assertThat(repository.listCurrentForRelationshipGraph(tenantB, planB, java.util.Set.of(domainA), true, 1))
+            .isEmpty();
+        assertThat(
+            repository.listRevisionsForRelationshipGraph(
+                tenantA,
+                List.of(new ModelRevisionRef(modelA.id(), 1)),
+                java.util.Set.of(domainA),
+                true,
+                1
+            )
+        )
+            .extracting(
+                ModelSpecRepository.StoredModelSpec::id,
+                ModelSpecRepository.StoredModelSpec::revision
+            )
+            .containsExactly(org.assertj.core.groups.Tuple.tuple(modelA.id(), 1));
+        assertThat(
+            repository.listRevisionsForRelationshipGraph(
+                tenantA,
+                List.of(new ModelRevisionRef(modelA.id(), 1)),
+                java.util.Set.of(domainB),
+                true,
+                1
+            )
+        )
+            .isEmpty();
+        assertThat(
+            repository.listRevisionsForRelationshipGraph(
+                tenantA,
+                List.of(new ModelRevisionRef(modelA.id(), 2)),
+                java.util.Set.of(domainA),
+                true,
+                1
+            )
+        )
+            .isEmpty();
+    }
+
     private void seedContext(String tenant, String actor, UUID planId, UUID domainId, UUID sourceBindingId) {
         jdbcTemplate.update(
             "insert into catalog_domain (id, name, code, lifecycle_status, access_policy) values (?, ?, ?, 'ACTIVE', 'PUBLIC')",

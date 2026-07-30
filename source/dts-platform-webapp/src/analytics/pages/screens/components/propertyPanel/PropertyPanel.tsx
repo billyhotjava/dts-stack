@@ -14,7 +14,8 @@ import {
     PROPERTY_SECTION_COLLAPSE_KEY,
     resolveExplainCardId,
 } from './helpers';
-import { renderActionConfig, renderDrillDownConfig, renderInteractionConfig } from './BehaviorConfigSection';
+import { renderActionConfig, renderInteractionConfig } from './BehaviorConfigSection';
+import { renderDrillDownConfig } from './DrillDownConfigSection';
 import { renderDataSourceConfig } from './DataSourceConfigSection';
 import { renderPluginSchemaFields } from './PluginSchemaFieldsSection';
 import { renderAnimationConfig } from './AnimationConfigSection';

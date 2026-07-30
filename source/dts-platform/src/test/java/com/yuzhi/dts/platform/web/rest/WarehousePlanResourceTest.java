@@ -64,6 +64,12 @@ import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanStageProje
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanStageProjectionService.StageProjection;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanStageProjectionService.StageStatus;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanStageProjectionService.StageView;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphContract.EdgeKind;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphContract.NodeKind;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphContract.RelationshipEdge;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphContract.RelationshipGraph;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphContract.RelationshipNode;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphService;
 import com.yuzhi.dts.platform.web.filter.AuditLoggingFilter;
 import java.time.Instant;
 import java.util.Arrays;
@@ -101,6 +107,9 @@ class WarehousePlanResourceTest {
 
     @MockBean
     private WarehousePlanStageProjectionService stageProjectionService;
+
+    @MockBean
+    private WarehousePlanRelationshipGraphService relationshipGraphService;
 
     @MockBean
     private WarehousePlanActorProvider actorProvider;
@@ -207,7 +216,13 @@ class WarehousePlanResourceTest {
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.code").value("WAREHOUSE_PLAN_NOT_FOUND"));
 
+        mockMvc
+            .perform(get("/api/modeling/warehouse-plans/{id}/relationship-graph", hiddenId))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.code").value("WAREHOUSE_PLAN_NOT_FOUND"));
+
         verify(service, never()).getSources(eq("server-tenant"), eq(hiddenId), any());
+        verify(relationshipGraphService, never()).read(eq("server-tenant"), any());
     }
 
     @Test
@@ -739,6 +754,182 @@ class WarehousePlanResourceTest {
             .andExpect(jsonPath("$.data.stages.length()").value(9));
 
         verify(stageProjectionService).project("server-tenant", PLAN_ID, actorContext);
+    }
+
+    @Test
+    void authorizesThePlanBeforeReturningItsRelationshipGraph() throws Exception {
+        WarehousePlanHeader plan = planHeader(1, DRAFT);
+        WarehousePlanActor actor = new WarehousePlanActor("owner-1", "department-1");
+        RelationshipGraph graph = new RelationshipGraph(
+            PLAN_ID,
+            List.of(
+                new RelationshipNode(
+                    "PLAN:" + PLAN_ID,
+                    NodeKind.PLAN,
+                    "Neutral warehouse",
+                    "DRAFT",
+                    "/modeling/workbench?planId=" + PLAN_ID + "&module=planning"
+                ),
+                new RelationshipNode(
+                    "MODEL:40000000-0000-0000-0000-000000000001",
+                    NodeKind.MODEL,
+                    "customer_detail",
+                    "DRAFT",
+                    "/modeling/workbench?planId=" + PLAN_ID + "&module=models"
+                )
+            ),
+            List.of(
+                new RelationshipEdge(
+                    "PLAN:" + PLAN_ID,
+                    "MODEL:40000000-0000-0000-0000-000000000001",
+                    EdgeKind.CONTAINS,
+                    "Plan model"
+                )
+            ),
+            false
+        );
+        when(actorProvider.currentActor()).thenReturn(actor);
+        when(service.get("server-tenant", PLAN_ID)).thenReturn(plan);
+        when(
+            relationshipGraphService.read(
+                "server-tenant",
+                plan,
+                "department-1",
+                "model",
+                "customer",
+                25
+            )
+        )
+            .thenReturn(graph);
+
+        mockMvc
+            .perform(
+                get("/api/modeling/warehouse-plans/{id}/relationship-graph", PLAN_ID)
+                    .param("kind", "model")
+                    .param("query", "customer")
+                    .param("limit", "25")
+            )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.planId").value(PLAN_ID.toString()))
+            .andExpect(jsonPath("$.data.nodes[0].id").value("PLAN:" + PLAN_ID))
+            .andExpect(jsonPath("$.data.nodes[1].kind").value("MODEL"))
+            .andExpect(jsonPath("$.data.edges[0].kind").value("CONTAINS"))
+            .andExpect(jsonPath("$.data.truncated").value(false));
+
+        verify(authorizationGuard).requirePlanRead(plan, actor);
+        verify(relationshipGraphService).read("server-tenant", plan, "department-1", "model", "customer", 25);
+    }
+
+    @Test
+    void passesTheOptionalRelationshipGraphCursorAfterAuthorizingThePlan() throws Exception {
+        WarehousePlanHeader plan = planHeader(1, DRAFT);
+        WarehousePlanActor actor = new WarehousePlanActor("owner-1", "department-1");
+        String cursor = "30000000-0000-0000-0000-000000000500";
+        RelationshipGraph graph = new RelationshipGraph(PLAN_ID, List.of(), List.of(), false);
+        when(actorProvider.currentActor()).thenReturn(actor);
+        when(service.get("server-tenant", PLAN_ID)).thenReturn(plan);
+        when(
+            relationshipGraphService.read(
+                "server-tenant",
+                plan,
+                "department-1",
+                "model",
+                "customer",
+                25,
+                cursor
+            )
+        )
+            .thenReturn(graph);
+
+        mockMvc
+            .perform(
+                get("/api/modeling/warehouse-plans/{id}/relationship-graph", PLAN_ID)
+                    .param("kind", "model")
+                    .param("query", "customer")
+                    .param("limit", "25")
+                    .param("cursor", cursor)
+            )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.planId").value(PLAN_ID.toString()));
+
+        verify(authorizationGuard).requirePlanRead(plan, actor);
+        verify(relationshipGraphService)
+            .read("server-tenant", plan, "department-1", "model", "customer", 25, cursor);
+    }
+
+    @Test
+    void returnsStableBadRequestForAnInvalidRelationshipGraphCursor() throws Exception {
+        WarehousePlanHeader plan = planHeader(1, DRAFT);
+        WarehousePlanActor actor = new WarehousePlanActor("owner-1", "department-1");
+        when(actorProvider.currentActor()).thenReturn(actor);
+        when(service.get("server-tenant", PLAN_ID)).thenReturn(plan);
+        when(
+            relationshipGraphService.read(
+                "server-tenant",
+                plan,
+                "department-1",
+                null,
+                null,
+                500,
+                "invalid-cursor"
+            )
+        )
+            .thenThrow(
+                new WarehousePlanException(
+                    "RELATIONSHIP_GRAPH_CURSOR_INVALID",
+                    "Relationship graph cursor is invalid",
+                    null
+                )
+            );
+
+        mockMvc
+            .perform(
+                get("/api/modeling/warehouse-plans/{id}/relationship-graph", PLAN_ID)
+                    .param("cursor", "invalid-cursor")
+            )
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("RELATIONSHIP_GRAPH_CURSOR_INVALID"));
+
+        verify(authorizationGuard).requirePlanRead(plan, actor);
+    }
+
+    @Test
+    void doesNotProjectAGraphWhenThePlanReadPolicyHidesThePlan() throws Exception {
+        WarehousePlanHeader plan = planHeader(1, DRAFT);
+        WarehousePlanActor actor = new WarehousePlanActor("reader", "department-2");
+        when(actorProvider.currentActor()).thenReturn(actor);
+        when(service.get("server-tenant", PLAN_ID)).thenReturn(plan);
+        doThrow(new WarehousePlanException("WAREHOUSE_PLAN_NOT_FOUND", "Warehouse plan not found", null))
+            .when(authorizationGuard)
+            .requirePlanRead(plan, actor);
+
+        mockMvc
+            .perform(get("/api/modeling/warehouse-plans/{id}/relationship-graph", PLAN_ID))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.code").value("WAREHOUSE_PLAN_NOT_FOUND"));
+
+        verify(relationshipGraphService, never()).read(any(), any(), any(), any(), any(), anyInt());
+    }
+
+    @Test
+    void mapsRelationshipGraphTimeoutToAStableServiceUnavailableResponse() throws Exception {
+        WarehousePlanHeader plan = planHeader(1, DRAFT);
+        WarehousePlanActor actor = new WarehousePlanActor("owner-1", "department-1");
+        when(actorProvider.currentActor()).thenReturn(actor);
+        when(service.get("server-tenant", PLAN_ID)).thenReturn(plan);
+        when(relationshipGraphService.read("server-tenant", plan, "department-1", null, null, 500))
+            .thenThrow(
+                new WarehousePlanException(
+                    "RELATIONSHIP_GRAPH_TIMEOUT",
+                    "Relationship graph projection timed out",
+                    null
+                )
+            );
+
+        mockMvc
+            .perform(get("/api/modeling/warehouse-plans/{id}/relationship-graph", PLAN_ID))
+            .andExpect(status().isServiceUnavailable())
+            .andExpect(jsonPath("$.code").value("RELATIONSHIP_GRAPH_TIMEOUT"));
     }
 
     private static WarehousePlanHeader planHeader(

@@ -97,28 +97,67 @@ public class DbtRuntimeProfileLeaseRepository {
     }
 
     @Transactional
-    public void release(UUID leaseId, Instant releasedAt) {
-        jdbcTemplate.update(
-            """
-            update modeling_dbt_runtime_profile_lease
-               set status = 'RELEASED', released_at = ?
-             where id = ? and status in ('ISSUED', 'CONSUMED')
-            """,
-            Timestamp.from(releasedAt),
-            leaseId
+    public boolean renew(
+        UUID leaseId,
+        Instant renewedAt,
+        Instant expiresAt
+    ) {
+        return (
+            jdbcTemplate.update(
+                """
+                update modeling_dbt_runtime_profile_lease
+                   set expires_at = greatest(expires_at, ?)
+                 where id = ?
+                   and status = 'CONSUMED'
+                   and expires_at > ?
+                """,
+                Timestamp.from(expiresAt),
+                leaseId,
+                Timestamp.from(renewedAt)
+            ) ==
+            1
         );
     }
 
     @Transactional
-    public void expire(UUID leaseId, Instant expiredAt) {
-        jdbcTemplate.update(
-            """
-            update modeling_dbt_runtime_profile_lease
-               set status = 'EXPIRED', released_at = ?
-             where id = ? and status in ('ISSUED', 'CONSUMED')
-            """,
-            Timestamp.from(expiredAt),
-            leaseId
+    public boolean release(UUID leaseId, Instant releasedAt) {
+        return (
+            jdbcTemplate.update(
+                """
+                update modeling_dbt_runtime_profile_lease
+                   set status = 'RELEASED', released_at = ?
+                 where id = ? and status in ('ISSUED', 'CONSUMED')
+                """,
+                Timestamp.from(releasedAt),
+                leaseId
+            ) ==
+            1
+        );
+    }
+
+    @Transactional
+    public boolean expire(
+        UUID leaseId,
+        Instant expectedExpiresAt,
+        Instant cutoff,
+        Instant expiredAt
+    ) {
+        return (
+            jdbcTemplate.update(
+                """
+                update modeling_dbt_runtime_profile_lease
+                   set status = 'EXPIRED', released_at = ?
+                 where id = ?
+                   and status in ('ISSUED', 'CONSUMED')
+                   and expires_at = ?
+                   and expires_at <= ?
+                """,
+                Timestamp.from(expiredAt),
+                leaseId,
+                Timestamp.from(expectedExpiresAt),
+                Timestamp.from(cutoff)
+            ) ==
+            1
         );
     }
 

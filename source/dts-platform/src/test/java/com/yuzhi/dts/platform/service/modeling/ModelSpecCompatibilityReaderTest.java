@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository;
+import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository.LegacyDefinitionMapping;
 import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository.LegacyDefinitionRef;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.StoredModelSpec;
@@ -108,6 +109,50 @@ class ModelSpecCompatibilityReaderTest {
         assertThat(view.legacyRefs().unresolvedStandardRefs())
             .extracting(ModelSpecContract.LegacyStandardRef::standardElementId)
             .containsExactly("std.customer.id");
+    }
+
+    @Test
+    void resolvesLegacyDimensionDefinitionsInOneBoundedBatchForRelationshipGraph() throws Exception {
+        ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
+        ModelSpecCompatibilityReader reader = new ModelSpecCompatibilityReader(
+            repository,
+            new ModelSpecSnapshotCodec(mapper),
+            mapper,
+            dimensionDefinitions
+        );
+        UUID planId = UUID.fromString("10000000-0000-0000-0000-000000000001");
+        UUID domainId = UUID.fromString("20000000-0000-0000-0000-000000000001");
+        UUID firstId = UUID.fromString("30000000-0000-0000-0000-000000000001");
+        UUID secondId = UUID.fromString("30000000-0000-0000-0000-000000000002");
+        UUID firstDefinitionId = UUID.fromString("40000000-0000-0000-0000-000000000001");
+        UUID secondDefinitionId = UUID.fromString("40000000-0000-0000-0000-000000000002");
+        StoredModelSpec first = legacyDimensionRow(mapper, firstId, planId, domainId, "first_dimension");
+        StoredModelSpec second = legacyDimensionRow(mapper, secondId, planId, domainId, "second_dimension");
+        when(
+            dimensionDefinitions.findLegacyDefinitionRefsForRelationshipGraph(
+                "server-tenant",
+                List.of(firstId, secondId),
+                501
+            )
+        )
+            .thenReturn(
+                List.of(
+                    new LegacyDefinitionMapping(firstId, firstDefinitionId, 2),
+                    new LegacyDefinitionMapping(secondId, secondDefinitionId, 3)
+                )
+            );
+
+        List<ModelSpecContract.ModelSpecView> projected = reader.readForRelationshipGraph(List.of(first, second));
+
+        assertThat(projected)
+            .extracting(ModelSpecContract.ModelSpecView::dimensionDefinitionRef)
+            .containsExactly(
+                new ModelSpecContract.DimensionDefinitionRef(firstDefinitionId, 2),
+                new ModelSpecContract.DimensionDefinitionRef(secondDefinitionId, 3)
+            );
+        verify(dimensionDefinitions)
+            .findLegacyDefinitionRefsForRelationshipGraph("server-tenant", List.of(firstId, secondId), 501);
+        verifyNoMoreInteractions(dimensionDefinitions);
     }
 
     @Test
@@ -541,5 +586,49 @@ class ModelSpecCompatibilityReaderTest {
               }
             }
             """;
+    }
+
+    private static StoredModelSpec legacyDimensionRow(
+        ObjectMapper mapper,
+        UUID id,
+        UUID planId,
+        UUID domainId,
+        String name
+    ) throws Exception {
+        ModelingVNextContract.ModelSpec legacy = new ModelingVNextContract.ModelSpec(
+            id.toString(),
+            null,
+            null,
+            ModelingVNextContract.Layer.DWD,
+            ModelingVNextContract.ModelType.DIMENSION,
+            ModelingVNextContract.ImplementationMode.DESIGNER_GENERATED,
+            name,
+            null,
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            "table",
+            1,
+            List.of(),
+            null
+        );
+        return new StoredModelSpec(
+            1,
+            "server-tenant",
+            id,
+            planId,
+            domainId,
+            ModelStatus.DRAFT,
+            1,
+            "a".repeat(64),
+            null,
+            mapper.writeValueAsString(legacy),
+            null,
+            null,
+            null,
+            Instant.EPOCH,
+            Instant.EPOCH
+        );
     }
 }

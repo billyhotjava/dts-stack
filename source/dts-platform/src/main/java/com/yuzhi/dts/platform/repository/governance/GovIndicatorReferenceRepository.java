@@ -5,6 +5,7 @@ import com.yuzhi.dts.platform.domain.governance.GovIndicatorReference;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -21,5 +22,20 @@ public interface GovIndicatorReferenceRepository extends JpaRepository<GovIndica
         GovIndicatorDefinition indicator,
         String refType,
         String refTarget
+    );
+
+    @Query(
+        """
+        select r
+          from GovIndicatorReference r
+          join fetch r.indicator i
+         where i.id in :indicatorIds
+           and upper(r.refType) = 'INDICATOR'
+         order by i.id, r.refTarget, r.id
+        """
+    )
+    List<GovIndicatorReference> findIndicatorDependenciesForRelationshipGraph(
+        @Param("indicatorIds") List<UUID> indicatorIds,
+        Pageable pageable
     );
 }

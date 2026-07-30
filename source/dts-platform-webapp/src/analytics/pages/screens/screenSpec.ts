@@ -8,6 +8,7 @@ import type {
 	ScreenTheme,
 } from "./types";
 import type { ScreenWritePayload } from "./contracts";
+import { validateComponentBehavior } from "./screenSpecBehaviorValidation";
 
 export const SCREEN_SCHEMA_VERSION = 1;
 
@@ -92,7 +93,6 @@ const THEMES = new Set<ScreenTheme>([
 	"brand-custom",
 ]);
 const DATA_SOURCE_TYPES = new Set(["static", "api", "card", "sql", "dataset", "metric", "database"]);
-const DRILL_TARGET_DATA_SOURCE_TYPES = new Set(["api", "card", "sql", "dataset", "metric", "database"]);
 const VARIABLE_TYPES = new Set(["string", "number", "date"]);
 const VARIABLE_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_:\.-]{0,63}$/;
 const VISIBILITY_MATCH_MODES = new Set([
@@ -106,17 +106,6 @@ const VISIBILITY_MATCH_MODES = new Set([
 	"empty",
 	"not-empty",
 ]);
-const INTERACTION_TRANSFORMS = new Set(["raw", "string", "number", "lowercase", "uppercase"]);
-const COMPONENT_ACTION_TYPES = new Set([
-	"set-variable",
-	"drill-down",
-	"drill-up",
-	"drill-view",
-	"jump-url",
-	"open-panel",
-	"emit-intent",
-]);
-const JUMP_OPEN_MODES = new Set(["self", "new-tab"]);
 
 function asNumber(value: unknown, fallback: number, min?: number): number {
 	const n = Number(value);
@@ -163,40 +152,6 @@ function validateVisibilityRuleConfig(config: Record<string, unknown> | undefine
 	if (Array.isArray(values) && values.length > 200) {
 		errors.push(`${path}.config.visibilityMatchValues 数量不能超过 200`);
 	}
-}
-
-function validateInteractionMappings(input: unknown, path: string, errors: string[]) {
-	if (!Array.isArray(input)) {
-		errors.push(`${path} 必须是数组`);
-		return;
-	}
-	const seenVariableKeys = new Set<string>();
-	input.forEach((mapping, mappingIdx) => {
-		const mappingPath = `${path}[${mappingIdx}]`;
-		if (!mapping || typeof mapping !== "object") {
-			errors.push(`${mappingPath} 必须是对象`);
-			return;
-		}
-		const mappingRow = mapping as Record<string, unknown>;
-		const variableKey = asTrimmedString(mappingRow.variableKey);
-		const sourcePath = asTrimmedString(mappingRow.sourcePath);
-		if (!variableKey) {
-			errors.push(`${mappingPath}.variableKey 不能为空`);
-		} else if (seenVariableKeys.has(variableKey)) {
-			errors.push(`${mappingPath}.variableKey 重复: ${variableKey}`);
-		} else {
-			seenVariableKeys.add(variableKey);
-		}
-		if (!sourcePath) {
-			errors.push(`${mappingPath}.sourcePath 不能为空`);
-		}
-		const transform = String(mappingRow.transform ?? "raw")
-			.trim()
-			.toLowerCase();
-		if (!INTERACTION_TRANSFORMS.has(transform)) {
-			errors.push(`${mappingPath}.transform 非法: ${transform}`);
-		}
-	});
 }
 
 function normalizeGlobalVariables(input: unknown): ScreenGlobalVariable[] {
@@ -579,6 +534,27 @@ export function buildScreenPayload(config: ScreenConfig): ScreenWritePayload {
 	};
 }
 
+function sortJsonValue(value: unknown): unknown {
+	if (Array.isArray(value)) return value.map(sortJsonValue);
+	if (!value || typeof value !== "object") return value;
+	const row = value as Record<string, unknown>;
+	return Object.keys(row)
+		.sort()
+		.reduce<Record<string, unknown>>((output, key) => {
+			output[key] = sortJsonValue(row[key]);
+			return output;
+		}, {});
+}
+
+function isSameMirroredComponent(left: unknown, right: unknown) {
+	if (left === right) return true;
+	try {
+		return JSON.stringify(sortJsonValue(left)) === JSON.stringify(sortJsonValue(right));
+	} catch {
+		return false;
+	}
+}
+
 export function validateScreenPayload(input: unknown): { errors: string[]; warnings: string[] } {
 	const errors: string[] = [];
 	const warnings: string[] = [];
@@ -612,10 +588,17 @@ export function validateScreenPayload(input: unknown): { errors: string[]; warni
 
 	const rawComponents = row.components;
 	const componentEntries: Array<{ item: unknown; path: string }> = [];
+	const rootComponentsById = new Map<string, unknown>();
 	if (!Array.isArray(rawComponents)) {
 		errors.push("components 必须是数组");
 	} else {
-		rawComponents.forEach((item, idx) => componentEntries.push({ item, path: `components[${idx}]` }));
+		rawComponents.forEach((item, idx) => {
+			componentEntries.push({ item, path: `components[${idx}]` });
+			if (item && typeof item === "object" && !Array.isArray(item)) {
+				const id = asTrimmedString((item as Record<string, unknown>).id);
+				if (id) rootComponentsById.set(id, item);
+			}
+		});
 	}
 	const rawPages = row.pages;
 	if (rawPages !== undefined && rawPages !== null) {
@@ -633,9 +616,13 @@ export function validateScreenPayload(input: unknown): { errors: string[]; warni
 					errors.push(`${pagePath}.components 必须是数组`);
 					return;
 				}
-				pageComponents.forEach((item, componentIdx) =>
-					componentEntries.push({ item, path: `${pagePath}.components[${componentIdx}]` }),
-				);
+				pageComponents.forEach((item, componentIdx) => {
+					if (item && typeof item === "object" && !Array.isArray(item)) {
+						const id = asTrimmedString((item as Record<string, unknown>).id);
+						if (id && isSameMirroredComponent(rootComponentsById.get(id), item)) return;
+					}
+					componentEntries.push({ item, path: `${pagePath}.components[${componentIdx}]` });
+				});
 			});
 		}
 	}
@@ -686,126 +673,7 @@ export function validateScreenPayload(input: unknown): { errors: string[]; warni
 					? (component.config as Record<string, unknown>)
 					: undefined;
 			validateVisibilityRuleConfig(config, path, errors);
-
-			const interaction = component.interaction;
-			if (interaction !== undefined && interaction !== null) {
-				if (typeof interaction !== "object") {
-					errors.push(`${path}.interaction 必须是对象`);
-				} else {
-					const interactionRow = interaction as Record<string, unknown>;
-					const mappings = interactionRow.mappings;
-					if (mappings !== undefined && mappings !== null) {
-						validateInteractionMappings(mappings, `${path}.interaction.mappings`, errors);
-					}
-				}
-			}
-
-			const drillDown = component.drillDown;
-			if (drillDown !== undefined && drillDown !== null) {
-				if (typeof drillDown !== "object" || Array.isArray(drillDown)) {
-					errors.push(`${path}.drillDown 必须是对象`);
-				} else {
-					const drillDownRow = drillDown as Record<string, unknown>;
-					if (drillDownRow.enabled !== undefined && typeof drillDownRow.enabled !== "boolean") {
-						errors.push(`${path}.drillDown.enabled 必须是布尔值`);
-					}
-					const levels = drillDownRow.levels;
-					if (!Array.isArray(levels)) {
-						errors.push(`${path}.drillDown.levels 必须是数组`);
-					} else {
-						levels.forEach((level, levelIdx) => {
-							const levelPath = `${path}.drillDown.levels[${levelIdx}]`;
-							if (!level || typeof level !== "object" || Array.isArray(level)) {
-								errors.push(`${levelPath} 必须是对象`);
-								return;
-							}
-							const levelRow = level as Record<string, unknown>;
-							if (!asTrimmedString(levelRow.label)) {
-								errors.push(`${levelPath}.label 不能为空`);
-							}
-							if (levelRow.inheritContext !== undefined && typeof levelRow.inheritContext !== "boolean") {
-								errors.push(`${levelPath}.inheritContext 必须是布尔值`);
-							}
-
-							const cardId = Number(levelRow.cardId);
-							const isLegacy = Number.isFinite(cardId) && cardId > 0 && Boolean(asTrimmedString(levelRow.paramName));
-							const levelDataSource = levelRow.dataSource;
-							const levelDataSourceRow =
-								levelDataSource && typeof levelDataSource === "object" && !Array.isArray(levelDataSource)
-									? (levelDataSource as Record<string, unknown>)
-									: undefined;
-							const sourceType = String(levelDataSourceRow?.sourceType ?? levelDataSourceRow?.type ?? "")
-								.trim()
-								.toLowerCase();
-							const hasGenericTarget = DRILL_TARGET_DATA_SOURCE_TYPES.has(sourceType);
-							const hasGenericMappings = Array.isArray(levelRow.mappings) && levelRow.mappings.length > 0;
-							if (!isLegacy && !(hasGenericTarget && hasGenericMappings)) {
-								errors.push(`${levelPath} 必须配置下一层数据源和字段映射，或提供旧版 cardId + paramName`);
-							}
-							if (levelDataSourceRow && sourceType && !DRILL_TARGET_DATA_SOURCE_TYPES.has(sourceType)) {
-								errors.push(`${levelPath}.dataSource.sourceType 非法: ${sourceType}`);
-							}
-							if (levelRow.mappings !== undefined && levelRow.mappings !== null) {
-								validateInteractionMappings(levelRow.mappings, `${levelPath}.mappings`, errors);
-							}
-						});
-					}
-				}
-			}
-
-			const actions = component.actions;
-			if (actions !== undefined && actions !== null) {
-				if (!Array.isArray(actions)) {
-					errors.push(`${path}.actions 必须是数组`);
-				} else {
-					actions.forEach((action, actionIdx) => {
-						const actionPath = `${path}.actions[${actionIdx}]`;
-						if (!action || typeof action !== "object") {
-							errors.push(`${actionPath} 必须是对象`);
-							return;
-						}
-						const actionRow = action as Record<string, unknown>;
-						const actionType = asTrimmedString(actionRow.type);
-						if (!actionType || !COMPONENT_ACTION_TYPES.has(actionType)) {
-							errors.push(`${actionPath}.type 非法: ${String(actionRow.type ?? "")}`);
-						}
-						const mappings = actionRow.mappings;
-						if (mappings !== undefined && mappings !== null) {
-							validateInteractionMappings(mappings, `${actionPath}.mappings`, errors);
-						}
-						if (actionType === "jump-url") {
-							const template = asTrimmedString(actionRow.jumpUrlTemplate);
-							if (!template) {
-								errors.push(`${actionPath}.jumpUrlTemplate 不能为空`);
-							}
-							const openMode = String(actionRow.jumpOpenMode ?? "new-tab")
-								.trim()
-								.toLowerCase();
-							if (!JUMP_OPEN_MODES.has(openMode)) {
-								errors.push(`${actionPath}.jumpOpenMode 非法: ${openMode}`);
-							}
-						}
-						if (actionType === "open-panel") {
-							const panelTitle = asTrimmedString(actionRow.panelTitle);
-							if (!panelTitle) {
-								errors.push(`${actionPath}.panelTitle 不能为空`);
-							}
-						}
-						if (actionType === "drill-view") {
-							const drillViewId = asTrimmedString(actionRow.drillViewId);
-							if (!drillViewId) {
-								errors.push(`${actionPath}.drillViewId 不能为空`);
-							}
-						}
-						if (actionType === "emit-intent") {
-							const intentName = asTrimmedString(actionRow.intentName);
-							if (!intentName) {
-								errors.push(`${actionPath}.intentName 不能为空`);
-							}
-						}
-					});
-				}
-			}
+			validateComponentBehavior(component, path, errors);
 	});
 
 	const rawVariables = row.globalVariables;

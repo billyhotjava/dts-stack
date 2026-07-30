@@ -22,6 +22,7 @@ import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.Reuse
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.Status;
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.UpdateCommand;
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.View;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.DimensionDefinitionRef;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -107,6 +108,38 @@ class DimensionDefinitionApplicationServiceTest {
             );
         assertThat(result.dimensionDefinition().checksum()).matches("[0-9a-f]{64}");
         verify(repository).insert(eq(TENANT), eq(ACTOR), eq(command), eq(result.dimensionDefinition()), anyString());
+    }
+
+    @Test
+    void resolvesPinnedRelationshipGraphRevisionsInOneTenantScopedVisibleBatch() {
+        DimensionDefinitionRef reference = new DimensionDefinitionRef(DEFINITION_ID, 2);
+        View view = new View(
+            DEFINITION_ID,
+            "dim_customer",
+            DOMAIN_ID,
+            "Customer",
+            "Customer dimension",
+            ACTOR,
+            ReuseScope.DOMAIN,
+            List.of(),
+            Status.CURRENT,
+            2,
+            "a".repeat(64),
+            0,
+            NOW,
+            NOW
+        );
+        StoredDimensionDefinition stored = stored(view, "request-hash", "{}");
+        when(repository.listRevisionsForRelationshipGraph(TENANT, List.of(reference), Set.of(DOMAIN_ID), 500))
+            .thenReturn(List.of(stored));
+
+        assertThat(service.revisionsForRelationshipGraph(TENANT, List.of(reference), 500))
+            .extracting(View::id, View::revision)
+            .containsExactly(org.assertj.core.groups.Tuple.tuple(DEFINITION_ID, 2));
+
+        verify(domainReadAccess).visibleDomainIds();
+        verify(repository).listRevisionsForRelationshipGraph(TENANT, List.of(reference), Set.of(DOMAIN_ID), 500);
+        verify(domainReadAccess, never()).canRead(any());
     }
 
     @Test
@@ -234,7 +267,7 @@ class DimensionDefinitionApplicationServiceTest {
         );
 
         View visible = view(Status.CURRENT, 2, "b".repeat(64), NOW, NOW.plusSeconds(1), "Customer");
-        when(repository.listCurrent(TENANT, null, Status.CURRENT, Set.of(DOMAIN_ID), 10, 25))
+        when(repository.listCurrent(TENANT, null, null, Status.CURRENT, Set.of(DOMAIN_ID), 10, 25))
             .thenReturn(List.of(stored(visible, null, null)));
         when(repository.usageCounts(TENANT, List.of(DEFINITION_ID))).thenReturn(Map.of(DEFINITION_ID, 3L));
 

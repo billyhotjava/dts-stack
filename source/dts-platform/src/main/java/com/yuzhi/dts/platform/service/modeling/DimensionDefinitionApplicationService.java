@@ -17,6 +17,7 @@ import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.Scope
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.Status;
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.UpdateCommand;
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.View;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.DimensionDefinitionRef;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
@@ -24,6 +25,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -210,6 +212,51 @@ public class DimensionDefinitionApplicationService {
         return visible
             .stream()
             .map(stored -> stored.toView(usageCounts.getOrDefault(stored.id(), 0L)))
+            .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<View> revisionsForRelationshipGraph(
+        String tenantId,
+        List<DimensionDefinitionRef> references,
+        int limit
+    ) {
+        requireTenant(tenantId);
+        if (limit < 1 || limit > 500) {
+            throw new ModelSpecException(
+                "DIMENSION_DEFINITION_RELATIONSHIP_GRAPH_WINDOW_INVALID",
+                "Relationship graph dimension limit must be between 1 and 500",
+                ModelSpecException.Kind.BAD_REQUEST
+            );
+        }
+        Set<UUID> visibleDomainIds = domainReadAccess.visibleDomainIds();
+        if (visibleDomainIds == null || visibleDomainIds.isEmpty() || references == null || references.isEmpty()) {
+            return List.of();
+        }
+        Map<String, DimensionDefinitionRef> unique = new LinkedHashMap<>();
+        for (DimensionDefinitionRef reference : references) {
+            if (reference == null || reference.dimensionDefinitionId() == null || reference.revision() < 1) {
+                continue;
+            }
+            unique.putIfAbsent(reference.dimensionDefinitionId() + "@" + reference.revision(), reference);
+            if (unique.size() >= limit) {
+                break;
+            }
+        }
+        List<DimensionDefinitionRef> bounded = unique
+            .values()
+            .stream()
+            .sorted(
+                java.util.Comparator
+                    .comparing(DimensionDefinitionRef::dimensionDefinitionId)
+                    .thenComparingInt(DimensionDefinitionRef::revision)
+            )
+            .toList();
+        return repository
+            .listRevisionsForRelationshipGraph(tenantId, bounded, visibleDomainIds, limit)
+            .stream()
+            .filter(stored -> visibleDomainIds.contains(stored.domainId()))
+            .map(stored -> stored.toView(0))
             .toList();
     }
 

@@ -40,6 +40,11 @@ public class DbtRuntimeProfileLeaseInternalResource {
         return leases.consume(leaseId);
     }
 
+    @PostMapping("/{leaseId}/renew")
+    public LeaseView renew(@PathVariable UUID leaseId) {
+        return leases.renew(leaseId);
+    }
+
     @DeleteMapping("/{leaseId}")
     public ResponseEntity<Void> release(@PathVariable UUID leaseId) {
         leases.release(leaseId);
@@ -54,6 +59,8 @@ public class DbtRuntimeProfileLeaseInternalResource {
             case "DBT_PROFILE_LEASE_NOT_FOUND" -> HttpStatus.NOT_FOUND;
             case
                 "DBT_PROFILE_LEASE_ALREADY_CONSUMED",
+                "DBT_PROFILE_LEASE_NOT_CONSUMED",
+                "DBT_PROFILE_LEASE_RENEW_FAILED",
                 "DBT_PROFILE_LEASE_EXPIRED" -> HttpStatus.CONFLICT;
             case
                 "DBT_RUNTIME_PROFILE_ROOT_MISSING",

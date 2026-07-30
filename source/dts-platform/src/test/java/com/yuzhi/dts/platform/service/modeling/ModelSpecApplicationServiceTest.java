@@ -29,6 +29,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -1557,6 +1558,66 @@ class ModelSpecApplicationServiceTest {
             .isEqualTo("MODEL_SPEC_NOT_FOUND");
         assertThat(disabled.get(TENANT, legacy.id())).isEqualTo(legacy);
         assertThat(disabled.list(TENANT, null, null, null, null)).containsExactly(legacy);
+    }
+
+    @Test
+    void loadsABoundedRelationshipGraphSliceWithOneBatchDomainVisibilityDecision() {
+        ModelSpecView canonical = codec.toCreatedView(MODEL_ID, command("graph-v2", "customer_detail"), NOW);
+        StoredModelSpec stored = stored(canonical, "request-hash", codec.write(canonical));
+        when(domainReadAccess.visibleDomainIds()).thenReturn(Set.of(DOMAIN_ID));
+        when(repository.listCurrentForRelationshipGraph(TENANT, PLAN_ID, Set.of(DOMAIN_ID), true, 501))
+            .thenReturn(List.of(stored));
+        when(compatibilityReader.readForRelationshipGraph(List.of(stored))).thenReturn(List.of(canonical));
+
+        assertThat(service.listForRelationshipGraph(TENANT, PLAN_ID, 501)).containsExactly(canonical);
+
+        verify(domainReadAccess).visibleDomainIds();
+        verify(repository).listCurrentForRelationshipGraph(TENANT, PLAN_ID, Set.of(DOMAIN_ID), true, 501);
+        verify(domainReadAccess, never()).canRead(any());
+    }
+
+    @Test
+    void forwardsTheRelationshipGraphUuidKeysetCursorIntoTheAuthorizedBatchQuery() {
+        UUID cursor = UUID.fromString("30000000-0000-0000-0000-000000000000");
+        ModelSpecView canonical = codec.toCreatedView(MODEL_ID, command("graph-cursor", "customer_detail"), NOW);
+        StoredModelSpec stored = stored(canonical, "request-hash", codec.write(canonical));
+        when(domainReadAccess.visibleDomainIds()).thenReturn(Set.of(DOMAIN_ID));
+        when(repository.listCurrentForRelationshipGraph(TENANT, PLAN_ID, Set.of(DOMAIN_ID), true, cursor, 501))
+            .thenReturn(List.of(stored));
+        when(compatibilityReader.readForRelationshipGraph(List.of(stored))).thenReturn(List.of(canonical));
+
+        assertThat(service.listForRelationshipGraph(TENANT, PLAN_ID, cursor, 501)).containsExactly(canonical);
+
+        verify(repository).listCurrentForRelationshipGraph(TENANT, PLAN_ID, Set.of(DOMAIN_ID), true, cursor, 501);
+        verify(domainReadAccess).visibleDomainIds();
+        verify(domainReadAccess, never()).canRead(any());
+    }
+
+    @Test
+    void loadsPinnedRelationshipGraphRevisionsInOneAuthorizedBatch() {
+        ModelRevisionRef reference = new ModelRevisionRef(MODEL_ID, 2);
+        ModelSpecView pinned = codec.toCreatedView(MODEL_ID, command("graph-revision", "customer_detail"), NOW);
+        StoredModelSpec stored = stored(pinned, "request-hash", codec.write(pinned));
+        when(domainReadAccess.visibleDomainIds()).thenReturn(Set.of(DOMAIN_ID));
+        when(
+            repository.listRevisionsForRelationshipGraph(
+                TENANT,
+                List.of(reference),
+                Set.of(DOMAIN_ID),
+                true,
+                500
+            )
+        )
+            .thenReturn(List.of(stored));
+        when(compatibilityReader.readForRelationshipGraph(List.of(stored))).thenReturn(List.of(pinned));
+
+        assertThat(service.revisionsForRelationshipGraph(TENANT, List.of(reference), 500))
+            .containsExactly(pinned);
+
+        verify(domainReadAccess).visibleDomainIds();
+        verify(repository)
+            .listRevisionsForRelationshipGraph(TENANT, List.of(reference), Set.of(DOMAIN_ID), true, 500);
+        verify(domainReadAccess, never()).canRead(any());
     }
 
     @Test

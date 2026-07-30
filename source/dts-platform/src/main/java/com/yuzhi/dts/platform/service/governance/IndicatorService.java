@@ -48,6 +48,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.jpa.domain.Specification;
@@ -144,6 +145,202 @@ public class IndicatorService {
         int end = Math.min(start + pageable.getPageSize(), total);
         List<IndicatorDto> content = filtered.subList(start, end).stream().map(IndicatorMapper::toDto).toList();
         return new PageImpl<>(content, pageable, total);
+    }
+
+    @Transactional(readOnly = true)
+    public List<IndicatorDto> listForRelationshipGraph(Collection<UUID> ids, String activeDept, int limit) {
+        if (ids == null || ids.isEmpty() || limit < 1) {
+            return List.of();
+        }
+        String trustedActiveDept = resolveTrustedActiveDept(activeDept);
+        List<UUID> boundedIds = ids
+            .stream()
+            .filter(Objects::nonNull)
+            .distinct()
+            .sorted()
+            .limit(Math.min(limit, 500))
+            .toList();
+        if (boundedIds.isEmpty()) {
+            return List.of();
+        }
+        return repository
+            .findAllById(boundedIds)
+            .stream()
+            .filter(Objects::nonNull)
+            .filter(indicator -> deptAllowed(indicator, trustedActiveDept))
+            .filter(this::levelAllowed)
+            .sorted(
+                Comparator
+                    .comparing(IndicatorService::indicatorLabel, String.CASE_INSENSITIVE_ORDER)
+                    .thenComparing(indicator -> indicator.getId().toString())
+            )
+            .limit(Math.min(limit, 500))
+            .map(IndicatorMapper::toDto)
+            .toList();
+    }
+
+    /**
+     * Projects visible indicator owners and their persisted one-hop INDICATOR references using
+     * three bounded queries: source owners, dependency rows, and target owners.
+     */
+    @Transactional(readOnly = true)
+    public RelationshipGraphProjection projectForRelationshipGraph(
+        Collection<UUID> ids,
+        String activeDept,
+        int nodeLimit,
+        int edgeLimit
+    ) {
+        if (ids == null || ids.isEmpty() || nodeLimit < 1 || edgeLimit < 1) {
+            return new RelationshipGraphProjection(List.of(), List.of(), false);
+        }
+        int boundedNodeLimit = Math.min(nodeLimit, 500);
+        int boundedEdgeLimit = Math.min(edgeLimit, 1000);
+        LinkedHashSet<UUID> sourceIds = new LinkedHashSet<>();
+        int inspected = 0;
+        boolean truncated = false;
+        for (UUID id : ids) {
+            if (++inspected > boundedNodeLimit || sourceIds.size() >= boundedNodeLimit) {
+                truncated = true;
+                break;
+            }
+            if (id != null) sourceIds.add(id);
+        }
+        List<UUID> orderedSourceIds = sourceIds.stream().sorted().toList();
+        if (orderedSourceIds.isEmpty()) {
+            return new RelationshipGraphProjection(List.of(), List.of(), truncated);
+        }
+        String trustedActiveDept = resolveTrustedActiveDept(activeDept);
+        boolean privileged = SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES);
+        DataLevel highestLevel = privileged ? DataLevel.DATA_CONFIDENTIAL : accessChecker.resolveHighestDataLevel();
+        LinkedHashMap<UUID, GovIndicatorDefinition> visible = new LinkedHashMap<>();
+        repository
+            .findAllById(orderedSourceIds)
+            .stream()
+            .filter(Objects::nonNull)
+            .filter(indicator -> graphDeptAllowed(indicator, trustedActiveDept, privileged))
+            .filter(indicator -> graphLevelAllowed(indicator, highestLevel, privileged))
+            .sorted(
+                Comparator
+                    .comparing(IndicatorService::indicatorLabel, String.CASE_INSENSITIVE_ORDER)
+                    .thenComparing(indicator -> indicator.getId().toString())
+            )
+            .forEach(indicator -> visible.putIfAbsent(indicator.getId(), indicator));
+        if (visible.isEmpty()) {
+            return new RelationshipGraphProjection(List.of(), List.of(), truncated);
+        }
+
+        List<UUID> visibleSourceIds = visible.keySet().stream().sorted().toList();
+        List<GovIndicatorReference> storedDependencies = referenceRepository.findIndicatorDependenciesForRelationshipGraph(
+            visibleSourceIds,
+            PageRequest.of(0, boundedEdgeLimit + 1)
+        );
+        LinkedHashSet<IndicatorDependency> candidateDependencies = new LinkedHashSet<>();
+        LinkedHashSet<UUID> targetIds = new LinkedHashSet<>();
+        int dependencyWork = 0;
+        for (GovIndicatorReference reference : storedDependencies == null ? List.<GovIndicatorReference>of() : storedDependencies) {
+            if (++dependencyWork > boundedEdgeLimit) {
+                truncated = true;
+                break;
+            }
+            UUID sourceId = reference == null || reference.getIndicator() == null
+                ? null
+                : reference.getIndicator().getId();
+            UUID targetId = parseUuidOrNull(reference == null ? null : reference.getRefTarget());
+            if (sourceId == null || targetId == null || !visible.containsKey(sourceId)) continue;
+            candidateDependencies.add(new IndicatorDependency(sourceId, targetId));
+            if (!visible.containsKey(targetId)) {
+                if (!targetIds.contains(targetId) && targetIds.size() >= boundedEdgeLimit) {
+                    truncated = true;
+                    continue;
+                }
+                targetIds.add(targetId);
+            }
+        }
+
+        if (!targetIds.isEmpty()) {
+            List<UUID> orderedTargetIds = targetIds.stream().sorted().toList();
+            List<GovIndicatorDefinition> authorizedTargets = repository
+                .findAllById(orderedTargetIds)
+                .stream()
+                .filter(Objects::nonNull)
+                .filter(indicator -> graphDeptAllowed(indicator, trustedActiveDept, privileged))
+                .filter(indicator -> graphLevelAllowed(indicator, highestLevel, privileged))
+                .sorted(
+                    Comparator
+                        .comparing(IndicatorService::indicatorLabel, String.CASE_INSENSITIVE_ORDER)
+                        .thenComparing(indicator -> indicator.getId().toString())
+                )
+                .toList();
+            for (GovIndicatorDefinition indicator : authorizedTargets) {
+                if (visible.containsKey(indicator.getId())) continue;
+                if (visible.size() < boundedNodeLimit) {
+                    visible.put(indicator.getId(), indicator);
+                } else {
+                    truncated = true;
+                }
+            }
+        }
+        List<IndicatorDependency> dependencies = candidateDependencies
+            .stream()
+            .filter(dependency -> visible.containsKey(dependency.sourceId()) && visible.containsKey(dependency.targetId()))
+            .limit(boundedEdgeLimit)
+            .toList();
+        List<IndicatorDto> projected = visible
+            .values()
+            .stream()
+            .sorted(
+                Comparator
+                    .comparing(IndicatorService::indicatorLabel, String.CASE_INSENSITIVE_ORDER)
+                    .thenComparing(indicator -> indicator.getId().toString())
+            )
+            .map(IndicatorMapper::toDto)
+            .toList();
+        return new RelationshipGraphProjection(projected, dependencies, truncated);
+    }
+
+    private boolean graphDeptAllowed(
+        GovIndicatorDefinition entity,
+        String activeDept,
+        boolean privileged
+    ) {
+        if (entity == null) return false;
+        if (privileged) return true;
+        if (!StringUtils.hasText(activeDept)) return isGlobalOrRoot(entity.getOwnerDept());
+        return isGlobalOrRoot(entity.getOwnerDept()) || sameDepartment(entity.getOwnerDept(), activeDept);
+    }
+
+    private static boolean graphLevelAllowed(
+        GovIndicatorDefinition entity,
+        DataLevel highestLevel,
+        boolean privileged
+    ) {
+        if (entity == null) return false;
+        if (privileged) return true;
+        DataLevel resource = DataLevel.normalize(entity.getDataLevel());
+        if (resource == null) resource = DataLevel.DATA_INTERNAL;
+        return highestLevel != null && resource.rank() <= highestLevel.rank();
+    }
+
+    private static UUID parseUuidOrNull(String value) {
+        if (!StringUtils.hasText(value)) return null;
+        try {
+            return UUID.fromString(value.trim());
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
+    public record IndicatorDependency(UUID sourceId, UUID targetId) {}
+
+    public record RelationshipGraphProjection(
+        List<IndicatorDto> indicators,
+        List<IndicatorDependency> dependencies,
+        boolean truncated
+    ) {
+        public RelationshipGraphProjection {
+            indicators = indicators == null ? List.of() : List.copyOf(indicators);
+            dependencies = dependencies == null ? List.of() : List.copyOf(dependencies);
+        }
     }
 
     private Specification<GovIndicatorDefinition> buildSpec(String status, String domain, String category, Boolean derived) {
@@ -1374,6 +1571,12 @@ public class IndicatorService {
         String expected = normalizeStatus(status, "");
         String actual = normalizeStatus(entity.getStatus(), "");
         return expected.equals(actual);
+    }
+
+    private static String indicatorLabel(GovIndicatorDefinition indicator) {
+        if (StringUtils.hasText(indicator.getName())) return indicator.getName().trim();
+        if (StringUtils.hasText(indicator.getCode())) return indicator.getCode().trim();
+        return indicator.getId() == null ? "" : indicator.getId().toString();
     }
 
     private String normalizeStatus(String status, String defaultValue) {

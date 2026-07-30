@@ -220,12 +220,6 @@ public class DbtRuntimeProfileLeaseService {
                 "Runtime profile lease does not exist"
             );
         }
-        if (current.status() == LeaseStatus.CONSUMED) {
-            throw error(
-                "DBT_PROFILE_LEASE_ALREADY_CONSUMED",
-                "Runtime profile lease has already been consumed"
-            );
-        }
         if (current.status() == LeaseStatus.EXPIRED) {
             throw error(
                 "DBT_PROFILE_LEASE_EXPIRED",
@@ -234,9 +228,7 @@ public class DbtRuntimeProfileLeaseService {
         }
         Instant now = clock.instant();
         if (!now.isBefore(current.expiresAt())) {
-            if (deleteLeaseDirectory(leaseDirectory(id), false)) {
-                repository.expire(id, now);
-            }
+            expireAndDelete(current, now, now);
             throw error(
                 "DBT_PROFILE_LEASE_EXPIRED",
                 "Runtime profile lease has expired"
@@ -248,18 +240,92 @@ public class DbtRuntimeProfileLeaseService {
                 LinkOption.NOFOLLOW_LINKS
             )
         ) {
-            if (deleteLeaseDirectory(leaseDirectory(id), false)) {
-                repository.expire(id, now);
-            }
+            expireAndDelete(
+                current,
+                current.expiresAt(),
+                now
+            );
             throw error(
                 "DBT_PROFILE_LEASE_FILE_MISSING",
                 "Runtime profile lease file is unavailable"
             );
         }
+        if (current.status() == LeaseStatus.CONSUMED) {
+            return view(current);
+        }
         if (!repository.consume(id, now)) {
             return consume(id);
         }
         return view(current);
+    }
+
+    /** Extends one active consumed lease so the janitor cannot remove a profile while dbt is still running. */
+    public LeaseView renew(UUID leaseId) {
+        UUID id = requiredLeaseId(leaseId);
+        LeaseRecord current = repository.find(id).orElse(null);
+        if (
+            current == null ||
+            current.status() == LeaseStatus.RELEASED
+        ) {
+            throw error(
+                "DBT_PROFILE_LEASE_NOT_FOUND",
+                "Runtime profile lease does not exist"
+            );
+        }
+        Instant now = clock.instant();
+        if (
+            current.status() == LeaseStatus.EXPIRED ||
+            !now.isBefore(current.expiresAt())
+        ) {
+            expireAndDelete(current, now, now);
+            throw error(
+                "DBT_PROFILE_LEASE_EXPIRED",
+                "Runtime profile lease has expired"
+            );
+        }
+        if (current.status() != LeaseStatus.CONSUMED) {
+            throw error(
+                "DBT_PROFILE_LEASE_NOT_CONSUMED",
+                "Runtime profile lease has not been consumed"
+            );
+        }
+        if (
+            !Files.isRegularFile(
+                leaseDirectory(id).resolve(PROFILE_FILE),
+                LinkOption.NOFOLLOW_LINKS
+            )
+        ) {
+            expireAndDelete(
+                current,
+                current.expiresAt(),
+                now
+            );
+            throw error(
+                "DBT_PROFILE_LEASE_FILE_MISSING",
+                "Runtime profile lease file is unavailable"
+            );
+        }
+        Instant expiresAt = now.plus(leaseTtl());
+        if (!repository.renew(id, now, expiresAt)) {
+            LeaseRecord raced = repository.find(id).orElse(null);
+            if (
+                raced != null &&
+                raced.status() == LeaseStatus.CONSUMED &&
+                now.isBefore(raced.expiresAt())
+            ) {
+                return view(raced);
+            }
+            throw error(
+                "DBT_PROFILE_LEASE_RENEW_FAILED",
+                "Runtime profile lease could not be renewed"
+            );
+        }
+        return new LeaseView(
+            current.id(),
+            current.targetName(),
+            expiresAt,
+            current.credentialVersionRef()
+        );
     }
 
     /** Returns the same non-sensitive lease identity for idempotent runtime-spec recovery. */
@@ -280,9 +346,7 @@ public class DbtRuntimeProfileLeaseService {
             current.status() == LeaseStatus.EXPIRED ||
             !now.isBefore(current.expiresAt())
         ) {
-            if (deleteLeaseDirectory(leaseDirectory(id), false)) {
-                repository.expire(id, now);
-            }
+            expireAndDelete(current, now, now);
             throw error(
                 "DBT_PROFILE_LEASE_EXPIRED",
                 "Runtime profile lease has expired"
@@ -293,8 +357,30 @@ public class DbtRuntimeProfileLeaseService {
 
     public void release(UUID leaseId) {
         UUID id = requiredLeaseId(leaseId);
-        deleteLeaseDirectory(leaseDirectory(id), true);
-        repository.release(id, clock.instant());
+        Path directory = leaseDirectory(id);
+        boolean released = repository.release(id, clock.instant());
+        if (!released) {
+            LeaseRecord current = repository.find(id).orElse(null);
+            if (
+                current == null ||
+                (current.status() != LeaseStatus.RELEASED &&
+                    current.status() != LeaseStatus.EXPIRED)
+            ) {
+                if (
+                    Files.notExists(
+                        directory,
+                        LinkOption.NOFOLLOW_LINKS
+                    )
+                ) {
+                    return;
+                }
+                throw error(
+                    "DBT_PROFILE_LEASE_RELEASE_FAILED",
+                    "Runtime profile lease release could not be confirmed"
+                );
+            }
+        }
+        deleteLeaseDirectory(directory, true);
     }
 
     public Readiness readiness() {
@@ -387,14 +473,7 @@ public class DbtRuntimeProfileLeaseService {
         Instant now = clock.instant();
         try {
             for (LeaseRecord lease : repository.findExpired(now, 100)) {
-                if (
-                    deleteLeaseDirectory(
-                        leaseDirectory(lease.id()),
-                        false
-                    )
-                ) {
-                    repository.expire(lease.id(), now);
-                }
+                expireAndDelete(lease, now, now);
             }
         } catch (RuntimeException ignored) {
             // Fail closed and retry on the next janitor pass.
@@ -416,15 +495,25 @@ public class DbtRuntimeProfileLeaseService {
             }
             try (DirectoryStream<Path> entries = Files.newDirectoryStream(root)) {
                 for (Path entry : entries) {
-                    UUID id = parseLeaseId(entry.getFileName().toString());
                     if (
-                        id == null ||
-                        repository.exists(id) ||
                         !Files.isDirectory(
                             entry,
                             LinkOption.NOFOLLOW_LINKS
                         )
                     ) {
+                        continue;
+                    }
+                    UUID id = parseLeaseId(entry.getFileName().toString());
+                    LeaseRecord tracked = id == null
+                        ? null
+                        : repository.find(id).orElse(null);
+                    if (tracked != null) {
+                        if (
+                            tracked.status() == LeaseStatus.RELEASED ||
+                            tracked.status() == LeaseStatus.EXPIRED
+                        ) {
+                            deleteLeaseDirectory(entry, false);
+                        }
                         continue;
                     }
                     Instant modified = Files.getLastModifiedTime(
@@ -440,6 +529,27 @@ public class DbtRuntimeProfileLeaseService {
         } catch (IOException | RuntimeException ignored) {
             // Readiness remains fail-closed; the next janitor pass retries cleanup.
         }
+    }
+
+    private boolean expireAndDelete(
+        LeaseRecord lease,
+        Instant cutoff,
+        Instant expiredAt
+    ) {
+        if (
+            !repository.expire(
+                lease.id(),
+                lease.expiresAt(),
+                cutoff,
+                expiredAt
+            )
+        ) {
+            return false;
+        }
+        return deleteLeaseDirectory(
+            leaseDirectory(lease.id()),
+            false
+        );
     }
 
     private void requireReady() {

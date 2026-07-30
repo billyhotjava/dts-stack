@@ -5,6 +5,9 @@ import com.yuzhi.dts.platform.domain.modeling.MetadataStandard;
 import com.yuzhi.dts.platform.repository.modeling.MetadataStandardRepository;
 import com.yuzhi.dts.platform.service.modeling.dto.MetadataStandardDto;
 import jakarta.persistence.EntityNotFoundException;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -41,6 +44,34 @@ public class MetadataStandardService {
     public MetadataStandardDto get(UUID id) {
         MetadataStandard entity = repository.findById(id).orElseThrow(() -> new EntityNotFoundException("元数据标准不存在"));
         return MetadataStandardMapper.toDto(entity);
+    }
+
+    @Transactional(readOnly = true)
+    public List<MetadataStandardDto> listForRelationshipGraph(Collection<UUID> ids, int limit) {
+        if (ids == null || ids.isEmpty() || limit < 1) {
+            return List.of();
+        }
+        List<UUID> boundedIds = ids
+            .stream()
+            .filter(Objects::nonNull)
+            .distinct()
+            .sorted()
+            .limit(Math.min(limit, 500))
+            .toList();
+        if (boundedIds.isEmpty()) {
+            return List.of();
+        }
+        return repository
+            .findAllById(boundedIds)
+            .stream()
+            .sorted(
+                Comparator
+                    .comparing(MetadataStandardService::standardLabel, String.CASE_INSENSITIVE_ORDER)
+                    .thenComparing(standard -> standard.getId().toString())
+            )
+            .limit(Math.min(limit, 500))
+            .map(MetadataStandardMapper::toDto)
+            .toList();
     }
 
     @Transactional(readOnly = true)
@@ -131,5 +162,11 @@ public class MetadataStandardService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private static String standardLabel(MetadataStandard standard) {
+        if (StringUtils.hasText(standard.getFieldNameCn())) return standard.getFieldNameCn().trim();
+        if (StringUtils.hasText(standard.getFieldNameEn())) return standard.getFieldNameEn().trim();
+        return standard.getId() == null ? "" : standard.getId().toString();
     }
 }

@@ -115,3 +115,15 @@ test("validates generic drill configuration inside a screen page", () => {
 
 	assert.match(validateScreenPayload(payload).errors.join("\n"), /pages\[0\]\.components\[0\]\.drillDown\.levels\[0\]/);
 });
+
+test("does not report the same invalid mirrored component twice", () => {
+	const payload = screenWithDrillLevel({});
+	const component = (payload.components as ScreenComponent[])[0];
+	const mirroredComponent = Object.fromEntries(Object.entries(component).reverse()) as unknown as ScreenComponent;
+	payload.pages = [{ id: "page-1", name: "Page 1", components: [mirroredComponent] }];
+
+	const errors = validateScreenPayload(payload).errors;
+
+	assert.equal(errors.length, 2);
+	assert.ok(errors.every((error) => error.startsWith("components[0].drillDown.levels[0]")));
+});

@@ -33,6 +33,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import jakarta.persistence.LockModeType;
 import org.junit.jupiter.api.AfterEach;
@@ -40,6 +41,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 import org.mockito.ArgumentCaptor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -104,6 +106,116 @@ class IndicatorServiceLifecycleTest {
         assertThat(published.getName()).isEqualTo("GMV");
         assertThat(published.getStatus()).isEqualTo("PUBLISHED");
         verify(indicatorRepository, never()).save(any(GovIndicatorDefinition.class));
+    }
+
+    @Test
+    void resolvesReferencedIndicatorsInOneBatchAndAppliesExistingReadPolicy() {
+        UUID visibleId = UUID.fromString("71000000-0000-0000-0000-000000000001");
+        UUID hiddenId = UUID.fromString("71000000-0000-0000-0000-000000000002");
+        GovIndicatorDefinition visible = indicator(visibleId, "VISIBLE", "Visible", "PUBLISHED", "v1");
+        visible.setOwnerDept("dept-a");
+        visible.setDataLevel("DATA_INTERNAL");
+        GovIndicatorDefinition hidden = indicator(hiddenId, "HIDDEN", "Hidden", "PUBLISHED", "v1");
+        hidden.setOwnerDept("dept-b");
+        hidden.setDataLevel("DATA_INTERNAL");
+        authenticate("alice", "dept-a");
+        when(indicatorRepository.findAllById(List.of(visibleId, hiddenId))).thenReturn(List.of(hidden, visible));
+
+        assertThat(service.listForRelationshipGraph(Set.of(hiddenId, visibleId), "dept-a", 500))
+            .extracting(IndicatorDto::getId)
+            .containsExactly(visibleId);
+
+        verify(indicatorRepository).findAllById(List.of(visibleId, hiddenId));
+    }
+
+    @Test
+    void projectsOneHopIndicatorDependenciesInBatchesAndAuthorizesBothEndpoints() {
+        UUID sourceId = UUID.fromString("72000000-0000-0000-0000-000000000001");
+        UUID visibleTargetId = UUID.fromString("72000000-0000-0000-0000-000000000002");
+        UUID hiddenTargetId = UUID.fromString("72000000-0000-0000-0000-000000000003");
+        GovIndicatorDefinition source = indicator(sourceId, "SOURCE", "Source", "PUBLISHED", "v2");
+        GovIndicatorDefinition visibleTarget = indicator(visibleTargetId, "VISIBLE", "Visible", "PUBLISHED", "v4");
+        GovIndicatorDefinition hiddenTarget = indicator(hiddenTargetId, "HIDDEN", "Hidden", "PUBLISHED", "v1");
+        source.setOwnerDept("dept-a");
+        visibleTarget.setOwnerDept("dept-a");
+        hiddenTarget.setOwnerDept("dept-b");
+        source.setDataLevel("DATA_INTERNAL");
+        visibleTarget.setDataLevel("DATA_INTERNAL");
+        hiddenTarget.setDataLevel("DATA_INTERNAL");
+        GovIndicatorReference visibleReference = reference(source, "INDICATOR", visibleTargetId.toString());
+        GovIndicatorReference hiddenReference = reference(source, "INDICATOR", hiddenTargetId.toString());
+        authenticate("alice", "dept-a");
+        when(indicatorRepository.findAllById(List.of(sourceId))).thenReturn(List.of(source));
+        when(referenceRepository.findIndicatorDependenciesForRelationshipGraph(
+                List.of(sourceId),
+                PageRequest.of(0, 1001)
+            ))
+            .thenReturn(List.of(visibleReference, hiddenReference));
+        when(indicatorRepository.findAllById(List.of(visibleTargetId, hiddenTargetId)))
+            .thenReturn(List.of(hiddenTarget, visibleTarget));
+
+        IndicatorService.RelationshipGraphProjection projection = service.projectForRelationshipGraph(
+            Set.of(sourceId),
+            "dept-a",
+            500,
+            1000
+        );
+
+        assertThat(projection.indicators())
+            .extracting(IndicatorDto::getId)
+            .containsExactly(sourceId, visibleTargetId);
+        assertThat(projection.dependencies())
+            .containsExactly(new IndicatorService.IndicatorDependency(sourceId, visibleTargetId));
+        assertThat(projection.truncated()).isFalse();
+        verify(indicatorRepository).findAllById(List.of(sourceId));
+        verify(indicatorRepository).findAllById(List.of(visibleTargetId, hiddenTargetId));
+    }
+
+    @Test
+    void hiddenIndicatorTargetsDoNotConsumeTheVisibleNodeBudget() {
+        UUID sourceId = UUID.fromString("72100000-0000-0000-0000-000000000001");
+        UUID hiddenTargetId = UUID.fromString("72100000-0000-0000-0000-000000000002");
+        UUID visibleTargetId = UUID.fromString("72100000-0000-0000-0000-000000000003");
+        GovIndicatorDefinition source = indicator(sourceId, "SOURCE", "Source", "PUBLISHED", "v1");
+        GovIndicatorDefinition hiddenTarget = indicator(hiddenTargetId, "HIDDEN", "Hidden", "PUBLISHED", "v1");
+        GovIndicatorDefinition visibleTarget = indicator(visibleTargetId, "VISIBLE", "Visible", "PUBLISHED", "v1");
+        source.setOwnerDept("dept-a");
+        visibleTarget.setOwnerDept("dept-a");
+        hiddenTarget.setOwnerDept("dept-b");
+        source.setDataLevel("DATA_INTERNAL");
+        visibleTarget.setDataLevel("DATA_INTERNAL");
+        hiddenTarget.setDataLevel("DATA_INTERNAL");
+        authenticate("alice", "dept-a");
+        when(indicatorRepository.findAllById(List.of(sourceId))).thenReturn(List.of(source));
+        when(
+            referenceRepository.findIndicatorDependenciesForRelationshipGraph(
+                List.of(sourceId),
+                PageRequest.of(0, 1001)
+            )
+        )
+            .thenReturn(
+                List.of(
+                    reference(source, "INDICATOR", hiddenTargetId.toString()),
+                    reference(source, "INDICATOR", visibleTargetId.toString())
+                )
+            );
+        when(indicatorRepository.findAllById(List.of(hiddenTargetId, visibleTargetId)))
+            .thenReturn(List.of(hiddenTarget, visibleTarget));
+
+        IndicatorService.RelationshipGraphProjection projection = service.projectForRelationshipGraph(
+            Set.of(sourceId),
+            "dept-a",
+            2,
+            1000
+        );
+
+        assertThat(projection.indicators())
+            .extracting(IndicatorDto::getId)
+            .containsExactly(sourceId, visibleTargetId);
+        assertThat(projection.dependencies())
+            .containsExactly(new IndicatorService.IndicatorDependency(sourceId, visibleTargetId));
+        assertThat(projection.truncated()).isFalse();
+        verify(indicatorRepository).findAllById(List.of(hiddenTargetId, visibleTargetId));
     }
 
     @Test

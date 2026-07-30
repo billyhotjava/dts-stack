@@ -558,6 +558,8 @@
                         <testInclude>**/service/governance/QualityDatasetStatementExecutorTest.java</testInclude>
                         <testInclude>**/service/governance/QualityRunServiceExecutableDefinitionTest.java</testInclude>
                         <testInclude>**/service/governance/MeasurementUnitApplicationServiceTest.java</testInclude>
+                        <testInclude>**/service/governance/IndicatorServiceLifecycleTest.java</testInclude>
+                        <testInclude>**/service/governance/ReferenceCodeServiceRelationshipGraphTest.java</testInclude>
                         <testInclude>**/service/infra/ConnectorDriverBindingServiceTest.java</testInclude>
                         <testInclude>**/service/infra/ConnectorRegistryServiceTest.java</testInclude>
                         <testInclude>**/service/infra/BiadminDataSourceInitializerTest.java</testInclude>
@@ -596,6 +598,9 @@
                         <testInclude>**/service/modeling/ModelSpecCompilerProjectionTest.java</testInclude>
                         <testInclude>**/service/modeling/PjmModelingFixture.java</testInclude>
                         <testInclude>**/service/modeling/ModelSpecApplicationServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelSpecCompatibilityReaderTest.java</testInclude>
+                        <testInclude>**/service/modeling/DimensionDefinitionApplicationServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/MetadataStandardServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelSpecStageGateServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/Sprint74ModelingLiquibaseTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelingDbtArtifactImportServiceTest.java</testInclude>
@@ -605,12 +610,14 @@
                         <testInclude>**/service/modeling/ModelingVNextApplicationServiceIT.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehousePlanApplicationServiceIT.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehousePlanContractTest.java</testInclude>
+                        <testInclude>**/service/modeling/warehouse/WarehousePlanRelationshipGraphServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/imports/**/*.java</testInclude>
                         <testInclude>**/web/filter/ModelArchiveUploadLimitFilterTest.java</testInclude>
                         <testInclude>**/web/rest/ModelSpecResourceTest.java</testInclude>
                         <testInclude>**/web/rest/ModelLifecycleResourceTest.java</testInclude>
                         <testInclude>**/web/rest/ModelBuildIntentResourceTest.java</testInclude>
                         <testInclude>**/web/rest/ModelPublicationIntentResourceTest.java</testInclude>
+                        <testInclude>**/web/rest/WarehousePlanResourceTest.java</testInclude>
                         <testInclude>**/web/rest/ModelReleaseCandidateResourceTest.java</testInclude>
                         <testInclude>**/web/rest/ModelReleaseSuperAdminAuthorizationTest.java</testInclude>
                         <testInclude>**/web/rest/ModelSpecImport*.java</testInclude>

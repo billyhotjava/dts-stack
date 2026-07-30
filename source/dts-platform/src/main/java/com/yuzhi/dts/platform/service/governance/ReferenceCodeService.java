@@ -17,7 +17,9 @@ import com.yuzhi.dts.platform.service.governance.dto.ReferenceCodeMappingDto;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -78,6 +80,51 @@ public class ReferenceCodeService {
             .orElseThrow(() -> new EntityNotFoundException("码表不存在"));
         ensureDeptAccess(entity, activeDept);
         return toDtoWithCount(entity);
+    }
+
+    /**
+     * Bounded relationship-graph owner lookup. This intentionally avoids the item-count mapper,
+     * which would issue one count query per directory.
+     */
+    @Transactional(readOnly = true)
+    public List<RelationshipGraphReferenceCode> listForRelationshipGraph(
+        Collection<String> codeTypeIds,
+        String activeDept,
+        int limit
+    ) {
+        if (codeTypeIds == null || codeTypeIds.isEmpty() || limit < 1) return List.of();
+        int boundedLimit = Math.min(limit, 500);
+        LinkedHashSet<String> unique = new LinkedHashSet<>();
+        int inspected = 0;
+        for (String codeTypeId : codeTypeIds) {
+            if (++inspected > boundedLimit || unique.size() >= boundedLimit) break;
+            String normalized = normalize(codeTypeId);
+            if (normalized != null) unique.add(normalized);
+        }
+        List<String> boundedIds = unique.stream().sorted(String.CASE_INSENSITIVE_ORDER).toList();
+        if (boundedIds.isEmpty()) return List.of();
+        return directoryRepository
+            .findAllById(boundedIds)
+            .stream()
+            .filter(Objects::nonNull)
+            .filter(directory -> security.canAccessDept(directory.getOwnerDept(), activeDept))
+            .filter(directory -> Integer.valueOf(1).equals(directory.getStatus()))
+            .sorted(
+                Comparator
+                    .comparing(ReferenceCodeService::referenceCodeLabel, String.CASE_INSENSITIVE_ORDER)
+                    .thenComparing(StdCodeDirectory::getCodeTypeId)
+            )
+            .limit(boundedLimit)
+            .map(directory ->
+                new RelationshipGraphReferenceCode(
+                    directory.getCodeTypeId(),
+                    directory.getCodeTypeCode(),
+                    directory.getCodeTypeName(),
+                    directory.getStatus(),
+                    directory.getVersion()
+                )
+            )
+            .toList();
     }
 
     public ReferenceCodeDirectoryDto createDirectory(ReferenceCodeDirectoryRequest request, String activeDept) {
@@ -759,6 +806,12 @@ public class ReferenceCodeService {
         };
     }
 
+    private static String referenceCodeLabel(StdCodeDirectory directory) {
+        if (StringUtils.hasText(directory.getCodeTypeName())) return directory.getCodeTypeName().trim();
+        if (StringUtils.hasText(directory.getCodeTypeCode())) return directory.getCodeTypeCode().trim();
+        return directory.getCodeTypeId() == null ? "" : directory.getCodeTypeId();
+    }
+
     private ReferenceCodeDirectoryDto toDtoWithCount(StdCodeDirectory entity) {
         ReferenceCodeDirectoryDto dto = toDto(entity);
         dto.setItemCount(valueRepository.countByCodeTypeId(entity.getCodeTypeId()));
@@ -980,6 +1033,14 @@ public class ReferenceCodeService {
         String dataType,
         Integer status,
         String ownerDept,
+        String version
+    ) {}
+
+    public record RelationshipGraphReferenceCode(
+        String codeTypeId,
+        String codeTypeCode,
+        String codeTypeName,
+        Integer status,
         String version
     ) {}
 

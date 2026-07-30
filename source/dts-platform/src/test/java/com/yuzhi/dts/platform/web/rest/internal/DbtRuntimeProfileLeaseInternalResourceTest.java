@@ -5,6 +5,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.yuzhi.dts.platform.service.etl.DbtRuntimeProfileException;
 import com.yuzhi.dts.platform.service.etl.DbtRuntimeProfileLeaseService;
 import com.yuzhi.dts.platform.service.etl.DbtRuntimeProfileLeaseService.LeaseView;
@@ -19,7 +21,7 @@ class DbtRuntimeProfileLeaseInternalResourceTest {
         UUID.fromString("10000000-0000-0000-0000-000000000001");
 
     @Test
-    void consumesAndReleasesOnlyByOpaqueLeaseId() {
+    void consumesRenewsAndReleasesOnlyByOpaqueLeaseId() {
         DbtRuntimeProfileLeaseService leases = mock(
             DbtRuntimeProfileLeaseService.class
         );
@@ -30,14 +32,17 @@ class DbtRuntimeProfileLeaseInternalResourceTest {
             "credential-v3"
         );
         when(leases.consume(LEASE_ID)).thenReturn(view);
+        when(leases.renew(LEASE_ID)).thenReturn(view);
         var resource = new DbtRuntimeProfileLeaseInternalResource(
             leases
         );
 
         assertThat(resource.consume(LEASE_ID)).isEqualTo(view);
+        assertThat(resource.renew(LEASE_ID)).isEqualTo(view);
         assertThat(resource.release(LEASE_ID).getStatusCode())
             .isEqualTo(HttpStatus.NO_CONTENT);
         verify(leases).consume(LEASE_ID);
+        verify(leases).renew(LEASE_ID);
         verify(leases).release(LEASE_ID);
     }
 
@@ -70,5 +75,26 @@ class DbtRuntimeProfileLeaseInternalResourceTest {
             .doesNotContainKey("cause");
         assertThat(consumed.getStatusCode())
             .isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    @Test
+    void serializesTheCrossLanguageLeaseIdAsProfileLeaseId()
+        throws Exception {
+        LeaseView view = new LeaseView(
+            LEASE_ID,
+            "dev",
+            Instant.parse("2026-07-27T13:10:00Z"),
+            "credential-v3"
+        );
+
+        String json = new ObjectMapper()
+            .registerModule(new JavaTimeModule())
+            .writeValueAsString(view);
+
+        assertThat(json)
+            .contains(
+                "\"profileLeaseId\":\"10000000-0000-0000-0000-000000000001\""
+            )
+            .doesNotContain("\"leaseId\"");
     }
 }

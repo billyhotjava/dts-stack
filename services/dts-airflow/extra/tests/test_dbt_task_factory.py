@@ -1,7 +1,11 @@
+from datetime import datetime, timedelta, timezone
 import importlib.util
+import json
 import os
 from pathlib import Path
+from types import SimpleNamespace
 import unittest
+from unittest import mock
 from uuid import UUID
 
 
@@ -22,6 +26,32 @@ def load_factory():
     return module
 
 
+class FakeProcess:
+    def __init__(self, wait_results):
+        self.wait_results = list(wait_results)
+        self.wait_timeouts = []
+        self.returncode = None
+        self.terminate_calls = 0
+        self.kill_calls = 0
+
+    def wait(self, timeout=None):
+        self.wait_timeouts.append(timeout)
+        result = self.wait_results.pop(0)
+        if isinstance(result, BaseException):
+            raise result
+        self.returncode = result
+        return result
+
+    def poll(self):
+        return self.returncode
+
+    def terminate(self):
+        self.terminate_calls += 1
+
+    def kill(self):
+        self.kill_calls += 1
+
+
 class DbtTaskFactoryTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -38,6 +68,44 @@ class DbtTaskFactoryTest(unittest.TestCase):
             "expiresAt": "2026-07-27T12:00:00Z",
             "credentialVersionRef": "sha256:" + "b" * 64,
         }
+
+    def lease_response(self, *, lease_id=None, expires_at=None):
+        runtime = self.runtime_spec()
+        return {
+            "profileLeaseId": lease_id or runtime["profileLeaseId"],
+            "targetName": runtime["targetName"],
+            "expiresAt": expires_at or "2099-07-30T12:00:00Z",
+            "credentialVersionRef": runtime["credentialVersionRef"],
+        }
+
+    def container_inspection(
+        self,
+        *,
+        container_id=None,
+        lease_id=None,
+        run_group_id=None,
+        running=True,
+    ):
+        runtime = self.runtime_spec()
+        return (
+            200,
+            json.dumps(
+                {
+                    "Id": container_id or "a" * 64,
+                    "Config": {
+                        "Labels": {
+                            "com.yuzhi.dts.dbt.profile-lease-id":
+                                lease_id or runtime["profileLeaseId"],
+                            "com.yuzhi.dts.dbt.pipeline-run-group-id":
+                                run_group_id
+                                or runtime["pipelineRunGroupId"],
+                        }
+                    },
+                    "State": {"Running": running},
+                },
+                separators=(",", ":"),
+            ).encode("utf-8"),
+        )
 
     def test_rejects_runtime_overrides_in_dag_run_conf(self):
         allowed = {
@@ -154,7 +222,31 @@ class DbtTaskFactoryTest(unittest.TestCase):
         )
 
         self.assertIsInstance(command, list)
-        self.assertEqual(command[:3], ["docker", "run", "--rm"])
+        self.assertEqual(
+            command[:5],
+            [
+                "docker",
+                "--host",
+                "unix:///var/run/docker.sock",
+                "run",
+                "--rm",
+            ],
+        )
+        self.assertIn("--name", command)
+        self.assertIn(
+            "dts-dbt-20000000-0000-0000-0000-000000000002",
+            command,
+        )
+        self.assertIn(
+            "com.yuzhi.dts.dbt.profile-lease-id="
+            "20000000-0000-0000-0000-000000000002",
+            command,
+        )
+        self.assertIn(
+            "com.yuzhi.dts.dbt.pipeline-run-group-id="
+            "10000000-0000-0000-0000-000000000001",
+            command,
+        )
         self.assertIn(
             "/srv/dts/services/dts-dbt/.dts-scoped-runs/"
             "candidate-" + "a" * 64 + ":/opt/dbt",
@@ -169,6 +261,213 @@ class DbtTaskFactoryTest(unittest.TestCase):
         self.assertIn("model_a model_b", command)
         self.assertNotIn("shell=True", " ".join(command))
         self.assertNotIn("password", " ".join(command).lower())
+
+    def test_daemon_cleanup_kills_container_when_graceful_stop_is_insufficient(
+        self,
+    ):
+        container_name = (
+            "dts-dbt-20000000-0000-0000-0000-000000000002"
+        )
+        container_id = "a" * 64
+        responses = iter(
+            [
+                self.container_inspection(),
+                (500, b""),
+                self.container_inspection(),
+                (204, b""),
+                self.container_inspection(running=False),
+            ]
+        )
+
+        with mock.patch.object(
+            self.factory,
+            "_docker_engine_request",
+            side_effect=lambda *_args: next(responses),
+        ) as request:
+            self.factory._stop_dbt_container(
+                container_name,
+                self.runtime_spec()["profileLeaseId"],
+                self.runtime_spec()["pipelineRunGroupId"],
+            )
+
+        self.assertEqual(
+            [call.args[:2] for call in request.call_args_list],
+            [
+                ("GET", f"/containers/{container_name}/json"),
+                (
+                    "POST",
+                    "/containers/"
+                    f"{container_id}/stop?t=10",
+                ),
+                ("GET", f"/containers/{container_id}/json"),
+                ("POST", f"/containers/{container_id}/kill"),
+                ("GET", f"/containers/{container_id}/json"),
+            ],
+        )
+
+    def test_daemon_cleanup_fails_when_container_is_still_running(self):
+        container_name = (
+            "dts-dbt-20000000-0000-0000-0000-000000000002"
+        )
+        responses = iter(
+            [
+                self.container_inspection(),
+                (500, b""),
+                self.container_inspection(),
+                (500, b""),
+                self.container_inspection(),
+            ]
+        )
+
+        with mock.patch.object(
+            self.factory,
+            "_docker_engine_request",
+            side_effect=lambda *_args: next(responses),
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "could not be confirmed stopped",
+            ):
+                self.factory._stop_dbt_container(
+                    container_name,
+                    self.runtime_spec()["profileLeaseId"],
+                    self.runtime_spec()["pipelineRunGroupId"],
+                )
+
+    def test_daemon_cleanup_treats_missing_container_as_stopped(self):
+        container_name = (
+            "dts-dbt-20000000-0000-0000-0000-000000000002"
+        )
+
+        with mock.patch.object(
+            self.factory,
+            "_docker_engine_request",
+            return_value=(404, b""),
+        ) as request:
+            self.factory._stop_dbt_container(
+                container_name,
+                self.runtime_spec()["profileLeaseId"],
+                self.runtime_spec()["pipelineRunGroupId"],
+            )
+
+        self.assertEqual(request.call_count, 1)
+        self.assertEqual(
+            request.call_args_list[-1].args[:2],
+            ("GET", f"/containers/{container_name}/json"),
+        )
+
+    def test_daemon_cleanup_refuses_a_container_owned_by_another_run(self):
+        runtime = self.runtime_spec()
+        container_name = "dts-dbt-" + runtime["profileLeaseId"]
+
+        with mock.patch.object(
+            self.factory,
+            "_docker_engine_request",
+            return_value=self.container_inspection(
+                run_group_id="10000000-0000-0000-0000-000000000099"
+            ),
+        ) as request:
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "ownership does not match runtime",
+            ):
+                self.factory._stop_dbt_container(
+                    container_name,
+                    runtime["profileLeaseId"],
+                    runtime["pipelineRunGroupId"],
+                )
+
+        self.assertEqual(
+            [call.args[0] for call in request.call_args_list],
+            ["GET"],
+        )
+
+    def test_daemon_cleanup_refuses_kill_after_owner_changes(self):
+        runtime = self.runtime_spec()
+        container_name = "dts-dbt-" + runtime["profileLeaseId"]
+        container_id = "a" * 64
+        responses = iter(
+            [
+                self.container_inspection(),
+                (500, b""),
+                self.container_inspection(
+                    run_group_id="10000000-0000-0000-0000-000000000099"
+                ),
+            ]
+        )
+
+        with mock.patch.object(
+            self.factory,
+            "_docker_engine_request",
+            side_effect=lambda *_args: next(responses),
+        ) as request:
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "ownership does not match runtime",
+            ):
+                self.factory._stop_dbt_container(
+                    container_name,
+                    runtime["profileLeaseId"],
+                    runtime["pipelineRunGroupId"],
+                )
+
+        self.assertEqual(
+            [call.args[:2] for call in request.call_args_list],
+            [
+                ("GET", f"/containers/{container_name}/json"),
+                (
+                    "POST",
+                    f"/containers/{container_id}/stop?t=10",
+                ),
+                ("GET", f"/containers/{container_id}/json"),
+            ],
+        )
+        self.assertNotIn(
+            f"/containers/{container_name}/kill",
+            [call.args[1] for call in request.call_args_list],
+        )
+
+    def test_daemon_cleanup_refuses_kill_after_container_identity_changes(
+        self,
+    ):
+        runtime = self.runtime_spec()
+        container_name = "dts-dbt-" + runtime["profileLeaseId"]
+        container_id = "a" * 64
+        replacement_id = "b" * 64
+        responses = iter(
+            [
+                self.container_inspection(container_id=container_id),
+                (500, b""),
+                self.container_inspection(container_id=replacement_id),
+            ]
+        )
+
+        with mock.patch.object(
+            self.factory,
+            "_docker_engine_request",
+            side_effect=lambda *_args: next(responses),
+        ) as request:
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "identity does not match",
+            ):
+                self.factory._stop_dbt_container(
+                    container_name,
+                    runtime["profileLeaseId"],
+                    runtime["pipelineRunGroupId"],
+                )
+
+        self.assertEqual(
+            [call.args[:2] for call in request.call_args_list],
+            [
+                ("GET", f"/containers/{container_name}/json"),
+                (
+                    "POST",
+                    f"/containers/{container_id}/stop?t=10",
+                ),
+                ("GET", f"/containers/{container_id}/json"),
+            ],
+        )
 
     def test_rejects_path_traversal_and_non_uuid_lease(self):
         invalid_bundle = {
@@ -197,14 +496,678 @@ class DbtTaskFactoryTest(unittest.TestCase):
                 "dts-core",
             )
 
-    def test_factory_source_has_one_checked_subprocess_owner(self):
+    def test_short_build_does_not_send_an_unnecessary_lease_renewal(self):
+        runtime = self.runtime_spec()
+        task_instance = mock.Mock()
+        task_instance.xcom_pull.return_value = runtime
+        command = ["docker", "run", "dts-dbt:1.10.0", "build"]
+        process = FakeProcess([0])
+        paths = []
+
+        with (
+            mock.patch.object(
+                self.factory,
+                "_platform_request",
+                side_effect=lambda path, **_kwargs: (
+                    paths.append(path) or self.lease_response()
+                ),
+            ),
+            mock.patch.object(
+                self.factory,
+                "_build_docker_command",
+                return_value=command,
+            ),
+            mock.patch.object(
+                self.factory.subprocess,
+                "Popen",
+                return_value=process,
+            ),
+            mock.patch.object(self.factory.subprocess, "run") as legacy_run,
+        ):
+            self.factory._dbt_build_task(ti=task_instance)
+
+        self.assertEqual(
+            paths,
+            [
+                "/api/internal/modeling/materialization/profile-leases/"
+                f"{runtime['profileLeaseId']}/consume"
+            ],
+        )
+        self.assertEqual(process.wait_timeouts, [60.0])
+        legacy_run.assert_not_called()
+
+    def test_long_build_renews_profile_lease_more_than_once(self):
+        runtime = self.runtime_spec()
+        task_instance = mock.Mock()
+        task_instance.xcom_pull.return_value = runtime
+        command = ["docker", "run", "dts-dbt:1.10.0", "build"]
+        timeout = self.factory.subprocess.TimeoutExpired(command, 60.0)
+        process = FakeProcess([timeout, timeout, 0])
+        paths = []
+
+        with (
+            mock.patch.object(
+                self.factory,
+                "_platform_request",
+                side_effect=lambda path, **_kwargs: (
+                    paths.append(path) or self.lease_response()
+                ),
+            ),
+            mock.patch.object(
+                self.factory,
+                "_build_docker_command",
+                return_value=command,
+            ),
+            mock.patch.object(
+                self.factory.subprocess,
+                "Popen",
+                return_value=process,
+            ) as popen,
+            mock.patch.object(self.factory.subprocess, "run") as legacy_run,
+        ):
+            self.factory._dbt_build_task(ti=task_instance)
+
+        popen.assert_called_once_with(command)
+        self.assertEqual(
+            paths,
+            [
+                "/api/internal/modeling/materialization/profile-leases/"
+                f"{runtime['profileLeaseId']}/consume",
+                "/api/internal/modeling/materialization/profile-leases/"
+                f"{runtime['profileLeaseId']}/renew",
+                "/api/internal/modeling/materialization/profile-leases/"
+                f"{runtime['profileLeaseId']}/renew",
+            ],
+        )
+        self.assertEqual(process.wait_timeouts, [60.0, 60.0, 60.0])
+        self.assertEqual(process.terminate_calls, 0)
+        legacy_run.assert_not_called()
+
+    def test_profile_lease_renew_interval_has_lower_and_upper_bounds(self):
+        now = datetime(2026, 7, 30, 12, 0, tzinfo=timezone.utc)
+
+        self.assertEqual(
+            self.factory._profile_lease_renew_interval(
+                (now + timedelta(seconds=12)).isoformat(),
+                now,
+            ),
+            5.0,
+        )
+        self.assertEqual(
+            self.factory._profile_lease_renew_interval(
+                (now + timedelta(hours=1)).isoformat(),
+                now,
+            ),
+            60.0,
+        )
+
+    def test_profile_lease_renew_interval_rejects_invalid_or_unsafe_expiry(self):
+        now = datetime(2026, 7, 30, 12, 0, tzinfo=timezone.utc)
+
+        for expires_at in (
+            "not-a-date",
+            "2026-07-30T12:01:00",
+            (now + timedelta(seconds=10)).isoformat(),
+        ):
+            with self.subTest(expires_at=expires_at):
+                with self.assertRaisesRegex(
+                    RuntimeError,
+                    "expiresAt is invalid|expires too soon",
+                ):
+                    self.factory._profile_lease_renew_interval(
+                        expires_at,
+                        now,
+                    )
+
+    def test_renew_response_recalculates_the_next_wait_interval(self):
+        runtime = self.runtime_spec()
+        task_instance = mock.Mock()
+        task_instance.xcom_pull.return_value = runtime
+        command = ["docker", "run", "dts-dbt:1.10.0", "build"]
+        process = FakeProcess(
+            [
+                self.factory.subprocess.TimeoutExpired(command, 60.0),
+                0,
+            ]
+        )
+
+        with (
+            mock.patch.object(
+                self.factory,
+                "_platform_request",
+                return_value=self.lease_response(),
+            ),
+            mock.patch.object(
+                self.factory,
+                "_validated_profile_lease_renew_interval",
+                side_effect=[60.0, 5.0],
+            ),
+            mock.patch.object(
+                self.factory,
+                "_build_docker_command",
+                return_value=command,
+            ),
+            mock.patch.object(
+                self.factory.subprocess,
+                "Popen",
+                return_value=process,
+            ),
+        ):
+            self.factory._dbt_build_task(ti=task_instance)
+
+        self.assertEqual(process.wait_timeouts, [60.0, 5.0])
+
+    def test_build_fails_closed_when_profile_lease_consume_errors(self):
+        task_instance = mock.Mock()
+        task_instance.xcom_pull.return_value = self.runtime_spec()
+
+        with (
+            mock.patch.object(
+                self.factory,
+                "_platform_request",
+                side_effect=RuntimeError("profile lease consume rejected"),
+            ),
+            mock.patch.object(self.factory, "_build_docker_command") as build,
+            mock.patch.object(self.factory.subprocess, "Popen") as popen,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "consume rejected"):
+                self.factory._dbt_build_task(ti=task_instance)
+
+        build.assert_not_called()
+        popen.assert_not_called()
+
+    def test_build_terminates_and_waits_when_profile_lease_renewal_errors(self):
+        runtime = self.runtime_spec()
+        task_instance = mock.Mock()
+        task_instance.xcom_pull.return_value = runtime
+        command = ["docker", "run", "dts-dbt:1.10.0", "build"]
+        process = FakeProcess(
+            [
+                self.factory.subprocess.TimeoutExpired(command, 60.0),
+                0,
+            ]
+        )
+        calls = 0
+
+        def request(_path, **_kwargs):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                return self.lease_response()
+            raise RuntimeError("profile lease renewal rejected")
+
+        with (
+            mock.patch.object(
+                self.factory,
+                "_platform_request",
+                side_effect=request,
+            ),
+            mock.patch.object(
+                self.factory,
+                "_build_docker_command",
+                return_value=command,
+            ),
+            mock.patch.object(
+                self.factory.subprocess,
+                "Popen",
+                return_value=process,
+            ),
+            mock.patch.object(
+                self.factory,
+                "_stop_dbt_container",
+            ) as stop_container,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "renewal rejected"):
+                self.factory._dbt_build_task(ti=task_instance)
+
+        stop_container.assert_called_once_with(
+            "dts-dbt-" + runtime["profileLeaseId"],
+            runtime["profileLeaseId"],
+            runtime["pipelineRunGroupId"],
+        )
+        self.assertEqual(process.terminate_calls, 1)
+        self.assertEqual(
+            process.wait_timeouts,
+            [
+                60.0,
+                self.factory._PROCESS_TERMINATE_TIMEOUT_SECONDS,
+            ],
+        )
+
+    def test_build_terminates_and_waits_when_renewed_lease_id_mismatches(self):
+        runtime = self.runtime_spec()
+        task_instance = mock.Mock()
+        task_instance.xcom_pull.return_value = runtime
+        command = ["docker", "run", "dts-dbt:1.10.0", "build"]
+        process = FakeProcess(
+            [
+                self.factory.subprocess.TimeoutExpired(command, 60.0),
+                0,
+            ]
+        )
+        responses = iter(
+            [
+                self.lease_response(),
+                self.lease_response(
+                    lease_id="20000000-0000-0000-0000-000000000099"
+                ),
+            ]
+        )
+
+        with (
+            mock.patch.object(
+                self.factory,
+                "_platform_request",
+                side_effect=lambda _path, **_kwargs: next(responses),
+            ),
+            mock.patch.object(
+                self.factory,
+                "_build_docker_command",
+                return_value=command,
+            ),
+            mock.patch.object(
+                self.factory.subprocess,
+                "Popen",
+                return_value=process,
+            ),
+            mock.patch.object(
+                self.factory,
+                "_stop_dbt_container",
+            ) as stop_container,
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "renew response does not match runtime",
+            ):
+                self.factory._dbt_build_task(ti=task_instance)
+
+        stop_container.assert_called_once_with(
+            "dts-dbt-" + runtime["profileLeaseId"],
+            runtime["profileLeaseId"],
+            runtime["pipelineRunGroupId"],
+        )
+        self.assertEqual(process.terminate_calls, 1)
+        self.assertEqual(
+            process.wait_timeouts,
+            [
+                60.0,
+                self.factory._PROCESS_TERMINATE_TIMEOUT_SECONDS,
+            ],
+        )
+
+    def test_renewal_error_kills_process_when_terminate_does_not_finish(self):
+        runtime = self.runtime_spec()
+        task_instance = mock.Mock()
+        task_instance.xcom_pull.return_value = runtime
+        command = ["docker", "run", "dts-dbt:1.10.0", "build"]
+        terminate_timeout = self.factory.subprocess.TimeoutExpired(
+            command,
+            self.factory._PROCESS_TERMINATE_TIMEOUT_SECONDS,
+        )
+        process = FakeProcess(
+            [
+                self.factory.subprocess.TimeoutExpired(command, 60.0),
+                terminate_timeout,
+                0,
+            ]
+        )
+        responses = iter(
+            [
+                self.lease_response(),
+                RuntimeError("profile lease renewal rejected"),
+            ]
+        )
+
+        def request(_path, **_kwargs):
+            response = next(responses)
+            if isinstance(response, BaseException):
+                raise response
+            return response
+
+        with (
+            mock.patch.object(
+                self.factory,
+                "_platform_request",
+                side_effect=request,
+            ),
+            mock.patch.object(
+                self.factory,
+                "_build_docker_command",
+                return_value=command,
+            ),
+            mock.patch.object(
+                self.factory.subprocess,
+                "Popen",
+                return_value=process,
+            ),
+            mock.patch.object(
+                self.factory,
+                "_stop_dbt_container",
+            ) as stop_container,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "renewal rejected"):
+                self.factory._dbt_build_task(ti=task_instance)
+
+        stop_container.assert_called_once_with(
+            "dts-dbt-" + runtime["profileLeaseId"],
+            runtime["profileLeaseId"],
+            runtime["pipelineRunGroupId"],
+        )
+        self.assertEqual(process.terminate_calls, 1)
+        self.assertEqual(process.kill_calls, 1)
+        self.assertEqual(
+            process.wait_timeouts,
+            [
+                60.0,
+                self.factory._PROCESS_TERMINATE_TIMEOUT_SECONDS,
+                self.factory._PROCESS_KILL_TIMEOUT_SECONDS,
+            ],
+        )
+
+    def test_cleanup_failure_does_not_mask_profile_lease_renewal_error(self):
+        runtime = self.runtime_spec()
+        task_instance = mock.Mock()
+        task_instance.xcom_pull.return_value = runtime
+        command = ["docker", "run", "dts-dbt:1.10.0", "build"]
+        process = FakeProcess(
+            [
+                self.factory.subprocess.TimeoutExpired(command, 60.0),
+                OSError("process wait failed"),
+                OSError("process kill wait failed"),
+            ]
+        )
+        responses = iter(
+            [
+                self.lease_response(),
+                RuntimeError("profile lease renewal rejected"),
+            ]
+        )
+
+        def request(_path, **_kwargs):
+            response = next(responses)
+            if isinstance(response, BaseException):
+                raise response
+            return response
+
+        with (
+            mock.patch.object(
+                self.factory,
+                "_platform_request",
+                side_effect=request,
+            ),
+            mock.patch.object(
+                self.factory,
+                "_build_docker_command",
+                return_value=command,
+            ),
+            mock.patch.object(
+                self.factory.subprocess,
+                "Popen",
+                return_value=process,
+            ),
+            mock.patch.object(
+                self.factory,
+                "_stop_dbt_container",
+                side_effect=OSError("docker engine unavailable"),
+            ),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "renewal rejected"):
+                self.factory._dbt_build_task(ti=task_instance)
+
+        self.assertEqual(process.terminate_calls, 1)
+        self.assertEqual(process.kill_calls, 1)
+        self.assertEqual(
+            process.wait_timeouts,
+            [
+                60.0,
+                self.factory._PROCESS_TERMINATE_TIMEOUT_SECONDS,
+                self.factory._PROCESS_KILL_TIMEOUT_SECONDS,
+            ],
+        )
+
+    def test_nonzero_build_exit_preserves_code_without_exposing_command(self):
+        runtime = self.runtime_spec()
+        task_instance = mock.Mock()
+        task_instance.xcom_pull.return_value = runtime
+        command = ["docker", "run", "dts-dbt:1.10.0", "build"]
+        process = FakeProcess([7])
+
+        with (
+            mock.patch.object(
+                self.factory,
+                "_platform_request",
+                return_value=self.lease_response(),
+            ),
+            mock.patch.object(
+                self.factory,
+                "_build_docker_command",
+                return_value=command,
+            ),
+            mock.patch.object(
+                self.factory.subprocess,
+                "Popen",
+                return_value=process,
+            ),
+            mock.patch.object(
+                self.factory,
+                "_stop_dbt_container",
+            ) as stop_container,
+        ):
+            with self.assertRaises(
+                self.factory.DbtBuildProcessError
+            ) as raised:
+                self.factory._dbt_build_task(ti=task_instance)
+
+        stop_container.assert_called_once_with(
+            "dts-dbt-" + runtime["profileLeaseId"],
+            runtime["profileLeaseId"],
+            runtime["pipelineRunGroupId"],
+        )
+        self.assertEqual(raised.exception.returncode, 7)
+        self.assertNotIn("model_a model_b", str(raised.exception))
+        self.assertNotIn("/dev/shm", str(raised.exception))
+        self.assertEqual(process.terminate_calls, 0)
+        self.assertEqual(process.kill_calls, 0)
+
+    def test_popen_failure_still_cleans_the_deterministic_container(self):
+        runtime = self.runtime_spec()
+        task_instance = mock.Mock()
+        task_instance.xcom_pull.return_value = runtime
+        command = ["docker", "run", "dts-dbt:1.10.0", "build"]
+
+        with (
+            mock.patch.object(
+                self.factory,
+                "_platform_request",
+                return_value=self.lease_response(),
+            ),
+            mock.patch.object(
+                self.factory,
+                "_build_docker_command",
+                return_value=command,
+            ),
+            mock.patch.object(
+                self.factory.subprocess,
+                "Popen",
+                side_effect=OSError("process acquisition failed"),
+            ),
+            mock.patch.object(
+                self.factory,
+                "_stop_dbt_container",
+            ) as stop_container,
+        ):
+            with self.assertRaisesRegex(
+                OSError,
+                "process acquisition failed",
+            ):
+                self.factory._dbt_build_task(ti=task_instance)
+
+        stop_container.assert_called_once_with(
+            "dts-dbt-" + runtime["profileLeaseId"],
+            runtime["profileLeaseId"],
+            runtime["pipelineRunGroupId"],
+        )
+
+    def test_build_fails_closed_when_consumed_profile_lease_id_mismatches(self):
+        runtime = self.runtime_spec()
+        mismatched_lease_id = "20000000-0000-0000-0000-000000000099"
+        task_instance = mock.Mock()
+        task_instance.xcom_pull.return_value = runtime
+
+        with (
+            mock.patch.object(
+                self.factory,
+                "_platform_request",
+                return_value={"profileLeaseId": mismatched_lease_id},
+            ),
+            mock.patch.object(self.factory, "_build_docker_command") as build,
+            mock.patch.object(self.factory.subprocess, "Popen") as popen,
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "consume response does not match runtime",
+            ):
+                self.factory._dbt_build_task(ti=task_instance)
+
+        build.assert_not_called()
+        popen.assert_not_called()
+
+    def test_finalizer_does_not_delete_lease_when_cleanup_is_unconfirmed(self):
+        runtime = self.runtime_spec()
+        task_instance = mock.Mock()
+        task_instance.xcom_pull.return_value = runtime
+        dag_run = mock.Mock()
+        dag_run.get_task_instances.return_value = [
+            SimpleNamespace(task_id=task_id, state="success")
+            for task_id in (
+                self.factory._PREPARE_TASK_ID,
+                self.factory._BUILD_TASK_ID,
+                self.factory._SYNC_TASK_ID,
+            )
+        ]
+        requests = []
+
+        with (
+            mock.patch.object(
+                self.factory,
+                "_platform_request",
+                side_effect=lambda path, **kwargs: (
+                    requests.append((path, kwargs)) or {}
+                ),
+            ),
+            mock.patch.object(
+                self.factory,
+                "_stop_dbt_container",
+                side_effect=RuntimeError("cleanup unconfirmed"),
+            ),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "cleanup unconfirmed"):
+                self.factory._finalize_task(
+                    ti=task_instance,
+                    dag_run=dag_run,
+                )
+
+        self.assertFalse(
+            any(kwargs.get("method") == "DELETE" for _, kwargs in requests)
+        )
+
+    def test_finalizer_deletes_lease_only_after_cleanup_is_confirmed(self):
+        runtime = self.runtime_spec()
+        task_instance = mock.Mock()
+        task_instance.xcom_pull.return_value = runtime
+        dag_run = mock.Mock()
+        dag_run.get_task_instances.return_value = [
+            SimpleNamespace(task_id=task_id, state="success")
+            for task_id in (
+                self.factory._PREPARE_TASK_ID,
+                self.factory._BUILD_TASK_ID,
+                self.factory._SYNC_TASK_ID,
+            )
+        ]
+        events = []
+
+        with (
+            mock.patch.object(
+                self.factory,
+                "_platform_request",
+                side_effect=lambda _path, **kwargs: (
+                    events.append(
+                        "delete"
+                        if kwargs.get("method") == "DELETE"
+                        else "finalize"
+                    )
+                    or {}
+                ),
+            ),
+            mock.patch.object(
+                self.factory,
+                "_stop_dbt_container",
+                side_effect=lambda *_args: events.append("cleanup"),
+            ) as stop_container,
+        ):
+            self.factory._finalize_task(
+                ti=task_instance,
+                dag_run=dag_run,
+            )
+
+        stop_container.assert_called_once_with(
+            "dts-dbt-" + runtime["profileLeaseId"],
+            runtime["profileLeaseId"],
+            runtime["pipelineRunGroupId"],
+        )
+        self.assertEqual(events, ["finalize", "cleanup", "delete"])
+
+    def test_platform_request_errors_do_not_expose_dynamic_lease_path(self):
+        lease_id = self.runtime_spec()["profileLeaseId"]
+        path = (
+            "/api/internal/modeling/materialization/profile-leases/"
+            f"{lease_id}/renew"
+        )
+        full_url = "http://dts-platform:8080" + path
+
+        with (
+            mock.patch.dict(
+                os.environ,
+                {
+                    "DTS_PLATFORM_INTERNAL_BASE_URL":
+                        "http://dts-platform:8080",
+                    "DTS_AIRFLOW_TO_PLATFORM_TOKEN": "opaque",
+                },
+            ),
+            mock.patch.object(
+                self.factory.urllib_request,
+                "urlopen",
+                side_effect=self.factory.urllib_error.HTTPError(
+                    full_url,
+                    409,
+                    "Conflict",
+                    None,
+                    None,
+                ),
+            ),
+        ):
+            with self.assertRaises(RuntimeError) as raised:
+                self.factory._platform_request(path)
+
+        message = str(raised.exception)
+        self.assertIn("HTTP 409", message)
+        self.assertNotIn(path, message)
+        self.assertNotIn(lease_id, message)
+
+    def test_factory_source_has_one_subprocess_owner(self):
         source = FACTORY_PATH.read_text(encoding="utf-8")
 
-        self.assertIn("subprocess.run(command, check=True)", source)
+        self.assertIn("subprocess.Popen(command)", source)
+        self.assertNotIn("subprocess.run(", source)
         self.assertNotIn("shell=True", source)
         self.assertNotIn("|| true", source)
         self.assertNotIn("BashOperator", source)
-        self.assertEqual(source.count("docker\", \"run"), 1)
+        self.assertEqual(
+            source.count(
+                '"docker", "--host", _DOCKER_ENGINE_HOST, "run"'
+            ),
+            1,
+        )
 
 
 if __name__ == "__main__":

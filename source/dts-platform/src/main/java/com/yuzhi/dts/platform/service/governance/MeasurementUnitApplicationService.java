@@ -15,6 +15,8 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecDomainReadAccessPort;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -236,6 +238,31 @@ public class MeasurementUnitApplicationService {
     @Transactional(readOnly = true)
     public List<MeasurementUnitView> list() {
         return repository.listCurrent().stream().map(this::toView).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<MeasurementUnitView> listForRelationshipGraph(Collection<UUID> unitIds, int limit) {
+        if (unitIds == null || unitIds.isEmpty() || limit < 1) return List.of();
+        int boundedLimit = Math.min(limit, 500);
+        Set<UUID> unique = new java.util.LinkedHashSet<>();
+        int inspected = 0;
+        for (UUID unitId : unitIds) {
+            if (++inspected > boundedLimit || unique.size() >= boundedLimit) break;
+            if (unitId != null) unique.add(unitId);
+        }
+        List<UUID> boundedIds = unique.stream().sorted().toList();
+        if (boundedIds.isEmpty()) return List.of();
+        return repository
+            .listCurrentForRelationshipGraph(boundedIds, boundedLimit)
+            .stream()
+            .map(this::toView)
+            .sorted(
+                Comparator
+                    .comparing(MeasurementUnitView::name, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
+                    .thenComparing(unit -> unit.id().toString())
+            )
+            .limit(boundedLimit)
+            .toList();
     }
 
     @Transactional(readOnly = true)

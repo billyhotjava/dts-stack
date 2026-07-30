@@ -10,6 +10,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.CreateModelSpec
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.FieldIssue;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.Layer;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelRevisionRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelStatus;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.UpdateModelSpecCommand;
@@ -18,6 +19,7 @@ import com.yuzhi.dts.platform.service.modeling.warehouse.CatalogDomainResolution
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -861,6 +863,90 @@ public class ModelSpecApplicationService {
             .stream()
             .filter(this::canRead)
             .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<ModelSpecView> listForRelationshipGraph(String serverTenantId, UUID planId, int limit) {
+        return listForRelationshipGraph(serverTenantId, planId, null, limit);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ModelSpecView> listForRelationshipGraph(
+        String serverTenantId,
+        UUID planId,
+        UUID afterId,
+        int limit
+    ) {
+        requireTenant(serverTenantId);
+        if (planId == null || limit < 1 || limit > 501) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_RELATIONSHIP_GRAPH_WINDOW_INVALID",
+                "Relationship graph ModelSpec limit must be between 1 and 501",
+                ModelSpecException.Kind.BAD_REQUEST
+            );
+        }
+        Set<UUID> visibleDomainIds = domainReadAccess.visibleDomainIds();
+        Set<UUID> effectiveVisibleDomainIds = visibleDomainIds == null ? Set.of() : visibleDomainIds;
+        List<StoredModelSpec> stored = afterId == null
+            ? repository.listCurrentForRelationshipGraph(
+                serverTenantId,
+                planId,
+                effectiveVisibleDomainIds,
+                featureFlags.canonicalReadEnabled(),
+                limit
+            )
+            : repository.listCurrentForRelationshipGraph(
+                serverTenantId,
+                planId,
+                effectiveVisibleDomainIds,
+                featureFlags.canonicalReadEnabled(),
+                afterId,
+                limit
+            );
+        return compatibilityReader.readForRelationshipGraph(stored);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ModelSpecView> revisionsForRelationshipGraph(
+        String serverTenantId,
+        Collection<ModelRevisionRef> references,
+        int limit
+    ) {
+        requireTenant(serverTenantId);
+        if (limit < 1 || limit > 500) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_RELATIONSHIP_GRAPH_WINDOW_INVALID",
+                "Relationship graph ModelSpec revision limit must be between 1 and 500",
+                ModelSpecException.Kind.BAD_REQUEST
+            );
+        }
+        if (references == null || references.isEmpty()) return List.of();
+        Set<ModelRevisionRef> unique = new java.util.LinkedHashSet<>();
+        int inspected = 0;
+        for (ModelRevisionRef reference : references) {
+            if (++inspected > limit || unique.size() >= limit) break;
+            if (reference != null && reference.modelSpecId() != null && reference.revision() > 0) {
+                unique.add(reference);
+            }
+        }
+        List<ModelRevisionRef> boundedReferences = unique
+            .stream()
+            .sorted(
+                java.util.Comparator
+                    .comparing(ModelRevisionRef::modelSpecId)
+                    .thenComparingInt(ModelRevisionRef::revision)
+            )
+            .toList();
+        if (boundedReferences.isEmpty()) return List.of();
+        Set<UUID> visibleDomainIds = domainReadAccess.visibleDomainIds();
+        List<StoredModelSpec> stored = repository.listRevisionsForRelationshipGraph(
+            serverTenantId,
+            boundedReferences,
+            visibleDomainIds == null ? Set.of() : visibleDomainIds,
+            featureFlags.canonicalReadEnabled(),
+            limit
+        );
+        return compatibilityReader.readForRelationshipGraph(stored);
     }
 
     @Transactional(readOnly = true)

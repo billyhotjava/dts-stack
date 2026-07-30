@@ -3,6 +3,7 @@ import test from "node:test";
 import { readFile } from "node:fs/promises";
 
 const behaviorConfigSectionPath = new URL("./BehaviorConfigSection.tsx", import.meta.url);
+const drillDownConfigSectionPath = new URL("./DrillDownConfigSection.tsx", import.meta.url);
 const componentRendererPath = new URL("../ComponentRenderer.tsx", import.meta.url);
 
 test("BehaviorConfigSection uses icon-backed action affordances", async () => {
@@ -18,7 +19,10 @@ test("BehaviorConfigSection uses icon-backed action affordances", async () => {
 });
 
 test("drilldown editor is data-source neutral and exposes generic mapping fields", async () => {
-    const source = await readFile(behaviorConfigSectionPath, "utf8");
+    const source = (await Promise.all([
+        readFile(behaviorConfigSectionPath, "utf8"),
+        readFile(drillDownConfigSectionPath, "utf8"),
+    ])).join("\n");
 
     assert.doesNotMatch(source, /dataSource\?\.type\s*!==\s*['"]card['"]/);
     assert.doesNotMatch(source, /cardId:\s*0,\s*paramName:\s*['"]{2}/);

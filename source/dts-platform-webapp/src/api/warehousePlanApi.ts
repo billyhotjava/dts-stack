@@ -257,6 +257,7 @@ export type WarehousePlanRelationshipGraph = {
 	edges: WarehousePlanRelationshipGraphEdge[];
 	truncated: boolean;
 	nextHint?: string | null;
+	nextCursor?: string | null;
 };
 
 export type WarehousePlanRelationshipGraphKind = "PLAN" | "DIMENSION" | "MODEL" | "STANDARD" | "INDICATOR";
@@ -265,6 +266,7 @@ export type WarehousePlanRelationshipGraphQuery = {
 	kind?: WarehousePlanRelationshipGraphKind;
 	query?: string;
 	limit?: number;
+	cursor?: string;
 };
 
 export const listWarehousePlans = (lifecycleStatus?: WarehousePlanLifecycleStatus) =>
