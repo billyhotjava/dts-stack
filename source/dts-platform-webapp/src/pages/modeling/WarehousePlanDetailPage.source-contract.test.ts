@@ -16,7 +16,7 @@ test("warehouse plan detail is registered as a stable planId wildcard route", ()
 
 test("plan overview owns inline header editing without opening a second surface", () => {
 	assert.match(page, /WarehousePlanHeaderEditor/);
-	assert.match(page, /const routeMode\s*=\s*searchParams\.get\("mode"\)/);
+	assert.match(page, /const routeMode\s*=\s*embedded\s*\?\s*null\s*:\s*searchParams\.get\("mode"\)/);
 	assert.match(page, /const editMode\s*=\s*routeMode\s*===\s*"edit"/);
 	assert.match(page, /headerEditing\s*=\s*editMode\s*&&\s*activeSection\s*===\s*"overview"/);
 	assert.match(page, /buildWarehousePlanRoute\(planId,\s*activeSection/);

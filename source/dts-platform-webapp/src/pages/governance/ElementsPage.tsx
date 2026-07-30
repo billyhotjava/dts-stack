@@ -77,7 +77,11 @@ const parseIntOr = (value: string | null, fallback: number) => {
 	return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 };
 
-export default function ElementsPage() {
+type ElementsPageProps = {
+	embedded?: boolean;
+};
+
+export default function ElementsPage({ embedded = false }: ElementsPageProps = {}) {
 	const navigate = useNavigate();
 	const [searchParams, setSearchParams] = useSearchParams();
 	const searchParamsValue = searchParams.toString();
@@ -335,30 +339,35 @@ export default function ElementsPage() {
 	];
 
 	const content = data?.content ?? [];
+	const headerActions = (
+		<Space wrap>
+			{returnTarget ? (
+				<Button icon={<ArrowLeftOutlined />} onClick={() => navigate(returnTarget.href)}>
+					{returnTarget.label}
+				</Button>
+			) : null}
+			<Button type="primary" onClick={() => openModal()} disabled={!canManage} data-testid="governance-elements-create">
+				+ 新增数据元
+			</Button>
+		</Space>
+	);
 
 	return (
 		<div className="space-y-4">
-			<Breadcrumb items={[{ title: "数据治理中心" }, { title: "标准管理" }, { title: "数据元" }]} />
-			<PageHeader
-				title="数据治理中心 · 标准管理 / 数据元"
-				actions={
-					<Space wrap>
-						{returnTarget ? (
-							<Button icon={<ArrowLeftOutlined />} onClick={() => navigate(returnTarget.href)}>
-								{returnTarget.label}
-							</Button>
-						) : null}
-						<Button
-							type="primary"
-							onClick={() => openModal()}
-							disabled={!canManage}
-							data-testid="governance-elements-create"
-						>
-							+ 新增数据元
-						</Button>
-					</Space>
-				}
-			/>
+			{embedded ? (
+				<div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
+					<div>
+						<div className="font-semibold text-slate-950">数据元</div>
+						<div className="mt-1 text-xs text-slate-500">维护字段标准正文、稳定版本和引用关系。</div>
+					</div>
+					{headerActions}
+				</div>
+			) : (
+				<>
+					<Breadcrumb items={[{ title: "数据治理中心" }, { title: "标准管理" }, { title: "数据元" }]} />
+					<PageHeader title="数据治理中心 · 标准管理 / 数据元" actions={headerActions} />
+				</>
+			)}
 			{returnTarget ? (
 				<Alert
 					showIcon

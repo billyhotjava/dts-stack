@@ -81,7 +81,8 @@ const lifecycleLabel: Record<WarehousePlanHeader["lifecycleStatus"], string> = {
 	ARCHIVED: "已归档",
 };
 
-type BaselineTab = "categories" | "data-marts" | "layers" | "sources";
+export type WarehousePlanBaselineTab = "categories" | "data-marts" | "layers" | "sources";
+type BaselineTab = WarehousePlanBaselineTab;
 type BaselineInputReplace = "none" | "categories" | "policy" | "all";
 type CategoryFormValue = { domainBindings: WarehousePlanCategoryBindingInput[] };
 type PolicyFormValue = WarehousePlanPolicyInput;
@@ -114,8 +115,23 @@ const resolveSection = (pathname: string): DetailSection => {
 	return entry?.[0] || "overview";
 };
 
-export default function WarehousePlanDetailPage() {
-	const { planId = "" } = useParams<{ planId: string }>();
+type WarehousePlanDetailPageProps = {
+	embedded?: boolean;
+	planIdOverride?: string;
+	sectionOverride?: "overview" | "baseline";
+	baselineTabOverride?: WarehousePlanBaselineTab;
+	onWorkspaceViewChange?: (view: "overview" | WarehousePlanBaselineTab) => void;
+};
+
+export default function WarehousePlanDetailPage({
+	embedded = false,
+	planIdOverride,
+	sectionOverride,
+	baselineTabOverride,
+	onWorkspaceViewChange,
+}: WarehousePlanDetailPageProps = {}) {
+	const { planId: routePlanId = "" } = useParams<{ planId: string }>();
+	const planId = planIdOverride?.trim() || routePlanId;
 	const location = useLocation();
 	const navigate = useNavigate();
 	const searchParams = useSearchParams();
@@ -150,11 +166,14 @@ export default function WarehousePlanDetailPage() {
 	const baselineInputsLoadGuard = useMemo(() => createLatestRequestGuard(), []);
 	const categoryMutationGuard = useMemo(() => createLatestRequestGuard(), []);
 	const policyMutationGuard = useMemo(() => createLatestRequestGuard(), []);
-	const activeSection = useMemo(() => resolveSection(location.pathname), [location.pathname]);
-	const requestedBaselineTab = searchParams.get("tab");
+	const activeSection = useMemo(
+		() => sectionOverride || resolveSection(location.pathname),
+		[location.pathname, sectionOverride],
+	);
+	const requestedBaselineTab = baselineTabOverride || searchParams.get("tab");
 	const requestedCandidateId = searchParams.get("candidateId") || "";
 	const requestedModelSpecId = searchParams.get("modelSpecId") || "";
-	const routeMode = searchParams.get("mode");
+	const routeMode = embedded ? null : searchParams.get("mode");
 	const viewOnly = routeMode === "view";
 	const editMode = routeMode === "edit";
 	const headerEditing = editMode && activeSection === "overview";
@@ -379,13 +398,30 @@ export default function WarehousePlanDetailPage() {
 	};
 
 	const openSpecialist = (route: string) => navigate(withWarehousePlanContext(route, planId));
-	const openSection = (section: DetailSection) =>
+	const openSection = (section: DetailSection) => {
+		if (embedded && onWorkspaceViewChange) {
+			onWorkspaceViewChange(section === "baseline" ? baselineTab : "overview");
+			return;
+		}
 		navigate(
 			buildWarehousePlanRoute(planId, section, {
 				mode: editMode ? "edit" : viewOnly ? "view" : undefined,
 				tab: section === "baseline" && activeSection === "baseline" ? baselineTab : undefined,
 			}),
 		);
+	};
+	const openBaselineTab = (value: string) => {
+		if (embedded && onWorkspaceViewChange) {
+			onWorkspaceViewChange(value as BaselineTab);
+			return;
+		}
+		navigate(
+			buildWarehousePlanRoute(planId, "baseline", {
+				tab: value,
+				mode: editMode ? "edit" : viewOnly ? "view" : undefined,
+			}),
+		);
+	};
 
 	if (!planId) {
 		return (
@@ -441,85 +477,90 @@ export default function WarehousePlanDetailPage() {
 	);
 
 	return (
-		<div className="mx-auto w-full max-w-[1480px] space-y-4 p-4 md:p-6" data-testid="warehouse-plan-detail">
-			<header className="rounded-[22px] border border-slate-200 bg-white px-5 pt-5 md:px-7 md:pt-6">
-				<div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-					<div>
-						<Button
-							type="link"
-							className="-ml-3 mb-1 px-2 text-slate-500"
-							icon={<ArrowLeft size={15} />}
-							onClick={() => navigate(`/modeling/workbench?planId=${encodeURIComponent(planId)}`)}
-						>
-							返回数据建设工作台
-						</Button>
-						<div className="flex flex-wrap items-center gap-3">
-							<Title level={2} style={{ margin: 0 }}>
-								{plan.name}
-							</Title>
-							<Tag color="blue">{lifecycleLabel[plan.lifecycleStatus]}</Tag>
-							{viewOnly ? <Tag>只读查看</Tag> : null}
-							{editMode ? <Tag color="processing">编辑中</Tag> : null}
+		<div
+			className={embedded ? "space-y-4 p-4 md:p-5" : "mx-auto w-full max-w-[1480px] space-y-4 p-4 md:p-6"}
+			data-testid="warehouse-plan-detail"
+		>
+			{!embedded ? (
+				<header className="rounded-[22px] border border-slate-200 bg-white px-5 pt-5 md:px-7 md:pt-6">
+					<div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+						<div>
+							<Button
+								type="link"
+								className="-ml-3 mb-1 px-2 text-slate-500"
+								icon={<ArrowLeft size={15} />}
+								onClick={() => navigate(`/modeling/workbench?planId=${encodeURIComponent(planId)}`)}
+							>
+								返回数据建设工作台
+							</Button>
+							<div className="flex flex-wrap items-center gap-3">
+								<Title level={2} style={{ margin: 0 }}>
+									{plan.name}
+								</Title>
+								<Tag color="blue">{lifecycleLabel[plan.lifecycleStatus]}</Tag>
+								{viewOnly ? <Tag>只读查看</Tag> : null}
+								{editMode ? <Tag color="processing">编辑中</Tag> : null}
+							</div>
+							<div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-slate-500">
+								<span>计划负责人：{plan.ownerId}</span>
+								<span>开始方式：{plan.onboardingMode === "ASSET_FIRST" ? "从现有数据开始" : "从业务目标开始"}</span>
+								<span>
+									当前阶段：
+									{projection
+										? projection.currentStage
+											? warehouseStageLabel(projection.currentStage)
+											: "全部阶段已完成"
+										: "状态未知"}
+								</span>
+							</div>
 						</div>
-						<div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-slate-500">
-							<span>计划负责人：{plan.ownerId}</span>
-							<span>开始方式：{plan.onboardingMode === "ASSET_FIRST" ? "从现有数据开始" : "从业务目标开始"}</span>
-							<span>
-								当前阶段：
-								{projection
-									? projection.currentStage
-										? warehouseStageLabel(projection.currentStage)
-										: "全部阶段已完成"
-									: "状态未知"}
-							</span>
-						</div>
+						<Space wrap>
+							{canEditWarehousePlanHeader(canMaintainPlan, plan.lifecycleStatus) && !editMode ? (
+								<Button
+									onClick={() =>
+										navigate(
+											buildWarehousePlanRoute(planId, activeSection, {
+												mode: "edit",
+												tab: activeSection === "baseline" ? baselineTab : undefined,
+											}),
+										)
+									}
+								>
+									编辑规划
+								</Button>
+							) : null}
+							{canEditWarehousePlanHeader(canMaintainPlan, plan.lifecycleStatus) &&
+							editMode &&
+							activeSection !== "overview" ? (
+								<Button
+									onClick={() =>
+										navigate(
+											buildWarehousePlanRoute(planId, activeSection, {
+												mode: "view",
+												tab: activeSection === "baseline" ? baselineTab : undefined,
+											}),
+										)
+									}
+								>
+									完成编辑
+								</Button>
+							) : null}
+							{!viewOnly && !editMode && activeSection !== "baseline" && nextAction ? (
+								<Button type="primary" size="large" onClick={() => openSpecialist(nextAction.path)}>
+									{projection?.currentStage ? warehouseStageActionLabel(projection.currentStage) : nextAction.label}
+									<ArrowRight size={16} />
+								</Button>
+							) : null}
+						</Space>
 					</div>
-					<Space wrap>
-						{canEditWarehousePlanHeader(canMaintainPlan, plan.lifecycleStatus) && !editMode ? (
-							<Button
-								onClick={() =>
-									navigate(
-										buildWarehousePlanRoute(planId, activeSection, {
-											mode: "edit",
-											tab: activeSection === "baseline" ? baselineTab : undefined,
-										}),
-									)
-								}
-							>
-								编辑规划
-							</Button>
-						) : null}
-						{canEditWarehousePlanHeader(canMaintainPlan, plan.lifecycleStatus) &&
-						editMode &&
-						activeSection !== "overview" ? (
-							<Button
-								onClick={() =>
-									navigate(
-										buildWarehousePlanRoute(planId, activeSection, {
-											mode: "view",
-											tab: activeSection === "baseline" ? baselineTab : undefined,
-										}),
-									)
-								}
-							>
-								完成编辑
-							</Button>
-						) : null}
-						{!viewOnly && !editMode && activeSection !== "baseline" && nextAction ? (
-							<Button type="primary" size="large" onClick={() => openSpecialist(nextAction.path)}>
-								{projection?.currentStage ? warehouseStageActionLabel(projection.currentStage) : nextAction.label}
-								<ArrowRight size={16} />
-							</Button>
-						) : null}
-					</Space>
-				</div>
-				<Tabs
-					className="mt-5"
-					activeKey={activeSection}
-					items={tabItems}
-					onChange={(key) => openSection(key as DetailSection)}
-				/>
-			</header>
+					<Tabs
+						className="mt-5"
+						activeKey={activeSection}
+						items={tabItems}
+						onChange={(key) => openSection(key as DetailSection)}
+					/>
+				</header>
+			) : null}
 
 			{evidenceFailed ? (
 				<Alert
@@ -604,14 +645,7 @@ export default function WarehousePlanDetailPage() {
 					) : null}
 					<Tabs
 						activeKey={baselineTab}
-						onChange={(value) =>
-							navigate(
-								buildWarehousePlanRoute(planId, "baseline", {
-									tab: value,
-									mode: editMode ? "edit" : viewOnly ? "view" : undefined,
-								}),
-							)
-						}
+						onChange={openBaselineTab}
 						items={[
 							{
 								key: "categories",

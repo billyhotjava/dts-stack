@@ -41,7 +41,7 @@ test("static and dynamic routers send every retired path through the same compat
 	]) {
 		assert.match(
 			staticRoutes,
-			new RegExp(`path: "${path}"[^\\n]*<S><ModelingCompatibilityPage`),
+			new RegExp(`path: "${path}"[\\s\\S]{0,160}<S>[\\s\\S]{0,80}<ModelingCompatibilityPage`),
 			`static route ${path} must use ModelingCompatibilityPage`,
 		);
 		assert.match(

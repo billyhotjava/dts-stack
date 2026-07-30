@@ -19,7 +19,11 @@ test("foundation pages share the CompactTable pagination convention", () => {
 		assert.match(source, /CompactTable/, `${name} should use CompactTable`);
 		assert.match(source, /pageSizeOptions:\s*\[10,\s*20,\s*50,\s*100\]/, `${name} should expose the same page sizes`);
 		assert.match(source, /showTotal:\s*\(total\) => `共 \$\{total\} 条`/, `${name} should show total count`);
-		assert.match(source, /setPageNum\(size !== pageSize \? 0 : page - 1\)/, `${name} should reset to page 1 when size changes`);
+		assert.match(
+			source,
+			/setPageNum\(size !== pageSize \? 0 : page - 1\)|syncQuery\(\{\s*page:\s*size !== pageSize \? 0 : page - 1,\s*size\s*\}\)/,
+			`${name} should reset to page 1 when size changes`,
+		);
 	}
 });
 

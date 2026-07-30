@@ -35,6 +35,7 @@ test("field standards are bound by ModelSpec instead of a page-wide draft", () =
 });
 
 test("data element actions wrap instead of clipping on narrow viewports", () => {
-	assert.match(source, /actions=\{\s*<Space wrap>/);
+	assert.match(source, /const headerActions\s*=\s*\(\s*<Space wrap>/);
+	assert.match(source, /actions=\{headerActions\}/);
 	assert.match(source, /<Space wrap className="mb-4">/);
 });

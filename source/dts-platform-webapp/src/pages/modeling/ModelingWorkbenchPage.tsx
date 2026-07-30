@@ -38,13 +38,14 @@ import {
 	mergeWarehousePlanLists,
 	reduceWarehousePlanCreateSession,
 } from "./warehousePlanCreateFlow";
-import { ModelingWorkspaceModuleLanding } from "./ModelingWorkspaceModuleLanding";
+import { ModelingWorkspacePanels } from "./ModelingWorkspacePanels";
 import { ModelingWorkspaceShell } from "./ModelingWorkspaceShell";
 import { type CreatePlanForm, WarehousePlanCreateModal } from "./WarehousePlanCreateModal";
 import {
 	parseModelingWorkspaceRouteState,
 	type ModelingWorkspaceModule,
 	type ModelingWorkspaceRoutePatch,
+	type ModelingWorkspaceView,
 	updateModelingWorkspaceSearch,
 } from "./modelingWorkspaceRouteState";
 
@@ -121,6 +122,11 @@ export default function ModelingWorkbenchPage() {
 
 	const changeModule = useCallback(
 		(module: ModelingWorkspaceModule) => navigateWorkspace({ module }),
+		[navigateWorkspace],
+	);
+
+	const changeWorkspaceView = useCallback(
+		(view: ModelingWorkspaceView) => navigateWorkspace({ workspaceView: view }),
 		[navigateWorkspace],
 	);
 
@@ -389,7 +395,7 @@ export default function ModelingWorkbenchPage() {
 				onCreatePlan={openCreate}
 				onOpenAllPlans={() => navigate("/modeling/plans")}
 			>
-				{activeModule === "home" || activeModule === "planning" ? (
+				{activeModule === "home" ? (
 					<div className="space-y-4 p-4 md:p-5">
 						{requestedCreate && !canCreatePlan ? (
 							<Alert
@@ -628,9 +634,11 @@ export default function ModelingWorkbenchPage() {
 						) : null}
 					</div>
 				) : (
-					<ModelingWorkspaceModuleLanding
+					<ModelingWorkspacePanels
 						module={activeModule}
 						planId={selectedPlanId || undefined}
+						workspaceView={workspaceRoute.workspaceView}
+						onViewChange={changeWorkspaceView}
 						onNavigate={navigate}
 					/>
 				)}
