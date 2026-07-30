@@ -21,8 +21,8 @@
 | `ModelSpecDetailPage` | 大幅改造 | 三阶段页面重组为单页编辑器；stage gate 仅作为顶部状态和按钮门禁 | 新编辑器功能等价后删除旧布局组件 |
 | `SqlModelingPage` / `ModelPipeline` | 保留专业入口 | 仅在工具栏提供深链，不塞入主编辑器 | 不删除；后续独立拆分 4741 行巨型页 |
 | `ModelTemplatesPage` | 保留 | 属于项目空间，不是重复模型页 | 不删除 |
-| `DbtFileBrowserPage.tsx` | 删除候选 A | 当前无运行时引用，先做影响/构建检查后删除 | 单批次即可 |
-| `modelingCompatibility.ts` 旧注册 helper | 删除候选 A | 若确认仅测试引用，连同孤儿测试删除 | 单批次即可 |
+| `DbtFileBrowserPage.tsx` | Batch A 已删除 | GitNexus LOW、current HEAD 无运行时引用；dbt 文件/运行能力由 `SqlModelingPage` 持有 | `pnpm build` 已通过 |
+| `modelingCompatibility.ts` 旧注册 helper | Batch A 已删除 | 仅孤儿测试引用，helper 与测试一起删除；正式 redirect owner 是 `modelingCompatibilityRoute.ts` | focused test 已通过 |
 | `ModelingCompatibilityPage` + 8 条兼容路由 | 删除候选 B | 先增加访问观测，继续 redirect/recovery | 所有部署两版本零访问、客户旧对象完成映射、回滚演练通过 |
 | `modeling_business_object`、`semantic_*` 等旧表/API | 删除候选 C | 本 Sprint 只做画像和 removal proposal | 客户环境 dry-run、零写入/零读取、备份、审批和独立 migration |
 

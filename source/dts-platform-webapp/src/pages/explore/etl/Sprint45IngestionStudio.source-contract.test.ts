@@ -60,7 +60,7 @@ test("Sprint-45 Studio converges project, SQL/dbt modeling, and release gates on
 	for (const action of ["新建项目", "导入项目", "进入 SQL 建模", "归档", "发布"]) {
 		assert.match(PROJECTS_SOURCE, new RegExp(action));
 	}
-	for (const action of ["新建模型", "导入模型", "加载预览", "生成 ODS", "发布门禁", "发布到 Analytics"]) {
+	for (const action of ["新建模型", "导入模型", "加载预览", "从 ODS 一键生成", "发布前门禁", "发布到 Analytics"]) {
 		assert.match(SQL_MODELING_SOURCE, new RegExp(action));
 	}
 	for (const action of ["导入", "校验", "预览", "发布", "编译", "测试"]) {

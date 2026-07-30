@@ -1731,7 +1731,7 @@
 | F4-发布物化短流程 | P0 | 2 | DRAFT |
 | F5-旧页面受控退役 | P0 | 2 | DRAFT |
 
-**统计**: DRAFT=12, READY=1, IN_PROGRESS=1, DONE=0, BLOCKED=0
+**统计**: DRAFT=11, READY=1, IN_PROGRESS=1, DONE=1, BLOCKED=0
 **执行顺序**: F0 → F1 → F2/F3 → F4 → F5；F2/F3 可在 Shell 契约冻结后并行，F5 必须等待功能等价、客户画像和两版本访问观测。
 **关键决策**: `/modeling/workbench` 为唯一主入口且不新增业务菜单；原型只提供 UI 规格；canonical owner 全部复用；“贴源表”映射来源注册/逆向候选而非第五类 ModelSpec；单页编辑不绕过三阶段门禁；孤儿代码可先删，canonical 页面先抽面板，8 条兼容路由两版本零访问后删，旧表另行审批。
 **已知风险**: 认证 API/UI 已在系统 Chrome 150 复验，但 Chrome 95 兼容尚未补；当前本地仅有 6 个 DIMENSION 模型且 Candidate/implementation 为 0；客户环境规模与旧入口使用未知；Sprint-76 PROD 物化仍为 NO-GO。

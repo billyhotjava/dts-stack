@@ -14,6 +14,10 @@ const menuSeed = readFileSync(
 	new URL("../../../../dts-admin/src/main/resources/config/data/portal-menu-seed.json", import.meta.url),
 	"utf8",
 );
+const portalMenuService = readFileSync(
+	new URL("../../../../dts-admin/src/main/java/com/yuzhi/dts/admin/service/PortalMenuService.java", import.meta.url),
+	"utf8",
+);
 const standardBindingDraftUrl = new URL("./standardBindingDraft.ts", import.meta.url);
 const standardBindingDraft = existsSync(standardBindingDraftUrl) ? readFileSync(standardBindingDraftUrl, "utf8") : "";
 const sqlModelingPage = readFileSync(new URL("./SqlModelingPage.tsx", import.meta.url), "utf8");
@@ -167,6 +171,14 @@ test("retired dbt surfaces are absent and the compatibility route hands files to
 	);
 	assert.match(sqlModelingPage, /data-testid="platform-sql-modeling-page"/);
 	assert.match(sqlModelingPage, /data-testid="platform-sql-modeling-release-gates"/);
+});
+
+test("backend menu fallback cannot resurrect the retired dbt file page", () => {
+	assert.match(
+		portalMenuService,
+		/Map\.entry\("studio\.dbt-files", "\/pages\/modeling\/ModelingCompatibilityPage"\)/,
+	);
+	assert.doesNotMatch(portalMenuService, /\/pages\/modeling\/DbtFileBrowserPage/);
 });
 
 test("metric workbench route is registered in static routes and dynamic resolver", () => {

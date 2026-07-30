@@ -56,7 +56,7 @@
 | CL-11 | 当前 HEAD 为 `857c5cf45`，工作树在立项时干净并与 `origin/v2.2.3` 一致 | `git status --short --branch`、`git log -1`，2026-07-30 |
 | CL-12 | 当前本地库：4 个 DRAFT 计划、7 个 CURRENT 维度、6 个 ModelSpec/10 个 revision；实现、Candidate、物理关系 observation 均为 0 | `assets/domain-profile.md` §3 |
 | CL-13 | 本地旧业务对象、旧 SQL 模型、旧语义模型/维度均为 0，近 30 天 legacy API usage 为 0 | `assets/domain-profile.md` §3；只能支持本地退役判断，不能外推客户环境 |
-| CL-14 | `DbtFileBrowserPage.tsx` 无运行时引用；`ModelTemplatesPage`、`ModelPipeline` 仍分别被项目空间和 SQL 建模使用 | 立项引用计数，2026-07-30 |
+| CL-14 | `DbtFileBrowserPage.tsx` 和旧注册 helper 已按 Batch A 删除；`ModelTemplatesPage`、`ModelPipeline` 仍分别被项目空间和 SQL 建模使用 | `it/evidence/IT-07/`，2026-07-30 |
 | CL-15 | GitNexus 索引停留在 `4762dc9b9`、落后 HEAD 2 个提交；最新原型/UI 只以 HEAD 源码为准 | GitNexus `list_repos`，2026-07-30 |
 
 **开放问题**

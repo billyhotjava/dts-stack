@@ -92,7 +92,7 @@ public class PortalMenuService {
         Map.entry("studio.scripts", "/pages/explore/etl/ScriptStudioPage"),
         Map.entry("studio.orchestration", "/pages/explore/etl/OrchestrationPage"),
         Map.entry("studio.adhoc", "/pages/explore/SqlIdePage"),
-        Map.entry("studio.dbt-files", "/pages/modeling/DbtFileBrowserPage"),
+        Map.entry("studio.dbt-files", "/pages/modeling/ModelingCompatibilityPage"),
         Map.entry("governance.subjects", "/pages/governance/SubjectAreasPage"),
         Map.entry("governance.standards.glossary", "/pages/governance/GlossaryPage"),
         Map.entry("governance.standards.elements", "/pages/governance/ElementsPage"),

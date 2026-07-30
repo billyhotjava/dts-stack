@@ -10,7 +10,7 @@
 | IT-04 | 指标与关系 | 从模型字段创建/绑定指标 → 图中定位维度/标准/指标边 | F3/T01～T02 | PENDING |
 | IT-05 | 发布短流程 | 模型页启动 Build Intent → Candidate 质量/审核边界可见 | F4/T01 | PENDING |
 | IT-06 | DEV 物化 | 独立角色完成发布 → 生成/运行 binding → relation EXISTS → Catalog 资产可见 | F4/T02 | PENDING |
-| IT-07 | 孤儿代码删除 | 无运行时 import、focused test、webapp build 通过 | F0/T03 | PENDING |
+| IT-07 | 孤儿代码删除 | 无运行时 import、focused test、webapp build 通过 | F0/T03 | PASS |
 | IT-08 | 旧入口退役 | 旧深链兼容、两版本零访问、删除后 404/重定向契约、回滚演练 | F5/T01～T02 | PENDING |
 
 ## 证据规范
