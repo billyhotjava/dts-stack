@@ -1,0 +1,11 @@
+commit=aacf2d660
+image=sha256:b773c552d5efc2177bbf6f25ef284b8209bb610bb21b9d22652fc4e8674a258f
+designed_ready=false
+implementation_button=disabled_by_gate
+representative_model=absent
+plan_maintenance_permission=absent
+authenticated_e2e=blocked
+modeling_write_requests=0
+build_status_read=403
+browser=Chrome 150.0.7871.128
+identity_cleanup=keycloak:0,snapshot:0,auth_state:absent

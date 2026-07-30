@@ -1,7 +1,7 @@
 # F2：单页模型编辑器
 
 **优先级**：P0  
-**状态**：DRAFT
+**状态**：IN_PROGRESS（T01/T04 主线严格只读验收通过；T02/T03 的代表数据写入旅程待补）
 
 ## 目标
 
@@ -33,18 +33,19 @@
 
 | ID | Task | 状态 | 依赖 |
 |---|---|---|---|
-| T01 | 重组模型详情为单页画布 | DRAFT | F1/T01 |
-| T02 | 收敛业务维度与字段映射 | DRAFT | T01 |
-| T03 | 补齐四类模型与关联抽屉 | DRAFT | T01、T02 |
+| T01 | 重组模型详情为单页画布 | PASS_WITH_GAPS | F1/T01 |
+| T02 | 收敛业务维度与字段映射 | IN_PROGRESS | T01 |
+| T03 | 补齐四类模型与关联抽屉 | IN_PROGRESS | T01、T02 |
+| T04 | 模型对象上下文接入 | PASS_WITH_GAPS | F1/T02、T01 |
 
 ## Definition of Ready
 
 - [x] ModelSpec/Dimension 现有 API 和字段 owner 已冻结。
-- [ ] F0 登录基线通过。
-- [ ] `ModelSpecDetailPage`、字段组件影响分析完成。
+- [x] F0 登录基线通过。
+- [x] `ModelSpecDetailPage`、字段组件影响分析完成。
 
 ## 完成标准
 
 - [ ] IT-02、IT-03 在正式 DTS 中通过。
-- [ ] stage gate 语义和 CAS 未改变。
-- [ ] 字段错误可定位，不再只有页面顶部笼统报错。
+- [x] stage gate 语义和 CAS 未改变。
+- [x] 字段错误可定位，不再只有页面顶部笼统报错。

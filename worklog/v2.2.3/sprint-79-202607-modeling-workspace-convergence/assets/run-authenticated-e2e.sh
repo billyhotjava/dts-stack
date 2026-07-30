@@ -2,34 +2,85 @@
 
 set -euo pipefail
 
-sprint79_repo_root="$(git rev-parse --show-toplevel)"
-set -a
+sprint79_script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+sprint79_repo_root="$(git -C "${sprint79_script_dir}" rev-parse --show-toplevel)"
 source "${sprint79_repo_root}/.env"
-set +a
 
 sprint79_user="sprint79-e2e-$(date +%s)"
 sprint79_password="$(openssl rand -hex 16)"
 sprint79_kcadm="/opt/keycloak/bin/kcadm.sh"
 sprint79_kcadm_config="/tmp/sprint79-kcadm.config"
 sprint79_auth_file="${sprint79_repo_root}/source/dts-platform-webapp/e2e/.auth/user.json"
+sprint79_realm_role="ROLE_OP_ADMIN"
 sprint79_kc_id=""
 
 cleanup_sprint79_identity() {
+	local sprint79_cleanup_failed=0
 	if [[ -n "${sprint79_kc_id}" ]]; then
-		docker exec -e PGPASSWORD="${PG_PWD_DTADMIN}" v223-dts-pg-1 \
+		if ! docker exec -e PGPASSWORD="${PG_PWD_DTADMIN}" v223-dts-pg-1 \
 			psql -q -U "${PG_USER_DTADMIN}" -d "${PG_DB_DTADMIN}" \
-			-c "DELETE FROM admin_keycloak_user WHERE username = '${sprint79_user}';" >/dev/null || true
-		docker exec dts-keycloak "${sprint79_kcadm}" \
+			-c "DELETE FROM admin_keycloak_user WHERE username = '${sprint79_user}';" >/dev/null; then
+			sprint79_cleanup_failed=1
+		fi
+		if ! docker exec dts-keycloak "${sprint79_kcadm}" \
 			delete "users/${sprint79_kc_id}" -r "${KC_REALM}" \
-			--config "${sprint79_kcadm_config}" >/dev/null || true
-		sprint79_kc_id=""
+			--config "${sprint79_kcadm_config}" >/dev/null; then
+			sprint79_cleanup_failed=1
+		fi
+		if [[ "${sprint79_cleanup_failed}" -eq 0 ]]; then
+			sprint79_kc_id=""
+		fi
 	fi
 	if [[ -e "${sprint79_auth_file}" ]]; then
-		unlink "${sprint79_auth_file}"
+		if ! unlink "${sprint79_auth_file}"; then
+			sprint79_cleanup_failed=1
+		fi
 	fi
+	return "${sprint79_cleanup_failed}"
 }
 
-trap cleanup_sprint79_identity EXIT
+trap 'cleanup_sprint79_identity || echo "ERROR: sprint79 identity cleanup requires manual verification" >&2' EXIT
+
+if [[ "$#" -lt 1 ]]; then
+	echo "ERROR: exact Sprint-79 spec path is required; refusing to run the full E2E directory" >&2
+	exit 64
+fi
+sprint79_requested_spec="$1"
+shift
+case "${sprint79_requested_spec}" in
+	e2e/sprint79-model-detail.spec.ts|source/dts-platform-webapp/e2e/sprint79-model-detail.spec.ts)
+		sprint79_spec="e2e/sprint79-model-detail.spec.ts"
+		;;
+	*)
+		echo "ERROR: only sprint79-model-detail.spec.ts is allowed by this privileged wrapper" >&2
+		exit 64
+		;;
+esac
+if [[ "${SPRINT79_CONFIRM_PRODUCTION_READ_ONLY:-}" != "1" ]]; then
+	echo "ERROR: set SPRINT79_CONFIRM_PRODUCTION_READ_ONLY=1 after reviewing the request-time write barrier" >&2
+	exit 64
+fi
+sprint79_playwright_args=()
+while [[ "$#" -gt 0 ]]; do
+	case "$1" in
+		--grep)
+			if [[ "$#" -lt 2 ]]; then
+				echo "ERROR: --grep requires one pattern" >&2
+				exit 64
+			fi
+			sprint79_playwright_args+=("$1" "$2")
+			shift 2
+			;;
+		--grep=*)
+			sprint79_playwright_args+=("$1")
+			shift
+			;;
+		*)
+			echo "ERROR: privileged wrapper accepts only --grep after the fixed Sprint-79 spec" >&2
+			exit 64
+			;;
+	esac
+done
 
 docker exec dts-keycloak "${sprint79_kcadm}" config credentials \
 	--config "${sprint79_kcadm_config}" \
@@ -61,7 +112,7 @@ docker exec dts-keycloak "${sprint79_kcadm}" set-password \
 docker exec dts-keycloak "${sprint79_kcadm}" add-roles \
 	-r "${KC_REALM}" \
 	--uusername "${sprint79_user}" \
-	--rolename ROLE_MODEL_MAINTAINER \
+	--rolename "${sprint79_realm_role}" \
 	--config "${sprint79_kcadm_config}" >/dev/null
 
 docker exec -e PGPASSWORD="${PG_PWD_DTADMIN}" v223-dts-pg-1 \
@@ -72,7 +123,7 @@ docker exec -e PGPASSWORD="${PG_PWD_DTADMIN}" v223-dts-pg-1 \
 		created_by, created_date, last_modified_by, last_modified_date
 	) VALUES (
 		'${sprint79_kc_id}', '${sprint79_user}', 'Sprint 79 E2E', '${sprint79_user}@example.invalid', 'IMPORTANT',
-		'[\"ROLE_MODEL_MAINTAINER\"]'::jsonb, '[]'::jsonb, true, now(),
+		'[\"${sprint79_realm_role}\"]'::jsonb, '[]'::jsonb, true, now(),
 		'sprint79-e2e', now(), 'sprint79-e2e', now()
 	);" >/dev/null
 
@@ -81,11 +132,15 @@ PLAYWRIGHT_EXECUTABLE_PATH=/usr/bin/google-chrome \
 	E2E_BASE_URL=https://bi.yuzhicloud.com \
 	E2E_USERNAME="${sprint79_user}" \
 	E2E_PASSWORD="${sprint79_password}" \
-	pnpm --dir "${sprint79_repo_root}/source/dts-platform-webapp" exec playwright test "$@" --project=chromium
+	pnpm --dir "${sprint79_repo_root}/source/dts-platform-webapp" exec playwright test \
+		"${sprint79_spec}" "${sprint79_playwright_args[@]}" --project=chromium
 sprint79_test_status=$?
 set -e
 
-cleanup_sprint79_identity
+if ! cleanup_sprint79_identity; then
+	echo "ERROR: sprint79 identity cleanup failed; final cleanup will retry on EXIT" >&2
+	sprint79_test_status=1
+fi
 
 sprint79_keycloak_count="$(
 	docker exec dts-keycloak "${sprint79_kcadm}" get users \

@@ -43,6 +43,30 @@ docker compose -f docker-compose-app.yml up -d --no-deps --force-recreate dts-pl
 - 演练结果：2026-07-30 20:16 CST，旧镜像回切后容器镜像 ID 精确匹配且 HTTPS 200；20:16:58 恢复最终镜像，镜像 ID 精确匹配且 HTTPS 200，**PASS**。
 - 不可逆部分：无；不写数据、不发外部通知、不删除客户对象。
 
+### F2/T01 单页模型编辑器发布演练
+
+- 精确源码提交：`aacf2d660`。
+- 部署前运行镜像：`dts-platform-webapp:predeploy-sprint79-f2t01` → `sha256:b773c552d5efc2177bbf6f25ef284b8209bb610bb21b9d22652fc4e8674a258f`。
+- F2 发布镜像：`dts-platform-webapp:sprint79-f2t01-aacf2d660` → 同一镜像 ID；精确提交相对部署前产物只包含测试契约调整和空行整理，生产 bundle 字节级复用。
+- 回滚目标：`dts-platform-webapp:sprint79-f1t02` → `sha256:7b939a81115eeda33c7e37800cf65e9ae3a507eaae0b9f228e9cf30a77130403`。
+- 演练结果：2026-07-30 21:06 CST 实际切回 F1 后 HTTPS 200；随后恢复 F2，运行镜像精确匹配 `sha256:b773c…` 且 HTTPS 200，**PASS**。
+- 恢复后认证工作台回归：Playwright 1/1 通过；一次性 Keycloak 用户、管理员快照和认证状态文件均清理为 0。
+
+### F2/T04 模型对象上下文候选验收
+
+- 精确源码提交：`559fef0e5`。
+- 隔离构建目录只包含该提交，未包含当前工作树的并行分析看板改动。
+- 候选镜像：`dts-platform-webapp:sprint79-f2t04-559fef0e5` →
+  `sha256:3303dfb0ef122614a08a6293530e6b0848111b46b4b426ec95e7aff5801caaee`。
+- 临时部署前镜像及回滚标签：
+  `dts-platform-webapp:predeploy-sprint79-f2t04-concurrent` →
+  `sha256:6ad5170b1c5ca5665061f00121881f908a58379d52b2db51942c4a8969854b19`。
+- 候选认证验收：严格只读 Playwright 2/2，通过单页逻辑画布和工作台对象恢复旅程；
+  建模写请求 0、建模 API 异常响应 0、临时身份清理 0/0/absent。
+- 恢复结果：2026-07-30 22:13 CST 恢复并行会话原镜像，容器 image ID 精确匹配
+  `sha256:6ad5170b…`，状态 running，HTTPS 200，**PASS**。
+- 当前运行态不是候选镜像；候选已保存，待与后续 F3/F4 主线切片一并走正式发布门禁。
+
 ## 5. 部署顺序与影响面
 
 1. 保存当前运行镜像的回滚标签。
@@ -58,3 +82,4 @@ docker compose -f docker-compose-app.yml up -d --no-deps --force-recreate dts-pl
 - 2026-07-30 20:12 CST 验收期间，前端容器曾被并行外部操作置为 `Created`，登录路由短暂返回 404。
 - 本轮通过 `docker compose ... up -d --no-deps dts-platform-webapp` 恢复同一最终镜像后，登录路由返回业务 400、认证测试恢复正常。
 - 该漂移不来自验收脚本；最终状态再次核对为 `sha256:7b939...`、`running`。
+- F2/T01 恢复后最终状态再次核对为 `sha256:b773c...`、`running`；后端、数据库、dbt 和 Airflow 未重启。

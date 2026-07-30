@@ -1,7 +1,7 @@
 # Sprint-79：智能数据建模工作台收敛
 
 **时间**：2026-07  
-**状态**：IN_PROGRESS（F1 七模块壳层已部署并通过 IT-01 空数据旅程；F2–F5、代表数据、物化和退役门禁继续按 Feature 控制）
+**状态**：IN_PROGRESS（F1 壳层与 F2/T01、T04 主线严格只读旅程通过；F2 代表写入、F3–F5、物化和退役门禁继续按 Feature 控制）
 **类型**：Architecture / UI Productization / Controlled Retirement / Full-stack  
 **目标**：用户在一个建模工作台内完成规划、标准、维度、四类逻辑模型、指标、关系查看以及发布/物化交接，不再在多组解释性页面和重复入口之间切换。
 
@@ -84,7 +84,7 @@
 |---|---|---:|---|---|
 | F0 | 交付基线与退役证据 | 3 | P0 | IN_PROGRESS |
 | F1 | 统一建模工作台壳层 | 2 | P0 | PASS_WITH_GAPS |
-| F2 | 单页模型编辑器 | 3 | P0 | DRAFT |
+| F2 | 单页模型编辑器 | 4 | P0 | IN_PROGRESS |
 | F3 | 指标、工具与关系图 | 2 | P1 | DRAFT |
 | F4 | 发布物化短流程 | 2 | P0 | DRAFT |
 | F5 | 旧页面受控退役 | 2 | P0 | DRAFT |
@@ -96,7 +96,7 @@
 | 需求点 | Feature/Task | 测试 | 验收证据 |
 |---|---|---|---|
 | 原型全部进入 DTS 而不复制内核 | F1/T01、F1/T02 | workspace route/source-contract | `it/IT-01` |
-| 对象树 + 单页编辑器 | F2/T01、F2/T02 | editor state/field mapping contract | `it/IT-02`、`IT-03` |
+| 对象上下文 + 单页编辑器 | F2/T01、F2/T02、F2/T04 | editor state/field mapping/workbench asset contract | `it/evidence/IT-02`、`IT-03` |
 | 指标、工具、关系图可达 | F3/T01、F3/T02 | indicator owner + graph projection IT | `it/IT-04` |
 | 发布与物化短流程 | F4/T01、F4/T02 | intent/candidate contract + real DEV build | `it/IT-05`、`IT-06` |
 | 不能复用的旧页面删除 | F0/T03、F5/T01、F5/T02 | orphan/import/route/usage guards | `it/IT-07`、`IT-08` |
