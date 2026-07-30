@@ -40,12 +40,17 @@ export const MODELING_WORKSPACE_ASSET_KINDS = [
 
 export type ModelingWorkspaceAssetKind = (typeof MODELING_WORKSPACE_ASSET_KINDS)[number];
 
+export const MODELING_WORKSPACE_MODEL_STAGES = ["logical", "implementation", "physical"] as const;
+
+export type ModelingWorkspaceModelStage = (typeof MODELING_WORKSPACE_MODEL_STAGES)[number];
+
 export type ModelingWorkspaceRouteState = {
 	module: ModelingWorkspaceModule;
 	workspaceView?: ModelingWorkspaceView;
 	planId?: string;
 	assetKind?: ModelingWorkspaceAssetKind;
 	assetId?: string;
+	activeStage?: ModelingWorkspaceModelStage;
 };
 
 export type ModelingWorkspaceRoutePatch = {
@@ -54,10 +59,18 @@ export type ModelingWorkspaceRoutePatch = {
 	planId?: string | null;
 	assetKind?: ModelingWorkspaceAssetKind | string | null;
 	assetId?: string | null;
+	activeStage?: ModelingWorkspaceModelStage | string | null;
 };
+
+export const isModelingWorkspaceModelAssetOpen = (state: ModelingWorkspaceRouteState): boolean =>
+	state.module === "models" &&
+	state.workspaceView === "model-specs" &&
+	state.assetKind === "model" &&
+	Boolean(state.assetId);
 
 const moduleSet = new Set<string>(MODELING_WORKSPACE_MODULES);
 const assetKindSet = new Set<string>(MODELING_WORKSPACE_ASSET_KINDS);
+const modelStageSet = new Set<string>(MODELING_WORKSPACE_MODEL_STAGES);
 const viewSetByModule: Record<ModelingWorkspaceModule, ReadonlySet<string>> = {
 	home: new Set(),
 	planning: new Set(["overview", "categories", "data-marts", "layers", "sources"]),
@@ -88,6 +101,11 @@ const assetKind = (value: string | null | undefined): ModelingWorkspaceAssetKind
 	return normalized && assetKindSet.has(normalized) ? (normalized as ModelingWorkspaceAssetKind) : undefined;
 };
 
+const modelStage = (value: string | null | undefined): ModelingWorkspaceModelStage | undefined => {
+	const normalized = text(value);
+	return normalized && modelStageSet.has(normalized) ? (normalized as ModelingWorkspaceModelStage) : undefined;
+};
+
 export const parseModelingWorkspaceRouteState = (searchParams: URLSearchParams): ModelingWorkspaceRouteState => {
 	const module = workspaceModule(searchParams.get("module"));
 	const state: ModelingWorkspaceRouteState = {
@@ -104,12 +122,13 @@ export const parseModelingWorkspaceRouteState = (searchParams: URLSearchParams):
 	if (nextAssetKind && assetId) {
 		state.assetKind = nextAssetKind;
 		state.assetId = assetId;
+		const activeStage = nextAssetKind === "model" ? modelStage(searchParams.get("activeStage")) : undefined;
+		if (activeStage) state.activeStage = activeStage;
 	}
 	return state;
 };
 
-const has = (patch: ModelingWorkspaceRoutePatch, key: keyof ModelingWorkspaceRoutePatch) =>
-	Object.prototype.hasOwnProperty.call(patch, key);
+const has = (patch: ModelingWorkspaceRoutePatch, key: keyof ModelingWorkspaceRoutePatch) => Object.hasOwn(patch, key);
 
 const assign = (searchParams: URLSearchParams, key: string, value: string | undefined) => {
 	if (value) {
@@ -140,6 +159,7 @@ export const updateModelingWorkspaceSearch = (current: URLSearchParams, patch: M
 		if (nextPlanId !== currentState.planId && !has(patch, "assetKind") && !has(patch, "assetId")) {
 			next.delete("assetKind");
 			next.delete("assetId");
+			next.delete("activeStage");
 		}
 	}
 
@@ -153,6 +173,13 @@ export const updateModelingWorkspaceSearch = (current: URLSearchParams, patch: M
 			next.delete("assetKind");
 			next.delete("assetId");
 		}
+	}
+
+	if (has(patch, "activeStage")) {
+		assign(next, "activeStage", modelStage(patch.activeStage));
+	}
+	if (next.get("assetKind") !== "model" || !text(next.get("assetId"))) {
+		next.delete("activeStage");
 	}
 
 	return next.toString();

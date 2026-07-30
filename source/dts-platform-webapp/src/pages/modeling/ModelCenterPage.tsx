@@ -22,6 +22,15 @@ import { canEditWarehousePlanHeader } from "./warehousePlanViewModel";
 const { Title } = Typography;
 type ModelTypeFilter = ModelSpecType | "ALL";
 
+type ModelCenterPageProps = {
+	embedded?: boolean;
+	planIdOverride?: string;
+	planOptionsOverride?: Array<{ value: string; label: string }>;
+	canImportOverride?: boolean;
+	onOpenModel?: (modelSpecId: string, planId?: string) => void;
+	onOpenModelImport?: () => void;
+};
+
 const modelTypeOptions = [
 	{ value: "ALL", label: "全部表类型" },
 	...Object.entries(MODEL_TYPE_LABELS).map(([value, label]) => ({ value, label })),
@@ -40,13 +49,20 @@ const deleteErrorMessage = (error: unknown) => {
 	return candidate.response?.data?.message || candidate.message || "草稿模型删除失败，请稍后重试";
 };
 
-export default function ModelCenterPage() {
+export default function ModelCenterPage({
+	embedded = false,
+	planIdOverride,
+	planOptionsOverride,
+	canImportOverride,
+	onOpenModel,
+	onOpenModelImport,
+}: ModelCenterPageProps = {}) {
 	const navigate = useNavigate();
 	const { message: toast, modal } = App.useApp();
 	const searchParams = useSearchParams();
 	const userRoles = useUserRoles();
 	const canEdit = hasWarehousePlanCreateAccess(userRoles);
-	const planId = searchParams.get("planId")?.trim() || "";
+	const planId = planIdOverride?.trim() || searchParams.get("planId")?.trim() || "";
 	const domainId = searchParams.get("domainId")?.trim() || "";
 	const compatibilityView = searchParams.get("view")?.trim() || "";
 	const lightweightCreate = searchParams.get("create") === "lightweight";
@@ -72,7 +88,10 @@ export default function ModelCenterPage() {
 		setLoadError("");
 		setActionError("");
 		const modelRequest = listModelSpecs({ ...(planId ? { planId } : {}), ...(domainId ? { domainId } : {}) });
-		const [modelResult, planResult] = await Promise.allSettled([modelRequest, listWarehousePlans()]);
+		const [modelResult, planResult] = await Promise.allSettled([
+			modelRequest,
+			embedded ? Promise.resolve([] as WarehousePlanHeader[]) : listWarehousePlans(),
+		]);
 		if (modelResult.status === "fulfilled") setModels(Array.isArray(modelResult.value) ? modelResult.value : []);
 		else {
 			setModels([]);
@@ -80,7 +99,7 @@ export default function ModelCenterPage() {
 		}
 		if (planResult.status === "fulfilled") setPlans(Array.isArray(planResult.value) ? planResult.value : []);
 		setLoading(false);
-	}, [domainId, planId]);
+	}, [domainId, embedded, planId]);
 
 	useEffect(() => {
 		void load();
@@ -93,11 +112,18 @@ export default function ModelCenterPage() {
 		}
 	}, [canEdit, compatibilityView, lightweightCreate]);
 
-	const planNameById = useMemo(() => new Map(plans.map((plan) => [plan.id, plan.name])), [plans]);
+	const planNameById = useMemo(
+		() =>
+			planOptionsOverride
+				? new Map(planOptionsOverride.map((plan) => [plan.value, plan.label]))
+				: new Map(plans.map((plan) => [plan.id, plan.name])),
+		[planOptionsOverride, plans],
+	);
 	const lockedImportPlan = useMemo(() => plans.find((plan) => plan.id === planId) || null, [planId, plans]);
 	const canImport =
-		canEdit &&
-		(!planId || Boolean(lockedImportPlan && canEditWarehousePlanHeader(true, lockedImportPlan.lifecycleStatus)));
+		canImportOverride ??
+		(canEdit &&
+			(!planId || Boolean(lockedImportPlan && canEditWarehousePlanHeader(true, lockedImportPlan.lifecycleStatus))));
 	const visibleModels = useMemo(() => {
 		const keyword = search.trim().toLowerCase();
 		return models.filter((model) => {
@@ -144,6 +170,22 @@ export default function ModelCenterPage() {
 			}),
 			{ replace: !open },
 		);
+	};
+
+	const openModel = (model: ModelSpecView) => {
+		if (onOpenModel) {
+			onOpenModel(model.id, model.planId || undefined);
+			return;
+		}
+		navigate(modelSpecDetailPath(model.id, "logical", model.planId));
+	};
+
+	const openCreatedModel = (model: { id: string }) => {
+		if (onOpenModel) {
+			onOpenModel(model.id, planId || undefined);
+			return;
+		}
+		navigate(modelSpecDetailPath(model.id, "logical", planId || undefined));
 	};
 
 	const columns: ColumnsType<ModelSpecView> = [
@@ -199,20 +241,11 @@ export default function ModelCenterPage() {
 				return (
 					<Space size={0}>
 						{editable ? (
-							<Button
-								type="link"
-								size="small"
-								icon={<Pencil size={14} />}
-								onClick={() => navigate(modelSpecDetailPath(model.id, "logical", model.planId))}
-							>
+							<Button type="link" size="small" icon={<Pencil size={14} />} onClick={() => openModel(model)}>
 								编辑
 							</Button>
 						) : (
-							<Button
-								type="link"
-								size="small"
-								onClick={() => navigate(`/modeling/models/${encodeURIComponent(model.id)}`)}
-							>
+							<Button type="link" size="small" onClick={() => openModel(model)}>
 								查看
 							</Button>
 						)}
@@ -231,16 +264,18 @@ export default function ModelCenterPage() {
 		<div className="p-4" data-testid="model-center-page">
 			<div className="mb-4 flex flex-wrap items-start justify-between gap-3">
 				<div>
-					<Title level={3} className="!mb-1">
-						模型中心
-					</Title>
+					{embedded ? null : (
+						<Title level={3} className="!mb-1">
+							模型中心
+						</Title>
+					)}
 				</div>
 				<Space wrap>
 					<Button
 						icon={<PackageOpen size={16} />}
 						disabled={!canImport}
 						title={canImport ? "导入 dbt 生成的 DTS 模型包" : "当前计划不可编辑、不可访问或账号没有计划维护权限"}
-						onClick={() => setImportRoute(true)}
+						onClick={() => (onOpenModelImport ? onOpenModelImport() : setImportRoute(true))}
 					>
 						导入模型包
 					</Button>
@@ -250,7 +285,7 @@ export default function ModelCenterPage() {
 					</Button>
 				</Space>
 			</div>
-			<JourneyContextBar stage="modeling" />
+			{embedded ? null : <JourneyContextBar stage="modeling" />}
 
 			{compatibilityView === "guided" ? (
 				<Alert
@@ -328,20 +363,22 @@ export default function ModelCenterPage() {
 				initialDimensionDefinitionRevision={Number(searchParams.get("dimensionDefinitionRevision")) || undefined}
 				createCommand={createModelSpec}
 				onClose={() => setCreateOpen(false)}
-				onCreated={(model) => navigate(`/modeling/models/${encodeURIComponent(model.id)}?activeStage=logical`)}
+				onCreated={openCreatedModel}
 			/>
-			<ImportModelPackageWizard
-				open={importOpen}
-				lockedPlanId={planId || undefined}
-				initialRunId={importRunId || undefined}
-				plans={plans}
-				canEdit={canImport}
-				returnSurface="model-center"
-				onClose={(runId) => setImportRoute(false, runId)}
-				onRunIdChange={(runId) => setImportRoute(true, runId)}
-				onApplied={() => void load()}
-				onNavigate={navigate}
-			/>
+			{embedded ? null : (
+				<ImportModelPackageWizard
+					open={importOpen}
+					lockedPlanId={planId || undefined}
+					initialRunId={importRunId || undefined}
+					plans={plans}
+					canEdit={canImport}
+					returnSurface="model-center"
+					onClose={(runId) => setImportRoute(false, runId)}
+					onRunIdChange={(runId) => setImportRoute(true, runId)}
+					onApplied={() => void load()}
+					onNavigate={navigate}
+				/>
+			)}
 		</div>
 	);
 }

@@ -14,6 +14,7 @@ type Props = {
 	canEdit: boolean;
 	primaryAction?: ModelSpecDetailPrimaryAction;
 	primaryActionContext: ModelSpecPrimaryActionContext;
+	backLabel?: string;
 	onBack: () => void;
 	onReload: () => Promise<void>;
 };
@@ -24,6 +25,7 @@ export function ModelSpecDetailHeader({
 	canEdit,
 	primaryAction,
 	primaryActionContext,
+	backLabel,
 	onBack,
 	onReload,
 }: Props) {
@@ -32,7 +34,7 @@ export function ModelSpecDetailHeader({
 			<div>
 				<Button type="link" className="!px-0" onClick={onBack}>
 					<ArrowLeft size={15} />
-					{model.modelType === "DIMENSION" ? "返回维度目录" : "返回模型中心"}
+					{backLabel || (model.modelType === "DIMENSION" ? "返回维度目录" : "返回模型中心")}
 				</Button>
 				<Title level={3} className="!mb-1 !mt-1">
 					{model.name}

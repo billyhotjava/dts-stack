@@ -1,7 +1,12 @@
 import { Button, Empty, Spin } from "antd";
 import { ArrowRight, FileInput, FileOutput, FileSearch, TerminalSquare } from "lucide-react";
-import { lazy, Suspense, type ReactNode } from "react";
-import type { ModelingWorkspaceModule, ModelingWorkspaceView } from "./modelingWorkspaceRouteState";
+import { lazy, type ReactNode, Suspense } from "react";
+import type {
+	ModelingWorkspaceAssetKind,
+	ModelingWorkspaceModelStage,
+	ModelingWorkspaceModule,
+	ModelingWorkspaceView,
+} from "./modelingWorkspaceRouteState";
 
 const WarehousePlanDetailPage = lazy(() => import("./WarehousePlanDetailPage"));
 const ElementsPage = lazy(() => import("../governance/ElementsPage"));
@@ -10,6 +15,7 @@ const GlossaryPage = lazy(() => import("../governance/GlossaryPage"));
 const MeasurementUnitsPage = lazy(() => import("../governance/MeasurementUnitsPage"));
 const DimensionCatalogPage = lazy(() => import("./DimensionCatalogPage"));
 const ModelCenterPage = lazy(() => import("./ModelCenterPage"));
+const ModelSpecDetailPage = lazy(() => import("./ModelSpecDetailPage"));
 const MetricWorkbenchPage = lazy(() => import("./MetricWorkbenchPage"));
 const LineageGraphPage = lazy(() => import("../catalog/LineageGraphPage"));
 
@@ -45,18 +51,26 @@ const defaultView = (module: ModelingWorkspaceModule): ModelingWorkspaceView | u
 	PANEL_VIEWS[module]?.[0]?.key;
 
 const loading = (
-	<div className="grid min-h-[320px] place-items-center" aria-label="模块加载中">
+	<output className="grid min-h-[320px] place-items-center" aria-label="模块加载中">
 		<Spin />
-	</div>
+	</output>
 );
 
 type ModelingWorkspacePanelsProps = {
 	module: Exclude<ModelingWorkspaceModule, "home">;
 	planId?: string;
+	planOptions?: Array<{ value: string; label: string }>;
+	canImportModels: boolean;
 	workspaceView?: ModelingWorkspaceView;
+	assetKind?: ModelingWorkspaceAssetKind;
+	assetId?: string;
 	onViewChange: (view: ModelingWorkspaceView) => void;
 	onNavigate: (route: string) => void;
 	onOpenModelImport: () => void;
+	onOpenModel: (modelSpecId: string, planId?: string) => void;
+	onCloseModel: () => void;
+	onModelStageChange: (stage: ModelingWorkspaceModelStage) => void;
+	onModelResolvedContext: (context: { modelSpecId: string; planId: string }) => void;
 };
 
 type PlanningView = "overview" | "categories" | "data-marts" | "layers" | "sources";
@@ -110,11 +124,22 @@ function ToolPanel({
 function activePanel(
 	module: ModelingWorkspacePanelsProps["module"],
 	view: ModelingWorkspaceView,
-	planId: string | undefined,
-	onViewChange: ModelingWorkspacePanelsProps["onViewChange"],
-	onNavigate: ModelingWorkspacePanelsProps["onNavigate"],
-	onOpenModelImport: ModelingWorkspacePanelsProps["onOpenModelImport"],
+	props: ModelingWorkspacePanelsProps,
 ) {
+	const {
+		assetId,
+		assetKind,
+		canImportModels,
+		onCloseModel,
+		onModelResolvedContext,
+		onModelStageChange,
+		onNavigate,
+		onOpenModel,
+		onOpenModelImport,
+		onViewChange,
+		planId,
+		planOptions,
+	} = props;
 	if (module === "planning") {
 		if (!planId) {
 			return (
@@ -162,9 +187,29 @@ function activePanel(
 		);
 	}
 	if (module === "models") {
+		if (view === "model-specs" && assetKind === "model" && assetId) {
+			return (
+				<Canonical>
+					<ModelSpecDetailPage
+						embedded
+						modelSpecIdOverride={assetId}
+						onBack={onCloseModel}
+						onStageChange={onModelStageChange}
+						onResolvedContext={onModelResolvedContext}
+					/>
+				</Canonical>
+			);
+		}
 		return view === "model-specs" ? (
 			<Canonical>
-				<ModelCenterPage />
+				<ModelCenterPage
+					embedded
+					planIdOverride={planId}
+					planOptionsOverride={planOptions}
+					canImportOverride={canImportModels}
+					onOpenModel={onOpenModel}
+					onOpenModelImport={onOpenModelImport}
+				/>
 			</Canonical>
 		) : (
 			<Canonical>
@@ -187,14 +232,8 @@ function activePanel(
 	return <ToolPanel onNavigate={onNavigate} onOpenModelImport={onOpenModelImport} />;
 }
 
-export function ModelingWorkspacePanels({
-	module,
-	planId,
-	workspaceView,
-	onViewChange,
-	onNavigate,
-	onOpenModelImport,
-}: ModelingWorkspacePanelsProps) {
+export function ModelingWorkspacePanels(props: ModelingWorkspacePanelsProps) {
+	const { module, onViewChange, workspaceView } = props;
 	const views = PANEL_VIEWS[module] || [];
 	const selectedView = views.find((item) => item.key === workspaceView)?.key || defaultView(module) || "overview";
 
@@ -222,9 +261,7 @@ export function ModelingWorkspacePanels({
 					);
 				})}
 			</nav>
-			<main className="min-w-0 overflow-x-hidden bg-white">
-				{activePanel(module, selectedView, planId, onViewChange, onNavigate, onOpenModelImport)}
-			</main>
+			<main className="min-w-0 overflow-x-hidden bg-white">{activePanel(module, selectedView, props)}</main>
 		</div>
 	);
 }

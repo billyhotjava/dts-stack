@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseModelingWorkspaceRouteState, updateModelingWorkspaceSearch } from "./modelingWorkspaceRouteState.ts";
+import {
+	isModelingWorkspaceModelAssetOpen,
+	parseModelingWorkspaceRouteState,
+	updateModelingWorkspaceSearch,
+} from "./modelingWorkspaceRouteState.ts";
 
 test("workspace route defaults invalid modules to home and trims stable context", () => {
 	assert.deepEqual(
@@ -24,6 +28,35 @@ test("workspace route drops incomplete or unsupported asset pairs", () => {
 	assert.deepEqual(
 		parseModelingWorkspaceRouteState(new URLSearchParams("module=models&assetKind=table&assetId=ods_order")),
 		{ module: "models" },
+	);
+});
+
+test("only the canonical model-spec workspace recognizes an open model asset", () => {
+	assert.equal(
+		isModelingWorkspaceModelAssetOpen(
+			parseModelingWorkspaceRouteState(
+				new URLSearchParams(
+					"module=models&workspaceView=model-specs&assetKind=model&assetId=model-79&activeStage=logical",
+				),
+			),
+		),
+		true,
+	);
+	assert.equal(
+		isModelingWorkspaceModelAssetOpen(
+			parseModelingWorkspaceRouteState(
+				new URLSearchParams("module=models&workspaceView=dimensions&assetKind=model&assetId=model-79"),
+			),
+		),
+		false,
+	);
+	assert.equal(
+		isModelingWorkspaceModelAssetOpen(
+			parseModelingWorkspaceRouteState(
+				new URLSearchParams("module=standards&workspaceView=elements&assetKind=model&assetId=model-79"),
+			),
+		),
+		false,
 	);
 });
 
@@ -86,13 +119,16 @@ test("changing module clears an incompatible workspace view and accepts an expli
 test("changing plan clears an asset from the previous plan unless a replacement pair is supplied", () => {
 	const changed = new URLSearchParams(
 		updateModelingWorkspaceSearch(
-			new URLSearchParams("planId=plan-old&module=models&assetKind=model&assetId=model-old"),
+			new URLSearchParams(
+				"planId=plan-old&module=models&workspaceView=model-specs&assetKind=model&assetId=model-old&activeStage=physical",
+			),
 			{ planId: "plan-new" },
 		),
 	);
 	assert.equal(changed.get("planId"), "plan-new");
 	assert.equal(changed.has("assetKind"), false);
 	assert.equal(changed.has("assetId"), false);
+	assert.equal(changed.has("activeStage"), false);
 
 	const replaced = parseModelingWorkspaceRouteState(
 		new URLSearchParams(
@@ -104,6 +140,48 @@ test("changing plan clears an asset from the previous plan unless a replacement 
 	);
 	assert.equal(replaced.assetKind, "dimension");
 	assert.equal(replaced.assetId, "dim-date");
+});
+
+test("model asset navigation opens, stages and closes inside the canonical workspace query", () => {
+	const opened = new URLSearchParams(
+		updateModelingWorkspaceSearch(
+			new URLSearchParams("module=planning&workspaceView=sources&planId=plan-stale&returnTo=ledger"),
+			{
+				module: "models",
+				workspaceView: "model-specs",
+				planId: "plan-real",
+				assetKind: "model",
+				assetId: "model-79",
+				activeStage: "logical",
+			},
+		),
+	);
+	assert.equal(opened.get("module"), "models");
+	assert.equal(opened.get("workspaceView"), "model-specs");
+	assert.equal(opened.get("planId"), "plan-real");
+	assert.equal(opened.get("assetKind"), "model");
+	assert.equal(opened.get("assetId"), "model-79");
+	assert.equal(opened.get("activeStage"), "logical");
+	assert.equal(opened.get("returnTo"), "ledger");
+
+	const implementation = new URLSearchParams(updateModelingWorkspaceSearch(opened, { activeStage: "implementation" }));
+	assert.equal(implementation.get("activeStage"), "implementation");
+	assert.equal(implementation.get("assetId"), "model-79");
+	assert.equal(implementation.get("planId"), "plan-real");
+
+	const closed = new URLSearchParams(
+		updateModelingWorkspaceSearch(implementation, {
+			assetKind: null,
+			assetId: null,
+			activeStage: null,
+		}),
+	);
+	assert.equal(closed.has("assetKind"), false);
+	assert.equal(closed.has("assetId"), false);
+	assert.equal(closed.has("activeStage"), false);
+	assert.equal(closed.get("module"), "models");
+	assert.equal(closed.get("workspaceView"), "model-specs");
+	assert.equal(closed.get("planId"), "plan-real");
 });
 
 test("clearing optional workspace context does not remove unrelated query keys", () => {

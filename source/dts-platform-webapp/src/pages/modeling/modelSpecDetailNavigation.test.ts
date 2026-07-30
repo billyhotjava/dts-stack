@@ -4,6 +4,7 @@ import test from "node:test";
 
 const helperUrl = new URL("./modelSpecDetailNavigation.ts", import.meta.url);
 const pageUrl = new URL("./ModelSpecDetailPage.tsx", import.meta.url);
+const routeAdapterUrl = new URL("./modelSpecDetailRouteAdapter.ts", import.meta.url);
 const fieldsUrl = new URL("./components/ModelSpecFieldsTab.tsx", import.meta.url);
 const standardsUrl = new URL("./components/ModelSpecStandardsTab.tsx", import.meta.url);
 const dependenciesUrl = new URL("./components/ModelSpecDependencyPanel.tsx", import.meta.url);
@@ -16,7 +17,8 @@ const read = (url: URL) => readFileSync(url, "utf8");
 test("model detail stage navigation reads legacy deep links and writes only activeStage", async () => {
 	assert.equal(existsSync(helperUrl), true, "model detail navigation helper is missing");
 	const navigation = await import(helperUrl.href);
-	const { modelSpecDetailPath, modelSpecPlanModelsPath, resolveModelSpecDetailStage, resolveModelSpecDetailTab } = navigation;
+	const { modelSpecDetailPath, modelSpecPlanModelsPath, resolveModelSpecDetailStage, resolveModelSpecDetailTab } =
+		navigation;
 
 	assert.equal(resolveModelSpecDetailTab(new URLSearchParams()), "design");
 	assert.equal(resolveModelSpecDetailTab(new URLSearchParams("tab=fields")), "fields");
@@ -26,7 +28,10 @@ test("model detail stage navigation reads legacy deep links and writes only acti
 	assert.equal(resolveModelSpecDetailStage(new URLSearchParams("tab=fields")), "logical");
 	assert.equal(resolveModelSpecDetailStage(new URLSearchParams("tab=standards")), "logical");
 	assert.equal(resolveModelSpecDetailStage(new URLSearchParams("tab=release")), "physical");
-	assert.equal(resolveModelSpecDetailStage(new URLSearchParams("activeStage=implementation&tab=release")), "implementation");
+	assert.equal(
+		resolveModelSpecDetailStage(new URLSearchParams("activeStage=implementation&tab=release")),
+		"implementation",
+	);
 	assert.equal(resolveModelSpecDetailStage(new URLSearchParams("activeStage=unexpected&tab=release")), "logical");
 	assert.equal(
 		modelSpecDetailPath("model / 1", "implementation", "plan / 1"),
@@ -48,9 +53,12 @@ test("model detail stage navigation reads legacy deep links and writes only acti
 		"/modeling/models?planId=plan+%2F+1",
 	);
 	const modelCenter = read(modelCenterUrl);
-	assert.match(modelCenter, /\?activeStage=logical/);
+	assert.match(modelCenter, /modelSpecDetailPath\(model\.id,\s*"logical",\s*model\.planId\)/);
 	assert.match(modelCenter, /initialDimensionDefinitionId=\{searchParams\.get\("dimensionDefinitionId"\)/);
-	assert.match(modelCenter, /initialDimensionDefinitionRevision=\{Number\(searchParams\.get\("dimensionDefinitionRevision"\)\) \|\| undefined\}/);
+	assert.match(
+		modelCenter,
+		/initialDimensionDefinitionRevision=\{Number\(searchParams\.get\("dimensionDefinitionRevision"\)\) \|\| undefined\}/,
+	);
 });
 
 test("model detail separates design fields and standards without trusting query plan context", () => {
@@ -59,6 +67,7 @@ test("model detail separates design fields and standards without trusting query 
 	assert.equal(existsSync(dependenciesUrl), true, "model dependency panel is missing");
 	assert.equal(existsSync(logicalStageUrl), true, "logical design stage is missing");
 	const page = read(pageUrl);
+	const routeAdapter = read(routeAdapterUrl);
 	const fields = read(fieldsUrl);
 	const standards = read(standardsUrl);
 	const dependencies = read(dependenciesUrl);
@@ -79,7 +88,7 @@ test("model detail separates design fields and standards without trusting query 
 		"full-replacement saves must include unmounted metric and standard collections",
 	);
 	assert.match(page, /modelSpecServerIssues\(error\)[\s\S]*form\.setFields/);
-	assert.match(page, /modelSpecCatalogPath\(model\.modelType,\s*model\.planId,\s*model\.domainId\)/);
+	assert.match(routeAdapter, /modelSpecCatalogPath\(model\.modelType,\s*model\.planId,\s*model\.domainId\)/);
 	assert.doesNotMatch(page, /searchParams\.get\(["']planId["']\)/);
 	assert.match(fields, /Form\.List[\s\S]*name="fields"/);
 	const errorListIndex = fields.indexOf("<Form.ErrorList");

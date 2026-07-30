@@ -16,38 +16,40 @@ import {
 } from "@/api/warehousePlanApi";
 import { useSearchParams } from "@/routes/hooks";
 import { useUserInfo, useUserRoles } from "@/store/userStore";
+import { ModelingWorkspacePanels } from "./ModelingWorkspacePanels";
+import { ModelingWorkspaceShell } from "./ModelingWorkspaceShell";
 import { ImportModelPackageWizard } from "./model-package-import/ImportModelPackageWizard";
 import { buildModelPackageImportQuery } from "./model-package-import/modelPackageImportNavigation";
 import {
-	WAREHOUSE_STAGE_ORDER,
-	buildWarehousePlanRoute,
-	canEditWarehousePlanHeader,
-	isWarehouseStageComplete,
-	stageStatusLabel,
-	warehouseBlockerMessage,
-	warehouseStageActionLabel,
-	warehouseStageLabel,
-	withWarehousePlanContext,
-} from "./warehousePlanViewModel";
+	isModelingWorkspaceModelAssetOpen,
+	type ModelingWorkspaceModelStage,
+	type ModelingWorkspaceModule,
+	type ModelingWorkspaceRoutePatch,
+	type ModelingWorkspaceView,
+	parseModelingWorkspaceRouteState,
+	updateModelingWorkspaceSearch,
+} from "./modelingWorkspaceRouteState";
+import { type CreatePlanForm, WarehousePlanCreateModal } from "./WarehousePlanCreateModal";
 import {
-	createWarehousePlanIdempotencyKey,
 	createLatestRequestGuard,
+	createWarehousePlanIdempotencyKey,
 	EMPTY_WAREHOUSE_PLAN_CREATE_SESSION,
 	hasWarehousePlanCreateAccess,
 	loadRequestedWarehousePlan,
 	mergeWarehousePlanLists,
 	reduceWarehousePlanCreateSession,
 } from "./warehousePlanCreateFlow";
-import { ModelingWorkspacePanels } from "./ModelingWorkspacePanels";
-import { ModelingWorkspaceShell } from "./ModelingWorkspaceShell";
-import { type CreatePlanForm, WarehousePlanCreateModal } from "./WarehousePlanCreateModal";
 import {
-	parseModelingWorkspaceRouteState,
-	type ModelingWorkspaceModule,
-	type ModelingWorkspaceRoutePatch,
-	type ModelingWorkspaceView,
-	updateModelingWorkspaceSearch,
-} from "./modelingWorkspaceRouteState";
+	buildWarehousePlanRoute,
+	canEditWarehousePlanHeader,
+	isWarehouseStageComplete,
+	stageStatusLabel,
+	WAREHOUSE_STAGE_ORDER,
+	warehouseBlockerMessage,
+	warehouseStageActionLabel,
+	warehouseStageLabel,
+	withWarehousePlanContext,
+} from "./warehousePlanViewModel";
 
 const { Text } = Typography;
 
@@ -78,6 +80,8 @@ export default function ModelingWorkbenchPage() {
 	const workspaceRoute = useMemo(() => parseModelingWorkspaceRouteState(searchParams), [searchParams]);
 	const requestedPlanId = workspaceRoute.planId || "";
 	const activeModule = workspaceRoute.module;
+	const modelAssetOpen = isModelingWorkspaceModelAssetOpen(workspaceRoute);
+	const resolvingModelAsset = modelAssetOpen && !requestedPlanId;
 	const requestedCreate = searchParams.get("create") === "1";
 	const importOpen = searchParams.get("modelImport") === "open";
 	const importRunId = searchParams.get("importRunId")?.trim() || "";
@@ -108,6 +112,7 @@ export default function ModelingWorkbenchPage() {
 	const createRouteHandledRef = useRef(false);
 
 	const selectedPlan = useMemo(() => plans.find((plan) => plan.id === selectedPlanId) ?? null, [plans, selectedPlanId]);
+	const planOptions = useMemo(() => plans.map((plan) => ({ label: plan.name, value: plan.id })), [plans]);
 	const canImportModels = Boolean(
 		selectedPlan && canEditWarehousePlanHeader(canCreatePlan, selectedPlan.lifecycleStatus),
 	);
@@ -128,6 +133,58 @@ export default function ModelingWorkbenchPage() {
 	const changeWorkspaceView = useCallback(
 		(view: ModelingWorkspaceView) => navigateWorkspace({ workspaceView: view }),
 		[navigateWorkspace],
+	);
+
+	const openModel = useCallback(
+		(modelSpecId: string, planId?: string) =>
+			navigateWorkspace({
+				module: "models",
+				workspaceView: "model-specs",
+				...(planId ? { planId } : {}),
+				assetKind: "model",
+				assetId: modelSpecId,
+				activeStage: "logical",
+			}),
+		[navigateWorkspace],
+	);
+
+	const closeModel = useCallback(
+		() => navigateWorkspace({ assetKind: null, assetId: null, activeStage: null }, true),
+		[navigateWorkspace],
+	);
+
+	const changeModelStage = useCallback(
+		(stage: ModelingWorkspaceModelStage) => navigateWorkspace({ activeStage: stage }, true),
+		[navigateWorkspace],
+	);
+
+	const resolveModelContext = useCallback(
+		(context: { modelSpecId: string; planId: string }) => {
+			setSelectedPlanId(context.planId);
+			if (
+				workspaceRoute.planId === context.planId &&
+				workspaceRoute.assetKind === "model" &&
+				workspaceRoute.assetId === context.modelSpecId
+			) {
+				return;
+			}
+			navigateWorkspace(
+				{
+					planId: context.planId,
+					assetKind: "model",
+					assetId: context.modelSpecId,
+					activeStage: workspaceRoute.activeStage || "logical",
+				},
+				true,
+			);
+		},
+		[
+			navigateWorkspace,
+			workspaceRoute.activeStage,
+			workspaceRoute.assetId,
+			workspaceRoute.assetKind,
+			workspaceRoute.planId,
+		],
 	);
 
 	const setImportRoute = useCallback(
@@ -206,7 +263,10 @@ export default function ModelingWorkbenchPage() {
 			setPlanListFailed(false);
 			setRequestedPlanFailed(false);
 			const nextPlanId = safePlans.find((plan) => plan.lifecycleStatus !== "ARCHIVED")?.id || safePlans[0]?.id || "";
-			if (nextPlanId && !requestedCreate) {
+			if (resolvingModelAsset) {
+				setSelectedPlanId("");
+				setProjection(null);
+			} else if (nextPlanId && !requestedCreate) {
 				selectPlan(nextPlanId, true);
 			} else if (nextPlanId) {
 				setSelectedPlanId(nextPlanId);
@@ -221,7 +281,7 @@ export default function ModelingWorkbenchPage() {
 		} finally {
 			if (isCurrent()) setLoadingPlans(false);
 		}
-	}, [planListRetryGuard, planLoadGuard, requestedCreate, requestedPlanId, selectPlan]);
+	}, [planListRetryGuard, planLoadGuard, requestedCreate, requestedPlanId, resolvingModelAsset, selectPlan]);
 
 	const retryPlanList = useCallback(async () => {
 		const isCurrent = planListRetryGuard.begin();
@@ -357,7 +417,7 @@ export default function ModelingWorkbenchPage() {
 		}
 	};
 
-	if (loadingPlans) {
+	if (loadingPlans && !modelAssetOpen) {
 		return (
 			<div className="mx-auto w-full max-w-[1480px] p-6">
 				<Skeleton active paragraph={{ rows: 8 }} />
@@ -365,7 +425,7 @@ export default function ModelingWorkbenchPage() {
 		);
 	}
 
-	if (plansFailed) {
+	if (plansFailed && !modelAssetOpen) {
 		return (
 			<div className="mx-auto w-full max-w-[1180px] p-6">
 				<Alert
@@ -388,7 +448,7 @@ export default function ModelingWorkbenchPage() {
 			<ModelingWorkspaceShell
 				activeModule={activeModule}
 				planId={selectedPlanId || undefined}
-				planOptions={plans.map((plan) => ({ label: plan.name, value: plan.id }))}
+				planOptions={planOptions}
 				canCreatePlan={canCreatePlan}
 				onModuleChange={changeModule}
 				onPlanChange={selectPlan}
@@ -634,14 +694,34 @@ export default function ModelingWorkbenchPage() {
 						) : null}
 					</div>
 				) : (
-					<ModelingWorkspacePanels
-						module={activeModule}
-						planId={selectedPlanId || undefined}
-						workspaceView={workspaceRoute.workspaceView}
-						onViewChange={changeWorkspaceView}
-						onNavigate={navigate}
-						onOpenModelImport={() => setImportRoute(true)}
-					/>
+					<>
+						{plansFailed ? (
+							<Alert
+								className="m-3 mb-0"
+								type="warning"
+								showIcon
+								message="计划列表暂不可用"
+								description="模型仍按资产标识读取；顶部计划选择暂时不可用。"
+								action={<Button onClick={() => void loadPlans()}>重新加载计划</Button>}
+							/>
+						) : null}
+						<ModelingWorkspacePanels
+							module={activeModule}
+							planId={selectedPlanId || undefined}
+							planOptions={planOptions}
+							canImportModels={canImportModels}
+							workspaceView={workspaceRoute.workspaceView}
+							assetKind={workspaceRoute.assetKind}
+							assetId={workspaceRoute.assetId}
+							onViewChange={changeWorkspaceView}
+							onNavigate={navigate}
+							onOpenModelImport={() => setImportRoute(true)}
+							onOpenModel={openModel}
+							onCloseModel={closeModel}
+							onModelStageChange={changeModelStage}
+							onModelResolvedContext={resolveModelContext}
+						/>
+					</>
 				)}
 
 				<WarehousePlanCreateModal

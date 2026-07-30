@@ -1,7 +1,6 @@
 import { Alert, Button, Card, Descriptions, Form, Modal, Space, Spin } from "antd";
 import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router";
 import {
 	getModelLifecycle,
 	getModelSpec,
@@ -14,7 +13,6 @@ import {
 } from "@/api/modelSpecApi";
 import { getWarehousePlanSources, type WarehousePlanSourceInventoryView } from "@/api/warehousePlanApi";
 import { useCatalogDomainOptions } from "@/hooks/useCatalogDomainOptions";
-import { useParams } from "@/routes/hooks";
 import { useUserRoles } from "@/store/userStore";
 import { ModelSpecBlockerPanel } from "./components/ModelSpecBlockerPanel";
 import { ModelSpecDetailHeader } from "./components/ModelSpecDetailHeader";
@@ -28,7 +26,7 @@ import {
 import { ModelSpecLogicalDesignStage, type ModelSpecSelectOption } from "./components/ModelSpecLogicalDesignStage";
 import { ModelSpecPhysicalAssetStage } from "./components/ModelSpecPhysicalAssetStage";
 import { ModelSpecSourceInventoryModal } from "./components/ModelSpecSourceInventoryModal";
-import { modelSpecCatalogPath, modelSpecDetailPath, resolveModelSpecDetailStage } from "./modelSpecDetailNavigation";
+import { type ModelSpecDetailPageProps, useModelSpecDetailRouteAdapter } from "./modelSpecDetailRouteAdapter";
 import { getModelSpecDetailStageProjection } from "./modelSpecDetailStageProjection";
 import {
 	handleModelSpecFormValidationError,
@@ -71,11 +69,10 @@ import {
 } from "./modelSpecWorkbench";
 import { hasWarehousePlanCreateAccess } from "./warehousePlanCreateFlow";
 
-export default function ModelSpecDetailPage() {
-	const navigate = useNavigate();
-	const [searchParams] = useSearchParams();
-	const params = useParams();
-	const modelSpecId = String(params.modelSpecId || "").trim();
+export default function ModelSpecDetailPage(props: ModelSpecDetailPageProps = {}) {
+	const { embedded = false } = props;
+	const { activeStage, changeStage, modelSpecId, navigate, notifyResolvedContext, returnToCatalog } =
+		useModelSpecDetailRouteAdapter(props);
 	const userRoles = useUserRoles();
 	const roleAllowsEdit = hasWarehousePlanCreateAccess(userRoles);
 	const [form] = Form.useForm<ModelSpecDraft>();
@@ -172,7 +169,6 @@ export default function ModelSpecDetailPage() {
 			!referenceResolutionFailed &&
 			!dependencyContractMismatch,
 	);
-	const activeStage = useMemo(() => resolveModelSpecDetailStage(searchParams), [searchParams]);
 	const currentImplementation = physicalTimeline?.implementation || null;
 	const currentImplementationRevision = currentImplementation?.implementationRevision;
 	const currentImplementationChecksum = currentImplementation?.implementationChecksum;
@@ -304,6 +300,7 @@ export default function ModelSpecDetailPage() {
 			]);
 			if (requestId !== loadRequestRef.current) return;
 			setModel(detail);
+			if (detail.planId) notifyResolvedContext({ modelSpecId: detail.id, planId: detail.planId });
 			if (gates) setStageGates(gates);
 			else setGateError("暂时无法读取服务端门禁结果，不影响继续编辑草稿");
 			setWriteDenied(false);
@@ -337,7 +334,7 @@ export default function ModelSpecDetailPage() {
 		} finally {
 			if (requestId === loadRequestRef.current) setLoading(false);
 		}
-	}, [form, modelSpecId]);
+	}, [form, modelSpecId, notifyResolvedContext]);
 	useEffect(() => {
 		void load();
 		return () => {
@@ -559,11 +556,6 @@ export default function ModelSpecDetailPage() {
 		});
 	};
 
-	const changeStage = (stage: "logical" | "implementation" | "physical") => {
-		if (!canonicalModel) return;
-		navigate(modelSpecDetailPath(canonicalModel.id, stage, canonicalModel.planId), { replace: true });
-	};
-
 	const retryReleaseRegistration = useCallback(
 		async (releaseId: string) => {
 			const requestId = ++releaseRetryRequestRef.current;
@@ -603,8 +595,8 @@ export default function ModelSpecDetailPage() {
 					message={loadError || "模型不可访问"}
 					action={
 						<Space>
-							<Button size="small" onClick={() => navigate("/modeling/models")}>
-								返回模型中心
+							<Button size="small" onClick={() => returnToCatalog()}>
+								{embedded ? "返回逻辑模型" : "返回模型中心"}
 							</Button>
 							<Button size="small" onClick={() => void load()}>
 								<RefreshCw size={14} />
@@ -636,7 +628,7 @@ export default function ModelSpecDetailPage() {
 	const runPrimaryAction = async () => {
 		if (!stageProjection || !canonicalModel || stageProjection.primaryAction.disabled) return;
 		if (stageProjection.primaryAction.recoveryStage !== activeStage) {
-			changeStage(stageProjection.primaryAction.recoveryStage);
+			changeStage(canonicalModel, stageProjection.primaryAction.recoveryStage);
 			return;
 		}
 		if (stageProjection.primaryAction.label === "保存逻辑设计") await save();
@@ -652,14 +644,15 @@ export default function ModelSpecDetailPage() {
 	};
 
 	return (
-		<div className="p-4" data-testid="model-spec-detail-page">
+		<div className={embedded ? "p-3" : "p-4"} data-testid="model-spec-detail-page">
 			<ModelSpecDetailHeader
 				model={model}
 				canonicalModel={canonicalModel}
 				canEdit={canEdit}
 				primaryAction={activeStage === "logical" ? stageProjection?.primaryAction : undefined}
 				primaryActionContext={primaryActionContext}
-				onBack={() => navigate(modelSpecCatalogPath(model.modelType, model.planId, model.domainId))}
+				backLabel={embedded ? "返回逻辑模型" : undefined}
+				onBack={() => returnToCatalog(model)}
 				onReload={load}
 			/>
 			<ModelSpecDetailNotices
@@ -690,7 +683,7 @@ export default function ModelSpecDetailPage() {
 				<ModelSpecEditorCanvas
 					activeStage={activeStage}
 					implementationDisabled={stageGates.find((gate) => gate.stage === "DESIGNED")?.status !== "READY"}
-					onStageChange={changeStage}
+					onStageChange={(stage) => changeStage(canonicalModel, stage)}
 					drawerAction={activeStage !== "logical" ? stageProjection?.primaryAction : undefined}
 					primaryActionContext={primaryActionContext}
 					logical={
