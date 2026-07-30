@@ -1,7 +1,7 @@
 # F4：发布物化短流程
 
 **优先级**：P0  
-**状态**：IN_PROGRESS（运行时安全契约已通过源码、定向测试与安全审查；发布 UI 和真实 DEV 物化链待 IT-05/06）
+**状态**：IN_PROGRESS（运行时安全契约、部署后 Airflow 装载与健康通过；发布 UI 和真实 DEV 物化链仍待 IT-05/06）
 
 ## 目标
 
@@ -45,4 +45,5 @@
 - Java：Repository、Service、Internal Resource、MethodSecurity 四类测试 23/23，BUILD SUCCESS。
 - Python：dbt task factory 28/28。
 - Java code review 与安全审查 APPROVED。
-- 未完成：真实 PostgreSQL 并发、Docker 容器、dbt/Airflow、relation probe、Catalog 与浏览器验收。
+- 部署预检：运行中 DAG/Task 为 0 后重启 scheduler/webserver；scheduler/triggerer/webserver healthy，容器内 factory 与宿主 SHA-256 一致。
+- 未完成：真实 PostgreSQL 并发、实际 dbt 容器运行、relation probe、Catalog 与发布浏览器验收；Airflow bind-mounted 源码回切未演练。

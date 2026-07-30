@@ -1,7 +1,7 @@
 # F3：指标、工具与关系图
 
 **优先级**：P1  
-**状态**：PASS_WITH_GAPS（源码、定向测试与独立审查通过；PostgreSQL IT、部署和浏览器 IT-04 待执行）
+**状态**：PASS_WITH_GAPS（源码、定向测试、部署、回滚与认证浏览器 IT-04 通过；PostgreSQL repository/cursor IT 与 Chrome95 待执行）
 
 ## 目标
 
@@ -30,11 +30,12 @@
 
 - [x] Indicator owner 和图 projection 边界已确定。
 - [x] graph 输出上限冻结为 500 nodes / 1000 edges，reference work 上限为 2501。
-- [x] 认证 UI 基线通过；F3 最终浏览器旅程仍待 IT-04。
+- [x] 认证 UI 基线及 F3 最终浏览器旅程通过。
 
 ## 完成标准
 
 - [x] 指标面板继续复用 canonical Indicator owner，未建立旧 semantic 写入链。
 - [x] 图节点具备模型 revision、维度、标准和指标工作台深链。
 - [x] 超限图明确返回截断/继续提示；不完整 reference/edge 投影不签发误导性 cursor。
-- [ ] IT-04 真实认证浏览器与 PostgreSQL 数据验证。
+- [x] IT-04 真实认证浏览器验证指标 owner 与非零关系图。
+- [ ] PostgreSQL repository/cursor 与 Chrome95 补充验证。

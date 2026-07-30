@@ -1,7 +1,7 @@
 # Sprint-79：智能数据建模工作台收敛
 
 **时间**：2026-07  
-**状态**：IN_PROGRESS（F1～F3 与 F5/T01 已完成源码收敛；统一构建、部署、真实 PostgreSQL/物化和浏览器 E2E 尚待最终验收；F5/T02 仍受两版本观测门禁约束）
+**状态**：IN_PROGRESS（建模工作台主线、F3 关系图、F5 菜单软删除已完成构建、部署、回滚和认证浏览器验收；真实 DEV 物化、PostgreSQL 并发、Chrome 95 与 F5/T02 两版本观测门禁仍未完成）
 **类型**：Architecture / UI Productization / Controlled Retirement / Full-stack  
 **目标**：用户在一个建模工作台内完成规划、标准、维度、四类逻辑模型、指标、关系查看以及发布/物化交接，不再在多组解释性页面和重复入口之间切换。
 
@@ -53,7 +53,7 @@
 | CL-08 | ModelSpec API 已具备 CRUD、门禁、依赖、实现迁移和 CAS | `source/dts-platform-webapp/src/api/modelSpecApi.ts:193`、`:208`、`:235`、`:261` |
 | CL-09 | 发布快捷入口和 Candidate 工作台契约已经存在 | `source/dts-platform-webapp/src/api/modelSpecApi.ts:788`、`:817`、`:832` |
 | CL-10 | `ModelSpecApplicationService` 影响评估为 MEDIUM：14 个直接依赖、21 个总影响点 | GitNexus `impact(ModelSpecApplicationService, upstream)`，2026-07-30 |
-| CL-11 | 当前 HEAD 为 `857c5cf45`，工作树在立项时干净并与 `origin/v2.2.3` 一致 | `git status --short --branch`、`git log -1`，2026-07-30 |
+| CL-11 | 立项基线 HEAD 为 `857c5cf45`，当时工作树干净并与 `origin/v2.2.3` 一致 | `git status --short --branch`、`git log -1`，2026-07-30 |
 | CL-12 | 当前本地库：4 个 DRAFT 计划、7 个 CURRENT 维度、6 个 ModelSpec/10 个 revision；实现、Candidate、物理关系 observation 均为 0 | `assets/domain-profile.md` §3 |
 | CL-13 | 本地旧业务对象、旧 SQL 模型、旧语义模型/维度均为 0，近 30 天 legacy API usage 为 0 | `assets/domain-profile.md` §3；只能支持本地退役判断，不能外推客户环境 |
 | CL-14 | `DbtFileBrowserPage.tsx` 和旧注册 helper 已按 Batch A 删除；`ModelTemplatesPage`、`ModelPipeline` 仍分别被项目空间和 SQL 建模使用 | `it/evidence/IT-07/`，2026-07-30 |
@@ -74,9 +74,9 @@
 | G0 | DTS 领域不变量 | PASS | ADR-79-01～08 | - |
 | G1 | 契约链贯通 | PASS | 本文“端到端契约链” | - |
 | G1 | 非功能预算 | PASS_WITH_GAPS | `assets/nfr-budget.md` | F0/T01、F3/T02 |
-| G3 | 发布安全 | PASS_WITH_GAPS | F1 前端回滚演练 PASS；F4/F5 仍见 `assets/release-plan.md` | F4/T02、F5/T02 |
+| G3 | 发布安全 | PASS_WITH_GAPS | platform/webapp/admin/menu 实际回切与恢复 PASS；Airflow bind-mounted 源码未实际回切 | F4/T02 |
 | G4 | 可运维性 | PENDING | 后续 `assets/runbook.md` | F0/T02 |
-| G4 | DoD 验收 | PENDING | `it/README.md` | 全部 Feature |
+| G4 | DoD 验收 | IN_PROGRESS | IT-01/02/04/07/08 已有部分真实证据；IT-03 BLOCKED，IT-05/06 与 Chrome95 未闭环 | F0/T01、F4、F5/T02 |
 
 ## Feature 列表
 
@@ -95,21 +95,21 @@
 
 | 范围 | 已完成 | 当前证据 | 尚未完成 |
 |---|---|---|---|
-| F3 指标/工具/关系图 | 工作台嵌入；计划、精确模型 revision、维度、三类标准、指标一跳依赖的只读投影；500/1000 上限；复合游标、窗口指纹、HMAC、防并发重排；旧响应竞态保护 | `51daf1225`、`56afd9858`、`c87cbf8b8`；Java 166/166；前端 Vitest 4/4、source-contract 7/7、TypeScript/Biome；Java、安全、TypeScript 审查 APPROVED | PostgreSQL repository IT、部署后认证浏览器 IT-04 |
-| F4 运行时安全 | `profileLeaseId` 跨语言对齐；续租/过期/释放 CAS；终态目录重试；Docker owner label + immutable container ID；清理未确认不释放租约；日志脱敏 | `56afd9858`；Java 23/23、Python 28/28；代码与安全审查 APPROVED | 真实 PostgreSQL 并发、Docker/dbt/Airflow/relation/Catalog IT-05/06 |
-| F5 入口收敛 | canonical 深链、菜单、帮助与指标入口进入 `/modeling/workbench`；旧菜单软删除 migration 可回滚 | `82d6e8eec`；路由/菜单/source-contract 定向测试通过 | 8 条 compatibility route 不满足两版本零访问门禁，暂不物理删除；客户旧表只保留提案 |
+| F3 指标/工具/关系图 | 工作台嵌入；计划、精确模型 revision、维度、三类标准、指标一跳依赖的只读投影；500/1000 上限；复合游标、窗口指纹、HMAC、防并发重排；旧响应竞态保护 | `51daf1225`、`56afd9858`、`c87cbf8b8`；Java 166/166；前端 Vitest 4/4、source-contract 7/7；最终认证 E2E 展示非零节点/关系，1/1 PASS | 真实 PostgreSQL repository/cursor IT、Chrome95 |
+| F4 运行时安全 | `profileLeaseId` 跨语言对齐；续租/过期/释放 CAS；终态目录重试；Docker owner label + immutable container ID；清理未确认不释放租约；日志脱敏 | `56afd9858`；Java 23/23、Python 28/28；部署后 Airflow scheduler/triggerer healthy，bind mount 校验和一致 | 真实 PostgreSQL 并发、DEV dbt run/relation/Catalog IT-05/06；Airflow 源码回切 |
+| F5 入口收敛 | canonical 深链、菜单、帮助与指标入口进入 `/modeling/workbench`；旧菜单软删除 migration 可回滚 | `82d6e8eec`、`8742e2bfe`、`286ffc68a`；5 行软删除、5 个 binding 保留，实际菜单/镜像回滚与恢复 PASS | 8 条 compatibility route 不满足两版本零访问门禁，暂不物理删除；客户旧表只保留提案 |
 
-这里的“通过”仅表示相应源码、定向测试和独立审查门禁通过，不替代后续构建、部署或人工/浏览器验收。
+F3/F5 的“通过”包含本轮构建、运行态、回滚和认证浏览器证据；F4 这里只证明运行时加载与健康，不代表真实物化或发布完成。
 
 ## 追溯矩阵
 
 | 需求点 | Feature/Task | 测试 | 验收证据 |
 |---|---|---|---|
-| 原型全部进入 DTS 而不复制内核 | F1/T01、F1/T02 | workspace route/source-contract | `it/IT-01` |
-| 对象上下文 + 单页编辑器 | F2/T01、F2/T02、F2/T04 | editor state/field mapping/workbench asset contract | `it/evidence/IT-02`、`IT-03` |
-| 指标、工具、关系图可达 | F3/T01、F3/T02 | indicator owner + graph projection IT | `it/IT-04` |
-| 发布与物化短流程 | F4/T01、F4/T02 | intent/candidate contract + real DEV build | `it/IT-05`、`IT-06` |
-| 不能复用的旧页面删除 | F0/T03、F5/T01、F5/T02 | orphan/import/route/usage guards | `it/IT-07`、`IT-08` |
+| 原型全部进入 DTS 而不复制内核 | F1/T01、F1/T02 | workspace route/source-contract | `it/evidence/IT-01` |
+| 对象上下文 + 单页编辑器 | F2/T01、F2/T02、F2/T04 | editor state/field mapping/workbench asset contract | `it/evidence/IT-02`、`it/evidence/IT-03` |
+| 指标、工具、关系图可达 | F3/T01、F3/T02 | indicator owner + graph projection IT | `it/evidence/IT-04` |
+| 发布与物化短流程 | F4/T01、F4/T02 | intent/candidate contract + real DEV build | `it/evidence/IT-05`、`it/evidence/IT-06` |
+| 不能复用的旧页面删除 | F0/T03、F5/T01、F5/T02 | orphan/import/route/usage guards | `it/evidence/IT-07`、`it/evidence/IT-08` |
 
 ## 完成标准
 
