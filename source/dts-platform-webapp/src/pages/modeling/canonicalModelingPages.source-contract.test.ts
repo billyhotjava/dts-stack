@@ -29,14 +29,16 @@ test("canonical pages expose one customer-facing primary action and no fake rele
 	const models = read("./ModelCenterPage.tsx");
 	const detail = read("./ModelSpecDetailPage.tsx");
 	const detailHeader = read("./components/ModelSpecDetailHeader.tsx");
+	const detailPrimaryAction = read("./components/ModelSpecPrimaryActionButton.tsx");
 	const stageProjection = read("./modelSpecDetailStageProjection.ts");
 
 	assert.match(dimensions, /type="primary"[\s\S]*登记维度/);
 	assert.match(models, /type="primary"[\s\S]*新建模型/);
-	assert.match(detailHeader, /type="primary"[\s\S]*primaryAction\.label/);
+	assert.match(detailHeader, /ModelSpecPrimaryActionButton/);
+	assert.match(detailPrimaryAction, /type="primary"[\s\S]*action\.label/);
 	assert.match(stageProjection, /保存逻辑设计/);
 	assert.doesNotMatch(
-		`${dimensions}\n${models}\n${detail}\n${detailHeader}\n${stageProjection}`,
+		`${dimensions}\n${models}\n${detail}\n${detailHeader}\n${detailPrimaryAction}\n${stageProjection}`,
 		/getModelSpecReleaseGate|可发布|发布模型/,
 	);
 });

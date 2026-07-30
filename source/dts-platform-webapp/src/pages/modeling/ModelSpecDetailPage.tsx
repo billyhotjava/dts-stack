@@ -193,7 +193,6 @@ export default function ModelSpecDetailPage() {
 			: "";
 	const implementationRecoveryMessage =
 		"当前实现绑定缺失或已不是此 ModelSpec 的当前版本；请返回数据实现阶段刷新并保存新的实现 revision。";
-
 	const loadStageGates = useCallback(async () => {
 		const requestId = ++gateRequestRef.current;
 		setGateLoading(true);
@@ -210,7 +209,6 @@ export default function ModelSpecDetailPage() {
 			if (requestId === gateRequestRef.current) setGateLoading(false);
 		}
 	}, [modelSpecId]);
-
 	const loadPhysicalTimeline = useCallback(async () => {
 		const requestId = ++physicalRequestRef.current;
 		setPhysicalLoading(true);
@@ -227,7 +225,6 @@ export default function ModelSpecDetailPage() {
 			if (requestId === physicalRequestRef.current) setPhysicalLoading(false);
 		}
 	}, [modelSpecId]);
-
 	const loadSources = useCallback(
 		async (
 			planId: string,
@@ -275,7 +272,6 @@ export default function ModelSpecDetailPage() {
 		},
 		[form],
 	);
-
 	const load = useCallback(async () => {
 		const requestId = ++loadRequestRef.current;
 		setLoading(true);
@@ -342,7 +338,6 @@ export default function ModelSpecDetailPage() {
 			if (requestId === loadRequestRef.current) setLoading(false);
 		}
 	}, [form, modelSpecId]);
-
 	useEffect(() => {
 		void load();
 		return () => {
