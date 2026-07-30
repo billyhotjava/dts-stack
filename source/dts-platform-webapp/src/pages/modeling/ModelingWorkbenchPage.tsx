@@ -1,6 +1,6 @@
-import { Alert, Button, Card, Collapse, Empty, Form, Input, Modal, Radio, Select, Skeleton, Space, Tag, Typography } from "antd";
+import { Alert, Button, Card, Collapse, Empty, Form, Skeleton, Space, Tag, Typography } from "antd";
 import { isAxiosError } from "axios";
-import { ArrowRight, CheckCircle2, Circle, Database, Layers3, PackageOpen, Plus, RefreshCw, ShieldAlert, Trash2 } from "lucide-react";
+import { ArrowRight, CheckCircle2, Circle, PackageOpen, RefreshCw, ShieldAlert } from "lucide-react";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
@@ -9,7 +9,6 @@ import {
 	getWarehousePlan,
 	getWarehousePlanStageProjection,
 	listWarehousePlans,
-	type CreateWarehousePlanInput,
 	type WarehousePlanHeader,
 	type WarehousePlanOnboardingMode,
 	type WarehousePlanStageProjection,
@@ -38,12 +37,18 @@ import {
 	loadRequestedWarehousePlan,
 	mergeWarehousePlanLists,
 	reduceWarehousePlanCreateSession,
-	validateWarehousePlanInitialSources,
 } from "./warehousePlanCreateFlow";
+import { ModelingWorkspaceModuleLanding } from "./ModelingWorkspaceModuleLanding";
+import { ModelingWorkspaceShell } from "./ModelingWorkspaceShell";
+import { type CreatePlanForm, WarehousePlanCreateModal } from "./WarehousePlanCreateModal";
+import {
+	parseModelingWorkspaceRouteState,
+	type ModelingWorkspaceModule,
+	type ModelingWorkspaceRoutePatch,
+	updateModelingWorkspaceSearch,
+} from "./modelingWorkspaceRouteState";
 
-const { Text, Title } = Typography;
-
-type CreatePlanForm = Omit<CreateWarehousePlanInput, "idempotencyKey" | "onboardingMode" | "ownerId" | "ownerDepartmentId">;
+const { Text } = Typography;
 
 const lifecycleLabel: Record<WarehousePlanHeader["lifecycleStatus"], string> = {
 	DRAFT: "规划中",
@@ -69,7 +74,9 @@ export default function ModelingWorkbenchPage() {
 	const userRoles = useUserRoles();
 	const canCreatePlan = hasWarehousePlanCreateAccess(userRoles);
 	const userInfo = useUserInfo() as Record<string, unknown>;
-	const requestedPlanId = searchParams.get("planId")?.trim() || "";
+	const workspaceRoute = useMemo(() => parseModelingWorkspaceRouteState(searchParams), [searchParams]);
+	const requestedPlanId = workspaceRoute.planId || "";
+	const activeModule = workspaceRoute.module;
 	const requestedCreate = searchParams.get("create") === "1";
 	const importOpen = searchParams.get("modelImport") === "open";
 	const importRunId = searchParams.get("importRunId")?.trim() || "";
@@ -99,12 +106,22 @@ export default function ModelingWorkbenchPage() {
 	const createRequestGuard = useMemo(() => createLatestRequestGuard(), []);
 	const createRouteHandledRef = useRef(false);
 
-	const selectedPlan = useMemo(
-		() => plans.find((plan) => plan.id === selectedPlanId) ?? null,
-		[plans, selectedPlanId],
-	);
+	const selectedPlan = useMemo(() => plans.find((plan) => plan.id === selectedPlanId) ?? null, [plans, selectedPlanId]);
 	const canImportModels = Boolean(
 		selectedPlan && canEditWarehousePlanHeader(canCreatePlan, selectedPlan.lifecycleStatus),
+	);
+
+	const navigateWorkspace = useCallback(
+		(patch: ModelingWorkspaceRoutePatch, replace = false) => {
+			const query = updateModelingWorkspaceSearch(searchParams, patch);
+			navigate(`/modeling/workbench${query ? `?${query}` : ""}`, { replace });
+		},
+		[navigate, searchParams],
+	);
+
+	const changeModule = useCallback(
+		(module: ModelingWorkspaceModule) => navigateWorkspace({ module }),
+		[navigateWorkspace],
 	);
 
 	const setImportRoute = useCallback(
@@ -127,9 +144,9 @@ export default function ModelingWorkbenchPage() {
 			setRetryingPlanList(false);
 			setPlanListFailed(false);
 			setSelectedPlanId(planId);
-			navigate(`/modeling/workbench?planId=${encodeURIComponent(planId)}`, { replace });
+			navigateWorkspace({ planId }, replace);
 		},
-		[navigate, planListRetryGuard],
+		[navigateWorkspace, planListRetryGuard],
 	);
 
 	const loadPlans = useCallback(async () => {
@@ -279,9 +296,10 @@ export default function ModelingWorkbenchPage() {
 		dispatchCreateSession({ type: "CLEAR" });
 		form.resetFields();
 		if (requestedCreate) {
-			navigate(selectedPlanId ? `/modeling/workbench?planId=${encodeURIComponent(selectedPlanId)}` : "/modeling/workbench", {
-				replace: true,
-			});
+			const next = new URLSearchParams(updateModelingWorkspaceSearch(searchParams, { planId: selectedPlanId || null }));
+			next.delete("create");
+			const query = next.toString();
+			navigate(`/modeling/workbench${query ? `?${query}` : ""}`, { replace: true });
 		}
 	};
 
@@ -321,8 +339,12 @@ export default function ModelingWorkbenchPage() {
 			navigate(created.nextAction);
 		} catch (error) {
 			if (!isCurrentCreate()) return;
-			const code = isAxiosError(error) ? String((error.response?.data as { code?: string } | undefined)?.code || "") : "";
-			dispatchCreateSession({ type: code === "WAREHOUSE_PLAN_IDEMPOTENCY_CONFLICT" ? "IDEMPOTENCY_CONFLICT" : "REQUEST_FAILED" });
+			const code = isAxiosError(error)
+				? String((error.response?.data as { code?: string } | undefined)?.code || "")
+				: "";
+			dispatchCreateSession({
+				type: code === "WAREHOUSE_PLAN_IDEMPOTENCY_CONFLICT" ? "IDEMPOTENCY_CONFLICT" : "REQUEST_FAILED",
+			});
 			// The shared HTTP interceptor presents the actionable server error.
 		} finally {
 			if (isCurrentCreate()) setCreating(false);
@@ -341,344 +363,305 @@ export default function ModelingWorkbenchPage() {
 		return (
 			<div className="mx-auto w-full max-w-[1180px] p-6">
 				<Alert
-				type="error"
-				showIcon
-				message="规划工作台暂时不可用"
-				description="计划读取失败，未把未知状态显示为已完成。"
-				action={<Button icon={<RefreshCw size={15} />} onClick={() => void loadPlans()}>重新加载</Button>}
-			/>
+					type="error"
+					showIcon
+					message="规划工作台暂时不可用"
+					description="计划读取失败，未把未知状态显示为已完成。"
+					action={
+						<Button icon={<RefreshCw size={15} />} onClick={() => void loadPlans()}>
+							重新加载
+						</Button>
+					}
+				/>
 			</div>
 		);
 	}
 
 	return (
-		<div className="mx-auto w-full max-w-[1480px] space-y-4 p-4 md:p-6" data-testid="warehouse-plan-workbench">
-			<header
-				className="overflow-hidden rounded-[22px] border border-slate-200 px-5 py-5 md:px-7"
-				style={{
-					background:
-						"linear-gradient(120deg, rgba(238,246,252,0.98) 0%, rgba(249,251,252,0.98) 58%, rgba(247,244,235,0.96) 100%)",
-				}}
+		<div className="mx-auto w-full max-w-[1560px] p-3 md:p-4" data-testid="warehouse-plan-workbench">
+			<ModelingWorkspaceShell
+				activeModule={activeModule}
+				planId={selectedPlanId || undefined}
+				planOptions={plans.map((plan) => ({ label: plan.name, value: plan.id }))}
+				canCreatePlan={canCreatePlan}
+				onModuleChange={changeModule}
+				onPlanChange={selectPlan}
+				onCreatePlan={openCreate}
+				onOpenAllPlans={() => navigate("/modeling/plans")}
 			>
-				<div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-					<div className="max-w-3xl">
-						<Title level={2} style={{ margin: 0 }}>数据建设工作台</Title>
-					</div>
-					<div className="flex flex-wrap items-center gap-2">
-						{plans.length > 0 ? (
-							<>
-							<Select
-								aria-label="当前建设计划"
-								value={selectedPlanId || undefined}
-								style={{ minWidth: 280 }}
-								options={plans.map((plan) => ({ label: plan.name, value: plan.id }))}
-								onChange={(value) => selectPlan(value)}
+				{activeModule === "home" || activeModule === "planning" ? (
+					<div className="space-y-4 p-4 md:p-5">
+						{requestedCreate && !canCreatePlan ? (
+							<Alert
+								type="info"
+								showIcon
+								message="当前账号没有规划维护权限"
+								description="可以查看已有规划，但不能新建或修改规划。"
 							/>
-							<Button
-								type="link"
-								disabled={!canCreatePlan}
-								title={canCreatePlan ? undefined : "当前账号没有规划维护权限"}
-								onClick={openCreate}
-							>
-								新建规划
-							</Button>
-							</>
 						) : null}
-						<Button type="link" onClick={() => navigate("/modeling/plans")}>全部规划</Button>
-					</div>
-				</div>
-			</header>
 
-			{requestedCreate && !canCreatePlan ? (
-				<Alert type="info" showIcon message="当前账号没有规划维护权限" description="可以查看已有规划，但不能新建或修改规划。" />
-			) : null}
+						{requestedPlanFailed ? (
+							<Alert
+								data-testid="warehouse-plan-requested-plan-recovery"
+								type="warning"
+								showIcon
+								message="指定的建设计划不可用"
+								description="该计划可能不存在、无权访问或暂时网络异常。系统不会自动替换成其他计划。"
+								action={<Button onClick={() => void loadPlans()}>重新加载指定计划</Button>}
+							/>
+						) : null}
 
-			{requestedPlanFailed ? (
-				<Alert
-					data-testid="warehouse-plan-requested-plan-recovery"
-					type="warning"
-					showIcon
-					message="指定的建设计划不可用"
-					description="该计划可能不存在、无权访问或暂时网络异常。系统不会自动替换成其他计划。"
-					action={
-						<Button onClick={() => void loadPlans()}>
-							重新加载指定计划
-						</Button>
-					}
-				/>
-			) : null}
+						{planListFailed && !requestedPlanFailed ? (
+							<Alert
+								data-testid="warehouse-plan-list-recovery"
+								type="warning"
+								showIcon
+								message="计划列表未完整加载"
+								description="当前计划可以继续使用；其他计划暂未显示。"
+								action={
+									<Button loading={retryingPlanList} onClick={() => void retryPlanList()}>
+										重新加载列表
+									</Button>
+								}
+							/>
+						) : null}
 
-			{planListFailed && !requestedPlanFailed ? (
-				<Alert
-					data-testid="warehouse-plan-list-recovery"
-					type="warning"
-					showIcon
-					message="计划列表未完整加载"
-					description="当前计划可以继续使用；其他计划暂未显示。"
-					action={
-						<Button loading={retryingPlanList} onClick={() => void retryPlanList()}>
-							重新加载列表
-						</Button>
-					}
-				/>
-			) : null}
-
-			{plans.length === 0 && !requestedPlanFailed ? (
-				<Card className="border-slate-200" styles={{ body: { padding: "72px 24px" } }}>
-					<Empty
-						image={Empty.PRESENTED_IMAGE_SIMPLE}
-						description="暂无建设规划"
-					>
-						<Button
-							type="primary"
-							size="large"
-							data-testid="warehouse-plan-empty-primary-action"
-							disabled={!canCreatePlan}
-							title={canCreatePlan ? undefined : "当前账号没有规划维护权限"}
-							onClick={openCreate}
-						>
-							新建规划
-						</Button>
-					</Empty>
-				</Card>
-			) : selectedPlan ? (
-				<>
-					<section className="grid gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.7fr)]">
-						<Card className="overflow-hidden border-slate-200" styles={{ body: { padding: 0 } }}>
-							<div className="border-b border-slate-200 px-5 py-4 md:px-6">
-								<div className="flex flex-wrap items-center justify-between gap-3">
-									<div>
-										<Text type="secondary">当前计划</Text>
-										<div className="mt-1 text-xl font-semibold text-slate-950">{selectedPlan.name}</div>
-									</div>
-									<Space wrap>
-										<Tag color="blue">生命周期：{lifecycleLabel[selectedPlan.lifecycleStatus]}</Tag>
-										<Tag>计划负责人：{selectedPlan.ownerId}</Tag>
-									</Space>
-								</div>
-							</div>
-
-							<div className="px-5 py-6 md:px-6 md:py-7">
-								{loadingProjection ? <Skeleton active paragraph={{ rows: 3 }} /> : projectionFailed ? (
-									<Alert
-										type="warning"
-										showIcon
-										message="阶段证据暂时不可用"
-										description="当前状态保持未知，不会误报为完成。"
-										action={<Button onClick={() => void loadProjection()}>重试</Button>}
-									/>
-								) : projection ? (
-									<div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-end">
-										<div>
-											<div className="mb-2 text-sm font-medium text-slate-500">当前阶段</div>
-											<div className="text-3xl font-semibold tracking-tight text-slate-950">
-												{projection.currentStage ? warehouseStageLabel(projection.currentStage) : "全部阶段已有当前证据"}
+						{plans.length === 0 && !requestedPlanFailed ? (
+							<Card className="border-slate-200" styles={{ body: { padding: "72px 24px" } }}>
+								<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无建设规划">
+									<Button
+										type="primary"
+										size="large"
+										data-testid="warehouse-plan-empty-primary-action"
+										disabled={!canCreatePlan}
+										title={canCreatePlan ? undefined : "当前账号没有规划维护权限"}
+										onClick={openCreate}
+									>
+										新建规划
+									</Button>
+								</Empty>
+							</Card>
+						) : selectedPlan ? (
+							<>
+								<section className="grid gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.7fr)]">
+									<Card className="overflow-hidden border-slate-200" styles={{ body: { padding: 0 } }}>
+										<div className="border-b border-slate-200 px-5 py-4 md:px-6">
+											<div className="flex flex-wrap items-center justify-between gap-3">
+												<div>
+													<Text type="secondary">当前计划</Text>
+													<div className="mt-1 text-xl font-semibold text-slate-950">{selectedPlan.name}</div>
+												</div>
+												<Space wrap>
+													<Tag color="blue">生命周期：{lifecycleLabel[selectedPlan.lifecycleStatus]}</Tag>
+													<Tag>计划负责人：{selectedPlan.ownerId}</Tag>
+												</Space>
 											</div>
-											{projection.primaryBlocker ? (
-												<div className="mt-4 flex max-w-3xl items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-950">
-													<ShieldAlert className="mt-0.5 shrink-0" size={18} />
+										</div>
+
+										<div className="px-5 py-6 md:px-6 md:py-7">
+											{loadingProjection ? (
+												<Skeleton active paragraph={{ rows: 3 }} />
+											) : projectionFailed ? (
+												<Alert
+													type="warning"
+													showIcon
+													message="阶段证据暂时不可用"
+													description="当前状态保持未知，不会误报为完成。"
+													action={<Button onClick={() => void loadProjection()}>重试</Button>}
+												/>
+											) : projection ? (
+												<div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-end">
 													<div>
-														<div className="font-medium">首要阻塞</div>
-														<div className="mt-1 text-sm">{warehouseBlockerMessage(projection.primaryBlocker.code, projection.primaryBlocker.message)}</div>
+														<div className="mb-2 text-sm font-medium text-slate-500">当前阶段</div>
+														<div className="text-3xl font-semibold tracking-tight text-slate-950">
+															{projection.currentStage
+																? warehouseStageLabel(projection.currentStage)
+																: "全部阶段已有当前证据"}
+														</div>
+														{projection.primaryBlocker ? (
+															<div className="mt-4 flex max-w-3xl items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-950">
+																<ShieldAlert className="mt-0.5 shrink-0" size={18} />
+																<div>
+																	<div className="font-medium">首要阻塞</div>
+																	<div className="mt-1 text-sm">
+																		{warehouseBlockerMessage(
+																			projection.primaryBlocker.code,
+																			projection.primaryBlocker.message,
+																		)}
+																	</div>
+																</div>
+															</div>
+														) : null}
 													</div>
+													<Space wrap>
+														<Button
+															size="large"
+															icon={<PackageOpen size={16} />}
+															disabled={!canImportModels}
+															title={
+																canImportModels
+																	? "将 dbt 模型包导入当前建设计划"
+																	: "发布中、已发布、已归档或只读计划不能导入"
+															}
+															onClick={() => setImportRoute(true)}
+														>
+															导入已有模型
+														</Button>
+														{projection.nextAction ? (
+															<Button
+																type="primary"
+																size="large"
+																data-testid="warehouse-plan-next-action"
+																onClick={() =>
+																	navigate(withWarehousePlanContext(projection.nextAction!.path, selectedPlan.id))
+																}
+															>
+																{projection.currentStage
+																	? warehouseStageActionLabel(projection.currentStage)
+																	: projection.nextAction.label}
+																<ArrowRight size={16} />
+															</Button>
+														) : null}
+													</Space>
 												</div>
 											) : null}
 										</div>
-										<Space wrap>
-											<Button
-												size="large"
-												icon={<PackageOpen size={16} />}
-												disabled={!canImportModels}
-												title={canImportModels ? "将 dbt 模型包导入当前建设计划" : "发布中、已发布、已归档或只读计划不能导入"}
-												onClick={() => setImportRoute(true)}
-											>
-												导入已有模型
-											</Button>
-											{projection.nextAction ? (
-												<Button
-													type="primary"
-													size="large"
-													data-testid="warehouse-plan-next-action"
-													onClick={() => navigate(withWarehousePlanContext(projection.nextAction!.path, selectedPlan.id))}
-												>
-													{projection.currentStage ? warehouseStageActionLabel(projection.currentStage) : projection.nextAction.label}<ArrowRight size={16} />
-												</Button>
-											) : null}
-										</Space>
-									</div>
-								) : null}
-							</div>
-						</Card>
+									</Card>
 
-						<Card className="border-slate-200" title="规划摘要">
-							<div className="space-y-4 text-sm">
-								<div><div className="text-slate-500">建设目标</div><div className="mt-1 text-slate-900">{selectedPlan.objective || "待补充"}</div></div>
-								<div><div className="text-slate-500">建设范围</div><div className="mt-1 text-slate-900">{selectedPlan.scope || "待补充"}</div></div>
-								<div><div className="text-slate-500">开始方式</div><div className="mt-1 text-slate-900">{selectedPlan.onboardingMode === "ASSET_FIRST" ? "从现有数据开始" : "从业务目标开始"}</div></div>
-								<Space direction="vertical" className="w-full" size={8}>
-									<Button
-										block
-										onClick={() =>
-											navigate(buildWarehousePlanRoute(selectedPlan.id, "overview", { mode: "view" }))
-										}
-									>
-										查看计划详情
-									</Button>
-									{canEditWarehousePlanHeader(canCreatePlan, selectedPlan.lifecycleStatus) ? (
-										<Button
-											block
-											onClick={() =>
-												navigate(buildWarehousePlanRoute(selectedPlan.id, "overview", { mode: "edit" }))
-											}
-										>
-											编辑规划
-										</Button>
-									) : null}
-								</Space>
-							</div>
-						</Card>
-					</section>
-
-					<Card className="border-slate-200" title="建设轨迹" extra={<Text type="secondary">状态来自 StageProjection，只读</Text>}>
-						<div className="grid gap-0 overflow-hidden rounded-xl border border-slate-200 md:grid-cols-3 xl:grid-cols-9" data-testid="warehouse-plan-nine-stage-track">
-							{WAREHOUSE_STAGE_ORDER.map((stageCode, index) => {
-								const evidence = projection?.stages.find((stage) => stage.code === stageCode);
-								const status = evidence?.status || "UNKNOWN";
-								const freshness = evidence?.freshness || "UNAVAILABLE";
-								const complete = isWarehouseStageComplete(status, freshness);
-								const tone = statusTone[complete ? "COMPLETE" : status];
-								return (
-									<div key={stageCode} className="min-h-28 border-b border-r border-slate-200 p-3 last:border-r-0 md:border-b-0" style={{ borderTop: `3px solid ${tone.border}` }}>
-										<div className="mb-3 flex items-center justify-between">
-											<span className="text-xs font-semibold text-slate-400">{String(index + 1).padStart(2, "0")}</span>
-											{complete ? <CheckCircle2 size={17} color={tone.dot} /> : <Circle size={15} color={tone.dot} />}
-										</div>
-										<div className="text-sm font-medium leading-5 text-slate-900">{warehouseStageLabel(stageCode)}</div>
-										<div className="mt-2 text-xs text-slate-500">{stageStatusLabel(status, freshness)}</div>
-									</div>
-								);
-							})}
-						</div>
-						<Collapse
-							ghost
-							className="mt-3"
-							items={[{
-								key: "evidence",
-								label: "查看次要缺口与证据说明",
-								children: <Text type="secondary">阶段完成度只由后台证据计算；刷新时间：{projection?.computedAt ? new Date(projection.computedAt).toLocaleString() : "暂无"}</Text>,
-							}]}
-						/>
-					</Card>
-				</>
-			) : null}
-
-			<Modal
-				title="新建数据建设规划"
-				open={createOpen}
-				confirmLoading={creating}
-				okText="创建并继续"
-				cancelText="取消"
-				closable={!creating}
-				maskClosable={!creating}
-				keyboard={!creating}
-				cancelButtonProps={{ disabled: creating }}
-				onCancel={() => {
-					if (!creating) cancelCreate();
-				}}
-				onOk={() => form.submit()}
-				destroyOnClose
-			>
-				<div className="mb-5 grid grid-cols-2 gap-3">
-					<label className={`cursor-pointer rounded-xl border p-4 ${onboardingMode === "BUSINESS_FIRST" ? "border-blue-500 bg-blue-50" : "border-slate-200"}`}>
-						<Radio disabled={creating} checked={onboardingMode === "BUSINESS_FIRST"} onChange={() => changeOnboardingMode("BUSINESS_FIRST")} />
-						<div className="mt-3 flex items-center gap-2 font-medium"><Layers3 size={17} />从业务目标开始</div>
-						<div className="mt-1 text-xs leading-5 text-slate-500">先说明要解决的问题，再逐步确认业务分类和范围。</div>
-					</label>
-					<label className={`cursor-pointer rounded-xl border p-4 ${onboardingMode === "ASSET_FIRST" ? "border-blue-500 bg-blue-50" : "border-slate-200"}`}>
-						<Radio disabled={creating} checked={onboardingMode === "ASSET_FIRST"} onChange={() => changeOnboardingMode("ASSET_FIRST")} />
-						<div className="mt-3 flex items-center gap-2 font-medium"><Database size={17} />从现有数据开始</div>
-						<div className="mt-1 text-xs leading-5 text-slate-500">先盘点现有表、文件和 dbt 产物。</div>
-					</label>
-				</div>
-				{createSession.idempotencyConflict ? (
-					<Alert
-						className="mb-4"
-						type="warning"
-						showIcon
-						message="这次创建内容与此前提交不一致"
-						description="表单已保留。确认内容后，可作为新计划重新提交。"
-						action={<Button onClick={replaceConflictingIdempotencyKey}>作为新计划重新提交</Button>}
-					/>
-				) : null}
-				<Form<CreatePlanForm> form={form} layout="vertical" disabled={creating} onFinish={(values) => void submitCreate(values)}>
-					<Form.Item name="name" label="规划名称" rules={[{ required: true, whitespace: true, max: 128, message: "请输入 1-128 个字符的规划名称" }]}><Input maxLength={128} placeholder="例如：经营分析主题数仓" /></Form.Item>
-					<Form.Item
-						name="objective"
-						label="建设目标"
-						rules={onboardingMode === "BUSINESS_FIRST" ? [{ required: true, whitespace: true, message: "请说明这次建设要解决的问题" }] : []}
-					>
-						<Input.TextArea rows={2} placeholder={onboardingMode === "BUSINESS_FIRST" ? "这次建设要解决什么业务问题" : "可稍后补充"} />
-					</Form.Item>
-					<Form.Item name="scope" label="初始范围"><Input placeholder="涉及的业务范围、组织或数据边界" /></Form.Item>
-					{onboardingMode === "ASSET_FIRST" ? (
-						<div className="mb-4" data-testid="warehouse-plan-initial-sources">
-							<Form.List
-								name="initialSourceRefs"
-								rules={[{ validator: async (_, sources) => {
-									const issue = validateWarehousePlanInitialSources(sources);
-									if (issue) throw new Error(issue);
-								} }]}
-							>
-								{(fields, { add, remove }, { errors }) => (
-									<div className="space-y-2">
-										<div className="flex items-center justify-between">
-											<Text strong>现有数据来源</Text>
-											<Button type="link" icon={<Plus size={14} />} onClick={() => add({ sourceType: "CATALOG_TABLE", sourceId: "" })}>添加来源</Button>
-										</div>
-										{fields.map((field) => (
-											<div key={field.key} className="grid grid-cols-[150px_1fr_1fr_auto] gap-2">
-												<Form.Item {...field} name={[field.name, "sourceType"]} rules={[{ required: true, message: "选择类型" }]} noStyle>
-													<Select options={[
-														{ value: "CATALOG_TABLE", label: "资产目录表" },
-														{ value: "CONNECTION_TABLE", label: "连接中的表" },
-														{ value: "EXCEL_FILE", label: "Excel 文件" },
-														{ value: "DBT_NODE", label: "dbt 节点" },
-													]} />
-												</Form.Item>
-												<Form.Item {...field} name={[field.name, "sourceId"]} rules={[{ required: true, whitespace: true, message: "填写稳定来源标识" }, { max: 256, message: "来源标识不能超过 256 个字符" }]} noStyle>
-													<Input maxLength={256} placeholder="来源标识" />
-												</Form.Item>
-												<Form.Item {...field} name={[field.name, "sourceVersion"]} rules={[{ max: 128, message: "来源版本不能超过 128 个字符" }]} noStyle>
-													<Input maxLength={128} placeholder="版本（可选）" />
-												</Form.Item>
-												<Button aria-label="删除来源" icon={<Trash2 size={14} />} onClick={() => remove(field.name)} />
+									<Card className="border-slate-200" title="规划摘要">
+										<div className="space-y-4 text-sm">
+											<div>
+												<div className="text-slate-500">建设目标</div>
+												<div className="mt-1 text-slate-900">{selectedPlan.objective || "待补充"}</div>
 											</div>
-										))}
-										<Form.ErrorList errors={errors} />
-									</div>
-								)}
-							</Form.List>
-						</div>
-					) : null}
-					<div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2" data-testid="warehouse-plan-current-owner">
-						<div className="text-xs text-slate-500">当前负责人由登录身份确定；创建后可在“建设规划”中按权限转派</div>
-						<div className="mt-1 text-sm font-medium text-slate-900">{currentOwner} · {currentDepartment}</div>
-					</div>
-				</Form>
-			</Modal>
+											<div>
+												<div className="text-slate-500">建设范围</div>
+												<div className="mt-1 text-slate-900">{selectedPlan.scope || "待补充"}</div>
+											</div>
+											<div>
+												<div className="text-slate-500">开始方式</div>
+												<div className="mt-1 text-slate-900">
+													{selectedPlan.onboardingMode === "ASSET_FIRST" ? "从现有数据开始" : "从业务目标开始"}
+												</div>
+											</div>
+											<Space direction="vertical" className="w-full" size={8}>
+												<Button
+													block
+													onClick={() =>
+														navigate(buildWarehousePlanRoute(selectedPlan.id, "overview", { mode: "view" }))
+													}
+												>
+													查看计划详情
+												</Button>
+												{canEditWarehousePlanHeader(canCreatePlan, selectedPlan.lifecycleStatus) ? (
+													<Button
+														block
+														onClick={() =>
+															navigate(buildWarehousePlanRoute(selectedPlan.id, "overview", { mode: "edit" }))
+														}
+													>
+														编辑规划
+													</Button>
+												) : null}
+											</Space>
+										</div>
+									</Card>
+								</section>
 
-			<ImportModelPackageWizard
-				open={importOpen}
-				lockedPlanId={selectedPlanId || undefined}
-				initialRunId={importRunId || undefined}
-				plans={plans}
-				canEdit={canImportModels}
-				returnSurface="workbench"
-				onClose={(runId) => setImportRoute(false, runId)}
-				onRunIdChange={(runId) => setImportRoute(true, runId)}
-				onApplied={() => void loadProjection()}
-				onNavigate={navigate}
-			/>
+								<Card
+									className="border-slate-200"
+									title="建设轨迹"
+									extra={<Text type="secondary">状态来自 StageProjection，只读</Text>}
+								>
+									<div
+										className="grid gap-0 overflow-hidden rounded-xl border border-slate-200 md:grid-cols-3 xl:grid-cols-9"
+										data-testid="warehouse-plan-nine-stage-track"
+									>
+										{WAREHOUSE_STAGE_ORDER.map((stageCode, index) => {
+											const evidence = projection?.stages.find((stage) => stage.code === stageCode);
+											const status = evidence?.status || "UNKNOWN";
+											const freshness = evidence?.freshness || "UNAVAILABLE";
+											const complete = isWarehouseStageComplete(status, freshness);
+											const tone = statusTone[complete ? "COMPLETE" : status];
+											return (
+												<div
+													key={stageCode}
+													className="min-h-28 border-b border-r border-slate-200 p-3 last:border-r-0 md:border-b-0"
+													style={{ borderTop: `3px solid ${tone.border}` }}
+												>
+													<div className="mb-3 flex items-center justify-between">
+														<span className="text-xs font-semibold text-slate-400">
+															{String(index + 1).padStart(2, "0")}
+														</span>
+														{complete ? (
+															<CheckCircle2 size={17} color={tone.dot} />
+														) : (
+															<Circle size={15} color={tone.dot} />
+														)}
+													</div>
+													<div className="text-sm font-medium leading-5 text-slate-900">
+														{warehouseStageLabel(stageCode)}
+													</div>
+													<div className="mt-2 text-xs text-slate-500">{stageStatusLabel(status, freshness)}</div>
+												</div>
+											);
+										})}
+									</div>
+									<Collapse
+										ghost
+										className="mt-3"
+										items={[
+											{
+												key: "evidence",
+												label: "查看次要缺口与证据说明",
+												children: (
+													<Text type="secondary">
+														阶段完成度只由后台证据计算；刷新时间：
+														{projection?.computedAt ? new Date(projection.computedAt).toLocaleString() : "暂无"}
+													</Text>
+												),
+											},
+										]}
+									/>
+								</Card>
+							</>
+						) : null}
+					</div>
+				) : (
+					<ModelingWorkspaceModuleLanding
+						module={activeModule}
+						planId={selectedPlanId || undefined}
+						onNavigate={navigate}
+					/>
+				)}
+
+				<WarehousePlanCreateModal
+					open={createOpen}
+					creating={creating}
+					onboardingMode={onboardingMode}
+					createSession={createSession}
+					form={form}
+					currentOwner={currentOwner}
+					currentDepartment={currentDepartment}
+					onCancel={cancelCreate}
+					onSubmit={(values) => void submitCreate(values)}
+					onOnboardingModeChange={changeOnboardingMode}
+					onReplaceConflictingIdempotencyKey={replaceConflictingIdempotencyKey}
+				/>
+
+				<ImportModelPackageWizard
+					open={importOpen}
+					lockedPlanId={selectedPlanId || undefined}
+					initialRunId={importRunId || undefined}
+					plans={plans}
+					canEdit={canImportModels}
+					returnSurface="workbench"
+					onClose={(runId) => setImportRoute(false, runId)}
+					onRunIdChange={(runId) => setImportRoute(true, runId)}
+					onApplied={() => void loadProjection()}
+					onNavigate={navigate}
+				/>
+			</ModelingWorkspaceShell>
 		</div>
 	);
 }

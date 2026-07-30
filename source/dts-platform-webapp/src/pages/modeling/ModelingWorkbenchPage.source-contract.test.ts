@@ -5,6 +5,8 @@ import test from "node:test";
 const entry = readFileSync(new URL("./ModelingWorkbenchPage.tsx", import.meta.url), "utf8");
 const shellUrl = new URL("./ModelingWorkspaceShell.tsx", import.meta.url);
 const shell = existsSync(shellUrl) ? readFileSync(shellUrl, "utf8") : "";
+const createModal = readFileSync(new URL("./WarehousePlanCreateModal.tsx", import.meta.url), "utf8");
+const createSurface = `${entry}\n${createModal}`;
 const frame = readFileSync(new URL("./semantic-workspace/SemanticWorkspaceFrame.tsx", import.meta.url), "utf8");
 const api = readFileSync(new URL("../../api/warehousePlanApi.ts", import.meta.url), "utf8");
 
@@ -33,8 +35,8 @@ test("modeling workbench is a canonical warehouse planning surface instead of a 
 
 test("workbench routes view and edit actions to the canonical plan overview", () => {
 	assert.doesNotMatch(entry, /WarehousePlanHeaderEditor/);
-	assert.match(entry, /全部规划/);
-	assert.match(entry, /navigate\("\/modeling\/plans"\)/);
+	assert.match(shell, /全部规划/);
+	assert.match(entry, /onOpenAllPlans=\{\(\) => navigate\("\/modeling\/plans"\)\}/);
 	assert.match(entry, /编辑规划/);
 	assert.match(entry, /buildWarehousePlanRoute\(selectedPlan\.id,\s*"overview",\s*\{\s*mode:\s*"view"\s*\}\)/);
 	assert.match(entry, /buildWarehousePlanRoute\(selectedPlan\.id,\s*"overview",\s*\{\s*mode:\s*"edit"\s*\}\)/);
@@ -61,12 +63,12 @@ test("empty and active plans each expose one unambiguous primary action", () => 
 });
 
 test("new planning uses two onboarding modes without creating two plan types", () => {
-	assert.match(entry, /从业务目标开始/);
-	assert.match(entry, /从现有数据开始/);
-	assert.match(entry, /BUSINESS_FIRST/);
-	assert.match(entry, /ASSET_FIRST/);
-	assert.doesNotMatch(entry, /DATA_FIRST/);
-	assert.doesNotMatch(entry, /businessPlan|dataPlan|planType/);
+	assert.match(createSurface, /从业务目标开始/);
+	assert.match(createSurface, /从现有数据开始/);
+	assert.match(createSurface, /BUSINESS_FIRST/);
+	assert.match(createSurface, /ASSET_FIRST/);
+	assert.doesNotMatch(createSurface, /DATA_FIRST/);
+	assert.doesNotMatch(createSurface, /businessPlan|dataPlan|planType/);
 });
 
 test("warehouse plan create flow is server coded, idempotent, dual-start and actor read-only", () => {
@@ -75,8 +77,8 @@ test("warehouse plan create flow is server coded, idempotent, dual-start and act
 	assert.match(api, /initialSourceRefs\??:\s*WarehousePlanSourceRef\[\]/);
 	assert.doesNotMatch(entry, /warehouse-\$\{Date\.now/);
 	assert.match(entry, /createWarehousePlanIdempotencyKey/);
-	assert.match(entry, /data-testid="warehouse-plan-current-owner"/);
-	assert.match(entry, /data-testid="warehouse-plan-initial-sources"/);
+	assert.match(createModal, /data-testid="warehouse-plan-current-owner"/);
+	assert.match(createModal, /data-testid="warehouse-plan-initial-sources"/);
 	assert.match(entry, /loadRequestedWarehousePlan\(\s*requestedPlanId,\s*getWarehousePlan/);
 	assert.match(entry, /data-testid="warehouse-plan-requested-plan-recovery"/);
 	assert.match(entry, /hasWarehousePlanCreateAccess/);
@@ -87,7 +89,15 @@ test("warehouse plan create flow is server coded, idempotent, dual-start and act
 });
 
 test("lifecycle labels match the backend contract exactly", () => {
-	for (const status of ["DRAFT", "BASELINE_READY", "DESIGNING", "VALIDATING", "READY_TO_PUBLISH", "PUBLISHED", "ARCHIVED"]) {
+	for (const status of [
+		"DRAFT",
+		"BASELINE_READY",
+		"DESIGNING",
+		"VALIDATING",
+		"READY_TO_PUBLISH",
+		"PUBLISHED",
+		"ARCHIVED",
+	]) {
 		assert.match(api, new RegExp(`\\|?\\s*"${status}"`));
 		assert.match(entry, new RegExp(`${status}:`));
 	}
@@ -98,10 +108,10 @@ test("create modal protects its active request session and cannot close while su
 	assert.match(entry, /const createRequestGuard = useMemo\(\(\) => createLatestRequestGuard\(\), \[\]\)/);
 	assert.match(entry, /const isCurrentCreate = createRequestGuard\.begin\(\)/);
 	assert.match(entry, /if \(!isCurrentCreate\(\)\) return/);
-	assert.match(entry, /closable=!\{creating\}|closable=\{!creating\}/);
-	assert.match(entry, /maskClosable=\{!creating\}/);
-	assert.match(entry, /keyboard=\{!creating\}/);
-	assert.match(entry, /cancelButtonProps=\{\{ disabled: creating \}\}/);
+	assert.match(createModal, /closable=!\{creating\}|closable=\{!creating\}/);
+	assert.match(createModal, /maskClosable=\{!creating\}/);
+	assert.match(createModal, /keyboard=\{!creating\}/);
+	assert.match(createModal, /cancelButtonProps=\{\{ disabled: creating \}\}/);
 });
 
 test("exact plan restoration degrades list failure separately and retries only the list", () => {
@@ -125,16 +135,16 @@ test("URL plan selection waits for the exact plan read before projection", () =>
 });
 
 test("asset-first inputs enforce the same identity and length limits as the backend", () => {
-	assert.match(entry, /validateWarehousePlanInitialSources/);
-	assert.match(entry, /max:\s*256/);
-	assert.match(entry, /maxLength=\{256\}/);
-	assert.match(entry, /max:\s*128/);
-	assert.match(entry, /maxLength=\{128\}/);
+	assert.match(createModal, /validateWarehousePlanInitialSources/);
+	assert.match(createModal, /max:\s*256/);
+	assert.match(createModal, /maxLength=\{256\}/);
+	assert.match(createModal, /max:\s*128/);
+	assert.match(createModal, /maxLength=\{128\}/);
 });
 
 test("idempotency conflict copy stays in customer language", () => {
-	assert.doesNotMatch(entry, /请求标识|幂等/);
-	assert.match(entry, /作为新计划重新提交/);
+	assert.doesNotMatch(createSurface, /请求标识|幂等/);
+	assert.match(createModal, /作为新计划重新提交/);
 });
 
 test("the workbench renders the server-owned nine-stage projection as read-only evidence", () => {
