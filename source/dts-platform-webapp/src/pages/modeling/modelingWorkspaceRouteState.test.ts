@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-	parseModelingWorkspaceRouteState,
-	updateModelingWorkspaceSearch,
-} from "./modelingWorkspaceRouteState.ts";
+import { parseModelingWorkspaceRouteState, updateModelingWorkspaceSearch } from "./modelingWorkspaceRouteState.ts";
 
 test("workspace route defaults invalid modules to home and trims stable context", () => {
 	assert.deepEqual(
@@ -32,23 +29,19 @@ test("workspace route drops incomplete or unsupported asset pairs", () => {
 
 test("workspace view is accepted only by the owning module", () => {
 	assert.deepEqual(
-		parseModelingWorkspaceRouteState(
-			new URLSearchParams("module=planning&planId=plan-79&workspaceView=%20sources%20"),
-		),
+		parseModelingWorkspaceRouteState(new URLSearchParams("module=planning&planId=plan-79&workspaceView=%20sources%20")),
 		{
 			module: "planning",
 			planId: "plan-79",
 			workspaceView: "sources",
 		},
 	);
-	assert.deepEqual(
-		parseModelingWorkspaceRouteState(new URLSearchParams("module=standards&workspaceView=sources")),
-		{ module: "standards" },
-	);
-	assert.deepEqual(
-		parseModelingWorkspaceRouteState(new URLSearchParams("module=standards&workspaceView=unknown")),
-		{ module: "standards" },
-	);
+	assert.deepEqual(parseModelingWorkspaceRouteState(new URLSearchParams("module=standards&workspaceView=sources")), {
+		module: "standards",
+	});
+	assert.deepEqual(parseModelingWorkspaceRouteState(new URLSearchParams("module=standards&workspaceView=unknown")), {
+		module: "standards",
+	});
 });
 
 test("module navigation preserves plan and active import session", () => {
@@ -71,10 +64,9 @@ test("module navigation preserves plan and active import session", () => {
 
 test("changing module clears an incompatible workspace view and accepts an explicit compatible replacement", () => {
 	const cleared = new URLSearchParams(
-		updateModelingWorkspaceSearch(
-			new URLSearchParams("planId=plan-79&module=planning&workspaceView=categories"),
-			{ module: "standards" },
-		),
+		updateModelingWorkspaceSearch(new URLSearchParams("planId=plan-79&module=planning&workspaceView=categories"), {
+			module: "standards",
+		}),
 	);
 	assert.equal(cleared.get("module"), "standards");
 	assert.equal(cleared.has("workspaceView"), false);
