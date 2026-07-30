@@ -8,7 +8,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.analytics.domain.AnalyticsScreen;
 import com.yuzhi.dts.analytics.repository.AnalyticsCardRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsDashboardCardRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsDatabaseRepository;
@@ -23,21 +25,97 @@ import org.mockito.Mockito;
 class AnalyticsConsumerClassificationServiceTest {
 
     private AnalyticsClassificationClient client;
+    private AnalyticsScreenRepository screenRepository;
+    private ObjectMapper objectMapper;
     private AnalyticsConsumerClassificationService service;
 
     @BeforeEach
     void setUp() {
         client = Mockito.mock(AnalyticsClassificationClient.class);
+        screenRepository = Mockito.mock(AnalyticsScreenRepository.class);
+        objectMapper = new ObjectMapper();
         service = new AnalyticsConsumerClassificationService(
             client,
             Mockito.mock(AnalyticsCardRepository.class),
             Mockito.mock(AnalyticsDashboardCardRepository.class),
             Mockito.mock(AnalyticsMetricRepository.class),
-            Mockito.mock(AnalyticsScreenRepository.class),
+            screenRepository,
             Mockito.mock(AnalyticsTableRepository.class),
             Mockito.mock(AnalyticsDatabaseRepository.class),
-            new ObjectMapper()
+            objectMapper
         );
+    }
+
+    @Test
+    void unresolved_api_source_can_be_saved_as_governance_blocked_draft() throws Exception {
+        AnalyticsScreen screen = new AnalyticsScreen();
+        screen.setId(16L);
+        screen.setClassification("CONFIDENTIAL");
+        screen.setManualClassificationFloor("CONFIDENTIAL");
+        screen.setComponentsJson("[]");
+        screen.setPagesJson("""
+            [
+              {
+                "id": "overview",
+                "components": [
+                  {
+                    "id": "project-overview",
+                    "dataSource": {
+                      "type": "api",
+                      "sourceType": "api",
+                      "apiConfig": {
+                        "url": "/bi/api/project-cockpit/screen/overview",
+                        "method": "GET"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+            """);
+
+        service.prepareScreenDraft(screen);
+
+        assertThat(screen.getClassification()).isEqualTo("CONFIDENTIAL");
+        assertThat(screen.getClassificationSnapshotId()).isNull();
+        assertThat(screen.getClassificationSnapshotVersion()).isNull();
+        JsonNode evidence = objectMapper.readTree(screen.getClassificationEvidenceJson());
+        assertThat(evidence.path("status").asText()).isEqualTo("BLOCKED_UNRESOLVED");
+        assertThat(evidence.path("unresolvedSources").size()).isEqualTo(1);
+        assertThat(evidence.path("unresolvedSources").get(0).asText())
+            .contains("/bi/api/project-cockpit/screen/overview");
+    }
+
+    @Test
+    void unresolved_api_source_remains_blocked_for_strict_derivation() {
+        AnalyticsScreen screen = new AnalyticsScreen();
+        screen.setId(16L);
+        screen.setClassification("CONFIDENTIAL");
+        screen.setManualClassificationFloor("CONFIDENTIAL");
+        screen.setComponentsJson("[]");
+        screen.setPagesJson("""
+            [
+              {
+                "id": "overview",
+                "components": [
+                  {
+                    "id": "project-overview",
+                    "dataSource": {
+                      "type": "api",
+                      "apiConfig": {
+                        "url": "/bi/api/project-cockpit/screen/overview"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+            """);
+
+        assertThatThrownBy(() -> service.deriveScreen(screen))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("without classification identity")
+            .hasMessageContaining("/bi/api/project-cockpit/screen/overview");
     }
 
     @Test

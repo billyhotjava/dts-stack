@@ -179,6 +179,52 @@ public class AnalyticsConsumerClassificationService {
         return result;
     }
 
+    public void prepareScreenDraft(AnalyticsScreen screen) {
+        if (screen == null || screen.getId() == null) {
+            throw new IllegalArgumentException("Saved screen is required for classification derivation");
+        }
+        ScreenSources sources = screenSources(screen);
+        if (sources.unresolved().isEmpty()) {
+            deriveScreen(screen);
+            return;
+        }
+
+        String manualFloor = firstText(
+            screen.getManualClassificationFloor(),
+            screen.getClassification()
+        );
+        screen.setClassification(
+            SecurityLevelCatalog.maxDataCode(screen.getClassification(), manualFloor)
+        );
+        screen.setClassificationSnapshotId(null);
+        screen.setClassificationSnapshotVersion(null);
+        screen.setClassificationDerivedAt(null);
+        try {
+            screen.setClassificationEvidenceJson(
+                objectMapper.writeValueAsString(
+                    java.util.Map.of(
+                        "status",
+                        "BLOCKED_UNRESOLVED",
+                        "manualFloor",
+                        manualFloor == null ? "" : manualFloor,
+                        "unresolvedSources",
+                        sources.unresolved()
+                    )
+                )
+            );
+        } catch (Exception ex) {
+            throw new IllegalStateException("Screen draft classification evidence cannot be serialized", ex);
+        }
+        screenRepository.save(screen);
+    }
+
+    public boolean hasUnresolvedScreenSources(AnalyticsScreen screen) {
+        if (screen == null || screen.getId() == null) {
+            throw new IllegalArgumentException("Saved screen is required for classification inspection");
+        }
+        return !screenSources(screen).unresolved().isEmpty();
+    }
+
     public AnalyticsClassificationClient.ClassificationResult deriveScreen(long screenId) {
         return deriveScreen(
             screenRepository

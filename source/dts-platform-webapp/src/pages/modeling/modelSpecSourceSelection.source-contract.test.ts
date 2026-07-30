@@ -5,7 +5,13 @@ import test from "node:test";
 const drawer = readFileSync(new URL("./components/ModelSpecCreateDrawer.tsx", import.meta.url), "utf8");
 const editor = readFileSync(new URL("./components/ModelSpecEditorFields.tsx", import.meta.url), "utf8");
 const contract = readFileSync(new URL("./modelSpecV2Contract.ts", import.meta.url), "utf8");
-const detail = readFileSync(new URL("./ModelSpecDetailPage.tsx", import.meta.url), "utf8");
+const detailPage = readFileSync(new URL("./ModelSpecDetailPage.tsx", import.meta.url), "utf8");
+const detail = [
+	detailPage,
+	readFileSync(new URL("./components/ModelSpecDetailNotices.tsx", import.meta.url), "utf8"),
+	readFileSync(new URL("./modelSpecIssueFieldPath.ts", import.meta.url), "utf8"),
+	readFileSync(new URL("./modelSpecReferenceResolution.ts", import.meta.url), "utf8"),
+].join("\n");
 const sourceInventory = readFileSync(new URL("./WarehousePlanSourcesTab.tsx", import.meta.url), "utf8");
 const sourceRegistration = readFileSync(new URL("./warehousePlanSourceRegistration.ts", import.meta.url), "utf8");
 const sourceManagerUrl = new URL("./components/ModelSpecSourceInventoryModal.tsx", import.meta.url);
@@ -196,7 +202,7 @@ test("exact-reference transport failures stay read-only with a direct retry and 
 	assert.match(detail, /referenceResolutionFailed/);
 	assert.match(detail, /!referenceResolutionFailed[\s\S]{0,120}canonicalModel\?\.dependsOn\.some/);
 	assert.match(detail, /暂时无法核验已锁定上游版本，页面已只读，请重试/);
-	assert.match(detail, /onClick=\{\(\) => void load\(\)\}/);
+	assert.match(detail, /onClick=\{\(\) => void onReload\(\)\}/);
 	assert.match(detail, /referenceMetadataLoaded[\s\S]{0,120}!referenceResolutionFailed/);
 });
 

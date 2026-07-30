@@ -204,6 +204,16 @@ public class ScreenPermissionService {
             try {
                 classificationService.requireCurrentScreen(screen.getId());
             } catch (RuntimeException ex) {
+                PermissionSnapshot unresolvedDraftSnapshot =
+                    unresolvedDraftCreatorSnapshot(screen, user, callerClassification);
+                if (unresolvedDraftSnapshot.canRead()) {
+                    LOG.warn(
+                        "event=screen_classification_guard_deferred screenId={} user={} reason=unresolved_draft",
+                        screen.getId(),
+                        resolveUserId(user)
+                    );
+                    return unresolvedDraftSnapshot;
+                }
                 LOG.warn(
                     "event=screen_classification_guard_denied screenId={} user={} reason={}",
                     screen.getId(),
@@ -255,6 +265,32 @@ public class ScreenPermissionService {
         }
 
         return localSnapshot(screen, user, roles, callerClassification);
+    }
+
+    private PermissionSnapshot unresolvedDraftCreatorSnapshot(
+            AnalyticsScreen screen,
+            AnalyticsUser user,
+            String callerClassification) {
+        if (
+            screen.getCreatorId() == null ||
+            !screen.getCreatorId().equals(user.getId()) ||
+            !isClassificationAllowed(callerClassification, screen.getClassification())
+        ) {
+            return PermissionSnapshot.none();
+        }
+        try {
+            return classificationService.hasUnresolvedScreenSources(screen)
+                ? PermissionSnapshot.all()
+                : PermissionSnapshot.none();
+        } catch (RuntimeException ex) {
+            LOG.warn(
+                "event=screen_unresolved_draft_guard_denied screenId={} user={} reason={}",
+                screen.getId(),
+                resolveUserId(user),
+                ex.getMessage()
+            );
+            return PermissionSnapshot.none();
+        }
     }
 
     private PermissionSnapshot localSnapshot(

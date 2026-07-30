@@ -7,7 +7,11 @@ const read = (relativePath: string) => readFileSync(new URL(relativePath, import
 test("dimension definition journey keeps a narrow business drawer, truthful empty states and version recovery", () => {
 	const drawer = read("./components/DimensionDefinitionCreateDrawer.tsx");
 	const catalog = read("./DimensionCatalogPage.tsx");
-	const detail = read("./ModelSpecDetailPage.tsx");
+	const detail = [
+		read("./ModelSpecDetailPage.tsx"),
+		read("./components/ModelSpecDetailHeader.tsx"),
+		read("./components/ModelSpecDetailNotices.tsx"),
+	].join("\n");
 
 	assert.match(drawer, /width=\{540\}/);
 	assert.match(drawer, /aria-label=\{editing/);

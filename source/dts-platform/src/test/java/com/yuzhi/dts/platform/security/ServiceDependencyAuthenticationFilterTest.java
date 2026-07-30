@@ -9,9 +9,12 @@ import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.platform.config.PlatformInboundServiceAuthProperties;
 import com.yuzhi.dts.platform.security.policy.PersonnelLevel;
+import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService.DeriveCommand;
 import com.yuzhi.dts.platform.service.services.SvcTokenAuthService;
 import com.yuzhi.dts.platform.service.services.SvcTokenAuthService.TokenPrincipal;
+import com.yuzhi.dts.platform.web.rest.catalog.CatalogConsumerClassificationResource;
 import jakarta.servlet.FilterChain;
+import java.lang.reflect.Method;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -181,6 +185,21 @@ class ServiceDependencyAuthenticationFilterTest {
         assertAnalyticsCanAccessPost(ANALYTICS_CLASSIFICATION_ACCESS_BINDINGS);
         assertAnalyticsCanAccessGet(ANALYTICS_CLASSIFICATION_ACCESS_BINDINGS_GUARD);
         assertAnalyticsCanAccessPost(ANALYTICS_CLASSIFICATION_EXPORT_SEAL);
+    }
+
+    @Test
+    void classificationDeriveAcceptsTheAuthorityGrantedToAuthenticatedServices() throws Exception {
+        Method derive = CatalogConsumerClassificationResource.class.getDeclaredMethod(
+            "derive",
+            DeriveCommand.class
+        );
+
+        PreAuthorize authorization = derive.getAnnotation(PreAuthorize.class);
+
+        assertThat(authorization).isNotNull();
+        assertThat(authorization.value())
+            .contains(AuthoritiesConstants.SERVICE_INTERNAL)
+            .doesNotContain("ROLE_INTERNAL_SERVICE");
     }
 
     @Test

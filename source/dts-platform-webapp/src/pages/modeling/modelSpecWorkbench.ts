@@ -504,6 +504,12 @@ export function modelSpecServerIssues(error: unknown): ModelSpecServerIssue[] {
 	}
 	const code = envelope?.code;
 	if (typeof code !== "string") return [];
+	if (code === "MODEL_SPEC_DIMENSION_ATTRIBUTE_UNKNOWN" && details && typeof details === "object") {
+		const fieldName = (details as { fieldName?: unknown }).fieldName;
+		if (typeof fieldName === "string" && /^[a-z][a-z0-9_]{0,62}$/.test(fieldName)) {
+			return [{ code, field: `fields.${fieldName}.dimensionAttributeCode` }];
+		}
+	}
 	const field = MODEL_SPEC_SERVER_ISSUE_FIELDS[code];
 	return field ? [{ code, field }] : [];
 }

@@ -7,10 +7,11 @@ const logicalUrl = new URL("./components/ModelSpecLogicalDesignStage.tsx", impor
 const implementationUrl = new URL("./components/ModelSpecImplementationStage.tsx", import.meta.url);
 const implementationPresentationUrl = new URL("./components/ModelSpecImplementationPresentation.tsx", import.meta.url);
 const physicalUrl = new URL("./components/ModelSpecPhysicalAssetStage.tsx", import.meta.url);
+const canvasUrl = new URL("./components/ModelSpecEditorCanvas.tsx", import.meta.url);
 const read = (url: URL) => readFileSync(url, "utf8");
 
-test("three-stage detail isolates logical design, canonical implementation and physical evidence", () => {
-	for (const url of [pageUrl, logicalUrl, implementationUrl, implementationPresentationUrl, physicalUrl]) {
+test("single-page detail isolates logical design and keeps implementation and physical evidence in scoped surfaces", () => {
+	for (const url of [pageUrl, logicalUrl, implementationUrl, implementationPresentationUrl, physicalUrl, canvasUrl]) {
 		assert.equal(existsSync(url), true, `${url.pathname} is missing`);
 	}
 	const page = read(pageUrl);
@@ -19,11 +20,14 @@ test("three-stage detail isolates logical design, canonical implementation and p
 	const implementationPresentation = read(implementationPresentationUrl);
 	const implementationSurface = `${implementation}\n${implementationPresentation}`;
 	const physical = read(physicalUrl);
+	const canvas = read(canvasUrl);
 
 	assert.doesNotMatch(page, /ModelSpecEditorFields/);
 	assert.match(page, /ModelSpecLogicalDesignStage/);
 	assert.match(page, /ModelSpecImplementationStage/);
 	assert.match(page, /ModelSpecPhysicalAssetStage/);
+	assert.match(page, /ModelSpecEditorCanvas/);
+	assert.match(canvas, /Drawer/);
 	assert.match(logical, /ModelSpecFieldsTab/);
 	assert.match(logical, /ModelSpecStandardsTab/);
 	assert.match(logical, /ModelSpecDependencyPanel/);
@@ -119,11 +123,13 @@ test("source and physical failures stay local while conflict and readonly preser
 	const page = read(pageUrl);
 	const implementation = read(implementationUrl);
 	const physical = read(physicalUrl);
+	const canvas = read(canvasUrl);
 
 	assert.doesNotMatch(page, /sourceVerificationPending/);
 	assert.doesNotMatch(page, /disabled=\{sourceLoading\}/);
 	assert.match(page, /activeStage !== "implementation"/);
-	assert.match(page, /activeStage === "physical"/);
+	assert.match(canvas, /activeStage === "implementation"/);
+	assert.match(canvas, /activeStage === "physical"/);
 	assert.match(page, /setPhysicalError/);
 	assert.match(page, /setPhysicalTimeline\(null\)/);
 	assert.match(page, /Form\.useWatch\(\[\], \{ form, preserve: true \}\)/);
@@ -140,5 +146,5 @@ test("source and physical failures stay local while conflict and readonly preser
 	assert.match(page, /readOnly=\{!canEdit\}/);
 	assert.match(page, /retryModelReleaseRegistration/);
 	assert.match(physical, /latestPublicationEvent\.status === "PARTIAL".*latestPublicationEvent\.status === "PENDING"/s);
-	assert.match(page, /max-\[390px\]:grid-cols-1/);
+	assert.match(canvas, /width=\{1040\}/);
 });

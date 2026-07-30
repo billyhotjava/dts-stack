@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.web.rest.catalog;
 
 import com.yuzhi.dts.platform.security.SecurityUtils;
+import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService;
 import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService.AccessBindingView;
 import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService.BindAccessCommand;
@@ -24,7 +25,9 @@ import org.springframework.web.bind.annotation.RestController;
 public class CatalogConsumerClassificationResource {
 
     private static final String WRITE =
-        "hasAnyAuthority('ROLE_ADMIN','ROLE_OP_ADMIN','ROLE_GOV_ADMIN','ROLE_DATA_STEWARD','ROLE_INFRA_ADMIN','ROLE_INTERNAL_SERVICE')";
+        "hasAnyAuthority('ROLE_ADMIN','ROLE_OP_ADMIN','ROLE_GOV_ADMIN','ROLE_DATA_STEWARD','ROLE_INFRA_ADMIN','" +
+        AuthoritiesConstants.SERVICE_INTERNAL +
+        "')";
 
     private final CatalogConsumerClassificationService service;
 

@@ -5,7 +5,11 @@ import test from "node:test";
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
 
 test("model detail exposes guarded reclassification and legacy implementation migration", () => {
-	const page = read("./ModelSpecDetailPage.tsx");
+	const page = [
+		read("./ModelSpecDetailPage.tsx"),
+		read("./components/ModelSpecDetailHeader.tsx"),
+		read("./components/ModelSpecDetailNotices.tsx"),
+	].join("\n");
 	const api = read("../../api/modelSpecApi.ts");
 	const reclassification = read("./components/ModelSpecReclassificationWizard.tsx");
 	const migration = read("./components/ModelSpecImplementationMigrationPanel.tsx");

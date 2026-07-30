@@ -1,11 +1,10 @@
-import { Alert, Button, Card, Descriptions, Form, Modal, Space, Spin, Tag, Typography } from "antd";
-import { ArrowLeft, RefreshCw } from "lucide-react";
+import { Alert, Button, Card, Descriptions, Form, Modal, Space, Spin } from "antd";
+import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import {
 	getModelLifecycle,
 	getModelSpec,
-	getModelSpecRevision,
 	getModelSpecStageGates,
 	listModelSpecs,
 	type ModelLifecycleTimeline,
@@ -18,6 +17,9 @@ import { useCatalogDomainOptions } from "@/hooks/useCatalogDomainOptions";
 import { useParams } from "@/routes/hooks";
 import { useUserRoles } from "@/store/userStore";
 import { ModelSpecBlockerPanel } from "./components/ModelSpecBlockerPanel";
+import { ModelSpecDetailHeader } from "./components/ModelSpecDetailHeader";
+import { ModelSpecDetailNotices } from "./components/ModelSpecDetailNotices";
+import { ModelSpecEditorCanvas } from "./components/ModelSpecEditorCanvas";
 import { ModelSpecImplementationMigrationPanel } from "./components/ModelSpecImplementationMigrationPanel";
 import {
 	ModelSpecImplementationStage,
@@ -25,10 +27,16 @@ import {
 } from "./components/ModelSpecImplementationStage";
 import { ModelSpecLogicalDesignStage, type ModelSpecSelectOption } from "./components/ModelSpecLogicalDesignStage";
 import { ModelSpecPhysicalAssetStage } from "./components/ModelSpecPhysicalAssetStage";
-import { ModelSpecReclassificationWizard } from "./components/ModelSpecReclassificationWizard";
 import { ModelSpecSourceInventoryModal } from "./components/ModelSpecSourceInventoryModal";
 import { modelSpecCatalogPath, modelSpecDetailPath, resolveModelSpecDetailStage } from "./modelSpecDetailNavigation";
 import { getModelSpecDetailStageProjection } from "./modelSpecDetailStageProjection";
+import {
+	handleModelSpecFormValidationError,
+	type ModelSpecIssueFormPath,
+	modelSpecIssueFieldPath,
+	stableModelSpecFormValue,
+} from "./modelSpecIssueFieldPath";
+import { resolveModelSpecReferenceTargets } from "./modelSpecReferenceResolution";
 import {
 	type ModelSpecSourceChoice,
 	modelSpecSourceInventoryState,
@@ -53,7 +61,6 @@ import {
 import {
 	buildModelSpecUpdateCommand,
 	isModelSpecStatusReadonly,
-	MODEL_STATUS_LABELS,
 	MODEL_TYPE_LABELS,
 	type ModelSpecDraft,
 	modelSpecDraftFromView,
@@ -63,72 +70,6 @@ import {
 	modelSpecServerIssues,
 } from "./modelSpecWorkbench";
 import { hasWarehousePlanCreateAccess } from "./warehousePlanCreateFlow";
-
-const { Text, Title } = Typography;
-
-const stableFormValue = (value: unknown): unknown => {
-	if (Array.isArray(value)) return value.map(stableFormValue);
-	if (value && typeof value === "object") {
-		return Object.fromEntries(
-			Object.entries(value as Record<string, unknown>)
-				.sort(([left], [right]) => left.localeCompare(right))
-				.map(([key, item]) => [key, stableFormValue(item)]),
-		);
-	}
-	return value;
-};
-
-const issueField = (field: string): keyof ModelSpecDraft => {
-	if (field === "grain") return "grainStatement";
-	if (field === "fields" || field.startsWith("fields[") || field.startsWith("fields.")) return "fields";
-	if (field === "sourceRefs") return "sources";
-	if (field === "dependsOn") return "upstreamIds";
-	if (field === "dimensionRefs") return "dimensionRefIds";
-	if (field === "timeSemantics") return "timeSemanticsType";
-	if (field === "dimensionProfile.reuseScope") return "dimensionReuseScope";
-	if (field === "dimensionProfile.scdPolicy") return "dimensionScdType";
-	if (field === "dimensionProfile.hierarchies") return "dimensionHierarchies";
-	if (field === "dimensionProfile") return "dimensionCode";
-	if (field === "generationStrategy") return "generationStrategyType";
-	return field as keyof ModelSpecDraft;
-};
-
-type ModelSpecReferenceResolution = {
-	targets: Record<string, ModelSpecView | null>;
-	failed: boolean;
-};
-
-const resolveModelSpecReferenceTargets = async (model: ModelSpecView): Promise<ModelSpecReferenceResolution> => {
-	const references =
-		model.compatibilityMode === "CANONICAL"
-			? Array.from(
-					new Map(
-						[...model.dependsOn, ...model.dimensionRefs].map((reference) => [
-							modelSpecRevisionRefKey(reference),
-							reference,
-						]),
-					).values(),
-				)
-			: [];
-	const resolved = await Promise.all(
-		references.map(async (reference) => {
-			const key = modelSpecRevisionRefKey(reference);
-			try {
-				const target = await getModelSpecRevision(reference.modelSpecId, reference.revision);
-				if (target.id !== reference.modelSpecId || target.revision !== reference.revision) {
-					return { key, target: null, failed: true };
-				}
-				return { key, target, failed: false };
-			} catch {
-				return { key, target: null, failed: true };
-			}
-		}),
-	);
-	return {
-		targets: Object.fromEntries(resolved.map(({ key, target }) => [key, target])),
-		failed: resolved.some((item) => item.failed),
-	};
-};
 
 export default function ModelSpecDetailPage() {
 	const navigate = useNavigate();
@@ -182,7 +123,8 @@ export default function ModelSpecDetailPage() {
 			Boolean(
 				persistedLogicalDraft &&
 					logicalFormValues &&
-					JSON.stringify(stableFormValue(logicalFormValues)) !== JSON.stringify(stableFormValue(persistedLogicalDraft)),
+					JSON.stringify(stableModelSpecFormValue(logicalFormValues)) !==
+						JSON.stringify(stableModelSpecFormValue(persistedLogicalDraft)),
 			),
 		[logicalFormValues, persistedLogicalDraft],
 	);
@@ -504,9 +446,10 @@ export default function ModelSpecDetailPage() {
 			const command = buildModelSpecUpdateCommand(values, selectableModels);
 			const issues = validateModelSpecUpdate(command);
 			if (issues.length > 0) {
+				const fields = (form.getFieldValue("fields") as ModelSpecDraft["fields"] | undefined) || [];
 				form.setFields(
 					issues.map((issue) => ({
-						name: issueField(issue.field),
+						name: modelSpecIssueFieldPath(issue.field, fields),
 						errors: [modelSpecIssueMessage(issue.code)],
 					})),
 				);
@@ -528,7 +471,7 @@ export default function ModelSpecDetailPage() {
 			setStatusChanged(false);
 			setSaveError("");
 		} catch (error) {
-			if (error && typeof error === "object" && "errorFields" in error) return;
+			if (handleModelSpecFormValidationError(error, form, setSaveError)) return;
 			if (pageRequestId !== loadRequestRef.current) return;
 			const latest = modelSpecRevisionConflict(error);
 			if (latest) setConflict(latest);
@@ -539,15 +482,17 @@ export default function ModelSpecDetailPage() {
 			} else {
 				const serverIssues = modelSpecServerIssues(error);
 				if (serverIssues.length > 0) {
-					const errorsByField = new Map<keyof ModelSpecDraft, string[]>();
+					const fields = (form.getFieldValue("fields") as ModelSpecDraft["fields"] | undefined) || [];
+					const errorsByField = new Map<string, { name: ModelSpecIssueFormPath; errors: string[] }>();
 					serverIssues.forEach((issue) => {
-						const field = issueField(issue.field);
-						const errors = errorsByField.get(field) || [];
-						errors.push(modelSpecIssueMessage(issue.code));
-						errorsByField.set(field, errors);
+						const name = modelSpecIssueFieldPath(issue.field, fields);
+						const key = JSON.stringify(name);
+						const entry = errorsByField.get(key) || { name, errors: [] };
+						entry.errors.push(modelSpecIssueMessage(issue.code));
+						errorsByField.set(key, entry);
 					});
 					form.setFields(
-						Array.from(errorsByField, ([name, errors]) => ({
+						Array.from(errorsByField.values(), ({ name, errors }) => ({
 							name,
 							errors: Array.from(new Set(errors)),
 						})),
@@ -704,146 +649,39 @@ export default function ModelSpecDetailPage() {
 		else if (stageProjection.primaryAction.label === "验证实现") await implementationActionRef.current?.validate();
 		else document.getElementById("model-spec-delivery-intents")?.scrollIntoView({ behavior: "smooth", block: "start" });
 	};
+	const primaryActionContext = {
+		saving,
+		advancedImplementationReady,
+		implementationRecoveryMessage,
+		onAction: runPrimaryAction,
+	};
 
 	return (
 		<div className="p-4" data-testid="model-spec-detail-page">
-			<div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-				<div>
-					<Button
-						type="link"
-						className="!px-0"
-						onClick={() => navigate(modelSpecCatalogPath(model.modelType, model.planId, model.domainId))}
-					>
-						<ArrowLeft size={15} />
-						{model.modelType === "DIMENSION" ? "返回维度目录" : "返回模型中心"}
-					</Button>
-					<Title level={3} className="!mb-1 !mt-1">
-						{model.name}
-					</Title>
-					<Space wrap>
-						<Tag color="blue">{MODEL_TYPE_LABELS[model.modelType]}</Tag>
-						<Tag>{model.layer}</Tag>
-						<Tag>
-							{model.compatibilityMode === "LEGACY_READONLY"
-								? "兼容只读"
-								: MODEL_STATUS_LABELS[model.status] || model.status}
-						</Tag>
-						<Text type="secondary">版本 r{model.revision}</Text>
-					</Space>
-				</div>
-				{stageProjection ? (
-					<Space wrap>
-						{canonicalModel?.status === "DRAFT" ? (
-							<ModelSpecReclassificationWizard
-								model={canonicalModel}
-								canMaintain={canEdit}
-								onApplied={async () => {
-									await load();
-								}}
-							/>
-						) : null}
-						<Button
-							type="primary"
-							loading={saving}
-							disabled={
-								stageProjection.primaryAction.disabled ||
-								(stageProjection.primaryAction.label === "构建与提交上线" && !advancedImplementationReady)
-							}
-							title={
-								stageProjection.primaryAction.recoveryMessage ||
-								(stageProjection.primaryAction.label === "构建与提交上线" && !advancedImplementationReady
-									? implementationRecoveryMessage
-									: undefined)
-							}
-							onClick={() => void runPrimaryAction()}
-						>
-							{stageProjection.primaryAction.label}
-						</Button>
-					</Space>
-				) : null}
-			</div>
-
-			{model.compatibilityMode === "LEGACY_READONLY" ? (
-				<>
-					<Alert
-						className="mb-3"
-						type="warning"
-						showIcon
-						message="这是迁移期历史模型，可浏览但不能在 canonical 页面修改"
-					/>
-					<ModelSpecImplementationMigrationPanel
-						model={model}
-						canMaintain={roleAllowsEdit && !writeDenied}
-						onMigrated={() => void load()}
-					/>
-				</>
-			) : null}
-			{dependencyContractMismatch ? (
-				<Alert
-					className="mb-3"
-					type="warning"
-					showIcon
-					message="历史模型的类别、目标分层、类型专属字段或输入依赖不符合当前四类表规则，仅支持查看"
-					description="请通过迁移任务重新登记为 DWD 维度/明细、DWS 汇总或 ADS 应用模型；系统不会静默改写历史 revision。"
-				/>
-			) : null}
-			{referenceResolutionFailed ? (
-				<Alert
-					className="mb-3"
-					type="warning"
-					showIcon
-					message="暂时无法核验已锁定上游版本，页面已只读，请重试"
-					description="已保存内容与版本锁定关系均已保留；重新核验成功前不会把临时读取失败误判为历史模型迁移问题。"
-					action={
-						<Button size="small" icon={<RefreshCw size={14} />} onClick={() => void load()}>
-							重新核验
-						</Button>
-					}
-				/>
-			) : null}
-			{!roleAllowsEdit || writeDenied ? (
-				<Alert className="mb-3" type="info" showIcon message="当前账号为只读浏览；编辑需要计划维护权限" />
-			) : null}
-			{statusChanged ? (
-				<Alert
-					className="mb-3"
-					type="warning"
-					showIcon
-					message="模型状态已变化，当前输入已保留；请加载最新状态后继续"
-					action={
-						<Button size="small" onClick={() => void load()}>
-							加载最新状态
-						</Button>
-					}
-				/>
-			) : null}
-			{canonicalModel && !statusAllowsEdit ? (
-				<Alert
-					className="mb-3"
-					type="info"
-					showIcon
-					message={`当前状态为${MODEL_STATUS_LABELS[canonicalModel.status] || canonicalModel.status}；只有草稿可编辑`}
-				/>
-			) : null}
-			{saveError ? <Alert className="mb-3" type="error" showIcon message={saveError} /> : null}
-			{conflict ? (
-				<Alert
-					className="mb-3"
-					type="warning"
-					showIcon
-					message={`服务器当前为 r${conflict.currentRevision}，你的输入仍保留在页面中`}
-					action={
-						<Space wrap>
-							<Button size="small" onClick={retryConflict}>
-								保留当前输入并基于 r{conflict.currentRevision} 重试
-							</Button>
-							<Button size="small" onClick={discardAndReload}>
-								放弃当前输入，加载最新版本
-							</Button>
-						</Space>
-					}
-				/>
-			) : null}
+			<ModelSpecDetailHeader
+				model={model}
+				canonicalModel={canonicalModel}
+				canEdit={canEdit}
+				primaryAction={activeStage === "logical" ? stageProjection?.primaryAction : undefined}
+				primaryActionContext={primaryActionContext}
+				onBack={() => navigate(modelSpecCatalogPath(model.modelType, model.planId, model.domainId))}
+				onReload={load}
+			/>
+			<ModelSpecDetailNotices
+				model={model}
+				canonicalModel={canonicalModel}
+				roleAllowsEdit={roleAllowsEdit}
+				writeDenied={writeDenied}
+				statusAllowsEdit={statusAllowsEdit}
+				statusChanged={statusChanged}
+				dependencyContractMismatch={dependencyContractMismatch}
+				referenceResolutionFailed={referenceResolutionFailed}
+				saveError={saveError}
+				conflict={conflict}
+				onReload={load}
+				onRetryConflict={retryConflict}
+				onDiscardAndReload={discardAndReload}
+			/>
 
 			{canonicalModel ? (
 				<ModelSpecBlockerPanel
@@ -854,28 +692,13 @@ export default function ModelSpecDetailPage() {
 				/>
 			) : null}
 			{canonicalModel ? (
-				<div className="mb-3 grid grid-cols-3 gap-2 max-[390px]:grid-cols-1" role="tablist" aria-label="模型阶段">
-					{(["logical", "implementation", "physical"] as const).map((stage) => {
-						const designedReady = stageGates.find((gate) => gate.stage === "DESIGNED")?.status === "READY";
-						const disabled = stage === "implementation" && !designedReady;
-						return (
-							<Button
-								key={stage}
-								type={activeStage === stage ? "primary" : "default"}
-								disabled={disabled}
-								title={disabled ? "先完成逻辑设计后再配置数据实现" : undefined}
-								onClick={() => changeStage(stage)}
-							>
-								{stage === "logical" ? "逻辑设计" : stage === "implementation" ? "数据实现" : "发布结果"}
-							</Button>
-						);
-					})}
-				</div>
-			) : null}
-
-			{canonicalModel ? (
-				<Card>
-					{activeStage === "logical" ? (
+				<ModelSpecEditorCanvas
+					activeStage={activeStage}
+					implementationDisabled={stageGates.find((gate) => gate.stage === "DESIGNED")?.status !== "READY"}
+					onStageChange={changeStage}
+					drawerAction={activeStage !== "logical" ? stageProjection?.primaryAction : undefined}
+					primaryActionContext={primaryActionContext}
+					logical={
 						<Form form={form} layout="vertical" requiredMark={false} disabled={saving}>
 							<ModelSpecLogicalDesignStage
 								form={form}
@@ -891,8 +714,8 @@ export default function ModelSpecDetailPage() {
 								onSaveStandardBindings={onSaveStandardBindings}
 							/>
 						</Form>
-					) : null}
-					{activeStage === "implementation" ? (
+					}
+					implementation={
 						<>
 							<ModelSpecImplementationMigrationPanel
 								model={canonicalModel}
@@ -940,8 +763,8 @@ export default function ModelSpecDetailPage() {
 								onOpenAdvanced={() => navigate(implementationPath)}
 							/>
 						</>
-					) : null}
-					{activeStage === "physical" ? (
+					}
+					physical={
 						<ModelSpecPhysicalAssetStage
 							model={canonicalModel}
 							timeline={physicalTimeline}
@@ -950,8 +773,8 @@ export default function ModelSpecDetailPage() {
 							onRetry={() => void loadPhysicalTimeline()}
 							onRetryReleaseRegistration={retryReleaseRegistration}
 						/>
-					) : null}
-				</Card>
+					}
+				/>
 			) : (
 				<Card>
 					<Descriptions column={1} size="small" bordered>

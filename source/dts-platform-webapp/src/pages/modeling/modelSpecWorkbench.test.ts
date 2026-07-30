@@ -107,17 +107,13 @@ test("FACT logical update keeps grain, source, optional time semantics and optio
 });
 
 test("FACT logical update may defer input mapping or pin an upstream model revision", () => {
-	const withoutInput = buildModelSpecUpdateCommand(
-		baseDraft({ sources: [], upstreamIds: [] }),
-		[],
-	);
+	const withoutInput = buildModelSpecUpdateCommand(baseDraft({ sources: [], upstreamIds: [] }), []);
 	assert.deepEqual(withoutInput.sourceRefs, []);
 	assert.deepEqual(withoutInput.dependsOn, []);
 
-	const withUpstream = buildModelSpecUpdateCommand(
-		baseDraft({ sources: [], upstreamIds: [UPSTREAM_ID] }),
-		[{ id: UPSTREAM_ID, revision: 7, modelType: "FACT" }],
-	);
+	const withUpstream = buildModelSpecUpdateCommand(baseDraft({ sources: [], upstreamIds: [UPSTREAM_ID] }), [
+		{ id: UPSTREAM_ID, revision: 7, modelType: "FACT" },
+	]);
 	assert.deepEqual(withUpstream.sourceRefs, []);
 	assert.deepEqual(withUpstream.dependsOn, [{ modelSpecId: UPSTREAM_ID, revision: 7 }]);
 });
@@ -525,7 +521,10 @@ test("request validation errors retain safe issue codes and field locations", ()
 		},
 	};
 	assert.deepEqual(modelSpecServerIssues(unknownDimensionAttributeError), [
-		{ code: "MODEL_SPEC_DIMENSION_ATTRIBUTE_UNKNOWN", field: "fields" },
+		{
+			code: "MODEL_SPEC_DIMENSION_ATTRIBUTE_UNKNOWN",
+			field: "fields.account_code.dimensionAttributeCode",
+		},
 	]);
 	assert.equal(
 		modelSpecErrorMessage(unknownDimensionAttributeError),

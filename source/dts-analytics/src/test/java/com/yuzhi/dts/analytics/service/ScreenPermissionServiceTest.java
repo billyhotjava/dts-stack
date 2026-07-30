@@ -508,4 +508,92 @@ class ScreenPermissionServiceTest {
         assertThat(snap.isOwner()).isFalse();
         Mockito.verifyNoInteractions(repo);
     }
+
+    @Test
+    void unresolved_draft_creator_with_clearance_can_continue_editing() {
+        AnalyticsConsumerClassificationService classificationService =
+            Mockito.mock(AnalyticsConsumerClassificationService.class);
+        ScreenPermissionService guardedService =
+            new ScreenPermissionService(
+                repo,
+                screenRepository,
+                null,
+                false,
+                true,
+                null,
+                classificationService
+            );
+        AnalyticsUser u = user(20L, false);
+        AnalyticsScreen s = screenWithLevel(10L, "CONFIDENTIAL");
+        s.setCreatorId(20L);
+        when(classificationService.requireCurrentScreen(10L))
+            .thenThrow(new IllegalStateException("classification snapshot missing"));
+        when(classificationService.hasUnresolvedScreenSources(s)).thenReturn(true);
+
+        PermissionSnapshot snap = guardedService.snapshot(s, u, ctx("CONFIDENTIAL"));
+
+        assertThat(snap.canRead()).isTrue();
+        assertThat(snap.canEdit()).isTrue();
+        assertThat(snap.isOwner()).isTrue();
+        assertThat(snap.overrideUsed()).isFalse();
+        Mockito.verifyNoInteractions(repo);
+    }
+
+    @Test
+    void unresolved_draft_does_not_admit_non_creator() {
+        AnalyticsConsumerClassificationService classificationService =
+            Mockito.mock(AnalyticsConsumerClassificationService.class);
+        ScreenPermissionService guardedService =
+            new ScreenPermissionService(
+                repo,
+                screenRepository,
+                null,
+                false,
+                true,
+                null,
+                classificationService
+            );
+        AnalyticsUser u = user(21L, false);
+        AnalyticsScreen s = screenWithLevel(10L, "CONFIDENTIAL");
+        s.setCreatorId(20L);
+        when(classificationService.requireCurrentScreen(10L))
+            .thenThrow(new IllegalStateException("classification snapshot missing"));
+        when(classificationService.hasUnresolvedScreenSources(s)).thenReturn(true);
+
+        PermissionSnapshot snap = guardedService.snapshot(s, u, ctx("CONFIDENTIAL"));
+
+        assertThat(snap.canRead()).isFalse();
+        assertThat(snap.canEdit()).isFalse();
+        assertThat(snap.isOwner()).isFalse();
+        Mockito.verifyNoInteractions(repo);
+    }
+
+    @Test
+    void unresolved_draft_creator_does_not_bypass_personnel_classification() {
+        AnalyticsConsumerClassificationService classificationService =
+            Mockito.mock(AnalyticsConsumerClassificationService.class);
+        ScreenPermissionService guardedService =
+            new ScreenPermissionService(
+                repo,
+                screenRepository,
+                null,
+                false,
+                true,
+                null,
+                classificationService
+            );
+        AnalyticsUser u = user(20L, false);
+        AnalyticsScreen s = screenWithLevel(10L, "CONFIDENTIAL");
+        s.setCreatorId(20L);
+        when(classificationService.requireCurrentScreen(10L))
+            .thenThrow(new IllegalStateException("classification snapshot missing"));
+        when(classificationService.hasUnresolvedScreenSources(s)).thenReturn(true);
+
+        PermissionSnapshot snap = guardedService.snapshot(s, u, ctx("INTERNAL"));
+
+        assertThat(snap.canRead()).isFalse();
+        assertThat(snap.canEdit()).isFalse();
+        assertThat(snap.isOwner()).isFalse();
+        Mockito.verifyNoInteractions(repo);
+    }
 }

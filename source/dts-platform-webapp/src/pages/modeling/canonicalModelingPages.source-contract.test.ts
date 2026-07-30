@@ -28,11 +28,17 @@ test("canonical pages expose one customer-facing primary action and no fake rele
 	const dimensions = read("./DimensionCatalogPage.tsx");
 	const models = read("./ModelCenterPage.tsx");
 	const detail = read("./ModelSpecDetailPage.tsx");
+	const detailHeader = read("./components/ModelSpecDetailHeader.tsx");
+	const stageProjection = read("./modelSpecDetailStageProjection.ts");
 
 	assert.match(dimensions, /type="primary"[\s\S]*登记维度/);
 	assert.match(models, /type="primary"[\s\S]*新建模型/);
-	assert.match(detail, /type="primary"[\s\S]*保存逻辑设计/);
-	assert.doesNotMatch(`${dimensions}\n${models}\n${detail}`, /getModelSpecReleaseGate|可发布|发布模型/);
+	assert.match(detailHeader, /type="primary"[\s\S]*primaryAction\.label/);
+	assert.match(stageProjection, /保存逻辑设计/);
+	assert.doesNotMatch(
+		`${dimensions}\n${models}\n${detail}\n${detailHeader}\n${stageProjection}`,
+		/getModelSpecReleaseGate|可发布|发布模型/,
+	);
 });
 
 test("model center handles compatibility views without restoring retired pages", () => {
@@ -56,7 +62,7 @@ test("static and dynamic routing resolve canonical list and detail pages to the 
 	assert.match(dynamicRoutes, /"\/modeling\/models\/:modelSpecId": "\/pages\/modeling\/ModelSpecDetailPage"/);
 	assert.match(
 		dynamicRoutes,
-		/directOverridePath &&[\s\S]*pathname !== resolvedPath[\s\S]*Component\(directOverridePath\)/,
+		/directOverridePath &&[\s\S]*pathname !== resolvedPath[\s\S]*renderDashboardComponent\(directOverridePath,\s*pathname\)/,
 	);
 });
 

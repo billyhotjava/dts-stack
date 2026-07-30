@@ -825,7 +825,7 @@ public class ScreenResource {
         screen.setArchived(false);
 
         screen = screenRepository.save(screen);
-        deriveScreenOrConflict(screen);
+        prepareScreenDraftOrConflict(screen);
 
         AnalyticsUser creator = user.orElseThrow();
         String creatorGranteeId = creator.getPlatformUsername() != null && !creator.getPlatformUsername().isBlank()
@@ -939,7 +939,7 @@ public class ScreenResource {
         }
 
         screenRepository.save(screen);
-        deriveScreenOrConflict(screen);
+        prepareScreenDraftOrConflict(screen);
         AnalyticsScreenVersion currentPublished =
                 screenVersionRepository.findFirstByScreenIdAndCurrentPublishedTrue(screen.getId()).orElse(null);
         ObjectNode detail = toDetailResponse(screen, null, currentPublished, "draft", permissions);
@@ -2490,6 +2490,18 @@ public class ScreenResource {
     ) {
         try {
             return classificationService.deriveScreen(screen);
+        } catch (RuntimeException ex) {
+            throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "大屏密级无法确定，请补全所有数据源的资产身份或等待上游密级传播",
+                ex
+            );
+        }
+    }
+
+    private void prepareScreenDraftOrConflict(AnalyticsScreen screen) {
+        try {
+            classificationService.prepareScreenDraft(screen);
         } catch (RuntimeException ex) {
             throw new ResponseStatusException(
                 HttpStatus.CONFLICT,
