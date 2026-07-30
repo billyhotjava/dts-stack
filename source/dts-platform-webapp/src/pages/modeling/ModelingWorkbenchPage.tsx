@@ -640,6 +640,7 @@ export default function ModelingWorkbenchPage() {
 						workspaceView={workspaceRoute.workspaceView}
 						onViewChange={changeWorkspaceView}
 						onNavigate={navigate}
+						onOpenModelImport={() => setImportRoute(true)}
 					/>
 				)}
 

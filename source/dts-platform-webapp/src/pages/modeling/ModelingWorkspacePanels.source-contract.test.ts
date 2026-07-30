@@ -48,3 +48,10 @@ test("panel navigation is accessible and does not manufacture new business owner
 	assert.match(panel, /data-testid="modeling-workspace-canonical-panel"/);
 	assert.doesNotMatch(panel, /localStorage|sessionStorage|fetch\(/);
 });
+
+test("model import tool delegates to the workbench context-preserving import action", () => {
+	assert.match(panel, /onOpenModelImport/);
+	assert.match(panel, /onClick:\s*onOpenModelImport/);
+	assert.match(workbench, /onOpenModelImport=\{\(\) => setImportRoute\(true\)\}/);
+	assert.doesNotMatch(panel, /\/modeling\/workbench\?modelImport=open/);
+});

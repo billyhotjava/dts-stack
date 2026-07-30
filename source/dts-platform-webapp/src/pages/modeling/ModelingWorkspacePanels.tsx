@@ -56,6 +56,7 @@ type ModelingWorkspacePanelsProps = {
 	workspaceView?: ModelingWorkspaceView;
 	onViewChange: (view: ModelingWorkspaceView) => void;
 	onNavigate: (route: string) => void;
+	onOpenModelImport: () => void;
 };
 
 type PlanningView = "overview" | "categories" | "data-marts" | "layers" | "sources";
@@ -65,13 +66,16 @@ const isPlanningView = (view: ModelingWorkspaceView): view is PlanningView =>
 
 const Canonical = ({ children }: { children: ReactNode }) => <Suspense fallback={loading}>{children}</Suspense>;
 
-function ToolPanel({ onNavigate }: Pick<ModelingWorkspacePanelsProps, "onNavigate">) {
+function ToolPanel({
+	onNavigate,
+	onOpenModelImport,
+}: Pick<ModelingWorkspacePanelsProps, "onNavigate" | "onOpenModelImport">) {
 	const tools = [
 		{ label: "SQL/dbt 建模", detail: "进入专业代码工作区", route: "/studio/sql-modeling", icon: TerminalSquare },
 		{
 			label: "导入模型包",
 			detail: "复用建设计划导入向导",
-			route: "/modeling/workbench?modelImport=open",
+			onClick: onOpenModelImport,
 			icon: FileInput,
 		},
 		{ label: "模型中心", detail: "导出与版本由模型 owner 管理", route: "/modeling/models", icon: FileOutput },
@@ -83,10 +87,10 @@ function ToolPanel({ onNavigate }: Pick<ModelingWorkspacePanelsProps, "onNavigat
 				const Icon = tool.icon;
 				return (
 					<button
-						key={tool.route}
+						key={tool.route || tool.label}
 						type="button"
 						className="flex min-h-24 items-center gap-4 rounded-lg border border-slate-200 bg-white px-4 text-left transition-colors hover:border-blue-300 hover:bg-blue-50/40"
-						onClick={() => onNavigate(tool.route)}
+						onClick={tool.onClick || (() => onNavigate(tool.route))}
 					>
 						<span className="grid size-10 shrink-0 place-items-center rounded-md bg-slate-100 text-slate-700">
 							<Icon size={19} aria-hidden="true" />
@@ -109,6 +113,7 @@ function activePanel(
 	planId: string | undefined,
 	onViewChange: ModelingWorkspacePanelsProps["onViewChange"],
 	onNavigate: ModelingWorkspacePanelsProps["onNavigate"],
+	onOpenModelImport: ModelingWorkspacePanelsProps["onOpenModelImport"],
 ) {
 	if (module === "planning") {
 		if (!planId) {
@@ -179,7 +184,7 @@ function activePanel(
 				<LineageGraphPage />
 			</Canonical>
 		);
-	return <ToolPanel onNavigate={onNavigate} />;
+	return <ToolPanel onNavigate={onNavigate} onOpenModelImport={onOpenModelImport} />;
 }
 
 export function ModelingWorkspacePanels({
@@ -188,6 +193,7 @@ export function ModelingWorkspacePanels({
 	workspaceView,
 	onViewChange,
 	onNavigate,
+	onOpenModelImport,
 }: ModelingWorkspacePanelsProps) {
 	const views = PANEL_VIEWS[module] || [];
 	const selectedView = views.find((item) => item.key === workspaceView)?.key || defaultView(module) || "overview";
@@ -217,7 +223,7 @@ export function ModelingWorkspacePanels({
 				})}
 			</nav>
 			<main className="min-w-0 overflow-x-hidden bg-white">
-				{activePanel(module, selectedView, planId, onViewChange, onNavigate)}
+				{activePanel(module, selectedView, planId, onViewChange, onNavigate, onOpenModelImport)}
 			</main>
 		</div>
 	);
