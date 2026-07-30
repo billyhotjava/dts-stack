@@ -1713,3 +1713,25 @@
 **执行顺序**: 四个 Feature 相互独立可并行；Feature 内 T01 → T02 → T03；F4/T03 浏览器 smoke 段等待 Sprint-77 F0 基线。
 **关键决策**: 初始口令 SecureRandom 一次性生成 + temporary=true、明文只存在于执行响应内存（ADR-78-01/02）；TLS 私钥唯一来源为部署期 services/certs，Git 历史旧私钥以轮换关闭（ADR-78-04/05）；备份走宿主机 pg_dump + 14 天保留，不动 data 目录（ADR-78-06）；Hetu 路由层硬删除不留开关（ADR-78-07）。
 **已知风险**: Git 历史中的旧 p12 私钥不可召回，现场必须执行 F2/T03 轮换才算关闭；旧 Hetu 路径书签失效需在发布说明中告知；浏览器 smoke 证据段受共享登录基线 GAP 约束（`it/baseline.md`）。
+
+## Sprint-79: 智能数据建模工作台收敛 (202607)
+
+**目录**: `worklog/v2.2.3/sprint-79-202607-modeling-workspace-convergence`
+**状态**: IN_PROGRESS（认证 UI/API 基线已通过，F1 可实施；代表数据、物化与退役门禁仍未解除）
+**类型**: Architecture / UI Productization / Controlled Retirement / Full-stack
+**目标**: 让用户在一个建模工作台内完成规划、标准、维度、四类逻辑模型、指标、关系查看以及发布/物化交接，不再在多组解释性页面和重复入口之间切换。
+**依赖**: 复用 Sprint-67/73/74 的 WarehousePlan、DimensionDefinition、四类 ModelSpec 与阶段门禁，复用 Sprint-67 指标 owner 和 Sprint-69/76 ReleaseCandidate/物化控制面；DataWorks 原型只作为交互参考，不进入产品运行时。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F0-交付基线与退役证据 | P0 | 3 | IN_PROGRESS |
+| F1-统一建模工作台壳层 | P0 | 2 | READY |
+| F2-单页模型编辑器 | P0 | 3 | DRAFT |
+| F3-指标工具与关系图 | P1 | 2 | DRAFT |
+| F4-发布物化短流程 | P0 | 2 | DRAFT |
+| F5-旧页面受控退役 | P0 | 2 | DRAFT |
+
+**统计**: DRAFT=12, READY=1, IN_PROGRESS=1, DONE=0, BLOCKED=0
+**执行顺序**: F0 → F1 → F2/F3 → F4 → F5；F2/F3 可在 Shell 契约冻结后并行，F5 必须等待功能等价、客户画像和两版本访问观测。
+**关键决策**: `/modeling/workbench` 为唯一主入口且不新增业务菜单；原型只提供 UI 规格；canonical owner 全部复用；“贴源表”映射来源注册/逆向候选而非第五类 ModelSpec；单页编辑不绕过三阶段门禁；孤儿代码可先删，canonical 页面先抽面板，8 条兼容路由两版本零访问后删，旧表另行审批。
+**已知风险**: 认证 API/UI 已在系统 Chrome 150 复验，但 Chrome 95 兼容尚未补；当前本地仅有 6 个 DIMENSION 模型且 Candidate/implementation 为 0；客户环境规模与旧入口使用未知；Sprint-76 PROD 物化仍为 NO-GO。
