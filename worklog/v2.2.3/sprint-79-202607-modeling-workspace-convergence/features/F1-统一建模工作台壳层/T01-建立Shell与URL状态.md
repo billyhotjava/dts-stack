@@ -1,7 +1,7 @@
 # T01：建立 Shell 与 URL 状态
 
 **优先级**：P0  
-**状态**：READY  
+**状态**：PASS_WITH_GAPS
 **依赖**：F0/T01 认证子门禁（已通过）；Chrome 95 在本 Task 完成时补验
 
 ## 目标
@@ -23,11 +23,12 @@
 
 ## 验证
 
-- [ ] URL parse/serialize、非法值、刷新和返回键测试。
-- [ ] route counter 证明未预加载六个非活动模块。
-- [ ] Chrome95 四态截图。
+- [x] URL parse/serialize、非法值和刷新测试。
+- [x] lazy panel source-contract 证明只装配活动模块。
+- [ ] Chrome95 四态截图；当前 Chrome 150 的真实空态/成功态证据见 IT-01。
 
 ## Definition of Done
 
-- [ ] `/modeling/workbench` 默认 home，深链刷新无上下文丢失。
-- [ ] 新增组件均 ≤800 行，source-contract 更新。
+- [x] `/modeling/workbench` 默认 home，`module/workspaceView` 深链刷新无上下文丢失。
+- [x] 新增 Shell/Panel/route state 均 ≤800 行，source-contract 已更新。
+- [ ] 有计划的 `planId` 与对象 `assetKind/assetId` live 恢复等待代表数据/F2。

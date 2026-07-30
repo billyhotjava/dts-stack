@@ -1,7 +1,7 @@
 # Sprint-79：智能数据建模工作台收敛
 
 **时间**：2026-07  
-**状态**：IN_PROGRESS（认证 UI 基线已恢复，F1 壳层可实施；代表数据、物化和退役门禁继续按 Feature 控制）  
+**状态**：IN_PROGRESS（F1 七模块壳层已部署并通过 IT-01 空数据旅程；F2–F5、代表数据、物化和退役门禁继续按 Feature 控制）
 **类型**：Architecture / UI Productization / Controlled Retirement / Full-stack  
 **目标**：用户在一个建模工作台内完成规划、标准、维度、四类逻辑模型、指标、关系查看以及发布/物化交接，不再在多组解释性页面和重复入口之间切换。
 
@@ -74,7 +74,7 @@
 | G0 | DTS 领域不变量 | PASS | ADR-79-01～08 | - |
 | G1 | 契约链贯通 | PASS | 本文“端到端契约链” | - |
 | G1 | 非功能预算 | PASS_WITH_GAPS | `assets/nfr-budget.md` | F0/T01、F3/T02 |
-| G3 | 发布安全 | PENDING | Sprint-76 + 后续 `assets/release-plan.md` | F4/T02、F5/T02 |
+| G3 | 发布安全 | PASS_WITH_GAPS | F1 前端回滚演练 PASS；F4/F5 仍见 `assets/release-plan.md` | F4/T02、F5/T02 |
 | G4 | 可运维性 | PENDING | 后续 `assets/runbook.md` | F0/T02 |
 | G4 | DoD 验收 | PENDING | `it/README.md` | 全部 Feature |
 
@@ -83,7 +83,7 @@
 | ID | Feature | Task 数 | 优先级 | 状态 |
 |---|---|---:|---|---|
 | F0 | 交付基线与退役证据 | 3 | P0 | IN_PROGRESS |
-| F1 | 统一建模工作台壳层 | 2 | P0 | READY |
+| F1 | 统一建模工作台壳层 | 2 | P0 | PASS_WITH_GAPS |
 | F2 | 单页模型编辑器 | 3 | P0 | DRAFT |
 | F3 | 指标、工具与关系图 | 2 | P1 | DRAFT |
 | F4 | 发布物化短流程 | 2 | P0 | DRAFT |
