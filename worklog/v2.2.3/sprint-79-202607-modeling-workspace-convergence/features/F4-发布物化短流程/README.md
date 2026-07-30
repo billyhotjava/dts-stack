@@ -1,7 +1,7 @@
 # F4：发布物化短流程
 
 **优先级**：P0  
-**状态**：DRAFT
+**状态**：IN_PROGRESS（运行时安全契约已通过源码、定向测试与安全审查；发布 UI 和真实 DEV 物化链待 IT-05/06）
 
 ## 目标
 
@@ -24,16 +24,25 @@
 
 | ID | Task | 状态 | 依赖 |
 |---|---|---|---|
-| T01 | 接入 Build/Publish Intent | DRAFT | F2/T01、Sprint-76 稳定契约 |
-| T02 | 接入物化运行与发布结果 | DRAFT | T01、Sprint-76 DEV 可运行链 |
+| T01 | 接入 Build/Publish Intent | IN_PROGRESS | F2/T01、Sprint-76 稳定契约 |
+| T02 | 接入物化运行与发布结果 | IN_PROGRESS | T01、Sprint-76 DEV 可运行链 |
 
 ## Definition of Ready
 
 - [x] 快捷入口与 Candidate owner 边界已冻结。
-- [ ] Sprint-76 对应 DEV 契约和 F0 基线可运行。
+- [x] `profileLeaseId`、租约续期/释放和 Docker 清理安全契约在源码层冻结。
+- [ ] Sprint-76 对应 DEV dbt/Airflow/relation/Catalog 链真实可运行。
 
 ## 完成标准
 
 - [ ] 快捷弹窗不越权 approve/publish。
 - [ ] build-only 不显示“已发布/已有物理资产”。
 - [ ] relation EXISTS 和 Catalog 注册后才显示上线完成。
+
+## 当前证据
+
+- 提交：`56afd9858`。
+- Java：Repository、Service、Internal Resource、MethodSecurity 四类测试 23/23，BUILD SUCCESS。
+- Python：dbt task factory 28/28。
+- Java code review 与安全审查 APPROVED。
+- 未完成：真实 PostgreSQL 并发、Docker 容器、dbt/Airflow、relation probe、Catalog 与浏览器验收。

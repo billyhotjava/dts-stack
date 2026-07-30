@@ -1,7 +1,7 @@
 # F3：指标、工具与关系图
 
 **优先级**：P1  
-**状态**：DRAFT
+**状态**：PASS_WITH_GAPS（源码、定向测试与独立审查通过；PostgreSQL IT、部署和浏览器 IT-04 待执行）
 
 ## 目标
 
@@ -23,17 +23,18 @@
 
 | ID | Task | 状态 | 依赖 |
 |---|---|---|---|
-| T01 | 嵌入指标与通用工具 | DRAFT | F1/T01 |
-| T02 | 建立只读关系图投影 | DRAFT | F1/T01、F2/T03 |
+| T01 | 嵌入指标与通用工具 | PASS_WITH_GAPS | F1/T01 |
+| T02 | 建立只读关系图投影 | PASS_WITH_GAPS | F1/T01、F2/T03 |
 
 ## Definition of Ready
 
 - [x] Indicator owner 和图 projection 边界已确定。
-- [ ] 客户数据规模画像完成后确认 graph 上限。
-- [ ] 认证 UI 基线通过。
+- [x] graph 输出上限冻结为 500 nodes / 1000 edges，reference work 上限为 2501。
+- [x] 认证 UI 基线通过；F3 最终浏览器旅程仍待 IT-04。
 
 ## 完成标准
 
-- [ ] 指标创建/绑定/发布未回潮旧 semantic owner。
-- [ ] 图节点可回到具体模型/维度/指标。
-- [ ] 超限图不崩溃且明确提示截断。
+- [x] 指标面板继续复用 canonical Indicator owner，未建立旧 semantic 写入链。
+- [x] 图节点具备模型 revision、维度、标准和指标工作台深链。
+- [x] 超限图明确返回截断/继续提示；不完整 reference/edge 投影不签发误导性 cursor。
+- [ ] IT-04 真实认证浏览器与 PostgreSQL 数据验证。

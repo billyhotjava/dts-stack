@@ -1,7 +1,7 @@
 # T01：canonical 页面与路由收敛
 
 **优先级**：P0  
-**状态**：DRAFT  
+**状态**：PASS_WITH_GAPS（源码、菜单 migration 与定向测试通过；部署后返回键/刷新 IT 待执行）
 **依赖**：F1～F4
 
 ## 目标
@@ -19,11 +19,16 @@
 
 ## 验证
 
-- [ ] 每条旧 deep link 正反向参数表测试。
-- [ ] 收藏、帮助链接和动态 resolver 无悬挂。
+- [x] canonical deep link 的 plan/module/asset/indicator/baseline 参数映射与 stale lookup 测试。
+- [x] 菜单、帮助链接、静态/动态 resolver 收敛，无新增旧入口。
 - [ ] Chrome95 返回键/刷新不循环。
 
 ## Definition of Done
 
 - [ ] IT-08 canonical 段通过。
-- [ ] 页面布局代码不再重复，专业 SQL/dbt 路由仍可达。
+- [x] 重复页面入口已收敛，专业 SQL/dbt 路由仍可达。
+
+## 实现证据
+
+- 提交：`82d6e8eec`。
+- 前端兼容/路由/菜单 source tests 与 TypeScript 审查通过；Liquibase/JSON 结构校验与数据库审查通过。

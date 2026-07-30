@@ -1,7 +1,7 @@
 # F5：旧页面受控退役
 
 **优先级**：P0  
-**状态**：DRAFT
+**状态**：PASS_WITH_GAPS（T01 源码收敛完成；T02 受两版本零访问和客户画像门禁阻塞）
 
 ## 目标
 
@@ -23,8 +23,8 @@
 
 | ID | Task | 状态 | 依赖 |
 |---|---|---|---|
-| T01 | canonical 页面转面板并收敛路由 | DRAFT | F1～F4 |
-| T02 | 移除兼容路由并形成旧表退役提案 | DRAFT | T01、F0/T02、两版本观测 |
+| T01 | canonical 页面转面板并收敛路由 | PASS_WITH_GAPS | F1～F4 |
+| T02 | 移除兼容路由并形成旧表退役提案 | BLOCKED_BY_OBSERVATION | T01、F0/T02、两版本观测 |
 
 ## Definition of Ready
 
@@ -37,3 +37,9 @@
 - [ ] 重复页源码删除，旧深链迁移或明确 404。
 - [ ] 菜单、角色、收藏、帮助链接、测试无悬挂引用。
 - [ ] 旧表未在无审批情况下物理删除。
+
+## 当前决策
+
+- canonical plans/dimensions/models/metric deep link、菜单和帮助入口已收敛到 `/modeling/workbench`。
+- dts-admin migration 只软删除旧菜单，并以 `sprint79-menu-convergence` 标记保障定向回滚。
+- 8 条 compatibility route 继续保留；没有两版本零访问、unresolved=0 和客户环境画像前，不删除 route helper 或 legacy 表。

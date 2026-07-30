@@ -1,7 +1,7 @@
 # Sprint-79：智能数据建模工作台收敛
 
 **时间**：2026-07  
-**状态**：IN_PROGRESS（F1 壳层与 F2/T01、T04 主线严格只读旅程通过；F2 代表写入、F3–F5、物化和退役门禁继续按 Feature 控制）
+**状态**：IN_PROGRESS（F1～F3 与 F5/T01 已完成源码收敛；统一构建、部署、真实 PostgreSQL/物化和浏览器 E2E 尚待最终验收；F5/T02 仍受两版本观测门禁约束）
 **类型**：Architecture / UI Productization / Controlled Retirement / Full-stack  
 **目标**：用户在一个建模工作台内完成规划、标准、维度、四类逻辑模型、指标、关系查看以及发布/物化交接，不再在多组解释性页面和重复入口之间切换。
 
@@ -63,7 +63,7 @@
 
 - 客户环境的存量模型数量、旧路由访问和旧表数据未画像；F5 删除门禁不得使用本地 0 行结论替代。
 - 正式 DTS 的认证 UI/API 基线已于 2026-07-30 通过系统 Chrome 150 复验；Chrome 95 兼容仍需在 F1 实现后补证据。
-- Sprint-76 生产物化链仍为 PROD NO-GO；本 Sprint 只消费其已冻结契约，不声称修复其生产缺口。
+- Sprint-76 的 `profileLeaseId`、租约竞态、容器归属和清理确认缺口已在源码与定向测试层关闭；在真实 DEV dbt/Airflow/relation/Catalog 链、PostgreSQL 并发和部署验收完成前，仍不得声明 PROD READY。
 
 ## Gate Registry
 
@@ -84,12 +84,22 @@
 |---|---|---:|---|---|
 | F0 | 交付基线与退役证据 | 3 | P0 | IN_PROGRESS |
 | F1 | 统一建模工作台壳层 | 2 | P0 | PASS_WITH_GAPS |
-| F2 | 单页模型编辑器 | 4 | P0 | IN_PROGRESS |
-| F3 | 指标、工具与关系图 | 2 | P1 | DRAFT |
-| F4 | 发布物化短流程 | 2 | P0 | DRAFT |
-| F5 | 旧页面受控退役 | 2 | P0 | DRAFT |
+| F2 | 单页模型编辑器 | 4 | P0 | PASS_WITH_GAPS |
+| F3 | 指标、工具与关系图 | 2 | P1 | PASS_WITH_GAPS |
+| F4 | 发布物化短流程 | 2 | P0 | IN_PROGRESS |
+| F5 | 旧页面受控退役 | 2 | P0 | PASS_WITH_GAPS |
 
 **依赖顺序**：F0 → F1 → F2/F3 → F4 → F5。F2 与 F3 可在壳层契约冻结后并行；F5 只能在功能等价和观测期满足后执行。
+
+## 2026-07-31 实现快照
+
+| 范围 | 已完成 | 当前证据 | 尚未完成 |
+|---|---|---|---|
+| F3 指标/工具/关系图 | 工作台嵌入；计划、精确模型 revision、维度、三类标准、指标一跳依赖的只读投影；500/1000 上限；复合游标、窗口指纹、HMAC、防并发重排；旧响应竞态保护 | `51daf1225`、`56afd9858`、`c87cbf8b8`；Java 166/166；前端 Vitest 4/4、source-contract 7/7、TypeScript/Biome；Java、安全、TypeScript 审查 APPROVED | PostgreSQL repository IT、部署后认证浏览器 IT-04 |
+| F4 运行时安全 | `profileLeaseId` 跨语言对齐；续租/过期/释放 CAS；终态目录重试；Docker owner label + immutable container ID；清理未确认不释放租约；日志脱敏 | `56afd9858`；Java 23/23、Python 28/28；代码与安全审查 APPROVED | 真实 PostgreSQL 并发、Docker/dbt/Airflow/relation/Catalog IT-05/06 |
+| F5 入口收敛 | canonical 深链、菜单、帮助与指标入口进入 `/modeling/workbench`；旧菜单软删除 migration 可回滚 | `82d6e8eec`；路由/菜单/source-contract 定向测试通过 | 8 条 compatibility route 不满足两版本零访问门禁，暂不物理删除；客户旧表只保留提案 |
+
+这里的“通过”仅表示相应源码、定向测试和独立审查门禁通过，不替代后续构建、部署或人工/浏览器验收。
 
 ## 追溯矩阵
 

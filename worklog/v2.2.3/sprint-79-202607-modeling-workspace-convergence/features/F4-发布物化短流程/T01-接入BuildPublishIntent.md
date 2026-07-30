@@ -1,7 +1,7 @@
 # T01：接入 Build / Publish Intent
 
 **优先级**：P0  
-**状态**：DRAFT  
+**状态**：IN_PROGRESS（canonical Intent 边界已冻结；统一 UI/真实 Candidate 旅程待 IT-05）
 **依赖**：F2/T01；Sprint-76 稳定契约
 
 ## 目标
@@ -30,3 +30,8 @@
 
 - [ ] IT-05 通过。
 - [ ] Candidate/ModelSpec 状态只有服务端 owner 写入。
+
+## 当前实现边界
+
+- 工作台仍只调用既有 Build/Publish Intent 与 Candidate owner，不新增发布状态表或前端 approve/publish 串联。
+- 本轮完成的是下游运行时租约安全收口，不把它等同于 IT-05 发布旅程通过。
