@@ -31,6 +31,11 @@
 - 模型编辑器预览：[prototype-model-editor.png](./dataworks-kimball/prototype-model-editor.png)
 - 发布与物化预览：[prototype-publish-materialize.png](./dataworks-kimball/prototype-publish-materialize.png)
 - 逆向建模预览：[prototype-overview.png](./dataworks-kimball/prototype-overview.png)
+- 首页预览：[prototype-home.png](./dataworks-kimball/prototype-home.png)
+- 数仓规划业务过程预览：[prototype-planning-business-process.png](./dataworks-kimball/prototype-planning-business-process.png)
+- 数据标准预览：[prototype-standards.png](./dataworks-kimball/prototype-standards.png)
+- 原子指标工作台预览：[prototype-metrics-atomic.png](./dataworks-kimball/prototype-metrics-atomic.png)
+- 关系图预览：[prototype-relationship-graph.png](./dataworks-kimball/prototype-relationship-graph.png)
 
 ## 六类新建页面字段差异
 
