@@ -17,7 +17,7 @@ const menuSeed = readFileSync(
 const standardBindingDraftUrl = new URL("./standardBindingDraft.ts", import.meta.url);
 const standardBindingDraft = existsSync(standardBindingDraftUrl) ? readFileSync(standardBindingDraftUrl, "utf8") : "";
 const sqlModelingPage = readFileSync(new URL("./SqlModelingPage.tsx", import.meta.url), "utf8");
-const dbtFileBrowserPage = readFileSync(new URL("./DbtFileBrowserPage.tsx", import.meta.url), "utf8");
+const modelingCompatibilityRoute = readFileSync(new URL("./modelingCompatibilityRoute.ts", import.meta.url), "utf8");
 const modelCenterPage = readFileSync(new URL("./ModelCenterPage.tsx", import.meta.url), "utf8");
 const elementsPage = readFileSync(new URL("../governance/ElementsPage.tsx", import.meta.url), "utf8");
 const standardPackagePage = readFileSync(new URL("../foundation/StandardPackagePage.tsx", import.meta.url), "utf8");
@@ -158,12 +158,15 @@ test("sql modeling exposes release gates and routes run evidence back to ops", (
 	assert.match(sqlModelingPage, /return `\/ops\/instances\?\$\{params\.toString\(\)\}`/);
 });
 
-test("dbt file browser is a file evidence surface and hands publishing back to SQL modeling", () => {
-	assert.match(dbtFileBrowserPage, /title="DBT 文件工作区"/);
-	assert.match(dbtFileBrowserPage, /data-testid="dbt-file-browser-preview-model"/);
-	assert.match(dbtFileBrowserPage, /data-testid="dbt-file-browser-save"/);
-	assert.match(dbtFileBrowserPage, /title="dbt 文件发布需先通过 SQL 建模页发布门禁"/);
-	assert.match(dbtFileBrowserPage, /\/studio\/sql-modeling/);
+test("retired dbt surfaces are absent and the compatibility route hands files to SQL modeling", () => {
+	assert.equal(existsSync(new URL("./DbtFileBrowserPage.tsx", import.meta.url)), false);
+	assert.equal(existsSync(new URL("./modelingCompatibility.ts", import.meta.url)), false);
+	assert.match(
+		modelingCompatibilityRoute,
+		/case "\/modeling\/dbt-files":[\s\S]*buildTarget\("\/studio\/sql-modeling"[\s\S]*view: "files"/,
+	);
+	assert.match(sqlModelingPage, /data-testid="platform-sql-modeling-page"/);
+	assert.match(sqlModelingPage, /data-testid="platform-sql-modeling-release-gates"/);
 });
 
 test("metric workbench route is registered in static routes and dynamic resolver", () => {

@@ -9,7 +9,6 @@ const TRANSFORM_SOURCE = readFileSync(new URL("./TransformPage.tsx", import.meta
 const ORCHESTRATION_SOURCE = readFileSync(new URL("./OrchestrationPage.tsx", import.meta.url), "utf8");
 const PROJECTS_SOURCE = readFileSync(new URL("../../modeling/ModelTemplatesPage.tsx", import.meta.url), "utf8");
 const SQL_MODELING_SOURCE = readFileSync(new URL("../../modeling/SqlModelingPage.tsx", import.meta.url), "utf8");
-const DBT_SOURCE = readFileSync(new URL("../../modeling/DbtFileBrowserPage.tsx", import.meta.url), "utf8");
 
 test("Sprint-45 data source entry exposes connection, schema, ODS, task, and golden-chain actions", () => {
 	for (const action of ["新建数据源", "测试连接", "Schema 探测", "生成 ODS 映射", "预览 ODS", "生成同步任务", "查看黄金链路"]) {
@@ -57,7 +56,7 @@ test("ETL task page consolidates filters and actions into one task toolbar", () 
 	assert.match(TRANSFORM_SOURCE, /data-testid="platform-transform-create"/);
 });
 
-test("Sprint-45 Studio surfaces project, SQL modeling, dbt, and release-gate handoffs", () => {
+test("Sprint-45 Studio converges project, SQL/dbt modeling, and release gates on canonical owners", () => {
 	for (const action of ["新建项目", "导入项目", "进入 SQL 建模", "归档", "发布"]) {
 		assert.match(PROJECTS_SOURCE, new RegExp(action));
 	}
@@ -65,6 +64,6 @@ test("Sprint-45 Studio surfaces project, SQL modeling, dbt, and release-gate han
 		assert.match(SQL_MODELING_SOURCE, new RegExp(action));
 	}
 	for (const action of ["导入", "校验", "预览", "发布", "编译", "测试"]) {
-		assert.match(DBT_SOURCE, new RegExp(action));
+		assert.match(SQL_MODELING_SOURCE, new RegExp(action));
 	}
 });

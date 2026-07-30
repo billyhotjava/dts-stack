@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
-const DBT = read("./modeling/DbtFileBrowserPage.tsx");
 const OPS = read("./ops/OpsInstancesPage.tsx");
 const BACKFILL = read("./ops/OpsBackfillPage.tsx");
 const AUDIT = read("./ops/AuditEvidencePage.tsx");
@@ -13,11 +12,11 @@ const METRIC = read("./modeling/MetricWorkbenchPage.tsx");
 const SQL = read("./modeling/SqlModelingPage.tsx");
 
 test("development and operations pages preserve journey context", () => {
-	for (const source of [DBT, OPS, BACKFILL, AUDIT]) {
+	for (const source of [SQL, OPS, BACKFILL, AUDIT]) {
 		assert.match(source, /JourneyContextBar/);
-		assert.match(source, /journey=e2e-data-product|buildJourneyUrl|searchParams/);
+		assert.match(source, /modelId|journey=e2e-data-product|buildJourneyUrl|searchParams/);
 	}
-	assert.match(DBT, /返回 SQL 建模发布门禁|\/studio\/sql-modeling/);
+	assert.match(SQL, /发布门禁汇总|发布前门禁/);
 	assert.match(OPS, /modelId/);
 	assert.match(BACKFILL, /buildJourneyUrl|searchParams/);
 	assert.match(AUDIT, /journey=e2e-data-product|searchParams/);
