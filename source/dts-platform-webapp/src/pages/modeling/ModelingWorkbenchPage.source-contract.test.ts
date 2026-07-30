@@ -1,10 +1,27 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 const entry = readFileSync(new URL("./ModelingWorkbenchPage.tsx", import.meta.url), "utf8");
+const shellUrl = new URL("./ModelingWorkspaceShell.tsx", import.meta.url);
+const shell = existsSync(shellUrl) ? readFileSync(shellUrl, "utf8") : "";
 const frame = readFileSync(new URL("./semantic-workspace/SemanticWorkspaceFrame.tsx", import.meta.url), "utf8");
 const api = readFileSync(new URL("../../api/warehousePlanApi.ts", import.meta.url), "utf8");
+
+test("workbench mounts one compact seven-module shell without moving business ownership", () => {
+	assert.equal(existsSync(shellUrl), true);
+	assert.match(entry, /ModelingWorkspaceShell/);
+	assert.match(entry, /parseModelingWorkspaceRouteState/);
+	assert.match(entry, /updateModelingWorkspaceSearch/);
+	assert.match(shell, /data-testid="modeling-workspace-shell"/);
+	assert.match(shell, /role="tablist"/);
+	assert.match(shell, /aria-selected/);
+	for (const label of ["首页", "数仓规划", "数据标准", "维度建模", "数据指标", "通用工具", "关系图"]) {
+		assert.match(shell, new RegExp(label));
+	}
+	assert.doesNotMatch(shell, /listWarehousePlans|createWarehousePlan|localStorage|sessionStorage/);
+	assert.doesNotMatch(entry, /linear-gradient/);
+});
 
 test("modeling workbench is a canonical warehouse planning surface instead of a redirect", () => {
 	assert.match(entry, /listWarehousePlans/);
