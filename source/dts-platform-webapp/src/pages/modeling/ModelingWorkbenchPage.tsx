@@ -153,6 +153,21 @@ export default function ModelingWorkbenchPage() {
 		[navigateWorkspace],
 	);
 
+	const openIndicator = useCallback(
+		(indicatorId?: string) =>
+			navigateWorkspace(
+				{
+					module: "metrics",
+					workspaceView: "definitions",
+					assetKind: indicatorId ? "indicator" : null,
+					assetId: indicatorId || null,
+					activeStage: null,
+				},
+				true,
+			),
+		[navigateWorkspace],
+	);
+
 	const changeModelStage = useCallback(
 		(stage: ModelingWorkspaceModelStage) => navigateWorkspace({ activeStage: stage }, true),
 		[navigateWorkspace],
@@ -578,9 +593,10 @@ export default function ModelingWorkbenchPage() {
 																type="primary"
 																size="large"
 																data-testid="warehouse-plan-next-action"
-																onClick={() =>
-																	navigate(withWarehousePlanContext(projection.nextAction!.path, selectedPlan.id))
-																}
+																onClick={() => {
+																	if (!projection.nextAction) return;
+																	navigate(withWarehousePlanContext(projection.nextAction.path, selectedPlan.id));
+																}}
 															>
 																{projection.currentStage
 																	? warehouseStageActionLabel(projection.currentStage)
@@ -717,6 +733,7 @@ export default function ModelingWorkbenchPage() {
 							onNavigate={navigate}
 							onOpenModelImport={() => setImportRoute(true)}
 							onOpenModel={openModel}
+							onOpenIndicator={openIndicator}
 							onCloseModel={closeModel}
 							onModelStageChange={changeModelStage}
 							onModelResolvedContext={resolveModelContext}

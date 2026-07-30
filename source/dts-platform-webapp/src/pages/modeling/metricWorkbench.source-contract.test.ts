@@ -29,6 +29,9 @@ test("legacy semantic routes remain redirect-only compatibility entries", () => 
 		assert.match(ROUTES, new RegExp(path.replaceAll("/", "\\/")));
 	}
 	assert.match(COMPATIBILITY, /listModelSpecs/);
+	assert.match(COMPATIBILITY, /requestKey/);
+	assert.match(COMPATIBILITY, /lookup\.requestKey === requestKey/);
+	assert.match(COMPATIBILITY, /needsObjectLookup \? "loading" : "ready"/);
 	assert.doesNotMatch(COMPATIBILITY, /createSemanticBusinessObject|updateSemanticBusinessObject/);
 });
 
@@ -39,6 +42,24 @@ test("metric workbench carries only canonical end-to-end context", () => {
 	assert.match(WORKBENCH, /metricId/);
 	assert.doesNotMatch(WORKBENCH, /围绕定义、模型生成、模板复用和业务消费/);
 	assert.doesNotMatch(WORKBENCH, /processId|businessObject/);
+});
+
+test("metric workbench exposes a controlled embedded adapter without nesting semantic chrome", () => {
+	assert.match(WORKBENCH, /embedded\??:\s*boolean/);
+	assert.match(WORKBENCH, /activeViewOverride\??:\s*MetricWorkbenchView/);
+	assert.match(WORKBENCH, /onViewChange\??:\s*\(view:\s*MetricWorkbenchView\)/);
+	assert.match(WORKBENCH, /onOpenModel\??:\s*\(modelSpecId:\s*string\)/);
+	assert.match(WORKBENCH, /indicatorIdOverride\??:\s*string/);
+	assert.match(WORKBENCH, /onSelectedIndicatorChange\??:\s*\(indicatorId\??:\s*string\)/);
+	assert.match(WORKBENCH, /requestedIndicatorIdOverride=\{indicatorIdOverride\}/);
+	assert.match(WORKBENCH, /if \(onSelectedIndicatorChange\) onSelectedIndicatorChange\(created\.id\)/);
+	assert.doesNotMatch(
+		WORKBENCH,
+		/onSelectedIndicatorChange\?\.\(created\.id\);\s*onViewChange\("definition"\)/,
+	);
+	assert.match(WORKBENCH, /if\s*\(embedded\)/);
+	assert.match(WORKBENCH, /data-testid="metric-workbench-embedded"/);
+	assert.match(WORKBENCH, /!embedded\s*\?\s*<JourneyContextBar/);
 });
 
 test("metric workbench stays compatible with Chrome 95", () => {

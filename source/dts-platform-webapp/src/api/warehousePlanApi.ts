@@ -236,6 +236,37 @@ export type WarehousePlanModelCandidatePreview = {
 	candidates: WarehousePlanModelCandidate[];
 };
 
+export type WarehousePlanRelationshipGraphNode = {
+	id: string;
+	kind: WarehousePlanRelationshipGraphKind;
+	label: string;
+	status?: string | null;
+	route?: string | null;
+};
+
+export type WarehousePlanRelationshipGraphEdge = {
+	source: string;
+	target: string;
+	kind: string;
+	label?: string | null;
+};
+
+export type WarehousePlanRelationshipGraph = {
+	planId: string;
+	nodes: WarehousePlanRelationshipGraphNode[];
+	edges: WarehousePlanRelationshipGraphEdge[];
+	truncated: boolean;
+	nextHint?: string | null;
+};
+
+export type WarehousePlanRelationshipGraphKind = "PLAN" | "DIMENSION" | "MODEL" | "STANDARD" | "INDICATOR";
+
+export type WarehousePlanRelationshipGraphQuery = {
+	kind?: WarehousePlanRelationshipGraphKind;
+	query?: string;
+	limit?: number;
+};
+
 export const listWarehousePlans = (lifecycleStatus?: WarehousePlanLifecycleStatus) =>
 	api.get<WarehousePlanHeader[]>(
 		withModelingRequestTimeout({
@@ -337,6 +368,15 @@ export const saveWarehousePlanPolicy = (planId: string, version: number, data: W
 export const getWarehousePlanStageProjection = (planId: string) =>
 	api.get<WarehousePlanStageProjection>(
 		withModelingRequestTimeout({ url: `${WAREHOUSE_PLAN_RESOURCE}/${planId}/stage-projection` }),
+	);
+
+export const getWarehousePlanRelationshipGraph = (planId: string, params: WarehousePlanRelationshipGraphQuery = {}) =>
+	api.get<WarehousePlanRelationshipGraph>(
+		withModelingRequestTimeout({
+			url: `${WAREHOUSE_PLAN_RESOURCE}/${planId}/relationship-graph`,
+			params,
+			_skipErrorToast: true,
+		}),
 	);
 
 export const previewWarehousePlanModelCandidates = (planId: string) =>

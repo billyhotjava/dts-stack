@@ -1,4 +1,7 @@
+import type { ModelingWorkspaceView } from "./modelingWorkspaceRouteState";
+
 export type MetricWorkbenchView = "definition" | "model" | "templates" | "consumption";
+export type MetricWorkspaceView = Extract<ModelingWorkspaceView, "definitions" | "model" | "templates" | "consumption">;
 
 const WORKBENCH_VIEWS = new Set<MetricWorkbenchView>(["definition", "model", "templates", "consumption"]);
 
@@ -13,4 +16,12 @@ export function buildMetricWorkbenchViewLocation(view: MetricWorkbenchView, sear
 	const params = new URLSearchParams(search);
 	params.set("view", view);
 	return `/modeling/metric-workbench?${params.toString()}${hash}`;
+}
+
+export function metricViewFromWorkspace(view: ModelingWorkspaceView): MetricWorkbenchView {
+	return view === "model" || view === "templates" || view === "consumption" ? view : "definition";
+}
+
+export function workspaceViewFromMetric(view: MetricWorkbenchView): MetricWorkspaceView {
+	return view === "definition" ? "definitions" : view;
 }

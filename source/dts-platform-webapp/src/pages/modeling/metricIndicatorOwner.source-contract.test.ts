@@ -65,6 +65,14 @@ test("list refresh and direct deep-link detail loading are independent", () => {
 	assert.doesNotMatch(OWNER.slice(listStart, listEnd), /openIndicator|getIndicator/);
 	assert.match(OWNER, /resolveIndicatorDetailRequest/);
 	assert.match(OWNER, /requestedIndicatorId/);
+	assert.match(OWNER, /requestedIndicatorIdOverride\??:\s*string/);
+	assert.match(OWNER, /requestedIndicatorIdOverride\?\.trim\(\)\s*\|\|/);
+	assert.match(OWNER, /onSelectedIndicatorChange \? null : searchParams\.get\("indicatorId"\)/);
+	assert.match(OWNER, /onSelectedIndicatorChange\(id\)/);
+	assert.match(
+		OWNER,
+		/if \(!updateLocation && onSelectedIndicatorChange\)[\s\S]*onSelectedIndicatorChange\(current\?\.id\)/,
+	);
 });
 
 test("owner writes are touched-only, CAS guarded, and protected from late detail responses", () => {

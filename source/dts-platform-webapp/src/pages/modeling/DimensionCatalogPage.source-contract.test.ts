@@ -33,6 +33,17 @@ test("dimension catalog uses the definition boundary and keeps the six-column bu
 	assert.doesNotMatch(page, /["'`](?:source|sql|materialization)["'`]/i);
 });
 
+test("dimension graph deep links use a read-only selected-row adapter", () => {
+	const page = read("./DimensionCatalogPage.tsx");
+	assert.match(page, /selectedDimensionIdOverride\??:\s*string/);
+	assert.match(page, /selectedDimensionId/);
+	assert.match(page, /rowClassName/);
+	assert.match(page, /modeling-selected-dimension-row/);
+	assert.match(page, /scrollIntoView/);
+	assert.match(page, /指定维度不可见或不存在/);
+	assert.doesNotMatch(page, /setEditing\(selectedDimension/);
+});
+
 test("dimension definition drawer stays narrow, has no physical-table form, and preserves strong-version recovery", () => {
 	const drawer = read("./components/DimensionDefinitionCreateDrawer.tsx");
 	const api = read("../../api/dimensionDefinitionApi.ts");

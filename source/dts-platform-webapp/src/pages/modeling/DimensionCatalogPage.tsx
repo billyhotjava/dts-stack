@@ -27,7 +27,11 @@ import { hasWarehousePlanCreateAccess } from "./warehousePlanCreateFlow";
 
 const { Text, Title } = Typography;
 
-export default function DimensionCatalogPage() {
+export type DimensionCatalogPageProps = {
+	selectedDimensionIdOverride?: string;
+};
+
+export default function DimensionCatalogPage({ selectedDimensionIdOverride }: DimensionCatalogPageProps = {}) {
 	const navigate = useNavigate();
 	const searchParams = useSearchParams();
 	const userRoles = useUserRoles();
@@ -42,6 +46,7 @@ export default function DimensionCatalogPage() {
 	const [search, setSearch] = useState("");
 	const [createOpen, setCreateOpen] = useState(false);
 	const [editing, setEditing] = useState<DimensionDefinitionView | null>(null);
+	const catalogRootRef = useRef<HTMLDivElement>(null);
 	const loadRequestRef = useRef(0);
 	const actionRequestRef = useRef(0);
 	const activeDomainRef = useRef(domainId);
@@ -99,6 +104,22 @@ export default function DimensionCatalogPage() {
 				.some((value) => value.toLowerCase().includes(keyword)),
 		);
 	}, [dimensions, search]);
+	const selectedDimensionId = selectedDimensionIdOverride?.trim() || "";
+	const selectedDimensionMissing =
+		Boolean(selectedDimensionId) &&
+		!loading &&
+		!loadError &&
+		!dimensions.some((definition) => definition.id === selectedDimensionId);
+
+	useEffect(() => {
+		void visibleDimensions;
+		if (!selectedDimensionId || loading) return;
+		const selectedRow = Array.from(
+			catalogRootRef.current?.querySelectorAll<HTMLElement>("tr[data-row-key]") || [],
+		).find((row) => row.dataset.rowKey === selectedDimensionId);
+		selectedRow?.scrollIntoView({ block: "nearest" });
+	}, [loading, selectedDimensionId, visibleDimensions]);
+
 	const emptyText = dimensionCatalogEmptyText({
 		totalCount: dimensions.length,
 		visibleCount: visibleDimensions.length,
@@ -283,7 +304,7 @@ export default function DimensionCatalogPage() {
 	];
 
 	return (
-		<div className="p-4" data-testid="dimension-catalog-page">
+		<div ref={catalogRootRef} className="p-4" data-testid="dimension-catalog-page">
 			<div className="mb-4 flex flex-wrap items-start justify-between gap-3">
 				<div>
 					<Title level={3} className="!mb-1">
@@ -320,6 +341,9 @@ export default function DimensionCatalogPage() {
 					}}
 				/>
 			) : null}
+			{selectedDimensionMissing ? (
+				<Alert className="mb-3" type="warning" showIcon message="指定维度不可见或不存在" />
+			) : null}
 			{loadError ? (
 				<Alert
 					className="mb-3"
@@ -349,6 +373,9 @@ export default function DimensionCatalogPage() {
 						loading={loading}
 						columns={columns}
 						dataSource={visibleDimensions}
+						rowClassName={(definition) =>
+							definition.id === selectedDimensionId ? "modeling-selected-dimension-row [&>td]:!bg-blue-50" : ""
+						}
 						scroll={{ x: 1600 }}
 						locale={{ emptyText: <Empty description={emptyText} /> }}
 					/>

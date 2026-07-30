@@ -71,7 +71,15 @@ const safeReturnTo = (value: string | null): string | null => {
 	return candidate.startsWith("/") && !candidate.startsWith("//") ? candidate : null;
 };
 
-export function IndicatorDefinitionPanel() {
+export type IndicatorDefinitionPanelProps = {
+	requestedIndicatorIdOverride?: string;
+	onSelectedIndicatorChange?: (indicatorId?: string) => void;
+};
+
+export function IndicatorDefinitionPanel({
+	requestedIndicatorIdOverride,
+	onSelectedIndicatorChange,
+}: IndicatorDefinitionPanelProps = {}) {
 	const canManage = useGovernanceManageAccess();
 	const navigate = useNavigate();
 	const [searchParams, setSearchParams] = useSearchParams();
@@ -94,7 +102,8 @@ export function IndicatorDefinitionPanel() {
 	const selectedId = current?.id || "";
 	const isDerived = Boolean(Form.useWatch("isDerived", form));
 	const dependencyCodes = Form.useWatch("dependencyCodes", form) || [];
-	const requestedIndicatorId = searchParams.get("indicatorId");
+	const requestedIndicatorId =
+		requestedIndicatorIdOverride?.trim() || (onSelectedIndicatorChange ? null : searchParams.get("indicatorId"));
 	const returnTo = safeReturnTo(searchParams.get("returnTo"));
 
 	const dependencyOptions = useMemo(
@@ -114,13 +123,17 @@ export function IndicatorDefinitionPanel() {
 
 	const updateDeepLink = useCallback(
 		(id?: string) => {
+			if (onSelectedIndicatorChange) {
+				onSelectedIndicatorChange(id);
+				return;
+			}
 			const next = new URLSearchParams(searchParams);
 			if (id) next.set("indicatorId", id);
 			else next.delete("indicatorId");
 			next.set("tab", "owner");
 			setSearchParams(next, { replace: true });
 		},
-		[searchParams, setSearchParams],
+		[onSelectedIndicatorChange, searchParams, setSearchParams],
 	);
 
 	const markEditedFields = useCallback((fieldNames: readonly string[]) => {
@@ -144,7 +157,10 @@ export function IndicatorDefinitionPanel() {
 	const openIndicator = useCallback(
 		async (id: string, updateLocation = true) => {
 			if (editedFieldNamesRef.current.size > 0) {
-				if (updateLocation) toast.error("当前指标有未保存修改，请先保存后再切换");
+				toast.error("当前指标有未保存修改，请先保存后再切换");
+				if (!updateLocation && onSelectedIndicatorChange) {
+					onSelectedIndicatorChange(current?.id);
+				}
 				return;
 			}
 			const requestSequence = ++detailRequestSequence.current;
@@ -178,7 +194,7 @@ export function IndicatorDefinitionPanel() {
 				if (requestSequence === detailRequestSequence.current) setDetailLoading(false);
 			}
 		},
-		[applyIndicatorDetail, updateDeepLink],
+		[applyIndicatorDetail, current?.id, onSelectedIndicatorChange, updateDeepLink],
 	);
 
 	const loadList = useCallback(async () => {

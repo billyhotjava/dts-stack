@@ -1,6 +1,7 @@
 import { Button, Empty, Spin } from "antd";
 import { ArrowRight, FileInput, FileOutput, FileSearch, TerminalSquare } from "lucide-react";
 import { lazy, type ReactNode, Suspense } from "react";
+import { metricViewFromWorkspace, workspaceViewFromMetric } from "./metricWorkbenchNavigation";
 import type {
 	ModelingWorkspaceAssetKind,
 	ModelingWorkspaceModelStage,
@@ -17,7 +18,7 @@ const DimensionCatalogPage = lazy(() => import("./DimensionCatalogPage"));
 const ModelCenterPage = lazy(() => import("./ModelCenterPage"));
 const ModelSpecDetailPage = lazy(() => import("./ModelSpecDetailPage"));
 const MetricWorkbenchPage = lazy(() => import("./MetricWorkbenchPage"));
-const LineageGraphPage = lazy(() => import("../catalog/LineageGraphPage"));
+const RelationshipGraphPanel = lazy(() => import("./RelationshipGraphPanel"));
 
 type PanelView = {
 	key: ModelingWorkspaceView;
@@ -42,7 +43,12 @@ const PANEL_VIEWS: Partial<Record<ModelingWorkspaceModule, PanelView[]>> = {
 		{ key: "dimensions", label: "业务维度" },
 		{ key: "model-specs", label: "逻辑模型" },
 	],
-	metrics: [{ key: "definitions", label: "指标工作台" }],
+	metrics: [
+		{ key: "definitions", label: "指标定义" },
+		{ key: "model", label: "模型生成" },
+		{ key: "templates", label: "模板复用" },
+		{ key: "consumption", label: "运行消费" },
+	],
 	tools: [{ key: "utilities", label: "建模工具" }],
 	graph: [{ key: "relationships", label: "资产关系" }],
 };
@@ -68,6 +74,7 @@ type ModelingWorkspacePanelsProps = {
 	onNavigate: (route: string) => void;
 	onOpenModelImport: () => void;
 	onOpenModel: (modelSpecId: string, planId?: string) => void;
+	onOpenIndicator: (indicatorId?: string) => void;
 	onCloseModel: () => void;
 	onModelStageChange: (stage: ModelingWorkspaceModelStage) => void;
 	onModelResolvedContext: (context: { modelSpecId: string; planId: string }) => void;
@@ -134,6 +141,7 @@ function activePanel(
 		onModelResolvedContext,
 		onModelStageChange,
 		onNavigate,
+		onOpenIndicator,
 		onOpenModel,
 		onOpenModelImport,
 		onViewChange,
@@ -213,20 +221,27 @@ function activePanel(
 			</Canonical>
 		) : (
 			<Canonical>
-				<DimensionCatalogPage />
+				<DimensionCatalogPage selectedDimensionIdOverride={assetKind === "dimension" ? assetId : undefined} />
 			</Canonical>
 		);
 	}
 	if (module === "metrics")
 		return (
 			<Canonical>
-				<MetricWorkbenchPage />
+				<MetricWorkbenchPage
+					embedded
+					activeViewOverride={metricViewFromWorkspace(view)}
+					onViewChange={(metricView) => onViewChange(workspaceViewFromMetric(metricView))}
+					onOpenModel={(modelSpecId) => onOpenModel(modelSpecId, planId)}
+					indicatorIdOverride={assetKind === "indicator" ? assetId : undefined}
+					onSelectedIndicatorChange={onOpenIndicator}
+				/>
 			</Canonical>
 		);
 	if (module === "graph")
 		return (
 			<Canonical>
-				<LineageGraphPage />
+				<RelationshipGraphPanel planId={planId} onNavigate={onNavigate} />
 			</Canonical>
 		);
 	return <ToolPanel onNavigate={onNavigate} onOpenModelImport={onOpenModelImport} />;

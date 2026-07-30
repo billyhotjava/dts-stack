@@ -44,6 +44,15 @@ type IndicatorDraftForm = {
 	aggregationType: string;
 };
 
+export type MetricWorkbenchPageProps = {
+	embedded?: boolean;
+	activeViewOverride?: MetricWorkbenchView;
+	onViewChange?: (view: MetricWorkbenchView) => void;
+	onOpenModel?: (modelSpecId: string) => void;
+	indicatorIdOverride?: string;
+	onSelectedIndicatorChange?: (indicatorId?: string) => void;
+};
+
 const publishedVersion = (value?: string) => {
 	const match = String(value || "")
 		.trim()
@@ -59,7 +68,14 @@ const draftCode = (model: CanonicalModelSpecView, field: ModelSpecField) =>
 		.toUpperCase()
 		.slice(0, 64) || `METRIC_${Date.now()}`;
 
-export default function MetricWorkbenchPage() {
+export default function MetricWorkbenchPage({
+	embedded = false,
+	activeViewOverride,
+	onViewChange,
+	onOpenModel,
+	indicatorIdOverride,
+	onSelectedIndicatorChange,
+}: MetricWorkbenchPageProps = {}) {
 	const location = useLocation();
 	const navigate = useNavigate();
 	const canManage = useGovernanceManageAccess();
@@ -76,7 +92,7 @@ export default function MetricWorkbenchPage() {
 	const [saving, setSaving] = useState(false);
 	const [draftOpen, setDraftOpen] = useState(false);
 	const [associateOpen, setAssociateOpen] = useState(false);
-	const activeView = resolveMetricWorkbenchView(location.search);
+	const activeView = activeViewOverride || resolveMetricWorkbenchView(location.search);
 
 	const journeyContext = useMemo(() => {
 		const params = new URLSearchParams(location.search);
@@ -161,6 +177,22 @@ export default function MetricWorkbenchPage() {
 	const unitById = useMemo(() => new Map(units.map((unit) => [unit.id, unit])), [units]);
 	const indicatorById = useMemo(() => new Map(indicators.map((indicator) => [indicator.id, indicator])), [indicators]);
 
+	const changeView = (view: MetricWorkbenchView) => {
+		if (embedded && onViewChange) {
+			onViewChange(view);
+			return;
+		}
+		navigate(buildMetricWorkbenchViewLocation(view, location.search, location.hash));
+	};
+
+	const openModel = (modelSpecId: string) => {
+		if (onOpenModel) {
+			onOpenModel(modelSpecId);
+			return;
+		}
+		navigate(`/modeling/models/${encodeURIComponent(modelSpecId)}`);
+	};
+
 	const fieldUnit = (model: CanonicalModelSpecView, fieldName: string) => {
 		const binding = model.standardBindings.find((item) => item.fieldName === fieldName);
 		const unit = binding?.measurementUnitId ? unitById.get(binding.measurementUnitId) : null;
@@ -199,6 +231,11 @@ export default function MetricWorkbenchPage() {
 			})) as IndicatorSummary;
 			setDraftOpen(false);
 			toast.success("原子指标草稿已创建，并保留模型字段与计量单位版本来源");
+			if (embedded) {
+				if (onSelectedIndicatorChange) onSelectedIndicatorChange(created.id);
+				else onViewChange?.("definition");
+				return;
+			}
 			const ownerParams = new URLSearchParams(location.search);
 			ownerParams.set("view", "definition");
 			ownerParams.set("indicatorId", created.id);
@@ -236,33 +273,25 @@ export default function MetricWorkbenchPage() {
 		}
 	};
 
-	return (
-		<SemanticWorkspaceFrame
-			activeKey="workbench"
-			title="指标工作台"
-			stats={[
-				{ label: "已发布模型", value: models.length, tone: "green" },
-				{ label: "可关联指标", value: indicators.length, tone: "blue" },
-				{ label: "指标引用", value: metricReferenceCount, tone: "amber" },
-				{ label: "度量字段", value: measureFieldCount, tone: "gray" },
-			]}
-			actions={
-				<Space wrap>
-					{activeView === "model" ? (
-						<>
-							<Button onClick={() => void load()} loading={loading} icon={<RefreshCw size={16} />}>
-								刷新
-							</Button>
-							<Button onClick={() => navigate("/modeling/models")}>查看模型中心</Button>
-							<Button type="primary" disabled={!selected || !canManage} onClick={() => setAssociateOpen(true)}>
-								关联已发布指标
-							</Button>
-						</>
-					) : null}
-				</Space>
-			}
-		>
-			<JourneyContextBar stage="metrics" />
+	const actions = (
+		<Space wrap>
+			{activeView === "model" ? (
+				<>
+					<Button onClick={() => void load()} loading={loading} icon={<RefreshCw size={16} />}>
+						刷新
+					</Button>
+					{!embedded ? <Button onClick={() => navigate("/modeling/models")}>查看模型中心</Button> : null}
+					<Button type="primary" disabled={!selected || !canManage} onClick={() => setAssociateOpen(true)}>
+						关联已发布指标
+					</Button>
+				</>
+			) : null}
+		</Space>
+	);
+
+	const content = (
+		<>
+			{!embedded ? <JourneyContextBar stage="metrics" /> : null}
 			{journeyContext.journey ? (
 				<Alert
 					className="mb-4"
@@ -273,32 +302,33 @@ export default function MetricWorkbenchPage() {
 					description={`模型 ${journeyContext.modelSpecId || "待选择"} · 标准草稿 ${journeyContext.standardDraftId || "未携带"} · 指标 ${journeyContext.metricId || "待引用"}`}
 				/>
 			) : null}
-			<div className="mb-4 rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
-				<div className="grid grid-cols-2 gap-2 md:grid-cols-4" data-testid="metric-workbench-navigation">
-					{[
-						{ label: "1 定义与发布", value: "definition" },
-						{ label: "2 从模型创建", value: "model" },
-						{ label: "3 模板复用", value: "templates" },
-						{ label: "4 运行与消费", value: "consumption" },
-					].map((item) => (
-						<Button
-							key={item.value}
-							block
-							type={activeView === item.value ? "primary" : "text"}
-							onClick={() =>
-								navigate(
-									buildMetricWorkbenchViewLocation(item.value as MetricWorkbenchView, location.search, location.hash),
-								)
-							}
-						>
-							{item.label}
-						</Button>
-					))}
+			{!embedded ? (
+				<div className="mb-4 rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
+					<div className="grid grid-cols-2 gap-2 md:grid-cols-4" data-testid="metric-workbench-navigation">
+						{[
+							{ label: "1 定义与发布", value: "definition" },
+							{ label: "2 从模型创建", value: "model" },
+							{ label: "3 模板复用", value: "templates" },
+							{ label: "4 运行与消费", value: "consumption" },
+						].map((item) => (
+							<Button
+								key={item.value}
+								block
+								type={activeView === item.value ? "primary" : "text"}
+								onClick={() => changeView(item.value as MetricWorkbenchView)}
+							>
+								{item.label}
+							</Button>
+						))}
+					</div>
 				</div>
-			</div>
+			) : null}
 			{activeView === "definition" ? (
 				<div data-testid="metric-indicator-owner">
-					<IndicatorDefinitionPanel />
+					<IndicatorDefinitionPanel
+						requestedIndicatorIdOverride={indicatorIdOverride}
+						onSelectedIndicatorChange={onSelectedIndicatorChange}
+					/>
 				</div>
 			) : null}
 			{activeView === "templates" ? <IndicatorTemplatePage /> : null}
@@ -371,9 +401,7 @@ export default function MetricWorkbenchPage() {
 											模型 {selected.id} · 发布 revision {selected.revision}
 										</div>
 									</div>
-									<Button onClick={() => navigate(`/modeling/models/${encodeURIComponent(selected.id)}`)}>
-										查看模型详情
-									</Button>
+									<Button onClick={() => openModel(selected.id)}>查看模型详情</Button>
 								</div>
 								<div className="mt-5 grid gap-5 lg:grid-cols-2">
 									<div>
@@ -446,13 +474,7 @@ export default function MetricWorkbenchPage() {
 																		创建原子指标草稿
 																	</Button>
 																	{!unit ? (
-																		<Button
-																			size="small"
-																			type="link"
-																			onClick={() =>
-																				navigate(`/modeling/models/${encodeURIComponent(selected.id)}?tab=standards`)
-																			}
-																		>
+																		<Button size="small" type="link" onClick={() => openModel(selected.id)}>
 																			先绑定单位
 																		</Button>
 																	) : null}
@@ -523,6 +545,31 @@ export default function MetricWorkbenchPage() {
 						.map((item) => ({ value: item.id, label: `${item.name || item.code || item.id} · ${item.version}` }))}
 				/>
 			</Modal>
+		</>
+	);
+
+	if (embedded) {
+		return (
+			<div className="space-y-4 p-4" data-testid="metric-workbench-embedded">
+				{activeView === "model" ? <div className="flex justify-end">{actions}</div> : null}
+				{content}
+			</div>
+		);
+	}
+
+	return (
+		<SemanticWorkspaceFrame
+			activeKey="workbench"
+			title="指标工作台"
+			stats={[
+				{ label: "已发布模型", value: models.length, tone: "green" },
+				{ label: "可关联指标", value: indicators.length, tone: "blue" },
+				{ label: "指标引用", value: metricReferenceCount, tone: "amber" },
+				{ label: "度量字段", value: measureFieldCount, tone: "gray" },
+			]}
+			actions={actions}
+		>
+			{content}
 		</SemanticWorkspaceFrame>
 	);
 }

@@ -23,6 +23,9 @@ export const MODELING_WORKSPACE_VIEWS = [
 	"dimensions",
 	"model-specs",
 	"definitions",
+	"model",
+	"templates",
+	"consumption",
 	"utilities",
 	"relationships",
 ] as const;
@@ -76,7 +79,7 @@ const viewSetByModule: Record<ModelingWorkspaceModule, ReadonlySet<string>> = {
 	planning: new Set(["overview", "categories", "data-marts", "layers", "sources"]),
 	standards: new Set(["elements", "reference", "glossary", "units"]),
 	models: new Set(["dimensions", "model-specs"]),
-	metrics: new Set(["definitions"]),
+	metrics: new Set(["definitions", "model", "templates", "consumption"]),
 	tools: new Set(["utilities"]),
 	graph: new Set(["relationships"]),
 };

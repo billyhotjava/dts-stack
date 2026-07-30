@@ -77,6 +77,18 @@ test("workspace view is accepted only by the owning module", () => {
 	});
 });
 
+test("metrics owns four stable workbench views without accepting them in other modules", () => {
+	for (const workspaceView of ["definitions", "model", "templates", "consumption"]) {
+		assert.deepEqual(
+			parseModelingWorkspaceRouteState(new URLSearchParams(`module=metrics&workspaceView=${workspaceView}`)),
+			{ module: "metrics", workspaceView },
+		);
+	}
+	assert.deepEqual(parseModelingWorkspaceRouteState(new URLSearchParams("module=models&workspaceView=templates")), {
+		module: "models",
+	});
+});
+
 test("module navigation preserves plan and active import session", () => {
 	const next = new URLSearchParams(
 		updateModelingWorkspaceSearch(
