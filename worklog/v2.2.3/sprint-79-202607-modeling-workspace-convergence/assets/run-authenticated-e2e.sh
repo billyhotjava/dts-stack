@@ -51,8 +51,11 @@ case "${sprint79_requested_spec}" in
 	e2e/sprint79-model-detail.spec.ts|source/dts-platform-webapp/e2e/sprint79-model-detail.spec.ts)
 		sprint79_spec="e2e/sprint79-model-detail.spec.ts"
 		;;
+	e2e/sprint79-modeling-workspace.spec.ts|source/dts-platform-webapp/e2e/sprint79-modeling-workspace.spec.ts)
+		sprint79_spec="e2e/sprint79-modeling-workspace.spec.ts"
+		;;
 	*)
-		echo "ERROR: only sprint79-model-detail.spec.ts is allowed by this privileged wrapper" >&2
+		echo "ERROR: only approved Sprint-79 read-only specs are allowed by this privileged wrapper" >&2
 		exit 64
 		;;
 esac
