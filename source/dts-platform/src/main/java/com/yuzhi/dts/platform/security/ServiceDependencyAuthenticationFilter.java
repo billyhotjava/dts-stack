@@ -141,7 +141,8 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
                 || isGet(method, path, "/api/infra/data-source-selections")
                 || isGetInfraDataSourceDetail(method, path)
                 || isGetRuntimeDetail(method, path)
-                || isAnalyticsAssetPermission(method, path);
+                || isAnalyticsAssetPermission(method, path)
+                || isAnalyticsClassificationConsumer(method, path);
         }
         if ("dts-metrics".equals(service)) {
             return isGet(method, path, "/api/internal/capabilities")
@@ -292,6 +293,14 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
             || isPost(method, path, "/api/internal/asset-permission/grants")
             || isDelete(method, path, "/api/internal/asset-permission/grants/by-asset")
             || isDeleteAnalyticsGrant(method, path);
+    }
+
+    private boolean isAnalyticsClassificationConsumer(String method, String path) {
+        return isPost(method, path, "/api/catalog/classifications/consumers/derive")
+            || isGet(method, path, "/api/catalog/classifications/consumers/guard")
+            || isPost(method, path, "/api/catalog/classifications/consumers/access-bindings")
+            || isGet(method, path, "/api/catalog/classifications/consumers/access-bindings/guard")
+            || isPost(method, path, "/api/catalog/classifications/consumers/exports/seal");
     }
 
     private boolean isMetricsAssetPermission(String method, String path) {

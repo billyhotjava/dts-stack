@@ -19,6 +19,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -102,6 +103,22 @@ public class GlobalExceptionHandler {
             message = "External database connection refused";
         }
         return buildError(HttpStatus.SERVICE_UNAVAILABLE, "EXT_DB_CONNECT_FAILED", message, request, response, true);
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ApiError> handleResponseStatus(
+            ResponseStatusException ex,
+            HttpServletRequest request,
+            HttpServletResponse response) {
+        HttpStatus status = HttpStatus.resolve(ex.getStatusCode().value());
+        if (status == null) {
+            status = HttpStatus.INTERNAL_SERVER_ERROR;
+        }
+        String message = ex.getReason();
+        if (message == null || message.isBlank()) {
+            message = ex.getMessage();
+        }
+        return buildError(status, status.name(), message, request, response);
     }
 
     @ExceptionHandler(Exception.class)

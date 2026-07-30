@@ -18,11 +18,11 @@ import { useCatalogDomainOptions } from "@/hooks/useCatalogDomainOptions";
 import { useParams } from "@/routes/hooks";
 import { useUserRoles } from "@/store/userStore";
 import { ModelSpecBlockerPanel } from "./components/ModelSpecBlockerPanel";
+import { ModelSpecImplementationMigrationPanel } from "./components/ModelSpecImplementationMigrationPanel";
 import {
 	ModelSpecImplementationStage,
 	type ModelSpecImplementationStageActionRef,
 } from "./components/ModelSpecImplementationStage";
-import { ModelSpecImplementationMigrationPanel } from "./components/ModelSpecImplementationMigrationPanel";
 import { ModelSpecLogicalDesignStage, type ModelSpecSelectOption } from "./components/ModelSpecLogicalDesignStage";
 import { ModelSpecPhysicalAssetStage } from "./components/ModelSpecPhysicalAssetStage";
 import { ModelSpecReclassificationWizard } from "./components/ModelSpecReclassificationWizard";
@@ -60,6 +60,7 @@ import {
 	modelSpecErrorMessage,
 	modelSpecIssueMessage,
 	modelSpecRevisionConflict,
+	modelSpecServerIssues,
 } from "./modelSpecWorkbench";
 import { hasWarehousePlanCreateAccess } from "./warehousePlanCreateFlow";
 
@@ -79,11 +80,14 @@ const stableFormValue = (value: unknown): unknown => {
 
 const issueField = (field: string): keyof ModelSpecDraft => {
 	if (field === "grain") return "grainStatement";
-	if (field === "fields") return "grainKeysText";
+	if (field === "fields" || field.startsWith("fields[") || field.startsWith("fields.")) return "fields";
 	if (field === "sourceRefs") return "sources";
 	if (field === "dependsOn") return "upstreamIds";
 	if (field === "dimensionRefs") return "dimensionRefIds";
 	if (field === "timeSemantics") return "timeSemanticsType";
+	if (field === "dimensionProfile.reuseScope") return "dimensionReuseScope";
+	if (field === "dimensionProfile.scdPolicy") return "dimensionScdType";
+	if (field === "dimensionProfile.hierarchies") return "dimensionHierarchies";
 	if (field === "dimensionProfile") return "dimensionCode";
 	if (field === "generationStrategy") return "generationStrategyType";
 	return field as keyof ModelSpecDraft;
@@ -533,6 +537,22 @@ export default function ModelSpecDetailPage() {
 				setStatusChanged(true);
 				setSaveError("");
 			} else {
+				const serverIssues = modelSpecServerIssues(error);
+				if (serverIssues.length > 0) {
+					const errorsByField = new Map<keyof ModelSpecDraft, string[]>();
+					serverIssues.forEach((issue) => {
+						const field = issueField(issue.field);
+						const errors = errorsByField.get(field) || [];
+						errors.push(modelSpecIssueMessage(issue.code));
+						errorsByField.set(field, errors);
+					});
+					form.setFields(
+						Array.from(errorsByField, ([name, errors]) => ({
+							name,
+							errors: Array.from(new Set(errors)),
+						})),
+					);
+				}
 				setSaveError(modelSpecErrorMessage(error));
 			}
 		} finally {

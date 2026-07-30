@@ -1,4 +1,5 @@
 import { parseModelFieldNames } from "./modelSpecFieldRules.ts";
+import { createDimensionSystemCode } from "./modelSpecSystemCode.ts";
 import type {
 	CanonicalModelSpecView,
 	CreateModelSpecCommand,
@@ -431,7 +432,11 @@ export function modelSpecDraftFromView(view: CanonicalModelSpecView): ModelSpecD
 		consumptionScenario: view.consumptionScenario || "",
 		generationStrategyType: view.generationStrategy?.type || "",
 		generationStrategyReference: view.generationStrategy?.reference || "",
-		dimensionCode: view.dimensionProfile?.dimensionCode || "",
+		dimensionCode:
+			view.dimensionProfile?.dimensionCode ||
+			(view.modelType === "DIMENSION" && view.status === "DRAFT"
+				? createDimensionSystemCode({ randomUUID: () => view.id })
+				: ""),
 		dimensionHierarchies:
 			view.dimensionProfile?.hierarchies.map((hierarchy) => ({
 				code: hierarchy.code,
@@ -467,9 +472,41 @@ export function modelSpecDraftFromView(view: CanonicalModelSpecView): ModelSpecD
 type ErrorLike = {
 	response?: {
 		status?: number;
-		data?: { code?: string; data?: unknown };
+		data?: { code?: string; data?: unknown; message?: string };
 	};
 };
+
+export type ModelSpecServerIssue = {
+	code: string;
+	field: string;
+};
+
+const MODEL_SPEC_SERVER_ISSUE_FIELDS: Record<string, string> = {
+	MODEL_SPEC_DIMENSION_ATTRIBUTE_UNKNOWN: "fields",
+	MODEL_SPEC_REDUNDANCY_EVIDENCE_REQUIRED: "fields",
+	MODEL_SPEC_DATA_MART_SCOPE_MISMATCH: "dataMartId",
+};
+
+export function modelSpecServerIssues(error: unknown): ModelSpecServerIssue[] {
+	const candidate = error as ErrorLike;
+	const status = candidate?.response?.status;
+	if (status !== 400 && status !== 422) return [];
+	const envelope = candidate.response?.data;
+	const details = envelope?.data;
+	if (Array.isArray(details)) {
+		const issues = details.flatMap((detail) => {
+			if (!detail || typeof detail !== "object") return [];
+			const code = (detail as { code?: unknown }).code;
+			const field = (detail as { field?: unknown }).field;
+			return typeof code === "string" && typeof field === "string" ? [{ code, field }] : [];
+		});
+		if (issues.length > 0) return issues;
+	}
+	const code = envelope?.code;
+	if (typeof code !== "string") return [];
+	const field = MODEL_SPEC_SERVER_ISSUE_FIELDS[code];
+	return field ? [{ code, field }] : [];
+}
 
 export function modelSpecRevisionConflict(error: unknown): ModelSpecRevisionConflictDetails | null {
 	const candidate = error as ErrorLike;
@@ -509,7 +546,14 @@ export function modelSpecErrorMessage(error: unknown): string {
 		return "当前计划和数据集市中已存在该业务维度的同名实现变体，请查看已有维度表或更换实现变体";
 	}
 	if (status === 409) return "当前名称或请求标识已被占用，请调整后重试";
-	if (status === 422 || status === 400) return "请检查标红字段；当前输入已保留";
+	if (status === 422 || status === 400) {
+		const messages = Array.from(
+			new Set(modelSpecServerIssues(error).map((issue) => modelSpecIssueMessage(issue.code))),
+		);
+		return messages.length > 0
+			? `${messages.join("；")}；当前输入已保留`
+			: "保存内容未通过校验；当前输入已保留，请检查逻辑定义和字段设计";
+	}
 	if (status === 428) return "模型版本信息已失效，请刷新后再保存";
 	return "操作未完成，当前输入已保留，请稍后重试";
 }
@@ -533,6 +577,9 @@ const MODEL_SPEC_ISSUE_MESSAGES: Record<string, string> = {
 	MODEL_SPEC_CONSUMPTION_SCENARIO_REQUIRED: "请说明应用表服务的报表、接口或业务场景",
 	MODEL_SPEC_TIME_SEMANTICS_INVALID: "请同时选择业务时间类型并填写对应字段",
 	MODEL_SPEC_FIELD_INVALID: "请检查字段名称、类型和角色",
+	MODEL_SPEC_DIMENSION_ATTRIBUTE_UNKNOWN: "维度属性编码不属于当前业务维度定义",
+	MODEL_SPEC_REDUNDANCY_EVIDENCE_REQUIRED: "请填写冗余维度字段的来源依据",
+	MODEL_SPEC_DATA_MART_SCOPE_MISMATCH: "请选择业务维度复用范围要求的数据集市",
 };
 
 export function modelSpecIssueMessage(code: string): string {

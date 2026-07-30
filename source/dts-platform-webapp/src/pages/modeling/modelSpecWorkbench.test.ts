@@ -11,6 +11,7 @@ import {
 	modelSpecDraftFromView,
 	modelSpecErrorMessage,
 	modelSpecIssueMessage,
+	modelSpecServerIssues,
 } from "./modelSpecWorkbench.ts";
 
 const PLAN_ID = "10000000-0000-0000-0000-000000000001";
@@ -19,6 +20,50 @@ const SOURCE_BINDING_ID = "50000000-0000-0000-0000-000000000001";
 const UPSTREAM_ID = "30000000-0000-0000-0000-000000000001";
 const NEW_UPSTREAM_ID = "30000000-0000-0000-0000-000000000002";
 const DIMENSION_ID = "40000000-0000-0000-0000-000000000001";
+
+const canonicalView = (overrides: Partial<CanonicalModelSpecView> = {}): CanonicalModelSpecView => ({
+	contractVersion: 2,
+	id: "60000000-0000-0000-0000-000000000001",
+	planId: PLAN_ID,
+	domainId: DOMAIN_ID,
+	modelType: "FACT",
+	layer: "DWD",
+	name: "customer_event_detail",
+	description: null,
+	implementationMode: "DESIGNER_GENERATED",
+	materialization: "table",
+	businessActivityRef: null,
+	consumptionScenario: null,
+	grain: { statement: "一行代表一次客户事件", keys: ["event_id"] },
+	factShape: "TRANSACTION",
+	timeSemantics: { type: "EVENT_TIME", fields: ["event_time"] },
+	fields: [{ name: "event_id", dataType: "string", nullable: false, role: "KEY" }],
+	sourceRefs: [
+		{
+			kind: "TABLE",
+			ref: "ods.customer_event",
+			layer: "ODS",
+			role: "PRIMARY",
+			sortOrder: 0,
+			sourceBindingId: SOURCE_BINDING_ID,
+			resolvedVersion: "v1",
+		},
+	],
+	dependsOn: [],
+	dimensionRefs: [],
+	metricRefs: [],
+	standardBindings: [],
+	generationStrategy: null,
+	dimensionDefinitionRef: null,
+	status: "DRAFT",
+	revision: 3,
+	checksum: "a".repeat(64),
+	createdAt: "2026-07-19T00:00:00Z",
+	updatedAt: "2026-07-19T00:00:00Z",
+	compatibilityMode: "CANONICAL",
+	legacyRefs: null,
+	...overrides,
+});
 
 const baseDraft = (overrides: Partial<ModelSpecDraft> = {}): ModelSpecDraft => ({
 	...createEmptyModelSpecDraft("FACT", { planId: PLAN_ID, domainId: DOMAIN_ID }),
@@ -250,48 +295,7 @@ test("SUMMARY and APPLICATION pin selected upstream revisions and keep their own
 });
 
 test("editing rebuilds a complete update command while immutable context stays unchanged", () => {
-	const view: CanonicalModelSpecView = {
-		contractVersion: 2,
-		id: "60000000-0000-0000-0000-000000000001",
-		planId: PLAN_ID,
-		domainId: DOMAIN_ID,
-		modelType: "FACT",
-		layer: "DWD",
-		name: "customer_event_detail",
-		description: null,
-		implementationMode: "DESIGNER_GENERATED",
-		materialization: "table",
-		businessActivityRef: null,
-		consumptionScenario: null,
-		grain: { statement: "一行代表一次客户事件", keys: ["event_id"] },
-		factShape: "TRANSACTION",
-		timeSemantics: { type: "EVENT_TIME", fields: ["event_time"] },
-		fields: [{ name: "event_id", dataType: "string", nullable: false, role: "KEY" }],
-		sourceRefs: [
-			{
-				kind: "TABLE",
-				ref: "ods.customer_event",
-				layer: "ODS",
-				role: "PRIMARY",
-				sortOrder: 0,
-				sourceBindingId: SOURCE_BINDING_ID,
-				resolvedVersion: "v1",
-			},
-		],
-		dependsOn: [],
-		dimensionRefs: [],
-		metricRefs: [],
-		standardBindings: [],
-		generationStrategy: null,
-		dimensionDefinitionRef: null,
-		status: "DRAFT",
-		revision: 3,
-		checksum: "a".repeat(64),
-		createdAt: "2026-07-19T00:00:00Z",
-		updatedAt: "2026-07-19T00:00:00Z",
-		compatibilityMode: "CANONICAL",
-		legacyRefs: null,
-	};
+	const view = canonicalView();
 	const draft = modelSpecDraftFromView(view);
 	draft.name = "customer_event_detail_v2";
 	const update = buildModelSpecUpdateCommand(draft, []);
@@ -301,6 +305,67 @@ test("editing rebuilds a complete update command while immutable context stays u
 	assert.equal(update.modelType, "FACT");
 	assert.equal(update.name, "customer_event_detail_v2");
 	assert.equal("idempotencyKey" in update, false);
+});
+
+test("opening a DIMENSION draft assigns one system code that is reused by logical-save retries", () => {
+	const view = canonicalView({
+		modelType: "DIMENSION",
+		name: "budget_account_dimension",
+		factShape: null,
+		timeSemantics: null,
+		dimensionDefinitionRef: {
+			dimensionDefinitionId: "70000000-0000-0000-0000-000000000001",
+			revision: 1,
+		},
+	});
+	const draft = modelSpecDraftFromView(view);
+	const reopenedDraft = modelSpecDraftFromView(view);
+
+	assert.match(draft.dimensionCode, /^DIM_[A-F0-9]{32}$/);
+	assert.equal(reopenedDraft.dimensionCode, draft.dimensionCode);
+	const firstSave = buildModelSpecUpdateCommand(draft, []);
+	const retry = buildModelSpecUpdateCommand(draft, []);
+	assert.deepEqual(firstSave.dimensionProfile, {
+		dimensionCode: draft.dimensionCode,
+		hierarchies: [],
+		scdPolicy: { type: "NONE" },
+		reuseScope: "PLAN",
+	});
+	assert.deepEqual(retry.dimensionProfile, firstSave.dimensionProfile);
+});
+
+test("opening a DIMENSION with a persisted system code never replaces it", () => {
+	const draft = modelSpecDraftFromView(
+		canonicalView({
+			modelType: "DIMENSION",
+			name: "budget_account_dimension",
+			factShape: null,
+			timeSemantics: null,
+			dimensionProfile: {
+				dimensionCode: "DIM_BUDGET_ACCOUNT",
+				hierarchies: [],
+				scdPolicy: { type: "TYPE1" },
+				reuseScope: "PLAN",
+			},
+		}),
+	);
+
+	assert.equal(draft.dimensionCode, "DIM_BUDGET_ACCOUNT");
+	assert.equal(buildModelSpecUpdateCommand(draft, []).dimensionProfile?.dimensionCode, "DIM_BUDGET_ACCOUNT");
+});
+
+test("opening a read-only historical DIMENSION without a profile does not invent a displayed code", () => {
+	const draft = modelSpecDraftFromView(
+		canonicalView({
+			modelType: "DIMENSION",
+			name: "legacy_dimension",
+			status: "PUBLISHED",
+			factShape: null,
+			timeSemantics: null,
+		}),
+	);
+
+	assert.equal(draft.dimensionCode, "");
 });
 
 test("editing unrelated fields preserves an existing upstream revision pin", () => {
@@ -422,6 +487,49 @@ test("customer errors describe recovery without exposing backend text", () => {
 	assert.equal(
 		modelSpecErrorMessage(new Error("SQLSTATE 23505 technical detail")),
 		"操作未完成，当前输入已保留，请稍后重试",
+	);
+});
+
+test("request validation errors retain safe issue codes and field locations", () => {
+	const invalidFieldsError = {
+		response: {
+			status: 422,
+			data: {
+				code: "MODEL_SPEC_REQUEST_INVALID",
+				message: "raw backend validation detail",
+				data: [
+					{
+						code: "MODEL_SPEC_FIELD_INVALID",
+						field: "fields",
+						severity: "ERROR",
+						message: "raw field detail",
+					},
+				],
+			},
+		},
+	};
+	assert.deepEqual(modelSpecServerIssues(invalidFieldsError), [{ code: "MODEL_SPEC_FIELD_INVALID", field: "fields" }]);
+	assert.equal(modelSpecErrorMessage(invalidFieldsError), "请检查字段名称、类型和角色；当前输入已保留");
+
+	const unknownDimensionAttributeError = {
+		response: {
+			status: 422,
+			data: {
+				code: "MODEL_SPEC_DIMENSION_ATTRIBUTE_UNKNOWN",
+				message: "raw dimension detail",
+				data: {
+					fieldName: "account_code",
+					dimensionAttributeCode: "ACCOUNT_CODE",
+				},
+			},
+		},
+	};
+	assert.deepEqual(modelSpecServerIssues(unknownDimensionAttributeError), [
+		{ code: "MODEL_SPEC_DIMENSION_ATTRIBUTE_UNKNOWN", field: "fields" },
+	]);
+	assert.equal(
+		modelSpecErrorMessage(unknownDimensionAttributeError),
+		"维度属性编码不属于当前业务维度定义；当前输入已保留",
 	);
 });
 

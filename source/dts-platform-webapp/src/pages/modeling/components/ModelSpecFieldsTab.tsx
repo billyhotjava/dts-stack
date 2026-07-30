@@ -47,6 +47,11 @@ export function ModelSpecFieldsTab({ readOnly, persistedFieldNames, dimensionAtt
 			>
 				{(fields, { add, remove }, { errors }) => (
 					<Space direction="vertical" className="w-full" size={12}>
+						{errors.length > 0 ? (
+							<div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+								<Form.ErrorList errors={errors} />
+							</div>
+						) : null}
 						{fields.length === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无字段" /> : null}
 						{fields.map((field, index) => {
 							const protectedName = isProtectedModelFieldName(
@@ -228,7 +233,6 @@ export function ModelSpecFieldsTab({ readOnly, persistedFieldNames, dimensionAtt
 								添加字段
 							</Button>
 						) : null}
-						<Form.ErrorList errors={errors} />
 					</Space>
 				)}
 			</Form.List>

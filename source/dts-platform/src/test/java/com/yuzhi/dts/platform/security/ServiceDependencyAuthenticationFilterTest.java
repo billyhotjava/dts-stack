@@ -32,6 +32,16 @@ class ServiceDependencyAuthenticationFilterTest {
     private static final String INGESTION_RUNTIME_DETAIL = "/api/infra/data-sources/11111111-1111-1111-1111-111111111111/runtime-detail";
     private static final String ANALYTICS_RUNTIME_DETAIL = "/api/infra/data-sources/22222222-2222-2222-2222-222222222222/runtime-detail";
     private static final String ANALYTICS_ASSET_PERMISSION_CHECK = "/api/internal/asset-permission/check";
+    private static final String ANALYTICS_CLASSIFICATION_DERIVE =
+        "/api/catalog/classifications/consumers/derive";
+    private static final String ANALYTICS_CLASSIFICATION_GUARD =
+        "/api/catalog/classifications/consumers/guard";
+    private static final String ANALYTICS_CLASSIFICATION_ACCESS_BINDINGS =
+        "/api/catalog/classifications/consumers/access-bindings";
+    private static final String ANALYTICS_CLASSIFICATION_ACCESS_BINDINGS_GUARD =
+        "/api/catalog/classifications/consumers/access-bindings/guard";
+    private static final String ANALYTICS_CLASSIFICATION_EXPORT_SEAL =
+        "/api/catalog/classifications/consumers/exports/seal";
     private static final String METRICS_ASSET_PERMISSION_POLICY_V1 = "/api/internal/v1/asset-permission/policy";
     private static final String METRICS_ASSET_PERMISSION_POLICY_LEGACY = "/api/internal/asset-permission/policy";
     private static final String ANALYTICS_ASSET_PERMISSION_BATCH_CHECK = "/api/internal/asset-permission/batch-check";
@@ -162,6 +172,30 @@ class ServiceDependencyAuthenticationFilterTest {
         assertAnalyticsCanAccessPost(ANALYTICS_ASSET_PERMISSION_CHECK);
         assertAnalyticsCanAccessPost(ANALYTICS_ASSET_PERMISSION_BATCH_CHECK);
         assertAnalyticsCanAccessPost(ANALYTICS_ASSET_PERMISSION_ACCESSIBLE_IDS);
+    }
+
+    @Test
+    void analyticsMatchingToken_canAccessClassificationConsumerContract() throws Exception {
+        assertAnalyticsCanAccessPost(ANALYTICS_CLASSIFICATION_DERIVE);
+        assertAnalyticsCanAccessGet(ANALYTICS_CLASSIFICATION_GUARD);
+        assertAnalyticsCanAccessPost(ANALYTICS_CLASSIFICATION_ACCESS_BINDINGS);
+        assertAnalyticsCanAccessGet(ANALYTICS_CLASSIFICATION_ACCESS_BINDINGS_GUARD);
+        assertAnalyticsCanAccessPost(ANALYTICS_CLASSIFICATION_EXPORT_SEAL);
+    }
+
+    @Test
+    void analyticsMatchingToken_cannotAccessClassificationExplainEndpoint() throws Exception {
+        ServiceDependencyAuthenticationFilter filter = new ServiceDependencyAuthenticationFilter(props, svcTokenAuthService);
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.addHeader(SERVICE_HEADER, "dts-analytics");
+        req.addHeader(TOKEN_HEADER, "analytics-secret");
+        req.setMethod("GET");
+        req.setRequestURI("/api/catalog/classifications/consumers/explain");
+
+        filter.doFilter(req, new MockHttpServletResponse(), chain);
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        verify(svcTokenAuthService, never()).authenticateService(any(), any());
     }
 
     @Test
@@ -442,6 +476,25 @@ class ServiceDependencyAuthenticationFilterTest {
         req.addHeader(SERVICE_HEADER, "dts-analytics");
         req.addHeader(TOKEN_HEADER, "analytics-secret");
         req.setMethod("POST");
+        req.setRequestURI(path);
+
+        filter.doFilter(req, new MockHttpServletResponse(), localChain);
+
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        assertThat(auth).isNotNull();
+        assertThat(auth.getPrincipal()).isEqualTo("service:dts-analytics");
+        assertThat(auth.getAuthorities()).extracting(Object::toString).contains(AuthoritiesConstants.SERVICE_INTERNAL);
+        verify(localChain).doFilter(any(), any());
+    }
+
+    private void assertAnalyticsCanAccessGet(String path) throws Exception {
+        SecurityContextHolder.clearContext();
+        FilterChain localChain = mock(FilterChain.class);
+        ServiceDependencyAuthenticationFilter filter = new ServiceDependencyAuthenticationFilter(props, svcTokenAuthService);
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.addHeader(SERVICE_HEADER, "dts-analytics");
+        req.addHeader(TOKEN_HEADER, "analytics-secret");
+        req.setMethod("GET");
         req.setRequestURI(path);
 
         filter.doFilter(req, new MockHttpServletResponse(), localChain);

@@ -78,9 +78,16 @@ test("model detail separates design fields and standards without trusting query 
 		/await form\.validateFields\(\);[\s\S]*form\.getFieldsValue\(true\)/,
 		"full-replacement saves must include unmounted metric and standard collections",
 	);
+	assert.match(page, /modelSpecServerIssues\(error\)[\s\S]*form\.setFields/);
 	assert.match(page, /modelSpecCatalogPath\(model\.modelType,\s*model\.planId,\s*model\.domainId\)/);
 	assert.doesNotMatch(page, /searchParams\.get\(["']planId["']\)/);
 	assert.match(fields, /Form\.List[\s\S]*name="fields"/);
+	const errorListIndex = fields.indexOf("<Form.ErrorList");
+	assert.notEqual(errorListIndex, -1, "field-list validation errors must have a visible renderer");
+	assert.ok(
+		errorListIndex < fields.indexOf("{fields.map("),
+		"field-list validation errors must be visible before the field cards",
+	);
 	assert.match(standards, /standardBindings/);
 	assert.match(standards, /前往数据元/);
 	assert.match(standards, /配置字段标准/);
