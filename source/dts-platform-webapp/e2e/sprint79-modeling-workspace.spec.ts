@@ -101,7 +101,7 @@ test("seven-module workspace preserves planning context and opens canonical owne
 
 	await page.getByRole("tab", { name: "数据指标", exact: true }).click();
 	await expectWorkspaceState(page, { module: "metrics", planId });
-	await expect(page.getByTestId("metric-workbench-navigation")).toBeVisible();
+	await expect(page.getByText("指标定义与发布", { exact: true })).toBeVisible();
 
 	await page.getByRole("tab", { name: "通用工具", exact: true }).click();
 	await expectWorkspaceState(page, { module: "tools", planId });
