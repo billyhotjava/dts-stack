@@ -125,7 +125,10 @@ test("seven-module workspace preserves planning context and opens canonical owne
 
 	await page.getByRole("tab", { name: "关系图", exact: true }).click();
 	await expectWorkspaceState(page, { module: "graph", planId });
-	await expect(page.getByText("血缘与影响分析 / 血缘图谱", { exact: true })).toBeVisible();
+	const relationshipGraph = page.getByTestId("relationship-graph-panel");
+	await expect(relationshipGraph.getByText("建设计划关系图", { exact: true })).toBeVisible();
+	await expect(relationshipGraph.getByText(/^[1-9]\d* 个节点$/)).toBeVisible();
+	await expect(relationshipGraph.getByText(/^[1-9]\d* 条关系$/)).toBeVisible();
 	await page.screenshot({ path: path.join(evidenceDir, "workspace-seven-modules.png"), fullPage: true });
 
 	expect(failures.pageErrors).toEqual([]);
