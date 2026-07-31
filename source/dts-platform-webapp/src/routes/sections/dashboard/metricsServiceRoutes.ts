@@ -1,15 +1,17 @@
 const LEGACY_METRICS_PREFIX = "/bi-apps/metrics";
 const LEGACY_SEMANTIC_CENTER_PREFIX = "/modeling/semantic-center";
-const METRIC_WORKBENCH_PATH = "/modeling/workbench?module=metrics&workspaceView=definitions";
-const MODEL_WORKBENCH_PATH = "/modeling/workbench?module=models&workspaceView=model-specs";
-const DIMENSION_WORKBENCH_PATH = "/modeling/workbench?module=models&workspaceView=dimensions";
+const METRIC_WORKBENCH_PATH = "/data-modeling/metrics/atomic";
+const MODEL_WORKBENCH_PATH = "/data-modeling/dimensions/workbench";
+const DIMENSION_WORKBENCH_PATH = "/data-modeling/dimensions/workbench";
+const BUSINESS_CATEGORIES_PATH = "/data-modeling/planning/business-categories";
+const MODELING_OVERVIEW_PATH = "/data-modeling/home/workspace";
 
 const SEMANTIC_PAGE_BY_SUFFIX: Record<string, string> = {
 	semantic: MODEL_WORKBENCH_PATH,
 	"semantic/objects": DIMENSION_WORKBENCH_PATH,
 	"semantic/metrics": METRIC_WORKBENCH_PATH,
 	"semantic/models": MODEL_WORKBENCH_PATH,
-	"semantic/publish": `${MODEL_WORKBENCH_PATH}&view=release`,
+	"semantic/publish": MODELING_OVERVIEW_PATH,
 	"semantic/runs": "/ops/instances",
 };
 
@@ -30,7 +32,7 @@ const platformPathFromMetricsSuffix = (suffix: string) => {
 		return METRIC_WORKBENCH_PATH;
 	}
 	if (normalized === "subjects" || normalized === "semantic/subjects") {
-		return "/governance/subjects";
+		return BUSINESS_CATEGORIES_PATH;
 	}
 	if (
 		normalized === "operations" ||
@@ -41,7 +43,7 @@ const platformPathFromMetricsSuffix = (suffix: string) => {
 		return "/ops/instances";
 	}
 	if (normalized === "publish") {
-		return `${MODEL_WORKBENCH_PATH}&view=release`;
+		return MODELING_OVERVIEW_PATH;
 	}
 
 	const semanticPage = SEMANTIC_PAGE_BY_SUFFIX[normalized];

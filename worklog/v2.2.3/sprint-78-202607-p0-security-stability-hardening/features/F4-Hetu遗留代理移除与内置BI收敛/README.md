@@ -1,7 +1,7 @@
 # F4：Hetu 遗留代理移除与内置 BI 收敛
 
 **优先级**：P0
-**状态**：READY
+**状态**：DONE（2026-07-31 验收：IT-06/IT-07 PASS；浏览器证据段 GAP，见 it/baseline.md）
 
 ## 目标
 

@@ -1,6 +1,8 @@
 package com.yuzhi.dts.platform.service.infra;
 
+import com.yuzhi.dts.platform.domain.infra.InfraConnector;
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
+import com.yuzhi.dts.platform.repository.infra.InfraConnectorRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.DepartmentUtils;
@@ -9,6 +11,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.security.core.Authentication;
@@ -26,6 +29,7 @@ public class DataSourceSelectionService {
     private static final String STATUS_ACTIVE = "ACTIVE";
     private static final String CAPABILITY_MODELING_LAKEHOUSE = "MODELING_LAKEHOUSE";
     private static final String CAPABILITY_DBT_TARGET = "DBT_TARGET";
+    private static final String CAPABILITY_INGESTION_SOURCE = "INGESTION_SOURCE";
     private static final String CAPABILITY_ANALYTICS_REGISTERABLE = "ANALYTICS_REGISTERABLE";
     private static final String CAPABILITY_QUERYABLE = "QUERYABLE";
     private static final String DEFAULT_SOURCE_ADMIN = "ADMIN_DEFAULT";
@@ -49,19 +53,24 @@ public class DataSourceSelectionService {
     );
 
     private final InfraDataSourceRepository dataSourceRepository;
+    private final InfraConnectorRepository connectorRepository;
     private final DefaultDestinationSyncService defaultDestinationSyncService;
 
     public DataSourceSelectionService(
         InfraDataSourceRepository dataSourceRepository,
+        InfraConnectorRepository connectorRepository,
         DefaultDestinationSyncService defaultDestinationSyncService
     ) {
         this.dataSourceRepository = dataSourceRepository;
+        this.connectorRepository = connectorRepository;
         this.defaultDestinationSyncService = defaultDestinationSyncService;
     }
 
     public DataSourceSelectionResponse listSelections(String capability, String activeDeptHeader) {
         String normalizedCapability = normalizeCapability(capability);
-        DefaultDestinationSyncService.DefaultDestinationStatus defaultStatus = resolveDefaultStatus().orElse(null);
+        DefaultDestinationSyncService.DefaultDestinationStatus defaultStatus = CAPABILITY_INGESTION_SOURCE.equals(normalizedCapability)
+            ? null
+            : resolveDefaultStatus().orElse(null);
         List<InfraDataSource> sources = loadVisibleSources(activeDeptHeader)
             .stream()
             .filter(source -> supportsCapability(source, normalizedCapability))
@@ -71,10 +80,11 @@ public class DataSourceSelectionService {
         UUID selectedDefaultId = hasAdminDefault ? adminDefaultId : (sources.size() == 1 ? sources.get(0).getId() : null);
         String defaultSource = hasAdminDefault ? DEFAULT_SOURCE_ADMIN : (selectedDefaultId != null ? DEFAULT_SOURCE_SINGLE : DEFAULT_SOURCE_NONE);
         String message = resolveMessage(defaultStatus, adminDefaultId, hasAdminDefault, sources);
+        Map<String, InfraConnector> connectors = loadConnectors();
 
         List<DataSourceSelectionItem> items = sources
             .stream()
-            .map(source -> toItem(source, normalizedCapability, adminDefaultId, selectedDefaultId))
+            .map(source -> toItem(source, normalizedCapability, adminDefaultId, selectedDefaultId, connectors))
             .sorted(
                 Comparator
                     .comparing(DataSourceSelectionItem::recommended)
@@ -141,21 +151,31 @@ public class DataSourceSelectionService {
         InfraDataSource source,
         String requestedCapability,
         UUID adminDefaultId,
-        UUID selectedDefaultId
+        UUID selectedDefaultId,
+        Map<String, InfraConnector> connectors
     ) {
         List<String> capabilities = capabilities(source);
         boolean isAdminDefault = adminDefaultId != null && adminDefaultId.equals(source.getId());
         boolean recommended = selectedDefaultId != null && selectedDefaultId.equals(source.getId());
         String reason = isAdminDefault ? "admin-default" : (recommended ? "single-available" : null);
+        String connectorKey = normalize(source.getConnectorKey());
+        if (!StringUtils.hasText(connectorKey)) {
+            connectorKey = normalizeLower(source.getType());
+        }
+        String normalizedConnectorKey = normalizeLower(connectorKey);
+        InfraConnector connector = StringUtils.hasText(normalizedConnectorKey)
+            ? connectors.get(normalizedConnectorKey)
+            : null;
         return new DataSourceSelectionItem(
             source.getId(),
             source.getName(),
             source.getType(),
-            source.getJdbcUrl(),
-            source.getUsername(),
-            source.getDescription(),
-            source.getOwnerDept(),
+            connectorKey,
+            connector == null ? null : connector.getName(),
+            connector == null ? null : connector.getCategory(),
+            connector == null ? null : connector.getDefaultEngine(),
             source.getStatus(),
+            null,
             capabilities,
             capabilities.contains(requestedCapability),
             isAdminDefault,
@@ -178,8 +198,31 @@ public class DataSourceSelectionService {
             capabilities.add(CAPABILITY_ANALYTICS_REGISTERABLE);
             capabilities.add(CAPABILITY_MODELING_LAKEHOUSE);
             capabilities.add(CAPABILITY_DBT_TARGET);
+            capabilities.add(CAPABILITY_INGESTION_SOURCE);
+        } else if (ApiDataSourceSupport.isApiType(source.getType())) {
+            capabilities.add(CAPABILITY_INGESTION_SOURCE);
         }
         return capabilities;
+    }
+
+    private Map<String, InfraConnector> loadConnectors() {
+        try {
+            List<InfraConnector> connectors = connectorRepository
+                .findByStatusIgnoreCaseOrderByDisplayOrderAscConnectorKeyAsc(STATUS_ACTIVE);
+            if (connectors == null || connectors.isEmpty()) {
+                return Map.of();
+            }
+            Map<String, InfraConnector> indexed = new java.util.LinkedHashMap<>();
+            connectors.forEach(connector -> {
+                String key = normalizeLower(connector.getConnectorKey());
+                if (StringUtils.hasText(key)) {
+                    indexed.putIfAbsent(key, connector);
+                }
+            });
+            return Map.copyOf(indexed);
+        } catch (RuntimeException ex) {
+            return Map.of();
+        }
     }
 
     private boolean isJdbcSource(InfraDataSource source) {
@@ -226,7 +269,10 @@ public class DataSourceSelectionService {
 
     private String resolveActiveDept(String activeDeptHeader) {
         String candidate = normalize(activeDeptHeader);
-        if (StringUtils.hasText(candidate)) {
+        if (
+            SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES) &&
+            StringUtils.hasText(candidate)
+        ) {
             return candidate;
         }
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -263,11 +309,12 @@ public class DataSourceSelectionService {
         UUID id,
         String name,
         String type,
-        String jdbcUrl,
-        String username,
-        String description,
-        String ownerDept,
+        String connectorKey,
+        String connectorName,
+        String connectorCategory,
+        String defaultEngine,
         String status,
+        String heartbeatStatus,
         List<String> capabilities,
         boolean selectable,
         boolean defaultSource,

@@ -19,7 +19,7 @@ test("category planning actions return to the canonical plan baseline", () => {
 });
 
 test("business modeling never invents a plan when no canonical planId exists", () => {
-	assert.match(source, /\/modeling\/plans/);
+	assert.match(source, /\/data-modeling\/planning\/spaces/);
 	assert.match(source, /resolveWarehousePlanPageContext/);
 	assert.match(source, /planId: returnPlanId/);
 	assert.doesNotMatch(source, /planningId:|warehouseLayer:|modelingMode:/);
@@ -32,7 +32,7 @@ test("subject area details expose business processes and process planning entry"
 	assert.doesNotMatch(source, /从示例创建|采用示例|补充示例/);
 	assert.match(source, /processId/);
 	assert.match(source, /进入业务建模/);
-	assert.match(source, /modeling\/dimensions/);
+	assert.match(source, /data-modeling\/dimensions\/workbench/);
 	assert.doesNotMatch(source, /modeling\/semantic\/objects/);
 });
 

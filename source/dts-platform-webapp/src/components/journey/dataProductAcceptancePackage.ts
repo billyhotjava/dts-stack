@@ -1,11 +1,11 @@
+import { buildGateEvidence, type GateEvidence, type GateEvidenceOptions } from "./gateEvidence";
 import {
-	E2E_DATA_PRODUCT_JOURNEY,
 	buildJourneyUrl,
-	extractJourneyContextParams,
 	type DataProductJourneyContextParams,
+	E2E_DATA_PRODUCT_JOURNEY,
+	extractJourneyContextParams,
 	type JourneyContextParamKey,
 } from "./journeyContext";
-import { buildGateEvidence, type GateEvidence, type GateEvidenceOptions } from "./gateEvidence";
 
 export type DataProductAcceptanceEvidenceGroupKey =
 	| "gate"
@@ -76,7 +76,7 @@ export const ACCEPTANCE_EVIDENCE_GROUPS: AcceptanceEvidenceDefinition[] = [
 		key: "model",
 		title: "模型",
 		description: "模型中心/SQL 模型草稿、字段映射和发布门禁。",
-		route: "/studio/sql-modeling",
+		route: "/data-modeling/dimensions/workbench",
 		requiredParam: "modelSpecId",
 		missingReason: "缺少模型证据：请从标准草稿生成模型候选。",
 	},
@@ -84,7 +84,7 @@ export const ACCEPTANCE_EVIDENCE_GROUPS: AcceptanceEvidenceDefinition[] = [
 		key: "metrics",
 		title: "指标",
 		description: "指标口径、维度、粒度和责任人。",
-		route: "/modeling/metric-workbench",
+		route: "/data-modeling/metrics/atomic",
 		requiredParam: "metricId",
 		missingReason: "缺少指标证据：请绑定指标口径和业务责任人。",
 	},
@@ -177,8 +177,8 @@ export const buildDataProductAcceptancePackage = (
 		key: "gate",
 		title: "发布门禁",
 		description: "落标覆盖、模型编译、数据测试、运行结果四项门禁。",
-		route: "/studio/sql-modeling",
-		url: buildJourneyUrl("/studio/sql-modeling", params),
+		route: "/data-modeling/dimensions/workbench",
+		url: buildJourneyUrl("/data-modeling/dimensions/workbench", params),
 		status: GATE_VERDICT_TO_STATUS[gateEvidence.verdict],
 		missingReason:
 			gateMissing.length > 0
@@ -214,7 +214,8 @@ export const buildAcceptancePackageMarkdown = (acceptancePackage: DataProductAcc
 	lines.push("| 门禁项 | 状态 | 说明 | 证据/待补接口 |");
 	lines.push("| --- | --- | --- | --- |");
 	for (const check of acceptancePackage.gateEvidence.checks) {
-		const evidenceCell = check.status === "ready" ? (check.evidenceUrl ?? "") : (check.apiName ?? check.evidenceUrl ?? "");
+		const evidenceCell =
+			check.status === "ready" ? (check.evidenceUrl ?? "") : (check.apiName ?? check.evidenceUrl ?? "");
 		lines.push(`| ${check.label} | ${check.status} | ${check.detail} | ${evidenceCell} |`);
 	}
 	return lines.join("\n");

@@ -656,6 +656,69 @@ PY
   printf '%s' "${key}"
 }
 
+ensure_distinct_service_tokens(){
+  # Each authenticated producer gets its own credential. If an older .env reused the
+  # installation password (or another service token), rotate only the duplicate entry.
+  local -a token_names=(
+    DTS_PLATFORM_TO_ADMIN_TOKEN
+    DTS_PLATFORM_TO_INGESTION_TOKEN
+    DTS_ANALYTICS_TO_ADMIN_TOKEN
+    DTS_INGESTION_TO_ADMIN_TOKEN
+    DTS_INBOUND_FROM_INGESTION
+    DTS_INBOUND_FROM_ANALYTICS
+    DTS_INBOUND_FROM_AIRFLOW
+  )
+  local -a seen_names=()
+  local -a seen_values=()
+  local name value replacement duplicate index legacy_shared
+  if [[ "${DTS_SERVICE_TOKEN_VERSION:-1}" != "2" ]]; then
+    for name in "${token_names[@]}"; do
+      replacement="$(generate_fernet)"
+      [[ -n "${replacement}" ]] || { echo "[init.sh] ERROR: unable to rotate ${name}." >&2; return 1; }
+      printf -v "${name}" '%s' "${replacement}"
+    done
+    DTS_SERVICE_TOKEN_VERSION=2
+    echo "[init.sh] Rotated all service credentials to pairwise credential version 2." >&2
+  fi
+  for name in "${token_names[@]}"; do
+    value="${!name:-}"
+    if [[ -z "${value}" ]]; then
+      replacement="$(generate_fernet)"
+      [[ -n "${replacement}" ]] || { echo "[init.sh] ERROR: unable to generate ${name}." >&2; return 1; }
+      printf -v "${name}" '%s' "${replacement}"
+      value="${replacement}"
+    fi
+    for legacy_shared in "${SECRET:-}" "${DTS_ADMIN_SERVICE_TOKEN:-}"; do
+      if [[ -n "${legacy_shared}" && "${value}" == "${legacy_shared}" ]]; then
+        replacement="$(generate_fernet)"
+        [[ -n "${replacement}" ]] || { echo "[init.sh] ERROR: unable to rotate legacy-derived ${name}." >&2; return 1; }
+        printf -v "${name}" '%s' "${replacement}"
+        value="${replacement}"
+        echo "[init.sh] Rotated legacy-derived service credential ${name}." >&2
+        break
+      fi
+    done
+    duplicate=""
+    for ((index=0; index<${#seen_values[@]}; index++)); do
+      if [[ "${value}" == "${seen_values[index]}" ]]; then
+        duplicate="${seen_names[index]}"
+        break
+      fi
+    done
+    if [[ -n "${duplicate}" ]]; then
+      replacement="$(generate_fernet)"
+      while [[ -z "${replacement}" || " ${seen_values[*]} " == *" ${replacement} "* ]]; do
+        replacement="$(generate_fernet)"
+      done
+      printf -v "${name}" '%s' "${replacement}"
+      value="${replacement}"
+      echo "[init.sh] Rotated duplicate service credential ${name}; it must not share identity with ${duplicate}." >&2
+    fi
+    seen_names+=("${name}")
+    seen_values+=("${value}")
+  done
+}
+
 generate_aes_key(){
   # Java-side InfraSettingsCryptoService expects STANDARD Base64 (with + and /), not URL-safe variants.
   local key=""
@@ -709,7 +772,9 @@ urlencode_component(){
 }
 
 generate_env_base(){
+  local env_tmp=""
   if [ -f .env ]; then
+    chmod 600 .env || { echo "[init.sh] ERROR: cannot secure existing .env permissions." >&2; return 1; }
     # Source .env safely: export line-by-line to handle values with spaces
     # (plain `. ./.env` would treat "VAR=a b" as "set VAR=a then run b")
     while IFS= read -r _env_line || [[ -n "$_env_line" ]]; do
@@ -776,8 +841,9 @@ generate_env_base(){
   # Docker containers may need a stable way to reach host-side services like an HTTP proxy.
   # Used by compose as the IP behind 'host.docker.internal' (works even on older Docker versions).
   : "${DOCKER_HOST_GATEWAY_IP:=${HOST_GATEWAY_IP}}"
-  # ---------- Hetu upstream ----------
-  # Defaults to HOST_GATEWAY_IP (Hetu runs on the same host), but can be overridden for remote Hetu deployments.
+  # ---------- Hetu upstream (DEPRECATED, Sprint-78/F4) ----------
+  # Hetu proxy routes were removed from compose and the traefik file provider.
+  # This variable is no longer consumed; existing .env values are left untouched.
   : "${HETU_UPSTREAM_IP:=${HOST_GATEWAY_IP}}"
 
   # ---------- MinIO/S3 (placed before Airflow uses it) ----------
@@ -835,8 +901,6 @@ generate_env_base(){
     : "${PG_PWD_METRICS:=${SECRET}}"
     : "${DTS_INBOUND_FROM_METRICS:=${SECRET}}"
     : "${DTS_METRICS_TO_PLATFORM:=${DTS_INBOUND_FROM_METRICS}}"
-    : "${DTS_PLATFORM_INBOUND_TRUSTED_SERVICES:=dts-admin,dts-ingestion,dts-airflow,dts-analytics,dts-metrics}"
-    : "${DTS_PLATFORM_INBOUND_SHARED_SECRET:=${DTS_INBOUND_FROM_METRICS}}"
     : "${DTS_METRICS_SERVICE_NAME:=dts-metrics}"
     : "${DTS_METRICS_API_BASE_PATH:=/api/metrics}"
     : "${IMAGE_DTS_METRICS:=dts-metrics:1.0.0}"
@@ -943,22 +1007,20 @@ generate_env_base(){
   OIDC_ISSUER_URI="https://${HOST_SSO}/realms/${KC_REALM}"
 
   # ---------- Service-to-service auth ----------
-  # 按调用方向命名,避免把 admin 身份、platform 入站、ingestion/analytics 出站混成一个全局 token。
-  # 复用 $SECRET 作为单机默认值;生产部署可独立轮换每一对。
-  : "${DTS_PLATFORM_TO_ADMIN_TOKEN:=${SECRET}}"
-  : "${DTS_INBOUND_FROM_INGESTION:=${SECRET}}"
-  : "${DTS_INBOUND_FROM_ANALYTICS:=${SECRET}}"
-  : "${DTS_INBOUND_FROM_AIRFLOW:=${SECRET}}"
-  : "${DTS_INGESTION_TO_PLATFORM:=${DTS_INBOUND_FROM_INGESTION}}"
-  : "${DTS_ANALYTICS_TO_PLATFORM:=${DTS_INBOUND_FROM_ANALYTICS}}"
-  : "${DTS_AIRFLOW_TO_PLATFORM:=${DTS_INBOUND_FROM_AIRFLOW}}"
+  # 按调用方向生成 pairwise credential；不同生产者不得共享服务身份。
+  : "${DTS_PLATFORM_TO_ADMIN_TOKEN:=$(generate_fernet)}"
+  : "${DTS_PLATFORM_TO_INGESTION_TOKEN:=$(generate_fernet)}"
+  : "${DTS_ANALYTICS_TO_ADMIN_TOKEN:=$(generate_fernet)}"
+  : "${DTS_INGESTION_TO_ADMIN_TOKEN:=$(generate_fernet)}"
+  : "${DTS_INBOUND_FROM_INGESTION:=$(generate_fernet)}"
+  : "${DTS_INBOUND_FROM_ANALYTICS:=$(generate_fernet)}"
+  : "${DTS_INBOUND_FROM_AIRFLOW:=$(generate_fernet)}"
+  : "${DTS_SERVICE_TOKEN_VERSION:=1}"
+  ensure_distinct_service_tokens
+  DTS_INGESTION_TO_PLATFORM="${DTS_INBOUND_FROM_INGESTION}"
+  DTS_ANALYTICS_TO_PLATFORM="${DTS_INBOUND_FROM_ANALYTICS}"
+  DTS_AIRFLOW_TO_PLATFORM="${DTS_INBOUND_FROM_AIRFLOW}"
   : "${DTS_MODEL_RUNTIME_SPEC_SIGNING_KEY:=$(generate_fernet)}"
-  : "${DTS_ANALYTICS_TO_ADMIN_TOKEN:=${DTS_PLATFORM_TO_ADMIN_TOKEN}}"
-  if [ "${DTS_ANALYTICS_TO_ADMIN_TOKEN}" = "${DTS_PLATFORM_TO_ADMIN_TOKEN}" ]; then
-    : "${AUDIT_INGEST_SERVICE_TOKENS:=${DTS_PLATFORM_TO_ADMIN_TOKEN}}"
-  else
-    : "${AUDIT_INGEST_SERVICE_TOKENS:=${DTS_PLATFORM_TO_ADMIN_TOKEN},${DTS_ANALYTICS_TO_ADMIN_TOKEN}}"
-  fi
 
   # ---------- Edition / optional service capabilities ----------
   : "${DTS_EDITION:=foundation}"
@@ -1110,7 +1172,9 @@ generate_env_base(){
   DTS_ADMIN_JAVA_TOOL_OPTIONS_EXTRA_ENV=${DTS_ADMIN_JAVA_TOOL_OPTIONS_EXTRA_ENV//\"/\\\"}
   DTS_ADMIN_JAVA_TOOL_OPTIONS_EXTRA_ENV=${DTS_ADMIN_JAVA_TOOL_OPTIONS_EXTRA_ENV//$'\n'/ }
 
-  cat > .env <<EOF
+  env_tmp="$(mktemp "${PWD}/.env.tmp.XXXXXX")" || return 1
+  chmod 600 "${env_tmp}" || { rm -f -- "${env_tmp}"; return 1; }
+  cat > "${env_tmp}" <<EOF
 # ====== Base & Traefik ======
 BASE_DOMAIN=${BASE_DOMAIN}
 TLS_PORT=${TLS_PORT}
@@ -1139,7 +1203,7 @@ HOST_META=${HOST_META}
 HOST_FLOW=${HOST_FLOW}
 HOST_GATEWAY_IP=${HOST_GATEWAY_IP}
 DOCKER_HOST_GATEWAY_IP=${DOCKER_HOST_GATEWAY_IP}
-HETU_UPSTREAM_IP=${HETU_UPSTREAM_IP}
+# HETU_UPSTREAM_IP 已退役（Sprint-78/F4）：新部署不再写入；既有 .env 中的值保持不变。
 
 # ====== Keycloak ======
 KC_ADMIN=${KC_ADMIN}
@@ -1236,8 +1300,10 @@ DTS_PKI_VENDOR_JAR=${DTS_PKI_VENDOR_JAR}
 DTS_ADMIN_JAVA_TOOL_OPTIONS_EXTRA="${DTS_ADMIN_JAVA_TOOL_OPTIONS_EXTRA_ENV}"
 
 # ====== Service-to-service auth ======
-# 按调用方向命名;DTS_ADMIN_SERVICE_TOKEN 仅保留在 application.yml fallback 中兼容旧部署,不再生成。
+# 按调用方向命名；不再生成或回退到全局 DTS_ADMIN_SERVICE_TOKEN。
+DTS_SERVICE_TOKEN_VERSION=${DTS_SERVICE_TOKEN_VERSION}
 DTS_PLATFORM_TO_ADMIN_TOKEN=${DTS_PLATFORM_TO_ADMIN_TOKEN}
+DTS_PLATFORM_TO_INGESTION_TOKEN=${DTS_PLATFORM_TO_INGESTION_TOKEN}
 DTS_INBOUND_FROM_INGESTION=${DTS_INBOUND_FROM_INGESTION}
 DTS_INBOUND_FROM_ANALYTICS=${DTS_INBOUND_FROM_ANALYTICS}
 DTS_INBOUND_FROM_AIRFLOW=${DTS_INBOUND_FROM_AIRFLOW}
@@ -1246,7 +1312,7 @@ DTS_ANALYTICS_TO_PLATFORM=${DTS_ANALYTICS_TO_PLATFORM}
 DTS_AIRFLOW_TO_PLATFORM=${DTS_AIRFLOW_TO_PLATFORM}
 DTS_MODEL_RUNTIME_SPEC_SIGNING_KEY=${DTS_MODEL_RUNTIME_SPEC_SIGNING_KEY}
 DTS_ANALYTICS_TO_ADMIN_TOKEN=${DTS_ANALYTICS_TO_ADMIN_TOKEN}
-AUDIT_INGEST_SERVICE_TOKENS=${AUDIT_INGEST_SERVICE_TOKENS}
+DTS_INGESTION_TO_ADMIN_TOKEN=${DTS_INGESTION_TO_ADMIN_TOKEN}
 
 # ====== Admin password-login IP allowlist (triad only; PKI unaffected) ======
 DTS_SECURITY_IP_ALLOWLIST_ENABLED=${DTS_SECURITY_IP_ALLOWLIST_ENABLED}
@@ -1407,7 +1473,7 @@ DTS_LEGACY_METRICS_ENABLED=${DTS_LEGACY_METRICS_ENABLED}
 EOF
 
   if [[ "${DTS_LEGACY_METRICS_ENABLED}" == "true" || "${DTS_LEGACY_METRICS_ENABLED}" == "1" ]]; then
-    cat >> .env <<EOF
+    cat >> "${env_tmp}" <<EOF
 
 # ====== Legacy dts-metrics (disabled in default app stack) ======
 PG_DB_METRICS=${PG_DB_METRICS}
@@ -1415,8 +1481,6 @@ PG_USER_METRICS=${PG_USER_METRICS}
 PG_PWD_METRICS=${PG_PWD_METRICS}
 DTS_INBOUND_FROM_METRICS=${DTS_INBOUND_FROM_METRICS}
 DTS_METRICS_TO_PLATFORM=${DTS_METRICS_TO_PLATFORM}
-DTS_PLATFORM_INBOUND_TRUSTED_SERVICES=${DTS_PLATFORM_INBOUND_TRUSTED_SERVICES}
-DTS_PLATFORM_INBOUND_SHARED_SECRET=${DTS_PLATFORM_INBOUND_SHARED_SECRET}
 DTS_METRICS_SERVICE_NAME=${DTS_METRICS_SERVICE_NAME}
 DTS_METRICS_API_BASE_PATH=${DTS_METRICS_API_BASE_PATH}
 IMAGE_DTS_METRICS=${IMAGE_DTS_METRICS}
@@ -1434,11 +1498,13 @@ EOF
       echo "MINIO_REGION_NAME=${S3_REGION}"
       echo "MINIO_SERVER_URL=${MINIO_SERVER_URL}"
       echo "MINIO_BROWSER_REDIRECT_URL=${MINIO_BROWSER_REDIRECT_URL}"
-    } >> .env
+    } >> "${env_tmp}"
   fi
   if [[ "${ENABLE_NESSIE:-false}" == "true" ]]; then
-    echo "HOST_NESSIE=${HOST_NESSIE}" >> .env
+    echo "HOST_NESSIE=${HOST_NESSIE}" >> "${env_tmp}"
   fi
+  mv -f -- "${env_tmp}" .env
+  chmod 600 .env || { echo "[init.sh] ERROR: cannot secure generated .env permissions." >&2; return 1; }
 }
 
 # ================= argument parsing (kept) =================

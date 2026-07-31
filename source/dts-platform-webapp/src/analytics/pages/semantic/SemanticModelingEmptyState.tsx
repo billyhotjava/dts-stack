@@ -17,17 +17,17 @@ export default function SemanticModelingEmptyState({
 
 				<div className="space-y-2">
 					<Typography.Text strong>如何开始</Typography.Text>
-					<div className="text-sm text-secondary">1. 进入 SQL 建模页，打开已经配置好 semantic contract 的模型。</div>
-					<div className="text-sm text-secondary">2. 在右侧信息区点击“发布到 Analytics”。</div>
-					<div className="text-sm text-secondary">3. 确认模型对分析师开放，且模型密级没有高于当前账号可见级别。</div>
+					<div className="text-sm text-secondary">1. 进入数据建模工作台，打开需要交付到分析侧的模型。</div>
+					<div className="text-sm text-secondary">2. 当前界面重构阶段只提供交付预览；发布能力将在后台重构后接入。</div>
+					<div className="text-sm text-secondary">3. 接入后确认模型对分析师开放，且模型密级没有高于当前账号可见级别。</div>
 					<div className="text-sm text-secondary">
 						4. 回到这里后，先选择基础模型，再从左侧指标树和维度树开始组装卡片。
 					</div>
 				</div>
 
 				<Space wrap>
-					<Link to="/modeling/sql">
-						<Button type="primary">去 SQL 建模页</Button>
+					<Link to="/data-modeling/dimensions/workbench">
+						<Button type="primary">去模型工作台</Button>
 					</Link>
 					{!compact && (
 						<Link to="/bi/explore">

@@ -15,8 +15,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.env.Environment;
-import tech.jhipster.config.JHipsterConstants;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -122,25 +120,8 @@ public class SecurityConfiguration {
     @Bean
     ServiceDependencyAuthenticationFilter serviceDependencyAuthenticationFilter(
         PlatformInboundServiceAuthProperties inboundAuthProperties,
-        org.springframework.beans.factory.ObjectProvider<com.yuzhi.dts.platform.service.services.SvcTokenAuthService> svcTokenAuthServiceProvider,
-        Environment environment
+        org.springframework.beans.factory.ObjectProvider<com.yuzhi.dts.platform.service.services.SvcTokenAuthService> svcTokenAuthServiceProvider
     ) {
-        if (inboundAuthProperties.isLegacyHeaderOnlyMode()) {
-            boolean isProduction = environment != null
-                && java.util.Arrays.asList(environment.getActiveProfiles()).contains(JHipsterConstants.SPRING_PROFILE_PRODUCTION);
-            if (isProduction) {
-                LOG.warn(
-                    "SECURITY: dts.platform.inbound.service-auth.legacy-header-only-mode=true detected in PRODUCTION profile. " +
-                    "This bypasses X-DTS-Service-Token validation and exposes service-enabled endpoints to header forgery. " +
-                    "Disable immediately unless this is an explicit emergency rollback."
-                );
-            } else {
-                LOG.warn(
-                    "dts.platform.inbound.service-auth.legacy-header-only-mode=true — Sprint-27 compatibility mode active. " +
-                    "Service auth filter will accept callers with only X-DTS-Service header (no token validation)."
-                );
-            }
-        }
         return new ServiceDependencyAuthenticationFilter(inboundAuthProperties, svcTokenAuthServiceProvider.getIfAvailable());
     }
 

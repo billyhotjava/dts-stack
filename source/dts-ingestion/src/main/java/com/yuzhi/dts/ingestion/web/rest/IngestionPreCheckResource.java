@@ -3,10 +3,8 @@ package com.yuzhi.dts.ingestion.web.rest;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.yuzhi.dts.ingestion.domain.IngestionTask;
 import com.yuzhi.dts.ingestion.repository.IngestionTaskRepository;
-import com.yuzhi.dts.ingestion.service.dto.CellError;
 import com.yuzhi.dts.ingestion.service.dto.ColumnInfo;
 import com.yuzhi.dts.ingestion.service.dto.ParseResult;
-import com.yuzhi.dts.ingestion.service.etl.BuiltInRuleChecker;
 import com.yuzhi.dts.ingestion.service.etl.CsvParseService;
 import com.yuzhi.dts.ingestion.service.etl.ExcelParseService;
 import com.yuzhi.dts.ingestion.service.etl.StagingTableService;
@@ -20,6 +18,7 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpHeaders;
@@ -43,7 +42,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 /**
  * REST controller for Excel pre-check flow on ingestion tasks.
- * Handles parsing, staging, built-in rule checking, and submission.
+ * Handles structural parsing, staging, governance quality pre-check, and submission.
  */
 @RestController
 @RequestMapping("/api/ingestion/tasks")
@@ -55,16 +54,15 @@ public class IngestionPreCheckResource {
     private final ExcelParseService excelParseService;
     private final CsvParseService csvParseService;
     private final StagingTableService stagingTableService;
-    private final BuiltInRuleChecker builtInRuleChecker;
     private final PlatformInfraClient platformInfraClient;
     private final FileUploadService fileUploadService;
+    private com.yuzhi.dts.ingestion.service.IngestionAccessContractService accessContractService;
 
     public IngestionPreCheckResource(
         IngestionTaskRepository taskRepository,
         ExcelParseService excelParseService,
         CsvParseService csvParseService,
         StagingTableService stagingTableService,
-        BuiltInRuleChecker builtInRuleChecker,
         PlatformInfraClient platformInfraClient,
         FileUploadService fileUploadService
     ) {
@@ -72,9 +70,13 @@ public class IngestionPreCheckResource {
         this.excelParseService = excelParseService;
         this.csvParseService = csvParseService;
         this.stagingTableService = stagingTableService;
-        this.builtInRuleChecker = builtInRuleChecker;
         this.platformInfraClient = platformInfraClient;
         this.fileUploadService = fileUploadService;
+    }
+
+    @Autowired
+    void setAccessContractService(com.yuzhi.dts.ingestion.service.IngestionAccessContractService accessContractService) {
+        this.accessContractService = accessContractService;
     }
 
     // ----- DTOs for request / response -----
@@ -93,7 +95,16 @@ public class IngestionPreCheckResource {
         int totalRules,
         int passedRules,
         int failedRules,
-        List<String> failedRuleNames
+        List<String> failedRuleNames,
+        int totalRows,
+        int passedRows,
+        int failedRows
+    ) {}
+
+    private record DraftTaskContext(
+        IngestionTask persistedTask,
+        IngestionTask workingTask,
+        boolean revisionBacked
     ) {}
 
     // ----- Endpoints -----
@@ -105,7 +116,8 @@ public class IngestionPreCheckResource {
     @PostMapping("/{id}/parse")
     @Transactional
     public ResponseEntity<ParseResponse> parse(@PathVariable Long id) {
-        IngestionTask task = findTaskOrThrow(id);
+        DraftTaskContext context = findDraftTaskContext(id, true);
+        IngestionTask task = context.workingTask();
 
         // Get uploaded file path from sourceConfig._filePath
         String filePath = extractFilePath(task);
@@ -140,18 +152,14 @@ public class IngestionPreCheckResource {
             String tableName = stagingTableService.create(taskUuid, id, parseResult.columns());
             stagingTableService.bulkInsert(tableName, parseResult.columns(), parseResult.rows());
 
-            // Run built-in rule checks and write errors to staging table
-            Map<Integer, List<CellError>> errors = builtInRuleChecker.check(tableName, parseResult.columns());
+            // Parsing is structural only. Business quality rules are resolved and
+            // executed by the governance quality service in /pre-check.
             int errorCount = 0;
-            for (Map.Entry<Integer, List<CellError>> entry : errors.entrySet()) {
-                stagingTableService.updateErrors(tableName, entry.getKey(), entry.getValue());
-                errorCount += entry.getValue().size();
-            }
 
             // Update task
             task.setStagingTableName(tableName);
             task.setPreCheckStatus("PENDING");
-            taskRepository.save(task);
+            persistDraftState(context);
 
             return ResponseEntity.ok(new ParseResponse(
                 parseResult.totalRows(),
@@ -173,9 +181,10 @@ public class IngestionPreCheckResource {
      * dts-platform's governance pre-check API via internal REST.
      */
     @PostMapping("/{id}/pre-check")
-    @Transactional
+    @Transactional(noRollbackFor = ResponseStatusException.class)
     public ResponseEntity<PreCheckResponse> preCheck(@PathVariable Long id) {
-        IngestionTask task = findTaskOrThrow(id);
+        DraftTaskContext context = findDraftTaskContext(id, true);
+        IngestionTask task = context.workingTask();
 
         String tableName = task.getStagingTableName();
         if (tableName == null || tableName.isBlank()) {
@@ -184,7 +193,6 @@ public class IngestionPreCheckResource {
         }
 
         task.setPreCheckStatus("CHECKING");
-        taskRepository.save(task);
 
         try {
             UUID datasetId = extractPreCheckDatasetId(task);
@@ -199,37 +207,51 @@ public class IngestionPreCheckResource {
 
             int passedRows = toInt(result.get("passedRows"));
             int failedRows = toInt(result.get("failedRows"));
-            int total = toInt(result.get("totalRows"));
+            int total = result.containsKey("totalRows") ? toInt(result.get("totalRows")) : totalRows;
 
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> errorsByRule =
                 result.get("errorsByRule") instanceof List<?> list ? (List<Map<String, Object>>) list : List.of();
 
-            List<String> failedRuleNames = errorsByRule.stream()
+            List<Map<String, Object>> failedRuleResults = errorsByRule.stream()
+                .filter(rule -> toInt(rule.get("failCount")) > 0)
+                .toList();
+            List<String> failedRuleNames = failedRuleResults.stream()
                 .map(r -> r.get("ruleName"))
                 .filter(n -> n != null)
                 .map(String::valueOf)
                 .toList();
 
-            String status = failedRows > 0 ? "FAILED" : "PASSED";
+            int failedRules = result.containsKey("failedRules")
+                ? toInt(result.get("failedRules"))
+                : failedRuleResults.size();
+            int passedRules = result.containsKey("passedRules") ? toInt(result.get("passedRules")) : 0;
+            int totalRules = result.containsKey("totalRules")
+                ? toInt(result.get("totalRules"))
+                : passedRules + failedRules;
+
+            String status = failedRows > 0 || failedRules > 0 ? "FAILED" : "PASSED";
             task.setPreCheckStatus(status);
-            taskRepository.save(task);
+            persistDraftState(context);
 
             return ResponseEntity.ok(new PreCheckResponse(
                 status,
-                errorsByRule.size(),
-                errorsByRule.size() - failedRuleNames.size() + passedRows, // approximate passed rules
-                failedRuleNames.size(),
-                failedRuleNames
+                totalRules,
+                passedRules,
+                failedRules,
+                failedRuleNames,
+                total,
+                passedRows,
+                failedRows
             ));
         } catch (ResponseStatusException e) {
             task.setPreCheckStatus("FAILED");
-            taskRepository.save(task);
+            persistDraftState(context);
             throw e;
         } catch (Exception e) {
             log.error("Pre-check failed for task {} via platform API: {}", id, e.getMessage());
             task.setPreCheckStatus("FAILED");
-            taskRepository.save(task);
+            persistDraftState(context);
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
                 "Quality pre-check service unavailable: " + e.getMessage());
         }
@@ -240,12 +262,14 @@ public class IngestionPreCheckResource {
      * Update a cell in the staging table.
      */
     @PutMapping("/{id}/staging/{rowNum}")
+    @Transactional
     public ResponseEntity<Map<String, Object>> updateCell(
         @PathVariable Long id,
         @PathVariable int rowNum,
         @RequestBody UpdateCellRequest request
     ) {
-        IngestionTask task = findTaskOrThrow(id);
+        DraftTaskContext context = findDraftTaskContext(id, true);
+        IngestionTask task = context.workingTask();
 
         String tableName = task.getStagingTableName();
         if (tableName == null || tableName.isBlank()) {
@@ -254,6 +278,11 @@ public class IngestionPreCheckResource {
         }
 
         stagingTableService.updateCell(tableName, rowNum, request.column(), request.value());
+        // Any manual correction invalidates a previous PASS. Admission is allowed
+        // only after the edited draft has been checked again against the centrally
+        // managed quality rules.
+        task.setPreCheckStatus("PENDING");
+        persistDraftState(context);
 
         return ResponseEntity.ok(Map.of(
             "rowNum", rowNum,
@@ -272,7 +301,7 @@ public class IngestionPreCheckResource {
         @RequestParam(value = "errorsOnly", defaultValue = "false") boolean errorsOnly,
         Pageable pageable
     ) {
-        IngestionTask task = findTaskOrThrow(id);
+        IngestionTask task = findDraftTaskContext(id, false).workingTask();
         String tableName = requireStagingTable(task);
         return ResponseEntity.ok(stagingTableService.query(tableName, errorsOnly, pageable));
     }
@@ -286,7 +315,7 @@ public class IngestionPreCheckResource {
         @PathVariable Long id,
         @RequestParam(value = "limit", defaultValue = "20") int limit
     ) {
-        IngestionTask task = findTaskOrThrow(id);
+        IngestionTask task = findDraftTaskContext(id, false).workingTask();
         String tableName = requireStagingTable(task);
         return ResponseEntity.ok(stagingTableService.summarizeErrors(tableName, limit));
     }
@@ -297,7 +326,7 @@ public class IngestionPreCheckResource {
      */
     @GetMapping(value = "/{id}/staging/errors/download", produces = "text/csv")
     public ResponseEntity<byte[]> downloadBadRows(@PathVariable Long id) {
-        IngestionTask task = findTaskOrThrow(id);
+        IngestionTask task = findDraftTaskContext(id, false).workingTask();
         String tableName = requireStagingTable(task);
         byte[] csv = stagingTableService.exportErrorRowsCsv(tableName);
         return ResponseEntity.ok()
@@ -313,53 +342,19 @@ public class IngestionPreCheckResource {
      * the staging table against governance quality rules.
      */
     @PostMapping("/{id}/re-check")
-    @Transactional
+    @Transactional(noRollbackFor = ResponseStatusException.class)
     public ResponseEntity<PreCheckResponse> reCheck(@PathVariable Long id) {
         return preCheck(id);
     }
 
-    /**
-     * POST /api/ingestion/tasks/{id}/submit
-     * Verify all rows are clean, transfer data from staging to target ODS table,
-     * then clean up the staging table.
-     */
+    /** Legacy direct-to-ODS submit endpoint retained only as an explicit compatibility tombstone. */
     @PostMapping("/{id}/submit")
     @Transactional
     public ResponseEntity<Map<String, Object>> submit(@PathVariable Long id) {
-        IngestionTask task = findTaskOrThrow(id);
-
-        String tableName = task.getStagingTableName();
-        if (tableName == null || tableName.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "暂存表不存在");
-        }
-
-        if (!stagingTableService.allClean(tableName)) {
-            long errorCount = stagingTableService.countErrors(tableName);
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "还有 " + errorCount + " 个错误待修复");
-        }
-
-        // Transfer data from staging table to target ODS table
-        try {
-            int rows = stagingTableService.transferToTarget(tableName, task);
-            log.info("Task {}: transferred {} rows from staging to target", id, rows);
-        } catch (Exception e) {
-            log.error("Task {}: failed to transfer staging data to target table", id, e);
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
-                "数据提交入湖失败: " + e.getMessage());
-        }
-
-        // Clean up staging table after successful transfer
-        stagingTableService.drop(tableName);
-        task.setStagingTableName(null);
-        task.setPreCheckStatus("SUBMITTED");
-        taskRepository.save(task);
-
-        return ResponseEntity.ok(Map.of(
-            "taskId", id,
-            "status", "submitted",
-            "message", "数据已成功提交入湖"
-        ));
+        throw new ResponseStatusException(
+            HttpStatus.GONE,
+            "Legacy staging submit has been removed; use /api/ingestion/tasks/{id}/admit then /execute"
+        );
     }
 
     /**
@@ -369,7 +364,8 @@ public class IngestionPreCheckResource {
     @DeleteMapping("/{id}/staging")
     @Transactional
     public ResponseEntity<Void> dropStaging(@PathVariable Long id) {
-        IngestionTask task = findTaskOrThrow(id);
+        DraftTaskContext context = findDraftTaskContext(id, true);
+        IngestionTask task = context.workingTask();
 
         String tableName = task.getStagingTableName();
         if (tableName != null && !tableName.isBlank()) {
@@ -378,7 +374,7 @@ public class IngestionPreCheckResource {
 
         task.setStagingTableName(null);
         task.setPreCheckStatus(null);
-        taskRepository.save(task);
+        persistDraftState(context);
 
         return ResponseEntity.noContent().build();
     }
@@ -388,6 +384,33 @@ public class IngestionPreCheckResource {
     private IngestionTask findTaskOrThrow(Long id) {
         return taskRepository.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found: " + id));
+    }
+
+    private DraftTaskContext findDraftTaskContext(Long id, boolean requireDraftForActiveTask) {
+        IngestionTask persisted = findTaskOrThrow(id);
+        if (accessContractService == null) {
+            return new DraftTaskContext(persisted, persisted, false);
+        }
+        java.util.Optional<com.yuzhi.dts.ingestion.domain.IngestionTaskRevision> draft =
+            accessContractService.findLatestDraftRevision(id);
+        if (draft.isPresent()) {
+            return new DraftTaskContext(persisted, accessContractService.materializeLatestDraft(persisted), true);
+        }
+        if (requireDraftForActiveTask && "active".equalsIgnoreCase(persisted.getStatus())) {
+            throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "DRAFT_REVISION_REQUIRED: 请先编辑并保存文件草稿，再执行解析或预检"
+            );
+        }
+        return new DraftTaskContext(persisted, persisted, false);
+    }
+
+    private void persistDraftState(DraftTaskContext context) {
+        if (context.revisionBacked() && accessContractService != null) {
+            accessContractService.recordDraftRevision(context.workingTask(), null, true);
+            return;
+        }
+        taskRepository.save(context.workingTask());
     }
 
     private boolean isCsvTask(IngestionTask task, Path path) {
@@ -501,6 +524,16 @@ public class IngestionPreCheckResource {
     }
 
     private UUID extractPreCheckDatasetId(IngestionTask task) {
+        if (accessContractService != null && task != null && task.getId() != null) {
+            try {
+                java.util.Optional<UUID> revisionDataset = accessContractService.findQualityDatasetId(task.getId(), task.getStatus());
+                if (revisionDataset.isPresent()) {
+                    return revisionDataset.get();
+                }
+            } catch (IllegalArgumentException ex) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage());
+            }
+        }
         JsonNode sourceConfig = task.getSourceConfig();
         if (sourceConfig != null) {
             JsonNode datasetNode = sourceConfig.get("_datasetId");
@@ -515,6 +548,6 @@ public class IngestionPreCheckResource {
                 }
             }
         }
-        return task.getSourceDataSourceId();
+        return null;
     }
 }

@@ -1,10 +1,10 @@
+import type { ArtifactValidationMap, ArtifactValidationResult } from "./journeyArtifactValidation";
 import {
 	buildJourneyUrl,
 	type DataProductJourneyContextParams,
 	type DataProductJourneyStageKey,
 	type JourneyContextParamKey,
 } from "./journeyContext";
-import type { ArtifactValidationMap, ArtifactValidationResult } from "./journeyArtifactValidation";
 
 export type DataProductJourneyStageStatus = "not_started" | "blocked" | "ready" | "in_progress" | "done";
 
@@ -110,7 +110,7 @@ export const DATA_PRODUCT_JOURNEY_STAGE_DEFINITIONS: JourneyStageDefinition[] = 
 		nextStep: "选择业务系统并完成连接测试",
 		route: "/foundation/data-sources",
 		action: "配置数据源",
-		supportingRoute: "/explore/etl/transform",
+		supportingRoute: "/foundation/data-sources",
 		supportingAction: "生成同步任务",
 		tagColor: "blue",
 		requiredParams: [],
@@ -126,7 +126,7 @@ export const DATA_PRODUCT_JOURNEY_STAGE_DEFINITIONS: JourneyStageDefinition[] = 
 		defaultGap: "缺少数据源：数仓规划需要先知道业务表来源。",
 		doneGap: "数仓规划入口已具备数据来源，可确认主题域和分层策略。",
 		nextStep: "确认主题域、业务过程和分层策略",
-		route: "/governance/subjects",
+		route: "/data-modeling/planning/spaces",
 		action: "确认数仓规划",
 		supportingRoute: "/catalog/metadata-management",
 		supportingAction: "核对资产目录",
@@ -161,9 +161,9 @@ export const DATA_PRODUCT_JOURNEY_STAGE_DEFINITIONS: JourneyStageDefinition[] = 
 		defaultGap: "缺少模型：请先用标准草稿生成模型候选。",
 		doneGap: "模型上下文已就绪，可继续沉淀指标口径。",
 		nextStep: "进入模型中心并生成 SQL 草稿",
-		route: "/modeling/models?view=guided",
-		action: "进入模型中心",
-		supportingRoute: "/studio/sql-modeling",
+		route: "/data-modeling/dimensions/workbench",
+		action: "进入模型工作台",
+		supportingRoute: "/data-modeling/dimensions/workbench?mode=implementation",
 		supportingAction: "高级建模",
 		tagColor: "geekblue",
 		requiredParams: ["standardDraftId"],
@@ -179,10 +179,10 @@ export const DATA_PRODUCT_JOURNEY_STAGE_DEFINITIONS: JourneyStageDefinition[] = 
 		defaultGap: "缺少指标：请基于模型字段绑定指标口径。",
 		doneGap: "指标上下文已就绪，可进入开发和发布门禁。",
 		nextStep: "基于模型字段设计指标口径",
-		route: "/modeling/metric-workbench",
+		route: "/data-modeling/metrics/atomic",
 		action: "设计指标",
-		supportingRoute: "/modeling/models?view=release",
-		supportingAction: "查看模型发布",
+		supportingRoute: "/data-modeling/home/workspace",
+		supportingAction: "查看建模概览",
 		tagColor: "green",
 		requiredParams: ["modelSpecId"],
 		artifactParam: "metricId",
@@ -287,9 +287,7 @@ export const resolveJourneyNextAction = (
 	description: gap,
 });
 
-const toValidationMap = (
-	validations?: ArtifactValidationMap | ArtifactValidationResult[],
-): ArtifactValidationMap => {
+const toValidationMap = (validations?: ArtifactValidationMap | ArtifactValidationResult[]): ArtifactValidationMap => {
 	if (!validations) return {};
 	if (Array.isArray(validations)) {
 		return validations.reduce<ArtifactValidationMap>((acc, result) => {
@@ -312,7 +310,8 @@ export const resolveDataProductJourneyStageState = (
 	const missingParams = missingRequiredParams(definition, params);
 	const validationMap = toValidationMap(validations);
 	const artifactValue = definition.artifactParam ? params[definition.artifactParam] : undefined;
-	const artifactValidation = definition.artifactParam && artifactValue ? validationMap[definition.artifactParam] : undefined;
+	const artifactValidation =
+		definition.artifactParam && artifactValue ? validationMap[definition.artifactParam] : undefined;
 	const invalidArtifact = artifactValidation?.status === "invalid";
 	const verification: JourneyArtifactVerification = artifactValue
 		? artifactValidation?.status === "valid"
@@ -334,7 +333,10 @@ export const resolveDataProductJourneyStageState = (
 						apiName: artifactValidation?.apiName ?? "前端上下文参数",
 						recoveryAction: "清除该参数并重新选择",
 					}
-				: definition.apiRequiredForCompletion && definition.apiName && definition.artifactParam && !params[definition.artifactParam]
+				: definition.apiRequiredForCompletion &&
+						definition.apiName &&
+						definition.artifactParam &&
+						!params[definition.artifactParam]
 					? {
 							reason: "API 缺口",
 							apiName: definition.apiName,
@@ -352,8 +354,17 @@ export const resolveDataProductJourneyStageState = (
 				? "ready"
 				: "in_progress";
 	const tone: JourneyStageTone =
-		status === "blocked" ? BLOCKED_STATUS_STATE.tone : status === "done" ? "success" : status === "in_progress" ? "processing" : "default";
-	const gap = invalidArtifact && artifactValidation?.reason ? artifactValidation.reason : resolveJourneyGap(definition, params, missingParams);
+		status === "blocked"
+			? BLOCKED_STATUS_STATE.tone
+			: status === "done"
+				? "success"
+				: status === "in_progress"
+					? "processing"
+					: "default";
+	const gap =
+		invalidArtifact && artifactValidation?.reason
+			? artifactValidation.reason
+			: resolveJourneyGap(definition, params, missingParams);
 	const nextAction = resolveJourneyNextAction(definition, params, gap);
 
 	return {

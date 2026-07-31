@@ -73,6 +73,20 @@ public class IngestionTaskDTO {
 
     private String lastExecutionStatus;
 
+    private Integer revisionNumber;
+
+    private String revisionState;
+
+    private JsonNode effectiveConfig;
+
+    private String effectiveConfigChecksum;
+
+    private Integer defaultPolicyVersion;
+
+    private String defaultPolicyChecksum;
+
+    private String qualityPolicyRef;
+
     private String createdBy;
 
     private Instant createdDate;
@@ -305,6 +319,62 @@ public class IngestionTaskDTO {
 
     public void setLastExecutionStatus(String lastExecutionStatus) {
         this.lastExecutionStatus = lastExecutionStatus;
+    }
+
+    public Integer getRevisionNumber() {
+        return revisionNumber;
+    }
+
+    public void setRevisionNumber(Integer revisionNumber) {
+        this.revisionNumber = revisionNumber;
+    }
+
+    public String getRevisionState() {
+        return revisionState;
+    }
+
+    public void setRevisionState(String revisionState) {
+        this.revisionState = revisionState;
+    }
+
+    public JsonNode getEffectiveConfig() {
+        return effectiveConfig;
+    }
+
+    public void setEffectiveConfig(JsonNode effectiveConfig) {
+        this.effectiveConfig = effectiveConfig;
+    }
+
+    public String getEffectiveConfigChecksum() {
+        return effectiveConfigChecksum;
+    }
+
+    public void setEffectiveConfigChecksum(String effectiveConfigChecksum) {
+        this.effectiveConfigChecksum = effectiveConfigChecksum;
+    }
+
+    public Integer getDefaultPolicyVersion() {
+        return defaultPolicyVersion;
+    }
+
+    public void setDefaultPolicyVersion(Integer defaultPolicyVersion) {
+        this.defaultPolicyVersion = defaultPolicyVersion;
+    }
+
+    public String getDefaultPolicyChecksum() {
+        return defaultPolicyChecksum;
+    }
+
+    public void setDefaultPolicyChecksum(String defaultPolicyChecksum) {
+        this.defaultPolicyChecksum = defaultPolicyChecksum;
+    }
+
+    public String getQualityPolicyRef() {
+        return qualityPolicyRef;
+    }
+
+    public void setQualityPolicyRef(String qualityPolicyRef) {
+        this.qualityPolicyRef = qualityPolicyRef;
     }
 
     public String getCreatedBy() {

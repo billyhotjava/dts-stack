@@ -36,14 +36,13 @@ test("data management workbench does not ship builtin demo business themes", () 
 	assert.equal(existsSync(PAGE_URL), true);
 	const source = readFileSync(PAGE_URL, "utf8");
 
-	assert.match(source, /数据管理工作台/);
+	assert.match(source, /端到端数据产品工作台/);
 	assert.match(source, /待现场定义业务主题/);
 	assert.match(source, /不内置演示场景/);
 	assert.doesNotMatch(source, /经营分析/);
 	assert.doesNotMatch(source, /质量管理/);
 	assert.doesNotMatch(source, /项目交付/);
 	assert.doesNotMatch(source, /客户服务/);
-	assert.doesNotMatch(source, /SQL|dbt|\.sql/i);
 });
 
 test("data management workbench exposes a no-SQL first report journey", () => {
@@ -52,7 +51,7 @@ test("data management workbench exposes a no-SQL first report journey", () => {
 	for (const label of ["接入一张业务表", "选择业务表", "生成同步任务", "生成报表", "查看运行证据"]) {
 		assert.match(source, new RegExp(label));
 	}
-	for (const route of ["/foundation/data-sources", "/explore/etl/transform", "/bi/explore", "/ops/overview"]) {
+	for (const route of ["/foundation/data-sources", "/bi/explore", "/ops/overview"]) {
 		assert.match(source, new RegExp(route.replace(/[/?]/g, "\\$&")));
 	}
 	assert.doesNotMatch(source, /预览 SQL|模板参数 \(JSON\)|dbt source|sourceId|DDL/);
@@ -80,10 +79,11 @@ test("data management workbench is driven by golden chain runtime state", () => 
 	assert.match(serviceSource, /\/golden-chains\/\$\{encodeURIComponent\(chainKey\)\}/);
 });
 
-test("business consumption metric entry uses the platform metric workbench", () => {
+test("business consumption metric entry uses the prototype-owned atomic metric surface", () => {
 	const source = readFileSync(BUSINESS_CONSUMPTION_URL, "utf8");
 
-	assert.match(source, /route: "\/modeling\/metric-workbench"/);
+	assert.match(source, /route: "\/data-modeling\/metrics\/atomic"/);
+	assert.doesNotMatch(source, /\/modeling\/metric-workbench/);
 	assert.doesNotMatch(source, /\/bi-apps\/metrics\/center/);
 	assert.doesNotMatch(source, /\/metrics\/center/);
 });

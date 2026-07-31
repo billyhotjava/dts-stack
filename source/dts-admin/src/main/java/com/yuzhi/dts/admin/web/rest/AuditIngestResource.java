@@ -1,15 +1,17 @@
 package com.yuzhi.dts.admin.web.rest;
 
 import com.yuzhi.dts.admin.service.audit.AuditActionRequest;
-import com.yuzhi.dts.admin.service.audit.AuditIngestAuthenticator;
-import com.yuzhi.dts.admin.service.audit.AuditIngestAuthenticator.Decision;
+import com.yuzhi.dts.admin.security.AdminInboundServiceAuthenticator;
+import com.yuzhi.dts.admin.security.AdminInboundServiceAuthenticator.Decision;
+import com.yuzhi.dts.admin.service.audit.AuditIngestIdempotencyService;
+import com.yuzhi.dts.admin.service.audit.AuditIngestIdempotencyService.IngestResult;
 import com.yuzhi.dts.admin.service.audit.AuditOperationKind;
 import com.yuzhi.dts.admin.service.audit.AuditResultStatus;
-import com.yuzhi.dts.admin.service.audit.AuditV2Service;
 import com.yuzhi.dts.admin.service.audit.ButtonCodes;
 import com.yuzhi.dts.admin.config.AuditIngestProperties;
 import com.yuzhi.dts.admin.domain.AdminKeycloakUser;
 import com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository;
+import com.yuzhi.dts.admin.web.filter.AuditIngestPreAuthenticationFilter;
 import com.yuzhi.dts.common.net.IpAddressUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import java.lang.reflect.Array;
@@ -28,9 +30,11 @@ import java.util.function.Predicate;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.web.util.matcher.IpAddressMatcher;
+import org.springframework.transaction.TransactionException;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -45,19 +49,19 @@ public class AuditIngestResource {
 
     private static final Logger log = LoggerFactory.getLogger(AuditIngestResource.class);
 
-    private final AuditV2Service auditV2Service;
-    private final AuditIngestAuthenticator authenticator;
+    private final AuditIngestIdempotencyService idempotencyService;
+    private final AdminInboundServiceAuthenticator authenticator;
     private final AdminKeycloakUserRepository userRepository;
     private final List<IpAddressMatcher> containerMatchers;
 
     public AuditIngestResource(
-        AuditV2Service auditV2Service,
-        AuditIngestAuthenticator authenticator,
+        AuditIngestIdempotencyService idempotencyService,
+        AdminInboundServiceAuthenticator authenticator,
         AdminKeycloakUserRepository userRepository,
         AuditIngestProperties properties
     ) {
-        this.auditV2Service = Objects.requireNonNull(auditV2Service, "auditV2Service required");
-        this.authenticator = Objects.requireNonNull(authenticator, "auditIngestAuthenticator required");
+        this.idempotencyService = Objects.requireNonNull(idempotencyService, "auditIngestIdempotencyService required");
+        this.authenticator = Objects.requireNonNull(authenticator, "adminInboundServiceAuthenticator required");
         this.userRepository = Objects.requireNonNull(userRepository, "userRepository required");
         this.containerMatchers = buildContainerMatchers(properties);
     }
@@ -107,8 +111,13 @@ public class AuditIngestResource {
     }
 
     @PostMapping
-    public ResponseEntity<Void> ingest(@RequestBody Map<String, Object> body, HttpServletRequest request) {
-        Decision decision = authenticator.authenticate(request);
+    public ResponseEntity<?> ingest(@RequestBody Map<String, Object> body, HttpServletRequest request) {
+        Object preAuthenticated = request == null
+            ? null
+            : request.getAttribute(AuditIngestPreAuthenticationFilter.AUTHENTICATION_ATTRIBUTE);
+        Decision decision = preAuthenticated instanceof Decision verified
+            ? verified
+            : authenticator.authenticate(request);
         if (!decision.accepted()) {
             log.warn(
                 "Rejected audit ingest from service={} reason={} ip={}",
@@ -119,7 +128,15 @@ public class AuditIngestResource {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
         try {
-            AuditPayload payload = AuditPayload.from(body, request, userRepository, this::isContainerAddress);
+            Map<String, Object> authenticatedBody = body == null ? new LinkedHashMap<>() : new LinkedHashMap<>(body);
+            authenticatedBody.put("sourceSystem", sourceSystemForProducer(decision.serviceName()));
+            authenticatedBody.remove("producer");
+            AuditPayload payload = AuditPayload.from(
+                authenticatedBody,
+                request,
+                userRepository,
+                this::isContainerAddress
+            );
             AuditActionRequest.Builder builder = AuditActionRequest
                 .builder(payload.actor(), payload.buttonCode())
                 .occurredAt(payload.occurredAt())
@@ -170,15 +187,71 @@ public class AuditIngestResource {
                 builder.detail("payload", payload.details());
             }
 
-            auditV2Service.record(builder.build());
-            return ResponseEntity.accepted().build();
+            Object eventId = body == null ? null : body.get("eventId");
+            if (eventId != null && StringUtils.isNotBlank(String.valueOf(eventId))) {
+                builder.metadata("ingestEventId", String.valueOf(eventId).trim());
+            }
+
+            IngestResult result = idempotencyService.record(decision.serviceName(), authenticatedBody, builder.build());
+            return switch (result.status()) {
+                case RECORDED -> ResponseEntity.status(HttpStatus.CREATED).body(responseBody(result));
+                case DUPLICATE -> ResponseEntity.ok(responseBody(result));
+                case IDEMPOTENCY_CONFLICT -> ResponseEntity.status(HttpStatus.CONFLICT).body(responseBody(result));
+            };
         } catch (NonUserActorException ex) {
-            log.warn("Skipped audit ingest with non-user actor: {}", ex.getMessage());
-            return ResponseEntity.accepted().build();
-        } catch (Exception ex) {
-            log.warn("Failed to ingest audit event from platform: {}", ex.getMessage(), ex);
+            log.warn(
+                "Rejected audit ingest reason=NON_USER_ACTOR producer={} eventId={}",
+                decision.serviceName(),
+                safeEventId(body)
+            );
+            return ResponseEntity.unprocessableEntity().body(Map.of("status", "REJECTED_NON_USER_ACTOR"));
+        } catch (DataAccessException | TransactionException ex) {
+            log.error(
+                "Audit ingest temporarily unavailable producer={} eventId={} cause={}",
+                decision.serviceName(),
+                safeEventId(body),
+                ex.getClass().getSimpleName()
+            );
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("status", "TEMPORARILY_UNAVAILABLE"));
+        } catch (IllegalArgumentException | DateTimeParseException ex) {
+            log.warn(
+                "Rejected invalid audit ingest producer={} eventId={} cause={}",
+                decision.serviceName(),
+                safeEventId(body),
+                ex.getClass().getSimpleName()
+            );
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        } catch (Exception ex) {
+            log.error(
+                "Audit ingest failed producer={} eventId={} cause={}",
+                decision.serviceName(),
+                safeEventId(body),
+                ex.getClass().getSimpleName(),
+                ex
+            );
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("status", "INTERNAL_ERROR"));
         }
+    }
+
+    private String safeEventId(Map<String, Object> body) {
+        Object raw = body == null ? null : body.get("eventId");
+        if (raw == null || StringUtils.isBlank(String.valueOf(raw))) {
+            return "missing";
+        }
+        String normalized = String.valueOf(raw).replaceAll("[\\p{Cntrl}]", "?").trim();
+        return normalized.length() <= 128 ? normalized : normalized.substring(0, 128);
+    }
+
+    private Map<String, String> responseBody(IngestResult result) {
+        return Map.of("status", result.status().name(), "eventId", result.eventId());
+    }
+
+    private String sourceSystemForProducer(String producer) {
+        if (StringUtils.isBlank(producer)) {
+            throw new IllegalArgumentException("authenticated audit producer is required");
+        }
+        String normalized = producer.trim().toLowerCase(Locale.ROOT);
+        return normalized.startsWith("dts-") ? normalized.substring("dts-".length()) : normalized;
     }
 
     private static final class NonUserActorException extends RuntimeException {
@@ -386,6 +459,8 @@ public class AuditIngestResource {
             copy.remove("operation_type");
             copy.remove("buttonCode");
             copy.remove("sourceSystem");
+            copy.remove("eventId");
+            copy.remove("producer");
             copy.remove("metadata");
             copy.remove("attributes");
             return copy;

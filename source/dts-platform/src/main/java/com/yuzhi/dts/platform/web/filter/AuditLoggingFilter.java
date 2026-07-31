@@ -323,7 +323,9 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
 
         Map<String, Object> payload = new HashMap<>();
         payload.put("status", response.getStatus());
-        payload.put("query", request.getQueryString());
+        if (!request.getParameterMap().isEmpty()) {
+            payload.put("queryKeys", request.getParameterMap().keySet().stream().sorted().toList());
+        }
         payload.put("responseSize", (long) response.getContentAsByteArray().length);
         payload.put("requestSize", request.getContentLengthLong());
         event.payload = payload;
@@ -335,16 +337,6 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
     }
 
     private boolean shouldSuppressAudit(ContentCachingRequestWrapper request, PendingAuditEvent event) {
-        if (request != null) {
-            String silentHeader = request.getHeader("X-Audit-Silent");
-            if ("true".equalsIgnoreCase(silentHeader)) {
-                return true;
-            }
-            String silentParam = request.getParameter("auditSilent");
-            if ("true".equalsIgnoreCase(silentParam)) {
-                return true;
-            }
-        }
         if (request != null && isSupplementaryQuery(request)) {
             return true;
         }
@@ -367,8 +359,9 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         if (!StringUtils.hasText(uri) || !StringUtils.hasText(method)) {
             return false;
         }
-        if (uri.startsWith("/api/modeling/")) {
-            // 所有数据标准相关接口由领域代码显式审计，过滤器不再重复记录
+        if ("GET".equalsIgnoreCase(method) && uri.startsWith("/api/modeling/")) {
+            // 建模读取接口不记录 HTTP fallback；建模写操作仅在领域审计成功标记后去重，
+            // 未显式审计的写操作仍由 fallback 留下尽力而为的审计轨迹。
             return true;
         }
         if (!"GET".equalsIgnoreCase(method)) {

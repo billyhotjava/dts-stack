@@ -10,7 +10,7 @@ vi.mock("@/global-config", () => ({
 	GLOBAL_CONFIG: config,
 }));
 
-import { resolveBiLinkForOpen } from "./biLinkUrl";
+import { normalizeBiLinkForSave, resolveBiLinkForOpen } from "./biLinkUrl";
 
 describe("resolveBiLinkForOpen", () => {
 	beforeEach(() => {
@@ -39,5 +39,22 @@ describe("resolveBiLinkForOpen", () => {
 
 	it("redirects_hetu_entry_pages_to_internal_bi_route", () => {
 		expect(resolveBiLinkForOpen("/screen", "HETU")).toBe("/#/bi");
+	});
+});
+
+describe("normalizeBiLinkForSave", () => {
+	beforeEach(() => {
+		config.routerHistory = "hash";
+		config.publicPath = "/";
+		(window as unknown as { __RUNTIME_CONFIG__?: unknown }).__RUNTIME_CONFIG__ = undefined;
+	});
+
+	it("passes_builtin_bi_links_through", () => {
+		expect(normalizeBiLinkForSave("/bi/screens/42/preview", "DTS_BI")).toBe("/bi/screens/42/preview");
+	});
+
+	it("rewrites_legacy_hetu_entry_pages_to_absolute_bi_url", () => {
+		expect(normalizeBiLinkForSave("/screen", "HETU")).toBe(`${window.location.origin}/bi`);
+		expect(normalizeBiLinkForSave("/dashboard/hetu", "HETU")).toBe(`${window.location.origin}/bi`);
 	});
 });

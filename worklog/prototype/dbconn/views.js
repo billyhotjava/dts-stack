@@ -16,17 +16,17 @@ const STATUS_META = {
 	lifecycle: { ACTIVE: ["已发布", "ok"], PAUSED: ["已暂停", "warn"], DRAFT: ["草稿", "muted"], ARCHIVED: ["已归档", "muted"] },
 	health: { HEALTHY: ["健康", "ok"], ATTENTION: ["需关注", "warn"], NOT_EVALUATED: ["未评估", "muted"] },
 	connectionHealth: { UP: ["可用", "ok"], RETEST_REQUIRED: ["待复测", "warn"], NOT_TESTED: ["未测试", "muted"], NOT_APPLICABLE: ["不适用（文件）", "muted"] },
-	admission: { ADMITTED: ["已准入 ODS", "ok"], CONDITIONAL: ["有条件准入", "warn"], REVIEW_REQUIRED: ["待人工确认", "warn"], NOT_STARTED: ["未发起", "muted"] },
+	admission: { ADMITTED: ["已准入 ODS", "ok"], READY: ["规则通过", "ok"], CONFIRMATION_REQUIRED: ["待人工确认", "warn"], BLOCKED: ["准入阻断", "bad"], PENDING_EXTERNAL_APPROVAL: ["等待外部流程", "warn"], NOT_STARTED: ["未发起", "muted"] },
 	lastRun: { SUCCESS: ["成功", "ok"], PARTIAL: ["部分成功", "warn"], FAILED: ["失败", "bad"], STAGING: ["等待准入", "info"], RUNNING: ["执行中", "info"], NOT_RUN: ["未运行", "muted"] },
 };
 
 const WORKSPACE_META = {
-	"ing-1042": { lifecycle: "ACTIVE", health: "ATTENTION", connectionHealth: "UP", admission: "ADMITTED", active: "R12", draft: null },
-	"ing-1039": { lifecycle: "ACTIVE", health: "ATTENTION", connectionHealth: "RETEST_REQUIRED", admission: "CONDITIONAL", active: "R08", draft: "R09 · 待审批" },
-	"ing-1035": { lifecycle: "ACTIVE", health: "HEALTHY", connectionHealth: "UP", admission: "ADMITTED", active: "R06", draft: null },
-	"ing-1028": { lifecycle: "ACTIVE", health: "ATTENTION", connectionHealth: "NOT_APPLICABLE", admission: "REVIEW_REQUIRED", active: "R05", draft: null },
-	"ing-1011": { lifecycle: "PAUSED", health: "HEALTHY", connectionHealth: "UP", admission: "ADMITTED", active: "R04", draft: null },
-	"ing-1007": { lifecycle: "DRAFT", health: "NOT_EVALUATED", connectionHealth: "NOT_TESTED", admission: "NOT_STARTED", active: null, draft: "R01 · 初始草稿" },
+	"ing-1042": { lifecycle: "ACTIVE", health: "ATTENTION", connectionHealth: "UP", active: "R12", activeAdmission: "ADMITTED", draft: null, draftAdmission: null },
+	"ing-1039": { lifecycle: "ACTIVE", health: "ATTENTION", connectionHealth: "RETEST_REQUIRED", active: "R08", activeAdmission: "ADMITTED", draft: "R09 · 待确认", draftAdmission: "CONFIRMATION_REQUIRED" },
+	"ing-1035": { lifecycle: "ACTIVE", health: "HEALTHY", connectionHealth: "UP", active: "R06", activeAdmission: "ADMITTED", draft: null, draftAdmission: null },
+	"ing-1028": { lifecycle: "ACTIVE", health: "ATTENTION", connectionHealth: "NOT_APPLICABLE", active: "R05", activeAdmission: "ADMITTED", draft: "R06 · 准入阻断", draftAdmission: "BLOCKED" },
+	"ing-1011": { lifecycle: "PAUSED", health: "HEALTHY", connectionHealth: "UP", active: "R04", activeAdmission: "ADMITTED", draft: null, draftAdmission: null },
+	"ing-1007": { lifecycle: "DRAFT", health: "NOT_EVALUATED", connectionHealth: "NOT_TESTED", active: null, activeAdmission: "NOT_STARTED", draft: "R01 · 初始草稿", draftAdmission: "NOT_STARTED" },
 };
 
 const plainChip = (meta) =>
@@ -45,11 +45,20 @@ function statusMetaOf(dimension, code) {
 function workspacePresentation(conn) {
 	const fixture = WORKSPACE_META[conn.id] || {};
 	const lastRunCode = conn.lastRunState === "—" ? "NOT_RUN" : conn.lastRunState;
+	const activeAdmission = statusMetaOf("admission", fixture.activeAdmission);
+	const draftAdmission = fixture.draft
+		? statusMetaOf("admission", fixture.draftAdmission)
+		: { code: "NO_DRAFT", label: "无草稿", tone: "muted" };
+	const admission = fixture.draft
+		? { ...draftAdmission, label: `草稿 ${fixture.draft.split(" · ")[0]} · ${draftAdmission.label}` }
+		: { ...activeAdmission, label: `生效 ${fixture.active || "无"} · ${activeAdmission.label}` };
 	return {
 		lifecycle: statusMetaOf("lifecycle", fixture.lifecycle),
 		health: statusMetaOf("health", fixture.health),
 		connectionHealth: statusMetaOf("connectionHealth", fixture.connectionHealth),
-		admission: statusMetaOf("admission", fixture.admission),
+		admission,
+		activeAdmission,
+		draftAdmission,
 		lastRun: statusMetaOf("lastRun", lastRunCode),
 		revision: { active: fixture.active || null, draft: fixture.draft || null },
 	};
@@ -77,7 +86,7 @@ function openDraftRevision(conn, rerender) {
 		return;
 	}
 	const draft = `${nextRevisionId(revision.active)} · 未发布`;
-	WORKSPACE_META[conn.id] = { ...WORKSPACE_META[conn.id], active: revision.active, draft };
+	WORKSPACE_META[conn.id] = { ...WORKSPACE_META[conn.id], active: revision.active, draft, draftAdmission: "NOT_STARTED" };
 	window.alert(`已从 active Revision ${revision.active} 复制出 ${draft}；发布前不会影响当前运行计划。`);
 	if (typeof rerender === "function") rerender();
 }
@@ -93,7 +102,7 @@ function renderList(nav) {
 		const alerts = [];
 		if (c.health.drift) alerts.push(`${c.health.drift} 处结构漂移`);
 		if (c.health.failed7d) alerts.push(`7 日内 ${c.health.failed7d} 次失败`);
-		if (c.health.pendingChange) alerts.push(`${c.health.pendingChange} 项变更待审批`);
+		if (c.health.pendingChange) alerts.push(`${c.health.pendingChange} 项变更待确认`);
 		if (c.health.stagingErrors) alerts.push(`${c.health.stagingErrors} 行待人工确认`);
 
 		return V("article", {
@@ -161,7 +170,7 @@ const DETAIL_TABS = [
 	{ key: "overview", label: "概览" },
 	{ key: "runs", label: "运行历史" },
 	{ key: "drift", label: "结构漂移", badge: (c) => c.health.drift },
-	{ key: "staging", label: "落地预检", badge: (c) => c.health.stagingErrors },
+	{ key: "staging", label: "质量检查" },
 	{ key: "changes", label: "变更记录", badge: (c) => c.health.pendingChange },
 	{ key: "config", label: "配置" },
 ];
@@ -216,29 +225,8 @@ function renderDrift() {
 	]);
 }
 
-function renderStaging() {
-	return V("div", {}, [
-		V("div", { class: "inline-alert info" }, [
-			V("b", {}, "落地前拦截"),
-			V("span", {}, "数据先进 staging，规则不通过的行在这里改，确认后才写入 ODS。现网这套能力已存在，只是入口在治理模块。"),
-		]),
-		V("div", { class: "table-scroll" }, V("table", { class: "grid" }, [
-			V("thead", {}, V("tr", {}, ["行号", "字段", "值", "问题", ""].map((h) => V("th", {}, h)))),
-			V("tbody", {}, P.STAGING_ROWS.map((s) => V("tr", { class: s.error ? "bad-row" : "" }, [
-				V("td", { class: "num" }, String(s.row)),
-				V("td", {}, s.col),
-				V("td", {}, V("input", { class: "ctl tight", value: s.value })),
-				V("td", { class: "muted small" }, s.error || "✓"),
-				V("td", {}, s.error ? V("button", { class: "link-btn" }, "重检此行") : ""),
-			]))),
-		])),
-		V("div", { class: "wizard-foot" }, [
-			V("span", { class: "muted" }, "17 行待确认 · 修正后统一重检"),
-			V("div", { class: "spacer" }),
-			V("button", { class: "btn ghost" }, "丢弃本批"),
-			V("button", { class: "btn primary" }, "全部重检并提交"),
-		]),
-	]);
+function renderStaging(conn, connector) {
+	return window.QualityChecks.render(conn, connector);
 }
 
 function renderChanges() {
@@ -249,7 +237,7 @@ function renderChanges() {
 			V("td", {}, c.type),
 			V("td", {}, c.summary),
 			V("td", {}, V("span", { class: c.risk === "高" ? "chip chip-bad" : "chip chip-warn" }, c.risk)),
-			V("td", {}, c.state === "待审批"
+			V("td", {}, c.state === "待确认"
 				? V("span", { class: "chip chip-warn" }, c.state)
 				: V("span", { class: "chip chip-ok" }, c.state)),
 			V("td", {}, c.assignee),
@@ -263,9 +251,10 @@ function renderOverview(conn) {
 	const status = workspacePresentation(conn);
 	const stateRows = [
 		["生命周期", plainChip(status.lifecycle), "AccessWorkspace 的发布 / 暂停 / 归档迁移", "不表示某次执行是否成功"],
-		["总体健康", plainChip(status.health), "漂移、失败、待审批与准入信号的聚合", "不触发生命周期迁移"],
+		["总体健康", plainChip(status.health), "漂移、失败、待确认与准入信号的聚合", "不触发生命周期迁移"],
 		["连接健康", plainChip(status.connectionHealth), "连接测试与连接失败证据", "连接可用不代表数据可准入"],
-		["ODS 准入", plainChip(status.admission), "staging 校验与人工确认结果", "不复用连接健康状态"],
+		["active 准入", plainChip(status.activeAdmission), "已生效 Revision 的不可变准入决定", status.revision.active ? `绑定 ${status.revision.active}` : "无生效 Revision"],
+		["draft 准入", plainChip(status.draftAdmission), "候选 Revision 的规则结果或风险确认", status.revision.draft ? `绑定 ${status.revision.draft.split(" · ")[0]}` : "不覆盖 active 决定"],
 		["上次运行", plainChip(status.lastRun), "最近一条 ExecutionRun 快照", "不是 AccessWorkspace 生命周期"],
 		["active Revision", revisionChip("已发布", status.revision.active, status.revision.active ? "info" : "muted"),
 			"当前生效的 ExecutionPlan Revision", "只读；继续运行使用这一版"],
@@ -322,18 +311,20 @@ function renderDetail(nav, id) {
 	const conn = P.CONNECTIONS.find((c) => c.id === id) || P.CONNECTIONS[1];
 	const connector = P.connectorByKey(conn.connector);
 	const status = workspacePresentation(conn);
+	const qualityTab = window.QualityChecks.tabMeta(conn, connector);
 
 	const tabs = V("div", { class: "tabs" }, DETAIL_TABS.map((t) => {
-		const badge = t.badge ? t.badge(conn) : 0;
+		const label = t.key === "staging" ? qualityTab.label : t.label;
+		const badge = t.key === "staging" ? qualityTab.badge : t.badge ? t.badge(conn) : 0;
 		return V("button", {
 			class: `tab${DETAIL.tab === t.key ? " active" : ""}`,
 			onclick: () => { DETAIL.tab = t.key; nav("detail", id); },
-		}, [t.label, badge ? V("span", { class: "tab-badge" }, String(badge)) : null]);
+		}, [label, badge ? V("span", { class: "tab-badge" }, String(badge)) : null]);
 	}));
 
 	const body = DETAIL.tab === "runs" ? renderRuns()
 		: DETAIL.tab === "drift" ? renderDrift()
-		: DETAIL.tab === "staging" ? renderStaging()
+		: DETAIL.tab === "staging" ? renderStaging(conn, connector)
 		: DETAIL.tab === "changes" ? renderChanges()
 		: DETAIL.tab === "config" ? renderConfigTab(conn, connector)
 		: renderOverview(conn);
@@ -554,7 +545,7 @@ const DECISIONS = [
 		n: "02",
 		title: "任务继承连接，偏离才覆盖",
 		now: "readerType、密级、归属部门在数据源表单和任务表单各填一遍。",
-		next: "默认显示「继承自连接」并置灰，点「覆盖」才可改，且覆盖会记入变更记录并触发审批。",
+		next: "默认显示「继承自连接」并置灰，点「覆盖」才可改；覆盖会留痕并重新计算准入，密级降低默认阻断。",
 		why: "既省录入，也让「这个任务的密级为什么和连接不一样」变成可审计的显式动作——对有密级封条的场景尤其重要。",
 	},
 	{
@@ -567,8 +558,8 @@ const DECISIONS = [
 	{
 		n: "04",
 		title: "运行时事件聚合到 AccessWorkspace",
-		now: "结构漂移在元数据管理、落地预检在治理、重跑在运维中心。一次失败要跨三个模块处理。",
-		next: "运行历史 / 漂移 / 预检 / 变更作为同一 AccessWorkspace 的标签页，但各自保留原领域对象与状态。",
+		now: "结构漂移在元数据管理、质量异常在数据质量、重跑在运维中心。一次失败要跨三个模块处理。",
+		next: "运行历史 / 漂移 / 质量检查 / 变更作为同一 AccessWorkspace 的标签页，但各自保留原领域对象与状态。",
 		why: "这些能力后端已经做得不错（SchemaSnapshot、IncrementalState、RetryService、rollback、staging），只是被按团队边界拆散在 UI 上。",
 	},
 	{
@@ -599,6 +590,13 @@ const DECISIONS = [
 		next: "只把无默认可言的项留在主流程（连接、选表、同步方式、调度、名称），其余压成一行摘要 chips，点「查看并调整」才展开。",
 		why: "减负不是砍功能，是把决策权从「必填」降级为「可改」。做原型时我自己也踩了这个坑——第③步一度有 18 个表单项，重构后 3 个。",
 	},
+	{
+		n: "09",
+		title: "组织审批不是默认发布依赖",
+		now: "DTS 尚未形成统一审批引擎，客户也未必具备可接入的 OA/BPM；强制填写处理人只会制造无法闭环的假流程。",
+		next: "AdmissionDecision 输出规则通过、需人工确认、硬阻断或等待外部流程；仅客户主动绑定 WorkflowBinding 时才进入外部审批。",
+		why: "风险确认负责说明影响与回退，硬规则负责安全底线，外部审批负责客户组织授权，三者不能混成一个统一状态。",
+	},
 ];
 
 function renderNotes() {
@@ -606,7 +604,7 @@ function renderNotes() {
 		V("div", { class: "page-head" }, [
 			V("div", {}, [
 				V("h2", {}, "设计说明"),
-				V("p", { class: "muted" }, "本原型要论证的五个决策，以及它们各自对应现网的哪一处具体问题。"),
+				V("p", { class: "muted" }, "本原型要论证的九个决策，以及它们各自对应现网的哪一处具体问题。"),
 			]),
 		]),
 		V("div", { class: "flow-compare" }, [
@@ -618,7 +616,7 @@ function renderNotes() {
 					"数据源管理 —— 新建数据源，填连接参数",
 					"数据源结构采集 —— 触发一次元数据采集",
 					"数据入湖配置 —— 新建任务，重填 readerType / 密级 / 部门，手写 Reader JSON",
-					"接入变更记录 —— 提交审批",
+					"接入变更记录 —— 留痕与风险确认",
 				].map((s) => V("li", {}, s))),
 				V("div", { class: "flow-tally" }, "3 个顶级模块 · 6 个页面"),
 			]),
@@ -629,7 +627,7 @@ function renderNotes() {
 					"数据接入 → 新建接入",
 					"① 连接：选连接器（含驱动状态）→ schema 表单 → 测通",
 					"② 选表：自动发现 → 勾选 → 自动推导 ODS 与字段映射",
-					"③ 策略：同步方式 / 调度 / 密级（继承）→ 确认启用",
+					"③ 策略：同步方式 / 调度 / 密级依据 → 规则准入 / 风险确认 → 发布",
 				].map((s) => V("li", {}, s))),
 				V("div", { class: "flow-tally" }, "1 个模块 · 1 个向导"),
 			]),
@@ -761,6 +759,6 @@ function renderParamMap(nav) {
 	]);
 }
 
-window.Views = { renderList, renderDetail, renderAdmin, renderNotes, renderParamMap, DETAIL };
+window.Views = { renderList, renderDetail, renderAdmin, renderNotes, renderParamMap, workspacePresentation, DETAIL };
 
 })();

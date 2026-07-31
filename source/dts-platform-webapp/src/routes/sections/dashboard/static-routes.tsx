@@ -5,11 +5,12 @@ import { StandardPackageActions } from "@/pages/governance/StandardPackageAction
 import { metricsServiceHrefFromPlatformLocation } from "./metricsServiceRoutes";
 
 // ── Platform pages ──
-const TransformPage = lazy(() => import("@/pages/explore/etl/TransformPage"));
 const EltConsolePage = lazy(() => import("@/pages/explore/etl/EltConsolePage"));
-const TransformCreatePage = lazy(() => import("@/pages/explore/etl/TransformCreatePage"));
-const TransformDetailPage = lazy(() => import("@/pages/explore/etl/TransformDetailPage"));
-const TransformExecutionHistoryPage = lazy(() => import("@/pages/explore/etl/TransformExecutionHistoryPage"));
+const AccessWorkspacePage = lazy(() => import("@/pages/foundation/access/AccessWorkspacePage"));
+const AccessPlanWizardPage = lazy(() => import("@/pages/foundation/access/AccessPlanWizardPage"));
+const AccessPlanDetailPage = lazy(() => import("@/pages/foundation/access/AccessPlanDetailPage"));
+const AccessDefaultsPage = lazy(() => import("@/pages/foundation/access/AccessDefaultsPage"));
+const LegacyDataIntegrationRedirect = lazy(() => import("@/pages/foundation/access/LegacyDataIntegrationRedirect"));
 const DataSourceDetailPage = lazy(() => import("@/pages/foundation/DataSourceDetailPage"));
 const StandardPackagePage = lazy(() => import("@/pages/foundation/StandardPackagePage"));
 const AssetOverviewPage = lazy(() => import("@/pages/catalog/AssetOverviewPage"));
@@ -28,10 +29,8 @@ const OpsInstancesPage = lazy(() => import("@/pages/ops/OpsInstancesPage"));
 const OpsAlertLogPage = lazy(() => import("@/pages/ops/OpsAlertLogPage"));
 const OpsBackfillPage = lazy(() => import("@/pages/ops/OpsBackfillPage"));
 const WorkflowCenterPage = lazy(() => import("@/pages/workbench/WorkflowCenterPage"));
-const StudioProjectsPage = lazy(() => import("@/pages/modeling/ModelTemplatesPage"));
-const SqlModelingPage = lazy(() => import("@/pages/modeling/SqlModelingPage"));
-const ModelingCompatibilityPage = lazy(() => import("@/pages/modeling/ModelingCompatibilityPage"));
-const ModelingWorkbenchPage = lazy(() => import("@/pages/modeling/ModelingWorkbenchPage"));
+const DataModelingPage = lazy(() => import("@/pages/data-modeling/DataModelingPage"));
+const LegacyDataModelingRedirect = lazy(() => import("@/pages/data-modeling/LegacyDataModelingRedirect"));
 const MeasurementUnitsPage = lazy(() => import("@/pages/governance/MeasurementUnitsPage"));
 
 // ── Analytics pages (static routes — registered statically for reliability; menu controls visibility) ──
@@ -103,7 +102,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "explore/etl/transform",
 		element: (
 			<S>
-				<TransformPage />
+				<LegacyDataIntegrationRedirect />
 			</S>
 		),
 	},
@@ -111,7 +110,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "explore/etl/transform/new",
 		element: (
 			<S>
-				<TransformCreatePage />
+				<LegacyDataIntegrationRedirect />
 			</S>
 		),
 	},
@@ -119,7 +118,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "explore/etl/transform/:id",
 		element: (
 			<S>
-				<TransformDetailPage />
+				<LegacyDataIntegrationRedirect />
 			</S>
 		),
 	},
@@ -127,7 +126,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "explore/etl/transform/:id/edit",
 		element: (
 			<S>
-				<TransformCreatePage />
+				<LegacyDataIntegrationRedirect />
 			</S>
 		),
 	},
@@ -135,7 +134,71 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "explore/etl/transform/:id/executions",
 		element: (
 			<S>
-				<TransformExecutionHistoryPage />
+				<LegacyDataIntegrationRedirect />
+			</S>
+		),
+	},
+	{
+		path: "foundation/access-changes",
+		element: (
+			<S>
+				<LegacyDataIntegrationRedirect />
+			</S>
+		),
+	},
+	{
+		path: "foundation/data-sources",
+		element: (
+			<S>
+				<AccessWorkspacePage />
+			</S>
+		),
+	},
+	{
+		path: "foundation/data-sources/database",
+		element: (
+			<S>
+				<AccessWorkspacePage />
+			</S>
+		),
+	},
+	{
+		path: "foundation/data-sources/api",
+		element: (
+			<S>
+				<AccessWorkspacePage />
+			</S>
+		),
+	},
+	{
+		path: "foundation/data-sources/files",
+		element: (
+			<S>
+				<AccessWorkspacePage />
+			</S>
+		),
+	},
+	{
+		path: "foundation/data-sources/defaults",
+		element: (
+			<S>
+				<AccessDefaultsPage />
+			</S>
+		),
+	},
+	{
+		path: "foundation/data-sources/access/new",
+		element: (
+			<S>
+				<AccessPlanWizardPage />
+			</S>
+		),
+	},
+	{
+		path: "foundation/data-sources/access/:taskId",
+		element: (
+			<S>
+				<AccessPlanDetailPage />
 			</S>
 		),
 	},
@@ -373,7 +436,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "studio/low-code-development",
 		element: (
 			<S>
-				<ModelingCompatibilityPage />
+				<LegacyDataModelingRedirect />
 			</S>
 		),
 	},
@@ -381,7 +444,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "studio/projects",
 		element: (
 			<S>
-				<StudioProjectsPage />
+				<LegacyDataModelingRedirect />
 			</S>
 		),
 	},
@@ -389,7 +452,15 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "studio/sql-modeling",
 		element: (
 			<S>
-				<SqlModelingPage />
+				<LegacyDataModelingRedirect />
+			</S>
+		),
+	},
+	{
+		path: "data-modeling/*",
+		element: (
+			<S>
+				<DataModelingPage />
 			</S>
 		),
 	},
@@ -397,7 +468,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "modeling/dbt-files",
 		element: (
 			<S>
-				<ModelingCompatibilityPage />
+				<LegacyDataModelingRedirect />
 			</S>
 		),
 	},
@@ -405,7 +476,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "modeling/workbench",
 		element: (
 			<S>
-				<ModelingWorkbenchPage />
+				<LegacyDataModelingRedirect />
 			</S>
 		),
 	},
@@ -413,7 +484,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "modeling/plans",
 		element: (
 			<S>
-				<ModelingCompatibilityPage />
+				<LegacyDataModelingRedirect />
 			</S>
 		),
 	},
@@ -421,7 +492,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "modeling/plans/:planId/*",
 		element: (
 			<S>
-				<ModelingCompatibilityPage />
+				<LegacyDataModelingRedirect />
 			</S>
 		),
 	},
@@ -429,7 +500,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "modeling/dimensions",
 		element: (
 			<S>
-				<ModelingCompatibilityPage />
+				<LegacyDataModelingRedirect />
 			</S>
 		),
 	},
@@ -437,7 +508,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "modeling/models",
 		element: (
 			<S>
-				<ModelingCompatibilityPage />
+				<LegacyDataModelingRedirect />
 			</S>
 		),
 	},
@@ -445,7 +516,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "modeling/models/:modelSpecId",
 		element: (
 			<S>
-				<ModelingCompatibilityPage />
+				<LegacyDataModelingRedirect />
 			</S>
 		),
 	},
@@ -453,7 +524,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "modeling/metric-workbench",
 		element: (
 			<S>
-				<ModelingCompatibilityPage />
+				<LegacyDataModelingRedirect />
 			</S>
 		),
 	},
@@ -470,7 +541,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "modeling/semantic/subjects",
 		element: (
 			<S>
-				<ModelingCompatibilityPage />
+				<LegacyDataModelingRedirect />
 			</S>
 		),
 	},
@@ -478,7 +549,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "modeling/semantic/objects",
 		element: (
 			<S>
-				<ModelingCompatibilityPage />
+				<LegacyDataModelingRedirect />
 			</S>
 		),
 	},
@@ -486,7 +557,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "modeling/semantic/metrics",
 		element: (
 			<S>
-				<ModelingCompatibilityPage />
+				<LegacyDataModelingRedirect />
 			</S>
 		),
 	},
@@ -494,7 +565,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "modeling/semantic/models",
 		element: (
 			<S>
-				<ModelingCompatibilityPage />
+				<LegacyDataModelingRedirect />
 			</S>
 		),
 	},
@@ -502,7 +573,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "modeling/semantic/publish",
 		element: (
 			<S>
-				<ModelingCompatibilityPage />
+				<LegacyDataModelingRedirect />
 			</S>
 		),
 	},
@@ -510,13 +581,50 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "modeling/semantic/runs",
 		element: (
 			<S>
-				<ModelingCompatibilityPage />
+				<LegacyDataModelingRedirect />
 			</S>
 		),
 	},
-	{ path: "modeling/semantic-center", element: <MetricsServiceRedirect /> },
-	{ path: "modeling/semantic-center/*", element: <MetricsServiceRedirect /> },
-	{ path: "bi/semantic-modeling", element: <MetricsServiceRedirect /> },
+	{
+		path: "modeling/semantic-center",
+		element: (
+			<S>
+				<LegacyDataModelingRedirect />
+			</S>
+		),
+	},
+	{
+		path: "modeling/semantic-center/*",
+		element: (
+			<S>
+				<LegacyDataModelingRedirect />
+			</S>
+		),
+	},
+	{
+		path: "bi/semantic-modeling",
+		element: (
+			<S>
+				<LegacyDataModelingRedirect />
+			</S>
+		),
+	},
+	{
+		path: "modeling/*",
+		element: (
+			<S>
+				<LegacyDataModelingRedirect />
+			</S>
+		),
+	},
+	{
+		path: "studio/modeling/*",
+		element: (
+			<S>
+				<LegacyDataModelingRedirect />
+			</S>
+		),
+	},
 
 	// ── Analytics (all routes statically registered — no dependency on menu API) ──
 	{

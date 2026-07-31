@@ -24,15 +24,12 @@ import org.springframework.web.filter.OncePerRequestFilter;
 /**
  * Injects an authenticated service principal when trusted services call platform APIs.
  * <p>
- * Sprint-28 F3: 启用 token 强校验,关闭 Sprint-27 的"白名单即权限"越权面。
  * 注入逻辑:
  * <ol>
- *   <li>X-DTS-Service header 必须在 trustedServices Map keys 或 trustedServiceNames List 内,否则拒绝;</li>
- *   <li>X-DTS-Service-Token header 必须存在,且与 trustedServices.get(serviceName) 或 sharedSecret 完全相等,
+ *   <li>X-DTS-Service header 必须在 trustedServices Map keys 内,否则拒绝;</li>
+ *   <li>X-DTS-Service-Token header 必须存在,且与 trustedServices.get(serviceName) 完全相等,
  *       或者通过 {@link SvcTokenAuthService#authenticateService} 命中数据库中动态颁发的 svc_token,缺一不注入。</li>
  * </ol>
- * <p>
- * 兼容开关 {@code legacy-header-only-mode} 开启时退回 Sprint-27 行为(仅看 header)。production 严禁开启。
  * 认证通过后只授予服务专用 authority,具体端点再按 service principal 收敛授权。
  */
 public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter {
@@ -98,11 +95,6 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
                 request.getRequestURI()
             );
             return null;
-        }
-
-        if (authProperties.isLegacyHeaderOnlyMode()) {
-            // Sprint-27 兼容路径,仅 header 即放行。production 严禁开启。
-            return canonical;
         }
 
         String suppliedToken = request.getHeader(SERVICE_TOKEN_HEADER);

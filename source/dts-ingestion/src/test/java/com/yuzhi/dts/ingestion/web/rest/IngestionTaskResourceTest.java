@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.doThrow;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -20,8 +21,10 @@ import com.yuzhi.dts.ingestion.service.IngestionTaskChangeLogService;
 import com.yuzhi.dts.ingestion.service.IngestionExecutionQueryService;
 import com.yuzhi.dts.ingestion.service.IngestionTaskQueryService;
 import com.yuzhi.dts.ingestion.service.IngestionTaskService;
+import com.yuzhi.dts.ingestion.service.IngestionAccessContractService;
 import com.yuzhi.dts.ingestion.service.audit.AuditService;
 import com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO;
+import com.yuzhi.dts.ingestion.service.dto.IngestionAccessDefaultPolicyDTO;
 import com.yuzhi.dts.ingestion.service.etl.AddaxJobService;
 import com.yuzhi.dts.ingestion.service.etl.AirflowAdapter;
 import com.yuzhi.dts.ingestion.service.etl.ConnectorCapabilityService;
@@ -38,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.time.Instant;
 import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.task.TaskRejectedException;
@@ -74,6 +78,9 @@ class IngestionTaskResourceTest {
     private IngestionTaskQueryService ingestionTaskQueryService;
 
     @MockBean
+    private IngestionAccessContractService accessContractService;
+
+    @MockBean
     private IngestionExecutionQueryService ingestionExecutionQueryService;
 
     @MockBean
@@ -99,6 +106,59 @@ class IngestionTaskResourceTest {
 
     @MockBean
     private ApiAuthProviderRegistry apiAuthProviderRegistry;
+
+    @Test
+    void listTasksShouldForwardServerSideAccessFilters() throws Exception {
+        when(
+            ingestionTaskQueryService.findAll(
+                eq("active"),
+                eq("api"),
+                eq("crm"),
+                eq("healthy"),
+                eq(UUID.fromString("00000000-0000-0000-0000-000000000091")),
+                any(org.springframework.data.domain.Pageable.class)
+            )
+        ).thenReturn(org.springframework.data.domain.Page.<IngestionTaskDTO>empty());
+
+        mockMvc.perform(
+            get("/api/ingestion/tasks/list")
+                .param("status", "active")
+                .param("sourceKind", "api")
+                .param("query", "crm")
+                .param("health", "healthy")
+                .param("sourceDataSourceId", "00000000-0000-0000-0000-000000000091")
+        ).andExpect(status().isOk());
+
+        verify(ingestionTaskQueryService).findAll(
+            eq("active"),
+            eq("api"),
+            eq("crm"),
+            eq("healthy"),
+            eq(UUID.fromString("00000000-0000-0000-0000-000000000091")),
+            any(org.springframework.data.domain.Pageable.class)
+        );
+    }
+
+    @Test
+    void getAccessDefaultPolicyShouldExposeVersionedReadOnlyContract() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        when(accessContractService.getActiveDefaultPolicy()).thenReturn(
+            new IngestionAccessDefaultPolicyDTO(
+                "GLOBAL",
+                3,
+                "ACTIVE",
+                mapper.createObjectNode().put("scheduleType", "manual"),
+                "checksum-v3",
+                Instant.parse("2026-07-31T00:00:00Z")
+            )
+        );
+
+        mockMvc.perform(get("/api/ingestion/access/default-policy"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.policyKey").value("GLOBAL"))
+            .andExpect(jsonPath("$.version").value(3))
+            .andExpect(jsonPath("$.checksum").value("checksum-v3"));
+    }
 
     @Test
     void createTask_apiDraftNormalizesRawOdsLandingAndTableMapping() throws Exception {

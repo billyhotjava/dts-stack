@@ -1,9 +1,9 @@
 package com.yuzhi.dts.platform.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -12,7 +12,6 @@ class PlatformInboundServiceAuthPropertiesTest {
     @Test
     void resolveExpectedTokenPrefersPerPairSecretWhenPresent() {
         PlatformInboundServiceAuthProperties props = new PlatformInboundServiceAuthProperties();
-        props.setSharedSecret("shared-fallback");
         Map<String, String> map = new LinkedHashMap<>();
         map.put("dts-ingestion", "ingestion-only-secret");
         map.put("dts-analytics", "analytics-only-secret");
@@ -33,34 +32,20 @@ class PlatformInboundServiceAuthPropertiesTest {
     }
 
     @Test
-    void resolveExpectedTokenFallsBackToSharedSecretWhenMapValueEmpty() {
-        // 模拟运维只设了 DTS_ADMIN_SERVICE_TOKEN(走 fallback 链),Map 包含 key 但 value 为空。
+    void resolveExpectedTokenFailsClosedWhenPairwiseCredentialIsMissing() {
         PlatformInboundServiceAuthProperties props = new PlatformInboundServiceAuthProperties();
-        props.setSharedSecret("legacy-shared");
         Map<String, String> map = new LinkedHashMap<>();
-        map.put("dts-ingestion", "");
-        map.put("dts-airflow", "  "); // whitespace 也视为空
+        map.put("dts-ingestion", " ");
         props.setTrustedServices(map);
 
-        assertThat(props.resolveExpectedToken("dts-ingestion")).isEqualTo("legacy-shared");
-        assertThat(props.resolveExpectedToken("dts-airflow")).isEqualTo("legacy-shared");
-    }
-
-    @Test
-    void resolveExpectedTokenFallsBackToSharedSecretForUnknownService() {
-        PlatformInboundServiceAuthProperties props = new PlatformInboundServiceAuthProperties();
-        props.setSharedSecret("shared-fallback");
-        Map<String, String> map = new LinkedHashMap<>();
-        map.put("dts-ingestion", "ingestion-secret");
-        props.setTrustedServices(map);
-
-        assertThat(props.resolveExpectedToken("dts-unknown")).isEqualTo("shared-fallback");
+        assertThat(props.resolveExpectedToken("dts-ingestion")).isNull();
+        assertThat(props.resolveExpectedToken("dts-unknown")).isNull();
+        assertThat(props.isTrustedServiceName("dts-ingestion")).isFalse();
     }
 
     @Test
     void resolveExpectedTokenReturnsNullWhenServiceNameBlank() {
         PlatformInboundServiceAuthProperties props = new PlatformInboundServiceAuthProperties();
-        props.setSharedSecret("shared");
         assertThat(props.resolveExpectedToken(null)).isNull();
         assertThat(props.resolveExpectedToken("")).isNull();
         assertThat(props.resolveExpectedToken("   ")).isNull();
@@ -79,14 +64,14 @@ class PlatformInboundServiceAuthPropertiesTest {
     }
 
     @Test
-    void isTrustedServiceNameAlsoMatchesLegacyListWhenMapEmpty() {
+    void startupValidationDropsBlankEntriesAndAllowsEmptyFailClosedConfiguration() {
         PlatformInboundServiceAuthProperties props = new PlatformInboundServiceAuthProperties();
-        props.setTrustedServiceNames(List.of("dts-ingestion", "dts-airflow"));
-        // trustedServices 默认空 Map → 仅靠 trustedServiceNames 判断
+        props.setTrustedServices(Map.of("dts-ingestion", " "));
 
-        assertThat(props.isTrustedServiceName("dts-ingestion")).isTrue();
-        assertThat(props.isTrustedServiceName("dts-airflow")).isTrue();
-        assertThat(props.isTrustedServiceName("dts-unknown")).isFalse();
+        props.afterPropertiesSet();
+
+        assertThat(props.getTrustedServices()).isEmpty();
+        assertThat(props.isTrustedServiceName("dts-ingestion")).isFalse();
     }
 
     @Test
@@ -100,8 +85,19 @@ class PlatformInboundServiceAuthPropertiesTest {
     }
 
     @Test
-    void legacyHeaderOnlyModeDefaultsToFalse() {
-        PlatformInboundServiceAuthProperties props = new PlatformInboundServiceAuthProperties();
-        assertThat(props.isLegacyHeaderOnlyMode()).isFalse();
+    void startupValidationRejectsWeakOrReusedPairwiseCredentials() {
+        PlatformInboundServiceAuthProperties weak = new PlatformInboundServiceAuthProperties();
+        weak.setTrustedServices(Map.of("dts-ingestion", "short"));
+        PlatformInboundServiceAuthProperties duplicate = new PlatformInboundServiceAuthProperties();
+        duplicate.setTrustedServices(
+            Map.of("dts-ingestion", "a".repeat(32), "dts-analytics", "a".repeat(32))
+        );
+
+        assertThatThrownBy(weak::afterPropertiesSet)
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("at least 32");
+        assertThatThrownBy(duplicate::afterPropertiesSet)
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("Duplicate");
     }
 }

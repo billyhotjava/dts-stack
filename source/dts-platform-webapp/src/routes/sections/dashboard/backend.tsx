@@ -117,6 +117,7 @@ const convertToRoute = (items: MenuTree[], parent?: MenuTree): RouteObject[] => 
 const buildDynamicFallbackRoutes = (): RouteObject[] => [
 	{ path: "workbench", children: [{ path: "*", element: <DynamicMenuResolver base="/workbench" /> }] },
 	{ path: "catalog", children: [{ path: "*", element: <DynamicMenuResolver base="/catalog" /> }] },
+	{ path: "data-modeling", children: [{ path: "*", element: <DynamicMenuResolver base="/data-modeling" /> }] },
 	{ path: "modeling", children: [{ path: "*", element: <DynamicMenuResolver base="/modeling" /> }] },
 	{ path: "governance", children: [{ path: "*", element: <DynamicMenuResolver base="/governance" /> }] },
 	{ path: "explore", children: [{ path: "*", element: <DynamicMenuResolver base="/explore" /> }] },

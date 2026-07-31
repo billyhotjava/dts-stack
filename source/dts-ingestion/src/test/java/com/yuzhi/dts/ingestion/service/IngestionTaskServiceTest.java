@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.ingestion.domain.IngestionExecution;
 import com.yuzhi.dts.ingestion.domain.IngestionTask;
+import com.yuzhi.dts.ingestion.domain.IngestionTaskRevision;
 import com.yuzhi.dts.ingestion.repository.IngestionExecutionRepository;
 import com.yuzhi.dts.ingestion.repository.IngestionTaskRepository;
 import com.yuzhi.dts.ingestion.service.audit.AuditService;
@@ -134,6 +135,9 @@ class IngestionTaskServiceTest {
 
     @Mock
     private IngestionClassificationSealGuard classificationSealGuard;
+
+    @Mock
+    private IngestionAccessContractService accessContractService;
 
     @Mock
     private jakarta.persistence.EntityManager entityManager;
@@ -621,6 +625,149 @@ class IngestionTaskServiceTest {
         assertThat(existingTask.getAddaxJobPath()).isEqualTo("/tmp/draft-job.json");
         verify(airflowDagService, never()).ensureDagForTask(any(), anyList());
         verify(dagPreheatService, never()).preheatDag(anyString());
+    }
+
+    @Test
+    void activeEditShouldSaveDraftRevisionWithoutMutatingActiveRuntimeRow() {
+        Long taskId = 61L;
+        ObjectNode activeSeal = createValidClassificationSeal();
+        ObjectNode draftSeal = activeSeal.deepCopy().put("sealId", "draft-seal");
+        IngestionTask active = createTestTaskEntity();
+        active.setId(taskId);
+        active.setStatus("active");
+        active.setSourceDataSourceId(TEST_SOURCE_ID);
+        active.setSourceConfig(objectMapper.createObjectNode().put("schema", "active_schema"));
+        active.setClassificationSeal(activeSeal);
+        active.setFieldClassifications(objectMapper.createObjectNode().put("customer_id", "INTERNAL"));
+
+        IngestionTaskDTO dto = createTestTaskDTO();
+        dto.setId(taskId);
+        dto.setStatus("draft");
+        dto.setSourceDataSourceId(TEST_SOURCE_ID);
+        dto.setSourceConfig(objectMapper.createObjectNode().put("schema", "draft_schema"));
+        dto.setClassificationSeal(draftSeal);
+        dto.setFieldClassifications(objectMapper.createObjectNode().put("customer_id", "CONFIDENTIAL"));
+
+        ingestionTaskService.setAccessContractService(accessContractService);
+        when(taskRepository.findByIdForUpdate(taskId)).thenReturn(Optional.of(active));
+        when(accessContractService.findLatestDraftRevision(taskId)).thenReturn(Optional.empty());
+        doAnswer(invocation -> {
+            IngestionTask target = invocation.getArgument(0);
+            target.setSourceConfig(dto.getSourceConfig());
+            target.setClassificationSeal(dto.getClassificationSeal());
+            target.setFieldClassifications(dto.getFieldClassifications());
+            target.setStatus("draft");
+            return null;
+        }).when(taskMapper).partialUpdate(any(IngestionTask.class), eq(dto));
+        when(taskMapper.toDto(any(IngestionTask.class))).thenAnswer(invocation -> {
+            IngestionTask task = invocation.getArgument(0);
+            IngestionTaskDTO result = new IngestionTaskDTO();
+            result.setId(task.getId());
+            result.setStatus(task.getStatus());
+            result.setSourceConfig(task.getSourceConfig());
+            return result;
+        });
+        when(accessContractService.enrichTaskDto(any(IngestionTaskDTO.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        IngestionTaskDTO result = ingestionTaskService.update(taskId, dto);
+
+        ArgumentCaptor<IngestionTask> draftCaptor = ArgumentCaptor.forClass(IngestionTask.class);
+        verify(accessContractService).recordDraftRevision(draftCaptor.capture(), isNull(), eq(false));
+        IngestionTask savedDraft = draftCaptor.getValue();
+        assertThat(result.getStatus()).isEqualTo("draft");
+        assertThat(savedDraft).isNotSameAs(active);
+        assertThat(savedDraft.getSourceConfig().path("schema").asText()).isEqualTo("draft_schema");
+        assertThat(active.getStatus()).isEqualTo("active");
+        assertThat(active.getSourceConfig().path("schema").asText()).isEqualTo("active_schema");
+        verify(taskRepository, never()).save(any(IngestionTask.class));
+        verifyNoInteractions(addaxJobService, airflowDagService, dagPreheatService);
+    }
+
+    @Test
+    void admitActiveTaskShouldApplyLatestDraftThenActivateIt() {
+        Long taskId = 62L;
+        ObjectNode seal = createValidClassificationSeal();
+        ObjectNode fields = objectMapper.createObjectNode().put("customer_id", "INTERNAL");
+        IngestionTask active = createTestTaskEntity();
+        active.setId(taskId);
+        active.setName("active-name");
+        active.setStatus("active");
+        active.setAddaxJobPath(null);
+        active.setClassificationSeal(seal);
+        active.setFieldClassifications(fields);
+        IngestionTask draft = createTestTaskEntity();
+        draft.setId(taskId);
+        draft.setName("draft-name");
+        draft.setStatus("draft");
+        draft.setSourceType("httpreader");
+        draft.setSourceDataSourceId(TEST_SOURCE_ID);
+        draft.setClassificationSeal(seal);
+        draft.setFieldClassifications(fields);
+        draft.setAirflowEnabled(false);
+        IngestionTaskRevision revision = new IngestionTaskRevision();
+        revision.setId(620L);
+        revision.setRevisionNumber(2);
+        revision.setState("DRAFT");
+
+        ingestionTaskService.setAccessContractService(accessContractService);
+        when(taskRepository.findByIdForUpdate(taskId)).thenReturn(Optional.of(active));
+        when(accessContractService.findLatestDraftRevision(taskId)).thenReturn(Optional.of(revision));
+        when(accessContractService.materializeLatestDraft(active)).thenReturn(draft);
+        when(taskRepository.save(active)).thenReturn(active);
+        when(taskMapper.toDto(active)).thenAnswer(invocation -> {
+            IngestionTaskDTO result = new IngestionTaskDTO();
+            result.setId(taskId);
+            result.setName(active.getName());
+            result.setStatus(active.getStatus());
+            return result;
+        });
+        when(accessContractService.enrichTaskDto(any(IngestionTaskDTO.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        IngestionTaskDTO result = ingestionTaskService.admit(taskId, seal, fields);
+
+        assertThat(result.getStatus()).isEqualTo("active");
+        assertThat(active.getName()).isEqualTo("draft-name");
+        assertThat(active.getSourceType()).isEqualTo("httpreader");
+        verify(accessContractService).activateDraftRevision(taskId);
+        verify(accessContractService, never()).recordDraftRevision(any(), any(), anyBoolean());
+        verify(taskRepository).save(active);
+        verifyNoInteractions(addaxJobService, airflowDagService, dagPreheatService);
+    }
+
+    @Test
+    void admitFileDraftShouldRequirePassedPreCheckWhenEnabled() {
+        Long taskId = 63L;
+        ObjectNode seal = createValidClassificationSeal();
+        ObjectNode fields = objectMapper.createObjectNode().put("customer_id", "INTERNAL");
+        IngestionTask active = createTestTaskEntity();
+        active.setId(taskId);
+        active.setStatus("active");
+        IngestionTask draft = createTestTaskEntity();
+        draft.setId(taskId);
+        draft.setStatus("draft");
+        draft.setSourceType("csv");
+        draft.setSourceDataSourceId(null);
+        draft.setClassificationSeal(seal);
+        draft.setFieldClassifications(fields);
+        draft.setQualityPreCheckEnabled(true);
+        draft.setPreCheckStatus("PENDING");
+        IngestionTaskRevision revision = new IngestionTaskRevision();
+        revision.setId(630L);
+        revision.setRevisionNumber(2);
+        revision.setState("DRAFT");
+
+        ingestionTaskService.setAccessContractService(accessContractService);
+        when(taskRepository.findByIdForUpdate(taskId)).thenReturn(Optional.of(active));
+        when(accessContractService.findLatestDraftRevision(taskId)).thenReturn(Optional.of(revision));
+        when(accessContractService.materializeLatestDraft(active)).thenReturn(draft);
+
+        assertThatThrownBy(() -> ingestionTaskService.admit(taskId, seal, fields))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("FILE_PRECHECK_REQUIRED");
+
+        verify(accessContractService, never()).activateDraftRevision(anyLong());
+        verifyNoInteractions(fileUploadService, addaxJobService, airflowDagService, dagPreheatService);
+        verify(taskRepository, never()).save(any(IngestionTask.class));
     }
 
     @Test
@@ -1143,6 +1290,17 @@ class IngestionTaskServiceTest {
         sourceConfig.put("path", "/orders");
         task.setSourceConfig(sourceConfig);
 
+        ingestionTaskService.setAccessContractService(accessContractService);
+        when(accessContractService.bindActiveRevision(any(IngestionExecution.class), eq(task))).thenAnswer(invocation -> {
+            IngestionExecution execution = invocation.getArgument(0);
+            execution.setQualityPolicyRef("dataset:00000000-0000-0000-0000-000000000001");
+            return null;
+        });
+        when(platformInfraClient.triggerQualityRunByPolicyRef(
+            "dataset:00000000-0000-0000-0000-000000000001",
+            "INGESTION"
+        )).thenReturn("quality-run-api-1");
+
         when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
         when(sourceResolver.resolve(sourceId, List.of())).thenReturn(
             new com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource(
@@ -1192,6 +1350,10 @@ class IngestionTaskServiceTest {
         verify(sourceConnectorRegistry).find(contextCaptor.capture());
         verify(apiConnector).buildExecutionPlan(contextCaptor.getValue());
         verify(apiIngestionExecutor).execute(eq(plan), eq(task), any(IngestionExecution.class));
+        verify(platformInfraClient).triggerQualityRunByPolicyRef(
+            "dataset:00000000-0000-0000-0000-000000000001",
+            "INGESTION"
+        );
         verify(airflowAdapter, never()).triggerIfRequested(any(), any(), anyBoolean());
         verify(addaxJobService, never()).resolveWriterColumnsIfNeeded(anyString());
 
@@ -1202,6 +1364,7 @@ class IngestionTaskServiceTest {
             assertThat(saved.getRowsRead()).isEqualTo(12L);
             assertThat(saved.getRowsWritten()).isEqualTo(12L);
             assertThat(saved.getEndTime()).isNotNull();
+            assertThat(saved.getQualityRunId()).isEqualTo("quality-run-api-1");
         });
 
         assertThat(contextCaptor.getValue().taskId()).isEqualTo(taskId);

@@ -29,11 +29,13 @@ export default function PortalMenusView() {
 		queryFn: () => adminApi.getAdminRoles(),
 	});
 
-	const treeMenus = useMemo(
-		() => portalMenus?.allMenus ?? portalMenus?.menus ?? [],
-		[portalMenus],
-	);
+	const [showDisabledMenus, setShowDisabledMenus] = useState(false);
 	const activeMenus = useMemo(() => portalMenus?.menus ?? [], [portalMenus]);
+	const allMenus = useMemo(() => portalMenus?.allMenus ?? activeMenus, [activeMenus, portalMenus]);
+	const treeMenus = useMemo(
+		() => (showDisabledMenus ? allMenus : activeMenus),
+		[activeMenus, allMenus, showDisabledMenus],
+	);
 	const roleOptions = useMemo(() => buildRoleOptions(rolesData ?? []), [rolesData]);
 	const roleLabelMap = useMemo(() => {
 		const map = new Map<string, string>();
@@ -98,16 +100,16 @@ export default function PortalMenusView() {
 				}
 			});
 		};
-		walk(treeMenus);
+		walk(allMenus);
 		const active = total - disabled;
 		return { total, active, disabled };
-	}, [treeMenus]);
+	}, [allMenus]);
 
 	useEffect(() => {
 		if (!isLoading) {
-			setPortalMenus(activeMenus, treeMenus);
+			setPortalMenus(activeMenus, allMenus);
 		}
-	}, [activeMenus, treeMenus, isLoading]);
+	}, [activeMenus, allMenus, isLoading]);
 
 	// 默认展开第一层
 	useEffect(() => {
@@ -542,6 +544,17 @@ export default function PortalMenusView() {
 					<div className="flex items-center gap-2">
 						<CardTitle className="mr-2">菜单编辑器</CardTitle>
 						<div className="ml-auto flex items-center gap-2">
+							<div className="flex items-center gap-2 whitespace-nowrap text-sm text-muted-foreground">
+								<Checkbox
+									id="show-disabled-menus"
+									checked={showDisabledMenus}
+									onCheckedChange={(value) => setShowDisabledMenus(value === true)}
+									aria-label="显示已禁用菜单"
+								/>
+								<label htmlFor="show-disabled-menus" className="cursor-pointer">
+									显示已禁用菜单
+								</label>
+							</div>
 							<Input
 								value={keyword}
 								onChange={(event) => setKeyword(event.target.value)}

@@ -98,7 +98,7 @@ export default function HelpCenter() {
 	const [open, setOpen] = useState(false);
 	const requestedTopicId =
 		location.pathname === "/settings/help" ? new URLSearchParams(location.search).get("topic") : undefined;
-	const topic = resolveHelpTopic(location.pathname, requestedTopicId, location.search);
+	const topic = resolveHelpTopic(location.pathname, requestedTopicId);
 
 	return (
 		<Sheet open={open} onOpenChange={setOpen}>

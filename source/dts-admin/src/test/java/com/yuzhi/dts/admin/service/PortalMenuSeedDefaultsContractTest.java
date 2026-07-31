@@ -122,14 +122,10 @@ class PortalMenuSeedDefaultsContractTest {
         assertNotNull(resourceRoot, "数据集成 root menu must exist");
         assertNotNull(governanceRoot, "数据治理 root menu must exist");
 
-        Map<String, Object> sourceStructure = listOfMaps(resourceRoot.get("children"))
-            .stream()
-            .filter(node -> "metadata".equals(node.get("key")))
-            .findFirst()
-            .orElse(null);
-        assertNotNull(sourceStructure, "数据源结构采集 must stay in data integration");
-        assertEquals("数据源结构采集", sourceStructure.get("title"));
-        assertEquals("/catalog/metadata", sourceStructure.get("externalLink"));
+        assertTrue(
+            listOfMaps(resourceRoot.get("children")).stream().noneMatch(node -> "metadata".equals(node.get("key"))),
+            "数据源结构采集 must be absorbed by the unified access workspace instead of remaining a top-level entry"
+        );
 
         Map<String, Object> assetsGroup = listOfMaps(governanceRoot.get("children"))
             .stream()
@@ -164,64 +160,258 @@ class PortalMenuSeedDefaultsContractTest {
     }
 
     @Test
-    void dataModelingSeedKeepsOnlySprint67CanonicalEntries() throws Exception {
+    void dataIntegrationUsesUnifiedAccessWorkspaceTree() throws Exception {
+        ClassPathResource seedResource = new ClassPathResource("config/data/portal-menu-seed.json");
+        Map<String, Object> seed = objectMapper.readValue(seedResource.getInputStream(), new TypeReference<Map<String, Object>>() {});
+        List<Map<String, Object>> roots = listOfMaps(seed.get("portalNavSections"));
+        Map<String, Object> resourceRoot = roots.stream().filter(node -> "resource".equals(node.get("key"))).findFirst().orElse(null);
+        assertNotNull(resourceRoot, "数据集成 root menu must exist");
+
+        List<Map<String, Object>> children = listOfMaps(resourceRoot.get("children"));
+        assertEquals(
+            List.of("accessOverview", "databaseAccess", "apiAccess", "fileAccess", "accessDefaults", "runtime"),
+            children.stream().map(node -> String.valueOf(node.get("key"))).toList()
+        );
+        assertEquals("/foundation/data-sources", children.get(0).get("externalLink"));
+        assertEquals("/foundation/data-sources/database", children.get(1).get("externalLink"));
+        assertEquals("/foundation/data-sources/api", children.get(2).get("externalLink"));
+        assertEquals("/foundation/data-sources/files", children.get(3).get("externalLink"));
+        assertEquals("/foundation/data-sources/defaults", children.get(4).get("externalLink"));
+        assertEquals(
+            List.of("connectors", "jdbcDrivers"),
+            listOfMaps(children.get(5).get("children")).stream().map(node -> String.valueOf(node.get("key"))).toList()
+        );
+
+        String resourceJson = objectMapper.writeValueAsString(resourceRoot);
+        assertFalse(resourceJson.contains("/explore/etl/transform"), "legacy ingestion menu must be removed");
+        assertFalse(resourceJson.contains("/foundation/access-changes"), "legacy access-change menu must be removed");
+        assertFalse(resourceJson.contains("/catalog/metadata"), "legacy source-collection menu must be removed");
+
+        ClassPathResource defaultsResource = new ClassPathResource("config/data/role-menu-defaults.json");
+        List<Map<String, Object>> defaults = objectMapper.readValue(
+            defaultsResource.getInputStream(),
+            new TypeReference<List<Map<String, Object>>>() {}
+        );
+        Map<String, String> routesByCode = defaults
+            .stream()
+            .collect(java.util.stream.Collectors.toMap(rule -> String.valueOf(rule.get("code")), rule -> String.valueOf(rule.get("route"))));
+        assertEquals("/foundation/data-sources", routesByCode.get("sys.nav.portal.resourceAccessOverview"));
+        assertEquals("/foundation/data-sources/database", routesByCode.get("sys.nav.portal.resourceDatabaseAccess"));
+        assertEquals("/foundation/data-sources/api", routesByCode.get("sys.nav.portal.resourceApiAccess"));
+        assertEquals("/foundation/data-sources/files", routesByCode.get("sys.nav.portal.resourceFileAccess"));
+        assertEquals("/foundation/data-sources/defaults", routesByCode.get("sys.nav.portal.resourceAccessDefaults"));
+        assertFalse(routesByCode.containsKey("sys.nav.portal.resourceIngestion"));
+        assertFalse(routesByCode.containsKey("sys.nav.portal.resourceChanges"));
+        assertFalse(routesByCode.containsKey("sys.nav.portal.resourceMetadata"));
+    }
+
+    @Test
+    void dataIntegrationAccessComponentsResolveToCanonicalWorkspacePages() throws Exception {
+        PortalMenuService service = new PortalMenuService(null, null, null, objectMapper, noOpTransactionManager());
+        Method resolveComponent = PortalMenuService.class.getDeclaredMethod("resolveComponent", String.class);
+        resolveComponent.setAccessible(true);
+
+        assertEquals(
+            "/pages/foundation/access/AccessWorkspacePage",
+            resolveComponent.invoke(service, "resource.accessOverview")
+        );
+        assertEquals(
+            "/pages/foundation/access/AccessWorkspacePage",
+            resolveComponent.invoke(service, "resource.databaseAccess")
+        );
+        assertEquals(
+            "/pages/foundation/access/AccessWorkspacePage",
+            resolveComponent.invoke(service, "resource.apiAccess")
+        );
+        assertEquals(
+            "/pages/foundation/access/AccessWorkspacePage",
+            resolveComponent.invoke(service, "resource.fileAccess")
+        );
+        assertEquals(
+            "/pages/foundation/access/AccessDefaultsPage",
+            resolveComponent.invoke(service, "resource.accessDefaults")
+        );
+        assertEquals(
+            "/pages/foundation/ConnectorRegistryPage",
+            resolveComponent.invoke(service, "resource.runtime.connectors")
+        );
+        assertEquals(
+            "/pages/foundation/JdbcDriversPage",
+            resolveComponent.invoke(service, "resource.runtime.jdbcDrivers")
+        );
+    }
+
+    @Test
+    void dataIntegrationAccessMigrationPreservesIdsBindingsAndCustomMenus() throws Exception {
+        String changelogFile = "20260731-04_data_integration_access_menu_convergence.xml";
+        ClassPathResource master = new ClassPathResource("config/liquibase/master.xml");
+        assertTrue(master.getContentAsString(StandardCharsets.UTF_8).contains(changelogFile));
+
+        ClassPathResource changelog = new ClassPathResource("config/liquibase/changelog/" + changelogFile);
+        assertTrue(changelog.exists(), "data-integration access convergence changelog must exist");
+        String xml = changelog.getContentAsString(StandardCharsets.UTF_8);
+        String forwardSql = xml.substring(0, xml.indexOf("<rollback>")).toLowerCase(Locale.ROOT);
+        String overviewVisibilitySql = sqlBlock(
+            xml,
+            "-- Overview receives only the direct Sources, Ingestion, Metadata, and Changes triples.",
+            "-- If seed upsert already created a second overview"
+        );
+        String accessModeVisibilitySql = sqlBlock(
+            xml,
+            "-- Database/API/file inherit only Sources + Ingestion. Defaults never receives historical bindings.",
+            "SELECT id, created_by = 'data-integration-access-menu-convergence'\n" +
+            "                  INTO runtime_id, runtime_was_created"
+        );
+        String runtimeVisibilitySql = sqlBlock(
+            xml,
+            "-- Connectors and JDBC keep only their own historical triples and their canonical row ids.",
+            "-- Retire only enabled legacy access rows."
+        );
+        String rollbackSql = xml.substring(xml.indexOf("<rollback>")).toLowerCase(Locale.ROOT);
+
+        assertTrue(
+            xml.contains("access_overview_id := COALESCE(legacy_sources_id, existing_overview_id)"),
+            "legacy Sources must be preferred so its menu id survives"
+        );
+        assertTrue(xml.contains("WHERE id = access_overview_id"), "Sources must be updated in place");
+        assertTrue(xml.contains("CASE WHEN parent_id = resource_id THEN 0 ELSE 1 END"));
+        assertTrue(xml.contains("SET parent_id = runtime_id"), "legacy runtime leaves must be reparented in place");
+        assertTrue(xml.contains("portal_menu_visibility_seq"));
+        assertTrue(xml.contains("target.data_level IS NOT DISTINCT FROM source.data_level"));
+        assertTrue(xml.contains("portal.menu.seed.hash"), "upgraded installations must not enter the destructive unseeded path");
+        assertFalse(forwardSql.contains("delete from portal_menu_visibility"), "forward migration must preserve existing role bindings");
+        assertFalse(forwardSql.contains("delete from portal_menu "), "system and custom menu rows must stay recoverable");
+        assertTrue(
+            forwardSql.contains("metadata::jsonb ->> 'key' = 'resource'"),
+            "root resolution must use the exact seed metadata key"
+        );
+        assertTrue(
+            forwardSql.contains("raise exception 'data-integration menu root metadata key resource is missing'"),
+            "a populated tree with no canonical resource root must fail closed"
+        );
+        assertFalse(forwardSql.contains("sys.nav.portal.resourcecenter"), "legacy title guesses must not select the root");
+        assertFalse(forwardSql.contains("metadata like"), "menu identity must use exact JSON metadata values");
+
+        assertTrue(overviewVisibilitySql.contains("source_menu_ids || ingestion_menu_ids || metadata_menu_ids || changes_menu_ids"));
+        assertFalse(overviewVisibilitySql.contains("resource_id"), "root visibility must not fan out to overview");
+        assertTrue(
+            accessModeVisibilitySql.contains("visibility.menu_id = ANY(source_menu_ids || ingestion_menu_ids)"),
+            "database/API/file must map only Sources and Ingestion triples"
+        );
+        assertTrue(
+            accessModeVisibilitySql.contains("IF desired.menu_key <> 'accessDefaults' THEN"),
+            "Defaults must receive no historical visibility mapping"
+        );
+        assertFalse(accessModeVisibilitySql.contains("metadata_menu_ids"));
+        assertFalse(accessModeVisibilitySql.contains("changes_menu_ids"));
+        assertFalse(accessModeVisibilitySql.contains("resource_id)"), "parent visibility must not fan out to access modes");
+        assertTrue(runtimeVisibilitySql.contains("THEN connector_menu_ids ELSE jdbc_menu_ids END"));
+        assertFalse(runtimeVisibilitySql.contains("source_menu_ids"));
+        assertFalse(runtimeVisibilitySql.contains("ingestion_menu_ids"));
+        assertFalse(runtimeVisibilitySql.contains("resource_id, access_overview_id"));
+        assertTrue(
+            xml.contains("SELECT DISTINCT visibility.role_code, visibility.permission_code, visibility.data_level"),
+            "visibility mappings must preserve complete source triples"
+        );
+
+        assertTrue(forwardSql.contains("and deleted = false"), "only enabled legacy rows may be retired or mapped");
+        assertTrue(forwardSql.contains("data-integration-access-menu-convergence-retired-enabled"));
+        assertTrue(
+            forwardSql.contains("data-integration-access-menu-convergence-created"),
+            "rows introduced and enabled by the migration must have a distinct rollback marker"
+        );
+        assertFalse(forwardSql.contains("migrated-sources-enabled"), "pre-deleted Sources must never be selected or revived");
+        assertFalse(forwardSql.contains("migrated-direct-enabled"), "pre-deleted runtime leaves must never be selected or revived");
+        assertTrue(
+            forwardSql.contains("portal.menu.access.convergence.snapshot.20260731-04") &&
+            forwardSql.contains("jsonb_build_array(to_jsonb(snapshot_menu))"),
+            "forward migration must persist exact pre-update menu snapshots"
+        );
+        assertTrue(
+            rollbackSql.contains("lateral jsonb_array_elements(config.cfg_value::jsonb) snapshot_item") &&
+            rollbackSql.contains("component = snapshots.snapshot_item ->> 'component'") &&
+            rollbackSql.contains("metadata = snapshots.snapshot_item ->> 'metadata'") &&
+            rollbackSql.contains("parent_id = nullif(snapshots.snapshot_item ->> 'parent_id', '')::bigint") &&
+            rollbackSql.contains("last_modified_date = nullif(snapshots.snapshot_item ->> 'last_modified_date', '')::timestamp"),
+            "rollback must restore every overwritten field from the persisted snapshot"
+        );
+        assertTrue(
+            rollbackSql.contains("data-integration menu convergence rollback snapshot is missing"),
+            "rollback must fail closed rather than guess when the snapshot is unavailable"
+        );
+        assertTrue(
+            rollbackSql.contains("delete from system_config") && rollbackSql.contains("where cfg_key = snapshot_key"),
+            "rollback must consume its migration-owned snapshot so reapply is stable"
+        );
+        assertFalse(
+            forwardSql.contains("metadata like '%\"key\":\"metadata\"%'") ||
+            forwardSql.contains("metadata like '%\"entrykey\":\"metadata\"%'"),
+            "legacy retirement must match exact system title keys instead of broad customer-defined keys"
+        );
+        assertTrue(
+            xml.contains("WHERE created_by = 'data-integration-access-menu-convergence'"),
+            "rollback may remove only visibility rows created by this migration"
+        );
+    }
+
+    @Test
+    void dataModelingSeedUsesPrototypeRootHierarchyOutsideStudio() throws Exception {
         ClassPathResource seedResource = new ClassPathResource("config/data/portal-menu-seed.json");
         assertTrue(seedResource.exists(), "portal-menu-seed.json must exist");
 
         Map<String, Object> seed = objectMapper.readValue(seedResource.getInputStream(), new TypeReference<Map<String, Object>>() {});
         List<Map<String, Object>> roots = listOfMaps(seed.get("portalNavSections"));
         Map<String, Object> studioRoot = roots.stream().filter(node -> "studio".equals(node.get("key"))).findFirst().orElse(null);
+        Map<String, Object> modeling = roots.stream().filter(node -> "modeling".equals(node.get("key"))).findFirst().orElse(null);
         assertNotNull(studioRoot, "数据开发与运维 root menu must exist");
         assertEquals("数据开发与运维", studioRoot.get("title"));
-
-        Map<String, Object> modeling = listOfMaps(studioRoot.get("children"))
-            .stream()
-            .filter(node -> "modeling".equals(node.get("key")))
-            .findFirst()
-            .orElse(null);
-        assertNotNull(modeling, "数据开发与运维 must expose 数据建模");
+        assertFalse(
+            listOfMaps(studioRoot.get("children")).stream().anyMatch(node -> "modeling".equals(node.get("key"))),
+            "数据开发与运维 must not retain the legacy modeling subtree"
+        );
+        assertNotNull(modeling, "数据建模 must be a root menu");
+        assertEquals("数据建模", modeling.get("title"));
 
         List<Map<String, Object>> modelingChildren = listOfMaps(modeling.get("children"));
-        Map<String, Object> workbench = modelingChildren.get(0);
-        assertEquals("modeling-workbench", workbench.get("key"));
-        assertEquals("sys.nav.portal.studioBusinessProcesses", workbench.get("titleKey"));
-        assertEquals("建模工作台", workbench.get("title"));
-        assertEquals("/modeling/workbench", workbench.get("externalLink"));
-        assertEquals("warehouse-planning", modelingChildren.get(1).get("key"), "数仓规划 should follow the workbench");
+        assertEquals(7, modelingChildren.size(), "modeling must expose one overview and six capability groups");
+        assertEquals("modeling-home-workspace", modelingChildren.get(0).get("key"));
+        assertEquals("建模概览", modelingChildren.get(0).get("title"));
+        assertEquals("/data-modeling/home/workspace", modelingChildren.get(0).get("externalLink"));
+        assertEquals("warehouse-planning", modelingChildren.get(1).get("key"), "数仓规划 should follow 建模概览");
         assertEquals("standards", modelingChildren.get(2).get("key"), "数据标准 should follow 数仓规划");
         assertEquals("dimensional-modeling", modelingChildren.get(3).get("key"), "维度建模 should follow 数据标准");
-        assertEquals("data-metrics", modelingChildren.get(4).get("key"), "数据指标 should remain available");
+        assertEquals("data-metrics", modelingChildren.get(4).get("key"), "数据指标 should follow 维度建模");
+        assertEquals("modeling-tools", modelingChildren.get(5).get("key"), "通用工具 should follow 数据指标");
+        assertEquals("modeling-graphs", modelingChildren.get(6).get("key"), "关系图 should be the final prototype group");
+        assertFalse(
+            modelingChildren.stream().anyMatch(node -> "modeling-home".equals(node.get("key"))),
+            "the redundant modeling home group must be removed"
+        );
+
+        Map<String, Object> warehousePlanning = modelingChildren
+            .stream()
+            .filter(node -> "warehouse-planning".equals(node.get("key")))
+            .findFirst()
+            .orElse(null);
+        assertNotNull(warehousePlanning, "数据建模 root must expose 数仓规划");
+        Map<String, Object> planningSystem = listOfMaps(warehousePlanning.get("children"))
+            .stream()
+            .filter(node -> "planning-system".equals(node.get("key")))
+            .findFirst()
+            .orElse(null);
+        assertNotNull(planningSystem, "数仓规划 must expose planning parameter configuration");
+        assertEquals("规划参数配置", planningSystem.get("title"));
 
         Map<String, Object> dimensionalModeling = modelingChildren
             .stream()
             .filter(node -> "dimensional-modeling".equals(node.get("key")))
             .findFirst()
             .orElse(null);
-        assertNotNull(dimensionalModeling, "数据建模 must expose 维度建模");
-
+        assertNotNull(dimensionalModeling, "数据建模 root must expose 维度建模");
         List<Map<String, Object>> dimensionChildren = listOfMaps(dimensionalModeling.get("children"));
-        assertEquals(3, dimensionChildren.size(), "dimension modeling must expose one entry per canonical capability");
-        assertEquals("sys.nav.portal.studioSemanticObjects", dimensionChildren.get(0).get("titleKey"));
-        assertEquals("sys.nav.portal.studioSemanticModels", dimensionChildren.get(1).get("titleKey"));
-        assertEquals("sys.nav.portal.studioSqlModeling", dimensionChildren.get(2).get("titleKey"));
-        assertEquals("高级建模（SQL/dbt）", dimensionChildren.get(2).get("title"));
-        assertTrue(containsTitleKey(dimensionChildren, "sys.nav.portal.studioSqlModeling"), "SQL modeling must stay available");
-        assertFalse(containsTitleKey(dimensionChildren, "sys.nav.portal.studioDbtFiles"), "dbt files must be a compatibility route only");
-        assertFalse(
-            modelingChildren.stream().anyMatch(node -> "low-code-development".equals(node.get("key"))),
-            "low-code development must not remain visible"
-        );
-
-        Map<String, Object> dataMetrics = modelingChildren
-            .stream()
-            .filter(node -> "data-metrics".equals(node.get("key")))
-            .findFirst()
-            .orElse(null);
-        assertNotNull(dataMetrics, "数据建模 must expose 数据指标");
-        List<Map<String, Object>> metricChildren = listOfMaps(dataMetrics.get("children"));
-        assertEquals(1, metricChildren.size(), "指标工作台 must be the only metric menu leaf");
-        assertTrue(containsTitleKey(metricChildren, "sys.nav.portal.studioMetricWorkbench"));
-        assertFalse(containsTitleKey(dimensionChildren, "sys.nav.portal.studioMetricWorkbench"), "metric workbench must stay in 数据指标");
+        assertEquals(2, dimensionChildren.size(), "维度建模 must expose model workbench and reverse modeling");
+        assertEquals("/data-modeling/dimensions/workbench", dimensionChildren.get(0).get("externalLink"));
+        assertEquals("/data-modeling/dimensions/reverse", dimensionChildren.get(1).get("externalLink"));
 
         Map<String, Object> dataStudio = listOfMaps(studioRoot.get("children"))
             .stream()
@@ -240,26 +430,100 @@ class PortalMenuSeedDefaultsContractTest {
             defaultsResource.getInputStream(),
             new TypeReference<List<Map<String, Object>>>() {}
         );
-        Map<String, Object> workbenchDefault = defaults
-            .stream()
-            .filter(rule -> "sys.nav.portal.studioBusinessProcesses".equals(rule.get("code")))
-            .findFirst()
-            .orElse(null);
-        assertNotNull(workbenchDefault, "workbench role default should keep its existing code");
-        assertEquals("建模工作台", workbenchDefault.get("title"));
-        assertEquals("/modeling/workbench", workbenchDefault.get("route"));
-        Map<String, Object> sqlDefault = defaults
-            .stream()
-            .filter(rule -> "sys.nav.portal.studioSqlModeling".equals(rule.get("code")))
-            .findFirst()
-            .orElse(null);
-        assertNotNull(sqlDefault, "advanced modeling role default must stay documented");
-        assertEquals("高级建模（SQL/dbt）", sqlDefault.get("title"));
-        assertEquals("/studio/sql-modeling", sqlDefault.get("route"));
-        assertFalse(
-            defaults.stream().anyMatch(rule -> "sys.nav.portal.studioLowCodeDevelopment".equals(rule.get("code"))),
-            "retired low-code default must not be rebound on a new installation"
+        assertEquals(
+            27,
+            defaults.stream().filter(rule -> String.valueOf(rule.get("route")).startsWith("/data-modeling/")).count(),
+            "role defaults must document every prototype leaf without granting roles"
         );
+        assertFalse(
+            defaults
+                .stream()
+                .anyMatch(rule ->
+                    List.of("sys.nav.portal.modelingHomeRecent", "sys.nav.portal.modelingHomeTasks").contains(rule.get("code"))
+                ),
+            "role defaults must not keep the retired recent/tasks menu entries"
+        );
+        assertFalse(
+            defaults
+                .stream()
+                .anyMatch(rule ->
+                    List
+                        .of(
+                            "sys.nav.portal.warehousePlans",
+                            "sys.nav.portal.studioBusinessProcesses",
+                            "sys.nav.portal.studioSemanticObjects",
+                            "sys.nav.portal.studioSemanticModels",
+                            "sys.nav.portal.studioSqlModeling",
+                            "sys.nav.portal.studioMetricWorkbench"
+                        )
+                        .contains(rule.get("code"))
+                ),
+            "role defaults must not keep retired modeling menu entries"
+        );
+        assertTrue(
+            defaults
+                .stream()
+                .filter(rule -> String.valueOf(rule.get("route")).startsWith("/data-modeling/"))
+                .allMatch(rule -> ((List<?>) rule.get("requiredRoles")).isEmpty()),
+            "Sprint-80 menu documentation must not create implicit role grants"
+        );
+    }
+
+    @Test
+    void sprint80ModelingMenuMigrationPreservesRootVisibilityAndSoftDeletesLegacyChildren() throws Exception {
+        String changelogFile = "20260731-02_sprint80_prototype_modeling_menu.xml";
+        ClassPathResource master = new ClassPathResource("config/liquibase/master.xml");
+        assertTrue(master.getContentAsString(StandardCharsets.UTF_8).contains(changelogFile));
+
+        ClassPathResource changelog = new ClassPathResource("config/liquibase/changelog/" + changelogFile);
+        assertTrue(changelog.exists(), "Sprint-80 modeling menu migration changelog must exist");
+        String xml = changelog.getContentAsString(StandardCharsets.UTF_8);
+        assertTrue(xml.contains("parent_id = NULL"), "modeling must be promoted to a root node");
+        assertTrue(xml.contains("/data-modeling/home/workspace"));
+        assertTrue(xml.contains("/data-modeling/graphs/metrics"));
+        assertTrue(xml.contains("WITH RECURSIVE descendants"));
+        assertTrue(xml.contains("deleted = TRUE"));
+        String forwardSql = xml.substring(0, xml.indexOf("<rollback>")).toLowerCase(Locale.ROOT);
+        assertFalse(forwardSql.contains("delete from portal_menu_visibility"), "forward migration must preserve visibility rows");
+        assertTrue(xml.contains("target_menu_id"), "PL/pgSQL variables must not shadow the menu_id column");
+        assertTrue(xml.contains("source.menu_id = parent_menu_id"), "new descendants must inherit only from their direct parent");
+        assertTrue(xml.contains("target.data_level IS NOT DISTINCT FROM source.data_level"));
+        assertTrue(
+            xml.contains("created_by = 'sprint80-prototype-modeling-ui'"),
+            "rollback must target only rows created by Sprint-80"
+        );
+        assertTrue(
+            xml.toLowerCase(Locale.ROOT).contains("delete from portal_menu_visibility"),
+            "rollback must remove only visibility rows created by Sprint-80"
+        );
+        assertFalse(xml.toLowerCase(Locale.ROOT).contains("delete from portal_menu "));
+    }
+
+    @Test
+    void sprint80MenuReviewPromotesOverviewAndPreservesVisibilityBindings() throws Exception {
+        String changelogFile = "20260731-03_sprint80_modeling_menu_review.xml";
+        ClassPathResource master = new ClassPathResource("config/liquibase/master.xml");
+        assertTrue(master.getContentAsString(StandardCharsets.UTF_8).contains(changelogFile));
+
+        ClassPathResource changelog = new ClassPathResource("config/liquibase/changelog/" + changelogFile);
+        assertTrue(changelog.exists(), "Sprint-80 menu-review changelog must exist");
+        String xml = changelog.getContentAsString(StandardCharsets.UTF_8);
+        String forwardSql = xml.substring(0, xml.indexOf("<rollback>")).toLowerCase(Locale.ROOT);
+
+        assertTrue(xml.contains("sys.nav.portal.modelingHomeWorkspace"));
+        assertTrue(xml.contains("requires the existing modeling-home group"), "the review migration must fail closed on an invalid base tree");
+        assertTrue(xml.contains("parent_id IN (home_id, modeling_id)"), "overview lookup must stay inside the modeling subtree");
+        assertTrue(xml.contains("'title', '建模概览'"));
+        assertTrue(xml.contains("parent_id = modeling_id"), "overview must be promoted without replacing its row");
+        assertTrue(xml.contains("sys.nav.portal.modelingHomeRecent"));
+        assertTrue(xml.contains("sys.nav.portal.modelingHomeTasks"));
+        assertTrue(xml.contains("'title', '规划参数配置'"));
+        assertTrue(xml.contains("/data-modeling/home/workspace"), "the stable overview route must be preserved");
+        assertFalse(forwardSql.contains("insert into portal_menu"), "the review migration must preserve existing menu ids");
+        assertFalse(forwardSql.contains("insert into portal_menu_visibility"), "the review migration must not add visibility bindings");
+        assertFalse(forwardSql.contains("update portal_menu_visibility"), "the review migration must not rewrite visibility bindings");
+        assertFalse(xml.toLowerCase(Locale.ROOT).contains("delete from portal_menu "));
+        assertFalse(xml.toLowerCase(Locale.ROOT).contains("delete from portal_menu_visibility"));
     }
 
     @Test
@@ -430,6 +694,70 @@ class PortalMenuSeedDefaultsContractTest {
         assertEquals("/pages/workbench/DataManagementWorkbenchPage", consumption.getComponent());
         assertEquals(1, consumption.getVisibilities().size(), "new seed child must inherit onsite parent visibility");
         assertEquals("ROLE_OP_ADMIN", consumption.getVisibilities().get(0).getRoleCode());
+    }
+
+    @Test
+    void accessDefaultsStaysUnboundAcrossRepeatedSeedSynchronization() throws Exception {
+        PortalMenuRepository menuRepository = mock(PortalMenuRepository.class);
+        PortalMenuService service = new PortalMenuService(
+            menuRepository,
+            null,
+            mock(SystemConfigRepository.class),
+            objectMapper,
+            noOpTransactionManager()
+        );
+        PortalMenu resource = menuWithVisibility(
+            20L,
+            "{\"key\":\"resource\",\"sectionKey\":\"resource\",\"titleKey\":\"sys.nav.portal.dataIntegration\"}"
+        );
+        resource.setName("sys.nav.portal.dataIntegration");
+        resource.setPath("resource");
+
+        PortalMenu accessDefaults = new PortalMenu();
+        accessDefaults.setId(21L);
+        accessDefaults.setName("customer.alias.access-defaults");
+        accessDefaults.setPath("resource/access-defaults");
+        accessDefaults.setMetadata(
+            "{\"key\":\"accessDefaults\",\"sectionKey\":\"resource\",\"entryKey\":\"accessDefaults\",\"titleKey\":\"sys.nav.portal.resourceAccessDefaults\"}"
+        );
+        accessDefaults.setParent(resource);
+        accessDefaults.setChildren(new ArrayList<>());
+        accessDefaults.setVisibilities(new ArrayList<>());
+        PortalMenu sources = menuWithVisibility(
+            22L,
+            "{\"key\":\"sources\",\"sectionKey\":\"resource\",\"entryKey\":\"sources\"}"
+        );
+        sources.setName("sys.nav.portal.resourceSources");
+        sources.setParent(resource);
+        sources.getVisibilities().get(0).setRoleCode("ROLE_SOURCES");
+        when(menuRepository.findByParentIdOrderBySortOrderAscIdAsc(20L)).thenReturn(List.of(accessDefaults, sources));
+
+        Method ensureChildrenFromSeed = PortalMenuService.class.getDeclaredMethod(
+            "ensureChildrenFromSeed",
+            PortalMenu.class,
+            List.class,
+            int.class,
+            String.class,
+            String.class
+        );
+        ensureChildrenFromSeed.setAccessible(true);
+        Object defaultsSeed = menuNode(
+            "accessDefaults",
+            "access-defaults",
+            "settings",
+            "sys.nav.portal.resourceAccessDefaults",
+            "默认策略",
+            "/foundation/data-sources/defaults",
+            List.of()
+        );
+
+        ensureChildrenFromSeed.invoke(service, resource, List.of(defaultsSeed), 1, "resource", "resource");
+        ensureChildrenFromSeed.invoke(service, resource, List.of(defaultsSeed), 1, "resource", "resource");
+
+        assertTrue(
+            accessDefaults.getVisibilities().isEmpty(),
+            "seed sync must not fan out parent or sibling visibility to accessDefaults"
+        );
     }
 
     @Test
@@ -668,6 +996,14 @@ class PortalMenuSeedDefaultsContractTest {
             }
         }
         return false;
+    }
+
+    private String sqlBlock(String sql, String startMarker, String endMarker) {
+        int start = sql.indexOf(startMarker);
+        int end = sql.indexOf(endMarker, start + startMarker.length());
+        assertTrue(start >= 0, () -> "missing SQL contract marker: " + startMarker);
+        assertTrue(end > start, () -> "missing SQL contract marker: " + endMarker);
+        return sql.substring(start, end);
     }
 
     private PortalMenu menuWithVisibility(Long id, String metadata) {

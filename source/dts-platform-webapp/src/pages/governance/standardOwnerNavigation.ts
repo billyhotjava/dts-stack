@@ -1,4 +1,4 @@
-import { normalizeCanonicalWarehousePlanId } from "../modeling/warehousePlanViewModel.ts";
+import { normalizeCanonicalWarehousePlanId } from "@/features/modeling/navigation/warehousePlanViewModel";
 
 export type StandardOwnerReturnTarget = {
 	href: string;
@@ -57,9 +57,10 @@ export const resolveStandardOwnerReturnTo = (searchParams: URLSearchParams): Sta
 	if (rawPlanId && !planId) return null;
 	if (modelSpecId) {
 		if (!/^[1-9]\d*$/.test(revision)) return null;
-		if (target.pathname !== `/modeling/models/${encodeURIComponent(modelSpecId)}`) return null;
+		if (target.pathname !== "/data-modeling/dimensions/workbench") return null;
+		if (!exactParam(target.searchParams, "modelSpecId", modelSpecId)) return null;
 		if (!exactParam(target.searchParams, "tab", "standards")) return null;
-		if (!hasOnlyKeys(target.searchParams, new Set(["tab", "planId"]))) return null;
+		if (!hasOnlyKeys(target.searchParams, new Set(["modelSpecId", "tab", "planId"]))) return null;
 		if (planId && !exactParam(target.searchParams, "planId", planId)) return null;
 		if (!planId && target.searchParams.has("planId")) return null;
 		return { href: `${target.pathname}?${target.searchParams.toString()}`, label: "返回模型字段标准" };
@@ -67,11 +68,12 @@ export const resolveStandardOwnerReturnTo = (searchParams: URLSearchParams): Sta
 
 	if (revision) return null;
 	if (!planId) return null;
-	if (target.pathname !== `/modeling/plans/${encodeURIComponent(planId)}/baseline`) return null;
+	if (target.pathname !== "/data-modeling/planning/spaces") return null;
+	if (!exactParam(target.searchParams, "view", "baseline")) return null;
 	if (!exactParam(target.searchParams, "planId", planId)) return null;
 	if (target.searchParams.getAll("tab").length !== 1) return null;
 	if (!PLAN_BASELINE_TABS.has(target.searchParams.get("tab") || "")) return null;
-	if (!hasOnlyKeys(target.searchParams, new Set(["tab", "planId"]))) return null;
+	if (!hasOnlyKeys(target.searchParams, new Set(["view", "tab", "planId"]))) return null;
 	return { href: `${target.pathname}?${target.searchParams.toString()}`, label: "返回建设规划" };
 };
 

@@ -23,7 +23,7 @@ import {
 	shouldOfferSnapshotResume,
 	type JourneySnapshot,
 } from "@/components/journey";
-import { getStandardBindingDraft, isBackendStandardBindingDraftId } from "@/pages/modeling/standardBindingDraft";
+import { getStandardBindingDraft, isBackendStandardBindingDraftId } from "@/features/modeling/drafts/standardBindingDraft";
 import { useRouter, useSearchParams } from "@/routes/hooks";
 import goldenChainService, {
 	type GoldenChainDetail,
@@ -101,7 +101,7 @@ const firstReportJourneySteps = [
 	{
 		title: "生成同步任务",
 		desc: "确认字段、同步方式和预检结果，生成可运行的同步任务。",
-		route: "/explore/etl/transform",
+		route: "/foundation/data-sources",
 		action: "查看同步任务",
 	},
 	{
@@ -120,11 +120,11 @@ const firstReportJourneySteps = [
 
 const WAREHOUSE_LAYER_PLAN = [
 	{ key: "ODS_RAW", title: "ODS_RAW", description: "保留源系统原始记录，保证可追溯和可重放。", route: "/foundation/data-sources", action: "确认接入" },
-	{ key: "ODS_STANDARDIZED", title: "ODS_STANDARDIZED", description: "统一字段类型、命名和技术字段，形成可治理的入湖表。", route: "/governance/standards/elements", action: "查看标准" },
-	{ key: "STG", title: "STG", description: "dbt 技术过渡层：类型转换、重命名、去重和轻量清洗，不承载业务聚合。", route: "/studio/sql-modeling?view=files", action: "查看 dbt staging" },
-	{ key: "DWD", title: "DWD", description: "按业务活动沉淀明细事实和维度关联，承接标准字段。", route: "/modeling/models?modelType=FACT", action: "创建明细表" },
-	{ key: "DWS", title: "DWS", description: "围绕主题域和公共粒度形成可复用汇总模型。", route: "/studio/sql-modeling", action: "进入 SQL 建模" },
-	{ key: "ADS", title: "ADS", description: "面向指标、报表和 API 消费交付应用数据集。", route: "/modeling/metric-workbench", action: "绑定指标" },
+	{ key: "ODS_STANDARDIZED", title: "ODS_STANDARDIZED", description: "统一字段类型、命名和技术字段，形成可治理的入湖表。", route: "/data-modeling/standards/fields", action: "查看标准" },
+	{ key: "STG", title: "STG", description: "dbt 技术过渡层：类型转换、重命名、去重和轻量清洗，不承载业务聚合。", route: "/data-modeling/dimensions/workbench", action: "进入模型工作台" },
+	{ key: "DWD", title: "DWD", description: "按业务活动沉淀明细事实和维度关联，承接标准字段。", route: "/data-modeling/dimensions/workbench", action: "创建明细表" },
+	{ key: "DWS", title: "DWS", description: "围绕主题域和公共粒度形成可复用汇总模型。", route: "/data-modeling/dimensions/workbench", action: "进入模型工作台" },
+	{ key: "ADS", title: "ADS", description: "面向指标、报表和 API 消费交付应用数据集。", route: "/data-modeling/metrics/atomic", action: "绑定指标" },
 ];
 
 export type DataManagementWorkbenchPageProps = {
@@ -269,10 +269,10 @@ export default function Page({
 	const headerActions = (
 		<Space wrap>
 			<Button onClick={() => router.push(withE2EJourney("/foundation/data-sources"))}>配置数据源</Button>
-			<Button onClick={() => router.push(withE2EJourney("/governance/subjects"))}>数仓规划</Button>
-			<Button onClick={() => router.push(withE2EJourney("/governance/standards/elements"))}>数据标准</Button>
-			<Button onClick={() => router.push(withE2EJourney("/modeling/models"))}>模型中心</Button>
-			<Button onClick={() => router.push(withE2EJourney("/modeling/metric-workbench"))}>指标设计</Button>
+			<Button onClick={() => router.push(withE2EJourney("/data-modeling/planning/spaces"))}>数仓规划</Button>
+			<Button onClick={() => router.push(withE2EJourney("/data-modeling/standards/fields"))}>数据标准</Button>
+			<Button onClick={() => router.push(withE2EJourney("/data-modeling/dimensions/workbench"))}>模型中心</Button>
+			<Button onClick={() => router.push(withE2EJourney("/data-modeling/metrics/atomic"))}>指标设计</Button>
 			<Button onClick={() => router.push(withE2EJourney("/explore/etl/scripts"))}>数据开发</Button>
 			<Button type={blockedThemes.length > 0 ? "primary" : "default"} onClick={() => router.push(withE2EJourney("/workbench/todo"))}>
 				处理阻断项

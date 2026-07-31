@@ -12,15 +12,45 @@
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.resourceConnectors",
-    "title": "连接器目录",
+    "code": "sys.nav.portal.resourceAccessOverview",
+    "title": "接入概览",
+    "route": "/foundation/data-sources",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.resourceDatabaseAccess",
+    "title": "数据库接入",
+    "route": "/foundation/data-sources/database",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.resourceApiAccess",
+    "title": "API 接入",
+    "route": "/foundation/data-sources/api",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.resourceFileAccess",
+    "title": "离线文件接入",
+    "route": "/foundation/data-sources/files",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.resourceAccessDefaults",
+    "title": "默认策略",
+    "route": "/foundation/data-sources/defaults",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.resourceRuntime",
+    "title": "连接器与运行时",
     "route": "/foundation/connectors",
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.resourceSources",
-    "title": "数据源管理",
-    "route": "/foundation/data-sources",
+    "code": "sys.nav.portal.resourceConnectors",
+    "title": "连接器目录",
+    "route": "/foundation/connectors",
     "requiredRoles": []
   },
   {
@@ -30,87 +60,165 @@
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.resourceMetadata",
-    "title": "数据源结构采集",
-    "route": "/catalog/metadata",
+    "code": "sys.nav.portal.modelingHomeWorkspace",
+    "title": "建模概览",
+    "route": "/data-modeling/home/workspace",
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.resourceIngestion",
-    "title": "数据入湖配置",
-    "route": "/explore/etl/transform",
-    "requiredRoles": []
-  },
-  {
-    "code": "sys.nav.portal.resourceChanges",
-    "title": "接入变更记录",
-    "route": "/foundation/access-changes",
-    "requiredRoles": []
-  },
-  {
-    "code": "sys.nav.portal.governanceSubjects",
+    "code": "sys.nav.portal.planningBusinessCategories",
     "title": "业务分类",
-    "route": "/governance/subjects",
+    "route": "/data-modeling/planning/business-categories",
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.warehousePlans",
-    "title": "建设规划",
-    "route": "/modeling/plans",
+    "code": "sys.nav.portal.planningLayers",
+    "title": "数仓分层",
+    "route": "/data-modeling/planning/layers",
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.studioBusinessProcesses",
-    "title": "建模工作台",
-    "route": "/modeling/workbench",
+    "code": "sys.nav.portal.planningDomains",
+    "title": "数据域",
+    "route": "/data-modeling/planning/domains",
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.governanceGlossary",
-    "title": "业务术语",
-    "route": "/governance/standards/glossary",
+    "code": "sys.nav.portal.planningProcesses",
+    "title": "业务过程",
+    "route": "/data-modeling/planning/processes",
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.governanceElements",
-    "title": "数据元",
-    "route": "/governance/standards/elements",
+    "code": "sys.nav.portal.planningMarts",
+    "title": "数据集市",
+    "route": "/data-modeling/planning/marts",
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.governanceReference",
-    "title": "公共码表",
-    "route": "/governance/standards/reference",
+    "code": "sys.nav.portal.planningSubjects",
+    "title": "主题域",
+    "route": "/data-modeling/planning/subjects",
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.governanceMeasurementUnits",
-    "title": "计量单位",
-    "route": "/governance/standards/units",
+    "code": "sys.nav.portal.planningSpaces",
+    "title": "建模空间",
+    "route": "/data-modeling/planning/spaces",
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.studioSemanticObjects",
-    "title": "维度目录",
-    "route": "/modeling/dimensions",
+    "code": "sys.nav.portal.planningSystem",
+    "title": "规划参数配置",
+    "route": "/data-modeling/planning/system",
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.studioSemanticModels",
-    "title": "模型中心",
-    "route": "/modeling/models",
+    "code": "sys.nav.portal.standardFields",
+    "title": "字段标准",
+    "route": "/data-modeling/standards/fields",
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.studioSqlModeling",
-    "title": "高级建模（SQL/dbt）",
-    "route": "/studio/sql-modeling",
+    "code": "sys.nav.portal.standardCodes",
+    "title": "标准代码",
+    "route": "/data-modeling/standards/codes",
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.studioMetricWorkbench",
-    "title": "指标工作台",
-    "route": "/modeling/metric-workbench",
+    "code": "sys.nav.portal.standardRoots",
+    "title": "词根",
+    "route": "/data-modeling/standards/roots",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.standardDictionary",
+    "title": "命名词典",
+    "route": "/data-modeling/standards/dictionary",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.standardMappings",
+    "title": "标准映射",
+    "route": "/data-modeling/standards/mappings",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.dimensionWorkbench",
+    "title": "模型工作台",
+    "route": "/data-modeling/dimensions/workbench",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.reverseModeling",
+    "title": "逆向建模",
+    "route": "/data-modeling/dimensions/reverse",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.metricComposite",
+    "title": "复合指标",
+    "route": "/data-modeling/metrics/composite",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.metricDerived",
+    "title": "派生指标",
+    "route": "/data-modeling/metrics/derived",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.metricAtomic",
+    "title": "原子指标",
+    "route": "/data-modeling/metrics/atomic",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.metricModifiers",
+    "title": "修饰词",
+    "route": "/data-modeling/metrics/modifiers",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.metricPeriods",
+    "title": "时间周期",
+    "route": "/data-modeling/metrics/periods",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.modelingToolbox",
+    "title": "工具箱",
+    "route": "/data-modeling/tools/toolbox",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.modelingImports",
+    "title": "导入记录",
+    "route": "/data-modeling/tools/imports",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.modelingExports",
+    "title": "导出记录",
+    "route": "/data-modeling/tools/exports",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.modelGraph",
+    "title": "模型关系",
+    "route": "/data-modeling/graphs/models",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.standardGraph",
+    "title": "标准关系",
+    "route": "/data-modeling/graphs/standards",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.metricLineage",
+    "title": "指标血缘",
+    "route": "/data-modeling/graphs/metrics",
     "requiredRoles": []
   },
   {

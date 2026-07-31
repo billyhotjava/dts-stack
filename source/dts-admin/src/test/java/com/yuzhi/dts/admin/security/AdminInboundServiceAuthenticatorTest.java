@@ -1,6 +1,7 @@
 package com.yuzhi.dts.admin.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.yuzhi.dts.admin.config.AdminInboundServiceAuthProperties;
 import java.util.Map;
@@ -67,6 +68,37 @@ class AdminInboundServiceAuthenticatorTest {
         assertThat(analytics.accepted()).isTrue();
         assertThat(analytics.serviceName()).isEqualTo("dts-analytics");
         assertThat(forgedPlatform.accepted()).isFalse();
+    }
+
+    @Test
+    void startupValidationRejectsDuplicateOrWeakPairwiseCredentials() {
+        var duplicate = new AdminInboundServiceAuthProperties();
+        duplicate.setTrustedServices(
+            Map.of(
+                "dts-platform",
+                "a".repeat(32),
+                "dts-analytics",
+                "a".repeat(32)
+            )
+        );
+        var weak = new AdminInboundServiceAuthProperties();
+        weak.setTrustedServices(Map.of("dts-platform", "short-secret"));
+
+        assertThatThrownBy(duplicate::afterPropertiesSet)
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("Duplicate");
+        assertThatThrownBy(weak::afterPropertiesSet)
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("at least 32");
+    }
+
+    @Test
+    void startupValidationAllowsEmptyFailClosedConfiguration() {
+        var properties = new AdminInboundServiceAuthProperties();
+
+        properties.afterPropertiesSet();
+
+        assertThat(properties.getTrustedServices()).isEmpty();
     }
 
     private static MockHttpServletRequest request(

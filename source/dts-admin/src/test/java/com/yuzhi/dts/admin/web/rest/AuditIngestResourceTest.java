@@ -13,13 +13,19 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.admin.config.AuditIngestProperties;
 import com.yuzhi.dts.admin.domain.AdminKeycloakUser;
+import com.yuzhi.dts.admin.domain.audit.AuditEntry;
 import com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository;
+import com.yuzhi.dts.admin.repository.audit.AuditEntryRepository;
+import com.yuzhi.dts.admin.security.AdminInboundServiceAuthenticator;
+import com.yuzhi.dts.admin.security.AdminInboundServiceAuthenticator.Decision;
 import com.yuzhi.dts.admin.service.audit.AuditActionRequest;
-import com.yuzhi.dts.admin.service.audit.AuditIngestAuthenticator;
-import com.yuzhi.dts.admin.service.audit.AuditIngestAuthenticator.Decision;
+import com.yuzhi.dts.admin.service.audit.AuditIngestFingerprint;
+import com.yuzhi.dts.admin.service.audit.AuditIngestIdempotencyService;
+import com.yuzhi.dts.admin.service.audit.AuditIngestPersistenceService;
 import com.yuzhi.dts.admin.service.audit.AuditOperationKind;
 import com.yuzhi.dts.admin.service.audit.AuditV2Service;
 import java.util.LinkedHashMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -28,6 +34,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -42,15 +49,38 @@ class AuditIngestResourceTest {
 
     private AuditV2Service auditV2Service;
 
-    private AuditIngestAuthenticator authenticator;
+    private AdminInboundServiceAuthenticator authenticator;
 
     private AdminKeycloakUserRepository userRepository;
+
+    private AuditEntryRepository auditEntryRepository;
+
+    private AuditIngestIdempotencyService idempotencyService;
+
+    private final Map<String, AuditEntry> ingestedEntries = new HashMap<>();
 
     @BeforeEach
     void setUp() {
         auditV2Service = mock(AuditV2Service.class);
-        authenticator = mock(AuditIngestAuthenticator.class);
+        authenticator = mock(AdminInboundServiceAuthenticator.class);
         userRepository = mock(AdminKeycloakUserRepository.class);
+        auditEntryRepository = mock(AuditEntryRepository.class);
+        ingestedEntries.clear();
+        when(auditV2Service.record(any())).thenAnswer(invocation -> new AuditEntry());
+        when(auditEntryRepository.findByIngestProducerAndIngestEventId(any(), any()))
+            .thenAnswer(invocation -> Optional.ofNullable(ingestedEntries.get(identityKey(invocation.getArgument(0), invocation.getArgument(1)))));
+        when(auditEntryRepository.saveAndFlush(any(AuditEntry.class)))
+            .thenAnswer(invocation -> {
+                AuditEntry entry = invocation.getArgument(0);
+                ingestedEntries.put(identityKey(entry.getIngestProducer(), entry.getIngestEventId()), entry);
+                return entry;
+            });
+        AuditIngestPersistenceService persistence = new AuditIngestPersistenceService(auditV2Service, auditEntryRepository);
+        idempotencyService = new AuditIngestIdempotencyService(
+            auditEntryRepository,
+            persistence,
+            new AuditIngestFingerprint(objectMapper)
+        );
         mockMvc = mockMvcWithContainerCidrs(List.of("172.16.0.0/12"));
     }
 
@@ -58,8 +88,12 @@ class AuditIngestResourceTest {
         AuditIngestProperties properties = new AuditIngestProperties();
         properties.setContainerCidrs(containerCidrs);
         return MockMvcBuilders
-            .standaloneSetup(new AuditIngestResource(auditV2Service, authenticator, userRepository, properties))
+            .standaloneSetup(new AuditIngestResource(idempotencyService, authenticator, userRepository, properties))
             .build();
+    }
+
+    private String identityKey(String producer, String eventId) {
+        return producer + '|' + eventId;
     }
 
     @Test
@@ -235,7 +269,7 @@ class AuditIngestResourceTest {
     }
 
     @Test
-    void skipsAuditEventsWhenNoExistingHumanActorIsPresent() throws Exception {
+    void rejectsAuditEventsWhenNoExistingHumanActorIsPresent() throws Exception {
         when(authenticator.authenticate(any())).thenReturn(new Decision(true, "dts-analytics", "valid token"));
 
         Map<String, Object> body = Map.ofEntries(
@@ -259,9 +293,24 @@ class AuditIngestResourceTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(body))
             )
-            .andExpect(status().isAccepted());
+            .andExpect(status().isUnprocessableEntity());
 
         verify(auditV2Service, never()).record(any());
+    }
+
+    @Test
+    void returnsServiceUnavailableWhenAuditPersistenceIsUnavailable() throws Exception {
+        stubHumanActor("alice");
+        when(authenticator.authenticate(any())).thenReturn(new Decision(true, "dts-platform", "valid token"));
+        when(auditV2Service.record(any())).thenThrow(new DataAccessResourceFailureException("database unavailable"));
+
+        mockMvc
+            .perform(
+                post("/api/audit-events")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsBytes(idempotentBody(EVENT_ID, "ignored", "创建模型", false)))
+            )
+            .andExpect(status().isServiceUnavailable());
     }
 
     @Test

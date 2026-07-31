@@ -1,0 +1,9 @@
+diff --git a/source/dts-platform-webapp/src/pages/explore/etl/TransformCreatePage.tsx b/source/dts-platform-webapp/src/pages/explore/etl/TransformCreatePage.tsx
+--- a/source/dts-platform-webapp/src/pages/explore/etl/TransformCreatePage.tsx
++++ b/source/dts-platform-webapp/src/pages/explore/etl/TransformCreatePage.tsx
+@@ -2049,1 +2049,1 @@
+-									onNavigateToModeling={() => router.push("/modeling/sql")}
++									onNavigateToModeling={() => router.push("/data-modeling/dimensions/workbench")}
+@@ -2109,1 +2109,1 @@
+-									onNavigateToModeling={() => router.push("/modeling/sql")}
++									onNavigateToModeling={() => router.push("/data-modeling/dimensions/workbench")}

@@ -7,41 +7,44 @@ import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import com.yuzhi.dts.platform.domain.catalog.CatalogClassificationSnapshot;
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
+import com.yuzhi.dts.platform.security.ClassificationUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogClassificationException;
 import com.yuzhi.dts.platform.service.catalog.CatalogClassificationService;
+import com.yuzhi.dts.platform.service.etl.OdsTableMappingSyncService;
+import com.yuzhi.dts.platform.service.ingestion.IngestionAccessDecisionService;
 import com.yuzhi.dts.platform.service.ingestion.IngestionClassificationAdmissionService;
 import com.yuzhi.dts.platform.service.ingestion.IngestionServiceClient;
 import com.yuzhi.dts.platform.service.infra.DefaultDestinationSyncService;
-import com.yuzhi.dts.platform.service.etl.OdsTableMappingSyncService;
 import com.yuzhi.dts.platform.service.ops.ExternalRunLogService;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.util.HexFormat;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.http.MediaType;
+import org.springframework.util.MultiValueMap;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestPart;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
-import org.springframework.util.StringUtils;
 
 @RestController
 @RequestMapping("/api/ingestion")
@@ -58,6 +61,8 @@ public class IngestionTaskProxyResource {
     private final InfraDataSourceRepository dataSourceRepository;
     private final CatalogClassificationService classificationService;
     private final IngestionClassificationAdmissionService classificationAdmissionService;
+    private final IngestionAccessDecisionService accessDecisionService;
+    private final ClassificationUtils classificationUtils;
     private final ObjectMapper objectMapper;
 
     public IngestionTaskProxyResource(
@@ -69,6 +74,8 @@ public class IngestionTaskProxyResource {
         InfraDataSourceRepository dataSourceRepository,
         CatalogClassificationService classificationService,
         IngestionClassificationAdmissionService classificationAdmissionService,
+        IngestionAccessDecisionService accessDecisionService,
+        ClassificationUtils classificationUtils,
         ObjectMapper objectMapper
     ) {
         this.ingestionClient = ingestionClient;
@@ -79,6 +86,8 @@ public class IngestionTaskProxyResource {
         this.dataSourceRepository = dataSourceRepository;
         this.classificationService = classificationService;
         this.classificationAdmissionService = classificationAdmissionService;
+        this.accessDecisionService = accessDecisionService;
+        this.classificationUtils = classificationUtils;
         this.objectMapper = objectMapper;
     }
 
@@ -86,6 +95,12 @@ public class IngestionTaskProxyResource {
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<?> listTemplates() {
         return ResponseEntity.ok(ingestionClient.listTemplates());
+    }
+
+    @GetMapping("/access/default-policy")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Object>> getAccessDefaultPolicy() {
+        return ResponseEntity.ok(ingestionClient.getAccessDefaultPolicy());
     }
 
     @PostMapping("/templates/{templateId}/render")
@@ -97,6 +112,7 @@ public class IngestionTaskProxyResource {
     @PostMapping("/tasks")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ApiResponse<Map<String, Object>> createTask(@RequestBody Map<String, Object> payload) {
+        payload = accessDecisionService.canonicalizeTaskPayloadIdentifiers(payload);
         boolean draft = payload != null && Boolean.parseBoolean(String.valueOf(payload.getOrDefault("draft", "false")));
         String taskName = payload == null ? null : String.valueOf(payload.getOrDefault("name", ""));
         if (!StringUtils.hasText(taskName) && payload != null) {
@@ -112,7 +128,9 @@ public class IngestionTaskProxyResource {
             DefaultDestinationSyncService.DefaultDestinationSnapshot snapshot = resolveDestinationSnapshot(payload);
             resolvedPayload = applyDefaultDestinationPayload(payload, snapshot);
         }
-        resolvedPayload = attachClassificationSeal(resolvedPayload, !draft);
+        resolvedPayload = accessDecisionService.canonicalizeTaskPayloadIdentifiers(resolvedPayload);
+        accessDecisionService.requireCreateOrUpdateAccess(resolvedPayload, true);
+        resolvedPayload = attachCurrentSourceClassificationSeal(resolvedPayload, !draft);
         ApiResponse<Map<String, Object>> response = ingestionClient.createIngestionTask(resolvedPayload);
         String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
         if (response != null && response.getStatus() >= 200 && response.getStatus() < 300) {
@@ -140,7 +158,7 @@ public class IngestionTaskProxyResource {
                 Map.of("summary", "创建入湖任务失败", "name", taskName, "operator", operator)
             );
         }
-        return response;
+        return accessDecisionService.sanitizeResponse(response);
     }
 
     @GetMapping("/default-destination")
@@ -152,18 +170,43 @@ public class IngestionTaskProxyResource {
 
     @GetMapping("/tasks/list")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
-    public ResponseEntity<ApiResponse<Map<String, Object>>> listTasks(@RequestParam Map<String, String> params) {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> listTasks(@RequestParam MultiValueMap<String, String> params) {
         Map<String, Object> query = new LinkedHashMap<>();
         if (params != null) {
-            query.putAll(params);
+            params.forEach((key, values) -> {
+                if (values == null || values.isEmpty()) {
+                    return;
+                }
+                query.put(key, values.size() == 1 ? values.get(0) : List.copyOf(values));
+            });
         }
-        return ResponseEntity.ok(ingestionClient.listTasks(query));
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(accessDecisionService.listVisibleTasks(query)));
     }
 
     @GetMapping("/tasks/{id}")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Map<String, Object>>> getTask(@PathVariable("id") Long id) {
-        return ResponseEntity.ok(ingestionClient.getTask(id));
+        ApiResponse<Map<String, Object>> response = ingestionClient.getTask(id);
+        if (response != null && response.getStatus() >= 200 && response.getStatus() < 300 && response.getData() != null) {
+            Map<String, Object> canonicalTask = accessDecisionService.canonicalizeTaskPayloadIdentifiers(response.getData());
+            accessDecisionService.requireTaskPayloadAccess(canonicalTask, false);
+            response.setData(canonicalTask);
+        }
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(response));
+    }
+
+    @GetMapping("/tasks/{id}/revisions")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Object>> getTaskRevisions(@PathVariable("id") Long id) {
+        accessDecisionService.requireTaskAccess(id, false);
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(ingestionClient.getTaskRevisions(id)));
+    }
+
+    @GetMapping("/tasks/{id}/effective-config")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Object>> getTaskEffectiveConfig(@PathVariable("id") Long id) {
+        accessDecisionService.requireTaskAccess(id, false);
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(ingestionClient.getTaskEffectiveConfig(id)));
     }
 
     @PutMapping("/tasks/{id}")
@@ -172,9 +215,24 @@ public class IngestionTaskProxyResource {
         @PathVariable("id") Long id,
         @RequestBody Map<String, Object> payload
     ) {
+        payload = accessDecisionService.canonicalizeTaskPayloadIdentifiers(payload);
+        Map<String, Object> existingTask = accessDecisionService.requireTaskAccess(id, true);
         DefaultDestinationSyncService.DefaultDestinationSnapshot snapshot = resolveDestinationSnapshot(payload);
         Map<String, Object> resolvedPayload = applyDefaultDestinationUpdatePayload(payload, snapshot);
-        resolvedPayload = attachClassificationSeal(resolvedPayload, false);
+        resolvedPayload = accessDecisionService.canonicalizeTaskPayloadIdentifiers(resolvedPayload);
+        Map<String, Object> accessPayload = new LinkedHashMap<>(existingTask);
+        if (resolvedPayload.containsKey("sourceDataSourceId")) {
+            if (!resolvedPayload.containsKey("source")) {
+                accessPayload.remove("source");
+            }
+            if (!resolvedPayload.containsKey("sourceConfig")) {
+                accessPayload.remove("sourceConfig");
+            }
+        }
+        accessPayload.putAll(resolvedPayload);
+        accessPayload = accessDecisionService.canonicalizeTaskPayloadIdentifiers(accessPayload);
+        accessDecisionService.requireCreateOrUpdateAccess(accessPayload, true);
+        resolvedPayload = attachCurrentSourceClassificationSeal(resolvedPayload, false);
         // Preserve the existing task's password when the update payload does not include one
         preserveExistingPassword(id, resolvedPayload, payload);
         ApiResponse<Map<String, Object>> response = ingestionClient.updateTask(id, resolvedPayload);
@@ -191,7 +249,7 @@ public class IngestionTaskProxyResource {
                 );
             }
         }
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(response));
     }
 
     @PostMapping("/tasks/{id}/admit")
@@ -202,10 +260,13 @@ public class IngestionTaskProxyResource {
             return ResponseEntity.ok(new ApiResponse<>(503, "接入服务暂不可用", null));
         }
         if (existing.getStatus() < 200 || existing.getStatus() >= 300 || existing.getData() == null) {
-            return ResponseEntity.ok(existing);
+            return ResponseEntity.ok(accessDecisionService.sanitizeResponse(existing));
         }
+        Map<String, Object> canonicalTask = accessDecisionService.canonicalizeTaskPayloadIdentifiers(existing.getData());
+        existing.setData(canonicalTask);
+        accessDecisionService.requireTaskPayloadAccess(canonicalTask, true);
 
-        Map<String, Object> sealedTask = attachClassificationSeal(existing.getData(), true);
+        Map<String, Object> sealedTask = attachCurrentSourceClassificationSeal(canonicalTask, true);
         Map<String, Object> admission = new LinkedHashMap<>();
         admission.put("classificationSeal", sealedTask.get("classificationSeal"));
         if (sealedTask.get("fieldClassifications") != null) {
@@ -227,12 +288,17 @@ public class IngestionTaskProxyResource {
                 operator
             )
         );
-        return ResponseEntity.ok(response == null ? new ApiResponse<>(503, "接入服务暂不可用", null) : response);
+        return ResponseEntity.ok(
+            accessDecisionService.sanitizeResponse(
+                response == null ? new ApiResponse<>(503, "接入服务暂不可用", null) : response
+            )
+        );
     }
 
     @DeleteMapping("/tasks/{id}")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Map<String, Object>>> deleteTask(@PathVariable("id") Long id) {
+        accessDecisionService.requireTaskAccess(id, true);
         ApiResponse<Map<String, Object>> response = ingestionClient.deleteTask(id);
         if (response != null && response.getStatus() >= 200 && response.getStatus() < 300) {
             try {
@@ -275,7 +341,7 @@ public class IngestionTaskProxyResource {
                 );
             }
         }
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(response));
     }
 
     @PostMapping("/tasks/{id}/execute")
@@ -284,6 +350,7 @@ public class IngestionTaskProxyResource {
         @PathVariable("id") Long id,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
+        accessDecisionService.requireTaskAccess(id, true);
         ApiResponse<Map<String, Object>> response = ingestionClient.executeTask(id);
         if (response != null && response.getStatus() >= 200 && response.getStatus() < 300) {
             String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
@@ -304,12 +371,13 @@ public class IngestionTaskProxyResource {
                 );
             }
         }
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(response));
     }
 
     @PostMapping("/tasks/{id}/execute/async")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Map<String, Object>>> executeTaskAsync(@PathVariable("id") Long id) {
+        accessDecisionService.requireTaskAccess(id, true);
         ApiResponse<Map<String, Object>> response = ingestionClient.executeTaskAsync(id);
         return buildAsyncProxyResponse(response);
     }
@@ -320,6 +388,7 @@ public class IngestionTaskProxyResource {
         @PathVariable("id") Long id,
         @RequestBody Map<String, Object> payload
     ) {
+        accessDecisionService.requireTaskAccess(id, true);
         ApiResponse<Map<String, Object>> response = ingestionClient.backfillTask(id, payload);
         return buildAsyncProxyResponse(response);
     }
@@ -332,6 +401,7 @@ public class IngestionTaskProxyResource {
         @RequestParam(value = "mode", required = false, defaultValue = "FAILED_ONLY") String mode,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
+        accessDecisionService.requireTaskAccess(id, true);
         ApiResponse<Map<String, Object>> response = ingestionClient.retryExecution(id, executionId, Map.of("mode", mode));
         if (response != null && response.getData() != null) {
             try {
@@ -340,7 +410,7 @@ public class IngestionTaskProxyResource {
                 // best-effort sync
             }
         }
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(response));
     }
 
     @PostMapping("/tasks/{id}/executions/{executionId}/retry/async")
@@ -350,6 +420,7 @@ public class IngestionTaskProxyResource {
         @PathVariable("executionId") Long executionId,
         @RequestParam(value = "mode", required = false, defaultValue = "FAILED_ONLY") String mode
     ) {
+        accessDecisionService.requireTaskAccess(id, true);
         ApiResponse<Map<String, Object>> response = ingestionClient.retryExecutionAsync(id, executionId, Map.of("mode", mode));
         return buildAsyncProxyResponse(response);
     }
@@ -357,7 +428,8 @@ public class IngestionTaskProxyResource {
     @PostMapping("/tasks/{id}/dag/rebuild")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Map<String, Object>>> rebuildDag(@PathVariable("id") Long id) {
-        return ResponseEntity.ok(ingestionClient.rebuildDag(id));
+        accessDecisionService.requireTaskAccess(id, true);
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(ingestionClient.rebuildDag(id)));
     }
 
     @GetMapping("/tasks/{id}/executions")
@@ -367,6 +439,7 @@ public class IngestionTaskProxyResource {
         @RequestParam Map<String, String> params,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
+        accessDecisionService.requireTaskAccess(id, false);
         Map<String, Object> query = new LinkedHashMap<>();
         if (params != null) {
             query.putAll(params);
@@ -379,7 +452,7 @@ public class IngestionTaskProxyResource {
                 // best-effort sync
             }
         }
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(response));
     }
 
     @GetMapping("/tasks/{id}/executions/latest")
@@ -388,6 +461,7 @@ public class IngestionTaskProxyResource {
         @PathVariable("id") Long id,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
+        accessDecisionService.requireTaskAccess(id, false);
         ApiResponse<Map<String, Object>> response = ingestionClient.latestExecution(id);
         if (response != null && response.getData() != null) {
             try {
@@ -396,7 +470,7 @@ public class IngestionTaskProxyResource {
                 // best-effort sync
             }
         }
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(response));
     }
 
     @GetMapping("/tasks/{id}/executions/{executionId}/logs")
@@ -406,17 +480,20 @@ public class IngestionTaskProxyResource {
         @PathVariable("executionId") Long executionId,
         @RequestParam Map<String, String> params
     ) {
+        accessDecisionService.requireTaskAccess(id, false);
         Map<String, Object> query = new LinkedHashMap<>();
         if (params != null) {
             query.putAll(params);
         }
-        return ResponseEntity.ok(ingestionClient.getExecutionLog(id, executionId, query));
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(ingestionClient.getExecutionLog(id, executionId, query)));
     }
 
     @PostMapping("/metadata/tables")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Object>> discoverTables(@RequestBody Map<String, Object> payload) {
-        return ResponseEntity.ok(ingestionClient.discoverTables(payload));
+        payload = accessDecisionService.canonicalizeTaskPayloadIdentifiers(payload);
+        accessDecisionService.requireDiscoveryAccess(payload);
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(ingestionClient.discoverTables(payload)));
     }
 
     @GetMapping("/connectors/capabilities")
@@ -446,25 +523,28 @@ public class IngestionTaskProxyResource {
     @PostMapping("/api/test-connection")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Object>> testApiConnection(@RequestBody Map<String, Object> payload) {
-        return ResponseEntity.ok(ingestionClient.testApiConnection(payload));
+        return ResponseEntity.ok(ingestionClient.testApiConnection(accessDecisionService.normalizeApiConnectionTest(payload)));
     }
 
     @GetMapping("/tasks/{id}/realtime-status")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Object>> getRealtimeStatus(@PathVariable("id") Long id) {
-        return ResponseEntity.ok(ingestionClient.getRealtimeStatus(id));
+        accessDecisionService.requireTaskAccess(id, false);
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(ingestionClient.getRealtimeStatus(id)));
     }
 
     @PostMapping("/tasks/{id}/parse")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Object>> parseStagingFile(@PathVariable("id") Long id) {
-        return ResponseEntity.ok(ingestionClient.parseStagingFile(id));
+        accessDecisionService.requireTaskAccess(id, false);
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(ingestionClient.parseStagingFile(id)));
     }
 
     @PostMapping("/tasks/{id}/pre-check")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Object>> preCheckStaging(@PathVariable("id") Long id) {
-        return ResponseEntity.ok(ingestionClient.preCheckStaging(id));
+        accessDecisionService.requireTaskAccess(id, false);
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(ingestionClient.preCheckStaging(id)));
     }
 
     @PutMapping("/tasks/{id}/staging/{rowNum}")
@@ -474,25 +554,29 @@ public class IngestionTaskProxyResource {
         @PathVariable("rowNum") Integer rowNum,
         @RequestBody Map<String, Object> payload
     ) {
-        return ResponseEntity.ok(ingestionClient.updateStagingCell(id, rowNum, payload));
+        accessDecisionService.requireTaskAccess(id, false);
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(ingestionClient.updateStagingCell(id, rowNum, payload)));
     }
 
     @PostMapping("/tasks/{id}/re-check")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Object>> reCheckStaging(@PathVariable("id") Long id) {
-        return ResponseEntity.ok(ingestionClient.reCheckStaging(id));
+        accessDecisionService.requireTaskAccess(id, false);
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(ingestionClient.reCheckStaging(id)));
     }
 
     @PostMapping("/tasks/{id}/submit")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Object>> submitStaging(@PathVariable("id") Long id) {
-        return ResponseEntity.ok(ingestionClient.submitStaging(id));
+        accessDecisionService.requireTaskAccess(id, false);
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(ingestionClient.submitStaging(id)));
     }
 
     @DeleteMapping("/tasks/{id}/staging")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Object>> dropStaging(@PathVariable("id") Long id) {
-        return ResponseEntity.ok(ingestionClient.dropStaging(id));
+        accessDecisionService.requireTaskAccess(id, false);
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(ingestionClient.dropStaging(id)));
     }
 
     @GetMapping("/tasks/{id}/staging")
@@ -501,11 +585,12 @@ public class IngestionTaskProxyResource {
         @PathVariable("id") Long id,
         @RequestParam Map<String, String> params
     ) {
+        accessDecisionService.requireTaskAccess(id, false);
         Map<String, Object> query = new LinkedHashMap<>();
         if (params != null) {
             query.putAll(params);
         }
-        return ResponseEntity.ok(ingestionClient.getStagingData(id, query));
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(ingestionClient.getStagingData(id, query)));
     }
 
     @GetMapping("/tasks/{id}/staging/errors/summary")
@@ -514,16 +599,18 @@ public class IngestionTaskProxyResource {
         @PathVariable("id") Long id,
         @RequestParam Map<String, String> params
     ) {
+        accessDecisionService.requireTaskAccess(id, false);
         Map<String, Object> query = new LinkedHashMap<>();
         if (params != null) {
             query.putAll(params);
         }
-        return ResponseEntity.ok(ingestionClient.getStagingErrorSummary(id, query));
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(ingestionClient.getStagingErrorSummary(id, query)));
     }
 
     @GetMapping("/tasks/{id}/staging/errors/download")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<byte[]> downloadStagingErrors(@PathVariable("id") Long id) {
+        accessDecisionService.requireTaskAccess(id, false);
         ResponseEntity<byte[]> response = ingestionClient.downloadStagingErrors(id);
         return ResponseEntity
             .status(response.getStatusCode())
@@ -534,7 +621,9 @@ public class IngestionTaskProxyResource {
     @PostMapping(value = "/files/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Object>> uploadFile(@RequestPart("file") MultipartFile file) {
-        return ResponseEntity.ok(ingestionClient.uploadFile(file));
+        return ResponseEntity
+            .status(HttpStatus.GONE)
+            .body(new ApiResponse<>(410, "旧文件上传接口已停用，请使用带显式密级的 upload-and-parse", null));
     }
 
     public record FileParseRequest(String fileId, Integer previewLimit, Integer sheetIndex, String sheetName, String originalName) {}
@@ -554,45 +643,39 @@ public class IngestionTaskProxyResource {
         } catch (IllegalArgumentException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "必须明确选择文件密级", ex);
         }
+        String userMaxLevel = classificationUtils
+            .getCurrentUserExplicitMaxLevel()
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "当前用户未配置密级，禁止上传文件"));
+        if (!SecurityLevelCatalog.isDataAtLeast(userMaxLevel, declaredLevel)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "所选文件密级超出当前用户密级");
+        }
         ApiResponse<Object> response = ingestionClient.uploadAndParse(file, previewLimit, sheetIndex, sheetName);
         if (response == null) {
             return ResponseEntity.ok(new ApiResponse<>(503, "接入服务暂不可用", null));
         }
         if (response.getStatus() >= 200 && response.getStatus() < 300) {
             try {
-                response.setData(
-                    classificationAdmissionService.sealEncryptedUpload(
-                        response.getData(),
-                        declaredLevel
-                    )
-                );
+                Object sealed = classificationAdmissionService.sealEncryptedUpload(response.getData(), declaredLevel);
+                response.setData(accessDecisionService.removeInternalFilePaths(sealed));
             } catch (CatalogClassificationException ex) {
                 throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, ex.getMessage(), ex);
             }
         }
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(response));
     }
 
     @PostMapping("/files/parse")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Object>> parseUploadedFile(@RequestBody FileParseRequest request) {
-        if (request == null || request.fileId() == null || request.fileId().isBlank()) {
-            return ResponseEntity.badRequest().body(new ApiResponse<>(400, "fileId 不能为空", null));
-        }
-        return ResponseEntity.ok(
-            ingestionClient.parseUploadedFile(
-                request.fileId(),
-                request.previewLimit(),
-                request.sheetIndex(),
-                request.sheetName(),
-                request.originalName()
-            )
-        );
+        return ResponseEntity
+            .status(HttpStatus.GONE)
+            .body(new ApiResponse<>(410, "旧文件解析接口已停用，请重新上传并明确选择文件密级", null));
     }
 
     @GetMapping("/tasks/executions/observability")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Object>> getExecutionsObservability(@RequestParam Map<String, String> params) {
+        accessDecisionService.requireAggregateScope(params, "查看全局接入执行观测");
         Map<String, Object> query = new LinkedHashMap<>();
         if (params != null) {
             query.putAll(params);
@@ -603,6 +686,7 @@ public class IngestionTaskProxyResource {
     @GetMapping("/tasks/executions/governance-overview")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Object>> getGovernanceOverview(@RequestParam Map<String, String> params) {
+        accessDecisionService.requireAggregateScope(params, "查看全局接入治理概览");
         Map<String, Object> query = new LinkedHashMap<>();
         if (params != null) {
             query.putAll(params);
@@ -613,6 +697,12 @@ public class IngestionTaskProxyResource {
     @GetMapping("/tasks/changes")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Map<String, Object>>> listChangeLogs(@RequestParam Map<String, String> params) {
+        Long taskId = parseLong(params == null ? null : params.get("taskId"));
+        if (taskId == null) {
+            accessDecisionService.requireInstituteScope("查看全局接入变更记录");
+        } else {
+            accessDecisionService.requireTaskAccess(taskId, false);
+        }
         Map<String, Object> query = new LinkedHashMap<>();
         if (params != null) {
             query.putAll(params);
@@ -623,6 +713,11 @@ public class IngestionTaskProxyResource {
     @PostMapping("/tasks/changes")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Map<String, Object>>> createChangeLog(@RequestBody Map<String, Object> payload) {
+        Long resolvedTaskId = parseLong(payload == null ? null : payload.get("taskId"));
+        if (resolvedTaskId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "taskId 不能为空");
+        }
+        accessDecisionService.requireTaskAccess(resolvedTaskId, true);
         ApiResponse<Map<String, Object>> response = ingestionClient.createChangeLog(payload);
         String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
         String taskId = payload == null ? null : String.valueOf(payload.getOrDefault("taskId", ""));
@@ -648,6 +743,7 @@ public class IngestionTaskProxyResource {
         if (response == null) {
             return ResponseEntity.ok(new ApiResponse<>(200, "accepted", null));
         }
+        response = accessDecisionService.sanitizeResponse(response);
         int status = response.getStatus();
         if (status >= 200 && status < 300) {
             ApiResponse<Map<String, Object>> normalized = new ApiResponse<>(200, response.getMessage(), response.getData());
@@ -762,6 +858,10 @@ public class IngestionTaskProxyResource {
     private String extractTargetDataSourceId(Map<String, Object> payload) {
         if (payload == null || payload.isEmpty()) {
             return null;
+        }
+        String topLevel = firstText(payload.get("targetDataSourceId"), payload.get("destinationDataSourceId"));
+        if (StringUtils.hasText(topLevel)) {
+            return topLevel;
         }
         Object destinationObj = payload.get("destination");
         if (destinationObj instanceof Map<?, ?> destinationMap) {
@@ -1109,6 +1209,12 @@ public class IngestionTaskProxyResource {
                 "}"
             )
         );
+        if (!subjectKey.equals(snapshot.getSubjectKey())) {
+            throw new CatalogClassificationException(
+                "CLASSIFICATION_SOURCE_MISMATCH",
+                "密级封存与当前数据源不匹配，请重新确认数据源"
+            );
+        }
         Map<String, Object> seal = new LinkedHashMap<>();
         seal.put("sealId", snapshot.getId());
         seal.put("subjectType", snapshot.getSubjectType());
@@ -1124,6 +1230,49 @@ public class IngestionTaskProxyResource {
             resolved.put("fieldClassifications", new LinkedHashMap<>(fieldClassifications));
         }
         return resolved;
+    }
+
+    /**
+     * Update and admission derive non-file classification evidence from the
+     * currently selected managed data source. Client-provided evidence may
+     * belong to the previous source, so it is never reused here.
+     */
+    private Map<String, Object> attachCurrentSourceClassificationSeal(
+        Map<String, Object> payload,
+        boolean required
+    ) {
+        Map<String, Object> resolved = payload == null ? new LinkedHashMap<>() : new LinkedHashMap<>(payload);
+        Map<String, Object> source = mapValue(resolved.get("source"));
+        Map<String, Object> sourceConfig = source.get("config") instanceof Map<?, ?>
+            ? mapValue(source.get("config"))
+            : mapValue(resolved.get("sourceConfig"));
+        Map<String, Object> topLevelSourceConfig = mapValue(resolved.get("sourceConfig"));
+        if (isFileTask(resolved, source, sourceConfig)) {
+            return attachClassificationSeal(resolved, required);
+        }
+
+        boolean hadClassificationSeal = resolved.get("classificationSeal") instanceof Map<?, ?> ||
+            sourceConfig.get("classificationSeal") instanceof Map<?, ?> ||
+            topLevelSourceConfig.get("classificationSeal") instanceof Map<?, ?>;
+        resolved.remove("classificationSeal");
+        resolved.remove("fieldClassifications");
+        if (resolved.get("source") instanceof Map<?, ?>) {
+            Map<String, Object> cleanSource = mapValue(resolved.get("source"));
+            if (cleanSource.get("config") instanceof Map<?, ?>) {
+                Map<String, Object> cleanConfig = mapValue(cleanSource.get("config"));
+                cleanConfig.remove("classificationSeal");
+                cleanConfig.remove("fieldClassifications");
+                cleanSource.put("config", cleanConfig);
+            }
+            resolved.put("source", cleanSource);
+        }
+        if (resolved.get("sourceConfig") instanceof Map<?, ?>) {
+            Map<String, Object> cleanConfig = mapValue(resolved.get("sourceConfig"));
+            cleanConfig.remove("classificationSeal");
+            cleanConfig.remove("fieldClassifications");
+            resolved.put("sourceConfig", cleanConfig);
+        }
+        return attachClassificationSeal(resolved, required || hadClassificationSeal);
     }
 
     private Map<String, Object> attachProvidedClassificationSeal(

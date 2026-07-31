@@ -6,7 +6,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * 出站客户端配置:platform 调 dts-admin 时携带的 base URL、API path、bearer 凭据与自报身份。
  * <p>
  * 与 {@link PlatformInboundServiceAuthProperties} 互不相干 —— 后者描述"谁能调 platform"。
- * 历史上这两个语义混在 {@link DtsAdminProperties} 中,自 Sprint-28 起分离。
  */
 @ConfigurationProperties(prefix = "dts.platform.outbound.admin")
 public class PlatformOutboundAdminProperties {

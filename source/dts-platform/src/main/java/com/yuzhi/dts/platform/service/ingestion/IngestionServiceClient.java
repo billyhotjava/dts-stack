@@ -40,6 +40,7 @@ public class IngestionServiceClient {
 
     private static final Logger LOG = LoggerFactory.getLogger(IngestionServiceClient.class);
     private static final String SERVICE_HEADER = "X-DTS-Service";
+    private static final String SERVICE_TOKEN_HEADER = "X-DTS-Service-Token";
     private static final String USER_HEADER = "X-DTS-User";
     private static final String ROLES_HEADER = "X-DTS-Roles";
     private static final String UPLOAD_TRACE_HEADER = "X-DTS-Upload-Trace";
@@ -55,7 +56,14 @@ public class IngestionServiceClient {
 
     public IngestionServiceClient(RestTemplateBuilder builder, DtsIngestionProperties properties) {
         this.properties = properties;
-        RestTemplateBuilder baseBuilder = builder.setConnectTimeout(Duration.ofSeconds(5));
+        RestTemplateBuilder baseBuilder = builder
+            .setConnectTimeout(Duration.ofSeconds(5))
+            .additionalInterceptors((request, body, execution) -> {
+                if (StringUtils.hasText(properties.getServiceToken())) {
+                    request.getHeaders().set(SERVICE_TOKEN_HEADER, properties.getServiceToken().trim());
+                }
+                return execution.execute(request, body);
+            });
         this.restTemplate = baseBuilder.setReadTimeout(Duration.ofSeconds(20)).build();
         this.longRestTemplate = baseBuilder.setReadTimeout(Duration.ofSeconds(180)).build();
         this.healthRestTemplate = baseBuilder.setReadTimeout(Duration.ofSeconds(3)).build();
@@ -112,6 +120,10 @@ public class IngestionServiceClient {
         return exchangeObject("/api/ingestion/templates", HttpMethod.GET, null, null, restTemplate);
     }
 
+    public ApiResponse<Object> getAccessDefaultPolicy() {
+        return exchangeObject("/api/ingestion/access/default-policy", HttpMethod.GET, null, null, restTemplate);
+    }
+
     public Object renderTemplate(String templateId, Object payload) {
         return exchangeObject("/api/ingestion/templates/" + templateId + "/render", HttpMethod.POST, payload, null, restTemplate);
     }
@@ -135,6 +147,14 @@ public class IngestionServiceClient {
 
     public ApiResponse<Map<String, Object>> getTask(Long id) {
         return exchangeTask("/api/ingestion/tasks/" + id, HttpMethod.GET, null, null);
+    }
+
+    public ApiResponse<Object> getTaskRevisions(Long id) {
+        return exchangeObject("/api/ingestion/tasks/" + id + "/revisions", HttpMethod.GET, null, null, restTemplate);
+    }
+
+    public ApiResponse<Object> getTaskEffectiveConfig(Long id) {
+        return exchangeObject("/api/ingestion/tasks/" + id + "/effective-config", HttpMethod.GET, null, null, restTemplate);
     }
 
     public ApiResponse<Map<String, Object>> updateTask(Long id, Object payload) {
@@ -258,8 +278,8 @@ public class IngestionServiceClient {
                 byte[].class
             );
         } catch (HttpStatusCodeException ex) {
-            LOG.warn("Ingestion staging error download failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
-            return ResponseEntity.status(ex.getStatusCode()).body(ex.getResponseBodyAsByteArray());
+            LOG.warn("Ingestion staging error download failed status={}", ex.getStatusCode().value());
+            return ResponseEntity.status(ex.getStatusCode()).body(null);
         } catch (Exception ex) {
             LOG.warn("Ingestion staging error download error: {}", ex.getMessage());
             return ResponseEntity.status(500).body(null);
@@ -385,12 +405,11 @@ public class IngestionServiceClient {
             return new ApiResponse<>(response.getStatusCode().value(), "ok", responseBody);
         } catch (HttpStatusCodeException ex) {
             LOG.warn(
-                "Ingestion file upload proxy failed: traceId={}, path={}, target={}, status={}, body={}, name={}, size={}, contentType={}",
+                "Ingestion file upload proxy failed: traceId={}, path={}, target={}, status={}, name={}, size={}, contentType={}",
                 traceId,
                 path,
                 uri,
                 ex.getStatusCode().value(),
-                abbreviate(ex.getResponseBodyAsString(), 2000),
                 originalName,
                 declaredSize,
                 contentType
@@ -408,7 +427,7 @@ public class IngestionServiceClient {
                 ex.getMessage(),
                 ex
             );
-            return new ApiResponse<>(500, "文件上传失败: " + ex.getMessage(), null);
+            return new ApiResponse<>(500, "文件上传失败", null);
         }
     }
 
@@ -439,11 +458,11 @@ public class IngestionServiceClient {
             }
             return exchangeObject("/api/ingestion/files/parse", HttpMethod.POST, payload, null, longRestTemplate);
         } catch (HttpStatusCodeException ex) {
-            LOG.warn("Ingestion file parse failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            LOG.warn("Ingestion file parse failed status={}", ex.getStatusCode().value());
             return new ApiResponse<>(ex.getStatusCode().value(), "文件解析失败", null);
         } catch (Exception ex) {
             LOG.warn("Ingestion file parse error: {}", ex.getMessage());
-            return new ApiResponse<>(500, "文件解析失败: " + ex.getMessage(), null);
+            return new ApiResponse<>(500, "文件解析失败", null);
         }
     }
 
@@ -819,10 +838,4 @@ public class IngestionServiceClient {
         }
     }
 
-    private String abbreviate(String value, int maxLength) {
-        if (value == null || value.length() <= maxLength) {
-            return value;
-        }
-        return value.substring(0, Math.max(0, maxLength)) + "...";
-    }
 }

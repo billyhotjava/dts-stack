@@ -232,4 +232,5 @@
     <include file="config/liquibase/changelog/20260728_08_catalog_dataset_harvest_status.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260729_01_metadata_standard_source_system_nullable.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260731_01_relationship_graph_dependency_index.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260731_02_platform_audit_outbox.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

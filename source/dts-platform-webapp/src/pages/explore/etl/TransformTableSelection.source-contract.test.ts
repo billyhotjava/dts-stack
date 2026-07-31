@@ -2,58 +2,41 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const STEP_SOURCE = readFileSync(new URL("./steps/DbUnifiedStep.tsx", import.meta.url), "utf8");
-const CREATE_SOURCE = readFileSync(new URL("./TransformCreatePage.tsx", import.meta.url), "utf8");
-const DISCOVER_HANDLER_SOURCE = CREATE_SOURCE.slice(
-	CREATE_SOURCE.indexOf("const handleDiscoverTables"),
-	CREATE_SOURCE.indexOf("const handleApiPreview"),
-);
-const SELECTED_TABLES_NAME_INDEX = CREATE_SOURCE.indexOf('name="selectedTables"');
-const SELECTED_TABLES_FIELD_SOURCE = CREATE_SOURCE.slice(
-	CREATE_SOURCE.lastIndexOf("<Form.Item", SELECTED_TABLES_NAME_INDEX),
-	CREATE_SOURCE.indexOf("</Form.Item>", SELECTED_TABLES_NAME_INDEX),
-);
-const EDIT_RESTORE_SOURCE = CREATE_SOURCE.slice(
-	CREATE_SOURCE.indexOf("const loadTask = async"),
-	CREATE_SOURCE.indexOf("const applyTemplate"),
+const STEP_SOURCE = readFileSync(new URL("../../foundation/access/DatabaseAccessStep.tsx", import.meta.url), "utf8");
+const PAYLOAD_SOURCE = readFileSync(new URL("../../foundation/access/accessPlanPayload.ts", import.meta.url), "utf8");
+const WIZARD_SOURCE = readFileSync(new URL("../../foundation/access/useAccessPlanWizard.ts", import.meta.url), "utf8");
+const DETAIL_SOURCE = readFileSync(new URL("../../foundation/access/AccessPlanDetailPage.tsx", import.meta.url), "utf8");
+const DISCOVERY_SOURCE = WIZARD_SOURCE.slice(
+	WIZARD_SOURCE.indexOf("const discoverTables"),
+	WIZARD_SOURCE.indexOf("const previewApi"),
 );
 
 test("database ingestion exposes one authoritative table-selection workflow", () => {
-	assert.match(STEP_SOURCE, /批量录入表名（备用）/);
-	assert.match(STEP_SOURCE, /tableSelectionMode === "manual"/);
-	assert.doesNotMatch(STEP_SOURCE, />\s*应用选择\s*</);
-	assert.doesNotMatch(STEP_SOURCE, /onApplyTables/);
+	assert.match(STEP_SOURCE, /name="tableSelectionMode"/);
+	assert.match(STEP_SOURCE, /selectionMode === "manual"/);
+	assert.match(STEP_SOURCE, /selectedRowKeys:\s*selectedTables/);
+	assert.match(STEP_SOURCE, /form\.setFieldValue\("selectedTables", keys\.map\(String\)\)/);
+	assert.doesNotMatch(STEP_SOURCE, /readerTables|批量录入表名|onApplyTables/);
 });
 
-test("create and draft submission share the canonical table-selection resolver", () => {
-	assert.match(CREATE_SOURCE, /resolveTableSelection/);
-	assert.ok(
-		(CREATE_SOURCE.match(/resolveWriterTables/g) || []).length >= 3,
-		"draft, submit and edit mapping should share writer table resolution",
-	);
-	assert.ok(
-		(CREATE_SOURCE.match(/explicitTables:\s*isJsonMode\s*\?\s*undefined\s*:/g) || []).length >= 2,
-		"draft and submit should treat the current JSON writer config as authoritative",
-	);
-	assert.match(CREATE_SOURCE, /tableMapping:\s*buildTableMapping/);
-	assert.doesNotMatch(CREATE_SOURCE, /const handleApplyTables/);
-	assert.doesNotMatch(CREATE_SOURCE, /onApplyTables=/);
+test("database access payload uses the same selected tables for reader, streams and edit mapping", () => {
+	assert.match(PAYLOAD_SOURCE, /const selectedTables = values\.selectedTables\.map\(normalizeText\)\.filter\(Boolean\)/);
+	assert.match(PAYLOAD_SOURCE, /tableSelectionMode === "manual" && !selectedTables\.length/);
+	assert.match(PAYLOAD_SOURCE, /readerTables:\s*values\.tableSelectionMode === "manual" \? selectedTables\.join\("\\n"\) : ""/);
+	assert.match(PAYLOAD_SOURCE, /include:\s*values\.tableSelectionMode === "manual" \? selectedTables : undefined/);
+	assert.match(PAYLOAD_SOURCE, /tableMapping:\s*sourceTables\.map/);
+	assert.match(PAYLOAD_SOURCE, /selectedTables:\s*parseTableEntries\(legacy\.selectedTables \|\| legacy\.readerTables\)/);
 });
 
-test("table discovery refresh preserves the current canonical selection", () => {
-	assert.doesNotMatch(DISCOVER_HANDLER_SOURCE, /syncSelectedTablesToForm\(\[\]/);
-	assert.match(STEP_SOURCE, /name="sourceDataSourceId"[\s\S]*?onChange=[\s\S]*?preserveSelectionMode/);
+test("table discovery invalidates stale selection and ignores superseded results", () => {
+	assert.match(DISCOVERY_SOURCE, /form\.setFieldValue\("selectedTables", \[\]\)/);
+	assert.match(DISCOVERY_SOURCE, /const requestId = \+\+discoveryRequestIdRef\.current/);
+	assert.match(DISCOVERY_SOURCE, /databaseDiscoveryFingerprint\(form\.getFieldsValue\(true\)\) !== fingerprint/);
+	assert.match(DISCOVERY_SOURCE, /数据库连接或筛选条件已变更，请重新发现源表/);
 });
 
-test("manual selection validation stays registered while the fallback panel is collapsed", () => {
-	assert.match(SELECTED_TABLES_FIELD_SOURCE, /readerTablesValidator/);
-	assert.ok(
-		(CREATE_SOURCE.match(/"readerType",\s*"selectedTables"/g) || []).length >= 2,
-		"visual and JSON step validation should both include selectedTables",
-	);
-});
-
-test("edit restore preserves the task's existing custom writer targets", () => {
-	assert.doesNotMatch(EDIT_RESTORE_SOURCE, /syncSelectedTablesToForm\(restoreState\.mappingTables/);
-	assert.match(EDIT_RESTORE_SOURCE, /selectedTableKeysRef\.current\s*=\s*restoreState\.mappingTables/);
+test("access detail shows the saved source-to-target mapping without exposing connection configuration", () => {
+	assert.match(DETAIL_SOURCE, /展示任务已保存的源到目标映射，不读取或回显连接参数/);
+	assert.match(DETAIL_SOURCE, /dataSource=\{tableMappings\}/);
+	assert.doesNotMatch(DETAIL_SOURCE, /task\.sourceConfig|task\.destinationConfig/);
 });

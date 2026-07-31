@@ -33,6 +33,28 @@ public class IngestionExecution {
     @Column(name = "execution_id", length = 200)
     private String executionId; // Addax或Airflow的执行ID
 
+    @Column(name = "task_revision_id")
+    private Long taskRevisionId;
+
+    @Column(name = "revision_number")
+    private Integer revisionNumber;
+
+    @Size(max = 64)
+    @Column(name = "effective_config_checksum", length = 64)
+    private String effectiveConfigChecksum;
+
+    @Size(max = 200)
+    @Column(name = "quality_policy_ref", length = 200)
+    private String qualityPolicyRef;
+
+    @Size(max = 200)
+    @Column(name = "quality_run_id", length = 200)
+    private String qualityRunId;
+
+    @Size(max = 200)
+    @Column(name = "airflow_dag_id", length = 200)
+    private String airflowDagId;
+
     @Size(max = 128)
     @Column(name = "batch_id", length = 128)
     private String batchId; // DTS入湖批次ID，同一次执行内保持一致
@@ -147,6 +169,54 @@ public class IngestionExecution {
 
     public void setExecutionId(String executionId) {
         this.executionId = executionId;
+    }
+
+    public Long getTaskRevisionId() {
+        return taskRevisionId;
+    }
+
+    public void setTaskRevisionId(Long taskRevisionId) {
+        this.taskRevisionId = taskRevisionId;
+    }
+
+    public Integer getRevisionNumber() {
+        return revisionNumber;
+    }
+
+    public void setRevisionNumber(Integer revisionNumber) {
+        this.revisionNumber = revisionNumber;
+    }
+
+    public String getEffectiveConfigChecksum() {
+        return effectiveConfigChecksum;
+    }
+
+    public void setEffectiveConfigChecksum(String effectiveConfigChecksum) {
+        this.effectiveConfigChecksum = effectiveConfigChecksum;
+    }
+
+    public String getQualityPolicyRef() {
+        return qualityPolicyRef;
+    }
+
+    public void setQualityPolicyRef(String qualityPolicyRef) {
+        this.qualityPolicyRef = qualityPolicyRef;
+    }
+
+    public String getQualityRunId() {
+        return qualityRunId;
+    }
+
+    public void setQualityRunId(String qualityRunId) {
+        this.qualityRunId = qualityRunId;
+    }
+
+    public String getAirflowDagId() {
+        return airflowDagId;
+    }
+
+    public void setAirflowDagId(String airflowDagId) {
+        this.airflowDagId = airflowDagId;
     }
 
     public String getBatchId() {

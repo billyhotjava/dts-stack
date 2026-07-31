@@ -4,9 +4,9 @@ import type {
 	ModelImplementationValidation,
 	ModelImplementationView,
 	ModelImplementationWriteCommand,
-} from "@/pages/modeling/modelImplementationContract";
-import { toModelImplementationEtag } from "@/pages/modeling/modelImplementationContract";
-import { toModelSpecEtag, type ModelSpecCasToken } from "@/pages/modeling/modelSpecV2Contract";
+} from "@/features/modeling/contracts/modelImplementationContract";
+import { toModelImplementationEtag } from "@/features/modeling/contracts/modelImplementationContract";
+import { toModelSpecEtag, type ModelSpecCasToken } from "@/features/modeling/contracts/modelSpecV2Contract";
 
 const implementationUrl = (id: string, suffix = "") =>
 	`/modeling/model-specs/${encodeURIComponent(id)}/implementation${suffix}`;

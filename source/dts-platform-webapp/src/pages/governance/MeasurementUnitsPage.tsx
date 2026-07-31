@@ -56,7 +56,10 @@ export default function MeasurementUnitsPage() {
 	const returnTo = safeInternalPath(searchParams.get("returnTo"));
 	const modelSpecId = String(searchParams.get("modelSpecId") || "").trim();
 	const returnPath =
-		returnTo || (modelSpecId ? `/modeling/models/${encodeURIComponent(modelSpecId)}?tab=standards` : "");
+		returnTo ||
+		(modelSpecId
+			? `/data-modeling/dimensions/workbench?modelSpecId=${encodeURIComponent(modelSpecId)}&tab=standards`
+			: "");
 
 	const load = useCallback(async () => {
 		setLoading(true);

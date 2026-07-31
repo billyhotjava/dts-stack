@@ -1,5 +1,17 @@
-import type { ClassificationLevel } from "@/utils/classification";
+import { normalizeClassification, type ClassificationLevel } from "@/utils/classification";
 import api from "./apiClient";
+
+export type IngestionRevisionState = "DRAFT" | "ACTIVE" | "SUPERSEDED" | "LEGACY_UNSEALED";
+
+export const normalizeIngestionRevisionState = (value: unknown): IngestionRevisionState | undefined => {
+	const normalized = typeof value === "string" ? value.trim().toUpperCase() : "";
+	return normalized === "DRAFT" ||
+		normalized === "ACTIVE" ||
+		normalized === "SUPERSEDED" ||
+		normalized === "LEGACY_UNSEALED"
+		? normalized
+		: undefined;
+};
 
 export type ClassificationSealReference = {
 	sealId: string;
@@ -43,6 +55,13 @@ export interface IngestionTaskDTO {
 	status?: string;
 	lastExecutedAt?: string;
 	lastExecutionStatus?: string;
+	revisionNumber?: number;
+	revisionState?: IngestionRevisionState;
+	effectiveConfig?: Record<string, unknown>;
+	effectiveConfigChecksum?: string;
+	defaultPolicyVersion?: number;
+	defaultPolicyChecksum?: string;
+	qualityPolicyRef?: string;
 	createdBy?: string;
 	createdDate?: string;
 	lastModifiedBy?: string;
@@ -72,7 +91,46 @@ export interface IngestionExecutionDTO {
 	sourceTables?: Record<string, any>[];
 	targetTables?: Record<string, any>[];
 	queueWaitSeconds?: number;
+	revisionNumber?: number;
+	effectiveConfigChecksum?: string;
+	qualityPolicyRef?: string;
+	qualityRunId?: string;
 	createdAt?: string;
+}
+
+export interface IngestionAccessDefaultPolicyDTO {
+	policyKey: string;
+	version: number;
+	status: "ACTIVE" | "RETIRED" | string;
+	defaults: Record<string, unknown>;
+	checksum: string;
+	activatedAt?: string;
+}
+
+export interface IngestionTaskRevisionDTO {
+	id?: number;
+	taskId?: number;
+	revisionNumber: number;
+	revisionState: IngestionRevisionState;
+	sourceKind: "database" | "api" | "file" | string;
+	effectiveConfigChecksum: string;
+	defaultPolicyVersion?: number;
+	defaultPolicyChecksum?: string;
+	qualityPolicyRef?: string;
+	createdAt?: string;
+	activatedAt?: string;
+}
+
+export interface IngestionEffectiveConfigDTO {
+	taskId: number;
+	revisionNumber: number;
+	revisionState: IngestionRevisionState;
+	sourceKind: "database" | "api" | "file" | string;
+	effectiveConfig: Record<string, unknown>;
+	effectiveConfigChecksum: string;
+	defaultPolicyVersion?: number;
+	defaultPolicyChecksum?: string;
+	qualityPolicyRef?: string;
 }
 
 export interface IngestionExecutionLog {
@@ -266,6 +324,49 @@ export interface FileUploadResult {
 	fieldClassifications?: Record<string, ClassificationLevel>;
 }
 
+export type ManagedFileColumn = {
+	name: string;
+	type: string;
+	label?: string;
+	length?: number;
+	precision?: number;
+	scale?: number;
+	_odsMatched?: boolean;
+};
+
+export type ManagedFileClassificationSealReference = ClassificationSealReference & {
+	fileId?: string;
+	fileSubjectKey?: string;
+	fileChecksum?: string;
+};
+
+/**
+ * File metadata exposed to the access workspace. Server/container paths are
+ * deliberately absent: persisted plans refer to the managed fileId and seal.
+ */
+export interface ManagedFileUploadResult {
+	fileId: string;
+	fileType: string;
+	originalName: string;
+	columns: ManagedFileColumn[];
+	batchCode?: string;
+	sheetName?: string;
+	sheetIndex?: number;
+	fileHash?: string;
+	fileSize?: number;
+	keyVersion?: string;
+	encrypted?: boolean;
+	delimiter?: string;
+	preview?: string[][];
+	rowCount?: number;
+	errorCount?: number;
+	sourceFileType?: string;
+	sheets?: Array<{ index: number; name: string }>;
+	classification?: ClassificationLevel;
+	classificationSeal?: ManagedFileClassificationSealReference;
+	fieldClassifications?: Record<string, ClassificationLevel>;
+}
+
 export interface DefaultDestinationStatus {
 	available: boolean;
 	writerTypeReady: boolean;
@@ -384,6 +485,19 @@ export interface ApiConnectionTestRequestDTO {
 	secrets?: Record<string, any>;
 }
 
+export interface ManagedApiConnectionTestResourceDTO {
+	path: string;
+	method: "GET";
+	resourceId?: string;
+	displayName?: string;
+	recordPath?: string;
+}
+
+export interface ManagedApiConnectionTestRequestDTO {
+	dataSourceId: string;
+	resource: ManagedApiConnectionTestResourceDTO;
+}
+
 export interface ApiConnectionTestResultDTO {
 	connected?: boolean;
 	httpStatus?: number;
@@ -397,6 +511,132 @@ export interface ApiConnectionTestResultDTO {
 	errorCode?: string;
 	elapsedMs?: number;
 }
+
+const ingestionRecord = (value: unknown): Record<string, unknown> =>
+	value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+
+const optionalString = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : undefined);
+
+const optionalNumber = (value: unknown) => {
+	const number = typeof value === "number" ? value : Number(value);
+	return Number.isFinite(number) ? number : undefined;
+};
+
+const normalizeClassificationSeal = (value: unknown): ManagedFileClassificationSealReference | undefined => {
+	const seal = ingestionRecord(value);
+	const sealId = optionalString(seal.sealId);
+	const subjectType = optionalString(seal.subjectType);
+	const subjectKey = optionalString(seal.subjectKey);
+	const effectiveLevel = normalizeClassification(optionalString(seal.effectiveLevel), undefined);
+	const snapshotVersion = optionalNumber(seal.snapshotVersion);
+	const checksum = optionalString(seal.checksum);
+	const sealedAt = optionalString(seal.sealedAt);
+	if (!sealId || !subjectType || !subjectKey || !effectiveLevel || snapshotVersion === undefined || !checksum || !sealedAt) {
+		return undefined;
+	}
+	return {
+		sealId,
+		subjectType,
+		subjectKey,
+		assetType: optionalString(seal.assetType),
+		effectiveLevel,
+		snapshotVersion,
+		checksum,
+		sealedAt,
+		propagationStatus: optionalString(seal.propagationStatus),
+		fileFloor: normalizeClassification(optionalString(seal.fileFloor), undefined),
+		fileId: optionalString(seal.fileId),
+		fileSubjectKey: optionalString(seal.fileSubjectKey),
+		fileChecksum: optionalString(seal.fileChecksum),
+	};
+};
+
+export const normalizeManagedFileUploadResult = (value: unknown): ManagedFileUploadResult => {
+	const result = ingestionRecord(value);
+	const fileId = optionalString(result.fileId);
+	const fileType = optionalString(result.fileType);
+	const originalName = optionalString(result.originalName);
+	if (!fileId || !fileType || !originalName || !Array.isArray(result.columns)) {
+		throw new Error("文件上传响应无效");
+	}
+	const columns = result.columns.flatMap((item): ManagedFileColumn[] => {
+		const column = ingestionRecord(item);
+		const name = optionalString(column.name);
+		if (!name) return [];
+		return [{
+			name,
+			type: optionalString(column.type) || optionalString(column.dataType) || "string",
+			label: optionalString(column.label),
+			length: optionalNumber(column.length),
+			precision: optionalNumber(column.precision),
+			scale: optionalNumber(column.scale),
+			_odsMatched: column._odsMatched === true || undefined,
+		}];
+	});
+	const fieldClassifications = Object.fromEntries(
+		Object.entries(ingestionRecord(result.fieldClassifications)).flatMap(([name, rawLevel]) => {
+			const level = normalizeClassification(optionalString(rawLevel), undefined);
+			return name.trim() && level ? [[name.trim(), level]] : [];
+		}),
+	) as Record<string, ClassificationLevel>;
+	const preview = Array.isArray(result.preview)
+		? result.preview.filter(Array.isArray).map((row) => row.map((cell) => String(cell ?? "")))
+		: undefined;
+	const sheets = Array.isArray(result.sheets)
+		? result.sheets.flatMap((item) => {
+			const sheet = ingestionRecord(item);
+			const index = optionalNumber(sheet.index);
+			const name = optionalString(sheet.name);
+			return index !== undefined && name ? [{ index, name }] : [];
+		})
+		: undefined;
+	return {
+		fileId,
+		fileType,
+		originalName,
+		columns,
+		batchCode: optionalString(result.batchCode),
+		sheetName: optionalString(result.sheetName),
+		sheetIndex: optionalNumber(result.sheetIndex),
+		fileHash: optionalString(result.fileHash),
+		fileSize: optionalNumber(result.fileSize),
+		keyVersion: optionalString(result.keyVersion),
+		encrypted: typeof result.encrypted === "boolean" ? result.encrypted : undefined,
+		delimiter: optionalString(result.delimiter),
+		preview,
+		rowCount: optionalNumber(result.rowCount),
+		errorCount: optionalNumber(result.errorCount),
+		sourceFileType: optionalString(result.sourceFileType),
+		sheets,
+		classification: normalizeClassification(optionalString(result.classification), undefined),
+		classificationSeal: normalizeClassificationSeal(result.classificationSeal),
+		fieldClassifications: Object.keys(fieldClassifications).length ? fieldClassifications : undefined,
+	};
+};
+
+export const normalizeIngestionTaskDTO = (value: unknown): IngestionTaskDTO => {
+	const task = ingestionRecord(value) as unknown as IngestionTaskDTO;
+	return { ...task, revisionState: normalizeIngestionRevisionState(task.revisionState) };
+};
+
+export const normalizeIngestionTaskRevisionDTO = (value: unknown): IngestionTaskRevisionDTO | undefined => {
+	const revision = ingestionRecord(value);
+	const revisionNumber = optionalNumber(revision.revisionNumber);
+	const revisionState = normalizeIngestionRevisionState(revision.revisionState);
+	if (!Number.isInteger(revisionNumber) || !revisionState) return undefined;
+	return {
+		...(revision as unknown as IngestionTaskRevisionDTO),
+		revisionNumber: revisionNumber as number,
+		revisionState,
+	};
+};
+
+export const normalizeIngestionEffectiveConfigDTO = (value: unknown): IngestionEffectiveConfigDTO => {
+	const config = ingestionRecord(value);
+	const revisionState = normalizeIngestionRevisionState(config.revisionState);
+	if (!revisionState) throw new Error("接入任务 Revision 状态无效");
+	return { ...(config as unknown as IngestionEffectiveConfigDTO), revisionState };
+};
 
 const DEFAULT_EXECUTION_POLL_INTERVAL_MS = (() => {
 	const raw = Number((import.meta as any)?.env?.VITE_INGESTION_EXECUTION_POLL_MS ?? 3000);
@@ -435,22 +675,48 @@ class IngestionTaskAPI {
 	 */
 	async getTasks(params?: {
 		status?: string;
+		sourceKind?: "database" | "api" | "file";
+		query?: string;
+		health?: "healthy" | "running" | "attention" | "not_evaluated";
+		sourceDataSourceId?: string;
 		page?: number;
 		size?: number;
 		sort?: string;
 	}): Promise<PageResult<IngestionTaskDTO>> {
 		const payload: any = await api.get({ url: "/ingestion/tasks/list", params });
-		if (payload && typeof payload === "object" && "status" in payload && "data" in payload) {
-			return payload.data as PageResult<IngestionTaskDTO>;
-		}
-		return payload as PageResult<IngestionTaskDTO>;
+		const page = this.resolveWrappedResponse<PageResult<unknown>>(payload);
+		return {
+			...page,
+			content: Array.isArray(page?.content) ? page.content.map(normalizeIngestionTaskDTO) : [],
+		};
 	}
 
 	/**
 	 * 获取任务详情
 	 */
 	async getTask(id: number): Promise<IngestionTaskDTO> {
-		return api.get({ url: `/ingestion/tasks/${id}` });
+		const payload: unknown = await api.get({ url: `/ingestion/tasks/${id}` });
+		return normalizeIngestionTaskDTO(this.resolveWrappedResponse(payload));
+	}
+
+	async getAccessDefaultPolicy(): Promise<IngestionAccessDefaultPolicyDTO> {
+		return api.get({ url: "/ingestion/access/default-policy" });
+	}
+
+	async getTaskRevisions(id: number): Promise<IngestionTaskRevisionDTO[]> {
+		const payload: unknown = await api.get({ url: `/ingestion/tasks/${id}/revisions` });
+		const revisions = this.resolveWrappedResponse<unknown>(payload);
+		return Array.isArray(revisions)
+			? revisions.flatMap((revision) => {
+					const normalized = normalizeIngestionTaskRevisionDTO(revision);
+					return normalized ? [normalized] : [];
+				})
+			: [];
+	}
+
+	async getEffectiveConfig(id: number): Promise<IngestionEffectiveConfigDTO> {
+		const payload: unknown = await api.get({ url: `/ingestion/tasks/${id}/effective-config` });
+		return normalizeIngestionEffectiveConfigDTO(this.resolveWrappedResponse(payload));
 	}
 
 	/**
@@ -620,20 +886,6 @@ class IngestionTaskAPI {
 		return api.get({ url: `/ingestion/tasks/${taskId}/incremental-audits/summary`, params });
 	}
 
-	/**
-	 * 上传 Excel/CSV 文件
-	 */
-	async uploadFile(file: File): Promise<FileUploadResult> {
-		const formData = new FormData();
-		formData.append("file", file);
-		const payload: any = await api.post({
-			url: "/ingestion/files/upload",
-			data: formData,
-			headers: { "Content-Type": "multipart/form-data" },
-		});
-		return this.resolveWrappedResponse<FileUploadResult>(payload);
-	}
-
 	async uploadAndParseFile(
 		file: File,
 		options: {
@@ -642,7 +894,7 @@ class IngestionTaskAPI {
 			sheetIndex?: number;
 			sheetName?: string;
 		},
-	): Promise<FileUploadResult> {
+	): Promise<ManagedFileUploadResult> {
 		const formData = new FormData();
 		formData.append("file", file);
 		formData.append("classification", options.classification);
@@ -660,21 +912,7 @@ class IngestionTaskAPI {
 			data: formData,
 			headers: { "Content-Type": "multipart/form-data" },
 		});
-		return this.resolveWrappedResponse<FileUploadResult>(payload);
-	}
-
-	async parseUploadedFileById(payload: {
-		fileId: string;
-		previewLimit?: number;
-		sheetIndex?: number;
-		sheetName?: string;
-		originalName?: string;
-	}): Promise<FileUploadResult> {
-		const payloadResult: any = await api.post({
-			url: "/ingestion/files/parse",
-			data: payload,
-		});
-		return this.resolveWrappedResponse<FileUploadResult>(payloadResult);
+		return normalizeManagedFileUploadResult(this.resolveWrappedResponse<unknown>(payload));
 	}
 
 	async getConnectorCapabilities(): Promise<IngestionConnectorCapabilityDTO[]> {
@@ -766,6 +1004,15 @@ class IngestionTaskAPI {
 		return this.resolveWrappedResponse<ApiConnectionTestResultDTO>(payload);
 	}
 
+	async testManagedApiConnection(data: ManagedApiConnectionTestRequestDTO): Promise<ApiConnectionTestResultDTO> {
+		const payload: any = await api.post({
+			url: "/ingestion/api/test-connection",
+			data,
+			_skipErrorToast: true,
+		} as any);
+		return this.resolveWrappedResponse<ApiConnectionTestResultDTO>(payload);
+	}
+
 	async getRealtimeStatus(taskId: number): Promise<IngestionRealtimeStatusDTO | null> {
 		try {
 			const payload: any = await api.get({ url: `/ingestion/tasks/${taskId}/realtime-status` });
@@ -836,39 +1083,6 @@ class IngestionTaskAPI {
 		return api.post({ url: `/ingestion/tasks/changes/${id}/transition`, data });
 	}
 
-	// Staging / pre-check APIs
-
-	async parseExcel(taskId: number): Promise<ParseResult> {
-		return api.post({ url: `/ingestion/tasks/${taskId}/parse` });
-	}
-
-	async preCheck(taskId: number): Promise<PreCheckResult> {
-		return api.post({ url: `/ingestion/tasks/${taskId}/pre-check` });
-	}
-
-	async updateStagingCell(taskId: number, rowNum: number, data: { column: string; value: string }): Promise<void> {
-		return api.put({ url: `/ingestion/tasks/${taskId}/staging/${rowNum}`, data });
-	}
-
-	async reCheck(taskId: number): Promise<PreCheckResult> {
-		return api.post({ url: `/ingestion/tasks/${taskId}/re-check` });
-	}
-
-	async submitFromStaging(taskId: number): Promise<void> {
-		return api.post({ url: `/ingestion/tasks/${taskId}/submit` });
-	}
-
-	async dropStaging(taskId: number): Promise<void> {
-		return api.delete({ url: `/ingestion/tasks/${taskId}/staging` });
-	}
-
-	async getStagingData(
-		taskId: number,
-		params: { errorsOnly?: boolean; page?: number; size?: number } = {},
-	): Promise<StagingPage> {
-		return api.get({ url: `/ingestion/tasks/${taskId}/staging`, params });
-	}
-
 	async getStagingErrorSummary(taskId: number, limit = 20): Promise<StagingErrorSummary> {
 		return api.get({ url: `/ingestion/tasks/${taskId}/staging/errors/summary`, params: { limit } });
 	}
@@ -879,32 +1093,6 @@ class IngestionTaskAPI {
 			responseType: "blob",
 		} as any);
 	}
-}
-
-export interface ParseResult {
-	totalRows: number;
-	columns: { name: string; inferredType: string; typeConfidence: number }[];
-	formulaCells: { rowNum: number; columnName: string; formula: string }[];
-	emptyRows: number[];
-}
-
-export interface PreCheckResult {
-	status?: string;
-	totalRules?: number;
-	passedRules?: number;
-	failedRules?: number;
-	failedRuleNames?: string[];
-	totalRows: number;
-	passedRows: number;
-	failedRows: number;
-	errorsByRule: { ruleName: string; ruleType: string; failCount: number; sampleRows: any[] }[];
-}
-
-export interface StagingPage {
-	content: Record<string, any>[];
-	totalElements: number;
-	totalPages: number;
-	number: number;
 }
 
 export interface StagingRuleErrorSummary {

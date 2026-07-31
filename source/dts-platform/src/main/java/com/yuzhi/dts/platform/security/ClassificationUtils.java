@@ -22,6 +22,31 @@ public class ClassificationUtils {
     }
 
     /**
+     * Resolve only an explicitly assigned user clearance.
+     *
+     * <p>Unlike {@link #getCurrentUserMaxLevel()}, this method never falls back to the
+     * application default. Mutation entry points use it when an absent clearance must
+     * fail closed.
+     */
+    public Optional<String> getCurrentUserExplicitMaxLevel() {
+        String fromAbac = resolveMaxLevelFromPersonnelClaim();
+        if (fromAbac != null) return Optional.of(fromAbac);
+        if (SecurityUtils.hasCurrentUserAnyOfAuthorities("ROLE_CONFIDENTIAL", "ROLE_TOP_SECRET")) {
+            return Optional.of(SecurityLevelCatalog.DataSecurityLevel.CONFIDENTIAL.code());
+        }
+        if (SecurityUtils.hasCurrentUserAnyOfAuthorities("ROLE_SECRET")) {
+            return Optional.of(SecurityLevelCatalog.DataSecurityLevel.SECRET.code());
+        }
+        if (SecurityUtils.hasCurrentUserAnyOfAuthorities("ROLE_INTERNAL")) {
+            return Optional.of(SecurityLevelCatalog.DataSecurityLevel.INTERNAL.code());
+        }
+        if (SecurityUtils.hasCurrentUserAnyOfAuthorities("ROLE_PUBLIC")) {
+            return Optional.of(SecurityLevelCatalog.DataSecurityLevel.PUBLIC.code());
+        }
+        return Optional.empty();
+    }
+
+    /**
      * Resolve current user's maximum allowed classification level.
      * Prefer ABAC personnel_level/person_security_level.
      * Fallback to realm roles: ROLE_CONFIDENTIAL (legacy ROLE_TOP_SECRET) > ROLE_SECRET > ROLE_INTERNAL > ROLE_PUBLIC.

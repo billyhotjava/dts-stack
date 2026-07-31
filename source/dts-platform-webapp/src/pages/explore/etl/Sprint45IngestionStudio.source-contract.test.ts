@@ -2,68 +2,55 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const DATA_SOURCES_SOURCE = readFileSync(new URL("../../foundation/DataSourcesPage.tsx", import.meta.url), "utf8");
-const CONNECTORS_SOURCE = readFileSync(new URL("../../foundation/ConnectorRegistryPage.tsx", import.meta.url), "utf8");
-const JDBC_SOURCE = readFileSync(new URL("../../foundation/JdbcDriversPage.tsx", import.meta.url), "utf8");
-const TRANSFORM_SOURCE = readFileSync(new URL("./TransformPage.tsx", import.meta.url), "utf8");
-const ORCHESTRATION_SOURCE = readFileSync(new URL("./OrchestrationPage.tsx", import.meta.url), "utf8");
-const PROJECTS_SOURCE = readFileSync(new URL("../../modeling/ModelTemplatesPage.tsx", import.meta.url), "utf8");
-const SQL_MODELING_SOURCE = readFileSync(new URL("../../modeling/SqlModelingPage.tsx", import.meta.url), "utf8");
+const WORKSPACE_SOURCE = readFileSync(new URL("../../foundation/access/AccessWorkspace.tsx", import.meta.url), "utf8");
+const WIZARD_SOURCE = readFileSync(new URL("../../foundation/access/AccessPlanWizardPage.tsx", import.meta.url), "utf8");
+const PAYLOAD_SOURCE = readFileSync(new URL("../../foundation/access/accessPlanPayload.ts", import.meta.url), "utf8");
+const DETAIL_SOURCE = readFileSync(new URL("../../foundation/access/AccessPlanDetailPage.tsx", import.meta.url), "utf8");
 
-test("Sprint-45 data source entry exposes connection, schema, ODS, task, and golden-chain actions", () => {
-	for (const action of ["新建数据源", "测试连接", "Schema 探测", "生成 ODS 映射", "预览 ODS", "生成同步任务", "查看黄金链路"]) {
-		assert.match(DATA_SOURCES_SOURCE, new RegExp(action));
+test("data access workspace separates database, API and offline-file entry points on one table-first overview", () => {
+	for (const label of ["接入概览", "数据库接入", "API 接入", "离线文件接入"]) {
+		assert.match(WORKSPACE_SOURCE, new RegExp(label));
 	}
-	for (const api of ["dataSourcesService.test", "dataSourcesService.schemaDiscover", "dataSourcesService.odsPreview", "dataSourcesService.odsPrecheck", "createIngestionTask"]) {
-		assert.match(DATA_SOURCES_SOURCE, new RegExp(api.replace(".", "\\.")));
-	}
+	assert.match(WORKSPACE_SOURCE, /<Table<AccessWorkspaceRow>/);
+	assert.match(WORKSPACE_SOURCE, /dataSourcesService\.selections\(\)/);
+	assert.match(WORKSPACE_SOURCE, /ingestionTaskAPI\.getTasks\(/);
+	assert.match(WORKSPACE_SOURCE, /access\/new\?kind=\$\{sourceKind\}/);
+	assert.match(WORKSPACE_SOURCE, /access\/\$\{row\.taskId\}/);
+	assert.doesNotMatch(WORKSPACE_SOURCE, /<Card|card-list/);
 });
 
-test("Sprint-45 connector and driver pages behave as access assets instead of isolated admin tables", () => {
-	for (const action of ["连接器目录", "创建数据源", "配置要求", "同步内置", "驱动就绪", "缺少驱动"]) {
-		assert.match(CONNECTORS_SOURCE, new RegExp(action));
+test("access wizard uses one three-step shell for database, API and file plans", () => {
+	for (const component of ["DatabaseAccessStep", "ApiAccessStep", "FileAccessStep", "LandingScheduleStep"]) {
+		assert.match(WIZARD_SOURCE, new RegExp(component));
 	}
-	for (const action of ["JDBC 驱动库", "上传驱动", "校验", "启用", "禁用", "删除", "查看详情"]) {
-		assert.match(JDBC_SOURCE, new RegExp(action));
+	for (const step of ["来源连接", "资源定义", "策略准入"]) {
+		assert.match(WIZARD_SOURCE, new RegExp(step));
 	}
-	assert.doesNotMatch(CONNECTORS_SOURCE, />启用</);
-	assert.doesNotMatch(CONNECTORS_SOURCE, />停用</);
-	assert.doesNotMatch(CONNECTORS_SOURCE, /查看模板/);
-	assert.match(CONNECTORS_SOURCE, /PageHeader/);
-	assert.match(JDBC_SOURCE, /PageHeader/);
+	assert.match(WIZARD_SOURCE, /requireSafeApiResourcePath/);
+	assert.match(WIZARD_SOURCE, /连接凭据由平台托管/);
+	assert.match(WIZARD_SOURCE, /kind === "file" \? "保存草稿" : "创建任务"/);
+	assert.match(WIZARD_SOURCE, /access\/\$\{result\.taskId\}/);
 });
 
-test("Sprint-45 ETL transform and orchestration pages connect runtime actions back to ops", () => {
-	for (const action of ["创建入湖任务", "运行", "停止", "重跑", "补数", "查看日志", "查看实例", "查看运维"]) {
-		assert.match(TRANSFORM_SOURCE, new RegExp(action));
-	}
-	for (const route of ["/ops/instances", "/ops/backfill"]) {
-		assert.match(TRANSFORM_SOURCE, new RegExp(route));
-	}
-	for (const action of ["新建 DAG", "启用调度", "暂停", "补数", "查看告警", "运行实例"]) {
-		assert.match(ORCHESTRATION_SOURCE, new RegExp(action));
-	}
-	assert.match(ORCHESTRATION_SOURCE, /PageHeader/);
+test("access payload preserves the established database, API and file runtime contracts", () => {
+	assert.match(PAYLOAD_SOURCE, /if \(context\.kind === "api"\) return buildApiRequest\(context\)/);
+	assert.match(PAYLOAD_SOURCE, /if \(context\.kind === "file"\) return buildFileRequest\(context\)/);
+	assert.match(PAYLOAD_SOURCE, /return buildDatabaseRequest\(context\)/);
+	assert.match(PAYLOAD_SOURCE, /source:\s*\{ dataSourceId: sourceDataSourceId, type: readerType, config: readerConfig \}/);
+	assert.match(PAYLOAD_SOURCE, /source:\s*\{ dataSourceId: sourceDataSourceId, type: "httpreader", config \}/);
+	assert.match(PAYLOAD_SOURCE, /type:\s*"txtfilereader"/);
+	assert.match(PAYLOAD_SOURCE, /usePlatformDefault:\s*true/);
 });
 
-test("ETL task page consolidates filters and actions into one task toolbar", () => {
-	assert.equal((TRANSFORM_SOURCE.match(/>\s*创建入湖任务\s*</g) || []).length, 1);
-	assert.doesNotMatch(TRANSFORM_SOURCE, /title="入湖任务中心"/);
-	assert.doesNotMatch(TRANSFORM_SOURCE, />\s*新建转换\s*</);
-	assert.match(TRANSFORM_SOURCE, /全部（不含已删除）/);
-	assert.match(TRANSFORM_SOURCE, /data-testid="platform-transform-status-filter"/);
-	assert.match(TRANSFORM_SOURCE, /data-testid="platform-transform-refresh"/);
-	assert.match(TRANSFORM_SOURCE, /data-testid="platform-transform-create"/);
-});
-
-test("Sprint-45 Studio converges project, SQL/dbt modeling, and release gates on canonical owners", () => {
-	for (const action of ["新建项目", "导入项目", "进入 SQL 建模", "归档", "发布"]) {
-		assert.match(PROJECTS_SOURCE, new RegExp(action));
+test("access detail is the operational home for history, admission, execution, DAG rebuild and rollback", () => {
+	for (const tab of ["概览", "运行历史", "密级准入", "变更记录"]) {
+		assert.match(DETAIL_SOURCE, new RegExp(`label:\\s*"${tab}"`));
 	}
-	for (const action of ["新建模型", "导入模型", "加载预览", "从 ODS 一键生成", "发布前门禁", "发布到 Analytics"]) {
-		assert.match(SQL_MODELING_SOURCE, new RegExp(action));
-	}
-	for (const action of ["导入", "校验", "预览", "发布", "编译", "测试"]) {
-		assert.match(SQL_MODELING_SOURCE, new RegExp(action));
-	}
+	assert.match(DETAIL_SOURCE, /<ExecutionHistoryTable taskId=\{taskId\}/);
+	assert.match(DETAIL_SOURCE, /<TaskAdmissionBasis task=\{task\}/);
+	assert.match(DETAIL_SOURCE, /runAccessPlanOperation\("admit", operationTaskId\)/);
+	assert.match(DETAIL_SOURCE, /runAccessPlanOperation\("execute", operationTaskId\)/);
+	assert.match(DETAIL_SOURCE, /runAccessPlanOperation\("rebuildDag", operationTaskId\)/);
+	assert.match(DETAIL_SOURCE, /<RollbackImpactModal/);
+	assert.match(DETAIL_SOURCE, /access\/new\?kind=\$\{inferAccessKind\(task\)\}&editId=/);
 });

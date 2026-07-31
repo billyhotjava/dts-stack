@@ -1,14 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Card, Input, Select, Space, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import { PageHeader } from "@/components/page-header";
-import { buildJourneyUrl, JourneyContextBar, JourneyGateEvidenceSummary } from "@/components/journey";
+import { type AirflowTaskInstance, listAirflowTaskInstances } from "@/api/platformApi";
 import opsService, { type OpsInstance } from "@/api/services/opsService";
+import { buildJourneyUrl, JourneyContextBar, JourneyGateEvidenceSummary } from "@/components/journey";
 import { useLogPreview } from "@/components/log-preview/LogPreviewContext";
-import { listAirflowTaskInstances, type AirflowTaskInstance } from "@/api/platformApi";
-import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
+import { PageHeader } from "@/components/page-header";
+import { appendDetailAction, CompactTable, RecordDetailDrawer } from "@/components/table";
 
 const { Text } = Typography;
 
@@ -37,9 +37,12 @@ const resolveSourceTaskPath = (record: OpsInstance) => {
 		return `/explore/etl/orchestration?dagId=${encodeURIComponent(record.dagId || record.artifactId || "")}`;
 	}
 	if (record.entryKey === "DBT_RUN") {
-		return "/studio/sql-modeling?view=runs";
+		return "/data-modeling/home/workspace";
 	}
-	return `/explore/etl/transform?taskId=${encodeURIComponent(record.artifactId || record.id)}`;
+	if (record.entryKey === "INGESTION_TASK" && record.artifactId) {
+		return `/foundation/data-sources/access/${encodeURIComponent(record.artifactId)}?tab=history`;
+	}
+	return "/foundation/data-sources";
 };
 
 export default function OpsInstancesPage() {
@@ -60,7 +63,8 @@ export default function OpsInstancesPage() {
 		if (revision) params.set("revision", revision);
 		if (implementationRevision) params.set("implementationRevision", implementationRevision);
 		if (implementationMode) params.set("implementationMode", implementationMode);
-		return `/modeling/models/${encodeURIComponent(modelSpecId)}?${params.toString()}`;
+		params.set("modelSpecId", modelSpecId);
+		return `/data-modeling/dimensions/workbench?${params.toString()}`;
 	})();
 	const journeyRoute = (route: string) =>
 		searchParams.get("journey") === "e2e-data-product" ? buildJourneyUrl(route, searchParams) : route;
@@ -108,9 +112,7 @@ export default function OpsInstancesPage() {
 		setTaskLoading((prev) => ({ ...prev, [runId]: true }));
 		try {
 			const result = await listAirflowTaskInstances(record.dagId, record.externalRunId);
-			const instances: AirflowTaskInstance[] = Array.isArray(result?.task_instances)
-				? result.task_instances
-				: [];
+			const instances: AirflowTaskInstance[] = Array.isArray(result?.task_instances) ? result.task_instances : [];
 			setTaskInstances((prev) => ({ ...prev, [runId]: instances }));
 		} catch {
 			setTaskInstances((prev) => ({ ...prev, [runId]: [] }));
@@ -124,8 +126,26 @@ export default function OpsInstancesPage() {
 		{ title: "类型", dataIndex: "entryKey", width: 140, render: (v) => <Tag>{v || "-"}</Tag> },
 		{ title: "DAG", dataIndex: "dagId", width: 160, render: (v) => v || "-" },
 		{ title: "状态", dataIndex: "status", width: 120, render: (v) => <Tag>{v || "-"}</Tag> },
-		{ title: "开始时间", dataIndex: "startedAt", render: (v) => formatDate(v) , sorter: (a, b) => { const ta = a.startedAt ? new Date(a.startedAt as any).getTime() : 0; const tb = b.startedAt ? new Date(b.startedAt as any).getTime() : 0; return ta - tb; } },
-		{ title: "结束时间", dataIndex: "finishedAt", render: (v) => formatDate(v) , sorter: (a, b) => { const ta = a.finishedAt ? new Date(a.finishedAt as any).getTime() : 0; const tb = b.finishedAt ? new Date(b.finishedAt as any).getTime() : 0; return ta - tb; } },
+		{
+			title: "开始时间",
+			dataIndex: "startedAt",
+			render: (v) => formatDate(v),
+			sorter: (a, b) => {
+				const ta = a.startedAt ? new Date(a.startedAt as any).getTime() : 0;
+				const tb = b.startedAt ? new Date(b.startedAt as any).getTime() : 0;
+				return ta - tb;
+			},
+		},
+		{
+			title: "结束时间",
+			dataIndex: "finishedAt",
+			render: (v) => formatDate(v),
+			sorter: (a, b) => {
+				const ta = a.finishedAt ? new Date(a.finishedAt as any).getTime() : 0;
+				const tb = b.finishedAt ? new Date(b.finishedAt as any).getTime() : 0;
+				return ta - tb;
+			},
+		},
 		{ title: "耗时(ms)", dataIndex: "durationMs", render: (v) => v ?? "-" },
 		{
 			title: "日志/备注",
@@ -142,31 +162,34 @@ export default function OpsInstancesPage() {
 			dataIndex: "actions",
 			width: 420,
 			fixed: "right",
-				render: (_: unknown, record: OpsInstance) => {
+			render: (_: unknown, record: OpsInstance) => {
 				const isDbt =
-					record.entryKey === "DBT_RUN" ||
-					(record.entryKey === "AIRFLOW_DAG" && record.dagId?.includes("dbt"));
+					record.entryKey === "DBT_RUN" || (record.entryKey === "AIRFLOW_DAG" && record.dagId?.includes("dbt"));
 				const failed = ["FAILED", "ERROR", "TIMED_OUT"].includes(String(record.status || "").toUpperCase());
 				return (
 					<Space size="small" wrap>
-						<Button
-							type="link"
-							size="small"
-							onClick={() => navigate(journeyRoute(resolveSourceTaskPath(record)))}
-						>
+						<Button type="link" size="small" onClick={() => navigate(journeyRoute(resolveSourceTaskPath(record)))}>
 							查看源任务
 						</Button>
 						<Button
 							type="link"
 							size="small"
-							onClick={() => navigate(`/foundation/data-sources?keyword=${encodeURIComponent(record.artifactName || record.artifactId || "")}`)}
+							onClick={() =>
+								navigate(
+									`/foundation/data-sources?keyword=${encodeURIComponent(record.artifactName || record.artifactId || "")}`,
+								)
+							}
 						>
 							查看数据源
 						</Button>
 						<Button
 							type="link"
 							size="small"
-							onClick={() => navigate(`/catalog/assets?keyword=${encodeURIComponent(record.artifactName || record.artifactId || "")}`)}
+							onClick={() =>
+								navigate(
+									`/catalog/assets?keyword=${encodeURIComponent(record.artifactName || record.artifactId || "")}`,
+								)
+							}
 						>
 							查看资产
 						</Button>
@@ -188,11 +211,7 @@ export default function OpsInstancesPage() {
 								type="link"
 								size="small"
 								data-testid="ops-return-model-repair"
-								onClick={() =>
-									navigate(
-										modelRepairPath,
-									)
-								}
+								onClick={() => navigate(modelRepairPath)}
 							>
 								返回模型修复
 							</Button>
@@ -219,7 +238,9 @@ export default function OpsInstancesPage() {
 							size="small"
 							onClick={() =>
 								navigate(
-									journeyRoute(`/ops/logs?entryKey=${record.entryKey ?? ""}&runId=${record.externalRunId ?? record.id}`),
+									journeyRoute(
+										`/ops/logs?entryKey=${record.entryKey ?? ""}&runId=${record.externalRunId ?? record.id}`,
+									),
 								)
 							}
 						>
@@ -265,9 +286,7 @@ export default function OpsInstancesPage() {
 					loading={loading}
 					expandable={{
 						rowExpandable: (record) =>
-							record.entryKey === "AIRFLOW_DAG" &&
-							Boolean(record.dagId) &&
-							Boolean(record.externalRunId),
+							record.entryKey === "AIRFLOW_DAG" && Boolean(record.dagId) && Boolean(record.externalRunId),
 						onExpand: (expanded, record) => {
 							if (expanded && !taskInstances[record.id]) {
 								void loadTaskInstances(record);
@@ -293,13 +312,7 @@ export default function OpsInstancesPage() {
 											render: (v) => (
 												<Tag
 													color={
-														v === "success"
-															? "green"
-															: v === "failed"
-																? "red"
-																: v === "running"
-																	? "blue"
-																	: "default"
+														v === "success" ? "green" : v === "failed" ? "red" : v === "running" ? "blue" : "default"
 													}
 												>
 													{v || "-"}

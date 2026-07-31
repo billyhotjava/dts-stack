@@ -13,26 +13,30 @@ const ROLE_DEFAULTS = readFileSync(
 	"utf8",
 );
 
-test("Sprint-45 workbench remains and retired studio leaves use Sprint-67 compatibility", () => {
+test("Sprint-45 workbench remains while retired studio modeling leaves only redirect", () => {
 	assert.match(MENU_SEED, /"externalLink": "\/workbench\/todo"/);
-	assert.match(MENU_SEED, /"externalLink": "\/studio\/sql-modeling"/);
+	assert.match(MENU_SEED, /"externalLink": "\/data-modeling\/dimensions\/workbench"/);
+	assert.doesNotMatch(MENU_SEED, /"externalLink": "\/studio\/sql-modeling"/);
 	assert.doesNotMatch(MENU_SEED, /"externalLink": "\/studio\/low-code-development"/);
 
 	assert.match(ROLE_DEFAULTS, /"route": "\/workbench\/todo"/);
-	assert.match(ROLE_DEFAULTS, /"route": "\/studio\/sql-modeling"/);
+	assert.match(ROLE_DEFAULTS, /"route": "\/data-modeling\/dimensions\/workbench"/);
+	assert.doesNotMatch(ROLE_DEFAULTS, /"route": "\/studio\/sql-modeling"/);
 	assert.doesNotMatch(ROLE_DEFAULTS, /"route": "\/studio\/low-code-development"/);
 
 	assert.match(STATIC_ROUTES, /WorkflowCenterPage/);
-	assert.match(STATIC_ROUTES, /ModelingCompatibilityPage/);
-	assert.match(STATIC_ROUTES, /StudioProjectsPage/);
-	assert.match(STATIC_ROUTES, /SqlModelingPage/);
+	assert.match(STATIC_ROUTES, /DataModelingPage/);
+	assert.match(STATIC_ROUTES, /LegacyDataModelingRedirect/);
+	assert.doesNotMatch(STATIC_ROUTES, /ModelingCompatibilityPage|StudioProjectsPage|SqlModelingPage/);
 	assert.match(STATIC_ROUTES, /path: "workbench\/todo"/);
+	assert.match(STATIC_ROUTES, /path: "data-modeling\/\*"/);
 	assert.match(STATIC_ROUTES, /path: "studio\/low-code-development"/);
 	assert.match(STATIC_ROUTES, /path: "studio\/projects"/);
 	assert.match(STATIC_ROUTES, /path: "studio\/sql-modeling"/);
 
 	assert.match(DYNAMIC_RESOLVER, /"\/workbench\/todo": "\/pages\/workbench\/WorkflowCenterPage"/);
-	assert.match(DYNAMIC_RESOLVER, /"\/studio\/low-code-development": "\/pages\/modeling\/ModelingCompatibilityPage"/);
-	assert.match(DYNAMIC_RESOLVER, /"\/studio\/projects": "\/pages\/modeling\/ModelTemplatesPage"/);
-	assert.match(DYNAMIC_RESOLVER, /"\/studio\/sql-modeling": "\/pages\/modeling\/SqlModelingPage"/);
+	for (const route of ["low-code-development", "projects", "sql-modeling"]) {
+		assert.match(DYNAMIC_RESOLVER, new RegExp(`"/studio/${route}": "/pages/data-modeling/LegacyDataModelingRedirect"`));
+	}
+	assert.match(DYNAMIC_RESOLVER, /normalized\.startsWith\("\/data-modeling\/"\)/);
 });

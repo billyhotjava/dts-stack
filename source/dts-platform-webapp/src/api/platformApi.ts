@@ -1493,7 +1493,7 @@ export const rollbackAnalyze = (data: {
 	dataSourceId?: string;
 	tables?: string[];
 	rebuildDbt?: boolean;
-}) => api.post({ url: "/rollback/analyze", data });
+}) => api.post({ url: "/rollback/analyze", data, _skipErrorToast: true } as any);
 
 export const rollbackExecute = (data: {
 	level: number;
@@ -1502,7 +1502,10 @@ export const rollbackExecute = (data: {
 	dataSourceId?: string;
 	tables?: string[];
 	rebuildDbt?: boolean;
-}) => api.post({ url: "/rollback/execute", data });
+	confirmationType: string;
+	confirmationToken: string;
+	confirmationText?: string;
+}) => api.post({ url: "/rollback/execute", data, _skipErrorToast: true } as any);
 
 export const getRollbackAuditLog = (params: { taskId?: number; dataSourceId?: string }) =>
 	api.get({ url: "/rollback/audit-log", params });

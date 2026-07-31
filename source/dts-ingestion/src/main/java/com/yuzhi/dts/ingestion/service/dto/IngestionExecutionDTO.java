@@ -16,6 +16,16 @@ public class IngestionExecutionDTO {
 
     private String executionId;
 
+    private Integer revisionNumber;
+
+    private String effectiveConfigChecksum;
+
+    private String qualityPolicyRef;
+
+    private String qualityRunId;
+
+    private String airflowDagId;
+
     private String batchId;
 
     private String status;
@@ -86,6 +96,46 @@ public class IngestionExecutionDTO {
 
     public void setExecutionId(String executionId) {
         this.executionId = executionId;
+    }
+
+    public Integer getRevisionNumber() {
+        return revisionNumber;
+    }
+
+    public void setRevisionNumber(Integer revisionNumber) {
+        this.revisionNumber = revisionNumber;
+    }
+
+    public String getEffectiveConfigChecksum() {
+        return effectiveConfigChecksum;
+    }
+
+    public void setEffectiveConfigChecksum(String effectiveConfigChecksum) {
+        this.effectiveConfigChecksum = effectiveConfigChecksum;
+    }
+
+    public String getQualityPolicyRef() {
+        return qualityPolicyRef;
+    }
+
+    public void setQualityPolicyRef(String qualityPolicyRef) {
+        this.qualityPolicyRef = qualityPolicyRef;
+    }
+
+    public String getQualityRunId() {
+        return qualityRunId;
+    }
+
+    public void setQualityRunId(String qualityRunId) {
+        this.qualityRunId = qualityRunId;
+    }
+
+    public String getAirflowDagId() {
+        return airflowDagId;
+    }
+
+    public void setAirflowDagId(String airflowDagId) {
+        this.airflowDagId = airflowDagId;
     }
 
     public String getBatchId() {

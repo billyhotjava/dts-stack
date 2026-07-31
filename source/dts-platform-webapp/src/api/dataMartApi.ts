@@ -7,7 +7,7 @@ import {
 	toDataMartEtag,
 	type UpdateDataMartCommand,
 	type WarehousePlanDataMartBaseline,
-} from "@/pages/modeling/dataMartContract";
+} from "@/features/modeling/contracts/dataMartContract";
 
 const DATA_MART_RESOURCE = "/modeling/data-marts";
 

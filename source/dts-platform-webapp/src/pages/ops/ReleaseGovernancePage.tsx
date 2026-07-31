@@ -1,20 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
 import { Alert, Button, Progress, Space, Tag, Timeline, Typography } from "antd";
-import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { ClipboardCheck, DatabaseZap, RadioTower, ShieldCheck } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import {
-	PlatformPageHero,
-	PlatformSectionCard,
-	PlatformSummaryCards,
-} from "@/components/console-page";
-import {
-	getSprint27ReleaseGovernance,
-	type PlatformEventSummary,
-	type Sprint27SourceStatus,
-} from "@/api/platformApi";
 import type { IngestionExecutionObservabilityDTO } from "@/api/ingestion";
+import { getSprint27ReleaseGovernance, type PlatformEventSummary, type Sprint27SourceStatus } from "@/api/platformApi";
+import { PlatformPageHero, PlatformSectionCard, PlatformSummaryCards } from "@/components/console-page";
+import { appendDetailAction, CompactTable, RecordDetailDrawer } from "@/components/table";
 
 type GovernanceReleaseGate = {
 	windowDays?: number;
@@ -110,15 +102,15 @@ export default function ReleaseGovernancePage() {
 			setRemoteCheckRows(
 				Array.isArray(snapshot?.checks)
 					? snapshot.checks.map((check: any) => ({
-						key: String(check.key ?? check.code ?? check.name),
-						area: String(check.area ?? "治理门禁"),
-						name: String(check.name ?? check.code ?? "-"),
-						passed: Boolean(check.passed),
-						actual: String(check.actual ?? "-"),
-						threshold: String(check.threshold ?? "-"),
-						severity: String(check.severity ?? "BLOCKER"),
-						path: String(check.path ?? "/governance"),
-					}))
+							key: String(check.key ?? check.code ?? check.name),
+							area: String(check.area ?? "治理门禁"),
+							name: String(check.name ?? check.code ?? "-"),
+							passed: Boolean(check.passed),
+							actual: String(check.actual ?? "-"),
+							threshold: String(check.threshold ?? "-"),
+							severity: String(check.severity ?? "BLOCKER"),
+							path: String(check.path ?? "/governance"),
+						}))
 					: [],
 			);
 			setSources(snapshot?.sources || {});
@@ -136,7 +128,8 @@ export default function ReleaseGovernancePage() {
 	const ingestionFailed = Number(ingestionOverview.failed || 0) + Number(ingestionOverview.timeout || 0);
 	const indicatorFailed = Number(indicatorOverview.validationFailed || 0);
 	const dbtBlocked = dbtGate ? Boolean(dbtGate.blocking ?? dbtGate.blocked ?? dbtGate.failed) : false;
-	const readyForRelease = remoteReadyForRelease ?? (!blockerFailed && !eventFailed && !ingestionFailed && !indicatorFailed && !dbtBlocked);
+	const readyForRelease =
+		remoteReadyForRelease ?? (!blockerFailed && !eventFailed && !ingestionFailed && !indicatorFailed && !dbtBlocked);
 
 	const summaryCards = [
 		{
@@ -144,28 +137,28 @@ export default function ReleaseGovernancePage() {
 			value: readyForRelease ? "可发布" : "待处理",
 			note: governanceGate?.checkedAt ? `最近校验 ${formatDateTime(governanceGate.checkedAt)}` : "聚合最近 7 天快照",
 			icon: <ClipboardCheck className="h-5 w-5" />,
-			tone: readyForRelease ? "success" as const : "warning" as const,
+			tone: readyForRelease ? ("success" as const) : ("warning" as const),
 		},
 		{
 			label: "治理阻断",
 			value: blockerFailed,
 			note: "质量、问题单、码表门禁",
 			icon: <ShieldCheck className="h-5 w-5" />,
-			tone: blockerFailed ? "warning" as const : "success" as const,
+			tone: blockerFailed ? ("warning" as const) : ("success" as const),
 		},
 		{
 			label: "ELT 异常",
 			value: ingestionFailed,
 			note: `成功率 ${percent(ingestionOverview.successRate)}`,
 			icon: <DatabaseZap className="h-5 w-5" />,
-			tone: ingestionFailed ? "warning" as const : "success" as const,
+			tone: ingestionFailed ? ("warning" as const) : ("success" as const),
 		},
 		{
 			label: "事件失败",
 			value: eventFailed,
 			note: `${eventSummary?.pending ?? 0} 条待分发`,
 			icon: <RadioTower className="h-5 w-5" />,
-			tone: eventFailed ? "warning" as const : "success" as const,
+			tone: eventFailed ? ("warning" as const) : ("success" as const),
 		},
 	];
 
@@ -223,7 +216,7 @@ export default function ReleaseGovernancePage() {
 				actual: dbtGate ? String(dbtGate.status ?? dbtGate.result ?? dbtGate.blocking ?? "checked") : "未返回",
 				threshold: "不阻断",
 				severity: "BLOCKER",
-				path: "/studio/sql-modeling?view=release",
+				path: "/data-modeling/home/workspace",
 			},
 		);
 		return rows;
@@ -233,11 +226,23 @@ export default function ReleaseGovernancePage() {
 
 	const baseColumns: ColumnsType<CheckRow> = [
 		{ title: "域", dataIndex: "area", key: "area", width: 110, render: (value) => <Tag>{value}</Tag> },
-		{ title: "检查项", dataIndex: "name", key: "name" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
-		{ title: "结果", dataIndex: "passed", key: "passed", width: 100, render: (value) => <Tag color={value ? "green" : "red"}>{value ? "通过" : "未通过"}</Tag> },
+		{ title: "检查项", dataIndex: "name", key: "name", sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
+		{
+			title: "结果",
+			dataIndex: "passed",
+			key: "passed",
+			width: 100,
+			render: (value) => <Tag color={value ? "green" : "red"}>{value ? "通过" : "未通过"}</Tag>,
+		},
 		{ title: "当前值", dataIndex: "actual", key: "actual", width: 140 },
 		{ title: "阈值", dataIndex: "threshold", key: "threshold", width: 120 },
-		{ title: "级别", dataIndex: "severity", key: "severity", width: 120, render: (value) => <Tag color={value === "BLOCKER" ? "red" : "orange"}>{value}</Tag> },
+		{
+			title: "级别",
+			dataIndex: "severity",
+			key: "severity",
+			width: 120,
+			render: (value) => <Tag color={value === "BLOCKER" ? "red" : "orange"}>{value}</Tag>,
+		},
 		{
 			title: "操作",
 			dataIndex: "action",
@@ -284,11 +289,18 @@ export default function ReleaseGovernancePage() {
 
 			<PlatformSectionCard title="数据源状态">
 				<Space wrap>
-					{Object.entries(sources).length ? Object.entries(sources).map(([key, source]) => (
-						<Tag key={key} color={source.status === "ERROR" ? "red" : source.status === "EMPTY" ? "default" : "green"}>
-							{key}: {source.status}
-						</Tag>
-					)) : <Typography.Text type="secondary">暂无后端数据源状态</Typography.Text>}
+					{Object.entries(sources).length ? (
+						Object.entries(sources).map(([key, source]) => (
+							<Tag
+								key={key}
+								color={source.status === "ERROR" ? "red" : source.status === "EMPTY" ? "default" : "green"}
+							>
+								{key}: {source.status}
+							</Tag>
+						))
+					) : (
+						<Typography.Text type="secondary">暂无后端数据源状态</Typography.Text>
+					)}
 				</Space>
 			</PlatformSectionCard>
 

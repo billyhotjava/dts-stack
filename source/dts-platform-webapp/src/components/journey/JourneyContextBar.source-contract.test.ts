@@ -10,9 +10,6 @@ const indexUrl = new URL("./index.ts", import.meta.url);
 const pageSources = [
 	["integration", new URL("../../pages/foundation/DataSourcesPage.tsx", import.meta.url)],
 	["standards", new URL("../../pages/governance/ElementsPage.tsx", import.meta.url)],
-	["modeling", new URL("../../pages/modeling/ModelCenterPage.tsx", import.meta.url)],
-	["development", new URL("../../pages/modeling/SqlModelingPage.tsx", import.meta.url)],
-	["metrics", new URL("../../pages/modeling/MetricWorkbenchPage.tsx", import.meta.url)],
 	["service", new URL("../../pages/services/ApiServicesPage.tsx", import.meta.url)],
 	["evidence", new URL("../../pages/ops/OpsInstancesPage.tsx", import.meta.url)],
 ] as const;
@@ -89,7 +86,7 @@ test("journey component barrel exports the shared surface", () => {
 	assert.match(source, /parseDataProductJourneyContext/);
 });
 
-test("core pages render the journey context bar with their stage", () => {
+test("retained journey pages render the journey context bar with their stage", () => {
 	for (const [stage, url] of pageSources) {
 		assert.equal(existsSync(url), true, `${url.pathname} should exist`);
 		const source = readFileSync(url, "utf8");

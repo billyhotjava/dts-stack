@@ -1,8 +1,10 @@
 package com.yuzhi.dts.platform.service.ingestion;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.http.HttpMethod.GET;
 import static org.springframework.http.HttpMethod.POST;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.headerDoesNotExist;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
@@ -93,6 +95,7 @@ class IngestionServiceClientTest {
             .expect(requestTo("http://ingestion.test/api/ingestion/tasks"))
             .andExpect(method(POST))
             .andExpect(header("X-DTS-Service", "dts-platform"))
+            .andExpect(headerDoesNotExist("X-DTS-Service-Token"))
             .andExpect(header("X-DTS-User", "xiezm"))
             .andExpect(header("X-DTS-Roles", "ROLE_INST_DATA_OWNER,ROLE_EMPLOYEE"))
             .andRespond(
@@ -105,6 +108,26 @@ class IngestionServiceClientTest {
 
         assertThat(response.getStatus()).isEqualTo(200);
         longServer.verify();
+    }
+
+    @Test
+    void shouldSendConfiguredServiceTokenOnEveryIngestionRequest() {
+        DtsIngestionProperties properties = new DtsIngestionProperties();
+        properties.setBaseUrl("http://ingestion.test");
+        properties.setServiceName("dts-platform");
+        properties.setServiceToken("platform-to-ingestion-secret");
+        IngestionServiceClient tokenClient = new IngestionServiceClient(new RestTemplateBuilder(), properties);
+        RestTemplate tokenRestTemplate = (RestTemplate) ReflectionTestUtils.getField(tokenClient, "restTemplate");
+        MockRestServiceServer tokenServer = MockRestServiceServer.bindTo(tokenRestTemplate).build();
+        tokenServer
+            .expect(requestTo("http://ingestion.test/api/ingestion/templates"))
+            .andExpect(method(GET))
+            .andExpect(header("X-DTS-Service-Token", "platform-to-ingestion-secret"))
+            .andRespond(withStatus(HttpStatus.OK).contentType(MediaType.APPLICATION_JSON).body("[]"));
+
+        tokenClient.listTemplates();
+
+        tokenServer.verify();
     }
 
     @Test
@@ -124,6 +147,72 @@ class IngestionServiceClientTest {
 
         assertThat(response.getStatus()).isEqualTo(200);
         assertThat(response.getData()).isInstanceOf(Map.class);
+        server.verify();
+    }
+
+    @Test
+    void shouldProxyAccessDefaultsAndTaskRevisionEndpointsWithoutChangingTheirContract() {
+        RestTemplate restTemplate = (RestTemplate) ReflectionTestUtils.getField(client, "restTemplate");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).ignoreExpectOrder(true).build();
+        server
+            .expect(requestTo("http://ingestion.test/api/ingestion/access/default-policy"))
+            .andExpect(method(GET))
+            .andRespond(
+                withStatus(HttpStatus.OK)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body("{\"policyKey\":\"INGESTION_DEFAULT\",\"version\":3,\"status\":\"ACTIVE\",\"defaults\":{}}")
+            );
+        server
+            .expect(requestTo("http://ingestion.test/api/ingestion/tasks/7/revisions"))
+            .andExpect(method(GET))
+            .andRespond(
+                withStatus(HttpStatus.OK)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body("[{\"revisionNumber\":2,\"revisionState\":\"ACTIVE\",\"sourceKind\":\"DATABASE\"}]")
+            );
+        server
+            .expect(requestTo("http://ingestion.test/api/ingestion/tasks/7/effective-config"))
+            .andExpect(method(GET))
+            .andRespond(
+                withStatus(HttpStatus.OK)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body("{\"taskId\":7,\"revisionNumber\":3,\"revisionState\":\"ACTIVE\",\"sourceKind\":\"DATABASE\",\"effectiveConfig\":{}}")
+            );
+
+        ApiResponse<Object> defaults = client.getAccessDefaultPolicy();
+        ApiResponse<Object> revisions = client.getTaskRevisions(7L);
+        ApiResponse<Object> effective = client.getTaskEffectiveConfig(7L);
+        assertThat(defaults.getStatus()).isEqualTo(200);
+        assertThat(defaults.getData()).asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
+            .containsEntry("policyKey", "INGESTION_DEFAULT")
+            .containsEntry("version", 3);
+        assertThat(revisions.getStatus()).isEqualTo(200);
+        assertThat(revisions.getData()).asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.LIST)
+            .hasSize(1);
+        assertThat(effective.getStatus()).isEqualTo(200);
+        assertThat(effective.getData()).asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
+            .containsEntry("revisionNumber", 3)
+            .containsEntry("sourceKind", "DATABASE");
+        server.verify();
+    }
+
+    @Test
+    void shouldPreserveEffectiveConfigConflictStatusFromIngestion() {
+        RestTemplate restTemplate = (RestTemplate) ReflectionTestUtils.getField(client, "restTemplate");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        server
+            .expect(requestTo("http://ingestion.test/api/ingestion/tasks/7/effective-config"))
+            .andExpect(method(GET))
+            .andRespond(
+                withStatus(HttpStatus.CONFLICT)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body("{\"status\":409,\"message\":\"任务尚未生成可用的配置版本\"}")
+            );
+
+        ApiResponse<Object> response = client.getTaskEffectiveConfig(7L);
+
+        assertThat(response.getStatus()).isEqualTo(409);
+        assertThat(response.getData()).isNull();
         server.verify();
     }
 }

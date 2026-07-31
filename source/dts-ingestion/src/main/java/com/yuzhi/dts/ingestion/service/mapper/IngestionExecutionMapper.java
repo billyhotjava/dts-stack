@@ -24,6 +24,11 @@ public class IngestionExecutionMapper {
         dto.setTaskId(entity.getTask() != null ? entity.getTask().getId() : null);
         dto.setTaskName(entity.getTask() != null ? entity.getTask().getName() : null);
         dto.setExecutionId(entity.getExecutionId());
+        dto.setRevisionNumber(entity.getRevisionNumber());
+        dto.setEffectiveConfigChecksum(entity.getEffectiveConfigChecksum());
+        dto.setQualityPolicyRef(entity.getQualityPolicyRef());
+        dto.setQualityRunId(entity.getQualityRunId());
+        dto.setAirflowDagId(entity.getAirflowDagId());
         dto.setBatchId(entity.getBatchId());
         dto.setStatus(entity.getStatus());
         dto.setStartTime(entity.getStartTime());
@@ -66,6 +71,11 @@ public class IngestionExecutionMapper {
         IngestionExecution entity = new IngestionExecution();
         entity.setId(dto.getId());
         entity.setExecutionId(dto.getExecutionId());
+        entity.setRevisionNumber(dto.getRevisionNumber());
+        entity.setEffectiveConfigChecksum(dto.getEffectiveConfigChecksum());
+        entity.setQualityPolicyRef(dto.getQualityPolicyRef());
+        entity.setQualityRunId(dto.getQualityRunId());
+        entity.setAirflowDagId(dto.getAirflowDagId());
         entity.setBatchId(dto.getBatchId());
         entity.setStatus(dto.getStatus());
         entity.setStartTime(dto.getStartTime());

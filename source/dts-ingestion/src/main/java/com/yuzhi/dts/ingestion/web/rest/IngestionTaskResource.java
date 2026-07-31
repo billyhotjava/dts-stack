@@ -40,6 +40,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.core.task.TaskRejectedException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.StringUtils;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -90,6 +91,7 @@ public class IngestionTaskResource {
     private final AirflowProperties airflowProperties;
     private final ApiProperties apiProperties;
     private final ApiAuthProviderRegistry apiAuthProviderRegistry;
+    private com.yuzhi.dts.ingestion.service.IngestionAccessContractService accessContractService;
 
     public IngestionTaskResource(
         AddaxJobService addaxJobService,
@@ -127,6 +129,11 @@ public class IngestionTaskResource {
         this.apiAuthProviderRegistry = apiAuthProviderRegistry;
     }
 
+    @Autowired
+    void setAccessContractService(com.yuzhi.dts.ingestion.service.IngestionAccessContractService accessContractService) {
+        this.accessContractService = accessContractService;
+    }
+
     public record IngestionTaskRequest(
         @JsonAlias({"taskName", "title"}) String name,
         String owner,
@@ -143,7 +150,8 @@ public class IngestionTaskResource {
         Map<String, String> fieldClassifications,
         Boolean runNow,
         Map<String, Object> jobConfig,
-        Boolean draft
+        Boolean draft,
+        String qualityPolicyRef
     ) {}
 
     public record IngestionTaskAdmissionRequest(
@@ -360,6 +368,7 @@ public class IngestionTaskResource {
                 taskDTO.setStatus(isDraft ? "draft" : "active");
                 taskDTO.setClassificationSeal(toJsonNode(request.classificationSeal()));
                 taskDTO.setFieldClassifications(toJsonNode(request.fieldClassifications()));
+                taskDTO.setQualityPolicyRef(request.qualityPolicyRef());
                 taskDTO.setSourceType(ApiConnectorTypes.DEFAULT_READER_TYPE);
                 taskDTO.setSourceDataSourceId(request.source().dataSourceId());
                 taskDTO.setSourceConfig(toJsonNode(apiRuntimeConfig));
@@ -447,6 +456,7 @@ public class IngestionTaskResource {
                 taskDTO.setStatus("draft");
                 taskDTO.setClassificationSeal(toJsonNode(request.classificationSeal()));
                 taskDTO.setFieldClassifications(toJsonNode(request.fieldClassifications()));
+                taskDTO.setQualityPolicyRef(request.qualityPolicyRef());
                 taskDTO.setSourceType(readerType);
                 taskDTO.setSourceDataSourceId(request.source().dataSourceId());
                 if (!sourceOverrides.isEmpty()) {
@@ -566,6 +576,7 @@ public class IngestionTaskResource {
             taskDTO.setStatus("active");
             taskDTO.setClassificationSeal(toJsonNode(request.classificationSeal()));
             taskDTO.setFieldClassifications(toJsonNode(request.fieldClassifications()));
+            taskDTO.setQualityPolicyRef(request.qualityPolicyRef());
             taskDTO.setSourceType(readerType);
             taskDTO.setSourceDataSourceId(request.source().dataSourceId());
             if (!sourceOverrides.isEmpty()) {
@@ -2025,19 +2036,21 @@ public class IngestionTaskResource {
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<org.springframework.data.domain.Page<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO>> getTasks(
         @RequestParam(required = false) String status,
+        @RequestParam(required = false) String sourceKind,
+        @RequestParam(required = false) String query,
+        @RequestParam(required = false) String health,
         @RequestParam(required = false) java.util.UUID sourceDataSourceId,
         org.springframework.data.domain.Pageable pageable
     ) {
-        if (sourceDataSourceId != null) {
-            java.util.List<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO> list =
-                ingestionTaskQueryService.findBySourceDataSourceId(sourceDataSourceId, false);
-            org.springframework.data.domain.Page<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO> page =
-                new org.springframework.data.domain.PageImpl<>(list, pageable, list.size());
-            return ResponseEntity.ok(page);
-        }
         org.springframework.data.domain.Page<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO> page =
-            ingestionTaskQueryService.findAll(status, pageable);
+            ingestionTaskQueryService.findAll(status, sourceKind, query, health, sourceDataSourceId, pageable);
         return ResponseEntity.ok(page);
+    }
+
+    @GetMapping("/access/default-policy")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<com.yuzhi.dts.ingestion.service.dto.IngestionAccessDefaultPolicyDTO> getAccessDefaultPolicy() {
+        return ResponseEntity.ok(requireAccessContractService().getActiveDefaultPolicy());
     }
 
     /**
@@ -2065,6 +2078,32 @@ public class IngestionTaskResource {
         return ingestionTaskQueryService.findOne(id)
             .map(ResponseEntity::ok)
             .orElse(ResponseEntity.<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO>notFound().build());
+    }
+
+    @GetMapping("/tasks/{id}/revisions")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<List<com.yuzhi.dts.ingestion.service.dto.IngestionTaskRevisionDTO>> getTaskRevisions(
+        @PathVariable Long id
+    ) {
+        try {
+            return ResponseEntity.ok(requireAccessContractService().getTaskRevisions(id));
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
+        }
+    }
+
+    @GetMapping("/tasks/{id}/effective-config")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<com.yuzhi.dts.ingestion.service.dto.IngestionEffectiveConfigDTO> getTaskEffectiveConfig(
+        @PathVariable Long id
+    ) {
+        try {
+            return ResponseEntity.ok(requireAccessContractService().getEffectiveConfig(id));
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
+        } catch (IllegalStateException ex) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "任务尚未生成可用的配置版本");
+        }
     }
 
     /**
@@ -2976,5 +3015,12 @@ public class IngestionTaskResource {
             return 30000L;
         }
         return value;
+    }
+
+    private com.yuzhi.dts.ingestion.service.IngestionAccessContractService requireAccessContractService() {
+        if (accessContractService == null) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "数据接入版本契约服务暂不可用");
+        }
+        return accessContractService;
     }
 }

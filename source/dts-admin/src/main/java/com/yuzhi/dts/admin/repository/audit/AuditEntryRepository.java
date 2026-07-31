@@ -14,6 +14,8 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface AuditEntryRepository extends JpaRepository<AuditEntry, Long>, JpaSpecificationExecutor<AuditEntry> {
+    Optional<AuditEntry> findByIngestProducerAndIngestEventId(String ingestProducer, String ingestEventId);
+
     @Query("select distinct lower(e.moduleKey) from AuditEntry e where e.moduleKey is not null and e.moduleKey <> '' order by lower(e.moduleKey)")
     List<String> findDistinctModuleKeys();
 

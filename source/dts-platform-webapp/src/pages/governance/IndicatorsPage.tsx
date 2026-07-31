@@ -1,9 +1,9 @@
 import { Navigate, useLocation } from "react-router";
-import { buildMetricWorkbenchLocation } from "../modeling/indicatorDefinitionWorkflow";
+import { buildMetricWorkbenchLocation } from "@/features/modeling/indicators/indicatorDefinitionWorkflow";
 
 export default function IndicatorsPage() {
 	const location = useLocation();
 	const target = buildMetricWorkbenchLocation(location.search, location.hash);
 
-	return <Navigate to={target || "/modeling/metric-workbench"} replace />;
+	return <Navigate to={target || "/data-modeling/metrics/atomic"} replace />;
 }

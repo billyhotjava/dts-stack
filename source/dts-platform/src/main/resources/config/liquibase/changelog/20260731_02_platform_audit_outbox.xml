@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260731_02_platform_audit_outbox" author="platform">
+        <preConditions onFail="HALT">
+            <not><tableExists tableName="platform_audit_outbox"/></not>
+        </preConditions>
+        <createTable tableName="platform_audit_outbox">
+            <column name="id" type="uuid"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="event_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="producer" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="occurred_at" type="timestamp"><constraints nullable="false"/></column>
+            <column name="payload_hash" type="char(64)"><constraints nullable="false"/></column>
+            <column name="body_json" type="text"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(16)" defaultValue="PENDING"><constraints nullable="false"/></column>
+            <column name="dispatch_attempts" type="int" defaultValueNumeric="0"><constraints nullable="false"/></column>
+            <column name="claimed_at" type="timestamp"/>
+            <column name="next_attempt_at" type="timestamp"/>
+            <column name="delivered_at" type="timestamp"/>
+            <column name="last_error" type="varchar(2048)"/>
+            <column name="created_at" type="timestamp"><constraints nullable="false"/></column>
+            <column name="last_modified_at" type="timestamp"><constraints nullable="false"/></column>
+        </createTable>
+        <addUniqueConstraint
+            tableName="platform_audit_outbox"
+            columnNames="event_id"
+            constraintName="uk_platform_audit_outbox_event_id"/>
+        <createIndex tableName="platform_audit_outbox" indexName="idx_platform_audit_outbox_dispatch">
+            <column name="status"/>
+            <column name="next_attempt_at"/>
+            <column name="created_at"/>
+        </createIndex>
+        <createIndex tableName="platform_audit_outbox" indexName="idx_platform_audit_outbox_delivery">
+            <column name="status"/>
+            <column name="delivered_at"/>
+        </createIndex>
+        <sql dbms="postgresql">
+            ALTER TABLE platform_audit_outbox
+                ADD CONSTRAINT ck_platform_audit_outbox_status
+                CHECK (status IN ('PENDING', 'CLAIMED', 'RETRY', 'SENT', 'DEAD'));
+            ALTER TABLE platform_audit_outbox
+                ADD CONSTRAINT ck_platform_audit_outbox_attempts
+                CHECK (dispatch_attempts &gt;= 0);
+            ALTER TABLE platform_audit_outbox
+                ADD CONSTRAINT ck_platform_audit_outbox_identity
+                CHECK (
+                    btrim(event_id) &lt;&gt; ''
+                    AND producer = 'dts-platform'
+                    AND payload_hash ~ '^[0-9a-f]{64}$'
+                );
+            ALTER TABLE platform_audit_outbox
+                ADD CONSTRAINT ck_platform_audit_outbox_body
+                CHECK (
+                    octet_length(body_json) BETWEEN 2 AND 262144
+                );
+            ALTER TABLE platform_audit_outbox
+                ADD CONSTRAINT ck_platform_audit_outbox_state
+                CHECK (
+                    (status = 'PENDING' AND claimed_at IS NULL AND delivered_at IS NULL AND next_attempt_at IS NOT NULL)
+                    OR (status = 'CLAIMED' AND claimed_at IS NOT NULL AND delivered_at IS NULL)
+                    OR (status = 'RETRY' AND claimed_at IS NULL AND delivered_at IS NULL AND next_attempt_at IS NOT NULL)
+                    OR (status = 'SENT' AND claimed_at IS NULL AND delivered_at IS NOT NULL AND next_attempt_at IS NULL)
+                    OR (status = 'DEAD' AND claimed_at IS NULL AND delivered_at IS NULL AND next_attempt_at IS NULL)
+                );
+        </sql>
+        <rollback>
+            <dropTable tableName="platform_audit_outbox"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

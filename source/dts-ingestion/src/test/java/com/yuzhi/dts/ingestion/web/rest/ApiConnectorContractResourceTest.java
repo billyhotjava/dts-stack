@@ -1,6 +1,7 @@
 package com.yuzhi.dts.ingestion.web.rest;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -28,6 +29,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.web.server.ResponseStatusException;
 
 class ApiConnectorContractResourceTest {
 
@@ -113,7 +115,7 @@ class ApiConnectorContractResourceTest {
                 new ApiConnectorContractResource.ApiConnectionTestRequest(
                     dataSourceId,
                     Map.<String, Object>of("resourceId", "orders", "path", "/v1/orders", "recordPath", "$.data.items"),
-                    Map.<String, Object>of("maxResponseBytes", 1024)
+                    Map.of()
                 )
             )
             .getBody();
@@ -167,25 +169,8 @@ class ApiConnectorContractResourceTest {
     }
 
     @Test
-    void testConnection_shouldProbeRawSourceConfigAndSecretsBeforeSave() {
-        when(apiHttpEngine.execute(any(ExecutionPlan.class))).thenReturn(
-            List.of(
-                new ApiHttpEngine.ApiHttpResult(
-                    "orders",
-                    URI.create("https://crm.example.test/v1/orders"),
-                    200,
-                    Map.of(),
-                    "{}".getBytes(StandardCharsets.UTF_8),
-                    1,
-                    1,
-                    List.of(JsonNodeFactory.instance.objectNode().put("id", 1)),
-                    null
-                )
-            )
-        );
-
-        Map<String, Object> body = resource
-            .testConnection(
+    void testConnection_shouldRejectRawSourceConfigAndSecretsBeforeSave() {
+        assertThatThrownBy(() -> resource.testConnection(
                 new ApiConnectorContractResource.ApiConnectionTestRequest(
                     null,
                     Map.<String, Object>of("resourceId", "orders", "path", "/v1/orders", "recordPath", "$.data.items"),
@@ -200,23 +185,53 @@ class ApiConnectorContractResourceTest {
                     ),
                     Map.<String, Object>of("accessToken", "token-123")
                 )
-            )
-            .getBody();
-
-        assertThat(body)
-            .containsEntry("connected", true)
-            .containsEntry("sampleCount", 1)
-            .containsEntry("recordPathResolved", true);
+            ))
+            .isInstanceOf(ResponseStatusException.class)
+            .hasMessageContaining("MANAGED_API_DATASOURCE_REQUIRED");
         verify(sourceResolver, org.mockito.Mockito.never()).resolveApiInfo(any(UUID.class));
-        ArgumentCaptor<ExecutionPlan> planCaptor = ArgumentCaptor.forClass(ExecutionPlan.class);
-        verify(apiHttpEngine).execute(planCaptor.capture());
-        @SuppressWarnings("unchecked")
-        Map<String, Object> sourceConfig = (Map<String, Object>) planCaptor.getValue().payload().get("sourceConfig");
-        assertThat(sourceConfig)
-            .containsEntry("baseUrl", "https://crm.example.test")
-            .containsEntry("defaultHeaders", Map.of("X-Tenant", "demo"))
-            .containsEntry("secrets", Map.of("accessToken", "token-123"));
-        assertThat(sourceConfig.get("auth")).isEqualTo(Map.of("provider", "bearerToken", "tokenRef", "accessToken"));
+        verify(apiHttpEngine, org.mockito.Mockito.never()).execute(any());
+    }
+
+    @Test
+    void testConnection_shouldRejectPolicyAndNetworkOverrides() {
+        UUID dataSourceId = UUID.randomUUID();
+
+        assertThatThrownBy(() -> resource.testConnection(
+            new ApiConnectorContractResource.ApiConnectionTestRequest(
+                dataSourceId,
+                Map.of("path", "/v1/orders"),
+                Map.of(),
+                Map.of("baseUrl", "http://169.254.169.254", "headers", Map.of("Host", "localhost")),
+                Map.of("token", "attacker-controlled")
+            )
+        )).isInstanceOf(ResponseStatusException.class).hasMessageContaining("API_TEST_OVERRIDE_FORBIDDEN");
+
+        assertThatThrownBy(() -> resource.testConnection(
+            new ApiConnectorContractResource.ApiConnectionTestRequest(
+                dataSourceId,
+                Map.of("path", "/v1/orders"),
+                Map.of("allowHttp", true, "allowedHosts", List.of("169.254.169.254"))
+            )
+        )).isInstanceOf(ResponseStatusException.class).hasMessageContaining("API_TEST_OVERRIDE_FORBIDDEN");
+
+        assertThatThrownBy(() -> resource.testConnection(
+            new ApiConnectorContractResource.ApiConnectionTestRequest(
+                dataSourceId,
+                Map.of("path", "//169.254.169.254/latest/meta-data"),
+                Map.of()
+            )
+        )).isInstanceOf(ResponseStatusException.class).hasMessageContaining("API_TEST_RESOURCE_PATH_INVALID");
+
+        assertThatThrownBy(() -> resource.testConnection(
+            new ApiConnectorContractResource.ApiConnectionTestRequest(
+                dataSourceId,
+                Map.of("path", "/v1/orders", "headers", Map.of("Host", "localhost")),
+                Map.of()
+            )
+        )).isInstanceOf(ResponseStatusException.class).hasMessageContaining("API_TEST_RESOURCE_FIELD_FORBIDDEN");
+
+        verify(sourceResolver, org.mockito.Mockito.never()).resolveApiInfo(any(UUID.class));
+        verify(apiHttpEngine, org.mockito.Mockito.never()).execute(any());
     }
 
     @Test
@@ -296,8 +311,10 @@ class ApiConnectorContractResourceTest {
         Map<String, Object> requestPolicy = (Map<String, Object>) sourceConfig.get("requestPolicy");
         assertThat(requestPolicy)
             .containsEntry("allowHttp", true)
-            .containsEntry("readTimeoutMillis", 9000)
-            .containsKey("connectTimeoutMillis");
+            .containsEntry("connectTimeoutMillis", 5000)
+            .containsEntry("readTimeoutMillis", 5000)
+            .containsEntry("maxResponseBytes", 1024 * 1024);
+        assertThat(sourceConfig).containsEntry("retryPolicy", Map.of("maxRetries", 0));
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> resources = (List<Map<String, Object>>) sourceConfig.get("resources");
         assertThat(resources).hasSize(1);
@@ -305,7 +322,7 @@ class ApiConnectorContractResourceTest {
     }
 
     @Test
-    void testConnection_shouldCallMockApiWithRawConfigAndReturnSample() throws Exception {
+    void testConnection_shouldCallMockApiWithManagedConfigAndReturnSample() throws Exception {
         startMockApi(exchange -> {
             if (!"Bearer token-123".equals(exchange.getRequestHeaders().getFirst("Authorization"))) {
                 write(exchange, 401, "{\"error\":\"unauthorized\"}");
@@ -314,20 +331,23 @@ class ApiConnectorContractResourceTest {
             write(exchange, 200, "{\"data\":{\"items\":[{\"id\":1,\"name\":\"order-1\"}]}}");
         });
         resource = new ApiConnectorContractResource(new ApiAuthProviderRegistry(), sourceResolver, realHttpEngine());
+        UUID dataSourceId = UUID.randomUUID();
+        when(sourceResolver.resolveApiInfo(dataSourceId)).thenReturn(
+            managedApiInfo(
+                dataSourceId,
+                mockApiBaseUrl(),
+                "bearerToken",
+                Map.of("provider", "bearerToken", "tokenRef", "accessToken"),
+                Map.of("accessToken", "token-123")
+            )
+        );
 
         Map<String, Object> body = resource
             .testConnection(
                 new ApiConnectorContractResource.ApiConnectionTestRequest(
-                    null,
+                    dataSourceId,
                     Map.<String, Object>of("resourceId", "orders", "path", "/v1/orders", "recordPath", "$.data.items"),
-                    Map.of(),
-                    Map.<String, Object>of(
-                        "baseUrl",
-                        mockApiBaseUrl(),
-                        "auth",
-                        Map.of("provider", "bearerToken", "tokenRef", "accessToken")
-                    ),
-                    Map.<String, Object>of("accessToken", "token-123")
+                    Map.of()
                 )
             )
             .getBody();
@@ -351,27 +371,27 @@ class ApiConnectorContractResourceTest {
             write(exchange, 200, "{\"data\":{\"items\":[{\"id\":1}]}}");
         });
         resource = new ApiConnectorContractResource(new ApiAuthProviderRegistry(), sourceResolver, realHttpEngine());
+        UUID dataSourceId = UUID.randomUUID();
+        when(sourceResolver.resolveApiInfo(dataSourceId)).thenReturn(
+            managedApiInfo(
+                dataSourceId,
+                mockApiBaseUrl(),
+                "apiKey",
+                Map.of(
+                    "provider", "apiKey",
+                    "config", Map.of("name", "X-API-Key", "location", "header"),
+                    "secretRefs", Map.of("value", "value")
+                ),
+                Map.of("value", "key-123")
+            )
+        );
 
         Map<String, Object> body = resource
             .testConnection(
                 new ApiConnectorContractResource.ApiConnectionTestRequest(
-                    null,
+                    dataSourceId,
                     Map.<String, Object>of("resourceId", "orders", "path", "/v1/orders", "recordPath", "$.data.items"),
-                    Map.of(),
-                    Map.<String, Object>of(
-                        "baseUrl",
-                        mockApiBaseUrl(),
-                        "auth",
-                        Map.of(
-                            "provider",
-                            "apiKey",
-                            "config",
-                            Map.of("name", "X-API-Key", "location", "header"),
-                            "secretRefs",
-                            Map.of("value", "value")
-                        )
-                    ),
-                    Map.<String, Object>of("value", "key-123")
+                    Map.of()
                 )
             )
             .getBody();
@@ -393,27 +413,27 @@ class ApiConnectorContractResourceTest {
             write(exchange, 200, "{\"data\":{\"items\":[{\"id\":1}]}}");
         });
         resource = new ApiConnectorContractResource(new ApiAuthProviderRegistry(), sourceResolver, realHttpEngine());
+        UUID dataSourceId = UUID.randomUUID();
+        when(sourceResolver.resolveApiInfo(dataSourceId)).thenReturn(
+            managedApiInfo(
+                dataSourceId,
+                mockApiBaseUrl(),
+                "basic",
+                Map.of(
+                    "provider", "basic",
+                    "config", Map.of("username", "api-user"),
+                    "secretRefs", Map.of("password", "password")
+                ),
+                Map.of("password", "api-pass")
+            )
+        );
 
         Map<String, Object> body = resource
             .testConnection(
                 new ApiConnectorContractResource.ApiConnectionTestRequest(
-                    null,
+                    dataSourceId,
                     Map.<String, Object>of("resourceId", "orders", "path", "/v1/orders", "recordPath", "$.data.items"),
-                    Map.of(),
-                    Map.<String, Object>of(
-                        "baseUrl",
-                        mockApiBaseUrl(),
-                        "auth",
-                        Map.of(
-                            "provider",
-                            "basic",
-                            "config",
-                            Map.of("username", "api-user"),
-                            "secretRefs",
-                            Map.of("password", "password")
-                        )
-                    ),
-                    Map.<String, Object>of("password", "api-pass")
+                    Map.of()
                 )
             )
             .getBody();
@@ -429,20 +449,23 @@ class ApiConnectorContractResourceTest {
     void testConnection_shouldClassifyMockApiAuthFailureWithRealEngine() throws Exception {
         startMockApi(exchange -> write(exchange, 401, "{\"error\":\"unauthorized\"}"));
         resource = new ApiConnectorContractResource(new ApiAuthProviderRegistry(), sourceResolver, realHttpEngine());
+        UUID dataSourceId = UUID.randomUUID();
+        when(sourceResolver.resolveApiInfo(dataSourceId)).thenReturn(
+            managedApiInfo(
+                dataSourceId,
+                mockApiBaseUrl(),
+                "bearerToken",
+                Map.of("provider", "bearerToken", "tokenRef", "accessToken"),
+                Map.of("accessToken", "wrong-token")
+            )
+        );
 
         Map<String, Object> body = resource
             .testConnection(
                 new ApiConnectorContractResource.ApiConnectionTestRequest(
-                    null,
+                    dataSourceId,
                     Map.<String, Object>of("resourceId", "orders", "path", "/v1/orders", "recordPath", "$.data.items"),
-                    Map.of(),
-                    Map.<String, Object>of(
-                        "baseUrl",
-                        mockApiBaseUrl(),
-                        "auth",
-                        Map.of("provider", "bearerToken", "tokenRef", "accessToken")
-                    ),
-                    Map.<String, Object>of("accessToken", "wrong-token")
+                    Map.of()
                 )
             )
             .getBody();
@@ -467,6 +490,25 @@ class ApiConnectorContractResourceTest {
             Map.of("Accept", "application/json"),
             Map.of("connectorType", "api"),
             Map.of("accessToken", "token-123")
+        );
+    }
+
+    private IngestionSourceResolver.ApiConnectionInfo managedApiInfo(
+        UUID dataSourceId,
+        String baseUrl,
+        String authProvider,
+        Map<String, Object> auth,
+        Map<String, Object> secrets
+    ) {
+        return new IngestionSourceResolver.ApiConnectionInfo(
+            dataSourceId,
+            "Managed API",
+            baseUrl,
+            authProvider,
+            auth,
+            Map.of(),
+            Map.of("connectorType", "api"),
+            secrets
         );
     }
 

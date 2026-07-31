@@ -14,7 +14,9 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -33,6 +35,17 @@ public class ApiConnectorContractResource {
     private static final String INFRA_MAINTAINER_EXPRESSION =
         "hasAnyAuthority(T(com.yuzhi.dts.ingestion.security.AuthoritiesConstants).INFRA_MAINTAINERS)";
     private static final long CONNECTION_TEST_TIMEOUT_MILLIS = 5_000L;
+    private static final int CONNECTION_TEST_MAX_RESPONSE_BYTES = 1_048_576;
+    private static final Set<String> CONNECTION_TEST_RESOURCE_KEYS = Set.of(
+        "resourceId", "displayName", "path", "resourcePath", "recordPath", "method",
+        "query", "pagination", "cursor", "targetTable", "landing", "schemaSnapshot"
+    );
+    private static final Set<String> FORBIDDEN_OVERRIDE_KEYS = Set.of(
+        "baseurl", "url", "uri", "host", "hostname", "endpoint", "headers",
+        "defaultheaders", "authorization", "auth", "secrets", "requestpolicy",
+        "allowhttp", "allowedhosts"
+    );
+    private static final Pattern CONTROL_CHARACTER = Pattern.compile("[\\x00-\\x1f\\x7f]");
 
     private final ApiAuthProviderRegistry authProviderRegistry;
     private final com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver sourceResolver;
@@ -95,14 +108,12 @@ public class ApiConnectorContractResource {
         if (request == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请求不能为空");
         }
-        if (request.dataSourceId() == null && safeMap(request.sourceConfig()).isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "dataSourceId 或 sourceConfig 不能为空");
-        }
+        validateManagedConnectionTestRequest(request);
         Instant startedAt = Instant.now();
         try {
             Map<String, Object> sourceConfig = connectionTestSourceConfig(request);
             Map<String, Object> probeResource = probeResource(sourceConfig, request);
-            ExecutionPlan plan = buildConnectionTestPlan(sourceConfig, request, probeResource);
+            ExecutionPlan plan = buildConnectionTestPlan(sourceConfig, probeResource);
             List<ApiHttpEngine.ApiHttpResult> results = apiHttpEngine.execute(plan);
             return ResponseEntity.ok(successResponse(results, probeResource, startedAt));
         } catch (ApiHttpException ex) {
@@ -116,11 +127,11 @@ public class ApiConnectorContractResource {
 
     private ExecutionPlan buildConnectionTestPlan(
         Map<String, Object> sourceConfig,
-        ApiConnectionTestRequest request,
         Map<String, Object> probeResource
     ) {
         Map<String, Object> planSourceConfig = new LinkedHashMap<>(sourceConfig);
-        planSourceConfig.put("requestPolicy", connectionTestPolicy(planSourceConfig, request));
+        planSourceConfig.put("requestPolicy", connectionTestPolicy(planSourceConfig));
+        planSourceConfig.put("retryPolicy", Map.of("maxRetries", 0));
         planSourceConfig.put("resources", List.of(probeResource));
         return new ExecutionPlan(
             "api-http",
@@ -135,31 +146,10 @@ public class ApiConnectorContractResource {
     }
 
     private Map<String, Object> connectionTestSourceConfig(ApiConnectionTestRequest request) {
-        Map<String, Object> sourceConfig;
-        if (request.dataSourceId() != null) {
-            com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ApiConnectionInfo apiInfo = sourceResolver.resolveApiInfo(
-                request.dataSourceId()
-            );
-            sourceConfig = sourceConfig(apiInfo);
-        } else {
-            sourceConfig = new LinkedHashMap<>(safeMap(request.sourceConfig()));
-            Map<String, Object> secrets = new LinkedHashMap<>(safeMap(sourceConfig.get("secrets")));
-            secrets.putAll(safeMap(request.secrets()));
-            if (!secrets.isEmpty()) {
-                sourceConfig.put("secrets", secrets);
-            }
-            Map<String, Object> auth = safeMap(sourceConfig.get("auth"));
-            String authProvider = text(sourceConfig.get("authProvider"));
-            if (!StringUtils.hasText(authProvider)) {
-                authProvider = text(auth.get("provider"));
-            }
-            if (StringUtils.hasText(authProvider)) {
-                sourceConfig.put("authProvider", authProvider);
-            }
-            if (!StringUtils.hasText(text(sourceConfig.get("baseUrl")))) {
-                throw new IllegalArgumentException("sourceConfig.baseUrl 不能为空");
-            }
-        }
+        com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ApiConnectionInfo apiInfo = sourceResolver.resolveApiInfo(
+            request.dataSourceId()
+        );
+        Map<String, Object> sourceConfig = sourceConfig(apiInfo);
         return ApiSourceConfigNormalizer.normalize(sourceConfig, request.dataSourceId(), "connection_test");
     }
 
@@ -184,7 +174,7 @@ public class ApiConnectorContractResource {
     }
 
     private Map<String, Object> probeResource(Map<String, Object> sourceConfig, ApiConnectionTestRequest request) {
-        Map<String, Object> resource = new LinkedHashMap<>(safeMap(request.resource()));
+        Map<String, Object> resource = sanitizeProbeResource(request.resource());
         if (resource.isEmpty()) {
             resource.putAll(firstConfiguredResource(sourceConfig));
         }
@@ -192,6 +182,8 @@ public class ApiConnectorContractResource {
             String path = text(sourceConfig.get("path"));
             resource.put("path", StringUtils.hasText(path) ? path : "/");
         }
+        validateRelativeResourcePath(text(resource.get("path")));
+        resource.put("method", "GET");
         resource.putIfAbsent("resourceId", "connection_test");
         Map<String, Object> pagination = new LinkedHashMap<>(safeMap(resource.get("pagination")));
         pagination.put("maxPages", 1);
@@ -216,14 +208,104 @@ public class ApiConnectorContractResource {
         return Map.of();
     }
 
-    private Map<String, Object> connectionTestPolicy(Map<String, Object> sourceConfig, ApiConnectionTestRequest request) {
+    private Map<String, Object> connectionTestPolicy(Map<String, Object> sourceConfig) {
         Map<String, Object> policy = new LinkedHashMap<>(safeMap(sourceConfig.get("requestPolicy")));
-        if (request != null) {
-            policy.putAll(safeMap(request.requestPolicy()));
-        }
-        policy.putIfAbsent("connectTimeoutMillis", CONNECTION_TEST_TIMEOUT_MILLIS);
-        policy.putIfAbsent("readTimeoutMillis", CONNECTION_TEST_TIMEOUT_MILLIS);
+        policy.put("connectTimeoutMillis", CONNECTION_TEST_TIMEOUT_MILLIS);
+        policy.put("readTimeoutMillis", CONNECTION_TEST_TIMEOUT_MILLIS);
+        policy.put("maxResponseBytes", CONNECTION_TEST_MAX_RESPONSE_BYTES);
         return policy;
+    }
+
+    private void validateManagedConnectionTestRequest(ApiConnectionTestRequest request) {
+        if (request.dataSourceId() == null) {
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "MANAGED_API_DATASOURCE_REQUIRED: API 连通测试只接受已保存的数据源 dataSourceId"
+            );
+        }
+        if (!safeMap(request.sourceConfig()).isEmpty()
+            || !safeMap(request.secrets()).isEmpty()
+            || !safeMap(request.requestPolicy()).isEmpty()) {
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "API_TEST_OVERRIDE_FORBIDDEN: 禁止覆盖 sourceConfig、secrets 或 requestPolicy"
+            );
+        }
+        sanitizeProbeResource(request.resource());
+    }
+
+    private Map<String, Object> sanitizeProbeResource(Map<String, Object> requested) {
+        Map<String, Object> raw = safeMap(requested);
+        if (raw.isEmpty()) {
+            return new LinkedHashMap<>();
+        }
+        for (String key : raw.keySet()) {
+            if (!CONNECTION_TEST_RESOURCE_KEYS.contains(key)) {
+                throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "API_TEST_RESOURCE_FIELD_FORBIDDEN: " + key
+                );
+            }
+        }
+        rejectForbiddenOverrides(raw);
+
+        Map<String, Object> sanitized = new LinkedHashMap<>(raw);
+        String path = text(raw.get("path"));
+        String resourcePath = text(raw.get("resourcePath"));
+        if (StringUtils.hasText(path) && StringUtils.hasText(resourcePath) && !path.equals(resourcePath)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "API_TEST_RESOURCE_PATH_CONFLICT");
+        }
+        String resolvedPath = StringUtils.hasText(path) ? path : resourcePath;
+        if (StringUtils.hasText(resolvedPath)) {
+            validateRelativeResourcePath(resolvedPath);
+            sanitized.put("path", resolvedPath);
+        }
+        sanitized.remove("resourcePath");
+
+        String method = text(raw.get("method"));
+        if (StringUtils.hasText(method) && !"GET".equalsIgnoreCase(method)) {
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "API_TEST_METHOD_FORBIDDEN: 连通测试仅允许 GET"
+            );
+        }
+        sanitized.put("method", "GET");
+        return sanitized;
+    }
+
+    private void validateRelativeResourcePath(String path) {
+        String value = path.trim();
+        if (!value.startsWith("/")
+            || value.startsWith("//")
+            || value.contains("://")
+            || value.contains("\\")
+            || CONTROL_CHARACTER.matcher(value).find()) {
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "API_TEST_RESOURCE_PATH_INVALID: resource path 必须是严格相对路径"
+            );
+        }
+    }
+
+    private void rejectForbiddenOverrides(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                String key = entry.getKey() == null
+                    ? ""
+                    : String.valueOf(entry.getKey()).replace("_", "").replace("-", "").toLowerCase(java.util.Locale.ROOT);
+                if (FORBIDDEN_OVERRIDE_KEYS.contains(key)) {
+                    throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "API_TEST_NETWORK_OVERRIDE_FORBIDDEN: " + entry.getKey()
+                    );
+                }
+                rejectForbiddenOverrides(entry.getValue());
+            }
+            return;
+        }
+        if (value instanceof Iterable<?> iterable) {
+            iterable.forEach(this::rejectForbiddenOverrides);
+        }
     }
 
     private Map<String, Object> successResponse(

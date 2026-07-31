@@ -20,10 +20,10 @@ const PARAMS = [
 	/* ---- 身份与归属 ---- */
 	{ f: "name", zh: "任务名称", where: "policy", note: "" },
 	{ f: "description", zh: "描述", where: "policy", note: "" },
-	{ f: "ownerDept", zh: "归属部门", where: "policy", note: "默认继承连接，覆盖需审批", dup: true },
+	{ f: "ownerDept", zh: "归属部门", where: "policy", note: "默认继承连接，覆盖需留痕并重新计算准入", dup: true },
 	{ f: "projectKey", zh: "所属项目", where: "policy", note: "决定配额与调度队列" },
 	{ f: "sourceSystem", zh: "来源系统", where: "connector", note: "属于连接的元信息，不是任务的" },
-	{ f: "classification", zh: "数据密级", where: "connector", note: "默认继承连接，覆盖需审批", ds: true },
+	{ f: "classification", zh: "数据密级", where: "connector", note: "证据可提高等级；降低默认阻断", ds: true },
 
 	/* ---- 连接（数据源表单） ---- */
 	{ f: "connectorKey", zh: "连接器", where: "connector", note: "", ds: true },
@@ -39,7 +39,7 @@ const PARAMS = [
 
 	/* ---- API 连接（数据源表单） ---- */
 	{ f: "apiBaseUrl", zh: "API Base URL", where: "connector", note: "", ds: true },
-	{ f: "apiAllowHttp", zh: "允许明文 HTTP", where: "connector", note: "开关 + 安全审批", ds: true },
+	{ f: "apiAllowHttp", zh: "允许明文 HTTP", where: "connector", note: "安全策略默认阻断；例外引用外部流程决定", ds: true },
 	{ f: "apiAuthProvider", zh: "鉴权方式", where: "connector", note: "选择后联动展开对应字段", ds: true },
 	{ f: "apiDefaultHeadersJson", zh: "默认请求头", where: "connector", note: "改为键值对编辑器", ds: true, json: true },
 	{ f: "apiRequestPolicyJson", zh: "请求策略", where: "connector", note: "拆为超时/重试/退避三个数字字段", ds: true, json: true },
@@ -97,8 +97,8 @@ const PARAMS = [
 	{ f: "writerTables", zh: "目标表名", where: "discover", note: "由源表名 + 命名规范推导，可覆盖" },
 	{ f: "writerColumns", zh: "目标列", where: "discover", note: "由字段映射生成" },
 	{ f: "writerWriteMode", zh: "写入模式", where: "policy", note: "覆盖 / 追加 / upsert，由同步方式推导" },
-	{ f: "writerPreSql", zh: "写入前 SQL", where: "policy", note: "高级项，需审批" },
-	{ f: "writerPostSql", zh: "写入后 SQL", where: "policy", note: "高级项，需审批" },
+	{ f: "writerPreSql", zh: "写入前 SQL", where: "policy", note: "高级项，需人工确认并审计" },
+	{ f: "writerPostSql", zh: "写入后 SQL", where: "policy", note: "高级项，需人工确认并审计" },
 	{ f: "writerConfig", zh: "Writer 配置 JSON", where: "drop", note: "同 readerConfig", json: true },
 	{ f: "writerExtraConfig", zh: "Writer 扩展 JSON", where: "drop", note: "同 readerExtraConfig", json: true },
 

@@ -115,9 +115,9 @@ const evidenceRefs = (snapshots: GoldenChainStageSnapshot[]) =>
 const routeForIssue = (issue?: GoldenChainStageSnapshot) => {
 	if (!issue) return "/bi/report-factory";
 	if (issue.stage === "SOURCE_READY" || issue.stage === "INGESTION_READY" || issue.stage === "ODS_READY") {
-		return "/explore/etl/transform";
+		return "/foundation/data-sources";
 	}
-	if (issue.stage === "MODEL_READY") return "/modeling/models";
+	if (issue.stage === "MODEL_READY") return "/data-modeling/dimensions/workbench";
 	if (issue.stage === "GOVERNANCE_READY" || issue.stage === "RELEASE_READY") return "/governance/quality";
 	if (issue.stage === "CONSUMABLE") return "/services/apis";
 	if (issue.stage === "OPERATED") return "/ops/overview";

@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 
 import com.yuzhi.dts.ingestion.domain.IngestionTask;
 import com.yuzhi.dts.ingestion.repository.IngestionExecutionRepository;
@@ -24,6 +26,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 @ExtendWith(MockitoExtension.class)
 class IngestionTaskQueryServiceTest {
@@ -59,7 +62,7 @@ class IngestionTaskQueryServiceTest {
         IngestionTaskDTO dto = createTaskDto(1L, "demo-task");
         Page<IngestionTask> page = new PageImpl<>(List.of(entity), pageable, 1);
 
-        when(taskRepository.findByStatus("active", pageable)).thenReturn(page);
+        when(taskRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(page);
         when(taskMapper.toDto(entity)).thenReturn(dto);
 
         Page<IngestionTaskDTO> result = queryService.findAll("active", pageable);

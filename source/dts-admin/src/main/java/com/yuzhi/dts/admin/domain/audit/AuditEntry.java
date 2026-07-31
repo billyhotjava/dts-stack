@@ -39,8 +39,17 @@ public class AuditEntry implements Serializable {
     @Column(name = "source_system", nullable = false, length = 32)
     private String sourceSystem;
 
-    @Column(name = "module_key", nullable = false, length = 64)
+    @Column(name = "module_key", nullable = false, length = 128)
     private String moduleKey;
+
+    @Column(name = "ingest_producer", length = 64)
+    private String ingestProducer;
+
+    @Column(name = "ingest_event_id", length = 128)
+    private String ingestEventId;
+
+    @Column(name = "ingest_payload_hash", length = 64)
+    private String ingestPayloadHash;
 
     @Column(name = "module_name", length = 128)
     private String moduleName;
@@ -147,6 +156,30 @@ public class AuditEntry implements Serializable {
 
     public void setModuleKey(String moduleKey) {
         this.moduleKey = moduleKey;
+    }
+
+    public String getIngestProducer() {
+        return ingestProducer;
+    }
+
+    public void setIngestProducer(String ingestProducer) {
+        this.ingestProducer = ingestProducer;
+    }
+
+    public String getIngestEventId() {
+        return ingestEventId;
+    }
+
+    public void setIngestEventId(String ingestEventId) {
+        this.ingestEventId = ingestEventId;
+    }
+
+    public String getIngestPayloadHash() {
+        return ingestPayloadHash;
+    }
+
+    public void setIngestPayloadHash(String ingestPayloadHash) {
+        this.ingestPayloadHash = ingestPayloadHash;
     }
 
     public String getModuleName() {

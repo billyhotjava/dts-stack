@@ -116,6 +116,34 @@ class AuditForwarderServiceTest {
         assertThat(body).containsEntry("operationCode", "ADMIN_AUTH_PLATFORM_LOGOUT");
     }
 
+    @Test
+    void recordShouldRedactSensitiveNestedValuesBeforeHashingAndPersistence() throws Exception {
+        PlatformAuditOutboxRepository outbox = mock(PlatformAuditOutboxRepository.class);
+        ObjectMapper objectMapper = new ObjectMapper();
+        AuditForwarderService service = new AuditForwarderService(enabledProperties(), outbox, objectMapper);
+        AuditForwarderService.PendingAuditEvent event = new AuditForwarderService.PendingAuditEvent();
+        event.actor = "alice";
+        event.action = "MODEL_SPEC_UPDATE";
+        event.module = "modeling";
+        event.payload = Map.of(
+            "modelCode",
+            "dim_account",
+            "password",
+            "must-not-leak",
+            "connection",
+            Map.of("access_token", "must-not-leak-either")
+        );
+
+        service.record(event);
+
+        Map<String, Object> body = capturedBody(outbox, objectMapper);
+        Map<String, Object> payload = (Map<String, Object>) body.get("payload");
+        assertThat(payload).containsEntry("modelCode", "dim_account").containsEntry("password", "[REDACTED]");
+        assertThat((Map<String, Object>) payload.get("connection"))
+            .containsEntry("access_token", "[REDACTED]");
+        assertThat(capturedCommand(outbox).bodyJson()).doesNotContain("must-not-leak");
+    }
+
     private AuditProperties enabledProperties() {
         AuditProperties properties = new AuditProperties();
         properties.setEnabled(true);
@@ -123,8 +151,12 @@ class AuditForwarderServiceTest {
     }
 
     private Map<String, Object> capturedBody(PlatformAuditOutboxRepository outbox, ObjectMapper objectMapper) throws Exception {
+        return objectMapper.readValue(capturedCommand(outbox).bodyJson(), MAP_TYPE);
+    }
+
+    private EnqueueCommand capturedCommand(PlatformAuditOutboxRepository outbox) {
         ArgumentCaptor<EnqueueCommand> captor = ArgumentCaptor.forClass(EnqueueCommand.class);
         verify(outbox).enqueue(captor.capture());
-        return objectMapper.readValue(captor.getValue().bodyJson(), MAP_TYPE);
+        return captor.getValue();
     }
 }

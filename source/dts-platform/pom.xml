@@ -535,6 +535,7 @@
                         <testInclude>**/config/TestSecurityConfiguration.java</testInclude>
                         <testInclude>**/config/CacheConfigurationIsolationTest.java</testInclude>
                         <testInclude>**/service/catalog/CatalogGrantClassificationProjectionPostgresIT.java</testInclude>
+                        <testInclude>**/repository/audit/PlatformAuditOutboxRepositoryPostgresIT.java</testInclude>
                         <testInclude>**/repository/modeling/DataMartRepositoryTest.java</testInclude>
                         <testInclude>**/repository/modeling/ModelLifecycleRepositoryTest.java</testInclude>
                         <testInclude>**/repository/modeling/ModelMaterializationStartServiceIT.java</testInclude>
@@ -617,6 +618,7 @@
                         <testInclude>**/service/modeling/warehouse/WarehousePlanRelationshipGraphServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/imports/**/*.java</testInclude>
                         <testInclude>**/web/filter/ModelArchiveUploadLimitFilterTest.java</testInclude>
+                        <testInclude>**/web/filter/AuditLoggingFilterTest.java</testInclude>
                         <testInclude>**/web/rest/ModelSpecResourceTest.java</testInclude>
                         <testInclude>**/web/rest/ModelLifecycleResourceTest.java</testInclude>
                         <testInclude>**/web/rest/ModelBuildIntentResourceTest.java</testInclude>
@@ -640,6 +642,7 @@
                         <testInclude>**/service/audit/OperationTypeNormalizerTest.java</testInclude>
                         <testInclude>**/service/audit/AuditForwarderServiceTest.java</testInclude>
                         <testInclude>**/service/audit/AuditOutboxDispatcherTest.java</testInclude>
+                        <testInclude>**/service/admin/gateway/audit/AdminAuditGatewayTest.java</testInclude>
                         <testInclude>**/web/rest/AssetActionPolicyResourceTest.java</testInclude>
                         <testInclude>**/web/rest/OperationPermissionMatrixIT.java</testInclude>
                         <testInclude>**/service/catalog/CatalogAssetPortalServicePermissionParityTest.java</testInclude>

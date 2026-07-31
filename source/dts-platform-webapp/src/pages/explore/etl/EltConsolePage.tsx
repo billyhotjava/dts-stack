@@ -129,9 +129,9 @@ export default function EltConsolePage() {
 
 	const fallbackStages = useMemo<PipelineStage[]>(
 		() => [
-			{ key: "source", title: "数据接入", status: governance.running ? "processing" : "success", count: governance.running, path: "/explore/etl/transform" },
+			{ key: "source", title: "数据接入", status: governance.running ? "processing" : "success", count: governance.running, path: "/foundation/data-sources" },
 			{ key: "queue", title: "队列调度", status: governance.queueLength ? "warning" : "success", count: governance.queueLength, path: "/explore/etl/orchestration" },
-			{ key: "transform", title: "加工转换", status: observability.running ? "processing" : "success", count: observability.running, path: "/explore/etl/transform" },
+			{ key: "transform", title: "加工转换", status: observability.running ? "processing" : "success", count: observability.running, path: "/data-modeling/dimensions/workbench" },
 			{ key: "quality", title: "质量校验", status: governance.blockedByPolicy ? "warning" : "success", count: governance.blockedByPolicy, path: "/governance/quality" },
 			{ key: "lineage", title: "血缘影响", status: "default", count: observability.terminal, path: "/catalog/lineage/impact" },
 		],
@@ -140,8 +140,8 @@ export default function EltConsolePage() {
 
 	const fallbackChainItems = useMemo<ChainItem[]>(
 		() => [
-			{ key: "task", asset: "采集任务", stage: "接入", owner: "dts-ingestion", status: governance.running ? "processing" : "success", path: "/explore/etl/transform" },
-			{ key: "model", asset: "转换模型", stage: "加工", owner: "dts-platform", status: observability.failed ? "warning" : "success", path: "/studio/sql-modeling?view=files" },
+			{ key: "task", asset: "采集任务", stage: "接入", owner: "dts-ingestion", status: governance.running ? "processing" : "success", path: "/foundation/data-sources" },
+			{ key: "model", asset: "转换模型", stage: "加工", owner: "dts-platform", status: observability.failed ? "warning" : "success", path: "/data-modeling/dimensions/workbench" },
 			{ key: "metric", asset: "指标口径", stage: "消费", owner: "dts-metrics", status: "success", path: "/metrics/center" },
 			{ key: "bi", asset: "分析看板", stage: "发布", owner: "dts-analytics", status: "success", path: "/bi/project-cockpit" },
 		],
@@ -231,7 +231,7 @@ export default function EltConsolePage() {
 						<Button loading={loading} onClick={() => void loadSnapshot()}>
 							刷新
 						</Button>
-						<Button type="primary" onClick={() => navigate("/explore/etl/transform/new")}>
+						<Button type="primary" onClick={() => navigate("/foundation/data-sources/access/new?kind=database")}>
 							新建任务
 						</Button>
 					</Space>
@@ -281,7 +281,7 @@ export default function EltConsolePage() {
 
 				<PlatformSectionCard
 					title="运行诊断"
-					action={<Button size="small" onClick={() => navigate("/explore/etl/transform")}>任务列表</Button>}
+					action={<Button size="small" onClick={() => navigate("/foundation/data-sources")}>任务列表</Button>}
 				>
 					{observability.failureTop?.length ? (
 						<Timeline

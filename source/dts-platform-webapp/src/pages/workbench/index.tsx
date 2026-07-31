@@ -1,14 +1,13 @@
 import { Button, Empty, message, Skeleton, Space, Typography } from "antd";
 import { RefreshCw, RotateCcw, SlidersHorizontal } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router";
+import { Navigate, useSearchParams } from "react-router";
 import workbenchService, {
 	type WorkbenchComponentDescriptor,
 	type WorkbenchPreferenceItem,
 	type WorkbenchPreferencesResponse,
 } from "@/api/services/workbenchService";
 import { GLOBAL_CONFIG } from "@/global-config";
-import ModelingWorkbenchPage from "@/pages/modeling/ModelingWorkbenchPage";
 import { useUserInfo } from "@/store/userStore";
 import WorkbenchCustomizeDrawer from "./components/WorkbenchCustomizeDrawer";
 import DataManagementWorkbenchPage from "./DataManagementWorkbenchPage";
@@ -211,7 +210,9 @@ export default function WorkbenchPage() {
 		}
 	}, [preferenceOwner]);
 
-	if (activeSection === "data-management" && activeJourney !== "first-report") return <ModelingWorkbenchPage />;
+	if (activeSection === "data-management" && activeJourney !== "first-report") {
+		return <Navigate replace to="/data-modeling/home/workspace" />;
+	}
 
 	return (
 		<div data-testid="platform-workbench-home">

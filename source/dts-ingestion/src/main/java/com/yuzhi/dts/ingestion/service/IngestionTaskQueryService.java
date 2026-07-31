@@ -26,10 +26,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import jakarta.persistence.criteria.Expression;
+import jakarta.persistence.criteria.Predicate;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -47,6 +51,7 @@ public class IngestionTaskQueryService {
     private final IngestionExecutionRepository executionRepository;
     private final IngestionTaskMapper taskMapper;
     private final IncrementalSyncService incrementalSyncService;
+    private IngestionAccessContractService accessContractService;
 
     public IngestionTaskQueryService(
         IngestionTaskRepository taskRepository,
@@ -60,17 +65,40 @@ public class IngestionTaskQueryService {
         this.incrementalSyncService = incrementalSyncService;
     }
 
+    @Autowired
+    void setAccessContractService(IngestionAccessContractService accessContractService) {
+        this.accessContractService = accessContractService;
+    }
+
     public Optional<IngestionTaskDTO> findOne(Long id) {
         log.debug("Request to get IngestionTask : {}", id);
-        return taskRepository.findById(id).map(taskMapper::toDto);
+        return taskRepository.findById(id).map(taskMapper::toDto).map(this::enrichTaskDto);
     }
 
     public Page<IngestionTaskDTO> findAll(String status, Pageable pageable) {
-        log.debug("Request to get all IngestionTasks with status: {}", status);
-        if (StringUtils.hasText(status)) {
-            return taskRepository.findByStatus(status, pageable).map(taskMapper::toDto);
-        }
-        return taskRepository.findAll(pageable).map(taskMapper::toDto);
+        return findAll(status, null, null, null, null, pageable);
+    }
+
+    public Page<IngestionTaskDTO> findAll(
+        String status,
+        String sourceKind,
+        String query,
+        String health,
+        UUID sourceDataSourceId,
+        Pageable pageable
+    ) {
+        log.debug(
+            "Request to get ingestion tasks status={}, sourceKind={}, query={}, health={}, source={}",
+            status,
+            sourceKind,
+            query,
+            health,
+            sourceDataSourceId
+        );
+        Specification<IngestionTask> filters = buildFilters(status, sourceKind, query, health, sourceDataSourceId);
+        Page<IngestionTaskDTO> page = taskRepository.findAll(filters, pageable).map(taskMapper::toDto);
+        enrichTaskDtos(page.getContent());
+        return page;
     }
 
     public List<IngestionTaskDTO> findBySourceDataSourceId(UUID sourceDataSourceId, boolean includeDeleted) {
@@ -81,7 +109,112 @@ public class IngestionTaskQueryService {
         if (!includeDeleted) {
             tasks = tasks.stream().filter(task -> !"deleted".equalsIgnoreCase(task.getStatus())).toList();
         }
-        return tasks.stream().map(taskMapper::toDto).toList();
+        List<IngestionTaskDTO> result = new ArrayList<>(tasks.stream().map(taskMapper::toDto).toList());
+        enrichTaskDtos(result);
+        return result;
+    }
+
+    private Specification<IngestionTask> buildFilters(
+        String status,
+        String sourceKind,
+        String query,
+        String health,
+        UUID sourceDataSourceId
+    ) {
+        return (root, criteriaQuery, criteriaBuilder) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (StringUtils.hasText(status)) {
+                predicates.add(criteriaBuilder.equal(criteriaBuilder.lower(root.get("status")), status.trim().toLowerCase(java.util.Locale.ROOT)));
+            }
+            if (sourceDataSourceId != null) {
+                predicates.add(criteriaBuilder.equal(root.get("sourceDataSourceId"), sourceDataSourceId));
+            }
+            if (StringUtils.hasText(query)) {
+                String pattern = "%" + query.trim().toLowerCase(java.util.Locale.ROOT) + "%";
+                predicates.add(
+                    criteriaBuilder.or(
+                        criteriaBuilder.like(criteriaBuilder.lower(root.<String>get("name")), pattern),
+                        criteriaBuilder.like(
+                            criteriaBuilder.lower(criteriaBuilder.coalesce(root.<String>get("description"), "")),
+                            pattern
+                        ),
+                        criteriaBuilder.like(criteriaBuilder.lower(root.<String>get("sourceType")), pattern),
+                        criteriaBuilder.like(
+                            criteriaBuilder.lower(criteriaBuilder.coalesce(root.<String>get("createdBy"), "")),
+                            pattern
+                        ),
+                        criteriaBuilder.like(
+                            criteriaBuilder.lower(criteriaBuilder.coalesce(root.<String>get("lastModifiedBy"), "")),
+                            pattern
+                        ),
+                        criteriaBuilder.like(criteriaBuilder.lower(root.get("sourceDataSourceId").as(String.class)), pattern)
+                    )
+                );
+            }
+            if (StringUtils.hasText(sourceKind) && !"all".equalsIgnoreCase(sourceKind)) {
+                predicates.add(sourceKindPredicate(criteriaBuilder, criteriaBuilder.lower(root.get("sourceType")), sourceKind));
+            }
+            if (StringUtils.hasText(health) && !"all".equalsIgnoreCase(health)) {
+                predicates.add(healthPredicate(criteriaBuilder, criteriaBuilder.lower(root.get("lastExecutionStatus")), health));
+            }
+            return criteriaBuilder.and(predicates.toArray(Predicate[]::new));
+        };
+    }
+
+    private Predicate sourceKindPredicate(
+        jakarta.persistence.criteria.CriteriaBuilder criteriaBuilder,
+        Expression<String> sourceType,
+        String requestedKind
+    ) {
+        Predicate api = criteriaBuilder.or(
+            criteriaBuilder.like(sourceType, "%http%"),
+            criteriaBuilder.like(sourceType, "%api%"),
+            criteriaBuilder.like(sourceType, "%rest%")
+        );
+        Predicate file = criteriaBuilder.or(
+            criteriaBuilder.like(sourceType, "%file%"),
+            criteriaBuilder.like(sourceType, "%excel%"),
+            criteriaBuilder.like(sourceType, "%csv%"),
+            criteriaBuilder.like(sourceType, "%txt%"),
+            criteriaBuilder.like(sourceType, "%jsonreader%")
+        );
+        return switch (requestedKind.trim().toLowerCase(java.util.Locale.ROOT)) {
+            case "api" -> api;
+            case "file" -> file;
+            case "database" -> criteriaBuilder.and(criteriaBuilder.not(api), criteriaBuilder.not(file));
+            default -> criteriaBuilder.disjunction();
+        };
+    }
+
+    private Predicate healthPredicate(
+        jakarta.persistence.criteria.CriteriaBuilder criteriaBuilder,
+        Expression<String> lastExecutionStatus,
+        String requestedHealth
+    ) {
+        Predicate healthy = lastExecutionStatus.in("success", "succeeded", "completed");
+        Predicate attention = lastExecutionStatus.in("failed", "failure", "error", "timeout", "cancelled", "canceled");
+        Predicate running = lastExecutionStatus.in("preparing", "queued", "running");
+        return switch (requestedHealth.trim().toLowerCase(java.util.Locale.ROOT)) {
+            case "healthy" -> healthy;
+            case "attention" -> attention;
+            case "running" -> running;
+            case "not_evaluated" -> criteriaBuilder.or(
+                criteriaBuilder.isNull(lastExecutionStatus),
+                criteriaBuilder.equal(lastExecutionStatus, ""),
+                criteriaBuilder.and(criteriaBuilder.not(healthy), criteriaBuilder.not(attention), criteriaBuilder.not(running))
+            );
+            default -> criteriaBuilder.disjunction();
+        };
+    }
+
+    private IngestionTaskDTO enrichTaskDto(IngestionTaskDTO dto) {
+        return accessContractService == null ? dto : accessContractService.enrichTaskDto(dto);
+    }
+
+    private void enrichTaskDtos(List<IngestionTaskDTO> dtos) {
+        if (accessContractService != null) {
+            accessContractService.enrichTaskDtos(dtos);
+        }
     }
 
     public List<IngestionIncrementalStateDTO> getIncrementalStates(Long taskId) {

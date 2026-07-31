@@ -44,7 +44,7 @@ public class InfraSecretService {
     public void init() {
         String encoded = properties.getEncryptionKey();
         if (!org.springframework.util.StringUtils.hasText(encoded)) {
-            LOG.warn("dts.platform.infra.encryption-key is not configured; secret fields will not be persisted");
+            LOG.warn("dts.platform.infra.encryption-key is not configured; secret writes will be rejected");
             this.secretKey = null;
             return;
         }
@@ -59,15 +59,9 @@ public class InfraSecretService {
             entity.setSecureKeyVersion(null);
             return;
         }
+        requireEncryptionKey();
         try {
             byte[] plain = objectMapper.writeValueAsString(secrets).getBytes(StandardCharsets.UTF_8);
-            if (secretKey == null) {
-                LOG.warn("Encryption key not configured. Persisting data source {} secrets as plaintext", entity.getName());
-                entity.setSecureProps(plain);
-                entity.setSecureIv(null);
-                entity.setSecureKeyVersion(PLAINTEXT_KEY_VERSION);
-                return;
-            }
             byte[] iv = randomIv();
             byte[] cipher = encrypt(plain, iv);
             entity.setSecureProps(cipher);
@@ -84,7 +78,10 @@ public class InfraSecretService {
         }
         try {
             byte[] plain;
-            if (PLAINTEXT_KEY_VERSION.equals(entity.getSecureKeyVersion()) || secretKey == null) {
+            if (PLAINTEXT_KEY_VERSION.equals(entity.getSecureKeyVersion())) {
+                LOG.warn("Legacy plaintext credentials detected for data source {}; migrate them to encrypted storage", entity.getId());
+                plain = entity.getSecureProps();
+            } else if (secretKey == null) {
                 plain = entity.getSecureProps();
             } else {
                 plain = decrypt(entity.getSecureProps(), entity.getSecureIv());
@@ -103,15 +100,9 @@ public class InfraSecretService {
             entity.setSecureKeyVersion(null);
             return;
         }
+        requireEncryptionKey();
         try {
             byte[] plain = objectMapper.writeValueAsString(secrets).getBytes(StandardCharsets.UTF_8);
-            if (secretKey == null) {
-                LOG.warn("Encryption key not configured. Persisting storage {} secrets as plaintext", entity.getName());
-                entity.setSecureProps(plain);
-                entity.setSecureIv(null);
-                entity.setSecureKeyVersion(PLAINTEXT_KEY_VERSION);
-                return;
-            }
             byte[] iv = randomIv();
             byte[] cipher = encrypt(plain, iv);
             entity.setSecureProps(cipher);
@@ -138,5 +129,11 @@ public class InfraSecretService {
         byte[] iv = new byte[12];
         secureRandom.nextBytes(iv);
         return iv;
+    }
+
+    private void requireEncryptionKey() {
+        if (secretKey == null) {
+            throw new IllegalStateException("Secret encryption key is not configured");
+        }
     }
 }

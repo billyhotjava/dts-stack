@@ -12,6 +12,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -20,6 +22,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +44,9 @@ public class AirflowDagService {
     private final AirflowClient airflowClient;
     private final org.springframework.core.env.Environment springEnv;
     private final ApiProperties apiProperties;
+
+    /** A DAG rendered outside Airflow's *.py discovery surface until admission commits. */
+    public record StagedDag(String dagId, Path stagedPath, Path finalPath) {}
 
     public AirflowDagService(
         AirflowProperties properties,
@@ -83,6 +89,77 @@ public class AirflowDagService {
 
     public String rebuildDagForTask(IngestionTask task, List<AddaxJobService.PerTableJob> perTableJobs) {
         return ensureDagForTask(task, perTableJobs, true);
+    }
+
+    public StagedDag stageDagForTask(IngestionTask task, List<AddaxJobService.PerTableJob> perTableJobs) {
+        if (task == null) {
+            throw new IllegalArgumentException("Ingestion task is required");
+        }
+        String dagId = resolveDagId(task);
+        Path dagDir = resolveDagDir(task);
+        if (dagDir == null) {
+            throw new IllegalStateException("Airflow DAG directory is not configured");
+        }
+        try {
+            Files.createDirectories(dagDir);
+            Path finalPath = resolveDagFile(dagDir, dagId);
+            Path stagedPath = dagDir.toAbsolutePath().normalize()
+                .resolve("." + dagId + "." + UUID.randomUUID() + ".staged")
+                .normalize();
+            if (!stagedPath.getParent().equals(dagDir.toAbsolutePath().normalize())) {
+                throw new IllegalArgumentException("Staged DAG must remain inside the configured DAG directory");
+            }
+            Files.writeString(
+                stagedPath,
+                buildDagSource(dagId, task, perTableJobs),
+                StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE_NEW
+            );
+            return new StagedDag(dagId, stagedPath, finalPath);
+        } catch (IOException ex) {
+            throw new IllegalStateException("Failed to stage Airflow DAG: " + ex.getMessage(), ex);
+        }
+    }
+
+    public String publishStagedDag(StagedDag stagedDag) {
+        if (stagedDag == null) {
+            return null;
+        }
+        try {
+            try {
+                Files.move(
+                    stagedDag.stagedPath(),
+                    stagedDag.finalPath(),
+                    StandardCopyOption.ATOMIC_MOVE,
+                    StandardCopyOption.REPLACE_EXISTING
+                );
+            } catch (AtomicMoveNotSupportedException ex) {
+                Files.move(stagedDag.stagedPath(), stagedDag.finalPath(), StandardCopyOption.REPLACE_EXISTING);
+            }
+            try {
+                Files.setPosixFilePermissions(
+                    stagedDag.finalPath(),
+                    java.nio.file.attribute.PosixFilePermissions.fromString("rw-r--r--")
+                );
+            } catch (Exception ignored) {}
+            return stagedDag.dagId();
+        } catch (IOException ex) {
+            throw new IllegalStateException("Failed to publish staged Airflow DAG: " + ex.getMessage(), ex);
+        }
+    }
+
+    public void discardStagedDag(StagedDag stagedDag, boolean includePublishedFile) {
+        if (stagedDag == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(stagedDag.stagedPath());
+            if (includePublishedFile) {
+                Files.deleteIfExists(stagedDag.finalPath());
+            }
+        } catch (IOException ex) {
+            LOG.warn("[airflow] failed to discard staged dag {}: {}", stagedDag.dagId(), ex.getMessage());
+        }
     }
 
     public boolean deleteDagForTask(IngestionTask task) {

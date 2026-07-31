@@ -8,6 +8,7 @@ public class DtsIngestionProperties {
     private boolean enabled = true;
     private String baseUrl = "http://dts-ingestion:8083";
     private String serviceName = "dts-platform";
+    private String serviceToken;
 
     private final Retry retry = new Retry();
     private final CircuitBreaker circuitBreaker = new CircuitBreaker();
@@ -34,6 +35,14 @@ public class DtsIngestionProperties {
 
     public void setServiceName(String serviceName) {
         this.serviceName = serviceName;
+    }
+
+    public String getServiceToken() {
+        return serviceToken;
+    }
+
+    public void setServiceToken(String serviceToken) {
+        this.serviceToken = serviceToken;
     }
 
     public Retry getRetry() {

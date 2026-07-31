@@ -103,7 +103,7 @@ describe("data management theme model", () => {
 		expect(themes["chain-quality"].evidenceRefs).toContain("it/evidence/onsite-defined/03-governance-gate.md");
 	});
 
-	it("routes blocked model readiness to the platform semantic model page", () => {
+	it("routes blocked model readiness to the prototype-owned model workbench", () => {
 		const chain = summary({
 			chainKey: "chain-model",
 			displayName: "现场模型链路",
@@ -123,7 +123,7 @@ describe("data management theme model", () => {
 			}),
 		);
 
-		expect(themes["chain-model"].primaryAction.route).toBe("/modeling/models");
+		expect(themes["chain-model"].primaryAction.route).toBe("/data-modeling/dimensions/workbench");
 	});
 
 	it("marks a theme as published and healthy only when consumption and operations are ready", () => {

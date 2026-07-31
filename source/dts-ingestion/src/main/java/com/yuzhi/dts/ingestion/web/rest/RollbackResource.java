@@ -12,15 +12,19 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/ingestion/rollback")
+@PreAuthorize("hasAnyAuthority(T(com.yuzhi.dts.ingestion.security.AuthoritiesConstants).INFRA_MAINTAINERS)")
 public class RollbackResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(RollbackResource.class);
@@ -50,6 +54,12 @@ public class RollbackResource {
      */
     @PostMapping("/execute")
     public ResponseEntity<ApiResponse<RollbackResult>> execute(@RequestBody RollbackRequest request) {
+        if (request == null || request.dryRun()) {
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "ROLLBACK_EXECUTE_DRY_RUN_FORBIDDEN: dryRun 请求只能提交到 /analyze"
+            );
+        }
         String operator = resolveOperator();
         LOG.info("Rollback execute: scope={}, level={}, taskId={}, dataSourceId={}, operator={}",
             request.scope(), request.level(), request.taskId(), request.dataSourceId(), operator);

@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const STATIC_ROUTES_SOURCE = readFileSync(new URL("../../routes/sections/dashboard/static-routes.tsx", import.meta.url), "utf8");
+const STATIC_ROUTES_SOURCE = readFileSync(
+	new URL("../../routes/sections/dashboard/static-routes.tsx", import.meta.url),
+	"utf8",
+);
 const DATA_SOURCE = readFileSync(new URL("./DataPage.tsx", import.meta.url), "utf8");
 const QUESTIONS_SOURCE = readFileSync(new URL("./CardsPage.tsx", import.meta.url), "utf8");
 const DASHBOARDS_SOURCE = readFileSync(new URL("./DashboardsPage.tsx", import.meta.url), "utf8");
@@ -10,9 +13,11 @@ const SCREENS_SOURCE = readFileSync(new URL("./screens/ScreensPage.tsx", import.
 const METRIC_LENS_SOURCE = readFileSync(new URL("./MetricLensPage.tsx", import.meta.url), "utf8");
 const NL2SQL_SOURCE = readFileSync(new URL("./Nl2SqlEvalPage.tsx", import.meta.url), "utf8");
 
-test("Sprint-45 metrics entry is a customer-facing platform modeling surface", () => {
-	for (const expected of ["modeling/metric-workbench", "modeling/semantic/metrics", "modeling/semantic/models"]) {
-		assert.match(STATIC_ROUTES_SOURCE, new RegExp(expected.replace("/", "\\/")));
+test("Sprint-45 metrics entry is owned by the prototype modeling surface", () => {
+	assert.match(STATIC_ROUTES_SOURCE, /path: "data-modeling\/\*"/);
+	assert.match(STATIC_ROUTES_SOURCE, /<DataModelingPage \/>/);
+	for (const legacy of ["modeling/metric-workbench", "modeling/semantic/metrics", "modeling/semantic/models"]) {
+		assert.match(STATIC_ROUTES_SOURCE, new RegExp(`path: "${legacy}"[\\s\\S]*LegacyDataModelingRedirect`));
 	}
 	assert.doesNotMatch(STATIC_ROUTES_SOURCE, /MetricsServiceFrame/);
 	assert.doesNotMatch(STATIC_ROUTES_SOURCE, /<iframe/);

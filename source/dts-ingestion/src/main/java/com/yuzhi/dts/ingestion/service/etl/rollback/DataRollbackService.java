@@ -15,7 +15,10 @@ import java.util.List;
 import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 public class DataRollbackService {
@@ -33,6 +36,7 @@ public class DataRollbackService {
 	private final IngestionTaskChangeLogService changeLogService;
 	private final AddaxJobService addaxJobService;
 	private final AirflowDagService airflowDagService;
+	private TransactionTemplate rollbackTxTemplate;
 
 	public DataRollbackService(IngestionTaskRepository taskRepository,
 							   IngestionExecutionRepository executionRepository,
@@ -56,6 +60,11 @@ public class DataRollbackService {
 		this.changeLogService = changeLogService;
 		this.addaxJobService = addaxJobService;
 		this.airflowDagService = airflowDagService;
+	}
+
+	@Autowired
+	void setTransactionManager(PlatformTransactionManager transactionManager) {
+		this.rollbackTxTemplate = new TransactionTemplate(transactionManager);
 	}
 
 	/**
@@ -127,6 +136,11 @@ public class DataRollbackService {
 	 * Execute rollback — dispatches to level-specific handler.
 	 */
 	public RollbackResult execute(RollbackRequest request, String operator) {
+		if (request == null || request.dryRun()) {
+			throw new IllegalArgumentException(
+				"ROLLBACK_EXECUTE_DRY_RUN_FORBIDDEN: dryRun 请求只能用于影响分析"
+			);
+		}
 		RollbackLevel level = RollbackLevel.fromCode(request.level());
 		List<IngestionTask> tasks = resolveTasks(request);
 		if (tasks.isEmpty()) {
@@ -141,7 +155,8 @@ public class DataRollbackService {
 				case FULL_CASCADE -> executeLevel3(request, tasks, operator);
 			};
 			auditService.record(operator, level, request.scope(), request.taskId(), request.dataSourceId(),
-				toJson(request), toJson(impact), toJson(result), "SUCCESS", null);
+				toJson(request), toJson(impact), toJson(result), result.status(),
+				result.errors().isEmpty() ? null : String.join("; ", result.errors()));
 		} catch (Exception ex) {
 			auditService.record(operator, level, request.scope(), request.taskId(), request.dataSourceId(),
 				toJson(request), toJson(impact), null, "FAILED", ex.getMessage());
@@ -223,7 +238,11 @@ public class DataRollbackService {
 	private RollbackResult executeLevel3DataSource(List<IngestionTask> tasks, String operator) {
 		List<RollbackResult> subResults = new ArrayList<>();
 		for (IngestionTask task : tasks) {
-			subResults.add(executeLevel3Task(task));
+			RollbackResult result = executeLevel3Task(task);
+			subResults.add(result);
+			if (!result.success()) {
+				break;
+			}
 		}
 		return RollbackResult.merge(subResults);
 	}
@@ -248,8 +267,17 @@ public class DataRollbackService {
 		} catch (Exception ex) {
 			errors.add("CONN_FAILED: task " + taskId + " - " + ex.getMessage());
 		}
+		if (!errors.isEmpty()) {
+			return new RollbackResult(false, actions, errors, false, List.of(taskId));
+		}
 
-		// 2. Clean upload files (Excel/CSV)
+		// 2. Critical local database cleanup. Any failure rolls back these DB steps
+		// and stops before files, runtime artifacts, or the task are removed.
+		if (!executeCriticalDatabaseCleanup(taskId, actions, errors)) {
+			return new RollbackResult(false, actions, errors, false, List.of(taskId));
+		}
+
+		// 3. External resources are attempted only after all critical DB steps pass.
 		if (isFileSourceType(task.getSourceType())) {
 			try {
 				List<String> deleted = fileUploadService.cleanupForTask(task);
@@ -259,52 +287,77 @@ public class DataRollbackService {
 			}
 		}
 
-		// 3. Clean execution records
+		// 4. Delete Addax job file
 		try {
-			executionRepository.deleteByTaskId(taskId);
-			actions.add("EXECUTIONS_DELETED: task " + taskId);
-		} catch (Exception ex) {
-			errors.add("EXEC_DELETE_FAILED: " + ex.getMessage());
-		}
-
-		// 4. Clean incremental checkpoints
-		try {
-			incrementalSyncService.clearCheckpointByTaskId(taskId);
-			actions.add("CHECKPOINTS_DELETED: task " + taskId);
-		} catch (Exception ex) {
-			errors.add("CHECKPOINT_DELETE_FAILED: " + ex.getMessage());
-		}
-
-		// 5. Clean change logs
-		try {
-			changeLogService.deleteByTaskId(taskId);
-			actions.add("CHANGELOGS_DELETED: task " + taskId);
-		} catch (Exception ex) {
-			errors.add("CHANGELOG_DELETE_FAILED: " + ex.getMessage());
-		}
-
-		// 6. Delete Addax job file
-		try {
-			addaxJobService.deleteJobIfExists(task.getAddaxJobPath());
-			actions.add("ADDAX_JOB_DELETED: task " + taskId);
+			boolean deleted = addaxJobService.deleteJobIfExists(task.getAddaxJobPath());
+			actions.add((deleted ? "ADDAX_JOB_DELETED: task " : "ADDAX_JOB_NOT_FOUND: task ") + taskId);
 		} catch (Exception ex) {
 			errors.add("ADDAX_JOB_DELETE_FAILED: " + ex.getMessage());
 		}
 
-		// 7. Delete Airflow DAG
+		// 5. Delete Airflow DAG
 		try {
-			airflowDagService.deleteDagForTask(task);
-			actions.add("DAG_DELETED: task " + taskId);
+			boolean deleted = airflowDagService.deleteDagForTask(task);
+			actions.add((deleted ? "DAG_DELETED: task " : "DAG_NOT_FOUND: task ") + taskId);
 		} catch (Exception ex) {
 			errors.add("DAG_DELETE_FAILED: " + ex.getMessage());
 		}
 
-		// 8. Soft-delete task
-		task.setStatus("deleted");
-		taskRepository.save(task);
-		actions.add("TASK_DELETED: " + taskId);
+		// 6. Soft-delete task
+		try {
+			task.setStatus("deleted");
+			taskRepository.save(task);
+			actions.add("TASK_DELETED: " + taskId);
+		} catch (Exception ex) {
+			errors.add("TASK_DELETE_FAILED: " + ex.getMessage());
+			return new RollbackResult(false, actions, errors, false, List.of(taskId));
+		}
 
 		return new RollbackResult(errors.isEmpty(), actions, errors, false, List.of(taskId));
+	}
+
+	private boolean executeCriticalDatabaseCleanup(Long taskId, List<String> actions, List<String> errors) {
+			List<String> committedActions = new ArrayList<>();
+			try {
+				if (rollbackTxTemplate == null) {
+					doCriticalDatabaseCleanup(taskId, committedActions);
+				} else {
+					rollbackTxTemplate.executeWithoutResult(status -> doCriticalDatabaseCleanup(taskId, committedActions));
+				}
+				actions.addAll(committedActions);
+				return true;
+			} catch (CriticalDatabaseCleanupException ex) {
+				errors.add(ex.getMessage());
+				actions.add("LOCAL_DB_ROLLED_BACK: task " + taskId);
+				return false;
+			}
+	}
+
+	private void doCriticalDatabaseCleanup(Long taskId, List<String> actions) {
+			try {
+				executionRepository.deleteByTaskId(taskId);
+				actions.add("EXECUTIONS_DELETED: task " + taskId);
+			} catch (Exception ex) {
+				throw new CriticalDatabaseCleanupException("EXEC_DELETE_FAILED: " + ex.getMessage(), ex);
+			}
+			try {
+				incrementalSyncService.clearCheckpointByTaskId(taskId);
+				actions.add("CHECKPOINTS_DELETED: task " + taskId);
+			} catch (Exception ex) {
+				throw new CriticalDatabaseCleanupException("CHECKPOINT_DELETE_FAILED: " + ex.getMessage(), ex);
+			}
+			try {
+				changeLogService.deleteByTaskId(taskId);
+				actions.add("CHANGELOGS_DELETED: task " + taskId);
+			} catch (Exception ex) {
+				throw new CriticalDatabaseCleanupException("CHANGELOG_DELETE_FAILED: " + ex.getMessage(), ex);
+			}
+	}
+
+	private static final class CriticalDatabaseCleanupException extends RuntimeException {
+		private CriticalDatabaseCleanupException(String message, Throwable cause) {
+			super(message, cause);
+		}
 	}
 
 	private String[] parseSchemaTable(String qualifiedName) {

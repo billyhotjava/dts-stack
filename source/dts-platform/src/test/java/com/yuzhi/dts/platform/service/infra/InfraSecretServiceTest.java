@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.infra;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.config.InfraSecurityProperties;
@@ -52,18 +53,49 @@ class InfraSecretServiceTest {
     }
 
     @Test
-    void shouldSkipSecretsWhenEncryptionKeyMissing() {
+    void shouldRejectStorageSecretWriteWhenEncryptionKeyMissing() {
         InfraSecurityProperties disabledProps = new InfraSecurityProperties();
         InfraSecretService disabledService = new InfraSecretService(disabledProps, objectMapper);
         disabledService.init();
 
         InfraDataStorage storage = new InfraDataStorage();
         storage.setName("lake");
-        disabledService.applySecrets(storage, Map.of("accessKey", "abc"));
 
-        assertThat(new String(storage.getSecureProps(), StandardCharsets.UTF_8)).isEqualTo("{\"accessKey\":\"abc\"}");
+        assertThatThrownBy(() -> disabledService.applySecrets(storage, Map.of("accessKey", "abc")))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("Secret encryption key is not configured");
+
+        assertThat(storage.getSecureProps()).isNull();
         assertThat(storage.getSecureIv()).isNull();
-        assertThat(storage.getSecureKeyVersion()).isEqualTo("PLAINTEXT");
+        assertThat(storage.getSecureKeyVersion()).isNull();
+    }
+
+    @Test
+    void shouldRejectDataSourceSecretWriteWhenEncryptionKeyMissing() {
+        InfraSecurityProperties disabledProps = new InfraSecurityProperties();
+        InfraSecretService disabledService = new InfraSecretService(disabledProps, objectMapper);
+        disabledService.init();
+        InfraDataSource dataSource = new InfraDataSource();
+        dataSource.setName("legacy-source");
+
+        assertThatThrownBy(() -> disabledService.applySecrets(dataSource, Map.of("password", "secret")))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("Secret encryption key is not configured");
+        assertThat(dataSource.getSecureProps()).isNull();
+        assertThat(dataSource.getSecureKeyVersion()).isNull();
+    }
+
+    @Test
+    void shouldReadLegacyPlaintextSecretsForInternalMigrationCompatibility() {
+        InfraSecurityProperties disabledProps = new InfraSecurityProperties();
+        InfraSecretService disabledService = new InfraSecretService(disabledProps, objectMapper);
+        disabledService.init();
+        InfraDataSource dataSource = new InfraDataSource();
+        dataSource.setName("legacy-source");
+        dataSource.setSecureProps("{\"password\":\"legacy\"}".getBytes(StandardCharsets.UTF_8));
+        dataSource.setSecureKeyVersion("PLAINTEXT");
+
+        assertThat(disabledService.readSecrets(dataSource)).containsEntry("password", "legacy");
     }
 
     @Test

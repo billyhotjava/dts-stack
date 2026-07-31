@@ -198,6 +198,57 @@ public class PlatformInfraClient {
         }
     }
 
+    /** Trigger the official quality bindings referenced by dataset:&lt;uuid&gt;. */
+    public String triggerQualityRunByPolicyRef(String qualityPolicyRef, String triggerType) {
+        UUID datasetId = com.yuzhi.dts.ingestion.service.IngestionAccessContractService.parseQualityDatasetRef(qualityPolicyRef);
+        URI uri = buildUri("/governance/quality/runs");
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("datasetId", datasetId);
+        payload.put("triggerType", StringUtils.hasText(triggerType) ? triggerType.trim() : "INGESTION");
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setAccept(java.util.List.of(MediaType.APPLICATION_JSON));
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        applyServiceHeaders(headers);
+        try {
+            ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.POST, new HttpEntity<>(payload, headers), Map.class);
+            if (!response.getStatusCode().is2xxSuccessful()) {
+                throw new IllegalStateException("平台质量检测触发返回异常状态: " + response.getStatusCode().value());
+            }
+            String qualityRunId = firstQualityRunId(response.getBody());
+            LOG.info(
+                "Quality run triggered for qualityPolicyRef={} triggerType={} qualityRunId={}",
+                qualityPolicyRef,
+                triggerType,
+                qualityRunId
+            );
+            return qualityRunId;
+        } catch (HttpStatusCodeException ex) {
+            LOG.warn("Platform quality run trigger failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            throw new IllegalStateException("质量检测触发失败: " + ex.getStatusCode().value());
+        } catch (RuntimeException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new IllegalStateException("质量检测触发失败: " + ex.getMessage(), ex);
+        }
+    }
+
+    private String firstQualityRunId(Map<?, ?> responseBody) {
+        if (responseBody == null) {
+            return null;
+        }
+        Object payload = responseBody.containsKey("data") ? responseBody.get("data") : responseBody;
+        if (payload instanceof List<?> runs && !runs.isEmpty() && runs.get(0) instanceof Map<?, ?> first) {
+            Object id = first.get("id");
+            return id == null ? null : id.toString();
+        }
+        if (payload instanceof Map<?, ?> map) {
+            Object id = map.get("id");
+            return id == null ? null : id.toString();
+        }
+        return null;
+    }
+
     public boolean syncIngestionExecutionLineage(IngestionTask task, IngestionExecution execution) {
         if (task == null || execution == null) {
             return false;

@@ -37,16 +37,26 @@ test("journey stage state model defines status, gaps, blockers and next actions"
 test("journey stage model covers the eight product journey stages", () => {
 	const source = readFileSync(stateUrl, "utf8");
 
-	for (const stage of ["integration", "planning", "standards", "modeling", "metrics", "development", "service", "evidence"]) {
+	for (const stage of [
+		"integration",
+		"planning",
+		"standards",
+		"modeling",
+		"metrics",
+		"development",
+		"service",
+		"evidence",
+	]) {
 		assert.match(source, new RegExp(stage));
 	}
 	for (const route of [
 		"/foundation/data-sources",
-		"/governance/subjects",
+		"/data-modeling/planning/spaces",
 		"/governance/standards/elements",
-		"/modeling/models",
-		"/modeling/metric-workbench",
-		"/studio/sql-modeling",
+		"/data-modeling/dimensions/workbench",
+		"/data-modeling/metrics/atomic",
+		"/data-modeling/home/workspace",
+		"/explore/etl/scripts",
 		"/services/apis",
 		"/ops/instances",
 	]) {

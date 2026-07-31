@@ -11,7 +11,8 @@ const LAUNCHER = read("./HelpCenter.tsx");
 const PAGE = read("./HelpCenterPage.tsx");
 const TOPICS = read("./helpTopics.ts");
 const JOURNEY_BAR = read("../../components/journey/JourneyContextBar.tsx");
-const SQL_MODELING = read("../../pages/modeling/SqlModelingPage.tsx");
+const DATA_MODELING = read("../../pages/data-modeling/DataModelingPage.tsx");
+const DIMENSIONAL_MODELING = read("../../pages/data-modeling/pages/DimensionalModelingWorkspace.tsx");
 
 test("dashboard header exposes one accessible help launcher without a floating gear", () => {
 	assert.match(HEADER, /import HelpCenter/);
@@ -30,7 +31,7 @@ test("full help center is a static settings route rather than a business menu", 
 	assert.match(PAGE, /searchParams\.get\("q"\)/);
 });
 
-test("migrated modeling guidance lives in typed local topics", () => {
+test("prototype modeling guidance lives in typed local topics", () => {
 	for (const topicId of [
 		"construction-planning",
 		"model-center",
@@ -42,10 +43,13 @@ test("migrated modeling guidance lives in typed local topics", () => {
 	assert.match(TOPICS, /DAG 未就绪/);
 	assert.match(TOPICS, /质量或发布门禁阻断/);
 	assert.match(TOPICS, /数据输出 → 重建/);
-	assert.doesNotMatch(SQL_MODELING, /建模与上线操作流程|key: "guide"|label: "操作说明"/);
-	assert.match(SQL_MODELING, /data-testid="platform-sql-modeling-compile"/);
-	assert.match(SQL_MODELING, /data-testid="platform-sql-modeling-test"/);
-	assert.match(SQL_MODELING, /data-testid="platform-sql-modeling-release"/);
+	assert.match(TOPICS, /"\/data-modeling"/);
+	assert.match(TOPICS, /"\/data-modeling\/planning"/);
+	assert.match(TOPICS, /"\/data-modeling\/dimensions"/);
+	assert.match(TOPICS, /"\/data-modeling\/metrics"/);
+	assert.match(DATA_MODELING, /DimensionalModelingWorkspace/);
+	assert.match(DIMENSIONAL_MODELING, /BackendPendingButton|disabled title="后台阶段接入"/);
+	assert.doesNotMatch(`${DATA_MODELING}\n${DIMENSIONAL_MODELING}`, /pages\/modeling|SqlModelingPage/);
 	assert.doesNotMatch(JOURNEY_BAR, /此页面是数据产品旅程|从工作台开始可获得完整的上下文与下一步引导/);
 	assert.match(JOURNEY_BAR, /journey-join-enter/);
 	assert.doesNotMatch(`${LAUNCHER}\n${PAGE}`, /dangerouslySetInnerHTML/);

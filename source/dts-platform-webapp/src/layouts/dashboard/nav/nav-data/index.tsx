@@ -192,7 +192,6 @@ const collectAllowedRoutes = (menus: MenuTree[]): AllowedRouteIndex => {
 	return allowed;
 };
 
-
 const resolveOrderValue = (node: MenuTree, meta: Record<string, any> | null): number => {
 	const candidates = [
 		(node as any)?.order,
@@ -331,15 +330,17 @@ const resolveDedupeKey = (node: MenuTree, meta: Record<string, any> | null): str
 
 /**
  * Menu category definitions — each group is separated by a divider in the sidebar.
+ * The root menu is the visible category title; a second visual label would duplicate it.
  * `keys` match the `sectionKey` (or `key`) from menu metadata.
  * `flatten` strips children so the item renders as a single external link.
  */
-const NAV_CATEGORY_GROUPS: { name?: string; keys: string[]; flatten?: boolean }[] = [
-	{ name: undefined, keys: ["workbench"] },
-	{ name: "数据集成", keys: ["resource"] },
-	{ name: "数据开发与运维", keys: ["studio"] },
-	{ name: "数据治理", keys: ["governance"] },
-	{ name: "数据分析与服务", keys: ["consumption"] },
+const NAV_CATEGORY_GROUPS: { keys: string[]; flatten?: boolean }[] = [
+	{ keys: ["workbench"] },
+	{ keys: ["resource"] },
+	{ keys: ["studio"] },
+	{ keys: ["modeling"] },
+	{ keys: ["governance"] },
+	{ keys: ["consumption"] },
 ];
 
 const resolveSectionKey = (node: MenuTree): string => {
@@ -373,7 +374,7 @@ const buildNavGroups = (menus: MenuTree[]): NavProps["data"] => {
 	const visited = new Set<string>();
 	const groups: NavProps["data"] = [];
 
-	for (const { name, keys, flatten } of NAV_CATEGORY_GROUPS) {
+	for (const { keys, flatten } of NAV_CATEGORY_GROUPS) {
 		const nodes: MenuTree[] = [];
 		for (const key of keys) {
 			const matched = keyToNodes.get(key);
@@ -398,7 +399,7 @@ const buildNavGroups = (menus: MenuTree[]): NavProps["data"] => {
 			}
 		}
 
-		groups.push({ name, items });
+		groups.push({ name: undefined, items });
 	}
 
 	// Append any nodes whose sectionKey didn't match a defined category
@@ -493,9 +494,7 @@ const filterNavData = (
 const FALLBACK_NAV_DATA: NavProps["data"] = [
 	{
 		name: "数据平台",
-		items: [
-			{ path: "/workbench", title: "工作台", icon: "solar:widget-3-bold-duotone" },
-		],
+		items: [{ path: "/workbench", title: "工作台", icon: "solar:widget-3-bold-duotone" }],
 	},
 ];
 
@@ -513,7 +512,10 @@ export const useFilteredNavData = () => {
 	const navGroups = useMemo(() => buildNavGroups(menus), [menus]);
 	const allowedRoutes = useMemo(() => collectAllowedRoutes(menus), [menus]);
 
-	const filtered = useMemo(() => filterNavData(navGroups, authCodes, allowedRoutes), [navGroups, authCodes, allowedRoutes]);
+	const filtered = useMemo(
+		() => filterNavData(navGroups, authCodes, allowedRoutes),
+		[navGroups, authCodes, allowedRoutes],
+	);
 
 	// Fallback: if menu API returned nothing, show minimal nav so the platform is still usable.
 	if (filtered.length === 0 && menus.length === 0) {

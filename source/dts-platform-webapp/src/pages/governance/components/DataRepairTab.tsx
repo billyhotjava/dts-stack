@@ -14,14 +14,12 @@ import {
 	Tag,
 	Tooltip,
 	Typography,
-	Upload,
 } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { CloudUploadOutlined, InfoCircleOutlined, SafetyOutlined } from "@ant-design/icons";
-import { useSearchParams } from "react-router";
+import { SafetyOutlined } from "@ant-design/icons";
+import { useNavigate, useSearchParams } from "react-router";
 import {
-	createIngestionTask,
 	listQualityRuns,
 	listCleansingFunctions,
 	previewCleansing,
@@ -32,9 +30,7 @@ import {
 	listFailingRows,
 	updateOdsRow,
 } from "@/api/platformApi";
-import { ingestionTaskAPI } from "@/api/ingestion";
 import { formatTime } from "@/utils/textUtils";
-import StagingDataEditor from "./StagingDataEditor";
 
 /* ---------- types ---------- */
 
@@ -73,291 +69,29 @@ type CleansingPreviewRow = {
 	after: string;
 };
 
-type RepairDatasetOption = {
-	id: string;
-	name: string;
-	sourceId?: string;
-	hiveDatabase?: string;
-	hiveTable?: string;
-};
-
-const normalizeFileBaseName = (name?: string) => {
-	const raw = String(name || "file").replace(/\.[^.]+$/, "");
-	const normalized = raw
-		.trim()
-		.toLowerCase()
-		.replace(/[^a-z0-9_]+/g, "_")
-		.replace(/^_+|_+$/g, "");
-	return normalized || "file";
-};
-
-const resolveUploadedFileType = (file: File, result: any) => {
-	const raw = String(result?.sourceFileType || result?.fileType || file.name.split(".").pop() || "").toLowerCase();
-	if (["xlsx", "xls", "excel", "excelreader"].includes(raw)) return "excel";
-	return "csv";
-};
-
-const extractCreatedTaskId = (result: any): number | undefined => {
-	const id = result?.task?.id ?? result?.taskId ?? result?.data?.task?.id ?? result?.data?.taskId;
-	const numeric = Number(id);
-	return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined;
-};
-
 /* ========== PreCheckMode ========== */
 
 function PreCheckMode({ initialTaskId }: { initialTaskId?: number }) {
-	const [taskId, setTaskId] = useState<number | undefined>(initialTaskId);
-	const [datasets, setDatasets] = useState<RepairDatasetOption[]>([]);
-	const [defaultDataSourceId, setDefaultDataSourceId] = useState<string>();
-	const [defaultDestinationName, setDefaultDestinationName] = useState<string>();
-	const [defaultWriterType, setDefaultWriterType] = useState<string>();
-	const [datasetLoading, setDatasetLoading] = useState(false);
-	const [selectedDataset, setSelectedDataset] = useState<string>();
-	const [uploading, setUploading] = useState(false);
-	const [checking, setChecking] = useState(false);
-	const [showEditor, setShowEditor] = useState(!!initialTaskId);
-	const [uploadedFileName, setUploadedFileName] = useState<string>();
-
-	useEffect(() => {
-		void loadDatasets();
-	}, []);
-
-	useEffect(() => {
-		if (initialTaskId) {
-			setTaskId(initialTaskId);
-			setShowEditor(true);
-		}
-	}, [initialTaskId]);
-
-	const selectedDatasetMeta = useMemo(
-		() => datasets.find((item) => item.id === selectedDataset),
-		[datasets, selectedDataset],
-	);
-
-	const resolveTargetTable = (dataset?: RepairDatasetOption) => {
-		const raw = String(dataset?.hiveTable || "").trim();
-		return raw || undefined;
-	};
-
-	const loadDatasets = async () => {
-		setDatasetLoading(true);
-		try {
-			const destination = await ingestionTaskAPI.getDefaultDestinationStatus();
-			const lakeSourceId = destination?.dataSourceId ? String(destination.dataSourceId) : undefined;
-			setDefaultDataSourceId(lakeSourceId);
-			setDefaultDestinationName(destination?.destinationName);
-			setDefaultWriterType(destination?.writerType);
-			if (!destination?.available || !lakeSourceId) {
-				setDatasets([]);
-				return;
-			}
-			const resp: any = await listDatasets(lakeSourceId
-				? { page: 0, size: 200, sourceId: lakeSourceId }
-				: { page: 0, size: 200 });
-			const list = Array.isArray(resp?.content) ? resp.content : [];
-			setDatasets(list.map((item: any) => ({
-				id: String(item.id),
-				name: item.name || item.id,
-				sourceId: item.sourceId ? String(item.sourceId) : undefined,
-				hiveDatabase: item.hiveDatabase,
-				hiveTable: item.hiveTable,
-			})));
-		} catch {
-			// non-critical
-		} finally {
-			setDatasetLoading(false);
-		}
-	};
-
-	const handleUpload = async (file: File) => {
-		if (!selectedDataset || !selectedDatasetMeta) {
-			toast.error("请先选择目标数据集");
-			return false;
-		}
-		if (!defaultDataSourceId) {
-			toast.error("未识别默认数据湖数据源，无法创建预检任务");
-			return false;
-		}
-		if (selectedDatasetMeta.sourceId && selectedDatasetMeta.sourceId !== defaultDataSourceId) {
-			toast.error("所选数据集未关联默认数据湖数据源，请重新选择");
-			return false;
-		}
-		const targetTable = resolveTargetTable(selectedDatasetMeta);
-		if (!targetTable) {
-			toast.error("所选数据集缺少物理表名，无法作为入湖提交目标");
-			return false;
-		}
-		setUploading(true);
-		try {
-			const result = await ingestionTaskAPI.uploadFile(file);
-			const fileType = resolveUploadedFileType(file, result);
-			const taskName = `quality_precheck_${normalizeFileBaseName(result.originalName || file.name)}_${Date.now()}`;
-			const createResult: any = await createIngestionTask({
-				name: taskName,
-				taskName,
-				description: `质量管控数据修复预检：${result.originalName || file.name}`,
-				source: {
-					type: fileType,
-					config: {
-							_filePath: result.hostPath,
-							_containerPath: result.containerPath,
-							_keyVersion: result.keyVersion,
-							_encrypted: result.encrypted,
-							_fileHash: result.fileHash,
-							_fileSize: result.fileSize,
-							_fileType: fileType,
-							_fileColumns: result.columns || [],
-						_originalName: result.originalName || file.name,
-						_datasetId: selectedDataset,
-						_targetDataSourceId: selectedDatasetMeta.sourceId || defaultDataSourceId,
-						_targetTable: targetTable,
-						_autoId: true,
-					},
-				},
-				destination: {
-					usePlatformDefault: true,
-					definitionId: defaultWriterType || "postgresqlwriter",
-					config: {
-						table: targetTable,
-						tables: [targetTable],
-					},
-				},
-				sync: {
-					mode: "full_refresh",
-					prefix: `ods_${normalizeFileBaseName(result.originalName || file.name)}_`,
-				},
-				airflow: { enabled: false },
-				draft: true,
-			});
-			const createdTaskId = extractCreatedTaskId(createResult);
-			if (!createdTaskId) {
-				throw new Error("文件已上传，但未返回入湖任务 ID");
-			}
-			setTaskId(createdTaskId);
-			setUploadedFileName(result.originalName || file.name);
-			toast.success(`文件上传成功，已创建预检任务 #${createdTaskId}`);
-		} catch (error: any) {
-			toast.error(error?.message || "文件上传失败");
-		} finally {
-			setUploading(false);
-		}
-		return false; // prevent antd default upload behavior
-	};
-
-	const handleStartCheck = async () => {
-		if (!taskId) {
-			toast.error("请输入任务ID");
-			return;
-		}
-		setChecking(true);
-		try {
-			await ingestionTaskAPI.parseExcel(taskId);
-			const result = await ingestionTaskAPI.preCheck(taskId);
-			if (result.failedRules != null || result.totalRules != null) {
-				toast.success(`预检完成：${result.passedRules ?? 0}/${result.totalRules ?? 0} 条规则通过`);
-			} else {
-				toast.success(`预检完成：${result.passedRows ?? 0} 通过, ${result.failedRows ?? 0} 失败`);
-			}
-			setShowEditor(true);
-		} catch (error: any) {
-			toast.error(error?.message || "预检失败");
-		} finally {
-			setChecking(false);
-		}
-	};
-
-	if (showEditor && taskId) {
-		return (
-			<StagingDataEditor
-				taskId={taskId}
-				onClose={() => setShowEditor(false)}
-			/>
-		);
-	}
+	const navigate = useNavigate();
+	const taskPath = initialTaskId
+		? `/foundation/data-sources/access/${encodeURIComponent(String(initialTaskId))}?tab=quality`
+		: "/foundation/data-sources/access/new?kind=file";
 
 	return (
 		<div className="space-y-4">
 			<Alert
 				type="info"
 				showIcon
-				icon={<InfoCircleOutlined />}
-				message="入湖预检说明"
-				description="先选择目标数据集，再上传 Excel/CSV 文件。系统会自动创建并关联一个预检入湖任务，随后可开始检查；检出的错误数据可在暂存编辑器中逐条修复后再提交入湖。"
-				className="mb-2"
+				message="文件预检已并入统一数据接入流程"
+				description="文件密级声明、加密上传、解析、质量预检、准入与执行必须在同一个 Revision 中完成。数据质量模块继续维护规则和运行结果，不再单独创建或直写入湖任务。"
 			/>
-
-			{/* Upload area */}
-			<Card title="上传文件" size="small">
-				<Upload.Dragger
-					accept=".xlsx,.xls,.csv"
-					showUploadList={false}
-					beforeUpload={handleUpload}
-					disabled={uploading || !selectedDataset}
-				>
-					<p className="ant-upload-drag-icon">
-						<CloudUploadOutlined style={{ fontSize: 40, color: "#1677ff" }} />
-					</p>
-					<p className="ant-upload-text">点击或拖拽 Excel / CSV 文件到此区域</p>
-					<p className="ant-upload-hint">
-						{selectedDataset ? "支持 .xlsx, .xls, .csv 格式" : "请先在下方选择目标数据集"}
-					</p>
-				</Upload.Dragger>
-			</Card>
-
-			{/* Target dataset + generated task */}
-			<Card title="预检配置" size="small">
-				{!datasetLoading && !defaultDataSourceId && (
-					<Alert
-						type="warning"
-						showIcon
-						message="未识别默认数据湖数据源"
-						description="请先确认平台默认数据湖已配置，并能映射到本地数据源；数据修复只允许选择默认数据湖下的数据集。"
-						className="mb-3"
-					/>
-				)}
-				<div className="flex flex-wrap items-end gap-4">
-					<div>
-						<Typography.Text className="mb-1 block text-xs text-gray-500">
-							目标数据集
-						</Typography.Text>
-						<Select
-							style={{ width: 260 }}
-							placeholder="选择目标数据集"
-							options={datasets.map((d) => ({ label: d.name, value: d.id }))}
-							value={selectedDataset}
-							onChange={(value) => {
-								setSelectedDataset(value);
-								setTaskId(undefined);
-								setUploadedFileName(undefined);
-								setShowEditor(false);
-							}}
-							allowClear
-							showSearch
-							loading={datasetLoading}
-							optionFilterProp="label"
-						/>
-					</div>
-					<Typography.Text type="secondary">
-						默认数据源：{defaultDestinationName || defaultDataSourceId || "未识别"}
-					</Typography.Text>
-					{selectedDatasetMeta?.hiveTable && (
-						<Tag color="cyan">目标表：{selectedDatasetMeta.hiveTable}</Tag>
-					)}
-					<Button
-						type="primary"
-						loading={checking}
-						onClick={handleStartCheck}
-						disabled={!taskId}
-					>
-						开始检查
+			<Card title={initialTaskId ? `接入任务 #${initialTaskId}` : "创建离线文件接入"} size="small">
+				<Space wrap>
+					<Button type="primary" onClick={() => navigate(taskPath)}>
+						{initialTaskId ? "查看任务预检与异常" : "前往离线文件接入"}
 					</Button>
-					{uploadedFileName && taskId && (
-						<Tag color="blue">已绑定任务 #{taskId}：{uploadedFileName}</Tag>
-					)}
-					{!taskId && (
-						<Typography.Text type="secondary">上传文件后会自动生成预检任务</Typography.Text>
-					)}
-				</div>
+					<Button onClick={() => navigate("/governance/rules")}>维护数据质量规则</Button>
+				</Space>
 			</Card>
 		</div>
 	);

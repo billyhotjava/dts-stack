@@ -43,12 +43,26 @@ export type InfraDataSource = {
 	recommendationReason?: string;
 };
 
+export type DataSourceSelectionItem = Pick<InfraDataSource, "id" | "name" | "type"> & {
+	connectorKey?: string;
+	connectorName?: string;
+	connectorCategory?: string;
+	defaultEngine?: string;
+	status?: string;
+	heartbeatStatus?: string;
+	capabilities?: string[];
+	selectable?: boolean;
+	defaultSource?: boolean;
+	recommended?: boolean;
+	recommendationReason?: string;
+};
+
 export type DataSourceSelectionResponse = {
 	capability: string;
 	defaultDataSourceId?: string;
 	defaultSource?: string;
 	message?: string;
-	items: InfraDataSource[];
+	items: DataSourceSelectionItem[];
 };
 
 export type DataSourceUpsertPayload = {

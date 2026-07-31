@@ -42,9 +42,9 @@ import { EmptyState } from "@/components/empty-state";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import { useRouter } from "@/routes/hooks";
 import { normalizeText } from "@/utils/textUtils";
-import { buildBusinessModelingRoute } from "../modeling/businessModelingContext";
-import { buildModelingJourneyRoute, modelingStagePath } from "../modeling/modelingJourneyContext";
-import { buildWarehousePlanRoute, resolveWarehousePlanPageContext } from "../modeling/warehousePlanViewModel";
+import { buildBusinessModelingRoute } from "@/features/modeling/navigation/businessModelingContext";
+import { buildModelingJourneyRoute, modelingStagePath } from "@/features/modeling/navigation/modelingJourneyContext";
+import { buildWarehousePlanRoute, resolveWarehousePlanPageContext } from "@/features/modeling/navigation/warehousePlanViewModel";
 import { ConformedDimensionCatalogCard } from "./ConformedDimensionCatalogCard";
 import { DataMartWorkspace } from "./DataMartWorkspace";
 import { DimensionalModelingAssist } from "./DimensionalModelingAssist";
@@ -366,11 +366,11 @@ export default function SubjectAreasPage() {
 		if (!activeDomain?.id) return;
 		if (!returnPlanId) {
 			toast.info("请先创建或选择建设规划，再进入业务建模");
-			router.push("/modeling/plans");
+			router.push("/data-modeling/planning/spaces");
 			return;
 		}
 		router.push(
-			buildBusinessModelingRoute("/modeling/dimensions", {
+			buildBusinessModelingRoute("/data-modeling/dimensions/workbench", {
 				planId: returnPlanId,
 				domainId: activeDomain.id,
 			}),
@@ -413,7 +413,7 @@ export default function SubjectAreasPage() {
 		if (!activeDomain?.id) return;
 		if (!returnPlanId) {
 			toast.info("请先创建或选择建设规划，再继续逻辑模型");
-			router.push("/modeling/plans");
+			router.push("/data-modeling/planning/spaces");
 			return;
 		}
 		router.push(
@@ -425,7 +425,7 @@ export default function SubjectAreasPage() {
 			}),
 		);
 	};
-	const returnToPlanning = () => router.push(planningReturnRoute || "/modeling/plans");
+	const returnToPlanning = () => router.push(planningReturnRoute || "/data-modeling/planning/spaces");
 	const openModal = (domain?: DomainNode | null, parentId?: string | null) => {
 		setEditing(domain || null);
 		form.resetFields();

@@ -1697,22 +1697,22 @@
 ## Sprint-78: P0 安全与稳定性加固（评审缺口闭环） (202607)
 
 **目录**: `worklog/v2.2.3/sprint-78-202607-p0-security-stability-hardening`
-**状态**: READY（规划与契约已冻结，未实施）
+**状态**: DONE（F3/F4 已实施并验收，2026-07-31；F1 放弃、F2 暂缓；浏览器证据段 GAP 由 Sprint-77 F0 基线跟踪）
 **类型**: Security Hardening / Ops Reliability / Delivery Cleanup
-**目标**: 关闭 2026-07-29 评审确认的四个 P0 风险——新建用户初始口令不再是公开常量、TLS 私钥不再随源码分发、PostgreSQL 具备定时备份与已验证恢复、Hetu 遗留代理从交付物中彻底移除。
-**依赖**: 复用 `KeycloakAdminClient.resetPassword` 既有 temporary 契约、`services/certs` 部署期证书链、init.sh 的 `PG_DB_*` 库清单口径、`biLinkUrl.ts` 既有 Hetu→`/bi` 重定向；不引入新容器、不改审批链路与角色边界、不动 `services/dts-pg/data`；浏览器验收基线缺口由 Sprint-77 F0 统一跟踪，本 Sprint 不重复立项。
+**目标**: 关闭 2026-07-29 评审确认的可立即落地的 P0 风险——Hetu 遗留代理从交付物中彻底移除、PostgreSQL 具备定时备份与已验证恢复。F1 因部分现场仅 PKI 登录、不可本地新建用户而放弃（ADR-78-09）；F2 暂缓待讨论。
+**依赖**: 复用 init.sh 的 `PG_DB_*` 库清单口径、`biLinkUrl.ts` 既有 Hetu→`/bi` 重定向；未引入新容器、未动 `services/dts-pg/data`；浏览器验收基线缺口由 Sprint-77 F0 统一跟踪。
 
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
-| F1-新建用户初始口令安全治理 | P0 | 3 | READY |
-| F2-TLS私钥出库与部署期注入 | P0 | 3 | READY |
-| F3-PostgreSQL定时备份与恢复验证 | P0 | 3 | READY |
-| F4-Hetu遗留代理移除与内置BI收敛 | P0 | 3 | READY |
+| F1-新建用户初始口令安全治理 | P0 | 3 | ABANDONED（2026-07-29 决策，ADR-78-09） |
+| F2-TLS私钥出库与部署期注入 | P0 | 3 | READY（暂缓） |
+| F3-PostgreSQL定时备份与恢复验证 | P0 | 3 | DONE（IT-04/05 PASS） |
+| F4-Hetu遗留代理移除与内置BI收敛 | P0 | 3 | DONE（IT-06/07 PASS，浏览器段 GAP） |
 
-**统计**: DRAFT=0, READY=4, IN_PROGRESS=0, DONE=0, BLOCKED=0
-**执行顺序**: 四个 Feature 相互独立可并行；Feature 内 T01 → T02 → T03；F4/T03 浏览器 smoke 段等待 Sprint-77 F0 基线。
-**关键决策**: 初始口令 SecureRandom 一次性生成 + temporary=true、明文只存在于执行响应内存（ADR-78-01/02）；TLS 私钥唯一来源为部署期 services/certs，Git 历史旧私钥以轮换关闭（ADR-78-04/05）；备份走宿主机 pg_dump + 14 天保留，不动 data 目录（ADR-78-06）；Hetu 路由层硬删除不留开关（ADR-78-07）。
-**已知风险**: Git 历史中的旧 p12 私钥不可召回，现场必须执行 F2/T03 轮换才算关闭；旧 Hetu 路径书签失效需在发布说明中告知；浏览器 smoke 证据段受共享登录基线 GAP 约束（`it/baseline.md`）。
+**统计**: READY=1, IN_PROGRESS=0, DONE=2, BLOCKED=0, ABANDONED=1
+**执行顺序**: F3、F4 并行实施完成；Feature 内 T01 → T02 → T03 均闭环。
+**关键决策**: 备份走宿主机 pg_dump + 14 天保留，不动 data 目录（ADR-78-06）——`bin/dts-backup` 已交付，9 库自动发现、故障注入/保留清理/恢复演练全部实测通过；Hetu 路由层硬删除不留开关（ADR-78-07）——compose 双文件 + file provider 清零，经用户批准受控重建 dts-proxy/dts-platform-webapp 后运行时 hetu 路由=0，旧路径全部回落 SPA；F1 放弃——PKI 现场无本地建用户流程（ADR-78-09）；F2 私钥出库暂缓，Git 历史旧私钥风险在 F2 落地前保持开放。
+**已知风险**: Git 历史中的旧 p12 私钥不可召回（F2 暂缓期间风险持续）；备份 crontab 需现场按 `assets/runbook.md` 手动安装（`17 3 * * *`）；浏览器 smoke 证据段受共享登录基线 GAP 约束（`it/baseline.md`）。
 
 ## Sprint-79: 智能数据建模工作台收敛 (202607)
 
@@ -1735,3 +1735,48 @@
 **执行顺序**: F0 → F1 → F2/F3 → F4 → F5；F2/F3 可在 Shell 契约冻结后并行，F5 必须等待功能等价、客户画像和两版本访问观测。
 **关键决策**: `/modeling/workbench` 为推荐主入口；原有规划、维度、模型、指标菜单在两版本观测和客户画像门禁满足前继续可见；原型只提供 UI 规格；canonical owner 全部复用；“贴源表”映射来源注册/逆向候选而非第五类 ModelSpec；单页编辑不绕过三阶段门禁；8 条兼容路由两版本零访问后删，旧表另行审批。
 **已知风险**: 认证 API/UI 已在系统 Chrome 150 复验，但 Chrome 95 兼容尚未补；当前本地仅有 6 个 DIMENSION 模型且 Candidate/implementation 为 0；客户环境规模与旧入口使用未知；Sprint-76 PROD 物化仍为 NO-GO。
+
+## Sprint-80: 原型驱动的数据建模前端替换 (202607)
+
+**目录**: `worklog/v2.2.3/sprint-80-202607-prototype-modeling-ui-replacement`
+**状态**: READY_FOR_UI_REVIEW（当前 v223 演示环境已完成构建与集中 E2E，尚未部署客户生产）
+**类型**: Frontend Architecture / Information Architecture / Controlled UI Retirement
+**目标**: 以 `worklog/prototype/dm` 为唯一 UI 规格，用 `/data-modeling/**` 正式页面和独立顶级“数据建模”菜单替换旧建模展示层；未接后台的保存、提交、发布和物化继续失败关闭。
+**依赖**: 继承 Sprint-79 已确认的 WarehousePlan、ModelSpec、StageGate、ReleaseCandidate、物化和审计 owner；本 Sprint 只重构前端、路由和菜单，不修改 Java/API/业务表。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F0-原型、旧 UI、共享契约、菜单和路由映射 | P0 | — | DONE |
+| F1-页面框架、建模概览、数仓规划、数据标准 | P0 | — | DONE |
+| F2-模型工作台、逆向建模、数据指标 | P0 | — | DONE |
+| F3-通用工具、关系图和共用弹层 | P0 | — | DONE |
+| F4-新菜单、静态路由、动态解析、旧页面退役 | P0 | — | DONE |
+| F5-集中构建、源契约、Chrome 95/E2E 和 UI 评审 | P0 | — | DONE |
+
+**统计**: Feature DONE=6；该 Sprint 未按独立 Task 文件拆分，当前交付状态为 READY_FOR_UI_REVIEW。
+**执行顺序**: 原型映射 → 页面与共享组件 → 正式路由 → 顶级菜单 → 旧展示层删除 → 一次集中构建/E2E。
+**关键决策**: `/data-modeling/**` 使用真实 URL；一级“数据建模”与“数据开发与运维”同级；旧展示组件物理删除；共享 contract/helper 先迁移；未接后台动作失败关闭，不模拟成功。
+**已知风险**: 尚未部署客户生产；后台保存、提交、发布、导入、导出和物化需由 Sprint-81 接入唯一 canonical 控制面。
+
+## Sprint-81: 数据建模后台重构与旧运行面物理退役 (202607)
+
+**目录**: `worklog/v2.2.3/sprint-81-202607-modeling-backend-rearchitecture`
+**状态**: PLANNED（架构与退役边界已冻结；F0 只读基线核验 IN_PROGRESS，尚未开始编码）
+**类型**: Backend Architecture / Modular Monolith / Data Migration / Controlled Retirement
+**目标**: 把 `dts-platform` 收敛为一套模块化建模控制面，使 Sprint-80 新前端只经 WarehousePlan→ModelSpec v2/revision→StageGate→Lifecycle→ReleaseCandidate→Materialization→DbtExecutionGateway→Airflow/dbt 完成真实后台旅程，并在同一 Sprint 重接、迁移后物理删除旧运行面。
+**依赖**: 复用 `CatalogAssetType/CatalogAssetKey`、`gov_rule/gov_rule_version/gov_rule_binding/gov_quality_run`、公共 `AuditService`、Sprint-69/76 ReleaseCandidate/物化/Airflow/dbt 主链；中央审计历史和历史 Liquibase changelog 永久保留。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F0-基线与退役门禁 | P0 | 3 | IN_PROGRESS |
+| F1-模块化控制面边界 | P0 | 3 | PLANNED |
+| F2-唯一建模状态链 | P0 | 3 | PLANNED |
+| F3-跨域证据与耐久消息 | P0 | 4 | PLANNED |
+| F4-dbt执行网关与调度 | P0 | 3 | PLANNED |
+| F5-精确迁移与物理退役 | P0 | 4 | PLANNED |
+| F6-集成验收与发布门禁 | P0 | 3 | PLANNED |
+
+**统计**: PLANNED=22, IN_PROGRESS=1, DONE=0, BLOCKED=0；共 23 个 Task。
+**执行顺序**: F0 → F1 → F2/F3 → F4 → F5 → F6；F5 每个批次在同 Sprint 内完成调用方重接、精确迁移/备份、停机复核和物理删除；最终 E2E 只在全部编码结束后集中执行。
+**关键决策**: dts-platform 模块化单体；跨域单向 `integration→catalog identity→quality evidence→modeling`；事件 outbox 与 audit outbox 分表，审计耐久投递 dts-admin；立即退役 semantic/old plan/vNext HTTP 面，SQL model/business object/vNext service/old dbt run 先解耦后删；不保留长期 410/tombstone。
+**已知风险**: 当前环境 legacy/run/candidate/materialization 数据为 0，但客户环境未知；质量模板 10、运行数据 0；任何客户 DROP 必须经过环境级画像、备份恢复和“零数据或已迁移”停机门禁。

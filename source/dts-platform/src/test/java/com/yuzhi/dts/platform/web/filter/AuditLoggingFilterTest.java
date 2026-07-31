@@ -51,6 +51,9 @@ class AuditLoggingFilterTest {
         assertThat(event.httpMethod).isEqualTo("GET");
         assertThat(event.action).contains("查看");
         assertThat(event.clientIp).isEqualTo("223.86.189.127");
+        assertThat((java.util.Map<String, Object>) event.payload)
+            .containsEntry("queryKeys", List.of("page", "size"))
+            .doesNotContainKey("query");
     }
 
     @Test
@@ -134,6 +137,24 @@ class AuditLoggingFilterTest {
 
             verify(forwarder, never()).record(org.mockito.ArgumentMatchers.any(AuditForwarderService.PendingAuditEvent.class));
         }
+    }
+
+    @Test
+    void authenticatedWriterCannotSuppressFallbackAuditWithClientControlledFlags() throws Exception {
+        AuditForwarderService forwarder = mock(AuditForwarderService.class);
+        AuditLoggingFilter filter = new AuditLoggingFilter(mockProvider(forwarder), mock(AuditFlowManager.class), false);
+        authenticate("opadmin");
+
+        MockHttpServletRequest headerRequest = new MockHttpServletRequest("POST", "/api/modeling/model-specs");
+        headerRequest.addHeader("X-Audit-Silent", "true");
+        filter.doFilter(headerRequest, new MockHttpServletResponse(), (req, res) -> {});
+        verify(forwarder).record(org.mockito.ArgumentMatchers.any(AuditForwarderService.PendingAuditEvent.class));
+
+        reset(forwarder);
+        MockHttpServletRequest parameterRequest = new MockHttpServletRequest("DELETE", "/api/modeling/model-specs/model-1");
+        parameterRequest.addParameter("auditSilent", "true");
+        filter.doFilter(parameterRequest, new MockHttpServletResponse(), (req, res) -> {});
+        verify(forwarder).record(org.mockito.ArgumentMatchers.any(AuditForwarderService.PendingAuditEvent.class));
     }
 
     private AuditForwarderService.PendingAuditEvent perform(

@@ -24,7 +24,7 @@ test("Sprint-45 ops instances can reverse-locate source task, backfill, logs and
 	for (const label of ["查看源任务", "查看数据源", "查看资产", "补数", "查看日志", "重试", "终止实例"]) {
 		assert.match(OPS_INSTANCES_SOURCE, new RegExp(label));
 	}
-	for (const route of ["/explore/etl/transform", "/ops/backfill", "/ops/logs", "/foundation/data-sources", "/catalog/assets"]) {
+	for (const route of ["/foundation/data-sources/access/", "/ops/backfill", "/ops/logs", "/foundation/data-sources", "/catalog/assets"]) {
 		assert.match(OPS_INSTANCES_SOURCE, new RegExp(route.replaceAll("/", "\\/")));
 	}
 	assert.match(OPS_INSTANCES_SOURCE, /searchParams\.get\("keyword"\)/);
@@ -34,9 +34,10 @@ test("Sprint-45 ops instances can reverse-locate source task, backfill, logs and
 });
 
 test("Sprint-45 ops alerts and backfill expose todo creation and impact scope", () => {
-	for (const label of ["创建待办", "查看源任务", "查看数据源", "查看资产"]) {
+	for (const label of ["创建待办", "查看质量规则", "查看数据源", "查看资产"]) {
 		assert.match(OPS_ALERTS_SOURCE, new RegExp(label));
 	}
+	assert.match(OPS_ALERTS_SOURCE, /\/governance\/rules/);
 	for (const label of ["影响说明", "查看源任务", "查看实例", "查看日志"]) {
 		assert.match(OPS_BACKFILL_SOURCE, new RegExp(label));
 	}

@@ -5,6 +5,8 @@ import com.yuzhi.dts.ingestion.repository.RollbackAuditLogRepository;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class RollbackAuditService {
@@ -15,6 +17,7 @@ public class RollbackAuditService {
 		this.repository = repository;
 	}
 
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public RollbackAuditLog record(String operator, RollbackLevel level, String scope,
 									Long taskId, UUID dataSourceId,
 									String requestJson, String impactJson,

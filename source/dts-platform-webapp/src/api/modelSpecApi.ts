@@ -2,8 +2,8 @@ import api from "@/api/apiClient";
 import type {
 	ModelImplementationCasToken,
 	ModelImplementationView,
-} from "@/pages/modeling/modelImplementationContract";
-import { toModelImplementationEtag } from "@/pages/modeling/modelImplementationContract";
+} from "@/features/modeling/contracts/modelImplementationContract";
+import { toModelImplementationEtag } from "@/features/modeling/contracts/modelImplementationContract";
 import type {
 	CanonicalModelSpecView,
 	CreateModelSpecCommand,
@@ -13,8 +13,8 @@ import type {
 	ModelSpecType,
 	ModelSpecView,
 	UpdateModelSpecCommand,
-} from "@/pages/modeling/modelSpecV2Contract";
-import { toModelSpecEtag } from "@/pages/modeling/modelSpecV2Contract";
+} from "@/features/modeling/contracts/modelSpecV2Contract";
+import { toModelSpecEtag } from "@/features/modeling/contracts/modelSpecV2Contract";
 
 const MODEL_SPEC_RESOURCE = "/modeling/model-specs";
 

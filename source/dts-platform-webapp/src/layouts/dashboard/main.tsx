@@ -1,10 +1,11 @@
 import { lazy, Suspense, useMemo } from "react";
 import { Outlet, ScrollRestoration, useLocation } from "react-router";
+import type { MenuTree } from "#/entity";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { LineLoading } from "@/components/loading";
-import { cn } from "@/utils";
+import { retiredDataModelingHomeRedirect } from "@/pages/data-modeling/navigation";
 import { useMenuStore } from "@/store/menuStore";
-import type { MenuTree } from "#/entity";
+import { cn } from "@/utils";
 import {
 	isExternalPath,
 	isMenuDeleted,
@@ -113,8 +114,19 @@ const collectMenuPaths = (menus: MenuTree[]): Set<string> => {
  * Platform core pages (workbench, settings, etc.) are not gated by menu visibility.
  * BI paths (/bi/*) are NOT in this list — they are subject to menu-based access control.
  */
-const ALWAYS_ALLOWED_PREFIXES = ["/workbench", "/explore", "/governance", "/catalog",
-	"/foundation", "/modeling", "/security", "/services", "/ops", "/my", "/settings"];
+const ALWAYS_ALLOWED_PREFIXES = [
+	"/workbench",
+	"/explore",
+	"/governance",
+	"/catalog",
+	"/foundation",
+	"/modeling",
+	"/security",
+	"/services",
+	"/ops",
+	"/my",
+	"/settings",
+];
 
 /** Check if pathname is reachable from any menu path (exact or prefix match). */
 const isPathInMenuTree = (menuPaths: Set<string>, pathname: string): boolean => {
@@ -134,10 +146,11 @@ const Main = () => {
 	const menus = useMenuStore((s) => s.menus || []);
 
 	const { pathname } = useLocation();
+	const guardPath = retiredDataModelingHomeRedirect(pathname) ?? pathname;
 	const authIndex = useMemo(() => buildAuthIndex(menus), [menus]);
-	const currentNavAuth = useMemo(() => resolveAuthForPath(authIndex, pathname), [authIndex, pathname]);
+	const currentNavAuth = useMemo(() => resolveAuthForPath(authIndex, guardPath), [authIndex, guardPath]);
 	const menuPaths = useMemo(() => collectMenuPaths(menus), [menus]);
-	const pathReachable = useMemo(() => isPathInMenuTree(menuPaths, pathname), [menuPaths, pathname]);
+	const pathReachable = useMemo(() => isPathInMenuTree(menuPaths, guardPath), [menuPaths, guardPath]);
 
 	// If menus are loaded but the path is not in the menu tree, block access.
 	if (!pathReachable) {

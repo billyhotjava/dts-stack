@@ -16,18 +16,27 @@ test("model-owned data element maintenance returns only to the matching model st
 		revision: "3",
 		planId: "10000000-0000-0000-0000-000000000001",
 		returnTo:
-			"/modeling/models/30000000-0000-0000-0000-000000000003?tab=standards&planId=10000000-0000-0000-0000-000000000001",
+			"/data-modeling/dimensions/workbench?modelSpecId=30000000-0000-0000-0000-000000000003&tab=standards&planId=10000000-0000-0000-0000-000000000001",
 	});
 	assert.deepEqual(navigation.resolveStandardOwnerReturnTo(params), {
-		href: "/modeling/models/30000000-0000-0000-0000-000000000003?tab=standards&planId=10000000-0000-0000-0000-000000000001",
+		href: "/data-modeling/dimensions/workbench?modelSpecId=30000000-0000-0000-0000-000000000003&tab=standards&planId=10000000-0000-0000-0000-000000000001",
 		label: "返回模型字段标准",
 	});
 
 	params.set(
 		"returnTo",
-		"/modeling/models/40000000-0000-0000-0000-000000000004?tab=standards&planId=10000000-0000-0000-0000-000000000001",
+		"/data-modeling/dimensions/workbench?modelSpecId=40000000-0000-0000-0000-000000000004&tab=standards&planId=10000000-0000-0000-0000-000000000001",
 	);
 	assert.equal(navigation.resolveStandardOwnerReturnTo(params), null);
+
+	for (const invalid of [
+		"/data-modeling/dimensions/workbench?tab=standards&planId=10000000-0000-0000-0000-000000000001",
+		"/data-modeling/dimensions/workbench?modelSpecId=30000000-0000-0000-0000-000000000003&tab=fields&planId=10000000-0000-0000-0000-000000000001",
+		"/data-modeling/dimensions/workbench?modelSpecId=30000000-0000-0000-0000-000000000003&tab=standards&planId=10000000-0000-0000-0000-000000000001&extra=1",
+	]) {
+		params.set("returnTo", invalid);
+		assert.equal(navigation.resolveStandardOwnerReturnTo(params), null, invalid);
+	}
 });
 
 test("plan-owned data element maintenance returns only to the matching canonical baseline", async () => {
@@ -37,11 +46,10 @@ test("plan-owned data element maintenance returns only to the matching canonical
 
 	const params = new URLSearchParams({
 		planId: "10000000-0000-0000-0000-000000000001",
-		returnTo:
-			"/modeling/plans/10000000-0000-0000-0000-000000000001/baseline?tab=categories&planId=10000000-0000-0000-0000-000000000001",
+		returnTo: "/data-modeling/planning/spaces?view=baseline&tab=categories&planId=10000000-0000-0000-0000-000000000001",
 	});
 	assert.deepEqual(navigation.resolveStandardOwnerReturnTo(params), {
-		href: "/modeling/plans/10000000-0000-0000-0000-000000000001/baseline?tab=categories&planId=10000000-0000-0000-0000-000000000001",
+		href: "/data-modeling/planning/spaces?view=baseline&tab=categories&planId=10000000-0000-0000-0000-000000000001",
 		label: "返回建设规划",
 	});
 
@@ -49,7 +57,10 @@ test("plan-owned data element maintenance returns only to the matching canonical
 		"https://evil.example",
 		"//evil.example",
 		"/ops/instances",
-		"/modeling/plans/other/baseline?tab=categories&planId=other",
+		"/data-modeling/planning/spaces?tab=categories&planId=10000000-0000-0000-0000-000000000001",
+		"/data-modeling/planning/spaces?view=baseline&tab=other&planId=10000000-0000-0000-0000-000000000001",
+		"/data-modeling/planning/spaces?view=baseline&tab=categories&planId=20000000-0000-0000-0000-000000000002",
+		"/data-modeling/planning/spaces?view=baseline&tab=categories&planId=10000000-0000-0000-0000-000000000001&extra=1",
 	]) {
 		params.set("returnTo", unsafe);
 		assert.equal(navigation.resolveStandardOwnerReturnTo(params), null, unsafe);
@@ -66,7 +77,7 @@ test("standard package round trip preserves only canonical owner context", async
 		revision: "3",
 		planId: "10000000-0000-0000-0000-000000000001",
 		returnTo:
-			"/modeling/models/30000000-0000-0000-0000-000000000003?tab=standards&planId=10000000-0000-0000-0000-000000000001",
+			"/data-modeling/dimensions/workbench?modelSpecId=30000000-0000-0000-0000-000000000003&tab=standards&planId=10000000-0000-0000-0000-000000000001",
 		keyword: "amount",
 		page: "2",
 		bindingDraft: "1",
@@ -79,7 +90,7 @@ test("standard package round trip preserves only canonical owner context", async
 		revision: "3",
 		planId: "10000000-0000-0000-0000-000000000001",
 		returnTo:
-			"/modeling/models/30000000-0000-0000-0000-000000000003?tab=standards&planId=10000000-0000-0000-0000-000000000001",
+			"/data-modeling/dimensions/workbench?modelSpecId=30000000-0000-0000-0000-000000000003&tab=standards&planId=10000000-0000-0000-0000-000000000001",
 	});
 
 	const elementsUrl = new URL(navigation.buildDataElementReturnRoute(packageUrl.searchParams), "http://dts.local");
@@ -88,7 +99,7 @@ test("standard package round trip preserves only canonical owner context", async
 	assert.equal(elementsUrl.searchParams.get("planId"), "10000000-0000-0000-0000-000000000001");
 	assert.equal(
 		elementsUrl.searchParams.get("returnTo"),
-		"/modeling/models/30000000-0000-0000-0000-000000000003?tab=standards&planId=10000000-0000-0000-0000-000000000001",
+		"/data-modeling/dimensions/workbench?modelSpecId=30000000-0000-0000-0000-000000000003&tab=standards&planId=10000000-0000-0000-0000-000000000001",
 	);
 	assert.equal(elementsUrl.searchParams.get("applied"), null);
 	assert.equal(elementsUrl.searchParams.get("bindingDraft"), null);

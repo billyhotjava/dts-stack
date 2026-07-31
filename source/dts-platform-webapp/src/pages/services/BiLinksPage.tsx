@@ -71,7 +71,7 @@ const CLASSIFICATION_OPTIONS = [
 ];
 
 const ENGINE_OPTIONS = [
-	{ label: "河图 (Hetu)", value: "HETU" },
+	{ label: "内置 BI (DTS)", value: "DTS_BI" },
 	{ label: "Tableau", value: "TABLEAU" },
 	{ label: "Superset", value: "SUPERSET" },
 	{ label: "Power BI", value: "POWERBI" },
@@ -103,7 +103,7 @@ const toRequestPayload = (values: FormValues): ReportLinkUpsertRequest => ({
 	code: normalizeText(values.code) || "",
 	title: normalizeText(values.title) || "",
 	url: normalizeBiLinkForSave(values.url, values.engine),
-	engine: normalizeText(values.engine)?.toUpperCase() || "HETU",
+	engine: normalizeText(values.engine)?.toUpperCase() || "DTS_BI",
 	reportType: normalizeText(values.reportType),
 	deptCodes: normalizeCodes(values.deptCodes),
 	roleCodes: normalizeCodes(values.roleCodes),
@@ -119,7 +119,7 @@ const toEditDefaults = (record: ReportLink): FormValues => ({
 	code: record.code || "",
 	title: record.title || "",
 	url: record.url || "",
-	engine: record.engine || "HETU",
+	engine: record.engine === "HETU" ? "DTS_BI" : record.engine || "DTS_BI",
 	reportType: record.reportType || undefined,
 	deptCodes: Array.isArray(record.deptCodes) ? record.deptCodes : [],
 	roleCodes: Array.isArray(record.roleCodes) ? record.roleCodes : [],
@@ -212,7 +212,7 @@ export default function Page({ embedded }: Props) {
 		setEditing(null);
 		form.resetFields();
 		form.setFieldsValue({
-			engine: "HETU",
+			engine: "DTS_BI",
 			classification: "INTERNAL",
 			enabled: true,
 			deptCodes: [],
@@ -347,7 +347,7 @@ export default function Page({ embedded }: Props) {
 				title: "引擎",
 				dataIndex: "engine",
 				width: 140,
-				render: (value: string) => <Tag>{value || "HETU"}</Tag>,
+				render: (value: string) => <Tag>{value || "DTS_BI"}</Tag>,
 			},
 			{
 				title: "类型",
@@ -553,7 +553,7 @@ export default function Page({ embedded }: Props) {
 						label="名称"
 						rules={[{ required: true, message: "请输入 BI 名称" }]}
 					>
-						<Input placeholder="例如：河图驾驶舱 / 财务看板" />
+						<Input placeholder="例如：经营驾驶舱 / 财务看板" />
 					</Form.Item>
 					<Form.Item
 						name="code"
@@ -561,14 +561,14 @@ export default function Page({ embedded }: Props) {
 						rules={[{ required: true, message: "请输入唯一标识" }]}
 						extra="建议使用英文或数字，作为唯一标识。"
 					>
-						<Input placeholder="例如：hetu-main-dashboard" />
+						<Input placeholder="例如：sales-monthly-report" />
 					</Form.Item>
 					<Form.Item
 						name="url"
 						label="访问地址"
 						rules={[{ required: true, message: "请输入访问地址" }]}
 					>
-						<Input placeholder="例如：http://bi.internal/hetu/dashboard" />
+						<Input placeholder="例如：/bi/dashboards 或 https://bi.example.com/report/1" />
 					</Form.Item>
 					<Space size="large" className="w-full">
 						<Form.Item name="engine" label="引擎">

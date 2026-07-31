@@ -6,7 +6,7 @@ import {
 	type DimensionDefinitionView,
 	toDimensionDefinitionEtag,
 	type UpdateDimensionDefinitionCommand,
-} from "@/pages/modeling/dimensionDefinitionContract";
+} from "@/features/modeling/contracts/dimensionDefinitionContract";
 
 const DIMENSION_DEFINITION_RESOURCE = "/modeling/dimension-definitions";
 

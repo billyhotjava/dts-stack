@@ -26,15 +26,26 @@ public class AdminInboundServiceAuthenticator {
         HttpServletRequest request,
         String requiredService
     ) {
-        if (request == null || !StringUtils.hasText(requiredService)) {
+        if (!StringUtils.hasText(requiredService)) {
+            return Decision.denied("request_invalid");
+        }
+        Decision decision = authenticate(request);
+        if (
+            !decision.accepted() ||
+            !decision.serviceName().equalsIgnoreCase(requiredService.trim())
+        ) {
+            return Decision.denied("service_unknown");
+        }
+        return decision;
+    }
+
+    public Decision authenticate(HttpServletRequest request) {
+        if (request == null) {
             return Decision.denied("request_invalid");
         }
         String declared = request.getHeader(SERVICE_HEADER);
         String canonical = properties.canonicalServiceName(declared);
-        if (
-            canonical == null ||
-            !canonical.equalsIgnoreCase(requiredService.trim())
-        ) {
+        if (canonical == null) {
             return Decision.denied("service_unknown");
         }
         String supplied = request.getHeader(TOKEN_HEADER);

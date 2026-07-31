@@ -34,6 +34,7 @@ const collectJourneyRoutes = () => {
 };
 
 const isRegisteredRoute = (route: string) => {
+	if (route.startsWith("/data-modeling/") && STATIC_ROUTES.includes('path: "data-modeling/*"')) return true;
 	if (DYNAMIC_RESOLVER.includes(`"${route}"`)) return true;
 	const staticPath = route.replace(/^\//, "");
 	return STATIC_ROUTES.includes(`path: "${staticPath}"`);
@@ -55,10 +56,10 @@ test("journey routes cover the eight stage entry pages", () => {
 	const routes = collectJourneyRoutes();
 	for (const route of [
 		"/foundation/data-sources",
-		"/governance/subjects",
+		"/data-modeling/planning/spaces",
 		"/governance/standards/elements",
-		"/modeling/models",
-		"/modeling/metric-workbench",
+		"/data-modeling/dimensions/workbench",
+		"/data-modeling/metrics/atomic",
 		"/explore/etl/scripts",
 		"/services/apis",
 		"/ops/instances",

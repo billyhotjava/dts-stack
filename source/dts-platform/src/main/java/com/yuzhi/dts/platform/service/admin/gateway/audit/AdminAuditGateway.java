@@ -14,6 +14,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.server.ResponseStatusException;
@@ -21,6 +22,30 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 @Component
 public class AdminAuditGateway {
+
+    public record AuditSubmissionResult(Outcome outcome, Duration retryAfter) {
+
+        public static final AuditSubmissionResult RECORDED = new AuditSubmissionResult(Outcome.RECORDED, null);
+        public static final AuditSubmissionResult DUPLICATE = new AuditSubmissionResult(Outcome.DUPLICATE, null);
+        public static final AuditSubmissionResult IDEMPOTENCY_CONFLICT = new AuditSubmissionResult(
+            Outcome.IDEMPOTENCY_CONFLICT,
+            null
+        );
+        public static final AuditSubmissionResult PERMANENT_FAILURE = new AuditSubmissionResult(Outcome.PERMANENT_FAILURE, null);
+        public static final AuditSubmissionResult RETRYABLE_FAILURE = new AuditSubmissionResult(Outcome.RETRYABLE_FAILURE, null);
+
+        public static AuditSubmissionResult retryable(Duration retryAfter) {
+            return new AuditSubmissionResult(Outcome.RETRYABLE_FAILURE, retryAfter);
+        }
+
+        public enum Outcome {
+            RECORDED,
+            DUPLICATE,
+            IDEMPOTENCY_CONFLICT,
+            PERMANENT_FAILURE,
+            RETRYABLE_FAILURE,
+        }
+    }
 
     private final RestTemplate restTemplate;
     private final PlatformOutboundAdminProperties adminProperties;
@@ -50,9 +75,9 @@ public class AdminAuditGateway {
         return response.getBody() != null ? response.getBody() : new byte[0];
     }
 
-    public boolean recordEvent(Map<String, Object> body) {
+    public AuditSubmissionResult submitEvent(Map<String, Object> body) {
         if (!isEnabled() || body == null) {
-            return false;
+            return AuditSubmissionResult.RETRYABLE_FAILURE;
         }
         try {
             HttpHeaders headers = new HttpHeaders();
@@ -64,14 +89,64 @@ public class AdminAuditGateway {
             if (StringUtils.hasText(adminProperties.getServiceName())) {
                 headers.set("X-DTS-Service", adminProperties.getServiceName().trim());
             }
-            ResponseEntity<Void> response = restTemplate.postForEntity(
+            ResponseEntity<Map> response = restTemplate.postForEntity(
                 buildAdminUri("/audit-events", Map.of()),
                 new HttpEntity<>(body, headers),
-                Void.class
+                Map.class
             );
-            return response.getStatusCode().is2xxSuccessful();
+            if (!response.getStatusCode().is2xxSuccessful()) {
+                return response.getStatusCode().is4xxClientError()
+                    ? AuditSubmissionResult.PERMANENT_FAILURE
+                    : AuditSubmissionResult.RETRYABLE_FAILURE;
+            }
+            Map responseBody = response.getBody();
+            String status = responseBody == null ? null : String.valueOf(responseBody.get("status"));
+            String submittedEventId = body.get("eventId") == null ? null : String.valueOf(body.get("eventId"));
+            String acknowledgedEventId = responseBody == null || responseBody.get("eventId") == null
+                ? null
+                : String.valueOf(responseBody.get("eventId"));
+            if (!StringUtils.hasText(submittedEventId) || !submittedEventId.equals(acknowledgedEventId)) {
+                return AuditSubmissionResult.RETRYABLE_FAILURE;
+            }
+            if (response.getStatusCode().value() == 201 && "RECORDED".equalsIgnoreCase(status)) {
+                return AuditSubmissionResult.RECORDED;
+            }
+            if (response.getStatusCode().value() == 200 && "DUPLICATE".equalsIgnoreCase(status)) {
+                return AuditSubmissionResult.DUPLICATE;
+            }
+            return AuditSubmissionResult.RETRYABLE_FAILURE;
+        } catch (HttpStatusCodeException ex) {
+            if (ex.getStatusCode().value() == 409) {
+                return AuditSubmissionResult.IDEMPOTENCY_CONFLICT;
+            }
+            if (isRetryableStatus(ex.getStatusCode().value())) {
+                return AuditSubmissionResult.retryable(retryAfter(ex));
+            }
+            return ex.getStatusCode().is4xxClientError()
+                ? AuditSubmissionResult.PERMANENT_FAILURE
+                : AuditSubmissionResult.RETRYABLE_FAILURE;
         } catch (RestClientException ex) {
-            return false;
+            return AuditSubmissionResult.RETRYABLE_FAILURE;
+        }
+    }
+
+    private boolean isRetryableStatus(int status) {
+        return status == 401 || status == 403 || status == 408 || status == 425 || status == 429;
+    }
+
+    private Duration retryAfter(HttpStatusCodeException failure) {
+        if (failure.getResponseHeaders() == null) {
+            return null;
+        }
+        String raw = failure.getResponseHeaders().getFirst(HttpHeaders.RETRY_AFTER);
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
+        try {
+            long seconds = Long.parseLong(raw.trim());
+            return Duration.ofSeconds(Math.max(1, Math.min(seconds, 3600)));
+        } catch (NumberFormatException ignored) {
+            return null;
         }
     }
 

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { confirmDataMart, createDataMart, listDataMarts, retireDataMart, updateDataMart } from "@/api/dataMartApi";
 import { searchUsers, type UserDirectoryEntry } from "@/api/services/userDirectoryService";
-import type { DataMartView } from "@/pages/modeling/dataMartContract";
+import type { DataMartView } from "@/features/modeling/contracts/dataMartContract";
 
 const { Text } = Typography;
 

@@ -98,9 +98,15 @@ function renderControl(field, values, onChange) {
 			]);
 
 		case "file":
-			return el("div", { class: "filebox" }, [
+			return el("label", { class: "filebox" }, [
 				el("span", { class: "filebox-btn" }, "选择文件"),
 				el("span", { class: "muted" }, value || "未选择"),
+				el("input", {
+					class: "file-input",
+					type: "file",
+					"aria-label": field.label,
+					onchange: (e) => commit(e.target.files?.[0]?.name || undefined),
+				}),
 			]);
 
 		case "kv":

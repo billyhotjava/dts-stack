@@ -1,6 +1,7 @@
 package com.yuzhi.dts.admin.service.audit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -79,6 +80,16 @@ class AuditIngestIdempotencyServiceTest {
         AuditIngestIdempotencyService.IngestResult result = service.record(PRODUCER, body(), request());
 
         assertThat(result.status()).isEqualTo(AuditIngestIdempotencyService.IngestStatus.DUPLICATE);
+    }
+
+    @Test
+    void missingEventIdIsRejectedInsteadOfFallingBackToNonIdempotentPersistence() {
+        Map<String, Object> bodyWithoutEventId = Map.of("summary", "创建模型");
+
+        assertThatThrownBy(() -> service.record(PRODUCER, bodyWithoutEventId, request()))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("eventId");
+        verify(persistence, never()).persistIdempotent(any(), any(), any(), any());
     }
 
     private AuditEntry existing(String hash) {

@@ -77,9 +77,9 @@ const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 	"/catalog/lineage/diff": "/pages/catalog/LineageDiffPage",
 	"/catalog/quality": "/pages/catalog/QualityPage",
 	"/catalog/data-products": "/pages/catalog/DataProductsPage",
-	"/foundation/access-changes": "/pages/foundation/AccessChangesPage",
+	"/foundation/access-changes": "/pages/foundation/access/LegacyDataIntegrationRedirect",
 	"/foundation/connectors": "/pages/foundation/ConnectorRegistryPage",
-	"/foundation/data-sources": "/pages/foundation/DataSourcesPage",
+	"/foundation/data-sources": "/pages/foundation/access/AccessWorkspacePage",
 	"/foundation/jdbc-drivers": "/pages/foundation/JdbcDriversPage",
 	"/foundation/standard-package": "/pages/foundation/StandardPackagePage",
 	"/workbench/todo": "/pages/workbench/WorkflowCenterPage",
@@ -88,9 +88,9 @@ const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 	"/explore/etl/scripts": "/pages/explore/etl/ScriptStudioPage",
 	"/explore/etl/orchestration": "/pages/explore/etl/OrchestrationPage",
 	"/explore/workbench": workbenchComponentPath,
-	"/studio/low-code-development": "/pages/modeling/ModelingCompatibilityPage",
-	"/studio/projects": "/pages/modeling/ModelTemplatesPage",
-	"/studio/sql-modeling": "/pages/modeling/SqlModelingPage",
+	"/studio/low-code-development": "/pages/data-modeling/LegacyDataModelingRedirect",
+	"/studio/projects": "/pages/data-modeling/LegacyDataModelingRedirect",
+	"/studio/sql-modeling": "/pages/data-modeling/LegacyDataModelingRedirect",
 	"/governance/subjects": "/pages/governance/SubjectAreasPage",
 	"/governance/standards/glossary": "/pages/governance/GlossaryPage",
 	"/governance/standards/elements": "/pages/governance/ElementsPage",
@@ -112,18 +112,18 @@ const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 	"/services/apis": "/pages/services/ApiServicesPage",
 	"/services/products": "/pages/services/DataProductsPage",
 	"/services/tokens": "/pages/services/TokensPage",
-	"/modeling/dbt-files": "/pages/modeling/ModelingCompatibilityPage",
-	"/modeling/plans": "/pages/modeling/ModelingCompatibilityPage",
-	"/modeling/dimensions": "/pages/modeling/ModelingCompatibilityPage",
-	"/modeling/models": "/pages/modeling/ModelingCompatibilityPage",
-	"/modeling/models/:modelSpecId": "/pages/modeling/ModelingCompatibilityPage",
-	"/modeling/metric-workbench": "/pages/modeling/ModelingCompatibilityPage",
-	"/modeling/semantic/subjects": "/pages/modeling/ModelingCompatibilityPage",
-	"/modeling/semantic/objects": "/pages/modeling/ModelingCompatibilityPage",
-	"/modeling/semantic/metrics": "/pages/modeling/ModelingCompatibilityPage",
-	"/modeling/semantic/models": "/pages/modeling/ModelingCompatibilityPage",
-	"/modeling/semantic/publish": "/pages/modeling/ModelingCompatibilityPage",
-	"/modeling/semantic/runs": "/pages/modeling/ModelingCompatibilityPage",
+	"/modeling/dbt-files": "/pages/data-modeling/LegacyDataModelingRedirect",
+	"/modeling/plans": "/pages/data-modeling/LegacyDataModelingRedirect",
+	"/modeling/dimensions": "/pages/data-modeling/LegacyDataModelingRedirect",
+	"/modeling/models": "/pages/data-modeling/LegacyDataModelingRedirect",
+	"/modeling/models/:modelSpecId": "/pages/data-modeling/LegacyDataModelingRedirect",
+	"/modeling/metric-workbench": "/pages/data-modeling/LegacyDataModelingRedirect",
+	"/modeling/semantic/subjects": "/pages/data-modeling/LegacyDataModelingRedirect",
+	"/modeling/semantic/objects": "/pages/data-modeling/LegacyDataModelingRedirect",
+	"/modeling/semantic/metrics": "/pages/data-modeling/LegacyDataModelingRedirect",
+	"/modeling/semantic/models": "/pages/data-modeling/LegacyDataModelingRedirect",
+	"/modeling/semantic/publish": "/pages/data-modeling/LegacyDataModelingRedirect",
+	"/modeling/semantic/runs": "/pages/data-modeling/LegacyDataModelingRedirect",
 	"/ops/events": "/pages/ops/PlatformEventObservabilityPage",
 	"/platform/events": "/pages/ops/PlatformEventObservabilityPage",
 	"/ops/audit-evidence": "/pages/ops/AuditEvidencePage",
@@ -142,6 +142,17 @@ const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 export const resolveDashboardComponentOverride = (path?: string) => {
 	const normalized = normalizeMenuPath(path || "");
 	if (!normalized) return "";
+	if (normalized === "/data-modeling" || normalized.startsWith("/data-modeling/")) {
+		return "/pages/data-modeling/DataModelingPage";
+	}
+	if (
+		normalized === "/modeling" ||
+		normalized.startsWith("/modeling/") ||
+		normalized === "/studio/modeling" ||
+		normalized.startsWith("/studio/modeling/")
+	) {
+		return "/pages/data-modeling/LegacyDataModelingRedirect";
+	}
 	const exact = PATH_COMPONENT_OVERRIDES[normalized];
 	if (exact) return exact;
 	const pathSegments = normalized.split("/").filter(Boolean);
@@ -163,8 +174,6 @@ const isWithinBase = (pathname: string, normalizedBase?: string) => {
 
 const directOverrideParentPath = (pathname: string) => {
 	if (pathname.startsWith("/catalog/datasets/")) return "/catalog/assets";
-	if (pathname.startsWith("/modeling/plans/")) return "/modeling/plans";
-	if (pathname.startsWith("/modeling/models/")) return "/modeling/models";
 	return "";
 };
 

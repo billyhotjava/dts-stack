@@ -1,0 +1,283 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dts-backup — DTS PostgreSQL 逻辑备份与恢复演练（Sprint-78 F3）
+#
+# Usage:
+#   bin/dts-backup [--dir DIR] [--retention-days N] [--dry-run]
+#   bin/dts-backup --restore-check <TS|latest> [--dbs db1,db2,...] [--dir DIR]
+#   bin/dts-backup --list [--dir DIR]
+#
+# Contracts (see worklog/v2.2.3/sprint-78-202607-*/features/F3-*):
+#   - Databases are auto-discovered from .env PG_DB_* keys (never hardcoded).
+#   - Artifacts: <dir>/<YYYYMMDD-HHMMSS>/<db>.dump (pg_dump -Fc) + manifest.txt
+#   - Permissions: dir 700, files 600; no passwords on command line or in logs.
+#   - Exit code 0 = all databases succeeded; non-zero if any failed.
+#   - Retention only deletes directories matching the <ts> naming shape.
+#   - --restore-check restores into isolated <db>_restore_check databases and
+#     always drops them afterwards.
+# =============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+# shellcheck source=lib/dts-common.sh
+source "${SCRIPT_DIR}/lib/dts-common.sh"
+
+ENV_FILE="${DTS_BACKUP_ENV_FILE:-${ROOT_DIR}/.env}"
+BACKUP_DIR="${DTS_BACKUP_DIR:-${ROOT_DIR}/backups/postgres}"
+RETENTION_DAYS=14
+MODE="backup"
+RESTORE_TS=""
+RESTORE_DBS=""
+DRY_RUN=0
+
+usage() {
+  cat <<'EOF'
+Usage:
+  dts-backup [--dir DIR] [--retention-days N] [--dry-run]
+  dts-backup --restore-check <TS|latest> [--dbs db1,db2,...] [--dir DIR]
+  dts-backup --list [--dir DIR]
+
+Options:
+  --dir DIR            Backup root (default: backups/postgres under repo root)
+  --retention-days N   Delete <ts> backup directories older than N days (default: 14)
+  --dry-run            Report retention cleanup without deleting
+  --restore-check TS   Restore drill from backup TS (or "latest") into <db>_restore_check
+  --dbs a,b,c          Limit restore-check to these databases
+  --list               List existing backups
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dir) BACKUP_DIR="$2"; shift 2 ;;
+    --retention-days) RETENTION_DAYS="$2"; shift 2 ;;
+    --dry-run) DRY_RUN=1; shift ;;
+    --restore-check) MODE="restore-check"; RESTORE_TS="$2"; shift 2 ;;
+    --dbs) RESTORE_DBS="$2"; shift 2 ;;
+    --list) MODE="list"; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) die "unknown argument: $1 (see --help)" ;;
+  esac
+done
+
+# ---------------------------------------------------------------------------
+# Environment discovery
+# ---------------------------------------------------------------------------
+pg_container() {
+  if [[ -n "${DTS_PG_CONTAINER:-}" ]]; then
+    echo "${DTS_PG_CONTAINER}"
+    return
+  fi
+  docker ps --format '{{.Names}}' | grep -E '(^|-)dts-pg(-|[0-9]|$)' | head -n 1
+}
+
+PG_CONTAINER="$(pg_container || true)"
+
+require_pg() {
+  [[ -n "${PG_CONTAINER}" ]] || die "no running dts-pg container found (set DTS_PG_CONTAINER to override)"
+  docker exec -i "${PG_CONTAINER}" pg_isready -q >/dev/null 2>&1 || die "postgres in ${PG_CONTAINER} is not ready"
+}
+
+# discover_databases — echoes one database name per line, from .env PG_DB_* keys.
+discover_databases() {
+  [[ -f "${ENV_FILE}" ]] || die ".env not found at ${ENV_FILE} (set DTS_BACKUP_ENV_FILE to override)"
+  grep -oE '^PG_DB_[A-Z0-9_]+=.*' "${ENV_FILE}" | cut -d= -f2- | sed 's/[[:space:]]//g' | grep -v '^$' | sort -u
+}
+
+# psql_query <db> <sql> — read-only query via container superuser over local socket.
+psql_query() {
+  local db="$1"; shift
+  docker exec -i "${PG_CONTAINER}" psql -U postgres -Atq -d "${db}" -c "$1"
+}
+
+psql_admin() {
+  docker exec -i "${PG_CONTAINER}" psql -U postgres -qc "$1" >/dev/null
+}
+
+# ---------------------------------------------------------------------------
+# list mode
+# ---------------------------------------------------------------------------
+if [[ "${MODE}" == "list" ]]; then
+  [[ -d "${BACKUP_DIR}" ]] || { info "no backup directory at ${BACKUP_DIR}"; exit 0; }
+  find "${BACKUP_DIR}" -mindepth 1 -maxdepth 1 -type d -regextype posix-extended \
+    -regex '.*/[0-9]{8}-[0-9]{6}' | sort
+  exit 0
+fi
+
+require_pg
+umask 077
+
+# ---------------------------------------------------------------------------
+# backup mode
+# ---------------------------------------------------------------------------
+run_backup() {
+  local dbs ts wip dest db start_ts end_ts dur status out size_bytes
+  mapfile -t dbs < <(discover_databases)
+  [[ ${#dbs[@]} -gt 0 ]] || die "no PG_DB_* databases discovered in ${ENV_FILE}"
+  info "discovered ${#dbs[@]} database(s): ${dbs[*]}"
+
+  install -d -m 700 "${BACKUP_DIR}"
+  exec 9>"${BACKUP_DIR}/.lock"
+  flock -n 9 || die "another dts-backup instance is running (lock: ${BACKUP_DIR}/.lock)"
+
+  # Disk precheck: require free space > 120% of current total DB size.
+  local db_list est_bytes free_kb need_kb
+  db_list="$(printf '%s,' "${dbs[@]}")"; db_list="{${db_list%,}}"
+  est_bytes="$(psql_query postgres "SELECT coalesce(sum(pg_database_size(datname)),0) FROM pg_database WHERE datname = ANY('${db_list}'::text[])")"
+  free_kb="$(df -P -k "${BACKUP_DIR}" | awk 'NR==2 {print $4}')"
+  need_kb=$(( est_bytes / 1024 * 12 / 10 + 102400 ))
+  if [[ "${free_kb}" -lt "${need_kb}" ]]; then
+    die "insufficient disk space in ${BACKUP_DIR}: free=${free_kb}KB need~${need_kb}KB (120% of ${est_bytes}B)"
+  fi
+
+  ts="$(date +%Y%m%d-%H%M%S)"
+  wip="${BACKUP_DIR}/.wip-${ts}"
+  dest="${BACKUP_DIR}/${ts}"
+  install -d -m 700 "${wip}"
+
+  local failures=0
+  local manifest_lines=()
+  for db in "${dbs[@]}"; do
+    start_ts="$(date +%s)"
+    status="SUCCESS"
+    out="${wip}/${db}.dump"
+    if docker exec -i "${PG_CONTAINER}" pg_dump -U postgres -d "${db}" -Fc > "${out}" 2>"${wip}/${db}.err"; then
+      if [[ ! -s "${out}" ]]; then
+        status="FAILED"
+        echo "pg_dump produced empty file" >> "${wip}/${db}.err"
+      fi
+    else
+      status="FAILED"
+    fi
+    end_ts="$(date +%s)"; dur=$(( end_ts - start_ts ))
+    if [[ "${status}" == "FAILED" ]]; then
+      failures=$(( failures + 1 ))
+      size_bytes=0
+      warn "backup FAILED for ${db}: $(tail -n 2 "${wip}/${db}.err" | tr '\n' ' ')"
+      rm -f "${out}"
+    else
+      size_bytes="$(stat -c %s "${out}")"
+      info "backup ${db}: ${size_bytes} bytes in ${dur}s"
+    fi
+    manifest_lines+=("${db}|${db}.dump|${size_bytes}|${status}|${dur}s")
+    rm -f "${wip}/${db}.err"
+  done
+
+  {
+    echo "# dts-backup manifest"
+    echo "timestamp=${ts}"
+    echo "date=$(date -Is)"
+    echo "pg_version=$(psql_query postgres 'SHOW server_version')"
+    echo "container=${PG_CONTAINER}"
+    echo "format=pg_dump custom (-Fc)"
+    echo "# db|file|bytes|status|duration"
+    printf '%s\n' "${manifest_lines[@]}"
+  } > "${wip}/manifest.txt"
+
+  chmod 600 "${wip}"/* 2>/dev/null || true
+  mv "${wip}" "${dest}"
+  info "backup directory: ${dest} (failures=${failures})"
+
+  run_retention || warn "retention cleanup reported errors (backup itself unaffected)"
+
+  [[ ${failures} -eq 0 ]]
+}
+
+# ---------------------------------------------------------------------------
+# retention cleanup (only <ts>-shaped directories are eligible)
+# ---------------------------------------------------------------------------
+run_retention() {
+  local cutoff_epoch dir base epoch removed=0
+  cutoff_epoch="$(date -d "-${RETENTION_DAYS} days" +%s)"
+  while IFS= read -r dir; do
+    base="$(basename "${dir}")"
+    epoch="$(date -d "${base:0:8} ${base:9:2}:${base:11:2}:${base:13:2}" +%s 2>/dev/null || echo 0)"
+    [[ "${epoch}" -gt 0 && "${epoch}" -lt "${cutoff_epoch}" ]] || continue
+    if [[ "${DRY_RUN}" -eq 1 ]]; then
+      info "[dry-run] would delete ${dir}"
+    else
+      rm -rf -- "${dir}"
+      info "retention: deleted ${dir} (older than ${RETENTION_DAYS} days)"
+    fi
+    removed=$(( removed + 1 ))
+  done < <(find "${BACKUP_DIR}" -mindepth 1 -maxdepth 1 -type d -regextype posix-extended \
+             -regex '.*/[0-9]{8}-[0-9]{6}' | sort)
+  [[ "${removed}" -eq 0 ]] && info "retention: nothing to delete (keep ${RETENTION_DAYS} days)"
+  return 0
+}
+
+# ---------------------------------------------------------------------------
+# restore-check mode
+# ---------------------------------------------------------------------------
+run_restore_check() {
+  local ts_dir
+  if [[ "${RESTORE_TS}" == "latest" ]]; then
+    ts_dir="$(find "${BACKUP_DIR}" -mindepth 1 -maxdepth 1 -type d -regextype posix-extended \
+              -regex '.*/[0-9]{8}-[0-9]{6}' | sort | tail -n 1)"
+    [[ -n "${ts_dir}" ]] || die "no backup found under ${BACKUP_DIR}"
+  else
+    ts_dir="${BACKUP_DIR}/${RESTORE_TS}"
+    [[ -d "${ts_dir}" ]] || die "backup directory not found: ${ts_dir}"
+  fi
+  info "restore-check from ${ts_dir}"
+
+  local dbs=()
+  if [[ -n "${RESTORE_DBS}" ]]; then
+    IFS=',' read -r -a dbs <<< "${RESTORE_DBS}"
+  else
+    while IFS='|' read -r db file bytes status dur; do
+      [[ "${db}" =~ ^# ]] && continue
+      [[ "${status}" == "SUCCESS" ]] && dbs+=("${db}")
+    done < "${ts_dir}/manifest.txt"
+  fi
+  [[ ${#dbs[@]} -gt 0 ]] || die "no databases selected for restore-check"
+
+  local failures=0 db check_db start_ts end_ts dur
+  for db in "${dbs[@]}"; do
+    [[ -f "${ts_dir}/${db}.dump" ]] || { warn "restore-check ${db}: dump file missing, skipped"; failures=$((failures+1)); continue; }
+    check_db="${db}_restore_check"
+    start_ts="$(date +%s)"
+    info "restore-check ${db} -> ${check_db} ..."
+    psql_admin "DROP DATABASE IF EXISTS \"${check_db}\""
+    psql_admin "CREATE DATABASE \"${check_db}\""
+    local rc_out rc=0
+    rc_out="$(docker exec -i "${PG_CONTAINER}" pg_restore -U postgres --no-owner --no-privileges -d "${check_db}" < "${ts_dir}/${db}.dump" 2>&1)" || rc=$?
+    if [[ "${rc}" -ne 0 ]]; then
+      warn "pg_restore ${db} exited ${rc}: $(echo "${rc_out}" | tail -n 3 | tr '\n' ' ')"
+      psql_admin "DROP DATABASE IF EXISTS \"${check_db}\""
+      failures=$(( failures + 1 ))
+      continue
+    fi
+
+    # Compare table counts and exact row counts between source and restored DB.
+    local src_tables dst_tables row_mismatch=0 t src_cnt dst_cnt
+    src_tables="$(psql_query "${db}" "SELECT count(*) FROM information_schema.tables WHERE table_schema='public'")"
+    dst_tables="$(psql_query "${check_db}" "SELECT count(*) FROM information_schema.tables WHERE table_schema='public'")"
+    while IFS= read -r t; do
+      [[ -z "${t}" ]] && continue
+      src_cnt="$(psql_query "${db}" "SELECT count(*) FROM public.\"${t}\"")"
+      dst_cnt="$(psql_query "${check_db}" "SELECT count(*) FROM public.\"${t}\"")"
+      if [[ "${src_cnt}" != "${dst_cnt}" ]]; then
+        warn "row mismatch ${db}.${t}: src=${src_cnt} restored=${dst_cnt}"
+        row_mismatch=$(( row_mismatch + 1 ))
+      fi
+    done < <(psql_query "${db}" "SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename LIMIT 200")
+    end_ts="$(date +%s)"; dur=$(( end_ts - start_ts ))
+    psql_admin "DROP DATABASE IF EXISTS \"${check_db}\""
+    if [[ "${src_tables}" == "${dst_tables}" && "${row_mismatch}" -eq 0 ]]; then
+      info "restore-check ${db}: PASS (tables=${dst_tables}, rows matched, ${dur}s)"
+    else
+      warn "restore-check ${db}: FAIL (tables src=${src_tables} restored=${dst_tables}, row_mismatch=${row_mismatch})"
+      failures=$(( failures + 1 ))
+    fi
+  done
+
+  [[ ${failures} -eq 0 ]] || die "restore-check completed with ${failures} failure(s)"
+  info "restore-check: all PASS"
+}
+
+case "${MODE}" in
+  backup) run_backup ;;
+  restore-check) run_restore_check ;;
+esac

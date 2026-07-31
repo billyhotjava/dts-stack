@@ -66,7 +66,7 @@ class InfraDataSourceResourceTest {
     @BeforeEach
     void setUp() {
         properties = new PlatformInboundServiceAuthProperties();
-        properties.setSharedSecret("svc-secret");
+        properties.setTrustedServices(Map.of("dts-ingestion", "svc-secret"));
         resource = new InfraDataSourceResource(
             infraManagementService,
             auditService,
@@ -140,7 +140,7 @@ class InfraDataSourceResourceTest {
     @Test
     void runtimeDetailAllowsServicePrincipalWithDatabaseManagedServiceToken() {
         UUID id = UUID.randomUUID();
-        properties.setSharedSecret(null);
+        properties.setTrustedServices(Map.of());
         authenticate("service:dts-ingestion", AuthoritiesConstants.SERVICE_INTERNAL);
         InfraDataSourceDetailDto detail = new InfraDataSourceDetailDto(
             id,

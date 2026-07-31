@@ -22,13 +22,12 @@ const ZH_LOCALE = readFileSync(new URL("../../../locales/lang/zh_CN/sys.json", i
 const EN_LOCALE = readFileSync(new URL("../../../locales/lang/en_US/sys.json", import.meta.url), "utf8");
 
 const PLATFORM_METRIC_KEYS = [
-	"studioDataModeling",
 	"dataMetrics",
-	"studioMetricWorkbench",
-	"studioSemanticObjects",
-	"studioSemanticMetrics",
-	"studioSemanticModels",
-	"studioSemanticPublish",
+	"metricComposite",
+	"metricDerived",
+	"metricAtomic",
+	"metricModifiers",
+	"metricPeriods",
 ];
 
 test("legacy metrics bridge redirects to platform modeling instead of embedding dts-metrics", () => {
@@ -42,23 +41,29 @@ test("legacy metrics bridge redirects to platform modeling instead of embedding 
 	assert.doesNotMatch(STATIC_ROUTES, /window\.location\.replace/);
 });
 
-test("metrics menu entries converge on the unified modeling workbench", () => {
-	assert.match(MENU_SEED, /"externalLink": "\/modeling\/workbench"/);
-	assert.doesNotMatch(MENU_SEED, /"externalLink": "\/modeling\/(?:metric-workbench|dimensions|models)"/);
+test("metrics menu entries converge on prototype-owned modeling routes", () => {
+	for (const route of [
+		"/data-modeling/metrics/composite",
+		"/data-modeling/metrics/derived",
+		"/data-modeling/metrics/atomic",
+		"/data-modeling/metrics/modifiers",
+		"/data-modeling/metrics/periods",
+	]) {
+		assert.match(MENU_SEED, new RegExp(`"externalLink": "${route.replaceAll("/", "\\/")}"`));
+		assert.match(ROLE_DEFAULTS, new RegExp(`"route": "${route.replaceAll("/", "\\/")}"`));
+	}
+	assert.doesNotMatch(MENU_SEED, /"externalLink": "\/modeling\/(?:workbench|metric-workbench|dimensions|models)"/);
 	assert.doesNotMatch(MENU_SEED, /"externalLink": "\/modeling\/semantic\//);
 	assert.doesNotMatch(MENU_SEED, /"externalLink": "\/modeling\/semantic\/subjects"/);
 	assert.doesNotMatch(MENU_SEED, /"externalLink": "\/modeling\/semantic\/runs"/);
-	assert.match(MENU_SEED, /"externalLink": "\/governance\/subjects"/);
 	assert.match(MENU_SEED, /"titleKey": "sys\.nav\.portal\.opsInstances"/);
 	assert.doesNotMatch(MENU_SEED, /"externalLink": "\/bi-apps\/metrics/);
 	assert.doesNotMatch(MENU_SEED, /"externalLink": "\/metrics\//);
 
-	assert.match(ROLE_DEFAULTS, /"route": "\/modeling\/workbench"/);
-	assert.doesNotMatch(ROLE_DEFAULTS, /"route": "\/modeling\/(?:metric-workbench|dimensions|models)"/);
+	assert.doesNotMatch(ROLE_DEFAULTS, /"route": "\/modeling\/(?:workbench|metric-workbench|dimensions|models)"/);
 	assert.doesNotMatch(ROLE_DEFAULTS, /"route": "\/modeling\/semantic\//);
 	assert.doesNotMatch(ROLE_DEFAULTS, /"route": "\/modeling\/semantic\/subjects"/);
 	assert.doesNotMatch(ROLE_DEFAULTS, /"route": "\/modeling\/semantic\/runs"/);
-	assert.match(ROLE_DEFAULTS, /"route": "\/governance\/subjects"/);
 	assert.match(ROLE_DEFAULTS, /"route": "\/ops\/instances"/);
 	assert.doesNotMatch(ROLE_DEFAULTS, /"route": "\/bi-apps\/metrics/);
 });
@@ -68,7 +73,7 @@ test("platform metric menu title keys have locale coverage", () => {
 		assert.match(ZH_LOCALE, new RegExp(`"${key}"`));
 		assert.match(EN_LOCALE, new RegExp(`"${key}"`));
 	}
-	assert.match(MENU_SEED, /"titleKey": "sys\.nav\.portal\.studioBusinessProcesses"/);
+	assert.match(MENU_SEED, /"titleKey": "sys\.nav\.portal\.metricAtomic"/);
 });
 
 test("legacy metric modeling subject menu is cleaned from persisted admin menus", () => {

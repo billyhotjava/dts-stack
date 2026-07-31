@@ -4,7 +4,7 @@ import type {
 	CanonicalModelSpecView,
 	CreateModelSpecCommand,
 	ModelSpecType,
-} from "@/pages/modeling/modelSpecV2Contract";
+} from "@/features/modeling/contracts/modelSpecV2Contract";
 
 const WAREHOUSE_PLAN_RESOURCE = "/modeling/warehouse-plans";
 

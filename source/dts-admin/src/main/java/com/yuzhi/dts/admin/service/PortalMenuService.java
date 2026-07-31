@@ -81,12 +81,13 @@ public class PortalMenuService {
         // portal_user_favorite table. Keeping the menu key alive surfaced an
         // orphan menu item even though the front-end page was deleted.
         Map.entry("workbench.data-management", "/pages/workbench/DataManagementWorkbenchPage"),
-        Map.entry("resource.connectors", "/pages/foundation/ConnectorRegistryPage"),
-        Map.entry("resource.sources", "/pages/foundation/DataSourcesPage"),
-        Map.entry("resource.jdbcDrivers", "/pages/foundation/JdbcDriversPage"),
-        Map.entry("resource.metadata", "/pages/catalog/MetadataPage"),
-        Map.entry("resource.ingestion", "/pages/explore/etl/TransformPage"),
-        Map.entry("resource.changes", "/pages/foundation/AccessChangesPage"),
+        Map.entry("resource.accessOverview", "/pages/foundation/access/AccessWorkspacePage"),
+        Map.entry("resource.databaseAccess", "/pages/foundation/access/AccessWorkspacePage"),
+        Map.entry("resource.apiAccess", "/pages/foundation/access/AccessWorkspacePage"),
+        Map.entry("resource.fileAccess", "/pages/foundation/access/AccessWorkspacePage"),
+        Map.entry("resource.accessDefaults", "/pages/foundation/access/AccessDefaultsPage"),
+        Map.entry("resource.runtime.connectors", "/pages/foundation/ConnectorRegistryPage"),
+        Map.entry("resource.runtime.jdbcDrivers", "/pages/foundation/JdbcDriversPage"),
         Map.entry("studio.projects", "/pages/modeling/ModelTemplatesPage"),
         Map.entry("studio.sql", "/pages/modeling/SqlModelingPage"),
         Map.entry("studio.scripts", "/pages/explore/etl/ScriptStudioPage"),
@@ -1009,6 +1010,9 @@ public class PortalMenuService {
         if (menu == null || parent == null) {
             return false;
         }
+        if (isExplicitlyUnboundAccessDefaults(menu)) {
+            return false;
+        }
         if (menu.getVisibilities() != null && !menu.getVisibilities().isEmpty()) {
             return false;
         }
@@ -1025,6 +1029,18 @@ public class PortalMenuService {
             }
         }
         return dirty;
+    }
+
+    private boolean isExplicitlyUnboundAccessDefaults(PortalMenu menu) {
+        if (menu == null) {
+            return false;
+        }
+        String sectionKey = extractSectionKey(menu);
+        String metadataKey = extractMetadataKey(menu);
+        if ("resource".equalsIgnoreCase(sectionKey) && "accessDefaults".equalsIgnoreCase(metadataKey)) {
+            return true;
+        }
+        return "sys.nav.portal.resourceAccessDefaults".equals(menu.getName());
     }
 
     private List<PortalMenuVisibility> inheritedVisibilitySources(

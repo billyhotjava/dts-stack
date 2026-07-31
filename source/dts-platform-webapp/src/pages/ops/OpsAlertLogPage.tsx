@@ -46,9 +46,9 @@ export default function OpsAlertLogPage() {
 					<Button
 						type="link"
 						size="small"
-						onClick={() => navigate(`/explore/etl/transform?ruleId=${encodeURIComponent(record.ruleId || record.ruleName || "")}`)}
+						onClick={() => navigate(`/governance/rules?ruleId=${encodeURIComponent(record.ruleId || record.ruleName || "")}`)}
 					>
-						查看源任务
+						查看质量规则
 					</Button>
 					<Button
 						type="link"

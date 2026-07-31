@@ -50,7 +50,7 @@ const consumptionEntries = [
 	{
 		title: "指标入口",
 		desc: "统一沉淀经营指标、维度口径和最近更新状态，减少重复解释。",
-		route: "/modeling/metric-workbench",
+		route: "/data-modeling/metrics/atomic",
 		action: "查看指标中心",
 		stage: "RELEASE_READY" as GoldenChainStage,
 	},

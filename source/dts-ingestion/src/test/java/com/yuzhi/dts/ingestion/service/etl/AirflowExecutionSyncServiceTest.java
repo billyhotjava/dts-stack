@@ -129,6 +129,45 @@ class AirflowExecutionSyncServiceTest {
     }
 
     @Test
+    void shouldUseBoundOfficialQualityPolicyAndPersistRunId() {
+        IngestionTask task = task(21L, "task-quality", "dag-quality");
+        IngestionExecution execution = runningExecution(203L, "manual__quality", task);
+        execution.setQualityPolicyRef("dataset:00000000-0000-0000-0000-000000000021");
+        when(executionRepository.findByStatusWithTask("running")).thenReturn(List.of(execution));
+        when(airflowClient.getDagRunLookup("dag-quality", "manual__quality"))
+            .thenReturn(AirflowClient.DagRunLookupResult.found(200, Map.of("state", "success")));
+        when(
+            platformInfraClient.triggerQualityRunByPolicyRef(
+                "dataset:00000000-0000-0000-0000-000000000021",
+                "INGESTION"
+            )
+        ).thenReturn("quality-run-21");
+
+        syncService.syncRunningExecutions();
+
+        verify(platformInfraClient).triggerQualityRunByPolicyRef(
+            "dataset:00000000-0000-0000-0000-000000000021",
+            "INGESTION"
+        );
+        assertThat(execution.getQualityRunId()).isEqualTo("quality-run-21");
+    }
+
+    @Test
+    void shouldNotTreatSourceConnectionAsQualityDataset() {
+        IngestionTask task = task(22L, "task-no-policy", "dag-no-policy");
+        task.setSourceDataSourceId(java.util.UUID.fromString("00000000-0000-0000-0000-000000000022"));
+        IngestionExecution execution = runningExecution(204L, "manual__no_policy", task);
+        when(executionRepository.findByStatusWithTask("running")).thenReturn(List.of(execution));
+        when(airflowClient.getDagRunLookup("dag-no-policy", "manual__no_policy"))
+            .thenReturn(AirflowClient.DagRunLookupResult.found(200, Map.of("state", "success")));
+
+        syncService.syncRunningExecutions();
+
+        verify(platformInfraClient, never()).triggerQualityRun(any(), any());
+        verify(platformInfraClient, never()).triggerQualityRunByPolicyRef(any(), any());
+    }
+
+    @Test
     void shouldMarkExecutionFailedWhenDagRunIsMissingBeyondGraceWindow() {
         IngestionTask task = task(30L, "task-missing", "dag-missing");
         IngestionExecution execution = runningExecution(303L, "manual__404", task);

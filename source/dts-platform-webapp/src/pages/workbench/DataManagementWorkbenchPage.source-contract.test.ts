@@ -46,10 +46,16 @@ test("workbench is the only homepage and legacy data-management entries redirect
 	assert.doesNotMatch(ZH_LOCALE, /"workbenchDataManagement": "数据管理工作台"/);
 	assert.doesNotMatch(STATIC_ROUTES, /path: "workbench\/data-management"[\s\S]*?<DataManagementWorkbenchPage/);
 	assert.doesNotMatch(STATIC_ROUTES, /path: "services\/consumption"[\s\S]*?<DataManagementWorkbenchPage/);
-	assert.match(STATIC_ROUTES, /path: "workbench\/data-management"[\s\S]*?<WorkbenchSectionRedirect section="data-management"/);
+	assert.match(
+		STATIC_ROUTES,
+		/path: "workbench\/data-management"[\s\S]*?<WorkbenchSectionRedirect section="data-management"/,
+	);
 	assert.match(STATIC_ROUTES, /path: "services\/consumption"[\s\S]*?<WorkbenchSectionRedirect section="consumption"/);
 	assert.match(STATIC_ROUTES, /next\.set\("section", section\)/);
-	assert.doesNotMatch(DYNAMIC_RESOLVER, /"\/workbench\/data-management": "\/pages\/workbench\/DataManagementWorkbenchPage"/);
+	assert.doesNotMatch(
+		DYNAMIC_RESOLVER,
+		/"\/workbench\/data-management": "\/pages\/workbench\/DataManagementWorkbenchPage"/,
+	);
 	assert.doesNotMatch(DYNAMIC_RESOLVER, /"\/services\/consumption": "\/pages\/workbench\/DataManagementWorkbenchPage"/);
 	assert.match(DYNAMIC_RESOLVER, /"\/workbench\/data-management": "\/workbench\?section=data-management"/);
 	assert.match(DYNAMIC_RESOLVER, /"\/services\/consumption": "\/workbench\?section=consumption"/);
@@ -97,19 +103,28 @@ test("workbench exposes the end-to-end data product journey from integration to 
 	for (const label of ["负责角色", "当前缺口", "下一步"]) {
 		assert.match(source, new RegExp(label));
 	}
-	for (const label of ["数据集成", "数仓规划", "数据标准", "维度建模", "数据指标", "数据开发", "数据服务", "运行证据"]) {
+	for (const label of [
+		"数据集成",
+		"数仓规划",
+		"数据标准",
+		"维度建模",
+		"数据指标",
+		"数据开发",
+		"数据服务",
+		"运行证据",
+	]) {
 		assert.match(journeySource, new RegExp(label));
 	}
 	for (const route of [
 		"/foundation/data-sources",
-		"/explore/etl/transform",
-		"/governance/subjects",
+		"/data-modeling/planning/spaces",
 		"/catalog/metadata-management",
 		"/governance/standards/elements",
 		"/governance/standards/reference",
-		"/modeling/models",
-		"/studio/sql-modeling",
-		"/modeling/metric-workbench",
+		"/data-modeling/standards/fields",
+		"/data-modeling/dimensions/workbench",
+		"/data-modeling/metrics/atomic",
+		"/data-modeling/home/workspace",
 		"/explore/etl/scripts",
 		"/explore/etl/orchestration",
 		"/services/apis",
@@ -119,11 +134,24 @@ test("workbench exposes the end-to-end data product journey from integration to 
 	]) {
 		assert.match(journeySource, new RegExp(route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 		assert.ok(
-			DYNAMIC_RESOLVER.includes(`"${route}"`) || STATIC_ROUTES.includes(`path: "${route.slice(1)}"`),
+			DYNAMIC_RESOLVER.includes(`"${route}"`) ||
+				STATIC_ROUTES.includes(`path: "${route.slice(1)}"`) ||
+				(route.startsWith("/data-modeling/") &&
+					STATIC_ROUTES.includes('path: "data-modeling/*"') &&
+					DYNAMIC_RESOLVER.includes('normalized.startsWith("/data-modeling/")')),
 			`${route} should resolve to a registered page`,
 		);
 	}
-	for (const key of ["integration", "planning", "standards", "modeling", "metrics", "development", "service", "evidence"]) {
+	for (const key of [
+		"integration",
+		"planning",
+		"standards",
+		"modeling",
+		"metrics",
+		"development",
+		"service",
+		"evidence",
+	]) {
 		assert.match(journeySource, new RegExp(key));
 	}
 	assert.match(source, /data-testid=\{`end-to-end-stage-\$\{stage\.key\}-primary`\}/);
@@ -133,11 +161,12 @@ test("workbench exposes the end-to-end data product journey from integration to 
 test("workbench exposes an explicit warehouse layer planning surface", () => {
 	const source = readFileSync(PAGE_URL, "utf8");
 	assert.match(source, /warehouse-layer-planning/);
-	for (const layer of ["ODS_RAW", "ODS_STANDARDIZED", "DWD", "DWS", "ADS"]) {
+	for (const layer of ["ODS_RAW", "ODS_STANDARDIZED", "STG", "DWD", "DWS", "ADS"]) {
 		assert.match(source, new RegExp(layer));
 	}
 	assert.match(source, /分层规划/);
-	assert.match(source, /进入低代码建模|进入 SQL 建模/);
+	assert.match(source, /进入模型工作台|创建明细表/);
+	assert.doesNotMatch(source, /\/modeling\/models|\/studio\/sql-modeling|\/modeling\/metric-workbench/);
 });
 
 test("first report journey can be focused from the workbench entry route", () => {

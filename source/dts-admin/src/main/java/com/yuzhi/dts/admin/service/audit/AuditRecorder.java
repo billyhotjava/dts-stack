@@ -73,7 +73,7 @@ public class AuditRecorder {
         entry.setActorId(clamp(audit.actorId(), 128, "actorId"));
         entry.setActorName(clamp(audit.actorName(), 128, "actorName"));
         entry.setActorRoles(audit.actorRoles());
-        entry.setModuleKey(clamp(audit.moduleKey(), 64, "moduleKey"));
+        entry.setModuleKey(clamp(audit.moduleKey(), 128, "moduleKey"));
         entry.setModuleName(clamp(audit.moduleName(), 128, "moduleName"));
         entry.setButtonCode(clamp(audit.buttonCode(), 128, "buttonCode"));
         entry.setOperationCode(clamp(audit.operationCode(), 128, "operationCode"));
@@ -131,6 +131,9 @@ public class AuditRecorder {
     }
 
     private boolean shouldSkipForDedup(ResolvedAudit audit) {
+        if (audit.metadata().containsKey("ingestEventId")) {
+            return false;
+        }
         if (audit.operationKind() != AuditOperationKind.QUERY) {
             return false;
         }

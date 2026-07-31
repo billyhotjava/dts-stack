@@ -6,6 +6,8 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.List;
 import org.slf4j.Logger;
@@ -23,6 +25,7 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
 
     private static final Logger log = LoggerFactory.getLogger(ServiceDependencyAuthenticationFilter.class);
     private static final String SERVICE_HEADER = "X-DTS-Service";
+    private static final String SERVICE_TOKEN_HEADER = "X-DTS-Service-Token";
     private static final String USER_HEADER = "X-DTS-User";
     private static final String ROLES_HEADER = "X-DTS-Roles";
 
@@ -66,7 +69,35 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
         if (!StringUtils.hasText(declared)) {
             return null;
         }
-        return declared.trim();
+        String canonical = declared.trim();
+        String trusted = properties.getTrustedServiceName();
+        boolean allowed = StringUtils.hasText(trusted)
+            && Arrays.stream(trusted.split(","))
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .anyMatch(name -> name.equalsIgnoreCase(canonical));
+        if (!allowed) {
+            log.warn("event=service_auth_denied service={} reason=service_unknown", canonical);
+            return null;
+        }
+        String expectedToken = properties.getTrustedServiceToken();
+        if (!StringUtils.hasText(expectedToken)) {
+            log.warn("event=service_auth_denied service={} reason=token_not_configured", canonical);
+            return null;
+        }
+        String suppliedToken = request.getHeader(SERVICE_TOKEN_HEADER);
+        if (!StringUtils.hasText(suppliedToken)) {
+            log.warn("event=service_auth_denied service={} reason=token_missing", canonical);
+            return null;
+        }
+        if (!MessageDigest.isEqual(
+            expectedToken.getBytes(StandardCharsets.UTF_8),
+            suppliedToken.getBytes(StandardCharsets.UTF_8)
+        )) {
+            log.warn("event=service_auth_denied service={} reason=token_invalid", canonical);
+            return null;
+        }
+        return canonical;
     }
 
     private List<SimpleGrantedAuthority> resolveForwardedAuthorities(String rawRoles) {

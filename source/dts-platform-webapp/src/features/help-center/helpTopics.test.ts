@@ -26,13 +26,11 @@ test("covers the DTS product areas from onboarding through administration", () =
 });
 
 test("resolves the most specific route topic and falls back to overview", () => {
-	assert.equal(resolveHelpTopic("/modeling/workbench").id, "construction-planning");
-	assert.equal(resolveHelpTopic("/modeling/workbench", null, "?module=models").id, "model-center");
-	assert.equal(resolveHelpTopic("/modeling/workbench", null, "?module=metrics").id, "metric-workbench");
-	assert.equal(resolveHelpTopic("/modeling/workbench", null, "?module=standards").id, "governance");
-	assert.equal(resolveHelpTopic("/modeling/models").id, "model-center");
-	assert.equal(resolveHelpTopic("/studio/sql-modeling").id, "sql-modeling");
-	assert.equal(resolveHelpTopic("/modeling/metric-workbench").id, "metric-workbench");
+	assert.equal(resolveHelpTopic("/data-modeling/home/workspace").id, "data-modeling");
+	assert.equal(resolveHelpTopic("/data-modeling/planning/domains").id, "construction-planning");
+	assert.equal(resolveHelpTopic("/data-modeling/dimensions/workbench").id, "model-center");
+	assert.equal(resolveHelpTopic("/data-modeling/metrics/atomic").id, "metric-workbench");
+	assert.equal(resolveHelpTopic("/data-modeling/standards/fields").id, "governance");
 	assert.equal(resolveHelpTopic("/catalog/lineage").id, "quality-security-lineage");
 	assert.equal(resolveHelpTopic("/unknown-page").id, "overview");
 });

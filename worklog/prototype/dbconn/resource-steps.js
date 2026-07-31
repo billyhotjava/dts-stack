@@ -14,6 +14,7 @@ const RESOURCE_STEP_LABELS = {
 	API: { title: "定义资源", desc: "请求样例、分页与响应结构" },
 	FILE: { title: "解析文件", desc: "封条、解析预览与版本差异" },
 };
+function knownClassification(value) { return Object.prototype.hasOwnProperty.call(CLASSIFICATION_RANK, value); }
 function clone(value) { return JSON.parse(JSON.stringify(value)); }
 function rerenderOrNoop(rerender) { return typeof rerender === "function" ? rerender : function () {}; }
 function panel(title, note, children, extraClass) {
@@ -39,8 +40,8 @@ function option(value, label, selected) { return el("option", { value, selected 
 function formatCount(value) { return Number(value || 0).toLocaleString("zh-CN"); }
 function highestClassification(levels) {
 	return levels.reduce((highest, level) => {
-		if (!(level in CLASSIFICATION_RANK)) return highest;
-		if (!(highest in CLASSIFICATION_RANK)) return level;
+		if (!knownClassification(level)) return highest;
+		if (!knownClassification(highest)) return level;
 		return CLASSIFICATION_RANK[level] > CLASSIFICATION_RANK[highest] ? level : highest;
 	}, "公开");
 }
@@ -126,7 +127,7 @@ function renderDatabaseTableList(state, rerender) {
 					render();
 				},
 			}, "清空"),
-			el("span", { class: "muted small" }, "带“需确认”的表仍可单独勾选，但会进入发布审批。"),
+			el("span", { class: "muted small" }, "带“需确认”的表仍可单独勾选，发布前需记录风险确认理由。"),
 		]),
 		el("div", { class: "table-scroll" }, el("table", { class: "grid" }, [
 			el("thead", {}, el("tr", {}, [
@@ -618,8 +619,8 @@ function renderFileDiff(state) {
 			formItem("删除", diffItems(diff.removed, "无"), "", 1),
 		]),
 		(diff.removed || []).length ? el("div", { class: "inline-alert warn" }, [
-			el("b", {}, "需要审批"),
-			el("span", {}, "字段删除不会自动发布，旧 Revision 继续生效。"),
+			el("b", {}, "需要人工确认"),
+			el("span", {}, "记录字段删除的影响与确认理由后才能发布；旧 Revision 继续生效。"),
 		]) : el("div", { class: "inline-alert info" }, [
 			el("b", {}, "旧版本未被改写"),
 			el("span", {}, "确认后生成新 Revision；所有历史运行仍可追溯到原 Schema。"),
@@ -635,7 +636,6 @@ function renderFileResource(state, rerender) {
 		renderFileDiff(state),
 	]);
 }
-
 function validateFileResource(state) {
 	const artifact = state && state.artifact;
 	if (!artifact) return { ok: false, reason: "尚未形成文件 Artifact" };
@@ -688,8 +688,9 @@ function validateResourceStep(connectorKey, state) {
 function databaseSummary(state) {
 	const selected = (state.tables || []).filter((table) => table.selected);
 	const rows = selected.reduce((sum, table) => sum + Number(table.rows || 0), 0);
-	const levels = selected.map((table) => table.classification || "内部");
-	const effectiveClassification = selected.length ? highestClassification(levels) : "待确认";
+	const missingClassification = selected.filter((table) => !knownClassification(table.classification));
+	const levels = selected.map((table) => table.classification);
+	const effectiveClassification = selected.length && !missingClassification.length ? highestClassification(levels) : "待确认";
 	const warned = selected.filter((table) => table.warn);
 	const evidence = selected.length
 		? [
@@ -697,8 +698,9 @@ function databaseSummary(state) {
 				`资源推断最高密级为${effectiveClassification}`,
 			]
 		: ["尚未选择资源，密级证据待生成"];
+	if (missingClassification.length) evidence.push(`${missingClassification.map((table) => table.name).join("、")} 缺少密级证据`);
+	else if (selected.length) evidence.push(`默认目标 ODS 区允许承载${effectiveClassification}数据`);
 	if (warned.length) evidence.push(`${warned.map((table) => table.name).join("、")} 命中资源级准入提示`);
-
 	return {
 		kind: "DATABASE",
 		resourceLabel: selected.length > 1 ? `${selected[0].name} 等 ${selected.length} 张表` : selected.length ? selected[0].name : "未选择源表",
@@ -708,7 +710,7 @@ function databaseSummary(state) {
 		effectiveClassification,
 		classificationEvidence: evidence,
 		estimatedVolume: selected.length ? `首轮约 ${formatCount(rows)} 行` : "待选择资源",
-		requiresApproval: warned.length > 0 || effectiveClassification === "秘密" || effectiveClassification === "机密",
+		admissionDecision: !selected.length ? { outcome: "BLOCKED", reasons: ["尚未选择资源"] } : missingClassification.length ? { outcome: "BLOCKED", reasons: ["所选资源缺少密级证据"] } : warned.length ? { outcome: "CONFIRMATION_REQUIRED", reasons: warned.map((table) => `${table.name}：${table.warn}`) } : { outcome: "READY", reasons: [] },
 	};
 }
 
@@ -725,9 +727,7 @@ function apiSummary(state) {
 		effectiveClassification,
 		classificationEvidence: clone(classification.evidence || ["样例响应尚未生成密级证据"]),
 		estimatedVolume: state.estimatedVolume || "待样例请求后估算",
-		requiresApproval: Boolean(state.requiresApproval)
-			|| effectiveClassification === "秘密"
-			|| effectiveClassification === "机密",
+		admissionDecision: knownClassification(classification.effectiveClassification) && Array.isArray(classification.evidence) && classification.evidence.length && state.admissionDecision ? clone(state.admissionDecision) : { outcome: "BLOCKED", reasons: ["API 资源缺少显式密级证据或准入计算结果"] },
 	};
 }
 
@@ -745,9 +745,9 @@ function fileSummary(state) {
 		resourceKeys: key ? [key] : [],
 		targetHint: state.targetHint || "ods.ods_file_resource",
 		effectiveClassification: seal.effectiveClassification || "待确认",
-		classificationEvidence: clone(seal.evidence || ["Artifact 密级尚未封存"]),
+		classificationEvidence: [...clone(seal.evidence || ["Artifact 密级尚未封存"]), `默认目标 ODS 区允许承载${seal.effectiveClassification || "待确认"}数据`],
 		estimatedVolume: artifact.id ? `${formatCount(state.rowCount)} 行 · ${artifact.size}` : "待解析",
-		requiresApproval: Boolean(state.requiresApproval) || (diff.removed || []).length > 0,
+		admissionDecision: seal.state !== "SEALED" || !knownClassification(seal.effectiveClassification) || !Array.isArray(seal.evidence) || !seal.evidence.length || artifact.securityScan?.status !== "PASSED" ? { outcome: "BLOCKED", reasons: ["文件封条、密级证据或安全扫描不完整"] } : (diff.removed || []).length ? { outcome: "CONFIRMATION_REQUIRED", reasons: ["检测到字段删除，需确认下游影响与回退方案"] } : { outcome: "READY", reasons: [] },
 	};
 }
 
@@ -763,7 +763,7 @@ function resourceSummary(connectorKey, state) {
 			effectiveClassification: "待确认",
 			classificationEvidence: ["资源状态与连接器不匹配"],
 			estimatedVolume: "—",
-			requiresApproval: false,
+			admissionDecision: { outcome: "BLOCKED", reasons: ["资源状态与连接器不匹配"] },
 		};
 	}
 	if (kind === "DATABASE") return databaseSummary(state);
@@ -778,7 +778,7 @@ function resourceSummary(connectorKey, state) {
 		effectiveClassification: "待确认",
 		classificationEvidence: ["该连接器尚未实现资源步骤"],
 		estimatedVolume: "—",
-		requiresApproval: false,
+		admissionDecision: { outcome: "BLOCKED", reasons: ["该连接器尚未实现资源步骤"] },
 	};
 }
 

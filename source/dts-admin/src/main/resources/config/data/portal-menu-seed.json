@@ -33,52 +33,69 @@
       "title": "数据集成",
       "children": [
         {
-          "key": "connectors",
-          "path": "connectors",
-          "icon": "solar:widget-add-bold-duotone",
-          "titleKey": "sys.nav.portal.resourceConnectors",
-          "title": "连接器目录",
-          "externalLink": "/foundation/connectors"
-        },
-        {
-          "key": "sources",
-          "path": "sources",
-          "icon": "solar:server-2-bold-duotone",
-          "titleKey": "sys.nav.portal.resourceSources",
-          "title": "数据源管理",
+          "key": "accessOverview",
+          "path": "access-overview",
+          "icon": "solar:layers-bold-duotone",
+          "titleKey": "sys.nav.portal.resourceAccessOverview",
+          "title": "接入概览",
           "externalLink": "/foundation/data-sources"
         },
         {
-          "key": "jdbcDrivers",
-          "path": "jdbc-drivers",
-          "icon": "solar:plug-circle-bold-duotone",
-          "titleKey": "sys.nav.portal.resourceJdbcDrivers",
-          "title": "驱动管理",
-          "externalLink": "/foundation/jdbc-drivers"
+          "key": "databaseAccess",
+          "path": "database-access",
+          "icon": "solar:database-bold-duotone",
+          "titleKey": "sys.nav.portal.resourceDatabaseAccess",
+          "title": "数据库接入",
+          "externalLink": "/foundation/data-sources/database"
         },
         {
-          "key": "metadata",
-          "path": "metadata",
-          "icon": "solar:upload-bold-duotone",
-          "titleKey": "sys.nav.portal.resourceMetadata",
-          "title": "数据源结构采集",
-          "externalLink": "/catalog/metadata"
+          "key": "apiAccess",
+          "path": "api-access",
+          "icon": "solar:link-bold-duotone",
+          "titleKey": "sys.nav.portal.resourceApiAccess",
+          "title": "API 接入",
+          "externalLink": "/foundation/data-sources/api"
         },
         {
-          "key": "ingestion",
-          "path": "ingestion",
-          "icon": "solar:layers-bold-duotone",
-          "titleKey": "sys.nav.portal.resourceIngestion",
-          "title": "数据入湖配置",
-          "externalLink": "/explore/etl/transform"
+          "key": "fileAccess",
+          "path": "file-access",
+          "icon": "solar:file-text-bold-duotone",
+          "titleKey": "sys.nav.portal.resourceFileAccess",
+          "title": "离线文件接入",
+          "externalLink": "/foundation/data-sources/files"
         },
         {
-          "key": "changes",
-          "path": "access-changes",
-          "icon": "solar:history-2-bold-duotone",
-          "titleKey": "sys.nav.portal.resourceChanges",
-          "title": "接入变更记录",
-          "externalLink": "/foundation/access-changes"
+          "key": "accessDefaults",
+          "path": "access-defaults",
+          "icon": "solar:settings-minimalistic-bold-duotone",
+          "titleKey": "sys.nav.portal.resourceAccessDefaults",
+          "title": "默认策略",
+          "externalLink": "/foundation/data-sources/defaults"
+        },
+        {
+          "key": "runtime",
+          "path": "runtime",
+          "icon": "solar:widget-add-bold-duotone",
+          "titleKey": "sys.nav.portal.resourceRuntime",
+          "title": "连接器与运行时",
+          "children": [
+            {
+              "key": "connectors",
+              "path": "connectors",
+              "icon": "solar:widget-add-bold-duotone",
+              "titleKey": "sys.nav.portal.resourceConnectors",
+              "title": "连接器目录",
+              "externalLink": "/foundation/connectors"
+            },
+            {
+              "key": "jdbcDrivers",
+              "path": "jdbc-drivers",
+              "icon": "solar:plug-circle-bold-duotone",
+              "titleKey": "sys.nav.portal.resourceJdbcDrivers",
+              "title": "驱动管理",
+              "externalLink": "/foundation/jdbc-drivers"
+            }
+          ]
         }
       ]
     },
@@ -89,139 +106,6 @@
       "titleKey": "sys.nav.portal.studioCenter",
       "title": "数据开发与运维",
       "children": [
-        {
-          "key": "modeling",
-          "path": "modeling",
-          "icon": "solar:layers-minimalistic-bold-duotone",
-          "titleKey": "sys.nav.portal.studioDataModeling",
-          "title": "数据建模",
-          "children": [
-            {
-              "key": "modeling-workbench",
-              "path": "modeling-workbench",
-              "icon": "solar:layers-minimalistic-bold-duotone",
-              "titleKey": "sys.nav.portal.studioBusinessProcesses",
-              "title": "建模工作台",
-              "externalLink": "/modeling/workbench"
-            },
-            {
-              "key": "warehouse-planning",
-              "path": "warehouse-planning",
-              "icon": "solar:map-point-bold-duotone",
-              "titleKey": "sys.nav.portal.warehousePlanning",
-              "title": "数仓规划",
-              "children": [
-                {
-                  "key": "warehouse-plans",
-                  "path": "warehouse-plans",
-                  "icon": "solar:clipboard-list-bold-duotone",
-                  "titleKey": "sys.nav.portal.warehousePlans",
-                  "title": "建设规划",
-                  "externalLink": "/modeling/plans"
-                },
-                {
-                  "key": "subjects",
-                  "path": "subjects",
-                  "icon": "solar:map-point-bold-duotone",
-                  "titleKey": "sys.nav.portal.governanceSubjects",
-                  "title": "业务分类",
-                  "externalLink": "/governance/subjects"
-                }
-              ]
-            },
-            {
-              "key": "standards",
-              "path": "standards",
-              "icon": "solar:document-text-bold-duotone",
-              "titleKey": "sys.nav.portal.dataStandards",
-              "title": "数据标准",
-              "children": [
-                {
-                  "key": "glossary",
-                  "path": "glossary",
-                  "icon": "solar:book-bold-duotone",
-                  "titleKey": "sys.nav.portal.governanceGlossary",
-                  "title": "业务术语",
-                  "externalLink": "/governance/standards/glossary"
-                },
-                {
-                  "key": "elements",
-                  "path": "elements",
-                  "icon": "solar:document-bold-duotone",
-                  "titleKey": "sys.nav.portal.governanceElements",
-                  "title": "数据元",
-                  "externalLink": "/governance/standards/elements"
-                },
-                {
-                  "key": "reference",
-                  "path": "reference",
-                  "icon": "solar:database-bold-duotone",
-                  "titleKey": "sys.nav.portal.governanceReference",
-                  "title": "公共码表",
-                  "externalLink": "/governance/standards/reference"
-                },
-                {
-                  "key": "units",
-                  "path": "units",
-                  "icon": "solar:ruler-cross-pen-bold-duotone",
-                  "titleKey": "sys.nav.portal.governanceMeasurementUnits",
-                  "title": "计量单位",
-                  "externalLink": "/governance/standards/units"
-                }
-              ]
-            },
-            {
-              "key": "dimensional-modeling",
-              "path": "dimensional-modeling",
-              "icon": "solar:cube-bold-duotone",
-              "titleKey": "sys.nav.portal.dimensionalModeling",
-              "title": "维度建模",
-              "children": [
-                {
-                  "key": "semantic-objects",
-                  "path": "objects",
-                  "icon": "solar:box-bold-duotone",
-                  "titleKey": "sys.nav.portal.studioSemanticObjects",
-                  "title": "维度目录",
-                  "externalLink": "/modeling/dimensions"
-                },
-                {
-                  "key": "semantic-models",
-                  "path": "models",
-                  "icon": "solar:database-bold-duotone",
-                  "titleKey": "sys.nav.portal.studioSemanticModels",
-                  "title": "模型中心",
-                  "externalLink": "/modeling/models"
-                },
-                {
-                  "key": "sql",
-                  "path": "sql-modeling",
-                  "icon": "solar:documents-bold-duotone",
-                  "titleKey": "sys.nav.portal.studioSqlModeling",
-                  "title": "高级建模（SQL/dbt）",
-                  "externalLink": "/studio/sql-modeling"
-                }
-              ]
-            },
-            {
-              "key": "data-metrics",
-              "path": "data-metrics",
-              "icon": "solar:graph-bold-duotone",
-              "titleKey": "sys.nav.portal.dataMetrics",
-              "title": "数据指标",
-              "children": [
-                {
-                  "key": "metric-workbench",
-                  "path": "metric-workbench",
-                  "icon": "solar:layers-minimalistic-bold-duotone",
-                  "titleKey": "sys.nav.portal.studioMetricWorkbench",
-                  "title": "指标工作台",
-                  "externalLink": "/modeling/metric-workbench"
-                }
-              ]
-            }
-          ]
-        },
         {
           "key": "data-studio",
           "path": "data-studio",
@@ -293,6 +177,303 @@
               "titleKey": "sys.nav.portal.opsBackfill",
               "title": "补数管理",
               "externalLink": "/ops/backfill"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "modeling",
+      "path": "modeling",
+      "icon": "solar:layers-minimalistic-bold-duotone",
+      "titleKey": "sys.nav.portal.studioDataModeling",
+      "title": "数据建模",
+      "children": [
+        {
+          "key": "modeling-home-workspace",
+          "path": "overview",
+          "icon": "solar:widget-3-bold-duotone",
+          "titleKey": "sys.nav.portal.modelingHomeWorkspace",
+          "title": "建模概览",
+          "externalLink": "/data-modeling/home/workspace"
+        },
+        {
+          "key": "warehouse-planning",
+          "path": "planning",
+          "icon": "solar:map-point-bold-duotone",
+          "titleKey": "sys.nav.portal.warehousePlanning",
+          "title": "数仓规划",
+          "children": [
+            {
+              "key": "planning-business-categories",
+              "path": "business-categories",
+              "icon": "solar:widget-4-bold-duotone",
+              "titleKey": "sys.nav.portal.planningBusinessCategories",
+              "title": "业务分类",
+              "externalLink": "/data-modeling/planning/business-categories"
+            },
+            {
+              "key": "planning-layers",
+              "path": "layers",
+              "icon": "solar:layers-bold-duotone",
+              "titleKey": "sys.nav.portal.planningLayers",
+              "title": "数仓分层",
+              "externalLink": "/data-modeling/planning/layers"
+            },
+            {
+              "key": "planning-public",
+              "path": "public",
+              "icon": "solar:database-bold-duotone",
+              "titleKey": "sys.nav.portal.planningPublicLayer",
+              "title": "公共层",
+              "children": [
+                {
+                  "key": "planning-domains",
+                  "path": "domains",
+                  "icon": "solar:globus-bold-duotone",
+                  "titleKey": "sys.nav.portal.planningDomains",
+                  "title": "数据域",
+                  "externalLink": "/data-modeling/planning/domains"
+                },
+                {
+                  "key": "planning-processes",
+                  "path": "processes",
+                  "icon": "solar:diagram-up-bold-duotone",
+                  "titleKey": "sys.nav.portal.planningProcesses",
+                  "title": "业务过程",
+                  "externalLink": "/data-modeling/planning/processes"
+                }
+              ]
+            },
+            {
+              "key": "planning-application",
+              "path": "application",
+              "icon": "solar:box-bold-duotone",
+              "titleKey": "sys.nav.portal.planningApplicationLayer",
+              "title": "应用层",
+              "children": [
+                {
+                  "key": "planning-marts",
+                  "path": "marts",
+                  "icon": "solar:database-bold-duotone",
+                  "titleKey": "sys.nav.portal.planningMarts",
+                  "title": "数据集市",
+                  "externalLink": "/data-modeling/planning/marts"
+                },
+                {
+                  "key": "planning-subjects",
+                  "path": "subjects",
+                  "icon": "solar:folder-with-files-bold-duotone",
+                  "titleKey": "sys.nav.portal.planningSubjects",
+                  "title": "主题域",
+                  "externalLink": "/data-modeling/planning/subjects"
+                }
+              ]
+            },
+            {
+              "key": "planning-spaces",
+              "path": "spaces",
+              "icon": "solar:buildings-2-bold-duotone",
+              "titleKey": "sys.nav.portal.planningSpaces",
+              "title": "建模空间",
+              "externalLink": "/data-modeling/planning/spaces"
+            },
+            {
+              "key": "planning-system",
+              "path": "system",
+              "icon": "solar:settings-bold-duotone",
+              "titleKey": "sys.nav.portal.planningSystem",
+              "title": "规划参数配置",
+              "externalLink": "/data-modeling/planning/system"
+            }
+          ]
+        },
+        {
+          "key": "standards",
+          "path": "standards",
+          "icon": "solar:document-text-bold-duotone",
+          "titleKey": "sys.nav.portal.dataStandards",
+          "title": "数据标准",
+          "children": [
+            {
+              "key": "standards-fields",
+              "path": "fields",
+              "icon": "solar:document-bold-duotone",
+              "titleKey": "sys.nav.portal.standardFields",
+              "title": "字段标准",
+              "externalLink": "/data-modeling/standards/fields"
+            },
+            {
+              "key": "standards-codes",
+              "path": "codes",
+              "icon": "solar:code-square-bold-duotone",
+              "titleKey": "sys.nav.portal.standardCodes",
+              "title": "标准代码",
+              "externalLink": "/data-modeling/standards/codes"
+            },
+            {
+              "key": "standards-roots",
+              "path": "roots",
+              "icon": "solar:text-field-focus-bold-duotone",
+              "titleKey": "sys.nav.portal.standardRoots",
+              "title": "词根",
+              "externalLink": "/data-modeling/standards/roots"
+            },
+            {
+              "key": "standards-dictionary",
+              "path": "dictionary",
+              "icon": "solar:notebook-bookmark-bold-duotone",
+              "titleKey": "sys.nav.portal.standardDictionary",
+              "title": "命名词典",
+              "externalLink": "/data-modeling/standards/dictionary"
+            },
+            {
+              "key": "standards-mappings",
+              "path": "mappings",
+              "icon": "solar:link-circle-bold-duotone",
+              "titleKey": "sys.nav.portal.standardMappings",
+              "title": "标准映射",
+              "externalLink": "/data-modeling/standards/mappings"
+            }
+          ]
+        },
+        {
+          "key": "dimensional-modeling",
+          "path": "dimensions",
+          "icon": "solar:cube-bold-duotone",
+          "titleKey": "sys.nav.portal.dimensionalModeling",
+          "title": "维度建模",
+          "children": [
+            {
+              "key": "dimensions-workbench",
+              "path": "workbench",
+              "icon": "solar:layers-minimalistic-bold-duotone",
+              "titleKey": "sys.nav.portal.dimensionWorkbench",
+              "title": "模型工作台",
+              "externalLink": "/data-modeling/dimensions/workbench"
+            },
+            {
+              "key": "dimensions-reverse",
+              "path": "reverse",
+              "icon": "solar:rewind-back-bold-duotone",
+              "titleKey": "sys.nav.portal.reverseModeling",
+              "title": "逆向建模",
+              "externalLink": "/data-modeling/dimensions/reverse"
+            }
+          ]
+        },
+        {
+          "key": "data-metrics",
+          "path": "metrics",
+          "icon": "solar:graph-bold-duotone",
+          "titleKey": "sys.nav.portal.dataMetrics",
+          "title": "数据指标",
+          "children": [
+            {
+              "key": "metrics-composite",
+              "path": "composite",
+              "icon": "solar:chart-2-bold-duotone",
+              "titleKey": "sys.nav.portal.metricComposite",
+              "title": "复合指标",
+              "externalLink": "/data-modeling/metrics/composite"
+            },
+            {
+              "key": "metrics-derived",
+              "path": "derived",
+              "icon": "solar:chart-square-bold-duotone",
+              "titleKey": "sys.nav.portal.metricDerived",
+              "title": "派生指标",
+              "externalLink": "/data-modeling/metrics/derived"
+            },
+            {
+              "key": "metrics-atomic",
+              "path": "atomic",
+              "icon": "solar:graph-new-up-bold-duotone",
+              "titleKey": "sys.nav.portal.metricAtomic",
+              "title": "原子指标",
+              "externalLink": "/data-modeling/metrics/atomic"
+            },
+            {
+              "key": "metrics-modifiers",
+              "path": "modifiers",
+              "icon": "solar:filter-bold-duotone",
+              "titleKey": "sys.nav.portal.metricModifiers",
+              "title": "修饰词",
+              "externalLink": "/data-modeling/metrics/modifiers"
+            },
+            {
+              "key": "metrics-periods",
+              "path": "periods",
+              "icon": "solar:calendar-bold-duotone",
+              "titleKey": "sys.nav.portal.metricPeriods",
+              "title": "时间周期",
+              "externalLink": "/data-modeling/metrics/periods"
+            }
+          ]
+        },
+        {
+          "key": "modeling-tools",
+          "path": "tools",
+          "icon": "solar:widget-add-bold-duotone",
+          "titleKey": "sys.nav.portal.modelingTools",
+          "title": "通用工具",
+          "children": [
+            {
+              "key": "tools-toolbox",
+              "path": "toolbox",
+              "icon": "solar:case-bold-duotone",
+              "titleKey": "sys.nav.portal.modelingToolbox",
+              "title": "工具箱",
+              "externalLink": "/data-modeling/tools/toolbox"
+            },
+            {
+              "key": "tools-imports",
+              "path": "imports",
+              "icon": "solar:import-bold-duotone",
+              "titleKey": "sys.nav.portal.modelingImports",
+              "title": "导入记录",
+              "externalLink": "/data-modeling/tools/imports"
+            },
+            {
+              "key": "tools-exports",
+              "path": "exports",
+              "icon": "solar:export-bold-duotone",
+              "titleKey": "sys.nav.portal.modelingExports",
+              "title": "导出记录",
+              "externalLink": "/data-modeling/tools/exports"
+            }
+          ]
+        },
+        {
+          "key": "modeling-graphs",
+          "path": "graphs",
+          "icon": "solar:share-circle-bold-duotone",
+          "titleKey": "sys.nav.portal.modelingGraphs",
+          "title": "关系图",
+          "children": [
+            {
+              "key": "graphs-models",
+              "path": "models",
+              "icon": "solar:share-bold-duotone",
+              "titleKey": "sys.nav.portal.modelGraph",
+              "title": "模型关系",
+              "externalLink": "/data-modeling/graphs/models"
+            },
+            {
+              "key": "graphs-standards",
+              "path": "standards",
+              "icon": "solar:link-circle-bold-duotone",
+              "titleKey": "sys.nav.portal.standardGraph",
+              "title": "标准关系",
+              "externalLink": "/data-modeling/graphs/standards"
+            },
+            {
+              "key": "graphs-metrics",
+              "path": "metrics",
+              "icon": "solar:branching-paths-up-bold-duotone",
+              "titleKey": "sys.nav.portal.metricLineage",
+              "title": "指标血缘",
+              "externalLink": "/data-modeling/graphs/metrics"
             }
           ]
         }

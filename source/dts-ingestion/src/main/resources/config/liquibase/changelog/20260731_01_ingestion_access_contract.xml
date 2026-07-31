@@ -1,0 +1,269 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260731-01-access-default-policy" author="codex">
+        <createTable tableName="ingestion_access_default_policy">
+            <column name="id" type="bigserial">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="policy_key" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="integer">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="defaults" type="jsonb">
+                <constraints nullable="false"/>
+            </column>
+            <column name="checksum" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="activated_at" type="timestamp with time zone"/>
+            <column name="created_by" type="varchar(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamp with time zone">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addUniqueConstraint
+            tableName="ingestion_access_default_policy"
+            columnNames="policy_key, version"
+            constraintName="uk_ingestion_access_policy_version"/>
+        <sql>
+            CREATE UNIQUE INDEX uk_ingestion_access_policy_active
+            ON ingestion_access_default_policy(policy_key)
+            WHERE status = 'ACTIVE'
+        </sql>
+        <sql splitStatements="false"><![CDATA[
+            WITH seeded(defaults) AS (
+                VALUES ('{
+                  "common": {
+                    "scheduleType": "manual",
+                    "taskConcurrency": 1,
+                    "sourceConcurrency": 1,
+                    "retry": {"maxAttempts": 1},
+                    "quality": {"mode": "official_policy_ref"}
+                  },
+                  "database": {
+                    "syncMode": "full_refresh",
+                    "destinationMode": "append",
+                    "schemaChangeMode": "fail"
+                  },
+                  "api": {
+                    "syncMode": "incremental",
+                    "paginationMode": "none",
+                    "schemaChangeMode": "fail"
+                  },
+                  "file": {
+                    "syncMode": "full_refresh",
+                    "header": true,
+                    "publishPreCheck": true,
+                    "schemaChangeMode": "fail"
+                  }
+                }'::jsonb)
+            )
+            INSERT INTO ingestion_access_default_policy(
+                policy_key, version, status, defaults, checksum, activated_at, created_by, created_at
+            )
+            SELECT
+                'GLOBAL',
+                1,
+                'ACTIVE',
+                defaults,
+                encode(sha256(convert_to(defaults::text, 'UTF8')), 'hex'),
+                CURRENT_TIMESTAMP,
+                'liquibase',
+                CURRENT_TIMESTAMP
+            FROM seeded
+        ]]></sql>
+        <rollback>
+            <sql>DROP INDEX IF EXISTS uk_ingestion_access_policy_active</sql>
+            <dropTable tableName="ingestion_access_default_policy"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="20260731-02-ingestion-task-revision" author="codex">
+        <createTable tableName="ingestion_task_revision">
+            <column name="id" type="bigserial">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="task_id" type="bigint">
+                <constraints
+                    nullable="false"
+                    foreignKeyName="fk_ingestion_task_revision_task"
+                    references="ingestion_task(id)"
+                    deleteCascade="true"/>
+            </column>
+            <column name="revision_number" type="integer">
+                <constraints nullable="false"/>
+            </column>
+            <column name="state" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_kind" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="task_snapshot" type="jsonb">
+                <constraints nullable="false"/>
+            </column>
+            <column name="effective_config" type="jsonb">
+                <constraints nullable="false"/>
+            </column>
+            <column name="effective_config_checksum" type="varchar(64)">
+            </column>
+            <column name="default_policy_version" type="integer">
+                <constraints nullable="false"/>
+            </column>
+            <column name="default_policy_checksum" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="classification_seal" type="jsonb"/>
+            <column name="field_classifications" type="jsonb"/>
+            <column name="runtime_snapshot" type="bytea"/>
+            <column name="runtime_snapshot_iv" type="bytea"/>
+            <column name="runtime_snapshot_key_version" type="varchar(64)"/>
+            <column name="quality_policy_ref" type="varchar(200)"/>
+            <column name="created_by" type="varchar(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamp with time zone">
+                <constraints nullable="false"/>
+            </column>
+            <column name="activated_by" type="varchar(100)"/>
+            <column name="activated_at" type="timestamp with time zone"/>
+        </createTable>
+        <addUniqueConstraint
+            tableName="ingestion_task_revision"
+            columnNames="task_id, revision_number"
+            constraintName="uk_ingestion_task_revision_number"/>
+        <createIndex tableName="ingestion_task_revision" indexName="idx_ingestion_task_revision_task_state">
+            <column name="task_id"/>
+            <column name="state"/>
+        </createIndex>
+        <sql>
+            CREATE UNIQUE INDEX uk_ingestion_task_revision_active
+            ON ingestion_task_revision(task_id)
+            WHERE state = 'ACTIVE'
+        </sql>
+        <sql splitStatements="false"><![CDATA[
+            WITH policy AS (
+                SELECT version, defaults, checksum
+                FROM ingestion_access_default_policy
+                WHERE policy_key = 'GLOBAL' AND status = 'ACTIVE'
+                ORDER BY version DESC
+                LIMIT 1
+            ), legacy AS (
+                SELECT
+                    t.*,
+                    CASE
+                        WHEN lower(coalesce(t.source_type, '')) LIKE ANY (ARRAY['%http%', '%api%', '%rest%']) THEN 'api'
+                        WHEN lower(coalesce(t.source_type, '')) LIKE ANY (ARRAY['%file%', '%excel%', '%csv%', '%txt%', '%jsonreader%']) THEN 'file'
+                        ELSE 'database'
+                    END AS source_kind,
+                    jsonb_strip_nulls(jsonb_build_object(
+                        'snapshotVersion', 'legacy-minimal-v1',
+                        'name', t.name,
+                        'description', t.description,
+                        'sourceType', t.source_type,
+                        'sourceDataSourceId', t.source_data_source_id,
+                        'destinationType', t.destination_type,
+                        'syncMode', t.sync_mode,
+                        'syncSchedule', t.sync_schedule,
+                        'tableMapping', t.table_mapping,
+                        'syncConfig', t.sync_config,
+                        'classificationSeal', t.classification_seal,
+                        'fieldClassifications', t.field_classifications,
+                        'airflowEnabled', t.airflow_enabled
+                    )) AS task_snapshot
+                FROM ingestion_task t
+            ), resolved AS (
+                SELECT
+                    legacy.*,
+                    policy.version AS policy_version,
+                    policy.checksum AS policy_checksum,
+                    jsonb_build_object(
+                        'defaults', coalesce(policy.defaults -> 'common', '{}'::jsonb) || coalesce(policy.defaults -> legacy.source_kind, '{}'::jsonb),
+                        'task', legacy.task_snapshot
+                    ) AS effective_config
+                FROM legacy CROSS JOIN policy
+            )
+            INSERT INTO ingestion_task_revision(
+                task_id,
+                revision_number,
+                state,
+                source_kind,
+                task_snapshot,
+                effective_config,
+                effective_config_checksum,
+                default_policy_version,
+                default_policy_checksum,
+                classification_seal,
+                field_classifications,
+                created_by,
+                created_at,
+                activated_by,
+                activated_at
+            )
+            SELECT
+                id,
+                1,
+                'LEGACY_UNSEALED',
+                source_kind,
+                task_snapshot,
+                effective_config,
+                NULL,
+                policy_version,
+                policy_checksum,
+                classification_seal,
+                field_classifications,
+                coalesce(created_by, 'liquibase'),
+                coalesce(created_date, CURRENT_TIMESTAMP),
+                NULL,
+                NULL
+            FROM resolved
+        ]]></sql>
+        <rollback>
+            <sql>DROP INDEX IF EXISTS uk_ingestion_task_revision_active</sql>
+            <dropTable tableName="ingestion_task_revision"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="20260731-03-ingestion-execution-revision-contract" author="codex">
+        <addColumn tableName="ingestion_execution">
+            <column name="task_revision_id" type="bigint"/>
+            <column name="revision_number" type="integer"/>
+            <column name="effective_config_checksum" type="varchar(64)"/>
+            <column name="quality_policy_ref" type="varchar(200)"/>
+            <column name="quality_run_id" type="varchar(200)"/>
+            <column name="airflow_dag_id" type="varchar(200)"/>
+        </addColumn>
+        <addForeignKeyConstraint
+            baseTableName="ingestion_execution"
+            baseColumnNames="task_revision_id"
+            referencedTableName="ingestion_task_revision"
+            referencedColumnNames="id"
+            constraintName="fk_ingestion_execution_task_revision"
+            onDelete="SET NULL"/>
+        <createIndex tableName="ingestion_execution" indexName="idx_ingestion_execution_task_revision">
+            <column name="task_revision_id"/>
+        </createIndex>
+        <rollback>
+            <dropIndex tableName="ingestion_execution" indexName="idx_ingestion_execution_task_revision"/>
+            <dropForeignKeyConstraint baseTableName="ingestion_execution" constraintName="fk_ingestion_execution_task_revision"/>
+            <dropColumn tableName="ingestion_execution" columnName="quality_run_id"/>
+            <dropColumn tableName="ingestion_execution" columnName="airflow_dag_id"/>
+            <dropColumn tableName="ingestion_execution" columnName="quality_policy_ref"/>
+            <dropColumn tableName="ingestion_execution" columnName="effective_config_checksum"/>
+            <dropColumn tableName="ingestion_execution" columnName="revision_number"/>
+            <dropColumn tableName="ingestion_execution" columnName="task_revision_id"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260731-03-sprint80-modeling-menu-review" author="codex">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="portal_menu"/>
+            <tableExists tableName="portal_menu_visibility"/>
+            <columnExists tableName="portal_menu" columnName="metadata"/>
+            <columnExists tableName="portal_menu" columnName="parent_id"/>
+            <columnExists tableName="portal_menu" columnName="deleted"/>
+        </preConditions>
+
+        <comment>
+            Promote the existing modeling workbench entry to a direct Modeling Overview child, retire the
+            redundant Home/Recent/Tasks menu entries, and rename System Management to Planning Parameter
+            Configuration. Keep stable menu ids, routes, and visibility bindings unchanged.
+        </comment>
+
+        <sql dbms="postgresql" splitStatements="false"><![CDATA[
+            DO $do$
+            DECLARE
+                modeling_id BIGINT;
+                overview_id BIGINT;
+                home_id BIGINT;
+                planning_system_id BIGINT;
+            BEGIN
+                SELECT id INTO modeling_id
+                  FROM portal_menu
+                 WHERE name = 'sys.nav.portal.studioDataModeling'
+                   AND parent_id IS NULL
+                 ORDER BY CASE WHEN deleted = FALSE THEN 0 ELSE 1 END, id
+                 LIMIT 1;
+
+                IF modeling_id IS NULL THEN
+                    RAISE EXCEPTION 'Sprint-80 menu review requires the data-modeling root';
+                END IF;
+
+                SELECT id INTO home_id
+                  FROM portal_menu
+                 WHERE name = 'sys.nav.portal.modelingHome'
+                   AND parent_id = modeling_id
+                 ORDER BY id
+                 LIMIT 1;
+
+                IF home_id IS NULL THEN
+                    RAISE EXCEPTION 'Sprint-80 menu review requires the existing modeling-home group';
+                END IF;
+
+                SELECT id INTO overview_id
+                  FROM portal_menu
+                 WHERE name = 'sys.nav.portal.modelingHomeWorkspace'
+                   AND parent_id IN (home_id, modeling_id)
+                 ORDER BY CASE WHEN parent_id = home_id THEN 0 WHEN parent_id = modeling_id THEN 1 ELSE 2 END, id
+                 LIMIT 1;
+
+                IF overview_id IS NULL THEN
+                    RAISE EXCEPTION 'Sprint-80 menu review requires the existing modeling workbench entry';
+                END IF;
+
+                UPDATE portal_menu
+                   SET parent_id = modeling_id,
+                       path = 'modeling/overview',
+                       component = NULL,
+                       sort_order = 1,
+                       metadata = (
+                           COALESCE(NULLIF(metadata, ''), '{}')::jsonb
+                           || jsonb_build_object(
+                               'key', 'modeling-home-workspace',
+                               'sectionKey', 'modeling',
+                               'entryKey', 'modeling-home-workspace',
+                               'titleKey', 'sys.nav.portal.modelingHomeWorkspace',
+                               'title', '建模概览',
+                               'icon', 'solar:widget-3-bold-duotone',
+                               'externalLink', '/data-modeling/home/workspace'
+                           )
+                       )::TEXT,
+                       icon = 'solar:widget-3-bold-duotone',
+                       deleted = FALSE,
+                       last_modified_by = 'sprint80-modeling-menu-review',
+                       last_modified_date = now()
+                 WHERE id = overview_id;
+
+                UPDATE portal_menu
+                   SET deleted = TRUE,
+                       last_modified_by = 'sprint80-modeling-menu-review',
+                       last_modified_date = now()
+                 WHERE id = home_id
+                    OR (home_id IS NOT NULL
+                        AND parent_id = home_id
+                        AND name IN (
+                            'sys.nav.portal.modelingHomeRecent',
+                            'sys.nav.portal.modelingHomeTasks'
+                        ));
+
+                WITH RECURSIVE modeling_descendants AS (
+                    SELECT id, name
+                      FROM portal_menu
+                     WHERE parent_id = modeling_id
+                    UNION ALL
+                    SELECT child.id, child.name
+                      FROM portal_menu child
+                      JOIN modeling_descendants parent ON child.parent_id = parent.id
+                )
+                SELECT id INTO planning_system_id
+                  FROM modeling_descendants
+                 WHERE name = 'sys.nav.portal.planningSystem'
+                 ORDER BY id
+                 LIMIT 1;
+
+                IF planning_system_id IS NULL THEN
+                    RAISE EXCEPTION 'Sprint-80 menu review requires the planning-system entry';
+                END IF;
+
+                UPDATE portal_menu
+                   SET metadata = (
+                           COALESCE(NULLIF(metadata, ''), '{}')::jsonb
+                           || jsonb_build_object('title', '规划参数配置')
+                       )::TEXT,
+                       deleted = FALSE,
+                       last_modified_by = 'sprint80-modeling-menu-review',
+                       last_modified_date = now()
+                 WHERE id = planning_system_id;
+            END
+            $do$;
+        ]]></sql>
+
+        <rollback>
+            <sql dbms="postgresql" splitStatements="false"><![CDATA[
+                DO $do$
+                DECLARE
+                    modeling_id BIGINT;
+                    overview_id BIGINT;
+                    home_id BIGINT;
+                    planning_system_id BIGINT;
+                BEGIN
+                    SELECT id INTO modeling_id
+                      FROM portal_menu
+                     WHERE name = 'sys.nav.portal.studioDataModeling'
+                       AND parent_id IS NULL
+                     ORDER BY id
+                     LIMIT 1;
+
+                    SELECT id INTO home_id
+                      FROM portal_menu
+                     WHERE name = 'sys.nav.portal.modelingHome'
+                       AND parent_id = modeling_id
+                     ORDER BY id
+                     LIMIT 1;
+
+                    SELECT id INTO overview_id
+                      FROM portal_menu
+                     WHERE name = 'sys.nav.portal.modelingHomeWorkspace'
+                       AND parent_id IN (home_id, modeling_id)
+                     ORDER BY CASE WHEN parent_id = modeling_id THEN 0 ELSE 1 END, id
+                     LIMIT 1;
+
+                    IF modeling_id IS NULL OR home_id IS NULL OR overview_id IS NULL THEN
+                        RAISE EXCEPTION 'Cannot rollback Sprint-80 menu review because its base hierarchy is incomplete';
+                    END IF;
+
+                    UPDATE portal_menu
+                       SET deleted = FALSE,
+                           last_modified_by = 'sprint80-modeling-menu-review-rollback',
+                           last_modified_date = now()
+                     WHERE id = home_id;
+
+                    UPDATE portal_menu
+                       SET parent_id = home_id,
+                           path = 'modeling/home/workspace',
+                           component = NULL,
+                           sort_order = 1,
+                           metadata = (
+                               COALESCE(NULLIF(metadata, ''), '{}')::jsonb
+                               || jsonb_build_object('title', '工作台')
+                           )::TEXT,
+                           deleted = FALSE,
+                           last_modified_by = 'sprint80-modeling-menu-review-rollback',
+                           last_modified_date = now()
+                     WHERE id = overview_id;
+
+                    UPDATE portal_menu
+                       SET deleted = FALSE,
+                           last_modified_by = 'sprint80-modeling-menu-review-rollback',
+                           last_modified_date = now()
+                     WHERE parent_id = home_id
+                       AND name IN (
+                           'sys.nav.portal.modelingHomeRecent',
+                           'sys.nav.portal.modelingHomeTasks'
+                       );
+
+                    WITH RECURSIVE modeling_descendants AS (
+                        SELECT id, name
+                          FROM portal_menu
+                         WHERE parent_id = modeling_id
+                        UNION ALL
+                        SELECT child.id, child.name
+                          FROM portal_menu child
+                          JOIN modeling_descendants parent ON child.parent_id = parent.id
+                    )
+                    SELECT id INTO planning_system_id
+                      FROM modeling_descendants
+                     WHERE name = 'sys.nav.portal.planningSystem'
+                     ORDER BY id
+                     LIMIT 1;
+
+                    UPDATE portal_menu
+                       SET metadata = (
+                               COALESCE(NULLIF(metadata, ''), '{}')::jsonb
+                               || jsonb_build_object('title', '系统管理')
+                           )::TEXT,
+                           last_modified_by = 'sprint80-modeling-menu-review-rollback',
+                           last_modified_date = now()
+                     WHERE id = planning_system_id;
+                END
+                $do$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

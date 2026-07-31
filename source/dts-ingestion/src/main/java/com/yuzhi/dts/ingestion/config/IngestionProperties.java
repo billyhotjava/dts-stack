@@ -9,7 +9,9 @@ public class IngestionProperties {
     /**
      * Comma-separated service names allowed via X-DTS-Service header (case-insensitive).
      */
-    private String trustedServiceName = "dts-platform,dts-admin";
+    private String trustedServiceName = "dts-platform";
+    /** Pairwise credential required from trusted callers before forwarded identity is accepted. */
+    private String trustedServiceToken;
 
     private final AutoRetry autoRetry = new AutoRetry();
 
@@ -27,6 +29,14 @@ public class IngestionProperties {
 
     public void setTrustedServiceName(String trustedServiceName) {
         this.trustedServiceName = trustedServiceName;
+    }
+
+    public String getTrustedServiceToken() {
+        return trustedServiceToken;
+    }
+
+    public void setTrustedServiceToken(String trustedServiceToken) {
+        this.trustedServiceToken = trustedServiceToken;
     }
 
     public AutoRetry getAutoRetry() {

@@ -6,6 +6,7 @@ import com.yuzhi.dts.ingestion.domain.IngestionExecution;
 import com.yuzhi.dts.ingestion.domain.IngestionTask;
 import com.yuzhi.dts.ingestion.repository.IngestionExecutionRepository;
 import com.yuzhi.dts.ingestion.repository.IngestionTaskRepository;
+import com.yuzhi.dts.ingestion.service.IngestionAccessContractService;
 import com.yuzhi.dts.ingestion.service.audit.AuditService;
 import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
 import com.yuzhi.dts.ingestion.service.infra.PlatformInfraClient;
@@ -21,6 +22,7 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -41,6 +43,7 @@ public class AirflowExecutionSyncService {
     private final PlatformInfraClient platformInfraClient;
     private final IncrementalSyncService incrementalSyncService;
     private final AuditService auditService;
+    private IngestionAccessContractService accessContractService;
 
     public AirflowExecutionSyncService(
         IngestionExecutionRepository executionRepository,
@@ -60,6 +63,11 @@ public class AirflowExecutionSyncService {
         this.platformInfraClient = platformInfraClient;
         this.incrementalSyncService = incrementalSyncService;
         this.auditService = auditService;
+    }
+
+    @Autowired
+    void setAccessContractService(IngestionAccessContractService accessContractService) {
+        this.accessContractService = accessContractService;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -82,11 +90,14 @@ public class AirflowExecutionSyncService {
                     continue; // not stale yet
                 }
 
-                IngestionTask task = execution.getTask();
+                IngestionTask canonicalTask = execution.getTask();
+                IngestionTask task = materializeExecutionTask(execution, canonicalTask);
                 boolean resolvedFromAirflow = false;
 
                 if (task != null && Boolean.TRUE.equals(task.getAirflowEnabled())) {
-                    String dagId = task.getAirflowDagId();
+                    String dagId = StringUtils.hasText(execution.getAirflowDagId())
+                        ? execution.getAirflowDagId()
+                        : task.getAirflowDagId();
                     String dagRunId = execution.getExecutionId();
                     if (StringUtils.hasText(dagId) && StringUtils.hasText(dagRunId)) {
                         try {
@@ -132,9 +143,9 @@ public class AirflowExecutionSyncService {
                         continue;
                     }
 
-                    if (task != null) {
-                        task.setLastExecutionStatus("failed");
-                        taskRepository.save(task);
+                    if (canonicalTask != null) {
+                        canonicalTask.setLastExecutionStatus("failed");
+                        taskRepository.save(canonicalTask);
                     }
                     LOG.warn("[recovery] execution {} marked as failed (zombie recovery)", execution.getId());
                 }
@@ -183,11 +194,14 @@ public class AirflowExecutionSyncService {
                 break;
             }
 
-            IngestionTask task = execution.getTask();
+            IngestionTask canonicalTask = execution.getTask();
+            IngestionTask task = materializeExecutionTask(execution, canonicalTask);
             if (task == null || !Boolean.TRUE.equals(task.getAirflowEnabled())) {
                 continue;
             }
-            String dagId = task.getAirflowDagId();
+            String dagId = StringUtils.hasText(execution.getAirflowDagId())
+                ? execution.getAirflowDagId()
+                : task.getAirflowDagId();
             String dagRunId = execution.getExecutionId();
             if (!StringUtils.hasText(dagId) || !StringUtils.hasText(dagRunId)) {
                 continue;
@@ -263,11 +277,12 @@ public class AirflowExecutionSyncService {
             return;
         }
 
-        task.setLastExecutionStatus(status);
+        IngestionTask canonicalTask = execution.getTask() != null ? execution.getTask() : task;
+        canonicalTask.setLastExecutionStatus(status);
         if ("success".equalsIgnoreCase(status)) {
-            task.setLastExecutedAt(execution.getEndTime());
+            canonicalTask.setLastExecutedAt(execution.getEndTime());
         }
-        taskRepository.save(task);
+        taskRepository.save(canonicalTask);
         LOG.info("[airflow] synced execution {} status={}", execution.getId(), status);
         try {
             boolean lineageSynced = platformInfraClient.syncIngestionExecutionLineage(task, execution);
@@ -312,6 +327,13 @@ public class AirflowExecutionSyncService {
             }
             auditService.auditAction("INGESTION_TASK_EXECUTE", AuditStage.FAIL, task.getName(), meta);
         }
+    }
+
+    private IngestionTask materializeExecutionTask(IngestionExecution execution, IngestionTask canonicalTask) {
+        if (canonicalTask == null || accessContractService == null) {
+            return canonicalTask;
+        }
+        return accessContractService.materializeExecutionTask(canonicalTask, execution.getTaskRevisionId());
     }
 
     private Map<String, Object> lineageFailureMeta(IngestionTask task, IngestionExecution execution, String reason) {
@@ -596,17 +618,23 @@ public class AirflowExecutionSyncService {
         if (Boolean.TRUE.equals(task.getQualityPreCheckEnabled())) {
             return;
         }
-        java.util.UUID datasetId = task.getSourceDataSourceId();
-        if (datasetId == null) {
+        String qualityPolicyRef = execution == null ? null : execution.getQualityPolicyRef();
+        if (!StringUtils.hasText(qualityPolicyRef)) {
+            LOG.debug("[quality] no official qualityPolicyRef bound for task={}, skipping post-ingestion quality", task.getId());
             return;
         }
         try {
-            LOG.info("[quality] triggering post-ingestion quality check for task={} datasetId={}", task.getId(), datasetId);
-            platformInfraClient.triggerQualityRun(datasetId, "INGESTION");
+            LOG.info("[quality] triggering post-ingestion quality check for task={} policy={}", task.getId(), qualityPolicyRef);
+            String qualityRunId = platformInfraClient.triggerQualityRunByPolicyRef(qualityPolicyRef, "INGESTION");
+            execution.setQualityRunId(qualityRunId);
+            executionRepository.save(execution);
             Map<String, Object> meta = new java.util.LinkedHashMap<>();
             meta.put("taskId", task.getId());
             meta.put("executionId", execution.getId());
-            meta.put("datasetId", datasetId.toString());
+            meta.put("qualityPolicyRef", qualityPolicyRef);
+            if (StringUtils.hasText(qualityRunId)) {
+                meta.put("qualityRunId", qualityRunId);
+            }
             meta.put("triggerType", "INGESTION");
             auditService.auditAction(
                 "INGESTION_TASK_QUALITY_TRIGGER",
@@ -619,7 +647,7 @@ public class AirflowExecutionSyncService {
             Map<String, Object> meta = new java.util.LinkedHashMap<>();
             meta.put("taskId", task.getId());
             meta.put("executionId", execution.getId());
-            meta.put("datasetId", datasetId.toString());
+            meta.put("qualityPolicyRef", qualityPolicyRef);
             meta.put("error", ex.getMessage());
             auditService.auditAction(
                 "INGESTION_TASK_QUALITY_TRIGGER",

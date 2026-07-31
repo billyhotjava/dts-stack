@@ -1,7 +1,7 @@
 # T01：compose 与 file provider 的 Hetu 路由移除
 
 **优先级**：P0
-**状态**：READY
+**状态**：DONE（compose 双文件 + file provider 已移除并验证；docker-label 运行时清理属部署动作，见 it-06 证据第 6 节）
 **依赖**：无
 
 ## 目标

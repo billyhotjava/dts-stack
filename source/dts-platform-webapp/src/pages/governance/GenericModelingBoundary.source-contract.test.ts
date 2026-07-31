@@ -5,7 +5,10 @@ import test from "node:test";
 const businessProcessSource = readFileSync(new URL("./businessProcess.ts", import.meta.url), "utf8");
 const conformedDimensionSource = readFileSync(new URL("./conformedDimensions.ts", import.meta.url), "utf8");
 const subjectAreasSource = readFileSync(new URL("./SubjectAreasPage.tsx", import.meta.url), "utf8");
-const modelingContractSource = readFileSync(new URL("../modeling/modelSpecV2Contract.ts", import.meta.url), "utf8");
+const modelingContractSource = readFileSync(
+	new URL("../../features/modeling/contracts/modelSpecV2Contract.ts", import.meta.url),
+	"utf8",
+);
 
 test("generic modeling pages do not install customer scenarios by default", () => {
 	for (const source of [businessProcessSource, conformedDimensionSource, subjectAreasSource]) {

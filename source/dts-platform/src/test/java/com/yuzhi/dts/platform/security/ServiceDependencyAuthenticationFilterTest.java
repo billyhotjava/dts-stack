@@ -87,7 +87,6 @@ class ServiceDependencyAuthenticationFilterTest {
         trusted.put("dts-metrics", "metrics-secret");
         trusted.put("dts-airflow", "airflow-secret");
         props.setTrustedServices(trusted);
-        props.setSharedSecret("shared-fallback");
         svcTokenAuthService = mock(SvcTokenAuthService.class);
         chain = mock(FilterChain.class);
     }
@@ -372,27 +371,6 @@ class ServiceDependencyAuthenticationFilterTest {
     }
 
     @Test
-    void serviceHeaderWithSharedSecretFallback_authenticates() throws Exception {
-        // trustedServices Map 命中但 value 为空 → fallback 到 sharedSecret
-        Map<String, String> trusted = new LinkedHashMap<>();
-        trusted.put("dts-ingestion", ""); // empty per-pair token
-        props.setTrustedServices(trusted);
-
-        ServiceDependencyAuthenticationFilter filter = new ServiceDependencyAuthenticationFilter(props, svcTokenAuthService);
-        MockHttpServletRequest req = new MockHttpServletRequest();
-        req.addHeader(SERVICE_HEADER, "dts-ingestion");
-        req.addHeader(TOKEN_HEADER, "shared-fallback");
-        req.setMethod("GET");
-        req.setRequestURI(INGESTION_RUNTIME_DETAIL);
-
-        filter.doFilter(req, new MockHttpServletResponse(), chain);
-
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        assertThat(auth).isNotNull();
-        assertThat(auth.getPrincipal()).isEqualTo("service:dts-ingestion");
-    }
-
-    @Test
     void serviceHeaderWithDynamicSvcToken_authenticates() throws Exception {
         when(svcTokenAuthService.authenticateService("db-managed-token", "dts-ingestion"))
             .thenReturn(new TokenPrincipal("service:dts-ingestion", null, PersonnelLevel.GENERAL, null));
@@ -442,35 +420,6 @@ class ServiceDependencyAuthenticationFilterTest {
         filter.doFilter(req, new MockHttpServletResponse(), chain);
 
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isSameAs(existing);
-    }
-
-    @Test
-    void legacyHeaderOnlyMode_authenticatesWithJustHeader() throws Exception {
-        props.setLegacyHeaderOnlyMode(true);
-        ServiceDependencyAuthenticationFilter filter = new ServiceDependencyAuthenticationFilter(props, svcTokenAuthService);
-        MockHttpServletRequest req = new MockHttpServletRequest();
-        req.addHeader(SERVICE_HEADER, "dts-ingestion");
-        req.setMethod("GET");
-        req.setRequestURI(INGESTION_RUNTIME_DETAIL);
-        // no token
-
-        filter.doFilter(req, new MockHttpServletResponse(), chain);
-
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        assertThat(auth).isNotNull();
-        assertThat(auth.getPrincipal()).isEqualTo("service:dts-ingestion");
-    }
-
-    @Test
-    void legacyHeaderOnlyMode_stillRejectsUnknownService() throws Exception {
-        props.setLegacyHeaderOnlyMode(true);
-        ServiceDependencyAuthenticationFilter filter = new ServiceDependencyAuthenticationFilter(props, svcTokenAuthService);
-        MockHttpServletRequest req = new MockHttpServletRequest();
-        req.addHeader(SERVICE_HEADER, "dts-malicious");
-
-        filter.doFilter(req, new MockHttpServletResponse(), chain);
-
-        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
     }
 
     @Test

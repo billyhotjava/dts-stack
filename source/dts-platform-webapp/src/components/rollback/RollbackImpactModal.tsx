@@ -1,10 +1,6 @@
-import { useState } from "react";
-import { Modal, Alert, Tag, List, Spin, message } from "antd";
-import {
-	ExclamationCircleOutlined,
-	DeleteOutlined,
-	WarningOutlined,
-} from "@ant-design/icons";
+import { DeleteOutlined, ExclamationCircleOutlined, WarningOutlined } from "@ant-design/icons";
+import { Alert, Checkbox, Input, List, Modal, message, Spin, Tag } from "antd";
+import { useMemo, useRef, useState } from "react";
 import { rollbackAnalyze, rollbackExecute } from "@/api/platformApi";
 
 export type RollbackRequest = {
@@ -29,6 +25,8 @@ export type RollbackImpact = {
 	uploadFiles: string[];
 	executionRecords: number;
 	confirmationType: string;
+	confirmationToken: string;
+	confirmationText?: string;
 	cascadeTaskIds: number[];
 	warnings: string[];
 };
@@ -47,6 +45,63 @@ const LEVEL_LABELS: Record<number, { text: string; color: string }> = {
 	3: { text: "Level 3 — 全链路回退", color: "#f5222d" },
 };
 
+const SUPPORTED_CONFIRMATION_TYPES = new Set(["MODAL", "TYPE_TEXT"]);
+
+const asRecord = (value: unknown): Record<string, unknown> | null =>
+	value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+
+const stringList = (value: unknown): string[] =>
+	Array.isArray(value) ? [...new Set(value.filter((item): item is string => typeof item === "string"))] : [];
+
+const numberList = (value: unknown): number[] =>
+	Array.isArray(value)
+		? value.map(Number).filter((item): item is number => Number.isSafeInteger(item) && item > 0)
+		: [];
+
+const normalizeImpact = (value: unknown): RollbackImpact | null => {
+	const record = asRecord(value);
+	if (!record) return null;
+	const level = Number(record.level);
+	const scope = typeof record.scope === "string" ? record.scope : "";
+	const confirmationType = typeof record.confirmationType === "string" ? record.confirmationType : "";
+	const confirmationToken = typeof record.confirmationToken === "string" ? record.confirmationToken : "";
+	const confirmationText = typeof record.confirmationText === "string" ? record.confirmationText : undefined;
+	if (
+		!Number.isSafeInteger(level) ||
+		level < 1 ||
+		!scope.trim() ||
+		!confirmationType.trim() ||
+		!confirmationToken.trim()
+	) {
+		return null;
+	}
+	return {
+		level,
+		scope,
+		taskId: record.taskId == null ? undefined : Number(record.taskId),
+		dataSourceId: typeof record.dataSourceId === "string" ? record.dataSourceId : undefined,
+		affectedTables: stringList(record.affectedTables),
+		affectedOdsMappings: stringList(record.affectedOdsMappings),
+		affectedModels: stringList(record.affectedModels),
+		affectedDbtFiles: stringList(record.affectedDbtFiles),
+		affectedDatasets: Number.isFinite(Number(record.affectedDatasets)) ? Number(record.affectedDatasets) : 0,
+		uploadFiles: stringList(record.uploadFiles),
+		executionRecords: Number.isFinite(Number(record.executionRecords)) ? Number(record.executionRecords) : 0,
+		confirmationType,
+		confirmationToken,
+		confirmationText,
+		cascadeTaskIds: numberList(record.cascadeTaskIds),
+		warnings: stringList(record.warnings),
+	};
+};
+
+const matchesRequest = (impact: RollbackImpact, request: RollbackRequest) => {
+	if (impact.level !== request.level || impact.scope !== request.scope) return false;
+	if (request.scope === "task") return impact.taskId === request.taskId;
+	if (request.scope === "datasource") return impact.dataSourceId === request.dataSourceId;
+	return false;
+};
+
 type Props = {
 	open: boolean;
 	request: RollbackRequest | null;
@@ -58,46 +113,90 @@ export default function RollbackImpactModal({ open, request, onClose, onSuccess 
 	const [impact, setImpact] = useState<RollbackImpact | null>(null);
 	const [analyzing, setAnalyzing] = useState(false);
 	const [executing, setExecuting] = useState(false);
-	const [step, setStep] = useState<"analyze" | "confirm">("analyze");
+	const [analyzeError, setAnalyzeError] = useState("");
+	const [acknowledged, setAcknowledged] = useState(false);
+	const [confirmationInput, setConfirmationInput] = useState("");
+	const analyzeRequestIdRef = useRef(0);
+
+	const confirmationType = useMemo(() => impact?.confirmationType.trim().toUpperCase() || "", [impact]);
+	const confirmationReady = Boolean(
+		impact?.confirmationToken.trim() &&
+			((confirmationType === "MODAL" && acknowledged) ||
+				(confirmationType === "TYPE_TEXT" && confirmationInput === impact.confirmationText)),
+	);
 
 	const doAnalyze = async () => {
 		if (!request) return;
+		const currentRequest = { ...request };
+		const requestId = ++analyzeRequestIdRef.current;
 		setAnalyzing(true);
+		setAnalyzeError("");
+		setImpact(null);
+		setAcknowledged(false);
+		setConfirmationInput("");
 		try {
-			const resp: any = await rollbackAnalyze(request);
-			const data = resp?.data || resp;
-			setImpact(data);
-			setStep("confirm");
+			const payload: any = await rollbackAnalyze(currentRequest);
+			if (analyzeRequestIdRef.current !== requestId) return;
+			const nextImpact = normalizeImpact(payload?.data || payload);
+			if (!nextImpact || !matchesRequest(nextImpact, currentRequest)) {
+				setAnalyzeError("回退确认凭据无效，无法执行回退。");
+				return;
+			}
+			const nextType = nextImpact.confirmationType.trim().toUpperCase();
+			if (!SUPPORTED_CONFIRMATION_TYPES.has(nextType)) {
+				setAnalyzeError("暂不支持当前回退确认方式，无法执行回退。");
+				return;
+			}
+			if (nextType === "TYPE_TEXT" && !nextImpact.confirmationText?.trim()) {
+				setAnalyzeError("回退确认凭据无效，无法执行回退。");
+				return;
+			}
+			setImpact(nextImpact);
 		} catch {
-			// global interceptor handles error
+			if (analyzeRequestIdRef.current === requestId) {
+				setAnalyzeError("回退影响分析失败，请稍后重试。");
+			}
 		} finally {
-			setAnalyzing(false);
+			if (analyzeRequestIdRef.current === requestId) setAnalyzing(false);
 		}
 	};
 
 	const doExecute = async () => {
-		if (!request) return;
+		if (!request || !impact || !confirmationReady || !matchesRequest(impact, request)) return;
 		setExecuting(true);
 		try {
-			const resp: any = await rollbackExecute(request);
-			const result: RollbackResult = resp?.data || resp;
+			const executeRequest = {
+				...request,
+				confirmationType: impact.confirmationType,
+				confirmationToken: impact.confirmationToken,
+				...(confirmationType === "TYPE_TEXT" ? { confirmationText: confirmationInput } : {}),
+			};
+			const payload: any = await rollbackExecute(executeRequest);
+			const result = (payload?.data || payload) as RollbackResult | null;
+			if (!result || typeof result.success !== "boolean") {
+				message.error("回退执行结果无效，请刷新任务状态后重试。");
+				return;
+			}
 			if (result.success) {
 				message.success("回退操作执行成功");
 			} else {
-				message.warning("回退操作部分完成，存在错误");
+				message.warning("回退操作部分完成，请到审计记录核对结果");
 			}
 			onSuccess?.(result);
 			handleClose();
 		} catch {
-			// global interceptor handles error
+			message.error("回退执行失败，请稍后重试。");
 		} finally {
 			setExecuting(false);
 		}
 	};
 
 	const handleClose = () => {
+		analyzeRequestIdRef.current += 1;
 		setImpact(null);
-		setStep("analyze");
+		setAnalyzeError("");
+		setAcknowledged(false);
+		setConfirmationInput("");
 		setAnalyzing(false);
 		setExecuting(false);
 		onClose();
@@ -106,9 +205,7 @@ export default function RollbackImpactModal({ open, request, onClose, onSuccess 
 	const levelInfo = LEVEL_LABELS[request?.level ?? 0] ?? { text: "未知级别", color: "default" };
 
 	const afterOpenChange = (visible: boolean) => {
-		if (visible && request && step === "analyze") {
-			doAnalyze();
-		}
+		if (visible && request) void doAnalyze();
 	};
 
 	return (
@@ -123,23 +220,28 @@ export default function RollbackImpactModal({ open, request, onClose, onSuccess 
 			onCancel={handleClose}
 			afterOpenChange={afterOpenChange}
 			width={640}
-			okText={step === "analyze" ? "分析中..." : "确认执行回退"}
+			okText={analyzing ? "分析中..." : impact ? "确认执行回退" : "无法执行回退"}
 			okButtonProps={{
 				danger: true,
 				loading: executing,
-				disabled: analyzing || !impact,
+				disabled: !confirmationReady || analyzing || executing,
 				icon: <DeleteOutlined />,
 			}}
+			cancelButtonProps={{ disabled: executing }}
+			closable={!executing}
+			maskClosable={!executing}
 			onOk={doExecute}
 			cancelText="取消"
 		>
-			{analyzing && (
+			{analyzing ? (
 				<div style={{ textAlign: "center", padding: 32 }}>
 					<Spin tip="正在分析影响范围..." />
 				</div>
-			)}
+			) : null}
 
-			{!analyzing && impact && (
+			{!analyzing && analyzeError ? <Alert type="error" showIcon message={analyzeError} /> : null}
+
+			{!analyzing && impact ? (
 				<div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 					<Alert
 						type="warning"
@@ -147,69 +249,97 @@ export default function RollbackImpactModal({ open, request, onClose, onSuccess 
 						icon={<WarningOutlined />}
 						message={
 							<span>
-								即将执行 <Tag color={levelInfo.color}>{levelInfo.text}</Tag> 操作，
-								范围: <Tag>{impact.scope === "task" ? "单任务" : "数据源级"}</Tag>
+								即将执行 <Tag color={levelInfo.color}>{levelInfo.text}</Tag> 操作，范围:
+								<Tag>{impact.scope === "task" ? "单任务" : "数据源级"}</Tag>
 							</span>
 						}
 					/>
 
-					{impact.warnings.length > 0 && (
+					{impact.warnings.length > 0 ? (
 						<Alert
 							type="error"
 							showIcon
 							message="注意事项"
 							description={
 								<ul style={{ margin: 0, paddingLeft: 20 }}>
-									{impact.warnings.map((w, i) => (
-										<li key={i}>{w}</li>
+									{impact.warnings.map((warning) => (
+										<li key={warning}>{warning}</li>
 									))}
 								</ul>
 							}
 						/>
-					)}
+					) : null}
 
-					{impact.affectedTables.length > 0 && (
+					{impact.affectedTables.length > 0 ? (
 						<div>
 							<strong>受影响的表 ({impact.affectedTables.length})</strong>
 							<List
 								size="small"
 								bordered
 								dataSource={impact.affectedTables}
-								renderItem={(t) => <List.Item>{t}</List.Item>}
+								renderItem={(table) => <List.Item>{table}</List.Item>}
 								style={{ maxHeight: 150, overflow: "auto", marginTop: 4 }}
 							/>
 						</div>
-					)}
+					) : null}
 
-					{impact.cascadeTaskIds.length > 0 && (
+					{impact.cascadeTaskIds.length > 0 ? (
 						<div>
 							<strong>受影响的任务 ID:</strong>{" "}
 							{impact.cascadeTaskIds.map((id) => (
 								<Tag key={id}>{id}</Tag>
 							))}
 						</div>
-					)}
+					) : null}
 
-					{impact.executionRecords > 0 && (
+					{impact.executionRecords > 0 ? (
 						<div>
 							<strong>执行记录:</strong> {impact.executionRecords} 条将被清除
 						</div>
-					)}
+					) : null}
 
-					{impact.uploadFiles.length > 0 && (
+					{impact.uploadFiles.length > 0 ? (
 						<div>
 							<strong>上传文件:</strong>
 							<List
 								size="small"
 								bordered
 								dataSource={impact.uploadFiles}
-								renderItem={(f) => <List.Item>{f}</List.Item>}
+								renderItem={(file) => <List.Item>{file}</List.Item>}
 								style={{ maxHeight: 100, overflow: "auto", marginTop: 4 }}
 							/>
 						</div>
-					)}
+					) : null}
+
+					{confirmationType === "MODAL" ? (
+						<Checkbox checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)}>
+							我已核对以上影响范围，并确认执行不可逆回退
+						</Checkbox>
+					) : null}
+
+					{confirmationType === "TYPE_TEXT" ? (
+						<div>
+							<Alert
+								type="error"
+								showIcon
+								message="需要输入确认文本"
+								description={
+									<span>
+										请完整输入：<code>{impact.confirmationText}</code>
+									</span>
+								}
+							/>
+							<Input
+								className="mt-3"
+								value={confirmationInput}
+								onChange={(event) => setConfirmationInput(event.target.value)}
+								placeholder="严格按上方文本输入"
+								autoComplete="off"
+							/>
+						</div>
+					) : null}
 				</div>
-			)}
+			) : null}
 		</Modal>
 	);
 }

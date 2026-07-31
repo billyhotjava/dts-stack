@@ -18,7 +18,6 @@ services:
       APP_API_DOCS_PUBLIC: ${APP_API_DOCS_PUBLIC:-false}
       APP_TEST_API_ENABLED: ${APP_TEST_API_ENABLED:-false}
       APP_TEST_API_TOKEN: ${APP_TEST_API_TOKEN:-}
-      AUDIT_INGEST_SERVICE_TOKENS: ${AUDIT_INGEST_SERVICE_TOKENS:-${DTS_PLATFORM_TO_ADMIN_TOKEN:-${DTS_ADMIN_SERVICE_TOKEN:-}},${DTS_ANALYTICS_TO_ADMIN_TOKEN:-${DTS_PLATFORM_TO_ADMIN_TOKEN:-${DTS_ADMIN_SERVICE_TOKEN:-}}}}
       DATA_ROOT: /data
       DTS_KEYCLOAK_ADMIN_CLIENT_ID: ${OAUTH2_ADMIN_CLIENT_ID:-dts-admin}
       DTS_KEYCLOAK_ADMIN_CLIENT_SECRET: ${OAUTH2_ADMIN_CLIENT_SECRET:-}
@@ -70,7 +69,9 @@ services:
       DTS_PKI_VENDOR_JAR: ${DTS_PKI_VENDOR_JAR:-}
       DTS_SECURITY_IP_ALLOWLIST_ENABLED: ${DTS_SECURITY_IP_ALLOWLIST_ENABLED:-true}
       DTS_SECURITY_IP_ALLOWLIST_TRIAD_USERNAMES: ${DTS_SECURITY_IP_ALLOWLIST_TRIAD_USERNAMES:-sysadmin,authadmin,auditadmin}
-      DTS_INBOUND_FROM_PLATFORM: ${DTS_INBOUND_FROM_PLATFORM:-${DTS_PLATFORM_TO_ADMIN_TOKEN:-${DTS_ADMIN_SERVICE_TOKEN:-}}}
+      DTS_PLATFORM_TO_ADMIN_TOKEN: ${DTS_PLATFORM_TO_ADMIN_TOKEN:-}
+      DTS_ANALYTICS_TO_ADMIN_TOKEN: ${DTS_ANALYTICS_TO_ADMIN_TOKEN:-}
+      DTS_INGESTION_TO_ADMIN_TOKEN: ${DTS_INGESTION_TO_ADMIN_TOKEN:-}
       EUREKA_CLIENT_ENABLED: "false"
       JAVA_TOOL_OPTIONS: -Djavax.net.ssl.trustStore=/etc/dts/truststore.p12 -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit} -Djavax.net.ssl.trustStoreType=PKCS12 -Dspring.datasource.url=$${SPRING_DATASOURCE_URL} -Dspring.datasource.username=$${SPRING_DATASOURCE_USERNAME} -Dspring.datasource.password=$${SPRING_DATASOURCE_PASSWORD} ${DTS_ADMIN_JAVA_TOOL_OPTIONS_EXTRA:-}
       JHIPSTER_CORS_ALLOW_CREDENTIALS: "true"
@@ -113,6 +114,14 @@ services:
       - traefik.http.routers.dts-admin-uiapi.tls=true
       - traefik.http.routers.dts-admin-uiapi.service=dts-admin
       - traefik.http.routers.dts-admin-uiapi.middlewares=cors-allow@file,security-headers@file
+      # /api/audit-events is service-internal; sibling services call dts-admin directly on the Docker network.
+      - traefik.http.middlewares.audit-ingest-public-deny.ipallowlist.sourcerange=127.0.0.1/32,::1/128
+      - traefik.http.routers.audit-ingest-public-deny.rule=(Host(`${HOST_ADMIN_UI}`) && Path(`/api/audit-events`)) || (Host(`${HOST_PLATFORM_UI}`) && Path(`/admin/api/audit-events`)) || (Host(`${HOST_API}`) && Path(`/admin/api/audit-events`))
+      - traefik.http.routers.audit-ingest-public-deny.entrypoints=websecure
+      - traefik.http.routers.audit-ingest-public-deny.tls=true
+      - traefik.http.routers.audit-ingest-public-deny.service=dts-admin
+      - traefik.http.routers.audit-ingest-public-deny.priority=1000
+      - traefik.http.routers.audit-ingest-public-deny.middlewares=audit-ingest-public-deny@docker
       - traefik.http.routers.dts-admin-platformapi.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/admin/api`)
       - traefik.http.routers.dts-admin-platformapi.entrypoints=websecure
       - traefik.http.routers.dts-admin-platformapi.tls=true
@@ -575,8 +584,8 @@ services:
         required: true
     environment:
       ANALYTICS_JDBC_DRIVERS_DIR: /opt/dts/jdbc
-      DTS_ANALYTICS_TO_PLATFORM: ${DTS_ANALYTICS_TO_PLATFORM:-${DTS_ADMIN_SERVICE_TOKEN:-}}
-      DTS_ANALYTICS_TO_ADMIN_TOKEN: ${DTS_ANALYTICS_TO_ADMIN_TOKEN:-${DTS_PLATFORM_TO_ADMIN_TOKEN:-${DTS_ADMIN_SERVICE_TOKEN:-}}}
+      DTS_ANALYTICS_TO_PLATFORM: ${DTS_ANALYTICS_TO_PLATFORM:-}
+      DTS_ANALYTICS_TO_ADMIN_TOKEN: ${DTS_ANALYTICS_TO_ADMIN_TOKEN:-}
       DTS_ANALYTICS_PROJECT_COCKPIT_WAREHOUSE_ENABLED: ${DTS_ANALYTICS_PROJECT_COCKPIT_WAREHOUSE_ENABLED:-true}
       EUREKA_CLIENT_ENABLED: "false"
       JAVA_TOOL_OPTIONS: ${ANALYTICS_JAVA_TOOL_OPTIONS:-}
@@ -723,7 +732,7 @@ services:
       ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
       DTS_ADDAX_DAG_ID: ${DTS_ADDAX_DAG_ID:-addax_job}
       DTS_ADDAX_ENABLED: ${DTS_ADDAX_ENABLED:-true}
-      DTS_INGESTION_TO_PLATFORM: ${DTS_INGESTION_TO_PLATFORM:-${DTS_ADMIN_SERVICE_TOKEN:-}}
+      DTS_INGESTION_TO_PLATFORM: ${DTS_INGESTION_TO_PLATFORM:-}
       DTS_ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
       DTS_ADDAX_JOB_DIR: ${DTS_AIRFLOW_DAGS_DIR:-/opt/airflow/dags}
       DTS_AIRFLOW_API_PATH: ${DTS_AIRFLOW_API_PATH:-/api/v1}
@@ -739,6 +748,7 @@ services:
       DTS_AIRFLOW_USERNAME: ${DTS_AIRFLOW_USERNAME:-airflow}
       DTS_INFRA_ENCRYPTION_KEY: ${DTS_INFRA_ENCRYPTION_KEY:-}
       DTS_INFRA_KEY_VERSION: ${DTS_INFRA_KEY_VERSION:-v1}
+      DTS_INGESTION_FROM_PLATFORM_TOKEN: ${DTS_PLATFORM_TO_INGESTION_TOKEN:-}
       DTS_INGESTION_TRUSTED_SERVICE_NAME: ${DTS_INGESTION_TRUSTED_SERVICE_NAME:-dts-platform}
       DTS_OPENMETADATA_API_PATH: ${DTS_OPENMETADATA_API_PATH:-/api/v1}
       DTS_OPENMETADATA_ALLOW_NO_AUTH: ${DTS_OPENMETADATA_ALLOW_NO_AUTH:-false}
@@ -1240,13 +1250,13 @@ services:
       DATA_STANDARD_STORAGE_DIR: /opt/dts/upload
       DTS_INFRA_ENCRYPTION_KEY: ${DTS_INFRA_ENCRYPTION_KEY:-${DATA_STANDARD_ENCRYPTION_KEY:-}}
       DTS_INFRA_KEY_VERSION: ${DTS_INFRA_KEY_VERSION:-${DATA_STANDARD_KEY_VERSION:-v1}}
-      DTS_ADMIN_API_PATH: /api
-      DTS_ADMIN_BASE_URL: http://dts-admin:8081
+      DTS_PLATFORM_OUTBOUND_ADMIN_API_PATH: /api
+      DTS_PLATFORM_OUTBOUND_ADMIN_BASE_URL: http://dts-admin:8081
       DTS_ANALYTICS_BASE_URL: ${DTS_ANALYTICS_BASE_URL:-http://dts-analytics:3000}
-      DTS_INBOUND_FROM_ANALYTICS: ${DTS_INBOUND_FROM_ANALYTICS:-${DTS_ADMIN_SERVICE_TOKEN:-}}
+      DTS_INBOUND_FROM_ANALYTICS: ${DTS_INBOUND_FROM_ANALYTICS:-}
       DTS_INBOUND_FROM_AIRFLOW: ${DTS_INBOUND_FROM_AIRFLOW:-}
-      DTS_INBOUND_FROM_INGESTION: ${DTS_INBOUND_FROM_INGESTION:-${DTS_ADMIN_SERVICE_TOKEN:-}}
-      DTS_PLATFORM_TO_ADMIN_TOKEN: ${DTS_PLATFORM_TO_ADMIN_TOKEN:-${DTS_ADMIN_SERVICE_TOKEN:-}}
+      DTS_INBOUND_FROM_INGESTION: ${DTS_INBOUND_FROM_INGESTION:-}
+      DTS_PLATFORM_TO_ADMIN_TOKEN: ${DTS_PLATFORM_TO_ADMIN_TOKEN:-}
       DTS_AIRFLOW_BASE_URL: ${DTS_AIRFLOW_BASE_URL:-http://dts-airflow-webserver:8080}
       DTS_AIRFLOW_DAG_ID: ${DTS_AIRFLOW_DAG_ID:-dbt_load}
       DTS_AIRFLOW_PASSWORD: ${DTS_AIRFLOW_PASSWORD:-${AIRFLOW_ADMIN_PASSWORD:-airflow}}
@@ -1262,6 +1272,7 @@ services:
       DTS_FEATURE_PLATFORM_KC_LOCALIZATION: "true"
       DTS_INGESTION_BASE_URL: ${DTS_INGESTION_BASE_URL:-http://dts-ingestion:8083}
       DTS_INGESTION_SERVICE_NAME: ${DTS_INGESTION_SERVICE_NAME:-dts-platform}
+      DTS_PLATFORM_TO_INGESTION_TOKEN: ${DTS_PLATFORM_TO_INGESTION_TOKEN:-}
       DTS_JDBC_DRIVER_CLASS: org.apache.hive.jdbc.HiveDriver
       DTS_JDBC_DRIVER_JAR: quark-driver-8.37.3.jar
       DTS_JDBC_LOAD_EXTERNAL_DRIVERS: "true"
@@ -1433,7 +1444,7 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=dts-core
-      - traefik.http.routers.dts-platform-ui.rule=Host(`${HOST_PLATFORM_UI}`) && !PathPrefix(`/api`) && !PathPrefix(`/admin/api`) && !PathPrefix(`/analytics`) && !PathPrefix(`/bi/api`) && !PathPrefix(`/screen`) && !PathPrefix(`/dashboards`) && !PathPrefix(`/system`) && !PathPrefix(`/tdv`) && !PathPrefix(`/account`) && !PathPrefix(`/hetu`) && !PathPrefix(`/static`)
+      - traefik.http.routers.dts-platform-ui.rule=Host(`${HOST_PLATFORM_UI}`) && !PathPrefix(`/api`) && !PathPrefix(`/admin/api`) && !PathPrefix(`/analytics`) && !PathPrefix(`/bi/api`)
       - traefik.http.routers.dts-platform-ui.priority=100
       - traefik.http.routers.dts-platform-ui.entrypoints=websecure
       - traefik.http.routers.dts-platform-ui.tls=true
@@ -1480,68 +1491,9 @@ services:
       - DOCKER_API_VERSION=${DOCKER_API_VERSION:-1.52}
     extra_hosts:
       - host.docker.internal:${HOST_GATEWAY_IP:-172.17.0.1}
-      - hetu.upstream:${HETU_UPSTREAM_IP:-172.17.0.1}
     image: ${IMAGE_TRAEFIK}
     labels:
       - traefik.enable=true
-      - traefik.http.routers.hetu-dashboards.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/dashboards`)
-      - traefik.http.routers.hetu-dashboards.entrypoints=websecure
-      - traefik.http.routers.hetu-dashboards.tls=true
-      - traefik.http.routers.hetu-dashboards.priority=200
-      - traefik.http.routers.hetu-dashboards.service=hetu@file
-      - traefik.http.middlewares.hetu-strip-dashboards.stripprefixregex.regex=/dashboards
-      - traefik.http.middlewares.hetu-upstream-host.headers.customrequestheaders.Host=${HETU_UPSTREAM_IP:-172.17.0.1}:7778
-      - traefik.http.middlewares.hetu-allow-anonymous.headers.customrequestheaders.tui-allow-anonymous=true
-      - traefik.http.routers.hetu-dashboards.middlewares=hetu-strip-dashboards@docker,hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file
-      - traefik.http.routers.hetu-dashboard-hetu.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/dashboard/hetu`)
-      - traefik.http.routers.hetu-dashboard-hetu.entrypoints=websecure
-      - traefik.http.routers.hetu-dashboard-hetu.tls=true
-      - traefik.http.routers.hetu-dashboard-hetu.priority=210
-      - traefik.http.routers.hetu-dashboard-hetu.service=hetu@file
-      - traefik.http.middlewares.hetu-strip-dashboard-hetu.stripprefixregex.regex=/dashboard/hetu
-      - traefik.http.routers.hetu-dashboard-hetu.middlewares=hetu-strip-dashboard-hetu@docker,hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file
-      - traefik.http.routers.hetu-screen.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/screen`)
-      - traefik.http.routers.hetu-screen.entrypoints=websecure
-      - traefik.http.routers.hetu-screen.tls=true
-      - traefik.http.routers.hetu-screen.priority=190
-      - traefik.http.routers.hetu-screen.service=hetu@file
-      - traefik.http.routers.hetu-screen.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file
-      - traefik.http.routers.hetu-system.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/system`)
-      - traefik.http.routers.hetu-system.entrypoints=websecure
-      - traefik.http.routers.hetu-system.tls=true
-      - traefik.http.routers.hetu-system.priority=185
-      - traefik.http.routers.hetu-system.service=hetu@file
-      - traefik.http.routers.hetu-system.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file
-      - traefik.http.routers.hetu-tdv.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/tdv`)
-      - traefik.http.routers.hetu-tdv.entrypoints=websecure
-      - traefik.http.routers.hetu-tdv.tls=true
-      - traefik.http.routers.hetu-tdv.priority=220
-      - traefik.http.routers.hetu-tdv.service=hetu@file
-      - traefik.http.routers.hetu-tdv.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file
-      - traefik.http.routers.hetu-account.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/account`)
-      - traefik.http.routers.hetu-account.entrypoints=websecure
-      - traefik.http.routers.hetu-account.tls=true
-      - traefik.http.routers.hetu-account.priority=186
-      - traefik.http.routers.hetu-account.service=hetu@file
-      - traefik.http.routers.hetu-account.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file
-      - traefik.http.routers.hetu-hetu.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/hetu`)
-      - traefik.http.routers.hetu-hetu.entrypoints=websecure
-      - traefik.http.routers.hetu-hetu.tls=true
-      - traefik.http.routers.hetu-hetu.priority=185
-      - traefik.http.routers.hetu-hetu.service=hetu@file
-      - traefik.http.routers.hetu-hetu.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file
-      - traefik.http.routers.hetu-static.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/static`)
-      - traefik.http.routers.hetu-static.entrypoints=websecure
-      - traefik.http.routers.hetu-static.tls=true
-      - traefik.http.routers.hetu-static.priority=195
-      - traefik.http.routers.hetu-static.service=hetu@file
-      - traefik.http.routers.hetu-static.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file
-      - traefik.http.routers.hetu-root-assets.rule=Host(`${HOST_PLATFORM_UI}`) && (PathPrefix(`/core`) || PathPrefix(`/screen-`) || PathPrefix(`/default~`) || PathPrefix(`/vendors~`) || PathPrefix(`/runtime~`))
-      - traefik.http.routers.hetu-root-assets.entrypoints=websecure
-      - traefik.http.routers.hetu-root-assets.tls=true
-      - traefik.http.routers.hetu-root-assets.priority=205
-      - traefik.http.routers.hetu-root-assets.service=hetu@file
-      - traefik.http.routers.hetu-root-assets.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file
     healthcheck:
       test:
         - CMD

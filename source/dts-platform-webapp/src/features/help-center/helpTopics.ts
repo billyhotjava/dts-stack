@@ -79,11 +79,11 @@ export const HELP_TOPICS: HelpTopic[] = [
 	},
 	{
 		id: "data-modeling",
-		title: "数据开发与建模",
+		title: "数据建模",
 		section: "数据建设",
-		summary: "围绕建设计划完成来源盘点、数仓规划、模型设计、构建和发布。",
-		keywords: ["建模", "建设计划", "数仓", "维度", "模型", "SQL", "dbt", "发布"],
-		routePrefixes: ["/modeling", "/studio/low-code-development", "/studio/projects"],
+		summary: "在独立的数据建模工作区完成数仓规划、标准、模型、指标和关系设计。",
+		keywords: ["建模", "数仓规划", "标准", "维度", "模型", "指标", "关系图"],
+		routePrefixes: ["/data-modeling"],
 		prerequisites: ["至少有一个可用数据源", "已明确业务目标或现有数据范围"],
 		steps: [
 			"新建建设计划并选择业务分类。",
@@ -100,11 +100,11 @@ export const HELP_TOPICS: HelpTopic[] = [
 	},
 	{
 		id: "construction-planning",
-		title: "建立数据建设规划",
+		title: "数仓规划",
 		section: "数据建设",
-		summary: "围绕一个建设计划查看真实证据、首要阻塞和下一步，并从业务目标或现有数据进入同一套建设基线。",
-		keywords: ["建设工作台", "建设计划", "规划", "九阶段", "证据", "阻塞", "业务目标", "现有数据"],
-		routePrefixes: ["/modeling/workbench", "/modeling/plans"],
+		summary: "规划业务分类、数仓分层、数据域、业务过程、数据集市、主题域和建模空间。",
+		keywords: ["数仓规划", "业务分类", "分层", "数据域", "业务过程", "数据集市", "主题域"],
+		routePrefixes: ["/data-modeling/planning"],
 		prerequisites: ["已明确本次建设的业务目标或首批来源数据", "账号具备规划查看权限；新建和编辑还需规划维护权限"],
 		steps: [
 			"进入数据建设工作台，新建规划或选择已有规划。",
@@ -121,11 +121,11 @@ export const HELP_TOPICS: HelpTopic[] = [
 	},
 	{
 		id: "model-center",
-		title: "创建和设计模型",
+		title: "维度建模",
 		section: "数据建设",
-		summary: "在同一模型版本中创建维度表、明细表、汇总表和应用表，并按业务目的完成逻辑设计。",
+		summary: "在模型工作台中设计维度、贴源、明细、汇总和应用模型，或从现有表逆向生成草稿。",
 		keywords: ["模型中心", "维度表", "明细表", "汇总表", "应用表", "逻辑设计", "模型版本"],
-		routePrefixes: ["/modeling/models", "/modeling/dimensions"],
+		routePrefixes: ["/data-modeling/dimensions"],
 		prerequisites: ["已经选择建设计划和业务分类", "已明确模型表达稳定对象、业务事件、聚合结果还是消费输出"],
 		steps: [
 			"根据业务目的选择维度表、明细表、汇总表或应用表。",
@@ -142,11 +142,11 @@ export const HELP_TOPICS: HelpTopic[] = [
 	},
 	{
 		id: "sql-modeling",
-		title: "高级 SQL/dbt 建模与上线",
+		title: "数据实现与上线",
 		section: "数据建设",
-		summary: "编辑和验证 dbt 模型，通过编译、测试、发布门禁与 Airflow 运行完成高级数据实现。",
+		summary: "数据实现、编译、测试和上线能力将在界面评审通过后的后台重构阶段接入。",
 		keywords: ["SQL", "dbt", "编译", "测试", "上线", "Airflow", "DAG", "selector", "full-refresh", "重建"],
-		routePrefixes: ["/studio/sql-modeling", "/modeling/dbt-files"],
+		routePrefixes: [],
 		prerequisites: ["ODS 或其他来源表已准备完成", "dbt 工作区、Profile 和目标数据源配置可用"],
 		steps: [
 			"需要快速起步时，从来源表生成 DWD、DWS 或 ADS 模型模板。",
@@ -169,11 +169,11 @@ export const HELP_TOPICS: HelpTopic[] = [
 	},
 	{
 		id: "metric-workbench",
-		title: "指标定义、复用与消费",
+		title: "数据指标",
 		section: "分析应用",
-		summary: "围绕指标定义与发布、从模型创建、模板复用和运行消费完成指标生命周期任务。",
-		keywords: ["指标工作台", "指标定义", "模型生成", "模板复用", "运行看板", "指标商店", "订阅"],
-		routePrefixes: ["/modeling/metric-workbench"],
+		summary: "维护复合指标、派生指标、原子指标、修饰词和时间周期的统一口径。",
+		keywords: ["数据指标", "复合指标", "派生指标", "原子指标", "修饰词", "时间周期"],
+		routePrefixes: ["/data-modeling/metrics"],
 		prerequisites: ["用于创建指标的模型已经发布", "指标口径、计量单位和责任人已经明确"],
 		steps: [
 			"在“定义与发布”维护指标口径、版本和发布状态。",
@@ -194,6 +194,7 @@ export const HELP_TOPICS: HelpTopic[] = [
 		summary: "维护术语、数据元、码表、主题域和标准绑定，统一数据含义与责任。",
 		keywords: ["治理", "标准", "术语", "数据元", "码表", "主题域", "单位"],
 		routePrefixes: [
+			"/data-modeling/standards",
 			"/governance/standards",
 			"/governance/templates",
 			"/governance/subjects",
@@ -342,29 +343,12 @@ export function getHelpTopicById(topicId?: string | null): HelpTopic | undefined
 	return HELP_TOPIC_MAP.get(topicId);
 }
 
-export function resolveHelpTopic(pathname: string, requestedTopicId?: string | null, search = ""): HelpTopic {
+export function resolveHelpTopic(pathname: string, requestedTopicId?: string | null): HelpTopic {
 	const requestedTopic = getHelpTopicById(requestedTopicId);
 	if (requestedTopic) return requestedTopic;
 
 	const normalizedPath = pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
 	if (normalizedPath === "/settings/help") return FALLBACK_TOPIC;
-	if (normalizedPath === "/modeling/workbench") {
-		const module = new URLSearchParams(search).get("module");
-		const topicId =
-			module === "models"
-				? "model-center"
-				: module === "metrics"
-					? "metric-workbench"
-					: module === "standards"
-						? "governance"
-						: module === "graph"
-							? "quality-security-lineage"
-							: module === "tools"
-								? "data-modeling"
-								: "construction-planning";
-		return HELP_TOPIC_MAP.get(topicId) || FALLBACK_TOPIC;
-	}
-
 	let bestMatch: HelpTopic | undefined;
 	let bestPrefixLength = -1;
 	for (const topic of HELP_TOPICS) {

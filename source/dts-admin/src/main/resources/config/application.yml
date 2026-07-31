@@ -255,15 +255,10 @@ auditing:
     days: ${AUDIT_RETENTION_DAYS:180}
     batch-size: ${AUDIT_RETENTION_BATCH_SIZE:5000}
   ingest:
-    # Whether /api/audit-events must validate a bearer service token.
-    # When true and service-tokens is empty, the endpoint rejects traffic so sibling
-    # services cannot silently publish unauthenticated audit events.
-    require-token: ${AUDIT_INGEST_REQUIRE_TOKEN:true}
-    # Comma-separated list of accepted bearer tokens. By default we reuse the same
-    # DTS_ADMIN_SERVICE_TOKEN that platform/analytics use to call admin.
-    service-tokens: ${AUDIT_INGEST_SERVICE_TOKENS:${DTS_ADMIN_SERVICE_TOKEN:}}
-    # Optional whitelist of caller-declared sourceSystem values; empty = accept any.
-    allowed-source-systems: ${AUDIT_INGEST_ALLOWED_SOURCES:}
+    # Internal endpoint transport guard: authenticate before JSON parsing, then bound and rate-limit payloads.
+    max-body-bytes: ${AUDIT_INGEST_MAX_BODY_BYTES:262144}
+    rate-limit-per-second: ${AUDIT_INGEST_RATE_LIMIT_PER_SECOND:100}
+    rate-limit-burst: ${AUDIT_INGEST_RATE_LIMIT_BURST:200}
     # CIDR ranges treated as container/proxy hops when resolving a pushed event's real client IP.
     # Loopback is always treated as a hop. Add the site's bridge network here when it is not the
     # Docker default (172.16/12) — e.g. deployments whose container subnet is 172.168.0.0/16 —
@@ -372,7 +367,9 @@ dts:
         # Pairwise credential used only by narrow /api/platform/internal APIs.
         # Empty or missing credentials fail closed.
         trusted-services:
-          dts-platform: ${DTS_INBOUND_FROM_PLATFORM:${DTS_ADMIN_SERVICE_TOKEN:}}
+          dts-platform: ${DTS_PLATFORM_TO_ADMIN_TOKEN:}
+          dts-analytics: ${DTS_ANALYTICS_TO_ADMIN_TOKEN:}
+          dts-ingestion: ${DTS_INGESTION_TO_ADMIN_TOKEN:}
     infra:
       encryption-key: ${DTS_ADMIN_INFRA_ENCRYPTION_KEY:}
       key-version: ${DTS_ADMIN_INFRA_KEY_VERSION:v1}

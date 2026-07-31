@@ -1,16 +1,13 @@
 // 发布门禁证据结构化：对齐 dbt build 的门禁语义——落标约束(schema)→编译(compile)→测试(test)→运行(run results)。
 // 每项 check 三态：ready=证据可查，missing=证据缺失（含后端 API 缺口，apiName 必填），blocked=上下文对象无效。
 // 聚合 verdict：任一 blocked→fail；有 missing→warn；全 ready→pass。
+
 import {
-	buildJourneyUrl,
-	type DataProductJourneyContextParams,
-	type JourneyContextParamKey,
-} from "./journeyContext";
-import {
-	toArtifactValidationMap,
 	type ArtifactValidationMap,
 	type ArtifactValidationResult,
+	toArtifactValidationMap,
 } from "./journeyArtifactValidation";
+import { buildJourneyUrl, type DataProductJourneyContextParams, type JourneyContextParamKey } from "./journeyContext";
 
 export type GateCheckKey = "standardsCoverage" | "compile" | "test" | "run";
 
@@ -61,7 +58,7 @@ const GATE_CHECK_DEFINITIONS: GateCheckDefinition[] = [
 		artifactParam: "modelSpecId",
 		readyDetail: (value) => `模型 ${value} 已生成 SQL 草稿，可进入编译验证`,
 		missingDetail: "缺少模型：请从标准草稿生成模型候选",
-		evidenceRoute: "/studio/sql-modeling",
+		evidenceRoute: "/data-modeling/dimensions/workbench",
 	},
 	{
 		key: "test",

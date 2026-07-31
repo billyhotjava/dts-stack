@@ -1,0 +1,791 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260731-02-sprint80-prototype-modeling-menu" author="codex">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="portal_menu"/>
+            <tableExists tableName="portal_menu_visibility"/>
+            <columnExists tableName="portal_menu" columnName="metadata"/>
+            <columnExists tableName="portal_menu" columnName="parent_id"/>
+            <columnExists tableName="portal_menu" columnName="deleted"/>
+        </preConditions>
+
+        <comment>
+            Promote data modeling to a root navigation section, remove the legacy modeling subtree from
+            Data Studio, and install the prototype-driven menu hierarchy. Preserve the existing root menu
+            id and visibility bindings; new descendants inherit the same role visibility.
+        </comment>
+
+        <sql dbms="postgresql" splitStatements="false"><![CDATA[
+            DO $do$
+            DECLARE
+                studio_id BIGINT;
+                modeling_id BIGINT;
+                parent_menu_id BIGINT;
+                target_menu_id BIGINT;
+                modeling_sort INTEGER;
+                created_menu BOOLEAN;
+                item JSONB;
+            BEGIN
+                SELECT id INTO studio_id
+                  FROM portal_menu
+                 WHERE deleted = FALSE
+                   AND parent_id IS NULL
+                   AND (name = 'sys.nav.portal.studioCenter' OR metadata LIKE '%"key":"studio"%')
+                 ORDER BY id
+                 LIMIT 1;
+
+                SELECT id INTO modeling_id
+                  FROM portal_menu
+                 WHERE (
+                           name = 'sys.nav.portal.studioDataModeling'
+                        OR metadata LIKE '%"titleKey":"sys.nav.portal.studioDataModeling"%'
+                       )
+                   AND (parent_id = studio_id OR parent_id IS NULL)
+                 ORDER BY CASE
+                              WHEN deleted = FALSE AND parent_id = studio_id THEN 0
+                              WHEN deleted = FALSE AND parent_id IS NULL THEN 1
+                              WHEN parent_id = studio_id THEN 2
+                              ELSE 3
+                          END,
+                          id
+                 LIMIT 1;
+
+                IF studio_id IS NOT NULL THEN
+                    SELECT COALESCE(sort_order, 0) + 1
+                      INTO modeling_sort
+                      FROM portal_menu
+                     WHERE id = studio_id;
+
+                    UPDATE portal_menu
+                       SET sort_order = sort_order + 1,
+                           last_modified_by = 'sprint80-prototype-modeling-ui-order',
+                           last_modified_date = now()
+                     WHERE parent_id IS NULL
+                       AND id IS DISTINCT FROM modeling_id
+                       AND sort_order >= modeling_sort;
+                ELSE
+                    SELECT COALESCE(MAX(sort_order), 0) + 1
+                      INTO modeling_sort
+                      FROM portal_menu
+                     WHERE parent_id IS NULL;
+                END IF;
+
+                IF modeling_id IS NULL THEN
+                    INSERT INTO portal_menu (
+                        name, path, component, sort_order, metadata, parent_id, icon, security_level, deleted,
+                        created_by, created_date, last_modified_by, last_modified_date
+                    ) VALUES (
+                        'sys.nav.portal.studioDataModeling',
+                        'modeling',
+                        NULL,
+                        modeling_sort,
+                        '{"key":"modeling","sectionKey":"modeling","titleKey":"sys.nav.portal.studioDataModeling","title":"数据建模","icon":"solar:layers-minimalistic-bold-duotone"}',
+                        NULL,
+                        'solar:layers-minimalistic-bold-duotone',
+                        'GENERAL',
+                        FALSE,
+                        'sprint80-prototype-modeling-ui', now(), 'sprint80-prototype-modeling-ui', now()
+                    ) RETURNING id INTO modeling_id;
+                ELSE
+                    UPDATE portal_menu
+                       SET parent_id = NULL,
+                           path = 'modeling',
+                           component = NULL,
+                           sort_order = modeling_sort,
+                           metadata = '{"key":"modeling","sectionKey":"modeling","titleKey":"sys.nav.portal.studioDataModeling","title":"数据建模","icon":"solar:layers-minimalistic-bold-duotone"}',
+                           icon = 'solar:layers-minimalistic-bold-duotone',
+                           deleted = FALSE,
+                           last_modified_by = 'sprint80-prototype-modeling-ui',
+                           last_modified_date = now()
+                     WHERE id = modeling_id;
+                END IF;
+
+                IF NOT EXISTS (
+                       SELECT 1 FROM portal_menu_visibility existing WHERE existing.menu_id = modeling_id
+                   ) THEN
+                    INSERT INTO portal_menu_visibility (
+                        id, menu_id, role_code, permission_code, data_level,
+                        created_by, created_date, last_modified_by, last_modified_date
+                    )
+                    WITH RECURSIVE legacy_descendants AS (
+                        SELECT id
+                          FROM portal_menu
+                         WHERE parent_id = modeling_id
+                           AND deleted = FALSE
+                        UNION ALL
+                        SELECT child.id
+                          FROM portal_menu child
+                          JOIN legacy_descendants parent ON child.parent_id = parent.id
+                         WHERE child.deleted = FALSE
+                    ),
+                    legacy_visibility AS (
+                        SELECT DISTINCT source.role_code, source.permission_code, source.data_level
+                          FROM portal_menu_visibility source
+                         WHERE source.menu_id IN (SELECT id FROM legacy_descendants)
+                    )
+                    SELECT nextval('portal_menu_visibility_seq'), modeling_id, source.role_code,
+                           source.permission_code, source.data_level,
+                           'sprint80-prototype-modeling-ui', now(), 'sprint80-prototype-modeling-ui', now()
+                      FROM legacy_visibility source
+                     WHERE NOT EXISTS (
+                           SELECT 1
+                             FROM portal_menu_visibility target
+                            WHERE target.menu_id = modeling_id
+                              AND target.role_code = source.role_code
+                              AND target.permission_code IS NOT DISTINCT FROM source.permission_code
+                              AND target.data_level IS NOT DISTINCT FROM source.data_level
+                       );
+                END IF;
+
+                WITH RECURSIVE descendants AS (
+                    SELECT id
+                      FROM portal_menu
+                     WHERE parent_id = modeling_id
+                    UNION ALL
+                    SELECT child.id
+                      FROM portal_menu child
+                      JOIN descendants parent ON child.parent_id = parent.id
+                )
+                UPDATE portal_menu
+                   SET deleted = TRUE,
+                       last_modified_by = 'sprint80-prototype-modeling-ui',
+                       last_modified_date = now()
+                 WHERE id IN (SELECT id FROM descendants);
+
+                FOR item IN
+                    SELECT value
+                      FROM jsonb_array_elements(
+                        '[
+                          {"name":"sys.nav.portal.modelingHome","key":"modeling-home","path":"modeling/home","title":"首页","icon":"solar:home-2-bold-duotone","sort":1},
+                          {"name":"sys.nav.portal.warehousePlanning","key":"warehouse-planning","path":"modeling/planning","title":"数仓规划","icon":"solar:map-point-bold-duotone","sort":2},
+                          {"name":"sys.nav.portal.dataStandards","key":"standards","path":"modeling/standards","title":"数据标准","icon":"solar:document-text-bold-duotone","sort":3},
+                          {"name":"sys.nav.portal.dimensionalModeling","key":"dimensional-modeling","path":"modeling/dimensions","title":"维度建模","icon":"solar:cube-bold-duotone","sort":4},
+                          {"name":"sys.nav.portal.dataMetrics","key":"data-metrics","path":"modeling/metrics","title":"数据指标","icon":"solar:graph-bold-duotone","sort":5},
+                          {"name":"sys.nav.portal.modelingTools","key":"modeling-tools","path":"modeling/tools","title":"通用工具","icon":"solar:widget-add-bold-duotone","sort":6},
+                          {"name":"sys.nav.portal.modelingGraphs","key":"modeling-graphs","path":"modeling/graphs","title":"关系图","icon":"solar:share-circle-bold-duotone","sort":7}
+                        ]'::jsonb
+                      )
+                LOOP
+                    created_menu := FALSE;
+                    SELECT id INTO target_menu_id
+                      FROM portal_menu
+                     WHERE name = item->>'name'
+                       AND parent_id = modeling_id
+                     ORDER BY id
+                     LIMIT 1;
+
+                    IF target_menu_id IS NULL THEN
+                        created_menu := TRUE;
+                        INSERT INTO portal_menu (
+                            name, path, component, sort_order, metadata, parent_id, icon, security_level, deleted,
+                            created_by, created_date, last_modified_by, last_modified_date
+                        ) VALUES (
+                            item->>'name',
+                            item->>'path',
+                            NULL,
+                            (item->>'sort')::INTEGER,
+                            jsonb_build_object(
+                                'key', item->>'key',
+                                'sectionKey', 'modeling',
+                                'entryKey', item->>'key',
+                                'titleKey', item->>'name',
+                                'title', item->>'title',
+                                'icon', item->>'icon'
+                            )::TEXT,
+                            modeling_id,
+                            item->>'icon',
+                            'GENERAL',
+                            FALSE,
+                            'sprint80-prototype-modeling-ui', now(), 'sprint80-prototype-modeling-ui', now()
+                        ) RETURNING id INTO target_menu_id;
+                    ELSE
+                        UPDATE portal_menu
+                           SET parent_id = modeling_id,
+                               path = item->>'path',
+                               component = NULL,
+                               sort_order = (item->>'sort')::INTEGER,
+                               metadata = jsonb_build_object(
+                                   'key', item->>'key',
+                                   'sectionKey', 'modeling',
+                                   'entryKey', item->>'key',
+                                   'titleKey', item->>'name',
+                                   'title', item->>'title',
+                                   'icon', item->>'icon'
+                               )::TEXT,
+                               icon = item->>'icon',
+                               deleted = FALSE,
+                               last_modified_by = 'sprint80-prototype-modeling-ui',
+                               last_modified_date = now()
+                         WHERE id = target_menu_id;
+                    END IF;
+
+                    -- New cross-cutting capability groups inherit the existing modeling-root visibility.
+                    -- Reused capability groups keep their existing, potentially narrower visibility unchanged.
+                    IF created_menu OR NOT EXISTS (
+                        SELECT 1 FROM portal_menu_visibility WHERE menu_id = target_menu_id
+                    ) THEN
+                        INSERT INTO portal_menu_visibility (
+                            id, menu_id, role_code, permission_code, data_level,
+                            created_by, created_date, last_modified_by, last_modified_date
+                        )
+                        SELECT nextval('portal_menu_visibility_seq'), target_menu_id, source.role_code,
+                               source.permission_code, source.data_level,
+                               'sprint80-prototype-modeling-ui', now(), 'sprint80-prototype-modeling-ui', now()
+                          FROM portal_menu_visibility source
+                         WHERE source.menu_id = modeling_id
+                           AND NOT EXISTS (
+                               SELECT 1
+                                 FROM portal_menu_visibility target
+                                WHERE target.menu_id = target_menu_id
+                                  AND target.role_code = source.role_code
+                                  AND target.permission_code IS NOT DISTINCT FROM source.permission_code
+                                  AND target.data_level IS NOT DISTINCT FROM source.data_level
+                           );
+                    END IF;
+                END LOOP;
+
+                SELECT id INTO parent_menu_id
+                  FROM portal_menu
+                 WHERE name = 'sys.nav.portal.warehousePlanning'
+                   AND parent_id = modeling_id
+                   AND deleted = FALSE
+                 ORDER BY id
+                 LIMIT 1;
+
+                FOR item IN
+                    SELECT value
+                      FROM jsonb_array_elements(
+                        '[
+                          {"name":"sys.nav.portal.planningPublicLayer","key":"planning-public","path":"modeling/planning/public","title":"公共层","icon":"solar:database-bold-duotone","sort":3},
+                          {"name":"sys.nav.portal.planningApplicationLayer","key":"planning-application","path":"modeling/planning/application","title":"应用层","icon":"solar:box-bold-duotone","sort":4}
+                        ]'::jsonb
+                      )
+                LOOP
+                    created_menu := FALSE;
+                    SELECT id INTO target_menu_id
+                      FROM portal_menu
+                     WHERE name = item->>'name'
+                       AND parent_id = parent_menu_id
+                     ORDER BY id
+                     LIMIT 1;
+
+                    IF target_menu_id IS NULL THEN
+                        created_menu := TRUE;
+                        INSERT INTO portal_menu (
+                            name, path, component, sort_order, metadata, parent_id, icon, security_level, deleted,
+                            created_by, created_date, last_modified_by, last_modified_date
+                        ) VALUES (
+                            item->>'name', item->>'path', NULL, (item->>'sort')::INTEGER,
+                            jsonb_build_object(
+                                'key', item->>'key',
+                                'sectionKey', 'modeling',
+                                'entryKey', item->>'key',
+                                'titleKey', item->>'name',
+                                'title', item->>'title',
+                                'icon', item->>'icon'
+                            )::TEXT,
+                            parent_menu_id, item->>'icon', 'GENERAL', FALSE,
+                            'sprint80-prototype-modeling-ui', now(), 'sprint80-prototype-modeling-ui', now()
+                        ) RETURNING id INTO target_menu_id;
+                    ELSE
+                        UPDATE portal_menu
+                           SET parent_id = parent_menu_id,
+                               path = item->>'path',
+                               component = NULL,
+                               sort_order = (item->>'sort')::INTEGER,
+                               metadata = jsonb_build_object(
+                                   'key', item->>'key',
+                                   'sectionKey', 'modeling',
+                                   'entryKey', item->>'key',
+                                   'titleKey', item->>'name',
+                                   'title', item->>'title',
+                                   'icon', item->>'icon'
+                               )::TEXT,
+                               icon = item->>'icon',
+                               deleted = FALSE,
+                               last_modified_by = 'sprint80-prototype-modeling-ui',
+                               last_modified_date = now()
+                         WHERE id = target_menu_id;
+                    END IF;
+
+                    IF created_menu OR NOT EXISTS (
+                        SELECT 1 FROM portal_menu_visibility WHERE menu_id = target_menu_id
+                    ) THEN
+                        INSERT INTO portal_menu_visibility (
+                            id, menu_id, role_code, permission_code, data_level,
+                            created_by, created_date, last_modified_by, last_modified_date
+                        )
+                        SELECT nextval('portal_menu_visibility_seq'), target_menu_id, source.role_code,
+                               source.permission_code, source.data_level,
+                               'sprint80-prototype-modeling-ui', now(), 'sprint80-prototype-modeling-ui', now()
+                          FROM portal_menu_visibility source
+                         WHERE source.menu_id = parent_menu_id
+                           AND NOT EXISTS (
+                               SELECT 1
+                                 FROM portal_menu_visibility target
+                                WHERE target.menu_id = target_menu_id
+                                  AND target.role_code = source.role_code
+                                  AND target.permission_code IS NOT DISTINCT FROM source.permission_code
+                                  AND target.data_level IS NOT DISTINCT FROM source.data_level
+                           );
+                    END IF;
+                END LOOP;
+
+                FOR item IN
+                    SELECT value
+                      FROM jsonb_array_elements(
+                        '[
+                          {"parent":"sys.nav.portal.modelingHome","name":"sys.nav.portal.modelingHomeWorkspace","key":"modeling-home-workspace","path":"modeling/home/workspace","title":"工作台","icon":"solar:widget-3-bold-duotone","link":"/data-modeling/home/workspace","sort":1},
+                          {"parent":"sys.nav.portal.modelingHome","name":"sys.nav.portal.modelingHomeRecent","key":"modeling-home-recent","path":"modeling/home/recent","title":"最近访问","icon":"solar:history-bold-duotone","link":"/data-modeling/home/recent","sort":2},
+                          {"parent":"sys.nav.portal.modelingHome","name":"sys.nav.portal.modelingHomeTasks","key":"modeling-home-tasks","path":"modeling/home/tasks","title":"我的任务","icon":"solar:checklist-bold-duotone","link":"/data-modeling/home/tasks","sort":3},
+                          {"parent":"sys.nav.portal.warehousePlanning","name":"sys.nav.portal.planningBusinessCategories","key":"planning-business-categories","path":"modeling/planning/business-categories","title":"业务分类","icon":"solar:widget-4-bold-duotone","link":"/data-modeling/planning/business-categories","sort":1},
+                          {"parent":"sys.nav.portal.warehousePlanning","name":"sys.nav.portal.planningLayers","key":"planning-layers","path":"modeling/planning/layers","title":"数仓分层","icon":"solar:layers-bold-duotone","link":"/data-modeling/planning/layers","sort":2},
+                          {"parent":"sys.nav.portal.planningPublicLayer","name":"sys.nav.portal.planningDomains","key":"planning-domains","path":"modeling/planning/public/domains","title":"数据域","icon":"solar:globus-bold-duotone","link":"/data-modeling/planning/domains","sort":1},
+                          {"parent":"sys.nav.portal.planningPublicLayer","name":"sys.nav.portal.planningProcesses","key":"planning-processes","path":"modeling/planning/public/processes","title":"业务过程","icon":"solar:diagram-up-bold-duotone","link":"/data-modeling/planning/processes","sort":2},
+                          {"parent":"sys.nav.portal.planningApplicationLayer","name":"sys.nav.portal.planningMarts","key":"planning-marts","path":"modeling/planning/application/marts","title":"数据集市","icon":"solar:database-bold-duotone","link":"/data-modeling/planning/marts","sort":1},
+                          {"parent":"sys.nav.portal.planningApplicationLayer","name":"sys.nav.portal.planningSubjects","key":"planning-subjects","path":"modeling/planning/application/subjects","title":"主题域","icon":"solar:folder-with-files-bold-duotone","link":"/data-modeling/planning/subjects","sort":2},
+                          {"parent":"sys.nav.portal.warehousePlanning","name":"sys.nav.portal.planningSpaces","key":"planning-spaces","path":"modeling/planning/spaces","title":"建模空间","icon":"solar:buildings-2-bold-duotone","link":"/data-modeling/planning/spaces","sort":5},
+                          {"parent":"sys.nav.portal.warehousePlanning","name":"sys.nav.portal.planningSystem","key":"planning-system","path":"modeling/planning/system","title":"系统管理","icon":"solar:settings-bold-duotone","link":"/data-modeling/planning/system","sort":6},
+                          {"parent":"sys.nav.portal.dataStandards","name":"sys.nav.portal.standardFields","key":"standards-fields","path":"modeling/standards/fields","title":"字段标准","icon":"solar:document-bold-duotone","link":"/data-modeling/standards/fields","sort":1},
+                          {"parent":"sys.nav.portal.dataStandards","name":"sys.nav.portal.standardCodes","key":"standards-codes","path":"modeling/standards/codes","title":"标准代码","icon":"solar:code-square-bold-duotone","link":"/data-modeling/standards/codes","sort":2},
+                          {"parent":"sys.nav.portal.dataStandards","name":"sys.nav.portal.standardRoots","key":"standards-roots","path":"modeling/standards/roots","title":"词根","icon":"solar:text-field-focus-bold-duotone","link":"/data-modeling/standards/roots","sort":3},
+                          {"parent":"sys.nav.portal.dataStandards","name":"sys.nav.portal.standardDictionary","key":"standards-dictionary","path":"modeling/standards/dictionary","title":"命名词典","icon":"solar:notebook-bookmark-bold-duotone","link":"/data-modeling/standards/dictionary","sort":4},
+                          {"parent":"sys.nav.portal.dataStandards","name":"sys.nav.portal.standardMappings","key":"standards-mappings","path":"modeling/standards/mappings","title":"标准映射","icon":"solar:link-circle-bold-duotone","link":"/data-modeling/standards/mappings","sort":5},
+                          {"parent":"sys.nav.portal.dimensionalModeling","name":"sys.nav.portal.dimensionWorkbench","key":"dimensions-workbench","path":"modeling/dimensions/workbench","title":"模型工作台","icon":"solar:layers-minimalistic-bold-duotone","link":"/data-modeling/dimensions/workbench","sort":1},
+                          {"parent":"sys.nav.portal.dimensionalModeling","name":"sys.nav.portal.reverseModeling","key":"dimensions-reverse","path":"modeling/dimensions/reverse","title":"逆向建模","icon":"solar:rewind-back-bold-duotone","link":"/data-modeling/dimensions/reverse","sort":2},
+                          {"parent":"sys.nav.portal.dataMetrics","name":"sys.nav.portal.metricComposite","key":"metrics-composite","path":"modeling/metrics/composite","title":"复合指标","icon":"solar:chart-2-bold-duotone","link":"/data-modeling/metrics/composite","sort":1},
+                          {"parent":"sys.nav.portal.dataMetrics","name":"sys.nav.portal.metricDerived","key":"metrics-derived","path":"modeling/metrics/derived","title":"派生指标","icon":"solar:chart-square-bold-duotone","link":"/data-modeling/metrics/derived","sort":2},
+                          {"parent":"sys.nav.portal.dataMetrics","name":"sys.nav.portal.metricAtomic","key":"metrics-atomic","path":"modeling/metrics/atomic","title":"原子指标","icon":"solar:graph-new-up-bold-duotone","link":"/data-modeling/metrics/atomic","sort":3},
+                          {"parent":"sys.nav.portal.dataMetrics","name":"sys.nav.portal.metricModifiers","key":"metrics-modifiers","path":"modeling/metrics/modifiers","title":"修饰词","icon":"solar:filter-bold-duotone","link":"/data-modeling/metrics/modifiers","sort":4},
+                          {"parent":"sys.nav.portal.dataMetrics","name":"sys.nav.portal.metricPeriods","key":"metrics-periods","path":"modeling/metrics/periods","title":"时间周期","icon":"solar:calendar-bold-duotone","link":"/data-modeling/metrics/periods","sort":5},
+                          {"parent":"sys.nav.portal.modelingTools","name":"sys.nav.portal.modelingToolbox","key":"tools-toolbox","path":"modeling/tools/toolbox","title":"工具箱","icon":"solar:case-bold-duotone","link":"/data-modeling/tools/toolbox","sort":1},
+                          {"parent":"sys.nav.portal.modelingTools","name":"sys.nav.portal.modelingImports","key":"tools-imports","path":"modeling/tools/imports","title":"导入记录","icon":"solar:import-bold-duotone","link":"/data-modeling/tools/imports","sort":2},
+                          {"parent":"sys.nav.portal.modelingTools","name":"sys.nav.portal.modelingExports","key":"tools-exports","path":"modeling/tools/exports","title":"导出记录","icon":"solar:export-bold-duotone","link":"/data-modeling/tools/exports","sort":3},
+                          {"parent":"sys.nav.portal.modelingGraphs","name":"sys.nav.portal.modelGraph","key":"graphs-models","path":"modeling/graphs/models","title":"模型关系","icon":"solar:share-bold-duotone","link":"/data-modeling/graphs/models","sort":1},
+                          {"parent":"sys.nav.portal.modelingGraphs","name":"sys.nav.portal.standardGraph","key":"graphs-standards","path":"modeling/graphs/standards","title":"标准关系","icon":"solar:link-circle-bold-duotone","link":"/data-modeling/graphs/standards","sort":2},
+                          {"parent":"sys.nav.portal.modelingGraphs","name":"sys.nav.portal.metricLineage","key":"graphs-metrics","path":"modeling/graphs/metrics","title":"指标血缘","icon":"solar:branching-paths-up-bold-duotone","link":"/data-modeling/graphs/metrics","sort":3}
+                        ]'::jsonb
+                      )
+                LOOP
+                    SELECT id INTO parent_menu_id
+                      FROM portal_menu
+                     WHERE name = item->>'parent'
+                       AND deleted = FALSE
+                       AND (
+                           parent_id = modeling_id
+                           OR parent_id IN (
+                               SELECT id
+                                 FROM portal_menu
+                                WHERE parent_id = modeling_id
+                                  AND deleted = FALSE
+                           )
+                       )
+                     ORDER BY id
+                     LIMIT 1;
+
+                    IF parent_menu_id IS NULL THEN
+                        RAISE EXCEPTION 'Sprint-80 modeling menu parent is missing: %', item->>'parent';
+                    END IF;
+
+                    created_menu := FALSE;
+                    SELECT id INTO target_menu_id
+                      FROM portal_menu
+                     WHERE name = item->>'name'
+                       AND parent_id = parent_menu_id
+                     ORDER BY id
+                     LIMIT 1;
+
+                    IF target_menu_id IS NULL THEN
+                        created_menu := TRUE;
+                        INSERT INTO portal_menu (
+                            name, path, component, sort_order, metadata, parent_id, icon, security_level, deleted,
+                            created_by, created_date, last_modified_by, last_modified_date
+                        ) VALUES (
+                            item->>'name',
+                            item->>'path',
+                            NULL,
+                            (item->>'sort')::INTEGER,
+                            jsonb_build_object(
+                                'key', item->>'key',
+                                'sectionKey', 'modeling',
+                                'entryKey', item->>'key',
+                                'titleKey', item->>'name',
+                                'title', item->>'title',
+                                'icon', item->>'icon',
+                                'externalLink', item->>'link'
+                            )::TEXT,
+                            parent_menu_id,
+                            item->>'icon',
+                            'GENERAL',
+                            FALSE,
+                            'sprint80-prototype-modeling-ui', now(), 'sprint80-prototype-modeling-ui', now()
+                        ) RETURNING id INTO target_menu_id;
+                    ELSE
+                        UPDATE portal_menu
+                           SET parent_id = parent_menu_id,
+                               path = item->>'path',
+                               component = NULL,
+                               sort_order = (item->>'sort')::INTEGER,
+                               metadata = jsonb_build_object(
+                                   'key', item->>'key',
+                                   'sectionKey', 'modeling',
+                                   'entryKey', item->>'key',
+                                   'titleKey', item->>'name',
+                                   'title', item->>'title',
+                                   'icon', item->>'icon',
+                                   'externalLink', item->>'link'
+                               )::TEXT,
+                               icon = item->>'icon',
+                               deleted = FALSE,
+                               last_modified_by = 'sprint80-prototype-modeling-ui',
+                               last_modified_date = now()
+                         WHERE id = target_menu_id;
+                    END IF;
+
+                    IF created_menu OR NOT EXISTS (
+                        SELECT 1 FROM portal_menu_visibility WHERE menu_id = target_menu_id
+                    ) THEN
+                        INSERT INTO portal_menu_visibility (
+                            id, menu_id, role_code, permission_code, data_level,
+                            created_by, created_date, last_modified_by, last_modified_date
+                        )
+                        SELECT nextval('portal_menu_visibility_seq'), target_menu_id, source.role_code,
+                               source.permission_code, source.data_level,
+                               'sprint80-prototype-modeling-ui', now(), 'sprint80-prototype-modeling-ui', now()
+                          FROM portal_menu_visibility source
+                         WHERE source.menu_id = parent_menu_id
+                           AND NOT EXISTS (
+                               SELECT 1
+                                 FROM portal_menu_visibility target
+                                WHERE target.menu_id = target_menu_id
+                                  AND target.role_code = source.role_code
+                                  AND target.permission_code IS NOT DISTINCT FROM source.permission_code
+                                  AND target.data_level IS NOT DISTINCT FROM source.data_level
+                           );
+                    END IF;
+                END LOOP;
+            END;
+            $do$;
+        ]]></sql>
+
+        <rollback>
+            <sql dbms="postgresql" splitStatements="false"><![CDATA[
+                DO $do$
+                DECLARE
+                    studio_id BIGINT;
+                    modeling_id BIGINT;
+                    parent_menu_id BIGINT;
+                    studio_sort INTEGER;
+                BEGIN
+                    DELETE FROM portal_menu_visibility
+                     WHERE created_by = 'sprint80-prototype-modeling-ui'
+                       AND last_modified_by = 'sprint80-prototype-modeling-ui';
+
+                    DELETE FROM portal_menu_visibility visibility
+                     USING portal_menu menu
+                     WHERE visibility.menu_id = menu.id
+                       AND menu.created_by = 'sprint80-prototype-modeling-ui';
+
+                    SELECT id INTO studio_id
+                      FROM portal_menu
+                     WHERE deleted = FALSE
+                       AND parent_id IS NULL
+                       AND name = 'sys.nav.portal.studioCenter'
+                     ORDER BY id
+                     LIMIT 1;
+
+                    SELECT sort_order INTO studio_sort
+                      FROM portal_menu
+                     WHERE id = studio_id;
+
+                    SELECT id INTO modeling_id
+                      FROM portal_menu
+                     WHERE name = 'sys.nav.portal.studioDataModeling'
+                     ORDER BY CASE WHEN created_by = 'sprint80-prototype-modeling-ui' THEN 1 ELSE 0 END, id
+                     LIMIT 1;
+
+                    UPDATE portal_menu
+                       SET sort_order = sort_order - 1,
+                           last_modified_by = 'sprint80-prototype-modeling-ui-rollback',
+                           last_modified_date = now()
+                     WHERE parent_id IS NULL
+                       AND id IS DISTINCT FROM modeling_id
+                       AND last_modified_by = 'sprint80-prototype-modeling-ui-order'
+                       AND sort_order > COALESCE(studio_sort, 0);
+
+                    UPDATE portal_menu
+                       SET deleted = TRUE,
+                           last_modified_by = 'sprint80-prototype-modeling-ui-rollback',
+                           last_modified_date = now()
+                     WHERE created_by = 'sprint80-prototype-modeling-ui';
+
+                    WITH RECURSIVE prototype_descendants AS (
+                        SELECT id
+                          FROM portal_menu
+                         WHERE parent_id = modeling_id
+                        UNION ALL
+                        SELECT child.id
+                          FROM portal_menu child
+                          JOIN prototype_descendants parent ON child.parent_id = parent.id
+                    )
+                    UPDATE portal_menu
+                       SET deleted = TRUE,
+                           last_modified_by = 'sprint80-prototype-modeling-ui-rollback',
+                           last_modified_date = now()
+                     WHERE id IN (SELECT id FROM prototype_descendants)
+                       AND last_modified_by = 'sprint80-prototype-modeling-ui'
+                       AND name IN (
+                         'sys.nav.portal.modelingHome',
+                         'sys.nav.portal.modelingHomeWorkspace',
+                         'sys.nav.portal.modelingHomeRecent',
+                         'sys.nav.portal.modelingHomeTasks',
+                         'sys.nav.portal.planningBusinessCategories',
+                         'sys.nav.portal.planningLayers',
+                         'sys.nav.portal.planningPublicLayer',
+                         'sys.nav.portal.planningDomains',
+                         'sys.nav.portal.planningProcesses',
+                         'sys.nav.portal.planningApplicationLayer',
+                         'sys.nav.portal.planningMarts',
+                         'sys.nav.portal.planningSubjects',
+                         'sys.nav.portal.planningSpaces',
+                         'sys.nav.portal.planningSystem',
+                         'sys.nav.portal.standardFields',
+                         'sys.nav.portal.standardCodes',
+                         'sys.nav.portal.standardRoots',
+                         'sys.nav.portal.standardDictionary',
+                         'sys.nav.portal.standardMappings',
+                         'sys.nav.portal.dimensionWorkbench',
+                         'sys.nav.portal.reverseModeling',
+                         'sys.nav.portal.metricComposite',
+                         'sys.nav.portal.metricDerived',
+                         'sys.nav.portal.metricAtomic',
+                         'sys.nav.portal.metricModifiers',
+                         'sys.nav.portal.metricPeriods',
+                         'sys.nav.portal.modelingTools',
+                         'sys.nav.portal.modelingToolbox',
+                         'sys.nav.portal.modelingImports',
+                         'sys.nav.portal.modelingExports',
+                         'sys.nav.portal.modelingGraphs',
+                         'sys.nav.portal.modelGraph',
+                         'sys.nav.portal.standardGraph',
+                         'sys.nav.portal.metricLineage'
+                     );
+
+                    IF studio_id IS NOT NULL
+                       AND modeling_id IS NOT NULL
+                       AND EXISTS (
+                           SELECT 1
+                             FROM portal_menu
+                            WHERE id = modeling_id
+                              AND created_by IS DISTINCT FROM 'sprint80-prototype-modeling-ui'
+                       ) THEN
+                        UPDATE portal_menu
+                           SET parent_id = studio_id,
+                               path = 'studio/modeling',
+                               component = NULL,
+                               sort_order = 1,
+                               metadata = '{"key":"modeling","sectionKey":"studio","entryKey":"modeling","titleKey":"sys.nav.portal.studioDataModeling","title":"数据建模","icon":"solar:layers-minimalistic-bold-duotone"}',
+                               icon = 'solar:layers-minimalistic-bold-duotone',
+                               deleted = FALSE,
+                               last_modified_by = 'sprint80-prototype-modeling-ui-rollback',
+                               last_modified_date = now()
+                         WHERE id = modeling_id;
+
+                        UPDATE portal_menu
+                           SET parent_id = modeling_id,
+                               path = 'studio/modeling/modeling-workbench',
+                               component = NULL,
+                               sort_order = 1,
+                               metadata = '{"key":"modeling-workbench","sectionKey":"studio","entryKey":"modeling-workbench","titleKey":"sys.nav.portal.studioBusinessProcesses","title":"建模工作台","icon":"solar:layers-minimalistic-bold-duotone","externalLink":"/modeling/workbench"}',
+                               icon = 'solar:layers-minimalistic-bold-duotone',
+                               deleted = FALSE,
+                               last_modified_by = 'sprint80-prototype-modeling-ui-rollback',
+                               last_modified_date = now()
+                         WHERE name = 'sys.nav.portal.studioBusinessProcesses'
+                           AND created_by IS DISTINCT FROM 'sprint80-prototype-modeling-ui';
+
+                        UPDATE portal_menu
+                           SET parent_id = modeling_id,
+                               path = CASE name
+                                   WHEN 'sys.nav.portal.warehousePlanning' THEN 'studio/modeling/warehouse-planning'
+                                   WHEN 'sys.nav.portal.dataStandards' THEN 'studio/modeling/standards'
+                                   WHEN 'sys.nav.portal.dimensionalModeling' THEN 'studio/modeling/dimensional-modeling'
+                                   WHEN 'sys.nav.portal.dataMetrics' THEN 'studio/modeling/data-metrics'
+                               END,
+                               component = NULL,
+                               sort_order = CASE name
+                                   WHEN 'sys.nav.portal.warehousePlanning' THEN 2
+                                   WHEN 'sys.nav.portal.dataStandards' THEN 3
+                                   WHEN 'sys.nav.portal.dimensionalModeling' THEN 4
+                                   WHEN 'sys.nav.portal.dataMetrics' THEN 5
+                               END,
+                               metadata = CASE name
+                                   WHEN 'sys.nav.portal.warehousePlanning' THEN '{"key":"warehouse-planning","sectionKey":"studio","entryKey":"warehouse-planning","titleKey":"sys.nav.portal.warehousePlanning","title":"数仓规划","icon":"solar:map-point-bold-duotone"}'
+                                   WHEN 'sys.nav.portal.dataStandards' THEN '{"key":"standards","sectionKey":"studio","entryKey":"standards","titleKey":"sys.nav.portal.dataStandards","title":"数据标准","icon":"solar:document-text-bold-duotone"}'
+                                   WHEN 'sys.nav.portal.dimensionalModeling' THEN '{"key":"dimensional-modeling","sectionKey":"studio","entryKey":"dimensional-modeling","titleKey":"sys.nav.portal.dimensionalModeling","title":"维度建模","icon":"solar:cube-bold-duotone"}'
+                                   WHEN 'sys.nav.portal.dataMetrics' THEN '{"key":"data-metrics","sectionKey":"studio","entryKey":"data-metrics","titleKey":"sys.nav.portal.dataMetrics","title":"数据指标","icon":"solar:graph-bold-duotone"}'
+                               END,
+                               icon = CASE name
+                                   WHEN 'sys.nav.portal.warehousePlanning' THEN 'solar:map-point-bold-duotone'
+                                   WHEN 'sys.nav.portal.dataStandards' THEN 'solar:document-text-bold-duotone'
+                                   WHEN 'sys.nav.portal.dimensionalModeling' THEN 'solar:cube-bold-duotone'
+                                   WHEN 'sys.nav.portal.dataMetrics' THEN 'solar:graph-bold-duotone'
+                               END,
+                               deleted = FALSE,
+                               last_modified_by = 'sprint80-prototype-modeling-ui-rollback',
+                               last_modified_date = now()
+                         WHERE name IN (
+                             'sys.nav.portal.warehousePlanning',
+                             'sys.nav.portal.dataStandards',
+                             'sys.nav.portal.dimensionalModeling',
+                             'sys.nav.portal.dataMetrics'
+                         )
+                           AND created_by IS DISTINCT FROM 'sprint80-prototype-modeling-ui';
+
+                        SELECT id INTO parent_menu_id
+                          FROM portal_menu
+                         WHERE name = 'sys.nav.portal.warehousePlanning'
+                           AND parent_id = modeling_id
+                           AND deleted = FALSE
+                         ORDER BY id
+                         LIMIT 1;
+                        UPDATE portal_menu
+                           SET parent_id = parent_menu_id,
+                               path = CASE name
+                                   WHEN 'sys.nav.portal.warehousePlans' THEN 'studio/modeling/warehouse-planning/warehouse-plans'
+                                   WHEN 'sys.nav.portal.governanceSubjects' THEN 'studio/modeling/warehouse-planning/subjects'
+                               END,
+                               component = NULL,
+                               sort_order = CASE name WHEN 'sys.nav.portal.warehousePlans' THEN 1 ELSE 2 END,
+                               metadata = CASE name
+                                   WHEN 'sys.nav.portal.warehousePlans' THEN '{"key":"warehouse-plans","sectionKey":"studio","entryKey":"warehouse-plans","titleKey":"sys.nav.portal.warehousePlans","title":"建设规划","icon":"solar:clipboard-list-bold-duotone","externalLink":"/modeling/plans"}'
+                                   WHEN 'sys.nav.portal.governanceSubjects' THEN '{"key":"subjects","sectionKey":"studio","entryKey":"subjects","titleKey":"sys.nav.portal.governanceSubjects","title":"业务分类","icon":"solar:map-point-bold-duotone","externalLink":"/governance/subjects"}'
+                               END,
+                               icon = CASE name
+                                   WHEN 'sys.nav.portal.warehousePlans' THEN 'solar:clipboard-list-bold-duotone'
+                                   ELSE 'solar:map-point-bold-duotone'
+                               END,
+                               deleted = FALSE,
+                               last_modified_by = 'sprint80-prototype-modeling-ui-rollback',
+                               last_modified_date = now()
+                         WHERE parent_menu_id IS NOT NULL
+                           AND name IN ('sys.nav.portal.warehousePlans', 'sys.nav.portal.governanceSubjects')
+                           AND created_by IS DISTINCT FROM 'sprint80-prototype-modeling-ui';
+
+                        SELECT id INTO parent_menu_id
+                          FROM portal_menu
+                         WHERE name = 'sys.nav.portal.dataStandards'
+                           AND parent_id = modeling_id
+                           AND deleted = FALSE
+                         ORDER BY id
+                         LIMIT 1;
+                        UPDATE portal_menu
+                           SET parent_id = parent_menu_id,
+                               path = CASE name
+                                   WHEN 'sys.nav.portal.governanceGlossary' THEN 'studio/modeling/standards/glossary'
+                                   WHEN 'sys.nav.portal.governanceElements' THEN 'studio/modeling/standards/elements'
+                                   WHEN 'sys.nav.portal.governanceReference' THEN 'studio/modeling/standards/reference'
+                                   WHEN 'sys.nav.portal.governanceMeasurementUnits' THEN 'studio/modeling/standards/units'
+                               END,
+                               component = NULL,
+                               sort_order = CASE name
+                                   WHEN 'sys.nav.portal.governanceGlossary' THEN 1
+                                   WHEN 'sys.nav.portal.governanceElements' THEN 2
+                                   WHEN 'sys.nav.portal.governanceReference' THEN 3
+                                   WHEN 'sys.nav.portal.governanceMeasurementUnits' THEN 4
+                               END,
+                               metadata = CASE name
+                                   WHEN 'sys.nav.portal.governanceGlossary' THEN '{"key":"glossary","sectionKey":"studio","entryKey":"glossary","titleKey":"sys.nav.portal.governanceGlossary","title":"业务术语","icon":"solar:book-bold-duotone","externalLink":"/governance/standards/glossary"}'
+                                   WHEN 'sys.nav.portal.governanceElements' THEN '{"key":"elements","sectionKey":"studio","entryKey":"elements","titleKey":"sys.nav.portal.governanceElements","title":"数据元","icon":"solar:document-bold-duotone","externalLink":"/governance/standards/elements"}'
+                                   WHEN 'sys.nav.portal.governanceReference' THEN '{"key":"reference","sectionKey":"studio","entryKey":"reference","titleKey":"sys.nav.portal.governanceReference","title":"公共码表","icon":"solar:database-bold-duotone","externalLink":"/governance/standards/reference"}'
+                                   WHEN 'sys.nav.portal.governanceMeasurementUnits' THEN '{"key":"units","sectionKey":"studio","entryKey":"units","titleKey":"sys.nav.portal.governanceMeasurementUnits","title":"计量单位","icon":"solar:ruler-cross-pen-bold-duotone","externalLink":"/governance/standards/units"}'
+                               END,
+                               icon = CASE name
+                                   WHEN 'sys.nav.portal.governanceGlossary' THEN 'solar:book-bold-duotone'
+                                   WHEN 'sys.nav.portal.governanceElements' THEN 'solar:document-bold-duotone'
+                                   WHEN 'sys.nav.portal.governanceReference' THEN 'solar:database-bold-duotone'
+                                   ELSE 'solar:ruler-cross-pen-bold-duotone'
+                               END,
+                               deleted = FALSE,
+                               last_modified_by = 'sprint80-prototype-modeling-ui-rollback',
+                               last_modified_date = now()
+                         WHERE parent_menu_id IS NOT NULL
+                           AND name IN (
+                               'sys.nav.portal.governanceGlossary',
+                               'sys.nav.portal.governanceElements',
+                               'sys.nav.portal.governanceReference',
+                               'sys.nav.portal.governanceMeasurementUnits'
+                           )
+                           AND created_by IS DISTINCT FROM 'sprint80-prototype-modeling-ui';
+
+                        SELECT id INTO parent_menu_id
+                          FROM portal_menu
+                         WHERE name = 'sys.nav.portal.dimensionalModeling'
+                           AND parent_id = modeling_id
+                           AND deleted = FALSE
+                         ORDER BY id
+                         LIMIT 1;
+                        UPDATE portal_menu
+                           SET parent_id = parent_menu_id,
+                               path = CASE name
+                                   WHEN 'sys.nav.portal.studioSemanticObjects' THEN 'studio/modeling/dimensional-modeling/objects'
+                                   WHEN 'sys.nav.portal.studioSemanticModels' THEN 'studio/modeling/dimensional-modeling/models'
+                                   WHEN 'sys.nav.portal.studioSqlModeling' THEN 'studio/modeling/dimensional-modeling/sql-modeling'
+                               END,
+                               component = NULL,
+                               sort_order = CASE name
+                                   WHEN 'sys.nav.portal.studioSemanticObjects' THEN 1
+                                   WHEN 'sys.nav.portal.studioSemanticModels' THEN 2
+                                   WHEN 'sys.nav.portal.studioSqlModeling' THEN 3
+                               END,
+                               metadata = CASE name
+                                   WHEN 'sys.nav.portal.studioSemanticObjects' THEN '{"key":"semantic-objects","sectionKey":"studio","entryKey":"semantic-objects","titleKey":"sys.nav.portal.studioSemanticObjects","title":"维度目录","icon":"solar:box-bold-duotone","externalLink":"/modeling/dimensions"}'
+                                   WHEN 'sys.nav.portal.studioSemanticModels' THEN '{"key":"semantic-models","sectionKey":"studio","entryKey":"semantic-models","titleKey":"sys.nav.portal.studioSemanticModels","title":"模型中心","icon":"solar:database-bold-duotone","externalLink":"/modeling/models"}'
+                                   WHEN 'sys.nav.portal.studioSqlModeling' THEN '{"key":"sql","sectionKey":"studio","entryKey":"sql","titleKey":"sys.nav.portal.studioSqlModeling","title":"高级建模（SQL/dbt）","icon":"solar:documents-bold-duotone","externalLink":"/studio/sql-modeling"}'
+                               END,
+                               icon = CASE name
+                                   WHEN 'sys.nav.portal.studioSemanticObjects' THEN 'solar:box-bold-duotone'
+                                   WHEN 'sys.nav.portal.studioSemanticModels' THEN 'solar:database-bold-duotone'
+                                   ELSE 'solar:documents-bold-duotone'
+                               END,
+                               deleted = FALSE,
+                               last_modified_by = 'sprint80-prototype-modeling-ui-rollback',
+                               last_modified_date = now()
+                         WHERE parent_menu_id IS NOT NULL
+                           AND name IN (
+                               'sys.nav.portal.studioSemanticObjects',
+                               'sys.nav.portal.studioSemanticModels',
+                               'sys.nav.portal.studioSqlModeling'
+                           )
+                           AND created_by IS DISTINCT FROM 'sprint80-prototype-modeling-ui';
+
+                        SELECT id INTO parent_menu_id
+                          FROM portal_menu
+                         WHERE name = 'sys.nav.portal.dataMetrics'
+                           AND parent_id = modeling_id
+                           AND deleted = FALSE
+                         ORDER BY id
+                         LIMIT 1;
+                        UPDATE portal_menu
+                           SET parent_id = parent_menu_id,
+                               path = 'studio/modeling/data-metrics/metric-workbench',
+                               component = NULL,
+                               sort_order = 1,
+                               metadata = '{"key":"metric-workbench","sectionKey":"studio","entryKey":"metric-workbench","titleKey":"sys.nav.portal.studioMetricWorkbench","title":"指标工作台","icon":"solar:layers-minimalistic-bold-duotone","externalLink":"/modeling/metric-workbench"}',
+                               icon = 'solar:layers-minimalistic-bold-duotone',
+                               deleted = FALSE,
+                               last_modified_by = 'sprint80-prototype-modeling-ui-rollback',
+                               last_modified_date = now()
+                         WHERE parent_menu_id IS NOT NULL
+                           AND name = 'sys.nav.portal.studioMetricWorkbench'
+                           AND created_by IS DISTINCT FROM 'sprint80-prototype-modeling-ui';
+                    END IF;
+                END;
+                $do$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -1,0 +1,551 @@
+import type { FormInstance } from "antd/es/form";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	type DefaultDestinationStatus,
+	type IngestionTaskDTO,
+	type ManagedFileUploadResult,
+	ingestionTaskAPI,
+} from "@/api/ingestion";
+import { createIngestionTask } from "@/api/platformApi";
+import dataSourcesService, { type DataSourceSelectionItem } from "@/api/services/dataSourcesService";
+import { useUserInfo } from "@/store/userStore";
+import { normalizeText } from "@/utils/textUtils";
+import { classificationRank, normalizeClassification } from "@/utils/classification";
+import {
+	buildFileBaseName,
+	isApiDataSource,
+	isJdbcSource,
+	normalizeTableName,
+} from "../../explore/etl/ingestionFormHelpers";
+import { resolveCreatedTaskId } from "../../explore/etl/transformCreateAsyncRun.helpers";
+import { uploadTransformFileWithAdmission } from "../../explore/etl/transformCreateFileFlow.helpers";
+import {
+	ACCESS_KIND_LABELS,
+	type AccessKind,
+	type AccessPlanFormValues,
+	type AccessPlanPayloadContext,
+	type AccessPlanRuntimeState,
+} from "./accessPlan.types";
+import {
+	extractManagedFileFromTask,
+	resolveManagedFileAdmissionState,
+	restoreManagedFileAdmissionFromTask,
+	toAdmissionFile,
+	toManagedFile,
+} from "./accessManagedFile";
+import {
+	buildManagedApiConnectionTestRequest,
+	buildAccessPlanCreateRequest,
+	buildAccessPlanUpdateDTO,
+	inferAccessKind,
+	toAccessPlanFormValues,
+} from "./accessPlanPayload";
+
+type BootstrapResult = {
+	dataSources: DataSourceSelectionItem[];
+	targetDataSources: DataSourceSelectionItem[];
+	defaultDestination: DefaultDestinationStatus | null;
+	defaultTargetDataSourceId?: string;
+};
+
+export async function loadAccessPlanBootstrap(): Promise<BootstrapResult> {
+	const [sourceSelections, targetSelections, defaultDestination] = await Promise.all([
+		dataSourcesService.selections({ capability: "INGESTION_SOURCE" }),
+		dataSourcesService.selections({ capability: "DBT_TARGET" }),
+		ingestionTaskAPI.getDefaultDestinationStatus(),
+	]);
+	return {
+		dataSources: Array.isArray(sourceSelections?.items) ? sourceSelections.items : [],
+		targetDataSources: Array.isArray(targetSelections?.items) ? targetSelections.items : [],
+		defaultDestination: defaultDestination || null,
+		defaultTargetDataSourceId: normalizeText(targetSelections?.defaultDataSourceId) || undefined,
+	};
+}
+
+export async function loadAccessPlanEdit(editId: number, expectedKind: AccessKind) {
+	const task = await ingestionTaskAPI.getTask(editId);
+	const actualKind = inferAccessKind(task);
+	if (actualKind !== expectedKind) {
+		throw new Error(`任务类型为${ACCESS_KIND_LABELS[actualKind]}，请从对应入口编辑`);
+	}
+	const extracted = extractManagedFileFromTask(task);
+	return {
+		task,
+		values: toAccessPlanFormValues(task),
+		fileUploadResult: expectedKind === "file" ? restoreManagedFileAdmissionFromTask(extracted, task) : null,
+	};
+}
+
+type EditResult = Awaited<ReturnType<typeof loadAccessPlanEdit>>;
+
+const SAFE_ACCESS_PLAN_MESSAGES = new Set([
+	"缺少 API 资源路径",
+	"API 资源路径必须是站内相对路径",
+	"API 资源路径格式无效",
+	"API 资源路径不能包含凭据参数，请在托管连接中配置认证信息",
+	"API 资源配置无效",
+	"缺少 API 资源标识",
+	"缺少 API 请求方法",
+	"缺少 API 目标表",
+	"请选择目标数据源",
+	"平台默认数据湖不可用",
+	"平台默认数据湖配置不完整",
+	"API 来源配置无效",
+	"缺少 API Reader 类型",
+	"请选择数据库连接",
+	"请选择 API 连接",
+	"请输入任务名称",
+	"请选择需要接入的表",
+	"目标表名格式不合法",
+	"请先上传并解析文件",
+	"编辑任务缺少 ID",
+	"编辑任务尚未加载完成，不能创建新任务",
+	"新建任务上下文尚未初始化，不能更新旧任务",
+	"请先选择数据库连接",
+	"数据库连接或筛选条件已变更，请重新发现源表",
+	"请先选择 API 连接",
+	"API 连接或资源参数已变更，请重新预览",
+	"请选择有效的文件密级",
+	"文件密级已变更，请按当前密级重新上传",
+	"文件密级封存与当前选择不一致，请重新上传",
+	"文件仍在上传解析，请等待完成后再保存",
+	"数据库连接或筛选条件已变更，请重新发现并选择源表",
+	"请先上传文件",
+	"缺少文件密级封存，请重新上传文件",
+	"文件上传响应无效",
+]);
+
+export const safeAccessPlanErrorMessage = (error: unknown, fallback: string) => {
+	const message = error instanceof Error ? normalizeText(error.message) : "";
+	const knownTaskKindMessage = /^任务类型为(?:数据库|API|离线文件)，请从对应入口编辑$/.test(message);
+	return message && (SAFE_ACCESS_PLAN_MESSAGES.has(message) || knownTaskKindMessage) ? message : fallback;
+};
+
+export class AccessPlanInitializationError extends Error {
+	constructor(
+		readonly stage: "bootstrap" | "edit",
+		cause: unknown,
+	) {
+		super(safeAccessPlanErrorMessage(cause, stage === "bootstrap" ? "接入配置加载失败" : "任务加载失败"));
+		this.name = "AccessPlanInitializationError";
+	}
+}
+
+export async function loadAccessPlanInitialization(editId: number | undefined, expectedKind: AccessKind) {
+	const bootstrapPromise = loadAccessPlanBootstrap().then(
+		(value) => ({ ok: true as const, value }),
+		(error: unknown) => ({ ok: false as const, error }),
+	);
+	const editPromise: Promise<{ ok: true; value: EditResult | null } | { ok: false; error: unknown }> = editId
+		? loadAccessPlanEdit(editId, expectedKind).then(
+				(value) => ({ ok: true as const, value }),
+				(error: unknown) => ({ ok: false as const, error }),
+			)
+		: Promise.resolve({ ok: true as const, value: null });
+	const [bootstrap, edit] = await Promise.all([bootstrapPromise, editPromise]);
+	if (!bootstrap.ok) throw new AccessPlanInitializationError("bootstrap", bootstrap.error);
+	if (!edit.ok) throw new AccessPlanInitializationError("edit", edit.error);
+	return { bootstrap: bootstrap.value, edit: edit.value };
+}
+
+type SaveAccessPlanInput = AccessPlanPayloadContext & {
+	existingTask: IngestionTaskDTO | null;
+	editId?: number;
+};
+
+export async function saveAccessPlan(
+	input: SaveAccessPlanInput,
+): Promise<{ taskId: number | string | null; updated: boolean }> {
+	if (input.editId !== undefined && input.existingTask?.id !== input.editId) {
+		throw new Error("编辑任务尚未加载完成，不能创建新任务");
+	}
+	if (input.editId === undefined && input.existingTask !== null) {
+		throw new Error("新建任务上下文尚未初始化，不能更新旧任务");
+	}
+	if (input.existingTask?.id) {
+		const payload = buildAccessPlanUpdateDTO(input.existingTask, input);
+		const updated = await ingestionTaskAPI.updateTask(input.existingTask.id, payload);
+		return { taskId: updated?.id ?? input.existingTask.id, updated: true };
+	}
+	const payload = buildAccessPlanCreateRequest(input);
+	const created = await createIngestionTask(payload);
+	return { taskId: resolveCreatedTaskId(created) ?? null, updated: false };
+}
+
+const INITIAL_STATE: AccessPlanRuntimeState = {
+	dataSources: [],
+	targetDataSources: [],
+	defaultDestination: null,
+	loading: true,
+	error: "",
+	loadedContextKey: null,
+	existingTask: null,
+	fileUploadResult: null,
+	discoveredTables: [],
+	discoveryFingerprint: null,
+	discoveringTables: false,
+	discoverError: "",
+	apiPreview: null,
+	apiPreviewFingerprint: null,
+	apiPreviewing: false,
+	uploadingFile: false,
+	saving: false,
+	editError: "",
+};
+
+type UseAccessPlanWizardInput = {
+	kind: AccessKind;
+	editId?: number;
+	form: FormInstance<AccessPlanFormValues>;
+};
+
+const databaseDiscoveryFingerprint = (values: Partial<AccessPlanFormValues>) =>
+	JSON.stringify([
+		normalizeText(values.sourceDataSourceId),
+		normalizeText(values.readerSchema),
+		normalizeText(values.readerTablePattern),
+	]);
+
+const apiPreviewFingerprint = (values: Partial<AccessPlanFormValues>) =>
+	JSON.stringify([
+		normalizeText(values.sourceDataSourceId),
+		normalizeText(values.apiResourcePath),
+		values.apiMethod || "GET",
+		normalizeText(values.apiRecordPath),
+		normalizeText(values.apiPageParam),
+		normalizeText(values.apiSizeParam),
+		Number(values.apiPageSize) || 0,
+		normalizeText(values.apiCursorField),
+		normalizeText(values.apiCursorParam),
+	]);
+
+const fileFloorMatchesSelection = (file: ManagedFileUploadResult | null, selected: unknown) => {
+	const requested = normalizeClassification(typeof selected === "string" ? selected : undefined, undefined);
+	const sealedFloor = normalizeClassification(
+		typeof file?.classificationSeal?.fileFloor === "string"
+			? file.classificationSeal.fileFloor
+			: typeof file?.classification === "string"
+				? file.classification
+				: undefined,
+		undefined,
+	);
+	return Boolean(requested && sealedFloor && requested === sealedFloor);
+};
+
+const resolveUserClassificationRank = (user: unknown) => {
+	if (!user || typeof user !== "object") return undefined;
+	const record = user as Record<string, unknown>;
+	const attributes =
+		record.attributes && typeof record.attributes === "object"
+			? (record.attributes as Record<string, unknown>)
+			: {};
+	const values = [
+		record.maxDataLevel,
+		record.dataLevel,
+		attributes.max_data_level,
+		attributes.maxDataLevel,
+		attributes.data_level,
+		attributes.classification,
+	];
+	for (const raw of values) {
+		const value = Array.isArray(raw) ? raw[0] : raw;
+		const normalized = normalizeClassification(typeof value === "string" ? value : undefined, undefined);
+		const rank = classificationRank(normalized);
+		if (rank !== undefined) return rank;
+	}
+	return undefined;
+};
+
+export function useAccessPlanWizard({ kind, editId, form }: UseAccessPlanWizardInput) {
+	const [state, setState] = useState<AccessPlanRuntimeState>(INITIAL_STATE);
+	const userInfo = useUserInfo() as ({ username?: string; login?: string } & Record<string, unknown>) | null;
+	const contextKey = `${kind}:${editId ?? "create"}`;
+	const discoveryRequestIdRef = useRef(0);
+	const apiPreviewRequestIdRef = useRef(0);
+	const fileUploadRequestIdRef = useRef(0);
+
+	useEffect(() => {
+		let active = true;
+		discoveryRequestIdRef.current += 1;
+		apiPreviewRequestIdRef.current += 1;
+		fileUploadRequestIdRef.current += 1;
+		form.resetFields();
+		setState({ ...INITIAL_STATE, loading: true });
+		void loadAccessPlanInitialization(editId, kind)
+			.then((result) => {
+				if (!active) return;
+				const targetDataSourceId = result.edit?.values.targetDataSourceId || result.bootstrap.defaultTargetDataSourceId;
+				if (result.edit) {
+					form.setFieldsValue({ ...result.edit.values, targetDataSourceId });
+				} else if (!form.getFieldValue("targetDataSourceId") && targetDataSourceId) {
+					form.setFieldValue("targetDataSourceId", targetDataSourceId);
+				}
+				setState((previous) => ({
+					...previous,
+					...result.bootstrap,
+					loading: false,
+					error: "",
+					editError: "",
+					loadedContextKey: contextKey,
+					existingTask: result.edit?.task || null,
+					fileUploadResult: result.edit?.fileUploadResult || null,
+					discoveryFingerprint:
+						kind === "database" && result.edit?.values.tableSelectionMode === "manual"
+							? databaseDiscoveryFingerprint(result.edit.values)
+							: null,
+				}));
+			})
+			.catch((error: unknown) => {
+				if (!active) return;
+				const stage = error instanceof AccessPlanInitializationError ? error.stage : editId ? "edit" : "bootstrap";
+				setState((previous) => ({
+					...previous,
+					loading: false,
+					...(stage === "edit"
+						? { editError: safeAccessPlanErrorMessage(error, "任务加载失败") }
+						: { error: safeAccessPlanErrorMessage(error, "接入配置加载失败") }),
+				}));
+			});
+		return () => {
+			active = false;
+		};
+	}, [contextKey, editId, form, kind]);
+
+	const sourceDataSources = useMemo(() => {
+		if (kind === "api") return state.dataSources.filter(isApiDataSource);
+		if (kind === "database")
+			return state.dataSources.filter((source) => isJdbcSource(source) && !isApiDataSource(source));
+		return [];
+	}, [kind, state.dataSources]);
+
+	const discoverTables = useCallback(async () => {
+		const requestValues = form.getFieldsValue(true);
+		const sourceDataSourceId = normalizeText(requestValues.sourceDataSourceId);
+		if (!sourceDataSourceId) throw new Error("请先选择数据库连接");
+		const requestId = ++discoveryRequestIdRef.current;
+		const fingerprint = databaseDiscoveryFingerprint(requestValues);
+		form.setFieldValue("selectedTables", []);
+		setState((previous) => ({
+			...previous,
+			discoveringTables: true,
+			discoverError: "",
+			discoveredTables: [],
+			discoveryFingerprint: null,
+		}));
+		try {
+			const tables = await ingestionTaskAPI.discoverTables({
+				source: { dataSourceId: sourceDataSourceId },
+				filter: {
+					schema: normalizeText(requestValues.readerSchema) || undefined,
+					tablePattern: normalizeText(requestValues.readerTablePattern) || undefined,
+					limit: 0,
+					includeColumns: false,
+				},
+			});
+			if (
+				discoveryRequestIdRef.current !== requestId ||
+				databaseDiscoveryFingerprint(form.getFieldsValue(true)) !== fingerprint
+			) {
+				throw new Error("数据库连接或筛选条件已变更，请重新发现源表");
+			}
+			setState((previous) => ({
+				...previous,
+				discoveringTables: false,
+				discoveredTables: Array.isArray(tables) ? tables : [],
+				discoveryFingerprint: fingerprint,
+			}));
+			return tables;
+		} catch (error: unknown) {
+			if (discoveryRequestIdRef.current === requestId) {
+				setState((previous) => ({
+					...previous,
+					discoveringTables: false,
+					discoverError: safeAccessPlanErrorMessage(error, "源表发现失败"),
+				}));
+			}
+			throw error;
+		}
+	}, [form]);
+
+	const resetDatabaseDiscovery = useCallback(() => {
+		discoveryRequestIdRef.current += 1;
+		form.setFieldValue("selectedTables", []);
+		setState((previous) => ({
+			...previous,
+			discoveredTables: [],
+			discoveryFingerprint: null,
+			discoveringTables: false,
+			discoverError: "",
+		}));
+	}, [form]);
+
+	const previewApi = useCallback(async () => {
+		const values = form.getFieldsValue(true);
+		const dataSourceId = normalizeText(values.sourceDataSourceId);
+		if (!dataSourceId) throw new Error("请先选择 API 连接");
+		const requestId = ++apiPreviewRequestIdRef.current;
+		const fingerprint = apiPreviewFingerprint(values);
+		setState((previous) => ({
+			...previous,
+			apiPreviewing: true,
+			apiPreview: null,
+			apiPreviewFingerprint: null,
+		}));
+		try {
+			const preview = await ingestionTaskAPI.testManagedApiConnection(buildManagedApiConnectionTestRequest(values));
+			if (
+				apiPreviewRequestIdRef.current !== requestId ||
+				apiPreviewFingerprint(form.getFieldsValue(true)) !== fingerprint
+			) {
+				throw new Error("API 连接或资源参数已变更，请重新预览");
+			}
+			setState((previous) => ({
+				...previous,
+				apiPreviewing: false,
+				apiPreview: preview,
+				apiPreviewFingerprint: fingerprint,
+			}));
+			return preview;
+		} catch (error: unknown) {
+			if (apiPreviewRequestIdRef.current === requestId) {
+				setState((previous) => ({ ...previous, apiPreviewing: false }));
+			}
+			throw error;
+		}
+	}, [form]);
+
+	const resetApiPreview = useCallback(() => {
+		apiPreviewRequestIdRef.current += 1;
+		setState((previous) => ({
+			...previous,
+			apiPreview: null,
+			apiPreviewFingerprint: null,
+			apiPreviewing: false,
+		}));
+	}, []);
+
+	const uploadFile = useCallback(
+		async (file: File) => {
+			const classification = normalizeClassification(form.getFieldValue("fileClassification"), undefined);
+			if (!classification) throw new Error("请选择有效的文件密级");
+			const requestId = ++fileUploadRequestIdRef.current;
+			const previousFile = state.fileUploadResult;
+			setState((previous) => ({ ...previous, uploadingFile: true, fileUploadResult: null }));
+			try {
+				const uploaded = toManagedFile(
+					await uploadTransformFileWithAdmission({
+						file,
+						classification,
+						previewLimit: 20,
+						previousFile: previousFile ? toAdmissionFile(previousFile) : null,
+						preserveSavedMapping: Boolean(editId),
+						uploadAndParse: async (upload, options) =>
+							toAdmissionFile(await ingestionTaskAPI.uploadAndParseFile(upload, options)),
+					}),
+				);
+				if (
+					fileUploadRequestIdRef.current !== requestId ||
+					normalizeClassification(form.getFieldValue("fileClassification"), undefined) !== classification
+				) {
+					throw new Error("文件密级已变更，请按当前密级重新上传");
+				}
+				if (!fileFloorMatchesSelection(uploaded, classification)) {
+					throw new Error("文件密级封存与当前选择不一致，请重新上传");
+				}
+				setState((previous) => ({ ...previous, uploadingFile: false, fileUploadResult: uploaded }));
+				if (!form.getFieldValue("fileTargetTable")) {
+					const generated = normalizeTableName(
+						`${normalizeText(form.getFieldValue("syncPrefix"))}${buildFileBaseName(uploaded.originalName)}`,
+					);
+					if (generated) form.setFieldValue("fileTargetTable", generated);
+				}
+				return uploaded;
+			} catch (error: unknown) {
+				if (fileUploadRequestIdRef.current === requestId) {
+					setState((previous) => ({ ...previous, uploadingFile: false }));
+				}
+				throw error;
+			}
+		},
+		[editId, form, state.fileUploadResult],
+	);
+
+	const setFileUploadResult = useCallback((fileUploadResult: ManagedFileUploadResult | null) => {
+		if (fileUploadResult === null) fileUploadRequestIdRef.current += 1;
+		setState((previous) => ({
+			...previous,
+			fileUploadResult,
+			uploadingFile: fileUploadResult === null ? false : previous.uploadingFile,
+		}));
+	}, []);
+
+	const submit = useCallback(async () => {
+		const existingTaskMatches =
+			editId === undefined ? state.existingTask === null : state.existingTask?.id === editId;
+		if (state.loading || state.loadedContextKey !== contextKey || !existingTaskMatches) {
+			throw new Error("编辑任务尚未加载完成，不能创建新任务");
+		}
+		if (state.uploadingFile) throw new Error("文件仍在上传解析，请等待完成后再保存");
+		const values = await form.validateFields();
+		if (
+			kind === "database" &&
+			values.tableSelectionMode === "manual" &&
+			state.discoveryFingerprint !== databaseDiscoveryFingerprint(values)
+		) {
+			throw new Error("数据库连接或筛选条件已变更，请重新发现并选择源表");
+		}
+		if (kind === "file") {
+			const admission = resolveManagedFileAdmissionState(state.fileUploadResult);
+			if (!admission.ready) throw new Error(admission.reason);
+			if (!fileFloorMatchesSelection(state.fileUploadResult, values.fileClassification)) {
+				throw new Error("文件密级封存与当前选择不一致，请重新上传");
+			}
+		}
+		const selectedSource = state.dataSources.find((item) => item.id === values.sourceDataSourceId);
+		const selectedTarget = state.targetDataSources.find((item) => item.id === values.targetDataSourceId);
+		setState((previous) => ({ ...previous, saving: true }));
+		try {
+			return await saveAccessPlan({
+				kind,
+				values,
+				owner: userInfo?.username || userInfo?.login,
+				defaultDestination: state.defaultDestination,
+				selectedSource,
+				selectedTarget,
+				fileUploadResult: state.fileUploadResult,
+		existingTask: state.existingTask,
+				editId,
+			});
+		} finally {
+			setState((previous) => ({ ...previous, saving: false }));
+		}
+	}, [
+		contextKey,
+		editId,
+		form,
+		kind,
+		state.dataSources,
+		state.defaultDestination,
+		state.discoveryFingerprint,
+		state.existingTask,
+		state.fileUploadResult,
+		state.loadedContextKey,
+		state.targetDataSources,
+		state.uploadingFile,
+		userInfo,
+	]);
+
+	return {
+		...state,
+		sourceDataSources,
+		fileAdmission: resolveManagedFileAdmissionState(state.fileUploadResult),
+		userClassificationRank: resolveUserClassificationRank(userInfo),
+		discoverTables,
+		resetDatabaseDiscovery,
+		previewApi,
+		resetApiPreview,
+		uploadFile,
+		setFileUploadResult,
+		submit,
+	};
+}

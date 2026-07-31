@@ -8,9 +8,12 @@
 (function () {
 
 const { el, renderSchemaForm, defaultsOf } = window.SchemaForm;
+const Admission = window.AdmissionPolicy;
+const Runtime = window.WizardRuntime;
 
 const WIZ = {
 	step: 0,
+	sourceCategory: "DATABASE",
 	connectorKey: null,
 	values: {},
 	tested: null,
@@ -25,20 +28,6 @@ const WIZ = {
 };
 let sourceCheckSequence = 0;
 
-const RUNTIME_CONTROLS = [
-	["retryPolicy", "失败重试", [["EXPONENTIAL_3", "最多 3 次，指数退避"], ["NONE", "不重试"]]],
-	["dirtyDataPolicy", "脏数据策略", [["STAGING_REVIEW", "进入 staging 待确认"], ["SKIP_AND_LOG", "跳过并记录"], ["FAIL_FAST", "立即中止"]]],
-	["conflictPolicy", "并发冲突", [["QUEUE_10M", "排队，最长 10 分钟"], ["REJECT", "直接拒绝"]]],
-];
-const RUNTIME_POLICY_DEFAULTS = {
-	retryPolicy: "EXPONENTIAL_3",
-	dirtyDataPolicy: "STAGING_REVIEW",
-	conflictPolicy: "QUEUE_10M",
-	taskConcurrency: 1,
-	timeZone: "Asia/Shanghai",
-	preflight: true,
-};
-
 function resourceKind() {
 	return WIZ.connectorKey ? window.ResourceSteps.resourceKind(WIZ.connectorKey) : "DATABASE";
 }
@@ -52,7 +41,7 @@ function resourceSummary() {
 				count: 0,
 				targetHint: "ods.<待推导>",
 				estimatedVolume: "待评估",
-				requiresApproval: false,
+				admissionDecision: { outcome: "BLOCKED", reasons: ["尚未选择资源"] },
 				effectiveClassification: "内部",
 				classificationEvidence: [],
 			};
@@ -84,8 +73,23 @@ function stepsForConnector() {
 	];
 }
 
-function resetWizard() {
+function sourceConnectors() {
+	return window.PROTO.CONNECTORS.filter((connector) =>
+		connector.category === WIZ.sourceCategory && !connector.disabled);
+}
+
+function selectConnector(connector) {
+	WIZ.connectorKey = connector.key;
+	WIZ.values = defaultsOf(connector.schema);
+	WIZ.tested = null;
+	WIZ.testRequestId = ++sourceCheckSequence;
+	WIZ.resourceState = window.ResourceSteps.createResourceState(connector.key);
+	WIZ.policy = {};
+}
+
+function resetWizard(sourceCategory = "DATABASE") {
 	WIZ.step = 0;
+	WIZ.sourceCategory = sourceCategory;
 	WIZ.connectorKey = null;
 	WIZ.values = {};
 	WIZ.tested = null;
@@ -97,6 +101,7 @@ function resetWizard() {
 	WIZ.showPlan = false;
 	WIZ.showCompiled = false;
 	WIZ.revisionId = "rev-draft-1";
+	if (sourceCategory !== "DATABASE" && sourceConnectors()[0]) selectConnector(sourceConnectors()[0]);
 }
 
 function ensureResourceState() {
@@ -104,24 +109,6 @@ function ensureResourceState() {
 		WIZ.resourceState = window.ResourceSteps.createResourceState(WIZ.connectorKey);
 	}
 	return WIZ.resourceState;
-}
-
-function runtimePolicy() {
-	WIZ.policy.runtime = { ...RUNTIME_POLICY_DEFAULTS, ...(WIZ.policy.runtime || {}) };
-	return WIZ.policy.runtime;
-}
-
-function runtimeSummaryItems() {
-	const policy = runtimePolicy();
-	const items = RUNTIME_CONTROLS.map(([key, label, options]) => {
-		const selected = options.find(([value]) => value === policy[key]) || options[0];
-		return [label, selected[1]];
-	});
-	return items.concat([
-		["本任务并发", String(policy.taskConcurrency)],
-		["时区", policy.timeZone],
-		["落地前预检", policy.preflight ? "开启" : "关闭"],
-	]);
 }
 
 function renderStepper() {
@@ -138,7 +125,7 @@ function renderStepper() {
 
 function renderConnectorPicker(rerender) {
 	const grid = el("div", { class: "connector-grid" });
-	window.PROTO.CONNECTORS.forEach((connector) => {
+	sourceConnectors().forEach((connector) => {
 		const selected = WIZ.connectorKey === connector.key;
 		const driverBad = connector.driver.status !== "READY" && connector.driver.status !== "NOT_REQUIRED";
 		grid.appendChild(el("button", {
@@ -147,12 +134,7 @@ function renderConnectorPicker(rerender) {
 			disabled: connector.disabled,
 			onclick: () => {
 				if (connector.disabled) return;
-				WIZ.connectorKey = connector.key;
-				WIZ.values = defaultsOf(connector.schema);
-				WIZ.tested = null;
-				WIZ.testRequestId = ++sourceCheckSequence;
-				WIZ.resourceState = window.ResourceSteps.createResourceState(connector.key);
-				WIZ.policy = {};
+				selectConnector(connector);
 				rerender();
 			},
 		}, [
@@ -170,8 +152,8 @@ function renderConnectorPicker(rerender) {
 
 	return el("section", { class: "panel" }, [
 		el("div", { class: "panel-head" }, [
-			el("h3", {}, "选择来源类型"),
-			el("span", { class: "panel-note" }, "连接器契约决定字段、能力与可用执行适配器"),
+			el("h3", {}, "选择数据库类型"),
+			el("span", { class: "panel-note" }, "数据库连接器契约决定字段、能力与可用执行适配器"),
 		]),
 		grid,
 	]);
@@ -186,13 +168,37 @@ function sourceCheckLabels(kind) {
 	}
 	return { button: "分层测试连接", waiting: "正在检查网络、认证与读取权限…", idle: "测通后才能发现表结构" };
 }
-
+function secureApiUrl(value) {
+	try {
+		const url = new URL(String(value || "").trim());
+		return url.protocol === "https:" && Boolean(url.hostname) && !url.username && !url.password;
+	} catch {
+		return false;
+	}
+}
+function missingRequiredFields(connector) {
+	return connector.schema.flatMap((group) => group.fields).filter((field) => {
+		const applies = !field.when || Object.entries(field.when).every(([key, expected]) => {
+			const actual = WIZ.values[key];
+			return Array.isArray(expected) ? expected.includes(actual) : actual === expected;
+		});
+		const value = WIZ.values[field.name];
+		return applies && field.required && (value === undefined || value === null || value === ""
+			|| (Array.isArray(value) && value.length === 0));
+	});
+}
 function renderTestBlock(rerender) {
 	const tested = WIZ.tested;
 	const connector = window.PROTO.connectorByKey(WIZ.connectorKey);
 	const kind = resourceKind();
 	const labels = sourceCheckLabels(kind);
 	const run = () => {
+		const missing = missingRequiredFields(connector);
+		if (missing.length) {
+			WIZ.tested = { ok: false, ms: 0, msg: `请先填写：${missing.map((field) => field.label).join("、")}` };
+			rerender();
+			return;
+		}
 		const testedConnectorKey = WIZ.connectorKey;
 		const requestId = ++sourceCheckSequence;
 		WIZ.testRequestId = requestId;
@@ -201,18 +207,20 @@ function renderTestBlock(rerender) {
 		setTimeout(() => {
 			if (WIZ.testRequestId !== requestId || WIZ.connectorKey !== testedConnectorKey) return;
 			const driverReady = connector.driver.status === "READY" || connector.driver.status === "NOT_REQUIRED";
+			const apiTransportBlocked = kind === "API" && (Boolean(WIZ.values.allowPlainHttp) || !secureApiUrl(WIZ.values.baseUrl));
 			const msg = !driverReady
 				? "运行时缺少管理员提供的驱动，不能发布"
-				: kind === "FILE"
+				: apiTransportBlocked
+					? "API Base URL 必须使用有效 HTTPS；当前未绑定外部例外决定"
+					: kind === "FILE"
 					? "制品已进入加密暂存区；哈希、封条和解析规则将在下一步确认"
 					: kind === "API"
 						? "Base URL 可达，鉴权配置格式有效；下一步发送真实样例请求"
 						: "DNS、TCP、认证、SELECT 与元数据读取权限均通过";
-			WIZ.tested = { ok: driverReady, ms: kind === "FILE" ? 86 : 412, msg };
+			WIZ.tested = { ok: driverReady && !apiTransportBlocked, ms: kind === "FILE" ? 86 : 412, msg };
 			rerender();
 		}, 700);
 	};
-
 	return el("div", { class: "test-block" }, [
 		el("button", {
 			class: "btn primary",
@@ -233,7 +241,15 @@ function renderTestBlock(rerender) {
 
 function renderStepConnect(rerender) {
 	const connector = window.PROTO.connectorByKey(WIZ.connectorKey);
-	const body = el("div", { class: "step-body" }, [renderConnectorPicker(rerender)]);
+	const body = el("div", { class: "step-body" }, WIZ.sourceCategory === "DATABASE"
+		? [renderConnectorPicker(rerender)]
+		: [el("div", { class: "source-locked" }, [
+				el("span", { class: `source-kind ${WIZ.sourceCategory.toLowerCase()}` }, WIZ.sourceCategory === "API" ? "API" : "离线文件"),
+				el("div", {}, [
+					el("b", {}, connector?.name || "内置连接器"),
+					el("span", {}, "当前入口已限定接入方式，无需再次选择类型。"),
+				]),
+			])]);
 	if (!connector) {
 		body.appendChild(el("div", { class: "empty" }, "请先选择一个来源类型"));
 		return body;
@@ -392,88 +408,37 @@ function renderTargetLine() {
 	]);
 }
 
-function renderRuntimeSummary(rerender) {
-	const summary = runtimeSummaryItems();
-	const panel = el("section", { class: "panel runtime-summary" }, [
-		el("div", { class: "runtime-head" }, [
-			el("div", {}, [
-				el("b", {}, "运行策略"),
-				el("span", { class: "chip chip-ok" }, `Revision 策略 · ${summary.length} 项`),
-			]),
-			el("button", {
-				class: "btn small",
-				type: "button",
-				onclick: () => { WIZ.runtimeOpen = !WIZ.runtimeOpen; rerender(); },
-			}, WIZ.runtimeOpen ? "收起" : "查看并调整"),
-		]),
-		el("div", { class: "runtime-chips" }, summary.map(([key, value]) =>
-			el("span", { class: "runtime-chip" }, [el("i", {}, key), el("b", {}, value)]))),
-	]);
-	if (WIZ.runtimeOpen) panel.appendChild(renderRuntimeControls(rerender));
-	return panel;
-}
-
-function renderRuntimeControls(rerender) {
-	const policy = runtimePolicy();
-	return el("div", { class: "runtime-detail" }, [
-		el("div", { class: "inline-alert info" }, [
-			el("b", {}, "这是 Revision 策略，不是引擎参数"),
-			el("span", {}, "编译器会把这些规则转换为 Addax、API 或 File Adapter 的运行参数。"),
-		]),
-		el("div", { class: "form-grid" }, [
-			...RUNTIME_CONTROLS.map(([key, label, options]) => el("div", { class: "form-item" }, [
-				el("label", { class: "form-label" }, label),
-				el("select", {
-					class: "ctl",
-					"aria-label": label,
-					onchange: (event) => { policy[key] = event.target.value; rerender(); },
-				}, options.map(([value, text]) => el("option", {
-					value,
-					selected: policy[key] === value,
-				}, text))),
-			])),
-			el("div", { class: "form-item" }, [
-				el("label", { class: "form-label" }, "本任务并发"),
-				el("div", { class: "ctl-wrap" }, [
-					el("input", {
-						class: "ctl",
-						type: "number",
-						value: policy.taskConcurrency,
-						"aria-label": "本任务并发",
-						min: 1,
-						max: 6,
-						onchange: (event) => {
-							policy.taskConcurrency = Math.max(1, Math.min(6, Number(event.target.value) || 1));
-							rerender();
-						},
-					}),
-					el("span", { class: "suffix" }, "/ 连接配额 6"),
-				]),
-			]),
-		]),
-	]);
-}
-
-function renderAdmission() {
+function renderAdmission(rerender) {
 	const summary = resourceSummary();
-	const evidence = summary.classificationEvidence.length
-		? summary.classificationEvidence
+	const state = Admission.presentation(summary);
+	const confirmation = Admission.confirmationFor(WIZ.revisionId, summary, WIZ.policy.confirmation);
+	if (WIZ.policy.confirmation && !confirmation) WIZ.policy.confirmation = null;
+	const evidence = [...summary.classificationEvidence, ...(state.decision.reasons || [])];
+	const visibleEvidence = evidence.length
+		? evidence
 		: ["连接默认下限：内部", "资源样例识别：未发现更高等级字段"];
 	return el("section", { class: "panel admission-panel" }, [
 		el("div", { class: "panel-head" }, [
 			el("h3", {}, "密级准入依据"),
-			el("span", { class: `chip ${summary.requiresApproval ? "chip-warn" : "chip-ok"}` },
-				summary.requiresApproval ? "待审批" : "可准入"),
+			el("span", { class: `chip chip-${state.tone}` }, state.label),
 		]),
-		el("div", { class: "evidence-list" }, evidence.map((item) =>
+		el("div", { class: "evidence-list" }, visibleEvidence.map((item) =>
 			el("div", { class: "evidence-item" }, [el("span", { class: "check-dot" }, "✓"), el("span", {}, item)]))),
 		el("div", { class: "admission-result" }, [
 			el("span", { class: "muted" }, "计算后的有效密级"),
 			el("b", {}, summary.effectiveClassification),
 			el("span", { class: "chip chip-inherit" }, "冻结为 AdmissionDecision"),
 		]),
+		state.decision.outcome === "CONFIRMATION_REQUIRED" ? el("div", { class: "form-item" }, [
+			el("label", { class: "form-label" }, "风险确认理由"),
+			el("textarea", {
+				class: "ctl", rows: 2, placeholder: "说明影响范围、接受原因和回退方式（至少 8 个字符）",
+				oninput: (event) => { WIZ.policy.confirmation = Admission.recordConfirmation(WIZ.revisionId, summary, event.target.value); const button = document.getElementById("publish-revision"); if (button) button.disabled = !canAdvance(); },
+				onchange: () => setTimeout(rerender, 0),
+			}, confirmation?.reason || ""),
+		]) : null,
 		el("div", { class: "foot-note" },
-			"最终等级取连接下限、文件封条、字段识别与人工判定中的最高有效等级；提高可直接记录，降低必须审批，不能用普通下拉框覆盖。"),
+			"默认不依赖组织审批：规则通过可直接发布，风险项记录确认理由，硬阻断不可绕过；仅客户已绑定 OA/BPM 时进入外部审批。密级降低默认阻断。"),
 	]);
 }
 
@@ -502,7 +467,10 @@ function buildExecutionPlan() {
 				? "STAGING_VALIDATE_ATOMIC_SWAP"
 				: "IDEMPOTENT_MERGE",
 			schedule: WIZ.policy.schedule || scheduleOptions()[0],
-			runtimePolicy: { ...runtimePolicy() },
+			defaultProfileRef: Runtime.PROFILE.ref,
+			runtimeOverrides: { ...Runtime.overrides(WIZ) },
+			effectiveRuntimePolicy: { ...Runtime.policy(WIZ) },
+			qualityGate: window.QualityChecks.executionContract(resourceKind()),
 			admissionSealRef: `admission://${WIZ.revisionId}`,
 		secretRefs: sourceType === "CONNECTION" ? ["secret://connection/draft"] : [],
 		executionAdapter: executionAdapter(mode),
@@ -567,12 +535,13 @@ function renderExecutionPlan(rerender) {
 function renderPublishChecks() {
 	const connector = window.PROTO.connectorByKey(WIZ.connectorKey);
 	const summary = resourceSummary();
+	const gate = Admission.publishGate(WIZ.revisionId, summary, WIZ.policy.confirmation);
 	const checks = [
 		["来源预检", "连接/制品检查在有效期内", true],
 		["运行时", connector.driver.status === "READY" || connector.driver.status === "NOT_REQUIRED" ? "驱动与适配器就绪" : "缺少管理员驱动", connector.driver.status === "READY" || connector.driver.status === "NOT_REQUIRED"],
 		["资源契约", `${summary.count} 个资源的 Schema 已冻结`, summary.count > 0],
 		["目标影响", "覆盖类写入采用 staging 校验后原子切换", true],
-		["密级准入", summary.requiresApproval ? "需要审批后才能发布" : `${summary.effectiveClassification} · 准入依据完整`, !summary.requiresApproval],
+		["密级准入", gate.detail, gate.ok],
 		["Secret", resourceKind() === "FILE" ? "无连接密码" : "仅保存 secretRef，不进入计划正文", true],
 		["重跑语义", "checkpoint 在目标提交成功后原子推进", true],
 	];
@@ -643,8 +612,8 @@ function renderStepPolicy(rerender) {
 			]),
 			renderTargetLine(),
 		]),
-		renderRuntimeSummary(rerender),
-		renderAdmission(),
+		Runtime.renderSummary(WIZ, rerender),
+		renderAdmission(rerender),
 		el("section", { class: "panel" }, [
 			el("div", { class: "panel-head" }, [
 				el("h3", {}, "确认范围"),
@@ -679,7 +648,9 @@ function canAdvance() {
 		return window.ResourceSteps.validateResourceStep(WIZ.connectorKey, ensureResourceState()).ok;
 	}
 	const mode = selectedMode();
-	return Boolean(mode && mode.enabled);
+	const summary = resourceSummary();
+	return Boolean(mode && mode.enabled
+		&& Admission.publishGate(WIZ.revisionId, summary, WIZ.policy.confirmation).ok);
 }
 
 function blockReason() {
@@ -688,7 +659,11 @@ function blockReason() {
 	if (WIZ.step === 1) {
 		return window.ResourceSteps.validateResourceStep(WIZ.connectorKey, ensureResourceState()).reason;
 	}
-	if (WIZ.step === 2) return "当前资源没有可发布的执行模式";
+	if (WIZ.step === 2) {
+		const summary = resourceSummary();
+		const gate = Admission.publishGate(WIZ.revisionId, summary, WIZ.policy.confirmation);
+		return gate.reason || "当前资源没有可发布的执行模式";
+	}
 	return null;
 }
 
@@ -697,7 +672,17 @@ function nextButtonLabel() {
 	return "下一步：准入与发布";
 }
 
+function publishButtonLabel(summary) {
+	const outcome = Admission.resolve(summary).outcome;
+	if (outcome === "CONFIRMATION_REQUIRED") return "记录确认并发布 Revision 1";
+	if (outcome === "PENDING_EXTERNAL_APPROVAL") return "等待外部流程";
+	if (outcome === "ADMITTED") return "已准入（不可重复发布）";
+	if (outcome === "BLOCKED") return "准入阻断";
+	return "确认准入并发布 Revision 1";
+}
+
 function renderWizard(nav, rerender) {
+	const sourceMeta = window.AccessPages.SOURCE_META[WIZ.sourceCategory];
 	const body = WIZ.step === 0
 		? renderStepConnect(rerender)
 		: WIZ.step === 1
@@ -709,10 +694,10 @@ function renderWizard(nav, rerender) {
 	return el("div", { class: "wizard" }, [
 		el("div", { class: "page-head" }, [
 			el("div", {}, [
-				el("h2", {}, "新建数据接入"),
-				el("p", { class: "muted" }, "一个工作台完成配置；连接、资源、Revision、准入与运行记录保持独立"),
+				el("h2", {}, `新建${sourceMeta.title}`),
+				el("p", { class: "muted" }, `${sourceMeta.desc} 发布时生成不可变 Revision 与有效配置快照。`),
 			]),
-			el("button", { class: "btn ghost", onclick: () => nav("list") }, "取消"),
+			el("button", { class: "btn ghost", onclick: () => nav(sourceMeta.route) }, "取消"),
 		]),
 		renderStepper(),
 		body,
@@ -744,14 +729,14 @@ function renderWizard(nav, rerender) {
 						},
 					}, nextButtonLabel())]
 					: [
-							el("button", { class: "btn ghost", onclick: () => nav("list") }, "保存草稿"),
+							el("button", { class: "btn ghost", onclick: () => nav(sourceMeta.route) }, "保存草稿"),
 							el("button", {
-								class: "btn primary",
+								class: "btn primary", id: "publish-revision",
 								disabled: !canAdvance(),
 								title: "静态原型不创建真实记录，完成后返回工作台",
-								onclick: () => nav("list"),
+								onclick: () => nav(sourceMeta.route),
 							},
-								summary.requiresApproval ? "保存草稿并提交审批" : "发布 Revision 1 并启用"),
+								publishButtonLabel(summary)),
 						]),
 		]),
 	]);

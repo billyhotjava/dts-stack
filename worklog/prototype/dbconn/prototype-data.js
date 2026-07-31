@@ -171,7 +171,7 @@ const CONNECTORS = [
 		schema: [
 			{ group: "连接", fields: [
 				{ name: "baseUrl", label: "Base URL", type: "text", required: true, span: 3, placeholder: "https://api.example.gov.cn/v1" },
-				{ name: "allowPlainHttp", label: "允许明文 HTTP", type: "switch", default: false, danger: true, hint: "开启后连接不加密，需安全审批" },
+				{ name: "allowPlainHttp", label: "允许明文 HTTP", type: "switch", default: false, danger: true, hint: "安全策略默认阻断；例外仅能引用客户已绑定的外部流程决定" },
 				{ name: "verifyCert", label: "校验服务端证书", type: "switch", default: true },
 			]},
 			{ group: "鉴权", fields: [
@@ -363,7 +363,7 @@ const DISCOVERED_TABLES = [
 	{ name: "hr_department", comment: "部门", rows: 312, size: "1 MB", pk: "dept_id", incrementalCol: "gmt_modified", cols: 14, classification: "内部", selected: false },
 	{ name: "hr_position", comment: "岗位字典", rows: 96, size: "< 1 MB", pk: "pos_id", incrementalCol: null, cols: 9, classification: "内部", selected: false },
 	{ name: "hr_contract", comment: "劳动合同", rows: 21_558, size: "58 MB", pk: "contract_id", incrementalCol: "update_time", cols: 27, classification: "秘密", selected: false },
-	{ name: "hr_salary_detail", comment: "薪酬明细", rows: 1_204_889, size: "3.1 GB", pk: "id", incrementalCol: "pay_month", cols: 41, classification: "机密", selected: false, warn: "含疑似敏感字段，建议单独审批" },
+	{ name: "hr_salary_detail", comment: "薪酬明细", rows: 1_204_889, size: "3.1 GB", pk: "id", incrementalCol: "pay_month", cols: 41, classification: "机密", selected: false, warn: "含疑似敏感字段，需记录接入范围确认" },
 	{ name: "hr_attendance", comment: "考勤流水", rows: 8_902_114, size: "12 GB", pk: "id", incrementalCol: "punch_time", cols: 11, classification: "内部", selected: false, warn: "数据量大，建议独立任务与调度窗口" },
 	{ name: "hr_train_record", comment: "培训记录", rows: 44_120, size: "88 MB", pk: "id", incrementalCol: "gmt_modified", cols: 19, classification: "内部", selected: false },
 	{ name: "tmp_hr_sync_bak", comment: "（临时备份表）", rows: 18_400, size: "40 MB", pk: null, incrementalCol: null, cols: 38, classification: "内部", selected: false, warn: "无主键，无法增量" },
@@ -435,7 +435,10 @@ const API_RESOURCE_DEMO = {
 	},
 	targetHint: "ods.ods_population_change",
 	estimatedVolume: "约 12.8 万条/日",
-	requiresApproval: true,
+	admissionDecision: {
+		outcome: "READY",
+		reasons: ["密级证据完整，目标 ODS 区允许承载秘密数据"],
+	},
 };
 
 /* 文件不是长连接：每次上传先形成不可变 Artifact，再定义解析 Revision */
@@ -489,7 +492,6 @@ const FILE_RESOURCE_DEMOS = {
 		},
 		rowCount: 1_204,
 		targetHint: "ods.ods_asset_inventory",
-		requiresApproval: false,
 	},
 	csv: {
 		artifact: {
@@ -540,7 +542,6 @@ const FILE_RESOURCE_DEMOS = {
 		},
 		rowCount: 1_204,
 		targetHint: "ods.ods_asset_inventory",
-		requiresApproval: false,
 	},
 };
 
@@ -571,9 +572,9 @@ const STAGING_ROWS = [
 ];
 
 const CHANGES = [
-	{ id: "chg-2211", type: "新增入湖表", summary: "新增 fin_budget_exec 等 3 张表", risk: "中", state: "待审批", assignee: "财务处 / 王主管", at: "2026-07-30 09:12" },
-	{ id: "chg-2190", type: "同步模式变更", summary: "全量 → 时间戳增量（update_time）", risk: "高", state: "已通过", assignee: "信息中心 / 李工", at: "2026-07-26 14:30" },
-	{ id: "chg-2154", type: "密级调整", summary: "内部 → 秘密（含身份证号）", risk: "高", state: "已通过", assignee: "保密办 / 张", at: "2026-07-20 10:05" },
+	{ id: "chg-2211", type: "新增入湖表", summary: "新增 fin_budget_exec 等 3 张表", risk: "中", state: "待确认", assignee: "财务处 / 王主管", at: "2026-07-30 09:12" },
+	{ id: "chg-2190", type: "同步模式变更", summary: "全量 → 时间戳增量（update_time）", risk: "高", state: "已确认", assignee: "信息中心 / 李工", at: "2026-07-26 14:30" },
+	{ id: "chg-2154", type: "密级调整", summary: "内部 → 秘密（含身份证号）", risk: "高", state: "已记录", assignee: "保密办 / 张", at: "2026-07-20 10:05" },
 ];
 
 /* ------------------------------------------------------------------ */

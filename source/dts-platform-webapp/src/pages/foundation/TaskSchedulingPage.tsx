@@ -23,7 +23,7 @@ const ENTRY_CARDS = [
 		title: "任务列表",
 		description: "查看数据集成任务、执行历史与任务详情。",
 		tag: "执行",
-		path: "/explore/etl/transform",
+		path: "/foundation/data-sources",
 		actionLabel: "查看任务",
 	},
 ];
@@ -43,7 +43,7 @@ export default function Page() {
 						<Button style={{ marginRight: 8 }} onClick={() => push("/explore/etl/orchestration")}>
 							任务编排
 						</Button>
-						<Button type="primary" onClick={() => push("/explore/etl/transform")}>
+						<Button type="primary" onClick={() => push("/foundation/data-sources")}>
 							任务列表
 						</Button>
 					</>

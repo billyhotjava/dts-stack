@@ -10,6 +10,13 @@ public record RollbackResult(
 	boolean dbtFullRefreshNeeded,   // signal to dts-platform
 	List<Long> affectedTaskIds      // for dts-platform cascade
 ) {
+	public String status() {
+		if (errors == null || errors.isEmpty()) {
+			return "SUCCESS";
+		}
+		return actions == null || actions.isEmpty() ? "FAILED" : "PARTIAL";
+	}
+
 	public static RollbackResult empty(String message) {
 		return new RollbackResult(true, List.of(message), List.of(), false, List.of());
 	}

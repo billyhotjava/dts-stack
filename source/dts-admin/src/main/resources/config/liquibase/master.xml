@@ -123,6 +123,10 @@
     <include file="config/liquibase/changelog/20260720-01_sprint67_measurement_unit_menu.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260730-01_sprint79_modeling_workspace_menu_convergence.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260731-01_sprint79_modeling_menu_restore.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260731-02_sprint80_prototype_modeling_menu.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260731-03_sprint80_modeling_menu_review.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260731-04_data_integration_access_menu_convergence.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260731-05_audit_ingest_idempotency.xml" relativeToChangelogFile="false"/>
     <!-- jhipster-needle-liquibase-add-changelog - JHipster will add liquibase changelogs here -->
     <!-- jhipster-needle-liquibase-add-constraints-changelog - JHipster will add liquibase constraints changelogs here -->
     <!-- jhipster-needle-liquibase-add-incremental-changelog - JHipster will add incremental liquibase changelogs here -->
