@@ -44,6 +44,31 @@ class AdminInboundServiceAuthenticatorTest {
             .isFalse();
     }
 
+    @Test
+    void authenticatesAnyDeclaredServiceAgainstItsOwnPairwiseToken() {
+        var properties = new AdminInboundServiceAuthProperties();
+        properties.setTrustedServices(
+            Map.of(
+                "dts-platform",
+                "platform-secret",
+                "dts-analytics",
+                "analytics-secret"
+            )
+        );
+        var authenticator = new AdminInboundServiceAuthenticator(properties);
+
+        var analytics = authenticator.authenticate(
+            request("DTS-ANALYTICS", "analytics-secret")
+        );
+        var forgedPlatform = authenticator.authenticate(
+            request("dts-platform", "analytics-secret")
+        );
+
+        assertThat(analytics.accepted()).isTrue();
+        assertThat(analytics.serviceName()).isEqualTo("dts-analytics");
+        assertThat(forgedPlatform.accepted()).isFalse();
+    }
+
     private static MockHttpServletRequest request(
         String service,
         String token
