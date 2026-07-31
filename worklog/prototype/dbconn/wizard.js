@@ -187,6 +187,42 @@ let rerenderHook = () => {};
 
 const odsName = (t) => `ods_hr_${t.name.replace(/^hr_/, "")}`;
 
+
+/** 发现范围 —— 对应现网「数据源」区的 Schema / 表名筛选 / 排除表 */
+function renderDiscoveryScope() {
+	const connector = window.PROTO.connectorByKey(WIZ.connectorKey);
+	const schemaFromConn = WIZ.values.schema || WIZ.values.database || "hr_prod";
+
+	return el("section", { class: "panel" }, [
+		el("div", { class: "panel-head" }, [
+			el("h3", {}, "发现范围"),
+			el("span", { class: "panel-note" }, "决定去源端扫哪些表；留空即全部"),
+		]),
+		el("div", { class: "form-grid" }, [
+			el("div", { class: "form-item" }, [
+				el("label", { class: "form-label" }, "Schema"),
+				el("div", { class: "inherited" }, [
+					el("span", {}, schemaFromConn),
+					el("span", { class: "chip chip-inherit" }, "继承自连接"),
+				]),
+				el("button", { class: "link-btn", type: "button" }, "改扫其它 Schema"),
+			]),
+			el("div", { class: "form-item" }, [
+				el("label", { class: "form-label" }, "表名筛选"),
+				el("input", { class: "ctl", placeholder: "SQL LIKE，如 hr_%（可留空）" }),
+				el("div", { class: "form-hint" }, "在源端下推，减少元数据扫描量"),
+			]),
+			el("div", { class: "form-item" }, [
+				el("label", { class: "form-label" }, "排除表"),
+				el("input", { class: "ctl", placeholder: "换行或逗号分隔，如 tmp_%, audit_log" }),
+				el("div", { class: "form-hint" }, "默认已排除临时表与备份表" ),
+			]),
+		]),
+		el("div", { class: "foot-note" },
+			`Reader 类型由「${connector ? connector.name : "所选连接器"}」自动决定，不需要用户选择——现网这里是一个禁用输入框，占了一个格子却不承载任何决策。`),
+	]);
+}
+
 function renderTableList(rerender) {
 	const tables = ensureTables();
 	const rows = tables.map((t) => el("tr", {
@@ -371,9 +407,12 @@ function renderStepTables(rerender) {
 		return el("div", { class: "step-body" }, el("div", { class: "empty" }, "正在读取源端结构…"));
 	}
 	rerenderHook = rerender;
-	return el("div", { class: "step-body split" }, [
-		renderTableList(rerender),
-		renderOdsPreview(),
+	return el("div", {}, [
+		renderDiscoveryScope(),
+		el("div", { class: "step-body split" }, [
+			renderTableList(rerender),
+			renderOdsPreview(),
+		]),
 	]);
 }
 
@@ -518,7 +557,7 @@ function renderRuntimePanel() {
 					el("span", { class: "suffix" }, "至"),
 					el("input", { class: "ctl", value: "06:00" }),
 				]),
-				el("div", { class: "form-hint" }, "超出窗口的批次顺延，避开源库业务高峰"),
+				el("div", { class: "form-hint warn-text" }, "窗口外触发会被直接拒绝并记为失败，不会自动顺延"),
 			]),
 			el("div", { class: "form-item" }, [
 				el("label", { class: "form-label" }, "时区"),
@@ -549,10 +588,27 @@ function renderRuntimePanel() {
 				]),
 			]),
 			el("div", { class: "form-item" }, [
-				el("label", { class: "form-label" }, "优先级"),
-				el("select", { class: "ctl" }, [
-					el("option", {}, "普通"), el("option", {}, "高"), el("option", {}, "低"),
+				el("label", { class: "form-label" }, "撞上并发上限时"),
+				el("select", {
+					class: "ctl",
+					onchange: (e) => { WIZ.policy.rejectPolicy = e.target.selectedIndex === 1 ? "QUEUE" : "REJECT"; rerenderHook(); },
+				}, [
+					el("option", { selected: (WIZ.policy.rejectPolicy || "REJECT") === "REJECT" }, "直接失败"),
+					el("option", { selected: WIZ.policy.rejectPolicy === "QUEUE" }, "排队等待"),
 				]),
+				(WIZ.policy.rejectPolicy === "QUEUE")
+					? el("div", { class: "form-hint warn-text" }, "现网最多只等 30 秒（硬编码），超时仍失败")
+					: el("div", { class: "form-hint" }, "对应 rejectPolicy=REJECT"),
+			]),
+			el("div", { class: "form-item" }, [
+				el("label", { class: "form-label" }, "队列优先级"),
+				el("select", { class: "ctl", disabled: WIZ.policy.rejectPolicy !== "QUEUE" }, [
+					el("option", { selected: true }, "普通（MEDIUM）"), el("option", {}, "高（HIGH）"), el("option", {}, "低（LOW）"),
+				]),
+				el("div", { class: "form-hint" },
+					WIZ.policy.rejectPolicy === "QUEUE"
+						? "决定多个任务抢同一槽位时谁先走"
+						: "仅在「排队等待」模式下生效，当前不起作用"),
 			]),
 			el("div", { class: "form-item" }, [
 				el("label", { class: "form-label" }, "本任务并发"),
@@ -575,8 +631,10 @@ function renderRuntimePanel() {
 				el("span", { class: "small" }, "已占用 7 / 20"),
 			]),
 		]),
-		el("div", { class: "foot-note" },
-			"现网把 taskConcurrency / sourceConcurrency / projectConcurrency 三个并发数都放在任务表单里让用户填。后两个是护源库和护集群的闸门，应当是配额而不是输入项。"),
+		el("div", { class: "inline-alert warn" }, [
+			el("b", {}, "现网默认是敞开的"),
+			el("span", {}, "sourceConcurrencyLimit 与 projectConcurrencyLimit 默认值都是 0，而 0 表示不限——也就是护源库、护集群这两道闸门默认根本没生效，要每个任务的创建者自己去填才有用。改为配额后由管理员统一设定，任务只能在额度内申请。"),
+		]),
 	]);
 }
 

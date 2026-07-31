@@ -113,9 +113,14 @@ const PARAMS = [
 	/* ---- 资源与容错 ---- */
 	{ f: "priority", zh: "优先级", where: "policy", note: "" },
 	{ f: "taskConcurrency", zh: "任务并发", where: "policy", note: "在配额内申请" },
-	{ f: "sourceConcurrency", zh: "源端并发上限", where: "quota", note: "护源库的闸门，应设在连接上" },
-	{ f: "projectConcurrency", zh: "项目并发上限", where: "quota", note: "应由管理员在项目上设" },
-	{ f: "rejectPolicy", zh: "脏数据策略", where: "policy", note: "中止 / 跳过并记录 / 进 staging" },
+	{ f: "sourceConcurrency", zh: "来源并发上限", where: "quota", note: "⚠ 默认 0 = 不限，护源库的闸门默认没生效；应设在连接上由管理员统一维护", risk: true },
+	{ f: "projectConcurrency", zh: "项目并发上限", where: "quota", note: "⚠ 默认 0 = 不限，同上", risk: true },
+	{ f: "rejectPolicy", zh: "限流策略", where: "policy", note: "只有 REJECT / QUEUE 两个有效值：撞并发上限时直接失败，或排队等待（硬编码最多 30 秒）" },
+	{ f: "maxConcurrentRuns", zh: "任务并发上限", where: "policy", note: "同一任务在途执行数，默认 1" },
+	{ f: "priority", zh: "队列优先级", where: "policy", note: "⚠ 仅在 rejectPolicy=QUEUE 时决定抢槽次序；默认 REJECT 模式下只透传给 Airflow conf，不影响行为", risk: true },
+	{ f: "windowStart/windowEnd", zh: "执行窗口", where: "policy", note: "⚠ 窗口外触发直接抛异常拒绝，不是顺延——调度批次会直接失败且不自动补", risk: true },
+	{ f: "(readerSchema 覆盖)", zh: "Schema", where: "discover", note: "默认继承连接，仅在需要扫其它 Schema 时覆盖" },
+	{ f: "(表名筛选)", zh: "表名筛选", where: "discover", note: "SQL LIKE，在源端下推以减少元数据扫描量" },
 
 	/* ---- 编排与下游 ---- */
 	{ f: "airflowEnabled", zh: "启用 Airflow", where: "platform", note: "调度实现细节，不该暴露给用户" },
@@ -129,6 +134,47 @@ const PARAMS = [
 	{ f: "jobConfig", zh: "作业配置", where: "drop", note: "又一个兜底 JSON", json: true },
 ];
 
+
+/* ------------------------------------------------------------------ */
+/* 屏幕对照：现网某一屏的字段逐个落到原型哪里                            */
+/* behaviour 一栏均已在后端代码中核实，标注了出处                        */
+/* ------------------------------------------------------------------ */
+
+const SCREEN_MAPS = [
+	{
+		screen: "数据入湖配置 · 数据源",
+		path: "/explore/etl/transform → 新建 → 数据源",
+		rows: [
+			{ label: "数据源连接", now: "下拉选已建好的数据源", behaviour: "任务与连接是两个对象，必须先去别的菜单建好", to: "向导① 选连接器并就地填参数", tone: "ok" },
+			{ label: "Reader 类型", now: "禁用输入框「将根据数据源自动生成」", behaviour: "完全由连接器决定，用户无法也不需要干预", to: "不出现在界面；连接器 schema 内部决定", tone: "muted", note: "占了一个格子却不承载任何决策" },
+			{ label: "Schema（可选）", now: "文本框，例如 public", behaviour: "决定去源端哪个 schema 找表", to: "向导② 发现范围 · 继承自连接，可覆盖", tone: "ok" },
+			{ label: "表名筛选（可选）", now: "SQL LIKE，例如 ods_%", behaviour: "在源端下推，减少元数据扫描量", to: "向导② 发现范围 · 表名筛选", tone: "ok" },
+			{ label: "入湖表选择", now: "全部表（默认）/ 手动选择", behaviour: "决定 readerTables 怎么生成", to: "向导② 手动勾选 / 按规则匹配", tone: "ok" },
+			{ label: "排除表（可选）", now: "换行或逗号分隔", behaviour: "从发现结果里剔除", to: "向导② 发现范围 · 排除表", tone: "ok" },
+			{ label: "Reader 字段", now: "逗号分隔，默认 *", behaviour: "写入 Addax reader 的 column", to: "向导② 逐表高级 · 列裁剪（默认全列）", tone: "ok" },
+			{ label: "Reader 过滤条件", now: "例如 status = 1", behaviour: "拼进 WHERE", to: "向导② 逐表高级 · 过滤条件", tone: "ok" },
+			{ label: "Reader 查询 SQL", now: "每行一条", behaviour: "有值时整表读取被替换", to: "向导② 逐表高级 · 自定义查询 SQL（标为逃生口）", tone: "warn" },
+			{ label: "Reader 扩展配置 JSON", now: "占位符 {\"splitPk\":\"id\"}", behaviour: "⚠ 原样成为 Addax reader parameter（AddaxJobService:362），且 {...base,...extra} 会静默覆盖上方的字段与过滤条件（ingestionFormHelpers:571）", to: "连接器 schema「读取性能」分组 + 受控逃生口", tone: "bad" },
+			{ label: "目标数据源", now: "下拉，数仓 (biadmin)（推荐）", behaviour: "湖是唯一目标，却做成了每任务可选", to: "向导③ 目标端 · 平台托管只读", tone: "bad" },
+			{ label: "目标表前缀", now: "从数据源自动推算，可手动修改", behaviour: "生成 ODS 表名", to: "向导③ 目标端 · 表名规范（平台配置）", tone: "muted" },
+		],
+	},
+	{
+		screen: "数据入湖配置 · 运行治理策略（可选）",
+		path: "/explore/etl/transform → 新建 → 运行治理策略",
+		rows: [
+			{ label: "任务并发上限", now: "默认 1", behaviour: "同一任务「运行中/排队中」执行数上限（IngestionTaskService:1876）", to: "向导③ 运行时 · 本任务并发", tone: "ok" },
+			{ label: "来源并发上限", now: "0 表示不限", behaviour: "⚠ 默认 0 = 闸门不生效。同一数据源上所有任务的在途数（:1882）——这是护源库的唯一防线", to: "配额：设在连接上，由管理员维护", tone: "bad" },
+			{ label: "项目并发上限", now: "0 表示不限", behaviour: "⚠ 同上，默认不生效（:1892）", to: "配额：设在项目上", tone: "bad" },
+			{ label: "项目标识", now: "例如 project:patent", behaviour: "上面配额的分组键；留空回退 dbtDagSelector，再回退 \"default\"（:1855）", to: "向导③ 基本信息 · 所属项目（下拉，不手打）", tone: "ok" },
+			{ label: "队列优先级", now: "MEDIUM", behaviour: "⚠ 权重 HIGH/P0/CRITICAL/URGENT=3、MEDIUM=2、LOW/P2=1，但仅在 QUEUE 模式抢槽位时生效（:2101）；REJECT 模式下只透传给 Airflow conf", to: "向导③ 运行时 · 非排队模式下置灰并说明无效", tone: "warn" },
+			{ label: "限流策略", now: "REJECT", behaviour: "⚠ 只有 REJECT / QUEUE 两个有效值。QUEUE 最多等 30 秒（GOVERNANCE_QUEUE_MAX_WAIT 硬编码，2 秒轮询），超时仍失败（:90、:623）", to: "向导③ 运行时 · 撞上并发上限时", tone: "warn" },
+			{ label: "执行窗口开始 / 结束", now: "HH:mm，例如 01:00 / 06:00", behaviour: "⚠ 窗口外触发直接抛异常拒绝，不是顺延（:1031）；支持跨零点", to: "向导③ 运行时 · 允许运行窗口，hint 明确写「不会自动顺延」", tone: "bad" },
+			{ label: "执行窗口时区", now: "Asia/Shanghai", behaviour: "非法值静默回退默认（:1834）", to: "向导③ 运行时 · 时区（平台配置）", tone: "muted" },
+		],
+	},
+];
+
 const WHERE_META = {
 	connector: { label: "连接器 schema", tone: "info", desc: "建连接时填一次，任务侧继承" },
 	discover: { label: "向导②选表", tone: "ok", desc: "自动推导为主，可逐表覆盖" },
@@ -138,6 +184,6 @@ const WHERE_META = {
 	drop: { label: "应删除", tone: "bad", desc: "裸 JSON 兜底或概念重复" },
 };
 
-window.PARAM_MAP = { PARAMS, WHERE_META };
+window.PARAM_MAP = { PARAMS, WHERE_META, SCREEN_MAPS };
 
 })();

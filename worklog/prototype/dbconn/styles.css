@@ -452,3 +452,20 @@ table.grid tr.bad-row td { background: #fffafa; }
 }
 .raw-msg.bad { background: var(--bad-soft); color: var(--bad); }
 .raw-msg.warn { background: var(--warn-soft); color: var(--warn); }
+
+/* ---------------- 视图切换 ---------------- */
+
+.seg {
+	display: inline-flex; border: 1px solid var(--border); border-radius: 8px;
+	overflow: hidden; margin-bottom: 16px; background: var(--surface);
+}
+.seg-item {
+	background: none; border: 0; padding: 7px 16px; color: var(--muted);
+	font-size: 12.5px; transition: all .15s;
+}
+.seg-item + .seg-item { border-left: 1px solid var(--border); }
+.seg-item:hover { color: var(--text); background: var(--surface-alt); }
+.seg-item.active { background: var(--blue); color: #fff; font-weight: 600; }
+
+.screen-maps table.grid td { vertical-align: top; }
+.screen-maps table.grid b { font-size: 12.5px; }

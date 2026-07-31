@@ -41,7 +41,8 @@ http://127.0.0.1:4174/dbconn/
 | 向导 ② 选表 | 自动发现、增量列识别、ODS 表名与字段映射推导 | [prototype-wizard-tables.png](./prototype-wizard-tables.png) |
 | 向导 ③ 策略 | 同步方式、调度、继承/覆盖、生成的 Addax 作业只读预览 | [prototype-wizard-policy.png](./prototype-wizard-policy.png) |
 | 接入详情 / 运维 | 概览、运行历史、结构漂移、落地预检、变更记录、配置 | [prototype-detail.png](./prototype-detail.png) |
-| 参数归属 | 现网 86 个字段逐个归位，可按归属筛选 | [prototype-params.png](./prototype-params.png) |
+| 参数归属 · 按字段 | 现网 86 个字段逐个归位，可按归属筛选 | [prototype-params.png](./prototype-params.png) |
+| 参数归属 · 按现网屏幕对照 | 「数据源」「运行治理策略」两屏逐字段对照，含已核实的真实行为 | [prototype-screen-map.png](./prototype-screen-map.png) |
 | 连接器与驱动 | 下沉为系统管理，"配置字段数"来自各连接器自己的 schema | — |
 | 设计说明 | 六个决策 + 现状对照 + 本原型未处理的问题 | [prototype-notes.png](./prototype-notes.png) |
 

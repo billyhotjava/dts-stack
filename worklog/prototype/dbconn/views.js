@@ -420,7 +420,37 @@ function renderNotes() {
 /* 五、参数归属                                                        */
 /* ---------------------------------------------------------------- */
 
-const PM = { filter: "" };
+const PM = { filter: "", view: "fields" };
+
+
+/** 屏幕对照：现网某一屏 → 原型落点，逐字段 */
+function renderScreenMaps() {
+	const { SCREEN_MAPS } = window.PARAM_MAP;
+
+	return V("div", { class: "screen-maps" }, SCREEN_MAPS.map((sm) => V("section", { class: "panel" }, [
+		V("div", { class: "panel-head" }, [
+			V("h3", {}, sm.screen),
+			V("span", { class: "panel-note" }, sm.path),
+		]),
+		V("div", { class: "table-scroll" }, V("table", { class: "grid tight" }, [
+			V("thead", {}, V("tr", {}, [
+				V("th", { style: "width:150px" }, "现网字段"),
+				V("th", { style: "width:190px" }, "界面呈现"),
+				V("th", {}, "实际行为（已核实）"),
+				V("th", { style: "width:250px" }, "原型落点"),
+			])),
+			V("tbody", {}, sm.rows.map((r) => V("tr", { class: r.tone === "bad" ? "bad-row" : "" }, [
+				V("td", {}, [
+					V("b", {}, r.label),
+					r.note ? V("div", { class: "muted small" }, r.note) : null,
+				]),
+				V("td", { class: "muted small" }, r.now),
+				V("td", { class: "small" }, r.behaviour),
+				V("td", {}, V("span", { class: `chip chip-${r.tone}` }, r.to)),
+			]))),
+		])),
+	])));
+}
 
 function renderParamMap(nav) {
 	const { PARAMS, WHERE_META } = window.PARAM_MAP;
@@ -468,12 +498,23 @@ function renderParamMap(nav) {
 					"现网数据源表单 22 个字段 + 入湖任务表单 64 个字段，逐个归位。点击下方分类可筛选。"),
 			]),
 		]),
-		legend,
-		V("div", { class: "inline-alert warn" }, [
+		V("div", { class: "seg" }, [
+			V("button", {
+				class: `seg-item${PM.view !== "screens" ? " active" : ""}`,
+				onclick: () => { PM.view = "fields"; nav("params"); },
+			}, "按字段"),
+			V("button", {
+				class: `seg-item${PM.view === "screens" ? " active" : ""}`,
+				onclick: () => { PM.view = "screens"; nav("params"); },
+			}, "按现网屏幕对照"),
+		]),
+		PM.view === "screens" ? renderScreenMaps() : null,
+		PM.view === "screens" ? null : legend,
+		PM.view === "screens" ? null : V("div", { class: "inline-alert warn" }, [
 			V("b", {}, "最需要先处理的一组"),
 			V("span", {}, "writerJdbcUrls / writerUsername / writerPassword —— 用户建入湖任务时要手填数据湖的地址、账号和密码，且每个任务各存一份。湖是唯一目标，这三项根本不该出现在任务表单里。"),
 		]),
-		V("div", { class: "table-scroll" }, V("table", { class: "grid" }, [
+		PM.view === "screens" ? null : V("div", { class: "table-scroll" }, V("table", { class: "grid" }, [
 			V("thead", {}, V("tr", {}, ["字段", "含义", "现状", "归属", "说明"].map((h) => V("th", {}, h)))),
 			V("tbody", {}, rows),
 		])),
