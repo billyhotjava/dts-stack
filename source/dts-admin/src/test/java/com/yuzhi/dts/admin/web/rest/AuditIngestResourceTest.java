@@ -1,6 +1,7 @@
 package com.yuzhi.dts.admin.web.rest;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mock;
@@ -18,17 +19,22 @@ import com.yuzhi.dts.admin.service.audit.AuditIngestAuthenticator;
 import com.yuzhi.dts.admin.service.audit.AuditIngestAuthenticator.Decision;
 import com.yuzhi.dts.admin.service.audit.AuditOperationKind;
 import com.yuzhi.dts.admin.service.audit.AuditV2Service;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class AuditIngestResourceTest {
+
+    private static final String EVENT_ID = "audit-event-81-0001";
 
     private MockMvc mockMvc;
 
@@ -256,5 +262,160 @@ class AuditIngestResourceTest {
             .andExpect(status().isAccepted());
 
         verify(auditV2Service, never()).record(any());
+    }
+
+    @Test
+    void firstEventIdSubmissionReturnsRecorded() throws Exception {
+        stubHumanActor("alice");
+        when(authenticator.authenticate(any())).thenReturn(new Decision(true, "dts-platform", "valid token"));
+
+        MvcResult response = postAuditEvent(
+            idempotentBody(EVENT_ID, "forged-producer", "创建模型", false),
+            "dts-platform"
+        );
+
+        assertAll(
+            () -> assertThat(response.getResponse().getStatus()).isEqualTo(HttpStatus.CREATED.value()),
+            () -> assertThat(responseField(response, "status")).isEqualTo("RECORDED"),
+            () -> assertThat(responseField(response, "eventId")).isEqualTo(EVENT_ID)
+        );
+    }
+
+    @Test
+    void canonicalReplayIgnoresJsonOrderAndBodyProducer() throws Exception {
+        stubHumanActor("alice");
+        when(authenticator.authenticate(any())).thenReturn(new Decision(true, "dts-platform", "valid token"));
+
+        MvcResult first = postAuditEvent(
+            idempotentBody(EVENT_ID, "forged-producer-a", "创建模型", false),
+            "dts-platform"
+        );
+        MvcResult duplicate = postAuditEvent(
+            idempotentBody(EVENT_ID, "forged-producer-b", "创建模型", true),
+            "dts-platform"
+        );
+
+        assertAll(
+            () -> assertThat(first.getResponse().getStatus()).isEqualTo(HttpStatus.CREATED.value()),
+            () -> assertThat(responseField(first, "status")).isEqualTo("RECORDED"),
+            () -> assertThat(responseField(first, "eventId")).isEqualTo(EVENT_ID),
+            () -> assertThat(duplicate.getResponse().getStatus()).isEqualTo(HttpStatus.OK.value()),
+            () -> assertThat(responseField(duplicate, "status")).isEqualTo("DUPLICATE"),
+            () -> assertThat(responseField(duplicate, "eventId")).isEqualTo(EVENT_ID)
+        );
+    }
+
+    @Test
+    void sameProducerAndEventIdWithDifferentPayloadReturnsConflict() throws Exception {
+        stubHumanActor("alice");
+        when(authenticator.authenticate(any())).thenReturn(new Decision(true, "dts-platform", "valid token"));
+
+        MvcResult first = postAuditEvent(
+            idempotentBody(EVENT_ID, "forged-producer", "创建模型", false),
+            "dts-platform"
+        );
+        MvcResult conflict = postAuditEvent(
+            idempotentBody(EVENT_ID, "forged-producer", "修改后的模型", false),
+            "dts-platform"
+        );
+
+        assertAll(
+            () -> assertThat(first.getResponse().getStatus()).isEqualTo(HttpStatus.CREATED.value()),
+            () -> assertThat(responseField(first, "status")).isEqualTo("RECORDED"),
+            () -> assertThat(responseField(first, "eventId")).isEqualTo(EVENT_ID),
+            () -> assertThat(conflict.getResponse().getStatus()).isEqualTo(HttpStatus.CONFLICT.value()),
+            () -> assertThat(responseField(conflict, "status")).isEqualTo("IDEMPOTENCY_CONFLICT"),
+            () -> assertThat(responseField(conflict, "eventId")).isEqualTo(EVENT_ID)
+        );
+    }
+
+    @Test
+    void authenticatedServiceIdentityPartitionsEventIdsInsteadOfBodyProducer() throws Exception {
+        stubHumanActor("alice");
+        when(authenticator.authenticate(any()))
+            .thenReturn(
+                new Decision(true, "dts-platform", "valid token"),
+                new Decision(true, "dts-analytics", "valid token")
+            );
+        Map<String, Object> body = idempotentBody(EVENT_ID, "same-forged-producer", "创建模型", false);
+
+        MvcResult platformResponse = postAuditEvent(body, "same-untrusted-header");
+        MvcResult analyticsResponse = postAuditEvent(body, "same-untrusted-header");
+
+        assertAll(
+            () -> assertThat(platformResponse.getResponse().getStatus()).isEqualTo(HttpStatus.CREATED.value()),
+            () -> assertThat(responseField(platformResponse, "status")).isEqualTo("RECORDED"),
+            () -> assertThat(responseField(platformResponse, "eventId")).isEqualTo(EVENT_ID),
+            () -> assertThat(analyticsResponse.getResponse().getStatus()).isEqualTo(HttpStatus.CREATED.value()),
+            () -> assertThat(responseField(analyticsResponse, "status")).isEqualTo("RECORDED"),
+            () -> assertThat(responseField(analyticsResponse, "eventId")).isEqualTo(EVENT_ID)
+        );
+    }
+
+    private void stubHumanActor(String username) {
+        AdminKeycloakUser user = new AdminKeycloakUser();
+        user.setUsername(username);
+        user.setFullName("Alice");
+        when(userRepository.findByUsernameIgnoreCase(username)).thenReturn(Optional.of(user));
+    }
+
+    private Map<String, Object> idempotentBody(String eventId, String producer, String summary, boolean reversed) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        if (reversed) {
+            metadata.put("correlationId", "correlation-81");
+            metadata.put("tenantId", "tenant-a");
+        } else {
+            metadata.put("tenantId", "tenant-a");
+            metadata.put("correlationId", "correlation-81");
+        }
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        if (reversed) {
+            body.put("metadata", metadata);
+            body.put("result", "SUCCESS");
+            body.put("resourceId", "model-81");
+            body.put("resourceType", "MODEL_SPEC");
+            body.put("operationType", "CREATE");
+            body.put("buttonCode", "MODEL_SPEC_CREATE");
+            body.put("module", "modeling");
+            body.put("summary", summary);
+            body.put("actor", "alice");
+            body.put("sourceSystem", "platform");
+            body.put("producer", producer);
+            body.put("eventId", eventId);
+        } else {
+            body.put("eventId", eventId);
+            body.put("producer", producer);
+            body.put("sourceSystem", "platform");
+            body.put("actor", "alice");
+            body.put("summary", summary);
+            body.put("module", "modeling");
+            body.put("buttonCode", "MODEL_SPEC_CREATE");
+            body.put("operationType", "CREATE");
+            body.put("resourceType", "MODEL_SPEC");
+            body.put("resourceId", "model-81");
+            body.put("result", "SUCCESS");
+            body.put("metadata", metadata);
+        }
+        return body;
+    }
+
+    private MvcResult postAuditEvent(Map<String, Object> body, String serviceName) throws Exception {
+        return mockMvc
+            .perform(
+                post("/api/audit-events")
+                    .header("X-DTS-Service", serviceName)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsBytes(body))
+            )
+            .andReturn();
+    }
+
+    private String responseField(MvcResult result, String field) throws Exception {
+        String content = result.getResponse().getContentAsString();
+        if (content.isBlank()) {
+            return null;
+        }
+        return objectMapper.readTree(content).path(field).asText(null);
     }
 }
