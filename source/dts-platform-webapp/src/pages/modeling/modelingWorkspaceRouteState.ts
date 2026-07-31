@@ -187,3 +187,24 @@ export const updateModelingWorkspaceSearch = (current: URLSearchParams, patch: M
 
 	return next.toString();
 };
+
+export type ModelingWorkspaceSearchCoordinator = {
+	sync: (current: URLSearchParams) => void;
+	transition: (patch: ModelingWorkspaceRoutePatch) => string;
+};
+
+export const createModelingWorkspaceSearchCoordinator = (
+	initial: URLSearchParams,
+): ModelingWorkspaceSearchCoordinator => {
+	let current = new URLSearchParams(initial);
+	return {
+		sync(next) {
+			current = new URLSearchParams(next);
+		},
+		transition(patch) {
+			const query = updateModelingWorkspaceSearch(current, patch);
+			current = new URLSearchParams(query);
+			return query;
+		},
+	};
+};

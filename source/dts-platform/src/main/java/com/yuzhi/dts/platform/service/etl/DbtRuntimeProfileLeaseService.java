@@ -2,18 +2,12 @@ package com.yuzhi.dts.platform.service.etl;
 
 import com.yuzhi.dts.platform.config.ModelMaterializationProperties;
 import com.yuzhi.dts.platform.repository.modeling.DbtRuntimeProfileLeaseRepository;
+import com.yuzhi.dts.platform.repository.modeling.DbtRuntimeProfileLeaseRepository.LeaseCompensationOutcome;
+import com.yuzhi.dts.platform.repository.modeling.DbtRuntimeProfileLeaseRepository.LeaseMutationOutcome;
+import com.yuzhi.dts.platform.repository.modeling.DbtRuntimeProfileLeaseRepository.LeaseMutationResult;
 import com.yuzhi.dts.platform.repository.modeling.DbtRuntimeProfileLeaseRepository.LeaseRecord;
 import com.yuzhi.dts.platform.repository.modeling.DbtRuntimeProfileLeaseRepository.LeaseStatus;
-import java.io.IOException;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.DirectoryStream;
-import java.nio.file.FileStore;
-import java.nio.file.Files;
-import java.nio.file.LinkOption;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
-import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -23,7 +17,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -36,19 +29,46 @@ import org.springframework.util.StringUtils;
 @Service
 public class DbtRuntimeProfileLeaseService {
 
-    private static final Set<java.nio.file.attribute.PosixFilePermission>
-        ROOT_PERMISSIONS = PosixFilePermissions.fromString("rwx------");
-    private static final Set<java.nio.file.attribute.PosixFilePermission>
-        PROFILE_PERMISSIONS = PosixFilePermissions.fromString("rw-------");
-    private static final String PROFILE_FILE = "profiles.yml";
-
     private final ModelMaterializationProperties properties;
     private final DbtTargetConnectionFactory targetFactory;
     private final DbtRuntimeProfileLeaseRepository repository;
     private final Supplier<UUID> leaseIdGenerator;
     private final Clock clock;
+    private final DbtRuntimeProfileLeaseFileStore fileStore;
+    private final DbtRuntimeProfileLeaseJanitor janitor;
 
     @Autowired
+    public DbtRuntimeProfileLeaseService(
+        ModelMaterializationProperties properties,
+        DbtTargetConnectionFactory targetFactory,
+        DbtRuntimeProfileLeaseRepository repository,
+        DbtRuntimeProfileLeaseFileStore fileStore,
+        DbtRuntimeProfileLeaseJanitor janitor
+    ) {
+        this.properties = Objects.requireNonNull(
+            properties,
+            "properties is required"
+        );
+        this.targetFactory = Objects.requireNonNull(
+            targetFactory,
+            "targetFactory is required"
+        );
+        this.repository = Objects.requireNonNull(
+            repository,
+            "repository is required"
+        );
+        this.fileStore = Objects.requireNonNull(
+            fileStore,
+            "fileStore is required"
+        );
+        this.janitor = Objects.requireNonNull(
+            janitor,
+            "janitor is required"
+        );
+        this.leaseIdGenerator = UUID::randomUUID;
+        this.clock = Clock.systemUTC();
+    }
+
     public DbtRuntimeProfileLeaseService(
         ModelMaterializationProperties properties,
         DbtTargetConnectionFactory targetFactory,
@@ -87,6 +107,15 @@ public class DbtRuntimeProfileLeaseService {
             "leaseIdGenerator is required"
         );
         this.clock = Objects.requireNonNull(clock, "clock is required");
+        this.fileStore = new DbtRuntimeProfileLeaseFileStore(
+            properties
+        );
+        this.janitor = new DbtRuntimeProfileLeaseJanitor(
+            properties,
+            repository,
+            fileStore,
+            clock
+        );
     }
 
     public LeaseView issue(LeaseRequest request) {
@@ -130,49 +159,25 @@ public class DbtRuntimeProfileLeaseService {
             leaseIdGenerator.get(),
             "generated lease id is required"
         );
-        Path leaseDirectory = leaseDirectory(leaseId);
-        Path profileFile = leaseDirectory.resolve(PROFILE_FILE);
-        try {
-            Files.createDirectory(
-                leaseDirectory,
-                PosixFilePermissions.asFileAttribute(ROOT_PERMISSIONS)
-            );
-        } catch (java.nio.file.FileAlreadyExistsException collision) {
-            throw new DbtRuntimeProfileException(
-                "DBT_PROFILE_LEASE_ID_COLLISION",
-                "Runtime profile lease id collision",
-                collision
-            );
-        } catch (IOException failure) {
-            throw new DbtRuntimeProfileException(
-                "DBT_PROFILE_LEASE_WRITE_FAILED",
-                "Runtime profile lease directory could not be created",
-                failure
-            );
-        }
-        try {
-            Files.writeString(
-                profileFile,
-                profileYaml(
-                    profileKey,
-                    targetName,
-                    target,
-                    endpoint
-                ),
-                StandardCharsets.UTF_8,
-                StandardOpenOption.CREATE_NEW,
-                StandardOpenOption.WRITE
-            );
-            Files.setPosixFilePermissions(profileFile, PROFILE_PERMISSIONS);
-            LeaseView view = new LeaseView(
-                leaseId,
+        LeaseView view = new LeaseView(
+            leaseId,
+            targetName,
+            expiresAt,
+            required(
+                target.credentialVersionRef(),
+                "credential version"
+            )
+        );
+        fileStore.createProfile(
+            leaseId,
+            profileYaml(
+                profileKey,
                 targetName,
-                expiresAt,
-                required(
-                    target.credentialVersionRef(),
-                    "credential version"
-                )
-            );
+                target,
+                endpoint
+            )
+        );
+        try {
             repository.issue(
                 new LeaseRecord(
                     leaseId,
@@ -191,18 +196,8 @@ public class DbtRuntimeProfileLeaseService {
                 )
             );
             return view;
-        } catch (DbtRuntimeProfileException failure) {
-            deleteLeaseDirectory(leaseDirectory, false);
-            throw failure;
-        } catch (IOException failure) {
-            deleteLeaseDirectory(leaseDirectory, false);
-            throw new DbtRuntimeProfileException(
-                "DBT_PROFILE_LEASE_WRITE_FAILED",
-                "Runtime profile lease could not be created",
-                failure
-            );
         } catch (RuntimeException failure) {
-            deleteLeaseDirectory(leaseDirectory, false);
+            fileStore.deleteLeaseDirectory(leaseId, false);
             throw new DbtRuntimeProfileException(
                 "DBT_PROFILE_LEASE_METADATA_WRITE_FAILED",
                 "Runtime profile lease metadata could not be persisted",
@@ -213,151 +208,95 @@ public class DbtRuntimeProfileLeaseService {
 
     public LeaseView consume(UUID leaseId) {
         UUID id = requiredLeaseId(leaseId);
-        LeaseRecord current = repository.find(id).orElse(null);
-        if (current == null || current.status() == LeaseStatus.RELEASED) {
+        inspectActive(id);
+        requireProfilePresent(id);
+        LeaseMutationResult result = repository.consumeState(id);
+        if (result.outcome() == LeaseMutationOutcome.NOT_FOUND) {
             throw error(
                 "DBT_PROFILE_LEASE_NOT_FOUND",
                 "Runtime profile lease does not exist"
             );
         }
-        if (current.status() == LeaseStatus.EXPIRED) {
+        if (result.outcome() == LeaseMutationOutcome.EXPIRED) {
+            fileStore.deleteLeaseDirectory(id, false);
             throw error(
                 "DBT_PROFILE_LEASE_EXPIRED",
                 "Runtime profile lease has expired"
             );
         }
-        Instant now = clock.instant();
-        if (!now.isBefore(current.expiresAt())) {
-            expireAndDelete(current, now, now);
-            throw error(
-                "DBT_PROFILE_LEASE_EXPIRED",
-                "Runtime profile lease has expired"
-            );
-        }
+        LeaseRecord current = result.lease();
         if (
-            !Files.isRegularFile(
-                leaseDirectory(id).resolve(PROFILE_FILE),
-                LinkOption.NOFOLLOW_LINKS
-            )
+            result.outcome() != LeaseMutationOutcome.SUCCESS ||
+            current == null
         ) {
-            expireAndDelete(
-                current,
-                current.expiresAt(),
-                now
-            );
             throw error(
-                "DBT_PROFILE_LEASE_FILE_MISSING",
-                "Runtime profile lease file is unavailable"
+                "DBT_PROFILE_LEASE_NOT_FOUND",
+                "Runtime profile lease does not exist"
             );
         }
-        if (current.status() == LeaseStatus.CONSUMED) {
-            return view(current);
-        }
-        if (!repository.consume(id, now)) {
-            return consume(id);
-        }
+        compensateIfProfileDisappeared(id, current);
         return view(current);
     }
 
     /** Extends one active consumed lease so the janitor cannot remove a profile while dbt is still running. */
     public LeaseView renew(UUID leaseId) {
         UUID id = requiredLeaseId(leaseId);
-        LeaseRecord current = repository.find(id).orElse(null);
-        if (
-            current == null ||
-            current.status() == LeaseStatus.RELEASED
-        ) {
-            throw error(
-                "DBT_PROFILE_LEASE_NOT_FOUND",
-                "Runtime profile lease does not exist"
-            );
-        }
-        Instant now = clock.instant();
-        if (
-            current.status() == LeaseStatus.EXPIRED ||
-            !now.isBefore(current.expiresAt())
-        ) {
-            expireAndDelete(current, now, now);
-            throw error(
-                "DBT_PROFILE_LEASE_EXPIRED",
-                "Runtime profile lease has expired"
-            );
-        }
-        if (current.status() != LeaseStatus.CONSUMED) {
+        LeaseRecord inspected = inspectActive(id);
+        if (inspected.status() != LeaseStatus.CONSUMED) {
             throw error(
                 "DBT_PROFILE_LEASE_NOT_CONSUMED",
                 "Runtime profile lease has not been consumed"
             );
         }
-        if (
-            !Files.isRegularFile(
-                leaseDirectory(id).resolve(PROFILE_FILE),
-                LinkOption.NOFOLLOW_LINKS
-            )
-        ) {
-            expireAndDelete(
-                current,
-                current.expiresAt(),
-                now
-            );
-            throw error(
-                "DBT_PROFILE_LEASE_FILE_MISSING",
-                "Runtime profile lease file is unavailable"
-            );
-        }
-        Instant expiresAt = now.plus(leaseTtl());
-        if (!repository.renew(id, now, expiresAt)) {
-            LeaseRecord raced = repository.find(id).orElse(null);
-            if (
-                raced != null &&
-                raced.status() == LeaseStatus.CONSUMED &&
-                now.isBefore(raced.expiresAt())
-            ) {
-                return view(raced);
-            }
-            throw error(
-                "DBT_PROFILE_LEASE_RENEW_FAILED",
-                "Runtime profile lease could not be renewed"
-            );
-        }
-        return new LeaseView(
-            current.id(),
-            current.targetName(),
-            expiresAt,
-            current.credentialVersionRef()
+        requireProfilePresent(id);
+        LeaseMutationResult result = repository.renewState(
+            id,
+            leaseTtl()
         );
-    }
-
-    /** Returns the same non-sensitive lease identity for idempotent runtime-spec recovery. */
-    public LeaseView viewActive(UUID leaseId) {
-        UUID id = requiredLeaseId(leaseId);
-        LeaseRecord current = repository.find(id).orElse(null);
-        if (
-            current == null ||
-            current.status() == LeaseStatus.RELEASED
-        ) {
+        if (result.outcome() == LeaseMutationOutcome.NOT_FOUND) {
             throw error(
                 "DBT_PROFILE_LEASE_NOT_FOUND",
                 "Runtime profile lease does not exist"
             );
         }
-        Instant now = clock.instant();
-        if (
-            current.status() == LeaseStatus.EXPIRED ||
-            !now.isBefore(current.expiresAt())
-        ) {
-            expireAndDelete(current, now, now);
+        if (result.outcome() == LeaseMutationOutcome.EXPIRED) {
+            fileStore.deleteLeaseDirectory(id, false);
             throw error(
                 "DBT_PROFILE_LEASE_EXPIRED",
                 "Runtime profile lease has expired"
             );
         }
-        return view(current);
+        if (result.outcome() == LeaseMutationOutcome.NOT_CONSUMED) {
+            throw error(
+                "DBT_PROFILE_LEASE_NOT_CONSUMED",
+                "Runtime profile lease has not been consumed"
+            );
+        }
+        LeaseRecord renewed = result.lease();
+        if (renewed == null) {
+            throw error(
+                "DBT_PROFILE_LEASE_RENEW_FAILED",
+                "Runtime profile lease could not be renewed"
+            );
+        }
+        compensateIfProfileDisappeared(id, renewed);
+        if (renewed.status() != LeaseStatus.CONSUMED) {
+            throw error(
+                "DBT_PROFILE_LEASE_RENEW_FAILED",
+                "Runtime profile lease could not be renewed"
+            );
+        }
+        return view(renewed);
+    }
+
+    /** Returns the same non-sensitive lease identity for idempotent runtime-spec recovery. */
+    public LeaseView viewActive(UUID leaseId) {
+        UUID id = requiredLeaseId(leaseId);
+        return view(inspectActive(id));
     }
 
     public void release(UUID leaseId) {
         UUID id = requiredLeaseId(leaseId);
-        Path directory = leaseDirectory(id);
         boolean released = repository.release(id, clock.instant());
         if (!released) {
             LeaseRecord current = repository.find(id).orElse(null);
@@ -366,12 +305,7 @@ public class DbtRuntimeProfileLeaseService {
                 (current.status() != LeaseStatus.RELEASED &&
                     current.status() != LeaseStatus.EXPIRED)
             ) {
-                if (
-                    Files.notExists(
-                        directory,
-                        LinkOption.NOFOLLOW_LINKS
-                    )
-                ) {
+                if (!fileStore.leaseDirectoryExists(id)) {
                     return;
                 }
                 throw error(
@@ -380,176 +314,17 @@ public class DbtRuntimeProfileLeaseService {
                 );
             }
         }
-        deleteLeaseDirectory(directory, true);
+        fileStore.deleteLeaseDirectory(id, true);
     }
 
     public Readiness readiness() {
-        try {
-            Path root = runtimeRoot();
-            if (!Files.exists(root, LinkOption.NOFOLLOW_LINKS)) {
-                if (properties.isRuntimeProfileRequireTmpfs()) {
-                    return Readiness.down(
-                        "DBT_RUNTIME_PROFILE_ROOT_MISSING"
-                    );
-                }
-                Files.createDirectories(
-                    root,
-                    PosixFilePermissions.asFileAttribute(
-                        ROOT_PERMISSIONS
-                    )
-                );
-            }
-            if (containsSymbolicLink(root)) {
-                return Readiness.down(
-                    "DBT_RUNTIME_PROFILE_ROOT_SYMLINK"
-                );
-            }
-            if (
-                !Files.isDirectory(
-                    root,
-                    LinkOption.NOFOLLOW_LINKS
-                ) ||
-                !Files.isWritable(root)
-            ) {
-                return Readiness.down(
-                    "DBT_RUNTIME_PROFILE_ROOT_UNAVAILABLE"
-                );
-            }
-            Set<java.nio.file.attribute.PosixFilePermission> permissions =
-                Files.getPosixFilePermissions(
-                    root,
-                    LinkOption.NOFOLLOW_LINKS
-                );
-            if (!ROOT_PERMISSIONS.equals(permissions)) {
-                if (properties.isRuntimeProfileRequireTmpfs()) {
-                    return Readiness.down(
-                        "DBT_RUNTIME_PROFILE_ROOT_PERMISSIONS_INVALID"
-                    );
-                }
-                Files.setPosixFilePermissions(root, ROOT_PERMISSIONS);
-            }
-            if (properties.isRuntimeProfileRequireTmpfs()) {
-                if (properties.getRuntimeProfileExpectedUid() < 0) {
-                    return Readiness.down(
-                        "DBT_RUNTIME_PROFILE_EXPECTED_UID_INVALID"
-                    );
-                }
-                Object ownerUid = Files.getAttribute(
-                    root,
-                    "unix:uid",
-                    LinkOption.NOFOLLOW_LINKS
-                );
-                if (
-                    !(ownerUid instanceof Number owner) ||
-                    owner.longValue() !=
-                    properties.getRuntimeProfileExpectedUid()
-                ) {
-                    return Readiness.down(
-                        "DBT_RUNTIME_PROFILE_ROOT_OWNER_INVALID"
-                    );
-                }
-                FileStore store = Files.getFileStore(root);
-                String type = store
-                    .type()
-                    .toLowerCase(Locale.ROOT);
-                if (!"tmpfs".equals(type) && !"ramfs".equals(type)) {
-                    return Readiness.down(
-                        "DBT_RUNTIME_PROFILE_ROOT_NOT_TMPFS"
-                    );
-                }
-            }
-            return Readiness.up();
-        } catch (IOException | RuntimeException failure) {
-            return Readiness.down(
-                "DBT_RUNTIME_PROFILE_ROOT_UNAVAILABLE"
-            );
-        }
+        DbtRuntimeProfileLeaseFileStore.Readiness readiness =
+            fileStore.readiness();
+        return new Readiness(readiness.ready(), readiness.code());
     }
 
-    @Scheduled(
-        fixedDelayString = "${dts.modeling.materialization.runtime-profile-janitor-delay-ms:60000}"
-    )
     public void cleanupExpired() {
-        Instant now = clock.instant();
-        try {
-            for (LeaseRecord lease : repository.findExpired(now, 100)) {
-                expireAndDelete(lease, now, now);
-            }
-        } catch (RuntimeException ignored) {
-            // Fail closed and retry on the next janitor pass.
-        }
-        cleanupOrphans(now);
-    }
-
-    private void cleanupOrphans(Instant now) {
-        Path root;
-        try {
-            root = runtimeRoot();
-            if (
-                !Files.isDirectory(
-                    root,
-                    LinkOption.NOFOLLOW_LINKS
-                )
-            ) {
-                return;
-            }
-            try (DirectoryStream<Path> entries = Files.newDirectoryStream(root)) {
-                for (Path entry : entries) {
-                    if (
-                        !Files.isDirectory(
-                            entry,
-                            LinkOption.NOFOLLOW_LINKS
-                        )
-                    ) {
-                        continue;
-                    }
-                    UUID id = parseLeaseId(entry.getFileName().toString());
-                    LeaseRecord tracked = id == null
-                        ? null
-                        : repository.find(id).orElse(null);
-                    if (tracked != null) {
-                        if (
-                            tracked.status() == LeaseStatus.RELEASED ||
-                            tracked.status() == LeaseStatus.EXPIRED
-                        ) {
-                            deleteLeaseDirectory(entry, false);
-                        }
-                        continue;
-                    }
-                    Instant modified = Files.getLastModifiedTime(
-                        entry,
-                        LinkOption.NOFOLLOW_LINKS
-                    )
-                        .toInstant();
-                    if (!now.isBefore(modified.plus(leaseTtl()))) {
-                        deleteLeaseDirectory(entry, false);
-                    }
-                }
-            }
-        } catch (IOException | RuntimeException ignored) {
-            // Readiness remains fail-closed; the next janitor pass retries cleanup.
-        }
-    }
-
-    private boolean expireAndDelete(
-        LeaseRecord lease,
-        Instant cutoff,
-        Instant expiredAt
-    ) {
-        if (
-            !repository.expire(
-                lease.id(),
-                lease.expiresAt(),
-                cutoff,
-                expiredAt
-            )
-        ) {
-            return false;
-        }
-        return deleteLeaseDirectory(
-            leaseDirectory(lease.id()),
-            false
-        );
+        janitor.cleanupExpired();
     }
 
     private void requireReady() {
@@ -579,76 +354,6 @@ public class DbtRuntimeProfileLeaseService {
                 "MODEL_EXECUTION_TARGET_UNAVAILABLE",
                 "Only the configured PostgreSQL runtime target is available"
             );
-        }
-    }
-
-    private Path runtimeRoot() {
-        String configured = required(
-            properties.getRuntimeProfileRoot(),
-            "runtime profile root"
-        );
-        Path root = Path.of(configured).toAbsolutePath().normalize();
-        if (root.getParent() == null) {
-            throw error(
-                "DBT_RUNTIME_PROFILE_ROOT_UNAVAILABLE",
-                "Runtime profile root is invalid"
-            );
-        }
-        return root;
-    }
-
-    private Path leaseDirectory(UUID leaseId) {
-        Path root = runtimeRoot();
-        Path lease = root.resolve(leaseId.toString()).normalize();
-        if (!root.equals(lease.getParent())) {
-            throw error(
-                "DBT_PROFILE_LEASE_PATH_INVALID",
-                "Runtime profile lease path is invalid"
-            );
-        }
-        return lease;
-    }
-
-    private boolean containsSymbolicLink(Path path) {
-        Path current = path.getRoot();
-        for (Path segment : path) {
-            current = current == null
-                ? segment
-                : current.resolve(segment);
-            if (Files.isSymbolicLink(current)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean deleteLeaseDirectory(
-        Path leaseDirectory,
-        boolean strict
-    ) {
-        try {
-            Path root = runtimeRoot();
-            Path normalized = leaseDirectory
-                .toAbsolutePath()
-                .normalize();
-            if (!root.equals(normalized.getParent())) {
-                throw error(
-                    "DBT_PROFILE_LEASE_PATH_INVALID",
-                    "Runtime profile lease path is invalid"
-                );
-            }
-            Files.deleteIfExists(normalized.resolve(PROFILE_FILE));
-            Files.deleteIfExists(normalized);
-            return true;
-        } catch (IOException | RuntimeException failure) {
-            if (strict) {
-                throw new DbtRuntimeProfileException(
-                    "DBT_PROFILE_LEASE_RELEASE_FAILED",
-                    "Runtime profile lease could not be released",
-                    failure
-                );
-            }
-            return false;
         }
     }
 
@@ -773,12 +478,69 @@ public class DbtRuntimeProfileLeaseService {
         return leaseId;
     }
 
-    private static UUID parseLeaseId(String value) {
-        try {
-            return UUID.fromString(value);
-        } catch (RuntimeException ignored) {
-            return null;
+    private LeaseRecord inspectActive(UUID leaseId) {
+        LeaseMutationResult result = repository.viewActiveState(
+            leaseId
+        );
+        if (result.outcome() == LeaseMutationOutcome.NOT_FOUND) {
+            throw error(
+                "DBT_PROFILE_LEASE_NOT_FOUND",
+                "Runtime profile lease does not exist"
+            );
         }
+        if (result.outcome() == LeaseMutationOutcome.EXPIRED) {
+            fileStore.deleteLeaseDirectory(leaseId, false);
+            throw error(
+                "DBT_PROFILE_LEASE_EXPIRED",
+                "Runtime profile lease has expired"
+            );
+        }
+        LeaseRecord lease = result.lease();
+        if (
+            result.outcome() != LeaseMutationOutcome.SUCCESS ||
+            lease == null
+        ) {
+            throw error(
+                "DBT_PROFILE_LEASE_NOT_FOUND",
+                "Runtime profile lease does not exist"
+            );
+        }
+        return lease;
+    }
+
+    private void requireProfilePresent(UUID leaseId) {
+        if (!fileStore.profileExists(leaseId)) {
+            throw fileMissing();
+        }
+    }
+
+    private void compensateIfProfileDisappeared(
+        UUID leaseId,
+        LeaseRecord lease
+    ) {
+        if (fileStore.profileExists(leaseId)) {
+            return;
+        }
+        LeaseCompensationOutcome outcome =
+            repository.compensateMissingProfile(
+                leaseId,
+                lease.status(),
+                lease.expiresAt()
+            );
+        if (outcome == LeaseCompensationOutcome.CONFLICT) {
+            throw error(
+                "DBT_PROFILE_LEASE_COMPENSATION_FAILED",
+                "Runtime profile lease file loss could not be compensated"
+            );
+        }
+        throw fileMissing();
+    }
+
+    private static DbtRuntimeProfileException fileMissing() {
+        return error(
+            "DBT_PROFILE_LEASE_FILE_MISSING",
+            "Runtime profile lease file is unavailable"
+        );
     }
 
     private static DbtRuntimeProfileException error(

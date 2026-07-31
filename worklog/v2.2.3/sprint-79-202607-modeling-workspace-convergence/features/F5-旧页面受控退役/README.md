@@ -25,6 +25,7 @@
 |---|---|---|---|
 | T01 | canonical 页面转面板并收敛路由 | PASS_WITH_GAPS | F1～F4 |
 | T02 | 移除兼容路由并形成旧表退役提案 | BLOCKED_BY_OBSERVATION | T01、F0/T02、两版本观测 |
+| T03 | 恢复建模菜单并纠正提前退役 | DONE | T01、T02 门禁 |
 
 ## Definition of Ready
 
@@ -41,5 +42,5 @@
 ## 当前决策
 
 - canonical plans/dimensions/models/metric deep link、菜单和帮助入口已收敛到 `/modeling/workbench`。
-- dts-admin migration 只软删除旧菜单，并以 `sprint79-menu-convergence` 标记保障定向回滚。
+- 2026-07-31 用户验收确认旧建模入口仍需保留；在 T02 两版本观测门禁完成前，以新前向 migration 恢复旧菜单，`/modeling/workbench` 作为推荐主入口而非唯一可见入口。
 - 8 条 compatibility route 继续保留；没有两版本零访问、unresolved=0 和客户环境画像前，不删除 route helper 或 legacy 表。

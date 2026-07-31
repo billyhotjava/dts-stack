@@ -4,14 +4,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.platform.config.ModelMaterializationProperties;
 import com.yuzhi.dts.platform.repository.modeling.DbtRuntimeProfileLeaseRepository;
+import com.yuzhi.dts.platform.repository.modeling.DbtRuntimeProfileLeaseRepository.LeaseCompensationOutcome;
+import com.yuzhi.dts.platform.repository.modeling.DbtRuntimeProfileLeaseRepository.LeaseMutationOutcome;
+import com.yuzhi.dts.platform.repository.modeling.DbtRuntimeProfileLeaseRepository.LeaseMutationResult;
 import com.yuzhi.dts.platform.repository.modeling.DbtRuntimeProfileLeaseRepository.LeaseRecord;
 import com.yuzhi.dts.platform.repository.modeling.DbtRuntimeProfileLeaseRepository.LeaseStatus;
 import java.nio.file.Files;
@@ -45,6 +50,7 @@ class DbtRuntimeProfileLeaseServiceTest {
     private DbtTargetConnectionFactory targetFactory;
     private DbtRuntimeProfileLeaseRepository repository;
     private AtomicReference<LeaseRecord> persisted;
+    private AtomicReference<Instant> databaseNow;
     private DbtRuntimeProfileLeaseService service;
 
     @BeforeEach
@@ -60,6 +66,7 @@ class DbtRuntimeProfileLeaseServiceTest {
         targetFactory = mock(DbtTargetConnectionFactory.class);
         repository = mock(DbtRuntimeProfileLeaseRepository.class);
         persisted = new AtomicReference<>();
+        databaseNow = new AtomicReference<>(NOW);
         doAnswer(invocation -> {
             persisted.set(invocation.getArgument(0));
             return null;
@@ -74,46 +81,136 @@ class DbtRuntimeProfileLeaseServiceTest {
                 : java.util.Optional.empty();
         });
         when(
-            repository.consume(any(UUID.class), any(Instant.class))
+            repository.viewActiveState(any(UUID.class))
         )
             .thenAnswer(invocation -> {
                 LeaseRecord current = persisted.get();
                 if (
                     current == null ||
-                    current.status() != LeaseStatus.ISSUED
+                    current.status() == LeaseStatus.RELEASED
                 ) {
-                    return false;
+                    return mutation(
+                        LeaseMutationOutcome.NOT_FOUND,
+                        current
+                    );
                 }
-                persisted.set(
-                    withStatus(
-                        current,
-                        LeaseStatus.CONSUMED,
-                        invocation.getArgument(1)
-                    )
+                if (
+                    current.status() == LeaseStatus.EXPIRED ||
+                    !NOW.isBefore(current.expiresAt())
+                ) {
+                    return mutation(
+                        LeaseMutationOutcome.EXPIRED,
+                        current
+                    );
+                }
+                return mutation(
+                    LeaseMutationOutcome.SUCCESS,
+                    current
                 );
-                return true;
             });
         when(
-            repository.renew(
+            repository.compensateMissingProfile(
                 any(UUID.class),
-                any(Instant.class),
+                any(LeaseStatus.class),
                 any(Instant.class)
             )
         )
             .thenAnswer(invocation -> {
                 LeaseRecord current = persisted.get();
-                Instant now = invocation.getArgument(1);
+                if (current == null) {
+                    return LeaseCompensationOutcome.NOT_FOUND;
+                }
                 if (
-                    current == null ||
-                    current.status() != LeaseStatus.CONSUMED ||
-                    !now.isBefore(current.expiresAt())
+                    current.status() == LeaseStatus.EXPIRED ||
+                    current.status() == LeaseStatus.RELEASED
                 ) {
-                    return false;
+                    return LeaseCompensationOutcome.ALREADY_TERMINAL;
                 }
                 persisted.set(
-                    withExpiry(current, invocation.getArgument(2))
+                    withStatus(
+                        current,
+                        LeaseStatus.EXPIRED,
+                        NOW
+                    )
                 );
-                return true;
+                return LeaseCompensationOutcome.COMPENSATED;
+            });
+        when(repository.findAllByIds(anyList())).thenAnswer(invocation -> {
+            LeaseRecord current = persisted.get();
+            java.util.List<UUID> ids = invocation.getArgument(0);
+            return current != null && ids.contains(current.id())
+                ? java.util.List.of(current)
+                : java.util.List.of();
+        });
+        when(
+            repository.consumeState(any(UUID.class))
+        )
+            .thenAnswer(invocation -> {
+                LeaseRecord current = persisted.get();
+                if (current == null || current.status() == LeaseStatus.RELEASED) {
+                    return mutation(
+                        LeaseMutationOutcome.NOT_FOUND,
+                        current
+                    );
+                }
+                if (current.status() == LeaseStatus.EXPIRED) {
+                    return mutation(
+                        LeaseMutationOutcome.EXPIRED,
+                        current
+                    );
+                }
+                if (current.status() == LeaseStatus.ISSUED) {
+                    persisted.set(
+                        withStatus(
+                            current,
+                            LeaseStatus.CONSUMED,
+                            NOW
+                        )
+                    );
+                }
+                return mutation(
+                    LeaseMutationOutcome.SUCCESS,
+                    persisted.get()
+                );
+            });
+        when(
+            repository.renewState(
+                any(UUID.class),
+                any(Duration.class)
+            )
+        )
+            .thenAnswer(invocation -> {
+                LeaseRecord current = persisted.get();
+                if (current == null || current.status() == LeaseStatus.RELEASED) {
+                    return mutation(
+                        LeaseMutationOutcome.NOT_FOUND,
+                        current
+                    );
+                }
+                if (current.status() == LeaseStatus.EXPIRED) {
+                    return mutation(
+                        LeaseMutationOutcome.EXPIRED,
+                        current
+                    );
+                }
+                if (current.status() != LeaseStatus.CONSUMED) {
+                    return mutation(
+                        LeaseMutationOutcome.NOT_CONSUMED,
+                        current
+                    );
+                }
+                persisted.set(
+                    withExpiry(
+                        current,
+                        current
+                            .expiresAt()
+                            .plus(invocation.getArgument(1))
+                    )
+                );
+                return mutation(
+                    LeaseMutationOutcome.SUCCESS,
+                    persisted.get()
+                );
             });
         doAnswer(invocation -> {
             LeaseRecord current = persisted.get();
@@ -141,15 +238,13 @@ class DbtRuntimeProfileLeaseServiceTest {
             LeaseRecord current = persisted.get();
             UUID id = invocation.getArgument(0);
             Instant expectedExpiresAt = invocation.getArgument(1);
-            Instant cutoff = invocation.getArgument(2);
-            Instant expiredAt = invocation.getArgument(3);
             if (
                 current == null ||
                 !current.id().equals(id) ||
                 (current.status() != LeaseStatus.ISSUED &&
                     current.status() != LeaseStatus.CONSUMED) ||
                 !current.expiresAt().equals(expectedExpiresAt) ||
-                current.expiresAt().isAfter(cutoff)
+                current.expiresAt().isAfter(databaseNow.get())
             ) {
                 return false;
             }
@@ -157,7 +252,7 @@ class DbtRuntimeProfileLeaseServiceTest {
                 withStatus(
                     current,
                     LeaseStatus.EXPIRED,
-                    expiredAt
+                    databaseNow.get()
                 )
             );
             return true;
@@ -165,21 +260,18 @@ class DbtRuntimeProfileLeaseServiceTest {
             .when(repository)
             .expire(
                 any(UUID.class),
-                any(Instant.class),
-                any(Instant.class),
                 any(Instant.class)
             );
         when(
-            repository.findExpired(any(Instant.class), anyInt())
+            repository.findExpired(anyInt())
         )
             .thenAnswer(invocation -> {
                 LeaseRecord current = persisted.get();
-                Instant at = invocation.getArgument(0);
                 boolean activeAndDue =
                     current != null &&
                     (current.status() == LeaseStatus.ISSUED ||
                         current.status() == LeaseStatus.CONSUMED) &&
-                    !at.isBefore(current.expiresAt());
+                    !databaseNow.get().isBefore(current.expiresAt());
                 return activeAndDue
                     ? java.util.List.of(current)
                     : java.util.List.of();
@@ -238,6 +330,191 @@ class DbtRuntimeProfileLeaseServiceTest {
         service.release(LEASE_ID);
         service.release(LEASE_ID);
         assertThat(leaseDir).doesNotExist();
+    }
+
+    @Test
+    void databaseAdmissionWinsWhenJvmClockRunsAheadDuringConsume() {
+        var issued = service.issue(
+            new DbtRuntimeProfileLeaseService.LeaseRequest(
+                "tenant-a",
+                PIPELINE_RUN_ID,
+                DAG_RUN_ID,
+                "DEV",
+                "postgres-primary"
+            )
+        );
+        service = new DbtRuntimeProfileLeaseService(
+            properties,
+            targetFactory,
+            repository,
+            UUID::randomUUID,
+            Clock.fixed(NOW.plus(Duration.ofHours(1)), ZoneOffset.UTC)
+        );
+
+        assertThat(service.consume(LEASE_ID)).isEqualTo(issued);
+        assertThat(persisted.get().status())
+            .isEqualTo(LeaseStatus.CONSUMED);
+    }
+
+    @Test
+    void databaseAdmissionWinsWhenJvmClockRunsAheadDuringRenew() {
+        service.issue(
+            new DbtRuntimeProfileLeaseService.LeaseRequest(
+                "tenant-a",
+                PIPELINE_RUN_ID,
+                DAG_RUN_ID,
+                "DEV",
+                "postgres-primary"
+            )
+        );
+        service.consume(LEASE_ID);
+        service = new DbtRuntimeProfileLeaseService(
+            properties,
+            targetFactory,
+            repository,
+            UUID::randomUUID,
+            Clock.fixed(NOW.plus(Duration.ofHours(1)), ZoneOffset.UTC)
+        );
+
+        assertThat(service.renew(LEASE_ID).expiresAt())
+            .isEqualTo(NOW.plus(Duration.ofMinutes(10)));
+        assertThat(persisted.get().status())
+            .isEqualTo(LeaseStatus.CONSUMED);
+    }
+
+    @Test
+    void databaseInspectionRejectsAnExpiredRecoveryBeforeJanitorRuns() {
+        service.issue(
+            new DbtRuntimeProfileLeaseService.LeaseRequest(
+                "tenant-a",
+                PIPELINE_RUN_ID,
+                DAG_RUN_ID,
+                "DEV",
+                "postgres-primary"
+            )
+        );
+        persisted.set(
+            withExpiry(
+                persisted.get(),
+                NOW.minus(Duration.ofSeconds(1))
+            )
+        );
+
+        assertThatThrownBy(() -> service.viewActive(LEASE_ID))
+            .isInstanceOf(DbtRuntimeProfileException.class)
+            .extracting(error ->
+                ((DbtRuntimeProfileException) error).code()
+            )
+            .isEqualTo("DBT_PROFILE_LEASE_EXPIRED");
+    }
+
+    @Test
+    void databaseInspectionWinsWhenJvmClockRunsAheadDuringRecovery() {
+        var issued = service.issue(
+            new DbtRuntimeProfileLeaseService.LeaseRequest(
+                "tenant-a",
+                PIPELINE_RUN_ID,
+                DAG_RUN_ID,
+                "DEV",
+                "postgres-primary"
+            )
+        );
+        service = new DbtRuntimeProfileLeaseService(
+            properties,
+            targetFactory,
+            repository,
+            UUID::randomUUID,
+            Clock.fixed(NOW.plus(Duration.ofHours(1)), ZoneOffset.UTC)
+        );
+
+        assertThat(service.viewActive(LEASE_ID)).isEqualTo(issued);
+    }
+
+    @Test
+    void consumeCompensatesWhenProfileDisappearsAfterPrecheck()
+        throws Exception {
+        service.issue(
+            new DbtRuntimeProfileLeaseService.LeaseRequest(
+                "tenant-a",
+                PIPELINE_RUN_ID,
+                DAG_RUN_ID,
+                "DEV",
+                "postgres-primary"
+            )
+        );
+        Path profile = runtimeRoot
+            .resolve(LEASE_ID.toString())
+            .resolve("profiles.yml");
+        when(repository.consumeState(LEASE_ID)).thenAnswer(invocation -> {
+            LeaseRecord consumed = withStatus(
+                persisted.get(),
+                LeaseStatus.CONSUMED,
+                NOW
+            );
+            persisted.set(consumed);
+            Files.delete(profile);
+            return mutation(
+                LeaseMutationOutcome.SUCCESS,
+                consumed
+            );
+        });
+
+        assertThatThrownBy(() -> service.consume(LEASE_ID))
+            .isInstanceOf(DbtRuntimeProfileException.class)
+            .extracting(error ->
+                ((DbtRuntimeProfileException) error).code()
+            )
+            .isEqualTo("DBT_PROFILE_LEASE_FILE_MISSING");
+        assertThat(persisted.get().status())
+            .isEqualTo(LeaseStatus.EXPIRED);
+    }
+
+    @Test
+    void renewCompensatesWhenProfileDisappearsAfterPrecheck()
+        throws Exception {
+        service.issue(
+            new DbtRuntimeProfileLeaseService.LeaseRequest(
+                "tenant-a",
+                PIPELINE_RUN_ID,
+                DAG_RUN_ID,
+                "DEV",
+                "postgres-primary"
+            )
+        );
+        service.consume(LEASE_ID);
+        Path profile = runtimeRoot
+            .resolve(LEASE_ID.toString())
+            .resolve("profiles.yml");
+        when(
+            repository.renewState(
+                LEASE_ID,
+                Duration.ofMinutes(5)
+            )
+        )
+            .thenAnswer(invocation -> {
+                LeaseRecord renewed = withExpiry(
+                    persisted.get(),
+                    persisted
+                        .get()
+                        .expiresAt()
+                        .plus(invocation.getArgument(1))
+                );
+                persisted.set(renewed);
+                Files.delete(profile);
+                return mutation(
+                    LeaseMutationOutcome.SUCCESS,
+                    renewed
+                );
+            });
+
+        assertThatThrownBy(() -> service.renew(LEASE_ID))
+            .isInstanceOf(DbtRuntimeProfileException.class)
+            .extracting(error ->
+                ((DbtRuntimeProfileException) error).code()
+            )
+            .isEqualTo("DBT_PROFILE_LEASE_FILE_MISSING");
+        assertThat(persisted.get().status())
+            .isEqualTo(LeaseStatus.EXPIRED);
     }
 
     @Test
@@ -344,6 +621,20 @@ class DbtRuntimeProfileLeaseServiceTest {
             )
         );
         service.consume(LEASE_ID);
+        Instant databaseRenewedAt = NOW.plus(Duration.ofMinutes(4));
+        when(repository.renewState(LEASE_ID, Duration.ofMinutes(5)))
+            .thenAnswer(invocation -> {
+                persisted.set(
+                    withExpiry(
+                        persisted.get(),
+                        databaseRenewedAt.plus(invocation.getArgument(1))
+                    )
+                );
+                return mutation(
+                    LeaseMutationOutcome.SUCCESS,
+                    persisted.get()
+                );
+            });
 
         service = new DbtRuntimeProfileLeaseService(
             properties,
@@ -387,7 +678,8 @@ class DbtRuntimeProfileLeaseServiceTest {
         LeaseRecord staleCandidate = persisted.get();
         Instant janitorCutoff = NOW.plus(Duration.ofMinutes(6));
         Instant renewedExpiry = NOW.plus(Duration.ofMinutes(9));
-        when(repository.findExpired(janitorCutoff, 100))
+        databaseNow.set(janitorCutoff);
+        when(repository.findExpired(100))
             .thenReturn(java.util.List.of(staleCandidate));
         doAnswer(invocation -> {
                 persisted.set(
@@ -398,9 +690,7 @@ class DbtRuntimeProfileLeaseServiceTest {
             .when(repository)
             .expire(
                 LEASE_ID,
-                staleCandidate.expiresAt(),
-                janitorCutoff,
-                janitorCutoff
+                staleCandidate.expiresAt()
             );
         service = new DbtRuntimeProfileLeaseService(
             properties,
@@ -531,6 +821,36 @@ class DbtRuntimeProfileLeaseServiceTest {
     }
 
     @Test
+    void janitorProcessesOneBoundedDirectoryBatchAndContinuesNextPass()
+        throws Exception {
+        for (int index = 1; index <= 101; index++) {
+            Path orphan = runtimeRoot.resolve(
+                new UUID(0, index).toString()
+            );
+            Files.createDirectory(orphan);
+            Files.setLastModifiedTime(
+                orphan,
+                FileTime.from(NOW.minus(Duration.ofMinutes(6)))
+            );
+        }
+
+        service.cleanupExpired();
+
+        try (var remaining = Files.list(runtimeRoot)) {
+            assertThat(remaining.count()).isEqualTo(1);
+        }
+        verify(repository).findAllByIds(anyList());
+        verify(repository, never()).find(any(UUID.class));
+
+        service.cleanupExpired();
+
+        try (var remaining = Files.list(runtimeRoot)) {
+            assertThat(remaining.count()).isZero();
+        }
+        verify(repository, times(2)).findAllByIds(anyList());
+    }
+
+    @Test
     void rejectsUnknownTargetBeforeResolvingAnyWarehouseSecret() {
         assertThatThrownBy(() ->
             service.issue(
@@ -579,6 +899,33 @@ class DbtRuntimeProfileLeaseServiceTest {
     }
 
     @Test
+    void janitorDoesNotExpireDatabaseActiveLeaseWhenJvmRunsAhead() {
+        service.issue(
+            new DbtRuntimeProfileLeaseService.LeaseRequest(
+                "tenant-a",
+                PIPELINE_RUN_ID,
+                DAG_RUN_ID,
+                "DEV",
+                "postgres-primary"
+            )
+        );
+        service = new DbtRuntimeProfileLeaseService(
+            properties,
+            targetFactory,
+            repository,
+            UUID::randomUUID,
+            Clock.fixed(NOW.plus(Duration.ofHours(1)), ZoneOffset.UTC)
+        );
+
+        service.cleanupExpired();
+
+        assertThat(runtimeRoot.resolve(LEASE_ID.toString())).exists();
+        assertThat(persisted.get().status())
+            .isEqualTo(LeaseStatus.ISSUED);
+        verify(repository).findExpired(100);
+    }
+
+    @Test
     void expiresAndDeletesAnUnconsumedLease() {
         service.issue(
             new DbtRuntimeProfileLeaseService.LeaseRequest(
@@ -597,6 +944,7 @@ class DbtRuntimeProfileLeaseServiceTest {
         } catch (java.io.IOException failure) {
             throw new AssertionError(failure);
         }
+        databaseNow.set(NOW.plus(Duration.ofMinutes(6)));
         service = new DbtRuntimeProfileLeaseService(
             properties,
             targetFactory,
@@ -727,5 +1075,12 @@ class DbtRuntimeProfileLeaseServiceTest {
             current.consumedAt(),
             current.releasedAt()
         );
+    }
+
+    private static LeaseMutationResult mutation(
+        LeaseMutationOutcome outcome,
+        LeaseRecord lease
+    ) {
+        return new LeaseMutationResult(outcome, lease);
     }
 }

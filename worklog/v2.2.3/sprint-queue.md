@@ -1717,21 +1717,21 @@
 ## Sprint-79: 智能数据建模工作台收敛 (202607)
 
 **目录**: `worklog/v2.2.3/sprint-79-202607-modeling-workspace-convergence`
-**状态**: IN_PROGRESS（认证 UI/API 基线已通过，F1 可实施；代表数据、物化与退役门禁仍未解除）
+**状态**: IN_PROGRESS（认证 UI/API、菜单恢复、关系图与租约并发基线已通过；代表数据、真实物化、Chrome 95 实机与退役门禁仍未解除）
 **类型**: Architecture / UI Productization / Controlled Retirement / Full-stack
 **目标**: 让用户在一个建模工作台内完成规划、标准、维度、四类逻辑模型、指标、关系查看以及发布/物化交接，不再在多组解释性页面和重复入口之间切换。
 **依赖**: 复用 Sprint-67/73/74 的 WarehousePlan、DimensionDefinition、四类 ModelSpec 与阶段门禁，复用 Sprint-67 指标 owner 和 Sprint-69/76 ReleaseCandidate/物化控制面；DataWorks 原型只作为交互参考，不进入产品运行时。
 
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
-| F0-交付基线与退役证据 | P0 | 3 | IN_PROGRESS |
-| F1-统一建模工作台壳层 | P0 | 2 | READY |
-| F2-单页模型编辑器 | P0 | 3 | DRAFT |
-| F3-指标工具与关系图 | P1 | 2 | DRAFT |
-| F4-发布物化短流程 | P0 | 2 | DRAFT |
-| F5-旧页面受控退役 | P0 | 2 | DRAFT |
+| F0-交付基线与退役证据 | P0 | 4 | IN_PROGRESS |
+| F1-统一建模工作台壳层 | P0 | 3 | IN_PROGRESS |
+| F2-单页模型编辑器 | P0 | 4 | IN_PROGRESS |
+| F3-指标工具与关系图 | P0 | 3 | IN_PROGRESS |
+| F4-发布物化短流程 | P0 | 3 | IN_PROGRESS |
+| F5-旧页面受控退役 | P0 | 3 | IN_PROGRESS |
 
-**统计**: DRAFT=11, READY=1, IN_PROGRESS=1, DONE=1, BLOCKED=0
+**统计**: REVIEW 修复任务 DONE=3、IN_PROGRESS=2；Sprint 仍为 IN_PROGRESS，真实物化、Chrome 95 实机与退役观测未闭环。
 **执行顺序**: F0 → F1 → F2/F3 → F4 → F5；F2/F3 可在 Shell 契约冻结后并行，F5 必须等待功能等价、客户画像和两版本访问观测。
-**关键决策**: `/modeling/workbench` 为唯一主入口且不新增业务菜单；原型只提供 UI 规格；canonical owner 全部复用；“贴源表”映射来源注册/逆向候选而非第五类 ModelSpec；单页编辑不绕过三阶段门禁；孤儿代码可先删，canonical 页面先抽面板，8 条兼容路由两版本零访问后删，旧表另行审批。
+**关键决策**: `/modeling/workbench` 为推荐主入口；原有规划、维度、模型、指标菜单在两版本观测和客户画像门禁满足前继续可见；原型只提供 UI 规格；canonical owner 全部复用；“贴源表”映射来源注册/逆向候选而非第五类 ModelSpec；单页编辑不绕过三阶段门禁；8 条兼容路由两版本零访问后删，旧表另行审批。
 **已知风险**: 认证 API/UI 已在系统 Chrome 150 复验，但 Chrome 95 兼容尚未补；当前本地仅有 6 个 DIMENSION 模型且 Candidate/implementation 为 0；客户环境规模与旧入口使用未知；Sprint-76 PROD 物化仍为 NO-GO。

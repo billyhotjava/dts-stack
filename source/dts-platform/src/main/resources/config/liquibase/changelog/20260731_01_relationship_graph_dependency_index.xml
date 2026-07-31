@@ -1,0 +1,348 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet
+        id="20260731-01-relationship-graph-index-prerequisites"
+        author="codex"
+        dbms="postgresql"
+        runInTransaction="false">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="modeling_model_spec"/>
+            <columnExists tableName="modeling_model_spec" columnName="depends_on"/>
+            <columnExists tableName="modeling_model_spec" columnName="dimension_refs"/>
+        </preConditions>
+        <sql>SELECT 1</sql>
+        <rollback>
+            <sql>SELECT 1</sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet
+        id="20260731-01-clean-invalid-depends-on-gin"
+        author="codex"
+        dbms="postgresql"
+        runAlways="true"
+        runInTransaction="false">
+        <preConditions onFail="CONTINUE" onError="HALT">
+            <sqlCheck expectedResult="1"><![CDATA[
+                SELECT count(*)
+                  FROM pg_catalog.pg_class index_relation
+                  JOIN pg_catalog.pg_index index_state
+                    ON index_state.indexrelid = index_relation.oid
+                  JOIN pg_catalog.pg_namespace index_schema
+                    ON index_schema.oid = index_relation.relnamespace
+                 WHERE index_schema.nspname = current_schema()
+                   AND index_relation.relname = 'idx_modeling_model_spec_depends_on_gin'
+                   AND (NOT index_state.indisvalid OR NOT index_state.indisready)
+            ]]></sqlCheck>
+        </preConditions>
+        <sql splitStatements="false">
+            DROP INDEX CONCURRENTLY IF EXISTS idx_modeling_model_spec_depends_on_gin
+        </sql>
+        <rollback>
+            <sql>SELECT 1</sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet
+        id="20260731-01-guard-mismatched-depends-on-gin"
+        author="codex"
+        dbms="postgresql"
+        runAlways="true"
+        runInTransaction="false">
+        <preConditions
+            onFail="HALT"
+            onError="HALT"
+            onFailMessage="RELATIONSHIP_GRAPH_DEPENDS_ON_GIN_INDEX_MISMATCH: same-name index is not a valid ready GIN jsonb_path_ops index on modeling_model_spec.depends_on">
+            <sqlCheck expectedResult="0"><![CDATA[
+                SELECT count(*)
+                  FROM pg_catalog.pg_class index_relation
+                  JOIN pg_catalog.pg_index index_state
+                    ON index_state.indexrelid = index_relation.oid
+                  JOIN pg_catalog.pg_namespace index_schema
+                    ON index_schema.oid = index_relation.relnamespace
+                  JOIN pg_catalog.pg_class table_relation
+                    ON table_relation.oid = index_state.indrelid
+                  JOIN pg_catalog.pg_namespace table_schema
+                    ON table_schema.oid = table_relation.relnamespace
+                  JOIN pg_catalog.pg_am access_method
+                    ON access_method.oid = index_relation.relam
+                  JOIN pg_catalog.pg_opclass operator_class
+                    ON operator_class.oid = index_state.indclass[0]
+                   AND operator_class.opcmethod = access_method.oid
+                  JOIN pg_catalog.pg_namespace operator_class_schema
+                    ON operator_class_schema.oid = operator_class.opcnamespace
+                 WHERE index_schema.nspname = current_schema()
+                   AND index_relation.relname = 'idx_modeling_model_spec_depends_on_gin'
+                   AND NOT (
+                       index_state.indisvalid
+                       AND index_state.indisready
+                       AND table_schema.nspname = current_schema()
+                       AND table_relation.relname = 'modeling_model_spec'
+                       AND access_method.amname = 'gin'
+                       AND operator_class_schema.nspname = 'pg_catalog'
+                       AND operator_class.opcname = 'jsonb_path_ops'
+                       AND NOT index_state.indisunique
+                       AND index_state.indpred IS NULL
+                       AND index_state.indexprs IS NULL
+                       AND index_state.indnkeyatts = 1
+                       AND index_state.indnatts = 1
+                       AND replace(
+                               lower(pg_get_indexdef(index_relation.oid, 1, true)),
+                               '"',
+                               ''
+                           ) = 'depends_on'
+                   )
+            ]]></sqlCheck>
+        </preConditions>
+        <sql>SELECT 1</sql>
+        <rollback>
+            <sql>SELECT 1</sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet
+        id="20260731-01-accept-equivalent-depends-on-gin"
+        author="codex"
+        dbms="postgresql"
+        runInTransaction="false">
+        <preConditions onFail="CONTINUE" onError="HALT">
+            <sqlCheck expectedResult="1"><![CDATA[
+                SELECT count(*)
+                  FROM pg_catalog.pg_class index_relation
+                  JOIN pg_catalog.pg_index index_state
+                    ON index_state.indexrelid = index_relation.oid
+                  JOIN pg_catalog.pg_namespace index_schema
+                    ON index_schema.oid = index_relation.relnamespace
+                  JOIN pg_catalog.pg_class table_relation
+                    ON table_relation.oid = index_state.indrelid
+                  JOIN pg_catalog.pg_namespace table_schema
+                    ON table_schema.oid = table_relation.relnamespace
+                  JOIN pg_catalog.pg_am access_method
+                    ON access_method.oid = index_relation.relam
+                  JOIN pg_catalog.pg_opclass operator_class
+                    ON operator_class.oid = index_state.indclass[0]
+                   AND operator_class.opcmethod = access_method.oid
+                  JOIN pg_catalog.pg_namespace operator_class_schema
+                    ON operator_class_schema.oid = operator_class.opcnamespace
+                 WHERE index_schema.nspname = current_schema()
+                   AND index_relation.relname = 'idx_modeling_model_spec_depends_on_gin'
+                   AND index_state.indisvalid
+                   AND index_state.indisready
+                   AND table_schema.nspname = current_schema()
+                   AND table_relation.relname = 'modeling_model_spec'
+                   AND access_method.amname = 'gin'
+                   AND operator_class_schema.nspname = 'pg_catalog'
+                   AND operator_class.opcname = 'jsonb_path_ops'
+                   AND NOT index_state.indisunique
+                   AND index_state.indpred IS NULL
+                   AND index_state.indexprs IS NULL
+                   AND index_state.indnkeyatts = 1
+                   AND index_state.indnatts = 1
+                   AND replace(
+                           lower(pg_get_indexdef(index_relation.oid, 1, true)),
+                           '"',
+                           ''
+                       ) = 'depends_on'
+            ]]></sqlCheck>
+        </preConditions>
+        <comment>
+            Record acceptance without claiming ownership, so rollback never drops an equivalent
+            index provisioned before this migration.
+        </comment>
+        <sql>SELECT 1</sql>
+        <rollback>
+            <sql>SELECT 1</sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet
+        id="20260731-01-relationship-graph-depends-on-gin"
+        author="codex"
+        dbms="postgresql"
+        runAlways="true"
+        runInTransaction="false">
+        <preConditions onFail="CONTINUE" onError="HALT">
+            <not><indexExists indexName="idx_modeling_model_spec_depends_on_gin"/></not>
+        </preConditions>
+        <comment>
+            Bound reverse relationship-graph lookups by exact target id/revision probes instead of
+            expanding every historical ModelSpec JSON array.
+        </comment>
+        <sql splitStatements="false"><![CDATA[
+            CREATE INDEX CONCURRENTLY idx_modeling_model_spec_depends_on_gin
+                ON modeling_model_spec USING gin (depends_on jsonb_path_ops);
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DROP INDEX CONCURRENTLY IF EXISTS idx_modeling_model_spec_depends_on_gin;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet
+        id="20260731-01-clean-invalid-dimension-refs-gin"
+        author="codex"
+        dbms="postgresql"
+        runAlways="true"
+        runInTransaction="false">
+        <preConditions onFail="CONTINUE" onError="HALT">
+            <sqlCheck expectedResult="1"><![CDATA[
+                SELECT count(*)
+                  FROM pg_catalog.pg_class index_relation
+                  JOIN pg_catalog.pg_index index_state
+                    ON index_state.indexrelid = index_relation.oid
+                  JOIN pg_catalog.pg_namespace index_schema
+                    ON index_schema.oid = index_relation.relnamespace
+                 WHERE index_schema.nspname = current_schema()
+                   AND index_relation.relname = 'idx_modeling_model_spec_dimension_refs_gin'
+                   AND (NOT index_state.indisvalid OR NOT index_state.indisready)
+            ]]></sqlCheck>
+        </preConditions>
+        <sql splitStatements="false">
+            DROP INDEX CONCURRENTLY IF EXISTS idx_modeling_model_spec_dimension_refs_gin
+        </sql>
+        <rollback>
+            <sql>SELECT 1</sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet
+        id="20260731-01-guard-mismatched-dimension-refs-gin"
+        author="codex"
+        dbms="postgresql"
+        runAlways="true"
+        runInTransaction="false">
+        <preConditions
+            onFail="HALT"
+            onError="HALT"
+            onFailMessage="RELATIONSHIP_GRAPH_DIMENSION_REFS_GIN_INDEX_MISMATCH: same-name index is not a valid ready GIN jsonb_path_ops index on modeling_model_spec.dimension_refs">
+            <sqlCheck expectedResult="0"><![CDATA[
+                SELECT count(*)
+                  FROM pg_catalog.pg_class index_relation
+                  JOIN pg_catalog.pg_index index_state
+                    ON index_state.indexrelid = index_relation.oid
+                  JOIN pg_catalog.pg_namespace index_schema
+                    ON index_schema.oid = index_relation.relnamespace
+                  JOIN pg_catalog.pg_class table_relation
+                    ON table_relation.oid = index_state.indrelid
+                  JOIN pg_catalog.pg_namespace table_schema
+                    ON table_schema.oid = table_relation.relnamespace
+                  JOIN pg_catalog.pg_am access_method
+                    ON access_method.oid = index_relation.relam
+                  JOIN pg_catalog.pg_opclass operator_class
+                    ON operator_class.oid = index_state.indclass[0]
+                   AND operator_class.opcmethod = access_method.oid
+                  JOIN pg_catalog.pg_namespace operator_class_schema
+                    ON operator_class_schema.oid = operator_class.opcnamespace
+                 WHERE index_schema.nspname = current_schema()
+                   AND index_relation.relname = 'idx_modeling_model_spec_dimension_refs_gin'
+                   AND NOT (
+                       index_state.indisvalid
+                       AND index_state.indisready
+                       AND table_schema.nspname = current_schema()
+                       AND table_relation.relname = 'modeling_model_spec'
+                       AND access_method.amname = 'gin'
+                       AND operator_class_schema.nspname = 'pg_catalog'
+                       AND operator_class.opcname = 'jsonb_path_ops'
+                       AND NOT index_state.indisunique
+                       AND index_state.indpred IS NULL
+                       AND index_state.indexprs IS NULL
+                       AND index_state.indnkeyatts = 1
+                       AND index_state.indnatts = 1
+                       AND replace(
+                               lower(pg_get_indexdef(index_relation.oid, 1, true)),
+                               '"',
+                               ''
+                           ) = 'dimension_refs'
+                   )
+            ]]></sqlCheck>
+        </preConditions>
+        <sql>SELECT 1</sql>
+        <rollback>
+            <sql>SELECT 1</sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet
+        id="20260731-01-accept-equivalent-dimension-refs-gin"
+        author="codex"
+        dbms="postgresql"
+        runInTransaction="false">
+        <preConditions onFail="CONTINUE" onError="HALT">
+            <sqlCheck expectedResult="1"><![CDATA[
+                SELECT count(*)
+                  FROM pg_catalog.pg_class index_relation
+                  JOIN pg_catalog.pg_index index_state
+                    ON index_state.indexrelid = index_relation.oid
+                  JOIN pg_catalog.pg_namespace index_schema
+                    ON index_schema.oid = index_relation.relnamespace
+                  JOIN pg_catalog.pg_class table_relation
+                    ON table_relation.oid = index_state.indrelid
+                  JOIN pg_catalog.pg_namespace table_schema
+                    ON table_schema.oid = table_relation.relnamespace
+                  JOIN pg_catalog.pg_am access_method
+                    ON access_method.oid = index_relation.relam
+                  JOIN pg_catalog.pg_opclass operator_class
+                    ON operator_class.oid = index_state.indclass[0]
+                   AND operator_class.opcmethod = access_method.oid
+                  JOIN pg_catalog.pg_namespace operator_class_schema
+                    ON operator_class_schema.oid = operator_class.opcnamespace
+                 WHERE index_schema.nspname = current_schema()
+                   AND index_relation.relname = 'idx_modeling_model_spec_dimension_refs_gin'
+                   AND index_state.indisvalid
+                   AND index_state.indisready
+                   AND table_schema.nspname = current_schema()
+                   AND table_relation.relname = 'modeling_model_spec'
+                   AND access_method.amname = 'gin'
+                   AND operator_class_schema.nspname = 'pg_catalog'
+                   AND operator_class.opcname = 'jsonb_path_ops'
+                   AND NOT index_state.indisunique
+                   AND index_state.indpred IS NULL
+                   AND index_state.indexprs IS NULL
+                   AND index_state.indnkeyatts = 1
+                   AND index_state.indnatts = 1
+                   AND replace(
+                           lower(pg_get_indexdef(index_relation.oid, 1, true)),
+                           '"',
+                           ''
+                       ) = 'dimension_refs'
+            ]]></sqlCheck>
+        </preConditions>
+        <comment>
+            Record acceptance without claiming ownership, so rollback never drops an equivalent
+            index provisioned before this migration.
+        </comment>
+        <sql>SELECT 1</sql>
+        <rollback>
+            <sql>SELECT 1</sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet
+        id="20260731-01-relationship-graph-dimension-refs-gin"
+        author="codex"
+        dbms="postgresql"
+        runAlways="true"
+        runInTransaction="false">
+        <preConditions onFail="CONTINUE" onError="HALT">
+            <not><indexExists indexName="idx_modeling_model_spec_dimension_refs_gin"/></not>
+        </preConditions>
+        <comment>
+            Index exact dimension-model reference containment with the same operator class used by
+            the bounded inbound relationship query.
+        </comment>
+        <sql splitStatements="false"><![CDATA[
+            CREATE INDEX CONCURRENTLY idx_modeling_model_spec_dimension_refs_gin
+                ON modeling_model_spec USING gin (dimension_refs jsonb_path_ops);
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DROP INDEX CONCURRENTLY IF EXISTS idx_modeling_model_spec_dimension_refs_gin;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

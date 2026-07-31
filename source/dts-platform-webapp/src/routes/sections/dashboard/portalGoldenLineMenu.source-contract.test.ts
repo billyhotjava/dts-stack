@@ -78,6 +78,10 @@ const SPRINT79_MODELING_MENU_URL = new URL(
 	"../../../../../dts-admin/src/main/resources/config/liquibase/changelog/20260730-01_sprint79_modeling_workspace_menu_convergence.xml",
 	import.meta.url,
 );
+const SPRINT79_MODELING_MENU_RESTORE_URL = new URL(
+	"../../../../../dts-admin/src/main/resources/config/liquibase/changelog/20260731-01_sprint79_modeling_menu_restore.xml",
+	import.meta.url,
+);
 
 const section = (key: string) => {
 	const found = MENU_SEED.portalNavSections.find((item) => item.key === key);
@@ -91,7 +95,7 @@ const child = (node: MenuNode, key: string) => {
 	return found;
 };
 
-test("portal menu starts modeling with the generic workbench", () => {
+test("portal menu keeps canonical modeling entries alongside the generic workbench", () => {
 	assert.deepEqual(
 		MENU_SEED.portalNavSections.map((item) => item.key),
 		["workbench", "resource", "studio", "governance", "consumption"],
@@ -113,14 +117,16 @@ test("portal menu starts modeling with the generic workbench", () => {
 	assert.equal(modeling.title, "数据建模");
 	assert.deepEqual(
 		modeling.children?.map((item) => item.key),
-		["modeling-workbench", "warehouse-planning", "standards", "dimensional-modeling"],
+		["modeling-workbench", "warehouse-planning", "standards", "dimensional-modeling", "data-metrics"],
 	);
 	assert.equal(child(modeling, "modeling-workbench").title, "建模工作台");
 	assert.equal(child(modeling, "modeling-workbench").externalLink, "/modeling/workbench");
 	assert.deepEqual(
 		child(modeling, "warehouse-planning").children?.map((item) => item.key),
-		["subjects"],
+		["warehouse-plans", "subjects"],
 	);
+	assert.equal(child(child(modeling, "warehouse-planning"), "warehouse-plans").title, "建设规划");
+	assert.equal(child(child(modeling, "warehouse-planning"), "warehouse-plans").externalLink, "/modeling/plans");
 	assert.equal(child(child(modeling, "warehouse-planning"), "subjects").title, "业务分类");
 	assert.equal(child(child(modeling, "warehouse-planning"), "subjects").externalLink, "/governance/subjects");
 	assert.deepEqual(
@@ -129,13 +135,20 @@ test("portal menu starts modeling with the generic workbench", () => {
 	);
 	assert.deepEqual(
 		child(modeling, "dimensional-modeling").children?.map((item) => item.key),
-		["sql"],
+		["semantic-objects", "semantic-models", "sql"],
 	);
+	assert.equal(child(child(modeling, "dimensional-modeling"), "semantic-objects").externalLink, "/modeling/dimensions");
+	assert.equal(child(child(modeling, "dimensional-modeling"), "semantic-models").externalLink, "/modeling/models");
 	assert.equal(child(child(modeling, "dimensional-modeling"), "sql").title, "高级建模（SQL/dbt）");
 	assert.equal(child(child(modeling, "dimensional-modeling"), "sql").externalLink, "/studio/sql-modeling");
+	assert.deepEqual(
+		child(modeling, "data-metrics").children?.map((item) => item.key),
+		["metric-workbench"],
+	);
+	assert.equal(child(child(modeling, "data-metrics"), "metric-workbench").externalLink, "/modeling/metric-workbench");
 	assert.doesNotMatch(
 		JSON.stringify(modeling),
-		/warehouse-plans|semantic-objects|semantic-models|metric-workbench|data-metrics|low-code-development|dbt-files|semantic-metrics|semantic-publish|standard-package|governanceTemplates/,
+		/low-code-development|dbt-files|semantic-metrics|semantic-publish|standard-package|governanceTemplates/,
 	);
 	assert.doesNotMatch(
 		JSON.stringify(modeling),
@@ -175,21 +188,22 @@ test("portal menu starts modeling with the generic workbench", () => {
 	assert.equal(child(child(section("consumption"), "services"), "products").externalLink, "/catalog/data-products");
 });
 
-test("specialist modeling menu keeps only SQL/dbt after workbench convergence", () => {
+test("specialist modeling menus keep canonical planning, dimension, model and metric leaves", () => {
+	const modeling = child(section("studio"), "modeling");
 	const dimensionalModeling = child(child(section("studio"), "modeling"), "dimensional-modeling");
 	const roleDefaultByCode = new Map(ROLE_DEFAULT_ENTRIES.map((entry) => [entry.code, entry]));
 	assert.deepEqual(
 		dimensionalModeling.children?.map((item) => item.key),
-		["sql"],
+		["semantic-objects", "semantic-models", "sql"],
 	);
-	for (const code of [
-		"sys.nav.portal.warehousePlans",
-		"sys.nav.portal.studioSemanticObjects",
-		"sys.nav.portal.studioSemanticModels",
-		"sys.nav.portal.studioMetricWorkbench",
-	]) {
-		assert.equal(roleDefaultByCode.has(code), false, `${code} must enter through the unified workbench`);
-	}
+	assert.deepEqual(
+		child(modeling, "data-metrics").children?.map((item) => item.key),
+		["metric-workbench"],
+	);
+	assert.equal(roleDefaultByCode.get("sys.nav.portal.warehousePlans")?.route, "/modeling/plans");
+	assert.equal(roleDefaultByCode.get("sys.nav.portal.studioSemanticObjects")?.route, "/modeling/dimensions");
+	assert.equal(roleDefaultByCode.get("sys.nav.portal.studioSemanticModels")?.route, "/modeling/models");
+	assert.equal(roleDefaultByCode.get("sys.nav.portal.studioMetricWorkbench")?.route, "/modeling/metric-workbench");
 });
 
 test("canonical role defaults contain only visible modeling leaves", () => {
@@ -213,10 +227,6 @@ test("canonical role defaults contain only visible modeling leaves", () => {
 		"sys.nav.portal.studioDbtFiles",
 		"sys.nav.portal.studioSemanticMetrics",
 		"sys.nav.portal.studioSemanticPublish",
-		"sys.nav.portal.warehousePlans",
-		"sys.nav.portal.studioSemanticObjects",
-		"sys.nav.portal.studioSemanticModels",
-		"sys.nav.portal.studioMetricWorkbench",
 	]) {
 		assert.equal(roleDefaultByCode.has(retired), false, `${retired} must not be rebound for a new installation`);
 	}
@@ -278,10 +288,26 @@ test("Sprint-79 menu migration soft-deletes old workbench leaves without deletin
 	}
 	assert.match(migration, /deleted = TRUE/);
 	assert.match(migration, /last_modified_by = 'sprint79-menu-convergence'/);
-	assert.match(
-		migration,
-		/<rollback>[\s\S]*deleted = TRUE[\s\S]*last_modified_by = 'sprint79-menu-convergence'/,
-	);
+	assert.match(migration, /<rollback>[\s\S]*deleted = TRUE[\s\S]*last_modified_by = 'sprint79-menu-convergence'/);
+	assert.doesNotMatch(migration, /DELETE FROM portal_menu_visibility|DELETE FROM portal_menu/);
+});
+
+test("Sprint-79 forward migration restores prematurely hidden canonical modeling menus", () => {
+	assert.match(LIQUIBASE_MASTER, /20260731-01_sprint79_modeling_menu_restore\.xml/);
+	assert.equal(existsSync(SPRINT79_MODELING_MENU_RESTORE_URL), true);
+	const migration = readFileSync(SPRINT79_MODELING_MENU_RESTORE_URL, "utf8");
+	for (const code of [
+		"sys.nav.portal.warehousePlans",
+		"sys.nav.portal.studioSemanticObjects",
+		"sys.nav.portal.studioSemanticModels",
+		"sys.nav.portal.studioMetricWorkbench",
+		"sys.nav.portal.dataMetrics",
+	]) {
+		assert.match(migration, new RegExp(code.replaceAll(".", "\\.")));
+	}
+	assert.match(migration, /deleted = FALSE/);
+	assert.match(migration, /last_modified_by = 'sprint79-menu-restore'/);
+	assert.match(migration, /last_modified_by = 'sprint79-menu-convergence'/);
 	assert.doesNotMatch(migration, /DELETE FROM portal_menu_visibility|DELETE FROM portal_menu/);
 });
 

@@ -56,27 +56,31 @@ function renderControl(field, values, onChange) {
 
 	switch (field.type) {
 		case "select":
-			return el("select", {
-				class: "ctl",
-				onchange: (e) => commit(e.target.value),
+				return el("select", {
+					class: "ctl",
+					"aria-label": field.label,
+					onchange: (e) => commit(e.target.value),
 			}, (field.options || []).map((o) =>
 				el("option", { value: o.value, selected: o.value === value }, o.label),
 			));
 
 		case "switch": {
 			const on = Boolean(value);
-			return el("button", {
-				type: "button",
-				class: `switch${on ? " on" : ""}${field.danger && on ? " danger" : ""}`,
-				onclick: () => commit(!on),
+				return el("button", {
+					type: "button",
+					class: `switch${on ? " on" : ""}${field.danger && on ? " danger" : ""}`,
+					"aria-label": field.label,
+					"aria-pressed": String(on),
+					onclick: () => commit(!on),
 			}, el("span", { class: "knob" }));
 		}
 
 		case "number":
 			return el("div", { class: "ctl-wrap" }, [
-				el("input", {
-					class: "ctl", type: "number", value: value ?? "",
-					min: field.min, max: field.max,
+					el("input", {
+						class: "ctl", type: "number", value: value ?? "",
+						"aria-label": field.label,
+						min: field.min, max: field.max,
 					oninput: (e) => commit(e.target.value === "" ? undefined : Number(e.target.value)),
 				}),
 				field.suffix ? el("span", { class: "suffix" }, field.suffix) : null,
@@ -84,9 +88,10 @@ function renderControl(field, values, onChange) {
 
 		case "password":
 			return el("div", { class: "ctl-wrap" }, [
-				el("input", {
-					class: "ctl", type: "password", value: value ?? "",
-					placeholder: field.placeholder || "",
+					el("input", {
+						class: "ctl", type: "password", value: value ?? "",
+						"aria-label": field.label,
+						placeholder: field.placeholder || "",
 					oninput: (e) => commit(e.target.value),
 				}),
 				el("span", { class: "chip chip-lock", title: "写入后由密钥服务加密保管，界面与导出均不回显" }, "🔒 密钥"),
@@ -105,9 +110,10 @@ function renderControl(field, values, onChange) {
 			return renderRaw(field, values, onChange);
 
 		default:
-			return el("input", {
-				class: "ctl", type: "text", value: value ?? "",
-				placeholder: field.placeholder || "",
+				return el("input", {
+					class: "ctl", type: "text", value: value ?? "",
+					"aria-label": field.label,
+					placeholder: field.placeholder || "",
 				oninput: (e) => commit(e.target.value),
 			});
 	}
@@ -120,14 +126,18 @@ function renderKv(field, values, onChange) {
 
 	rows.forEach((row, i) => {
 		box.appendChild(el("div", { class: "kv-row" }, [
-			el("input", {
-				class: "ctl", placeholder: "键", value: row.k || "",
-				oninput: (e) => { rows[i].k = e.target.value; },
-			}),
-			el("input", {
-				class: "ctl", placeholder: "值", value: row.v || "",
-				oninput: (e) => { rows[i].v = e.target.value; },
-			}),
+				el("input", {
+					class: "ctl", placeholder: "键", value: row.k || "",
+					"aria-label": `${field.label} 键`,
+					oninput: (e) => { rows[i].k = e.target.value; },
+					onchange: onChange,
+				}),
+				el("input", {
+					class: "ctl", placeholder: "值", value: row.v || "",
+					"aria-label": `${field.label} 值`,
+					oninput: (e) => { rows[i].v = e.target.value; },
+					onchange: onChange,
+				}),
 			el("button", {
 				class: "icon-btn", type: "button", title: "删除",
 				onclick: () => { rows.splice(i, 1); values[field.name] = rows; onChange(); },
@@ -181,9 +191,10 @@ function renderRaw(field, values, onChange) {
 	}
 
 	const box = el("div", { class: "raw-box" }, [
-		el("textarea", {
-			class: "ctl mono", rows: 3, value: text,
-			placeholder: '留空即可。示例：{"autoPk":true}',
+			el("textarea", {
+				class: "ctl mono", rows: 3, value: text,
+				"aria-label": field.label,
+				placeholder: '留空即可。示例：{"autoPk":true}',
 			oninput: (e) => { values[field.name] = e.target.value; onChange(); },
 		}),
 	]);

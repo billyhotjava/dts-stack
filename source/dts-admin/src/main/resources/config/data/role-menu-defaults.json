@@ -54,6 +54,12 @@
     "requiredRoles": []
   },
   {
+    "code": "sys.nav.portal.warehousePlans",
+    "title": "建设规划",
+    "route": "/modeling/plans",
+    "requiredRoles": []
+  },
+  {
     "code": "sys.nav.portal.studioBusinessProcesses",
     "title": "建模工作台",
     "route": "/modeling/workbench",
@@ -84,9 +90,27 @@
     "requiredRoles": []
   },
   {
+    "code": "sys.nav.portal.studioSemanticObjects",
+    "title": "维度目录",
+    "route": "/modeling/dimensions",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.studioSemanticModels",
+    "title": "模型中心",
+    "route": "/modeling/models",
+    "requiredRoles": []
+  },
+  {
     "code": "sys.nav.portal.studioSqlModeling",
     "title": "高级建模（SQL/dbt）",
     "route": "/studio/sql-modeling",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.studioMetricWorkbench",
+    "title": "指标工作台",
+    "route": "/modeling/metric-workbench",
     "requiredRoles": []
   },
   {

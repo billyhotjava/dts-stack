@@ -1,6 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
+import {
+	installSprint79ProductionReadOnlyBarrier,
+	type Sprint79ReadOnlyFailures,
+} from "./support/sprint79ProductionReadOnly";
 
 const evidenceRoot = path.resolve(
 	process.cwd(),
@@ -8,64 +12,11 @@ const evidenceRoot = path.resolve(
 );
 const it02EvidenceDir = path.join(evidenceRoot, "IT-02");
 const it03EvidenceDir = path.join(evidenceRoot, "IT-03");
-const safeMethods = new Set(["GET", "HEAD", "OPTIONS"]);
-
 type ModelSpecCandidate = {
 	id: string;
 	name: string;
 	fieldCount: number;
 	designedReady: boolean;
-};
-
-type BrowserFailures = {
-	pageErrors: string[];
-	requestFailures: string[];
-	httpFailures: string[];
-	modelingWrites: string[];
-};
-
-const installReadOnlyBarrier = async (page: Page): Promise<BrowserFailures> => {
-	const failures: BrowserFailures = {
-		pageErrors: [],
-		requestFailures: [],
-		httpFailures: [],
-		modelingWrites: [],
-	};
-	page.on("pageerror", (error) => failures.pageErrors.push(error.message));
-	page.on("requestfailed", (request) => {
-		const errorText = request.failure()?.errorText ?? "unknown";
-		if (errorText === "net::ERR_ABORTED" || errorText === "net::ERR_BLOCKED_BY_CLIENT") return;
-		const pathname = new URL(request.url()).pathname;
-		failures.requestFailures.push(`${request.method()} ${pathname} ${errorText}`);
-	});
-	page.on("response", (response) => {
-		if (response.status() < 400) return;
-		const url = new URL(response.url());
-		if (
-			url.pathname.startsWith("/api/") ||
-			url.pathname.startsWith("/admin/api/") ||
-			url.pathname.startsWith("/analytics/api/") ||
-			url.pathname.startsWith("/bi/api/")
-		) {
-			failures.httpFailures.push(`${response.status()} ${response.request().method()} ${url.pathname}`);
-		}
-	});
-	await page.route("**/*", async (route) => {
-		const request = route.request();
-		const pathname = new URL(request.url()).pathname;
-		const isApiRequest =
-			pathname.startsWith("/api/") ||
-			pathname.startsWith("/admin/api/") ||
-			pathname.startsWith("/analytics/api/") ||
-			pathname.startsWith("/bi/api/");
-		if (!isApiRequest || safeMethods.has(request.method())) {
-			await route.continue();
-			return;
-		}
-		failures.modelingWrites.push(`${request.method()} ${pathname}`);
-		await route.abort("blockedbyclient");
-	});
-	return failures;
 };
 
 const selectReadableModelSpec = async (page: Page, requireDesignedReady: boolean) =>
@@ -186,7 +137,7 @@ const expectDrawerActionUnobscured = async (drawer: Locator, allowedLabels: stri
 		.toBe(true);
 };
 
-const assertCleanReadOnlyJourney = (failures: BrowserFailures) => {
+const assertCleanReadOnlyJourney = (failures: Sprint79ReadOnlyFailures) => {
 	expect(failures.pageErrors).toEqual([]);
 	expect(failures.requestFailures).toEqual([]);
 	expect(failures.httpFailures).toEqual([]);
@@ -208,7 +159,7 @@ test("F2 real ModelSpec renders one logical canvas and compact field table witho
 	page,
 	browser,
 }) => {
-	const failures = await installReadOnlyBarrier(page);
+	const failures = await installSprint79ProductionReadOnlyBarrier(page);
 	await page.setViewportSize({ width: 1440, height: 960 });
 	await page.goto("/#/modeling/workbench?module=models&workspaceView=model-specs");
 	await expect(page.getByTestId("modeling-workspace-shell")).toBeVisible();
@@ -255,7 +206,7 @@ test("F2 workbench restores model context and preserves unsaved input across dra
 	page,
 	browser,
 }) => {
-	const failures = await installReadOnlyBarrier(page);
+	const failures = await installSprint79ProductionReadOnlyBarrier(page);
 	await page.setViewportSize({ width: 1440, height: 960 });
 	await page.goto("/#/modeling/workbench?module=models&workspaceView=model-specs");
 	await expect(page.getByTestId("modeling-workspace-shell")).toBeVisible();
@@ -314,7 +265,7 @@ test("F2 implementation and release drawers require a designed model and a usabl
 	page,
 	browser,
 }) => {
-	const failures = await installReadOnlyBarrier(page);
+	const failures = await installSprint79ProductionReadOnlyBarrier(page);
 	await page.setViewportSize({ width: 1440, height: 960 });
 	await page.goto("/#/modeling/workbench?module=models&workspaceView=model-specs");
 	await expect(page.getByTestId("modeling-workspace-shell")).toBeVisible();

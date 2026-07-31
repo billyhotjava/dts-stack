@@ -172,23 +172,33 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
             return false;
         }
         String remainder = path.substring(prefix.length());
-        boolean consume = HttpMethod.POST.matches(method) &&
-            remainder.endsWith("/consume");
-        String leaseId = consume
-            ? remainder.substring(
+        String leaseId;
+        if (HttpMethod.POST.matches(method)) {
+            String action = remainder.endsWith("/consume")
+                ? "/consume"
+                : remainder.endsWith("/renew")
+                    ? "/renew"
+                    : null;
+            if (action == null) {
+                return false;
+            }
+            leaseId = remainder.substring(
                 0,
-                remainder.length() - "/consume".length()
-            )
-            : remainder;
-        if (!consume && !HttpMethod.DELETE.matches(method)) {
+                remainder.length() - action.length()
+            );
+        } else if (HttpMethod.DELETE.matches(method)) {
+            leaseId = remainder;
+        } else {
             return false;
         }
         if (leaseId.contains("/")) {
             return false;
         }
         try {
-            java.util.UUID.fromString(leaseId);
-            return true;
+            return java.util.UUID
+                .fromString(leaseId)
+                .toString()
+                .equals(leaseId);
         } catch (IllegalArgumentException ignored) {
             return false;
         }

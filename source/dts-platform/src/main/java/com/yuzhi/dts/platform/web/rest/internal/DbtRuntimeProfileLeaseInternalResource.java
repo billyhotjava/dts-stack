@@ -61,15 +61,22 @@ public class DbtRuntimeProfileLeaseInternalResource {
                 "DBT_PROFILE_LEASE_ALREADY_CONSUMED",
                 "DBT_PROFILE_LEASE_NOT_CONSUMED",
                 "DBT_PROFILE_LEASE_RENEW_FAILED",
-                "DBT_PROFILE_LEASE_EXPIRED" -> HttpStatus.CONFLICT;
+                "DBT_PROFILE_LEASE_EXPIRED",
+                "DBT_PROFILE_LEASE_FILE_MISSING" -> HttpStatus.CONFLICT;
+            case
+                "DBT_PROFILE_LEASE_WRITE_FAILED",
+                "DBT_PROFILE_LEASE_METADATA_WRITE_FAILED",
+                "DBT_PROFILE_LEASE_RELEASE_FAILED",
+                "DBT_PROFILE_LEASE_PATH_INVALID" -> HttpStatus.INTERNAL_SERVER_ERROR;
             case
                 "DBT_RUNTIME_PROFILE_ROOT_MISSING",
+                "DBT_RUNTIME_PROFILE_ROOT_SYMLINK",
                 "DBT_RUNTIME_PROFILE_ROOT_NOT_TMPFS",
                 "DBT_RUNTIME_PROFILE_ROOT_OWNER_INVALID",
                 "DBT_RUNTIME_PROFILE_ROOT_PERMISSIONS_INVALID",
                 "DBT_RUNTIME_PROFILE_EXPECTED_UID_INVALID",
                 "DBT_RUNTIME_PROFILE_ROOT_UNAVAILABLE" -> HttpStatus.SERVICE_UNAVAILABLE;
-            default -> HttpStatus.UNPROCESSABLE_ENTITY;
+            default -> HttpStatus.INTERNAL_SERVER_ERROR;
         };
         return ResponseEntity
             .status(status)

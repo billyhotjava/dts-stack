@@ -25,6 +25,12 @@ test("workbench mounts one compact seven-module shell without moving business ow
 	assert.doesNotMatch(entry, /linear-gradient/);
 });
 
+test("workbench serializes overlapping URL transitions so plan context cannot be overwritten", () => {
+	assert.match(entry, /createModelingWorkspaceSearchCoordinator\(searchParams\)/);
+	assert.match(entry, /workspaceSearchCoordinator\.sync\(searchParams\)/);
+	assert.match(entry, /workspaceSearchCoordinator\.transition\(patch\)/);
+});
+
 test("modeling workbench is a canonical warehouse planning surface instead of a redirect", () => {
 	assert.match(entry, /listWarehousePlans/);
 	assert.match(entry, /getWarehousePlanStageProjection/);
@@ -69,6 +75,8 @@ test("new planning uses two onboarding modes without creating two plan types", (
 	assert.match(createSurface, /ASSET_FIRST/);
 	assert.doesNotMatch(createSurface, /DATA_FIRST/);
 	assert.doesNotMatch(createSurface, /businessPlan|dataPlan|planType/);
+	assert.match(createModal, /<Radio\.Group/);
+	assert.doesNotMatch(createModal, /<label[\s\S]{0,200}<Radio/);
 });
 
 test("warehouse plan create flow is server coded, idempotent, dual-start and actor read-only", () => {

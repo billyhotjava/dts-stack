@@ -326,6 +326,22 @@ class ServiceDependencyAuthenticationFilterTest {
     }
 
     @Test
+    void airflowPairwiseTokenAllowsOnlyCanonicalProfileLeaseRenewPath()
+        throws Exception {
+        assertAirflowCanAccess("POST", AIRFLOW_PROFILE_LEASE + "/renew");
+
+        assertAirflowCannotAccess("GET", AIRFLOW_PROFILE_LEASE + "/renew");
+        assertAirflowCannotAccess(
+            "POST",
+            AIRFLOW_PROFILE_LEASE + "/renew/extra"
+        );
+        assertAirflowCannotAccess(
+            "POST",
+            "/api/internal/modeling/materialization/profile-leases/1-1-1-1-1/consume"
+        );
+    }
+
+    @Test
     void metricsMatchingToken_cannotMutateAssetPermissionGrants() throws Exception {
         ServiceDependencyAuthenticationFilter filter = new ServiceDependencyAuthenticationFilter(props, svcTokenAuthService);
         MockHttpServletRequest req = new MockHttpServletRequest();
@@ -567,6 +583,30 @@ class ServiceDependencyAuthenticationFilterTest {
         assertThat(auth.getAuthorities())
             .extracting(Object::toString)
             .contains(AuthoritiesConstants.SERVICE_INTERNAL);
+        verify(localChain).doFilter(any(), any());
+    }
+
+    private void assertAirflowCannotAccess(String method, String path)
+        throws Exception {
+        SecurityContextHolder.clearContext();
+        FilterChain localChain = mock(FilterChain.class);
+        ServiceDependencyAuthenticationFilter filter =
+            new ServiceDependencyAuthenticationFilter(
+                props,
+                svcTokenAuthService
+            );
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.addHeader(SERVICE_HEADER, "dts-airflow");
+        req.addHeader(TOKEN_HEADER, "airflow-secret");
+        req.setMethod(method);
+        req.setRequestURI(path);
+
+        filter.doFilter(req, new MockHttpServletResponse(), localChain);
+
+        assertThat(
+            SecurityContextHolder.getContext().getAuthentication()
+        )
+            .isNull();
         verify(localChain).doFilter(any(), any());
     }
 }

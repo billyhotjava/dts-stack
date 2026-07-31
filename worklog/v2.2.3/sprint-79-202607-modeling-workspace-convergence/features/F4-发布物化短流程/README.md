@@ -26,6 +26,7 @@
 |---|---|---|---|
 | T01 | 接入 Build/Publish Intent | IN_PROGRESS | F2/T01、Sprint-76 稳定契约 |
 | T02 | 接入物化运行与发布结果 | IN_PROGRESS | T01、Sprint-76 DEV 可运行链 |
+| T03 | 修复运行时租约鉴权与并发 | IN_PROGRESS | T02 |
 
 ## Definition of Ready
 

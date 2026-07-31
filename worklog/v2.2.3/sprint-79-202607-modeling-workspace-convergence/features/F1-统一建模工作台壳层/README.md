@@ -36,6 +36,7 @@
 |---|---|---|---|
 | T01 | 建立 Shell 与 URL 状态 | PASS_WITH_GAPS | F0/T01 认证子门禁 |
 | T02 | 嵌入规划与标准面板 | PASS_WITH_GAPS | T01 |
+| T03 | 修复 URL 上下文与前端质量门禁 | DONE | T01 |
 
 ## Definition of Ready
 

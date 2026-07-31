@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260731-01-sprint79-modeling-menu-restore" author="codex">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="portal_menu"/>
+            <columnExists tableName="portal_menu" columnName="deleted"/>
+            <columnExists tableName="portal_menu" columnName="last_modified_by"/>
+            <columnExists tableName="portal_menu" columnName="last_modified_date"/>
+        </preConditions>
+
+        <comment>
+            Restore canonical modeling menus that were hidden before the controlled-retirement observation gate completed.
+            Existing menu ids and portal_menu_visibility bindings remain unchanged.
+        </comment>
+        <sql dbms="postgresql" splitStatements="false"><![CDATA[
+            UPDATE portal_menu
+            SET deleted = FALSE,
+                last_modified_by = 'sprint79-menu-restore',
+                last_modified_date = now()
+            WHERE name IN (
+                'sys.nav.portal.warehousePlans',
+                'sys.nav.portal.studioSemanticObjects',
+                'sys.nav.portal.studioSemanticModels',
+                'sys.nav.portal.studioMetricWorkbench',
+                'sys.nav.portal.dataMetrics'
+            )
+              AND deleted = TRUE
+              AND last_modified_by = 'sprint79-menu-convergence';
+        ]]></sql>
+
+        <rollback>
+            UPDATE portal_menu
+            SET deleted = TRUE,
+                last_modified_by = 'sprint79-menu-convergence',
+                last_modified_date = now()
+            WHERE name IN (
+                'sys.nav.portal.warehousePlans',
+                'sys.nav.portal.studioSemanticObjects',
+                'sys.nav.portal.studioSemanticModels',
+                'sys.nav.portal.studioMetricWorkbench',
+                'sys.nav.portal.dataMetrics'
+            )
+              AND deleted = FALSE
+              AND last_modified_by = 'sprint79-menu-restore';
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

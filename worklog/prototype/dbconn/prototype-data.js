@@ -19,30 +19,6 @@ const JDBC_COMMON_ADVANCED = [
 	{ name: "extraParams", label: "额外连接参数", type: "kv", hint: "键值对形式，替代过去手写 JDBC URL 尾巴" },
 ];
 
-/* Addax reader 插件参数：有限且文档化，因此同样进 schema，不做成裸 JSON */
-const ADDAX_READ_PERF = [
-	{
-		name: "channel", label: "并发通道数", type: "number", default: 1, min: 1, max: 16,
-		hint: "映射 Addax setting.speed.channel。现网硬编码为 1，splitPk 因此从未生效",
-	},
-	{
-		name: "splitPk", label: "分片键", type: "select", default: "__auto__",
-		options: [
-			{ value: "__auto__", label: "自动使用各表主键（推荐）" },
-			{ value: "__none__", label: "不分片" },
-			{ value: "__manual__", label: "逐表指定" },
-		],
-		hint: "channel > 1 时才有意义；主键已在第②步发现，无需手打",
-	},
-	{ name: "fetchSize", label: "批量拉取行数", type: "number", default: 1000, min: 100, hint: "越大越快，但占用更多执行器内存" },
-	{ name: "queryTimeOut", label: "单条查询超时", type: "number", default: 600, suffix: "秒" },
-	{ name: "session", label: "会话初始化语句", type: "kv", hint: "如 Oracle 的 NLS_DATE_FORMAT" },
-	{
-		name: "__raw", label: "原始参数覆盖", type: "raw",
-		hint: "逃生口：仅接受该插件已知的键，且不允许覆盖 table / column / where / jdbcUrl / username / password。使用后记入变更记录。",
-	},
-];
-
 const CONNECTORS = [
 	{
 		key: "mysql",
@@ -51,7 +27,13 @@ const CONNECTORS = [
 		engine: "ADDAX",
 		icon: "🐬",
 		driver: { status: "READY", label: "mysql-connector-j 8.4.0" },
-		capabilities: ["connectionTest", "schemaDiscover", "samplePreview", "fullRefresh", "timestampIncremental", "primaryKeyIncremental", "cdc", "odsGeneration", "dbtSourceGeneration"],
+		capabilities: ["connectionTest", "schemaDiscover", "samplePreview", "fullRefresh", "timestampIncremental", "primaryKeyIncremental", "odsGeneration", "dbtSourceGeneration"],
+		executionBindings: [
+			{ mode: "FULL_REFRESH", adapter: "ADDAX_BATCH", status: "READY" },
+			{ mode: "TIMESTAMP_INCREMENTAL", adapter: "ADDAX_BATCH", status: "READY" },
+			{ mode: "PRIMARY_KEY_INCREMENTAL", adapter: "ADDAX_BATCH", status: "READY" },
+			{ mode: "CDC", adapter: "DEBEZIUM_CDC", status: "POC" },
+		],
 		schema: [
 			{ group: "连接", fields: [
 				{ name: "host", label: "主机", type: "text", required: true, placeholder: "10.20.30.40", span: 2 },
@@ -60,12 +42,11 @@ const CONNECTORS = [
 				{ name: "username", label: "用户名", type: "text", required: true },
 				{ name: "password", label: "密码", type: "password", required: true, secret: true },
 			]},
-			{ group: "高级", collapsed: true, fields: [
-				{ name: "useSsl", label: "启用 SSL", type: "switch", default: false },
-				...JDBC_COMMON_ADVANCED,
-			]},
-			{ group: "读取性能", collapsed: true, fields: ADDAX_READ_PERF },
-		],
+				{ group: "高级", collapsed: true, fields: [
+					{ name: "useSsl", label: "启用 SSL", type: "switch", default: false },
+					...JDBC_COMMON_ADVANCED,
+				]},
+			],
 	},
 	{
 		key: "postgresql",
@@ -74,7 +55,13 @@ const CONNECTORS = [
 		engine: "ADDAX",
 		icon: "🐘",
 		driver: { status: "READY", label: "postgresql 42.7.3" },
-		capabilities: ["connectionTest", "schemaDiscover", "samplePreview", "fullRefresh", "timestampIncremental", "primaryKeyIncremental", "cdc", "odsGeneration", "dbtSourceGeneration"],
+		capabilities: ["connectionTest", "schemaDiscover", "samplePreview", "fullRefresh", "timestampIncremental", "primaryKeyIncremental", "odsGeneration", "dbtSourceGeneration"],
+		executionBindings: [
+			{ mode: "FULL_REFRESH", adapter: "ADDAX_BATCH", status: "READY" },
+			{ mode: "TIMESTAMP_INCREMENTAL", adapter: "ADDAX_BATCH", status: "READY" },
+			{ mode: "PRIMARY_KEY_INCREMENTAL", adapter: "ADDAX_BATCH", status: "READY" },
+			{ mode: "CDC", adapter: "DEBEZIUM_CDC", status: "PLANNED" },
+		],
 		schema: [
 			{ group: "连接", fields: [
 				{ name: "host", label: "主机", type: "text", required: true, span: 2 },
@@ -83,10 +70,9 @@ const CONNECTORS = [
 				{ name: "schema", label: "Schema", type: "text", default: "public" },
 				{ name: "username", label: "用户名", type: "text", required: true },
 				{ name: "password", label: "密码", type: "password", required: true, secret: true },
-			]},
-			{ group: "高级", collapsed: true, fields: JDBC_COMMON_ADVANCED },
-			{ group: "读取性能", collapsed: true, fields: ADDAX_READ_PERF },
-		],
+				]},
+				{ group: "高级", collapsed: true, fields: JDBC_COMMON_ADVANCED },
+			],
 	},
 	{
 		key: "oracle",
@@ -94,8 +80,13 @@ const CONNECTORS = [
 		category: "DATABASE",
 		engine: "ADDAX",
 		icon: "🅾️",
-		driver: { status: "READY", label: "ojdbc11 23.4.0" },
-		capabilities: ["connectionTest", "schemaDiscover", "samplePreview", "fullRefresh", "timestampIncremental", "primaryKeyIncremental", "odsGeneration"],
+			driver: { status: "READY", label: "ojdbc11 23.4.0" },
+			capabilities: ["connectionTest", "schemaDiscover", "samplePreview", "fullRefresh", "timestampIncremental", "primaryKeyIncremental", "odsGeneration"],
+			executionBindings: [
+				{ mode: "FULL_REFRESH", adapter: "ADDAX_BATCH", status: "READY" },
+				{ mode: "TIMESTAMP_INCREMENTAL", adapter: "ADDAX_BATCH", status: "READY" },
+				{ mode: "PRIMARY_KEY_INCREMENTAL", adapter: "ADDAX_BATCH", status: "READY" },
+			],
 		schema: [
 			{ group: "连接", fields: [
 				{ name: "host", label: "主机", type: "text", required: true, span: 2 },
@@ -108,10 +99,9 @@ const CONNECTORS = [
 				{ name: "sid", label: "SID", type: "text", required: true, when: { serviceMode: "sid" } },
 				{ name: "username", label: "用户名", type: "text", required: true },
 				{ name: "password", label: "密码", type: "password", required: true, secret: true },
-			]},
-			{ group: "高级", collapsed: true, fields: JDBC_COMMON_ADVANCED },
-			{ group: "读取性能", collapsed: true, fields: ADDAX_READ_PERF },
-		],
+				]},
+				{ group: "高级", collapsed: true, fields: JDBC_COMMON_ADVANCED },
+			],
 	},
 	{
 		key: "dm8",
@@ -119,8 +109,12 @@ const CONNECTORS = [
 		category: "DATABASE",
 		engine: "ADDAX",
 		icon: "🇨🇳",
-		driver: { status: "MISSING", label: "未上传驱动包" },
-		capabilities: ["connectionTest", "schemaDiscover", "fullRefresh", "timestampIncremental", "odsGeneration"],
+			driver: { status: "MISSING", label: "未上传驱动包" },
+			capabilities: ["connectionTest", "schemaDiscover", "fullRefresh", "timestampIncremental", "odsGeneration"],
+			executionBindings: [
+				{ mode: "FULL_REFRESH", adapter: "ADDAX_BATCH", status: "BLOCKED_DRIVER" },
+				{ mode: "TIMESTAMP_INCREMENTAL", adapter: "ADDAX_BATCH", status: "BLOCKED_DRIVER" },
+			],
 		schema: [
 			{ group: "连接", fields: [
 				{ name: "host", label: "主机", type: "text", required: true, span: 2 },
@@ -128,10 +122,9 @@ const CONNECTORS = [
 				{ name: "schema", label: "模式", type: "text", required: true },
 				{ name: "username", label: "用户名", type: "text", required: true },
 				{ name: "password", label: "密码", type: "password", required: true, secret: true },
-			]},
-			{ group: "高级", collapsed: true, fields: JDBC_COMMON_ADVANCED },
-			{ group: "读取性能", collapsed: true, fields: ADDAX_READ_PERF },
-		],
+				]},
+				{ group: "高级", collapsed: true, fields: JDBC_COMMON_ADVANCED },
+			],
 	},
 	{
 		key: "inceptor",
@@ -139,8 +132,12 @@ const CONNECTORS = [
 		category: "DATABASE",
 		engine: "ADDAX",
 		icon: "🐝",
-		driver: { status: "READY", label: "inceptor-jdbc 8.32" },
-		capabilities: ["connectionTest", "schemaDiscover", "fullRefresh", "append", "odsGeneration", "dbtSourceGeneration"],
+			driver: { status: "READY", label: "inceptor-jdbc 8.32" },
+			capabilities: ["connectionTest", "schemaDiscover", "fullRefresh", "append", "odsGeneration", "dbtSourceGeneration"],
+			executionBindings: [
+				{ mode: "FULL_REFRESH", adapter: "ADDAX_BATCH", status: "READY" },
+				{ mode: "APPEND_BATCH", adapter: "ADDAX_BATCH", status: "READY" },
+			],
 		schema: [
 			{ group: "连接", fields: [
 				{ name: "jdbcUrl", label: "JDBC URL", type: "text", required: true, span: 3, placeholder: "jdbc:inceptor2://host:10000/default" },
@@ -152,10 +149,9 @@ const CONNECTORS = [
 				{ name: "password", label: "密码", type: "password", required: true, secret: true, when: { authType: "ldap" } },
 				{ name: "principal", label: "Principal", type: "text", required: true, when: { authType: "kerberos" } },
 				{ name: "keytab", label: "Keytab", type: "file", required: true, secret: true, when: { authType: "kerberos" } },
-			]},
-			{ group: "高级", collapsed: true, fields: JDBC_COMMON_ADVANCED },
-			{ group: "读取性能", collapsed: true, fields: ADDAX_READ_PERF },
-		],
+				]},
+				{ group: "高级", collapsed: true, fields: JDBC_COMMON_ADVANCED },
+			],
 	},
 	{
 		key: "http_api",
@@ -163,13 +159,15 @@ const CONNECTORS = [
 		category: "API",
 		engine: "API_RUNTIME",
 		icon: "🌐",
-		driver: { status: "READY", label: "内置运行时" },
-		capabilities: ["connectionTest", "samplePreview", "fullRefresh", "timestampIncremental", "odsGeneration"],
+			driver: { status: "READY", label: "内置运行时" },
+			capabilities: ["connectionTest", "samplePreview", "fullRefresh", "timestampIncremental", "odsGeneration"],
+			executionBindings: [
+				{ mode: "FULL_REFRESH", adapter: "DTS_API_HTTP", status: "READY" },
+				{ mode: "CURSOR_INCREMENTAL", adapter: "DTS_API_HTTP", status: "READY" },
+			],
 		/* 这一段是全篇重点：现网这里是 8 个裸 JSON 文本框 */
-		replaces: [
-			"apiDefaultHeadersJson", "apiRequestPolicyJson", "apiRateLimitJson", "apiTlsJson",
-			"apiQueryJson", "apiBodyTemplateJson", "apiPaginationJson", "apiCursorJson",
-		],
+		replaces: ["apiDefaultHeadersJson", "apiRequestPolicyJson", "apiRateLimitJson", "apiTlsJson"],
+		resourceReplaces: ["apiQueryJson", "apiBodyTemplateJson", "apiPaginationJson", "apiCursorJson"],
 		schema: [
 			{ group: "连接", fields: [
 				{ name: "baseUrl", label: "Base URL", type: "text", required: true, span: 3, placeholder: "https://api.example.gov.cn/v1" },
@@ -199,27 +197,8 @@ const CONNECTORS = [
 				{ name: "tokenPath", label: "Token 提取路径", type: "text", default: "$.data.token", when: { authType: "jwtLogin" }, hint: "JSONPath" },
 				{ name: "reloginOn401", label: "401 自动重登", type: "switch", default: true, when: { authType: "jwtLogin" } },
 			]},
-			{ group: "分页", fields: [
-				{ name: "paginationType", label: "分页方式", type: "select", default: "page", options: [
-					{ value: "none", label: "不分页" },
-					{ value: "page", label: "页码" },
-					{ value: "offset", label: "偏移量" },
-					{ value: "cursor", label: "游标" },
-					{ value: "link", label: "Link 头 / 下一页 URL" },
-				]},
-				{ name: "pageParam", label: "页码参数", type: "text", default: "pageNum", when: { paginationType: "page" } },
-				{ name: "sizeParam", label: "每页条数参数", type: "text", default: "pageSize", when: { paginationType: "page" } },
-				{ name: "startPage", label: "起始页", type: "number", default: 1, when: { paginationType: "page" }, hint: "注意 0/1 基准差异" },
-				{ name: "offsetParam", label: "偏移参数", type: "text", default: "offset", when: { paginationType: "offset" } },
-				{ name: "limitParam", label: "条数参数", type: "text", default: "limit", when: { paginationType: "offset" } },
-				{ name: "cursorParam", label: "游标参数", type: "text", default: "cursor", when: { paginationType: "cursor" } },
-				{ name: "cursorPath", label: "游标提取路径", type: "text", default: "$.data.nextCursor", when: { paginationType: "cursor" } },
-				{ name: "pageSize", label: "每页条数", type: "number", default: 500, min: 1, when: { paginationType: ["page", "offset", "cursor"] } },
-				{ name: "maxPages", label: "单次最多页数", type: "number", default: 2000, hint: "防止后端翻页不终止时打爆执行器" },
-			]},
-			{ group: "请求策略", collapsed: true, fields: [
+			{ group: "连接默认请求策略", collapsed: true, fields: [
 				{ name: "headers", label: "默认请求头", type: "kv" },
-				{ name: "query", label: "固定 Query 参数", type: "kv" },
 				{ name: "rateLimitQps", label: "限流", type: "number", default: 5, suffix: "req/s" },
 				{ name: "maxConcurrency", label: "并发", type: "number", default: 2, min: 1, max: 16 },
 				{ name: "retryMax", label: "最大重试", type: "number", default: 3 },
@@ -234,17 +213,18 @@ const CONNECTORS = [
 		category: "FILE",
 		engine: "FILE",
 		icon: "📄",
-		driver: { status: "READY", label: "内置解析器" },
-		capabilities: ["samplePreview", "fullRefresh", "odsGeneration"],
+			driver: { status: "READY", label: "内置解析器" },
+			capabilities: ["samplePreview", "fullRefresh", "odsGeneration"],
+			executionBindings: [
+				{ mode: "REPLACE_BATCH", adapter: "DTS_NATIVE_FILE", status: "READY" },
+				{ mode: "APPEND_BATCH", adapter: "DTS_NATIVE_FILE", status: "READY" },
+			],
 		schema: [
 			{ group: "文件", fields: [
-				{ name: "file", label: "上传文件", type: "file", required: true, span: 3 },
-				{ name: "sheet", label: "工作表", type: "select", options: [{ value: "Sheet1", label: "Sheet1" }], default: "Sheet1" },
-				{ name: "headerRow", label: "表头行", type: "number", default: 1, min: 1 },
-				{ name: "dataStartRow", label: "数据起始行", type: "number", default: 2, min: 1 },
-				{ name: "delimiter", label: "分隔符", type: "text", default: "," },
-				{ name: "dateFormat", label: "日期格式", type: "text", default: "yyyy-MM-dd" },
-				{ name: "fillMerged", label: "填充合并单元格", type: "switch", default: true },
+				{
+					name: "file", label: "上传文件", type: "file", required: true, span: 3,
+					hint: "上传只形成不可变 Artifact；工作表、分隔符等解析设置在下一步随 Revision 冻结。",
+				},
 			]},
 		],
 	},
@@ -256,13 +236,17 @@ const CONNECTORS = [
 		icon: "📡",
 		driver: { status: "PLANNED", label: "规划中" },
 		disabled: true,
-		capabilities: ["append", "cdc"],
+		capabilities: [],
+		executionBindings: [
+			{ mode: "APPEND", adapter: "KAFKA_STREAM", status: "PLANNED" },
+			{ mode: "CDC", adapter: "KAFKA_STREAM", status: "PLANNED" },
+		],
 		schema: [],
 	},
 ];
 
 /* ------------------------------------------------------------------ */
-/* 接入（连接 + 任务合一）                                              */
+/* AccessWorkspace 展示数据（底层连接、资源、计划、Revision 保持独立）    */
 /* ------------------------------------------------------------------ */
 
 const CONNECTIONS = [
@@ -375,14 +359,14 @@ const CONNECTIONS = [
 /* ------------------------------------------------------------------ */
 
 const DISCOVERED_TABLES = [
-	{ name: "hr_employee", comment: "员工主表", rows: 18_402, size: "42 MB", pk: "emp_id", incrementalCol: "gmt_modified", cols: 38, selected: true },
-	{ name: "hr_department", comment: "部门", rows: 312, size: "1 MB", pk: "dept_id", incrementalCol: "gmt_modified", cols: 14, selected: true },
-	{ name: "hr_position", comment: "岗位字典", rows: 96, size: "< 1 MB", pk: "pos_id", incrementalCol: null, cols: 9, selected: true },
-	{ name: "hr_contract", comment: "劳动合同", rows: 21_558, size: "58 MB", pk: "contract_id", incrementalCol: "update_time", cols: 27, selected: true },
-	{ name: "hr_salary_detail", comment: "薪酬明细", rows: 1_204_889, size: "3.1 GB", pk: "id", incrementalCol: "pay_month", cols: 41, selected: false, warn: "含疑似敏感字段，建议单独审批" },
-	{ name: "hr_attendance", comment: "考勤流水", rows: 8_902_114, size: "12 GB", pk: "id", incrementalCol: "punch_time", cols: 11, selected: false, warn: "数据量大，建议独立任务与调度窗口" },
-	{ name: "hr_train_record", comment: "培训记录", rows: 44_120, size: "88 MB", pk: "id", incrementalCol: "gmt_modified", cols: 19, selected: false },
-	{ name: "tmp_hr_sync_bak", comment: "（临时备份表）", rows: 18_400, size: "40 MB", pk: null, incrementalCol: null, cols: 38, selected: false, warn: "无主键，无法增量" },
+	{ name: "hr_employee", comment: "员工主表", rows: 18_402, size: "42 MB", pk: "emp_id", incrementalCol: "gmt_modified", cols: 38, classification: "秘密", selected: false },
+	{ name: "hr_department", comment: "部门", rows: 312, size: "1 MB", pk: "dept_id", incrementalCol: "gmt_modified", cols: 14, classification: "内部", selected: false },
+	{ name: "hr_position", comment: "岗位字典", rows: 96, size: "< 1 MB", pk: "pos_id", incrementalCol: null, cols: 9, classification: "内部", selected: false },
+	{ name: "hr_contract", comment: "劳动合同", rows: 21_558, size: "58 MB", pk: "contract_id", incrementalCol: "update_time", cols: 27, classification: "秘密", selected: false },
+	{ name: "hr_salary_detail", comment: "薪酬明细", rows: 1_204_889, size: "3.1 GB", pk: "id", incrementalCol: "pay_month", cols: 41, classification: "机密", selected: false, warn: "含疑似敏感字段，建议单独审批" },
+	{ name: "hr_attendance", comment: "考勤流水", rows: 8_902_114, size: "12 GB", pk: "id", incrementalCol: "punch_time", cols: 11, classification: "内部", selected: false, warn: "数据量大，建议独立任务与调度窗口" },
+	{ name: "hr_train_record", comment: "培训记录", rows: 44_120, size: "88 MB", pk: "id", incrementalCol: "gmt_modified", cols: 19, classification: "内部", selected: false },
+	{ name: "tmp_hr_sync_bak", comment: "（临时备份表）", rows: 18_400, size: "40 MB", pk: null, incrementalCol: null, cols: 38, classification: "内部", selected: false, warn: "无主键，无法增量" },
 ];
 
 const SAMPLE_COLUMNS = [
@@ -393,6 +377,172 @@ const SAMPLE_COLUMNS = [
 	{ src: "hire_date", srcType: "date", target: "hire_date", targetType: "DATE", role: "", std: "" },
 	{ src: "gmt_modified", srcType: "datetime", target: "gmt_modified", targetType: "TIMESTAMP", role: "增量列", std: "" },
 ];
+
+/* API Endpoint 是连接下的资源；请求、分页与响应结构随 Revision 冻结 */
+const API_RESOURCE_DEMO = {
+	resourceKey: "population-change-search",
+	method: "POST",
+	path: "/population/changes/search",
+	query: [
+		{ k: "regionCode", v: "330000" },
+		{ k: "includeHistory", v: "false" },
+	],
+	bodyTemplate: [
+		"{",
+		'  "changedFrom": "${window_start}",',
+		'  "changedTo": "${window_end}",',
+		'  "status": ["ACTIVE"]',
+		"}",
+	].join("\n"),
+	sampleStatus: "succeeded",
+	sampleResult: {
+		status: 200,
+		durationMs: 286,
+		bytes: "1.8 KB",
+		requestUrl: "/population/changes/search?regionCode=330000&includeHistory=false",
+		body: {
+			data: {
+				records: [
+					{ personId: "P-100238", name: "张*", idCardNo: "3301**********0832", changedAt: "2026-07-30T10:22:18+08:00" },
+					{ personId: "P-100241", name: "李*", idCardNo: "3301**********1244", changedAt: "2026-07-30T10:24:06+08:00" },
+				],
+				nextCursor: "eyJvZmZzZXQiOjIwMH0",
+			},
+			requestId: "req-demo-20260731-001",
+		},
+	},
+	recordPath: "$.data.records",
+	pagination: {
+		type: "cursor",
+		cursorParam: "cursor",
+		cursorPath: "$.data.nextCursor",
+		pageSize: 200,
+		maxPages: 500,
+	},
+	checkpointPreview: "eyJvZmZzZXQiOjIwMH0",
+	inferredSchema: [
+		{ name: "personId", jsonType: "string", targetType: "STRING", nullable: false, classification: "内部" },
+		{ name: "name", jsonType: "string", targetType: "STRING", nullable: false, classification: "内部" },
+		{ name: "idCardNo", jsonType: "string", targetType: "STRING", nullable: false, classification: "秘密" },
+		{ name: "changedAt", jsonType: "string/date-time", targetType: "TIMESTAMP", nullable: false },
+	],
+	classification: {
+		effectiveClassification: "秘密",
+		evidence: [
+			"样例响应字段 idCardNo 命中公民身份号码规则 DE-0001",
+			"样例值保存前已脱敏，原值不进入浏览器与 Revision",
+		],
+	},
+	targetHint: "ods.ods_population_change",
+	estimatedVolume: "约 12.8 万条/日",
+	requiresApproval: true,
+};
+
+/* 文件不是长连接：每次上传先形成不可变 Artifact，再定义解析 Revision */
+const FILE_RESOURCE_DEMOS = {
+	xlsx: {
+		artifact: {
+			id: "artifact-assets-202607-v3",
+			fileName: "资产盘点_202607.xlsx",
+			format: "xlsx",
+			size: "286 KB",
+			version: "Artifact v3",
+			sha256: "5d41402abc4b2a76b9719d911017c5925d41402abc4b2a76b9719d911017c592",
+			classificationSeal: {
+				state: "SEALED",
+				effectiveClassification: "内部",
+				sealId: "seal-cls-7128",
+				evidence: ["上传人声明为内部", "字段抽样未命中秘密或机密识别规则"],
+			},
+			securityScan: {
+				status: "PASSED",
+				engine: "ClamAV 1.4 + Office Guard",
+				signatures: "病毒库 2026-07-31",
+				scannedAt: "2026-07-31 09:42:18",
+			},
+		},
+		parse: {
+			availableSheets: ["资产明细", "填报说明"],
+			sheet: "资产明细",
+			headerRow: 2,
+			dataStartRow: 3,
+			dateFormat: "yyyy-MM-dd",
+				fillMerged: false,
+		},
+		previewColumns: [
+			{ name: "asset_code", label: "资产编号", type: "STRING" },
+			{ name: "asset_name", label: "资产名称", type: "STRING" },
+			{ name: "department", label: "使用部门", type: "STRING" },
+			{ name: "purchase_date", label: "购置日期", type: "DATE" },
+			{ name: "original_value", label: "原值(元)", type: "DECIMAL(18,2)" },
+		],
+		previewRows: [
+			{ asset_code: "ZC-2026-0031", asset_name: "图形工作站", department: "信息中心", purchase_date: "2026-03-12", original_value: "28,600.00" },
+			{ asset_code: "ZC-2026-0032", asset_name: "存储阵列", department: "数据处", purchase_date: "2026-04-08", original_value: "186,000.00" },
+			{ asset_code: "ZC-2026-0033", asset_name: "扫描仪", department: "档案处", purchase_date: "2026-04-19", original_value: "4,980.00" },
+		],
+		schemaDiff: {
+			againstRevision: "R2（当前生效）",
+			added: [{ name: "department", detail: "新增 STRING，可空" }],
+			changed: [{ name: "original_value", detail: "DECIMAL(14,2) → DECIMAL(18,2)" }],
+			removed: [],
+		},
+		rowCount: 1_204,
+		targetHint: "ods.ods_asset_inventory",
+		requiresApproval: false,
+	},
+	csv: {
+		artifact: {
+			id: "artifact-assets-202607-csv-v1",
+			fileName: "资产盘点_202607.csv",
+			format: "csv",
+			size: "198 KB",
+			version: "Artifact v1",
+			sha256: "9e107d9d372bb6826bd81d3542a419d69e107d9d372bb6826bd81d3542a419d6",
+			classificationSeal: {
+				state: "SEALED",
+				effectiveClassification: "内部",
+				sealId: "seal-cls-7131",
+				evidence: ["上传人声明为内部", "CSV 抽样字段未命中秘密或机密识别规则"],
+			},
+			securityScan: {
+				status: "PASSED",
+				engine: "ClamAV 1.4 + CSV Guard",
+				signatures: "病毒库 2026-07-31",
+				scannedAt: "2026-07-31 09:44:03",
+			},
+		},
+		parse: {
+			encoding: "UTF-8",
+			delimiter: ",",
+			headerRow: 1,
+			quote: '"',
+			escape: '"',
+			dateFormat: "yyyy-MM-dd",
+		},
+		previewColumns: [
+			{ name: "asset_code", label: "资产编号", type: "STRING" },
+			{ name: "asset_name", label: "资产名称", type: "STRING" },
+			{ name: "department", label: "使用部门", type: "STRING" },
+			{ name: "purchase_date", label: "购置日期", type: "DATE" },
+			{ name: "original_value", label: "原值(元)", type: "DECIMAL(18,2)" },
+		],
+		previewRows: [
+			{ asset_code: "ZC-2026-0031", asset_name: "图形工作站", department: "信息中心", purchase_date: "2026-03-12", original_value: "28600.00" },
+			{ asset_code: "ZC-2026-0032", asset_name: "存储阵列", department: "数据处", purchase_date: "2026-04-08", original_value: "186000.00" },
+			{ asset_code: "ZC-2026-0033", asset_name: "扫描仪", department: "档案处", purchase_date: "2026-04-19", original_value: "4980.00" },
+		],
+		schemaDiff: {
+			againstRevision: "R2（当前生效）",
+			added: [{ name: "department", detail: "新增 STRING，可空" }],
+			changed: [],
+			removed: [],
+		},
+		rowCount: 1_204,
+		targetHint: "ods.ods_asset_inventory",
+		requiresApproval: false,
+	},
+};
 
 /* ------------------------------------------------------------------ */
 /* 运维数据                                                             */
@@ -442,6 +592,7 @@ const CAPABILITY_LABELS = {
 };
 
 
+/* 兼容旧示意数据与运行记录的标签映射；新 AccessWorkspace 不再用单一 state。 */
 const STATE_META = {
 	RUNNING: { label: "正常运行", tone: "ok" },
 	ATTENTION: { label: "需要关注", tone: "warn" },
@@ -454,7 +605,7 @@ const STATE_META = {
 };
 
 
-/* 状态机：现网是自由字符串，这里是显式迁移表 */
+/* 兼容旧截图的迁移表示意；新生命周期由 views.js 的独立维度表达。 */
 const STATE_MACHINE = {
 	DRAFT: ["READY"],
 	READY: ["RUNNING", "ARCHIVED"],
@@ -467,6 +618,7 @@ const STATE_MACHINE = {
 
 window.PROTO = {
 	CONNECTORS, CONNECTIONS, DISCOVERED_TABLES, SAMPLE_COLUMNS,
+	API_RESOURCE_DEMO, FILE_RESOURCE_DEMOS,
 	RUNS, DRIFTS, STAGING_ROWS, CHANGES,
 	CAPABILITY_LABELS, STATE_META, STATE_MACHINE,
 	connectorByKey: (key) => CONNECTORS.find((c) => c.key === key),

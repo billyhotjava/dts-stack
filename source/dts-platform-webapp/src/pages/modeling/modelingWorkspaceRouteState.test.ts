@@ -1,11 +1,30 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-
+import * as routeStateModule from "./modelingWorkspaceRouteState.ts";
 import {
 	isModelingWorkspaceModelAssetOpen,
 	parseModelingWorkspaceRouteState,
 	updateModelingWorkspaceSearch,
 } from "./modelingWorkspaceRouteState.ts";
+
+test("workspace navigation merges overlapping plan and module transitions before router state catches up", () => {
+	const createCoordinator = (
+		routeStateModule as typeof routeStateModule & {
+			createModelingWorkspaceSearchCoordinator?: (initial: URLSearchParams) => {
+				transition: (patch: { module?: string; planId?: string }) => string;
+			};
+		}
+	).createModelingWorkspaceSearchCoordinator;
+	assert.equal(typeof createCoordinator, "function");
+	if (!createCoordinator) return;
+
+	const coordinator = createCoordinator(new URLSearchParams("module=home"));
+	coordinator.transition({ module: "planning" });
+	const merged = new URLSearchParams(coordinator.transition({ planId: "plan-79" }));
+
+	assert.equal(merged.get("module"), "planning");
+	assert.equal(merged.get("planId"), "plan-79");
+});
 
 test("workspace route defaults invalid modules to home and trims stable context", () => {
 	assert.deepEqual(

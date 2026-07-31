@@ -1,5 +1,9 @@
 package com.yuzhi.dts.platform.service.modeling.warehouse;
 
+import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphCursorCodec.cursorInvalid;
+import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphCursorCodec.runtimeSpecSigningKey;
+import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphProjectionSupport.*;
+
 import com.yuzhi.dts.platform.config.ModelMaterializationProperties;
 import com.yuzhi.dts.platform.service.governance.IndicatorService;
 import com.yuzhi.dts.platform.service.governance.IndicatorService.IndicatorDependency;
@@ -14,11 +18,8 @@ import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionApplicationSer
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.View;
 import com.yuzhi.dts.platform.service.modeling.MetadataStandardService;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService;
-import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.DimensionDefinitionRef;
-import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.MetricRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelRevisionRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
-import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.StandardBinding;
 import com.yuzhi.dts.platform.service.modeling.dto.MetadataStandardDto;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicationService.WarehousePlanException;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.WarehousePlanHeader;
@@ -27,30 +28,30 @@ import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationsh
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphContract.RelationshipEdge;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphContract.RelationshipGraph;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphContract.RelationshipNode;
-import java.net.URLEncoder;
-import java.nio.ByteBuffer;
-import java.nio.charset.CharacterCodingException;
-import java.nio.charset.CodingErrorAction;
-import java.nio.charset.StandardCharsets;
-import java.security.GeneralSecurityException;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.text.Normalizer;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphCursorCodec.GraphCursor;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphInboundModelSupport.InboundModelProjection;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphProjectionSupport.DimensionLink;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphProjectionSupport.DimensionRevisionKey;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphProjectionSupport.EdgeAccumulator;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphProjectionSupport.EdgeWork;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphProjectionSupport.IndicatorOwners;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphProjectionSupport.MetricLink;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphProjectionSupport.MetricRevisionKey;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphProjectionSupport.ModelReferenceLink;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphProjectionSupport.ModelRevisionKey;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphProjectionSupport.ReferenceCollector;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphProjectionSupport.StandardLink;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphProjectionSupport.StandardOwnerKey;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphProjectionSupport.WorkBudget;
 import java.util.ArrayList;
-import java.util.Base64;
-import java.util.Collection;
 import java.util.Comparator;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.stereotype.Service;
@@ -61,28 +62,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class WarehousePlanRelationshipGraphService {
 
-    static final int MAX_NODES = 500;
-    static final int MAX_EDGES = 1000;
-    static final int MAX_REFERENCE_WORK = (MAX_EDGES * 2) + MAX_NODES + 1;
+    static final int MAX_NODES = WarehousePlanRelationshipGraphProjectionSupport.MAX_NODES;
+    static final int MAX_EDGES = WarehousePlanRelationshipGraphProjectionSupport.MAX_EDGES;
+    static final int MAX_REFERENCE_WORK =
+        WarehousePlanRelationshipGraphProjectionSupport.MAX_REFERENCE_WORK;
     private static final int SOURCE_LOOKAHEAD = MAX_NODES + 1;
-    private static final String FILTER_NEXT_HINT = "FILTER_BY_KIND_OR_QUERY";
-    private static final String CURSOR_NEXT_HINT = "CONTINUE_WITH_CURSOR";
-    private static final String CURSOR_VERSION = "1";
-    private static final int MAX_CURSOR_LENGTH = 4096;
-    private static final int MAX_CURSOR_NODE_ID_LENGTH = 2048;
-    private static final String HMAC_ALGORITHM = "HmacSHA256";
-    private static final String CURSOR_KEY_DOMAIN =
-        "dts:modeling:relationship-graph-cursor:v1";
-
-    private static final Comparator<RelationshipNode> NODE_ORDER = Comparator
-        .comparing(RelationshipNode::kind)
-        .thenComparing(RelationshipNode::label, String.CASE_INSENSITIVE_ORDER)
-        .thenComparing(RelationshipNode::id);
-    private static final Comparator<RelationshipEdge> EDGE_ORDER = Comparator
-        .comparing(RelationshipEdge::kind)
-        .thenComparing(RelationshipEdge::source)
-        .thenComparing(RelationshipEdge::target)
-        .thenComparing(RelationshipEdge::label);
 
     private final ModelSpecApplicationService modelSpecs;
     private final DimensionDefinitionApplicationService dimensionDefinitions;
@@ -90,9 +74,9 @@ public class WarehousePlanRelationshipGraphService {
     private final IndicatorService indicators;
     private final ReferenceCodeService referenceCodes;
     private final MeasurementUnitApplicationService measurementUnits;
-    private final byte[] cursorSigningKey;
+    private final WarehousePlanRelationshipGraphInboundModelReader inboundModels;
+    private final WarehousePlanRelationshipGraphCursorCodec cursorCodec;
 
-    @Autowired
     public WarehousePlanRelationshipGraphService(
         ModelSpecApplicationService modelSpecs,
         DimensionDefinitionApplicationService dimensionDefinitions,
@@ -109,6 +93,30 @@ public class WarehousePlanRelationshipGraphService {
             indicators,
             referenceCodes,
             measurementUnits,
+            null,
+            runtimeSpecSigningKey(materializationProperties)
+        );
+    }
+
+    @Autowired
+    WarehousePlanRelationshipGraphService(
+        ModelSpecApplicationService modelSpecs,
+        DimensionDefinitionApplicationService dimensionDefinitions,
+        MetadataStandardService metadataStandards,
+        IndicatorService indicators,
+        ReferenceCodeService referenceCodes,
+        MeasurementUnitApplicationService measurementUnits,
+        WarehousePlanRelationshipGraphInboundModelReader inboundModels,
+        ModelMaterializationProperties materializationProperties
+    ) {
+        this(
+            modelSpecs,
+            dimensionDefinitions,
+            metadataStandards,
+            indicators,
+            referenceCodes,
+            measurementUnits,
+            inboundModels,
             runtimeSpecSigningKey(materializationProperties)
         );
     }
@@ -122,13 +130,38 @@ public class WarehousePlanRelationshipGraphService {
         MeasurementUnitApplicationService measurementUnits,
         String cursorSigningSecret
     ) {
+        this(
+            modelSpecs,
+            dimensionDefinitions,
+            metadataStandards,
+            indicators,
+            referenceCodes,
+            measurementUnits,
+            null,
+            cursorSigningSecret
+        );
+    }
+
+    private WarehousePlanRelationshipGraphService(
+        ModelSpecApplicationService modelSpecs,
+        DimensionDefinitionApplicationService dimensionDefinitions,
+        MetadataStandardService metadataStandards,
+        IndicatorService indicators,
+        ReferenceCodeService referenceCodes,
+        MeasurementUnitApplicationService measurementUnits,
+        WarehousePlanRelationshipGraphInboundModelReader inboundModels,
+        String cursorSigningSecret
+    ) {
         this.modelSpecs = modelSpecs;
         this.dimensionDefinitions = dimensionDefinitions;
         this.metadataStandards = metadataStandards;
         this.indicators = indicators;
         this.referenceCodes = referenceCodes;
         this.measurementUnits = measurementUnits;
-        this.cursorSigningKey = deriveCursorSigningKey(cursorSigningSecret);
+        this.inboundModels = inboundModels;
+        this.cursorCodec = new WarehousePlanRelationshipGraphCursorCodec(
+            cursorSigningSecret
+        );
     }
 
     WarehousePlanRelationshipGraphService(
@@ -145,6 +178,23 @@ public class WarehousePlanRelationshipGraphService {
             indicators,
             null,
             null,
+            cursorSigningSecret
+        );
+    }
+
+    WarehousePlanRelationshipGraphService(
+        ModelSpecApplicationService modelSpecs,
+        WarehousePlanRelationshipGraphInboundModelReader inboundModels,
+        String cursorSigningSecret
+    ) {
+        this(
+            modelSpecs,
+            null,
+            null,
+            null,
+            null,
+            null,
+            inboundModels,
             cursorSigningSecret
         );
     }
@@ -195,7 +245,7 @@ public class WarehousePlanRelationshipGraphService {
         NodeKind kindFilter = parseKind(kind);
         int boundedLimit = requireLimit(limit);
         String normalizedQuery = normalizeQuery(query);
-        GraphCursor graphCursor = parseCursor(
+        GraphCursor graphCursor = cursorCodec.parse(
             cursor,
             tenantId,
             plan.id(),
@@ -270,6 +320,10 @@ public class WarehousePlanRelationshipGraphService {
             : rootModels.values().stream().reduce((left, right) -> right).orElseThrow().id();
         boolean projectionIncomplete = false;
         rootModels.values().forEach(model -> putNode(candidates, modelNode(model)));
+        Map<String, RelationshipNode> visibleNodes = new LinkedHashMap<>(
+            candidates
+        );
+        putNode(visibleNodes, planNode(plan));
 
         WorkBudget referenceWork = new WorkBudget(MAX_REFERENCE_WORK);
         ReferenceCollector references = collectReferences(rootModels.values(), kindFilter, referenceWork);
@@ -289,9 +343,29 @@ public class WarehousePlanRelationshipGraphService {
                     ModelRevisionKey key = modelKey(model);
                     if (!references.modelReferences.contains(new ModelRevisionRef(key.id(), key.revision()))) continue;
                     visibleModels.putIfAbsent(key, model);
-                    putNode(candidates, modelNode(model));
+                    putNode(visibleNodes, modelNode(model));
                 }
             }
+        }
+        InboundModelProjection inboundProjection =
+            WarehousePlanRelationshipGraphInboundModelSupport.load(
+                kindFilter == null || kindFilter == NodeKind.MODEL
+                    ? inboundModels
+                    : null,
+                modelSpecs,
+                tenantId,
+                plan.id(),
+                afterId,
+                rootModels,
+                references,
+                referenceWork
+            );
+        Set<ModelRevisionKey> canonicalRootKeys =
+            inboundProjection.canonicalRootKeys();
+        projectionIncomplete |= inboundProjection.truncated();
+        for (ModelSpecView source : inboundProjection.sources()) {
+            visibleModels.putIfAbsent(modelKey(source), source);
+            putNode(visibleNodes, modelNode(source));
         }
 
         Map<DimensionRevisionKey, View> visibleDefinitions = hydrateDimensions(
@@ -316,7 +390,10 @@ public class WarehousePlanRelationshipGraphService {
             referenceWork,
             candidates
         );
-        projectionIncomplete |= indicatorOwners.truncated;
+        projectionIncomplete |= indicatorOwners.truncated();
+        candidates
+            .values()
+            .forEach(node -> putNode(visibleNodes, node));
 
         List<RelationshipNode> matchingNodes = candidates
             .values()
@@ -325,14 +402,14 @@ public class WarehousePlanRelationshipGraphService {
             .filter(node -> matchesQuery(node, query))
             .sorted(NODE_ORDER)
             .toList();
-        String currentWindowFingerprint = windowFingerprint(
+        String currentWindowFingerprint = cursorCodec.windowFingerprint(
             afterId,
             rootModels.values(),
             hasMoreRoots,
             matchingNodes
         );
-        requireCurrentWindow(cursor, currentWindowFingerprint);
-        int selectedStart = cursorNodeStart(matchingNodes, cursor);
+        cursorCodec.requireCurrentWindow(cursor, currentWindowFingerprint);
+        int selectedStart = cursorCodec.nodeStart(matchingNodes, cursor);
         int selectedEnd = Math.min(selectedStart + limit, matchingNodes.size());
         List<RelationshipNode> selectedNodes = matchingNodes.subList(selectedStart, selectedEnd);
         boolean hasMoreMatchingNodes = selectedEnd < matchingNodes.size();
@@ -340,12 +417,32 @@ public class WarehousePlanRelationshipGraphService {
             .stream()
             .map(RelationshipNode::id)
             .collect(java.util.stream.Collectors.toSet());
+        Set<String> eligibleIds = visibleNodes
+            .values()
+            .stream()
+            .filter(node ->
+                kindFilter == null || node.kind() == kindFilter
+            )
+            .filter(node -> matchesQuery(node, query))
+            .map(RelationshipNode::id)
+            .collect(
+                java.util.stream.Collectors.toCollection(
+                    LinkedHashSet::new
+                )
+            );
 
-        EdgeAccumulator edges = new EdgeAccumulator(selectedIds);
+        EdgeAccumulator edges = new EdgeAccumulator(selectedIds, eligibleIds);
         EdgeWork edgeWork = new EdgeWork(MAX_REFERENCE_WORK);
         String planNodeId = nodeId(NodeKind.PLAN, plan.id());
         for (ModelSpecView root : rootModels.values()) {
-            if (!edgeWork.add(edges, new RelationshipEdge(planNodeId, modelNodeId(modelKey(root)), EdgeKind.CONTAINS, "Plan model"))) {
+            String targetNodeId = modelNodeId(modelKey(root));
+            if (
+                !edgeWork.add(
+                    edges,
+                    new RelationshipEdge(planNodeId, targetNodeId, EdgeKind.CONTAINS, "Plan model"),
+                    targetNodeId
+                )
+            ) {
                 break;
             }
         }
@@ -360,6 +457,10 @@ public class WarehousePlanRelationshipGraphService {
                             modelNodeId(modelKey(link.target())),
                             link.kind(),
                             link.label()
+                        ),
+                        modelLinkOwnerNodeId(
+                            link,
+                            canonicalRootKeys
                         )
                     )
                 ) break;
@@ -377,7 +478,8 @@ public class WarehousePlanRelationshipGraphService {
                             dimensionNodeId(target),
                             EdgeKind.DIMENSION_DEFINITION_REFERENCE,
                             "Dimension definition r" + target.revision()
-                        )
+                        ),
+                        modelNodeId(link.source())
                     )
                 ) break;
             }
@@ -393,14 +495,15 @@ public class WarehousePlanRelationshipGraphService {
                             standardNodeId(link.owner()),
                             EdgeKind.STANDARD_BINDING,
                             link.label()
-                        )
+                        ),
+                        modelNodeId(link.source())
                     )
                 ) break;
             }
         }
         if (edgeWork.available()) {
             for (MetricLink link : references.metricLinks) {
-                IndicatorDto indicator = indicatorOwners.visible.get(link.reference().id());
+                IndicatorDto indicator = indicatorOwners.visible().get(link.reference().id());
                 if (indicator == null || numericVersion(indicator.getVersion()) != link.reference().version()) continue;
                 if (
                     !edgeWork.add(
@@ -410,13 +513,14 @@ public class WarehousePlanRelationshipGraphService {
                             nodeId(NodeKind.INDICATOR, link.reference().id()),
                             EdgeKind.INDICATOR_REFERENCE,
                             "Indicator reference v" + link.reference().version()
-                        )
+                        ),
+                        modelNodeId(link.source())
                     )
                 ) break;
             }
         }
         if (edgeWork.available()) {
-            for (IndicatorDependency dependency : indicatorOwners.dependencies) {
+            for (IndicatorDependency dependency : indicatorOwners.dependencies()) {
                 if (
                     !edgeWork.add(
                         edges,
@@ -425,7 +529,8 @@ public class WarehousePlanRelationshipGraphService {
                             nodeId(NodeKind.INDICATOR, dependency.targetId()),
                             EdgeKind.INDICATOR_DEPENDS_ON,
                             "Indicator dependency"
-                        )
+                        ),
+                        nodeId(NodeKind.INDICATOR, dependency.sourceId())
                     )
                 ) break;
             }
@@ -435,7 +540,7 @@ public class WarehousePlanRelationshipGraphService {
         String nextCursor = null;
         if (!projectionIncomplete) {
             if (hasMoreMatchingNodes) {
-                nextCursor = encodeCursor(
+                nextCursor = cursorCodec.encode(
                     new GraphCursor(
                         afterId,
                         selectedNodes.getLast().id(),
@@ -448,7 +553,7 @@ public class WarehousePlanRelationshipGraphService {
                     query
                 );
             } else if (hasMoreRoots && rootWindowEnd != null) {
-                nextCursor = encodeCursor(
+                nextCursor = cursorCodec.encode(
                     new GraphCursor(rootWindowEnd, null, null),
                     tenantId,
                     plan.id(),
@@ -458,10 +563,20 @@ public class WarehousePlanRelationshipGraphService {
                 );
             }
         }
-        List<RelationshipEdge> selectedEdges = edges.values().stream().sorted(EDGE_ORDER).limit(MAX_EDGES).toList();
+        List<RelationshipEdge> selectedEdges = edges
+            .values()
+            .stream()
+            .sorted(EDGE_ORDER)
+            .limit(MAX_EDGES)
+            .toList();
+        List<RelationshipNode> responseNodes = selfContainedPageNodes(
+            selectedNodes,
+            selectedEdges,
+            visibleNodes
+        );
         return new RelationshipGraph(
             plan.id(),
-            selectedNodes,
+            responseNodes,
             selectedEdges,
             truncated,
             nextHint(truncated, nextCursor),
@@ -615,976 +730,14 @@ public class WarehousePlanRelationshipGraphService {
             .stream()
             .sorted(
                 Comparator
-                    .comparing(WarehousePlanRelationshipGraphService::indicatorLabel, String.CASE_INSENSITIVE_ORDER)
+                    .comparing(
+                        WarehousePlanRelationshipGraphProjectionSupport::indicatorLabel,
+                        String.CASE_INSENSITIVE_ORDER
+                    )
                     .thenComparing(indicator -> indicator.getId().toString())
             )
             .map(indicator -> indicatorNode(planId, indicator))
             .forEach(node -> putNode(candidates, node));
         return new IndicatorOwners(visible, List.copyOf(dependencies), truncated);
-    }
-
-    private static ReferenceCollector collectReferences(
-        Collection<ModelSpecView> models,
-        NodeKind kindFilter,
-        WorkBudget work
-    ) {
-        ReferenceCollector result = new ReferenceCollector();
-        for (ModelSpecView model : models) {
-            ModelRevisionKey source = modelKey(model);
-            if (kindFilter == null || kindFilter == NodeKind.MODEL) {
-                collectModelLinks(source, model.dependsOn(), EdgeKind.DEPENDS_ON, "Depends on", result, work);
-                collectModelLinks(
-                    source,
-                    model.dimensionRefs(),
-                    EdgeKind.DIMENSION_REFERENCE,
-                    "Dimension model reference",
-                    result,
-                    work
-                );
-            }
-            if (kindFilter == null || kindFilter == NodeKind.DIMENSION) {
-                DimensionDefinitionRef definition = model.dimensionDefinitionRef();
-                if (valid(definition)) {
-                    if (!work.tryConsume()) {
-                        result.truncated = true;
-                        break;
-                    }
-                    DimensionRevisionKey key = dimensionKey(definition);
-                    if (!putBounded(result.dimensionDefinitions, key, definition)) {
-                        result.stop(work);
-                        break;
-                    }
-                    result.dimensionLinks.add(new DimensionLink(source, definition));
-                }
-            }
-            if (kindFilter == null || kindFilter == NodeKind.STANDARD) {
-                for (StandardBinding binding : safe(model.standardBindings())) {
-                    if (!work.tryConsume()) {
-                        result.truncated = true;
-                        break;
-                    }
-                    if (binding == null) continue;
-                    if (
-                        binding.standardElementId() != null &&
-                        positive(binding.standardElementVersion())
-                    ) {
-                        if (!collectStandard(
-                            source,
-                            StandardOwnerKey.element(binding.standardElementId(), binding.standardElementVersion()),
-                            standardLabel(binding.fieldName(), "Data element", binding.standardElementVersion()),
-                            result,
-                            work
-                        )) break;
-                    }
-                    if (
-                        binding.referenceCode() != null &&
-                        !binding.referenceCode().isBlank() &&
-                        positive(binding.referenceCodeVersion())
-                    ) {
-                        if (!collectStandard(
-                            source,
-                            StandardOwnerKey.referenceCode(binding.referenceCode(), binding.referenceCodeVersion()),
-                            standardLabel(binding.fieldName(), "Reference code", binding.referenceCodeVersion()),
-                            result,
-                            work
-                        )) break;
-                    }
-                    if (
-                        binding.measurementUnitId() != null &&
-                        positive(binding.measurementUnitVersion())
-                    ) {
-                        if (!collectStandard(
-                            source,
-                            StandardOwnerKey.measurementUnit(binding.measurementUnitId(), binding.measurementUnitVersion()),
-                            standardLabel(binding.fieldName(), "Measurement unit", binding.measurementUnitVersion()),
-                            result,
-                            work
-                        )) break;
-                    }
-                }
-            }
-            if (kindFilter == null || kindFilter == NodeKind.INDICATOR) {
-                for (MetricRef metricRef : safe(model.metricRefs())) {
-                    if (!work.tryConsume()) {
-                        result.truncated = true;
-                        break;
-                    }
-                    UUID indicatorId = parseUuid(metricRef == null ? null : metricRef.metricId());
-                    if (indicatorId == null || metricRef.version() < 1) continue;
-                    MetricRevisionKey key = new MetricRevisionKey(indicatorId, metricRef.version());
-                    if (
-                        (!result.indicatorIds.contains(indicatorId) && result.indicatorIds.size() >= MAX_NODES) ||
-                        (!result.metricReferences.contains(key) && result.metricReferences.size() >= MAX_NODES)
-                    ) {
-                        result.stop(work);
-                        break;
-                    }
-                    result.indicatorIds.add(indicatorId);
-                    result.metricReferences.add(key);
-                    result.metricLinks.add(new MetricLink(source, key));
-                }
-            }
-        }
-        return result;
-    }
-
-    private static void collectModelLinks(
-        ModelRevisionKey source,
-        List<ModelRevisionRef> references,
-        EdgeKind kind,
-        String label,
-        ReferenceCollector result,
-        WorkBudget work
-    ) {
-        for (ModelRevisionRef reference : safe(references)) {
-            if (!work.tryConsume()) {
-                result.truncated = true;
-                return;
-            }
-            if (!valid(reference)) continue;
-            if (!result.modelReferences.contains(reference) && result.modelReferences.size() >= MAX_NODES) {
-                result.stop(work);
-                return;
-            }
-            result.modelReferences.add(reference);
-            result.modelLinks.add(new ModelReferenceLink(source, reference, kind, label + " r" + reference.revision()));
-        }
-    }
-
-    private static boolean collectStandard(
-        ModelRevisionKey source,
-        StandardOwnerKey owner,
-        String label,
-        ReferenceCollector result,
-        WorkBudget work
-    ) {
-        if (!work.tryConsume()) {
-            result.truncated = true;
-            return false;
-        }
-        if (!result.standardOwners.contains(owner) && result.standardOwners.size() >= MAX_NODES) {
-            result.stop(work);
-            return false;
-        }
-        result.standardOwners.add(owner);
-        result.standardLinks.add(new StandardLink(source, owner, label));
-        return true;
-    }
-
-    private static RelationshipGraph finish(
-        UUID planId,
-        Map<String, RelationshipNode> candidates,
-        List<RelationshipEdge> edges,
-        NodeKind kindFilter,
-        String query,
-        int limit,
-        boolean sourceTruncated,
-        String nextCursor
-    ) {
-        List<RelationshipNode> matching = candidates
-            .values()
-            .stream()
-            .filter(node -> kindFilter == null || node.kind() == kindFilter)
-            .filter(node -> matchesQuery(node, query))
-            .sorted(NODE_ORDER)
-            .toList();
-        List<RelationshipNode> selected = matching.stream().limit(limit).toList();
-        boolean truncated = sourceTruncated || matching.size() > selected.size() || edges.size() > MAX_EDGES;
-        return new RelationshipGraph(
-            planId,
-            selected,
-            edges.stream().limit(MAX_EDGES).toList(),
-            truncated,
-            nextHint(truncated, nextCursor),
-            nextCursor
-        );
-    }
-
-    private static RelationshipNode planNode(WarehousePlanHeader plan) {
-        return new RelationshipNode(
-            nodeId(NodeKind.PLAN, plan.id()),
-            NodeKind.PLAN,
-            firstText(plan.name(), plan.code(), plan.id().toString()),
-            plan.lifecycleStatus() == null ? null : plan.lifecycleStatus().name(),
-            "/modeling/workbench?planId=" +
-            plan.id() +
-            "&module=planning&workspaceView=overview&assetKind=plan&assetId=" +
-            plan.id()
-        );
-    }
-
-    private static RelationshipNode modelNode(ModelSpecView model) {
-        return new RelationshipNode(
-            modelNodeId(modelKey(model)),
-            NodeKind.MODEL,
-            modelLabel(model),
-            model.status() == null ? null : model.status().name(),
-            "/modeling/workbench?planId=" +
-            model.planId() +
-            "&module=models&workspaceView=model-specs&assetKind=model&assetId=" +
-            model.id() +
-            "&revision=" +
-            model.revision() +
-            "&activeStage=logical"
-        );
-    }
-
-    private static RelationshipNode dimensionNode(UUID planId, View definition) {
-        DimensionRevisionKey key = new DimensionRevisionKey(definition.id(), definition.revision());
-        return new RelationshipNode(
-            dimensionNodeId(key),
-            NodeKind.DIMENSION,
-            firstText(definition.name(), definition.systemCode(), definition.id().toString()),
-            definition.status() == null ? null : definition.status().name(),
-            "/modeling/workbench?planId=" +
-            planId +
-            "&module=models&workspaceView=dimensions&assetKind=dimension&assetId=" +
-            definition.id() +
-            "&revision=" +
-            definition.revision()
-        );
-    }
-
-    private static RelationshipNode standardElementNode(UUID planId, MetadataStandardDto standard) {
-        StandardOwnerKey key = StandardOwnerKey.element(standard.getId(), standard.getVersion());
-        return new RelationshipNode(
-            standardNodeId(key),
-            NodeKind.STANDARD,
-            firstText(standard.getFieldNameCn(), standard.getFieldNameEn(), standard.getId().toString()),
-            null,
-            "/modeling/workbench?planId=" +
-            planId +
-            "&module=standards&workspaceView=elements&assetKind=standard&assetId=" +
-            standard.getId() +
-            "&version=" +
-            standard.getVersion()
-        );
-    }
-
-    private static RelationshipNode referenceCodeNode(
-        UUID planId,
-        RelationshipGraphReferenceCode code,
-        int version
-    ) {
-        StandardOwnerKey key = StandardOwnerKey.referenceCode(code.codeTypeId(), version);
-        return new RelationshipNode(
-            standardNodeId(key),
-            NodeKind.STANDARD,
-            firstText(code.codeTypeName(), code.codeTypeCode(), code.codeTypeId()),
-            "ACTIVE",
-            "/modeling/workbench?planId=" +
-            planId +
-            "&module=standards&workspaceView=reference-codes&assetKind=referenceCode&assetId=" +
-            encode(code.codeTypeId()) +
-            "&version=" +
-            version
-        );
-    }
-
-    private static RelationshipNode measurementUnitNode(UUID planId, MeasurementUnitView unit) {
-        StandardOwnerKey key = StandardOwnerKey.measurementUnit(unit.id(), unit.version());
-        return new RelationshipNode(
-            standardNodeId(key),
-            NodeKind.STANDARD,
-            firstText(unit.name(), unit.code(), unit.symbol(), unit.id().toString()),
-            unit.status().name(),
-            "/modeling/workbench?planId=" +
-            planId +
-            "&module=standards&workspaceView=measurement-units&assetKind=measurementUnit&assetId=" +
-            unit.id() +
-            "&version=" +
-            unit.version()
-        );
-    }
-
-    private static RelationshipNode indicatorNode(UUID planId, IndicatorDto indicator) {
-        return new RelationshipNode(
-            nodeId(NodeKind.INDICATOR, indicator.getId()),
-            NodeKind.INDICATOR,
-            indicatorLabel(indicator),
-            indicator.getStatus(),
-            "/modeling/workbench?planId=" +
-            planId +
-            "&module=metrics&workspaceView=definitions&assetKind=indicator&assetId=" +
-            indicator.getId()
-        );
-    }
-
-    private static boolean matchesQuery(RelationshipNode node, String query) {
-        return (
-            query == null ||
-            node.label().toLowerCase(Locale.ROOT).contains(query) ||
-            node.id().toLowerCase(Locale.ROOT).contains(query)
-        );
-    }
-
-    private static String modelLabel(ModelSpecView model) {
-        return firstText(model.name(), model.id().toString());
-    }
-
-    private static String indicatorLabel(IndicatorDto indicator) {
-        return firstText(indicator.getName(), indicator.getCode(), indicator.getId().toString());
-    }
-
-    private static String standardLabel(String fieldName, String type, int version) {
-        return firstText(fieldName, "Standard binding") + " · " + type + " v" + version;
-    }
-
-    private static String firstText(String... candidates) {
-        for (String candidate : candidates) {
-            if (candidate != null && !candidate.isBlank()) return candidate.trim();
-        }
-        return "";
-    }
-
-    private static NodeKind parseKind(String value) {
-        if (value == null || value.isBlank()) return null;
-        try {
-            return NodeKind.valueOf(value.trim().toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException invalid) {
-            throw new WarehousePlanException(
-                "RELATIONSHIP_GRAPH_KIND_INVALID",
-                "Relationship graph kind is invalid",
-                null
-            );
-        }
-    }
-
-    private static int requireLimit(int limit) {
-        if (limit < 1 || limit > MAX_NODES) {
-            throw new WarehousePlanException(
-                "RELATIONSHIP_GRAPH_LIMIT_INVALID",
-                "Relationship graph limit must be between 1 and 500",
-                null
-            );
-        }
-        return limit;
-    }
-
-    private GraphCursor parseCursor(
-        String cursor,
-        String tenantId,
-        UUID planId,
-        String activeDepartmentId,
-        NodeKind kind,
-        String query
-    ) {
-        if (cursor == null) return null;
-        try {
-            if (cursor.isEmpty() || cursor.length() > MAX_CURSOR_LENGTH || !isBase64Url(cursor)) {
-                throw new IllegalArgumentException("invalid cursor envelope");
-            }
-            String raw = decodeBase64Url(cursor);
-            String[] parts = raw.split("\\.", -1);
-            if (parts.length != 6 || !CURSOR_VERSION.equals(parts[0])) {
-                throw new IllegalArgumentException("unsupported cursor version");
-            }
-            String unsigned = String.join(
-                ".",
-                parts[0],
-                parts[1],
-                parts[2],
-                parts[3],
-                parts[4]
-            );
-            if (
-                !isLowerHex(parts[4]) ||
-                !isLowerHex(parts[5]) ||
-                !constantTimeEquals(cursorSignature(unsigned), parts[5])
-            ) {
-                throw new IllegalArgumentException("invalid cursor integrity");
-            }
-            String expectedScope = cursorScope(tenantId, planId, activeDepartmentId, kind, query);
-            if (!constantTimeEquals(expectedScope, parts[4])) {
-                throw new IllegalArgumentException("cursor scope mismatch");
-            }
-            UUID rootAfter = parts[1].isEmpty() ? null : parseCanonicalUuid(parts[1]);
-            String nodeAfter = parts[2].isEmpty() ? null : decodeBase64Url(parts[2]);
-            String windowFingerprint = parts[3].isEmpty() ? null : parts[3];
-            if (
-                (rootAfter == null && nodeAfter == null) ||
-                (nodeAfter != null && !validCursorNodeId(nodeAfter, kind)) ||
-                (nodeAfter == null && windowFingerprint != null) ||
-                (nodeAfter != null &&
-                    (windowFingerprint == null ||
-                        !isLowerHex(windowFingerprint)))
-            ) {
-                throw new IllegalArgumentException("invalid cursor position");
-            }
-            return new GraphCursor(rootAfter, nodeAfter, windowFingerprint);
-        } catch (IllegalArgumentException invalid) {
-            throw cursorInvalid();
-        }
-    }
-
-    private String encodeCursor(
-        GraphCursor cursor,
-        String tenantId,
-        UUID planId,
-        String activeDepartmentId,
-        NodeKind kind,
-        String query
-    ) {
-        String rootAfter = cursor.rootAfter() == null ? "" : cursor.rootAfter().toString();
-        String nodeAfter = cursor.nodeAfter() == null ? "" : encodeBase64Url(cursor.nodeAfter());
-        String windowFingerprint = cursor.windowFingerprint() == null
-            ? ""
-            : cursor.windowFingerprint();
-        String unsigned = String.join(
-            ".",
-            CURSOR_VERSION,
-            rootAfter,
-            nodeAfter,
-            windowFingerprint,
-            cursorScope(tenantId, planId, activeDepartmentId, kind, query)
-        );
-        return encodeBase64Url(unsigned + "." + cursorSignature(unsigned));
-    }
-
-    private static int cursorNodeStart(List<RelationshipNode> matchingNodes, GraphCursor cursor) {
-        if (cursor == null || cursor.nodeAfter() == null) return 0;
-        for (int index = 0; index < matchingNodes.size(); index++) {
-            if (matchingNodes.get(index).id().equals(cursor.nodeAfter())) {
-                return index + 1;
-            }
-        }
-        throw cursorInvalid();
-    }
-
-    private static void requireCurrentWindow(
-        GraphCursor cursor,
-        String currentWindowFingerprint
-    ) {
-        if (
-            cursor == null ||
-            cursor.nodeAfter() == null ||
-            constantTimeEquals(
-                cursor.windowFingerprint(),
-                currentWindowFingerprint
-            )
-        ) {
-            return;
-        }
-        throw cursorStale();
-    }
-
-    private static String windowFingerprint(
-        UUID rootAfter,
-        Collection<ModelSpecView> rootModels,
-        boolean hasMoreRoots,
-        List<RelationshipNode> matchingNodes
-    ) {
-        StringBuilder canonical = new StringBuilder(
-            "dts:modeling:relationship-graph-window:v1"
-        );
-        appendFingerprintPart(
-            canonical,
-            rootAfter == null ? null : rootAfter.toString()
-        );
-        appendFingerprintPart(
-            canonical,
-            Boolean.toString(hasMoreRoots)
-        );
-        appendFingerprintPart(
-            canonical,
-            Integer.toString(rootModels.size())
-        );
-        for (ModelSpecView root : rootModels) {
-            appendFingerprintPart(
-                canonical,
-                root.id().toString()
-            );
-            appendFingerprintPart(
-                canonical,
-                Integer.toString(root.revision())
-            );
-        }
-        appendFingerprintPart(
-            canonical,
-            Integer.toString(matchingNodes.size())
-        );
-        for (RelationshipNode node : matchingNodes) {
-            appendFingerprintPart(canonical, node.kind().name());
-            appendFingerprintPart(
-                canonical,
-                node.label().toLowerCase(Locale.ROOT)
-            );
-            appendFingerprintPart(canonical, node.id());
-            appendFingerprintPart(canonical, node.label());
-            appendFingerprintPart(canonical, node.status());
-            appendFingerprintPart(canonical, node.route());
-        }
-        return sha256(canonical.toString());
-    }
-
-    private static void appendFingerprintPart(
-        StringBuilder target,
-        String value
-    ) {
-        target.append(cursorScopePart(value)).append(';');
-    }
-
-    private static UUID parseCanonicalUuid(String value) {
-        UUID parsed = UUID.fromString(value);
-        if (!parsed.toString().equals(value)) {
-            throw new IllegalArgumentException("non-canonical UUID");
-        }
-        return parsed;
-    }
-
-    private static boolean validCursorNodeId(String value, NodeKind kind) {
-        if (
-            value.isEmpty() ||
-            value.length() > MAX_CURSOR_NODE_ID_LENGTH ||
-            !value.equals(value.trim())
-        ) {
-            return false;
-        }
-        for (int index = 0; index < value.length(); index++) {
-            if (Character.isISOControl(value.charAt(index))) return false;
-        }
-        if (kind != null) return value.startsWith(kind.name() + ":");
-        for (NodeKind candidate : NodeKind.values()) {
-            if (value.startsWith(candidate.name() + ":")) return true;
-        }
-        return false;
-    }
-
-    private static String cursorScope(
-        String tenantId,
-        UUID planId,
-        String activeDepartmentId,
-        NodeKind kind,
-        String query
-    ) {
-        return sha256(
-            cursorScopePart(tenantId) +
-            cursorScopePart(planId.toString()) +
-            cursorScopePart(activeDepartmentId) +
-            cursorScopePart(kind == null ? null : kind.name()) +
-            cursorScopePart(query)
-        );
-    }
-
-    private static String cursorScopePart(String value) {
-        return value == null ? "-1:" : value.length() + ":" + value;
-    }
-
-    private static String encodeBase64Url(String value) {
-        return Base64
-            .getUrlEncoder()
-            .withoutPadding()
-            .encodeToString(value.getBytes(StandardCharsets.UTF_8));
-    }
-
-    private static String decodeBase64Url(String value) {
-        if (!isBase64Url(value)) {
-            throw new IllegalArgumentException("invalid base64url");
-        }
-        byte[] decoded = Base64.getUrlDecoder().decode(value);
-        if (!Base64.getUrlEncoder().withoutPadding().encodeToString(decoded).equals(value)) {
-            throw new IllegalArgumentException("non-canonical base64url");
-        }
-        try {
-            return StandardCharsets.UTF_8
-                .newDecoder()
-                .onMalformedInput(CodingErrorAction.REPORT)
-                .onUnmappableCharacter(CodingErrorAction.REPORT)
-                .decode(ByteBuffer.wrap(decoded))
-                .toString();
-        } catch (CharacterCodingException invalid) {
-            throw new IllegalArgumentException("invalid UTF-8", invalid);
-        }
-    }
-
-    private static boolean isBase64Url(String value) {
-        if (value.isEmpty()) return false;
-        for (int index = 0; index < value.length(); index++) {
-            char candidate = value.charAt(index);
-            if (
-                (candidate >= 'a' && candidate <= 'z') ||
-                (candidate >= 'A' && candidate <= 'Z') ||
-                (candidate >= '0' && candidate <= '9') ||
-                candidate == '-' ||
-                candidate == '_'
-            ) continue;
-            return false;
-        }
-        return true;
-    }
-
-    private static boolean isLowerHex(String value) {
-        if (value.length() != 64) return false;
-        for (int index = 0; index < value.length(); index++) {
-            char candidate = value.charAt(index);
-            if (
-                (candidate >= '0' && candidate <= '9') ||
-                (candidate >= 'a' && candidate <= 'f')
-            ) continue;
-            return false;
-        }
-        return true;
-    }
-
-    private static String sha256(String value) {
-        try {
-            return HexFormat
-                .of()
-                .formatHex(
-                    MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8))
-                );
-        } catch (NoSuchAlgorithmException impossible) {
-            throw new IllegalStateException("SHA-256 is unavailable", impossible);
-        }
-    }
-
-    private String cursorSignature(String unsigned) {
-        if (cursorSigningKey == null) {
-            throw cursorSigningUnavailable();
-        }
-        return HexFormat
-            .of()
-            .formatHex(
-                hmac(
-                    cursorSigningKey,
-                    unsigned.getBytes(StandardCharsets.UTF_8)
-                )
-            );
-    }
-
-    private static byte[] deriveCursorSigningKey(
-        String signingSecret
-    ) {
-        if (
-            signingSecret == null ||
-            signingSecret.trim().length() < 32
-        ) return null;
-        return hmac(
-            signingSecret.trim().getBytes(StandardCharsets.UTF_8),
-            CURSOR_KEY_DOMAIN.getBytes(StandardCharsets.UTF_8)
-        );
-    }
-
-    private static String runtimeSpecSigningKey(
-        ModelMaterializationProperties materializationProperties
-    ) {
-        return Objects
-            .requireNonNull(
-                materializationProperties,
-                "materializationProperties is required"
-            )
-            .getRuntimeSpecSigningKey();
-    }
-
-    private static byte[] hmac(byte[] key, byte[] value) {
-        try {
-            Mac mac = Mac.getInstance(HMAC_ALGORITHM);
-            mac.init(new SecretKeySpec(key, HMAC_ALGORITHM));
-            return mac.doFinal(value);
-        } catch (GeneralSecurityException impossible) {
-            throw new IllegalStateException(
-                "Relationship graph cursor signing is unavailable",
-                impossible
-            );
-        }
-    }
-
-    private static boolean constantTimeEquals(String left, String right) {
-        if (left == null || right == null) return false;
-        return MessageDigest.isEqual(
-            left.getBytes(StandardCharsets.US_ASCII),
-            right.getBytes(StandardCharsets.US_ASCII)
-        );
-    }
-
-    private static WarehousePlanException cursorInvalid() {
-        return new WarehousePlanException(
-            "RELATIONSHIP_GRAPH_CURSOR_INVALID",
-            "Relationship graph cursor is invalid",
-            null
-        );
-    }
-
-    private static WarehousePlanException cursorStale() {
-        return new WarehousePlanException(
-            "RELATIONSHIP_GRAPH_CURSOR_STALE",
-            "Relationship graph cursor is stale",
-            null
-        );
-    }
-
-    private static WarehousePlanException cursorSigningUnavailable() {
-        return new WarehousePlanException(
-            "RELATIONSHIP_GRAPH_CURSOR_SIGNING_UNAVAILABLE",
-            "Relationship graph cursor signing is unavailable",
-            null
-        );
-    }
-
-    private static String nextHint(boolean truncated, String nextCursor) {
-        if (nextCursor != null) return CURSOR_NEXT_HINT;
-        return truncated ? FILTER_NEXT_HINT : null;
-    }
-
-    private static String normalizeQuery(String query) {
-        if (query == null || query.isBlank()) return null;
-        String normalized = Normalizer.normalize(query.trim(), Normalizer.Form.NFKC);
-        if (normalized.length() > 128) {
-            throw new WarehousePlanException(
-                "RELATIONSHIP_GRAPH_QUERY_INVALID",
-                "Relationship graph query must not exceed 128 characters",
-                null
-            );
-        }
-        return normalized.toLowerCase(Locale.ROOT);
-    }
-
-    private static int numericVersion(String value) {
-        if (value == null || value.isBlank()) return -1;
-        String normalized = value.trim();
-        if (normalized.length() > 1 && (normalized.charAt(0) == 'v' || normalized.charAt(0) == 'V')) {
-            normalized = normalized.substring(1);
-        }
-        try {
-            int parsed = Integer.parseInt(normalized);
-            return parsed > 0 ? parsed : -1;
-        } catch (NumberFormatException invalid) {
-            return -1;
-        }
-    }
-
-    private static UUID parseUuid(String value) {
-        if (value == null || value.isBlank()) return null;
-        try {
-            return UUID.fromString(value.trim());
-        } catch (IllegalArgumentException invalid) {
-            return null;
-        }
-    }
-
-    private static boolean positive(Integer value) {
-        return value != null && value > 0;
-    }
-
-    private static boolean valid(ModelRevisionRef reference) {
-        return reference != null && reference.modelSpecId() != null && reference.revision() > 0;
-    }
-
-    private static boolean valid(DimensionDefinitionRef reference) {
-        return (
-            reference != null &&
-            reference.dimensionDefinitionId() != null &&
-            reference.revision() > 0
-        );
-    }
-
-    private static <K, V> boolean putBounded(Map<K, V> target, K key, V value) {
-        if (target.containsKey(key)) return true;
-        if (target.size() >= MAX_NODES) return false;
-        target.put(key, value);
-        return true;
-    }
-
-    private static void putNode(Map<String, RelationshipNode> nodes, RelationshipNode node) {
-        nodes.putIfAbsent(node.id(), node);
-    }
-
-    private static String nodeId(NodeKind kind, UUID id) {
-        return kind.name() + ":" + id;
-    }
-
-    private static String modelNodeId(ModelRevisionKey key) {
-        return nodeId(NodeKind.MODEL, key.id()) + "@" + key.revision();
-    }
-
-    private static String dimensionNodeId(DimensionRevisionKey key) {
-        return nodeId(NodeKind.DIMENSION, key.id()) + "@" + key.revision();
-    }
-
-    private static String standardNodeId(StandardOwnerKey key) {
-        return "STANDARD:" + key.type().name() + ":" + encode(key.ownerId()) + "@" + key.version();
-    }
-
-    private static String encode(String value) {
-        return URLEncoder.encode(value, StandardCharsets.UTF_8);
-    }
-
-    private static ModelRevisionKey modelKey(ModelSpecView model) {
-        return new ModelRevisionKey(model.id(), model.revision());
-    }
-
-    private static ModelRevisionKey modelKey(ModelRevisionRef reference) {
-        return new ModelRevisionKey(reference.modelSpecId(), reference.revision());
-    }
-
-    private static DimensionRevisionKey dimensionKey(DimensionDefinitionRef reference) {
-        return new DimensionRevisionKey(reference.dimensionDefinitionId(), reference.revision());
-    }
-
-    private static <T> List<T> safe(List<T> values) {
-        return values == null ? List.of() : values;
-    }
-
-    private static <T> List<T> nullToEmpty(List<T> values) {
-        return values == null ? List.of() : values;
-    }
-
-    private record GraphCursor(
-        UUID rootAfter,
-        String nodeAfter,
-        String windowFingerprint
-    ) {}
-
-    private record ModelRevisionKey(UUID id, int revision) {}
-
-    private record DimensionRevisionKey(UUID id, int revision) {}
-
-    private record ModelReferenceLink(
-        ModelRevisionKey source,
-        ModelRevisionRef target,
-        EdgeKind kind,
-        String label
-    ) {}
-
-    private record DimensionLink(ModelRevisionKey source, DimensionDefinitionRef reference) {}
-
-    private enum StandardOwnerType {
-        ELEMENT,
-        REFERENCE_CODE,
-        MEASUREMENT_UNIT,
-    }
-
-    private record StandardOwnerKey(StandardOwnerType type, String ownerId, int version) {
-        private static StandardOwnerKey element(UUID id, int version) {
-            return new StandardOwnerKey(StandardOwnerType.ELEMENT, id.toString(), version);
-        }
-
-        private static StandardOwnerKey referenceCode(String id, int version) {
-            return new StandardOwnerKey(StandardOwnerType.REFERENCE_CODE, id.trim(), version);
-        }
-
-        private static StandardOwnerKey measurementUnit(UUID id, int version) {
-            return new StandardOwnerKey(StandardOwnerType.MEASUREMENT_UNIT, id.toString(), version);
-        }
-    }
-
-    private record StandardLink(ModelRevisionKey source, StandardOwnerKey owner, String label) {}
-
-    private record MetricRevisionKey(UUID id, int version) {}
-
-    private record MetricLink(ModelRevisionKey source, MetricRevisionKey reference) {}
-
-    private record IndicatorOwners(
-        Map<UUID, IndicatorDto> visible,
-        List<IndicatorDependency> dependencies,
-        boolean truncated
-    ) {}
-
-    private record EdgeKey(String source, String target, EdgeKind kind) {}
-
-    private static final class ReferenceCollector {
-
-        private final LinkedHashSet<ModelRevisionRef> modelReferences = new LinkedHashSet<>();
-        private final List<ModelReferenceLink> modelLinks = new ArrayList<>();
-        private final LinkedHashMap<DimensionRevisionKey, DimensionDefinitionRef> dimensionDefinitions =
-            new LinkedHashMap<>();
-        private final List<DimensionLink> dimensionLinks = new ArrayList<>();
-        private final LinkedHashSet<StandardOwnerKey> standardOwners = new LinkedHashSet<>();
-        private final List<StandardLink> standardLinks = new ArrayList<>();
-        private final LinkedHashSet<UUID> indicatorIds = new LinkedHashSet<>();
-        private final LinkedHashSet<MetricRevisionKey> metricReferences = new LinkedHashSet<>();
-        private final List<MetricLink> metricLinks = new ArrayList<>();
-        private boolean truncated;
-
-        private void stop(WorkBudget work) {
-            truncated = true;
-            work.exhaust();
-        }
-    }
-
-    private static final class WorkBudget {
-
-        private int remaining;
-
-        private WorkBudget(int remaining) {
-            this.remaining = remaining;
-        }
-
-        private boolean tryConsume() {
-            if (remaining < 1) return false;
-            remaining--;
-            return true;
-        }
-
-        private int remaining() {
-            return remaining;
-        }
-
-        private boolean exhausted() {
-            return remaining < 1;
-        }
-
-        private void exhaust() {
-            remaining = 0;
-        }
-    }
-
-    private static final class EdgeWork {
-
-        private final WorkBudget budget;
-        private boolean truncated;
-
-        private EdgeWork(int limit) {
-            this.budget = new WorkBudget(limit);
-        }
-
-        private boolean add(EdgeAccumulator edges, RelationshipEdge edge) {
-            if (!budget.tryConsume()) {
-                truncated = true;
-                return false;
-            }
-            return edges.add(edge);
-        }
-
-        private boolean available() {
-            return !truncated;
-        }
-    }
-
-    private static final class EdgeAccumulator {
-
-        private final Set<String> selectedNodeIds;
-        private final Map<EdgeKey, RelationshipEdge> edges = new LinkedHashMap<>();
-        private boolean truncated;
-
-        private EdgeAccumulator(Set<String> selectedNodeIds) {
-            this.selectedNodeIds = selectedNodeIds;
-        }
-
-        private boolean add(RelationshipEdge edge) {
-            if (!selectedNodeIds.contains(edge.source()) || !selectedNodeIds.contains(edge.target())) {
-                return true;
-            }
-            EdgeKey key = new EdgeKey(edge.source(), edge.target(), edge.kind());
-            if (edges.containsKey(key)) return true;
-            if (edges.size() >= MAX_EDGES + 1) {
-                truncated = true;
-                return false;
-            }
-            edges.put(key, edge);
-            if (edges.size() > MAX_EDGES) {
-                truncated = true;
-                return false;
-            }
-            return true;
-        }
-
-        private List<RelationshipEdge> values() {
-            return new ArrayList<>(edges.values());
-        }
-
-        private boolean truncated() {
-            return truncated;
-        }
     }
 }

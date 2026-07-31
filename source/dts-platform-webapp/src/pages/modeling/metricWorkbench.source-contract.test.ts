@@ -53,10 +53,7 @@ test("metric workbench exposes a controlled embedded adapter without nesting sem
 	assert.match(WORKBENCH, /onSelectedIndicatorChange\??:\s*\(indicatorId\??:\s*string\)/);
 	assert.match(WORKBENCH, /requestedIndicatorIdOverride=\{indicatorIdOverride\}/);
 	assert.match(WORKBENCH, /if \(onSelectedIndicatorChange\) onSelectedIndicatorChange\(created\.id\)/);
-	assert.doesNotMatch(
-		WORKBENCH,
-		/onSelectedIndicatorChange\?\.\(created\.id\);\s*onViewChange\("definition"\)/,
-	);
+	assert.doesNotMatch(WORKBENCH, /onSelectedIndicatorChange\?\.\(created\.id\);\s*onViewChange\("definition"\)/);
 	assert.match(WORKBENCH, /if\s*\(embedded\)/);
 	assert.match(WORKBENCH, /data-testid="metric-workbench-embedded"/);
 	assert.match(WORKBENCH, /!embedded\s*\?\s*<JourneyContextBar/);

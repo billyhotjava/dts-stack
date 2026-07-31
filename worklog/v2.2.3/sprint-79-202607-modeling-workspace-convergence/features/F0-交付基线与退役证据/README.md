@@ -27,6 +27,7 @@
 | T01 | 恢复认证验收与代表 Demo 数据 | IN_PROGRESS | - |
 | T02 | 建立客户画像与兼容访问观测 | DRAFT | T01、客户只读环境 |
 | T03 | 删除确认无引用的孤儿代码 | DONE | T01 认证子门禁、GitNexus + current HEAD |
+| T04 | 生产只读验收写屏障 | IN_PROGRESS | T01 |
 
 ## Definition of Ready
 

@@ -1,7 +1,7 @@
 # Sprint-79：智能数据建模工作台收敛
 
 **时间**：2026-07  
-**状态**：IN_PROGRESS（建模工作台主线、F3 关系图、F5 菜单软删除已完成构建、部署、回滚和认证浏览器验收；真实 DEV 物化、PostgreSQL 并发、Chrome 95 与 F5/T02 两版本观测门禁仍未完成）
+**状态**：IN_PROGRESS（建模工作台主线、F3 关系图、F4 租约并发与 F5 菜单恢复已完成构建、部署、回滚和认证浏览器验收；真实 DEV 物化、Chrome 95 与 F5/T02 两版本观测门禁仍未完成）
 **类型**：Architecture / UI Productization / Controlled Retirement / Full-stack  
 **目标**：用户在一个建模工作台内完成规划、标准、维度、四类逻辑模型、指标、关系查看以及发布/物化交接，不再在多组解释性页面和重复入口之间切换。
 
@@ -15,7 +15,7 @@
 
 | ID | 决策 | 理由 | 影响 |
 |---|---|---|---|
-| ADR-79-01 | `/modeling/workbench` 是唯一主入口；原型七个一级模块变为工作台内部 Tab，不新增业务菜单 | 遵守“现有页面第一事实源”，减少跳转和菜单层级 | 保留原深链兼容；菜单最终只保留工作台与高级 SQL/dbt |
+| ADR-79-01 | `/modeling/workbench` 是推荐主入口；原型七个一级模块变为工作台内部 Tab，原有 canonical 菜单在退役门禁满足前继续可见 | 用户仍需要从既有菜单直达规划、维度、模型和指标；工作台收敛不能提前替代受控退役 | 保留原深链与菜单；两版本零访问、客户画像和审批齐备后再单独退役 |
 | ADR-79-02 | 原型 HTML/CSS/JS 不进入产品运行时，仅作为 UI 规格和验收参考 | 防止形成第二套模型状态和 API 模拟层 | 正式组件从现有 DTS 页面抽取、组合 |
 | ADR-79-03 | WarehousePlan、DimensionDefinition、ModelSpec、Indicator、ReleaseCandidate、CatalogAssetKey 继续作为唯一 owner | 现有服务已被规划、导入、指标和发布链复用 | 不新建模型、指标、运行、发布或图谱台账 |
 | ADR-79-04 | 模型详情改为“对象树 + 单页编辑器”；三个阶段门禁保留为后台状态和顶部进度，不再拆成三张解释页 | 降低填写成本但不削弱 DRAFT_SAVE、IMPLEMENTATION_READY、RELEASE_READY | 复用 stage-gates API；重组而非绕过门禁 |
@@ -37,7 +37,7 @@
 | 关系图投影 | `GET /api/modeling/warehouse-plans/{planId}/relationship-graph` | 只读聚合投影：`nodes[{id,kind,label,status,route}]`、`edges[{source,target,kind,label}]`；不落新图谱表 |
 | 兼容访问观测 | `POST /api/modeling/compatibility-usage` | allowlist body：`{route,target,result:REDIRECT|RECOVERY}`；复用 `modeling_legacy_api_usage`，不接收 tenant/caller |
 | 数据 | 既有 `modeling_warehouse_plan`、`modeling_dimension_definition`、`modeling_model_spec*`、`gov_indicator_*`、`modeling_model_release_candidate`、`catalog_dataset` | 不新增业务表；任何删除均先 dry-run、零消费者和回滚演练 |
-| 菜单/迁移 | dts-admin Liquibase 菜单事实源 | 不增加一级菜单；旧菜单继续软删除，最终删除路由前保留原 menu id/role binding 回滚证据 |
+| 菜单/迁移 | dts-admin Liquibase 菜单事实源 | 不增加一级菜单；恢复五个既有建模菜单并保留原 menu id/role binding，退役必须重新过 F5 门禁 |
 
 ## 现状勘察账本（Context Ledger）
 
@@ -58,12 +58,18 @@
 | CL-13 | 本地旧业务对象、旧 SQL 模型、旧语义模型/维度均为 0，近 30 天 legacy API usage 为 0 | `assets/domain-profile.md` §3；只能支持本地退役判断，不能外推客户环境 |
 | CL-14 | `DbtFileBrowserPage.tsx` 和旧注册 helper 已按 Batch A 删除；`ModelTemplatesPage`、`ModelPipeline` 仍分别被项目空间和 SQL 建模使用 | `it/evidence/IT-07/`，2026-07-30 |
 | CL-15 | GitNexus 索引停留在 `4762dc9b9`、落后 HEAD 2 个提交；最新原型/UI 只以 HEAD 源码为准 | GitNexus `list_repos`，2026-07-30 |
+| CL-16 | 2026-07-31 live DB 中建设规划、维度目录、模型中心、数据指标、指标工作台均为 `deleted=true`，且 `last_modified_by=sprint79-menu-convergence` | 只读查询 `portal_menu` |
+| CL-17 | 菜单缺失根因同时存在于升级链和新租户链：`20260730-01` 软删除五行，当前 `portal-menu-seed.json` 也移除了同一层级 | `20260730-01_sprint79_modeling_workspace_menu_convergence.xml:17`；`portal-menu-seed.json` |
+| CL-18 | review 发现 Airflow renew 路由未进入服务鉴权 allowlist、租约 CAS 使用服务端旧时钟、orphan janitor 无界 N+1 | F4/T03 |
+| CL-19 | review 发现关系图先分页节点后丢弃跨页边，遍历全部 cursor 仍无法得到完整图；投影服务已达 1590 行 | F3/T03 |
+| CL-20 | review 发现 workspace E2E 无执行期写屏障、自动计划未规范化写入 URL、创建计划卡存在嵌套 label | F0/T04、F1/T03 |
+| CL-21 | 前向恢复迁移已将五个菜单恢复为 `deleted=false / last_modified_by=sprint79-menu-restore`，原 binding 各保留 1 条；`ROLE_INST_DATA_OWNER` 认证旅程可见完整建模菜单 | `it/evidence/IT-01/workspace-restored-modeling-menus.png`；2026-07-31 live DB 只读查询 |
 
 **开放问题**
 
 - 客户环境的存量模型数量、旧路由访问和旧表数据未画像；F5 删除门禁不得使用本地 0 行结论替代。
 - 正式 DTS 的认证 UI/API 基线已于 2026-07-30 通过系统 Chrome 150 复验；Chrome 95 兼容仍需在 F1 实现后补证据。
-- Sprint-76 的 `profileLeaseId`、租约竞态、容器归属和清理确认缺口已在源码与定向测试层关闭；在真实 DEV dbt/Airflow/relation/Catalog 链、PostgreSQL 并发和部署验收完成前，仍不得声明 PROD READY。
+- Sprint-76 的 `profileLeaseId`、租约竞态、容器归属和清理确认缺口已在源码、PostgreSQL 并发 IT 与部署健康检查层关闭；真实 DEV dbt/Airflow/relation/Catalog 链完成前，仍不得声明 PROD READY。
 
 ## Gate Registry
 
@@ -82,12 +88,12 @@
 
 | ID | Feature | Task 数 | 优先级 | 状态 |
 |---|---|---:|---|---|
-| F0 | 交付基线与退役证据 | 3 | P0 | IN_PROGRESS |
-| F1 | 统一建模工作台壳层 | 2 | P0 | PASS_WITH_GAPS |
+| F0 | 交付基线与退役证据 | 4 | P0 | IN_PROGRESS |
+| F1 | 统一建模工作台壳层 | 3 | P0 | IN_PROGRESS |
 | F2 | 单页模型编辑器 | 4 | P0 | PASS_WITH_GAPS |
-| F3 | 指标、工具与关系图 | 2 | P1 | PASS_WITH_GAPS |
-| F4 | 发布物化短流程 | 2 | P0 | IN_PROGRESS |
-| F5 | 旧页面受控退役 | 2 | P0 | PASS_WITH_GAPS |
+| F3 | 指标、工具与关系图 | 3 | P0 | IN_PROGRESS |
+| F4 | 发布物化短流程 | 3 | P0 | IN_PROGRESS |
+| F5 | 旧页面受控退役 | 3 | P0 | IN_PROGRESS |
 
 **依赖顺序**：F0 → F1 → F2/F3 → F4 → F5。F2 与 F3 可在壳层契约冻结后并行；F5 只能在功能等价和观测期满足后执行。
 
@@ -95,9 +101,9 @@
 
 | 范围 | 已完成 | 当前证据 | 尚未完成 |
 |---|---|---|---|
-| F3 指标/工具/关系图 | 工作台嵌入；计划、精确模型 revision、维度、三类标准、指标一跳依赖的只读投影；500/1000 上限；复合游标、窗口指纹、HMAC、防并发重排；旧响应竞态保护 | `51daf1225`、`56afd9858`、`c87cbf8b8`；Java 166/166；前端 Vitest 4/4、source-contract 7/7；最终认证 E2E 展示非零节点/关系，1/1 PASS | 真实 PostgreSQL repository/cursor IT、Chrome95 |
-| F4 运行时安全 | `profileLeaseId` 跨语言对齐；续租/过期/释放 CAS；终态目录重试；Docker owner label + immutable container ID；清理未确认不释放租约；日志脱敏 | `56afd9858`；Java 23/23、Python 28/28；部署后 Airflow scheduler/triggerer healthy，bind mount 校验和一致 | 真实 PostgreSQL 并发、DEV dbt run/relation/Catalog IT-05/06；Airflow 源码回切 |
-| F5 入口收敛 | canonical 深链、菜单、帮助与指标入口进入 `/modeling/workbench`；旧菜单软删除 migration 可回滚 | `82d6e8eec`、`8742e2bfe`、`286ffc68a`；5 行软删除、5 个 binding 保留，实际菜单/镜像回滚与恢复 PASS | 8 条 compatibility route 不满足两版本零访问门禁，暂不物理删除；客户旧表只保留提案 |
+| F3 指标/工具/关系图 | 工作台嵌入；完整窗口投影；复合游标、窗口指纹、HMAC、防并发重排；投影服务拆分到 800 行门禁内；GIN 索引具备结构校验与安全重建 | 关系图定向测试 38/38、Resource 22/22；PostgreSQL 17.6 + Liquibase IT 4/4；最终认证 E2E 展示非零节点/关系，1/1 PASS | Chrome 95 |
+| F4 运行时安全 | `profileLeaseId` 跨语言对齐；数据库时钟续租/过期/释放 CAS；批量 orphan janitor；Docker owner label + immutable container ID；清理未确认不释放租约 | 租约定向测试 38/38、Spring 装配 1/1、PostgreSQL 17.6 并发 IT PASS；部署后 platform/Airflow healthy | DEV dbt run/relation/Catalog IT-05/06；Airflow 源码回切 |
+| F5 入口收敛 | `/modeling/workbench` 为推荐入口；五个 canonical 菜单在退役门禁前恢复；原 menu id、父子关系和 role binding 保持不变 | admin 契约、Liquibase、构建和部署 PASS；live DB 五项 `deleted=false`；认证 E2E 菜单断言 1/1 PASS | 8 条 compatibility route 不满足两版本零访问门禁，暂不物理删除；客户旧表只保留提案 |
 
 F3/F5 的“通过”包含本轮构建、运行态、回滚和认证浏览器证据；F4 这里只证明运行时加载与健康，不代表真实物化或发布完成。
 
@@ -110,6 +116,7 @@ F3/F5 的“通过”包含本轮构建、运行态、回滚和认证浏览器�
 | 指标、工具、关系图可达 | F3/T01、F3/T02 | indicator owner + graph projection IT | `it/evidence/IT-04` |
 | 发布与物化短流程 | F4/T01、F4/T02 | intent/candidate contract + real DEV build | `it/evidence/IT-05`、`it/evidence/IT-06` |
 | 不能复用的旧页面删除 | F0/T03、F5/T01、F5/T02 | orphan/import/route/usage guards | `it/evidence/IT-07`、`it/evidence/IT-08` |
+| Review 阻断修复与旧菜单恢复 | F0/T04、F1/T03、F3/T03、F4/T03、F5/T03 | 只读屏障、URL、分页、租约、菜单契约 | `it/evidence/IT-01/workspace-restored-modeling-menus.png`；生产只读 E2E 1/1、清理四项为 0 |
 
 ## 完成标准
 

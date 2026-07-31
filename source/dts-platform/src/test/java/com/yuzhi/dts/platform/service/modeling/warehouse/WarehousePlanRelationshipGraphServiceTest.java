@@ -52,6 +52,7 @@ import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationsh
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphContract.RelationshipGraph;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphContract.RelationshipNode;
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
@@ -65,6 +66,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.Test;
 
 class WarehousePlanRelationshipGraphServiceTest {
@@ -1053,6 +1056,62 @@ class WarehousePlanRelationshipGraphServiceTest {
     }
 
     @Test
+    void rejectsCursorSignedDirectlyWithTheRawRuntimeSigningKey() {
+        ModelSpecApplicationService modelSpecs = mock(
+            ModelSpecApplicationService.class
+        );
+        List<ModelSpecView> models = new ArrayList<>();
+        for (int index = 1; index <= 30; index++) {
+            models.add(
+                model(
+                    new UUID(0, index),
+                    "model-%03d".formatted(index),
+                    List.of(),
+                    List.of()
+                )
+            );
+        }
+        when(
+            modelSpecs.listForRelationshipGraph(
+                TENANT,
+                PLAN_ID,
+                501
+            )
+        )
+            .thenReturn(models);
+        WarehousePlanRelationshipGraphService service =
+            productionService(
+                modelSpecs,
+                materializationProperties(CURSOR_SIGNING_SECRET)
+            );
+        RelationshipGraph first = service.read(
+            TENANT,
+            plan(),
+            null,
+            "model",
+            null,
+            10,
+            null
+        );
+        String forged = forgeWithRawRuntimeKey(
+            first.nextCursor(),
+            CURSOR_SIGNING_SECRET
+        );
+
+        assertInvalidCursor(() ->
+            service.read(
+                TENANT,
+                plan(),
+                null,
+                "model",
+                null,
+                10,
+                forged
+            )
+        );
+    }
+
+    @Test
     void continuesAnUnchangedWindowWithTheCorrectSecretAndRejectsTheWrongSecret() {
         ModelSpecApplicationService modelSpecs = mock(
             ModelSpecApplicationService.class
@@ -1838,6 +1897,34 @@ class WarehousePlanRelationshipGraphServiceTest {
             );
     }
 
+    private static String forgeWithRawRuntimeKey(
+        String cursor,
+        String runtimeSigningKey
+    ) {
+        String raw = new String(
+            Base64.getUrlDecoder().decode(cursor),
+            StandardCharsets.UTF_8
+        );
+        String[] parts = raw.split("\\.", -1);
+        int signatureIndex = parts.length - 1;
+        String unsigned = String.join(
+            ".",
+            java.util.Arrays.copyOf(parts, signatureIndex)
+        );
+        parts[signatureIndex] = hmacSha256(
+            runtimeSigningKey.trim(),
+            unsigned
+        );
+        return Base64
+            .getUrlEncoder()
+            .withoutPadding()
+            .encodeToString(
+                String.join(".", parts).getBytes(
+                    StandardCharsets.UTF_8
+                )
+            );
+    }
+
     private static String mutateTokenPart(
         String cursor,
         int partIndex
@@ -1872,6 +1959,27 @@ class WarehousePlanRelationshipGraphServiceTest {
                         )
                 );
         } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException(impossible);
+        }
+    }
+
+    private static String hmacSha256(String key, String value) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(
+                new SecretKeySpec(
+                    key.getBytes(StandardCharsets.UTF_8),
+                    "HmacSHA256"
+                )
+            );
+            return HexFormat
+                .of()
+                .formatHex(
+                    mac.doFinal(
+                        value.getBytes(StandardCharsets.UTF_8)
+                    )
+                );
+        } catch (GeneralSecurityException impossible) {
             throw new IllegalStateException(impossible);
         }
     }

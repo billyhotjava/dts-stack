@@ -78,6 +78,94 @@ class DbtRuntimeProfileLeaseInternalResourceTest {
     }
 
     @Test
+    void mapsLeaseStateConflictsAndServerFaultsPrecisely() {
+        var resource = new DbtRuntimeProfileLeaseInternalResource(
+            mock(DbtRuntimeProfileLeaseService.class)
+        );
+
+        assertThat(
+            resource
+                .handle(
+                    failure(
+                        "DBT_PROFILE_LEASE_FILE_MISSING"
+                    )
+                )
+                .getStatusCode()
+        )
+            .isEqualTo(HttpStatus.CONFLICT);
+        assertThat(
+            resource
+                .handle(
+                    failure(
+                        "DBT_PROFILE_LEASE_RELEASE_FAILED"
+                    )
+                )
+                .getStatusCode()
+        )
+            .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(
+            resource
+                .handle(
+                    failure(
+                        "DBT_PROFILE_LEASE_METADATA_WRITE_FAILED"
+                    )
+                )
+                .getStatusCode()
+        )
+            .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(
+            resource
+                .handle(
+                    failure(
+                        "DBT_PROFILE_LEASE_PATH_INVALID"
+                    )
+                )
+                .getStatusCode()
+        )
+            .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(
+            resource
+                .handle(
+                    failure(
+                        "DBT_RUNTIME_PROFILE_ROOT_UNAVAILABLE"
+                    )
+                )
+                .getStatusCode()
+        )
+            .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
+    @Test
+    void mapsInvalidConfigurationAndUnknownFailuresToServerErrors() {
+        var resource = new DbtRuntimeProfileLeaseInternalResource(
+            mock(DbtRuntimeProfileLeaseService.class)
+        );
+
+        assertThat(
+            resource
+                .handle(failure("DBT_PROFILE_LEASE_TTL_INVALID"))
+                .getStatusCode()
+        )
+            .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(
+            resource
+                .handle(
+                    failure(
+                        "DBT_RUNTIME_PROFILE_CONFIGURATION_INVALID"
+                    )
+                )
+                .getStatusCode()
+        )
+            .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(
+            resource
+                .handle(failure("UNEXPECTED_LEASE_FAILURE"))
+                .getStatusCode()
+        )
+            .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    @Test
     void serializesTheCrossLanguageLeaseIdAsProfileLeaseId()
         throws Exception {
         LeaseView view = new LeaseView(
@@ -96,5 +184,12 @@ class DbtRuntimeProfileLeaseInternalResourceTest {
                 "\"profileLeaseId\":\"10000000-0000-0000-0000-000000000001\""
             )
             .doesNotContain("\"leaseId\"");
+    }
+
+    private static DbtRuntimeProfileException failure(String code) {
+        return new DbtRuntimeProfileException(
+            code,
+            "sanitized runtime profile lease failure"
+        );
     }
 }

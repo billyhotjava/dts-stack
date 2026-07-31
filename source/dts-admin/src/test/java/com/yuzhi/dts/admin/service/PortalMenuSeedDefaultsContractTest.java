@@ -293,6 +293,24 @@ class PortalMenuSeedDefaultsContractTest {
     }
 
     @Test
+    void sprint79ModelingMenuRestoreReactivatesOnlyConvergenceRowsAndPreservesBindings() throws Exception {
+        String changelogFile = "20260731-01_sprint79_modeling_menu_restore.xml";
+        ClassPathResource master = new ClassPathResource("config/liquibase/master.xml");
+        assertTrue(master.getContentAsString(StandardCharsets.UTF_8).contains(changelogFile));
+
+        ClassPathResource changelog = new ClassPathResource("config/liquibase/changelog/" + changelogFile);
+        assertTrue(changelog.exists(), "Sprint-79 modeling menu restore changelog must exist");
+        String xml = changelog.getContentAsString(StandardCharsets.UTF_8);
+        assertTrue(xml.contains("onFail=\"HALT\""));
+        assertTrue(xml.contains("columnName=\"last_modified_date\""));
+        assertTrue(xml.contains("deleted = FALSE"));
+        assertTrue(xml.contains("last_modified_by = 'sprint79-menu-convergence'"));
+        assertTrue(xml.contains("last_modified_by = 'sprint79-menu-restore'"));
+        assertFalse(xml.toLowerCase(Locale.ROOT).contains("delete from portal_menu_visibility"));
+        assertFalse(xml.toLowerCase(Locale.ROOT).contains("delete from portal_menu "));
+    }
+
+    @Test
     void dataScreenRootMigrationPreservesVisibilityBindings() throws Exception {
         String changelogFile = "20260525-01_portal_menu_data_screen_root.xml";
         ClassPathResource master = new ClassPathResource("config/liquibase/master.xml");

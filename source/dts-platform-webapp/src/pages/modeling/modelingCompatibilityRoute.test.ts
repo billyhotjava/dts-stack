@@ -76,18 +76,12 @@ describe("Sprint-67 modeling compatibility routes", () => {
 		});
 		expect(metric.searchParams.get("indicatorId")).toBeNull();
 
-		const metricTemplates = redirect(
-			"/modeling/metric-workbench",
-			"view=templates&indicatorId=stale-indicator",
-		);
+		const metricTemplates = redirect("/modeling/metric-workbench", "view=templates&indicatorId=stale-indicator");
 		expect(metricTemplates.searchParams.get("workspaceView")).toBe("templates");
 		expect(metricTemplates.searchParams.get("assetKind")).toBeNull();
 		expect(metricTemplates.searchParams.get("indicatorId")).toBeNull();
 
-		const baseline = redirect(
-			"/modeling/plans/plan-79/baseline",
-			"tab=sources",
-		);
+		const baseline = redirect("/modeling/plans/plan-79/baseline", "tab=sources");
 		expect(Object.fromEntries(baseline.searchParams)).toMatchObject({
 			module: "planning",
 			workspaceView: "sources",

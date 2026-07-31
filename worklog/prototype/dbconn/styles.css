@@ -469,3 +469,101 @@ table.grid tr.bad-row td { background: #fffafa; }
 
 .screen-maps table.grid td { vertical-align: top; }
 .screen-maps table.grid b { font-size: 12.5px; }
+
+/* ---------------- 决策 vs 默认 ---------------- */
+
+.target-line {
+	display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+	margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-soft);
+	font-size: 12.5px;
+}
+.target-line .arrow { color: var(--blue); }
+.target-line code.strong {
+	background: var(--blue-soft); color: #1c3f8e; padding: 2px 7px;
+	border-radius: 4px; font-weight: 600;
+}
+
+.runtime-summary { background: var(--surface-alt); }
+.runtime-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.runtime-head > div { display: flex; align-items: center; gap: 9px; }
+.runtime-head b { font-size: 14.5px; }
+.runtime-head .btn { margin-left: auto; }
+
+.runtime-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.runtime-chip {
+	display: inline-flex; align-items: baseline; gap: 5px;
+	background: var(--surface); border: 1px solid var(--border);
+	border-radius: 6px; padding: 3px 9px; font-size: 11.5px;
+}
+.runtime-chip i { font-style: normal; color: var(--muted); }
+.runtime-chip b { font-weight: 600; }
+
+.runtime-detail {
+	margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border);
+}
+
+.scope-collapsed { display: flex; align-items: center; gap: 12px; padding: 12px 18px; }
+.scope-collapsed .link-btn { margin-left: auto; white-space: nowrap; }
+
+.decision-count {
+	background: var(--ok-soft); color: #14612f; border: 1px solid #bfe3cd;
+	border-radius: 7px; padding: 9px 12px; font-size: 12.5px; line-height: 1.6;
+	margin-bottom: 12px;
+}
+.decision-count b { font-size: 14px; }
+
+/* ---------------- Revision / 准入 / 发布 ---------------- */
+
+.revision-banner {
+	display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 14px;
+	margin-bottom: 16px; padding: 12px 14px; border: 1px solid var(--blue-line);
+	border-radius: 8px; background: linear-gradient(90deg, #f8faff, var(--blue-soft));
+}
+.revision-banner > div { display: flex; flex-direction: column; gap: 3px; }
+.revision-banner > div:last-child { text-align: right; }
+.revision-banner > span { color: var(--blue); font-weight: 700; }
+
+.admission-panel { border-left: 3px solid var(--blue); }
+.evidence-list {
+	display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px;
+}
+.evidence-item {
+	display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px;
+	border: 1px solid var(--border-soft); border-radius: 7px; background: var(--surface-alt);
+	font-size: 12.5px; line-height: 1.5;
+}
+.check-dot {
+	flex: 0 0 18px; width: 18px; height: 18px; display: grid; place-items: center;
+	border-radius: 50%; background: var(--ok-soft); color: var(--ok); font-size: 11px; font-weight: 700;
+}
+.admission-result {
+	display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 10px 12px;
+	border-top: 1px solid var(--border-soft);
+}
+.admission-result b { font-size: 16px; color: #8a5400; }
+
+.execution-plan .link-btn { margin-right: 14px; }
+.compiled-toggle { margin-top: 10px; }
+.code-block.secondary { border-color: #d7dce4; background: #252a32; }
+
+.check-grid {
+	display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px;
+}
+.check-card {
+	min-height: 76px; display: flex; flex-direction: column; gap: 7px;
+	padding: 11px 12px; border: 1px solid var(--border); border-radius: 7px;
+	background: var(--surface-alt); font-size: 12px; line-height: 1.45;
+}
+.check-card b { font-size: 12.5px; }
+.check-card.ok { border-color: #bfe3cd; background: var(--ok-soft); }
+.check-card.ok b { color: var(--ok); }
+.check-card.warn { border-color: #efd29d; background: var(--warn-soft); }
+.check-card.warn b { color: var(--warn); }
+
+.binding-list { display: flex; flex-wrap: wrap; gap: 5px; max-width: 430px; }
+.binding-list .chip { white-space: nowrap; }
+
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+	outline: 2px solid var(--blue);
+	outline-offset: 2px;
+}

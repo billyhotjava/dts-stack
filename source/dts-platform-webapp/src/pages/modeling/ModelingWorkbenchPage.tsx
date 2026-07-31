@@ -21,6 +21,7 @@ import { ModelingWorkspaceShell } from "./ModelingWorkspaceShell";
 import { ImportModelPackageWizard } from "./model-package-import/ImportModelPackageWizard";
 import { buildModelPackageImportQuery } from "./model-package-import/modelPackageImportNavigation";
 import {
+	createModelingWorkspaceSearchCoordinator,
 	isModelingWorkspaceModelAssetOpen,
 	type ModelingWorkspaceModelStage,
 	type ModelingWorkspaceModule,
@@ -85,6 +86,13 @@ export default function ModelingWorkbenchPage() {
 	const requestedCreate = searchParams.get("create") === "1";
 	const importOpen = searchParams.get("modelImport") === "open";
 	const importRunId = searchParams.get("importRunId")?.trim() || "";
+	const workspaceSearchCoordinatorRef = useRef<ReturnType<typeof createModelingWorkspaceSearchCoordinator> | null>(
+		null,
+	);
+	if (!workspaceSearchCoordinatorRef.current) {
+		workspaceSearchCoordinatorRef.current = createModelingWorkspaceSearchCoordinator(searchParams);
+	}
+	const workspaceSearchCoordinator = workspaceSearchCoordinatorRef.current;
 	const [plans, setPlans] = useState<WarehousePlanHeader[]>([]);
 	const [selectedPlanId, setSelectedPlanId] = useState("");
 	const [projection, setProjection] = useState<WarehousePlanStageProjection | null>(null);
@@ -117,12 +125,16 @@ export default function ModelingWorkbenchPage() {
 		selectedPlan && canEditWarehousePlanHeader(canCreatePlan, selectedPlan.lifecycleStatus),
 	);
 
+	useEffect(() => {
+		workspaceSearchCoordinator.sync(searchParams);
+	}, [searchParams, workspaceSearchCoordinator]);
+
 	const navigateWorkspace = useCallback(
 		(patch: ModelingWorkspaceRoutePatch, replace = false) => {
-			const query = updateModelingWorkspaceSearch(searchParams, patch);
+			const query = workspaceSearchCoordinator.transition(patch);
 			navigate(`/modeling/workbench${query ? `?${query}` : ""}`, { replace });
 		},
-		[navigate, searchParams],
+		[navigate, workspaceSearchCoordinator],
 	);
 
 	const changeModule = useCallback(

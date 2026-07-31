@@ -12,6 +12,7 @@ sprint79_kcadm="/opt/keycloak/bin/kcadm.sh"
 sprint79_kcadm_config="/tmp/sprint79-kcadm.config"
 sprint79_auth_file="${sprint79_repo_root}/source/dts-platform-webapp/e2e/.auth/user.json"
 sprint79_realm_role="ROLE_OP_ADMIN"
+sprint79_business_role="ROLE_INST_DATA_OWNER"
 sprint79_kc_id=""
 
 cleanup_sprint79_identity() {
@@ -19,7 +20,11 @@ cleanup_sprint79_identity() {
 	if [[ -n "${sprint79_kc_id}" ]]; then
 		if ! docker exec -e PGPASSWORD="${PG_PWD_DTADMIN}" v223-dts-pg-1 \
 			psql -q -U "${PG_USER_DTADMIN}" -d "${PG_DB_DTADMIN}" \
-			-c "DELETE FROM admin_keycloak_user WHERE username = '${sprint79_user}';" >/dev/null; then
+			-c "DELETE FROM admin_role_member
+				WHERE username = '${sprint79_user}'
+				  AND role = '${sprint79_business_role}';
+				DELETE FROM admin_keycloak_user
+				WHERE username = '${sprint79_user}';" >/dev/null; then
 			sprint79_cleanup_failed=1
 		fi
 		if ! docker exec dts-keycloak "${sprint79_kcadm}" \
@@ -128,6 +133,13 @@ docker exec -e PGPASSWORD="${PG_PWD_DTADMIN}" v223-dts-pg-1 \
 		'${sprint79_kc_id}', '${sprint79_user}', 'Sprint 79 E2E', '${sprint79_user}@example.invalid', 'IMPORTANT',
 		'[\"${sprint79_realm_role}\"]'::jsonb, '[]'::jsonb, true, now(),
 		'sprint79-e2e', now(), 'sprint79-e2e', now()
+	);
+	INSERT INTO admin_role_member (
+		role, username, display_name,
+		created_by, created_date, last_modified_by, last_modified_date
+	) VALUES (
+		'${sprint79_business_role}', '${sprint79_user}', 'Sprint 79 E2E',
+		'sprint79-e2e', now(), 'sprint79-e2e', now()
 	);" >/dev/null
 
 set +e
@@ -158,13 +170,22 @@ sprint79_snapshot_count="$(
 		psql -Atq -U "${PG_USER_DTADMIN}" -d "${PG_DB_DTADMIN}" \
 		-c "SELECT count(*) FROM admin_keycloak_user WHERE username = '${sprint79_user}';"
 )"
+sprint79_role_member_count="$(
+	docker exec -e PGPASSWORD="${PG_PWD_DTADMIN}" v223-dts-pg-1 \
+		psql -Atq -U "${PG_USER_DTADMIN}" -d "${PG_DB_DTADMIN}" \
+		-c "SELECT count(*)
+			FROM admin_role_member
+			WHERE username = '${sprint79_user}'
+			  AND role = '${sprint79_business_role}';"
+)"
 sprint79_auth_state="absent"
 if [[ -e "${sprint79_auth_file}" ]]; then
 	sprint79_auth_state="present"
 fi
 
-echo "CLEANUP keycloak=${sprint79_keycloak_count} snapshot=${sprint79_snapshot_count} auth_state=${sprint79_auth_state}"
+echo "CLEANUP keycloak=${sprint79_keycloak_count} snapshot=${sprint79_snapshot_count} role_member=${sprint79_role_member_count} auth_state=${sprint79_auth_state}"
 [[ "${sprint79_keycloak_count}" == "0" ]]
 [[ "${sprint79_snapshot_count}" == "0" ]]
+[[ "${sprint79_role_member_count}" == "0" ]]
 [[ "${sprint79_auth_state}" == "absent" ]]
 exit "${sprint79_test_status}"

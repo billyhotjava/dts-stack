@@ -1,7 +1,7 @@
 # F3：指标、工具与关系图
 
 **优先级**：P1  
-**状态**：PASS_WITH_GAPS（源码、定向测试、部署、回滚与认证浏览器 IT-04 通过；PostgreSQL repository/cursor IT 与 Chrome95 待执行）
+**状态**：PASS_WITH_GAPS（源码、PostgreSQL/Liquibase IT、部署、回滚与认证浏览器 IT-04 通过；Chrome 95 实机验收待执行）
 
 ## 目标
 
@@ -25,6 +25,7 @@
 |---|---|---|---|
 | T01 | 嵌入指标与通用工具 | PASS_WITH_GAPS | F1/T01 |
 | T02 | 建立只读关系图投影 | PASS_WITH_GAPS | F1/T01、F2/T03 |
+| T03 | 修复关系图分页并拆分投影服务 | DONE | T02 |
 
 ## Definition of Ready
 

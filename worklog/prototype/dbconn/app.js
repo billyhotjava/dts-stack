@@ -9,7 +9,7 @@ const A = window.SchemaForm.el;
 const ROUTES = [
 	{ key: "list", label: "数据接入" },
 	{ key: "params", label: "参数归属" },
-	{ key: "admin", label: "连接器与驱动" },
+	{ key: "admin", label: "连接器与运行时" },
 	{ key: "notes", label: "设计说明" },
 ];
 

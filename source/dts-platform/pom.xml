@@ -610,6 +610,10 @@
                         <testInclude>**/service/modeling/ModelingVNextApplicationServiceIT.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehousePlanApplicationServiceIT.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehousePlanContractTest.java</testInclude>
+                        <testInclude>**/service/modeling/warehouse/WarehousePlanRelationshipGraphInboundIndexLiquibaseIT.java</testInclude>
+                        <testInclude>**/service/modeling/warehouse/WarehousePlanRelationshipGraphInboundIndexLiquibaseTest.java</testInclude>
+                        <testInclude>**/service/modeling/warehouse/WarehousePlanRelationshipGraphInboundModelReaderTest.java</testInclude>
+                        <testInclude>**/service/modeling/warehouse/WarehousePlanRelationshipGraphPaginationTest.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehousePlanRelationshipGraphServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/imports/**/*.java</testInclude>
                         <testInclude>**/web/filter/ModelArchiveUploadLimitFilterTest.java</testInclude>

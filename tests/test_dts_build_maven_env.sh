@@ -8,6 +8,8 @@ trap 'rm -rf "${TMP_DIR}"' EXIT
 TEST_REPO="${TMP_DIR}/repo"
 FAKE_BIN="${TMP_DIR}/bin"
 FAKE_DOCKER_LOG="${TMP_DIR}/docker-run.args"
+FAKE_DOCKER_COLLISION="${TMP_DIR}/docker-run.collision"
+FAKE_DOCKER_ACTIVE="${TMP_DIR}/docker-run.active"
 HOST_M2_DIR="${TMP_DIR}/host-m2"
 mkdir -p "${TEST_REPO}/builds" "${TEST_REPO}/builds/dts-admin" "${TEST_REPO}/source/dts-admin/target" "${FAKE_BIN}" "${HOST_M2_DIR}"
 
@@ -64,6 +66,14 @@ case "${1:-}" in
     ;;
   run)
     printf '%s\n' "$@" > "__FAKE_DOCKER_LOG__"
+    if [[ "${FAKE_DOCKER_RUN_DELAY:-0}" != "0" ]]; then
+      if ! mkdir "__FAKE_DOCKER_ACTIVE__" 2>/dev/null; then
+        : > "__FAKE_DOCKER_COLLISION__"
+        exit 91
+      fi
+      trap 'rmdir "__FAKE_DOCKER_ACTIVE__"' EXIT
+      sleep "${FAKE_DOCKER_RUN_DELAY}"
+    fi
     mkdir -p "__TEST_REPO__/source/dts-admin/target"
     : > "__TEST_REPO__/source/dts-admin/target/dts-admin-0.0.1-SNAPSHOT.jar"
     exit 0
@@ -94,6 +104,8 @@ case "${1:-}" in
 esac
 EOF_DOCKER
 sed -i "s|__FAKE_DOCKER_LOG__|${FAKE_DOCKER_LOG}|g" "${FAKE_BIN}/docker"
+sed -i "s|__FAKE_DOCKER_COLLISION__|${FAKE_DOCKER_COLLISION}|g" "${FAKE_BIN}/docker"
+sed -i "s|__FAKE_DOCKER_ACTIVE__|${FAKE_DOCKER_ACTIVE}|g" "${FAKE_BIN}/docker"
 sed -i "s|__TEST_REPO__|${TEST_REPO}|g" "${FAKE_BIN}/docker"
 chmod +x "${FAKE_BIN}/docker"
 
@@ -147,5 +159,17 @@ fi
 
 if ! grep -q 'exec /usr/bin/mvn ' "${FAKE_DOCKER_LOG}"; then
   echo "expected fallback command to execute /usr/bin/mvn directly" >&2
+  exit 1
+fi
+
+FAKE_DOCKER_RUN_DELAY=1 "${TEST_REPO}/builds/dts-build.sh" --image dts-admin >/dev/null &
+first_build_pid=$!
+FAKE_DOCKER_RUN_DELAY=1 "${TEST_REPO}/builds/dts-build.sh" --image dts-admin >/dev/null &
+second_build_pid=$!
+wait "${first_build_pid}"
+wait "${second_build_pid}"
+
+if [[ -e "${FAKE_DOCKER_COLLISION}" ]]; then
+  echo "expected concurrent builds to serialize Maven access to the shared target directory" >&2
   exit 1
 fi

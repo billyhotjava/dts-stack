@@ -645,6 +645,17 @@ build_maven_module() {
   local module="$1"
   local jar_glob="$2"
   local out_jar="$3"
+  local repo_lock_id
+  local maven_lock_file
+  local maven_lock_fd
+
+  require_cmd flock
+  repo_lock_id="$(printf '%s' "${REPO_ROOT}" | cksum | awk '{print $1}')"
+  maven_lock_file="${MAVEN_BUILD_LOCK_FILE:-${TMPDIR:-/tmp}/dts-build-maven-${repo_lock_id}.lock}"
+  exec {maven_lock_fd}>"${maven_lock_file}"
+  echo "[dts-build] Waiting for Maven workspace lock: ${maven_lock_file}"
+  flock "${maven_lock_fd}"
+  echo "[dts-build] Acquired Maven workspace lock for ${module}"
 
   if [[ -f "$out_jar" ]]; then
     echo "[dts-build] Removing stale prebuilt jar: ${out_jar}"
@@ -783,6 +794,8 @@ SETTINGS_EOF
   cp "$jar_path" "$out_jar"
   echo "[dts-build] Copied ${jar_path} -> ${out_jar}"
   validate_module_jar_identity "$module" "$out_jar"
+  flock -u "${maven_lock_fd}"
+  exec {maven_lock_fd}>&-
 }
 
 init_images_normal() {

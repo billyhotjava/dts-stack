@@ -1,7 +1,7 @@
-import { Alert, Button, Form, Input, Modal, Radio, Select, Typography, type FormInstance } from "antd";
+import { Alert, Button, Form, type FormInstance, Input, Modal, Radio, Select, Typography } from "antd";
 import { Database, Layers3, Plus, Trash2 } from "lucide-react";
 import type { CreateWarehousePlanInput, WarehousePlanOnboardingMode } from "@/api/warehousePlanApi";
-import { type WarehousePlanCreateSession, validateWarehousePlanInitialSources } from "./warehousePlanCreateFlow";
+import { validateWarehousePlanInitialSources, type WarehousePlanCreateSession } from "./warehousePlanCreateFlow";
 
 const { Text } = Typography;
 
@@ -23,6 +23,50 @@ type WarehousePlanCreateModalProps = {
 	onOnboardingModeChange: (mode: WarehousePlanOnboardingMode) => void;
 	onReplaceConflictingIdempotencyKey: () => void;
 };
+
+type WarehousePlanOnboardingModeSelectorProps = {
+	value: WarehousePlanOnboardingMode;
+	disabled: boolean;
+	onChange: (value: WarehousePlanOnboardingMode) => void;
+};
+
+export function WarehousePlanOnboardingModeSelector({
+	value,
+	disabled,
+	onChange,
+}: WarehousePlanOnboardingModeSelectorProps) {
+	return (
+		<div role="radiogroup" aria-label="建设计划创建模式">
+			<Radio.Group
+				className="mb-5 grid w-full grid-cols-2 gap-3"
+				disabled={disabled}
+				value={value}
+				onChange={(event) => onChange(event.target.value as WarehousePlanOnboardingMode)}
+			>
+				<Radio
+					value="BUSINESS_FIRST"
+					className={`m-0 rounded-xl border p-4 [&_.ant-radio-label]:min-w-0 [&_.ant-radio-label]:flex-1 ${value === "BUSINESS_FIRST" ? "border-blue-500 bg-blue-50" : "border-slate-200"}`}
+				>
+					<div className="flex items-center gap-2 font-medium">
+						<Layers3 size={17} />
+						从业务目标开始
+					</div>
+					<div className="mt-1 text-xs leading-5 text-slate-500">先说明要解决的问题，再逐步确认业务分类和范围。</div>
+				</Radio>
+				<Radio
+					value="ASSET_FIRST"
+					className={`m-0 rounded-xl border p-4 [&_.ant-radio-label]:min-w-0 [&_.ant-radio-label]:flex-1 ${value === "ASSET_FIRST" ? "border-blue-500 bg-blue-50" : "border-slate-200"}`}
+				>
+					<div className="flex items-center gap-2 font-medium">
+						<Database size={17} />
+						从现有数据开始
+					</div>
+					<div className="mt-1 text-xs leading-5 text-slate-500">先盘点现有表、文件和 dbt 产物。</div>
+				</Radio>
+			</Radio.Group>
+		</div>
+	);
+}
 
 export function WarehousePlanCreateModal({
 	open,
@@ -54,36 +98,11 @@ export function WarehousePlanCreateModal({
 			onOk={() => form.submit()}
 			destroyOnClose
 		>
-			<div className="mb-5 grid grid-cols-2 gap-3">
-				<label
-					className={`cursor-pointer rounded-xl border p-4 ${onboardingMode === "BUSINESS_FIRST" ? "border-blue-500 bg-blue-50" : "border-slate-200"}`}
-				>
-					<Radio
-						disabled={creating}
-						checked={onboardingMode === "BUSINESS_FIRST"}
-						onChange={() => onOnboardingModeChange("BUSINESS_FIRST")}
-					/>
-					<div className="mt-3 flex items-center gap-2 font-medium">
-						<Layers3 size={17} />
-						从业务目标开始
-					</div>
-					<div className="mt-1 text-xs leading-5 text-slate-500">先说明要解决的问题，再逐步确认业务分类和范围。</div>
-				</label>
-				<label
-					className={`cursor-pointer rounded-xl border p-4 ${onboardingMode === "ASSET_FIRST" ? "border-blue-500 bg-blue-50" : "border-slate-200"}`}
-				>
-					<Radio
-						disabled={creating}
-						checked={onboardingMode === "ASSET_FIRST"}
-						onChange={() => onOnboardingModeChange("ASSET_FIRST")}
-					/>
-					<div className="mt-3 flex items-center gap-2 font-medium">
-						<Database size={17} />
-						从现有数据开始
-					</div>
-					<div className="mt-1 text-xs leading-5 text-slate-500">先盘点现有表、文件和 dbt 产物。</div>
-				</label>
-			</div>
+			<WarehousePlanOnboardingModeSelector
+				value={onboardingMode}
+				disabled={creating}
+				onChange={onOnboardingModeChange}
+			/>
 			{createSession.idempotencyConflict ? (
 				<Alert
 					className="mb-4"

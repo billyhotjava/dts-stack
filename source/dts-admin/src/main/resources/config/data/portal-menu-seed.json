@@ -112,6 +112,14 @@
               "title": "数仓规划",
               "children": [
                 {
+                  "key": "warehouse-plans",
+                  "path": "warehouse-plans",
+                  "icon": "solar:clipboard-list-bold-duotone",
+                  "titleKey": "sys.nav.portal.warehousePlans",
+                  "title": "建设规划",
+                  "externalLink": "/modeling/plans"
+                },
+                {
                   "key": "subjects",
                   "path": "subjects",
                   "icon": "solar:map-point-bold-duotone",
@@ -170,12 +178,45 @@
               "title": "维度建模",
               "children": [
                 {
+                  "key": "semantic-objects",
+                  "path": "objects",
+                  "icon": "solar:box-bold-duotone",
+                  "titleKey": "sys.nav.portal.studioSemanticObjects",
+                  "title": "维度目录",
+                  "externalLink": "/modeling/dimensions"
+                },
+                {
+                  "key": "semantic-models",
+                  "path": "models",
+                  "icon": "solar:database-bold-duotone",
+                  "titleKey": "sys.nav.portal.studioSemanticModels",
+                  "title": "模型中心",
+                  "externalLink": "/modeling/models"
+                },
+                {
                   "key": "sql",
                   "path": "sql-modeling",
                   "icon": "solar:documents-bold-duotone",
                   "titleKey": "sys.nav.portal.studioSqlModeling",
                   "title": "高级建模（SQL/dbt）",
                   "externalLink": "/studio/sql-modeling"
+                }
+              ]
+            },
+            {
+              "key": "data-metrics",
+              "path": "data-metrics",
+              "icon": "solar:graph-bold-duotone",
+              "titleKey": "sys.nav.portal.dataMetrics",
+              "title": "数据指标",
+              "children": [
+                {
+                  "key": "metric-workbench",
+                  "path": "metric-workbench",
+                  "icon": "solar:layers-minimalistic-bold-duotone",
+                  "titleKey": "sys.nav.portal.studioMetricWorkbench",
+                  "title": "指标工作台",
+                  "externalLink": "/modeling/metric-workbench"
                 }
               ]
             }
