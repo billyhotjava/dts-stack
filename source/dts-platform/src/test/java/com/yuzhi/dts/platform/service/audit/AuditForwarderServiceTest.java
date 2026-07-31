@@ -1,68 +1,69 @@
 package com.yuzhi.dts.platform.service.audit;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.config.AuditProperties;
-import com.yuzhi.dts.platform.service.admin.gateway.audit.AdminAuditGateway;
+import com.yuzhi.dts.platform.repository.audit.PlatformAuditOutboxRepository;
+import com.yuzhi.dts.platform.repository.audit.PlatformAuditOutboxRepository.EnqueueCommand;
 import java.util.Map;
-import java.util.Queue;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.test.util.ReflectionTestUtils;
 
 class AuditForwarderServiceTest {
 
-    @Test
-    void recordShouldSendThroughAdminAuditGateway() {
-        AdminAuditGateway gateway = mock(AdminAuditGateway.class);
-        when(gateway.isEnabled()).thenReturn(true);
-        when(gateway.recordEvent(anyMap())).thenReturn(true);
+    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
-        AuditForwarderService service = new AuditForwarderService(enabledProperties(), gateway);
+    @Test
+    void recordShouldPersistStableEventBeforeAnyRemoteDelivery() throws Exception {
+        PlatformAuditOutboxRepository outbox = mock(PlatformAuditOutboxRepository.class);
+        ObjectMapper objectMapper = new ObjectMapper();
+        AuditForwarderService service = new AuditForwarderService(enabledProperties(), outbox, objectMapper);
         AuditForwarderService.PendingAuditEvent event = new AuditForwarderService.PendingAuditEvent();
         event.actor = "alice";
-        event.action = "CREATE";
-        event.module = "FOUNDATION";
+        event.action = "MODEL_SPEC_CREATE";
+        event.module = "modeling";
+        event.resourceType = "modeling.model-spec";
+        event.resourceId = "spec-1";
 
         service.record(event);
 
-        verify(gateway).recordEvent(anyMap());
-        assertThat(queue(service)).isEmpty();
+        ArgumentCaptor<EnqueueCommand> captor = ArgumentCaptor.forClass(EnqueueCommand.class);
+        verify(outbox).enqueue(captor.capture());
+        EnqueueCommand command = captor.getValue();
+        Map<String, Object> body = objectMapper.readValue(command.bodyJson(), MAP_TYPE);
+        assertThat(command.eventId()).isNotBlank();
+        assertThat(command.payloadHash()).hasSize(64);
+        assertThat(body)
+            .containsEntry("eventId", command.eventId())
+            .containsEntry("producer", "dts-platform")
+            .containsEntry("action", "MODEL_SPEC_CREATE")
+            .containsEntry("resourceId", "spec-1");
     }
 
     @Test
-    void retryFailedEventsShouldReplayQueuedPayloadsThroughGateway() {
-        AdminAuditGateway gateway = mock(AdminAuditGateway.class);
-        when(gateway.isEnabled()).thenReturn(true);
-        when(gateway.recordEvent(anyMap())).thenReturn(false).thenReturn(true);
-
-        AuditForwarderService service = new AuditForwarderService(enabledProperties(), gateway);
+    void recordShouldPersistEvenWhenRemoteGatewayIsUnavailable() {
+        PlatformAuditOutboxRepository outbox = mock(PlatformAuditOutboxRepository.class);
+        AuditForwarderService service = new AuditForwarderService(enabledProperties(), outbox, new ObjectMapper());
         AuditForwarderService.PendingAuditEvent event = new AuditForwarderService.PendingAuditEvent();
         event.actor = "alice";
-        event.action = "UPDATE";
-        event.module = "FOUNDATION";
+        event.action = "MODEL_RELEASE_CANDIDATE_PUBLISH";
+        event.module = "modeling";
 
         service.record(event);
-        assertThat(queue(service)).hasSize(1);
 
-        service.retryFailedEvents();
-
-        verify(gateway, times(2)).recordEvent(anyMap());
-        assertThat(queue(service)).isEmpty();
+        verify(outbox).enqueue(any(EnqueueCommand.class));
     }
 
     @Test
     void recordShouldSkipMachineActors() {
-        AdminAuditGateway gateway = mock(AdminAuditGateway.class);
-        when(gateway.isEnabled()).thenReturn(true);
-
-        AuditForwarderService service = new AuditForwarderService(enabledProperties(), gateway);
+        PlatformAuditOutboxRepository outbox = mock(PlatformAuditOutboxRepository.class);
+        AuditForwarderService service = new AuditForwarderService(enabledProperties(), outbox, new ObjectMapper());
         AuditForwarderService.PendingAuditEvent event = new AuditForwarderService.PendingAuditEvent();
         event.actor = "service:dts-analytics";
         event.action = "查看数据源列表";
@@ -70,17 +71,14 @@ class AuditForwarderServiceTest {
 
         service.record(event);
 
-        verify(gateway, never()).recordEvent(anyMap());
-        assertThat(queue(service)).isEmpty();
+        verify(outbox, never()).enqueue(any(EnqueueCommand.class));
     }
 
     @Test
-    void recordShouldSendStableButtonCodeForPlatformLoginEvents() {
-        AdminAuditGateway gateway = mock(AdminAuditGateway.class);
-        when(gateway.isEnabled()).thenReturn(true);
-        when(gateway.recordEvent(anyMap())).thenReturn(true);
-
-        AuditForwarderService service = new AuditForwarderService(enabledProperties(), gateway);
+    void recordShouldPersistStableButtonCodeForPlatformLoginEvents() throws Exception {
+        PlatformAuditOutboxRepository outbox = mock(PlatformAuditOutboxRepository.class);
+        ObjectMapper objectMapper = new ObjectMapper();
+        AuditForwarderService service = new AuditForwarderService(enabledProperties(), outbox, objectMapper);
         AuditForwarderService.PendingAuditEvent event = new AuditForwarderService.PendingAuditEvent();
         event.actor = "xiezm";
         event.action = "AUTH LOGIN";
@@ -92,18 +90,16 @@ class AuditForwarderServiceTest {
 
         service.record(event);
 
-        Map<String, Object> body = capturedBody(gateway);
+        Map<String, Object> body = capturedBody(outbox, objectMapper);
         assertThat(body).containsEntry("buttonCode", "ADMIN_AUTH_PLATFORM_LOGIN");
         assertThat(body).containsEntry("operationCode", "ADMIN_AUTH_PLATFORM_LOGIN");
     }
 
     @Test
-    void recordShouldSendStableButtonCodeForPlatformLogoutEvents() {
-        AdminAuditGateway gateway = mock(AdminAuditGateway.class);
-        when(gateway.isEnabled()).thenReturn(true);
-        when(gateway.recordEvent(anyMap())).thenReturn(true);
-
-        AuditForwarderService service = new AuditForwarderService(enabledProperties(), gateway);
+    void recordShouldPersistStableButtonCodeForPlatformLogoutEvents() throws Exception {
+        PlatformAuditOutboxRepository outbox = mock(PlatformAuditOutboxRepository.class);
+        ObjectMapper objectMapper = new ObjectMapper();
+        AuditForwarderService service = new AuditForwarderService(enabledProperties(), outbox, objectMapper);
         AuditForwarderService.PendingAuditEvent event = new AuditForwarderService.PendingAuditEvent();
         event.actor = "xiezm";
         event.action = "AUTH LOGOUT";
@@ -115,7 +111,7 @@ class AuditForwarderServiceTest {
 
         service.record(event);
 
-        Map<String, Object> body = capturedBody(gateway);
+        Map<String, Object> body = capturedBody(outbox, objectMapper);
         assertThat(body).containsEntry("buttonCode", "ADMIN_AUTH_PLATFORM_LOGOUT");
         assertThat(body).containsEntry("operationCode", "ADMIN_AUTH_PLATFORM_LOGOUT");
     }
@@ -126,15 +122,9 @@ class AuditForwarderServiceTest {
         return properties;
     }
 
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> capturedBody(AdminAuditGateway gateway) {
-        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
-        verify(gateway).recordEvent(captor.capture());
-        return captor.getValue();
-    }
-
-    @SuppressWarnings("unchecked")
-    private Queue<java.util.Map<String, Object>> queue(AuditForwarderService service) {
-        return (Queue<java.util.Map<String, Object>>) ReflectionTestUtils.getField(service, "failedEventQueue");
+    private Map<String, Object> capturedBody(PlatformAuditOutboxRepository outbox, ObjectMapper objectMapper) throws Exception {
+        ArgumentCaptor<EnqueueCommand> captor = ArgumentCaptor.forClass(EnqueueCommand.class);
+        verify(outbox).enqueue(captor.capture());
+        return objectMapper.readValue(captor.getValue().bodyJson(), MAP_TYPE);
     }
 }

@@ -638,6 +638,8 @@
                         <testInclude>**/service/security/AssetActionPolicyEvaluatorTest.java</testInclude>
                         <testInclude>**/service/security/AssetActionPolicyServiceTest.java</testInclude>
                         <testInclude>**/service/audit/OperationTypeNormalizerTest.java</testInclude>
+                        <testInclude>**/service/audit/AuditForwarderServiceTest.java</testInclude>
+                        <testInclude>**/service/audit/AuditOutboxDispatcherTest.java</testInclude>
                         <testInclude>**/web/rest/AssetActionPolicyResourceTest.java</testInclude>
                         <testInclude>**/web/rest/OperationPermissionMatrixIT.java</testInclude>
                         <testInclude>**/service/catalog/CatalogAssetPortalServicePermissionParityTest.java</testInclude>
