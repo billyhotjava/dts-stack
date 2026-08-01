@@ -120,7 +120,6 @@ public class PlatformCapabilityResource {
             "METRIC_PACK",
             "SEMANTIC_MODEL",
             "DATA_PRODUCT",
-            "MODELING_SQL_MODEL",
             "DATA_STANDARD",
             "GLOSSARY_TERM",
             "GOV_INDICATOR",

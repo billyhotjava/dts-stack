@@ -85,6 +85,24 @@ public class IngestionTaskRevision {
     @Column(name = "activated_at")
     private Instant activatedAt;
 
+    @Column(name = "dag_deployment_status", length = 32)
+    private String dagDeploymentStatus;
+
+    @Column(name = "dag_deployment_error", columnDefinition = "TEXT")
+    private String dagDeploymentError;
+
+    @Column(name = "staged_dag_path", length = 1000)
+    private String stagedDagPath;
+
+    @Column(name = "published_dag_path", length = 1000)
+    private String publishedDagPath;
+
+    @Column(name = "previous_airflow_dag_id", length = 200)
+    private String previousAirflowDagId;
+
+    @Column(name = "dag_deployment_updated_at")
+    private Instant dagDeploymentUpdatedAt;
+
     public Long getId() {
         return id;
     }
@@ -243,5 +261,53 @@ public class IngestionTaskRevision {
 
     public void setActivatedAt(Instant activatedAt) {
         this.activatedAt = activatedAt;
+    }
+
+    public String getDagDeploymentStatus() {
+        return dagDeploymentStatus;
+    }
+
+    public void setDagDeploymentStatus(String dagDeploymentStatus) {
+        this.dagDeploymentStatus = dagDeploymentStatus;
+    }
+
+    public String getDagDeploymentError() {
+        return dagDeploymentError;
+    }
+
+    public void setDagDeploymentError(String dagDeploymentError) {
+        this.dagDeploymentError = dagDeploymentError;
+    }
+
+    public String getStagedDagPath() {
+        return stagedDagPath;
+    }
+
+    public void setStagedDagPath(String stagedDagPath) {
+        this.stagedDagPath = stagedDagPath;
+    }
+
+    public String getPublishedDagPath() {
+        return publishedDagPath;
+    }
+
+    public void setPublishedDagPath(String publishedDagPath) {
+        this.publishedDagPath = publishedDagPath;
+    }
+
+    public String getPreviousAirflowDagId() {
+        return previousAirflowDagId;
+    }
+
+    public void setPreviousAirflowDagId(String previousAirflowDagId) {
+        this.previousAirflowDagId = previousAirflowDagId;
+    }
+
+    public Instant getDagDeploymentUpdatedAt() {
+        return dagDeploymentUpdatedAt;
+    }
+
+    public void setDagDeploymentUpdatedAt(Instant dagDeploymentUpdatedAt) {
+        this.dagDeploymentUpdatedAt = dagDeploymentUpdatedAt;
     }
 }

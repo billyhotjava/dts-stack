@@ -1,9 +1,11 @@
 package com.yuzhi.dts.platform.service.modeling;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -43,6 +45,12 @@ class ModelMaterializationStartServiceTest {
     @Mock
     private ModelMaterializationBuildRepository builds;
 
+    @Mock
+    private ModelMaterializationSourceAvailabilityGuard sourceAvailability;
+
+    @Mock
+    private ModelMaterializationAvailabilityAuditService availabilityAudit;
+
     private ModelMaterializationStartService service;
 
     @BeforeEach
@@ -50,6 +58,8 @@ class ModelMaterializationStartServiceTest {
         service = new ModelMaterializationStartService(
             candidateCommands,
             builds,
+            sourceAvailability,
+            availabilityAudit,
             Clock.fixed(NOW, ZoneOffset.UTC)
         );
     }
@@ -83,6 +93,7 @@ class ModelMaterializationStartServiceTest {
         assertThat(command.getValue().expectedVersion()).isEqualTo(4);
         assertThat(command.getValue().targetStatus()).isEqualTo(DeliveryStatus.BUILDING);
         verify(builds).createQueuedBuild(building, NOW);
+        verify(sourceAvailability).requireCandidateCurrent(TENANT, CANDIDATE_ID, 5);
         verify(builds, never()).requireQueuedBuild(any());
     }
 
@@ -172,6 +183,34 @@ class ModelMaterializationStartServiceTest {
         assertThat(result.candidate().status()).isEqualTo(DeliveryStatus.STALE);
         verify(builds, never()).createQueuedBuild(any(), any());
         verify(builds, never()).requireQueuedBuild(any());
+    }
+
+    @Test
+    void availabilityFenceRollsTheTransitionBackBeforeTheBuildSnapshot() {
+        CandidateView building = candidate(DeliveryStatus.BUILDING);
+        when(candidateCommands.transition(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), any()))
+            .thenReturn(new CommandResult(building, false, List.of()));
+        doThrow(
+            new ModelReleaseCandidateException(
+                ModelMaterializationSourceAvailabilityGuard.SOURCE_UNAVAILABLE,
+                "source fenced",
+                ModelReleaseCandidateException.Kind.UNPROCESSABLE
+            )
+        ).when(sourceAvailability).requireCandidateCurrent(TENANT, CANDIDATE_ID, 5);
+
+        assertThatThrownBy(() -> service.start(TENANT, ACTOR, CANDIDATE_ID, 4, "build-key", "start build"))
+            .isInstanceOf(ModelReleaseCandidateException.class)
+            .extracting(error -> ((ModelReleaseCandidateException) error).code())
+            .isEqualTo(ModelMaterializationSourceAvailabilityGuard.SOURCE_UNAVAILABLE);
+
+        verify(candidateCommands).transition(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), any());
+        verify(availabilityAudit).recordStartDenied(
+            ACTOR,
+            CANDIDATE_ID,
+            5,
+            ModelMaterializationSourceAvailabilityGuard.SOURCE_UNAVAILABLE
+        );
+        verify(builds, never()).createQueuedBuild(any(), any());
     }
 
     private static CandidateView candidate(DeliveryStatus status) {

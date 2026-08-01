@@ -43,9 +43,10 @@ management:
 dts:
   ingestion:
     enabled: true
-    trusted-service-name: ${DTS_INGESTION_TRUSTED_SERVICE_NAME:dts-platform}
-    # Pairwise platform -> ingestion credential. Missing configuration fails closed.
-    trusted-service-token: ${DTS_INGESTION_FROM_PLATFORM_TOKEN:${DTS_PLATFORM_TO_INGESTION_TOKEN:}}
+    # Pairwise credentials are necessary but not sufficient: code-owned service/method/path policy also applies.
+    trusted-service-tokens:
+      dts-platform: ${DTS_INGESTION_FROM_PLATFORM_TOKEN:${DTS_PLATFORM_TO_INGESTION_TOKEN:}}
+      dts-airflow: ${DTS_AIRFLOW_TO_INGESTION_TOKEN:}
     api:
       max-pages: ${DTS_INGESTION_API_MAX_PAGES:1000}
       connect-timeout: ${DTS_INGESTION_API_CONNECT_TIMEOUT:10s}

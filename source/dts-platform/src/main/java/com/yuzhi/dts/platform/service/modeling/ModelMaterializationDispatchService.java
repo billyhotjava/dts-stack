@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.service.modeling;
 
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationBuildRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationBuildRepository.CandidateBuildScope;
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationDispatchRepository;
@@ -13,15 +14,21 @@ import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService;
 import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService.CandidateArtifact;
 import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService.CandidateArtifactEntry;
 import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService.ScopedCandidateProject;
+import com.yuzhi.dts.platform.service.audit.AuditService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionOperations;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Claims durable candidate outbox rows and performs the external Airflow side effect outside the
@@ -41,7 +48,10 @@ public class ModelMaterializationDispatchService {
     private final DbtDagService dags;
     private final DbtExecutionGateway gateway;
     private final ModelRuntimeSpecTokenCodec tokens;
+    private final ModelMaterializationSourceAvailabilityGuard sourceAvailability;
+    private final AuditService auditService;
     private final Clock clock;
+    private final TransactionOperations transactions;
 
     @Autowired
     public ModelMaterializationDispatchService(
@@ -50,7 +60,10 @@ public class ModelMaterializationDispatchService {
         DbtScopedProjectService scopedProjects,
         DbtDagService dags,
         DbtExecutionGateway gateway,
-        ModelRuntimeSpecTokenCodec tokens
+        ModelRuntimeSpecTokenCodec tokens,
+        ModelMaterializationSourceAvailabilityGuard sourceAvailability,
+        AuditService auditService,
+        PlatformTransactionManager transactionManager
     ) {
         this(
             dispatches,
@@ -59,7 +72,10 @@ public class ModelMaterializationDispatchService {
             dags,
             gateway,
             tokens,
-            Clock.systemUTC()
+            sourceAvailability,
+            auditService,
+            Clock.systemUTC(),
+            new TransactionTemplate(transactionManager)
         );
     }
 
@@ -70,7 +86,10 @@ public class ModelMaterializationDispatchService {
         DbtDagService dags,
         DbtExecutionGateway gateway,
         ModelRuntimeSpecTokenCodec tokens,
-        Clock clock
+        ModelMaterializationSourceAvailabilityGuard sourceAvailability,
+        AuditService auditService,
+        Clock clock,
+        TransactionOperations transactions
     ) {
         this.dispatches = Objects.requireNonNull(
             dispatches,
@@ -93,7 +112,16 @@ public class ModelMaterializationDispatchService {
             tokens,
             "tokens is required"
         );
+        this.sourceAvailability = Objects.requireNonNull(sourceAvailability, "sourceAvailability is required");
+        this.auditService = Objects.requireNonNull(
+            auditService,
+            "auditService is required"
+        );
         this.clock = Objects.requireNonNull(clock, "clock is required");
+        this.transactions = Objects.requireNonNull(
+            transactions,
+            "transactions is required"
+        );
     }
 
     @Scheduled(
@@ -121,19 +149,6 @@ public class ModelMaterializationDispatchService {
                     dispatch.id()
                 );
             validateIdentity(dispatch, scope);
-            if (
-                !dispatch
-                    .artifactBundleChecksum()
-                    .equals(scope.artifactBundleChecksum())
-            ) {
-                return Optional.of(
-                    block(
-                        dispatch,
-                        "MATERIALIZATION_ARTIFACT_BUNDLE_DRIFT",
-                        now
-                    )
-                );
-            }
 
             Optional<ReleaseBuildRequest> recoveryRequest =
                 recoveryRequest(dispatch);
@@ -153,6 +168,22 @@ public class ModelMaterializationDispatchService {
                     );
                 }
             }
+
+            if (
+                !dispatch
+                    .artifactBundleChecksum()
+                    .equals(scope.artifactBundleChecksum())
+            ) {
+                return Optional.of(
+                    block(
+                        dispatch,
+                        "MATERIALIZATION_ARTIFACT_BUNDLE_DRIFT",
+                        now
+                    )
+                );
+            }
+
+            sourceAvailability.requireDispatchCurrent(dispatch.id());
 
             ScopedCandidateProject project =
                 scopedProjects.prepareCandidate(toArtifacts(scope));
@@ -211,16 +242,16 @@ public class ModelMaterializationDispatchService {
             return Optional.of(block(dispatch, failure.code(), now));
         } catch (ModelReleaseCandidateException failure) {
             return Optional.of(block(dispatch, failure.code(), now));
+        } catch (MachineAuditPersistenceException failure) {
+            throw failure;
         } catch (RuntimeException failure) {
             if (externalBoundaryCrossed) {
                 String code = "MODEL_DISPATCH_PERSISTENCE_UNKNOWN";
                 try {
-                    dispatches.markUnknown(
-                        dispatch.id(),
-                        code,
-                        now.plus(RETRY_DELAY),
-                        now
-                    );
+                    markUnknown(dispatch, code, now);
+                } catch (MachineAuditPersistenceException auditFailure) {
+                    auditFailure.addSuppressed(failure);
+                    throw auditFailure;
                 } catch (RuntimeException ignored) {
                     // The stale-claim recovery path retries the same deterministic DagRun id.
                 }
@@ -293,11 +324,20 @@ public class ModelMaterializationDispatchService {
         Instant now
     ) {
         if (submitted.status() == SubmissionStatus.SUBMITTED) {
-            dispatches.markSubmitted(
-                dispatch.id(),
-                submitted.recovered(),
-                now
-            );
+            transactions.executeWithoutResult(status -> {
+                dispatches.markSubmitted(
+                    dispatch.id(),
+                    submitted.recovered(),
+                    now
+                );
+                auditDispatch(
+                    dispatch,
+                    "SUBMITTED",
+                    null,
+                    AuditStage.SUCCESS,
+                    now
+                );
+            });
             return new DispatchResult(
                 dispatch.id(),
                 "SUBMITTED",
@@ -310,12 +350,7 @@ public class ModelMaterializationDispatchService {
             submitted.status() ==
             SubmissionStatus.RETRYABLE_UNKNOWN
         ) {
-            dispatches.markUnknown(
-                dispatch.id(),
-                submitted.errorCode(),
-                now.plus(RETRY_DELAY),
-                now
-            );
+            markUnknown(dispatch, submitted.errorCode(), now);
             return new DispatchResult(
                 dispatch.id(),
                 "UNKNOWN",
@@ -367,7 +402,16 @@ public class ModelMaterializationDispatchService {
             errorCode == null || errorCode.isBlank()
                 ? "MATERIALIZATION_DISPATCH_FAILED"
                 : errorCode.trim();
-        dispatches.markBlocked(dispatch.id(), code, now);
+        transactions.executeWithoutResult(status -> {
+            dispatches.markBlocked(dispatch.id(), code, now);
+            auditDispatch(
+                dispatch,
+                "BLOCKED",
+                code,
+                AuditStage.FAIL,
+                now
+            );
+        });
         return new DispatchResult(
             dispatch.id(),
             "BLOCKED",
@@ -375,6 +419,85 @@ public class ModelMaterializationDispatchService {
             false,
             code
         );
+    }
+
+    private void markUnknown(
+        DispatchRecord dispatch,
+        String errorCode,
+        Instant now
+    ) {
+        String code =
+            errorCode == null || errorCode.isBlank()
+                ? "MODEL_DISPATCH_PERSISTENCE_UNKNOWN"
+                : errorCode.trim();
+        transactions.executeWithoutResult(status -> {
+            dispatches.markUnknown(
+                dispatch.id(),
+                code,
+                now.plus(RETRY_DELAY),
+                now
+            );
+            auditDispatch(
+                dispatch,
+                "UNKNOWN",
+                code,
+                AuditStage.FAIL,
+                now
+            );
+        });
+    }
+
+    private void auditDispatch(
+        DispatchRecord dispatch,
+        String status,
+        String errorCode,
+        AuditStage stage,
+        Instant occurredAt
+    ) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("tenant", dispatch.tenantId());
+        payload.put("candidate", dispatch.candidateId());
+        payload.put("version", dispatch.candidateVersion());
+        payload.put("attempt", dispatch.attempt());
+        payload.put("dispatch", dispatch.id());
+        payload.put("run", dispatch.airflowRunId());
+        payload.put("status", status);
+        if (errorCode != null) payload.put("errorCode", errorCode);
+        try {
+            auditService.auditActionAs(
+                "scheduler",
+                dispatchEventIdentity(dispatch, status),
+                occurredAt,
+                "MODEL_MATERIALIZATION_DISPATCH_" + status,
+                stage,
+                dispatch.id().toString(),
+                payload
+            );
+        } catch (RuntimeException failure) {
+            throw new MachineAuditPersistenceException(failure);
+        }
+    }
+
+    private static String dispatchEventIdentity(
+        DispatchRecord dispatch,
+        String status
+    ) {
+        return (
+            "model-materialization-dispatch:" +
+            dispatch.id() +
+            ":attempt:" +
+            dispatch.attempt() +
+            ":" +
+            status.toLowerCase(java.util.Locale.ROOT)
+        );
+    }
+
+    private static final class MachineAuditPersistenceException
+        extends RuntimeException {
+
+        private MachineAuditPersistenceException(RuntimeException cause) {
+            super("Machine audit persistence failed", cause);
+        }
     }
 
     private static void validateIdentity(

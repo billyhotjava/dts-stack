@@ -92,10 +92,22 @@ public class AirflowDagService {
     }
 
     public StagedDag stageDagForTask(IngestionTask task, List<AddaxJobService.PerTableJob> perTableJobs) {
+        return stageDagForTask(task, perTableJobs, null, null);
+    }
+
+    public StagedDag stageDagForTask(
+        IngestionTask task,
+        List<AddaxJobService.PerTableJob> perTableJobs,
+        Long revisionId,
+        String effectiveConfigChecksum
+    ) {
         if (task == null) {
             throw new IllegalArgumentException("Ingestion task is required");
         }
         String dagId = resolveDagId(task);
+        if (revisionId != null) {
+            dagId = bindDagIdToRevision(dagId, revisionId);
+        }
         Path dagDir = resolveDagDir(task);
         if (dagDir == null) {
             throw new IllegalStateException("Airflow DAG directory is not configured");
@@ -111,7 +123,7 @@ public class AirflowDagService {
             }
             Files.writeString(
                 stagedPath,
-                buildDagSource(dagId, task, perTableJobs),
+                buildStagedDagSource(dagId, task, perTableJobs, revisionId, effectiveConfigChecksum),
                 StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE_NEW
             );
@@ -162,36 +174,141 @@ public class AirflowDagService {
         }
     }
 
+    public void discardStagedDagStrict(StagedDag stagedDag, boolean includePublishedFile) {
+        if (stagedDag == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(stagedDag.stagedPath());
+            if (includePublishedFile) {
+                Files.deleteIfExists(stagedDag.finalPath());
+            }
+        } catch (IOException ex) {
+            throw new IllegalStateException("Failed to compensate staged DAG " + stagedDag.dagId() + ": " + ex.getMessage(), ex);
+        }
+    }
+
+    public void setDagPausedStrict(String dagId, boolean paused) {
+        airflowClient.setDagPausedStrict(dagId, paused);
+    }
+
+    public void retireDagStrict(String dagId, IngestionTask pathContext) {
+        if (!StringUtils.hasText(dagId)) {
+            return;
+        }
+        // Retirement is deliberately a strict pause, not deletion. Airflow may
+        // still have queued/running DagRuns whose immutable revision contract is
+        // embedded in this file. Keeping the paused definition lets those runs
+        // finish while preventing any new schedule from being created.
+        airflowClient.setDagPausedStrict(dagId, true);
+    }
+
+    private String buildStagedDagSource(
+        String dagId,
+        IngestionTask task,
+        List<AddaxJobService.PerTableJob> perTableJobs,
+        Long revisionId,
+        String effectiveConfigChecksum
+    ) {
+        String source = buildDagSource(dagId, task, perTableJobs);
+        source = source.replace("is_paused_upon_creation=False", "is_paused_upon_creation=True");
+        if (!source.contains("is_paused_upon_creation=")) {
+            source = source.replace("    catchup=False,", "    catchup=False,\n    is_paused_upon_creation=True,");
+        }
+        if (revisionId == null || !StringUtils.hasText(effectiveConfigChecksum)) {
+            return source;
+        }
+        if (com.yuzhi.dts.ingestion.service.etl.api.ApiConnectorTypes.isApiSourceType(task.getSourceType())) {
+            source = source.replace(
+                "INGESTION_BASE_URL =",
+                "INGESTION_REVISION_ID = " + revisionId + "\n" +
+                "INGESTION_CONFIG_CHECKSUM = \"" + escapePythonString(effectiveConfigChecksum) + "\"\n" +
+                "INGESTION_DAG_ID = \"" + escapePythonString(dagId) + "\"\n" +
+                "INGESTION_BASE_URL ="
+            );
+            return source.replace(
+                "\"taskId\": INGESTION_TASK_ID,",
+                "\"taskId\": INGESTION_TASK_ID,\n" +
+                "                    \"revisionId\": INGESTION_REVISION_ID,\n" +
+                "                    \"configChecksum\": INGESTION_CONFIG_CHECKSUM,\n" +
+                "                    \"airflowDagId\": INGESTION_DAG_ID,"
+            );
+        }
+
+        String registration = """
+
+            DTS_INGESTION_BASE_URL = os.getenv("DTS_INGESTION_INTERNAL_BASE_URL", "http://dts-ingestion:8083").rstrip("/")
+            DTS_SERVICE_NAME = "dts-airflow"
+            DTS_SERVICE_TOKEN = os.getenv("DTS_AIRFLOW_TO_INGESTION_TOKEN", "")
+            DTS_REVISION_ID = %d
+            DTS_CONFIG_CHECKSUM = "%s"
+            DTS_DAG_ID = "%s"
+            DTS_TASK_ID = %d
+
+
+            def _register_dts_execution(context):
+                payload = json.dumps({
+                    "taskId": DTS_TASK_ID,
+                    "revisionId": DTS_REVISION_ID,
+                    "configChecksum": DTS_CONFIG_CHECKSUM,
+                    "airflowDagId": DTS_DAG_ID,
+                    "airflowRunId": context.get("run_id"),
+                }).encode("utf-8")
+                headers = {"Content-Type": "application/json", "X-DTS-Service": DTS_SERVICE_NAME}
+                if DTS_SERVICE_TOKEN:
+                    headers["X-DTS-Service-Token"] = DTS_SERVICE_TOKEN
+                request = urllib.request.Request(
+                    DTS_INGESTION_BASE_URL + "/internal/api-ingestion/scheduled-executions",
+                    data=payload,
+                    method="POST",
+                    headers=headers,
+                )
+                with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(request, timeout=30) as response:
+                    if response.status < 200 or response.status >= 300:
+                        raise RuntimeError(f"DTS_SCHEDULED_EXECUTION_REGISTER_FAILED: HTTP {response.status}")
+
+            """.formatted(
+                revisionId,
+                escapePythonString(effectiveConfigChecksum),
+                escapePythonString(dagId),
+                task.getId() == null ? 0L : task.getId()
+            );
+        int dagBlock = source.indexOf("\nwith DAG(");
+        if (dagBlock < 0) {
+            throw new IllegalStateException("Generated DAG source has no DAG declaration");
+        }
+        source = source.substring(0, dagBlock) + registration + source.substring(dagBlock);
+        return source.replace(
+            "        tty=False,",
+            "        on_execute_callback=_register_dts_execution,\n        tty=False,"
+        );
+    }
+
     public boolean deleteDagForTask(IngestionTask task) {
         if (task == null) {
             return false;
         }
         String dagId = resolveDagId(task);
+        boolean deletedRemote = false;
         if (StringUtils.hasText(dagId)) {
-            try {
-                boolean deletedRemote = airflowClient.deleteDag(dagId);
-                if (deletedRemote) {
-                    LOG.info("[airflow] deleted dag {} via API", dagId);
-                }
-            } catch (Exception ex) {
-                LOG.warn("[airflow] failed to delete dag {} via API: {}", dagId, ex.getMessage());
+            deletedRemote = airflowClient.deleteDag(dagId);
+            if (deletedRemote) {
+                LOG.info("[airflow] deleted dag {} via API", dagId);
             }
         }
         Path dagDir = resolveDagDir(task);
         if (dagDir == null) {
-            LOG.warn("[airflow] dagsDir not configured, skip delete dag file for dagId={}", dagId);
-            return false;
+            return deletedRemote;
         }
         Path dagFile = resolveDagFile(dagDir, dagId);
         try {
-            boolean deleted = Files.deleteIfExists(dagFile);
-            if (deleted) {
+            boolean deletedLocal = Files.deleteIfExists(dagFile);
+            if (deletedLocal) {
                 LOG.info("[airflow] deleted dag file {}", dagFile);
             }
-            return deleted;
+            return deletedRemote || deletedLocal;
         } catch (IOException ex) {
-            LOG.warn("[airflow] failed to delete dag file {}: {}", dagFile, ex.getMessage());
-            return false;
+            throw new IllegalStateException("AIRFLOW_DAG_FILE_DELETE_FAILED: " + dagId, ex);
         }
     }
 
@@ -369,6 +486,19 @@ public class AirflowDagService {
             return safeBase;
         }
         return requireSafeDagId(limitLength(safeBase, 200 - suffix.length()) + suffix);
+    }
+
+    private String bindDagIdToRevision(String baseDagId, Long revisionId) {
+        String safeBase = requireSafeDagId(baseDagId);
+        if (revisionId == null) {
+            return safeBase;
+        }
+        String suffix = "_revision_" + revisionId;
+        if (safeBase.endsWith(suffix)) {
+            return safeBase;
+        }
+        String withoutPriorRevision = safeBase.replaceFirst("_revision_[0-9]+$", "");
+        return requireSafeDagId(limitLength(withoutPriorRevision, 200 - suffix.length()) + suffix);
     }
 
     private String resolveOwnedPreviousDagId(IngestionTask task) {
@@ -1352,8 +1482,8 @@ public class AirflowDagService {
             INGESTION_TASK_ID = %d
             INGESTION_TASK_NAME = "%s"
             INGESTION_BASE_URL = os.getenv("DTS_INGESTION_INTERNAL_BASE_URL", "http://dts-ingestion:8083").rstrip("/")
-            SERVICE_NAME = os.getenv("DTS_SERVICE_NAME", "dts-airflow")
-            SERVICE_TOKEN = os.getenv("DTS_SERVICE_TOKEN", "")
+            SERVICE_NAME = "dts-airflow"
+            SERVICE_TOKEN = os.getenv("DTS_AIRFLOW_TO_INGESTION_TOKEN", "")
             POLL_INTERVAL_SECONDS = int(os.getenv("DTS_API_INGESTION_POLL_INTERVAL_SECONDS", "5"))
             POLL_TIMEOUT_SECONDS = int(os.getenv("DTS_API_INGESTION_POLL_TIMEOUT_SECONDS", "%d"))
             _DTS_INTERNAL_HTTP_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))

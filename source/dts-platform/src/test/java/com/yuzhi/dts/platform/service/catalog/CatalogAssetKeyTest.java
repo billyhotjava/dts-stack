@@ -33,7 +33,6 @@ class CatalogAssetKeyTest {
     @Test
     void explicitAssetTypesNormalizeHyphenatedNames() {
         assertThat(CatalogAssetType.from("bi-dataset")).isEqualTo(CatalogAssetType.BI_DATASET);
-        assertThat(CatalogAssetType.from("modeling-sql-model")).isEqualTo(CatalogAssetType.MODELING_SQL_MODEL);
         assertThat(CatalogAssetType.from("api-service")).isEqualTo(CatalogAssetType.API_SERVICE);
     }
 

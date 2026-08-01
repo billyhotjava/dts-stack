@@ -1,17 +1,16 @@
 package com.yuzhi.dts.ingestion.config;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "dts.ingestion")
 public class IngestionProperties {
 
     private boolean enabled = true;
-    /**
-     * Comma-separated service names allowed via X-DTS-Service header (case-insensitive).
-     */
-    private String trustedServiceName = "dts-platform";
-    /** Pairwise credential required from trusted callers before forwarded identity is accepted. */
-    private String trustedServiceToken;
+    /** Pairwise inbound credential keyed by the exact producer service identity. */
+    private Map<String, String> trustedServiceTokens = new LinkedHashMap<>();
 
     private final AutoRetry autoRetry = new AutoRetry();
 
@@ -23,20 +22,35 @@ public class IngestionProperties {
         this.enabled = enabled;
     }
 
-    public String getTrustedServiceName() {
-        return trustedServiceName;
+    public Map<String, String> getTrustedServiceTokens() {
+        return trustedServiceTokens;
     }
 
-    public void setTrustedServiceName(String trustedServiceName) {
-        this.trustedServiceName = trustedServiceName;
+    public void setTrustedServiceTokens(Map<String, String> trustedServiceTokens) {
+        this.trustedServiceTokens = trustedServiceTokens == null
+            ? new LinkedHashMap<>()
+            : new LinkedHashMap<>(trustedServiceTokens);
     }
 
-    public String getTrustedServiceToken() {
-        return trustedServiceToken;
-    }
-
-    public void setTrustedServiceToken(String trustedServiceToken) {
-        this.trustedServiceToken = trustedServiceToken;
+    public void validateTrustedServiceTokens() {
+        Set<String> supportedServices = Set.of("dts-platform", "dts-airflow");
+        Set<String> uniqueTokens = new java.util.HashSet<>();
+        for (Map.Entry<String, String> entry : trustedServiceTokens.entrySet()) {
+            String service = entry.getKey() == null ? "" : entry.getKey().trim().toLowerCase(java.util.Locale.ROOT);
+            if (!supportedServices.contains(service)) {
+                throw new IllegalStateException("Unsupported ingestion service credential: " + service);
+            }
+            String token = entry.getValue();
+            if (token == null || token.isBlank()) {
+                continue;
+            }
+            if (!token.equals(token.trim()) || token.length() < 32) {
+                throw new IllegalStateException("Ingestion service credential must contain at least 32 characters: " + service);
+            }
+            if (!uniqueTokens.add(token)) {
+                throw new IllegalStateException("Ingestion service credentials must be pairwise unique");
+            }
+        }
     }
 
     public AutoRetry getAutoRetry() {

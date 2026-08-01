@@ -9,7 +9,10 @@ import com.yuzhi.dts.platform.domain.modeling.MetadataStandard;
 import com.yuzhi.dts.platform.repository.governance.MeasurementUnitRepository;
 import com.yuzhi.dts.platform.repository.governance.MeasurementUnitRepository.StoredUnit;
 import com.yuzhi.dts.platform.repository.governance.StdCodeDirectoryRepository;
+import com.yuzhi.dts.platform.repository.modeling.DataStandardRepository;
 import com.yuzhi.dts.platform.repository.modeling.MetadataStandardRepository;
+import com.yuzhi.dts.platform.repository.modeling.ModelingGlossaryTermRepository;
+import com.yuzhi.dts.platform.service.governance.GovernanceStandardEvidenceReadService;
 import com.yuzhi.dts.platform.service.governance.MeasurementUnitContract.MeasurementUnitStatus;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.FieldRole;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelField;
@@ -139,7 +142,17 @@ class GovernanceModelSpecStandardEvidenceAdapterTest {
         StdCodeDirectoryRepository codes,
         MeasurementUnitRepository units
     ) {
-        return new GovernanceModelSpecStandardEvidenceAdapter(elements, codes, units);
+        return new GovernanceModelSpecStandardEvidenceAdapter(
+            new GovernanceStandardEvidenceReadService(
+                new JpaGovernedStandardReadAdapter(
+                    mock(DataStandardRepository.class),
+                    elements,
+                    mock(ModelingGlossaryTermRepository.class)
+                ),
+                codes,
+                units
+            )
+        );
     }
 
     private static StoredUnit unit(int version, MeasurementUnitStatus status) {

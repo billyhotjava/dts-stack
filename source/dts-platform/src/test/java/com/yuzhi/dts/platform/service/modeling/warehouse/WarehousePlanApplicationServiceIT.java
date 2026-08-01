@@ -13,7 +13,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.common.audit.AuditStage;
@@ -38,7 +40,10 @@ import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.Q
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.StandardCoverage;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.ProcessBinding;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBinding;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBindingCommand;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBusinessMapping;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceInventoryCommand;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceInventoryView;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceLocator;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.Versioned;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.WarehousePlanHeader;
@@ -58,6 +63,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @IntegrationTest
@@ -88,8 +94,12 @@ class WarehousePlanApplicationServiceIT {
     @BeforeEach
     void resolveCatalogDomainsAsAvailableByDefault() {
         when(sourceReferenceResolver.resolve(eq(CATALOG_TABLE), any(SourceLocator.class), any()))
-            .thenReturn(SourceReferenceResolver.ResolvedSource.available("Orders", "schema-v1"));
+            .thenAnswer(invocation -> {
+                assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+                return SourceReferenceResolver.ResolvedSource.available("Orders", "schema-v1");
+            });
         when(catalogDomainResolutionPort.resolve(any())).thenAnswer(invocation -> {
+            assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
             UUID domainId = invocation.getArgument(0);
             return new CatalogDomainResolutionPort.DomainResolution(
                 domainId,
@@ -132,6 +142,13 @@ class WarehousePlanApplicationServiceIT {
 
         try {
             CreateWarehousePlanResult created = service.create(tenant, createCommand(BUSINESS_FIRST, idempotencyKey));
+            verify(auditService).auditAction(
+                eq("MODELING_WAREHOUSE_PLAN_CREATE"),
+                eq(AuditStage.SUCCESS),
+                eq(created.planId().toString()),
+                any()
+            );
+            clearInvocations(auditService);
             CreateWarehousePlanResult replayed = service.create(tenant, createCommand(BUSINESS_FIRST, idempotencyKey));
 
             assertThat(created.replayed()).isFalse();
@@ -159,6 +176,7 @@ class WarehousePlanApplicationServiceIT {
                 "WAREHOUSE_PLAN_IDEMPOTENCY_CONFLICT",
                 null
             );
+            verifyNoInteractions(auditService);
         } finally {
             deleteTenant(tenant);
         }
@@ -178,7 +196,7 @@ class WarehousePlanApplicationServiceIT {
                 created.version(),
                 new UpdatePlanHeaderCommand("Changed after create", "Changed objective", null, "owner-2", "department-2")
             );
-            service.saveSources(tenant, created.planId(), 1, readySources());
+            saveCanonicalSources(tenant, service.get(tenant, created.planId()), 1, readySources());
 
             CreateWarehousePlanResult replayed = service.create(tenant, command);
 
@@ -327,6 +345,7 @@ class WarehousePlanApplicationServiceIT {
                 Long.class,
                 tenant
             )).isZero();
+            verifyNoInteractions(auditService);
         } finally {
             executeCommitted("alter table modeling_warehouse_plan_source drop constraint if exists " + constraintName);
             deleteTenant(tenant);
@@ -339,6 +358,7 @@ class WarehousePlanApplicationServiceIT {
 
         try {
             WarehousePlanHeader created = service.create(tenant, createCommand(BUSINESS_FIRST, "version-" + UUID.randomUUID())).plan();
+            clearInvocations(auditService);
             WarehousePlanHeader updated = service.updateHeader(
                 tenant,
                 created.id(),
@@ -348,6 +368,13 @@ class WarehousePlanApplicationServiceIT {
 
             assertThat(updated.name()).isEqualTo("Renamed warehouse");
             assertThat(updated.version()).isEqualTo(2);
+            verify(auditService).auditAction(
+                eq("MODELING_WAREHOUSE_PLAN_HEADER_UPDATE"),
+                eq(AuditStage.SUCCESS),
+                eq(created.id().toString()),
+                any()
+            );
+            clearInvocations(auditService);
             assertWarehouseError(
                 () -> service.updateHeader(
                     tenant,
@@ -358,6 +385,7 @@ class WarehousePlanApplicationServiceIT {
                 "WAREHOUSE_PLAN_VERSION_CONFLICT",
                 2
             );
+            verifyNoInteractions(auditService);
 
             WarehousePlanHeader archived = service.archive(tenant, created.id(), updated.version());
             assertThat(archived.lifecycleStatus()).isEqualTo(ARCHIVED);
@@ -368,6 +396,12 @@ class WarehousePlanApplicationServiceIT {
                 tenant,
                 created.id()
             )).isEqualTo(1L);
+            verify(auditService).auditAction(
+                eq("MODELING_WAREHOUSE_PLAN_ARCHIVE"),
+                eq(AuditStage.SUCCESS),
+                eq(created.id().toString()),
+                any()
+            );
         } finally {
             deleteTenant(tenant);
         }
@@ -383,17 +417,25 @@ class WarehousePlanApplicationServiceIT {
             List<SourceBinding> sources = readySources();
 
             Versioned<BusinessScope> savedScope = service.saveBusinessScope(tenant, plan.id(), 1, scope);
-            Versioned<List<SourceBinding>> savedSources = service.saveSources(tenant, plan.id(), 1, sources);
+            SourceInventoryView savedSources = saveCanonicalSources(tenant, plan, 1, sources);
 
             assertThat(savedScope.version()).isEqualTo(2);
             assertThat(savedSources.version()).isEqualTo(2);
-            assertThat(savedSources.value()).extracting(SourceBinding::id).containsExactly(sources.getFirst().id());
+            assertThat(savedSources.bindings()).extracting(WarehousePlanContract.SourceBindingView::bindingId).containsExactly(sources.getFirst().id());
+            verify(auditService).auditAction(
+                eq("MODELING_WAREHOUSE_BUSINESS_SCOPE_SAVE"),
+                eq(AuditStage.SUCCESS),
+                eq(plan.id().toString()),
+                any()
+            );
+            clearInvocations(auditService);
             assertThatThrownBy(() -> service.saveBusinessScope(tenant, plan.id(), 1, scope))
                 .isInstanceOfSatisfying(WarehousePlanException.class, error -> {
                     assertThat(error.code()).isEqualTo("WAREHOUSE_PLAN_EDIT_UNIT_VERSION_CONFLICT");
                     assertThat(error.currentVersion()).isEqualTo(2);
                     assertThat(error.editUnit()).isEqualTo(BUSINESS_SCOPE);
                 });
+            verifyNoInteractions(auditService);
         } finally {
             deleteTenant(tenant);
         }
@@ -405,6 +447,7 @@ class WarehousePlanApplicationServiceIT {
 
         try {
             WarehousePlanHeader plan = service.create(tenant, createCommand(ASSET_FIRST, "baseline-" + UUID.randomUUID())).plan();
+            clearInvocations(auditService);
 
             PlanningBaseline incomplete = service.getBaseline(tenant, plan.id());
             assertThat(incomplete.ready()).isFalse();
@@ -419,6 +462,7 @@ class WarehousePlanApplicationServiceIT {
                 "WAREHOUSE_PLAN_BASELINE_INCOMPLETE",
                 null
             );
+            verifyNoInteractions(auditService);
 
             BusinessScope scope = readyScope();
             List<SourceBinding> sources = readySources();
@@ -426,13 +470,28 @@ class WarehousePlanApplicationServiceIT {
             PlanningPolicy policy = readyPolicy();
 
             service.saveBusinessScope(tenant, plan.id(), 1, scope);
-            service.saveSources(tenant, plan.id(), 1, sources);
+            saveCanonicalSources(tenant, plan, 1, sources);
             service.saveSourceMappings(tenant, plan.id(), 1, mappings);
+            verify(auditService).auditAction(
+                eq("MODELING_WAREHOUSE_SOURCE_MAPPINGS_SAVE"),
+                eq(AuditStage.SUCCESS),
+                eq(plan.id().toString()),
+                any()
+            );
+            clearInvocations(auditService);
+            assertThatThrownBy(() -> service.saveSourceMappings(tenant, plan.id(), 1, mappings))
+                .isInstanceOfSatisfying(WarehousePlanException.class, error -> {
+                    assertThat(error.code()).isEqualTo("WAREHOUSE_PLAN_EDIT_UNIT_VERSION_CONFLICT");
+                    assertThat(error.currentVersion()).isEqualTo(2);
+                    assertThat(error.editUnit()).isEqualTo(WarehousePlanContract.EditUnit.SOURCE_MAPPINGS);
+                });
+            verifyNoInteractions(auditService);
             service.savePolicy(tenant, plan.id(), 1, policy);
 
             PlanningBaseline ready = service.getBaseline(tenant, plan.id());
             assertThat(ready.missingCodes()).isEmpty();
             assertThat(ready.ready()).isTrue();
+            clearInvocations(auditService);
             assertThat(
                 service.confirmBaseline(
                     tenant,
@@ -444,6 +503,56 @@ class WarehousePlanApplicationServiceIT {
             WarehousePlanHeader confirmed = service.get(tenant, plan.id());
             assertThat(confirmed.lifecycleStatus()).isEqualTo(BASELINE_READY);
             assertThat(confirmed.version()).isEqualTo(2);
+            verify(auditService).auditAction(
+                eq("MODELING_WAREHOUSE_BASELINE_CONFIRM"),
+                eq(AuditStage.SUCCESS),
+                eq(plan.id().toString()),
+                any()
+            );
+        } finally {
+            deleteTenant(tenant);
+        }
+    }
+
+    @Test
+    void rejectsBaselineConfirmationWhenAnEditUnitChangesDuringExternalValidation() {
+        String tenant = tenant("baseline-stale");
+
+        try {
+            WarehousePlanHeader plan = service.create(
+                tenant,
+                createCommand(ASSET_FIRST, "baseline-stale-" + UUID.randomUUID())
+            ).plan();
+            service.saveBusinessScope(tenant, plan.id(), 1, readyScope());
+            saveCanonicalSources(tenant, plan, 1, readySources());
+            service.savePolicy(tenant, plan.id(), 1, readyPolicy());
+            clearInvocations(auditService);
+
+            when(sourceReferenceResolver.resolve(eq(CATALOG_TABLE), any(SourceLocator.class), any()))
+                .thenAnswer(invocation -> {
+                    assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+                    new TransactionTemplate(transactionManager).executeWithoutResult(status ->
+                        jdbcTemplate.update(
+                            "update modeling_warehouse_plan set sources_version = sources_version + 1 where tenant_id = ? and id = ?",
+                            tenant,
+                            plan.id()
+                        )
+                    );
+                    return SourceReferenceResolver.ResolvedSource.available("Orders", "schema-v1");
+                });
+
+            assertThatThrownBy(() ->
+                service.confirmBaseline(
+                    tenant,
+                    plan.id(),
+                    plan.version(),
+                    new SourceReferenceResolver.AccessContext(tenant, plan.ownerId(), plan.ownerDepartmentId())
+                )
+            ).isInstanceOfSatisfying(WarehousePlanException.class, error ->
+                assertThat(error.code()).isEqualTo("WAREHOUSE_PLAN_BASELINE_STALE")
+            );
+            assertThat(service.get(tenant, plan.id()).lifecycleStatus()).isEqualTo(WarehousePlanContract.LifecycleStatus.DRAFT);
+            verifyNoInteractions(auditService);
         } finally {
             deleteTenant(tenant);
         }
@@ -819,6 +928,35 @@ class WarehousePlanApplicationServiceIT {
             List.of(new DomainBinding(domainId, CONFIRMED)),
             List.of(new ProcessBinding("process-1", domainId, "ACCUMULATING_SNAPSHOT", CONFIRMED)),
             List.<MetricRequirement>of()
+        );
+    }
+
+    private SourceInventoryView saveCanonicalSources(
+        String tenant,
+        WarehousePlanHeader plan,
+        int expectedVersion,
+        List<SourceBinding> sources
+    ) {
+        SourceInventoryCommand command = new SourceInventoryCommand(
+            sources
+                .stream()
+                .map(source ->
+                    new SourceBindingCommand(
+                        source.id(),
+                        source.sourceType(),
+                        new SourceLocator(UUID.fromString(source.sourceId()), null, null, null, null, null, null),
+                        source.confirmationStatus(),
+                        source.exclusionReason()
+                    )
+                )
+                .toList()
+        );
+        return service.saveSources(
+            tenant,
+            plan.id(),
+            expectedVersion,
+            command,
+            new SourceReferenceResolver.AccessContext(tenant, plan.ownerId(), plan.ownerDepartmentId())
         );
     }
 

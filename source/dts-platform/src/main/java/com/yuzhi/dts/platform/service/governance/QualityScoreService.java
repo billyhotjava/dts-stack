@@ -34,9 +34,14 @@ public class QualityScoreService {
     private static final String UNKNOWN_DIMENSION = "OTHER";
 
     private final GovQualityRunRepository runRepository;
+    private final QualityDatasetReadGuard qualityDatasetReadGuard;
 
-    public QualityScoreService(GovQualityRunRepository runRepository) {
+    public QualityScoreService(
+        GovQualityRunRepository runRepository,
+        QualityDatasetReadGuard qualityDatasetReadGuard
+    ) {
         this.runRepository = runRepository;
+        this.qualityDatasetReadGuard = qualityDatasetReadGuard;
     }
 
     /**
@@ -54,6 +59,11 @@ public class QualityScoreService {
      * <p>Trend: one data point per day for the period, computed in-memory from a single query.
      */
     public QualityScoreResult calculate(UUID datasetId, int periodDays) {
+        return calculate(datasetId, periodDays, null);
+    }
+
+    public QualityScoreResult calculate(UUID datasetId, int periodDays, String activeDeptHeader) {
+        qualityDatasetReadGuard.requireReadable(datasetId, activeDeptHeader);
         Instant now = Instant.now();
         Instant periodStart = now.minus(java.time.Duration.ofDays(periodDays));
         Instant previousPeriodStart = periodStart.minus(java.time.Duration.ofDays(periodDays));

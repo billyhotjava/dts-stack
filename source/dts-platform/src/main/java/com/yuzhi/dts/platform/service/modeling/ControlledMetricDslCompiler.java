@@ -11,11 +11,9 @@ import org.springframework.util.StringUtils;
 /**
  * 受控派生指标 DSL 编译器（Sprint-41 / F2，整合自 dts-metrics 的受控建模逻辑）。
  *
- * <p>把无类型/permissive 的指标公式收敛为"受控模式"：相对平台现有
- * {@code SemanticModelingService.buildMetricExpression}（允许 {@code sql/custom/expression} 原始 SQL），
- * 本编译器是同词汇的 <b>严格变体</b>——只接受函数白名单、默认拒绝、拒绝原始 SQL、对标识符做方言感知 quote、
- * 对字面量做注入防御。它是一个独立、无状态、可单测、可被未来抽取的组件（仅依赖 Jackson 解析 formula JSON），
- * 不耦合 {@code SemanticModelingService} 内部状态。
+ * <p>把无类型/permissive 的指标公式收敛为"受控模式"：只接受函数白名单、默认拒绝、拒绝原始 SQL、
+ * 对标识符做方言感知 quote、对字面量做注入防御。它是一个独立、无状态、可单测、可被未来抽取的组件
+ * （仅依赖 Jackson 解析 formula JSON），不耦合任何已退役的语义建模实现。
  *
  * <p>设计取向：<b>安全/语义一致</b>而非字节复刻 dts-metrics——dts-metrics 吃字符串表达式、平台吃 JSON formula，
  * 输出形态不同；本编译器把 dts-metrics 的安全纪律施加到平台 formula 模型上。

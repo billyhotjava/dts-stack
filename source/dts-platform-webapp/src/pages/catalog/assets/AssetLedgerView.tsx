@@ -1,16 +1,17 @@
-import { MoreOutlined } from "@ant-design/icons";
-import type { MenuProps } from "antd";
-import { Button, Dropdown, Space, Table, Tag } from "antd";
+import { Alert, Button, Space, Table, Tag } from "antd";
+import type { Key } from "react";
 import { useEffect, useMemo, useState } from "react";
-import {
-	type ClassificationFactView,
-	getCatalogClassificationFacts,
-} from "@/api/platformApi";
+import { useSearchParams } from "react-router";
+import { toast } from "sonner";
+import { batchTagAssets } from "@/api/catalogTagsApi";
+import { type ClassificationFactView, getCatalogClassificationFacts } from "@/api/platformApi";
 import { AssetTagChips } from "@/components/catalog/tags/AssetTagChips";
+import { writeTagIds } from "@/components/catalog/tags/catalogTagUrlState";
 import { useRouter } from "@/routes/hooks";
 import { resolveAssetReadiness } from "../assetPortalUx.helpers";
-import { ASSET_TYPE_DICT, GOVERNANCE_STATUS_DICT, resolveEnumLabel } from "./assetEnumLabels";
+import { AssetGovernanceWorkbenchDrawer } from "./AssetGovernanceWorkbenchDrawer";
 import { AssetLifecycleWorkbenchDrawer } from "./AssetLifecycleWorkbenchDrawer";
+import { ASSET_TYPE_DICT, GOVERNANCE_STATUS_DICT, resolveEnumLabel } from "./assetEnumLabels";
 import type { AssetRow } from "./assetPageShared";
 import {
 	ASSET_ACTION_COLUMN_WIDTH,
@@ -28,7 +29,7 @@ export interface AssetLedgerViewProps {
 	readyCount: number;
 	selectedDomainName: string;
 	missingDomainCount: number;
-	onOpenGovernanceRemediation: (assetId?: string) => void;
+	onAssetChanged?: () => void;
 }
 
 /** 资产台账视图：登记核验指标 + 核验列组表格（权属/密级/治理/消费出口）。 */
@@ -39,15 +40,32 @@ export function AssetLedgerView({
 	readyCount,
 	selectedDomainName,
 	missingDomainCount,
-	onOpenGovernanceRemediation,
+	onAssetChanged,
 }: AssetLedgerViewProps) {
 	const router = useRouter();
+	const [searchParams, setSearchParams] = useSearchParams();
+	const associationTagId = searchParams.get("manageTag") || "";
+	const associationTagName = searchParams.get("manageTagName") || "当前标签";
 	const [classificationFacts, setClassificationFacts] = useState<ClassificationFactView[]>([]);
 	const [workbenchAsset, setWorkbenchAsset] = useState<AssetRow | null>(null);
+	const [governanceAsset, setGovernanceAsset] = useState<AssetRow | null>(null);
+	const [selectedAssetIds, setSelectedAssetIds] = useState<Key[]>([]);
+	const [associationSubmitting, setAssociationSubmitting] = useState(false);
 	const classificationFactMap = useMemo(
 		() => new Map(classificationFacts.map((fact) => [fact.subjectKey, fact])),
 		[classificationFacts],
 	);
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: changing the association target starts a new bounded selection context.
+	useEffect(() => {
+		setSelectedAssetIds([]);
+	}, [associationTagId]);
+
+	useEffect(() => {
+		setGovernanceAsset((current) => (current ? records.find((row) => row.id === current.id) || current : current));
+		const visibleIds = new Set(records.map((row) => row.id));
+		setSelectedAssetIds((current) => current.filter((id) => visibleIds.has(String(id))));
+	}, [records]);
 
 	useEffect(() => {
 		const subjects = records
@@ -70,44 +88,65 @@ export function AssetLedgerView({
 		};
 	}, [records]);
 
-	const overflowActionItems: MenuProps["items"] = [
-		{ key: "classification", label: "分级分类" },
-		{ key: "lifecycle", label: "密级与生命周期" },
-		{ key: "lineage", label: "查看血缘" },
-		{ key: "report", label: "创建报表" },
-		{ key: "product", label: "生成数据产品" },
-		{ key: "api", label: "发布数据 API" },
-	];
+	const cancelTagAssociation = () => {
+		const next = new URLSearchParams(searchParams);
+		next.delete("manageTag");
+		next.delete("manageTagName");
+		setSearchParams(next, { replace: true });
+	};
 
-	const handleOverflowAction = (row: AssetRow, key: string) => {
-		if (key === "lifecycle") {
-			setWorkbenchAsset(row);
-			return;
-		}
-		if (key === "classification") {
-			router.push(`/security/data-security?tab=datasetSecurity&datasetId=${row.id}`);
-			return;
-		}
-		if (key === "lineage") {
-			router.push(`/catalog/datasets/${row.id}?tab=lineage-impact`);
-			return;
-		}
-		if (key === "report") {
-			router.push(`/bi/dashboards?assetId=${row.id}`);
-			return;
-		}
-		if (key === "product") {
-			router.push(`/catalog/data-products?assetId=${row.id}`);
-			return;
-		}
-		if (key === "api") {
-			router.push(`/services/apis?assetId=${row.id}`);
+	const associateSelectedAssets = async () => {
+		const selectedRows = records.filter((row) => selectedAssetIds.includes(row.id) && row.assetType && row.assetKey);
+		if (!associationTagId || selectedRows.length === 0 || associationSubmitting) return;
+		setAssociationSubmitting(true);
+		try {
+			const result = await batchTagAssets({
+				assets: selectedRows.map((row) => ({
+					assetType: String(row.assetType),
+					assetKey: String(row.assetKey),
+				})),
+				tagIds: [associationTagId],
+			});
+			toast.success(
+				`已关联 ${String(result?.assetCount || selectedRows.length)} 个资产，新增 ${String(result?.created || 0)} 条关系`,
+			);
+			setSelectedAssetIds([]);
+			const next = new URLSearchParams(searchParams);
+			next.delete("manageTag");
+			next.delete("manageTagName");
+			next.delete("tab");
+			setSearchParams(writeTagIds(next, [associationTagId]), { replace: true });
+		} catch (error: unknown) {
+			toast.error(error instanceof Error && error.message ? error.message : "批量关联业务数据标签失败");
+		} finally {
+			setAssociationSubmitting(false);
 		}
 	};
 
 	return (
 		<div className="asset-ledger-workbench space-y-3">
-			<div className="grid gap-3 md:grid-cols-4">
+			{associationTagId ? (
+				<Alert
+					type="info"
+					showIcon
+					message={`正在关联标签：${associationTagName}`}
+					description="请选择当前页中需要关联的资产。缺少统一资产身份的记录不可选择。"
+					action={
+						<Space>
+							<Button onClick={cancelTagAssociation}>取消</Button>
+							<Button
+								type="primary"
+								loading={associationSubmitting}
+								disabled={selectedAssetIds.length === 0}
+								onClick={() => void associateSelectedAssets()}
+							>
+								关联选中资产（{selectedAssetIds.length}）
+							</Button>
+						</Space>
+					}
+				/>
+			) : null}
+			<div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
 				<div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
 					<div className="text-xs text-slate-500">登记核验</div>
 					<div className="mt-2 text-xl font-semibold text-slate-900">{records.length}</div>
@@ -136,11 +175,25 @@ export function AssetLedgerView({
 					rowKey="id"
 					dataSource={records}
 					pagination={false}
+					rowSelection={
+						associationTagId
+							? {
+									selectedRowKeys: selectedAssetIds,
+									onChange: setSelectedAssetIds,
+									getCheckboxProps: (row) => ({
+										disabled: !row.assetType || !row.assetKey,
+										title: !row.assetType || !row.assetKey ? "资产身份不完整，无法关联标签" : undefined,
+									}),
+								}
+							: undefined
+					}
 					scroll={{ x: ASSET_TABLE_SCROLL_X }}
 					tableLayout="fixed"
 					className="catalog-assets-table"
 					onRow={(row) => ({
-						onClick: () => router.push(`/catalog/datasets/${row.id}`),
+						onClick: () => {
+							if (!associationTagId) router.push(`/catalog/datasets/${row.id}`);
+						},
 					})}
 					columns={[
 						{
@@ -195,7 +248,9 @@ export function AssetLedgerView({
 								const effective = fact?.effectiveLevel || row.classification;
 								return (
 									<Space direction="vertical" size={2}>
-										<div title={`有效密级取来源声明、识别、人工下限和全部上游的最高值；快照 v${fact?.snapshotVersion ?? 0}`}>
+										<div
+											title={`有效密级取来源声明、识别、人工下限和全部上游的最高值；快照 v${fact?.snapshotVersion ?? 0}`}
+										>
 											<Tag color={effective ? "orange" : "red"}>{classificationText(effective)}</Tag>
 											<Tag color={fact?.propagationStatus === "PROPAGATED" ? "green" : "gold"}>
 												{fact?.sealed ? fact.propagationStatus || "已封存" : "待封存"}
@@ -226,52 +281,38 @@ export function AssetLedgerView({
 							width: ASSET_ACTION_COLUMN_WIDTH,
 							fixed: "right",
 							render: (_, row) => (
-								<Space
-									size={[4, 4]}
-									className="catalog-assets-actions"
-									wrap={false}
-									onClick={(event) => event.stopPropagation()}
-								>
+								<div className="catalog-assets-actions">
 									<Button
+										type="primary"
 										size="small"
-										onClick={() => router.push(`/security/dataset-access-approval?datasetId=${row.id}`)}
-									>
-										申请权限
-									</Button>
-									<Button size="small" onClick={() => router.push(`/catalog/datasets/${row.id}`)}>
-										详情
-									</Button>
-									<Button size="small" onClick={() => onOpenGovernanceRemediation(row.id)}>
-										治理
-									</Button>
-									<Dropdown
-										trigger={["click"]}
-										menu={{
-											items: overflowActionItems,
-											onClick: ({ key, domEvent }) => {
-												domEvent.stopPropagation();
-												handleOverflowAction(row, String(key));
-											},
+										onClick={(event) => {
+											event.stopPropagation();
+											setGovernanceAsset(row);
 										}}
 									>
-										<Button size="small" icon={<MoreOutlined />}>
-											更多
-										</Button>
-									</Dropdown>
-								</Space>
+										治理资产
+									</Button>
+								</div>
 							),
 						},
 					]}
 				/>
 			</div>
+			<AssetGovernanceWorkbenchDrawer
+				open={Boolean(governanceAsset)}
+				asset={governanceAsset}
+				classificationFact={governanceAsset?.assetKey ? classificationFactMap.get(governanceAsset.assetKey) : undefined}
+				onClose={() => setGovernanceAsset(null)}
+				onOpenLifecycle={(asset) => {
+					setGovernanceAsset(null);
+					setWorkbenchAsset(asset);
+				}}
+				onChanged={onAssetChanged}
+			/>
 			<AssetLifecycleWorkbenchDrawer
 				open={Boolean(workbenchAsset)}
 				asset={workbenchAsset}
-				classificationFact={
-					workbenchAsset?.assetKey
-						? classificationFactMap.get(workbenchAsset.assetKey)
-						: undefined
-				}
+				classificationFact={workbenchAsset?.assetKey ? classificationFactMap.get(workbenchAsset.assetKey) : undefined}
 				onClose={() => setWorkbenchAsset(null)}
 				onChanged={() => {
 					const subjects = records

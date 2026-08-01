@@ -17,6 +17,7 @@ import com.yuzhi.dts.ingestion.service.etl.api.ApiAuthProviderDescriptor;
 import com.yuzhi.dts.ingestion.service.etl.api.ApiAuthProviderRegistry;
 import com.yuzhi.dts.ingestion.service.etl.api.ApiConnectorTypes;
 import com.yuzhi.dts.ingestion.service.etl.api.ApiSourceConfigNormalizer;
+import com.yuzhi.dts.ingestion.service.security.IngestionSensitiveConfigSupport;
 import com.yuzhi.dts.ingestion.config.AirflowProperties;
 import com.yuzhi.dts.ingestion.config.ApiProperties;
 import com.yuzhi.dts.ingestion.service.openmetadata.OpenMetadataAdapter;
@@ -286,8 +287,16 @@ public class IngestionTaskResource {
             if (request == null || !StringUtils.hasText(request.name())) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "任务名称不能为空");
             }
-            boolean isDraft = Boolean.TRUE.equals(request.draft());
-            boolean runNow = !isDraft && Boolean.TRUE.equals(request.runNow());
+            if (request.dbt() != null
+                && (StringUtils.hasText(normalize(request.dbt().modelSelector()))
+                    || StringUtils.hasText(normalize(request.dbt().dagSelector())))) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "直接 dbt selector 已退役，请通过发布候选与物化流程配置");
+            }
+            // Creation only persists a draft access plan. Admission is the sole
+            // transition that may materialize runtime artifacts and make a task
+            // schedulable; client-supplied draft/runNow flags cannot bypass it.
+            boolean isDraft = true;
+            boolean runNow = false;
             if (request.source() == null) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少源端配置");
             }
@@ -371,7 +380,9 @@ public class IngestionTaskResource {
                 taskDTO.setQualityPolicyRef(request.qualityPolicyRef());
                 taskDTO.setSourceType(ApiConnectorTypes.DEFAULT_READER_TYPE);
                 taskDTO.setSourceDataSourceId(request.source().dataSourceId());
-                taskDTO.setSourceConfig(toJsonNode(apiRuntimeConfig));
+                taskDTO.setSourceConfig(
+                    IngestionSensitiveConfigSupport.stripRawSecrets(toJsonNode(apiRuntimeConfig))
+                );
                 Map<String, Object> apiDestinationConfig = safeMap(request.destination() == null ? null : request.destination().config());
                 String apiWriterType = resolvePlugin(
                     request.destination() == null ? null : request.destination().definitionId(),
@@ -478,10 +489,6 @@ public class IngestionTaskResource {
                 taskDTO.setAddaxConfig(toJsonNode(request.jobConfig()));
                 taskDTO.setAirflowEnabled(airflowRequest == null ? null : airflowRequest.enabled());
                 taskDTO.setAirflowDagId(airflowRequest == null ? null : normalize(airflowRequest.dagId()));
-                if (request.dbt() != null) {
-                    taskDTO.setDbtModelSelector(normalize(request.dbt().modelSelector()));
-                    taskDTO.setDbtDagSelector(normalize(request.dbt().dagSelector()));
-                }
                 if (isApiSource) {
                     List<Map<String, String>> apiTableMapping = ApiSourceConfigNormalizer.deriveOdsMappings(
                         sourceOverrides,
@@ -591,10 +598,6 @@ public class IngestionTaskResource {
             taskDTO.setAddaxConfig(toJsonNode(request.jobConfig()));
             taskDTO.setAirflowEnabled(airflowRequest == null ? null : airflowRequest.enabled());
             taskDTO.setAirflowDagId(airflowRequest == null ? null : normalize(airflowRequest.dagId()));
-            if (request.dbt() != null) {
-                taskDTO.setDbtModelSelector(normalize(request.dbt().modelSelector()));
-                taskDTO.setDbtDagSelector(normalize(request.dbt().dagSelector()));
-            }
             List<Map<String, String>> tableMapping = deriveTableMapping(mergedReaderConfig, writerConfig, request.sync());
             if (!tableMapping.isEmpty()) {
                 taskDTO.setTableMapping(toJsonNode(tableMapping));
@@ -2260,8 +2263,6 @@ public class IngestionTaskResource {
             taskDTO.setTableMapping(tableMapping.isEmpty() ? null : toJsonNode(tableMapping));
             taskDTO.setDestinationType(null);
             taskDTO.setDestinationConfig(null);
-            taskDTO.setDbtModelSelector(null);
-            taskDTO.setDbtDagSelector(null);
         } else if (rebuildMapping) {
             com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolved =
                 (resolvedSource != null) ? resolvedSource

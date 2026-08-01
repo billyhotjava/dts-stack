@@ -313,16 +313,14 @@ class DimensionDefinitionRepositoryIT {
                        (table_name = 'modeling_dimension_definition'
                         and column_name in ('created_date', 'last_modified_date'))
                        or
-                       (table_name in (
-                           'modeling_dimension_definition_revision',
-                           'modeling_dimension_definition_legacy_map'
-                        ) and column_name = 'created_date')
+                       (table_name = 'modeling_dimension_definition_revision'
+                        and column_name = 'created_date')
                    )
                  order by table_name, column_name
                 """
             )
         )
-            .hasSize(4)
+            .hasSize(3)
             .allSatisfy(column -> assertThat(column.get("data_type")).isEqualTo("timestamp with time zone"));
     }
 
@@ -508,6 +506,9 @@ class DimensionDefinitionRepositoryIT {
             inNewTransaction(() -> seedModelHead(tenant, "DIMENSION", null, 1))
         ).isInstanceOf(DataIntegrityViolationException.class);
         assertThatThrownBy(() ->
+            inNewTransaction(() -> seedModelHead(tenant, "DIMENSION", null, null))
+        ).isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() ->
             inNewTransaction(() -> seedModelHead(tenant, "FACT", finalDefinitionId, 1))
         ).isInstanceOf(DataIntegrityViolationException.class);
     }
@@ -518,40 +519,13 @@ class DimensionDefinitionRepositoryIT {
         UUID domainId = UUID.randomUUID();
         View first = view(UUID.randomUUID(), domainId, SYSTEM_CODE, "Customer", Status.DRAFT, 1, hash('a'), Instant.now());
         inNewTransaction(() -> repository.insert(tenant, "owner-1", command(domainId, "revision-ref"), first, hash('1')));
-        UUID modelSpecId = inNewTransaction(() -> seedModelHead(tenant, "DIMENSION", null, null));
+        UUID modelSpecId = inNewTransaction(() -> seedModelHead(tenant, "DIMENSION", first.id(), 1));
 
         assertInvalidModelRevision(tenant, modelSpecId, 101, 1, "{\"modelType\":\"DIMENSION\"}", first.id());
         assertInvalidModelRevision(tenant, modelSpecId, 102, 2, "{}", first.id());
         assertInvalidModelRevision(tenant, modelSpecId, 103, 2, "{\"modelType\":\"FACT\"}", first.id());
         assertInvalidModelRevision(tenant, modelSpecId, 104, 2, "{\"modelType\":\"DIMENSION\"}", first.id(), null);
         assertInvalidModelRevision(tenant, modelSpecId, 105, 2, "{\"modelType\":\"DIMENSION\"}", null, 1);
-    }
-
-    @Test
-    void enforcesBothLegacyMapForeignKeys() {
-        String tenant = tenant("legacy-map");
-        UUID domainId = UUID.randomUUID();
-        View first = view(UUID.randomUUID(), domainId, SYSTEM_CODE, "Customer", Status.DRAFT, 1, hash('a'), Instant.now());
-        inNewTransaction(() -> repository.insert(tenant, "owner-1", command(domainId, "legacy-map"), first, hash('1')));
-        UUID modelSpecId = inNewTransaction(() -> seedModelHead(tenant, "DIMENSION", null, null));
-        UUID secondModelSpecId = inNewTransaction(() -> seedModelHead(tenant, "DIMENSION", null, null));
-
-        inNewTransaction(() -> {
-            insertLegacyMap(tenant, modelSpecId, first.id(), 1);
-            return null;
-        });
-        assertThatThrownBy(() ->
-            inNewTransaction(() -> {
-                insertLegacyMap(tenant, UUID.randomUUID(), first.id(), 1);
-                return null;
-            })
-        ).isInstanceOf(DataIntegrityViolationException.class);
-        assertThatThrownBy(() ->
-            inNewTransaction(() -> {
-                insertLegacyMap(tenant, secondModelSpecId, first.id(), 99);
-                return null;
-            })
-        ).isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
@@ -622,41 +596,6 @@ class DimensionDefinitionRepositoryIT {
                 modelSpecId
             )
         ).isEqualTo(1);
-    }
-
-    @Test
-    void legacyMapParticipatesInReferenceProjectionAndUsageCountsWithoutDoubleCounting() {
-        String tenant = tenant("legacy-usage");
-        UUID domainId = UUID.randomUUID();
-        UUID definitionId = UUID.randomUUID();
-        Instant now = Instant.parse("2026-07-24T00:00:00Z");
-        View definition = view(
-            definitionId,
-            domainId,
-            systemCode(definitionId),
-            "Customer",
-            Status.CURRENT,
-            1,
-            hash('a'),
-            now
-        );
-        repository.insert(
-            tenant,
-            "owner-1",
-            command(domainId, "legacy-usage"),
-            definition,
-            hash('1')
-        );
-        UUID legacyModelSpecId = seedModelHead(tenant, "DIMENSION", null, null);
-        insertLegacyMap(tenant, legacyModelSpecId, definitionId, 1);
-
-        assertThat(repository.findLegacyDefinitionRef(tenant, legacyModelSpecId, domainId))
-            .contains(new DimensionDefinitionRepository.LegacyDefinitionRef(definitionId, 1));
-        assertThat(repository.findLegacyDefinitionRef(tenant, legacyModelSpecId, UUID.randomUUID()))
-            .isEmpty();
-        assertThat(repository.usageCount(tenant, definitionId)).isEqualTo(1);
-        assertThat(repository.usageCounts(tenant, List.of(definitionId)))
-            .containsExactlyEntriesOf(java.util.Map.of(definitionId, 1L));
     }
 
     @Test
@@ -882,22 +821,6 @@ class DimensionDefinitionRepositoryIT {
             view.reuseScope().name(),
             view.status().name(),
             view.checksum()
-        );
-    }
-
-    private void insertLegacyMap(String tenant, UUID modelSpecId, UUID definitionId, int definitionRevision) {
-        jdbcTemplate.update(
-            """
-            insert into modeling_dimension_definition_legacy_map (
-                id, tenant_id, legacy_model_spec_id, dimension_definition_id,
-                dimension_definition_revision, migration_batch_id, classification, created_by, created_date
-            ) values (?, ?, ?, ?, ?, 'batch-1', 'AUTO_DIMENSION', 'owner-1', current_timestamp)
-            """,
-            UUID.randomUUID(),
-            tenant,
-            modelSpecId,
-            definitionId,
-            definitionRevision
         );
     }
 

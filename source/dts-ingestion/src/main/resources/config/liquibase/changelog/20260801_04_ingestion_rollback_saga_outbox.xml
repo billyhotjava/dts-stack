@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260801-04-ingestion-rollback-saga-outbox" author="codex" dbms="postgresql">
+        <validCheckSum>9:74731bf50dea3b48c98c65fcfbb7a033</validCheckSum>
+        <preConditions
+            onFail="HALT"
+            onError="HALT"
+            onFailMessage="INGESTION_ROLLBACK_SAGA_SCHEMA_BLOCKED: expected the legacy audit table and no partial saga objects"
+            onErrorMessage="INGESTION_ROLLBACK_SAGA_SCHEMA_UNEXPECTED">
+            <and>
+                <tableExists tableName="rollback_audit_log"/>
+                <columnExists tableName="rollback_audit_log" columnName="id"/>
+                <columnExists tableName="rollback_audit_log" columnName="operator"/>
+                <columnExists tableName="rollback_audit_log" columnName="request_json"/>
+                <columnExists tableName="rollback_audit_log" columnName="created_at"/>
+                <not><columnExists tableName="rollback_audit_log" columnName="operation_receipt_id"/></not>
+                <not><columnExists tableName="rollback_audit_log" columnName="event_hash"/></not>
+                <not><columnExists tableName="rollback_audit_log" columnName="reason_code"/></not>
+                <not><tableExists tableName="ingestion_rollback_operation"/></not>
+                <not><tableExists tableName="ingestion_rollback_affected_object"/></not>
+                <not><tableExists tableName="ingestion_rollback_outbox"/></not>
+                <sqlCheck expectedResult="0"><![CDATA[
+                    SELECT count(*)
+                      FROM pg_trigger
+                     WHERE tgname IN (
+                         'trg_rollback_audit_append_only',
+                         'trg_ingestion_rollback_evidence_append_only'
+                     )
+                       AND NOT tgisinternal
+                ]]></sqlCheck>
+                <sqlCheck expectedResult="0"><![CDATA[
+                    SELECT count(*)
+                      FROM pg_proc function_definition
+                      JOIN pg_namespace function_schema
+                        ON function_schema.oid = function_definition.pronamespace
+                     WHERE function_schema.nspname = current_schema()
+                       AND function_definition.proname = 'dts_reject_rollback_evidence_mutation'
+                ]]></sqlCheck>
+            </and>
+        </preConditions>
+
+        <createTable tableName="ingestion_rollback_operation">
+            <column name="receipt_id" type="uuid"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="idempotency_key" type="varchar(128)"><constraints nullable="false" unique="true"/></column>
+            <column name="request_hash" type="char(64)"><constraints nullable="false"/></column>
+            <column name="payload_hash" type="char(64)"><constraints nullable="false"/></column>
+            <column name="level" type="integer"><constraints nullable="false"/></column>
+            <column name="scope" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="task_id" type="bigint"/>
+            <column name="source_data_source_id" type="uuid"><constraints nullable="false"/></column>
+            <column name="fence_sequence" type="bigint"><constraints nullable="false"/></column>
+            <column name="completion_sequence" type="bigint"/>
+            <column name="operator" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(48)"><constraints nullable="false"/></column>
+            <column name="outcome" type="varchar(48)"/>
+            <column name="side_effects_applied" type="boolean" defaultValueBoolean="false"><constraints nullable="false"/></column>
+            <column name="request_json" type="text"><constraints nullable="false"/></column>
+            <column name="impact_json" type="text"><constraints nullable="false"/></column>
+            <column name="result_json" type="text"/>
+            <column name="completion_event_id" type="varchar(128)"/>
+            <column name="failure_message" type="text"/>
+            <column name="created_at" type="timestamp with time zone"><constraints nullable="false"/></column>
+            <column name="updated_at" type="timestamp with time zone"><constraints nullable="false"/></column>
+            <column name="lock_version" type="bigint" defaultValueNumeric="0"><constraints nullable="false"/></column>
+        </createTable>
+        <sql><![CDATA[
+            ALTER TABLE ingestion_rollback_operation
+                ADD CONSTRAINT ck_ingestion_rollback_operation_level CHECK (level in (1, 2, 3)),
+                ADD CONSTRAINT ck_ingestion_rollback_operation_scope CHECK (scope in ('task', 'datasource')),
+                ADD CONSTRAINT ck_ingestion_rollback_operation_scope_task CHECK (
+                    scope <> 'task' OR task_id IS NOT NULL
+                ),
+                ADD CONSTRAINT ck_ingestion_rollback_operation_fence CHECK (
+                    fence_sequence > 0 AND (completion_sequence IS NULL OR completion_sequence > fence_sequence)
+                ),
+                ADD CONSTRAINT ck_ingestion_rollback_operation_status CHECK (
+                    status in ('EXECUTING','COMPLETION_PENDING','ABORT_PENDING','COMPLETED','ABORTED','RESTORE_PENDING','RESTORED','RECONCILIATION_REQUIRED')
+                ),
+                ADD CONSTRAINT ck_ingestion_rollback_operation_outcome CHECK (
+                    outcome IS NULL OR outcome in ('APPLY','ABORT_NO_SIDE_EFFECT','RESTORE')
+                );
+        ]]></sql>
+        <createIndex tableName="ingestion_rollback_operation" indexName="idx_ingestion_rollback_operation_source_created">
+            <column name="source_data_source_id"/>
+            <column name="created_at"/>
+        </createIndex>
+        <createIndex tableName="ingestion_rollback_operation" indexName="idx_ingestion_rollback_operation_status">
+            <column name="status"/>
+            <column name="updated_at"/>
+        </createIndex>
+
+        <createTable tableName="ingestion_rollback_affected_object">
+            <column name="id" type="bigint" autoIncrement="true"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="operation_receipt_id" type="uuid"><constraints nullable="false"/></column>
+            <column name="object_type" type="varchar(48)"><constraints nullable="false"/></column>
+            <column name="object_ref" type="varchar(1024)"><constraints nullable="false"/></column>
+            <column name="action" type="varchar(48)"><constraints nullable="false"/></column>
+            <column name="phase" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="evidence_json" type="text"/>
+            <column name="evidence_hash" type="char(64)"><constraints nullable="false"/></column>
+            <column name="recorded_at" type="timestamp with time zone"><constraints nullable="false"/></column>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="ingestion_rollback_affected_object"
+            baseColumnNames="operation_receipt_id"
+            referencedTableName="ingestion_rollback_operation"
+            referencedColumnNames="receipt_id"
+            constraintName="fk_ingestion_rollback_evidence_operation"
+            onDelete="RESTRICT"/>
+        <sql><![CDATA[
+            ALTER TABLE ingestion_rollback_affected_object
+                ADD CONSTRAINT ck_ingestion_rollback_evidence_phase CHECK (phase in ('PLANNED','RESULT'));
+        ]]></sql>
+        <createIndex tableName="ingestion_rollback_affected_object" indexName="idx_ingestion_rollback_evidence_receipt">
+            <column name="operation_receipt_id"/>
+            <column name="id"/>
+        </createIndex>
+
+        <createTable tableName="ingestion_rollback_outbox">
+            <column name="id" type="uuid"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="operation_receipt_id" type="uuid"><constraints nullable="false"/></column>
+            <column name="event_id" type="varchar(128)"><constraints nullable="false" unique="true"/></column>
+            <column name="event_hash" type="char(64)"><constraints nullable="false"/></column>
+            <column name="source_sequence" type="bigint"><constraints nullable="false"/></column>
+            <column name="outcome" type="varchar(48)"><constraints nullable="false"/></column>
+            <column name="payload_json" type="text"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="attempt_count" type="integer" defaultValueNumeric="0"><constraints nullable="false"/></column>
+            <column name="next_attempt_at" type="timestamp with time zone"><constraints nullable="false"/></column>
+            <column name="last_error" type="text"/>
+            <column name="created_at" type="timestamp with time zone"><constraints nullable="false"/></column>
+            <column name="updated_at" type="timestamp with time zone"><constraints nullable="false"/></column>
+            <column name="sent_at" type="timestamp with time zone"/>
+            <column name="lock_version" type="bigint" defaultValueNumeric="0"><constraints nullable="false"/></column>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="ingestion_rollback_outbox"
+            baseColumnNames="operation_receipt_id"
+            referencedTableName="ingestion_rollback_operation"
+            referencedColumnNames="receipt_id"
+            constraintName="fk_ingestion_rollback_outbox_operation"
+            onDelete="RESTRICT"/>
+        <sql><![CDATA[
+            ALTER TABLE ingestion_rollback_outbox
+                ADD CONSTRAINT ck_ingestion_rollback_outbox_status CHECK (
+                    status in ('PENDING','SENDING','RETRY','SENT','DEAD')
+                ),
+                ADD CONSTRAINT ck_ingestion_rollback_outbox_outcome CHECK (
+                    outcome in ('APPLY','ABORT_NO_SIDE_EFFECT','RESTORE') AND source_sequence > 0
+                );
+        ]]></sql>
+        <createIndex tableName="ingestion_rollback_outbox" indexName="idx_ingestion_rollback_outbox_due">
+            <column name="status"/>
+            <column name="next_attempt_at"/>
+            <column name="created_at"/>
+        </createIndex>
+        <createIndex tableName="ingestion_rollback_outbox" indexName="idx_ingestion_rollback_outbox_operation_sequence">
+            <column name="operation_receipt_id"/>
+            <column name="source_sequence"/>
+        </createIndex>
+
+        <addColumn tableName="rollback_audit_log">
+            <column name="operation_receipt_id" type="uuid"/>
+            <column name="event_hash" type="char(64)"/>
+            <column name="reason_code" type="varchar(64)"/>
+        </addColumn>
+        <addForeignKeyConstraint
+            baseTableName="rollback_audit_log"
+            baseColumnNames="operation_receipt_id"
+            referencedTableName="ingestion_rollback_operation"
+            referencedColumnNames="receipt_id"
+            constraintName="fk_rollback_audit_operation"
+            onDelete="RESTRICT"/>
+        <createIndex tableName="rollback_audit_log" indexName="idx_rollback_audit_receipt">
+            <column name="operation_receipt_id"/>
+        </createIndex>
+
+        <sql splitStatements="false"><![CDATA[
+            CREATE FUNCTION dts_reject_rollback_evidence_mutation()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            AS $$
+            BEGIN
+                RAISE EXCEPTION 'ROLLBACK_EVIDENCE_APPEND_ONLY';
+            END;
+            $$;
+
+            CREATE TRIGGER trg_rollback_audit_append_only
+            BEFORE UPDATE OR DELETE ON rollback_audit_log
+            FOR EACH ROW EXECUTE FUNCTION dts_reject_rollback_evidence_mutation();
+
+            CREATE TRIGGER trg_ingestion_rollback_evidence_append_only
+            BEFORE UPDATE OR DELETE ON ingestion_rollback_affected_object
+            FOR EACH ROW EXECUTE FUNCTION dts_reject_rollback_evidence_mutation();
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    RAISE EXCEPTION 'ROLLBACK_BLOCKED_INGESTION_ROLLBACK_SAGA_FORWARD_ONLY: recovery requires a new forward changeset';
+                END $$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260801-03-quality-governance-audit-catalog" author="codex">
+        <comment>幂等登记数据质量原型接入正式产品所需的资源、模块和业务审计动作</comment>
+        <sql splitStatements="true" stripComments="false"><![CDATA[
+            INSERT INTO audit_resource_dictionary (
+                resource_key, display_name, category, aliases, order_value, enabled, updated_at
+            )
+            VALUES (
+                'data_quality',
+                '数据质量',
+                '数据质量',
+                'data_quality,quality_rule,governance.rules,governance.qualityRuns,governance.issues,governance.qualityTemplates,governance.qualityTasks,governance.qualityCleansing,governance.qualityRepair,governance.qualityReports,governance.qualityOps',
+                32,
+                TRUE,
+                CURRENT_TIMESTAMP
+            )
+            ON CONFLICT (resource_key) DO UPDATE SET
+                display_name = EXCLUDED.display_name,
+                category = EXCLUDED.category,
+                aliases = EXCLUDED.aliases,
+                order_value = EXCLUDED.order_value,
+                enabled = EXCLUDED.enabled,
+                updated_at = EXCLUDED.updated_at;
+
+            WITH desired (module_key, module_name, order_value) AS (
+                VALUES
+                    ('governance.rules', '质量规则', 100),
+                    ('governance.qualityRuns', '质量运行', 110),
+                    ('governance.issues', '质量问题', 120),
+                    ('governance.qualityTemplates', '质量模板', 130),
+                    ('governance.qualityTasks', '质量巡检计划', 140),
+                    ('governance.qualityCleansing', '质量清洗', 150),
+                    ('governance.qualityRepair', '质量修复', 160),
+                    ('governance.qualityReports', '质量报告', 170),
+                    ('governance.qualityOps', '质量运营', 180)
+            )
+            INSERT INTO audit_module_catalog (
+                source_system, module_key, module_name, parent_module_key, owner,
+                enabled, order_value, version, updated_at
+            )
+            SELECT
+                'platform',
+                desired.module_key,
+                desired.module_name,
+                'governance',
+                'platform',
+                TRUE,
+                desired.order_value,
+                'prototype-dq-v1',
+                CURRENT_TIMESTAMP
+              FROM desired
+            ON CONFLICT (source_system, module_key) DO UPDATE SET
+                module_name = EXCLUDED.module_name,
+                parent_module_key = EXCLUDED.parent_module_key,
+                owner = EXCLUDED.owner,
+                enabled = EXCLUDED.enabled,
+                order_value = EXCLUDED.order_value,
+                version = EXCLUDED.version,
+                updated_at = EXCLUDED.updated_at;
+
+            WITH desired (
+                action_code, module_key, module_name, operation_name,
+                operation_kind, allow_empty_targets
+            ) AS (
+                VALUES
+                    ('GOV_RULE_VERSION_LIST', 'governance.rules', '质量规则', '查看质量规则版本列表', 'QUERY', TRUE),
+                    ('GOV_RULE_VERSION_VIEW', 'governance.rules', '质量规则', '查看质量规则版本', 'QUERY', FALSE),
+                    ('GOV_RULE_VERSION_STATUS', 'governance.rules', '质量规则', '变更质量规则版本状态', 'UPDATE', FALSE),
+                    ('GOV_RULE_DRY_RUN', 'governance.rules', '质量规则', '试跑质量规则', 'TEST', FALSE),
+                    ('GOV_QUALITY_RUN_EXECUTE', 'governance.qualityRuns', '质量运行', '执行质量检测运行', 'EXECUTE', FALSE),
+                    ('GOV_ISSUE_CREATE', 'governance.issues', '质量问题', '创建质量问题', 'CREATE', FALSE),
+                    ('GOV_ISSUE_METRICS', 'governance.issues', '质量问题', '查看质量问题指标', 'QUERY', TRUE),
+                    ('GOV_QUALITY_TEMPLATE_LIST', 'governance.qualityTemplates', '质量模板', '查看质量模板列表', 'QUERY', TRUE),
+                    ('GOV_QUALITY_TEMPLATE_VIEW', 'governance.qualityTemplates', '质量模板', '查看质量模板', 'QUERY', FALSE),
+                    ('GOV_QUALITY_TEMPLATE_CREATE', 'governance.qualityTemplates', '质量模板', '创建质量模板', 'CREATE', FALSE),
+                    ('GOV_QUALITY_TEMPLATE_UPDATE', 'governance.qualityTemplates', '质量模板', '更新质量模板', 'UPDATE', FALSE),
+                    ('GOV_QUALITY_TEMPLATE_DELETE', 'governance.qualityTemplates', '质量模板', '删除质量模板', 'DELETE', FALSE),
+                    ('GOV_QUALITY_TEMPLATE_PREVIEW', 'governance.qualityTemplates', '质量模板', '预览质量模板', 'QUERY', FALSE),
+                    ('GOV_QUALITY_TASK_LIST', 'governance.qualityTasks', '质量巡检计划', '查看质量巡检计划列表', 'QUERY', TRUE),
+                    ('GOV_QUALITY_TASK_CREATE', 'governance.qualityTasks', '质量巡检计划', '创建质量巡检计划', 'CREATE', FALSE),
+                    ('GOV_QUALITY_TASK_UPDATE', 'governance.qualityTasks', '质量巡检计划', '更新质量巡检计划', 'UPDATE', FALSE),
+                    ('GOV_QUALITY_TASK_DELETE', 'governance.qualityTasks', '质量巡检计划', '删除质量巡检计划', 'DELETE', FALSE),
+                    ('GOV_QUALITY_TASK_TOGGLE', 'governance.qualityTasks', '质量巡检计划', '切换质量巡检计划状态', 'UPDATE', FALSE),
+                    ('GOV_QUALITY_TASK_EXECUTE', 'governance.qualityTasks', '质量巡检计划', '执行质量巡检计划', 'EXECUTE', FALSE),
+                    ('GOV_QUALITY_CLEANSING_PREVIEW', 'governance.qualityCleansing', '质量清洗', '预览质量问题清洗', 'QUERY', FALSE),
+                    ('GOV_QUALITY_CLEANSING_EXECUTE', 'governance.qualityCleansing', '质量清洗', '执行质量问题清洗', 'EXECUTE', FALSE),
+                    ('GOV_QUALITY_CLEANSING_FUNCTION_LIST', 'governance.qualityCleansing', '质量清洗', '查看清洗函数列表', 'QUERY', TRUE),
+                    ('GOV_QUALITY_CLEANSING_FUNCTION_CREATE', 'governance.qualityCleansing', '质量清洗', '创建清洗函数', 'CREATE', FALSE),
+                    ('GOV_QUALITY_CLEANSING_FUNCTION_UPDATE', 'governance.qualityCleansing', '质量清洗', '更新清洗函数', 'UPDATE', FALSE),
+                    ('GOV_QUALITY_CLEANSING_FUNCTION_DELETE', 'governance.qualityCleansing', '质量清洗', '删除清洗函数', 'DELETE', FALSE),
+                    ('GOV_QUALITY_SQL_REPAIR_PREVIEW', 'governance.qualityRepair', '质量修复', '预览质量 SQL 修复', 'QUERY', FALSE),
+                    ('GOV_QUALITY_SQL_REPAIR_EXECUTE', 'governance.qualityRepair', '质量修复', '执行质量 SQL 修复', 'EXECUTE', FALSE),
+                    ('GOV_QUALITY_REPORT_EXPORT', 'governance.qualityReports', '质量报告', '导出质量报告', 'EXPORT', FALSE),
+                    ('GOV_OPS_OVERVIEW_VIEW', 'governance.qualityOps', '质量运营', '查看质量运营概览', 'QUERY', TRUE),
+                    ('GOV_OPS_TREND_VIEW', 'governance.qualityOps', '质量运营', '查看质量运营趋势', 'QUERY', TRUE),
+                    ('GOV_OPS_RELEASE_GATE_VIEW', 'governance.qualityOps', '质量运营', '查看质量发布门禁', 'QUERY', TRUE),
+                    ('GOV_AUTO_TRIGGER', 'governance.qualityOps', '质量运营', '自动触发清洗与质量检测', 'EXECUTE', FALSE)
+            )
+            INSERT INTO audit_action_catalog (
+                source_system, action_code, module_key, module_name, operation_code,
+                operation_name, operation_kind, resource_type, allow_empty_targets,
+                enabled, version, updated_at
+            )
+            SELECT
+                'platform',
+                desired.action_code,
+                desired.module_key,
+                desired.module_name,
+                desired.action_code,
+                desired.operation_name,
+                desired.operation_kind,
+                'data_quality',
+                desired.allow_empty_targets,
+                TRUE,
+                'prototype-dq-v1',
+                CURRENT_TIMESTAMP
+              FROM desired
+            ON CONFLICT (source_system, action_code) DO UPDATE SET
+                module_key = EXCLUDED.module_key,
+                module_name = EXCLUDED.module_name,
+                operation_code = EXCLUDED.operation_code,
+                operation_name = EXCLUDED.operation_name,
+                operation_kind = EXCLUDED.operation_kind,
+                resource_type = EXCLUDED.resource_type,
+                allow_empty_targets = EXCLUDED.allow_empty_targets,
+                enabled = EXCLUDED.enabled,
+                version = EXCLUDED.version,
+                updated_at = EXCLUDED.updated_at;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="true" stripComments="false"><![CDATA[
+                -- Forward-only convergence: shared catalog rows may have existed before this
+                -- change set, so rollback deliberately preserves all audit dictionary data.
+                SELECT 1;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

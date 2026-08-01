@@ -7,6 +7,10 @@ import com.yuzhi.dts.ingestion.service.etl.rollback.RollbackAuditService;
 import com.yuzhi.dts.ingestion.service.etl.rollback.RollbackImpact;
 import com.yuzhi.dts.ingestion.service.etl.rollback.RollbackRequest;
 import com.yuzhi.dts.ingestion.service.etl.rollback.RollbackResult;
+import com.yuzhi.dts.ingestion.service.etl.rollback.RollbackSagaService.RollbackCommandInProgressException;
+import com.yuzhi.dts.ingestion.service.etl.rollback.RollbackSagaService.RollbackIdempotencyConflictException;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -24,7 +28,11 @@ import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/ingestion/rollback")
-@PreAuthorize("hasAnyAuthority(T(com.yuzhi.dts.ingestion.security.AuthoritiesConstants).INFRA_MAINTAINERS)")
+@PreAuthorize(
+    "hasAnyAuthority(T(com.yuzhi.dts.ingestion.security.AuthoritiesConstants).INFRA_MAINTAINERS)" +
+    " && hasAuthority(T(com.yuzhi.dts.ingestion.security.AuthoritiesConstants).SERVICE_DTS_PLATFORM)" +
+    " && !authentication.name.startsWith('service:')"
+)
 public class RollbackResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(RollbackResource.class);
@@ -42,7 +50,9 @@ public class RollbackResource {
      * POST /api/ingestion/rollback/analyze - Impact analysis (dryRun).
      */
     @PostMapping("/analyze")
-    public ResponseEntity<ApiResponse<RollbackImpact>> analyze(@RequestBody RollbackRequest request) {
+    public ResponseEntity<ApiResponse<RollbackImpact>> analyze(
+        @RequestBody @Valid @NotNull RollbackRequest request
+    ) {
         LOG.info("Rollback impact analysis: scope={}, level={}, taskId={}, dataSourceId={}",
             request.scope(), request.level(), request.taskId(), request.dataSourceId());
         RollbackImpact impact = rollbackService.analyze(request);
@@ -53,7 +63,9 @@ public class RollbackResource {
      * POST /api/ingestion/rollback/execute - Execute rollback.
      */
     @PostMapping("/execute")
-    public ResponseEntity<ApiResponse<RollbackResult>> execute(@RequestBody RollbackRequest request) {
+    public ResponseEntity<ApiResponse<RollbackResult>> execute(
+        @RequestBody @Valid @NotNull RollbackRequest request
+    ) {
         if (request == null || request.dryRun()) {
             throw new ResponseStatusException(
                 HttpStatus.BAD_REQUEST,
@@ -63,7 +75,22 @@ public class RollbackResource {
         String operator = resolveOperator();
         LOG.info("Rollback execute: scope={}, level={}, taskId={}, dataSourceId={}, operator={}",
             request.scope(), request.level(), request.taskId(), request.dataSourceId(), operator);
-        RollbackResult result = rollbackService.execute(request, operator);
+        RollbackResult result;
+        try {
+            result = rollbackService.execute(request, operator);
+        } catch (RollbackIdempotencyConflictException | RollbackCommandInProgressException conflict) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, conflict.getMessage(), conflict);
+        }
+        if (!result.success()) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(
+                new ApiResponse<>(
+                    HttpStatus.CONFLICT.value(),
+                    "ROLLBACK_INCOMPLETE: manual recovery required",
+                    "ROLLBACK_INCOMPLETE",
+                    result
+                )
+            );
+        }
         return ResponseEntity.ok(ApiResponses.ok(result));
     }
 

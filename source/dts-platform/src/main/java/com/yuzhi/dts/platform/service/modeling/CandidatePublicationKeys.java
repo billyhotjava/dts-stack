@@ -7,7 +7,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
-/** Stable Candidate command keys for the local publication commit and registration retry receipt. */
+/** Stable Candidate command keys for the local publication commit and publication retry receipt. */
 public final class CandidatePublicationKeys {
 
     private CandidatePublicationKeys() {}
@@ -18,12 +18,12 @@ public final class CandidatePublicationKeys {
             return "candidate-publication-commit:" + candidate.id() + ":v" + candidate.version();
         }
         if (candidate.status() == DeliveryStatus.PARTIAL) {
-            return registrationRetry(publishRequestKey);
+            return publicationRetry(publishRequestKey);
         }
         throw new IllegalArgumentException("Candidate must be PUBLISHING or PARTIAL");
     }
 
-    public static String registrationRetry(String publishRequestKey) {
+    public static String publicationRetry(String publishRequestKey) {
         if (publishRequestKey == null || publishRequestKey.isBlank()) {
             throw new IllegalArgumentException("publishRequestKey is required");
         }

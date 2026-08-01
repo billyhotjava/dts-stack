@@ -233,4 +233,15 @@
     <include file="config/liquibase/changelog/20260729_01_metadata_standard_source_system_nullable.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260731_01_relationship_graph_dependency_index.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260731_02_platform_audit_outbox.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260801_01_retire_legacy_semantic_modeling.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260801_02_retire_model_spec_v1.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260801_03_retire_dimension_definition_legacy_migration.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260801_04_platform_audit_outbox_tenant.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260801_05_retire_modeling_plan_version_review.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260801_06_model_implementation_command_receipt.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260801_07_retire_legacy_modeling_plan_sql_model.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260801_08_rollback_invalidation_availability.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260801_09_model_materialization_availability_pin.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260801_10_platform_audit_outbox_generation_attempts.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260801_11_rollback_dispatch_generation_attempts.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

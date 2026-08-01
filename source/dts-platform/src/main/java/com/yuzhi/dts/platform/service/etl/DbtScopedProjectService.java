@@ -1,8 +1,6 @@
 package com.yuzhi.dts.platform.service.etl;
 
 import com.yuzhi.dts.platform.config.DbtProperties;
-import com.yuzhi.dts.platform.domain.modeling.ModelingSqlModel;
-import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -24,7 +22,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -61,21 +58,15 @@ public class DbtScopedProjectService {
 
     private final DbtConfigService dbtConfigService;
     private final DbtProperties dbtProperties;
-    private final ModelingSqlModelRepository modelingSqlModelRepository;
 
-    public DbtScopedProjectService(
-        DbtConfigService dbtConfigService,
-        DbtProperties dbtProperties,
-        ModelingSqlModelRepository modelingSqlModelRepository
-    ) {
+    public DbtScopedProjectService(DbtConfigService dbtConfigService, DbtProperties dbtProperties) {
         this.dbtConfigService = dbtConfigService;
         this.dbtProperties = dbtProperties;
-        this.modelingSqlModelRepository = modelingSqlModelRepository;
     }
 
     /**
      * Builds one immutable candidate-scoped dbt project from lifecycle artifacts without creating
-     * or updating ModelingSqlModel rows. Workspace sources, macros and referenced nodes remain
+     * or updating legacy SQL-model rows. Workspace sources, macros and referenced nodes remain
      * dependencies; the candidate artifacts are the only overlay owner.
      */
     public ScopedCandidateProject prepareCandidate(List<CandidateArtifactEntry> entries) {
@@ -185,128 +176,6 @@ public class DbtScopedProjectService {
                 failure
             );
         }
-    }
-
-    public Optional<ScopedProject> prepare(String selector) {
-        ParsedSelector parsedSelector = parseSelector(selector);
-        if (parsedSelector == null || !parsedSelector.supported() || parsedSelector.modelNames().isEmpty()) {
-            return Optional.empty();
-        }
-        Path workspaceDir = resolveWorkspaceDir();
-        cleanupScopedRuns(workspaceDir.resolve(SCOPED_ROOT_DIR));
-
-        List<ModelingSqlModel> allModels = modelingSqlModelRepository.findAll();
-        Map<String, ModelingSqlModel> modelByName = buildModelByName(allModels);
-
-        Map<String, Path> seedsByName = indexResourceFiles(workspaceDir.resolve("seeds"), Set.of(".csv", ".tsv"));
-        Map<String, Path> snapshotsByName = indexResourceFiles(workspaceDir.resolve("snapshots"), Set.of(".sql"));
-        // Filesystem fallback: include workspace model files that were not registered in the logical
-        // modeling DB (e.g. STG-layer views, which ModelingSqlModelService.normalizeLayer does not
-        // accept). DWD models that ref() them would otherwise fail dbt compilation with
-        // "depends on a node named '...' which was not found".
-        Map<String, Path> modelFilesByName = indexResourceFiles(workspaceDir.resolve("models"), Set.of(".sql"));
-        validateRequestedModels(parsedSelector.modelNames(), modelByName, modelFilesByName);
-
-        Set<String> requestedModelNames = new LinkedHashSet<>(parsedSelector.modelNames());
-        Set<String> includedModelNames = new LinkedHashSet<>();
-        Set<String> includedFilesystemModelNames = new LinkedHashSet<>();
-        Set<String> requiredSourceNames = new LinkedHashSet<>();
-        Set<String> requiredSeedNames = new LinkedHashSet<>();
-        Set<String> requiredSnapshotNames = new LinkedHashSet<>();
-        ArrayDeque<String> queue = new ArrayDeque<>(requestedModelNames);
-
-        while (!queue.isEmpty()) {
-            String modelName = queue.removeFirst();
-            String normalizedName = normalizeName(modelName);
-            if (
-                !StringUtils.hasText(normalizedName)
-                || includedModelNames.contains(normalizedName)
-                || includedFilesystemModelNames.contains(normalizedName)
-            ) {
-                continue;
-            }
-            ModelingSqlModel model = modelByName.get(normalizedName);
-            String dependencyText;
-            if (model != null) {
-                includedModelNames.add(normalizedName);
-                dependencyText = buildDependencyText(workspaceDir, model);
-            } else if (modelFilesByName.containsKey(normalizedName)) {
-                includedFilesystemModelNames.add(normalizedName);
-                dependencyText = readWorkspaceModelDependencyText(modelFilesByName.get(normalizedName));
-            } else {
-                continue;
-            }
-            requiredSourceNames.addAll(extractSources(dependencyText));
-            for (String refName : extractRefs(dependencyText)) {
-                String normalizedRefName = normalizeName(refName);
-                if (!StringUtils.hasText(normalizedRefName)) {
-                    continue;
-                }
-                if (modelByName.containsKey(normalizedRefName) || modelFilesByName.containsKey(normalizedRefName)) {
-                    if (
-                        !includedModelNames.contains(normalizedRefName)
-                        && !includedFilesystemModelNames.contains(normalizedRefName)
-                    ) {
-                        queue.addLast(normalizedRefName);
-                    }
-                    continue;
-                }
-                if (seedsByName.containsKey(normalizedRefName)) {
-                    requiredSeedNames.add(normalizedRefName);
-                    continue;
-                }
-                if (snapshotsByName.containsKey(normalizedRefName)) {
-                    requiredSnapshotNames.add(normalizedRefName);
-                }
-            }
-        }
-
-        Path scopedRoot = workspaceDir.resolve(SCOPED_ROOT_DIR);
-        Path scopedProjectDir = scopedRoot.resolve(buildScopedRunId(requestedModelNames));
-        try {
-            Files.createDirectories(scopedProjectDir);
-            copyRootFiles(workspaceDir, scopedProjectDir);
-            copyDirectoryIfExists(workspaceDir.resolve("macros"), scopedProjectDir.resolve("macros"));
-            copyDirectoryIfExists(workspaceDir.resolve("dbt_packages"), scopedProjectDir.resolve("dbt_packages"));
-            copyDirectoryIfExists(workspaceDir.resolve("packages"), scopedProjectDir.resolve("packages"));
-
-            for (String modelName : includedModelNames) {
-                ModelingSqlModel model = modelByName.get(modelName);
-                if (model != null) {
-                    copyModelResources(workspaceDir, scopedProjectDir, model);
-                }
-            }
-            for (String modelName : includedFilesystemModelNames) {
-                copyResourceWithCompanions(workspaceDir, scopedProjectDir, modelFilesByName.get(modelName));
-            }
-            for (String seedName : requiredSeedNames) {
-                copyResourceWithCompanions(workspaceDir, scopedProjectDir, seedsByName.get(seedName));
-            }
-            for (String snapshotName : requiredSnapshotNames) {
-                copyResourceWithCompanions(workspaceDir, scopedProjectDir, snapshotsByName.get(snapshotName));
-            }
-            copyRelevantSourceFiles(workspaceDir, scopedProjectDir, requiredSourceNames);
-        } catch (IOException ex) {
-            deleteRecursively(scopedProjectDir);
-            throw new IllegalStateException("构造临时 dbt 项目失败: " + ex.getMessage(), ex);
-        } catch (RuntimeException ex) {
-            deleteRecursively(scopedProjectDir);
-            throw ex;
-        }
-
-        List<String> requested = requestedModelNames.stream().toList();
-        List<String> included = new ArrayList<>(includedModelNames);
-        included.addAll(includedFilesystemModelNames);
-        String externalProjectDir = toExternalProjectDir(workspaceDir, scopedProjectDir);
-        LOG.info(
-            "[dbt-scoped] prepared scoped project {} (external view: {}) with {} requested, {} DB-registered, {} filesystem-only models",
-            scopedProjectDir,
-            externalProjectDir,
-            requested.size(),
-            includedModelNames.size(),
-            includedFilesystemModelNames.size()
-        );
-        return Optional.of(new ScopedProject(externalProjectDir, requested, included));
     }
 
     private CandidateOverlay validateCandidateOverlay(
@@ -766,78 +635,6 @@ public class DbtScopedProjectService {
         return workspaceDir;
     }
 
-    private ParsedSelector parseSelector(String selector) {
-        if (!StringUtils.hasText(selector)) {
-            return null;
-        }
-        String normalized = selector.trim();
-        if (normalized.isEmpty() || "all".equalsIgnoreCase(normalized)) {
-            return null;
-        }
-        Set<String> modelNames = new LinkedHashSet<>();
-        for (String rawToken : normalized.split("[,\\s]+")) {
-            if (!StringUtils.hasText(rawToken)) {
-                continue;
-            }
-            String token = rawToken.trim();
-            if (token.isEmpty() || "all".equalsIgnoreCase(token)) {
-                continue;
-            }
-            String candidate = token;
-            if (candidate.regionMatches(true, 0, "model:", 0, 6)) {
-                candidate = candidate.substring(6);
-            } else if (candidate.contains(":")) {
-                return new ParsedSelector(false, List.of());
-            }
-            candidate = stripGraphOperators(candidate);
-            if (!candidate.matches("[A-Za-z0-9_]+")) {
-                return new ParsedSelector(false, List.of());
-            }
-            modelNames.add(candidate);
-        }
-        return new ParsedSelector(true, modelNames.stream().toList());
-    }
-
-    private String stripGraphOperators(String token) {
-        String normalized = token == null ? "" : token.trim();
-        while (normalized.startsWith("+") || normalized.startsWith("@")) {
-            normalized = normalized.substring(1);
-        }
-        while (normalized.endsWith("+") || normalized.endsWith("@")) {
-            normalized = normalized.substring(0, normalized.length() - 1);
-        }
-        return normalized.trim();
-    }
-
-    private Map<String, ModelingSqlModel> buildModelByName(List<ModelingSqlModel> models) {
-        Map<String, ModelingSqlModel> modelByName = new LinkedHashMap<>();
-        for (ModelingSqlModel model : models) {
-            if (model == null || !StringUtils.hasText(model.getName())) {
-                continue;
-            }
-            String normalizedName = normalizeName(model.getName());
-            modelByName.putIfAbsent(normalizedName, model);
-        }
-        return modelByName;
-    }
-
-    private void validateRequestedModels(List<String> requestedModelNames, Map<String, ModelingSqlModel> modelByName, Map<String, Path> modelFilesByName) {
-        List<String> missing = new ArrayList<>();
-        for (String modelName : requestedModelNames) {
-            String normalizedName = normalizeName(modelName);
-            if (
-                StringUtils.hasText(normalizedName)
-                && !modelByName.containsKey(normalizedName)
-                && !modelFilesByName.containsKey(normalizedName)
-            ) {
-                missing.add(modelName);
-            }
-        }
-        if (!missing.isEmpty()) {
-            throw new IllegalArgumentException("以下模型未在逻辑建模或 dbt 工作区中找到，无法构造隔离编译工程: " + String.join(", ", missing));
-        }
-    }
-
     private Map<String, Path> indexResourceFiles(Path rootDir, Set<String> extensions) {
         if (rootDir == null || extensions == null || extensions.isEmpty() || !Files.isDirectory(rootDir)) {
             return Map.of();
@@ -864,32 +661,6 @@ public class DbtScopedProjectService {
             LOG.warn("[dbt-scoped] failed to index {}: {}", rootDir, ex.getMessage());
         }
         return indexed;
-    }
-
-    private String buildDependencyText(Path workspaceDir, ModelingSqlModel model) {
-        StringBuilder builder = new StringBuilder();
-        String modelSql = readModelSql(workspaceDir, model);
-        if (StringUtils.hasText(modelSql)) {
-            builder.append(modelSql).append('\n');
-        }
-        Path modelFile = resolveWorkspacePath(workspaceDir, model.getModelPath());
-        if (modelFile != null) {
-            appendIfPresent(builder, resolveCompanionPath(modelFile, ".yml"));
-            appendIfPresent(builder, resolveCompanionPath(modelFile, ".yaml"));
-        }
-        return builder.toString();
-    }
-
-    private String readModelSql(Path workspaceDir, ModelingSqlModel model) {
-        Path modelFile = resolveWorkspacePath(workspaceDir, model == null ? null : model.getModelPath());
-        if (modelFile != null && Files.isRegularFile(modelFile)) {
-            try {
-                return Files.readString(modelFile, StandardCharsets.UTF_8);
-            } catch (IOException ex) {
-                LOG.warn("[dbt-scoped] failed to read model file {}: {}", modelFile, ex.getMessage());
-            }
-        }
-        return model == null ? null : model.getSqlText();
     }
 
     /**
@@ -1001,23 +772,6 @@ public class DbtScopedProjectService {
         }
     }
 
-    private void copyModelResources(Path workspaceDir, Path scopedProjectDir, ModelingSqlModel model) throws IOException {
-        Path source = resolveWorkspacePath(workspaceDir, model == null ? null : model.getModelPath());
-        if (source != null && Files.isRegularFile(source)) {
-            copyRelativeFile(workspaceDir, scopedProjectDir, source);
-            copyCompanionFiles(workspaceDir, scopedProjectDir, source);
-            return;
-        }
-        if (model == null || !StringUtils.hasText(model.getModelPath())) {
-            throw new IOException("模型缺少有效 modelPath: " + (model == null ? null : model.getName()));
-        }
-        Path target = scopedProjectDir.resolve(model.getModelPath()).normalize();
-        ensureInside(scopedProjectDir, target);
-        Files.createDirectories(target.getParent());
-        Files.writeString(target, StringUtils.hasText(model.getSqlText()) ? model.getSqlText() : "", StandardCharsets.UTF_8,
-            StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-    }
-
     private void copyResourceWithCompanions(Path workspaceDir, Path scopedProjectDir, Path source) throws IOException {
         if (source == null || !Files.isRegularFile(source)) {
             return;
@@ -1101,15 +855,6 @@ public class DbtScopedProjectService {
         return false;
     }
 
-    private Path resolveWorkspacePath(Path workspaceDir, String relativePath) {
-        if (workspaceDir == null || !StringUtils.hasText(relativePath)) {
-            return null;
-        }
-        Path resolved = workspaceDir.resolve(relativePath).normalize();
-        ensureInside(workspaceDir, resolved);
-        return resolved;
-    }
-
     private void ensureInside(Path root, Path candidate) {
         if (root == null || candidate == null || !candidate.normalize().startsWith(root.normalize())) {
             throw new IllegalStateException("非法路径访问: " + candidate);
@@ -1156,15 +901,6 @@ public class DbtScopedProjectService {
         }
     }
 
-    private String buildScopedRunId(Set<String> requestedModelNames) {
-        String prefix = requestedModelNames.isEmpty() ? "scoped" : requestedModelNames.iterator().next();
-        String normalizedPrefix = normalizeName(prefix);
-        if (!StringUtils.hasText(normalizedPrefix)) {
-            normalizedPrefix = "scoped";
-        }
-        return normalizedPrefix + "-" + Instant.now().toEpochMilli() + "-" + UUID.randomUUID().toString().substring(0, 8);
-    }
-
     private String stripExtension(String fileName) {
         if (!StringUtils.hasText(fileName)) {
             return fileName;
@@ -1180,10 +916,6 @@ public class DbtScopedProjectService {
         String normalized = value.trim().toLowerCase(Locale.ROOT);
         return normalized.isEmpty() ? null : normalized;
     }
-
-    private record ParsedSelector(boolean supported, List<String> modelNames) {}
-
-    public record ScopedProject(String projectDir, List<String> requestedModels, List<String> includedModels) {}
 
     public record CandidateArtifact(String path, String contentChecksum, String content) {}
 

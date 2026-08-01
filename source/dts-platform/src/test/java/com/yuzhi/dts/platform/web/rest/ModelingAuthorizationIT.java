@@ -25,7 +25,7 @@ class ModelingAuthorizationIT {
 
     @Test
     @WithMockUser(username = "sprint67-reader", authorities = AuthoritiesConstants.EMPLOYEE)
-    void readOnlyUserCanReadCanonicalModelsButCannotWriteOrExecuteMigration() throws Exception {
+    void readOnlyUserCanReadCanonicalModelsButCannotWrite() throws Exception {
         mockMvc.perform(get("/api/modeling/model-specs")).andExpect(status().isOk());
 
         mockMvc
@@ -35,10 +35,6 @@ class ModelingAuthorizationIT {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("{}")
             )
-            .andExpect(status().isForbidden());
-
-        mockMvc
-            .perform(get("/api/modeling/migrations/legacy-objects/dry-run"))
             .andExpect(status().isForbidden());
     }
 }

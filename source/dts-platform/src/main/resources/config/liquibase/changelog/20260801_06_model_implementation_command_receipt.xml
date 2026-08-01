@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260801-06-model-implementation-command-receipt" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT">
+            <tableExists tableName="modeling_model_spec"/>
+            <tableExists tableName="modeling_model_implementation"/>
+        </preConditions>
+        <comment>Create append-only, action-scoped idempotency receipts for canonical implementation writes.</comment>
+
+        <createTable tableName="modeling_model_implementation_command_receipt">
+            <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="model_spec_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="action" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="idempotency_key" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="payload_hash" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="implementation_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="plan_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="model_revision" type="int"><constraints nullable="false"/></column>
+            <column name="model_checksum" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="ownership" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="project_key" type="varchar(255)"><constraints nullable="false"/></column>
+            <column name="dbt_unique_id" type="varchar(500)"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="implementation_revision" type="int"><constraints nullable="false"/></column>
+            <column name="implementation_checksum" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="input_mode" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="inputs_json" type="jsonb"><constraints nullable="false"/></column>
+            <column name="field_mappings_json" type="jsonb"><constraints nullable="false"/></column>
+            <column name="settings_json" type="jsonb"><constraints nullable="false"/></column>
+            <column name="materialization" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="created_by" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="created_at" type="timestamptz"><constraints nullable="false"/></column>
+        </createTable>
+
+        <addUniqueConstraint
+            tableName="modeling_model_implementation_command_receipt"
+            columnNames="tenant_id, model_spec_id, action, idempotency_key"
+            constraintName="uk_model_implementation_command_receipt_key"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_model_implementation_command_receipt"
+            baseColumnNames="tenant_id, model_spec_id"
+            constraintName="fk_model_implementation_command_receipt_model"
+            referencedTableName="modeling_model_spec"
+            referencedColumnNames="tenant_id, id"
+            onDelete="RESTRICT"/>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE modeling_model_implementation_command_receipt
+                ADD CONSTRAINT ck_model_implementation_command_receipt_payload
+                CHECK (
+                    action IN ('SAVE', 'IMPORT', 'OWNERSHIP_CONVERT', 'CLAIM')
+                    AND btrim(tenant_id) <> ''
+                    AND tenant_id = btrim(tenant_id)
+                    AND btrim(idempotency_key) <> ''
+                    AND idempotency_key = btrim(idempotency_key)
+                    AND payload_hash ~ '^[0-9a-f]{64}$'
+                    AND model_revision > 0
+                    AND model_checksum ~ '^[0-9a-f]{64}$'
+                    AND ownership IN ('DESIGNER_GENERATED', 'DBT_MANAGED')
+                    AND btrim(project_key) <> ''
+                    AND project_key = btrim(project_key)
+                    AND btrim(dbt_unique_id) <> ''
+                    AND dbt_unique_id = btrim(dbt_unique_id)
+                    AND status = 'ACTIVE'
+                    AND implementation_revision > 0
+                    AND implementation_checksum ~ '^[0-9a-f]{64}$'
+                    AND input_mode IN ('PHYSICAL_ASSET', 'UPSTREAM_MODEL', 'GENERATED')
+                    AND jsonb_typeof(inputs_json) = 'array'
+                    AND jsonb_typeof(field_mappings_json) = 'array'
+                    AND jsonb_typeof(settings_json) = 'object'
+                    AND octet_length(inputs_json::text) <= 1048576
+                    AND octet_length(field_mappings_json::text) <= 1048576
+                    AND octet_length(settings_json::text) <= 1048576
+                    AND materialization IN ('table', 'view', 'incremental')
+                    AND btrim(created_by) <> ''
+                    AND created_by = btrim(created_by)
+                );
+        ]]></sql>
+
+        <createIndex
+            tableName="modeling_model_implementation_command_receipt"
+            indexName="idx_model_implementation_command_receipt_history">
+            <column name="tenant_id"/>
+            <column name="model_spec_id"/>
+            <column name="created_at"/>
+        </createIndex>
+
+        <sql splitStatements="false"><![CDATA[
+            CREATE OR REPLACE FUNCTION modeling_reject_implementation_command_receipt_mutation()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            AS $function$
+            BEGIN
+                RAISE EXCEPTION 'MODEL_IMPLEMENTATION_COMMAND_RECEIPT_APPEND_ONLY'
+                    USING ERRCODE = '55000';
+            END;
+            $function$;
+        ]]></sql>
+        <sql splitStatements="false"><![CDATA[
+            CREATE TRIGGER trg_model_implementation_command_receipt_append_only
+            BEFORE UPDATE OR DELETE ON modeling_model_implementation_command_receipt
+            FOR EACH ROW
+            EXECUTE FUNCTION modeling_reject_implementation_command_receipt_mutation();
+        ]]></sql>
+        <sql splitStatements="false"><![CDATA[
+            CREATE TRIGGER trg_model_implementation_command_receipt_no_truncate
+            BEFORE TRUNCATE ON modeling_model_implementation_command_receipt
+            FOR EACH STATEMENT
+            EXECUTE FUNCTION modeling_reject_implementation_command_receipt_mutation();
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    LOCK TABLE modeling_model_implementation_command_receipt IN ACCESS EXCLUSIVE MODE;
+                    IF EXISTS (SELECT 1 FROM modeling_model_implementation_command_receipt) THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_MODEL_IMPLEMENTATION_COMMAND_RECEIPT_DATA_EXISTS';
+                    END IF;
+                END $$;
+            ]]></sql>
+            <dropTable tableName="modeling_model_implementation_command_receipt"/>
+            <sql>DROP FUNCTION IF EXISTS modeling_reject_implementation_command_receipt_mutation()</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -7,6 +7,7 @@ import { ClassificationTag } from "@/analytics/pages/screens/components/Classifi
 import { ingestionTaskAPI } from "@/api/ingestion";
 import dataSourcesService from "@/api/services/dataSourcesService";
 import { PageHeader } from "@/components/page-header";
+import { JourneyContextBar } from "@/components/journey";
 import { formatTimestamp } from "@/utils/format";
 import styles from "./AccessWorkspace.module.css";
 import {
@@ -83,15 +84,18 @@ const syncModeLabel = (value: string) => {
 	return value || "未记录";
 };
 
+export const accessKeywordFromSearch = (search: string) => (new URLSearchParams(search).get("keyword") || "").trim();
+
 export default function AccessWorkspace() {
 	const navigate = useNavigate();
 	const location = useLocation();
 	const kind = parseAccessKind(location.pathname.split("/").filter(Boolean).at(-1));
+	const initialKeyword = accessKeywordFromSearch(location.search);
 	const [rows, setRows] = useState<AccessWorkspaceRow[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string>();
-	const [queryInput, setQueryInput] = useState("");
-	const [query, setQuery] = useState("");
+	const [queryInput, setQueryInput] = useState(initialKeyword);
+	const [query, setQuery] = useState(initialKeyword);
 	const [lifecycle, setLifecycle] = useState<AccessLifecycle | "all">("all");
 	const [health, setHealth] = useState<AccessHealth | "all">("all");
 	const [pagination, setPagination] = useState({ current: 1, pageSize: 10, total: 0 });
@@ -133,9 +137,17 @@ export default function AccessWorkspace() {
 		}
 	}, [health, kind, lifecycle, pagination.current, pagination.pageSize, query]);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: changing the route access kind must restart that workspace at page one.
 	useEffect(() => {
 		setPagination((previous) => ({ ...previous, current: 1 }));
 	}, [kind]);
+
+	useEffect(() => {
+		const keyword = accessKeywordFromSearch(location.search);
+		setQueryInput(keyword);
+		setQuery(keyword);
+		setPagination((previous) => ({ ...previous, current: 1 }));
+	}, [location.search]);
 
 	useEffect(() => {
 		void load();
@@ -152,6 +164,17 @@ export default function AccessWorkspace() {
 
 	const openDetail = (row: AccessWorkspaceRow) => {
 		if (row.taskId != null) navigate(`/foundation/data-sources/access/${row.taskId}`);
+	};
+
+	const syncKeyword = (value: string) => {
+		const keyword = value.trim();
+		setQueryInput(keyword);
+		setQuery(keyword);
+		setPagination((previous) => ({ ...previous, current: 1 }));
+		const params = new URLSearchParams(location.search);
+		if (keyword) params.set("keyword", keyword);
+		else params.delete("keyword");
+		navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
 	};
 
 	const columns: ColumnsType<AccessWorkspaceRow> = [
@@ -280,14 +303,18 @@ export default function AccessWorkspace() {
 
 	const createKind: AccessSourceKind = kind === "overview" ? "database" : kind;
 	const createAction = (
-		<Button type="primary" onClick={() => openCreate(createKind)}>
-			{`新建${KIND_META[createKind].label}`}
-		</Button>
+		<Space>
+			<Button onClick={() => navigate("/foundation/connections")}>连接管理</Button>
+			<Button type="primary" onClick={() => openCreate(createKind)}>
+				{`新建${KIND_META[createKind].label}`}
+			</Button>
+		</Space>
 	);
 
 	return (
 		<div className={styles.workspace}>
 			<PageHeader title={KIND_META[kind].label} actions={createAction} />
+			<JourneyContextBar stage="integration" />
 
 			<section className={styles.intro}>
 				<div className={styles.introText}>
@@ -317,15 +344,9 @@ export default function AccessWorkspace() {
 						onChange={(event) => {
 							const next = event.target.value;
 							setQueryInput(next);
-							if (!next) {
-								setQuery("");
-								setPagination((previous) => ({ ...previous, current: 1 }));
-							}
+							if (!next) syncKeyword("");
 						}}
-						onSearch={(value) => {
-							setQuery(value.trim());
-							setPagination((previous) => ({ ...previous, current: 1 }));
-						}}
+						onSearch={syncKeyword}
 						placeholder="搜索任务名称、描述、接入类型或负责人"
 					/>
 					<Select

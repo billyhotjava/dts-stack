@@ -590,10 +590,6 @@ public class IngestionTaskQueryService {
                 return configured;
             }
         }
-        String dagSelector = toText(task.getDbtDagSelector());
-        if (StringUtils.hasText(dagSelector)) {
-            return dagSelector;
-        }
         return "default";
     }
 

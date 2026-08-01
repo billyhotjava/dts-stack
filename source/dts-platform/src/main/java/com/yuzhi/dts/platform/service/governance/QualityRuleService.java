@@ -14,7 +14,6 @@ import com.yuzhi.dts.platform.repository.governance.GovRuleVersionRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
-import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.governance.dto.QualityRuleDto;
 import com.yuzhi.dts.platform.service.governance.request.QualityRuleBindingRequest;
 import com.yuzhi.dts.platform.service.governance.request.QualityRuleUpsertRequest;
@@ -34,10 +33,6 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -55,11 +50,13 @@ public class QualityRuleService {
     private final GovRuleBindingRepository bindingRepository;
     private final CatalogDatasetRepository datasetRepository;
     private final DefaultLakeDatasetGuard defaultLakeDatasetGuard;
-    private final AuditService auditService;
+    private final QualityAuditRecorder qualityAuditRecorder;
     private final ObjectMapper objectMapper;
     private final GovernanceProperties properties;
     private final AccessChecker accessChecker;
     private final OrganizationVisibilityService organizationVisibilityService;
+    private final QualityEffectiveDepartmentResolver departmentResolver;
+    private final QualityDatasetReadGuard datasetReadGuard;
 
     public QualityRuleService(
         GovRuleRepository ruleRepository,
@@ -67,27 +64,31 @@ public class QualityRuleService {
         GovRuleBindingRepository bindingRepository,
         CatalogDatasetRepository datasetRepository,
         DefaultLakeDatasetGuard defaultLakeDatasetGuard,
-        AuditService auditService,
+        QualityAuditRecorder qualityAuditRecorder,
         ObjectMapper objectMapper,
         GovernanceProperties properties,
         AccessChecker accessChecker,
-        OrganizationVisibilityService organizationVisibilityService
+        OrganizationVisibilityService organizationVisibilityService,
+        QualityEffectiveDepartmentResolver departmentResolver,
+        QualityDatasetReadGuard datasetReadGuard
     ) {
         this.ruleRepository = ruleRepository;
         this.versionRepository = versionRepository;
         this.bindingRepository = bindingRepository;
         this.datasetRepository = datasetRepository;
         this.defaultLakeDatasetGuard = defaultLakeDatasetGuard;
-        this.auditService = auditService;
+        this.qualityAuditRecorder = qualityAuditRecorder;
         this.objectMapper = objectMapper;
         this.properties = properties;
         this.accessChecker = accessChecker;
         this.organizationVisibilityService = organizationVisibilityService;
+        this.departmentResolver = departmentResolver;
+        this.datasetReadGuard = datasetReadGuard;
     }
 
     @Transactional(readOnly = true)
     public List<QualityRuleDto> listAll(String activeDeptHeader) {
-        String activeDept = resolveActiveDept(activeDeptHeader);
+        String activeDept = departmentResolver.resolve(activeDeptHeader);
         boolean instituteScope = hasInstituteScope();
         UUID defaultLakeSourceId = defaultLakeDatasetGuard.currentDefaultLakeSourceId().orElse(null);
         return ruleRepository
@@ -133,76 +134,6 @@ public class QualityRuleService {
         return DepartmentUtils.matches(trimmedOwner, activeDept);
     }
 
-    private String resolveActiveDept(String activeDeptHeader) {
-        if (org.springframework.util.StringUtils.hasText(activeDeptHeader)) {
-            return activeDeptHeader.trim();
-        }
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        try {
-            if (authentication instanceof JwtAuthenticationToken token) {
-                String candidate = extractDeptClaim(token.getToken().getClaims().get("dept_code"));
-                if (candidate != null) {
-                    return candidate;
-                }
-                candidate = extractDeptClaim(token.getToken().getClaims().get("deptCode"));
-                if (candidate != null) {
-                    return candidate;
-                }
-                return extractDeptClaim(token.getToken().getClaims().get("department"));
-            }
-            if (authentication != null && authentication.getPrincipal() instanceof OAuth2AuthenticatedPrincipal principal) {
-                String candidate = extractDeptClaim(principal.getAttribute("dept_code"));
-                if (candidate != null) {
-                    return candidate;
-                }
-                candidate = extractDeptClaim(principal.getAttribute("deptCode"));
-                if (candidate != null) {
-                    return candidate;
-                }
-                return extractDeptClaim(principal.getAttribute("department"));
-            }
-        } catch (Exception ignored) {}
-        return null;
-    }
-
-    private String extractDeptClaim(Object raw) {
-        Object flattened = flattenValue(raw);
-        if (flattened == null) {
-            return null;
-        }
-        String text = flattened.toString();
-        if (!org.springframework.util.StringUtils.hasText(text)) {
-            return null;
-        }
-        String trimmed = text.trim();
-        return trimmed.isEmpty() ? null : trimmed;
-    }
-
-    private Object flattenValue(Object raw) {
-        if (raw == null) {
-            return null;
-        }
-        if (raw instanceof Iterable<?> iterable) {
-            for (Object element : iterable) {
-                if (element != null) {
-                    return element;
-                }
-            }
-            return null;
-        }
-        if (raw.getClass().isArray()) {
-            int length = java.lang.reflect.Array.getLength(raw);
-            for (int i = 0; i < length; i++) {
-                Object element = java.lang.reflect.Array.get(raw, i);
-                if (element != null) {
-                    return element;
-                }
-            }
-            return null;
-        }
-        return raw;
-    }
-
     @Transactional(readOnly = true)
     public QualityRuleDto getRule(UUID id) {
         return getRule(id, null);
@@ -242,7 +173,7 @@ public class QualityRuleService {
         if (rule == null) {
             throw new EntityNotFoundException("质量规则不存在");
         }
-        String activeDept = resolveActiveDept(activeDeptHeader);
+        String activeDept = departmentResolver.resolve(activeDeptHeader);
         boolean instituteScope = hasInstituteScope();
         if (!isOwnerDeptVisible(rule.getOwnerDept(), activeDept, instituteScope)) {
             throw new AccessDeniedException("当前账号无权访问该质量规则");
@@ -269,7 +200,7 @@ public class QualityRuleService {
             throw new AccessDeniedException("当前账号无权维护质量规则");
         }
         String ownerDept = StringUtils.trimToNull(rule.getOwnerDept());
-        String activeDept = resolveActiveDept(activeDeptHeader);
+        String activeDept = departmentResolver.resolve(activeDeptHeader);
         if (StringUtils.isBlank(activeDept)) {
             throw new AccessDeniedException("当前账号未配置所属部门，无法执行该操作");
         }
@@ -288,12 +219,12 @@ public class QualityRuleService {
             if (current != null) {
                 return current;
             }
-            return trimToNull(resolveActiveDept(activeDeptHeader));
+            return trimToNull(departmentResolver.resolve(activeDeptHeader));
         }
         if (!hasDepartmentScope()) {
             throw new AccessDeniedException("当前账号无权维护质量规则");
         }
-        String activeDept = resolveActiveDept(activeDeptHeader);
+        String activeDept = departmentResolver.resolve(activeDeptHeader);
         if (StringUtils.isBlank(activeDept)) {
             throw new AccessDeniedException("当前账号未配置所属部门，无法执行该操作");
         }
@@ -313,7 +244,7 @@ public class QualityRuleService {
 
     @Transactional(readOnly = true)
     public List<QualityRuleDto> findByDataset(UUID datasetId, String activeDeptHeader) {
-        String activeDept = resolveActiveDept(activeDeptHeader);
+        String activeDept = departmentResolver.resolve(activeDeptHeader);
         boolean instituteScope = hasInstituteScope();
         UUID defaultLakeSourceId = defaultLakeDatasetGuard.currentDefaultLakeSourceId().orElse(null);
         return ruleRepository
@@ -330,7 +261,16 @@ public class QualityRuleService {
     }
 
     public QualityRuleDto createRule(QualityRuleUpsertRequest request, String actor, String activeDeptHeader) {
-        validateDataset(request.getDatasetId());
+        try {
+            return createRuleInternal(request, actor, activeDeptHeader);
+        } catch (RuntimeException ex) {
+            recordRuleFailure("GOV_RULE_MANAGE", "UNASSIGNED", "新增质量规则失败", ex);
+            throw ex;
+        }
+    }
+
+    private QualityRuleDto createRuleInternal(QualityRuleUpsertRequest request, String actor, String activeDeptHeader) {
+        validateDatasetBindingContract(request, activeDeptHeader);
         String code = resolveRuleCode(request.getCode());
         if (ruleRepository.findByCode(code).isPresent()) {
             throw new IllegalArgumentException("编码重复: " + code);
@@ -354,7 +294,7 @@ public class QualityRuleService {
         auditPayload.put("targetId", persisted.getId().toString());
         auditPayload.put("targetName", persisted.getName());
         auditPayload.put("summary", "新增质量规则：" + persisted.getName());
-        auditService.auditAction("GOV_RULE_MANAGE", AuditStage.SUCCESS, persisted.getId().toString(), auditPayload);
+        qualityAuditRecorder.recordAction("GOV_RULE_MANAGE", AuditStage.SUCCESS, persisted.getId().toString(), auditPayload);
         return GovernanceMapper.toDto(persisted);
     }
 
@@ -363,12 +303,19 @@ public class QualityRuleService {
     }
 
     public QualityRuleDto updateRule(UUID id, QualityRuleUpsertRequest request, String actor, String activeDeptHeader) {
+        try {
+            return updateRuleInternal(id, request, actor, activeDeptHeader);
+        } catch (RuntimeException ex) {
+            recordRuleFailure("GOV_RULE_MANAGE", ruleResourceId(id), "修改质量规则失败", ex);
+            throw ex;
+        }
+    }
+
+    private QualityRuleDto updateRuleInternal(UUID id, QualityRuleUpsertRequest request, String actor, String activeDeptHeader) {
         GovRule rule = ruleRepository.findById(id).orElseThrow(EntityNotFoundException::new);
         ensureRuleWritable(rule, activeDeptHeader);
         Map<String, Object> before = toRuleAuditView(rule);
-        if (request.getDatasetId() != null) {
-            validateDataset(request.getDatasetId());
-        }
+        validateDatasetBindingContract(request, activeDeptHeader);
         if (StringUtils.isNotBlank(request.getCode())) {
             ruleRepository
                 .findByCode(request.getCode().trim())
@@ -399,7 +346,7 @@ public class QualityRuleService {
         auditPayload.put("targetId", id.toString());
         auditPayload.put("targetName", persisted.getName());
         auditPayload.put("summary", "修改质量规则：" + persisted.getName());
-        auditService.auditAction("GOV_RULE_MANAGE", AuditStage.SUCCESS, id.toString(), auditPayload);
+        qualityAuditRecorder.recordAction("GOV_RULE_MANAGE", AuditStage.SUCCESS, id.toString(), auditPayload);
         return GovernanceMapper.toDto(persisted);
     }
 
@@ -408,6 +355,15 @@ public class QualityRuleService {
     }
 
     public void deleteRule(UUID id, String activeDeptHeader) {
+        try {
+            deleteRuleInternal(id, activeDeptHeader);
+        } catch (RuntimeException ex) {
+            recordRuleFailure("GOV_RULE_MANAGE", ruleResourceId(id), "删除质量规则失败", ex);
+            throw ex;
+        }
+    }
+
+    private void deleteRuleInternal(UUID id, String activeDeptHeader) {
         GovRule rule = ruleRepository.findById(id).orElseThrow(EntityNotFoundException::new);
         ensureRuleWritable(rule, activeDeptHeader);
         Map<String, Object> before = toRuleAuditView(rule);
@@ -418,7 +374,7 @@ public class QualityRuleService {
         auditPayload.put("targetId", id.toString());
         auditPayload.put("targetName", rule.getName());
         auditPayload.put("summary", "删除质量规则：" + rule.getName());
-        auditService.auditAction("GOV_RULE_MANAGE", AuditStage.SUCCESS, id.toString(), auditPayload);
+        qualityAuditRecorder.recordAction("GOV_RULE_MANAGE", AuditStage.SUCCESS, id.toString(), auditPayload);
     }
 
     public QualityRuleDto toggleRule(UUID id, boolean enabled) {
@@ -426,6 +382,15 @@ public class QualityRuleService {
     }
 
     public QualityRuleDto toggleRule(UUID id, boolean enabled, String activeDeptHeader) {
+        try {
+            return toggleRuleInternal(id, enabled, activeDeptHeader);
+        } catch (RuntimeException ex) {
+            recordRuleFailure("GOV_RULE_MANAGE", ruleResourceId(id), "切换质量规则状态失败", ex);
+            throw ex;
+        }
+    }
+
+    private QualityRuleDto toggleRuleInternal(UUID id, boolean enabled, String activeDeptHeader) {
         GovRule rule = ruleRepository.findById(id).orElseThrow(EntityNotFoundException::new);
         ensureRuleWritable(rule, activeDeptHeader);
         Map<String, Object> before = toRuleAuditView(rule);
@@ -438,11 +403,27 @@ public class QualityRuleService {
         auditPayload.put("targetId", id.toString());
         auditPayload.put("targetName", rule.getName());
         auditPayload.put("summary", (enabled ? "启用" : "禁用") + "质量规则：" + rule.getName());
-        auditService.auditAction("GOV_RULE_MANAGE", AuditStage.SUCCESS, id.toString(), auditPayload);
+        qualityAuditRecorder.recordAction("GOV_RULE_MANAGE", AuditStage.SUCCESS, id.toString(), auditPayload);
         return GovernanceMapper.toDto(rule);
     }
 
     public com.yuzhi.dts.platform.service.governance.dto.QualityRuleVersionDto changeRuleVersionStatus(
+        UUID id,
+        Integer version,
+        String targetStatus,
+        String notes,
+        String actor,
+        String activeDeptHeader
+    ) {
+        try {
+            return changeRuleVersionStatusInternal(id, version, targetStatus, notes, actor, activeDeptHeader);
+        } catch (RuntimeException ex) {
+            recordRuleFailure("GOV_RULE_VERSION_STATUS", ruleResourceId(id), "切换质量规则版本状态失败", ex);
+            throw ex;
+        }
+    }
+
+    private com.yuzhi.dts.platform.service.governance.dto.QualityRuleVersionDto changeRuleVersionStatusInternal(
         UUID id,
         Integer version,
         String targetStatus,
@@ -463,6 +444,7 @@ public class QualityRuleService {
         ensureStatusTransitionAllowed(currentStatus, nextStatus);
         if (STATUS_PUBLISHED.equals(nextStatus)) {
             requireExecutableDefinition(target.getDefinition());
+            requireExecutableBinding(rule, target, activeDeptHeader);
         }
         target.setStatus(nextStatus);
         if (StringUtils.isNotBlank(notes)) {
@@ -489,8 +471,28 @@ public class QualityRuleService {
         payload.put("version", version);
         payload.put("fromStatus", currentStatus);
         payload.put("toStatus", nextStatus);
-        auditService.auditAction("GOV_RULE_VERSION_STATUS", AuditStage.SUCCESS, id.toString(), payload);
+        qualityAuditRecorder.recordAction("GOV_RULE_VERSION_STATUS", AuditStage.SUCCESS, id.toString(), payload);
         return GovernanceMapper.toDto(target);
+    }
+
+    private void recordRuleFailure(String actionCode, String resourceId, String summary, RuntimeException original) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("summary", summary);
+        payload.put("errorType", original.getClass().getSimpleName());
+        try {
+            qualityAuditRecorder.recordFailureAction(actionCode, resourceId, payload);
+        } catch (RuntimeException auditFailure) {
+            log.warn(
+                "event=quality_rule_failure_audit_write_failed actionCode={} resourceId={} errorType={}",
+                actionCode,
+                resourceId,
+                auditFailure.getClass().getSimpleName()
+            );
+        }
+    }
+
+    private String ruleResourceId(UUID id) {
+        return id != null ? id.toString() : "UNASSIGNED";
     }
 
     private boolean hasInstituteScope() {
@@ -624,7 +626,7 @@ public class QualityRuleService {
         try {
             return objectMapper.writeValueAsString(payload);
         } catch (JsonProcessingException e) {
-            log.warn("Failed to serialize rule definition: {}", e.getMessage());
+            log.warn("event=quality_rule_definition_serialize_failed errorType={}", e.getClass().getSimpleName());
             return "{}";
         }
     }
@@ -682,11 +684,50 @@ public class QualityRuleService {
         return view;
     }
 
-    private void validateDataset(UUID datasetId) {
+    private void validateDatasetBindingContract(QualityRuleUpsertRequest request, String activeDeptHeader) {
+        if (request == null) {
+            throw new IllegalArgumentException("质量规则请求不能为空");
+        }
+        UUID datasetId = request.getDatasetId();
+        List<QualityRuleBindingRequest> bindings = request.getBindings();
+        if (bindings != null && !bindings.isEmpty()) {
+            if (datasetId == null) {
+                throw new IllegalArgumentException("规则数据资产不能为空");
+            }
+            if (bindings.size() != 1 || bindings.get(0) == null || bindings.get(0).getDatasetId() == null) {
+                throw new IllegalArgumentException("一个质量规则只能绑定一个数据资产");
+            }
+            QualityRuleBindingRequest binding = bindings.get(0);
+            if (!datasetId.equals(binding.getDatasetId())) {
+                throw new IllegalArgumentException("绑定数据资产必须与规则数据资产一致");
+            }
+            if (StringUtils.isNotBlank(binding.getScopeType()) && !"DATASET".equalsIgnoreCase(binding.getScopeType().trim())) {
+                throw new IllegalArgumentException("质量规则仅支持数据资产级绑定");
+            }
+        }
         if (datasetId == null) {
+            if (STATUS_PUBLISHED.equals(resolveInitialVersionStatus(request))) {
+                throw new IllegalArgumentException("已发布质量规则必须绑定数据资产");
+            }
             return;
         }
-        defaultLakeDatasetGuard.requireDefaultLakeDataset(datasetId);
+        datasetReadGuard.requireReadable(datasetId, activeDeptHeader);
+    }
+
+    private void requireExecutableBinding(GovRule rule, GovRuleVersion version, String activeDeptHeader) {
+        UUID datasetId = rule != null ? rule.getDatasetId() : null;
+        List<GovRuleBinding> bindings = version != null && version.getId() != null
+            ? bindingRepository.findByRuleVersionId(version.getId())
+            : List.of();
+        if (
+            datasetId == null ||
+            bindings.size() != 1 ||
+            bindings.get(0) == null ||
+            !datasetId.equals(bindings.get(0).getDatasetId())
+        ) {
+            throw new IllegalArgumentException("发布质量规则前必须绑定数据资产");
+        }
+        datasetReadGuard.requireReadable(datasetId, activeDeptHeader);
     }
 
     private String resolveRuleCode(String code) {

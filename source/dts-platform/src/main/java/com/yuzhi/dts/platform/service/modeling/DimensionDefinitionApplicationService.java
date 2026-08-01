@@ -6,8 +6,10 @@ import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository;
 import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository.StoredDimensionDefinition;
+import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.AttributeSemantic;
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.CreateCommand;
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.FieldIssue;
@@ -48,6 +50,7 @@ public class DimensionDefinitionApplicationService {
     private final ObjectWriter canonicalWriter;
     private final ModelSpecDomainWriteAccessPort domainWriteAccess;
     private final ModelSpecDomainReadAccessPort domainReadAccess;
+    private final AuditService auditService;
     private final Clock clock;
     private final Supplier<UUID> idGenerator;
 
@@ -56,13 +59,15 @@ public class DimensionDefinitionApplicationService {
         DimensionDefinitionRepository repository,
         ObjectMapper objectMapper,
         ModelSpecDomainWriteAccessPort domainWriteAccess,
-        ModelSpecDomainReadAccessPort domainReadAccess
+        ModelSpecDomainReadAccessPort domainReadAccess,
+        AuditService auditService
     ) {
         this(
             repository,
             objectMapper,
             domainWriteAccess,
             domainReadAccess,
+            auditService,
             Clock.systemUTC(),
             UUID::randomUUID
         );
@@ -73,6 +78,7 @@ public class DimensionDefinitionApplicationService {
         ObjectMapper objectMapper,
         ModelSpecDomainWriteAccessPort domainWriteAccess,
         ModelSpecDomainReadAccessPort domainReadAccess,
+        AuditService auditService,
         Clock clock,
         Supplier<UUID> idGenerator
     ) {
@@ -87,6 +93,7 @@ public class DimensionDefinitionApplicationService {
             .writer();
         this.domainWriteAccess = domainWriteAccess;
         this.domainReadAccess = domainReadAccess;
+        this.auditService = auditService;
         this.clock = clock;
         this.idGenerator = idGenerator;
     }
@@ -148,6 +155,7 @@ public class DimensionDefinitionApplicationService {
                 );
             return replay(concurrent, requestHash);
         }
+        audit("MODELING_DIMENSION_DEFINITION_CREATE", tenantId, actorId, created);
         return new CreateResult(created, false);
     }
 
@@ -312,17 +320,23 @@ public class DimensionDefinitionApplicationService {
                 attributes
             )
         );
-        return compareAndSet(tenantId, actorId, current, replacement);
+        View updated = compareAndSet(tenantId, actorId, current, replacement);
+        audit("MODELING_DIMENSION_DEFINITION_UPDATE", tenantId, actorId, updated);
+        return updated;
     }
 
     @Transactional
     public View confirm(String tenantId, String actorId, UUID id, ExpectedVersion expected) {
-        return transition(tenantId, actorId, id, expected, Status.DRAFT, Status.CURRENT);
+        View confirmed = transition(tenantId, actorId, id, expected, Status.DRAFT, Status.CURRENT);
+        audit("MODELING_DIMENSION_DEFINITION_CONFIRM", tenantId, actorId, confirmed);
+        return confirmed;
     }
 
     @Transactional
     public View retire(String tenantId, String actorId, UUID id, ExpectedVersion expected) {
-        return transition(tenantId, actorId, id, expected, Status.CURRENT, Status.RETIRED);
+        View retired = transition(tenantId, actorId, id, expected, Status.CURRENT, Status.RETIRED);
+        audit("MODELING_DIMENSION_DEFINITION_RETIRE", tenantId, actorId, retired);
+        return retired;
     }
 
     private View transition(
@@ -406,6 +420,18 @@ public class DimensionDefinitionApplicationService {
             throw revisionConflict(latestVisible(tenantId, current));
         }
         return replacement;
+    }
+
+    private void audit(String actionCode, String tenantId, String actorId, View view) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("actor", actorId);
+        payload.put("tenantId", tenantId);
+        payload.put("domainId", view.domainId());
+        payload.put("systemCode", view.systemCode());
+        payload.put("name", view.name());
+        payload.put("revision", view.revision());
+        payload.put("status", view.status().name());
+        auditService.auditAction(actionCode, AuditStage.SUCCESS, view.id().toString(), payload);
     }
 
     private CreateResult replay(StoredDimensionDefinition stored, String requestHash) {

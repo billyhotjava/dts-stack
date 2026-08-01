@@ -6,6 +6,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class AuditProperties {
 
     private boolean enabled = true;
+    private TenancyMode tenancyMode;
+    private String tenantId;
     private final Outbox outbox = new Outbox();
 
     public boolean isEnabled() {
@@ -16,8 +18,29 @@ public class AuditProperties {
         this.enabled = enabled;
     }
 
+    public TenancyMode getTenancyMode() {
+        return tenancyMode;
+    }
+
+    public void setTenancyMode(TenancyMode tenancyMode) {
+        this.tenancyMode = tenancyMode;
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
+    }
+
     public Outbox getOutbox() {
         return outbox;
+    }
+
+    public enum TenancyMode {
+        SINGLE_TENANT,
+        MULTI_TENANT,
     }
 
     public static class Outbox {

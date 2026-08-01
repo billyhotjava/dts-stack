@@ -48,6 +48,12 @@
     "requiredRoles": []
   },
   {
+    "code": "sys.nav.portal.resourceConnections",
+    "title": "连接管理",
+    "route": "/foundation/connections",
+    "requiredRoles": []
+  },
+  {
     "code": "sys.nav.portal.resourceConnectors",
     "title": "连接器目录",
     "route": "/foundation/connectors",

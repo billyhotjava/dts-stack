@@ -3,6 +3,7 @@ package com.yuzhi.dts.platform.service.catalog;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetPortalService.AssetSummary;
+import com.yuzhi.dts.platform.service.catalog.dto.CatalogTagDto;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -141,5 +142,29 @@ class CatalogAssetOverviewAggregatorTest {
 
         assertThat(overview.byDomain()).isEmpty();
         assertThat(overview.missingDomain()).isEqualTo(1);
+    }
+
+    @Test
+    void tagCoverageUsesTheSameVisibleAssetPopulation() {
+        CatalogTagDto tag = new CatalogTagDto(
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            "BUSINESS-ORDER",
+            "订单",
+            "#1677ff",
+            false,
+            true,
+            "订单资产"
+        );
+        var rows = List.of(
+            summary("ODS", UUID.randomUUID(), "INTERNAL", "ACTIVE", "GOVERNED").withAssetTags(List.of(tag)),
+            summary("DWD", UUID.randomUUID(), "INTERNAL", "ACTIVE", "GOVERNED")
+        );
+
+        var overview = CatalogAssetOverviewAggregator.aggregate(rows, rows.size(), false);
+
+        assertThat(overview.tagged()).isEqualTo(1);
+        assertThat(overview.untagged()).isEqualTo(1);
+        assertThat(overview.tagCoveragePercent()).isEqualTo(50);
     }
 }

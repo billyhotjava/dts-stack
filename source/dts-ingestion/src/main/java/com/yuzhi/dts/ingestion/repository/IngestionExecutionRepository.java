@@ -72,6 +72,8 @@ public interface IngestionExecutionRepository extends JpaRepository<IngestionExe
      */
     Optional<IngestionExecution> findFirstByTaskIdAndExecutionId(Long taskId, String executionId);
 
+    Optional<IngestionExecution> findFirstByTaskIdAndAirflowDagIdAndExecutionId(Long taskId, String airflowDagId, String executionId);
+
     /**
      * 根据状态查询执行历史
      */

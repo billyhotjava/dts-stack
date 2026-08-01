@@ -16,12 +16,93 @@ class AuditActionCatalogResourceTest {
         }
 
         assertThat(catalog)
+            .contains("\"code\": \"MODELING_WAREHOUSE_PLAN_CREATE\"")
+            .contains("\"code\": \"MODELING_WAREHOUSE_PLAN_HEADER_UPDATE\"")
+            .contains("\"code\": \"MODELING_WAREHOUSE_PLAN_ARCHIVE\"")
+            .contains("\"code\": \"MODELING_WAREHOUSE_BUSINESS_SCOPE_SAVE\"")
             .contains("\"code\": \"MODELING_WAREHOUSE_CATEGORY_SCOPE_SAVE\"")
             .contains("\"code\": \"MODELING_WAREHOUSE_POLICY_SAVE\"")
             .contains("\"code\": \"MODELING_WAREHOUSE_SOURCE_INVENTORY_SAVE\"")
+            .contains("\"code\": \"MODELING_WAREHOUSE_SOURCE_MAPPINGS_SAVE\"")
+            .contains("\"code\": \"MODELING_WAREHOUSE_BASELINE_CONFIRM\"")
+            .contains("\"code\": \"MODEL_RELEASE_CANDIDATE_CREATE\"")
+            .contains("\"code\": \"MODEL_RELEASE_CANDIDATE_REPLACEMENT_CREATE\"")
+            .contains("\"code\": \"MODEL_RELEASE_CANDIDATE_SCOPE_REPLACE\"")
+            .contains("\"code\": \"MODEL_RELEASE_CANDIDATE_STATUS_CHANGE\"")
             .contains("\"code\": \"MODEL_RELEASE_CANDIDATE_PUBLISH\"")
-            .contains("\"code\": \"MODEL_RELEASE_CANDIDATE_REGISTRATION_RETRY\"")
+            .contains("\"code\": \"MODEL_RELEASE_CANDIDATE_PUBLICATION_RETRY\"")
             .contains("\"code\": \"MODEL_RELEASE_CANDIDATE_ROLLBACK\"")
             .contains("\"key\": \"modeling.plan\"");
+    }
+
+    @Test
+    void registersCanonicalModelSpecAndDimensionDefinitionWritesAsModelingActions() throws Exception {
+        String catalog;
+        try (var input = getClass().getResourceAsStream("/config/audit-action-catalog.json")) {
+            assertThat(input).isNotNull();
+            catalog = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        }
+
+        assertThat(catalog)
+            .contains("\"key\": \"modeling.model-spec\"")
+            .contains("\"code\": \"MODELING_MODEL_SPEC_CREATE\"")
+            .contains("\"code\": \"MODELING_MODEL_SPEC_IMPORT_CREATE\"")
+            .contains("\"code\": \"MODELING_MODEL_SPEC_UPDATE\"")
+            .contains("\"code\": \"MODELING_MODEL_SPEC_RECLASSIFY\"")
+            .contains("\"code\": \"MODELING_MODEL_SPEC_DELETE_DRAFT\"")
+            .contains("\"key\": \"modeling.dimension-definition\"")
+            .contains("\"code\": \"MODELING_DIMENSION_DEFINITION_CREATE\"")
+            .contains("\"code\": \"MODELING_DIMENSION_DEFINITION_UPDATE\"")
+            .contains("\"code\": \"MODELING_DIMENSION_DEFINITION_CONFIRM\"")
+            .contains("\"code\": \"MODELING_DIMENSION_DEFINITION_RETIRE\"")
+            .doesNotContain("\"key\": \"modeling.plans\"")
+            .doesNotContain("\"key\": \"modeling.sql-model\"")
+            .doesNotContain("\"code\": \"MODELING_PLAN_")
+            .doesNotContain("\"code\": \"MODELING_SQL_MODEL_");
+    }
+
+    @Test
+    void registersModelMaterializationMachineAuditActions() throws Exception {
+        String catalog;
+        try (var input = getClass().getResourceAsStream("/config/audit-action-catalog.json")) {
+            assertThat(input).isNotNull();
+            catalog = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        }
+
+        assertThat(catalog)
+            .contains("\"key\": \"modeling.materialization\"")
+            .contains("\"code\": \"MODEL_MATERIALIZATION_DISPATCH_SUBMITTED\"")
+            .contains("\"code\": \"MODEL_MATERIALIZATION_DISPATCH_UNKNOWN\"")
+            .contains("\"code\": \"MODEL_MATERIALIZATION_DISPATCH_BLOCKED\"")
+            .contains("\"code\": \"MODEL_MATERIALIZATION_SOURCE_FENCE_DENIED\"")
+            .contains("\"code\": \"MODEL_MATERIALIZATION_RUNTIME_SPEC_CONSUMED\"")
+            .contains("\"code\": \"MODEL_MATERIALIZATION_RUNTIME_SPEC_BLOCKED\"")
+            .contains("\"code\": \"MODEL_MATERIALIZATION_ARTIFACTS_SYNCED\"")
+            .contains("\"code\": \"MODEL_MATERIALIZATION_RELATIONS_VERIFIED\"")
+            .contains("\"code\": \"MODEL_MATERIALIZATION_RUN_FAILED\"")
+            .contains("\"code\": \"MODEL_MATERIALIZATION_RUN_FINALIZED\"")
+            .contains("\"key\": \"modeling.rollback-invalidation\"")
+            .contains("\"code\": \"ROLLBACK_INVALIDATION_PREPARE\"")
+            .contains("\"code\": \"ROLLBACK_INVALIDATION_APPLY\"")
+            .contains("\"code\": \"ROLLBACK_INVALIDATION_ABORT\"")
+            .contains("\"code\": \"SOURCE_AVAILABILITY_RESTORE\"");
+    }
+
+    @Test
+    void registersCanonicalModelImplementationLifecycleWrites() throws Exception {
+        String catalog;
+        try (var input = getClass().getResourceAsStream("/config/audit-action-catalog.json")) {
+            assertThat(input).isNotNull();
+            catalog = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        }
+
+        assertThat(catalog)
+            .contains("\"key\": \"modeling.implementation-lifecycle\"")
+            .contains("\"code\": \"MODEL_IMPLEMENTATION_SAVE\"")
+            .contains("\"code\": \"MODEL_IMPLEMENTATION_IMPORT\"")
+            .contains("\"code\": \"MODEL_IMPLEMENTATION_OWNERSHIP_CONVERT\"")
+            .contains("\"code\": \"MODEL_IMPLEMENTATION_CLAIM\"")
+            .contains("\"code\": \"MODEL_IMPLEMENTATION_COMPILE\"")
+            .contains("\"code\": \"MODEL_IMPLEMENTATION_TEST_EVIDENCE_RECORD\"");
     }
 }

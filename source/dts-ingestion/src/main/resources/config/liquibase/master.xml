@@ -30,5 +30,12 @@
     <include file="config/liquibase/changelog/20260505_01_ingestion_task_graph_dsl.xml"/>
     <include file="config/liquibase/changelog/20260726_01_ingestion_classification_seal.xml"/>
     <include file="config/liquibase/changelog/20260731_01_ingestion_access_contract.xml"/>
+    <include file="config/liquibase/changelog/20260801_01_ingestion_admission_dag_reconciliation.xml"/>
+    <include file="config/liquibase/changelog/20260801_02_ingestion_task_secret_migration.xml"/>
+    <include file="config/liquibase/changelog/20260801_02a_archive_ingestion_task_direct_dbt.xml"/>
+    <include file="config/liquibase/changelog/20260801_03_retire_ingestion_task_direct_dbt.xml"/>
+    <include file="config/liquibase/changelog/20260801_04_ingestion_rollback_saga_outbox.xml"/>
+    <include file="config/liquibase/changelog/20260801_05_ingestion_runtime_resilience.xml"/>
+    <include file="config/liquibase/changelog/20260801_06_ingestion_rollback_truncate_guards.xml"/>
 
 </databaseChangeLog>

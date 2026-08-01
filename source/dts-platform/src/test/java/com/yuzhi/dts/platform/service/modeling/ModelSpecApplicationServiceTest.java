@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -14,12 +15,14 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository;
 import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository.StoredDimensionDefinition;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.DomainBindingState;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.PlanState;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.StoredModelSpec;
+import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.ExpectedVersion;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.*;
 import com.yuzhi.dts.platform.service.modeling.warehouse.CatalogDomainResolutionPort;
@@ -35,6 +38,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.InOrder;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -71,7 +75,10 @@ class ModelSpecApplicationServiceTest {
     private ModelSpecSourceValidationPort sourceValidation;
 
     @Mock
-    private ModelSpecCompatibilityReader compatibilityReader;
+    private ModelSpecReader compatibilityReader;
+
+    @Mock
+    private AuditService auditService;
 
     private ModelSpecSnapshotCodec codec;
     private ModelSpecApplicationService service;
@@ -89,6 +96,7 @@ class ModelSpecApplicationServiceTest {
             planWriteAccess,
             sourceValidation,
             compatibilityReader,
+            auditService,
             Clock.fixed(NOW, ZoneOffset.UTC),
             () -> MODEL_ID
         );
@@ -124,7 +132,14 @@ class ModelSpecApplicationServiceTest {
         assertThat(result.modelSpec().id()).isEqualTo(MODEL_ID);
         assertThat(result.modelSpec().contractVersion()).isEqualTo(2);
         assertThat(result.modelSpec().compatibilityMode()).isEqualTo(CompatibilityMode.CANONICAL);
-        verify(repository).insertV2Revision(eq(TENANT), eq(ACTOR), eq(result.modelSpec()), anyString());
+        InOrder order = inOrder(repository, auditService);
+        order.verify(repository).insertV2Revision(eq(TENANT), eq(ACTOR), eq(result.modelSpec()), anyString());
+        order.verify(auditService).auditAction(
+            eq("MODELING_MODEL_SPEC_CREATE"),
+            eq(AuditStage.SUCCESS),
+            eq(MODEL_ID.toString()),
+            any()
+        );
     }
 
     @Test
@@ -138,7 +153,14 @@ class ModelSpecApplicationServiceTest {
 
         assertThat(result.replayed()).isFalse();
         assertThat(result.modelSpec().id()).isEqualTo(previewedId);
-        verify(repository).insertV2Revision(eq(TENANT), eq(ACTOR), eq(result.modelSpec()), anyString());
+        InOrder order = inOrder(repository, auditService);
+        order.verify(repository).insertV2Revision(eq(TENANT), eq(ACTOR), eq(result.modelSpec()), anyString());
+        order.verify(auditService).auditAction(
+            eq("MODELING_MODEL_SPEC_IMPORT_CREATE"),
+            eq(AuditStage.SUCCESS),
+            eq(previewedId.toString()),
+            any()
+        );
     }
 
     @Test
@@ -326,6 +348,7 @@ class ModelSpecApplicationServiceTest {
         assertThat(replay.replayed()).isTrue();
         assertThat(replay.modelSpec()).isEqualTo(originalView);
         verify(repository, never()).insertV2(any(), any(), any(), any(), any(), any());
+        verify(auditService, never()).auditAction(anyString(), any(), anyString(), any());
 
         assertThatThrownBy(() -> service.create(TENANT, ACTOR, command("create-1", "changed_name")))
             .isInstanceOf(ModelSpecException.class)
@@ -381,6 +404,7 @@ class ModelSpecApplicationServiceTest {
         assertThat(result).isEqualTo(current);
         verify(repository, never()).compareAndSetV2(any(), any(), anyInt(), anyString(), any(), anyString());
         verify(repository, never()).insertV2Revision(any(), any(), any(), any());
+        verify(auditService, never()).auditAction(anyString(), any(), anyString(), any());
     }
 
     @Test
@@ -471,36 +495,14 @@ class ModelSpecApplicationServiceTest {
         assertThat(result.dimensionDefinitionRef()).isEqualTo(current.dimensionDefinitionRef());
         assertThat(result.dimensionProfile().dimensionCode()).isEqualTo("DIM_CUSTOMER");
         assertThat(result.dimensionProfile().reuseScope()).isEqualTo(ReuseScope.DOMAIN);
-        verify(repository).insertV2Revision(TENANT, ACTOR, result, codec.write(result));
-    }
-
-    @Test
-    void refusesUpdatesToLegacyRowsWithoutConsultingBusinessObjects() {
-        StoredModelSpec legacy = new StoredModelSpec(
-            1,
-            TENANT,
-            MODEL_ID,
-            PLAN_ID,
-            DOMAIN_ID,
-            ModelStatus.DRAFT,
-            1,
-            "a".repeat(64),
-            null,
-            "{}",
-            null,
-            null,
-            null,
-            NOW,
-            NOW
+        InOrder order = inOrder(repository, auditService);
+        order.verify(repository).insertV2Revision(TENANT, ACTOR, result, codec.write(result));
+        order.verify(auditService).auditAction(
+            eq("MODELING_MODEL_SPEC_UPDATE"),
+            eq(AuditStage.SUCCESS),
+            eq(MODEL_ID.toString()),
+            any()
         );
-        when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(legacy));
-
-        assertThatThrownBy(
-            () -> service.update(TENANT, ACTOR, MODEL_ID, new ExpectedVersion(MODEL_ID, 1, "a".repeat(64)), update(command("x", "customer_detail")))
-        )
-            .isInstanceOf(ModelSpecException.class)
-            .extracting(error -> ((ModelSpecException) error).code())
-            .isEqualTo("MODEL_SPEC_LEGACY_READONLY");
     }
 
     @Test
@@ -833,19 +835,6 @@ class ModelSpecApplicationServiceTest {
                 null,
                 CompatibilityMode.CANONICAL
             ),
-            copyModel(
-                base,
-                1,
-                ModelType.DIMENSION,
-                Layer.DWD,
-                null,
-                null,
-                base.sourceRefs(),
-                List.of(),
-                null,
-                null,
-                CompatibilityMode.LEGACY_READONLY
-            ),
             withFactOnlyFields(
                 copyModel(
                     base,
@@ -897,16 +886,16 @@ class ModelSpecApplicationServiceTest {
         );
         ModelSpecView invalidDimension = copyModel(
             base,
-            1,
+            2,
             ModelType.DIMENSION,
-            Layer.DWD,
+            Layer.ODS,
             null,
             null,
             base.sourceRefs(),
             List.of(),
             null,
             null,
-            CompatibilityMode.LEGACY_READONLY
+            CompatibilityMode.CANONICAL
         );
         StoredModelSpec stored = stored(invalidDimension, null, null);
         when(repository.findByIdempotencyKey(TENANT, requested.idempotencyKey())).thenReturn(Optional.empty());
@@ -1328,6 +1317,7 @@ class ModelSpecApplicationServiceTest {
         assertThat(result.replayed()).isTrue();
         assertThat(result.modelSpec()).isEqualTo(created);
         verify(repository, never()).insertV2Revision(any(), any(), any(), any());
+        verify(auditService, never()).auditAction(anyString(), any(), anyString(), any());
     }
 
     @Test
@@ -1358,6 +1348,7 @@ class ModelSpecApplicationServiceTest {
                 );
             });
         verify(repository, never()).insertV2Revision(eq(TENANT), eq(ACTOR), any(), anyString());
+        verify(auditService, never()).auditAction(anyString(), any(), anyString(), any());
     }
 
     @Test
@@ -1455,8 +1446,9 @@ class ModelSpecApplicationServiceTest {
         assertThat(result.factShape()).isNull();
         assertThat(result.timeSemantics()).isNull();
         assertThat(result.dimensionDefinitionRef()).isNotNull();
-        verify(repository).insertV2Revision(eq(TENANT), eq(ACTOR), eq(result), anyString());
-        verify(repository).insertReclassificationCommand(
+        InOrder order = inOrder(repository, auditService);
+        order.verify(repository).insertV2Revision(eq(TENANT), eq(ACTOR), eq(result), anyString());
+        order.verify(repository).insertReclassificationCommand(
             TENANT,
             ACTOR,
             MODEL_ID,
@@ -1466,6 +1458,12 @@ class ModelSpecApplicationServiceTest {
             result.revision(),
             result.checksum(),
             NOW
+        );
+        order.verify(auditService).auditAction(
+            eq("MODELING_MODEL_SPEC_RECLASSIFY"),
+            eq(AuditStage.SUCCESS),
+            eq(MODEL_ID.toString()),
+            any()
         );
     }
 
@@ -1523,7 +1521,7 @@ class ModelSpecApplicationServiceTest {
     }
 
     @Test
-    void rollbackFlagsDisableCanonicalWritesAndHideV2WhileLegacyReadsRemainAvailable() {
+    void canonicalWriteFlagDisablesNewWritesWithoutHidingCanonicalReads() {
         ModelSpecApplicationService disabled = new ModelSpecApplicationService(
             repository,
             codec,
@@ -1533,15 +1531,15 @@ class ModelSpecApplicationServiceTest {
             planWriteAccess,
             sourceValidation,
             compatibilityReader,
-            new ModelSpecFeatureFlags(false, false),
+            new ModelSpecFeatureFlags(false),
+            auditService,
             Clock.fixed(NOW, ZoneOffset.UTC),
             () -> MODEL_ID
         );
         ModelSpecView canonical = codec.toCreatedView(MODEL_ID, command("flag-v2", "customer_detail"), NOW);
-        ModelSpecView legacy = legacyView();
         when(compatibilityReader.get(TENANT, MODEL_ID)).thenReturn(canonical);
-        when(compatibilityReader.get(TENANT, legacy.id())).thenReturn(legacy);
-        when(compatibilityReader.list(TENANT, null, null, null, null)).thenReturn(List.of(canonical, legacy));
+        when(compatibilityReader.list(TENANT, null, null, null, null)).thenReturn(List.of(canonical));
+        when(domainReadAccess.canRead(DOMAIN_ID)).thenReturn(true);
 
         assertThatThrownBy(() -> disabled.create(TENANT, ACTOR, command("write-off", "customer_detail")))
             .isInstanceOf(ModelSpecException.class)
@@ -1552,12 +1550,8 @@ class ModelSpecApplicationServiceTest {
         when(repository.findByIdempotencyKey(TENANT, "write-off-replay"))
             .thenReturn(Optional.of(stored(original, codec.requestHash(replayCommand), codec.write(original))));
         assertThat(disabled.create(TENANT, ACTOR, replayCommand).replayed()).isTrue();
-        assertThatThrownBy(() -> disabled.get(TENANT, MODEL_ID))
-            .isInstanceOf(ModelSpecException.class)
-            .extracting(error -> ((ModelSpecException) error).code())
-            .isEqualTo("MODEL_SPEC_NOT_FOUND");
-        assertThat(disabled.get(TENANT, legacy.id())).isEqualTo(legacy);
-        assertThat(disabled.list(TENANT, null, null, null, null)).containsExactly(legacy);
+        assertThat(disabled.get(TENANT, MODEL_ID)).isEqualTo(canonical);
+        assertThat(disabled.list(TENANT, null, null, null, null)).containsExactly(canonical);
     }
 
     @Test
@@ -1565,14 +1559,14 @@ class ModelSpecApplicationServiceTest {
         ModelSpecView canonical = codec.toCreatedView(MODEL_ID, command("graph-v2", "customer_detail"), NOW);
         StoredModelSpec stored = stored(canonical, "request-hash", codec.write(canonical));
         when(domainReadAccess.visibleDomainIds()).thenReturn(Set.of(DOMAIN_ID));
-        when(repository.listCurrentForRelationshipGraph(TENANT, PLAN_ID, Set.of(DOMAIN_ID), true, 501))
+        when(repository.listCurrentForRelationshipGraph(TENANT, PLAN_ID, Set.of(DOMAIN_ID), 501))
             .thenReturn(List.of(stored));
         when(compatibilityReader.readForRelationshipGraph(List.of(stored))).thenReturn(List.of(canonical));
 
         assertThat(service.listForRelationshipGraph(TENANT, PLAN_ID, 501)).containsExactly(canonical);
 
         verify(domainReadAccess).visibleDomainIds();
-        verify(repository).listCurrentForRelationshipGraph(TENANT, PLAN_ID, Set.of(DOMAIN_ID), true, 501);
+        verify(repository).listCurrentForRelationshipGraph(TENANT, PLAN_ID, Set.of(DOMAIN_ID), 501);
         verify(domainReadAccess, never()).canRead(any());
     }
 
@@ -1582,13 +1576,13 @@ class ModelSpecApplicationServiceTest {
         ModelSpecView canonical = codec.toCreatedView(MODEL_ID, command("graph-cursor", "customer_detail"), NOW);
         StoredModelSpec stored = stored(canonical, "request-hash", codec.write(canonical));
         when(domainReadAccess.visibleDomainIds()).thenReturn(Set.of(DOMAIN_ID));
-        when(repository.listCurrentForRelationshipGraph(TENANT, PLAN_ID, Set.of(DOMAIN_ID), true, cursor, 501))
+        when(repository.listCurrentForRelationshipGraph(TENANT, PLAN_ID, Set.of(DOMAIN_ID), cursor, 501))
             .thenReturn(List.of(stored));
         when(compatibilityReader.readForRelationshipGraph(List.of(stored))).thenReturn(List.of(canonical));
 
         assertThat(service.listForRelationshipGraph(TENANT, PLAN_ID, cursor, 501)).containsExactly(canonical);
 
-        verify(repository).listCurrentForRelationshipGraph(TENANT, PLAN_ID, Set.of(DOMAIN_ID), true, cursor, 501);
+        verify(repository).listCurrentForRelationshipGraph(TENANT, PLAN_ID, Set.of(DOMAIN_ID), cursor, 501);
         verify(domainReadAccess).visibleDomainIds();
         verify(domainReadAccess, never()).canRead(any());
     }
@@ -1604,7 +1598,6 @@ class ModelSpecApplicationServiceTest {
                 TENANT,
                 List.of(reference),
                 Set.of(DOMAIN_ID),
-                true,
                 500
             )
         )
@@ -1616,7 +1609,7 @@ class ModelSpecApplicationServiceTest {
 
         verify(domainReadAccess).visibleDomainIds();
         verify(repository)
-            .listRevisionsForRelationshipGraph(TENANT, List.of(reference), Set.of(DOMAIN_ID), true, 500);
+            .listRevisionsForRelationshipGraph(TENANT, List.of(reference), Set.of(DOMAIN_ID), 500);
         verify(domainReadAccess, never()).canRead(any());
     }
 
@@ -1671,12 +1664,19 @@ class ModelSpecApplicationServiceTest {
             eq(ModelStatus.DRAFT),
             argThat(archived -> archived.status() == ModelStatus.ARCHIVED && archived.id().equals(MODEL_ID))
         );
-        verify(repository).updateV2RevisionLifecycle(
+        InOrder order = inOrder(repository, auditService);
+        order.verify(repository).updateV2RevisionLifecycle(
             eq(TENANT),
             eq(ACTOR),
             eq(ModelStatus.DRAFT),
             argThat(archived -> archived.status() == ModelStatus.ARCHIVED),
             anyString()
+        );
+        order.verify(auditService).auditAction(
+            eq("MODELING_MODEL_SPEC_DELETE_DRAFT"),
+            eq(AuditStage.SUCCESS),
+            eq(MODEL_ID.toString()),
+            any()
         );
     }
 
@@ -1702,6 +1702,7 @@ class ModelSpecApplicationServiceTest {
 
         verify(repository, never()).compareAndSetLifecycle(any(), any(), anyInt(), anyString(), any(), any());
         verify(repository, never()).updateV2RevisionLifecycle(any(), any(), any(), any(), anyString());
+        verify(auditService, never()).auditAction(anyString(), any(), anyString(), any());
     }
 
     private void assertCreateCode(String idempotencyKey, String code) {
@@ -1722,7 +1723,6 @@ class ModelSpecApplicationServiceTest {
             view.revision(),
             view.checksum(),
             codec.write(view),
-            null,
             "create-1",
             requestHash,
             responseSnapshot,
@@ -2179,37 +2179,4 @@ class ModelSpecApplicationServiceTest {
         );
     }
 
-    private static ModelSpecView legacyView() {
-        return new ModelSpecView(
-            1,
-            UUID.fromString("30000000-0000-0000-0000-000000000099"),
-            null,
-            null,
-            ModelType.DIMENSION,
-            Layer.DWD,
-            "legacy_customer",
-            null,
-            ImplementationMode.DESIGNER_GENERATED,
-            "table",
-            null,
-            null,
-            new Grain("one row per customer", List.of("customer_id")),
-            null,
-            null,
-            List.of(new ModelField("customer_id", "legacy_unknown", true, null, FieldRole.KEY, null)),
-            List.of(),
-            List.of(),
-            List.of(),
-            List.of(),
-            List.of(),
-            null,
-            ModelStatus.DRAFT,
-            1,
-            "a".repeat(64),
-            NOW,
-            NOW,
-            CompatibilityMode.LEGACY_READONLY,
-            new LegacyRefs("legacy-model", List.of(), List.of(), List.of())
-        );
-    }
 }

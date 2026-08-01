@@ -40,19 +40,27 @@ public class QualityReportExportService {
     private final QualityScoreService qualityScoreService;
     private final GovRuleRepository ruleRepository;
     private final GovQualityRunRepository runRepository;
+    private final QualityDatasetReadGuard qualityDatasetReadGuard;
 
     public QualityReportExportService(
         QualityScoreService qualityScoreService,
         GovRuleRepository ruleRepository,
-        GovQualityRunRepository runRepository
+        GovQualityRunRepository runRepository,
+        QualityDatasetReadGuard qualityDatasetReadGuard
     ) {
         this.qualityScoreService = qualityScoreService;
         this.ruleRepository = ruleRepository;
         this.runRepository = runRepository;
+        this.qualityDatasetReadGuard = qualityDatasetReadGuard;
     }
 
     public byte[] exportExcel(UUID datasetId, int periodDays) throws IOException {
-        QualityScoreResult scoreResult = qualityScoreService.calculate(datasetId, periodDays);
+        return exportExcel(datasetId, periodDays, null);
+    }
+
+    public byte[] exportExcel(UUID datasetId, int periodDays, String activeDeptHeader) throws IOException {
+        qualityDatasetReadGuard.requireReadable(datasetId, activeDeptHeader);
+        QualityScoreResult scoreResult = qualityScoreService.calculate(datasetId, periodDays, activeDeptHeader);
         List<GovRule> rules = ruleRepository.findByDatasetId(datasetId);
 
         try (XSSFWorkbook workbook = new XSSFWorkbook()) {

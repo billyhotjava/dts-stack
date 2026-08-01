@@ -65,7 +65,7 @@ const GATE_CHECK_DEFINITIONS: GateCheckDefinition[] = [
 		label: "数据测试",
 		readyDetail: () => "测试结果可查",
 		missingDetail: "测试结果接口未接入：暂无法自动出示测试证据",
-		evidenceRoute: "/governance/quality",
+		evidenceRoute: "/governance/rules/runs",
 		apiName: "GET /api/dbt/test-results",
 	},
 	{

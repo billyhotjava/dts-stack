@@ -5,10 +5,7 @@ import static com.yuzhi.dts.platform.service.modeling.warehouse.CatalogDomainRes
 import static com.yuzhi.dts.platform.service.modeling.warehouse.CatalogDomainResolutionPort.ResolutionStatus.FORBIDDEN;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.CatalogDomainResolutionPort.ResolutionStatus.MISSING;
 
-import com.yuzhi.dts.platform.domain.catalog.CatalogDomain;
-import com.yuzhi.dts.platform.domain.catalog.CatalogDomainLifecycleStatus;
-import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
-import com.yuzhi.dts.platform.service.catalog.CatalogDomainVisibilityService;
+import com.yuzhi.dts.platform.service.catalog.CatalogDomainAccessReadPort;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,34 +14,31 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class CatalogDomainResolutionAdapter implements CatalogDomainResolutionPort {
 
-    private final CatalogDomainRepository domainRepository;
-    private final CatalogDomainVisibilityService visibilityService;
+    private final CatalogDomainAccessReadPort domains;
 
-    public CatalogDomainResolutionAdapter(
-        CatalogDomainRepository domainRepository,
-        CatalogDomainVisibilityService visibilityService
-    ) {
-        this.domainRepository = domainRepository;
-        this.visibilityService = visibilityService;
+    public CatalogDomainResolutionAdapter(CatalogDomainAccessReadPort domains) {
+        this.domains = domains;
     }
 
     @Override
     public DomainResolution resolve(UUID domainId) {
-        return domainRepository.findById(domainId).map(this::resolveExisting).orElseGet(() -> redacted(domainId, MISSING));
-    }
-
-    private DomainResolution resolveExisting(CatalogDomain domain) {
-        if (!visibilityService.canRead(domain)) {
-            return redacted(domain.getId(), FORBIDDEN);
+        CatalogDomainAccessReadPort.DomainSnapshot snapshot = domains.resolve(domainId);
+        ResolutionStatus status = switch (snapshot.status()) {
+            case AVAILABLE -> AVAILABLE;
+            case ARCHIVED -> ARCHIVED;
+            case FORBIDDEN -> FORBIDDEN;
+            case MISSING -> MISSING;
+        };
+        if (status == FORBIDDEN || status == MISSING) {
+            return redacted(snapshot.id(), status);
         }
-        ResolutionStatus status = domain.getLifecycleStatus() == CatalogDomainLifecycleStatus.ARCHIVED ? ARCHIVED : AVAILABLE;
         return new DomainResolution(
-            domain.getId(),
+            snapshot.id(),
             status,
-            domain.getName(),
-            domain.getCode(),
-            domain.getOwner(),
-            domain.getDescription()
+            snapshot.name(),
+            snapshot.code(),
+            snapshot.owner(),
+            snapshot.description()
         );
     }
 

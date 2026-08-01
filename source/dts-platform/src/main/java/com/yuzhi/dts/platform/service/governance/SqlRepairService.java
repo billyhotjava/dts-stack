@@ -72,110 +72,14 @@ public class SqlRepairService {
      */
     @Transactional(readOnly = true)
     public SqlRepairPreview preview(String sql, int limit) {
-        validateSql(sql);
-        if (limit <= 0 || limit > 200) limit = 10;
-
-        Matcher tableMatcher = VALID_UPDATE.matcher(sql);
-        if (!tableMatcher.find()) {
-            throw new IllegalArgumentException("无法解析表名");
-        }
-        String tableName = tableMatcher.group(1);
-
-        // Extract WHERE clause (may be absent)
-        String whereClause = null;
-        Matcher whereMatcher = WHERE_CLAUSE.matcher(sql);
-        if (whereMatcher.find()) {
-            whereClause = whereMatcher.group(1).trim();
-            // Remove trailing semicolons
-            whereClause = whereClause.replaceAll(";\\s*$", "").trim();
-        }
-
-        List<SetAssignment> assignments = parseSetAssignments(sql);
-
-        // 1. Count affected rows using the same WHERE clause
-        String countSql = "SELECT count(*) FROM " + quoteIdentifier(tableName);
-        if (whereClause != null && !whereClause.isEmpty()) {
-            countSql += " WHERE " + whereClause;
-        }
-        Long affectedRows = jdbcTemplate.queryForObject(countSql, Long.class);
-        if (affectedRows == null) affectedRows = 0L;
-
-        // 2. Fetch sample before/after rows by evaluating SET expressions in SELECT.
-        StringBuilder selectSql = new StringBuilder("SELECT id");
-        for (int i = 0; i < assignments.size(); i++) {
-            SetAssignment assignment = assignments.get(i);
-            selectSql
-                .append(", ")
-                .append(assignment.columnExpression())
-                .append(" AS before_")
-                .append(i)
-                .append(", ")
-                .append(assignment.valueExpression())
-                .append(" AS after_")
-                .append(i);
-        }
-        selectSql.append(" FROM ").append(quoteIdentifier(tableName));
-        if (whereClause != null && !whereClause.isEmpty()) {
-            selectSql.append(" WHERE ").append(whereClause);
-        }
-        selectSql.append(" LIMIT ").append(limit);
-
-        List<Map<String, Object>> rawRows = jdbcTemplate.queryForList(selectSql.toString());
-        List<Map<String, Object>> samples = new ArrayList<>();
-        for (Map<String, Object> rawRow : rawRows) {
-            Map<String, Object> sample = new LinkedHashMap<>();
-            Object rowId = rawRow.get("id");
-            Map<String, Object> columnValues = new LinkedHashMap<>();
-            Map<String, Object> newValues = new LinkedHashMap<>();
-            for (int i = 0; i < assignments.size(); i++) {
-                SetAssignment assignment = assignments.get(i);
-                Object before = rawRow.get("before_" + i);
-                Object after = rawRow.get("after_" + i);
-                columnValues.put(assignment.columnName(), before == null ? null : before.toString());
-                newValues.put(assignment.columnName(), after == null ? null : after.toString());
-            }
-            sample.put("rowId", rowId);
-            sample.put("columnValues", columnValues);
-            sample.put("newValues", newValues);
-            samples.add(sample);
-        }
-
-        return new SqlRepairPreview(affectedRows, samples);
+        throw new UnsupportedOperationException("质量 SQL 修复预览暂未开放");
     }
 
     /**
      * Execute the SQL UPDATE and record an audit log entry.
      */
     public SqlRepairResult execute(String sql, UUID runId) {
-        validateSql(sql);
-
-        Matcher tableMatcher = VALID_UPDATE.matcher(sql);
-        if (!tableMatcher.find()) {
-            throw new IllegalArgumentException("无法解析表名");
-        }
-        String tableName = tableMatcher.group(1);
-        String currentUser = SecurityUtils.getCurrentUserLogin().orElse("system");
-
-        // Execute the UPDATE via JdbcTemplate (participates in Spring transaction)
-        int affectedRows = jdbcTemplate.update(sql);
-
-        // Record audit log (same transaction)
-        GovDataEditLog logEntry = new GovDataEditLog();
-        logEntry.setTableName(tableName);
-        logEntry.setRowId(runId != null ? runId.toString() : "batch");
-        logEntry.setColumnName(null);
-        logEntry.setOldValue(null);
-        logEntry.setNewValue(sql);
-        logEntry.setEditType("SQL_REPAIR");
-        logEntry.setEditReason("SQL修复: 影响 " + affectedRows + " 行");
-        logEntry.setEditedBy(currentUser);
-        logEntry.setEditedAt(Instant.now());
-        GovDataEditLog saved = editLogRepository.save(logEntry);
-
-        log.info("SQL repair executed by {}: table={}, affectedRows={}, auditId={}",
-            currentUser, tableName, affectedRows, saved.getId());
-
-        return new SqlRepairResult(affectedRows, saved.getId());
+        throw new UnsupportedOperationException("质量 SQL 修复执行暂未开放");
     }
 
     // ---- validation ---------------------------------------------------------

@@ -14,7 +14,7 @@ import org.springframework.util.StringUtils;
  *
  * <p>纯函数评估器：{@link #evaluate(List)} 返回诊断列表（不抛异常），由调用方（F3-T02 集成）决定如何
  * 据 {@link Diagnostic#code()} 阻断与映射 HTTP（F3-T03）。无状态、可单测、可被未来抽取——与
- * {@link ControlledMetricDslCompiler} 同属独立 {@code modeling} 组件，不耦合 {@code SemanticModelingService} 内部。
+ * {@link ControlledMetricDslCompiler} 同属独立 {@code modeling} 组件，不耦合任何已退役的语义建模实现。
  */
 @Component
 public class EltLayerGate {

@@ -34,7 +34,7 @@ class ModelSpecMetricReferenceServiceTest {
         UUID planId = UUID.fromString("10000000-0000-0000-0000-000000000071");
         UUID indicatorId = UUID.fromString("60000000-0000-0000-0000-000000000071");
         ModelSpecRepository repository = mock(ModelSpecRepository.class);
-        ModelSpecCompatibilityReader reader = mock(ModelSpecCompatibilityReader.class);
+        ModelSpecReader reader = mock(ModelSpecReader.class);
         ModelSpecSnapshotCodec codec = mock(ModelSpecSnapshotCodec.class);
         ModelSpecPlanWriteAccessPort writeAccess = mock(ModelSpecPlanWriteAccessPort.class);
         IndicatorService indicators = mock(IndicatorService.class);
@@ -70,7 +70,7 @@ class ModelSpecMetricReferenceServiceTest {
             codec,
             writeAccess,
             indicators,
-            new ModelSpecFeatureFlags(true, true),
+            new ModelSpecFeatureFlags(true),
             Clock.fixed(Instant.parse("2026-07-20T09:00:00Z"), ZoneOffset.UTC)
         ).bind(
             "tenant-1",

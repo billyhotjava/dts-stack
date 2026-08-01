@@ -285,47 +285,6 @@ class CatalogAssetTagPermissionIdentityResolverTest {
     }
 
     @Test
-    void resolvesSqlModelByUniqueNameOnlyAndRejectsAliasOrDuplicateRows() {
-        String key = CatalogAssetKey.codeAsset(
-            CatalogAssetType.MODELING_SQL_MODEL,
-            "default",
-            "dws_orders"
-        );
-        when(readAdapter.loadBatch(any(BatchLookupRequest.class)))
-            .thenReturn(
-                lookup(
-                    CatalogAssetType.MODELING_SQL_MODEL,
-                    identity(ENTITY_ID, "dws_orders")
-                )
-            );
-
-        ResolvedPermissionIdentity identity = resolver.resolve(
-            CatalogAssetType.MODELING_SQL_MODEL,
-            key
-        );
-        assertThat(identity.grantAssetId()).isEqualTo(ENTITY_ID.toString());
-
-        when(readAdapter.loadBatch(any(BatchLookupRequest.class)))
-            .thenReturn(
-                lookup(
-                    CatalogAssetType.MODELING_SQL_MODEL,
-                    identity(ENTITY_ID, "dws_orders"),
-                    identity(
-                        UUID.fromString(
-                            "66666666-6666-6666-6666-666666666666"
-                        ),
-                        "DWS_ORDERS"
-                    )
-                )
-            );
-        assertReason(
-            () ->
-                resolver.resolve(CatalogAssetType.MODELING_SQL_MODEL, key),
-            "AMBIGUOUS_PERMISSION_IDENTITY"
-        );
-    }
-
-    @Test
     void resolvesTheFourUniqueCodeAssetsWithoutCrossTypeGuessing() {
         when(readAdapter.loadBatch(any(BatchLookupRequest.class)))
             .thenAnswer(invocation -> {
@@ -519,10 +478,6 @@ class CatalogAssetTagPermissionIdentityResolverTest {
             List.of(identity(ENTITY_ID, "orders"))
         );
         matches.put(
-            CatalogAssetType.MODELING_PLAN,
-            List.of(identity(ENTITY_ID, ENTITY_ID.toString()))
-        );
-        matches.put(
             CatalogAssetType.METADATA_STANDARD,
             List.of(identity(ENTITY_ID, ENTITY_ID.toString()))
         );
@@ -574,7 +529,6 @@ class CatalogAssetTagPermissionIdentityResolverTest {
                     CatalogAssetKey.semanticModel(ENTITY_ID.toString())
                 ),
                 codeRef(CatalogAssetType.DATA_PRODUCT, "orders"),
-                codeRef(CatalogAssetType.MODELING_PLAN, ENTITY_ID.toString()),
                 codeRef(
                     CatalogAssetType.METADATA_STANDARD,
                     ENTITY_ID.toString()
@@ -604,14 +558,13 @@ class CatalogAssetTagPermissionIdentityResolverTest {
                 CatalogAssetType.METRIC_PACK,
                 CatalogAssetType.SEMANTIC_MODEL,
                 CatalogAssetType.DATA_PRODUCT,
-                CatalogAssetType.MODELING_PLAN,
                 CatalogAssetType.METADATA_STANDARD,
                 CatalogAssetType.GOV_INDICATOR_TEMPLATE,
                 CatalogAssetType.QUALITY_RULE,
                 CatalogAssetType.SECURITY_POLICY,
                 CatalogAssetType.BACKFILL_REQUEST
             );
-        ResolvedPermissionIdentity securityPolicy = resolved.get(10);
+        ResolvedPermissionIdentity securityPolicy = resolved.get(9);
         assertThat(securityPolicy.grantAssetType())
             .isEqualTo(CatalogAssetType.DATASET.name());
         assertThat(securityPolicy.dataset()).isSameAs(securedDataset);

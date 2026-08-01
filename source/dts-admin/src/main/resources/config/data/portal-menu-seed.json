@@ -80,6 +80,14 @@
           "title": "连接器与运行时",
           "children": [
             {
+              "key": "connections",
+              "path": "connections",
+              "icon": "solar:server-square-cloud-bold-duotone",
+              "titleKey": "sys.nav.portal.resourceConnections",
+              "title": "连接管理",
+              "externalLink": "/foundation/connections"
+            },
+            {
               "key": "connectors",
               "path": "connectors",
               "icon": "solar:widget-add-bold-duotone",

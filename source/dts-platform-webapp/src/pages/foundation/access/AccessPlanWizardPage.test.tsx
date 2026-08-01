@@ -2,6 +2,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 
+import SOURCE from "./AccessPlanWizardPage.tsx?raw";
+
 const useWizard = vi.hoisted(() => vi.fn());
 
 vi.mock("./useAccessPlanWizard", () => ({ useAccessPlanWizard: useWizard }));
@@ -58,5 +60,14 @@ describe("AccessPlanWizardPage", () => {
 		expect(text).toContain("策略准入");
 		expect(text).not.toContain("切换为数据库");
 		expect(useWizard).toHaveBeenCalledWith(expect.objectContaining({ kind: "api", editId: 7 }));
+	});
+
+	it("acquires a synchronous submit lock before validation and reports a pending draft", () => {
+		expect(SOURCE).toMatch(
+			/if \(!acquireSingleFlight\(submitLockRef\)\) return;\s*try \{\s*await validateCurrentStep\(\)/,
+		);
+		expect(SOURCE).toContain("修改已保存为待准入草稿；当前生效版本继续运行");
+		expect(SOURCE).toContain("接入计划草稿已保存，请完成密级准入");
+		expect(SOURCE).toMatch(/finally \{\s*releaseSingleFlight\(submitLockRef\)/);
 	});
 });

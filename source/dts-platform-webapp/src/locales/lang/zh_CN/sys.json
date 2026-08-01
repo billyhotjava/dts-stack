@@ -124,6 +124,7 @@
 				"resourceFileAccess": "离线文件接入",
 				"resourceAccessDefaults": "默认策略",
 				"resourceRuntime": "连接器与运行时",
+				"resourceConnections": "连接管理",
 					"studioCenter": "数据开发与运维",
 					"studioDataModeling": "数据建模",
 					"studioDataStudio": "Data Studio",

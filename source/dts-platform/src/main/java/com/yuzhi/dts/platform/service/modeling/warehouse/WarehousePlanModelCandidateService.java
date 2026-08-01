@@ -23,7 +23,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /** Produces deterministic, non-persistent source candidates and confirms them through canonical ModelSpec writes. */
 @Service
@@ -42,7 +41,6 @@ public class WarehousePlanModelCandidateService {
         this.modelSpecs = modelSpecs;
     }
 
-    @Transactional(readOnly = true)
     public CandidatePreview preview(String tenantId, UUID planId, AccessContext accessContext) {
         plans.get(tenantId, planId);
         SourceInventoryView inventory = plans.getSources(tenantId, planId, accessContext);
@@ -58,7 +56,6 @@ public class WarehousePlanModelCandidateService {
         return new CandidatePreview(planId, inventory.version(), INFERENCE_VERSION, candidates);
     }
 
-    @Transactional
     public CreateResult confirm(
         String tenantId,
         String actorId,

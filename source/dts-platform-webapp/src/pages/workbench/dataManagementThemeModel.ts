@@ -118,7 +118,7 @@ const routeForIssue = (issue?: GoldenChainStageSnapshot) => {
 		return "/foundation/data-sources";
 	}
 	if (issue.stage === "MODEL_READY") return "/data-modeling/dimensions/workbench";
-	if (issue.stage === "GOVERNANCE_READY" || issue.stage === "RELEASE_READY") return "/governance/quality";
+	if (issue.stage === "GOVERNANCE_READY" || issue.stage === "RELEASE_READY") return "/governance/rules/runs";
 	if (issue.stage === "CONSUMABLE") return "/services/apis";
 	if (issue.stage === "OPERATED") return "/ops/overview";
 	return "/foundation/data-sources";

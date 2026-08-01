@@ -18,6 +18,7 @@ import javax.crypto.spec.SecretKeySpec;
  */
 final class AddaxFileCrypto {
 
+    static final String SEALED_JOB_PREFIX = "DTS_ADDAX_JOB_SEALED_V1:";
     private static final String ALGORITHM = "AES/GCM/NoPadding";
     private static final int TAG_LENGTH = 128;
     private static final int IV_LENGTH = 12;
@@ -55,6 +56,27 @@ final class AddaxFileCrypto {
         byte[] iv = Arrays.copyOfRange(payload, ivStart, ivStart + IV_LENGTH);
         byte[] cipherText = Arrays.copyOfRange(payload, ivStart + IV_LENGTH, payload.length);
         return new EncryptedPayload(keyVersion, iv, cipherText);
+    }
+
+    static boolean isSealedJob(String value) {
+        return value != null && value.trim().startsWith(SEALED_JOB_PREFIX);
+    }
+
+    static EncryptedPayload parseSealedJob(String token) throws GeneralSecurityException {
+        if (!isSealedJob(token)) {
+            throw new GeneralSecurityException("Addax job is not a supported sealed token");
+        }
+        byte[] payload;
+        try {
+            payload = Base64.getDecoder().decode(token.trim().substring(SEALED_JOB_PREFIX.length()));
+        } catch (IllegalArgumentException ex) {
+            throw new GeneralSecurityException("sealed Addax job payload is not valid Base64", ex);
+        }
+        try {
+            return parse(payload);
+        } finally {
+            Arrays.fill(payload, (byte) 0);
+        }
     }
 
     static byte[] decrypt(EncryptedPayload payload, SecretKey key) throws GeneralSecurityException {

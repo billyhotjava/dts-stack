@@ -3,28 +3,17 @@ package com.yuzhi.dts.platform.web.rest;
 import com.yuzhi.dts.platform.config.AirflowProperties;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.config.Constants;
-import com.yuzhi.dts.platform.domain.modeling.ModelingSqlModel;
-import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.etl.AirflowClient;
 import com.yuzhi.dts.platform.service.etl.DbtConfigService;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.service.etl.DbtManifestService;
 import com.yuzhi.dts.platform.service.etl.DbtModelDiagnosticsService;
 import com.yuzhi.dts.platform.service.etl.DbtAssetSyncService;
 import com.yuzhi.dts.platform.service.etl.DbtDagService;
 import com.yuzhi.dts.platform.service.etl.DbtPreviewService;
-import com.yuzhi.dts.platform.service.etl.DbtOutputRelationService;
 import com.yuzhi.dts.platform.service.etl.DbtArtifactSyncState;
 import com.yuzhi.dts.platform.service.etl.DbtRunResultService;
-import com.yuzhi.dts.platform.service.etl.DbtQualityGateService;
-import com.yuzhi.dts.platform.service.etl.DbtReleaseGateService;
-import com.yuzhi.dts.platform.service.etl.DbtReleaseSubmissionService;
-import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService;
 import com.yuzhi.dts.platform.service.etl.DbtSourceService;
-import com.yuzhi.dts.platform.service.event.PlatformEventOutboxService;
-import com.yuzhi.dts.platform.service.event.dto.PlatformEventRequest;
 import com.yuzhi.dts.platform.service.governance.IndicatorRunTracker;
 import com.yuzhi.dts.platform.service.ops.ExternalRunLogService;
 import java.time.Duration;
@@ -49,21 +38,13 @@ public class EtlResource {
     private final DbtAssetSyncService dbtAssetSyncService;
     private final DbtDagService dbtDagService;
     private final DbtPreviewService dbtPreviewService;
-    private final DbtOutputRelationService dbtOutputRelationService;
     private final DbtRunResultService dbtRunResultService;
-    private final DbtQualityGateService dbtQualityGateService;
-    private final DbtReleaseGateService dbtReleaseGateService;
-    private final DbtReleaseSubmissionService dbtReleaseSubmissionService;
-    private final DbtScopedProjectService dbtScopedProjectService;
     private final DbtArtifactSyncState dbtArtifactSyncState;
     private final AirflowClient airflowClient;
     private final AirflowProperties airflowProperties;
     private final ExternalRunLogService externalRunLogService;
     private final AuditService auditService;
-    private final ObjectMapper objectMapper;
-    private final ModelingSqlModelRepository sqlModelRepository;
     private final IndicatorRunTracker indicatorRunTracker;
-    private final PlatformEventOutboxService eventOutbox;
 
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(EtlResource.class);
 
@@ -75,21 +56,13 @@ public class EtlResource {
         DbtAssetSyncService dbtAssetSyncService,
         DbtDagService dbtDagService,
         DbtPreviewService dbtPreviewService,
-        DbtOutputRelationService dbtOutputRelationService,
         DbtRunResultService dbtRunResultService,
-        DbtQualityGateService dbtQualityGateService,
-        DbtReleaseGateService dbtReleaseGateService,
-        DbtReleaseSubmissionService dbtReleaseSubmissionService,
-        DbtScopedProjectService dbtScopedProjectService,
         DbtArtifactSyncState dbtArtifactSyncState,
         AirflowClient airflowClient,
         AirflowProperties airflowProperties,
         ExternalRunLogService externalRunLogService,
         AuditService auditService,
-        ObjectMapper objectMapper,
-        ModelingSqlModelRepository sqlModelRepository,
-        IndicatorRunTracker indicatorRunTracker,
-        PlatformEventOutboxService eventOutbox
+        IndicatorRunTracker indicatorRunTracker
     ) {
         this.dbtConfigService = dbtConfigService;
         this.manifestService = manifestService;
@@ -98,21 +71,13 @@ public class EtlResource {
         this.dbtAssetSyncService = dbtAssetSyncService;
         this.dbtDagService = dbtDagService;
         this.dbtPreviewService = dbtPreviewService;
-        this.dbtOutputRelationService = dbtOutputRelationService;
         this.dbtRunResultService = dbtRunResultService;
-        this.dbtQualityGateService = dbtQualityGateService;
-        this.dbtReleaseGateService = dbtReleaseGateService;
-        this.dbtReleaseSubmissionService = dbtReleaseSubmissionService;
-        this.dbtScopedProjectService = dbtScopedProjectService;
         this.dbtArtifactSyncState = dbtArtifactSyncState;
         this.airflowClient = airflowClient;
         this.airflowProperties = airflowProperties;
         this.externalRunLogService = externalRunLogService;
         this.auditService = auditService;
-        this.objectMapper = objectMapper;
-        this.sqlModelRepository = sqlModelRepository;
         this.indicatorRunTracker = indicatorRunTracker;
-        this.eventOutbox = eventOutbox;
     }
 
     @GetMapping("/dbt/config")
@@ -153,79 +118,6 @@ public class EtlResource {
         DbtPreviewService.PreviewResult result = dbtPreviewService.preview(model, Math.min(limit, 500));
         auditService.auditAction("ETL_DBT_PREVIEW_READ", AuditStage.SUCCESS, model, null);
         return ApiResponses.ok(result);
-    }
-
-    @GetMapping("/dbt/output")
-    public ApiResponse<DbtOutputRelationService.DbtOutputRelationSummary> analyzeDbtOutputRelation(
-        @RequestParam java.util.UUID modelId
-    ) {
-        try {
-            ApiResponse<DbtOutputRelationService.DbtOutputRelationSummary> response = ApiResponses.ok(
-                dbtOutputRelationService.analyze(modelId)
-            );
-            auditService.auditAction("ETL_DBT_OUTPUT_READ", AuditStage.SUCCESS, String.valueOf(modelId), null);
-            return response;
-        } catch (IllegalArgumentException | IllegalStateException ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
-        }
-    }
-
-    @PostMapping("/dbt/output/truncate")
-    public ApiResponse<Map<String, Object>> truncateDbtOutputRelation(
-        @RequestBody DbtOutputRelationRequest request,
-        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
-    ) {
-        try {
-            DbtOutputRelationService.DbtOutputRelationActionResult prepare = dbtOutputRelationService.prepareTruncate(request.modelId());
-            String selector = prepare.selector();
-            Map<String, Object> macroArgs = buildTruncateMacroArgs(request.modelId());
-            ApiResponse<Map<String, Object>> response = triggerDbtMacroOperation(
-                selector,
-                selector,
-                request.target(),
-                "truncate_relation",
-                macroArgs,
-                activeDept
-            );
-            Map<String, Object> payload = new LinkedHashMap<>(response.getData());
-            payload.put("relation", prepare.qualifiedName());
-            payload.put("selector", selector);
-            payload.put("macroName", "truncate_relation");
-            payload.put("message", prepare.message());
-            auditService.auditAction("ETL_DBT_OUTPUT_TRUNCATE_EXECUTE", AuditStage.SUCCESS, String.valueOf(request.modelId()), null);
-            return ApiResponses.ok(payload);
-        } catch (IllegalArgumentException | IllegalStateException ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
-        }
-    }
-
-    @PostMapping("/dbt/output/rebuild")
-    public ApiResponse<Map<String, Object>> rebuildDbtOutputRelation(
-        @RequestBody DbtOutputRelationRequest request,
-        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
-    ) {
-        try {
-            DbtOutputRelationService.DbtOutputRelationActionResult prepare = dbtOutputRelationService.prepareRebuild(request.modelId());
-            String selector = prepare.selector();
-            // S4-002: Use --full-refresh instead of manual DROP to avoid data loss on build failure
-            ApiResponse<Map<String, Object>> response = triggerDbtOperation(
-                "build",
-                new DbtRunRequest(selector, selector, request.target(), "build", request.vars(), null, null, null),
-                activeDept,
-                true,
-                true
-            );
-            Map<String, Object> payload = new LinkedHashMap<>(response.getData());
-            payload.put("relation", prepare.qualifiedName());
-            payload.put("selector", selector);
-            payload.put("fullRefresh", true);
-            payload.put("dropExecuted", prepare.executed());
-            payload.put("dropMessage", prepare.message());
-            auditService.auditAction("ETL_DBT_OUTPUT_REBUILD_EXECUTE", AuditStage.SUCCESS, String.valueOf(request.modelId()), null);
-            return ApiResponses.ok(payload);
-        } catch (IllegalArgumentException | IllegalStateException ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
-        }
     }
 
     @PostMapping("/dbt/sources/refresh")
@@ -283,7 +175,7 @@ public class EtlResource {
     public ApiResponse<Map<String, Object>> checkDagReady(
         @RequestParam(required = false) String selector
     ) {
-        String dagSelector = resolveDagSelector(null, selector);
+        String dagSelector = resolveDagSelector(selector);
         String dagId = dbtDagService.ensureDagForSelector(dagSelector);
         if (!StringUtils.hasText(dagId)) {
             dagId = airflowProperties.getDagId();
@@ -350,164 +242,6 @@ public class EtlResource {
         result.put("log", log != null ? log : "");
         auditService.auditAction("ETL_DBT_LOGS_READ", AuditStage.SUCCESS, dagRunId, null);
         return ApiResponses.ok(result);
-    }
-
-    @PostMapping("/dbt/run")
-    public ApiResponse<Map<String, Object>> triggerDbtRun(
-        @RequestBody DbtRunRequest request,
-        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
-    ) {
-        String operation = normalizeDbtOperation(request == null ? null : request.operation());
-        boolean requireSelector = !"docs".equals(operation);
-        String selector = resolveSelector(request, requireSelector);
-        ApiResponse<Map<String, Object>> response = triggerDbtOperation(operation, request, activeDept, requireSelector);
-        // Operation is dynamic ("run" / "test" / "compile" / "docs" / etc.); pick the closest
-        // catalog code per branch instead of generating one synthesised at runtime.
-        String dbtActionCode = switch (operation) {
-            case "test" -> "ETL_DBT_TEST_EXECUTE";
-            case "compile" -> "ETL_DBT_COMPILE_EXECUTE";
-            case "docs" -> "ETL_DBT_DOCS_EXECUTE";
-            case "source" -> "ETL_DBT_SOURCES_EXECUTE";
-            default -> "ETL_DBT_MODELS_EXECUTE";
-        };
-        auditService.auditAction(dbtActionCode, AuditStage.SUCCESS, selector, null);
-        Map<String, Object> eventPayload = new LinkedHashMap<>();
-        eventPayload.put("operation", operation);
-        eventPayload.put("selector", selector);
-        eventPayload.put("result", response.getData());
-        publishEtlEvent(
-            "ELT.DBT.OPERATION_TRIGGERED",
-            "EXECUTE",
-            "SUBMITTED",
-            "DBT_OPERATION",
-            selector,
-            selector,
-            eventPayload,
-            dbtActionCode
-        );
-        return response;
-    }
-
-    @PostMapping("/dbt/compile")
-    public ApiResponse<Map<String, Object>> triggerDbtCompile(
-        @RequestBody(required = false) DbtRunRequest request,
-        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
-    ) {
-        ApiResponse<Map<String, Object>> response = triggerDbtOperation("compile", request, activeDept, false);
-        auditService.auditAction("ETL_DBT_COMPILE_EXECUTE", AuditStage.SUCCESS, resolveSelector(request, false), null);
-        return response;
-    }
-
-    @PostMapping("/dbt/test")
-    public ApiResponse<Map<String, Object>> triggerDbtTest(
-        @RequestBody(required = false) DbtRunRequest request,
-        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
-    ) {
-        String selector = resolveSelector(request, false);
-        ApiResponse<Map<String, Object>> response = triggerDbtOperation("test", request, activeDept, false);
-        auditService.auditAction("ETL_DBT_TEST_EXECUTE", AuditStage.SUCCESS, selector, null);
-        return response;
-    }
-
-    @PostMapping("/dbt/docs")
-    public ApiResponse<Map<String, Object>> triggerDbtDocs(
-        @RequestBody(required = false) DbtRunRequest request,
-        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
-    ) {
-        ApiResponse<Map<String, Object>> response = triggerDbtOperation("docs", request, activeDept, false);
-        auditService.auditAction("ETL_DBT_DOCS_EXECUTE", AuditStage.SUCCESS, resolveSelector(request, false), null);
-        return response;
-    }
-
-    @PostMapping("/dbt/quality-gate/check")
-    public ApiResponse<DbtQualityGateService.DbtQualityGateResult> checkDbtQualityGate(
-        @RequestBody(required = false) DbtQualityGateRequest request
-    ) {
-        String selector = request == null ? null : request.models();
-        DbtQualityGateService.DbtQualityGateResult result = dbtQualityGateService.evaluate(selector);
-        auditService.auditAction("ETL_DBT_QUALITY_GATE_READ", AuditStage.SUCCESS, StringUtils.hasText(selector) ? selector : "all", null);
-        return ApiResponses.ok(result);
-    }
-
-    @PostMapping("/dbt/release-gate/check")
-    public ApiResponse<DbtReleaseGateService.DbtReleaseGateResult> checkDbtReleaseGate(
-        @RequestBody(required = false) DbtReleaseGateRequest request,
-        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
-    ) {
-        String selector = request == null ? null : request.models();
-        syncDbtBuildRuns(selector, activeDept);
-        DbtReleaseGateService.DbtReleaseGateResult result = dbtReleaseGateService.evaluate(
-            selector,
-            request == null ? null : request.gitRef(),
-            request == null ? null : request.commitSha(),
-            request == null ? null : request.strictMode()
-        );
-        auditService.auditAction("ETL_DBT_RELEASE_GATE_READ", AuditStage.SUCCESS, StringUtils.hasText(selector) ? selector : "all", null);
-        return ApiResponses.ok(result);
-    }
-
-    @PostMapping("/dbt/release/submit")
-    public ApiResponse<DbtReleaseSubmissionService.DbtReleaseSubmitResult> submitDbtRelease(
-        @RequestBody(required = false) DbtReleaseSubmissionService.DbtReleaseSubmitRequest request,
-        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
-    ) {
-        DbtReleaseSubmissionService.DbtReleaseSubmitResult result = dbtReleaseSubmissionService.submit(request, activeDept);
-        auditService.auditAction("ETL_DBT_RELEASE_SUBMIT_EXECUTE", AuditStage.SUCCESS, StringUtils.hasText(result.selector()) ? result.selector() : "all", null);
-        Map<String, Object> eventPayload = new LinkedHashMap<>();
-        eventPayload.put("selector", StringUtils.hasText(result.selector()) ? result.selector() : "all");
-        eventPayload.put("status", result.status());
-        eventPayload.put("blocking", result.blocking());
-        eventPayload.put("warning", result.warning());
-        eventPayload.put("dagId", result.dagId());
-        eventPayload.put("dagRunId", result.dagRunId());
-        publishEtlEvent(
-            "ELT.DBT.RELEASE_SUBMITTED",
-            "PUBLISH",
-            result.blocking() ? "BLOCKED" : result.warning() ? "WARNING" : "SUCCESS",
-            "DBT_RELEASE",
-            StringUtils.hasText(result.selector()) ? result.selector() : "all",
-            StringUtils.hasText(result.selector()) ? result.selector() : "all",
-            eventPayload,
-            "ETL_DBT_RELEASE_SUBMIT_EXECUTE"
-        );
-        return ApiResponses.ok(result);
-    }
-
-    private void publishEtlEvent(
-        String eventType,
-        String action,
-        String status,
-        String aggregateType,
-        String aggregateId,
-        String aggregateName,
-        Map<String, Object> payload,
-        String auditActionCode
-    ) {
-        try {
-            eventOutbox.publishInternal(
-                new PlatformEventRequest(
-                    null,
-                    eventType,
-                    "ELT",
-                    "dts-platform",
-                    aggregateType,
-                    aggregateId,
-                    aggregateName,
-                    action,
-                    "INFO",
-                    status,
-                    Instant.now(),
-                    null,
-                    null,
-                    null,
-                    auditActionCode,
-                    null,
-                    payload == null ? Map.of() : new LinkedHashMap<>(payload)
-                )
-            );
-        } catch (RuntimeException ex) {
-            LOG.warn("Failed to publish ETL event {} for {}: {}", eventType, aggregateId, ex.getMessage());
-        }
     }
 
     private void recordDbtSyncState(
@@ -648,198 +382,13 @@ public class EtlResource {
         return ApiResponses.ok(result);
     }
 
-    public record DbtRunRequest(
-        String models,
-        String dagSelector,
-        String target,
-        String operation,
-        Map<String, Object> vars,
-        String gitRef,
-        String commitSha,
-        String buildInvocationId,
-        String modelSpecId,
-        Integer implementationRevision,
-        String implementationChecksum,
-        String projectKey,
-        String dbtUniqueId
-    ) {
-        public DbtRunRequest(
-            String models,
-            String dagSelector,
-            String target,
-            String operation,
-            Map<String, Object> vars,
-            String gitRef,
-            String commitSha,
-            String buildInvocationId
-        ) {
-            this(models, dagSelector, target, operation, vars, gitRef, commitSha, buildInvocationId, null, null, null, null, null);
-        }
-    }
     public record DbtArtifactSyncRequest(String projectDir, Boolean syncManifest) {}
-    public record DbtOutputRelationRequest(java.util.UUID modelId, String target, Map<String, Object> vars) {}
-    public record DbtQualityGateRequest(String models) {}
-    public record DbtReleaseGateRequest(String models, String gitRef, String commitSha, Boolean strictMode) {}
-
-    private String normalizeDbtOperation(String raw) {
-        if (!StringUtils.hasText(raw)) {
-            return "run";
-        }
-        String op = raw.trim().toLowerCase();
-        if (
-            "run".equals(op) ||
-            "test".equals(op) ||
-            "compile".equals(op) ||
-            "docs".equals(op) ||
-            "build".equals(op) ||
-            "run-operation".equals(op)
-        ) {
-            return op;
-        }
-        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "operation 仅支持 run/test/compile/docs/build/run-operation");
-    }
-
-    private ApiResponse<Map<String, Object>> triggerDbtOperation(
-        String operation,
-        DbtRunRequest request,
-        String activeDept,
-        boolean selectorRequired
-    ) {
-        return triggerDbtOperation(operation, request, activeDept, selectorRequired, false);
-    }
-
-    private ApiResponse<Map<String, Object>> triggerDbtOperation(
-        String operation,
-        DbtRunRequest request,
-        String activeDept,
-        boolean selectorRequired,
-        boolean fullRefresh
-    ) {
-        String selector = resolveSelector(request, selectorRequired);
-        String dagSelector = resolveDagSelector(request, selector);
-        String dagId = dbtDagService.ensureDagForSelector(dagSelector);
-        if (!StringUtils.hasText(dagId)) {
-            dagId = airflowProperties.getDagId();
-        }
-        Map<String, Object> conf = new LinkedHashMap<>();
-        dbtSourceService.refreshOdsSources();
-        DbtScopedProjectService.ScopedProject scopedProject = dbtScopedProjectService.prepare(selector).orElse(null);
-        conf.put("operation", operation);
-        if (fullRefresh) {
-            conf.put("full_refresh", true);
-        }
-        if (StringUtils.hasText(selector)) {
-            conf.put("models", selector);
-        }
-        if (scopedProject != null && StringUtils.hasText(scopedProject.projectDir())) {
-            conf.put("projectDir", scopedProject.projectDir());
-            conf.put("syncManifest", shouldSyncManifest(operation));
-        }
-        if (StringUtils.hasText(request == null ? null : request.dagSelector())) {
-            conf.put("dagSelector", dagSelector);
-        }
-        if (StringUtils.hasText(request == null ? null : request.target())) {
-            conf.put("target", request.target().trim());
-        }
-        Map<String, Object> mergedVars = new LinkedHashMap<>();
-        if (request != null && request.vars() != null && !request.vars().isEmpty()) {
-            mergedVars.putAll(request.vars());
-        }
-        if (!mergedVars.isEmpty()) {
-            conf.put("vars", toJsonString(mergedVars));
-        }
-        if (StringUtils.hasText(request == null ? null : request.gitRef())) {
-            conf.put("gitRef", request.gitRef().trim());
-        }
-        if (StringUtils.hasText(request == null ? null : request.commitSha())) {
-            conf.put("commitSha", request.commitSha().trim());
-        }
-        if (StringUtils.hasText(request == null ? null : request.buildInvocationId())) {
-            conf.put("buildInvocationId", request.buildInvocationId().trim());
-        }
-        putLifecycleRunContext(conf, request);
-        Map<String, Object> payload = Map.of("conf", conf, "logical_date", Instant.now().toString());
-        Map<String, Object> result = new LinkedHashMap<>(triggerAirflowDagOrThrow(dagId, payload));
-        result.putIfAbsent("dagId", dagId);
-        try {
-            externalRunLogService.recordAirflowRun(ExternalRunLogService.ENTRY_DBT, dagId, result, conf, activeDept);
-        } catch (RuntimeException ex) {
-            // best-effort sync
-        }
-        return ApiResponses.ok(result);
-    }
-
-    private void putLifecycleRunContext(Map<String, Object> conf, DbtRunRequest request) {
-        if (request == null) return;
-        boolean present =
-            StringUtils.hasText(request.modelSpecId()) ||
-            request.implementationRevision() != null ||
-            StringUtils.hasText(request.implementationChecksum()) ||
-            StringUtils.hasText(request.projectKey()) ||
-            StringUtils.hasText(request.dbtUniqueId());
-        if (!present) return;
-        if (
-            !StringUtils.hasText(request.modelSpecId()) ||
-            request.implementationRevision() == null ||
-            request.implementationRevision() < 1 ||
-            !StringUtils.hasText(request.implementationChecksum()) ||
-            !StringUtils.hasText(request.projectKey()) ||
-            !StringUtils.hasText(request.dbtUniqueId())
-        ) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ModelSpec lifecycle run context is incomplete");
-        }
-        try {
-            java.util.UUID.fromString(request.modelSpecId().trim());
-        } catch (IllegalArgumentException invalid) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "modelSpecId must be UUID", invalid);
-        }
-        conf.put("modelSpecId", request.modelSpecId().trim());
-        conf.put("implementationRevision", request.implementationRevision());
-        conf.put("implementationChecksum", request.implementationChecksum().trim());
-        conf.put("projectKey", request.projectKey().trim());
-        conf.put("dbtUniqueId", request.dbtUniqueId().trim());
-    }
-
-    private ApiResponse<Map<String, Object>> triggerDbtMacroOperation(
-        String dagSelector,
-        String selector,
-        String target,
-        String macroName,
-        Map<String, Object> macroArgs,
-        String activeDept
-    ) {
-        String dagId = dbtDagService.ensureDagForSelector(dagSelector);
-        if (!StringUtils.hasText(dagId)) {
-            dagId = airflowProperties.getDagId();
-        }
-        Map<String, Object> conf = new LinkedHashMap<>();
-        conf.put("operation", "run-operation");
-        conf.put("macro_name", macroName);
-        if (StringUtils.hasText(selector)) {
-            conf.put("models", selector);
-        }
-        if (StringUtils.hasText(target)) {
-            conf.put("target", target.trim());
-        }
-        if (macroArgs != null && !macroArgs.isEmpty()) {
-            conf.put("macro_args", toJsonString(macroArgs));
-        }
-        Map<String, Object> payload = Map.of("conf", conf, "logical_date", Instant.now().toString());
-        Map<String, Object> result = new LinkedHashMap<>(triggerAirflowDagOrThrow(dagId, payload));
-        result.putIfAbsent("dagId", dagId);
-        try {
-            externalRunLogService.recordAirflowRun(ExternalRunLogService.ENTRY_DBT, dagId, result, conf, activeDept);
-        } catch (RuntimeException ex) {
-            // best-effort sync
-        }
-        return ApiResponses.ok(result);
-    }
 
     private void syncDbtBuildRuns(String selector, String activeDept) {
         if (!airflowProperties.isEnabled()) {
             return;
         }
-        String dagSelector = resolveDagSelector(null, selector);
+        String dagSelector = resolveDagSelector(selector);
         String dagId = dbtDagService.ensureDagForSelector(dagSelector);
         if (!StringUtils.hasText(dagId)) {
             dagId = airflowProperties.getDagId();
@@ -960,54 +509,7 @@ public class EtlResource {
         return Boolean.parseBoolean(stringVal(value));
     }
 
-    private Map<String, Object> buildTruncateMacroArgs(java.util.UUID modelId) {
-        ModelingSqlModel model = sqlModelRepository
-            .findById(modelId)
-            .orElseThrow(() -> new IllegalArgumentException("模型不存在"));
-        String identifier = stringVal(model.getAlias());
-        if (!StringUtils.hasText(identifier)) {
-            identifier = stringVal(model.getName());
-        }
-        if (!StringUtils.hasText(identifier)) {
-            throw new IllegalArgumentException("模型名称不能为空");
-        }
-        String schema = stringVal(model.getSchemaName());
-        String database = null;
-        DbtConfigService.DbtConfigView view = dbtConfigService.loadConfig();
-        if (view != null && view.config() != null) {
-            database = stringVal(view.config().database());
-            if (!StringUtils.hasText(schema)) {
-                schema = stringVal(view.config().schema());
-            }
-        }
-        Map<String, Object> macroArgs = new LinkedHashMap<>();
-        if (StringUtils.hasText(database)) {
-            macroArgs.put("database_name", database);
-        }
-        if (StringUtils.hasText(schema)) {
-            macroArgs.put("schema_name", schema);
-        }
-        macroArgs.put("identifier", identifier);
-        return macroArgs;
-    }
-
-    private String resolveSelector(DbtRunRequest request, boolean required) {
-        String selector = request == null ? null : stringVal(request.models());
-        if (required && !StringUtils.hasText(selector)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请提供模型选择器");
-        }
-        return StringUtils.hasText(selector) ? selector : "all";
-    }
-
-    private boolean shouldSyncManifest(String operation) {
-        return "run".equalsIgnoreCase(operation) || "build".equalsIgnoreCase(operation) || "docs".equalsIgnoreCase(operation);
-    }
-
-    private String resolveDagSelector(DbtRunRequest request, String selector) {
-        String dagSelector = request == null ? null : stringVal(request.dagSelector());
-        if (StringUtils.hasText(dagSelector)) {
-            return dagSelector;
-        }
+    private String resolveDagSelector(String selector) {
         if (StringUtils.hasText(selector) && selector.trim().toLowerCase().contains("tag:")) {
             return selector;
         }
@@ -1021,20 +523,12 @@ public class EtlResource {
         if (StringUtils.hasText(dagId)) {
             return dagId.trim();
         }
-        String dagSelector = resolveDagSelector(null, selector);
+        String dagSelector = resolveDagSelector(selector);
         String resolvedDagId = dbtDagService.ensureDagForSelector(dagSelector);
         if (StringUtils.hasText(resolvedDagId)) {
             return resolvedDagId;
         }
         return airflowProperties.getDagId();
-    }
-
-    private String toJsonString(Map<String, Object> vars) {
-        try {
-            return objectMapper.writeValueAsString(vars);
-        } catch (JsonProcessingException ex) {
-            return String.valueOf(vars);
-        }
     }
 
     private String normalizeText(String raw) {

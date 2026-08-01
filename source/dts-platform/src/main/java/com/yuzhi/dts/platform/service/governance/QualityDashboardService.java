@@ -6,6 +6,7 @@ import com.yuzhi.dts.platform.domain.governance.GovRuleBinding;
 import com.yuzhi.dts.platform.repository.governance.GovQualityRunRepository;
 import com.yuzhi.dts.platform.repository.governance.GovRuleBindingRepository;
 import com.yuzhi.dts.platform.repository.governance.GovRuleRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.service.governance.dto.QualityDashboardDto;
 import com.yuzhi.dts.platform.service.governance.dto.QualityDashboardDto.FailingDataset;
 import com.yuzhi.dts.platform.service.governance.dto.QualityDashboardDto.RecentRun;
@@ -20,6 +21,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -36,31 +38,54 @@ public class QualityDashboardService {
     private final GovRuleRepository ruleRepository;
     private final GovRuleBindingRepository bindingRepository;
     private final GovQualityRunRepository runRepository;
+    private final CatalogDatasetRepository datasetRepository;
+    private final QualityDatasetReadGuard datasetReadGuard;
 
     public QualityDashboardService(
         GovRuleRepository ruleRepository,
         GovRuleBindingRepository bindingRepository,
-        GovQualityRunRepository runRepository
+        GovQualityRunRepository runRepository,
+        CatalogDatasetRepository datasetRepository,
+        QualityDatasetReadGuard datasetReadGuard
     ) {
         this.ruleRepository = ruleRepository;
         this.bindingRepository = bindingRepository;
         this.runRepository = runRepository;
+        this.datasetRepository = datasetRepository;
+        this.datasetReadGuard = datasetReadGuard;
     }
 
-    public QualityDashboardDto getDashboard() {
+    public QualityDashboardDto getDashboard(String activeDeptHeader) {
+        var datasets = datasetRepository.findAll();
+        Set<UUID> readableDatasetIds = datasetReadGuard.readableDatasetIds(datasets, activeDeptHeader);
+
         // 1. ruleCount: enabled rules
-        int ruleCount = ruleRepository.countByEnabledTrue();
+        int ruleCount = (int) ruleRepository
+            .findAll()
+            .stream()
+            .filter(rule -> Boolean.TRUE.equals(rule.getEnabled()))
+            .filter(rule -> rule.getDatasetId() != null && readableDatasetIds.contains(rule.getDatasetId()))
+            .count();
 
-        // 2. coveredDatasets: distinct dataset IDs from bindings (use count query, not findAll)
-        long coveredDatasets = bindingRepository.countDistinctDatasetIds();
+        // 2. coveredDatasets: distinct readable dataset IDs from bindings
+        long coveredDatasets = bindingRepository
+            .findAll()
+            .stream()
+            .map(GovRuleBinding::getDatasetId)
+            .filter(readableDatasetIds::contains)
+            .distinct()
+            .count();
 
-        // 3. totalDatasets: use coveredDatasets since there is no standalone dataset table
-        int totalDatasets = (int) coveredDatasets;
+        // 3. totalDatasets: only assets readable in the current department scope
+        int totalDatasets = readableDatasetIds.size();
 
         // 4 & 5. todayPassed / todayFailed
         ZoneId zone = ZoneId.systemDefault();
         Instant todayStart = LocalDate.now(zone).atStartOfDay(zone).toInstant();
-        List<GovQualityRun> todayRuns = runRepository.findByCreatedDateAfterOrderByCreatedDateAsc(todayStart);
+        List<GovQualityRun> todayRuns = visibleRuns(
+            runRepository.findByCreatedDateAfterOrderByCreatedDateAsc(todayStart),
+            readableDatasetIds
+        );
 
         int todayPassed = 0;
         int todayFailed = 0;
@@ -73,12 +98,18 @@ public class QualityDashboardService {
         }
 
         // 5. pendingFixRows: count FAILED runs as a proxy (no per-row count available)
-        List<GovQualityRun> failedRuns = runRepository.findTop100ByStatusOrderByCreatedDateDesc("FAILED");
+        List<GovQualityRun> failedRuns = visibleRuns(
+            runRepository.findTop100ByStatusOrderByCreatedDateDesc("FAILED"),
+            readableDatasetIds
+        );
         long pendingFixRows = failedRuns.size();
 
         // 6. trend7d: pass rate per day for the last 7 days
         Instant sevenDaysAgo = Instant.now().minus(7, ChronoUnit.DAYS);
-        List<GovQualityRun> recentRuns = runRepository.findByCreatedDateAfterOrderByCreatedDateAsc(sevenDaysAgo);
+        List<GovQualityRun> recentRuns = visibleRuns(
+            runRepository.findByCreatedDateAfterOrderByCreatedDateAsc(sevenDaysAgo),
+            readableDatasetIds
+        );
         List<TrendPoint> trend7d = computeTrend(recentRuns, zone);
 
         // 7. topFailingDatasets: group FAILED runs by datasetId, sum failingRows, top 5
@@ -101,6 +132,16 @@ public class QualityDashboardService {
             topFailingDatasets,
             recentFailedRuns
         );
+    }
+
+    private List<GovQualityRun> visibleRuns(List<GovQualityRun> runs, Set<UUID> readableDatasetIds) {
+        if (runs == null || runs.isEmpty() || readableDatasetIds.isEmpty()) {
+            return List.of();
+        }
+        return runs
+            .stream()
+            .filter(run -> run.getDatasetId() != null && readableDatasetIds.contains(run.getDatasetId()))
+            .toList();
     }
 
     private List<TrendPoint> computeTrend(List<GovQualityRun> runs, ZoneId zone) {

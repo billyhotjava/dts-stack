@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.modeling;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -9,6 +10,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationBuildRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationBuildRepository.BuildArtifact;
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationBuildRepository.CandidateBuildEntry;
@@ -18,15 +20,23 @@ import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationDispatchRe
 import com.yuzhi.dts.platform.service.etl.DbtDagService;
 import com.yuzhi.dts.platform.service.etl.DbtExecutionGateway;
 import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService;
+import com.yuzhi.dts.platform.service.audit.AuditService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionException;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 
 class ModelMaterializationDispatchServiceTest {
 
@@ -70,12 +80,18 @@ class ModelMaterializationDispatchServiceTest {
                 NOW.plus(Duration.ofMinutes(15))
             )
         );
-        when(fixture.gateway.submitReleaseBuild(any())).thenReturn(
-            DbtExecutionGateway.SubmissionResult.submitted(
-                DAG_RUN_ID,
-                false
-            )
+        when(fixture.gateway.submitReleaseBuild(any())).thenAnswer(
+            invocation -> {
+                assertThat(fixture.transactions.active()).isFalse();
+                return DbtExecutionGateway.SubmissionResult.submitted(
+                    DAG_RUN_ID,
+                    false
+                );
+            }
         );
+        fixture.audit.observe(() -> {
+            assertThat(fixture.transactions.active()).isTrue();
+        });
 
         Optional<ModelMaterializationDispatchService.DispatchResult> result =
             fixture.service.dispatchNext();
@@ -107,6 +123,42 @@ class ModelMaterializationDispatchServiceTest {
             false,
             NOW
         );
+        AuditCall audit = fixture.audit.singleCall();
+        assertThat(audit.actor()).isEqualTo("scheduler");
+        assertThat(audit.eventIdentity())
+            .isEqualTo(dispatchEventIdentity("submitted"));
+        assertThat(audit.occurredAt()).isEqualTo(NOW);
+        assertThat(audit.actionCode())
+            .isEqualTo("MODEL_MATERIALIZATION_DISPATCH_SUBMITTED");
+        assertThat(audit.stage()).isEqualTo(AuditStage.SUCCESS);
+        assertThat(audit.resourceId()).isEqualTo(GROUP_ID.toString());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> payload =
+            (Map<String, Object>) audit.payload();
+        assertThat(payload)
+            .containsOnlyKeys(
+                "tenant",
+                "candidate",
+                "version",
+                "attempt",
+                "dispatch",
+                "run",
+                "status"
+            )
+            .containsEntry("status", "SUBMITTED");
+        assertThat(payload)
+            .doesNotContainKeys(
+                "checksum",
+                "digest",
+                "token",
+                "credential",
+                "selector"
+            );
+        assertThat(payload.toString())
+            .doesNotContain("runtime-token")
+            .doesNotContain("sha256:")
+            .doesNotContain("/must-not-leave-platform")
+            .doesNotContain("dim_customer fct_invoice");
     }
 
     @Test
@@ -142,6 +194,62 @@ class ModelMaterializationDispatchServiceTest {
         verify(fixture.dispatches).markBlocked(
             GROUP_ID,
             "MATERIALIZATION_ARTIFACT_BUNDLE_DRIFT",
+            NOW
+        );
+        assertThat(fixture.audit.singleCall())
+            .isEqualTo(
+                new AuditCall(
+                    "scheduler",
+                    dispatchEventIdentity("blocked"),
+                    NOW,
+                    "MODEL_MATERIALIZATION_DISPATCH_BLOCKED",
+                    AuditStage.FAIL,
+                    GROUP_ID.toString(),
+                    Map.of(
+                        "tenant",
+                        "tenant-a",
+                        "candidate",
+                        CANDIDATE_ID,
+                        "version",
+                        3,
+                        "attempt",
+                        1,
+                        "dispatch",
+                        GROUP_ID,
+                        "run",
+                        DAG_RUN_ID,
+                        "status",
+                        "BLOCKED",
+                        "errorCode",
+                        "MATERIALIZATION_ARTIFACT_BUNDLE_DRIFT"
+                    )
+                )
+            );
+    }
+
+    @Test
+    void availabilityFenceBlocksBeforeArtifactPreparationOrAirflow() {
+        Fixture fixture = fixture();
+        when(fixture.dispatches.claimNext(eq(NOW), eq(Duration.ofMinutes(2))))
+            .thenReturn(Optional.of(dispatch()));
+        when(fixture.builds.loadCandidateBuildScope("tenant-a", GROUP_ID)).thenReturn(scope());
+        doThrow(
+            new ModelReleaseCandidateException(
+                ModelMaterializationSourceAvailabilityGuard.SOURCE_UNAVAILABLE,
+                "source fenced",
+                ModelReleaseCandidateException.Kind.UNPROCESSABLE
+            )
+        ).when(fixture.sourceAvailability).requireDispatchCurrent(GROUP_ID);
+
+        var result = fixture.service.dispatchNext().orElseThrow();
+
+        assertThat(result.status()).isEqualTo("BLOCKED");
+        assertThat(result.errorCode()).isEqualTo(ModelMaterializationSourceAvailabilityGuard.SOURCE_UNAVAILABLE);
+        verify(fixture.scoped, never()).prepareCandidate(any());
+        verify(fixture.gateway, never()).submitReleaseBuild(any());
+        verify(fixture.dispatches).markBlocked(
+            GROUP_ID,
+            ModelMaterializationSourceAvailabilityGuard.SOURCE_UNAVAILABLE,
             NOW
         );
     }
@@ -189,6 +297,12 @@ class ModelMaterializationDispatchServiceTest {
             NOW.plus(Duration.ofSeconds(30)),
             NOW
         );
+        AuditCall audit = fixture.audit.singleCall();
+        assertThat(audit.eventIdentity())
+            .isEqualTo(dispatchEventIdentity("unknown"));
+        assertThat(audit.actionCode())
+            .isEqualTo("MODEL_MATERIALIZATION_DISPATCH_UNKNOWN");
+        assertThat(audit.stage()).isEqualTo(AuditStage.FAIL);
     }
 
     @Test
@@ -292,6 +406,13 @@ class ModelMaterializationDispatchServiceTest {
                 )
             )
         );
+        doThrow(
+            new ModelReleaseCandidateException(
+                ModelMaterializationSourceAvailabilityGuard.SOURCE_UNAVAILABLE,
+                "source fenced",
+                ModelReleaseCandidateException.Kind.UNPROCESSABLE
+            )
+        ).when(fixture.sourceAvailability).requireDispatchCurrent(GROUP_ID);
 
         var result = fixture.service.dispatchNext().orElseThrow();
 
@@ -304,11 +425,118 @@ class ModelMaterializationDispatchServiceTest {
         );
         verify(fixture.scoped, never()).prepareCandidate(any());
         verify(fixture.gateway, never()).submitReleaseBuild(any());
+        verify(fixture.sourceAvailability, never()).requireDispatchCurrent(GROUP_ID);
         verify(fixture.dispatches, never()).markBlocked(
             eq(GROUP_ID),
             any(),
             eq(NOW)
         );
+        AuditCall audit = fixture.audit.singleCall();
+        assertThat(audit.eventIdentity())
+            .isEqualTo(dispatchEventIdentity("submitted"));
+        assertThat(audit.actionCode())
+            .isEqualTo("MODEL_MATERIALIZATION_DISPATCH_SUBMITTED");
+        assertThat(audit.stage()).isEqualTo(AuditStage.SUCCESS);
+    }
+
+    @Test
+    void auditFailureRollsBackAndPropagatesBeforeDeterministicReconcile() {
+        Fixture fixture = fixture();
+        DispatchRecord prepared = new DispatchRecord(
+            GROUP_ID,
+            "tenant-a",
+            CANDIDATE_ID,
+            3,
+            1,
+            "postgres-primary",
+            DAG_ID,
+            DAG_RUN_ID,
+            ARTIFACT_CHECKSUM,
+            "CLAIMED",
+            SCOPED_CHECKSUM,
+            "sha256:" + "c".repeat(64),
+            NOW.plus(Duration.ofMinutes(15))
+        );
+        when(
+            fixture.dispatches.claimNext(
+                eq(NOW),
+                eq(Duration.ofMinutes(2))
+            )
+        ).thenReturn(Optional.of(dispatch()), Optional.of(prepared));
+        when(fixture.builds.loadCandidateBuildScope("tenant-a", GROUP_ID))
+            .thenReturn(scope());
+        when(fixture.scoped.prepareCandidate(any())).thenReturn(
+            new DbtScopedProjectService.ScopedCandidateProject(
+                "/must-not-leave-platform",
+                "dim_customer fct_invoice",
+                SCOPED_CHECKSUM,
+                List.of()
+            )
+        );
+        when(fixture.tokens.issue(GROUP_ID, NOW)).thenReturn(
+            new ModelRuntimeSpecTokenCodec.IssuedToken(
+                "runtime-token",
+                "sha256:" + "c".repeat(64),
+                NOW.plus(Duration.ofMinutes(15))
+            )
+        );
+        when(
+            fixture.tokens.restore(
+                GROUP_ID,
+                NOW.plus(Duration.ofMinutes(15))
+            )
+        ).thenReturn(
+            new ModelRuntimeSpecTokenCodec.IssuedToken(
+                "runtime-token",
+                "sha256:" + "c".repeat(64),
+                NOW.plus(Duration.ofMinutes(15))
+            )
+        );
+        when(fixture.gateway.submitReleaseBuild(any())).thenReturn(
+            DbtExecutionGateway.SubmissionResult.submitted(
+                DAG_RUN_ID,
+                false
+            )
+        );
+        when(fixture.gateway.reconcileReleaseBuild(any())).thenReturn(
+            Optional.of(
+                DbtExecutionGateway.SubmissionResult.submitted(
+                    DAG_RUN_ID,
+                    true
+                )
+            )
+        );
+        fixture.audit.failNext(
+            new IllegalStateException("audit unavailable")
+        );
+
+        assertThatThrownBy(fixture.service::dispatchNext)
+            .isInstanceOf(RuntimeException.class)
+            .hasRootCauseMessage("audit unavailable");
+        assertThat(fixture.transactions.rollbacks()).isEqualTo(1);
+        verify(fixture.dispatches, never()).markUnknown(
+            eq(GROUP_ID),
+            any(),
+            any(),
+            any()
+        );
+
+        var reconciled = fixture.service.dispatchNext().orElseThrow();
+
+        assertThat(reconciled.status()).isEqualTo("SUBMITTED");
+        assertThat(reconciled.recovered()).isTrue();
+        assertThat(fixture.transactions.commits()).isEqualTo(1);
+        verify(fixture.gateway).submitReleaseBuild(any());
+        verify(fixture.gateway).reconcileReleaseBuild(any());
+        assertThat(
+            fixture.audit.calls().stream()
+                .map(AuditCall::eventIdentity)
+                .toList()
+        )
+            .containsExactly(
+                dispatchEventIdentity("submitted"),
+                dispatchEventIdentity("submitted")
+            );
     }
 
     private static Fixture fixture() {
@@ -320,6 +548,9 @@ class ModelMaterializationDispatchServiceTest {
         var dags = mock(DbtDagService.class);
         var gateway = mock(DbtExecutionGateway.class);
         var tokens = mock(ModelRuntimeSpecTokenCodec.class);
+        var sourceAvailability = mock(ModelMaterializationSourceAvailabilityGuard.class);
+        var audit = new RecordingAuditService();
+        var transactions = new RecordingTransactionManager();
         when(dags.ensureReleaseBuildDag(DAG_ID)).thenReturn(
             new DbtDagService.ManagedDagDeployment(
                 DAG_ID,
@@ -335,7 +566,10 @@ class ModelMaterializationDispatchServiceTest {
             dags,
             gateway,
             tokens,
-            Clock.fixed(NOW, ZoneOffset.UTC)
+            sourceAvailability,
+            audit,
+            Clock.fixed(NOW, ZoneOffset.UTC),
+            new TransactionTemplate(transactions)
         );
         return new Fixture(
             service,
@@ -343,7 +577,19 @@ class ModelMaterializationDispatchServiceTest {
             builds,
             scoped,
             gateway,
-            tokens
+            tokens,
+            sourceAvailability,
+            audit,
+            transactions
+        );
+    }
+
+    private static String dispatchEventIdentity(String status) {
+        return (
+            "model-materialization-dispatch:" +
+            GROUP_ID +
+            ":attempt:1:" +
+            status
         );
     }
 
@@ -425,6 +671,121 @@ class ModelMaterializationDispatchServiceTest {
         ModelMaterializationBuildRepository builds,
         DbtScopedProjectService scoped,
         DbtExecutionGateway gateway,
-        ModelRuntimeSpecTokenCodec tokens
+        ModelRuntimeSpecTokenCodec tokens,
+        ModelMaterializationSourceAvailabilityGuard sourceAvailability,
+        RecordingAuditService audit,
+        RecordingTransactionManager transactions
     ) {}
+
+    private record AuditCall(
+        String actor,
+        String eventIdentity,
+        Instant occurredAt,
+        String actionCode,
+        AuditStage stage,
+        String resourceId,
+        Object payload
+    ) {}
+
+    private static final class RecordingAuditService
+        extends AuditService {
+
+        private final java.util.ArrayList<AuditCall> calls =
+            new java.util.ArrayList<>();
+        private Runnable observer = () -> {};
+        private RuntimeException nextFailure;
+
+        private RecordingAuditService() {
+            super(null, null, null, null, null, null);
+        }
+
+        @Override
+        public void auditActionAs(
+            String machineActor,
+            String eventIdentity,
+            Instant occurredAt,
+            String actionCode,
+            AuditStage stage,
+            String resourceId,
+            Object payload
+        ) {
+            observer.run();
+            calls.add(
+                new AuditCall(
+                    machineActor,
+                    eventIdentity,
+                    occurredAt,
+                    actionCode,
+                    stage,
+                    resourceId,
+                    payload
+                )
+            );
+            if (nextFailure != null) {
+                RuntimeException failure = nextFailure;
+                nextFailure = null;
+                throw failure;
+            }
+        }
+
+        private void observe(Runnable observer) {
+            this.observer = observer;
+        }
+
+        private void failNext(RuntimeException failure) {
+            nextFailure = failure;
+        }
+
+        private AuditCall singleCall() {
+            assertThat(calls).hasSize(1);
+            return calls.getFirst();
+        }
+
+        private List<AuditCall> calls() {
+            return List.copyOf(calls);
+        }
+    }
+
+    private static final class RecordingTransactionManager
+        implements PlatformTransactionManager {
+
+        private final ThreadLocal<Boolean> active =
+            ThreadLocal.withInitial(() -> false);
+        private int commits;
+        private int rollbacks;
+
+        @Override
+        public TransactionStatus getTransaction(
+            TransactionDefinition definition
+        ) throws TransactionException {
+            active.set(true);
+            return new SimpleTransactionStatus();
+        }
+
+        @Override
+        public void commit(TransactionStatus status)
+            throws TransactionException {
+            commits++;
+            active.remove();
+        }
+
+        @Override
+        public void rollback(TransactionStatus status)
+            throws TransactionException {
+            rollbacks++;
+            active.remove();
+        }
+
+        private boolean active() {
+            return active.get();
+        }
+
+        private int commits() {
+            return commits;
+        }
+
+        private int rollbacks() {
+            return rollbacks;
+        }
+    }
 }

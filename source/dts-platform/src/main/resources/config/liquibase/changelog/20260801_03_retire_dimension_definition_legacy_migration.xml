@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260801-03-retire-dimension-definition-legacy-migration" author="codex" dbms="postgresql" runInTransaction="true">
+        <preConditions
+            onFail="HALT"
+            onError="HALT"
+            onFailMessage="DIMENSION_DEFINITION_LEGACY_MIGRATION_RETIREMENT_BLOCKED: finish all migration batches and pin every canonical DIMENSION head before deployment"
+            onErrorMessage="DIMENSION_DEFINITION_LEGACY_MIGRATION_RETIREMENT_SCHEMA_UNEXPECTED">
+            <tableExists tableName="modeling_model_spec"/>
+            <tableExists tableName="modeling_dimension_definition_legacy_map"/>
+            <tableExists tableName="modeling_dimension_definition_migration_batch"/>
+            <columnExists tableName="modeling_model_spec" columnName="contract_version"/>
+            <columnExists tableName="modeling_model_spec" columnName="model_type"/>
+            <columnExists tableName="modeling_model_spec" columnName="dimension_definition_id"/>
+            <columnExists tableName="modeling_model_spec" columnName="dimension_definition_revision"/>
+
+            <sqlCheck expectedResult="1"><![CDATA[
+                SELECT count(*)
+                  FROM pg_constraint
+                 WHERE conrelid = 'modeling_model_spec'::regclass
+                   AND conname = 'ck_model_spec_dimension_definition_ref'
+            ]]></sqlCheck>
+            <sqlCheck expectedResult="1"><![CDATA[
+                SELECT count(*)
+                  FROM pg_constraint
+                 WHERE conrelid = 'modeling_dimension_definition_legacy_map'::regclass
+                   AND conname = 'fk_dimension_definition_legacy_batch'
+            ]]></sqlCheck>
+            <sqlCheck expectedResult="0"><![CDATA[
+                SELECT
+                    (SELECT count(*) FROM modeling_dimension_definition_legacy_map) +
+                    (SELECT count(*) FROM modeling_dimension_definition_migration_batch)
+            ]]></sqlCheck>
+            <sqlCheck expectedResult="0"><![CDATA[
+                SELECT count(*)
+                  FROM modeling_model_spec
+                 WHERE contract_version IS DISTINCT FROM 2
+            ]]></sqlCheck>
+            <sqlCheck expectedResult="0"><![CDATA[
+                SELECT count(*)
+                  FROM modeling_model_spec
+                 WHERE contract_version = 2
+                   AND NOT (
+                       (
+                           model_type = 'DIMENSION'
+                           AND dimension_definition_id IS NOT NULL
+                           AND dimension_definition_revision IS NOT NULL
+                       )
+                       OR (
+                           model_type <> 'DIMENSION'
+                           AND dimension_definition_id IS NULL
+                           AND dimension_definition_revision IS NULL
+                       )
+                   )
+            ]]></sqlCheck>
+        </preConditions>
+        <comment>
+            Remove the completed dimension-definition compatibility migration ledger and make
+            revision-pinned DimensionDefinition ownership mandatory on every canonical DIMENSION head.
+        </comment>
+
+        <sql><![CDATA[
+            LOCK TABLE modeling_dimension_definition_legacy_map,
+                modeling_dimension_definition_migration_batch, modeling_model_spec
+            IN ACCESS EXCLUSIVE MODE
+        ]]></sql>
+        <sql splitStatements="false"><![CDATA[
+            DO $$
+            BEGIN
+                IF (
+                    (SELECT count(*) FROM modeling_dimension_definition_legacy_map) +
+                    (SELECT count(*) FROM modeling_dimension_definition_migration_batch) +
+                    (SELECT count(*) FROM modeling_model_spec WHERE contract_version IS DISTINCT FROM 2) +
+                    (SELECT count(*) FROM modeling_model_spec
+                      WHERE contract_version = 2
+                        AND NOT (
+                            (model_type = 'DIMENSION' AND dimension_definition_id IS NOT NULL AND dimension_definition_revision IS NOT NULL)
+                            OR
+                            (model_type <> 'DIMENSION' AND dimension_definition_id IS NULL AND dimension_definition_revision IS NULL)
+                        ))
+                ) <> 0 THEN
+                    RAISE EXCEPTION 'DIMENSION_DEFINITION_LEGACY_MIGRATION_RETIREMENT_LOCKED_RECHECK_FAILED';
+                END IF;
+            END $$;
+        ]]></sql>
+
+        <dropTable tableName="modeling_dimension_definition_legacy_map" cascadeConstraints="false"/>
+        <dropTable tableName="modeling_dimension_definition_migration_batch" cascadeConstraints="false"/>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE modeling_model_spec
+                DROP CONSTRAINT ck_model_spec_dimension_definition_ref;
+            ALTER TABLE modeling_model_spec
+                ADD CONSTRAINT ck_model_spec_dimension_definition_ref
+                CHECK (
+                    contract_version = 2
+                    AND (
+                        (
+                            model_type = 'DIMENSION'
+                            AND dimension_definition_id IS NOT NULL
+                            AND dimension_definition_revision IS NOT NULL
+                        )
+                        OR (
+                            model_type <> 'DIMENSION'
+                            AND dimension_definition_id IS NULL
+                            AND dimension_definition_revision IS NULL
+                        )
+                    )
+                );
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    RAISE EXCEPTION 'ROLLBACK_BLOCKED_DIMENSION_DEFINITION_LEGACY_MIGRATION_RETIREMENT_FORWARD_ONLY: recovery requires a new forward changeset';
+                END $$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

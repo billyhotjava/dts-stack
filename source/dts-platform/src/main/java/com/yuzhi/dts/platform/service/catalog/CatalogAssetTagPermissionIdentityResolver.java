@@ -226,10 +226,6 @@ public class CatalogAssetTagPermissionIdentityResolver {
                 resolveExactIdentity(requested, index, "semantic-model-id");
             case DATA_PRODUCT ->
                 resolveCodeIdentity(requested, index, "data-product-code");
-            case MODELING_SQL_MODEL ->
-                resolveCodeIdentity(requested, index, "sql-model-name");
-            case MODELING_PLAN ->
-                resolveCodeIdentity(requested, index, "modeling-plan-id");
             case DATA_STANDARD ->
                 resolveCodeIdentity(requested, index, "data-standard-code");
             case METADATA_STANDARD ->
@@ -523,7 +519,6 @@ public class CatalogAssetTagPermissionIdentityResolver {
         if (
             EnumSet
                 .of(
-                    CatalogAssetType.MODELING_PLAN,
                     CatalogAssetType.METADATA_STANDARD,
                     CatalogAssetType.SECURITY_POLICY,
                     CatalogAssetType.BACKFILL_REQUEST

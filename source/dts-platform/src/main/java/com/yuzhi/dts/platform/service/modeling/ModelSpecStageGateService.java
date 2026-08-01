@@ -50,7 +50,7 @@ public class ModelSpecStageGateService {
     private final ModelLifecycleRepository lifecycle;
     private final ModelSpecSourceValidationPort sourceValidation;
     private final ModelSpecDomainReadAccessPort domainReadAccess;
-    private final ModelImplementationCompatibilityAdapter implementationCompatibility;
+    private final ModelImplementationInputPolicy inputPolicy;
     private final ModelClassificationPublishGate classificationGate;
     private final ModelGovernancePolicyPort governancePolicy;
 
@@ -91,7 +91,7 @@ public class ModelSpecStageGateService {
         ModelSpecSourceValidationPort sourceValidation,
         DimensionDefinitionRepository dimensionDefinitions,
         ModelSpecDomainReadAccessPort domainReadAccess,
-        ModelImplementationCompatibilityAdapter implementationCompatibility
+        ModelImplementationInputPolicy inputPolicy
     ) {
         this(
             modelSpecs,
@@ -101,7 +101,7 @@ public class ModelSpecStageGateService {
             sourceValidation,
             dimensionDefinitions,
             domainReadAccess,
-            implementationCompatibility,
+            inputPolicy,
             null
         );
     }
@@ -114,7 +114,7 @@ public class ModelSpecStageGateService {
         ModelSpecSourceValidationPort sourceValidation,
         DimensionDefinitionRepository dimensionDefinitions,
         ModelSpecDomainReadAccessPort domainReadAccess,
-        ModelImplementationCompatibilityAdapter implementationCompatibility,
+        ModelImplementationInputPolicy inputPolicy,
         ModelClassificationPublishGate classificationGate
     ) {
         this(
@@ -125,7 +125,7 @@ public class ModelSpecStageGateService {
             sourceValidation,
             dimensionDefinitions,
             domainReadAccess,
-            implementationCompatibility,
+            inputPolicy,
             classificationGate,
             null
         );
@@ -140,7 +140,7 @@ public class ModelSpecStageGateService {
         ModelSpecSourceValidationPort sourceValidation,
         DimensionDefinitionRepository dimensionDefinitions,
         ModelSpecDomainReadAccessPort domainReadAccess,
-        ModelImplementationCompatibilityAdapter implementationCompatibility,
+        ModelImplementationInputPolicy inputPolicy,
         ModelClassificationPublishGate classificationGate,
         ModelGovernancePolicyPort governancePolicy
     ) {
@@ -151,7 +151,7 @@ public class ModelSpecStageGateService {
         this.lifecycle = lifecycle;
         this.sourceValidation = sourceValidation;
         this.domainReadAccess = domainReadAccess;
-        this.implementationCompatibility = implementationCompatibility;
+        this.inputPolicy = inputPolicy;
         this.classificationGate = classificationGate;
         this.governancePolicy = governancePolicy;
     }
@@ -360,15 +360,13 @@ public class ModelSpecStageGateService {
     }
 
     private GateView withImplementationInputEvidence(String tenantId, ModelSpecView view, GateView gate) {
-        if (gate.stage() == Stage.DRAFT_SAVE || gate.stage() == Stage.DESIGNED || implementationCompatibility == null) return gate;
+        if (gate.stage() == Stage.DRAFT_SAVE || gate.stage() == Stage.DESIGNED || inputPolicy == null) return gate;
         ImplementationView implementation = lifecycle == null ? null : lifecycle.findImplementation(tenantId, view.id()).orElse(null);
         String blockerCode = null;
         String blockerField = "implementation.inputs";
         String blockerMessage = "实现输入未通过当前来源与依赖校验";
         if (implementation == null) {
             blockerCode = "MODEL_IMPLEMENTATION_REQUIRED";
-        } else if (isLegacyClaim(implementation)) {
-            blockerCode = "MODEL_IMPLEMENTATION_INPUT_MIGRATION_REQUIRED";
         } else {
             SaveImplementationCommand command = new SaveImplementationCommand(
                 implementation.inputMode(),
@@ -379,8 +377,8 @@ public class ModelSpecStageGateService {
                 implementation.materialization(),
                 "gate-input-evidence"
             );
-            ModelImplementationCompatibilityAdapter.ValidationResult inputValidation =
-                implementationCompatibility.validate(
+            ModelImplementationInputPolicy.ValidationResult inputValidation =
+                inputPolicy.validate(
                 tenantId,
                 view,
                 command
@@ -430,15 +428,6 @@ public class ModelSpecStageGateService {
             gate.stage(),
             blockers.isEmpty() ? GateStatus.READY : GateStatus.BLOCKED,
             blockers
-        );
-    }
-
-    private static boolean isLegacyClaim(ImplementationView implementation) {
-        return (
-            implementation.inputMode() == ModelLifecycleContract.InputMode.GENERATED &&
-            implementation.inputs().size() == 1 &&
-            implementation.inputs().get(0) instanceof ModelLifecycleContract.GeneratedInput input &&
-            "LEGACY_CLAIM".equals(input.generatorType())
         );
     }
 

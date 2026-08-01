@@ -3,12 +3,21 @@ package com.yuzhi.dts.ingestion.service.etl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.ingestion.config.AddaxProperties;
+import com.yuzhi.dts.ingestion.service.infra.InfraSettingsCryptoService;
 import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
+import java.util.Arrays;
+import java.util.Base64;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -17,6 +26,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -27,6 +39,10 @@ public class AddaxJobService {
 
     private static final Logger LOG = LoggerFactory.getLogger(AddaxJobService.class);
     private static final String ADDAX_CONTAINER_DIR = "/opt/addax/jobs";
+    static final String SEALED_JOB_PREFIX = "DTS_ADDAX_JOB_SEALED_V1:";
+    private static final int SEALED_JOB_IV_LENGTH = 12;
+    private static final Set<java.nio.file.attribute.PosixFilePermission> JOB_FILE_PERMISSIONS =
+        java.nio.file.attribute.PosixFilePermissions.fromString("rw-r-----");
     private static final String TABLE_PLACEHOLDER = "${table}";
     private static final List<String> CONNECTION_OVERRIDE_KEYS = List.of(
         "jdbcUrl",
@@ -46,7 +62,8 @@ public class AddaxJobService {
     private static final Set<String> DESTINATION_METADATA_KEYS = Set.of(
         "targetDataSourceId",
         "destinationDataSourceId",
-        "dataSourceId"
+        "dataSourceId",
+        "_managedDestination"
     );
     private final AddaxProperties properties;
     private final IngestionSettingsService settingsService;
@@ -54,6 +71,8 @@ public class AddaxJobService {
     private final JdbcMetadataService jdbcMetadataService;
     private final AddaxJdbcConfigNormalizer jdbcConfigNormalizer;
     private final org.springframework.core.env.Environment springEnv;
+    private final InfraSettingsCryptoService cryptoService;
+    private IngestionSourceResolver sourceResolver;
 
     public AddaxJobService(
         AddaxProperties properties,
@@ -61,7 +80,8 @@ public class AddaxJobService {
         ObjectMapper objectMapper,
         JdbcMetadataService jdbcMetadataService,
         AddaxJdbcConfigNormalizer jdbcConfigNormalizer,
-        org.springframework.core.env.Environment springEnv
+        org.springframework.core.env.Environment springEnv,
+        InfraSettingsCryptoService cryptoService
     ) {
         this.properties = properties;
         this.settingsService = settingsService;
@@ -69,6 +89,12 @@ public class AddaxJobService {
         this.jdbcMetadataService = jdbcMetadataService;
         this.jdbcConfigNormalizer = jdbcConfigNormalizer;
         this.springEnv = springEnv;
+        this.cryptoService = cryptoService;
+    }
+
+    @Autowired
+    void setSourceResolver(IngestionSourceResolver sourceResolver) {
+        this.sourceResolver = sourceResolver;
     }
 
     public record AddaxJobResult(String jobName, String jobPath, Map<String, Object> jobConfig) {}
@@ -139,7 +165,7 @@ public class AddaxJobService {
                 throw new IllegalStateException("Addax 作业目录不可写: " + jobDir);
             }
             Path jobPath = dir.resolve(jobName);
-            objectMapper.writerWithDefaultPrettyPrinter().writeValue(jobPath.toFile(), resolvedJob);
+            writeSealedJob(jobPath, resolvedJob);
             return new AddaxJobResult(jobName, jobPath.toString(), resolvedJob);
         } catch (Exception ex) {
             LOG.warn("Failed to write Addax job {}: {}", jobName, ex.getMessage());
@@ -307,12 +333,13 @@ public class AddaxJobService {
             resolvedReader = ensureDriver(readerType, resolvedReader);
         }
         Map<String, Object> resolvedWriter = ensureDriver(writerType, safeMap(writerConfig));
+        boolean managedDestination = Boolean.TRUE.equals(resolvedWriter.get("_managedDestination"));
         stripDestinationMetadata(resolvedWriter);
         // Fallback: inject data lake credentials if writer has no password
-        if (!StringUtils.hasText(normalizeText(resolvedWriter.get("password")))) {
+        if (!managedDestination && !StringUtils.hasText(normalizeText(resolvedWriter.get("password")))) {
             resolvedWriter.put("password", springEnv.getProperty("spring.datasource.password", ""));
         }
-        if (!StringUtils.hasText(normalizeText(resolvedWriter.get("username")))) {
+        if (!managedDestination && !StringUtils.hasText(normalizeText(resolvedWriter.get("username")))) {
             resolvedWriter.put("username", springEnv.getProperty("spring.datasource.username", "postgres"));
         }
         ensureWriterConnection(writerType, resolvedWriter);
@@ -543,12 +570,13 @@ public class AddaxJobService {
         if (!(contentObj instanceof List<?> list) || list.isEmpty()) {
             return;
         }
-        Object first = list.get(0);
-        if (!(first instanceof Map<?, ?> contentMap)) {
-            return;
+        for (Object item : list) {
+            if (!(item instanceof Map<?, ?> contentMap)) {
+                continue;
+            }
+            applyNodeDefaults(contentMap, "reader", readerType, readerConfig);
+            applyNodeDefaults(contentMap, "writer", writerType, writerConfig);
         }
-        applyNodeDefaults(contentMap, "reader", readerType, readerConfig);
-        applyNodeDefaults(contentMap, "writer", writerType, writerConfig);
     }
 
     private void applyNodeDefaults(
@@ -595,6 +623,12 @@ public class AddaxJobService {
             mergeMissing(params, fallbackConfig, "connection");
             mergeMissing(params, fallbackConfig, "table");
             mergeMissing(params, fallbackConfig, "tables");
+            for (String authoritativeKey : CONNECTION_OVERRIDE_KEYS) {
+                if (!"connection".equalsIgnoreCase(authoritativeKey)
+                    && fallbackConfig.containsKey(authoritativeKey)) {
+                    params.put(authoritativeKey, fallbackConfig.get(authoritativeKey));
+                }
+            }
         }
         ensureDriver(normalizedPlugin, params);
         if ("writer".equalsIgnoreCase(key)) {
@@ -668,10 +702,7 @@ public class AddaxJobService {
             return List.of();
         }
         try {
-            Map<String, Object> jobConfig = objectMapper.readValue(
-                path.toFile(),
-                new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {}
-            );
+            Map<String, Object> jobConfig = readManagedJob(path);
             Object jobObj = jobConfig.get("job");
             if (!(jobObj instanceof Map<?, ?> jobMap)) {
                 return List.of();
@@ -1350,6 +1381,7 @@ public class AddaxJobService {
         Map<String, Object> writerConfig = task.getDestinationConfig() != null
             ? jsonNodeToMap(task.getDestinationConfig())
             : Map.of();
+        writerConfig = resolveManagedDestinationConfig(writerConfig);
         String writerType = normalizeWriterType(task.getDestinationType() != null ? task.getDestinationType() : "postgresqlwriter");
         applyTableMapping(task.getTableMapping(), readerConfig, writerConfig, writerType);
         Map<String, Object> jobConfig = task.getAddaxConfig() != null
@@ -1398,6 +1430,51 @@ public class AddaxJobService {
             runtimeReaderOverrides,
             runtimeContext
         );
+    }
+
+    private Map<String, Object> resolveManagedDestinationConfig(Map<String, Object> config) {
+        Map<String, Object> resolved = config == null ? new LinkedHashMap<>() : new LinkedHashMap<>(config);
+        String rawId = null;
+        for (String key : List.of("targetDataSourceId", "destinationDataSourceId", "dataSourceId")) {
+            String candidate = normalizeText(resolved.get(key));
+            if (StringUtils.hasText(candidate)) {
+                rawId = candidate;
+                break;
+            }
+        }
+        if (!StringUtils.hasText(rawId)) {
+            return resolved;
+        }
+        if (sourceResolver == null) {
+            throw new IllegalStateException("Managed destination resolver is unavailable");
+        }
+        UUID dataSourceId;
+        try {
+            dataSourceId = UUID.fromString(rawId);
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("Invalid managed destination data source id");
+        }
+        JdbcMetadataService.JdbcConnectionInfo info = sourceResolver.resolveJdbcInfo(dataSourceId);
+        resolved.put("_managedDestination", true);
+        resolved.put("jdbcUrl", info.jdbcUrl());
+        putOrRemove(resolved, "username", info.username());
+        putOrRemove(resolved, "password", info.password());
+        putOrRemove(resolved, "driverClass", info.driverClass());
+        putOrRemove(resolved, "driverVersion", info.driverVersion());
+        if (info.jdbcProperties() == null || info.jdbcProperties().isEmpty()) {
+            resolved.remove("jdbcProperties");
+        } else {
+            resolved.put("jdbcProperties", new LinkedHashMap<>(info.jdbcProperties()));
+        }
+        return resolved;
+    }
+
+    private void putOrRemove(Map<String, Object> target, String key, String value) {
+        if (value == null) {
+            target.remove(key);
+        } else {
+            target.put(key, value);
+        }
     }
 
     private boolean hasFileSourceHint(Map<String, Object> readerConfig) {
@@ -2466,10 +2543,7 @@ public class AddaxJobService {
             return false;
         }
         try {
-            Map<String, Object> jobConfig = objectMapper.readValue(
-                jobPath.toFile(),
-                new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {}
-            );
+            Map<String, Object> jobConfig = readManagedJob(jobPath);
             return hasMalformedJdbcUrlInJob(jobConfig) || hasTablePlaceholderInJob(jobConfig);
         } catch (Exception ex) {
             LOG.debug("Failed to parse Addax job {}: {}", jobPath, ex.getMessage());
@@ -2649,6 +2723,201 @@ public class AddaxJobService {
         return StringUtils.hasText(resolveJdbcUrl(config));
     }
 
+    @EventListener(ApplicationReadyEvent.class)
+    public void migrateLegacyPlaintextJobFiles() {
+        Path managedRoot = Paths.get(resolveJobDir()).toAbsolutePath().normalize();
+        if (!Files.isDirectory(managedRoot, LinkOption.NOFOLLOW_LINKS)) {
+            return;
+        }
+        int migrated = 0;
+        int verified = 0;
+        int failures = 0;
+        try (java.util.stream.Stream<Path> files = Files.list(managedRoot)) {
+            for (Path path : files.filter(this::isManagedJsonCandidate).toList()) {
+                try {
+                    String stored = Files.readString(path, StandardCharsets.UTF_8);
+                    if (!isSealedJobToken(stored)
+                        && !(stored.contains("\"job\"") && stored.contains("\"content\""))) {
+                        continue;
+                    }
+                    Map<String, Object> config = parseManagedJob(stored);
+                    if (!looksLikeAddaxJob(config)) {
+                        continue;
+                    }
+                    if (isSealedJobToken(stored)) {
+                        setSecureJobPermissions(path);
+                        verified++;
+                    } else {
+                        writeSealedJob(path, config);
+                        migrated++;
+                    }
+                } catch (Exception ex) {
+                    failures++;
+                }
+            }
+        } catch (Exception ex) {
+            throw new IllegalStateException("ADDAX_JOB_SEAL_MIGRATION_SCAN_FAILED", ex);
+        }
+        if (failures > 0) {
+            throw new IllegalStateException("ADDAX_JOB_SEAL_MIGRATION_FAILED: files=" + failures);
+        }
+        if (migrated > 0 || verified > 0) {
+            LOG.info("Addax managed job sealing completed: migrated={}, verified={}", migrated, verified);
+        }
+    }
+
+    private boolean isManagedJsonCandidate(Path path) {
+        try {
+            java.nio.file.attribute.BasicFileAttributes attributes = Files.readAttributes(
+                path,
+                java.nio.file.attribute.BasicFileAttributes.class,
+                LinkOption.NOFOLLOW_LINKS
+            );
+            Path fileName = path.getFileName();
+            return attributes.isRegularFile()
+                && !attributes.isSymbolicLink()
+                && fileName != null
+                && fileName.toString().toLowerCase(Locale.ROOT).endsWith(".json");
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
+    private boolean looksLikeAddaxJob(Map<String, Object> config) {
+        if (config == null || !(config.get("job") instanceof Map<?, ?> job)) {
+            return false;
+        }
+        return job.get("content") instanceof List<?>;
+    }
+
+    Map<String, Object> readManagedJob(Path path) throws Exception {
+        return parseManagedJob(Files.readString(path, StandardCharsets.UTF_8));
+    }
+
+    private Map<String, Object> parseManagedJob(String stored) throws Exception {
+        if (stored == null) {
+            throw new IllegalArgumentException("Addax job content is required");
+        }
+        byte[] plain = null;
+        try {
+            plain = isSealedJobToken(stored)
+                ? unsealManagedJob(stored.trim())
+                : stored.getBytes(StandardCharsets.UTF_8);
+            return objectMapper.readValue(
+                plain,
+                new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {}
+            );
+        } finally {
+            if (plain != null) {
+                Arrays.fill(plain, (byte) 0);
+            }
+        }
+    }
+
+    private boolean isSealedJobToken(String value) {
+        return value != null && value.trim().startsWith(SEALED_JOB_PREFIX);
+    }
+
+    private void writeSealedJob(Path requestedPath, Map<String, Object> config) throws Exception {
+        byte[] plain = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(config);
+        try {
+            writeSealedTokenAtomically(requestedPath, sealManagedJob(plain));
+        } finally {
+            Arrays.fill(plain, (byte) 0);
+        }
+    }
+
+    private String sealManagedJob(byte[] plain) throws Exception {
+        if (cryptoService == null || !cryptoService.isEncryptionReady()) {
+            throw new IllegalStateException("ADDAX_JOB_ENCRYPTION_KEY_REQUIRED");
+        }
+        String keyVersion = cryptoService.currentKeyVersion();
+        byte[] versionBytes = keyVersion == null ? new byte[0] : keyVersion.getBytes(StandardCharsets.UTF_8);
+        if (versionBytes.length == 0 || versionBytes.length > 255) {
+            throw new IllegalStateException("ADDAX_JOB_ENCRYPTION_KEY_VERSION_INVALID");
+        }
+        byte[] iv = cryptoService.randomIv();
+        byte[] cipherText = cryptoService.encryptStrict(plain, iv);
+        ByteArrayOutputStream payload = new ByteArrayOutputStream(1 + versionBytes.length + iv.length + cipherText.length);
+        payload.write(versionBytes.length);
+        payload.writeBytes(versionBytes);
+        payload.writeBytes(iv);
+        payload.writeBytes(cipherText);
+        return SEALED_JOB_PREFIX + Base64.getEncoder().encodeToString(payload.toByteArray());
+    }
+
+    private byte[] unsealManagedJob(String token) throws Exception {
+        if (cryptoService == null || !cryptoService.isEncryptionReady()) {
+            throw new IllegalStateException("ADDAX_JOB_ENCRYPTION_KEY_REQUIRED");
+        }
+        byte[] payload;
+        try {
+            payload = Base64.getDecoder().decode(token.substring(SEALED_JOB_PREFIX.length()));
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalStateException("ADDAX_JOB_SEALED_TOKEN_INVALID", ex);
+        }
+        if (payload.length < 1 + SEALED_JOB_IV_LENGTH + 16) {
+            throw new IllegalStateException("ADDAX_JOB_SEALED_TOKEN_TOO_SHORT");
+        }
+        int versionLength = payload[0] & 0xFF;
+        int ivStart = 1 + versionLength;
+        if (versionLength == 0 || payload.length < ivStart + SEALED_JOB_IV_LENGTH + 16) {
+            throw new IllegalStateException("ADDAX_JOB_SEALED_TOKEN_INVALID");
+        }
+        String keyVersion = new String(payload, 1, versionLength, StandardCharsets.UTF_8);
+        if (!java.util.Objects.equals(keyVersion, cryptoService.currentKeyVersion())) {
+            throw new IllegalStateException("ADDAX_JOB_ENCRYPTION_KEY_VERSION_MISMATCH");
+        }
+        byte[] iv = Arrays.copyOfRange(payload, ivStart, ivStart + SEALED_JOB_IV_LENGTH);
+        byte[] cipherText = Arrays.copyOfRange(payload, ivStart + SEALED_JOB_IV_LENGTH, payload.length);
+        try {
+            return cryptoService.decryptStrict(cipherText, iv);
+        } finally {
+            Arrays.fill(payload, (byte) 0);
+            Arrays.fill(cipherText, (byte) 0);
+        }
+    }
+
+    private void writeSealedTokenAtomically(Path requestedPath, String token) throws Exception {
+        Path managedRoot = Paths.get(resolveJobDir()).toAbsolutePath().normalize();
+        Files.createDirectories(managedRoot);
+        Path canonicalRoot = managedRoot.toRealPath();
+        Path target = requestedPath.toAbsolutePath().normalize();
+        Path parent = target.getParent();
+        if (parent == null || !canonicalRoot.equals(parent.toRealPath())) {
+            throw new IllegalStateException("ADDAX_JOB_PATH_OUTSIDE_MANAGED_ROOT");
+        }
+        if (Files.exists(target, LinkOption.NOFOLLOW_LINKS) && Files.isSymbolicLink(target)) {
+            throw new IllegalStateException("ADDAX_JOB_PATH_NOT_REGULAR_FILE");
+        }
+        Path temp = Files.createTempFile(
+            canonicalRoot,
+            ".addax-job-",
+            ".tmp",
+            java.nio.file.attribute.PosixFilePermissions.asFileAttribute(JOB_FILE_PERMISSIONS)
+        );
+        try {
+            Files.writeString(
+                temp,
+                token,
+                StandardCharsets.UTF_8,
+                StandardOpenOption.WRITE,
+                StandardOpenOption.TRUNCATE_EXISTING
+            );
+            try (FileChannel channel = FileChannel.open(temp, StandardOpenOption.WRITE)) {
+                channel.force(true);
+            }
+            Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            setSecureJobPermissions(target);
+        } finally {
+            Files.deleteIfExists(temp);
+        }
+    }
+
+    private void setSecureJobPermissions(Path path) throws Exception {
+        Files.setPosixFilePermissions(path, JOB_FILE_PERMISSIONS);
+    }
+
     /**
      * 保存Job JSON到指定路径（用于更新已有任务）
      */
@@ -2659,8 +2928,8 @@ public class AddaxJobService {
         try {
             Files.createDirectories(dir);
             Path jobPath = dir.resolve(jobName);
-            Files.writeString(jobPath, jobJson);
-            try { Files.setPosixFilePermissions(jobPath, java.nio.file.attribute.PosixFilePermissions.fromString("rw-r--r--")); } catch (Exception ignored) {}
+            Map<String, Object> jobConfig = parseManagedJob(jobJson);
+            writeSealedJob(jobPath, jobConfig);
             return jobPath.toString();
         } catch (Exception ex) {
             LOG.warn("Failed to save job JSON for task {}: {}", taskId, ex.getMessage());
@@ -2673,15 +2942,36 @@ public class AddaxJobService {
             return false;
         }
         try {
-            Path path = Paths.get(jobPath.trim());
+            Path configuredRoot = Paths.get(resolveJobDir()).toAbsolutePath().normalize();
+            Path managedRoot = configuredRoot.toRealPath();
+            Path path = Paths.get(jobPath.trim()).toAbsolutePath().normalize();
+            if (!configuredRoot.equals(path.getParent())) {
+                throw new IllegalStateException("ADDAX_JOB_PATH_OUTSIDE_MANAGED_ROOT");
+            }
+            java.nio.file.attribute.BasicFileAttributes attributes;
+            try {
+                attributes = Files.readAttributes(
+                    path,
+                    java.nio.file.attribute.BasicFileAttributes.class,
+                    java.nio.file.LinkOption.NOFOLLOW_LINKS
+                );
+            } catch (java.nio.file.NoSuchFileException ex) {
+                return false;
+            }
+            if (attributes.isSymbolicLink() || !attributes.isRegularFile()) {
+                throw new IllegalStateException("ADDAX_JOB_PATH_NOT_REGULAR_FILE");
+            }
+            Path canonicalParent = path.getParent().toRealPath();
+            if (!managedRoot.equals(canonicalParent)) {
+                throw new IllegalStateException("ADDAX_JOB_PARENT_OUTSIDE_MANAGED_ROOT");
+            }
             boolean deleted = Files.deleteIfExists(path);
             if (deleted) {
-                LOG.info("Deleted Addax job file: {}", path);
+                LOG.info("Deleted managed Addax job file: {}", path.getFileName());
             }
             return deleted;
         } catch (Exception ex) {
-            LOG.warn("Failed to delete Addax job file {}: {}", jobPath, ex.getMessage());
-            return false;
+            throw new IllegalStateException("ADDAX_JOB_DELETE_FAILED: " + ex.getMessage(), ex);
         }
     }
 
@@ -2703,10 +2993,7 @@ public class AddaxJobService {
             return List.of();
         }
         try {
-            Map<String, Object> jobConfig = objectMapper.readValue(
-                basePath.toFile(),
-                new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {}
-            );
+            Map<String, Object> jobConfig = readManagedJob(basePath);
             Object jobObj = jobConfig.get("job");
             if (!(jobObj instanceof Map<?, ?> jobMap)) {
                 return List.of(new PerTableJob("run", toContainerJobPath(baseJobPath), baseJobPath));
@@ -2747,8 +3034,7 @@ public class AddaxJobService {
                 perTableConfig.put("job", perJob);
                 String fileName = baseName + "_" + slug + ".json";
                 Path filePath = dir.resolve(fileName);
-                objectMapper.writerWithDefaultPrettyPrinter().writeValue(filePath.toFile(), perTableConfig);
-                try { Files.setPosixFilePermissions(filePath, java.nio.file.attribute.PosixFilePermissions.fromString("rw-r--r--")); } catch (Exception ignored) {}
+                writeSealedJob(filePath, perTableConfig);
                 results.add(new PerTableJob(tableName, toContainerJobPath(filePath.toString()), filePath.toString()));
             }
             LOG.info("Split base job {} into {} per-table job files", basePath.getFileName(), results.size());
@@ -2809,10 +3095,7 @@ public class AddaxJobService {
             return;
         }
         try {
-            Map<String, Object> jobConfig = objectMapper.readValue(
-                path.toFile(),
-                new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {}
-            );
+            Map<String, Object> jobConfig = readManagedJob(path);
             Object jobObj = jobConfig.get("job");
             if (!(jobObj instanceof Map<?, ?> jobMap)) {
                 return;
@@ -2882,7 +3165,7 @@ public class AddaxJobService {
                     columnNames.size() <= 20 ? columnNames : columnNames.subList(0, 20) + "...(" + columnNames.size() + ")");
             }
             if (modified) {
-                objectMapper.writerWithDefaultPrettyPrinter().writeValue(path.toFile(), jobConfig);
+                writeSealedJob(path, jobConfig);
                 LOG.info("Updated Addax job with resolved writer columns: {}", path);
             }
         } catch (Exception ex) {

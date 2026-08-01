@@ -14,7 +14,7 @@ class ModelingDbtCompilerTest {
 
     @Test
     void compilesPjmDwdModelIntoTraceableDbtArtifacts() {
-        ModelingVNextContract.ModelSpec model = PjmModelingFixture.projectNode().modelSpec();
+        ModelingCompilerContract.CompilerModel model = PjmModelingFixture.projectNode().compilerModel();
 
         ModelingDbtCompiler.CompiledArtifacts artifacts = ModelingDbtCompiler.compile(model);
 
@@ -29,7 +29,7 @@ class ModelingDbtCompilerTest {
     void usesRefForDbtModelSourcesAndKeepsRevisionInOutputPath() {
         PjmModelingFixture.GoldenPathFixture fixture = PjmModelingFixture.goldenPath();
 
-        ModelingDbtCompiler.CompiledArtifacts artifacts = ModelingDbtCompiler.compile(fixture.modelSpecs().get(1));
+        ModelingDbtCompiler.CompiledArtifacts artifacts = ModelingDbtCompiler.compile(fixture.compilerModels().get(1));
 
         assertThat(artifacts.outputDirectory()).isEqualTo("models/dws/project_progress_monthly/v1");
         assertThat(artifacts.files().get("project_progress_monthly.sql")).contains("{{ ref('project_node_detail') }}");
@@ -38,18 +38,18 @@ class ModelingDbtCompilerTest {
 
     @Test
     void blocksModelsWithoutGrainOrTraceableSource() {
-        ModelingVNextContract.ModelSpec base = PjmModelingFixture.projectNode().modelSpec();
-        ModelingVNextContract.ModelSpec invalid = new ModelingVNextContract.ModelSpec(
+        ModelingCompilerContract.CompilerModel base = PjmModelingFixture.projectNode().compilerModel();
+        ModelingCompilerContract.CompilerModel invalid = new ModelingCompilerContract.CompilerModel(
             "invalid",
-            base.objectId(),
-            base.processId(),
-            ModelingVNextContract.Layer.DWD,
+            ModelingCompilerContract.Layer.DWD,
             base.modelType(),
             base.implementationMode(),
             "invalid_model",
-            new ModelingVNextContract.Grain("", List.of()),
+            new ModelingCompilerContract.Grain("", List.of()),
             base.standardBindings(),
             List.of(),
+            base.dimensions(),
+            base.metrics(),
             base.revision()
         );
 
@@ -60,7 +60,7 @@ class ModelingDbtCompilerTest {
 
     @Test
     void compilesOrdinaryImplementationThroughADeterministicEphemeralStg() {
-        ModelingVNextContract.ModelSpec model = PjmModelingFixture.projectNode().modelSpec();
+        ModelingCompilerContract.CompilerModel model = PjmModelingFixture.projectNode().compilerModel();
         ModelSpecCompilerProjection.ImplementationProjection implementation = new ModelSpecCompilerProjection.ImplementationProjection(
             model,
             "tenant-a",
@@ -113,8 +113,8 @@ class ModelingDbtCompilerTest {
 
     @Test
     void rejectsUntrustedOrUnsupportedFieldTypeSyntax() {
-        ModelingVNextContract.ModelSpec model =
-            PjmModelingFixture.projectNode().modelSpec();
+        ModelingCompilerContract.CompilerModel model =
+            PjmModelingFixture.projectNode().compilerModel();
         ModelSpecCompilerProjection.ImplementationProjection implementation =
             new ModelSpecCompilerProjection.ImplementationProjection(
                 model,
@@ -164,8 +164,8 @@ class ModelingDbtCompilerTest {
 
     @Test
     void rejectsIncompleteFieldTypeCoverage() {
-        ModelingVNextContract.ModelSpec model =
-            PjmModelingFixture.projectNode().modelSpec();
+        ModelingCompilerContract.CompilerModel model =
+            PjmModelingFixture.projectNode().compilerModel();
         ModelSpecCompilerProjection.ImplementationProjection implementation =
             new ModelSpecCompilerProjection.ImplementationProjection(
                 model,
@@ -215,23 +215,18 @@ class ModelingDbtCompilerTest {
 
     @Test
     void compilesTheRealUiSettingsThroughTheCanonicalExecutionPlan() {
-        ModelingVNextContract.ModelSpec model = new ModelingVNextContract.ModelSpec(
+        ModelingCompilerContract.CompilerModel model = new ModelingCompilerContract.CompilerModel(
             "finance-detail",
-            null,
-            null,
-            ModelingVNextContract.Layer.DWD,
-            ModelingVNextContract.ModelType.FACT,
-            ModelingVNextContract.ImplementationMode.DESIGNER_GENERATED,
+            ModelingCompilerContract.Layer.DWD,
+            ModelingCompilerContract.ModelType.FACT,
+            ModelingCompilerContract.ImplementationMode.DESIGNER_GENERATED,
             "finance_detail",
-            new ModelingVNextContract.Grain("one row per finance event", List.of("project_no")),
+            new ModelingCompilerContract.Grain("one row per finance event", List.of("project_no")),
             List.of(),
-            List.of(new ModelingVNextContract.SourceRef("TABLE", "ods.finance_event", ModelingVNextContract.Layer.ODS)),
+            List.of(new ModelingCompilerContract.SourceRef("TABLE", "ods.finance_event", ModelingCompilerContract.Layer.ODS)),
             List.of("project_no"),
             List.of(),
-            "table",
-            1,
-            List.of(),
-            null
+            1
         );
         ModelSpecCompilerProjection.ImplementationProjection implementation = new ModelSpecCompilerProjection.ImplementationProjection(
             model,
@@ -265,7 +260,7 @@ class ModelingDbtCompilerTest {
 
     @Test
     void compilesFullViewWithoutInventingAnIncrementalKey() {
-        ModelingVNextContract.ModelSpec model = PjmModelingFixture.projectNode().modelSpec();
+        ModelingCompilerContract.CompilerModel model = PjmModelingFixture.projectNode().compilerModel();
         ModelSpecCompilerProjection.ImplementationProjection implementation =
             new ModelSpecCompilerProjection.ImplementationProjection(
                 model,
@@ -296,24 +291,19 @@ class ModelingDbtCompilerTest {
 
     @Test
     void projectsPinnedUpstreamModelsAsDbtRefsInTheOrdinaryStgNode() {
-        ModelingVNextContract.ModelSpec base = PjmModelingFixture.projectNode().modelSpec();
-        ModelingVNextContract.ModelSpec derived = new ModelingVNextContract.ModelSpec(
+        ModelingCompilerContract.CompilerModel base = PjmModelingFixture.projectNode().compilerModel();
+        ModelingCompilerContract.CompilerModel derived = new ModelingCompilerContract.CompilerModel(
             base.id(),
-            base.objectId(),
-            base.processId(),
             base.layer(),
             base.modelType(),
             base.implementationMode(),
             base.name(),
             base.grain(),
             base.standardBindings(),
-            List.of(new ModelingVNextContract.SourceRef("DBT_MODEL", "upstream_finance_node", ModelingVNextContract.Layer.DWD)),
+            List.of(new ModelingCompilerContract.SourceRef("DBT_MODEL", "upstream_finance_node", ModelingCompilerContract.Layer.DWD)),
             base.dimensions(),
             base.metrics(),
-            base.materialization(),
-            base.revision(),
-            base.dependsOn(),
-            base.legacyRef()
+            base.revision()
         );
         ModelSpecCompilerProjection.ImplementationProjection implementation =
             new ModelSpecCompilerProjection.ImplementationProjection(
@@ -342,24 +332,19 @@ class ModelingDbtCompilerTest {
 
     @Test
     void generatedImplementationDoesNotRequireAPhysicalSource() {
-        ModelingVNextContract.ModelSpec base = PjmModelingFixture.projectNode().modelSpec();
-        ModelingVNextContract.ModelSpec generated = new ModelingVNextContract.ModelSpec(
+        ModelingCompilerContract.CompilerModel base = PjmModelingFixture.projectNode().compilerModel();
+        ModelingCompilerContract.CompilerModel generated = new ModelingCompilerContract.CompilerModel(
             base.id(),
-            base.objectId(),
-            base.processId(),
             base.layer(),
-            ModelingVNextContract.ModelType.DIMENSION,
-            ModelingVNextContract.ImplementationMode.DESIGNER_GENERATED,
+            ModelingCompilerContract.ModelType.DIMENSION,
+            ModelingCompilerContract.ImplementationMode.DESIGNER_GENERATED,
             "calendar_day",
             base.grain(),
             base.standardBindings(),
             List.of(),
             base.dimensions(),
             base.metrics(),
-            "table",
-            base.revision(),
-            List.of(),
-            null
+            base.revision()
         );
 
         ModelingDbtCompiler.CompiledArtifacts artifacts = ModelingDbtCompiler.compile(new ModelSpecCompilerProjection.ImplementationProjection(
@@ -386,11 +371,9 @@ class ModelingDbtCompilerTest {
 
     @Test
     void usesThePinnedTechnicalNodeNameInsteadOfTheBusinessDisplayName() {
-        ModelingVNextContract.ModelSpec base = PjmModelingFixture.projectNode().modelSpec();
-        ModelingVNextContract.ModelSpec localized = new ModelingVNextContract.ModelSpec(
+        ModelingCompilerContract.CompilerModel base = PjmModelingFixture.projectNode().compilerModel();
+        ModelingCompilerContract.CompilerModel localized = new ModelingCompilerContract.CompilerModel(
             base.id(),
-            base.objectId(),
-            base.processId(),
             base.layer(),
             base.modelType(),
             base.implementationMode(),
@@ -400,10 +383,7 @@ class ModelingDbtCompilerTest {
             base.sourceRefs(),
             base.dimensions(),
             base.metrics(),
-            base.materialization(),
-            base.revision(),
-            base.dependsOn(),
-            base.legacyRef()
+            base.revision()
         );
 
         ModelingDbtCompiler.CompiledArtifacts artifacts = ModelingDbtCompiler.compile(new ModelSpecCompilerProjection.ImplementationProjection(
@@ -432,26 +412,21 @@ class ModelingDbtCompilerTest {
 
     @Test
     void compilesControlledMultiInputJoinsWithStableSystemAliases() {
-        ModelingVNextContract.ModelSpec model = new ModelingVNextContract.ModelSpec(
+        ModelingCompilerContract.CompilerModel model = new ModelingCompilerContract.CompilerModel(
             "model-id",
-            null,
-            null,
-            ModelingVNextContract.Layer.DWD,
-            ModelingVNextContract.ModelType.FACT,
-            ModelingVNextContract.ImplementationMode.DESIGNER_GENERATED,
+            ModelingCompilerContract.Layer.DWD,
+            ModelingCompilerContract.ModelType.FACT,
+            ModelingCompilerContract.ImplementationMode.DESIGNER_GENERATED,
             "客户事实",
-            new ModelingVNextContract.Grain("one row per customer", List.of("customer_id")),
+            new ModelingCompilerContract.Grain("one row per customer", List.of("customer_id")),
             List.of(),
             List.of(
-                new ModelingVNextContract.SourceRef("TABLE", "ods.customer", ModelingVNextContract.Layer.ODS),
-                new ModelingVNextContract.SourceRef("TABLE", "ods.customer_status", ModelingVNextContract.Layer.ODS)
+                new ModelingCompilerContract.SourceRef("TABLE", "ods.customer", ModelingCompilerContract.Layer.ODS),
+                new ModelingCompilerContract.SourceRef("TABLE", "ods.customer_status", ModelingCompilerContract.Layer.ODS)
             ),
             List.of("customer_id"),
             List.of(),
-            "table",
-            1,
-            List.of(),
-            null
+            1
         );
         ModelSpecCompilerProjection.ImplementationProjection projection = new ModelSpecCompilerProjection.ImplementationProjection(
             model,
@@ -487,7 +462,7 @@ class ModelingDbtCompilerTest {
 
     @Test
     void rejectsFreeSqlSettingsEvenWhenAProjectionBypassesTheHttpDecoder() {
-        ModelingVNextContract.ModelSpec model = PjmModelingFixture.projectNode().modelSpec();
+        ModelingCompilerContract.CompilerModel model = PjmModelingFixture.projectNode().compilerModel();
         ModelSpecCompilerProjection.ImplementationProjection projection = new ModelSpecCompilerProjection.ImplementationProjection(
             model,
             "tenant-a",
@@ -509,7 +484,7 @@ class ModelingDbtCompilerTest {
     }
 
     private static List<ModelSpecCompilerProjection.CompilerField> typedFields(
-        ModelingVNextContract.ModelSpec model
+        ModelingCompilerContract.CompilerModel model
     ) {
         java.util.LinkedHashSet<String> names =
             new java.util.LinkedHashSet<>();
@@ -522,7 +497,7 @@ class ModelingDbtCompilerTest {
                 .stream()
                 .filter(java.util.Objects::nonNull)
                 .map(
-                    ModelingVNextContract.StandardBinding::fieldName
+                    ModelingCompilerContract.StandardBinding::fieldName
                 )
                 .forEach(names::add);
         }

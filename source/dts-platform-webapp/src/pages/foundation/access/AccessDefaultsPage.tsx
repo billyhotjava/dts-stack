@@ -21,7 +21,7 @@ const SENSITIVE_KEY =
 const SENSITIVE_VALUE_PAIR =
 	/([?&;]\s*[a-z0-9_.-]*(?:pass(?:word|wd)?|secret|token|authorization|credential|api[-_]?key|access[-_]?key|private[-_]?key)[a-z0-9_.-]*=)[^&#;\s]*/gi;
 const SENSITIVE_INLINE_PAIR =
-	/(\b[a-z0-9_.-]*(?:pass(?:word|wd)?|secret|token|authorization|credential|api[-_]?key|access[-_]?key|private[-_]?key)[a-z0-9_.-]*\s*[:=]\s*)(?:(?:Bearer|Basic)\s+)?[^,;\s]+/gi;
+	/(\b[a-z0-9_.-]*(?:pass(?:word|wd)?|secret|token|authorization|credential|api[-_]?key|access[-_]?key|private[-_]?key)[a-z0-9_.-]*\s*[:=]\s*)(?:(?:Bearer|Basic)\s+)?[^,;&#\s]+/gi;
 
 const redactSensitiveString = (value: string) => {
 	if (/^(?:Bearer|Basic)\s+\S+/i.test(value.trim())) return HIDDEN_VALUE;

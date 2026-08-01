@@ -22,7 +22,7 @@ import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogClassificationPropagationJobService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract;
-import com.yuzhi.dts.platform.service.modeling.ModelSpecCompatibilityReader;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecReader;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -69,7 +69,7 @@ class DbtAssetSyncServiceTest {
     private ModelLifecycleRepository lifecycleRepository;
 
     @Mock
-    private ModelSpecCompatibilityReader modelSpecReader;
+    private ModelSpecReader modelSpecReader;
 
     @Mock
     private AuditService auditService;

@@ -2,6 +2,7 @@ package com.yuzhi.dts.platform.service.modeling;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationBuildRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationBuildRepository.CandidateBuildEntry;
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationBuildRepository.CandidateBuildScope;
@@ -10,7 +11,10 @@ import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationRunReposit
 import com.yuzhi.dts.platform.repository.modeling.PhysicalRelationObservationRepository;
 import com.yuzhi.dts.platform.repository.modeling.PhysicalRelationObservationRepository.ObservationWrite;
 import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService;
+import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus;
+import com.yuzhi.dts.platform.service.modeling.ModelMaterializationSourceAvailabilityGuard.GenerationCheck;
+import com.yuzhi.dts.platform.service.modeling.ModelMaterializationSourceAvailabilityGuard.GenerationDrift;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.TransitionCommand;
 import com.yuzhi.dts.platform.service.modeling.PhysicalRelationInspector.ExpectedRelationType;
 import com.yuzhi.dts.platform.service.modeling.PhysicalRelationInspector.PhysicalColumn;
@@ -56,10 +60,12 @@ public class ModelMaterializationRunArtifactService {
 
     private final ModelMaterializationRunRepository runs;
     private final ModelMaterializationBuildRepository builds;
+    private final ModelMaterializationSourceAvailabilityGuard sourceAvailability;
     private final DbtScopedProjectService scopedProjects;
     private final PhysicalRelationInspectorRegistry inspectors;
     private final PhysicalRelationObservationRepository observations;
     private final ModelReleaseCandidateService candidates;
+    private final AuditService auditService;
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final TransactionOperations transactions;
@@ -68,20 +74,24 @@ public class ModelMaterializationRunArtifactService {
     public ModelMaterializationRunArtifactService(
         ModelMaterializationRunRepository runs,
         ModelMaterializationBuildRepository builds,
+        ModelMaterializationSourceAvailabilityGuard sourceAvailability,
         DbtScopedProjectService scopedProjects,
         PhysicalRelationInspectorRegistry inspectors,
         PhysicalRelationObservationRepository observations,
         ModelReleaseCandidateService candidates,
+        AuditService auditService,
         ObjectMapper objectMapper,
         PlatformTransactionManager transactionManager
     ) {
         this(
             runs,
             builds,
+            sourceAvailability,
             scopedProjects,
             inspectors,
             observations,
             candidates,
+            auditService,
             objectMapper,
             Clock.systemUTC(),
             new TransactionTemplate(transactionManager)
@@ -91,10 +101,12 @@ public class ModelMaterializationRunArtifactService {
     ModelMaterializationRunArtifactService(
         ModelMaterializationRunRepository runs,
         ModelMaterializationBuildRepository builds,
+        ModelMaterializationSourceAvailabilityGuard sourceAvailability,
         DbtScopedProjectService scopedProjects,
         PhysicalRelationInspectorRegistry inspectors,
         PhysicalRelationObservationRepository observations,
         ModelReleaseCandidateService candidates,
+        AuditService auditService,
         ObjectMapper objectMapper,
         Clock clock,
         TransactionOperations transactions
@@ -103,6 +115,10 @@ public class ModelMaterializationRunArtifactService {
         this.builds = Objects.requireNonNull(
             builds,
             "builds is required"
+        );
+        this.sourceAvailability = Objects.requireNonNull(
+            sourceAvailability,
+            "sourceAvailability is required"
         );
         this.scopedProjects = Objects.requireNonNull(
             scopedProjects,
@@ -119,6 +135,10 @@ public class ModelMaterializationRunArtifactService {
         this.candidates = Objects.requireNonNull(
             candidates,
             "candidates is required"
+        );
+        this.auditService = Objects.requireNonNull(
+            auditService,
+            "auditService is required"
         );
         this.objectMapper = Objects.requireNonNull(
             objectMapper,
@@ -142,6 +162,7 @@ public class ModelMaterializationRunArtifactService {
             );
         }
         RunGroupRecord group = requireGroup(groupId);
+        rejectPersistedAvailabilityStale(group);
         boolean terminalStatePersisted = false;
         try {
             requireSyncIdentity(group, command);
@@ -179,7 +200,12 @@ public class ModelMaterializationRunArtifactService {
                     locators,
                     now
                 );
-            transactions.executeWithoutResult(status -> {
+            boolean artifactBoundaryCurrent = Boolean.TRUE.equals(transactions.execute(status -> {
+                GenerationCheck generation = sourceAvailability.checkPinnedCurrentForUpdate(groupId);
+                if (!generation.current()) {
+                    persistAvailabilityStale(group, generation, "ARTIFACT_SYNC", now);
+                    return false;
+                }
                 runs.markDbtSucceeded(
                     groupId,
                     invocationId,
@@ -187,7 +213,23 @@ public class ModelMaterializationRunArtifactService {
                     now
                 );
                 observations.appendAll(evidence);
-            });
+                auditRun(
+                    group,
+                    "artifacts-synced:" + invocationId,
+                    "MODEL_MATERIALIZATION_ARTIFACTS_SYNCED",
+                    AuditStage.SUCCESS,
+                    "ARTIFACTS_SYNCED",
+                    invocationId,
+                    scope.entries().size(),
+                    null,
+                    now
+                );
+                return true;
+            }));
+            if (!artifactBoundaryCurrent) {
+                terminalStatePersisted = true;
+                throw staleFailure();
+            }
             ObservationWrite failed = evidence
                 .stream()
                 .filter(observation ->
@@ -201,7 +243,12 @@ public class ModelMaterializationRunArtifactService {
                     "Physical relation verification failed"
                 );
             }
-            transactions.executeWithoutResult(status -> {
+            boolean relationBoundaryCurrent = Boolean.TRUE.equals(transactions.execute(status -> {
+                GenerationCheck generation = sourceAvailability.checkPinnedCurrentForUpdate(groupId);
+                if (!generation.current()) {
+                    persistAvailabilityStale(group, generation, "RELATION_PUBLICATION", now);
+                    return false;
+                }
                 runs.markRelationsVerified(
                     groupId,
                     scope.entries().size(),
@@ -213,7 +260,23 @@ public class ModelMaterializationRunArtifactService {
                     "materialization-built-" + groupId,
                     "dbt build and physical relation evidence verified"
                 );
-            });
+                auditRun(
+                    group,
+                    "relations-verified:" + invocationId,
+                    "MODEL_MATERIALIZATION_RELATIONS_VERIFIED",
+                    AuditStage.SUCCESS,
+                    "BUILT",
+                    invocationId,
+                    scope.entries().size(),
+                    null,
+                    now
+                );
+                return true;
+            }));
+            if (!relationBoundaryCurrent) {
+                terminalStatePersisted = true;
+                throw staleFailure();
+            }
             terminalStatePersisted = true;
             return new RunArtifactView(
                 groupId,
@@ -221,22 +284,36 @@ public class ModelMaterializationRunArtifactService {
                 invocationId,
                 scope.entries().size()
             );
+        } catch (MachineAuditPersistenceException failure) {
+            throw failure;
         } catch (RuntimeException failure) {
             ModelMaterializationRuntimeException stable =
                 stableFailure(failure);
             if (!terminalStatePersisted) {
                 try {
+                    Instant failedAt = clock.instant();
                     transactions.executeWithoutResult(status -> {
                         runs.markFailed(
                             groupId,
                             stable.code(),
-                            clock.instant()
+                            failedAt
                         );
                         transitionCandidate(
                             group,
                             DeliveryStatus.BUILD_FAILED,
                             "materialization-failed-" + groupId,
                             stable.code()
+                        );
+                        auditRun(
+                            group,
+                            "failed:" + stable.code(),
+                            "MODEL_MATERIALIZATION_RUN_FAILED",
+                            AuditStage.FAIL,
+                            "FAILED",
+                            null,
+                            null,
+                            stable.code(),
+                            failedAt
                         );
                     });
                 } catch (RuntimeException failurePersistence) {
@@ -258,6 +335,7 @@ public class ModelMaterializationRunArtifactService {
             );
         }
         RunGroupRecord group = requireGroup(groupId);
+        rejectPersistedAvailabilityStale(group);
         String outcome = required(
             command.outcome(),
             "outcome"
@@ -266,7 +344,37 @@ public class ModelMaterializationRunArtifactService {
         int modelCount;
         if ("SUCCEEDED".equals(outcome)) {
             try {
-                modelCount = runs.finalizeSucceeded(groupId, now);
+                SuccessBoundary success = transactions.execute(status -> {
+                    GenerationCheck generation = sourceAvailability.checkPinnedCurrentForUpdate(groupId);
+                    if (!generation.current()) {
+                        persistAvailabilityStale(group, generation, "AIRFLOW_FINALIZE", now);
+                        return new SuccessBoundary(false, 0);
+                    }
+                    int finalized = runs.finalizeSucceeded(
+                        groupId,
+                        now
+                    );
+                    auditRun(
+                        group,
+                        "finalized:succeeded",
+                        "MODEL_MATERIALIZATION_RUN_FINALIZED",
+                        AuditStage.SUCCESS,
+                        "BUILT",
+                        null,
+                        finalized,
+                        null,
+                        now
+                    );
+                    return new SuccessBoundary(true, finalized);
+                });
+                if (success == null || !success.current()) {
+                    throw staleFailure();
+                }
+                modelCount = success.modelCount();
+            } catch (MachineAuditPersistenceException failure) {
+                throw failure;
+            } catch (ModelMaterializationRuntimeException stable) {
+                throw stable;
             } catch (RuntimeException inconsistent) {
                 throw failure(
                     "MODEL_DBT_FINALIZE_PRECONDITION_FAILED",
@@ -280,20 +388,31 @@ public class ModelMaterializationRunArtifactService {
                     "MODEL_DBT_AIRFLOW_UPSTREAM_FAILED",
                     now
                 );
+                if (failed < 1) {
+                    throw failure(
+                        "MODEL_DBT_FINALIZE_PRECONDITION_FAILED",
+                        "Run group cannot be finalized as failed"
+                    );
+                }
                 transitionCandidate(
                     group,
                     DeliveryStatus.BUILD_FAILED,
                     "materialization-failed-" + groupId,
                     "MODEL_DBT_AIRFLOW_UPSTREAM_FAILED"
                 );
+                auditRun(
+                    group,
+                    "finalized:failed",
+                    "MODEL_MATERIALIZATION_RUN_FAILED",
+                    AuditStage.FAIL,
+                    "FAILED",
+                    null,
+                    failed,
+                    "MODEL_DBT_AIRFLOW_UPSTREAM_FAILED",
+                    now
+                );
                 return failed;
             });
-            if (modelCount < 1) {
-                throw failure(
-                    "MODEL_DBT_FINALIZE_PRECONDITION_FAILED",
-                    "Run group cannot be finalized as failed"
-                );
-            }
         } else {
             throw failure(
                 "MODEL_DBT_RUN_REQUEST_INVALID",
@@ -327,6 +446,97 @@ public class ModelMaterializationRunArtifactService {
                     "Materialization run group does not exist"
                 )
             );
+    }
+
+    private static void rejectPersistedAvailabilityStale(RunGroupRecord group) {
+        if (isAvailabilityStaleReason(group.lastErrorCode())) {
+            throw staleFailure();
+        }
+    }
+
+    private void persistAvailabilityStale(
+        RunGroupRecord group,
+        GenerationCheck generation,
+        String boundary,
+        Instant occurredAt
+    ) {
+        String reasonCode = generation.reasonCode() == null
+            ? ModelMaterializationSourceAvailabilityGuard.SOURCE_GENERATION_STALE
+            : generation.reasonCode();
+        boolean first = runs.markAvailabilityStale(group.groupId(), reasonCode, occurredAt);
+        if (!first) {
+            return;
+        }
+        if (!DeliveryStatus.STALE.name().equals(group.candidateCurrentStatus())) {
+            candidates.transition(
+                group.tenantId(),
+                "service:dts-airflow",
+                group.candidateId(),
+                new TransitionCommand(
+                    group.candidateCurrentVersion(),
+                    DeliveryStatus.STALE,
+                    "materialization-availability-stale-" + group.groupId(),
+                    reasonCode
+                )
+            );
+        }
+        auditAvailabilityStale(group, generation, boundary, reasonCode, occurredAt);
+    }
+
+    private void auditAvailabilityStale(
+        RunGroupRecord group,
+        GenerationCheck generation,
+        String boundary,
+        String reasonCode,
+        Instant occurredAt
+    ) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("tenant", group.tenantId());
+        payload.put("candidate", group.candidateId());
+        payload.put("version", group.candidateVersion());
+        payload.put("attempt", group.attempt());
+        payload.put("dispatch", group.groupId());
+        payload.put("status", "FAILED_STALE");
+        payload.put("boundary", boundary);
+        payload.put("reasonCode", reasonCode);
+        payload.put("driftCount", generation.drift().size());
+        payload.put(
+            "generations",
+            generation
+                .drift()
+                .stream()
+                .limit(100)
+                .map(ModelMaterializationRunArtifactService::safeGeneration)
+                .toList()
+        );
+        try {
+            auditService.auditActionAsStrict(
+                "airflow",
+                "model-materialization-run:" + group.groupId() + ":availability-stale",
+                occurredAt,
+                "MODEL_MATERIALIZATION_RUN_FAILED",
+                AuditStage.FAIL,
+                group.groupId().toString(),
+                Map.copyOf(payload)
+            );
+        } catch (RuntimeException failure) {
+            throw new MachineAuditPersistenceException(failure);
+        }
+    }
+
+    private static Map<String, Object> safeGeneration(GenerationDrift drift) {
+        Map<String, Object> generation = new LinkedHashMap<>();
+        if (drift.sourceBindingId() != null) generation.put("sourceBindingId", drift.sourceBindingId());
+        if (drift.assetType() != null) generation.put("assetType", drift.assetType());
+        generation.put("pinnedEpoch", drift.pinnedEpoch());
+        generation.put("pinnedSourceSequence", drift.pinnedSourceSequence());
+        if (drift.pinnedEventId() != null) generation.put("pinnedEventId", drift.pinnedEventId());
+        if (drift.currentStatus() != null) generation.put("currentStatus", drift.currentStatus());
+        generation.put("currentEpoch", drift.currentEpoch());
+        generation.put("currentSourceSequence", drift.currentSourceSequence());
+        if (drift.currentEventId() != null) generation.put("currentEventId", drift.currentEventId());
+        generation.put("reasonCode", drift.reasonCode());
+        return Map.copyOf(generation);
     }
 
     private static void requireSyncIdentity(
@@ -845,13 +1055,48 @@ public class ModelMaterializationRunArtifactService {
             group.tenantId(),
             "service:dts-airflow",
             group.candidateId(),
-            new TransitionCommand(
-                group.candidateVersion(),
+                new TransitionCommand(
+                group.candidateCurrentVersion(),
                 target,
                 idempotencyKey,
                 reason
             )
         );
+    }
+
+    private void auditRun(
+        RunGroupRecord group,
+        String eventSuffix,
+        String actionCode,
+        AuditStage stage,
+        String outcome,
+        UUID invocationId,
+        Integer modelCount,
+        String errorCode,
+        Instant occurredAt
+    ) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("tenant", group.tenantId());
+        payload.put("candidate", group.candidateId());
+        payload.put("version", group.candidateVersion());
+        payload.put("runGroup", group.groupId());
+        payload.put("outcome", outcome);
+        if (invocationId != null) payload.put("invocation", invocationId);
+        if (modelCount != null) payload.put("modelCount", modelCount);
+        if (errorCode != null) payload.put("errorCode", errorCode);
+        try {
+            auditService.auditActionAs(
+                "airflow",
+                "model-materialization-run:" + group.groupId() + ":" + eventSuffix,
+                occurredAt,
+                actionCode,
+                stage,
+                group.groupId().toString(),
+                payload
+            );
+        } catch (RuntimeException failure) {
+            throw new MachineAuditPersistenceException(failure);
+        }
     }
 
     private static void validateRunResults(
@@ -942,6 +1187,19 @@ public class ModelMaterializationRunArtifactService {
         return new ModelMaterializationRuntimeException(code, message);
     }
 
+    private static ModelMaterializationRuntimeException staleFailure() {
+        return failure(
+            ModelMaterializationSourceAvailabilityGuard.SOURCE_GENERATION_STALE,
+            "Materialization runtime source generation is stale"
+        );
+    }
+
+    private static boolean isAvailabilityStaleReason(String reasonCode) {
+        return ModelMaterializationSourceAvailabilityGuard.SOURCE_GENERATION_STALE.equals(reasonCode) ||
+        ModelMaterializationSourceAvailabilityGuard.SOURCE_PIN_MISSING.equals(reasonCode) ||
+        ModelMaterializationSourceAvailabilityGuard.SOURCE_UNAVAILABLE.equals(reasonCode);
+    }
+
     private static String digest(List<String> values) {
         MessageDigest digest;
         try {
@@ -974,4 +1232,14 @@ public class ModelMaterializationRunArtifactService {
         UUID dbtInvocationId,
         int modelCount
     ) {}
+
+    private record SuccessBoundary(boolean current, int modelCount) {}
+
+    private static final class MachineAuditPersistenceException
+        extends RuntimeException {
+
+        private MachineAuditPersistenceException(RuntimeException cause) {
+            super("Machine audit persistence failed", cause);
+        }
+    }
 }

@@ -2,6 +2,8 @@ import { lazy } from "react";
 
 const Pages = import.meta.glob([
 	"/src/pages/**/*.tsx",
+	"!/src/pages/**/*.test.tsx",
+	"!/src/pages/**/*.spec.tsx",
 	"!/src/pages/sys/**/*.tsx",
 	"!/src/pages/metrics/**/*.tsx",
 ]);

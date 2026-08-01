@@ -55,7 +55,6 @@ class CatalogAssetTagPermissionIdentityResolverIT {
     private final UUID sourceId = uuid(2);
     private final UUID biDatasetId = uuid(3);
     private final UUID semanticModelId = uuid(4);
-    private final UUID modelingPlanId = uuid(5);
     private final UUID metadataStandardId = uuid(6);
     private final UUID backfillRequestId = uuid(7);
 
@@ -94,13 +93,8 @@ class CatalogAssetTagPermissionIdentityResolverIT {
         );
         insertExternalIdentity("METRIC", metricKey, "metric-revenue");
         insertExternalIdentity("METRIC_PACK", metricPackKey, "core-v1");
-        insertUuidOnly("semantic_model", semanticModelId);
+        insertUuidOnly("modeling_model_spec", semanticModelId);
         insertUuidCode("catalog_data_product", uuid(13), "orders-product");
-        jdbcTemplate.update(
-            "insert into modeling_sql_model (id, name) values (?, 'dws_orders')",
-            uuid(14)
-        );
-        insertUuidOnly("modeling_plan", modelingPlanId);
         insertUuidCode("data_standard", uuid(15), "std-customer-id");
         insertUuidOnly("metadata_standard", metadataStandardId);
         insertUuidCode("modeling_glossary_term", uuid(16), "customer");
@@ -203,15 +197,6 @@ class CatalogAssetTagPermissionIdentityResolverIT {
             codeRef(CatalogAssetType.DATA_PRODUCT, "orders-product")
         );
         requests.add(
-            codeRef(CatalogAssetType.MODELING_SQL_MODEL, "dws_orders")
-        );
-        requests.add(
-            codeRef(
-                CatalogAssetType.MODELING_PLAN,
-                modelingPlanId.toString()
-            )
-        );
-        requests.add(
             codeRef(CatalogAssetType.DATA_STANDARD, "std-customer-id")
         );
         requests.add(
@@ -291,10 +276,8 @@ class CatalogAssetTagPermissionIdentityResolverIT {
                 active boolean not null
             )
             """,
-            "create table semantic_model (id uuid primary key)",
+            "create table modeling_model_spec (id uuid primary key)",
             "create table catalog_data_product (id uuid primary key, code varchar(128) not null)",
-            "create table modeling_sql_model (id uuid primary key, name varchar(128) not null)",
-            "create table modeling_plan (id uuid primary key)",
             "create table data_standard (id uuid primary key, code varchar(128) not null)",
             "create table metadata_standard (id uuid primary key)",
             "create table modeling_glossary_term (id uuid primary key, code varchar(128) not null)",

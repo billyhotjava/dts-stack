@@ -17,9 +17,14 @@ public interface IngestionTaskRevisionRepository extends JpaRepository<Ingestion
 
     Optional<IngestionTaskRevision> findFirstByTaskIdOrderByRevisionNumberDesc(Long taskId);
 
+    @Query("select r.task.id from IngestionTaskRevision r where r.id = :revisionId")
+    Optional<Long> findTaskIdById(@Param("revisionId") Long revisionId);
+
     List<IngestionTaskRevision> findAllByTaskIdOrderByRevisionNumberDesc(Long taskId);
 
     List<IngestionTaskRevision> findAllByTaskIdInOrderByTaskIdAscRevisionNumberDesc(Collection<Long> taskIds);
+
+    List<IngestionTaskRevision> findTop50ByDagDeploymentStatusInOrderByDagDeploymentUpdatedAtAsc(Collection<String> statuses);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select r from IngestionTaskRevision r where r.task.id = :taskId order by r.revisionNumber desc")

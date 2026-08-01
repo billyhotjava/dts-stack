@@ -1761,22 +1761,65 @@
 ## Sprint-81: 数据建模后台重构与旧运行面物理退役 (202607)
 
 **目录**: `worklog/v2.2.3/sprint-81-202607-modeling-backend-rearchitecture`
-**状态**: PLANNED（架构与退役边界已冻结；F0 只读基线核验 IN_PROGRESS，尚未开始编码）
+**状态**: IMPLEMENTED_SOURCE_VERIFIED（后台编码、物理退役、迁移契约和隔离 PostgreSQL 控制面 E2E 已完成；共享环境部署与客户环境画像/备份门禁待单独执行）
 **类型**: Backend Architecture / Modular Monolith / Data Migration / Controlled Retirement
 **目标**: 把 `dts-platform` 收敛为一套模块化建模控制面，使 Sprint-80 新前端只经 WarehousePlan→ModelSpec v2/revision→StageGate→Lifecycle→ReleaseCandidate→Materialization→DbtExecutionGateway→Airflow/dbt 完成真实后台旅程，并在同一 Sprint 重接、迁移后物理删除旧运行面。
 **依赖**: 复用 `CatalogAssetType/CatalogAssetKey`、`gov_rule/gov_rule_version/gov_rule_binding/gov_quality_run`、公共 `AuditService`、Sprint-69/76 ReleaseCandidate/物化/Airflow/dbt 主链；中央审计历史和历史 Liquibase changelog 永久保留。
 
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
-| F0-基线与退役门禁 | P0 | 3 | IN_PROGRESS |
-| F1-模块化控制面边界 | P0 | 3 | PLANNED |
-| F2-唯一建模状态链 | P0 | 3 | PLANNED |
-| F3-跨域证据与耐久消息 | P0 | 4 | PLANNED |
-| F4-dbt执行网关与调度 | P0 | 3 | PLANNED |
-| F5-精确迁移与物理退役 | P0 | 4 | PLANNED |
-| F6-集成验收与发布门禁 | P0 | 3 | PLANNED |
+| F0-基线与退役门禁 | P0 | 3 | SOURCE_COMPLETE / CUSTOMER_GATE |
+| F1-模块化控制面边界 | P0 | 3 | COMPLETE |
+| F2-唯一建模状态链 | P0 | 3 | COMPLETE |
+| F3-跨域证据与耐久消息 | P0 | 4 | COMPLETE |
+| F4-dbt执行网关与调度 | P0 | 3 | COMPLETE |
+| F5-精确迁移与物理退役 | P0 | 4 | SOURCE_COMPLETE / CUSTOMER_GATE |
+| F6-集成验收与发布门禁 | P0 | 3 | CONTROL_PLANE_PASS / DEPLOY_PENDING |
 
-**统计**: PLANNED=22, IN_PROGRESS=1, DONE=0, BLOCKED=0；共 23 个 Task。
+**统计**: COMPLETE=13，SOURCE_COMPLETE/CUSTOMER_GATE=7，CONTROL_PLANE_PASS/DEPLOY_PENDING=3；共 23 个 Task。
 **执行顺序**: F0 → F1 → F2/F3 → F4 → F5 → F6；F5 每个批次在同 Sprint 内完成调用方重接、精确迁移/备份、停机复核和物理删除；最终 E2E 只在全部编码结束后集中执行。
 **关键决策**: dts-platform 模块化单体；跨域单向 `integration→catalog identity→quality evidence→modeling`；事件 outbox 与 audit outbox 分表，审计耐久投递 dts-admin；立即退役 semantic/old plan/vNext HTTP 面，SQL model/business object/vNext service/old dbt run 先解耦后删；不保留长期 410/tombstone。
 **已知风险**: 当前环境 legacy/run/candidate/materialization 数据为 0，但客户环境未知；质量模板 10、运行数据 0；任何客户 DROP 必须经过环境级画像、备份恢复和“零数据或已迁移”停机门禁。
+
+## Sprint-82: 数据资产地图与治理台账工作台重构 (202608)
+
+**目录**: worklog/v2.2.3/sprint-82-202608-data-asset-workbench-rearchitecture
+**状态**: DONE（19/19 Task 完成；代码与 mock-API UI E2E 通过，真实联动待部署补证）
+**类型**: Product Architecture / Frontend Refactoring / Governance Workflow
+**目标**: 将资产地图收敛为概要分布和筛选下钻，将资产台账收敛为具体资产检索、标签和治理的唯一入口；台账每行只保留“治理资产”，通过单资产治理工作台完成任务引导并保持完整资产档案可达。
+**依赖**: 复用 CatalogAssetType + CatalogAssetKey、现有 Catalog 查询、标签 CRUD/检索/能力校验/绑定接口、分类分级与生命周期、质量、血缘、权限和公共审计 owner；不新增重复控制面。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F1-地图与台账职责收敛 | P0 | 4 | DONE |
+| F2-单资产治理工作台 | P0 | 5 | DONE |
+| F3-标签与资产关联闭环 | P0 | 5 | DONE |
+| F4-契约与交付验证 | P0 | 5 | DONE |
+
+**统计**: PLANNED=0, IN_PROGRESS=0, DONE=19, BLOCKED=0；共 19 个 Task。
+**执行顺序**: F1 → F2 → F3 → F4；编码期间只做必要 RED/GREEN 定向测试，F1～F3 全部编码完成后再统一执行类型检查、模块构建、Chrome 95 和核心 E2E。
+**关键决策**: 不新增菜单和第三个资产页面；地图不承载标签维护和治理写操作；标签迁入台账；旧标签 URL 兼容跳转；行操作收敛为一个治理入口；工作台只做任务导引，完整详情继续由资产档案承载；第一阶段复用现有后端 API。
+**已知风险**: 当前运行库没有标签及资产标签样本；资产身份缺失可能导致 404；标签权限只沿用现有 capability；最终不编译或重启容器，部署另行审批。
+
+## Sprint-83: dbt 双向可视化建模与外部项目接入 (202608)
+
+**目录**: `worklog/v2.2.3/sprint-83-202608-dbt-visual-roundtrip-modeling`
+**状态**: DRAFT（现状与架构 Review 已完成；产品决策、真实 dbt 包画像、G0 基线和契约尚未冻结，禁止编码）
+**类型**: Architecture / Product Design / dbt Integration / Full-stack
+**目标**: 让建模人员在同一 canonical 模型上下文中查看和维护业务模型、dbt SQL、表结构、依赖关系与物化结果，并把外部 dbt 项目通过可审计的预检、冲突处理和幂等应用导入为 ModelSpec DRAFT + DBT_MANAGED Implementation Revision，不产生第二套模型、解析、发布或运行控制面。
+**依赖**: 复用 Sprint-81 的 WarehousePlan→ModelSpec v2→StageGate→Lifecycle→ReleaseCandidate→Materialization→DbtExecutionGateway 主链；复用现有 dts.model-package/v1、ZIP inspector、preview/apply/retry、CatalogAssetKey、质量证据和公共审计 outbox。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---------|--------|---------|------|
+| F0-架构基线与产品决策冻结 | P0 | 4 | DRAFT |
+| F1-统一dbt快照与可视化投影 | P0 | 4 | DRAFT |
+| F2-高级建模SQL与可视化双视图 | P0 | 5 | DRAFT |
+| F3-外部dbt包逆向建模产品化 | P0 | 5 | DRAFT |
+| F4-发布物化与资产证据闭环 | P0 | 4 | DRAFT |
+| F5-安全审计与可运维收敛 | P0 | 4 | DRAFT |
+| F6-真实端到端验收与旧入口退役 | P0 | 4 | DRAFT |
+
+**统计**: DRAFT=30, READY=0, IN_PROGRESS=0, DONE=0, BLOCKED=0。
+**执行顺序**: F0 → F1 → F2/T01～T03 与 F3 → F4/T01～T03 → F2/T04～T05 与 F4/T04；F5 从 F1 起并行守卫，最后 F6。F0/T04 未通过前，任何实现 Task 不得转为 READY。
+**关键决策（提案）**: ModelSpec 拥有业务语义，Implementation Revision 拥有技术实现，运行 artifact/relation observation 拥有物理事实；DBT_MANAGED 为 SQL 权威、结构只读；P0 提供逻辑表结构、依赖图和物理表/样例数据，不承诺任意 SQL/Jinja 无损转可编辑画布；高级模式复用现有模型工作台；首期只支持 ZIP 快照，不接 Git/在线依赖，也不做 ZIP 导出和所有权转换。
+**已知风险**: 尚无客户脱敏 dbt 包，dbt Core/manifest/adapter 兼容范围不能宣称；现有逆向 UI 为硬编码数据库表原型；后台 import 主体已存在但正式审计、三方漂移、部分成功恢复 UX 和 parser 收敛仍有缺口；所有产品决策详见 `assets/decision-register.md`。

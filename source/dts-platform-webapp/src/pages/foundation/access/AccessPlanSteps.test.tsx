@@ -1,5 +1,6 @@
 import { Form } from "antd";
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { AccessPlanReviewStep } from "./AccessPlanReviewStep";
 import { ApiAccessStep } from "./ApiAccessStep";
@@ -30,7 +31,11 @@ function renderInForm(node: (form: ReturnType<typeof Form.useForm>[0]) => React.
 		const [form] = Form.useForm();
 		return <Form form={form}>{node(form)}</Form>;
 	}
-	return renderToStaticMarkup(<Harness />);
+	return renderToStaticMarkup(
+		<MemoryRouter>
+			<Harness />
+		</MemoryRouter>,
+	);
 }
 
 describe("access plan steps", () => {
@@ -121,6 +126,8 @@ describe("access plan steps", () => {
 
 		expect(html).toContain("平台默认湖");
 		expect(html).toContain("postgresqlwriter");
+		expect(html).toContain("接入计划先保存为待准入草稿");
+		expect(html).not.toContain("保存后立即运行");
 		expect(html).not.toContain("private-host");
 		expect(html).not.toContain("lake_admin");
 	});
@@ -153,6 +160,9 @@ describe("access plan steps", () => {
 
 		expect(html).toContain("订单 API");
 		expect(html).toContain("/orders");
+		expect(html).toContain("不会立即执行");
+		expect(html).toContain("保存草稿并等待密级准入");
+		expect(html).not.toContain("立即运行");
 		expect(html).not.toContain("审批");
 		expect(html).not.toContain("Revision");
 		expect(html).not.toContain("质量通过");

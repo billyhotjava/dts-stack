@@ -10,7 +10,7 @@ import type { InfraDataSource } from "@/api/services/dataSourcesService";
 import { loadTransformCreateBootstrap } from "../transformCreateBootstrap.helpers";
 import { ingestionTaskAPI } from "@/api/ingestion";
 import dataSourcesService from "@/api/services/dataSourcesService";
-import { listSqlModels } from "@/api/platformApi";
+import { listModelSpecs } from "@/api/modelSpecApi";
 
 // ---------------------------------------------------------------------------
 // State & Actions
@@ -59,6 +59,15 @@ const initialState: TransformBootstrapState = {
 	defaultDestinationStatus: null,
 	loadingDefaultDestination: false,
 	defaultDestinationError: "",
+};
+
+const loadCanonicalModelOptions = async () => {
+	const models = await listModelSpecs();
+	return models.flatMap((model) => {
+		const physicalName = model.implementationPolicy?.physicalName?.trim();
+		if (!physicalName || model.status === "ARCHIVED") return [];
+		return [{ id: model.id, name: physicalName, alias: model.name === physicalName ? undefined : model.name }];
+	});
 };
 
 function reducer(state: TransformBootstrapState, action: Action): TransformBootstrapState {
@@ -112,7 +121,7 @@ export function useTransformBootstrap(
 					loadConnectorCapabilities: () => ingestionTaskAPI.getConnectorCapabilities(),
 					loadTaskTemplates: () => ingestionTaskAPI.getTaskTemplates(),
 					loadDefaultDestinationStatus: () => ingestionTaskAPI.getDefaultDestinationStatus(),
-					loadSqlModels: () => listSqlModels() as Promise<Array<{ id?: string; name?: string; alias?: string }>>,
+					loadSqlModels: loadCanonicalModelOptions,
 				},
 				selectedTemplateId,
 			);

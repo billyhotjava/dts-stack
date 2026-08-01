@@ -21,10 +21,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import com.yuzhi.dts.platform.domain.governance.GovIndicatorDefinition;
-import com.yuzhi.dts.platform.repository.governance.GovIndicatorDefinitionRepository;
+import com.yuzhi.dts.platform.service.governance.GovernanceIndicatorEvidenceReadPort;
+import com.yuzhi.dts.platform.service.governance.GovernanceIndicatorEvidenceReadPort.EvidenceState;
+import com.yuzhi.dts.platform.service.governance.GovernanceIndicatorEvidenceReadPort.IndicatorEvidence;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,19 +33,17 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class WarehousePlanDownstreamEvidenceAdapter implements WarehousePlanDownstreamEvidencePort {
 
-    private static final Pattern INDICATOR_VERSION = Pattern.compile("(?i)^v?([1-9][0-9]*)$");
-
     private static final List<StageCode> RECORDED_STAGES = List.of(
         StageCode.DATA_ASSET,
         StageCode.DATA_SERVICE_OPERATIONS
     );
 
-    private final GovIndicatorDefinitionRepository indicators;
+    private final GovernanceIndicatorEvidenceReadPort indicators;
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
 
     public WarehousePlanDownstreamEvidenceAdapter(
-        GovIndicatorDefinitionRepository indicators,
+        GovernanceIndicatorEvidenceReadPort indicators,
         JdbcTemplate jdbcTemplate,
         ObjectMapper objectMapper
     ) {
@@ -98,14 +95,11 @@ public class WarehousePlanDownstreamEvidenceAdapter implements WarehousePlanDown
                 }
                 for (MetricRef reference : model.metricRefs()) {
                     UUID indicatorId = parseIndicatorId(reference);
-                    GovIndicatorDefinition indicator = indicatorId == null ? null : indicators.findById(indicatorId).orElse(null);
-                    Integer currentVersion = indicator == null ? null : parseIndicatorVersion(indicator.getVersion());
-                    if (
-                        indicator == null ||
-                        !"PUBLISHED".equalsIgnoreCase(indicator.getStatus()) ||
-                        currentVersion == null ||
-                        reference.version() != currentVersion
-                    ) {
+                    IndicatorEvidence indicator = indicators.read(indicatorId);
+                    if (indicator.state() == EvidenceState.UNKNOWN) {
+                        return unknown(StageCode.METRIC_SYSTEM, "METRIC_OWNER_EVIDENCE_UNAVAILABLE");
+                    }
+                    if (indicator.state() != EvidenceState.CURRENT || reference.version() != indicator.version()) {
                         return new StageEvidence(
                             StageCode.METRIC_SYSTEM,
                             StageStatus.BLOCKED,
@@ -131,17 +125,6 @@ public class WarehousePlanDownstreamEvidenceAdapter implements WarehousePlanDown
         try {
             return UUID.fromString(reference.metricId());
         } catch (IllegalArgumentException invalid) {
-            return null;
-        }
-    }
-
-    private static Integer parseIndicatorVersion(String value) {
-        if (value == null) return null;
-        Matcher matcher = INDICATOR_VERSION.matcher(value.trim());
-        if (!matcher.matches()) return null;
-        try {
-            return Integer.valueOf(matcher.group(1));
-        } catch (NumberFormatException invalid) {
             return null;
         }
     }

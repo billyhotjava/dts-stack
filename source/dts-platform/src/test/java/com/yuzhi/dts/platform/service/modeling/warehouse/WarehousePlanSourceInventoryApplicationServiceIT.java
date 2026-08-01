@@ -42,6 +42,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @IntegrationTest
@@ -72,7 +73,10 @@ class WarehousePlanSourceInventoryApplicationServiceIT {
     @BeforeEach
     void resolveOriginalOwners() {
         when(sourceReferenceResolver.resolve(eq(CATALOG_TABLE), any(SourceLocator.class), any(AccessContext.class)))
-            .thenReturn(ResolvedSource.available("Orders", "schema-v1"));
+            .thenAnswer(invocation -> {
+                assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+                return ResolvedSource.available("Orders", "schema-v1");
+            });
         when(catalogDomainResolutionPort.resolve(DOMAIN_ID)).thenReturn(
             new CatalogDomainResolutionPort.DomainResolution(
                 DOMAIN_ID,

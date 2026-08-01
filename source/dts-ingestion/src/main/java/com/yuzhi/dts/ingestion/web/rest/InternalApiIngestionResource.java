@@ -42,15 +42,51 @@ public class InternalApiIngestionResource {
         Long taskId = requiredLong(request, "taskId");
         Instant windowStart = optionalInstant(request, "backfillWindowStart", "backfill_window_start");
         Instant windowEnd = optionalInstant(request, "backfillWindowEnd", "backfill_window_end");
-        IngestionExecutionDTO submitted = taskService.executeInternalApi(
-            taskId,
-            text(request, "batchId", "batch_id"),
-            text(request, "mode", "triggerMode", "trigger_mode"),
-            windowStart,
-            windowEnd,
-            text(request, "backfillCursorColumn", "backfill_column", "backfillColumn")
+        String configChecksum = text(request, "configChecksum", "config_checksum");
+        String airflowDagId = text(request, "airflowDagId", "airflow_dag_id");
+        String airflowRunId = text(request, "airflowRunId", "airflow_run_id");
+        boolean exactRevisionRequested = request != null && (
+            request.containsKey("revisionId")
+                || request.containsKey("revision_id")
+                || StringUtils.hasText(configChecksum)
+                || StringUtils.hasText(airflowDagId)
+                || StringUtils.hasText(airflowRunId)
         );
+        IngestionExecutionDTO submitted = exactRevisionRequested
+            ? taskService.executeInternalApiForRevision(
+                taskId,
+                text(request, "batchId", "batch_id"),
+                text(request, "mode", "triggerMode", "trigger_mode"),
+                windowStart,
+                windowEnd,
+                text(request, "backfillCursorColumn", "backfill_column", "backfillColumn"),
+                requiredLong(request, "revisionId", "revision_id"),
+                requiredText(request, "configChecksum", "config_checksum"),
+                requiredText(request, "airflowDagId", "airflow_dag_id"),
+                requiredText(request, "airflowRunId", "airflow_run_id")
+            )
+            : taskService.executeInternalApi(
+                taskId,
+                text(request, "batchId", "batch_id"),
+                text(request, "mode", "triggerMode", "trigger_mode"),
+                windowStart,
+                windowEnd,
+                text(request, "backfillCursorColumn", "backfill_column", "backfillColumn")
+            );
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(toResponse(submitted));
+    }
+
+    @PostMapping("/scheduled-executions")
+    @PreAuthorize(INTERNAL_SERVICE_EXPRESSION)
+    public ResponseEntity<Map<String, Object>> registerScheduledExecution(@RequestBody Map<String, Object> request) {
+        IngestionExecutionDTO execution = taskService.registerScheduledExecution(
+            requiredLong(request, "taskId", "task_id"),
+            requiredLong(request, "revisionId", "revision_id"),
+            requiredText(request, "configChecksum", "config_checksum"),
+            requiredText(request, "airflowDagId", "airflow_dag_id"),
+            requiredText(request, "airflowRunId", "airflow_run_id")
+        );
+        return ResponseEntity.ok(toResponse(execution));
     }
 
     @GetMapping("/executions/{executionId}")
@@ -119,8 +155,18 @@ public class InternalApiIngestionResource {
         return body;
     }
 
-    private Long requiredLong(Map<String, Object> request, String field) {
-        Object value = request == null ? null : request.get(field);
+    private Long requiredLong(Map<String, Object> request, String... fields) {
+        Object value = null;
+        String matchedField = fields == null || fields.length == 0 ? "value" : fields[0];
+        if (request != null && fields != null) {
+            for (String field : fields) {
+                if (request.containsKey(field)) {
+                    value = request.get(field);
+                    matchedField = field;
+                    break;
+                }
+            }
+        }
         if (value instanceof Number number) {
             return number.longValue();
         }
@@ -128,9 +174,18 @@ public class InternalApiIngestionResource {
             try {
                 return Long.parseLong(value.toString().trim());
             } catch (NumberFormatException ex) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, field + " must be a number", ex);
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, matchedField + " must be a number", ex);
             }
         }
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, matchedField + " is required");
+    }
+
+    private String requiredText(Map<String, Object> request, String... fields) {
+        String value = text(request, fields);
+        if (StringUtils.hasText(value)) {
+            return value;
+        }
+        String field = fields == null || fields.length == 0 ? "value" : fields[0];
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, field + " is required");
     }
 

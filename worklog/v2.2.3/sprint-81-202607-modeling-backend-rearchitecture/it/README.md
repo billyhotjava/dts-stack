@@ -1,18 +1,28 @@
 # Sprint-81 集成验收计划
 
-**状态**：PLANNED
+**状态**：CONTROL_PLANE_PASS / LIVE_DEPLOYMENT_PENDING
 **执行纪律**：全部编码、迁移和物理删除完成后，再集中执行最终 E2E。过程中的单测、ArchUnit、Testcontainers、build 只作为 Task 证据，不替代 IT-08。
 
 | ID | 场景 | 验收路径 | 关联 Task | 当前状态 |
 |---|---|---|---|---|
-| IT-01 | 模块化控制面 | ArchUnit → Spring context → 禁止跨域 repository/entity → 依赖无环 | F1/T01～T03 | PLANNED |
-| IT-02 | 唯一建模状态链 | WarehousePlan → ModelSpec revision → StageGate → Lifecycle → ReleaseCandidate → Materialization | F2/T01～T03 | PLANNED |
-| IT-03 | Catalog 与质量证据 | Integration identity → CatalogAssetKey → rule/version/binding/run → StageGate evidence | F3/T01～T02 | PLANNED |
-| IT-04 | durable event/audit | 业务事务 → 两张 outbox → 故障/恢复/重放 → dts-admin 中央审计分类 | F3/T03～T04 | PLANNED |
-| IT-05 | dbt 执行网关 | Candidate → gateway submit/query/cancel → Airflow DagRun → dbt result/relation 对账 | F4/T01～T03 | PLANNED |
-| IT-06 | 旧运行面物理退役 | consumer=0 → 旧 route 普通 404 → bean/entity/repository 不存在 → table absent | F5/T01～T04 | PLANNED |
-| IT-07 | 升级与恢复 | 空库升级 + 存量库升级 + manifest apply/verify + backup restore + forward recovery | F0/T03、F6/T02 | PLANNED |
-| IT-08 | 最终认证 E2E | 新 UI → canonical API → quality → lifecycle/candidate → Airflow/dbt → relation/Catalog → dts-admin audit | F6/T03 | DEFERRED_UNTIL_CODE_COMPLETE |
+| IT-01 | 模块化控制面 | ArchUnit → Spring context → 禁止跨域 repository/entity → 依赖无环 | F1/T01～T03 | PASS |
+| IT-02 | 唯一建模状态链 | WarehousePlan → ModelSpec revision → StageGate → Lifecycle → ReleaseCandidate → Materialization | F2/T01～T03 | PASS |
+| IT-03 | Catalog 与质量证据 | Integration identity → CatalogAssetKey → rule/version/binding/run → StageGate evidence | F3/T01～T02 | PASS_COMPONENT_IT |
+| IT-04 | durable event/audit | 业务事务 → 两张 outbox → 故障/恢复/重放 → dts-admin 中央审计分类 | F3/T03～T04 | PASS_COMPONENT_IT |
+| IT-05 | dbt 执行网关 | Candidate → gateway submit/query/cancel → Airflow DagRun → dbt result/relation 对账 | F4/T01～T03 | PASS_CONTROL_PLANE_IT |
+| IT-06 | 旧运行面物理退役 | consumer=0 → 旧 route 普通 404 → bean/entity/repository 不存在 → table absent | F5/T01～T04 | PASS_SOURCE_SCHEMA_CONTRACT |
+| IT-07 | 升级与恢复 | 空库升级 + 存量库升级 + manifest apply/verify + backup restore + forward recovery | F0/T03、F6/T02 | PASS_CHANGED_MIGRATIONS / CUSTOMER_RESTORE_PENDING |
+| IT-08 | 最终认证 E2E | 新 UI → canonical API → quality → lifecycle/candidate → Airflow/dbt → relation/Catalog → dts-admin audit | F6/T03 | PASS_ISOLATED_CONTROL_PLANE / LIVE_PENDING |
+
+## 2026-08-01 最终验证记录
+
+- 后端聚焦测试通过：公共审计目录、dts-admin 审计入口、数据集成 SQL 标识符防注入、secret restore 服务/资源/outbox、建模 ArchUnit、Catalog identity/column sync、legacy code-set CAS 与引用代码迁移。
+- PostgreSQL 迁移/并发测试通过：平台审计与回退 17/17；数据集成 secret-restore/访问迁移 7/7；旧 worker 的 DELIVERED/RETRY/DEAD 均被 `delivery_attempts` fencing 拒绝。
+- 前端 canonical 契约通过：旧 `/modeling/sql-models` endpoint/function/consumer 为 0；ModelSpec physical name 映射、建模请求超时断言通过；`pnpm build` 成功。
+- 静态交付门禁通过：`bash -n init.sh`、全部变更 XML、app/legacy/dev Compose config、`git diff --check`。
+- 最终隔离 E2E 使用 PostgreSQL 17 Testcontainers，执行 `ModelMaterializationStartServiceIT#commitsBuildingSnapshotClaimAndOneQueuedRunAsOneUnit`，验证 candidate BUILDING、revision/implementation/dependency/source snapshot、pipeline run、dispatch claim/runtime spec、物理 relation、append-only observation、profile lease、quality evidence 与公共审计；最终结果 PASS。
+- E2E 首轮暴露并修复三类旧夹具尾巴：v1 `object_id/process_id/spec_json`、事务外未提交 DDL、调用方时钟/非幂等 consume 旧假设。修复后重跑完全相同命令通过。
+- 共享 Compose 当前运行镜像早于最后增量，因此没有把在线 UI 点击声明为本次后台验收。部署新镜像后仍需执行认证 UI、真实 Airflow/dbt、Catalog 同步与 dts-admin 中央审计的 live acceptance；客户环境还必须完成画像、备份恢复和签字。
 
 ## IT-01：模块化控制面
 

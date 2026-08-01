@@ -38,7 +38,16 @@ class ModelLifecyclePublicationServiceTest {
             com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode.DESIGNER_GENERATED,
             "warehouse",
             "model.warehouse.customer_detail",
-            "ACTIVE"
+            "ACTIVE",
+            1,
+            "a".repeat(64),
+            com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.InputMode.GENERATED,
+            java.util.List.of(
+                new com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.GeneratedInput("DBT", java.util.Map.of())
+            ),
+            java.util.List.of(),
+            java.util.Map.of(),
+            "table"
         );
         Instant now = Instant.parse("2026-07-20T08:00:00Z");
         when(lifecycle.lockImplementation("tenant-a", draft.id(), implementation)).thenReturn(true);

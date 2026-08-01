@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260801-01-retire-legacy-semantic-modeling" author="codex" dbms="postgresql" runInTransaction="true">
+        <preConditions
+            onFail="HALT"
+            onFailMessage="LEGACY_SEMANTIC_MODELING_DATA_REQUIRES_MIGRATION; LEGACY_MODELING_RETIREMENT_EVIDENCE_REQUIRES_ARCHIVE">
+            <and>
+                <tableExists tableName="semantic_subject_domain"/>
+                <tableExists tableName="semantic_business_object"/>
+                <tableExists tableName="semantic_object_table_mapping"/>
+                <tableExists tableName="semantic_dimension"/>
+                <tableExists tableName="semantic_metric"/>
+                <tableExists tableName="semantic_model"/>
+                <tableExists tableName="semantic_generated_artifact"/>
+                <tableExists tableName="semantic_model_dimension"/>
+                <tableExists tableName="semantic_model_metric"/>
+                <tableExists tableName="semantic_model_review_log"/>
+                <tableExists tableName="semantic_model_run"/>
+                <tableExists tableName="modeling_legacy_object_migration_batch"/>
+                <tableExists tableName="modeling_legacy_object_migration"/>
+                <tableExists tableName="modeling_legacy_api_usage"/>
+                <tableExists tableName="modeling_model_registration_step"/>
+                <sqlCheck expectedResult="0"><![CDATA[
+                    SELECT
+                        (SELECT count(*) FROM semantic_subject_domain) +
+                        (SELECT count(*) FROM semantic_business_object) +
+                        (SELECT count(*) FROM semantic_object_table_mapping) +
+                        (SELECT count(*) FROM semantic_dimension) +
+                        (SELECT count(*) FROM semantic_metric) +
+                        (SELECT count(*) FROM semantic_model) +
+                        (SELECT count(*) FROM semantic_generated_artifact) +
+                        (SELECT count(*) FROM semantic_model_dimension) +
+                        (SELECT count(*) FROM semantic_model_metric) +
+                        (SELECT count(*) FROM semantic_model_review_log) +
+                        (SELECT count(*) FROM semantic_model_run)
+                ]]></sqlCheck>
+                <sqlCheck expectedResult="0"><![CDATA[
+                    SELECT
+                        (SELECT count(*) FROM modeling_legacy_object_migration_batch) +
+                        (SELECT count(*) FROM modeling_legacy_object_migration) +
+                        (SELECT count(*) FROM modeling_legacy_api_usage) +
+                        (SELECT count(*) FROM modeling_model_registration_step)
+                ]]></sqlCheck>
+            </and>
+        </preConditions>
+        <comment>
+            Remove the superseded semantic-modeling backend and its one-off migration ledger.
+            The change is fail-closed: any business row or retirement evidence must be migrated
+            or archived before the deployment may continue.
+        </comment>
+
+        <sql><![CDATA[
+            LOCK TABLE
+                modeling_legacy_api_usage,
+                modeling_legacy_object_migration,
+                modeling_legacy_object_migration_batch,
+                modeling_model_registration_step,
+                semantic_business_object,
+                semantic_dimension,
+                semantic_generated_artifact,
+                semantic_metric,
+                semantic_model,
+                semantic_model_dimension,
+                semantic_model_metric,
+                semantic_model_review_log,
+                semantic_model_run,
+                semantic_object_table_mapping,
+                semantic_subject_domain
+            IN ACCESS EXCLUSIVE MODE
+        ]]></sql>
+        <sql splitStatements="false"><![CDATA[
+            DO $$
+            BEGIN
+                IF (
+                    (SELECT count(*) FROM semantic_subject_domain) +
+                    (SELECT count(*) FROM semantic_business_object) +
+                    (SELECT count(*) FROM semantic_object_table_mapping) +
+                    (SELECT count(*) FROM semantic_dimension) +
+                    (SELECT count(*) FROM semantic_metric) +
+                    (SELECT count(*) FROM semantic_model) +
+                    (SELECT count(*) FROM semantic_generated_artifact) +
+                    (SELECT count(*) FROM semantic_model_dimension) +
+                    (SELECT count(*) FROM semantic_model_metric) +
+                    (SELECT count(*) FROM semantic_model_review_log) +
+                    (SELECT count(*) FROM semantic_model_run) +
+                    (SELECT count(*) FROM modeling_legacy_object_migration_batch) +
+                    (SELECT count(*) FROM modeling_legacy_object_migration) +
+                    (SELECT count(*) FROM modeling_legacy_api_usage) +
+                    (SELECT count(*) FROM modeling_model_registration_step)
+                ) <> 0 THEN
+                    RAISE EXCEPTION 'LEGACY_SEMANTIC_MODELING_RETIREMENT_LOCKED_RECHECK_FAILED';
+                END IF;
+            END $$;
+        ]]></sql>
+
+        <dropTable tableName="semantic_model_dimension"/>
+        <dropTable tableName="semantic_model_metric"/>
+        <dropTable tableName="semantic_generated_artifact"/>
+        <dropTable tableName="semantic_model_review_log"/>
+        <dropTable tableName="semantic_model_run"/>
+        <dropTable tableName="semantic_object_table_mapping"/>
+        <dropTable tableName="semantic_dimension"/>
+        <dropTable tableName="semantic_metric"/>
+        <dropTable tableName="semantic_model"/>
+        <dropTable tableName="semantic_business_object"/>
+        <dropTable tableName="semantic_subject_domain"/>
+        <dropTable tableName="modeling_legacy_object_migration"/>
+        <dropTable tableName="modeling_legacy_object_migration_batch"/>
+        <dropTable tableName="modeling_legacy_api_usage"/>
+        <dropTable tableName="modeling_model_registration_step"/>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    RAISE EXCEPTION 'ROLLBACK_BLOCKED_LEGACY_SEMANTIC_MODELING_RETIREMENT_FORWARD_ONLY: recovery requires a new forward changeset';
+                END $$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

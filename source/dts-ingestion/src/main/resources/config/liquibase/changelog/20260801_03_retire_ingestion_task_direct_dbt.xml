@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260801-03-retire-ingestion-task-direct-dbt" author="codex" dbms="postgresql">
+        <preConditions
+            onFail="HALT"
+            onError="HALT"
+            onFailMessage="INGESTION_DIRECT_DBT_RETIREMENT_BLOCKED: migrate non-empty dbt_model_selector or dbt_dag_selector values to the canonical Candidate and Materialization chain"
+            onErrorMessage="INGESTION_DIRECT_DBT_RETIREMENT_SCHEMA_UNEXPECTED">
+            <and>
+                <tableExists tableName="ingestion_task"/>
+                <columnExists tableName="ingestion_task" columnName="dbt_model_selector"/>
+                <columnExists tableName="ingestion_task" columnName="dbt_dag_selector"/>
+                <sqlCheck expectedResult="0"><![CDATA[
+                    SELECT count(*)
+                     FROM ingestion_task
+                     WHERE nullif(btrim(dbt_model_selector), '') IS NOT NULL
+                        OR nullif(btrim(dbt_dag_selector), '') IS NOT NULL
+                ]]></sqlCheck>
+                <sqlCheck expectedResult="0"><![CDATA[
+                    SELECT count(*)
+                      FROM pg_constraint constraint_definition
+                     WHERE constraint_definition.conrelid = 'ingestion_task'::regclass
+                       AND EXISTS (
+                           SELECT 1
+                             FROM unnest(constraint_definition.conkey) constrained_column(attnum)
+                             JOIN pg_attribute attribute_definition
+                               ON attribute_definition.attrelid = constraint_definition.conrelid
+                              AND attribute_definition.attnum = constrained_column.attnum
+                            WHERE attribute_definition.attname IN ('dbt_model_selector', 'dbt_dag_selector')
+                       )
+                ]]></sqlCheck>
+                <sqlCheck expectedResult="0"><![CDATA[
+                    SELECT count(*)
+                      FROM pg_index index_definition
+                     WHERE index_definition.indrelid = 'ingestion_task'::regclass
+                       AND EXISTS (
+                           SELECT 1
+                             FROM unnest(index_definition.indkey::smallint[]) indexed_column(attnum)
+                             JOIN pg_attribute attribute_definition
+                               ON attribute_definition.attrelid = index_definition.indrelid
+                              AND attribute_definition.attnum = indexed_column.attnum
+                            WHERE attribute_definition.attname IN ('dbt_model_selector', 'dbt_dag_selector')
+                       )
+                ]]></sqlCheck>
+                <sqlCheck expectedResult="0"><![CDATA[
+                    SELECT count(DISTINCT dependent_view.oid)
+                      FROM pg_depend dependency
+                      JOIN pg_rewrite rewrite_rule
+                        ON rewrite_rule.oid = dependency.objid
+                      JOIN pg_class dependent_view
+                        ON dependent_view.oid = rewrite_rule.ev_class
+                      JOIN pg_attribute source_column
+                        ON source_column.attrelid = dependency.refobjid
+                       AND source_column.attnum = dependency.refobjsubid
+                     WHERE dependency.refobjid = 'ingestion_task'::regclass
+                       AND source_column.attname IN ('dbt_model_selector', 'dbt_dag_selector')
+                       AND dependent_view.relkind IN ('v', 'm')
+                ]]></sqlCheck>
+            </and>
+        </preConditions>
+
+        <comment>
+            Remove the retired ingestion-to-dbt shortcut configuration. Ingestion now publishes source
+            and quality facts; model execution is owned exclusively by ReleaseCandidate and Materialization.
+            Historical task revision JSON and audit evidence remain untouched.
+        </comment>
+
+        <sql dbms="postgresql" splitStatements="false"><![CDATA[
+            DO $do$
+            BEGIN
+                LOCK TABLE ingestion_task IN ACCESS EXCLUSIVE MODE;
+
+                IF EXISTS (
+                    SELECT 1
+                      FROM ingestion_task
+                     WHERE nullif(btrim(dbt_model_selector), '') IS NOT NULL
+                        OR nullif(btrim(dbt_dag_selector), '') IS NOT NULL
+                ) THEN
+                    RAISE EXCEPTION 'INGESTION_DIRECT_DBT_RETIREMENT_BLOCKED: non-empty selector appeared after the initial precondition check';
+                END IF;
+
+                IF EXISTS (
+                    SELECT 1
+                      FROM pg_constraint constraint_definition
+                     WHERE constraint_definition.conrelid = 'ingestion_task'::regclass
+                       AND EXISTS (
+                           SELECT 1
+                             FROM unnest(constraint_definition.conkey) constrained_column(attnum)
+                             JOIN pg_attribute attribute_definition
+                               ON attribute_definition.attrelid = constraint_definition.conrelid
+                              AND attribute_definition.attnum = constrained_column.attnum
+                            WHERE attribute_definition.attname IN ('dbt_model_selector', 'dbt_dag_selector')
+                       )
+                ) OR EXISTS (
+                    SELECT 1
+                      FROM pg_index index_definition
+                     WHERE index_definition.indrelid = 'ingestion_task'::regclass
+                       AND EXISTS (
+                           SELECT 1
+                             FROM unnest(index_definition.indkey::smallint[]) indexed_column(attnum)
+                             JOIN pg_attribute attribute_definition
+                               ON attribute_definition.attrelid = index_definition.indrelid
+                              AND attribute_definition.attnum = indexed_column.attnum
+                            WHERE attribute_definition.attname IN ('dbt_model_selector', 'dbt_dag_selector')
+                       )
+                ) OR EXISTS (
+                    SELECT 1
+                      FROM pg_depend dependency
+                      JOIN pg_rewrite rewrite_rule ON rewrite_rule.oid = dependency.objid
+                      JOIN pg_class dependent_view ON dependent_view.oid = rewrite_rule.ev_class
+                      JOIN pg_attribute source_column
+                        ON source_column.attrelid = dependency.refobjid
+                       AND source_column.attnum = dependency.refobjsubid
+                     WHERE dependency.refobjid = 'ingestion_task'::regclass
+                       AND source_column.attname IN ('dbt_model_selector', 'dbt_dag_selector')
+                       AND dependent_view.relkind IN ('v', 'm')
+                ) THEN
+                    RAISE EXCEPTION 'INGESTION_DIRECT_DBT_RETIREMENT_SCHEMA_UNEXPECTED: selector dependency appeared after the initial precondition check';
+                END IF;
+            END
+            $do$;
+        ]]></sql>
+
+        <dropColumn tableName="ingestion_task" columnName="dbt_model_selector"/>
+        <dropColumn tableName="ingestion_task" columnName="dbt_dag_selector"/>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    RAISE EXCEPTION 'ROLLBACK_BLOCKED_INGESTION_DIRECT_DBT_RETIREMENT_FORWARD_ONLY: recovery requires a new forward changeset';
+                END $$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

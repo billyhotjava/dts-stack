@@ -12,17 +12,17 @@ import {
 	normalizeTableName,
 	normalizeText,
 	resolveReaderTypeFromDataSource,
-} from "../../explore/etl/ingestionFormHelpers";
-import { parseTableEntries } from "../../explore/etl/transformTableSelection.helpers";
+} from "./shared/ingestionFormHelpers";
+import { parseTableEntries } from "./shared/transformTableSelection.helpers";
 import {
 	buildManagedFileAdmissionFields,
 	buildManagedFileSourceConfig,
 	extractManagedFileFromTask,
 } from "./accessManagedFile";
 import type {
+	AccessKind,
 	AccessPlanApiResourceDTO,
 	AccessPlanApiSourceConfigDTO,
-	AccessKind,
 	AccessPlanCreateRequest,
 	AccessPlanFormValues,
 	AccessPlanPayloadContext,
@@ -45,7 +45,8 @@ export const inferAccessKind = (task: Pick<IngestionTaskDTO, "sourceType" | "sou
 };
 
 const resolveWriterType = (target?: DataSourceSelectionItem | null, fallback?: string) => {
-	const marker = `${target?.type || ""} ${target?.connectorKey || ""} ${target?.connectorName || ""} ${target?.defaultEngine || ""}`.toLowerCase();
+	const marker =
+		`${target?.type || ""} ${target?.connectorKey || ""} ${target?.connectorName || ""} ${target?.defaultEngine || ""}`.toLowerCase();
 	if (marker.includes("postgres")) return "postgresqlwriter";
 	if (marker.includes("mysql") || marker.includes("mariadb")) return "mysqlwriter";
 	if (marker.includes("oracle")) return "oraclewriter";
@@ -197,8 +198,8 @@ const buildDatabaseRequest = (context: AccessPlanPayloadContext): AccessPlanCrea
 			tablePattern: normalizeText(values.readerTablePattern) || undefined,
 		},
 		airflow: { enabled: values.airflowEnabled },
-		runNow: values.runNow,
-		draft: false,
+		runNow: false,
+		draft: true,
 	};
 };
 
@@ -216,8 +217,8 @@ const buildApiRequest = (context: AccessPlanPayloadContext): AccessPlanCreateReq
 		sync: buildSync(values, false),
 		streams: { selection: "manual", include: [resource.resourceId] },
 		airflow: { enabled: values.airflowEnabled },
-		runNow: values.runNow,
-		draft: false,
+		runNow: false,
+		draft: true,
 	};
 };
 

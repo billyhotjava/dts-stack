@@ -81,9 +81,6 @@ class CatalogAssetTagPermissionReadAdapterIT {
                 )
                 """
             );
-            statement.execute(
-                "create table modeling_sql_model (id uuid primary key, name varchar(255) not null)"
-            );
         }
         applyChangelog();
     }
@@ -275,78 +272,6 @@ class CatalogAssetTagPermissionReadAdapterIT {
                         .isEqualTo("INTERNAL");
                     assertThat(dataset.getEnabled()).isTrue();
                 });
-        }
-    }
-
-    @Test
-    void duplicateSqlModelNamesReturnAtMostTwoRowsPerKeyWithinGlobalSentinel()
-        throws Exception {
-        try (Connection connection = connectionInSchema()) {
-            try (
-                PreparedStatement statement = connection.prepareStatement(
-                    "insert into modeling_sql_model (id, name) values (?, ?)"
-                )
-            ) {
-                for (String name : List.of(
-                    "dws_orders",
-                    "DWS_ORDERS",
-                    "dws_orders",
-                    "dws_customer",
-                    "DWS_CUSTOMER",
-                    "dws_customer"
-                )) {
-                    statement.setObject(1, UUID.randomUUID());
-                    statement.setString(2, name);
-                    statement.addBatch();
-                }
-                statement.executeBatch();
-            }
-            RecordingJdbcTemplate jdbcTemplate = recordingTemplate(connection);
-
-            BatchLookup result = new CatalogAssetTagPermissionReadAdapter(
-                jdbcTemplate
-            ).loadBatch(
-                new BatchLookupRequest(
-                    Set.of(),
-                    Set.of(),
-                    java.util.Map.of(
-                        CatalogAssetType.MODELING_SQL_MODEL,
-                        Set.of("dws_orders", "dws_customer")
-                    )
-                )
-            );
-
-            assertThat(
-                result.identities().get(CatalogAssetType.MODELING_SQL_MODEL)
-            )
-                .hasSize(4)
-                .allSatisfy(identity ->
-                    assertThat(identity.naturalKey().toLowerCase())
-                        .isIn("dws_orders", "dws_customer")
-                );
-            assertThat(
-                result
-                    .identities()
-                    .get(CatalogAssetType.MODELING_SQL_MODEL)
-                    .stream()
-                    .collect(
-                        java.util.stream.Collectors.groupingBy(identity ->
-                            identity.naturalKey().toLowerCase()
-                        )
-                    )
-            )
-                .allSatisfy((key, identities) ->
-                    assertThat(identities)
-                        .as("rows returned for requested key %s", key)
-                        .hasSize(2)
-                );
-            QueryInvocation invocation = jdbcTemplate.singleQuery();
-            assertThat(invocation.sql().toLowerCase())
-                .contains(
-                    "where match_rank <= 2",
-                    "fetch first ? rows only"
-                );
-            assertThat(invocation.arguments()).contains(5);
         }
     }
 

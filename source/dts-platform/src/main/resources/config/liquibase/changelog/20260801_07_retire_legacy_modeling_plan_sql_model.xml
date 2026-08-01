@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260801-07-retire-legacy-modeling-plan-sql-model" author="codex" dbms="postgresql" runInTransaction="true">
+        <preConditions
+            onFail="HALT"
+            onError="HALT"
+            onFailMessage="LEGACY_MODELING_PLAN_SQL_MODEL_RETIREMENT_BLOCKED: migrate or archive legacy rows and catalog identities, then remove unknown dependencies"
+            onErrorMessage="LEGACY_MODELING_PLAN_SQL_MODEL_RETIREMENT_SCHEMA_UNEXPECTED">
+            <and>
+                <tableExists tableName="modeling_plan"/>
+                <tableExists tableName="modeling_sql_model"/>
+                <sqlCheck expectedResult="0"><![CDATA[
+                    SELECT
+                        (SELECT count(*) FROM modeling_plan) +
+                        (SELECT count(*) FROM modeling_sql_model)
+                ]]></sqlCheck>
+                <sqlCheck expectedResult="2"><![CDATA[
+                    SELECT count(*)
+                      FROM pg_constraint c
+                     WHERE c.contype = 'f'
+                       AND (
+                           (
+                               c.conrelid = 'modeling_plan'::regclass
+                               AND c.confrelid = 'catalog_domain'::regclass
+                               AND c.conname = 'fk_modeling_plan_domain'
+                           )
+                           OR (
+                               c.conrelid = 'modeling_sql_model'::regclass
+                               AND c.confrelid = 'modeling_model_spec'::regclass
+                               AND c.conname = 'fk_modeling_sql_model_spec'
+                           )
+                       )
+                ]]></sqlCheck>
+                <sqlCheck expectedResult="0"><![CDATA[
+                    SELECT count(*)
+                      FROM pg_constraint c
+                     WHERE c.contype = 'f'
+                       AND (
+                           c.conrelid IN ('modeling_plan'::regclass, 'modeling_sql_model'::regclass)
+                           OR c.confrelid IN ('modeling_plan'::regclass, 'modeling_sql_model'::regclass)
+                       )
+                       AND NOT (
+                           (
+                               c.conrelid = 'modeling_plan'::regclass
+                               AND c.confrelid = 'catalog_domain'::regclass
+                               AND c.conname = 'fk_modeling_plan_domain'
+                           )
+                           OR (
+                               c.conrelid = 'modeling_sql_model'::regclass
+                               AND c.confrelid = 'modeling_model_spec'::regclass
+                               AND c.conname = 'fk_modeling_sql_model_spec'
+                           )
+                       )
+                ]]></sqlCheck>
+                <sqlCheck expectedResult="0"><![CDATA[
+                    SELECT count(DISTINCT dependent_view.oid)
+                      FROM pg_depend dependency
+                      JOIN pg_rewrite rewrite_rule
+                        ON rewrite_rule.oid = dependency.objid
+                      JOIN pg_class dependent_view
+                        ON dependent_view.oid = rewrite_rule.ev_class
+                     WHERE dependency.refobjid IN ('modeling_plan'::regclass, 'modeling_sql_model'::regclass)
+                       AND dependent_view.relkind IN ('v', 'm')
+                ]]></sqlCheck>
+                <sqlCheck expectedResult="0"><![CDATA[
+                    SELECT sum(reference_count)
+                      FROM (
+                          SELECT count(*) AS reference_count FROM asset_grant WHERE upper(asset_type) IN ('MODELING_SQL_MODEL', 'MODELING_PLAN')
+                          UNION ALL SELECT count(*) FROM asset_ownership WHERE upper(asset_type) IN ('MODELING_SQL_MODEL', 'MODELING_PLAN')
+                          UNION ALL SELECT count(*) FROM asset_permission_audit WHERE upper(asset_type) IN ('MODELING_SQL_MODEL', 'MODELING_PLAN')
+                          UNION ALL SELECT count(*) FROM asset_permission_policy_injection WHERE upper(asset_type) IN ('MODELING_SQL_MODEL', 'MODELING_PLAN')
+                          UNION ALL SELECT count(*) FROM catalog_asset_tag WHERE upper(asset_type) IN ('MODELING_SQL_MODEL', 'MODELING_PLAN')
+                          UNION ALL SELECT count(*) FROM catalog_classification_event WHERE upper(asset_type) IN ('MODELING_SQL_MODEL', 'MODELING_PLAN')
+                          UNION ALL SELECT count(*) FROM catalog_classification_migration_item WHERE upper(asset_type) IN ('MODELING_SQL_MODEL', 'MODELING_PLAN')
+                          UNION ALL SELECT count(*) FROM catalog_classification_snapshot WHERE upper(asset_type) IN ('MODELING_SQL_MODEL', 'MODELING_PLAN')
+                          UNION ALL SELECT count(*) FROM catalog_dataset_lineage WHERE upper(upstream_asset_type) IN ('MODELING_SQL_MODEL', 'MODELING_PLAN')
+                          UNION ALL SELECT count(*) FROM catalog_dataset_lineage WHERE upper(downstream_asset_type) IN ('MODELING_SQL_MODEL', 'MODELING_PLAN')
+                          UNION ALL SELECT count(*) FROM catalog_external_asset_identity WHERE upper(asset_type) IN ('MODELING_SQL_MODEL', 'MODELING_PLAN')
+                          UNION ALL SELECT count(*) FROM catalog_external_asset_sync_item WHERE upper(asset_type) IN ('MODELING_SQL_MODEL', 'MODELING_PLAN')
+                      ) legacy_catalog_reference
+                ]]></sqlCheck>
+            </and>
+        </preConditions>
+
+        <comment>
+            Remove the empty pre-ModelSpec SQL-model and plan stores after all callers have converged on
+            WarehousePlan, ModelSpec revisions, release candidates and materialization. Persisted legacy
+            catalog identities or unknown relational dependencies halt deployment; no cascade is permitted.
+        </comment>
+
+        <sql><![CDATA[
+            LOCK TABLE modeling_plan, modeling_sql_model IN ACCESS EXCLUSIVE MODE
+        ]]></sql>
+        <sql><![CDATA[
+            LOCK TABLE asset_grant, asset_ownership, asset_permission_audit,
+                asset_permission_policy_injection, catalog_asset_tag,
+                catalog_classification_event, catalog_classification_migration_item,
+                catalog_classification_snapshot, catalog_dataset_lineage,
+                catalog_external_asset_identity, catalog_external_asset_sync_item
+            IN SHARE ROW EXCLUSIVE MODE
+        ]]></sql>
+        <sql splitStatements="false"><![CDATA[
+            DO $$
+            BEGIN
+                IF (
+                    (SELECT count(*) FROM modeling_plan) +
+                    (SELECT count(*) FROM modeling_sql_model) +
+                    (SELECT count(*) FROM asset_grant WHERE upper(asset_type) IN ('MODELING_SQL_MODEL', 'MODELING_PLAN')) +
+                    (SELECT count(*) FROM asset_ownership WHERE upper(asset_type) IN ('MODELING_SQL_MODEL', 'MODELING_PLAN')) +
+                    (SELECT count(*) FROM asset_permission_audit WHERE upper(asset_type) IN ('MODELING_SQL_MODEL', 'MODELING_PLAN')) +
+                    (SELECT count(*) FROM asset_permission_policy_injection WHERE upper(asset_type) IN ('MODELING_SQL_MODEL', 'MODELING_PLAN')) +
+                    (SELECT count(*) FROM catalog_asset_tag WHERE upper(asset_type) IN ('MODELING_SQL_MODEL', 'MODELING_PLAN')) +
+                    (SELECT count(*) FROM catalog_classification_event WHERE upper(asset_type) IN ('MODELING_SQL_MODEL', 'MODELING_PLAN')) +
+                    (SELECT count(*) FROM catalog_classification_migration_item WHERE upper(asset_type) IN ('MODELING_SQL_MODEL', 'MODELING_PLAN')) +
+                    (SELECT count(*) FROM catalog_classification_snapshot WHERE upper(asset_type) IN ('MODELING_SQL_MODEL', 'MODELING_PLAN')) +
+                    (SELECT count(*) FROM catalog_dataset_lineage WHERE upper(upstream_asset_type) IN ('MODELING_SQL_MODEL', 'MODELING_PLAN')) +
+                    (SELECT count(*) FROM catalog_dataset_lineage WHERE upper(downstream_asset_type) IN ('MODELING_SQL_MODEL', 'MODELING_PLAN')) +
+                    (SELECT count(*) FROM catalog_external_asset_identity WHERE upper(asset_type) IN ('MODELING_SQL_MODEL', 'MODELING_PLAN')) +
+                    (SELECT count(*) FROM catalog_external_asset_sync_item WHERE upper(asset_type) IN ('MODELING_SQL_MODEL', 'MODELING_PLAN'))
+                ) <> 0 THEN
+                    RAISE EXCEPTION 'LEGACY_MODELING_PLAN_SQL_MODEL_RETIREMENT_LOCKED_RECHECK_FAILED';
+                END IF;
+            END $$;
+        ]]></sql>
+
+        <dropTable tableName="modeling_sql_model" cascadeConstraints="false"/>
+        <dropTable tableName="modeling_plan" cascadeConstraints="false"/>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    RAISE EXCEPTION 'ROLLBACK_BLOCKED_LEGACY_MODELING_PLAN_SQL_MODEL_RETIREMENT_FORWARD_ONLY: recovery requires a new forward changeset';
+                END $$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

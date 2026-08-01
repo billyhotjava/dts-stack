@@ -206,9 +206,7 @@ public class IngestionTaskChangeLogService {
             fields.add("mapping/sync");
         }
         if (!Objects.equals(before.getAirflowEnabled(), after.getAirflowEnabled())
-            || !Objects.equals(before.getAirflowDagId(), after.getAirflowDagId())
-            || !Objects.equals(before.getDbtModelSelector(), after.getDbtModelSelector())
-            || !Objects.equals(before.getDbtDagSelector(), after.getDbtDagSelector())) {
+            || !Objects.equals(before.getAirflowDagId(), after.getAirflowDagId())) {
             blocks.add("调度配置");
             fields.add("airflow");
         }

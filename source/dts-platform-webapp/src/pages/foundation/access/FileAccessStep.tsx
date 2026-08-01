@@ -4,7 +4,7 @@ import type { ManagedFileUploadResult } from "@/api/ingestion";
 import { CompactTable } from "@/components/table";
 import { Upload as SecureUpload } from "@/components/upload";
 import { CLASSIFICATION_LABELS_ZH, classificationRank, type ClassificationLevel } from "@/utils/classification";
-import { FileFieldClassificationSelect } from "../../explore/etl/steps/FileClassificationIntake";
+import { FileFieldClassificationSelect } from "./shared/FileClassificationIntake";
 import { toAdmissionFile, toManagedFile } from "./accessManagedFile";
 import type { AccessPlanFormValues } from "./accessPlan.types";
 

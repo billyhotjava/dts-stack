@@ -309,7 +309,7 @@ class ModelSpecRepositoryIT {
             .isEqualTo(1);
         repository.insertV2Revision(tenantB, "owner-b", modelB, codec.write(modelB));
 
-        assertThat(repository.listCurrentForRelationshipGraph(tenantA, planA, java.util.Set.of(domainA), true, 1))
+        assertThat(repository.listCurrentForRelationshipGraph(tenantA, planA, java.util.Set.of(domainA), 1))
             .extracting(ModelSpecRepository.StoredModelSpec::id)
             .containsExactly(modelA.id());
         assertThat(
@@ -317,22 +317,20 @@ class ModelSpecRepositoryIT {
                 tenantA,
                 planA,
                 java.util.Set.of(domainA),
-                true,
                 modelA.id(),
                 1
             )
         )
             .isEmpty();
-        assertThat(repository.listCurrentForRelationshipGraph(tenantA, planB, java.util.Set.of(domainA), true, 1))
+        assertThat(repository.listCurrentForRelationshipGraph(tenantA, planB, java.util.Set.of(domainA), 1))
             .isEmpty();
-        assertThat(repository.listCurrentForRelationshipGraph(tenantB, planB, java.util.Set.of(domainA), true, 1))
+        assertThat(repository.listCurrentForRelationshipGraph(tenantB, planB, java.util.Set.of(domainA), 1))
             .isEmpty();
         assertThat(
             repository.listRevisionsForRelationshipGraph(
                 tenantA,
                 List.of(new ModelRevisionRef(modelA.id(), 1)),
                 java.util.Set.of(domainA),
-                true,
                 1
             )
         )
@@ -346,7 +344,6 @@ class ModelSpecRepositoryIT {
                 tenantA,
                 List.of(new ModelRevisionRef(modelA.id(), 1)),
                 java.util.Set.of(domainB),
-                true,
                 1
             )
         )
@@ -356,7 +353,6 @@ class ModelSpecRepositoryIT {
                 tenantA,
                 List.of(new ModelRevisionRef(modelA.id(), 2)),
                 java.util.Set.of(domainA),
-                true,
                 1
             )
         )

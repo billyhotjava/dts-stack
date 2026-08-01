@@ -3,14 +3,12 @@ package com.yuzhi.dts.platform.repository.modeling;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.Layer;
-import com.yuzhi.dts.platform.service.modeling.ModelSpecContract;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelRevisionRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelStatus;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceKind;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecException;
-import com.yuzhi.dts.platform.service.modeling.ModelingVNextContract;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -24,20 +22,20 @@ import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
-/** PostgreSQL persistence adapter for the canonical and legacy ModelSpec ledger. */
+/** PostgreSQL persistence adapter for the canonical ModelSpec ledger. */
 @Repository
 public class ModelSpecRepository {
 
     private static final String CURRENT_COLUMNS = """
         select true as current_head, s.contract_version, s.tenant_id, s.id, s.plan_id, s.domain_id, s.status, s.revision,
                s.current_checksum as current_checksum, r.content_checksum as revision_checksum,
-               r.snapshot_json::text as current_snapshot, r.spec_json as legacy_spec_json,
+               r.snapshot_json::text as current_snapshot,
                s.idempotency_key, s.idempotency_request_hash,
                s.idempotency_response_snapshot::text as idempotency_response_snapshot,
                s.created_date, s.last_modified_date
           from modeling_model_spec s
           left join modeling_model_spec_revision r
-            on r.model_spec_id = s.id and r.revision = s.revision
+            on r.model_spec_id = s.id and r.revision = s.revision and r.contract_version = 2
         """;
 
     private final JdbcTemplate jdbcTemplate;
@@ -51,7 +49,7 @@ public class ModelSpecRepository {
     public Optional<StoredModelSpec> findCurrent(String tenantId, UUID modelSpecId) {
         return jdbcTemplate
             .query(
-                CURRENT_COLUMNS + " where s.tenant_id = ? and s.id = ?",
+                CURRENT_COLUMNS + " where s.tenant_id = ? and s.id = ? and s.contract_version = 2",
                 ModelSpecRepository::mapStored,
                 tenantId,
                 modelSpecId
@@ -189,7 +187,7 @@ public class ModelSpecRepository {
     }
 
     public List<StoredModelSpec> listCurrent(String tenantId, ListFilter filter) {
-        StringBuilder sql = new StringBuilder(CURRENT_COLUMNS).append(" where s.tenant_id = ?");
+        StringBuilder sql = new StringBuilder(CURRENT_COLUMNS).append(" where s.tenant_id = ? and s.contract_version = 2");
         List<Object> arguments = new ArrayList<>();
         arguments.add(tenantId);
         ListFilter effective = filter == null ? new ListFilter(null, null, null, null) : filter;
@@ -223,14 +221,12 @@ public class ModelSpecRepository {
         String tenantId,
         UUID planId,
         Set<UUID> visibleDomainIds,
-        boolean canonicalReadEnabled,
         int limit
     ) {
         return listCurrentForRelationshipGraph(
             tenantId,
             planId,
             visibleDomainIds,
-            canonicalReadEnabled,
             null,
             limit
         );
@@ -246,7 +242,6 @@ public class ModelSpecRepository {
         String tenantId,
         UUID planId,
         Set<UUID> visibleDomainIds,
-        boolean canonicalReadEnabled,
         UUID afterId,
         int limit
     ) {
@@ -255,31 +250,21 @@ public class ModelSpecRepository {
         }
         Set<UUID> effectiveVisibleDomainIds = visibleDomainIds == null ? Set.of() : visibleDomainIds;
         List<UUID> orderedDomainIds = effectiveVisibleDomainIds.stream().filter(java.util.Objects::nonNull).sorted().toList();
+        if (orderedDomainIds.isEmpty()) return List.of();
         StringBuilder sql = new StringBuilder(CURRENT_COLUMNS)
-            .append(" where s.tenant_id = ? and s.plan_id = ?");
+            .append(" where s.tenant_id = ? and s.plan_id = ? and s.contract_version = 2");
         List<Object> arguments = new ArrayList<>();
         arguments.add(tenantId);
         arguments.add(planId);
-        if (!canonicalReadEnabled) {
-            sql.append(" and s.contract_version <> ?");
-            arguments.add(ModelSpecContract.CONTRACT_VERSION);
-        }
         if (afterId != null) {
             sql.append(" and s.id > ?");
             arguments.add(afterId);
         }
-        sql.append(" and (");
-        if (orderedDomainIds.isEmpty()) {
-            sql.append("s.domain_id is null and s.contract_version = ?");
-        } else {
-            sql
-                .append("s.domain_id in (")
-                .append(String.join(", ", java.util.Collections.nCopies(orderedDomainIds.size(), "?")))
-                .append(") or (s.domain_id is null and s.contract_version = ?)");
-            arguments.addAll(orderedDomainIds);
-        }
-        arguments.add(ModelingVNextContract.CONTRACT_VERSION);
-        sql.append(") order by s.id limit ?");
+        sql
+            .append(" and s.domain_id in (")
+            .append(String.join(", ", java.util.Collections.nCopies(orderedDomainIds.size(), "?")))
+            .append(") order by s.id limit ?");
+        arguments.addAll(orderedDomainIds);
         arguments.add(limit);
         return jdbcTemplate.query(sql.toString(), ModelSpecRepository::mapStored, arguments.toArray());
     }
@@ -290,13 +275,14 @@ public class ModelSpecRepository {
                 """
                 select false as current_head, r.contract_version, r.tenant_id, s.id, s.plan_id, s.domain_id, r.status, r.revision,
                        null as current_checksum, r.content_checksum as revision_checksum,
-                       r.snapshot_json::text as current_snapshot, r.spec_json as legacy_spec_json,
+                       r.snapshot_json::text as current_snapshot,
                        s.idempotency_key, s.idempotency_request_hash,
                        s.idempotency_response_snapshot::text as idempotency_response_snapshot,
                        s.created_date, coalesce(r.last_modified_date, r.created_date) as last_modified_date
                   from modeling_model_spec_revision r
                   join modeling_model_spec s on s.id = r.model_spec_id and s.tenant_id = r.tenant_id
                  where r.tenant_id = ? and r.model_spec_id = ? and r.revision = ?
+                   and r.contract_version = 2 and s.contract_version = 2
                 """,
                 ModelSpecRepository::mapStored,
                 tenantId,
@@ -317,7 +303,6 @@ public class ModelSpecRepository {
         String tenantId,
         List<ModelRevisionRef> references,
         Set<UUID> visibleDomainIds,
-        boolean canonicalReadEnabled,
         int limit
     ) {
         if (references == null || references.isEmpty() || limit < 1) return List.of();
@@ -344,37 +329,27 @@ public class ModelSpecRepository {
             .filter(Objects::nonNull)
             .sorted()
             .toList();
+        if (orderedDomainIds.isEmpty()) return List.of();
         StringBuilder sql = new StringBuilder(
             """
             select false as current_head, r.contract_version, r.tenant_id, s.id, s.plan_id, s.domain_id, r.status, r.revision,
                    null as current_checksum, r.content_checksum as revision_checksum,
-                   r.snapshot_json::text as current_snapshot, r.spec_json as legacy_spec_json,
+                   r.snapshot_json::text as current_snapshot,
                    s.idempotency_key, s.idempotency_request_hash,
                    s.idempotency_response_snapshot::text as idempotency_response_snapshot,
                    s.created_date, coalesce(r.last_modified_date, r.created_date) as last_modified_date
               from modeling_model_spec_revision r
               join modeling_model_spec s on s.id = r.model_spec_id and s.tenant_id = r.tenant_id
-             where r.tenant_id = ?
+             where r.tenant_id = ? and r.contract_version = 2 and s.contract_version = 2
             """
         );
         List<Object> arguments = new ArrayList<>();
         arguments.add(tenantId);
-        if (!canonicalReadEnabled) {
-            sql.append(" and r.contract_version <> ?");
-            arguments.add(ModelSpecContract.CONTRACT_VERSION);
-        }
-        sql.append(" and (");
-        if (orderedDomainIds.isEmpty()) {
-            sql.append("s.domain_id is null and r.contract_version = ?");
-        } else {
-            sql
-                .append("s.domain_id in (")
-                .append(String.join(", ", java.util.Collections.nCopies(orderedDomainIds.size(), "?")))
-                .append(") or (s.domain_id is null and r.contract_version = ?)");
-            arguments.addAll(orderedDomainIds);
-        }
-        arguments.add(ModelingVNextContract.CONTRACT_VERSION);
-        sql.append(") and (");
+        sql
+            .append(" and s.domain_id in (")
+            .append(String.join(", ", java.util.Collections.nCopies(orderedDomainIds.size(), "?")))
+            .append(") and (");
+        arguments.addAll(orderedDomainIds);
         for (int index = 0; index < boundedReferences.size(); index++) {
             if (index > 0) sql.append(" or ");
             sql.append("(r.model_spec_id = ? and r.revision = ?)");
@@ -877,7 +852,6 @@ public class ModelSpecRepository {
             row.getString("current_checksum"),
             row.getString("revision_checksum"),
             row.getString("current_snapshot"),
-            row.getString("legacy_spec_json"),
             row.getString("idempotency_key"),
             row.getString("idempotency_request_hash"),
             row.getString("idempotency_response_snapshot"),
@@ -918,7 +892,6 @@ public class ModelSpecRepository {
         String currentChecksum,
         String revisionChecksum,
         String currentSnapshot,
-        String legacySpecJson,
         String idempotencyKey,
         String idempotencyRequestHash,
         String idempotencyResponseSnapshot,
@@ -935,7 +908,6 @@ public class ModelSpecRepository {
             int revision,
             String checksum,
             String currentSnapshot,
-            String legacySpecJson,
             String idempotencyKey,
             String idempotencyRequestHash,
             String idempotencyResponseSnapshot,
@@ -954,7 +926,6 @@ public class ModelSpecRepository {
                 checksum,
                 checksum,
                 currentSnapshot,
-                legacySpecJson,
                 idempotencyKey,
                 idempotencyRequestHash,
                 idempotencyResponseSnapshot,

@@ -3,6 +3,7 @@ package com.yuzhi.dts.platform.service.governance;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -10,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.config.GovernanceProperties;
+import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.governance.GovQualityMetric;
 import com.yuzhi.dts.platform.domain.governance.GovQualityRun;
 import com.yuzhi.dts.platform.domain.governance.GovRule;
@@ -21,7 +23,6 @@ import com.yuzhi.dts.platform.repository.governance.GovQualityRunRepository;
 import com.yuzhi.dts.platform.repository.governance.GovRuleBindingRepository;
 import com.yuzhi.dts.platform.repository.governance.GovRuleRepository;
 import com.yuzhi.dts.platform.repository.governance.GovRuleVersionRepository;
-import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.governance.dto.QualityRunDto;
 import com.yuzhi.dts.platform.service.governance.request.QualityRunTriggerRequest;
 import com.yuzhi.dts.platform.service.security.dto.StatementExecutionResult;
@@ -36,6 +37,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.transaction.PlatformTransactionManager;
 
 @ExtendWith(MockitoExtension.class)
@@ -71,7 +73,7 @@ class QualityRunServiceExecutableDefinitionTest {
     private QualityDatasetStatementExecutor statementExecutor;
 
     @Mock
-    private AuditService auditService;
+    private QualityAuditRecorder qualityAuditRecorder;
 
     @Mock
     private IssueTicketService issueTicketService;
@@ -81,6 +83,9 @@ class QualityRunServiceExecutableDefinitionTest {
 
     @Mock
     private DefaultLakeDatasetGuard defaultLakeDatasetGuard;
+
+    @Mock
+    private QualityDatasetReadGuard qualityDatasetReadGuard;
 
     private QualityRunService service;
 
@@ -95,12 +100,13 @@ class QualityRunServiceExecutableDefinitionTest {
             datasetRepository,
             taskExecutor,
             statementExecutor,
-            auditService,
+            qualityAuditRecorder,
             issueTicketService,
             new ObjectMapper(),
             new GovernanceProperties(),
             transactionManager,
-            defaultLakeDatasetGuard
+            defaultLakeDatasetGuard,
+            qualityDatasetReadGuard
         );
     }
 
@@ -109,6 +115,7 @@ class QualityRunServiceExecutableDefinitionTest {
         GovRule rule = new GovRule();
         rule.setId(RULE_ID);
         rule.setName("空规则");
+        rule.setEnabled(Boolean.TRUE);
 
         GovRuleVersion version = new GovRuleVersion();
         version.setId(VERSION_ID);
@@ -136,10 +143,70 @@ class QualityRunServiceExecutableDefinitionTest {
     }
 
     @Test
+    void rejectsDisabledRuleBeforeCreatingAQualityRun() {
+        GovRule rule = new GovRule();
+        rule.setId(RULE_ID);
+        rule.setName("已停用规则");
+        rule.setEnabled(Boolean.FALSE);
+
+        when(ruleRepository.findById(RULE_ID)).thenReturn(Optional.of(rule));
+
+        QualityRunTriggerRequest request = new QualityRunTriggerRequest();
+        request.setRuleId(RULE_ID);
+
+        assertThatThrownBy(() -> service.trigger(request, "actor"))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("已停用");
+        verify(runRepository, never()).save(any());
+    }
+
+    @Test
+    void humanTriggerCannotImpersonateTheSchedulerAuditActor() {
+        QualityRunTriggerRequest request = new QualityRunTriggerRequest();
+        request.setRuleId(RULE_ID);
+        request.setTriggerType(" SCHEDULED ");
+
+        assertThatThrownBy(() -> service.trigger(request, "alice", "D01"))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("不允许使用调度触发类型");
+
+        verify(ruleRepository, never()).findById(any());
+        verify(qualityAuditRecorder, never()).recordMachine(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void trustedTwoArgumentTriggerCannotImpersonateTheSchedulerAuditActor() {
+        QualityRunTriggerRequest request = new QualityRunTriggerRequest();
+        request.setRuleId(RULE_ID);
+        request.setTriggerType("SCHEDULED");
+
+        assertThatThrownBy(() -> service.trigger(request, "service:dts-ingestion"))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("不允许使用调度触发类型");
+
+        verify(ruleRepository, never()).findById(any());
+        verify(qualityAuditRecorder, never()).recordMachine(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void scheduledEntryRejectsEveryNonScheduledTriggerType() {
+        QualityRunTriggerRequest request = new QualityRunTriggerRequest();
+        request.setRuleId(RULE_ID);
+        request.setTriggerType("AUTO");
+
+        assertThatThrownBy(() -> service.triggerScheduled(request))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("仅允许使用调度触发类型");
+
+        verify(ruleRepository, never()).findById(any());
+    }
+
+    @Test
     void rejectsNullSqlInLegacyPublishedRuleBeforeCreatingAQualityRun() {
         GovRule rule = new GovRule();
         rule.setId(RULE_ID);
         rule.setName("空规则");
+        rule.setEnabled(Boolean.TRUE);
 
         GovRuleVersion version = new GovRuleVersion();
         version.setId(VERSION_ID);
@@ -171,6 +238,7 @@ class QualityRunServiceExecutableDefinitionTest {
         GovRule rule = new GovRule();
         rule.setId(RULE_ID);
         rule.setName("有效规则");
+        rule.setEnabled(Boolean.TRUE);
 
         GovRuleVersion version = new GovRuleVersion();
         version.setId(VERSION_ID);
@@ -208,6 +276,7 @@ class QualityRunServiceExecutableDefinitionTest {
         GovRule rule = new GovRule();
         rule.setId(RULE_ID);
         rule.setName("混合定义规则");
+        rule.setEnabled(Boolean.TRUE);
 
         GovRuleVersion version = new GovRuleVersion();
         version.setId(VERSION_ID);
@@ -246,6 +315,7 @@ class QualityRunServiceExecutableDefinitionTest {
         rule.setId(RULE_ID);
         rule.setName("默认数仓非空检查");
         rule.setSeverity("MEDIUM");
+        rule.setEnabled(Boolean.TRUE);
 
         GovRuleVersion version = new GovRuleVersion();
         version.setId(VERSION_ID);
@@ -290,6 +360,8 @@ class QualityRunServiceExecutableDefinitionTest {
             assertThat(run.getStatus()).isEqualTo("SUCCEEDED");
             assertThat(run.getRowsTotal()).isEqualTo(25);
             assertThat(run.getFailingRowCount()).isZero();
+            assertThat(run.getInputParamsJson()).isNull();
+            assertThat(run.getMetricsJson()).isNull();
         });
     }
 
@@ -299,6 +371,7 @@ class QualityRunServiceExecutableDefinitionTest {
         rule.setId(RULE_ID);
         rule.setName("字段不存在的检查");
         rule.setSeverity("MEDIUM");
+        rule.setEnabled(Boolean.TRUE);
 
         GovRuleVersion version = new GovRuleVersion();
         version.setId(VERSION_ID);
@@ -359,5 +432,61 @@ class QualityRunServiceExecutableDefinitionTest {
         assertThat(metric.getAllValues()).allSatisfy(item ->
             assertThat(item.getMetricValue()).isEqualByComparingTo("0")
         );
+    }
+
+    @Test
+    void runDetailRequiresObjectReadAndRemovesSensitivePayloads() {
+        UUID runId = UUID.fromString("50000000-0000-0000-0000-000000000014");
+        GovQualityRun run = new GovQualityRun();
+        run.setId(runId);
+        run.setDatasetId(DATASET_ID);
+        run.setStatus("FAILED");
+        run.setMessage("driver password=top-secret-token");
+        run.setInputParamsJson("{\"token\":\"top-secret-token\"}");
+        run.setMetricsJson("[{\"sql\":\"select token\"}]");
+        GovQualityMetric metric = new GovQualityMetric();
+        metric.setRun(run);
+        metric.setStatus("FAILED");
+        metric.setDetail("jdbc password=top-secret-token");
+        when(runRepository.findById(runId)).thenReturn(Optional.of(run));
+        when(metricRepository.findByRunId(runId)).thenReturn(List.of(metric));
+
+        QualityRunDto dto = service.getRun(runId, "D01");
+
+        verify(qualityDatasetReadGuard).requireReadable(DATASET_ID, "D01");
+        assertThat(dto.getInputParamsJson()).isNull();
+        assertThat(dto.getMetricsJson()).isNull();
+        assertThat(dto.getMessage()).isEqualTo("质量检测执行失败");
+        assertThat(dto.getMetrics()).singleElement().satisfies(item ->
+            assertThat(item.getDetail()).isEqualTo("质量检测项执行失败")
+        );
+        assertThat(String.valueOf(dto)).doesNotContain("top-secret-token");
+    }
+
+    @Test
+    void unscopedRunListDropsDatasetsOutsideReadableSet() {
+        UUID deniedDatasetId = UUID.fromString("40000000-0000-0000-0000-000000000011");
+        GovQualityRun readable = new GovQualityRun();
+        readable.setId(UUID.fromString("50000000-0000-0000-0000-000000000015"));
+        readable.setDatasetId(DATASET_ID);
+        readable.setStatus("SUCCEEDED");
+        GovQualityRun denied = new GovQualityRun();
+        denied.setId(UUID.fromString("50000000-0000-0000-0000-000000000016"));
+        denied.setDatasetId(deniedDatasetId);
+        denied.setStatus("SUCCEEDED");
+        CatalogDataset readableDataset = new CatalogDataset();
+        readableDataset.setId(DATASET_ID);
+        CatalogDataset deniedDataset = new CatalogDataset();
+        deniedDataset.setId(deniedDatasetId);
+        when(runRepository.findAll(any(org.springframework.data.domain.Pageable.class))).thenReturn(
+            new PageImpl<>(List.of(readable, denied))
+        );
+        when(datasetRepository.findAllById(any())).thenReturn(List.of(readableDataset, deniedDataset));
+        when(qualityDatasetReadGuard.readableDatasetIds(any(), eq("D01"))).thenReturn(Set.of(DATASET_ID));
+        when(metricRepository.findByRunId(readable.getId())).thenReturn(List.of());
+
+        List<QualityRunDto> result = service.listRuns(null, null, null, null, null, null, 10, "D01");
+
+        assertThat(result).extracting(QualityRunDto::getDatasetId).containsExactly(DATASET_ID);
     }
 }

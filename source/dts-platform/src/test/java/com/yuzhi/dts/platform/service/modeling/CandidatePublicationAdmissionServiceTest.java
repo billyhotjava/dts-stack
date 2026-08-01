@@ -10,6 +10,8 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.modeling.CandidatePublicationEvidenceRepository;
 import com.yuzhi.dts.platform.repository.modeling.CandidatePublicationEvidenceRepository.PublicationEntryEvidence;
 import com.yuzhi.dts.platform.security.policy.AssetAction;
+import com.yuzhi.dts.platform.service.catalog.CatalogPublicationPolicyAdapter;
+import com.yuzhi.dts.platform.service.catalog.CatalogPublicationPolicyPort.Action;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryAuditView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CandidateView;
@@ -57,8 +59,7 @@ class CandidatePublicationAdmissionServiceTest {
     void setUp() {
         service = new CandidatePublicationAdmissionService(
             evidence,
-            catalogs,
-            accessChecker,
+            new CatalogPublicationPolicyAdapter(catalogs, accessChecker),
             targetResolver
         );
     }
@@ -135,7 +136,7 @@ class CandidatePublicationAdmissionServiceTest {
                 java.util.Map<?, ?> details = (java.util.Map<?, ?>) failure.details();
                 assertThat(details.get("candidateId")).isEqualTo(CANDIDATE_ID);
                 assertThat(details.get("modelSpecId")).isEqualTo(FIRST_MODEL_ID);
-                assertThat(details.get("assetAction")).isEqualTo(AssetAction.CREATE);
+                assertThat(details.get("assetAction")).isEqualTo(Action.CREATE);
             });
     }
 
@@ -168,7 +169,7 @@ class CandidatePublicationAdmissionServiceTest {
                 java.util.Map<?, ?> details = (java.util.Map<?, ?>) failure.details();
                 assertThat(details.get("candidateId")).isEqualTo(CANDIDATE_ID);
                 assertThat(details.get("modelSpecId")).isEqualTo(FIRST_MODEL_ID);
-                assertThat(details.get("assetAction")).isEqualTo(AssetAction.CREATE);
+                assertThat(details.get("assetAction")).isEqualTo(Action.CREATE);
             });
     }
 
@@ -215,7 +216,7 @@ class CandidatePublicationAdmissionServiceTest {
                 assertThat(failure.kind()).isEqualTo(ModelReleaseCandidateException.Kind.FORBIDDEN);
                 java.util.Map<?, ?> details = (java.util.Map<?, ?>) failure.details();
                 assertThat(details.get("assetId")).isEqualTo(assetId);
-                assertThat(details.get("assetAction")).isEqualTo(AssetAction.ARCHIVE);
+                assertThat(details.get("assetAction")).isEqualTo(Action.ARCHIVE);
             });
     }
 
@@ -243,7 +244,7 @@ class CandidatePublicationAdmissionServiceTest {
                 assertThat(failure.kind()).isEqualTo(ModelReleaseCandidateException.Kind.FORBIDDEN);
                 java.util.Map<?, ?> details = (java.util.Map<?, ?>) failure.details();
                 assertThat(details.get("assetId")).isEqualTo(assetId);
-                assertThat(details.get("assetAction")).isEqualTo(AssetAction.ARCHIVE);
+                assertThat(details.get("assetAction")).isEqualTo(Action.ARCHIVE);
             });
     }
 

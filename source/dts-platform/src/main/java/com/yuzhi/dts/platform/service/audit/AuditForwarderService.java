@@ -3,6 +3,7 @@ package com.yuzhi.dts.platform.service.audit;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.yuzhi.dts.common.audit.AuditPayloadSanitizer;
 import com.yuzhi.dts.platform.config.AuditProperties;
 import com.yuzhi.dts.platform.repository.audit.PlatformAuditOutboxRepository;
 import com.yuzhi.dts.platform.repository.audit.PlatformAuditOutboxRepository.EnqueueCommand;
@@ -18,6 +19,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -38,6 +40,8 @@ public class AuditForwarderService {
     private static final String PLATFORM_AUTH_LOGOUT_BUTTON_CODE = "ADMIN_AUTH_PLATFORM_LOGOUT";
     private static final Duration READ_DEDUPE_WINDOW = Duration.ofSeconds(2);
     private static final int READ_DEDUPE_MAX_SIZE = 2048;
+    private static final int MACHINE_EVENT_IDENTITY_MAX_LENGTH = 200;
+    private static final Pattern MACHINE_EVENT_IDENTITY = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._:/+@-]{0,199}");
 
     public static final class PendingAuditEvent {
         public String eventId;
@@ -69,16 +73,19 @@ public class AuditForwarderService {
     private final AuditProperties properties;
     private final PlatformAuditOutboxRepository outbox;
     private final ObjectMapper objectMapper;
+    private final AuditTenantResolver tenantResolver;
     private final ConcurrentHashMap<String, Long> recentReadEvents = new ConcurrentHashMap<>();
 
     public AuditForwarderService(
         AuditProperties properties,
         PlatformAuditOutboxRepository outbox,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        AuditTenantResolver tenantResolver
     ) {
         this.properties = properties;
         this.outbox = outbox;
         this.objectMapper = objectMapper;
+        this.tenantResolver = tenantResolver;
     }
 
     public void record(
@@ -110,6 +117,60 @@ public class AuditForwarderService {
     public void record(PendingAuditEvent event) {
         if (!properties.isEnabled()) return;
         if (event == null || !StringUtils.hasText(event.actor) || isAnonymous(event.actor)) return;
+        persist(event, true);
+    }
+
+    /**
+     * Persists compliance-sensitive audit evidence or fails the caller transaction.
+     * This path deliberately bypasses read deduplication and never silently skips an event.
+     */
+    public UUID recordStrict(PendingAuditEvent event) {
+        if (!properties.isEnabled()) {
+            throw new IllegalStateException("Audit recording is disabled");
+        }
+        if (event == null || !StringUtils.hasText(event.actor) || isAnonymous(event.actor)) {
+            throw new IllegalStateException("Authenticated audit actor is required");
+        }
+        if (event.auxiliary) {
+            throw new IllegalArgumentException("Strict audit events cannot be auxiliary");
+        }
+        UUID receiptId = persist(event, false);
+        if (receiptId == null) {
+            throw new IllegalStateException("Strict audit event was not persisted");
+        }
+        return receiptId;
+    }
+
+    void recordTrustedMachine(PendingAuditEvent event, String eventIdentity) {
+        prepareTrustedMachineEvent(event, eventIdentity);
+        if (!properties.isEnabled()) return;
+        persist(event, false);
+    }
+
+    UUID recordTrustedMachineStrict(PendingAuditEvent event, String eventIdentity) {
+        prepareTrustedMachineEvent(event, eventIdentity);
+        if (!properties.isEnabled()) {
+            throw new IllegalStateException("Audit recording is disabled");
+        }
+        UUID receiptId = persist(event, false);
+        if (receiptId == null) {
+            throw new IllegalStateException("Strict machine audit event was not persisted");
+        }
+        return receiptId;
+    }
+
+    private void prepareTrustedMachineEvent(PendingAuditEvent event, String eventIdentity) {
+        if (event == null) throw new IllegalArgumentException("event is required");
+        String actor = normalizeTrustedMachineActor(event.actor);
+        String identity = requireMachineEventIdentity(eventIdentity);
+        if (event.occurredAt == null) {
+            throw new IllegalArgumentException("occurredAt is required for machine audit events");
+        }
+        event.actor = actor;
+        event.eventId = deterministicMachineEventId(actor, identity);
+    }
+
+    private UUID persist(PendingAuditEvent event, boolean applyReadDedupe) {
         if (event.auxiliary) {
             if (log.isDebugEnabled()) {
                 log.debug(
@@ -120,9 +181,9 @@ public class AuditForwarderService {
                     event.requestUri
                 );
             }
-            return;
+            return null;
         }
-        if (shouldSkipByDedupe(event)) {
+        if (applyReadDedupe && shouldSkipByDedupe(event)) {
             if (log.isDebugEnabled()) {
                 log.debug(
                     "Deduplicated audit event within {}ms window actor={} action={} resourceId={} uri={}",
@@ -133,13 +194,42 @@ public class AuditForwarderService {
                     event.requestUri
                 );
             }
-            return;
+            return null;
         }
         Instant occurredAt = event.occurredAt != null ? event.occurredAt : Instant.now();
         String eventId = StringUtils.hasText(event.eventId) ? event.eventId.trim() : UUID.randomUUID().toString();
         Map<String, Object> body = AuditPayloadSanitizer.sanitize(toRequestBody(event, eventId, occurredAt));
         String bodyJson = serializeCanonical(body);
-        outbox.enqueue(new EnqueueCommand(eventId, occurredAt, sha256(bodyJson), bodyJson));
+        return outbox.enqueue(
+            new EnqueueCommand(tenantResolver.currentTenantId(), eventId, occurredAt, sha256(bodyJson), bodyJson)
+        );
+    }
+
+    static String normalizeTrustedMachineActor(String actor) {
+        if (!StringUtils.hasText(actor)) {
+            throw new IllegalArgumentException("machineActor is required");
+        }
+        return switch (actor.trim().toLowerCase(Locale.ROOT)) {
+            case "airflow", "dts-airflow", "service:dts-airflow", "_system:airflow" -> "_system:airflow";
+            case "scheduler", "dts-scheduler", "service:dts-scheduler", "_system:scheduler" -> "_system:scheduler";
+            default -> throw new IllegalArgumentException("machineActor is not trusted");
+        };
+    }
+
+    static String requireMachineEventIdentity(String eventIdentity) {
+        if (!StringUtils.hasText(eventIdentity)) {
+            throw new IllegalArgumentException("eventIdentity is required");
+        }
+        String identity = eventIdentity.trim();
+        if (identity.length() > MACHINE_EVENT_IDENTITY_MAX_LENGTH || !MACHINE_EVENT_IDENTITY.matcher(identity).matches()) {
+            throw new IllegalArgumentException("eventIdentity has an invalid format");
+        }
+        return identity;
+    }
+
+    private static String deterministicMachineEventId(String actor, String eventIdentity) {
+        String identity = PRODUCER + "|machine-audit-v1|" + actor + '|' + eventIdentity;
+        return UUID.nameUUIDFromBytes(identity.getBytes(StandardCharsets.UTF_8)).toString();
     }
 
     private Map<String, Object> toRequestBody(PendingAuditEvent event, String eventId, Instant occurredAt) {

@@ -133,6 +133,28 @@ class IngestionAccessContractServiceTest {
     }
 
     @Test
+    void draftDetailOverlayMustKeepActiveCompatibilityLifecycleExecutable() {
+        IngestionTask task = task(48L, "mysqlreader");
+        task.setStatus("active");
+        IngestionTaskRevision draft = revision(task, 601L, 13, "DRAFT");
+        draft.setTaskSnapshot(objectMapper.createObjectNode().put("name", "draft-r13-name"));
+        draft.setEffectiveConfig(objectMapper.createObjectNode());
+        when(revisionRepository.findFirstByTaskIdAndStateOrderByRevisionNumberDesc(48L, "DRAFT"))
+            .thenReturn(Optional.of(draft));
+        com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO dto = new com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO();
+        dto.setId(48L);
+        dto.setName("active-r12-name");
+        dto.setStatus("active");
+
+        service.enrichTaskDto(dto);
+
+        assertThat(dto.getStatus()).isEqualTo("active");
+        assertThat(dto.getName()).isEqualTo("draft-r13-name");
+        assertThat(dto.getRevisionState()).isEqualTo("DRAFT");
+        assertThat(dto.getRevisionNumber()).isEqualTo(13);
+    }
+
+    @Test
     void activateDraftRevisionShouldSupersedePreviousActiveAtomically() {
         IngestionTask task = task(42L, "httpreader");
         IngestionTaskRevision active = revision(task, 201L, 1, "ACTIVE");
@@ -236,6 +258,30 @@ class IngestionAccessContractServiceTest {
         assertThat(runtime.getAirflowDagId()).isEqualTo("task_47_r12");
         assertThat(canonical.getSourceConfig().path("schema").asText()).isEqualTo("r13_schema");
         assertThat(r13.getId()).isEqualTo(513L);
+    }
+
+    @Test
+    void materializeExecutionTaskShouldPreserveNullableBooleanFallbacksWhenSnapshotOmitsThem() {
+        IngestionTask canonical = task(49L, "mysqlreader");
+        canonical.setAirflowEnabled(null);
+        canonical.setQualityPreCheckEnabled(null);
+        when(taskRepository.getReferenceById(49L)).thenReturn(canonical);
+        when(revisionRepository.findAllByTaskIdForUpdate(49L)).thenReturn(List.of());
+        when(policyRepository.findFirstByPolicyKeyAndStatusOrderByVersionDesc("GLOBAL", "ACTIVE"))
+            .thenReturn(Optional.of(policy()));
+        when(revisionRepository.save(any(IngestionTaskRevision.class))).thenAnswer(invocation -> {
+            IngestionTaskRevision revision = invocation.getArgument(0);
+            revision.setId(514L);
+            return revision;
+        });
+
+        IngestionTaskRevision revision = service.recordDraftRevision(canonical, null, false);
+        when(revisionRepository.findById(514L)).thenReturn(Optional.of(revision));
+
+        IngestionTask runtime = service.materializeExecutionTask(canonical, 514L);
+
+        assertThat(runtime.getAirflowEnabled()).isNull();
+        assertThat(runtime.getQualityPreCheckEnabled()).isNull();
     }
 
     private IngestionTask task(Long id, String sourceType) {

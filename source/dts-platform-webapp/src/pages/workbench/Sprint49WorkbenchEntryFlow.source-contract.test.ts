@@ -21,7 +21,7 @@ const expectedWorkbenchRoutes = [
 	"/foundation/data-sources",
 	"/workbench?section=data-management&journey=first-report",
 	"/workbench?section=data-management",
-	"/governance/quality",
+	"/governance/rules/runs",
 	"/services/apis",
 	"/ops/overview",
 ];
@@ -45,7 +45,7 @@ test("Sprint-49 F3 registered homepage actions resolve to existing dashboard rou
 		assert.match(STATIC_ROUTES_SOURCE, new RegExp(`path:\\s*"${route.replace(/\//g, "\\/")}"`));
 	}
 
-	for (const route of ["/foundation/data-sources", "/governance/quality", "/services/apis"]) {
+	for (const route of ["/foundation/data-sources", "/governance/rules/runs", "/services/apis"]) {
 		assert.match(DYNAMIC_RESOLVER_SOURCE, new RegExp(route.replace(/[/?]/g, "\\$&")));
 	}
 

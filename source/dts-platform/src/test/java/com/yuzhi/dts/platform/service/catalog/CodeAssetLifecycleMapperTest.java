@@ -18,16 +18,6 @@ class CodeAssetLifecycleMapperTest {
     }
 
     @Test
-    void mapsModelingSqlModelLifecycleWithoutFalsePendingGovernance() {
-        assertThat(CodeAssetLifecycleMapper.fromModelingSqlModelStatus("ACTIVE", true)).isEqualTo("ACTIVE");
-        assertThat(CodeAssetLifecycleMapper.fromModelingSqlModelStatus("PROMOTED", true)).isEqualTo("ACTIVE");
-        assertThat(CodeAssetLifecycleMapper.fromModelingSqlModelStatus("TESTING", true)).isEqualTo("TESTING");
-        assertThat(CodeAssetLifecycleMapper.fromModelingSqlModelStatus("DRAFT", true)).isEqualTo("DRAFT_GOVERNANCE");
-        assertThat(CodeAssetLifecycleMapper.fromModelingSqlModelStatus("ACTIVE", false)).isEqualTo("ARCHIVED");
-        assertThat(CodeAssetLifecycleMapper.fromModelingSqlModelStatus(null, true)).isEqualTo("PENDING_GOVERNANCE");
-    }
-
-    @Test
     void mapsApiAndDataStandardLifecycle() {
         assertThat(CodeAssetLifecycleMapper.fromApiServiceStatus("PUBLISHED")).isEqualTo("ACTIVE");
         assertThat(CodeAssetLifecycleMapper.fromApiServiceStatus("DISABLED")).isEqualTo("ARCHIVED");

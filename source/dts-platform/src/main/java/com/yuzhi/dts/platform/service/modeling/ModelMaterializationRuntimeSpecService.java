@@ -1,12 +1,16 @@
 package com.yuzhi.dts.platform.service.modeling;
 
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationDispatchRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationDispatchRepository.RuntimeSpecRecord;
+import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.etl.DbtRuntimeProfileLeaseService;
 import com.yuzhi.dts.platform.service.etl.DbtRuntimeProfileLeaseService.LeaseRequest;
 import com.yuzhi.dts.platform.service.etl.DbtRuntimeProfileLeaseService.LeaseView;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -18,22 +22,39 @@ public class ModelMaterializationRuntimeSpecService {
 
     private final ModelMaterializationDispatchRepository dispatches;
     private final ModelRuntimeSpecTokenCodec tokens;
+    private final ModelMaterializationSourceAvailabilityGuard sourceAvailability;
+    private final ModelMaterializationAvailabilityAuditService availabilityAudit;
     private final DbtRuntimeProfileLeaseService leases;
+    private final AuditService auditService;
     private final Clock clock;
 
     @Autowired
     public ModelMaterializationRuntimeSpecService(
         ModelMaterializationDispatchRepository dispatches,
         ModelRuntimeSpecTokenCodec tokens,
-        DbtRuntimeProfileLeaseService leases
+        ModelMaterializationSourceAvailabilityGuard sourceAvailability,
+        ModelMaterializationAvailabilityAuditService availabilityAudit,
+        DbtRuntimeProfileLeaseService leases,
+        AuditService auditService
     ) {
-        this(dispatches, tokens, leases, Clock.systemUTC());
+        this(
+            dispatches,
+            tokens,
+            sourceAvailability,
+            availabilityAudit,
+            leases,
+            auditService,
+            Clock.systemUTC()
+        );
     }
 
     ModelMaterializationRuntimeSpecService(
         ModelMaterializationDispatchRepository dispatches,
         ModelRuntimeSpecTokenCodec tokens,
+        ModelMaterializationSourceAvailabilityGuard sourceAvailability,
+        ModelMaterializationAvailabilityAuditService availabilityAudit,
         DbtRuntimeProfileLeaseService leases,
+        AuditService auditService,
         Clock clock
     ) {
         this.dispatches = Objects.requireNonNull(
@@ -44,9 +65,15 @@ public class ModelMaterializationRuntimeSpecService {
             tokens,
             "tokens is required"
         );
+        this.sourceAvailability = Objects.requireNonNull(sourceAvailability, "sourceAvailability is required");
+        this.availabilityAudit = Objects.requireNonNull(availabilityAudit, "availabilityAudit is required");
         this.leases = Objects.requireNonNull(
             leases,
             "leases is required"
+        );
+        this.auditService = Objects.requireNonNull(
+            auditService,
+            "auditService is required"
         );
         this.clock = Objects.requireNonNull(clock, "clock is required");
     }
@@ -92,8 +119,15 @@ public class ModelMaterializationRuntimeSpecService {
                 "Runtime spec token has expired"
             );
         }
+        try {
+            sourceAvailability.requireDispatchCurrent(runtime.dispatchId());
+        } catch (ModelReleaseCandidateException unavailable) {
+            availabilityAudit.recordRuntimeDenied(runtime, unavailable.code(), now);
+            throw failure(unavailable.code(), unavailable.getMessage());
+        }
         requireRuntime(runtime);
         LeaseView lease;
+        boolean issuedNow = false;
         if (runtime.profileLeaseId() != null) {
             lease = leases.viewActive(runtime.profileLeaseId());
         } else {
@@ -106,6 +140,7 @@ public class ModelMaterializationRuntimeSpecService {
                     runtime.executionTargetKey()
                 )
             );
+            issuedNow = true;
             if (
                 !dispatches.attachRuntimeLease(
                     runtime.dispatchId(),
@@ -120,7 +155,20 @@ public class ModelMaterializationRuntimeSpecService {
                 );
             }
         }
-        return new RuntimeSpecView(
+        try {
+            sourceAvailability.pinDispatchCurrent(runtime.dispatchId(), now);
+        } catch (ModelReleaseCandidateException unavailable) {
+            if (issuedNow) {
+                try {
+                    leases.release(lease.profileLeaseId());
+                } catch (RuntimeException compensationFailure) {
+                    unavailable.addSuppressed(compensationFailure);
+                }
+            }
+            availabilityAudit.recordRuntimeDenied(runtime, unavailable.code(), now);
+            throw failure(unavailable.code(), unavailable.getMessage());
+        }
+        RuntimeSpecView view = new RuntimeSpecView(
             runtime.dispatchId(),
             "RELEASE_BUILD",
             runtime.scopedBundleChecksum(),
@@ -129,6 +177,63 @@ public class ModelMaterializationRuntimeSpecService {
             lease.profileLeaseId(),
             lease.expiresAt(),
             lease.credentialVersionRef()
+        );
+        try {
+            auditRuntimeSpecConsumed(
+                runtime,
+                lease,
+                runtime.runtimeConsumedAt() == null
+                    ? now
+                    : runtime.runtimeConsumedAt()
+            );
+        } catch (RuntimeException failure) {
+            if (issuedNow) {
+                try {
+                    leases.release(lease.profileLeaseId());
+                } catch (RuntimeException compensationFailure) {
+                    failure.addSuppressed(compensationFailure);
+                }
+            }
+            throw failure;
+        }
+        return view;
+    }
+
+    private void auditRuntimeSpecConsumed(
+        RuntimeSpecRecord runtime,
+        LeaseView lease,
+        Instant occurredAt
+    ) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("tenant", runtime.tenantId());
+        payload.put("candidate", runtime.candidateId());
+        payload.put("version", runtime.candidateVersion());
+        payload.put("attempt", runtime.attempt());
+        payload.put("dispatch", runtime.dispatchId());
+        payload.put("run", runtime.airflowRunId());
+        payload.put("status", "CONSUMED");
+        payload.put("leaseId", lease.profileLeaseId());
+        payload.put("expiresAt", lease.expiresAt());
+        auditService.auditActionAsStrict(
+            "airflow",
+            runtimeSpecEventIdentity(runtime),
+            occurredAt,
+            "MODEL_MATERIALIZATION_RUNTIME_SPEC_CONSUMED",
+            AuditStage.SUCCESS,
+            runtime.dispatchId().toString(),
+            payload
+        );
+    }
+
+    private static String runtimeSpecEventIdentity(
+        RuntimeSpecRecord runtime
+    ) {
+        return (
+            "model-materialization-runtime-spec:" +
+            runtime.dispatchId() +
+            ":attempt:" +
+            runtime.attempt() +
+            ":consumed"
         );
     }
 

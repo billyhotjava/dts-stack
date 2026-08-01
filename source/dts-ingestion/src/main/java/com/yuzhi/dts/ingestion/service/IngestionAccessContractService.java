@@ -53,6 +53,10 @@ public class IngestionAccessContractService {
     public static final String REVISION_ACTIVE = "ACTIVE";
     public static final String REVISION_SUPERSEDED = "SUPERSEDED";
     public static final String REVISION_LEGACY_UNSEALED = "LEGACY_UNSEALED";
+    public static final String DAG_DEPLOYMENT_STAGED = "STAGED";
+    public static final String DAG_DEPLOYMENT_RESTAGE_REQUIRED = "RESTAGE_REQUIRED";
+    public static final String DAG_DEPLOYMENT_RECONCILIATION_REQUIRED = "RECONCILIATION_REQUIRED";
+    public static final String DAG_DEPLOYMENT_ACTIVE = "ACTIVE";
 
     private static final Set<String> SECRET_KEYS = Set.of(
         "password",
@@ -194,6 +198,84 @@ public class IngestionAccessContractService {
         execution.setEffectiveConfigChecksum(revision.getEffectiveConfigChecksum());
         execution.setQualityPolicyRef(revision.getQualityPolicyRef());
         return revision;
+    }
+
+    public IngestionTaskRevision bindExactRevision(
+        IngestionExecution execution,
+        IngestionTask task,
+        Long revisionId,
+        String expectedChecksum
+    ) {
+        if (execution == null || task == null || task.getId() == null || revisionId == null || !StringUtils.hasText(expectedChecksum)) {
+            throw new IllegalArgumentException("Exact execution revision id and checksum are required");
+        }
+        IngestionTaskRevision revision = revisionRepository.findById(revisionId)
+            .orElseThrow(() -> new IllegalStateException("Execution revision not found: " + revisionId));
+        if (revision.getTask() == null || !task.getId().equals(revision.getTask().getId())) {
+            throw new IllegalStateException("Execution revision does not belong to task: " + task.getId());
+        }
+        if (!expectedChecksum.equals(revision.getEffectiveConfigChecksum())) {
+            throw new IllegalStateException("Execution revision checksum mismatch: " + revisionId);
+        }
+        if (REVISION_LEGACY_UNSEALED.equals(revision.getState())
+            || revision.getRuntimeSnapshot() == null
+            || revision.getRuntimeSnapshotIv() == null
+            || !StringUtils.hasText(revision.getRuntimeSnapshotKeyVersion())) {
+            throw new IllegalStateException("Execution revision is not formally sealed: " + revisionId);
+        }
+        execution.setTaskRevisionId(revision.getId());
+        execution.setRevisionNumber(revision.getRevisionNumber());
+        execution.setEffectiveConfigChecksum(revision.getEffectiveConfigChecksum());
+        execution.setQualityPolicyRef(revision.getQualityPolicyRef());
+        return revision;
+    }
+
+    public IngestionTaskRevision markDraftDagStaged(
+        Long revisionId,
+        String stagedDagPath,
+        String publishedDagPath,
+        String previousAirflowDagId
+    ) {
+        IngestionTaskRevision revision = requireRevision(revisionId);
+        if (!REVISION_DRAFT.equals(revision.getState())) {
+            throw new IllegalStateException("Only a draft revision can stage a DAG: " + revisionId);
+        }
+        revision.setStagedDagPath(stagedDagPath);
+        revision.setPublishedDagPath(publishedDagPath);
+        revision.setPreviousAirflowDagId(previousAirflowDagId);
+        revision.setDagDeploymentStatus(DAG_DEPLOYMENT_STAGED);
+        revision.setDagDeploymentError(null);
+        revision.setDagDeploymentUpdatedAt(Instant.now());
+        return revisionRepository.save(revision);
+    }
+
+    public IngestionTaskRevision markDagDeployment(Long revisionId, String status, String error) {
+        IngestionTaskRevision revision = requireRevision(revisionId);
+        revision.setDagDeploymentStatus(status);
+        revision.setDagDeploymentError(error);
+        revision.setDagDeploymentUpdatedAt(Instant.now());
+        return revisionRepository.save(revision);
+    }
+
+    @Transactional(readOnly = true)
+    public IngestionTaskRevision getRevision(Long revisionId) {
+        return requireRevision(revisionId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<IngestionTaskRevision> findTaskRevisionEntities(Long taskId) {
+        return revisionRepository.findAllByTaskIdOrderByRevisionNumberDesc(taskId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<IngestionTaskRevision> findDagDeploymentsNeedingReconciliation() {
+        return revisionRepository.findTop50ByDagDeploymentStatusInOrderByDagDeploymentUpdatedAtAsc(
+            List.of(
+                DAG_DEPLOYMENT_STAGED,
+                DAG_DEPLOYMENT_RESTAGE_REQUIRED,
+                DAG_DEPLOYMENT_RECONCILIATION_REQUIRED
+            )
+        );
     }
 
     @Transactional(readOnly = true)
@@ -363,6 +445,14 @@ public class IngestionAccessContractService {
         return taskRepository.findById(taskId).orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
     }
 
+    private IngestionTaskRevision requireRevision(Long revisionId) {
+        if (revisionId == null) {
+            throw new IllegalArgumentException("Revision id is required");
+        }
+        return revisionRepository.findById(revisionId)
+            .orElseThrow(() -> new IllegalArgumentException("Revision not found: " + revisionId));
+    }
+
     private java.util.Optional<IngestionTaskRevision> findDetailRevisionOptional(Long taskId, String taskStatus) {
         java.util.Optional<IngestionTaskRevision> draft = revisionRepository.findFirstByTaskIdAndStateOrderByRevisionNumberDesc(
             taskId,
@@ -427,8 +517,6 @@ public class IngestionAccessContractService {
         set(snapshot, "fieldClassifications", task.getFieldClassifications());
         set(snapshot, "addaxConfig", task.getAddaxConfig());
         snapshot.put("airflowEnabled", Boolean.TRUE.equals(task.getAirflowEnabled()));
-        put(snapshot, "dbtModelSelector", task.getDbtModelSelector());
-        put(snapshot, "dbtDagSelector", task.getDbtDagSelector());
         snapshot.put("qualityPreCheckEnabled", Boolean.TRUE.equals(task.getQualityPreCheckEnabled()));
         put(snapshot, "stagingTableName", task.getStagingTableName());
         put(snapshot, "preCheckStatus", task.getPreCheckStatus());
@@ -468,8 +556,6 @@ public class IngestionAccessContractService {
         if (task.getAirflowEnabled() != null) {
             snapshot.put("airflowEnabled", task.getAirflowEnabled());
         }
-        put(snapshot, "dbtModelSelector", task.getDbtModelSelector());
-        put(snapshot, "dbtDagSelector", task.getDbtDagSelector());
         put(snapshot, "status", task.getStatus());
         put(snapshot, "airflowDagId", task.getAirflowDagId());
         if (task.getQualityPreCheckEnabled() != null) {
@@ -519,8 +605,6 @@ public class IngestionAccessContractService {
         task.setAddaxJobPath(text(snapshot, "addaxJobPath", persistedTask.getAddaxJobPath()));
         task.setAirflowEnabled(bool(snapshot, "airflowEnabled", persistedTask.getAirflowEnabled()));
         task.setAirflowDagId(text(snapshot, "airflowDagId", persistedTask.getAirflowDagId()));
-        task.setDbtModelSelector(text(snapshot, "dbtModelSelector", persistedTask.getDbtModelSelector()));
-        task.setDbtDagSelector(text(snapshot, "dbtDagSelector", persistedTask.getDbtDagSelector()));
         task.setStatus(REVISION_DRAFT.equals(revision.getState()) ? "draft" : "active");
         task.setQualityPreCheckEnabled(bool(snapshot, "qualityPreCheckEnabled", persistedTask.getQualityPreCheckEnabled()));
         task.setStagingTableName(text(snapshot, "stagingTableName", persistedTask.getStagingTableName()));
@@ -679,7 +763,10 @@ public class IngestionAccessContractService {
             revision.getCreatedBy(),
             revision.getCreatedAt(),
             revision.getActivatedBy(),
-            revision.getActivatedAt()
+            revision.getActivatedAt(),
+            revision.getDagDeploymentStatus(),
+            revision.getDagDeploymentError(),
+            revision.getDagDeploymentUpdatedAt()
         );
     }
 
@@ -726,14 +813,14 @@ public class IngestionAccessContractService {
         dto.setGraphDsl(json(snapshot, "graphDsl", dto.getGraphDsl()));
         dto.setAddaxConfig(json(snapshot, "addaxConfig", dto.getAddaxConfig()));
         dto.setAirflowEnabled(bool(snapshot, "airflowEnabled", dto.getAirflowEnabled()));
-        dto.setDbtModelSelector(text(snapshot, "dbtModelSelector", dto.getDbtModelSelector()));
-        dto.setDbtDagSelector(text(snapshot, "dbtDagSelector", dto.getDbtDagSelector()));
         dto.setQualityPreCheckEnabled(bool(snapshot, "qualityPreCheckEnabled", dto.getQualityPreCheckEnabled()));
         dto.setStagingTableName(text(snapshot, "stagingTableName", dto.getStagingTableName()));
         dto.setPreCheckStatus(text(snapshot, "preCheckStatus", dto.getPreCheckStatus()));
         dto.setClassificationSeal(copy(revision.getClassificationSeal()));
         dto.setFieldClassifications(copy(revision.getFieldClassifications()));
-        dto.setStatus(REVISION_DRAFT.equals(revision.getState()) ? "draft" : dto.getStatus());
+        if (REVISION_DRAFT.equals(revision.getState()) && !"active".equalsIgnoreCase(dto.getStatus())) {
+            dto.setStatus("draft");
+        }
     }
 
     private void put(ObjectNode target, String key, String value) {
@@ -761,7 +848,10 @@ public class IngestionAccessContractService {
 
     private Boolean bool(JsonNode snapshot, String key, Boolean fallback) {
         JsonNode value = snapshot == null ? null : snapshot.get(key);
-        return value == null || value.isNull() ? fallback : value.asBoolean();
+        if (value == null || value.isNull()) {
+            return fallback;
+        }
+        return value.asBoolean();
     }
 
     private UUID uuid(JsonNode snapshot, String key, UUID fallback) {

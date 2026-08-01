@@ -3,19 +3,17 @@ package com.yuzhi.dts.platform.service.catalog;
 import com.yuzhi.dts.platform.domain.catalog.CatalogAssetMapping;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.OpenMetadataAssetCache;
-import com.yuzhi.dts.platform.domain.governance.GovIndicatorDefinition;
-import com.yuzhi.dts.platform.domain.modeling.DataStandard;
-import com.yuzhi.dts.platform.domain.modeling.ModelingGlossaryTerm;
-import com.yuzhi.dts.platform.domain.modeling.ModelingSqlModel;
-import com.yuzhi.dts.platform.domain.service.SvcApi;
 import com.yuzhi.dts.platform.repository.catalog.CatalogAssetMappingRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.OpenMetadataAssetCacheRepository;
-import com.yuzhi.dts.platform.repository.governance.GovIndicatorDefinitionRepository;
-import com.yuzhi.dts.platform.repository.modeling.DataStandardRepository;
-import com.yuzhi.dts.platform.repository.modeling.ModelingGlossaryTermRepository;
-import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
-import com.yuzhi.dts.platform.repository.service.SvcApiRepository;
+import com.yuzhi.dts.platform.service.catalog.CanonicalModelIdentityReadPort.ModelIdentity;
+import com.yuzhi.dts.platform.service.governance.GovernanceReferenceAssetReadPort;
+import com.yuzhi.dts.platform.service.governance.GovernanceReferenceAssetReadPort.IndicatorView;
+import com.yuzhi.dts.platform.service.modeling.GovernedStandardReadPort;
+import com.yuzhi.dts.platform.service.modeling.GovernedStandardReadPort.GlossaryAsset;
+import com.yuzhi.dts.platform.service.modeling.GovernedStandardReadPort.StandardAsset;
+import com.yuzhi.dts.platform.service.services.ServiceAssetIdentityReadPort;
+import com.yuzhi.dts.platform.service.services.ServiceAssetIdentityReadPort.ApiAsset;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -33,32 +31,29 @@ public class CatalogAssetIdentityResolver {
     private final OpenMetadataAssetCacheRepository assetRepository;
     private final CatalogAssetMappingRepository mappingRepository;
     private final CatalogDatasetRepository datasetRepository;
-    private final GovIndicatorDefinitionRepository indicatorRepository;
-    private final ModelingSqlModelRepository sqlModelRepository;
-    private final DataStandardRepository dataStandardRepository;
-    private final ModelingGlossaryTermRepository glossaryTermRepository;
-    private final SvcApiRepository svcApiRepository;
+    private final GovernanceReferenceAssetReadPort governanceAssets;
+    private final CanonicalModelIdentityReadPort canonicalModelIdentityReadPort;
+    private final GovernedStandardReadPort governedStandards;
+    private final ServiceAssetIdentityReadPort serviceAssets;
     private final CatalogAssetIdentityResolutionAuditService resolutionAuditService;
 
     public CatalogAssetIdentityResolver(
         OpenMetadataAssetCacheRepository assetRepository,
         CatalogAssetMappingRepository mappingRepository,
         CatalogDatasetRepository datasetRepository,
-        GovIndicatorDefinitionRepository indicatorRepository,
-        ModelingSqlModelRepository sqlModelRepository,
-        DataStandardRepository dataStandardRepository,
-        ModelingGlossaryTermRepository glossaryTermRepository,
-        SvcApiRepository svcApiRepository,
+        GovernanceReferenceAssetReadPort governanceAssets,
+        CanonicalModelIdentityReadPort canonicalModelIdentityReadPort,
+        GovernedStandardReadPort governedStandards,
+        ServiceAssetIdentityReadPort serviceAssets,
         CatalogAssetIdentityResolutionAuditService resolutionAuditService
     ) {
         this.assetRepository = assetRepository;
         this.mappingRepository = mappingRepository;
         this.datasetRepository = datasetRepository;
-        this.indicatorRepository = indicatorRepository;
-        this.sqlModelRepository = sqlModelRepository;
-        this.dataStandardRepository = dataStandardRepository;
-        this.glossaryTermRepository = glossaryTermRepository;
-        this.svcApiRepository = svcApiRepository;
+        this.governanceAssets = governanceAssets;
+        this.canonicalModelIdentityReadPort = canonicalModelIdentityReadPort;
+        this.governedStandards = governedStandards;
+        this.serviceAssets = serviceAssets;
         this.resolutionAuditService = resolutionAuditService;
     }
 
@@ -196,7 +191,8 @@ public class CatalogAssetIdentityResolver {
             case "glossary", "glossary_term" -> resolveGlossaryTerm(naturalKey);
             case "data_standard", "standard" -> resolveDataStandard(naturalKey);
             case "gov_indicator", "indicator", "metric" -> resolveGovIndicator(naturalKey);
-            case "modeling_sql_model", "sql_model", "dbt_model" -> resolveModelingSqlModel(naturalKey);
+            case "dbt_model" -> resolveDbtModel(naturalKey);
+            case "semantic_model", "model_spec" -> resolveSemanticModel(naturalKey);
             case "api_service", "svc_api", "api" -> resolveApiService(naturalKey);
             case "metric_pack" -> Optional.of(metricPackIdentity(trimmed));
             default -> resolveCodeAssetByCode(naturalKey);
@@ -204,23 +200,23 @@ public class CatalogAssetIdentityResolver {
     }
 
     private Optional<CatalogAssetIdentity> resolveCodeAssetById(UUID id) {
-        Optional<GovIndicatorDefinition> indicator = indicatorRepository.findById(id);
+        Optional<IndicatorView> indicator = governanceAssets.indicatorById(id);
         if (indicator.isPresent()) {
             return Optional.of(govIndicatorIdentity(indicator.orElseThrow()));
         }
-        Optional<ModelingSqlModel> sqlModel = sqlModelRepository.findById(id);
-        if (sqlModel.isPresent()) {
-            return Optional.of(modelingSqlModelIdentity(sqlModel.orElseThrow()));
+        Optional<ModelIdentity> canonicalModel = canonicalModelIdentityReadPort.findById(id);
+        if (canonicalModel.isPresent()) {
+            return canonicalModel.map(this::canonicalModelIdentity);
         }
-        Optional<DataStandard> standard = dataStandardRepository.findById(id);
+        Optional<StandardAsset> standard = governedStandards.findDataStandardById(id);
         if (standard.isPresent()) {
             return Optional.of(dataStandardIdentity(standard.orElseThrow()));
         }
-        Optional<ModelingGlossaryTerm> glossaryTerm = glossaryTermRepository.findById(id);
+        Optional<GlossaryAsset> glossaryTerm = governedStandards.findGlossaryTermById(id);
         if (glossaryTerm.isPresent()) {
             return glossaryTerm.map(this::glossaryTermIdentity);
         }
-        Optional<SvcApi> api = svcApiRepository.findById(id);
+        Optional<ApiAsset> api = serviceAssets.findApiById(id);
         return api.map(this::apiServiceIdentity);
     }
 
@@ -229,7 +225,7 @@ public class CatalogAssetIdentityResolver {
         if (indicator.isPresent()) {
             return indicator;
         }
-        Optional<CatalogAssetIdentity> model = resolveModelingSqlModel(code);
+        Optional<CatalogAssetIdentity> model = resolveDbtModel(code);
         if (model.isPresent()) {
             return model;
         }
@@ -248,66 +244,63 @@ public class CatalogAssetIdentityResolver {
         if (!StringUtils.hasText(code)) {
             return Optional.empty();
         }
-        return indicatorRepository.findFirstByCodeIgnoreCase(code).map(this::govIndicatorIdentity);
+        return governanceAssets.indicatorByCode(code).map(this::govIndicatorIdentity);
     }
 
-    private Optional<CatalogAssetIdentity> resolveModelingSqlModel(String code) {
+    private Optional<CatalogAssetIdentity> resolveDbtModel(String code) {
         if (!StringUtils.hasText(code)) {
             return Optional.empty();
         }
-        String expected = code.trim();
-        Optional<ModelingSqlModel> byName = sqlModelRepository.findFirstByNameIgnoreCase(expected);
-        if (byName.isPresent()) {
-            return byName.map(this::modelingSqlModelIdentity);
+        return canonicalModelIdentityReadPort.findDbtModel(code.trim()).map(this::canonicalModelIdentity);
+    }
+
+    private Optional<CatalogAssetIdentity> resolveSemanticModel(String code) {
+        if (!StringUtils.hasText(code)) {
+            return Optional.empty();
         }
-        return sqlModelRepository.findFirstByAliasIgnoreCase(expected).map(this::modelingSqlModelIdentity);
+        return canonicalModelIdentityReadPort.findSemanticModel(code.trim()).map(this::canonicalModelIdentity);
     }
 
     private Optional<CatalogAssetIdentity> resolveDataStandard(String code) {
         if (!StringUtils.hasText(code)) {
             return Optional.empty();
         }
-        return dataStandardRepository.findByCodeIgnoreCase(code).map(this::dataStandardIdentity);
+        return governedStandards.findDataStandardByCode(code).map(this::dataStandardIdentity);
     }
 
     private Optional<CatalogAssetIdentity> resolveGlossaryTerm(String code) {
-        List<ModelingGlossaryTerm> terms = glossaryTermRepository.findByCodeLowerIn(List.copyOf(codeCandidates(code)));
-        if (terms == null || terms.isEmpty()) {
-            return Optional.empty();
-        }
-        return terms.stream().findFirst().map(this::glossaryTermIdentity);
+        return governedStandards.findFirstGlossaryTermByLowerCodes(List.copyOf(codeCandidates(code))).map(this::glossaryTermIdentity);
     }
 
     private Optional<CatalogAssetIdentity> resolveApiService(String code) {
         if (!StringUtils.hasText(code)) {
             return Optional.empty();
         }
-        return svcApiRepository.findFirstByCodeIgnoreCase(code).map(this::apiServiceIdentity);
+        return serviceAssets.findApiByCode(code).map(this::apiServiceIdentity);
     }
 
-    private CatalogAssetIdentity govIndicatorIdentity(GovIndicatorDefinition indicator) {
-        String naturalKey = firstText(indicator.getCode(), idText(indicator.getId()));
-        return codeAssetIdentity(CatalogAssetType.GOV_INDICATOR, naturalKey, idText(indicator.getId()), "gov-indicator:" + naturalKey);
+    private CatalogAssetIdentity govIndicatorIdentity(IndicatorView indicator) {
+        String naturalKey = firstText(indicator.code(), idText(indicator.id()));
+        return codeAssetIdentity(CatalogAssetType.GOV_INDICATOR, naturalKey, idText(indicator.id()), "gov-indicator:" + naturalKey);
     }
 
-    private CatalogAssetIdentity modelingSqlModelIdentity(ModelingSqlModel model) {
-        String naturalKey = firstText(model.getName(), model.getAlias(), idText(model.getId()));
-        return codeAssetIdentity(CatalogAssetType.MODELING_SQL_MODEL, naturalKey, idText(model.getId()), "modeling-sql-model:" + naturalKey);
+    private CatalogAssetIdentity canonicalModelIdentity(ModelIdentity model) {
+        return new CatalogAssetIdentity(model.assetType(), model.assetKey(), idText(model.assetId()), model.sourceRef());
     }
 
-    private CatalogAssetIdentity dataStandardIdentity(DataStandard standard) {
-        String naturalKey = firstText(standard.getCode(), idText(standard.getId()));
-        return codeAssetIdentity(CatalogAssetType.DATA_STANDARD, naturalKey, idText(standard.getId()), "data-standard:" + naturalKey);
+    private CatalogAssetIdentity dataStandardIdentity(StandardAsset standard) {
+        String naturalKey = firstText(standard.code(), idText(standard.id()));
+        return codeAssetIdentity(CatalogAssetType.DATA_STANDARD, naturalKey, idText(standard.id()), "data-standard:" + naturalKey);
     }
 
-    private CatalogAssetIdentity glossaryTermIdentity(ModelingGlossaryTerm term) {
-        String naturalKey = firstText(term.getCode(), idText(term.getId()));
-        return codeAssetIdentity(CatalogAssetType.GLOSSARY_TERM, naturalKey, idText(term.getId()), "glossary-term:" + naturalKey);
+    private CatalogAssetIdentity glossaryTermIdentity(GlossaryAsset term) {
+        String naturalKey = firstText(term.code(), idText(term.id()));
+        return codeAssetIdentity(CatalogAssetType.GLOSSARY_TERM, naturalKey, idText(term.id()), "glossary-term:" + naturalKey);
     }
 
-    private CatalogAssetIdentity apiServiceIdentity(SvcApi api) {
-        String naturalKey = firstText(api.getCode(), idText(api.getId()));
-        return codeAssetIdentity(CatalogAssetType.API_SERVICE, naturalKey, idText(api.getId()), "api-service:" + naturalKey);
+    private CatalogAssetIdentity apiServiceIdentity(ApiAsset api) {
+        String naturalKey = firstText(api.code(), idText(api.id()));
+        return codeAssetIdentity(CatalogAssetType.API_SERVICE, naturalKey, idText(api.id()), "api-service:" + naturalKey);
     }
 
     private CatalogAssetIdentity codeAssetIdentity(CatalogAssetType type, String naturalKey, String assetId, String sourceRef) {
@@ -399,8 +392,6 @@ public class CatalogAssetIdentityResolver {
                 "gov_indicator",
                 "indicator",
                 "metric",
-                "modeling_sql_model",
-                "sql_model",
                 "dbt_model",
                 "api_service",
                 "svc_api",

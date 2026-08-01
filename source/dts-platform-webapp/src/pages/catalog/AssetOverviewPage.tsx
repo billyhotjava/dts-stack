@@ -1,16 +1,13 @@
 import { DatabaseOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Alert, Button, Layout, Spin, Tabs, Tag, Tooltip } from "antd";
+import { Alert, Button, Layout, Spin, Tag, Tooltip } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { getCatalogAssetsOverview, getDomainTree, listCatalogAssetsV2 } from "@/api/platformApi";
 import { DomainScopeNav, type DomainScopeStats } from "@/components/catalog/DomainScopeNav";
-import { TagManagementTab } from "@/components/catalog/tags/TagManagementTab";
 import { PageHeader } from "@/components/page-header";
-import { useCatalogTagGovernanceAccess } from "@/hooks/useModuleManageAccess";
 import { useRouter } from "@/routes/hooks";
 import { resolveAssetReadiness } from "./assetPortalUx.helpers";
 import { GOVERNANCE_STATUS_DICT, resolveEnumLabel } from "./assets/assetEnumLabels";
-import { GovernanceGapPanel } from "./assets/GovernanceGapPanel";
 import type { AssetRow, DomainNode } from "./assets/assetPageShared";
 import {
 	buildDomainScopeNodes,
@@ -20,6 +17,7 @@ import {
 	normalizeLayer,
 	UNASSIGNED_DOMAIN_KEY,
 } from "./assets/assetPageShared";
+import { GovernanceGapPanel } from "./assets/GovernanceGapPanel";
 
 /** 矩阵最多展示的主题域列数，超出合并为「其他 N 个域」并明示 */
 const MATRIX_MAX_COLUMNS = 8;
@@ -35,6 +33,9 @@ type AssetOverview = {
 	missingDomain?: number;
 	stale?: number;
 	attention?: number;
+	tagged?: number;
+	untagged?: number;
+	tagCoveragePercent?: number;
 	byLayer?: Record<string, number>;
 	governanceStatusCounts?: Record<string, number>;
 	matrix?: MatrixCell[];
@@ -49,10 +50,10 @@ type AssetOverview = {
 export default function AssetOverviewPage() {
 	const router = useRouter();
 	const [searchParams, setSearchParams] = useSearchParams();
-	const canManageCatalog = useCatalogTagGovernanceAccess();
-	const activeTab = searchParams.get("tab") === "catalog-tags" ? "catalog-tags" : "asset-map";
+	const isLegacyTagRedirect = searchParams.get("tab") === "catalog-tags";
 	const isLegacyLedgerRedirect = searchParams.get("view") === "table";
-	const isAssetMapActive = activeTab === "asset-map" && !isLegacyLedgerRedirect;
+	const isLegacyRedirect = isLegacyTagRedirect || isLegacyLedgerRedirect;
+	const isAssetMapActive = !isLegacyRedirect;
 	const domain = searchParams.get("domain") || undefined;
 	const setDomain = useCallback(
 		(next: string | undefined) => {
@@ -76,15 +77,16 @@ export default function AssetOverviewPage() {
 	const [treeLoading, setTreeLoading] = useState(false);
 	const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
 
-	// ?view=table 旧深链兼容：台账已是独立路由
+	// 旧深链兼容：台账已是独立路由，标签字典也归入台账治理工作区。
 	useEffect(() => {
-		if (!isLegacyLedgerRedirect) return;
+		if (!isLegacyRedirect) return;
 		const params = new URLSearchParams(searchParams);
 		params.delete("view");
-		params.delete("tab");
+		if (isLegacyTagRedirect) params.set("tab", "catalog-tags");
+		else params.delete("tab");
 		const rest = params.toString();
 		router.replace(`/catalog/assets/ledger${rest ? `?${rest}` : ""}`);
-	}, [isLegacyLedgerRedirect, router, searchParams]);
+	}, [isLegacyRedirect, isLegacyTagRedirect, router, searchParams]);
 
 	useEffect(() => {
 		if (!isAssetMapActive) return;
@@ -239,15 +241,13 @@ export default function AssetOverviewPage() {
 
 	const matrixCellMap = useMemo(() => {
 		const map = new Map<string, MatrixCell>();
-		const mergedKeys = new Set(
-			(matrixColumns.find((col) => col.key === MERGED_DOMAIN_KEY) as any)?.mergedKeys ?? [],
-		);
+		const mergedKeys = new Set((matrixColumns.find((col) => col.key === MERGED_DOMAIN_KEY) as any)?.mergedKeys ?? []);
 		for (const cell of overview?.matrix || []) {
 			const domainKey = cell.domainId === null ? "__NULL__" : cell.domainId;
 			map.set(`${cell.layer}|${domainKey}`, cell);
 			// 被合并进「其他 N 个域」的列必须预聚合，否则该列每格都查不到而恒显示 "-"
 			if (mergedKeys.has(domainKey)) {
-					const key = `${cell.layer}|${MERGED_DOMAIN_KEY}`;
+				const key = `${cell.layer}|${MERGED_DOMAIN_KEY}`;
 				const prev = map.get(key);
 				map.set(
 					key,
@@ -298,49 +298,13 @@ export default function AssetOverviewPage() {
 		[domainTree, domainStats.byDomain],
 	);
 
-	const handleTabChange = (key: string) => {
-		const params = new URLSearchParams(searchParams);
-		if (key === "catalog-tags") {
-			params.set("tab", "catalog-tags");
-		} else {
-			params.delete("tab");
-		}
-		setSearchParams(params);
-	};
-
-	const assetTabs = (
-		<Tabs
-			activeKey={activeTab}
-			onChange={handleTabChange}
-			items={[
-				{ key: "asset-map", label: "资产地图" },
-				{ key: "catalog-tags", label: "数据标签" },
-			]}
-		/>
-	);
-
-	if (isLegacyLedgerRedirect) return null;
-
-	if (activeTab === "catalog-tags") {
-		return (
-			<div className="space-y-4">
-				{assetTabs}
-				<Alert
-					type="info"
-					showIcon
-					message="标签字典用于数据资产打标"
-					description="统一维护标签分类与标签字典，供资产台账和资产详情选择使用。"
-				/>
-				<TagManagementTab canManage={canManageCatalog} />
-			</div>
-		);
-	}
+	if (isLegacyRedirect) return null;
 
 	return (
 		<Layout className="min-h-full bg-transparent">
 			<Layout.Sider
 				width={240}
-				breakpoint="md"
+				breakpoint="lg"
 				collapsedWidth={0}
 				theme="light"
 				className="rounded-lg border border-slate-200 bg-white p-3"
@@ -356,7 +320,6 @@ export default function AssetOverviewPage() {
 				/>
 			</Layout.Sider>
 			<Layout.Content style={{ padding: "0 16px" }}>
-				{assetTabs}
 				<div className="space-y-4">
 					<PageHeader
 						title="资产地图"
@@ -398,7 +361,12 @@ export default function AssetOverviewPage() {
 							icon={<DatabaseOutlined />}
 							label="资产总量"
 							value={overview?.truncated ? `≥${overview?.total ?? 0}` : (overview?.total ?? 0)}
-							footnote={domain ? domainMap.get(domain) || "未归域" : "全部主题域"}
+							footnote={
+								(domain ? domainMap.get(domain) || "未归域" : "全部主题域") +
+								" · 标签覆盖 " +
+								(overview?.tagCoveragePercent ?? 0) +
+								"%"
+							}
 						/>
 						<GovernanceGapPanel
 							total={overview?.total ?? 0}
@@ -438,7 +406,9 @@ export default function AssetOverviewPage() {
 											disabled={!cell}
 											onClick={() => cell && drillToLedger(layer, matrixColumns[0].key)}
 											className={`rounded-md border px-3 py-2 text-left text-xs transition ${
-												cell ? `${meta.tone} hover:ring-2 hover:ring-blue-200` : "border-slate-100 bg-slate-50 text-slate-300"
+												cell
+													? `${meta.tone} hover:ring-2 hover:ring-blue-200`
+													: "border-slate-100 bg-slate-50 text-slate-300"
 											}`}
 										>
 											<div className="font-medium text-slate-700">

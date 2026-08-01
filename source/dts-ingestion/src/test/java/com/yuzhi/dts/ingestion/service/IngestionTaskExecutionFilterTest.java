@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import com.yuzhi.dts.ingestion.domain.IngestionExecution;
 import com.yuzhi.dts.ingestion.repository.IngestionExecutionRepository;
 import com.yuzhi.dts.ingestion.repository.IngestionTaskRepository;
+import com.yuzhi.dts.ingestion.repository.IngestionTaskRevisionRepository;
 import com.yuzhi.dts.ingestion.service.audit.AuditService;
 import com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO;
 import com.yuzhi.dts.ingestion.service.etl.AddaxJobService;
@@ -41,6 +42,9 @@ class IngestionTaskExecutionFilterTest {
 
     @Mock
     private IngestionTaskRepository taskRepository;
+
+    @Mock
+    private IngestionTaskRevisionRepository revisionRepository;
 
     @Mock
     private IngestionExecutionRepository executionRepository;
@@ -117,6 +121,7 @@ class IngestionTaskExecutionFilterTest {
     void setUp() {
         ingestionTaskService = new IngestionTaskService(
             taskRepository,
+            revisionRepository,
             executionRepository,
             taskMapper,
             executionMapper,

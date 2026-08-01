@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 
 import com.yuzhi.dts.ingestion.config.AddaxProperties;
 import com.yuzhi.dts.ingestion.config.AirflowProperties;
@@ -208,7 +209,9 @@ class AirflowDagServiceTest {
         assertThat(dag).contains("/internal/api-ingestion/executions");
         assertThat(dag).contains("X-DTS-Service");
         assertThat(dag).contains("DTS_INGESTION_INTERNAL_BASE_URL");
-        assertThat(dag).contains("DTS_SERVICE_TOKEN");
+        assertThat(dag).contains("os.getenv(\"DTS_AIRFLOW_TO_INGESTION_TOKEN\", \"\")");
+        assertThat(dag).contains("SERVICE_NAME = \"dts-airflow\"");
+        assertThat(dag).doesNotContain("os.getenv(\"DTS_SERVICE_TOKEN\"");
         assertThat(dag).contains("DTS_API_INGESTION_POLL_TIMEOUT_SECONDS\", \"1800\"");
         assertThat(dag).contains("\"execution_timeout\": timedelta(seconds=1800)");
         assertThat(dag).contains("urllib.request.ProxyHandler({})");
@@ -231,6 +234,47 @@ class AirflowDagServiceTest {
         assertThat(dag).doesNotContain("dts_api_ingestion_checkpoint");
         assertThat(dag).doesNotContain("_dts_raw_record JSONB");
         assertThat(dag).doesNotContain("_request_json");
+    }
+
+    @Test
+    void stagedAddaxDagShouldBeRevisionScopedPausedAndRegisterExactExecutionBeforeWorkload() throws Exception {
+        IngestionTask task = task("cron:0 0 * * *", "ods_orders_task_99_revision_12");
+        task.setId(99L);
+
+        AirflowDagService.StagedDag staged = dagService.stageDagForTask(task, List.of(), 13L, "checksum-r13");
+        String source = Files.readString(staged.stagedPath());
+
+        assertThat(staged.dagId()).isEqualTo("ods_orders_task_99_revision_13");
+        assertThat(source).contains("is_paused_upon_creation=True");
+        assertThat(source).contains("DTS_REVISION_ID = 13");
+        assertThat(source).contains("DTS_CONFIG_CHECKSUM = \"checksum-r13\"");
+        assertThat(source).contains("DTS_DAG_ID = \"ods_orders_task_99_revision_13\"");
+        assertThat(source).contains("/internal/api-ingestion/scheduled-executions");
+        assertThat(source.indexOf("on_execute_callback=_register_dts_execution"))
+            .isLessThan(source.indexOf("tty=False"));
+
+        dagService.retireDagStrict("ods_orders_task_99_revision_12", task);
+        verify(airflowClient).setDagPausedStrict("ods_orders_task_99_revision_12", true);
+    }
+
+    @Test
+    void stagedApiDagShouldCarryExactRevisionContract() throws Exception {
+        IngestionTask task = new IngestionTask();
+        task.setId(88L);
+        task.setName("api-orders");
+        task.setSourceType("api");
+        task.setSyncSchedule("manual");
+        task.setAirflowDagId("ods_api_orders_task_88_revision_3");
+
+        AirflowDagService.StagedDag staged = dagService.stageDagForTask(task, List.of(), 4L, "checksum-r4");
+        String source = Files.readString(staged.stagedPath());
+
+        assertThat(staged.dagId()).isEqualTo("ods_api_orders_task_88_revision_4");
+        assertThat(source).contains("INGESTION_REVISION_ID = 4");
+        assertThat(source).contains("INGESTION_CONFIG_CHECKSUM = \"checksum-r4\"");
+        assertThat(source).contains("\"revisionId\": INGESTION_REVISION_ID");
+        assertThat(source).contains("\"airflowDagId\": INGESTION_DAG_ID");
+        assertThat(source).contains("is_paused_upon_creation=True");
     }
 
     @Test

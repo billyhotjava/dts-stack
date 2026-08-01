@@ -82,38 +82,31 @@ public class PlatformInfraClient {
         }
     }
 
-    public Map<String, Object> triggerDbtRun(String models, String dagSelector) {
-        if (!StringUtils.hasText(models)) {
-            throw new IllegalArgumentException("models不能为空");
-        }
-        URI uri = buildUri("/etl/dbt/run");
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("models", models.trim());
-        if (StringUtils.hasText(dagSelector)) {
-            payload.put("dagSelector", dagSelector.trim());
-        }
+    public void completeRollbackInvalidation(Map<String, Object> payload) {
+        URI uri = buildUri("/internal/rollback-invalidation/completions");
         HttpHeaders headers = new HttpHeaders();
-        headers.setAccept(java.util.List.of(MediaType.APPLICATION_JSON));
+        headers.setAccept(List.of(MediaType.APPLICATION_JSON));
         headers.setContentType(MediaType.APPLICATION_JSON);
         applyServiceHeaders(headers);
         try {
-            ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.POST, new HttpEntity<>(payload, headers), Map.class);
+            ResponseEntity<Map> response = restTemplate.exchange(
+                uri,
+                HttpMethod.POST,
+                new HttpEntity<>(payload, headers),
+                Map.class
+            );
             if (!response.getStatusCode().is2xxSuccessful()) {
-                throw new IllegalStateException("平台返回异常状态: " + response.getStatusCode().value());
+                throw new RollbackCompletionDeliveryException(response.getStatusCode().value(), "unexpected response");
             }
-            Map<String, Object> body = response.getBody() == null ? Map.of() : new LinkedHashMap<>(response.getBody());
-            Object data = body.get("data");
-            if (data instanceof Map<?, ?> map) {
-                return castMap(map);
-            }
-            return body;
         } catch (HttpStatusCodeException ex) {
-            LOG.warn("Platform dbt trigger failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
-            throw new IllegalStateException("触发 dbt 失败: " + ex.getStatusCode().value());
-        } catch (RuntimeException ex) {
+            throw new RollbackCompletionDeliveryException(
+                ex.getStatusCode().value(),
+                ex.getResponseBodyAsString()
+            );
+        } catch (RollbackCompletionDeliveryException ex) {
             throw ex;
-        } catch (Exception ex) {
-            throw new IllegalStateException("触发 dbt 失败: " + ex.getMessage(), ex);
+        } catch (RuntimeException ex) {
+            throw new RollbackCompletionDeliveryException(0, ex.getMessage());
         }
     }
 
@@ -520,4 +513,18 @@ public class PlatformInfraClient {
         Map<String, Object> secrets,
         String status
     ) {}
+
+    public static final class RollbackCompletionDeliveryException extends RuntimeException {
+
+        private final int statusCode;
+
+        public RollbackCompletionDeliveryException(int statusCode, String message) {
+            super("ROLLBACK_COMPLETION_DELIVERY_FAILED status=" + statusCode + " detail=" + message);
+            this.statusCode = statusCode;
+        }
+
+        public int statusCode() {
+            return statusCode;
+        }
+    }
 }

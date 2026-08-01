@@ -221,7 +221,22 @@ class FileUploadServiceEncryptionTest {
     }
 
     @Test
-    void cleanupForTask_supports_filePath_aliases() throws Exception {
+    void cleanupForTask_deletesOnlyManagedFileId() throws Exception {
+        FileUploadService service = newService(crypto);
+        var upload = service.handleUpload(new MockMultipartFile("file", "people.xlsx", null, makeXlsx()));
+        IngestionTask task = new IngestionTask();
+        ObjectNode sourceConfig = new ObjectMapper().createObjectNode();
+        sourceConfig.put("_fileId", upload.fileId());
+        task.setSourceConfig(sourceConfig);
+
+        var deleted = service.cleanupForTask(task);
+
+        assertThat(deleted).containsExactly(upload.fileId());
+        assertThat(Files.exists(Path.of(upload.hostPath()))).isFalse();
+    }
+
+    @Test
+    void cleanupForTask_rejectsClientControlledPathWithoutManagedFileId() throws Exception {
         FileUploadService service = newService(crypto);
         var upload = service.handleUpload(new MockMultipartFile("file", "people.xlsx", null, makeXlsx()));
         IngestionTask task = new IngestionTask();
@@ -229,10 +244,10 @@ class FileUploadServiceEncryptionTest {
         sourceConfig.put("_filePath", upload.hostPath());
         task.setSourceConfig(sourceConfig);
 
-        var deleted = service.cleanupForTask(task);
-
-        assertThat(deleted).containsExactly(upload.hostPath());
-        assertThat(Files.exists(Path.of(upload.hostPath()))).isFalse();
+        assertThatThrownBy(() -> service.cleanupForTask(task))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("MANAGED_FILE_ID_REQUIRED_FOR_DELETE");
+        assertThat(Files.exists(Path.of(upload.hostPath()))).isTrue();
     }
 
     private static int indexOf(byte[] haystack, byte[] needle) {

@@ -37,6 +37,10 @@ export type RollbackResult = {
 	errors: string[];
 	dbtFullRefreshNeeded: boolean;
 	affectedTaskIds: number[];
+	state?: string;
+	succeeded?: string[];
+	failedStep?: string;
+	manualRecoveryRequired?: boolean;
 };
 
 const LEVEL_LABELS: Record<number, { text: string; color: string }> = {
@@ -102,6 +106,38 @@ const matchesRequest = (impact: RollbackImpact, request: RollbackRequest) => {
 	return false;
 };
 
+export const normalizeRollbackResult = (value: unknown): RollbackResult | null => {
+	const envelope = asRecord(value);
+	if (!envelope) return null;
+	const data = asRecord(envelope.data) || envelope;
+	const state = String(data.state || envelope.code || "")
+		.trim()
+		.toUpperCase();
+	if (state === "PARTIAL_FAILED" || Number(envelope.status) === 207) {
+		const succeeded = stringList(data.succeeded);
+		const rollbackResult = asRecord(data.rollbackResult);
+		return {
+			success: false,
+			actions: succeeded.length ? succeeded : stringList(rollbackResult?.actions),
+			errors: stringList(rollbackResult?.errors),
+			dbtFullRefreshNeeded: Boolean(rollbackResult?.dbtFullRefreshNeeded),
+			affectedTaskIds: numberList(rollbackResult?.affectedTaskIds),
+			state: "PARTIAL_FAILED",
+			succeeded,
+			failedStep: typeof data.failedStep === "string" ? data.failedStep : undefined,
+			manualRecoveryRequired: data.manualRecoveryRequired === true,
+		};
+	}
+	if (typeof data.success !== "boolean") return null;
+	return {
+		success: data.success,
+		actions: stringList(data.actions),
+		errors: stringList(data.errors),
+		dbtFullRefreshNeeded: Boolean(data.dbtFullRefreshNeeded),
+		affectedTaskIds: numberList(data.affectedTaskIds),
+	};
+};
+
 type Props = {
 	open: boolean;
 	request: RollbackRequest | null;
@@ -116,11 +152,14 @@ export default function RollbackImpactModal({ open, request, onClose, onSuccess 
 	const [analyzeError, setAnalyzeError] = useState("");
 	const [acknowledged, setAcknowledged] = useState(false);
 	const [confirmationInput, setConfirmationInput] = useState("");
+	const [confirmationConsumed, setConfirmationConsumed] = useState(false);
+	const [executionResult, setExecutionResult] = useState<RollbackResult | null>(null);
 	const analyzeRequestIdRef = useRef(0);
 
 	const confirmationType = useMemo(() => impact?.confirmationType.trim().toUpperCase() || "", [impact]);
 	const confirmationReady = Boolean(
-		impact?.confirmationToken.trim() &&
+		!confirmationConsumed &&
+			impact?.confirmationToken.trim() &&
 			((confirmationType === "MODAL" && acknowledged) ||
 				(confirmationType === "TYPE_TEXT" && confirmationInput === impact.confirmationText)),
 	);
@@ -134,6 +173,8 @@ export default function RollbackImpactModal({ open, request, onClose, onSuccess 
 		setImpact(null);
 		setAcknowledged(false);
 		setConfirmationInput("");
+		setConfirmationConsumed(false);
+		setExecutionResult(null);
 		try {
 			const payload: any = await rollbackAnalyze(currentRequest);
 			if (analyzeRequestIdRef.current !== requestId) return;
@@ -162,7 +203,8 @@ export default function RollbackImpactModal({ open, request, onClose, onSuccess 
 	};
 
 	const doExecute = async () => {
-		if (!request || !impact || !confirmationReady || !matchesRequest(impact, request)) return;
+		if (!request || !impact || !confirmationReady || confirmationConsumed || !matchesRequest(impact, request)) return;
+		setConfirmationConsumed(true);
 		setExecuting(true);
 		try {
 			const executeRequest = {
@@ -172,9 +214,15 @@ export default function RollbackImpactModal({ open, request, onClose, onSuccess 
 				...(confirmationType === "TYPE_TEXT" ? { confirmationText: confirmationInput } : {}),
 			};
 			const payload: any = await rollbackExecute(executeRequest);
-			const result = (payload?.data || payload) as RollbackResult | null;
-			if (!result || typeof result.success !== "boolean") {
-				message.error("回退执行结果无效，请刷新任务状态后重试。");
+			const result = normalizeRollbackResult(payload);
+			if (!result) {
+				message.error("回退执行结果无效；确认令牌已提交，请刷新任务和审计记录核对状态。");
+				return;
+			}
+			setExecutionResult(result);
+			if (result.state === "PARTIAL_FAILED") {
+				message.warning("回退操作部分完成，请按页面提示人工处置失败步骤");
+				onSuccess?.(result);
 				return;
 			}
 			if (result.success) {
@@ -185,7 +233,7 @@ export default function RollbackImpactModal({ open, request, onClose, onSuccess 
 			onSuccess?.(result);
 			handleClose();
 		} catch {
-			message.error("回退执行失败，请稍后重试。");
+			message.error("回退请求结果未知；确认令牌已提交，禁止再次执行整个回退，请核对审计记录。");
 		} finally {
 			setExecuting(false);
 		}
@@ -197,6 +245,8 @@ export default function RollbackImpactModal({ open, request, onClose, onSuccess 
 		setAnalyzeError("");
 		setAcknowledged(false);
 		setConfirmationInput("");
+		setConfirmationConsumed(false);
+		setExecutionResult(null);
 		setAnalyzing(false);
 		setExecuting(false);
 		onClose();
@@ -220,11 +270,21 @@ export default function RollbackImpactModal({ open, request, onClose, onSuccess 
 			onCancel={handleClose}
 			afterOpenChange={afterOpenChange}
 			width={640}
-			okText={analyzing ? "分析中..." : impact ? "确认执行回退" : "无法执行回退"}
+			okText={
+				analyzing
+					? "分析中..."
+					: executionResult?.state === "PARTIAL_FAILED"
+						? "已部分完成"
+						: confirmationConsumed
+							? "已提交，禁止重复执行"
+							: impact
+								? "确认执行回退"
+								: "无法执行回退"
+			}
 			okButtonProps={{
 				danger: true,
 				loading: executing,
-				disabled: !confirmationReady || analyzing || executing,
+				disabled: !confirmationReady || confirmationConsumed || analyzing || executing,
 				icon: <DeleteOutlined />,
 			}}
 			cancelButtonProps={{ disabled: executing }}
@@ -240,6 +300,22 @@ export default function RollbackImpactModal({ open, request, onClose, onSuccess 
 			) : null}
 
 			{!analyzing && analyzeError ? <Alert type="error" showIcon message={analyzeError} /> : null}
+
+			{executionResult?.state === "PARTIAL_FAILED" ? (
+				<Alert
+					type="warning"
+					showIcon
+					message="回退部分完成"
+					description={
+						<ul style={{ margin: 0, paddingLeft: 20 }}>
+							<li>已完成步骤：{executionResult.succeeded?.join("、") || "后端未返回明细"}</li>
+							<li>失败步骤：{executionResult.failedStep || "未记录"}</li>
+							<li>需要人工恢复：{executionResult.manualRecoveryRequired ? "是" : "否"}</li>
+							<li>确认令牌已消费，禁止再次执行整个回退。</li>
+						</ul>
+					}
+				/>
+			) : null}
 
 			{!analyzing && impact ? (
 				<div style={{ display: "flex", flexDirection: "column", gap: 16 }}>

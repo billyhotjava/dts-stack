@@ -3,14 +3,14 @@ package com.yuzhi.dts.platform.service.modeling;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.common.security.SecurityLevelCatalog;
-import com.yuzhi.dts.platform.domain.catalog.CatalogClassificationSnapshot;
-import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
-import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelLifecycleRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.SourceBindingState;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
-import com.yuzhi.dts.platform.service.catalog.CatalogClassificationService;
+import com.yuzhi.dts.platform.service.catalog.CatalogClassificationBoundary;
+import com.yuzhi.dts.platform.service.catalog.CatalogClassificationBoundary.ClassificationFact;
+import com.yuzhi.dts.platform.service.catalog.CatalogClassificationBoundary.SealRequest;
+import com.yuzhi.dts.platform.service.catalog.CatalogSourceReferenceReadPort;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.GeneratedInput;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationInput;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
@@ -46,23 +46,23 @@ public class ModelClassificationPublishGate {
     private final ModelSpecApplicationService modelSpecs;
     private final ModelSpecRepository modelSpecRepository;
     private final ModelLifecycleRepository lifecycleRepository;
-    private final CatalogDatasetRepository datasetRepository;
-    private final CatalogClassificationService classificationService;
+    private final CatalogSourceReferenceReadPort catalogSources;
+    private final CatalogClassificationBoundary classifications;
     private final ObjectMapper objectMapper;
 
     public ModelClassificationPublishGate(
         ModelSpecApplicationService modelSpecs,
         ModelSpecRepository modelSpecRepository,
         ModelLifecycleRepository lifecycleRepository,
-        CatalogDatasetRepository datasetRepository,
-        CatalogClassificationService classificationService,
+        CatalogSourceReferenceReadPort catalogSources,
+        CatalogClassificationBoundary classifications,
         ObjectMapper objectMapper
     ) {
         this.modelSpecs = modelSpecs;
         this.modelSpecRepository = modelSpecRepository;
         this.lifecycleRepository = lifecycleRepository;
-        this.datasetRepository = datasetRepository;
-        this.classificationService = classificationService;
+        this.catalogSources = catalogSources;
+        this.classifications = classifications;
         this.objectMapper = objectMapper;
     }
 
@@ -155,8 +155,8 @@ public class ModelClassificationPublishGate {
         List<String> candidates = new ArrayList<>(decision.upstreamLevels().values());
         candidates.addAll(decision.fieldLevels().values());
         String evidenceJson = evidenceJson(decision);
-        CatalogClassificationSnapshot seal = classificationService.sealOrRaise(
-            new CatalogClassificationService.SealCommand(
+        ClassificationFact seal = classifications.sealOrRaise(
+            new SealRequest(
                 "ASSET",
                 decision.outputSubjectKey(),
                 "DBT_MODEL",
@@ -171,8 +171,8 @@ public class ModelClassificationPublishGate {
             )
         );
         for (Map.Entry<String, String> field : decision.fieldLevels().entrySet()) {
-            classificationService.sealOrRaise(
-                new CatalogClassificationService.SealCommand(
+            classifications.sealOrRaise(
+                new SealRequest(
                     "COLUMN",
                     decision.outputSubjectKey() + "/column:" + normalize(field.getKey()),
                     "DBT_MODEL",
@@ -240,7 +240,7 @@ public class ModelClassificationPublishGate {
     }
 
     private Optional<InputEvidence> sealedEvidence(String subjectKey, List<Blocker> blockers) {
-        CatalogClassificationSnapshot snapshot = classificationService.resolve("ASSET", subjectKey).orElse(null);
+        ClassificationFact snapshot = classifications.resolve("ASSET", subjectKey).orElse(null);
         if (snapshot == null) {
             blockers.add(
                 new Blocker(
@@ -251,7 +251,7 @@ public class ModelClassificationPublishGate {
             );
             return Optional.empty();
         }
-        if (!CatalogClassificationService.STATUS_PROPAGATED.equals(snapshot.getPropagationStatus())) {
+        if (!snapshot.propagated()) {
             blockers.add(
                 new Blocker(
                     "CLASSIFICATION_PROPAGATION_PENDING",
@@ -261,18 +261,16 @@ public class ModelClassificationPublishGate {
             );
             return Optional.empty();
         }
-        return Optional.of(new InputEvidence(subjectKey, snapshot.getEffectiveLevel()));
+        return Optional.of(new InputEvidence(subjectKey, snapshot.effectiveLevel()));
     }
 
     private String sourceSubjectKey(SourceBindingState binding, List<Blocker> blockers) {
         try {
             return switch (binding.sourceType()) {
-                case "CATALOG_TABLE" -> datasetRepository
-                    .findById(UUID.fromString(binding.sourceId()))
-                    .map(CatalogAssetKey::dataset)
+                case "CATALOG_TABLE" -> catalogSources
+                    .findDatasetAssetKey(UUID.fromString(binding.sourceId()))
                     .orElseGet(() -> missingBindingAsset(binding, blockers));
-                case "CONNECTION_TABLE" -> connectionDataset(binding)
-                    .map(CatalogAssetKey::dataset)
+                case "CONNECTION_TABLE" -> connectionDatasetAssetKey(binding)
                     .orElseGet(() -> missingBindingAsset(binding, blockers));
                 case "EXCEL_FILE" -> "external-exchange-file:" + UUID.fromString(binding.sourceId());
                 case "DBT_NODE" -> dbtSourceKey(binding);
@@ -299,12 +297,12 @@ public class ModelClassificationPublishGate {
         }
     }
 
-    private Optional<CatalogDataset> connectionDataset(SourceBindingState binding) throws Exception {
+    private Optional<String> connectionDatasetAssetKey(SourceBindingState binding) throws Exception {
         JsonNode locator = objectMapper.readTree(binding.locatorJson());
         UUID connectionId = UUID.fromString(locator.path("connectionId").asText());
         String namespace = locator.path("namespace").asText();
         String objectName = locator.path("objectName").asText();
-        return datasetRepository.findFirstBySourceIdAndHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(
+        return catalogSources.findDatasetAssetKey(
             connectionId,
             namespace,
             objectName
@@ -398,7 +396,7 @@ public class ModelClassificationPublishGate {
         Map<String, String> upstreamLevels,
         Map<String, String> fieldLevels,
         List<Blocker> blockers,
-        CatalogClassificationSnapshot seal
+        ClassificationFact seal
     ) {
         private static Decision blocked(
             UUID modelSpecId,
@@ -419,7 +417,7 @@ public class ModelClassificationPublishGate {
             );
         }
 
-        private Decision withSeal(CatalogClassificationSnapshot snapshot) {
+        private Decision withSeal(ClassificationFact snapshot) {
             return new Decision(
                 ready,
                 modelSpecId,

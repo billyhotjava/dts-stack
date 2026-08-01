@@ -2,18 +2,23 @@ package com.yuzhi.dts.platform.web.rest.infra;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.config.PlatformInboundServiceAuthProperties;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.infra.HiveConnectionTestResult;
 import com.yuzhi.dts.platform.service.infra.InfraManagementService;
-import com.yuzhi.dts.platform.service.infra.JdbcCatalogSyncService;
 import com.yuzhi.dts.platform.service.infra.JdbcConnectionTestService;
-import com.yuzhi.dts.platform.service.infra.OdsGenerationService;
+import com.yuzhi.dts.platform.service.infra.dto.DataSourceRequest;
 import com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDto;
 import com.yuzhi.dts.platform.service.ingestion.IngestionServiceClient;
 import com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDetailDto;
@@ -34,6 +39,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 @ExtendWith(MockitoExtension.class)
@@ -49,16 +57,16 @@ class InfraDataSourceResourceTest {
     private JdbcConnectionTestService jdbcConnectionTestService;
 
     @Mock
-    private JdbcCatalogSyncService jdbcCatalogSyncService;
-
-    @Mock
-    private OdsGenerationService odsGenerationService;
-
-    @Mock
     private IngestionServiceClient ingestionServiceClient;
 
     @Mock
     private SvcTokenAuthService svcTokenAuthService;
+
+    @Mock
+    private PlatformTransactionManager transactionManager;
+
+    @Mock
+    private TransactionStatus transactionStatus;
 
     private PlatformInboundServiceAuthProperties properties;
     private InfraDataSourceResource resource;
@@ -71,12 +79,13 @@ class InfraDataSourceResourceTest {
             infraManagementService,
             auditService,
             jdbcConnectionTestService,
-            jdbcCatalogSyncService,
-            odsGenerationService,
             ingestionServiceClient,
             properties,
-            svcTokenAuthService
+            svcTokenAuthService,
+            transactionManager
         );
+        lenient().when(auditService.auditActionStrict(anyString(), any(AuditStage.class), anyString(), any()))
+            .thenReturn(UUID.randomUUID());
     }
 
     @AfterEach
@@ -182,6 +191,88 @@ class InfraDataSourceResourceTest {
         verify(ingestionServiceClient).testApiConnection(Map.of("dataSourceId", id.toString()));
         verify(infraManagementService).markDataSourceVerified(id);
         verify(infraManagementService, never()).getDataSourceRuntimeDetail(id);
+        verify(auditService).auditActionStrict(
+            eq("FOUNDATION_DATASOURCE_TEST"),
+            eq(AuditStage.BEGIN),
+            eq(id.toString()),
+            argThat(payload -> safeConnectionAuditPayload(payload, id, "system"))
+        );
+        verify(auditService).auditActionStrict(
+            eq("FOUNDATION_DATASOURCE_TEST"),
+            eq(AuditStage.SUCCESS),
+            eq(id.toString()),
+            argThat(payload -> safeConnectionAuditPayload(payload, id, "system"))
+        );
+    }
+
+    @Test
+    void retiredGenerationApisReturnGoneWithoutInvokingLegacyServices() {
+        UUID id = UUID.randomUUID();
+
+        assertThat(resource.discoverSchema(id, Map.of(), null).getStatusCode()).isEqualTo(HttpStatus.GONE);
+        assertThat(resource.previewOdsGeneration(id, Map.of(), null).getStatusCode()).isEqualTo(HttpStatus.GONE);
+        assertThat(resource.precheckOdsGeneration(id, Map.of(), null).getStatusCode()).isEqualTo(HttpStatus.GONE);
+        assertThat(resource.applyOdsGeneration(id, Map.of(), null).getStatusCode()).isEqualTo(HttpStatus.GONE);
+        assertThat(resource.buildSyncTaskDraft(id, Map.of(), null).getStatusCode()).isEqualTo(HttpStatus.GONE);
+
+        verify(infraManagementService, never()).getDataSource(id, null);
+        verify(infraManagementService, never()).findEntity(id);
+    }
+
+    @Test
+    void createRollsBackAndDoesNotWriteFailWhenSuccessAuditCannotBeFinalized() {
+        UUID id = UUID.randomUUID();
+        UUID beginReceipt = UUID.randomUUID();
+        DataSourceRequest request = new DataSourceRequest(
+            "ERP",
+            "postgresql",
+            "jdbc:postgresql://db:5432/erp",
+            "erp",
+            null,
+            Map.of(),
+            Map.of("password", "secret")
+        );
+        when(transactionManager.getTransaction(any(TransactionDefinition.class))).thenReturn(transactionStatus);
+        when(infraManagementService.createDataSource(request, "system", null))
+            .thenReturn(new InfraDataSourceDto(id, "ERP", "postgresql", "jdbc:postgresql://db:5432/erp", "erp"));
+        when(auditService.auditActionStrict(anyString(), any(AuditStage.class), anyString(), any()))
+            .thenAnswer(invocation -> {
+                AuditStage stage = invocation.getArgument(1);
+                if (stage == AuditStage.BEGIN) {
+                    return beginReceipt;
+                }
+                if (stage == AuditStage.SUCCESS) {
+                    throw new IllegalStateException("audit outbox unavailable");
+                }
+                return UUID.randomUUID();
+            });
+
+        assertThatThrownBy(() -> resource.create(request, null))
+            .isInstanceOf(ResponseStatusException.class)
+            .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
+            .isEqualTo(HttpStatus.CONFLICT);
+
+        verify(transactionManager).rollback(transactionStatus);
+        verify(transactionManager, never()).commit(transactionStatus);
+        verify(auditService, never()).auditActionStrict(
+            eq("FOUNDATION_DATASOURCE_CREATE"),
+            eq(AuditStage.FAIL),
+            anyString(),
+            any()
+        );
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean safeConnectionAuditPayload(Object value, UUID id, String operator) {
+        if (!(value instanceof Map<?, ?> payload)) {
+            return false;
+        }
+        return id.toString().equals(payload.get("dataSourceId")) &&
+            operator.equals(payload.get("operator")) &&
+            payload.containsKey("auditOperationId") &&
+            payload.keySet().stream().noneMatch(key ->
+                List.of("password", "secrets", "props", "jdbcUrl", "config").contains(String.valueOf(key))
+            );
     }
 
     private void authenticate(String principal, String authority) {

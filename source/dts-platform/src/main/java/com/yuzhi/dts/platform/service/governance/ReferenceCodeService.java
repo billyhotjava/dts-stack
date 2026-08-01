@@ -190,7 +190,11 @@ public class ReferenceCodeService {
         StdCodeDirectory entity = directoryRepository.findById(codeTypeId)
             .orElseThrow(() -> new EntityNotFoundException("码表不存在"));
         ensureDeptAccess(entity, activeDept);
-        Map<String, Object> references = referenceService.referenceCodeReferences(entity);
+        Map<String, Object> references = referenceService.referenceCodeReferences(
+            entity.getCodeTypeId(),
+            entity.getCodeTypeCode(),
+            entity.getCodeTypeName()
+        );
         int impact = referenceService.countReferences(references);
         if (impact > 0) {
             String summary = referenceService.summarizeReferences(references, 5);
@@ -206,7 +210,11 @@ public class ReferenceCodeService {
         StdCodeDirectory entity = directoryRepository.findById(codeTypeId)
             .orElseThrow(() -> new EntityNotFoundException("码表不存在"));
         ensureDeptAccess(entity, activeDept);
-        return referenceService.referenceCodeReferences(entity);
+        return referenceService.referenceCodeReferences(
+            entity.getCodeTypeId(),
+            entity.getCodeTypeCode(),
+            entity.getCodeTypeName()
+        );
     }
 
     public List<ReferenceCodeItemDto> listItems(String codeTypeId, String activeDept) {

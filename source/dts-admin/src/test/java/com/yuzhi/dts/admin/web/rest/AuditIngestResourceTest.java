@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -108,6 +109,7 @@ class AuditIngestResourceTest {
         when(userRepository.findByEmailIgnoreCase("opadmin@platform.local")).thenReturn(Optional.of(user));
 
         Map<String, Object> body = Map.ofEntries(
+            Map.entry("eventId", "audit-actor-resolution-1"),
             Map.entry("sourceSystem", "analytics"),
             Map.entry("actor", "service:dts-analytics"),
             Map.entry("operator", "opadmin@platform.local"),
@@ -130,7 +132,7 @@ class AuditIngestResourceTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(body))
             )
-            .andExpect(status().isAccepted());
+            .andExpect(status().isCreated());
 
         ArgumentCaptor<AuditActionRequest> captor = ArgumentCaptor.forClass(AuditActionRequest.class);
         verify(auditV2Service).record(captor.capture());
@@ -153,6 +155,7 @@ class AuditIngestResourceTest {
         when(userRepository.findByEmailIgnoreCase("opadmin@platform.local")).thenReturn(Optional.of(user));
 
         Map<String, Object> body = Map.ofEntries(
+            Map.entry("eventId", "audit-container-ip-1"),
             Map.entry("sourceSystem", "analytics"),
             Map.entry("actor", "service:dts-analytics"),
             Map.entry("operator", "opadmin@platform.local"),
@@ -174,7 +177,7 @@ class AuditIngestResourceTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(body))
             )
-            .andExpect(status().isAccepted());
+            .andExpect(status().isCreated());
 
         ArgumentCaptor<AuditActionRequest> captor = ArgumentCaptor.forClass(AuditActionRequest.class);
         verify(auditV2Service).record(captor.capture());
@@ -197,6 +200,7 @@ class AuditIngestResourceTest {
         when(userRepository.findByEmailIgnoreCase("opadmin@platform.local")).thenReturn(Optional.of(user));
 
         Map<String, Object> body = Map.ofEntries(
+            Map.entry("eventId", "audit-site-container-ip-1"),
             Map.entry("sourceSystem", "analytics"),
             Map.entry("actor", "service:dts-analytics"),
             Map.entry("operator", "opadmin@platform.local"),
@@ -219,7 +223,7 @@ class AuditIngestResourceTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(body))
             )
-            .andExpect(status().isAccepted());
+            .andExpect(status().isCreated());
 
         ArgumentCaptor<AuditActionRequest> captor = ArgumentCaptor.forClass(AuditActionRequest.class);
         verify(auditV2Service).record(captor.capture());
@@ -238,6 +242,7 @@ class AuditIngestResourceTest {
         when(userRepository.findByEmailIgnoreCase("xiezm@example.test")).thenReturn(Optional.of(user));
 
         Map<String, Object> body = Map.ofEntries(
+            Map.entry("eventId", "audit-operation-code-1"),
             Map.entry("sourceSystem", "analytics"),
             Map.entry("actor", "xiezm@example.test"),
             Map.entry("module", "analytics.screen"),
@@ -257,7 +262,7 @@ class AuditIngestResourceTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(body))
             )
-            .andExpect(status().isAccepted());
+            .andExpect(status().isCreated());
 
         ArgumentCaptor<AuditActionRequest> captor = ArgumentCaptor.forClass(AuditActionRequest.class);
         verify(auditV2Service).record(captor.capture());
@@ -295,6 +300,54 @@ class AuditIngestResourceTest {
             )
             .andExpect(status().isUnprocessableEntity());
 
+        verify(auditV2Service, never()).record(any());
+    }
+
+    @Test
+    void acceptsWhitelistedPlatformMachineActorAfterPairwiseAuthentication() throws Exception {
+        when(authenticator.authenticate(any())).thenReturn(new Decision(true, "dts-platform", "valid token"));
+        Map<String, Object> body = new LinkedHashMap<>(
+            idempotentBody(EVENT_ID, "forged-producer", "提交模型物化任务", false)
+        );
+        body.put("actor", "_system:airflow");
+        body.put("buttonCode", "MODEL_MATERIALIZATION_DISPATCH_SUBMITTED");
+        body.put("operationType", "EXECUTE");
+
+        MvcResult response = postAuditEvent(body, "dts-platform");
+
+        assertThat(response.getResponse().getStatus()).isEqualTo(HttpStatus.CREATED.value());
+        ArgumentCaptor<AuditActionRequest> captor = ArgumentCaptor.forClass(AuditActionRequest.class);
+        verify(auditV2Service).record(captor.capture());
+        assertThat(captor.getValue().actorId()).isEqualTo("_system:airflow");
+        assertThat(captor.getValue().actorName()).isEqualTo("_system:airflow");
+        assertThat(captor.getValue().allowSystemActor()).isTrue();
+    }
+
+    @Test
+    void rejectsPlatformMachineActorFromAnotherAuthenticatedProducer() throws Exception {
+        when(authenticator.authenticate(any())).thenReturn(new Decision(true, "dts-analytics", "valid token"));
+        Map<String, Object> body = new LinkedHashMap<>(
+            idempotentBody(EVENT_ID, "forged-producer", "提交模型物化任务", false)
+        );
+        body.put("actor", "_system:airflow");
+
+        MvcResult response = postAuditEvent(body, "dts-analytics");
+
+        assertThat(response.getResponse().getStatus()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY.value());
+        verify(auditV2Service, never()).record(any());
+    }
+
+    @Test
+    void rejectsUnrecognizedMachineActorFromPlatform() throws Exception {
+        when(authenticator.authenticate(any())).thenReturn(new Decision(true, "dts-platform", "valid token"));
+        Map<String, Object> body = new LinkedHashMap<>(
+            idempotentBody(EVENT_ID, "forged-producer", "提交模型物化任务", false)
+        );
+        body.put("actor", "_system:untrusted");
+
+        MvcResult response = postAuditEvent(body, "dts-platform");
+
+        assertThat(response.getResponse().getStatus()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY.value());
         verify(auditV2Service, never()).record(any());
     }
 
@@ -376,6 +429,53 @@ class AuditIngestResourceTest {
             () -> assertThat(responseField(conflict, "status")).isEqualTo("IDEMPOTENCY_CONFLICT"),
             () -> assertThat(responseField(conflict, "eventId")).isEqualTo(EVENT_ID)
         );
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void redactsNestedEvidenceBeforeFingerprintingAndPersistence() throws Exception {
+        stubHumanActor("alice");
+        when(authenticator.authenticate(any())).thenReturn(new Decision(true, "dts-platform", "valid token"));
+        Map<String, Object> first = new LinkedHashMap<>(
+            idempotentBody("audit-sensitive-1", "forged-producer", "记录模型审计证据", false)
+        );
+        first.put(
+            "payload",
+            Map.of(
+                "connection",
+                Map.of("password", "first-password"),
+                "evidence",
+                List.of("Bearer first-token", Map.of("credential", "first-credential"))
+            )
+        );
+        Map<String, Object> replay = new LinkedHashMap<>(first);
+        replay.put(
+            "payload",
+            Map.of(
+                "connection",
+                Map.of("password", "second-password"),
+                "evidence",
+                List.of("Bearer second-token", Map.of("credential", "second-credential"))
+            )
+        );
+
+        MvcResult recorded = postAuditEvent(first, "dts-platform");
+        MvcResult duplicate = postAuditEvent(replay, "dts-platform");
+
+        assertThat(recorded.getResponse().getStatus()).isEqualTo(HttpStatus.CREATED.value());
+        assertThat(responseField(duplicate, "status")).isEqualTo("DUPLICATE");
+        ArgumentCaptor<AuditActionRequest> captor = ArgumentCaptor.forClass(AuditActionRequest.class);
+        verify(auditV2Service, times(1)).record(captor.capture());
+        Map<String, Object> details = (Map<String, Object>) captor.getValue().details().getFirst().value();
+        Map<String, Object> payload = (Map<String, Object>) details.get("payload");
+        assertThat((Map<String, Object>) payload.get("connection"))
+            .doesNotContainKey("password")
+            .containsEntry("redacted_key_1", "[REDACTED]");
+        assertThat((List<Object>) payload.get("evidence"))
+            .containsExactly("[REDACTED]", Map.of("redacted_key_1", "[REDACTED]"));
+        assertThat(String.valueOf(details))
+            .doesNotContain("password", "credential", "first-password", "first-token", "first-credential")
+            .doesNotContain("second-password", "second-token", "second-credential");
     }
 
     @Test

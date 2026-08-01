@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.ingestion.domain.IngestionTask;
 import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -52,14 +54,16 @@ public class TableOperationService {
      * TRUNCATE specified table. 30s timeout.
      */
     public void truncateTable(JdbcMetadataService.JdbcConnectionInfo connInfo, String schema, String table) {
-        String qualified = StringUtils.hasText(schema) ? schema + "." + table : table;
-        LOG.info("[rollback] TRUNCATE TABLE {}", qualified);
-        try (Connection conn = metadataService.openConnection(connInfo);
-             Statement stmt = conn.createStatement()) {
-            stmt.setQueryTimeout(30);
-            stmt.execute("TRUNCATE TABLE " + qualified);
+        String target = displayTarget(schema, table);
+        try (Connection conn = metadataService.openConnection(connInfo)) {
+            String qualified = quoteQualifiedTable(conn, schema, table);
+            LOG.info("[rollback] TRUNCATE TABLE {}", target);
+            try (Statement stmt = conn.createStatement()) {
+                stmt.setQueryTimeout(30);
+                stmt.execute("TRUNCATE TABLE " + qualified);
+            }
         } catch (Exception ex) {
-            throw new RuntimeException("TRUNCATE failed for " + qualified + ": " + ex.getMessage(), ex);
+            throw new RuntimeException("TRUNCATE failed for " + target + ": " + ex.getMessage(), ex);
         }
     }
 
@@ -67,14 +71,16 @@ public class TableOperationService {
      * DROP specified table with CASCADE. 30s timeout.
      */
     public void dropTable(JdbcMetadataService.JdbcConnectionInfo connInfo, String schema, String table) {
-        String qualified = StringUtils.hasText(schema) ? schema + "." + table : table;
-        LOG.info("[rollback] DROP TABLE IF EXISTS {} CASCADE", qualified);
-        try (Connection conn = metadataService.openConnection(connInfo);
-             Statement stmt = conn.createStatement()) {
-            stmt.setQueryTimeout(30);
-            stmt.execute("DROP TABLE IF EXISTS " + qualified + " CASCADE");
+        String target = displayTarget(schema, table);
+        try (Connection conn = metadataService.openConnection(connInfo)) {
+            String qualified = quoteQualifiedTable(conn, schema, table);
+            LOG.info("[rollback] DROP TABLE IF EXISTS {} CASCADE", target);
+            try (Statement stmt = conn.createStatement()) {
+                stmt.setQueryTimeout(30);
+                stmt.execute("DROP TABLE IF EXISTS " + qualified + " CASCADE");
+            }
         } catch (Exception ex) {
-            throw new RuntimeException("DROP failed for " + qualified + ": " + ex.getMessage(), ex);
+            throw new RuntimeException("DROP failed for " + target + ": " + ex.getMessage(), ex);
         }
     }
 
@@ -114,6 +120,55 @@ public class TableOperationService {
     }
 
     // ---- private helpers ----
+
+    private String quoteQualifiedTable(Connection connection, String schema, String table) throws SQLException {
+        validateIdentifier(schema, "schema", false);
+        validateIdentifier(table, "table", true);
+        DatabaseMetaData databaseMetaData = connection.getMetaData();
+        String quote = databaseMetaData == null ? null : databaseMetaData.getIdentifierQuoteString();
+        if (quote == null || quote.isBlank()) {
+            throw new IllegalStateException("Target JDBC driver does not expose an identifier quote");
+        }
+        quote = quote.strip();
+        String qualifiedTable = quoteIdentifier(table, quote);
+        return StringUtils.hasText(schema) ? quoteIdentifier(schema, quote) + "." + qualifiedTable : qualifiedTable;
+    }
+
+    private String quoteIdentifier(String identifier, String openingQuote) {
+        String closingQuote = "[".equals(openingQuote) ? "]" : openingQuote;
+        return openingQuote + identifier.replace(closingQuote, closingQuote + closingQuote) + closingQuote;
+    }
+
+    private void validateIdentifier(String identifier, String label, boolean required) {
+        if (!StringUtils.hasText(identifier)) {
+            if (required) {
+                throw new IllegalArgumentException(label + " identifier is required");
+            }
+            return;
+        }
+        if (
+            identifier.indexOf('.') >= 0 ||
+            identifier.indexOf(';') >= 0 ||
+            identifier.contains("--") ||
+            identifier.contains("/*") ||
+            identifier.contains("*/")
+        ) {
+            throw new IllegalArgumentException(label + " identifier contains SQL structure");
+        }
+        if (identifier.codePoints().anyMatch(Character::isISOControl)) {
+            throw new IllegalArgumentException(label + " identifier contains control characters");
+        }
+    }
+
+    private String displayTarget(String schema, String table) {
+        String qualified = StringUtils.hasText(schema) ? schema + "." + table : table;
+        if (qualified == null) {
+            return "<missing>";
+        }
+        StringBuilder sanitized = new StringBuilder(qualified.length());
+        qualified.codePoints().forEach(codePoint -> sanitized.appendCodePoint(Character.isISOControl(codePoint) ? '?' : codePoint));
+        return sanitized.toString();
+    }
 
     private List<String> applySchema(List<String> tables, IngestionTask task) {
         Map<String, Object> writerConfig = jsonNodeToMap(task.getDestinationConfig());

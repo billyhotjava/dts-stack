@@ -22,7 +22,7 @@ test("Sprint-45 workbench exposes product journey actions from source to operati
 	const expectedRoutes = [
 		"/foundation/data-sources",
 		"/workbench/todo",
-		"/governance/quality",
+		"/governance/rules/runs",
 		"/catalog/assets",
 		"/bi/dashboards",
 		"/services/apis",

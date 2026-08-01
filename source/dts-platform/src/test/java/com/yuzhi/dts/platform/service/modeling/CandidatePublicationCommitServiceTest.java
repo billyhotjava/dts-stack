@@ -2,11 +2,14 @@ package com.yuzhi.dts.platform.service.modeling;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.modeling.CandidatePublicationEvidenceRepository;
 import com.yuzhi.dts.platform.repository.modeling.CandidatePublicationEvidenceRepository.PublicationEntryEvidence;
 import com.yuzhi.dts.platform.repository.modeling.CandidatePublicationRepository;
@@ -14,6 +17,7 @@ import com.yuzhi.dts.platform.repository.modeling.CandidatePublicationRepository
 import com.yuzhi.dts.platform.repository.modeling.ModelLifecycleRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.StoredModelSpec;
+import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.event.PlatformEventOutboxService;
 import com.yuzhi.dts.platform.service.event.dto.PlatformEventRequest;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryAuditView;
@@ -82,6 +86,9 @@ class CandidatePublicationCommitServiceTest {
     @Mock
     private ModelExecutionTargetCatalogResolver targetResolver;
 
+    @Mock
+    private AuditService auditService;
+
     private CandidatePublicationCommitService service;
 
     @BeforeEach
@@ -96,7 +103,8 @@ class CandidatePublicationCommitServiceTest {
             outbox,
             candidateCommands,
             targetResolver,
-            Clock.fixed(NOW, ZoneOffset.UTC)
+            Clock.fixed(NOW, ZoneOffset.UTC),
+            auditService
         );
     }
 
@@ -167,7 +175,7 @@ class CandidatePublicationCommitServiceTest {
         )
             .thenReturn(binding);
         when(
-            candidateCommands.transition(
+            candidateCommands.transitionWithinAuditedCommit(
                 eq(TENANT),
                 eq(ACTOR),
                 eq(CANDIDATE_ID),
@@ -190,7 +198,8 @@ class CandidatePublicationCommitServiceTest {
             lifecyclePublication,
             publicationRepository,
             outbox,
-            candidateCommands
+            candidateCommands,
+            auditService
         );
         order.verify(evidence).requireCurrent(publishing, true);
         order
@@ -213,10 +222,29 @@ class CandidatePublicationCommitServiceTest {
         order.verify(outbox).publishInternal(any(PlatformEventRequest.class));
         order
             .verify(candidateCommands)
-            .transition(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), any(TransitionCommand.class));
+            .transitionWithinAuditedCommit(
+                eq(TENANT),
+                eq(ACTOR),
+                eq(CANDIDATE_ID),
+                any(TransitionCommand.class)
+            );
+        order
+            .verify(auditService)
+            .auditAction(
+                eq("MODEL_RELEASE_CANDIDATE_PUBLISH"),
+                eq(AuditStage.SUCCESS),
+                eq(CANDIDATE_ID.toString()),
+                any()
+            );
 
         ArgumentCaptor<TransitionCommand> transition = ArgumentCaptor.forClass(TransitionCommand.class);
-        verify(candidateCommands).transition(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), transition.capture());
+        verify(candidateCommands)
+            .transitionWithinAuditedCommit(
+                eq(TENANT),
+                eq(ACTOR),
+                eq(CANDIDATE_ID),
+                transition.capture()
+            );
         assertThat(transition.getValue().expectedVersion()).isEqualTo(10);
         assertThat(transition.getValue().targetStatus()).isEqualTo(DeliveryStatus.PUBLISHED);
         assertThat(transition.getValue().idempotencyKey())
@@ -240,7 +268,7 @@ class CandidatePublicationCommitServiceTest {
         when(targetResolver.resolve(partial)).thenReturn(target());
         when(evidence.requireCurrent(partial, true)).thenReturn(List.of());
         when(
-            candidateCommands.transition(
+            candidateCommands.transitionWithinAuditedCommit(
                 eq(TENANT),
                 eq(ACTOR),
                 eq(CANDIDATE_ID),
@@ -254,10 +282,49 @@ class CandidatePublicationCommitServiceTest {
         ArgumentCaptor<PlatformEventRequest> event = ArgumentCaptor.forClass(PlatformEventRequest.class);
         verify(outbox).publishInternal(event.capture());
         assertThat(event.getValue().eventType())
-            .isEqualTo("MODEL_RELEASE_CANDIDATE_REGISTRATION_RETRIED");
+            .isEqualTo("MODEL_RELEASE_CANDIDATE_PUBLICATION_RETRIED");
         assertThat(event.getValue().action()).isEqualTo("RETRY");
         assertThat(event.getValue().auditActionCode())
-            .isEqualTo("MODEL_RELEASE_CANDIDATE_REGISTRATION_RETRY");
+            .isEqualTo("MODEL_RELEASE_CANDIDATE_PUBLICATION_RETRY");
+        verify(auditService).auditAction(
+            eq("MODEL_RELEASE_CANDIDATE_PUBLICATION_RETRY"),
+            eq(AuditStage.SUCCESS),
+            eq(CANDIDATE_ID.toString()),
+            any()
+        );
+    }
+
+    @Test
+    void replayedFinalTransitionDoesNotDuplicateTheExplicitAudit() {
+        CandidateView publishing = candidate(DeliveryStatus.PUBLISHING, 10, audit(false));
+        CandidateView published = candidate(DeliveryStatus.PUBLISHED, 11, audit(true));
+        when(targetResolver.resolve(publishing)).thenReturn(target());
+        when(evidence.requireCurrent(publishing, true)).thenReturn(List.of());
+        when(
+            candidateCommands.transitionWithinAuditedCommit(
+                eq(TENANT),
+                eq(ACTOR),
+                eq(CANDIDATE_ID),
+                any(TransitionCommand.class)
+            )
+        )
+            .thenReturn(new CommandResult(published, true, List.of()));
+
+        CommandResult result = service.commit(
+            TENANT,
+            ACTOR,
+            publishing,
+            "publish-key",
+            "publish approved release"
+        );
+
+        assertThat(result.replayed()).isTrue();
+        verify(auditService, never()).auditAction(
+            anyString(),
+            any(),
+            anyString(),
+            any()
+        );
     }
 
     private static CandidateView candidate(DeliveryStatus status, int version, DeliveryAuditView audit) {

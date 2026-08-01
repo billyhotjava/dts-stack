@@ -50,7 +50,7 @@ class CatalogAssetTagPermissionReadAdapterTest {
     }
 
     @Test
-    void modelingSqlModelNameLookupUsesPerKeyAndGlobalBounds() {
+    void semanticModelIdentityUsesCanonicalModelSpecTable() {
         CountingJdbcTemplate jdbcTemplate = new CountingJdbcTemplate();
         CatalogAssetTagPermissionReadAdapter adapter = new CatalogAssetTagPermissionReadAdapter(jdbcTemplate);
 
@@ -59,22 +59,38 @@ class CatalogAssetTagPermissionReadAdapterTest {
                 Set.of(),
                 Set.of(),
                 Map.of(
-                    CatalogAssetType.MODELING_SQL_MODEL,
-                    Set.of("dws_orders", "dws_customer")
+                    CatalogAssetType.SEMANTIC_MODEL,
+                    Set.of("00000000-0000-0000-0000-000000000004")
                 )
             )
         );
 
-        QueryInvocation query = jdbcTemplate.singleQuery();
-        assertThat(query.sql().toLowerCase(Locale.ROOT))
-            .contains(
-                "join modeling_sql_model candidate",
-                "lower(candidate.name) = requested.natural_key",
-                "where match_rank <= 2",
-                "fetch first ? rows only"
+        assertThat(jdbcTemplate.singleQuery().sql().toLowerCase(Locale.ROOT))
+            .contains("from modeling_model_spec")
+            .doesNotContain("from semantic_model");
+    }
+
+    @Test
+    void localMetricIdentityUsesGovernanceIndicatorTable() {
+        CountingJdbcTemplate jdbcTemplate = new CountingJdbcTemplate();
+        CatalogAssetTagPermissionReadAdapter adapter = new CatalogAssetTagPermissionReadAdapter(jdbcTemplate);
+
+        adapter.loadBatch(
+            new BatchLookupRequest(
+                Set.of(),
+                Set.of(),
+                Map.of(CatalogAssetType.METRIC, Set.of("metric:local/revenue"))
+            )
+        );
+
+        List<QueryInvocation> queries = jdbcTemplate.queries();
+        assertThat(queries)
+            .extracting(query -> query.sql().toLowerCase(Locale.ROOT))
+            .anySatisfy(sql ->
+                assertThat(sql)
+                    .contains("from gov_indicator_definition")
+                    .doesNotContain("from semantic_metric")
             );
-        assertThat(query.arguments())
-            .contains("dws_orders", "dws_customer", 5);
     }
 
     @Test
@@ -163,6 +179,10 @@ class CatalogAssetTagPermissionReadAdapterTest {
 
         QueryInvocation singleQuery() {
             return queries.getFirst();
+        }
+
+        List<QueryInvocation> queries() {
+            return List.copyOf(queries);
         }
     }
 

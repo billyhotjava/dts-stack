@@ -3,10 +3,14 @@ package com.yuzhi.dts.admin.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,9 +33,17 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers
 class DataIntegrationAccessMenuLiquibaseIT {
 
-    private static final String CHANGELOG =
+    private static final String PRELUDE_CHANGELOG =
+        "config/liquibase/changelog/20260731-03a_data_integration_access_menu_audit_width_prelude.xml";
+    private static final String SNAPSHOT_WIDTH_CHANGELOG =
+        "config/liquibase/changelog/20260731-03b_data_integration_access_menu_snapshot_width_prelude.xml";
+    private static final String LEGACY_CHANGELOG =
         "config/liquibase/changelog/20260731-04_data_integration_access_menu_convergence.xml";
-    private static final String MIGRATION_ACTOR = "data-integration-access-menu-convergence";
+    private static final String CHANGELOG =
+        "config/liquibase/changelog/20260801-01_data_integration_access_menu_convergence_hardening.xml";
+    private static final String LEGACY_CHANGELOG_SHA256 =
+        "27d169ded405324490c9afe89ffb4ac1b0648bf206189ef22b472855814be8e3";
+    private static final String MIGRATION_ACTOR = "di-access-menu-v2";
     private static final Pattern OWNED_SCHEMA = Pattern.compile("^data_integration_access_[0-9a-f]{32}$");
 
     private static final long RESOURCE_ID = 1L;
@@ -46,6 +58,7 @@ class DataIntegrationAccessMenuLiquibaseIT {
     private static final long PREDELETED_CONNECTORS_ID = 18L;
     private static final long EXISTING_DATABASE_ACCESS_ID = 19L;
     private static final long EXISTING_RUNTIME_ID = 20L;
+    private static final long DUPLICATE_RUNTIME_ID = 21L;
 
     @Container
     private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17.4")
@@ -111,7 +124,19 @@ class DataIntegrationAccessMenuLiquibaseIT {
             .containsExactly(new VisibilityTriple("ROLE_CONNECTORS", "connectors.read", "INTERNAL"));
         assertThat(triplesFor(activeMenuId("sys.nav.portal.resourceJdbcDrivers")))
             .containsExactly(new VisibilityTriple("ROLE_JDBC", "jdbc.manage", "CONFIDENTIAL"));
-        assertThat(triplesFor(activeMenuId("sys.nav.portal.resourceRuntime"))).isEmpty();
+        assertThat(triplesFor(activeMenuId("sys.nav.portal.resourceRuntime")))
+            .containsExactlyInAnyOrder(
+                new VisibilityTriple("ROLE_RUNTIME_PRIMARY", "runtime.read", "INTERNAL"),
+                new VisibilityTriple("ROLE_RUNTIME_SECONDARY", "runtime.manage", "CONFIDENTIAL")
+            );
+        assertThat(isDeleted(DUPLICATE_RUNTIME_ID)).isTrue();
+        assertThat(
+            longValue(
+                "select coalesce(sum(octet_length(metadata)), 0) " +
+                "from portal_menu_di_access_snapshot_20260801"
+            )
+        ).isGreaterThan(2000L);
+        assertThat(count("system_config", "cfg_key like 'portal.menu.access.convergence.snapshot.%'")).isZero();
 
         assertThat(parentId(CONNECTORS_ID)).isEqualTo(activeMenuId("sys.nav.portal.resourceRuntime"));
         assertThat(parentId(JDBC_ID)).isEqualTo(activeMenuId("sys.nav.portal.resourceRuntime"));
@@ -136,11 +161,66 @@ class DataIntegrationAccessMenuLiquibaseIT {
     }
 
     @Test
+    void invalidMetadataFailsAtomicallyBeforeCreatingSnapshots() throws Exception {
+        try (Connection connection = connectionInSchema(); Statement statement = connection.createStatement()) {
+            statement.execute("update portal_menu set metadata = '{invalid' where id = " + CONNECTORS_ID);
+        }
+        Map<Long, MenuState> menusBefore = allMenuStates();
+        Map<Long, java.sql.Timestamp> modifiedDatesBefore = allLastModifiedDates();
+        SeedHashState seedHashBefore = seedHashState();
+
+        assertThatThrownBy(this::applyChangelog)
+            .hasStackTraceContaining("data-integration menu metadata contains invalid JSON; convergence aborted");
+
+        assertThat(allMenuStates()).isEqualTo(menusBefore);
+        assertThat(allLastModifiedDates()).isEqualTo(modifiedDatesBefore);
+        assertThat(seedHashState()).isEqualTo(seedHashBefore);
+        assertThat(snapshotTableCount()).isZero();
+    }
+
+    @Test
+    void emptyMenuTreeCreatesZeroRowManifestAndRollsBackCleanly() throws Exception {
+        SeedHashState seedHashBefore = seedHashState();
+        try (Connection connection = connectionInSchema(); Statement statement = connection.createStatement()) {
+            statement.execute("delete from portal_menu_visibility");
+            statement.execute("delete from portal_menu");
+        }
+
+        applyChangelog();
+
+        assertThat(count("portal_menu_di_access_snapshot_20260801", "true")).isZero();
+        assertThat(longValue("select menu_snapshot_count from portal_seed_di_access_snapshot_20260801")).isZero();
+
+        rollbackChangelog();
+
+        assertThat(count("portal_menu", "true")).isZero();
+        assertThat(seedHashState()).isEqualTo(seedHashBefore);
+        assertThat(snapshotTableCount()).isZero();
+    }
+
+    @Test
+    void rollbackKeepsSeedHashAbsentWhenItDidNotExistBeforeForward() throws Exception {
+        try (Connection connection = connectionInSchema(); Statement statement = connection.createStatement()) {
+            statement.execute("delete from system_config where cfg_key = 'portal.menu.seed.hash'");
+        }
+
+        applyChangelog();
+        assertThat(count("system_config", "cfg_key = 'portal.menu.seed.hash'")).isEqualTo(1L);
+
+        rollbackChangelog();
+        assertThat(count("system_config", "cfg_key = 'portal.menu.seed.hash'")).isZero();
+        assertThat(snapshotTableCount()).isZero();
+    }
+
+    @Test
     void rollbackRestoresOnlyRowsThatWereEnabledBeforeForwardMigration() throws Exception {
         MenuState databaseBefore = menuState(EXISTING_DATABASE_ACCESS_ID);
         MenuState runtimeBefore = menuState(EXISTING_RUNTIME_ID);
+        MenuState duplicateRuntimeBefore = menuState(DUPLICATE_RUNTIME_ID);
+        SeedHashState seedHashBefore = seedHashState();
         java.sql.Timestamp databaseModifiedBefore = lastModifiedDate(EXISTING_DATABASE_ACCESS_ID);
         java.sql.Timestamp runtimeModifiedBefore = lastModifiedDate(EXISTING_RUNTIME_ID);
+        java.sql.Timestamp duplicateRuntimeModifiedBefore = lastModifiedDate(DUPLICATE_RUNTIME_ID);
         applyChangelog();
         rollbackChangelog();
 
@@ -166,15 +246,22 @@ class DataIntegrationAccessMenuLiquibaseIT {
         assertThat(triplesFor(CONNECTORS_ID))
             .containsExactly(new VisibilityTriple("ROLE_CONNECTORS", "connectors.read", "INTERNAL"));
         assertThat(triplesFor(JDBC_ID)).containsExactly(new VisibilityTriple("ROLE_JDBC", "jdbc.manage", "CONFIDENTIAL"));
-        assertThat(activeMenuCount("sys.nav.portal.resourceDatabaseAccess")).isZero();
+        assertThat(activeMenuCount("sys.nav.portal.resourceDatabaseAccess")).isEqualTo(1L);
         assertThat(activeMenuCount("sys.nav.portal.resourceApiAccess")).isZero();
         assertThat(activeMenuCount("sys.nav.portal.resourceFileAccess")).isZero();
         assertThat(activeMenuCount("sys.nav.portal.resourceAccessDefaults")).isZero();
-        assertThat(activeMenuCount("sys.nav.portal.resourceRuntime")).isEqualTo(1L);
+        assertThat(activeMenuCount("sys.nav.portal.resourceRuntime")).isEqualTo(2L);
         assertThat(menuState(EXISTING_DATABASE_ACCESS_ID)).isEqualTo(databaseBefore);
         assertThat(menuState(EXISTING_RUNTIME_ID)).isEqualTo(runtimeBefore);
+        assertThat(menuState(DUPLICATE_RUNTIME_ID)).isEqualTo(duplicateRuntimeBefore);
+        assertThat(seedHashState()).isEqualTo(seedHashBefore);
         assertThat(lastModifiedDate(EXISTING_DATABASE_ACCESS_ID)).isEqualTo(databaseModifiedBefore);
         assertThat(lastModifiedDate(EXISTING_RUNTIME_ID)).isEqualTo(runtimeModifiedBefore);
+        assertThat(lastModifiedDate(DUPLICATE_RUNTIME_ID)).isEqualTo(duplicateRuntimeModifiedBefore);
+        assertThat(triplesFor(EXISTING_RUNTIME_ID))
+            .containsExactly(new VisibilityTriple("ROLE_RUNTIME_PRIMARY", "runtime.read", "INTERNAL"));
+        assertThat(triplesFor(DUPLICATE_RUNTIME_ID))
+            .containsExactly(new VisibilityTriple("ROLE_RUNTIME_SECONDARY", "runtime.manage", "CONFIDENTIAL"));
     }
 
     @Test
@@ -183,11 +270,8 @@ class DataIntegrationAccessMenuLiquibaseIT {
         Map<Long, MenuState> menusBeforeRollback = allMenuStates();
         Map<Long, java.sql.Timestamp> modifiedDatesBeforeRollback = allLastModifiedDates();
         long migrationVisibilityBeforeRollback = countMigrationVisibilityRows();
-        try (Connection connection = connectionInSchema(); PreparedStatement statement = connection.prepareStatement(
-            "delete from system_config where cfg_key = ?"
-        )) {
-            statement.setString(1, "portal.menu.access.convergence.snapshot.20260731-04");
-            assertThat(statement.executeUpdate()).isEqualTo(1);
+        try (Connection connection = connectionInSchema(); Statement statement = connection.createStatement()) {
+            assertThat(statement.executeUpdate("delete from portal_menu_di_access_snapshot_20260801")).isPositive();
         }
 
         assertThatThrownBy(this::rollbackChangelog)
@@ -226,8 +310,138 @@ class DataIntegrationAccessMenuLiquibaseIT {
         assertThat(isDeleted(PREDELETED_CHANGES_ID)).isTrue();
         assertThat(isDeleted(PREDELETED_DEFAULTS_ID)).isTrue();
         assertThat(isDeleted(PREDELETED_CONNECTORS_ID)).isTrue();
+        assertThat(isDeleted(DUPLICATE_RUNTIME_ID)).isTrue();
         assertThat(allRolesOnActiveAccessMenus())
             .doesNotContain("ROLE_PARENT", "ROLE_STALE_CHANGES", "ROLE_STALE_DEFAULTS", "ROLE_STALE_CONNECTORS");
+    }
+
+    @Test
+    void frozenLegacyChangeSetThenHardeningAppliesRollsBackAndReapplies() throws Exception {
+        resetToMinimalLegacyFixture();
+        assertThat(resourceSha256(LEGACY_CHANGELOG)).isEqualTo(LEGACY_CHANGELOG_SHA256);
+        String master = resourceText("config/liquibase/master.xml");
+        assertThat(master.indexOf("20260731-03a_data_integration_access_menu_audit_width_prelude.xml"))
+            .isGreaterThanOrEqualTo(0)
+            .isLessThan(master.indexOf("20260731-03b_data_integration_access_menu_snapshot_width_prelude.xml"));
+        assertThat(master.indexOf("20260731-03b_data_integration_access_menu_snapshot_width_prelude.xml"))
+            .isLessThan(master.indexOf("20260731-04_data_integration_access_menu_convergence.xml"));
+        assertThat(master.indexOf("20260731-04_data_integration_access_menu_convergence.xml"))
+            .isLessThan(master.indexOf("20260801-01_data_integration_access_menu_convergence_hardening.xml"));
+
+        assertThat(portalMenuLastModifiedByLength()).isEqualTo(50);
+        applyPreludeChangelog();
+        assertThat(portalMenuLastModifiedByLength()).isEqualTo(100);
+        applySnapshotWidthChangelog();
+        assertThat(
+            stringValue(
+                "select data_type from information_schema.columns " +
+                "where table_schema = current_schema() and table_name = 'system_config' and column_name = 'cfg_value'"
+            )
+        ).isEqualTo("text");
+        setCustomMarker(SOURCES_ID, 2600);
+        applyLegacyChangelog();
+        assertThat(
+            longValue(
+                "select octet_length(cfg_value) from system_config " +
+                "where cfg_key = 'portal.menu.access.convergence.snapshot.20260731-04'"
+            )
+        ).isGreaterThan(2000L);
+        assertThat(
+            count(
+                "databasechangelog",
+                "id = '20260731-04-data-integration-access-menu-convergence' and author = 'codex'"
+            )
+        ).isEqualTo(1L);
+        assertThat(
+            stringValue(
+                "select md5sum from databasechangelog " +
+                "where id = '20260731-04-data-integration-access-menu-convergence' and author = 'codex'"
+            )
+        ).isNotBlank();
+
+        long canonicalRuntimeId = activeMenuId("sys.nav.portal.resourceRuntime");
+        long canonicalDatabaseId = activeMenuId("sys.nav.portal.resourceDatabaseAccess");
+        long sequentialDuplicateRuntimeId = 5000L;
+        insertMenu(
+            sequentialDuplicateRuntimeId,
+            RESOURCE_ID,
+            "sys.nav.portal.resourceRuntime",
+            "runtime-sequential-duplicate",
+            false
+        );
+        insertVisibility(
+            9000L,
+            sequentialDuplicateRuntimeId,
+            "ROLE_RUNTIME_SEQUENTIAL",
+            "runtime.reconcile",
+            "SECRET"
+        );
+        setCustomMarker(canonicalDatabaseId, 2600);
+
+        Map<Long, MenuState> legacyAppliedMenus = allMenuStates();
+        Map<Long, java.sql.Timestamp> legacyAppliedDates = allLastModifiedDates();
+        SeedHashState legacyAppliedSeedHash = seedHashState();
+        long legacyAppliedVisibilityCount = count("portal_menu_visibility", "true");
+
+        applyChangelog();
+        Map<String, Long> firstHardenedIds = canonicalActiveIds();
+        assertThat(activeMenuId("sys.nav.portal.resourceRuntime")).isEqualTo(canonicalRuntimeId);
+        assertThat(isDeleted(sequentialDuplicateRuntimeId)).isTrue();
+        assertThat(triplesFor(canonicalRuntimeId))
+            .contains(new VisibilityTriple("ROLE_RUNTIME_SEQUENTIAL", "runtime.reconcile", "SECRET"));
+        assertThat(
+            longValue(
+                "select coalesce(sum(octet_length(metadata)), 0) " +
+                "from portal_menu_di_access_snapshot_20260801"
+            )
+        ).isGreaterThan(2000L);
+
+        rollbackChangelog();
+        assertThat(allMenuStates()).isEqualTo(legacyAppliedMenus);
+        assertThat(allLastModifiedDates()).isEqualTo(legacyAppliedDates);
+        assertThat(seedHashState()).isEqualTo(legacyAppliedSeedHash);
+        assertThat(count("portal_menu_visibility", "true")).isEqualTo(legacyAppliedVisibilityCount);
+        assertThat(snapshotTableCount()).isZero();
+
+        applyChangelog();
+        assertThat(canonicalActiveIds()).isEqualTo(firstHardenedIds);
+        assertThat(activeMenuId("sys.nav.portal.resourceRuntime")).isEqualTo(canonicalRuntimeId);
+        assertThat(isDeleted(sequentialDuplicateRuntimeId)).isTrue();
+    }
+
+    @Test
+    void preludeSafelyUpgradesDatabaseWhereFrozenLegacyChangeSetAlreadyRan() throws Exception {
+        resetToMinimalLegacyFixture();
+        assertThat(portalMenuLastModifiedByLength()).isEqualTo(50);
+
+        applyPreludeChangelog();
+        assertThat(portalMenuLastModifiedByLength()).isEqualTo(100);
+        rollbackPreludeChangelog();
+        assertThat(portalMenuLastModifiedByLength()).isEqualTo(100);
+        assertThat(
+            count(
+                "databasechangelog",
+                "id = '20260731-03a-data-integration-access-menu-audit-width-prelude' and author = 'codex'"
+            )
+        ).isZero();
+
+        applyLegacyChangelog();
+        assertThat(
+            count(
+                "databasechangelog",
+                "id = '20260731-04-data-integration-access-menu-convergence' and author = 'codex'"
+            )
+        ).isEqualTo(1L);
+
+        applyPreludeChangelog();
+        assertThat(portalMenuLastModifiedByLength()).isEqualTo(100);
+        applyLegacyChangelog();
+        assertThat(
+            count(
+                "databasechangelog",
+                "id = '20260731-04-data-integration-access-menu-convergence' and author = 'codex'"
+            )
+        ).isEqualTo(1L);
     }
 
     private void createPrerequisites() throws Exception {
@@ -246,9 +460,9 @@ class DataIntegrationAccessMenuLiquibaseIT {
                     icon varchar(255),
                     security_level varchar(64),
                     deleted boolean not null default false,
-                    created_by varchar(100),
+                    created_by varchar(50),
                     created_date timestamp,
-                    last_modified_by varchar(100),
+                    last_modified_by varchar(50),
                     last_modified_date timestamp
                 )
                 """
@@ -261,9 +475,9 @@ class DataIntegrationAccessMenuLiquibaseIT {
                     role_code varchar(100) not null,
                     permission_code varchar(100),
                     data_level varchar(64),
-                    created_by varchar(100),
+                    created_by varchar(50),
                     created_date timestamp,
-                    last_modified_by varchar(100),
+                    last_modified_by varchar(50),
                     last_modified_date timestamp
                 )
                 """
@@ -272,7 +486,7 @@ class DataIntegrationAccessMenuLiquibaseIT {
                 """
                 create table system_config (
                     cfg_key varchar(255) primary key,
-                    cfg_value text,
+                    cfg_value varchar(2000),
                     description varchar(512),
                     category varchar(100),
                     sensitive boolean,
@@ -283,9 +497,9 @@ class DataIntegrationAccessMenuLiquibaseIT {
                     config_scope varchar(64),
                     restart_required boolean,
                     owner varchar(100),
-                    created_by varchar(100),
+                    created_by varchar(50),
                     created_date timestamp,
-                    last_modified_by varchar(100),
+                    last_modified_by varchar(50),
                     last_modified_date timestamp
                 )
                 """
@@ -312,8 +526,10 @@ class DataIntegrationAccessMenuLiquibaseIT {
             false
         );
         insertMenu(EXISTING_RUNTIME_ID, RESOURCE_ID, "sys.nav.portal.resourceRuntime", "runtime", false);
+        insertMenu(DUPLICATE_RUNTIME_ID, RESOURCE_ID, "sys.nav.portal.resourceRuntime", "runtime-duplicate", false);
         customizeMenu(EXISTING_DATABASE_ACCESS_ID, "custom/database", "custom.DatabaseComponent", 71, "custom-database-icon");
         customizeMenu(EXISTING_RUNTIME_ID, "custom/runtime", "custom.RuntimeComponent", 72, "custom-runtime-icon");
+        customizeMenu(DUPLICATE_RUNTIME_ID, "custom/runtime-2", "custom.RuntimeComponent2", 73, "custom-runtime-icon-2");
 
         insertVisibility(100L, RESOURCE_ID, "ROLE_PARENT", "resource.root", "INTERNAL");
         insertVisibility(101L, SOURCES_ID, "ROLE_SOURCES", "source.read", "INTERNAL");
@@ -325,6 +541,27 @@ class DataIntegrationAccessMenuLiquibaseIT {
         insertVisibility(107L, PREDELETED_CHANGES_ID, "ROLE_STALE_CHANGES", "changes.stale", "INTERNAL");
         insertVisibility(108L, PREDELETED_DEFAULTS_ID, "ROLE_STALE_DEFAULTS", "defaults.stale", "INTERNAL");
         insertVisibility(109L, PREDELETED_CONNECTORS_ID, "ROLE_STALE_CONNECTORS", "connectors.stale", "INTERNAL");
+        insertVisibility(110L, EXISTING_RUNTIME_ID, "ROLE_RUNTIME_PRIMARY", "runtime.read", "INTERNAL");
+        insertVisibility(111L, DUPLICATE_RUNTIME_ID, "ROLE_RUNTIME_SECONDARY", "runtime.manage", "CONFIDENTIAL");
+
+        try (Connection connection = connectionInSchema(); Statement statement = connection.createStatement()) {
+            statement.execute(
+                "insert into system_config (cfg_key, cfg_value, description, category, sensitive, data_type, editable, " +
+                "sort_order, display_name, config_scope, restart_required, owner, created_by, created_date, " +
+                "last_modified_by, last_modified_date) values " +
+                "('portal.menu.seed.hash', 'fixture-seed-hash', 'fixture seed hash', 'SYSTEM', false, 'STRING', " +
+                "false, 9, 'Fixture seed hash', 'RUNTIME', false, 'fixture-owner', 'seed-creator', " +
+                "timestamp '2026-06-01 01:02:03', 'seed-editor', timestamp '2026-06-02 04:05:06')"
+            );
+        }
+    }
+
+    private void resetToMinimalLegacyFixture() throws Exception {
+        try (Connection connection = connectionInSchema(); Statement statement = connection.createStatement()) {
+            statement.execute("delete from portal_menu_visibility");
+            statement.execute("delete from portal_menu where id not in (" + RESOURCE_ID + ", " + SOURCES_ID + ")");
+        }
+        insertVisibility(101L, SOURCES_ID, "ROLE_SOURCES", "source.read", "INTERNAL");
     }
 
     private void insertMenu(long id, Long parentId, String titleKey, String key, boolean deleted) throws Exception {
@@ -376,10 +613,39 @@ class DataIntegrationAccessMenuLiquibaseIT {
             statement.setString(1, path);
             statement.setString(2, component);
             statement.setInt(3, sortOrder);
-            statement.setString(4, "marker-" + menuId);
+            statement.setString(4, "marker-" + menuId + "-" + "x".repeat(1200));
             statement.setString(5, icon);
             statement.setLong(6, menuId);
             statement.executeUpdate();
+        }
+    }
+
+    private void setCustomMarker(long menuId, int markerLength) throws Exception {
+        String sql =
+            "update portal_menu set metadata = jsonb_set(metadata::jsonb, '{customMarker}', to_jsonb(?::text))::text " +
+            "where id = ?";
+        try (Connection connection = connectionInSchema(); PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, "x".repeat(markerLength));
+            statement.setLong(2, menuId);
+            statement.executeUpdate();
+        }
+    }
+
+    private String resourceSha256(String resourcePath) throws Exception {
+        try (InputStream input = DataIntegrationAccessMenuLiquibaseIT.class.getClassLoader().getResourceAsStream(resourcePath)) {
+            if (input == null) {
+                throw new IllegalStateException("Missing test resource: " + resourcePath);
+            }
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(input.readAllBytes()));
+        }
+    }
+
+    private String resourceText(String resourcePath) throws Exception {
+        try (InputStream input = DataIntegrationAccessMenuLiquibaseIT.class.getClassLoader().getResourceAsStream(resourcePath)) {
+            if (input == null) {
+                throw new IllegalStateException("Missing test resource: " + resourcePath);
+            }
+            return new String(input.readAllBytes(), StandardCharsets.UTF_8);
         }
     }
 
@@ -531,6 +797,29 @@ class DataIntegrationAccessMenuLiquibaseIT {
         return count("portal_menu_visibility", "created_by = '" + MIGRATION_ACTOR + "'");
     }
 
+    private long snapshotTableCount() throws Exception {
+        return longValue(
+            "select count(*) from pg_tables where schemaname = current_schema() and tablename in " +
+            "('portal_menu_di_access_snapshot_20260801', 'portal_seed_di_access_snapshot_20260801')"
+        );
+    }
+
+    private SeedHashState seedHashState() throws Exception {
+        String sql =
+            "select cfg_value, created_by, created_date, last_modified_by, last_modified_date " +
+            "from system_config where cfg_key = 'portal.menu.seed.hash'";
+        try (Connection connection = connectionInSchema(); Statement statement = connection.createStatement(); ResultSet result = statement.executeQuery(sql)) {
+            assertThat(result.next()).isTrue();
+            return new SeedHashState(
+                result.getString(1),
+                result.getString(2),
+                result.getTimestamp(3),
+                result.getString(4),
+                result.getTimestamp(5)
+            );
+        }
+    }
+
     private java.sql.Timestamp lastModifiedDate(long menuId) throws Exception {
         try (
             Connection connection = connectionInSchema();
@@ -569,8 +858,31 @@ class DataIntegrationAccessMenuLiquibaseIT {
         }
     }
 
+    private long portalMenuLastModifiedByLength() throws Exception {
+        return longValue(
+            "select character_maximum_length from information_schema.columns " +
+            "where table_schema = current_schema() and table_name = 'portal_menu' and column_name = 'last_modified_by'"
+        );
+    }
+
     private void applyChangelog() throws Exception {
         runLiquibase(liquibase -> liquibase.update(new Contexts(), new LabelExpression()));
+    }
+
+    private void applyPreludeChangelog() throws Exception {
+        runLiquibase(PRELUDE_CHANGELOG, liquibase -> liquibase.update(new Contexts(), new LabelExpression()));
+    }
+
+    private void rollbackPreludeChangelog() throws Exception {
+        runLiquibase(PRELUDE_CHANGELOG, liquibase -> liquibase.rollback(1, new Contexts(), new LabelExpression()));
+    }
+
+    private void applySnapshotWidthChangelog() throws Exception {
+        runLiquibase(SNAPSHOT_WIDTH_CHANGELOG, liquibase -> liquibase.update(new Contexts(), new LabelExpression()));
+    }
+
+    private void applyLegacyChangelog() throws Exception {
+        runLiquibase(LEGACY_CHANGELOG, liquibase -> liquibase.update(new Contexts(), new LabelExpression()));
     }
 
     private void rollbackChangelog() throws Exception {
@@ -578,6 +890,10 @@ class DataIntegrationAccessMenuLiquibaseIT {
     }
 
     private void runLiquibase(LiquibaseOperation operation) throws Exception {
+        runLiquibase(CHANGELOG, operation);
+    }
+
+    private void runLiquibase(String changelog, LiquibaseOperation operation) throws Exception {
         try (
             Connection connection = connectionInSchema();
             ClassLoaderResourceAccessor resources = new ClassLoaderResourceAccessor()
@@ -587,7 +903,7 @@ class DataIntegrationAccessMenuLiquibaseIT {
             try {
                 database.setDefaultSchemaName(schema);
                 database.setLiquibaseSchemaName(schema);
-                try (Liquibase liquibase = new Liquibase(CHANGELOG, resources, database)) {
+                try (Liquibase liquibase = new Liquibase(changelog, resources, database)) {
                     operation.run(liquibase);
                 }
             } finally {
@@ -620,6 +936,14 @@ class DataIntegrationAccessMenuLiquibaseIT {
     }
 
     private record VisibilityTriple(String roleCode, String permissionCode, String dataLevel) {}
+
+    private record SeedHashState(
+        String value,
+        String createdBy,
+        java.sql.Timestamp createdDate,
+        String lastModifiedBy,
+        java.sql.Timestamp lastModifiedDate
+    ) {}
 
     private record MenuState(
         String name,

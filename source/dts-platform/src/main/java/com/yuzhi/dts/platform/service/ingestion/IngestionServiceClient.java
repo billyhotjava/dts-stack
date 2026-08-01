@@ -1,5 +1,7 @@
 package com.yuzhi.dts.platform.service.ingestion;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.yuzhi.dts.platform.config.DtsIngestionProperties;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
@@ -19,6 +21,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -44,6 +47,9 @@ public class IngestionServiceClient {
     private static final String USER_HEADER = "X-DTS-User";
     private static final String ROLES_HEADER = "X-DTS-Roles";
     private static final String UPLOAD_TRACE_HEADER = "X-DTS-Upload-Trace";
+    private static final String REQUEST_ID_HEADER = "X-Request-Id";
+    private static final String UNKNOWN_REQUEST_ID = "unknown";
+    private static final Pattern STABLE_LOG_VALUE = Pattern.compile("[A-Za-z0-9._:-]{1,128}");
     private static final Duration HEALTH_TTL = Duration.ofSeconds(15);
 
     private final RestTemplate restTemplate;
@@ -80,8 +86,11 @@ public class IngestionServiceClient {
             .build();
         this.retry = RetryRegistry.of(retryConfig).retry("ingestion");
         this.retry.getEventPublisher()
-            .onRetry(event -> LOG.warn("[ingestion-retry] attempt #{} for {}: {}",
-                event.getNumberOfRetryAttempts(), event.getName(), event.getLastThrowable().getMessage()));
+            .onRetry(event -> logFailure(
+                "INGESTION_RETRY",
+                statusCode(event.getLastThrowable(), 503),
+                responseRequestId(event.getLastThrowable(), UNKNOWN_REQUEST_ID)
+            ));
 
         // Resilience4j circuit breaker: open on sustained failures, allow probing in half-open
         DtsIngestionProperties.CircuitBreaker cbProps = properties.getCircuitBreaker();
@@ -147,6 +156,42 @@ public class IngestionServiceClient {
 
     public ApiResponse<Map<String, Object>> getTask(Long id) {
         return exchangeTask("/api/ingestion/tasks/" + id, HttpMethod.GET, null, null);
+    }
+
+    public ApiResponse<Map<String, Object>> getTaskAccessMetadata(Long id) {
+        if (!isEnabled()) {
+            return new ApiResponse<>(503, "ingestion service disabled", null);
+        }
+        URI uri = buildAbsoluteUri("/api/ingestion/tasks/" + id);
+        String requestId = UUID.randomUUID().toString();
+        try {
+            HttpEntity<?> entity = new HttpEntity<>(headersWithRequestId(requestId));
+            Supplier<ResponseEntity<TaskAccessProjection>> supplier = () ->
+                restTemplate.exchange(uri, HttpMethod.GET, entity, TaskAccessProjection.class);
+            Supplier<ResponseEntity<TaskAccessProjection>> circuitProtected = CircuitBreaker.decorateSupplier(
+                circuitBreaker,
+                supplier
+            );
+            ResponseEntity<TaskAccessProjection> response = Retry.decorateSupplier(retry, circuitProtected).get();
+            TaskAccessProjection body = response.getBody();
+            if (body == null) {
+                return new ApiResponse<>(response.getStatusCode().value(), "ingestion task access metadata unavailable", null);
+            }
+            return new ApiResponse<>(response.getStatusCode().value(), "ok", body.toMap());
+        } catch (io.github.resilience4j.circuitbreaker.CallNotPermittedException ex) {
+            logFailure("INGESTION_TASK_ACCESS_CIRCUIT_OPEN", 503, requestId);
+            return new ApiResponse<>(503, "数据采集服务暂时不可用，请稍后重试", null);
+        } catch (HttpStatusCodeException ex) {
+            logFailure(
+                "INGESTION_TASK_ACCESS_HTTP_ERROR",
+                ex.getStatusCode().value(),
+                responseRequestId(ex, requestId)
+            );
+            return new ApiResponse<>(ex.getStatusCode().value(), "ingestion service error", null);
+        } catch (Exception ex) {
+            logFailure("INGESTION_TASK_ACCESS_ERROR", statusCode(ex, 500), responseRequestId(ex, requestId));
+            return new ApiResponse<>(500, "ingestion service error", null);
+        }
     }
 
     public ApiResponse<Object> getTaskRevisions(Long id) {
@@ -270,18 +315,23 @@ public class IngestionServiceClient {
             return ResponseEntity.status(503).body(null);
         }
         URI uri = buildAbsoluteUri("/api/ingestion/tasks/" + taskId + "/staging/errors/download");
+        String requestId = UUID.randomUUID().toString();
         try {
             return longRestTemplate.exchange(
                 uri,
                 HttpMethod.GET,
-                new HttpEntity<>(defaultHeaders()),
+                new HttpEntity<>(headersWithRequestId(requestId)),
                 byte[].class
             );
         } catch (HttpStatusCodeException ex) {
-            LOG.warn("Ingestion staging error download failed status={}", ex.getStatusCode().value());
+            logFailure(
+                "INGESTION_STAGING_DOWNLOAD_HTTP_ERROR",
+                ex.getStatusCode().value(),
+                responseRequestId(ex, requestId)
+            );
             return ResponseEntity.status(ex.getStatusCode()).body(null);
         } catch (Exception ex) {
-            LOG.warn("Ingestion staging error download error: {}", ex.getMessage());
+            logFailure("INGESTION_STAGING_DOWNLOAD_ERROR", statusCode(ex, 500), responseRequestId(ex, requestId));
             return ResponseEntity.status(500).body(null);
         }
     }
@@ -344,6 +394,7 @@ public class IngestionServiceClient {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.MULTIPART_FORM_DATA);
             headers.set(UPLOAD_TRACE_HEADER, traceId);
+            headers.set(REQUEST_ID_HEADER, traceId);
             if (StringUtils.hasText(properties.getServiceName())) {
                 headers.set(SERVICE_HEADER, properties.getServiceName());
             }
@@ -383,50 +434,17 @@ public class IngestionServiceClient {
             if (responseBody instanceof Map<?, ?> map) {
                 ApiResponse<Object> unwrapped = unwrapApiResponseMap(map);
                 if (unwrapped != null) {
-                    LOG.info(
-                        "Ingestion file upload proxy response: traceId={}, path={}, httpStatus={}, apiStatus={}, message={}, dataType={}",
-                        traceId,
-                        path,
-                        response.getStatusCode().value(),
-                        unwrapped.getStatus(),
-                        unwrapped.getMessage(),
-                        unwrapped.getData() == null ? null : unwrapped.getData().getClass().getSimpleName()
-                    );
+                    logResponse("INGESTION_UPLOAD_RESPONSE", unwrapped.getStatus(), traceId);
                     return unwrapped;
                 }
             }
-            LOG.info(
-                "Ingestion file upload proxy response: traceId={}, path={}, httpStatus={}, bodyType={}",
-                traceId,
-                path,
-                response.getStatusCode().value(),
-                responseBody == null ? null : responseBody.getClass().getSimpleName()
-            );
+            logResponse("INGESTION_UPLOAD_RESPONSE", response.getStatusCode().value(), traceId);
             return new ApiResponse<>(response.getStatusCode().value(), "ok", responseBody);
         } catch (HttpStatusCodeException ex) {
-            LOG.warn(
-                "Ingestion file upload proxy failed: traceId={}, path={}, target={}, status={}, name={}, size={}, contentType={}",
-                traceId,
-                path,
-                uri,
-                ex.getStatusCode().value(),
-                originalName,
-                declaredSize,
-                contentType
-            );
+            logFailure("INGESTION_UPLOAD_HTTP_ERROR", ex.getStatusCode().value(), responseRequestId(ex, traceId));
             return new ApiResponse<>(ex.getStatusCode().value(), "文件上传失败", null);
         } catch (Exception ex) {
-            LOG.warn(
-                "Ingestion file upload proxy error: traceId={}, path={}, target={}, name={}, size={}, contentType={}, error={}",
-                traceId,
-                path,
-                uri,
-                originalName,
-                declaredSize,
-                contentType,
-                ex.getMessage(),
-                ex
-            );
+            logFailure("INGESTION_UPLOAD_ERROR", statusCode(ex, 500), responseRequestId(ex, traceId));
             return new ApiResponse<>(500, "文件上传失败", null);
         }
     }
@@ -441,6 +459,7 @@ public class IngestionServiceClient {
         if (!isEnabled()) {
             return new ApiResponse<>(503, "ingestion service disabled", null);
         }
+        String requestId = UUID.randomUUID().toString();
         try {
             java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
             payload.put("fileId", fileId);
@@ -458,10 +477,10 @@ public class IngestionServiceClient {
             }
             return exchangeObject("/api/ingestion/files/parse", HttpMethod.POST, payload, null, longRestTemplate);
         } catch (HttpStatusCodeException ex) {
-            LOG.warn("Ingestion file parse failed status={}", ex.getStatusCode().value());
+            logFailure("INGESTION_FILE_PARSE_HTTP_ERROR", ex.getStatusCode().value(), responseRequestId(ex, requestId));
             return new ApiResponse<>(ex.getStatusCode().value(), "文件解析失败", null);
         } catch (Exception ex) {
-            LOG.warn("Ingestion file parse error: {}", ex.getMessage());
+            logFailure("INGESTION_FILE_PARSE_ERROR", statusCode(ex, 500), responseRequestId(ex, requestId));
             return new ApiResponse<>(500, "文件解析失败", null);
         }
     }
@@ -591,11 +610,15 @@ public class IngestionServiceClient {
             return new ApiResponse<>(503, "ingestion service disabled", null);
         }
         URI uri = buildAbsoluteUri(path, params);
+        String requestId = UUID.randomUUID().toString();
         try {
-            HttpEntity<?> entity = payload == null ? new HttpEntity<>(defaultHeaders()) : new HttpEntity<>(payload, defaultHeaders());
+            HttpHeaders headers = headersWithRequestId(requestId);
+            HttpEntity<?> entity = payload == null ? new HttpEntity<>(headers) : new HttpEntity<>(payload, headers);
             Supplier<ResponseEntity<Object>> supplier = () -> client.exchange(uri, method, entity, Object.class);
-            ResponseEntity<Object> response = Retry.decorateSupplier(retry,
-                CircuitBreaker.decorateSupplier(circuitBreaker, supplier)).get();
+            Supplier<ResponseEntity<Object>> circuitProtected = CircuitBreaker.decorateSupplier(circuitBreaker, supplier);
+            ResponseEntity<Object> response = (HttpMethod.GET.equals(method) || HttpMethod.HEAD.equals(method))
+                ? Retry.decorateSupplier(retry, circuitProtected).get()
+                : circuitProtected.get();
             Object body = response.getBody();
             if (body == null) {
                 if (response.getStatusCode().is2xxSuccessful()) {
@@ -608,18 +631,22 @@ public class IngestionServiceClient {
             }
             return bodyHandler.apply(body, response.getStatusCode());
         } catch (io.github.resilience4j.circuitbreaker.CallNotPermittedException ex) {
-            LOG.warn("Ingestion API {} blocked by circuit breaker (state=OPEN)", path);
+            logFailure("INGESTION_CIRCUIT_OPEN", 503, requestId);
             return new ApiResponse<>(503, "数据采集服务暂时不可用，请稍后重试", null);
         } catch (HttpStatusCodeException ex) {
-            LOG.warn("Ingestion API {} failed status={} body={}", path, ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            logFailure("INGESTION_HTTP_ERROR", ex.getStatusCode().value(), responseRequestId(ex, requestId));
             return new ApiResponse<>(ex.getStatusCode().value(), "ingestion service error", null);
         } catch (Exception ex) {
             Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
             if (cause instanceof HttpStatusCodeException hsce) {
-                LOG.warn("Ingestion API {} failed after retries status={}", path, hsce.getStatusCode().value());
+                logFailure(
+                    "INGESTION_HTTP_ERROR_AFTER_RETRY",
+                    hsce.getStatusCode().value(),
+                    responseRequestId(hsce, requestId)
+                );
                 return new ApiResponse<>(hsce.getStatusCode().value(), "ingestion service error", null);
             }
-            LOG.warn("Ingestion API {} error after retries: {}", path, cause.getMessage());
+            logFailure("INGESTION_REQUEST_ERROR", statusCode(cause, 500), responseRequestId(cause, requestId));
             return new ApiResponse<>(500, "ingestion service error", null);
         }
     }
@@ -732,6 +759,84 @@ public class IngestionServiceClient {
         }
     }
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record TaskAccessProjection(
+        Long id,
+        String sourceKind,
+        String sourceType,
+        UUID sourceDataSourceId,
+        UUID targetDataSourceId,
+        UUID destinationDataSourceId,
+        TaskAccessConfigProjection sourceConfig,
+        TaskAccessConfigProjection destinationConfig,
+        ClassificationSealProjection classificationSeal
+    ) {
+        private Map<String, Object> toMap() {
+            Map<String, Object> metadata = new java.util.LinkedHashMap<>();
+            putIfNotNull(metadata, "id", id);
+            putIfNotNull(metadata, "sourceKind", sourceKind);
+            putIfNotNull(metadata, "sourceType", sourceType);
+            putIfNotNull(metadata, "sourceDataSourceId", sourceDataSourceId == null ? null : sourceDataSourceId.toString());
+            putIfNotNull(metadata, "targetDataSourceId", uuidText(targetDataSourceId));
+            putIfNotNull(metadata, "destinationDataSourceId", uuidText(destinationDataSourceId));
+            if (sourceConfig != null) {
+                metadata.put("sourceConfig", sourceConfig.toMap());
+            }
+            if (destinationConfig != null) {
+                metadata.put("destinationConfig", destinationConfig.toMap());
+            }
+            if (classificationSeal != null) {
+                metadata.put("classificationSeal", classificationSeal.toMap());
+            }
+            return metadata;
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record TaskAccessConfigProjection(
+        UUID sourceDataSourceId,
+        UUID dataSourceId,
+        UUID targetDataSourceId,
+        UUID destinationDataSourceId,
+        String readerType,
+        @JsonProperty("_fileId") String fileId,
+        ClassificationSealProjection classificationSeal
+    ) {
+        private Map<String, Object> toMap() {
+            Map<String, Object> metadata = new java.util.LinkedHashMap<>();
+            putIfNotNull(metadata, "sourceDataSourceId", uuidText(sourceDataSourceId));
+            putIfNotNull(metadata, "dataSourceId", uuidText(dataSourceId));
+            putIfNotNull(metadata, "targetDataSourceId", uuidText(targetDataSourceId));
+            putIfNotNull(metadata, "destinationDataSourceId", uuidText(destinationDataSourceId));
+            putIfNotNull(metadata, "readerType", readerType);
+            putIfNotNull(metadata, "_fileId", fileId);
+            if (classificationSeal != null) {
+                metadata.put("classificationSeal", classificationSeal.toMap());
+            }
+            return metadata;
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record ClassificationSealProjection(String effectiveLevel, String fileFloor) {
+        private Map<String, Object> toMap() {
+            Map<String, Object> metadata = new java.util.LinkedHashMap<>();
+            putIfNotNull(metadata, "effectiveLevel", effectiveLevel);
+            putIfNotNull(metadata, "fileFloor", fileFloor);
+            return metadata;
+        }
+    }
+
+    private static void putIfNotNull(Map<String, Object> target, String key, Object value) {
+        if (value != null) {
+            target.put(key, value);
+        }
+    }
+
+    private static String uuidText(UUID value) {
+        return value == null ? null : value.toString();
+    }
+
     public record HealthStatus(boolean ready, Instant checkedAt, String message) {
         public static HealthStatus unknown() {
             return new HealthStatus(false, Instant.EPOCH, "unknown");
@@ -824,18 +929,69 @@ public class IngestionServiceClient {
             );
             return bytes;
         } catch (Exception ex) {
-            LOG.warn(
-                "Ingestion file upload proxy read multipart failed: traceId={}, path={}, name={}, declaredSize={}, contentType={}, error={}",
-                traceId,
-                path,
-                originalName,
-                declaredSize,
-                contentType,
-                ex.getMessage(),
-                ex
-            );
-            throw new IllegalStateException("读取上传文件失败: " + ex.getMessage(), ex);
+            logFailure("INGESTION_MULTIPART_READ_ERROR", statusCode(ex, 500), traceId);
+            throw new IllegalStateException("读取上传文件失败", ex);
         }
+    }
+
+    private HttpHeaders headersWithRequestId(String requestId) {
+        HttpHeaders headers = defaultHeaders();
+        headers.set(REQUEST_ID_HEADER, stableLogValue(requestId, UNKNOWN_REQUEST_ID));
+        return headers;
+    }
+
+    /**
+     * Security boundary for downstream failures: response bodies and exception messages never reach logs.
+     * Only an allowlisted, single-line projection is emitted.
+     */
+    private static void logFailure(String code, int status, String requestId) {
+        LOG.warn(
+            "[ingestion-client] code={} status={} requestId={}",
+            stableLogValue(code, "INGESTION_ERROR"),
+            status,
+            stableLogValue(requestId, UNKNOWN_REQUEST_ID)
+        );
+    }
+
+    private static void logResponse(String code, int status, String requestId) {
+        LOG.info(
+            "[ingestion-client] code={} status={} requestId={}",
+            stableLogValue(code, "INGESTION_RESPONSE"),
+            status,
+            stableLogValue(requestId, UNKNOWN_REQUEST_ID)
+        );
+    }
+
+    private static int statusCode(Throwable error, int fallback) {
+        if (error instanceof HttpStatusCodeException statusError) {
+            return statusError.getStatusCode().value();
+        }
+        Throwable cause = error == null ? null : error.getCause();
+        if (cause instanceof HttpStatusCodeException statusError) {
+            return statusError.getStatusCode().value();
+        }
+        return fallback;
+    }
+
+    private static String responseRequestId(Throwable error, String fallback) {
+        HttpStatusCodeException statusError = null;
+        if (error instanceof HttpStatusCodeException direct) {
+            statusError = direct;
+        } else if (error != null && error.getCause() instanceof HttpStatusCodeException nested) {
+            statusError = nested;
+        }
+        if (statusError != null && statusError.getResponseHeaders() != null) {
+            String downstreamRequestId = statusError.getResponseHeaders().getFirst(REQUEST_ID_HEADER);
+            if (StringUtils.hasText(downstreamRequestId)) {
+                return stableLogValue(downstreamRequestId, fallback);
+            }
+        }
+        return stableLogValue(fallback, UNKNOWN_REQUEST_ID);
+    }
+
+    private static String stableLogValue(String value, String fallback) {
+        String candidate = value == null ? "" : value.trim();
+        return STABLE_LOG_VALUE.matcher(candidate).matches() ? candidate : fallback;
     }
 
 }

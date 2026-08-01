@@ -51,6 +51,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceUtils;
+import org.springframework.jdbc.datasource.TransactionAwareDataSourceProxy;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -96,10 +97,12 @@ class ModelMaterializationStartServiceIT {
     void commitsBuildingSnapshotClaimAndOneQueuedRunAsOneUnit() {
         Scope scope = scope("atomic-success");
         TransactionTemplate transaction = new TransactionTemplate(transactionManager);
-        jdbcTemplate.execute(
-            "create table public." +
-            scope.targetIdentifier() +
-            " (project_id uuid not null, amount numeric(18,2))"
+        transaction.executeWithoutResult(status ->
+            jdbcTemplate.execute(
+                "create table public." +
+                scope.targetIdentifier() +
+                " (project_id uuid not null, amount numeric(18,2))"
+            )
         );
         try {
             transaction.executeWithoutResult(status -> {
@@ -235,6 +238,7 @@ class ModelMaterializationStartServiceIT {
             assertThat(runtime.pipelineRunId())
                 .isEqualTo(pipelineRunId);
             UUID leaseId = UUID.randomUUID();
+            Instant leaseIssuedAt = Instant.now();
             profileLeases.issue(
                 new LeaseRecord(
                     leaseId,
@@ -251,8 +255,8 @@ class ModelMaterializationStartServiceIT {
                     "dev",
                     "sha256:" + "a".repeat(64),
                     LeaseStatus.ISSUED,
-                    NOW,
-                    NOW.plusSeconds(300),
+                    leaseIssuedAt,
+                    leaseIssuedAt.plusSeconds(300),
                     null,
                     null
                 )
@@ -308,12 +312,14 @@ class ModelMaterializationStartServiceIT {
             DbtTargetConnectionFactory targetFactory = mock(
                 DbtTargetConnectionFactory.class
             );
+            TransactionAwareDataSourceProxy transactionAwareDataSource =
+                new TransactionAwareDataSourceProxy(dataSource);
             when(targetFactory.resolveRuntimeTarget())
                 .thenReturn(runtimeTarget);
             try {
                 when(targetFactory.open(runtimeTarget))
                     .thenAnswer(invocation ->
-                        dataSource.getConnection()
+                        transactionAwareDataSource.getConnection()
                     );
             } catch (java.sql.SQLException impossible) {
                 throw new IllegalStateException(impossible);
@@ -441,22 +447,16 @@ class ModelMaterializationStartServiceIT {
                 .extracting(LeaseRecord::status)
                 .isEqualTo(LeaseStatus.ISSUED);
             assertThat(
-                profileLeases.consume(
-                    leaseId,
-                    NOW.plusSeconds(1)
-                )
+                profileLeases.consume(leaseId)
             )
                 .isTrue();
             assertThat(
-                profileLeases.consume(
-                    leaseId,
-                    NOW.plusSeconds(2)
-                )
+                profileLeases.consume(leaseId)
             )
-                .isFalse();
+                .isTrue();
             profileLeases.release(
                 leaseId,
-                NOW.plusSeconds(3)
+                leaseIssuedAt.plusSeconds(3)
             );
             assertThat(profileLeases.find(leaseId))
                 .get()
@@ -499,9 +499,11 @@ class ModelMaterializationStartServiceIT {
             status.setRollbackOnly();
             });
         } finally {
-            jdbcTemplate.execute(
-                "drop table if exists public." +
-                scope.targetIdentifier()
+            transaction.executeWithoutResult(status ->
+                jdbcTemplate.execute(
+                    "drop table if exists public." +
+                    scope.targetIdentifier()
+                )
             );
         }
     }
@@ -779,11 +781,11 @@ class ModelMaterializationStartServiceIT {
                 jdbcTemplate.update(
                     """
                     insert into modeling_model_spec_revision (
-                        id, model_spec_id, revision, spec_json, status,
+                        id, model_spec_id, revision, status,
                         content_checksum, created_date, last_modified_date,
                         tenant_id, contract_version, snapshot_json, created_by
                     ) values (
-                        ?, ?, 2, null, 'DRAFT', ?, current_timestamp,
+                        ?, ?, 2, 'DRAFT', ?, current_timestamp,
                         current_timestamp, ?, 2, cast('{}' as jsonb), 'builder-a'
                     )
                     """,
@@ -1613,10 +1615,12 @@ class ModelMaterializationStartServiceIT {
     void cancellationReleasesClaimsButRetainsRunObservationSnapshotAndRelation() {
         Scope scope = scope("cancel-preserves-evidence");
         TransactionTemplate transaction = new TransactionTemplate(transactionManager);
-        jdbcTemplate.execute(
-            "create table public." +
-            scope.targetIdentifier() +
-            " (project_id uuid not null, amount numeric(18,2))"
+        transaction.executeWithoutResult(status ->
+            jdbcTemplate.execute(
+                "create table public." +
+                scope.targetIdentifier() +
+                " (project_id uuid not null, amount numeric(18,2))"
+            )
         );
         try {
             transaction.executeWithoutResult(status -> {
@@ -1843,8 +1847,11 @@ class ModelMaterializationStartServiceIT {
                 status.setRollbackOnly();
             });
         } finally {
-            jdbcTemplate.execute(
-                "drop table if exists public." + scope.targetIdentifier()
+            transaction.executeWithoutResult(status ->
+                jdbcTemplate.execute(
+                    "drop table if exists public." +
+                    scope.targetIdentifier()
+                )
             );
         }
     }
@@ -1873,12 +1880,12 @@ class ModelMaterializationStartServiceIT {
         jdbcTemplate.update(
             """
             insert into modeling_model_spec (
-                id, tenant_id, object_id, plan_id, process_id, layer, model_type,
+                id, tenant_id, plan_id, layer, model_type,
                 implementation_mode, name, status, revision, version, created_date,
                 last_modified_date, contract_version, domain_id, current_checksum,
                 idempotency_key, idempotency_request_hash, idempotency_response_snapshot
             ) values (
-                ?, ?, null, ?, null, 'DWD', 'FACT', 'DESIGNER_GENERATED',
+                ?, ?, ?, 'DWD', 'FACT', 'DESIGNER_GENERATED',
                 'Sprint 76 atomic model', 'DRAFT', 1, 1, current_timestamp,
                 current_timestamp, 2, ?, ?, ?, ?, cast('{}' as jsonb)
             )
@@ -1894,9 +1901,9 @@ class ModelMaterializationStartServiceIT {
         jdbcTemplate.update(
             """
             insert into modeling_model_spec_revision (
-                id, model_spec_id, revision, spec_json, status, content_checksum, created_date,
+                id, model_spec_id, revision, status, content_checksum, created_date,
                 last_modified_date, tenant_id, contract_version, snapshot_json, created_by
-            ) values (?, ?, 1, null, 'DRAFT', ?, current_timestamp, current_timestamp, ?, 2,
+            ) values (?, ?, 1, 'DRAFT', ?, current_timestamp, current_timestamp, ?, 2,
                       cast('{}' as jsonb), 'builder-a')
             """,
             UUID.randomUUID(),

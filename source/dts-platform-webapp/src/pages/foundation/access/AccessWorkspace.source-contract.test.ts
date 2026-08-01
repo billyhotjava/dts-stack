@@ -2,63 +2,56 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const SOURCE = readFileSync(new URL("./AccessWorkspace.tsx", import.meta.url), "utf8");
+const WORKSPACE_SOURCE = readFileSync(new URL("./AccessWorkspace.tsx", import.meta.url), "utf8");
+const WIZARD_SOURCE = readFileSync(new URL("./AccessPlanWizardPage.tsx", import.meta.url), "utf8");
+const PAYLOAD_SOURCE = readFileSync(new URL("./accessPlanPayload.ts", import.meta.url), "utf8");
+const DETAIL_SOURCE = readFileSync(new URL("./AccessPlanDetailPage.tsx", import.meta.url), "utf8");
 
-test("access workspace reuses aggregate list contracts and never requests latest execution per row", () => {
-	assert.match(SOURCE, /dataSourcesService\.selections\(\{ capability: "INGESTION_SOURCE" \}\)/);
-	assert.doesNotMatch(SOURCE, /dataSourcesService\.list\(\)/);
-	assert.match(SOURCE, /ingestionTaskAPI\.getTasks\(/);
-	assert.doesNotMatch(SOURCE, /getLatestExecution|getExecutions\(/);
+test("data access workspace separates database, API and offline-file entry points on one table-first overview", () => {
+	for (const label of ["接入概览", "数据库接入", "API 接入", "离线文件接入"]) {
+		assert.match(WORKSPACE_SOURCE, new RegExp(label));
+	}
+	assert.match(WORKSPACE_SOURCE, /<Table<AccessWorkspaceRow>/);
+	assert.match(WORKSPACE_SOURCE, /dataSourcesService\.selections\(\{ capability: "INGESTION_SOURCE" \}\)/);
+	assert.match(WORKSPACE_SOURCE, /ingestionTaskAPI\.getTasks\(/);
+	assert.match(WORKSPACE_SOURCE, /access\/new\?kind=\$\{sourceKind\}/);
+	assert.match(WORKSPACE_SOURCE, /access\/\$\{row\.taskId\}/);
+	assert.doesNotMatch(WORKSPACE_SOURCE, /<Card|card-list/);
 });
 
-test("access workspace ignores superseded and unmounted requests without exposing backend errors", () => {
-	assert.match(SOURCE, /const requestId = \+\+loadRequestIdRef\.current/);
-	assert.match(SOURCE, /loadRequestIdRef\.current !== requestId/);
-	assert.match(SOURCE, /loadRequestIdRef\.current \+= 1/);
-	assert.match(SOURCE, /setError\("数据接入概览加载失败"\)/);
-	assert.doesNotMatch(SOURCE, /loadError instanceof Error|loadError\.message/);
+test("access wizard uses one three-step shell for database, API and file plans", () => {
+	for (const component of ["DatabaseAccessStep", "ApiAccessStep", "FileAccessStep", "LandingScheduleStep"]) {
+		assert.match(WIZARD_SOURCE, new RegExp(component));
+	}
+	for (const step of ["来源连接", "资源定义", "策略准入"]) {
+		assert.match(WIZARD_SOURCE, new RegExp(step));
+	}
+	assert.match(WIZARD_SOURCE, /requireSafeApiResourcePath/);
+	assert.match(WIZARD_SOURCE, /连接凭据由平台托管/);
+	assert.match(WIZARD_SOURCE, /\{editId \? "保存修改为草稿" : "保存草稿"\}/);
+	assert.doesNotMatch(WIZARD_SOURCE, /创建任务/);
+	assert.match(WIZARD_SOURCE, /access\/\$\{result\.taskId\}/);
 });
 
-test("access workspace delegates all filters to one bounded server page", () => {
-	assert.match(SOURCE, /page:\s*pagination\.current\s*-\s*1/);
-	assert.match(SOURCE, /size:\s*pagination\.pageSize/);
-	assert.match(SOURCE, /total:\s*pagination\.total/);
-	assert.doesNotMatch(SOURCE, /loadAllTasks|totalPages|for\s*\(let page/);
-	assert.match(SOURCE, /sourceKind:\s*kind === "overview" \? undefined : kind/);
-	assert.match(SOURCE, /query:\s*query\.trim\(\) \|\| undefined/);
-	assert.match(SOURCE, /health:\s*health === "all" \? undefined : health/);
-	assert.match(SOURCE, /dataSource=\{rows\}/);
-	assert.doesNotMatch(SOURCE, /filterAccessWorkspaceRows/);
-	assert.doesNotMatch(SOURCE, /当前页有界筛选|不会继续扫描后续页/);
+test("access payload preserves the established database, API and file runtime contracts", () => {
+	assert.match(PAYLOAD_SOURCE, /if \(context\.kind === "api"\) return buildApiRequest\(context\)/);
+	assert.match(PAYLOAD_SOURCE, /if \(context\.kind === "file"\) return buildFileRequest\(context\)/);
+	assert.match(PAYLOAD_SOURCE, /return buildDatabaseRequest\(context\)/);
+	assert.match(PAYLOAD_SOURCE, /source:\s*\{ dataSourceId: sourceDataSourceId, type: readerType, config: readerConfig \}/);
+	assert.match(PAYLOAD_SOURCE, /source:\s*\{ dataSourceId: sourceDataSourceId, type: "httpreader", config \}/);
+	assert.match(PAYLOAD_SOURCE, /type:\s*"txtfilereader"/);
+	assert.match(PAYLOAD_SOURCE, /usePlatformDefault:\s*true/);
 });
 
-test("access workspace is a table-first page with ten rows by default", () => {
-	assert.match(SOURCE, /<Table<AccessWorkspaceRow>/);
-	assert.match(SOURCE, /pageSize:\s*10/);
-	assert.doesNotMatch(SOURCE, /Card|card-list|grid-template-columns/);
-});
-
-test("access workspace keeps classification separate from lifecycle and health tags", () => {
-	assert.match(SOURCE, /<ClassificationTag/);
-	assert.match(SOURCE, /renderLifecycleTag/);
-	assert.match(SOURCE, /renderHealthTag/);
-});
-
-test("access workspace exposes the agreed creation and detail navigation", () => {
-	assert.match(SOURCE, /`\/foundation\/data-sources\/access\/new\?kind=\$\{sourceKind\}`/);
-	assert.match(SOURCE, /`\/foundation\/data-sources\/access\/\$\{row\.taskId\}`/);
-});
-
-test("access kind navigation belongs to the left tree rather than duplicate page controls", () => {
-	assert.doesNotMatch(SOURCE, /KIND_OPTIONS|kindNav|value=\{kind\}/);
-	assert.match(SOURCE, /搜索任务名称、描述、接入类型或负责人/);
-	assert.match(SOURCE, /全部生命周期/);
-	assert.match(SOURCE, /全部健康状态/);
-});
-
-test("access workspace shows real revision data while keeping an honest legacy fallback", () => {
-	assert.match(SOURCE, /存量任务待后台迁移/);
-	assert.match(SOURCE, /未版本化/);
-	assert.match(SOURCE, /versionLabel/);
-	assert.doesNotMatch(SOURCE, /质量通过|隔离成功/);
+test("access detail is the operational home for history, admission, execution, DAG rebuild and rollback", () => {
+	for (const tab of ["概览", "运行历史", "密级准入", "变更记录"]) {
+		assert.match(DETAIL_SOURCE, new RegExp(`label:\\s*"${tab}"`));
+	}
+	assert.match(DETAIL_SOURCE, /<ExecutionHistoryTable taskId=\{taskId\}/);
+	assert.match(DETAIL_SOURCE, /<TaskAdmissionBasis task=\{admissionTask \|\| task\}/);
+	assert.match(DETAIL_SOURCE, /runAccessPlanOperation\("admit", operationTaskId\)/);
+	assert.match(DETAIL_SOURCE, /runAccessPlanOperation\("execute", operationTaskId\)/);
+	assert.match(DETAIL_SOURCE, /runAccessPlanOperation\("rebuildDag", operationTaskId\)/);
+	assert.match(DETAIL_SOURCE, /<RollbackImpactModal/);
+	assert.match(DETAIL_SOURCE, /access\/new\?kind=\$\{inferAccessKind\(task\)\}&editId=/);
 });

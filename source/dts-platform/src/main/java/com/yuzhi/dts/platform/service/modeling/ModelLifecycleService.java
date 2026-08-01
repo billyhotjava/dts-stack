@@ -1,8 +1,12 @@
 package com.yuzhi.dts.platform.service.modeling;
 
+import com.yuzhi.dts.common.audit.AuditStage;
+import com.yuzhi.dts.platform.repository.modeling.ModelLifecycleCommandReceiptRepository;
+import com.yuzhi.dts.platform.repository.modeling.ModelLifecycleCommandReceiptRepository.Receipt;
 import com.yuzhi.dts.platform.repository.modeling.ModelLifecycleRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.PlanState;
+import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ArtifactView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ArtifactWrite;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ClaimImplementationCommand;
@@ -11,13 +15,6 @@ import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.EventType;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.LifecycleEventView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.SaveImplementationCommand;
-import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.PublishCommand;
-import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.RegistrationStep;
-import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.RegistrationStepView;
-import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ReleaseView;
-import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ReviewCommand;
-import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.RollbackCommand;
-import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.RunCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.TestEvidenceCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.TimelineView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.ExpectedVersion;
@@ -28,17 +25,10 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecStageGateService.GateSta
 import com.yuzhi.dts.platform.service.modeling.ModelSpecStageGateService.Stage;
 import java.time.Clock;
 import java.time.Instant;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.TreeMap;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -49,18 +39,21 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ModelLifecycleService {
 
+    private static final String COMMAND_SAVE = "SAVE";
+    private static final String COMMAND_IMPORT = "IMPORT";
+    private static final String COMMAND_OWNERSHIP_CONVERT = "OWNERSHIP_CONVERT";
+    private static final String COMMAND_CLAIM = "CLAIM";
+
     private final ModelSpecApplicationService modelSpecs;
     private final ModelSpecRepository modelSpecRepository;
     private final ModelLifecycleRepository lifecycle;
     private final ModelSpecStageGateService stageGates;
     private final ModelSpecPlanWriteAccessPort writeAccess;
     private final ModelLifecycleCompilerPort compiler;
-    private final ModelReleaseRegistrationPort registrations;
     private final ModelLifecycleTestEvidencePort testEvidence;
-    private final ModelLifecyclePublicationService publication;
-    private final ModelingVNextApplicationService runtime;
-    private final ModelImplementationCompatibilityAdapter implementationCompatibility;
-    private final ModelClassificationPublishGate classificationGate;
+    private final ModelImplementationInputPolicy inputPolicy;
+    private final ModelLifecycleCommandReceiptRepository commandReceipts;
+    private final AuditService auditService;
     private final Clock clock;
 
     @Autowired
@@ -71,12 +64,10 @@ public class ModelLifecycleService {
         ModelSpecStageGateService stageGates,
         ModelSpecPlanWriteAccessPort writeAccess,
         ModelLifecycleCompilerPort compiler,
-        ModelReleaseRegistrationPort registrations,
         ModelLifecycleTestEvidencePort testEvidence,
-        ModelLifecyclePublicationService publication,
-        ModelingVNextApplicationService runtime,
-        ModelImplementationCompatibilityAdapter implementationCompatibility,
-        ModelClassificationPublishGate classificationGate
+        ModelImplementationInputPolicy inputPolicy,
+        ModelLifecycleCommandReceiptRepository commandReceipts,
+        AuditService auditService
     ) {
         this(
             modelSpecs,
@@ -85,12 +76,10 @@ public class ModelLifecycleService {
             stageGates,
             writeAccess,
             compiler,
-            registrations,
             testEvidence,
-            publication,
-            runtime,
-            implementationCompatibility,
-            classificationGate,
+            inputPolicy,
+            commandReceipts,
+            auditService,
             Clock.systemUTC()
         );
     }
@@ -102,10 +91,7 @@ public class ModelLifecycleService {
         ModelSpecStageGateService stageGates,
         ModelSpecPlanWriteAccessPort writeAccess,
         ModelLifecycleCompilerPort compiler,
-        ModelReleaseRegistrationPort registrations,
         ModelLifecycleTestEvidencePort testEvidence,
-        ModelLifecyclePublicationService publication,
-        ModelingVNextApplicationService runtime,
         Clock clock
     ) {
         this(
@@ -115,11 +101,9 @@ public class ModelLifecycleService {
             stageGates,
             writeAccess,
             compiler,
-            registrations,
             testEvidence,
-            publication,
-            runtime,
-            new ModelImplementationCompatibilityAdapter(modelSpecs, modelSpecRepository, lifecycle, null),
+            new ModelImplementationInputPolicy(modelSpecs, modelSpecRepository, lifecycle, null),
+            null,
             null,
             clock
         );
@@ -132,11 +116,8 @@ public class ModelLifecycleService {
         ModelSpecStageGateService stageGates,
         ModelSpecPlanWriteAccessPort writeAccess,
         ModelLifecycleCompilerPort compiler,
-        ModelReleaseRegistrationPort registrations,
         ModelLifecycleTestEvidencePort testEvidence,
-        ModelLifecyclePublicationService publication,
-        ModelingVNextApplicationService runtime,
-        ModelImplementationCompatibilityAdapter implementationCompatibility,
+        ModelImplementationInputPolicy inputPolicy,
         Clock clock
     ) {
         this(
@@ -146,11 +127,9 @@ public class ModelLifecycleService {
             stageGates,
             writeAccess,
             compiler,
-            registrations,
             testEvidence,
-            publication,
-            runtime,
-            implementationCompatibility,
+            inputPolicy,
+            null,
             null,
             clock
         );
@@ -163,12 +142,10 @@ public class ModelLifecycleService {
         ModelSpecStageGateService stageGates,
         ModelSpecPlanWriteAccessPort writeAccess,
         ModelLifecycleCompilerPort compiler,
-        ModelReleaseRegistrationPort registrations,
         ModelLifecycleTestEvidencePort testEvidence,
-        ModelLifecyclePublicationService publication,
-        ModelingVNextApplicationService runtime,
-        ModelImplementationCompatibilityAdapter implementationCompatibility,
-        ModelClassificationPublishGate classificationGate,
+        ModelImplementationInputPolicy inputPolicy,
+        ModelLifecycleCommandReceiptRepository commandReceipts,
+        AuditService auditService,
         Clock clock
     ) {
         this.modelSpecs = modelSpecs;
@@ -177,12 +154,10 @@ public class ModelLifecycleService {
         this.stageGates = stageGates;
         this.writeAccess = writeAccess;
         this.compiler = compiler;
-        this.registrations = registrations;
         this.testEvidence = testEvidence;
-        this.publication = publication;
-        this.runtime = runtime;
-        this.implementationCompatibility = implementationCompatibility;
-        this.classificationGate = classificationGate;
+        this.inputPolicy = inputPolicy;
+        this.commandReceipts = commandReceipts;
+        this.auditService = auditService;
         this.clock = clock;
     }
 
@@ -195,9 +170,9 @@ public class ModelLifecycleService {
         SaveImplementationCommand command
     ) {
         ModelSpecView model = writableCurrent(tenantId, actorId, modelSpecId, expected);
-        SaveImplementationCommand pinned = implementationCompatibility.pinCurrentUpstreamImplementations(tenantId, command);
-        ModelImplementationCompatibilityAdapter.ValidationResult inputValidation =
-            implementationCompatibility.validate(tenantId, model, pinned);
+        SaveImplementationCommand pinned = inputPolicy.pinCurrentUpstreamImplementations(tenantId, command);
+        ModelImplementationInputPolicy.ValidationResult inputValidation =
+            inputPolicy.validate(tenantId, model, pinned);
         if (!inputValidation.valid()) return validation(inputValidation);
         return validation(
             ModelImplementationExecutionPlanner.plan(
@@ -219,8 +194,19 @@ public class ModelLifecycleService {
         String dbtUniqueId,
         SaveImplementationCommand command
     ) {
-        ModelSpecView model = writableCurrent(tenantId, actorId, modelSpecId, expected);
-        SaveImplementationCommand pinned = implementationCompatibility.pinCurrentUpstreamImplementations(tenantId, command);
+        ModelSpecView authorizedModel = authorizeImplementationCommand(tenantId, actorId, modelSpecId);
+        String idempotencyKey = implementationIdempotencyKey(command);
+        CommandAttempt commandAttempt = beginImplementationCommand(
+            tenantId,
+            actorId,
+            modelSpecId,
+            COMMAND_SAVE,
+            idempotencyKey,
+            implementationCommandPayload(COMMAND_SAVE, expected, null, expectedImplementation, null, null, command)
+        );
+        if (commandAttempt.replay() != null) return commandAttempt.replay();
+        ModelSpecView model = requireExpectedAuthorizedModel(modelSpecId, expected, authorizedModel);
+        SaveImplementationCommand pinned = inputPolicy.pinCurrentUpstreamImplementations(tenantId, command);
         String systemProjectKey = ModelImplementationExecutionPlanner.systemManagedDbtProjectKey(model);
         String systemDbtUniqueId = ModelImplementationExecutionPlanner.systemManagedDbtUniqueId(model);
         validateForWrite(tenantId, model, pinned, systemDbtUniqueId);
@@ -240,195 +226,10 @@ public class ModelLifecycleService {
         ) {
             throw conflict("MODEL_IMPLEMENTATION_REVISION_CONFLICT", "Implementation revision changed; refresh before saving");
         }
-        return lifecycle.findImplementation(tenantId, modelSpecId).orElseThrow();
-    }
-
-    @Transactional(readOnly = true)
-    public ImplementationMigrationBatch previewImplementationMigrations(
-        String tenantId,
-        List<UUID> modelSpecIds
-    ) {
-        List<ImplementationMigrationResult> results = migrationModels(tenantId, modelSpecIds)
-            .stream()
-            .map(model ->
-                migrationResult(
-                    implementationCompatibility.previewMigration(tenantId, model).decision(),
-                    false,
-                    null
-                )
-            )
-            .toList();
-        return migrationBatch(results, 0, migrationChecksum(results));
-    }
-
-    @Transactional
-    public ImplementationMigrationBatch applyImplementationMigrations(
-        String tenantId,
-        String actorId,
-        List<UUID> modelSpecIds,
-        String expectedPreviewChecksum
-    ) {
-        ImplementationMigrationBatch preview = previewImplementationMigrations(tenantId, modelSpecIds);
-        if (
-            expectedPreviewChecksum == null ||
-            expectedPreviewChecksum.isBlank() ||
-            !expectedPreviewChecksum.equals(preview.previewChecksum())
-        ) {
-            boolean alreadyApplied = !preview.results().isEmpty() && preview.results().stream().allMatch(result ->
-                result.decision().status() == ModelImplementationCompatibilityAdapter.MigrationStatus.SKIPPED &&
-                "ALREADY_MIGRATED".equals(result.decision().reasonCode())
-            );
-            if (alreadyApplied) return preview;
-            throw conflict(
-                "MODEL_IMPLEMENTATION_MIGRATION_PREVIEW_STALE",
-                "Implementation migration candidates changed after dry-run"
-            );
-        }
-
-        List<ImplementationMigrationResult> results = new ArrayList<>(preview.results().size());
-        int applied = 0;
-        for (ModelSpecView model : migrationModels(tenantId, modelSpecIds)) {
-            ModelImplementationCompatibilityAdapter.MigrationProjection projection =
-                implementationCompatibility.previewMigration(tenantId, model);
-            if (projection.decision().status() != ModelImplementationCompatibilityAdapter.MigrationStatus.ELIGIBLE) {
-                results.add(migrationResult(projection.decision(), false, null));
-                continue;
-            }
-            try {
-                String dbtUniqueId = ModelImplementationExecutionPlanner.systemManagedDbtUniqueId(model);
-                ImplementationView saved = saveImplementation(
-                    tenantId,
-                    actorId,
-                    model.id(),
-                    new ExpectedVersion(model.id(), model.revision(), model.checksum()),
-                    new ExpectedImplementationVersion(model.id(), 0, null),
-                    ModelImplementationExecutionPlanner.systemManagedDbtProjectKey(model),
-                    dbtUniqueId,
-                    projection.command()
-                );
-                results.add(migrationResult(projection.decision(), true, saved));
-                applied++;
-            } catch (ModelSpecException conflict) {
-                results.add(
-                    migrationResult(
-                        new ModelImplementationCompatibilityAdapter.MigrationDecision(
-                            model.id(),
-                            ModelImplementationCompatibilityAdapter.MigrationStatus.CONFLICT,
-                            conflict.code(),
-                            model.revision(),
-                            null,
-                            null,
-                            projection.decision().targetInputMode(),
-                            projection.decision().targetSettings()
-                        ),
-                        false,
-                        null
-                    )
-                );
-            }
-        }
-        return migrationBatch(results, applied, expectedPreviewChecksum);
-    }
-
-    @Transactional(readOnly = true)
-    public ImplementationMigrationRollback rollbackImplementationMigration(String previewChecksum) {
-        if (previewChecksum == null || !previewChecksum.matches("^[0-9a-f]{64}$")) {
-            throw unprocessable(
-                "MODEL_IMPLEMENTATION_MIGRATION_CHECKSUM_REQUIRED",
-                "A valid migration preview checksum is required"
-            );
-        }
-        return new ImplementationMigrationRollback(
-            previewChecksum,
-            true,
-            0,
-            "COMPATIBILITY_READ_RETAINED"
-        );
-    }
-
-    private List<ModelSpecView> migrationModels(String tenantId, List<UUID> modelSpecIds) {
-        if (modelSpecIds == null || modelSpecIds.isEmpty()) {
-            return modelSpecs.list(tenantId, null, null, null, null)
-                .stream()
-                .sorted(Comparator.comparing(ModelSpecView::id))
-                .toList();
-        }
-        return modelSpecIds
-            .stream()
-            .filter(Objects::nonNull)
-            .distinct()
-            .sorted()
-            .map(id -> modelSpecs.get(tenantId, id))
-            .toList();
-    }
-
-    private static ImplementationMigrationResult migrationResult(
-        ModelImplementationCompatibilityAdapter.MigrationDecision decision,
-        boolean applied,
-        ImplementationView target
-    ) {
-        return new ImplementationMigrationResult(
-            decision,
-            applied,
-            target == null ? decision.currentImplementationRevision() : Integer.valueOf(target.implementationRevision()),
-            target == null ? decision.currentImplementationChecksum() : target.implementationChecksum()
-        );
-    }
-
-    private static ImplementationMigrationBatch migrationBatch(
-        List<ImplementationMigrationResult> results,
-        int applied,
-        String checksum
-    ) {
-        long eligible = count(results, ModelImplementationCompatibilityAdapter.MigrationStatus.ELIGIBLE);
-        long conflict = count(results, ModelImplementationCompatibilityAdapter.MigrationStatus.CONFLICT);
-        long orphan = count(results, ModelImplementationCompatibilityAdapter.MigrationStatus.ORPHAN);
-        long skipped = count(results, ModelImplementationCompatibilityAdapter.MigrationStatus.SKIPPED);
-        return new ImplementationMigrationBatch(
-            checksum,
-            results.size(),
-            Math.toIntExact(eligible),
-            Math.toIntExact(conflict),
-            Math.toIntExact(orphan),
-            Math.toIntExact(skipped),
-            applied,
-            results
-        );
-    }
-
-    private static long count(
-        List<ImplementationMigrationResult> results,
-        ModelImplementationCompatibilityAdapter.MigrationStatus status
-    ) {
-        return results.stream().filter(result -> result.decision().status() == status).count();
-    }
-
-    private static String migrationChecksum(List<ImplementationMigrationResult> results) {
-        String canonical = results
-            .stream()
-            .map(result -> {
-                ModelImplementationCompatibilityAdapter.MigrationDecision decision = result.decision();
-                return String.join(
-                    "|",
-                    String.valueOf(decision.modelSpecId()),
-                    decision.status().name(),
-                    String.valueOf(decision.reasonCode()),
-                    Integer.toString(decision.modelRevision()),
-                    String.valueOf(decision.currentImplementationRevision()),
-                    String.valueOf(decision.currentImplementationChecksum()),
-                    String.valueOf(decision.targetInputMode()),
-                    new TreeMap<>(decision.targetSettings()).toString()
-                );
-            })
-            .reduce((left, right) -> left + "\n" + right)
-            .orElse("");
-        try {
-            return HexFormat.of().formatHex(
-                MessageDigest.getInstance("SHA-256").digest(canonical.getBytes(StandardCharsets.UTF_8))
-            );
-        } catch (NoSuchAlgorithmException impossible) {
-            throw new IllegalStateException("SHA-256 is unavailable", impossible);
-        }
+        ImplementationView saved = lifecycle.findImplementation(tenantId, modelSpecId).orElseThrow();
+        auditImplementation("MODEL_IMPLEMENTATION_SAVE", tenantId, actorId, model, saved);
+        completeImplementationCommand(tenantId, modelSpecId, COMMAND_SAVE, idempotencyKey, commandAttempt.payloadHash(), saved, actorId);
+        return saved;
     }
 
     /**
@@ -450,15 +251,35 @@ public class ModelLifecycleService {
         String dbtUniqueId,
         SaveImplementationCommand command
     ) {
-        ModelSpecView model = writableCurrent(tenantId, actorId, modelSpecId, expectedModel);
+        ModelSpecView authorizedModel = authorizeImplementationCommand(tenantId, actorId, modelSpecId);
+        String idempotencyKey = implementationIdempotencyKey(command);
+        CommandAttempt commandAttempt = beginImplementationCommand(
+            tenantId,
+            actorId,
+            modelSpecId,
+            COMMAND_IMPORT,
+            idempotencyKey,
+            implementationCommandPayload(
+                COMMAND_IMPORT,
+                expectedModel,
+                expectedModelStatus == null ? null : expectedModelStatus.name(),
+                expectedImplementation,
+                projectKey,
+                dbtUniqueId,
+                command
+            )
+        );
+        if (commandAttempt.replay() != null) return commandAttempt.replay();
+        ModelSpecView model = requireExpectedAuthorizedModel(modelSpecId, expectedModel, authorizedModel);
         if (expectedModelStatus == null || model.status() != expectedModelStatus) {
             throw conflict("MODEL_SPEC_STATUS_CONFLICT", "ModelSpec status changed after import preview");
         }
         requireImportedDbtCommand(model, projectKey, dbtUniqueId, command);
         ImplementationView current = lifecycle.findImplementation(tenantId, modelSpecId).orElse(null);
         requireImplementationPrecondition(modelSpecId, current, expectedImplementation);
+        ImplementationView saved;
         try {
-            ImplementationView saved = lifecycle
+            saved = lifecycle
                 .saveImportedDbtImplementation(
                     tenantId,
                     actorId,
@@ -472,11 +293,23 @@ public class ModelLifecycleService {
                     clock.instant()
                 )
                 .orElse(null);
-            if (saved != null) return saved;
         } catch (DataIntegrityViolationException duplicate) {
             throw conflict("MODEL_IMPLEMENTATION_DBT_CONFLICT", "The dbt node is already owned by another ModelSpec");
         } catch (IllegalArgumentException invalid) {
             throw unprocessable("MODEL_IMPORT_IMPLEMENTATION_INVALID", "Imported DBT implementation payload is invalid");
+        }
+        if (saved != null) {
+            auditImplementation("MODEL_IMPLEMENTATION_IMPORT", tenantId, actorId, model, saved);
+            completeImplementationCommand(
+                tenantId,
+                modelSpecId,
+                COMMAND_IMPORT,
+                idempotencyKey,
+                commandAttempt.payloadHash(),
+                saved,
+                actorId
+            );
+            return saved;
         }
 
         ModelSpecView refreshed = modelSpecs.get(tenantId, modelSpecId);
@@ -501,8 +334,27 @@ public class ModelLifecycleService {
         String dbtUniqueId,
         SaveImplementationCommand command
     ) {
-        ModelSpecView model = writableCurrent(tenantId, actorId, modelSpecId, expected);
-        SaveImplementationCommand pinned = implementationCompatibility.pinCurrentUpstreamImplementations(tenantId, command);
+        ModelSpecView authorizedModel = authorizeImplementationCommand(tenantId, actorId, modelSpecId);
+        String idempotencyKey = implementationIdempotencyKey(command);
+        CommandAttempt commandAttempt = beginImplementationCommand(
+            tenantId,
+            actorId,
+            modelSpecId,
+            COMMAND_OWNERSHIP_CONVERT,
+            idempotencyKey,
+            implementationCommandPayload(
+                COMMAND_OWNERSHIP_CONVERT,
+                expected,
+                null,
+                expectedImplementation,
+                null,
+                null,
+                command
+            )
+        );
+        if (commandAttempt.replay() != null) return commandAttempt.replay();
+        ModelSpecView model = requireExpectedAuthorizedModel(modelSpecId, expected, authorizedModel);
+        SaveImplementationCommand pinned = inputPolicy.pinCurrentUpstreamImplementations(tenantId, command);
         String systemProjectKey = ModelImplementationExecutionPlanner.systemManagedDbtProjectKey(model);
         String systemDbtUniqueId = ModelImplementationExecutionPlanner.systemManagedDbtUniqueId(model);
         validateForWrite(tenantId, model, pinned, systemDbtUniqueId);
@@ -519,7 +371,18 @@ public class ModelLifecycleService {
         ) {
             throw conflict("MODEL_IMPLEMENTATION_REVISION_CONFLICT", "Implementation revision changed or is no longer DBT-managed");
         }
-        return lifecycle.findImplementation(tenantId, modelSpecId).orElseThrow();
+        ImplementationView saved = lifecycle.findImplementation(tenantId, modelSpecId).orElseThrow();
+        auditImplementation("MODEL_IMPLEMENTATION_OWNERSHIP_CONVERT", tenantId, actorId, model, saved);
+        completeImplementationCommand(
+            tenantId,
+            modelSpecId,
+            COMMAND_OWNERSHIP_CONVERT,
+            idempotencyKey,
+            commandAttempt.payloadHash(),
+            saved,
+            actorId
+        );
+        return saved;
     }
 
     @Transactional
@@ -531,8 +394,19 @@ public class ModelLifecycleService {
         ExpectedImplementationVersion expectedImplementation,
         ClaimImplementationCommand command
     ) {
-        ModelSpecView model = writableCurrent(tenantId, actorId, modelSpecId, expected);
+        ModelSpecView authorizedModel = authorizeImplementationCommand(tenantId, actorId, modelSpecId);
         requireText(command == null ? null : command.idempotencyKey(), "MODEL_IMPLEMENTATION_IDEMPOTENCY_REQUIRED");
+        String idempotencyKey = command.idempotencyKey().trim();
+        CommandAttempt commandAttempt = beginImplementationCommand(
+            tenantId,
+            actorId,
+            modelSpecId,
+            COMMAND_CLAIM,
+            idempotencyKey,
+            claimCommandPayload(expected, expectedImplementation, command)
+        );
+        if (commandAttempt.replay() != null) return commandAttempt.replay();
+        ModelSpecView model = requireExpectedAuthorizedModel(modelSpecId, expected, authorizedModel);
         requireText(command == null ? null : command.projectKey(), "MODEL_IMPLEMENTATION_PROJECT_REQUIRED");
         requireText(command == null ? null : command.dbtUniqueId(), "MODEL_IMPLEMENTATION_DBT_ID_REQUIRED");
         if (command == null || command.ownership() == null || command.ownership() != model.implementationMode()) {
@@ -560,7 +434,10 @@ public class ModelLifecycleService {
         } catch (DataIntegrityViolationException duplicate) {
             throw conflict("MODEL_IMPLEMENTATION_DBT_CONFLICT", "The dbt node is already owned by another ModelSpec");
         }
-        return lifecycle.findImplementation(tenantId, modelSpecId).orElseThrow();
+        ImplementationView saved = lifecycle.findImplementation(tenantId, modelSpecId).orElseThrow();
+        auditImplementation("MODEL_IMPLEMENTATION_CLAIM", tenantId, actorId, model, saved);
+        completeImplementationCommand(tenantId, modelSpecId, COMMAND_CLAIM, idempotencyKey, commandAttempt.payloadHash(), saved, actorId);
+        return saved;
     }
 
     @Transactional
@@ -613,6 +490,15 @@ public class ModelLifecycleService {
             owner,
             clock.instant()
         );
+        auditLifecycleEvent(
+            "MODEL_IMPLEMENTATION_COMPILE",
+            tenantId,
+            actorId,
+            model,
+            owner,
+            event,
+            artifactCount
+        );
         return new CompileView(owner, event, lifecycle.listArtifacts(tenantId, modelSpecId, model.revision()));
     }
 
@@ -631,6 +517,13 @@ public class ModelLifecycleService {
         ImplementationView owner = requireCurrentOwner(tenantId, model);
         requireImplementationPrecondition(modelSpecId, owner, expectedImplementation);
         lockCurrentImplementation(tenantId, modelSpecId, owner);
+        LifecycleEventView replay = lifecycle
+            .findEvent(tenantId, modelSpecId, EventType.TEST, command.idempotencyKey().trim())
+            .orElse(null);
+        if (replay != null) {
+            requireEventImplementation(replay, owner);
+            return replay;
+        }
         List<ArtifactView> artifacts = lifecycle.listArtifacts(tenantId, modelSpecId, model.revision());
         if (
             !lifecycle.hasPassedEvidence(
@@ -662,7 +555,7 @@ public class ModelLifecycleService {
         if (requested != null && !requested.equals(verified.status())) {
             throw conflict("MODEL_TEST_STATUS_MISMATCH", "Client status does not match the persisted dbt run");
         }
-        return lifecycle.recordEvent(
+        LifecycleEventView event = lifecycle.recordEvent(
             tenantId,
             actorId,
             model,
@@ -675,200 +568,16 @@ public class ModelLifecycleService {
             owner,
             clock.instant()
         );
-    }
-
-    @Transactional
-    public LifecycleEventView submitReview(
-        String tenantId,
-        String actorId,
-        UUID modelSpecId,
-        ExpectedVersion expected,
-        ExpectedImplementationVersion expectedImplementation,
-        ReviewCommand command
-    ) {
-        ModelSpecView model = writableCurrent(tenantId, actorId, modelSpecId, expected);
-        ImplementationView owner = requireCurrentOwner(tenantId, model);
-        requireImplementationPrecondition(modelSpecId, owner, expectedImplementation);
-        lockCurrentImplementation(tenantId, modelSpecId, owner);
-        requireText(command == null ? null : command.idempotencyKey(), "MODEL_REVIEW_IDEMPOTENCY_REQUIRED");
-        requireGate(tenantId, modelSpecId, Stage.RELEASE_READY);
-        requireClassificationGate(tenantId, model, false, command.idempotencyKey());
-        return lifecycle.recordEvent(
+        auditLifecycleEvent(
+            "MODEL_IMPLEMENTATION_TEST_EVIDENCE_RECORD",
             tenantId,
             actorId,
             model,
-            EventType.REVIEW_SUBMITTED,
-            "PENDING",
-            command.idempotencyKey().trim(),
-            command.comment(),
-            null,
-            Map.of(),
             owner,
-            clock.instant()
+            event,
+            artifacts.size()
         );
-    }
-
-    @Transactional
-    public LifecycleEventView approveReview(
-        String tenantId,
-        String actorId,
-        UUID modelSpecId,
-        ExpectedVersion expected,
-        ExpectedImplementationVersion expectedImplementation,
-        ReviewCommand command
-    ) {
-        ModelSpecView model = writableCurrent(tenantId, actorId, modelSpecId, expected);
-        ImplementationView owner = requireCurrentOwner(tenantId, model);
-        requireImplementationPrecondition(modelSpecId, owner, expectedImplementation);
-        lockCurrentImplementation(tenantId, modelSpecId, owner);
-        requireText(command == null ? null : command.idempotencyKey(), "MODEL_REVIEW_IDEMPOTENCY_REQUIRED");
-        if (
-            lifecycle
-                .findLatestEvent(
-                    tenantId,
-                    modelSpecId,
-                    model.revision(),
-                    owner.implementationRevision(),
-                    owner.implementationChecksum(),
-                    EventType.REVIEW_SUBMITTED,
-                    "PENDING"
-                )
-                .isEmpty()
-        ) {
-            throw conflict("MODEL_REVIEW_SUBMISSION_REQUIRED", "Submit the current ModelSpec revision for review first");
-        }
-        return lifecycle.recordEvent(
-            tenantId,
-            actorId,
-            model,
-            EventType.REVIEW_APPROVED,
-            "APPROVED",
-            command.idempotencyKey().trim(),
-            command.comment(),
-            null,
-            Map.of(),
-            owner,
-            clock.instant()
-        );
-    }
-
-    public ReleaseView publish(
-        String tenantId,
-        String actorId,
-        UUID modelSpecId,
-        ExpectedVersion expected,
-        ExpectedImplementationVersion expectedImplementation,
-        PublishCommand command
-    ) {
-        requireText(command == null ? null : command.idempotencyKey(), "MODEL_RELEASE_IDEMPOTENCY_REQUIRED");
-        ModelSpecView current = writableCurrent(tenantId, actorId, modelSpecId, expected);
-        ImplementationView owner = requireCurrentOwner(tenantId, current);
-        requireImplementationPrecondition(modelSpecId, owner, expectedImplementation);
-        LifecycleEventView replay = lifecycle
-            .findEvent(tenantId, modelSpecId, EventType.RELEASE, command.idempotencyKey().trim())
-            .orElse(null);
-        if (replay != null) {
-            requireEventImplementation(replay, owner);
-            return releaseView(replay);
-        }
-        if (current.status() != ModelStatus.DRAFT) {
-            throw conflict("MODEL_RELEASE_DRAFT_REQUIRED", "Only a reviewed draft can be published");
-        }
-        requireGate(tenantId, modelSpecId, Stage.RELEASE_READY);
-        requireClassificationGate(tenantId, current, true, command.idempotencyKey());
-        if (
-            lifecycle
-                .findLatestEvent(
-                    tenantId,
-                    modelSpecId,
-                    current.revision(),
-                    owner.implementationRevision(),
-                    owner.implementationChecksum(),
-                    EventType.REVIEW_APPROVED,
-                    "APPROVED"
-                )
-                .isEmpty()
-        ) {
-            throw conflict("MODEL_REVIEW_APPROVAL_REQUIRED", "Current ModelSpec revision has not been approved");
-        }
-        Instant now = clock.instant();
-        ModelLifecyclePublicationService.Publication committed = publication.publish(tenantId, actorId, current, owner, command, now);
-        return register(committed.release(), tenantId, actorId, committed.model());
-    }
-
-    public ReleaseView retryRegistration(String tenantId, String actorId, UUID modelSpecId, UUID releaseEventId) {
-        LifecycleEventView release = lifecycle.findEvent(tenantId, releaseEventId).orElseThrow(() -> notFound("Release event was not found"));
-        if (!release.modelSpecId().equals(modelSpecId) || !release.eventType().equals(EventType.RELEASE)) {
-            throw conflict("MODEL_RELEASE_EVENT_MISMATCH", "Release event does not belong to this ModelSpec");
-        }
-        ModelSpecView model = modelSpecs.get(tenantId, modelSpecId);
-        requireWrite(tenantId, actorId, model);
-        if (model.revision() != release.revision() || !Objects.equals(model.checksum(), release.modelChecksum())) {
-            throw conflict("MODEL_RELEASE_EVIDENCE_STALE", "Release registration belongs to an older ModelSpec revision");
-        }
-        return register(release, tenantId, actorId, model);
-    }
-
-    public LifecycleEventView rollback(
-        String tenantId,
-        String actorId,
-        UUID modelSpecId,
-        ExpectedVersion expected,
-        RollbackCommand command
-    ) {
-        requireText(command == null ? null : command.idempotencyKey(), "MODEL_ROLLBACK_IDEMPOTENCY_REQUIRED");
-        ModelSpecView current = writableCurrent(tenantId, actorId, modelSpecId, expected);
-        LifecycleEventView replay = lifecycle
-            .findEvent(tenantId, modelSpecId, EventType.ROLLBACK, command.idempotencyKey().trim())
-            .orElse(null);
-        if (replay != null) return replay;
-        if (current.status() != ModelStatus.PUBLISHED) {
-            throw conflict("MODEL_ROLLBACK_PUBLISHED_REQUIRED", "Only a published ModelSpec can be rolled back");
-        }
-        return publication.rollback(tenantId, actorId, current, command, clock.instant());
-    }
-
-    @Transactional
-    public ModelingVNextApplicationService.RunView run(
-        String tenantId,
-        String actorId,
-        UUID modelSpecId,
-        ExpectedVersion expected,
-        RunCommand command
-    ) {
-        ModelSpecView model = writableCurrent(tenantId, actorId, modelSpecId, expected);
-        if (model.status() != ModelStatus.PUBLISHED) {
-            throw conflict("MODEL_RUN_PUBLISHED_REQUIRED", "Only a published ModelSpec can run");
-        }
-        requireText(command == null ? null : command.idempotencyKey(), "MODEL_RUN_IDEMPOTENCY_REQUIRED");
-        ModelingRunRequestContract.RunRequest request = new ModelingRunRequestContract.RunRequest(
-            model.id().toString(),
-            model.revision(),
-            command.idempotencyKey().trim(),
-            new ModelingRunRequestContract.ExternalContext(
-                command.sourceBatchId(),
-                command.addaxTaskId(),
-                command.airflowDagId(),
-                command.airflowRunId(),
-                command.dbtRunId(),
-                command.dbtSelector(),
-                command.targetTable()
-            )
-        );
-        ModelingVNextApplicationService.RunView result = runtime.createRun(tenantId, request);
-        lifecycle.recordEvent(
-            tenantId,
-            actorId,
-            model,
-            EventType.RUN,
-            result.state(),
-            command.idempotencyKey().trim(),
-            result.message(),
-            result.id(),
-            runDetails(result),
-            clock.instant()
-        );
-        return result;
+        return event;
     }
 
     @Transactional(readOnly = true)
@@ -878,71 +587,6 @@ public class ModelLifecycleService {
             lifecycle.findImplementation(tenantId, modelSpecId).orElse(null),
             lifecycle.listArtifacts(tenantId, modelSpecId, null),
             lifecycle.listEvents(tenantId, modelSpecId)
-        );
-    }
-
-    private ReleaseView register(LifecycleEventView release, String tenantId, String actorId, ModelSpecView model) {
-        List<ArtifactView> artifacts = lifecycle.listArtifacts(tenantId, model.id(), model.revision());
-        Map<RegistrationStep, RegistrationStepView> existing = new LinkedHashMap<>();
-        lifecycle.listRegistrations(release.id()).forEach(item -> existing.put(item.step(), item));
-        for (RegistrationStep step : RegistrationStep.values()) {
-            RegistrationStepView previous = existing.get(step);
-            if (previous != null && "SUCCEEDED".equals(previous.status())) continue;
-            RegistrationStepView attempt = lifecycle.startRegistration(release.id(), step, clock.instant());
-            try {
-                ModelReleaseRegistrationPort.RegistrationResult result = registrations.register(
-                    step,
-                    tenantId,
-                    actorId,
-                    release.id(),
-                    model,
-                    releaseImplementationRevision(release),
-                    releaseImplementationChecksum(release),
-                    artifacts,
-                    attempt.externalRef()
-                );
-                if (result == null || result.externalRef() == null || result.externalRef().startsWith("catalog-sync-required")) {
-                    lifecycle.completeRegistration(
-                        release.id(), step, "PENDING", result == null ? null : result.externalRef(), "catalog-sync-required", clock.instant()
-                    );
-                } else {
-                    lifecycle.completeRegistration(release.id(), step, "SUCCEEDED", result.externalRef(), null, clock.instant());
-                }
-            } catch (RuntimeException failure) {
-                lifecycle.completeRegistration(
-                    release.id(),
-                    step,
-                    "FAILED",
-                    attempt.externalRef(),
-                    safeMessage(failure),
-                    clock.instant()
-                );
-            }
-        }
-        List<RegistrationStepView> steps = lifecycle.listRegistrations(release.id());
-        String status = steps.size() == RegistrationStep.values().length && steps.stream().allMatch(item -> "SUCCEEDED".equals(item.status()))
-            ? "PUBLISHED"
-            : "PARTIAL";
-        lifecycle.updateEventStatus(release.id(), status, Map.of("registrationCount", steps.size()));
-        LifecycleEventView updated = lifecycle.findEvent(release.id()).orElseThrow();
-        return new ReleaseView(updated, status, model.revision(), model.checksum(), steps);
-    }
-
-    private static Map<String, Object> runDetails(ModelingVNextApplicationService.RunView result) {
-        Map<String, Object> details = new LinkedHashMap<>();
-        details.put("runId", result.id());
-        if (result.repairPath() != null) details.put("repairPath", result.repairPath());
-        if (result.planId() != null) details.put("planId", result.planId());
-        return details;
-    }
-
-    private ReleaseView releaseView(LifecycleEventView release) {
-        return new ReleaseView(
-            release,
-            release.status(),
-            release.revision(),
-            release.modelChecksum(),
-            lifecycle.listRegistrations(release.id())
         );
     }
 
@@ -965,6 +609,33 @@ public class ModelLifecycleService {
         }
         requireWrite(tenantId, actorId, model);
         return model;
+    }
+
+    private ModelSpecView authorizeImplementationCommand(String tenantId, String actorId, UUID modelSpecId) {
+        ModelSpecView model = modelSpecs.get(tenantId, modelSpecId);
+        requireWrite(tenantId, actorId, model);
+        return model;
+    }
+
+    private ModelSpecView requireExpectedAuthorizedModel(
+        UUID modelSpecId,
+        ExpectedVersion expected,
+        ModelSpecView authorizedModel
+    ) {
+        if (expected == null || !modelSpecId.equals(expected.modelSpecId())) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_IF_MATCH_INVALID",
+                "A strong ModelSpec revision precondition is required",
+                ModelSpecException.Kind.BAD_REQUEST
+            );
+        }
+        if (
+            authorizedModel.revision() != expected.revision() ||
+            !Objects.equals(authorizedModel.checksum(), expected.checksum())
+        ) {
+            throw conflict("MODEL_SPEC_REVISION_CONFLICT", "ModelSpec revision changed; refresh before continuing");
+        }
+        return authorizedModel;
     }
 
     private void requireWrite(String tenantId, String actorId, ModelSpecView model) {
@@ -998,43 +669,6 @@ public class ModelLifecycleService {
         }
     }
 
-    private void requireClassificationGate(
-        String tenantId,
-        ModelSpecView model,
-        boolean sealOutput,
-        String triggerRef
-    ) {
-        if (classificationGate == null) {
-            return;
-        }
-        ModelClassificationPublishGate.Decision decision = sealOutput
-            ? classificationGate.admitAndSeal(
-                tenantId,
-                model.id(),
-                model.revision(),
-                model.checksum(),
-                triggerRef
-            )
-            : classificationGate.evaluate(tenantId, model.id(), model.revision(), model.checksum());
-        if (!decision.ready()) {
-            throw new ModelSpecException(
-                "MODEL_CLASSIFICATION_GATE_BLOCKED",
-                "ModelSpec classification evidence is incomplete",
-                ModelSpecException.Kind.UNPROCESSABLE,
-                Map.of(
-                    "modelSpecId",
-                    model.id(),
-                    "revision",
-                    model.revision(),
-                    "outputSubjectKey",
-                    decision.outputSubjectKey(),
-                    "blockers",
-                    decision.blockers()
-                )
-            );
-        }
-    }
-
     private ImplementationView requireCurrentOwner(String tenantId, ModelSpecView model) {
         ImplementationView owner = lifecycle.findImplementation(tenantId, model.id()).orElseThrow(() ->
             conflict("MODEL_IMPLEMENTATION_OWNER_REQUIRED", "Claim an implementation owner before continuing")
@@ -1059,24 +693,6 @@ public class ModelLifecycleService {
         if (!ModelLifecycleRepository.matchesImplementation(event, owner)) {
             throw conflict("MODEL_LIFECYCLE_IDEMPOTENCY_CONFLICT", "The idempotency key belongs to another implementation revision");
         }
-    }
-
-    private static int releaseImplementationRevision(LifecycleEventView release) {
-        Object value = release.details() == null ? null : release.details().get("implementationRevision");
-        try {
-            return value instanceof Number number ? number.intValue() : Integer.parseInt(String.valueOf(value));
-        } catch (NumberFormatException invalid) {
-            throw conflict("MODEL_RELEASE_IMPLEMENTATION_PIN_REQUIRED", "Release evidence is missing its implementation revision");
-        }
-    }
-
-    private static String releaseImplementationChecksum(LifecycleEventView release) {
-        Object value = release.details() == null ? null : release.details().get("implementationChecksum");
-        String checksum = value == null ? null : value.toString();
-        if (checksum == null || !checksum.matches("^[0-9a-f]{64}$")) {
-            throw conflict("MODEL_RELEASE_IMPLEMENTATION_PIN_REQUIRED", "Release evidence is missing its implementation checksum");
-        }
-        return checksum;
     }
 
     private static void requireImplementationPrecondition(
@@ -1122,7 +738,7 @@ public class ModelLifecycleService {
         String dbtUniqueId
     ) {
         if (command == null) throw unprocessable("MODEL_IMPLEMENTATION_INPUT_REQUIRED", "Implementation input is required");
-        ModelImplementationCompatibilityAdapter.ValidationResult result = implementationCompatibility.validate(tenantId, model, command);
+        ModelImplementationInputPolicy.ValidationResult result = inputPolicy.validate(tenantId, model, command);
         if (!result.valid()) throw unprocessable(result.code(), "Implementation input does not satisfy the current ModelSpec");
         ModelImplementationExecutionPlanner.ValidationResult execution =
             ModelImplementationExecutionPlanner.plan(model, command, dbtUniqueId);
@@ -1166,7 +782,7 @@ public class ModelLifecycleService {
         }
     }
 
-    private static ImplementationValidationView validation(ModelImplementationCompatibilityAdapter.ValidationResult result) {
+    private static ImplementationValidationView validation(ModelImplementationInputPolicy.ValidationResult result) {
         if (result.valid()) {
             return new ImplementationValidationView(true, "MODEL_IMPLEMENTATION_VALID", List.of(), null);
         }
@@ -1196,13 +812,210 @@ public class ModelLifecycleService {
         );
     }
 
-    private static void requireText(String value, String code) {
-        if (value == null || value.isBlank()) throw unprocessable(code, "Required lifecycle input is missing");
+    private String implementationIdempotencyKey(SaveImplementationCommand command) {
+        requireText(command == null ? null : command.idempotencyKey(), "MODEL_IMPLEMENTATION_IDEMPOTENCY_REQUIRED");
+        return command.idempotencyKey().trim();
     }
 
-    private static String safeMessage(RuntimeException exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank() ? exception.getClass().getSimpleName() : message;
+    private CommandAttempt beginImplementationCommand(
+        String tenantId,
+        String actorId,
+        UUID modelSpecId,
+        String action,
+        String idempotencyKey,
+        Object payload
+    ) {
+        if (commandReceipts == null) {
+            throw new IllegalStateException("Model lifecycle command receipt repository is required");
+        }
+        String payloadHash = commandReceipts.payloadHash(payload);
+        commandReceipts.lockCommandKey(tenantId, modelSpecId, action, idempotencyKey);
+        Receipt existing = commandReceipts.find(tenantId, modelSpecId, action, idempotencyKey).orElse(null);
+        if (existing == null) return new CommandAttempt(payloadHash, null);
+        requireReceiptReplayWrite(tenantId, actorId, existing.result());
+        if (!Objects.equals(existing.payloadHash(), payloadHash)) {
+            throw conflict(
+                "MODEL_IMPLEMENTATION_IDEMPOTENCY_CONFLICT",
+                "The implementation idempotency key belongs to a different payload"
+            );
+        }
+        return new CommandAttempt(payloadHash, existing.result());
+    }
+
+    private void requireReceiptReplayWrite(String tenantId, String actorId, ImplementationView result) {
+        if (actorId == null || actorId.isBlank()) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_ACTOR_REQUIRED",
+                "Authenticated actor is required",
+                ModelSpecException.Kind.FORBIDDEN
+            );
+        }
+        PlanState plan = modelSpecRepository
+            .lockPlan(tenantId, result.planId())
+            .orElseThrow(() -> notFound("Warehouse plan was not found"));
+        if ("ARCHIVED".equals(plan.lifecycleStatus()) || !writeAccess.canMaintain(tenantId, result.planId(), actorId)) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_PLAN_FORBIDDEN",
+                "Warehouse plan is not available for lifecycle maintenance",
+                ModelSpecException.Kind.FORBIDDEN
+            );
+        }
+    }
+
+    private void completeImplementationCommand(
+        String tenantId,
+        UUID modelSpecId,
+        String action,
+        String idempotencyKey,
+        String payloadHash,
+        ImplementationView result,
+        String actorId
+    ) {
+        commandReceipts.append(
+            tenantId,
+            modelSpecId,
+            action,
+            idempotencyKey,
+            payloadHash,
+            result,
+            actorId,
+            clock.instant()
+        );
+    }
+
+    private static Map<String, Object> implementationCommandPayload(
+        String action,
+        ExpectedVersion expectedModel,
+        String expectedModelStatus,
+        ExpectedImplementationVersion expectedImplementation,
+        String projectKey,
+        String dbtUniqueId,
+        SaveImplementationCommand command
+    ) {
+        LinkedHashMap<String, Object> payload = baseCommandPayload(
+            action,
+            expectedModel,
+            expectedModelStatus,
+            expectedImplementation
+        );
+        payload.put("projectKey", normalized(projectKey));
+        payload.put("dbtUniqueId", normalized(dbtUniqueId));
+        payload.put("inputMode", command == null ? null : command.inputMode());
+        payload.put("inputs", command == null ? null : command.inputs());
+        payload.put("fieldMappings", command == null ? null : command.fieldMappings());
+        payload.put("settings", command == null ? null : command.settings());
+        payload.put("ownership", command == null ? null : command.ownership());
+        payload.put("materialization", command == null ? null : command.materialization());
+        return payload;
+    }
+
+    private static Map<String, Object> claimCommandPayload(
+        ExpectedVersion expectedModel,
+        ExpectedImplementationVersion expectedImplementation,
+        ClaimImplementationCommand command
+    ) {
+        LinkedHashMap<String, Object> payload = baseCommandPayload(
+            COMMAND_CLAIM,
+            expectedModel,
+            null,
+            expectedImplementation
+        );
+        payload.put("ownership", command == null ? null : command.ownership());
+        payload.put("projectKey", command == null ? null : normalized(command.projectKey()));
+        payload.put("dbtUniqueId", command == null ? null : normalized(command.dbtUniqueId()));
+        return payload;
+    }
+
+    private static LinkedHashMap<String, Object> baseCommandPayload(
+        String action,
+        ExpectedVersion expectedModel,
+        String expectedModelStatus,
+        ExpectedImplementationVersion expectedImplementation
+    ) {
+        LinkedHashMap<String, Object> payload = new LinkedHashMap<>();
+        payload.put("action", action);
+        payload.put("expectedModelId", expectedModel == null ? null : expectedModel.modelSpecId());
+        payload.put("expectedModelRevision", expectedModel == null ? null : expectedModel.revision());
+        payload.put("expectedModelChecksum", expectedModel == null ? null : expectedModel.checksum());
+        payload.put("expectedModelStatus", expectedModelStatus);
+        payload.put(
+            "expectedImplementationId",
+            expectedImplementation == null ? null : expectedImplementation.modelSpecId()
+        );
+        payload.put(
+            "expectedImplementationRevision",
+            expectedImplementation == null ? null : expectedImplementation.revision()
+        );
+        payload.put(
+            "expectedImplementationChecksum",
+            expectedImplementation == null ? null : expectedImplementation.checksum()
+        );
+        return payload;
+    }
+
+    private static String normalized(String value) {
+        return value == null ? null : value.trim();
+    }
+
+    private void auditImplementation(
+        String actionCode,
+        String tenantId,
+        String actorId,
+        ModelSpecView model,
+        ImplementationView implementation
+    ) {
+        if (auditService == null) return;
+        String eventIdentity = actionCode + ":" + model.id() + ":" + implementation.implementationRevision();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("eventIdentity", eventIdentity);
+        payload.put("actor", actorId);
+        payload.put("tenantId", tenantId);
+        payload.put("planId", model.planId());
+        payload.put("modelSpecId", model.id());
+        payload.put("modelRevision", model.revision());
+        payload.put("implementationId", implementation.id());
+        payload.put("implementationRevision", implementation.implementationRevision());
+        payload.put("inputMode", implementation.inputMode().name());
+        payload.put("ownership", implementation.ownership().name());
+        payload.put("materialization", implementation.materialization());
+        payload.put("outcome", implementation.status());
+        payload.put("inputCount", implementation.inputs().size());
+        payload.put("fieldMappingCount", implementation.fieldMappings().size());
+        payload.put("settingCount", implementation.settings().size());
+        auditService.auditActionStrict(actionCode, AuditStage.SUCCESS, eventIdentity, payload);
+    }
+
+    private void auditLifecycleEvent(
+        String actionCode,
+        String tenantId,
+        String actorId,
+        ModelSpecView model,
+        ImplementationView implementation,
+        LifecycleEventView event,
+        int artifactCount
+    ) {
+        if (auditService == null) return;
+        String eventIdentity = actionCode + ":" + event.id();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("eventIdentity", eventIdentity);
+        payload.put("actor", actorId);
+        payload.put("tenantId", tenantId);
+        payload.put("planId", model.planId());
+        payload.put("modelSpecId", model.id());
+        payload.put("modelRevision", model.revision());
+        payload.put("implementationId", implementation.id());
+        payload.put("implementationRevision", implementation.implementationRevision());
+        payload.put("inputMode", implementation.inputMode().name());
+        payload.put("ownership", implementation.ownership().name());
+        payload.put("materialization", implementation.materialization());
+        payload.put("lifecycleEventId", event.id());
+        payload.put("outcome", event.status());
+        payload.put("artifactCount", artifactCount);
+        auditService.auditAction(actionCode, AuditStage.SUCCESS, eventIdentity, payload);
+    }
+
+    private static void requireText(String value, String code) {
+        if (value == null || value.isBlank()) throw unprocessable(code, "Required lifecycle input is missing");
     }
 
     private static ModelSpecException conflict(String code, String message) {
@@ -1216,6 +1029,8 @@ public class ModelLifecycleService {
     private static ModelSpecException notFound(String message) {
         return new ModelSpecException("MODEL_LIFECYCLE_NOT_FOUND", message, ModelSpecException.Kind.NOT_FOUND);
     }
+
+    private record CommandAttempt(String payloadHash, ImplementationView replay) {}
 
     public record ImplementationValidationView(
         boolean valid,
@@ -1231,35 +1046,6 @@ public class ModelLifecycleService {
             blockers = blockers == null ? List.of() : List.copyOf(blockers);
         }
     }
-
-    public record ImplementationMigrationResult(
-        ModelImplementationCompatibilityAdapter.MigrationDecision decision,
-        boolean applied,
-        Integer targetImplementationRevision,
-        String targetImplementationChecksum
-    ) {}
-
-    public record ImplementationMigrationBatch(
-        String previewChecksum,
-        int total,
-        int eligible,
-        int conflict,
-        int orphan,
-        int skipped,
-        int applied,
-        List<ImplementationMigrationResult> results
-    ) {
-        public ImplementationMigrationBatch {
-            results = results == null ? List.of() : List.copyOf(results);
-        }
-    }
-
-    public record ImplementationMigrationRollback(
-        String previewChecksum,
-        boolean compatibilityReadRetained,
-        int deletedImplementationRevisions,
-        String reasonCode
-    ) {}
 
     /** Explicit CAS token for implementation-input writers; revision zero represents a missing head. */
     public record ExpectedImplementationVersion(UUID modelSpecId, int revision, String checksum) {

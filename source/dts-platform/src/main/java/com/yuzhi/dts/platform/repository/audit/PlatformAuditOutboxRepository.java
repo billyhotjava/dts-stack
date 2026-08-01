@@ -13,6 +13,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Repository
 public class PlatformAuditOutboxRepository {
 
+    public static final String LEGACY_UNSCOPED_TENANT = "__legacy_unscoped__";
+
     private final JdbcTemplate jdbcTemplate;
 
     public PlatformAuditOutboxRepository(JdbcTemplate jdbcTemplate) {
@@ -24,15 +26,17 @@ public class PlatformAuditOutboxRepository {
         if (command == null) throw new IllegalArgumentException("command is required");
         UUID id = UUID.randomUUID();
         Instant now = Instant.now();
+        String tenantId = requiredTenant(command.tenantId());
         int inserted = jdbcTemplate.update(
             """
             insert into platform_audit_outbox (
-                id, event_id, producer, occurred_at, payload_hash, body_json,
+                id, tenant_id, event_id, producer, occurred_at, payload_hash, body_json,
                 status, dispatch_attempts, next_attempt_at, created_at, last_modified_at
-            ) values (?, ?, 'dts-platform', ?, ?, ?, 'PENDING', 0, ?, ?, ?)
+            ) values (?, ?, ?, 'dts-platform', ?, ?, ?, 'PENDING', 0, ?, ?, ?)
             on conflict (event_id) do nothing
             """,
             id,
+            tenantId,
             required(command.eventId(), "eventId"),
             Timestamp.from(required(command.occurredAt(), "occurredAt")),
             required(command.payloadHash(), "payloadHash"),
@@ -43,14 +47,76 @@ public class PlatformAuditOutboxRepository {
         );
         if (inserted == 1) return id;
         ExistingEvent existing = jdbcTemplate.queryForObject(
-            "select id, payload_hash from platform_audit_outbox where event_id = ?",
-            (row, rowNumber) -> new ExistingEvent(row.getObject("id", UUID.class), row.getString("payload_hash")),
+            "select id, tenant_id, payload_hash from platform_audit_outbox where event_id = ?",
+            (row, rowNumber) ->
+                new ExistingEvent(
+                    row.getObject("id", UUID.class),
+                    row.getString("tenant_id"),
+                    row.getString("payload_hash")
+                ),
             command.eventId()
         );
-        if (existing == null || !command.payloadHash().equals(existing.payloadHash())) {
-            throw new IllegalStateException("Audit event id already exists with different payload");
+        if (
+            existing == null ||
+            !tenantId.equals(existing.tenantId()) ||
+            !command.payloadHash().equals(existing.payloadHash())
+        ) {
+            throw new IllegalStateException("Audit event id already exists with different payload or ownership");
         }
         return existing.id();
+    }
+
+    public Optional<ReplayTarget> findReplayTarget(String tenantId, UUID id) {
+        String scopedTenant = requiredTenant(tenantId);
+        if (id == null) throw new IllegalArgumentException("id is required");
+        return jdbcTemplate
+            .query(
+                """
+                select id, event_id, producer, payload_hash, body_json, status, dispatch_attempts
+                  from platform_audit_outbox
+                 where id = ? and tenant_id = ?
+                """,
+                (row, rowNumber) ->
+                    new ReplayTarget(
+                        row.getObject("id", UUID.class),
+                        row.getString("event_id"),
+                        row.getString("producer"),
+                        row.getString("payload_hash"),
+                        row.getString("body_json"),
+                        row.getString("status"),
+                        row.getInt("dispatch_attempts")
+                    ),
+                id,
+                scopedTenant
+            )
+            .stream()
+            .findFirst();
+    }
+
+    @Transactional
+    public int replayDead(ReplayCommand command) {
+        if (command == null) throw new IllegalArgumentException("command is required");
+        String tenantId = requiredTenant(command.tenantId());
+        UUID id = required(command.id(), "id");
+        String payloadHash = required(command.expectedPayloadHash(), "expectedPayloadHash");
+        String bodyJson = required(command.expectedBodyJson(), "expectedBodyJson");
+        Instant nextAttemptAt = required(command.nextAttemptAt(), "nextAttemptAt");
+        Instant now = required(command.now(), "now");
+        return jdbcTemplate.update(
+            """
+            update platform_audit_outbox
+               set status = 'PENDING', claimed_at = null, next_attempt_at = ?,
+                   generation_attempts = 0, last_modified_at = ?
+             where id = ? and tenant_id = ? and status = 'DEAD'
+               and payload_hash = ? and body_json = ?
+            """,
+            Timestamp.from(nextAttemptAt),
+            Timestamp.from(now),
+            id,
+            tenantId,
+            payloadHash,
+            bodyJson
+        );
     }
 
     @Transactional
@@ -78,10 +144,12 @@ public class PlatformAuditOutboxRepository {
                 update platform_audit_outbox a
                    set status = 'CLAIMED', claimed_at = ?,
                        dispatch_attempts = dispatch_attempts + 1,
+                       generation_attempts = generation_attempts + 1,
                        last_modified_at = ?
                   from next_audit n
                  where a.id = n.id
-                returning a.id, a.event_id, a.producer, a.payload_hash, a.body_json, a.dispatch_attempts
+                returning a.id, a.event_id, a.producer, a.payload_hash, a.body_json,
+                          a.dispatch_attempts, a.generation_attempts
                 """,
                 (row, rowNumber) ->
                     new ClaimedAudit(
@@ -90,7 +158,8 @@ public class PlatformAuditOutboxRepository {
                         row.getString("producer"),
                         row.getString("payload_hash"),
                         row.getString("body_json"),
-                        row.getInt("dispatch_attempts")
+                        row.getInt("dispatch_attempts"),
+                        row.getInt("generation_attempts")
                     ),
                 Timestamp.from(now),
                 Timestamp.from(staleBefore),
@@ -208,14 +277,50 @@ public class PlatformAuditOutboxRepository {
         return value;
     }
 
+    private String requiredTenant(String tenantId) {
+        String value = required(tenantId, "tenantId").trim();
+        if (value.length() > 128) throw new IllegalArgumentException("tenantId is too long");
+        if (LEGACY_UNSCOPED_TENANT.equals(value)) {
+            throw new IllegalArgumentException("legacy unscoped audit rows cannot be operated manually");
+        }
+        return value;
+    }
+
     private <T> T required(T value, String field) {
         if (value == null) throw new IllegalArgumentException(field + " is required");
         return value;
     }
 
-    public record EnqueueCommand(String eventId, Instant occurredAt, String payloadHash, String bodyJson) {}
+    public record EnqueueCommand(String tenantId, String eventId, Instant occurredAt, String payloadHash, String bodyJson) {}
 
-    public record ClaimedAudit(UUID id, String eventId, String producer, String payloadHash, String bodyJson, int attempts) {}
+    public record ClaimedAudit(
+        UUID id,
+        String eventId,
+        String producer,
+        String payloadHash,
+        String bodyJson,
+        int attempts,
+        int generationAttempts
+    ) {}
 
-    private record ExistingEvent(UUID id, String payloadHash) {}
+    public record ReplayTarget(
+        UUID id,
+        String eventId,
+        String producer,
+        String payloadHash,
+        String bodyJson,
+        String status,
+        int attemptCount
+    ) {}
+
+    public record ReplayCommand(
+        String tenantId,
+        UUID id,
+        String expectedPayloadHash,
+        String expectedBodyJson,
+        Instant nextAttemptAt,
+        Instant now
+    ) {}
+
+    private record ExistingEvent(UUID id, String tenantId, String payloadHash) {}
 }

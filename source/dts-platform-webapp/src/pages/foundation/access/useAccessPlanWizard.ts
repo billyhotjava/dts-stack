@@ -16,9 +16,9 @@ import {
 	isApiDataSource,
 	isJdbcSource,
 	normalizeTableName,
-} from "../../explore/etl/ingestionFormHelpers";
-import { resolveCreatedTaskId } from "../../explore/etl/transformCreateAsyncRun.helpers";
-import { uploadTransformFileWithAdmission } from "../../explore/etl/transformCreateFileFlow.helpers";
+} from "./shared/ingestionFormHelpers";
+import { resolveCreatedTaskId } from "./shared/transformCreateAsyncRun.helpers";
+import { uploadTransformFileWithAdmission } from "./shared/transformCreateFileFlow.helpers";
 import {
 	ACCESS_KIND_LABELS,
 	type AccessKind,
@@ -232,7 +232,7 @@ const fileFloorMatchesSelection = (file: ManagedFileUploadResult | null, selecte
 	return Boolean(requested && sealedFloor && requested === sealedFloor);
 };
 
-const resolveUserClassificationRank = (user: unknown) => {
+export const resolveUserClassificationRank = (user: unknown) => {
 	if (!user || typeof user !== "object") return undefined;
 	const record = user as Record<string, unknown>;
 	const attributes =
@@ -242,18 +242,41 @@ const resolveUserClassificationRank = (user: unknown) => {
 	const values = [
 		record.maxDataLevel,
 		record.dataLevel,
+		record.person_level,
+		record.personLevel,
+		record.personnel_level,
+		record.personnelLevel,
+		record.person_security_level,
+		record.personSecurityLevel,
+		record.personnel_security_level,
+		record.personnelSecurityLevel,
 		attributes.max_data_level,
 		attributes.maxDataLevel,
 		attributes.data_level,
+		attributes.person_level,
+		attributes.personLevel,
+		attributes.personnel_level,
+		attributes.personnelLevel,
+		attributes.person_security_level,
+		attributes.personSecurityLevel,
+		attributes.personnel_security_level,
+		attributes.personnelSecurityLevel,
 		attributes.classification,
 	];
+	let highestRank: number | undefined;
 	for (const raw of values) {
-		const value = Array.isArray(raw) ? raw[0] : raw;
-		const normalized = normalizeClassification(typeof value === "string" ? value : undefined, undefined);
-		const rank = classificationRank(normalized);
-		if (rank !== undefined) return rank;
+		const candidates = Array.isArray(raw) ? raw : [raw];
+		for (const candidate of candidates) {
+			if (typeof candidate !== "string" || !candidate.trim()) continue;
+			// Distinct fallbacks let us reject unknown aliases without duplicating the shared classification map.
+			const lowFallback = normalizeClassification(candidate, "PUBLIC");
+			const highFallback = normalizeClassification(candidate, "CONFIDENTIAL");
+			if (lowFallback !== highFallback) continue;
+			const rank = classificationRank(lowFallback);
+			if (rank !== undefined && (highestRank === undefined || rank > highestRank)) highestRank = rank;
+		}
 	}
-	return undefined;
+	return highestRank;
 };
 
 export function useAccessPlanWizard({ kind, editId, form }: UseAccessPlanWizardInput) {

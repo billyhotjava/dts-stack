@@ -28,7 +28,7 @@ import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService.ColumnSpe
 import com.yuzhi.dts.platform.service.catalog.CatalogPhysicalLocator;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ArtifactWrite;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
-import com.yuzhi.dts.platform.service.modeling.ModelSpecCompatibilityReader;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecReader;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import java.io.File;
@@ -69,7 +69,7 @@ public class DbtAssetSyncService {
     private final CatalogColumnSyncService columnSyncService;
     private final InfraOdsTableMappingRepository mappingRepository;
     private final ModelLifecycleRepository lifecycleRepository;
-    private final ModelSpecCompatibilityReader modelSpecReader;
+    private final ModelSpecReader modelSpecReader;
     private final AuditService auditService;
     private final CatalogClassificationPropagationJobService propagationJobService;
 
@@ -86,7 +86,7 @@ public class DbtAssetSyncService {
         CatalogColumnSyncService columnSyncService,
         InfraOdsTableMappingRepository mappingRepository,
         ModelLifecycleRepository lifecycleRepository,
-        ModelSpecCompatibilityReader modelSpecReader,
+        ModelSpecReader modelSpecReader,
         AuditService auditService,
         CatalogClassificationPropagationJobService propagationJobService
     ) {

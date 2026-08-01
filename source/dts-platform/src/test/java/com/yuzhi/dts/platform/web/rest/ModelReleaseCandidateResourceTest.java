@@ -261,7 +261,7 @@ class ModelReleaseCandidateResourceTest {
         when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", null));
         CandidateView published = candidateAtVersion(5);
         when(
-            service.retryRegistration(
+            service.retryPublication(
                 "server-tenant",
                 "alice",
                 PLAN_ID,
@@ -276,7 +276,7 @@ class ModelReleaseCandidateResourceTest {
         mockMvc
             .perform(
                 post(
-                    "/api/modeling/plans/{planId}/release-candidates/{candidateId}/registration/retry",
+                    "/api/modeling/plans/{planId}/release-candidates/{candidateId}/publication/retry",
                     PLAN_ID,
                     CANDIDATE_ID
                 )
@@ -288,7 +288,7 @@ class ModelReleaseCandidateResourceTest {
             .andExpect(status().isOk())
             .andExpect(header().string("ETag", "\"release-candidate:" + CANDIDATE_ID + ":5\""));
 
-        verify(service).retryRegistration(
+        verify(service).retryPublication(
             "server-tenant",
             "alice",
             PLAN_ID,

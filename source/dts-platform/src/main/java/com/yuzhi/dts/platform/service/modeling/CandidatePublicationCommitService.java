@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.service.modeling;
 
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.modeling.CandidatePublicationEvidenceRepository;
 import com.yuzhi.dts.platform.repository.modeling.CandidatePublicationEvidenceRepository.PublicationEntryEvidence;
 import com.yuzhi.dts.platform.repository.modeling.CandidatePublicationRepository;
@@ -7,6 +8,7 @@ import com.yuzhi.dts.platform.repository.modeling.CandidatePublicationRepository
 import com.yuzhi.dts.platform.repository.modeling.ModelLifecycleRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.StoredModelSpec;
+import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.event.PlatformEventOutboxService;
 import com.yuzhi.dts.platform.service.event.dto.PlatformEventRequest;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus;
@@ -48,6 +50,7 @@ public class CandidatePublicationCommitService {
     private final ModelReleaseCandidateService candidateCommands;
     private final ModelExecutionTargetCatalogResolver targetResolver;
     private final Clock clock;
+    private final AuditService auditService;
 
     @Autowired
     public CandidatePublicationCommitService(
@@ -59,7 +62,8 @@ public class CandidatePublicationCommitService {
         CandidatePublicationRepository publications,
         PlatformEventOutboxService outbox,
         ModelReleaseCandidateService candidateCommands,
-        ModelExecutionTargetCatalogResolver targetResolver
+        ModelExecutionTargetCatalogResolver targetResolver,
+        AuditService auditService
     ) {
         this(
             evidence,
@@ -71,7 +75,8 @@ public class CandidatePublicationCommitService {
             outbox,
             candidateCommands,
             targetResolver,
-            Clock.systemUTC()
+            Clock.systemUTC(),
+            auditService
         );
     }
 
@@ -87,6 +92,34 @@ public class CandidatePublicationCommitService {
         ModelExecutionTargetCatalogResolver targetResolver,
         Clock clock
     ) {
+        this(
+            evidence,
+            modelSpecs,
+            lifecycle,
+            codec,
+            lifecyclePublication,
+            publications,
+            outbox,
+            candidateCommands,
+            targetResolver,
+            clock,
+            null
+        );
+    }
+
+    public CandidatePublicationCommitService(
+        CandidatePublicationEvidenceRepository evidence,
+        ModelSpecRepository modelSpecs,
+        ModelLifecycleRepository lifecycle,
+        ModelSpecSnapshotCodec codec,
+        ModelLifecyclePublicationService lifecyclePublication,
+        CandidatePublicationRepository publications,
+        PlatformEventOutboxService outbox,
+        ModelReleaseCandidateService candidateCommands,
+        ModelExecutionTargetCatalogResolver targetResolver,
+        Clock clock,
+        AuditService auditService
+    ) {
         this.evidence = evidence;
         this.modelSpecs = modelSpecs;
         this.lifecycle = lifecycle;
@@ -97,6 +130,7 @@ public class CandidatePublicationCommitService {
         this.candidateCommands = candidateCommands;
         this.targetResolver = targetResolver;
         this.clock = clock;
+        this.auditService = auditService;
     }
 
     @Transactional
@@ -170,34 +204,34 @@ public class CandidatePublicationCommitService {
             );
         }
         publications.rebuildManualBinding(candidate, List.copyOf(bindings), actorId, now);
-        boolean registrationRetry = candidate.status() == DeliveryStatus.PARTIAL;
+        boolean publicationRetry = candidate.status() == DeliveryStatus.PARTIAL;
         outbox.publishInternal(
             new PlatformEventRequest(
                 (
-                    registrationRetry
-                        ? "model-release-candidate-registration-retried:"
+                    publicationRetry
+                        ? "model-release-candidate-publication-retried:"
                         : "model-release-candidate-published:"
                 ) +
                 candidate.id() +
                 ":v" +
                 candidate.version(),
-                registrationRetry
-                    ? "MODEL_RELEASE_CANDIDATE_REGISTRATION_RETRIED"
+                publicationRetry
+                    ? "MODEL_RELEASE_CANDIDATE_PUBLICATION_RETRIED"
                     : "MODEL_RELEASE_CANDIDATE_PUBLISHED",
                 "modeling",
                 "dts-platform",
                 "MODEL_RELEASE_CANDIDATE",
                 candidate.id().toString(),
                 candidate.planId().toString(),
-                registrationRetry ? "RETRY" : "PUBLISH",
+                publicationRetry ? "RETRY" : "PUBLISH",
                 "INFO",
                 "SUCCESS",
                 now,
                 actorId,
                 publishRequestKey,
                 null,
-                registrationRetry
-                    ? "MODEL_RELEASE_CANDIDATE_REGISTRATION_RETRY"
+                publicationRetry
+                    ? "MODEL_RELEASE_CANDIDATE_PUBLICATION_RETRY"
                     : "MODEL_RELEASE_CANDIDATE_PUBLISH",
                 "SPRINT_36_F3_ASSET_ACTION",
                 Map.of(
@@ -216,7 +250,7 @@ public class CandidatePublicationCommitService {
                 )
             )
         );
-        return candidateCommands.transition(
+        CommandResult result = candidateCommands.transitionWithinAuditedCommit(
             tenantId,
             actorId,
             candidate.id(),
@@ -226,6 +260,50 @@ public class CandidatePublicationCommitService {
                 CandidatePublicationKeys.finalCommit(candidate, publishRequestKey),
                 reason
             )
+        );
+        if (!result.replayed()) {
+            String actionCode = publicationRetry
+                ? "MODEL_RELEASE_CANDIDATE_PUBLICATION_RETRY"
+                : "MODEL_RELEASE_CANDIDATE_PUBLISH";
+            auditSuccess(
+                actorId,
+                actionCode,
+                candidate,
+                Map.of(
+                    "tenantId",
+                    tenantId,
+                    "planId",
+                    candidate.planId(),
+                    "environment",
+                    candidate.environment(),
+                    "fromStatus",
+                    candidate.status().name(),
+                    "toStatus",
+                    result.candidate().status().name(),
+                    "version",
+                    result.candidate().version(),
+                    "entryCount",
+                    bindings.size()
+                )
+            );
+        }
+        return result;
+    }
+
+    private void auditSuccess(
+        String actorId,
+        String actionCode,
+        CandidateView candidate,
+        Map<String, Object> payload
+    ) {
+        if (auditService == null) return;
+        Map<String, Object> auditPayload = new LinkedHashMap<>(payload);
+        auditPayload.put("actor", actorId);
+        auditService.auditAction(
+            actionCode,
+            AuditStage.SUCCESS,
+            candidate.id().toString(),
+            auditPayload
         );
     }
 

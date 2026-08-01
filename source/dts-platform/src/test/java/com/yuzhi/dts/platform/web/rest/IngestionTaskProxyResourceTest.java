@@ -2,6 +2,9 @@ package com.yuzhi.dts.platform.web.rest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.anyMap;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -14,6 +17,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.domain.catalog.CatalogClassificationSnapshot;
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
@@ -29,6 +33,8 @@ import com.yuzhi.dts.platform.service.ingestion.IngestionServiceClient;
 import com.yuzhi.dts.platform.service.ops.ExternalRunLogService;
 import com.yuzhi.dts.platform.security.session.PortalSessionInactivityFilter;
 import com.yuzhi.dts.platform.web.filter.AuditLoggingFilter;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -108,15 +114,22 @@ class IngestionTaskProxyResourceTest {
         when(accessDecisionService.removeInternalFilePaths(any())).thenAnswer(invocation ->
             boundaryService.removeInternalFilePaths(invocation.getArgument(0))
         );
+        when(accessDecisionService.retainExplicitSecrets(any(), any())).thenAnswer(invocation ->
+            boundaryService.retainExplicitSecrets(invocation.getArgument(0), invocation.getArgument(1))
+        );
         when(accessDecisionService.sanitizeResponse(any())).thenAnswer(invocation ->
             boundaryService.sanitizeResponse(invocation.getArgument(0))
         );
         when(accessDecisionService.normalizeApiConnectionTest(anyMap())).thenAnswer(invocation -> invocation.getArgument(0));
         when(accessDecisionService.requireTaskAccess(any(), org.mockito.ArgumentMatchers.anyBoolean()))
             .thenReturn(new java.util.LinkedHashMap<>());
+        when(accessDecisionService.requireTaskAuthorizationAccess(any(), org.mockito.ArgumentMatchers.anyBoolean()))
+            .thenReturn(new java.util.LinkedHashMap<>());
         when(accessDecisionService.listVisibleTasks(anyMap())).thenAnswer(invocation ->
             ingestionClient.listTasks(invocation.getArgument(0))
         );
+        when(auditService.auditActionStrict(anyString(), any(AuditStage.class), anyString(), any()))
+            .thenReturn(UUID.randomUUID());
     }
 
     @Test
@@ -414,7 +427,7 @@ class IngestionTaskProxyResourceTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void providedOdsSealIsRevalidatedAndRaisedToTheHighestFieldBeforeForwarding() throws Exception {
+    void providedOdsSealIsReplacedByCurrentManagedSourceAndRaisedBeforeForwarding() throws Exception {
         DefaultDestinationSnapshot destination = new DefaultDestinationSnapshot(
             "rdbmswriter",
             "lake",
@@ -425,20 +438,20 @@ class IngestionTaskProxyResourceTest {
         when(ingestionClient.createIngestionTask(anyMap()))
             .thenReturn(new ApiResponse<>(200, "ok", Map.of("task", "ods-demo")));
 
-        CatalogClassificationSnapshot sourceSnapshot = snapshot(
+        String sourceId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+        configureClassifiedSource(sourceId);
+        CatalogClassificationSnapshot providedSnapshot = snapshot(
             UUID.randomUUID(),
             "ASSET",
-            "data-source:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "data-source:" + sourceId,
             "INTERNAL"
         );
         CatalogClassificationSnapshot taskSnapshot = snapshot(
             UUID.randomUUID(),
             "ASSET",
-            "ingestion-seal:asset:" + sourceSnapshot.getSubjectKey(),
+            "data-source:" + sourceId,
             "SECRET"
         );
-        when(classificationService.resolve("ASSET", sourceSnapshot.getSubjectKey()))
-            .thenReturn(java.util.Optional.of(sourceSnapshot));
         when(classificationService.sealOrRaise(any(CatalogClassificationService.SealCommand.class)))
             .thenReturn(taskSnapshot);
 
@@ -448,6 +461,8 @@ class IngestionTaskProxyResourceTest {
                     """
                     {
                       "name":"ods-task",
+                      "sourceType":"mysqlreader",
+                      "sourceDataSourceId":"%s",
                       "classificationSeal":{
                         "sealId":"%s",
                         "subjectType":"ASSET",
@@ -459,9 +474,10 @@ class IngestionTaskProxyResourceTest {
                       "destination":{"config":{"table":["ods_customer"]}}
                     }
                     """.formatted(
-                        sourceSnapshot.getId(),
-                        sourceSnapshot.getSubjectKey(),
-                        sourceSnapshot.getEvidenceChecksum()
+                        sourceId,
+                        providedSnapshot.getId(),
+                        providedSnapshot.getSubjectKey(),
+                        providedSnapshot.getEvidenceChecksum()
                     )
                 ))
             .andExpect(status().isOk());
@@ -470,12 +486,13 @@ class IngestionTaskProxyResourceTest {
         verify(ingestionClient).createIngestionTask(payload.capture());
         assertThat((Map<String, Object>) payload.getValue().get("classificationSeal"))
             .containsEntry("effectiveLevel", "SECRET")
-            .containsEntry("subjectKey", taskSnapshot.getSubjectKey());
+            .containsEntry("subjectKey", "data-source:" + sourceId);
         ArgumentCaptor<CatalogClassificationService.SealCommand> command =
             ArgumentCaptor.forClass(CatalogClassificationService.SealCommand.class);
         verify(classificationService).sealOrRaise(command.capture());
+        assertThat(command.getValue().declaredLevel()).isEqualTo("INTERNAL");
         assertThat(command.getValue().upstreamLevels().stream().map(String::valueOf).toList())
-            .containsExactlyInAnyOrder("INTERNAL", "SECRET");
+            .containsExactly("SECRET");
     }
 
     @Test
@@ -565,6 +582,31 @@ class IngestionTaskProxyResourceTest {
     }
 
     @Test
+    void updateRejectsConflictingTargetAliasesBeforeReadingOrForwardingTask() throws Exception {
+        String ownTargetId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+        String foreignNestedId = "11111111-2222-3333-4444-555555555555";
+
+        mockMvc.perform(put("/api/ingestion/tasks/91")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "name":"conflicting-target",
+                      "targetDataSourceId":"%s",
+                      "destinationConfig":{"targetDataSourceId":"%s"}
+                    }
+                    """.formatted(ownTargetId, foreignNestedId)
+                ))
+            .andExpect(status().isBadRequest());
+
+        verify(accessDecisionService, never()).requireTaskAccess(
+            org.mockito.ArgumentMatchers.eq(91L),
+            org.mockito.ArgumentMatchers.anyBoolean()
+        );
+        verify(ingestionClient, never()).updateTask(org.mockito.ArgumentMatchers.eq(91L), anyMap());
+    }
+
+    @Test
     void fileTaskClearanceGateCoversDetailUpdateAdmissionExecutionStagingAndErrorDownload() throws Exception {
         long taskId = 77L;
         Map<String, Object> highFileTask = Map.of(
@@ -588,6 +630,7 @@ class IngestionTaskProxyResourceTest {
                 org.mockito.ArgumentMatchers.anyBoolean()
             ))
             .thenThrow(forbidden);
+        when(accessDecisionService.requireTaskAuthorizationAccess(taskId, true)).thenThrow(forbidden);
 
         mockMvc.perform(get("/api/ingestion/tasks/{id}", taskId)).andExpect(status().isForbidden());
         mockMvc.perform(put("/api/ingestion/tasks/{id}", taskId)
@@ -607,13 +650,45 @@ class IngestionTaskProxyResourceTest {
     }
 
     @Test
+    void ordinaryTaskReadEndpointsApplySourceClearanceGateBeforeReturningConfiguration() throws Exception {
+        long taskId = 78L;
+        Map<String, Object> databaseTask = Map.of(
+            "id", taskId,
+            "sourceType", "mysqlreader",
+            "sourceDataSourceId", "11111111-2222-3333-4444-555555555555",
+            "destinationConfig", Map.of("targetDataSourceId", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+        );
+        org.springframework.web.server.ResponseStatusException forbidden = new org.springframework.web.server.ResponseStatusException(
+            org.springframework.http.HttpStatus.FORBIDDEN,
+            "数据源密级超出当前用户密级"
+        );
+        when(ingestionClient.getTask(taskId)).thenReturn(new ApiResponse<>(200, "ok", databaseTask));
+        org.mockito.Mockito.doThrow(forbidden)
+            .when(accessDecisionService)
+            .requireTaskPayloadAccess(org.mockito.ArgumentMatchers.anyMap(), org.mockito.ArgumentMatchers.eq(false));
+        when(accessDecisionService.requireTaskAccess(taskId, false)).thenThrow(forbidden);
+
+        mockMvc.perform(get("/api/ingestion/tasks/{id}", taskId)).andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/ingestion/tasks/{id}/revisions", taskId)).andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/ingestion/tasks/{id}/effective-config", taskId)).andExpect(status().isForbidden());
+
+        verify(ingestionClient, never()).getTaskRevisions(taskId);
+        verify(ingestionClient, never()).getTaskEffectiveConfig(taskId);
+    }
+
+    @Test
     void taskResponsesRecursivelyRemoveInternalFilePathsButPreserveApiResourcePathAndSeal() throws Exception {
         Map<String, Object> leaked = Map.of(
             "fileId", "file-1",
             "hostPath", "/srv/upload.xlsx",
-            "nested", Map.of("containerPath", "/decrypted/upload.xlsx", "filePath", "/tmp/upload.xlsx"),
+            "addaxJobPath", new String[] { "/opt/airflow/jobs/task.json" },
+            "nested", Map.of(
+                "containerPath", "/decrypted/upload.xlsx",
+                "_file_path", "/tmp/upload.xlsx",
+                "path", new String[] { "/decrypted/upload.xlsx" }
+            ),
             "classificationSeal", Map.of("effectiveLevel", "SECRET", "fileFloor", "SECRET"),
-            "apiResource", Map.of("resourceId", "customers", "path", "/tmp/customers")
+            "resource", Map.of("resourceId", "customers", "path", "/tmp/customers")
         );
         when(ingestionClient.listTasks(anyMap()))
             .thenReturn(new ApiResponse<>(200, "ok", Map.of("content", java.util.List.of(leaked))));
@@ -623,12 +698,15 @@ class IngestionTaskProxyResourceTest {
         when(ingestionClient.executeTask(81L)).thenReturn(new ApiResponse<>(200, "ok", leaked));
         when(ingestionClient.getExecutionLog(org.mockito.ArgumentMatchers.eq(81L), org.mockito.ArgumentMatchers.eq(2L), anyMap()))
             .thenReturn(new ApiResponse<>(200, "ok", leaked));
+        when(ingestionClient.getGovernanceOverview(anyMap())).thenReturn(new ApiResponse<>(200, "ok", leaked));
+        when(ingestionClient.listChangeLogs(anyMap())).thenReturn(new ApiResponse<>(200, "ok", Map.of("content", java.util.List.of(leaked))));
+        when(ingestionClient.listTemplates()).thenReturn(new ApiResponse<>(200, "ok", java.util.List.of(leaked)));
 
         mockMvc.perform(get("/api/ingestion/tasks/list"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.content[0].hostPath").doesNotExist())
             .andExpect(jsonPath("$.data.content[0].nested.containerPath").doesNotExist())
-            .andExpect(jsonPath("$.data.content[0].apiResource.path").value("/tmp/customers"));
+            .andExpect(jsonPath("$.data.content[0].resource.path").value("/tmp/customers"));
         mockMvc.perform(get("/api/ingestion/tasks/81"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.hostPath").doesNotExist())
@@ -639,14 +717,161 @@ class IngestionTaskProxyResourceTest {
             .andExpect(jsonPath("$.data[0].hostPath").doesNotExist());
         mockMvc.perform(get("/api/ingestion/tasks/81/effective-config"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data.nested.filePath").doesNotExist());
+            .andExpect(jsonPath("$.data.nested._file_path").doesNotExist())
+            .andExpect(jsonPath("$.data.addaxJobPath").doesNotExist());
         mockMvc.perform(post("/api/ingestion/tasks/81/execute"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.hostPath").doesNotExist());
         mockMvc.perform(get("/api/ingestion/tasks/81/executions/2/logs"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.nested.containerPath").doesNotExist())
-            .andExpect(jsonPath("$.data.apiResource.path").value("/tmp/customers"));
+            .andExpect(jsonPath("$.data.resource.path").value("/tmp/customers"));
+        mockMvc.perform(get("/api/ingestion/tasks/executions/governance-overview"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.addaxJobPath").doesNotExist());
+        mockMvc.perform(get("/api/ingestion/tasks/changes").param("taskId", "81"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.content[0].nested.path").doesNotExist());
+        mockMvc.perform(get("/api/ingestion/templates"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data[0].hostPath").doesNotExist())
+            .andExpect(jsonPath("$.data[0].resource.path").value("/tmp/customers"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void updateWithoutPasswordDoesNotReadOrForwardStoredOrDefaultPasswords() throws Exception {
+        String targetId = "99999999-2222-3333-4444-555555555555";
+        when(destinationSyncService.ensureDestination(targetId))
+            .thenReturn(
+                new DefaultDestinationSnapshot(
+                    "postgresqlwriter",
+                    "lake",
+                    Map.of(
+                        "jdbcUrl", "jdbc:postgresql://dts-pg:5432/biadmin",
+                        "password", "default-password",
+                        "connection", List.of(Map.of("passwd", "nested-password"))
+                    ),
+                    targetId
+                )
+            );
+        when(ingestionClient.updateTask(org.mockito.ArgumentMatchers.eq(92L), anyMap()))
+            .thenReturn(new ApiResponse<>(200, "ok", Map.of("id", 92L)));
+
+        mockMvc.perform(put("/api/ingestion/tasks/92")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "name":"passwordless-update",
+                      "targetDataSourceId":"%s",
+                      "destinationConfig":{"targetDataSourceId":"%s","table":["ods_demo"]}
+                    }
+                    """.formatted(targetId, targetId)
+                ))
+            .andExpect(status().isOk());
+
+        ArgumentCaptor<Map<String, Object>> forwarded = ArgumentCaptor.forClass(Map.class);
+        verify(ingestionClient).updateTask(org.mockito.ArgumentMatchers.eq(92L), forwarded.capture());
+        Map<String, Object> destination = (Map<String, Object>) forwarded.getValue().get("destinationConfig");
+        assertThat(destination).doesNotContainKeys("password", "passwd");
+        assertThat((Map<String, Object>) ((List<?>) destination.get("connection")).get(0))
+            .doesNotContainKeys("password", "passwd");
+        verify(accessDecisionService).requireTaskAuthorizationAccess(92L, true);
+        verify(ingestionClient, never()).getTask(92L);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void oneExplicitPasswordDoesNotReleaseOtherDefaultSecretsDuringUpdate() throws Exception {
+        String targetId = "88888888-2222-3333-4444-555555555555";
+        when(destinationSyncService.ensureDestination(targetId))
+            .thenReturn(
+                new DefaultDestinationSnapshot(
+                    "postgresqlwriter",
+                    "lake",
+                    Map.of(
+                        "jdbcUrl", "jdbc:postgresql://dts-pg:5432/biadmin",
+                        "password", "default-password",
+                        "clientSecret", "default-client-secret",
+                        "connection", List.of(Map.of(
+                            "password", "nested-password",
+                            "apiKey", "nested-api-key"
+                        ))
+                    ),
+                    targetId
+                )
+            );
+        when(ingestionClient.updateTask(org.mockito.ArgumentMatchers.eq(93L), anyMap()))
+            .thenReturn(new ApiResponse<>(200, "ok", Map.of("id", 93L)));
+
+        mockMvc.perform(put("/api/ingestion/tasks/93")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "name":"single-explicit-secret",
+                      "targetDataSourceId":"%s",
+                      "destinationConfig":{
+                        "targetDataSourceId":"%s",
+                        "password":"request-password",
+                        "table":["ods_demo"]
+                      }
+                    }
+                    """.formatted(targetId, targetId)
+                ))
+            .andExpect(status().isOk());
+
+        ArgumentCaptor<Map<String, Object>> forwarded = ArgumentCaptor.forClass(Map.class);
+        verify(ingestionClient).updateTask(org.mockito.ArgumentMatchers.eq(93L), forwarded.capture());
+        Map<String, Object> destination = (Map<String, Object>) forwarded.getValue().get("destinationConfig");
+        Map<String, Object> connection = (Map<String, Object>) ((List<?>) destination.get("connection")).get(0);
+        assertThat(destination)
+            .containsEntry("password", "request-password")
+            .doesNotContainKey("clientSecret");
+        assertThat(connection).doesNotContainKeys("password", "apiKey");
+        verify(ingestionClient, never()).getTask(93L);
+    }
+
+    @Test
+    void taskReadEndpointsRecursivelyRedactSecretsAndKeepSealChecksums() throws Exception {
+        Map<String, Object> leaked = new LinkedHashMap<>();
+        leaked.put("id", 81L);
+        leaked.put("password", "password");
+        leaked.put("clientSecret", "client-secret");
+        leaked.put("token", "token");
+        leaked.put("secureProps", Map.of("apiKey", "api-key"));
+        leaked.put("nested", Map.of("Authorization", "Bearer token", "credential", "credential"));
+        leaked.put("classificationSeal", Map.of("effectiveLevel", "SECRET", "checksum", "seal-checksum"));
+        when(ingestionClient.listTasks(anyMap()))
+            .thenReturn(new ApiResponse<>(200, "ok", Map.of("content", List.of(leaked))));
+        when(ingestionClient.getTask(81L)).thenReturn(new ApiResponse<>(200, "ok", leaked));
+        when(ingestionClient.getTaskRevisions(81L)).thenReturn(new ApiResponse<>(200, "ok", List.of(leaked)));
+        when(ingestionClient.getTaskEffectiveConfig(81L)).thenReturn(new ApiResponse<>(200, "ok", leaked));
+        when(ingestionClient.listExecutions(org.mockito.ArgumentMatchers.eq(81L), anyMap()))
+            .thenReturn(new ApiResponse<>(200, "ok", Map.of("content", List.of(leaked))));
+        when(ingestionClient.getExecutionLog(org.mockito.ArgumentMatchers.eq(81L), org.mockito.ArgumentMatchers.eq(2L), anyMap()))
+            .thenReturn(new ApiResponse<>(200, "ok", leaked));
+
+        mockMvc.perform(get("/api/ingestion/tasks/list"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.content[0].password").doesNotExist());
+        mockMvc.perform(get("/api/ingestion/tasks/81"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.clientSecret").doesNotExist())
+            .andExpect(jsonPath("$.data.classificationSeal.checksum").value("seal-checksum"));
+        mockMvc.perform(get("/api/ingestion/tasks/81/revisions"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data[0].token").doesNotExist());
+        mockMvc.perform(get("/api/ingestion/tasks/81/effective-config"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.secureProps").doesNotExist());
+        mockMvc.perform(get("/api/ingestion/tasks/81/executions"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.content[0].nested.Authorization").doesNotExist());
+        mockMvc.perform(get("/api/ingestion/tasks/81/executions/2/logs"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.nested.credential").doesNotExist());
     }
 
     @Test
@@ -710,6 +935,38 @@ class IngestionTaskProxyResourceTest {
             .andExpect(jsonPath("$.data.status").value("QUEUED"));
 
         verify(ingestionClient).retryExecution(1L, 2L, Map.of("mode", "FAILED_ONLY"));
+        verify(auditService).auditActionStrict(
+            eq("INGESTION_EXECUTION_RETRY"),
+            eq(AuditStage.SUCCESS),
+            eq("2"),
+            argThat(this::isSafeTaskAuditPayload)
+        );
+    }
+
+    @Test
+    void successfulRemoteRetryIsNotReclassifiedAsFailWhenTerminalAuditFails() throws Exception {
+        UUID beginReceipt = UUID.randomUUID();
+        when(ingestionClient.retryExecution(1L, 2L, Map.of("mode", "FAILED_ONLY")))
+            .thenReturn(new ApiResponse<>(200, "ok", Map.of("executionId", 2, "status", "QUEUED")));
+        when(auditService.auditActionStrict(anyString(), any(AuditStage.class), anyString(), any()))
+            .thenAnswer(invocation -> {
+                AuditStage stage = invocation.getArgument(1);
+                if (stage == AuditStage.SUCCESS) {
+                    throw new IllegalStateException("audit outbox unavailable");
+                }
+                return beginReceipt;
+            });
+
+        mockMvc.perform(post("/api/ingestion/tasks/1/executions/2/retry").param("mode", "FAILED_ONLY"))
+            .andExpect(status().isConflict());
+
+        verify(ingestionClient, times(1)).retryExecution(1L, 2L, Map.of("mode", "FAILED_ONLY"));
+        verify(auditService, never()).auditActionStrict(
+            eq("INGESTION_EXECUTION_RETRY"),
+            eq(AuditStage.FAIL),
+            eq("2"),
+            any()
+        );
     }
 
     @Test
@@ -922,6 +1179,12 @@ class IngestionTaskProxyResourceTest {
         assertThat(command.getValue().subjectKey()).isEqualTo("ingestion-upload:file-001");
         assertThat(command.getValue().declaredLevel()).isEqualTo("SECRET");
         assertThat(command.getValue().evidenceChecksum()).isEqualTo(upstreamData.get("fileHash"));
+        verify(auditService).auditActionStrict(
+            eq("INGESTION_FILE_CLASSIFICATION_SEAL"),
+            eq(AuditStage.SUCCESS),
+            any(String.class),
+            argThat(this::isSafeClassificationAuditPayload)
+        );
     }
 
     @Test
@@ -991,6 +1254,12 @@ class IngestionTaskProxyResourceTest {
             .containsEntry("fileChecksum", fileSnapshot.getEvidenceChecksum());
         assertThat((Map<String, String>) admission.getValue().get("fieldClassifications"))
             .containsExactlyInAnyOrderEntriesOf(Map.of("name", "SECRET", "identity_no", "CONFIDENTIAL"));
+        verify(auditService).auditActionStrict(
+            eq("INGESTION_TASK_ADMIT"),
+            eq(AuditStage.SUCCESS),
+            eq("7"),
+            argThat(this::isSafeClassificationAuditPayload)
+        );
     }
 
     @Test
@@ -1027,6 +1296,33 @@ class IngestionTaskProxyResourceTest {
             .containsEntry("subjectKey", "data-source:" + currentSourceId);
         assertThat((Map<String, String>) admission.getValue().get("fieldClassifications"))
             .containsExactly(Map.entry("identity_no", "SECRET"));
+    }
+
+    private boolean isSafeTaskAuditPayload(Object value) {
+        if (!(value instanceof Map<?, ?> payload)) {
+            return false;
+        }
+        return payload.containsKey("auditOperationId") &&
+            payload.containsKey("operator") &&
+            payload.keySet().stream().noneMatch(key ->
+                List.of("password", "sourceConfig", "destinationConfig", "config", "payload")
+                    .contains(String.valueOf(key))
+            );
+    }
+
+    private boolean isSafeClassificationAuditPayload(Object value) {
+        if (!(value instanceof Map<?, ?> payload)) {
+            return false;
+        }
+        return isSafeTaskAuditPayload(value) &&
+            payload.containsKey("sealId") &&
+            payload.containsKey("effectiveLevel") &&
+            payload.containsKey("snapshotVersion") &&
+            payload.containsKey("evidenceChecksum") &&
+            payload.keySet().stream().noneMatch(key ->
+                List.of("fieldClassifications", "classificationSeal", "filePath", "originalName")
+                    .contains(String.valueOf(key))
+            );
     }
 
     private void configureClassifiedSource(String sourceId) {

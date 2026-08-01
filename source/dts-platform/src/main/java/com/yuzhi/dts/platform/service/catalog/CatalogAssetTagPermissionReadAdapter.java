@@ -32,24 +32,6 @@ public class CatalogAssetTagPermissionReadAdapter {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    public List<SqlModelIdentity> findSqlModelsByLowerName(String naturalKey) {
-        if (!StringUtils.hasText(naturalKey)) {
-            return List.of();
-        }
-        return jdbcTemplate.query(
-            """
-            select id, name
-              from modeling_sql_model
-             where lower(name) = ?
-             order by id
-             fetch first 2 rows only
-            """,
-            (resultSet, rowNumber) ->
-                new SqlModelIdentity(resultSet.getObject("id", UUID.class), resultSet.getString("name")),
-            naturalKey.trim().toLowerCase(Locale.ROOT)
-        );
-    }
-
     public BatchLookup loadBatch(BatchLookupRequest request) {
         BatchLookupRequest safeRequest = request == null
             ? new BatchLookupRequest(Set.of(), Set.of(), Map.of())
@@ -95,17 +77,13 @@ public class CatalogAssetTagPermissionReadAdapter {
             case METRIC -> findMetricIdentities(naturalKeys);
             case METRIC_PACK -> findExternalIdentities(type, naturalKeys);
             case SEMANTIC_MODEL ->
-                findUuidOnlyIdentities("semantic_model", naturalKeys);
+                findUuidOnlyIdentities("modeling_model_spec", naturalKeys);
             case DATA_PRODUCT ->
                 findUuidCodeIdentities(
                     "catalog_data_product",
                     "code",
                     naturalKeys
                 );
-            case MODELING_SQL_MODEL ->
-                findUuidCodeIdentities("modeling_sql_model", "name", naturalKeys);
-            case MODELING_PLAN ->
-                findUuidOnlyIdentities("modeling_plan", naturalKeys);
             case DATA_STANDARD ->
                 findUuidCodeIdentities("data_standard", "code", naturalKeys);
             case METADATA_STANDARD ->
@@ -264,7 +242,7 @@ public class CatalogAssetTagPermissionReadAdapter {
             return List.copyOf(identities);
         }
         String sql =
-            "select id, code from semantic_metric where lower(code) in (" +
+            "select id, code from gov_indicator_definition where lower(code) in (" +
             placeholders(localCodes.size()) +
             ") order by id";
         identities.addAll(
@@ -712,5 +690,4 @@ public class CatalogAssetTagPermissionReadAdapter {
         String tableName
     ) {}
 
-    public record SqlModelIdentity(UUID id, String name) {}
 }

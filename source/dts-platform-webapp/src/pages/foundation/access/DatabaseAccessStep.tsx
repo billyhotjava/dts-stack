@@ -1,5 +1,6 @@
 import { Alert, Button, Empty, Form, Input, Radio, Select, Space, Tag, Typography } from "antd";
 import type { FormInstance } from "antd/es/form";
+import { useNavigate } from "react-router";
 import type { TableInfo } from "@/api/ingestion";
 import type { InfraDataSource } from "@/api/services/dataSourcesService";
 import { CompactTable } from "@/components/table";
@@ -28,6 +29,7 @@ export function DatabaseAccessStep({
 	onDiscover,
 	onDiscoveryInputChange,
 }: Props) {
+	const navigate = useNavigate();
 	const selectionMode = Form.useWatch("tableSelectionMode", form) || "all";
 	const selectedTables = Form.useWatch("selectedTables", form) || [];
 
@@ -36,9 +38,13 @@ export function DatabaseAccessStep({
 			<div className="space-y-5">
 				<div>
 					<Typography.Title level={4}>选择数据库连接</Typography.Title>
-					<Typography.Text type="secondary">
-						仅使用平台已托管并验证的连接，不在任务内重复填写账号或 JDBC 地址。
-					</Typography.Text>
+					<Space wrap>
+						<Typography.Text type="secondary">
+							仅使用平台已托管并验证的连接，不在任务内重复填写账号或 JDBC 地址。
+						</Typography.Text>
+						<Button type="link" className="h-auto p-0" onClick={() => navigate("/foundation/connections")}>管理连接</Button>
+						<Button type="link" className="h-auto p-0" onClick={() => navigate("/foundation/connections?create=1")}>新建连接</Button>
+					</Space>
 				</div>
 				<div className="grid gap-4 md:grid-cols-2">
 					<Form.Item name="name" label="任务名称" rules={[{ required: true, message: "请输入任务名称" }]}>

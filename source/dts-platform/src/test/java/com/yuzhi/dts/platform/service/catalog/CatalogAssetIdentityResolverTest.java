@@ -1,23 +1,21 @@
 package com.yuzhi.dts.platform.service.catalog;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.yuzhi.dts.platform.domain.governance.GovIndicatorDefinition;
-import com.yuzhi.dts.platform.domain.modeling.DataStandard;
-import com.yuzhi.dts.platform.domain.modeling.ModelingGlossaryTerm;
-import com.yuzhi.dts.platform.domain.modeling.ModelingSqlModel;
-import com.yuzhi.dts.platform.domain.service.SvcApi;
 import com.yuzhi.dts.platform.repository.catalog.CatalogAssetMappingRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.OpenMetadataAssetCacheRepository;
-import com.yuzhi.dts.platform.repository.governance.GovIndicatorDefinitionRepository;
-import com.yuzhi.dts.platform.repository.modeling.DataStandardRepository;
-import com.yuzhi.dts.platform.repository.modeling.ModelingGlossaryTermRepository;
-import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
-import com.yuzhi.dts.platform.repository.service.SvcApiRepository;
+import com.yuzhi.dts.platform.service.catalog.CanonicalModelIdentityReadPort.ModelIdentity;
+import com.yuzhi.dts.platform.service.catalog.CanonicalModelIdentityReadPort.ModelIdentityType;
+import com.yuzhi.dts.platform.service.governance.GovernanceReferenceAssetReadPort;
+import com.yuzhi.dts.platform.service.governance.GovernanceReferenceAssetReadPort.IndicatorView;
+import com.yuzhi.dts.platform.service.modeling.GovernedStandardReadPort;
+import com.yuzhi.dts.platform.service.modeling.GovernedStandardReadPort.GlossaryAsset;
+import com.yuzhi.dts.platform.service.modeling.GovernedStandardReadPort.StandardAsset;
+import com.yuzhi.dts.platform.service.services.ServiceAssetIdentityReadPort;
+import com.yuzhi.dts.platform.service.services.ServiceAssetIdentityReadPort.ApiAsset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -40,19 +38,16 @@ class CatalogAssetIdentityResolverTest {
     private CatalogDatasetRepository datasetRepository;
 
     @Mock
-    private GovIndicatorDefinitionRepository indicatorRepository;
+    private GovernanceReferenceAssetReadPort governanceAssets;
 
     @Mock
-    private ModelingSqlModelRepository sqlModelRepository;
+    private CanonicalModelIdentityReadPort canonicalModelIdentityReadPort;
 
     @Mock
-    private DataStandardRepository dataStandardRepository;
+    private GovernedStandardReadPort governedStandards;
 
     @Mock
-    private ModelingGlossaryTermRepository glossaryTermRepository;
-
-    @Mock
-    private SvcApiRepository svcApiRepository;
+    private ServiceAssetIdentityReadPort serviceAssets;
 
     @Mock
     private CatalogAssetIdentityResolutionAuditService resolutionAuditService;
@@ -65,11 +60,10 @@ class CatalogAssetIdentityResolverTest {
             assetRepository,
             mappingRepository,
             datasetRepository,
-            indicatorRepository,
-            sqlModelRepository,
-            dataStandardRepository,
-            glossaryTermRepository,
-            svcApiRepository,
+            governanceAssets,
+            canonicalModelIdentityReadPort,
+            governedStandards,
+            serviceAssets,
             resolutionAuditService
         );
     }
@@ -77,10 +71,8 @@ class CatalogAssetIdentityResolverTest {
     @Test
     void resolvesGlossaryTermByPrefixedCode() {
         UUID id = UUID.randomUUID();
-        ModelingGlossaryTerm term = new ModelingGlossaryTerm();
-        term.setId(id);
-        term.setCode("contract_amount");
-        when(glossaryTermRepository.findByCodeLowerIn(List.of("contract_amount"))).thenReturn(List.of(term));
+        GlossaryAsset term = new GlossaryAsset(id, "contract_amount");
+        when(governedStandards.findFirstGlossaryTermByLowerCodes(List.of("contract_amount"))).thenReturn(Optional.of(term));
 
         CatalogAssetIdentity identity = resolver.resolveIdentity("glossary.contract_amount").orElseThrow();
 
@@ -92,10 +84,8 @@ class CatalogAssetIdentityResolverTest {
     @Test
     void resolvesGovernanceIndicatorByCode() {
         UUID id = UUID.randomUUID();
-        GovIndicatorDefinition indicator = new GovIndicatorDefinition();
-        indicator.setId(id);
-        indicator.setCode("direct_cost_execution_rate");
-        when(indicatorRepository.findFirstByCodeIgnoreCase("direct_cost_execution_rate")).thenReturn(Optional.of(indicator));
+        IndicatorView indicator = new IndicatorView(id, "direct_cost_execution_rate", null, null, null, null);
+        when(governanceAssets.indicatorByCode("direct_cost_execution_rate")).thenReturn(Optional.of(indicator));
 
         CatalogAssetIdentity identity = resolver.resolveIdentity("gov_indicator:direct_cost_execution_rate").orElseThrow();
 
@@ -108,10 +98,8 @@ class CatalogAssetIdentityResolverTest {
     @Test
     void resolvesLegacyUrnUuidCodeAssetRef() {
         UUID id = UUID.randomUUID();
-        GovIndicatorDefinition indicator = new GovIndicatorDefinition();
-        indicator.setId(id);
-        indicator.setCode("contract_amount");
-        when(indicatorRepository.findById(id)).thenReturn(Optional.of(indicator));
+        IndicatorView indicator = new IndicatorView(id, "contract_amount", null, null, null, null);
+        when(governanceAssets.indicatorById(id)).thenReturn(Optional.of(indicator));
 
         CatalogAssetIdentity identity = resolver.resolveIdentity("urn:uuid:" + id).orElseThrow();
 
@@ -121,36 +109,57 @@ class CatalogAssetIdentityResolverTest {
     }
 
     @Test
-    void resolvesModelingSqlModelByName() {
-        UUID id = UUID.randomUUID();
-        ModelingSqlModel model = new ModelingSqlModel();
-        model.setId(id);
-        model.setName("dws_contract_summary");
-        when(sqlModelRepository.findFirstByNameIgnoreCase("dws_contract_summary")).thenReturn(Optional.of(model));
+    void resolvesCanonicalDbtModelByResourceName() {
+        UUID implementationId = UUID.randomUUID();
+        UUID modelSpecId = UUID.randomUUID();
+        ModelIdentity model = new ModelIdentity(
+            ModelIdentityType.DBT_MODEL,
+            implementationId,
+            modelSpecId,
+            implementationId,
+            "dws_contract_summary",
+            3,
+            "model.finance.dws_contract_summary"
+        );
+        when(canonicalModelIdentityReadPort.findDbtModel("dws_contract_summary")).thenReturn(Optional.of(model));
 
-        CatalogAssetIdentity identity = resolver.resolveIdentity("modeling_sql_model:dws_contract_summary").orElseThrow();
+        CatalogAssetIdentity identity = resolver.resolveIdentity("dbt_model:dws_contract_summary").orElseThrow();
 
-        assertThat(identity.type()).isEqualTo(CatalogAssetType.MODELING_SQL_MODEL);
-        assertThat(identity.assetId()).isEqualTo(id.toString());
-        assertThat(identity.assetKey()).isEqualTo(CatalogAssetKey.codeAsset(CatalogAssetType.MODELING_SQL_MODEL, "default", "dws_contract_summary"));
-        verify(sqlModelRepository, never()).findAll();
+        assertThat(identity.type()).isEqualTo(CatalogAssetType.DBT_MODEL);
+        assertThat(identity.assetId()).isEqualTo(implementationId.toString());
+        assertThat(identity.assetKey()).isEqualTo(CatalogAssetKey.dbtModel("model.finance.dws_contract_summary", "dws_contract_summary"));
     }
 
     @Test
-    void resolvesModelingSqlModelByAliasWithoutFullScan() {
-        UUID id = UUID.randomUUID();
-        ModelingSqlModel model = new ModelingSqlModel();
-        model.setId(id);
-        model.setName("dws_contract_summary");
-        model.setAlias("合同汇总");
-        when(sqlModelRepository.findFirstByNameIgnoreCase("contract-summary")).thenReturn(Optional.empty());
-        when(sqlModelRepository.findFirstByAliasIgnoreCase("contract-summary")).thenReturn(Optional.of(model));
+    void resolvesCanonicalSemanticModelBySpecReference() {
+        UUID modelSpecId = UUID.randomUUID();
+        ModelIdentity model = new ModelIdentity(
+            ModelIdentityType.SEMANTIC_MODEL,
+            modelSpecId,
+            modelSpecId,
+            null,
+            "预算执行事实",
+            2,
+            null
+        );
+        when(canonicalModelIdentityReadPort.findSemanticModel(modelSpecId.toString())).thenReturn(Optional.of(model));
 
-        CatalogAssetIdentity identity = resolver.resolveIdentity("modeling_sql_model:contract-summary").orElseThrow();
+        CatalogAssetIdentity identity = resolver.resolveIdentity("model_spec:" + modelSpecId).orElseThrow();
 
-        assertThat(identity.type()).isEqualTo(CatalogAssetType.MODELING_SQL_MODEL);
-        assertThat(identity.assetId()).isEqualTo(id.toString());
-        verify(sqlModelRepository, never()).findAll();
+        assertThat(identity.type()).isEqualTo(CatalogAssetType.SEMANTIC_MODEL);
+        assertThat(identity.assetId()).isEqualTo(modelSpecId.toString());
+        assertThat(identity.assetKey()).isEqualTo(CatalogAssetKey.semanticModel(modelSpecId.toString()));
+    }
+
+    @Test
+    void rejectsRetiredModelingSqlModelTypeHint() {
+        assertThat(resolver.resolveIdentity("modeling_sql_model:dws_contract_summary")).isEmpty();
+
+        verify(resolutionAuditService).recordFailure(
+            "modeling_sql_model:dws_contract_summary",
+            "CatalogAssetIdentityResolver",
+            "UNKNOWN_TYPE_HINT"
+        );
     }
 
     @Test
@@ -178,10 +187,8 @@ class CatalogAssetIdentityResolverTest {
     @Test
     void resolvesDataStandardByCode() {
         UUID id = UUID.randomUUID();
-        DataStandard standard = new DataStandard();
-        standard.setId(id);
-        standard.setCode("contract_amount");
-        when(dataStandardRepository.findByCodeIgnoreCase("contract_amount")).thenReturn(Optional.of(standard));
+        StandardAsset standard = new StandardAsset(id, "contract_amount");
+        when(governedStandards.findDataStandardByCode("contract_amount")).thenReturn(Optional.of(standard));
 
         CatalogAssetIdentity identity = resolver.resolveIdentity("data_standard:contract_amount").orElseThrow();
 
@@ -193,10 +200,8 @@ class CatalogAssetIdentityResolverTest {
     @Test
     void resolvesApiServiceByCode() {
         UUID id = UUID.randomUUID();
-        SvcApi api = new SvcApi();
-        api.setId(id);
-        api.setCode("contract_summary_api");
-        when(svcApiRepository.findFirstByCodeIgnoreCase("contract_summary_api")).thenReturn(Optional.of(api));
+        ApiAsset api = new ApiAsset(id, "contract_summary_api");
+        when(serviceAssets.findApiByCode("contract_summary_api")).thenReturn(Optional.of(api));
 
         CatalogAssetIdentity identity = resolver.resolveIdentity("api_service:contract_summary_api").orElseThrow();
 

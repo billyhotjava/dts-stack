@@ -149,6 +149,7 @@ describe("GovernedAssetTagPanel", () => {
 
 		const select = container.querySelector("select[aria-label='添加业务数据标签']") as HTMLSelectElement;
 		expect(select.disabled).toBe(true);
+		expect(container.textContent).toContain("permission service unavailable");
 		expect(container.textContent).toContain("您可以查看业务数据标签，但不能修改当前资产");
 		unmount();
 	});

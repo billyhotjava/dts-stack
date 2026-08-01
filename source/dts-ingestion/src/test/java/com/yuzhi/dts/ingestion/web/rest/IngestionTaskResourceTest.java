@@ -24,6 +24,7 @@ import com.yuzhi.dts.ingestion.service.IngestionTaskService;
 import com.yuzhi.dts.ingestion.service.IngestionAccessContractService;
 import com.yuzhi.dts.ingestion.service.audit.AuditService;
 import com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO;
+import com.yuzhi.dts.ingestion.service.dto.IngestionTaskRevisionDTO;
 import com.yuzhi.dts.ingestion.service.dto.IngestionAccessDefaultPolicyDTO;
 import com.yuzhi.dts.ingestion.service.etl.AddaxJobService;
 import com.yuzhi.dts.ingestion.service.etl.AirflowAdapter;
@@ -140,6 +141,76 @@ class IngestionTaskResourceTest {
     }
 
     @Test
+    void getTaskShouldExposeActiveLifecycleSeparatelyFromDraftRevisionOverlay() throws Exception {
+        IngestionTaskDTO detail = new IngestionTaskDTO();
+        detail.setId(48L);
+        detail.setName("draft-r13-name");
+        detail.setStatus("active");
+        detail.setRevisionState("DRAFT");
+        detail.setRevisionNumber(13);
+        detail.setSourceConfig(new ObjectMapper().readTree("""
+            {"endpoint":"https://api.example.test","auth":{"clientSecret":"must-not-leak","token":"must-not-leak"}}
+            """));
+        when(ingestionTaskQueryService.findOne(48L)).thenReturn(Optional.of(detail));
+
+        mockMvc.perform(get("/api/ingestion/tasks/48"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("active"))
+            .andExpect(jsonPath("$.revisionState").value("DRAFT"))
+            .andExpect(jsonPath("$.revisionNumber").value(13))
+            .andExpect(jsonPath("$.sourceConfig.endpoint").value("https://api.example.test"))
+            .andExpect(jsonPath("$.sourceConfig.auth.clientSecret").doesNotExist())
+            .andExpect(jsonPath("$.sourceConfig.auth.token").doesNotExist());
+    }
+
+    @Test
+    void getTaskRevisionsShouldExposeOneActiveAndOptionalDraftRevision() throws Exception {
+        when(accessContractService.getTaskRevisions(48L)).thenReturn(List.of(
+            new IngestionTaskRevisionDTO(
+                12,
+                "ACTIVE",
+                "database",
+                "checksum-r12",
+                3,
+                "policy-r3",
+                null,
+                "operator",
+                Instant.parse("2026-07-31T00:00:00Z"),
+                "operator",
+                Instant.parse("2026-07-31T00:01:00Z"),
+                "ACTIVE",
+                null,
+                Instant.parse("2026-07-31T00:02:00Z")
+            ),
+            new IngestionTaskRevisionDTO(
+                13,
+                "DRAFT",
+                "database",
+                "checksum-r13",
+                3,
+                "policy-r3",
+                null,
+                "operator",
+                Instant.parse("2026-07-31T01:00:00Z"),
+                null,
+                null,
+                "STAGED",
+                null,
+                Instant.parse("2026-07-31T01:01:00Z")
+            )
+        ));
+
+        mockMvc.perform(get("/api/ingestion/tasks/48/revisions"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].revisionNumber").value(12))
+            .andExpect(jsonPath("$[0].revisionState").value("ACTIVE"))
+            .andExpect(jsonPath("$[0].dagDeploymentStatus").value("ACTIVE"))
+            .andExpect(jsonPath("$[1].revisionNumber").value(13))
+            .andExpect(jsonPath("$[1].revisionState").value("DRAFT"))
+            .andExpect(jsonPath("$[1].dagDeploymentStatus").value("STAGED"));
+    }
+
+    @Test
     void getAccessDefaultPolicyShouldExposeVersionedReadOnlyContract() throws Exception {
         ObjectMapper mapper = new ObjectMapper();
         when(accessContractService.getActiveDefaultPolicy()).thenReturn(
@@ -176,7 +247,15 @@ class IngestionTaskResourceTest {
             "ACTIVE"
         );
         when(ingestionSourceResolver.resolve(eq(sourceId), anyList()))
-            .thenReturn(new IngestionSourceResolver.ResolvedSource("httpreader", Map.of("readerType", "httpreader"), detail));
+            .thenReturn(new IngestionSourceResolver.ResolvedSource(
+                "httpreader",
+                Map.of(
+                    "readerType", "httpreader",
+                    "secrets", Map.of("token", "managed-api-token"),
+                    "auth", Map.of("clientSecret", "managed-client-secret")
+                ),
+                detail
+            ));
         IngestionTaskDTO created = new IngestionTaskDTO();
         created.setId(99L);
         created.setName("crm-orders");
@@ -225,6 +304,9 @@ class IngestionTaskResourceTest {
         assertThat(task.getStatus()).isEqualTo("draft");
         assertThat(task.getAirflowEnabled()).isFalse();
         assertThat(task.getSourceConfig().get("resource").has("fields")).isFalse();
+        assertThat(task.getSourceConfig().has("secrets")).isFalse();
+        assertThat(task.getSourceConfig().path("auth").has("clientSecret")).isFalse();
+        assertThat(task.getSourceConfig().toString()).doesNotContain("managed-api-token", "managed-client-secret");
         assertThat(task.getSourceConfig().get("resource").get("targetTable").asText()).isEqualTo("ods_api_crm_v1_orders");
 	        assertThat(task.getSourceConfig().get("resource").get("landing").get("rawRecordColumn").asText()).isEqualTo("_dts_raw_record");
 	        assertThat(task.getDestinationType()).isEqualTo("postgresqlwriter");
@@ -236,7 +318,7 @@ class IngestionTaskResourceTest {
     }
 
     @Test
-    void createTask_jdbcProductionSetsActiveStatus() throws Exception {
+    void createTask_jdbcFlagsCannotBypassDraftAdmission() throws Exception {
         UUID sourceId = UUID.fromString("11111111-2222-3333-4444-555555555555");
         Map<String, Object> readerConfig = new java.util.LinkedHashMap<>();
         readerConfig.put("readerType", "mysqlreader");
@@ -248,19 +330,14 @@ class IngestionTaskResourceTest {
         IngestionTaskDTO created = new IngestionTaskDTO();
         created.setId(100L);
         created.setName("jdbc-orders");
-        created.setAddaxJobPath("/tmp/jobs/jdbc-orders.json");
-        when(ingestionTaskService.create(any(IngestionTaskDTO.class), eq(resolvedSource))).thenReturn(created);
-        when(addaxJobService.toContainerJobPath("/tmp/jobs/jdbc-orders.json")).thenReturn("/opt/addax/jobs/jdbc-orders.json");
-        when(openMetadataAdapter.registerLineage(any(), any())).thenReturn(Map.of());
-        when(openMetadataAdapter.ensureMetadataIngestion(any())).thenReturn(Map.of());
-        when(airflowAdapter.triggerIfRequested(any(), any(), eq(false))).thenReturn(Map.of());
+        when(ingestionTaskService.create(any(IngestionTaskDTO.class), eq(resolvedSource), eq(true))).thenReturn(created);
 
         mockMvc.perform(post("/api/ingestion/tasks")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
                       "draft": false,
-                      "runNow": false,
+                      "runNow": true,
                       "name": "jdbc-orders",
                       "source": {
                         "dataSourceId": "11111111-2222-3333-4444-555555555555",
@@ -285,51 +362,48 @@ class IngestionTaskResourceTest {
             .andExpect(jsonPath("$.data.task.id").value(100));
 
         ArgumentCaptor<IngestionTaskDTO> captor = ArgumentCaptor.forClass(IngestionTaskDTO.class);
-        verify(ingestionTaskService).create(captor.capture(), eq(resolvedSource));
-        assertThat(captor.getValue().getStatus()).isEqualTo("active");
+        verify(ingestionTaskService).create(captor.capture(), eq(resolvedSource), eq(true));
+        assertThat(captor.getValue().getStatus()).isEqualTo("draft");
+        verify(ingestionTaskService, never()).executeAsync(100L);
+        verify(addaxJobService, never()).createJob(any(), any(), any(), any(), any(), any());
     }
 
     @Test
-    void createTask_returnsConflictWhenActiveSealValidationFails() throws Exception {
-        UUID sourceId = UUID.fromString("11111111-2222-3333-4444-555555555555");
-        Map<String, Object> readerConfig = new java.util.LinkedHashMap<>();
-        readerConfig.put("readerType", "mysqlreader");
-        readerConfig.put("table", List.of("orders"));
-        IngestionSourceResolver.ResolvedSource resolvedSource =
-            new IngestionSourceResolver.ResolvedSource("mysqlreader", readerConfig, null);
-        when(ingestionSourceResolver.resolve(eq(sourceId), anyList())).thenReturn(resolvedSource);
+    void createTask_fileFlagsCannotBypassDraftAdmission() throws Exception {
         when(connectorCapabilityService.normalizeSyncMode(any())).thenReturn("full_refresh");
-        when(ingestionTaskService.create(any(IngestionTaskDTO.class), eq(resolvedSource)))
-            .thenThrow(new IllegalStateException("CLASSIFICATION_SEAL_REQUIRED"));
+        IngestionTaskDTO created = new IngestionTaskDTO();
+        created.setId(101L);
+        created.setName("file-orders");
+        when(ingestionTaskService.create(any(IngestionTaskDTO.class), org.mockito.ArgumentMatchers.isNull(), eq(true)))
+            .thenReturn(created);
 
         mockMvc.perform(post("/api/ingestion/tasks")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
                       "draft": false,
-                      "runNow": false,
-                      "name": "jdbc-orders",
+                      "runNow": true,
+                      "name": "file-orders",
                       "source": {
-                        "dataSourceId": "11111111-2222-3333-4444-555555555555",
-                        "type": "mysql",
-                        "config": {}
-                      },
-                      "destination": {
-                        "usePlatformDefault": true,
-                        "definitionId": "postgresqlwriter",
+                        "type": "excel",
                         "config": {
-                          "jdbcUrl": "jdbc:postgresql://pg:5432/biadmin",
-                          "username": "biadmin"
+                          "_fileId": "upload-101",
+                          "_fileName": "orders.xlsx"
                         }
                       },
                       "sync": {"mode": "full_refresh"},
-                      "streams": {"selection": "manual", "include": ["orders"]},
                       "airflow": {"enabled": false}
                     }
                     """))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.status").value(409))
-            .andExpect(jsonPath("$.message").value("CLASSIFICATION_SEAL_REQUIRED"));
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.task.id").value(101));
+
+        ArgumentCaptor<IngestionTaskDTO> captor = ArgumentCaptor.forClass(IngestionTaskDTO.class);
+        verify(ingestionTaskService).create(captor.capture(), org.mockito.ArgumentMatchers.isNull(), eq(true));
+        assertThat(captor.getValue().getStatus()).isEqualTo("draft");
+        verify(ingestionTaskService, never()).executeAsync(101L);
+        verify(addaxJobService, never()).createJob(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -410,7 +484,8 @@ class IngestionTaskResourceTest {
                     """))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value(409))
-            .andExpect(jsonPath("$.message").value("CLASSIFICATION_SEAL_INVALID"));
+            .andExpect(jsonPath("$.message").value("请求状态冲突"))
+            .andExpect(jsonPath("$.code").value("HTTP_409"));
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> auditMeta = ArgumentCaptor.forClass(Map.class);
@@ -446,7 +521,30 @@ class IngestionTaskResourceTest {
                     """))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value(409))
-            .andExpect(jsonPath("$.message").value("Task must enter active status through /admit"));
+            .andExpect(jsonPath("$.message").value("请求状态冲突"))
+            .andExpect(jsonPath("$.code").value("HTTP_409"));
+    }
+
+    @Test
+    void updateTask_rejectsRetiredDirectDbtSelectors() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/ingestion/tasks/1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "id": 1,
+                      "name": "legacy-dbt-task",
+                      "sourceType": "mysqlreader",
+                      "sourceDataSourceId": "11111111-2222-3333-4444-555555555555",
+                      "syncMode": "full_refresh",
+                      "dbtDagSelector": "legacy-project"
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(400))
+            .andExpect(jsonPath("$.message").value("请求体解析失败"))
+            .andExpect(jsonPath("$.code").value("INVALID_REQUEST_BODY"));
+
+        verify(ingestionTaskService, never()).update(eq(1L), any(IngestionTaskDTO.class));
     }
 
     @Test
@@ -491,7 +589,8 @@ class IngestionTaskResourceTest {
                     """))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value(400))
-            .andExpect(jsonPath("$.message").value("API 鉴权方式 mtls 暂未开放，不能用于入湖任务"));
+            .andExpect(jsonPath("$.message").value("请求参数错误"))
+            .andExpect(jsonPath("$.code").value("HTTP_400"));
 
         verify(ingestionTaskService, never()).create(any(IngestionTaskDTO.class), any(), eq(true));
     }
@@ -503,7 +602,8 @@ class IngestionTaskResourceTest {
                 .content("{}"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value(400))
-            .andExpect(jsonPath("$.message").value("缺少源端配置"));
+            .andExpect(jsonPath("$.message").value("请求参数错误"))
+            .andExpect(jsonPath("$.code").value("HTTP_400"));
     }
 
     @Test
@@ -543,7 +643,8 @@ class IngestionTaskResourceTest {
         mockMvc.perform(post("/api/ingestion/tasks/1/execute/async"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value(409))
-            .andExpect(jsonPath("$.message").value("任务仍在运行中，请稍后重试"));
+            .andExpect(jsonPath("$.message").value("请求状态冲突"))
+            .andExpect(jsonPath("$.code").value("HTTP_409"));
 
         verify(ingestionTaskService, never()).executeAsync(1L);
     }
@@ -557,7 +658,8 @@ class IngestionTaskResourceTest {
         mockMvc.perform(post("/api/ingestion/tasks/1/executions/9/retry/async"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value(404))
-            .andExpect(jsonPath("$.message").value("Execution not found: 9"));
+            .andExpect(jsonPath("$.message").value("资源不存在"))
+            .andExpect(jsonPath("$.code").value("HTTP_404"));
 
         verify(ingestionTaskService, never()).retryExecutionAsync(1L, 9L, "FAILED_ONLY");
     }
@@ -571,7 +673,8 @@ class IngestionTaskResourceTest {
         mockMvc.perform(post("/api/ingestion/tasks/1/executions/9/retry/async"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value(409))
-            .andExpect(jsonPath("$.message").value("Task is not in executable status: draft"));
+            .andExpect(jsonPath("$.message").value("请求状态冲突"))
+            .andExpect(jsonPath("$.code").value("HTTP_409"));
 
         verify(ingestionTaskService, never()).retryExecutionAsync(1L, 9L, "FAILED_ONLY");
     }
@@ -585,7 +688,8 @@ class IngestionTaskResourceTest {
         mockMvc.perform(post("/api/ingestion/tasks/1/executions/9/retry/async"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value(409))
-            .andExpect(jsonPath("$.message").value("CLASSIFICATION_SEAL_REQUIRED"));
+            .andExpect(jsonPath("$.message").value("请求状态冲突"))
+            .andExpect(jsonPath("$.code").value("HTTP_409"));
 
         verify(ingestionTaskService, never()).retryExecutionAsync(1L, 9L, "FAILED_ONLY");
     }
@@ -599,7 +703,8 @@ class IngestionTaskResourceTest {
         mockMvc.perform(post("/api/ingestion/tasks/1/executions/9/retry/async"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value(409))
-            .andExpect(jsonPath("$.message").value("仅失败执行可使用 FAILED_ONLY 重试模式"));
+            .andExpect(jsonPath("$.message").value("请求状态冲突"))
+            .andExpect(jsonPath("$.code").value("HTTP_409"));
 
         verify(ingestionTaskService, never()).retryExecutionAsync(1L, 9L, "FAILED_ONLY");
         verify(auditService, never()).auditAction(
@@ -622,7 +727,8 @@ class IngestionTaskResourceTest {
         mockMvc.perform(post("/api/ingestion/tasks/1/execute/async"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value(503))
-            .andExpect(jsonPath("$.message").value("后台执行队列繁忙，请稍后重试"));
+            .andExpect(jsonPath("$.message").value("服务内部错误"))
+            .andExpect(jsonPath("$.code").value("HTTP_503"));
     }
 
     @Test
@@ -633,6 +739,7 @@ class IngestionTaskResourceTest {
         mockMvc.perform(post("/api/ingestion/tasks/1/executions/9/retry/async"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value(503))
-            .andExpect(jsonPath("$.message").value("后台执行队列繁忙，请稍后重试"));
+            .andExpect(jsonPath("$.message").value("服务内部错误"))
+            .andExpect(jsonPath("$.code").value("HTTP_503"));
     }
 }

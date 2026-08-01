@@ -220,8 +220,9 @@ describe("AssetTagPanel", () => {
 
 	it("adds a selected tag with the formal asset identity", async () => {
 		const { AssetTagPanel } = await import("./AssetTagPanel");
+		const onChanged = vi.fn();
 		const { container, unmount } = await renderAndFlush(
-			<AssetTagPanel assetType="DATASET" assetKey="source:s/schema:p/table:orders" canEdit />,
+			<AssetTagPanel assetType="DATASET" assetKey="source:s/schema:p/table:orders" canEdit onChanged={onChanged} />,
 		);
 
 		const select = container.querySelector("select[aria-label='添加业务数据标签']") as HTMLSelectElement;
@@ -237,6 +238,7 @@ describe("AssetTagPanel", () => {
 			tagIds: [salesTag.id],
 		});
 		expect(container.textContent).toContain("销售");
+		expect(onChanged).toHaveBeenCalledTimes(1);
 		unmount();
 	});
 

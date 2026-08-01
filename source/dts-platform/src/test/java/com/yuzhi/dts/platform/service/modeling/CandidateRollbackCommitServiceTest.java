@@ -2,15 +2,20 @@ package com.yuzhi.dts.platform.service.modeling;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.modeling.CandidatePublicationEvidenceRepository;
 import com.yuzhi.dts.platform.repository.modeling.CandidatePublicationEvidenceRepository.PublicationEntryEvidence;
 import com.yuzhi.dts.platform.repository.modeling.CandidatePublicationRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.StoredModelSpec;
+import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.event.PlatformEventOutboxService;
 import com.yuzhi.dts.platform.service.event.dto.PlatformEventRequest;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryAuditView;
@@ -69,6 +74,9 @@ class CandidateRollbackCommitServiceTest {
     @Mock
     private ModelReleaseCandidateService candidateCommands;
 
+    @Mock
+    private AuditService auditService;
+
     private CandidateRollbackCommitService service;
 
     @BeforeEach
@@ -81,7 +89,8 @@ class CandidateRollbackCommitServiceTest {
             publications,
             outbox,
             candidateCommands,
-            Clock.fixed(NOW, ZoneOffset.UTC)
+            Clock.fixed(NOW, ZoneOffset.UTC),
+            auditService
         );
     }
 
@@ -105,7 +114,14 @@ class CandidateRollbackCommitServiceTest {
         when(model.checksum()).thenReturn("b".repeat(64));
         when(lifecyclePublication.rollback(eq(TENANT), eq(ACTOR), eq(model), any(RollbackCommand.class), eq(NOW)))
             .thenReturn(rollback);
-        when(candidateCommands.transition(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), any(TransitionCommand.class)))
+        when(
+            candidateCommands.transitionWithinAuditedCommit(
+                eq(TENANT),
+                eq(ACTOR),
+                eq(CANDIDATE_ID),
+                any(TransitionCommand.class)
+            )
+        )
             .thenReturn(new CommandResult(rolledBack, false, List.of()));
 
         CommandResult result = service.rollback(
@@ -117,7 +133,14 @@ class CandidateRollbackCommitServiceTest {
         );
 
         assertThat(result.candidate().status()).isEqualTo(DeliveryStatus.ROLLED_BACK);
-        InOrder order = inOrder(evidence, lifecyclePublication, publications, outbox, candidateCommands);
+        InOrder order = inOrder(
+            evidence,
+            lifecyclePublication,
+            publications,
+            outbox,
+            candidateCommands,
+            auditService
+        );
         order.verify(evidence).requireCurrent(published, true);
         order
             .verify(lifecyclePublication)
@@ -127,7 +150,52 @@ class CandidateRollbackCommitServiceTest {
         order.verify(outbox).publishInternal(any(PlatformEventRequest.class));
         order
             .verify(candidateCommands)
-            .transition(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), any(TransitionCommand.class));
+            .transitionWithinAuditedCommit(
+                eq(TENANT),
+                eq(ACTOR),
+                eq(CANDIDATE_ID),
+                any(TransitionCommand.class)
+            );
+        order
+            .verify(auditService)
+            .auditAction(
+                eq("MODEL_RELEASE_CANDIDATE_ROLLBACK"),
+                eq(AuditStage.SUCCESS),
+                eq(CANDIDATE_ID.toString()),
+                any()
+            );
+    }
+
+    @Test
+    void replayedRollbackTransitionDoesNotDuplicateTheExplicitAudit() {
+        CandidateView published = candidate(DeliveryStatus.PUBLISHED, 11);
+        CandidateView rolledBack = candidate(DeliveryStatus.ROLLED_BACK, 12);
+        when(evidence.requireCurrent(published, true)).thenReturn(List.of());
+        when(
+            candidateCommands.transitionWithinAuditedCommit(
+                eq(TENANT),
+                eq(ACTOR),
+                eq(CANDIDATE_ID),
+                any(TransitionCommand.class)
+            )
+        )
+            .thenReturn(new CommandResult(rolledBack, true, List.of()));
+
+        CommandResult result = service.rollback(
+            TENANT,
+            ACTOR,
+            published,
+            "rollback-key",
+            "withdraw published model"
+        );
+
+        assertThat(result.replayed()).isTrue();
+        verify(auditService, never()).auditAction(
+            anyString(),
+            any(),
+            anyString(),
+            any()
+        );
     }
 
     private static CandidateView candidate(DeliveryStatus status, int version) {

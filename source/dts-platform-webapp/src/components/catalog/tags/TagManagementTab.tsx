@@ -127,7 +127,13 @@ function toParentTreeData(
 		}));
 }
 
-export function TagManagementTab({ canManage }: { canManage: boolean }) {
+type TagManagementTabProps = {
+	canManage: boolean;
+	onViewAssets?: (tag: CatalogTagDto) => void;
+	onAssociateAssets?: (tag: CatalogTagDto) => void;
+};
+
+export function TagManagementTab({ canManage, onViewAssets, onAssociateAssets }: TagManagementTabProps) {
 	const [categories, setCategories] = useState<CatalogTagCategoryDto[]>([]);
 	const [selectedCategoryId, setSelectedCategoryId] = useState("");
 	const [tags, setTags] = useState<CatalogTagDto[]>([]);
@@ -412,37 +418,47 @@ export function TagManagementTab({ canManage }: { canManage: boolean }) {
 			key: "description",
 			render: (description) => description || "—",
 		},
-		...(canManage
-			? [
-					{
-						title: "操作",
-						key: "actions",
-						dataIndex: "actions",
-						render: (_: unknown, tag: CatalogTagDto) => (
-							<Space size={4}>
-								<Button type="link" size="small" aria-label={`编辑标签 ${tag.name}`} onClick={() => openTagEditor(tag)}>
-									编辑
+		{
+			title: "操作",
+			key: "actions",
+			dataIndex: "actions",
+			render: (_: unknown, tag: CatalogTagDto) => (
+				<Space size={4}>
+					{onViewAssets ? (
+						<Button type="link" size="small" onClick={() => onViewAssets(tag)}>
+							查看资产
+						</Button>
+					) : null}
+					{canManage ? (
+						<>
+							{onAssociateAssets ? (
+								<Button type="link" size="small" onClick={() => onAssociateAssets(tag)}>
+									关联资产
 								</Button>
-								<Tooltip title={tag.builtin ? BUILTIN_TAG_DELETE_REASON : undefined}>
-									<span>
-										<Button
-											type="link"
-											size="small"
-											danger
-											aria-label={`删除标签 ${tag.name}`}
-											disabled={tag.builtin}
-											title={tag.builtin ? BUILTIN_TAG_DELETE_REASON : undefined}
-											onClick={() => confirmDeleteTag(tag)}
-										>
-											删除
-										</Button>
-									</span>
-								</Tooltip>
-							</Space>
-						),
-					},
-				]
-			: []),
+							) : null}
+							<Button type="link" size="small" aria-label={`编辑标签 ${tag.name}`} onClick={() => openTagEditor(tag)}>
+								编辑
+							</Button>
+							<Tooltip title={tag.builtin ? BUILTIN_TAG_DELETE_REASON : undefined}>
+								<span>
+									<Button
+										type="link"
+										size="small"
+										danger
+										aria-label={`删除标签 ${tag.name}`}
+										disabled={tag.builtin}
+										title={tag.builtin ? BUILTIN_TAG_DELETE_REASON : undefined}
+										onClick={() => confirmDeleteTag(tag)}
+									>
+										删除
+									</Button>
+								</span>
+							</Tooltip>
+						</>
+					) : null}
+				</Space>
+			),
+		},
 	];
 
 	return (

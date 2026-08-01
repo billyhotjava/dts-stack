@@ -4,16 +4,16 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.domain.catalog.CatalogTag;
 import com.yuzhi.dts.platform.domain.catalog.CatalogTagCategory;
-import com.yuzhi.dts.platform.domain.modeling.StandardPackageImportRun;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTagCategoryRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTagInstallLockRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTagRepository;
-import com.yuzhi.dts.platform.repository.modeling.StandardPackageImportRunRepository;
 import com.yuzhi.dts.platform.service.catalog.dto.CatalogTagSeedReport;
 import com.yuzhi.dts.platform.service.catalog.dto.CatalogTagSeedReport.Conflict;
-import com.yuzhi.dts.platform.service.modeling.StandardPackageApplyService;
 import com.yuzhi.dts.platform.service.modeling.StandardPackageContractException;
 import com.yuzhi.dts.platform.service.modeling.StandardPackageManifestContract;
+import com.yuzhi.dts.platform.service.modeling.StandardPackageInstallLedgerPort;
+import com.yuzhi.dts.platform.service.modeling.StandardPackageInstallLedgerPort.AppliedPackageCommand;
+import com.yuzhi.dts.platform.service.modeling.StandardPackageInstallLedgerPort.AppliedPackageRecord;
 import java.io.InputStream;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -39,7 +39,7 @@ public class CatalogTagSeedService {
     private final CatalogTagCategoryRepository categoryRepository;
     private final CatalogTagRepository tagRepository;
     private final CatalogTagInstallLockRepository installLockRepository;
-    private final StandardPackageImportRunRepository runRepository;
+    private final StandardPackageInstallLedgerPort installLedger;
     private final ObjectMapper objectMapper;
     private final StandardPackageManifestContract manifestContract;
 
@@ -47,14 +47,14 @@ public class CatalogTagSeedService {
         CatalogTagCategoryRepository categoryRepository,
         CatalogTagRepository tagRepository,
         CatalogTagInstallLockRepository installLockRepository,
-        StandardPackageImportRunRepository runRepository,
+        StandardPackageInstallLedgerPort installLedger,
         ObjectMapper objectMapper,
         StandardPackageManifestContract manifestContract
     ) {
         this.categoryRepository = categoryRepository;
         this.tagRepository = tagRepository;
         this.installLockRepository = installLockRepository;
-        this.runRepository = runRepository;
+        this.installLedger = installLedger;
         this.objectMapper = objectMapper;
         this.manifestContract = manifestContract;
     }
@@ -267,19 +267,12 @@ public class CatalogTagSeedService {
 
     private Map<String, StandardPackageManifestContract.InstalledPackage> installedPackages() {
         Map<String, StandardPackageManifestContract.InstalledPackage> installed = new LinkedHashMap<>();
-        for (
-            StandardPackageImportRun run : runRepository.findByStatusOrderByCreatedDateDesc(
-                StandardPackageApplyService.STATUS_APPLIED
-            )
-        ) {
-            if (!SOURCE_BUILTIN.equals(run.getSource())) {
-                continue;
-            }
-            if (!StringUtils.hasText(run.getPreviewJson())) {
-                throw new IllegalStateException("已安装内置标签包缺少版本摘要：" + run.getId());
+        for (AppliedPackageRecord run : installLedger.findAppliedBySource(SOURCE_BUILTIN)) {
+            if (!StringUtils.hasText(run.previewJson())) {
+                throw new IllegalStateException("已安装内置标签包缺少版本摘要：" + run.runId());
             }
             try {
-                JsonNode preview = objectMapper.readTree(run.getPreviewJson());
+                JsonNode preview = objectMapper.readTree(run.previewJson());
                 String packageCode = requiredText(preview, "packageCode", run);
                 String packageVersion = requiredText(preview, "packageVersion", run);
                 String contentChecksum = requiredText(preview, "contentChecksum", run);
@@ -294,7 +287,7 @@ public class CatalogTagSeedService {
             } catch (StandardPackageContractException exception) {
                 throw exception;
             } catch (Exception exception) {
-                throw new IllegalStateException("已安装内置标签包状态解析失败：" + run.getId(), exception);
+                throw new IllegalStateException("已安装内置标签包状态解析失败：" + run.runId(), exception);
             }
         }
         return Map.copyOf(installed);
@@ -326,37 +319,34 @@ public class CatalogTagSeedService {
             payload.put("manifest", manifestContract.summary(manifest));
             payload.put("installedCodes", report.installedCodes());
 
-            StandardPackageImportRun run = new StandardPackageImportRun();
-            run.setPackageName(manifest.packageCode());
-            run.setSource(SOURCE_BUILTIN);
-            run.setStatus(StandardPackageApplyService.STATUS_APPLIED);
-            run.setSummary(
-                "内置标签包已安装：" +
-                manifest.packageCode() +
-                "@" +
-                manifest.packageVersion() +
-                "，摘要 " +
-                manifest.contentChecksum()
-            );
-            run.setPreviewJson(objectMapper.writeValueAsString(preview));
-            run.setPayloadJson(objectMapper.writeValueAsString(payload));
             Instant now = Instant.now();
-            run.setCreatedBy("system");
-            run.setCreatedDate(now);
-            run.setLastModifiedBy("system");
-            run.setLastModifiedDate(now);
-            runRepository.save(run);
+            installLedger.recordApplied(
+                new AppliedPackageCommand(
+                    manifest.packageCode(),
+                    SOURCE_BUILTIN,
+                    "内置标签包已安装：" +
+                    manifest.packageCode() +
+                    "@" +
+                    manifest.packageVersion() +
+                    "，摘要 " +
+                    manifest.contentChecksum(),
+                    objectMapper.writeValueAsString(preview),
+                    objectMapper.writeValueAsString(payload),
+                    "system",
+                    now
+                )
+            );
         } catch (Exception exception) {
             throw new IllegalStateException("内置标签包安装记录写入失败", exception);
         }
     }
 
-    private String requiredText(JsonNode node, String field, StandardPackageImportRun run) {
+    private String requiredText(JsonNode node, String field, AppliedPackageRecord run) {
         JsonNode value = node == null ? null : node.get(field);
         if (value == null || !value.isTextual() || !StringUtils.hasText(value.asText())) {
             throw new StandardPackageContractException(
                 "MANIFEST_INSTALLED_STATE_INVALID",
-                "已安装内置标签包摘要缺少 " + field + "：" + run.getId()
+                "已安装内置标签包摘要缺少 " + field + "：" + run.runId()
             );
         }
         return value.asText();

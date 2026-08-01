@@ -1,11 +1,13 @@
 package com.yuzhi.dts.platform.service.modeling;
 
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository;
 import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository;
 import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository.StoredDimensionDefinition;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.DomainBindingState;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.PlanState;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.StoredModelSpec;
+import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.CreateModelSpecCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.FieldIssue;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.Layer;
@@ -45,8 +47,9 @@ public class ModelSpecApplicationService {
     private final ModelSpecDomainReadAccessPort domainReadAccess;
     private final ModelSpecPlanWriteAccessPort planWriteAccess;
     private final ModelSpecSourceValidationPort sourceValidation;
-    private final ModelSpecCompatibilityReader compatibilityReader;
+    private final ModelSpecReader compatibilityReader;
     private final ModelSpecFeatureFlags featureFlags;
+    private final AuditService auditService;
     private final Clock clock;
     private final Supplier<UUID> idGenerator;
 
@@ -60,8 +63,9 @@ public class ModelSpecApplicationService {
         ModelSpecDomainReadAccessPort domainReadAccess,
         ModelSpecPlanWriteAccessPort planWriteAccess,
         ModelSpecSourceValidationPort sourceValidation,
-        ModelSpecCompatibilityReader compatibilityReader,
-        ModelSpecFeatureFlags featureFlags
+        ModelSpecReader compatibilityReader,
+        ModelSpecFeatureFlags featureFlags,
+        AuditService auditService
     ) {
         this(
             repository,
@@ -74,6 +78,7 @@ public class ModelSpecApplicationService {
             sourceValidation,
             compatibilityReader,
             featureFlags,
+            auditService,
             Clock.systemUTC(),
             UUID::randomUUID
         );
@@ -87,7 +92,8 @@ public class ModelSpecApplicationService {
         ModelSpecDomainReadAccessPort domainReadAccess,
         ModelSpecPlanWriteAccessPort planWriteAccess,
         ModelSpecSourceValidationPort sourceValidation,
-        ModelSpecCompatibilityReader compatibilityReader,
+        ModelSpecReader compatibilityReader,
+        AuditService auditService,
         Clock clock,
         Supplier<UUID> idGenerator
     ) {
@@ -102,6 +108,7 @@ public class ModelSpecApplicationService {
             sourceValidation,
             compatibilityReader,
             ModelSpecFeatureFlags.enabled(),
+            auditService,
             clock,
             idGenerator
         );
@@ -115,8 +122,9 @@ public class ModelSpecApplicationService {
         ModelSpecDomainReadAccessPort domainReadAccess,
         ModelSpecPlanWriteAccessPort planWriteAccess,
         ModelSpecSourceValidationPort sourceValidation,
-        ModelSpecCompatibilityReader compatibilityReader,
+        ModelSpecReader compatibilityReader,
         ModelSpecFeatureFlags featureFlags,
+        AuditService auditService,
         Clock clock,
         Supplier<UUID> idGenerator
     ) {
@@ -131,6 +139,7 @@ public class ModelSpecApplicationService {
             sourceValidation,
             compatibilityReader,
             featureFlags,
+            auditService,
             clock,
             idGenerator
         );
@@ -145,7 +154,8 @@ public class ModelSpecApplicationService {
         ModelSpecDomainReadAccessPort domainReadAccess,
         ModelSpecPlanWriteAccessPort planWriteAccess,
         ModelSpecSourceValidationPort sourceValidation,
-        ModelSpecCompatibilityReader compatibilityReader,
+        ModelSpecReader compatibilityReader,
+        AuditService auditService,
         Clock clock,
         Supplier<UUID> idGenerator
     ) {
@@ -160,6 +170,7 @@ public class ModelSpecApplicationService {
             sourceValidation,
             compatibilityReader,
             ModelSpecFeatureFlags.enabled(),
+            auditService,
             clock,
             idGenerator
         );
@@ -174,8 +185,9 @@ public class ModelSpecApplicationService {
         ModelSpecDomainReadAccessPort domainReadAccess,
         ModelSpecPlanWriteAccessPort planWriteAccess,
         ModelSpecSourceValidationPort sourceValidation,
-        ModelSpecCompatibilityReader compatibilityReader,
+        ModelSpecReader compatibilityReader,
         ModelSpecFeatureFlags featureFlags,
+        AuditService auditService,
         Clock clock,
         Supplier<UUID> idGenerator
     ) {
@@ -189,13 +201,18 @@ public class ModelSpecApplicationService {
         this.sourceValidation = sourceValidation;
         this.compatibilityReader = compatibilityReader;
         this.featureFlags = featureFlags;
+        this.auditService = auditService;
         this.clock = clock;
         this.idGenerator = idGenerator;
     }
 
     @Transactional
     public CreateResult create(String serverTenantId, String actorId, CreateModelSpecCommand command) {
-        return createInternal(serverTenantId, actorId, null, command);
+        CreateResult result = createInternal(serverTenantId, actorId, null, command);
+        if (!result.replayed()) {
+            audit("MODELING_MODEL_SPEC_CREATE", serverTenantId, actorId, result.modelSpec());
+        }
+        return result;
     }
 
     /**
@@ -218,7 +235,11 @@ public class ModelSpecApplicationService {
                 ModelSpecException.Kind.BAD_REQUEST
             );
         }
-        return createInternal(serverTenantId, actorId, previewedModelSpecId, command);
+        CreateResult result = createInternal(serverTenantId, actorId, previewedModelSpecId, command);
+        if (!result.replayed()) {
+            audit("MODELING_MODEL_SPEC_IMPORT_CREATE", serverTenantId, actorId, result.modelSpec());
+        }
+        return result;
     }
 
     private CreateResult createInternal(
@@ -330,13 +351,6 @@ public class ModelSpecApplicationService {
         }
 
         StoredModelSpec stored = repository.findCurrent(serverTenantId, modelSpecId).orElseThrow(() -> notFound(modelSpecId));
-        if (stored.contractVersion() != ModelSpecContract.CONTRACT_VERSION) {
-            throw new ModelSpecException(
-                "MODEL_SPEC_LEGACY_READONLY",
-                "Legacy ModelSpec rows are read-only at the canonical boundary",
-                ModelSpecException.Kind.CONFLICT
-            );
-        }
         ModelSpecView current = compatibilityReader.read(stored);
         validateWriteContext(serverTenantId, actorId, current.planId(), current.domainId());
         requireExpected(current, expected);
@@ -436,6 +450,7 @@ public class ModelSpecApplicationService {
             throw revisionConflict(compatibilityReader.read(latest));
         }
         repository.insertV2Revision(serverTenantId, actorId, replacement, snapshot);
+        audit("MODELING_MODEL_SPEC_UPDATE", serverTenantId, actorId, replacement);
         return replacement;
     }
 
@@ -589,18 +604,12 @@ public class ModelSpecApplicationService {
             replacement.checksum(),
             clock.instant()
         );
+        audit("MODELING_MODEL_SPEC_RECLASSIFY", serverTenantId, actorId, replacement);
         return replacement;
     }
 
     private ModelSpecView currentForReclassification(String tenantId, String actorId, UUID modelSpecId) {
         StoredModelSpec stored = repository.findCurrent(tenantId, modelSpecId).orElseThrow(() -> notFound(modelSpecId));
-        if (stored.contractVersion() != ModelSpecContract.CONTRACT_VERSION) {
-            throw new ModelSpecException(
-                "MODEL_SPEC_LEGACY_READONLY",
-                "Legacy ModelSpec rows cannot be reclassified",
-                ModelSpecException.Kind.CONFLICT
-            );
-        }
         ModelSpecView current = compatibilityReader.read(stored);
         validateWriteContext(tenantId, actorId, current.planId(), current.domainId());
         return current;
@@ -785,13 +794,6 @@ public class ModelSpecApplicationService {
         }
 
         StoredModelSpec stored = repository.findCurrent(serverTenantId, modelSpecId).orElseThrow(() -> notFound(modelSpecId));
-        if (stored.contractVersion() != ModelSpecContract.CONTRACT_VERSION) {
-            throw new ModelSpecException(
-                "MODEL_SPEC_LEGACY_READONLY",
-                "Legacy ModelSpec rows are read-only at the canonical boundary",
-                ModelSpecException.Kind.CONFLICT
-            );
-        }
         ModelSpecView current = compatibilityReader.read(stored);
         validateWriteContext(serverTenantId, actorId, current.planId(), current.domainId());
         requireExpected(current, expected);
@@ -838,6 +840,21 @@ public class ModelSpecApplicationService {
                 ModelSpecException.Kind.CONFLICT
             );
         }
+        audit("MODELING_MODEL_SPEC_DELETE_DRAFT", serverTenantId, actorId, archived);
+    }
+
+    private void audit(String actionCode, String tenantId, String actorId, ModelSpecView view) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("actor", actorId);
+        payload.put("tenantId", tenantId);
+        payload.put("planId", view.planId());
+        payload.put("domainId", view.domainId());
+        payload.put("name", view.name());
+        payload.put("modelType", view.modelType().name());
+        payload.put("layer", view.layer().name());
+        payload.put("revision", view.revision());
+        payload.put("status", view.status().name());
+        auditService.auditAction(actionCode, AuditStage.SUCCESS, view.id().toString(), payload);
     }
 
     @Transactional(readOnly = true)
@@ -892,14 +909,12 @@ public class ModelSpecApplicationService {
                 serverTenantId,
                 planId,
                 effectiveVisibleDomainIds,
-                featureFlags.canonicalReadEnabled(),
                 limit
             )
             : repository.listCurrentForRelationshipGraph(
                 serverTenantId,
                 planId,
                 effectiveVisibleDomainIds,
-                featureFlags.canonicalReadEnabled(),
                 afterId,
                 limit
             );
@@ -943,7 +958,6 @@ public class ModelSpecApplicationService {
             serverTenantId,
             boundedReferences,
             visibleDomainIds == null ? Set.of() : visibleDomainIds,
-            featureFlags.canonicalReadEnabled(),
             limit
         );
         return compatibilityReader.readForRelationshipGraph(stored);
@@ -1024,10 +1038,6 @@ public class ModelSpecApplicationService {
 
     private static String nodeKey(UUID modelSpecId, int revision) {
         return modelSpecId + "@" + revision;
-    }
-
-    public boolean canonicalReadEnabled() {
-        return featureFlags.canonicalReadEnabled();
     }
 
     private void validateReferences(
@@ -1280,13 +1290,13 @@ public class ModelSpecApplicationService {
     }
 
     private boolean canRead(ModelSpecView view) {
-        if (view.contractVersion() == ModelSpecContract.CONTRACT_VERSION && !featureFlags.canonicalReadEnabled()) {
-            return false;
-        }
-        if (view.domainId() != null) return domainReadAccess.canRead(view.domainId());
         return (
-            view.contractVersion() == ModelingVNextContract.CONTRACT_VERSION &&
-            view.compatibilityMode() == ModelSpecContract.CompatibilityMode.LEGACY_READONLY
+            view != null &&
+            view.contractVersion() == ModelSpecContract.CONTRACT_VERSION &&
+            view.compatibilityMode() == ModelSpecContract.CompatibilityMode.CANONICAL &&
+            view.legacyRefs() == null &&
+            view.domainId() != null &&
+            domainReadAccess.canRead(view.domainId())
         );
     }
 

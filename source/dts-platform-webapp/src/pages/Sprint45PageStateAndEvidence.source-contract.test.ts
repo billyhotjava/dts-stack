@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 const WORKBENCH_SOURCE = readFileSync(new URL("./workbench/DataManagementWorkbenchPage.tsx", import.meta.url), "utf8");
-const DATASOURCES_SOURCE = readFileSync(new URL("./foundation/DataSourcesPage.tsx", import.meta.url), "utf8");
+const DATASOURCES_SOURCE = readFileSync(new URL("./foundation/access/AccessWorkspace.tsx", import.meta.url), "utf8");
 const ASSETS_SOURCE = readFileSync(new URL("./catalog/DatasetsPage.tsx", import.meta.url), "utf8");
 const API_SOURCE = readFileSync(new URL("./services/ApiServicesPage.tsx", import.meta.url), "utf8");
 const TOKENS_SOURCE = readFileSync(new URL("./services/TokensPage.tsx", import.meta.url), "utf8");

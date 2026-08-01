@@ -23,11 +23,10 @@ class RollbackConfirmationTokenServiceTest {
         MutableClock clock = new MutableClock(Instant.parse("2026-07-31T00:00:00Z"));
         RollbackConfirmationTokenService service = service(clock);
         Map<String, Object> request = Map.of(
-            "level", 2,
+            "level", 1,
             "scope", "task",
             "taskId", 7,
-            "tables", List.of("ods_b", "ods_a"),
-            "rebuildDbt", true
+            "tables", List.of("ods_b", "ods_a")
         );
 
         RollbackConfirmationTokenService.IssuedConfirmation issued = service.issue(
@@ -74,6 +73,30 @@ class RollbackConfirmationTokenServiceTest {
         assertConflict(() ->
             service.consume(plan(analyzed), issued.token(), "MODAL", "确认清空数据", "alice")
         );
+    }
+
+    @Test
+    void tableListsWithTheSameCommaJoinedTextHaveDifferentConfirmationFingerprints() {
+        RollbackConfirmationTokenService service = service(
+            new MutableClock(Instant.parse("2026-07-31T00:00:00Z"))
+        );
+        RollbackCommand analyzed = plan(
+            Map.of("level", 1, "scope", "task", "taskId", 7, "tables", List.of("a,b", "c"))
+        );
+        RollbackCommand changed = plan(
+            Map.of("level", 1, "scope", "task", "taskId", 7, "tables", List.of("a", "b,c"))
+        );
+        RollbackConfirmationTokenService.IssuedConfirmation issued = service.issue(
+            analyzed,
+            "MODAL",
+            "确认回退",
+            "alice",
+            null
+        );
+
+        assertThat(analyzed.canonicalFingerprintSource())
+            .isNotEqualTo(changed.canonicalFingerprintSource());
+        assertConflict(() -> service.consume(changed, issued.token(), "MODAL", null, "alice"));
     }
 
     @Test

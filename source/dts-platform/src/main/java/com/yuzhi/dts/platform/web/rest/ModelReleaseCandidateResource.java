@@ -360,9 +360,9 @@ public class ModelReleaseCandidateResource {
         );
     }
 
-    @PostMapping("/{candidateId}/registration/retry")
+    @PostMapping("/{candidateId}/publication/retry")
     @PreAuthorize(RELEASE_DUTY_EXPRESSION)
-    public ResponseEntity<ApiResponse<CommandResult>> retryRegistration(
+    public ResponseEntity<ApiResponse<CommandResult>> retryPublication(
         @PathVariable UUID planId,
         @PathVariable UUID candidateId,
         @RequestHeader(value = "If-Match", required = false) String ifMatch,
@@ -370,14 +370,14 @@ public class ModelReleaseCandidateResource {
         @RequestBody(required = false) ReasonRequest request
     ) {
         return write(
-            service.retryRegistration(
+            service.retryPublication(
                 serverTenantId,
                 actorId(),
                 planId,
                 candidateId,
                 expectedVersion(candidateId, ifMatch),
                 requiredIdempotencyKey(idempotencyKey),
-                requiredRequest(request, "registration retry request").reason()
+                requiredRequest(request, "publication retry request").reason()
             )
         );
     }

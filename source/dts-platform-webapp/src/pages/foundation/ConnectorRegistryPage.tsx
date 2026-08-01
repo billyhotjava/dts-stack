@@ -157,8 +157,8 @@ export default function ConnectorRegistryPage() {
 	const openDataSourceCreate = useCallback(
 		(connectorKey?: string) => {
 			const target = connectorKey
-				? `/foundation/data-sources?create=1&connectorKey=${encodeURIComponent(connectorKey)}`
-				: "/foundation/data-sources?create=1";
+				? `/foundation/connections?create=1&connectorKey=${encodeURIComponent(connectorKey)}`
+				: "/foundation/connections?create=1";
 			router.push(target);
 		},
 		[router],

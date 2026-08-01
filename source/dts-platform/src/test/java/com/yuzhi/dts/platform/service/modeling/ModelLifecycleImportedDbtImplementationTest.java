@@ -4,14 +4,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.modeling.ModelLifecycleRepository;
+import com.yuzhi.dts.platform.repository.modeling.ModelLifecycleCommandReceiptRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.PlanState;
+import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.GeneratedInput;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.InputMode;
@@ -30,6 +35,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class ModelLifecycleImportedDbtImplementationTest {
 
@@ -80,6 +86,43 @@ class ModelLifecycleImportedDbtImplementationTest {
                 ImplementationView::inputMode
             )
             .containsExactly(1, IMPLEMENTATION_CHECKSUM, ImplementationMode.DBT_MANAGED, InputMode.GENERATED);
+
+        ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
+        verify(fixture.audit()).auditActionStrict(
+            eq("MODEL_IMPLEMENTATION_IMPORT"),
+            eq(AuditStage.SUCCESS),
+            eq("MODEL_IMPLEMENTATION_IMPORT:" + MODEL_ID + ":1"),
+            payload.capture()
+        );
+        assertThat(payload.getValue()).isInstanceOfSatisfying(Map.class, value ->
+            assertThat(value)
+                .containsEntry("actor", "alice")
+                .containsEntry("tenantId", "tenant-a")
+                .containsEntry("modelSpecId", MODEL_ID)
+                .containsEntry("modelRevision", 7)
+                .containsEntry("implementationRevision", 1)
+                .containsEntry("inputMode", "GENERATED")
+                .containsEntry("ownership", "DBT_MANAGED")
+                .containsEntry("materialization", "table")
+                .containsEntry("outcome", "ACTIVE")
+                .doesNotContainKeys(
+                    "checksum",
+                    "modelChecksum",
+                    "implementationChecksum",
+                    "dbtUniqueId",
+                    "projectKey",
+                    "inputs",
+                    "settings",
+                    "sql",
+                    "path",
+                    "token",
+                    "credential"
+                )
+        );
+        verify(fixture.receipts()).append(
+            eq("tenant-a"), eq(MODEL_ID), eq("IMPORT"), eq(command.idempotencyKey()), any(),
+            eq(saved), eq("alice"), eq(NOW)
+        );
     }
 
     @Test
@@ -155,6 +198,44 @@ class ModelLifecycleImportedDbtImplementationTest {
             .isEqualTo("MODEL_SPEC_STATUS_CONFLICT");
     }
 
+    @Test
+    void propagatesAuditInfrastructureFailuresWithoutRelabelingThemAsInvalidImportPayloads() {
+        Fixture fixture = fixture();
+        SaveImplementationCommand command = dbtCommand("DBT");
+        ImplementationView saved = implementation(command);
+        when(
+            fixture.lifecycle().saveImportedDbtImplementation(
+                "tenant-a",
+                "alice",
+                fixture.model(),
+                ModelStatus.DRAFT,
+                "pjm",
+                "model.pjm.budget",
+                command,
+                0,
+                null,
+                NOW
+            )
+        ).thenReturn(Optional.of(saved));
+        IllegalArgumentException auditFailure = new IllegalArgumentException("audit outbox unavailable");
+        doThrow(auditFailure).when(fixture.audit()).auditActionStrict(any(), any(), any(), any());
+
+        assertThatThrownBy(() ->
+            fixture.service().saveImportedDbtImplementation(
+                "tenant-a",
+                "alice",
+                MODEL_ID,
+                new ExpectedVersion(MODEL_ID, 7, MODEL_CHECKSUM),
+                ModelStatus.DRAFT,
+                new ExpectedImplementationVersion(MODEL_ID, 0, null),
+                "pjm",
+                "model.pjm.budget",
+                command
+            )
+        ).isSameAs(auditFailure);
+        verify(fixture.receipts(), never()).append(any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
     private static Fixture fixture() {
         ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
         ModelSpecRepository modelSpecRepository = mock(ModelSpecRepository.class);
@@ -173,6 +254,9 @@ class ModelLifecycleImportedDbtImplementationTest {
         when(modelSpecRepository.lockPlan("tenant-a", PLAN_ID)).thenReturn(Optional.of(new PlanState(PLAN_ID, "DRAFT")));
         when(writeAccess.canMaintain("tenant-a", PLAN_ID, "alice")).thenReturn(true);
         when(lifecycle.findImplementation("tenant-a", MODEL_ID)).thenReturn(Optional.empty());
+        AuditService audit = mock(AuditService.class);
+        ModelLifecycleCommandReceiptRepository receipts = mock(ModelLifecycleCommandReceiptRepository.class);
+        when(receipts.payloadHash(any())).thenReturn("f".repeat(64));
         ModelLifecycleService service = new ModelLifecycleService(
             modelSpecs,
             modelSpecRepository,
@@ -180,13 +264,18 @@ class ModelLifecycleImportedDbtImplementationTest {
             mock(ModelSpecStageGateService.class),
             writeAccess,
             mock(ModelLifecycleCompilerPort.class),
-            mock(ModelReleaseRegistrationPort.class),
             mock(ModelLifecycleTestEvidencePort.class),
-            mock(ModelLifecyclePublicationService.class),
-            mock(ModelingVNextApplicationService.class),
+            new ModelImplementationInputPolicy(
+                modelSpecs,
+                modelSpecRepository,
+                lifecycle,
+                mock(ModelSpecSourceValidationPort.class)
+            ),
+            receipts,
+            audit,
             Clock.fixed(NOW, ZoneOffset.UTC)
         );
-        return new Fixture(service, lifecycle, model);
+        return new Fixture(service, lifecycle, model, audit, receipts);
     }
 
     private static SaveImplementationCommand dbtCommand(String generatorType) {
@@ -239,6 +328,8 @@ class ModelLifecycleImportedDbtImplementationTest {
     private record Fixture(
         ModelLifecycleService service,
         ModelLifecycleRepository lifecycle,
-        ModelSpecView model
+        ModelSpecView model,
+        AuditService audit,
+        ModelLifecycleCommandReceiptRepository receipts
     ) {}
 }

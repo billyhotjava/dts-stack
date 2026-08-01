@@ -30,7 +30,7 @@ public class ModelSpecMetricReferenceService {
     private static final Pattern INDICATOR_VERSION = Pattern.compile("(?i)^v?([1-9][0-9]*)$");
 
     private final ModelSpecRepository repository;
-    private final ModelSpecCompatibilityReader reader;
+    private final ModelSpecReader reader;
     private final ModelSpecSnapshotCodec codec;
     private final ModelSpecPlanWriteAccessPort writeAccess;
     private final IndicatorService indicators;
@@ -40,7 +40,7 @@ public class ModelSpecMetricReferenceService {
     @Autowired
     public ModelSpecMetricReferenceService(
         ModelSpecRepository repository,
-        ModelSpecCompatibilityReader reader,
+        ModelSpecReader reader,
         ModelSpecSnapshotCodec codec,
         ModelSpecPlanWriteAccessPort writeAccess,
         IndicatorService indicators,
@@ -51,7 +51,7 @@ public class ModelSpecMetricReferenceService {
 
     ModelSpecMetricReferenceService(
         ModelSpecRepository repository,
-        ModelSpecCompatibilityReader reader,
+        ModelSpecReader reader,
         ModelSpecSnapshotCodec codec,
         ModelSpecPlanWriteAccessPort writeAccess,
         IndicatorService indicators,

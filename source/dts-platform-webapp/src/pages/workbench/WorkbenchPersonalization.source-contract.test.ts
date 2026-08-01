@@ -70,7 +70,7 @@ test("workbench component registry enumerates real product modules, not demo sce
 		"/foundation/data-sources",
 		"/workbench?section=data-management&journey=first-report",
 		"/workbench?section=data-management",
-		"/governance/quality",
+		"/governance/rules/runs",
 		"/services/apis",
 		"/ops/overview",
 	];

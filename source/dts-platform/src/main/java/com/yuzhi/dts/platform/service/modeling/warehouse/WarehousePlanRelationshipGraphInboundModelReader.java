@@ -2,11 +2,8 @@ package com.yuzhi.dts.platform.service.modeling.warehouse;
 
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanRelationshipGraphProjectionSupport.POSTGRES_UUID_ORDER;
 
-import com.yuzhi.dts.platform.service.modeling.ModelSpecContract;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelRevisionRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecDomainReadAccessPort;
-import com.yuzhi.dts.platform.service.modeling.ModelSpecFeatureFlags;
-import com.yuzhi.dts.platform.service.modeling.ModelingVNextContract;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -34,16 +31,13 @@ class WarehousePlanRelationshipGraphInboundModelReader {
 
     private final JdbcTemplate jdbcTemplate;
     private final ModelSpecDomainReadAccessPort domainReadAccess;
-    private final ModelSpecFeatureFlags featureFlags;
 
     WarehousePlanRelationshipGraphInboundModelReader(
         JdbcTemplate jdbcTemplate,
-        ModelSpecDomainReadAccessPort domainReadAccess,
-        ModelSpecFeatureFlags featureFlags
+        ModelSpecDomainReadAccessPort domainReadAccess
     ) {
         this.jdbcTemplate = jdbcTemplate;
         this.domainReadAccess = domainReadAccess;
-        this.featureFlags = featureFlags;
     }
 
     List<ModelRevisionRef> listCurrentTargets(
@@ -55,18 +49,19 @@ class WarehousePlanRelationshipGraphInboundModelReader {
         List<ModelRevisionRef> boundedTargets = boundedTargets(targets);
         if (boundedTargets.isEmpty()) return List.of();
         List<UUID> orderedDomainIds = visibleDomainIds();
+        if (orderedDomainIds.isEmpty()) return List.of();
         StringBuilder sql = new StringBuilder(
             """
             select s.id, s.revision
               from modeling_model_spec s
              where s.tenant_id = ?
                and s.plan_id = ?
+               and s.contract_version = 2
             """
         );
         List<Object> arguments = new ArrayList<>();
         arguments.add(tenantId);
         arguments.add(planId);
-        appendCanonicalScope(sql, arguments);
         appendDomainScope(sql, arguments, orderedDomainIds);
         sql.append(" and (");
         for (int index = 0; index < boundedTargets.size(); index++) {
@@ -102,18 +97,19 @@ class WarehousePlanRelationshipGraphInboundModelReader {
         if (boundedTargets.isEmpty()) return List.of();
 
         List<UUID> orderedDomainIds = visibleDomainIds();
+        if (orderedDomainIds.isEmpty()) return List.of();
         StringBuilder sql = new StringBuilder(
             """
             select s.id, s.revision
               from modeling_model_spec s
              where s.tenant_id = ?
                and s.plan_id = ?
+               and s.contract_version = 2
             """
         );
         List<Object> arguments = new ArrayList<>();
         arguments.add(tenantId);
         arguments.add(planId);
-        appendCanonicalScope(sql, arguments);
         appendDomainScope(sql, arguments, orderedDomainIds);
         sql.append(" and (");
         for (int index = 0; index < boundedTargets.size(); index++) {
@@ -171,16 +167,6 @@ class WarehousePlanRelationshipGraphInboundModelReader {
             .filter(Objects::nonNull)
             .sorted(POSTGRES_UUID_ORDER)
             .toList();
-    }
-
-    private void appendCanonicalScope(
-        StringBuilder sql,
-        List<Object> arguments
-    ) {
-        if (!featureFlags.canonicalReadEnabled()) {
-            sql.append(" and s.contract_version <> ?");
-            arguments.add(ModelSpecContract.CONTRACT_VERSION);
-        }
     }
 
     private List<ModelRevisionRef> queryReferences(
@@ -252,24 +238,12 @@ class WarehousePlanRelationshipGraphInboundModelReader {
         List<Object> arguments,
         List<UUID> orderedDomainIds
     ) {
-        sql.append(" and (");
-        if (orderedDomainIds.isEmpty()) {
-            sql.append(
-                "s.domain_id is null and s.contract_version = ?"
-            );
-        } else {
-            sql
-                .append(
-                    "s.domain_id = ANY (?::uuid[]) or (s.domain_id is null and s.contract_version = ?)"
-                );
-            arguments.add(
-                new SqlArrayValue(
-                    "uuid",
-                    orderedDomainIds.toArray(UUID[]::new)
-                )
-            );
-        }
-        arguments.add(ModelingVNextContract.CONTRACT_VERSION);
-        sql.append(')');
+        sql.append(" and s.domain_id = ANY (?::uuid[])");
+        arguments.add(
+            new SqlArrayValue(
+                "uuid",
+                orderedDomainIds.toArray(UUID[]::new)
+            )
+        );
     }
 }

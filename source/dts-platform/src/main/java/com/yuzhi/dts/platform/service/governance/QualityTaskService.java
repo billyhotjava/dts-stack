@@ -1,12 +1,13 @@
 package com.yuzhi.dts.platform.service.governance;
 
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.domain.governance.GovQualityTask;
 import com.yuzhi.dts.platform.domain.governance.GovRuleBinding;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.governance.GovQualityTaskRepository;
 import com.yuzhi.dts.platform.repository.governance.GovRuleBindingRepository;
 import com.yuzhi.dts.platform.security.DepartmentUtils;
-import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.governance.dto.IssueTicketDto;
 import com.yuzhi.dts.platform.service.governance.request.IssueTicketUpsertRequest;
 import com.yuzhi.dts.platform.service.governance.request.QualityRunTriggerRequest;
 import com.yuzhi.dts.platform.service.modeling.DataStandardSecurity;
@@ -29,8 +30,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 @Transactional
@@ -43,40 +47,48 @@ public class QualityTaskService {
     private final GovRuleBindingRepository bindingRepository;
     private final CatalogDatasetRepository datasetRepository;
     private final QualityRunService qualityRunService;
-    private final AuditService auditService;
+    private final QualityAuditRecorder qualityAuditRecorder;
     private final IssueTicketService issueTicketService;
     private final DataStandardSecurity security;
+    private final QualityEffectiveDepartmentResolver departmentResolver;
     private final OrganizationVisibilityService organizationVisibilityService;
     private final AccessChecker accessChecker;
     private final DefaultLakeDatasetGuard defaultLakeDatasetGuard;
+    private final TransactionTemplate taskTransactionTemplate;
 
     public QualityTaskService(
         GovQualityTaskRepository taskRepository,
         GovRuleBindingRepository bindingRepository,
         CatalogDatasetRepository datasetRepository,
         QualityRunService qualityRunService,
-        AuditService auditService,
+        QualityAuditRecorder qualityAuditRecorder,
         IssueTicketService issueTicketService,
         DataStandardSecurity security,
+        QualityEffectiveDepartmentResolver departmentResolver,
         OrganizationVisibilityService organizationVisibilityService,
         AccessChecker accessChecker,
-        DefaultLakeDatasetGuard defaultLakeDatasetGuard
+        DefaultLakeDatasetGuard defaultLakeDatasetGuard,
+        PlatformTransactionManager transactionManager
     ) {
         this.taskRepository = taskRepository;
         this.bindingRepository = bindingRepository;
         this.datasetRepository = datasetRepository;
         this.qualityRunService = qualityRunService;
-        this.auditService = auditService;
+        this.qualityAuditRecorder = qualityAuditRecorder;
         this.issueTicketService = issueTicketService;
         this.security = security;
+        this.departmentResolver = departmentResolver;
         this.organizationVisibilityService = organizationVisibilityService;
         this.accessChecker = accessChecker;
         this.defaultLakeDatasetGuard = defaultLakeDatasetGuard;
+        TransactionTemplate template = new TransactionTemplate(transactionManager);
+        template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.taskTransactionTemplate = template;
     }
 
     @Transactional(readOnly = true)
     public List<GovQualityTask> list(String activeDeptHeader) {
-        String activeDept = security.resolveActiveDept(activeDeptHeader);
+        String activeDept = departmentResolver.resolve(activeDeptHeader);
         boolean instituteScope = security.hasInstituteScope();
         UUID defaultLakeSourceId = defaultLakeDatasetGuard.currentDefaultLakeSourceId().orElse(null);
         return taskRepository
@@ -97,70 +109,107 @@ public class QualityTaskService {
     }
 
     public GovQualityTask create(GovQualityTask request, String actor, String activeDeptHeader) {
-        GovQualityTask task = new GovQualityTask();
-        applyUpsert(task, request, activeDeptHeader);
-        GovQualityTask saved = taskRepository.save(task);
-        auditService.recordAs(
-            actor,
-            "CREATE",
-            "governance.quality.task",
-            "governance.quality.task",
-            saved.getId().toString(),
-            "SUCCESS",
-            Map.of("summary", "创建质量巡检计划", "taskName", saved.getName()),
-            null
-        );
-        return saved;
+        try {
+            GovQualityTask task = new GovQualityTask();
+            applyUpsert(task, request, activeDeptHeader);
+            GovQualityTask saved = taskRepository.save(task);
+            auditTaskAction(
+                "GOV_QUALITY_TASK_CREATE",
+                AuditStage.SUCCESS,
+                taskResourceId(saved != null ? saved.getId() : null),
+                "创建质量巡检计划",
+                saved,
+                Map.of()
+            );
+            return saved;
+        } catch (RuntimeException ex) {
+            auditTaskFailure("GOV_QUALITY_TASK_CREATE", "UNASSIGNED", "创建质量巡检计划失败", request, ex);
+            throw ex;
+        }
     }
 
     public GovQualityTask update(UUID id, GovQualityTask request, String actor, String activeDeptHeader) {
-        GovQualityTask task = taskRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("巡检计划不存在"));
-        ensureAccessible(task, activeDeptHeader);
-        applyUpsert(task, request, activeDeptHeader);
-        GovQualityTask saved = taskRepository.save(task);
-        auditService.recordAs(
-            actor,
-            "UPDATE",
-            "governance.quality.task",
-            "governance.quality.task",
-            id.toString(),
-            "SUCCESS",
-            Map.of("summary", "更新质量巡检计划", "taskName", saved.getName()),
-            null
-        );
-        return saved;
+        try {
+            GovQualityTask task = taskRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("巡检计划不存在"));
+            ensureAccessible(task, activeDeptHeader);
+            applyUpsert(task, request, activeDeptHeader);
+            GovQualityTask saved = taskRepository.save(task);
+            auditTaskAction(
+                "GOV_QUALITY_TASK_UPDATE",
+                AuditStage.SUCCESS,
+                id.toString(),
+                "更新质量巡检计划",
+                saved,
+                Map.of()
+            );
+            return saved;
+        } catch (RuntimeException ex) {
+            auditTaskFailure("GOV_QUALITY_TASK_UPDATE", id.toString(), "更新质量巡检计划失败", request, ex);
+            throw ex;
+        }
     }
 
     public void delete(UUID id, String actor) {
-        taskRepository.deleteById(id);
-        auditService.recordAs(actor, "DELETE", "governance.quality.task", "governance.quality.task", id.toString(), "SUCCESS", Map.of("summary", "删除质量巡检计划"), null);
+        try {
+            taskRepository.deleteById(id);
+            auditTaskAction(
+                "GOV_QUALITY_TASK_DELETE",
+                AuditStage.SUCCESS,
+                id.toString(),
+                "删除质量巡检计划",
+                null,
+                Map.of()
+            );
+        } catch (RuntimeException ex) {
+            auditTaskFailure("GOV_QUALITY_TASK_DELETE", id.toString(), "删除质量巡检计划失败", null, ex);
+            throw ex;
+        }
     }
 
     public GovQualityTask toggle(UUID id, boolean enabled, String actor, String activeDeptHeader) {
-        GovQualityTask task = taskRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("巡检计划不存在"));
-        ensureAccessible(task, activeDeptHeader);
-        task.setEnabled(enabled);
-        GovQualityTask saved = taskRepository.save(task);
-        auditService.recordAs(
-            actor,
-            "UPDATE",
-            "governance.quality.task",
-            "governance.quality.task",
-            id.toString(),
-            "SUCCESS",
-            Map.of("summary", enabled ? "启用质量巡检计划" : "停用质量巡检计划"),
-            null
-        );
-        return saved;
+        GovQualityTask task = null;
+        try {
+            task = taskRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("巡检计划不存在"));
+            ensureAccessible(task, activeDeptHeader);
+            task.setEnabled(enabled);
+            GovQualityTask saved = taskRepository.save(task);
+            auditTaskAction(
+                "GOV_QUALITY_TASK_TOGGLE",
+                AuditStage.SUCCESS,
+                id.toString(),
+                enabled ? "启用质量巡检计划" : "停用质量巡检计划",
+                saved,
+                Map.of("enabled", enabled)
+            );
+            return saved;
+        } catch (RuntimeException ex) {
+            auditTaskFailure("GOV_QUALITY_TASK_TOGGLE", id.toString(), "切换质量巡检计划状态失败", task, ex);
+            throw ex;
+        }
     }
 
     public List<Map<String, Object>> trigger(UUID id, String actor, String activeDeptHeader) {
-        GovQualityTask task = taskRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("巡检计划不存在"));
-        ensureAccessible(task, activeDeptHeader);
-        List<Map<String, Object>> runs = triggerInternal(task, actor, "MANUAL");
-        task.setLastTriggeredAt(Instant.now());
-        taskRepository.save(task);
-        return runs;
+        GovQualityTask task = null;
+        try {
+            task = taskRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("巡检计划不存在"));
+            ensureAccessible(task, activeDeptHeader);
+            List<Map<String, Object>> runs = triggerInternal(task, actor, "MANUAL");
+            task.setLastTriggeredAt(Instant.now());
+            taskRepository.save(task);
+            boolean failed = hasTriggerErrors(runs);
+            auditTaskAction(
+                "GOV_QUALITY_TASK_EXECUTE",
+                failed ? AuditStage.FAIL : AuditStage.SUCCESS,
+                id.toString(),
+                failed ? "触发质量巡检计划存在失败" : "触发质量巡检计划",
+                task,
+                Map.of("triggerType", "MANUAL", "runGroupCount", runs.size())
+            );
+            return runs;
+        } catch (RuntimeException ex) {
+            auditTaskFailure("GOV_QUALITY_TASK_EXECUTE", id.toString(), "触发质量巡检计划失败", task, ex);
+            throw ex;
+        }
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -172,11 +221,14 @@ public class QualityTaskService {
             // Liquibase may be running asynchronously; avoid spamming scheduling logs until tables are ready.
             if (TABLE_NOT_READY_WARNED.compareAndSet(false, true)) {
                 log.warn(
-                    "质量巡检调度跳过（表未就绪？）：{}。请确认平台数据库已完成 Liquibase 迁移（含 changelog 20260101_02_governance_quality_task.xml）。",
-                    ex.getMessage()
+                    "event=quality_task_schedule_repository_unavailable errorType={} hint=verify_governance_quality_task_migration",
+                    ex.getClass().getSimpleName()
                 );
             } else {
-                log.debug("质量巡检调度跳过（表未就绪？）：{}", ex.getMessage());
+                log.debug(
+                    "event=quality_task_schedule_repository_unavailable errorType={}",
+                    ex.getClass().getSimpleName()
+                );
             }
             return;
         }
@@ -185,7 +237,7 @@ public class QualityTaskService {
         }
         Instant now = Instant.now();
         for (GovQualityTask task : tasks) {
-            if (task == null || task.getDatasetId() == null || !Boolean.TRUE.equals(task.getEnabled())) {
+            if (task == null || task.getId() == null || task.getDatasetId() == null || !Boolean.TRUE.equals(task.getEnabled())) {
                 continue;
             }
             int intervalMinutes = task.getIntervalMinutes() != null ? task.getIntervalMinutes() : 60;
@@ -199,64 +251,151 @@ public class QualityTaskService {
                     continue;
                 }
             }
+            Instant dueBefore = now.minus(Duration.ofMinutes(intervalMinutes));
+            boolean claimed;
             try {
-                triggerInternal(task, "system", "SCHEDULED");
-                task.setLastTriggeredAt(now);
-                taskRepository.save(task);
-            } catch (Exception ex) {
+                claimed = Boolean.TRUE.equals(taskTransactionTemplate.execute(status ->
+                    taskRepository.claimDueExecution(task.getId(), now, dueBefore) == 1
+                ));
+            } catch (RuntimeException claimFailure) {
+                log.warn(
+                    "event=quality_task_schedule_claim_failed taskId={} errorType={}",
+                    task.getId(),
+                    claimFailure.getClass().getSimpleName()
+                );
+                continue;
+            }
+            if (!claimed) {
+                continue;
+            }
+            Instant scheduleSlot = normalizedScheduleSlot(now, intervalMinutes);
+            String attemptIdentity = scheduledEventIdentity(task.getId(), now, intervalMinutes);
+            Map<String, Object> beginPayload = taskAuditPayload(
+                "开始调度质量巡检计划",
+                task,
+                Map.of("triggerType", "SCHEDULED")
+            );
+            try {
+                qualityAuditRecorder.recordMachineAttempt(
+                    "scheduler",
+                    attemptIdentity + ":BEGIN",
+                    scheduleSlot,
+                    "GOV_QUALITY_TASK_EXECUTE",
+                    AuditStage.BEGIN,
+                    taskResourceId(task.getId()),
+                    beginPayload
+                );
+            } catch (RuntimeException auditFailure) {
+                log.warn(
+                    "event=quality_task_begin_audit_write_failed taskId={} errorType={}",
+                    task.getId(),
+                    auditFailure.getClass().getSimpleName()
+                );
+                continue;
+            }
+            try {
+                taskTransactionTemplate.executeWithoutResult(status -> {
+                    List<Map<String, Object>> runs = triggerInternal(task, "scheduler", "SCHEDULED");
+                    boolean failed = hasTriggerErrors(runs);
+                    auditScheduledTask(
+                        attemptIdentity + (failed ? ":FAIL" : ":SUCCESS"),
+                        scheduleSlot,
+                        task,
+                        failed ? AuditStage.FAIL : AuditStage.SUCCESS,
+                        failed ? "调度质量巡检计划存在失败" : "调度质量巡检计划",
+                        Map.of("runGroupCount", runs.size())
+                    );
+                });
+            } catch (RuntimeException ex) {
+                String errorCategory = taskAuditErrorCategory(ex);
                 Map<String, Object> payload = new LinkedHashMap<>();
                 payload.put("summary", "执行质量巡检计划失败");
                 payload.put("taskId", String.valueOf(task.getId()));
                 payload.put("taskName", task.getName());
-                payload.put("message", ex.getMessage());
-                auditService.recordAs("system", "ERROR", "governance.quality.task", "governance.quality.task", String.valueOf(task.getId()), "FAIL", payload, null);
-                createIssueForTaskFailure(task, ex.getMessage());
+                payload.put("errorType", ex.getClass().getSimpleName());
+                payload.put("errorCategory", errorCategory);
+                safeRecordMachineFailure(
+                    attemptIdentity + ":FAIL",
+                    scheduleSlot,
+                    "GOV_QUALITY_TASK_EXECUTE",
+                    String.valueOf(task.getId()),
+                    payload
+                );
+                try {
+                    taskTransactionTemplate.executeWithoutResult(status ->
+                        createIssueForTaskFailure(task, errorCategory, attemptIdentity, scheduleSlot)
+                    );
+                } catch (RuntimeException issueFailure) {
+                    log.warn(
+                        "event=quality_task_issue_create_failed taskId={} errorType={}",
+                        task.getId(),
+                        issueFailure.getClass().getSimpleName()
+                    );
+                }
             }
         }
     }
 
-    private void createIssueForTaskFailure(GovQualityTask task, String message) {
+    private void createIssueForTaskFailure(
+        GovQualityTask task,
+        String errorCategory,
+        String attemptIdentity,
+        Instant occurredAt
+    ) {
         if (task == null || task.getId() == null) {
             return;
         }
-        try {
-            IssueTicketUpsertRequest req = new IssueTicketUpsertRequest();
-            req.setTitle("质量巡检计划执行失败");
-            StringBuilder summary = new StringBuilder();
-            summary.append("计划：").append(task.getName() != null ? task.getName() : task.getId().toString());
-            if (task.getDatasetId() != null) {
-                summary.append("\n数据集：").append(task.getDatasetId());
-            }
-            if (StringUtils.isNotBlank(message)) {
-                summary.append("\n原因：").append(message);
-            }
-            req.setSummary(summary.toString());
-            req.setSeverity("HIGH");
-            req.setDatasetId(task.getDatasetId());
-            req.setTags(List.of("QUALITY_TASK", "datasetId=" + String.valueOf(task.getDatasetId())));
-            issueTicketService.createOrTouch("QUALITY_TASK", task.getId(), req, "system", "系统自动生成：巡检计划执行失败");
-        } catch (Exception ignored) {}
+        IssueTicketUpsertRequest req = new IssueTicketUpsertRequest();
+        req.setTitle("质量巡检计划执行失败");
+        StringBuilder summary = new StringBuilder();
+        summary.append("计划：").append(task.getName() != null ? task.getName() : task.getId().toString());
+        if (task.getDatasetId() != null) {
+            summary.append("\n数据集：").append(task.getDatasetId());
+        }
+        summary.append("\n原因：质量巡检计划执行失败（类别：")
+            .append(StringUtils.defaultIfBlank(errorCategory, "INTERNAL_ERROR"))
+            .append("）");
+        req.setSummary(summary.toString());
+        req.setSeverity("HIGH");
+        req.setDatasetId(task.getDatasetId());
+        req.setTags(List.of("QUALITY_TASK", "datasetId=" + String.valueOf(task.getDatasetId())));
+        IssueTicketService.CreateOrTouchResult result = issueTicketService.createOrTouchWithDisposition(
+            "QUALITY_TASK",
+            task.getId(),
+            req,
+            "system",
+            "系统自动生成：巡检计划执行失败"
+        );
+        IssueTicketDto issue = result != null ? result.ticket() : null;
+        if (issue != null && issue.getId() != null) {
+            String actionCode = result.disposition() == IssueTicketService.CreateOrTouchDisposition.CREATED
+                ? "GOV_ISSUE_CREATE"
+                : "GOV_ISSUE_ACTION_APPEND";
+            qualityAuditRecorder.recordMachine(
+                "scheduler",
+                attemptIdentity + ":ISSUE:" + result.disposition().name(),
+                occurredAt,
+                actionCode,
+                AuditStage.SUCCESS,
+                issue.getId().toString(),
+                automaticIssueAuditPayload("QUALITY_TASK", task.getId(), task.getDatasetId(), issue.getId())
+            );
+        }
     }
 
     private List<Map<String, Object>> triggerInternal(GovQualityTask task, String actor, String triggerType) {
         UUID datasetId = task.getDatasetId();
-        List<UUID> rulesToRun = new ArrayList<>();
-        if (task.getRuleId() != null) {
-            rulesToRun.add(task.getRuleId());
+        List<UUID> executableRuleIds = executableRuleIds(datasetId);
+        List<UUID> rulesToRun;
+        if (task.getRuleId() == null) {
+            rulesToRun = executableRuleIds;
+        } else if (executableRuleIds.contains(task.getRuleId())) {
+            rulesToRun = List.of(task.getRuleId());
         } else {
-            List<GovRuleBinding> bindings = bindingRepository.findByDatasetId(datasetId);
-            for (GovRuleBinding binding : bindings) {
-                try {
-                    UUID rid = binding.getRuleVersion().getRule().getId();
-                    if (rid != null) {
-                        rulesToRun.add(rid);
-                    }
-                } catch (Exception ignored) {}
-            }
-            rulesToRun = rulesToRun.stream().filter(Objects::nonNull).distinct().toList();
+            throw new IllegalStateException("巡检计划规则未启用、未发布或未绑定当前数据资产");
         }
         if (rulesToRun.isEmpty()) {
-            throw new IllegalStateException("未找到该数据集绑定的质量规则");
+            throw new IllegalStateException("未找到该数据集已启用且已发布的质量规则");
         }
         List<Map<String, Object>> result = new ArrayList<>();
         for (UUID rid : rulesToRun) {
@@ -265,23 +404,201 @@ public class QualityTaskService {
                 req.setRuleId(rid);
                 req.setDatasetId(datasetId);
                 req.setTriggerType(StringUtils.defaultIfBlank(triggerType, "MANUAL"));
-                Object runs = qualityRunService.trigger(req, actor);
+                Object runs = "SCHEDULED".equalsIgnoreCase(req.getTriggerType())
+                    ? qualityRunService.triggerScheduled(req)
+                    : qualityRunService.trigger(req, actor);
                 result.add(Map.of("ruleId", rid.toString(), "runs", runs));
             } catch (Exception ex) {
-                result.add(Map.of("ruleId", rid.toString(), "error", StringUtils.defaultString(ex.getMessage(), "执行失败")));
+                result.add(Map.of(
+                    "ruleId", rid.toString(),
+                    "error", "质量规则执行失败",
+                    "errorType", ex.getClass().getSimpleName(),
+                    "errorCategory", taskAuditErrorCategory(ex)
+                ));
             }
         }
-        auditService.recordAs(
-            actor,
-            "EXECUTE",
-            "governance.quality.task",
-            "governance.quality.task",
-            String.valueOf(task.getId()),
-            "SUCCESS",
-            Map.of("summary", "触发质量巡检计划", "taskName", task.getName(), "datasetId", String.valueOf(datasetId), "ruleCount", rulesToRun.size()),
-            null
-        );
         return result;
+    }
+
+    private List<UUID> executableRuleIds(UUID datasetId) {
+        List<GovRuleBinding> bindings = bindingRepository.findByDatasetIdAndRuleVersionStatus(datasetId, "PUBLISHED");
+        if (bindings == null || bindings.isEmpty()) {
+            return List.of();
+        }
+        return bindings
+            .stream()
+            .filter(Objects::nonNull)
+            .filter(binding -> binding.getRuleVersion() != null)
+            .filter(binding -> "PUBLISHED".equalsIgnoreCase(StringUtils.trimToEmpty(binding.getRuleVersion().getStatus())))
+            .map(binding -> binding.getRuleVersion().getRule())
+            .filter(Objects::nonNull)
+            .filter(rule -> Boolean.TRUE.equals(rule.getEnabled()))
+            .map(rule -> rule.getId())
+            .filter(Objects::nonNull)
+            .distinct()
+            .toList();
+    }
+
+    private void auditScheduledTask(
+        String eventIdentity,
+        Instant occurredAt,
+        GovQualityTask task,
+        AuditStage stage,
+        String summary,
+        Map<String, Object> details
+    ) {
+        Map<String, Object> payload = taskAuditPayload(summary, task, details);
+        qualityAuditRecorder.recordMachine(
+            "scheduler",
+            eventIdentity,
+            occurredAt,
+            "GOV_QUALITY_TASK_EXECUTE",
+            stage,
+            taskResourceId(task != null ? task.getId() : null),
+            payload
+        );
+    }
+
+    private void auditTaskFailure(
+        String actionCode,
+        String resourceId,
+        String summary,
+        GovQualityTask task,
+        RuntimeException error
+    ) {
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("errorType", error.getClass().getSimpleName());
+        details.put("errorCategory", taskAuditErrorCategory(error));
+        Map<String, Object> payload = taskAuditPayload(summary, task, details);
+        try {
+            qualityAuditRecorder.recordFailureAction(actionCode, resourceId, payload);
+        } catch (RuntimeException auditFailure) {
+            log.warn(
+                "event=quality_task_failure_audit_write_failed actionCode={} resourceId={} errorType={}",
+                actionCode,
+                resourceId,
+                auditFailure.getClass().getSimpleName()
+            );
+        }
+    }
+
+    private void auditTaskAction(
+        String actionCode,
+        AuditStage stage,
+        String resourceId,
+        String summary,
+        GovQualityTask task,
+        Map<String, Object> details
+    ) {
+        qualityAuditRecorder.recordAction(actionCode, stage, resourceId, taskAuditPayload(summary, task, details));
+    }
+
+    static Instant normalizedScheduleSlot(Instant occurredAt, int intervalMinutes) {
+        Instant effectiveTime = occurredAt != null ? occurredAt : Instant.EPOCH;
+        long intervalSeconds = Math.max(1L, intervalMinutes) * 60L;
+        long slotEpochSeconds = Math.floorDiv(effectiveTime.getEpochSecond(), intervalSeconds) * intervalSeconds;
+        return Instant.ofEpochSecond(slotEpochSeconds);
+    }
+
+    static String scheduledEventIdentity(UUID taskId, Instant occurredAt, int intervalMinutes) {
+        return "quality-task:" + taskId + ":scheduled:" + normalizedScheduleSlot(occurredAt, intervalMinutes).getEpochSecond();
+    }
+
+    private void safeRecordMachineFailure(
+        String eventIdentity,
+        Instant occurredAt,
+        String actionCode,
+        String resourceId,
+        Object payload
+    ) {
+        try {
+            qualityAuditRecorder.recordMachineAttempt(
+                "scheduler",
+                eventIdentity,
+                occurredAt,
+                actionCode,
+                AuditStage.FAIL,
+                resourceId,
+                payload
+            );
+        } catch (RuntimeException auditFailure) {
+            log.warn(
+                "event=quality_task_machine_audit_write_failed actionCode={} resourceId={} errorType={}",
+                actionCode,
+                resourceId,
+                auditFailure.getClass().getSimpleName()
+            );
+        }
+    }
+
+    private Map<String, Object> automaticIssueAuditPayload(
+        String sourceType,
+        UUID sourceId,
+        UUID datasetId,
+        UUID issueId
+    ) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("summary", "自动创建质量问题");
+        payload.put("sourceType", sourceType);
+        payload.put("sourceId", sourceId.toString());
+        payload.put("issueId", issueId.toString());
+        if (datasetId != null) {
+            payload.put("datasetId", datasetId.toString());
+        }
+        return payload;
+    }
+
+    private String taskAuditErrorCategory(Throwable error) {
+        if (error instanceof EntityNotFoundException) {
+            return "NOT_FOUND";
+        }
+        if (error instanceof AccessDeniedException) {
+            return "ACCESS_DENIED";
+        }
+        if (error instanceof IllegalArgumentException || error instanceof IllegalStateException) {
+            return "VALIDATION";
+        }
+        String type = error != null ? error.getClass().getSimpleName().toUpperCase(Locale.ROOT) : "";
+        if (type.contains("SQL") || type.contains("JDBC") || type.contains("DATAACCESS")) {
+            return "DATA_ACCESS";
+        }
+        return "INTERNAL_ERROR";
+    }
+
+    private Map<String, Object> taskAuditPayload(
+        String summary,
+        GovQualityTask task,
+        Map<String, Object> details
+    ) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("summary", summary);
+        if (task != null) {
+            if (StringUtils.isNotBlank(task.getName())) {
+                payload.put("taskName", task.getName());
+            }
+            if (task.getDatasetId() != null) {
+                payload.put("datasetId", task.getDatasetId().toString());
+            }
+            if (task.getRuleId() != null) {
+                payload.put("ruleId", task.getRuleId().toString());
+            }
+        }
+        if (details != null) {
+            details.forEach((key, value) -> {
+                if (StringUtils.isNotBlank(key) && value != null) {
+                    payload.put(key, value);
+                }
+            });
+        }
+        return payload;
+    }
+
+    private boolean hasTriggerErrors(List<Map<String, Object>> runs) {
+        return runs != null && runs.stream().anyMatch(run -> run != null && run.containsKey("error"));
+    }
+
+    private String taskResourceId(UUID taskId) {
+        return taskId != null ? taskId.toString() : "UNASSIGNED";
     }
 
     private void applyUpsert(GovQualityTask task, GovQualityTask request, String activeDeptHeader) {
@@ -294,6 +611,9 @@ public class QualityTaskService {
         var dataset = defaultLakeDatasetGuard.requireDefaultLakeDataset(request.getDatasetId());
         if (!accessChecker.canRead(dataset)) {
             throw new AccessDeniedException("无权限访问该数据集");
+        }
+        if (request.getRuleId() != null && !executableRuleIds(request.getDatasetId()).contains(request.getRuleId())) {
+            throw new IllegalArgumentException("所选质量规则未启用、未发布或未绑定当前数据资产");
         }
         task.setName(StringUtils.trimToNull(request.getName()));
         task.setDatasetId(request.getDatasetId());
@@ -310,7 +630,7 @@ public class QualityTaskService {
             task.setOwnerDept(requestedOwnerDept);
             return;
         }
-        String activeDept = security.resolveActiveDept(activeDeptHeader);
+        String activeDept = departmentResolver.resolve(activeDeptHeader);
         if (!org.springframework.util.StringUtils.hasText(activeDept)) {
             throw new AccessDeniedException("当前账号未配置所属部门，无法执行该操作");
         }
@@ -344,7 +664,7 @@ public class QualityTaskService {
         if (task == null) {
             throw new EntityNotFoundException("巡检计划不存在");
         }
-        String activeDept = security.resolveActiveDept(activeDeptHeader);
+        String activeDept = departmentResolver.resolve(activeDeptHeader);
         boolean instituteScope = security.hasInstituteScope();
         if (!isOwnerDeptVisible(task.getOwnerDept(), activeDept, instituteScope)) {
             throw new AccessDeniedException("当前账号无权访问该巡检计划");

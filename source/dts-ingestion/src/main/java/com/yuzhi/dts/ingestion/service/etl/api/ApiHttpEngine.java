@@ -13,9 +13,7 @@ import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
 import java.security.SecureRandom;
@@ -36,10 +34,23 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Semaphore;
 import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLParameters;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
+import org.apache.hc.client5.http.DnsResolver;
+import org.apache.hc.client5.http.classic.methods.HttpUriRequestBase;
+import org.apache.hc.client5.http.config.ConnectionConfig;
+import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.client5.http.impl.classic.HttpClients;
+import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder;
+import org.apache.hc.client5.http.ssl.NoopHostnameVerifier;
+import org.apache.hc.client5.http.ssl.SSLConnectionSocketFactoryBuilder;
+import org.apache.hc.core5.http.ContentType;
+import org.apache.hc.core5.http.Header;
+import org.apache.hc.core5.http.HttpEntity;
+import org.apache.hc.core5.http.io.entity.ByteArrayEntity;
+import org.apache.hc.core5.util.Timeout;
 import org.springframework.util.unit.DataSize;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -62,6 +73,61 @@ public class ApiHttpEngine {
     @FunctionalInterface
     interface Sleeper {
         void sleep(Duration duration) throws InterruptedException;
+    }
+
+    @FunctionalInterface
+    interface HostAddressResolver {
+        InetAddress[] resolve(String host) throws UnknownHostException;
+    }
+
+    record ResolvedTarget(String host, InetAddress[] addresses) {
+        ResolvedTarget {
+            if (!StringUtils.hasText(host) || addresses == null || addresses.length == 0) {
+                throw new IllegalArgumentException("Resolved target requires a host and addresses");
+            }
+            addresses = addresses.clone();
+        }
+
+        @Override
+        public InetAddress[] addresses() {
+            return addresses.clone();
+        }
+    }
+
+    static final class PinnedDnsResolver implements DnsResolver {
+
+        private final ResolvedTarget target;
+
+        PinnedDnsResolver(ResolvedTarget target) {
+            this.target = target;
+        }
+
+        @Override
+        public InetAddress[] resolve(String host) throws UnknownHostException {
+            if (!target.host().equalsIgnoreCase(host)) {
+                throw new UnknownHostException("Unvalidated host: " + host);
+            }
+            return target.addresses();
+        }
+
+        @Override
+        public String resolveCanonicalHostname(String host) throws UnknownHostException {
+            resolve(host);
+            return target.host();
+        }
+    }
+
+    private record PinnedHttpResponse(int statusCode, Map<String, List<String>> headers, byte[] body) {
+
+        Optional<String> firstHeader(String name) {
+            if (!StringUtils.hasText(name)) {
+                return Optional.empty();
+            }
+            return headers.entrySet().stream()
+                .filter(entry -> name.equalsIgnoreCase(entry.getKey()))
+                .flatMap(entry -> entry.getValue().stream())
+                .findFirst();
+        }
     }
 
     public record ApiHttpResult(
@@ -87,6 +153,8 @@ public class ApiHttpEngine {
     private final ConcurrentMap<String, CachedToken> oauth2TokenCache = new ConcurrentHashMap<>();
     private final CursorTracker cursorTracker = new CursorTracker();
     private final ApiProperties apiProperties;
+    private final HostAddressResolver hostAddressResolver;
+    private final boolean allowNonGlobalTargetsForTests;
 
     public ApiHttpEngine() {
         this(defaultSleeper(), new ApiProperties());
@@ -101,8 +169,19 @@ public class ApiHttpEngine {
     }
 
     ApiHttpEngine(Sleeper sleeper, ApiProperties apiProperties) {
+        this(sleeper, apiProperties, InetAddress::getAllByName, false);
+    }
+
+    ApiHttpEngine(
+        Sleeper sleeper,
+        ApiProperties apiProperties,
+        HostAddressResolver hostAddressResolver,
+        boolean allowNonGlobalTargetsForTests
+    ) {
         this.sleeper = sleeper == null ? duration -> {} : sleeper;
         this.apiProperties = apiProperties == null ? new ApiProperties() : apiProperties;
+        this.hostAddressResolver = hostAddressResolver == null ? InetAddress::getAllByName : hostAddressResolver;
+        this.allowNonGlobalTargetsForTests = allowNonGlobalTargetsForTests;
     }
 
     public static List<String> supportedAuthProviders() {
@@ -229,10 +308,16 @@ public class ApiHttpEngine {
         Map<String, Object> cursor,
         int pageNo
     ) {
-        int maxRetries = nonNegativeInt(retryPolicy.get("maxRetries"), apiProperties.getRetry().getMaxRetries());
+        boolean retryAllowed = retryAllowed(method, sourceConfig, resource, retryPolicy);
+        int maxRetries = retryAllowed
+            ? nonNegativeInt(retryPolicy.get("maxRetries"), apiProperties.getRetry().getMaxRetries())
+            : 0;
         int attempts = 0;
+        int retries = 0;
+        int redirects = 0;
         boolean jwtTokenRefreshedAfter401 = false;
-        validateUri(uri, requestPolicy);
+        URI requestUri = uri;
+        validateUri(requestUri, requestPolicy);
         while (true) {
             attempts++;
             try {
@@ -242,26 +327,48 @@ public class ApiHttpEngine {
                 semaphore.acquire();
                 try {
                     applyRateLimit(resourceId, rateLimit);
-                    HttpClient client = buildClient(requestPolicy, tlsPolicy, sourceConfig);
-                    HttpRequest request = buildRequest(uri, method, sourceConfig, resource, requestPolicy);
-                    HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
-                    byte[] body = readBody(
-                        response.body(),
+                    PinnedHttpResponse response = executePinned(
+                        requestUri,
+                        method,
+                        sourceConfig,
+                        resource,
+                        requestPolicy,
+                        tlsPolicy,
                         positiveBytes(requestPolicy.get("maxResponseBytes"), apiProperties.maxResponseBytesAsInt()),
                         attempts
                     );
+                    byte[] body = response.body();
                     int status = response.statusCode();
-                    if (isRedirect(status) && !bool(requestPolicy.get("followRedirects"), false)) {
-                        throw new ApiHttpException("API_RUNTIME_REDIRECT", "API 重定向默认关闭", status, attempts);
+                    if (isRedirect(status)) {
+                        if (!bool(requestPolicy.get("followRedirects"), false)) {
+                            throw new ApiHttpException("API_RUNTIME_REDIRECT", "API 重定向默认关闭", status, attempts);
+                        }
+                        int maxRedirects = Math.min(10, positiveInt(requestPolicy.get("maxRedirects"), 5));
+                        if (redirects >= maxRedirects) {
+                            throw new ApiHttpException("API_RUNTIME_REDIRECT", "API 重定向超过最大跳数", status, attempts);
+                        }
+                        String location = response.firstHeader("Location").orElse(null);
+                        if (!StringUtils.hasText(location)) {
+                            throw new ApiHttpException("API_RUNTIME_REDIRECT", "API 重定向缺少 Location", status, attempts);
+                        }
+                        URI redirected = requestUri.resolve(location);
+                        requestUri = guardRelatedUri(
+                            requestUri.toString(),
+                            redirected,
+                            requestPolicy,
+                            "API 重定向 URL 不允许跨源: "
+                        );
+                        redirects++;
+                        continue;
                     }
                     if (status >= 200 && status < 300) {
                         List<JsonNode> records = extractRecords(body, resource);
                         String cursorValue = cursorTracker.advance(records, cursor);
                         return new ApiHttpResult(
                             resourceId,
-                            uri,
+                            requestUri,
                             status,
-                            response.headers().map(),
+                            response.headers(),
                             body,
                             attempts,
                             pageNo,
@@ -269,14 +376,19 @@ public class ApiHttpEngine {
                             cursorValue
                         );
                     }
-                    if (status == 401 && isJwtLogin(sourceConfig) && !jwtTokenRefreshedAfter401) {
+                    if (status == 401
+                        && isJwtLogin(sourceConfig)
+                        && !jwtTokenRefreshedAfter401
+                        && retries < maxRetries) {
                         invalidateJwtToken(sourceConfig);
                         jwtTokenRefreshedAfter401 = true;
+                        retries++;
                         continue;
                     }
-                    if (shouldRetry(status) && attempts <= maxRetries) {
+                    if (shouldRetry(status) && retries < maxRetries) {
+                        retries++;
                         retryStatus = status;
-                        retryAfter = response.headers().firstValue("Retry-After");
+                        retryAfter = response.firstHeader("Retry-After");
                     } else {
                         throw statusException(status, attempts);
                     }
@@ -290,7 +402,8 @@ public class ApiHttpEngine {
             } catch (ApiHttpException ex) {
                 throw ex;
             } catch (IOException ex) {
-                if (attempts <= maxRetries) {
+                if (retries < maxRetries) {
+                    retries++;
                     try {
                         sleepBeforeRetry(null, Optional.empty(), attempts, retryPolicy);
                     } catch (InterruptedException interrupted) {
@@ -608,30 +721,119 @@ public class ApiHttpEngine {
         query.putIfAbsent(Optional.ofNullable(firstText(pagination, "sizeParam")).orElse("size"), pageSize);
     }
 
-    private HttpClient buildClient(Map<String, Object> requestPolicy) {
-        return buildClient(requestPolicy, Map.of(), Map.of());
+    private PinnedHttpResponse executePinned(
+        URI uri,
+        String method,
+        Map<String, Object> sourceConfig,
+        Map<String, Object> resource,
+        Map<String, Object> requestPolicy,
+        Map<String, Object> tlsPolicy,
+        int maxResponseBytes,
+        int attempts
+    ) throws IOException {
+        validateUri(uri, requestPolicy);
+        ResolvedTarget target = resolveTarget(uri.getHost());
+        HttpUriRequestBase request = buildRequest(uri, method, sourceConfig, resource, requestPolicy);
+        try (CloseableHttpClient client = buildClient(requestPolicy, tlsPolicy, sourceConfig, target)) {
+            return client.execute(request, response -> {
+                HttpEntity entity = response.getEntity();
+                byte[] body = entity == null
+                    ? new byte[0]
+                    : readBody(entity.getContent(), maxResponseBytes, attempts);
+                return new PinnedHttpResponse(response.getCode(), responseHeaders(response.getHeaders()), body);
+            });
+        }
     }
 
-    private HttpClient buildClient(Map<String, Object> requestPolicy, Map<String, Object> tlsPolicy, Map<String, Object> sourceConfig) {
-        HttpClient.Builder builder = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofMillis(durationMillis(requestPolicy.get("connectTimeoutMillis"), apiProperties.getConnectTimeout())))
-            .followRedirects(bool(requestPolicy.get("followRedirects"), false) ? HttpClient.Redirect.NORMAL : HttpClient.Redirect.NEVER);
+    private PinnedHttpResponse executeRawPinned(
+        URI uri,
+        String method,
+        Map<String, String> headers,
+        String body,
+        Map<String, Object> requestPolicy,
+        Map<String, Object> tlsPolicy,
+        Map<String, Object> sourceConfig,
+        int maxResponseBytes,
+        int attempts
+    ) throws IOException {
+        validateUri(uri, requestPolicy);
+        ResolvedTarget target = resolveTarget(uri.getHost());
+        HttpUriRequestBase request = new HttpUriRequestBase(method, uri);
+        headers.forEach(request::setHeader);
+        if (!("GET".equals(method) || "HEAD".equals(method) || "DELETE".equals(method))) {
+            ContentType contentType = ContentType.parse(
+                headers.entrySet().stream()
+                    .filter(entry -> "Content-Type".equalsIgnoreCase(entry.getKey()))
+                    .map(Map.Entry::getValue)
+                    .findFirst()
+                    .orElse("application/octet-stream")
+            );
+            request.setEntity(new ByteArrayEntity((body == null ? "" : body).getBytes(StandardCharsets.UTF_8), contentType));
+        }
+        try (CloseableHttpClient client = buildClient(requestPolicy, tlsPolicy, sourceConfig, target)) {
+            return client.execute(request, response -> {
+                HttpEntity entity = response.getEntity();
+                byte[] responseBody = entity == null
+                    ? new byte[0]
+                    : readBody(entity.getContent(), maxResponseBytes, attempts);
+                return new PinnedHttpResponse(response.getCode(), responseHeaders(response.getHeaders()), responseBody);
+            });
+        }
+    }
+
+    private CloseableHttpClient buildClient(
+        Map<String, Object> requestPolicy,
+        Map<String, Object> tlsPolicy,
+        Map<String, Object> sourceConfig,
+        ResolvedTarget target
+    ) {
+        Timeout connectTimeout = Timeout.ofMilliseconds(
+            durationMillis(requestPolicy.get("connectTimeoutMillis"), apiProperties.getConnectTimeout())
+        );
+        Timeout readTimeout = Timeout.ofMilliseconds(
+            durationMillis(requestPolicy.get("readTimeoutMillis"), apiProperties.getReadTimeout())
+        );
+        var connectionManagerBuilder = PoolingHttpClientConnectionManagerBuilder.create()
+            .setDnsResolver(new PinnedDnsResolver(target))
+            .setDefaultConnectionConfig(
+                ConnectionConfig.custom()
+                    .setConnectTimeout(connectTimeout)
+                    .setSocketTimeout(readTimeout)
+                    .build()
+            );
         Map<String, Object> safeTlsPolicy = safeMap(tlsPolicy);
         if (!bool(safeTlsPolicy.get("verifyTls"), true)) {
-            builder.sslContext(insecureSslContext());
-            SSLParameters sslParameters = new SSLParameters();
-            sslParameters.setEndpointIdentificationAlgorithm("");
-            builder.sslParameters(sslParameters);
+            connectionManagerBuilder.setSSLSocketFactory(
+                SSLConnectionSocketFactoryBuilder.create()
+                    .setSslContext(insecureSslContext())
+                    .setHostnameVerifier(NoopHostnameVerifier.INSTANCE)
+                    .build()
+            );
         } else {
             String caPem = tlsCaPem(safeTlsPolicy, sourceConfig);
             if (StringUtils.hasText(caPem)) {
-                builder.sslContext(customCaSslContext(caPem));
+                connectionManagerBuilder.setSSLSocketFactory(
+                    SSLConnectionSocketFactoryBuilder.create()
+                        .setSslContext(customCaSslContext(caPem))
+                        .build()
+                );
             }
         }
-        return builder.build();
+        RequestConfig requestConfig = RequestConfig.custom()
+            .setRedirectsEnabled(false)
+            .setConnectTimeout(connectTimeout)
+            .setResponseTimeout(readTimeout)
+            .build();
+        return HttpClients.custom()
+            .setConnectionManager(connectionManagerBuilder.build())
+            .setDefaultRequestConfig(requestConfig)
+            .disableRedirectHandling()
+            .disableAutomaticRetries()
+            .disableCookieManagement()
+            .build();
     }
 
-    private HttpRequest buildRequest(
+    private HttpUriRequestBase buildRequest(
         URI uri,
         String method,
         Map<String, Object> sourceConfig,
@@ -639,24 +841,49 @@ public class ApiHttpEngine {
         Map<String, Object> requestPolicy
     ) {
         validateUri(uri, requestPolicy);
-        HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
-            .timeout(Duration.ofMillis(durationMillis(requestPolicy.get("readTimeoutMillis"), apiProperties.getReadTimeout())));
+        HttpUriRequestBase request = new HttpUriRequestBase(method, uri);
         Map<String, Object> headers = new LinkedHashMap<>(safeMap(sourceConfig.get("defaultHeaders")));
         headers.putAll(safeMap(resource.get("headers")));
         applyAuth(headers, sourceConfig);
         headers.forEach((key, value) -> {
             if (StringUtils.hasText(key) && value != null) {
-                builder.header(key, String.valueOf(value));
+                request.setHeader(key, String.valueOf(value));
             }
         });
 
         Object bodyTemplate = resource.get("bodyTemplate");
-        if ("GET".equals(method) || "DELETE".equals(method)) {
-            builder.method(method, HttpRequest.BodyPublishers.noBody());
-        } else {
-            builder.method(method, HttpRequest.BodyPublishers.ofString(bodyTemplate == null ? "" : String.valueOf(bodyTemplate)));
+        if (!("GET".equals(method) || "HEAD".equals(method) || "DELETE".equals(method))) {
+            byte[] body = (bodyTemplate == null ? "" : String.valueOf(bodyTemplate)).getBytes(StandardCharsets.UTF_8);
+            request.setEntity(new ByteArrayEntity(body, requestContentType(headers)));
         }
-        return builder.build();
+        return request;
+    }
+
+    private ContentType requestContentType(Map<String, Object> headers) {
+        String value = headers.entrySet().stream()
+            .filter(entry -> "Content-Type".equalsIgnoreCase(entry.getKey()))
+            .map(Map.Entry::getValue)
+            .filter(java.util.Objects::nonNull)
+            .map(String::valueOf)
+            .findFirst()
+            .orElse("application/octet-stream");
+        try {
+            return ContentType.parse(value);
+        } catch (RuntimeException ignored) {
+            return ContentType.APPLICATION_OCTET_STREAM;
+        }
+    }
+
+    private Map<String, List<String>> responseHeaders(Header[] headers) {
+        Map<String, List<String>> result = new LinkedHashMap<>();
+        if (headers != null) {
+            for (Header header : headers) {
+                result.computeIfAbsent(header.getName(), ignored -> new ArrayList<>()).add(header.getValue());
+            }
+        }
+        Map<String, List<String>> immutable = new LinkedHashMap<>();
+        result.forEach((name, values) -> immutable.put(name, List.copyOf(values)));
+        return Map.copyOf(immutable);
     }
 
     private SSLContext insecureSslContext() {
@@ -865,17 +1092,19 @@ public class ApiHttpEngine {
         }
         String body = formEncoded(form);
         URI uri = buildAuthUri(sourceConfig, firstText(auth, "tokenUrl"));
-        HttpRequest request = HttpRequest.newBuilder(uri)
-            .timeout(apiProperties.getReadTimeout())
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build();
         try {
-            HttpResponse<InputStream> response = buildClient(Map.of(), safeMap(sourceConfig.get("tls")), sourceConfig).send(
-                request,
-                HttpResponse.BodyHandlers.ofInputStream()
+            PinnedHttpResponse response = executeRawPinned(
+                uri,
+                "POST",
+                Map.of("Content-Type", "application/x-www-form-urlencoded"),
+                body,
+                safeMap(sourceConfig.get("requestPolicy")),
+                safeMap(sourceConfig.get("tls")),
+                sourceConfig,
+                apiProperties.maxResponseBytesAsInt(),
+                1
             );
-            byte[] bodyBytes = readBody(response.body(), apiProperties.maxResponseBytesAsInt(), 1);
+            byte[] bodyBytes = response.body();
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 throw new ApiHttpException(
                     "API_RUNTIME_AUTH",
@@ -894,10 +1123,7 @@ public class ApiHttpEngine {
         } catch (ApiHttpException ex) {
             throw ex;
         } catch (IOException ex) {
-            throw new ApiHttpException("API_RUNTIME_AUTH", "OAuth2 token endpoint 失败: " + ex.getMessage(), null, 1, ex);
-        } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
-            throw new ApiHttpException("API_RUNTIME_AUTH", "OAuth2 token endpoint 被中断", null, 1, ex);
+            throw new ApiHttpException("API_RUNTIME_AUTH", "OAuth2 token endpoint 调用失败", null, 1, ex);
         }
     }
 
@@ -921,20 +1147,19 @@ public class ApiHttpEngine {
         String loginMethod = Optional.ofNullable(firstText(auth, "loginMethod")).orElse("POST").trim().toUpperCase(Locale.ROOT);
         String body = renderSecretTemplate(firstText(auth, "loginBodyTemplate"), secrets);
         URI uri = buildAuthUri(sourceConfig, loginUrl);
-        HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
-            .timeout(apiProperties.getReadTimeout())
-            .header("Content-Type", "application/json");
-        if ("GET".equals(loginMethod)) {
-            builder.GET();
-        } else {
-            builder.method(loginMethod, HttpRequest.BodyPublishers.ofString(body == null ? "" : body));
-        }
         try {
-            HttpResponse<InputStream> response = buildClient(Map.of(), safeMap(sourceConfig.get("tls")), sourceConfig).send(
-                builder.build(),
-                HttpResponse.BodyHandlers.ofInputStream()
+            PinnedHttpResponse response = executeRawPinned(
+                uri,
+                loginMethod,
+                Map.of("Content-Type", "application/json"),
+                body,
+                safeMap(sourceConfig.get("requestPolicy")),
+                safeMap(sourceConfig.get("tls")),
+                sourceConfig,
+                apiProperties.maxResponseBytesAsInt(),
+                1
             );
-            byte[] bodyBytes = readBody(response.body(), apiProperties.maxResponseBytesAsInt(), 1);
+            byte[] bodyBytes = response.body();
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 throw new ApiHttpException("API_RUNTIME_AUTH", "JWT 登录失败: HTTP " + response.statusCode(), response.statusCode(), 1);
             }
@@ -948,10 +1173,7 @@ public class ApiHttpEngine {
         } catch (ApiHttpException ex) {
             throw ex;
         } catch (IOException ex) {
-            throw new ApiHttpException("API_RUNTIME_AUTH", "JWT 登录失败: " + ex.getMessage(), null, 1, ex);
-        } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
-            throw new ApiHttpException("API_RUNTIME_AUTH", "JWT 登录被中断", null, 1, ex);
+            throw new ApiHttpException("API_RUNTIME_AUTH", "JWT 登录调用失败", null, 1, ex);
         }
     }
 
@@ -1239,9 +1461,29 @@ public class ApiHttpEngine {
         if (!allowedHosts.isEmpty() && !hostAllowed(uri.getHost(), allowedHosts)) {
             throw new ApiHttpException("API_RUNTIME_BLOCKED_URL", "API host 不在允许列表: " + uri.getHost(), null, 0);
         }
-        if (resolvesToPrivateAddress(uri.getHost()) && !hostAllowed(uri.getHost(), allowedHosts)) {
-            throw new ApiHttpException("API_RUNTIME_BLOCKED_URL", "API 私网/本机地址默认禁止: " + uri.getHost(), null, 0);
+    }
+
+    ResolvedTarget resolveTarget(String host) {
+        if (!StringUtils.hasText(host)) {
+            throw new ApiHttpException("API_RUNTIME_BLOCKED_URL", "API host 无效", null, 0);
         }
+        final InetAddress[] addresses;
+        try {
+            addresses = hostAddressResolver.resolve(host);
+        } catch (IOException ex) {
+            throw new ApiHttpException("API_RUNTIME_BLOCKED_URL", "API host DNS 解析失败", null, 0, ex);
+        }
+        if (addresses == null || addresses.length == 0) {
+            throw new ApiHttpException("API_RUNTIME_BLOCKED_URL", "API host DNS 未返回地址", null, 0);
+        }
+        if (!allowNonGlobalTargetsForTests) {
+            for (InetAddress address : addresses) {
+                if (!isGlobalUnicast(address)) {
+                    throw new ApiHttpException("API_RUNTIME_BLOCKED_URL", "API host 解析到非公网单播地址", null, 0);
+                }
+            }
+        }
+        return new ResolvedTarget(host, addresses);
     }
 
     private List<String> allowedHosts(Object raw) {
@@ -1287,30 +1529,87 @@ public class ApiHttpEngine {
         return false;
     }
 
-    private boolean resolvesToPrivateAddress(String host) {
-        if (!StringUtils.hasText(host)) {
-            return false;
+    private boolean retryAllowed(
+        String method,
+        Map<String, Object> sourceConfig,
+        Map<String, Object> resource,
+        Map<String, Object> retryPolicy
+    ) {
+        String normalized = StringUtils.hasText(method) ? method.trim().toUpperCase(Locale.ROOT) : "GET";
+        if ("GET".equals(normalized) || "HEAD".equals(normalized)) {
+            return true;
         }
-        try {
-            InetAddress[] addresses = InetAddress.getAllByName(host);
-            for (InetAddress address : addresses) {
-                if (isPrivateAddress(address)) {
-                    return true;
-                }
-            }
-        } catch (IOException ex) {
-            return false;
+        if ("PUT".equals(normalized) || "DELETE".equals(normalized)) {
+            return bool(retryPolicy.get("idempotent"), false) || bool(resource.get("idempotent"), false);
+        }
+        if ("POST".equals(normalized) || "PATCH".equals(normalized)) {
+            Map<String, Object> headers = new LinkedHashMap<>(safeMap(sourceConfig.get("defaultHeaders")));
+            headers.putAll(safeMap(resource.get("headers")));
+            return headers.entrySet().stream()
+                .filter(entry -> "Idempotency-Key".equalsIgnoreCase(entry.getKey()))
+                .map(Map.Entry::getValue)
+                .map(this::text)
+                .anyMatch(StringUtils::hasText);
         }
         return false;
     }
 
-    private boolean isPrivateAddress(InetAddress address) {
-        return address != null
-            && (address.isAnyLocalAddress()
-                || address.isLoopbackAddress()
-                || address.isLinkLocalAddress()
-                || address.isSiteLocalAddress()
-                || address.isMulticastAddress());
+    private boolean isGlobalUnicast(InetAddress address) {
+        if (address == null
+            || address.isAnyLocalAddress()
+            || address.isLoopbackAddress()
+            || address.isLinkLocalAddress()
+            || address.isSiteLocalAddress()
+            || address.isMulticastAddress()) {
+            return false;
+        }
+        byte[] bytes = address.getAddress();
+        if (bytes.length == 4) {
+            int first = Byte.toUnsignedInt(bytes[0]);
+            int second = Byte.toUnsignedInt(bytes[1]);
+            int third = Byte.toUnsignedInt(bytes[2]);
+            if (first == 0 || first == 10 || first == 127 || first >= 224) {
+                return false;
+            }
+            if (first == 100 && second >= 64 && second <= 127) {
+                return false;
+            }
+            if (first == 169 && second == 254) {
+                return false;
+            }
+            if (first == 172 && second >= 16 && second <= 31) {
+                return false;
+            }
+            if (first == 192
+                && ((second == 0 && third == 0)
+                    || (second == 0 && third == 2)
+                    || (second == 88 && third == 99)
+                    || second == 168)) {
+                return false;
+            }
+            if (first == 198 && (second == 18 || second == 19 || (second == 51 && third == 100))) {
+                return false;
+            }
+            return !(first == 203 && second == 0 && third == 113);
+        }
+        if (bytes.length == 16) {
+            int first = Byte.toUnsignedInt(bytes[0]);
+            int second = Byte.toUnsignedInt(bytes[1]);
+            // fc00::/7 is unique-local, never a valid outbound API target.
+            if ((first & 0xfe) == 0xfc) {
+                return false;
+            }
+            // Only IPv6 global-unicast 2000::/3 is eligible. Exclude the
+            // documentation-only 2001:db8::/32 range as well.
+            if ((first & 0xe0) != 0x20) {
+                return false;
+            }
+            return !(first == 0x20
+                && second == 0x01
+                && Byte.toUnsignedInt(bytes[2]) == 0x0d
+                && Byte.toUnsignedInt(bytes[3]) == 0xb8);
+        }
+        return false;
     }
 
     private Object firstPresent(Map<String, Object> map, String... keys) {

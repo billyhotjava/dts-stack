@@ -232,96 +232,6 @@ public class DimensionDefinitionRepository {
             .findFirst();
     }
 
-    /**
-     * Resolves the immutable definition revision projected for a legacy DIMENSION ModelSpec.
-     *
-     * <p>The domain predicate prevents a corrupt or manually inserted cross-domain map from becoming
-     * an effective ModelSpec reference.
-     */
-    public Optional<LegacyDefinitionRef> findLegacyDefinitionRef(
-        String tenantId,
-        UUID legacyModelSpecId,
-        UUID domainId
-    ) {
-        return jdbcTemplate
-            .query(
-                """
-                select m.dimension_definition_id, m.dimension_definition_revision
-                  from modeling_dimension_definition_legacy_map m
-                  join modeling_dimension_definition d
-                    on d.tenant_id = m.tenant_id
-                   and d.id = m.dimension_definition_id
-                 where m.tenant_id = ?
-                   and m.legacy_model_spec_id = ?
-                   and d.domain_id = ?
-                """,
-                (row, rowNumber) ->
-                    new LegacyDefinitionRef(
-                        row.getObject("dimension_definition_id", UUID.class),
-                        row.getInt("dimension_definition_revision")
-                    ),
-                tenantId,
-                legacyModelSpecId,
-                domainId
-            )
-            .stream()
-            .findFirst();
-    }
-
-    /**
-     * Bounded graph-only resolver for legacy DIMENSION projections.
-     *
-     * <p>The authoritative ModelSpec head supplies the domain guard for every map row, preventing
-     * cross-domain mappings without issuing one lookup per ModelSpec.
-     */
-    public List<LegacyDefinitionMapping> findLegacyDefinitionRefsForRelationshipGraph(
-        String tenantId,
-        List<UUID> legacyModelSpecIds,
-        int limit
-    ) {
-        if (legacyModelSpecIds == null || legacyModelSpecIds.isEmpty() || limit < 1) {
-            return List.of();
-        }
-        int boundedLimit = Math.min(limit, 501);
-        List<UUID> boundedIds = new ArrayList<>();
-        Set<UUID> seen = new java.util.LinkedHashSet<>();
-        int inspected = 0;
-        for (UUID id : legacyModelSpecIds) {
-            if (++inspected > boundedLimit || boundedIds.size() >= boundedLimit) break;
-            if (id != null && seen.add(id)) boundedIds.add(id);
-        }
-        if (boundedIds.isEmpty()) return List.of();
-        String placeholders = String.join(", ", java.util.Collections.nCopies(boundedIds.size(), "?"));
-        List<Object> arguments = new ArrayList<>();
-        arguments.add(tenantId);
-        arguments.addAll(boundedIds);
-        arguments.add(boundedLimit);
-        return jdbcTemplate.query(
-            """
-            select m.legacy_model_spec_id, m.dimension_definition_id, m.dimension_definition_revision
-              from modeling_dimension_definition_legacy_map m
-              join modeling_model_spec s
-                on s.tenant_id = m.tenant_id
-               and s.id = m.legacy_model_spec_id
-              join modeling_dimension_definition d
-                on d.tenant_id = m.tenant_id
-               and d.id = m.dimension_definition_id
-             where m.tenant_id = ?
-               and m.legacy_model_spec_id in (%s)
-               and d.domain_id = s.domain_id
-             order by m.legacy_model_spec_id
-             limit ?
-            """.formatted(placeholders),
-            (row, rowNumber) ->
-                new LegacyDefinitionMapping(
-                    row.getObject("legacy_model_spec_id", UUID.class),
-                    row.getObject("dimension_definition_id", UUID.class),
-                    row.getInt("dimension_definition_revision")
-                ),
-            arguments.toArray()
-        );
-    }
-
     public boolean existsByDomainAndName(
         String tenantId,
         UUID domainId,
@@ -545,20 +455,12 @@ public class DimensionDefinitionRepository {
     public long usageCount(String tenantId, UUID id) {
         Long count = jdbcTemplate.queryForObject(
             """
-            select count(distinct usage.model_spec_id)
-              from (
-                    select s.id as model_spec_id
-                      from modeling_model_spec s
-                     where s.tenant_id = ? and s.dimension_definition_id = ?
-                    union all
-                    select m.legacy_model_spec_id as model_spec_id
-                      from modeling_dimension_definition_legacy_map m
-                     where m.tenant_id = ? and m.dimension_definition_id = ?
-                   ) usage
+            select count(*)
+              from modeling_model_spec s
+             where s.tenant_id = ?
+               and s.dimension_definition_id = ?
             """,
             Long.class,
-            tenantId,
-            id,
             tenantId,
             id
         );
@@ -574,24 +476,14 @@ public class DimensionDefinitionRepository {
         ArrayList<Object> arguments = new ArrayList<>(distinctIds.size() + 1);
         arguments.add(tenantId);
         arguments.addAll(distinctIds);
-        arguments.add(tenantId);
-        arguments.addAll(distinctIds);
         return jdbcTemplate.query(
             """
-            select usage.dimension_definition_id, count(distinct usage.model_spec_id) as usage_count
-              from (
-                    select s.dimension_definition_id, s.id as model_spec_id
-                      from modeling_model_spec s
-                     where s.tenant_id = ?
-                       and s.dimension_definition_id in (%s)
-                    union all
-                    select m.dimension_definition_id, m.legacy_model_spec_id as model_spec_id
-                      from modeling_dimension_definition_legacy_map m
-                     where m.tenant_id = ?
-                       and m.dimension_definition_id in (%s)
-                   ) usage
-             group by usage.dimension_definition_id
-            """.formatted(placeholders, placeholders),
+            select s.dimension_definition_id, count(*) as usage_count
+              from modeling_model_spec s
+             where s.tenant_id = ?
+               and s.dimension_definition_id in (%s)
+             group by s.dimension_definition_id
+            """.formatted(placeholders),
             resultSet -> {
                 Map<UUID, Long> counts = new LinkedHashMap<>();
                 while (resultSet.next()) {
@@ -663,14 +555,6 @@ public class DimensionDefinitionRepository {
     }
 
     public record ExpectedVersion(UUID id, int revision, String checksum) {}
-
-    public record LegacyDefinitionRef(UUID dimensionDefinitionId, int revision) {}
-
-    public record LegacyDefinitionMapping(
-        UUID legacyModelSpecId,
-        UUID dimensionDefinitionId,
-        int revision
-    ) {}
 
     public record StoredDimensionDefinition(
         boolean currentHead,

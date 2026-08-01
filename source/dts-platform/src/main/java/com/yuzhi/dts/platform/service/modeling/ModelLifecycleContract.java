@@ -1,9 +1,16 @@
 package com.yuzhi.dts.platform.service.modeling;
 
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
+import java.lang.reflect.Array;
 import java.time.Instant;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -44,12 +51,6 @@ public final class ModelLifecycleContract {
         RELEASE,
         ROLLBACK,
         RUN,
-    }
-
-    public enum RegistrationStep {
-        CATALOG_ASSET,
-        BI_DATASET,
-        LINEAGE,
     }
 
     /** Immutable evidence categories consumed by the build, quality and release workbench. */
@@ -133,7 +134,7 @@ public final class ModelLifecycleContract {
             result.put(REJECTED, List.of(DeliveryAction.CREATE_REPLACEMENT_CANDIDATE));
             result.put(APPROVED, List.of(DeliveryAction.PUBLISH));
             result.put(PUBLISHING, List.of());
-            result.put(PARTIAL, List.of(DeliveryAction.RETRY_REGISTRATION, DeliveryAction.ROLLBACK));
+            result.put(PARTIAL, List.of(DeliveryAction.RETRY_PUBLICATION, DeliveryAction.ROLLBACK));
             result.put(PUBLISHED, List.of(DeliveryAction.ROLLBACK));
             result.put(ROLLED_BACK, List.of(DeliveryAction.CREATE_REPLACEMENT_CANDIDATE));
             result.put(CANCELLED, List.of(DeliveryAction.CREATE_REPLACEMENT_CANDIDATE));
@@ -158,7 +159,7 @@ public final class ModelLifecycleContract {
         REJECT(DeliveryActorRole.RELEASE_REVIEWER),
         CREATE_REPLACEMENT_CANDIDATE(DeliveryActorRole.MODEL_MAINTAINER),
         PUBLISH(DeliveryActorRole.RELEASE_OPERATOR),
-        RETRY_REGISTRATION(DeliveryActorRole.RELEASE_OPERATOR),
+        RETRY_PUBLICATION(DeliveryActorRole.RELEASE_OPERATOR),
         ROLLBACK(DeliveryActorRole.RELEASE_OPERATOR);
 
         private final DeliveryActorRole requiredRole;
@@ -277,6 +278,12 @@ public final class ModelLifecycleContract {
         return value.trim();
     }
 
+    private static String requiredIdempotencyKey(String value) {
+        String result = requiredText(value, "idempotencyKey");
+        if (result.length() > 128) throw new IllegalArgumentException("idempotencyKey must not exceed 128 characters");
+        return result;
+    }
+
     private static String optionalActor(String actorId, Instant at, String action) {
         if (actorId == null && at == null) return null;
         if (actorId == null || actorId.isBlank() || at == null) {
@@ -331,11 +338,6 @@ public final class ModelLifecycleContract {
                 }
                 dbtUniqueId = requiredText(dbtUniqueId, "dbtUniqueId");
             }
-        }
-
-        /** API compatibility: the authoritative service fills the current implementation pin before validation and persistence. */
-        public UpstreamModelInput(UUID modelSpecId, int revision, String checksum) {
-            this(modelSpecId, revision, checksum, 0, null, null);
         }
 
         public boolean implementationPinned() {
@@ -393,7 +395,7 @@ public final class ModelLifecycleContract {
             if (!MATERIALIZATIONS.contains(materialization)) {
                 throw new IllegalArgumentException("materialization is not allowed");
             }
-            idempotencyKey = requiredText(idempotencyKey, "idempotencyKey");
+            idempotencyKey = requiredIdempotencyKey(idempotencyKey);
         }
     }
 
@@ -411,11 +413,66 @@ public final class ModelLifecycleContract {
 
     private static Map<String, Object> immutableMap(Map<String, Object> value, String name) {
         if (value == null) throw new IllegalArgumentException(name + " is required");
-        if (value.keySet().stream().anyMatch(key -> key == null || key.isBlank())) {
-            throw new IllegalArgumentException(name + " cannot contain blank keys");
+        LinkedHashMap<String, Object> result = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : value.entrySet()) {
+            String key = entry.getKey();
+            if (key == null || key.isBlank()) throw new IllegalArgumentException(name + " cannot contain blank keys");
+            result.put(key, deepFreeze(entry.getValue(), name + "." + key));
         }
-        if (value.values().stream().anyMatch(Objects::isNull)) throw new IllegalArgumentException(name + " cannot contain null values");
-        return Map.copyOf(value);
+        return Collections.unmodifiableMap(result);
+    }
+
+    private static Object deepFreeze(Object value, String name) {
+        if (value == null) throw new IllegalArgumentException(name + " cannot be null");
+        if (value instanceof Map<?, ?> values) {
+            LinkedHashMap<String, Object> result = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : values.entrySet()) {
+                if (!(entry.getKey() instanceof String key) || key.isBlank()) {
+                    throw new IllegalArgumentException(name + " cannot contain non-text or blank keys");
+                }
+                result.put(key, deepFreeze(entry.getValue(), name + "." + key));
+            }
+            return Collections.unmodifiableMap(result);
+        }
+        if (value instanceof List<?> values) {
+            ArrayList<Object> result = new ArrayList<>(values.size());
+            for (int index = 0; index < values.size(); index++) {
+                result.add(deepFreeze(values.get(index), name + "[" + index + "]"));
+            }
+            return List.copyOf(result);
+        }
+        if (value instanceof Set<?> values) {
+            LinkedHashSet<Object> result = new LinkedHashSet<>();
+            int index = 0;
+            for (Object item : values) result.add(deepFreeze(item, name + "[" + index++ + "]"));
+            return Collections.unmodifiableSet(result);
+        }
+        if (value.getClass().isArray()) {
+            int length = Array.getLength(value);
+            ArrayList<Object> result = new ArrayList<>(length);
+            for (int index = 0; index < length; index++) {
+                result.add(deepFreeze(Array.get(value, index), name + "[" + index + "]"));
+            }
+            return List.copyOf(result);
+        }
+        if (
+            value instanceof String ||
+            value instanceof Boolean ||
+            value instanceof Character ||
+            value instanceof Byte ||
+            value instanceof Short ||
+            value instanceof Integer ||
+            value instanceof Long ||
+            value instanceof Float ||
+            value instanceof Double ||
+            value instanceof BigInteger ||
+            value instanceof BigDecimal ||
+            value instanceof UUID ||
+            value instanceof Enum<?>
+        ) {
+            return value;
+        }
+        throw new IllegalArgumentException(name + " contains an unsupported mutable value");
     }
 
     private static Map<String, Object> validatedSettings(Map<String, Object> value) {
@@ -560,26 +617,20 @@ public final class ModelLifecycleContract {
         String projectKey,
         String dbtUniqueId,
         String idempotencyKey
-    ) {}
+    ) {
+        public ClaimImplementationCommand {
+            Objects.requireNonNull(ownership, "ownership is required");
+            projectKey = requiredText(projectKey, "projectKey");
+            dbtUniqueId = requiredText(dbtUniqueId, "dbtUniqueId");
+            idempotencyKey = requiredIdempotencyKey(idempotencyKey);
+        }
+    }
 
     public record TestEvidenceCommand(String status, String externalRunId, String comment, String idempotencyKey) {}
-
-    public record ReviewCommand(String comment, String idempotencyKey) {}
 
     public record PublishCommand(String comment, String idempotencyKey) {}
 
     public record RollbackCommand(String comment, String idempotencyKey) {}
-
-    public record RunCommand(
-        String idempotencyKey,
-        String sourceBatchId,
-        String addaxTaskId,
-        String airflowDagId,
-        String airflowRunId,
-        String dbtRunId,
-        String dbtSelector,
-        String targetTable
-    ) {}
 
     public record ImplementationView(
         UUID id,
@@ -598,39 +649,7 @@ public final class ModelLifecycleContract {
         List<FieldMapping> fieldMappings,
         Map<String, Object> settings,
         String materialization
-    ) {
-        /** Legacy projection retained for lifecycle callers until the input editor is wired. */
-        public ImplementationView(
-            UUID id,
-            UUID modelSpecId,
-            UUID planId,
-            int revision,
-            String modelChecksum,
-            ImplementationMode ownership,
-            String projectKey,
-            String dbtUniqueId,
-            String status
-        ) {
-            this(
-                id,
-                modelSpecId,
-                planId,
-                revision,
-                modelChecksum,
-                ownership,
-                projectKey,
-                dbtUniqueId,
-                status,
-                1,
-                modelChecksum,
-                InputMode.GENERATED,
-                List.of(new GeneratedInput("LEGACY_CLAIM", Map.of())),
-                List.of(),
-                Map.of(),
-                "table"
-            );
-        }
-    }
+    ) {}
 
     public record ArtifactView(
         UUID id,
@@ -696,29 +715,10 @@ public final class ModelLifecycleContract {
         Instant createdAt
     ) {}
 
-    public record RegistrationStepView(
-        UUID id,
-        UUID releaseEventId,
-        RegistrationStep step,
-        String status,
-        String externalRef,
-        int attemptCount,
-        String errorMessage,
-        Instant lastAttemptAt
-    ) {}
-
     public record CompileView(
         ImplementationView implementation,
         LifecycleEventView event,
         List<ArtifactView> artifacts
-    ) {}
-
-    public record ReleaseView(
-        LifecycleEventView release,
-        String status,
-        int publishedRevision,
-        String modelChecksum,
-        List<RegistrationStepView> registrations
     ) {}
 
     public record TimelineView(

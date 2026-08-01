@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260801-02a-archive-ingestion-task-direct-dbt" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <and>
+                <tableExists tableName="ingestion_task"/>
+                <columnExists tableName="ingestion_task" columnName="id"/>
+                <columnExists tableName="ingestion_task" columnName="dbt_model_selector"/>
+                <columnExists tableName="ingestion_task" columnName="dbt_dag_selector"/>
+            </and>
+        </preConditions>
+
+        <comment>
+            Preserve only the six production-confirmed legacy tab labels before the direct integration is
+            retired. Any other selector remains in ingestion_task so the following retirement migration
+            fails closed instead of projecting an unknown identity into the canonical model chain.
+        </comment>
+
+        <createTable tableName="ingestion_task_legacy_dbt_selector_archive">
+            <column name="task_id" type="bigint">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="dbt_model_selector" type="varchar(512)"/>
+            <column name="dbt_dag_selector" type="varchar(256)"/>
+            <column name="archived_at" type="timestamp with time zone" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="archived_by" type="varchar(100)" defaultValue="direct-dbt-retirement">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <sql dbms="postgresql" splitStatements="false"><![CDATA[
+            DO $do$
+            BEGIN
+                LOCK TABLE ingestion_task IN SHARE ROW EXCLUSIVE MODE;
+
+                INSERT INTO ingestion_task_legacy_dbt_selector_archive (
+                    task_id, dbt_model_selector, dbt_dag_selector
+                )
+                SELECT id, dbt_model_selector, dbt_dag_selector
+                  FROM ingestion_task
+                 WHERE nullif(btrim(dbt_model_selector), '') IS NULL
+                   AND (
+                         (id IN (11, 12, 14, 18, 24) AND dbt_dag_selector = 'tab:findemo1')
+                      OR (id = 26 AND dbt_dag_selector = 'tab:biadmin')
+                   );
+
+                IF EXISTS (
+                    SELECT 1
+                      FROM ingestion_task task
+                     LEFT JOIN ingestion_task_legacy_dbt_selector_archive archive
+                        ON archive.task_id = task.id
+                     WHERE nullif(btrim(task.dbt_model_selector), '') IS NULL
+                       AND (
+                             (task.id IN (11, 12, 14, 18, 24) AND task.dbt_dag_selector = 'tab:findemo1')
+                          OR (task.id = 26 AND task.dbt_dag_selector = 'tab:biadmin')
+                       )
+                       AND (
+                           archive.task_id IS NULL
+                        OR archive.dbt_model_selector IS DISTINCT FROM task.dbt_model_selector
+                        OR archive.dbt_dag_selector IS DISTINCT FROM task.dbt_dag_selector
+                       )
+                ) THEN
+                    RAISE EXCEPTION 'INGESTION_DIRECT_DBT_ARCHIVE_VERIFICATION_FAILED';
+                END IF;
+
+                UPDATE ingestion_task
+                   SET dbt_model_selector = NULL,
+                       dbt_dag_selector = NULL
+                 WHERE nullif(btrim(dbt_model_selector), '') IS NULL
+                   AND (
+                         (id IN (11, 12, 14, 18, 24) AND dbt_dag_selector = 'tab:findemo1')
+                      OR (id = 26 AND dbt_dag_selector = 'tab:biadmin')
+                   );
+            END
+            $do$;
+        ]]></sql>
+
+        <rollback>
+            <sql dbms="postgresql" splitStatements="false"><![CDATA[
+                DO $do$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                          FROM information_schema.columns
+                         WHERE table_schema = current_schema()
+                           AND table_name = 'ingestion_task'
+                           AND column_name = 'dbt_model_selector'
+                    ) OR NOT EXISTS (
+                        SELECT 1
+                          FROM information_schema.columns
+                         WHERE table_schema = current_schema()
+                           AND table_name = 'ingestion_task'
+                           AND column_name = 'dbt_dag_selector'
+                    ) THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_INGESTION_DIRECT_DBT_ARCHIVE_COLUMNS_RETIRED';
+                    END IF;
+
+                    LOCK TABLE ingestion_task IN SHARE ROW EXCLUSIVE MODE;
+
+                    IF EXISTS (
+                        SELECT 1
+                          FROM ingestion_task_legacy_dbt_selector_archive archive
+                          LEFT JOIN ingestion_task task ON task.id = archive.task_id
+                         WHERE task.id IS NULL
+                    ) THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_INGESTION_DIRECT_DBT_ARCHIVE_TASK_MISSING';
+                    END IF;
+
+                    IF EXISTS (
+                        SELECT 1
+                          FROM ingestion_task task
+                          JOIN ingestion_task_legacy_dbt_selector_archive archive
+                            ON archive.task_id = task.id
+                         WHERE task.dbt_model_selector IS NOT NULL
+                            OR task.dbt_dag_selector IS NOT NULL
+                    ) THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_INGESTION_DIRECT_DBT_ARCHIVE_SELECTOR_DRIFT';
+                    END IF;
+
+                    UPDATE ingestion_task task
+                       SET dbt_model_selector = archive.dbt_model_selector,
+                           dbt_dag_selector = archive.dbt_dag_selector
+                      FROM ingestion_task_legacy_dbt_selector_archive archive
+                     WHERE archive.task_id = task.id;
+                END
+                $do$;
+            ]]></sql>
+            <dropTable tableName="ingestion_task_legacy_dbt_selector_archive"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

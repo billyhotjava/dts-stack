@@ -2,14 +2,12 @@ package com.yuzhi.dts.platform.service.sql;
 
 import com.yuzhi.dts.platform.domain.explore.QueryDatasetAsset;
 import com.yuzhi.dts.platform.domain.explore.QueryDatasetVersion;
-import com.yuzhi.dts.platform.domain.modeling.ModelingSqlModel;
 import com.yuzhi.dts.platform.domain.explore.QueryExecution;
 import com.yuzhi.dts.platform.domain.explore.ResultSet;
 import com.yuzhi.dts.platform.repository.explore.QueryDatasetAssetRepository;
 import com.yuzhi.dts.platform.repository.explore.QueryDatasetVersionRepository;
 import com.yuzhi.dts.platform.repository.explore.QueryExecutionRepository;
 import com.yuzhi.dts.platform.repository.explore.ResultSetRepository;
-import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
@@ -19,7 +17,8 @@ import com.yuzhi.dts.platform.service.sql.dto.PublishQueryDatasetRequest;
 import com.yuzhi.dts.platform.service.sql.dto.QueryDatasetResponse;
 import com.yuzhi.dts.platform.service.sql.dto.QueryDatasetVersionResponse;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
-import com.yuzhi.dts.platform.service.catalog.CatalogAssetType;
+import com.yuzhi.dts.platform.service.catalog.CanonicalModelIdentityReadPort;
+import com.yuzhi.dts.platform.service.catalog.CanonicalModelIdentityReadPort.ModelIdentity;
 import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService;
 import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService.DeriveCommand;
 import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService.SubjectRef;
@@ -51,7 +50,7 @@ public class QueryDatasetService {
     private final QueryDatasetVersionRepository versionRepository;
     private final QueryExecutionRepository executionRepository;
     private final ResultSetRepository resultSetRepository;
-    private final ModelingSqlModelRepository modelingSqlModelRepository;
+    private final CanonicalModelIdentityReadPort canonicalModelIdentityReadPort;
     private final CatalogConsumerClassificationService consumerClassificationService;
 
     public QueryDatasetService(
@@ -59,47 +58,30 @@ public class QueryDatasetService {
         QueryDatasetVersionRepository versionRepository,
         QueryExecutionRepository executionRepository,
         ResultSetRepository resultSetRepository,
-        ModelingSqlModelRepository modelingSqlModelRepository
-    ) {
-        this(
-            assetRepository,
-            versionRepository,
-            executionRepository,
-            resultSetRepository,
-            modelingSqlModelRepository,
-            null
-        );
-    }
-
-    @org.springframework.beans.factory.annotation.Autowired
-    public QueryDatasetService(
-        QueryDatasetAssetRepository assetRepository,
-        QueryDatasetVersionRepository versionRepository,
-        QueryExecutionRepository executionRepository,
-        ResultSetRepository resultSetRepository,
-        ModelingSqlModelRepository modelingSqlModelRepository,
+        CanonicalModelIdentityReadPort canonicalModelIdentityReadPort,
         CatalogConsumerClassificationService consumerClassificationService
     ) {
         this.assetRepository = assetRepository;
         this.versionRepository = versionRepository;
         this.executionRepository = executionRepository;
         this.resultSetRepository = resultSetRepository;
-        this.modelingSqlModelRepository = modelingSqlModelRepository;
+        this.canonicalModelIdentityReadPort = canonicalModelIdentityReadPort;
         this.consumerClassificationService = consumerClassificationService;
     }
 
     @Transactional(readOnly = true)
     public List<QueryDatasetResponse> list(String activeDeptHeader) {
         String activeDept = resolveActiveDept(activeDeptHeader);
-        Map<String, ModelingSqlModel> modelsByName = loadModelIndex();
+        List<QueryDatasetAsset> enabled = assetRepository.findByEnabledTrueOrderByLastModifiedDateDesc();
+        Map<String, ModelIdentity> modelsByName = loadReferencedModels(enabled);
         if (hasGlobalManageScope()) {
-            return assetRepository.findByEnabledTrueOrderByLastModifiedDateDesc().stream().map(asset -> toDto(asset, modelsByName)).toList();
+            return enabled.stream().map(asset -> toDto(asset, modelsByName)).toList();
         }
 
         Map<UUID, QueryDatasetAsset> scoped = new LinkedHashMap<>();
         if (StringUtils.hasText(activeDept)) {
             // Avoid exact owner_dept matching. Dept codes may have format variants.
-            for (QueryDatasetAsset asset : assetRepository.findByEnabledTrueOrderByLastModifiedDateDesc()) {
+            for (QueryDatasetAsset asset : enabled) {
                 if (asset == null || asset.getId() == null) {
                     continue;
                 }
@@ -235,11 +217,8 @@ public class QueryDatasetService {
     }
 
     private void requireDerivedClassification(QueryDatasetAsset asset, String sqlText) {
-        if (consumerClassificationService == null) {
-            return;
-        }
-        Map<String, ModelingSqlModel> models = loadModelIndex();
         Set<String> names = extractReferencedModels(sqlText);
+        Map<String, ModelIdentity> models = canonicalModelIdentityReadPort.findDbtModelsByResourceNames(names);
         List<SubjectRef> upstreams = names
             .stream()
             .map(models::get)
@@ -247,11 +226,7 @@ public class QueryDatasetService {
             .map(model ->
                 new SubjectRef(
                     "ASSET",
-                    CatalogAssetKey.codeAsset(
-                        CatalogAssetType.MODELING_SQL_MODEL,
-                        "default",
-                        model.getName()
-                    )
+                    model.assetKey()
                 )
             )
             .distinct()
@@ -331,10 +306,11 @@ public class QueryDatasetService {
     }
 
     private QueryDatasetResponse toDto(QueryDatasetAsset asset) {
-        return toDto(asset, loadModelIndex());
+        Set<String> names = extractReferencedModels(asset == null ? null : asset.getSqlText());
+        return toDto(asset, canonicalModelIdentityReadPort.findDbtModelsByResourceNames(names));
     }
 
-    private QueryDatasetResponse toDto(QueryDatasetAsset asset, Map<String, ModelingSqlModel> modelsByName) {
+    private QueryDatasetResponse toDto(QueryDatasetAsset asset, Map<String, ModelIdentity> modelsByName) {
         DatasetContractInfo contractInfo = resolveDatasetContractInfo(asset, modelsByName);
         return new QueryDatasetResponse(
             asset.getId(),
@@ -358,18 +334,15 @@ public class QueryDatasetService {
         );
     }
 
-    private Map<String, ModelingSqlModel> loadModelIndex() {
-        Map<String, ModelingSqlModel> index = new LinkedHashMap<>();
-        for (ModelingSqlModel model : modelingSqlModelRepository.findAll()) {
-            if (model == null || !StringUtils.hasText(model.getName())) {
-                continue;
-            }
-            index.putIfAbsent(model.getName().trim().toLowerCase(Locale.ROOT), model);
+    private Map<String, ModelIdentity> loadReferencedModels(List<QueryDatasetAsset> assets) {
+        Set<String> names = new LinkedHashSet<>();
+        if (assets != null) {
+            assets.forEach(asset -> names.addAll(extractReferencedModels(asset == null ? null : asset.getSqlText())));
         }
-        return index;
+        return canonicalModelIdentityReadPort.findDbtModelsByResourceNames(names);
     }
 
-    private DatasetContractInfo resolveDatasetContractInfo(QueryDatasetAsset asset, Map<String, ModelingSqlModel> modelsByName) {
+    private DatasetContractInfo resolveDatasetContractInfo(QueryDatasetAsset asset, Map<String, ModelIdentity> modelsByName) {
         if (asset == null || modelsByName == null || modelsByName.isEmpty()) {
             return new DatasetContractInfo(null, 0, List.of());
         }
@@ -380,14 +353,12 @@ public class QueryDatasetService {
         Set<String> contractVersions = new LinkedHashSet<>();
         List<String> resolvedNames = new ArrayList<>();
         for (String name : modelNames) {
-            ModelingSqlModel model = modelsByName.get(name);
+            ModelIdentity model = modelsByName.get(name);
             if (model == null) {
                 continue;
             }
-            resolvedNames.add(model.getName());
-            if (StringUtils.hasText(model.getContractVersion())) {
-                contractVersions.add(model.getContractVersion().trim());
-            }
+            resolvedNames.add(model.modelName());
+            contractVersions.add(model.contractVersion());
         }
         resolvedNames.sort(String.CASE_INSENSITIVE_ORDER);
         if (contractVersions.isEmpty()) {

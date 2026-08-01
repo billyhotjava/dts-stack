@@ -7,14 +7,17 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository;
 import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository.StoredDimensionDefinition;
+import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionApplicationService.CreateResult;
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionApplicationService.ExpectedVersion;
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.CreateCommand;
@@ -35,6 +38,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -56,6 +60,9 @@ class DimensionDefinitionApplicationServiceTest {
     @Mock
     private ModelSpecDomainReadAccessPort domainReadAccess;
 
+    @Mock
+    private AuditService auditService;
+
     private ObjectMapper objectMapper;
     private DimensionDefinitionApplicationService service;
 
@@ -67,6 +74,7 @@ class DimensionDefinitionApplicationServiceTest {
             objectMapper,
             domainWriteAccess,
             domainReadAccess,
+            auditService,
             Clock.fixed(NOW, ZoneOffset.UTC),
             () -> DEFINITION_ID
         );
@@ -108,6 +116,122 @@ class DimensionDefinitionApplicationServiceTest {
             );
         assertThat(result.dimensionDefinition().checksum()).matches("[0-9a-f]{64}");
         verify(repository).insert(eq(TENANT), eq(ACTOR), eq(command), eq(result.dimensionDefinition()), anyString());
+    }
+
+    @Test
+    void recordsCanonicalWriteAuditsOnlyAfterCreateUpdateConfirmAndRetirePersistence() {
+        CreateCommand command = createCommand("audit-lifecycle", "Customer");
+        when(repository.findByIdempotencyKey(TENANT, command.idempotencyKey())).thenReturn(Optional.empty());
+        when(repository.insert(eq(TENANT), eq(ACTOR), eq(command), any(), anyString())).thenReturn(1);
+
+        View draft = service.create(TENANT, ACTOR, command).dimensionDefinition();
+
+        InOrder createOrder = inOrder(repository, auditService);
+        createOrder.verify(repository).insert(eq(TENANT), eq(ACTOR), eq(command), eq(draft), anyString());
+        createOrder.verify(auditService).auditAction(
+            eq("MODELING_DIMENSION_DEFINITION_CREATE"),
+            eq(AuditStage.SUCCESS),
+            eq(DEFINITION_ID.toString()),
+            any()
+        );
+
+        reset(repository, auditService);
+        when(repository.findCurrent(TENANT, DEFINITION_ID)).thenReturn(Optional.of(stored(draft, null, null)));
+        when(repository.usageCount(TENANT, DEFINITION_ID)).thenReturn(0L);
+        when(repository.compareAndSet(eq(TENANT), eq(ACTOR), any(), any())).thenReturn(1);
+
+        View updated = service.update(
+            TENANT,
+            ACTOR,
+            DEFINITION_ID,
+            expected(draft),
+            updateCommand("Customer updated")
+        );
+
+        InOrder updateOrder = inOrder(repository, auditService);
+        updateOrder.verify(repository).compareAndSet(eq(TENANT), eq(ACTOR), any(), eq(updated));
+        updateOrder.verify(auditService).auditAction(
+            eq("MODELING_DIMENSION_DEFINITION_UPDATE"),
+            eq(AuditStage.SUCCESS),
+            eq(DEFINITION_ID.toString()),
+            any()
+        );
+
+        View auditableDraft = withPrimaryKey(updated);
+        reset(repository, auditService);
+        when(repository.findCurrent(TENANT, DEFINITION_ID)).thenReturn(Optional.of(stored(auditableDraft, null, null)));
+        when(repository.usageCount(TENANT, DEFINITION_ID)).thenReturn(0L);
+        when(repository.compareAndSet(eq(TENANT), eq(ACTOR), any(), any())).thenReturn(1);
+
+        View current = service.confirm(TENANT, ACTOR, DEFINITION_ID, expected(auditableDraft));
+
+        InOrder confirmOrder = inOrder(repository, auditService);
+        confirmOrder.verify(repository).compareAndSet(eq(TENANT), eq(ACTOR), any(), eq(current));
+        confirmOrder.verify(auditService).auditAction(
+            eq("MODELING_DIMENSION_DEFINITION_CONFIRM"),
+            eq(AuditStage.SUCCESS),
+            eq(DEFINITION_ID.toString()),
+            any()
+        );
+
+        reset(repository, auditService);
+        when(repository.findCurrent(TENANT, DEFINITION_ID)).thenReturn(Optional.of(stored(current, null, null)));
+        when(repository.usageCount(TENANT, DEFINITION_ID)).thenReturn(0L);
+        when(repository.compareAndSet(eq(TENANT), eq(ACTOR), any(), any())).thenReturn(1);
+
+        View retired = service.retire(TENANT, ACTOR, DEFINITION_ID, expected(current));
+
+        InOrder retireOrder = inOrder(repository, auditService);
+        retireOrder.verify(repository).compareAndSet(eq(TENANT), eq(ACTOR), any(), eq(retired));
+        retireOrder.verify(auditService).auditAction(
+            eq("MODELING_DIMENSION_DEFINITION_RETIRE"),
+            eq(AuditStage.SUCCESS),
+            eq(DEFINITION_ID.toString()),
+            any()
+        );
+    }
+
+    @Test
+    void doesNotAuditIdempotencyReplayNoOpUpdateOrFailedCas() throws Exception {
+        CreateCommand command = createCommand("audit-replay", "Customer");
+        View original = createPersisted(command);
+        ArgumentCaptor<String> requestHash = ArgumentCaptor.forClass(String.class);
+        verify(repository).insert(eq(TENANT), eq(ACTOR), eq(command), any(), requestHash.capture());
+        StoredDimensionDefinition stored = stored(
+            original,
+            requestHash.getValue(),
+            objectMapper.writeValueAsString(original)
+        );
+
+        reset(repository, auditService);
+        when(repository.findByIdempotencyKey(TENANT, command.idempotencyKey())).thenReturn(Optional.of(stored));
+        when(repository.findRevision(TENANT, DEFINITION_ID, 1)).thenReturn(Optional.of(stored));
+        service.create(TENANT, ACTOR, command);
+        verify(auditService, never()).auditAction(anyString(), any(), anyString(), any());
+
+        reset(repository, auditService);
+        when(repository.findCurrent(TENANT, DEFINITION_ID)).thenReturn(Optional.of(stored(original, null, null)));
+        when(repository.usageCount(TENANT, DEFINITION_ID)).thenReturn(0L);
+        service.update(TENANT, ACTOR, DEFINITION_ID, expected(original), updateCommand(original.name()));
+        verify(auditService, never()).auditAction(anyString(), any(), anyString(), any());
+
+        reset(repository, auditService);
+        when(repository.findCurrent(TENANT, DEFINITION_ID))
+            .thenReturn(Optional.of(stored(original, null, null)), Optional.of(stored(original, null, null)));
+        when(repository.usageCount(TENANT, DEFINITION_ID)).thenReturn(0L);
+        when(repository.compareAndSet(eq(TENANT), eq(ACTOR), any(), any())).thenReturn(0);
+
+        assertCode(
+            () -> service.update(
+                TENANT,
+                ACTOR,
+                DEFINITION_ID,
+                expected(original),
+                updateCommand("Customer changed")
+            ),
+            "DIMENSION_DEFINITION_REVISION_CONFLICT"
+        );
+        verify(auditService, never()).auditAction(anyString(), any(), anyString(), any());
     }
 
     @Test
@@ -370,6 +494,7 @@ class DimensionDefinitionApplicationServiceTest {
             objectMapper,
             domainWriteAccess,
             domainReadAccess,
+            auditService,
             Clock.fixed(nanosecondInstant, ZoneOffset.UTC),
             () -> DEFINITION_ID
         );
@@ -433,6 +558,7 @@ class DimensionDefinitionApplicationServiceTest {
             prettyMapper,
             domainWriteAccess,
             domainReadAccess,
+            auditService,
             Clock.fixed(NOW, ZoneOffset.UTC),
             () -> DEFINITION_ID
         );
@@ -627,6 +753,38 @@ class DimensionDefinitionApplicationServiceTest {
 
     private static ExpectedVersion expected(View view) {
         return new ExpectedVersion(view.id(), view.revision(), view.checksum());
+    }
+
+    private static View withPrimaryKey(View view) {
+        return new View(
+            view.id(),
+            view.systemCode(),
+            view.domainId(),
+            view.name(),
+            view.definition(),
+            view.ownerId(),
+            view.reuseScope(),
+            view.hierarchies(),
+            view.status(),
+            view.revision(),
+            view.checksum(),
+            view.usageCount(),
+            view.createdAt(),
+            view.updatedAt(),
+            view.scopeType(),
+            view.dataMartId(),
+            List.of(
+                new DimensionDefinitionContract.AttributeSemantic(
+                    "CUSTOMER_ID",
+                    "Customer id",
+                    "Stable customer business key",
+                    true,
+                    null,
+                    null,
+                    1
+                )
+            )
+        );
     }
 
     private static View view(

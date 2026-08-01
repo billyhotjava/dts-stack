@@ -1,17 +1,16 @@
 package com.yuzhi.dts.platform.service.modeling;
 
-import com.yuzhi.dts.platform.domain.governance.GovIndicatorDefinition;
-import com.yuzhi.dts.platform.domain.governance.StdCodeDirectory;
 import com.yuzhi.dts.platform.domain.modeling.DataStandard;
 import com.yuzhi.dts.platform.domain.modeling.MetadataStandard;
 import com.yuzhi.dts.platform.domain.modeling.ModelingGlossaryTerm;
 import com.yuzhi.dts.platform.domain.modeling.ModelingTemplate;
-import com.yuzhi.dts.platform.repository.governance.GovIndicatorDefinitionRepository;
-import com.yuzhi.dts.platform.repository.governance.StdCodeDirectoryRepository;
 import com.yuzhi.dts.platform.repository.modeling.DataStandardRepository;
 import com.yuzhi.dts.platform.repository.modeling.MetadataStandardRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingGlossaryTermRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingTemplateRepository;
+import com.yuzhi.dts.platform.service.governance.GovernanceReferenceAssetReadPort;
+import com.yuzhi.dts.platform.service.governance.GovernanceReferenceAssetReadPort.IndicatorView;
+import com.yuzhi.dts.platform.service.governance.GovernanceReferenceAssetReadPort.ReferenceCodeView;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -36,24 +35,21 @@ public class ModelingAssetReferenceService {
     private final MetadataStandardRepository metadataStandardRepository;
     private final ModelingTemplateRepository modelingTemplateRepository;
     private final ModelingGlossaryTermRepository modelingGlossaryTermRepository;
-    private final StdCodeDirectoryRepository stdCodeDirectoryRepository;
+    private final GovernanceReferenceAssetReadPort governanceAssets;
     private final DataStandardRepository dataStandardRepository;
-    private final GovIndicatorDefinitionRepository indicatorRepository;
 
     public ModelingAssetReferenceService(
         MetadataStandardRepository metadataStandardRepository,
         ModelingTemplateRepository modelingTemplateRepository,
         ModelingGlossaryTermRepository modelingGlossaryTermRepository,
-        StdCodeDirectoryRepository stdCodeDirectoryRepository,
-        DataStandardRepository dataStandardRepository,
-        GovIndicatorDefinitionRepository indicatorRepository
+        GovernanceReferenceAssetReadPort governanceAssets,
+        DataStandardRepository dataStandardRepository
     ) {
         this.metadataStandardRepository = metadataStandardRepository;
         this.modelingTemplateRepository = modelingTemplateRepository;
         this.modelingGlossaryTermRepository = modelingGlossaryTermRepository;
-        this.stdCodeDirectoryRepository = stdCodeDirectoryRepository;
+        this.governanceAssets = governanceAssets;
         this.dataStandardRepository = dataStandardRepository;
-        this.indicatorRepository = indicatorRepository;
     }
 
     public Map<String, Object> glossaryReferences(ModelingGlossaryTerm term) {
@@ -110,19 +106,19 @@ public class ModelingAssetReferenceService {
             }
         }
 
-        for (StdCodeDirectory directory : stdCodeDirectoryRepository.findAll()) {
+        for (ReferenceCodeView directory : governanceAssets.referenceCodes()) {
             if (
-                matchKeyword(directory.getCodeTypeName(), keyword) ||
-                matchKeyword(directory.getCodeTypeCode(), keyword) ||
-                matchKeyword(directory.getBizCatalog(), keyword)
+                matchKeyword(directory.name(), keyword) ||
+                matchKeyword(directory.code(), keyword) ||
+                matchKeyword(directory.businessCatalog(), keyword)
             ) {
                 items.add(
                     referenceItem(
                         "REFERENCE_CODE",
                         "公共码表",
-                        directory.getCodeTypeId(),
-                        directory.getCodeTypeCode(),
-                        directory.getCodeTypeName(),
+                        directory.id(),
+                        directory.code(),
+                        directory.name(),
                         "/governance/standards/reference",
                         "码表定义命中术语关键字"
                     )
@@ -151,21 +147,21 @@ public class ModelingAssetReferenceService {
             }
         }
 
-        for (GovIndicatorDefinition indicator : indicatorRepository.findAll()) {
+        for (IndicatorView indicator : governanceAssets.indicators()) {
             if (
-                matchKeyword(indicator.getName(), keyword) ||
-                matchKeyword(indicator.getCode(), keyword) ||
-                matchKeyword(indicator.getDefinition(), keyword) ||
-                matchKeyword(indicator.getExpressionSql(), keyword) ||
-                matchKeyword(indicator.getTags(), keyword)
+                matchKeyword(indicator.name(), keyword) ||
+                matchKeyword(indicator.code(), keyword) ||
+                matchKeyword(indicator.definition(), keyword) ||
+                matchKeyword(indicator.expressionSql(), keyword) ||
+                matchKeyword(indicator.tags(), keyword)
             ) {
                 items.add(
                     referenceItem(
                         "INDICATOR",
                         "指标",
-                        toStringId(indicator.getId()),
-                        indicator.getCode(),
-                        indicator.getName(),
+                        toStringId(indicator.id()),
+                        indicator.code(),
+                        indicator.name(),
                         "/governance/indicators/dictionary",
                         "指标定义命中术语关键字"
                     )
@@ -222,31 +218,31 @@ public class ModelingAssetReferenceService {
 
         String codeSet = StringUtils.trimToNull(standard.getCodeSet());
         if (codeSet != null) {
-            stdCodeDirectoryRepository
-                .findByCodeTypeCodeIgnoreCase(codeSet)
+            governanceAssets
+                .referenceCodeByCode(codeSet)
                 .ifPresent(directory ->
                     items.add(
                         referenceItem(
                             "REFERENCE_CODE",
                             "公共码表",
-                            directory.getCodeTypeId(),
-                            directory.getCodeTypeCode(),
-                            directory.getCodeTypeName(),
+                            directory.id(),
+                            directory.code(),
+                            directory.name(),
                             "/governance/standards/reference",
                             "数据元 codeSet 指向该码表"
                         )
                     )
                 );
-            stdCodeDirectoryRepository
-                .findById(codeSet)
+            governanceAssets
+                .referenceCodeById(codeSet)
                 .ifPresent(directory ->
                     items.add(
                         referenceItem(
                             "REFERENCE_CODE",
                             "公共码表",
-                            directory.getCodeTypeId(),
-                            directory.getCodeTypeCode(),
-                            directory.getCodeTypeName(),
+                            directory.id(),
+                            directory.code(),
+                            directory.name(),
                             "/governance/standards/reference",
                             "数据元 codeSet 指向该码表"
                         )
@@ -290,17 +286,17 @@ public class ModelingAssetReferenceService {
 
         Set<String> stdCodeRefs = extractStdCodes(template.getFieldsTemplate());
         if (!stdCodeRefs.isEmpty()) {
-            for (StdCodeDirectory directory : stdCodeDirectoryRepository.findAll()) {
-                String code = normalize(directory.getCodeTypeCode());
-                String id = normalize(directory.getCodeTypeId());
+            for (ReferenceCodeView directory : governanceAssets.referenceCodes()) {
+                String code = normalize(directory.code());
+                String id = normalize(directory.id());
                 if (stdCodeRefs.contains(code) || stdCodeRefs.contains(id)) {
                     items.add(
                         referenceItem(
                             "REFERENCE_CODE",
                             "公共码表",
-                            directory.getCodeTypeId(),
-                            directory.getCodeTypeCode(),
-                            directory.getCodeTypeName(),
+                            directory.id(),
+                            directory.code(),
+                            directory.name(),
                             "/governance/standards/reference",
                             "模板字段定义引用了该码表"
                         )
@@ -331,9 +327,9 @@ public class ModelingAssetReferenceService {
         return referencePayload("TEMPLATE", toStringId(template.getId()), template.getName(), deduplicate(items));
     }
 
-    public Map<String, Object> referenceCodeReferences(StdCodeDirectory directory) {
-        String codeTypeCode = normalize(directory.getCodeTypeCode());
-        String codeTypeId = normalize(directory.getCodeTypeId());
+    public Map<String, Object> referenceCodeReferences(String directoryId, String directoryCode, String directoryName) {
+        String codeTypeCode = normalize(directoryCode);
+        String codeTypeId = normalize(directoryId);
         List<Map<String, Object>> items = new ArrayList<>();
 
         for (MetadataStandard standard : metadataStandardRepository.findAll()) {
@@ -387,7 +383,7 @@ public class ModelingAssetReferenceService {
             }
         }
 
-        return referencePayload("REFERENCE_CODE", directory.getCodeTypeId(), directory.getCodeTypeName(), deduplicate(items));
+        return referencePayload("REFERENCE_CODE", directoryId, directoryName, deduplicate(items));
     }
 
     public boolean hasReferences(Map<String, Object> payload) {

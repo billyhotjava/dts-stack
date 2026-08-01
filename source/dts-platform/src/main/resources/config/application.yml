@@ -250,8 +250,7 @@ info:
 
 dts:
   modeling:
-    # Independent rollback switches: v1 rows remain readable and v2 ledger rows are never deleted.
-    canonical-read-enabled: ${DTS_MODELING_CANONICAL_READ_ENABLED:true}
+    # Operational write freeze; canonical ModelSpec v2 remains the only readable contract.
     canonical-write-enabled: ${DTS_MODELING_CANONICAL_WRITE_ENABLED:true}
     runtime:
       # Keep first deployment safe; enable after Addax and Airflow endpoints are reachable.
@@ -448,11 +447,6 @@ dts:
   platform:
     modeling:
       default-tenant-id: ${DTS_PLATFORM_MODELING_DEFAULT_TENANT_ID:default}
-      # Sprint-67 F5: old reads are rollback-safe compatibility only; production writes stay frozen.
-      legacy-object-read-enabled: ${DTS_MODELING_LEGACY_OBJECT_READ_ENABLED:true}
-      legacy-object-write-frozen: ${DTS_MODELING_LEGACY_OBJECT_WRITE_FROZEN:true}
-      # Physical retirement remains NO-DROP until backup approval is explicitly supplied.
-      legacy-object-backup-approved: ${DTS_MODELING_LEGACY_OBJECT_BACKUP_APPROVED:false}
     infra:
       multi-source-enabled: ${DTS_PLATFORM_INFRA_MULTI_SOURCE_ENABLED:false}
       encryption-key: ${DTS_INFRA_ENCRYPTION_KEY:${DATA_STANDARD_ENCRYPTION_KEY:}}

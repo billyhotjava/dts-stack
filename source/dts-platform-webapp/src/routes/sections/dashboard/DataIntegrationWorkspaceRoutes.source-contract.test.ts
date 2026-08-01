@@ -15,6 +15,8 @@ const assertRouteBinding = (path: string, component: string) => {
 };
 
 test("data integration workspace owns the canonical access routes", () => {
+	assertRouteBinding("foundation/connections", "ConnectionProfilesPage");
+	assertRouteBinding("foundation/connections/:id", "ConnectionProfileDetailPage");
 	assertRouteBinding("foundation/data-sources", "AccessWorkspacePage");
 	assertRouteBinding("foundation/data-sources/database", "AccessWorkspacePage");
 	assertRouteBinding("foundation/data-sources/api", "AccessWorkspacePage");
@@ -36,5 +38,6 @@ test("legacy ingestion routes redirect into the access workspace", () => {
 	}
 
 	assert.match(DYNAMIC_RESOLVER, /foundation\/data-sources[^\n]*AccessWorkspacePage/);
+	assert.match(DYNAMIC_RESOLVER, /foundation\/connections[^\n]*ConnectionProfilesPage/);
 	assert.doesNotMatch(DYNAMIC_RESOLVER, /foundation\/data-sources[^\n]*DataSourcesPage/);
 });

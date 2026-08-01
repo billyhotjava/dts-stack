@@ -1,11 +1,6 @@
-import {
-	DatabaseOutlined,
-	SafetyCertificateOutlined,
-	TableOutlined,
-	WarningOutlined,
-} from "@ant-design/icons";
+import { DatabaseOutlined, SafetyCertificateOutlined, TableOutlined, WarningOutlined } from "@ant-design/icons";
 import { Alert, Button, Card, Collapse, Layout, Pagination, Space, Tabs } from "antd";
-import {useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import {
 	getCatalogAssetsV2Diagnostics,
@@ -20,10 +15,9 @@ import {
 	syncCatalogAssetsV2,
 	syncCatalogAssetV2Lineage,
 } from "@/api/platformApi";
+import { DomainScopeNav } from "@/components/catalog/DomainScopeNav";
 import { readTagIds, writeTagIds } from "@/components/catalog/tags/catalogTagUrlState";
 import { EmptyState } from "@/components/empty-state";
-import { DomainScopeNav } from "@/components/catalog/DomainScopeNav";
-import { ASSET_TYPE_DICT, LIFECYCLE_STATUS_DICT, MATCH_STATUS_DICT, resolveEnumLabel } from "./assets/assetEnumLabels";
 import { PageHeader } from "@/components/page-header";
 import { useRouter } from "@/routes/hooks";
 import { resolveAssetReadiness, STALE_LIFECYCLE_STATUSES } from "./assetPortalUx.helpers";
@@ -31,6 +25,8 @@ import { AssetLedgerDialogs } from "./assets/AssetLedgerDialogs";
 import { AssetLedgerToolbar } from "./assets/AssetLedgerToolbar";
 import { AssetLedgerView } from "./assets/AssetLedgerView";
 import { AssetReconciliationPanel } from "./assets/AssetReconciliationPanel";
+import { AssetTagsWorkspace } from "./assets/AssetTagsWorkspace";
+import { ASSET_TYPE_DICT, LIFECYCLE_STATUS_DICT, MATCH_STATUS_DICT, resolveEnumLabel } from "./assets/assetEnumLabels";
 import type {
 	AssetRow,
 	DomainNode,
@@ -54,6 +50,30 @@ import {
 } from "./assets/assetPageShared";
 
 export default function Page() {
+	const [params, setParams] = useSearchParams();
+	const activeWorkspace = params.get("tab") === "catalog-tags" ? "catalog-tags" : "assets";
+	const switchWorkspace = (tab: string) => {
+		const next = new URLSearchParams(params);
+		if (tab === "catalog-tags") next.set("tab", "catalog-tags");
+		else next.delete("tab");
+		setParams(next);
+	};
+	return (
+		<>
+			<Tabs
+				activeKey={activeWorkspace}
+				onChange={switchWorkspace}
+				items={[
+					{ key: "assets", label: "资产列表" },
+					{ key: "catalog-tags", label: "数据标签" },
+				]}
+			/>
+			{activeWorkspace === "catalog-tags" ? <AssetTagsWorkspace /> : <AssetLedgerPage />}
+		</>
+	);
+}
+
+function AssetLedgerPage() {
 	const router = useRouter();
 	const [searchParams, setSearchParams] = useSearchParams();
 	const selectedTagIds = useMemo(() => readTagIds(searchParams), [searchParams]);
@@ -343,7 +363,9 @@ export default function Page() {
 
 	const unclassifiedCount = records.filter((row) => !row.classification).length;
 	const missingDomainCount = records.filter((row) => !row.domain && !row.domainId).length;
-	const staleCount = records.filter((row) => STALE_LIFECYCLE_STATUSES.has(String(row.lifecycleStatus || "").toUpperCase())).length;
+	const staleCount = records.filter((row) =>
+		STALE_LIFECYCLE_STATUSES.has(String(row.lifecycleStatus || "").toUpperCase()),
+	).length;
 	const activeCount = records.filter((row) => row.status === "启用").length;
 	const readinessCounts = records.reduce<Record<string, number>>((acc, row) => {
 		const state = resolveAssetReadiness(row).state;
@@ -533,26 +555,26 @@ export default function Page() {
 			readyCount={Number(readinessCounts.READY || 0)}
 			selectedDomainName={selectedDomainName}
 			missingDomainCount={missingDomainCount}
-			onOpenGovernanceRemediation={openGovernanceRemediation}
+			onAssetChanged={() => void loadDatasets(pageState.page, pageState.size)}
 		/>
 	);
 
 	return (
-			<Layout className="min-h-full" style={{ background: "transparent" }}>
-				<Layout.Sider
-					width={248}
-					breakpoint="md"
-					collapsedWidth={0}
-					theme="light"
-					style={{
-						background: "#fff",
-						borderRight: "1px solid #f0f0f0",
-						padding: "12px 8px",
-						overflowY: "auto",
-						height: "calc(100vh - 64px)",
-					}}
-				>
-					<DomainScopeNav nodes={scopeNodes} value={domain} onChange={setDomain} loading={treeLoading} />
+		<Layout className="min-h-full" style={{ background: "transparent" }}>
+			<Layout.Sider
+				width={248}
+				breakpoint="lg"
+				collapsedWidth={0}
+				theme="light"
+				style={{
+					background: "#fff",
+					borderRight: "1px solid #f0f0f0",
+					padding: "12px 8px",
+					overflowY: "auto",
+					height: "calc(100vh - 64px)",
+				}}
+			>
+				<DomainScopeNav nodes={scopeNodes} value={domain} onChange={setDomain} loading={treeLoading} />
 			</Layout.Sider>
 			<Layout.Content style={{ padding: "0 16px" }}>
 				<div className="space-y-4">
@@ -595,7 +617,10 @@ export default function Page() {
 								Array.isArray(diagnostics.issues) && diagnostics.issues.length > 0
 									? diagnostics.issues
 											.slice(0, 3)
-											.map((item: any) => `${item.fqn || "-"}：${item.matchReason || resolveEnumLabel(MATCH_STATUS_DICT, item.matchStatus, "-")}`)
+											.map(
+												(item: any) =>
+													`${item.fqn || "-"}：${item.matchReason || resolveEnumLabel(MATCH_STATUS_DICT, item.matchStatus, "-")}`,
+											)
 											.join("；")
 									: undefined
 							}
@@ -629,7 +654,7 @@ export default function Page() {
 						/>
 					) : null}
 
-					<div className="grid gap-3 md:grid-cols-5">
+					<div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
 						<MetricTile
 							icon={<DatabaseOutlined />}
 							label="台账总量"

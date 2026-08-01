@@ -162,13 +162,13 @@ public class AuditOutboxDispatcher {
         }
 
         int maxAttempts = Math.max(1, properties.getOutbox().getMaxAttempts());
-        if (claimed.attempts() >= maxAttempts) {
+        if (claimed.generationAttempts() >= maxAttempts) {
             outbox.markDead(claimed.id(), claimed.attempts(), "AUDIT_DELIVERY_RETRIES_EXHAUSTED", now);
             return new DispatchResult(claimed.eventId(), "DEAD", claimed.attempts());
         }
         Duration delay = submission.retryAfter() != null
             ? submission.retryAfter()
-            : retryDelay(claimed.attempts());
+            : retryDelay(claimed.generationAttempts());
         outbox.markRetry(
             claimed.id(),
             claimed.attempts(),

@@ -277,7 +277,7 @@ export default function Page({
 			<Button type={blockedThemes.length > 0 ? "primary" : "default"} onClick={() => router.push(withE2EJourney("/workbench/todo"))}>
 				处理阻断项
 			</Button>
-			<Button onClick={() => router.push(withE2EJourney("/governance/quality"))}>治理检查</Button>
+			<Button onClick={() => router.push(withE2EJourney("/governance/rules/runs"))}>治理检查</Button>
 			<Button onClick={() => router.push(withE2EJourney("/catalog/assets"))}>查看资产</Button>
 			<Button onClick={() => router.push(withE2EJourney("/catalog/lineage/graph"))}>查看血缘</Button>
 			<Button onClick={() => router.push(withE2EJourney("/governance/standards/reference"))}>字典管理</Button>
@@ -741,7 +741,7 @@ export default function Page({
 							<Space wrap>
 								<Button onClick={() => router.push("/foundation/data-sources")}>配置数据源</Button>
 								<Button onClick={() => router.push("/workbench/todo")}>处理阻断项</Button>
-								<Button onClick={() => router.push("/governance/quality")}>治理检查</Button>
+								<Button onClick={() => router.push("/governance/rules/runs")}>治理检查</Button>
 								<Button onClick={() => router.push("/catalog/assets")}>查看资产</Button>
 								<Button onClick={() => router.push("/catalog/lineage/graph")}>查看血缘</Button>
 								<Button onClick={() => router.push("/governance/standards/reference")}>字典管理</Button>

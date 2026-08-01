@@ -29,8 +29,10 @@ public class ModelMaterializationRunRepository {
             .query(
                 """
                 select d.id, d.tenant_id, d.candidate_id,
-                       d.candidate_version,
-                       d.scoped_bundle_checksum, d.status,
+                       d.candidate_version, d.attempt,
+                       d.scoped_bundle_checksum, d.status, d.last_error_code,
+                       c.version as candidate_current_version,
+                       c.status as candidate_current_status,
                        c.execution_target_key, c.adapter,
                        l.credential_version_ref
                   from modeling_materialization_dispatch d
@@ -47,9 +49,13 @@ public class ModelMaterializationRunRepository {
                         row.getString("tenant_id"),
                         row.getObject("candidate_id", UUID.class),
                         row.getInt("candidate_version"),
+                        row.getInt("attempt"),
+                        row.getInt("candidate_current_version"),
+                        row.getString("candidate_current_status"),
                         "RELEASE_BUILD",
                         row.getString("scoped_bundle_checksum"),
                         row.getString("status"),
+                        row.getString("last_error_code"),
                         row.getString("execution_target_key"),
                         row.getString("adapter"),
                         row.getString("credential_version_ref")
@@ -118,6 +124,83 @@ public class ModelMaterializationRunRepository {
             );
         }
         markDispatchTerminal(groupId, "FAILED", errorCode, now);
+    }
+
+    /**
+     * Commits the fail-closed terminal truth for a callback whose runtime source pin is stale.
+     * Returns {@code true} only for the first stale transition; retries preserve the original
+     * terminal evidence and cannot downgrade it to a generic failure.
+     */
+    @Transactional
+    public boolean markAvailabilityStale(
+        UUID groupId,
+        String reasonCode,
+        Instant now
+    ) {
+        if (groupId == null || reasonCode == null || reasonCode.isBlank() || now == null) {
+            throw new IllegalArgumentException("groupId, reasonCode and now are required");
+        }
+        String stableReason = reasonCode.trim();
+        int dispatchRows = jdbcTemplate.update(
+            """
+            update modeling_materialization_dispatch
+               set status = 'FAILED', claimed_at = null,
+                   next_attempt_at = null, last_error_code = ?,
+                   last_modified_at = ?
+             where id = ?
+               and status in ('CLAIMED', 'SUBMITTED', 'UNKNOWN')
+            """,
+            stableReason,
+            Timestamp.from(now),
+            groupId
+        );
+        if (dispatchRows == 0) {
+            Integer staleRows = jdbcTemplate.queryForObject(
+                """
+                select count(*)
+                  from modeling_materialization_dispatch d
+                 where d.id = ?
+                   and d.status = 'FAILED'
+                   and d.last_error_code = ?
+                   and exists (
+                       select 1
+                         from modeling_pipeline_run pr
+                        where pr.pipeline_run_group_id = d.id
+                          and pr.run_purpose = 'RELEASE_BUILD'
+                          and pr.status = 'FAILED_STALE'
+                   )
+                """,
+                Integer.class,
+                groupId,
+                stableReason
+            );
+            if (staleRows == null || staleRows < 1) {
+                throw new IllegalStateException("stale materialization terminal truth is incomplete");
+            }
+            return false;
+        }
+        if (dispatchRows != 1) {
+            throw new IllegalStateException("materialization dispatch stale transition is not unique");
+        }
+        int pipelineRows = jdbcTemplate.update(
+            """
+            update modeling_pipeline_run
+               set status = 'FAILED_STALE', message = ?,
+                   finished_date = coalesce(finished_date, ?),
+                   last_modified_date = ?
+             where pipeline_run_group_id = ?
+               and run_purpose = 'RELEASE_BUILD'
+               and status <> 'PUBLISHED'
+            """,
+            stableReason,
+            Timestamp.from(now),
+            Timestamp.from(now),
+            groupId
+        );
+        if (pipelineRows < 1) {
+            throw new IllegalStateException("stale materialization group has no pipeline rows");
+        }
+        return true;
     }
 
     @Transactional
@@ -255,7 +338,7 @@ public class ModelMaterializationRunRepository {
                    last_modified_date = ?
              where pipeline_run_group_id = ?
                and run_purpose = 'RELEASE_BUILD'
-               and status not in ('BUILT', 'PUBLISHED')
+               and status not in ('BUILT', 'PUBLISHED', 'FAILED_STALE')
             """,
             errorCode.trim(),
             Timestamp.from(now),
@@ -299,9 +382,13 @@ public class ModelMaterializationRunRepository {
         String tenantId,
         UUID candidateId,
         int candidateVersion,
+        int attempt,
+        int candidateCurrentVersion,
+        String candidateCurrentStatus,
         String runPurpose,
         String scopedBundleChecksum,
         String dispatchStatus,
+        String lastErrorCode,
         String executionTargetKey,
         String adapter,
         String credentialVersionRef

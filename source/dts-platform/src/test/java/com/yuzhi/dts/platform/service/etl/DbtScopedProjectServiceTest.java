@@ -3,15 +3,14 @@ package com.yuzhi.dts.platform.service.etl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.platform.config.DbtProperties;
-import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
@@ -21,10 +20,26 @@ import org.junit.jupiter.api.io.TempDir;
 
 class DbtScopedProjectServiceTest {
 
+    @Test
+    void constructorDoesNotDependOnLegacyModelingSqlRepository() {
+        assertThat(DbtScopedProjectService.class.getDeclaredConstructors())
+            .flatExtracting(constructor -> Arrays.asList(constructor.getParameterTypes()))
+            .extracting(Class::getSimpleName)
+            .doesNotContain("ModelingSqlModelRepository");
+    }
+
+    @Test
+    void legacyPrepareEntryPointIsNotExposed() {
+        assertThat(DbtScopedProjectService.class.getDeclaredMethods())
+            .noneMatch(method ->
+                "prepare".equals(method.getName()) &&
+                Arrays.equals(method.getParameterTypes(), new Class<?>[] { String.class })
+            );
+    }
+
     @TempDir
     Path workspace;
 
-    private ModelingSqlModelRepository sqlModels;
     private DbtScopedProjectService service;
 
     @BeforeEach
@@ -56,8 +71,7 @@ class DbtScopedProjectServiceTest {
         DbtConfigService config = mock(DbtConfigService.class);
         when(config.resolveProjectDir()).thenReturn(workspace.toString());
         DbtProperties properties = new DbtProperties();
-        sqlModels = mock(ModelingSqlModelRepository.class);
-        service = new DbtScopedProjectService(config, properties, sqlModels);
+        service = new DbtScopedProjectService(config, properties);
     }
 
     @Test
@@ -92,7 +106,6 @@ class DbtScopedProjectServiceTest {
 
         service.releaseCandidateProject(first.bundleChecksum());
         assertThat(projectDir.resolve(".dts-active")).doesNotExist();
-        verifyNoInteractions(sqlModels);
     }
 
     @Test
@@ -207,7 +220,6 @@ class DbtScopedProjectServiceTest {
             () -> service.prepareCandidate(List.of(entry, duplicateSelector)),
             "MATERIALIZATION_SCOPE_DUPLICATE"
         );
-        verifyNoInteractions(sqlModels);
     }
 
     @Test
@@ -225,7 +237,6 @@ class DbtScopedProjectServiceTest {
             () -> service.prepareCandidate(List.of(first, second)),
             "MATERIALIZATION_DEPENDENCY_CYCLE"
         );
-        verifyNoInteractions(sqlModels);
     }
 
     private DbtScopedProjectService.CandidateArtifactEntry candidateEntry() {

@@ -3,7 +3,9 @@ package com.yuzhi.dts.ingestion.service.etl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.yuzhi.dts.ingestion.config.AddaxProperties;
+import com.yuzhi.dts.ingestion.config.InfraSecurityProperties;
 import com.yuzhi.dts.ingestion.domain.IngestionTask;
+import com.yuzhi.dts.ingestion.service.infra.InfraSettingsCryptoService;
 import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,6 +16,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.*;
@@ -37,6 +42,9 @@ class AddaxJobServiceTest {
     @Mock
     private JdbcMetadataService jdbcMetadataService;
 
+    @Mock
+    private IngestionSourceResolver sourceResolver;
+
     private ObjectMapper objectMapper;
     private AddaxJobService addaxJobService;
 
@@ -50,14 +58,23 @@ class AddaxJobServiceTest {
             .withProperty("spring.datasource.url", "jdbc:postgresql://localhost:5432/test")
             .withProperty("spring.datasource.username", "test")
             .withProperty("spring.datasource.password", "test");
+        InfraSecurityProperties securityProperties = new InfraSecurityProperties();
+        securityProperties.setEncryptionKey(Base64.getEncoder().encodeToString(
+            "0123456789abcdef0123456789abcdef".getBytes(StandardCharsets.UTF_8)
+        ));
+        securityProperties.setKeyVersion("v1");
+        InfraSettingsCryptoService cryptoService = new InfraSettingsCryptoService(securityProperties);
+        cryptoService.init();
         addaxJobService = new AddaxJobService(
             addaxProperties,
             settingsService,
             objectMapper,
             jdbcMetadataService,
             new AddaxJdbcConfigNormalizer(objectMapper),
-            mockEnv
+            mockEnv,
+            cryptoService
         );
+        addaxJobService.setSourceResolver(sourceResolver);
 
         // Mock settings service
         IngestionSettingsService.SettingsSnapshot settingsSnapshot = new IngestionSettingsService.SettingsSnapshot(
@@ -113,9 +130,12 @@ class AddaxJobServiceTest {
         Path jobPath = Path.of(result.jobPath());
         assertThat(Files.exists(jobPath)).isTrue();
 
-        // Verify JSON structure
-        String jsonContent = Files.readString(jobPath);
-        Map<String, Object> jobConfig = objectMapper.readValue(jsonContent, Map.class);
+        String sealedContent = Files.readString(jobPath);
+        assertThat(sealedContent)
+            .startsWith(AddaxJobService.SEALED_JOB_PREFIX)
+            .doesNotContain("password");
+        assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(jobPath))).isEqualTo("rw-r-----");
+        Map<String, Object> jobConfig = addaxJobService.readManagedJob(jobPath);
         assertThat(jobConfig).containsKey("job");
 
         Map<String, Object> job = (Map<String, Object>) jobConfig.get("job");
@@ -161,7 +181,7 @@ class AddaxJobServiceTest {
         IngestionTask task = new IngestionTask();
         task.setName("test-task");
         task.setSourceType("mysqlreader");
-        
+
         ObjectNode sourceConfig = objectMapper.createObjectNode();
         sourceConfig.put("username", "root");
         sourceConfig.put("password", "password");
@@ -388,7 +408,8 @@ class AddaxJobServiceTest {
         assertThat(Files.exists(Path.of(jobPath))).isTrue();
 
         String savedContent = Files.readString(Path.of(jobPath));
-        assertThat(savedContent).isEqualTo(jobJson);
+        assertThat(savedContent).startsWith(AddaxJobService.SEALED_JOB_PREFIX).doesNotContain("content", "setting");
+        assertThat(addaxJobService.readManagedJob(Path.of(jobPath))).containsKey("job");
     }
 
     @Test
@@ -846,6 +867,65 @@ class AddaxJobServiceTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void managedDestinationShouldResolveRuntimeCredentialsAndOverrideHistoricalJobSecrets() throws Exception {
+        java.util.UUID targetId = java.util.UUID.randomUUID();
+        IngestionTask task = new IngestionTask();
+        task.setName("managed-target");
+        task.setSourceType("mysqlreader");
+        task.setDestinationType("postgresqlwriter");
+        task.setSyncMode("incremental");
+        task.setSourceConfig(objectMapper.createObjectNode().set("table", objectMapper.valueToTree(java.util.List.of("orders"))));
+        ObjectNode destination = objectMapper.createObjectNode();
+        destination.put("targetDataSourceId", targetId.toString());
+        destination.put("password", "historical-task-secret");
+        destination.set("table", objectMapper.valueToTree(java.util.List.of("ods_orders")));
+        task.setDestinationConfig(destination);
+        task.setAddaxConfig(objectMapper.readTree("""
+            {
+              "job": {
+                "content": [{
+                  "reader": {"name":"mysqlreader","parameter":{"password":"historical-reader-secret"}},
+                  "writer": {"name":"postgresqlwriter","parameter":{"password":"historical-writer-secret"}}
+                }]
+              }
+            }
+            """));
+        when(sourceResolver.resolveJdbcInfo(targetId)).thenReturn(new JdbcMetadataService.JdbcConnectionInfo(
+            "jdbc:postgresql://managed-db:5432/lake",
+            "managed_user",
+            "managed_password",
+            "org.postgresql.Driver",
+            "42.7.5",
+            Map.of("sslmode", "disable")
+        ));
+        Map<String, Object> runtimeReader = new java.util.LinkedHashMap<>();
+        runtimeReader.put("jdbcUrl", "jdbc:mysql://source-db:3306/orders");
+        runtimeReader.put("username", "source_user");
+        runtimeReader.put("password", "source_runtime_password");
+        runtimeReader.put("table", java.util.List.of("orders"));
+
+        AddaxJobService.AddaxJobResult result = addaxJobService.createJobFromTask(
+            task,
+            "mysqlreader",
+            runtimeReader
+        );
+
+        Map<String, Object> job = (Map<String, Object>) result.jobConfig().get("job");
+        Map<String, Object> content = (Map<String, Object>) ((java.util.List<?>) job.get("content")).get(0);
+        Map<String, Object> writer = (Map<String, Object>) content.get("writer");
+        Map<String, Object> writerParams = (Map<String, Object>) writer.get("parameter");
+        Map<String, Object> writerConnection = (Map<String, Object>) ((java.util.List<?>) writerParams.get("connection")).get(0);
+        assertThat(writerParams)
+            .containsEntry("username", "managed_user")
+            .containsEntry("password", "managed_password");
+        assertThat(writerConnection)
+            .containsEntry("jdbcUrl", "jdbc:postgresql://managed-db:5432/lake?sslmode=disable");
+        assertThat(result.jobConfig().toString())
+            .doesNotContain("historical-task-secret", "historical-reader-secret", "historical-writer-secret");
+    }
+
+    @Test
     void shouldThrowExceptionWhenReaderWriterTypesMissing() {
         // When & Then
         assertThatThrownBy(() -> addaxJobService.createJob(
@@ -858,5 +938,62 @@ class AddaxJobServiceTest {
         ))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("缺少 Addax Reader/Writer 类型");
+    }
+
+    @Test
+    void deleteJobIfExists_deletesOnlyRegularFileDirectlyUnderManagedRoot() throws Exception {
+        Path job = Files.createFile(tempDir.resolve("task-41.json"));
+
+        assertThat(addaxJobService.deleteJobIfExists(job.toString())).isTrue();
+        assertThat(Files.exists(job)).isFalse();
+        assertThat(addaxJobService.deleteJobIfExists(job.toString())).isFalse();
+    }
+
+    @Test
+    void deleteJobIfExists_rejectsPathOutsideManagedRoot() throws Exception {
+        Path nested = Files.createDirectories(tempDir.resolve("unmanaged"));
+        Path job = Files.createFile(nested.resolve("task-41.json"));
+
+        assertThatThrownBy(() -> addaxJobService.deleteJobIfExists(job.toString()))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("ADDAX_JOB_PATH_OUTSIDE_MANAGED_ROOT");
+        assertThat(Files.exists(job)).isTrue();
+    }
+
+    @Test
+    void legacyPlaintextMigrationShouldSealInPlaceWithoutChangingAgain() throws Exception {
+        Path legacy = tempDir.resolve("task_71_1234abcd.json");
+        Files.writeString(legacy, """
+            {"job":{"content":[{"reader":{"parameter":{"password":"legacy-secret"}}}],"setting":{}}}
+            """);
+
+        addaxJobService.migrateLegacyPlaintextJobFiles();
+        String first = Files.readString(legacy);
+        addaxJobService.migrateLegacyPlaintextJobFiles();
+
+        assertThat(first).startsWith(AddaxJobService.SEALED_JOB_PREFIX).doesNotContain("legacy-secret");
+        assertThat(Files.readString(legacy)).isEqualTo(first);
+        assertThat(addaxJobService.readManagedJob(legacy).toString()).contains("legacy-secret");
+    }
+
+    @Test
+    void splitJobsShouldRemainSealedAndOwnerGroupReadableOnly() throws Exception {
+        String base = addaxJobService.saveJobJson("""
+            {"job":{"setting":{},"content":[
+              {"reader":{"parameter":{"password":"reader-secret"}},"writer":{"parameter":{"table":["orders"]}}},
+              {"reader":{"parameter":{"password":"reader-secret"}},"writer":{"parameter":{"table":["customers"]}}}
+            ]}}
+            """, 72L);
+
+        java.util.List<AddaxJobService.PerTableJob> split = addaxJobService.splitJobIntoPerTableFiles(base);
+
+        assertThat(split).hasSize(2);
+        for (AddaxJobService.PerTableJob job : split) {
+            Path path = Path.of(job.hostJobPath());
+            assertThat(Files.readString(path))
+                .startsWith(AddaxJobService.SEALED_JOB_PREFIX)
+                .doesNotContain("reader-secret");
+            assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(path))).isEqualTo("rw-r-----");
+        }
     }
 }

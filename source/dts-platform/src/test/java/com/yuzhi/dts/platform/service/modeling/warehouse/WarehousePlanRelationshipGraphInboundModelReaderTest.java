@@ -13,7 +13,6 @@ import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelRevisionRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecDomainReadAccessPort;
-import com.yuzhi.dts.platform.service.modeling.ModelSpecFeatureFlags;
 import java.sql.Array;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -55,8 +54,7 @@ class WarehousePlanRelationshipGraphInboundModelReaderTest {
     void setUp() {
         reader = new WarehousePlanRelationshipGraphInboundModelReader(
             jdbcTemplate,
-            domainReadAccess,
-            new ModelSpecFeatureFlags(true, true)
+            domainReadAccess
         );
     }
 
@@ -177,7 +175,7 @@ class WarehousePlanRelationshipGraphInboundModelReaderTest {
             UUID.fromString("80000000-0000-0000-0000-000000000001"),
             1
         );
-        when(domainReadAccess.visibleDomainIds()).thenReturn(Set.of());
+        when(domainReadAccess.visibleDomainIds()).thenReturn(Set.of(DOMAIN_ID));
         doReturn(List.of(earlierSource, currentWindowSource))
             .when(jdbcTemplate)
             .query(
@@ -237,9 +235,9 @@ class WarehousePlanRelationshipGraphInboundModelReaderTest {
                 arguments.capture()
             );
         assertThat(sql.getValue())
-            .contains("s.domain_id = ANY (?::uuid[])")
+            .contains("s.contract_version = 2", "s.domain_id = ANY (?::uuid[])")
             .doesNotContain("s.domain_id in (");
-        assertThat(arguments.getValue()).hasSize(7);
+        assertThat(arguments.getValue()).hasSize(6);
         assertThat(arguments.getValue()[2])
             .isInstanceOf(SqlArrayValue.class);
 

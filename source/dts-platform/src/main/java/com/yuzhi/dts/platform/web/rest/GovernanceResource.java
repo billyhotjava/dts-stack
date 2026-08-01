@@ -2,8 +2,10 @@ package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.config.GovernanceProperties;
+import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.governance.GovCleansingFunction;
 import com.yuzhi.dts.platform.domain.governance.GovRule;
+import com.yuzhi.dts.platform.domain.governance.GovRuleBinding;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.domain.governance.GovQualityFailingRow;
 import com.yuzhi.dts.platform.domain.governance.GovQualityTemplate;
@@ -13,7 +15,7 @@ import com.yuzhi.dts.platform.repository.governance.GovDataEditLogRepository;
 import com.yuzhi.dts.platform.repository.governance.GovQualityFailingRowRepository;
 import com.yuzhi.dts.platform.repository.governance.GovQualityTemplateRepository;
 import com.yuzhi.dts.platform.repository.governance.GovRuleRepository;
-import com.yuzhi.dts.platform.service.governance.CleansingResult;
+import com.yuzhi.dts.platform.repository.governance.GovRuleBindingRepository;
 import com.yuzhi.dts.platform.service.governance.ComplianceService;
 import com.yuzhi.dts.platform.service.governance.DataCleansingService;
 import com.yuzhi.dts.platform.service.governance.GovernanceOpsMetricsService;
@@ -22,6 +24,8 @@ import com.yuzhi.dts.platform.service.governance.OdsDataEditorService;
 import com.yuzhi.dts.platform.service.governance.IngestionQualityBridge;
 import com.yuzhi.dts.platform.service.governance.QualityRuleService;
 import com.yuzhi.dts.platform.service.governance.QualityReportExportService;
+import com.yuzhi.dts.platform.service.governance.QualityAuditRecorder;
+import com.yuzhi.dts.platform.service.governance.QualityDatasetReadGuard;
 import com.yuzhi.dts.platform.service.governance.QualityRunService;
 import com.yuzhi.dts.platform.service.governance.SqlRepairService;
 import com.yuzhi.dts.platform.service.governance.QualityDashboardService;
@@ -62,6 +66,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import javax.sql.DataSource;
@@ -71,6 +76,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -103,6 +109,8 @@ public class GovernanceResource {
     private final GovernanceOpsMetricsService governanceOpsMetricsService;
     private final ReferenceCodeService referenceCodeService;
     private final AuditService auditService;
+    private final QualityAuditRecorder qualityAuditRecorder;
+    private final QualityDatasetReadGuard qualityDatasetReadGuard;
     private final GovQualityTemplateRepository templateRepository;
     private final SqlTemplateRenderer sqlTemplateRenderer;
     private final GovQualityFailingRowRepository failingRowRepository;
@@ -110,6 +118,7 @@ public class GovernanceResource {
     private final DataCleansingService dataCleansingService;
     private final GovCleansingFunctionRepository cleansingFunctionRepository;
     private final GovRuleRepository ruleRepository;
+    private final GovRuleBindingRepository ruleBindingRepository;
     private final GovernanceProperties governanceProperties;
     private final OdsDataEditorService odsDataEditorService;
     private final GovDataEditLogRepository editLogRepository;
@@ -127,6 +136,8 @@ public class GovernanceResource {
         GovernanceOpsMetricsService governanceOpsMetricsService,
         ReferenceCodeService referenceCodeService,
         AuditService auditService,
+        QualityAuditRecorder qualityAuditRecorder,
+        QualityDatasetReadGuard qualityDatasetReadGuard,
         GovQualityTemplateRepository templateRepository,
         SqlTemplateRenderer sqlTemplateRenderer,
         GovQualityFailingRowRepository failingRowRepository,
@@ -134,6 +145,7 @@ public class GovernanceResource {
         DataCleansingService dataCleansingService,
         GovCleansingFunctionRepository cleansingFunctionRepository,
         GovRuleRepository ruleRepository,
+        GovRuleBindingRepository ruleBindingRepository,
         GovernanceProperties governanceProperties,
         OdsDataEditorService odsDataEditorService,
         GovDataEditLogRepository editLogRepository,
@@ -150,6 +162,8 @@ public class GovernanceResource {
         this.governanceOpsMetricsService = governanceOpsMetricsService;
         this.referenceCodeService = referenceCodeService;
         this.auditService = auditService;
+        this.qualityAuditRecorder = qualityAuditRecorder;
+        this.qualityDatasetReadGuard = qualityDatasetReadGuard;
         this.templateRepository = templateRepository;
         this.sqlTemplateRenderer = sqlTemplateRenderer;
         this.failingRowRepository = failingRowRepository;
@@ -157,6 +171,7 @@ public class GovernanceResource {
         this.dataCleansingService = dataCleansingService;
         this.cleansingFunctionRepository = cleansingFunctionRepository;
         this.ruleRepository = ruleRepository;
+        this.ruleBindingRepository = ruleBindingRepository;
         this.governanceProperties = governanceProperties;
         this.odsDataEditorService = odsDataEditorService;
         this.editLogRepository = editLogRepository;
@@ -297,13 +312,15 @@ public class GovernanceResource {
     }
 
     @GetMapping("/quality/rules/{id}/history")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
     public ApiResponse<List<Map<String, Object>>> getRuleHistory(
         @PathVariable UUID id,
-        @RequestParam(value = "limit", defaultValue = "10") int limit
+        @RequestParam(value = "limit", defaultValue = "10") int limit,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         int safeLimit = Math.max(1, Math.min(limit, 100));
         List<Map<String, Object>> history = qualityRunService
-            .recentByRule(id, safeLimit)
+            .recentByRule(id, safeLimit, activeDept)
             .stream()
             .map(this::toRuleHistoryItem)
             .toList();
@@ -368,57 +385,80 @@ public class GovernanceResource {
 
     @PostMapping("/quality/runs")
     @PreAuthorize("(" + GOVERNANCE_MAINTAINER_EXPRESSION + ") or (" + INGESTION_SERVICE_EXPRESSION + ")")
-    public ApiResponse<List<QualityRunDto>> triggerQualityRun(@RequestBody QualityRunTriggerRequest request) {
-        List<QualityRunDto> runs = qualityRunService.trigger(request, currentUser());
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("summary", "执行质量检测");
-        payload.put("runCount", runs.size());
-        if (request != null) {
-            if (request.getRuleId() != null) {
-                payload.put("ruleId", request.getRuleId().toString());
-            }
-            if (request.getDatasetId() != null) {
-                payload.put("datasetId", request.getDatasetId().toString());
-            }
-            if (StringUtils.hasText(request.getTriggerType())) {
-                payload.put("triggerType", request.getTriggerType());
-            }
-        }
+    public ApiResponse<List<QualityRunDto>> triggerQualityRun(
+        @RequestBody QualityRunTriggerRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
         String resourceId = request != null && request.getRuleId() != null ? request.getRuleId().toString() : "trigger";
-        auditService.auditAction("GOV_RULE_EXECUTE", AuditStage.SUCCESS, resourceId, payload);
-        return ApiResponses.ok(runs);
+        try {
+            List<QualityRunDto> runs = isTrustedIngestionService()
+                ? qualityRunService.trigger(request, currentUser())
+                : qualityRunService.trigger(request, currentUser(), activeDept);
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("summary", "执行质量检测");
+            payload.put("runCount", runs.size());
+            if (request != null) {
+                if (request.getRuleId() != null) {
+                    payload.put("ruleId", request.getRuleId().toString());
+                }
+                if (request.getDatasetId() != null) {
+                    payload.put("datasetId", request.getDatasetId().toString());
+                }
+                if (StringUtils.hasText(request.getTriggerType())) {
+                    payload.put("triggerType", request.getTriggerType());
+                }
+            }
+            auditQualityAction("GOV_RULE_EXECUTE", AuditStage.SUCCESS, resourceId, "执行质量检测", payload);
+            return ApiResponses.ok(runs);
+        } catch (RuntimeException ex) {
+            auditQualityFailure("GOV_RULE_EXECUTE", resourceId, "执行质量检测失败", ex);
+            throw ex;
+        }
+    }
+
+    private boolean isTrustedIngestionService() {
+        return SecurityUtils.hasCurrentUserThisAuthority(AuthoritiesConstants.SERVICE_INTERNAL) &&
+            "service:dts-ingestion".equals(currentUser());
     }
 
     @PostMapping("/quality/runs/dry-run")
     @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
-    public ApiResponse<List<QualityRunDto>> dryRunQualityRule(@RequestBody QualityRunTriggerRequest request) {
+    public ApiResponse<List<QualityRunDto>> dryRunQualityRule(
+        @RequestBody QualityRunTriggerRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
         QualityRunTriggerRequest effectiveRequest = request != null ? request : new QualityRunTriggerRequest();
         effectiveRequest.setDryRun(Boolean.TRUE);
         if (!StringUtils.hasText(effectiveRequest.getTriggerType())) {
             effectiveRequest.setTriggerType("DRY_RUN");
         }
-        List<QualityRunDto> runs = qualityRunService.trigger(effectiveRequest, currentUser());
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("summary", "试跑质量规则");
-        payload.put("runCount", runs.size());
-        if (effectiveRequest.getRuleId() != null) {
-            payload.put("ruleId", effectiveRequest.getRuleId().toString());
+        String resourceId = effectiveRequest.getRuleId() != null ? effectiveRequest.getRuleId().toString() : "dry-run";
+        try {
+            List<QualityRunDto> runs = qualityRunService.trigger(effectiveRequest, currentUser(), activeDept);
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("summary", "试跑质量规则");
+            payload.put("runCount", runs.size());
+            if (effectiveRequest.getRuleId() != null) {
+                payload.put("ruleId", effectiveRequest.getRuleId().toString());
+            }
+            if (effectiveRequest.getDatasetId() != null) {
+                payload.put("datasetId", effectiveRequest.getDatasetId().toString());
+            }
+            auditQualityAction("GOV_RULE_DRY_RUN", AuditStage.SUCCESS, resourceId, "试跑质量规则", payload);
+            return ApiResponses.ok(runs);
+        } catch (RuntimeException ex) {
+            auditQualityFailure("GOV_RULE_DRY_RUN", resourceId, "试跑质量规则失败", ex);
+            throw ex;
         }
-        if (effectiveRequest.getDatasetId() != null) {
-            payload.put("datasetId", effectiveRequest.getDatasetId().toString());
-        }
-        auditService.auditAction(
-            "GOV_RULE_DRY_RUN",
-            AuditStage.SUCCESS,
-            effectiveRequest.getRuleId() != null ? effectiveRequest.getRuleId().toString() : "dry-run",
-            payload
-        );
-        return ApiResponses.ok(runs);
     }
 
     @GetMapping("/quality/runs/{id}")
-    public ApiResponse<QualityRunDto> getQualityRun(@PathVariable UUID id) {
-        QualityRunDto dto = qualityRunService.getRun(id);
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
+    public ApiResponse<QualityRunDto> getQualityRun(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        QualityRunDto dto = qualityRunService.getRun(id, activeDept);
         Map<String, Object> detail = new LinkedHashMap<>();
         detail.put("targetId", id.toString());
         detail.put("summary", "查看质量运行详情");
@@ -441,6 +481,7 @@ public class GovernanceResource {
     }
 
     @GetMapping("/quality/runs")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
     public ApiResponse<List<QualityRunDto>> listQualityRuns(
         @RequestParam(value = "ruleId", required = false) UUID ruleId,
         @RequestParam(value = "datasetId", required = false) UUID datasetId,
@@ -450,11 +491,21 @@ public class GovernanceResource {
         @RequestParam(value = "startedTo", required = false) Instant startedTo,
         @RequestParam(value = "startFrom", required = false) Instant startFrom,
         @RequestParam(value = "startTo", required = false) Instant startTo,
-        @RequestParam(value = "limit", defaultValue = "10") int limit
+        @RequestParam(value = "limit", defaultValue = "10") int limit,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         Instant effectiveStartedFrom = startedFrom != null ? startedFrom : startFrom;
         Instant effectiveStartedTo = startedTo != null ? startedTo : startTo;
-        List<QualityRunDto> runs = qualityRunService.listRuns(ruleId, datasetId, status, triggerType, effectiveStartedFrom, effectiveStartedTo, limit);
+        List<QualityRunDto> runs = qualityRunService.listRuns(
+            ruleId,
+            datasetId,
+            status,
+            triggerType,
+            effectiveStartedFrom,
+            effectiveStartedTo,
+            limit,
+            activeDept
+        );
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("summary", "查看质量运行记录");
         payload.put("limit", limit);
@@ -492,12 +543,15 @@ public class GovernanceResource {
      * 查询某次质量检测运行的失败行明细（分页）
      */
     @GetMapping("/quality/runs/{runId}/failing-rows")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
     public ApiResponse<Map<String, Object>> listFailingRows(
         @PathVariable UUID runId,
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "20") int size,
-        @RequestParam(required = false) String columnName
+        @RequestParam(required = false) String columnName,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
+        qualityRunService.assertRunReadable(runId, activeDept);
         // 1. 分页查询 gov_quality_failing_row
         Pageable pageable = PageRequest.of(page, Math.min(size, 100));
         Page<GovQualityFailingRow> rows;
@@ -556,7 +610,11 @@ public class GovernanceResource {
                 }
             }
         } catch (Exception e) {
-            log.warn("Failed to fetch row data from {}: {}", tableName, e.getMessage());
+            log.warn(
+                "event=quality_failing_row_refresh_failed tableName={} errorType={}",
+                tableName,
+                e.getClass().getSimpleName()
+            );
         }
         return Map.of();
     }
@@ -565,77 +623,131 @@ public class GovernanceResource {
 
     @GetMapping("/quality/templates")
     public ApiResponse<List<GovQualityTemplate>> listTemplates() {
-        return ApiResponses.ok(templateRepository.findAll());
+        List<GovQualityTemplate> templates = templateRepository.findAll();
+        auditQualityAction(
+            "GOV_QUALITY_TEMPLATE_LIST",
+            AuditStage.SUCCESS,
+            "LIST",
+            "查看质量模板列表",
+            Map.of("count", templates.size())
+        );
+        return ApiResponses.ok(templates);
     }
 
     @GetMapping("/quality/templates/{id}")
     public ApiResponse<GovQualityTemplate> getTemplate(@PathVariable UUID id) {
         GovQualityTemplate template = templateRepository.findById(id)
             .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("质量模板不存在"));
+        auditQualityAction(
+            "GOV_QUALITY_TEMPLATE_VIEW",
+            AuditStage.SUCCESS,
+            id.toString(),
+            "查看质量模板",
+            Map.of("templateCode", valueOrUnknown(template.getCode()), "templateName", valueOrUnknown(template.getName()))
+        );
         return ApiResponses.ok(template);
     }
 
     @PostMapping("/quality/templates")
     @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
     public ApiResponse<GovQualityTemplate> createTemplate(@RequestBody GovQualityTemplate template) {
-        template.setId(null);
-        if (template.getBuiltin() == null) {
-            template.setBuiltin(Boolean.FALSE);
+        String requestedCode = qualityResourceId(template != null ? template.getCode() : null, "UNASSIGNED");
+        try {
+            template.setId(null);
+            if (template.getBuiltin() == null) {
+                template.setBuiltin(Boolean.FALSE);
+            }
+            if (template.getEnabled() == null) {
+                template.setEnabled(Boolean.TRUE);
+            }
+            GovQualityTemplate saved = templateRepository.save(template);
+            auditQualityAction(
+                "GOV_QUALITY_TEMPLATE_CREATE",
+                AuditStage.SUCCESS,
+                qualityResourceId(saved.getId(), requestedCode),
+                "创建质量模板",
+                Map.of("templateCode", valueOrUnknown(saved.getCode()), "templateName", valueOrUnknown(saved.getName()))
+            );
+            return ApiResponses.ok(saved);
+        } catch (RuntimeException ex) {
+            auditQualityFailure("GOV_QUALITY_TEMPLATE_CREATE", requestedCode, "创建质量模板失败", ex);
+            throw ex;
         }
-        if (template.getEnabled() == null) {
-            template.setEnabled(Boolean.TRUE);
-        }
-        return ApiResponses.ok(templateRepository.save(template));
     }
 
     @PutMapping("/quality/templates/{id}")
     @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
     public ApiResponse<GovQualityTemplate> updateTemplate(@PathVariable UUID id, @RequestBody GovQualityTemplate template) {
-        GovQualityTemplate existing = templateRepository.findById(id)
-            .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("质量模板不存在"));
-        if (StringUtils.hasText(template.getCode())) {
-            existing.setCode(template.getCode().trim());
+        try {
+            GovQualityTemplate existing = templateRepository.findById(id)
+                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("质量模板不存在"));
+            if (StringUtils.hasText(template.getCode())) {
+                existing.setCode(template.getCode().trim());
+            }
+            if (StringUtils.hasText(template.getName())) {
+                existing.setName(template.getName().trim());
+            }
+            if (StringUtils.hasText(template.getCategory())) {
+                existing.setCategory(template.getCategory().trim());
+            }
+            if (template.getDescription() != null) {
+                existing.setDescription(template.getDescription());
+            }
+            if (template.getParamSchema() != null) {
+                existing.setParamSchema(template.getParamSchema());
+            }
+            if (StringUtils.hasText(template.getSqlTemplate())) {
+                existing.setSqlTemplate(template.getSqlTemplate());
+            }
+            if (template.getSeverityDefault() != null) {
+                existing.setSeverityDefault(template.getSeverityDefault());
+            }
+            if (template.getActionDefault() != null) {
+                existing.setActionDefault(template.getActionDefault());
+            }
+            if (template.getDialect() != null) {
+                existing.setDialect(template.getDialect());
+            }
+            if (template.getEnabled() != null) {
+                existing.setEnabled(template.getEnabled());
+            }
+            GovQualityTemplate saved = templateRepository.save(existing);
+            auditQualityAction(
+                "GOV_QUALITY_TEMPLATE_UPDATE",
+                AuditStage.SUCCESS,
+                id.toString(),
+                "更新质量模板",
+                Map.of("templateCode", valueOrUnknown(saved.getCode()), "templateName", valueOrUnknown(saved.getName()))
+            );
+            return ApiResponses.ok(saved);
+        } catch (RuntimeException ex) {
+            auditQualityFailure("GOV_QUALITY_TEMPLATE_UPDATE", id.toString(), "更新质量模板失败", ex);
+            throw ex;
         }
-        if (StringUtils.hasText(template.getName())) {
-            existing.setName(template.getName().trim());
-        }
-        if (StringUtils.hasText(template.getCategory())) {
-            existing.setCategory(template.getCategory().trim());
-        }
-        if (template.getDescription() != null) {
-            existing.setDescription(template.getDescription());
-        }
-        if (template.getParamSchema() != null) {
-            existing.setParamSchema(template.getParamSchema());
-        }
-        if (StringUtils.hasText(template.getSqlTemplate())) {
-            existing.setSqlTemplate(template.getSqlTemplate());
-        }
-        if (template.getSeverityDefault() != null) {
-            existing.setSeverityDefault(template.getSeverityDefault());
-        }
-        if (template.getActionDefault() != null) {
-            existing.setActionDefault(template.getActionDefault());
-        }
-        if (template.getDialect() != null) {
-            existing.setDialect(template.getDialect());
-        }
-        if (template.getEnabled() != null) {
-            existing.setEnabled(template.getEnabled());
-        }
-        return ApiResponses.ok(templateRepository.save(existing));
     }
 
     @DeleteMapping("/quality/templates/{id}")
     @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
     public ApiResponse<Boolean> deleteTemplate(@PathVariable UUID id) {
-        GovQualityTemplate existing = templateRepository.findById(id)
-            .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("质量模板不存在"));
-        if (Boolean.TRUE.equals(existing.getBuiltin())) {
-            throw new IllegalArgumentException("内置模板不可删除");
+        try {
+            GovQualityTemplate existing = templateRepository.findById(id)
+                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("质量模板不存在"));
+            if (Boolean.TRUE.equals(existing.getBuiltin())) {
+                throw new IllegalArgumentException("内置模板不可删除");
+            }
+            templateRepository.delete(existing);
+            auditQualityAction(
+                "GOV_QUALITY_TEMPLATE_DELETE",
+                AuditStage.SUCCESS,
+                id.toString(),
+                "删除质量模板",
+                Map.of("templateCode", valueOrUnknown(existing.getCode()), "templateName", valueOrUnknown(existing.getName()))
+            );
+            return ApiResponses.ok(Boolean.TRUE);
+        } catch (RuntimeException ex) {
+            auditQualityFailure("GOV_QUALITY_TEMPLATE_DELETE", id.toString(), "删除质量模板失败", ex);
+            throw ex;
         }
-        templateRepository.delete(existing);
-        return ApiResponses.ok(Boolean.TRUE);
     }
 
     @PostMapping("/quality/templates/{id}/preview")
@@ -645,11 +757,23 @@ public class GovernanceResource {
         @PathVariable UUID id,
         @RequestBody Map<String, Object> params
     ) {
-        GovQualityTemplate template = templateRepository.findById(id)
-            .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("质量模板不存在"));
-        String renderedSql = sqlTemplateRenderer.render(
-            template.getSqlTemplate(), params, template.getParamSchema());
-        return ApiResponses.ok(Map.of("sql", renderedSql));
+        try {
+            GovQualityTemplate template = templateRepository.findById(id)
+                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("质量模板不存在"));
+            String renderedSql = sqlTemplateRenderer.render(
+                template.getSqlTemplate(), params, template.getParamSchema());
+            auditQualityAction(
+                "GOV_QUALITY_TEMPLATE_PREVIEW",
+                AuditStage.SUCCESS,
+                id.toString(),
+                "预览质量模板",
+                Map.of("templateCode", valueOrUnknown(template.getCode()), "parameterCount", params != null ? params.size() : 0)
+            );
+            return ApiResponses.ok(Map.of("sql", renderedSql));
+        } catch (RuntimeException ex) {
+            auditQualityFailure("GOV_QUALITY_TEMPLATE_PREVIEW", id.toString(), "预览质量模板失败", ex);
+            throw ex;
+        }
     }
 
     // Compliance APIs --------------------------------------------------------
@@ -1032,74 +1156,98 @@ public class GovernanceResource {
     // Auto-trigger API (F2/T03) ---------------------------------------------
 
     /**
-     * 入湖完成后自动触发清洗 + 质量检测链路。
-     * 参数: tableName (String), datasetId (UUID, 可选), triggerRef (String, 可选)
+     * 对已授权的数据集触发质量检测。自动清洗链路在安全边界收敛前保持关闭。
+     * 参数: tableName (String), datasetId (UUID, 必填)
      */
     @PostMapping("/quality/auto-trigger")
     @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
-    public ApiResponse<Map<String, Object>> autoTrigger(@RequestBody Map<String, Object> body) {
+    @Transactional
+    public ApiResponse<Map<String, Object>> autoTrigger(
+        @RequestBody Map<String, Object> body,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        String resourceId = body != null ? qualityResourceId(body.get("tableName"), "UNASSIGNED") : "UNASSIGNED";
+        try {
+            return autoTriggerInternal(body, activeDept);
+        } catch (RuntimeException ex) {
+            auditQualityFailure("GOV_AUTO_TRIGGER", resourceId, "自动触发质量检测失败", ex);
+            throw ex;
+        }
+    }
+
+    private ApiResponse<Map<String, Object>> autoTriggerInternal(Map<String, Object> body, String activeDept) {
         String tableName = body != null ? String.valueOf(body.getOrDefault("tableName", "")).trim() : "";
         if (!StringUtils.hasText(tableName)) {
             throw new IllegalArgumentException("参数 tableName 不能为空");
         }
 
-        UUID datasetId = null;
         Object dsObj = body.get("datasetId");
-        if (dsObj != null && StringUtils.hasText(String.valueOf(dsObj).trim())) {
-            datasetId = UUID.fromString(String.valueOf(dsObj).trim());
+        if (dsObj == null || !StringUtils.hasText(String.valueOf(dsObj).trim())) {
+            throw new IllegalArgumentException("参数 datasetId 不能为空");
+        }
+        UUID datasetId = UUID.fromString(String.valueOf(dsObj).trim());
+        CatalogDataset dataset = qualityDatasetReadGuard.requireReadable(datasetId, activeDept);
+        String authorizedTable = dataset != null && dataset.getHiveTable() != null ? dataset.getHiveTable().trim() : "";
+        if (!StringUtils.hasText(authorizedTable) || !authorizedTable.equalsIgnoreCase(tableName)) {
+            throw new AccessDeniedException("请求表与授权数据集不匹配");
         }
 
-        String triggerRef = body.get("triggerRef") != null
-            ? String.valueOf(body.get("triggerRef")).trim() : null;
-        if (!StringUtils.hasText(triggerRef)) {
-            triggerRef = currentUser();
+        if (requestsAutoCleanse(body)) {
+            throw new UnsupportedOperationException("质量自动清洗暂未开放");
         }
+        String triggerRef = currentUser();
 
         boolean autoTriggerEnabled = governanceProperties.getQuality().isEnabled();
-        boolean autoCleanseEnabled = governanceProperties.getQuality().isAutoCleanseEnabled();
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("tableName", tableName);
         result.put("autoTriggerEnabled", autoTriggerEnabled);
-        result.put("autoCleanseEnabled", autoCleanseEnabled);
+        result.put("autoCleanseEnabled", false);
 
-        // Step 1: 自动清洗
         Map<String, Object> cleanseResult = new LinkedHashMap<>();
-        if (autoCleanseEnabled) {
-            try {
-                CleansingResult cr = dataCleansingService.cleanse(tableName);
-                cleanseResult.put("status", "SUCCESS");
-                cleanseResult.put("functionsApplied", cr.functionsApplied());
-                cleanseResult.put("columnsProcessed", cr.columnsProcessed());
-                cleanseResult.put("totalRowsAffected", cr.totalRowsAffected());
-            } catch (Exception e) {
-                log.warn("Auto-cleanse failed for table [{}]: {}", tableName, e.getMessage());
-                cleanseResult.put("status", "FAILED");
-                cleanseResult.put("error", e.getMessage());
-            }
-        } else {
-            cleanseResult.put("status", "SKIPPED");
-            cleanseResult.put("reason", "auto-cleanse-disabled");
-        }
+        cleanseResult.put("status", "SKIPPED");
+        cleanseResult.put("reason", "auto-cleanse-unavailable");
         result.put("cleanse", cleanseResult);
 
         // Step 2: 自动触发质量检测
         List<Map<String, Object>> qualityResults = new ArrayList<>();
         if (autoTriggerEnabled) {
-            // 查找 auto_trigger=true 且 enabled=true 的规则
-            List<GovRule> autoRules = ruleRepository.findByAutoTriggerTrueAndEnabledTrue();
+            Set<UUID> visibleRuleIds = qualityRuleService
+                .listAll(activeDept)
+                .stream()
+                .map(QualityRuleDto::getId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+            Set<UUID> boundRuleIds = ruleBindingRepository
+                .findByDatasetIdAndRuleVersionStatus(datasetId, "PUBLISHED")
+                .stream()
+                .filter(java.util.Objects::nonNull)
+                .map(GovRuleBinding::getRuleVersion)
+                .filter(java.util.Objects::nonNull)
+                .filter(version -> "PUBLISHED".equalsIgnoreCase(StringUtils.trimWhitespace(version.getStatus())))
+                .map(version -> version.getRule())
+                .filter(java.util.Objects::nonNull)
+                .map(GovRule::getId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+            List<GovRule> autoRules = ruleRepository
+                .findByAutoTriggerTrueAndEnabledTrue()
+                .stream()
+                .filter(rule ->
+                    rule != null &&
+                    rule.getId() != null &&
+                    visibleRuleIds.contains(rule.getId()) &&
+                    boundRuleIds.contains(rule.getId())
+                )
+                .toList();
 
-            // 如果提供了 datasetId，过滤绑定了该 datasetId 的规则
-            UUID filterDatasetId = datasetId;
             for (GovRule rule : autoRules) {
                 try {
                     QualityRunTriggerRequest triggerRequest = new QualityRunTriggerRequest();
                     triggerRequest.setRuleId(rule.getId());
                     triggerRequest.setTriggerType("AUTO");
-                    if (filterDatasetId != null) {
-                        triggerRequest.setDatasetId(filterDatasetId);
-                    }
-                    List<QualityRunDto> runs = qualityRunService.trigger(triggerRequest, triggerRef);
+                    triggerRequest.setDatasetId(datasetId);
+                    List<QualityRunDto> runs = qualityRunService.triggerAuthorizedIndependent(triggerRequest, triggerRef, activeDept);
 
                     Map<String, Object> ruleResult = new LinkedHashMap<>();
                     ruleResult.put("ruleId", rule.getId().toString());
@@ -1108,13 +1256,19 @@ public class GovernanceResource {
                     ruleResult.put("status", "TRIGGERED");
                     qualityResults.add(ruleResult);
                 } catch (Exception e) {
-                    log.warn("Auto-trigger quality rule [{}] failed: {}", rule.getId(), e.getMessage());
+                    log.warn(
+                        "event=quality_auto_trigger_rule_failed ruleId={} errorType={}",
+                        rule.getId(),
+                        e.getClass().getSimpleName()
+                    );
                     Map<String, Object> ruleResult = new LinkedHashMap<>();
                     ruleResult.put("ruleId", rule.getId().toString());
                     ruleResult.put("ruleName", StringUtils.hasText(rule.getName()) ? rule.getName() : rule.getCode());
                     ruleResult.put("runCount", 0);
                     ruleResult.put("status", "FAILED");
-                    ruleResult.put("error", e.getMessage());
+                    ruleResult.put("error", "质量规则执行失败");
+                    ruleResult.put("errorType", e.getClass().getSimpleName());
+                    ruleResult.put("errorCategory", qualityAuditErrorCategory(e));
                     qualityResults.add(ruleResult);
                 }
             }
@@ -1123,74 +1277,70 @@ public class GovernanceResource {
         result.put("totalRulesTriggered", qualityResults.size());
 
         Map<String, Object> auditPayload = new LinkedHashMap<>();
-        auditPayload.put("summary", "自动触发清洗+质量检测");
+        auditPayload.put("summary", "自动触发质量检测");
         auditPayload.put("tableName", tableName);
         if (datasetId != null) {
             auditPayload.put("datasetId", datasetId.toString());
         }
         auditPayload.put("rulesTriggered", qualityResults.size());
-        auditService.auditAction("GOV_AUTO_TRIGGER", AuditStage.SUCCESS, tableName, auditPayload);
+        long failedRules = qualityResults
+            .stream()
+            .filter(item -> "FAILED".equals(item.get("status")))
+            .count();
+        auditPayload.put("failedRules", failedRules);
+        auditQualityAction(
+            "GOV_AUTO_TRIGGER",
+            failedRules > 0 ? AuditStage.FAIL : AuditStage.SUCCESS,
+            tableName,
+            "自动触发质量检测",
+            auditPayload
+        );
 
         return ApiResponses.ok(result);
+    }
+
+    private boolean requestsAutoCleanse(Map<String, Object> body) {
+        if (body == null || body.isEmpty()) {
+            return false;
+        }
+        return List.of("autoCleanse", "cleanse", "cleaning")
+            .stream()
+            .map(body::get)
+            .anyMatch(value -> Boolean.TRUE.equals(value) || "true".equalsIgnoreCase(String.valueOf(value)));
     }
 
     @PostMapping("/quality/cleansing/preview")
     @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
-    public ApiResponse<Map<String, Object>> previewQualityCleansing(@RequestBody Map<String, Object> body) {
-        UUID runId = UUID.fromString(String.valueOf(body.get("runId")));
-        UUID functionId = UUID.fromString(String.valueOf(body.get("functionId")));
-        int limit = body.containsKey("limit") ? Math.max(1, Math.min(((Number) body.get("limit")).intValue(), 100)) : 20;
-        GovCleansingFunction function = resolveCleansingFunction(functionId);
-        validateCleansingFunctionReady(function);
-        List<Map<String, Object>> samples = new ArrayList<>();
-        long affectedRows = 0;
-        long unresolvableRows = 0;
-        for (GovQualityFailingRow row : failingRowRepository.findByRunId(runId)) {
-            try {
-                Map<String, Object> sample = previewCleansingRow(row, function);
-                if (sample == null) {
-                    unresolvableRows++;
-                    continue;
-                }
-                if (!String.valueOf(sample.get("before")).equals(String.valueOf(sample.get("after")))) {
-                    affectedRows++;
-                    if (samples.size() < limit) {
-                        samples.add(sample);
-                    }
-                }
-            } catch (Exception ex) {
-                unresolvableRows++;
-                log.debug("Failed to preview cleansing row {}: {}", row.getId(), ex.getMessage());
-            }
+    public ApiResponse<Map<String, Object>> previewQualityCleansing(
+        @RequestBody Map<String, Object> body,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        String auditResourceId = auditBodyResourceId(body, "runId", "UNASSIGNED");
+        try {
+            UUID runId = requiredRunId(body);
+            qualityRunService.assertRunReadable(runId, activeDept);
+            throw new UnsupportedOperationException("质量清洗预览暂未开放");
+        } catch (RuntimeException ex) {
+            auditQualityFailure("GOV_QUALITY_CLEANSING_PREVIEW", auditResourceId, "预览质量问题清洗失败", ex);
+            throw ex;
         }
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("affectedRows", affectedRows);
-        result.put("unresolvableRows", unresolvableRows);
-        result.put("samples", samples);
-        return ApiResponses.ok(result);
     }
 
     @PostMapping("/quality/cleansing/execute")
     @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
-    public ApiResponse<Map<String, Object>> executeQualityCleansing(@RequestBody Map<String, Object> body) {
-        UUID runId = UUID.fromString(String.valueOf(body.get("runId")));
-        UUID functionId = UUID.fromString(String.valueOf(body.get("functionId")));
-        GovCleansingFunction function = resolveCleansingFunction(functionId);
-        validateCleansingFunctionReady(function);
-        int affectedRows = 0;
-        int unresolvableRows = 0;
-        for (GovQualityFailingRow row : failingRowRepository.findByRunId(runId)) {
-            try {
-                affectedRows += executeCleansingRow(row, function);
-            } catch (Exception ex) {
-                unresolvableRows++;
-                log.debug("Failed to execute cleansing row {}: {}", row.getId(), ex.getMessage());
-            }
+    public ApiResponse<Map<String, Object>> executeQualityCleansing(
+        @RequestBody Map<String, Object> body,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        String auditResourceId = auditBodyResourceId(body, "runId", "UNASSIGNED");
+        try {
+            UUID runId = requiredRunId(body);
+            qualityRunService.assertRunReadable(runId, activeDept);
+            throw new UnsupportedOperationException("质量清洗执行暂未开放");
+        } catch (RuntimeException ex) {
+            auditQualityFailure("GOV_QUALITY_CLEANSING_EXECUTE", auditResourceId, "执行质量问题清洗失败", ex);
+            throw ex;
         }
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("affectedRows", affectedRows);
-        result.put("unresolvableRows", unresolvableRows);
-        return ApiResponses.ok(result);
     }
 
     private GovCleansingFunction resolveCleansingFunction(UUID functionId) {
@@ -1280,23 +1430,45 @@ public class GovernanceResource {
 
     @GetMapping("/cleansing/functions")
     public ApiResponse<List<GovCleansingFunction>> listCleansingFunctions() {
-        return ApiResponses.ok(cleansingFunctionRepository.findByEnabledTrueOrderByDisplayOrderAsc());
+        List<GovCleansingFunction> functions = cleansingFunctionRepository.findByEnabledTrueOrderByDisplayOrderAsc();
+        auditQualityAction(
+            "GOV_QUALITY_CLEANSING_FUNCTION_LIST",
+            AuditStage.SUCCESS,
+            "LIST",
+            "查看清洗函数列表",
+            Map.of("count", functions.size())
+        );
+        return ApiResponses.ok(functions);
     }
 
     @PostMapping("/cleansing/functions")
     @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
     public ApiResponse<GovCleansingFunction> createCleansingFunction(@RequestBody GovCleansingFunction function) {
-        function.setId(null);
-        if (function.getBuiltin() == null) {
-            function.setBuiltin(Boolean.FALSE);
+        String requestedCode = qualityResourceId(function != null ? function.getCode() : null, "UNASSIGNED");
+        try {
+            function.setId(null);
+            if (function.getBuiltin() == null) {
+                function.setBuiltin(Boolean.FALSE);
+            }
+            if (function.getEnabled() == null) {
+                function.setEnabled(Boolean.TRUE);
+            }
+            if (function.getDisplayOrder() == null) {
+                function.setDisplayOrder(0);
+            }
+            GovCleansingFunction saved = cleansingFunctionRepository.save(function);
+            auditQualityAction(
+                "GOV_QUALITY_CLEANSING_FUNCTION_CREATE",
+                AuditStage.SUCCESS,
+                qualityResourceId(saved.getId(), requestedCode),
+                "创建清洗函数",
+                Map.of("functionCode", valueOrUnknown(saved.getCode()), "functionName", valueOrUnknown(saved.getName()))
+            );
+            return ApiResponses.ok(saved);
+        } catch (RuntimeException ex) {
+            auditQualityFailure("GOV_QUALITY_CLEANSING_FUNCTION_CREATE", requestedCode, "创建清洗函数失败", ex);
+            throw ex;
         }
-        if (function.getEnabled() == null) {
-            function.setEnabled(Boolean.TRUE);
-        }
-        if (function.getDisplayOrder() == null) {
-            function.setDisplayOrder(0);
-        }
-        return ApiResponses.ok(cleansingFunctionRepository.save(function));
     }
 
     @PutMapping("/cleansing/functions/{id}")
@@ -1305,39 +1477,64 @@ public class GovernanceResource {
         @PathVariable UUID id,
         @RequestBody GovCleansingFunction function
     ) {
-        GovCleansingFunction existing = cleansingFunctionRepository.findById(id)
-            .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("清洗函数不存在"));
-        if (StringUtils.hasText(function.getCode())) {
-            existing.setCode(function.getCode().trim());
+        try {
+            GovCleansingFunction existing = cleansingFunctionRepository.findById(id)
+                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("清洗函数不存在"));
+            if (StringUtils.hasText(function.getCode())) {
+                existing.setCode(function.getCode().trim());
+            }
+            if (StringUtils.hasText(function.getName())) {
+                existing.setName(function.getName().trim());
+            }
+            if (function.getDescription() != null) {
+                existing.setDescription(function.getDescription());
+            }
+            if (StringUtils.hasText(function.getSqlExpression())) {
+                existing.setSqlExpression(function.getSqlExpression());
+            }
+            if (function.getDisplayOrder() != null) {
+                existing.setDisplayOrder(function.getDisplayOrder());
+            }
+            if (function.getEnabled() != null) {
+                existing.setEnabled(function.getEnabled());
+            }
+            GovCleansingFunction saved = cleansingFunctionRepository.save(existing);
+            auditQualityAction(
+                "GOV_QUALITY_CLEANSING_FUNCTION_UPDATE",
+                AuditStage.SUCCESS,
+                id.toString(),
+                "更新清洗函数",
+                Map.of("functionCode", valueOrUnknown(saved.getCode()), "functionName", valueOrUnknown(saved.getName()))
+            );
+            return ApiResponses.ok(saved);
+        } catch (RuntimeException ex) {
+            auditQualityFailure("GOV_QUALITY_CLEANSING_FUNCTION_UPDATE", id.toString(), "更新清洗函数失败", ex);
+            throw ex;
         }
-        if (StringUtils.hasText(function.getName())) {
-            existing.setName(function.getName().trim());
-        }
-        if (function.getDescription() != null) {
-            existing.setDescription(function.getDescription());
-        }
-        if (StringUtils.hasText(function.getSqlExpression())) {
-            existing.setSqlExpression(function.getSqlExpression());
-        }
-        if (function.getDisplayOrder() != null) {
-            existing.setDisplayOrder(function.getDisplayOrder());
-        }
-        if (function.getEnabled() != null) {
-            existing.setEnabled(function.getEnabled());
-        }
-        return ApiResponses.ok(cleansingFunctionRepository.save(existing));
     }
 
     @DeleteMapping("/cleansing/functions/{id}")
     @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
     public ApiResponse<Boolean> deleteCleansingFunction(@PathVariable UUID id) {
-        GovCleansingFunction existing = cleansingFunctionRepository.findById(id)
-            .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("清洗函数不存在"));
-        if (Boolean.TRUE.equals(existing.getBuiltin())) {
-            throw new IllegalArgumentException("内置清洗函数不可删除");
+        try {
+            GovCleansingFunction existing = cleansingFunctionRepository.findById(id)
+                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("清洗函数不存在"));
+            if (Boolean.TRUE.equals(existing.getBuiltin())) {
+                throw new IllegalArgumentException("内置清洗函数不可删除");
+            }
+            cleansingFunctionRepository.delete(existing);
+            auditQualityAction(
+                "GOV_QUALITY_CLEANSING_FUNCTION_DELETE",
+                AuditStage.SUCCESS,
+                id.toString(),
+                "删除清洗函数",
+                Map.of("functionCode", valueOrUnknown(existing.getCode()), "functionName", valueOrUnknown(existing.getName()))
+            );
+            return ApiResponses.ok(Boolean.TRUE);
+        } catch (RuntimeException ex) {
+            auditQualityFailure("GOV_QUALITY_CLEANSING_FUNCTION_DELETE", id.toString(), "删除清洗函数失败", ex);
+            throw ex;
         }
-        cleansingFunctionRepository.delete(existing);
-        return ApiResponses.ok(Boolean.TRUE);
     }
 
     // ODS Data Editor APIs ---------------------------------------------------
@@ -1414,16 +1611,19 @@ public class GovernanceResource {
     @GetMapping("/quality/score")
     public ApiResponse<QualityScoreResult> getQualityScore(
         @RequestParam UUID datasetId,
-        @RequestParam(defaultValue = "7") int periodDays
+        @RequestParam(defaultValue = "7") int periodDays,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        return ApiResponses.ok(qualityScoreService.calculate(datasetId, periodDays));
+        return ApiResponses.ok(qualityScoreService.calculate(datasetId, periodDays, activeDept));
     }
 
     // Quality dashboard API ---------------------------------------------------
 
     @GetMapping("/quality/dashboard")
-    public ApiResponse<QualityDashboardDto> getQualityDashboard() {
-        return ApiResponses.ok(qualityDashboardService.getDashboard());
+    public ApiResponse<QualityDashboardDto> getQualityDashboard(
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        return ApiResponses.ok(qualityDashboardService.getDashboard(activeDept));
     }
 
     // Ingestion pre-check API ------------------------------------------------
@@ -1448,17 +1648,30 @@ public class GovernanceResource {
     public void exportQualityReport(
         @RequestParam UUID datasetId,
         @RequestParam(defaultValue = "30") int periodDays,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept,
         HttpServletResponse response
     ) throws IOException {
-        byte[] excelBytes = qualityReportExportService.exportExcel(datasetId, periodDays);
+        try {
+            byte[] excelBytes = qualityReportExportService.exportExcel(datasetId, periodDays, activeDept);
 
-        String filename = "quality-report-" + datasetId + "-"
-            + java.time.LocalDate.now() + ".xlsx";
+            String filename = "quality-report-" + datasetId + "-"
+                + java.time.LocalDate.now() + ".xlsx";
 
-        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        response.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
-        response.setContentLength(excelBytes.length);
-        response.getOutputStream().write(excelBytes);
+            auditQualityAction(
+                "GOV_QUALITY_REPORT_EXPORT",
+                AuditStage.SUCCESS,
+                datasetId.toString(),
+                "导出质量报告",
+                Map.of("datasetId", datasetId.toString(), "periodDays", periodDays, "bytes", excelBytes.length)
+            );
+            response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            response.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+            response.setContentLength(excelBytes.length);
+            response.getOutputStream().write(excelBytes);
+        } catch (IOException | RuntimeException ex) {
+            auditQualityFailure("GOV_QUALITY_REPORT_EXPORT", datasetId.toString(), "导出质量报告失败", ex);
+            throw ex;
+        }
     }
 
     // SQL repair API ----------------------------------------------------------
@@ -1466,22 +1679,141 @@ public class GovernanceResource {
     @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
     @PostMapping("/quality/sql-repair/preview")
     public ApiResponse<SqlRepairService.SqlRepairPreview> previewSqlRepair(
-        @RequestBody Map<String, Object> body
+        @RequestBody Map<String, Object> body,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        String sql = (String) body.get("sql");
-        int limit = body.containsKey("limit") ? ((Number) body.get("limit")).intValue() : 10;
-        return ApiResponses.ok(sqlRepairService.preview(sql, limit));
+        String auditResourceId = auditBodyResourceId(body, "runId", "UNASSIGNED");
+        try {
+            UUID runId = requiredRunId(body);
+            qualityRunService.assertRunReadable(runId, activeDept);
+            String sql = (String) body.get("sql");
+            int limit = body.containsKey("limit") ? ((Number) body.get("limit")).intValue() : 10;
+            SqlRepairService.SqlRepairPreview preview = sqlRepairService.preview(sql, limit);
+            auditQualityAction(
+                "GOV_QUALITY_SQL_REPAIR_PREVIEW",
+                AuditStage.SUCCESS,
+                runId.toString(),
+                "预览质量 SQL 修复",
+                Map.of("runId", runId.toString(), "limit", limit, "sqlLength", sql != null ? sql.length() : 0)
+            );
+            return ApiResponses.ok(preview);
+        } catch (RuntimeException ex) {
+            auditQualityFailure("GOV_QUALITY_SQL_REPAIR_PREVIEW", auditResourceId, "预览质量 SQL 修复失败", ex);
+            throw ex;
+        }
     }
 
     @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
     @PostMapping("/quality/sql-repair/execute")
     public ApiResponse<SqlRepairService.SqlRepairResult> executeSqlRepair(
-        @RequestBody Map<String, Object> body
+        @RequestBody Map<String, Object> body,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        String sql = (String) body.get("sql");
-        UUID runId = body.containsKey("runId") && body.get("runId") != null
-            ? UUID.fromString((String) body.get("runId"))
-            : null;
-        return ApiResponses.ok(sqlRepairService.execute(sql, runId));
+        String auditResourceId = auditBodyResourceId(body, "runId", "UNASSIGNED");
+        try {
+            UUID runId = requiredRunId(body);
+            qualityRunService.assertRunReadable(runId, activeDept);
+            String sql = (String) body.get("sql");
+            SqlRepairService.SqlRepairResult result = sqlRepairService.execute(sql, runId);
+            auditQualityAction(
+                "GOV_QUALITY_SQL_REPAIR_EXECUTE",
+                AuditStage.SUCCESS,
+                auditResourceId,
+                "执行质量 SQL 修复",
+                Map.of("runId", runId.toString(), "sqlLength", sql != null ? sql.length() : 0)
+            );
+            return ApiResponses.ok(result);
+        } catch (RuntimeException ex) {
+            auditQualityFailure("GOV_QUALITY_SQL_REPAIR_EXECUTE", auditResourceId, "执行质量 SQL 修复失败", ex);
+            throw ex;
+        }
+    }
+
+    private void auditQualityFailure(String actionCode, String resourceId, String summary, Exception error) {
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("errorType", error.getClass().getSimpleName());
+        details.put("errorCategory", qualityAuditErrorCategory(error));
+        String safeResourceId = qualityResourceId(resourceId, "UNASSIGNED");
+        try {
+            qualityAuditRecorder.recordFailureAction(
+                actionCode,
+                safeResourceId,
+                qualityAuditPayload(summary, details)
+            );
+        } catch (RuntimeException auditFailure) {
+            log.warn(
+                "event=quality_failure_audit_write_failed actionCode={} resourceId={} errorType={}",
+                actionCode,
+                safeResourceId,
+                auditFailure.getClass().getSimpleName()
+            );
+        }
+    }
+
+    private void auditQualityAction(
+        String actionCode,
+        AuditStage stage,
+        String resourceId,
+        String summary,
+        Map<String, ?> details
+    ) {
+        Map<String, Object> payload = qualityAuditPayload(summary, details);
+        String safeResourceId = qualityResourceId(resourceId, "UNASSIGNED");
+        qualityAuditRecorder.recordAction(actionCode, stage, safeResourceId, payload);
+    }
+
+    private Map<String, Object> qualityAuditPayload(String summary, Map<String, ?> details) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("summary", summary);
+        if (details != null) {
+            details.forEach((key, value) -> {
+                if (StringUtils.hasText(key) && value != null) {
+                    payload.put(key, value);
+                }
+            });
+        }
+        return payload;
+    }
+
+    private String qualityAuditErrorCategory(Throwable error) {
+        if (error instanceof jakarta.persistence.EntityNotFoundException) {
+            return "NOT_FOUND";
+        }
+        if (error instanceof org.springframework.security.access.AccessDeniedException) {
+            return "ACCESS_DENIED";
+        }
+        if (error instanceof IllegalArgumentException) {
+            return "VALIDATION";
+        }
+        String type = error != null ? error.getClass().getSimpleName().toUpperCase(java.util.Locale.ROOT) : "";
+        if (type.contains("SQL") || type.contains("JDBC") || type.contains("DATAACCESS")) {
+            return "DATA_ACCESS";
+        }
+        return "INTERNAL_ERROR";
+    }
+
+    private String auditBodyResourceId(Map<String, Object> body, String key, String fallback) {
+        return body != null ? qualityResourceId(body.get(key), fallback) : fallback;
+    }
+
+    private UUID requiredRunId(Map<String, Object> body) {
+        Object value = body != null ? body.get("runId") : null;
+        if (value == null || !StringUtils.hasText(String.valueOf(value))) {
+            throw new IllegalArgumentException("runId 不能为空");
+        }
+        try {
+            return UUID.fromString(String.valueOf(value).trim());
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("runId 格式不正确");
+        }
+    }
+
+    private String qualityResourceId(Object value, String fallback) {
+        String text = value != null ? String.valueOf(value).trim() : null;
+        return StringUtils.hasText(text) ? text : fallback;
+    }
+
+    private String valueOrUnknown(String value) {
+        return StringUtils.hasText(value) ? value.trim() : "未知";
     }
 }

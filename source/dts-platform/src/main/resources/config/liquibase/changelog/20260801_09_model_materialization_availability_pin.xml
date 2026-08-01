@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260801-09-model-materialization-availability-pin" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="modeling_materialization_dispatch"/>
+            <tableExists tableName="modeling_warehouse_plan_source"/>
+            <tableExists tableName="catalog_asset_availability"/>
+            <not>
+                <tableExists tableName="modeling_materialization_source_pin"/>
+            </not>
+        </preConditions>
+        <comment>
+            Pin the exact catalog availability generation consumed by each materialization runtime
+            lease. The snapshot is immutable evidence used to reject stale success callbacks.
+        </comment>
+
+        <addColumn tableName="modeling_materialization_dispatch">
+            <column name="availability_pinned_at" type="${datetimeType}"/>
+            <column name="availability_pin_count" type="int"/>
+        </addColumn>
+
+        <createTable tableName="modeling_materialization_source_pin">
+            <column name="dispatch_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_binding_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="asset_type" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="asset_key" type="varchar(512)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="availability_status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="availability_epoch" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_sequence" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="availability_event_id" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="resolved_version" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="pinned_at" type="${datetimeType}">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addPrimaryKey
+            tableName="modeling_materialization_source_pin"
+            columnNames="dispatch_id, source_binding_id"
+            constraintName="pk_modeling_materialization_source_pin"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_materialization_source_pin"
+            baseColumnNames="dispatch_id"
+            constraintName="fk_materialization_source_pin_dispatch"
+            referencedTableName="modeling_materialization_dispatch"
+            referencedColumnNames="id"
+            onDelete="RESTRICT"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_materialization_source_pin"
+            baseColumnNames="source_binding_id"
+            constraintName="fk_materialization_source_pin_binding"
+            referencedTableName="modeling_warehouse_plan_source"
+            referencedColumnNames="id"
+            onDelete="RESTRICT"/>
+        <createIndex
+            tableName="modeling_materialization_source_pin"
+            indexName="idx_materialization_source_pin_asset">
+            <column name="asset_type"/>
+            <column name="asset_key"/>
+        </createIndex>
+
+        <sql splitStatements="false"><![CDATA[
+            ALTER TABLE modeling_materialization_dispatch
+                ADD CONSTRAINT ck_materialization_dispatch_availability_pin
+                CHECK (
+                    (
+                        availability_pinned_at IS NULL
+                        AND availability_pin_count IS NULL
+                    )
+                    OR (
+                        availability_pinned_at IS NOT NULL
+                        AND availability_pin_count IS NOT NULL
+                        AND availability_pin_count >= 0
+                    )
+                );
+
+            ALTER TABLE modeling_materialization_source_pin
+                ADD CONSTRAINT ck_materialization_source_pin
+                CHECK (
+                    asset_type IN ('DATASET', 'DBT_MODEL')
+                    AND btrim(asset_key) <> ''
+                    AND availability_status = 'AVAILABLE'
+                    AND availability_epoch >= 0
+                    AND source_sequence >= 0
+                    AND source_sequence < 9223372036854775807
+                    AND btrim(availability_event_id) <> ''
+                    AND btrim(resolved_version) <> ''
+                );
+
+            CREATE OR REPLACE FUNCTION modeling_reject_materialization_source_pin_mutation()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            AS $function$
+            BEGIN
+                RAISE EXCEPTION 'MODEL_MATERIALIZATION_SOURCE_PIN_APPEND_ONLY'
+                    USING ERRCODE = '55000';
+            END;
+            $function$;
+
+            CREATE TRIGGER trg_materialization_source_pin_append_only
+            BEFORE UPDATE OR DELETE ON modeling_materialization_source_pin
+            FOR EACH ROW
+            EXECUTE FUNCTION modeling_reject_materialization_source_pin_mutation();
+
+            CREATE TRIGGER trg_materialization_source_pin_no_truncate
+            BEFORE TRUNCATE ON modeling_materialization_source_pin
+            FOR EACH STATEMENT
+            EXECUTE FUNCTION modeling_reject_materialization_source_pin_mutation();
+
+            CREATE OR REPLACE FUNCTION modeling_protect_materialization_availability_marker()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            AS $function$
+            BEGIN
+                IF OLD.availability_pinned_at IS NOT NULL
+                   AND (
+                       NEW.availability_pinned_at IS DISTINCT FROM OLD.availability_pinned_at
+                       OR NEW.availability_pin_count IS DISTINCT FROM OLD.availability_pin_count
+                   ) THEN
+                    RAISE EXCEPTION 'MODEL_MATERIALIZATION_AVAILABILITY_MARKER_IMMUTABLE'
+                        USING ERRCODE = '55000';
+                END IF;
+                RETURN NEW;
+            END;
+            $function$;
+
+            CREATE TRIGGER trg_materialization_availability_marker_immutable
+            BEFORE UPDATE OF availability_pinned_at, availability_pin_count
+            ON modeling_materialization_dispatch
+            FOR EACH ROW
+            EXECUTE FUNCTION modeling_protect_materialization_availability_marker();
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    LOCK TABLE modeling_materialization_dispatch,
+                               modeling_materialization_source_pin
+                        IN ACCESS EXCLUSIVE MODE;
+                    IF EXISTS (SELECT 1 FROM modeling_materialization_source_pin)
+                       OR EXISTS (
+                           SELECT 1
+                             FROM modeling_materialization_dispatch
+                            WHERE availability_pinned_at IS NOT NULL
+                               OR availability_pin_count IS NOT NULL
+                       ) THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_MODEL_MATERIALIZATION_AVAILABILITY_PIN_EXISTS'
+                            USING ERRCODE = '55000';
+                    END IF;
+                END $$;
+            ]]></sql>
+            <sql splitStatements="false"><![CDATA[
+                DROP TRIGGER IF EXISTS trg_materialization_availability_marker_immutable
+                    ON modeling_materialization_dispatch;
+                DROP TRIGGER IF EXISTS trg_materialization_source_pin_no_truncate
+                    ON modeling_materialization_source_pin;
+                DROP TRIGGER IF EXISTS trg_materialization_source_pin_append_only
+                    ON modeling_materialization_source_pin;
+            ]]></sql>
+            <dropTable tableName="modeling_materialization_source_pin"/>
+            <dropColumn tableName="modeling_materialization_dispatch" columnName="availability_pin_count"/>
+            <dropColumn tableName="modeling_materialization_dispatch" columnName="availability_pinned_at"/>
+            <sql>DROP FUNCTION IF EXISTS modeling_protect_materialization_availability_marker()</sql>
+            <sql>DROP FUNCTION IF EXISTS modeling_reject_materialization_source_pin_mutation()</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

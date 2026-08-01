@@ -256,14 +256,6 @@ class CatalogAssetTagServiceIT {
                 CatalogAssetKey.semanticModel(entityId.toString());
             case DATA_PRODUCT ->
                 CatalogAssetKey.codeAsset(type, "default", "orders-product");
-            case MODELING_SQL_MODEL ->
-                CatalogAssetKey.codeAsset(type, "default", "dws_orders");
-            case MODELING_PLAN ->
-                CatalogAssetKey.codeAsset(
-                    type,
-                    "default",
-                    entityId.toString()
-                );
             case DATA_STANDARD ->
                 CatalogAssetKey.codeAsset(
                     type,

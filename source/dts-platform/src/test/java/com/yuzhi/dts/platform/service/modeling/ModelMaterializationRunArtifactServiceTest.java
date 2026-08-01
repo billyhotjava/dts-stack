@@ -3,6 +3,8 @@ package com.yuzhi.dts.platform.service.modeling;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -10,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationBuildRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationBuildRepository.CandidateBuildEntry;
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationBuildRepository.CandidateBuildScope;
@@ -18,6 +21,9 @@ import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationRunReposit
 import com.yuzhi.dts.platform.repository.modeling.PhysicalRelationObservationRepository;
 import com.yuzhi.dts.platform.repository.modeling.PhysicalRelationObservationRepository.ObservationWrite;
 import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService;
+import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.modeling.ModelMaterializationSourceAvailabilityGuard.GenerationCheck;
+import com.yuzhi.dts.platform.service.modeling.ModelMaterializationSourceAvailabilityGuard.GenerationDrift;
 import com.yuzhi.dts.platform.service.modeling.PhysicalRelationInspector.ExpectedRelationType;
 import com.yuzhi.dts.platform.service.modeling.PhysicalRelationInspector.PhysicalColumn;
 import com.yuzhi.dts.platform.service.modeling.PhysicalRelationInspector.PhysicalRelationObservation;
@@ -31,6 +37,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.HexFormat;
+import java.util.Map;
 import java.util.UUID;
 import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,17 +71,22 @@ class ModelMaterializationRunArtifactServiceTest {
 
     private ModelMaterializationRunRepository runs;
     private ModelMaterializationBuildRepository builds;
+    private ModelMaterializationSourceAvailabilityGuard sourceAvailability;
     private DbtScopedProjectService scoped;
     private PhysicalRelationInspector inspector;
     private PhysicalRelationInspectorRegistry inspectors;
     private PhysicalRelationObservationRepository observations;
     private ModelReleaseCandidateService candidates;
+    private AuditService auditService;
     private ModelMaterializationRunArtifactService service;
 
     @BeforeEach
     void setUp() {
         runs = mock(ModelMaterializationRunRepository.class);
         builds = mock(ModelMaterializationBuildRepository.class);
+        sourceAvailability = mock(
+            ModelMaterializationSourceAvailabilityGuard.class
+        );
         scoped = mock(DbtScopedProjectService.class);
         inspector = mock(PhysicalRelationInspector.class);
         inspectors = mock(
@@ -84,35 +96,30 @@ class ModelMaterializationRunArtifactServiceTest {
             PhysicalRelationObservationRepository.class
         );
         candidates = mock(ModelReleaseCandidateService.class);
+        auditService = mock(AuditService.class);
         service = new ModelMaterializationRunArtifactService(
             runs,
             builds,
+            sourceAvailability,
             scoped,
             inspectors,
             observations,
             candidates,
+            auditService,
             new ObjectMapper(),
             Clock.fixed(NOW, ZoneOffset.UTC),
             passthroughTransactions()
         );
         when(runs.findRunGroup(GROUP_ID)).thenReturn(
             java.util.Optional.of(
-                new RunGroupRecord(
-                    GROUP_ID,
-                    "tenant-a",
-                    CANDIDATE_ID,
-                    3,
-                    "RELEASE_BUILD",
-                    BUNDLE,
-                    "SUBMITTED",
-                    "postgres-primary",
-                    "postgres",
-                    "sha256:" + "e".repeat(64)
-                )
+                runGroup(3, "BUILDING", "SUBMITTED", null)
             )
         );
         when(builds.loadCandidateBuildScope("tenant-a", GROUP_ID))
             .thenReturn(scope());
+        when(
+            sourceAvailability.checkPinnedCurrentForUpdate(GROUP_ID)
+        ).thenReturn(GenerationCheck.currentCheck());
         when(scoped.verifyCandidateProject(BUNDLE))
             .thenReturn(project);
         when(inspectors.require("postgres"))
@@ -217,6 +224,74 @@ class ModelMaterializationRunArtifactServiceTest {
             "MODEL_DBT_ARTIFACT_INVALID",
             NOW
         );
+        ArgumentCaptor<Object> auditPayload =
+            ArgumentCaptor.forClass(Object.class);
+        verify(auditService).auditActionAs(
+            eq("airflow"),
+            eq("model-materialization-run:" + GROUP_ID + ":artifacts-synced:" + INVOCATION_ID),
+            eq(NOW),
+            eq("MODEL_MATERIALIZATION_ARTIFACTS_SYNCED"),
+            eq(AuditStage.SUCCESS),
+            eq(GROUP_ID.toString()),
+            auditPayload.capture()
+        );
+        @SuppressWarnings("unchecked")
+        Map<String, Object> safeAuditPayload =
+            (Map<String, Object>) auditPayload.getValue();
+        assertThat(safeAuditPayload)
+            .doesNotContainKeys(
+                "checksum",
+                "digest",
+                "token",
+                "credential",
+                "selector",
+                "path"
+            );
+        verify(auditService).auditActionAs(
+            eq("airflow"),
+            eq("model-materialization-run:" + GROUP_ID + ":relations-verified:" + INVOCATION_ID),
+            eq(NOW),
+            eq("MODEL_MATERIALIZATION_RELATIONS_VERIFIED"),
+            eq(AuditStage.SUCCESS),
+            eq(GROUP_ID.toString()),
+            any()
+        );
+    }
+
+    @Test
+    void auditOutboxFailureDoesNotInventBusinessFailure() throws Exception {
+        writeArtifacts("success", "b".repeat(64));
+        doThrow(new IllegalStateException("audit unavailable"))
+            .when(auditService)
+            .auditActionAs(
+                eq("airflow"),
+                eq("model-materialization-run:" + GROUP_ID + ":artifacts-synced:" + INVOCATION_ID),
+                eq(NOW),
+                eq("MODEL_MATERIALIZATION_ARTIFACTS_SYNCED"),
+                eq(AuditStage.SUCCESS),
+                eq(GROUP_ID.toString()),
+                any()
+            );
+
+        assertThatThrownBy(() ->
+            service.syncAndProbe(
+                GROUP_ID,
+                new ModelMaterializationRunArtifactService.SyncProbeCommand(
+                    "RELEASE_BUILD",
+                    BUNDLE
+                )
+            )
+        )
+            .isInstanceOf(RuntimeException.class)
+            .hasMessage("Machine audit persistence failed");
+
+        verify(runs, never()).markFailed(eq(GROUP_ID), any(), any());
+        verify(candidates, never()).transition(
+            eq("tenant-a"),
+            eq("service:dts-airflow"),
+            eq(CANDIDATE_ID),
+            any()
+        );
     }
 
     @Test
@@ -246,6 +321,15 @@ class ModelMaterializationRunArtifactServiceTest {
             GROUP_ID,
             "MODEL_DBT_MANIFEST_IDENTITY_MISMATCH",
             NOW
+        );
+        verify(auditService).auditActionAs(
+            eq("airflow"),
+            eq("model-materialization-run:" + GROUP_ID + ":failed:MODEL_DBT_MANIFEST_IDENTITY_MISMATCH"),
+            eq(NOW),
+            eq("MODEL_MATERIALIZATION_RUN_FAILED"),
+            eq(AuditStage.FAIL),
+            eq(GROUP_ID.toString()),
+            any()
         );
         verify(runs, never()).markDbtSucceeded(
             GROUP_ID,
@@ -733,6 +817,15 @@ class ModelMaterializationRunArtifactServiceTest {
         assertThat(result.status()).isEqualTo("BUILT");
         assertThat(result.modelCount()).isEqualTo(1);
         verify(runs).finalizeSucceeded(GROUP_ID, NOW);
+        verify(auditService).auditActionAs(
+            eq("airflow"),
+            eq("model-materialization-run:" + GROUP_ID + ":finalized:succeeded"),
+            eq(NOW),
+            eq("MODEL_MATERIALIZATION_RUN_FINALIZED"),
+            eq(AuditStage.SUCCESS),
+            eq(GROUP_ID.toString()),
+            any()
+        );
     }
 
     @Test
@@ -757,6 +850,276 @@ class ModelMaterializationRunArtifactServiceTest {
             GROUP_ID,
             "MODEL_DBT_AIRFLOW_UPSTREAM_FAILED",
             NOW
+        );
+        verify(auditService).auditActionAs(
+            eq("airflow"),
+            eq("model-materialization-run:" + GROUP_ID + ":finalized:failed"),
+            eq(NOW),
+            eq("MODEL_MATERIALIZATION_RUN_FAILED"),
+            eq(AuditStage.FAIL),
+            eq(GROUP_ID.toString()),
+            any()
+        );
+    }
+
+    @Test
+    void staleGenerationAtArtifactBoundaryCannotPublishSuccessEvidence()
+        throws Exception {
+        writeArtifacts("success", "b".repeat(64));
+        GenerationCheck stale = staleGeneration();
+        when(
+            sourceAvailability.checkPinnedCurrentForUpdate(GROUP_ID)
+        ).thenReturn(stale);
+        when(
+            runs.markAvailabilityStale(
+                GROUP_ID,
+                ModelMaterializationSourceAvailabilityGuard.SOURCE_GENERATION_STALE,
+                NOW
+            )
+        ).thenReturn(true);
+
+        assertThatThrownBy(() ->
+            service.syncAndProbe(
+                GROUP_ID,
+                new ModelMaterializationRunArtifactService.SyncProbeCommand(
+                    "RELEASE_BUILD",
+                    BUNDLE
+                )
+            )
+        )
+            .isInstanceOf(ModelMaterializationRuntimeException.class)
+            .extracting(error ->
+                ((ModelMaterializationRuntimeException) error).code()
+            )
+            .isEqualTo(
+                ModelMaterializationSourceAvailabilityGuard.SOURCE_GENERATION_STALE
+            );
+
+        verify(runs, never()).markDbtSucceeded(any(), any(), anyInt(), any());
+        verify(runs, never()).markRelationsVerified(any(), anyInt(), any());
+        verify(candidates).transition(
+            "tenant-a",
+            "service:dts-airflow",
+            CANDIDATE_ID,
+            new ModelReleaseCandidateContract.TransitionCommand(
+                3,
+                ModelLifecycleContract.DeliveryStatus.STALE,
+                "materialization-availability-stale-" + GROUP_ID,
+                ModelMaterializationSourceAvailabilityGuard.SOURCE_GENERATION_STALE
+            )
+        );
+        ArgumentCaptor<Object> auditPayload = ArgumentCaptor.forClass(
+            Object.class
+        );
+        verify(auditService).auditActionAsStrict(
+            eq("airflow"),
+            eq(
+                "model-materialization-run:" +
+                GROUP_ID +
+                ":availability-stale"
+            ),
+            eq(NOW),
+            eq("MODEL_MATERIALIZATION_RUN_FAILED"),
+            eq(AuditStage.FAIL),
+            eq(GROUP_ID.toString()),
+            auditPayload.capture()
+        );
+        @SuppressWarnings("unchecked")
+        Map<String, Object> payload = (Map<String, Object>) auditPayload.getValue();
+        assertThat(payload)
+            .containsEntry("candidate", CANDIDATE_ID)
+            .containsEntry("dispatch", GROUP_ID)
+            .containsEntry("attempt", 1)
+            .containsEntry(
+                "reasonCode",
+                ModelMaterializationSourceAvailabilityGuard.SOURCE_GENERATION_STALE
+            )
+            .doesNotContainKeys(
+                "assetKey",
+                "token",
+                "credential",
+                "selector",
+                "path"
+            );
+        assertThat(payload.get("generations").toString())
+            .contains("pinnedEpoch=7")
+            .contains("currentSourceSequence=101")
+            .doesNotContain("catalog://sensitive-asset-key");
+    }
+
+    @Test
+    void generationDriftBetweenArtifactSyncAndBuiltPublicationWins()
+        throws Exception {
+        writeArtifacts("success", "b".repeat(64));
+        when(
+            sourceAvailability.checkPinnedCurrentForUpdate(GROUP_ID)
+        ).thenReturn(GenerationCheck.currentCheck(), staleGeneration());
+        when(
+            runs.markAvailabilityStale(
+                GROUP_ID,
+                ModelMaterializationSourceAvailabilityGuard.SOURCE_GENERATION_STALE,
+                NOW
+            )
+        ).thenReturn(true);
+
+        assertThatThrownBy(() ->
+            service.syncAndProbe(
+                GROUP_ID,
+                new ModelMaterializationRunArtifactService.SyncProbeCommand(
+                    "RELEASE_BUILD",
+                    BUNDLE
+                )
+            )
+        )
+            .isInstanceOf(ModelMaterializationRuntimeException.class)
+            .extracting(error ->
+                ((ModelMaterializationRuntimeException) error).code()
+            )
+            .isEqualTo(
+                ModelMaterializationSourceAvailabilityGuard.SOURCE_GENERATION_STALE
+            );
+
+        verify(runs).markDbtSucceeded(GROUP_ID, INVOCATION_ID, 1, NOW);
+        verify(runs, never()).markRelationsVerified(GROUP_ID, 1, NOW);
+        verify(runs, never()).markFailed(eq(GROUP_ID), any(), any());
+    }
+
+    @Test
+    void staleGenerationAtFinalizeCannotCompleteDispatch() {
+        when(runs.findRunGroup(GROUP_ID)).thenReturn(
+            java.util.Optional.of(
+                runGroup(4, "BUILT", "SUBMITTED", null)
+            )
+        );
+        when(
+            sourceAvailability.checkPinnedCurrentForUpdate(GROUP_ID)
+        ).thenReturn(staleGeneration());
+        when(
+            runs.markAvailabilityStale(
+                GROUP_ID,
+                ModelMaterializationSourceAvailabilityGuard.SOURCE_GENERATION_STALE,
+                NOW
+            )
+        ).thenReturn(true);
+
+        assertThatThrownBy(() ->
+            service.finalizeRun(
+                GROUP_ID,
+                new ModelMaterializationRunArtifactService.FinalizeCommand(
+                    "SUCCEEDED"
+                )
+            )
+        )
+            .isInstanceOf(ModelMaterializationRuntimeException.class)
+            .extracting(error ->
+                ((ModelMaterializationRuntimeException) error).code()
+            )
+            .isEqualTo(
+                ModelMaterializationSourceAvailabilityGuard.SOURCE_GENERATION_STALE
+            );
+
+        verify(runs, never()).finalizeSucceeded(GROUP_ID, NOW);
+        verify(candidates).transition(
+            "tenant-a",
+            "service:dts-airflow",
+            CANDIDATE_ID,
+            new ModelReleaseCandidateContract.TransitionCommand(
+                4,
+                ModelLifecycleContract.DeliveryStatus.STALE,
+                "materialization-availability-stale-" + GROUP_ID,
+                ModelMaterializationSourceAvailabilityGuard.SOURCE_GENERATION_STALE
+            )
+        );
+    }
+
+    @Test
+    void repeatedSuccessCallbackCannotOverwritePersistedStaleTruth() {
+        when(runs.findRunGroup(GROUP_ID)).thenReturn(
+            java.util.Optional.of(
+                runGroup(
+                    4,
+                    "STALE",
+                    "FAILED",
+                    ModelMaterializationSourceAvailabilityGuard.SOURCE_GENERATION_STALE
+                )
+            )
+        );
+
+        assertThatThrownBy(() ->
+            service.finalizeRun(
+                GROUP_ID,
+                new ModelMaterializationRunArtifactService.FinalizeCommand(
+                    "SUCCEEDED"
+                )
+            )
+        )
+            .isInstanceOf(ModelMaterializationRuntimeException.class)
+            .extracting(error ->
+                ((ModelMaterializationRuntimeException) error).code()
+            )
+            .isEqualTo(
+                ModelMaterializationSourceAvailabilityGuard.SOURCE_GENERATION_STALE
+            );
+
+        verify(sourceAvailability, never()).checkPinnedCurrentForUpdate(
+            GROUP_ID
+        );
+        verify(runs, never()).finalizeSucceeded(GROUP_ID, NOW);
+        verify(runs, never()).markAvailabilityStale(any(), any(), any());
+        verify(auditService, never()).auditActionAsStrict(
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any()
+        );
+    }
+
+    private static RunGroupRecord runGroup(
+        int candidateCurrentVersion,
+        String candidateCurrentStatus,
+        String dispatchStatus,
+        String lastErrorCode
+    ) {
+        return new RunGroupRecord(
+            GROUP_ID,
+            "tenant-a",
+            CANDIDATE_ID,
+            3,
+            1,
+            candidateCurrentVersion,
+            candidateCurrentStatus,
+            "RELEASE_BUILD",
+            BUNDLE,
+            dispatchStatus,
+            lastErrorCode,
+            "postgres-primary",
+            "postgres",
+            "sha256:" + "e".repeat(64)
+        );
+    }
+
+    private static GenerationCheck staleGeneration() {
+        return GenerationCheck.stale(
+            ModelMaterializationSourceAvailabilityGuard.SOURCE_GENERATION_STALE,
+            List.of(
+                new GenerationDrift(
+                    UUID.fromString(
+                        "50000000-0000-0000-0000-000000000005"
+                    ),
+                    "DATASET",
+                    7L,
+                    100L,
+                    "available-100",
+                    "FENCED",
+                    7L,
+                    101L,
+                    "fence-101",
+                    ModelMaterializationSourceAvailabilityGuard.SOURCE_GENERATION_STALE
+                )
+            )
         );
     }
 

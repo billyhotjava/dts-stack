@@ -6,6 +6,7 @@
     http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
 
     <changeSet id="20260517-05-code-asset-lifecycle-backfill" author="codex">
+        <validCheckSum>9:d914616f2cbb3c7d89dd402b9af98730</validCheckSum>
         <preConditions onFail="MARK_RAN">
             <and>
                 <tableExists tableName="asset_ownership"/>

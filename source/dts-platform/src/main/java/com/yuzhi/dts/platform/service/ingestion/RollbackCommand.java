@@ -19,7 +19,6 @@ public record RollbackCommand(
     Long taskId,
     UUID dataSourceId,
     List<String> tables,
-    boolean rebuildDbt,
     boolean dryRun
 ) {
 
@@ -30,7 +29,6 @@ public record RollbackCommand(
         "taskId",
         "dataSourceId",
         "tables",
-        "rebuildDbt",
         "dryRun"
     );
     private static final Set<String> EXECUTE_METADATA_FIELDS = Set.of(
@@ -77,16 +75,18 @@ public record RollbackCommand(
         }
 
         List<String> tables = normalizeTables(safe.get("tables"));
-        boolean rebuildDbt = requireBoolean(safe, "rebuildDbt", false);
+        if (level > 1 && !tables.isEmpty()) {
+            throw badRequest("tables 子集仅支持一级回退；二、三级回退会作用于任务或数据源的全部表");
+        }
         boolean requestedDryRun = requireBoolean(safe, "dryRun", false);
         if (executeRequest && requestedDryRun) {
             throw badRequest("execute 不接受 dryRun=true，请重新执行影响分析");
         }
-        return new RollbackCommand(level, scope, taskId, dataSourceId, tables, rebuildDbt, false);
+        return new RollbackCommand(level, scope, taskId, dataSourceId, tables, false);
     }
 
     public RollbackCommand asAnalysisCommand() {
-        return new RollbackCommand(level, scope, taskId, dataSourceId, tables, rebuildDbt, true);
+        return new RollbackCommand(level, scope, taskId, dataSourceId, tables, true);
     }
 
     public Map<String, Object> toMap() {
@@ -102,22 +102,35 @@ public record RollbackCommand(
         if (!tables.isEmpty()) {
             command.put("tables", tables);
         }
-        command.put("rebuildDbt", rebuildDbt);
         command.put("dryRun", dryRun);
         return Map.copyOf(command);
     }
 
     public String canonicalFingerprintSource() {
-        return String.join(
-            "\n",
-            "level=" + level,
-            "scope=" + scope,
-            "taskId=" + (taskId == null ? "" : taskId),
-            "dataSourceId=" + (dataSourceId == null ? "" : dataSourceId),
-            "tables=" + String.join(",", tables),
-            "rebuildDbt=" + rebuildDbt,
-            "dryRun=" + dryRun
+        StringBuilder canonical = new StringBuilder("rollback-command-v2;");
+        appendFingerprintValue(canonical, "level", String.valueOf(level));
+        appendFingerprintValue(canonical, "scope", scope);
+        appendFingerprintValue(canonical, "taskId", taskId == null ? "" : taskId.toString());
+        appendFingerprintValue(
+            canonical,
+            "dataSourceId",
+            dataSourceId == null ? "" : dataSourceId.toString()
         );
+        appendFingerprintValue(canonical, "tableCount", String.valueOf(tables.size()));
+        tables.forEach(table -> appendFingerprintValue(canonical, "table", table));
+        appendFingerprintValue(canonical, "dryRun", String.valueOf(dryRun));
+        return canonical.toString();
+    }
+
+    private static void appendFingerprintValue(StringBuilder canonical, String name, String value) {
+        String safeValue = value == null ? "" : value;
+        canonical
+            .append(name)
+            .append('=')
+            .append(safeValue.length())
+            .append(':')
+            .append(safeValue)
+            .append(';');
     }
 
     private static List<String> normalizeTables(Object value) {

@@ -2,6 +2,7 @@ package com.yuzhi.dts.ingestion.service.etl;
 
 import com.yuzhi.dts.ingestion.config.AirflowProperties;
 import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
+import com.yuzhi.dts.ingestion.service.security.IngestionSensitiveConfigSupport;
 import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -92,16 +93,16 @@ public class AirflowClient {
             recordSuccess();
             return new TriggerResult(true, response.getStatusCode().value(), null, response.getBody());
         } catch (HttpStatusCodeException ex) {
-            LOG.warn("Airflow dag trigger failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            LOG.warn("Airflow dag trigger failed status={} body={}", ex.getStatusCode().value(), sanitized(ex.getResponseBodyAsString()));
             // 4xx errors are Airflow-side issues, not connectivity — don't count toward circuit breaker
             if (ex.getStatusCode().is5xxServerError()) {
                 recordFailure();
             }
-            return new TriggerResult(false, ex.getStatusCode().value(), ex.getResponseBodyAsString(), null);
+            return new TriggerResult(false, ex.getStatusCode().value(), "Airflow DAG 触发失败", null);
         } catch (Exception ex) {
-            LOG.warn("Airflow dag trigger error: {}", ex.getMessage());
+            LOG.warn("Airflow dag trigger error: {}", sanitized(ex.getMessage()));
             recordFailure();
-            return new TriggerResult(false, -1, ex.getMessage(), null);
+            return new TriggerResult(false, -1, "Airflow DAG 触发调用失败", null);
         }
     }
 
@@ -118,9 +119,9 @@ public class AirflowClient {
             ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.GET, entity, Map.class);
             return Optional.ofNullable(response.getBody());
         } catch (HttpStatusCodeException ex) {
-            LOG.warn("Airflow dag list failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            LOG.warn("Airflow dag list failed status={} body={}", ex.getStatusCode().value(), sanitized(ex.getResponseBodyAsString()));
         } catch (Exception ex) {
-            LOG.warn("Airflow dag list error: {}", ex.getMessage());
+            LOG.warn("Airflow dag list error: {}", sanitized(ex.getMessage()));
         }
         return Optional.empty();
     }
@@ -137,13 +138,61 @@ public class AirflowClient {
             ResponseEntity<Void> response = restTemplate.exchange(uri, HttpMethod.DELETE, entity, Void.class);
             return response.getStatusCode().is2xxSuccessful();
         } catch (HttpStatusCodeException ex) {
-            if (ex.getStatusCode().value() != 404) {
-                LOG.warn("Airflow dag delete failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            if (ex.getStatusCode().value() == 404) {
+                return false;
             }
+            LOG.warn("Airflow DAG delete failed status={} body={}", ex.getStatusCode().value(), sanitized(ex.getResponseBodyAsString()));
+            throw new IllegalStateException("AIRFLOW_DAG_DELETE_HTTP_FAILED: status=" + ex.getStatusCode().value());
         } catch (Exception ex) {
-            LOG.warn("Airflow dag delete error: {}", ex.getMessage());
+            LOG.warn("Airflow DAG delete failed detail={}", sanitized(ex.getMessage()));
+            throw new IllegalStateException("AIRFLOW_DAG_DELETE_FAILED");
         }
-        return false;
+    }
+
+    /** Strict lifecycle variant used by admission reconciliation; 404 is idempotent success. */
+    public void deleteDagStrict(String dagId) {
+        AirflowSettings settings = resolveSettings();
+        if (!settings.enabled() || !StringUtils.hasText(settings.baseUrl()) || !StringUtils.hasText(dagId)) {
+            throw new IllegalStateException("Airflow DAG deletion is not configured: " + dagId);
+        }
+        URI uri = buildUri(settings, "/dags/" + dagId, null);
+        try {
+            HttpHeaders headers = deleteHeaders(settings);
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            restTemplate.exchange(uri, HttpMethod.DELETE, entity, Void.class);
+        } catch (HttpStatusCodeException ex) {
+            if (ex.getStatusCode().value() == 404) {
+                return;
+            }
+            LOG.warn("Airflow DAG strict delete failed status={} body={}", ex.getStatusCode().value(), sanitized(ex.getResponseBodyAsString()));
+            throw new IllegalStateException(
+                "AIRFLOW_DAG_DELETE_HTTP_FAILED: status=" + ex.getStatusCode().value()
+            );
+        } catch (Exception ex) {
+            LOG.warn("Airflow DAG strict delete failed detail={}", sanitized(ex.getMessage()));
+            throw new IllegalStateException("AIRFLOW_DAG_DELETE_FAILED");
+        }
+    }
+
+    public void setDagPausedStrict(String dagId, boolean paused) {
+        AirflowSettings settings = resolveSettings();
+        if (!settings.enabled() || !StringUtils.hasText(settings.baseUrl()) || !StringUtils.hasText(dagId)) {
+            throw new IllegalStateException("Airflow DAG state update is not configured: " + dagId);
+        }
+        URI uri = buildUri(settings, "/dags/" + dagId, null);
+        try {
+            HttpHeaders headers = defaultHeaders(settings);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(Map.of("is_paused", paused), headers);
+            restTemplate.exchange(uri, HttpMethod.PATCH, entity, Map.class);
+        } catch (HttpStatusCodeException ex) {
+            LOG.warn("Airflow DAG state update failed status={} body={}", ex.getStatusCode().value(), sanitized(ex.getResponseBodyAsString()));
+            throw new IllegalStateException(
+                "AIRFLOW_DAG_STATE_UPDATE_HTTP_FAILED: status=" + ex.getStatusCode().value()
+            );
+        } catch (Exception ex) {
+            LOG.warn("Airflow DAG state update failed detail={}", sanitized(ex.getMessage()));
+            throw new IllegalStateException("AIRFLOW_DAG_STATE_UPDATE_FAILED");
+        }
     }
 
     public Optional<Map<String, Object>> getDagRun(String dagId, String dagRunId) {
@@ -172,17 +221,18 @@ public class AirflowClient {
         } catch (HttpStatusCodeException ex) {
             if (ex.getStatusCode().value() == 404) {
                 recordSuccess();
-                return DagRunLookupResult.notFound(ex.getStatusCode().value(), ex.getResponseBodyAsString());
+                LOG.debug("Airflow dag run not found body={}", sanitized(ex.getResponseBodyAsString()));
+                return DagRunLookupResult.notFound(ex.getStatusCode().value(), "Airflow DAG run 不存在");
             }
-            LOG.warn("Airflow dag run fetch failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            LOG.warn("Airflow dag run fetch failed status={} body={}", ex.getStatusCode().value(), sanitized(ex.getResponseBodyAsString()));
             if (ex.getStatusCode().is5xxServerError()) {
                 recordFailure();
             }
-            return DagRunLookupResult.error(ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            return DagRunLookupResult.error(ex.getStatusCode().value(), "Airflow DAG run 查询失败");
         } catch (Exception ex) {
-            LOG.warn("Airflow dag run fetch error: {}", ex.getMessage());
+            LOG.warn("Airflow dag run fetch error: {}", sanitized(ex.getMessage()));
             recordFailure();
-            return DagRunLookupResult.error(-1, ex.getMessage());
+            return DagRunLookupResult.error(-1, "Airflow DAG run 查询调用失败");
         }
     }
 
@@ -199,9 +249,9 @@ public class AirflowClient {
             ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.GET, entity, Map.class);
             return Optional.ofNullable(response.getBody());
         } catch (HttpStatusCodeException ex) {
-            LOG.warn("Airflow dag runs list failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            LOG.warn("Airflow dag runs list failed status={} body={}", ex.getStatusCode().value(), sanitized(ex.getResponseBodyAsString()));
         } catch (Exception ex) {
-            LOG.warn("Airflow dag runs list error: {}", ex.getMessage());
+            LOG.warn("Airflow dag runs list error: {}", sanitized(ex.getMessage()));
         }
         return Optional.empty();
     }
@@ -229,12 +279,12 @@ public class AirflowClient {
             return Optional.ofNullable(response.getBody());
         } catch (HttpStatusCodeException ex) {
             if (ex.getStatusCode().value() == 404) {
-                LOG.debug("Airflow task log not ready dag={} run={} task={} try={} body={}", dagId, dagRunId, taskId, resolvedTry, ex.getResponseBodyAsString());
+                LOG.debug("Airflow task log not ready dag={} run={} task={} try={} body={}", dagId, dagRunId, taskId, resolvedTry, sanitized(ex.getResponseBodyAsString()));
             } else {
-                LOG.warn("Airflow task log fetch failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+                LOG.warn("Airflow task log fetch failed status={} body={}", ex.getStatusCode().value(), sanitized(ex.getResponseBodyAsString()));
             }
         } catch (Exception ex) {
-            LOG.warn("Airflow task log fetch error: {}", ex.getMessage());
+            LOG.warn("Airflow task log fetch error: {}", sanitized(ex.getMessage()));
         }
         return Optional.empty();
     }
@@ -260,12 +310,12 @@ public class AirflowClient {
             return Optional.of(extractMapList(body, "task_instances"));
         } catch (HttpStatusCodeException ex) {
             if (ex.getStatusCode().value() == 404) {
-                LOG.debug("Airflow task instances not ready dag={} run={} body={}", dagId, dagRunId, ex.getResponseBodyAsString());
+                LOG.debug("Airflow task instances not ready dag={} run={} body={}", dagId, dagRunId, sanitized(ex.getResponseBodyAsString()));
             } else {
-                LOG.warn("Airflow task instance list failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+                LOG.warn("Airflow task instance list failed status={} body={}", ex.getStatusCode().value(), sanitized(ex.getResponseBodyAsString()));
             }
         } catch (Exception ex) {
-            LOG.warn("Airflow task instance list error: {}", ex.getMessage());
+            LOG.warn("Airflow task instance list error: {}", sanitized(ex.getMessage()));
         }
         return Optional.empty();
     }
@@ -284,9 +334,9 @@ public class AirflowClient {
             Map body = response.getBody();
             return Optional.of(extractMapList(body, "import_errors"));
         } catch (HttpStatusCodeException ex) {
-            LOG.warn("Airflow import errors fetch failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            LOG.warn("Airflow import errors fetch failed status={} body={}", ex.getStatusCode().value(), sanitized(ex.getResponseBodyAsString()));
         } catch (Exception ex) {
-            LOG.warn("Airflow import errors fetch error: {}", ex.getMessage());
+            LOG.warn("Airflow import errors fetch error: {}", sanitized(ex.getMessage()));
         }
         return Optional.empty();
     }
@@ -342,12 +392,12 @@ public class AirflowClient {
                 recordSuccess(); // 404 = Airflow is reachable, DAG just not there yet
                 return false;
             }
-            LOG.warn("Airflow dag check failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            LOG.warn("Airflow dag check failed status={} body={}", ex.getStatusCode().value(), sanitized(ex.getResponseBodyAsString()));
             if (ex.getStatusCode().is5xxServerError()) {
                 recordFailure();
             }
         } catch (Exception ex) {
-            LOG.warn("Airflow dag check error: {}", ex.getMessage());
+            LOG.warn("Airflow dag check error: {}", sanitized(ex.getMessage()));
             recordFailure();
         }
         return false;
@@ -402,6 +452,10 @@ public class AirflowClient {
             password = fallbackPass;
         }
         return new AirflowSettings(enabled, baseUrl, apiPath, username, password);
+    }
+
+    private String sanitized(String value) {
+        return IngestionSensitiveConfigSupport.sanitizeText(value);
     }
 
     private List<Map<String, Object>> extractMapList(Map body, String key) {

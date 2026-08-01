@@ -1,5 +1,6 @@
 import { Alert, Button, Form, Input, InputNumber, Select, Space, Typography } from "antd";
 import type { FormInstance } from "antd/es/form";
+import { useNavigate } from "react-router";
 import type { ApiConnectionTestResultDTO } from "@/api/ingestion";
 import type { InfraDataSource } from "@/api/services/dataSourcesService";
 import type { AccessPlanFormValues } from "./accessPlan.types";
@@ -23,12 +24,17 @@ export function ApiAccessStep({
 	onPreview,
 	onPreviewInputChange,
 }: Props) {
+	const navigate = useNavigate();
 	if (phase === "source") {
 		return (
 			<div className="space-y-5">
 				<div>
 					<Typography.Title level={4}>选择 API 连接</Typography.Title>
-					<Typography.Text type="secondary">认证信息由平台连接管理托管，任务只引用连接。</Typography.Text>
+					<Space wrap>
+						<Typography.Text type="secondary">认证信息由平台连接管理托管，任务只引用连接。</Typography.Text>
+						<Button type="link" className="h-auto p-0" onClick={() => navigate("/foundation/connections")}>管理连接</Button>
+						<Button type="link" className="h-auto p-0" onClick={() => navigate("/foundation/connections?create=1")}>新建连接</Button>
+					</Space>
 				</div>
 				<div className="grid gap-4 md:grid-cols-2">
 					<Form.Item name="name" label="任务名称" rules={[{ required: true, message: "请输入任务名称" }]}>

@@ -1102,31 +1102,55 @@ public class FileUploadService {
     }
 
     public List<String> cleanupForTask(com.yuzhi.dts.ingestion.domain.IngestionTask task) {
-        List<String> deleted = new ArrayList<>();
-        if (task == null || task.getSourceConfig() == null) return List.of();
+        if (task == null || task.getSourceConfig() == null) {
+            return List.of();
+        }
         var config = task.getSourceConfig();
-        String hostPath = config.path("hostPath").asText(null);
-        if (!StringUtils.hasText(hostPath)) {
-            hostPath = config.path("_filePath").asText(null);
+        String fileId = config.path("_fileId").asText(null);
+        if (!StringUtils.hasText(fileId) || !fileId.matches("[A-Za-z0-9][A-Za-z0-9_-]{0,127}")) {
+            throw new IllegalStateException("MANAGED_FILE_ID_REQUIRED_FOR_DELETE");
         }
-        if (!StringUtils.hasText(hostPath)) {
-            hostPath = config.path("filePath").asText(null);
-        }
-        if (!StringUtils.hasText(hostPath)) {
-            hostPath = config.path("path").asText(null);
-        }
-        if (StringUtils.hasText(hostPath)) {
-            try {
-                Path path = Paths.get(hostPath.trim());
-                if (Files.exists(path)) {
-                    Files.delete(path);
-                    deleted.add(hostPath);
-                    LOG.info("[rollback] Deleted upload file: {}", hostPath);
-                }
-            } catch (Exception ex) {
-                LOG.warn("[rollback] Failed to delete upload file {}: {}", hostPath, ex.getMessage());
+        try {
+            Path configuredRoot = Paths.get(resolveJobDir(), UPLOADS_SUBDIR).toAbsolutePath().normalize();
+            Path managedRoot = configuredRoot.toRealPath();
+            String prefix = fileId + "_";
+            List<Path> matches;
+            try (var stream = Files.list(configuredRoot)) {
+                matches = stream
+                    .filter(path -> path.getFileName().toString().startsWith(prefix))
+                    .filter(path -> path.getFileName().toString().endsWith(".enc"))
+                    .toList();
             }
+            if (matches.isEmpty()) {
+                return List.of();
+            }
+            if (matches.size() != 1) {
+                throw new IllegalStateException("MANAGED_FILE_DELETE_AMBIGUOUS");
+            }
+            Path path = matches.get(0).toAbsolutePath().normalize();
+            if (!configuredRoot.equals(path.getParent())) {
+                throw new IllegalStateException("MANAGED_FILE_PATH_OUTSIDE_ROOT");
+            }
+            java.nio.file.attribute.BasicFileAttributes attributes = Files.readAttributes(
+                path,
+                java.nio.file.attribute.BasicFileAttributes.class,
+                java.nio.file.LinkOption.NOFOLLOW_LINKS
+            );
+            if (attributes.isSymbolicLink() || !attributes.isRegularFile()) {
+                throw new IllegalStateException("MANAGED_FILE_DELETE_REJECTED_NON_REGULAR_FILE");
+            }
+            if (!managedRoot.equals(path.getParent().toRealPath())) {
+                throw new IllegalStateException("MANAGED_FILE_PARENT_OUTSIDE_ROOT");
+            }
+            Files.delete(path);
+            LOG.info("[rollback] Deleted managed upload fileId={}", fileId);
+            return List.of(fileId);
+        } catch (java.nio.file.NoSuchFileException ex) {
+            return List.of();
+        } catch (IllegalStateException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new IllegalStateException("MANAGED_FILE_DELETE_FAILED: " + ex.getMessage(), ex);
         }
-        return deleted;
     }
 }

@@ -37,6 +37,7 @@ import {
 	loadAccessPlanBootstrap,
 	loadAccessPlanEdit,
 	loadAccessPlanInitialization,
+	resolveUserClassificationRank,
 	saveAccessPlan,
 } from "./useAccessPlanWizard";
 
@@ -63,6 +64,21 @@ const destination = {
 	writerType: "postgresqlwriter",
 	destinationName: "默认湖",
 };
+
+describe("resolveUserClassificationRank", () => {
+	it("accepts person_level from direct and identity-provider attribute payloads", () => {
+		expect(resolveUserClassificationRank({ person_level: "IMPORTANT" })).toBe(2);
+		expect(resolveUserClassificationRank({ attributes: { person_level: "IMPORTANT" } })).toBe(2);
+		expect(resolveUserClassificationRank({ attributes: { person_level: ["CORE"] } })).toBe(3);
+	});
+
+	it("uses the highest valid classification across conflicting and multi-value claims", () => {
+		expect(resolveUserClassificationRank({ dataLevel: "INTERNAL", person_level: "CORE" })).toBe(3);
+		expect(resolveUserClassificationRank({ attributes: { person_level: ["INTERNAL", "CORE"] } })).toBe(3);
+		expect(resolveUserClassificationRank({ person_level: "INTERNAL" })).toBe(1);
+		expect(resolveUserClassificationRank({ person_level: "UNKNOWN" })).toBeUndefined();
+	});
+});
 
 beforeEach(() => {
 	vi.clearAllMocks();

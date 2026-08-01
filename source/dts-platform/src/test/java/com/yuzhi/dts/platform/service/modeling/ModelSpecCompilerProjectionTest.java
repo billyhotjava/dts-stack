@@ -17,15 +17,15 @@ import org.junit.jupiter.api.Test;
 class ModelSpecCompilerProjectionTest {
 
     @Test
-    void projectsCanonicalFieldsWithoutInventingABusinessObject() {
+    void projectsOnlyCompilerOwnedFieldsFromTheCanonicalModel() {
         ModelSpecView view = view(ModelType.FACT, List.of(), List.of(source()));
 
-        ModelingVNextContract.ModelSpec projected = ModelSpecCompilerProjection.project(view, ignored -> null);
+        ModelingCompilerContract.CompilerModel projected = ModelSpecCompilerProjection.project(view, ignored -> null);
 
-        assertThat(projected.objectId()).isNull();
+        assertThat(projected.id()).isEqualTo(view.id().toString());
         assertThat(projected.dimensions()).contains("customer_id");
         assertThat(projected.metrics()).contains("amount");
-        assertThat(projected.sourceRefs()).extracting(ModelingVNextContract.SourceRef::ref).containsExactly("ods.customer");
+        assertThat(projected.sourceRefs()).extracting(ModelingCompilerContract.SourceRef::ref).containsExactly("ods.customer");
     }
 
     @Test
@@ -40,7 +40,7 @@ class ModelSpecCompilerProjectionTest {
             "a".repeat(64), Instant.EPOCH, Instant.EPOCH, CompatibilityMode.CANONICAL, null
         );
 
-        ModelingVNextContract.ModelSpec projected = ModelSpecCompilerProjection.project(derived, candidate -> candidate.equals(ref) ? upstream : null);
+        ModelingCompilerContract.CompilerModel projected = ModelSpecCompilerProjection.project(derived, candidate -> candidate.equals(ref) ? upstream : null);
 
         assertThat(projected.sourceRefs()).singleElement().satisfies(source -> {
             assertThat(source.kind()).isEqualTo("DBT_MODEL");
@@ -60,7 +60,7 @@ class ModelSpecCompilerProjectionTest {
             "a".repeat(64), Instant.EPOCH, Instant.EPOCH, CompatibilityMode.CANONICAL, null
         );
 
-        ModelingVNextContract.ModelSpec projected = ModelSpecCompilerProjection.project(
+        ModelingCompilerContract.CompilerModel projected = ModelSpecCompilerProjection.project(
             fact,
             candidate -> candidate.equals(ref) ? upstream : null
         );
@@ -156,7 +156,16 @@ class ModelSpecCompilerProjectionTest {
             2,
             "c".repeat(64),
             InputMode.UPSTREAM_MODEL,
-            List.of(new ModelLifecycleContract.UpstreamModelInput(upstreamId, 3, "b".repeat(64))),
+            List.of(
+                new ModelLifecycleContract.UpstreamModelInput(
+                    upstreamId,
+                    3,
+                    "b".repeat(64),
+                    1,
+                    "d".repeat(64),
+                    "model.warehouse.customer_detail"
+                )
+            ),
             List.of(),
             Map.of(),
             "table"

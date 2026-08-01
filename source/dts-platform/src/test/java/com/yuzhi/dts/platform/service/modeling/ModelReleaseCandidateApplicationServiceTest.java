@@ -798,7 +798,7 @@ class ModelReleaseCandidateApplicationServiceTest {
                     .isEqualTo(ModelReleaseCandidateException.Kind.FORBIDDEN)
             );
         assertThatThrownBy(() ->
-            service.retryRegistration(
+            service.retryPublication(
                 TENANT,
                 ACTOR,
                 PLAN_ID,
@@ -1053,7 +1053,7 @@ class ModelReleaseCandidateApplicationServiceTest {
         )
             .thenReturn(new CommandResult(published, false, List.of()));
 
-        CommandResult result = service.retryRegistration(
+        CommandResult result = service.retryPublication(
             TENANT,
             ACTOR,
             PLAN_ID,

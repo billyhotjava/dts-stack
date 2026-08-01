@@ -76,7 +76,9 @@ public class QualityDatasetStatementExecutor {
             throw new IllegalStateException("数据资产关联的数据源未配置 JDBC 连接");
         }
 
-        String tableName = resolveTableName(dataset);
+        String sourceType = resolveSourceType(dataSource);
+        BoundTable boundTable = resolveBoundTable(dataset, sourceType);
+        String tableName = boundTable != null ? boundTable.qualifiedName() : null;
         String persistedTableName = StringUtils.hasText(tableName) ? tableName : dataset.getName();
         List<StatementExecutionResult> results = new ArrayList<>();
         List<GovQualityFailingRow> samples = new ArrayList<>();
@@ -85,7 +87,7 @@ public class QualityDatasetStatementExecutor {
         int failingRowCount = 0;
 
         try (Connection connection = jdbcSqlExecutor.getConnection(dataSource)) {
-            configureReadOnlyTransaction(connection);
+            configureReadOnlyTransaction(connection, sourceType);
             try {
                 rowsTotal = countRows(connection, tableName);
                 for (Map.Entry<String, String> entry : statements.entrySet()) {
@@ -111,8 +113,20 @@ public class QualityDatasetStatementExecutor {
                                 entry.getKey(),
                                 sql,
                                 StatementExecutionResult.Status.FAILED,
-                                validation.violations().stream().map(violation -> violation.message()).findFirst().orElse("仅允许只读质量检测 SQL"),
+                                "质量检测 SQL 未通过只读安全校验",
                                 "WRITE_BLOCKED"
+                            )
+                        );
+                        continue;
+                    }
+                    if (!referencesOnlyBoundTable(sql, boundTable, sourceType)) {
+                        results.add(
+                            new StatementExecutionResult(
+                                entry.getKey(),
+                                sql,
+                                StatementExecutionResult.Status.FAILED,
+                                "质量检测 SQL 只能读取当前绑定数据资产对应的物理表",
+                                "DATASET_SCOPE_BLOCKED"
                             )
                         );
                         continue;
@@ -147,7 +161,7 @@ public class QualityDatasetStatementExecutor {
                                 sql,
                                 StatementExecutionResult.Status.FAILED,
                                 sqlErrorMessage(ex),
-                                ex.getSQLState()
+                                safeSqlState(ex)
                             )
                         );
                     }
@@ -166,7 +180,7 @@ public class QualityDatasetStatementExecutor {
                     );
                 }
             } finally {
-                rollbackReadOnlyTransaction(connection);
+                rollbackReadOnlyTransaction(connection, sourceType);
             }
         } catch (SQLException ex) {
             throw new IllegalStateException("无法建立只读质量检测会话：" + sqlErrorMessage(ex), ex);
@@ -258,16 +272,57 @@ public class QualityDatasetStatementExecutor {
         }
     }
 
-    private String resolveTableName(CatalogDataset dataset) {
-        String table = safeIdentifier(dataset.getHiveTable());
-        if (table == null) {
-            table = safeIdentifier(dataset.getName());
-        }
-        if (table == null) {
+    private BoundTable resolveBoundTable(CatalogDataset dataset, String sourceType) {
+        if (!isLowerCaseDialect(sourceType)) {
             return null;
         }
-        String schema = safeIdentifier(dataset.getHiveDatabase());
-        return schema == null ? table : schema + "." + table;
+        String rawTable = StringUtils.hasText(dataset.getHiveTable()) ? dataset.getHiveTable().trim() : null;
+        if (rawTable == null) {
+            return null;
+        }
+        String[] parts = rawTable.split("\\.", -1);
+        if (parts.length < 1 || parts.length > 2) {
+            return null;
+        }
+        String table = canonicalLowerIdentifier(parts[parts.length - 1]);
+        String embeddedSchema = parts.length == 2 ? canonicalLowerIdentifier(parts[0]) : null;
+        String datasetSchema = StringUtils.hasText(dataset.getHiveDatabase())
+            ? canonicalLowerIdentifier(dataset.getHiveDatabase())
+            : null;
+        if (
+            table == null ||
+            (parts.length == 2 && embeddedSchema == null) ||
+            (StringUtils.hasText(dataset.getHiveDatabase()) && datasetSchema == null) ||
+            (embeddedSchema != null && datasetSchema != null && !embeddedSchema.equals(datasetSchema))
+        ) {
+            return null;
+        }
+        String schema = embeddedSchema != null ? embeddedSchema : datasetSchema;
+        return schema != null ? new BoundTable(schema, table, schema + "." + table) : null;
+    }
+
+    private boolean referencesOnlyBoundTable(String sql, BoundTable boundTable, String sourceType) {
+        if (boundTable == null) {
+            return false;
+        }
+        return QualitySqlScopeValidator.referencesOnlyBoundTable(sql, boundTable.schema(), boundTable.table(), sourceType);
+    }
+
+    private String resolveSourceType(InfraDataSource dataSource) {
+        String jdbcUrl = dataSource.getJdbcUrl();
+        if (StringUtils.hasText(jdbcUrl) && jdbcUrl.trim().toLowerCase(java.util.Locale.ROOT).startsWith("jdbc:postgresql:")) {
+            return "POSTGRESQL";
+        }
+        return StringUtils.hasText(dataSource.getType()) ? dataSource.getType().trim().toUpperCase(java.util.Locale.ROOT) : null;
+    }
+
+    private boolean isLowerCaseDialect(String sourceType) {
+        return sourceType != null && List.of("POSTGRES", "POSTGRESQL", "HIVE", "INCEPTOR").contains(sourceType);
+    }
+
+    private String canonicalLowerIdentifier(String value) {
+        String identifier = safeIdentifier(value);
+        return identifier != null && identifier.equals(identifier.toLowerCase(java.util.Locale.ROOT)) ? identifier : null;
     }
 
     private String safeIdentifier(String value) {
@@ -283,13 +338,20 @@ public class QualityDatasetStatementExecutor {
         return normalized;
     }
 
-    private void configureReadOnlyTransaction(Connection connection) throws SQLException {
+    private void configureReadOnlyTransaction(Connection connection, String sourceType) throws SQLException {
+        if ("HIVE".equals(sourceType) || "INCEPTOR".equals(sourceType)) {
+            return;
+        }
         connection.setReadOnly(true);
         if (connection.getAutoCommit()) {
             connection.setAutoCommit(false);
         }
         try (Statement statement = connection.createStatement()) {
             statement.execute("SET TRANSACTION READ ONLY");
+            if ("POSTGRES".equals(sourceType) || "POSTGRESQL".equals(sourceType)) {
+                statement.execute("SET LOCAL standard_conforming_strings = on");
+                statement.execute("SET LOCAL search_path = pg_catalog");
+            }
         } catch (SQLException exception) {
             throw new SQLException(
                 "数据源不支持只读事务，已拒绝执行质量检测",
@@ -300,7 +362,10 @@ public class QualityDatasetStatementExecutor {
         }
     }
 
-    private void rollbackReadOnlyTransaction(Connection connection) {
+    private void rollbackReadOnlyTransaction(Connection connection, String sourceType) {
+        if (!"POSTGRES".equals(sourceType) && !"POSTGRESQL".equals(sourceType)) {
+            return;
+        }
         try {
             connection.rollback();
         } catch (SQLException ignored) {}
@@ -332,7 +397,18 @@ public class QualityDatasetStatementExecutor {
     }
 
     private String sqlErrorMessage(SQLException exception) {
-        return StringUtils.hasText(exception.getMessage()) ? exception.getMessage() : "质量检测 SQL 执行失败";
+        String sqlState = safeSqlState(exception);
+        return sqlState == null
+            ? "质量检测 SQL 执行失败"
+            : "质量检测 SQL 执行失败（SQLSTATE: " + sqlState + "）";
+    }
+
+    private String safeSqlState(SQLException exception) {
+        if (exception == null || !StringUtils.hasText(exception.getSQLState())) {
+            return null;
+        }
+        String state = exception.getSQLState().trim().toUpperCase(java.util.Locale.ROOT);
+        return state.matches("[A-Z0-9]{1,10}") ? state : null;
     }
 
     private int toInt(long value) {
@@ -350,6 +426,8 @@ public class QualityDatasetStatementExecutor {
         }
         return value.substring(0, maxLength);
     }
+
+    private record BoundTable(String schema, String table, String qualifiedName) {}
 
     public record Execution(List<StatementExecutionResult> results, Integer rowsTotal, int failingRowCount) {}
 }

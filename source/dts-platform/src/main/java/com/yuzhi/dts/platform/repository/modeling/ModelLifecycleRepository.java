@@ -13,8 +13,6 @@ import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.Implementa
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.InputMode;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.LifecycleEventView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.PhysicalAssetInput;
-import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.RegistrationStep;
-import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.RegistrationStepView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.SaveImplementationCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.UpstreamModelInput;
 import com.yuzhi.dts.platform.service.modeling.ModelImplementationChecksumCodec;
@@ -30,7 +28,6 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /** PostgreSQL store for revision-bound implementation and lifecycle evidence. */
@@ -855,20 +852,6 @@ public class ModelLifecycleRepository {
         return queryEvents(" where tenant_id = ? and id = ?", tenantId, eventId).stream().findFirst();
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void updateEventStatus(UUID eventId, String status, Map<String, Object> details) {
-        jdbcTemplate.update(
-            """
-            update modeling_model_lifecycle_event
-               set status = ?, details_json = coalesce(details_json, '{}'::jsonb) || cast(? as jsonb)
-             where id = ?
-            """,
-            status,
-            json(details),
-            eventId
-        );
-    }
-
     public Optional<LifecycleEventView> findLatestEvent(
         String tenantId,
         UUID modelSpecId,
@@ -962,81 +945,6 @@ public class ModelLifecycleRepository {
             " where tenant_id = ? and model_spec_id = ? order by created_date desc, id",
             tenantId,
             modelSpecId
-        );
-    }
-
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public RegistrationStepView startRegistration(
-        UUID releaseEventId,
-        RegistrationStep step,
-        Instant now
-    ) {
-        jdbcTemplate.update(
-            """
-            insert into modeling_model_registration_step (
-                id, release_event_id, step_code, status, external_ref,
-                attempt_count, error_message, last_attempt_at
-            ) values (?, ?, ?, 'ATTEMPTING', null, 1, null, ?)
-            on conflict (release_event_id, step_code) do update
-               set status = 'ATTEMPTING',
-                   attempt_count = modeling_model_registration_step.attempt_count + 1,
-                   error_message = null,
-                   last_attempt_at = excluded.last_attempt_at
-            """,
-            UUID.randomUUID(),
-            releaseEventId,
-            step.name(),
-            Timestamp.from(now)
-        );
-        return listRegistrations(releaseEventId).stream().filter(item -> item.step() == step).findFirst().orElseThrow();
-    }
-
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public RegistrationStepView completeRegistration(
-        UUID releaseEventId,
-        RegistrationStep step,
-        String status,
-        String externalRef,
-        String errorMessage,
-        Instant now
-    ) {
-        int changed = jdbcTemplate.update(
-            """
-            update modeling_model_registration_step
-               set status = ?, external_ref = coalesce(?, external_ref), error_message = ?, last_attempt_at = ?
-             where release_event_id = ? and step_code = ?
-            """,
-            status,
-            externalRef,
-            errorMessage,
-            Timestamp.from(now),
-            releaseEventId,
-            step.name()
-        );
-        if (changed == 0) throw new IllegalStateException("Registration attempt was not started");
-        return listRegistrations(releaseEventId).stream().filter(item -> item.step() == step).findFirst().orElseThrow();
-    }
-
-    public List<RegistrationStepView> listRegistrations(UUID releaseEventId) {
-        return jdbcTemplate.query(
-            """
-            select id, release_event_id, step_code, status, external_ref,
-                   attempt_count, error_message, last_attempt_at
-              from modeling_model_registration_step
-             where release_event_id = ? order by step_code
-            """,
-            (row, number) ->
-                new RegistrationStepView(
-                    row.getObject("id", UUID.class),
-                    row.getObject("release_event_id", UUID.class),
-                    RegistrationStep.valueOf(row.getString("step_code")),
-                    row.getString("status"),
-                    row.getString("external_ref"),
-                    row.getInt("attempt_count"),
-                    row.getString("error_message"),
-                    row.getTimestamp("last_attempt_at").toInstant()
-                ),
-            releaseEventId
         );
     }
 

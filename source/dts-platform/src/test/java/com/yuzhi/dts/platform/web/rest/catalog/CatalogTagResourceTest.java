@@ -356,7 +356,7 @@ class CatalogTagResourceTest {
     void mixedBatchPermissionDenialPerformsNoMutationAndWritesOneFailAudit() throws Exception {
         List<AssetRef> assets = List.of(
             new AssetRef("SCREEN", "screen:114"),
-            new AssetRef("MODELING_SQL_MODEL", "tenant:default/env:prod/dialect:generic/modeling_sql_model:sales")
+            new AssetRef("DATA_STANDARD", "tenant:default/env:prod/dialect:generic/data_standard:sales")
         );
         CatalogAssetTagPermissionException failure = new CatalogAssetTagPermissionException(
             HttpStatus.FORBIDDEN,

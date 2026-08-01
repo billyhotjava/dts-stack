@@ -12,6 +12,7 @@ import com.yuzhi.dts.admin.config.AuditIngestProperties;
 import com.yuzhi.dts.admin.domain.AdminKeycloakUser;
 import com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository;
 import com.yuzhi.dts.admin.web.filter.AuditIngestPreAuthenticationFilter;
+import com.yuzhi.dts.common.audit.AuditPayloadSanitizer;
 import com.yuzhi.dts.common.net.IpAddressUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import java.lang.reflect.Array;
@@ -131,9 +132,11 @@ public class AuditIngestResource {
             Map<String, Object> authenticatedBody = body == null ? new LinkedHashMap<>() : new LinkedHashMap<>(body);
             authenticatedBody.put("sourceSystem", sourceSystemForProducer(decision.serviceName()));
             authenticatedBody.remove("producer");
+            Map<String, Object> sanitizedBody = AuditPayloadSanitizer.sanitize(authenticatedBody);
             AuditPayload payload = AuditPayload.from(
-                authenticatedBody,
+                sanitizedBody,
                 request,
+                decision.serviceName(),
                 userRepository,
                 this::isContainerAddress
             );
@@ -150,6 +153,10 @@ public class AuditIngestResource {
                 .request(payload.requestUri(), payload.httpMethod())
                 .metadata("sourceSystem", payload.sourceSystem())
                 .metadata("moduleKeyRaw", payload.moduleKeyRaw());
+
+            if (payload.actor().startsWith("_system:")) {
+                builder.allowSystemActor();
+            }
 
             if (StringUtils.isNotBlank(payload.moduleKey())) {
                 builder.moduleOverride(payload.moduleKey(), payload.moduleName());
@@ -187,12 +194,12 @@ public class AuditIngestResource {
                 builder.detail("payload", payload.details());
             }
 
-            Object eventId = body == null ? null : body.get("eventId");
+            Object eventId = sanitizedBody.get("eventId");
             if (eventId != null && StringUtils.isNotBlank(String.valueOf(eventId))) {
                 builder.metadata("ingestEventId", String.valueOf(eventId).trim());
             }
 
-            IngestResult result = idempotencyService.record(decision.serviceName(), authenticatedBody, builder.build());
+            IngestResult result = idempotencyService.record(decision.serviceName(), sanitizedBody, builder.build());
             return switch (result.status()) {
                 case RECORDED -> ResponseEntity.status(HttpStatus.CREATED).body(responseBody(result));
                 case DUPLICATE -> ResponseEntity.ok(responseBody(result));
@@ -238,7 +245,8 @@ public class AuditIngestResource {
         if (raw == null || StringUtils.isBlank(String.valueOf(raw))) {
             return "missing";
         }
-        String normalized = String.valueOf(raw).replaceAll("[\\p{Cntrl}]", "?").trim();
+        Object sanitized = AuditPayloadSanitizer.sanitize(Map.of("eventId", raw)).get("eventId");
+        String normalized = String.valueOf(sanitized).replaceAll("[\\p{Cntrl}]", "?").trim();
         return normalized.length() <= 128 ? normalized : normalized.substring(0, 128);
     }
 
@@ -292,6 +300,7 @@ public class AuditIngestResource {
         static AuditPayload from(
             Map<String, Object> body,
             HttpServletRequest request,
+            String authenticatedProducer,
             AdminKeycloakUserRepository userRepository,
             Predicate<String> isContainerAddress
         ) {
@@ -304,7 +313,12 @@ public class AuditIngestResource {
             );
             String moduleName = firstNonBlank(text(sanitizedBody.get("moduleName")), moduleKey);
 
-            ActorResolution actorResolution = normalizeActor(sanitizedBody, sourceSystem, userRepository);
+            ActorResolution actorResolution = normalizeActor(
+                sanitizedBody,
+                sourceSystem,
+                authenticatedProducer,
+                userRepository
+            );
             String actor = actorResolution.username();
             String actorName = firstNonBlank(
                 actorResolution.displayName(),
@@ -534,6 +548,7 @@ public class AuditIngestResource {
         private static ActorResolution normalizeActor(
             Map<String, Object> body,
             String sourceSystem,
+            String authenticatedProducer,
             AdminKeycloakUserRepository userRepository
         ) {
             List<Object> candidates = collectValues(
@@ -565,8 +580,29 @@ public class AuditIngestResource {
                     return resolved;
                 }
             }
+            ActorResolution machineActor = resolveTrustedMachineActor(candidates, authenticatedProducer);
+            if (machineActor != null) {
+                return machineActor;
+            }
             String origin = sourceSystem != null && !sourceSystem.isBlank() ? sourceSystem.trim() : "unknown";
             throw new NonUserActorException("source=" + origin + " candidates=" + candidates);
+        }
+
+        private static ActorResolution resolveTrustedMachineActor(
+            List<Object> candidates,
+            String authenticatedProducer
+        ) {
+            if (!"dts-platform".equalsIgnoreCase(StringUtils.trimToEmpty(authenticatedProducer))) {
+                return null;
+            }
+            for (Object candidate : candidates) {
+                if (candidate == null) continue;
+                String normalized = candidate.toString().trim().toLowerCase(Locale.ROOT);
+                if (normalized.equals("_system:airflow") || normalized.equals("_system:scheduler")) {
+                    return new ActorResolution(normalized, normalized);
+                }
+            }
+            return null;
         }
 
         private static ActorResolution resolveExistingUser(String candidate, AdminKeycloakUserRepository userRepository) {

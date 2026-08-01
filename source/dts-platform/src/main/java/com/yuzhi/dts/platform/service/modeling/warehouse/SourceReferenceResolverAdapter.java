@@ -1,28 +1,22 @@
 package com.yuzhi.dts.platform.service.modeling.warehouse;
 
-import com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema;
-import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
-import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
 import com.yuzhi.dts.platform.domain.infra.InfraExternalExchangeFile;
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
-import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
-import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
-import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraExternalExchangeFileRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.security.DepartmentUtils;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetAvailabilityReadPort;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetType;
+import com.yuzhi.dts.platform.service.catalog.CatalogSourceReferenceReadPort;
+import com.yuzhi.dts.platform.service.catalog.CatalogSourceReferenceReadPort.SourceSnapshot;
 import com.yuzhi.dts.platform.service.etl.DbtManifestService;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceLocator;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceType;
-import com.yuzhi.dts.platform.service.security.AccessChecker;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.time.Instant;
-import java.util.Comparator;
 import java.util.HexFormat;
-import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
@@ -32,30 +26,24 @@ public class SourceReferenceResolverAdapter implements SourceReferenceResolver {
 
     private static final String DEFAULT_DBT_PROJECT = "default";
 
-    private final CatalogTableSchemaRepository tableRepository;
-    private final CatalogColumnSchemaRepository columnRepository;
-    private final CatalogDatasetRepository datasetRepository;
+    private final CatalogSourceReferenceReadPort catalogSources;
     private final InfraExternalExchangeFileRepository fileRepository;
     private final InfraDataSourceRepository dataSourceRepository;
     private final DbtManifestService dbtManifestService;
-    private final AccessChecker accessChecker;
+    private final CatalogAssetAvailabilityReadPort availability;
 
     public SourceReferenceResolverAdapter(
-        CatalogTableSchemaRepository tableRepository,
-        CatalogColumnSchemaRepository columnRepository,
-        CatalogDatasetRepository datasetRepository,
+        CatalogSourceReferenceReadPort catalogSources,
         InfraExternalExchangeFileRepository fileRepository,
         InfraDataSourceRepository dataSourceRepository,
         DbtManifestService dbtManifestService,
-        AccessChecker accessChecker
+        CatalogAssetAvailabilityReadPort availability
     ) {
-        this.tableRepository = tableRepository;
-        this.columnRepository = columnRepository;
-        this.datasetRepository = datasetRepository;
+        this.catalogSources = catalogSources;
         this.fileRepository = fileRepository;
         this.dataSourceRepository = dataSourceRepository;
         this.dbtManifestService = dbtManifestService;
-        this.accessChecker = accessChecker;
+        this.availability = availability;
     }
 
     @Override
@@ -79,15 +67,10 @@ public class SourceReferenceResolverAdapter implements SourceReferenceResolver {
         if (locator.assetId() == null) {
             return ResolvedSource.providerError();
         }
-        CatalogTableSchema table = tableRepository.findById(locator.assetId()).orElse(null);
-        if (table == null) {
-            return ResolvedSource.missing();
-        }
-        CatalogDataset dataset = table.getDataset();
-        if (!canRead(dataset, accessContext)) {
-            return ResolvedSource.forbidden();
-        }
-        return ResolvedSource.available(table.getName(), schemaFingerprint(table));
+        return fromCatalog(
+            catalogSources.resolveTable(locator.assetId(), actorDepartment(accessContext)),
+            null
+        );
     }
 
     private ResolvedSource resolveExcelFile(SourceLocator locator, AccessContext accessContext) {
@@ -121,30 +104,14 @@ public class SourceReferenceResolverAdapter implements SourceReferenceResolver {
         if (!"ACTIVE".equalsIgnoreCase(connection.getStatus()) || connection.getLastVerifiedAt() == null) {
             return ResolvedSource.providerError();
         }
-        CatalogDataset dataset = datasetRepository
-            .findFirstBySourceIdAndHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(
+        SourceSnapshot catalogSource = catalogSources.resolveConnectionTable(
                 locator.connectionId(),
                 locator.namespace(),
-                locator.objectName()
-            )
-            .orElse(null);
-        if (dataset == null) {
-            return ResolvedSource.providerError();
-        }
-        if (!canRead(dataset, accessContext)) {
-            return ResolvedSource.forbidden();
-        }
-        List<CatalogTableSchema> tables = tableRepository.findByDataset(dataset);
-        CatalogTableSchema table = tables
-            .stream()
-            .filter(candidate -> locator.objectName().equalsIgnoreCase(candidate.getName()))
-            .findFirst()
-            .orElseGet(() -> tables.size() == 1 ? tables.getFirst() : null);
-        if (table == null) {
-            return ResolvedSource.providerError();
-        }
+                locator.objectName(),
+                actorDepartment(accessContext)
+            );
         String label = connection.getName() + " / " + locator.namespace() + "." + locator.objectName();
-        return ResolvedSource.available(label, schemaFingerprint(table));
+        return fromCatalog(catalogSource, label);
     }
 
     private ResolvedSource resolveDbtNode(SourceLocator locator) {
@@ -173,13 +140,49 @@ public class SourceReferenceResolverAdapter implements SourceReferenceResolver {
             safe(model.schema()),
             safe(model.path())
         );
-        return ResolvedSource.available(model.name(), sha256(artifact));
+        return availableIfCurrent(
+            CatalogAssetType.DBT_MODEL,
+            CatalogAssetKey.dbtModel(model.uniqueId(), model.name()),
+            model.name(),
+            sha256(artifact)
+        );
     }
 
-    private boolean canRead(CatalogDataset dataset, AccessContext accessContext) {
-        return dataset != null &&
-        accessChecker.canRead(dataset) &&
-        accessChecker.departmentAllowedExact(dataset, accessContext == null ? null : accessContext.actorDepartmentId());
+    private ResolvedSource availableIfCurrent(
+        CatalogAssetType assetType,
+        String assetKey,
+        String displayName,
+        String baseVersion
+    ) {
+        CatalogAssetAvailabilityReadPort.Availability current = availability.read(assetType, assetKey);
+        if (!current.isAvailable()) {
+            return ResolvedSource.missing();
+        }
+        if (current.epoch() == 0L) {
+            return ResolvedSource.available(displayName, baseVersion);
+        }
+        return ResolvedSource.available(
+            displayName,
+            sha256(baseVersion + "\u0000availability-epoch=" + current.epoch())
+        );
+    }
+
+    private ResolvedSource fromCatalog(SourceSnapshot snapshot, String displayNameOverride) {
+        return switch (snapshot.status()) {
+            case AVAILABLE -> availableIfCurrent(
+                snapshot.assetType(),
+                snapshot.assetKey(),
+                isBlank(displayNameOverride) ? snapshot.displayName() : displayNameOverride,
+                snapshot.schemaFingerprint()
+            );
+            case MISSING -> ResolvedSource.missing();
+            case FORBIDDEN -> ResolvedSource.forbidden();
+            case PROVIDER_ERROR -> ResolvedSource.providerError();
+        };
+    }
+
+    private static String actorDepartment(AccessContext accessContext) {
+        return accessContext == null ? null : accessContext.actorDepartmentId();
     }
 
     private static boolean departmentAllowed(String ownerDepartmentId, AccessContext accessContext) {
@@ -192,140 +195,6 @@ public class SourceReferenceResolverAdapter implements SourceReferenceResolver {
         String canonicalOwner = DepartmentUtils.normalize(ownerDepartmentId);
         String canonicalActor = DepartmentUtils.normalize(accessContext.actorDepartmentId());
         return !canonicalOwner.isEmpty() && canonicalOwner.equals(canonicalActor);
-    }
-
-    private String schemaFingerprint(CatalogTableSchema table) {
-        List<CatalogColumnSchema> columns = columnRepository
-            .findByTable(table)
-            .stream()
-            .sorted(Comparator.comparing(CatalogColumnSchema::getName, String.CASE_INSENSITIVE_ORDER))
-            .toList();
-        if (columns.isEmpty()) {
-            throw new IllegalStateException("Catalog schema has no columns");
-        }
-        StringBuilder canonical = new StringBuilder(safe(table.getName()));
-        for (CatalogColumnSchema column : columns) {
-            canonical
-                .append('\u0000')
-                .append(safe(column.getName()))
-                .append('\u0000')
-                .append(safe(column.getDataType()))
-                .append('\u0000')
-                .append(Boolean.TRUE.equals(column.getNullable()))
-                .append('\u0000')
-                .append(safe(column.getStatus()));
-        }
-        String apiEvidence = apiFingerprintEvidence(table);
-        if (apiEvidence != null) {
-            canonical.append('\u0000').append(apiEvidence);
-        }
-        return sha256(canonical.toString());
-    }
-
-    private String apiFingerprintEvidence(CatalogTableSchema table) {
-        if (table == null) {
-            return null;
-        }
-        Map<String, String> tableTags = tagValues(table.getTags());
-        Map<String, String> datasetTags = table.getDataset() == null ? Map.of() : tagValues(table.getDataset().getTags());
-        String origin = consistentEvidenceValue("origin", tableTags, datasetTags);
-        if (!"API".equalsIgnoreCase(origin)) {
-            return null;
-        }
-        CatalogDataset dataset = table.getDataset();
-        if (dataset == null || !Boolean.TRUE.equals(dataset.getEnabled()) || "STALE".equalsIgnoreCase(dataset.getLifecycleStatus())) {
-            throw new IllegalStateException("API landing catalog asset is not current");
-        }
-        String connectionId = requiredApiEvidence("connectionId", tableTags, datasetTags);
-        String taskId = requiredApiEvidence("taskId", tableTags, datasetTags);
-        String taskRevision = requiredApiEvidence("taskRevision", tableTags, datasetTags);
-        String resourceId = requiredApiEvidence("resourceId", tableTags, datasetTags);
-        String executionSequence = requiredApiEvidence("executionSequence", tableTags, datasetTags);
-        String executionId = requiredApiEvidence("executionId", tableTags, datasetTags);
-        String executionStatus = requiredApiEvidence("executionStatus", tableTags, datasetTags);
-        String landingTruth = requiredApiEvidence("landingTruth", tableTags, datasetTags);
-        String landingStatus = requiredApiEvidence("landingStatus", tableTags, datasetTags);
-        String configChecksum = requiredApiEvidence("configChecksum", tableTags, datasetTags);
-        String fieldSnapshotChecksum = requiredApiEvidence("fieldSnapshotChecksum", tableTags, datasetTags);
-        UUID evidenceConnectionId;
-        try {
-            evidenceConnectionId = UUID.fromString(connectionId);
-            Instant.parse(taskRevision);
-            if (Long.parseLong(executionSequence) < 0) {
-                throw new IllegalArgumentException("negative sequence");
-            }
-        } catch (RuntimeException exception) {
-            throw new IllegalStateException("API landing evidence has invalid task or execution ordering", exception);
-        }
-        if (
-            (dataset.getSourceId() != null && !dataset.getSourceId().equals(evidenceConnectionId)) ||
-            !"SUCCESS".equalsIgnoreCase(executionStatus) ||
-            !"VERIFIED".equalsIgnoreCase(landingTruth) ||
-            !"SUCCESS".equalsIgnoreCase(landingStatus)
-        ) {
-            throw new IllegalStateException("API landing evidence is not verified successful");
-        }
-        return String.join(
-            "\u0000",
-            "api-connection=" + connectionId,
-            "api-task=" + taskId,
-            "api-task-revision=" + taskRevision,
-            "api-resource=" + resourceId,
-            "api-execution-sequence=" + executionSequence,
-            "api-execution=" + executionId,
-            "api-execution-status=SUCCESS",
-            "api-landing-status=SUCCESS",
-            "api-config=" + configChecksum,
-            "api-field-snapshot=" + fieldSnapshotChecksum
-        );
-    }
-
-    private String requiredApiEvidence(String key, Map<String, String> tableTags, Map<String, String> datasetTags) {
-        String value = consistentEvidenceValue(key, tableTags, datasetTags);
-        if (isBlank(value)) {
-            throw new IllegalStateException("API landing evidence is missing " + key);
-        }
-        return value;
-    }
-
-    private String consistentEvidenceValue(String key, Map<String, String> tableTags, Map<String, String> datasetTags) {
-        String tableValue = tableTags.get(key);
-        String datasetValue = datasetTags.get(key);
-        if (!isBlank(tableValue) && !isBlank(datasetValue) && !tableValue.equals(datasetValue)) {
-            throw new IllegalStateException("API landing evidence conflicts for " + key);
-        }
-        return firstNonBlank(tableValue, datasetValue);
-    }
-
-    private Map<String, String> tagValues(String tags) {
-        if (isBlank(tags)) {
-            return Map.of();
-        }
-        Map<String, String> values = new java.util.LinkedHashMap<>();
-        for (String entry : tags.split(";")) {
-            int separator = entry.indexOf('=');
-            if (separator <= 0) {
-                continue;
-            }
-            String key = entry.substring(0, separator).trim();
-            String value = entry.substring(separator + 1).trim();
-            if (!key.isEmpty() && !value.isEmpty()) {
-                values.put(key, value);
-            }
-        }
-        return values;
-    }
-
-    private String firstNonBlank(String... values) {
-        if (values == null) {
-            return null;
-        }
-        for (String value : values) {
-            if (!isBlank(value)) {
-                return value.trim();
-            }
-        }
-        return null;
     }
 
     private static String sha256(String value) {

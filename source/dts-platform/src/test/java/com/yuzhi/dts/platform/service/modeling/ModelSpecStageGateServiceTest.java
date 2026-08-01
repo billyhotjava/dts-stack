@@ -54,7 +54,7 @@ class ModelSpecStageGateServiceTest {
         ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
         ModelSpecRepository repository = mock(ModelSpecRepository.class);
         ModelLifecycleRepository lifecycle = mock(ModelLifecycleRepository.class);
-        ModelImplementationCompatibilityAdapter adapter = mock(ModelImplementationCompatibilityAdapter.class);
+        ModelImplementationInputPolicy adapter = mock(ModelImplementationInputPolicy.class);
         ModelSpecView model = view(
             ModelType.FACT,
             null,
@@ -125,7 +125,7 @@ class ModelSpecStageGateServiceTest {
             "table"
         );
         when(lifecycle.findImplementation("tenant-a", MODEL_ID)).thenReturn(Optional.of(implementation));
-        ModelImplementationCompatibilityAdapter adapter = new ModelImplementationCompatibilityAdapter(
+        ModelImplementationInputPolicy adapter = new ModelImplementationInputPolicy(
             modelSpecs,
             repository,
             lifecycle,
@@ -523,7 +523,14 @@ class ModelSpecStageGateServiceTest {
             ImplementationMode.DBT_MANAGED,
             "pjm",
             "model.pjm.fact",
-            "ACTIVE"
+            "ACTIVE",
+            1,
+            model.checksum(),
+            ModelLifecycleContract.InputMode.GENERATED,
+            List.of(new ModelLifecycleContract.GeneratedInput("DBT", java.util.Map.of())),
+            List.of(),
+            java.util.Map.of(),
+            "table"
         );
         when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(model);
         when(sourceValidation.isCurrentBindingForGate("tenant-a", model.planId(), model.sourceRefs().getFirst())).thenReturn(true);

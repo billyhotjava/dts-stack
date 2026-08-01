@@ -20,7 +20,7 @@ const routes = [
 	"/data-modeling/dimensions/workbench",
 	"/data-modeling/metrics/atomic",
 	"/services/apis",
-	"/governance/quality",
+	"/governance/rules/runs",
 	"/governance/asset-grants",
 	"/ops/instances",
 	"/ops/audit-evidence",

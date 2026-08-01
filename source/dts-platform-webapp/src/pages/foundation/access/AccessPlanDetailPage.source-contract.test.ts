@@ -7,6 +7,7 @@ const SOURCE = readFileSync(new URL("./AccessPlanDetailPage.tsx", import.meta.ur
 test("access plan detail loads one task and its latest execution without list fan-out", () => {
 	assert.match(SOURCE, /ingestionTaskAPI\.getTask\(taskId\)/);
 	assert.match(SOURCE, /ingestionTaskAPI\.getLatestExecution\(taskId\)/);
+	assert.match(SOURCE, /ingestionTaskAPI\.getTaskRevisions\(taskId\)/);
 	assert.doesNotMatch(SOURCE, /getTasks\(|dataSourcesService\.list\(/);
 });
 
@@ -17,8 +18,8 @@ test("access plan detail exposes the agreed operational tabs on real contracts",
 	assert.match(SOURCE, /label: inferAccessKind\(task\) === "file" \? "文件预检" : "异常数据"/);
 	assert.match(SOURCE, /<ExecutionHistoryTable taskId=\{taskId\}/);
 	assert.match(SOURCE, /<AccessStructureDriftPanel task=\{task\}/);
-	assert.match(SOURCE, /<AccessQualityPanel task=\{task\} latestExecution=\{latestExecution\}/);
-	assert.match(SOURCE, /<TaskAdmissionBasis task=\{task\}/);
+	assert.match(SOURCE, /<AccessQualityPanel[\s\S]{0,180}task=\{task\}[\s\S]{0,180}onTaskChanged=/);
+	assert.match(SOURCE, /<TaskAdmissionBasis\s+task=\{admissionTask \|\| task\}\s*\/>/);
 	assert.match(SOURCE, /ingestionTaskAPI\.getChangeLogs\(\{/);
 	assert.match(SOURCE, /taskId,/);
 });
@@ -26,9 +27,11 @@ test("access plan detail exposes the agreed operational tabs on real contracts",
 test("access plan detail preserves admission, execution, DAG rebuild and guarded rollback operations", () => {
 	assert.match(SOURCE, /runAccessPlanOperation\("admit", operationTaskId\)/);
 	assert.match(SOURCE, /runAccessPlanOperation\("execute", operationTaskId\)/);
+	assert.equal(SOURCE.match(/if \(!acquireSingleFlight\(operationLockRef\)\) return;/g)?.length, 3);
+	assert.equal(SOURCE.match(/onCancel:\s*\(\) => releaseSingleFlight\(operationLockRef\)/g)?.length, 2);
 	assert.match(SOURCE, /runAccessPlanOperation\("rebuildDag", operationTaskId\)/);
 	assert.match(SOURCE, /<RollbackImpactModal/);
-	assert.match(SOURCE, /确认密级并准入/);
+	assert.match(SOURCE, /准入草稿/);
 	assert.match(SOURCE, /立即执行/);
 	assert.match(SOURCE, /setRollbackOpen\(false\);\s*setRollbackRequest\(null\);/);
 	assert.match(SOURCE, /rollbackRequest\?\.taskId === taskId/);
@@ -60,15 +63,19 @@ test("access plan detail routes legacy and explicit edits to the same-kind wizar
 	assert.match(SOURCE, /access\/new\?kind=\$\{inferAccessKind\(task\)\}&editId=/);
 });
 
-test("access plan detail shows real task revision with an honest legacy fallback and keeps seal version separate", () => {
+test("access plan detail separates the active revision from a pending draft and keeps seal version separate", () => {
 	assert.match(SOURCE, /任务版本/);
 	assert.match(SOURCE, /task\.revisionNumber/);
 	assert.match(SOURCE, /task\.revisionState/);
+	assert.match(SOURCE, /activeRevisionNumber/);
+	assert.match(SOURCE, /draftRevisionNumber/);
+	assert.match(SOURCE, /resolveAccessRevisionView\(task, revisions, revisionsError\)/);
+	assert.match(SOURCE, /待准入草稿/);
+	assert.match(SOURCE, /执行生效版本/);
 	assert.match(SOURCE, /task\.defaultPolicyVersion/);
 	assert.match(SOURCE, /task\.effectiveConfigChecksum/);
 	assert.match(SOURCE, /未版本化（存量任务）/);
 	assert.match(SOURCE, /密级封存版本/);
-	assert.doesNotMatch(SOURCE, /activeRevision|draftRevision/);
 });
 
 test("access plan detail does not render raw or sensitive task configuration", () => {

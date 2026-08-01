@@ -421,7 +421,7 @@ function DatasetOverviewTab({
 	const governanceActions =
 		readiness.state === "BLOCKED" || readiness.state === "WARNING" ? (
 			<Space size={4} wrap>
-				<Button size="small" onClick={() => router.push("/governance/quality")}>
+				<Button size="small" onClick={() => router.push("/governance/rules/catalog")}>
 					质量规则
 				</Button>
 				<Button size="small" onClick={() => router.push("/governance/asset-grants")}>

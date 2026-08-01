@@ -79,6 +79,7 @@ const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 	"/catalog/data-products": "/pages/catalog/DataProductsPage",
 	"/foundation/access-changes": "/pages/foundation/access/LegacyDataIntegrationRedirect",
 	"/foundation/connectors": "/pages/foundation/ConnectorRegistryPage",
+	"/foundation/connections": "/pages/foundation/access/ConnectionProfilesPage",
 	"/foundation/data-sources": "/pages/foundation/access/AccessWorkspacePage",
 	"/foundation/jdbc-drivers": "/pages/foundation/JdbcDriversPage",
 	"/foundation/standard-package": "/pages/foundation/StandardPackagePage",

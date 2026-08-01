@@ -7,6 +7,8 @@ import com.yuzhi.dts.ingestion.domain.IngestionTask;
 import com.yuzhi.dts.ingestion.repository.IngestionExecutionRepository;
 import com.yuzhi.dts.ingestion.repository.IngestionTaskRepository;
 import com.yuzhi.dts.ingestion.service.IngestionAccessContractService;
+import com.yuzhi.dts.ingestion.service.IngestionTaskService;
+import com.yuzhi.dts.ingestion.service.etl.rollback.RollbackRecoveryService;
 import com.yuzhi.dts.ingestion.service.audit.AuditService;
 import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
 import com.yuzhi.dts.ingestion.service.infra.PlatformInfraClient;
@@ -24,6 +26,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.EventListener;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,6 +47,8 @@ public class AirflowExecutionSyncService {
     private final IncrementalSyncService incrementalSyncService;
     private final AuditService auditService;
     private IngestionAccessContractService accessContractService;
+    private IngestionTaskService ingestionTaskService;
+    private RollbackRecoveryService rollbackRecoveryService;
 
     public AirflowExecutionSyncService(
         IngestionExecutionRepository executionRepository,
@@ -70,9 +75,20 @@ public class AirflowExecutionSyncService {
         this.accessContractService = accessContractService;
     }
 
+    @Autowired
+    void setIngestionTaskService(@Lazy IngestionTaskService ingestionTaskService) {
+        this.ingestionTaskService = ingestionTaskService;
+    }
+
+    @Autowired
+    void setRollbackRecoveryService(@Lazy RollbackRecoveryService rollbackRecoveryService) {
+        this.rollbackRecoveryService = rollbackRecoveryService;
+    }
+
     @EventListener(ApplicationReadyEvent.class)
     @Transactional
     public void recoverStaleExecutions() {
+        reconcileAdmissionDags();
         long thresholdMinutes = properties.getStaleExecutionThresholdMinutes() != null
             ? properties.getStaleExecutionThresholdMinutes() : 60L;
         Instant cutoff = Instant.now().minus(Duration.ofMinutes(thresholdMinutes));
@@ -165,6 +181,7 @@ public class AirflowExecutionSyncService {
     @Scheduled(fixedDelayString = "${dts.airflow.execution-poll-interval-ms:15000}")
     @Transactional
     public void syncRunningExecutions() {
+        reconcileAdmissionDags();
         IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_AIRFLOW);
         boolean enabled = settings.getBoolean("executionPollEnabled", properties.isExecutionPollEnabled());
         if (!enabled) {
@@ -245,6 +262,12 @@ public class AirflowExecutionSyncService {
         }
     }
 
+    private void reconcileAdmissionDags() {
+        if (ingestionTaskService != null) {
+            ingestionTaskService.reconcileAdmissionDagDeployments();
+        }
+    }
+
     private void markExecution(
         IngestionExecution execution,
         IngestionTask task,
@@ -305,7 +328,9 @@ public class AirflowExecutionSyncService {
         }
         if ("success".equalsIgnoreCase(status)) {
             incrementalSyncService.updateCheckpointOnSuccess(task, execution);
-            triggerDbtIfConfigured(task, execution);
+            if (rollbackRecoveryService != null) {
+                rollbackRecoveryService.recordSuccessfulRevalidation(task, execution);
+            }
             triggerPostIngestionQualityCheck(task, execution);
             return;
         }
@@ -558,50 +583,6 @@ public class AirflowExecutionSyncService {
         }
         String text = value.toString().trim();
         return StringUtils.hasText(text) ? text : null;
-    }
-
-    private void triggerDbtIfConfigured(IngestionTask task, IngestionExecution execution) {
-        if (task == null) {
-            return;
-        }
-        String models = task.getDbtModelSelector();
-        if (!StringUtils.hasText(models)) {
-            return;
-        }
-        String dagSelector = task.getDbtDagSelector();
-        try {
-            Map<String, Object> result = platformInfraClient.triggerDbtRun(models, dagSelector);
-            Map<String, Object> meta = new java.util.LinkedHashMap<>();
-            meta.put("taskId", task.getId());
-            meta.put("executionId", execution.getId());
-            meta.put("models", models);
-            if (StringUtils.hasText(dagSelector)) {
-                meta.put("dagSelector", dagSelector);
-            }
-            meta.put("result", result);
-            auditService.auditAction(
-                "INGESTION_TASK_DBT_TRIGGER",
-                AuditStage.SUCCESS,
-                task.getName(),
-                meta
-            );
-        } catch (Exception ex) {
-            LOG.warn("[dbt] trigger failed task={} err={}", task.getId(), ex.getMessage());
-            Map<String, Object> meta = new java.util.LinkedHashMap<>();
-            meta.put("taskId", task.getId());
-            meta.put("executionId", execution.getId());
-            meta.put("models", models);
-            if (StringUtils.hasText(dagSelector)) {
-                meta.put("dagSelector", dagSelector);
-            }
-            meta.put("error", ex.getMessage());
-            auditService.auditAction(
-                "INGESTION_TASK_DBT_TRIGGER",
-                AuditStage.FAIL,
-                task.getName(),
-                meta
-            );
-        }
     }
 
     /**

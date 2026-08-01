@@ -277,6 +277,38 @@ export interface PageResult<T> {
 	number: number;
 }
 
+export interface IngestionStagingParseResult {
+	totalRows: number;
+	columns: ColumnInfo[];
+	stagingTableName: string;
+	builtInErrorCount: number;
+}
+
+export interface IngestionStagingPreCheckResult {
+	status: "PASSED" | "FAILED" | string;
+	totalRules: number;
+	passedRules: number;
+	failedRules: number;
+	failedRuleNames: string[];
+	totalRows: number;
+	passedRows: number;
+	failedRows: number;
+}
+
+export type IngestionStagingRow = Record<string, unknown> & {
+	_row_num?: number;
+	_status?: string;
+	_errors?: unknown;
+};
+
+export interface IngestionStagingCellUpdateResult {
+	rowNum: number;
+	column: string;
+	value: unknown;
+}
+
+type StagingAPIResponse<T> = T | { status?: number | string; data?: T };
+
 export interface IngestionChangeLogDTO {
 	id?: number;
 	taskId: number;
@@ -736,6 +768,54 @@ class IngestionTaskAPI {
 	async admitTask(id: number): Promise<IngestionTaskDTO> {
 		const payload: any = await api.post({ url: `/ingestion/tasks/${id}/admit` });
 		return this.resolveWrappedResponse<IngestionTaskDTO>(payload);
+	}
+
+	async parseStagingFile(taskId: number): Promise<IngestionStagingParseResult> {
+		const payload = await api.post<StagingAPIResponse<IngestionStagingParseResult>>({
+			url: `/ingestion/tasks/${taskId}/parse`,
+		});
+		return this.resolveWrappedResponse<IngestionStagingParseResult>(payload);
+	}
+
+	async preCheckStaging(taskId: number): Promise<IngestionStagingPreCheckResult> {
+		const payload = await api.post<StagingAPIResponse<IngestionStagingPreCheckResult>>({
+			url: `/ingestion/tasks/${taskId}/pre-check`,
+		});
+		return this.resolveWrappedResponse<IngestionStagingPreCheckResult>(payload);
+	}
+
+	async reCheckStaging(taskId: number): Promise<IngestionStagingPreCheckResult> {
+		const payload = await api.post<StagingAPIResponse<IngestionStagingPreCheckResult>>({
+			url: `/ingestion/tasks/${taskId}/re-check`,
+		});
+		return this.resolveWrappedResponse<IngestionStagingPreCheckResult>(payload);
+	}
+
+	async updateStagingCell(
+		taskId: number,
+		rowNum: number,
+		data: { column: string; value: unknown },
+	): Promise<IngestionStagingCellUpdateResult> {
+		const payload = await api.put<StagingAPIResponse<IngestionStagingCellUpdateResult>>({
+			url: `/ingestion/tasks/${taskId}/staging/${rowNum}`,
+			data,
+		});
+		return this.resolveWrappedResponse<IngestionStagingCellUpdateResult>(payload);
+	}
+
+	async getStagingRows(
+		taskId: number,
+		params?: { errorsOnly?: boolean; page?: number; size?: number; sort?: string },
+	): Promise<PageResult<IngestionStagingRow>> {
+		const payload = await api.get<StagingAPIResponse<PageResult<IngestionStagingRow>>>({
+			url: `/ingestion/tasks/${taskId}/staging`,
+			params,
+		});
+		return this.resolveWrappedResponse<PageResult<IngestionStagingRow>>(payload);
+	}
+
+	async dropStaging(taskId: number): Promise<void> {
+		await api.delete({ url: `/ingestion/tasks/${taskId}/staging` });
 	}
 
 	/**

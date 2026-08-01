@@ -26,33 +26,29 @@ public class PkiContextEnricher {
         if (request == null) {
             return;
         }
-        try {
-            PkiClientCert cert = PkiClientCert.fromRequest(request);
-            if (!cert.present()) {
-                return;
-            }
-            payload.putIfAbsent("pkiCertPresent", true);
-            payload.putIfAbsent("pkiCertVerified", cert.verified());
+        PkiClientCert cert = PkiClientCert.fromRequest(request);
+        if (!cert.present()) {
+            return;
+        }
+        payload.putIfAbsent("pkiCertPresent", true);
+        payload.putIfAbsent("pkiCertVerified", cert.verified());
+        if (StringUtils.hasText(cert.serial())) {
+            payload.putIfAbsent("pkiCertSerial", cert.serial());
+        }
+        if (StringUtils.hasText(cert.subjectDn())) {
+            payload.putIfAbsent("pkiCertSubjectDn", cert.subjectDn());
+        }
+        if (StringUtils.hasText(cert.issuerDn())) {
+            payload.putIfAbsent("pkiCertIssuerDn", cert.issuerDn());
+        }
+        if (cert.notAfter() != null) {
+            payload.putIfAbsent("pkiCertNotAfter", cert.notAfter().toString());
+        }
+        if (extraTags != null) {
+            extraTags.putIfAbsent("pkiCertVerified", cert.verified());
             if (StringUtils.hasText(cert.serial())) {
-                payload.putIfAbsent("pkiCertSerial", cert.serial());
+                extraTags.putIfAbsent("pkiCertSerial", cert.serial());
             }
-            if (StringUtils.hasText(cert.subjectDn())) {
-                payload.putIfAbsent("pkiCertSubjectDn", cert.subjectDn());
-            }
-            if (StringUtils.hasText(cert.issuerDn())) {
-                payload.putIfAbsent("pkiCertIssuerDn", cert.issuerDn());
-            }
-            if (cert.notAfter() != null) {
-                payload.putIfAbsent("pkiCertNotAfter", cert.notAfter().toString());
-            }
-            if (extraTags != null) {
-                extraTags.putIfAbsent("pkiCertVerified", cert.verified());
-                if (StringUtils.hasText(cert.serial())) {
-                    extraTags.putIfAbsent("pkiCertSerial", cert.serial());
-                }
-            }
-        } catch (Exception ignored) {
-            // Cert lookups may fail (no cert, malformed cert) — audit must not block business flow.
         }
     }
 }

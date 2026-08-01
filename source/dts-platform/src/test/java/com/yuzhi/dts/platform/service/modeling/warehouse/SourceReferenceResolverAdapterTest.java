@@ -17,16 +17,23 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraExternalExchangeFileRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetAvailabilityReadPort;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetAvailabilityReadPort.Availability;
+import com.yuzhi.dts.platform.service.catalog.JpaCatalogSourceReferenceReadAdapter;
 import com.yuzhi.dts.platform.service.etl.DbtManifestService;
 import com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver.AccessContext;
 import com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver.ResolvedSource;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceLocator;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceType;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -44,6 +51,7 @@ class SourceReferenceResolverAdapterTest {
     private InfraDataSourceRepository dataSourceRepository;
     private DbtManifestService dbtManifestService;
     private AccessChecker accessChecker;
+    private CatalogAssetAvailabilityReadPort availability;
     private SourceReferenceResolverAdapter resolver;
 
     @BeforeEach
@@ -55,14 +63,19 @@ class SourceReferenceResolverAdapterTest {
         dataSourceRepository = mock(InfraDataSourceRepository.class);
         dbtManifestService = mock(DbtManifestService.class);
         accessChecker = mock(AccessChecker.class);
+        availability = mock(CatalogAssetAvailabilityReadPort.class);
+        when(
+            availability.read(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyString()
+            )
+        ).thenReturn(Availability.legacyAvailable());
         resolver = new SourceReferenceResolverAdapter(
-            tableRepository,
-            columnRepository,
-            datasetRepository,
+            new JpaCatalogSourceReferenceReadAdapter(tableRepository, columnRepository, datasetRepository, accessChecker),
             fileRepository,
             dataSourceRepository,
             dbtManifestService,
-            accessChecker
+            availability
         );
     }
 
@@ -83,7 +96,8 @@ class SourceReferenceResolverAdapterTest {
 
         assertThat(result.status()).isEqualTo(AVAILABLE);
         assertThat(result.displayName()).isEqualTo("orders");
-        assertThat(result.resolvedVersion()).hasSize(64);
+        assertThat(result.resolvedVersion())
+            .isEqualTo(sha256("orders\u0000order_id\u0000uuid\u0000false\u0000ACTIVE"));
     }
 
     @Test
@@ -248,6 +262,60 @@ class SourceReferenceResolverAdapterTest {
     }
 
     @Test
+    void failsClosedWhenCatalogAvailabilityIsUnavailableOrCannotBeRead() {
+        CatalogDataset dataset = dataset("orders");
+        CatalogTableSchema table = table(dataset, TABLE_ID, "orders");
+        when(tableRepository.findById(TABLE_ID)).thenReturn(Optional.of(table));
+        when(columnRepository.findByTable(table)).thenReturn(List.of(column(table, "order_id", "uuid", false)));
+        when(accessChecker.canRead(dataset)).thenReturn(true);
+        when(accessChecker.departmentAllowedExact(dataset, "D01")).thenReturn(true);
+        when(availability.read(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString()))
+            .thenReturn(new Availability("UNAVAILABLE", 7L, 11L, "rollback-11"));
+
+        ResolvedSource unavailable = resolver.resolve(
+            SourceType.CATALOG_TABLE,
+            new SourceLocator(TABLE_ID, null, null, null, null, null, null),
+            ACCESS
+        );
+        assertThat(unavailable.status()).isEqualTo(SourceReferenceResolver.ResolutionStatus.MISSING);
+
+        when(availability.read(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString()))
+            .thenThrow(new IllegalStateException("availability read failed"));
+        ResolvedSource providerError = resolver.resolve(
+            SourceType.CATALOG_TABLE,
+            new SourceLocator(TABLE_ID, null, null, null, null, null, null),
+            ACCESS
+        );
+        assertThat(providerError.status()).isEqualTo(PROVIDER_ERROR);
+    }
+
+    @Test
+    void availabilityEpochParticipatesInResolvedVersion() {
+        CatalogDataset dataset = dataset("orders");
+        CatalogTableSchema table = table(dataset, TABLE_ID, "orders");
+        when(tableRepository.findById(TABLE_ID)).thenReturn(Optional.of(table));
+        when(columnRepository.findByTable(table)).thenReturn(List.of(column(table, "order_id", "uuid", false)));
+        when(accessChecker.canRead(dataset)).thenReturn(true);
+        when(accessChecker.departmentAllowedExact(dataset, "D01")).thenReturn(true);
+        when(availability.read(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString()))
+            .thenReturn(new Availability("AVAILABLE", 1L, 1L, "available-1"))
+            .thenReturn(new Availability("AVAILABLE", 2L, 2L, "available-2"));
+
+        String first = resolver.resolve(
+            SourceType.CATALOG_TABLE,
+            new SourceLocator(TABLE_ID, null, null, null, null, null, null),
+            ACCESS
+        ).resolvedVersion();
+        String second = resolver.resolve(
+            SourceType.CATALOG_TABLE,
+            new SourceLocator(TABLE_ID, null, null, null, null, null, null),
+            ACCESS
+        ).resolvedVersion();
+
+        assertThat(second).isNotEqualTo(first);
+    }
+
+    @Test
     void rejectsDepartmentSuffixCollisionsAcrossCatalogFileAndConnectionSources() {
         AccessContext departmentA = new AccessContext("tenant-a", "user-a", "dept-a");
         CatalogDataset catalogDataset = dataset("orders");
@@ -337,8 +405,19 @@ class SourceReferenceResolverAdapterTest {
             "executionId=api-100",
             "executionStatus=success",
             "landingTruth=VERIFIED",
+            "landingStatus=success",
             "configChecksum=" + configChecksum,
             "fieldSnapshotChecksum=" + fieldSnapshotChecksum
         );
+    }
+
+    private static String sha256(String value) {
+        try {
+            return HexFormat.of().formatHex(
+                MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8))
+            );
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 }

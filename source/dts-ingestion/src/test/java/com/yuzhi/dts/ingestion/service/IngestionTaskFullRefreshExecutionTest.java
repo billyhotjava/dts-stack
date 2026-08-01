@@ -13,6 +13,7 @@ import com.yuzhi.dts.ingestion.domain.IngestionExecution;
 import com.yuzhi.dts.ingestion.domain.IngestionTask;
 import com.yuzhi.dts.ingestion.repository.IngestionExecutionRepository;
 import com.yuzhi.dts.ingestion.repository.IngestionTaskRepository;
+import com.yuzhi.dts.ingestion.repository.IngestionTaskRevisionRepository;
 import com.yuzhi.dts.ingestion.service.audit.AuditService;
 import com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO;
 import com.yuzhi.dts.ingestion.service.etl.AddaxJobService;
@@ -48,6 +49,9 @@ class IngestionTaskFullRefreshExecutionTest {
 
     @Mock
     private IngestionTaskRepository taskRepository;
+
+    @Mock
+    private IngestionTaskRevisionRepository revisionRepository;
 
     @Mock
     private IngestionExecutionRepository executionRepository;
@@ -126,6 +130,7 @@ class IngestionTaskFullRefreshExecutionTest {
         objectMapper = new ObjectMapper();
         service = new IngestionTaskService(
             taskRepository,
+            revisionRepository,
             executionRepository,
             taskMapper,
             executionMapper,

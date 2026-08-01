@@ -132,7 +132,7 @@ export default function EltConsolePage() {
 			{ key: "source", title: "数据接入", status: governance.running ? "processing" : "success", count: governance.running, path: "/foundation/data-sources" },
 			{ key: "queue", title: "队列调度", status: governance.queueLength ? "warning" : "success", count: governance.queueLength, path: "/explore/etl/orchestration" },
 			{ key: "transform", title: "加工转换", status: observability.running ? "processing" : "success", count: observability.running, path: "/data-modeling/dimensions/workbench" },
-			{ key: "quality", title: "质量校验", status: governance.blockedByPolicy ? "warning" : "success", count: governance.blockedByPolicy, path: "/governance/quality" },
+			{ key: "quality", title: "质量校验", status: governance.blockedByPolicy ? "warning" : "success", count: governance.blockedByPolicy, path: "/governance/rules/runs" },
 			{ key: "lineage", title: "血缘影响", status: "default", count: observability.terminal, path: "/catalog/lineage/impact" },
 		],
 		[governance, observability],
@@ -309,7 +309,7 @@ export default function EltConsolePage() {
 						<Button block onClick={() => navigate("/explore/etl/orchestration")}>
 							编排与调度
 						</Button>
-						<Button block onClick={() => navigate("/governance/quality")}>
+						<Button block onClick={() => navigate("/governance/rules/runs")}>
 							质量门禁
 						</Button>
 						<Button block onClick={() => navigate("/catalog/lineage/impact")}>

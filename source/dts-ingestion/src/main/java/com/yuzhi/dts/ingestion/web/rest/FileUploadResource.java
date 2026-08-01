@@ -27,6 +27,9 @@ public class FileUploadResource {
     private static final String INFRA_MAINTAINER_EXPRESSION =
         "hasAnyAuthority(T(com.yuzhi.dts.ingestion.security.AuthoritiesConstants).INFRA_MAINTAINERS)";
     private static final String UPLOAD_TRACE_HEADER = "X-DTS-Upload-Trace";
+    private static final String UPLOAD_FAILED = "FILE_UPLOAD_FAILED";
+    private static final String UPLOAD_AND_PARSE_FAILED = "FILE_UPLOAD_AND_PARSE_FAILED";
+    private static final String PARSE_BY_ID_FAILED = "FILE_PARSE_BY_ID_FAILED";
 
     private final FileUploadService fileUploadService;
 
@@ -42,32 +45,26 @@ public class FileUploadResource {
     ) {
         String traceId = resolveTraceId(uploadTraceId);
         LOG.info(
-            "Ingestion upload request received: traceId={}, operation=upload, name={}, size={}, contentType={}",
+            "Ingestion upload request received: traceId={}, operation=upload, size={}",
             traceId,
-            file == null ? null : file.getOriginalFilename(),
-            file == null ? null : file.getSize(),
-            file == null ? null : file.getContentType()
+            file == null ? null : file.getSize()
         );
         try {
             FileUploadService.FileUploadResult result = fileUploadService.handleUpload(file, traceId);
             LOG.info(
-                "Ingestion upload request completed: traceId={}, operation=upload, fileId={}, fileType={}, columns={}, rows={}, hostPath={}",
+                "Ingestion upload request completed: traceId={}, operation=upload, fileId={}, fileType={}, columns={}, rows={}",
                 traceId,
-                result.fileId(),
+                safeIdentifier(result.fileId()),
                 result.fileType(),
                 result.columns() == null ? 0 : result.columns().size(),
-                result.rowCount(),
-                result.hostPath()
+                result.rowCount()
             );
             return result;
         } catch (RuntimeException ex) {
             LOG.info(
-                "Ingestion upload request failed: traceId={}, operation=upload, name={}, size={}, contentType={}",
+                "Ingestion upload request failed: traceId={}, operation=upload, errorCode={}",
                 traceId,
-                file == null ? null : file.getOriginalFilename(),
-                file == null ? null : file.getSize(),
-                file == null ? null : file.getContentType(),
-                ex
+                UPLOAD_FAILED
             );
             throw ex;
         }
@@ -84,14 +81,10 @@ public class FileUploadResource {
     ) {
         String traceId = resolveTraceId(uploadTraceId);
         LOG.info(
-            "Ingestion upload request received: traceId={}, operation=upload-and-parse, name={}, size={}, contentType={}, previewLimit={}, sheetIndex={}, sheetName={}",
+            "Ingestion upload request received: traceId={}, operation=upload-and-parse, size={}, previewLimit={}",
             traceId,
-            file == null ? null : file.getOriginalFilename(),
             file == null ? null : file.getSize(),
-            file == null ? null : file.getContentType(),
-            previewLimit,
-            sheetIndex,
-            sheetName
+            previewLimit
         );
         try {
             FileUploadService.FileUploadResult result = fileUploadService.handleUploadAndParse(
@@ -102,29 +95,20 @@ public class FileUploadResource {
                 traceId
             );
             LOG.info(
-                "Ingestion upload request completed: traceId={}, operation=upload-and-parse, fileId={}, fileType={}, columns={}, rows={}, errors={}, sheetIndex={}, sheetName={}, hostPath={}",
+                "Ingestion upload request completed: traceId={}, operation=upload-and-parse, fileId={}, fileType={}, columns={}, rows={}, errors={}",
                 traceId,
-                result.fileId(),
+                safeIdentifier(result.fileId()),
                 result.fileType(),
                 result.columns() == null ? 0 : result.columns().size(),
                 result.rowCount(),
-                result.errorCount(),
-                result.sheetIndex(),
-                result.sheetName(),
-                result.hostPath()
+                result.errorCount()
             );
             return ResponseEntity.ok(result);
         } catch (Exception ex) {
             LOG.info(
-                "Upload and parse file failed: traceId={}, name={}, size={}, contentType={}, previewLimit={}, sheetIndex={}, sheetName={}",
+                "Ingestion upload request failed: traceId={}, operation=upload-and-parse, errorCode={}",
                 traceId,
-                file == null ? null : file.getOriginalFilename(),
-                file == null ? null : file.getSize(),
-                file == null ? null : file.getContentType(),
-                previewLimit,
-                sheetIndex,
-                sheetName,
-                ex
+                UPLOAD_AND_PARSE_FAILED
             );
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
         }
@@ -150,13 +134,10 @@ public class FileUploadResource {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
         }
         LOG.info(
-            "Ingestion upload parse request received: traceId={}, fileId={}, previewLimit={}, sheetIndex={}, sheetName={}, originalName={}",
+            "Ingestion upload parse request received: traceId={}, fileId={}, previewLimit={}",
             traceId,
-            request.fileId(),
-            request.previewLimit(),
-            request.sheetIndex(),
-            request.sheetName(),
-            request.originalName()
+            safeIdentifier(request.fileId()),
+            request.previewLimit()
         );
         try {
             FileUploadService.FileUploadResult result = fileUploadService.parseById(
@@ -167,24 +148,41 @@ public class FileUploadResource {
                 request.originalName()
             );
             LOG.info(
-                "Ingestion upload parse request completed: traceId={}, fileId={}, fileType={}, columns={}, rows={}, errors={}, sheetIndex={}, sheetName={}",
+                "Ingestion upload parse request completed: traceId={}, fileId={}, fileType={}, columns={}, rows={}, errors={}",
                 traceId,
-                result.fileId(),
+                safeIdentifier(result.fileId()),
                 result.fileType(),
                 result.columns() == null ? 0 : result.columns().size(),
                 result.rowCount(),
-                result.errorCount(),
-                result.sheetIndex(),
-                result.sheetName()
+                result.errorCount()
             );
             return ResponseEntity.ok(result);
         } catch (RuntimeException ex) {
-            LOG.info("Ingestion upload parse request failed: traceId={}, fileId={}", traceId, request.fileId(), ex);
+            LOG.info(
+                "Ingestion upload parse request failed: traceId={}, fileId={}, errorCode={}",
+                traceId,
+                safeIdentifier(request.fileId()),
+                PARSE_BY_ID_FAILED
+            );
             throw ex;
         }
     }
 
     private String resolveTraceId(String uploadTraceId) {
-        return StringUtils.hasText(uploadTraceId) ? uploadTraceId.trim() : UUID.randomUUID().toString();
+        if (StringUtils.hasText(uploadTraceId)) {
+            String candidate = uploadTraceId.trim();
+            if (candidate.matches("[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")) {
+                return candidate;
+            }
+        }
+        return UUID.randomUUID().toString();
+    }
+
+    private String safeIdentifier(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "missing";
+        }
+        String candidate = value.trim();
+        return candidate.matches("[A-Za-z0-9][A-Za-z0-9._:-]{0,127}") ? candidate : "invalid";
     }
 }

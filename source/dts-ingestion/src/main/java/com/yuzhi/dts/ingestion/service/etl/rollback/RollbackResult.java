@@ -1,37 +1,69 @@
 package com.yuzhi.dts.ingestion.service.etl.rollback;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 public record RollbackResult(
 	boolean success,
-	List<String> actions,           // what was done
-	List<String> errors,            // what failed
-	boolean dbtFullRefreshNeeded,   // signal to dts-platform
-	List<Long> affectedTaskIds      // for dts-platform cascade
+	List<String> actions,
+	List<String> errors,
+	List<Long> affectedTaskIds,
+	boolean sideEffectsApplied,
+	String sideEffectStatus,
+	UUID receiptId,
+	String outcome,
+	String completionEventId,
+	boolean completionPending,
+	boolean replayed
 ) {
+	public RollbackResult {
+		actions = actions == null ? List.of() : List.copyOf(actions);
+		errors = errors == null ? List.of() : List.copyOf(errors);
+		affectedTaskIds = affectedTaskIds == null ? List.of() : List.copyOf(affectedTaskIds);
+	}
+
+	public RollbackResult(boolean success, List<String> actions, List<String> errors, List<Long> affectedTaskIds) {
+		this(
+			success,
+			actions,
+			errors,
+			affectedTaskIds,
+			actions != null && !actions.isEmpty(),
+			actions == null || actions.isEmpty() ? "NONE" : "APPLIED",
+			null,
+			null,
+			null,
+			false,
+			false
+		);
+	}
+
 	public String status() {
-		if (errors == null || errors.isEmpty()) {
+		if (errors.isEmpty()) {
 			return "SUCCESS";
 		}
-		return actions == null || actions.isEmpty() ? "FAILED" : "PARTIAL";
+		return sideEffectsApplied ? "PARTIAL" : "FAILED";
 	}
 
-	public static RollbackResult empty(String message) {
-		return new RollbackResult(true, List.of(message), List.of(), false, List.of());
-	}
-
-	public static RollbackResult merge(List<RollbackResult> results) {
-		List<String> allActions = new ArrayList<>();
-		List<String> allErrors = new ArrayList<>();
-		List<Long> allTaskIds = new ArrayList<>();
-		boolean anyDbt = false;
-		for (RollbackResult r : results) {
-			allActions.addAll(r.actions());
-			allErrors.addAll(r.errors());
-			allTaskIds.addAll(r.affectedTaskIds());
-			if (r.dbtFullRefreshNeeded()) anyDbt = true;
-		}
-		return new RollbackResult(allErrors.isEmpty(), allActions, allErrors, anyDbt, allTaskIds);
+	public RollbackResult withCompletion(
+		UUID newReceiptId,
+		String newOutcome,
+		String eventId,
+		boolean pending,
+		boolean wasReplayed
+	) {
+		return new RollbackResult(
+			success,
+			actions,
+			errors,
+			affectedTaskIds,
+			sideEffectsApplied,
+			sideEffectStatus,
+			newReceiptId,
+			newOutcome,
+			eventId,
+			pending,
+			wasReplayed
+		);
 	}
 }

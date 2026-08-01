@@ -11,6 +11,7 @@ import com.yuzhi.dts.ingestion.config.ApiProperties;
 import com.yuzhi.dts.ingestion.service.etl.connector.ExecutionPlan;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
@@ -59,7 +60,7 @@ class ApiHttpEngineTest {
         startServer(exchange -> write(exchange, 200, "12345"));
         ApiProperties properties = testProperties();
         properties.setMaxResponseBytes(DataSize.ofBytes(4));
-        ApiHttpEngine engine = new ApiHttpEngine(duration -> {}, properties);
+        ApiHttpEngine engine = new ApiHttpEngine(duration -> {}, properties, InetAddress::getAllByName, true);
 
         assertThatThrownBy(() -> engine.execute(plan(Map.of(), Map.of(), Map.of("path", "/orders"))))
             .isInstanceOf(ApiHttpException.class)
@@ -108,6 +109,48 @@ class ApiHttpEngineTest {
             .isInstanceOf(ApiHttpException.class)
             .extracting("code")
             .isEqualTo("API_RUNTIME_BLOCKED_URL");
+    }
+
+    @Test
+    void resolveTarget_shouldRejectIpv6UniqueLocalAddressEvenWhenHostIsAllowed() throws Exception {
+        ApiProperties properties = new ApiProperties();
+        properties.setAllowHttp(true);
+        properties.setAllowedHosts(List.of("api.internal.example"));
+        ApiHttpEngine engine = new ApiHttpEngine(
+            duration -> {},
+            properties,
+            host -> new InetAddress[] { InetAddress.getByName("fc00::1") },
+            false
+        );
+
+        assertThatThrownBy(() -> engine.resolveTarget("api.internal.example"))
+            .isInstanceOf(ApiHttpException.class)
+            .extracting("code")
+            .isEqualTo("API_RUNTIME_BLOCKED_URL");
+    }
+
+    @Test
+    void pinnedDnsResolver_shouldUseOnlyValidatedSnapshotAcrossRebindingAttempt() throws Exception {
+        AtomicInteger resolutions = new AtomicInteger();
+        InetAddress publicAddress = InetAddress.getByName("93.184.216.34");
+        InetAddress reboundAddress = InetAddress.getByName("fc00::1");
+        ApiProperties properties = new ApiProperties();
+        properties.setAllowedHosts(List.of("api.example"));
+        ApiHttpEngine engine = new ApiHttpEngine(
+            duration -> {},
+            properties,
+            host -> resolutions.incrementAndGet() == 1
+                ? new InetAddress[] { publicAddress }
+                : new InetAddress[] { reboundAddress },
+            false
+        );
+
+        ApiHttpEngine.ResolvedTarget target = engine.resolveTarget("api.example");
+        ApiHttpEngine.PinnedDnsResolver pinned = new ApiHttpEngine.PinnedDnsResolver(target);
+
+        assertThat(pinned.resolve("api.example")).containsExactly(publicAddress);
+        assertThat(pinned.resolve("api.example")).containsExactly(publicAddress);
+        assertThat(resolutions).hasValue(1);
     }
 
     @Test
@@ -192,6 +235,95 @@ class ApiHttpEngineTest {
             .isInstanceOf(ApiHttpException.class)
             .extracting("code")
             .isEqualTo("API_RUNTIME_REDIRECT");
+    }
+
+    @Test
+    void execute_shouldFollowRedirectOnlyAfterValidatingEachHop() throws Exception {
+        startServer(exchange -> {
+            if ("/redirect".equals(exchange.getRequestURI().getPath())) {
+                exchange.getResponseHeaders().add("Location", "/orders");
+                write(exchange, 302, "");
+                return;
+            }
+            write(exchange, 200, "ok");
+        });
+        ApiHttpEngine engine = engine();
+
+        List<ApiHttpEngine.ApiHttpResult> results = engine.execute(
+            plan(Map.of("followRedirects", true), Map.of(), Map.of("path", "/redirect"))
+        );
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).uri().getPath()).isEqualTo("/orders");
+        assertThat(results.get(0).attempts()).isEqualTo(2);
+    }
+
+    @Test
+    void execute_shouldNotRetryPostWithoutStableIdempotencyKey() throws Exception {
+        AtomicInteger attempts = new AtomicInteger();
+        startServer(exchange -> {
+            attempts.incrementAndGet();
+            write(exchange, 500, "server-error");
+        });
+        ApiHttpEngine engine = engine();
+
+        assertThatThrownBy(() -> engine.execute(
+            plan(Map.of(), Map.of("maxRetries", 2), Map.of("path", "/orders", "method", "POST", "bodyTemplate", "{}"))
+        ))
+            .isInstanceOf(ApiHttpException.class)
+            .extracting("code")
+            .isEqualTo("API_RUNTIME_SERVER");
+        assertThat(attempts).hasValue(1);
+    }
+
+    @Test
+    void execute_shouldRetryPostWithStableIdempotencyKey() throws Exception {
+        AtomicInteger attempts = new AtomicInteger();
+        startServer(exchange -> {
+            if (attempts.incrementAndGet() == 1) {
+                write(exchange, 500, "server-error");
+                return;
+            }
+            write(exchange, 200, "ok");
+        });
+        ApiHttpEngine engine = engine();
+
+        List<ApiHttpEngine.ApiHttpResult> results = engine.execute(
+            plan(
+                Map.of(),
+                Map.of("maxRetries", 1),
+                Map.of(
+                    "path", "/orders",
+                    "method", "POST",
+                    "bodyTemplate", "{}",
+                    "headers", Map.of("Idempotency-Key", "task-41-stable-key")
+                )
+            )
+        );
+
+        assertThat(results.get(0).attempts()).isEqualTo(2);
+        assertThat(attempts).hasValue(2);
+    }
+
+    @Test
+    void execute_shouldFailClosedWhenAllowedHostCannotResolve() {
+        ApiProperties properties = new ApiProperties();
+        properties.setAllowHttp(true);
+        properties.setAllowedHosts(List.of("dts-unresolvable.invalid"));
+        ApiHttpEngine engine = new ApiHttpEngine(duration -> {}, properties);
+
+        assertThatThrownBy(() -> engine.execute(
+            planWithBaseUrl(
+                "http://dts-unresolvable.invalid/orders",
+                Map.of(),
+                Map.of("maxRetries", 0),
+                Map.of(),
+                Map.of("path", "/orders")
+            )
+        ))
+            .isInstanceOf(ApiHttpException.class)
+            .extracting("code")
+            .isEqualTo("API_RUNTIME_BLOCKED_URL");
     }
 
     @Test
@@ -1037,7 +1169,7 @@ class ApiHttpEngineTest {
     }
 
     private ApiHttpEngine engine(ApiHttpEngine.Sleeper sleeper) {
-        return new ApiHttpEngine(sleeper, testProperties());
+        return new ApiHttpEngine(sleeper, testProperties(), InetAddress::getAllByName, true);
     }
 
     private ApiProperties testProperties() {

@@ -1,7 +1,6 @@
 import axios, { type AxiosError, type AxiosRequestConfig, type AxiosResponse } from "axios";
 import { toast } from "sonner";
 import type { Result } from "#/api";
-import { ResultStatus } from "#/enum";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { t } from "@/locales/i18n";
 import { isLoginRouteActive, resolveCurrentAppPath, resolveLoginHref } from "@/routes/constants";
@@ -14,6 +13,7 @@ import {
 	readPortalSessionTimestamp,
 } from "@/utils/portalSessionStorage";
 import { resolvePortalTokenExpiresAt } from "@/utils/sessionExpiry";
+import { acceptsApiEnvelopeStatus } from "./apiEnvelopeStatus";
 
 const axiosInstance = axios.create({
 	baseURL: GLOBAL_CONFIG.apiBaseUrl,
@@ -29,22 +29,6 @@ const IS_LOCAL_DEV_HOST =
 	typeof window !== "undefined" &&
 	(["localhost", "127.0.0.1", "::1"].includes(window.location.hostname || "") ||
 		(window.location.hostname || "").endsWith(".local"));
-
-const isSuccessStatus = (status: unknown): boolean => {
-	if (status === ResultStatus.SUCCESS) return true;
-	if (typeof status === "string") {
-		const normalized = status.trim().toUpperCase();
-		if (!normalized) return false;
-		if (normalized === "SUCCESS" || normalized === "OK") return true;
-		if (!Number.isNaN(Number(normalized))) {
-			return Number(normalized) === ResultStatus.SUCCESS;
-		}
-	}
-	if (typeof status === "number") {
-		return status === ResultStatus.SUCCESS;
-	}
-	return false;
-};
 
 const TEST_SESSION_ENABLED =
 	!IS_PRODUCTION &&
@@ -370,7 +354,7 @@ axiosInstance.interceptors.response.use(
 			if (res.data && typeof res.data === "object" && "status" in res.data) {
 				// 对于标准响应格式，返回data字段
 				const { status, data, message } = res.data;
-				if (isSuccessStatus(status)) {
+				if (acceptsApiEnvelopeStatus(status)) {
 					return data;
 				}
 				throw new Error(message || t("sys.api.apiRequestFailed"));
@@ -382,8 +366,12 @@ axiosInstance.interceptors.response.use(
 
 		// 处理标准API响应格式
 		const { status, data, message } = res.data;
-		if (isSuccessStatus(status)) {
-			return data;
+		const envelopeConfig = res.config as AxiosRequestConfig & {
+			_acceptedEnvelopeStatuses?: number[];
+			_returnEnvelope?: boolean;
+		};
+		if (acceptsApiEnvelopeStatus(status, envelopeConfig._acceptedEnvelopeStatuses)) {
+			return envelopeConfig._returnEnvelope ? res.data : data;
 		}
 		throw new Error(message || t("sys.api.apiRequestFailed"));
 	},

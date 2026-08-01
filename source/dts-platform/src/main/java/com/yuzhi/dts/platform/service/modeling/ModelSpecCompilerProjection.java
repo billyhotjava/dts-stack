@@ -17,14 +17,14 @@ import java.util.Objects;
 import java.util.TreeMap;
 import java.util.function.Function;
 
-/** Pure compatibility projection. It adapts v2 snapshots without changing the CRITICAL compiler. */
+/** Projects canonical ModelSpec revisions into the compiler's minimal immutable input. */
 public final class ModelSpecCompilerProjection {
 
     private ModelSpecCompilerProjection() {}
 
     /** Immutable compiler view of one append-only implementation revision. */
     public record ImplementationProjection(
-        ModelingVNextContract.ModelSpec model,
+        ModelingCompilerContract.CompilerModel model,
         String tenantId,
         String modelChecksum,
         int implementationRevision,
@@ -40,7 +40,7 @@ public final class ModelSpecCompilerProjection {
         List<CompilerField> typedFields
     ) {
         public ImplementationProjection(
-            ModelingVNextContract.ModelSpec model,
+            ModelingCompilerContract.CompilerModel model,
             String tenantId,
             String modelChecksum,
             int implementationRevision,
@@ -71,7 +71,7 @@ public final class ModelSpecCompilerProjection {
         }
 
         public ImplementationProjection(
-            ModelingVNextContract.ModelSpec model,
+            ModelingCompilerContract.CompilerModel model,
             String tenantId,
             String modelChecksum,
             int implementationRevision,
@@ -139,13 +139,13 @@ public final class ModelSpecCompilerProjection {
         }
     }
 
-    public static ModelingVNextContract.ModelSpec project(
+    public static ModelingCompilerContract.CompilerModel project(
         ModelSpecView view,
         Function<ModelRevisionRef, ModelSpecView> revisionResolver
     ) {
         validatePinnedReferences(view.dependsOn(), revisionResolver, false);
         validatePinnedReferences(view.dimensionRefs(), revisionResolver, true);
-        List<ModelingVNextContract.SourceRef> sources = projectSources(view, revisionResolver);
+        List<ModelingCompilerContract.SourceRef> sources = projectSources(view, revisionResolver);
         List<String> dimensions = view.fields()
             .stream()
             .filter(Objects::nonNull)
@@ -160,33 +160,26 @@ public final class ModelSpecCompilerProjection {
             .map(ModelSpecContract.ModelField::name)
             .filter(ModelSpecCompilerProjection::notBlank)
             .toList();
-        List<ModelingVNextContract.StandardBinding> bindings = view.standardBindings()
+        List<ModelingCompilerContract.StandardBinding> bindings = view.standardBindings()
             .stream()
             .filter(Objects::nonNull)
-            .map(binding -> new ModelingVNextContract.StandardBinding(
+            .map(binding -> new ModelingCompilerContract.StandardBinding(
                 binding.fieldName(),
-                binding.standardElementId() == null ? null : binding.standardElementId().toString(),
-                binding.referenceCode(),
-                binding.securityLevel()
+                binding.standardElementId() == null ? null : binding.standardElementId().toString()
             ))
             .toList();
-        return new ModelingVNextContract.ModelSpec(
+        return new ModelingCompilerContract.CompilerModel(
             view.id().toString(),
-            null,
-            view.modelType() == ModelSpecContract.ModelType.FACT ? view.businessActivityRef() : null,
-            ModelingVNextContract.Layer.valueOf(view.layer().name()),
-            ModelingVNextContract.ModelType.valueOf(view.modelType().name()),
-            ModelingVNextContract.ImplementationMode.valueOf(view.implementationMode().name()),
+            ModelingCompilerContract.Layer.valueOf(view.layer().name()),
+            ModelingCompilerContract.ModelType.valueOf(view.modelType().name()),
+            ModelingCompilerContract.ImplementationMode.valueOf(view.implementationMode().name()),
             view.name(),
-            view.grain() == null ? null : new ModelingVNextContract.Grain(view.grain().statement(), view.grain().keys()),
+            view.grain() == null ? null : new ModelingCompilerContract.Grain(view.grain().statement(), view.grain().keys()),
             bindings,
             sources,
             dimensions,
             metrics,
-            view.materialization(),
-            view.revision(),
-            view.dependsOn().stream().map(ref -> ref.modelSpecId().toString()).toList(),
-            null
+            view.revision()
         );
     }
 
@@ -224,12 +217,12 @@ public final class ModelSpecCompilerProjection {
                 ModelSpecException.Kind.CONFLICT
             );
         }
-        ModelingVNextContract.ModelSpec canonical = project(view, revisionResolver);
-        ModelingVNextContract.ModelSpec implementationBound = new ModelingVNextContract.ModelSpec(
-            canonical.id(), canonical.objectId(), canonical.processId(), canonical.layer(), canonical.modelType(),
+        ModelingCompilerContract.CompilerModel canonical = project(view, revisionResolver);
+        ModelingCompilerContract.CompilerModel implementationBound = new ModelingCompilerContract.CompilerModel(
+            canonical.id(), canonical.layer(), canonical.modelType(),
             canonical.implementationMode(), canonical.name(), canonical.grain(), canonical.standardBindings(),
             projectImplementationSources(implementation, revisionResolver, physicalResolver), canonical.dimensions(), canonical.metrics(),
-            canonical.materialization(), canonical.revision(), canonical.dependsOn(), canonical.legacyRef()
+            canonical.revision()
         );
         return new ImplementationProjection(
             implementationBound,
@@ -279,14 +272,14 @@ public final class ModelSpecCompilerProjection {
             .toList();
     }
 
-    private static List<String> grainKeys(ModelingVNextContract.ModelSpec model) {
+    private static List<String> grainKeys(ModelingCompilerContract.CompilerModel model) {
         return model == null || model.grain() == null || model.grain().keys() == null
             ? List.of()
             : model.grain().keys();
     }
 
     /** Compiler inputs are authoritative: canonical sourceRefs are validation evidence only. */
-    private static List<ModelingVNextContract.SourceRef> projectImplementationSources(
+    private static List<ModelingCompilerContract.SourceRef> projectImplementationSources(
         ImplementationView implementation,
         Function<ModelRevisionRef, ModelSpecView> revisionResolver,
         Function<PhysicalAssetInput, SourceRef> physicalResolver
@@ -317,22 +310,22 @@ public final class ModelSpecCompilerProjection {
                         "MODEL_IMPLEMENTATION_INPUT_STALE", "Pinned upstream implementation input is unavailable", ModelSpecException.Kind.CONFLICT
                     );
                 }
-                return new ModelingVNextContract.SourceRef(
-                    "DBT_MODEL", dbtResourceName(input.dbtUniqueId()), ModelingVNextContract.Layer.valueOf(upstream.layer().name())
+                return new ModelingCompilerContract.SourceRef(
+                    "DBT_MODEL", dbtResourceName(input.dbtUniqueId()), ModelingCompilerContract.Layer.valueOf(upstream.layer().name())
                 );
             }).toList();
             case GENERATED -> List.of();
         };
     }
 
-    private static List<ModelingVNextContract.SourceRef> projectSources(
+    private static List<ModelingCompilerContract.SourceRef> projectSources(
         ModelSpecView view,
         Function<ModelRevisionRef, ModelSpecView> revisionResolver
     ) {
         if (!view.sourceRefs().isEmpty()) {
             return view.sourceRefs().stream().filter(Objects::nonNull).map(ModelSpecCompilerProjection::projectSource).toList();
         }
-        List<ModelingVNextContract.SourceRef> sources = new ArrayList<>();
+        List<ModelingCompilerContract.SourceRef> sources = new ArrayList<>();
         for (ModelRevisionRef ref : view.dependsOn()) {
             ModelSpecView upstream = revisionResolver.apply(ref);
             if (upstream == null || upstream.revision() != ref.revision()) {
@@ -342,10 +335,10 @@ public final class ModelSpecCompilerProjection {
                     ModelSpecException.Kind.CONFLICT
                 );
             }
-            sources.add(new ModelingVNextContract.SourceRef(
+            sources.add(new ModelingCompilerContract.SourceRef(
                 "DBT_MODEL",
                 upstream.name(),
-                ModelingVNextContract.Layer.valueOf(upstream.layer().name())
+                ModelingCompilerContract.Layer.valueOf(upstream.layer().name())
             ));
         }
         return List.copyOf(sources);
@@ -375,11 +368,11 @@ public final class ModelSpecCompilerProjection {
         }
     }
 
-    private static ModelingVNextContract.SourceRef projectSource(SourceRef source) {
-        return new ModelingVNextContract.SourceRef(
+    private static ModelingCompilerContract.SourceRef projectSource(SourceRef source) {
+        return new ModelingCompilerContract.SourceRef(
             source.kind().name(),
             source.ref(),
-            ModelingVNextContract.Layer.valueOf(source.layer().name())
+            ModelingCompilerContract.Layer.valueOf(source.layer().name())
         );
     }
 

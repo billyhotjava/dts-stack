@@ -100,7 +100,7 @@ export const ACCEPTANCE_EVIDENCE_GROUPS: AcceptanceEvidenceDefinition[] = [
 		key: "quality",
 		title: "质量",
 		description: "质量规则、检查结果和修复记录。",
-		route: "/governance/quality",
+		route: "/governance/rules/runs",
 		requiredParam: "runId",
 		missingReason: "缺少质量证据：请执行质量检查并记录结果。",
 	},

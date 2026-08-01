@@ -118,6 +118,7 @@
 				"resourceFileAccess": "Offline file access",
 				"resourceAccessDefaults": "Default policies",
 				"resourceRuntime": "Connectors and runtime",
+				"resourceConnections": "Connection profiles",
 	    "studioCenter": "Data development & operations",
 	    "studioDataModeling": "Data modeling",
 	    "studioDataStudio": "Data Studio",

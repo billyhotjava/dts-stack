@@ -36,6 +36,17 @@ validate_base_domain(){
   [[ "$candidate" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]]
 }
 
+validate_audit_tenancy(){
+  if [[ "${AUDIT_TENANCY_MODE}" != "SINGLE_TENANT" ]]; then
+    echo "[init.sh] ERROR: AUDIT_TENANCY_MODE must be SINGLE_TENANT until request-scoped tenant resolution is available." >&2
+    return 1
+  fi
+  if [[ ! "${AUDIT_TENANT_ID}" =~ ^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$ || "${AUDIT_TENANT_ID}" == "__legacy_unscoped__" ]]; then
+    echo "[init.sh] ERROR: AUDIT_TENANT_ID must be a non-legacy tenant code (1-128 letters, digits, '.', '_', ':', or '-')." >&2
+    return 1
+  fi
+}
+
 prompt_base_domain(){
   local default_value="${1:-dts.local}"
   local input=""
@@ -662,6 +673,7 @@ ensure_distinct_service_tokens(){
   local -a token_names=(
     DTS_PLATFORM_TO_ADMIN_TOKEN
     DTS_PLATFORM_TO_INGESTION_TOKEN
+    DTS_AIRFLOW_TO_INGESTION_TOKEN
     DTS_ANALYTICS_TO_ADMIN_TOKEN
     DTS_INGESTION_TO_ADMIN_TOKEN
     DTS_INBOUND_FROM_INGESTION
@@ -1010,6 +1022,7 @@ generate_env_base(){
   # 按调用方向生成 pairwise credential；不同生产者不得共享服务身份。
   : "${DTS_PLATFORM_TO_ADMIN_TOKEN:=$(generate_fernet)}"
   : "${DTS_PLATFORM_TO_INGESTION_TOKEN:=$(generate_fernet)}"
+  : "${DTS_AIRFLOW_TO_INGESTION_TOKEN:=$(generate_fernet)}"
   : "${DTS_ANALYTICS_TO_ADMIN_TOKEN:=$(generate_fernet)}"
   : "${DTS_INGESTION_TO_ADMIN_TOKEN:=$(generate_fernet)}"
   : "${DTS_INBOUND_FROM_INGESTION:=$(generate_fernet)}"
@@ -1021,6 +1034,13 @@ generate_env_base(){
   DTS_ANALYTICS_TO_PLATFORM="${DTS_INBOUND_FROM_ANALYTICS}"
   DTS_AIRFLOW_TO_PLATFORM="${DTS_INBOUND_FROM_AIRFLOW}"
   : "${DTS_MODEL_RUNTIME_SPEC_SIGNING_KEY:=$(generate_fernet)}"
+
+  # ---------- Platform audit tenancy ----------
+  # init.sh writes an explicit single-tenant identity for production Compose.
+  # Direct Compose users must still provide both values because Compose remains fail-closed.
+  : "${AUDIT_TENANCY_MODE:=SINGLE_TENANT}"
+  : "${AUDIT_TENANT_ID:=default}"
+  validate_audit_tenancy
 
   # ---------- Edition / optional service capabilities ----------
   : "${DTS_EDITION:=foundation}"
@@ -1304,6 +1324,7 @@ DTS_ADMIN_JAVA_TOOL_OPTIONS_EXTRA="${DTS_ADMIN_JAVA_TOOL_OPTIONS_EXTRA_ENV}"
 DTS_SERVICE_TOKEN_VERSION=${DTS_SERVICE_TOKEN_VERSION}
 DTS_PLATFORM_TO_ADMIN_TOKEN=${DTS_PLATFORM_TO_ADMIN_TOKEN}
 DTS_PLATFORM_TO_INGESTION_TOKEN=${DTS_PLATFORM_TO_INGESTION_TOKEN}
+DTS_AIRFLOW_TO_INGESTION_TOKEN=${DTS_AIRFLOW_TO_INGESTION_TOKEN}
 DTS_INBOUND_FROM_INGESTION=${DTS_INBOUND_FROM_INGESTION}
 DTS_INBOUND_FROM_ANALYTICS=${DTS_INBOUND_FROM_ANALYTICS}
 DTS_INBOUND_FROM_AIRFLOW=${DTS_INBOUND_FROM_AIRFLOW}
@@ -1313,6 +1334,11 @@ DTS_AIRFLOW_TO_PLATFORM=${DTS_AIRFLOW_TO_PLATFORM}
 DTS_MODEL_RUNTIME_SPEC_SIGNING_KEY=${DTS_MODEL_RUNTIME_SPEC_SIGNING_KEY}
 DTS_ANALYTICS_TO_ADMIN_TOKEN=${DTS_ANALYTICS_TO_ADMIN_TOKEN}
 DTS_INGESTION_TO_ADMIN_TOKEN=${DTS_INGESTION_TO_ADMIN_TOKEN}
+
+# ====== Platform audit tenancy ======
+# Production supports only a deployment-wide tenant until request-scoped tenant resolution exists.
+AUDIT_TENANCY_MODE=${AUDIT_TENANCY_MODE}
+AUDIT_TENANT_ID=${AUDIT_TENANT_ID}
 
 # ====== Admin password-login IP allowlist (triad only; PKI unaffected) ======
 DTS_SECURITY_IP_ALLOWLIST_ENABLED=${DTS_SECURITY_IP_ALLOWLIST_ENABLED}

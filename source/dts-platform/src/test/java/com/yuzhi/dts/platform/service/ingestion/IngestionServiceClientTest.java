@@ -12,10 +12,14 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import com.yuzhi.dts.platform.config.DtsIngestionProperties;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -25,6 +29,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
 
+@ExtendWith(OutputCaptureExtension.class)
 class IngestionServiceClientTest {
 
     private IngestionServiceClient client;
@@ -215,4 +220,191 @@ class IngestionServiceClientTest {
         assertThat(response.getData()).isNull();
         server.verify();
     }
+
+    @Test
+    void downstreamErrorLogUsesStableMetadataAndNeverIncludesResponseSecrets(CapturedOutput output) {
+        RestTemplate restTemplate = (RestTemplate) ReflectionTestUtils.getField(client, "restTemplate");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        server
+            .expect(requestTo("http://ingestion.test/api/ingestion/api/test-connection"))
+            .andExpect(method(POST))
+            .andRespond(
+                withStatus(HttpStatus.BAD_REQUEST)
+                    .header("X-Request-Id", "req-rollback-42")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(
+                        "{\"code\":\"REMOTE_REJECTED\",\"status\":400," +
+                        "\"message\":\"password=downstream-secret\",\"token\":\"raw-token\"}"
+                    )
+            );
+
+        ApiResponse<Object> response = client.testApiConnection(Map.of("dataSourceId", UUID.randomUUID().toString()));
+
+        assertThat(response.getStatus()).isEqualTo(400);
+        assertThat(response.getMessage()).isEqualTo("ingestion service error");
+        assertThat(response.getData()).isNull();
+        assertThat(output.getAll())
+            .contains("code=INGESTION_HTTP_ERROR", "status=400", "requestId=req-rollback-42")
+            .doesNotContain("downstream-secret", "raw-token", "REMOTE_REJECTED", "password");
+        server.verify();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void taskAccessMetadataProjectionNeverMaterializesSensitiveConfiguration() {
+        RestTemplate restTemplate = (RestTemplate) ReflectionTestUtils.getField(client, "restTemplate");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        server
+            .expect(requestTo("http://ingestion.test/api/ingestion/tasks/7"))
+            .andExpect(method(GET))
+            .andRespond(
+                withStatus(HttpStatus.OK)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(
+                        """
+                        {
+                          "id":7,
+                          "sourceKind":"FILE",
+                          "sourceType":"excelreader",
+                          "sourceDataSourceId":"11111111-2222-3333-4444-555555555555",
+                          "targetDataSourceId":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                          "sourceConfig":{
+                            "_fileId":"file-7",
+                            "password":"source-password",
+                            "classificationSeal":{"effectiveLevel":"INTERNAL","fileFloor":"INTERNAL","checksum":"checksum"}
+                          },
+                          "destinationConfig":{
+                            "targetDataSourceId":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                            "password":"target-password",
+                            "secureProps":{"token":"token"}
+                          }
+                        }
+                        """
+                    )
+            );
+
+        ApiResponse<Map<String, Object>> response = client.getTaskAccessMetadata(7L);
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(response.getData())
+            .containsEntry("sourceKind", "FILE")
+            .containsEntry("sourceDataSourceId", "11111111-2222-3333-4444-555555555555")
+            .containsEntry("targetDataSourceId", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+        Map<String, Object> sourceConfig = (Map<String, Object>) response.getData().get("sourceConfig");
+        assertThat(sourceConfig)
+            .containsEntry("_fileId", "file-7")
+            .doesNotContainKey("password");
+        assertThat((Map<String, Object>) sourceConfig.get("classificationSeal"))
+            .containsEntry("effectiveLevel", "INTERNAL")
+            .containsEntry("fileFloor", "INTERNAL")
+            .doesNotContainKey("checksum");
+        assertThat((Map<String, Object>) response.getData().get("destinationConfig"))
+            .containsEntry("targetDataSourceId", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+            .doesNotContainKeys("password", "secureProps");
+        server.verify();
+    }
+
+    @Test
+    void createIsNotRetriedAfterAmbiguousReadTimeout() {
+        assertSingleWriteCall(
+            "/api/ingestion/tasks",
+            true,
+            true,
+            candidate -> candidate.createIngestionTask(Map.of("name", "already-created"))
+        );
+    }
+
+    @Test
+    void admitIsNotRetriedAfterDownstreamServerError() {
+        assertSingleWriteCall(
+            "/api/ingestion/tasks/7/admit",
+            false,
+            false,
+            candidate -> candidate.admitTask(7L, Map.of("classification", "INTERNAL"))
+        );
+    }
+
+    @Test
+    void executeIsNotRetriedAfterAmbiguousReadTimeout() {
+        assertSingleWriteCall(
+            "/api/ingestion/tasks/7/execute",
+            true,
+            true,
+            candidate -> candidate.executeTask(7L)
+        );
+    }
+
+    @Test
+    void rollbackExecuteIsNotRetriedAfterDownstreamServerError() {
+        assertSingleWriteCall(
+            "/api/ingestion/rollback/execute",
+            true,
+            false,
+            candidate -> candidate.rollbackExecute(Map.of("taskId", 7L))
+        );
+    }
+
+    @Test
+    void getStillRetriesTransientServerFailuresAccordingToConfiguration() {
+        ClientHarness harness = newClientHarness(false);
+        harness.server()
+            .expect(org.springframework.test.web.client.ExpectedCount.once(), requestTo("http://ingestion.test/api/ingestion/tasks/7"))
+            .andExpect(method(GET))
+            .andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
+        harness.server()
+            .expect(org.springframework.test.web.client.ExpectedCount.once(), requestTo("http://ingestion.test/api/ingestion/tasks/7"))
+            .andExpect(method(GET))
+            .andRespond(
+                withStatus(HttpStatus.OK)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body("{\"status\":200,\"message\":\"ok\",\"data\":{\"id\":7}}")
+            );
+
+        ApiResponse<Map<String, Object>> response = harness.client().getTask(7L);
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(response.getData()).containsEntry("id", 7);
+        harness.server().verify();
+    }
+
+    private void assertSingleWriteCall(
+        String path,
+        boolean useLongClient,
+        boolean simulateReadTimeout,
+        java.util.function.Function<IngestionServiceClient, ApiResponse<?>> invocation
+    ) {
+        ClientHarness harness = newClientHarness(useLongClient);
+        var expectation = harness.server()
+            .expect(
+                org.springframework.test.web.client.ExpectedCount.once(),
+                requestTo("http://ingestion.test" + path)
+            )
+            .andExpect(method(POST));
+        if (simulateReadTimeout) {
+            expectation.andRespond(request -> {
+                throw new org.springframework.web.client.ResourceAccessException("Read timed out after downstream commit");
+            });
+        } else {
+            expectation.andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
+        }
+
+        ApiResponse<?> response = invocation.apply(harness.client());
+
+        assertThat(response.getStatus()).isEqualTo(500);
+        harness.server().verify();
+    }
+
+    private ClientHarness newClientHarness(boolean useLongClient) {
+        DtsIngestionProperties properties = new DtsIngestionProperties();
+        properties.setBaseUrl("http://ingestion.test");
+        properties.setServiceName("dts-platform");
+        properties.getRetry().setWaitDurationMs(1);
+        IngestionServiceClient candidate = new IngestionServiceClient(new RestTemplateBuilder(), properties);
+        String field = useLongClient ? "longRestTemplate" : "restTemplate";
+        RestTemplate template = (RestTemplate) ReflectionTestUtils.getField(candidate, field);
+        MockRestServiceServer server = MockRestServiceServer.bindTo(template).build();
+        return new ClientHarness(candidate, server);
+    }
+
+    private record ClientHarness(IngestionServiceClient client, MockRestServiceServer server) {}
 }

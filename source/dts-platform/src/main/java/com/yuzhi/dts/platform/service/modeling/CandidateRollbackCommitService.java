@@ -1,10 +1,12 @@
 package com.yuzhi.dts.platform.service.modeling;
 
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.modeling.CandidatePublicationEvidenceRepository;
 import com.yuzhi.dts.platform.repository.modeling.CandidatePublicationEvidenceRepository.PublicationEntryEvidence;
 import com.yuzhi.dts.platform.repository.modeling.CandidatePublicationRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.StoredModelSpec;
+import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.event.PlatformEventOutboxService;
 import com.yuzhi.dts.platform.service.event.dto.PlatformEventRequest;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus;
@@ -17,6 +19,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelStatus;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -37,6 +40,7 @@ public class CandidateRollbackCommitService {
     private final PlatformEventOutboxService outbox;
     private final ModelReleaseCandidateService candidateCommands;
     private final Clock clock;
+    private final AuditService auditService;
 
     @Autowired
     public CandidateRollbackCommitService(
@@ -46,7 +50,8 @@ public class CandidateRollbackCommitService {
         ModelLifecyclePublicationService lifecyclePublication,
         CandidatePublicationRepository publications,
         PlatformEventOutboxService outbox,
-        ModelReleaseCandidateService candidateCommands
+        ModelReleaseCandidateService candidateCommands,
+        AuditService auditService
     ) {
         this(
             evidence,
@@ -56,7 +61,8 @@ public class CandidateRollbackCommitService {
             publications,
             outbox,
             candidateCommands,
-            Clock.systemUTC()
+            Clock.systemUTC(),
+            auditService
         );
     }
 
@@ -70,6 +76,30 @@ public class CandidateRollbackCommitService {
         ModelReleaseCandidateService candidateCommands,
         Clock clock
     ) {
+        this(
+            evidence,
+            modelSpecs,
+            codec,
+            lifecyclePublication,
+            publications,
+            outbox,
+            candidateCommands,
+            clock,
+            null
+        );
+    }
+
+    CandidateRollbackCommitService(
+        CandidatePublicationEvidenceRepository evidence,
+        ModelSpecRepository modelSpecs,
+        ModelSpecSnapshotCodec codec,
+        ModelLifecyclePublicationService lifecyclePublication,
+        CandidatePublicationRepository publications,
+        PlatformEventOutboxService outbox,
+        ModelReleaseCandidateService candidateCommands,
+        Clock clock,
+        AuditService auditService
+    ) {
         this.evidence = evidence;
         this.modelSpecs = modelSpecs;
         this.codec = codec;
@@ -78,6 +108,7 @@ public class CandidateRollbackCommitService {
         this.outbox = outbox;
         this.candidateCommands = candidateCommands;
         this.clock = clock;
+        this.auditService = auditService;
     }
 
     @Transactional
@@ -150,7 +181,7 @@ public class CandidateRollbackCommitService {
                 )
             )
         );
-        return candidateCommands.transition(
+        CommandResult result = candidateCommands.transitionWithinAuditedCommit(
             tenantId,
             actorId,
             candidate.id(),
@@ -160,6 +191,46 @@ public class CandidateRollbackCommitService {
                 rollbackRequestKey,
                 reason
             )
+        );
+        if (!result.replayed()) {
+            auditSuccess(
+                actorId,
+                candidate,
+                Map.of(
+                    "tenantId",
+                    tenantId,
+                    "planId",
+                    candidate.planId(),
+                    "environment",
+                    candidate.environment(),
+                    "fromStatus",
+                    candidate.status().name(),
+                    "toStatus",
+                    result.candidate().status().name(),
+                    "version",
+                    result.candidate().version(),
+                    "entryCount",
+                    observations.size()
+                )
+            );
+        }
+        return result;
+    }
+
+    private void auditSuccess(
+        String actorId,
+        CandidateView candidate,
+        Map<String, Object> payload
+    ) {
+        if (auditService == null) return;
+        String actionCode = "MODEL_RELEASE_CANDIDATE_ROLLBACK";
+        Map<String, Object> auditPayload = new LinkedHashMap<>(payload);
+        auditPayload.put("actor", actorId);
+        auditService.auditAction(
+            actionCode,
+            AuditStage.SUCCESS,
+            candidate.id().toString(),
+            auditPayload
         );
     }
 

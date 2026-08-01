@@ -24,13 +24,16 @@ class QualityScoreServiceTest {
     @Mock
     private GovQualityRunRepository runRepository;
 
+    @Mock
+    private QualityDatasetReadGuard qualityDatasetReadGuard;
+
     @Test
     void excludesSkippedRunsFromQualityScoresAndTrends() {
         GovQualityRun skipped = run("SKIPPED");
         when(runRepository.findByDatasetIdAndFinishedAtAfterOrderByFinishedAtAsc(eq(DATASET_ID), anyInstant()))
             .thenReturn(List.of(skipped));
 
-        QualityScoreResult result = new QualityScoreService(runRepository).calculate(DATASET_ID, 30);
+        QualityScoreResult result = new QualityScoreService(runRepository, qualityDatasetReadGuard).calculate(DATASET_ID, 30);
 
         assertThat(result.overall()).isZero();
         assertThat(result.dimensions()).isEmpty();
@@ -43,7 +46,7 @@ class QualityScoreServiceTest {
         when(runRepository.findByDatasetIdAndFinishedAtAfterOrderByFinishedAtAsc(eq(DATASET_ID), anyInstant()))
             .thenReturn(List.of(failed));
 
-        QualityScoreResult result = new QualityScoreService(runRepository).calculate(DATASET_ID, 30);
+        QualityScoreResult result = new QualityScoreService(runRepository, qualityDatasetReadGuard).calculate(DATASET_ID, 30);
 
         assertThat(result.overall()).isZero();
         assertThat(result.dimensions()).hasSize(1);
@@ -57,7 +60,7 @@ class QualityScoreServiceTest {
         when(runRepository.findByDatasetIdAndFinishedAtAfterOrderByFinishedAtAsc(eq(DATASET_ID), anyInstant()))
             .thenReturn(List.of(succeeded));
 
-        QualityScoreResult result = new QualityScoreService(runRepository).calculate(DATASET_ID, 30);
+        QualityScoreResult result = new QualityScoreService(runRepository, qualityDatasetReadGuard).calculate(DATASET_ID, 30);
 
         assertThat(result.overall()).isEqualTo(100);
         assertThat(result.dimensions()).hasSize(1);

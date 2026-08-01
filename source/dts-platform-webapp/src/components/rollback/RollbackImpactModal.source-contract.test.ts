@@ -25,11 +25,20 @@ test("rollback execution echoes the analyzed confirmation contract", () => {
 	assert.match(SOURCE, /confirmationType:\s*impact\.confirmationType/);
 	assert.match(SOURCE, /confirmationToken:\s*impact\.confirmationToken/);
 	assert.match(SOURCE, /confirmationText:\s*confirmationInput/);
-	assert.match(SOURCE, /disabled:\s*!confirmationReady/);
+	assert.match(SOURCE, /disabled:\s*!confirmationReady \|\| confirmationConsumed/);
 });
 
 test("rollback failures use controlled messages instead of raw backend details", () => {
 	assert.match(SOURCE, /回退影响分析失败，请稍后重试/);
-	assert.match(SOURCE, /回退执行失败，请稍后重试/);
+	assert.match(SOURCE, /确认令牌已提交，禁止再次执行整个回退/);
 	assert.doesNotMatch(SOURCE, /(?:error|response)\.(?:message|data)/i);
+});
+
+test("partial rollback preserves recovery details and never offers a whole-operation retry", () => {
+	assert.match(SOURCE, /state === "PARTIAL_FAILED"/);
+	assert.match(SOURCE, /executionResult\.succeeded/);
+	assert.match(SOURCE, /executionResult\.failedStep/);
+	assert.match(SOURCE, /executionResult\.manualRecoveryRequired/);
+	assert.match(SOURCE, /禁止再次执行整个回退/);
+	assert.doesNotMatch(SOURCE, /重试失败步骤|重新执行回退/);
 });

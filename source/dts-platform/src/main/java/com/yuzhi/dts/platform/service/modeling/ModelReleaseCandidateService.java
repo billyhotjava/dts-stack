@@ -6,8 +6,10 @@ import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.modeling.ModelReleaseCandidateRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelReleaseCandidateRepository.IdempotencyCollisionException;
+import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryAuditView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryActorRole;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryAction;
@@ -32,6 +34,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -55,6 +58,10 @@ public class ModelReleaseCandidateService {
     private static final String SCOPE_STALE = "MODEL_RELEASE_CANDIDATE_SCOPE_STALE";
     private static final String WRITE_CONFLICT = "MODEL_RELEASE_CANDIDATE_WRITE_CONFLICT";
     private static final String REPLACEMENT_NOT_ALLOWED = "MODEL_RELEASE_CANDIDATE_REPLACEMENT_NOT_ALLOWED";
+    private static final String AUDIT_CREATE = "MODEL_RELEASE_CANDIDATE_CREATE";
+    private static final String AUDIT_REPLACEMENT_CREATE = "MODEL_RELEASE_CANDIDATE_REPLACEMENT_CREATE";
+    private static final String AUDIT_SCOPE_REPLACE = "MODEL_RELEASE_CANDIDATE_SCOPE_REPLACE";
+    private static final String AUDIT_STATUS_CHANGE = "MODEL_RELEASE_CANDIDATE_STATUS_CHANGE";
 
     private final ModelReleaseCandidateRepository repository;
     private final ObjectMapper objectMapper;
@@ -63,13 +70,15 @@ public class ModelReleaseCandidateService {
     private final Supplier<UUID> idGenerator;
     private final ModelClassificationPublishGate classificationGate;
     private final ModelReleaseCandidateRetryDriftGate retryDriftGate;
+    private final AuditService auditService;
 
     @Autowired
     public ModelReleaseCandidateService(
         ModelReleaseCandidateRepository repository,
         ObjectMapper objectMapper,
         ModelClassificationPublishGate classificationGate,
-        ModelReleaseCandidateRetryDriftGate retryDriftGate
+        ModelReleaseCandidateRetryDriftGate retryDriftGate,
+        AuditService auditService
     ) {
         this(
             repository,
@@ -77,7 +86,8 @@ public class ModelReleaseCandidateService {
             Clock.systemUTC(),
             UUID::randomUUID,
             classificationGate,
-            retryDriftGate
+            retryDriftGate,
+            auditService
         );
     }
 
@@ -93,7 +103,8 @@ public class ModelReleaseCandidateService {
             clock,
             idGenerator,
             null,
-            candidate -> List.of()
+            candidate -> List.of(),
+            null
         );
     }
 
@@ -110,7 +121,8 @@ public class ModelReleaseCandidateService {
             clock,
             idGenerator,
             classificationGate,
-            candidate -> List.of()
+            candidate -> List.of(),
+            null
         );
     }
 
@@ -122,6 +134,26 @@ public class ModelReleaseCandidateService {
         ModelClassificationPublishGate classificationGate,
         ModelReleaseCandidateRetryDriftGate retryDriftGate
     ) {
+        this(
+            repository,
+            objectMapper,
+            clock,
+            idGenerator,
+            classificationGate,
+            retryDriftGate,
+            null
+        );
+    }
+
+    ModelReleaseCandidateService(
+        ModelReleaseCandidateRepository repository,
+        ObjectMapper objectMapper,
+        Clock clock,
+        Supplier<UUID> idGenerator,
+        ModelClassificationPublishGate classificationGate,
+        ModelReleaseCandidateRetryDriftGate retryDriftGate,
+        AuditService auditService
+    ) {
         this.repository = Objects.requireNonNull(repository, "repository is required");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper is required");
         this.clock = Objects.requireNonNull(clock, "clock is required");
@@ -131,6 +163,7 @@ public class ModelReleaseCandidateService {
             retryDriftGate,
             "retryDriftGate is required"
         );
+        this.auditService = auditService;
         this.canonicalWriter = objectMapper
             .copy()
             .setSerializationInclusion(JsonInclude.Include.ALWAYS)
@@ -146,7 +179,8 @@ public class ModelReleaseCandidateService {
             tenantId,
             actorId,
             command,
-            CandidateOrigin.BATCH_WORKBENCH
+            CandidateOrigin.BATCH_WORKBENCH,
+            AUDIT_CREATE
         );
     }
 
@@ -160,7 +194,8 @@ public class ModelReleaseCandidateService {
             tenantId,
             actorId,
             command,
-            CandidateOrigin.SINGLE_MODEL_INTENT
+            CandidateOrigin.SINGLE_MODEL_INTENT,
+            AUDIT_CREATE
         );
     }
 
@@ -168,7 +203,8 @@ public class ModelReleaseCandidateService {
         String tenantId,
         String actorId,
         CreateCandidateCommand command,
-        CandidateOrigin origin
+        CandidateOrigin origin,
+        String auditActionCode
     ) {
         String tenant = requiredText(tenantId, "tenantId");
         String actor = requiredText(actorId, "actorId");
@@ -262,6 +298,25 @@ public class ModelReleaseCandidateService {
         if (repository.appendCommand(event) == 0) {
             throw idempotencyConflict(command.idempotencyKey(), null);
         }
+        auditSuccess(
+            actor,
+            auditActionCode,
+            created,
+            Map.of(
+                "tenantId",
+                tenant,
+                "planId",
+                created.planId(),
+                "environment",
+                created.environment(),
+                "origin",
+                created.origin().name(),
+                "version",
+                created.version(),
+                "entryCount",
+                created.entries().size()
+            )
+        );
         return result;
     }
 
@@ -274,6 +329,7 @@ public class ModelReleaseCandidateService {
         CreateCandidateCommand command
     ) {
         String tenant = requiredText(tenantId, "tenantId");
+        String actor = requiredText(actorId, "actorId");
         if (sourceCandidateId == null) throw notFound(null);
         if (expectedVersion < 1) throw invalid("expectedVersion must be positive");
         if (command == null) throw invalid("create command is required");
@@ -304,12 +360,34 @@ public class ModelReleaseCandidateService {
         );
         CommandResult result = createWithOrigin(
             tenant,
-            actorId,
+            actor,
             replacement,
-            source.origin()
+            source.origin(),
+            null
         );
         if (!result.replayed()) {
             repository.transferActiveClaims(source, result.candidate());
+            auditSuccess(
+                actor,
+                AUDIT_REPLACEMENT_CREATE,
+                result.candidate(),
+                Map.of(
+                    "tenantId",
+                    tenant,
+                    "planId",
+                    result.candidate().planId(),
+                    "sourceCandidateId",
+                    source.id(),
+                    "sourceStatus",
+                    source.status().name(),
+                    "origin",
+                    result.candidate().origin().name(),
+                    "version",
+                    result.candidate().version(),
+                    "entryCount",
+                    result.candidate().entries().size()
+                )
+            );
         }
         return result;
     }
@@ -406,6 +484,21 @@ public class ModelReleaseCandidateService {
                 command.expectedVersion()
             );
         }
+        auditSuccess(
+            actor,
+            AUDIT_SCOPE_REPLACE,
+            replacement,
+            Map.of(
+                "tenantId",
+                tenant,
+                "planId",
+                replacement.planId(),
+                "version",
+                replacement.version(),
+                "entryCount",
+                replacement.entries().size()
+            )
+        );
         return result;
     }
 
@@ -421,7 +514,29 @@ public class ModelReleaseCandidateService {
             actorId,
             candidateId,
             command,
-            CommandEventType.STATUS_CHANGED
+            CommandEventType.STATUS_CHANGED,
+            true
+        );
+    }
+
+    /**
+     * Performs the final Candidate CAS for a transaction whose orchestrator records the single specialized audit.
+     * Callers must emit that audit only after this method returns a non-replayed result.
+     */
+    @Transactional
+    CommandResult transitionWithinAuditedCommit(
+        String tenantId,
+        String actorId,
+        UUID candidateId,
+        TransitionCommand command
+    ) {
+        return transition(
+            tenantId,
+            actorId,
+            candidateId,
+            command,
+            CommandEventType.STATUS_CHANGED,
+            false
         );
     }
 
@@ -445,7 +560,8 @@ public class ModelReleaseCandidateService {
             actorId,
             candidateId,
             command,
-            CommandEventType.PUBLICATION_REQUESTED
+            CommandEventType.PUBLICATION_REQUESTED,
+            true
         );
     }
 
@@ -454,7 +570,8 @@ public class ModelReleaseCandidateService {
         String actorId,
         UUID candidateId,
         TransitionCommand command,
-        CommandEventType requestedEventType
+        CommandEventType requestedEventType,
+        boolean auditStatusChange
     ) {
         String tenant = requiredText(tenantId, "tenantId");
         String actor = requiredText(actorId, "actorId");
@@ -595,7 +712,47 @@ public class ModelReleaseCandidateService {
                 command.expectedVersion()
             );
         }
+        if (auditStatusChange) {
+            auditSuccess(
+                actor,
+                AUDIT_STATUS_CHANGE,
+                transitioned,
+                Map.of(
+                    "tenantId",
+                    tenant,
+                    "planId",
+                    transitioned.planId(),
+                    "fromStatus",
+                    current.status().name(),
+                    "toStatus",
+                    transitioned.status().name(),
+                    "version",
+                    transitioned.version(),
+                    "eventType",
+                    event.eventType().name(),
+                    "driftCount",
+                    driftReasons.size()
+                )
+            );
+        }
         return result;
+    }
+
+    private void auditSuccess(
+        String actor,
+        String actionCode,
+        CandidateView candidate,
+        Map<String, Object> payload
+    ) {
+        if (auditService == null || actionCode == null) return;
+        Map<String, Object> auditPayload = new LinkedHashMap<>(payload);
+        auditPayload.put("actor", actor);
+        auditService.auditAction(
+            actionCode,
+            AuditStage.SUCCESS,
+            candidate.id().toString(),
+            auditPayload
+        );
     }
 
     private void requireClassificationAdmission(String tenantId, CandidateView candidate, String triggerRef) {

@@ -8,6 +8,7 @@ import com.yuzhi.dts.ingestion.domain.IngestionTask;
 import com.yuzhi.dts.ingestion.domain.IngestionTaskRevision;
 import com.yuzhi.dts.ingestion.repository.IngestionExecutionRepository;
 import com.yuzhi.dts.ingestion.repository.IngestionTaskRepository;
+import com.yuzhi.dts.ingestion.repository.IngestionTaskRevisionRepository;
 import com.yuzhi.dts.ingestion.service.audit.AuditService;
 import com.yuzhi.dts.ingestion.service.dto.IngestionIncrementalAuditDTO;
 import com.yuzhi.dts.ingestion.service.dto.IngestionIncrementalAuditSummaryDTO;
@@ -30,6 +31,7 @@ import com.yuzhi.dts.ingestion.service.etl.IngestionExecutionLineageSnapshot;
 import com.yuzhi.dts.ingestion.service.etl.api.ApiConnectorTypes;
 import com.yuzhi.dts.ingestion.service.etl.api.ApiIngestionExecutor;
 import com.yuzhi.dts.ingestion.service.etl.api.ApiIngestionResult;
+import com.yuzhi.dts.ingestion.service.etl.rollback.RollbackRecoveryService;
 import com.yuzhi.dts.ingestion.service.etl.connector.ExecutionPlan;
 import com.yuzhi.dts.ingestion.service.etl.connector.SourceConnector;
 import com.yuzhi.dts.ingestion.service.etl.connector.SourceConnectorContext;
@@ -37,6 +39,7 @@ import com.yuzhi.dts.ingestion.service.etl.connector.SourceConnectorRegistry;
 import com.yuzhi.dts.ingestion.service.infra.PlatformInfraClient;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionExecutionMapper;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionTaskMapper;
+import com.yuzhi.dts.ingestion.service.security.IngestionSensitiveConfigSupport;
 import com.yuzhi.dts.common.audit.AuditStage;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
@@ -47,9 +50,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -69,6 +74,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.Executor;
 import java.util.Collection;
 import java.util.HashMap;
@@ -77,6 +83,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 /**
  * 数据入湖任务服务
@@ -98,6 +105,7 @@ public class IngestionTaskService {
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
     private final IngestionTaskRepository taskRepository;
+    private final IngestionTaskRevisionRepository revisionRepository;
     private final IngestionExecutionRepository executionRepository;
     private final IngestionTaskMapper taskMapper;
     private final IngestionExecutionMapper executionMapper;
@@ -123,9 +131,13 @@ public class IngestionTaskService {
     private final TransactionTemplate txTemplate;
     private final Executor ingestionTaskExecutor;
     private IngestionAccessContractService accessContractService;
+    private IngestionTaskSecretMigrationService secretMigrationService;
+    private IngestionRequiresNewExecutor requiresNewExecutor;
+    private RollbackRecoveryService rollbackRecoveryService;
 
     public IngestionTaskService(
         IngestionTaskRepository taskRepository,
+        IngestionTaskRevisionRepository revisionRepository,
         IngestionExecutionRepository executionRepository,
         IngestionTaskMapper taskMapper,
         IngestionExecutionMapper executionMapper,
@@ -152,6 +164,7 @@ public class IngestionTaskService {
         @org.springframework.beans.factory.annotation.Qualifier("ingestionTaskExecutor") Executor ingestionTaskExecutor
     ) {
         this.taskRepository = taskRepository;
+        this.revisionRepository = revisionRepository;
         this.executionRepository = executionRepository;
         this.taskMapper = taskMapper;
         this.executionMapper = executionMapper;
@@ -183,6 +196,21 @@ public class IngestionTaskService {
         this.accessContractService = accessContractService;
     }
 
+    @Autowired
+    void setSecretMigrationService(IngestionTaskSecretMigrationService secretMigrationService) {
+        this.secretMigrationService = secretMigrationService;
+    }
+
+    @Autowired
+    void setRequiresNewExecutor(IngestionRequiresNewExecutor requiresNewExecutor) {
+        this.requiresNewExecutor = requiresNewExecutor;
+    }
+
+    @Autowired
+    void setRollbackRecoveryService(RollbackRecoveryService rollbackRecoveryService) {
+        this.rollbackRecoveryService = rollbackRecoveryService;
+    }
+
     /**
      * 创建新任务
      * 审计信息会自动填充（createdBy, createdDate）
@@ -200,6 +228,7 @@ public class IngestionTaskService {
         com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolvedSource,
         boolean skipJob
     ) {
+        assertNoRawTaskSecrets(dto);
         log.info("Creating new ingestion task: {} (skipJob={})", dto.getName(), skipJob);
 
         if (!isFileSourceType(dto.getSourceType()) && dto.getSourceDataSourceId() == null) {
@@ -224,6 +253,10 @@ public class IngestionTaskService {
         }
 
         IngestionTask savedTask = taskRepository.save(task);
+        if (secretMigrationService != null) {
+            taskRepository.flush();
+            secretMigrationService.markNewTaskClean(savedTask.getId());
+        }
         recordTaskRevision(savedTask, dto.getQualityPolicyRef(), false, false);
 
         log.info("Created ingestion task with ID: {} by user: {}", savedTask.getId(), savedTask.getCreatedBy());
@@ -252,6 +285,7 @@ public class IngestionTaskService {
     public IngestionTaskDTO admit(Long id, JsonNode classificationSeal, JsonNode fieldClassifications) {
         IngestionTask task = taskRepository.findByIdForUpdate(id)
             .orElseThrow(() -> new IllegalArgumentException("Task not found: " + id));
+        requireSecretMigrationReady(task.getId());
         if (!statusEquals(task.getStatus(), "draft") && !statusEquals(task.getStatus(), "active")) {
             throw new IllegalStateException("Task is not in admissible status: " + task.getStatus());
         }
@@ -302,17 +336,35 @@ public class IngestionTaskService {
             if (isFileSourceType(draft.getSourceType()) || !hasDraftRevision) {
                 draftRevision = accessContractService.recordDraftRevision(draft, null, true);
             } else {
-                draftRevision = accessContractService.findLatestDraftRevision(task.getId())
-                    .orElseThrow(() -> new IllegalStateException("Task has no draft revision: " + task.getId()));
+                Long admissionTaskId = task.getId();
+                draftRevision = accessContractService.findLatestDraftRevision(admissionTaskId)
+                    .orElseThrow(() -> new IllegalStateException("Task has no draft revision: " + admissionTaskId));
             }
         }
 
         AdmissionArtifacts artifacts = stageAdmissionArtifacts(draft, draftRevision);
-        boolean lifecycleRegistered = registerAdmissionArtifactLifecycle(artifacts);
+        boolean lifecycleRegistered = false;
         try {
             if (accessContractService != null) {
                 accessContractService.refreshDraftRuntimeSnapshot(task.getId(), artifacts.task());
             }
+            if (artifacts.stagedDag() != null) {
+                if (draftRevision == null || accessContractService == null) {
+                    throw new IllegalStateException("Airflow admission requires a persisted draft revision");
+                }
+                accessContractService.markDraftDagStaged(
+                    draftRevision.getId(),
+                    artifacts.stagedDag().stagedPath().toString(),
+                    artifacts.stagedDag().finalPath().toString(),
+                    artifacts.previousAirflowDagId()
+                );
+                lifecycleRegistered = registerAdmissionArtifactLifecycle(artifacts);
+                if (!lifecycleRegistered) {
+                    reconcileAdmissionDagDeployment(draftRevision.getId());
+                }
+                return enrichTaskDto(taskMapper.toDto(artifacts.task()));
+            }
+
             applyPlanSnapshot(task, artifacts.task());
             task.setClassificationSeal(classificationSeal);
             task.setFieldClassifications(fieldClassifications);
@@ -321,15 +373,9 @@ public class IngestionTaskService {
             if (accessContractService != null) {
                 accessContractService.activateDraftRevision(task.getId());
             }
-            if (artifacts.stagedDag() != null) {
-                String publishedDagId = airflowDagService.publishStagedDag(artifacts.stagedDag());
-                if (!java.util.Objects.equals(task.getAirflowDagId(), publishedDagId)) {
-                    throw new IllegalStateException("Published DAG identity does not match admitted revision");
-                }
-            }
         } catch (RuntimeException ex) {
             if (!lifecycleRegistered) {
-                discardAdmissionArtifacts(artifacts, true);
+                discardAdmissionAttemptArtifacts(artifacts);
             }
             throw ex;
         }
@@ -341,10 +387,12 @@ public class IngestionTaskService {
      * 审计信息会自动更新（lastModifiedBy, lastModifiedDate）
      */
     public IngestionTaskDTO update(Long id, IngestionTaskDTO dto) {
+        assertNoRawTaskSecrets(dto);
         log.info("Updating ingestion task ID: {}", id);
 
         return taskRepository.findByIdForUpdate(id)
             .map(existingTask -> {
+                requireSecretMigrationReady(existingTask.getId());
                 boolean activeOrPaused = statusEquals(existingTask.getStatus(), "active")
                     || statusEquals(existingTask.getStatus(), "paused");
                 IngestionTask basePlan = activeOrPaused
@@ -354,6 +402,7 @@ public class IngestionTaskService {
                         : snapshot(existingTask);
                 IngestionTask candidate = snapshot(basePlan);
                 taskMapper.partialUpdate(candidate, dto);
+                preserveAbsentManagedSecrets(basePlan, candidate, dto);
                 if (dto.getSyncConfig() != null) {
                     candidate.setSyncConfig(dto.getSyncConfig());
                 }
@@ -587,7 +636,114 @@ public class IngestionTaskService {
             mode = "BACKFILL_RANGE";
             backfillWindow = new BackfillWindow(column, windowStart, windowEnd);
         }
-        return execute(taskId, mode, backfillWindow, batchId, true);
+        return execute(taskId, mode, backfillWindow, batchId, true, null);
+    }
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public IngestionExecutionDTO executeInternalApiForRevision(
+        Long taskId,
+        String batchId,
+        String triggerMode,
+        Instant windowStart,
+        Instant windowEnd,
+        String column,
+        Long revisionId,
+        String configChecksum,
+        String airflowDagId,
+        String airflowRunId
+    ) {
+        String mode = normalizeTriggerMode(triggerMode);
+        BackfillWindow backfillWindow = null;
+        if ("BACKFILL_RANGE".equalsIgnoreCase(mode)
+            || windowStart != null
+            || windowEnd != null
+            || StringUtils.hasText(column)) {
+            if (windowStart == null || windowEnd == null) {
+                throw new IllegalArgumentException("backfillWindowStart and backfillWindowEnd are required for API backfill");
+            }
+            mode = "BACKFILL_RANGE";
+            backfillWindow = new BackfillWindow(column, windowStart, windowEnd);
+        }
+        ExactRevisionContext exactRevision = new ExactRevisionContext(revisionId, configChecksum, airflowDagId, airflowRunId);
+        validateExactRevisionContext(exactRevision);
+        String resolvedMode = mode;
+        BackfillWindow resolvedBackfillWindow = backfillWindow;
+        try {
+            return inRequiresNewTransaction(() -> {
+                Optional<IngestionExecution> existing = executionRepository.findFirstByTaskIdAndAirflowDagIdAndExecutionId(
+                    taskId,
+                    airflowDagId,
+                    airflowRunId
+                );
+                if (existing.isPresent()) {
+                    return toExactExistingExecution(existing.orElseThrow(), exactRevision);
+                }
+                return execute(taskId, resolvedMode, resolvedBackfillWindow, batchId, true, exactRevision);
+            });
+        } catch (DataIntegrityViolationException duplicate) {
+            return inRequiresNewTransaction(() -> executionRepository
+                .findFirstByTaskIdAndAirflowDagIdAndExecutionId(taskId, airflowDagId, airflowRunId)
+                .map(existing -> toExactExistingExecution(existing, exactRevision))
+                .orElseThrow(() -> duplicate));
+        }
+    }
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public IngestionExecutionDTO registerScheduledExecution(
+        Long taskId,
+        Long revisionId,
+        String configChecksum,
+        String airflowDagId,
+        String airflowRunId
+    ) {
+        ExactRevisionContext exactRevision = new ExactRevisionContext(revisionId, configChecksum, airflowDagId, airflowRunId);
+        validateExactRevisionContext(exactRevision);
+        try {
+            IngestionExecutionDTO registered = inRequiresNewTransaction(() -> {
+                Optional<IngestionExecution> existing = executionRepository.findFirstByTaskIdAndAirflowDagIdAndExecutionId(
+                    taskId,
+                    airflowDagId,
+                    airflowRunId
+                );
+                if (existing.isPresent()) {
+                    return toExactExistingExecution(existing.orElseThrow(), exactRevision);
+                }
+
+                IngestionTask canonicalTask = loadScheduledRegistrationTask(taskId);
+                IngestionTask runtimeTask = materializeExactRevisionTask(canonicalTask, exactRevision);
+                if (isApiSourceTask(runtimeTask)) {
+                    throw new IllegalArgumentException("API source DAGs must use the internal execution endpoint");
+                }
+
+                IngestionExecution execution = new IngestionExecution();
+                execution.setTask(canonicalTask);
+                execution.setExecutionId(airflowRunId);
+                execution.setAirflowDagId(airflowDagId);
+                execution.setBatchId(resolveBatchId(taskId, airflowRunId));
+                execution.setStatus("running");
+                execution.setStartTime(Instant.now());
+                execution.setCreatedAt(Instant.now());
+                execution.setTriggerMode("SCHEDULED");
+                execution.setReplaceMode(resolveReplaceMode(runtimeTask, "SCHEDULED"));
+                IngestionExecutionLineageSnapshot.apply(execution, runtimeTask);
+                accessContractService.bindExactRevision(execution, canonicalTask, revisionId, configChecksum);
+                execution = executionRepository.saveAndFlush(execution);
+
+                canonicalTask.setLastExecutionStatus("running");
+                canonicalTask.setLastExecutedAt(execution.getStartTime());
+                taskRepository.save(canonicalTask);
+                return executionMapper.toDto(execution);
+            });
+            if (registered == null) {
+                throw new IllegalStateException("Scheduled execution registration transaction returned no result");
+            }
+            return registered;
+        } catch (DataIntegrityViolationException duplicate) {
+            return inRequiresNewTransaction(() -> executionRepository
+                .findFirstByTaskIdAndAirflowDagIdAndExecutionId(taskId, airflowDagId, airflowRunId)
+                .map(existing -> toExactExistingExecution(existing, exactRevision))
+                .orElseThrow(() -> duplicate));
+        }
     }
 
     public IngestionTaskDTO validateAsyncExecutionRequest(Long taskId) {
@@ -605,7 +761,7 @@ public class IngestionTaskService {
     }
 
     private IngestionExecutionDTO execute(Long taskId, String triggerMode, BackfillWindow backfillWindow) {
-        return execute(taskId, triggerMode, backfillWindow, null, false);
+        return execute(taskId, triggerMode, backfillWindow, null, false, null);
     }
 
     private IngestionExecutionDTO execute(
@@ -613,11 +769,25 @@ public class IngestionTaskService {
         String triggerMode,
         BackfillWindow backfillWindow,
         String requestedBatchId,
-        boolean apiOnly
+        boolean apiOnly,
+        ExactRevisionContext exactRevision
+    ) {
+        return execute(taskId, triggerMode, backfillWindow, requestedBatchId, apiOnly, exactRevision, null);
+    }
+
+    private IngestionExecutionDTO execute(
+        Long taskId,
+        String triggerMode,
+        BackfillWindow backfillWindow,
+        String requestedBatchId,
+        boolean apiOnly,
+        ExactRevisionContext exactRevision,
+        RetryLineage retryLineage
     ) {
         log.info("Executing ingestion task ID: {}", taskId);
 
-        IngestionTask task = loadExecutableTask(taskId);
+        IngestionTask canonicalTask = loadExecutableTask(taskId);
+        IngestionTask task = exactRevision == null ? canonicalTask : materializeExactRevisionTask(canonicalTask, exactRevision);
         if (apiOnly && !isApiSourceTask(task)) {
             throw new IllegalArgumentException("Internal API ingestion endpoint only supports API source tasks: " + taskId);
         }
@@ -643,26 +813,47 @@ public class IngestionTaskService {
         }
 
         IngestionExecution execution = new IngestionExecution();
-        execution.setTask(task);
+        execution.setTask(canonicalTask);
         execution.setStatus("preparing");
         execution.setCreatedAt(Instant.now());
         execution.setReplaceMode(resolveReplaceMode(task, triggerMode));
         execution.setTriggerMode(normalizeTriggerMode(triggerMode));
+        if (retryLineage != null) {
+            execution.setParentExecutionId(retryLineage.parentExecutionId());
+            execution.setRetryCount(retryLineage.retryCount());
+            execution.setMaxRetries(retryLineage.maxRetries());
+        }
         if (resolvedBackfill != null) {
             execution.setBackfillColumn(resolvedBackfill.column());
             execution.setBackfillWindowStart(resolvedBackfill.windowStart());
             execution.setBackfillWindowEnd(resolvedBackfill.windowEnd());
         }
         execution.setBatchId(resolveBatchId(taskId, requestedBatchId));
-        execution.setExecutionId("preparing-" + UUID.randomUUID().toString().substring(0, 8));
+        execution.setExecutionId(
+            exactRevision == null ? "preparing-" + UUID.randomUUID().toString().substring(0, 8) : exactRevision.airflowRunId()
+        );
+        if (exactRevision != null) {
+            execution.setAirflowDagId(exactRevision.airflowDagId());
+        }
         IngestionExecutionLineageSnapshot.apply(execution, task);
         if (accessContractService != null) {
-            accessContractService.bindActiveRevision(execution, task);
+            if (exactRevision == null) {
+                accessContractService.bindActiveRevision(execution, canonicalTask);
+            } else {
+                accessContractService.bindExactRevision(
+                    execution,
+                    canonicalTask,
+                    exactRevision.revisionId(),
+                    exactRevision.configChecksum()
+                );
+            }
         }
-        execution = executionRepository.save(execution);
+        execution = exactRevision == null && retryLineage == null
+            ? executionRepository.save(execution)
+            : executionRepository.saveAndFlush(execution);
 
-        task.setLastExecutionStatus("preparing");
-        taskRepository.save(task);
+        canonicalTask.setLastExecutionStatus("preparing");
+        taskRepository.save(canonicalTask);
 
         // Phase 2 (asynchronous): job generation, DAG wait, Airflow trigger
         // Must run AFTER transaction commits so the execution record is visible to the new thread.
@@ -700,9 +891,134 @@ public class IngestionTaskService {
         GovernancePolicy policy,
         String governanceBlockedReason
     ) {
+        ApiExecutionWork apiWork = txTemplate.execute(status -> loadApiExecutionWork(taskId, executionId));
+        if (apiWork != null) {
+            executeApiTriggerPhase(apiWork, policy, governanceBlockedReason);
+            return;
+        }
         txTemplate.executeWithoutResult(txStatus -> {
             doExecuteAirflowTriggerPhase(taskId, executionId, policy, governanceBlockedReason);
         });
+    }
+
+    private ApiExecutionWork loadApiExecutionWork(Long taskId, Long executionId) {
+        IngestionExecution execution = executionRepository.findById(executionId).orElse(null);
+        IngestionTask canonicalTask = taskRepository.findById(taskId).orElse(null);
+        if (execution == null || canonicalTask == null) {
+            return null;
+        }
+        IngestionTask runtime = materializeApiRuntimeTask(canonicalTask, execution);
+        return isApiSourceTask(runtime)
+            ? new ApiExecutionWork(runtime, copyApiExecution(execution))
+            : null;
+    }
+
+    private void executeApiTriggerPhase(
+        ApiExecutionWork initialWork,
+        GovernancePolicy policy,
+        String governanceBlockedReason
+    ) {
+        Long taskId = initialWork.task().getId();
+        Long executionId = initialWork.execution().getId();
+        IngestionTask runtimeTask = initialWork.task();
+        boolean executionSucceeded = false;
+        try {
+            if (StringUtils.hasText(governanceBlockedReason) && "QUEUE".equalsIgnoreCase(policy.rejectPolicy())) {
+                boolean ready = waitForGovernanceSlot(
+                    runtimeTask,
+                    policy,
+                    executionId,
+                    GOVERNANCE_QUEUE_MAX_WAIT,
+                    GOVERNANCE_QUEUE_POLL_INTERVAL
+                );
+                if (!ready) {
+                    throw new IllegalStateException(
+                        "触发治理队列等待超时(" + GOVERNANCE_QUEUE_MAX_WAIT.toSeconds() + "s)：" + governanceBlockedReason
+                    );
+                }
+            }
+
+            ApiExecutionWork claimed = txTemplate.execute(status -> claimApiExecution(taskId, executionId));
+            if (claimed == null) {
+                throw new IllegalStateException("API execution claim returned no result");
+            }
+            runtimeTask = claimed.task();
+            IngestionExecution runtimeExecution = claimed.execution();
+            com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource source = resolveSource(runtimeTask, null);
+            ApiIngestionResult result = runApiIngestionPlan(runtimeTask, runtimeExecution, source);
+
+            IngestionTask completedTask = runtimeTask;
+            IngestionExecution completedExecution = txTemplate.execute(status ->
+                finalizeApiExecutionSuccess(taskId, executionId, runtimeExecution, result)
+            );
+            if (completedExecution == null) {
+                throw new IllegalStateException("API execution finalizer returned no result");
+            }
+            executionSucceeded = true;
+            if (rollbackRecoveryService != null) {
+                rollbackRecoveryService.recordSuccessfulRevalidation(completedTask, completedExecution);
+            }
+            triggerPostIngestionQualityCheck(completedTask, completedExecution);
+            syncExecutionLineageQuietly(completedTask, completedExecution);
+            auditApiExecution(completedTask, completedExecution, true, null);
+            log.info("Completed API execution {} for task ID: {}", completedExecution.getExecutionId(), taskId);
+        } catch (Exception ex) {
+            String failureMessage = extractFailureMessage(ex);
+            if (executionSucceeded) {
+                log.warn("[api-execution] post-success hook failed for task {}: {}", taskId, failureMessage, ex);
+                return;
+            }
+            IngestionTask failedTask = runtimeTask;
+            IngestionExecution failedExecution = txTemplate.execute(status ->
+                finalizeApiExecutionFailure(taskId, executionId, failedTask, failureMessage)
+            );
+            if (failedExecution != null) {
+                syncExecutionLineageQuietly(failedTask, failedExecution);
+                auditApiExecution(failedTask, failedExecution, false, failureMessage);
+            }
+            log.error("[api-execution] failed for task {}: {}", taskId, failureMessage, ex);
+        }
+    }
+
+    private ApiExecutionWork claimApiExecution(Long taskId, Long executionId) {
+        IngestionExecution execution = entityManager.find(
+            IngestionExecution.class,
+            executionId,
+            LockModeType.PESSIMISTIC_WRITE
+        );
+        if (execution == null) {
+            throw new IllegalStateException("API execution not found: " + executionId);
+        }
+        IngestionTask canonicalTask = taskRepository.findById(taskId)
+            .orElseThrow(() -> new IllegalStateException("API ingestion task not found: " + taskId));
+        entityManager.refresh(canonicalTask, LockModeType.PESSIMISTIC_WRITE);
+        requireActiveProductionTask(canonicalTask);
+        if (!statusEquals(execution.getStatus(), "preparing")) {
+            throw new IllegalStateException("API execution is not claimable: " + execution.getStatus());
+        }
+        IngestionTask runtime = materializeApiRuntimeTask(canonicalTask, execution);
+        if (!isApiSourceTask(runtime)) {
+            throw new IllegalStateException("Execution revision is not an API ingestion task");
+        }
+        execution.setExecutionId("api-" + UUID.randomUUID().toString().substring(0, 8));
+        execution.setStatus("running");
+        execution.setStartTime(Instant.now());
+        executionRepository.save(execution);
+        canonicalTask.setLastExecutedAt(execution.getStartTime());
+        canonicalTask.setLastExecutionStatus("running");
+        taskRepository.save(canonicalTask);
+        return new ApiExecutionWork(runtime, copyApiExecution(execution));
+    }
+
+    private IngestionTask materializeApiRuntimeTask(IngestionTask canonicalTask, IngestionExecution execution) {
+        if (accessContractService == null) {
+            return canonicalTask;
+        }
+        IngestionTask runtime = accessContractService.materializeExecutionTask(
+            canonicalTask,
+            execution.getTaskRevisionId()
+        );
+        return runtime == null ? canonicalTask : runtime;
     }
 
     private void doExecuteAirflowTriggerPhase(
@@ -885,14 +1201,8 @@ public class IngestionTaskService {
         if (task != null) {
             IngestionExecutionLineageSnapshot.applyIfMissing(execution, task);
         }
+        retryService.scheduleRetryIfEligible(execution);
         executionRepository.save(execution);
-
-        try {
-            retryService.scheduleRetryIfEligible(execution);
-            executionRepository.save(execution);
-        } catch (Exception retryEx) {
-            log.warn("Failed to schedule auto-retry for execution id={}: {}", execution.getId(), retryEx.getMessage());
-        }
 
         if (canonicalTask != null) {
             canonicalTask.setLastExecutionStatus("failed");
@@ -913,23 +1223,11 @@ public class IngestionTaskService {
         IngestionExecution execution,
         com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource source
     ) {
-        SourceConnectorContext context = buildSourceConnectorContext(task, source);
-        SourceConnector connector = sourceConnectorRegistry.find(context)
-            .orElseThrow(() -> new IllegalStateException("未找到 API 数据源连接器: " + task.getSourceType()));
-        ExecutionPlan plan = connector.buildExecutionPlan(context);
-
         execution.setExecutionId("api-" + UUID.randomUUID().toString().substring(0, 8));
         execution.setStatus("running");
         executionRepository.save(execution);
 
-        ApiIngestionResult result = apiIngestionExecutor.execute(plan, task, execution);
-        if (result == null) {
-            throw new IllegalStateException("API 入湖执行未返回结果");
-        }
-        if (!result.success()) {
-            String message = StringUtils.hasText(result.errorMessage()) ? result.errorMessage() : "API 入湖执行失败";
-            throw new IllegalStateException(message);
-        }
+        ApiIngestionResult result = runApiIngestionPlan(task, execution, source);
 
         execution.setStatus("success");
         execution.setEndTime(Instant.now());
@@ -940,7 +1238,153 @@ public class IngestionTaskService {
             execution.setRowsWritten(result.rowsWritten());
         }
         executionRepository.save(execution);
+        if (rollbackRecoveryService != null) {
+            rollbackRecoveryService.recordSuccessfulRevalidation(task, execution);
+        }
     }
+
+    private ApiIngestionResult runApiIngestionPlan(
+        IngestionTask task,
+        IngestionExecution execution,
+        com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource source
+    ) {
+        SourceConnectorContext context = buildSourceConnectorContext(task, source);
+        SourceConnector connector = sourceConnectorRegistry.find(context)
+            .orElseThrow(() -> new IllegalStateException("未找到 API 数据源连接器: " + task.getSourceType()));
+        ExecutionPlan plan = connector.buildExecutionPlan(context);
+        ApiIngestionResult result = apiIngestionExecutor.execute(plan, task, execution);
+        if (result == null) {
+            throw new IllegalStateException("API 入湖执行未返回结果");
+        }
+        if (!result.success()) {
+            String message = StringUtils.hasText(result.errorMessage()) ? result.errorMessage() : "API 入湖执行失败";
+            throw new IllegalStateException(message);
+        }
+        return result;
+    }
+
+    private IngestionExecution finalizeApiExecutionSuccess(
+        Long taskId,
+        Long executionId,
+        IngestionExecution runtimeExecution,
+        ApiIngestionResult result
+    ) {
+        IngestionExecution execution = executionRepository.findById(executionId)
+            .orElseThrow(() -> new IllegalStateException("API execution not found during finalization: " + executionId));
+        IngestionTask canonicalTask = taskRepository.findById(taskId)
+            .orElseThrow(() -> new IllegalStateException("API task not found during finalization: " + taskId));
+        entityManager.refresh(canonicalTask, LockModeType.PESSIMISTIC_WRITE);
+        execution.setStatus("success");
+        execution.setEndTime(Instant.now());
+        execution.setRowsRead(result.rowsRead());
+        execution.setRowsWritten(result.rowsWritten());
+        execution.setSourceTables(runtimeExecution.getSourceTables());
+        execution.setTargetTables(runtimeExecution.getTargetTables());
+        executionRepository.save(execution);
+        canonicalTask.setLastExecutedAt(execution.getEndTime());
+        canonicalTask.setLastExecutionStatus("success");
+        taskRepository.save(canonicalTask);
+        return copyApiExecution(execution);
+    }
+
+    private IngestionExecution finalizeApiExecutionFailure(
+        Long taskId,
+        Long executionId,
+        IngestionTask runtimeTask,
+        String failureMessage
+    ) {
+        IngestionExecution execution = executionRepository.findById(executionId).orElse(null);
+        if (execution == null) {
+            return null;
+        }
+        IngestionTask canonicalTask = taskRepository.findById(taskId).orElse(null);
+        if (canonicalTask != null) {
+            entityManager.refresh(canonicalTask, LockModeType.PESSIMISTIC_WRITE);
+        }
+        String failureCategory = ExecutionFailureClassifier.classify(failureMessage);
+        execution.setStatus("failed");
+        execution.setEndTime(Instant.now());
+        execution.setErrorMessage(failureMessage);
+        execution.setFailureCategory(failureCategory);
+        execution.setFailureAdvice(ExecutionFailureClassifier.advice(failureCategory));
+        if (execution.getStartTime() == null) {
+            execution.setStartTime(execution.getCreatedAt() == null ? Instant.now() : execution.getCreatedAt());
+        }
+        if (runtimeTask != null) {
+            IngestionExecutionLineageSnapshot.applyIfMissing(execution, runtimeTask);
+        }
+        retryService.scheduleRetryIfEligible(execution);
+        executionRepository.save(execution);
+        if (canonicalTask != null) {
+            canonicalTask.setLastExecutionStatus("failed");
+            taskRepository.save(canonicalTask);
+        }
+        return copyApiExecution(execution);
+    }
+
+    private IngestionExecution copyApiExecution(IngestionExecution source) {
+        IngestionExecution copy = new IngestionExecution();
+        copy.setId(source.getId());
+        copy.setVersion(source.getVersion());
+        copy.setExecutionId(source.getExecutionId());
+        copy.setTaskRevisionId(source.getTaskRevisionId());
+        copy.setRevisionNumber(source.getRevisionNumber());
+        copy.setEffectiveConfigChecksum(source.getEffectiveConfigChecksum());
+        copy.setQualityPolicyRef(source.getQualityPolicyRef());
+        copy.setQualityRunId(source.getQualityRunId());
+        copy.setAirflowDagId(source.getAirflowDagId());
+        copy.setBatchId(source.getBatchId());
+        copy.setStatus(source.getStatus());
+        copy.setStartTime(source.getStartTime());
+        copy.setEndTime(source.getEndTime());
+        copy.setRowsRead(source.getRowsRead());
+        copy.setRowsWritten(source.getRowsWritten());
+        copy.setErrorMessage(source.getErrorMessage());
+        copy.setFailureCategory(source.getFailureCategory());
+        copy.setFailureAdvice(source.getFailureAdvice());
+        copy.setTriggerMode(source.getTriggerMode());
+        copy.setReplaceMode(source.getReplaceMode());
+        copy.setBackfillColumn(source.getBackfillColumn());
+        copy.setBackfillWindowStart(source.getBackfillWindowStart());
+        copy.setBackfillWindowEnd(source.getBackfillWindowEnd());
+        copy.setSourceTables(source.getSourceTables() == null ? null : source.getSourceTables().deepCopy());
+        copy.setTargetTables(source.getTargetTables() == null ? null : source.getTargetTables().deepCopy());
+        copy.setRetryCount(source.getRetryCount());
+        copy.setMaxRetries(source.getMaxRetries());
+        copy.setNextRetryAt(source.getNextRetryAt());
+        copy.setRetryExhausted(source.isRetryExhausted());
+        copy.setParentExecutionId(source.getParentExecutionId());
+        copy.setCreatedAt(source.getCreatedAt());
+        return copy;
+    }
+
+    private void auditApiExecution(
+        IngestionTask task,
+        IngestionExecution execution,
+        boolean success,
+        String failureMessage
+    ) {
+        if (task == null || execution == null) {
+            return;
+        }
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("taskId", task.getId());
+        meta.put("executionId", execution.getId());
+        meta.put("batchId", execution.getBatchId());
+        meta.put("operator", resolveOperator(task));
+        meta.put("engine", "api-http");
+        if (StringUtils.hasText(failureMessage)) {
+            meta.put("error", failureMessage);
+        }
+        auditService.auditAction(
+            "INGESTION_TASK_EXECUTE",
+            success ? AuditStage.SUCCESS : AuditStage.FAIL,
+            task.getName(),
+            meta
+        );
+    }
+
+    private record ApiExecutionWork(IngestionTask task, IngestionExecution execution) {}
 
     /**
      * API ingestion does not pass through the Airflow status synchronizer, so it
@@ -959,7 +1403,12 @@ public class IngestionTaskService {
         try {
             String qualityRunId = platformInfraClient.triggerQualityRunByPolicyRef(qualityPolicyRef, "INGESTION");
             execution.setQualityRunId(qualityRunId);
-            executionRepository.save(execution);
+            if (execution.getId() != null) {
+                txTemplate.executeWithoutResult(status -> executionRepository.findById(execution.getId()).ifPresent(managed -> {
+                    managed.setQualityRunId(qualityRunId);
+                    executionRepository.save(managed);
+                }));
+            }
             Map<String, Object> meta = new LinkedHashMap<>();
             meta.put("taskId", task.getId());
             meta.put("executionId", execution.getId());
@@ -1001,11 +1450,38 @@ public class IngestionTaskService {
         com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource source
     ) {
         Map<String, Object> merged = new LinkedHashMap<>();
-        if (source != null && source.readerConfig() != null) {
-            merged.putAll(source.readerConfig());
+        Map<String, Object> managedConfig = source == null || source.readerConfig() == null
+            ? Map.of()
+            : source.readerConfig();
+        merged.putAll(managedConfig);
+        JsonNode taskConfig = task.getSourceConfig();
+        if (task.getSourceDataSourceId() != null) {
+            taskConfig = stripRawSecrets(taskConfig);
         }
-        merged.putAll(jsonObjectMap(task.getSourceConfig(), "sourceConfig"));
+        merged.putAll(jsonObjectMap(taskConfig, "sourceConfig"));
+        overlayManagedSecrets(merged, managedConfig);
         return merged;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void overlayManagedSecrets(Map<String, Object> target, Map<String, Object> managed) {
+        for (Map.Entry<String, Object> entry : managed.entrySet()) {
+            Object managedValue = entry.getValue();
+            JsonNode managedNode = OBJECT_MAPPER.valueToTree(managedValue);
+            if (IngestionSensitiveConfigSupport.isRawSecretKeyName(entry.getKey())
+                || IngestionSensitiveConfigSupport.containsRawSecrets(managedNode)) {
+                target.put(entry.getKey(), managedValue);
+                continue;
+            }
+            if (managedValue instanceof Map<?, ?> managedNested) {
+                Object targetValue = target.get(entry.getKey());
+                Map<String, Object> targetNested = targetValue instanceof Map<?, ?> existing
+                    ? new LinkedHashMap<>((Map<String, Object>) existing)
+                    : new LinkedHashMap<>();
+                overlayManagedSecrets(targetNested, (Map<String, Object>) managedNested);
+                target.put(entry.getKey(), targetNested);
+            }
+        }
     }
 
     private Map<String, Object> jsonObjectMap(JsonNode node, String fieldName) {
@@ -1166,13 +1642,21 @@ public class IngestionTaskService {
             task.getName(),
             retryMeta
         );
-        return execute(taskId, mode);
+        RetryLineage retryLineage = new RetryLineage(
+            executionId,
+            Math.max(0, execution.getRetryCount()) + 1,
+            Math.max(execution.getMaxRetries(), Math.max(0, execution.getRetryCount()) + 1)
+        );
+        return execute(taskId, mode, null, null, false, null, retryLineage);
     }
+
+    private record RetryLineage(Long parentExecutionId, int retryCount, int maxRetries) {}
 
     private IngestionTask loadExecutableTask(Long taskId) {
         IngestionTask task = taskRepository.findById(taskId)
             .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
 
+        requireSecretMigrationReady(taskId);
         requireActiveProductionTask(task);
         GovernancePolicy policy = resolveGovernancePolicy(task);
         if (!isWithinExecutionWindow(policy)) {
@@ -1185,6 +1669,20 @@ public class IngestionTaskService {
             && policy.maxConcurrentRuns() <= 1) {
             throw new IllegalStateException("任务仍在运行中，请稍后重试");
         }
+        return task;
+    }
+
+    /**
+     * Validates the immutable task contract for an Airflow run that has already
+     * started. Registration must not apply launch-time window/concurrency gates:
+     * the database uniqueness constraint arbitrates duplicate callbacks, and the
+     * committed winner is returned after a conflict.
+     */
+    private IngestionTask loadScheduledRegistrationTask(Long taskId) {
+        IngestionTask task = taskRepository.findById(taskId)
+            .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+        requireSecretMigrationReady(taskId);
+        requireActiveProductionTask(task);
         return task;
     }
 
@@ -1329,6 +1827,40 @@ public class IngestionTaskService {
     }
 
     private record BackfillWindow(String column, Instant windowStart, Instant windowEnd) {}
+
+    private record ExactRevisionContext(Long revisionId, String configChecksum, String airflowDagId, String airflowRunId) {}
+
+    private void validateExactRevisionContext(ExactRevisionContext context) {
+        if (context == null
+            || context.revisionId() == null
+            || !StringUtils.hasText(context.configChecksum())
+            || !StringUtils.hasText(context.airflowDagId())
+            || !StringUtils.hasText(context.airflowRunId())) {
+            throw new IllegalArgumentException("revisionId, configChecksum, airflowDagId and airflowRunId are required together");
+        }
+    }
+
+    private IngestionTask materializeExactRevisionTask(IngestionTask canonicalTask, ExactRevisionContext context) {
+        validateExactRevisionContext(context);
+        if (accessContractService == null) {
+            throw new IllegalStateException("Ingestion access contract service is required for scheduled execution");
+        }
+        IngestionTask runtimeTask = accessContractService.materializeExecutionTask(canonicalTask, context.revisionId());
+        if (!context.airflowDagId().equals(runtimeTask.getAirflowDagId())) {
+            throw new IllegalStateException(
+                "Scheduled execution DAG does not match revision " + context.revisionId() + ": " + context.airflowDagId()
+            );
+        }
+        return runtimeTask;
+    }
+
+    private IngestionExecutionDTO toExactExistingExecution(IngestionExecution execution, ExactRevisionContext context) {
+        if (!context.revisionId().equals(execution.getTaskRevisionId())
+            || !context.configChecksum().equals(execution.getEffectiveConfigChecksum())) {
+            throw new IllegalStateException("Airflow run is already bound to a different ingestion revision");
+        }
+        return executionMapper.toDto(execution);
+    }
 
     private String resolveDroppedTables(IngestionTask task) {
         if (task == null) {
@@ -1548,13 +2080,47 @@ public class IngestionTaskService {
         if (taskId == null || limit <= 0) {
             return;
         }
-        IngestionTask task = taskRepository.findById(taskId).orElse(null);
-        if (task == null || !isAirflowEnabled(task) || !StringUtils.hasText(task.getAirflowDagId())) {
+        IngestionTask canonicalTask = taskRepository.findById(taskId).orElse(null);
+        if (canonicalTask == null || !isAirflowEnabled(canonicalTask)) {
             return;
         }
-        Map<String, Object> payload = airflowClient.listDagRuns(task.getAirflowDagId(), Math.max(limit, 20)).orElse(null);
+        int inserted = 0;
+        boolean foundRevisionDag = false;
+        if (accessContractService != null) {
+            for (IngestionTaskRevision revision : accessContractService.findTaskRevisionEntities(taskId)) {
+                if (IngestionAccessContractService.REVISION_LEGACY_UNSEALED.equals(revision.getState())
+                    || revision.getRuntimeSnapshot() == null
+                    || revision.getRuntimeSnapshotIv() == null) {
+                    continue;
+                }
+                IngestionTask revisionTask = accessContractService.materializeExecutionTask(canonicalTask, revision.getId());
+                if (!StringUtils.hasText(revisionTask.getAirflowDagId())) {
+                    continue;
+                }
+                foundRevisionDag = true;
+                inserted += backfillExecutionsForDag(canonicalTask, revisionTask, revision, limit);
+            }
+        }
+        // Legacy tasks have no seal that can prove an exact historical plan.
+        // Preserve observability, but intentionally leave revision fields null.
+        if (!foundRevisionDag && StringUtils.hasText(canonicalTask.getAirflowDagId())) {
+            inserted += backfillExecutionsForDag(canonicalTask, canonicalTask, null, limit);
+        }
+        if (inserted > 0) {
+            log.info("Backfilled {} exact execution records for task {} from Airflow", inserted, taskId);
+        }
+    }
+
+    private int backfillExecutionsForDag(
+        IngestionTask canonicalTask,
+        IngestionTask runtimeTask,
+        IngestionTaskRevision revision,
+        int limit
+    ) {
+        String dagId = runtimeTask.getAirflowDagId();
+        Map<String, Object> payload = airflowClient.listDagRuns(dagId, Math.max(limit, 20)).orElse(null);
         if (payload == null || !(payload.get("dag_runs") instanceof java.util.List<?> dagRuns)) {
-            return;
+            return 0;
         }
         int inserted = 0;
         for (Object runObj : dagRuns) {
@@ -1569,16 +2135,23 @@ public class IngestionTaskService {
             if (!StringUtils.hasText(runId)) {
                 continue;
             }
-            if (executionRepository.findFirstByTaskIdAndExecutionId(taskId, runId).isPresent()) {
+            if (executionRepository.findFirstByTaskIdAndAirflowDagIdAndExecutionId(canonicalTask.getId(), dagId, runId).isPresent()) {
                 continue;
             }
             IngestionExecution execution = new IngestionExecution();
-            execution.setTask(task);
+            execution.setTask(canonicalTask);
             execution.setExecutionId(runId);
+            execution.setAirflowDagId(dagId);
+            execution.setTriggerMode("SCHEDULED");
             execution.setStatus(mapAirflowState(toText(run.get("state"))));
-            IngestionExecutionLineageSnapshot.apply(execution, task);
-            if (accessContractService != null) {
-                accessContractService.bindActiveRevision(execution, task);
+            IngestionExecutionLineageSnapshot.apply(execution, runtimeTask);
+            if (revision != null) {
+                accessContractService.bindExactRevision(
+                    execution,
+                    canonicalTask,
+                    revision.getId(),
+                    revision.getEffectiveConfigChecksum()
+                );
             }
             execution.setStartTime(parseAirflowInstant(firstNonBlank(run.get("start_date"), run.get("execution_date"), run.get("logical_date"))));
             execution.setEndTime(parseAirflowInstant(run.get("end_date")));
@@ -1597,9 +2170,7 @@ public class IngestionTaskService {
             executionRepository.save(execution);
             inserted++;
         }
-        if (inserted > 0) {
-            log.info("Backfilled {} execution records for task {} from Airflow dag {}", inserted, taskId, task.getAirflowDagId());
-        }
+        return inserted;
     }
 
     private String mapAirflowState(String state) {
@@ -2160,10 +2731,6 @@ public class IngestionTaskService {
             if (StringUtils.hasText(configured)) {
                 return configured;
             }
-        }
-        String dagSelector = toText(task.getDbtDagSelector());
-        if (StringUtils.hasText(dagSelector)) {
-            return dagSelector;
         }
         return "default";
     }
@@ -2803,17 +3370,30 @@ public class IngestionTaskService {
                     .map(AddaxJobService.PerTableJob::hostJobPath)
                     .filter(StringUtils::hasText)
                     .forEach(generatedJobPaths::add);
-                stagedDag = airflowDagService.stageDagForTask(admittedPlan, perTableJobs);
+                stagedDag = airflowDagService.stageDagForTask(
+                    admittedPlan,
+                    perTableJobs,
+                    revision == null ? null : revision.getId(),
+                    revision == null ? null : revision.getEffectiveConfigChecksum()
+                );
                 admittedPlan.setAirflowDagId(stagedDag.dagId());
             }
-            return new AdmissionArtifacts(admittedPlan, List.copyOf(new java.util.LinkedHashSet<>(generatedJobPaths)), stagedDag);
+            return new AdmissionArtifacts(
+                admittedPlan,
+                List.copyOf(new java.util.LinkedHashSet<>(generatedJobPaths)),
+                stagedDag,
+                draft.getAirflowDagId(),
+                revision == null ? null : revision.getId()
+            );
         } catch (RuntimeException ex) {
             AdmissionArtifacts partial = new AdmissionArtifacts(
                 admittedPlan,
                 List.copyOf(new java.util.LinkedHashSet<>(generatedJobPaths)),
-                stagedDag
+                stagedDag,
+                draft.getAirflowDagId(),
+                revision == null ? null : revision.getId()
             );
-            discardAdmissionArtifacts(partial, true);
+            discardAdmissionAttemptArtifacts(partial);
             throw ex;
         }
     }
@@ -2825,8 +3405,8 @@ public class IngestionTaskService {
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                if (artifacts.stagedDag() != null && StringUtils.hasText(artifacts.task().getAirflowDagId())) {
-                    dagPreheatService.preheatDag(artifacts.task().getAirflowDagId());
+                if (artifacts.revisionId() != null) {
+                    reconcileAdmissionDagDeployment(artifacts.revisionId());
                 }
             }
 
@@ -2834,30 +3414,239 @@ public class IngestionTaskService {
             public void afterCompletion(int status) {
                 boolean rolledBack = status != TransactionSynchronization.STATUS_COMMITTED;
                 if (rolledBack) {
-                    discardAdmissionArtifacts(artifacts, true);
-                } else if (artifacts.stagedDag() != null) {
-                    airflowDagService.discardStagedDag(artifacts.stagedDag(), false);
+                    discardAdmissionAttemptArtifacts(artifacts);
                 }
             }
         });
         return true;
     }
 
-    private void discardAdmissionArtifacts(AdmissionArtifacts artifacts, boolean includePublishedDag) {
+    private void discardAdmissionAttemptArtifacts(AdmissionArtifacts artifacts) {
         if (artifacts == null) {
             return;
         }
         for (String path : artifacts.generatedJobPaths()) {
             addaxJobService.deleteJobIfExists(path);
         }
-        airflowDagService.discardStagedDag(artifacts.stagedDag(), includePublishedDag);
+        // The final path is revision-scoped and may already belong to a concurrent
+        // admission winner. Outer transaction rollback owns only this attempt's
+        // staged file. A published DAG may be removed only by the separately
+        // transacted, revision-locked activation compensation below.
+        airflowDagService.discardStagedDag(artifacts.stagedDag(), false);
     }
 
     private record AdmissionArtifacts(
         IngestionTask task,
         List<String> generatedJobPaths,
-        AirflowDagService.StagedDag stagedDag
+        AirflowDagService.StagedDag stagedDag,
+        String previousAirflowDagId,
+        Long revisionId
     ) {}
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public void reconcileAdmissionDagDeployments() {
+        if (accessContractService == null) {
+            return;
+        }
+        for (IngestionTaskRevision revision : accessContractService.findDagDeploymentsNeedingReconciliation()) {
+            try {
+                reconcileAdmissionDagDeployment(revision.getId());
+            } catch (RuntimeException ex) {
+                log.error("Admission DAG reconciliation failed for revision {}: {}", revision.getId(), ex.getMessage(), ex);
+            }
+        }
+    }
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public void reconcileAdmissionDagDeployment(Long revisionId) {
+        if (accessContractService == null) {
+            throw new IllegalStateException("Access contract service is unavailable");
+        }
+        AtomicReference<AirflowDagService.StagedDag> stagedDagRef = new AtomicReference<>();
+        AdmissionDagDeployment deployment;
+        try {
+            deployment = inRequiresNewTransaction(() -> {
+                Long taskId = revisionRepository.findTaskIdById(revisionId)
+                    .orElseThrow(() -> new IllegalStateException("Ingestion task revision not found: " + revisionId));
+                IngestionTask canonical = taskRepository.findByIdForUpdate(taskId)
+                    .orElseThrow(() -> new IllegalStateException("Admission task not found: " + taskId));
+                IngestionTaskRevision revision = lockAdmissionRevision(revisionId);
+                if (revision.getTask() == null || !taskId.equals(revision.getTask().getId())) {
+                    throw new IllegalStateException("Admission revision task changed while acquiring locks: " + revisionId);
+                }
+                IngestionTask runtime = accessContractService.materializeExecutionTask(canonical, revisionId);
+                AirflowDagService.StagedDag stagedDag = stagedDagFromRevision(revision, runtime);
+                stagedDagRef.set(stagedDag);
+
+                if (IngestionAccessContractService.REVISION_DRAFT.equals(revision.getState())) {
+                    try {
+                        if (!Files.exists(stagedDag.finalPath())) {
+                            if (!Files.exists(stagedDag.stagedPath())) {
+                                stagedDag = restageAdmissionDag(runtime, revision);
+                                stagedDagRef.set(stagedDag);
+                            }
+                            String publishedDagId = airflowDagService.publishStagedDag(stagedDag);
+                            if (!java.util.Objects.equals(runtime.getAirflowDagId(), publishedDagId)) {
+                                throw new IllegalStateException("Published DAG identity does not match admitted revision");
+                            }
+                        }
+                    } catch (RuntimeException publishError) {
+                        throw new AdmissionDagPhaseException("PUBLISH", publishError);
+                    }
+
+                    try {
+                        applyPlanSnapshot(canonical, runtime);
+                        canonical.setStatus("active");
+                        taskRepository.save(canonical);
+                        accessContractService.activateDraftRevision(taskId);
+                        accessContractService.markDagDeployment(
+                            revisionId,
+                            IngestionAccessContractService.DAG_DEPLOYMENT_RECONCILIATION_REQUIRED,
+                            null
+                        );
+                    } catch (RuntimeException activationError) {
+                        throw new AdmissionDagPhaseException("ACTIVATION", activationError);
+                    }
+                } else if (!IngestionAccessContractService.REVISION_ACTIVE.equals(revision.getState())) {
+                    throw new IllegalStateException(
+                        "Admission revision is not deployable: " + revisionId + " state=" + revision.getState()
+                    );
+                }
+                return new AdmissionDagDeployment(revision, runtime);
+            });
+        } catch (AdmissionDagPhaseException phaseError) {
+            if ("PUBLISH".equals(phaseError.phase())) {
+                markDagReconciliationFailure(revisionId, "DAG_PUBLISH_FAILED: " + phaseError.getCause().getMessage());
+            } else {
+                compensateFailedAdmissionActivation(revisionId, stagedDagRef.get(), phaseError);
+            }
+            throw phaseError.unwrap();
+        }
+        if (deployment == null) {
+            throw new IllegalStateException("Admission DAG reconciliation transaction returned no result");
+        }
+        IngestionTaskRevision revision = deployment.revision();
+        IngestionTask runtime = deployment.runtime();
+
+        try {
+            if (StringUtils.hasText(revision.getPreviousAirflowDagId())
+                && !revision.getPreviousAirflowDagId().equals(runtime.getAirflowDagId())) {
+                airflowDagService.retireDagStrict(revision.getPreviousAirflowDagId(), runtime);
+            }
+            airflowDagService.setDagPausedStrict(runtime.getAirflowDagId(), false);
+            inRequiresNewTransactionWithoutResult(() -> accessContractService.markDagDeployment(
+                    revisionId,
+                    IngestionAccessContractService.DAG_DEPLOYMENT_ACTIVE,
+                    null
+                ));
+        } catch (RuntimeException ex) {
+            markDagReconciliationFailure(revisionId, "DAG_CUTOVER_FAILED: " + ex.getMessage());
+            throw ex;
+        }
+    }
+
+    private void compensateFailedAdmissionActivation(
+        Long revisionId,
+        AirflowDagService.StagedDag stagedDag,
+        AdmissionDagPhaseException activationError
+    ) {
+        try {
+            inRequiresNewTransactionWithoutResult(() -> {
+                IngestionTaskRevision current = lockAdmissionRevision(revisionId);
+                if (IngestionAccessContractService.REVISION_ACTIVE.equals(current.getState())) {
+                    return;
+                }
+                if (IngestionAccessContractService.REVISION_DRAFT.equals(current.getState()) && stagedDag != null) {
+                    airflowDagService.discardStagedDagStrict(stagedDag, true);
+                }
+                accessContractService.markDagDeployment(
+                    revisionId,
+                    IngestionAccessContractService.DAG_DEPLOYMENT_RESTAGE_REQUIRED,
+                    "DAG_ACTIVATION_FAILED: " + activationError.getCause().getMessage()
+                );
+            });
+        } catch (RuntimeException compensationError) {
+            markDagReconciliationFailure(
+                revisionId,
+                "DAG_ACTIVATION_FAILED: " + activationError.getCause().getMessage()
+                    + "; DAG_COMPENSATION_FAILED: " + compensationError.getMessage()
+            );
+            activationError.addSuppressed(compensationError);
+        }
+    }
+
+    private record AdmissionDagDeployment(IngestionTaskRevision revision, IngestionTask runtime) {}
+
+    private IngestionTaskRevision lockAdmissionRevision(Long revisionId) {
+        IngestionTaskRevision revision = entityManager.find(
+            IngestionTaskRevision.class,
+            revisionId,
+            LockModeType.PESSIMISTIC_WRITE
+        );
+        if (revision == null) {
+            throw new IllegalStateException("Ingestion task revision not found: " + revisionId);
+        }
+        return revision;
+    }
+
+    private static final class AdmissionDagPhaseException extends RuntimeException {
+        private final String phase;
+
+        private AdmissionDagPhaseException(String phase, RuntimeException cause) {
+            super(cause.getMessage(), cause);
+            this.phase = phase;
+        }
+
+        private String phase() {
+            return phase;
+        }
+
+        private RuntimeException unwrap() {
+            RuntimeException cause = (RuntimeException) getCause();
+            for (Throwable suppressed : getSuppressed()) {
+                cause.addSuppressed(suppressed);
+            }
+            return cause;
+        }
+    }
+
+    private AirflowDagService.StagedDag restageAdmissionDag(IngestionTask runtime, IngestionTaskRevision revision) {
+        List<AddaxJobService.PerTableJob> perTableJobs = isApiSourceTask(runtime)
+            ? List.of()
+            : addaxJobService.splitJobIntoPerTableFiles(runtime.getAddaxJobPath());
+        AirflowDagService.StagedDag staged = airflowDagService.stageDagForTask(
+            runtime,
+            perTableJobs,
+            revision.getId(),
+            revision.getEffectiveConfigChecksum()
+        );
+        accessContractService.markDraftDagStaged(
+            revision.getId(),
+            staged.stagedPath().toString(),
+            staged.finalPath().toString(),
+            revision.getPreviousAirflowDagId()
+        );
+        return staged;
+    }
+
+    private AirflowDagService.StagedDag stagedDagFromRevision(IngestionTaskRevision revision, IngestionTask runtime) {
+        if (!StringUtils.hasText(revision.getStagedDagPath()) || !StringUtils.hasText(revision.getPublishedDagPath())) {
+            throw new IllegalStateException("Revision has no staged DAG paths: " + revision.getId());
+        }
+        return new AirflowDagService.StagedDag(
+            runtime.getAirflowDagId(),
+            Path.of(revision.getStagedDagPath()),
+            Path.of(revision.getPublishedDagPath())
+        );
+    }
+
+    private void markDagReconciliationFailure(Long revisionId, String error) {
+        inRequiresNewTransactionWithoutResult(() -> accessContractService.markDagDeployment(
+                revisionId,
+                IngestionAccessContractService.DAG_DEPLOYMENT_RECONCILIATION_REQUIRED,
+                truncateText(error, 4000)
+            ));
+    }
 
     private boolean planConfigChanged(IngestionTask before, IngestionTask current) {
         return executionConfigChanged(before, current)
@@ -2892,13 +3681,18 @@ public class IngestionTaskService {
     }
 
     private IngestionTaskDTO saveDraftRevisionForActiveTask(IngestionTask activeTask, IngestionTaskDTO dto) {
+        assertNoRawTaskSecrets(dto);
         IngestionTask draft = accessContractService.findLatestDraftRevision(activeTask.getId()).isPresent()
             ? accessContractService.materializeLatestDraft(activeTask)
             : snapshot(activeTask);
+        draft.setSourceConfig(stripRawSecrets(draft.getSourceConfig()));
+        draft.setDestinationConfig(stripRawSecrets(draft.getDestinationConfig()));
+        draft.setAddaxConfig(stripRawSecrets(draft.getAddaxConfig()));
         IngestionTask beforeDraft = snapshot(draft);
         JsonNode previousClassificationSeal = copyJsonNode(draft.getClassificationSeal());
 
         taskMapper.partialUpdate(draft, dto);
+        preserveAbsentManagedSecrets(beforeDraft, draft, dto);
         if (dto.getSyncConfig() != null) {
             draft.setSyncConfig(dto.getSyncConfig());
         }
@@ -2935,6 +3729,52 @@ public class IngestionTaskService {
         return enrichTaskDto(taskMapper.toDto(draft));
     }
 
+    private void preserveAbsentManagedSecrets(IngestionTask managed, IngestionTask target, IngestionTaskDTO incoming) {
+        if (target == null) {
+            return;
+        }
+        // Managed credentials are resolved at runtime from platform secure_props.
+        // Never inherit an omitted credential from the compatibility task row or
+        // from an encrypted historical revision.
+        target.setSourceConfig(stripRawSecrets(target.getSourceConfig()));
+        target.setDestinationConfig(stripRawSecrets(target.getDestinationConfig()));
+        target.setAddaxConfig(stripRawSecrets(target.getAddaxConfig()));
+    }
+
+    private void assertNoRawTaskSecrets(IngestionTaskDTO dto) {
+        if (dto == null) {
+            throw new IllegalArgumentException("ingestion task is required");
+        }
+        IngestionSensitiveConfigSupport.assertNoRawSecrets(dto.getSourceConfig(), "sourceConfig");
+        IngestionSensitiveConfigSupport.assertNoRawSecrets(dto.getDestinationConfig(), "destinationConfig");
+        IngestionSensitiveConfigSupport.assertNoRawSecrets(dto.getAddaxConfig(), "addaxConfig");
+    }
+
+    private JsonNode stripRawSecrets(JsonNode config) {
+        if (config == null || config.isNull()) {
+            return null;
+        }
+        return IngestionSensitiveConfigSupport.stripRawSecrets(config);
+    }
+
+    private void requireSecretMigrationReady(Long taskId) {
+        if (secretMigrationService != null) {
+            secretMigrationService.requireTaskReady(taskId);
+        }
+    }
+
+    private <T> T inRequiresNewTransaction(Supplier<T> work) {
+        return requiresNewExecutor == null ? work.get() : requiresNewExecutor.execute(work);
+    }
+
+    private void inRequiresNewTransactionWithoutResult(Runnable work) {
+        if (requiresNewExecutor == null) {
+            work.run();
+            return;
+        }
+        requiresNewExecutor.executeWithoutResult(work);
+    }
+
     private void requirePassedFilePreCheck(IngestionTask task) {
         if (task == null
             || !isFileSourceType(task.getSourceType())
@@ -2967,8 +3807,6 @@ public class IngestionTaskService {
         target.setAddaxJobPath(source.getAddaxJobPath());
         target.setAirflowEnabled(source.getAirflowEnabled());
         target.setAirflowDagId(source.getAirflowDagId());
-        target.setDbtModelSelector(source.getDbtModelSelector());
-        target.setDbtDagSelector(source.getDbtDagSelector());
         target.setQualityPreCheckEnabled(source.getQualityPreCheckEnabled());
         target.setStagingTableName(source.getStagingTableName());
         target.setPreCheckStatus(source.getPreCheckStatus());
@@ -2997,8 +3835,6 @@ public class IngestionTaskService {
         snap.setAddaxConfig(copyJsonNode(task.getAddaxConfig()));
         snap.setAirflowEnabled(task.getAirflowEnabled());
         snap.setAirflowDagId(task.getAirflowDagId());
-        snap.setDbtModelSelector(task.getDbtModelSelector());
-        snap.setDbtDagSelector(task.getDbtDagSelector());
         snap.setQualityPreCheckEnabled(task.getQualityPreCheckEnabled());
         snap.setStagingTableName(task.getStagingTableName());
         snap.setPreCheckStatus(task.getPreCheckStatus());
@@ -3020,8 +3856,6 @@ public class IngestionTaskService {
             || !java.util.Objects.equals(before.getAddaxConfig(), current.getAddaxConfig())
             || !java.util.Objects.equals(before.getAirflowEnabled(), current.getAirflowEnabled())
             || !java.util.Objects.equals(before.getAirflowDagId(), current.getAirflowDagId())
-            || !java.util.Objects.equals(before.getDbtModelSelector(), current.getDbtModelSelector())
-            || !java.util.Objects.equals(before.getDbtDagSelector(), current.getDbtDagSelector())
             || !java.util.Objects.equals(before.getQualityPreCheckEnabled(), current.getQualityPreCheckEnabled())
             || !java.util.Objects.equals(before.getStagingTableName(), current.getStagingTableName())
             || !java.util.Objects.equals(before.getPreCheckStatus(), current.getPreCheckStatus());

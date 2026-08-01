@@ -3,11 +3,8 @@ package com.yuzhi.dts.platform.service.modeling;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
-import com.yuzhi.dts.platform.domain.catalog.CatalogDomain;
-import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
-import com.yuzhi.dts.platform.service.catalog.CatalogDomainVisibilityService;
-import java.util.List;
-import java.util.Optional;
+import com.yuzhi.dts.platform.service.catalog.CatalogDomainAccessReadPort;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,20 +15,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class ModelSpecDomainWriteAccessAdapterTest {
 
     @Mock
-    private CatalogDomainRepository repository;
-
-    @Mock
-    private CatalogDomainVisibilityService visibilityService;
+    private CatalogDomainAccessReadPort domains;
 
     @Test
     void delegatesMaintenanceChecksOnlyForPersistedDomains() {
         UUID id = UUID.randomUUID();
-        CatalogDomain domain = new CatalogDomain();
-        domain.setId(id);
-        when(repository.findById(id)).thenReturn(Optional.of(domain));
-        when(visibilityService.canMaintain(domain)).thenReturn(true);
+        when(domains.canMaintain(id)).thenReturn(true);
 
-        ModelSpecDomainWriteAccessAdapter adapter = new ModelSpecDomainWriteAccessAdapter(repository, visibilityService);
+        ModelSpecDomainWriteAccessAdapter adapter = new ModelSpecDomainWriteAccessAdapter(domains);
 
         assertThat(adapter.canMaintain(id)).isTrue();
         assertThat(adapter.canMaintain(UUID.randomUUID())).isFalse();
@@ -40,12 +31,9 @@ class ModelSpecDomainWriteAccessAdapterTest {
     @Test
     void delegatesReadChecksOnlyForPersistedDomains() {
         UUID id = UUID.randomUUID();
-        CatalogDomain domain = new CatalogDomain();
-        domain.setId(id);
-        when(repository.findById(id)).thenReturn(Optional.of(domain));
-        when(visibilityService.canRead(domain)).thenReturn(true);
+        when(domains.canRead(id)).thenReturn(true);
 
-        ModelSpecDomainReadAccessAdapter adapter = new ModelSpecDomainReadAccessAdapter(repository, visibilityService);
+        ModelSpecDomainReadAccessAdapter adapter = new ModelSpecDomainReadAccessAdapter(domains);
 
         assertThat(adapter.canRead(id)).isTrue();
         assertThat(adapter.canRead(UUID.randomUUID())).isFalse();
@@ -54,11 +42,9 @@ class ModelSpecDomainWriteAccessAdapterTest {
     @Test
     void suppliesOnlyPersistedVisibleDomainIdsForRepositoryFiltering() {
         UUID id = UUID.randomUUID();
-        CatalogDomain domain = new CatalogDomain();
-        domain.setId(id);
-        when(visibilityService.findAllVisible()).thenReturn(List.of(domain));
+        when(domains.visibleDomainIds()).thenReturn(Set.of(id));
 
-        ModelSpecDomainReadAccessAdapter adapter = new ModelSpecDomainReadAccessAdapter(repository, visibilityService);
+        ModelSpecDomainReadAccessAdapter adapter = new ModelSpecDomainReadAccessAdapter(domains);
 
         assertThat(adapter.visibleDomainIds()).containsExactly(id);
     }

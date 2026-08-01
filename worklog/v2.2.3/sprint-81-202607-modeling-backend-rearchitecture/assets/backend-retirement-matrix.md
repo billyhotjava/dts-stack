@@ -1,6 +1,6 @@
 # 建模后台退役矩阵
 
-**状态**：PLANNED
+**状态**：SOURCE_COMPLETE / CUSTOMER_ENVIRONMENT_GATE
 **总原则**：每个批次都在同一 Sprint 内完成“重接调用方 → dry-run/备份 → 迁移或证明零数据 → 停机复核 → 物理删除”。未满足条件时停止删除，不保留长期 410、tombstone、双写、隐藏 feature flag 或旧 entity 只读壳。
 
 ## 1. 全局删除门禁
@@ -26,6 +26,20 @@
 | `/api/modeling/vnext/**` HTTP shell | vNext runtime 数据 0 | canonical ModelSpec/StageGate/Lifecycle/ReleaseCandidate | 替换所有 webapp、测试和内部调用 | resource、HTTP DTO/mapper、route test | vNext HTTP consumer=0；vNext service/contract 若仍被内部消费，移入批次 B |
 
 删除后的 URL 进入统一普通 404；不得新增 410 handler、redirect controller 或兼容实体。
+
+### 2.1 当前批次执行记录（2026-07-31）
+
+| 项目 | 当前结果 | 数据保护 |
+|---|---|---|
+| semantic HTTP/service/repository 运行面 | 源码已物理删除；Catalog identity 查询已改到 canonical ModelSpec/指标定义 | forward changeset 在 11 张 semantic 表任一非空时 `HALT` |
+| vNext HTTP/runtime shell | resource、runtime submission、Addax/Airflow 旧 gateway 和测试已物理删除 | canonical compiler、ModelSpec、Candidate、materialization 主链保留 |
+| legacy object migration runtime | resource/service/planner 与运行测试已删除 | 3 张 ledger 任一非空时 changeset `HALT`；历史 changelog 不改写 |
+| legacy lifecycle release compatibility | reviews/publish/retry/rollback route、adapter、旧 registration port/ledger 已删除 | canonical ReleaseCandidate publication/retry/rollback 保留；旧路由测试断言普通 404 |
+| 零消费者策略/契约 | `ModelingApiContract`、`BusinessObjectRetirementPolicy`、`ModelingDriftGate`、`ModelingDomainValidator` 已删除 | GitNexus impact 为 LOW，当前源码零生产消费者 |
+| 旧 SQL-model 前端尾巴 | `/api/modeling/sql-models` client 与 ETL consumer 已删除；ETL 只读取非 ARCHIVED 的 canonical ModelSpec `implementationPolicy.physicalName` | source contract 断言旧 endpoint/function/consumer 为 0；生产构建通过 |
+| ModelSpec v1 schema | `object_id/process_id/spec_json` 等旧列与 business-object/standard-binding owner 已由 forward-only changeset 删除 | E2E 夹具同步到 `plan_id/domain_id/current_checksum/snapshot_json/content_checksum`，避免测试继续暗养旧 schema |
+
+当前环境只读复核：semantic 与 migration ledger 均为 0；`modeling_model_registration_step=0`；ModelSpec 仅 `contract_version=2`。这些事实只决定当前开发环境的 changeset 可放行，不替代客户环境升级前画像与备份。
 
 ## 3. 批次 B：先解耦，再物理删除
 

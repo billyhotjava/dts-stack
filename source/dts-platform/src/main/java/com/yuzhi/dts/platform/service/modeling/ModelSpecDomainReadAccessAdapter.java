@@ -1,8 +1,6 @@
 package com.yuzhi.dts.platform.service.modeling;
 
-import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
-import com.yuzhi.dts.platform.service.catalog.CatalogDomainVisibilityService;
-import java.util.Objects;
+import com.yuzhi.dts.platform.service.catalog.CatalogDomainAccessReadPort;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -12,31 +10,19 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class ModelSpecDomainReadAccessAdapter implements ModelSpecDomainReadAccessPort {
 
-    private final CatalogDomainRepository domainRepository;
-    private final CatalogDomainVisibilityService visibilityService;
+    private final CatalogDomainAccessReadPort domains;
 
-    public ModelSpecDomainReadAccessAdapter(
-        CatalogDomainRepository domainRepository,
-        CatalogDomainVisibilityService visibilityService
-    ) {
-        this.domainRepository = domainRepository;
-        this.visibilityService = visibilityService;
+    public ModelSpecDomainReadAccessAdapter(CatalogDomainAccessReadPort domains) {
+        this.domains = domains;
     }
 
     @Override
     public boolean canRead(UUID domainId) {
-        return domainId != null && domainRepository.findById(domainId).filter(visibilityService::canRead).isPresent();
+        return domains.canRead(domainId);
     }
 
     @Override
     public Set<UUID> visibleDomainIds() {
-        return Set.copyOf(
-            visibilityService
-                .findAllVisible()
-                .stream()
-                .map(domain -> domain.getId())
-                .filter(Objects::nonNull)
-                .toList()
-        );
+        return Set.copyOf(domains.visibleDomainIds());
     }
 }

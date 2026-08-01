@@ -90,26 +90,21 @@ export function LandingScheduleStep({ form, kind, editing, targetDataSources, de
 					<Input placeholder="0 0 3 * * *" />
 				</Form.Item>
 			) : null}
-			<div className="grid gap-4 md:grid-cols-2">
+			<div>
 				<Form.Item name="airflowEnabled" label="启用调度编排" valuePropName="checked">
 					<Switch />
 				</Form.Item>
-				{kind !== "file" && !editing ? (
-					<Form.Item name="runNow" label="保存后立即运行" valuePropName="checked">
-						<Switch />
-					</Form.Item>
-				) : null}
 			</div>
-			{kind === "file" ? (
-				<Alert
-					type="info"
-					showIcon
-					message="文件任务先保存为草稿"
-					description="保存后需在任务详情确认密级与准入，才能执行。"
-				/>
-			) : editing ? (
-				<Alert type="info" showIcon message="保存修改后请在任务详情手动执行" />
-			) : null}
+			<Alert
+				type="info"
+				showIcon
+				message="接入计划先保存为待准入草稿"
+				description={
+					editing
+						? "保存修改后，当前生效版本继续运行；新草稿完成密级准入后才会生效。"
+						: "数据库、API 和离线文件任务均需先完成密级准入，之后才能手动执行或按调度运行。"
+				}
+			/>
 		</div>
 	);
 }

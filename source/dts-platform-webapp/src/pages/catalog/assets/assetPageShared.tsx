@@ -89,7 +89,7 @@ export const LAYER_ORDER = ["SOURCE", "ODS", "STG", "DWD", "DIM", "DWS", "ADS", 
 // 台账遵循全局分页约定：默认 10 条/页；地图保持原有卡片档位
 export const LEDGER_PAGE_SIZE = 10;
 export const MAP_PAGE_SIZE = 18;
-export const ASSET_ACTION_COLUMN_WIDTH = 320;
+export const ASSET_ACTION_COLUMN_WIDTH = 132;
 export const ASSET_TABLE_SCROLL_X = 1440;
 
 export type ReconciliationAssertion = {

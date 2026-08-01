@@ -42,6 +42,7 @@
         <hazelcast-spring.version>5.5.0</hazelcast-spring.version>
         <jacoco-maven-plugin.version>0.8.13</jacoco-maven-plugin.version>
         <jhipster-framework.version>8.11.0</jhipster-framework.version>
+        <jsqlparser.version>5.3</jsqlparser.version>
         <jib-maven-plugin.architecture>amd64</jib-maven-plugin.architecture>
     <jib-maven-plugin.image>eclipse-temurin:21-jre</jib-maven-plugin.image>
         <jib-maven-plugin.version>3.4.5</jib-maven-plugin.version>
@@ -311,6 +312,11 @@
             <artifactId>commons-lang3</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.github.jsqlparser</groupId>
+            <artifactId>jsqlparser</artifactId>
+            <version>${jsqlparser.version}</version>
+        </dependency>
+        <dependency>
             <groupId>org.eclipse.jgit</groupId>
             <artifactId>org.eclipse.jgit</artifactId>
             <version>7.1.0.202411261347-r</version>
@@ -538,26 +544,39 @@
                         <testInclude>**/repository/audit/PlatformAuditOutboxRepositoryPostgresIT.java</testInclude>
                         <testInclude>**/repository/modeling/DataMartRepositoryTest.java</testInclude>
                         <testInclude>**/repository/modeling/ModelLifecycleRepositoryTest.java</testInclude>
+                        <testInclude>**/repository/modeling/ModelLifecycleCommandReceiptRepositoryTest.java</testInclude>
+                        <testInclude>**/repository/modeling/ModelImplementationCommandReceiptLiquibaseIT.java</testInclude>
                         <testInclude>**/repository/modeling/ModelMaterializationStartServiceIT.java</testInclude>
+                        <testInclude>**/repository/modeling/ModelMaterializationAvailabilityPinPostgresIT.java</testInclude>
                         <testInclude>**/repository/modeling/CandidatePublicationRepositoryIT.java</testInclude>
                         <testInclude>**/repository/modeling/ModelReleaseCandidateRepositoryIT.java</testInclude>
                         <testInclude>**/repository/modeling/ModelSpecRepositoryIT.java</testInclude>
                         <testInclude>**/repository/modeling/MetadataStandardSourceSystemLiquibaseIT.java</testInclude>
                         <testInclude>**/repository/modeling/Sprint74ModelImplementationSettingsRepositoryIT.java</testInclude>
-                        <testInclude>**/service/modeling/ModelImplementationCompatibilityAdapterTest.java</testInclude>
+                        <testInclude>**/repository/rollback/RollbackInvalidationRepositoryPostgresIT.java</testInclude>
+                        <testInclude>**/service/modeling/ModelImplementationInputPolicyTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelImplementationExecutionPlannerTest.java</testInclude>
                         <testInclude>**/service/modeling/CanonicalModelLifecycleCompilerAdapterTest.java</testInclude>
                         <testInclude>**/service/etl/DbtScopedProjectServiceTest.java</testInclude>
                         <testInclude>**/service/etl/DbtScopedProjectServiceRealCompileIT.java</testInclude>
                         <testInclude>**/service/etl/DbtDagServiceTest.java</testInclude>
                         <testInclude>**/service/etl/DbtAssetSyncServiceTest.java</testInclude>
+                        <testInclude>**/service/etl/DbtFileServiceOwnershipTest.java</testInclude>
                         <testInclude>**/service/etl/AirflowDbtExecutionGatewayTest.java</testInclude>
                         <testInclude>**/service/etl/DbtConfigServiceTest.java</testInclude>
                         <testInclude>**/service/etl/DbtRuntimeProfile*.java</testInclude>
                         <testInclude>**/service/etl/DbtTargetConnectionFactoryTest.java</testInclude>
                         <testInclude>**/service/admin/gateway/directory/AdminReleaseDutyDirectoryAdapterTest.java</testInclude>
                         <testInclude>**/service/governance/QualityDatasetStatementExecutorTest.java</testInclude>
+                        <testInclude>**/service/governance/QualitySqlScopeValidatorTest.java</testInclude>
+                        <testInclude>**/service/governance/QualityDatasetReadGuardTest.java</testInclude>
+                        <testInclude>**/service/governance/QualityDashboardAuthorizationTest.java</testInclude>
                         <testInclude>**/service/governance/QualityRunServiceExecutableDefinitionTest.java</testInclude>
+                        <testInclude>**/service/governance/QualityScoreServiceTest.java</testInclude>
+                        <testInclude>**/service/governance/Quality*Audit*.java</testInclude>
+                        <testInclude>**/service/governance/QualityRuleServiceDatasetBindingTest.java</testInclude>
+                        <testInclude>**/service/governance/IssueTicketServiceAutomaticAuditTest.java</testInclude>
+                        <testInclude>**/service/governance/SqlRepairServiceTest.java</testInclude>
                         <testInclude>**/service/governance/MeasurementUnitApplicationServiceTest.java</testInclude>
                         <testInclude>**/service/governance/IndicatorServiceLifecycleTest.java</testInclude>
                         <testInclude>**/service/governance/ReferenceCodeServiceRelationshipGraphTest.java</testInclude>
@@ -567,15 +586,22 @@
                         <testInclude>**/service/infra/DataSourceSelectionServiceTest.java</testInclude>
                         <testInclude>**/service/infra/DefaultDestinationSyncServiceTest.java</testInclude>
                         <testInclude>**/service/infra/InfraManagementServiceTest.java</testInclude>
+                        <testInclude>**/service/ingestion/IngestionAccessDecisionServiceTest.java</testInclude>
+                        <testInclude>**/service/ingestion/IngestionServiceClientTest.java</testInclude>
+                        <testInclude>**/service/ingestion/RollbackConfirmationTokenServiceTest.java</testInclude>
                         <testInclude>**/service/governance/DefaultLakeDatasetGuardTest.java</testInclude>
                         <testInclude>**/service/sql/SqlMetadataServiceCacheTest.java</testInclude>
+                        <testInclude>**/service/sql/QueryDatasetServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelLifecycleContractTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelLifecycleImportedDbtImplementationTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelLifecycleServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/MetadataStandardSourceSystemPersistenceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelBuildIntentServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelMaterializationDispatchServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelMaterializationRunArtifactServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelMaterializationRuntimeSpecServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelMaterializationSourceAvailabilityGuardTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelMaterializationAvailabilityPinLiquibaseTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelMaterializationStartServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/PostgresPhysicalRelationInspectorTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelReleaseCandidateApplicationServiceTest.java</testInclude>
@@ -585,7 +611,6 @@
                         <testInclude>**/service/modeling/CandidateRollbackCommitServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelExecutionTargetCatalogResolverTest.java</testInclude>
                         <testInclude>**/service/modeling/CatalogPhysicalLocatorLiquibaseTest.java</testInclude>
-                        <testInclude>**/service/modeling/LegacyModelLifecycleCandidateAdapterTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelPlanExecutionBindingLiquibaseTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelPublicationIntentServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelPublicationQualityReconcilerTest.java</testInclude>
@@ -596,10 +621,15 @@
                         <testInclude>**/service/modeling/ModelReleaseCandidateReplacementLiquibaseTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelReleaseCandidateServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelingDbtCompilerTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelingCompilerContractTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelSpecCompilerProjectionTest.java</testInclude>
                         <testInclude>**/service/modeling/PjmModelingFixture.java</testInclude>
                         <testInclude>**/service/modeling/ModelSpecApplicationServiceTest.java</testInclude>
-                        <testInclude>**/service/modeling/ModelSpecCompatibilityReaderTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelSpecReaderTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelSpecDomainWriteAccessAdapterTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelingCatalogBoundaryArchitectureTest.java</testInclude>
+                        <testInclude>**/service/modeling/JpaLegacyCodeSetMigrationAdapterTest.java</testInclude>
+                        <testInclude>**/service/governance/ReferenceCodeSeedServiceMigrationTest.java</testInclude>
                         <testInclude>**/service/modeling/DimensionDefinitionApplicationServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/MetadataStandardServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelSpecStageGateServiceTest.java</testInclude>
@@ -608,15 +638,32 @@
                         <testInclude>**/service/modeling/StandardPackageApplyServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/StandardPackageImportServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/StandardPackageMeasurementUnitServiceTest.java</testInclude>
-                        <testInclude>**/service/modeling/ModelingVNextApplicationServiceIT.java</testInclude>
+                        <testInclude>**/service/modeling/migration/LegacySemanticModelingRetirementLiquibaseTest.java</testInclude>
+                        <testInclude>**/service/modeling/migration/LegacySemanticModelingRetirementLiquibaseIT.java</testInclude>
+                        <testInclude>**/service/modeling/migration/ModelSpecV1SchemaRetirementLiquibaseTest.java</testInclude>
+                        <testInclude>**/service/modeling/migration/ModelSpecV1SchemaRetirementLiquibaseIT.java</testInclude>
+                        <testInclude>**/service/modeling/migration/DimensionDefinitionLegacyMigrationRetirementLiquibaseTest.java</testInclude>
+                        <testInclude>**/service/modeling/migration/DimensionDefinitionLegacyMigrationRetirementLiquibaseIT.java</testInclude>
+                        <testInclude>**/service/modeling/migration/ModelingPlanVersionReviewRetirementLiquibaseTest.java</testInclude>
+                        <testInclude>**/service/modeling/migration/ModelingPlanVersionReviewRetirementLiquibaseIT.java</testInclude>
+                        <testInclude>**/service/modeling/migration/LegacyModelingPlanSqlModelRetirementLiquibaseTest.java</testInclude>
+                        <testInclude>**/service/modeling/migration/LegacyModelingPlanSqlModelRetirementLiquibaseIT.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehousePlanApplicationServiceIT.java</testInclude>
+                        <testInclude>**/service/modeling/warehouse/WarehousePlanSourceInventoryApplicationServiceIT.java</testInclude>
+                        <testInclude>**/service/modeling/warehouse/WarehousePlanModelCandidateServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehousePlanContractTest.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehousePlanRelationshipGraphInboundIndexLiquibaseIT.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehousePlanRelationshipGraphInboundIndexLiquibaseTest.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehousePlanRelationshipGraphInboundModelReaderTest.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehousePlanRelationshipGraphPaginationTest.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehousePlanRelationshipGraphServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/warehouse/WarehousePlanOperationsReadAdapterTest.java</testInclude>
+                        <testInclude>**/service/modeling/warehouse/CatalogDomainResolutionAdapterTest.java</testInclude>
+                        <testInclude>**/service/modeling/warehouse/SourceReferenceResolverAdapterTest.java</testInclude>
                         <testInclude>**/service/modeling/imports/**/*.java</testInclude>
+                        <testInclude>**/service/rollback/RollbackInvalidationServiceTest.java</testInclude>
+                        <testInclude>**/service/rollback/RollbackDispatchWorkerTest.java</testInclude>
+                        <testInclude>**/service/ops/OpsServiceWarehousePlanTest.java</testInclude>
                         <testInclude>**/web/filter/ModelArchiveUploadLimitFilterTest.java</testInclude>
                         <testInclude>**/web/filter/AuditLoggingFilterTest.java</testInclude>
                         <testInclude>**/web/rest/ModelSpecResourceTest.java</testInclude>
@@ -624,16 +671,23 @@
                         <testInclude>**/web/rest/ModelBuildIntentResourceTest.java</testInclude>
                         <testInclude>**/web/rest/ModelPublicationIntentResourceTest.java</testInclude>
                         <testInclude>**/web/rest/WarehousePlanResourceTest.java</testInclude>
+                        <testInclude>**/web/rest/ModelingAuxResourceTest.java</testInclude>
                         <testInclude>**/web/rest/ModelReleaseCandidateResourceTest.java</testInclude>
                         <testInclude>**/web/rest/ModelReleaseSuperAdminAuthorizationTest.java</testInclude>
                         <testInclude>**/web/rest/ModelSpecImport*.java</testInclude>
                         <testInclude>**/web/rest/IngestionTaskProxyResourceTest.java</testInclude>
+                        <testInclude>**/web/rest/GovernanceResourceQualityAuditTest.java</testInclude>
+                        <testInclude>**/web/rest/RollbackProxyResourceTest.java</testInclude>
                         <testInclude>**/repository/catalog/CatalogAssetTag*.java</testInclude>
                         <testInclude>**/repository/catalog/CatalogExternalAssetIdentityLiquibaseIT.java</testInclude>
                         <testInclude>**/repository/catalog/CatalogHarvestStatusLiquibaseIT.java</testInclude>
                         <testInclude>**/repository/catalog/CatalogTagLiquibaseIT.java</testInclude>
                         <testInclude>**/service/catalog/CatalogAssetOverviewAggregatorTest.java</testInclude>
+                        <testInclude>**/service/catalog/CatalogAssetIdentityResolverTest.java</testInclude>
+                        <testInclude>**/service/catalog/CatalogColumnSyncServiceTest.java</testInclude>
+                        <testInclude>**/service/catalog/JdbcCanonicalModelIdentityReadAdapterPostgresIT.java</testInclude>
                         <testInclude>**/service/catalog/CatalogPhysicalLocatorTest.java</testInclude>
+                        <testInclude>**/service/catalog/CatalogClassificationBoundaryAdapterTest.java</testInclude>
                         <testInclude>**/repository/iam/IamAssetActionPolicyRepositoryIT.java</testInclude>
                         <testInclude>**/security/policy/AssetActionTest.java</testInclude>
                         <testInclude>**/service/security/AccessCheckerCanPerformTest.java</testInclude>
@@ -641,7 +695,9 @@
                         <testInclude>**/service/security/AssetActionPolicyServiceTest.java</testInclude>
                         <testInclude>**/service/audit/OperationTypeNormalizerTest.java</testInclude>
                         <testInclude>**/service/audit/AuditForwarderServiceTest.java</testInclude>
+                        <testInclude>**/service/audit/AuditServiceTest.java</testInclude>
                         <testInclude>**/service/audit/AuditOutboxDispatcherTest.java</testInclude>
+                        <testInclude>**/service/audit/AuditOutboxMetricsTest.java</testInclude>
                         <testInclude>**/service/admin/gateway/audit/AdminAuditGatewayTest.java</testInclude>
                         <testInclude>**/web/rest/AssetActionPolicyResourceTest.java</testInclude>
                         <testInclude>**/web/rest/OperationPermissionMatrixIT.java</testInclude>
@@ -664,6 +720,7 @@
                         <testInclude>**/web/rest/internal/DbtRuntimeProfile*.java</testInclude>
                         <testInclude>**/web/rest/internal/ModelMaterializationRunInternalResourceTest.java</testInclude>
                         <testInclude>**/web/rest/internal/ModelMaterializationRuntimeSpecInternalResourceTest.java</testInclude>
+                        <testInclude>**/web/rest/internal/RollbackInvalidationCompletionContractTest.java</testInclude>
                     </testIncludes>
                     <testExcludes>
                         <!-- TODO: restore when cf5ff765 session refactor tests are updated -->
@@ -1071,6 +1128,12 @@
                     <groupId>org.jacoco</groupId>
                     <artifactId>jacoco-maven-plugin</artifactId>
                     <version>${jacoco-maven-plugin.version}</version>
+                    <configuration>
+                        <excludes>
+                            <!-- Generated parser methods exceed the JVM method-size limit after instrumentation. -->
+                            <exclude>net.sf.jsqlparser.parser.*</exclude>
+                        </excludes>
+                    </configuration>
                     <executions>
                         <execution>
                             <id>pre-unit-tests</id>

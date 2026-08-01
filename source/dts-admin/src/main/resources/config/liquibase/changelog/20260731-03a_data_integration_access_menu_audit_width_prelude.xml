@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260731-03a-data-integration-access-menu-audit-width-prelude" author="codex">
+        <preConditions onFail="HALT" onError="HALT">
+            <and>
+                <dbms type="postgresql"/>
+                <tableExists tableName="portal_menu"/>
+                <columnExists tableName="portal_menu" columnName="last_modified_by"/>
+            </and>
+        </preConditions>
+
+        <comment>
+            Expand portal_menu.last_modified_by before the frozen 20260731-04 migration writes its legacy audit markers.
+            Wider varchar columns and text are already safe and remain unchanged.
+        </comment>
+        <sql dbms="postgresql" splitStatements="false"><![CDATA[
+            DO $do$
+            DECLARE
+                current_data_type TEXT;
+                current_maximum_length INTEGER;
+            BEGIN
+                SELECT data_type, character_maximum_length
+                  INTO current_data_type, current_maximum_length
+                  FROM information_schema.columns
+                 WHERE table_schema = current_schema()
+                   AND table_name = 'portal_menu'
+                   AND column_name = 'last_modified_by';
+
+                IF NOT FOUND THEN
+                    RAISE EXCEPTION 'portal_menu.last_modified_by is missing';
+                ELSIF current_data_type = 'character varying' AND current_maximum_length = 50 THEN
+                    ALTER TABLE portal_menu ALTER COLUMN last_modified_by TYPE VARCHAR(100);
+                ELSIF current_data_type = 'character varying' AND current_maximum_length >= 100 THEN
+                    NULL;
+                ELSIF current_data_type = 'text' THEN
+                    NULL;
+                ELSE
+                    RAISE EXCEPTION 'portal_menu.last_modified_by has unsupported type/width: %/%',
+                        current_data_type, current_maximum_length;
+                END IF;
+            END
+            $do$;
+        ]]></sql>
+
+        <rollback>
+            <!-- Deliberate no-op: narrowing could reject or truncate audit values written after this expansion. -->
+            <sql dbms="postgresql">SELECT 1;</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

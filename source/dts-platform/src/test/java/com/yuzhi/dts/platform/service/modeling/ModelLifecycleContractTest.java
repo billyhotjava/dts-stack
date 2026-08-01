@@ -11,6 +11,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliverySt
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.FieldMapping;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.GeneratedInput;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ClaimImplementationCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.InputMode;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.PhysicalAssetInput;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.RevisionBoundDeliveryKey;
@@ -233,7 +234,7 @@ class ModelLifecycleContractTest {
         );
         SaveImplementationCommand upstream = new SaveImplementationCommand(
             InputMode.UPSTREAM_MODEL,
-            List.of(new UpstreamModelInput(upstreamModelId, 3, "a".repeat(64))),
+            List.of(new UpstreamModelInput(upstreamModelId, 3, "a".repeat(64), 0, null, null)),
             List.of(),
             Map.of(),
             ImplementationMode.DBT_MANAGED,
@@ -264,13 +265,73 @@ class ModelLifecycleContractTest {
         )).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("unsupported key");
         assertThatThrownBy(() -> new SaveImplementationCommand(
             InputMode.PHYSICAL_ASSET,
-            List.of(new UpstreamModelInput(upstreamModelId, 3, "a".repeat(64))),
+            List.of(new UpstreamModelInput(upstreamModelId, 3, "a".repeat(64), 0, null, null)),
             List.of(),
             Map.of(),
             ImplementationMode.DBT_MANAGED,
             "table",
             "mixed-input"
         )).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("inputMode");
+    }
+
+    @Test
+    void implementationWriteCommandsRequireCallerProvidedIdempotencyKeys() {
+        assertThatThrownBy(() -> new ClaimImplementationCommand(
+            ImplementationMode.DBT_MANAGED,
+            "project",
+            "model.project.customer",
+            " "
+        )).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("idempotencyKey");
+        assertThatThrownBy(() -> new SaveImplementationCommand(
+            InputMode.GENERATED,
+            List.of(new GeneratedInput("DATE_DIMENSION", Map.of())),
+            List.of(),
+            Map.of(),
+            ImplementationMode.DESIGNER_GENERATED,
+            "table",
+            null
+        )).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("idempotencyKey");
+    }
+
+    @Test
+    void saveImportConvertAndClaimNormalizeAndBoundCallerIdempotencyKeys() {
+        assertThat(generatedCommandWithKey("  save-key  ").idempotencyKey()).isEqualTo("save-key");
+        assertThat(new ClaimImplementationCommand(
+            ImplementationMode.DBT_MANAGED,
+            "project",
+            "model.project.customer",
+            "  claim-key  "
+        ).idempotencyKey()).isEqualTo("claim-key");
+
+        String tooLong = "k".repeat(129);
+        for (String action : List.of("SAVE", "IMPORT", "OWNERSHIP_CONVERT")) {
+            assertThatThrownBy(() -> generatedCommandWithKey(tooLong))
+                .as(action)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("idempotencyKey")
+                .hasMessageContaining("128");
+        }
+        assertThatThrownBy(() -> new ClaimImplementationCommand(
+            ImplementationMode.DBT_MANAGED,
+            "project",
+            "model.project.customer",
+            tooLong
+        )).as("CLAIM")
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("idempotencyKey")
+            .hasMessageContaining("128");
+    }
+
+    private static SaveImplementationCommand generatedCommandWithKey(String idempotencyKey) {
+        return new SaveImplementationCommand(
+            InputMode.GENERATED,
+            List.of(new GeneratedInput("DATE_DIMENSION", Map.of())),
+            List.of(),
+            Map.of(),
+            ImplementationMode.DESIGNER_GENERATED,
+            "table",
+            idempotencyKey
+        );
     }
 
     @Test

@@ -15,6 +15,7 @@ import static org.mockito.Mockito.when;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDomain;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.service.catalog.CatalogDomainVisibilityService;
+import com.yuzhi.dts.platform.service.catalog.JpaCatalogDomainAccessReadAdapter;
 import com.yuzhi.dts.platform.service.modeling.warehouse.CatalogDomainResolutionPort.DomainResolution;
 import java.util.Optional;
 import java.util.UUID;
@@ -37,7 +38,9 @@ class CatalogDomainResolutionAdapterTest {
 
     @BeforeEach
     void setUp() {
-        adapter = new CatalogDomainResolutionAdapter(domainRepository, visibilityService);
+        adapter = new CatalogDomainResolutionAdapter(
+            new JpaCatalogDomainAccessReadAdapter(domainRepository, visibilityService)
+        );
     }
 
     @Test

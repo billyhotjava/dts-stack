@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.service.ingestion;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.common.security.SecurityLevelCatalog;
@@ -9,6 +10,7 @@ import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.ClassificationUtils;
 import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
+import com.yuzhi.dts.platform.service.infra.DefaultDestinationSyncService;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -18,6 +20,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -67,6 +70,15 @@ public class IngestionAccessDecisionService {
         "allowedhosts"
     );
     private static final Pattern CONTROL_CHARACTER = Pattern.compile("[\\x00-\\x1f\\x7f]");
+    private static final Pattern TEXT_KEY_VALUE = Pattern.compile(
+        "(?i)([\"']?([a-z][a-z0-9_.-]{0,63})[\"']?\\s*[:=]\\s*)" +
+        "(\"(?:\\\\.|[^\"\\\\])*(?:\"|$)|'(?:\\\\.|[^'\\\\])*(?:'|$)|(?:basic|bearer)\\s+[^\\s,;&\\[\\{\\]}]+|[^\\s,;&\\[\\{\\]}]+)"
+    );
+    private static final Pattern INTERNAL_ABSOLUTE_PATH_TEXT = Pattern.compile(
+        "(?i)(?<![a-z0-9])(?:file:)?/(?:opt|srv|tmp|decrypted|var/lib|home|root)(?:/[^\\s,;\\]}\"']*)?"
+    );
+    private static final String REDACTED_VALUE = "[REDACTED]";
+    private static final String REDACTED_PATH = "[REDACTED_PATH]";
 
     private final InfraDataSourceRepository dataSourceRepository;
     private final IngestionServiceClient ingestionClient;
@@ -99,6 +111,23 @@ public class IngestionAccessDecisionService {
         }
         Map<String, Object> canonicalTask = canonicalizeTaskPayloadIdentifiers(response.getData());
         response.setData(canonicalTask);
+        requireTaskPayloadAccess(canonicalTask, requireExplicitClearance);
+        return canonicalTask;
+    }
+
+    public Map<String, Object> requireTaskAuthorizationAccess(Long taskId, boolean requireExplicitClearance) {
+        if (taskId == null || taskId <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "任务标识无效");
+        }
+        ApiResponse<Map<String, Object>> response = ingestionClient.getTaskAccessMetadata(taskId);
+        if (response == null) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "接入服务暂不可用");
+        }
+        if (response.getStatus() < 200 || response.getStatus() >= 300 || response.getData() == null) {
+            HttpStatus status = HttpStatus.resolve(response.getStatus());
+            throw new ResponseStatusException(status == null ? HttpStatus.BAD_GATEWAY : status, "无法读取接入任务授权元数据");
+        }
+        Map<String, Object> canonicalTask = canonicalizeTaskPayloadIdentifiers(response.getData());
         requireTaskPayloadAccess(canonicalTask, requireExplicitClearance);
         return canonicalTask;
     }
@@ -152,9 +181,6 @@ public class IngestionAccessDecisionService {
 
     public ApiResponse<Map<String, Object>> listVisibleTasks(Map<String, Object> query) {
         Map<String, Object> safeQuery = query == null ? Map.of() : new LinkedHashMap<>(query);
-        if (isInstituteMaintainer()) {
-            return ingestionClient.listTasks(safeQuery);
-        }
         int requestedPage = queryInteger(safeQuery.get("page"), 0, 0, Integer.MAX_VALUE, "page");
         int requestedSize = queryInteger(safeQuery.get("size"), 20, 1, 500, "size");
         Map<String, Object> scanQuery = new LinkedHashMap<>(safeQuery);
@@ -192,8 +218,12 @@ public class IngestionAccessDecisionService {
             scanPage++;
         }
 
-        Set<UUID> visibleIds = visibleActiveDataSourceIds();
-        List<Map<String, Object>> visible = tasks.stream().filter(task -> taskVisible(task, visibleIds)).toList();
+        TaskVisibilityScope visibilityScope = visibleActiveDataSourceIds();
+        List<Map<String, Object>> visible = tasks
+            .stream()
+            .filter(task -> taskVisible(task, visibilityScope))
+            .filter(this::taskClearanceVisible)
+            .toList();
         long requestedOffset = (long) requestedPage * requestedSize;
         int from = requestedOffset >= visible.size() ? visible.size() : (int) requestedOffset;
         int to = Math.min(visible.size(), from + requestedSize);
@@ -262,22 +292,143 @@ public class IngestionAccessDecisionService {
     }
 
     public Object removeInternalFilePaths(Object value) {
+        return sanitizeValue(value, false, null);
+    }
+
+    public Object retainExplicitSecrets(Object mergedValue, Object explicitValue) {
+        if (mergedValue instanceof Map<?, ?> mergedMap) {
+            Map<String, Object> retained = new LinkedHashMap<>();
+            mergedMap.forEach((key, item) -> {
+                String name = String.valueOf(key);
+                Map.Entry<?, ?> explicitEntry = findNormalizedEntry(explicitValue, name);
+                if (isSensitiveResponseField(name)) {
+                    if (explicitEntry != null && hasExplicitSecretValue(explicitEntry.getValue())) {
+                        retained.put(name, copyExplicitValue(explicitEntry.getValue()));
+                    }
+                    return;
+                }
+                retained.put(
+                    name,
+                    retainExplicitSecrets(item, explicitEntry == null ? null : explicitEntry.getValue())
+                );
+            });
+            return retained;
+        }
+        if (mergedValue instanceof Iterable<?> mergedItems) {
+            List<?> explicitItems = explicitValue instanceof List<?> list ? list : List.of();
+            List<Object> retained = new ArrayList<>();
+            int index = 0;
+            for (Object item : mergedItems) {
+                Object explicitItem = index < explicitItems.size() ? explicitItems.get(index) : null;
+                retained.add(retainExplicitSecrets(item, explicitItem));
+                index++;
+            }
+            return retained;
+        }
+        return mergedValue;
+    }
+
+    private Object sanitizeValue(Object value, boolean apiResourceContext, String sourceFieldName) {
         if (value instanceof Map<?, ?> map) {
             Map<String, Object> sanitized = new LinkedHashMap<>();
             map.forEach((key, item) -> {
                 String name = String.valueOf(key);
-                if (!isInternalFilePathField(map, name, item)) {
-                    sanitized.put(name, removeInternalFilePaths(item));
+                if (!isSensitiveResponseField(name) && !isInternalFilePathField(name, item, apiResourceContext)) {
+                    sanitized.put(name, sanitizeValue(item, isApiResourceField(name), name));
                 }
             });
             return sanitized;
         }
         if (value instanceof Iterable<?> values) {
             List<Object> sanitized = new ArrayList<>();
-            values.forEach(item -> sanitized.add(removeInternalFilePaths(item)));
+            values.forEach(item -> sanitized.add(sanitizeValue(item, apiResourceContext, sourceFieldName)));
             return sanitized;
         }
+        if (value != null && value.getClass().isArray()) {
+            int length = java.lang.reflect.Array.getLength(value);
+            List<Object> sanitized = new ArrayList<>(length);
+            for (int index = 0; index < length; index++) {
+                sanitized.add(sanitizeValue(java.lang.reflect.Array.get(value, index), apiResourceContext, sourceFieldName));
+            }
+            return sanitized;
+        }
+        if (value instanceof String text) {
+            return sanitizeString(text, apiResourceContext, sourceFieldName);
+        }
         return value;
+    }
+
+    private String sanitizeString(String value, boolean apiResourceContext, String sourceFieldName) {
+        String trimmed = value.trim();
+        boolean jsonShaped = trimmed.startsWith("{") || trimmed.startsWith("[");
+        if (jsonShaped) {
+            try {
+                Object parsed = objectMapper.readValue(trimmed, Object.class);
+                if (parsed instanceof Map<?, ?> || parsed instanceof Iterable<?>) {
+                    Object sanitized = sanitizeValue(parsed, apiResourceContext, sourceFieldName);
+                    if (sanitized.equals(parsed)) {
+                        return value;
+                    }
+                    return objectMapper.writeValueAsString(sanitized);
+                }
+            } catch (JsonProcessingException ignored) {
+                // Malformed audit JSON must still pass through pattern-based fail-closed redaction below.
+            }
+        }
+        return sanitizePlainText(value, jsonShaped || isAuditTextField(sourceFieldName));
+    }
+
+    private String sanitizePlainText(String value, boolean redactStandaloneInternalPaths) {
+        Matcher matcher = TEXT_KEY_VALUE.matcher(value);
+        StringBuilder sanitized = new StringBuilder();
+        boolean changed = false;
+        while (matcher.find()) {
+            String key = matcher.group(2);
+            String rawValue = matcher.group(3);
+            boolean sensitive = isSensitiveResponseField(key);
+            boolean internalPath = !"path".equals(normalizeFieldName(key)) &&
+                isInternalFilePathField(key, unquoteTextValue(rawValue), false);
+            if (!sensitive && !internalPath) {
+                continue;
+            }
+            String replacement = matcher.group(1) + quotedRedaction(rawValue, internalPath ? REDACTED_PATH : REDACTED_VALUE);
+            matcher.appendReplacement(sanitized, Matcher.quoteReplacement(replacement));
+            changed = true;
+        }
+        if (changed) {
+            matcher.appendTail(sanitized);
+        }
+        String result = changed ? sanitized.toString() : value;
+        if (redactStandaloneInternalPaths) {
+            result = INTERNAL_ABSOLUTE_PATH_TEXT.matcher(result).replaceAll(REDACTED_PATH);
+        }
+        return result;
+    }
+
+    private String unquoteTextValue(String value) {
+        if (value.length() >= 2) {
+            char first = value.charAt(0);
+            char last = value.charAt(value.length() - 1);
+            if ((first == '\"' && last == '\"') || (first == '\'' && last == '\'')) {
+                return value.substring(1, value.length() - 1);
+            }
+        }
+        return value;
+    }
+
+    private String quotedRedaction(String rawValue, String redaction) {
+        if (rawValue.startsWith("\"")) {
+            return "\"" + redaction + "\"";
+        }
+        if (rawValue.startsWith("'")) {
+            return "'" + redaction + "'";
+        }
+        return redaction;
+    }
+
+    private boolean isAuditTextField(String fieldName) {
+        String normalized = normalizeFieldName(fieldName);
+        return normalized.endsWith("json") || "errormessage".equals(normalized);
     }
 
     @SuppressWarnings("unchecked")
@@ -300,21 +451,32 @@ public class IngestionAccessDecisionService {
     }
 
     public void requireRollbackAuditAccess(Long taskId, UUID dataSourceId) {
+        boolean scoped = false;
+        if (dataSourceId != null) {
+            requireDataSourceAccess(dataSourceId, true);
+            scoped = true;
+        }
         if (taskId != null) {
             requireTaskAccess(taskId, false);
-            return;
+            scoped = true;
         }
-        if (dataSourceId != null) {
-            requireDataSourceAccess(dataSourceId, false);
+        if (scoped) {
             return;
         }
         requireInstituteScope("查看全局回退审计");
     }
 
     public void requireAggregateScope(Map<String, ?> params, String operation) {
-        UUID sourceId = parseUuid(params == null ? null : params.get("sourceDataSourceId"));
-        if (sourceId != null) {
-            requireDataSourceAccess(sourceId, false);
+        if (params != null && params.containsKey("sourceDataSourceId")) {
+            Object rawSourceId = params.get("sourceDataSourceId");
+            if (!StringUtils.hasText(text(rawSourceId))) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "sourceDataSourceId 不能为空");
+            }
+            UUID sourceId = parseUuid(rawSourceId);
+            if (sourceId == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "sourceDataSourceId 必须是 UUID");
+            }
+            requireDataSourceAccess(sourceId, true);
             return;
         }
         requireInstituteScope(operation);
@@ -338,8 +500,11 @@ public class IngestionAccessDecisionService {
         }
         if (fileTask) {
             assertFileTaskClearance(payload);
+            if (sourceId != null) {
+                requireDataSourceAccess(sourceId, true);
+            }
         } else if (sourceId != null) {
-            requireDataSourceAccess(sourceId, requireExplicitClearance && !fileTask);
+            requireDataSourceAccess(sourceId, true);
         }
         requireDataSourceAccess(targetId, false);
     }
@@ -401,7 +566,7 @@ public class IngestionAccessDecisionService {
         }
         String owner = DepartmentUtils.normalize(dataSource.getOwnerDept());
         if (!StringUtils.hasText(owner)) {
-            return;
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "数据源未配置归属部门，禁止普通用户访问");
         }
         String department = DepartmentUtils.normalize(resolveTokenDepartment());
         if (!StringUtils.hasText(department) || !owner.equalsIgnoreCase(department)) {
@@ -425,35 +590,122 @@ public class IngestionAccessDecisionService {
         }
     }
 
-    private Set<UUID> visibleActiveDataSourceIds() {
+    private TaskVisibilityScope visibleActiveDataSourceIds() {
+        boolean instituteMaintainer = isInstituteMaintainer();
         String department = DepartmentUtils.normalize(resolveTokenDepartment());
-        Set<UUID> ids = new LinkedHashSet<>();
+        String userLevel = classificationUtils.getCurrentUserExplicitMaxLevel().orElse(null);
+        Set<UUID> visibleIds = new LinkedHashSet<>();
+        Set<UUID> clearedSourceIds = new LinkedHashSet<>();
         List<InfraDataSource> sources = dataSourceRepository.findAll();
         if (sources == null) {
-            return Set.of();
+            return new TaskVisibilityScope(Set.of(), Set.of());
         }
         for (InfraDataSource source : sources) {
             if (source == null || source.getId() == null || !ACTIVE.equalsIgnoreCase(text(source.getStatus()))) {
                 continue;
             }
             String owner = DepartmentUtils.normalize(source.getOwnerDept());
-            if (!StringUtils.hasText(owner) || (StringUtils.hasText(department) && owner.equalsIgnoreCase(department))) {
-                ids.add(source.getId());
+            if (!instituteMaintainer &&
+                (!StringUtils.hasText(owner) || !StringUtils.hasText(department) || !owner.equalsIgnoreCase(department))) {
+                continue;
+            }
+            visibleIds.add(source.getId());
+            if (hasSourceClearance(source, userLevel)) {
+                clearedSourceIds.add(source.getId());
             }
         }
-        return Set.copyOf(ids);
+        return new TaskVisibilityScope(Set.copyOf(visibleIds), Set.copyOf(clearedSourceIds));
     }
 
-    private boolean taskVisible(Map<String, Object> task, Set<UUID> visibleIds) {
+    private boolean hasSourceClearance(InfraDataSource dataSource, String userLevel) {
+        if (!StringUtils.hasText(userLevel)) {
+            return false;
+        }
+        try {
+            String sourceLevel = SecurityLevelCatalog
+                .requireDataLevel(dataSourceProperties(dataSource).get("classification"))
+                .code();
+            return SecurityLevelCatalog.isDataAtLeast(userLevel, sourceLevel);
+        } catch (IllegalArgumentException | ResponseStatusException ex) {
+            return false;
+        }
+    }
+
+    private boolean taskVisible(Map<String, Object> task, TaskVisibilityScope visibilityScope) {
         if (task == null || task.isEmpty()) {
             return false;
         }
         UUID sourceId = sourceDataSourceId(task);
         UUID targetId = targetDataSourceId(task);
-        if (targetId == null || !visibleIds.contains(targetId)) {
+        if (targetId == null || !visibilityScope.visibleDataSourceIds().contains(targetId)) {
             return false;
         }
-        return isFileTask(task) ? sourceId == null || visibleIds.contains(sourceId) : sourceId != null && visibleIds.contains(sourceId);
+        return isFileTask(task)
+            ? sourceId == null || visibilityScope.clearedSourceDataSourceIds().contains(sourceId)
+            : sourceId != null && visibilityScope.clearedSourceDataSourceIds().contains(sourceId);
+    }
+
+    private Map.Entry<?, ?> findNormalizedEntry(Object value, String requestedName) {
+        if (!(value instanceof Map<?, ?> map)) {
+            return null;
+        }
+        String normalizedName = normalizeFieldName(requestedName);
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            if (normalizedName.equals(normalizeFieldName(String.valueOf(entry.getKey())))) {
+                return entry;
+            }
+        }
+        return null;
+    }
+
+    private boolean hasExplicitSecretValue(Object value) {
+        if (value instanceof String text) {
+            return StringUtils.hasText(text);
+        }
+        if (value instanceof Map<?, ?> map) {
+            return !map.isEmpty();
+        }
+        if (value instanceof Iterable<?> values) {
+            return values.iterator().hasNext();
+        }
+        return value != null;
+    }
+
+    private Object copyExplicitValue(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> copy = new LinkedHashMap<>();
+            map.forEach((key, item) -> copy.put(String.valueOf(key), copyExplicitValue(item)));
+            return copy;
+        }
+        if (value instanceof Iterable<?> values) {
+            List<Object> copy = new ArrayList<>();
+            values.forEach(item -> copy.add(copyExplicitValue(item)));
+            return copy;
+        }
+        if (value != null && value.getClass().isArray()) {
+            int length = java.lang.reflect.Array.getLength(value);
+            List<Object> copy = new ArrayList<>(length);
+            for (int index = 0; index < length; index++) {
+                copy.add(copyExplicitValue(java.lang.reflect.Array.get(value, index)));
+            }
+            return copy;
+        }
+        return value;
+    }
+
+    private boolean taskClearanceVisible(Map<String, Object> task) {
+        if (!isFileTask(task)) {
+            return true;
+        }
+        try {
+            assertFileTaskClearance(task);
+            return true;
+        } catch (ResponseStatusException ex) {
+            if (HttpStatus.FORBIDDEN.equals(ex.getStatusCode())) {
+                return false;
+            }
+            throw ex;
+        }
     }
 
     private UUID resolveCanonicalSourceId(Map<String, Object> payload) {
@@ -641,39 +893,92 @@ public class IngestionAccessDecisionService {
         }
     }
 
-    private boolean isInternalFilePathField(Map<?, ?> parent, String fieldName, Object value) {
-        String normalized = fieldName == null ? "" : fieldName.toLowerCase(Locale.ROOT);
-        if (
-            "hostpath".equals(normalized) ||
-            "containerpath".equals(normalized) ||
-            "_filepath".equals(normalized) ||
-            "_containerpath".equals(normalized) ||
-            "filepath".equals(normalized)
-        ) {
+    private boolean isInternalFilePathField(String fieldName, Object value, boolean apiResourceContext) {
+        String normalized = normalizeFieldName(fieldName);
+        if (Set.of("hostpath", "containerpath", "filepath", "addaxjobpath").contains(normalized)) {
             return true;
         }
-        if (!"path".equals(normalized) || !(value instanceof String path)) {
+        if (!"path".equals(normalized)) {
             return false;
         }
-        String candidate = path.trim().replace('\\', '/').toLowerCase(Locale.ROOT);
-        if (candidate.startsWith("file:")) {
+        return !(apiResourceContext && containsOnlyApiRelativePaths(value)) && containsInternalAbsolutePath(value);
+    }
+
+    private boolean isSensitiveResponseField(String fieldName) {
+        return DefaultDestinationSyncService.isSensitiveConfigKey(fieldName);
+    }
+
+    private boolean isApiResourceField(String fieldName) {
+        String normalized = normalizeFieldName(fieldName);
+        return "resource".equals(normalized) || "resources".equals(normalized);
+    }
+
+    private String normalizeFieldName(String fieldName) {
+        return fieldName == null
+            ? ""
+            : fieldName.replace("_", "").replace("-", "").toLowerCase(Locale.ROOT);
+    }
+
+    private boolean containsOnlyApiRelativePaths(Object value) {
+        if (value instanceof String path) {
+            String candidate = path.trim();
+            return StringUtils.hasText(candidate) &&
+                !candidate.startsWith("//") &&
+                !candidate.toLowerCase(Locale.ROOT).startsWith("file:") &&
+                !candidate.contains("://") &&
+                !candidate.contains("\\") &&
+                !candidate.matches("(?i)^[a-z]:[\\\\/].*") &&
+                !CONTROL_CHARACTER.matcher(candidate).find();
+        }
+        if (value instanceof Iterable<?> values) {
+            boolean found = false;
+            for (Object item : values) {
+                found = true;
+                if (!containsOnlyApiRelativePaths(item)) {
+                    return false;
+                }
+            }
+            return found;
+        }
+        if (value != null && value.getClass().isArray()) {
+            int length = java.lang.reflect.Array.getLength(value);
+            if (length == 0) {
+                return false;
+            }
+            for (int index = 0; index < length; index++) {
+                if (!containsOnlyApiRelativePaths(java.lang.reflect.Array.get(value, index))) {
+                    return false;
+                }
+            }
             return true;
         }
-        boolean fileContext = parent.keySet()
-            .stream()
-            .map(String::valueOf)
-            .map(key -> key.toLowerCase(Locale.ROOT))
-            .anyMatch(key ->
-                "fileid".equals(key) ||
-                "filehash".equals(key) ||
-                "originalname".equals(key) ||
-                "hostpath".equals(key) ||
-                "containerpath".equals(key)
-            );
-        return fileContext && (
-            candidate.startsWith("/") ||
-            candidate.matches("^[a-z]:/.*")
-        );
+        return false;
+    }
+
+    private boolean containsInternalAbsolutePath(Object value) {
+        if (value instanceof String path) {
+            String candidate = path.trim().replace('\\', '/');
+            return candidate.startsWith("/") ||
+                candidate.toLowerCase(Locale.ROOT).startsWith("file:") ||
+                candidate.matches("(?i)^[a-z]:/.*");
+        }
+        if (value instanceof Iterable<?> values) {
+            for (Object item : values) {
+                if (containsInternalAbsolutePath(item)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (value != null && value.getClass().isArray()) {
+            int length = java.lang.reflect.Array.getLength(value);
+            for (int index = 0; index < length; index++) {
+                if (containsInternalAbsolutePath(java.lang.reflect.Array.get(value, index))) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private boolean isApiDataSource(InfraDataSource dataSource) {
@@ -783,6 +1088,8 @@ public class IngestionAccessDecisionService {
     private boolean isInstituteMaintainer() {
         return SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES);
     }
+
+    private record TaskVisibilityScope(Set<UUID> visibleDataSourceIds, Set<UUID> clearedSourceDataSourceIds) {}
 
     private UUID parseUuid(Object value) {
         if (value instanceof UUID uuid) {

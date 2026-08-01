@@ -41,6 +41,7 @@ public class DefaultDestinationSyncService {
         "passphrase",
         "pwd",
         "secret",
+        "secureprops",
         "token",
         "credential",
         "authorization",
@@ -481,7 +482,7 @@ public class DefaultDestinationSyncService {
         }
         Map<String, Object> safe = new LinkedHashMap<>();
         raw.forEach((key, value) -> {
-            if (key == null || isSecretKey(key) || !isSafePersistedDestinationConfigKey(key)) {
+            if (key == null || isSensitiveConfigKey(key) || !isSafePersistedDestinationConfigKey(key)) {
                 return;
             }
             if (value instanceof String || value instanceof Number || value instanceof Boolean) {
@@ -496,7 +497,10 @@ public class DefaultDestinationSyncService {
         return SAFE_PERSISTED_DESTINATION_CONFIG_KEYS.contains(normalized);
     }
 
-    private boolean isSecretKey(String key) {
+    public static boolean isSensitiveConfigKey(String key) {
+        if (key == null) {
+            return false;
+        }
         String normalized = key.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
         return SENSITIVE_CONFIG_KEY_MARKERS.stream().anyMatch(normalized::contains);
     }

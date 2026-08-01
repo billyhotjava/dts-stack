@@ -54,7 +54,11 @@ import java.util.UUID;
 import java.time.Instant;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionOperations;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 public class WarehousePlanApplicationService {
@@ -70,19 +74,26 @@ public class WarehousePlanApplicationService {
     private final CatalogDomainResolutionPort catalogDomainResolutionPort;
     private final SourceReferenceResolver sourceReferenceResolver;
     private final AuditService auditService;
+    private final TransactionOperations transactions;
+    private final TransactionOperations withoutTransactions;
 
     public WarehousePlanApplicationService(
         JdbcTemplate jdbcTemplate,
         ObjectMapper objectMapper,
         CatalogDomainResolutionPort catalogDomainResolutionPort,
         SourceReferenceResolver sourceReferenceResolver,
-        AuditService auditService
+        AuditService auditService,
+        PlatformTransactionManager transactionManager
     ) {
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
         this.catalogDomainResolutionPort = catalogDomainResolutionPort;
         this.sourceReferenceResolver = sourceReferenceResolver;
         this.auditService = auditService;
+        this.transactions = new TransactionTemplate(transactionManager);
+        TransactionTemplate nonTransactional = new TransactionTemplate(transactionManager);
+        nonTransactional.setPropagationBehavior(TransactionDefinition.PROPAGATION_NOT_SUPPORTED);
+        this.withoutTransactions = nonTransactional;
     }
 
     @Transactional
@@ -162,6 +173,19 @@ public class WarehousePlanApplicationService {
         }
         CreateWarehousePlanResult result = createResult(serverTenantId, id, false);
         persistCreateResultSnapshot(serverTenantId, id, result);
+        auditService.auditAction(
+            "MODELING_WAREHOUSE_PLAN_CREATE",
+            AuditStage.SUCCESS,
+            id.toString(),
+            Map.of(
+                "version",
+                result.version(),
+                "onboardingMode",
+                result.plan().onboardingMode().name(),
+                "initialSourceCount",
+                result.initialSourceBindings().size()
+            )
+        );
         return result;
     }
 
@@ -238,7 +262,14 @@ public class WarehousePlanApplicationService {
         if (updated == 0) {
             resolveWriteFailure(serverTenantId, planId, expectedVersion);
         }
-        return get(serverTenantId, planId);
+        WarehousePlanHeader result = get(serverTenantId, planId);
+        auditService.auditAction(
+            "MODELING_WAREHOUSE_PLAN_HEADER_UPDATE",
+            AuditStage.SUCCESS,
+            planId.toString(),
+            Map.of("version", result.version())
+        );
+        return result;
     }
 
     @Transactional
@@ -258,18 +289,32 @@ public class WarehousePlanApplicationService {
         if (updated == 0) {
             resolveWriteFailure(serverTenantId, planId, expectedVersion);
         }
-        return get(serverTenantId, planId);
+        WarehousePlanHeader result = get(serverTenantId, planId);
+        auditService.auditAction(
+            "MODELING_WAREHOUSE_PLAN_ARCHIVE",
+            AuditStage.SUCCESS,
+            planId.toString(),
+            Map.of("version", result.version(), "lifecycleStatus", result.lifecycleStatus().name())
+        );
+        return result;
     }
 
-    @Transactional(readOnly = true)
     public Versioned<CategoryScopeView> getCategoryScope(String serverTenantId, UUID planId) {
         requireServerTenant(serverTenantId);
-        get(serverTenantId, planId);
-        int version = readEditUnitVersion(serverTenantId, planId, EditUnit.CATEGORY_SCOPE);
-        return new Versioned<>(resolveCategoryScope(loadDomainBindings(serverTenantId, planId)), version);
+        CategoryScopeSnapshot snapshot = Objects.requireNonNull(
+            transactions.execute(status -> {
+                get(serverTenantId, planId);
+                return new CategoryScopeSnapshot(
+                    loadDomainBindings(serverTenantId, planId),
+                    readEditUnitVersion(serverTenantId, planId, EditUnit.CATEGORY_SCOPE)
+                );
+            }),
+            "Category scope snapshot is required"
+        );
+        CategoryScopeView resolved = withoutTransactions.execute(status -> resolveCategoryScope(snapshot.bindings()));
+        return new Versioned<>(Objects.requireNonNull(resolved, "Category scope resolution is required"), snapshot.version());
     }
 
-    @Transactional
     public Versioned<CategoryScopeView> saveCategoryScope(
         String serverTenantId,
         UUID planId,
@@ -277,9 +322,19 @@ public class WarehousePlanApplicationService {
         CategoryScopeCommand command
     ) {
         requireServerTenant(serverTenantId);
-        get(serverTenantId, planId);
         List<DomainBinding> bindings = validateCategoryScope(command);
-        CategoryScopeView validated = resolveCategoryScope(bindings);
+        int observedVersion = Objects.requireNonNull(
+            transactions.execute(status -> {
+                get(serverTenantId, planId);
+                return readEditUnitVersion(serverTenantId, planId, EditUnit.CATEGORY_SCOPE);
+            }),
+            "Category scope version is required"
+        );
+        requireExpectedEditVersion(observedVersion, expectedVersion, EditUnit.CATEGORY_SCOPE);
+        CategoryScopeView validated = Objects.requireNonNull(
+            withoutTransactions.execute(status -> resolveCategoryScope(bindings)),
+            "Category scope resolution is required"
+        );
         if (
             validated
                 .domainBindings()
@@ -314,44 +369,49 @@ public class WarehousePlanApplicationService {
             );
         }
 
-        casEditUnit(serverTenantId, planId, expectedVersion, EditUnit.CATEGORY_SCOPE);
-        jdbcTemplate.update(
-            "delete from modeling_warehouse_plan_domain where tenant_id = ? and plan_id = ?",
-            serverTenantId,
-            planId
+        return Objects.requireNonNull(
+            transactions.execute(status -> {
+                casEditUnit(serverTenantId, planId, expectedVersion, EditUnit.CATEGORY_SCOPE);
+                jdbcTemplate.update(
+                    "delete from modeling_warehouse_plan_domain where tenant_id = ? and plan_id = ?",
+                    serverTenantId,
+                    planId
+                );
+                for (DomainBinding binding : bindings) {
+                    jdbcTemplate.update(
+                        """
+                        insert into modeling_warehouse_plan_domain
+                            (id, tenant_id, plan_id, domain_id, confirmation_status, last_validated_at,
+                             created_date, last_modified_date)
+                        values (?, ?, ?, ?, ?, ?, current_timestamp, current_timestamp)
+                        """,
+                        UUID.randomUUID(),
+                        serverTenantId,
+                        planId,
+                        binding.domainId(),
+                        binding.confirmationStatus().name(),
+                        Timestamp.from(validated.lastValidatedAt())
+                    );
+                }
+                auditService.auditAction(
+                    "MODELING_WAREHOUSE_CATEGORY_SCOPE_SAVE",
+                    AuditStage.SUCCESS,
+                    planId.toString(),
+                    Map.of(
+                        "version",
+                        expectedVersion + 1,
+                        "bindingCount",
+                        bindings.size(),
+                        "readiness",
+                        validated.readiness().name(),
+                        "lastValidatedAt",
+                        validated.lastValidatedAt().toString()
+                    )
+                );
+                return new Versioned<>(validated, expectedVersion + 1);
+            }),
+            "Saved category scope is required"
         );
-        for (DomainBinding binding : bindings) {
-            jdbcTemplate.update(
-                """
-                insert into modeling_warehouse_plan_domain
-                    (id, tenant_id, plan_id, domain_id, confirmation_status, last_validated_at,
-                     created_date, last_modified_date)
-                values (?, ?, ?, ?, ?, ?, current_timestamp, current_timestamp)
-                """,
-                UUID.randomUUID(),
-                serverTenantId,
-                planId,
-                binding.domainId(),
-                binding.confirmationStatus().name(),
-                Timestamp.from(validated.lastValidatedAt())
-            );
-        }
-        auditService.auditAction(
-            "MODELING_WAREHOUSE_CATEGORY_SCOPE_SAVE",
-            AuditStage.SUCCESS,
-            planId.toString(),
-            Map.of(
-                "version",
-                expectedVersion + 1,
-                "bindingCount",
-                bindings.size(),
-                "readiness",
-                validated.readiness().name(),
-                "lastValidatedAt",
-                validated.lastValidatedAt().toString()
-            )
-        );
-        return new Versioned<>(validated, expectedVersion + 1);
     }
 
     @Transactional(readOnly = true)
@@ -514,28 +574,43 @@ public class WarehousePlanApplicationService {
                 requirement.confirmationStatus().name()
             );
         }
-        return new Versioned<>(value, expectedVersion + 1);
+        Versioned<BusinessScope> result = new Versioned<>(value, expectedVersion + 1);
+        auditService.auditAction(
+            "MODELING_WAREHOUSE_BUSINESS_SCOPE_SAVE",
+            AuditStage.SUCCESS,
+            planId.toString(),
+            Map.of(
+                "version",
+                result.version(),
+                "confirmed",
+                value.confirmed(),
+                "domainCount",
+                value.domainBindings().size(),
+                "processCount",
+                value.processBindings().size(),
+                "metricRequirementCount",
+                value.metricRequirements().size()
+            )
+        );
+        return result;
     }
 
-    @Transactional(readOnly = true)
     public SourceInventoryView getSources(
         String serverTenantId,
         UUID planId,
         SourceReferenceResolver.AccessContext accessContext
     ) {
         requireServerTenant(serverTenantId);
-        WarehousePlanHeader plan = get(serverTenantId, planId);
-        int version = readEditUnitVersion(serverTenantId, planId, EditUnit.SOURCES);
-        return resolveSourceInventory(
-            serverTenantId,
-            plan,
-            loadSourceRows(serverTenantId, planId),
-            version,
-            accessContext
+        SourceInventorySnapshot snapshot = Objects.requireNonNull(
+            transactions.execute(status -> loadSourceInventorySnapshot(serverTenantId, planId)),
+            "Source inventory snapshot is required"
+        );
+        return Objects.requireNonNull(
+            withoutTransactions.execute(status -> resolveSourceInventory(serverTenantId, snapshot, accessContext)),
+            "Source inventory resolution is required"
         );
     }
 
-    @Transactional
     public SourceInventoryView saveSources(
         String serverTenantId,
         UUID planId,
@@ -544,7 +619,6 @@ public class WarehousePlanApplicationService {
         SourceReferenceResolver.AccessContext accessContext
     ) {
         requireServerTenant(serverTenantId);
-        WarehousePlanHeader plan = get(serverTenantId, planId);
         List<DomainIssue> issues = WarehousePlanContract.validateSourceInventoryCommand(command);
         if (!issues.isEmpty()) {
             DomainIssue issue = issues.getFirst();
@@ -555,8 +629,29 @@ public class WarehousePlanApplicationService {
                 EditUnit.SOURCES
             );
         }
+        SourceInventorySnapshot snapshot = Objects.requireNonNull(
+            transactions.execute(status -> loadSourceInventorySnapshot(serverTenantId, planId)),
+            "Source inventory snapshot is required"
+        );
+        requireExpectedEditVersion(snapshot.version(), expectedVersion, EditUnit.SOURCES);
+        PreparedSourceInventory prepared = Objects.requireNonNull(
+            withoutTransactions.execute(status ->
+                prepareSourceInventory(serverTenantId, snapshot.rows(), command, accessContext)
+            ),
+            "Resolved source inventory is required"
+        );
+        return Objects.requireNonNull(
+            transactions.execute(status -> persistSourceInventory(serverTenantId, planId, expectedVersion, snapshot.plan(), prepared)),
+            "Saved source inventory is required"
+        );
+    }
 
-        List<SourceRow> existingRows = loadSourceRows(serverTenantId, planId);
+    private PreparedSourceInventory prepareSourceInventory(
+        String serverTenantId,
+        List<SourceRow> existingRows,
+        SourceInventoryCommand command,
+        SourceReferenceResolver.AccessContext accessContext
+    ) {
         Map<UUID, SourceRow> existingById = new HashMap<>();
         Map<String, SourceRow> existingByIdentity = new HashMap<>();
         for (SourceRow row : existingRows) {
@@ -633,9 +728,18 @@ public class WarehousePlanApplicationService {
                 "Existing sources must be retained and marked EXCLUDED to preserve audit history"
             );
         }
+        return new PreparedSourceInventory(writes, checkedAt);
+    }
 
+    private SourceInventoryView persistSourceInventory(
+        String serverTenantId,
+        UUID planId,
+        int expectedVersion,
+        WarehousePlanHeader plan,
+        PreparedSourceInventory prepared
+    ) {
         casEditUnit(serverTenantId, planId, expectedVersion, EditUnit.SOURCES);
-        for (ResolvedSourceWrite write : writes) {
+        for (ResolvedSourceWrite write : prepared.writes()) {
             String locatorJson = write.locator() == null ? null : writeLocator(write.locator());
             int updated = jdbcTemplate.update(
                 """
@@ -683,10 +787,10 @@ public class WarehousePlanApplicationService {
         }
 
         SourceInventoryView result = WarehousePlanContract.evaluateSourceInventory(
-            writes.stream().map(this::toSourceBindingView).toList(),
+            prepared.writes().stream().map(this::toSourceBindingView).toList(),
             plan.onboardingMode(),
             expectedVersion + 1,
-            checkedAt
+            prepared.checkedAt()
         );
         auditService.auditAction(
             "MODELING_WAREHOUSE_SOURCE_INVENTORY_SAVE",
@@ -704,93 +808,6 @@ public class WarehousePlanApplicationService {
             )
         );
         return result;
-    }
-
-    /** Legacy application boundary retained until F5; canonical REST no longer calls this method. */
-    @Deprecated(forRemoval = false)
-    @Transactional
-    public Versioned<List<SourceBinding>> saveSources(
-        String serverTenantId,
-        UUID planId,
-        int expectedVersion,
-        List<SourceBinding> value
-    ) {
-        requireServerTenant(serverTenantId);
-        List<SourceBinding> sources = value == null ? List.of() : List.copyOf(value);
-        validateSources(sources);
-        casEditUnit(serverTenantId, planId, expectedVersion, EditUnit.SOURCES);
-
-        Set<UUID> incomingIds = new HashSet<>();
-        sources.forEach(source -> incomingIds.add(source.id()));
-        List<UUID> existingIds = jdbcTemplate.query(
-            "select id from modeling_warehouse_plan_source where tenant_id = ? and plan_id = ?",
-            (row, rowNumber) -> row.getObject("id", UUID.class),
-            serverTenantId,
-            planId
-        );
-        for (UUID existingId : existingIds) {
-            if (incomingIds.contains(existingId)) {
-                continue;
-            }
-            Integer mappingCount = jdbcTemplate.queryForObject(
-                "select count(*) from modeling_warehouse_plan_source_mapping where tenant_id = ? and plan_id = ? and source_binding_id = ?",
-                Integer.class,
-                serverTenantId,
-                planId,
-                existingId
-            );
-            if (mappingCount != null && mappingCount > 0) {
-                throw new WarehousePlanException(
-                    "WAREHOUSE_PLAN_SOURCE_IN_USE",
-                    "A mapped source must be removed from source mappings before it can be removed from inventory",
-                    expectedVersion + 1,
-                    EditUnit.SOURCES
-                );
-            }
-            jdbcTemplate.update(
-                "delete from modeling_warehouse_plan_source where tenant_id = ? and plan_id = ? and id = ?",
-                serverTenantId,
-                planId,
-                existingId
-            );
-        }
-        for (SourceBinding source : sources) {
-            int updated = jdbcTemplate.update(
-                """
-                update modeling_warehouse_plan_source
-                   set source_type = ?, source_id = ?, source_version = ?, confirmation_status = ?, exclusion_reason = ?,
-                       last_modified_date = current_timestamp
-                 where tenant_id = ? and plan_id = ? and id = ?
-                """,
-                source.sourceType().name(),
-                source.sourceId(),
-                source.sourceVersion(),
-                source.confirmationStatus().name(),
-                source.exclusionReason(),
-                serverTenantId,
-                planId,
-                source.id()
-            );
-            if (updated == 0) {
-                jdbcTemplate.update(
-                    """
-                    insert into modeling_warehouse_plan_source
-                        (id, tenant_id, plan_id, source_type, source_id, source_version, confirmation_status,
-                         exclusion_reason, created_date, last_modified_date)
-                    values (?, ?, ?, ?, ?, ?, ?, ?, current_timestamp, current_timestamp)
-                    """,
-                    source.id(),
-                    serverTenantId,
-                    planId,
-                    source.sourceType().name(),
-                    source.sourceId(),
-                    source.sourceVersion(),
-                    source.confirmationStatus().name(),
-                    source.exclusionReason()
-                );
-            }
-        }
-        return new Versioned<>(sources, expectedVersion + 1);
     }
 
     @Transactional
@@ -828,7 +845,14 @@ public class WarehousePlanApplicationService {
                 mapping.notes()
             );
         }
-        return new Versioned<>(mappings, expectedVersion + 1);
+        Versioned<List<SourceBusinessMapping>> result = new Versioned<>(mappings, expectedVersion + 1);
+        auditService.auditAction(
+            "MODELING_WAREHOUSE_SOURCE_MAPPINGS_SAVE",
+            AuditStage.SUCCESS,
+            planId.toString(),
+            Map.of("version", result.version(), "mappingCount", mappings.size())
+        );
+        return result;
     }
 
     @Transactional
@@ -876,29 +900,36 @@ public class WarehousePlanApplicationService {
         return new Versioned<>(value, expectedVersion + 1);
     }
 
-    @Transactional(readOnly = true)
     public PlanningBaseline getBaseline(String serverTenantId, UUID planId) {
         requireServerTenant(serverTenantId);
-        WarehousePlanHeader plan = get(serverTenantId, planId);
-        return loadBaseline(
+        BaselineSnapshot snapshot = Objects.requireNonNull(
+            transactions.execute(status -> loadBaselineSnapshot(serverTenantId, planId)),
+            "Planning baseline snapshot is required"
+        );
+        return resolveBaseline(
             serverTenantId,
-            plan,
-            new SourceReferenceResolver.AccessContext(serverTenantId, plan.ownerId(), plan.ownerDepartmentId())
+            snapshot,
+            new SourceReferenceResolver.AccessContext(
+                serverTenantId,
+                snapshot.plan().ownerId(),
+                snapshot.plan().ownerDepartmentId()
+            )
         );
     }
 
-    @Transactional(readOnly = true)
     public PlanningBaseline getBaseline(
         String serverTenantId,
         UUID planId,
         SourceReferenceResolver.AccessContext accessContext
     ) {
         requireServerTenant(serverTenantId);
-        WarehousePlanHeader plan = get(serverTenantId, planId);
-        return loadBaseline(serverTenantId, plan, accessContext);
+        BaselineSnapshot snapshot = Objects.requireNonNull(
+            transactions.execute(status -> loadBaselineSnapshot(serverTenantId, planId)),
+            "Planning baseline snapshot is required"
+        );
+        return resolveBaseline(serverTenantId, snapshot, accessContext);
     }
 
-    @Transactional
     public PlanningBaseline confirmBaseline(
         String serverTenantId,
         UUID planId,
@@ -906,6 +937,45 @@ public class WarehousePlanApplicationService {
         SourceReferenceResolver.AccessContext accessContext
     ) {
         requireServerTenant(serverTenantId);
+        BaselineSnapshot snapshot = Objects.requireNonNull(
+            transactions.execute(status -> loadBaselineSnapshot(serverTenantId, planId)),
+            "Planning baseline snapshot is required"
+        );
+        if (snapshot.plan().version() != expectedPlanHeadVersion) {
+            throw new WarehousePlanException(
+                "WAREHOUSE_PLAN_VERSION_CONFLICT",
+                "Warehouse plan was changed by another operation",
+                snapshot.plan().version()
+            );
+        }
+        if (!WarehousePlanContract.canTransition(snapshot.plan().lifecycleStatus(), LifecycleStatus.BASELINE_READY)) {
+            throw new WarehousePlanException(
+                "WAREHOUSE_PLAN_LIFECYCLE_CONFLICT",
+                "Warehouse plan lifecycle does not allow baseline confirmation",
+                snapshot.plan().version()
+            );
+        }
+        PlanningBaseline baseline = resolveBaseline(serverTenantId, snapshot, accessContext);
+        if (!baseline.ready()) {
+            throw new WarehousePlanException(
+                "WAREHOUSE_PLAN_BASELINE_INCOMPLETE",
+                "Warehouse planning baseline is incomplete: " + String.join(",", baseline.missingCodes()),
+                null
+            );
+        }
+        return Objects.requireNonNull(
+            transactions.execute(status -> confirmBaselineSnapshot(serverTenantId, planId, expectedPlanHeadVersion, snapshot, baseline)),
+            "Confirmed planning baseline is required"
+        );
+    }
+
+    private PlanningBaseline confirmBaselineSnapshot(
+        String serverTenantId,
+        UUID planId,
+        int expectedPlanHeadVersion,
+        BaselineSnapshot snapshot,
+        PlanningBaseline baseline
+    ) {
         WarehousePlanHeader current = lockPlan(serverTenantId, planId);
         if (current.version() != expectedPlanHeadVersion) {
             throw new WarehousePlanException(
@@ -914,18 +984,21 @@ public class WarehousePlanApplicationService {
                 current.version()
             );
         }
-        PlanningBaseline baseline = loadBaseline(serverTenantId, current, accessContext);
-        if (!baseline.ready()) {
-            throw new WarehousePlanException(
-                "WAREHOUSE_PLAN_BASELINE_INCOMPLETE",
-                "Warehouse planning baseline is incomplete: " + String.join(",", baseline.missingCodes()),
-                null
-            );
-        }
         if (!WarehousePlanContract.canTransition(current.lifecycleStatus(), LifecycleStatus.BASELINE_READY)) {
             throw new WarehousePlanException(
                 "WAREHOUSE_PLAN_LIFECYCLE_CONFLICT",
                 "Warehouse plan lifecycle does not allow baseline confirmation",
+                current.version()
+            );
+        }
+        if (
+            readEditUnitVersion(serverTenantId, planId, EditUnit.CATEGORY_SCOPE) != snapshot.categoryScopeVersion() ||
+            readEditUnitVersion(serverTenantId, planId, EditUnit.SOURCES) != snapshot.sourceInventory().version() ||
+            readEditUnitVersion(serverTenantId, planId, EditUnit.POLICY) != snapshot.policyVersion()
+        ) {
+            throw new WarehousePlanException(
+                "WAREHOUSE_PLAN_BASELINE_STALE",
+                "Warehouse plan baseline changed while its external references were being validated",
                 current.version()
             );
         }
@@ -943,6 +1016,17 @@ public class WarehousePlanApplicationService {
         if (updated == 0) {
             resolveWriteFailure(serverTenantId, planId, expectedPlanHeadVersion);
         }
+        auditService.auditAction(
+            "MODELING_WAREHOUSE_BASELINE_CONFIRM",
+            AuditStage.SUCCESS,
+            planId.toString(),
+            Map.of(
+                "version",
+                expectedPlanHeadVersion + 1,
+                "lifecycleStatus",
+                LifecycleStatus.BASELINE_READY.name()
+            )
+        );
         return baseline;
     }
 
@@ -981,27 +1065,6 @@ public class WarehousePlanApplicationService {
                 (requirement.id() != null && !metricIds.add(requirement.id()))
             ) {
                 throw invalidEditUnit(EditUnit.BUSINESS_SCOPE, "Metric requirements must be unique and complete");
-            }
-        }
-    }
-
-    private static void validateSources(List<SourceBinding> sources) {
-        Set<UUID> ids = new HashSet<>();
-        Set<String> references = new HashSet<>();
-        for (SourceBinding source : sources) {
-            if (
-                source == null ||
-                source.id() == null ||
-                source.sourceType() == null ||
-                isBlank(source.sourceId()) ||
-                source.confirmationStatus() == null ||
-                !ids.add(source.id()) ||
-                !references.add(source.sourceType().name() + "\u0000" + source.sourceId())
-            ) {
-                throw invalidEditUnit(EditUnit.SOURCES, "Sources must be unique and complete");
-            }
-            if (source.confirmationStatus() == ConfirmationStatus.EXCLUDED && isBlank(source.exclusionReason())) {
-                throw invalidEditUnit(EditUnit.SOURCES, "Excluded sources require a reason");
             }
         }
     }
@@ -1207,24 +1270,41 @@ public class WarehousePlanApplicationService {
         );
     }
 
-    private PlanningBaseline loadBaseline(
+    private BaselineSnapshot loadBaselineSnapshot(String tenantId, UUID planId) {
+        WarehousePlanHeader plan = get(tenantId, planId);
+        return new BaselineSnapshot(
+            plan,
+            loadDomainBindings(tenantId, planId),
+            readEditUnitVersion(tenantId, planId, EditUnit.CATEGORY_SCOPE),
+            loadSourceInventorySnapshot(tenantId, planId, plan),
+            loadPlanningPolicyCommand(tenantId, planId),
+            readEditUnitVersion(tenantId, planId, EditUnit.POLICY)
+        );
+    }
+
+    private PlanningBaseline resolveBaseline(
         String tenantId,
-        WarehousePlanHeader plan,
+        BaselineSnapshot snapshot,
         SourceReferenceResolver.AccessContext accessContext
     ) {
-        CategoryScopeView categoryScope = resolveCategoryScope(loadDomainBindings(tenantId, plan.id()));
-        int sourceVersion = readEditUnitVersion(tenantId, plan.id(), EditUnit.SOURCES);
-        SourceInventoryView sourceInventory = resolveSourceInventory(
-            tenantId,
-            plan,
-            loadSourceRows(tenantId, plan.id()),
-            sourceVersion,
-            accessContext
+        return Objects.requireNonNull(
+            withoutTransactions.execute(status -> {
+                CategoryScopeView categoryScope = resolveCategoryScope(snapshot.domainBindings());
+                SourceInventoryView sourceInventory = resolveSourceInventory(
+                    tenantId,
+                    snapshot.sourceInventory(),
+                    accessContext
+                );
+                PlanningPolicyView planningPolicy = WarehousePlanContract.evaluatePlanningPolicy(snapshot.policy());
+                return WarehousePlanContract.evaluateBaseline(
+                    categoryScope,
+                    sourceInventory,
+                    planningPolicy,
+                    snapshot.plan().onboardingMode()
+                );
+            }),
+            "Resolved planning baseline is required"
         );
-        PlanningPolicyView planningPolicy = WarehousePlanContract.evaluatePlanningPolicy(
-            loadPlanningPolicyCommand(tenantId, plan.id())
-        );
-        return WarehousePlanContract.evaluateBaseline(categoryScope, sourceInventory, planningPolicy, plan.onboardingMode());
     }
 
     private WarehousePlanHeader lockPlan(String tenantId, UUID planId) {
@@ -1279,14 +1359,13 @@ public class WarehousePlanApplicationService {
 
     private SourceInventoryView resolveSourceInventory(
         String tenantId,
-        WarehousePlanHeader plan,
-        List<SourceRow> rows,
-        int version,
+        SourceInventorySnapshot snapshot,
         SourceReferenceResolver.AccessContext accessContext
     ) {
         Instant checkedAt = Instant.now();
         SourceReferenceResolver.AccessContext serverContext = serverAccessContext(tenantId, accessContext);
-        List<SourceBindingView> bindings = rows
+        List<SourceBindingView> bindings = snapshot
+            .rows()
             .stream()
             .map(row -> {
                 SourceLocator locator = readLocator(row);
@@ -1306,7 +1385,28 @@ public class WarehousePlanApplicationService {
                 );
             })
             .toList();
-        return WarehousePlanContract.evaluateSourceInventory(bindings, plan.onboardingMode(), version, checkedAt);
+        return WarehousePlanContract.evaluateSourceInventory(
+            bindings,
+            snapshot.plan().onboardingMode(),
+            snapshot.version(),
+            checkedAt
+        );
+    }
+
+    private SourceInventorySnapshot loadSourceInventorySnapshot(String tenantId, UUID planId) {
+        return loadSourceInventorySnapshot(tenantId, planId, get(tenantId, planId));
+    }
+
+    private SourceInventorySnapshot loadSourceInventorySnapshot(
+        String tenantId,
+        UUID planId,
+        WarehousePlanHeader plan
+    ) {
+        return new SourceInventorySnapshot(
+            plan,
+            loadSourceRows(tenantId, planId),
+            readEditUnitVersion(tenantId, planId, EditUnit.SOURCES)
+        );
     }
 
     private List<SourceRow> loadSourceRows(String tenantId, UUID planId) {
@@ -1683,6 +1783,17 @@ public class WarehousePlanApplicationService {
         );
     }
 
+    private static void requireExpectedEditVersion(int observedVersion, int expectedVersion, EditUnit editUnit) {
+        if (observedVersion != expectedVersion) {
+            throw new WarehousePlanException(
+                "WAREHOUSE_PLAN_EDIT_UNIT_VERSION_CONFLICT",
+                "Warehouse plan edit unit was changed by another operation",
+                observedVersion,
+                editUnit
+            );
+        }
+    }
+
     public record UpdatePlanHeaderCommand(
         String name,
         String objective,
@@ -1692,6 +1803,37 @@ public class WarehousePlanApplicationService {
     ) {}
 
     private record ExistingCreate(UUID planId, String requestHash, String responseSnapshot) {}
+
+    private record CategoryScopeSnapshot(List<DomainBinding> bindings, int version) {
+        private CategoryScopeSnapshot {
+            bindings = List.copyOf(bindings);
+        }
+    }
+
+    private record SourceInventorySnapshot(WarehousePlanHeader plan, List<SourceRow> rows, int version) {
+        private SourceInventorySnapshot {
+            rows = List.copyOf(rows);
+        }
+    }
+
+    private record PreparedSourceInventory(List<ResolvedSourceWrite> writes, Instant checkedAt) {
+        private PreparedSourceInventory {
+            writes = List.copyOf(writes);
+        }
+    }
+
+    private record BaselineSnapshot(
+        WarehousePlanHeader plan,
+        List<DomainBinding> domainBindings,
+        int categoryScopeVersion,
+        SourceInventorySnapshot sourceInventory,
+        PlanningPolicyCommand policy,
+        int policyVersion
+    ) {
+        private BaselineSnapshot {
+            domainBindings = List.copyOf(domainBindings);
+        }
+    }
 
     private record SourceRow(
         UUID bindingId,

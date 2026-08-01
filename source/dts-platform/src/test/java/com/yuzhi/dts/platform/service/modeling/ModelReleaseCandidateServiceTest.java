@@ -12,7 +12,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.modeling.ModelReleaseCandidateRepository;
+import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryAuditView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryAction;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus;
@@ -42,8 +44,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import static org.mockito.Mockito.inOrder;
 
 @ExtendWith(MockitoExtension.class)
 class ModelReleaseCandidateServiceTest {
@@ -62,6 +67,9 @@ class ModelReleaseCandidateServiceTest {
     @Mock
     private ModelReleaseCandidateRetryDriftGate retryDriftGate;
 
+    @Mock
+    private AuditService auditService;
+
     private ModelReleaseCandidateService service;
 
     @BeforeEach
@@ -72,7 +80,8 @@ class ModelReleaseCandidateServiceTest {
             Clock.fixed(NOW, ZoneOffset.UTC),
             UUID::randomUUID,
             null,
-            retryDriftGate
+            retryDriftGate,
+            auditService
         );
     }
 
@@ -100,6 +109,12 @@ class ModelReleaseCandidateServiceTest {
         assertThat(event.getValue().eventType()).isEqualTo(CommandEventType.CREATED);
         verify(repository).lockPlanForCandidate(TENANT, PLAN_ID);
         verify(repository).insert(any());
+        verify(auditService).auditAction(
+            eq("MODEL_RELEASE_CANDIDATE_CREATE"),
+            eq(AuditStage.SUCCESS),
+            eq(first.candidate().id().toString()),
+            any()
+        );
     }
 
     @Test
@@ -293,6 +308,18 @@ class ModelReleaseCandidateServiceTest {
         assertThat(event.getValue().fromStatus()).isEqualTo(DeliveryStatus.DRAFT);
         assertThat(event.getValue().toStatus()).isEqualTo(DeliveryStatus.DRAFT);
         assertThat(event.getValue().reason()).isEqualTo("select one model");
+        InOrder writeThenAudit = inOrder(repository, auditService);
+        writeThenAudit
+            .verify(repository)
+            .replaceDraftScope(any(), anyInt(), anyList(), anyString(), any(), any());
+        writeThenAudit
+            .verify(auditService)
+            .auditAction(
+                eq("MODEL_RELEASE_CANDIDATE_SCOPE_REPLACE"),
+                eq(AuditStage.SUCCESS),
+                eq(CANDIDATE_ID.toString()),
+                any()
+            );
     }
 
     @Test
@@ -347,6 +374,56 @@ class ModelReleaseCandidateServiceTest {
         assertThat(event.getValue().eventType()).isEqualTo(CommandEventType.STALE_DETECTED);
         assertThat(event.getValue().fromStatus()).isEqualTo(DeliveryStatus.DRAFT);
         assertThat(event.getValue().toStatus()).isEqualTo(DeliveryStatus.STALE);
+        verify(auditService).auditAction(
+            eq("MODEL_RELEASE_CANDIDATE_STATUS_CHANGE"),
+            eq(AuditStage.SUCCESS),
+            eq(CANDIDATE_ID.toString()),
+            any()
+        );
+    }
+
+    @Test
+    void finalCommitTransitionLeavesTheSingleSpecializedAuditToItsOrchestrator() {
+        CandidateView publishing = candidate(
+            DeliveryStatus.PUBLISHING,
+            10,
+            fullAudit(),
+            List.of(entry(DeliveryStatus.PUBLISHING, 1, CHECKSUM))
+        );
+        when(repository.findCommandByIdempotencyKey(TENANT, "final-commit-key"))
+            .thenReturn(Optional.empty());
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(publishing));
+        when(repository.findCurrentModelReferences(TENANT, PLAN_ID, List.of(MODEL_ID)))
+            .thenReturn(Map.of(MODEL_ID, currentReference(1, CHECKSUM)));
+        when(retryDriftGate.detect(publishing)).thenReturn(List.of());
+        when(
+            repository.transitionAndAppend(
+                any(),
+                anyInt(),
+                any(),
+                any(),
+                anyString(),
+                any(),
+                any()
+            )
+        )
+            .thenReturn(1);
+
+        CommandResult result = service.transitionWithinAuditedCommit(
+            TENANT,
+            ACTOR,
+            CANDIDATE_ID,
+            new TransitionCommand(
+                10,
+                DeliveryStatus.PUBLISHED,
+                "final-commit-key",
+                "finalize publication"
+            )
+        );
+
+        assertThat(result.replayed()).isFalse();
+        assertThat(result.candidate().status()).isEqualTo(DeliveryStatus.PUBLISHED);
+        verify(auditService, never()).auditAction(anyString(), any(), anyString(), any());
     }
 
     @Test
@@ -781,6 +858,12 @@ class ModelReleaseCandidateServiceTest {
         assertThat(result.replayed()).isTrue();
         assertThat(result.candidate().status()).isEqualTo(DeliveryStatus.BUILDING);
         assertThat(result.candidate().version()).isEqualTo(2);
+        verify(auditService, never()).auditAction(
+            anyString(),
+            any(),
+            anyString(),
+            any()
+        );
     }
 
     @Test
@@ -851,6 +934,16 @@ class ModelReleaseCandidateServiceTest {
         assertThat(result.allowedActions()).isEmpty();
         assertThat(rolledBack.audit()).isEqualTo(oldAudit);
         verify(repository, never()).transitionAndAppend(any(), anyInt(), any(), any(), anyString(), any(), any());
+        InOrder replacementThenAudit = inOrder(repository, auditService);
+        replacementThenAudit.verify(repository).transferActiveClaims(eq(rolledBack), eq(result.candidate()));
+        replacementThenAudit
+            .verify(auditService)
+            .auditAction(
+                eq("MODEL_RELEASE_CANDIDATE_REPLACEMENT_CREATE"),
+                eq(AuditStage.SUCCESS),
+                eq(result.candidate().id().toString()),
+                any()
+            );
     }
 
     @Test

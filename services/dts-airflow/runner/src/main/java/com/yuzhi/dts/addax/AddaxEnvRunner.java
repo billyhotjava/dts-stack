@@ -47,7 +47,11 @@ public final class AddaxEnvRunner {
             return EX_NOINPUT;
         }
 
-        String template = Files.readString(jobFile, StandardCharsets.UTF_8);
+        String storedJob = Files.readString(jobFile, StandardCharsets.UTF_8);
+        String template = unsealJobIfNeeded(storedJob, env, err);
+        if (template == null) {
+            return EX_CONFIG;
+        }
         String rendered = renderTemplate(template, env, err);
         if (rendered == null) {
             return EX_CONFIG;
@@ -69,16 +73,55 @@ public final class AddaxEnvRunner {
             tempFile = writeTempJob(jobFile, prepared, env);
             return runAddax(tempFile, env, err);
         } finally {
-            if (tempFile != null) {
-                Files.deleteIfExists(tempFile);
+            try {
+                if (tempFile != null) {
+                    Files.deleteIfExists(tempFile);
+                }
+            } catch (IOException | RuntimeException cleanupFailure) {
+                err.println("WARN: failed to delete temporary Addax job");
+            } finally {
+                erasePlaintexts(decryptedPlaintexts);
             }
-            erasePlaintexts(decryptedPlaintexts);
         }
     }
 
     private static final Pattern ENC_REFERENCE = Pattern.compile("\"([^\"]*\\.enc)\"");
     private static final String ENCRYPTION_KEY_ENV = "DTS_INFRA_ENCRYPTION_KEY";
     private static final String KEY_VERSION_ENV = "DTS_INFRA_KEY_VERSION";
+
+    private static String unsealJobIfNeeded(String storedJob, Map<String, String> env, PrintStream err) {
+        if (!AddaxFileCrypto.isSealedJob(storedJob)) {
+            return storedJob;
+        }
+        String base64Key = env.get(ENCRYPTION_KEY_ENV);
+        if (base64Key == null || base64Key.isBlank()) {
+            err.println("ERROR: sealed Addax job requires " + ENCRYPTION_KEY_ENV);
+            return null;
+        }
+        String expectedVersion = env.get(KEY_VERSION_ENV);
+        if (expectedVersion == null || expectedVersion.isBlank()) {
+            err.println("ERROR: sealed Addax job requires " + KEY_VERSION_ENV);
+            return null;
+        }
+        byte[] plain = null;
+        try {
+            SecretKey key = AddaxFileCrypto.keyFromBase64(base64Key);
+            AddaxFileCrypto.EncryptedPayload payload = AddaxFileCrypto.parseSealedJob(storedJob);
+            if (!expectedVersion.equals(payload.keyVersion())) {
+                err.println("ERROR: sealed Addax job key version mismatch");
+                return null;
+            }
+            plain = AddaxFileCrypto.decrypt(payload, key);
+            return new String(plain, StandardCharsets.UTF_8);
+        } catch (GeneralSecurityException ex) {
+            err.println("ERROR: failed to unseal Addax job");
+            return null;
+        } finally {
+            if (plain != null) {
+                java.util.Arrays.fill(plain, (byte) 0);
+            }
+        }
+    }
 
     /**
      * 把 job 中引用的 *.enc 密文解密到 TMPDIR（tmpfs）明文，并将路径改写为明文路径。
@@ -171,9 +214,25 @@ public final class AddaxEnvRunner {
         Path tempDir = Path.of(env.getOrDefault("TMPDIR", System.getProperty("java.io.tmpdir")));
         String baseName = jobFile.getFileName() == null ? "job" : jobFile.getFileName().toString();
         String safeBaseName = baseName.replaceAll("[^A-Za-z0-9._-]", "_");
-        Path tempFile = Files.createTempFile(tempDir, "addax-job-" + safeBaseName + "-", ".json");
-        Files.writeString(tempFile, rendered, StandardCharsets.UTF_8);
-        return tempFile;
+        Path tempFile = null;
+        try {
+            tempFile = Files.createTempFile(tempDir, "addax-job-" + safeBaseName + "-", ".json");
+            Files.setPosixFilePermissions(
+                tempFile,
+                Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE)
+            );
+            Files.writeString(tempFile, rendered, StandardCharsets.UTF_8);
+            return tempFile;
+        } catch (IOException | RuntimeException writeFailure) {
+            if (tempFile != null) {
+                try {
+                    Files.deleteIfExists(tempFile);
+                } catch (IOException | RuntimeException ignored) {
+                    // Best-effort only; preserve the original write failure.
+                }
+            }
+            throw writeFailure;
+        }
     }
 
     private static int runAddax(Path tempFile, Map<String, String> env, PrintStream err) throws InterruptedException {

@@ -13,6 +13,8 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.MetricRef;
 import com.yuzhi.dts.platform.domain.governance.GovIndicatorDefinition;
 import com.yuzhi.dts.platform.repository.governance.GovIndicatorDefinitionRepository;
+import com.yuzhi.dts.platform.service.governance.GovernanceIndicatorEvidenceReadPort;
+import com.yuzhi.dts.platform.service.governance.GovernanceIndicatorEvidenceReadService;
 import java.util.Optional;
 import java.util.List;
 import java.util.UUID;
@@ -30,7 +32,7 @@ class WarehousePlanDownstreamEvidenceAdapterTest {
         when(model.id()).thenReturn(modelId);
         when(model.status()).thenReturn(ModelStatus.PUBLISHED);
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        GovIndicatorDefinitionRepository indicators = mock(GovIndicatorDefinitionRepository.class);
+        GovernanceIndicatorEvidenceReadPort indicators = mock(GovernanceIndicatorEvidenceReadPort.class);
         when(jdbc.query(anyString(), any(RowMapper.class), any(), any())).thenReturn(List.of());
         WarehousePlanDownstreamEvidenceAdapter adapter = new WarehousePlanDownstreamEvidenceAdapter(
             indicators,
@@ -57,7 +59,7 @@ class WarehousePlanDownstreamEvidenceAdapterTest {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         when(jdbc.query(anyString(), any(RowMapper.class), any(), any())).thenReturn(List.of());
         WarehousePlanDownstreamEvidenceAdapter adapter = new WarehousePlanDownstreamEvidenceAdapter(
-            mock(GovIndicatorDefinitionRepository.class),
+            mock(GovernanceIndicatorEvidenceReadPort.class),
             jdbc,
             new ObjectMapper()
         );
@@ -92,7 +94,7 @@ class WarehousePlanDownstreamEvidenceAdapterTest {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         when(jdbc.query(anyString(), any(RowMapper.class), any(), any())).thenReturn(List.of());
         WarehousePlanDownstreamEvidenceAdapter adapter = new WarehousePlanDownstreamEvidenceAdapter(
-            indicators,
+            new GovernanceIndicatorEvidenceReadService(indicators),
             jdbc,
             new ObjectMapper()
         );

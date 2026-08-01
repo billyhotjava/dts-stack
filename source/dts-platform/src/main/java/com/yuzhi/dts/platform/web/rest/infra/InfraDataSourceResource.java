@@ -7,19 +7,10 @@ import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.infra.HiveConnectionTestResult;
 import com.yuzhi.dts.platform.service.infra.InfraManagementService;
-import com.yuzhi.dts.platform.service.infra.JdbcCatalogSyncService;
 import com.yuzhi.dts.platform.service.infra.JdbcConnectionTestService;
-import com.yuzhi.dts.platform.service.infra.OdsGenerationService;
 import com.yuzhi.dts.platform.service.infra.dto.DataSourceRequest;
 import com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDetailDto;
 import com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDto;
-import com.yuzhi.dts.platform.service.infra.dto.OdsGenerationDtos.OdsGenerationApplyResult;
-import com.yuzhi.dts.platform.service.infra.dto.OdsGenerationDtos.OdsGenerationPreviewResponse;
-import com.yuzhi.dts.platform.service.infra.dto.OdsGenerationDtos.OdsGenerationRequest;
-import com.yuzhi.dts.platform.service.infra.dto.OdsGenerationDtos.OdsPrecheckResponse;
-import com.yuzhi.dts.platform.service.infra.dto.OdsGenerationDtos.OdsSyncTaskDraftResponse;
-import com.yuzhi.dts.platform.service.infra.dto.SchemaDiscoverDtos.SchemaDiscoverRequest;
-import com.yuzhi.dts.platform.service.infra.dto.SchemaDiscoverDtos.SchemaDiscoverResponse;
 import com.yuzhi.dts.platform.service.ingestion.IngestionServiceClient;
 import com.yuzhi.dts.platform.service.services.SvcTokenAuthService;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
@@ -34,6 +25,8 @@ import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -61,30 +54,27 @@ public class InfraDataSourceResource {
     private final InfraManagementService infraManagementService;
     private final AuditService auditService;
     private final JdbcConnectionTestService jdbcConnectionTestService;
-    private final JdbcCatalogSyncService jdbcCatalogSyncService;
-    private final OdsGenerationService odsGenerationService;
     private final IngestionServiceClient ingestionServiceClient;
     private final PlatformInboundServiceAuthProperties inboundAuthProperties;
     private final SvcTokenAuthService svcTokenAuthService;
+    private final TransactionTemplate transactionTemplate;
 
     public InfraDataSourceResource(
         InfraManagementService infraManagementService,
         AuditService auditService,
         JdbcConnectionTestService jdbcConnectionTestService,
-        JdbcCatalogSyncService jdbcCatalogSyncService,
-        OdsGenerationService odsGenerationService,
         IngestionServiceClient ingestionServiceClient,
         PlatformInboundServiceAuthProperties inboundAuthProperties,
-        SvcTokenAuthService svcTokenAuthService
+        SvcTokenAuthService svcTokenAuthService,
+        PlatformTransactionManager transactionManager
     ) {
         this.infraManagementService = infraManagementService;
         this.auditService = auditService;
         this.jdbcConnectionTestService = jdbcConnectionTestService;
-        this.jdbcCatalogSyncService = jdbcCatalogSyncService;
-        this.odsGenerationService = odsGenerationService;
         this.ingestionServiceClient = ingestionServiceClient;
         this.inboundAuthProperties = inboundAuthProperties;
         this.svcTokenAuthService = svcTokenAuthService;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     @GetMapping
@@ -127,7 +117,7 @@ public class InfraDataSourceResource {
                 "FOUNDATION_DATASOURCE_REGISTER",
                 AuditStage.FAIL,
                 id.toString(),
-                Map.of("summary", "查看数据源详情失败", "id", id.toString(), "error", ex.getMessage())
+                Map.of("summary", "查看数据源详情失败", "id", id.toString(), "errorType", ex.getClass().getSimpleName())
             );
             throw ex;
         }
@@ -205,30 +195,47 @@ public class InfraDataSourceResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
+        String auditOperationId = UUID.randomUUID().toString();
+        Map<String, Object> requested = new LinkedHashMap<>();
+        requested.put("name", request.name());
+        requested.put("type", request.type());
+        putText(requested, "connectorKey", request.connectorKey());
+        putText(requested, "ownerDept", request.ownerDept());
+        putText(requested, "activeDept", activeDept);
+        UUID beginAuditReceipt = auditDataSourceAction(
+            "FOUNDATION_DATASOURCE_CREATE",
+            AuditStage.BEGIN,
+            "create",
+            auditOperationId,
+            "开始新增数据连接",
+            requested
+        );
         try {
-            InfraDataSourceDto dto = infraManagementService.createDataSource(request, operator, activeDept);
-            auditService.auditAction(
-                "FOUNDATION_DATASOURCE_REGISTER",
-                AuditStage.SUCCESS,
-                dto.id() != null ? dto.id().toString() : "create",
-                Map.of(
-                    "summary",
-                    "新增数据源",
-                    "name",
-                    dto.name(),
-                    "connectorKey",
-                    dto.connectorKey(),
-                    "operator",
-                    operator
-                )
-            );
+            InfraDataSourceDto dto = transactionTemplate.execute(status -> {
+                InfraDataSourceDto created = infraManagementService.createDataSource(request, operator, activeDept);
+                auditDataSourceTerminal(
+                    "FOUNDATION_DATASOURCE_CREATE",
+                    AuditStage.SUCCESS,
+                    created.id() != null ? created.id().toString() : "create",
+                    auditOperationId,
+                    beginAuditReceipt,
+                    "新增数据连接成功",
+                    requested,
+                    true
+                );
+                return created;
+            });
             return ApiResponses.ok(dto);
+        } catch (AuditFinalizationException ex) {
+            throw ex;
         } catch (RuntimeException ex) {
-            auditService.auditAction(
-                "FOUNDATION_DATASOURCE_REGISTER",
+            auditDataSourceAction(
+                "FOUNDATION_DATASOURCE_CREATE",
                 AuditStage.FAIL,
                 "create",
-                Map.of("summary", "新增数据源失败", "error", ex.getMessage(), "operator", operator)
+                auditOperationId,
+                "新增数据连接失败",
+                withBeginReceipt(failureDetails(requested, ex), beginAuditReceipt)
             );
             throw ex;
         }
@@ -242,36 +249,50 @@ public class InfraDataSourceResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
+        String auditOperationId = UUID.randomUUID().toString();
+        Map<String, Object> requested = dataSourceUpdateAuditDetails(id, request, activeDept);
+        UUID beginAuditReceipt = auditDataSourceAction(
+            "FOUNDATION_DATASOURCE_UPDATE",
+            AuditStage.BEGIN,
+            id.toString(),
+            auditOperationId,
+            "开始更新数据连接",
+            requested
+        );
         try {
-            InfraManagementService.DataSourceUpdateImpact impact = infraManagementService.updateDataSourceWithImpact(
-                id,
-                request,
-                operator,
-                activeDept
-            );
+            InfraManagementService.DataSourceUpdateImpact impact = transactionTemplate.execute(status -> {
+                InfraManagementService.DataSourceUpdateImpact updated = infraManagementService.updateDataSourceWithImpact(
+                    id,
+                    request,
+                    operator,
+                    activeDept
+                );
+                InfraDataSourceDto updatedDataSource = updated.dataSource();
+                Map<String, Object> successDetails = dataSourceImpactAuditDetails(updatedDataSource, updated);
+                auditDataSourceTerminal(
+                    "FOUNDATION_DATASOURCE_UPDATE",
+                    AuditStage.SUCCESS,
+                    id.toString(),
+                    auditOperationId,
+                    beginAuditReceipt,
+                    "更新数据连接成功",
+                    successDetails,
+                    true
+                );
+                return updated;
+            });
             InfraDataSourceDto dto = impact.dataSource();
-            Map<String, Object> meta = new LinkedHashMap<>();
-            meta.put("summary", "更新数据源");
-            meta.put("name", dto.name());
-            meta.put("connectorKey", dto.connectorKey());
-            meta.put("operator", operator);
-            meta.put("connectionChanged", impact.connectionChanged());
-            meta.put("affectedTasks", impact.affectedTasks());
-            meta.put("changeLogCreated", impact.changeLogCreated());
-            meta.put("taskIds", impact.taskIds());
-            auditService.auditAction(
-                "FOUNDATION_DATASOURCE_REGISTER",
-                AuditStage.SUCCESS,
-                id.toString(),
-                meta
-            );
             return ApiResponses.ok(dto);
+        } catch (AuditFinalizationException ex) {
+            throw ex;
         } catch (RuntimeException ex) {
-            auditService.auditAction(
-                "FOUNDATION_DATASOURCE_REGISTER",
+            auditDataSourceAction(
+                "FOUNDATION_DATASOURCE_UPDATE",
                 AuditStage.FAIL,
                 id.toString(),
-                Map.of("summary", "更新数据源失败", "error", ex.getMessage(), "operator", operator)
+                auditOperationId,
+                "更新数据连接失败",
+                withBeginReceipt(failureDetails(requested, ex), beginAuditReceipt)
             );
             throw ex;
         }
@@ -285,36 +306,47 @@ public class InfraDataSourceResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
+        String auditOperationId = UUID.randomUUID().toString();
+        Map<String, Object> requested = dataSourceUpdateAuditDetails(id, request, activeDept);
+        UUID beginAuditReceipt = auditDataSourceAction(
+            "FOUNDATION_DATASOURCE_UPDATE",
+            AuditStage.BEGIN,
+            id.toString(),
+            auditOperationId,
+            "开始更新数据连接并评估影响",
+            requested
+        );
         try {
-            InfraManagementService.DataSourceUpdateImpact impact = infraManagementService.updateDataSourceWithImpact(
-                id,
-                request,
-                operator,
-                activeDept
-            );
-            InfraDataSourceDto dto = impact.dataSource();
-            Map<String, Object> meta = new LinkedHashMap<>();
-            meta.put("summary", "更新数据源");
-            meta.put("name", dto.name());
-            meta.put("connectorKey", dto.connectorKey());
-            meta.put("operator", operator);
-            meta.put("connectionChanged", impact.connectionChanged());
-            meta.put("affectedTasks", impact.affectedTasks());
-            meta.put("changeLogCreated", impact.changeLogCreated());
-            meta.put("taskIds", impact.taskIds());
-            auditService.auditAction(
-                "FOUNDATION_DATASOURCE_REGISTER",
-                AuditStage.SUCCESS,
-                id.toString(),
-                meta
-            );
+            InfraManagementService.DataSourceUpdateImpact impact = transactionTemplate.execute(status -> {
+                InfraManagementService.DataSourceUpdateImpact updated = infraManagementService.updateDataSourceWithImpact(
+                    id,
+                    request,
+                    operator,
+                    activeDept
+                );
+                auditDataSourceTerminal(
+                    "FOUNDATION_DATASOURCE_UPDATE",
+                    AuditStage.SUCCESS,
+                    id.toString(),
+                    auditOperationId,
+                    beginAuditReceipt,
+                    "更新数据连接并完成影响评估",
+                    dataSourceImpactAuditDetails(updated.dataSource(), updated),
+                    true
+                );
+                return updated;
+            });
             return ApiResponses.ok(impact);
+        } catch (AuditFinalizationException ex) {
+            throw ex;
         } catch (RuntimeException ex) {
-            auditService.auditAction(
-                "FOUNDATION_DATASOURCE_REGISTER",
+            auditDataSourceAction(
+                "FOUNDATION_DATASOURCE_UPDATE",
                 AuditStage.FAIL,
                 id.toString(),
-                Map.of("summary", "更新数据源失败", "error", ex.getMessage(), "operator", operator)
+                auditOperationId,
+                "更新数据连接失败",
+                withBeginReceipt(failureDetails(requested, ex), beginAuditReceipt)
             );
             throw ex;
         }
@@ -326,22 +358,43 @@ public class InfraDataSourceResource {
         @PathVariable UUID id,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
+        String auditOperationId = UUID.randomUUID().toString();
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("dataSourceId", id.toString());
+        putText(details, "activeDept", activeDept);
+        UUID beginAuditReceipt = auditDataSourceAction(
+            "FOUNDATION_DATASOURCE_DISABLE",
+            AuditStage.BEGIN,
+            id.toString(),
+            auditOperationId,
+            "开始停用数据连接",
+            details
+        );
         try {
-            infraManagementService.deleteDataSource(id, activeDept);
-            auditService.auditAction(
-                "FOUNDATION_DATASOURCE_DISABLE",
-                AuditStage.SUCCESS,
-                id.toString(),
-                Map.of("summary", "删除数据源", "id", id.toString(), "operator", operator)
-            );
+            transactionTemplate.executeWithoutResult(status -> {
+                infraManagementService.deleteDataSource(id, activeDept);
+                auditDataSourceTerminal(
+                    "FOUNDATION_DATASOURCE_DISABLE",
+                    AuditStage.SUCCESS,
+                    id.toString(),
+                    auditOperationId,
+                    beginAuditReceipt,
+                    "停用数据连接成功",
+                    details,
+                    true
+                );
+            });
             return ApiResponses.ok(null);
+        } catch (AuditFinalizationException ex) {
+            throw ex;
         } catch (RuntimeException ex) {
-            auditService.auditAction(
+            auditDataSourceAction(
                 "FOUNDATION_DATASOURCE_DISABLE",
                 AuditStage.FAIL,
                 id.toString(),
-                Map.of("summary", "删除数据源失败", "error", ex.getMessage(), "operator", operator)
+                auditOperationId,
+                "停用数据连接失败",
+                withBeginReceipt(failureDetails(details, ex), beginAuditReceipt)
             );
             throw ex;
         }
@@ -353,24 +406,66 @@ public class InfraDataSourceResource {
         @PathVariable UUID id,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        InfraDataSourceDto dto = infraManagementService.getDataSource(id, activeDept);
-        if (!StringUtils.hasText(dto.jdbcUrl())) {
-            if (isApiDataSource(dto)) {
-                HiveConnectionTestResult result = testApiConnection(id, dto);
-                if (result.success()) {
-                    infraManagementService.markDataSourceVerified(id);
+        String auditOperationId = UUID.randomUUID().toString();
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("dataSourceId", id.toString());
+        putText(details, "activeDept", activeDept);
+        UUID beginAuditReceipt = auditDataSourceAction(
+            "FOUNDATION_DATASOURCE_TEST",
+            AuditStage.BEGIN,
+            id.toString(),
+            auditOperationId,
+            "开始测试数据连接",
+            details
+        );
+        try {
+            InfraDataSourceDto dto = infraManagementService.getDataSource(id, activeDept);
+            details.put("type", dto.type());
+            putText(details, "connectorKey", dto.connectorKey());
+            HiveConnectionTestResult result;
+            if (!StringUtils.hasText(dto.jdbcUrl())) {
+                if (!isApiDataSource(dto)) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "当前数据源类型不支持连接测试");
                 }
-                auditService.auditAction(
-                    "FOUNDATION_DATASOURCE_TEST",
-                    result.success() ? AuditStage.SUCCESS : AuditStage.FAIL,
-                    id.toString(),
-                    Map.of("summary", "测试 API 数据源连接", "id", id.toString(), "result", result.success() ? "SUCCESS" : "FAILED")
-                );
-                return ApiResponses.ok(result);
+                result = testApiConnection(id, dto);
+            } else {
+                result = testJdbcConnection(id, dto);
             }
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "当前数据源类型不支持连接测试");
+            if (result.success()) {
+                infraManagementService.markDataSourceVerified(id);
+            }
+            Map<String, Object> outcome = new LinkedHashMap<>(details);
+            outcome.put("result", result.success() ? "SUCCESS" : "FAILED");
+            outcome.put("elapsedMillis", result.elapsedMillis());
+            putText(outcome, "errorType", result.errorType());
+            outcome.put("warningCount", result.warnings() == null ? 0 : result.warnings().size());
+            auditDataSourceTerminal(
+                "FOUNDATION_DATASOURCE_TEST",
+                result.success() ? AuditStage.SUCCESS : AuditStage.FAIL,
+                id.toString(),
+                auditOperationId,
+                beginAuditReceipt,
+                result.success() ? "数据连接测试成功" : "数据连接测试失败",
+                outcome,
+                false
+            );
+            return ApiResponses.ok(result);
+        } catch (AuditFinalizationException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            auditDataSourceAction(
+                "FOUNDATION_DATASOURCE_TEST",
+                AuditStage.FAIL,
+                id.toString(),
+                auditOperationId,
+                "数据连接测试异常",
+                withBeginReceipt(failureDetails(details, ex), beginAuditReceipt)
+            );
+            throw ex;
         }
-        // Use existing JDBC test endpoint by mapping dto into request
+    }
+
+    private HiveConnectionTestResult testJdbcConnection(UUID id, InfraDataSourceDto dto) {
         JdbcConnectionTestRequest request = new JdbcConnectionTestRequest();
         request.setJdbcUrl(dto.jdbcUrl());
         request.setUsername(dto.username());
@@ -392,19 +487,13 @@ public class InfraDataSourceResource {
             request.setPassword(password.toString());
         }
         HiveConnectionTestResult result = jdbcConnectionTestService.testConnection(request);
-        // Persist test log and update lastVerifiedAt on success
-        String username = SecurityUtils.getCurrentUserLogin().orElse("system");
-        infraManagementService.recordConnectionTest(id, request, result, username);
-        if (result.success()) {
-            infraManagementService.markDataSourceVerified(id);
-        }
-        auditService.auditAction(
-            "FOUNDATION_DATASOURCE_TEST",
-            result.success() ? AuditStage.SUCCESS : AuditStage.FAIL,
-            id.toString(),
-            Map.of("summary", "测试数据源连接", "id", id.toString(), "result", result.success() ? "SUCCESS" : "FAILED")
+        infraManagementService.recordConnectionTest(
+            id,
+            request,
+            result,
+            SecurityUtils.getCurrentUserLogin().orElse("system")
         );
-        return ApiResponses.ok(result);
+        return result;
     }
 
     private HiveConnectionTestResult testApiConnection(UUID id, InfraDataSourceDto dto) {
@@ -514,128 +603,177 @@ public class InfraDataSourceResource {
 
     @PostMapping("/{id}/schema-discover")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
-    public ApiResponse<SchemaDiscoverResponse> discoverSchema(
+    public org.springframework.http.ResponseEntity<ApiResponse<Void>> discoverSchema(
         @PathVariable UUID id,
-        @RequestBody(required = false) SchemaDiscoverRequest request,
+        @RequestBody(required = false) Object ignored,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        InfraDataSourceDto dto = infraManagementService.getDataSource(id, activeDept);
-        if (!StringUtils.hasText(dto.jdbcUrl())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "非 JDBC 数据源不支持 JDBC Schema Discover");
-        }
-        SchemaDiscoverResponse response = jdbcCatalogSyncService.discover(infraManagementService.findEntity(id), request);
-        auditService.auditAction(
-            "FOUNDATION_SCHEMA_DISCOVER",
-            "SUCCESS".equalsIgnoreCase(response.status()) ? AuditStage.SUCCESS : AuditStage.FAIL,
-            id.toString(),
-            Map.of(
-                "summary",
-                "探测数据源 Schema",
-                "id",
-                id.toString(),
-                "schemaCount",
-                response.schemas() != null ? response.schemas().size() : 0,
-                "tableCount",
-                response.tables() != null ? response.tables().size() : 0,
-                "status",
-                response.status()
-            )
-        );
-        return ApiResponses.ok(response);
+        return retiredApi("旧 Schema 探测接口已停用，请在接入任务中使用源表发现");
     }
 
     @PostMapping("/{id}/ods-preview")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
-    public ApiResponse<OdsGenerationPreviewResponse> previewOdsGeneration(
+    public org.springframework.http.ResponseEntity<ApiResponse<Void>> previewOdsGeneration(
         @PathVariable UUID id,
-        @RequestBody OdsGenerationRequest request,
+        @RequestBody(required = false) Object ignored,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        InfraDataSourceDto dto = infraManagementService.getDataSource(id, activeDept);
-        if (!StringUtils.hasText(dto.jdbcUrl())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "非 JDBC 数据源暂不支持 ODS 预览生成");
-        }
-        OdsGenerationPreviewResponse response = odsGenerationService.preview(infraManagementService.findEntity(id), request);
-        Map<String, Object> meta = new LinkedHashMap<>();
-        meta.put("summary", "预览 ODS/dbt source 生成");
-        meta.put("id", id.toString());
-        meta.put("tables", response.tables() != null ? response.tables().size() : 0);
-        meta.put("odsSchema", response.odsSchema());
-        auditService.auditAction("FOUNDATION_ODS_PREVIEW", AuditStage.SUCCESS, id.toString(), meta);
-        return ApiResponses.ok(response);
+        return retiredApi("旧 ODS 预览接口已停用，请在接入任务落地配置中预览目标结构");
     }
 
     @PostMapping("/{id}/ods-apply")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
-    public ApiResponse<OdsGenerationApplyResult> applyOdsGeneration(
+    public org.springframework.http.ResponseEntity<ApiResponse<Void>> applyOdsGeneration(
         @PathVariable UUID id,
-        @RequestBody OdsGenerationRequest request,
+        @RequestBody(required = false) Object ignored,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        InfraDataSourceDto dto = infraManagementService.getDataSource(id, activeDept);
-        if (!StringUtils.hasText(dto.jdbcUrl())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "非 JDBC 数据源暂不支持 ODS 映射生成");
-        }
-        OdsGenerationApplyResult result = odsGenerationService.apply(infraManagementService.findEntity(id), request);
-        Map<String, Object> meta = new LinkedHashMap<>();
-        meta.put("summary", "生成 ODS 映射和 dbt source");
-        meta.put("id", id.toString());
-        meta.put("mappingsUpserted", result.mappingsUpserted());
-        meta.put("columnsUpserted", result.columnsUpserted());
-        meta.put("lineageCreated", result.lineageCreated());
-        meta.put("lineageUpdated", result.lineageUpdated());
-        meta.put("lineageSkipped", result.lineageSkipped());
-        meta.put("dbt", result.dbtMessage());
-        auditService.auditAction("FOUNDATION_ODS_APPLY", AuditStage.SUCCESS, id.toString(), meta);
-        return ApiResponses.ok(result);
+        return retiredApi("旧 ODS 应用接口已停用，请创建并执行正式接入任务");
     }
 
     @PostMapping("/{id}/ods-precheck")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
-    public ApiResponse<OdsPrecheckResponse> precheckOdsGeneration(
+    public org.springframework.http.ResponseEntity<ApiResponse<Void>> precheckOdsGeneration(
         @PathVariable UUID id,
-        @RequestBody OdsGenerationRequest request,
+        @RequestBody(required = false) Object ignored,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        InfraDataSourceDto dto = infraManagementService.getDataSource(id, activeDept);
-        if (!StringUtils.hasText(dto.jdbcUrl())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "非 JDBC 数据源暂不支持 ODS 预检");
-        }
-        OdsPrecheckResponse response = odsGenerationService.precheck(infraManagementService.findEntity(id), request);
-        Map<String, Object> meta = new LinkedHashMap<>();
-        meta.put("summary", "同步任务生成前预检");
-        meta.put("id", id.toString());
-        meta.put("status", response.status());
-        meta.put("tables", response.tables() != null ? response.tables().size() : 0);
-        meta.put("failedRules", response.failedRules());
-        meta.put("warningRules", response.warningRules());
-        auditService.auditAction(
-            "FOUNDATION_ODS_PRECHECK",
-            response.failedRules() > 0 ? AuditStage.FAIL : AuditStage.SUCCESS,
-            id.toString(),
-            meta
-        );
-        return ApiResponses.ok(response);
+        return retiredApi("旧 ODS 预检接口已停用；文件任务使用落地前预检，数据库和 API 任务使用运行后质量检查");
     }
 
     @PostMapping("/{id}/sync-task-draft")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
-    public ApiResponse<OdsSyncTaskDraftResponse> buildSyncTaskDraft(
+    public org.springframework.http.ResponseEntity<ApiResponse<Void>> buildSyncTaskDraft(
         @PathVariable UUID id,
-        @RequestBody OdsGenerationRequest request,
+        @RequestBody(required = false) Object ignored,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        InfraDataSourceDto dto = infraManagementService.getDataSource(id, activeDept);
-        if (!StringUtils.hasText(dto.jdbcUrl())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "非 JDBC 数据源暂不支持同步任务生成");
+        return retiredApi("旧同步任务草稿接口已停用，请在统一接入工作台创建任务");
+    }
+
+    private org.springframework.http.ResponseEntity<ApiResponse<Void>> retiredApi(String message) {
+        return org.springframework.http.ResponseEntity
+            .status(HttpStatus.GONE)
+            .body(new ApiResponse<>(HttpStatus.GONE.value(), message, "API_RETIRED", null));
+    }
+
+    private UUID auditDataSourceAction(
+        String actionCode,
+        AuditStage stage,
+        String resourceId,
+        String operationId,
+        String summary,
+        Map<String, Object> details
+    ) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("summary", summary);
+        payload.put("auditOperationId", operationId);
+        payload.put("operator", SecurityUtils.getCurrentUserLogin().orElse("system"));
+        if (details != null) {
+            payload.putAll(details);
         }
-        OdsSyncTaskDraftResponse response = odsGenerationService.buildSyncTaskDraft(infraManagementService.findEntity(id), request);
-        Map<String, Object> meta = new LinkedHashMap<>();
-        meta.put("summary", "生成同步任务草稿");
-        meta.put("id", id.toString());
-        meta.put("taskName", response.taskName());
-        meta.put("tables", response.tables() != null ? response.tables().size() : 0);
-        auditService.auditAction("FOUNDATION_SYNC_TASK_DRAFT", AuditStage.SUCCESS, id.toString(), meta);
-        return ApiResponses.ok(response);
+        payload.entrySet().removeIf(entry -> entry.getValue() == null);
+        return auditService.auditActionStrict(actionCode, stage, resourceId, Map.copyOf(payload));
+    }
+
+    private void auditDataSourceTerminal(
+        String actionCode,
+        AuditStage stage,
+        String resourceId,
+        String operationId,
+        UUID beginAuditReceipt,
+        String summary,
+        Map<String, Object> details,
+        boolean rolledBackOnFailure
+    ) {
+        try {
+            auditDataSourceAction(
+                actionCode,
+                stage,
+                resourceId,
+                operationId,
+                summary,
+                withBeginReceipt(details, beginAuditReceipt)
+            );
+        } catch (RuntimeException auditFailure) {
+            throw new AuditFinalizationException(operationId, beginAuditReceipt, rolledBackOnFailure, auditFailure);
+        }
+    }
+
+    private Map<String, Object> dataSourceImpactAuditDetails(
+        InfraDataSourceDto dto,
+        InfraManagementService.DataSourceUpdateImpact impact
+    ) {
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("name", dto.name());
+        details.put("connectorKey", dto.connectorKey());
+        details.put("connectionChanged", impact.connectionChanged());
+        details.put("affectedTasks", impact.affectedTasks());
+        details.put("changeLogCreated", impact.changeLogCreated());
+        details.put("taskIds", impact.taskIds());
+        return details;
+    }
+
+    private Map<String, Object> withBeginReceipt(Map<String, Object> details, UUID beginAuditReceipt) {
+        Map<String, Object> correlated = new LinkedHashMap<>();
+        if (details != null) {
+            correlated.putAll(details);
+        }
+        correlated.put("beginAuditReceipt", beginAuditReceipt.toString());
+        return correlated;
+    }
+
+    private Map<String, Object> dataSourceUpdateAuditDetails(
+        UUID id,
+        DataSourceRequest request,
+        String activeDept
+    ) {
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("dataSourceId", id.toString());
+        details.put("name", request.name());
+        details.put("type", request.type());
+        putText(details, "connectorKey", request.connectorKey());
+        putText(details, "ownerDept", request.ownerDept());
+        putText(details, "activeDept", activeDept);
+        return details;
+    }
+
+    private Map<String, Object> failureDetails(Map<String, Object> base, RuntimeException failure) {
+        Map<String, Object> details = new LinkedHashMap<>();
+        if (base != null) {
+            details.putAll(base);
+        }
+        details.put("errorType", failure.getClass().getSimpleName());
+        if (failure instanceof ResponseStatusException statusFailure) {
+            details.put("httpStatus", statusFailure.getStatusCode().value());
+        }
+        return details;
+    }
+
+    private void putText(Map<String, Object> target, String key, String value) {
+        if (StringUtils.hasText(value)) {
+            target.put(key, value.trim());
+        }
+    }
+
+    private static final class AuditFinalizationException extends ResponseStatusException {
+
+        private AuditFinalizationException(
+            String operationId,
+            UUID beginAuditReceipt,
+            boolean rolledBack,
+            RuntimeException cause
+        ) {
+            super(
+                HttpStatus.CONFLICT,
+                rolledBack
+                    ? "审计终态写入失败，数据连接变更已回滚；请使用审计操作号核对后再重试。operationId=" + operationId
+                    : "操作结果已经产生，但审计终态尚未确认；请勿重复执行，请使用 BEGIN 回执核对。operationId=" +
+                    operationId +
+                    ", beginReceipt=" +
+                    beginAuditReceipt,
+                cause
+            );
+        }
     }
 }

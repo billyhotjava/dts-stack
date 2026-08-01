@@ -502,7 +502,7 @@ public class ModelReleaseCandidateApplicationService {
         );
     }
 
-    public CommandResult retryRegistration(
+    public CommandResult retryPublication(
         String tenantId,
         String actorId,
         UUID planId,
@@ -519,7 +519,7 @@ public class ModelReleaseCandidateApplicationService {
         );
         String commitKey;
         if (candidate.status() == DeliveryStatus.PUBLISHED) {
-            commitKey = CandidatePublicationKeys.registrationRetry(idempotencyKey);
+            commitKey = CandidatePublicationKeys.publicationRetry(idempotencyKey);
             CommandEventView receipt = repository
                 .findCommandByIdempotencyKey(access.tenantId(), commitKey)
                 .orElse(null);
@@ -529,7 +529,7 @@ public class ModelReleaseCandidateApplicationService {
                 receipt.fromStatus() == DeliveryStatus.PARTIAL &&
                 receipt.toStatus() == DeliveryStatus.PUBLISHED
             ) {
-                requireRegistrationRetryReplayAccess(access, candidate, receipt);
+                requirePublicationRetryReplayAccess(access, candidate, receipt);
                 CommandResult replay = commands.transition(
                     access.tenantId(),
                     access.actorId(),
@@ -548,7 +548,7 @@ public class ModelReleaseCandidateApplicationService {
             .duties()
             .stream()
             .anyMatch(role ->
-                DeliveryAction.RETRY_REGISTRATION.isAllowedFor(
+                DeliveryAction.RETRY_PUBLICATION.isAllowedFor(
                     candidate.status(),
                     role,
                     access.actorId(),
@@ -556,7 +556,7 @@ public class ModelReleaseCandidateApplicationService {
                 )
             );
         if (!allowed) {
-            throw dutyForbidden(candidate, DeliveryAction.RETRY_REGISTRATION);
+            throw dutyForbidden(candidate, DeliveryAction.RETRY_PUBLICATION);
         }
         publicationAdmission.requireAllowed(candidate);
         return roleAware(
@@ -1190,7 +1190,7 @@ public class ModelReleaseCandidateApplicationService {
         }
     }
 
-    private void requireRegistrationRetryReplayAccess(
+    private void requirePublicationRetryReplayAccess(
         Access access,
         CandidateView candidate,
         CommandEventView receipt

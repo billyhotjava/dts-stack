@@ -1,39 +1,28 @@
 package com.yuzhi.dts.platform.web.rest;
 
-import com.fasterxml.jackson.annotation.JsonAnySetter;
-import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ClaimImplementationCommand;
-import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.CompileView;
-import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
-import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.LifecycleEventView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.FieldMapping;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.GeneratedInput;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ClaimImplementationCommand;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.CompileView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationInput;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.InputMode;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.LifecycleEventView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.PhysicalAssetInput;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.SaveImplementationCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.UpstreamModelInput;
-import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.PublishCommand;
-import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ReleaseView;
-import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ReviewCommand;
-import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.RollbackCommand;
-import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.RunCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.TestEvidenceCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.TimelineView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService;
-import com.yuzhi.dts.platform.service.modeling.LegacyModelLifecycleCandidateAdapter;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService.ImplementationValidationView;
-import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService.ImplementationMigrationBatch;
-import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService.ImplementationMigrationRollback;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService.ExpectedImplementationVersion;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.ExpectedVersion;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecException;
-import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateException;
-import com.yuzhi.dts.platform.service.modeling.ModelingVNextApplicationService.RunView;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider;
-import java.util.UUID;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Value;
@@ -56,8 +45,6 @@ public class ModelLifecycleResource {
 
     private static final String MODELING_MAINTAINER_EXPRESSION =
         "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).CATALOG_MAINTAINERS)";
-    private static final String RELEASE_DUTY_EXPRESSION =
-        "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).MODEL_RELEASE_DUTIES)";
     private static final Pattern STRONG_ETAG = Pattern.compile(
         "^\\\"model-spec:([0-9a-fA-F-]{36}):([1-9][0-9]*):([0-9a-f]{64})\\\"$"
     );
@@ -66,18 +53,15 @@ public class ModelLifecycleResource {
     );
 
     private final ModelLifecycleService service;
-    private final LegacyModelLifecycleCandidateAdapter candidateCompatibility;
     private final WarehousePlanActorProvider actorProvider;
     private final String tenantId;
 
     public ModelLifecycleResource(
         ModelLifecycleService service,
-        LegacyModelLifecycleCandidateAdapter candidateCompatibility,
         WarehousePlanActorProvider actorProvider,
         @Value("${dts.platform.modeling.default-tenant-id:default}") String tenantId
     ) {
         this.service = service;
-        this.candidateCompatibility = candidateCompatibility;
         this.actorProvider = actorProvider;
         this.tenantId = tenantId;
     }
@@ -120,42 +104,6 @@ public class ModelLifecycleResource {
         return ApiResponses.ok(service.validateImplementation(tenantId, actorId(), id, expected(id, ifMatch), decode(request)));
     }
 
-    @PostMapping("/implementation-migrations/dry-run")
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
-    public ApiResponse<ImplementationMigrationBatch> previewImplementationMigrations(
-        @RequestBody(required = false) ImplementationMigrationScopeRequest request
-    ) {
-        return ApiResponses.ok(
-            service.previewImplementationMigrations(
-                tenantId,
-                request == null ? List.of() : request.modelSpecIds()
-            )
-        );
-    }
-
-    @PostMapping("/implementation-migrations/apply")
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
-    public ApiResponse<ImplementationMigrationBatch> applyImplementationMigrations(
-        @RequestBody ImplementationMigrationApplyRequest request
-    ) {
-        return ApiResponses.ok(
-            service.applyImplementationMigrations(
-                tenantId,
-                actorId(),
-                request.modelSpecIds(),
-                request.previewChecksum()
-            )
-        );
-    }
-
-    @PostMapping("/implementation-migrations/rollback")
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
-    public ApiResponse<ImplementationMigrationRollback> rollbackImplementationMigration(
-        @RequestBody ImplementationMigrationRollbackRequest request
-    ) {
-        return ApiResponses.ok(service.rollbackImplementationMigration(request.previewChecksum()));
-    }
-
     @PostMapping("/{id}/implementation/convert-to-designer-generated")
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
     public ApiResponse<ImplementationView> convertToDesignerGenerated(
@@ -195,68 +143,6 @@ public class ModelLifecycleResource {
         return ApiResponses.ok(service.recordTest(tenantId, actorId(), id, expected(id, ifMatch), expectedImplementation(id, implementationIfMatch), command));
     }
 
-    @PostMapping("/{id}/lifecycle/reviews")
-    @PreAuthorize(RELEASE_DUTY_EXPRESSION)
-    public ApiResponse<LifecycleEventView> submitReview(
-        @PathVariable UUID id,
-        @RequestHeader(value = "If-Match", required = false) String ifMatch,
-        @RequestHeader(value = "If-Match-Implementation", required = false) String implementationIfMatch,
-        @RequestBody ReviewCommand command
-    ) {
-        return ApiResponses.ok(candidateCompatibility.submitReview(tenantId, actorId(), id, expected(id, ifMatch), expectedImplementation(id, implementationIfMatch), command));
-    }
-
-    @PostMapping("/{id}/lifecycle/reviews/approve")
-    @PreAuthorize(RELEASE_DUTY_EXPRESSION)
-    public ApiResponse<LifecycleEventView> approveReview(
-        @PathVariable UUID id,
-        @RequestHeader(value = "If-Match", required = false) String ifMatch,
-        @RequestHeader(value = "If-Match-Implementation", required = false) String implementationIfMatch,
-        @RequestBody ReviewCommand command
-    ) {
-        return ApiResponses.ok(candidateCompatibility.approveReview(tenantId, actorId(), id, expected(id, ifMatch), expectedImplementation(id, implementationIfMatch), command));
-    }
-
-    @PostMapping("/{id}/lifecycle/publish")
-    @PreAuthorize(RELEASE_DUTY_EXPRESSION)
-    public ApiResponse<ReleaseView> publish(
-        @PathVariable UUID id,
-        @RequestHeader(value = "If-Match", required = false) String ifMatch,
-        @RequestHeader(value = "If-Match-Implementation", required = false) String implementationIfMatch,
-        @RequestBody PublishCommand command
-    ) {
-        return ApiResponses.ok(candidateCompatibility.publish(tenantId, actorId(), id, expected(id, ifMatch), expectedImplementation(id, implementationIfMatch), command));
-    }
-
-    @PostMapping("/{id}/lifecycle/releases/{releaseId}/retry")
-    @PreAuthorize(RELEASE_DUTY_EXPRESSION)
-    public ApiResponse<ReleaseView> retry(
-        @PathVariable UUID id,
-        @PathVariable UUID releaseId
-    ) {
-        return ApiResponses.ok(candidateCompatibility.retryRegistration(tenantId, actorId(), id, releaseId));
-    }
-
-    @PostMapping("/{id}/lifecycle/rollback")
-    @PreAuthorize(RELEASE_DUTY_EXPRESSION)
-    public ApiResponse<LifecycleEventView> rollback(
-        @PathVariable UUID id,
-        @RequestHeader(value = "If-Match", required = false) String ifMatch,
-        @RequestBody RollbackCommand command
-    ) {
-        return ApiResponses.ok(candidateCompatibility.rollback(tenantId, actorId(), id, expected(id, ifMatch), command));
-    }
-
-    @PostMapping("/{id}/lifecycle/runs")
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
-    public ApiResponse<RunView> run(
-        @PathVariable UUID id,
-        @RequestHeader(value = "If-Match", required = false) String ifMatch,
-        @RequestBody RunCommand command
-    ) {
-        return ApiResponses.ok(service.run(tenantId, actorId(), id, expected(id, ifMatch), command));
-    }
-
     @GetMapping("/{id}/lifecycle")
     public ApiResponse<TimelineView> timeline(@PathVariable UUID id) {
         return ApiResponses.ok(service.timeline(tenantId, id));
@@ -264,21 +150,6 @@ public class ModelLifecycleResource {
 
     @ExceptionHandler(ModelSpecException.class)
     public ResponseEntity<ApiResponse<Object>> handleModelSpecError(ModelSpecException exception) {
-        HttpStatus status = switch (exception.kind()) {
-            case BAD_REQUEST -> HttpStatus.BAD_REQUEST;
-            case UNPROCESSABLE -> HttpStatus.UNPROCESSABLE_ENTITY;
-            case FORBIDDEN -> HttpStatus.FORBIDDEN;
-            case NOT_FOUND -> HttpStatus.NOT_FOUND;
-            case CONFLICT -> HttpStatus.CONFLICT;
-            case PRECONDITION_REQUIRED -> HttpStatus.PRECONDITION_REQUIRED;
-        };
-        return ResponseEntity.status(status).body(
-            new ApiResponse<>(ResultStatus.ERROR.getCode(), exception.getMessage(), exception.code(), exception.details())
-        );
-    }
-
-    @ExceptionHandler(ModelReleaseCandidateException.class)
-    public ResponseEntity<ApiResponse<Object>> handleCandidateError(ModelReleaseCandidateException exception) {
         HttpStatus status = switch (exception.kind()) {
             case BAD_REQUEST -> HttpStatus.BAD_REQUEST;
             case UNPROCESSABLE -> HttpStatus.UNPROCESSABLE_ENTITY;
@@ -415,43 +286,6 @@ public class ModelLifecycleResource {
         String materialization,
         String idempotencyKey
     ) {}
-
-    public record ImplementationMigrationScopeRequest(List<UUID> modelSpecIds) {
-        public ImplementationMigrationScopeRequest {
-            modelSpecIds = modelSpecIds == null ? List.of() : List.copyOf(modelSpecIds);
-        }
-
-        @JsonAnySetter
-        public void rejectUnknownField(String fieldName, Object ignored) {
-            throw invalidMigrationCommand(fieldName);
-        }
-    }
-
-    public record ImplementationMigrationApplyRequest(List<UUID> modelSpecIds, String previewChecksum) {
-        public ImplementationMigrationApplyRequest {
-            modelSpecIds = modelSpecIds == null ? List.of() : List.copyOf(modelSpecIds);
-        }
-
-        @JsonAnySetter
-        public void rejectUnknownField(String fieldName, Object ignored) {
-            throw invalidMigrationCommand(fieldName);
-        }
-    }
-
-    public record ImplementationMigrationRollbackRequest(String previewChecksum) {
-        @JsonAnySetter
-        public void rejectUnknownField(String fieldName, Object ignored) {
-            throw invalidMigrationCommand(fieldName);
-        }
-    }
-
-    private static ModelSpecException invalidMigrationCommand(String fieldName) {
-        return new ModelSpecException(
-            "MODEL_IMPLEMENTATION_MIGRATION_COMMAND_INVALID",
-            "Unsupported implementation migration field: " + fieldName,
-            ModelSpecException.Kind.BAD_REQUEST
-        );
-    }
 
     public record ImplementationInputRequest(
         UUID sourceBindingId,

@@ -26,6 +26,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -94,19 +95,19 @@ public class IngestionTaskProxyResource {
     @GetMapping("/templates")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<?> listTemplates() {
-        return ResponseEntity.ok(ingestionClient.listTemplates());
+        return ResponseEntity.ok(sanitizeJsonResponse(ingestionClient.listTemplates()));
     }
 
     @GetMapping("/access/default-policy")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Object>> getAccessDefaultPolicy() {
-        return ResponseEntity.ok(ingestionClient.getAccessDefaultPolicy());
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(ingestionClient.getAccessDefaultPolicy()));
     }
 
     @PostMapping("/templates/{templateId}/render")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<?> renderTemplate(@PathVariable String templateId, @RequestBody(required = false) Map<String, Object> payload) {
-        return ResponseEntity.ok(ingestionClient.renderTemplate(templateId, payload));
+        return ResponseEntity.ok(sanitizeJsonResponse(ingestionClient.renderTemplate(templateId, payload)));
     }
 
     @PostMapping("/tasks")
@@ -123,42 +124,86 @@ public class IngestionTaskProxyResource {
                 taskName = fallback;
             }
         }
-        Map<String, Object> resolvedPayload = payload;
-        if (!draft || usesPlatformDefaultDestination(payload)) {
-            DefaultDestinationSyncService.DefaultDestinationSnapshot snapshot = resolveDestinationSnapshot(payload);
-            resolvedPayload = applyDefaultDestinationPayload(payload, snapshot);
-        }
-        resolvedPayload = accessDecisionService.canonicalizeTaskPayloadIdentifiers(resolvedPayload);
-        accessDecisionService.requireCreateOrUpdateAccess(resolvedPayload, true);
-        resolvedPayload = attachCurrentSourceClassificationSeal(resolvedPayload, !draft);
-        ApiResponse<Map<String, Object>> response = ingestionClient.createIngestionTask(resolvedPayload);
-        String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
-        if (response != null && response.getStatus() >= 200 && response.getStatus() < 300) {
-            auditService.auditAction(
+        String resourceId = StringUtils.hasText(taskName) ? taskName : "create";
+        String auditOperationId = UUID.randomUUID().toString();
+        Map<String, Object> auditDetails = new LinkedHashMap<>();
+        putAuditText(auditDetails, "taskName", taskName);
+        auditDetails.put("draft", draft);
+        UUID beginAuditReceipt = strictAudit(
+            "INGESTION_TASK_CREATE",
+            AuditStage.BEGIN,
+            resourceId,
+            auditOperationId,
+            "开始创建接入任务",
+            auditDetails
+        );
+        boolean terminalAuditWritten = false;
+        try {
+            Map<String, Object> resolvedPayload = payload;
+            if (!draft || usesPlatformDefaultDestination(payload)) {
+                DefaultDestinationSyncService.DefaultDestinationSnapshot snapshot = resolveDestinationSnapshot(payload);
+                resolvedPayload = applyDefaultDestinationPayload(payload, snapshot);
+            }
+            resolvedPayload = accessDecisionService.canonicalizeTaskPayloadIdentifiers(resolvedPayload);
+            accessDecisionService.requireCreateOrUpdateAccess(resolvedPayload, true);
+            resolvedPayload = attachCurrentSourceClassificationSeal(resolvedPayload, !draft);
+            ApiResponse<Map<String, Object>> response = ingestionClient.createIngestionTask(resolvedPayload);
+            Map<String, Object> outcome = safeAuditDetails(auditDetails);
+            if (response != null) {
+                outcome.put("downstreamStatus", response.getStatus());
+                putAuditText(outcome, "downstreamCode", response.getCode());
+                Map<String, Object> responseData = response.getData();
+                if (responseData != null) {
+                    putAuditText(outcome, "taskId", responseData.get("id"));
+                }
+            }
+            boolean success = isSuccessful(response);
+            terminalStrictAudit(
                 "INGESTION_TASK_CREATE",
-                AuditStage.SUCCESS,
-                taskName,
-                Map.of("summary", "创建入湖任务", "name", taskName, "operator", operator)
+                success ? AuditStage.SUCCESS : AuditStage.FAIL,
+                resourceId,
+                auditOperationId,
+                beginAuditReceipt,
+                success ? "创建接入任务成功" : "创建接入任务失败",
+                outcome
             );
-            try {
-                odsTableMappingSyncService.syncFromIngestionPayload(response.getData());
-            } catch (RuntimeException ex) {
-                auditService.auditAction(
-                    "INGESTION_MAPPING_SYNC",
+            terminalAuditWritten = true;
+            if (success) {
+                try {
+                    odsTableMappingSyncService.syncFromIngestionPayload(response.getData());
+                } catch (RuntimeException ex) {
+                    auditService.auditAction(
+                        "INGESTION_MAPPING_SYNC",
+                        AuditStage.FAIL,
+                        resourceId,
+                        Map.of(
+                            "summary", "同步 ODS 映射失败",
+                            "name", resourceId,
+                            "operator", SecurityUtils.getCurrentUserLogin().orElse("system"),
+                            "errorType", ex.getClass().getSimpleName()
+                        )
+                    );
+                }
+            }
+            return accessDecisionService.sanitizeResponse(response);
+        } catch (RuntimeException failure) {
+            if (!(failure instanceof AuditFinalizationException) && !terminalAuditWritten) {
+                Map<String, Object> failed = safeAuditDetails(auditDetails);
+                failed.put("errorType", failure.getClass().getSimpleName());
+                failed.put("operationOutcome", "UNKNOWN");
+                failed.put("doNotRetry", true);
+                terminalStrictAudit(
+                    "INGESTION_TASK_CREATE",
                     AuditStage.FAIL,
-                    taskName,
-                    Map.of("summary", "同步 ODS 映射失败", "name", taskName, "operator", operator, "error", ex.getMessage())
+                    resourceId,
+                    auditOperationId,
+                    beginAuditReceipt,
+                    "创建接入任务异常",
+                    failed
                 );
             }
-        } else {
-            auditService.auditAction(
-                "INGESTION_TASK_CREATE",
-                AuditStage.FAIL,
-                taskName,
-                Map.of("summary", "创建入湖任务失败", "name", taskName, "operator", operator)
-            );
+            throw failure;
         }
-        return accessDecisionService.sanitizeResponse(response);
     }
 
     @GetMapping("/default-destination")
@@ -215,91 +260,207 @@ public class IngestionTaskProxyResource {
         @PathVariable("id") Long id,
         @RequestBody Map<String, Object> payload
     ) {
-        payload = accessDecisionService.canonicalizeTaskPayloadIdentifiers(payload);
-        Map<String, Object> existingTask = accessDecisionService.requireTaskAccess(id, true);
-        DefaultDestinationSyncService.DefaultDestinationSnapshot snapshot = resolveDestinationSnapshot(payload);
-        Map<String, Object> resolvedPayload = applyDefaultDestinationUpdatePayload(payload, snapshot);
-        resolvedPayload = accessDecisionService.canonicalizeTaskPayloadIdentifiers(resolvedPayload);
-        Map<String, Object> accessPayload = new LinkedHashMap<>(existingTask);
-        if (resolvedPayload.containsKey("sourceDataSourceId")) {
-            if (!resolvedPayload.containsKey("source")) {
-                accessPayload.remove("source");
+        String resourceId = String.valueOf(id);
+        String auditOperationId = UUID.randomUUID().toString();
+        Map<String, Object> auditDetails = Map.of("taskId", id);
+        UUID beginAuditReceipt = strictAudit(
+            "INGESTION_TASK_UPDATE",
+            AuditStage.BEGIN,
+            resourceId,
+            auditOperationId,
+            "开始更新接入任务",
+            auditDetails
+        );
+        boolean terminalAuditWritten = false;
+        try {
+            payload = accessDecisionService.canonicalizeTaskPayloadIdentifiers(payload);
+            Map<String, Object> existingTask = accessDecisionService.requireTaskAuthorizationAccess(id, true);
+            DefaultDestinationSyncService.DefaultDestinationSnapshot snapshot = resolveDestinationSnapshot(payload);
+            Map<String, Object> resolvedPayload = applyDefaultDestinationUpdatePayload(payload, snapshot);
+            resolvedPayload.put(
+                "destinationConfig",
+                accessDecisionService.retainExplicitSecrets(
+                    resolvedPayload.get("destinationConfig"),
+                    payload.get("destinationConfig")
+                )
+            );
+            resolvedPayload = accessDecisionService.canonicalizeTaskPayloadIdentifiers(resolvedPayload);
+            Map<String, Object> accessPayload = new LinkedHashMap<>(existingTask);
+            if (resolvedPayload.containsKey("sourceDataSourceId")) {
+                if (!resolvedPayload.containsKey("source")) {
+                    accessPayload.remove("source");
+                }
+                if (!resolvedPayload.containsKey("sourceConfig")) {
+                    accessPayload.remove("sourceConfig");
+                }
             }
-            if (!resolvedPayload.containsKey("sourceConfig")) {
-                accessPayload.remove("sourceConfig");
+            accessPayload.putAll(resolvedPayload);
+            accessPayload = accessDecisionService.canonicalizeTaskPayloadIdentifiers(accessPayload);
+            accessDecisionService.requireCreateOrUpdateAccess(accessPayload, true);
+            resolvedPayload = attachCurrentSourceClassificationSeal(resolvedPayload, false);
+            ApiResponse<Map<String, Object>> response = ingestionClient.updateTask(id, resolvedPayload);
+            Map<String, Object> outcome = new LinkedHashMap<>(auditDetails);
+            if (response != null) {
+                outcome.put("downstreamStatus", response.getStatus());
+                putAuditText(outcome, "downstreamCode", response.getCode());
             }
-        }
-        accessPayload.putAll(resolvedPayload);
-        accessPayload = accessDecisionService.canonicalizeTaskPayloadIdentifiers(accessPayload);
-        accessDecisionService.requireCreateOrUpdateAccess(accessPayload, true);
-        resolvedPayload = attachCurrentSourceClassificationSeal(resolvedPayload, false);
-        // Preserve the existing task's password when the update payload does not include one
-        preserveExistingPassword(id, resolvedPayload, payload);
-        ApiResponse<Map<String, Object>> response = ingestionClient.updateTask(id, resolvedPayload);
-        if (response != null && response.getStatus() >= 200 && response.getStatus() < 300) {
-            try {
-                odsTableMappingSyncService.syncFromIngestionPayload(response.getData());
-            } catch (RuntimeException ex) {
-                String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
-                auditService.auditAction(
-                    "INGESTION_MAPPING_SYNC",
+            boolean success = isSuccessful(response);
+            terminalStrictAudit(
+                "INGESTION_TASK_UPDATE",
+                success ? AuditStage.SUCCESS : AuditStage.FAIL,
+                resourceId,
+                auditOperationId,
+                beginAuditReceipt,
+                success ? "更新接入任务成功" : "更新接入任务失败",
+                outcome
+            );
+            terminalAuditWritten = true;
+            if (success) {
+                try {
+                    odsTableMappingSyncService.syncFromIngestionPayload(response.getData());
+                } catch (RuntimeException ex) {
+                    auditService.auditAction(
+                        "INGESTION_MAPPING_SYNC",
+                        AuditStage.FAIL,
+                        resourceId,
+                        Map.of(
+                            "summary", "同步 ODS 映射失败",
+                            "taskId", id,
+                            "operator", SecurityUtils.getCurrentUserLogin().orElse("system"),
+                            "errorType", ex.getClass().getSimpleName()
+                        )
+                    );
+                }
+            }
+            return ResponseEntity.ok(accessDecisionService.sanitizeResponse(response));
+        } catch (RuntimeException failure) {
+            if (!(failure instanceof AuditFinalizationException) && !terminalAuditWritten) {
+                terminalStrictAudit(
+                    "INGESTION_TASK_UPDATE",
                     AuditStage.FAIL,
-                    String.valueOf(id),
-                    Map.of("summary", "同步 ODS 映射失败", "taskId", id, "operator", operator, "error", ex.getMessage())
+                    resourceId,
+                    auditOperationId,
+                    beginAuditReceipt,
+                    "更新接入任务异常",
+                    Map.of(
+                        "taskId", id,
+                        "errorType", failure.getClass().getSimpleName(),
+                        "operationOutcome", "UNKNOWN",
+                        "doNotRetry", true
+                    )
                 );
             }
+            throw failure;
         }
-        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(response));
     }
 
     @PostMapping("/tasks/{id}/admit")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Map<String, Object>>> admitTask(@PathVariable("id") Long id) {
-        ApiResponse<Map<String, Object>> existing = ingestionClient.getTask(id);
-        if (existing == null) {
-            return ResponseEntity.ok(new ApiResponse<>(503, "接入服务暂不可用", null));
-        }
-        if (existing.getStatus() < 200 || existing.getStatus() >= 300 || existing.getData() == null) {
-            return ResponseEntity.ok(accessDecisionService.sanitizeResponse(existing));
-        }
-        Map<String, Object> canonicalTask = accessDecisionService.canonicalizeTaskPayloadIdentifiers(existing.getData());
-        existing.setData(canonicalTask);
-        accessDecisionService.requireTaskPayloadAccess(canonicalTask, true);
+        String resourceId = String.valueOf(id);
+        String auditOperationId = UUID.randomUUID().toString();
+        UUID beginAuditReceipt = strictAudit(
+            "INGESTION_TASK_ADMIT",
+            AuditStage.BEGIN,
+            resourceId,
+            auditOperationId,
+            "开始确认任务密级并准入",
+            Map.of("taskId", id)
+        );
+        boolean terminalAuditWritten = false;
+        try {
+            ApiResponse<Map<String, Object>> existing = ingestionClient.getTask(id);
+            if (existing == null || existing.getStatus() < 200 || existing.getStatus() >= 300 || existing.getData() == null) {
+                Map<String, Object> unavailable = new LinkedHashMap<>();
+                unavailable.put("taskId", id);
+                unavailable.put("downstreamStatus", existing == null ? "UNAVAILABLE" : existing.getStatus());
+                terminalStrictAudit(
+                    "INGESTION_TASK_ADMIT",
+                    AuditStage.FAIL,
+                    resourceId,
+                    auditOperationId,
+                    beginAuditReceipt,
+                    "任务密级准入前置读取失败",
+                    unavailable
+                );
+                terminalAuditWritten = true;
+                ApiResponse<Map<String, Object>> safeResponse = existing == null
+                    ? new ApiResponse<>(503, "接入服务暂不可用", null)
+                    : accessDecisionService.sanitizeResponse(existing);
+                return ResponseEntity.ok(safeResponse);
+            }
+            Map<String, Object> canonicalTask = accessDecisionService.canonicalizeTaskPayloadIdentifiers(existing.getData());
+            existing.setData(canonicalTask);
+            accessDecisionService.requireTaskPayloadAccess(canonicalTask, true);
 
-        Map<String, Object> sealedTask = attachCurrentSourceClassificationSeal(canonicalTask, true);
-        Map<String, Object> admission = new LinkedHashMap<>();
-        admission.put("classificationSeal", sealedTask.get("classificationSeal"));
-        if (sealedTask.get("fieldClassifications") != null) {
-            admission.put("fieldClassifications", sealedTask.get("fieldClassifications"));
+            Map<String, Object> sealedTask = attachCurrentSourceClassificationSeal(canonicalTask, true);
+            Map<String, Object> admission = new LinkedHashMap<>();
+            admission.put("classificationSeal", sealedTask.get("classificationSeal"));
+            if (sealedTask.get("fieldClassifications") != null) {
+                admission.put("fieldClassifications", sealedTask.get("fieldClassifications"));
+            }
+            ApiResponse<Map<String, Object>> response = ingestionClient.admitTask(id, admission);
+            boolean success = isSuccessful(response);
+            Map<String, Object> evidence = classificationAuditEvidence(sealedTask);
+            evidence.put("taskId", id);
+            if (response != null) {
+                evidence.put("downstreamStatus", response.getStatus());
+                putAuditText(evidence, "downstreamCode", response.getCode());
+                if (response.getData() != null) {
+                    classificationAuditEvidence(response.getData()).forEach(evidence::putIfAbsent);
+                }
+            }
+            terminalStrictAudit(
+                "INGESTION_TASK_ADMIT",
+                success ? AuditStage.SUCCESS : AuditStage.FAIL,
+                resourceId,
+                auditOperationId,
+                beginAuditReceipt,
+                success ? "确认任务密级并准入成功" : "确认任务密级并准入失败",
+                evidence
+            );
+            terminalAuditWritten = true;
+            return ResponseEntity.ok(
+                accessDecisionService.sanitizeResponse(
+                    response == null ? new ApiResponse<>(503, "接入服务暂不可用", null) : response
+                )
+            );
+        } catch (RuntimeException failure) {
+            if (!(failure instanceof AuditFinalizationException) && !terminalAuditWritten) {
+                terminalStrictAudit(
+                    "INGESTION_TASK_ADMIT",
+                    AuditStage.FAIL,
+                    resourceId,
+                    auditOperationId,
+                    beginAuditReceipt,
+                    "确认任务密级并准入异常",
+                    Map.of(
+                        "taskId", id,
+                        "errorType", failure.getClass().getSimpleName(),
+                        "operationOutcome", "UNKNOWN",
+                        "doNotRetry", true
+                    )
+                );
+            }
+            throw failure;
         }
-        ApiResponse<Map<String, Object>> response = ingestionClient.admitTask(id, admission);
-        String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
-        boolean success = response != null && response.getStatus() >= 200 && response.getStatus() < 300;
-        auditService.auditAction(
-            "INGESTION_TASK_UPDATE",
-            success ? AuditStage.SUCCESS : AuditStage.FAIL,
-            String.valueOf(id),
-            Map.of(
-                "summary",
-                success ? "完成密级封存与生产准入" : "密级封存与生产准入失败",
-                "taskId",
-                id,
-                "operator",
-                operator
-            )
-        );
-        return ResponseEntity.ok(
-            accessDecisionService.sanitizeResponse(
-                response == null ? new ApiResponse<>(503, "接入服务暂不可用", null) : response
-            )
-        );
     }
 
     @DeleteMapping("/tasks/{id}")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Map<String, Object>>> deleteTask(@PathVariable("id") Long id) {
-        accessDecisionService.requireTaskAccess(id, true);
-        ApiResponse<Map<String, Object>> response = ingestionClient.deleteTask(id);
+        ApiResponse<Map<String, Object>> response = auditedIngestionCall(
+            "INGESTION_TASK_DELETE",
+            String.valueOf(id),
+            "开始删除接入任务",
+            "删除接入任务成功",
+            "删除接入任务失败",
+            Map.of("taskId", id),
+            () -> {
+                accessDecisionService.requireTaskAccess(id, true);
+                return ingestionClient.deleteTask(id);
+            }
+        );
         if (response != null && response.getStatus() >= 200 && response.getStatus() < 300) {
             try {
                 odsTableMappingSyncService.removeFromIngestionPayload(response.getData());
@@ -309,7 +470,7 @@ public class IngestionTaskProxyResource {
                     "INGESTION_MAPPING_DELETE",
                     AuditStage.FAIL,
                     String.valueOf(id),
-                    Map.of("summary", "删除 ODS 映射失败", "taskId", id, "operator", operator, "error", ex.getMessage())
+                    Map.of("summary", "删除 ODS 映射失败", "taskId", id, "operator", operator, "errorType", ex.getClass().getSimpleName())
                 );
             }
             try {
@@ -337,7 +498,7 @@ public class IngestionTaskProxyResource {
                     "INGESTION_RUNLOG_DELETE",
                     AuditStage.FAIL,
                     String.valueOf(id),
-                    Map.of("summary", "删除入湖运行日志失败", "taskId", id, "operator", operator, "error", ex.getMessage())
+                    Map.of("summary", "删除入湖运行日志失败", "taskId", id, "operator", operator, "errorType", ex.getClass().getSimpleName())
                 );
             }
         }
@@ -350,8 +511,18 @@ public class IngestionTaskProxyResource {
         @PathVariable("id") Long id,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        accessDecisionService.requireTaskAccess(id, true);
-        ApiResponse<Map<String, Object>> response = ingestionClient.executeTask(id);
+        ApiResponse<Map<String, Object>> response = auditedIngestionCall(
+            "INGESTION_TASK_EXECUTE",
+            String.valueOf(id),
+            "开始执行接入任务",
+            "接入任务执行请求已提交",
+            "接入任务执行请求失败",
+            Map.of("taskId", id, "mode", "SYNC"),
+            () -> {
+                accessDecisionService.requireTaskAccess(id, true);
+                return ingestionClient.executeTask(id);
+            }
+        );
         if (response != null && response.getStatus() >= 200 && response.getStatus() < 300) {
             String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
             try {
@@ -367,7 +538,7 @@ public class IngestionTaskProxyResource {
                     "INFRA_EXTERNAL_RUN_SYNC",
                     AuditStage.FAIL,
                     String.valueOf(id),
-                    Map.of("summary", "同步入湖执行实例失败", "taskId", id, "operator", operator, "error", ex.getMessage())
+                    Map.of("summary", "同步入湖执行实例失败", "taskId", id, "operator", operator, "errorType", ex.getClass().getSimpleName())
                 );
             }
         }
@@ -377,8 +548,18 @@ public class IngestionTaskProxyResource {
     @PostMapping("/tasks/{id}/execute/async")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Map<String, Object>>> executeTaskAsync(@PathVariable("id") Long id) {
-        accessDecisionService.requireTaskAccess(id, true);
-        ApiResponse<Map<String, Object>> response = ingestionClient.executeTaskAsync(id);
+        ApiResponse<Map<String, Object>> response = auditedIngestionCall(
+            "INGESTION_TASK_EXECUTE",
+            String.valueOf(id),
+            "开始异步执行接入任务",
+            "接入任务异步执行请求已提交",
+            "接入任务异步执行请求失败",
+            Map.of("taskId", id, "mode", "ASYNC"),
+            () -> {
+                accessDecisionService.requireTaskAccess(id, true);
+                return ingestionClient.executeTaskAsync(id);
+            }
+        );
         return buildAsyncProxyResponse(response);
     }
 
@@ -388,8 +569,18 @@ public class IngestionTaskProxyResource {
         @PathVariable("id") Long id,
         @RequestBody Map<String, Object> payload
     ) {
-        accessDecisionService.requireTaskAccess(id, true);
-        ApiResponse<Map<String, Object>> response = ingestionClient.backfillTask(id, payload);
+        ApiResponse<Map<String, Object>> response = auditedIngestionCall(
+            "INGESTION_BACKFILL_RUN",
+            String.valueOf(id),
+            "开始提交接入补数任务",
+            "接入补数任务已提交",
+            "接入补数任务提交失败",
+            Map.of("taskId", id),
+            () -> {
+                accessDecisionService.requireTaskAccess(id, true);
+                return ingestionClient.backfillTask(id, payload);
+            }
+        );
         return buildAsyncProxyResponse(response);
     }
 
@@ -401,8 +592,18 @@ public class IngestionTaskProxyResource {
         @RequestParam(value = "mode", required = false, defaultValue = "FAILED_ONLY") String mode,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        accessDecisionService.requireTaskAccess(id, true);
-        ApiResponse<Map<String, Object>> response = ingestionClient.retryExecution(id, executionId, Map.of("mode", mode));
+        ApiResponse<Map<String, Object>> response = auditedIngestionCall(
+            "INGESTION_EXECUTION_RETRY",
+            String.valueOf(executionId),
+            "开始重试接入执行",
+            "接入执行重试请求已提交",
+            "接入执行重试请求失败",
+            Map.of("taskId", id, "executionId", executionId, "mode", mode),
+            () -> {
+                accessDecisionService.requireTaskAccess(id, true);
+                return ingestionClient.retryExecution(id, executionId, Map.of("mode", mode));
+            }
+        );
         if (response != null && response.getData() != null) {
             try {
                 externalRunLogService.recordIngestionExecution(response.getData(), activeDept);
@@ -420,8 +621,18 @@ public class IngestionTaskProxyResource {
         @PathVariable("executionId") Long executionId,
         @RequestParam(value = "mode", required = false, defaultValue = "FAILED_ONLY") String mode
     ) {
-        accessDecisionService.requireTaskAccess(id, true);
-        ApiResponse<Map<String, Object>> response = ingestionClient.retryExecutionAsync(id, executionId, Map.of("mode", mode));
+        ApiResponse<Map<String, Object>> response = auditedIngestionCall(
+            "INGESTION_EXECUTION_RETRY",
+            String.valueOf(executionId),
+            "开始异步重试接入执行",
+            "接入执行异步重试请求已提交",
+            "接入执行异步重试请求失败",
+            Map.of("taskId", id, "executionId", executionId, "mode", mode),
+            () -> {
+                accessDecisionService.requireTaskAccess(id, true);
+                return ingestionClient.retryExecutionAsync(id, executionId, Map.of("mode", mode));
+            }
+        );
         return buildAsyncProxyResponse(response);
     }
 
@@ -499,31 +710,43 @@ public class IngestionTaskProxyResource {
     @GetMapping("/connectors/capabilities")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Object>> listConnectorCapabilities() {
-        return ResponseEntity.ok(ingestionClient.listConnectorCapabilities());
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(ingestionClient.listConnectorCapabilities()));
     }
 
     @GetMapping("/connectors/capabilities/{connectorType}")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Object>> getConnectorCapability(@PathVariable("connectorType") String connectorType) {
-        return ResponseEntity.ok(ingestionClient.getConnectorCapability(connectorType));
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(ingestionClient.getConnectorCapability(connectorType)));
     }
 
     @GetMapping("/api/contract")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Object>> getApiConnectorContract() {
-        return ResponseEntity.ok(ingestionClient.getApiConnectorContract());
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(ingestionClient.getApiConnectorContract()));
     }
 
     @GetMapping("/api/auth-providers")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Object>> listApiAuthProviders() {
-        return ResponseEntity.ok(ingestionClient.listApiAuthProviders());
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(ingestionClient.listApiAuthProviders()));
     }
 
     @PostMapping("/api/test-connection")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Object>> testApiConnection(@RequestBody Map<String, Object> payload) {
-        return ResponseEntity.ok(ingestionClient.testApiConnection(accessDecisionService.normalizeApiConnectionTest(payload)));
+        Map<String, Object> details = new LinkedHashMap<>();
+        putAuditText(details, "dataSourceId", payload == null ? null : payload.get("dataSourceId"));
+        String resourceId = String.valueOf(details.getOrDefault("dataSourceId", "api-draft"));
+        ApiResponse<Object> response = auditedIngestionCall(
+            "FOUNDATION_DATASOURCE_TEST",
+            resourceId,
+            "开始测试 API 数据连接",
+            "API 数据连接测试成功",
+            "API 数据连接测试失败",
+            details,
+            () -> ingestionClient.testApiConnection(accessDecisionService.normalizeApiConnectionTest(payload))
+        );
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(response));
     }
 
     @GetMapping("/tasks/{id}/realtime-status")
@@ -536,15 +759,37 @@ public class IngestionTaskProxyResource {
     @PostMapping("/tasks/{id}/parse")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Object>> parseStagingFile(@PathVariable("id") Long id) {
-        accessDecisionService.requireTaskAccess(id, false);
-        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(ingestionClient.parseStagingFile(id)));
+        ApiResponse<Object> response = auditedIngestionCall(
+            "INGESTION_FILE_PARSE",
+            String.valueOf(id),
+            "开始解析任务文件",
+            "任务文件解析完成",
+            "任务文件解析失败",
+            Map.of("taskId", id),
+            () -> {
+                accessDecisionService.requireTaskAccess(id, false);
+                return ingestionClient.parseStagingFile(id);
+            }
+        );
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(response));
     }
 
     @PostMapping("/tasks/{id}/pre-check")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Object>> preCheckStaging(@PathVariable("id") Long id) {
-        accessDecisionService.requireTaskAccess(id, false);
-        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(ingestionClient.preCheckStaging(id)));
+        ApiResponse<Object> response = auditedIngestionCall(
+            "INGESTION_FILE_PRECHECK",
+            String.valueOf(id),
+            "开始执行文件落地前预检",
+            "文件落地前预检完成",
+            "文件落地前预检失败",
+            Map.of("taskId", id),
+            () -> {
+                accessDecisionService.requireTaskAccess(id, false);
+                return ingestionClient.preCheckStaging(id);
+            }
+        );
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(response));
     }
 
     @PutMapping("/tasks/{id}/staging/{rowNum}")
@@ -554,15 +799,37 @@ public class IngestionTaskProxyResource {
         @PathVariable("rowNum") Integer rowNum,
         @RequestBody Map<String, Object> payload
     ) {
-        accessDecisionService.requireTaskAccess(id, false);
-        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(ingestionClient.updateStagingCell(id, rowNum, payload)));
+        ApiResponse<Object> response = auditedIngestionCall(
+            "INGESTION_STAGING_CELL_UPDATE",
+            String.valueOf(id),
+            "开始修订文件暂存数据",
+            "文件暂存数据修订完成",
+            "文件暂存数据修订失败",
+            Map.of("taskId", id, "rowNum", rowNum),
+            () -> {
+                accessDecisionService.requireTaskAccess(id, false);
+                return ingestionClient.updateStagingCell(id, rowNum, payload);
+            }
+        );
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(response));
     }
 
     @PostMapping("/tasks/{id}/re-check")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Object>> reCheckStaging(@PathVariable("id") Long id) {
-        accessDecisionService.requireTaskAccess(id, false);
-        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(ingestionClient.reCheckStaging(id)));
+        ApiResponse<Object> response = auditedIngestionCall(
+            "INGESTION_FILE_RECHECK",
+            String.valueOf(id),
+            "开始重新检查文件暂存数据",
+            "文件暂存数据重新检查完成",
+            "文件暂存数据重新检查失败",
+            Map.of("taskId", id),
+            () -> {
+                accessDecisionService.requireTaskAccess(id, false);
+                return ingestionClient.reCheckStaging(id);
+            }
+        );
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(response));
     }
 
     @PostMapping("/tasks/{id}/submit")
@@ -575,8 +842,19 @@ public class IngestionTaskProxyResource {
     @DeleteMapping("/tasks/{id}/staging")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Object>> dropStaging(@PathVariable("id") Long id) {
-        accessDecisionService.requireTaskAccess(id, false);
-        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(ingestionClient.dropStaging(id)));
+        ApiResponse<Object> response = auditedIngestionCall(
+            "INGESTION_STAGING_CLEAR",
+            String.valueOf(id),
+            "开始清除文件暂存数据",
+            "文件暂存数据清除完成",
+            "文件暂存数据清除失败",
+            Map.of("taskId", id),
+            () -> {
+                accessDecisionService.requireTaskAccess(id, false);
+                return ingestionClient.dropStaging(id);
+            }
+        );
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(response));
     }
 
     @GetMapping("/tasks/{id}/staging")
@@ -649,19 +927,111 @@ public class IngestionTaskProxyResource {
         if (!SecurityLevelCatalog.isDataAtLeast(userMaxLevel, declaredLevel)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "所选文件密级超出当前用户密级");
         }
-        ApiResponse<Object> response = ingestionClient.uploadAndParse(file, previewLimit, sheetIndex, sheetName);
-        if (response == null) {
-            return ResponseEntity.ok(new ApiResponse<>(503, "接入服务暂不可用", null));
+        String auditOperationId = UUID.randomUUID().toString();
+        Map<String, Object> uploadEvidence = new LinkedHashMap<>();
+        uploadEvidence.put("declaredLevel", declaredLevel);
+        uploadEvidence.put("fileSize", file.getSize());
+        putAuditText(uploadEvidence, "contentType", file.getContentType());
+        if (previewLimit != null) {
+            uploadEvidence.put("previewLimit", previewLimit);
         }
-        if (response.getStatus() >= 200 && response.getStatus() < 300) {
-            try {
+        if (sheetIndex != null) {
+            uploadEvidence.put("sheetIndex", sheetIndex);
+        }
+        UUID beginAuditReceipt = strictAudit(
+            "INGESTION_FILE_CLASSIFICATION_SEAL",
+            AuditStage.BEGIN,
+            auditOperationId,
+            auditOperationId,
+            "开始上传、解析并封存文件密级",
+            uploadEvidence
+        );
+        boolean terminalAuditWritten = false;
+        try {
+            ApiResponse<Object> response = ingestionClient.uploadAndParse(file, previewLimit, sheetIndex, sheetName);
+            if (response == null) {
+                terminalStrictAudit(
+                    "INGESTION_FILE_CLASSIFICATION_SEAL",
+                    AuditStage.FAIL,
+                    auditOperationId,
+                    auditOperationId,
+                    beginAuditReceipt,
+                    "文件上传解析服务暂不可用",
+                    uploadEvidence
+                );
+                terminalAuditWritten = true;
+                return ResponseEntity.ok(new ApiResponse<>(503, "接入服务暂不可用", null));
+            }
+            if (isSuccessful(response)) {
                 Object sealed = classificationAdmissionService.sealEncryptedUpload(response.getData(), declaredLevel);
                 response.setData(accessDecisionService.removeInternalFilePaths(sealed));
-            } catch (CatalogClassificationException ex) {
-                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, ex.getMessage(), ex);
+                Map<String, Object> outcome = safeAuditDetails(uploadEvidence);
+                classificationAuditEvidence(mapValue(sealed)).forEach(outcome::putIfAbsent);
+                outcome.put("downstreamStatus", response.getStatus());
+                putAuditText(outcome, "downstreamCode", response.getCode());
+                terminalStrictAudit(
+                    "INGESTION_FILE_CLASSIFICATION_SEAL",
+                    AuditStage.SUCCESS,
+                    auditOperationId,
+                    auditOperationId,
+                    beginAuditReceipt,
+                    "文件上传解析及密级封存成功",
+                    outcome
+                );
+                terminalAuditWritten = true;
+            } else {
+                Map<String, Object> outcome = safeAuditDetails(uploadEvidence);
+                outcome.put("downstreamStatus", response.getStatus());
+                putAuditText(outcome, "downstreamCode", response.getCode());
+                terminalStrictAudit(
+                    "INGESTION_FILE_CLASSIFICATION_SEAL",
+                    AuditStage.FAIL,
+                    auditOperationId,
+                    auditOperationId,
+                    beginAuditReceipt,
+                    "文件上传解析失败，未生成密级封存",
+                    outcome
+                );
+                terminalAuditWritten = true;
             }
+            return ResponseEntity.ok(accessDecisionService.sanitizeResponse(response));
+        } catch (CatalogClassificationException failure) {
+            if (!terminalAuditWritten) {
+                terminalStrictAudit(
+                    "INGESTION_FILE_CLASSIFICATION_SEAL",
+                    AuditStage.FAIL,
+                    auditOperationId,
+                    auditOperationId,
+                    beginAuditReceipt,
+                    "文件密级封存失败",
+                    Map.of(
+                        "declaredLevel", declaredLevel,
+                        "errorType", failure.getClass().getSimpleName(),
+                        "operationOutcome", "UNKNOWN",
+                        "doNotRetry", true
+                    )
+                );
+            }
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, failure.getMessage(), failure);
+        } catch (RuntimeException failure) {
+            if (!(failure instanceof AuditFinalizationException) && !terminalAuditWritten) {
+                terminalStrictAudit(
+                    "INGESTION_FILE_CLASSIFICATION_SEAL",
+                    AuditStage.FAIL,
+                    auditOperationId,
+                    auditOperationId,
+                    beginAuditReceipt,
+                    "文件上传解析及密级封存异常",
+                    Map.of(
+                        "declaredLevel", declaredLevel,
+                        "errorType", failure.getClass().getSimpleName(),
+                        "operationOutcome", "UNKNOWN",
+                        "doNotRetry", true
+                    )
+                );
+            }
+            throw failure;
         }
-        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(response));
     }
 
     @PostMapping("/files/parse")
@@ -680,7 +1050,7 @@ public class IngestionTaskProxyResource {
         if (params != null) {
             query.putAll(params);
         }
-        return ResponseEntity.ok(ingestionClient.getExecutionsObservability(query));
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(ingestionClient.getExecutionsObservability(query)));
     }
 
     @GetMapping("/tasks/executions/governance-overview")
@@ -691,7 +1061,7 @@ public class IngestionTaskProxyResource {
         if (params != null) {
             query.putAll(params);
         }
-        return ResponseEntity.ok(ingestionClient.getGovernanceOverview(query));
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(ingestionClient.getGovernanceOverview(query)));
     }
 
     @GetMapping("/tasks/changes")
@@ -707,7 +1077,7 @@ public class IngestionTaskProxyResource {
         if (params != null) {
             query.putAll(params);
         }
-        return ResponseEntity.ok(ingestionClient.listChangeLogs(query));
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(ingestionClient.listChangeLogs(query)));
     }
 
     @PostMapping("/tasks/changes")
@@ -736,7 +1106,7 @@ public class IngestionTaskProxyResource {
                 Map.of("summary", "登记接入变更失败", "taskId", taskId, "operator", operator)
             );
         }
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(response));
     }
 
     private ResponseEntity<ApiResponse<Map<String, Object>>> buildAsyncProxyResponse(ApiResponse<Map<String, Object>> response) {
@@ -751,6 +1121,204 @@ public class IngestionTaskProxyResource {
             return ResponseEntity.ok(normalized);
         }
         return ResponseEntity.status(status > 0 ? status : 500).body(response);
+    }
+
+    private Object sanitizeJsonResponse(Object response) {
+        if (response instanceof ApiResponse<?> apiResponse) {
+            return accessDecisionService.sanitizeResponse(apiResponse);
+        }
+        return accessDecisionService.removeInternalFilePaths(response);
+    }
+
+    private <T> ApiResponse<T> auditedIngestionCall(
+        String actionCode,
+        String resourceId,
+        String beginSummary,
+        String successSummary,
+        String failureSummary,
+        Map<String, Object> details,
+        Supplier<ApiResponse<T>> operation
+    ) {
+        String auditOperationId = UUID.randomUUID().toString();
+        UUID beginAuditReceipt = strictAudit(
+            actionCode,
+            AuditStage.BEGIN,
+            resourceId,
+            auditOperationId,
+            beginSummary,
+            details
+        );
+        ApiResponse<T> response;
+        try {
+            response = operation.get();
+        } catch (RuntimeException failure) {
+            Map<String, Object> failed = safeAuditDetails(details);
+            failed.put("errorType", failure.getClass().getSimpleName());
+            failed.put("operationOutcome", "UNKNOWN");
+            failed.put("doNotRetry", true);
+            if (failure instanceof ResponseStatusException statusFailure) {
+                failed.put("httpStatus", statusFailure.getStatusCode().value());
+            }
+            terminalStrictAudit(
+                actionCode,
+                AuditStage.FAIL,
+                resourceId,
+                auditOperationId,
+                beginAuditReceipt,
+                failureSummary,
+                failed
+            );
+            throw failure;
+        }
+        boolean success = isSuccessful(response);
+        Map<String, Object> outcome = safeAuditDetails(details);
+        if (response != null) {
+            outcome.put("downstreamStatus", response.getStatus());
+            putAuditText(outcome, "downstreamCode", response.getCode());
+        } else {
+            outcome.put("downstreamStatus", "UNAVAILABLE");
+        }
+        terminalStrictAudit(
+            actionCode,
+            success ? AuditStage.SUCCESS : AuditStage.FAIL,
+            resourceId,
+            auditOperationId,
+            beginAuditReceipt,
+            success ? successSummary : failureSummary,
+            outcome
+        );
+        return response;
+    }
+
+    private boolean isSuccessful(ApiResponse<?> response) {
+        return response != null && response.getStatus() >= 200 && response.getStatus() < 300;
+    }
+
+    private UUID strictAudit(
+        String actionCode,
+        AuditStage stage,
+        String resourceId,
+        String auditOperationId,
+        String summary,
+        Map<String, Object> details
+    ) {
+        Map<String, Object> payload = safeAuditDetails(details);
+        payload.put("summary", summary);
+        payload.put("auditOperationId", auditOperationId);
+        payload.put("operator", SecurityUtils.getCurrentUserLogin().orElse("system"));
+        return auditService.auditActionStrict(actionCode, stage, resourceId, Map.copyOf(payload));
+    }
+
+    private void terminalStrictAudit(
+        String actionCode,
+        AuditStage stage,
+        String resourceId,
+        String auditOperationId,
+        UUID beginAuditReceipt,
+        String summary,
+        Map<String, Object> details
+    ) {
+        Map<String, Object> correlated = safeAuditDetails(details);
+        correlated.put("beginAuditReceipt", beginAuditReceipt.toString());
+        try {
+            strictAudit(actionCode, stage, resourceId, auditOperationId, summary, correlated);
+        } catch (RuntimeException auditFailure) {
+            throw new AuditFinalizationException(auditOperationId, beginAuditReceipt, auditFailure);
+        }
+    }
+
+    private Map<String, Object> safeAuditDetails(Map<String, Object> details) {
+        Map<String, Object> safe = new LinkedHashMap<>();
+        if (details != null) {
+            details.forEach((key, value) -> {
+                if (value != null) {
+                    safe.put(key, value);
+                }
+            });
+        }
+        return safe;
+    }
+
+    private void putAuditText(Map<String, Object> target, String key, Object value) {
+        String text = value == null ? null : String.valueOf(value).trim();
+        if (StringUtils.hasText(text)) {
+            target.put(key, text);
+        }
+    }
+
+    private static final class AuditFinalizationException extends ResponseStatusException {
+
+        private AuditFinalizationException(String operationId, UUID beginAuditReceipt, RuntimeException cause) {
+            super(
+                HttpStatus.CONFLICT,
+                "操作结果已经产生，但审计终态尚未确认；请勿重复执行，请使用 BEGIN 回执核对。operationId=" +
+                operationId +
+                ", beginReceipt=" +
+                beginAuditReceipt,
+                cause
+            );
+        }
+    }
+
+    private Map<String, Object> classificationAuditEvidence(Map<String, Object> source) {
+        Map<String, Object> evidence = new LinkedHashMap<>();
+        if (source == null || source.isEmpty()) {
+            return evidence;
+        }
+        Map<String, Object> seal = mapValue(source.get("classificationSeal"));
+        if (seal.isEmpty()) {
+            Map<String, Object> sourceConfig = mapValue(source.get("sourceConfig"));
+            seal = mapValue(sourceConfig.get("classificationSeal"));
+        }
+        copyAuditEvidence(seal, evidence, "sealId", "sealId");
+        copyAuditEvidence(seal, evidence, "subjectType", "subjectType");
+        copyAuditEvidence(seal, evidence, "subjectKey", "subjectKey");
+        copyAuditEvidence(seal, evidence, "effectiveLevel", "effectiveLevel");
+        copyAuditEvidence(seal, evidence, "fileFloor", "fileFloor");
+        copyAuditEvidence(seal, evidence, "snapshotVersion", "snapshotVersion");
+        copyAuditEvidence(seal, evidence, "propagationStatus", "propagationStatus");
+        Object checksum = firstNonBlank(
+            seal.get("evidenceChecksum"),
+            seal.get("checksum"),
+            seal.get("fileChecksum")
+        );
+        putAuditText(evidence, "evidenceChecksum", checksum);
+        Object rawFields = source.get("fieldClassifications");
+        if (rawFields instanceof Map<?, ?> fields) {
+            evidence.put("fieldClassificationCount", fields.size());
+            Map<String, Integer> levelCounts = new java.util.TreeMap<>();
+            fields.values().forEach(level -> {
+                String normalized = String.valueOf(level).trim();
+                if (StringUtils.hasText(normalized)) {
+                    levelCounts.merge(normalized, 1, Integer::sum);
+                }
+            });
+            if (!levelCounts.isEmpty()) {
+                evidence.put("fieldClassificationLevelCounts", Map.copyOf(levelCounts));
+            }
+        }
+        copyAuditEvidence(source, evidence, "preCheckStatus", "preCheckStatus");
+        copyAuditEvidence(source, evidence, "preCheckRunId", "preCheckRunId");
+        copyAuditEvidence(source, evidence, "revisionNumber", "revisionNumber");
+        copyAuditEvidence(source, evidence, "revisionState", "revisionState");
+        copyAuditEvidence(source, evidence, "activeRevisionId", "activeRevisionId");
+        copyAuditEvidence(source, evidence, "activeRevisionNumber", "activeRevisionNumber");
+        copyAuditEvidence(source, evidence, "effectiveConfigChecksum", "effectiveConfigChecksum");
+        copyAuditEvidence(source, evidence, "defaultPolicyVersion", "defaultPolicyVersion");
+        copyAuditEvidence(source, evidence, "defaultPolicyChecksum", "defaultPolicyChecksum");
+        copyAuditEvidence(source, evidence, "qualityPolicyRef", "qualityPolicyRef");
+        return evidence;
+    }
+
+    private void copyAuditEvidence(
+        Map<String, Object> source,
+        Map<String, Object> target,
+        String sourceKey,
+        String targetKey
+    ) {
+        if (source != null) {
+            putAuditText(target, targetKey, source.get(sourceKey));
+        }
     }
 
     private Map<String, Object> applyDefaultDestinationPayload(
@@ -988,44 +1556,6 @@ public class IngestionTaskProxyResource {
             return merged;
         }
         return overrideConn;
-    }
-
-    /**
-     * When the update payload does not include a password, fetch the existing
-     * task and keep its stored password instead of falling back to the default
-     * data-lake template value.
-     */
-    private void preserveExistingPassword(Long id, Map<String, Object> resolvedPayload, Map<String, Object> originalPayload) {
-        Map<String, Object> userDestConfig = extractConfig(originalPayload.get("destinationConfig"));
-        boolean userProvidedPassword = userDestConfig.containsKey("password")
-            && StringUtils.hasText(String.valueOf(userDestConfig.get("password")));
-        if (userProvidedPassword) {
-            return;
-        }
-        Object destCfgObj = resolvedPayload.get("destinationConfig");
-        if (!(destCfgObj instanceof Map<?, ?> destCfg)) {
-            return;
-        }
-        try {
-            ApiResponse<Map<String, Object>> existing = ingestionClient.getTask(id);
-            if (existing == null || existing.getData() == null) {
-                return;
-            }
-            Map<String, Object> existingData = existing.getData();
-            Object existingDestCfg = existingData.get("destinationConfig");
-            String existingPassword = null;
-            if (existingDestCfg instanceof Map<?, ?> m) {
-                Object pw = m.get("password");
-                existingPassword = pw == null ? null : String.valueOf(pw).trim();
-            }
-            if (StringUtils.hasText(existingPassword)) {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> mutable = (Map<String, Object>) destCfg;
-                mutable.put("password", existingPassword);
-            }
-        } catch (Exception ex) {
-            // best-effort: if we can't fetch the task, proceed with whatever we have
-        }
     }
 
     private void ensureWriterTables(Map<String, Object> config) {

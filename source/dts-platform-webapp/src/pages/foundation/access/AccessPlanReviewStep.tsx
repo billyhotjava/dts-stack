@@ -19,7 +19,15 @@ const scheduleText = (values: AccessPlanFormValues) => {
 	return "手动触发";
 };
 
-export function AccessPlanReviewStep({ kind, editing, values, sourceName, targetName, fileUploadResult, apiPreview }: Props) {
+export function AccessPlanReviewStep({
+	kind,
+	editing,
+	values,
+	sourceName,
+	targetName,
+	fileUploadResult,
+	apiPreview,
+}: Props) {
 	const resource =
 		kind === "database"
 			? values.tableSelectionMode === "all"
@@ -35,7 +43,7 @@ export function AccessPlanReviewStep({ kind, editing, values, sourceName, target
 			<div>
 				<Typography.Title level={4}>确认接入计划</Typography.Title>
 				<Typography.Text type="secondary">
-					确认后创建或更新任务；执行结果和异常数据将在任务运行记录中呈现。
+					确认后仅保存为待准入草稿，不会立即执行；准入后的运行结果和异常数据将在任务运行记录中呈现。
 				</Typography.Text>
 			</div>
 			<Descriptions bordered size="small" column={{ xs: 1, sm: 1, md: 2 }}>
@@ -53,13 +61,7 @@ export function AccessPlanReviewStep({ kind, editing, values, sourceName, target
 					{kind === "file" ? "全量导入" : values.syncMode === "incremental" ? "增量同步" : "全量同步"}
 				</Descriptions.Item>
 				<Descriptions.Item label="提交后">
-					{kind === "file"
-						? "保存草稿并等待密级准入"
-						: editing
-							? "保存为待准入草稿；当前生效版本继续运行"
-							: values.runNow
-								? "立即运行"
-								: "仅保存任务"}
+					{editing ? "保存为待准入草稿；当前生效版本继续运行" : "保存草稿并等待密级准入"}
 				</Descriptions.Item>
 			</Descriptions>
 			{kind === "file" ? (

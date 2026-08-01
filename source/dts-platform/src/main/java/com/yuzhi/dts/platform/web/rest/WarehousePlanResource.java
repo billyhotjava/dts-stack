@@ -304,7 +304,6 @@ public class WarehousePlanResource {
 
     @PutMapping("/{id}/baseline/source-mappings")
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
-    @Deprecated(forRemoval = false)
     public ResponseEntity<ApiResponse<List<SourceBusinessMapping>>> saveSourceMappings(
         @PathVariable UUID id,
         @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
@@ -535,6 +534,7 @@ public class WarehousePlanResource {
             "WAREHOUSE_PLAN_CODE_CONFLICT".equals(code) ||
             "WAREHOUSE_PLAN_IDEMPOTENCY_CONFLICT".equals(code) ||
             "WAREHOUSE_PLAN_LIFECYCLE_CONFLICT".equals(code) ||
+            "WAREHOUSE_PLAN_BASELINE_STALE".equals(code) ||
             "WAREHOUSE_PLAN_BASELINE_INCOMPLETE".equals(code) ||
             "WAREHOUSE_PLAN_SOURCE_IN_USE".equals(code)
         ) {

@@ -748,86 +748,6 @@
           ]
         },
         {
-          "key": "modeling.plans",
-          "title": "数据规划管理",
-          "actions": [
-            {
-              "code": "MODELING_PLAN_VIEW",
-              "display": "查看数据规划",
-              "phases": [
-                "SUCCESS"
-              ],
-              "supportsFlow": false
-            },
-            {
-              "code": "MODELING_PLAN_EDIT",
-              "display": "维护数据规划",
-              "phases": [
-                "BEGIN",
-                "SUCCESS",
-                "FAIL"
-              ],
-              "supportsFlow": true
-            },
-            {
-              "code": "MODELING_PLAN_DELETE",
-              "display": "删除数据规划",
-              "phases": [
-                "BEGIN",
-                "SUCCESS",
-                "FAIL"
-              ],
-              "supportsFlow": true
-            },
-            {
-              "code": "MODELING_PLAN_VERSION_VIEW",
-              "display": "查看数据规划版本",
-              "phases": [
-                "SUCCESS"
-              ],
-              "supportsFlow": false
-            },
-            {
-              "code": "MODELING_PLAN_PUBLISH",
-              "display": "发布数据规划",
-              "phases": [
-                "BEGIN",
-                "SUCCESS",
-                "FAIL"
-              ],
-              "supportsFlow": true
-            },
-            {
-              "code": "MODELING_PLAN_REVIEW_VIEW",
-              "display": "查看数据规划评审记录",
-              "phases": [
-                "SUCCESS"
-              ],
-              "supportsFlow": false
-            },
-            {
-              "code": "MODELING_PLAN_REVIEW_SUBMIT",
-              "display": "提交数据规划评审",
-              "phases": [
-                "BEGIN",
-                "SUCCESS",
-                "FAIL"
-              ],
-              "supportsFlow": true
-            },
-            {
-              "code": "MODELING_PLAN_REVIEW_DECIDE",
-              "display": "审批数据规划评审",
-              "phases": [
-                "BEGIN",
-                "SUCCESS",
-                "FAIL"
-              ],
-              "supportsFlow": true
-            }
-          ]
-        },
-        {
           "key": "modeling.glossary",
           "title": "指标口径与术语库",
           "actions": [
@@ -996,24 +916,32 @@
           "title": "数据规划",
           "actions": [
             {
-              "code": "MODELING_PLAN_CREATE",
-              "display": "创建建模计划",
+              "code": "MODELING_WAREHOUSE_PLAN_CREATE",
+              "display": "创建建设计划",
               "phases": [
                 "SUCCESS"
               ],
               "supportsFlow": false
             },
             {
-              "code": "MODELING_PLAN_READ",
-              "display": "查看建模计划",
+              "code": "MODELING_WAREHOUSE_PLAN_HEADER_UPDATE",
+              "display": "更新建设计划基本信息",
               "phases": [
                 "SUCCESS"
               ],
               "supportsFlow": false
             },
             {
-              "code": "MODELING_PLAN_UPDATE",
-              "display": "更新建模计划",
+              "code": "MODELING_WAREHOUSE_PLAN_ARCHIVE",
+              "display": "归档建设计划",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "MODELING_WAREHOUSE_BUSINESS_SCOPE_SAVE",
+              "display": "保存建设计划业务范围",
               "phases": [
                 "SUCCESS"
               ],
@@ -1044,6 +972,54 @@
               "supportsFlow": false
             },
             {
+              "code": "MODELING_WAREHOUSE_SOURCE_MAPPINGS_SAVE",
+              "display": "保存建设计划来源映射",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "MODELING_WAREHOUSE_BASELINE_CONFIRM",
+              "display": "确认建设计划基线",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "MODEL_RELEASE_CANDIDATE_CREATE",
+              "display": "创建模型候选版本",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "MODEL_RELEASE_CANDIDATE_REPLACEMENT_CREATE",
+              "display": "创建模型候选替代版本",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "MODEL_RELEASE_CANDIDATE_SCOPE_REPLACE",
+              "display": "替换模型候选范围",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "MODEL_RELEASE_CANDIDATE_STATUS_CHANGE",
+              "display": "变更模型候选状态",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
               "code": "MODEL_RELEASE_CANDIDATE_PUBLISH",
               "display": "发布模型候选版本",
               "phases": [
@@ -1052,8 +1028,8 @@
               "supportsFlow": false
             },
             {
-              "code": "MODEL_RELEASE_CANDIDATE_REGISTRATION_RETRY",
-              "display": "重试模型候选版本登记",
+              "code": "MODEL_RELEASE_CANDIDATE_PUBLICATION_RETRY",
+              "display": "重试发布模型候选版本",
               "phases": [
                 "SUCCESS"
               ],
@@ -1070,124 +1046,260 @@
           ]
         },
         {
-          "key": "modeling.sql-model",
-          "title": "SQL 模型",
+          "key": "modeling.materialization",
+          "title": "模型物化调度",
           "actions": [
             {
-              "code": "MODELING_SQL_MODEL_BATCH_IMPORT",
-              "display": "批量导入SQL 模型",
+              "code": "MODEL_MATERIALIZATION_DISPATCH_SUBMITTED",
+              "display": "提交模型物化任务",
               "phases": [
                 "SUCCESS"
               ],
               "supportsFlow": false
             },
             {
-              "code": "MODELING_SQL_MODEL_CREATE",
-              "display": "创建SQL 模型",
+              "code": "MODEL_MATERIALIZATION_DISPATCH_UNKNOWN",
+              "display": "模型物化调度结果未知",
+              "phases": [
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "MODEL_MATERIALIZATION_DISPATCH_BLOCKED",
+              "display": "阻断模型物化调度",
+              "phases": [
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "MODEL_MATERIALIZATION_SOURCE_FENCE_DENIED",
+              "display": "源可用性围栏阻断模型物化",
+              "phases": [
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "MODEL_MATERIALIZATION_RUNTIME_SPEC_CONSUMED",
+              "display": "消费模型物化运行时规格",
               "phases": [
                 "SUCCESS"
               ],
               "supportsFlow": false
             },
             {
-              "code": "MODELING_SQL_MODEL_DELETE",
-              "display": "删除SQL 模型",
+              "code": "MODEL_MATERIALIZATION_RUNTIME_SPEC_BLOCKED",
+              "display": "阻断模型物化运行时规格",
+              "phases": [
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "MODEL_MATERIALIZATION_ARTIFACTS_SYNCED",
+              "display": "同步模型物化运行产物",
               "phases": [
                 "SUCCESS"
               ],
               "supportsFlow": false
             },
             {
-              "code": "MODELING_SQL_MODEL_GENERATE",
-              "display": "生成SQL 模型",
+              "code": "MODEL_MATERIALIZATION_RELATIONS_VERIFIED",
+              "display": "验证模型物化物理关系",
               "phases": [
                 "SUCCESS"
               ],
               "supportsFlow": false
             },
             {
-              "code": "MODELING_SQL_MODEL_IMPORT",
-              "display": "导入SQL 模型",
+              "code": "MODEL_MATERIALIZATION_RUN_FAILED",
+              "display": "模型物化运行失败",
+              "phases": [
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "MODEL_MATERIALIZATION_RUN_FINALIZED",
+              "display": "完成模型物化运行",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            }
+          ]
+        },
+        {
+          "key": "modeling.rollback-invalidation",
+          "title": "回滚失效处理",
+          "actions": [
+            {
+              "code": "ROLLBACK_INVALIDATION_PREPARE",
+              "display": "准备回滚失效",
               "phases": [
                 "SUCCESS"
               ],
               "supportsFlow": false
             },
             {
-              "code": "MODELING_SQL_MODEL_READ",
-              "display": "查看SQL 模型",
+              "code": "ROLLBACK_INVALIDATION_APPLY",
+              "display": "应用回滚失效",
               "phases": [
                 "SUCCESS"
               ],
               "supportsFlow": false
             },
             {
-              "code": "MODELING_SQL_MODEL_UPDATE",
-              "display": "更新SQL 模型",
+              "code": "ROLLBACK_INVALIDATION_ABORT",
+              "display": "中止回滚失效",
               "phases": [
                 "SUCCESS"
               ],
               "supportsFlow": false
             },
             {
-              "code": "MODELING_SQL_MODEL_BATCH_DELETE",
-              "display": "删除SQL 模型批量",
+              "code": "SOURCE_AVAILABILITY_RESTORE",
+              "display": "恢复来源可用性",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            }
+          ]
+        },
+        {
+          "key": "modeling.model-spec",
+          "title": "模型定义",
+          "actions": [
+            {
+              "code": "MODELING_MODEL_SPEC_CREATE",
+              "display": "创建模型定义",
               "phases": [
                 "SUCCESS"
               ],
               "supportsFlow": false
             },
             {
-              "code": "MODELING_SQL_MODEL_COLUMNS_READ",
-              "display": "查看SQL 模型列",
+              "code": "MODELING_MODEL_SPEC_IMPORT_CREATE",
+              "display": "导入模型定义",
               "phases": [
                 "SUCCESS"
               ],
               "supportsFlow": false
             },
             {
-              "code": "MODELING_SQL_MODEL_CONTRACT_IMPACT_READ",
-              "display": "查看SQL 模型契约影响",
+              "code": "MODELING_MODEL_SPEC_UPDATE",
+              "display": "更新模型定义",
               "phases": [
                 "SUCCESS"
               ],
               "supportsFlow": false
             },
             {
-              "code": "MODELING_SQL_MODEL_DBT_REFS_READ",
-              "display": "查看SQL 模型 dbt refs",
+              "code": "MODELING_MODEL_SPEC_RECLASSIFY",
+              "display": "调整模型分类",
               "phases": [
                 "SUCCESS"
               ],
               "supportsFlow": false
             },
             {
-              "code": "MODELING_SQL_MODEL_DBT_SOURCES_READ",
-              "display": "查看SQL 模型 dbt sources",
+              "code": "MODELING_MODEL_SPEC_DELETE_DRAFT",
+              "display": "删除模型草稿",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            }
+          ]
+        },
+        {
+          "key": "modeling.implementation-lifecycle",
+          "title": "模型实现生命周期",
+          "actions": [
+            {
+              "code": "MODEL_IMPLEMENTATION_SAVE",
+              "display": "保存模型实现",
               "phases": [
                 "SUCCESS"
               ],
               "supportsFlow": false
             },
             {
-              "code": "MODELING_SQL_MODEL_GOVERNANCE_EXECUTE_DELETE",
-              "display": "删除SQL 模型治理执行",
+              "code": "MODEL_IMPLEMENTATION_IMPORT",
+              "display": "导入 dbt 模型实现",
               "phases": [
                 "SUCCESS"
               ],
               "supportsFlow": false
             },
             {
-              "code": "MODELING_SQL_MODEL_GOVERNANCE_PREVIEW_READ",
-              "display": "查看SQL 模型治理预览",
+              "code": "MODEL_IMPLEMENTATION_OWNERSHIP_CONVERT",
+              "display": "转换模型实现归属",
               "phases": [
                 "SUCCESS"
               ],
               "supportsFlow": false
             },
             {
-              "code": "MODELING_SQL_MODEL_SEMANTIC_PUBLISH",
-              "display": "发布SQL 模型语义层",
+              "code": "MODEL_IMPLEMENTATION_CLAIM",
+              "display": "认领模型实现",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "MODEL_IMPLEMENTATION_COMPILE",
+              "display": "编译模型实现",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "MODEL_IMPLEMENTATION_TEST_EVIDENCE_RECORD",
+              "display": "登记模型实现测试证据",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            }
+          ]
+        },
+        {
+          "key": "modeling.dimension-definition",
+          "title": "业务维度",
+          "actions": [
+            {
+              "code": "MODELING_DIMENSION_DEFINITION_CREATE",
+              "display": "创建业务维度",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "MODELING_DIMENSION_DEFINITION_UPDATE",
+              "display": "更新业务维度",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "MODELING_DIMENSION_DEFINITION_CONFIRM",
+              "display": "确认业务维度",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "MODELING_DIMENSION_DEFINITION_RETIRE",
+              "display": "停用业务维度",
               "phases": [
                 "SUCCESS"
               ],
@@ -1550,8 +1662,34 @@
               "supportsFlow": false
             },
             {
+              "code": "GOV_RULE_VERSION_LIST",
+              "display": "查看质量规则版本列表",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "GOV_RULE_VERSION_VIEW",
+              "display": "查看质量规则版本",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
               "code": "GOV_RULE_MANAGE",
               "display": "维护质量规则",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
+              "code": "GOV_RULE_VERSION_STATUS",
+              "display": "变更质量规则版本状态",
               "phases": [
                 "BEGIN",
                 "SUCCESS",
@@ -1568,6 +1706,15 @@
                 "FAIL"
               ],
               "supportsFlow": true
+            },
+            {
+              "code": "GOV_RULE_DRY_RUN",
+              "display": "试跑质量规则",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
             }
           ]
         },
@@ -1590,6 +1737,15 @@
                 "SUCCESS"
               ],
               "supportsFlow": false
+            },
+            {
+              "code": "GOV_QUALITY_RUN_EXECUTE",
+              "display": "执行质量检测运行",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
             }
           ]
         },
@@ -1608,6 +1764,14 @@
             {
               "code": "GOV_ISSUE_VIEW",
               "display": "查看问题单详情",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "GOV_ISSUE_METRICS",
+              "display": "查看质量问题指标",
               "phases": [
                 "SUCCESS"
               ],
@@ -1652,6 +1816,270 @@
                 "FAIL"
               ],
               "supportsFlow": true
+            }
+          ]
+        },
+        {
+          "key": "governance.qualityTemplates",
+          "title": "质量模板",
+          "actions": [
+            {
+              "code": "GOV_QUALITY_TEMPLATE_LIST",
+              "display": "查看质量模板列表",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "GOV_QUALITY_TEMPLATE_VIEW",
+              "display": "查看质量模板",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "GOV_QUALITY_TEMPLATE_CREATE",
+              "display": "创建质量模板",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
+              "code": "GOV_QUALITY_TEMPLATE_UPDATE",
+              "display": "更新质量模板",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
+              "code": "GOV_QUALITY_TEMPLATE_DELETE",
+              "display": "删除质量模板",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
+              "code": "GOV_QUALITY_TEMPLATE_PREVIEW",
+              "display": "预览质量模板",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            }
+          ]
+        },
+        {
+          "key": "governance.qualityTasks",
+          "title": "质量巡检计划",
+          "actions": [
+            {
+              "code": "GOV_QUALITY_TASK_LIST",
+              "display": "查看质量巡检计划列表",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "GOV_QUALITY_TASK_CREATE",
+              "display": "创建质量巡检计划",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
+              "code": "GOV_QUALITY_TASK_UPDATE",
+              "display": "更新质量巡检计划",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
+              "code": "GOV_QUALITY_TASK_DELETE",
+              "display": "删除质量巡检计划",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
+              "code": "GOV_QUALITY_TASK_TOGGLE",
+              "display": "切换质量巡检计划状态",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
+              "code": "GOV_QUALITY_TASK_EXECUTE",
+              "display": "执行质量巡检计划",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            }
+          ]
+        },
+        {
+          "key": "governance.qualityCleansing",
+          "title": "质量清洗",
+          "actions": [
+            {
+              "code": "GOV_QUALITY_CLEANSING_PREVIEW",
+              "display": "预览质量问题清洗",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "GOV_QUALITY_CLEANSING_EXECUTE",
+              "display": "执行质量问题清洗",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "GOV_QUALITY_CLEANSING_FUNCTION_LIST",
+              "display": "查看清洗函数列表",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "GOV_QUALITY_CLEANSING_FUNCTION_CREATE",
+              "display": "创建清洗函数",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
+              "code": "GOV_QUALITY_CLEANSING_FUNCTION_UPDATE",
+              "display": "更新清洗函数",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
+              "code": "GOV_QUALITY_CLEANSING_FUNCTION_DELETE",
+              "display": "删除清洗函数",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            }
+          ]
+        },
+        {
+          "key": "governance.qualityRepair",
+          "title": "质量修复",
+          "actions": [
+            {
+              "code": "GOV_QUALITY_SQL_REPAIR_PREVIEW",
+              "display": "预览质量 SQL 修复",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "GOV_QUALITY_SQL_REPAIR_EXECUTE",
+              "display": "执行质量 SQL 修复",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            }
+          ]
+        },
+        {
+          "key": "governance.qualityReports",
+          "title": "质量报告",
+          "actions": [
+            {
+              "code": "GOV_QUALITY_REPORT_EXPORT",
+              "display": "导出质量报告",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            }
+          ]
+        },
+        {
+          "key": "governance.qualityOps",
+          "title": "质量运营",
+          "actions": [
+            {
+              "code": "GOV_OPS_OVERVIEW_VIEW",
+              "display": "查看质量运营概览",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "GOV_OPS_TREND_VIEW",
+              "display": "查看质量运营趋势",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "GOV_OPS_RELEASE_GATE_VIEW",
+              "display": "查看质量发布门禁",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "GOV_AUTO_TRIGGER",
+              "display": "自动触发清洗与质量检测",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
             }
           ]
         },
@@ -2921,6 +3349,26 @@
               "supportsFlow": true
             },
             {
+              "code": "FOUNDATION_DATASOURCE_CREATE",
+              "display": "创建数据连接",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
+              "code": "FOUNDATION_DATASOURCE_UPDATE",
+              "display": "更新数据连接",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
               "code": "FOUNDATION_DATASOURCE_TEST",
               "display": "测试数据源连接",
               "phases": [
@@ -2941,112 +3389,204 @@
               "supportsFlow": true
             },
             {
-              "code": "FOUNDATION_SCHEMA_DISCOVER",
-              "display": "探测数据源 Schema",
-              "phases": [
-                "SUCCESS",
-                "FAIL"
-              ],
-              "supportsFlow": false
-            },
-            {
-              "code": "FOUNDATION_ODS_PREVIEW",
-              "display": "预览 ODS 与 dbt source",
-              "phases": [
-                "SUCCESS",
-                "FAIL"
-              ],
-              "supportsFlow": false
-            },
-            {
-              "code": "FOUNDATION_ODS_PRECHECK",
-              "display": "执行 ODS 同步任务预检",
-              "phases": [
-                "SUCCESS",
-                "FAIL"
-              ],
-              "supportsFlow": false
-            },
-            {
-              "code": "FOUNDATION_ODS_APPLY",
-              "display": "生成 ODS 映射与 dbt source",
-              "phases": [
-                "SUCCESS",
-                "FAIL"
-              ],
-              "supportsFlow": false
-            },
-            {
-              "code": "FOUNDATION_SYNC_TASK_DRAFT",
-              "display": "生成同步任务草稿",
-              "phases": [
-                "SUCCESS",
-                "FAIL"
-              ],
-              "supportsFlow": false
-            },
-            {
               "code": "INGESTION_TASK_CREATE",
-              "display": "创建入湖任务",
+              "display": "创建接入任务",
               "phases": [
+                "BEGIN",
                 "SUCCESS",
                 "FAIL"
               ],
-              "supportsFlow": false
+              "supportsFlow": true
             },
             {
               "code": "INGESTION_TASK_UPDATE",
-              "display": "更新入湖任务",
+              "display": "更新接入任务",
               "phases": [
+                "BEGIN",
                 "SUCCESS",
                 "FAIL"
               ],
-              "supportsFlow": false
+              "supportsFlow": true
             },
             {
               "code": "INGESTION_TASK_DELETE",
-              "display": "删除入湖任务",
+              "display": "删除接入任务",
               "phases": [
+                "BEGIN",
                 "SUCCESS",
                 "FAIL"
               ],
-              "supportsFlow": false
+              "supportsFlow": true
             },
             {
               "code": "INGESTION_TASK_EXECUTE",
-              "display": "执行入湖任务",
+              "display": "执行接入任务",
               "phases": [
+                "BEGIN",
                 "SUCCESS",
                 "FAIL"
               ],
-              "supportsFlow": false
+              "supportsFlow": true
             },
             {
               "code": "INGESTION_TASK_RETRY",
-              "display": "重跑入湖任务",
+              "display": "重跑接入任务",
               "phases": [
+                "BEGIN",
                 "SUCCESS",
                 "FAIL"
               ],
-              "supportsFlow": false
+              "supportsFlow": true
             },
             {
               "code": "INGESTION_EXECUTION_RETRY",
-              "display": "重试入湖执行",
+              "display": "重试接入执行",
               "phases": [
+                "BEGIN",
                 "SUCCESS",
                 "FAIL"
               ],
-              "supportsFlow": false
+              "supportsFlow": true
+            },
+            {
+              "code": "INGESTION_FILE_PARSE",
+              "display": "解析接入文件",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
+              "code": "INGESTION_FILE_PRECHECK",
+              "display": "执行文件落地前预检",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
+              "code": "INGESTION_FILE_RECHECK",
+              "display": "重新检查文件落地数据",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
+              "code": "INGESTION_STAGING_CELL_UPDATE",
+              "display": "修订文件暂存数据",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
+              "code": "INGESTION_STAGING_CLEAR",
+              "display": "清除文件暂存数据",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
+              "code": "INGESTION_FILE_CLASSIFICATION_SEAL",
+              "display": "封存接入文件密级",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
+              "code": "INGESTION_TASK_ADMIT",
+              "display": "确认任务密级并准入",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
+              "code": "INGESTION_ROLLBACK_ANALYZE",
+              "display": "分析接入回退影响",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
+              "code": "INGESTION_ROLLBACK_EXECUTE",
+              "display": "执行接入数据回退",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
+              "code": "INGESTION_ROLLBACK_REPLAY",
+              "display": "重新投递接入回退命令",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
+              "code": "INGESTION_TASK_PAUSE",
+              "display": "暂停接入任务",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
+              "code": "INGESTION_TASK_RESUME",
+              "display": "恢复接入任务",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
+              "code": "INGESTION_SECRET_COMPATIBILITY_RESTORE",
+              "display": "恢复接入任务兼容凭据",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
             },
             {
               "code": "INGESTION_BACKFILL_RUN",
               "display": "按时间范围补数",
               "phases": [
+                "BEGIN",
                 "SUCCESS",
                 "FAIL"
               ],
-              "supportsFlow": false
+              "supportsFlow": true
             }
           ]
         },
@@ -4522,6 +5062,20 @@
             {
               "code": "SPRINT27_RELEASE_GOVERNANCE_VIEW",
               "display": "查看 Sprint-27 发布治理",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            }
+          ]
+        },
+        {
+          "key": "platform.audit-outbox",
+          "title": "审计投递队列",
+          "actions": [
+            {
+              "code": "AUDIT_OUTBOX_REPLAY_REQUESTED",
+              "display": "请求重放审计投递事件",
               "phases": [
                 "SUCCESS"
               ],

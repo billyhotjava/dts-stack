@@ -25,6 +25,7 @@ import com.yuzhi.dts.platform.repository.modeling.MetadataStandardRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingGlossaryTermRepository;
 import com.yuzhi.dts.platform.repository.modeling.StandardPackageImportRunItemRepository;
 import com.yuzhi.dts.platform.repository.modeling.StandardPackageImportRunRepository;
+import com.yuzhi.dts.platform.service.governance.GovernanceReferenceCodePackageService;
 import com.yuzhi.dts.platform.service.modeling.dto.MetadataStandardDto;
 import java.util.List;
 import java.util.Map;
@@ -81,9 +82,11 @@ class StandardPackageApplyServiceTest {
             glossaryTermRepository,
             metadataStandardRepository,
             metadataStandardService,
-            codeDirectoryRepository,
-            codeValueRepository,
-            codeMappingRepository,
+            new GovernanceReferenceCodePackageService(
+                codeDirectoryRepository,
+                codeValueRepository,
+                codeMappingRepository
+            ),
             objectMapper,
             measurementUnitService
         );

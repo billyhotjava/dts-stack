@@ -11,7 +11,9 @@ const AccessPlanWizardPage = lazy(() => import("@/pages/foundation/access/Access
 const AccessPlanDetailPage = lazy(() => import("@/pages/foundation/access/AccessPlanDetailPage"));
 const AccessDefaultsPage = lazy(() => import("@/pages/foundation/access/AccessDefaultsPage"));
 const LegacyDataIntegrationRedirect = lazy(() => import("@/pages/foundation/access/LegacyDataIntegrationRedirect"));
-const DataSourceDetailPage = lazy(() => import("@/pages/foundation/DataSourceDetailPage"));
+const LegacyConnectionProfileRedirect = lazy(() => import("@/pages/foundation/access/LegacyConnectionProfileRedirect"));
+const ConnectionProfilesPage = lazy(() => import("@/pages/foundation/access/ConnectionProfilesPage"));
+const ConnectionProfileDetailPage = lazy(() => import("@/pages/foundation/access/ConnectionProfileDetailPage"));
 const StandardPackagePage = lazy(() => import("@/pages/foundation/StandardPackagePage"));
 const AssetOverviewPage = lazy(() => import("@/pages/catalog/AssetOverviewPage"));
 const DatasetsPage = lazy(() => import("@/pages/catalog/DatasetsPage"));
@@ -32,6 +34,7 @@ const WorkflowCenterPage = lazy(() => import("@/pages/workbench/WorkflowCenterPa
 const DataModelingPage = lazy(() => import("@/pages/data-modeling/DataModelingPage"));
 const LegacyDataModelingRedirect = lazy(() => import("@/pages/data-modeling/LegacyDataModelingRedirect"));
 const MeasurementUnitsPage = lazy(() => import("@/pages/governance/MeasurementUnitsPage"));
+const QualityRoutePage = lazy(() => import("@/features/data-quality/QualityRoutePage"));
 
 // ── Analytics pages (static routes — registered statically for reliability; menu controls visibility) ──
 const AnalyticsHomePage = lazy(() => import("@/analytics/pages/HomePage"));
@@ -147,6 +150,22 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		),
 	},
 	{
+		path: "foundation/connections",
+		element: (
+			<S>
+				<ConnectionProfilesPage />
+			</S>
+		),
+	},
+	{
+		path: "foundation/connections/:id",
+		element: (
+			<S>
+				<ConnectionProfileDetailPage />
+			</S>
+		),
+	},
+	{
 		path: "foundation/data-sources",
 		element: (
 			<S>
@@ -206,7 +225,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "foundation/data-sources/:id",
 		element: (
 			<S>
-				<DataSourceDetailPage />
+				<LegacyConnectionProfileRedirect />
 			</S>
 		),
 	},
@@ -881,6 +900,167 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		element: (
 			<S>
 				<Nl2SqlEvalPage />
+			</S>
+		),
+	},
+	// Data quality roots remain menu-driven dynamic routes. These deep routes share one workspace.
+	{
+		path: "governance/rules/catalog",
+		element: (
+			<S>
+				<QualityRoutePage routeKey="rule-list" />
+			</S>
+		),
+	},
+	{
+		path: "governance/rules/catalog/new",
+		element: (
+			<S>
+				<QualityRoutePage routeKey="rule-editor" />
+			</S>
+		),
+	},
+	{
+		path: "governance/rules/catalog/:ruleId/edit",
+		element: (
+			<S>
+				<QualityRoutePage routeKey="rule-editor" />
+			</S>
+		),
+	},
+	{
+		path: "governance/rules/catalog/:ruleId",
+		element: (
+			<S>
+				<QualityRoutePage routeKey="rule-detail" />
+			</S>
+		),
+	},
+	{
+		path: "governance/rules/templates",
+		element: (
+			<S>
+				<QualityRoutePage routeKey="rule-template" />
+			</S>
+		),
+	},
+	{
+		path: "governance/rules/templates/:templateId",
+		element: (
+			<S>
+				<QualityRoutePage routeKey="template-detail" />
+			</S>
+		),
+	},
+	{
+		path: "governance/rules/config/tables",
+		element: (
+			<S>
+				<QualityRoutePage routeKey="rule-by-table" />
+			</S>
+		),
+	},
+	{
+		path: "governance/rules/config/tables/:datasetId",
+		element: (
+			<S>
+				<QualityRoutePage routeKey="table-detail" />
+			</S>
+		),
+	},
+	{
+		path: "governance/rules/config/templates",
+		element: (
+			<S>
+				<QualityRoutePage routeKey="rule-by-template" />
+			</S>
+		),
+	},
+	{
+		path: "governance/rules/config/batch",
+		element: (
+			<S>
+				<QualityRoutePage routeKey="batch-wizard" />
+			</S>
+		),
+	},
+	{
+		path: "governance/rules/monitors",
+		element: (
+			<S>
+				<QualityRoutePage routeKey="monitor" />
+			</S>
+		),
+	},
+	{
+		path: "governance/rules/monitors/new",
+		element: (
+			<S>
+				<QualityRoutePage routeKey="monitor-editor" />
+			</S>
+		),
+	},
+	{
+		path: "governance/rules/monitors/:taskId/edit",
+		element: (
+			<S>
+				<QualityRoutePage routeKey="monitor-editor" />
+			</S>
+		),
+	},
+	{
+		path: "governance/rules/monitors/:taskId",
+		element: (
+			<S>
+				<QualityRoutePage routeKey="monitor-detail" />
+			</S>
+		),
+	},
+	{
+		path: "governance/rules/runs",
+		element: (
+			<S>
+				<QualityRoutePage routeKey="run-records" />
+			</S>
+		),
+	},
+	{
+		path: "governance/rules/runs/:runId",
+		element: (
+			<S>
+				<QualityRoutePage routeKey="run-detail" />
+			</S>
+		),
+	},
+	{
+		path: "governance/rules/noise",
+		element: (
+			<S>
+				<QualityRoutePage routeKey="noise" />
+			</S>
+		),
+	},
+	{
+		path: "governance/quality/reports/new",
+		element: (
+			<S>
+				<QualityRoutePage routeKey="report-editor" />
+			</S>
+		),
+	},
+	{
+		path: "governance/quality/reports/:reportId/edit",
+		element: (
+			<S>
+				<QualityRoutePage routeKey="report-editor" />
+			</S>
+		),
+	},
+	{
+		path: "governance/quality/preview",
+		element: (
+			<S>
+				<QualityRoutePage routeKey="report-preview" />
 			</S>
 		),
 	},

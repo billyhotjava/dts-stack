@@ -2,18 +2,16 @@ package com.yuzhi.dts.platform.service.etl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.config.DbtProperties;
-import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.FieldMapping;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.InputMode;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecCompilerProjection;
 import com.yuzhi.dts.platform.service.modeling.ModelingDbtCompiler;
-import com.yuzhi.dts.platform.service.modeling.ModelingVNextContract;
+import com.yuzhi.dts.platform.service.modeling.ModelingCompilerContract;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -54,20 +52,19 @@ class DbtScopedProjectServiceRealCompileIT {
 
         DbtConfigService config = mock(DbtConfigService.class);
         when(config.resolveProjectDir()).thenReturn(DBT_WORKSPACE.toString());
-        ModelingSqlModelRepository sqlModels = mock(ModelingSqlModelRepository.class);
-        DbtScopedProjectService scoped = new DbtScopedProjectService(config, new DbtProperties(), sqlModels);
+        DbtScopedProjectService scoped = new DbtScopedProjectService(config, new DbtProperties());
 
         CompiledEntry dimension = compileEntry(
             "76000000-0000-0000-0000-000000000001",
-            ModelingVNextContract.ModelType.DIMENSION,
-            ModelingVNextContract.Layer.DWD,
+            ModelingCompilerContract.ModelType.DIMENSION,
+            ModelingCompilerContract.Layer.DWD,
             "s76_dimension_project",
             "table",
             "FULL",
-            new ModelingVNextContract.SourceRef(
+            new ModelingCompilerContract.SourceRef(
                 "TABLE",
                 "ods.ods_erp_smoke_project",
-                ModelingVNextContract.Layer.ODS
+                ModelingCompilerContract.Layer.ODS
             ),
             List.of("project_id", "owner_name"),
             List.of(
@@ -78,15 +75,15 @@ class DbtScopedProjectServiceRealCompileIT {
         );
         CompiledEntry fact = compileEntry(
             "76000000-0000-0000-0000-000000000002",
-            ModelingVNextContract.ModelType.FACT,
-            ModelingVNextContract.Layer.DWD,
+            ModelingCompilerContract.ModelType.FACT,
+            ModelingCompilerContract.Layer.DWD,
             "s76_fact_budget",
             "incremental",
             "INCREMENTAL",
-            new ModelingVNextContract.SourceRef(
+            new ModelingCompilerContract.SourceRef(
                 "TABLE",
                 "ods.ods_erp_smoke_project",
-                ModelingVNextContract.Layer.ODS
+                ModelingCompilerContract.Layer.ODS
             ),
             List.of("project_id", "budget_amount"),
             List.of(
@@ -97,15 +94,15 @@ class DbtScopedProjectServiceRealCompileIT {
         );
         CompiledEntry summary = compileEntry(
             "76000000-0000-0000-0000-000000000003",
-            ModelingVNextContract.ModelType.SUMMARY,
-            ModelingVNextContract.Layer.DWS,
+            ModelingCompilerContract.ModelType.SUMMARY,
+            ModelingCompilerContract.Layer.DWS,
             "s76_summary_budget",
             "view",
             "FULL",
-            new ModelingVNextContract.SourceRef(
+            new ModelingCompilerContract.SourceRef(
                 "DBT_MODEL",
                 fact.selector(),
-                ModelingVNextContract.Layer.DWD
+                ModelingCompilerContract.Layer.DWD
             ),
             List.of("project_id", "budget_amount"),
             List.of(
@@ -177,7 +174,6 @@ class DbtScopedProjectServiceRealCompileIT {
             assertThat(manifest.path("nodes").path(factStgUniqueId).path("compiled_code").asText())
                 .contains("cast(project_id as text)")
                 .contains("cast(budget_amount as numeric)");
-            verifyNoInteractions(sqlModels);
         } finally {
             scoped.releaseCandidateProject(project.bundleChecksum());
             deleteRecursively(runtimeDirectory);
@@ -187,35 +183,30 @@ class DbtScopedProjectServiceRealCompileIT {
 
     private static CompiledEntry compileEntry(
         String modelId,
-        ModelingVNextContract.ModelType modelType,
-        ModelingVNextContract.Layer layer,
+        ModelingCompilerContract.ModelType modelType,
+        ModelingCompilerContract.Layer layer,
         String targetIdentifier,
         String materialization,
         String loadStrategy,
-        ModelingVNextContract.SourceRef source,
+        ModelingCompilerContract.SourceRef source,
         List<String> columns,
         List<FieldMapping> mappings,
         Map<String, String> casts
     ) {
         UUID id = UUID.fromString(modelId);
         String selector = "model_" + modelId.replace("-", "_");
-        ModelingVNextContract.ModelSpec model = new ModelingVNextContract.ModelSpec(
+        ModelingCompilerContract.CompilerModel model = new ModelingCompilerContract.CompilerModel(
             modelId,
-            null,
-            null,
             layer,
             modelType,
-            ModelingVNextContract.ImplementationMode.DESIGNER_GENERATED,
+            ModelingCompilerContract.ImplementationMode.DESIGNER_GENERATED,
             targetIdentifier,
-            new ModelingVNextContract.Grain("one row per project", List.of("project_id")),
+            new ModelingCompilerContract.Grain("one row per project", List.of("project_id")),
             List.of(),
             List.of(source),
             columns,
             List.of(),
-            materialization,
-            1,
-            List.of(),
-            null
+            1
         );
         Map<String, Object> settings = new java.util.LinkedHashMap<>();
         settings.put("targetPhysicalName", targetIdentifier);

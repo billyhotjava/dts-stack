@@ -38,6 +38,9 @@ public final class CatalogAssetOverviewAggregator {
         long missingDomain,
         long stale,
         long attention,
+        long tagged,
+        long untagged,
+        int tagCoveragePercent,
         Map<String, Long> byLayer,
         Map<String, Long> governanceStatusCounts,
         List<MatrixCell> matrix,
@@ -51,6 +54,7 @@ public final class CatalogAssetOverviewAggregator {
         long missingDomain = 0;
         long stale = 0;
         long attention = 0;
+        long tagged = 0;
         Map<String, Long> byLayer = new LinkedHashMap<>();
         Map<String, Long> governanceStatusCounts = new LinkedHashMap<>();
         Map<String, long[]> matrixCells = new LinkedHashMap<>();
@@ -68,6 +72,7 @@ public final class CatalogAssetOverviewAggregator {
             if (rowMissingDomain) missingDomain++;
             if (rowStale) stale++;
             if (rowAttention) attention++;
+            if (!row.assetTags().isEmpty()) tagged++;
             if (StringUtils.hasText(governanceStatus)) {
                 governanceStatusCounts.merge(governanceStatus, 1L, Long::sum);
             }
@@ -104,12 +109,17 @@ public final class CatalogAssetOverviewAggregator {
             byDomain.put(cell.domainId(), new DomainStats(current.total() + cell.total(), current.attention() + cell.attention()));
         }
 
+        long untagged = rows.size() - tagged;
+        int tagCoveragePercent = rows.isEmpty() ? 0 : (int) Math.round((tagged * 100.0d) / rows.size());
         return new AssetOverview(
             rows.size(),
             unclassified,
             missingDomain,
             stale,
             attention,
+            tagged,
+            untagged,
+            tagCoveragePercent,
             byLayer,
             governanceStatusCounts,
             matrix,

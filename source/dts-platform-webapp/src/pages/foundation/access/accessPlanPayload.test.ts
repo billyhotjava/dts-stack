@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { FileUploadResult, IngestionTaskDTO } from "@/api/ingestion";
+import type { IngestionTaskDTO, ManagedFileUploadResult } from "@/api/ingestion";
 import type { AccessPlanFormValues, AccessPlanPayloadContext } from "./accessPlan.types";
 import {
 	buildAccessPlanCreateRequest,
 	buildAccessPlanUpdateDTO,
+	buildManagedApiConnectionTestRequest,
 	inferAccessKind,
 	normalizeAccessKind,
 	requireSafeApiResourcePath,
@@ -57,8 +58,8 @@ describe("normalizeAccessKind", () => {
 });
 
 describe("buildAccessPlanCreateRequest", () => {
-	it("builds a database request from a managed source and selected tables", () => {
-		const request = buildAccessPlanCreateRequest(context("database", baseValues()));
+	it("always saves a database request as a non-running draft", () => {
+		const request = buildAccessPlanCreateRequest(context("database", baseValues({ runNow: true })));
 
 		expect(request).toMatchObject({
 			name: "客户主数据入湖",
@@ -74,11 +75,11 @@ describe("buildAccessPlanCreateRequest", () => {
 			},
 			streams: { selection: "manual", include: ["crm.customer"] },
 			runNow: false,
-			draft: false,
+			draft: true,
 		});
 	});
 
-	it("turns typed API paging fields into the existing API resource contract", () => {
+	it("turns typed API paging fields into a non-running draft", () => {
 		const request = buildAccessPlanCreateRequest(
 			context(
 				"api",
@@ -93,6 +94,7 @@ describe("buildAccessPlanCreateRequest", () => {
 					apiPageSize: 100,
 					apiCursorField: "updatedAt",
 					apiCursorParam: "updatedAfter",
+					runNow: true,
 				}),
 			),
 		);
@@ -107,12 +109,11 @@ describe("buildAccessPlanCreateRequest", () => {
 			cursor: { type: "field", field: "updatedAt", injectInto: "query", parameterName: "updatedAfter" },
 		});
 		expect(request.streams).toEqual({ selection: "manual", include: ["orders"] });
+		expect(request).toMatchObject({ draft: true, runNow: false });
 	});
 
 	it("always saves a classified file as a non-running draft", () => {
-		const file: FileUploadResult = {
-			hostPath: "/encrypted/source.xlsx",
-			containerPath: "/encrypted/source.xlsx",
+		const file: ManagedFileUploadResult = {
 			fileType: "excel",
 			originalName: "source.xlsx",
 			fileId: "file-1",
@@ -136,11 +137,14 @@ describe("buildAccessPlanCreateRequest", () => {
 		expect(request).toMatchObject({
 			draft: true,
 			runNow: false,
-			source: { type: "txtfilereader", config: { _fileId: "file-1", _encrypted: undefined } },
+			source: { type: "txtfilereader", config: { _fileId: "file-1" } },
 			streams: { selection: "manual", include: ["ods_customer"] },
 			classificationSeal: { sealId: "seal-1", fileFloor: "INTERNAL" },
 			fieldClassifications: { customer_id: "INTERNAL" },
 		});
+		expect(request.source.config).not.toHaveProperty("_filePath");
+		expect(request.source.config).not.toHaveProperty("_containerPath");
+		expect(request.source.config).not.toHaveProperty("_encrypted");
 	});
 });
 
@@ -162,6 +166,34 @@ describe("requireSafeApiResourcePath", () => {
 			expect(() => requireSafeApiResourcePath(path)).toThrow("API 资源路径不能包含凭据参数");
 		},
 	);
+});
+
+describe("buildManagedApiConnectionTestRequest", () => {
+	it("sends only a managed data source and a strict relative GET resource", () => {
+		const request = buildManagedApiConnectionTestRequest(
+			baseValues({
+				sourceDataSourceId: "11111111-1111-1111-1111-111111111111",
+				apiMethod: "POST",
+				apiResourceId: "orders",
+				apiResourcePath: "/v1/orders?status=active",
+				apiRecordPath: "data.items",
+			}),
+		);
+
+		expect(request).toEqual({
+			dataSourceId: "11111111-1111-1111-1111-111111111111",
+			resource: {
+				path: "/v1/orders?status=active",
+				method: "GET",
+				resourceId: "orders",
+				displayName: undefined,
+				recordPath: "data.items",
+			},
+		});
+		expect(request).not.toHaveProperty("sourceConfig");
+		expect(request).not.toHaveProperty("secrets");
+		expect(request).not.toHaveProperty("requestPolicy");
+	});
 });
 
 describe("buildAccessPlanUpdateDTO", () => {
@@ -222,10 +254,7 @@ describe("buildAccessPlanUpdateDTO", () => {
 		};
 		const updated = buildAccessPlanUpdateDTO(
 			oldTask,
-			context(
-				"database",
-				baseValues({ sourceDataSourceId: "33333333-3333-3333-3333-333333333333" }),
-			),
+			context("database", baseValues({ sourceDataSourceId: "33333333-3333-3333-3333-333333333333" })),
 		);
 
 		expect(updated.status).toBe("draft");

@@ -1,5 +1,6 @@
 package com.yuzhi.dts.ingestion.service.dto;
 
+import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -56,10 +57,6 @@ public class IngestionTaskDTO {
     private Boolean airflowEnabled;
 
     private String airflowDagId;
-
-    private String dbtModelSelector;
-
-    private String dbtDagSelector;
 
     private Boolean qualityPreCheckEnabled;
 
@@ -257,22 +254,6 @@ public class IngestionTaskDTO {
         this.airflowDagId = airflowDagId;
     }
 
-    public String getDbtModelSelector() {
-        return dbtModelSelector;
-    }
-
-    public void setDbtModelSelector(String dbtModelSelector) {
-        this.dbtModelSelector = dbtModelSelector;
-    }
-
-    public String getDbtDagSelector() {
-        return dbtDagSelector;
-    }
-
-    public void setDbtDagSelector(String dbtDagSelector) {
-        this.dbtDagSelector = dbtDagSelector;
-    }
-
     public Boolean getQualityPreCheckEnabled() {
         return qualityPreCheckEnabled;
     }
@@ -407,6 +388,13 @@ public class IngestionTaskDTO {
 
     public void setLastModifiedDate(Instant lastModifiedDate) {
         this.lastModifiedDate = lastModifiedDate;
+    }
+
+    @JsonAnySetter
+    public void rejectRetiredDirectDbtSelector(String propertyName, JsonNode ignoredValue) {
+        if ("dbtModelSelector".equals(propertyName) || "dbtDagSelector".equals(propertyName)) {
+            throw new IllegalArgumentException("DIRECT_DBT_SELECTOR_RETIRED");
+        }
     }
 
     @Override

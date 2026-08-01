@@ -135,7 +135,7 @@ export default function Page() {
 					return <Button onClick={() => push("/security/dataset-access-approval")}>前往审批</Button>;
 				}
 				if (record.type === "QUALITY") {
-					return <Button onClick={() => push("/governance/quality-rules")}>查看质量</Button>;
+					return <Button onClick={() => push("/governance/rules")}>查看质量</Button>;
 				}
 				if (record.type === "SCHEMA_DRIFT") {
 					return <Button onClick={() => push("/catalog/assets")}>查看详情</Button>;
@@ -178,7 +178,7 @@ export default function Page() {
 					<Button onClick={() => push("/security/dataset-access-approval")}>
 						审批入口
 					</Button>
-					<Button onClick={() => push("/governance/quality-rules")}>
+					<Button onClick={() => push("/governance/rules/catalog")}>
 						质量规则
 					</Button>
 				</div>

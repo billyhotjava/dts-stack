@@ -165,7 +165,7 @@ export const WORKBENCH_COMPONENT_REGISTRY: WorkbenchComponentDefinition[] = [
 		title: "治理阻断",
 		description: "查看质量、权限和发布门禁阻断",
 		actionText: "处理阻断",
-		route: "/governance/quality",
+		route: "/governance/rules/runs",
 		icon: ShieldAlert,
 	}),
 	entry({

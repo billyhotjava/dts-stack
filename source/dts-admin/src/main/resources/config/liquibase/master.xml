@@ -125,7 +125,12 @@
     <include file="config/liquibase/changelog/20260731-01_sprint79_modeling_menu_restore.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260731-02_sprint80_prototype_modeling_menu.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260731-03_sprint80_modeling_menu_review.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260731-03a_data_integration_access_menu_audit_width_prelude.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260731-03b_data_integration_access_menu_snapshot_width_prelude.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260731-04_data_integration_access_menu_convergence.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260801-01_data_integration_access_menu_convergence_hardening.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260801-02_connection_profiles_and_access_defaults_visibility.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260801-03_quality_governance_audit_catalog.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260731-05_audit_ingest_idempotency.xml" relativeToChangelogFile="false"/>
     <!-- jhipster-needle-liquibase-add-changelog - JHipster will add liquibase changelogs here -->
     <!-- jhipster-needle-liquibase-add-constraints-changelog - JHipster will add liquibase constraints changelogs here -->

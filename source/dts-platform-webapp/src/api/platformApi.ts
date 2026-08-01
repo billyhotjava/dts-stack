@@ -45,8 +45,7 @@ export const getDatasetGovernanceHealth = (id: string) => api.get({ url: `/catal
 export type IndicatorDep = { id: string; name: string; code: string; isDerived: boolean; status: string };
 export const getDatasetIndicatorDeps = (datasetId: string) =>
 	api.get({ url: `/catalog/datasets/${datasetId}/indicator-deps` });
-export const batchDatasetQuality = (ids: string[]) =>
-	api.post({ url: "/catalog/quality/batch", data: { ids } });
+export const batchDatasetQuality = (ids: string[]) => api.post({ url: "/catalog/quality/batch", data: { ids } });
 export const getCatalogReconciliation = (sampleLimit = 20) =>
 	api.get({ url: "/catalog/ops/reconciliation", params: { sampleLimit } });
 export type TechMetadataTableSummary = {
@@ -142,14 +141,16 @@ export const syncCatalogAssetV2Lineage = (id: string, params?: { upstreamDepth?:
 	api.post({ url: `/catalog/assets-v2/${id}/lineage/sync`, params });
 export const getCatalogAssetsV2Diagnostics = () => api.get({ url: "/catalog/assets-v2/diagnostics" });
 export const listCatalogAssetResolutionFailures = (params: { since?: string; limit?: number } = {}) =>
-	api.get<Array<{
-		id?: string;
-		ref?: string;
-		requestedAt?: string;
-		caller?: string;
-		typeHintGuess?: string;
-		reason?: string;
-	}>>({ url: "/catalog/assets-v2/resolution-failures", params });
+	api.get<
+		Array<{
+			id?: string;
+			ref?: string;
+			requestedAt?: string;
+			caller?: string;
+			typeHintGuess?: string;
+			reason?: string;
+		}>
+	>({ url: "/catalog/assets-v2/resolution-failures", params });
 export const syncCatalogAssetsV2 = (limit?: number) =>
 	api.post({ url: "/catalog/assets-v2/sync", params: limit ? { limit } : undefined });
 
@@ -310,9 +311,7 @@ export type GovernanceIssueView = {
 	repairRoute?: string;
 };
 
-export const getCatalogClassificationFacts = (
-	subjects: Array<{ subjectType?: string; subjectKey: string }>,
-) =>
+export const getCatalogClassificationFacts = (subjects: Array<{ subjectType?: string; subjectKey: string }>) =>
 	api.post<ClassificationFactView[]>({
 		url: "/catalog/governance-workbench/classification-facts",
 		data: subjects,
@@ -342,20 +341,15 @@ export const raiseCatalogClassificationManualFloor = (data: {
 		data,
 	});
 
-export const getCatalogAssetGovernanceWorkspace = (
-	datasetId: string,
-	subjectKey: string,
-) =>
+export const getCatalogAssetGovernanceWorkspace = (datasetId: string, subjectKey: string) =>
 	api.get<AssetGovernanceWorkspace>({
 		url: `/catalog/governance-workbench/assets/${datasetId}`,
 		params: { subjectKey },
 	});
 
-export const getCatalogLifecycleMetrics = (params: {
-	ownerDept?: string;
-	classification?: string;
-	days?: number;
-} = {}) =>
+export const getCatalogLifecycleMetrics = (
+	params: { ownerDept?: string; classification?: string; days?: number } = {},
+) =>
 	api.get<LifecycleMetrics>({
 		url: "/catalog/governance-workbench/lifecycle-metrics",
 		params,
@@ -449,10 +443,7 @@ export type ClassificationWriteFreeze = {
 	reason?: string | null;
 };
 
-export const createClassificationMigrationDryRun = (data: {
-	idempotencyKey: string;
-	batchSize?: number;
-}) =>
+export const createClassificationMigrationDryRun = (data: { idempotencyKey: string; batchSize?: number }) =>
 	api.post<ClassificationMigrationRun>({
 		url: "/catalog/classification-migrations/dry-run",
 		data,
@@ -463,10 +454,7 @@ export const getClassificationMigrationRun = (runId: string) =>
 		url: `/catalog/classification-migrations/${runId}`,
 	});
 
-export const listClassificationMigrationItems = (
-	runId: string,
-	params: { decision?: string; limit?: number } = {},
-) =>
+export const listClassificationMigrationItems = (runId: string, params: { decision?: string; limit?: number } = {}) =>
 	api.get<ClassificationMigrationItem[]>({
 		url: `/catalog/classification-migrations/${runId}/items`,
 		params,
@@ -493,10 +481,7 @@ export const reconcileClassificationMigration = (runId: string) =>
 		url: `/catalog/classification-migrations/${runId}/reconciliation`,
 	});
 
-export const freezeLegacyClassificationWrites = (
-	runId: string,
-	data: { sourceTables?: string[]; reason?: string },
-) =>
+export const freezeLegacyClassificationWrites = (runId: string, data: { sourceTables?: string[]; reason?: string }) =>
 	api.post<ClassificationWriteFreeze[]>({
 		url: `/catalog/classification-migrations/${runId}/freeze`,
 		data,
@@ -660,10 +645,8 @@ export type Sprint27ReleaseGovernance = {
 	checks?: any[];
 };
 
-export const getPlatformEventSummary = () =>
-	api.get<PlatformEventSummary>({ url: "/platform/events/summary" });
-export const listPlatformEvents = (params: any = {}) =>
-	api.get<PlatformEventPage>({ url: "/platform/events", params });
+export const getPlatformEventSummary = () => api.get<PlatformEventSummary>({ url: "/platform/events/summary" });
+export const listPlatformEvents = (params: any = {}) => api.get<PlatformEventPage>({ url: "/platform/events", params });
 export const getSprint27EltConsole = (params: any = {}) =>
 	api.get<Sprint27EltConsole>({ url: "/platform/sprint27/elt-console", params });
 export const getSprint27MetricOperations = (params: any = {}) =>
@@ -677,14 +660,12 @@ export const getSprint27ReleaseGovernance = (params: any = {}) =>
 
 // dbt project file management
 export const getDbtFileTree = () => api.get({ url: "/etl/dbt/files/tree" });
-export const getDbtFileContent = (path: string) =>
-	api.get({ url: "/etl/dbt/files/content", params: { path } });
+export const getDbtFileContent = (path: string) => api.get({ url: "/etl/dbt/files/content", params: { path } });
 export const saveDbtFileContent = (data: { path: string; content: string }) =>
 	api.put({ url: "/etl/dbt/files/content", data });
 export const createDbtFile = (data: { path: string; type: "file" | "directory"; content?: string }) =>
 	api.post({ url: "/etl/dbt/files", data });
-export const deleteDbtFile = (path: string) =>
-	api.delete({ url: "/etl/dbt/files", params: { path } });
+export const deleteDbtFile = (path: string) => api.delete({ url: "/etl/dbt/files", params: { path } });
 export const renameDbtFile = (data: { oldPath: string; newPath: string }) =>
 	api.put({ url: "/etl/dbt/files/rename", data });
 export const uploadDbtArchive = (data: FormData, clean = false) =>
@@ -699,28 +680,13 @@ export const checkDagReady = (params?: { selector?: string }) =>
 	api.get(withModelingRequestTimeout({ url: "/etl/dbt/dag/ready", params }));
 export const listDbtRuns = (limit = 20, params?: { dagId?: string; selector?: string }) =>
 	api.get(withModelingRequestTimeout({ url: "/etl/dbt/runs", params: { limit, ...(params || {}) } }));
-export const triggerDbtRun = (data: any) => api.post(withModelingRequestTimeout({ url: "/etl/dbt/run", data }));
-export const triggerDbtCompile = (data?: any) => api.post(withModelingRequestTimeout({ url: "/etl/dbt/compile", data }));
-export const triggerDbtTest = (data?: any) => api.post(withModelingRequestTimeout({ url: "/etl/dbt/test", data }));
-export const triggerDbtDocs = (data?: any) => api.post(withModelingRequestTimeout({ url: "/etl/dbt/docs", data }));
-export const checkDbtQualityGate = (data?: any) =>
-	api.post(withModelingRequestTimeout({ url: "/etl/dbt/quality-gate/check", data }));
-export const checkDbtReleaseGate = (data?: any) =>
-	api.post(withModelingRequestTimeout({ url: "/etl/dbt/release-gate/check", data }));
-export const submitDbtRelease = (data: any) =>
-	api.post(withModelingRequestTimeout({ url: "/etl/dbt/release/submit", data }));
 
 // dbt execution log (from Airflow)
 export const getDbtRunLog = (dagRunId: string, params?: { dagId?: string; taskId?: string; tryNumber?: number }) =>
 	api.get(withModelingRequestTimeout({ url: `/etl/dbt/runs/${encodeURIComponent(dagRunId)}/logs`, params }));
 
 // Airflow generic task log (non-dbt DAGs or explicit taskId)
-export const getAirflowTaskLog = (
-	dagId: string,
-	dagRunId: string,
-	taskId: string,
-	tryNumber = 1,
-) =>
+export const getAirflowTaskLog = (dagId: string, dagRunId: string, taskId: string, tryNumber = 1) =>
 	api.get<{ dagId: string; dagRunId: string; taskId: string; tryNumber: number; log: string }>({
 		url: `/etl/airflow/jobs/${encodeURIComponent(dagId)}/runs/${encodeURIComponent(dagRunId)}/task-logs`,
 		params: { taskId, tryNumber },
@@ -749,67 +715,25 @@ export const previewDbtModel = (model: string, limit = 100) =>
 	api.get(withModelingRequestTimeout({ url: "/etl/dbt/preview", params: { model, limit } }));
 export const getDbtModelDiagnostics = (model: string) =>
 	api.get(withModelingRequestTimeout({ url: `/etl/dbt/models/${encodeURIComponent(model)}/diagnostics` }));
-export const getDbtOutputRelation = (modelId: string) =>
-	api.get(withModelingRequestTimeout({ url: "/etl/dbt/output", params: { modelId } }));
-export const truncateDbtOutputRelation = (data: { modelId: string; target?: string }) =>
-	api.post(withModelingRequestTimeout({ url: "/etl/dbt/output/truncate", data }));
-export const rebuildDbtOutputRelation = (data: { modelId: string; target?: string; vars?: Record<string, any> }) =>
-	api.post({ url: "/etl/dbt/output/rebuild", data });
 
 // dbt git operations
 export const getDbtGitStatus = () => api.get({ url: "/etl/dbt/git/status" });
 export const commitDbtChanges = (data: { message: string; authorName?: string; authorEmail?: string }) =>
 	api.post({ url: "/etl/dbt/git/commit", data });
 export const getDbtGitLog = (limit = 20) => api.get({ url: "/etl/dbt/git/log", params: { limit } });
-export const getDbtGitDiff = (path?: string) =>
-	api.get({ url: "/etl/dbt/git/diff", params: path ? { path } : {} });
-export const revertDbtFile = (path: string) =>
-	api.post({ url: "/etl/dbt/git/revert", data: { path } });
+export const getDbtGitDiff = (path?: string) => api.get({ url: "/etl/dbt/git/diff", params: path ? { path } : {} });
+export const revertDbtFile = (path: string) => api.post({ url: "/etl/dbt/git/revert", data: { path } });
 export const getDbtFileAtCommit = (path: string, commitHash: string) =>
 	api.get({ url: "/etl/dbt/git/file-at-commit", params: { path, commitHash } });
-export const listSqlModels = (params?: any) => api.get(withModelingRequestTimeout({ url: "/modeling/sql-models", params }));
-export const getSqlModel = (id: string) => api.get(withModelingRequestTimeout({ url: `/modeling/sql-models/${id}` }));
-export const listSqlModelColumns = (id: string) =>
-	api.get(withModelingRequestTimeout({ url: `/modeling/sql-models/${id}/columns` }));
-export const getSqlModelContractImpact = (id: string) =>
-	api.get(withModelingRequestTimeout({ url: `/modeling/sql-models/${id}/contract-impact` }));
-export const publishSqlModelSemantic = (id: string) =>
-	api.post(withModelingRequestTimeout({ url: `/modeling/sql-models/${id}/semantic/publish` }));
-export const listSqlModelStandardBindings = (id: string) =>
-	api.get(withModelingRequestTimeout({ url: `/modeling/sql-models/${id}/standard-bindings` }));
-export const saveSqlModelStandardBindings = (id: string, data: any) =>
-	api.put(withModelingRequestTimeout({ url: `/modeling/sql-models/${id}/standard-bindings`, data }));
-export const generateSqlModelSchemaYml = (id: string) =>
-	api.post(withModelingRequestTimeout({ url: `/modeling/sql-models/${id}/dbt/schema-yml` }));
-export const checkSqlModelStandardGate = (id: string) =>
-	api.post(withModelingRequestTimeout({ url: `/modeling/sql-models/${id}/standard-gate/check` }));
 export const createStandardBindingDraftSnapshot = (data: any) =>
 	api.post(withModelingRequestTimeout({ url: "/modeling/standard-binding-drafts", data }));
 export const getStandardBindingDraftSnapshot = (id: string) =>
 	api.get(withModelingRequestTimeout({ url: `/modeling/standard-binding-drafts/${id}` }));
-export const createSqlModel = (data: any) => api.post(withModelingRequestTimeout({ url: "/modeling/sql-models", data }));
-export const updateSqlModel = (id: string, data: any) =>
-	api.put(withModelingRequestTimeout({ url: `/modeling/sql-models/${id}`, data }));
-export const deleteSqlModel = (id: string) => api.delete(withModelingRequestTimeout({ url: `/modeling/sql-models/${id}` }));
-export const batchDeleteSqlModels = (data: { modelIds: string[] }) =>
-	api.post(withModelingRequestTimeout({ url: "/modeling/sql-models/batch-delete", data }));
-export const importSqlModel = (data: FormData) => api.post(withModelingRequestTimeout({ url: "/modeling/sql-models/import", data }));
-export const batchImportSqlModels = (data: FormData) =>
-	api.post(withModelingRequestTimeout({ url: "/modeling/sql-models/batch-import", data }));
-export const generateSqlModelsFromOds = (data: any) =>
-	api.post(withModelingRequestTimeout({ url: "/modeling/sql-models/generate-from-ods", data }));
-export const previewSqlModelGovernance = (data: any) =>
-	api.post(withModelingRequestTimeout({ url: "/modeling/sql-models/governance/preview", data }));
-export const executeSqlModelGovernance = (data: any) =>
-	api.post(withModelingRequestTimeout({ url: "/modeling/sql-models/governance/execute", data }));
-export const listDbtSources = (params?: { keyword?: string; sourceDataSourceId?: string }) =>
-	api.get(withModelingRequestTimeout({ url: "/modeling/sql-models/dbt/sources", params }));
-export const listDbtRefs = (params?: { keyword?: string; layer?: string }) =>
-	api.get(withModelingRequestTimeout({ url: "/modeling/sql-models/dbt/refs", params }));
 export const listAirflowJobs = (limit = 50) => api.get({ url: "/etl/airflow/jobs", params: { limit } });
 export const listAirflowJobRuns = (dagId: string, limit = 20) =>
 	api.get({ url: `/etl/airflow/jobs/${dagId}/runs`, params: { limit } });
-export const triggerAirflowJob = (dagId: string, data?: any) => api.post({ url: `/etl/airflow/jobs/${dagId}/trigger`, data });
+export const triggerAirflowJob = (dagId: string, data?: any) =>
+	api.post({ url: `/etl/airflow/jobs/${dagId}/trigger`, data });
 export const createDataset = (data: any) => api.post({ url: "/catalog/datasets", data });
 export const updateDataset = (id: string, data: any) => api.put({ url: `/catalog/datasets/${id}`, data });
 export const deleteDataset = (id: string) => api.delete({ url: `/catalog/datasets/${id}` });
@@ -823,12 +747,13 @@ export const getDomainTree = (options?: { withStats?: boolean }) =>
 	api.get({ url: `/catalog/domains/tree${options?.withStats ? "?withStats=true" : ""}` });
 export const moveDomain = (id: string, data: { newParentId?: string | null }) =>
 	api.post({ url: `/catalog/domains/${id}/move`, data });
-export const getDomainAssetStats = (domainId: string): Promise<{
+export const getDomainAssetStats = (
+	domainId: string,
+): Promise<{
 	datasetCount: number;
 	indicatorCount: number | null;
 	qualityRuleCount: number | null;
-}> =>
-	api.get({ url: `/catalog/domains/${domainId}/asset-stats` }).then((r: any) => r.data?.data);
+}> => api.get({ url: `/catalog/domains/${domainId}/asset-stats` }).then((r: any) => r.data?.data);
 
 export type DatasetField = {
 	name: string;
@@ -843,9 +768,9 @@ export const getDatasetFields = (datasetId: string): Promise<DatasetField[]> =>
 
 // Asset extras (tasks)
 export const syncDatasetSchema = (datasetId: string, data?: any) =>
-    api.post({ url: `/datasets/${datasetId}/sync-schema`, data });
+	api.post({ url: `/datasets/${datasetId}/sync-schema`, data });
 export const previewDataset = (datasetId: string, rows = 50) =>
-    api.get({ url: `/datasets/${datasetId}/preview`, params: { rows } });
+	api.get({ url: `/datasets/${datasetId}/preview`, params: { rows } });
 export const getDatasetJob = (jobId: string) => api.get({ url: `/dataset-jobs/${jobId}` });
 export const listDatasetJobs = (datasetId: string) => api.get({ url: `/datasets/${datasetId}/jobs` });
 
@@ -885,7 +810,8 @@ export const listDoneDatasetAccessTasks = (
 export const getDatasetAccessWorkflowPreview = (datasetId: string) =>
 	api.get({ url: "/catalog/access/workflow/preview", params: { datasetId } });
 
-export const listDatasetAccessRequestSteps = (requestId: string) => api.get({ url: `/catalog/access/requests/${requestId}/steps` });
+export const listDatasetAccessRequestSteps = (requestId: string) =>
+	api.get({ url: `/catalog/access/requests/${requestId}/steps` });
 
 export const approveDatasetAccessTask = (taskId: string, notes?: string) =>
 	api.post({ url: `/catalog/access/tasks/${taskId}/approve`, data: notes ? { notes } : {} });
@@ -914,22 +840,23 @@ export const getClassificationMaskingLinkage = (datasetId?: string) =>
 	api.get({ url: "/catalog/classification-masking/linkage", params: datasetId ? { datasetId } : undefined });
 
 export const getDatasetSecurityMapping = (datasetId: string) =>
-    api.get({ url: `/catalog/datasets/${datasetId}/security-mapping` });
+	api.get({ url: `/catalog/datasets/${datasetId}/security-mapping` });
 export const upsertDatasetSecurityMapping = (datasetId: string, data: any) =>
-    api.put({ url: `/catalog/datasets/${datasetId}/security-mapping`, data });
+	api.put({ url: `/catalog/datasets/${datasetId}/security-mapping`, data });
 
 // Infra external links (ETL entry)
 export const listExternalLinks = () => api.get({ url: "/infra/external-links" });
 export const getExternalLink = (entryKey: string) => api.get({ url: `/infra/external-links/${entryKey}` });
 export const checkExternalLink = (entryKey: string) => api.get({ url: `/infra/external-links/${entryKey}/check` });
 export const getExternalLinkStatus = (entryKey: string) => api.get({ url: `/infra/external-links/${entryKey}/status` });
-export const visitExternalLink = (entryKey: string, data?: any) => api.post({ url: `/infra/external-links/${entryKey}/visit`, data });
-export const upsertExternalLink = (entryKey: string, data: any) => api.put({ url: `/infra/external-links/${entryKey}`, data });
+export const visitExternalLink = (entryKey: string, data?: any) =>
+	api.post({ url: `/infra/external-links/${entryKey}/visit`, data });
+export const upsertExternalLink = (entryKey: string, data: any) =>
+	api.put({ url: `/infra/external-links/${entryKey}`, data });
 export const deleteExternalLink = (entryKey: string) => api.delete({ url: `/infra/external-links/${entryKey}` });
 
 // Addax (data lake ingestion)
-export const createIngestionTask = (data: any) =>
-	api.post({ url: "/ingestion/tasks", data, timeout: 180000 });
+export const createIngestionTask = (data: any) => api.post({ url: "/ingestion/tasks", data, timeout: 180000 });
 
 // External exchange files (data ingestion ledger)
 export const listExchangeFiles = (params?: any) => api.get({ url: "/infra/exchange-files", params });
@@ -950,13 +877,12 @@ export const deleteStandard = (id: string) => api.delete({ url: `/modeling/stand
 export const archiveStandard = (id: string) => api.post({ url: `/modeling/standards/${id}/archive` });
 export const listStandardVersions = (id: string) => api.get({ url: `/modeling/standards/${id}/versions` });
 export const listStandardAttachments = (id: string) => api.get({ url: `/modeling/standards/${id}/attachments` });
-export const importStandards = (formData: FormData) =>
-    api.post({ url: "/modeling/standards/import", data: formData });
+export const importStandards = (formData: FormData) => api.post({ url: "/modeling/standards/import", data: formData });
 export const uploadStandardAttachment = (id: string, formData: FormData) =>
-    api.post({
-        url: `/modeling/standards/${id}/attachments`,
-        data: formData,
-    });
+	api.post({
+		url: `/modeling/standards/${id}/attachments`,
+		data: formData,
+	});
 export const deleteStandardAttachment = (standardId: string, attachmentId: string) =>
 	api.delete({ url: `/modeling/standards/${standardId}/attachments/${attachmentId}` });
 export const getStandardSettings = () => api.get({ url: "/modeling/standards/settings" });
@@ -967,14 +893,15 @@ export const getStandardHealth = () => api.get({ url: "/modeling/standards/healt
 export const listMetadataStandards = (params: any = {}) => api.get({ url: "/modeling/metadata-standards", params });
 export const getMetadataStandard = (id: string) => api.get({ url: `/modeling/metadata-standards/${id}` });
 export const createMetadataStandard = (data: any) => api.post({ url: "/modeling/metadata-standards", data });
-export const updateMetadataStandard = (id: string, data: any) => api.put({ url: `/modeling/metadata-standards/${id}`, data });
+export const updateMetadataStandard = (id: string, data: any) =>
+	api.put({ url: `/modeling/metadata-standards/${id}`, data });
 export const deleteMetadataStandard = (id: string) => api.delete({ url: `/modeling/metadata-standards/${id}` });
 export const getMetadataStandardReferences = (id: string) =>
 	api.get({ url: `/modeling/metadata-standards/${id}/references` });
 export const downloadDataStandardPackageTemplate = () =>
 	api.get<Blob>({ url: "/modeling/metadata-standards/template", responseType: "blob" });
 export const importMetadataStandards = (formData: FormData) =>
-    api.post({ url: "/modeling/metadata-standards/import", data: formData });
+	api.post({ url: "/modeling/metadata-standards/import", data: formData });
 
 // Measurement units (versioned professional owner)
 export type MeasurementUnitStatus = "ACTIVE" | "INACTIVE";
@@ -1041,8 +968,7 @@ export const applyStandardPackageImport = (runId: string) =>
 	api.post({ url: "/modeling/standard-packages/import/apply", data: { runId } });
 export const listStandardPackageRuns = (params: any = {}) =>
 	api.get({ url: "/modeling/standard-packages/runs", params });
-export const getStandardPackageRun = (runId: string) =>
-	api.get({ url: `/modeling/standard-packages/runs/${runId}` });
+export const getStandardPackageRun = (runId: string) => api.get({ url: `/modeling/standard-packages/runs/${runId}` });
 export const rollbackStandardPackageRun = (runId: string) =>
 	api.post({ url: `/modeling/standard-packages/runs/${runId}/rollback` });
 export const listBuiltinStandardPackages = () => api.get({ url: "/modeling/standard-packages/builtin" });
@@ -1060,8 +986,7 @@ export const getReferenceCodeReferences = (id: string) =>
 	api.get({ url: `/governance/reference-codes/${id}/references` });
 export const getReferenceCodeImportOpsOverview = (params: { hours?: number } = {}) =>
 	api.get({ url: "/governance/reference-codes/ops/import-overview", params });
-export const listReferenceCodeItems = (id: string) =>
-	api.get({ url: `/governance/reference-codes/${id}/items` });
+export const listReferenceCodeItems = (id: string) => api.get({ url: `/governance/reference-codes/${id}/items` });
 export const createReferenceCodeItem = (id: string, data: any) =>
 	api.post({ url: `/governance/reference-codes/${id}/items`, data });
 export const batchReferenceCodeItems = (id: string, data: { raw: string }) =>
@@ -1084,8 +1009,7 @@ export const updateReferenceCodeItem = (id: string, itemId: string | number, dat
 	api.put({ url: `/governance/reference-codes/${id}/items/${itemId}`, data });
 export const deleteReferenceCodeItem = (id: string, itemId: string | number) =>
 	api.delete({ url: `/governance/reference-codes/${id}/items/${itemId}` });
-export const listReferenceCodeMappings = (id: string) =>
-	api.get({ url: `/governance/reference-codes/${id}/mappings` });
+export const listReferenceCodeMappings = (id: string) => api.get({ url: `/governance/reference-codes/${id}/mappings` });
 export const createReferenceCodeMapping = (id: string, data: any) =>
 	api.post({ url: `/governance/reference-codes/${id}/mappings`, data });
 export const updateReferenceCodeMapping = (id: string, mapId: string | number, data: any) =>
@@ -1103,7 +1027,8 @@ export const updateModelingPlan = (id: string, data: any) => api.put({ url: `/mo
 export const deleteModelingPlan = (id: string) => api.delete({ url: `/modeling/plans/${id}` });
 export const publishModelingPlan = (id: string, data?: { version?: string; changeSummary?: string }) =>
 	api.post({ url: `/modeling/plans/${id}/publish`, data });
-export const archiveModelingPlan = (id: string, data?: { notes?: string }) => api.post({ url: `/modeling/plans/${id}/archive`, data });
+export const archiveModelingPlan = (id: string, data?: { notes?: string }) =>
+	api.post({ url: `/modeling/plans/${id}/archive`, data });
 export const restoreModelingPlan = (id: string) => api.post({ url: `/modeling/plans/${id}/restore` });
 
 export const listGlossaryTerms = (params: any = {}) => api.get<any[]>({ url: "/modeling/glossary/terms", params });
@@ -1114,8 +1039,7 @@ export const listGlossaryTermVersions = (id: string) =>
 	api.get<any[]>({ url: `/modeling/glossary/terms/${id}/versions` });
 export const listGlossaryTermReviews = (id: string) =>
 	api.get<any[]>({ url: `/modeling/glossary/terms/${id}/reviews` });
-export const getGlossaryTermReferences = (id: string) =>
-	api.get({ url: `/modeling/glossary/terms/${id}/references` });
+export const getGlossaryTermReferences = (id: string) => api.get({ url: `/modeling/glossary/terms/${id}/references` });
 
 export const listModelTemplates = () => api.get<any[]>({ url: "/modeling/templates" });
 export const listTemplateLayers = () =>
@@ -1126,8 +1050,7 @@ export const getModelTemplate = (id: string) => api.get({ url: `/modeling/templa
 export const createModelTemplate = (data: any) => api.post({ url: "/modeling/templates", data });
 export const updateModelTemplate = (id: string, data: any) => api.put({ url: `/modeling/templates/${id}`, data });
 export const deleteModelTemplate = (id: string) => api.delete({ url: `/modeling/templates/${id}` });
-export const getModelTemplateReferences = (id: string) =>
-	api.get({ url: `/modeling/templates/${id}/references` });
+export const getModelTemplateReferences = (id: string) => api.get({ url: `/modeling/templates/${id}/references` });
 export const validateModelTemplate = (id: string, tableId: string) =>
 	api.get({ url: `/modeling/templates/${id}/validate`, params: { tableId } });
 
@@ -1159,8 +1082,7 @@ export interface RuleRunHistory {
 	failingRows: number;
 }
 
-export const getQualityDashboard = () =>
-	api.get<QualityDashboard>({ url: "/governance/quality/dashboard" });
+export const getQualityDashboard = () => api.get<QualityDashboard>({ url: "/governance/quality/dashboard" });
 
 export const getQualityScore = (datasetId: string, periodDays?: number) =>
 	api.get<QualityScoreResult>({ url: "/governance/quality/score", params: { datasetId, periodDays } });
@@ -1183,7 +1105,10 @@ export const executeCleansing = (data: { runId: string; functionId: string }) =>
 
 // SQL Repair
 export const previewSqlRepair = (data: { sql: string; limit?: number }) =>
-	api.post<{ affectedRows: number; samples: { rowId: any; columnValues: Record<string, string>; newValues?: Record<string, string> }[] }>({
+	api.post<{
+		affectedRows: number;
+		samples: { rowId: any; columnValues: Record<string, string>; newValues?: Record<string, string> }[];
+	}>({
 		url: "/governance/quality/sql-repair/preview",
 		data,
 	});
@@ -1215,28 +1140,35 @@ export const getQualityRun = (id: string) => api.get({ url: `/governance/quality
 // Quality templates
 export const listQualityTemplates = () => api.get({ url: "/governance/quality/templates" });
 export const createQualityTemplate = (data: any) => api.post({ url: "/governance/quality/templates", data });
-export const updateQualityTemplate = (id: string, data: any) => api.put({ url: `/governance/quality/templates/${id}`, data });
+export const updateQualityTemplate = (id: string, data: any) =>
+	api.put({ url: `/governance/quality/templates/${id}`, data });
 export const deleteQualityTemplate = (id: string) => api.delete({ url: `/governance/quality/templates/${id}` });
-export const previewTemplateSQL = (id: string, params: any) => api.post({ url: `/governance/quality/templates/${id}/preview`, data: params });
+export const previewTemplateSQL = (id: string, params: any) =>
+	api.post({ url: `/governance/quality/templates/${id}/preview`, data: params });
 
 // Cleansing functions
 export const listCleansingFunctions = () => api.get({ url: "/governance/cleansing/functions" });
 export const createCleansingFunction = (data: any) => api.post({ url: "/governance/cleansing/functions", data });
-export const updateCleansingFunction = (id: string, data: any) => api.put({ url: `/governance/cleansing/functions/${id}`, data });
+export const updateCleansingFunction = (id: string, data: any) =>
+	api.put({ url: `/governance/cleansing/functions/${id}`, data });
 export const deleteCleansingFunction = (id: string) => api.delete({ url: `/governance/cleansing/functions/${id}` });
 
 // Quality auto-trigger
 export const triggerAutoQuality = (data: any) => api.post({ url: "/governance/quality/auto-trigger", data });
 
 // Failing rows
-export const listFailingRows = (runId: string, params: any = {}) => api.get({ url: `/governance/quality/runs/${runId}/failing-rows`, params });
+export const listFailingRows = (runId: string, params: any = {}) =>
+	api.get({ url: `/governance/quality/runs/${runId}/failing-rows`, params });
 
 // Data editor (ODS)
 export const listOdsTables = () => api.get({ url: "/governance/data-editor/tables" });
 export const listOdsColumns = (tableName: string) => api.get({ url: `/governance/data-editor/${tableName}/columns` });
-export const listOdsRows = (tableName: string, params: any = {}) => api.get({ url: `/governance/data-editor/${tableName}/rows`, params });
-export const updateOdsRow = (tableName: string, rowId: string, data: any) => api.put({ url: `/governance/data-editor/${tableName}/rows/${rowId}`, data });
-export const insertOdsRow = (tableName: string, data: any) => api.post({ url: `/governance/data-editor/${tableName}/rows`, data });
+export const listOdsRows = (tableName: string, params: any = {}) =>
+	api.get({ url: `/governance/data-editor/${tableName}/rows`, params });
+export const updateOdsRow = (tableName: string, rowId: string, data: any) =>
+	api.put({ url: `/governance/data-editor/${tableName}/rows/${rowId}`, data });
+export const insertOdsRow = (tableName: string, data: any) =>
+	api.post({ url: `/governance/data-editor/${tableName}/rows`, data });
 export const listEditLogs = (params: any = {}) => api.get({ url: "/governance/data-editor/audit-log", params });
 
 // Quality tasks (巡检计划)
@@ -1251,7 +1183,8 @@ export const deleteQualityTask = (id: string) => api.delete({ url: `/governance/
 export const createComplianceBatch = (data: any) => api.post({ url: "/governance/compliance/batches", data });
 export const listComplianceBatches = (params: any = {}) => api.get({ url: "/governance/compliance/batches", params });
 export const getComplianceBatch = (id: string) => api.get({ url: `/governance/compliance/batches/${id}` });
-export const updateComplianceItem = (id: string, data: any) => api.put({ url: `/governance/compliance/items/${id}`, data });
+export const updateComplianceItem = (id: string, data: any) =>
+	api.put({ url: `/governance/compliance/items/${id}`, data });
 export const deleteComplianceBatch = (id: string) => api.delete({ url: `/governance/compliance/batches/${id}` });
 
 export const listIssues = (params: any = {}) => api.get<any[]>({ url: "/governance/issues", params });
@@ -1262,7 +1195,14 @@ export const closeIssue = (id: string, resolution?: string) =>
 	api.post({ url: `/governance/issues/${id}/close`, data: { resolution } });
 export const appendIssueAction = (id: string, data: any) => api.post({ url: `/governance/issues/${id}/actions`, data });
 export const getIssueSlaMetrics = (params: { days?: number } = {}) =>
-	api.get<{ windowDays: number; total: number; open: number; overdue: number; overdueRate: number; avgHandlingHours: number }>({
+	api.get<{
+		windowDays: number;
+		total: number;
+		open: number;
+		overdue: number;
+		overdueRate: number;
+		avgHandlingHours: number;
+	}>({
 		url: "/governance/issues/metrics",
 		params,
 	});
@@ -1301,12 +1241,14 @@ export const rollbackIndicatorVersion = (
 	data: { reason?: string; publishAfterRollback?: boolean } = {},
 ) => api.post({ url: `/governance/indicators/${id}/versions/${version}/rollback`, data });
 export const listIndicatorReferences = (id: string) => api.get({ url: `/governance/indicators/${id}/references` });
-export const createIndicatorReference = (id: string, data: any) => api.post({ url: `/governance/indicators/${id}/references`, data });
+export const createIndicatorReference = (id: string, data: any) =>
+	api.post({ url: `/governance/indicators/${id}/references`, data });
 export const updateIndicatorReference = (id: string, refId: string, data: any) =>
 	api.put({ url: `/governance/indicators/${id}/references/${refId}`, data });
 export const deleteIndicatorReference = (id: string, refId: string) =>
 	api.delete({ url: `/governance/indicators/${id}/references/${refId}` });
-export const getIndicatorPublishPreview = (id: string) => api.post({ url: `/governance/indicators/${id}/publish-preview` });
+export const getIndicatorPublishPreview = (id: string) =>
+	api.post({ url: `/governance/indicators/${id}/publish-preview` });
 export const previewIndicator = (id: string, params: { limit?: number } = {}) =>
 	api.post({ url: `/governance/indicators/${id}/preview`, params });
 export const getIndicatorOpsOverview = (params: { hours?: number } = {}) =>
@@ -1334,15 +1276,15 @@ export const archiveDimension = (id: string) => api.post({ url: `/governance/dim
 // Explore
 export const previewQuery = (data: any) => api.post({ url: "/explore/query/preview", data });
 export interface SavedQueryCreatePayload {
-  name: string;
-  sqlText: string;
-  datasetId?: string | null;
+	name: string;
+	sqlText: string;
+	datasetId?: string | null;
 }
 
 export interface SavedQueryUpdatePayload {
-  name?: string;
-  sqlText?: string;
-  datasetId?: string | null;
+	name?: string;
+	sqlText?: string;
+	datasetId?: string | null;
 }
 
 export const listSavedQueries = () => api.get({ url: "/explore/saved-queries" });
@@ -1351,13 +1293,13 @@ export const deleteSavedQuery = (id: string) => api.delete({ url: `/explore/save
 export const runSavedQuery = (id: string) => api.post({ url: `/explore/saved-queries/${id}/run` });
 export const getSavedQuery = (id: string) => api.get({ url: `/explore/saved-queries/${id}` });
 export const updateSavedQuery = (id: string, data: SavedQueryUpdatePayload) =>
-  api.put({ url: `/explore/saved-queries/${id}`, data });
+	api.put({ url: `/explore/saved-queries/${id}`, data });
 
 // Explore (new APIs)
 export const executeExplore = (data: any) => api.post({ url: "/explore/execute", data });
 export const explainExplore = (data: any) => api.post({ url: "/explore/explain", data });
 export const saveExploreResult = (executionId: string, data?: any) =>
-  api.post({ url: `/explore/save-result/${executionId}`, data });
+	api.post({ url: `/explore/save-result/${executionId}`, data });
 export const previewResultSet = (resultSetId: string) => api.get({ url: `/explore/result-preview/${resultSetId}` });
 export const deleteResultSet = (id: string) => api.delete({ url: `/explore/result-sets/${id}` });
 
@@ -1370,48 +1312,48 @@ export const recordResultSetCopy = (id: string, data?: Record<string, unknown>) 
 
 // Catalog tables & columns
 export const listTablesByDataset = (datasetId: string, keyword?: string) =>
-  api.get({ url: "/catalog/tables", params: { datasetId, keyword } });
+	api.get({ url: "/catalog/tables", params: { datasetId, keyword } });
 export const listColumnsByTable = (tableId: string, keyword?: string) =>
-  api.get({ url: "/catalog/columns", params: { tableId, keyword } });
+	api.get({ url: "/catalog/columns", params: { tableId, keyword } });
 export const updateTableSchema = (id: string, data: any) => api.put({ url: `/catalog/tables/${id}`, data });
 export const updateColumnSchema = (id: string, data: any) => api.put({ url: `/catalog/columns/${id}`, data });
 export const validateTableStandardMapping = (tableId: string) =>
-  api.get({ url: `/catalog/tables/${tableId}/standard-mapping/validate` });
+	api.get({ url: `/catalog/tables/${tableId}/standard-mapping/validate` });
 export const previewAutoMapTableStandardMapping = (
-  tableId: string,
-  params: { overwrite?: boolean; onlyUnmapped?: boolean } = {},
+	tableId: string,
+	params: { overwrite?: boolean; onlyUnmapped?: boolean } = {},
 ) => api.get({ url: `/catalog/tables/${tableId}/standard-mapping/auto-map/preview`, params });
 export const applyAutoMapTableStandardMapping = (
-  tableId: string,
-  data: { overwrite?: boolean; onlyUnmapped?: boolean } = {},
+	tableId: string,
+	data: { overwrite?: boolean; onlyUnmapped?: boolean } = {},
 ) => api.post({ url: `/catalog/tables/${tableId}/standard-mapping/auto-map/apply`, data });
 
 // Catalog lineage
 export const getCatalogLineage = (datasetId: string, projectName?: string) =>
-  api.get({ url: "/catalog/lineage", params: { datasetId, projectName } });
+	api.get({ url: "/catalog/lineage", params: { datasetId, projectName } });
 export const getCatalogLineageImpact = (
-  datasetId: string,
-  params: {
-    direction?: "UPSTREAM" | "DOWNSTREAM" | "BOTH";
-    depth?: number;
-    projectName?: string;
-    layers?: string;
-    changedWithinHours?: number;
-    sourceId?: string;
-    withJobs?: boolean;
-    withColumns?: boolean;
-    at?: string;
-  } = {},
+	datasetId: string,
+	params: {
+		direction?: "UPSTREAM" | "DOWNSTREAM" | "BOTH";
+		depth?: number;
+		projectName?: string;
+		layers?: string;
+		changedWithinHours?: number;
+		sourceId?: string;
+		withJobs?: boolean;
+		withColumns?: boolean;
+		at?: string;
+	} = {},
 ) => api.get({ url: "/catalog/lineage/impact", params: { datasetId, ...params } });
 export const getCatalogLineageDiff = (
-  datasetId: string,
-  params: {
-    from: string;
-    to: string;
-    direction?: "UPSTREAM" | "DOWNSTREAM" | "BOTH";
-    depth?: number;
-    projectName?: string;
-  },
+	datasetId: string,
+	params: {
+		from: string;
+		to: string;
+		direction?: "UPSTREAM" | "DOWNSTREAM" | "BOTH";
+		depth?: number;
+		projectName?: string;
+	},
 ) => api.get({ url: "/catalog/lineage/diff", params: { datasetId, ...params } });
 export const createCatalogLineage = (data: any) => api.post({ url: "/catalog/lineage", data });
 export const deleteCatalogLineage = (id: string) => api.delete({ url: `/catalog/lineage/${id}` });
@@ -1419,7 +1361,11 @@ export const syncAddaxLineage = () => api.post({ url: "/catalog/lineage/sync-add
 export const importDbtManifest = (file: File): Promise<{ created: number; skipped: number; total: number }> => {
 	const form = new FormData();
 	form.append("file", file);
-	return api.post({ url: "/catalog/lineage/import-dbt-manifest", data: form, headers: { "Content-Type": "multipart/form-data" } });
+	return api.post({
+		url: "/catalog/lineage/import-dbt-manifest",
+		data: form,
+		headers: { "Content-Type": "multipart/form-data" },
+	});
 };
 
 // Catalog sync (full scan)
@@ -1438,8 +1384,7 @@ export const updateCatalogSyncConfig = (data: { autoSyncEnabled?: boolean; autoS
 export const listCatalogSyncPipelines = () => api.get({ url: "/catalog/sync/pipelines" });
 export const listCatalogSyncRuns = (
 	params: { integration?: string; limit?: number; includeDetails?: boolean; sourceId?: string } = {},
-) =>
-	api.get({ url: "/catalog/sync/runs", params });
+) => api.get({ url: "/catalog/sync/runs", params });
 export const getCatalogSyncRunDiagnostics = (runId: string, params: { sourceId?: string } = {}) =>
 	api.get({ url: `/catalog/sync/runs/${runId}/diagnostics`, params });
 export const triggerJdbcCatalogSync = (sourceId: string, data: { reason?: string } = {}) =>
@@ -1505,7 +1450,14 @@ export const rollbackExecute = (data: {
 	confirmationType: string;
 	confirmationToken: string;
 	confirmationText?: string;
-}) => api.post({ url: "/rollback/execute", data, _skipErrorToast: true } as any);
+}) =>
+	api.post({
+		url: "/rollback/execute",
+		data,
+		_skipErrorToast: true,
+		_acceptedEnvelopeStatuses: [207],
+		_returnEnvelope: true,
+	} as any);
 
 export const getRollbackAuditLog = (params: { taskId?: number; dataSourceId?: string }) =>
 	api.get({ url: "/rollback/audit-log", params });
@@ -1537,8 +1489,7 @@ export const createAssetGrant = (data: {
 	grantReason?: string;
 }) => api.post({ url: "/asset-grants", data });
 export const deleteAssetGrant = (id: number) => api.delete({ url: `/asset-grants/${id}` });
-export const listMyGrants = (params?: { page?: number; size?: number }) =>
-	api.get({ url: "/asset-grants/my", params });
+export const listMyGrants = (params?: { page?: number; size?: number }) => api.get({ url: "/asset-grants/my", params });
 export const listGrantedByMe = (params?: { page?: number; size?: number }) =>
 	api.get({ url: "/asset-grants/granted-by-me", params });
 
@@ -1557,32 +1508,25 @@ export const listPermissionAudit = (params: {
 // Indicator Templates
 export const listIndicatorTemplates = (params?: { domain?: string }) =>
 	api.get({ url: "/governance/indicator-templates", params });
-export const getIndicatorTemplate = (id: string) =>
-	api.get({ url: `/governance/indicator-templates/${id}` });
-export const createIndicatorTemplate = (data: any) =>
-	api.post({ url: "/governance/indicator-templates", data });
+export const getIndicatorTemplate = (id: string) => api.get({ url: `/governance/indicator-templates/${id}` });
+export const createIndicatorTemplate = (data: any) => api.post({ url: "/governance/indicator-templates", data });
 export const updateIndicatorTemplate = (id: string, data: any) =>
 	api.put({ url: `/governance/indicator-templates/${id}`, data });
-export const deleteIndicatorTemplate = (id: string) =>
-	api.delete({ url: `/governance/indicator-templates/${id}` });
+export const deleteIndicatorTemplate = (id: string) => api.delete({ url: `/governance/indicator-templates/${id}` });
 export const applyIndicatorTemplate = (templateId: string, data: any) =>
 	api.post({ url: `/governance/indicator-templates/${templateId}/apply`, data });
 
 // Indicator Generation
-export const previewIndicatorSql = (id: string) =>
-	api.post({ url: `/governance/indicators/${id}/preview-sql` });
-export const generateIndicators = (data: any) =>
-	api.post({ url: "/governance/indicators/generate", data });
+export const previewIndicatorSql = (id: string) => api.post({ url: `/governance/indicators/${id}/preview-sql` });
+export const generateIndicators = (data: any) => api.post({ url: "/governance/indicators/generate", data });
 export const generateAndRunIndicators = (data: any) =>
 	api.post({ url: "/governance/indicators/generate-and-run", data });
 
 // Indicator Subscriptions
-export const listSubscriptions = () =>
-	api.get({ url: "/governance/indicators/subscriptions" });
+export const listSubscriptions = () => api.get({ url: "/governance/indicators/subscriptions" });
 export const createSubscription = (data: { indicatorId: string; filterConfig?: string; displayOrder?: number }) =>
 	api.post({ url: "/governance/indicators/subscriptions", data });
-export const deleteSubscription = (id: string) =>
-	api.delete({ url: `/governance/indicators/subscriptions/${id}` });
+export const deleteSubscription = (id: string) => api.delete({ url: `/governance/indicators/subscriptions/${id}` });
 export const updateSubscription = (id: string, data: { filterConfig?: string; displayOrder?: number }) =>
 	api.put({ url: `/governance/indicators/subscriptions/${id}`, data });
 
@@ -1606,14 +1550,12 @@ export type DataProduct = {
 export const listDataProducts = (page = 0, size = 20) =>
 	api.get({ url: "/catalog/data-products", params: { page, size } });
 
-export const createDataProduct = (data: Omit<DataProduct, "id">) =>
-	api.post({ url: "/catalog/data-products", data });
+export const createDataProduct = (data: Omit<DataProduct, "id">) => api.post({ url: "/catalog/data-products", data });
 
 export const updateDataProduct = (id: string, data: Partial<DataProduct>) =>
 	api.put({ url: `/catalog/data-products/${id}`, data });
 
-export const deleteDataProduct = (id: string) =>
-	api.delete({ url: `/catalog/data-products/${id}` });
+export const deleteDataProduct = (id: string) => api.delete({ url: `/catalog/data-products/${id}` });
 
 // --- Sprint-8: 指标中心 ---
 

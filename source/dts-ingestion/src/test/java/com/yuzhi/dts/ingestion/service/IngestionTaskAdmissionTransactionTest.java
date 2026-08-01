@@ -3,16 +3,18 @@ package com.yuzhi.dts.ingestion.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.yuzhi.dts.ingestion.domain.IngestionAccessDefaultPolicy;
 import com.yuzhi.dts.ingestion.domain.IngestionTask;
+import com.yuzhi.dts.ingestion.repository.IngestionAccessDefaultPolicyRepository;
 import com.yuzhi.dts.ingestion.repository.IngestionTaskRepository;
 import com.yuzhi.dts.ingestion.service.etl.AddaxJobService;
 import com.yuzhi.dts.ingestion.service.infra.InfraServiceSettingsRepository;
+import java.time.Instant;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,7 +23,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 
-@SpringBootTest
+@SpringBootTest(properties = "dts.platform.infra.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
 @ActiveProfiles("test")
 class IngestionTaskAdmissionTransactionTest {
 
@@ -30,6 +32,9 @@ class IngestionTaskAdmissionTransactionTest {
 
     @Autowired
     private IngestionTaskRepository taskRepository;
+
+    @Autowired
+    private IngestionAccessDefaultPolicyRepository policyRepository;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -43,14 +48,30 @@ class IngestionTaskAdmissionTransactionTest {
     @MockBean
     private IngestionClassificationSealGuard classificationSealGuard;
 
+    @MockBean
+    private IngestionTaskSecretMigrationService secretMigrationService;
+
     @AfterEach
     void cleanUp() {
         taskRepository.deleteAll();
+        policyRepository.deleteAll();
     }
 
     @Test
     @WithMockUser(username = "admission-test")
     void admit_rollsBackActiveStatusWhenRequiredJobGenerationFails() {
+        IngestionAccessDefaultPolicy policy = new IngestionAccessDefaultPolicy();
+        policy.setPolicyKey("GLOBAL");
+        policy.setVersion(1);
+        policy.setStatus("ACTIVE");
+        policy.setDefaults(objectMapper.createObjectNode()
+            .set("common", objectMapper.createObjectNode().put("taskConcurrency", 1)));
+        policy.setChecksum("admission-policy-checksum");
+        policy.setActivatedAt(Instant.now());
+        policy.setCreatedBy("admission-test");
+        policy.setCreatedAt(Instant.now());
+        policyRepository.saveAndFlush(policy);
+
         ObjectNode seal = validSeal();
         ObjectNode fields = objectMapper.createObjectNode();
         IngestionTask task = new IngestionTask();
@@ -68,13 +89,7 @@ class IngestionTaskAdmissionTransactionTest {
 
         doThrow(new IllegalStateException("forced job generation failure"))
             .when(addaxJobService)
-            .createJobFromTask(
-                any(IngestionTask.class),
-                isNull(),
-                isNull(),
-                isNull(),
-                isNull()
-            );
+            .createJobFromTask(any(IngestionTask.class));
 
         assertThatThrownBy(() -> ingestionTaskService.admit(taskId, storedSeal, storedFields))
             .isInstanceOf(IllegalStateException.class)

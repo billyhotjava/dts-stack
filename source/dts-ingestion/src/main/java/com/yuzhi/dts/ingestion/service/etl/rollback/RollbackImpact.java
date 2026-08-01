@@ -9,10 +9,6 @@ public record RollbackImpact(
 	Long taskId,
 	UUID dataSourceId,
 	List<String> affectedTables,
-	List<String> affectedOdsMappings,
-	List<String> affectedModels,        // placeholder - populated by dts-platform
-	List<String> affectedDbtFiles,      // placeholder - populated by dts-platform
-	int affectedDatasets,               // placeholder
 	List<String> uploadFiles,
 	int executionRecords,
 	String confirmationType,

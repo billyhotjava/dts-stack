@@ -24,19 +24,25 @@ public class ModelMaterializationStartService {
 
     private final ModelReleaseCandidateService candidateCommands;
     private final ModelMaterializationBuildRepository builds;
+    private final ModelMaterializationSourceAvailabilityGuard sourceAvailability;
+    private final ModelMaterializationAvailabilityAuditService availabilityAudit;
     private final Clock clock;
 
     @Autowired
     public ModelMaterializationStartService(
         ModelReleaseCandidateService candidateCommands,
-        ModelMaterializationBuildRepository builds
+        ModelMaterializationBuildRepository builds,
+        ModelMaterializationSourceAvailabilityGuard sourceAvailability,
+        ModelMaterializationAvailabilityAuditService availabilityAudit
     ) {
-        this(candidateCommands, builds, Clock.systemUTC());
+        this(candidateCommands, builds, sourceAvailability, availabilityAudit, Clock.systemUTC());
     }
 
     ModelMaterializationStartService(
         ModelReleaseCandidateService candidateCommands,
         ModelMaterializationBuildRepository builds,
+        ModelMaterializationSourceAvailabilityGuard sourceAvailability,
+        ModelMaterializationAvailabilityAuditService availabilityAudit,
         Clock clock
     ) {
         this.candidateCommands = Objects.requireNonNull(
@@ -44,6 +50,8 @@ public class ModelMaterializationStartService {
             "candidateCommands is required"
         );
         this.builds = Objects.requireNonNull(builds, "builds is required");
+        this.sourceAvailability = Objects.requireNonNull(sourceAvailability, "sourceAvailability is required");
+        this.availabilityAudit = Objects.requireNonNull(availabilityAudit, "availabilityAudit is required");
         this.clock = Objects.requireNonNull(clock, "clock is required");
     }
 
@@ -91,6 +99,7 @@ public class ModelMaterializationStartService {
             // Canonical drift handling may atomically turn the requested build into STALE.
             return new StartResult(result, null);
         }
+        requireAvailable(tenantId, actorId, candidateId, result.candidate().version());
         QueuedBuildGroup build;
         if (result.replayed()) {
             build = builds.requireQueuedBuild(result.candidate());
@@ -123,12 +132,22 @@ public class ModelMaterializationStartService {
         if (result.candidate().status() != DeliveryStatus.BUILDING) {
             return result;
         }
+        requireAvailable(tenantId, actorId, candidateId, result.candidate().version());
         if (result.replayed()) {
             builds.requireQueuedBuild(result.candidate());
         } else {
             builds.createRetryQueuedBuild(result.candidate(), clock.instant());
         }
         return result;
+    }
+
+    private void requireAvailable(String tenantId, String actorId, UUID candidateId, int candidateVersion) {
+        try {
+            sourceAvailability.requireCandidateCurrent(tenantId, candidateId, candidateVersion);
+        } catch (ModelReleaseCandidateException unavailable) {
+            availabilityAudit.recordStartDenied(actorId, candidateId, candidateVersion, unavailable.code());
+            throw unavailable;
+        }
     }
 
     public record StartResult(CommandResult command, QueuedBuildGroup build) {

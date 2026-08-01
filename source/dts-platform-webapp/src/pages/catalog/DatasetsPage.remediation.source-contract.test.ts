@@ -4,6 +4,10 @@ import test from "node:test";
 
 const SOURCE = readFileSync(new URL("./DatasetsPage.tsx", import.meta.url), "utf8");
 const LEDGER_VIEW = readFileSync(new URL("./assets/AssetLedgerView.tsx", import.meta.url), "utf8");
+const GOVERNANCE_WORKBENCH = readFileSync(
+	new URL("./assets/AssetGovernanceWorkbenchDrawer.tsx", import.meta.url),
+	"utf8",
+);
 const DIALOGS = readFileSync(new URL("./assets/AssetLedgerDialogs.tsx", import.meta.url), "utf8");
 
 test("asset map exposes remediation workspace for governance gaps and lineage failures", () => {
@@ -15,10 +19,11 @@ test("asset map exposes remediation workspace for governance gaps and lineage fa
 	assert.match(DIALOGS, /同步血缘/);
 });
 
-test("remediation actions route to detail tabs and refresh lineage evidence", () => {
+test("remediation actions route through the governance workbench and refresh lineage evidence", () => {
 	assert.match(SOURCE, /syncCatalogAssetV2Lineage/);
 	assert.match(SOURCE, /\/catalog\/datasets\/\$\{assetId\}\?tab=governance/);
-	assert.match(LEDGER_VIEW, /\/catalog\/datasets\/\$\{row\.id\}\?tab=lineage-impact/);
+	assert.match(LEDGER_VIEW, /AssetGovernanceWorkbenchDrawer/);
+	assert.match(GOVERNANCE_WORKBENCH, /openDetail\("lineage-impact"\)/);
 	assert.match(SOURCE, /loadGovernanceSignals/);
 });
 
@@ -26,7 +31,7 @@ test("asset ledger keeps the operational table shell (map split into AssetOvervi
 	assert.match(SOURCE, /renderAssetTable/);
 	assert.match(SOURCE, /返回地图/);
 	assert.match(LEDGER_VIEW, /title: "治理状态"/);
-	assert.match(LEDGER_VIEW, /tab=lineage-impact/);
+	assert.match(GOVERNANCE_WORKBENCH, /血缘与影响/);
 	assert.doesNotMatch(SOURCE, /label: "卡片"/);
 	assert.doesNotMatch(SOURCE, /DATASET_VIEW_MODE_STORAGE_KEY/);
 	assert.doesNotMatch(SOURCE, /router\.push\("\/catalog\/asset-detail"\)/);

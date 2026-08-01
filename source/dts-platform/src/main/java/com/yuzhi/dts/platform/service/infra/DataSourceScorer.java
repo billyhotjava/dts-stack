@@ -7,8 +7,8 @@ import org.springframework.util.StringUtils;
  *
  * <p>The core scoring rules (applied by {@link #scoreDataSource}) capture the
  * common pattern used across InfraManagementService, DbtConfigService,
- * ModelingSqlModelService, and ModelingSqlModelResource.  Callers that need
- * additional context-specific bonuses (e.g. description hints, preferred
+ * and modeling materialization services. Callers that need additional
+ * context-specific bonuses (e.g. description hints, preferred
  * database matching, admin-data-lake props) should add those on top of the
  * base score returned here.
  */

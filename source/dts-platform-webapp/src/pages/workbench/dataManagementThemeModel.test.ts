@@ -99,7 +99,7 @@ describe("data management theme model", () => {
 		expect(themes["chain-quality"].governance.tone).toBe("warning");
 		expect(themes["chain-quality"].operation.label).toBe("待运行");
 		expect(themes["chain-quality"].primaryAction.label).toBe("补齐质量责任人与分级说明");
-		expect(themes["chain-quality"].primaryAction.route).toBe("/governance/quality");
+		expect(themes["chain-quality"].primaryAction.route).toBe("/governance/rules/runs");
 		expect(themes["chain-quality"].evidenceRefs).toContain("it/evidence/onsite-defined/03-governance-gate.md");
 	});
 

@@ -51,7 +51,7 @@ export default function GovernanceCenterPage() {
 				title: "质量管控",
 				entries: [
 					{ title: "质量规则", description: "定义并执行质量规则", path: "/governance/rules" },
-					{ title: "质量检查", description: "运行质量检查并查看执行结果", path: "/governance/quality" },
+					{ title: "质量检查", description: "运行质量检查并查看执行结果", path: "/governance/rules/runs" },
 					{ title: "资产视图", description: "联动查看数据资产质量", path: "/catalog/quality" },
 				],
 			},
@@ -124,7 +124,7 @@ export default function GovernanceCenterPage() {
 						<Button type="primary" onClick={() => navigate("/governance/rules")}>
 							新建规则
 						</Button>
-						<Button onClick={() => navigate("/governance/quality")}>运行质量</Button>
+						<Button onClick={() => navigate("/governance/rules/runs")}>运行质量</Button>
 						<Button onClick={() => navigate("/workbench/todo")}>修复阻断</Button>
 						<Button onClick={() => navigate("/governance/quality")}>查看报告</Button>
 					</Space>

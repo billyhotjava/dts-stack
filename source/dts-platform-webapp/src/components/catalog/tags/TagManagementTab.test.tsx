@@ -587,4 +587,26 @@ describe("TagManagementTab", () => {
 		expect(toastError).toHaveBeenCalledWith("标签仍被三个资产使用，需确认后再删除");
 		unmount();
 	});
+
+	it("exposes view and association journeys for the selected tag", async () => {
+		const onViewAssets = vi.fn();
+		const onAssociateAssets = vi.fn();
+		const { TagManagementTab } = await import("./TagManagementTab");
+		const { container, unmount } = await renderAndFlush(
+			<TagManagementTab canManage onViewAssets={onViewAssets} onAssociateAssets={onAssociateAssets} />,
+		);
+
+		const view = Array.from(container.querySelectorAll("button")).find(
+			(button) => button.textContent === "查看资产",
+		) as HTMLButtonElement;
+		const associate = Array.from(container.querySelectorAll("button")).find(
+			(button) => button.textContent === "关联资产",
+		) as HTMLButtonElement;
+		act(() => view.click());
+		act(() => associate.click());
+
+		expect(onViewAssets).toHaveBeenCalledWith(financeTag);
+		expect(onAssociateAssets).toHaveBeenCalledWith(financeTag);
+		unmount();
+	});
 });

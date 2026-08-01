@@ -75,6 +75,40 @@ class AuditOutboxDispatcherTest {
     }
 
     @Test
+    void replayGenerationUsesFreshRetryBudgetWhileKeepingCumulativeAttemptFence() {
+        PlatformAuditOutboxRepository outbox = mock(PlatformAuditOutboxRepository.class);
+        AdminAuditGateway gateway = mock(AdminAuditGateway.class);
+        ClaimedAudit claimed = claimedAudit(21, 1);
+        when(outbox.claimNext(eq(NOW), any())).thenReturn(Optional.of(claimed));
+        when(gateway.submitEvent(any())).thenReturn(AuditSubmissionResult.RETRYABLE_FAILURE);
+        AuditOutboxDispatcher dispatcher = dispatcher(outbox, gateway);
+
+        AuditOutboxDispatcher.DispatchResult result = dispatcher.dispatchNext().orElseThrow();
+
+        assertThat(result.status()).isEqualTo("RETRY");
+        assertThat(result.attempts()).isEqualTo(21);
+        verify(outbox).markRetry(eq(claimed.id()), eq(21), eq("AUDIT_DELIVERY_RETRYABLE"), any(), eq(NOW));
+        verify(outbox, never()).markDead(any(), anyInt(), any(), any());
+    }
+
+    @Test
+    void currentReplayGenerationExhaustionDeadLettersEvenWithSeparateCumulativeCounter() {
+        PlatformAuditOutboxRepository outbox = mock(PlatformAuditOutboxRepository.class);
+        AdminAuditGateway gateway = mock(AdminAuditGateway.class);
+        ClaimedAudit claimed = claimedAudit(37, 20);
+        when(outbox.claimNext(eq(NOW), any())).thenReturn(Optional.of(claimed));
+        when(gateway.submitEvent(any())).thenReturn(AuditSubmissionResult.RETRYABLE_FAILURE);
+        AuditOutboxDispatcher dispatcher = dispatcher(outbox, gateway);
+
+        AuditOutboxDispatcher.DispatchResult result = dispatcher.dispatchNext().orElseThrow();
+
+        assertThat(result.status()).isEqualTo("DEAD");
+        assertThat(result.attempts()).isEqualTo(37);
+        verify(outbox).markDead(claimed.id(), 37, "AUDIT_DELIVERY_RETRIES_EXHAUSTED", NOW);
+        verify(outbox, never()).markRetry(any(), anyInt(), any(), any(), any());
+    }
+
+    @Test
     void tamperedPayloadShouldBeDeadLetteredBeforeRemoteDelivery() {
         PlatformAuditOutboxRepository outbox = mock(PlatformAuditOutboxRepository.class);
         AdminAuditGateway gateway = mock(AdminAuditGateway.class);
@@ -84,6 +118,7 @@ class AuditOutboxDispatcherTest {
             "dts-platform",
             "0".repeat(64),
             "{\"eventId\":\"audit-event-1\",\"producer\":\"dts-platform\",\"actor\":\"alice\"}",
+            1,
             1
         );
         when(outbox.claimNext(eq(NOW), any())).thenReturn(Optional.of(claimed));
@@ -120,6 +155,10 @@ class AuditOutboxDispatcherTest {
     }
 
     private ClaimedAudit claimedAudit() {
+        return claimedAudit(1, 1);
+    }
+
+    private ClaimedAudit claimedAudit(int attempts, int generationAttempts) {
         String body = "{\"eventId\":\"audit-event-1\",\"producer\":\"dts-platform\",\"actor\":\"alice\"}";
         return new ClaimedAudit(
             UUID.fromString("8cd274de-45c0-4fd7-b6e8-d2a22714dd2c"),
@@ -127,7 +166,8 @@ class AuditOutboxDispatcherTest {
             "dts-platform",
             sha256(body),
             body,
-            1
+            attempts,
+            generationAttempts
         );
     }
 

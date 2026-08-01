@@ -1,6 +1,6 @@
 import { ArrowLeftOutlined } from "@ant-design/icons";
 import { Alert, Button, Form, Space, Spin, Steps, Tag, Typography } from "antd";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { useRouter, useSearchParams } from "@/routes/hooks";
@@ -9,6 +9,7 @@ import styles from "./AccessPlanWizardPage.module.css";
 import { ApiAccessStep } from "./ApiAccessStep";
 import { ACCESS_KIND_LABELS, type AccessPlanFormValues, type AccessPlanStep } from "./accessPlan.types";
 import { normalizeAccessKind, requireSafeApiResourcePath } from "./accessPlanPayload";
+import { acquireSingleFlight, releaseSingleFlight } from "./accessSingleFlight";
 import { DatabaseAccessStep } from "./DatabaseAccessStep";
 import { FileAccessStep } from "./FileAccessStep";
 import { LandingScheduleStep } from "./LandingScheduleStep";
@@ -48,6 +49,7 @@ export default function AccessPlanWizardPage() {
 	const editId = useMemo(() => parseEditId(searchParams.get("editId")), [searchParams]);
 	const [currentStep, setCurrentStep] = useState<AccessPlanStep>(0);
 	const [form] = Form.useForm<AccessPlanFormValues>();
+	const submitLockRef = useRef(false);
 	const wizard = useAccessPlanWizard({ kind, editId, form });
 	const watchedValues = Form.useWatch([], form);
 	const values = { ...initialValues, ...form.getFieldsValue(true), ...(watchedValues || {}) } as AccessPlanFormValues;
@@ -55,6 +57,7 @@ export default function AccessPlanWizardPage() {
 	const targetName = wizard.targetDataSources.find((item) => item.id === values.targetDataSourceId)?.name;
 	const listPath = kind === "file" ? "/foundation/data-sources/files" : `/foundation/data-sources/${kind}`;
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: changing the route edit target or access kind must restart the wizard at its first step.
 	useEffect(() => {
 		setCurrentStep(0);
 	}, [editId, kind]);
@@ -95,16 +98,19 @@ export default function AccessPlanWizardPage() {
 	};
 
 	const submit = async () => {
+		if (!acquireSingleFlight(submitLockRef)) return;
 		try {
 			await validateCurrentStep();
 			const result = await wizard.submit();
 			toast.success(
-				result.updated ? "接入任务已更新" : kind === "file" ? "文件任务草稿已保存，请完成密级准入" : "接入任务已创建",
+				result.updated ? "修改已保存为待准入草稿；当前生效版本继续运行" : "接入计划草稿已保存，请完成密级准入",
 			);
 			if (result.taskId) router.push(`/foundation/data-sources/access/${result.taskId}`);
 			else router.push(listPath);
 		} catch (error: unknown) {
 			toast.error(safeAccessPlanErrorMessage(error, "接入任务保存失败"));
+		} finally {
+			releaseSingleFlight(submitLockRef);
 		}
 	};
 
@@ -279,7 +285,7 @@ export default function AccessPlanWizardPage() {
 								</Button>
 							) : (
 								<Button type="primary" loading={wizard.saving} onClick={() => void submit()}>
-									{editId ? "保存修改" : kind === "file" ? "保存草稿" : "创建任务"}
+									{editId ? "保存修改为草稿" : "保存草稿"}
 								</Button>
 							)}
 						</Space>

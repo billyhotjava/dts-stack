@@ -75,6 +75,59 @@ class InternalApiIngestionResourceTest {
     }
 
     @Test
+    void startExecution_shouldBindAirflowRunToExactEmbeddedRevision() {
+        IngestionExecutionDTO submitted = new IngestionExecutionDTO();
+        submitted.setId(43L);
+        submitted.setTaskId(99L);
+        submitted.setExecutionId("scheduled__r12");
+        submitted.setStatus("preparing");
+        when(taskService.executeInternalApiForRevision(
+            99L, "batch-r12", null, null, null, null,
+            12L, "checksum-r12", "orders_revision_12", "scheduled__r12"
+        )).thenReturn(submitted);
+
+        Map<String, Object> body = resource.startExecution(Map.of(
+            "taskId", 99L,
+            "batchId", "batch-r12",
+            "revisionId", 12L,
+            "configChecksum", "checksum-r12",
+            "airflowDagId", "orders_revision_12",
+            "airflowRunId", "scheduled__r12"
+        )).getBody();
+
+        assertThat(body).containsEntry("id", 43L).containsEntry("executionId", "scheduled__r12");
+        verify(taskService).executeInternalApiForRevision(
+            99L, "batch-r12", null, null, null, null,
+            12L, "checksum-r12", "orders_revision_12", "scheduled__r12"
+        );
+    }
+
+    @Test
+    void registerScheduledExecution_shouldPersistExactContractBeforeAddaxRuns() {
+        IngestionExecutionDTO submitted = new IngestionExecutionDTO();
+        submitted.setId(44L);
+        submitted.setTaskId(99L);
+        submitted.setExecutionId("scheduled__r12");
+        submitted.setStatus("running");
+        when(taskService.registerScheduledExecution(
+            99L, 12L, "checksum-r12", "orders_revision_12", "scheduled__r12"
+        )).thenReturn(submitted);
+
+        Map<String, Object> body = resource.registerScheduledExecution(Map.of(
+            "taskId", 99L,
+            "revisionId", 12L,
+            "configChecksum", "checksum-r12",
+            "airflowDagId", "orders_revision_12",
+            "airflowRunId", "scheduled__r12"
+        )).getBody();
+
+        assertThat(body).containsEntry("id", 44L).containsEntry("status", "running");
+        verify(taskService).registerScheduledExecution(
+            99L, 12L, "checksum-r12", "orders_revision_12", "scheduled__r12"
+        );
+    }
+
+    @Test
     void getExecution_shouldReturnStatusByStableExecutionDatabaseId() {
         IngestionTask task = new IngestionTask();
         task.setId(99L);

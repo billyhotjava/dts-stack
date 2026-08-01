@@ -35,6 +35,17 @@ public class RollbackAuditLog {
 	@Column(name = "data_source_id")
 	private UUID dataSourceId;
 
+	@Column(name = "operation_receipt_id")
+	private UUID operationReceiptId;
+
+	@Size(max = 64)
+	@Column(name = "event_hash", length = 64)
+	private String eventHash;
+
+	@Size(max = 64)
+	@Column(name = "reason_code", length = 64)
+	private String reasonCode;
+
 	@Column(name = "request_json", columnDefinition = "TEXT")
 	private String requestJson;
 
@@ -102,6 +113,30 @@ public class RollbackAuditLog {
 
 	public void setDataSourceId(UUID dataSourceId) {
 		this.dataSourceId = dataSourceId;
+	}
+
+	public UUID getOperationReceiptId() {
+		return operationReceiptId;
+	}
+
+	public void setOperationReceiptId(UUID operationReceiptId) {
+		this.operationReceiptId = operationReceiptId;
+	}
+
+	public String getEventHash() {
+		return eventHash;
+	}
+
+	public void setEventHash(String eventHash) {
+		this.eventHash = eventHash;
+	}
+
+	public String getReasonCode() {
+		return reasonCode;
+	}
+
+	public void setReasonCode(String reasonCode) {
+		this.reasonCode = reasonCode;
 	}
 
 	public String getRequestJson() {

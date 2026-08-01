@@ -13,5 +13,8 @@ public record IngestionTaskRevisionDTO(
     String createdBy,
     Instant createdAt,
     String activatedBy,
-    Instant activatedAt
+    Instant activatedAt,
+    String dagDeploymentStatus,
+    String dagDeploymentError,
+    Instant dagDeploymentUpdatedAt
 ) {}

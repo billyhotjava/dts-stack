@@ -11,22 +11,15 @@ import com.yuzhi.dts.platform.domain.modeling.DataStandard;
 import com.yuzhi.dts.platform.domain.modeling.ModelingGlossaryTerm;
 import com.yuzhi.dts.platform.domain.modeling.ModelingGlossaryTermReview;
 import com.yuzhi.dts.platform.domain.modeling.ModelingGlossaryTermVersion;
-import com.yuzhi.dts.platform.domain.modeling.ModelingPlan;
-import com.yuzhi.dts.platform.domain.modeling.ModelingPlanReview;
-import com.yuzhi.dts.platform.domain.modeling.ModelingPlanVersion;
 import com.yuzhi.dts.platform.domain.modeling.ModelingTemplate;
 import com.yuzhi.dts.platform.domain.modeling.ModelingTemplateVersion;
 import com.yuzhi.dts.platform.repository.governance.GovIndicatorDefinitionRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
-import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.modeling.DataStandardRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingGlossaryTermRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingGlossaryTermReviewRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingGlossaryTermVersionRepository;
-import com.yuzhi.dts.platform.repository.modeling.ModelingPlanRepository;
-import com.yuzhi.dts.platform.repository.modeling.ModelingPlanReviewRepository;
-import com.yuzhi.dts.platform.repository.modeling.ModelingPlanVersionRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingTemplateRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingTemplateVersionRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
@@ -83,9 +76,6 @@ public class ModelingAuxResource {
         "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).CATALOG_MAINTAINERS)";
     private static final Pattern STD_CODE_PATTERN = Pattern.compile("(?i)(?:\\bSTD\\b|标准)\\s*[:：]\\s*([A-Za-z0-9_\\-\\.]+)");
 
-    private final ModelingPlanRepository planRepo;
-    private final ModelingPlanVersionRepository planVersionRepo;
-    private final ModelingPlanReviewRepository planReviewRepo;
     private final ModelingGlossaryTermRepository glossaryRepo;
     private final ModelingGlossaryTermVersionRepository glossaryVersionRepo;
     private final ModelingGlossaryTermReviewRepository glossaryReviewRepo;
@@ -99,15 +89,11 @@ public class ModelingAuxResource {
     private final GovIndicatorDefinitionRepository indicatorRepository;
     private final CatalogTableSchemaRepository catalogTableRepo;
     private final CatalogColumnSchemaRepository catalogColumnRepo;
-    private final CatalogDomainRepository catalogDomainRepo;
     private final AccessChecker catalogAccessChecker;
     private final ModelingAssetReferenceService referenceService;
     private final CodeAssetGrantWriter codeAssetGrantWriter;
 
     public ModelingAuxResource(
-        ModelingPlanRepository planRepo,
-        ModelingPlanVersionRepository planVersionRepo,
-        ModelingPlanReviewRepository planReviewRepo,
         ModelingGlossaryTermRepository glossaryRepo,
         ModelingGlossaryTermVersionRepository glossaryVersionRepo,
         ModelingGlossaryTermReviewRepository glossaryReviewRepo,
@@ -121,14 +107,10 @@ public class ModelingAuxResource {
         GovIndicatorDefinitionRepository indicatorRepository,
         CatalogTableSchemaRepository catalogTableRepo,
         CatalogColumnSchemaRepository catalogColumnRepo,
-        CatalogDomainRepository catalogDomainRepo,
         AccessChecker catalogAccessChecker,
         ModelingAssetReferenceService referenceService,
         CodeAssetGrantWriter codeAssetGrantWriter
     ) {
-        this.planRepo = planRepo;
-        this.planVersionRepo = planVersionRepo;
-        this.planReviewRepo = planReviewRepo;
         this.glossaryRepo = glossaryRepo;
         this.glossaryVersionRepo = glossaryVersionRepo;
         this.glossaryReviewRepo = glossaryReviewRepo;
@@ -142,315 +124,9 @@ public class ModelingAuxResource {
         this.indicatorRepository = indicatorRepository;
         this.catalogTableRepo = catalogTableRepo;
         this.catalogColumnRepo = catalogColumnRepo;
-        this.catalogDomainRepo = catalogDomainRepo;
         this.catalogAccessChecker = catalogAccessChecker;
         this.referenceService = referenceService;
         this.codeAssetGrantWriter = codeAssetGrantWriter;
-    }
-
-    @GetMapping("/plans")
-    public ApiResponse<List<ModelingPlan>> listPlans(
-        @RequestParam(value = "keyword", required = false) String keyword,
-        @RequestParam(value = "status", required = false) String status,
-        @RequestHeader(value = "X-Active-Dept", required = false) String activeDeptHeader
-    ) {
-        String activeDept = security.resolveActiveDept(activeDeptHeader);
-        boolean instituteScope = security.hasInstituteScope();
-        String kw = StringUtils.trimToNull(keyword);
-        String statusFilter = parsePlanStatusFilter(status);
-        List<ModelingPlan> list = planRepo
-            .findAll()
-            .stream()
-            .filter(plan -> isOwnerDeptVisible(plan != null ? plan.getOwnerDept() : null, activeDept, instituteScope))
-            .filter(plan -> statusFilter == null || statusFilter.equalsIgnoreCase(StringUtils.trimToEmpty(plan != null ? plan.getStatus() : null)))
-            .filter(plan -> kw == null || matchKeyword(plan.getName(), kw) || matchKeyword(plan.getOwner(), kw))
-            .sorted(Comparator.comparing(plan -> String.valueOf(plan.getName()).toLowerCase(Locale.ROOT)))
-            .toList();
-        auditService.auditAction("MODELING_PLAN_READ", AuditStage.SUCCESS, "list", null);
-        return ApiResponses.ok(list);
-    }
-
-    @GetMapping("/plans/{id}")
-    public ApiResponse<ModelingPlan> getPlan(
-        @PathVariable UUID id,
-        @RequestHeader(value = "X-Active-Dept", required = false) String activeDeptHeader
-    ) {
-        String activeDept = security.resolveActiveDept(activeDeptHeader);
-        boolean instituteScope = security.hasInstituteScope();
-        ModelingPlan plan = planRepo.findById(id).orElseThrow(() -> new EntityNotFoundException("数据规划不存在"));
-        if (!isOwnerDeptVisible(plan.getOwnerDept(), activeDept, instituteScope)) {
-            throw new AccessDeniedException("当前账号无权访问该数据规划");
-        }
-        auditService.auditAction("MODELING_PLAN_READ", AuditStage.SUCCESS, id.toString(), null);
-        return ApiResponses.ok(plan);
-    }
-
-    @PostMapping("/plans")
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
-    public ApiResponse<ModelingPlan> createPlan(
-        @Valid @RequestBody ModelingPlan request,
-        @RequestHeader(value = "X-Active-Dept", required = false) String activeDeptHeader
-    ) {
-        ensurePlanNameUnique(null, request != null ? request.getName() : null);
-        ModelingPlan plan = new ModelingPlan();
-        applyPlanUpsert(plan, request, activeDeptHeader);
-        ensurePlanDefaults(plan);
-        ModelingPlan saved = planRepo.save(plan);
-        upsertPlanVersionSnapshot(saved, saved.getVersionNotes(), null);
-        auditService.auditAction("MODELING_PLAN_CREATE", AuditStage.SUCCESS, saved.getId().toString(), null);
-        return ApiResponses.ok(saved);
-    }
-
-    @PutMapping("/plans/{id}")
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
-    public ApiResponse<ModelingPlan> updatePlan(
-        @PathVariable UUID id,
-        @Valid @RequestBody ModelingPlan request,
-        @RequestHeader(value = "X-Active-Dept", required = false) String activeDeptHeader
-    ) {
-        ensurePlanNameUnique(id, request != null ? request.getName() : null);
-        ModelingPlan plan = planRepo.findById(id).orElseThrow(() -> new EntityNotFoundException("数据规划不存在"));
-        applyPlanUpsert(plan, request, activeDeptHeader);
-        ensurePlanDefaults(plan);
-        ModelingPlan saved = planRepo.save(plan);
-        upsertPlanVersionSnapshot(saved, saved.getVersionNotes(), null);
-        auditService.auditAction("MODELING_PLAN_UPDATE", AuditStage.SUCCESS, id.toString(), null);
-        return ApiResponses.ok(saved);
-    }
-
-    @GetMapping("/plans/{id}/versions")
-    public ApiResponse<List<ModelingPlanVersion>> listPlanVersions(
-        @PathVariable UUID id,
-        @RequestHeader(value = "X-Active-Dept", required = false) String activeDeptHeader
-    ) {
-        ModelingPlan plan = getReadablePlan(id, activeDeptHeader);
-        List<ModelingPlanVersion> list = planVersionRepo.findByPlanOrderByCreatedDateDesc(plan);
-        auditService.auditAction(
-            "MODELING_PLAN_VERSION_VIEW",
-            AuditStage.SUCCESS,
-            id.toString(),
-            Map.of("summary", "查看数据规划版本", "planName", plan.getName())
-        );
-        return ApiResponses.ok(list);
-    }
-
-    public record ModelingPlanPublishRequest(String version, String changeSummary) {}
-
-    @PostMapping("/plans/{id}/publish")
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
-    public ApiResponse<ModelingPlan> publishPlan(
-        @PathVariable UUID id,
-        @RequestBody(required = false) ModelingPlanPublishRequest body,
-        @RequestHeader(value = "X-Active-Dept", required = false) String activeDeptHeader
-    ) {
-        ModelingPlan plan = getWritablePlan(id, activeDeptHeader);
-        if ("ARCHIVED".equalsIgnoreCase(StringUtils.trimToEmpty(plan.getStatus()))) {
-            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "已归档的数据规划不能直接发布，请先恢复为草稿");
-        }
-        Map<String, Object> before = toPlanAuditView(plan);
-
-        String version = StringUtils.trimToNull(body != null ? body.version() : null);
-        if (version != null) {
-            plan.setVersion(version);
-        }
-        ensurePlanDefaults(plan);
-        plan.setStatus("PUBLISHED");
-        if (StringUtils.isNotBlank(body != null ? body.changeSummary() : null)) {
-            plan.setVersionNotes(StringUtils.trimToNull(body.changeSummary()));
-        }
-        ModelingPlan saved = planRepo.save(plan);
-        upsertPlanVersionSnapshot(saved, StringUtils.trimToNull(body != null ? body.changeSummary() : null), "PUBLISHED");
-
-        Map<String, Object> auditPayload = new LinkedHashMap<>();
-        auditPayload.put("before", before);
-        auditPayload.put("after", toPlanAuditView(saved));
-        auditPayload.put("targetId", id.toString());
-        auditPayload.put("targetName", saved.getName());
-        auditPayload.put("operationType", "PUBLISH");
-        auditPayload.put("summary", "发布数据规划：" + saved.getName());
-        auditPayload.put("version", saved.getVersion());
-        auditService.auditAction("MODELING_PLAN_PUBLISH", AuditStage.SUCCESS, id.toString(), auditPayload);
-        return ApiResponses.ok(saved);
-    }
-
-    public record ModelingPlanArchiveRequest(String notes) {}
-
-    @PostMapping("/plans/{id}/archive")
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
-    public ApiResponse<ModelingPlan> archivePlan(
-        @PathVariable UUID id,
-        @RequestBody(required = false) ModelingPlanArchiveRequest body,
-        @RequestHeader(value = "X-Active-Dept", required = false) String activeDeptHeader
-    ) {
-        ModelingPlan plan = getWritablePlan(id, activeDeptHeader);
-        Map<String, Object> before = toPlanAuditView(plan);
-        plan.setStatus("ARCHIVED");
-        if (StringUtils.isNotBlank(body != null ? body.notes() : null)) {
-            plan.setVersionNotes(StringUtils.trimToNull(body.notes()));
-        }
-        ensurePlanDefaults(plan);
-        ModelingPlan saved = planRepo.save(plan);
-        upsertPlanVersionSnapshot(saved, StringUtils.trimToNull(body != null ? body.notes() : null), "ARCHIVED");
-
-        Map<String, Object> auditPayload = new LinkedHashMap<>();
-        auditPayload.put("before", before);
-        auditPayload.put("after", toPlanAuditView(saved));
-        auditPayload.put("targetId", id.toString());
-        auditPayload.put("targetName", saved.getName());
-        auditPayload.put("operationType", "ARCHIVE");
-        auditPayload.put("summary", "归档数据规划：" + saved.getName());
-        auditPayload.put("version", saved.getVersion());
-        auditService.auditAction("MODELING_PLAN_ARCHIVE", AuditStage.SUCCESS, id.toString(), auditPayload);
-        return ApiResponses.ok(saved);
-    }
-
-    @PostMapping("/plans/{id}/restore")
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
-    public ApiResponse<ModelingPlan> restorePlan(
-        @PathVariable UUID id,
-        @RequestHeader(value = "X-Active-Dept", required = false) String activeDeptHeader
-    ) {
-        ModelingPlan plan = getWritablePlan(id, activeDeptHeader);
-        Map<String, Object> before = toPlanAuditView(plan);
-        plan.setStatus("DRAFT");
-        ensurePlanDefaults(plan);
-        ModelingPlan saved = planRepo.save(plan);
-        upsertPlanVersionSnapshot(saved, null, "DRAFT");
-
-        Map<String, Object> auditPayload = new LinkedHashMap<>();
-        auditPayload.put("before", before);
-        auditPayload.put("after", toPlanAuditView(saved));
-        auditPayload.put("targetId", id.toString());
-        auditPayload.put("targetName", saved.getName());
-        auditPayload.put("operationType", "RESTORE");
-        auditPayload.put("summary", "恢复数据规划为草稿：" + saved.getName());
-        auditService.auditAction("MODELING_PLAN_RESTORE", AuditStage.SUCCESS, id.toString(), auditPayload);
-        return ApiResponses.ok(saved);
-    }
-
-    @GetMapping("/plans/{id}/reviews")
-    public ApiResponse<List<ModelingPlanReview>> listPlanReviews(
-        @PathVariable UUID id,
-        @RequestHeader(value = "X-Active-Dept", required = false) String activeDeptHeader
-    ) {
-        ModelingPlan plan = getReadablePlan(id, activeDeptHeader);
-        List<ModelingPlanReview> list = planReviewRepo.findByPlanOrderByCreatedDateDesc(plan);
-        auditService.auditAction("MODELING_PLAN_REVIEW_VIEW", AuditStage.SUCCESS, id.toString(), Map.of("summary", "查看数据规划评审记录"));
-        return ApiResponses.ok(list);
-    }
-
-    public record ModelingPlanReviewSubmitRequest(String version, String notes) {}
-
-    @PostMapping("/plans/{id}/reviews/submit")
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
-    public ApiResponse<ModelingPlanReview> submitPlanReview(
-        @PathVariable UUID id,
-        @RequestBody(required = false) ModelingPlanReviewSubmitRequest body,
-        @RequestHeader(value = "X-Active-Dept", required = false) String activeDeptHeader
-    ) {
-        ModelingPlan plan = getWritablePlan(id, activeDeptHeader);
-        String version = StringUtils.trimToNull(body != null ? body.version() : null);
-        if (version == null) {
-            version = StringUtils.trimToNull(plan.getVersion());
-        }
-        ModelingPlanReview review = new ModelingPlanReview();
-        review.setPlan(plan);
-        review.setVersion(version);
-        review.setStatus("SUBMITTED");
-        review.setReviewNotes(StringUtils.trimToNull(body != null ? body.notes() : null));
-        ModelingPlanReview saved = planReviewRepo.save(review);
-        auditService.auditAction(
-            "MODELING_PLAN_REVIEW_SUBMIT",
-            AuditStage.SUCCESS,
-            id.toString(),
-            Map.of("summary", "提交数据规划评审：" + plan.getName(), "version", version)
-        );
-        return ApiResponses.ok(saved);
-    }
-
-    public record ModelingPlanReviewDecisionRequest(String notes) {}
-
-    @PostMapping("/plans/{id}/reviews/{reviewId}/approve")
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
-    public ApiResponse<ModelingPlan> approvePlanReview(
-        @PathVariable UUID id,
-        @PathVariable UUID reviewId,
-        @RequestBody(required = false) ModelingPlanReviewDecisionRequest body,
-        @RequestHeader(value = "X-Active-Dept", required = false) String activeDeptHeader
-    ) {
-        ModelingPlan plan = getWritablePlan(id, activeDeptHeader);
-        ModelingPlanReview review = planReviewRepo.findById(reviewId).orElseThrow(() -> new EntityNotFoundException("评审记录不存在"));
-        if (review.getPlan() == null || !Objects.equals(review.getPlan().getId(), plan.getId())) {
-            throw new AccessDeniedException("评审记录不属于当前数据规划");
-        }
-        String reviewer = SecurityUtils.getCurrentUserLogin().orElse("unknown");
-        review.setReviewer(reviewer);
-        review.setReviewedAt(Instant.now());
-        review.setStatus("APPROVED");
-        if (StringUtils.isNotBlank(body != null ? body.notes() : null)) {
-            review.setReviewNotes(StringUtils.trimToNull(body.notes()));
-        }
-        planReviewRepo.save(review);
-
-        Map<String, Object> before = toPlanAuditView(plan);
-        plan.setStatus("PUBLISHED");
-        ensurePlanDefaults(plan);
-        ModelingPlan saved = planRepo.save(plan);
-        upsertPlanVersionSnapshot(saved, StringUtils.trimToNull(body != null ? body.notes() : null), "PUBLISHED");
-
-        Map<String, Object> auditPayload = new LinkedHashMap<>();
-        auditPayload.put("before", before);
-        auditPayload.put("after", toPlanAuditView(saved));
-        auditPayload.put("targetId", id.toString());
-        auditPayload.put("targetName", saved.getName());
-        auditPayload.put("operationType", "REVIEW_APPROVE");
-        auditPayload.put("summary", "通过数据规划评审并发布：" + saved.getName());
-        auditPayload.put("reviewId", reviewId.toString());
-        auditPayload.put("reviewer", reviewer);
-        auditService.auditAction("MODELING_PLAN_REVIEW_DECIDE", AuditStage.SUCCESS, id.toString(), auditPayload);
-        return ApiResponses.ok(saved);
-    }
-
-    @PostMapping("/plans/{id}/reviews/{reviewId}/reject")
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
-    public ApiResponse<ModelingPlanReview> rejectPlanReview(
-        @PathVariable UUID id,
-        @PathVariable UUID reviewId,
-        @RequestBody(required = false) ModelingPlanReviewDecisionRequest body,
-        @RequestHeader(value = "X-Active-Dept", required = false) String activeDeptHeader
-    ) {
-        ModelingPlan plan = getWritablePlan(id, activeDeptHeader);
-        ModelingPlanReview review = planReviewRepo.findById(reviewId).orElseThrow(() -> new EntityNotFoundException("评审记录不存在"));
-        if (review.getPlan() == null || !Objects.equals(review.getPlan().getId(), plan.getId())) {
-            throw new AccessDeniedException("评审记录不属于当前数据规划");
-        }
-        String reviewer = SecurityUtils.getCurrentUserLogin().orElse("unknown");
-        review.setReviewer(reviewer);
-        review.setReviewedAt(Instant.now());
-        review.setStatus("REJECTED");
-        if (StringUtils.isNotBlank(body != null ? body.notes() : null)) {
-            review.setReviewNotes(StringUtils.trimToNull(body.notes()));
-        }
-        ModelingPlanReview saved = planReviewRepo.save(review);
-        auditService.auditAction(
-            "MODELING_PLAN_REVIEW_DECIDE",
-            AuditStage.SUCCESS,
-            id.toString(),
-            Map.of("summary", "驳回数据规划评审：" + plan.getName(), "reviewId", reviewId.toString(), "reviewer", reviewer)
-        );
-        return ApiResponses.ok(saved);
-    }
-
-    @DeleteMapping("/plans/{id}")
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
-    public ApiResponse<Boolean> deletePlan(@PathVariable UUID id) {
-        ModelingPlan plan = planRepo.findById(id).orElseThrow(() -> new EntityNotFoundException("数据规划不存在"));
-        // Delete dependent records first to satisfy DB foreign keys (plan_version/plan_review).
-        planReviewRepo.deleteByPlan(plan);
-        planVersionRepo.deleteByPlan(plan);
-        planRepo.delete(plan);
-        auditService.auditAction("MODELING_PLAN_DELETE", AuditStage.SUCCESS, id.toString(), null);
-        return ApiResponses.ok(Boolean.TRUE);
     }
 
     @GetMapping("/glossary/terms")
@@ -1095,37 +771,6 @@ public class ModelingAuxResource {
         return ApiResponses.ok(payload);
     }
 
-    private void applyPlanUpsert(ModelingPlan plan, ModelingPlan request, String activeDeptHeader) {
-        if (plan == null || request == null) return;
-        plan.setName(StringUtils.trimToNull(request.getName()));
-        UUID domainId = request.getDomainId();
-        if (domainId != null && catalogDomainRepo != null && !catalogDomainRepo.existsById(domainId)) {
-            throw new BadRequestAlertException("主题域不存在", "modelingPlan", "domainNotFound");
-        }
-        plan.setDomainId(domainId);
-        plan.setDomain(null);
-        plan.setScope(StringUtils.trimToNull(request.getScope()));
-        plan.setVersion(StringUtils.trimToNull(request.getVersion()));
-        plan.setVersionNotes(StringUtils.trimToNull(request.getVersionNotes()));
-        plan.setOwner(StringUtils.trimToNull(request.getOwner()));
-        plan.setTags(StringUtils.trimToNull(request.getTags()));
-        plan.setContent(StringUtils.trimToNull(request.getContent()));
-
-        String requestedOwnerDept = StringUtils.trimToNull(request.getOwnerDept());
-        if (security.hasInstituteScope()) {
-            plan.setOwnerDept(requestedOwnerDept);
-            return;
-        }
-        String activeDept = security.resolveActiveDept(activeDeptHeader);
-        if (!org.springframework.util.StringUtils.hasText(activeDept)) {
-            throw new AccessDeniedException("当前账号未配置所属部门，无法执行该操作");
-        }
-        if (requestedOwnerDept != null && !DepartmentUtils.matches(requestedOwnerDept, activeDept)) {
-            throw new AccessDeniedException("仅允许设置为当前登录部门的数据规划");
-        }
-        plan.setOwnerDept(activeDept.trim());
-    }
-
     private void applyGlossaryUpsert(ModelingGlossaryTerm term, ModelingGlossaryTerm request, String activeDeptHeader) {
         if (term == null || request == null) return;
         term.setCode(StringUtils.trimToNull(request.getCode()));
@@ -1165,134 +810,6 @@ public class ModelingAuxResource {
         template.setFieldsTemplate(StringUtils.trimToNull(request.getFieldsTemplate()));
         template.setMetadataStandardIds(StringUtils.trimToNull(request.getMetadataStandardIds()));
         template.setReviewChecklist(StringUtils.trimToNull(request.getReviewChecklist()));
-    }
-
-    private ModelingPlan getReadablePlan(UUID id, String activeDeptHeader) {
-        String activeDept = security.resolveActiveDept(activeDeptHeader);
-        boolean instituteScope = security.hasInstituteScope();
-        ModelingPlan plan = planRepo.findById(id).orElseThrow(() -> new EntityNotFoundException("数据规划不存在"));
-        if (!isOwnerDeptVisible(plan.getOwnerDept(), activeDept, instituteScope)) {
-            throw new AccessDeniedException("当前账号无权访问该数据规划");
-        }
-        return plan;
-    }
-
-    private ModelingPlan getWritablePlan(UUID id, String activeDeptHeader) {
-        ModelingPlan plan = getReadablePlan(id, activeDeptHeader);
-        if (security.hasInstituteScope()) {
-            return plan;
-        }
-        String activeDept = security.resolveActiveDept(activeDeptHeader);
-        if (!org.springframework.util.StringUtils.hasText(activeDept)) {
-            throw new AccessDeniedException("当前账号未配置所属部门，无法执行该操作");
-        }
-        String ownerDept = StringUtils.trimToNull(plan.getOwnerDept());
-        if (ownerDept != null && !DepartmentUtils.matches(ownerDept, activeDept)) {
-            throw new AccessDeniedException("仅允许维护当前登录部门的数据规划");
-        }
-        return plan;
-    }
-
-    private void ensurePlanDefaults(ModelingPlan plan) {
-        if (plan == null) return;
-        if (!org.springframework.util.StringUtils.hasText(plan.getStatus())) {
-            plan.setStatus("DRAFT");
-        } else {
-            plan.setStatus(normalizePlanStatus(plan.getStatus()));
-        }
-        if (!org.springframework.util.StringUtils.hasText(plan.getVersion())) {
-            plan.setVersion("v1");
-        } else {
-            plan.setVersion(plan.getVersion().trim());
-        }
-    }
-
-    private void ensurePlanNameUnique(UUID currentId, String rawName) {
-        String name = StringUtils.trimToNull(rawName);
-        if (name == null) {
-            return;
-        }
-        ModelingPlan existing = planRepo.findFirstByNameIgnoreCase(name).orElse(null);
-        if (existing == null) {
-            return;
-        }
-        if (currentId != null && currentId.equals(existing.getId())) {
-            return;
-        }
-        throw new BadRequestAlertException("已存在同名项目空间: " + name,
-            "modelingPlan", "duplicateName");
-    }
-
-    private String normalizePlanStatus(String status) {
-        if (!org.springframework.util.StringUtils.hasText(status)) {
-            return "DRAFT";
-        }
-        String s = status.trim().toUpperCase(Locale.ROOT);
-        if ("PUBLISHED".equals(s) || "ARCHIVED".equals(s) || "DRAFT".equals(s)) {
-            return s;
-        }
-        return "DRAFT";
-    }
-
-    private String parsePlanStatusFilter(String status) {
-        if (!org.springframework.util.StringUtils.hasText(status)) {
-            return null;
-        }
-        String s = status.trim().toUpperCase(Locale.ROOT);
-        if ("ALL".equals(s)) {
-            return null;
-        }
-        if ("PUBLISHED".equals(s) || "ARCHIVED".equals(s) || "DRAFT".equals(s)) {
-            return s;
-        }
-        throw new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid status: " + status);
-    }
-
-    private void upsertPlanVersionSnapshot(ModelingPlan plan, String changeSummary, String statusOverride) {
-        if (plan == null || !org.springframework.util.StringUtils.hasText(plan.getVersion())) {
-            return;
-        }
-        ModelingPlanVersion snapshot = planVersionRepo
-            .findByPlanAndVersion(plan, plan.getVersion())
-            .orElseGet(ModelingPlanVersion::new);
-        snapshot.setPlan(plan);
-        snapshot.setVersion(plan.getVersion());
-        String effectiveStatus = org.springframework.util.StringUtils.hasText(statusOverride)
-            ? normalizePlanStatus(statusOverride)
-            : normalizePlanStatus(plan.getStatus());
-        snapshot.setStatus(effectiveStatus);
-        snapshot.setChangeSummary(StringUtils.trimToNull(changeSummary));
-        if (org.springframework.util.StringUtils.hasText(statusOverride)) {
-            snapshot.setReleasedAt("PUBLISHED".equals(effectiveStatus) ? Instant.now() : null);
-        }
-        snapshot.setSnapshotJson(serializePlanSnapshot(plan));
-        planVersionRepo.save(snapshot);
-    }
-
-    private String serializePlanSnapshot(ModelingPlan plan) {
-        try {
-            return objectMapper.writeValueAsString(toPlanAuditView(plan));
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException("Failed to serialize plan snapshot", e);
-        }
-    }
-
-    private Map<String, Object> toPlanAuditView(ModelingPlan plan) {
-        if (plan == null) {
-            return Map.of();
-        }
-        Map<String, Object> view = new LinkedHashMap<>();
-        view.put("id", plan.getId());
-        view.put("name", plan.getName());
-        view.put("domainId", plan.getDomainId());
-        view.put("scope", plan.getScope());
-        view.put("status", plan.getStatus());
-        view.put("version", plan.getVersion());
-        view.put("versionNotes", plan.getVersionNotes());
-        view.put("owner", plan.getOwner());
-        view.put("ownerDept", plan.getOwnerDept());
-        view.put("tags", plan.getTags());
-        return view;
     }
 
     private ModelingGlossaryTerm getReadableTerm(UUID id, String activeDeptHeader) {

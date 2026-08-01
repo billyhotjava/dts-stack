@@ -2,9 +2,8 @@ package com.yuzhi.dts.platform.service.catalog;
 
 import com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema;
 import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
-import com.yuzhi.dts.platform.domain.modeling.DataStandard;
 import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
-import com.yuzhi.dts.platform.repository.modeling.DataStandardRepository;
+import com.yuzhi.dts.platform.service.modeling.GovernedStandardReadPort;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.Reader;
@@ -35,14 +34,14 @@ public class CatalogColumnSyncService {
     public static final String STATUS_DRAFT = "DRAFT";
 
     private final CatalogColumnSchemaRepository columnRepository;
-    private final DataStandardRepository dataStandardRepository;
+    private final GovernedStandardReadPort governedStandards;
 
     public CatalogColumnSyncService(
         CatalogColumnSchemaRepository columnRepository,
-        DataStandardRepository dataStandardRepository
+        GovernedStandardReadPort governedStandards
     ) {
         this.columnRepository = columnRepository;
-        this.dataStandardRepository = dataStandardRepository;
+        this.governedStandards = governedStandards;
     }
 
     public List<ColumnSpec> parseCsv(Path path) {
@@ -125,7 +124,7 @@ public class CatalogColumnSyncService {
                 standardCodes.add(spec.standardCode().trim().toLowerCase(Locale.ROOT));
             }
         }
-        Map<String, DataStandard> standardsByCode = loadStandards(standardCodes);
+        Map<String, UUID> standardsByCode = loadStandards(standardCodes);
         // Iterate by a stable order (lower-cased name) so concurrent callers acquire
         // row locks in the same sequence — defense-in-depth alongside the advisory lock.
         List<ColumnSpec> orderedSpecs = new ArrayList<>(specs);
@@ -161,9 +160,9 @@ public class CatalogColumnSyncService {
                 column.setSensitiveTags(spec.sensitiveTags().trim());
             }
             if (StringUtils.hasText(spec.standardCode())) {
-                DataStandard standard = standardsByCode.get(spec.standardCode().trim().toLowerCase(Locale.ROOT));
-                if (standard != null) {
-                    column.setStandardId(standard.getId());
+                UUID standardId = standardsByCode.get(spec.standardCode().trim().toLowerCase(Locale.ROOT));
+                if (standardId != null) {
+                    column.setStandardId(standardId);
                     column.setStandardMismatchReason(null);
                 } else {
                     column.setStandardId(null);
@@ -229,17 +228,11 @@ public class CatalogColumnSyncService {
         return result;
     }
 
-    private Map<String, DataStandard> loadStandards(Set<String> codes) {
+    private Map<String, UUID> loadStandards(Set<String> codes) {
         if (codes == null || codes.isEmpty()) {
             return Map.of();
         }
-        List<DataStandard> standards = dataStandardRepository.findByCodeLowerIn(codes);
-        Map<String, DataStandard> result = new LinkedHashMap<>();
-        for (DataStandard ds : standards) {
-            if (ds == null || !StringUtils.hasText(ds.getCode())) continue;
-            result.put(ds.getCode().trim().toLowerCase(Locale.ROOT), ds);
-        }
-        return result;
+        return governedStandards.findDataStandardIdsByLowerCode(codes);
     }
 
     private String valueOf(Map<String, Integer> idx, List<String> values, String... keys) {

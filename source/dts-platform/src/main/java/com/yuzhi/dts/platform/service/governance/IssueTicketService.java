@@ -14,13 +14,11 @@ import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.security.policy.DataLevel;
-import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.governance.dto.IssueActionDto;
 import com.yuzhi.dts.platform.service.governance.dto.IssueTicketDto;
 import com.yuzhi.dts.platform.service.governance.request.IssueActionRequest;
 import com.yuzhi.dts.platform.service.governance.request.IssueTicketUpsertRequest;
 import jakarta.persistence.EntityNotFoundException;
-import java.lang.reflect.Array;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -33,15 +31,13 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
@@ -50,12 +46,20 @@ import org.springframework.util.CollectionUtils;
 @Transactional
 public class IssueTicketService {
 
+    private static final Logger log = LoggerFactory.getLogger(IssueTicketService.class);
     private static final List<String> OPEN_STATUSES = List.of("OPEN", "IN_PROGRESS", "RESOLVED");
     private static final Set<String> CLOSED_STATUSES = Set.of("CLOSED");
     private static final String STATUS_OPEN = "OPEN";
     private static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
     private static final String STATUS_RESOLVED = "RESOLVED";
     private static final String STATUS_CLOSED = "CLOSED";
+
+    public enum CreateOrTouchDisposition {
+        CREATED,
+        TOUCHED
+    }
+
+    public record CreateOrTouchResult(IssueTicketDto ticket, CreateOrTouchDisposition disposition) {}
 
     private final GovIssueTicketRepository ticketRepository;
     private final GovIssueActionRepository actionRepository;
@@ -64,7 +68,10 @@ public class IssueTicketService {
     private final com.yuzhi.dts.platform.service.security.AccessChecker accessChecker;
     private final com.yuzhi.dts.platform.service.security.OrganizationVisibilityService organizationVisibilityService;
     private final GovernanceProperties properties;
-    private final AuditService auditService;
+    private final QualityAuditRecorder qualityAuditRecorder;
+    private final QualityEffectiveDepartmentResolver departmentResolver;
+    private final QualityDatasetReadGuard datasetReadGuard;
+    private final ThreadLocal<Boolean> suppressAutomaticAudit = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     public IssueTicketService(
         GovIssueTicketRepository ticketRepository,
@@ -74,7 +81,9 @@ public class IssueTicketService {
         com.yuzhi.dts.platform.service.security.AccessChecker accessChecker,
         com.yuzhi.dts.platform.service.security.OrganizationVisibilityService organizationVisibilityService,
         GovernanceProperties properties,
-        AuditService auditService
+        QualityAuditRecorder qualityAuditRecorder,
+        QualityEffectiveDepartmentResolver departmentResolver,
+        QualityDatasetReadGuard datasetReadGuard
     ) {
         this.ticketRepository = ticketRepository;
         this.actionRepository = actionRepository;
@@ -83,7 +92,9 @@ public class IssueTicketService {
         this.accessChecker = accessChecker;
         this.organizationVisibilityService = organizationVisibilityService;
         this.properties = properties;
-        this.auditService = auditService;
+        this.qualityAuditRecorder = qualityAuditRecorder;
+        this.departmentResolver = departmentResolver;
+        this.datasetReadGuard = datasetReadGuard;
     }
 
     @Transactional(readOnly = true)
@@ -178,9 +189,23 @@ public class IssueTicketService {
     }
 
     public IssueTicketDto create(IssueTicketUpsertRequest request, String actor, String activeDeptHeader) {
+        try {
+            return createInternal(request, actor, activeDeptHeader, true);
+        } catch (RuntimeException ex) {
+            recordIssueFailure("GOV_ISSUE_CREATE", "UNASSIGNED", "新建问题单失败", ex);
+            throw ex;
+        }
+    }
+
+    private IssueTicketDto createInternal(
+        IssueTicketUpsertRequest request,
+        String actor,
+        String activeDeptHeader,
+        boolean enforceDatasetRead
+    ) {
         String effectiveActor = StringUtils.defaultIfBlank(actor, SecurityUtils.getCurrentUserLogin().orElse("anonymous"));
         GovIssueTicket ticket = new GovIssueTicket();
-        applyUpsert(ticket, request, activeDeptHeader);
+        applyUpsert(ticket, request, activeDeptHeader, enforceDatasetRead);
         if (StringUtils.isBlank(ticket.getStatus())) {
             ticket.setStatus(STATUS_OPEN);
         }
@@ -210,7 +235,9 @@ public class IssueTicketService {
         payload.put("ownerDept", ticket.getOwnerDept());
         payload.put("assignedTo", ticket.getAssignedTo());
         payload.put("actor", effectiveActor);
-        auditService.auditAction("GOV_ISSUE_CREATE", AuditStage.SUCCESS, ticket.getId().toString(), payload);
+        if (!Boolean.TRUE.equals(suppressAutomaticAudit.get())) {
+            qualityAuditRecorder.recordAction("GOV_ISSUE_CREATE", AuditStage.SUCCESS, ticket.getId().toString(), payload);
+        }
 
         return GovernanceMapper.toDto(ticket);
     }
@@ -233,49 +260,96 @@ public class IssueTicketService {
         String note,
         String activeDeptHeader
     ) {
-        String normalizedType = StringUtils.trimToNull(sourceType);
-        if (normalizedType != null) {
-            normalizedType = normalizedType.trim().toUpperCase(Locale.ROOT);
-        }
+        return createOrTouchResult(sourceType, sourceRefId, request, actor, note, activeDeptHeader, false).ticket();
+    }
 
-        if (normalizedType != null && sourceRefId != null) {
-            GovIssueTicket existing = ticketRepository
-                .findFirstBySourceTypeIgnoreCaseAndSourceRefIdAndStatusInOrderByCreatedDateDesc(normalizedType, sourceRefId, OPEN_STATUSES)
-                .orElse(null);
-            if (existing != null) {
-                boolean enriched = enrichTicket(existing, request, activeDeptHeader);
-                if (enriched) {
-                    ticketRepository.save(existing);
+    public CreateOrTouchResult createOrTouchWithDisposition(
+        String sourceType,
+        UUID sourceRefId,
+        IssueTicketUpsertRequest request,
+        String actor,
+        String note
+    ) {
+        return createOrTouchResult(sourceType, sourceRefId, request, actor, note, null, true);
+    }
+
+    private CreateOrTouchResult createOrTouchResult(
+        String sourceType,
+        UUID sourceRefId,
+        IssueTicketUpsertRequest request,
+        String actor,
+        String note,
+        String activeDeptHeader,
+        boolean suppressBuiltInAudit
+    ) {
+        Boolean previousSuppression = suppressAutomaticAudit.get();
+        suppressAutomaticAudit.set(suppressBuiltInAudit || Boolean.TRUE.equals(previousSuppression));
+        try {
+            String normalizedType = StringUtils.trimToNull(sourceType);
+            if (normalizedType != null) {
+                normalizedType = normalizedType.trim().toUpperCase(Locale.ROOT);
+            }
+
+            if (normalizedType != null && sourceRefId != null) {
+                GovIssueTicket existing = ticketRepository
+                    .findFirstBySourceTypeIgnoreCaseAndSourceRefIdAndStatusInOrderByCreatedDateDesc(normalizedType, sourceRefId, OPEN_STATUSES)
+                    .orElse(null);
+                if (existing != null) {
+                    boolean enriched = enrichTicket(existing, request, activeDeptHeader);
+                    if (enriched) {
+                        ticketRepository.save(existing);
+                    }
+                    if (StringUtils.isNotBlank(note)) {
+                        IssueActionRequest action = new IssueActionRequest();
+                        action.setActionType("AUTO_NOTE");
+                        action.setNotes(note);
+                        appendAction(existing.getId(), action, actor, activeDeptHeader);
+                    }
+                    return new CreateOrTouchResult(GovernanceMapper.toDto(existing), CreateOrTouchDisposition.TOUCHED);
                 }
-                if (StringUtils.isNotBlank(note)) {
-                    IssueActionRequest action = new IssueActionRequest();
-                    action.setActionType("AUTO_NOTE");
-                    action.setNotes(note);
-                    appendAction(existing.getId(), action, actor, activeDeptHeader);
-                }
-                return GovernanceMapper.toDto(existing);
+            }
+
+            IssueTicketUpsertRequest effective = request != null ? request : new IssueTicketUpsertRequest();
+            effective.setSourceType(normalizedType);
+            effective.setSourceId(sourceRefId);
+            IssueTicketDto created;
+            try {
+                created = createInternal(effective, actor, activeDeptHeader, false);
+            } catch (RuntimeException ex) {
+                recordIssueFailure("GOV_ISSUE_CREATE", "UNASSIGNED", "新建问题单失败", ex);
+                throw ex;
+            }
+            if (created != null && created.getId() != null && StringUtils.isNotBlank(note)) {
+                IssueActionRequest action = new IssueActionRequest();
+                action.setActionType("AUTO_NOTE");
+                action.setNotes(note);
+                appendAction(created.getId(), action, actor, activeDeptHeader);
+            }
+            return new CreateOrTouchResult(created, CreateOrTouchDisposition.CREATED);
+        } finally {
+            if (Boolean.TRUE.equals(previousSuppression)) {
+                suppressAutomaticAudit.set(Boolean.TRUE);
+            } else {
+                suppressAutomaticAudit.remove();
             }
         }
-
-        IssueTicketUpsertRequest effective = request != null ? request : new IssueTicketUpsertRequest();
-        effective.setSourceType(normalizedType);
-        effective.setSourceId(sourceRefId);
-        IssueTicketDto created = create(effective, actor, activeDeptHeader);
-        if (created != null && created.getId() != null && StringUtils.isNotBlank(note)) {
-            IssueActionRequest action = new IssueActionRequest();
-            action.setActionType("AUTO_NOTE");
-            action.setNotes(note);
-            appendAction(created.getId(), action, actor, activeDeptHeader);
-        }
-        return created;
     }
 
     public IssueTicketDto update(UUID id, IssueTicketUpsertRequest request, String actor, String activeDeptHeader) {
+        try {
+            return updateInternal(id, request, actor, activeDeptHeader);
+        } catch (RuntimeException ex) {
+            recordIssueFailure("GOV_ISSUE_UPDATE", resourceId(id), "更新问题单失败", ex);
+            throw ex;
+        }
+    }
+
+    private IssueTicketDto updateInternal(UUID id, IssueTicketUpsertRequest request, String actor, String activeDeptHeader) {
         String effectiveActor = StringUtils.defaultIfBlank(actor, SecurityUtils.getCurrentUserLogin().orElse("anonymous"));
         GovIssueTicket ticket = ticketRepository.findById(id).orElseThrow(EntityNotFoundException::new);
         ensureWritable(ticket, effectiveActor, activeDeptHeader);
         String previousStatus = normalizeIssueStatus(ticket.getStatus());
-        applyUpsert(ticket, request, activeDeptHeader);
+        applyUpsert(ticket, request, activeDeptHeader, true);
         if (StringUtils.isNotBlank(request.getSeverity())) {
             ticket.setSeverity(request.getSeverity());
         }
@@ -322,12 +396,21 @@ public class IssueTicketService {
         payload.put("ownerDept", ticket.getOwnerDept());
         payload.put("assignedTo", ticket.getAssignedTo());
         payload.put("actor", effectiveActor);
-        auditService.auditAction("GOV_ISSUE_UPDATE", AuditStage.SUCCESS, id.toString(), payload);
+        qualityAuditRecorder.recordAction("GOV_ISSUE_UPDATE", AuditStage.SUCCESS, id.toString(), payload);
 
         return GovernanceMapper.toDto(ticket);
     }
 
     public IssueTicketDto close(UUID id, String resolution, String actor, String activeDeptHeader) {
+        try {
+            return closeInternal(id, resolution, actor, activeDeptHeader);
+        } catch (RuntimeException ex) {
+            recordIssueFailure("GOV_ISSUE_CLOSE", resourceId(id), "关闭问题单失败", ex);
+            throw ex;
+        }
+    }
+
+    private IssueTicketDto closeInternal(UUID id, String resolution, String actor, String activeDeptHeader) {
         String effectiveActor = StringUtils.defaultIfBlank(actor, SecurityUtils.getCurrentUserLogin().orElse("anonymous"));
         GovIssueTicket ticket = ticketRepository.findById(id).orElseThrow(EntityNotFoundException::new);
         ensureWritable(ticket, effectiveActor, activeDeptHeader);
@@ -345,12 +428,21 @@ public class IssueTicketService {
         payload.put("title", ticket.getTitle());
         payload.put("resolution", resolution);
         payload.put("actor", effectiveActor);
-        auditService.auditAction("GOV_ISSUE_CLOSE", AuditStage.SUCCESS, id.toString(), payload);
+        qualityAuditRecorder.recordAction("GOV_ISSUE_CLOSE", AuditStage.SUCCESS, id.toString(), payload);
 
         return GovernanceMapper.toDto(ticket);
     }
 
     public IssueActionDto appendAction(UUID ticketId, IssueActionRequest request, String actor, String activeDeptHeader) {
+        try {
+            return appendActionInternal(ticketId, request, actor, activeDeptHeader);
+        } catch (RuntimeException ex) {
+            recordIssueFailure("GOV_ISSUE_ACTION_APPEND", resourceId(ticketId), "追加问题单处理记录失败", ex);
+            throw ex;
+        }
+    }
+
+    private IssueActionDto appendActionInternal(UUID ticketId, IssueActionRequest request, String actor, String activeDeptHeader) {
         String effectiveActor = StringUtils.defaultIfBlank(actor, SecurityUtils.getCurrentUserLogin().orElse("anonymous"));
         GovIssueTicket ticket = ticketRepository.findById(ticketId).orElseThrow(EntityNotFoundException::new);
         ensureWritable(ticket, effectiveActor, activeDeptHeader);
@@ -367,9 +459,34 @@ public class IssueTicketService {
         payload.put("title", ticket.getTitle());
         payload.put("actionType", action.getActionType());
         payload.put("actor", effectiveActor);
-        auditService.auditAction("GOV_ISSUE_ACTION_APPEND", AuditStage.SUCCESS, ticketId.toString(), payload);
+        if (!Boolean.TRUE.equals(suppressAutomaticAudit.get())) {
+            qualityAuditRecorder.recordAction("GOV_ISSUE_ACTION_APPEND", AuditStage.SUCCESS, ticketId.toString(), payload);
+        }
 
         return GovernanceMapper.toDto(action);
+    }
+
+    private void recordIssueFailure(String actionCode, String resourceId, String summary, RuntimeException original) {
+        if (Boolean.TRUE.equals(suppressAutomaticAudit.get())) {
+            return;
+        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("summary", summary);
+        payload.put("errorType", original.getClass().getSimpleName());
+        try {
+            qualityAuditRecorder.recordFailureAction(actionCode, resourceId, payload);
+        } catch (RuntimeException auditFailure) {
+            log.warn(
+                "event=quality_issue_failure_audit_write_failed actionCode={} resourceId={} errorType={}",
+                actionCode,
+                resourceId,
+                auditFailure.getClass().getSimpleName()
+            );
+        }
+    }
+
+    private String resourceId(UUID id) {
+        return id != null ? id.toString() : "UNASSIGNED";
     }
 
     @Transactional(readOnly = true)
@@ -409,7 +526,12 @@ public class IssueTicketService {
         return payload;
     }
 
-    private void applyUpsert(GovIssueTicket ticket, IssueTicketUpsertRequest request, String activeDeptHeader) {
+    private void applyUpsert(
+        GovIssueTicket ticket,
+        IssueTicketUpsertRequest request,
+        String activeDeptHeader,
+        boolean enforceDatasetRead
+    ) {
         if (ticket == null || request == null) {
             throw new IllegalArgumentException("请求不能为空");
         }
@@ -433,10 +555,15 @@ public class IssueTicketService {
             ticket.setResolution(request.getResolution().trim());
         }
         ticket.setTags(GovernanceMapper.joinCsv(request.getTags()));
-        normalizeTicketFields(ticket, request, activeDeptHeader);
+        normalizeTicketFields(ticket, request, activeDeptHeader, enforceDatasetRead);
     }
 
-    private void normalizeTicketFields(GovIssueTicket ticket, IssueTicketUpsertRequest request, String activeDeptHeader) {
+    private void normalizeTicketFields(
+        GovIssueTicket ticket,
+        IssueTicketUpsertRequest request,
+        String activeDeptHeader,
+        boolean enforceDatasetRead
+    ) {
         if (ticket == null) {
             return;
         }
@@ -451,7 +578,12 @@ public class IssueTicketService {
             ticket.setDatasetId(datasetId);
         }
 
-        CatalogDataset dataset = datasetId != null ? datasetRepository.findById(datasetId).orElse(null) : null;
+        CatalogDataset dataset = null;
+        if (datasetId != null) {
+            dataset = enforceDatasetRead
+                ? datasetReadGuard.requireReadable(datasetId, activeDeptHeader)
+                : datasetRepository.findById(datasetId).orElse(null);
+        }
         if (datasetId != null && dataset == null) {
             throw new IllegalArgumentException("数据集不存在");
         }
@@ -463,7 +595,7 @@ public class IssueTicketService {
         if (StringUtils.isBlank(ticket.getOwnerDept())) {
             String inferredDept = dataset != null ? StringUtils.trimToNull(dataset.getOwnerDept()) : null;
             if (StringUtils.isBlank(inferredDept)) {
-                inferredDept = resolveActiveDept(activeDeptHeader);
+                inferredDept = departmentResolver.resolve(activeDeptHeader);
             }
             ticket.setOwnerDept(StringUtils.trimToNull(inferredDept));
         }
@@ -483,10 +615,10 @@ public class IssueTicketService {
             ticket.setDataLevel(StringUtils.trimToNull(request.getDataLevel()));
         }
         if (StringUtils.isBlank(ticket.getOwnerDept())) {
-            String inferredDept = resolveActiveDept(activeDeptHeader);
+            String inferredDept = departmentResolver.resolve(activeDeptHeader);
             ticket.setOwnerDept(StringUtils.trimToNull(inferredDept));
         }
-        normalizeTicketFields(ticket, request, activeDeptHeader);
+        normalizeTicketFields(ticket, request, activeDeptHeader, false);
         return !Objects.equals(beforeDatasetId, ticket.getDatasetId()) ||
             !Objects.equals(beforeDataLevel, ticket.getDataLevel()) ||
             !Objects.equals(beforeOwnerDept, ticket.getOwnerDept());
@@ -577,7 +709,7 @@ public class IssueTicketService {
         if (organizationVisibilityService.isRoot(ownerDept)) {
             return true;
         }
-        String activeDept = resolveActiveDept(activeDeptHeader);
+        String activeDept = departmentResolver.resolve(activeDeptHeader);
         if (StringUtils.isBlank(activeDept)) {
             return false;
         }
@@ -599,7 +731,7 @@ public class IssueTicketService {
                 return;
             }
             String ownerDept = StringUtils.trimToNull(ticket.getOwnerDept());
-            String activeDept = resolveActiveDept(activeDeptHeader);
+            String activeDept = departmentResolver.resolve(activeDeptHeader);
             if (StringUtils.isBlank(ownerDept) || StringUtils.isBlank(activeDept)) {
                 throw new AccessDeniedException("无权限维护该问题单");
             }
@@ -687,76 +819,6 @@ public class IssueTicketService {
             return StringUtils.trimToNull(actor);
         }
         return StringUtils.trimToNull(trimmed);
-    }
-
-    private String resolveActiveDept(String activeDeptHeader) {
-        if (org.springframework.util.StringUtils.hasText(activeDeptHeader)) {
-            return activeDeptHeader.trim();
-        }
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        try {
-            if (authentication instanceof JwtAuthenticationToken token) {
-                String candidate = extractDeptClaim(token.getToken().getClaims().get("dept_code"));
-                if (candidate != null) {
-                    return candidate;
-                }
-                candidate = extractDeptClaim(token.getToken().getClaims().get("deptCode"));
-                if (candidate != null) {
-                    return candidate;
-                }
-                return extractDeptClaim(token.getToken().getClaims().get("department"));
-            }
-            if (authentication != null && authentication.getPrincipal() instanceof OAuth2AuthenticatedPrincipal principal) {
-                String candidate = extractDeptClaim(principal.getAttribute("dept_code"));
-                if (candidate != null) {
-                    return candidate;
-                }
-                candidate = extractDeptClaim(principal.getAttribute("deptCode"));
-                if (candidate != null) {
-                    return candidate;
-                }
-                return extractDeptClaim(principal.getAttribute("department"));
-            }
-        } catch (Exception ignored) {}
-        return null;
-    }
-
-    private String extractDeptClaim(Object raw) {
-        Object flattened = flattenValue(raw);
-        if (flattened == null) {
-            return null;
-        }
-        String text = flattened.toString();
-        if (!org.springframework.util.StringUtils.hasText(text)) {
-            return null;
-        }
-        String trimmed = text.trim();
-        return trimmed.isEmpty() ? null : trimmed;
-    }
-
-    private Object flattenValue(Object raw) {
-        if (raw == null) {
-            return null;
-        }
-        if (raw instanceof Iterable<?> iterable) {
-            for (Object element : iterable) {
-                if (element != null) {
-                    return element;
-                }
-            }
-            return null;
-        }
-        if (raw.getClass().isArray()) {
-            int length = Array.getLength(raw);
-            for (int i = 0; i < length; i++) {
-                Object element = Array.get(raw, i);
-                if (element != null) {
-                    return element;
-                }
-            }
-            return null;
-        }
-        return raw;
     }
 
     private String normalizeIssueStatus(String status) {

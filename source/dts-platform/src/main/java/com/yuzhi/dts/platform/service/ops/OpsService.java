@@ -3,13 +3,12 @@ package com.yuzhi.dts.platform.service.ops;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.domain.governance.GovQualityRun;
 import com.yuzhi.dts.platform.domain.infra.InfraExternalRunLog;
-import com.yuzhi.dts.platform.domain.modeling.ModelingPlan;
 import com.yuzhi.dts.platform.domain.ops.OpsBackfillRequest;
 import com.yuzhi.dts.platform.repository.governance.GovQualityRunRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraExternalRunLogRepository;
-import com.yuzhi.dts.platform.repository.modeling.ModelingPlanRepository;
 import com.yuzhi.dts.platform.repository.ops.OpsBackfillRequestRepository;
 import com.yuzhi.dts.platform.service.etl.AirflowClient;
+import com.yuzhi.dts.platform.service.ops.WarehousePlanOperationsReadPort.WarehousePlanProjection;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -44,7 +43,7 @@ public class OpsService {
 
     private final InfraExternalRunLogRepository runLogRepository;
     private final GovQualityRunRepository qualityRunRepository;
-    private final ModelingPlanRepository modelingPlanRepository;
+    private final WarehousePlanOperationsReadPort warehousePlanReadPort;
     private final OpsBackfillRequestRepository backfillRepository;
     private final AirflowClient airflowClient;
     private final ObjectMapper objectMapper;
@@ -52,14 +51,14 @@ public class OpsService {
     public OpsService(
         InfraExternalRunLogRepository runLogRepository,
         GovQualityRunRepository qualityRunRepository,
-        ModelingPlanRepository modelingPlanRepository,
+        WarehousePlanOperationsReadPort warehousePlanReadPort,
         OpsBackfillRequestRepository backfillRepository,
         AirflowClient airflowClient,
         ObjectMapper objectMapper
     ) {
         this.runLogRepository = runLogRepository;
         this.qualityRunRepository = qualityRunRepository;
-        this.modelingPlanRepository = modelingPlanRepository;
+        this.warehousePlanReadPort = warehousePlanReadPort;
         this.backfillRepository = backfillRepository;
         this.airflowClient = airflowClient;
         this.objectMapper = objectMapper;
@@ -107,11 +106,11 @@ public class OpsService {
             normalizedArtifactName
         );
 
-        List<ModelingPlan> plans = modelingPlanRepository.findAll();
-        Map<UUID, ModelingPlan> planById = new HashMap<>();
-        for (ModelingPlan plan : plans) {
-            if (plan != null && plan.getId() != null) {
-                planById.put(plan.getId(), plan);
+        List<WarehousePlanProjection> plans = warehousePlanReadPort.listPlans();
+        Map<UUID, WarehousePlanProjection> planById = new HashMap<>();
+        for (WarehousePlanProjection plan : plans) {
+            if (plan != null && plan.id() != null) {
+                planById.put(plan.id(), plan);
             }
         }
 
@@ -168,12 +167,12 @@ public class OpsService {
                 daily.durationMsTotal += run.getDurationMs();
             }
 
-            ModelingPlan resolvedPlan = resolvedPlanId == null ? null : planById.get(resolvedPlanId);
+            WarehousePlanProjection resolvedPlan = resolvedPlanId == null ? null : planById.get(resolvedPlanId);
             String aggregateKey =
                 normalize(run.getEntryKey()) + "|" + safeText(run.getArtifactName()) + "|" + safeText(resolvedPlanId);
             FailureAggregate aggregate = failureAggregates.computeIfAbsent(
                 aggregateKey,
-                ignored -> new FailureAggregate(run, resolvedPlanId, resolvedPlan == null ? null : resolvedPlan.getName())
+                ignored -> new FailureAggregate(run, resolvedPlanId, resolvedPlan == null ? null : resolvedPlan.name())
             );
             aggregate.totalRuns++;
             if (isFailed(status)) {
@@ -345,26 +344,30 @@ public class OpsService {
         return backfillRepository.save(request);
     }
 
-    private List<Map<String, Object>> buildPlanOptions(List<ModelingPlan> plans, Map<UUID, Long> planRunCounter, UUID selectedPlanId) {
+    private List<Map<String, Object>> buildPlanOptions(
+        List<WarehousePlanProjection> plans,
+        Map<UUID, Long> planRunCounter,
+        UUID selectedPlanId
+    ) {
         if (plans == null || plans.isEmpty()) {
             return List.of();
         }
         return plans
             .stream()
-            .filter(plan -> plan != null && plan.getId() != null)
-            .sorted(Comparator.comparing(plan -> safeText(plan.getName()), String.CASE_INSENSITIVE_ORDER))
+            .filter(plan -> plan != null && plan.id() != null)
+            .sorted(Comparator.comparing(plan -> safeText(plan.name()), String.CASE_INSENSITIVE_ORDER))
             .filter(
                 plan ->
-                    planRunCounter.getOrDefault(plan.getId(), 0L) > 0 ||
-                    (selectedPlanId != null && selectedPlanId.equals(plan.getId()))
+                    planRunCounter.getOrDefault(plan.id(), 0L) > 0 ||
+                    (selectedPlanId != null && selectedPlanId.equals(plan.id()))
             )
             .map(plan -> {
                 Map<String, Object> row = new LinkedHashMap<>();
-                row.put("id", plan.getId());
-                row.put("name", plan.getName());
-                row.put("ownerDept", plan.getOwnerDept());
-                row.put("status", plan.getStatus());
-                row.put("runCount", planRunCounter.getOrDefault(plan.getId(), 0L));
+                row.put("id", plan.id());
+                row.put("name", plan.name());
+                row.put("ownerDept", plan.ownerDepartmentId());
+                row.put("status", plan.lifecycleStatus());
+                row.put("runCount", planRunCounter.getOrDefault(plan.id(), 0L));
                 return row;
             })
             .toList();
@@ -373,7 +376,7 @@ public class OpsService {
     private List<InfraExternalRunLog> filterRunsByPlan(
         List<InfraExternalRunLog> runs,
         UUID planId,
-        Map<UUID, ModelingPlan> planById
+        Map<UUID, WarehousePlanProjection> planById
     ) {
         if (planId == null) {
             return runs;
@@ -391,7 +394,7 @@ public class OpsService {
     private UUID resolvePlanId(
         InfraExternalRunLog run,
         Map<String, Object> metrics,
-        Map<UUID, ModelingPlan> planById
+        Map<UUID, WarehousePlanProjection> planById
     ) {
         if (run != null && run.getArtifactId() != null && planById.containsKey(run.getArtifactId())) {
             return run.getArtifactId();

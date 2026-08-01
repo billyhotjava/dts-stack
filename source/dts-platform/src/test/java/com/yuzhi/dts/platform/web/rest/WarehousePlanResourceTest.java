@@ -613,6 +613,21 @@ class WarehousePlanResourceTest {
     }
 
     @Test
+    void reportsAStaleBaselineValidationAsAPlanConflict() throws Exception {
+        when(service.confirmBaseline(eq("server-tenant"), eq(PLAN_ID), eq(1), any())).thenThrow(
+            new WarehousePlanException("WAREHOUSE_PLAN_BASELINE_STALE", "baseline changed", 1)
+        );
+
+        mockMvc
+            .perform(
+                post("/api/modeling/warehouse-plans/{id}/baseline/confirm", PLAN_ID).header("If-Match", "\"plan-head:1\"")
+            )
+            .andExpect(status().isConflict())
+            .andExpect(header().string("ETag", "\"plan-head:1\""))
+            .andExpect(jsonPath("$.code").value("WAREHOUSE_PLAN_BASELINE_STALE"));
+    }
+
+    @Test
     void getsAndSavesCanonicalCategoriesWithBodyVersionAndCategoryEtag() throws Exception {
         CategoryScopeView view = readyCategoryScope();
         CategoryScopeCommand command = new CategoryScopeCommand(List.of(new DomainBinding(DOMAIN_ID, CONFIRMED)));

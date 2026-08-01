@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260801-05-retire-modeling-plan-version-review" author="codex" dbms="postgresql" runInTransaction="true">
+        <preConditions
+            onFail="HALT"
+            onError="HALT"
+            onFailMessage="MODELING_PLAN_VERSION_REVIEW_RETIREMENT_BLOCKED: empty both tables and remove unknown foreign-key or view dependencies before deployment"
+            onErrorMessage="MODELING_PLAN_VERSION_REVIEW_RETIREMENT_SCHEMA_UNEXPECTED">
+            <tableExists tableName="modeling_plan"/>
+            <tableExists tableName="modeling_plan_review"/>
+            <tableExists tableName="modeling_plan_version"/>
+            <sqlCheck expectedResult="0"><![CDATA[
+                SELECT
+                    (SELECT count(*) FROM modeling_plan_review) +
+                    (SELECT count(*) FROM modeling_plan_version)
+            ]]></sqlCheck>
+            <sqlCheck expectedResult="2"><![CDATA[
+                SELECT count(*)
+                  FROM pg_constraint c
+                 WHERE c.contype = 'f'
+                   AND (
+                       (
+                           c.conrelid = 'modeling_plan_review'::regclass
+                           AND c.confrelid = 'modeling_plan'::regclass
+                           AND c.conname = 'fk_modeling_plan_review_plan'
+                       )
+                       OR (
+                           c.conrelid = 'modeling_plan_version'::regclass
+                           AND c.confrelid = 'modeling_plan'::regclass
+                           AND c.conname = 'fk_modeling_plan_version_plan'
+                       )
+                   )
+            ]]></sqlCheck>
+            <sqlCheck expectedResult="0"><![CDATA[
+                SELECT count(*)
+                  FROM pg_constraint c
+                 WHERE c.contype = 'f'
+                   AND (
+                       c.confrelid IN (
+                           'modeling_plan_review'::regclass,
+                           'modeling_plan_version'::regclass
+                       )
+                       OR (
+                           c.conrelid IN (
+                               'modeling_plan_review'::regclass,
+                               'modeling_plan_version'::regclass
+                           )
+                           AND c.conname NOT IN (
+                               'fk_modeling_plan_review_plan',
+                               'fk_modeling_plan_version_plan'
+                           )
+                       )
+                   )
+            ]]></sqlCheck>
+            <sqlCheck expectedResult="0"><![CDATA[
+                SELECT count(DISTINCT dependent_view.oid)
+                  FROM pg_depend dependency
+                  JOIN pg_rewrite rewrite_rule
+                    ON rewrite_rule.oid = dependency.objid
+                  JOIN pg_class dependent_view
+                    ON dependent_view.oid = rewrite_rule.ev_class
+                 WHERE dependency.refobjid IN (
+                           'modeling_plan_review'::regclass,
+                           'modeling_plan_version'::regclass
+                       )
+                   AND dependent_view.relkind IN ('v', 'm')
+            ]]></sqlCheck>
+        </preConditions>
+
+        <comment>
+            Remove the empty legacy plan review and version ledgers after their Java APIs and repositories
+            have been retired. Unknown relational dependencies halt the deployment instead of cascading.
+        </comment>
+
+        <sql><![CDATA[
+            LOCK TABLE modeling_plan, modeling_plan_review, modeling_plan_version
+            IN ACCESS EXCLUSIVE MODE
+        ]]></sql>
+        <sql splitStatements="false"><![CDATA[
+            DO $$
+            BEGIN
+                IF (
+                    (SELECT count(*) FROM modeling_plan_review) +
+                    (SELECT count(*) FROM modeling_plan_version)
+                ) <> 0 THEN
+                    RAISE EXCEPTION 'MODELING_PLAN_VERSION_REVIEW_RETIREMENT_LOCKED_RECHECK_FAILED';
+                END IF;
+            END $$;
+        ]]></sql>
+
+        <dropTable tableName="modeling_plan_review" cascadeConstraints="false"/>
+        <dropTable tableName="modeling_plan_version" cascadeConstraints="false"/>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    RAISE EXCEPTION 'ROLLBACK_BLOCKED_MODELING_PLAN_VERSION_REVIEW_RETIREMENT_FORWARD_ONLY: recovery requires a new forward changeset';
+                END $$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

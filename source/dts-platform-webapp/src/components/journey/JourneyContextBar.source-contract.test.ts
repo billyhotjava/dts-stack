@@ -8,7 +8,7 @@ const contextUrl = new URL("./journeyContext.ts", import.meta.url);
 const indexUrl = new URL("./index.ts", import.meta.url);
 
 const pageSources = [
-	["integration", new URL("../../pages/foundation/DataSourcesPage.tsx", import.meta.url)],
+	["integration", new URL("../../pages/foundation/access/AccessWorkspace.tsx", import.meta.url)],
 	["standards", new URL("../../pages/governance/ElementsPage.tsx", import.meta.url)],
 	["service", new URL("../../pages/services/ApiServicesPage.tsx", import.meta.url)],
 	["evidence", new URL("../../pages/ops/OpsInstancesPage.tsx", import.meta.url)],

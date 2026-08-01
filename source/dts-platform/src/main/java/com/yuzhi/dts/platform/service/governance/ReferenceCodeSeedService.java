@@ -3,11 +3,11 @@ package com.yuzhi.dts.platform.service.governance;
 import com.yuzhi.dts.platform.config.DbtProperties;
 import com.yuzhi.dts.platform.domain.governance.StdCodeDirectory;
 import com.yuzhi.dts.platform.domain.governance.StdCodeValue;
-import com.yuzhi.dts.platform.domain.modeling.DataStandard;
 import com.yuzhi.dts.platform.repository.governance.StdCodeDirectoryRepository;
 import com.yuzhi.dts.platform.repository.governance.StdCodeValueRepository;
-import com.yuzhi.dts.platform.repository.modeling.DataStandardRepository;
 import com.yuzhi.dts.platform.service.etl.DbtConfigService;
+import com.yuzhi.dts.platform.service.modeling.LegacyCodeSetMigrationPort;
+import com.yuzhi.dts.platform.service.modeling.LegacyCodeSetMigrationPort.LegacyCodeSetCandidate;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -30,7 +30,7 @@ public class ReferenceCodeSeedService {
 
     private final StdCodeDirectoryRepository directoryRepository;
     private final StdCodeValueRepository valueRepository;
-    private final DataStandardRepository dataStandardRepository;
+    private final LegacyCodeSetMigrationPort legacyCodeSets;
     private final DbtConfigService dbtConfigService;
     private final DbtProperties dbtProperties;
     private final ReferenceCodeSecurity security;
@@ -38,14 +38,14 @@ public class ReferenceCodeSeedService {
     public ReferenceCodeSeedService(
         StdCodeDirectoryRepository directoryRepository,
         StdCodeValueRepository valueRepository,
-        DataStandardRepository dataStandardRepository,
+        LegacyCodeSetMigrationPort legacyCodeSets,
         DbtConfigService dbtConfigService,
         DbtProperties dbtProperties,
         ReferenceCodeSecurity security
     ) {
         this.directoryRepository = directoryRepository;
         this.valueRepository = valueRepository;
-        this.dataStandardRepository = dataStandardRepository;
+        this.legacyCodeSets = legacyCodeSets;
         this.dbtConfigService = dbtConfigService;
         this.dbtProperties = dbtProperties;
         this.security = security;
@@ -142,35 +142,33 @@ public class ReferenceCodeSeedService {
     }
 
     private LegacyMigrationStats migrateLegacyCodeSets() {
-        List<DataStandard> standards = dataStandardRepository.findAll();
+        List<LegacyCodeSetCandidate> standards = legacyCodeSets.findCandidates();
         int directoriesCreated = 0;
         int itemsCreated = 0;
         int standardsUpdated = 0;
-        for (DataStandard standard : standards) {
-            String raw = trimToNull(standard.getCodeSet());
-            if (!StringUtils.hasText(raw) || !raw.contains(":")) {
-                continue;
-            }
-            String code = trimToNull(standard.getCode());
-            if (!StringUtils.hasText(code)) {
-                continue;
-            }
+        for (LegacyCodeSetCandidate standard : standards) {
+            String raw = trimToNull(standard.inlineCodeSet());
+            String code = trimToNull(standard.code());
             String codeTypeId = code;
             String codeTypeCode = code;
+            List<CodePair> pairs = parseCodeSet(raw);
+            if (!legacyCodeSets.replaceInlineCodeSet(standard.id(), standard.inlineCodeSet(), codeTypeCode)) {
+                continue;
+            }
+            standardsUpdated++;
             StdCodeDirectory directory = directoryRepository.findByCodeTypeCodeIgnoreCase(codeTypeCode).orElse(null);
             if (directory == null) {
                 directory = new StdCodeDirectory();
                 directory.setCodeTypeId(codeTypeId);
                 directory.setCodeTypeCode(codeTypeCode);
-                directory.setCodeTypeName(trimToNull(standard.getName()) != null ? standard.getName() : codeTypeCode);
-                directory.setBizCatalog(trimToNull(standard.getDomain()));
-                directory.setDataType(trimToNull(standard.getDataType()));
+                directory.setCodeTypeName(trimToNull(standard.name()) != null ? standard.name() : codeTypeCode);
+                directory.setBizCatalog(trimToNull(standard.domain()));
+                directory.setDataType(trimToNull(standard.dataType()));
                 directory.setStatus(1);
-                directory.setVersion(trimToNull(standard.getCurrentVersion()));
+                directory.setVersion(trimToNull(standard.currentVersion()));
                 directoryRepository.save(directory);
                 directoriesCreated++;
             }
-            List<CodePair> pairs = parseCodeSet(raw);
             Set<String> seen = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
             for (CodePair pair : pairs) {
                 if (!StringUtils.hasText(pair.value) || !StringUtils.hasText(pair.label)) {
@@ -191,13 +189,6 @@ public class ReferenceCodeSeedService {
                 itemsCreated++;
                 seen.add(pair.value);
             }
-            if (!codeTypeCode.equals(standard.getCodeSet())) {
-                standard.setCodeSet(codeTypeCode);
-                standardsUpdated++;
-            }
-        }
-        if (standardsUpdated > 0) {
-            dataStandardRepository.saveAll(standards);
         }
         return new LegacyMigrationStats(directoriesCreated, itemsCreated, standardsUpdated);
     }

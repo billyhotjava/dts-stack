@@ -2,24 +2,21 @@ package com.yuzhi.dts.platform.service.modeling;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.yuzhi.dts.platform.domain.governance.StdCodeDirectory;
-import com.yuzhi.dts.platform.domain.governance.StdCodeMapping;
-import com.yuzhi.dts.platform.domain.governance.StdCodeValue;
 import com.yuzhi.dts.platform.domain.modeling.DataSecurityLevel;
 import com.yuzhi.dts.platform.domain.modeling.MetadataStandard;
 import com.yuzhi.dts.platform.domain.modeling.ModelingGlossaryTerm;
 import com.yuzhi.dts.platform.domain.modeling.StandardPackageImportRun;
 import com.yuzhi.dts.platform.domain.modeling.StandardPackageImportRunItem;
-import com.yuzhi.dts.platform.repository.governance.StdCodeDirectoryRepository;
-import com.yuzhi.dts.platform.repository.governance.StdCodeMappingRepository;
-import com.yuzhi.dts.platform.repository.governance.StdCodeValueRepository;
 import com.yuzhi.dts.platform.repository.modeling.MetadataStandardRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingGlossaryTermRepository;
 import com.yuzhi.dts.platform.repository.modeling.StandardPackageImportRunItemRepository;
 import com.yuzhi.dts.platform.repository.modeling.StandardPackageImportRunRepository;
+import com.yuzhi.dts.platform.service.governance.GovernanceReferenceCodePackagePort;
+import com.yuzhi.dts.platform.service.governance.GovernanceReferenceCodePackagePort.Change;
+import com.yuzhi.dts.platform.service.governance.GovernanceReferenceCodePackagePort.DirectoryChanges;
+import com.yuzhi.dts.platform.service.governance.GovernanceReferenceCodePackagePort.EntityType;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -59,9 +56,7 @@ public class StandardPackageApplyService {
     private final ModelingGlossaryTermRepository glossaryTermRepository;
     private final MetadataStandardRepository metadataStandardRepository;
     private final MetadataStandardService metadataStandardService;
-    private final StdCodeDirectoryRepository codeDirectoryRepository;
-    private final StdCodeValueRepository codeValueRepository;
-    private final StdCodeMappingRepository codeMappingRepository;
+    private final GovernanceReferenceCodePackagePort referenceCodes;
     private final ObjectMapper objectMapper;
     private final StandardPackageMeasurementUnitService measurementUnitService;
 
@@ -71,9 +66,7 @@ public class StandardPackageApplyService {
         ModelingGlossaryTermRepository glossaryTermRepository,
         MetadataStandardRepository metadataStandardRepository,
         MetadataStandardService metadataStandardService,
-        StdCodeDirectoryRepository codeDirectoryRepository,
-        StdCodeValueRepository codeValueRepository,
-        StdCodeMappingRepository codeMappingRepository,
+        GovernanceReferenceCodePackagePort referenceCodes,
         ObjectMapper objectMapper,
         StandardPackageMeasurementUnitService measurementUnitService
     ) {
@@ -82,9 +75,7 @@ public class StandardPackageApplyService {
         this.glossaryTermRepository = glossaryTermRepository;
         this.metadataStandardRepository = metadataStandardRepository;
         this.metadataStandardService = metadataStandardService;
-        this.codeDirectoryRepository = codeDirectoryRepository;
-        this.codeValueRepository = codeValueRepository;
-        this.codeMappingRepository = codeMappingRepository;
+        this.referenceCodes = referenceCodes;
         this.objectMapper = objectMapper;
         this.measurementUnitService = measurementUnitService;
     }
@@ -109,10 +100,17 @@ public class StandardPackageApplyService {
 
         applyMeasurementUnits(listOf(payload, "measurementUnits"), actor, ctx);
         applyTerms(listOf(payload, "terms"), ctx);
-        applyCodeDirectories(listOf(payload, "codeDirectories"), ctx);
-        applyCodeItems(listOf(payload, "codeItems"), ctx);
+        DirectoryChanges directories = referenceCodes.applyDirectories(listOf(payload, "codeDirectories"));
+        recordReferenceCodeChanges(directories.changes(), ctx);
+        recordReferenceCodeChanges(
+            referenceCodes.applyValues(listOf(payload, "codeItems"), directories.directoryIdsByCode()),
+            ctx
+        );
         applyElements(listOf(payload, "elements"), ctx);
-        applyCodeMappings(listOf(payload, "codeMappings"), ctx);
+        recordReferenceCodeChanges(
+            referenceCodes.applyMappings(listOf(payload, "codeMappings"), directories.directoryIdsByCode()),
+            ctx
+        );
 
         runItemRepository.saveAll(ctx.items);
         run.setStatus(STATUS_APPLIED);
@@ -136,6 +134,19 @@ public class StandardPackageApplyService {
                 ctx.countCreate(TYPE_MEASUREMENT_UNIT);
             } else {
                 ctx.countUpdate(TYPE_MEASUREMENT_UNIT);
+            }
+        }
+    }
+
+    private void recordReferenceCodeChanges(List<Change> changes, ApplyContext ctx) {
+        for (Change change : changes) {
+            String type = change.entityType().name();
+            String action = change.action().name();
+            ctx.record(type, change.entityId(), action, change.beforeImage());
+            if (ACTION_CREATE.equals(action)) {
+                ctx.countCreate(type);
+            } else {
+                ctx.countUpdate(type);
             }
         }
     }
@@ -182,93 +193,6 @@ public class StandardPackageApplyService {
         target.setVersion(StringUtils.hasText(version) ? version.trim() : "v1");
     }
 
-    private void applyCodeDirectories(List<Map<String, Object>> directories, ApplyContext ctx) {
-        for (Map<String, Object> dir : directories) {
-            String code = asString(dir.get("codeTypeCode"));
-            if (!StringUtils.hasText(code)) {
-                continue;
-            }
-            Optional<StdCodeDirectory> existing = codeDirectoryRepository.findByCodeTypeCodeIgnoreCase(code);
-            if (existing.isPresent()) {
-                StdCodeDirectory entity = existing.orElseThrow();
-                ctx.record(TYPE_CODE_DIRECTORY, entity.getCodeTypeId(), ACTION_UPDATE, directoryImage(entity));
-                copyDirectoryFields(dir, entity, false);
-                codeDirectoryRepository.save(entity);
-                ctx.directoryIds.put(code.toLowerCase(Locale.ROOT), entity.getCodeTypeId());
-                ctx.countUpdate(TYPE_CODE_DIRECTORY);
-            } else {
-                StdCodeDirectory entity = new StdCodeDirectory();
-                String codeTypeId = asString(dir.get("codeTypeId"));
-                entity.setCodeTypeId(StringUtils.hasText(codeTypeId) ? codeTypeId : code);
-                entity.setCodeTypeCode(code);
-                copyDirectoryFields(dir, entity, true);
-                codeDirectoryRepository.save(entity);
-                ctx.record(TYPE_CODE_DIRECTORY, entity.getCodeTypeId(), ACTION_CREATE, null);
-                ctx.directoryIds.put(code.toLowerCase(Locale.ROOT), entity.getCodeTypeId());
-                ctx.countCreate(TYPE_CODE_DIRECTORY);
-            }
-        }
-    }
-
-    private void copyDirectoryFields(Map<String, Object> source, StdCodeDirectory target, boolean creating) {
-        target.setCodeTypeName(asString(source.get("codeTypeName")));
-        target.setStdLevel(asString(source.get("stdLevel")));
-        target.setBizCatalog(asString(source.get("bizCatalog")));
-        target.setDataType(asString(source.get("dataType")));
-        Integer status = asInteger(source.get("status"));
-        if (status != null || creating) {
-            target.setStatus(status == null ? Integer.valueOf(1) : status);
-        }
-        String ownerDept = asString(source.get("ownerDept"));
-        if (StringUtils.hasText(ownerDept) || creating) {
-            target.setOwnerDept(ownerDept);
-        }
-        target.setVersion(asString(source.get("version")));
-    }
-
-    private void applyCodeItems(List<Map<String, Object>> items, ApplyContext ctx) {
-        Map<String, Map<String, StdCodeValue>> existingByDirectory = new HashMap<>();
-        for (Map<String, Object> item : items) {
-            String typeCode = asString(item.get("codeTypeCode"));
-            String codeTypeId = resolveDirectoryId(typeCode, ctx);
-            if (codeTypeId == null) {
-                continue;
-            }
-            Map<String, StdCodeValue> existingValues = existingByDirectory.computeIfAbsent(codeTypeId, key -> {
-                Map<String, StdCodeValue> map = new LinkedHashMap<>();
-                for (StdCodeValue value : codeValueRepository.findByCodeTypeIdOrderBySortNumAscCodeValueAsc(key)) {
-                    map.put(value.getCodeValue(), value);
-                }
-                return map;
-            });
-            String codeValue = asString(item.get("codeValue"));
-            StdCodeValue existing = existingValues.get(codeValue);
-            if (existing != null) {
-                ctx.record(TYPE_CODE_VALUE, String.valueOf(existing.getItemId()), ACTION_UPDATE, codeValueImage(existing));
-                copyCodeValueFields(item, existing);
-                codeValueRepository.save(existing);
-                ctx.countUpdate(TYPE_CODE_VALUE);
-            } else {
-                StdCodeValue value = new StdCodeValue();
-                value.setCodeTypeId(codeTypeId);
-                value.setCodeValue(codeValue);
-                copyCodeValueFields(item, value);
-                StdCodeValue saved = codeValueRepository.save(value);
-                existingValues.put(codeValue, saved);
-                ctx.record(TYPE_CODE_VALUE, String.valueOf(saved.getItemId()), ACTION_CREATE, null);
-                ctx.countCreate(TYPE_CODE_VALUE);
-            }
-        }
-    }
-
-    private void copyCodeValueFields(Map<String, Object> source, StdCodeValue target) {
-        target.setCodeName(asString(source.get("codeName")));
-        target.setDescription(asString(source.get("description")));
-        target.setSortNum(asInteger(source.get("sortNum")));
-        target.setParentCode(asString(source.get("parentCode")));
-        target.setIsDefault(asBoolean(source.get("isDefault")));
-    }
-
     private void applyElements(List<Map<String, Object>> elements, ApplyContext ctx) {
         for (Map<String, Object> element : elements) {
             MetadataStandardUpsertRequest req = toElementRequest(element);
@@ -307,63 +231,6 @@ public class StandardPackageApplyService {
         String securityLevel = asString(element.get("securityLevel"));
         req.setSecurityLevel(StringUtils.hasText(securityLevel) ? DataSecurityLevel.valueOf(securityLevel) : DataSecurityLevel.INTERNAL);
         return req;
-    }
-
-    private void applyCodeMappings(List<Map<String, Object>> mappings, ApplyContext ctx) {
-        Map<String, List<StdCodeMapping>> existingByDirectory = new HashMap<>();
-        for (Map<String, Object> mapping : mappings) {
-            String typeCode = asString(mapping.get("codeTypeCode"));
-            String codeTypeId = resolveDirectoryId(typeCode, ctx);
-            if (codeTypeId == null) {
-                continue;
-            }
-            List<StdCodeMapping> existingList = existingByDirectory.computeIfAbsent(
-                codeTypeId,
-                key -> new ArrayList<>(codeMappingRepository.findByCodeTypeIdOrderBySourceSysAsc(key))
-            );
-            String sourceSystem = asString(mapping.get("sourceSystem"));
-            String sourceCode = asString(mapping.get("sourceCode"));
-            String standardCode = asString(mapping.get("standardCode"));
-            StdCodeMapping existing = existingList
-                .stream()
-                .filter(m -> sourceSystem.equals(m.getSourceSys()) && sourceCode.equals(m.getSrcCode()))
-                .findFirst()
-                .orElse(null);
-            if (existing != null) {
-                ctx.record(TYPE_CODE_MAPPING, String.valueOf(existing.getMapId()), ACTION_UPDATE, Map.of("stdCode", existing.getStdCode()));
-                existing.setStdCode(standardCode);
-                codeMappingRepository.save(existing);
-                ctx.countUpdate(TYPE_CODE_MAPPING);
-            } else {
-                StdCodeMapping entity = new StdCodeMapping();
-                entity.setCodeTypeId(codeTypeId);
-                entity.setSourceSys(sourceSystem);
-                entity.setSrcCode(sourceCode);
-                entity.setStdCode(standardCode);
-                StdCodeMapping saved = codeMappingRepository.save(entity);
-                existingList.add(saved);
-                ctx.record(TYPE_CODE_MAPPING, String.valueOf(saved.getMapId()), ACTION_CREATE, null);
-                ctx.countCreate(TYPE_CODE_MAPPING);
-            }
-        }
-    }
-
-    private String resolveDirectoryId(String codeTypeCode, ApplyContext ctx) {
-        if (!StringUtils.hasText(codeTypeCode)) {
-            return null;
-        }
-        String normalized = codeTypeCode.toLowerCase(Locale.ROOT);
-        String cached = ctx.directoryIds.get(normalized);
-        if (cached != null) {
-            return cached;
-        }
-        return codeDirectoryRepository
-            .findByCodeTypeCodeIgnoreCase(codeTypeCode)
-            .map(directory -> {
-                ctx.directoryIds.put(normalized, directory.getCodeTypeId());
-                return directory.getCodeTypeId();
-            })
-            .orElse(null);
     }
 
     // ---------- rollback ----------
@@ -446,18 +313,13 @@ public class StandardPackageApplyService {
                     metadataStandardRepository.deleteById(id);
                 }
                 case TYPE_CODE_DIRECTORY -> {
-                    if (!codeDirectoryRepository.existsById(item.getEntityId())) return false;
-                    codeDirectoryRepository.deleteById(item.getEntityId());
+                    return referenceCodes.rollbackCreate(EntityType.CODE_DIRECTORY, item.getEntityId());
                 }
                 case TYPE_CODE_VALUE -> {
-                    Long id = Long.valueOf(item.getEntityId());
-                    if (!codeValueRepository.existsById(id)) return false;
-                    codeValueRepository.deleteById(id);
+                    return referenceCodes.rollbackCreate(EntityType.CODE_VALUE, item.getEntityId());
                 }
                 case TYPE_CODE_MAPPING -> {
-                    Long id = Long.valueOf(item.getEntityId());
-                    if (!codeMappingRepository.existsById(id)) return false;
-                    codeMappingRepository.deleteById(id);
+                    return referenceCodes.rollbackCreate(EntityType.CODE_MAPPING, item.getEntityId());
                 }
                 case TYPE_MEASUREMENT_UNIT -> {
                     return measurementUnitService.rollbackCreate(
@@ -520,35 +382,13 @@ public class StandardPackageApplyService {
                 metadataStandardRepository.save(element);
             }
             case TYPE_CODE_DIRECTORY -> {
-                Optional<StdCodeDirectory> entity = codeDirectoryRepository.findById(item.getEntityId());
-                if (entity.isEmpty()) return false;
-                StdCodeDirectory directory = entity.orElseThrow();
-                directory.setCodeTypeName(asString(before.get("codeTypeName")));
-                directory.setStdLevel(asString(before.get("stdLevel")));
-                directory.setBizCatalog(asString(before.get("bizCatalog")));
-                directory.setDataType(asString(before.get("dataType")));
-                directory.setStatus(asInteger(before.get("status")));
-                directory.setOwnerDept(asString(before.get("ownerDept")));
-                directory.setVersion(asString(before.get("version")));
-                codeDirectoryRepository.save(directory);
+                return referenceCodes.rollbackUpdate(EntityType.CODE_DIRECTORY, item.getEntityId(), before);
             }
             case TYPE_CODE_VALUE -> {
-                Optional<StdCodeValue> entity = codeValueRepository.findById(Long.valueOf(item.getEntityId()));
-                if (entity.isEmpty()) return false;
-                StdCodeValue value = entity.orElseThrow();
-                value.setCodeName(asString(before.get("codeName")));
-                value.setDescription(asString(before.get("description")));
-                value.setSortNum(asInteger(before.get("sortNum")));
-                value.setParentCode(asString(before.get("parentCode")));
-                value.setIsDefault(asBoolean(before.get("isDefault")));
-                codeValueRepository.save(value);
+                return referenceCodes.rollbackUpdate(EntityType.CODE_VALUE, item.getEntityId(), before);
             }
             case TYPE_CODE_MAPPING -> {
-                Optional<StdCodeMapping> entity = codeMappingRepository.findById(Long.valueOf(item.getEntityId()));
-                if (entity.isEmpty()) return false;
-                StdCodeMapping mapping = entity.orElseThrow();
-                mapping.setStdCode(asString(before.get("stdCode")));
-                codeMappingRepository.save(mapping);
+                return referenceCodes.rollbackUpdate(EntityType.CODE_MAPPING, item.getEntityId(), before);
             }
             case TYPE_MEASUREMENT_UNIT -> {
                 return measurementUnitService.rollbackUpdate(UUID.fromString(item.getEntityId()), before, actor);
@@ -613,28 +453,6 @@ public class StandardPackageApplyService {
         return image;
     }
 
-    private Map<String, Object> directoryImage(StdCodeDirectory directory) {
-        Map<String, Object> image = new LinkedHashMap<>();
-        image.put("codeTypeName", directory.getCodeTypeName());
-        image.put("stdLevel", directory.getStdLevel());
-        image.put("bizCatalog", directory.getBizCatalog());
-        image.put("dataType", directory.getDataType());
-        image.put("status", directory.getStatus());
-        image.put("ownerDept", directory.getOwnerDept());
-        image.put("version", directory.getVersion());
-        return image;
-    }
-
-    private Map<String, Object> codeValueImage(StdCodeValue value) {
-        Map<String, Object> image = new LinkedHashMap<>();
-        image.put("codeName", value.getCodeName());
-        image.put("description", value.getDescription());
-        image.put("sortNum", value.getSortNum());
-        image.put("parentCode", value.getParentCode());
-        image.put("isDefault", value.getIsDefault());
-        return image;
-    }
-
     private Map<String, Object> readJsonMap(String json) {
         if (!StringUtils.hasText(json)) {
             return Map.of();
@@ -687,12 +505,11 @@ public class StandardPackageApplyService {
         return null;
     }
 
-    /** 单次 apply 的上下文：目录 code→id 解析缓存、before-image 明细、计数。 */
+    /** 单次 apply 的 before-image 明细与计数。 */
     private final class ApplyContext {
 
         final UUID runId;
         final List<StandardPackageImportRunItem> items = new ArrayList<>();
-        final Map<String, String> directoryIds = new HashMap<>();
         final Map<String, Integer> createdByType = new LinkedHashMap<>();
         final Map<String, Integer> updatedByType = new LinkedHashMap<>();
         int seq = 0;

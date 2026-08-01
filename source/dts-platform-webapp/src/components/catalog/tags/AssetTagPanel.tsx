@@ -16,6 +16,7 @@ type AssetTagPanelProps = {
 	assetType: string;
 	assetKey: string;
 	canEdit?: boolean;
+	onChanged?: () => void;
 };
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -31,7 +32,7 @@ function flattenCategories(categories: CatalogTagCategoryDto[]): CatalogTagCateg
 	return result;
 }
 
-export function AssetTagPanel({ assetType, assetKey, canEdit = false }: AssetTagPanelProps) {
+export function AssetTagPanel({ assetType, assetKey, canEdit = false, onChanged }: AssetTagPanelProps) {
 	const [selected, setSelected] = useState<DisplayCatalogTag[]>([]);
 	const [catalog, setCatalog] = useState<DisplayCatalogTag[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -120,6 +121,7 @@ export function AssetTagPanel({ assetType, assetKey, canEdit = false }: AssetTag
 		setSelected((current) => [...current, tag]);
 		try {
 			await tagAsset({ assetType, assetKey, tagIds: [tag.id] });
+			onChanged?.();
 		} catch (error: unknown) {
 			if (identity === identityRef.current) {
 				setSelected((current) => current.filter((item) => item.id !== tag.id));
@@ -141,6 +143,7 @@ export function AssetTagPanel({ assetType, assetKey, canEdit = false }: AssetTag
 		setSelected((current) => current.filter((item) => item.id !== tag.id));
 		try {
 			await untagAsset({ assetType, assetKey, tagIds: [tag.id] });
+			onChanged?.();
 		} catch (error: unknown) {
 			if (identity === identityRef.current) {
 				setSelected((current) => {

@@ -18,6 +18,7 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogTagCategoryRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTagInstallLockRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTagRepository;
 import com.yuzhi.dts.platform.repository.modeling.StandardPackageImportRunRepository;
+import com.yuzhi.dts.platform.service.modeling.StandardPackageInstallLedgerService;
 import com.yuzhi.dts.platform.service.modeling.StandardPackageContractException;
 import com.yuzhi.dts.platform.service.modeling.StandardPackageManifestContract;
 import java.io.InputStream;
@@ -61,7 +62,7 @@ class CatalogTagSeedServiceTest {
             categoryRepository,
             tagRepository,
             installLockRepository,
-            runRepository,
+            new StandardPackageInstallLedgerService(runRepository),
             objectMapper,
             manifestContract
         );
