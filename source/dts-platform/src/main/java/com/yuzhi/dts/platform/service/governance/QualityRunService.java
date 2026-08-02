@@ -15,9 +15,6 @@ import com.yuzhi.dts.platform.repository.governance.GovQualityRunRepository;
 import com.yuzhi.dts.platform.repository.governance.GovRuleBindingRepository;
 import com.yuzhi.dts.platform.repository.governance.GovRuleRepository;
 import com.yuzhi.dts.platform.repository.governance.GovRuleVersionRepository;
-import com.yuzhi.dts.platform.service.governance.dto.IssueTicketDto;
-import com.yuzhi.dts.platform.service.governance.request.IssueTicketUpsertRequest;
-import com.yuzhi.dts.platform.service.governance.dto.QualityMetricDto;
 import com.yuzhi.dts.platform.service.governance.dto.QualityRunDto;
 import com.yuzhi.dts.platform.service.governance.request.QualityRunTriggerRequest;
 import com.yuzhi.dts.platform.service.security.dto.StatementExecutionResult;
@@ -32,7 +29,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
@@ -41,9 +37,6 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -64,16 +57,16 @@ public class QualityRunService {
     private final GovRuleBindingRepository bindingRepository;
     private final GovQualityRunRepository runRepository;
     private final GovQualityMetricRepository metricRepository;
-    private final CatalogDatasetRepository datasetRepository;
     private final Executor taskExecutor;
     private final QualityDatasetStatementExecutor statementExecutor;
     private final QualityAuditRecorder qualityAuditRecorder;
-    private final IssueTicketService issueTicketService;
     private final ObjectMapper objectMapper;
     private final GovernanceProperties properties;
     private final TransactionTemplate runTransactionTemplate;
     private final DefaultLakeDatasetGuard defaultLakeDatasetGuard;
     private final QualityDatasetReadGuard qualityDatasetReadGuard;
+    private final QualityRunQueryService qualityRunQueryService;
+    private final QualityRunAuditCoordinator runAuditCoordinator;
 
     public QualityRunService(
         GovRuleRepository ruleRepository,
@@ -97,15 +90,20 @@ public class QualityRunService {
         this.bindingRepository = bindingRepository;
         this.runRepository = runRepository;
         this.metricRepository = metricRepository;
-        this.datasetRepository = datasetRepository;
         this.taskExecutor = taskExecutor;
         this.statementExecutor = statementExecutor;
         this.qualityAuditRecorder = qualityAuditRecorder;
-        this.issueTicketService = issueTicketService;
         this.objectMapper = objectMapper;
         this.properties = properties;
         this.defaultLakeDatasetGuard = defaultLakeDatasetGuard;
         this.qualityDatasetReadGuard = qualityDatasetReadGuard;
+        this.qualityRunQueryService = new QualityRunQueryService(
+            runRepository,
+            metricRepository,
+            datasetRepository,
+            qualityDatasetReadGuard
+        );
+        this.runAuditCoordinator = new QualityRunAuditCoordinator(qualityAuditRecorder, issueTicketService);
         TransactionTemplate template = new TransactionTemplate(transactionManager);
         template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.runTransactionTemplate = template;
@@ -113,12 +111,17 @@ public class QualityRunService {
 
     @Transactional
     public List<QualityRunDto> trigger(QualityRunTriggerRequest request, String actor) {
-        return triggerInternal(request, actor, null, false, false);
+        return triggerInternal(request, actor, null, false, false, false);
     }
 
     @Transactional
     public List<QualityRunDto> trigger(QualityRunTriggerRequest request, String actor, String activeDeptHeader) {
-        return triggerInternal(request, actor, activeDeptHeader, true, false);
+        return triggerInternal(request, actor, activeDeptHeader, true, false, false);
+    }
+
+    @Transactional
+    public List<QualityRunDto> triggerTrustedIngestion(QualityRunTriggerRequest request) {
+        return triggerInternal(request, "service:dts-ingestion", null, false, false, true);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -127,12 +130,12 @@ public class QualityRunService {
         String actor,
         String activeDeptHeader
     ) {
-        return triggerInternal(request, actor, activeDeptHeader, true, false);
+        return triggerInternal(request, actor, activeDeptHeader, true, false, false);
     }
 
     @Transactional
     public List<QualityRunDto> triggerScheduled(QualityRunTriggerRequest request) {
-        return triggerInternal(request, "scheduler", null, false, true);
+        return triggerInternal(request, "scheduler", null, false, true, false);
     }
 
     private List<QualityRunDto> triggerInternal(
@@ -140,7 +143,8 @@ public class QualityRunService {
         String actor,
         String activeDeptHeader,
         boolean enforceUserAccess,
-        boolean scheduledInvocation
+        boolean scheduledInvocation,
+        boolean trustedIngestionInvocation
     ) {
         if (!properties.getQuality().isEnabled()) {
             throw new IllegalStateException("质量检测功能已禁用");
@@ -149,7 +153,12 @@ public class QualityRunService {
             throw new IllegalArgumentException("质量运行请求不能为空");
         }
         boolean dryRun = Boolean.TRUE.equals(request.getDryRun());
-        String triggerType = resolveTriggerType(request.getTriggerType(), dryRun, scheduledInvocation);
+        String triggerType = resolveTriggerType(
+            request.getTriggerType(),
+            dryRun,
+            scheduledInvocation,
+            trustedIngestionInvocation
+        );
         GovRule rule = resolveRule(request.getRuleId());
         GovRuleVersion version = resolveVersion(rule);
         if (resolveStatements(version).isEmpty()) {
@@ -187,9 +196,10 @@ public class QualityRunService {
 
             Map<String, Object> beginPayload = buildRunAuditPayload(run, "开始运行质量规则：" + resolveRunRuleName(run));
             beginPayload.put("status", run.getStatus());
-            if ("SCHEDULED".equalsIgnoreCase(run.getTriggerType())) {
+            String machineActor = runMachineAuditActor(run);
+            if (machineActor != null) {
                 qualityAuditRecorder.recordMachine(
-                    "scheduler",
+                    machineActor,
                     runEventIdentity(run, AuditStage.BEGIN),
                     run.getScheduledAt(),
                     "GOV_QUALITY_RUN_EXECUTE",
@@ -207,7 +217,7 @@ public class QualityRunService {
             }
 
             runIds.add(run.getId());
-            runs.add(toSafeDto(run, Collections.emptyList()));
+            runs.add(qualityRunQueryService.toSafeDto(run, Collections.emptyList()));
         }
 
         if (!runIds.isEmpty()) {
@@ -262,65 +272,47 @@ public class QualityRunService {
 
     @Transactional(readOnly = true)
     public QualityRunDto getRun(UUID runId) {
-        return getRun(runId, null);
+        return qualityRunQueryService.getRun(runId, null);
     }
 
     @Transactional(readOnly = true)
     public QualityRunDto getRun(UUID runId, String activeDeptHeader) {
-        GovQualityRun run = runRepository.findById(runId).orElseThrow(EntityNotFoundException::new);
-        requireReadableRun(run, activeDeptHeader);
-        List<GovQualityMetric> metrics = metricRepository.findByRunId(runId);
-        return toSafeDto(run, metrics);
+        return qualityRunQueryService.getRun(runId, activeDeptHeader);
     }
 
     @Transactional(readOnly = true)
     public void assertRunReadable(UUID runId, String activeDeptHeader) {
-        GovQualityRun run = runRepository.findById(runId).orElseThrow(EntityNotFoundException::new);
-        requireReadableRun(run, activeDeptHeader);
+        qualityRunQueryService.assertRunReadable(runId, activeDeptHeader);
     }
 
     @Transactional(readOnly = true)
     public List<QualityRunDto> recentByRule(UUID ruleId, int limit) {
-        return recentByRule(ruleId, limit, null);
+        return qualityRunQueryService.recentByRule(ruleId, limit, null);
     }
 
     @Transactional(readOnly = true)
     public List<QualityRunDto> recentByRule(UUID ruleId, int limit, String activeDeptHeader) {
-        Pageable pageable = PageRequest.of(0, limit, Sort.Direction.DESC, "createdDate");
-        return filterReadableRuns(runRepository.findByRuleId(ruleId, pageable), activeDeptHeader)
-            .stream()
-            .map(run -> toSafeDto(run, metricRepository.findByRunId(run.getId())))
-            .collect(Collectors.toList());
+        return qualityRunQueryService.recentByRule(ruleId, limit, activeDeptHeader);
     }
 
     @Transactional(readOnly = true)
     public List<QualityRunDto> recentByDataset(UUID datasetId, int limit) {
-        return recentByDataset(datasetId, limit, null);
+        return qualityRunQueryService.recentByDataset(datasetId, limit, null);
     }
 
     @Transactional(readOnly = true)
     public List<QualityRunDto> recentByDataset(UUID datasetId, int limit, String activeDeptHeader) {
-        qualityDatasetReadGuard.requireReadable(datasetId, activeDeptHeader);
-        Pageable pageable = PageRequest.of(0, limit, Sort.Direction.DESC, "createdDate");
-        return runRepository
-            .findByDatasetId(datasetId, pageable)
-            .stream()
-            .map(run -> toSafeDto(run, metricRepository.findByRunId(run.getId())))
-            .collect(Collectors.toList());
+        return qualityRunQueryService.recentByDataset(datasetId, limit, activeDeptHeader);
     }
 
     @Transactional(readOnly = true)
     public List<QualityRunDto> recent(int limit) {
-        Pageable pageable = PageRequest.of(0, limit, Sort.Direction.DESC, "createdDate");
-        return filterReadableRuns(runRepository.findAll(pageable).getContent(), null)
-            .stream()
-            .map(run -> toSafeDto(run, metricRepository.findByRunId(run.getId())))
-            .collect(Collectors.toList());
+        return qualityRunQueryService.recent(limit);
     }
 
     @Transactional(readOnly = true)
     public List<QualityRunDto> listRuns(UUID ruleId, UUID datasetId, String status, String triggerType, Instant startedFrom, Instant startedTo, int limit) {
-        return listRuns(ruleId, datasetId, status, triggerType, startedFrom, startedTo, limit, null);
+        return qualityRunQueryService.listRuns(ruleId, datasetId, status, triggerType, startedFrom, startedTo, limit, null);
     }
 
     @Transactional(readOnly = true)
@@ -334,34 +326,16 @@ public class QualityRunService {
         int limit,
         String activeDeptHeader
     ) {
-        int safeLimit = Math.max(1, Math.min(limit, 500));
-        int querySize = Math.max(safeLimit, 200);
-        Pageable pageable = PageRequest.of(0, querySize, Sort.Direction.DESC, "createdDate");
-        List<GovQualityRun> candidates;
-        if (ruleId != null) {
-            candidates = runRepository.findByRuleId(ruleId, pageable);
-        } else if (datasetId != null) {
-            qualityDatasetReadGuard.requireReadable(datasetId, activeDeptHeader);
-            candidates = runRepository.findByDatasetId(datasetId, pageable);
-        } else {
-            candidates = runRepository.findAll(pageable).getContent();
-        }
-        String normalizedStatus = StringUtils.trimToNull(status);
-        String normalizedTriggerType = StringUtils.trimToNull(triggerType);
-        return filterReadableRuns(candidates, activeDeptHeader)
-            .stream()
-            .filter(run -> normalizedStatus == null || normalizedStatus.equalsIgnoreCase(StringUtils.trimToEmpty(run.getStatus())))
-            .filter(run -> normalizedTriggerType == null || normalizedTriggerType.equalsIgnoreCase(StringUtils.trimToEmpty(run.getTriggerType())))
-            .filter(run -> {
-                Instant pivot = run.getStartedAt() != null ? run.getStartedAt() : run.getCreatedDate();
-                if (startedFrom != null && (pivot == null || pivot.isBefore(startedFrom))) {
-                    return false;
-                }
-                return startedTo == null || pivot == null || !pivot.isAfter(startedTo);
-            })
-            .limit(safeLimit)
-            .map(run -> toSafeDto(run, metricRepository.findByRunId(run.getId())))
-            .collect(Collectors.toList());
+        return qualityRunQueryService.listRuns(
+            ruleId,
+            datasetId,
+            status,
+            triggerType,
+            startedFrom,
+            startedTo,
+            limit,
+            activeDeptHeader
+        );
     }
 
     private void doExecuteRun(UUID runId, Map<String, Object> params) {
@@ -446,8 +420,22 @@ public class QualityRunService {
         return run != null && "DRY_RUN".equalsIgnoreCase(StringUtils.trimToEmpty(run.getTriggerType()));
     }
 
-    private String resolveTriggerType(String requestedTriggerType, boolean dryRun, boolean scheduledInvocation) {
+    private String resolveTriggerType(
+        String requestedTriggerType,
+        boolean dryRun,
+        boolean scheduledInvocation,
+        boolean trustedIngestionInvocation
+    ) {
         String triggerType = StringUtils.defaultIfBlank(requestedTriggerType, "MANUAL").trim();
+        if (trustedIngestionInvocation) {
+            if (dryRun) {
+                throw new IllegalArgumentException("入湖服务质量运行不允许试跑模式");
+            }
+            return "INGESTION";
+        }
+        if ("INGESTION".equalsIgnoreCase(triggerType)) {
+            throw new IllegalArgumentException("人工质量运行不允许使用入湖触发类型");
+        }
         if ("SCHEDULED".equalsIgnoreCase(triggerType) && !scheduledInvocation) {
             throw new IllegalArgumentException("人工质量运行不允许使用调度触发类型");
         }
@@ -464,279 +452,35 @@ public class QualityRunService {
     }
 
     private List<QualityRunDto> dispatchIdsToDtos(List<UUID> runIds) {
-        if (runIds == null || runIds.isEmpty()) {
-            return Collections.emptyList();
-        }
-        return runIds
-            .stream()
-            .map(runRepository::findById)
-            .flatMap(Optional::stream)
-            .map(run -> toSafeDto(run, metricRepository.findByRunId(run.getId())))
-            .collect(Collectors.toList());
+        return qualityRunQueryService.findDtosByIds(runIds);
     }
 
     private void createIssueForFailedRun(GovQualityRun run, List<StatementExecutionResult> results, String actor) {
-        if (run == null || run.getId() == null) {
-            return;
-        }
-        IssueTicketUpsertRequest req = new IssueTicketUpsertRequest();
-        String ruleName = resolveRunRuleName(run);
-        req.setTitle("质量检测失败：" + ruleName);
-        StringBuilder summary = new StringBuilder();
-        summary.append("规则：").append(ruleName);
-        if (run.getDatasetId() != null) {
-            summary.append("\n数据集：").append(run.getDatasetId());
-        }
-        summary.append("\n原因：质量检测执行失败（类别：")
-            .append(StringUtils.defaultIfBlank(run.getErrorCategory(), "EXECUTION_ERROR"))
-            .append("）");
-        if (results != null && !results.isEmpty()) {
-            long failed = results.stream().filter(r -> r != null && r.status() == StatementExecutionResult.Status.FAILED).count();
-            summary.append("\n失败项数：").append(failed);
-        }
-        req.setSummary(summary.toString());
-        req.setSeverity(run.getSeverity());
-        req.setDataLevel(run.getDataLevel());
-        req.setDatasetId(run.getDatasetId());
-        req.setOwner(run.getRule() != null ? run.getRule().getOwner() : null);
-        req.setTags(List.of(
-            "QUALITY_RUN",
-            "trigger=" + String.valueOf(run.getTriggerType()),
-            "datasetId=" + String.valueOf(run.getDatasetId())
-        ));
-        String effectiveActor = StringUtils.isNotBlank(actor) ? actor : "system";
-        String issueActor = "SCHEDULED".equalsIgnoreCase(StringUtils.trimToEmpty(run.getTriggerType()))
-            ? "system"
-            : effectiveActor;
-        IssueTicketService.CreateOrTouchResult result;
-        try {
-            result = issueTicketService.createOrTouchWithDisposition(
-                "QUALITY_RUN",
-                run.getId(),
-                req,
-                issueActor,
-                "系统自动生成：质量检测失败"
-            );
-        } catch (Exception ex) {
-            log.warn(
-                "event=quality_run_issue_create_failed runId={} errorType={}",
-                run.getId(),
-                ex.getClass().getSimpleName()
-            );
-            return;
-        }
-        IssueTicketDto issue = result != null ? result.ticket() : null;
-        if (issue != null && issue.getId() != null) {
-            auditAutomaticIssue(run, issue.getId(), effectiveActor, result.disposition());
-        }
-    }
-
-    private void auditAutomaticIssue(
-        GovQualityRun run,
-        UUID issueId,
-        String actor,
-        IssueTicketService.CreateOrTouchDisposition disposition
-    ) {
-        try {
-            Map<String, Object> payload = new LinkedHashMap<>();
-            payload.put("summary", "自动创建质量问题");
-            payload.put("sourceType", "QUALITY_RUN");
-            payload.put("sourceId", run.getId().toString());
-            payload.put("issueId", issueId.toString());
-            if (run.getDatasetId() != null) {
-                payload.put("datasetId", run.getDatasetId().toString());
-            }
-            payload.put("disposition", disposition.name());
-            payload.put("triggerActor", actor);
-            String actionCode = disposition == IssueTicketService.CreateOrTouchDisposition.CREATED
-                ? "GOV_ISSUE_CREATE"
-                : "GOV_ISSUE_ACTION_APPEND";
-            if ("SCHEDULED".equalsIgnoreCase(StringUtils.trimToEmpty(run.getTriggerType()))) {
-                Instant occurredAt = run.getFinishedAt() != null ? run.getFinishedAt() : Instant.now();
-                qualityAuditRecorder.recordMachine(
-                    "scheduler",
-                    runEventIdentity(run, AuditStage.FAIL) + ":ISSUE:" + disposition.name(),
-                    occurredAt,
-                    actionCode,
-                    AuditStage.SUCCESS,
-                    issueId.toString(),
-                    payload
-                );
-                return;
-            }
-            qualityAuditRecorder.recordAction(
-                actionCode,
-                AuditStage.SUCCESS,
-                issueId.toString(),
-                payload
-            );
-        } catch (RuntimeException ex) {
-            throw new QualityRunAuditWriteException(ex);
-        }
-    }
-
-    private String resolveRuleName(GovRule rule) {
-        if (rule == null) {
-            return "未知规则";
-        }
-        if (StringUtils.isNotBlank(rule.getName())) {
-            return rule.getName();
-        }
-        if (StringUtils.isNotBlank(rule.getCode())) {
-            return rule.getCode();
-        }
-        return rule.getId() != null ? rule.getId().toString() : "未知规则";
+        runAuditCoordinator.createIssueForFailedRun(run, results, actor);
     }
 
     private String resolveRunRuleName(GovQualityRun run) {
-        if (run == null) {
-            return "未知规则";
-        }
-        GovRule rule = run.getRule();
-        if (rule != null) {
-            return resolveRuleName(rule);
-        }
-        GovRuleVersion version = run.getRuleVersion();
-        if (version != null && version.getRule() != null) {
-            return resolveRuleName(version.getRule());
-        }
-        return run.getId() != null ? run.getId().toString() : "未知规则";
+        return runAuditCoordinator.resolveRunRuleName(run);
     }
 
     private String resolveRunActor(GovQualityRun run) {
-        if (run == null) {
-            return null;
-        }
-        if ("SCHEDULED".equalsIgnoreCase(StringUtils.trimToEmpty(run.getTriggerType()))) {
-            return "scheduler";
-        }
-        if (StringUtils.isNotBlank(run.getTriggerRef())) {
-            return run.getTriggerRef();
-        }
-        if (StringUtils.isNotBlank(run.getCreatedBy())) {
-            return run.getCreatedBy();
-        }
-        if (StringUtils.isNotBlank(run.getLastModifiedBy())) {
-            return run.getLastModifiedBy();
-        }
-        return null;
+        return runAuditCoordinator.resolveRunActor(run);
     }
 
     private void auditRunCompletion(GovQualityRun run, AuditStage stage, Map<String, Object> payload) {
-        try {
-            String resourceId = run != null && run.getId() != null ? run.getId().toString() : "UNASSIGNED";
-            if (run != null && "SCHEDULED".equalsIgnoreCase(StringUtils.trimToEmpty(run.getTriggerType()))) {
-                Map<String, Object> machinePayload = new LinkedHashMap<>(payload);
-                machinePayload.putAll(buildRunAuditTags(run));
-                Instant occurredAt = run.getFinishedAt() != null ? run.getFinishedAt() : Instant.now();
-                qualityAuditRecorder.recordMachine(
-                    "scheduler",
-                    runEventIdentity(run, stage),
-                    occurredAt,
-                    "GOV_QUALITY_RUN_EXECUTE",
-                    stage,
-                    resourceId,
-                    machinePayload
-                );
-                return;
-            }
-            Map<String, Object> actorPayload = new LinkedHashMap<>(payload);
-            actorPayload.putAll(buildRunAuditTags(run));
-            actorPayload.put("triggerActor", resolveRunActor(run));
-            qualityAuditRecorder.recordAction(
-                "GOV_QUALITY_RUN_EXECUTE",
-                stage,
-                resourceId,
-                actorPayload
-            );
-        } catch (RuntimeException ex) {
-            throw new QualityRunAuditWriteException(ex);
-        }
+        runAuditCoordinator.auditRunCompletion(run, stage, payload);
+    }
+
+    private String runMachineAuditActor(GovQualityRun run) {
+        return runAuditCoordinator.runMachineAuditActor(run);
     }
 
     private String runEventIdentity(GovQualityRun run, AuditStage stage) {
-        String runId = run != null && run.getId() != null ? run.getId().toString() : "UNASSIGNED";
-        return "quality-run:" + runId + ":" + stage.name();
+        return runAuditCoordinator.runEventIdentity(run, stage);
     }
 
     private Map<String, Object> buildRunAuditPayload(GovQualityRun run, String summary) {
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("summary", summary);
-        if (run != null) {
-            if (run.getId() != null) {
-                payload.put("runId", run.getId().toString());
-            }
-            GovRule rule = run.getRule();
-            if (rule != null && rule.getId() != null) {
-                payload.put("ruleId", rule.getId().toString());
-                payload.put("ruleName", resolveRuleName(rule));
-            } else if (run.getRuleVersion() != null && run.getRuleVersion().getRule() != null) {
-                GovRule vrule = run.getRuleVersion().getRule();
-                if (vrule.getId() != null) {
-                    payload.put("ruleId", vrule.getId().toString());
-                }
-                payload.put("ruleName", resolveRuleName(vrule));
-            }
-            payload.putIfAbsent("ruleName", resolveRunRuleName(run));
-        }
-        return payload;
-    }
-
-    private Map<String, Object> buildRunAuditTags(GovQualityRun run) {
-        if (run == null) {
-            return Collections.emptyMap();
-        }
-        Map<String, Object> tags = new LinkedHashMap<>();
-        if (run.getId() != null) {
-            tags.put("qualityRunId", run.getId().toString());
-        }
-        GovRule rule = run.getRule();
-        if (rule != null && rule.getId() != null) {
-            tags.put("qualityRuleId", rule.getId().toString());
-        }
-        GovRuleVersion version = run.getRuleVersion();
-        if (version != null && version.getId() != null) {
-            tags.put("qualityRuleVersionId", version.getId().toString());
-        }
-        if (run.getDatasetId() != null) {
-            tags.put("datasetId", run.getDatasetId().toString());
-        }
-        if (StringUtils.isNotBlank(run.getSeverity())) {
-            tags.put("severity", run.getSeverity());
-        }
-        if (StringUtils.isNotBlank(run.getTriggerType())) {
-            tags.put("triggerType", run.getTriggerType());
-        }
-        if (StringUtils.isNotBlank(run.getStatus())) {
-            tags.put("status", run.getStatus());
-        }
-        return tags.isEmpty() ? Collections.emptyMap() : tags;
-    }
-
-    private void requireReadableRun(GovQualityRun run, String activeDeptHeader) {
-        if (run == null || run.getDatasetId() == null) {
-            throw new org.springframework.security.access.AccessDeniedException("质量运行缺少可授权的数据集");
-        }
-        qualityDatasetReadGuard.requireReadable(run.getDatasetId(), activeDeptHeader);
-    }
-
-    private List<GovQualityRun> filterReadableRuns(List<GovQualityRun> runs, String activeDeptHeader) {
-        if (runs == null || runs.isEmpty()) {
-            return Collections.emptyList();
-        }
-        Set<UUID> datasetIds = runs
-            .stream()
-            .map(GovQualityRun::getDatasetId)
-            .filter(java.util.Objects::nonNull)
-            .collect(Collectors.toSet());
-        if (datasetIds.isEmpty()) {
-            return Collections.emptyList();
-        }
-        Set<UUID> readableIds = qualityDatasetReadGuard.readableDatasetIds(
-            datasetRepository.findAllById(datasetIds),
-            activeDeptHeader
-        );
-        return runs.stream().filter(run -> readableIds.contains(run.getDatasetId())).collect(Collectors.toList());
+        return runAuditCoordinator.buildRunAuditPayload(run, summary);
     }
 
     private GovRule resolveRule(UUID ruleId) {
@@ -921,54 +665,11 @@ public class QualityRunService {
     }
 
     private String resolveErrorCategory(List<StatementExecutionResult> results) {
-        if (results == null || results.isEmpty()) {
-            return null;
-        }
-        StatementExecutionResult failed = results
-            .stream()
-            .filter(item -> item != null && item.status() == StatementExecutionResult.Status.FAILED)
-            .findFirst()
-            .orElse(null);
-        if (failed == null) {
-            return null;
-        }
-        if (StringUtils.isNotBlank(failed.errorCode())) {
-            return normalizeErrorCode(failed.errorCode());
-        }
-        return resolveErrorCategory(failed.message());
+        return QualityRunOutcomeSemantics.dominantFailureCategory(results);
     }
 
     private String resolveErrorCategory(String rawMessage) {
-        String message = StringUtils.trimToEmpty(rawMessage).toLowerCase(Locale.ROOT);
-        if (message.isEmpty()) {
-            return "UNKNOWN";
-        }
-        if (message.contains("permission denied") || message.contains("access denied") || message.contains("not authorized")) {
-            return "PERMISSION_DENIED";
-        }
-        if (message.contains("timeout") || message.contains("timed out")) {
-            return "TIMEOUT";
-        }
-        if (message.contains("syntax error") || message.contains("parse exception") || message.contains("parser")) {
-            return "SQL_SYNTAX";
-        }
-        if (
-            message.contains("does not exist") ||
-            message.contains("not found") ||
-            message.contains("unknown table") ||
-            message.contains("unknown column")
-        ) {
-            return "OBJECT_NOT_FOUND";
-        }
-        if (message.contains("connection refused") || message.contains("connection reset") || message.contains("connection closed")) {
-            return "CONNECTION_ERROR";
-        }
-        return "EXECUTION_ERROR";
-    }
-
-    private String normalizeErrorCode(String errorCode) {
-        String normalized = StringUtils.trimToEmpty(errorCode).toUpperCase(Locale.ROOT).replace('-', '_');
-        return normalized.matches("[A-Z0-9_]{1,64}") ? normalized : "EXECUTION_ERROR";
+        return QualityRunOutcomeSemantics.classifyExecutionError(rawMessage);
     }
 
     private String summaryMessage(List<StatementExecutionResult> results) {
@@ -999,7 +700,7 @@ public class QualityRunService {
                     item.put(
                         "errorCategory",
                         StringUtils.isNotBlank(result.errorCode())
-                            ? normalizeErrorCode(result.errorCode())
+                            ? QualityRunOutcomeSemantics.normalizeErrorCode(result.errorCode())
                             : resolveErrorCategory(result.message())
                     );
                 }
@@ -1020,43 +721,6 @@ public class QualityRunService {
         };
     }
 
-    private QualityRunDto toSafeDto(GovQualityRun run, List<GovQualityMetric> metrics) {
-        QualityRunDto dto = GovernanceMapper.toDto(run, metrics);
-        if (dto == null) {
-            return null;
-        }
-        dto.setInputParamsJson(null);
-        dto.setMetricsJson(null);
-        dto.setMessage(safeRunMessage(run));
-        if (dto.getMetrics() != null) {
-            dto.getMetrics().forEach(metric -> metric.setDetail(safeMetricDetail(parseMetricStatus(metric.getStatus()))));
-        }
-        return dto;
-    }
-
-    private StatementExecutionResult.Status parseMetricStatus(String status) {
-        try {
-            return StatementExecutionResult.Status.valueOf(StringUtils.trimToEmpty(status).toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException ignored) {
-            return null;
-        }
-    }
-
-    private String safeRunMessage(GovQualityRun run) {
-        if (run == null) {
-            return null;
-        }
-        String status = StringUtils.trimToEmpty(run.getStatus()).toUpperCase(Locale.ROOT);
-        return switch (status) {
-            case "QUEUED" -> "质量检测已进入队列";
-            case "RUNNING" -> "正在执行质量检测";
-            case "SUCCEEDED" -> "质量检测执行成功";
-            case "SKIPPED" -> "质量检测已跳过";
-            case "FAILED" -> "质量检测执行失败";
-            default -> "质量检测状态未知";
-        };
-    }
-
     private String writeJson(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -1065,10 +729,4 @@ public class QualityRunService {
         }
     }
 
-    private static final class QualityRunAuditWriteException extends RuntimeException {
-
-        private QualityRunAuditWriteException(RuntimeException cause) {
-            super("质量运行审计写入失败", cause);
-        }
-    }
 }

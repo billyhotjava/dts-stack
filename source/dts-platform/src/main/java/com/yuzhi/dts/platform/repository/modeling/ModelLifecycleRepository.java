@@ -382,6 +382,130 @@ public class ModelLifecycleRepository {
     }
 
     /**
+     * Forward-undo-only DBT writer.
+     *
+     * <p>The current implementation is compared against the post-import ModelSpec and
+     * implementation pins, while the replacement head is attached to the newly appended restored
+     * ModelSpec revision. Existing save/import writers intentionally retain their original CAS
+     * semantics.
+     */
+    @Transactional
+    public int restoreImportedDbtImplementation(
+        String tenantId,
+        String actorId,
+        ModelSpecView restoredModel,
+        String projectKey,
+        String dbtUniqueId,
+        SaveImplementationCommand restoredCommand,
+        int expectedCurrentModelRevision,
+        String expectedCurrentModelChecksum,
+        int expectedCurrentImplementationRevision,
+        String expectedCurrentImplementationChecksum,
+        String expectedRestoredImplementationChecksum,
+        Instant now
+    ) {
+        requireImportedDbtCommand(restoredModel, ModelStatus.DRAFT, projectKey, dbtUniqueId, restoredCommand);
+        String restoredImplementationChecksum = implementationChecksum(restoredCommand);
+        if (
+            expectedCurrentModelRevision < 1 ||
+            expectedCurrentImplementationRevision < 1 ||
+            expectedCurrentModelChecksum == null ||
+            !expectedCurrentModelChecksum.matches("^[0-9a-f]{64}$") ||
+            expectedCurrentImplementationChecksum == null ||
+            !expectedCurrentImplementationChecksum.matches("^[0-9a-f]{64}$") ||
+            expectedRestoredImplementationChecksum == null ||
+            !expectedRestoredImplementationChecksum.matches("^[0-9a-f]{64}$") ||
+            !expectedRestoredImplementationChecksum.equals(restoredImplementationChecksum)
+        ) {
+            throw new IllegalArgumentException("Invalid imported DBT forward-undo pins");
+        }
+
+        String inputs = implementationJson(restoredCommand.inputs());
+        String mappings = implementationJson(restoredCommand.fieldMappings());
+        String settings = implementationJson(restoredCommand.settings());
+        Integer changed = jdbcTemplate.queryForObject(
+            """
+            with locked_model as (
+                select spec.id
+                  from modeling_model_spec spec
+                 where spec.tenant_id = ? and spec.id = ? and spec.plan_id = ?
+                   and spec.revision = ? and spec.current_checksum = ? and spec.status = 'DRAFT'
+                 for share
+            ), locked_head as (
+                select implementation.id, implementation.implementation_revision
+                  from modeling_model_implementation implementation
+                  join locked_model on locked_model.id = implementation.model_spec_id
+                 where implementation.tenant_id = ?
+                   and implementation.ownership = 'DBT_MANAGED'
+                   and implementation.status = 'ACTIVE'
+                   and implementation.project_key = ? and implementation.dbt_unique_id = ?
+                   and implementation.model_revision = ? and implementation.model_checksum = ?
+                   and implementation.implementation_revision = ?
+                   and implementation.current_implementation_checksum = ?
+                 for update
+            ), saved_head as (
+                update modeling_model_implementation implementation
+                   set plan_id = ?, model_revision = ?, model_checksum = ?, status = 'ACTIVE',
+                       idempotency_key = ?,
+                       implementation_revision = locked_head.implementation_revision + 1,
+                       current_implementation_checksum = ?, input_mode = ?,
+                       inputs_json = cast(? as jsonb), field_mappings_json = cast(? as jsonb),
+                       settings_json = cast(? as jsonb), materialization = ?, last_modified_date = ?
+                  from locked_head
+                 where implementation.tenant_id = ? and implementation.id = locked_head.id
+                returning implementation.tenant_id, implementation.id,
+                          implementation.implementation_revision,
+                          implementation.current_implementation_checksum,
+                          implementation.input_mode, implementation.inputs_json,
+                          implementation.field_mappings_json, implementation.settings_json,
+                          implementation.ownership, implementation.materialization
+            ), inserted_revision as (
+                insert into modeling_model_implementation_revision (
+                    id, tenant_id, implementation_id, revision, content_checksum, input_mode,
+                    inputs_json, field_mappings_json, settings_json, ownership, materialization,
+                    created_by, created_date
+                )
+                select ?, tenant_id, id, implementation_revision,
+                       current_implementation_checksum, input_mode, inputs_json,
+                       field_mappings_json, settings_json, ownership, materialization, ?, ?
+                  from saved_head
+                returning 1
+            )
+            select count(*)::int from saved_head
+            """,
+            Integer.class,
+            tenantId,
+            restoredModel.id(),
+            restoredModel.planId(),
+            restoredModel.revision(),
+            restoredModel.checksum(),
+            tenantId,
+            projectKey.trim(),
+            dbtUniqueId.trim(),
+            expectedCurrentModelRevision,
+            expectedCurrentModelChecksum,
+            expectedCurrentImplementationRevision,
+            expectedCurrentImplementationChecksum,
+            restoredModel.planId(),
+            restoredModel.revision(),
+            restoredModel.checksum(),
+            restoredCommand.idempotencyKey(),
+            restoredImplementationChecksum,
+            restoredCommand.inputMode().name(),
+            inputs,
+            mappings,
+            settings,
+            restoredCommand.materialization(),
+            Timestamp.from(now),
+            tenantId,
+            UUID.randomUUID(),
+            actorId,
+            Timestamp.from(now)
+        );
+        return changed == null ? 0 : changed;
+    }
+
+    /**
      * Explicitly replaces a DBT-managed implementation head with a designer-owned revision.
      * Ordinary saves intentionally keep their ownership equality check and cannot use this path.
      */

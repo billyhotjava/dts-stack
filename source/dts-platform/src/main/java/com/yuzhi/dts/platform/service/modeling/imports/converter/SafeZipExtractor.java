@@ -28,6 +28,31 @@ public final class SafeZipExtractor {
     private static final long MAX_TOTAL_BYTES = 64L * 1024 * 1024;
     private static final long MIN_EXPANDED_BYTES = 4L * 1024 * 1024;
     private static final long MAX_COMPRESSION_RATIO = 40L;
+    private static final Set<String> SENSITIVE_FILE_NAMES = Set.of(
+        "profiles.yml",
+        "profiles.yaml",
+        "credentials",
+        "credentials.json",
+        "credentials.yml",
+        "credentials.yaml",
+        "service-account.json",
+        "service_account.json",
+        "application-default-credentials.json",
+        "id_rsa",
+        "id_dsa",
+        "id_ecdsa",
+        "id_ed25519",
+        ".netrc"
+    );
+    private static final Set<String> SENSITIVE_FILE_EXTENSIONS = Set.of(
+        ".pem",
+        ".key",
+        ".p8",
+        ".p12",
+        ".pfx",
+        ".jks",
+        ".keystore"
+    );
 
     private final CleanupPass cleanupPass;
 
@@ -101,6 +126,12 @@ public final class SafeZipExtractor {
                 if (isNestedArchive(entry.getName())) {
                     throw new ArchiveException("UNSAFE_PATH", "Nested archives are not allowed");
                 }
+                if (isSensitiveFile(entry.getName())) {
+                    throw new ArchiveException(
+                        "SENSITIVE_FILE",
+                        "Archive contains prohibited credential material"
+                    );
+                }
 
                 if (entry.isDirectory()) {
                     Files.createDirectories(target);
@@ -159,6 +190,19 @@ public final class SafeZipExtractor {
         return normalized.endsWith(".zip") || normalized.endsWith(".jar") || normalized.endsWith(".war");
     }
 
+    private static boolean isSensitiveFile(String name) {
+        String normalized = name.toLowerCase(Locale.ROOT);
+        int separator = normalized.lastIndexOf('/');
+        String fileName = separator < 0 ? normalized : normalized.substring(separator + 1);
+        if (fileName.equals(".env") || fileName.startsWith(".env.")) {
+            return true;
+        }
+        if (SENSITIVE_FILE_NAMES.contains(fileName)) {
+            return true;
+        }
+        return SENSITIVE_FILE_EXTENSIONS.stream().anyMatch(fileName::endsWith);
+    }
+
     private void deleteRecursively(Path root) {
         if (root == null || Files.notExists(root)) {
             return;
@@ -167,12 +211,16 @@ public final class SafeZipExtractor {
             cleanupPass.delete(root);
             return;
         } catch (IOException firstFailure) {
-            LOG.warn("Temporary model import archive cleanup failed; retrying once", firstFailure);
+            LOG.warn("Temporary model import archive cleanup failed; retrying once");
         }
         try {
             cleanupPass.delete(root);
         } catch (IOException secondFailure) {
-            LOG.warn("Temporary model import archive cleanup still failed after retry", secondFailure);
+            LOG.error("Temporary model import archive cleanup still failed after retry");
+            throw new ArchiveException(
+                "CLEANUP_FAILED",
+                "Temporary model import archive cleanup failed"
+            );
         }
     }
 

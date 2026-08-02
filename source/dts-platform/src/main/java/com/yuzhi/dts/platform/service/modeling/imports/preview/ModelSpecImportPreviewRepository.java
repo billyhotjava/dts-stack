@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyPayloadCodec;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyPlanContract.ApplyPlan;
+import com.yuzhi.dts.platform.service.modeling.imports.reconciliation.ModelSpecImportReconciliationContract.MergeCheckpoint;
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewContract.Action;
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewContract.ConversionMode;
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewContract.Kind;
@@ -190,6 +191,89 @@ public class ModelSpecImportPreviewRepository {
             projectKey,
             dbtUniqueId
         )
+            .stream()
+            .findFirst();
+    }
+
+    /**
+     * Returns only an explicitly accepted apply checkpoint. Historical apply rows pre-dating the
+     * reconciliation contract intentionally return empty so re-import fails closed.
+     */
+    @Transactional(readOnly = true)
+    public Optional<MergeCheckpoint> findLatestMergeCheckpoint(
+        String tenantId,
+        UUID planId,
+        UUID modelSpecId,
+        UUID implementationId,
+        String projectKey,
+        String dbtUniqueId
+    ) {
+        return jdbcTemplate
+            .query(
+                """
+                select result.merge_checkpoint_json::text as merge_checkpoint_json
+                  from modeling_model_spec_import_apply_result result
+                  join modeling_model_spec_import_apply_attempt attempt
+                    on attempt.id = result.attempt_id and attempt.run_id = result.run_id
+                 where attempt.tenant_id = ?
+                   and attempt.plan_id = ?
+                   and attempt.operation_type = 'APPLY'
+                   and attempt.status in ('SUCCESS', 'PARTIAL')
+                   and result.model_spec_id = ?
+                   and result.project_key = ?
+                   and result.dbt_unique_id = ?
+                   and result.status in ('CREATED', 'UPDATED', 'SKIPPED')
+                   and result.merge_checkpoint_json is not null
+                   and result.merge_checkpoint_json ->> 'tenantId' = ?
+                   and result.merge_checkpoint_json ->> 'projectKey' = result.project_key
+                   and result.merge_checkpoint_json ->> 'dbtUniqueId' = result.dbt_unique_id
+                   and (result.merge_checkpoint_json ->> 'acceptedImplementationRevision')::int = result.implementation_revision
+                   and result.merge_checkpoint_json ->> 'acceptedImplementationChecksum' = result.implementation_checksum
+                   and (result.merge_checkpoint_json ->> 'mappedModelSpecRevision')::int = result.mapped_model_spec_revision
+                   and result.merge_checkpoint_json ->> 'mappedModelSpecEtag' = result.mapped_model_spec_etag
+                   and exists (
+                       select 1
+                         from modeling_model_implementation implementation
+                        where implementation.tenant_id = attempt.tenant_id
+                          and implementation.id = ?
+                          and implementation.model_spec_id = result.model_spec_id
+                          and implementation.plan_id = attempt.plan_id
+                          and implementation.project_key = result.project_key
+                          and implementation.dbt_unique_id = result.dbt_unique_id
+                   )
+                 order by result.created_date desc, result.id desc
+                 limit 1
+                """,
+                (row, rowNumber) -> readValue(row.getString("merge_checkpoint_json"), MergeCheckpoint.class),
+                tenantId,
+                planId,
+                modelSpecId,
+                projectKey,
+                dbtUniqueId,
+                tenantId,
+                implementationId
+            )
+            .stream()
+            .findFirst();
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<JsonNode> findCurrentModelSpecSnapshot(String tenantId, UUID modelSpecId, int revision) {
+        return jdbcTemplate
+            .query(
+                """
+                select revision.snapshot_json::text as snapshot_json
+                  from modeling_model_spec_revision revision
+                 where revision.tenant_id = ?
+                   and revision.model_spec_id = ?
+                   and revision.revision = ?
+                   and revision.contract_version = 2
+                """,
+                (row, rowNumber) -> readTree(row.getString("snapshot_json")),
+                tenantId,
+                modelSpecId,
+                revision
+            )
             .stream()
             .findFirst();
     }
@@ -600,6 +684,14 @@ public class ModelSpecImportPreviewRepository {
             return objectMapper.readTree(json);
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Stored model import preview projection is invalid", exception);
+        }
+    }
+
+    private <T> T readValue(String json, Class<T> type) {
+        try {
+            return objectMapper.readValue(json, type);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Stored model import reconciliation checkpoint is invalid", exception);
         }
     }
 

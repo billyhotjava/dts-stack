@@ -1,0 +1,365 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260802_01_model_spec_import_apply_status_canonical" author="codex">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="modeling_model_spec_import_apply_attempt"/>
+            <tableExists tableName="modeling_model_spec_import_apply_result"/>
+            <sqlCheck expectedResult="0">
+                WITH facts AS (
+                    SELECT attempt.id,
+                           attempt.status,
+                           attempt.summary_json,
+                           jsonb_array_length(attempt.selected_closure_json) AS selected,
+                           count(result.id) AS terminal,
+                           count(*) FILTER (WHERE result.status = 'CREATED') AS created,
+                           count(*) FILTER (WHERE result.status = 'UPDATED') AS updated,
+                           count(*) FILTER (WHERE result.status = 'SKIPPED') AS skipped,
+                           count(*) FILTER (WHERE result.status = 'REPLAYED') AS replayed,
+                           count(*) FILTER (WHERE result.status = 'FAILED') AS failed,
+                           count(*) FILTER (WHERE result.status = 'BLOCKED') AS blocked
+                      FROM modeling_model_spec_import_apply_attempt attempt
+                      LEFT JOIN modeling_model_spec_import_apply_result result
+                        ON result.attempt_id = attempt.id
+                     GROUP BY attempt.id
+                )
+                SELECT count(*)
+                  FROM facts
+                 WHERE terminal &gt; selected
+                    OR (status &lt;&gt; 'RUNNING' AND terminal &lt;&gt; selected)
+                    OR (status = 'RUNNING' AND terminal = selected)
+                    OR (
+                        status &lt;&gt; 'RUNNING'
+                        AND (
+                            COALESCE((summary_json -&gt;&gt; 'total')::int, -1) &lt;&gt; terminal
+                            OR COALESCE((summary_json -&gt;&gt; 'created')::int, -1) &lt;&gt; created
+                            OR COALESCE((summary_json -&gt;&gt; 'updated')::int, -1) &lt;&gt; updated
+                            OR COALESCE((summary_json -&gt;&gt; 'skipped')::int, -1) &lt;&gt; skipped
+                            OR COALESCE((summary_json -&gt;&gt; 'replayed')::int, -1) &lt;&gt; replayed
+                            OR COALESCE((summary_json -&gt;&gt; 'failed')::int, -1) &lt;&gt; failed
+                            OR COALESCE((summary_json -&gt;&gt; 'blocked')::int, -1) &lt;&gt; blocked
+                        )
+                    )
+            </sqlCheck>
+            <sqlCheck expectedResult="0">
+                SELECT count(*)
+                  FROM modeling_model_spec_import_apply_attempt attempt
+                 WHERE EXISTS (
+                           SELECT expected.dbt_unique_id
+                             FROM jsonb_array_elements_text(attempt.selected_closure_json)
+                                  AS expected(dbt_unique_id)
+                           EXCEPT
+                           SELECT result.dbt_unique_id
+                             FROM modeling_model_spec_import_apply_result result
+                            WHERE result.attempt_id = attempt.id
+                       )
+                    OR EXISTS (
+                           SELECT result.dbt_unique_id
+                             FROM modeling_model_spec_import_apply_result result
+                            WHERE result.attempt_id = attempt.id
+                           EXCEPT
+                           SELECT expected.dbt_unique_id
+                             FROM jsonb_array_elements_text(attempt.selected_closure_json)
+                                  AS expected(dbt_unique_id)
+                       )
+            </sqlCheck>
+        </preConditions>
+
+        <sql>
+            ALTER TABLE modeling_model_spec_import_apply_attempt
+                DROP CONSTRAINT ck_model_spec_import_apply_attempt_status;
+            ALTER TABLE modeling_model_spec_import_apply_result
+                DROP CONSTRAINT ck_model_spec_import_apply_result_status;
+
+            UPDATE modeling_model_spec_import_apply_result
+               SET status = 'SKIPPED'
+             WHERE status = 'REPLAYED';
+
+            UPDATE modeling_model_spec_import_apply_result
+               SET issues_json = '[]'::jsonb
+             WHERE issues_json IS NULL OR jsonb_typeof(issues_json) &lt;&gt; 'array';
+
+            UPDATE modeling_model_spec_import_apply_result result
+               SET issues_json = jsonb_build_array(
+                   jsonb_build_object(
+                       'code', 'MODEL_IMPORT_LEGACY_FAILURE',
+                       'severity', 'ERROR',
+                       'stage', 'APPLY',
+                       'category', 'INTERNAL',
+                       'retryable', result.status = 'FAILED',
+                       'fieldPath', '$.items',
+                       'modelUniqueId', result.dbt_unique_id,
+                       'message', 'A legacy apply failure requires operator review',
+                       'recoveryAction', CASE WHEN result.status = 'FAILED' THEN 'RETRY' ELSE 'CONTACT_ADMIN' END,
+                       'correlationId', 'legacy-' || md5(result.id::text || ':0')
+                   )
+               )
+             WHERE result.status IN ('FAILED', 'BLOCKED')
+               AND jsonb_array_length(result.issues_json) = 0;
+
+            WITH enriched_issues AS (
+                SELECT result.id,
+                       COALESCE(
+                           jsonb_agg(
+                               issue.value || jsonb_build_object(
+                                   'code', to_jsonb(
+                                       CASE
+                                           WHEN btrim(COALESCE(issue.value -&gt;&gt; 'code', '')) = ''
+                                               THEN 'MODEL_IMPORT_LEGACY_FAILURE'
+                                           ELSE issue.value -&gt;&gt; 'code'
+                                       END
+                                   ),
+                                   'severity', to_jsonb(
+                                       CASE
+                                           WHEN issue.value -&gt;&gt; 'severity' IN ('ERROR', 'WARNING', 'INFO')
+                                               THEN issue.value -&gt;&gt; 'severity'
+                                           ELSE 'ERROR'
+                                       END
+                                   ),
+                                   'stage', to_jsonb(
+                                       CASE
+                                           WHEN issue.value -&gt;&gt; 'stage' IN (
+                                               'INSPECT', 'MAPPING', 'PREVIEW', 'APPLY', 'RETRY', 'UNDO'
+                                           ) THEN issue.value -&gt;&gt; 'stage'
+                                           WHEN issue.value -&gt;&gt; 'code' = 'MODEL_IMPORT_APPLY_INTERRUPTED' THEN 'RETRY'
+                                           ELSE 'APPLY'
+                                       END
+                                   ),
+                                   'category', to_jsonb(
+                                       CASE
+                                           WHEN issue.value -&gt;&gt; 'category' IN (
+                                               'VALIDATION', 'SECURITY', 'DEPENDENCY', 'CONFLICT',
+                                               'PERMISSION', 'STALE', 'PERSISTENCE', 'INTERNAL'
+                                           ) THEN issue.value -&gt;&gt; 'category'
+                                           WHEN issue.value -&gt;&gt; 'code' = 'MODEL_IMPORT_APPLY_INTERRUPTED' THEN 'PERSISTENCE'
+                                           WHEN issue.value -&gt;&gt; 'code' = 'MODEL_IMPORT_DEPENDENCY_FAILED' THEN 'DEPENDENCY'
+                                           WHEN issue.value -&gt;&gt; 'code' = 'MODEL_IMPORT_IDEMPOTENCY_CONFLICT' THEN 'CONFLICT'
+                                           WHEN issue.value -&gt;&gt; 'code' = 'MODEL_IMPORT_APPLY_CANDIDATE_NOT_SELECTED' THEN 'VALIDATION'
+                                           ELSE 'INTERNAL'
+                                       END
+                                   ),
+                                   'retryable', CASE
+                                       WHEN jsonb_typeof(issue.value -&gt; 'retryable') = 'boolean'
+                                           THEN issue.value -&gt; 'retryable'
+                                       ELSE to_jsonb(result.status = 'FAILED')
+                                   END,
+                                   'modelUniqueId', to_jsonb(
+                                       COALESCE(NULLIF(btrim(issue.value -&gt;&gt; 'modelUniqueId'), ''), result.dbt_unique_id)
+                                   ),
+                                   'message', to_jsonb(
+                                       COALESCE(
+                                           NULLIF(btrim(issue.value -&gt;&gt; 'message'), ''),
+                                           'A legacy apply failure requires operator review'
+                                       )
+                                   ),
+                                   'recoveryAction', to_jsonb(
+                                       CASE
+                                           WHEN issue.value -&gt;&gt; 'recoveryAction' IN (
+                                               'REUPLOAD', 'COMPLETE_MAPPING', 'INCLUDE_DEPENDENCY',
+                                               'RESOLVE_CONFLICT', 'REAUTHORIZE', 'REFRESH_PREVIEW',
+                                               'RETRY', 'OPEN_MODEL', 'CONTACT_ADMIN', 'NONE'
+                                           ) THEN issue.value -&gt;&gt; 'recoveryAction'
+                                           WHEN issue.value -&gt;&gt; 'code' = 'MODEL_IMPORT_APPLY_CANDIDATE_NOT_SELECTED'
+                                               THEN 'REFRESH_PREVIEW'
+                                           WHEN result.status = 'FAILED' THEN 'RETRY'
+                                           ELSE 'CONTACT_ADMIN'
+                                       END
+                                   ),
+                                   'correlationId', to_jsonb(
+                                       COALESCE(
+                                           NULLIF(btrim(issue.value -&gt;&gt; 'correlationId'), ''),
+                                           'legacy-' || md5(result.id::text || ':' || issue.ordinality::text)
+                                       )
+                                   )
+                               ) || CASE
+                                   WHEN COALESCE(issue.value -&gt;&gt; 'category', '') = 'DEPENDENCY'
+                                        OR issue.value -&gt;&gt; 'code' = 'MODEL_IMPORT_DEPENDENCY_FAILED'
+                                   THEN jsonb_build_object(
+                                       'dependencyUniqueId', COALESCE(
+                                           NULLIF(btrim(issue.value -&gt;&gt; 'dependencyUniqueId'), ''),
+                                           'legacy-unresolved-' || md5(result.id::text || ':' || issue.ordinality::text)
+                                       )
+                                   )
+                                   ELSE '{}'::jsonb
+                               END
+                               ORDER BY issue.ordinality
+                           ) FILTER (WHERE issue.value IS NOT NULL),
+                           '[]'::jsonb
+                       ) AS issues_json
+                  FROM modeling_model_spec_import_apply_result result
+                  LEFT JOIN LATERAL jsonb_array_elements(COALESCE(result.issues_json, '[]'::jsonb))
+                       WITH ORDINALITY AS issue(value, ordinality) ON TRUE
+                 GROUP BY result.id, result.status
+            )
+            UPDATE modeling_model_spec_import_apply_result result
+               SET issues_json = enriched_issues.issues_json
+              FROM enriched_issues
+             WHERE result.id = enriched_issues.id;
+
+            WITH facts AS (
+                SELECT attempt.id,
+                       jsonb_array_length(attempt.selected_closure_json) AS selected,
+                       count(result.id)::int AS terminal,
+                       count(*) FILTER (WHERE result.status = 'CREATED')::int AS created,
+                       count(*) FILTER (WHERE result.status = 'UPDATED')::int AS updated,
+                       count(*) FILTER (WHERE result.status = 'SKIPPED')::int AS skipped,
+                       count(*) FILTER (WHERE result.status = 'FAILED')::int AS failed,
+                       count(*) FILTER (WHERE result.status = 'BLOCKED')::int AS blocked
+                  FROM modeling_model_spec_import_apply_attempt attempt
+                  LEFT JOIN modeling_model_spec_import_apply_result result
+                    ON result.attempt_id = attempt.id
+                 GROUP BY attempt.id
+            ), canonical AS (
+                SELECT id,
+                       selected,
+                       selected - terminal AS pending,
+                       created + updated AS succeeded,
+                       created,
+                       updated,
+                       skipped,
+                       failed,
+                       blocked,
+                       CASE
+                           WHEN selected - terminal &gt; 0 THEN 'RUNNING'
+                           WHEN failed + blocked = 0 AND created + updated + skipped = selected THEN 'SUCCESS'
+                           WHEN created + updated + skipped &gt; 0 AND failed + blocked &gt; 0 THEN 'PARTIAL'
+                           WHEN created + updated + skipped = 0 AND failed &gt; 0 THEN 'FAILED'
+                           WHEN created + updated + skipped = 0 AND failed = 0 AND blocked &gt; 0 THEN 'BLOCKED'
+                       END AS status
+                  FROM facts
+            )
+            UPDATE modeling_model_spec_import_apply_attempt attempt
+               SET status = canonical.status,
+                   summary_json = jsonb_build_object(
+                       'selected', canonical.selected,
+                       'pending', canonical.pending,
+                       'succeeded', canonical.succeeded,
+                       'created', canonical.created,
+                       'updated', canonical.updated,
+                       'skipped', canonical.skipped,
+                       'failed', canonical.failed,
+                       'blocked', canonical.blocked
+                   )
+              FROM canonical
+             WHERE attempt.id = canonical.id;
+
+            ALTER TABLE modeling_model_spec_import_apply_attempt
+                ADD CONSTRAINT ck_model_spec_import_apply_attempt_status
+                CHECK (status IN ('RUNNING', 'SUCCESS', 'PARTIAL', 'FAILED', 'BLOCKED')),
+                ADD CONSTRAINT ck_model_spec_import_apply_summary_canonical
+                CHECK (
+                    jsonb_typeof(summary_json) = 'object'
+                    AND jsonb_typeof(summary_json -&gt; 'selected') = 'number'
+                    AND jsonb_typeof(summary_json -&gt; 'pending') = 'number'
+                    AND jsonb_typeof(summary_json -&gt; 'succeeded') = 'number'
+                    AND jsonb_typeof(summary_json -&gt; 'created') = 'number'
+                    AND jsonb_typeof(summary_json -&gt; 'updated') = 'number'
+                    AND jsonb_typeof(summary_json -&gt; 'skipped') = 'number'
+                    AND jsonb_typeof(summary_json -&gt; 'failed') = 'number'
+                    AND jsonb_typeof(summary_json -&gt; 'blocked') = 'number'
+                    AND (summary_json -&gt;&gt; 'selected')::int &gt;= 0
+                    AND (summary_json -&gt;&gt; 'pending')::int &gt;= 0
+                    AND (summary_json -&gt;&gt; 'succeeded')::int &gt;= 0
+                    AND (summary_json -&gt;&gt; 'created')::int &gt;= 0
+                    AND (summary_json -&gt;&gt; 'updated')::int &gt;= 0
+                    AND (summary_json -&gt;&gt; 'skipped')::int &gt;= 0
+                    AND (summary_json -&gt;&gt; 'failed')::int &gt;= 0
+                    AND (summary_json -&gt;&gt; 'blocked')::int &gt;= 0
+                    AND (summary_json -&gt;&gt; 'succeeded')::int =
+                        (summary_json -&gt;&gt; 'created')::int + (summary_json -&gt;&gt; 'updated')::int
+                    AND (summary_json -&gt;&gt; 'selected')::int =
+                        (summary_json -&gt;&gt; 'pending')::int +
+                        (summary_json -&gt;&gt; 'created')::int +
+                        (summary_json -&gt;&gt; 'updated')::int +
+                        (summary_json -&gt;&gt; 'skipped')::int +
+                        (summary_json -&gt;&gt; 'failed')::int +
+                        (summary_json -&gt;&gt; 'blocked')::int
+                    AND (
+                        (status = 'RUNNING' AND (summary_json -&gt;&gt; 'pending')::int &gt; 0)
+                        OR (
+                            status = 'SUCCESS'
+                            AND (summary_json -&gt;&gt; 'pending')::int = 0
+                            AND (summary_json -&gt;&gt; 'failed')::int + (summary_json -&gt;&gt; 'blocked')::int = 0
+                            AND (summary_json -&gt;&gt; 'succeeded')::int + (summary_json -&gt;&gt; 'skipped')::int =
+                                (summary_json -&gt;&gt; 'selected')::int
+                        )
+                        OR (
+                            status = 'PARTIAL'
+                            AND (summary_json -&gt;&gt; 'pending')::int = 0
+                            AND (summary_json -&gt;&gt; 'succeeded')::int + (summary_json -&gt;&gt; 'skipped')::int &gt; 0
+                            AND (summary_json -&gt;&gt; 'failed')::int + (summary_json -&gt;&gt; 'blocked')::int &gt; 0
+                        )
+                        OR (
+                            status = 'FAILED'
+                            AND (summary_json -&gt;&gt; 'pending')::int = 0
+                            AND (summary_json -&gt;&gt; 'succeeded')::int + (summary_json -&gt;&gt; 'skipped')::int = 0
+                            AND (summary_json -&gt;&gt; 'failed')::int &gt; 0
+                        )
+                        OR (
+                            status = 'BLOCKED'
+                            AND (summary_json -&gt;&gt; 'pending')::int = 0
+                            AND (summary_json -&gt;&gt; 'succeeded')::int + (summary_json -&gt;&gt; 'skipped')::int = 0
+                            AND (summary_json -&gt;&gt; 'failed')::int = 0
+                            AND (summary_json -&gt;&gt; 'blocked')::int &gt; 0
+                        )
+                    )
+                );
+
+            ALTER TABLE modeling_model_spec_import_apply_result
+                ADD CONSTRAINT ck_model_spec_import_apply_result_status
+                CHECK (status IN ('CREATED', 'UPDATED', 'SKIPPED', 'FAILED', 'BLOCKED')),
+                ADD CONSTRAINT ck_model_spec_import_apply_issue_contract
+                CHECK (
+                    jsonb_typeof(issues_json) = 'array'
+                    AND (
+                        status NOT IN ('FAILED', 'BLOCKED')
+                        OR jsonb_array_length(issues_json) &gt; 0
+                    )
+                    AND NOT jsonb_path_exists(
+                        issues_json,
+                        '$[*] ? (
+                            !exists(@.code) || @.code == "" ||
+                            !exists(@.severity) || !(@.severity == "ERROR" || @.severity == "WARNING" || @.severity == "INFO") ||
+                            !exists(@.stage) || !(
+                                @.stage == "INSPECT" || @.stage == "MAPPING" || @.stage == "PREVIEW" ||
+                                @.stage == "APPLY" || @.stage == "RETRY" || @.stage == "UNDO"
+                            ) ||
+                            !exists(@.category) || !(
+                                @.category == "VALIDATION" || @.category == "SECURITY" ||
+                                @.category == "DEPENDENCY" || @.category == "CONFLICT" ||
+                                @.category == "PERMISSION" || @.category == "STALE" ||
+                                @.category == "PERSISTENCE" || @.category == "INTERNAL"
+                            ) ||
+                            !exists(@.retryable) || !(@.retryable == true || @.retryable == false) ||
+                            !exists(@.modelUniqueId) || @.modelUniqueId == "" ||
+                            !exists(@.message) || @.message == "" ||
+                            !exists(@.recoveryAction) || !(
+                                @.recoveryAction == "REUPLOAD" || @.recoveryAction == "COMPLETE_MAPPING" ||
+                                @.recoveryAction == "INCLUDE_DEPENDENCY" || @.recoveryAction == "RESOLVE_CONFLICT" ||
+                                @.recoveryAction == "REAUTHORIZE" || @.recoveryAction == "REFRESH_PREVIEW" ||
+                                @.recoveryAction == "RETRY" || @.recoveryAction == "OPEN_MODEL" ||
+                                @.recoveryAction == "CONTACT_ADMIN" || @.recoveryAction == "NONE"
+                            ) ||
+                            !exists(@.correlationId) || @.correlationId == "" || @.correlationId == null ||
+                            (@.category == "DEPENDENCY" &amp;&amp; (
+                                !exists(@.dependencyUniqueId) || @.dependencyUniqueId == ""
+                            ))
+                        )'
+                    )
+                );
+        </sql>
+
+        <rollback>
+            <sql splitStatements="false">
+                DO $$
+                BEGIN
+                    RAISE EXCEPTION 'ROLLBACK_BLOCKED_MODEL_SPEC_IMPORT_STATUS_CANONICAL_FORWARD_ONLY: Recovery requires a new forward changeset';
+                END $$;
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

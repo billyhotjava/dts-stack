@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.BeginCommand;
+import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.ApplyIssue;
+import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.CandidateResult;
+import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.ResultStatus;
+import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.Severity;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,6 +41,80 @@ class ModelSpecImportApplyContractTest {
         )
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("selectedClosure");
+    }
+
+    @Test
+    void exposesPersistedFailureClassificationAndRetryFacts() {
+        ApplyIssue issue = new ApplyIssue(
+            "MODEL_IMPORT_CANDIDATE_FAILED",
+            Severity.ERROR,
+            "APPLY",
+            "INTERNAL",
+            true,
+            "$.items[0]",
+            "model.project.fact",
+            null,
+            "Candidate apply failed",
+            "RETRY",
+            "correlation-123"
+        );
+        CandidateResult result = new CandidateResult(
+            UUID.randomUUID(),
+            0,
+            "model.project.fact",
+            "candidate-key",
+            "candidate-hash",
+            ResultStatus.FAILED,
+            null,
+            null,
+            null,
+            null,
+            null,
+            0,
+            List.of(issue),
+            Instant.now()
+        );
+
+        assertThat(result.retryable()).isTrue();
+        assertThat(result.issues()).singleElement().satisfies(stored -> {
+            assertThat(stored.stage()).isEqualTo("APPLY");
+            assertThat(stored.category()).isEqualTo("INTERNAL");
+            assertThat(stored.retryable()).isTrue();
+            assertThat(stored.correlationId()).isEqualTo("correlation-123");
+            assertThat(stored.dependencyUniqueId()).isNull();
+        });
+    }
+
+    @Test
+    void rejectsFailureFactsOutsideTheFrozenPartialResultContract() {
+        assertThatThrownBy(() -> issue("RECOVERY", "PERSISTENCE", "RETRY", "correlation-123"))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("stage");
+        assertThatThrownBy(() -> issue("RETRY", "LEASE", "RETRY", "correlation-123"))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("category");
+        assertThatThrownBy(() -> issue("RETRY", "PERSISTENCE", "TRY_AGAIN", "correlation-123"))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("recoveryAction");
+        assertThatThrownBy(() -> issue("RETRY", "PERSISTENCE", "RETRY", null))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("correlationId");
+    }
+
+    private static ApplyIssue issue(String stage, String category, String recoveryAction, String correlationId) {
+        return new ApplyIssue(
+            "MODEL_IMPORT_APPLY_INTERRUPTED",
+            Severity.ERROR,
+            stage,
+            category,
+            true,
+            "$.items[0]",
+            "model.project.fact",
+            null,
+            "Apply worker lease expired",
+            recoveryAction,
+            correlationId
+        );
     }
 
     private static BeginCommand command(List<String> selected, List<String> closure) {

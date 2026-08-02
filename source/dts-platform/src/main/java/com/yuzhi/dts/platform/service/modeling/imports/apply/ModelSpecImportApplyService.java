@@ -7,11 +7,13 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.ApplyIssue;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.ApplyRequest;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.ApplyResponse;
+import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.ApplySummary;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.Attempt;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.BeginCommand;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.BeginDisposition;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.BeginResult;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.CandidateResult;
+import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.CanonicalRunResult;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.Kind;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.ModelSpecImportApplyException;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.ResultStatus;
@@ -20,6 +22,8 @@ import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportAppl
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyPlanContract.Candidate;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyPreflightService.PreparedApply;
 import com.yuzhi.dts.platform.service.modeling.imports.checksum.ModelPackageChecksum;
+import com.yuzhi.dts.platform.service.modeling.imports.reconciliation.ModelSpecImportReconciliationContract.ConflictResolution;
+import com.yuzhi.dts.platform.service.modeling.imports.reconciliation.ModelSpecImportReconciliationAudit;
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewRepository;
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewRepository.PlanSnapshot;
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewRepository.StoredApplyPlan;
@@ -36,8 +40,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -60,6 +66,7 @@ public class ModelSpecImportApplyService {
     private final WarehousePlanAuthorizationGuard authorizationGuard;
     private final ModelSpecImportApplyPayloadCodec payloadCodec;
     private final ObjectMapper objectMapper;
+    private final ModelSpecImportReconciliationAudit reconciliationAudit;
     private final String tenantId;
 
     public ModelSpecImportApplyService(
@@ -73,6 +80,33 @@ public class ModelSpecImportApplyService {
         ObjectMapper objectMapper,
         @Value("${dts.platform.modeling.default-tenant-id:default}") String tenantId
     ) {
+        this(
+            previewRepository,
+            applyRepository,
+            preflight,
+            candidateWorker,
+            actorProvider,
+            authorizationGuard,
+            payloadCodec,
+            objectMapper,
+            tenantId,
+            null
+        );
+    }
+
+    @Autowired
+    public ModelSpecImportApplyService(
+        ModelSpecImportPreviewRepository previewRepository,
+        ModelSpecImportApplyRepository applyRepository,
+        ModelSpecImportApplyPreflightService preflight,
+        ModelSpecImportCandidateTransactionWorker candidateWorker,
+        WarehousePlanActorProvider actorProvider,
+        WarehousePlanAuthorizationGuard authorizationGuard,
+        ModelSpecImportApplyPayloadCodec payloadCodec,
+        ObjectMapper objectMapper,
+        @Value("${dts.platform.modeling.default-tenant-id:default}") String tenantId,
+        ModelSpecImportReconciliationAudit reconciliationAudit
+    ) {
         this.previewRepository = previewRepository;
         this.applyRepository = applyRepository;
         this.preflight = preflight;
@@ -82,6 +116,7 @@ public class ModelSpecImportApplyService {
         this.payloadCodec = payloadCodec;
         this.objectMapper = objectMapper;
         this.tenantId = tenantId;
+        this.reconciliationAudit = reconciliationAudit;
     }
 
     public ApplyResponse apply(ApplyRequest request) {
@@ -95,6 +130,7 @@ public class ModelSpecImportApplyService {
             request.previewHash(),
             selectedUniqueIds,
             request.idempotencyKey(),
+            request.conflictResolutions(),
             false
         );
         if (replay.isPresent()) {
@@ -108,6 +144,9 @@ public class ModelSpecImportApplyService {
                 request.previewHash(),
                 selectedUniqueIds,
                 null,
+                Map.of(),
+                Map.of(),
+                request.conflictResolutions(),
                 Instant.now()
             );
         } catch (RuntimeException failure) {
@@ -116,6 +155,7 @@ public class ModelSpecImportApplyService {
                 request.previewHash(),
                 selectedUniqueIds,
                 request.idempotencyKey(),
+                request.conflictResolutions(),
                 false
             );
             if (raced.isPresent()) {
@@ -129,13 +169,17 @@ public class ModelSpecImportApplyService {
             Map.of()
         );
         prepared = withDependencies(prepared, allocation.syntheticDependencies());
+        if (reconciliationAudit != null) {
+            reconciliationAudit.beginConflictDecisions(request.runId(), request.conflictResolutions());
+        }
         return execute(
             prepared,
             actor.ownerId(),
             request.idempotencyKey(),
             null,
             Map.of(),
-            allocation
+            allocation,
+            request.conflictResolutions()
         );
     }
 
@@ -153,6 +197,7 @@ public class ModelSpecImportApplyService {
             request.previewHash(),
             List.of(),
             request.idempotencyKey(),
+            Map.of(),
             true
         );
         if (replay.isPresent()) {
@@ -185,6 +230,7 @@ public class ModelSpecImportApplyService {
                 request.previewHash(),
                 List.of(),
                 request.idempotencyKey(),
+                Map.of(),
                 true
             );
             if (raced.isPresent()) {
@@ -200,7 +246,8 @@ public class ModelSpecImportApplyService {
             request.idempotencyKey(),
             source,
             candidateKeys,
-            allocation
+            allocation,
+            Map.of()
         );
     }
 
@@ -227,14 +274,16 @@ public class ModelSpecImportApplyService {
         String idempotencyKey,
         Attempt retrySource,
         Map<String, String> replayKeys,
-        TechnicalAllocation allocation
+        TechnicalAllocation allocation,
+        Map<String, ConflictResolution> conflictResolutions
     ) {
         String requestHash = requestHash(
             prepared.stored().runId(),
             prepared.stored().previewHash(),
             prepared.selectedUniqueIds(),
             prepared.selectedClosure(),
-            retrySource == null ? null : retrySource.id()
+            retrySource == null ? null : retrySource.id(),
+            conflictResolutions
         );
         BeginResult begin = applyRepository.begin(
             new BeginCommand(
@@ -256,6 +305,7 @@ public class ModelSpecImportApplyService {
             return response(begin.disposition(), begin.attempt());
         }
         String ownerToken = begin.ownerToken();
+        String diagnosticStage = diagnosticStage(retrySource);
 
         Map<String, ResultStatus> outcomes = new HashMap<>();
         int sequence = 0;
@@ -272,13 +322,13 @@ public class ModelSpecImportApplyService {
                 ModelPackageChecksum.sha256Text(idempotencyKey + "\n" + candidate.dbtUniqueId())
             );
             String candidateHash = payloadCodec.checksum(objectMapper.valueToTree(candidate));
-            boolean dependencyFailed = hasFailedDependency(
+            String failedDependencyUniqueId = failedDependencyUniqueId(
                 candidate.dbtUniqueId(),
                 prepared.dependencies(),
                 outcomes
             );
             CandidateResult result;
-            if (dependencyFailed) {
+            if (failedDependencyUniqueId != null) {
                 result = blocked(
                     prepared.stored().runId(),
                     begin.attempt().id(),
@@ -286,7 +336,9 @@ public class ModelSpecImportApplyService {
                     sequence,
                     candidate,
                     candidateKey,
-                    candidateHash
+                    candidateHash,
+                    failedDependencyUniqueId,
+                    diagnosticStage
                 );
             } else {
                 try {
@@ -317,7 +369,8 @@ public class ModelSpecImportApplyService {
                         candidate,
                         candidateKey,
                         candidateHash,
-                        failure
+                        failure,
+                        diagnosticStage
                     );
                 }
             }
@@ -336,7 +389,8 @@ public class ModelSpecImportApplyService {
             begin.attempt().id(),
             ownerToken,
             actorId,
-            Instant.now()
+            Instant.now(),
+            conflictResolutions
         );
         return response(BeginDisposition.STARTED, finalized);
     }
@@ -348,7 +402,9 @@ public class ModelSpecImportApplyService {
         int sequence,
         Candidate candidate,
         String candidateKey,
-        String candidateHash
+        String candidateHash,
+        String dependencyUniqueId,
+        String diagnosticStage
     ) {
         CandidateResult result = new CandidateResult(
             UUID.randomUUID(),
@@ -367,10 +423,15 @@ public class ModelSpecImportApplyService {
                 new ApplyIssue(
                     "MODEL_IMPORT_DEPENDENCY_FAILED",
                     Severity.ERROR,
+                    diagnosticStage,
+                    "DEPENDENCY",
+                    false,
                     "$.dependencies",
                     candidate.dbtUniqueId(),
+                    dependencyUniqueId,
                     "An upstream candidate failed in this apply attempt",
-                    "Fix and retry the failed root candidate"
+                    "RETRY",
+                    UUID.randomUUID().toString()
                 )
             ),
             Instant.now()
@@ -386,11 +447,12 @@ public class ModelSpecImportApplyService {
         Candidate candidate,
         String candidateKey,
         String candidateHash,
-        RuntimeException failure
+        RuntimeException failure,
+        String diagnosticStage
     ) {
         SanitizedFailure sanitized = sanitizeCandidateFailure(failure);
+        String correlationId = UUID.randomUUID().toString();
         if (!sanitized.allowlisted()) {
-            String correlationId = UUID.randomUUID().toString();
             LOG.error(
                 "Model import candidate failed; correlationId={}, attemptId={}, candidate={}",
                 correlationId,
@@ -415,10 +477,15 @@ public class ModelSpecImportApplyService {
                 new ApplyIssue(
                     sanitized.code(),
                     Severity.ERROR,
+                    diagnosticStage,
+                    sanitized.category(),
+                    sanitized.retryable(),
                     "$.items[" + sequence + "]",
                     candidate.dbtUniqueId(),
+                    null,
                     sanitized.message(),
-                    sanitized.recoveryAction()
+                    sanitized.recoveryAction(),
+                    correlationId
                 )
             ),
             Instant.now()
@@ -483,6 +550,7 @@ public class ModelSpecImportApplyService {
         String previewHash,
         List<String> selectedUniqueIds,
         String idempotencyKey,
+        Map<String, ConflictResolution> conflictResolutions,
         boolean retry
     ) {
         return applyRepository.findByIdempotencyKey(tenantId, idempotencyKey).map(existing -> {
@@ -491,7 +559,18 @@ public class ModelSpecImportApplyService {
                 !Objects.equals(existing.runId(), runId) ||
                 !Objects.equals(existing.previewHash(), previewHash) ||
                 storedRetry != retry ||
-                (!retry && !Objects.equals(existing.selectedUniqueIds(), selectedUniqueIds))
+                (!retry && !Objects.equals(existing.selectedUniqueIds(), selectedUniqueIds)) ||
+                !Objects.equals(
+                    existing.requestHash(),
+                    requestHash(
+                        runId,
+                        previewHash,
+                        selectedUniqueIds,
+                        existing.selectedClosure(),
+                        retry ? existing.retrySourceAttemptId() : null,
+                        conflictResolutions
+                    )
+                )
             ) {
                 throw conflict(
                     "MODEL_IMPORT_IDEMPOTENCY_CONFLICT",
@@ -518,6 +597,22 @@ public class ModelSpecImportApplyService {
     }
 
     RetryHistory retryHistory(Attempt source) {
+        List<Attempt> chain = retryChain(source);
+        Map<String, CandidateResult> successful = new LinkedHashMap<>();
+        for (Attempt attempt : chain) {
+            attempt
+                .results()
+                .stream()
+                .filter(CandidateResult::successful)
+                .forEach(result -> successful.putIfAbsent(result.dbtUniqueId(), result));
+        }
+        return new RetryHistory(
+            chain.getLast().selectedClosure(),
+            Map.copyOf(successful)
+        );
+    }
+
+    private List<Attempt> retryChain(Attempt source) {
         List<Attempt> chain = new ArrayList<>();
         Set<UUID> visited = new LinkedHashSet<>();
         Attempt current = source;
@@ -538,18 +633,7 @@ public class ModelSpecImportApplyService {
         if (current != null && current.retrySourceAttemptId() != null && !visited.add(current.retrySourceAttemptId())) {
             throw conflict("MODEL_IMPORT_RETRY_SOURCE_STALE", "Retry ancestor chain contains a cycle");
         }
-        Map<String, CandidateResult> successful = new LinkedHashMap<>();
-        for (Attempt attempt : chain) {
-            attempt
-                .results()
-                .stream()
-                .filter(CandidateResult::successful)
-                .forEach(result -> successful.putIfAbsent(result.dbtUniqueId(), result));
-        }
-        return new RetryHistory(
-            chain.getLast().selectedClosure(),
-            Map.copyOf(successful)
-        );
+        return List.copyOf(chain);
     }
 
     TechnicalAllocation technicalAllocation(
@@ -608,10 +692,25 @@ public class ModelSpecImportApplyService {
         }
     }
 
-    private static boolean claimsTechnicalNodes(Candidate candidate) {
-        return candidate != null &&
-            "DBT_BACKED".equals(candidate.conversionMode()) &&
-            !"SKIP".equals(candidate.action());
+    private boolean claimsTechnicalNodes(Candidate candidate) {
+        if (candidate == null || "SKIP".equals(candidate.action())) {
+            return false;
+        }
+        try {
+            JsonNode wrapper = objectMapper.readTree(candidate.implementationJson());
+            JsonNode command = wrapper.has("command") ? wrapper.path("command") : wrapper;
+            String ownership = command.path("ownership").asText(null);
+            if (ownership != null && !ownership.isBlank()) {
+                return "DBT_MANAGED".equals(ownership);
+            }
+            // Compatibility for frozen previews created before ownership was persisted separately.
+            return "DBT_BACKED".equals(candidate.conversionMode());
+        } catch (JsonProcessingException exception) {
+            throw conflict(
+                "MODEL_IMPORT_PREVIEW_STALE",
+                "Stored model import implementation ownership is invalid"
+            );
+        }
     }
 
     private static PreparedApply withDependencies(
@@ -644,11 +743,24 @@ public class ModelSpecImportApplyService {
         Map<String, Set<String>> dependencies,
         Map<String, ResultStatus> outcomes
     ) {
+        return failedDependencyUniqueId(dbtUniqueId, dependencies, outcomes) != null;
+    }
+
+    static String failedDependencyUniqueId(
+        String dbtUniqueId,
+        Map<String, Set<String>> dependencies,
+        Map<String, ResultStatus> outcomes
+    ) {
         return dependencies
             .getOrDefault(dbtUniqueId, Set.of())
             .stream()
-            .map(outcomes::get)
-            .anyMatch(status -> status == ResultStatus.FAILED || status == ResultStatus.BLOCKED);
+            .sorted()
+            .filter(dependency -> {
+                ResultStatus status = outcomes.get(dependency);
+                return status == ResultStatus.FAILED || status == ResultStatus.BLOCKED;
+            })
+            .findFirst()
+            .orElse(null);
     }
 
     private String requestHash(
@@ -656,7 +768,8 @@ public class ModelSpecImportApplyService {
         String previewHash,
         List<String> selected,
         List<String> closure,
-        UUID retrySource
+        UUID retrySource,
+        Map<String, ConflictResolution> conflictResolutions
     ) {
         ObjectNode node = objectMapper.createObjectNode();
         node.put("runId", runId.toString());
@@ -665,6 +778,11 @@ public class ModelSpecImportApplyService {
         node.set("selectedClosure", objectMapper.valueToTree(closure));
         if (retrySource != null) {
             node.put("retrySourceAttemptId", retrySource.toString());
+        }
+        if (conflictResolutions != null && !conflictResolutions.isEmpty()) {
+            TreeMap<String, String> normalized = new TreeMap<>();
+            conflictResolutions.forEach((uniqueId, resolution) -> normalized.put(uniqueId, resolution.name()));
+            node.set("conflictResolutions", objectMapper.valueToTree(normalized));
         }
         return payloadCodec.checksum(node);
     }
@@ -736,15 +854,54 @@ public class ModelSpecImportApplyService {
         return value.trim();
     }
 
-    private static ApplyResponse response(BeginDisposition disposition, Attempt attempt) {
+    private ApplyResponse response(BeginDisposition disposition, Attempt attempt) {
         return new ApplyResponse(
             attempt.id(),
             attempt.runId(),
             disposition,
             attempt.status(),
             attempt.summary(),
-            attempt.results()
+            attempt.results(),
+            canonicalRun(attempt)
         );
+    }
+
+    CanonicalRunResult canonicalRun(Attempt latestAttempt) {
+        List<Attempt> chain = retryChain(latestAttempt);
+        Attempt root = chain.getLast();
+        Map<String, CandidateResult> latestResults = new LinkedHashMap<>();
+        chain.forEach(attempt ->
+            attempt.results().forEach(result -> latestResults.putIfAbsent(result.dbtUniqueId(), result))
+        );
+        List<CandidateResult> items = root
+            .selectedClosure()
+            .stream()
+            .map(latestResults::get)
+            .filter(Objects::nonNull)
+            .toList();
+        int selected = root.selectedClosure().size();
+        ApplySummary summary = new ApplySummary(
+            selected,
+            selected - items.size(),
+            count(items, ResultStatus.CREATED) + count(items, ResultStatus.UPDATED),
+            count(items, ResultStatus.CREATED),
+            count(items, ResultStatus.UPDATED),
+            count(items, ResultStatus.SKIPPED),
+            count(items, ResultStatus.FAILED),
+            count(items, ResultStatus.BLOCKED)
+        );
+        ModelSpecImportApplyContract.AttemptStatus status = summary.pending() > 0
+            ? ModelSpecImportApplyContract.AttemptStatus.RUNNING
+            : ModelSpecImportApplyRepository.terminalStatus(summary);
+        return new CanonicalRunResult(root.id(), status, summary, items);
+    }
+
+    private static int count(List<CandidateResult> items, ResultStatus status) {
+        return (int) items.stream().filter(item -> item.status() == status).count();
+    }
+
+    static String diagnosticStage(Attempt retrySource) {
+        return retrySource == null ? "APPLY" : "RETRY";
     }
 
     private static ModelSpecImportApplyException badRequest(String code, String message) {
@@ -761,15 +918,19 @@ public class ModelSpecImportApplyService {
                 case "MODEL_IMPORT_IDEMPOTENCY_CONFLICT" ->
                     new SanitizedFailure(
                         applyFailure.code(),
+                        "CONFLICT",
+                        true,
                         "Candidate request conflicts with a previously persisted apply result",
-                        "Use a new idempotency key for changed input, then retry the import run",
+                        "RETRY",
                         true
                     );
                 case "MODEL_IMPORT_APPLY_CANDIDATE_NOT_SELECTED" ->
                     new SanitizedFailure(
                         applyFailure.code(),
+                        "VALIDATION",
+                        false,
                         "Candidate is outside the frozen selection closure",
-                        "Create a new preview containing the candidate before applying it",
+                        "REFRESH_PREVIEW",
                         true
                     );
                 default -> SanitizedFailure.GENERIC;
@@ -790,14 +951,18 @@ public class ModelSpecImportApplyService {
 
     record SanitizedFailure(
         String code,
+        String category,
+        boolean retryable,
         String message,
         String recoveryAction,
         boolean allowlisted
     ) {
         private static final SanitizedFailure GENERIC = new SanitizedFailure(
             "MODEL_IMPORT_CANDIDATE_FAILED",
+            "INTERNAL",
+            true,
             "Candidate apply failed; internal details were withheld",
-            "Review the server-side attempt diagnostics, correct the underlying problem, and retry",
+            "RETRY",
             false
         );
     }

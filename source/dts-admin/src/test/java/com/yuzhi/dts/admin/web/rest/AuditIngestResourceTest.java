@@ -324,6 +324,25 @@ class AuditIngestResourceTest {
     }
 
     @Test
+    void acceptsIngestionMachineActorOnlyFromTheAuthenticatedPlatformProducer() throws Exception {
+        when(authenticator.authenticate(any())).thenReturn(new Decision(true, "dts-platform", "valid token"));
+        Map<String, Object> body = new LinkedHashMap<>(
+            idempotentBody(EVENT_ID, "forged-producer", "执行入湖质量检测", false)
+        );
+        body.put("actor", "_system:ingestion");
+        body.put("buttonCode", "GOV_QUALITY_RUN_EXECUTE");
+        body.put("operationType", "EXECUTE");
+
+        MvcResult response = postAuditEvent(body, "dts-platform");
+
+        assertThat(response.getResponse().getStatus()).isEqualTo(HttpStatus.CREATED.value());
+        ArgumentCaptor<AuditActionRequest> captor = ArgumentCaptor.forClass(AuditActionRequest.class);
+        verify(auditV2Service).record(captor.capture());
+        assertThat(captor.getValue().actorId()).isEqualTo("_system:ingestion");
+        assertThat(captor.getValue().allowSystemActor()).isTrue();
+    }
+
+    @Test
     void rejectsPlatformMachineActorFromAnotherAuthenticatedProducer() throws Exception {
         when(authenticator.authenticate(any())).thenReturn(new Decision(true, "dts-analytics", "valid token"));
         Map<String, Object> body = new LinkedHashMap<>(

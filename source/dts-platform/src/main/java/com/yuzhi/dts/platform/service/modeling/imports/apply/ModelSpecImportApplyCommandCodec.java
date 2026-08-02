@@ -56,7 +56,7 @@ public class ModelSpecImportApplyCommandCodec {
         CreateModelSpecCommand model = value(candidate.modelSpecJson(), CreateModelSpecCommand.class);
         SaveImplementationCommand implementation = implementation(candidate.implementationJson());
         String projectKey = requiredText(payload.path("dbt").path("projectName").asText(null), "projectKey");
-        List<ImportedArtifact> artifacts = "DBT_BACKED".equals(candidate.conversionMode())
+        List<ImportedArtifact> artifacts = implementation.ownership() == ImplementationMode.DBT_MANAGED
             ? artifacts(candidate, payload, ownedTechnicalNodeIds)
             : List.of();
         return new DecodedCandidate(model, update(model), implementation, projectKey, artifacts);

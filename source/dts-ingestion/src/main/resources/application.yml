@@ -40,6 +40,11 @@ management:
           - health
           - info
 
+# This release has one deployment-wide audit owner. The durable outbox keeps
+# tenant_id for ownership and replay isolation, but it is not externally selectable.
+auditing:
+  tenant-id: default
+
 dts:
   ingestion:
     enabled: true

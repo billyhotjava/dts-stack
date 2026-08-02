@@ -285,6 +285,7 @@ public class QualityRuleService {
         GovRuleVersion version = persistVersion(rule, request, 1, actor);
         rule.setLatestVersion(version);
         ruleRepository.save(rule);
+        ruleRepository.flush();
 
         GovRule persisted = ruleRepository.findById(rule.getId()).orElseThrow();
         Map<String, Object> after = toRuleAuditView(persisted);
@@ -337,6 +338,7 @@ public class QualityRuleService {
         GovRuleVersion version = persistVersion(rule, request, nextVersion, actor);
         rule.setLatestVersion(version);
         ruleRepository.save(rule);
+        ruleRepository.flush();
 
         GovRule persisted = ruleRepository.findById(id).orElseThrow();
         Map<String, Object> after = toRuleAuditView(persisted);
@@ -368,6 +370,7 @@ public class QualityRuleService {
         ensureRuleWritable(rule, activeDeptHeader);
         Map<String, Object> before = toRuleAuditView(rule);
         ruleRepository.delete(rule);
+        ruleRepository.flush();
         Map<String, Object> auditPayload = new java.util.LinkedHashMap<>();
         auditPayload.put("before", before);
         auditPayload.put("after", Map.of("deleted", true));
@@ -396,6 +399,7 @@ public class QualityRuleService {
         Map<String, Object> before = toRuleAuditView(rule);
         rule.setEnabled(enabled);
         ruleRepository.save(rule);
+        ruleRepository.flush();
         Map<String, Object> after = toRuleAuditView(rule);
         Map<String, Object> auditPayload = new java.util.LinkedHashMap<>();
         auditPayload.put("before", before);
@@ -465,6 +469,7 @@ public class QualityRuleService {
             rule.setLatestVersion(fallback);
             ruleRepository.save(rule);
         }
+        ruleRepository.flush();
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("summary", "切换质量规则版本状态：" + rule.getName());
         payload.put("targetId", id.toString());

@@ -21,6 +21,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceKind;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceRole;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.StandardBinding;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.TimeSemantics;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.TimeSemanticsType;
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.Column;
@@ -119,7 +120,7 @@ public class ModelPackageCanonicalProjector {
             layer,
             model.name(),
             model.description(),
-            request.dbtBacked() ? ImplementationMode.DBT_MANAGED : ImplementationMode.DESIGNER_GENERATED,
+            request.externalDbtOwned() ? ImplementationMode.DBT_MANAGED : ImplementationMode.DESIGNER_GENERATED,
             model.materialization(),
             null,
             consumptionScenario,
@@ -131,7 +132,7 @@ public class ModelPackageCanonicalProjector {
             dependsOn,
             dimensionRefs,
             List.of(),
-            List.of(),
+            request.standardBindings(),
             null,
             null,
             dimensionDefinitionRef,
@@ -144,12 +145,12 @@ public class ModelPackageCanonicalProjector {
         String artifactChecksum = implementationCodec.artifactChecksum(
             model.sql() == null ? null : model.sql().effectiveSql()
         );
-        if (request.dbtBacked() && artifactChecksum == null) {
+        if (request.externalDbtOwned() && artifactChecksum == null) {
             issues.add(
                 new CanonicalIssue(
                     "MODEL_IMPORT_EFFECTIVE_SQL_REQUIRED",
                     "sql.effectiveSql",
-                    "DBT_BACKED implementation requires effective SQL"
+                    "DBT_MANAGED external implementation requires effective SQL"
                 )
             );
         }
@@ -205,7 +206,7 @@ public class ModelPackageCanonicalProjector {
         InputMode inputMode;
         List<ImplementationInput> inputs;
         try {
-            if (request.dbtBacked()) {
+            if (request.externalDbtOwned()) {
                 inputMode = InputMode.GENERATED;
                 inputs = List.of(
                     new GeneratedInput(
@@ -425,14 +426,40 @@ public class ModelPackageCanonicalProjector {
         UUID domainId,
         String projectKey,
         PackageModel model,
-        boolean dbtBacked,
+        boolean externalDbtOwned,
         List<SourceTarget> sources,
         List<DependencyTarget> dependencies,
-        DimensionDefinitionRef dimensionDefinitionRef
+        DimensionDefinitionRef dimensionDefinitionRef,
+        List<StandardBinding> standardBindings
     ) {
         public ProjectRequest {
             sources = sources == null ? List.of() : List.copyOf(sources);
             dependencies = dependencies == null ? List.of() : List.copyOf(dependencies);
+            standardBindings = standardBindings == null ? List.of() : List.copyOf(standardBindings);
+        }
+
+        /** Compatibility constructor for canonical callers without target-environment semantic overrides. */
+        public ProjectRequest(
+            UUID planId,
+            UUID domainId,
+            String projectKey,
+            PackageModel model,
+            boolean externalDbtOwned,
+            List<SourceTarget> sources,
+            List<DependencyTarget> dependencies,
+            DimensionDefinitionRef dimensionDefinitionRef
+        ) {
+            this(
+                planId,
+                domainId,
+                projectKey,
+                model,
+                externalDbtOwned,
+                sources,
+                dependencies,
+                dimensionDefinitionRef,
+                List.of()
+            );
         }
     }
 

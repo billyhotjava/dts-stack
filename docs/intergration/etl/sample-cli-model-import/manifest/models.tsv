@@ -1,4 +1,0 @@
-name	layer	sql_path	source_data_source_id	alias	schema_name	materialized	tags	status	enabled	owner_dept	description	csv_path
-biz_dwd_patent_base	DWD	models/dwd/biz_dwd_patent_base.sql				view	patent,biz	DRAFT	true		专利基础明细（外部LLM生成）	
-biz_dws_patent_dept_metrics	DWS	models/dws/biz_dws_patent_dept_metrics.sql				table	patent,biz,metrics	DRAFT	true		部门专利主题汇总（外部LLM生成）	
-biz_ads_patent_dashboard	ADS	models/ads/biz_ads_patent_dashboard.sql				view	patent,biz,dashboard	DRAFT	true		专利看板指标集（外部LLM生成）	

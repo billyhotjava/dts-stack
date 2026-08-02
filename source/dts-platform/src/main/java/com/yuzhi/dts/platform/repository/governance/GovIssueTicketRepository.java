@@ -30,6 +30,11 @@ public interface GovIssueTicketRepository extends JpaRepository<GovIssueTicket, 
         List<String> statuses
     );
 
+    Optional<GovIssueTicket> findFirstBySourceTypeIgnoreCaseAndSourceRefIdOrderByCreatedDateDesc(
+        String sourceType,
+        UUID sourceRefId
+    );
+
     long countByDatasetIdNotIn(java.util.Collection<UUID> datasetIds);
 
     List<GovIssueTicket> findByDatasetIdNotIn(java.util.Collection<UUID> datasetIds, org.springframework.data.domain.Pageable pageable);

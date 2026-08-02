@@ -6,6 +6,7 @@ import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.core.StreamReadConstraints;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.ApplyRequest;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.RetryRequest;
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewContract.PreviewRequest;
@@ -55,7 +56,7 @@ public class ModelSpecImportPreviewRequestParser {
     private final ObjectMapper mapper;
 
     public ModelSpecImportPreviewRequestParser(ObjectMapper objectMapper) {
-        this.mapper = objectMapper.copy();
+        this.mapper = objectMapper.copy().enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
         this.mapper.getFactory().setStreamReadConstraints(
                 StreamReadConstraints.builder()
                     .maxNestingDepth(MAX_JSON_DEPTH)

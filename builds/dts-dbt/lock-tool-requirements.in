@@ -1,0 +1,2 @@
+# H83-01 lock generator bootstrap dependency.
+pip-tools==7.5.2

@@ -1,0 +1,15 @@
+dts_rt01:
+  target: rt01
+  outputs:
+    rt01:
+      type: postgres
+      host: "{{ env_var('RT01_PG_HOST') }}"
+      port: "{{ env_var('RT01_PG_PORT', '5432') | int }}"
+      user: "{{ env_var('RT01_PG_USER') }}"
+      password: "{{ env_var('RT01_PG_PASSWORD') }}"
+      dbname: "{{ env_var('RT01_PG_DATABASE') }}"
+      schema: "{{ env_var('RT01_PG_SCHEMA', 'dts_rt01') }}"
+      threads: 1
+      connect_timeout: 10
+      retries: 0
+      sslmode: "{{ env_var('RT01_PG_SSLMODE', 'prefer') }}"

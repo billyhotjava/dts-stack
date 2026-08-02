@@ -17,8 +17,11 @@ import com.yuzhi.dts.platform.service.modeling.ModelPackageCanonicalProjector.De
 import com.yuzhi.dts.platform.service.modeling.ModelPackageCanonicalProjector.ProjectRequest;
 import com.yuzhi.dts.platform.service.modeling.ModelPackageCanonicalProjector.Projection;
 import com.yuzhi.dts.platform.service.modeling.ModelPackageCanonicalProjector.SourceTarget;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.CreateModelSpecCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.DimensionDefinitionRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.StandardBinding;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecSnapshotCodec;
 import com.yuzhi.dts.platform.service.modeling.imports.checksum.ModelPackageChecksum;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyPayloadCodec;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyPayloadCodec.SanitizedPayload;
@@ -43,12 +46,24 @@ import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPr
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewContract.PreviewSummary;
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewContract.RunStatus;
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewContract.Severity;
+import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewContract.SemanticOverride;
+import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewCommitPort.PreviewAuditOutcome;
+import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewCommitPort.PreviewAuditFacts;
+import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewCommitPort.PreviewFailureFact;
+import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportSemanticOverrideResolver.ResolvedSemanticOverride;
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewRepository.DomainBindingSnapshot;
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewRepository.ModelOwnershipSnapshot;
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewRepository.PersistedItem;
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewRepository.PersistedRun;
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewRepository.PlanSnapshot;
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewRepository.SourceBindingSnapshot;
+import com.yuzhi.dts.platform.service.modeling.imports.reconciliation.ModelSpecImportReconciliationContract.DriftAction;
+import com.yuzhi.dts.platform.service.modeling.imports.reconciliation.ModelSpecImportReconciliationContract.DriftDecision;
+import com.yuzhi.dts.platform.service.modeling.imports.reconciliation.ModelSpecImportReconciliationContract.DriftInput;
+import com.yuzhi.dts.platform.service.modeling.imports.reconciliation.ModelSpecImportReconciliationContract.MappingPin;
+import com.yuzhi.dts.platform.service.modeling.imports.reconciliation.ModelSpecImportReconciliationContract.RenameMapping;
+import com.yuzhi.dts.platform.service.modeling.imports.reconciliation.ModelSpecImportReconciliationContract.TechnicalPin;
+import com.yuzhi.dts.platform.service.modeling.imports.reconciliation.ModelSpecImportThreeWayReconciler;
 import com.yuzhi.dts.platform.service.modeling.imports.validator.ModelPackageValidator;
 import com.yuzhi.dts.platform.service.modeling.imports.validator.ModelPackageValidator.ModelPackageValidationException;
 import com.yuzhi.dts.platform.service.modeling.warehouse.CatalogDomainResolutionPort;
@@ -63,6 +78,7 @@ import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.L
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceFreshness;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceLocator;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceType;
+import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftCorrelation;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -102,6 +118,18 @@ public class ModelSpecImportPreviewService {
         LifecycleStatus.VALIDATING,
         LifecycleStatus.READY_TO_PUBLISH
     );
+    private static final Set<String> AUDIT_RECOVERY_ACTIONS = Set.of(
+        "REUPLOAD",
+        "COMPLETE_MAPPING",
+        "INCLUDE_DEPENDENCY",
+        "RESOLVE_CONFLICT",
+        "REAUTHORIZE",
+        "REFRESH_PREVIEW",
+        "RETRY",
+        "OPEN_MODEL",
+        "CONTACT_ADMIN",
+        "NONE"
+    );
     private static final Comparator<PreviewIssue> ISSUE_ORDER = Comparator.comparing(
         PreviewIssue::severity
     )
@@ -110,6 +138,7 @@ public class ModelSpecImportPreviewService {
         .thenComparing(PreviewIssue::modelUniqueId, Comparator.nullsFirst(String::compareTo));
 
     private final ModelSpecImportPreviewRepository repository;
+    private final ModelSpecImportPreviewCommitPort commits;
     private final CatalogDomainResolutionPort domainResolver;
     private final SourceReferenceResolver sourceResolver;
     private final WarehousePlanActorProvider actorProvider;
@@ -119,12 +148,17 @@ public class ModelSpecImportPreviewService {
     private final DimensionDefinitionImportResolver dimensionDefinitionResolver;
     private final ModelSpecImportApplyPayloadCodec applyPayloadCodec;
     private final ModelPackageValidator packageValidator;
+    private final ModelSpecImportThreeWayReconciler threeWayReconciler;
+    private final ModelSpecSnapshotCodec modelSpecSnapshotCodec;
+    private final ModelSpecImportSemanticOverrideResolver semanticOverrideResolver =
+        new ModelSpecImportSemanticOverrideResolver();
     private final String serverTenantId;
     private final Clock clock;
 
     @Autowired
     public ModelSpecImportPreviewService(
         ModelSpecImportPreviewRepository repository,
+        ModelSpecImportPreviewCommitPort commits,
         CatalogDomainResolutionPort domainResolver,
         SourceReferenceResolver sourceResolver,
         WarehousePlanActorProvider actorProvider,
@@ -137,6 +171,7 @@ public class ModelSpecImportPreviewService {
     ) {
         this(
             repository,
+            commits,
             domainResolver,
             sourceResolver,
             actorProvider,
@@ -163,7 +198,38 @@ public class ModelSpecImportPreviewService {
         String serverTenantId,
         Clock clock
     ) {
+        this(
+            repository,
+            (run, items, facts) -> repository.save(run, items),
+            domainResolver,
+            sourceResolver,
+            actorProvider,
+            authorizationGuard,
+            objectMapper,
+            canonicalProjector,
+            dimensionDefinitionResolver,
+            applyPayloadCodec,
+            serverTenantId,
+            clock
+        );
+    }
+
+    ModelSpecImportPreviewService(
+        ModelSpecImportPreviewRepository repository,
+        ModelSpecImportPreviewCommitPort commits,
+        CatalogDomainResolutionPort domainResolver,
+        SourceReferenceResolver sourceResolver,
+        WarehousePlanActorProvider actorProvider,
+        WarehousePlanAuthorizationGuard authorizationGuard,
+        ObjectMapper objectMapper,
+        ModelPackageCanonicalProjector canonicalProjector,
+        DimensionDefinitionImportResolver dimensionDefinitionResolver,
+        ModelSpecImportApplyPayloadCodec applyPayloadCodec,
+        String serverTenantId,
+        Clock clock
+    ) {
         this.repository = repository;
+        this.commits = commits;
         this.domainResolver = domainResolver;
         this.sourceResolver = sourceResolver;
         this.actorProvider = actorProvider;
@@ -173,6 +239,8 @@ public class ModelSpecImportPreviewService {
         this.dimensionDefinitionResolver = dimensionDefinitionResolver;
         this.applyPayloadCodec = applyPayloadCodec;
         this.packageValidator = new ModelPackageValidator(objectMapper);
+        this.threeWayReconciler = new ModelSpecImportThreeWayReconciler(objectMapper);
+        this.modelSpecSnapshotCodec = new ModelSpecSnapshotCodec(objectMapper);
         this.serverTenantId = requireText(serverTenantId, "MODEL_IMPORT_SERVER_TENANT_REQUIRED", "Server tenant context is required");
         this.clock = clock;
     }
@@ -185,6 +253,7 @@ public class ModelSpecImportPreviewService {
             .orElseThrow(ModelSpecImportPreviewService::notFound);
         authorizationGuard.requirePlanMaintenance(plan.header(), actor);
         requireImportable(plan);
+        requireRenameOwnership(input, plan);
 
         ResolvedContext context = resolveContext(input, plan, actor);
         PreviewBuild preview = buildPreview(input, plan, actor, context);
@@ -255,10 +324,24 @@ public class ModelSpecImportPreviewService {
             throw badRequest("MODEL_PACKAGE_SCHEMA_INVALID", "Request field package is not serializable", null);
         }
 
-        Map<String, PackageModel> models = new TreeMap<>();
+        Map<String, PackageModel> inspectedModels = new TreeMap<>();
         for (PackageModel model : safe(modelPackage.models())) {
-            models.put(model.dbtUniqueId(), model);
+            inspectedModels.put(model.dbtUniqueId(), model);
         }
+        Map<String, SemanticOverride> semanticOverrides = semanticOverrideResolver.index(
+            request.semanticOverrides(),
+            inspectedModels
+        );
+        Map<String, PackageModel> models = new TreeMap<>();
+        Map<String, List<StandardBinding>> standardBindings = new TreeMap<>();
+        inspectedModels.forEach((uniqueId, inspected) -> {
+            ResolvedSemanticOverride resolved = semanticOverrideResolver.resolve(
+                inspected,
+                semanticOverrides.get(uniqueId)
+            );
+            models.put(uniqueId, resolved.model());
+            standardBindings.put(uniqueId, resolved.standardBindings());
+        });
         TreeSet<String> selected = new TreeSet<>();
         for (String uniqueId : safe(request.selectedUniqueIds())) {
             if (uniqueId != null && !uniqueId.isBlank()) {
@@ -284,6 +367,11 @@ public class ModelSpecImportPreviewService {
                 )
             );
         }
+        Map<String, String> renameSourcesByTarget = validateRenameMappings(
+            request.renameMappings(),
+            inspectedModels,
+            selected
+        );
         PreviewContext context = request.context();
         return new ValidatedInput(
             modelPackage,
@@ -291,8 +379,73 @@ public class ModelSpecImportPreviewService {
             List.copyOf(selected),
             normalizedHints(context.domainMappings()),
             normalizedHints(context.sourceMappings()),
-            models
+            models,
+            Map.copyOf(standardBindings),
+            renameSourcesByTarget,
+            Set.copyOf(semanticOverrides.keySet())
         );
+    }
+
+    private Map<String, String> validateRenameMappings(
+        List<RenameMapping> requested,
+        Map<String, PackageModel> packageModels,
+        Set<String> selected
+    ) {
+        Map<String, String> oldToNew;
+        try {
+            oldToNew = threeWayReconciler.validateRenameMappings(requested);
+        } catch (IllegalArgumentException invalid) {
+            throw badRequest("MODEL_IMPORT_RENAME_MAPPING_INVALID", invalid.getMessage(), null);
+        }
+        if (oldToNew.isEmpty()) return Map.of();
+        TreeMap<String, String> sourceByTarget = new TreeMap<>();
+        for (Map.Entry<String, String> mapping : oldToNew.entrySet()) {
+            String oldUniqueId = mapping.getKey();
+            String newUniqueId = mapping.getValue();
+            boolean valid = packageModels.containsKey(newUniqueId) &&
+                !packageModels.containsKey(oldUniqueId) &&
+                selected.contains(newUniqueId) &&
+                Objects.equals(dbtPackageIdentity(oldUniqueId), dbtPackageIdentity(newUniqueId));
+            if (!valid) {
+                throw badRequest(
+                    "MODEL_IMPORT_RENAME_IDENTITY_INVALID",
+                    "Rename mappings must identify a selected replacement in the same dbt package",
+                    Map.of("oldUniqueId", oldUniqueId, "newUniqueId", newUniqueId)
+                );
+            }
+            sourceByTarget.put(newUniqueId, oldUniqueId);
+        }
+        return Map.copyOf(sourceByTarget);
+    }
+
+    private void requireRenameOwnership(ValidatedInput input, PlanSnapshot plan) {
+        if (input.renameSourcesByTarget().isEmpty()) return;
+        String projectKey = input.modelPackage().dbt() == null ? null : input.modelPackage().dbt().projectName();
+        for (Map.Entry<String, String> mapping : input.renameSourcesByTarget().entrySet()) {
+            ModelOwnershipSnapshot source = repository
+                .findOwnership(serverTenantId, projectKey, mapping.getValue())
+                .orElseThrow(() ->
+                    badRequest(
+                        "MODEL_IMPORT_RENAME_IDENTITY_INVALID",
+                        "Rename source is not owned by the selected tenant and warehouse plan",
+                        mapping
+                    )
+                );
+            if (!plan.id().equals(source.planId()) || repository.findOwnership(serverTenantId, projectKey, mapping.getKey()).isPresent()) {
+                throw badRequest(
+                    "MODEL_IMPORT_RENAME_IDENTITY_INVALID",
+                    "Rename target is already owned or the source belongs to another warehouse plan",
+                    mapping
+                );
+            }
+        }
+    }
+
+    private static String dbtPackageIdentity(String uniqueId) {
+        if (uniqueId == null) return null;
+        int first = uniqueId.indexOf('.');
+        int second = first < 0 ? -1 : uniqueId.indexOf('.', first + 1);
+        return second < 0 ? null : uniqueId.substring(0, second);
     }
 
     private ResolvedContext resolveContext(ValidatedInput input, PlanSnapshot plan, WarehousePlanActor actor) {
@@ -468,6 +621,19 @@ public class ModelSpecImportPreviewService {
         Map<String, PendingItem> projectedDependencies
     ) {
         List<PreviewIssue> issues = new ArrayList<>();
+        String renameSourceUniqueId = input.renameSourcesByTarget().get(model.dbtUniqueId());
+        boolean renameBlocked = renameSourceUniqueId != null;
+        if (renameBlocked) {
+            issues.add(
+                issue(
+                    "MODEL_IMPORT_RENAME_REQUIRES_CANONICAL_REASSOCIATION",
+                    "$.renameMappings",
+                    model.dbtUniqueId(),
+                    "The explicit rename is valid but canonical dbt ownership reassociation is not available",
+                    "Keep the current model and retry after canonical ownership reassociation is enabled"
+                )
+            );
+        }
         ConversionMode conversionMode = conversionMode(model);
         if (conversionMode == ConversionMode.BLOCKED) {
             issues.add(
@@ -544,10 +710,11 @@ public class ModelSpecImportPreviewService {
                 domain == null ? null : domain.domainId(),
                 input.modelPackage().dbt() == null ? null : input.modelPackage().dbt().projectName(),
                 model,
-                conversionMode == ConversionMode.DBT_BACKED,
+                true,
                 canonicalSources(model, bindings),
                 canonicalDependencies(dependencies, projectedDependencies, input.models()),
-                dimensionDefinitionRef
+                dimensionDefinitionRef,
+                input.standardBindings().getOrDefault(model.dbtUniqueId(), List.of())
             )
         );
         addCanonicalIssues(model, canonical.issues(), issues);
@@ -560,6 +727,67 @@ public class ModelSpecImportPreviewService {
         ModelOwnershipSnapshot current = repository
             .findOwnership(serverTenantId, projectKey, model.dbtUniqueId())
             .orElse(null);
+        DriftDecision reconciliation = null;
+        if (current != null && canonical.implementationChecksum() != null) {
+            JsonNode currentModelSpec = repository
+                .findCurrentModelSpecSnapshot(serverTenantId, current.modelSpecId(), current.currentRevision())
+                .orElse(null);
+            if (currentModelSpec == null) {
+                issues.add(
+                    issue(
+                        "MODEL_IMPORT_CURRENT_SNAPSHOT_MISSING",
+                        "$.package.models[" + model.dbtUniqueId() + "]",
+                        model.dbtUniqueId(),
+                        "The current mapped ModelSpec revision snapshot is unavailable",
+                        "Open the mapped model and repair its revision history before re-importing"
+                    )
+                );
+            } else {
+                reconciliation = threeWayReconciler.evaluate(
+                    new DriftInput(
+                        repository
+                            .findLatestMergeCheckpoint(
+                                serverTenantId,
+                                plan.id(),
+                                current.modelSpecId(),
+                                current.implementationId(),
+                                projectKey,
+                                model.dbtUniqueId()
+                            )
+                            .orElse(null),
+                        new TechnicalPin(current.implementationRevision(), current.currentImplementationChecksum()),
+                        canonical.implementationChecksum(),
+                        new MappingPin(current.currentRevision(), current.currentChecksum()),
+                        currentModelSpec,
+                        proposedModelSpec,
+                        input.semanticOverrideIds().contains(model.dbtUniqueId())
+                    )
+                );
+                proposedModelSpec = reconciliation.proposedModelSpec();
+                modelSpecChecksum = checksumModelSpecProjection(proposedModelSpec);
+                if (reconciliation.action() == DriftAction.CONFLICT) {
+                    issues.add(
+                        issue(
+                            "MODEL_IMPORT_" + reconciliation.reasonCode(),
+                            "$.package.models[" + model.dbtUniqueId() + "]",
+                            model.dbtUniqueId(),
+                            "The re-import cannot overwrite divergent or unbased model state",
+                            "Choose KEEP_CURRENT, ACCEPT_INCOMING, or CANCEL for this candidate"
+                        )
+                    );
+                } else if (reconciliation.action() == DriftAction.BLOCKED_REMAP) {
+                    issues.add(
+                        issue(
+                            "MODEL_IMPORT_BLOCKED_REMAP",
+                            "$.package.models[" + model.dbtUniqueId() + "]",
+                            model.dbtUniqueId(),
+                            "The mapped ModelSpec revision changed after the accepted import checkpoint",
+                            "Revalidate the model mapping before applying this re-import"
+                        )
+                    );
+                }
+            }
+        }
         String expectedOwnership = canonical.modelSpecCommand().implementationMode().name();
         boolean ownershipConflict = current != null &&
         (
@@ -631,12 +859,28 @@ public class ModelSpecImportPreviewService {
 
         List<PreviewIssue> orderedIssues = issues.stream().distinct().sorted(ISSUE_ORDER).toList();
         Action action;
-        if (ownershipConflict || dimensionBoundaryConflict || modelStatusConflict) {
+        if (renameBlocked) {
+            action = BLOCKED;
+        } else if (
+            ownershipConflict ||
+            dimensionBoundaryConflict ||
+            modelStatusConflict ||
+            (reconciliation != null && reconciliation.action() == DriftAction.CONFLICT)
+        ) {
             action = CONFLICT;
+        } else if (reconciliation != null && reconciliation.action() == DriftAction.BLOCKED_REMAP) {
+            action = BLOCKED;
         } else if (orderedIssues.stream().anyMatch(issue -> issue.severity() == Severity.ERROR)) {
             action = BLOCKED;
         } else if (current == null) {
             action = Action.CREATE;
+        } else if (reconciliation != null) {
+            action = switch (reconciliation.action()) {
+                case SKIP -> Action.SKIP;
+                case UPDATE -> Action.UPDATE;
+                case CONFLICT -> CONFLICT;
+                case BLOCKED_REMAP -> BLOCKED;
+            };
         } else if (
             Objects.equals(current.currentChecksum(), modelSpecChecksum) &&
             Objects.equals(current.currentImplementationChecksum(), canonical.implementationChecksum()) &&
@@ -657,6 +901,19 @@ public class ModelSpecImportPreviewService {
         dependencyProjection.set("canonicalDependencies", objectMapper.valueToTree(dependencies));
         dependencyProjection.set("technicalPathNodes", objectMapper.valueToTree(graph.technicalPathNodes(model.dbtUniqueId())));
         dependencyProjection.set("sourceNodes", objectMapper.valueToTree(sourceNodeIds));
+        ObjectNode evidence = evidenceProjection(canonical, orderedIssues);
+        if (reconciliation != null) {
+            evidence.put("reconciliationAction", reconciliation.action().name());
+            evidence.put("reconciliationReason", reconciliation.reasonCode());
+            evidence.put("mappingRevalidationRequired", reconciliation.mappingRevalidationRequired());
+        }
+        if (renameBlocked) {
+            evidence.put("reconciliationAction", DriftAction.BLOCKED_REMAP.name());
+            evidence.put("reconciliationReason", "MODEL_IMPORT_RENAME_REQUIRES_CANONICAL_REASSOCIATION");
+            evidence.put("mappingRevalidationRequired", true);
+            evidence.put("renameSourceUniqueId", renameSourceUniqueId);
+            evidence.put("renameTargetUniqueId", model.dbtUniqueId());
+        }
         return new PendingItem(
             model.dbtUniqueId(),
             action,
@@ -682,7 +939,7 @@ public class ModelSpecImportPreviewService {
             current == null ? null : current.currentImplementationChecksum(),
             canonical.modelSpecCommand().modelType(),
             objectMapper.valueToTree(canonical.artifact()),
-            evidenceProjection(canonical, orderedIssues)
+            evidence
         );
     }
 
@@ -1200,6 +1457,16 @@ public class ModelSpecImportPreviewService {
         normalizedRequest.set("selectedUniqueIds", objectMapper.valueToTree(input.selectedUniqueIds()));
         normalizedRequest.set("domainMappings", objectMapper.valueToTree(input.domainMappings()));
         normalizedRequest.set("sourceMappings", objectMapper.valueToTree(input.sourceMappings()));
+        normalizedRequest.set(
+            "renameMappings",
+            objectMapper.valueToTree(
+                input.renameSourcesByTarget()
+                    .entrySet()
+                    .stream()
+                    .map(entry -> new RenameMapping(entry.getValue(), entry.getKey()))
+                    .toList()
+            )
+        );
 
         PersistedRun run = new PersistedRun(
             preview.runId(),
@@ -1245,7 +1512,123 @@ public class ModelSpecImportPreviewService {
                 )
             );
         }
-        repository.save(run, items);
+        String correlationId = DbtImplementationDraftCorrelation.currentOrCreate();
+        commits.commit(
+            run,
+            items,
+            new PreviewAuditFacts(
+                preview.runId(),
+                serverTenantId,
+                plan.id(),
+                actor.ownerId(),
+                preview.previewHash(),
+                input.modelPackage().packageChecksum(),
+                preview.summary(),
+                previewAuditOutcome(preview.summary()),
+                previewAuditFailures(preview.pendingItems(), correlationId),
+                correlationId
+            )
+        );
+    }
+
+    private static PreviewAuditOutcome previewAuditOutcome(PreviewSummary summary) {
+        if (summary == null) return PreviewAuditOutcome.BLOCKED;
+        int unresolved = summary.blocked() + summary.conflict();
+        if (unresolved == 0) return PreviewAuditOutcome.SUCCESS;
+        return summary.ready() > 0 ? PreviewAuditOutcome.PARTIAL : PreviewAuditOutcome.BLOCKED;
+    }
+
+    private static List<PreviewFailureFact> previewAuditFailures(List<PendingItem> items, String correlationId) {
+        if (items == null || items.isEmpty()) return List.of();
+        return items
+            .stream()
+            .filter(item -> item != null && (item.action() == BLOCKED || item.action() == CONFLICT))
+            .map(item -> previewAuditFailure(item, correlationId))
+            .toList();
+    }
+
+    private static PreviewFailureFact previewAuditFailure(PendingItem item, String correlationId) {
+        PreviewIssue issue = primaryAuditIssue(item.issues());
+        String code = safeAuditCode(issue == null ? null : issue.code());
+        String category = previewAuditCategory(item.action(), code);
+        return new PreviewFailureFact(
+            safeAuditIdentity(item.dbtUniqueId()),
+            code,
+            "PREVIEW",
+            category,
+            false,
+            previewAuditRecoveryAction(item.action(), category, issue == null ? null : issue.recoveryAction()),
+            correlationId
+        );
+    }
+
+    private static PreviewIssue primaryAuditIssue(List<PreviewIssue> issues) {
+        if (issues == null || issues.isEmpty()) return null;
+        return issues
+            .stream()
+            .filter(Objects::nonNull)
+            .filter(issue -> issue.severity() == Severity.ERROR)
+            .findFirst()
+            .orElseGet(() -> issues.stream().filter(Objects::nonNull).findFirst().orElse(null));
+    }
+
+    private static String safeAuditCode(String code) {
+        String normalized = trim(code);
+        if (
+            normalized == null ||
+            normalized.length() > 128 ||
+            !normalized.chars().allMatch(value -> value == '_' || Character.isUpperCase(value) || Character.isDigit(value))
+        ) {
+            return "MODEL_IMPORT_PREVIEW_UNRESOLVED";
+        }
+        return normalized;
+    }
+
+    private static String safeAuditIdentity(String identity) {
+        String normalized = trim(identity);
+        if (normalized == null) return "unknown";
+        StringBuilder safe = new StringBuilder(Math.min(normalized.length(), 256));
+        normalized
+            .chars()
+            .limit(256)
+            .forEach(value ->
+                safe.append(
+                    Character.isLetterOrDigit(value) || value == '.' || value == '_' || value == '-' || value == ':'
+                        ? (char) value
+                        : '_'
+                )
+            );
+        return safe.toString();
+    }
+
+    private static String previewAuditCategory(Action action, String code) {
+        if (action == CONFLICT || code.contains("CONFLICT")) return "CONFLICT";
+        if (code.contains("DEPENDENC")) return "DEPENDENCY";
+        if (code.contains("PERMISSION") || code.contains("FORBIDDEN") || code.contains("AUTHORIZ")) return "PERMISSION";
+        if (code.contains("STALE") || code.contains("EXPIRED") || code.contains("REVISION")) return "STALE";
+        if (code.contains("SECURITY") || code.contains("SECRET") || code.contains("ZIP")) return "SECURITY";
+        if (code.contains("PERSIST") || code.contains("DATABASE") || code.contains("STORAGE") || code.contains("AUDIT")) {
+            return "PERSISTENCE";
+        }
+        if (code.contains("INTERNAL") || code.contains("UNAVAILABLE") || code.contains("TIMEOUT")) return "INTERNAL";
+        return "VALIDATION";
+    }
+
+    private static String previewAuditRecoveryAction(Action action, String category, String requestedAction) {
+        String normalized = trim(requestedAction);
+        if (normalized != null) {
+            normalized = normalized.toUpperCase(Locale.ROOT);
+            if (AUDIT_RECOVERY_ACTIONS.contains(normalized)) return normalized;
+        }
+        if (action == CONFLICT) return "RESOLVE_CONFLICT";
+        return switch (category) {
+            case "DEPENDENCY" -> "INCLUDE_DEPENDENCY";
+            case "PERMISSION" -> "REAUTHORIZE";
+            case "STALE" -> "REFRESH_PREVIEW";
+            case "SECURITY" -> "REUPLOAD";
+            case "PERSISTENCE", "INTERNAL" -> "CONTACT_ADMIN";
+            default -> "COMPLETE_MAPPING";
+        };
     }
 
     private static List<String> stableTopologicalOrder(
@@ -1343,13 +1726,27 @@ public class ModelSpecImportPreviewService {
                     json(item.artifact()),
                     json(item.evidence()),
                     json(item.dependencySnapshot()),
-                    json(item.sourceSnapshot())
+                    json(item.sourceSnapshot()),
+                    item.implementationChecksum(),
+                    dependencyUniqueIds(item.dependencySnapshot())
                 )
             )
             .toList();
     }
 
-    private JsonNode evidenceProjection(Projection canonical, List<PreviewIssue> issues) {
+    private static List<String> dependencyUniqueIds(JsonNode dependencySnapshot) {
+        if (dependencySnapshot == null || !dependencySnapshot.path("canonicalDependencies").isArray()) {
+            return List.of();
+        }
+        List<String> result = new ArrayList<>();
+        dependencySnapshot.path("canonicalDependencies").forEach(node -> {
+            String value = node.isTextual() ? node.asText() : node.path("dbtUniqueId").asText(null);
+            if (value != null && !value.isBlank()) result.add(value);
+        });
+        return result.stream().distinct().sorted().toList();
+    }
+
+    private ObjectNode evidenceProjection(Projection canonical, List<PreviewIssue> issues) {
         ObjectNode evidence = objectMapper.createObjectNode();
         evidence.put("modelSpecChecksum", canonical.modelSpecChecksum());
         evidence.put("implementationChecksum", canonical.implementationChecksum());
@@ -1401,6 +1798,15 @@ public class ModelSpecImportPreviewService {
             return objectMapper.writeValueAsString(value);
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Model import preview snapshot cannot be serialized", exception);
+        }
+    }
+
+    private String checksumModelSpecProjection(JsonNode projection) {
+        try {
+            CreateModelSpecCommand command = objectMapper.treeToValue(projection, CreateModelSpecCommand.class);
+            return modelSpecSnapshotCodec.contentChecksum(command);
+        } catch (JsonProcessingException | IllegalArgumentException exception) {
+            throw new IllegalStateException("Reconciled ModelSpec projection is invalid", exception);
         }
     }
 
@@ -1530,7 +1936,10 @@ public class ModelSpecImportPreviewService {
         List<String> selectedUniqueIds,
         Map<String, String> domainMappings,
         Map<String, String> sourceMappings,
-        Map<String, PackageModel> models
+        Map<String, PackageModel> models,
+        Map<String, List<StandardBinding>> standardBindings,
+        Map<String, String> renameSourcesByTarget,
+        Set<String> semanticOverrideIds
     ) {}
 
     private record ResolvedContext(List<ResolvedDomain> domains, List<ResolvedBinding> sources) {}

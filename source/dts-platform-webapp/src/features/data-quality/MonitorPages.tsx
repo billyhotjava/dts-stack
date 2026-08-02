@@ -400,43 +400,64 @@ export function MonitorDetailPage() {
 	const [task, setTask] = useState<QualityTask>();
 	const [runs, setRuns] = useState<QualityRun[]>([]);
 	const [loading, setLoading] = useState(true);
+	const loadSequence = useRef(0);
+	const activeTaskId = useRef(taskId);
+	const loadedTaskId = useRef<string>();
+	const settledTaskRequestId = useRef<string>();
+	activeTaskId.current = taskId;
 
 	const load = useCallback(async () => {
+		const requestedTaskId = taskId;
+		const sequence = ++loadSequence.current;
+		loadedTaskId.current = undefined;
+		settledTaskRequestId.current = undefined;
+		setTask(undefined);
+		setRuns([]);
 		setLoading(true);
 		try {
 			const taskResponse = await listQualityTasks();
-			const nextTask = toList<QualityTask>(taskResponse).find((item) => String(item.id) === taskId);
-			setTask(nextTask);
-			if (nextTask?.datasetId)
-				setRuns(
-					toList<QualityRun>(
+			if (sequence !== loadSequence.current || activeTaskId.current !== requestedTaskId) return;
+			const nextTask = toList<QualityTask>(taskResponse).find((item) => String(item.id) === requestedTaskId);
+			const nextRuns = nextTask?.datasetId
+				? toList<QualityRun>(
 						await listQualityRuns({
 							datasetId: nextTask.datasetId,
 							...(nextTask.ruleId ? { ruleId: nextTask.ruleId } : {}),
 							triggerType: "SCHEDULED",
 							limit: 20,
 						}),
-					),
-				);
+					)
+				: [];
+			if (sequence !== loadSequence.current || activeTaskId.current !== requestedTaskId) return;
+			setTask(nextTask);
+			setRuns(nextRuns);
+			loadedTaskId.current = nextTask ? String(nextTask.id) : undefined;
+			settledTaskRequestId.current = requestedTaskId;
 		} catch (error) {
+			if (sequence !== loadSequence.current || activeTaskId.current !== requestedTaskId) return;
+			settledTaskRequestId.current = requestedTaskId;
 			toast.error(error instanceof Error ? error.message : "监控详情加载失败");
 		} finally {
-			setLoading(false);
+			if (sequence === loadSequence.current && activeTaskId.current === requestedTaskId) setLoading(false);
 		}
 	}, [taskId]);
 
 	useEffect(() => {
 		void load();
 	}, [load]);
-	if (!loading && !task) return <QualityEmpty description="未找到该质量监控。" />;
-	const datasetName = datasets.find((item) => item.id === task?.datasetId)?.name || task?.datasetId;
+	const loadedTaskIsCurrent = loadedTaskId.current === taskId && String(task?.id || "") === taskId;
+	const visibleTask = loadedTaskIsCurrent ? task : undefined;
+	const visibleRuns = loadedTaskIsCurrent ? runs : [];
+	const detailLoading = loading || settledTaskRequestId.current !== taskId;
+	if (!detailLoading && !visibleTask) return <QualityEmpty description="未找到该质量监控。" />;
+	const datasetName = datasets.find((item) => item.id === visibleTask?.datasetId)?.name || visibleTask?.datasetId;
 
 	return (
 		<div className="dq-page">
 			<QualityPageHeading
-				title={task?.name || "监控详情"}
+				title={visibleTask?.name || "监控详情"}
 				description={
-					task?.ruleId
+					visibleTask?.ruleId
 						? "查看监控配置及该资产、该规则的调度运行。"
 						: "查看监控配置及该资产全部调度运行；当前后端不能按监控任务标识过滤。"
 				}
@@ -448,31 +469,31 @@ export function MonitorDetailPage() {
 						key="edit"
 						type="primary"
 						icon={<EditOutlined />}
-						disabled={!canManage}
+						disabled={!canManage || !loadedTaskIsCurrent || loading}
 						onClick={() => navigate(`${qualityPath("monitor-detail", { taskId })}/edit`)}
 					>
 						编辑监控
 					</Button>,
 				]}
 			/>
-			<Card loading={loading} title="监控信息">
+			<Card loading={detailLoading} title="监控信息">
 				<Descriptions column={{ xs: 1, md: 2, xl: 3 }} size="small">
 					<Descriptions.Item label="数据资产">{displayName(datasetName)}</Descriptions.Item>
-					<Descriptions.Item label="关联规则">{displayName(task?.ruleId, "自动匹配全部规则")}</Descriptions.Item>
+					<Descriptions.Item label="关联规则">{displayName(visibleTask?.ruleId, "自动匹配全部规则")}</Descriptions.Item>
 					<Descriptions.Item label="巡检周期">
-						{task?.intervalMinutes ? `每 ${task.intervalMinutes} 分钟` : "-"}
+						{visibleTask?.intervalMinutes ? `每 ${visibleTask.intervalMinutes} 分钟` : "-"}
 					</Descriptions.Item>
-					<Descriptions.Item label="责任部门">{displayName(task?.ownerDept)}</Descriptions.Item>
+					<Descriptions.Item label="责任部门">{displayName(visibleTask?.ownerDept)}</Descriptions.Item>
 					<Descriptions.Item label="状态">
-						<QualityStatus status={Boolean(task?.enabled)} />
+						<QualityStatus status={Boolean(visibleTask?.enabled)} />
 					</Descriptions.Item>
-					<Descriptions.Item label="最近触发">{formatTime(task?.lastTriggeredAt)}</Descriptions.Item>
+					<Descriptions.Item label="最近触发">{formatTime(visibleTask?.lastTriggeredAt)}</Descriptions.Item>
 				</Descriptions>
 			</Card>
-			<Card title={task?.ruleId ? "该规则调度运行" : "该资产全部调度运行"}>
+			<Card title={visibleTask?.ruleId ? "该规则调度运行" : "该资产全部调度运行"}>
 				<Table
 					rowKey="id"
-					dataSource={runs}
+					dataSource={visibleRuns}
 					pagination={false}
 					size="small"
 					columns={[

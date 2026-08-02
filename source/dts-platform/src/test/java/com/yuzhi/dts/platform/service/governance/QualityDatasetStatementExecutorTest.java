@@ -520,8 +520,12 @@ class QualityDatasetStatementExecutorTest {
         when(dataSourceRepository.findById(SOURCE_ID)).thenReturn(Optional.of(source));
         when(jdbcSqlExecutor.getConnection(source)).thenReturn(connection);
         when(connection.createStatement()).thenReturn(countStatement);
-        ResultSet tableCount = resultSetWithSingleLong(25L);
-        ResultSet failureCount = resultSetWithSingleLong(0L);
+        ResultSet tableCount = mock(ResultSet.class);
+        ResultSet failureCount = mock(ResultSet.class);
+        when(tableCount.next()).thenReturn(true, false);
+        when(tableCount.getLong(1)).thenReturn(25L);
+        when(failureCount.next()).thenReturn(true, false);
+        when(failureCount.getLong(1)).thenReturn(0L);
         when(countStatement.executeQuery("SELECT count(*) FROM default.ods_budget_v2"))
             .thenReturn(tableCount);
         when(connection.prepareStatement("SELECT count(*) FROM (" + sql + ") quality_failures"))

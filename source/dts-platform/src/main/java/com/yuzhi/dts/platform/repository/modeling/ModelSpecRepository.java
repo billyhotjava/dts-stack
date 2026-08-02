@@ -624,6 +624,80 @@ public class ModelSpecRepository {
         );
     }
 
+    /**
+     * Forward-undo-only append for a semantic no-op ModelSpec restore.
+     *
+     * <p>Ordinary updates intentionally remain idempotent and do not append a revision when the
+     * content checksum is unchanged. Forward undo requires a new revision boundary even in that
+     * case so its restored implementation can be pinned to a new, immutable ModelSpec revision.
+     */
+    public int appendUnchangedV2RevisionForForwardUndo(
+        String tenantId,
+        String actorId,
+        int expectedRevision,
+        String expectedChecksum,
+        ModelSpecView replacement,
+        String snapshot
+    ) {
+        if (
+            tenantId == null || tenantId.isBlank() ||
+            actorId == null || actorId.isBlank() ||
+            replacement == null || replacement.status() != ModelStatus.DRAFT ||
+            replacement.revision() != expectedRevision + 1 ||
+            !Objects.equals(replacement.checksum(), expectedChecksum) ||
+            snapshot == null || snapshot.isBlank()
+        ) {
+            throw new IllegalArgumentException("Invalid unchanged ModelSpec forward-undo append");
+        }
+        Integer changed = jdbcTemplate.queryForObject(
+            """
+            with advanced_head as (
+                update modeling_model_spec
+                   set revision = ?, version = version + 1, last_modified_date = ?
+                 where tenant_id = ? and id = ? and contract_version = 2
+                   and revision = ? and current_checksum = ? and status = 'DRAFT'
+                returning id
+            ), inserted_revision as (
+                insert into modeling_model_spec_revision (
+                    id, model_spec_id, revision, status, content_checksum,
+                    created_date, last_modified_date, tenant_id, contract_version,
+                    snapshot_json, created_by, dimension_definition_id,
+                    dimension_definition_revision, data_mart_id, variant_code
+                )
+                select ?, advanced_head.id, ?, ?, ?, ?, ?, ?, 2, cast(? as jsonb), ?, ?, ?, ?, ?
+                  from advanced_head
+                returning 1
+            )
+            select count(*)::int from inserted_revision
+            """,
+            Integer.class,
+            replacement.revision(),
+            Timestamp.from(replacement.updatedAt()),
+            tenantId,
+            replacement.id(),
+            expectedRevision,
+            expectedChecksum,
+            UUID.randomUUID(),
+            replacement.revision(),
+            replacement.status().name(),
+            replacement.checksum(),
+            Timestamp.from(replacement.updatedAt()),
+            Timestamp.from(replacement.updatedAt()),
+            tenantId,
+            snapshot,
+            actorId,
+            replacement.dimensionDefinitionRef() == null
+                ? null
+                : replacement.dimensionDefinitionRef().dimensionDefinitionId(),
+            replacement.dimensionDefinitionRef() == null
+                ? null
+                : replacement.dimensionDefinitionRef().revision(),
+            replacement.dataMartId(),
+            replacement.variantCode()
+        );
+        return changed == null ? 0 : changed;
+    }
+
     public int compareAndSetPublishedMetricRefs(
         String tenantId,
         String actorId,

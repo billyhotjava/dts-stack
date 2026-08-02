@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260802-02-modeling-dbt-implementation-draft" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="modeling_model_spec"/>
+            <tableExists tableName="modeling_model_implementation"/>
+            <not>
+                <tableExists tableName="modeling_dbt_implementation_draft"/>
+            </not>
+        </preConditions>
+        <comment>
+            Isolated, tenant/plan/model/actor-scoped advanced dbt drafts with strong CAS,
+            expiry, validation pins and immutable implementation commit receipts.
+        </comment>
+
+        <createTable tableName="modeling_dbt_implementation_draft">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="tenant_id" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="plan_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="model_spec_id" type="${uuidType}">
+                <constraints nullable="false" foreignKeyName="fk_modeling_dbt_draft_model" referencedTableName="modeling_model_spec" referencedColumnNames="id"/>
+            </column>
+            <column name="actor_id" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="base_model_revision" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="base_model_checksum" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="base_implementation_revision" type="int"/>
+            <column name="base_implementation_checksum" type="varchar(64)"/>
+            <column name="idempotency_key" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="request_hash" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_bundle_snapshot" type="jsonb">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="etag" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expires_at" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+            <column name="validated_checksum" type="varchar(64)"/>
+            <column name="project_checksum" type="varchar(64)"/>
+            <column name="bundle_checksum" type="varchar(64)"/>
+            <column name="bundle_manifest" type="text"/>
+            <column name="validation_summary" type="jsonb"/>
+            <column name="commit_idempotency_key" type="varchar(128)"/>
+            <column name="implementation_id" type="${uuidType}"/>
+            <column name="implementation_revision" type="int"/>
+            <column name="implementation_checksum" type="varchar(64)"/>
+            <column name="artifact_count" type="int" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="committed_at" type="timestamp"/>
+            <column name="created_date" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_modified_date" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint
+            tableName="modeling_dbt_implementation_draft"
+            columnNames="tenant_id,plan_id,model_spec_id,actor_id,idempotency_key"
+            constraintName="uk_modeling_dbt_draft_idempotency"/>
+        <addUniqueConstraint
+            tableName="modeling_dbt_implementation_draft"
+            columnNames="etag"
+            constraintName="uk_modeling_dbt_draft_etag"/>
+        <createIndex tableName="modeling_dbt_implementation_draft" indexName="idx_modeling_dbt_draft_lookup">
+            <column name="tenant_id"/>
+            <column name="model_spec_id"/>
+            <column name="actor_id"/>
+            <column name="status"/>
+            <column name="expires_at"/>
+        </createIndex>
+        <createIndex tableName="modeling_dbt_implementation_draft" indexName="idx_modeling_dbt_draft_expiry">
+            <column name="expires_at"/>
+            <column name="status"/>
+            <column name="id"/>
+        </createIndex>
+
+        <createTable tableName="modeling_dbt_implementation_draft_file">
+            <column name="draft_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="path" type="varchar(512)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="content_checksum" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="content" type="text">
+                <constraints nullable="false"/>
+            </column>
+            <column name="byte_size" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="modeling_dbt_implementation_draft_file"
+            baseColumnNames="draft_id"
+            constraintName="fk_modeling_dbt_draft_file_draft"
+            referencedTableName="modeling_dbt_implementation_draft"
+            referencedColumnNames="id"
+            onDelete="CASCADE"/>
+        <addUniqueConstraint
+            tableName="modeling_dbt_implementation_draft_file"
+            columnNames="draft_id,path"
+            constraintName="uk_modeling_dbt_draft_file_path"/>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE modeling_dbt_implementation_draft
+                ADD CONSTRAINT ck_modeling_dbt_draft_pins
+                CHECK (
+                    base_model_revision > 0
+                    AND base_model_checksum ~ '^[0-9a-f]{64}$'
+                    AND (
+                        (base_implementation_revision IS NULL AND base_implementation_checksum IS NULL)
+                        OR (
+                            base_implementation_revision > 0
+                            AND base_implementation_checksum ~ '^[0-9a-f]{64}$'
+                        )
+                    )
+                ),
+                ADD CONSTRAINT ck_modeling_dbt_draft_state
+                CHECK (status IN ('DRAFT', 'VALIDATED', 'COMMITTING', 'COMMITTED')),
+                ADD CONSTRAINT ck_modeling_dbt_draft_validation
+                CHECK (
+                    (status = 'DRAFT' AND validated_checksum IS NULL AND project_checksum IS NULL
+                        AND bundle_checksum IS NULL AND bundle_manifest IS NULL)
+                    OR (status IN ('VALIDATED', 'COMMITTING', 'COMMITTED')
+                        AND validated_checksum ~ '^[0-9a-f]{64}$'
+                        AND project_checksum ~ '^[0-9a-f]{64}$'
+                        AND bundle_checksum ~ '^[0-9a-f]{64}$'
+                        AND bundle_manifest IS NOT NULL)
+                ),
+                ADD CONSTRAINT ck_modeling_dbt_draft_commit
+                CHECK (
+                    (status <> 'COMMITTED' AND implementation_id IS NULL AND implementation_revision IS NULL
+                        AND implementation_checksum IS NULL AND committed_at IS NULL)
+                    OR (status = 'COMMITTED' AND implementation_id IS NOT NULL AND implementation_revision > 0
+                        AND implementation_checksum ~ '^[0-9a-f]{64}$' AND committed_at IS NOT NULL)
+                ),
+                ADD CONSTRAINT ck_modeling_dbt_draft_artifact_count
+                CHECK (artifact_count >= 0);
+
+            ALTER TABLE modeling_dbt_implementation_draft_file
+                ADD CONSTRAINT ck_modeling_dbt_draft_file_path
+                CHECK (path <> '' AND path !~ '(^/|(^|/)\.\.(/|$)|^[A-Za-z]:/)'),
+                ADD CONSTRAINT ck_modeling_dbt_draft_file_checksum
+                CHECK (content_checksum ~ '^[0-9a-f]{64}$'),
+                ADD CONSTRAINT ck_modeling_dbt_draft_file_size
+                CHECK (byte_size >= 0 AND byte_size <= 2097152);
+        ]]></sql>
+
+        <rollback>
+            <dropTable tableName="modeling_dbt_implementation_draft_file"/>
+            <dropTable tableName="modeling_dbt_implementation_draft"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

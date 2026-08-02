@@ -1804,22 +1804,23 @@
 ## Sprint-83: dbt 双向可视化建模与外部项目接入 (202608)
 
 **目录**: `worklog/v2.2.3/sprint-83-202608-dbt-visual-roundtrip-modeling`
-**状态**: DRAFT（现状与架构 Review 已完成；产品决策、真实 dbt 包画像、G0 基线和契约尚未冻结，禁止编码）
+**状态**: DRAFT（D01～D12 产品决策与核心所有权边界已冻结；工程 fixtures、G0 基线和当前待拉取切片契约尚未过门。H83-01 原始证据 + F0/T05 认证登记只阻断 S3 物化，客户脱敏包只阻断客户兼容声明）
 **类型**: Architecture / Product Design / dbt Integration / Full-stack
-**目标**: 让建模人员在同一 canonical 模型上下文中查看和维护业务模型、dbt SQL、表结构、依赖关系与物化结果，并把外部 dbt 项目通过可审计的预检、冲突处理和幂等应用导入为 ModelSpec DRAFT + DBT_MANAGED Implementation Revision，不产生第二套模型、解析、发布或运行控制面。
+**目标**: 让建模人员在同一 canonical 模型上下文中完成业务可视化设计、选择或确认 dbt 物化实现并查看依赖与物化结果；SQL/dbt 技术正文仅在同一模型详情的显式高级实现中维护。外部 dbt 项目通过可审计的预检、冲突处理和幂等应用导入为 ModelSpec DRAFT + DBT_MANAGED Implementation Revision，不产生第二套模型、解析、发布或运行控制面。
 **依赖**: 复用 Sprint-81 的 WarehousePlan→ModelSpec v2→StageGate→Lifecycle→ReleaseCandidate→Materialization→DbtExecutionGateway 主链；复用现有 dts.model-package/v1、ZIP inspector、preview/apply/retry、CatalogAssetKey、质量证据和公共审计 outbox。
+**独立紧急前置**: `H83-01`（`assets/dbt-runtime-hotfix-prerequisite.md`）不计入下表 35 个 Task；它独立修复精确 PostgreSQL dbt runtime 并产生不可变候选/原始 RT-01 证据，F0/T05 是唯一认证登记 owner。两者只阻断 S3 发布物化，不能以客户包缺失为由延期。
 
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
-| F0-架构基线与产品决策冻结 | P0 | 4 | DRAFT |
-| F1-统一dbt快照与可视化投影 | P0 | 4 | DRAFT |
-| F2-高级建模SQL与可视化双视图 | P0 | 5 | DRAFT |
-| F3-外部dbt包逆向建模产品化 | P0 | 5 | DRAFT |
-| F4-发布物化与资产证据闭环 | P0 | 4 | DRAFT |
-| F5-安全审计与可运维收敛 | P0 | 4 | DRAFT |
-| F6-真实端到端验收与旧入口退役 | P0 | 4 | DRAFT |
+| F0-架构基线与产品决策冻结 | P0×5（T05 仅 S3） | 5 | DRAFT |
+| F1-统一dbt快照与可视化投影 | P0×4 / P1×1 | 5 | DRAFT |
+| F2-业务可视化与高级dbt实现分层 | P0×2 / P1×3 | 5 | DRAFT |
+| F3-外部dbt包逆向建模产品化 | P0×4 / P1×2 | 6 | DRAFT |
+| F4-发布物化与资产证据闭环 | P1×4 | 4 | DRAFT |
+| F5-安全审计与可运维收敛 | P0×3 / P1×1 / P2×1 | 5 | DRAFT |
+| F6-真实端到端验收与旧入口退役 | P0×1 / P1×3 / P2×1 | 5 | DRAFT |
 
-**统计**: DRAFT=30, READY=0, IN_PROGRESS=0, DONE=0, BLOCKED=0。
-**执行顺序**: F0 → F1 → F2/T01～T03 与 F3 → F4/T01～T03 → F2/T04～T05 与 F4/T04；F5 从 F1 起并行守卫，最后 F6。F0/T04 未通过前，任何实现 Task 不得转为 READY。
-**关键决策（提案）**: ModelSpec 拥有业务语义，Implementation Revision 拥有技术实现，运行 artifact/relation observation 拥有物理事实；DBT_MANAGED 为 SQL 权威、结构只读；P0 提供逻辑表结构、依赖图和物理表/样例数据，不承诺任意 SQL/Jinja 无损转可编辑画布；高级模式复用现有模型工作台；首期只支持 ZIP 快照，不接 Git/在线依赖，也不做 ZIP 导出和所有权转换。
-**已知风险**: 尚无客户脱敏 dbt 包，dbt Core/manifest/adapter 兼容范围不能宣称；现有逆向 UI 为硬编码数据库表原型；后台 import 主体已存在但正式审计、三方漂移、部分成功恢复 UX 和 parser 收敛仍有缺口；所有产品决策详见 `assets/decision-register.md`。
+**统计**: DRAFT=35, READY=0, IN_PROGRESS=0, DONE=0, BLOCKED=0；P0=19（其中 F0/T05 只阻断 S3），P1=14，P2=2。
+**执行顺序**: Sprint-83a（S0 工程准入 → S1 统一表示 → S2 artifact-rich ZIP）→ Sprint-83b（S3 发布物化 → S4 source-only/漂移/恢复）→ Sprint-83c（S5 物理退役）。F0/T04 只评审当前待拉取切片；S1/S2 不等待 H83-01/F0/T05，S3 必须等待 `G0-RUNTIME=PASS`，P1/P2 不反向阻断 P0。
+**关键决策**: D01～D12 均已确认：普通业务可视化隐藏 SQL/dbt 技术正文；DBT_MANAGED 只表示技术实现所有权；高级实现不新增菜单/清单；P0 artifact-rich 外部接入只接 ZIP；重新导入按技术三方比较并保留 ModelSpec 业务语义；PARTIAL 只表示已选合格项启动后的逐项混合结果；Catalog 使用 latestPublishedRef/servingRef 双指针，PUBLISHED 可发现、成功 MATERIALIZED 才切 serving；S3 样例显式加载、默认100/最大500并 fail-closed；dbt 兼容按 inspect/import/materialization 三轴认证；source-only 政策已冻结但实现排入 P1，只有 enforced 完整 name/data_type 字段契约才可导入，动态/macro/package 缺口阻断受影响闭包；Sprint-83 不做 ZIP 导出、Git push 或 ownership conversion。
+**已知风险**: 当前 `dts-dbt:1.10.0` 实际 Core 为 `2.0.0-alpha.5`，H83-01 + F0/T05 未完成前 materialization 保持 NOT_CERTIFIED；尚无客户脱敏 dbt 包，因此 CUSTOMER-VALIDATION 保持 GAP 但不阻断通用实现；source parser 尚未投影 schema YAML columns，也未可靠传播自定义 macro 隐藏依赖；现有逆向 UI 为硬编码数据库表原型；后台 import、Catalog 双指针和物理预览主体契约仍待实现；具名残余风险 `R-DBT-LEGACY-DAG` 仍可由维护员触达，`R-DBT-LEGACY-PREVIEW` 仍可绕过 revision/evidence/密级/脱敏控制，旧 preview 必须在 S3 先完成安全遏制，两者再于 caller=0、迁移和回滚证据成立后退役；正式审计、三方漂移、PARTIAL、前向撤销与真实密级/脱敏/大字段性能证据仍有缺口。

@@ -11,12 +11,14 @@ import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.config.GovernanceProperties;
+import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.governance.GovIssueTicket;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.governance.GovComplianceBatchRepository;
 import com.yuzhi.dts.platform.repository.governance.GovIssueActionRepository;
 import com.yuzhi.dts.platform.repository.governance.GovIssueTicketRepository;
 import com.yuzhi.dts.platform.service.governance.request.IssueTicketUpsertRequest;
+import com.yuzhi.dts.platform.security.policy.DataLevel;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
 import com.yuzhi.dts.platform.service.security.OrganizationVisibilityService;
 import java.util.List;
@@ -45,6 +47,7 @@ class IssueTicketServiceAutomaticAuditTest {
     @Mock private QualityAuditRecorder qualityAuditRecorder;
     @Mock private QualityEffectiveDepartmentResolver departmentResolver;
     @Mock private QualityDatasetReadGuard datasetReadGuard;
+    @Mock private IssueSourcePolicy issueSourcePolicy;
 
     private IssueTicketService service;
 
@@ -60,7 +63,8 @@ class IssueTicketServiceAutomaticAuditTest {
             new GovernanceProperties(),
             qualityAuditRecorder,
             departmentResolver,
-            datasetReadGuard
+            datasetReadGuard,
+            issueSourcePolicy
         );
     }
 
@@ -153,6 +157,68 @@ class IssueTicketServiceAutomaticAuditTest {
         assertThatThrownBy(() -> service.create(request, "alice", "dept-a"))
             .isInstanceOf(AccessDeniedException.class);
         verify(ticketRepository, never()).save(any(GovIssueTicket.class));
+    }
+
+    @Test
+    void boundDatasetClassificationCannotBeDowngradedByTheRequest() {
+        UUID datasetId = UUID.fromString("40000000-0000-0000-0000-000000000082");
+        CatalogDataset dataset = new CatalogDataset();
+        dataset.setId(datasetId);
+        dataset.setClassification("CONFIDENTIAL");
+        IssueTicketUpsertRequest request = request();
+        request.setDatasetId(datasetId);
+        request.setDataLevel("DATA_INTERNAL");
+        when(datasetReadGuard.requireReadable(datasetId, "dept-a")).thenReturn(dataset);
+        when(ticketRepository.save(any(GovIssueTicket.class))).thenAnswer(invocation -> {
+            GovIssueTicket ticket = invocation.getArgument(0);
+            ticket.setId(TICKET_ID);
+            return ticket;
+        });
+
+        var created = service.create(request, "alice", "dept-a");
+
+        assertThat(created.getDataLevel()).isEqualTo("CONFIDENTIAL");
+    }
+
+    @Test
+    void lowClearanceUserCannotReadAConfidentialDatasetIssue() {
+        GovIssueTicket ticket = new GovIssueTicket();
+        ticket.setId(TICKET_ID);
+        ticket.setTitle("高密级数据质量问题");
+        ticket.setDataLevel("CONFIDENTIAL");
+        when(ticketRepository.findById(TICKET_ID)).thenReturn(Optional.of(ticket));
+        when(accessChecker.resolveHighestDataLevel()).thenReturn(DataLevel.DATA_INTERNAL);
+
+        assertThatThrownBy(() -> service.get(TICKET_ID, "bob", "dept-a"))
+            .isInstanceOf(AccessDeniedException.class)
+            .hasMessageContaining("无权访问");
+    }
+
+    @Test
+    void exactSourceLookupReturnsOnlyTheAuthorizedIssue() {
+        GovIssueTicket ticket = new GovIssueTicket();
+        ticket.setId(TICKET_ID);
+        ticket.setSourceType("QUALITY_RUN");
+        ticket.setSourceRefId(SOURCE_ID);
+        ticket.setTitle("质量运行问题");
+        ticket.setDataLevel("INTERNAL");
+        ticket.setOwner("alice");
+        when(ticketRepository.findFirstBySourceTypeIgnoreCaseAndSourceRefIdOrderByCreatedDateDesc("QUALITY_RUN", SOURCE_ID))
+            .thenReturn(Optional.of(ticket));
+        when(accessChecker.resolveHighestDataLevel()).thenReturn(DataLevel.DATA_CONFIDENTIAL);
+
+        assertThat(service.findBySource("QUALITY_RUN", SOURCE_ID, "alice", "dept-a"))
+            .get()
+            .extracting(result -> result.getId())
+            .isEqualTo(TICKET_ID);
+    }
+
+    @Test
+    void exactSourceLookupReportsAnAbsentIssueWithoutEnumeratingTickets() {
+        when(ticketRepository.findFirstBySourceTypeIgnoreCaseAndSourceRefIdOrderByCreatedDateDesc("QUALITY_RUN", SOURCE_ID))
+            .thenReturn(Optional.empty());
+
+        assertThat(service.findBySource("QUALITY_RUN", SOURCE_ID, "alice", "dept-a")).isEmpty();
     }
 
     private IssueTicketUpsertRequest request() {

@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ingestionTaskAPI } from "@/api/ingestion";
-import { listDatasets } from "@/api/platformApi";
+import { listQualityDatasetOptions } from "@/api/platformApi";
 import { normalizeDatasetDomain } from "./datasetDomains";
-import { collectDatasetPages } from "./datasetPaging";
 import type { QualityDataset } from "./qualityTypes";
 
 export function useDefaultLakeDatasets() {
@@ -21,15 +20,7 @@ export function useDefaultLakeDatasets() {
 				setMessage(lake?.message || "未识别默认数据湖连接");
 				return;
 			}
-			const allRows = await collectDatasetPages<Record<string, unknown>>(
-				async (page, size) =>
-					(await listDatasets({ page, size, enabledOnly: true, sourceId: lake.dataSourceId })) as {
-						content?: Record<string, unknown>[];
-						total?: number;
-						totalElements?: number;
-						totalPages?: number;
-					},
-			);
+			const allRows = (await listQualityDatasetOptions()) as unknown as Record<string, unknown>[];
 			const next = allRows.map((item) => ({
 				id: String(item.id),
 				name: String(item.name || item.tableName || item.id),
@@ -37,7 +28,7 @@ export function useDefaultLakeDatasets() {
 				tableName: item.tableName ? String(item.tableName) : undefined,
 				hiveDatabase: item.hiveDatabase ? String(item.hiveDatabase) : undefined,
 				hiveTable: item.hiveTable ? String(item.hiveTable) : undefined,
-				sourceId: String(lake.dataSourceId),
+				sourceId: item.sourceId ? String(item.sourceId) : String(lake.dataSourceId),
 				...normalizeDatasetDomain(item),
 			}));
 			setDatasets(next);

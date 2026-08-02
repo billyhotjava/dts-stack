@@ -10,6 +10,7 @@ import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportAppl
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.BeginDisposition;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.CandidateResult;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.ModelSpecImportApplyException;
+import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.OperationType;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.ResultStatus;
 import java.time.Instant;
 import java.util.List;
@@ -25,7 +26,7 @@ class ModelSpecImportApplyRepositoryTest {
         BeginCommand command = command("request-hash");
 
         assertThat(
-            ModelSpecImportApplyRepository.replayDisposition(command, attempt(command, AttemptStatus.SUCCEEDED))
+            ModelSpecImportApplyRepository.replayDisposition(command, attempt(command, AttemptStatus.SUCCESS))
         )
             .isEqualTo(BeginDisposition.REPLAY);
         assertThat(
@@ -37,9 +38,28 @@ class ModelSpecImportApplyRepositoryTest {
     @Test
     void sameKeyWithDifferentRequestHashFailsClosed() {
         BeginCommand command = command("request-hash");
-        Attempt existing = attempt(command("different-hash"), AttemptStatus.SUCCEEDED);
+        Attempt existing = attempt(command("different-hash"), AttemptStatus.SUCCESS);
 
         assertThatThrownBy(() -> ModelSpecImportApplyRepository.replayDisposition(command, existing))
+            .isInstanceOfSatisfying(ModelSpecImportApplyException.class, exception ->
+                assertThat(exception.code()).isEqualTo("MODEL_IMPORT_IDEMPOTENCY_CONFLICT")
+            );
+    }
+
+    @Test
+    void forwardUndoReplayIsBoundToTheExactTargetAttempt() {
+        UUID targetAttemptId = UUID.fromString("10000000-0000-0000-0000-000000000020");
+        BeginCommand command = undoCommand(targetAttemptId);
+        Attempt matching = undoAttempt(command, targetAttemptId);
+
+        assertThat(ModelSpecImportApplyRepository.replayDisposition(command, matching))
+            .isEqualTo(BeginDisposition.REPLAY);
+        assertThatThrownBy(() ->
+            ModelSpecImportApplyRepository.replayDisposition(
+                command,
+                undoAttempt(command, UUID.fromString("10000000-0000-0000-0000-000000000021"))
+            )
+        )
             .isInstanceOfSatisfying(ModelSpecImportApplyException.class, exception ->
                 assertThat(exception.code()).isEqualTo("MODEL_IMPORT_IDEMPOTENCY_CONFLICT")
             );
@@ -58,17 +78,22 @@ class ModelSpecImportApplyRepositoryTest {
     @Test
     void derivesTerminalStatusOnlyFromRecordedCandidateFacts() {
         CandidateResult created = result("model.project.fact", ResultStatus.CREATED);
+        CandidateResult skipped = result("model.project.dimension", ResultStatus.SKIPPED);
         CandidateResult failed = result("model.project.summary", ResultStatus.FAILED);
         CandidateResult blocked = result("model.project.application", ResultStatus.BLOCKED);
 
         ApplySummary success = ModelSpecImportApplyRepository.summarize(List.of(created));
         ApplySummary partial = ModelSpecImportApplyRepository.summarize(List.of(created, failed, blocked));
         ApplySummary failedOnly = ModelSpecImportApplyRepository.summarize(List.of(failed, blocked));
+        ApplySummary skippedAndFailed = ModelSpecImportApplyRepository.summarize(List.of(skipped, failed));
+        ApplySummary blockedOnly = ModelSpecImportApplyRepository.summarize(List.of(blocked));
 
-        assertThat(ModelSpecImportApplyRepository.terminalStatus(success)).isEqualTo(AttemptStatus.SUCCEEDED);
+        assertThat(ModelSpecImportApplyRepository.terminalStatus(success)).isEqualTo(AttemptStatus.SUCCESS);
         assertThat(ModelSpecImportApplyRepository.terminalStatus(partial)).isEqualTo(AttemptStatus.PARTIAL);
         assertThat(ModelSpecImportApplyRepository.terminalStatus(failedOnly)).isEqualTo(AttemptStatus.FAILED);
-        assertThat(partial).isEqualTo(new ApplySummary(3, 1, 0, 0, 0, 1, 1));
+        assertThat(ModelSpecImportApplyRepository.terminalStatus(skippedAndFailed)).isEqualTo(AttemptStatus.PARTIAL);
+        assertThat(ModelSpecImportApplyRepository.terminalStatus(blockedOnly)).isEqualTo(AttemptStatus.BLOCKED);
+        assertThat(partial).isEqualTo(new ApplySummary(3, 0, 1, 1, 0, 0, 1, 1));
     }
 
     @Test
@@ -119,7 +144,7 @@ class ModelSpecImportApplyRepositoryTest {
             "source-key",
             "source-hash",
             AttemptStatus.PARTIAL,
-            new ApplySummary(2, 1, 0, 0, 0, 1, 0),
+            new ApplySummary(2, 0, 1, 1, 0, 0, 1, 0),
             "actor",
             NOW,
             NOW,
@@ -149,6 +174,49 @@ class ModelSpecImportApplyRepositoryTest {
             requestHash,
             "actor",
             NOW
+        );
+    }
+
+    private static BeginCommand undoCommand(UUID targetAttemptId) {
+        return new BeginCommand(
+            UUID.fromString("10000000-0000-0000-0000-000000000011"),
+            UUID.fromString("10000000-0000-0000-0000-000000000002"),
+            UUID.fromString("10000000-0000-0000-0000-000000000003"),
+            null,
+            "default",
+            "preview-hash",
+            List.of("model.project.summary"),
+            List.of("model.project.summary"),
+            "undo-key",
+            "undo-request-hash",
+            "actor",
+            NOW,
+            OperationType.FORWARD_UNDO,
+            targetAttemptId
+        );
+    }
+
+    private static Attempt undoAttempt(BeginCommand command, UUID targetAttemptId) {
+        return new Attempt(
+            command.attemptId(),
+            command.runId(),
+            command.planId(),
+            null,
+            command.tenantId(),
+            2,
+            command.previewHash(),
+            command.selectedUniqueIds(),
+            command.selectedClosure(),
+            command.idempotencyKey(),
+            command.requestHash(),
+            AttemptStatus.SUCCESS,
+            new ApplySummary(1, 0, 0, 0, 0, 1, 0, 0),
+            command.actorId(),
+            NOW,
+            NOW,
+            List.of(result("model.project.summary", ResultStatus.SKIPPED)),
+            OperationType.FORWARD_UNDO,
+            targetAttemptId
         );
     }
 

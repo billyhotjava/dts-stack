@@ -73,6 +73,8 @@ class ServiceDependencyAuthenticationFilterTest {
         "/api/internal/modeling/execution-bindings/runtime-specs/consume";
     private static final String AIRFLOW_PLAN_RUN_GROUP =
         "/api/internal/modeling/execution-bindings/run-groups/10000000-0000-0000-0000-000000000001";
+    private static final String AIRFLOW_LEGACY_DBT_SYNC =
+        "/api/etl/dbt/models/sync";
 
     private PlatformInboundServiceAuthProperties props;
     private SvcTokenAuthService svcTokenAuthService;
@@ -322,6 +324,18 @@ class ServiceDependencyAuthenticationFilterTest {
             SecurityContextHolder.getContext().getAuthentication()
         )
             .isNull();
+    }
+
+    @Test
+    void airflowPairwiseTokenCanOnlyUseExactLegacyDbtSyncCallback()
+        throws Exception {
+        assertAirflowCanAccess("POST", AIRFLOW_LEGACY_DBT_SYNC);
+
+        assertAirflowCannotAccess("GET", AIRFLOW_LEGACY_DBT_SYNC);
+        assertAirflowCannotAccess(
+            "POST",
+            AIRFLOW_LEGACY_DBT_SYNC + "/extra"
+        );
     }
 
     @Test

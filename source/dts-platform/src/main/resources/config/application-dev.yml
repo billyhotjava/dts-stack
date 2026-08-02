@@ -112,7 +112,3 @@ jhipster:
 # ===================================================================
 
 # application:
-
-auditing:
-  tenancy-mode: ${AUDIT_TENANCY_MODE:SINGLE_TENANT}
-  tenant-id: ${AUDIT_TENANT_ID:${DTS_PLATFORM_MODELING_DEFAULT_TENANT_ID:default}}

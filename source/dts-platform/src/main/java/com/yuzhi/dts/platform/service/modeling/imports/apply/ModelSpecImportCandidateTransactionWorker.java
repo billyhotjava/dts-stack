@@ -7,12 +7,15 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.ExpectedVersion;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelStatus;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
 import com.yuzhi.dts.platform.service.modeling.ModelingDbtArtifactImportService;
 import com.yuzhi.dts.platform.service.modeling.ModelingDbtArtifactImportService.ImportCommand;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyCommandCodec.DecodedCandidate;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.CandidateResult;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.ResultStatus;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyPlanContract.Candidate;
+import com.yuzhi.dts.platform.service.modeling.imports.reconciliation.ModelSpecImportReconciliationContract.MergeCheckpoint;
+import com.yuzhi.dts.platform.service.modeling.imports.reconciliation.ModelSpecImportReconciliationContract.RevisionPins;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -56,7 +59,7 @@ public class ModelSpecImportCandidateTransactionWorker {
         );
         ResultStatus resultStatus;
         ModelSpecView model;
-        if ("SKIP".equals(candidate.action())) {
+        if ("SKIP".equals(candidate.action()) || "CANCEL".equals(candidate.action())) {
             model = modelSpecs.get(command.tenantId(), candidate.targetModelSpecId());
             resultStatus = ResultStatus.SKIPPED;
         } else if ("CREATE".equals(candidate.action())) {
@@ -67,7 +70,7 @@ public class ModelSpecImportCandidateTransactionWorker {
                 decoded.createCommand()
             );
             model = created.modelSpec();
-            resultStatus = created.replayed() ? ResultStatus.REPLAYED : ResultStatus.CREATED;
+            resultStatus = created.replayed() ? ResultStatus.SKIPPED : ResultStatus.CREATED;
         } else if ("UPDATE".equals(candidate.action())) {
             model = modelSpecs.update(
                 command.tenantId(),
@@ -87,9 +90,10 @@ public class ModelSpecImportCandidateTransactionWorker {
         requireExpectedModel(candidate, model);
 
         int artifactCount = 0;
-        int implementationRevision = candidate.targetImplementationRevision();
-        String implementationChecksum = candidate.proposedImplementationChecksum();
-        if (!"SKIP".equals(candidate.action())) {
+        int implementationRevision = candidate.expectedImplementationRevision();
+        String implementationChecksum = candidate.expectedImplementationChecksum();
+        boolean importedDbt = decoded.implementationCommand().ownership() == ImplementationMode.DBT_MANAGED;
+        if (!"SKIP".equals(candidate.action()) && !"CANCEL".equals(candidate.action())) {
             ExpectedVersion modelVersion = new ExpectedVersion(model.id(), model.revision(), model.checksum());
             ExpectedImplementationVersion expectedImplementation = new ExpectedImplementationVersion(
                 model.id(),
@@ -97,7 +101,7 @@ public class ModelSpecImportCandidateTransactionWorker {
                 candidate.expectedImplementationChecksum()
             );
             ImplementationView implementation;
-            if ("DBT_BACKED".equals(candidate.conversionMode())) {
+            if (importedDbt) {
                 implementation = lifecycle.saveImportedDbtImplementation(
                     command.tenantId(),
                     command.actorId(),
@@ -124,7 +128,7 @@ public class ModelSpecImportCandidateTransactionWorker {
             requireExpectedImplementation(candidate, implementation);
             implementationRevision = implementation.implementationRevision();
             implementationChecksum = implementation.implementationChecksum();
-            if ("DBT_BACKED".equals(candidate.conversionMode())) {
+            if (importedDbt) {
                 ModelingDbtArtifactImportService.ImportResult imported = artifactImports.importArtifacts(
                     new ImportCommand(
                         command.tenantId(),
@@ -146,6 +150,29 @@ public class ModelSpecImportCandidateTransactionWorker {
             }
         }
 
+        RevisionPins preAttemptPins = candidate.expectedModelRevision() > 0 &&
+            candidate.expectedModelChecksum() != null &&
+            candidate.expectedImplementationRevision() > 0 &&
+            candidate.expectedImplementationChecksum() != null
+            ? new RevisionPins(
+                candidate.expectedModelRevision(),
+                candidate.expectedModelChecksum(),
+                candidate.expectedImplementationRevision(),
+                candidate.expectedImplementationChecksum()
+            )
+            : null;
+        MergeCheckpoint checkpoint = "CANCEL".equals(candidate.action())
+            ? null
+            : new MergeCheckpoint(
+                command.tenantId(),
+                decoded.projectKey(),
+                candidate.dbtUniqueId(),
+                candidate.incomingExternalChecksum(),
+                implementationRevision,
+                implementationChecksum,
+                model.revision(),
+                model.checksum()
+            );
         CandidateResult result = new CandidateResult(
             UUID.randomUUID(),
             command.sequence(),
@@ -160,7 +187,12 @@ public class ModelSpecImportCandidateTransactionWorker {
             implementationChecksum,
             artifactCount,
             List.of(),
-            Instant.now()
+            Instant.now(),
+            candidate.action(),
+            decoded.projectKey(),
+            checkpoint,
+            preAttemptPins,
+            candidate.dependencyUniqueIds()
         );
         return applyRepository.recordSuccess(
             command.tenantId(),

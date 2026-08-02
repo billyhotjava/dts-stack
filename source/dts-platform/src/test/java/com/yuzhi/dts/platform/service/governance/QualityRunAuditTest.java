@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -80,7 +81,7 @@ class QualityRunAuditTest {
             defaultLakeDatasetGuard,
             qualityDatasetReadGuard
         );
-        when(statementExecutor.execute(any(), any())).thenReturn(
+        lenient().when(statementExecutor.execute(any(), any())).thenReturn(
             new QualityDatasetStatementExecutor.Execution(
                 List.of(new StatementExecutionResult("sql", "select 1", StatementExecutionResult.Status.SUCCEEDED, "通过")),
                 1,
@@ -123,6 +124,41 @@ class QualityRunAuditTest {
             payload.capture()
         );
         org.assertj.core.api.Assertions.assertThat(String.valueOf(payload.getValue())).contains("triggerActor=alice");
+    }
+
+    @Test
+    void ingestionCompletionUsesTheTrustedMachineAuditPath() {
+        GovQualityRun run = executableRun("INGESTION", "service:dts-ingestion");
+        when(runRepository.findById(RUN_ID)).thenReturn(Optional.of(run));
+
+        ReflectionTestUtils.invokeMethod(service, "doExecuteRun", RUN_ID, Map.of());
+
+        verify(qualityAuditRecorder).recordMachine(
+            eq("ingestion"),
+            eq("quality-run:" + RUN_ID + ":SUCCESS"),
+            any(Instant.class),
+            eq("GOV_QUALITY_RUN_EXECUTE"),
+            eq(AuditStage.SUCCESS),
+            eq(RUN_ID.toString()),
+            any()
+        );
+        verify(qualityAuditRecorder, never()).recordAction(any(), any(), any(), any());
+    }
+
+    @Test
+    void sameNamedManualActorIsNeverPromotedToIngestionMachineAudit() {
+        GovQualityRun run = executableRun("MANUAL", "service:dts-ingestion");
+        when(runRepository.findById(RUN_ID)).thenReturn(Optional.of(run));
+
+        ReflectionTestUtils.invokeMethod(service, "doExecuteRun", RUN_ID, Map.of());
+
+        verify(qualityAuditRecorder).recordAction(
+            eq("GOV_QUALITY_RUN_EXECUTE"),
+            eq(AuditStage.SUCCESS),
+            eq(RUN_ID.toString()),
+            any()
+        );
+        verify(qualityAuditRecorder, never()).recordMachine(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -211,6 +247,34 @@ class QualityRunAuditTest {
             issuePayload.capture()
         );
         org.assertj.core.api.Assertions.assertThat(String.valueOf(issuePayload.getValue())).contains("triggerActor=alice");
+    }
+
+    @Test
+    void scheduledAutomaticIssueFailureWritesASeparateFailureAudit() {
+        GovQualityRun run = executableRun("SCHEDULED", "system");
+        when(runRepository.findById(RUN_ID)).thenReturn(Optional.of(run));
+        when(statementExecutor.execute(any(), any())).thenReturn(
+            new QualityDatasetStatementExecutor.Execution(
+                List.of(new StatementExecutionResult("sql", "select 1", StatementExecutionResult.Status.FAILED, "失败")),
+                1,
+                1
+            )
+        );
+        when(issueTicketService.createOrTouchWithDisposition(
+            eq("QUALITY_RUN"), eq(RUN_ID), any(), eq("system"), any()
+        )).thenThrow(new IllegalStateException("issue repository unavailable"));
+
+        ReflectionTestUtils.invokeMethod(service, "doExecuteRun", RUN_ID, Map.of());
+
+        verify(qualityAuditRecorder).recordMachineAttempt(
+            eq("scheduler"),
+            eq("quality-run:" + RUN_ID + ":FAIL:ISSUE:FAIL"),
+            any(Instant.class),
+            eq("GOV_ISSUE_CREATE"),
+            eq(AuditStage.FAIL),
+            eq(RUN_ID.toString()),
+            any()
+        );
     }
 
     @Test

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260802-05-catalog-model-serving-asset-key-constraint" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="modeling_catalog_model_serving_projection"/>
+            <sqlCheck expectedResult="1"><![CDATA[
+                SELECT count(*)
+                  FROM pg_constraint
+                 WHERE conrelid = 'modeling_catalog_model_serving_projection'::regclass
+                   AND conname = 'ck_catalog_model_serving_projection'
+            ]]></sqlCheck>
+        </preConditions>
+        <comment>
+            Replace the PostgreSQL-invalid {0,510} repetition with an equivalent
+            column-bounded length check plus an unbounded character allowlist.
+        </comment>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE modeling_catalog_model_serving_projection
+                DROP CONSTRAINT ck_catalog_model_serving_projection;
+
+            ALTER TABLE modeling_catalog_model_serving_projection
+                ADD CONSTRAINT ck_catalog_model_serving_projection
+                CHECK (
+                    btrim(tenant_id) <> ''
+                    AND catalog_asset_type = 'SEMANTIC_MODEL'
+                    AND char_length(catalog_asset_key) BETWEEN 16 AND 512
+                    AND catalog_asset_key ~ '^semantic-model:[a-z0-9][a-z0-9._:-]*$'
+                    AND jsonb_typeof(latest_published_ref) = 'object'
+                    AND (
+                        serving_ref IS NULL
+                        OR jsonb_typeof(serving_ref) = 'object'
+                    )
+                    AND version > 0
+                    AND sync_status IN ('SYNC_PENDING', 'SYNCED', 'SYNC_FAILED')
+                    AND sync_attempts >= 0
+                    AND (
+                        sync_status <> 'SYNC_FAILED'
+                        OR (last_sync_error IS NOT NULL AND btrim(last_sync_error) <> '')
+                    )
+                    AND updated_at >= created_at
+                );
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    RAISE EXCEPTION 'ROLLBACK_BLOCKED_CATALOG_MODEL_SERVING_ASSET_KEY_CONSTRAINT';
+                END $$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

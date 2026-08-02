@@ -9,6 +9,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelPackageCanonicalProjector.De
 import com.yuzhi.dts.platform.service.modeling.ModelPackageCanonicalProjector.ProjectRequest;
 import com.yuzhi.dts.platform.service.modeling.ModelPackageCanonicalProjector.SourceTarget;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.StandardBinding;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecSnapshotCodec;
 import com.yuzhi.dts.platform.service.modeling.imports.ModelPackageFixtures;
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.Column;
@@ -132,6 +133,39 @@ class ModelPackageCanonicalProjectorTest {
         var projection = projector.project(request(dimension, List.of(), null));
 
         assertThat(projection.issues()).extracting("code").contains("MODEL_SPEC_DIMENSION_DEFINITION_REQUIRED");
+    }
+
+    @Test
+    void projectsTargetEnvironmentStandardBindingsFromTheRequestSidecar() {
+        PackageModel model = ModelPackageFixtures.validPackage().models().getFirst();
+        String field = model.columns().getFirst().name();
+        StandardBinding binding = new StandardBinding(
+            field,
+            UUID.fromString("40000000-0000-0000-0000-000000000083"),
+            1,
+            null,
+            null,
+            null,
+            null,
+            "L2"
+        );
+
+        var base = request(model, List.of(), null);
+        var projection = projector.project(
+            new ProjectRequest(
+                base.planId(),
+                base.domainId(),
+                base.projectKey(),
+                base.model(),
+                base.externalDbtOwned(),
+                base.sources(),
+                base.dependencies(),
+                base.dimensionDefinitionRef(),
+                List.of(binding)
+            )
+        );
+
+        assertThat(projection.modelSpecCommand().standardBindings()).containsExactly(binding);
     }
 
     private static ProjectRequest request(

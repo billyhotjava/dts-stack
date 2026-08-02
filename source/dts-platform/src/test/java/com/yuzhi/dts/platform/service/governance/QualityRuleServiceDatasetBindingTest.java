@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.config.GovernanceProperties;
+import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.governance.GovRule;
 import com.yuzhi.dts.platform.domain.governance.GovRuleBinding;
 import com.yuzhi.dts.platform.domain.governance.GovRuleVersion;
@@ -240,10 +241,14 @@ class QualityRuleServiceDatasetBindingTest {
         version.setVersion(1);
         version.setStatus("DRAFT");
         version.setDefinition("{\"sql\":\"select id from public.orders\"}");
+        CatalogDataset dataset = new CatalogDataset();
+        dataset.setId(DATASET_ID);
 
         when(ruleRepository.findById(RULE_ID)).thenReturn(Optional.of(rule));
         when(versionRepository.findByRuleIdOrderByVersionDesc(RULE_ID)).thenReturn(List.of(version));
         when(bindingRepository.findByRuleVersionId(VERSION_ID)).thenReturn(List.of());
+        when(datasetRepository.findById(DATASET_ID)).thenReturn(Optional.of(dataset));
+        when(accessChecker.canRead(dataset)).thenReturn(true);
 
         assertThatThrownBy(() ->
             service.changeRuleVersionStatus(RULE_ID, 1, "PUBLISHED", null, "actor", "dept-a")

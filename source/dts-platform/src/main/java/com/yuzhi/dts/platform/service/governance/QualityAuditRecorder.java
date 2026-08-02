@@ -27,6 +27,11 @@ public class QualityAuditRecorder {
         auditService.auditActionStrict(actionCode, AuditStage.FAIL, resourceId, payload);
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordAttempt(String actionCode, AuditStage stage, String resourceId, Object payload) {
+        auditService.auditActionStrict(actionCode, stage, resourceId, payload);
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
     public void recordMachine(
         String machineActor,

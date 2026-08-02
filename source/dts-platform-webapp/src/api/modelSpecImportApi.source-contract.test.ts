@@ -8,7 +8,7 @@ test("model import preview and apply truth are queried from separate canonical r
 	assert.match(source, /getModelSpecImportPreviewRun/);
 	assert.match(source, /getModelSpecImportApplyResult/);
 	assert.match(source, /encodeURIComponent\(runId\)}\/apply/);
-	assert.doesNotMatch(source, /latestAttempt|applyResult/);
+	assert.match(source, /overallRun: ModelSpecImportRunResult/);
 });
 
 test("model import requests opt out of global toast without escaping type checking", () => {
@@ -22,5 +22,33 @@ test("dbt archive inspection uses the canonical multipart contract before JSON p
 	assert.match(source, /new FormData\(\)/);
 	assert.match(source, /data\.append\("archive", archive\)/);
 	assert.match(source, /\/dbt\/archive\/inspect/);
-	assert.match(source, /api\.post<ModelPackageJson>/);
+	assert.match(source, /api\.post<DbtArchiveInspection>/);
+	assert.match(source, /inspectionProof/);
+	assert.match(source, /proofExpiresAt/);
+	assert.match(source, /semanticOverrides/);
+	assert.match(source, /renameMappings/);
+});
+
+test("apply response exposes only the canonical status algebra", () => {
+	assert.match(source, /"RUNNING" \| "SUCCESS" \| "PARTIAL" \| "FAILED" \| "BLOCKED"/);
+	assert.match(source, /selected: number/);
+	assert.match(source, /pending: number/);
+	assert.match(source, /succeeded: number/);
+	for (const persistedFailureFact of [
+		"stage",
+		"category",
+		"retryable",
+		"correlationId",
+		"dependencyUniqueId",
+	]) {
+		assert.match(source, new RegExp(`${persistedFailureFact}\\??:`));
+	}
+	assert.doesNotMatch(source, /"SUCCEEDED"|"REPLAYED"|replayed: number/);
+});
+
+test("reimport decisions and forward undo reuse the canonical import resources", () => {
+	assert.match(source, /conflictResolutions: Record<string, ModelSpecImportConflictResolution>/);
+	assert.match(source, /forwardUndoModelSpecImport/);
+	assert.match(source, /\/dbt\/forward-undo/);
+	assert.match(source, /expectedCurrentRevisions/);
 });

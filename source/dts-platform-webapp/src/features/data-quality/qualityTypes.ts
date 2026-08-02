@@ -77,13 +77,20 @@ export type QualityRun = {
 	failingRowsSample?: Array<Record<string, unknown>>;
 };
 
-export const getQualityRunCounts = (run?: Pick<QualityRun, "rowsTotal" | "failingRowCount" | "status">) => {
+export const getQualityRunCounts = (
+	run?: Pick<QualityRun, "rowsTotal" | "failingRowCount" | "status" | "errorCategory">,
+) => {
 	const total = Math.max(0, Number(run?.rowsTotal || 0));
 	const failed = Math.min(total, Math.max(0, Number(run?.failingRowCount || 0)));
-	const passed = Math.max(0, total - failed);
-	const passRate = total ? Math.round((passed / total) * 10000) / 100 : 0;
-	const pending = ["QUEUED", "RUNNING"].includes(String(run?.status || "").toUpperCase());
-	const hasStatistics = !pending && total > 0;
+	const status = String(run?.status || "").toUpperCase();
+	const errorCategory = String(run?.errorCategory || "").toUpperCase();
+	const pending = ["QUEUED", "RUNNING"].includes(status);
+	const executionFailed =
+		status === "FAILED" &&
+		(errorCategory ? errorCategory !== "QUALITY_VIOLATION" : Number(run?.failingRowCount || 0) <= 0);
+	const passed = executionFailed ? 0 : Math.max(0, total - failed);
+	const passRate = total && !executionFailed ? Math.round((passed / total) * 10000) / 100 : 0;
+	const hasStatistics = !pending && !executionFailed && total > 0;
 	return { total, failed, passed, passRate, hasStatistics };
 };
 

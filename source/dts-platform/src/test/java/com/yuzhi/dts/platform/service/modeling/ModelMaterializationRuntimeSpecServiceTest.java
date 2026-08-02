@@ -64,6 +64,15 @@ class ModelMaterializationRuntimeSpecServiceTest {
         assertThat(view.pipelineRunGroupId()).isEqualTo(DISPATCH_ID);
         assertThat(view.runPurpose()).isEqualTo("RELEASE_BUILD");
         assertThat(view.profileLeaseId()).isEqualTo(LEASE_ID);
+        assertThat(view.runtimeProfileId())
+            .isEqualTo(
+                DbtRuntimeCertificationService.EXPECTED_CERTIFICATION_PROFILE_ID
+            );
+        assertThat(view.imageRef())
+            .endsWith(
+                "@" +
+                DbtRuntimeCertificationService.EXPECTED_CERTIFIED_IMAGE_DIGEST
+            );
         assertThat(view.toString())
             .doesNotContain("/run/")
             .doesNotContain("/dev/shm")
@@ -120,6 +129,37 @@ class ModelMaterializationRuntimeSpecServiceTest {
             .doesNotContain(token.digest())
             .doesNotContain("dim_customer fct_invoice")
             .doesNotContain(lease.credentialVersionRef());
+    }
+
+    @Test
+    void certificationDriftFailsBeforeLeaseIssueAndIsAudited() {
+        Fixture fixture = fixture();
+        ModelRuntimeSpecTokenCodec.IssuedToken token =
+            fixture.tokens.issue(DISPATCH_ID, NOW);
+        RuntimeSpecRecord runtime = runtime(token, null);
+        when(fixture.dispatches.lockRuntimeSpec(token.digest()))
+            .thenReturn(Optional.of(runtime));
+        when(fixture.runtimeCertification.requireCertified())
+            .thenThrow(
+                new ModelReleaseCandidateException(
+                    "DBT_RUNTIME_NOT_CERTIFIED",
+                    "Certified dbt runtime is unavailable",
+                    ModelReleaseCandidateException.Kind.PRECONDITION_REQUIRED
+                )
+            );
+
+        assertThatThrownBy(() -> fixture.service.consume(token.token()))
+            .isInstanceOf(ModelMaterializationRuntimeException.class)
+            .extracting(failure ->
+                ((ModelMaterializationRuntimeException) failure).code()
+            )
+            .isEqualTo("DBT_RUNTIME_NOT_CERTIFIED");
+        verify(fixture.leases, never()).issue(any());
+        verify(fixture.availabilityAudit).recordRuntimeDenied(
+            runtime,
+            "DBT_RUNTIME_NOT_CERTIFIED",
+            NOW
+        );
     }
 
     @Test
@@ -352,17 +392,33 @@ class ModelMaterializationRuntimeSpecServiceTest {
         var leases = mock(DbtRuntimeProfileLeaseService.class);
         var sourceAvailability = mock(ModelMaterializationSourceAvailabilityGuard.class);
         var availabilityAudit = mock(ModelMaterializationAvailabilityAuditService.class);
+        var runtimeCertification = mock(
+            DbtRuntimeCertificationService.class
+        );
+        when(runtimeCertification.requireCertified()).thenReturn(
+            DbtRuntimeCertificationServiceTest.runtime()
+        );
         var audit = new RecordingAuditService();
         var service = new ModelMaterializationRuntimeSpecService(
             dispatches,
             tokens,
             sourceAvailability,
             availabilityAudit,
+            runtimeCertification,
             leases,
             audit,
             Clock.fixed(NOW, ZoneOffset.UTC)
         );
-        return new Fixture(service, dispatches, tokens, sourceAvailability, availabilityAudit, leases, audit);
+        return new Fixture(
+            service,
+            dispatches,
+            tokens,
+            sourceAvailability,
+            availabilityAudit,
+            runtimeCertification,
+            leases,
+            audit
+        );
     }
 
     private static String runtimeSpecEventIdentity() {
@@ -415,6 +471,7 @@ class ModelMaterializationRuntimeSpecServiceTest {
         ModelRuntimeSpecTokenCodec tokens,
         ModelMaterializationSourceAvailabilityGuard sourceAvailability,
         ModelMaterializationAvailabilityAuditService availabilityAudit,
+        DbtRuntimeCertificationService runtimeCertification,
         DbtRuntimeProfileLeaseService leases,
         RecordingAuditService audit
     ) {}

@@ -1,7 +1,7 @@
 import { DeleteOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
 import {
@@ -240,13 +240,30 @@ export function TemplateDetailPage() {
 	const [previewParams, setPreviewParams] = useState("{}");
 	const [previewSql, setPreviewSql] = useState("");
 	const [form] = Form.useForm<TemplateForm>();
+	const loadSequence = useRef(0);
+	const activeTemplateId = useRef(templateId);
+	const loadedTemplateId = useRef<string>();
+	const settledTemplateRequestId = useRef<string>();
+	activeTemplateId.current = templateId;
 
 	const load = useCallback(async () => {
+		const requestedTemplateId = templateId;
+		const sequence = ++loadSequence.current;
+		loadedTemplateId.current = undefined;
+		settledTemplateRequestId.current = undefined;
+		setTemplate(undefined);
+		setEditing(false);
+		setPreviewSql("");
+		form.resetFields();
 		setLoading(true);
 		try {
-			const next = toList<QualityTemplate>(await listQualityTemplates()).find((item) => String(item.id) === templateId);
+			const next = toList<QualityTemplate>(await listQualityTemplates()).find(
+				(item) => String(item.id) === requestedTemplateId,
+			);
+			if (sequence !== loadSequence.current || activeTemplateId.current !== requestedTemplateId) return;
 			setTemplate(next);
-			if (next)
+			if (next) {
+				loadedTemplateId.current = String(next.id);
 				form.setFieldsValue({
 					name: next.name || "",
 					code: next.code || "",
@@ -260,22 +277,38 @@ export function TemplateDetailPage() {
 							? next.paramSchema
 							: JSON.stringify(next.paramSchema || { params: [] }, null, 2),
 				});
+			}
+			settledTemplateRequestId.current = requestedTemplateId;
 		} catch (error) {
+			if (sequence !== loadSequence.current || activeTemplateId.current !== requestedTemplateId) return;
+			settledTemplateRequestId.current = requestedTemplateId;
 			toast.error(error instanceof Error ? error.message : "模板详情加载失败");
 		} finally {
-			setLoading(false);
+			if (sequence === loadSequence.current && activeTemplateId.current === requestedTemplateId) setLoading(false);
 		}
 	}, [form, templateId]);
 
 	useEffect(() => {
 		void load();
 	}, [load]);
+	const loadedTemplateIsCurrent =
+		loadedTemplateId.current === templateId && String(template?.id || "") === templateId;
+	const visibleTemplate = loadedTemplateIsCurrent ? template : undefined;
+	const detailLoading = loading || settledTemplateRequestId.current !== templateId;
 
 	const save = async () => {
+		const operationTemplateId = templateId;
+		if (!loadedTemplateIsCurrent) return;
 		try {
 			const values = await form.validateFields();
+			if (
+				activeTemplateId.current !== operationTemplateId ||
+				loadedTemplateId.current !== operationTemplateId
+			)
+				return;
 			setSaving(true);
-			await updateQualityTemplate(templateId, templatePayload(values));
+			await updateQualityTemplate(operationTemplateId, templatePayload(values));
+			if (activeTemplateId.current !== operationTemplateId) return;
 			toast.success("模板已更新");
 			setEditing(false);
 			await load();
@@ -294,8 +327,15 @@ export function TemplateDetailPage() {
 	};
 
 	const preview = async () => {
+		const operationTemplateId = templateId;
+		if (!loadedTemplateIsCurrent) return;
 		try {
-			const result = await previewTemplateSQL(templateId, JSON.parse(previewParams || "{}"));
+			const result = await previewTemplateSQL(operationTemplateId, JSON.parse(previewParams || "{}"));
+			if (
+				activeTemplateId.current !== operationTemplateId ||
+				loadedTemplateId.current !== operationTemplateId
+			)
+				return;
 			setPreviewSql(
 				typeof result === "string"
 					? result
@@ -312,38 +352,48 @@ export function TemplateDetailPage() {
 		}
 	};
 
-	if (!loading && !template) return <QualityEmpty description="未找到该规则模板。" />;
+	if (!detailLoading && !visibleTemplate) return <QualityEmpty description="未找到该规则模板。" />;
 	return (
 		<div className="dq-page">
 			<QualityPageHeading
-				title={template?.name || "模板详情"}
+				title={visibleTemplate?.name || "模板详情"}
 				description="维护模板 SQL 与参数结构，并使用真实后端模板渲染接口进行预览。"
 				actions={[
 					<Button key="back" onClick={() => navigate(qualityPath("rule-template"))}>
 						返回模板库
 					</Button>,
-					<Button key="edit" type="primary" disabled={!canManage} onClick={() => setEditing((value) => !value)}>
+					<Button
+						key="edit"
+						type="primary"
+						disabled={!canManage || !loadedTemplateIsCurrent || loading}
+						onClick={() => setEditing((value) => !value)}
+					>
 						{editing ? "退出编辑" : "编辑模板"}
 					</Button>,
 				]}
 			/>
-			<Card loading={loading} title="模板定义">
+			<Card loading={detailLoading} title="模板定义">
 				{editing ? (
 					<>
 						<TemplateFormBody form={form} />
-						<Button type="primary" loading={saving} disabled={!canManage} onClick={() => void save()}>
+						<Button
+							type="primary"
+							loading={saving}
+							disabled={!canManage || !loadedTemplateIsCurrent || loading}
+							onClick={() => void save()}
+						>
 							保存模板
 						</Button>
 					</>
 				) : (
 					<Space direction="vertical" size={14} style={{ width: "100%" }}>
 						<div>
-							<Tag color="blue">{displayName(template?.category)}</Tag>
-							<Tag>{displayName(template?.code)}</Tag>
-							<Tag>{displayName(template?.severityDefault)}</Tag>
+							<Tag color="blue">{displayName(visibleTemplate?.category)}</Tag>
+							<Tag>{displayName(visibleTemplate?.code)}</Tag>
+							<Tag>{displayName(visibleTemplate?.severityDefault)}</Tag>
 						</div>
-						<div>{displayName(template?.description, "暂无说明")}</div>
-						<pre className="dq-code-block">{displayName(template?.sqlTemplate)}</pre>
+						<div>{displayName(visibleTemplate?.description, "暂无说明")}</div>
+						<pre className="dq-code-block">{displayName(visibleTemplate?.sqlTemplate)}</pre>
 					</Space>
 				)}
 			</Card>
@@ -355,7 +405,11 @@ export function TemplateDetailPage() {
 						onChange={(event) => setPreviewParams(event.target.value)}
 						className="dq-code-block"
 					/>
-					<Button type="primary" disabled={!canManage} onClick={() => void preview()}>
+					<Button
+						type="primary"
+						disabled={!canManage || !loadedTemplateIsCurrent || loading}
+						onClick={() => void preview()}
+					>
 						调用后端预览
 					</Button>
 					{previewSql ? <pre className="dq-code-block">{previewSql}</pre> : null}

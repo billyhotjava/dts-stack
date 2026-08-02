@@ -1,6 +1,6 @@
 # T04：实现来源/实施漂移的 FAILED_STALE 门禁
 
-**优先级**：P0  
+**优先级**：P1
 **状态**：DRAFT  
 **依赖**：T02～T03
 
@@ -21,4 +21,4 @@
 
 ## Definition of Done
 
-- [ ] stale 结果不能登记 Catalog、展示为成功或提供数据预览。
+- [ ] stale 结果只能登记失败 attempt；不能创建/更新物理 relation 绑定、切换 serving、展示为成功或提供数据预览。PUBLISHED 逻辑资产和旧 serving 保持不变。

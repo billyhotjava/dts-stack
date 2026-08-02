@@ -1085,7 +1085,7 @@ public class ModelMaterializationRunArtifactService {
         if (modelCount != null) payload.put("modelCount", modelCount);
         if (errorCode != null) payload.put("errorCode", errorCode);
         try {
-            auditService.auditActionAs(
+            auditService.auditActionAsStrict(
                 "airflow",
                 "model-materialization-run:" + group.groupId() + ":" + eventSuffix,
                 occurredAt,

@@ -2,6 +2,8 @@ package com.yuzhi.dts.platform.service.modeling.imports.apply;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.common.audit.AuditStage;
+import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.ApplyIssue;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.ApplySummary;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.Attempt;
@@ -12,17 +14,27 @@ import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportAppl
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.CandidateResult;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.Kind;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.ModelSpecImportApplyException;
+import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.OperationType;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.ResultStatus;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.Severity;
+import com.yuzhi.dts.platform.service.modeling.imports.reconciliation.ModelSpecImportReconciliationContract.ConflictResolution;
 import com.yuzhi.dts.platform.service.modeling.imports.checksum.ModelPackageChecksum;
+import com.yuzhi.dts.platform.service.modeling.imports.reconciliation.ModelSpecImportReconciliationContract.MergeCheckpoint;
+import com.yuzhi.dts.platform.service.modeling.imports.reconciliation.ModelSpecImportReconciliationContract.RevisionPins;
+import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftCorrelation;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.ArrayList;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,12 +42,25 @@ import org.springframework.transaction.annotation.Transactional;
 @Repository
 public class ModelSpecImportApplyRepository {
 
+    private static final String CONFLICT_ACTION = "MODELING_DBT_IMPORT_CONFLICT";
+
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
+    private final AuditService auditService;
 
     public ModelSpecImportApplyRepository(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
+        this(jdbcTemplate, objectMapper, null);
+    }
+
+    @Autowired
+    public ModelSpecImportApplyRepository(
+        JdbcTemplate jdbcTemplate,
+        ObjectMapper objectMapper,
+        AuditService auditService
+    ) {
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
+        this.auditService = auditService;
     }
 
     /**
@@ -70,13 +95,15 @@ public class ModelSpecImportApplyRepository {
                 preview_hash, selected_unique_ids, selected_closure_json,
                 idempotency_key, request_hash, status, summary_json,
                 owner_token, lease_expires_at,
-                created_by, created_date, last_modified_by, last_modified_date
+                created_by, created_date, last_modified_by, last_modified_date,
+                operation_type, target_attempt_id
             ) values (
                 ?, ?, ?, ?, ?, ?,
                 ?, cast(? as jsonb), cast(? as jsonb),
                 ?, ?, 'RUNNING', cast(? as jsonb),
                 ?, CURRENT_TIMESTAMP + INTERVAL '5 minutes',
-                ?, ?, ?, ?
+                ?, ?, ?, ?,
+                ?, ?
             )
             """,
             command.attemptId(),
@@ -90,12 +117,14 @@ public class ModelSpecImportApplyRepository {
             json(command.selectedClosure()),
             command.idempotencyKey(),
             command.requestHash(),
-            json(ApplySummary.EMPTY),
+            json(ApplySummary.running(command.selectedClosure().size())),
             ownerToken,
             command.actorId(),
             Timestamp.from(command.startedAt()),
             command.actorId(),
-            Timestamp.from(command.startedAt())
+            Timestamp.from(command.startedAt()),
+            command.operationType().name(),
+            command.targetAttemptId()
         );
         return new BeginResult(
             BeginDisposition.STARTED,
@@ -199,6 +228,27 @@ public class ModelSpecImportApplyRepository {
         String actorId,
         Instant completedAt
     ) {
+        return finalizeAttempt(
+            tenantId,
+            runId,
+            attemptId,
+            ownerToken,
+            actorId,
+            completedAt,
+            Map.of()
+        );
+    }
+
+    @Transactional
+    public Attempt finalizeAttempt(
+        String tenantId,
+        UUID runId,
+        UUID attemptId,
+        String ownerToken,
+        String actorId,
+        Instant completedAt,
+        Map<String, ConflictResolution> conflictResolutions
+    ) {
         Objects.requireNonNull(completedAt, "completedAt is required");
         Attempt current = lockOwnedAttempt(tenantId, runId, attemptId, ownerToken);
         List<CandidateResult> results = findResults(attemptId);
@@ -232,7 +282,88 @@ public class ModelSpecImportApplyRepository {
                 attemptId
             );
         }
+        auditFinalize(current, status, summary, results, actorId);
+        auditConflictCompletion(current, status, summary, conflictResolutions);
         return find(tenantId, attemptId).orElseThrow();
+    }
+
+    private void auditConflictCompletion(
+        Attempt attempt,
+        AttemptStatus status,
+        ApplySummary summary,
+        Map<String, ConflictResolution> conflictResolutions
+    ) {
+        if (auditService == null || conflictResolutions == null || conflictResolutions.isEmpty()) return;
+        TreeMap<String, String> decisions = new TreeMap<>();
+        conflictResolutions.forEach((uniqueId, resolution) ->
+            decisions.put(uniqueId, Objects.requireNonNull(resolution, "conflict resolution is required").name())
+        );
+        auditService.auditActionStrict(
+            CONFLICT_ACTION,
+            summary.unresolved() == 0 ? AuditStage.SUCCESS : AuditStage.FAIL,
+            attempt.id().toString(),
+            Map.of(
+                "runId", attempt.runId(),
+                "attemptId", attempt.id(),
+                "correlationId", attempt.id(),
+                "decisionCount", decisions.size(),
+                "decisions", Map.copyOf(decisions),
+                "status", status.name(),
+                "failed", summary.failed(),
+                "blocked", summary.blocked()
+            )
+        );
+    }
+
+    private void auditFinalize(
+        Attempt attempt,
+        AttemptStatus status,
+        ApplySummary summary,
+        List<CandidateResult> results,
+        String actorId
+    ) {
+        if (auditService == null) return;
+        String action = attempt.operationType() == OperationType.FORWARD_UNDO
+            ? "MODELING_DBT_IMPORT_FORWARD_UNDO"
+            : attempt.retrySourceAttemptId() != null
+                ? "MODELING_DBT_IMPORT_RETRY"
+                : "MODELING_DBT_IMPORT_APPLY";
+        LinkedHashMap<String, Object> payload = new LinkedHashMap<>();
+        payload.put("tenantId", attempt.tenantId());
+        payload.put("actorId", actorId);
+        payload.put("runId", attempt.runId());
+        payload.put("attemptId", attempt.id());
+        payload.put("correlationId", attempt.id());
+        payload.put("requestCorrelationId", DbtImplementationDraftCorrelation.currentOrCreate());
+        payload.put("attemptNo", attempt.attemptNo());
+        payload.put("operation", attempt.operationType().name());
+        payload.put("targetAttemptId", attempt.targetAttemptId());
+        payload.put("retrySourceAttemptId", attempt.retrySourceAttemptId());
+        payload.put("summary", summary);
+        ArrayList<Map<String, Object>> unresolved = new ArrayList<>();
+        results.stream()
+            .filter(item -> item.status() == ResultStatus.FAILED || item.status() == ResultStatus.BLOCKED)
+            .forEach(item -> {
+                for (ApplyIssue issue : item.issues()) {
+                    LinkedHashMap<String, Object> failure = new LinkedHashMap<>();
+                    failure.put("identity", item.dbtUniqueId());
+                    failure.put("status", item.status().name());
+                    failure.put("code", issue.code());
+                    failure.put("stage", issue.stage());
+                    failure.put("category", issue.category());
+                    failure.put("retryable", issue.retryable());
+                    failure.put("recoveryAction", issue.recoveryAction());
+                    failure.put("correlationId", issue.correlationId());
+                    unresolved.add(Map.copyOf(failure));
+                }
+            });
+        payload.put("unresolved", List.copyOf(unresolved));
+        auditService.auditActionStrict(
+            action,
+            status == AttemptStatus.SUCCESS ? AuditStage.SUCCESS : AuditStage.FAIL,
+            attempt.id().toString(),
+            payload
+        );
     }
 
     @Transactional(readOnly = true)
@@ -243,7 +374,7 @@ public class ModelSpecImportApplyRepository {
                    preview_hash, selected_unique_ids::text as selected_unique_ids,
                    selected_closure_json::text as selected_closure_json,
                    idempotency_key, request_hash, status, summary_json::text as summary_json,
-                   created_by, created_date, completed_at
+                   created_by, created_date, completed_at, operation_type, target_attempt_id
               from modeling_model_spec_import_apply_attempt
              where tenant_id = ? and id = ?
             """,
@@ -260,7 +391,7 @@ public class ModelSpecImportApplyRepository {
                    preview_hash, selected_unique_ids::text as selected_unique_ids,
                    selected_closure_json::text as selected_closure_json,
                    idempotency_key, request_hash, status, summary_json::text as summary_json,
-                   created_by, created_date, completed_at
+                   created_by, created_date, completed_at, operation_type, target_attempt_id
               from modeling_model_spec_import_apply_attempt
              where tenant_id = ? and idempotency_key = ?
             """,
@@ -277,7 +408,7 @@ public class ModelSpecImportApplyRepository {
                    preview_hash, selected_unique_ids::text as selected_unique_ids,
                    selected_closure_json::text as selected_closure_json,
                    idempotency_key, request_hash, status, summary_json::text as summary_json,
-                   created_by, created_date, completed_at
+                   created_by, created_date, completed_at, operation_type, target_attempt_id
               from modeling_model_spec_import_apply_attempt
              where tenant_id = ? and run_id = ?
              order by attempt_no desc
@@ -296,7 +427,7 @@ public class ModelSpecImportApplyRepository {
                    preview_hash, selected_unique_ids::text as selected_unique_ids,
                    selected_closure_json::text as selected_closure_json,
                    idempotency_key, request_hash, status, summary_json::text as summary_json,
-                   created_by, created_date, completed_at
+                   created_by, created_date, completed_at, operation_type, target_attempt_id
               from modeling_model_spec_import_apply_attempt
              where tenant_id = ? and run_id = ? and status = 'RUNNING'
              limit 1
@@ -318,6 +449,7 @@ public class ModelSpecImportApplyRepository {
                 select candidate.*
                   from modeling_model_spec_import_apply_attempt candidate
                  where candidate.tenant_id = ? and candidate.run_id = ?
+                   and candidate.operation_type = 'APPLY'
                  order by candidate.attempt_no desc
                  limit 1
             )
@@ -327,14 +459,17 @@ public class ModelSpecImportApplyRepository {
                    attempt.selected_closure_json::text as selected_closure_json,
                    attempt.idempotency_key, attempt.request_hash, attempt.status,
                    attempt.summary_json::text as summary_json,
-                   attempt.created_by, attempt.created_date, attempt.completed_at
-              from latest attempt
-             where attempt.status in ('PARTIAL', 'FAILED')
+                   attempt.created_by, attempt.created_date, attempt.completed_at,
+                   attempt.operation_type, attempt.target_attempt_id
+             from latest attempt
+             where attempt.status in ('PARTIAL', 'FAILED', 'BLOCKED')
+               and attempt.operation_type = 'APPLY'
                and exists (
                    select 1
                      from modeling_model_spec_import_apply_result result
                     where result.attempt_id = attempt.id
                       and result.status in ('FAILED', 'BLOCKED')
+                      and result.issues_json @> '[{"retryable": true}]'::jsonb
                )
             """,
             tenantId,
@@ -351,23 +486,33 @@ public class ModelSpecImportApplyRepository {
         List<CandidateResult> safeResults = results == null ? List.of() : results;
         return new ApplySummary(
             safeResults.size(),
+            0,
+            count(safeResults, ResultStatus.CREATED) + count(safeResults, ResultStatus.UPDATED),
             count(safeResults, ResultStatus.CREATED),
             count(safeResults, ResultStatus.UPDATED),
             count(safeResults, ResultStatus.SKIPPED),
-            count(safeResults, ResultStatus.REPLAYED),
             count(safeResults, ResultStatus.FAILED),
             count(safeResults, ResultStatus.BLOCKED)
         );
     }
 
     static AttemptStatus terminalStatus(ApplySummary summary) {
-        if (summary.total() == 0 || summary.failed() + summary.blocked() == summary.total()) {
-            return AttemptStatus.FAILED;
+        if (summary.pending() != 0 || summary.selected() == 0) {
+            throw new IllegalArgumentException("Terminal apply summary must contain at least one fully resolved selection");
         }
-        if (summary.failed() > 0 || summary.blocked() > 0) {
+        if (summary.unresolved() == 0 && summary.handled() == summary.selected()) {
+            return AttemptStatus.SUCCESS;
+        }
+        if (summary.handled() > 0 && summary.unresolved() > 0) {
             return AttemptStatus.PARTIAL;
         }
-        return AttemptStatus.SUCCEEDED;
+        if (summary.handled() == 0 && summary.failed() > 0) {
+            return AttemptStatus.FAILED;
+        }
+        if (summary.handled() == 0 && summary.failed() == 0 && summary.blocked() > 0) {
+            return AttemptStatus.BLOCKED;
+        }
+        throw new IllegalArgumentException("Terminal apply summary does not match the canonical status algebra");
     }
 
     static void requireCompleteResults(Attempt attempt, List<CandidateResult> results) {
@@ -392,10 +537,12 @@ public class ModelSpecImportApplyRepository {
             !Objects.equals(source.runId(), command.runId()) ||
             !Objects.equals(source.planId(), command.planId()) ||
             !Objects.equals(source.previewHash(), command.previewHash()) ||
-            (source.status() != AttemptStatus.PARTIAL && source.status() != AttemptStatus.FAILED) ||
-            source.results().stream().noneMatch(item ->
-                item.status() == ResultStatus.FAILED || item.status() == ResultStatus.BLOCKED
+            (
+                source.status() != AttemptStatus.PARTIAL &&
+                source.status() != AttemptStatus.FAILED &&
+                source.status() != AttemptStatus.BLOCKED
             ) ||
+            source.results().stream().noneMatch(CandidateResult::retryable) ||
             !source.selectedClosure().containsAll(command.selectedClosure())
         ) {
             throw conflict(
@@ -459,13 +606,21 @@ public class ModelSpecImportApplyRepository {
                 candidate_idempotency_key, candidate_request_hash, status,
                 model_spec_id, model_revision, model_checksum,
                 implementation_revision, implementation_checksum,
-                artifact_count, issues_json, created_date, last_modified_date
+                artifact_count, issues_json, created_date, last_modified_date,
+                applied_action, project_key,
+                accepted_external_checksum, accepted_implementation_revision,
+                accepted_implementation_checksum, mapped_model_spec_revision, mapped_model_spec_etag,
+                merge_checkpoint_json, pre_attempt_pins_json, dependency_json
             ) values (
                 ?, ?, ?, ?, ?,
                 ?, ?, ?,
                 ?, ?, ?,
                 ?, ?,
-                ?, cast(? as jsonb), ?, ?
+                ?, cast(? as jsonb), ?, ?,
+                ?, ?,
+                ?, ?,
+                ?, ?, ?,
+                cast(? as jsonb), cast(? as jsonb), cast(? as jsonb)
             )
             """,
             result.resultId(),
@@ -484,7 +639,17 @@ public class ModelSpecImportApplyRepository {
             result.artifactCount(),
             json(result.issues()),
             Timestamp.from(result.recordedAt()),
-            Timestamp.from(result.recordedAt())
+            Timestamp.from(result.recordedAt()),
+            result.appliedAction(),
+            result.projectKey(),
+            result.mergeCheckpoint() == null ? null : result.mergeCheckpoint().acceptedExternalChecksum(),
+            result.mergeCheckpoint() == null ? null : result.mergeCheckpoint().acceptedImplementationRevision(),
+            result.mergeCheckpoint() == null ? null : result.mergeCheckpoint().acceptedImplementationChecksum(),
+            result.mergeCheckpoint() == null ? null : result.mergeCheckpoint().mappedModelSpecRevision(),
+            result.mergeCheckpoint() == null ? null : result.mergeCheckpoint().mappedModelSpecEtag(),
+            result.mergeCheckpoint() == null ? null : json(result.mergeCheckpoint()),
+            result.preAttemptPins() == null ? null : json(result.preAttemptPins()),
+            json(result.dependencyUniqueIds())
         );
         return findResult(attemptId, result.dbtUniqueId()).orElseThrow();
     }
@@ -497,7 +662,7 @@ public class ModelSpecImportApplyRepository {
                        preview_hash, selected_unique_ids::text as selected_unique_ids,
                        selected_closure_json::text as selected_closure_json,
                        idempotency_key, request_hash, status, summary_json::text as summary_json,
-                       created_by, created_date, completed_at
+                       created_by, created_date, completed_at, operation_type, target_attempt_id
                   from modeling_model_spec_import_apply_attempt
                  where tenant_id = ? and run_id = ? and status = 'RUNNING'
                    and (owner_token is null or lease_expires_at is null or lease_expires_at <= CURRENT_TIMESTAMP)
@@ -613,10 +778,15 @@ public class ModelSpecImportApplyRepository {
                 new ApplyIssue(
                     "MODEL_IMPORT_APPLY_INTERRUPTED",
                     Severity.ERROR,
+                    "RETRY",
+                    "PERSISTENCE",
+                    true,
                     "$.items[" + sequence + "]",
                     dbtUniqueId,
+                    null,
                     "The apply worker lease expired before this candidate produced a durable result",
-                    "Retry the unresolved candidates from this recovered attempt"
+                    "RETRY",
+                    attempt.id().toString()
                 )
             ),
             recoveredAt
@@ -636,7 +806,7 @@ public class ModelSpecImportApplyRepository {
                        preview_hash, selected_unique_ids::text as selected_unique_ids,
                        selected_closure_json::text as selected_closure_json,
                        idempotency_key, request_hash, status, summary_json::text as summary_json,
-                       created_by, created_date, completed_at
+                       created_by, created_date, completed_at, operation_type, target_attempt_id
                   from modeling_model_spec_import_apply_attempt
                  where tenant_id = ? and run_id = ? and id = ?
                    and status = 'RUNNING'
@@ -664,7 +834,7 @@ public class ModelSpecImportApplyRepository {
                        preview_hash, selected_unique_ids::text as selected_unique_ids,
                        selected_closure_json::text as selected_closure_json,
                        idempotency_key, request_hash, status, summary_json::text as summary_json,
-                       created_by, created_date, completed_at
+                       created_by, created_date, completed_at, operation_type, target_attempt_id
                   from modeling_model_spec_import_apply_attempt
                  where tenant_id = ? and id = ?
                  for update
@@ -712,7 +882,9 @@ public class ModelSpecImportApplyRepository {
             row.getString("created_by"),
             instant(row.getTimestamp("created_date")),
             instant(row.getTimestamp("completed_at")),
-            List.of()
+            List.of(),
+            OperationType.valueOf(row.getString("operation_type")),
+            row.getObject("target_attempt_id", UUID.class)
         );
     }
 
@@ -734,7 +906,9 @@ public class ModelSpecImportApplyRepository {
             head.actorId(),
             head.startedAt(),
             head.completedAt(),
-            results
+            results,
+            head.operationType(),
+            head.targetAttemptId()
         );
     }
 
@@ -744,7 +918,11 @@ public class ModelSpecImportApplyRepository {
             select id, seq, dbt_unique_id, candidate_idempotency_key, candidate_request_hash,
                    status, model_spec_id, model_revision, model_checksum,
                    implementation_revision, implementation_checksum, artifact_count,
-                   issues_json::text as issues_json, created_date
+                   issues_json::text as issues_json, created_date,
+                   applied_action, project_key,
+                   merge_checkpoint_json::text as merge_checkpoint_json,
+                   pre_attempt_pins_json::text as pre_attempt_pins_json,
+                   dependency_json::text as dependency_json
               from modeling_model_spec_import_apply_result
              where attempt_id = ?
              order by seq, dbt_unique_id
@@ -764,7 +942,12 @@ public class ModelSpecImportApplyRepository {
                     row.getString("implementation_checksum"),
                     row.getInt("artifact_count"),
                     readIssues(row.getString("issues_json")),
-                    instant(row.getTimestamp("created_date"))
+                    instant(row.getTimestamp("created_date")),
+                    row.getString("applied_action"),
+                    row.getString("project_key"),
+                    readOptional(row.getString("merge_checkpoint_json"), MergeCheckpoint.class),
+                    readOptional(row.getString("pre_attempt_pins_json"), RevisionPins.class),
+                    readStrings(row.getString("dependency_json"))
                 ),
             attemptId
         );
@@ -822,7 +1005,9 @@ public class ModelSpecImportApplyRepository {
             !Objects.equals(existing.retrySourceAttemptId(), command.retrySourceAttemptId()) ||
             !Objects.equals(existing.previewHash(), command.previewHash()) ||
             !Objects.equals(existing.selectedUniqueIds(), command.selectedUniqueIds()) ||
-            !Objects.equals(existing.selectedClosure(), command.selectedClosure())
+            !Objects.equals(existing.selectedClosure(), command.selectedClosure()) ||
+            existing.operationType() != command.operationType() ||
+            !Objects.equals(existing.targetAttemptId(), command.targetAttemptId())
         ) {
             throw conflict(
                 "MODEL_IMPORT_IDEMPOTENCY_CONFLICT",
@@ -857,6 +1042,15 @@ public class ModelSpecImportApplyRepository {
             return objectMapper.readerForListOf(ApplyIssue.class).readValue(json);
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Stored model import apply issues are invalid", exception);
+        }
+    }
+
+    private <T> T readOptional(String json, Class<T> type) {
+        if (json == null || json.isBlank()) return null;
+        try {
+            return objectMapper.readValue(json, type);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Stored model import reconciliation checkpoint is invalid", exception);
         }
     }
 

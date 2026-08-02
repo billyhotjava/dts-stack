@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260802_04_model_spec_import_reconciliation_undo" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="modeling_model_spec_import_apply_attempt"/>
+            <tableExists tableName="modeling_model_spec_import_apply_result"/>
+            <tableExists tableName="modeling_model_spec_revision"/>
+            <tableExists tableName="modeling_model_implementation_revision"/>
+            <not><columnExists tableName="modeling_model_spec_import_apply_attempt" columnName="operation_type"/></not>
+            <not><columnExists tableName="modeling_model_spec_import_apply_result" columnName="merge_checkpoint_json"/></not>
+            <sqlCheck expectedResult="0">
+                SELECT count(*)
+                  FROM modeling_model_spec_import_apply_attempt
+                 WHERE status NOT IN ('RUNNING', 'SUCCESS', 'PARTIAL', 'FAILED', 'BLOCKED')
+            </sqlCheck>
+            <sqlCheck expectedResult="0">
+                SELECT count(*)
+                  FROM modeling_model_spec_import_apply_result
+                 WHERE status NOT IN ('CREATED', 'UPDATED', 'SKIPPED', 'FAILED', 'BLOCKED')
+            </sqlCheck>
+        </preConditions>
+
+        <comment>
+            Extend the canonical apply attempt/result ledger for accepted merge checkpoints and
+            forward undo. Legacy results intentionally retain NULL checkpoints, which makes
+            re-import and undo fail closed until a new accepted apply establishes revision pins.
+        </comment>
+
+        <addColumn tableName="modeling_model_spec_import_apply_attempt">
+            <column name="operation_type" type="varchar(32)" defaultValue="APPLY">
+                <constraints nullable="false"/>
+            </column>
+            <column name="target_attempt_id" type="${uuidType}"/>
+        </addColumn>
+
+        <addForeignKeyConstraint
+            baseTableName="modeling_model_spec_import_apply_attempt"
+            baseColumnNames="tenant_id,run_id,target_attempt_id"
+            referencedTableName="modeling_model_spec_import_apply_attempt"
+            referencedColumnNames="tenant_id,run_id,id"
+            constraintName="fk_model_spec_import_apply_forward_undo_target"
+            onDelete="RESTRICT"/>
+
+        <addColumn tableName="modeling_model_spec_import_apply_result">
+            <column name="applied_action" type="varchar(16)"/>
+            <column name="project_key" type="varchar(256)"/>
+            <column name="accepted_external_checksum" type="varchar(64)"/>
+            <column name="accepted_implementation_revision" type="int"/>
+            <column name="accepted_implementation_checksum" type="varchar(64)"/>
+            <column name="mapped_model_spec_revision" type="int"/>
+            <column name="mapped_model_spec_etag" type="varchar(64)"/>
+            <column name="merge_checkpoint_json" type="jsonb"/>
+            <column name="pre_attempt_pins_json" type="jsonb"/>
+            <column name="dependency_json" type="jsonb" defaultValueComputed="'[]'::jsonb">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            UPDATE modeling_model_spec_import_apply_attempt
+               SET operation_type = 'APPLY'
+             WHERE operation_type IS NULL;
+
+            UPDATE modeling_model_spec_import_apply_result
+               SET applied_action = CASE status
+                   WHEN 'CREATED' THEN 'CREATE'
+                   WHEN 'UPDATED' THEN 'UPDATE'
+                   WHEN 'SKIPPED' THEN 'SKIP'
+                   ELSE NULL
+               END,
+                   dependency_json = '[]'::jsonb
+             WHERE applied_action IS NULL OR dependency_json IS NULL;
+
+            ALTER TABLE modeling_model_spec_import_apply_attempt
+                ADD CONSTRAINT ck_model_spec_import_apply_operation
+                CHECK (
+                    (operation_type = 'APPLY' AND target_attempt_id IS NULL)
+                    OR (
+                        operation_type = 'FORWARD_UNDO'
+                        AND retry_source_attempt_id IS NULL
+                        AND target_attempt_id IS NOT NULL
+                        AND target_attempt_id <> id
+                    )
+                );
+
+            ALTER TABLE modeling_model_spec_import_apply_result
+                ADD CONSTRAINT ck_model_spec_import_result_applied_action
+                CHECK (applied_action IS NULL OR applied_action IN ('CREATE', 'UPDATE', 'SKIP', 'CANCEL')),
+                ADD CONSTRAINT ck_model_spec_import_result_dependency_json
+                CHECK (jsonb_typeof(dependency_json) = 'array'),
+                ADD CONSTRAINT ck_model_spec_import_result_checkpoint_all_or_none
+                CHECK (
+                    (
+                        merge_checkpoint_json IS NULL
+                        AND accepted_external_checksum IS NULL
+                        AND accepted_implementation_revision IS NULL
+                        AND accepted_implementation_checksum IS NULL
+                        AND mapped_model_spec_revision IS NULL
+                        AND mapped_model_spec_etag IS NULL
+                    ) OR (
+                        merge_checkpoint_json IS NOT NULL
+                        AND jsonb_typeof(merge_checkpoint_json) = 'object'
+                        AND project_key IS NOT NULL AND btrim(project_key) <> ''
+                        AND accepted_external_checksum ~ '^[0-9a-f]{64}$'
+                        AND accepted_implementation_revision > 0
+                        AND accepted_implementation_checksum ~ '^[0-9a-f]{64}$'
+                        AND mapped_model_spec_revision > 0
+                        AND mapped_model_spec_etag ~ '^[0-9a-f]{64}$'
+                        AND status IN ('CREATED', 'UPDATED', 'SKIPPED')
+                    )
+                ),
+                ADD CONSTRAINT ck_model_spec_import_result_pre_pins
+                CHECK (
+                    pre_attempt_pins_json IS NULL
+                    OR (
+                        jsonb_typeof(pre_attempt_pins_json) = 'object'
+                        AND (pre_attempt_pins_json ->> 'modelRevision')::int > 0
+                        AND pre_attempt_pins_json ->> 'modelChecksum' ~ '^[0-9a-f]{64}$'
+                        AND (pre_attempt_pins_json ->> 'implementationRevision')::int > 0
+                        AND pre_attempt_pins_json ->> 'implementationChecksum' ~ '^[0-9a-f]{64}$'
+                    )
+                );
+
+            CREATE INDEX idx_model_spec_import_result_checkpoint
+                ON modeling_model_spec_import_apply_result (
+                    project_key,
+                    dbt_unique_id,
+                    created_date DESC,
+                    id DESC
+                )
+                WHERE merge_checkpoint_json IS NOT NULL;
+
+            CREATE INDEX idx_model_spec_import_forward_undo_target
+                ON modeling_model_spec_import_apply_attempt (tenant_id, target_attempt_id, created_date DESC)
+                WHERE operation_type = 'FORWARD_UNDO';
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    RAISE EXCEPTION 'ROLLBACK_BLOCKED_MODEL_SPEC_IMPORT_RECONCILIATION_UNDO_FORWARD_ONLY: Recovery requires a new forward changeset';
+                END $$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

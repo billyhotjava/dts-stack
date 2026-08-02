@@ -1,11 +1,10 @@
 import { Alert, Button, Card, Descriptions, Input, Modal, Space, Table, Tag } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { appendIssueAction, closeIssue, createIssue, getIssue, listIssues, updateIssue } from "@/api/platformApi";
+import { appendIssueAction, closeIssue, createIssue, getIssueBySource, updateIssue } from "@/api/platformApi";
 import { useUserInfo } from "@/store/userStore";
 import { formatTime } from "@/utils/textUtils";
 import { QualityStatus } from "./QualityShared";
-import { collectCompletePages } from "./qualityTypes";
 import {
 	buildIssueUpdatePayload,
 	findRunIssue,
@@ -22,8 +21,6 @@ const nextStatus = (status?: string) => {
 	return undefined;
 };
 
-const INCOMPLETE_ISSUE_LOOKUP = "问题单接口未提供全量分页总数，无法确认该运行是否已有问题单";
-
 export function RunIssueDisposition({
 	runId,
 	datasetId,
@@ -38,7 +35,6 @@ export function RunIssueDisposition({
 	const [issue, setIssue] = useState<RunIssue>();
 	const [loading, setLoading] = useState(true);
 	const [loadError, setLoadError] = useState("");
-	const [creationBlockedReason, setCreationBlockedReason] = useState("");
 	const [saving, setSaving] = useState(false);
 	const [noteOpen, setNoteOpen] = useState(false);
 	const [resolutionOpen, setResolutionOpen] = useState(false);
@@ -49,29 +45,22 @@ export function RunIssueDisposition({
 	activeRunId.current = runId;
 
 	const lookupRunIssue = useCallback(async () => {
-		const result = await collectCompletePages<RunIssue>(
-			(page, size) => listIssues({ sourceType: "QUALITY_RUN", datasetId, page, size, limit: size }),
-			200,
-		);
-		const matched = findRunIssue(result.rows, runId);
-		if (!matched?.id) return { issue: matched, complete: result.complete };
-		const detail = (await getIssue(matched.id)) as RunIssue;
-		if (!findRunIssue([detail], runId)) throw new Error("问题单详情与当前质量运行不匹配");
-		return { issue: detail, complete: result.complete };
-	}, [datasetId, runId]);
+		const matched = (await getIssueBySource("QUALITY_RUN", runId)) as RunIssue | undefined;
+		if (!matched) return undefined;
+		if (!findRunIssue([matched], runId)) throw new Error("问题单详情与当前质量运行不匹配");
+		return matched;
+	}, [runId]);
 
 	const load = useCallback(async () => {
 		const requestedRunId = runId;
 		const sequence = ++loadSequence.current;
 		setLoading(true);
 		setLoadError("");
-		setCreationBlockedReason("");
 		setIssue(undefined);
 		try {
 			const result = await lookupRunIssue();
 			if (sequence !== loadSequence.current || activeRunId.current !== requestedRunId) return;
-			setIssue(result.issue);
-			if (!result.issue && !result.complete) setCreationBlockedReason(INCOMPLETE_ISSUE_LOOKUP);
+			setIssue(result);
 		} catch (error) {
 			if (sequence !== loadSequence.current || activeRunId.current !== requestedRunId) return;
 			const message = error instanceof Error ? error.message : "运行问题处置加载失败";
@@ -104,23 +93,19 @@ export function RunIssueDisposition({
 	};
 
 	const createForRun = () => {
-		if (creationBlockedReason || loadError || loading || saving) return;
+		if (loadError || loading || saving) return;
 		setSaving(true);
 		Modal.confirm({
 			title: "确认创建该质量运行的问题单？",
-			content: "确认后将再次执行全量去重查询，仅在确认不存在关联问题单时创建。",
+			content: "确认后将再次按运行来源精确查询，仅在确认不存在关联问题单时创建。",
 			okText: "确认创建",
 			onOk: async () => {
+				let createError: unknown;
 				try {
 					const verification = await lookupRunIssue();
-					if (verification.issue) {
-						setIssue(verification.issue);
+					if (verification) {
+						setIssue(verification);
 						toast.warning("该质量运行已存在问题单，已取消重复创建");
-						return;
-					}
-					if (!verification.complete) {
-						setCreationBlockedReason(INCOMPLETE_ISSUE_LOOKUP);
-						toast.error(INCOMPLETE_ISSUE_LOOKUP);
 						return;
 					}
 					await createIssue({
@@ -132,13 +117,23 @@ export function RunIssueDisposition({
 						status: "OPEN",
 						severity: "HIGH",
 						priority: "HIGH",
-						dataLevel: "DATA_INTERNAL",
 						tags: ["QUALITY_RUN"],
 					});
 					toast.success("问题单已创建");
 					if (activeRunId.current === runId) await load();
 				} catch (error) {
-					toast.error(error instanceof Error ? error.message : "问题单创建失败");
+					createError = error;
+					try {
+						const concurrentIssue = await lookupRunIssue();
+						if (concurrentIssue) {
+							setIssue(concurrentIssue);
+							toast.warning("该质量运行的问题单已由其他请求创建，已加载现有记录");
+							return;
+						}
+					} catch {
+						// Preserve the original create failure when the reconciliation lookup also fails.
+					}
+					toast.error(createError instanceof Error ? createError.message : "问题单创建失败");
 				} finally {
 					setSaving(false);
 				}
@@ -227,16 +222,11 @@ export function RunIssueDisposition({
 					<Alert
 						showIcon
 						type="warning"
-						message={creationBlockedReason ? "无法安全创建问题单" : "该异常运行尚未建立问题单"}
-						description={
-							creationBlockedReason
-								? `${creationBlockedReason}。为避免重复问题单，后端补充精确查询或 total 分页合同前保持禁用。`
-								: undefined
-						}
+						message="该异常运行尚未建立问题单"
 						action={
 							<Button
 								type="primary"
-								disabled={!canManage || Boolean(creationBlockedReason)}
+								disabled={!canManage}
 								loading={saving}
 								onClick={createForRun}
 							>

@@ -317,11 +317,6 @@
             <version>${jsqlparser.version}</version>
         </dependency>
         <dependency>
-            <groupId>org.eclipse.jgit</groupId>
-            <artifactId>org.eclipse.jgit</artifactId>
-            <version>7.1.0.202411261347-r</version>
-        </dependency>
-        <dependency>
             <groupId>org.glassfish.jaxb</groupId>
             <artifactId>jaxb-runtime</artifactId>
             <scope>provided</scope>
@@ -544,6 +539,8 @@
                         <testInclude>**/repository/audit/PlatformAuditOutboxRepositoryPostgresIT.java</testInclude>
                         <testInclude>**/repository/modeling/DataMartRepositoryTest.java</testInclude>
                         <testInclude>**/repository/modeling/ModelLifecycleRepositoryTest.java</testInclude>
+                        <testInclude>**/repository/modeling/ModelSpecRepositoryForwardUndoTest.java</testInclude>
+                        <testInclude>**/service/modeling/imports/reconciliation/ModelSpecImportForwardRestorePostgresIT.java</testInclude>
                         <testInclude>**/repository/modeling/ModelLifecycleCommandReceiptRepositoryTest.java</testInclude>
                         <testInclude>**/repository/modeling/ModelImplementationCommandReceiptLiquibaseIT.java</testInclude>
                         <testInclude>**/repository/modeling/ModelMaterializationStartServiceIT.java</testInclude>
@@ -557,11 +554,29 @@
                         <testInclude>**/service/modeling/ModelImplementationInputPolicyTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelImplementationExecutionPlannerTest.java</testInclude>
                         <testInclude>**/service/modeling/CanonicalModelLifecycleCompilerAdapterTest.java</testInclude>
+                        <testInclude>**/service/modeling/representation/*.java</testInclude>
+                        <testInclude>**/service/modeling/serving/*.java</testInclude>
+                        <testInclude>**/service/modeling/dbtdraft/*.java</testInclude>
+                        <testInclude>**/service/modeling/observability/*.java</testInclude>
+                        <testInclude>**/web/rest/ModelRepresentationResourceTest.java</testInclude>
+                        <testInclude>**/web/rest/ModelSpecImportPreviewAuditTest.java</testInclude>
+                        <testInclude>**/web/rest/ModelPhysicalPreviewResourceTest.java</testInclude>
+                        <testInclude>**/web/rest/DbtImplementationDraftResourceTest.java</testInclude>
+                        <testInclude>**/web/rest/EtlResourceLegacyDbtPreviewRetirementTest.java</testInclude>
+                        <testInclude>**/web/rest/EtlResourceLegacyDbtSelectorDagRetirementTest.java</testInclude>
+                        <testInclude>**/service/modeling/imports/converter/DbtCompatibilityEvaluatorTest.java</testInclude>
+                        <testInclude>**/service/modeling/imports/converter/DbtSourceOnlyContractTest.java</testInclude>
+                        <testInclude>**/service/modeling/imports/converter/Sprint83DbtFixtureContractTest.java</testInclude>
+                        <testInclude>**/service/modeling/imports/apply/*.java</testInclude>
+                        <testInclude>**/service/modeling/imports/preview/ModelPackageCanonicalProjectorTest.java</testInclude>
+                        <testInclude>**/service/modeling/imports/preview/ModelSpecImportPreviewServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/imports/preview/ModelSpecImportSemanticOverrideResolverTest.java</testInclude>
+                        <testInclude>**/service/modeling/imports/proof/ModelSpecImportInspectionProofCodecTest.java</testInclude>
+                        <testInclude>**/service/modeling/imports/reconciliation/*.java</testInclude>
                         <testInclude>**/service/etl/DbtScopedProjectServiceTest.java</testInclude>
                         <testInclude>**/service/etl/DbtScopedProjectServiceRealCompileIT.java</testInclude>
                         <testInclude>**/service/etl/DbtDagServiceTest.java</testInclude>
                         <testInclude>**/service/etl/DbtAssetSyncServiceTest.java</testInclude>
-                        <testInclude>**/service/etl/DbtFileServiceOwnershipTest.java</testInclude>
                         <testInclude>**/service/etl/AirflowDbtExecutionGatewayTest.java</testInclude>
                         <testInclude>**/service/etl/DbtConfigServiceTest.java</testInclude>
                         <testInclude>**/service/etl/DbtRuntimeProfile*.java</testInclude>
@@ -570,12 +585,19 @@
                         <testInclude>**/service/governance/QualityDatasetStatementExecutorTest.java</testInclude>
                         <testInclude>**/service/governance/QualitySqlScopeValidatorTest.java</testInclude>
                         <testInclude>**/service/governance/QualityDatasetReadGuardTest.java</testInclude>
+                        <testInclude>**/service/governance/QualityDatasetCatalogServiceTest.java</testInclude>
                         <testInclude>**/service/governance/QualityDashboardAuthorizationTest.java</testInclude>
+                        <testInclude>**/service/governance/QualityReportExportServiceTest.java</testInclude>
                         <testInclude>**/service/governance/QualityRunServiceExecutableDefinitionTest.java</testInclude>
                         <testInclude>**/service/governance/QualityScoreServiceTest.java</testInclude>
+                        <testInclude>**/service/governance/QualityRunOutcomeSemanticsTest.java</testInclude>
+                        <testInclude>**/service/governance/SqlTemplateRendererTest.java</testInclude>
+                        <testInclude>**/service/governance/InceptorQualityTemplateLiquibaseIT.java</testInclude>
+                        <testInclude>**/repository/governance/QualityRunIssueIdentityLiquibaseIT.java</testInclude>
                         <testInclude>**/service/governance/Quality*Audit*.java</testInclude>
                         <testInclude>**/service/governance/QualityRuleServiceDatasetBindingTest.java</testInclude>
                         <testInclude>**/service/governance/IssueTicketServiceAutomaticAuditTest.java</testInclude>
+                        <testInclude>**/service/governance/IssueSourcePolicyTest.java</testInclude>
                         <testInclude>**/service/governance/SqlRepairServiceTest.java</testInclude>
                         <testInclude>**/service/governance/MeasurementUnitApplicationServiceTest.java</testInclude>
                         <testInclude>**/service/governance/IndicatorServiceLifecycleTest.java</testInclude>
@@ -599,6 +621,7 @@
                         <testInclude>**/service/modeling/ModelBuildIntentServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelMaterializationDispatchServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelMaterializationRunArtifactServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/F4StrictAuditRollbackPostgresIT.java</testInclude>
                         <testInclude>**/service/modeling/ModelMaterializationRuntimeSpecServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelMaterializationSourceAvailabilityGuardTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelMaterializationAvailabilityPinLiquibaseTest.java</testInclude>
@@ -665,6 +688,7 @@
                         <testInclude>**/service/rollback/RollbackDispatchWorkerTest.java</testInclude>
                         <testInclude>**/service/ops/OpsServiceWarehousePlanTest.java</testInclude>
                         <testInclude>**/web/filter/ModelArchiveUploadLimitFilterTest.java</testInclude>
+                        <testInclude>**/web/filter/ModelSpecImportCorrelationFilterTest.java</testInclude>
                         <testInclude>**/web/filter/AuditLoggingFilterTest.java</testInclude>
                         <testInclude>**/web/rest/ModelSpecResourceTest.java</testInclude>
                         <testInclude>**/web/rest/ModelLifecycleResourceTest.java</testInclude>
@@ -701,6 +725,7 @@
                         <testInclude>**/service/admin/gateway/audit/AdminAuditGatewayTest.java</testInclude>
                         <testInclude>**/web/rest/AssetActionPolicyResourceTest.java</testInclude>
                         <testInclude>**/web/rest/OperationPermissionMatrixIT.java</testInclude>
+                        <testInclude>**/web/rest/LegacyEtlMutationAuthorizationTest.java</testInclude>
                         <testInclude>**/service/catalog/CatalogAssetPortalServicePermissionParityTest.java</testInclude>
                         <testInclude>**/service/catalog/OpenMetadataAssetSyncServiceTest.java</testInclude>
                         <testInclude>**/service/catalog/CatalogAssetPortalTagFilterTest.java</testInclude>

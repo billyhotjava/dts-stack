@@ -2,8 +2,18 @@ package com.yuzhi.dts.platform.service.modeling.imports.apply;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.common.audit.AuditStage;
+import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.ApplyIssue;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.ApplySummary;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.BeginCommand;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.BeginDisposition;
@@ -11,10 +21,15 @@ import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportAppl
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.CandidateResult;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.ModelSpecImportApplyException;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.ResultStatus;
+import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.Severity;
+import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewRepository;
+import com.yuzhi.dts.platform.service.modeling.imports.reconciliation.ModelSpecImportReconciliationContract.ConflictResolution;
+import com.yuzhi.dts.platform.service.modeling.imports.reconciliation.ModelSpecImportReconciliationContract.MergeCheckpoint;
 import java.sql.Connection;
 import java.sql.Statement;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -43,7 +58,9 @@ class ModelSpecImportApplyRepositoryIT {
 
     private static final List<String> CHANGELOGS = List.of(
         "config/liquibase/changelog/20260725_04_model_spec_import_apply.xml",
-        "config/liquibase/changelog/20260725_05_model_spec_import_apply_lease.xml"
+        "config/liquibase/changelog/20260725_05_model_spec_import_apply_lease.xml",
+        "config/liquibase/changelog/20260802_01_model_spec_import_apply_status_canonical.xml",
+        "config/liquibase/changelog/20260802_04_model_spec_import_reconciliation_undo.xml"
     );
     private static final Pattern OWNED_SCHEMA = Pattern.compile("^s70_model_apply_[0-9a-f]{32}$");
     private static final Instant NOW = Instant.parse("2026-07-25T00:00:00Z");
@@ -58,6 +75,8 @@ class ModelSpecImportApplyRepositoryIT {
     private JdbcTemplate jdbc;
     private TransactionTemplate transactions;
     private ModelSpecImportApplyRepository repository;
+    private ModelSpecImportPreviewRepository previewRepository;
+    private AuditService auditService;
 
     @BeforeEach
     void setUpSchema() throws Exception {
@@ -67,6 +86,20 @@ class ModelSpecImportApplyRepositoryIT {
             statement.execute("create schema " + schema);
             statement.execute("set search_path to " + schema);
             statement.execute("create table modeling_model_spec_import_run (id uuid primary key)");
+            statement.execute("create table modeling_model_spec_revision (id uuid primary key)");
+            statement.execute("create table modeling_model_implementation_revision (id uuid primary key)");
+            statement.execute(
+                """
+                create table modeling_model_implementation (
+                    id uuid primary key,
+                    tenant_id varchar(128) not null,
+                    model_spec_id uuid not null,
+                    plan_id uuid not null,
+                    project_key varchar(128) not null,
+                    dbt_unique_id varchar(512) not null
+                )
+                """
+            );
             statement.execute(
                 """
                 create table modeling_dbt_artifact (
@@ -101,7 +134,10 @@ class ModelSpecImportApplyRepositoryIT {
         );
         jdbc = new JdbcTemplate(dataSource);
         transactions = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
-        repository = new ModelSpecImportApplyRepository(jdbc, new ObjectMapper());
+        auditService = mock(AuditService.class);
+        ObjectMapper objectMapper = new ObjectMapper();
+        repository = new ModelSpecImportApplyRepository(jdbc, objectMapper, auditService);
+        previewRepository = new ModelSpecImportPreviewRepository(jdbc, objectMapper);
     }
 
     @AfterEach
@@ -151,9 +187,204 @@ class ModelSpecImportApplyRepositoryIT {
                 NOW.plusSeconds(1)
             )
         );
-        assertThat(finalized.summary()).isEqualTo(new ApplySummary(1, 1, 0, 0, 0, 0, 0));
+        assertThat(finalized.summary()).isEqualTo(new ApplySummary(1, 0, 1, 1, 0, 0, 0, 0));
         assertThat(inTransaction(() -> repository.begin(original)).disposition())
             .isEqualTo(BeginDisposition.REPLAY);
+    }
+
+    @Test
+    void strictFinalizeAuditFailureRollsBackAndCanBeRetried() {
+        UUID runId = insertPreviewRun();
+        BeginCommand command = command(runId, "strict-audit-key", "strict-audit-hash");
+        BeginResult started = inTransaction(() -> repository.begin(command));
+        inTransaction(() ->
+            repository.recordSuccess(
+                "default",
+                runId,
+                command.attemptId(),
+                started.ownerToken(),
+                result("model.project.fact", ResultStatus.CREATED)
+            )
+        );
+        doThrow(new IllegalStateException("audit unavailable"))
+            .when(auditService)
+            .auditActionStrict(any(), any(), any(), any());
+
+        assertThatThrownBy(() ->
+            inTransaction(() ->
+                repository.finalizeAttempt(
+                    "default", runId, command.attemptId(), started.ownerToken(), "actor", NOW.plusSeconds(1)
+                )
+            )
+        ).isInstanceOf(IllegalStateException.class).hasMessageContaining("audit unavailable");
+        assertThat(jdbc.queryForObject(
+            "select status from modeling_model_spec_import_apply_attempt where id = ?",
+            String.class,
+            command.attemptId()
+        )).isEqualTo("RUNNING");
+
+        reset(auditService);
+        inTransaction(() ->
+            repository.finalizeAttempt(
+                "default", runId, command.attemptId(), started.ownerToken(), "actor", NOW.plusSeconds(2)
+            )
+        );
+        verify(auditService, times(1)).auditActionStrict(
+            eq("MODELING_DBT_IMPORT_APPLY"),
+            eq(AuditStage.SUCCESS),
+            eq(command.attemptId().toString()),
+            any()
+        );
+    }
+
+    @Test
+    void strictConflictCompletionAuditFailureRollsBackTheTerminalAttempt() {
+        UUID runId = insertPreviewRun();
+        BeginCommand command = command(runId, "strict-conflict-key", "strict-conflict-hash");
+        BeginResult started = inTransaction(() -> repository.begin(command));
+        inTransaction(() ->
+            repository.recordSuccess(
+                "default",
+                runId,
+                command.attemptId(),
+                started.ownerToken(),
+                result("model.project.fact", ResultStatus.CREATED)
+            )
+        );
+        org.mockito.Mockito
+            .when(auditService.auditActionStrict(any(), any(), any(), any()))
+            .thenReturn(UUID.randomUUID())
+            .thenThrow(new IllegalStateException("conflict audit unavailable"));
+
+        assertThatThrownBy(() ->
+            inTransaction(() ->
+                repository.finalizeAttempt(
+                    "default",
+                    runId,
+                    command.attemptId(),
+                    started.ownerToken(),
+                    "actor",
+                    NOW.plusSeconds(1),
+                    Map.of("model.project.fact", ConflictResolution.ACCEPT_INCOMING)
+                )
+            )
+        ).isInstanceOf(IllegalStateException.class).hasMessageContaining("conflict audit unavailable");
+        assertThat(
+            jdbc.queryForObject(
+                "select status from modeling_model_spec_import_apply_attempt where id = ?",
+                String.class,
+                command.attemptId()
+            )
+        ).isEqualTo("RUNNING");
+        verify(auditService).auditActionStrict(
+            eq("MODELING_DBT_IMPORT_APPLY"),
+            eq(AuditStage.SUCCESS),
+            eq(command.attemptId().toString()),
+            any()
+        );
+        verify(auditService).auditActionStrict(
+            eq("MODELING_DBT_IMPORT_CONFLICT"),
+            eq(AuditStage.SUCCESS),
+            eq(command.attemptId().toString()),
+            any()
+        );
+    }
+
+    @Test
+    void mergeCheckpointRequiresTheExactCurrentPlanAndModelSpecIdentity() {
+        UUID runId = insertPreviewRun();
+        UUID historicalPlanId = UUID.randomUUID();
+        UUID historicalModelSpecId = UUID.randomUUID();
+        UUID historicalImplementationId = UUID.randomUUID();
+        String implementationChecksum = "c".repeat(64);
+        jdbc.update(
+            """
+            insert into modeling_model_implementation (
+                id, tenant_id, model_spec_id, plan_id, project_key, dbt_unique_id
+            ) values (?, 'default', ?, ?, 'project', 'model.project.fact')
+            """,
+            historicalImplementationId,
+            historicalModelSpecId,
+            historicalPlanId
+        );
+        BeginCommand command = command(
+            UUID.randomUUID(),
+            runId,
+            historicalPlanId,
+            null,
+            "historical-checkpoint-key",
+            "historical-checkpoint-hash"
+        );
+        BeginResult started = inTransaction(() -> repository.begin(command));
+        CandidateResult historical = checkpointResult(
+            historicalModelSpecId,
+            "model.project.fact",
+            implementationChecksum
+        );
+        inTransaction(() ->
+            repository.recordSuccess("default", runId, command.attemptId(), started.ownerToken(), historical)
+        );
+        inTransaction(() ->
+            repository.finalizeAttempt(
+                "default",
+                runId,
+                command.attemptId(),
+                started.ownerToken(),
+                "actor",
+                NOW.plusSeconds(1)
+            )
+        );
+
+        assertThat(
+            previewRepository.findLatestMergeCheckpoint(
+                "default",
+                historicalPlanId,
+                historicalModelSpecId,
+                historicalImplementationId,
+                "project",
+                "model.project.fact"
+            )
+        ).contains(historical.mergeCheckpoint());
+        assertThat(
+            previewRepository.findLatestMergeCheckpoint(
+                "default",
+                UUID.randomUUID(),
+                historicalModelSpecId,
+                historicalImplementationId,
+                "project",
+                "model.project.fact"
+            )
+        ).isEmpty();
+        assertThat(
+            previewRepository.findLatestMergeCheckpoint(
+                "default",
+                historicalPlanId,
+                UUID.randomUUID(),
+                historicalImplementationId,
+                "project",
+                "model.project.fact"
+            )
+        ).isEmpty();
+        assertThat(
+            previewRepository.findLatestMergeCheckpoint(
+                "other-tenant",
+                historicalPlanId,
+                historicalModelSpecId,
+                historicalImplementationId,
+                "project",
+                "model.project.fact"
+            )
+        ).isEmpty();
+        assertThat(
+            previewRepository.findLatestMergeCheckpoint(
+                "default",
+                historicalPlanId,
+                historicalModelSpecId,
+                UUID.randomUUID(),
+                "project",
+                "model.project.fact"
+            )
+        ).isEmpty();
     }
 
     @Test
@@ -242,7 +473,7 @@ class ModelSpecImportApplyRepositoryIT {
         );
 
         assertThat(recovered.status()).isEqualTo(ModelSpecImportApplyContract.AttemptStatus.PARTIAL);
-        assertThat(recovered.summary()).isEqualTo(new ApplySummary(2, 1, 0, 0, 0, 1, 0));
+        assertThat(recovered.summary()).isEqualTo(new ApplySummary(2, 0, 1, 1, 0, 0, 1, 0));
         assertThat(recovered.results())
             .filteredOn(item -> item.dbtUniqueId().equals("model.project.summary"))
             .singleElement()
@@ -465,6 +696,25 @@ class ModelSpecImportApplyRepositoryIT {
 
     private static CandidateResult result(String dbtUniqueId, ResultStatus status) {
         boolean successful = status != ResultStatus.FAILED && status != ResultStatus.BLOCKED;
+        List<ApplyIssue> issues = successful
+            ? List.of()
+            : List.of(
+                new ApplyIssue(
+                    status == ResultStatus.FAILED ? "MODEL_IMPORT_TEST_FAILURE" : "MODEL_IMPORT_TEST_BLOCKED",
+                    Severity.ERROR,
+                    "APPLY",
+                    status == ResultStatus.FAILED ? "PERSISTENCE" : "VALIDATION",
+                    status == ResultStatus.FAILED,
+                    null,
+                    dbtUniqueId,
+                    null,
+                    status == ResultStatus.FAILED
+                        ? "The test candidate could not be persisted"
+                        : "The test candidate is not eligible for apply",
+                    status == ResultStatus.FAILED ? "RETRY" : "OPEN_MODEL",
+                    "test-" + UUID.randomUUID()
+                )
+            );
         return new CandidateResult(
             UUID.randomUUID(),
             0,
@@ -478,8 +728,47 @@ class ModelSpecImportApplyRepositoryIT {
             successful ? 1 : null,
             successful ? "implementation-checksum" : null,
             successful ? 2 : 0,
-            List.of(),
+            issues,
             NOW
+        );
+    }
+
+    private static CandidateResult checkpointResult(
+        UUID modelSpecId,
+        String dbtUniqueId,
+        String implementationChecksum
+    ) {
+        String modelChecksum = "b".repeat(64);
+        MergeCheckpoint checkpoint = new MergeCheckpoint(
+            "default",
+            "project",
+            dbtUniqueId,
+            "d".repeat(64),
+            1,
+            implementationChecksum,
+            1,
+            modelChecksum
+        );
+        return new CandidateResult(
+            UUID.randomUUID(),
+            0,
+            dbtUniqueId,
+            "candidate:" + dbtUniqueId,
+            "candidate-hash:" + dbtUniqueId,
+            ResultStatus.CREATED,
+            modelSpecId,
+            1,
+            modelChecksum,
+            1,
+            implementationChecksum,
+            1,
+            List.of(),
+            NOW,
+            "CREATE",
+            "project",
+            checkpoint,
+            null,
+            List.of()
         );
     }
 

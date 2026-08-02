@@ -49,7 +49,7 @@ public class CandidatePublicationEvidenceRepository {
                    o.metadata_checksum, o.observed_at
               from modeling_model_release_candidate c
               join lateral (
-                    select candidate_id, pipeline_run_group_id, attempt
+                    select candidate_id, id as pipeline_run_group_id, attempt
                       from modeling_materialization_dispatch
                      where tenant_id = c.tenant_id
                        and candidate_id = c.id

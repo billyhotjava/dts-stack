@@ -48,8 +48,8 @@ import org.springframework.util.StringUtils;
 final class QualitySqlScopeValidator {
 
     private static final int PARSE_TIMEOUT_MILLIS = 2_000;
-    private static final Set<String> SAFE_FUNCTIONS = Set.of("count", "round", "nullif");
-    private static final Set<String> SAFE_CAST_TYPES = Set.of("numeric", "text");
+    private static final Set<String> SAFE_FUNCTIONS = Set.of("count", "round", "nullif", "sum", "trim");
+    private static final Set<String> SAFE_CAST_TYPES = Set.of("numeric", "text", "string");
 
     private QualitySqlScopeValidator() {}
 

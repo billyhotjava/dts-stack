@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.ApplyRequest;
+import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.ApplyIssue;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.ApplySummary;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.Attempt;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.AttemptStatus;
@@ -15,6 +16,7 @@ import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportAppl
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.Kind;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.ModelSpecImportApplyException;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.ResultStatus;
+import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.Severity;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyPlanContract.ApplyPlan;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyPlanContract.Candidate;
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewContract.RunStatus;
@@ -265,6 +267,48 @@ class ModelSpecImportApplyPreflightServiceTest {
         assertThat(prepared.candidates()).extracting(Candidate::dbtUniqueId).containsExactly("model.pjm.fact");
     }
 
+    @Test
+    void retrySelectionUsesOnlyPersistedRetryableFailureFacts() {
+        Candidate retryable = candidate("model.pjm.fact", FACT_ID, "CREATE", 0, null, 0, null, "[]");
+        Candidate terminal = candidate("model.pjm.summary", SUMMARY_ID, "CREATE", 0, null, 0, null, "[]");
+        when(repository.findOwnership(TENANT, PROJECT, retryable.dbtUniqueId())).thenReturn(Optional.empty());
+        Attempt source = new Attempt(
+            UUID.randomUUID(),
+            RUN_ID,
+            PLAN_ID,
+            null,
+            TENANT,
+            1,
+            "preview-hash",
+            List.of(retryable.dbtUniqueId(), terminal.dbtUniqueId()),
+            List.of(retryable.dbtUniqueId(), terminal.dbtUniqueId()),
+            "first-key",
+            "first-hash",
+            AttemptStatus.FAILED,
+            new ApplySummary(2, 0, 0, 0, 0, 0, 2, 0),
+            "actor",
+            NOW,
+            NOW,
+            List.of(
+                failedResult(retryable.dbtUniqueId(), true),
+                failedResult(terminal.dbtUniqueId(), false)
+            )
+        );
+
+        ModelSpecImportApplyPreflightService.PreparedApply prepared = preflight.prepare(
+            TENANT,
+            stored(baseContext(), List.of(retryable, terminal)),
+            "preview-hash",
+            List.of(),
+            source,
+            NOW
+        );
+
+        assertThat(prepared.selectedUniqueIds()).containsExactly(retryable.dbtUniqueId());
+        assertThat(prepared.selectedClosure()).containsExactly(retryable.dbtUniqueId());
+        assertThat(prepared.candidates()).extracting(Candidate::dbtUniqueId).containsExactly(retryable.dbtUniqueId());
+    }
+
     private StoredApplyPlan stored(String contextJson, List<Candidate> candidates) {
         List<String> topology = candidates.stream().map(Candidate::dbtUniqueId).toList();
         ApplyPlan plan = new ApplyPlan(
@@ -343,7 +387,7 @@ class ModelSpecImportApplyPreflightServiceTest {
             "first-key",
             "first-hash",
             AttemptStatus.PARTIAL,
-            new ApplySummary(2, 1, 0, 0, 0, 1, 0),
+            new ApplySummary(2, 0, 1, 1, 0, 0, 1, 0),
             "actor",
             NOW,
             NOW,
@@ -376,6 +420,10 @@ class ModelSpecImportApplyPreflightServiceTest {
     }
 
     private static CandidateResult failedResult(String uniqueId) {
+        return failedResult(uniqueId, true);
+    }
+
+    private static CandidateResult failedResult(String uniqueId, boolean retryable) {
         return new CandidateResult(
             UUID.randomUUID(),
             1,
@@ -389,7 +437,21 @@ class ModelSpecImportApplyPreflightServiceTest {
             null,
             null,
             0,
-            List.of(),
+            List.of(
+                new ApplyIssue(
+                    "MODEL_IMPORT_CANDIDATE_FAILED",
+                    Severity.ERROR,
+                    "APPLY",
+                    "INTERNAL",
+                    retryable,
+                    "$.items[1]",
+                    uniqueId,
+                    null,
+                    "Candidate apply failed",
+                    "RETRY",
+                    "correlation-" + uniqueId
+                )
+            ),
             NOW
         );
     }

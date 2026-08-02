@@ -1,9 +1,11 @@
 package com.yuzhi.dts.platform.service.modeling;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -34,6 +36,8 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelStatus;
 import com.yuzhi.dts.platform.service.modeling.PhysicalRelationInspector.ExpectedRelationType;
 import com.yuzhi.dts.platform.service.modeling.ModelExecutionTargetCatalogResolver.ResolvedCatalogTarget;
+import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelServingService;
+import com.yuzhi.dts.platform.repository.modeling.CatalogModelServingProjectionRepository.ProjectionMutation;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -89,6 +93,9 @@ class CandidatePublicationCommitServiceTest {
     @Mock
     private AuditService auditService;
 
+    @Mock
+    private CatalogModelServingService catalogServing;
+
     private CandidatePublicationCommitService service;
 
     @BeforeEach
@@ -104,7 +111,8 @@ class CandidatePublicationCommitServiceTest {
             candidateCommands,
             targetResolver,
             Clock.fixed(NOW, ZoneOffset.UTC),
-            auditService
+            auditService,
+            catalogServing
         );
     }
 
@@ -174,6 +182,10 @@ class CandidatePublicationCommitServiceTest {
             )
         )
             .thenReturn(binding);
+        when(catalogServing.projectLatestPublication(publishing, publishedModel, implementation, target, null))
+            .thenReturn(new ProjectionMutation(true, false, 2, "LATEST_PUBLISHED"));
+        when(catalogServing.promoteSuccessfulServing(publishing, publishedModel, implementation, target, null))
+            .thenReturn(new ProjectionMutation(false, false, 2, "SERVING_NOT_READY"));
         when(
             candidateCommands.transitionWithinAuditedCommit(
                 eq(TENANT),
@@ -196,6 +208,7 @@ class CandidatePublicationCommitServiceTest {
         InOrder order = inOrder(
             evidence,
             lifecyclePublication,
+            catalogServing,
             publicationRepository,
             outbox,
             candidateCommands,
@@ -206,6 +219,15 @@ class CandidatePublicationCommitServiceTest {
             .verify(lifecyclePublication)
             .publish(eq(TENANT), eq(ACTOR), eq(draft), eq(implementation), any(PublishCommand.class), eq(NOW));
         order
+            .verify(catalogServing)
+            .projectLatestPublication(
+                publishing,
+                publishedModel,
+                implementation,
+                target,
+                null
+            );
+        order
             .verify(publicationRepository)
             .registerModel(
                 publishing,
@@ -215,6 +237,15 @@ class CandidatePublicationCommitServiceTest {
                 release,
                 ACTOR,
                 NOW
+            );
+        order
+            .verify(catalogServing)
+            .promoteSuccessfulServing(
+                publishing,
+                publishedModel,
+                implementation,
+                target,
+                null
             );
         order
             .verify(publicationRepository)
@@ -230,7 +261,7 @@ class CandidatePublicationCommitServiceTest {
             );
         order
             .verify(auditService)
-            .auditAction(
+            .auditActionStrict(
                 eq("MODEL_RELEASE_CANDIDATE_PUBLISH"),
                 eq(AuditStage.SUCCESS),
                 eq(CANDIDATE_ID.toString()),
@@ -258,7 +289,8 @@ class CandidatePublicationCommitServiceTest {
         assertThat(event.getValue().auditActionCode()).isEqualTo("MODEL_RELEASE_CANDIDATE_PUBLISH");
         assertThat(event.getValue().payload())
             .containsEntry("scheduleMode", "MANUAL_ONLY")
-            .containsEntry("entryCount", 1);
+            .containsEntry("entryCount", 1)
+            .containsEntry("servingNotReadyCount", 1);
     }
 
     @Test
@@ -286,12 +318,49 @@ class CandidatePublicationCommitServiceTest {
         assertThat(event.getValue().action()).isEqualTo("RETRY");
         assertThat(event.getValue().auditActionCode())
             .isEqualTo("MODEL_RELEASE_CANDIDATE_PUBLICATION_RETRY");
-        verify(auditService).auditAction(
+        verify(auditService).auditActionStrict(
             eq("MODEL_RELEASE_CANDIDATE_PUBLICATION_RETRY"),
             eq(AuditStage.SUCCESS),
             eq(CANDIDATE_ID.toString()),
             any()
         );
+    }
+
+    @Test
+    void strictAuditFailurePreventsPublicationCommitFromReturningSuccess() {
+        CandidateView publishing = candidate(DeliveryStatus.PUBLISHING, 10, audit(false));
+        CandidateView published = candidate(DeliveryStatus.PUBLISHED, 11, audit(true));
+        when(targetResolver.resolve(publishing)).thenReturn(target());
+        when(evidence.requireCurrent(publishing, true)).thenReturn(List.of());
+        when(
+            candidateCommands.transitionWithinAuditedCommit(
+                eq(TENANT),
+                eq(ACTOR),
+                eq(CANDIDATE_ID),
+                any(TransitionCommand.class)
+            )
+        )
+            .thenReturn(new CommandResult(published, false, List.of()));
+        doThrow(new IllegalStateException("audit unavailable"))
+            .when(auditService)
+            .auditActionStrict(
+                eq("MODEL_RELEASE_CANDIDATE_PUBLISH"),
+                eq(AuditStage.SUCCESS),
+                eq(CANDIDATE_ID.toString()),
+                any()
+            );
+
+        assertThatThrownBy(() ->
+            service.commit(
+                TENANT,
+                ACTOR,
+                publishing,
+                "publish-key",
+                "publish approved release"
+            )
+        )
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("audit unavailable");
     }
 
     @Test
@@ -319,7 +388,7 @@ class CandidatePublicationCommitServiceTest {
         );
 
         assertThat(result.replayed()).isTrue();
-        verify(auditService, never()).auditAction(
+        verify(auditService, never()).auditActionStrict(
             anyString(),
             any(),
             anyString(),

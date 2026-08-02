@@ -3,6 +3,7 @@ package com.yuzhi.dts.platform.web.rest;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -32,15 +33,76 @@ class ModelSpecImportPreviewRequestParserTest {
         String json = """
             {
               \"package\": {},
+              \"inspectionProof\": \"proof-v1\",
               \"context\": {\"planId\": \"%s\", \"domainMappings\": {}, \"sourceMappings\": {}},
-              \"selectedUniqueIds\": []
+              \"selectedUniqueIds\": [],
+              \"semanticOverrides\": [{
+                \"modelUniqueId\": \"model.demo.fact_budget\",
+                \"businessName\": \"预算事实\",
+                \"fieldRoles\": {\"budget_id\": \"KEY\"}
+              }]
             }
             """.formatted(UUID.randomUUID());
 
         var parsed = parser.parse(new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8)), json.getBytes(StandardCharsets.UTF_8).length);
 
         assertThat(parsed.context().planId()).isNotNull();
+        assertThat(parsed.inspectionProof()).isEqualTo("proof-v1");
         assertThat(parsed.selectedUniqueIds()).isEmpty();
+        assertThat(parsed.semanticOverrides()).singleElement().satisfies(override -> {
+            assertThat(override.modelUniqueId()).isEqualTo("model.demo.fact_budget");
+            assertThat(override.businessName()).isEqualTo("预算事实");
+        });
+    }
+
+    @Test
+    void rejectsTechnicalFieldsOutsideTheSemanticOverrideAllowlist() {
+        String json = """
+            {
+              "package": {},
+              "inspectionProof": "proof-v1",
+              "context": {"planId": "%s"},
+              "selectedUniqueIds": [],
+              "semanticOverrides": [{
+                "modelUniqueId": "model.demo.fact_budget",
+                "sql": "select secret from source"
+              }]
+            }
+            """.formatted(UUID.randomUUID());
+
+        assertInvalidRequest(json);
+    }
+
+    @Test
+    void rejectsUnknownSemanticOverrideFieldsEvenWhenTheProductionMapperIsLenient() {
+        ObjectMapper productionMapper = new ObjectMapper()
+            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+        ModelSpecImportPreviewRequestParser strictParser = new ModelSpecImportPreviewRequestParser(
+            productionMapper
+        );
+        String json = """
+            {
+              "package": {},
+              "inspectionProof": "proof-v1",
+              "context": {"planId": "%s"},
+              "selectedUniqueIds": [],
+              "semanticOverrides": [{
+                "modelUniqueId": "model.demo.fact_budget",
+                "compiledSql": "select credential_body from forbidden_source"
+              }]
+            }
+            """.formatted(UUID.randomUUID());
+        byte[] body = json.getBytes(StandardCharsets.UTF_8);
+
+        assertThatThrownBy(() -> strictParser.parse(new ByteArrayInputStream(body), body.length))
+            .isInstanceOf(ModelSpecImportPreviewRequestParser.RequestLimitException.class)
+            .satisfies(error -> {
+                ModelSpecImportPreviewRequestParser.RequestLimitException requestError =
+                    (ModelSpecImportPreviewRequestParser.RequestLimitException) error;
+                assertThat(requestError.status()).isEqualTo(HttpStatus.BAD_REQUEST);
+                assertThat(requestError.code()).isEqualTo("MODEL_IMPORT_REQUEST_INVALID");
+                assertThat(requestError.getMessage()).doesNotContain("credential_body", "forbidden_source");
+            });
     }
 
     @Test

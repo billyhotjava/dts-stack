@@ -4,18 +4,15 @@ import test from "node:test";
 
 const platformApiPath = new URL("./platformApi.ts", import.meta.url);
 
-test("platformApi keeps supported dbt reads and omits retired direct execution routes", async () => {
+test("platformApi keeps supported dbt reads and omits retired direct and selector execution routes", async () => {
 	const source = await readFile(platformApiPath, "utf8");
 
 	assert.equal(source.includes('url: "/session/status"'), true);
 	assert.equal(source.includes("X-Portal-Access-Token"), false);
 	assert.equal(source.includes("_skipAuth: true"), true);
-	assert.equal(
-		source.includes(
-			'export const checkDagReady = (params?: { selector?: string }) =>\n\tapi.get(withModelingRequestTimeout({ url: "/etl/dbt/dag/ready", params }));',
-		),
-		true,
-	);
+	assert.equal(source.includes("checkDagReady"), false);
+	assert.equal(source.includes('/etl/dbt/dag/ready'), false);
+	assert.equal(source.includes("selector?: string"), false);
 	assert.equal(
 		source.includes(
 			`export const getDbtModelDiagnostics = (model: string) =>\n\tapi.get(withModelingRequestTimeout({ url: \`/etl/dbt/models/\${encodeURIComponent(model)}/diagnostics\` }));`,
@@ -25,6 +22,12 @@ test("platformApi keeps supported dbt reads and omits retired direct execution r
 	for (const route of [
 		'/etl/dbt/output',
 		'/etl/dbt/run',
+		'/etl/dbt/git/status',
+		'/etl/dbt/git/commit',
+		'/etl/dbt/git/log',
+		'/etl/dbt/git/diff',
+		'/etl/dbt/git/revert',
+		'/etl/dbt/git/file-at-commit',
 		'/etl/dbt/compile',
 		'/etl/dbt/test',
 		'/etl/dbt/docs',

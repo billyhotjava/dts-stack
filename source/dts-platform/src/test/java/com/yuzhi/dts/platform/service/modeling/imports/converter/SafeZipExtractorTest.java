@@ -8,8 +8,10 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import org.junit.jupiter.api.Test;
@@ -60,6 +62,31 @@ class SafeZipExtractorTest {
     }
 
     @Test
+    void rejectsCredentialBearingFilesBeforeWritingThemToDisk(CapturedOutput output) throws Exception {
+        for (String sensitivePath : List.of(
+            "profiles.yml",
+            ".env",
+            "config/.env.production",
+            "keys/id_rsa",
+            "keys/client-private.pem",
+            "config/credentials.json"
+        )) {
+            AtomicReference<java.nio.file.Path> extractionRoot = new AtomicReference<>();
+            SafeZipExtractor observingExtractor = new SafeZipExtractor(root -> {
+                extractionRoot.set(root);
+                assertThat(Files.exists(root.resolve(sensitivePath))).isFalse();
+                SafeZipExtractor.deleteRecursivelyOnce(root);
+            });
+            assertCode(
+                "SENSITIVE_FILE",
+                () -> observingExtractor.extract(file("model.zip", zip(Map.of(sensitivePath, "credential-body-FX05"))))
+            );
+            assertThat(extractionRoot).hasValueSatisfying(root -> assertThat(Files.exists(root)).isFalse());
+        }
+        assertThat(output.getAll()).doesNotContain("credential-body-FX05");
+    }
+
+    @Test
     void rejectsExtremeCompressionExpansionPastTheFourMiBFloor() throws Exception {
         byte[] expanded = new byte[(4 * 1024 * 1024) + 1];
 
@@ -93,6 +120,27 @@ class SafeZipExtractorTest {
         assertThat(attempts).hasValue(2);
         assertThat(Files.exists(root)).isFalse();
         assertThat(output.getAll()).contains("Temporary model import archive cleanup failed; retrying once");
+    }
+
+    @Test
+    void failsClosedAfterTwoCleanupFailuresWithoutLoggingFailureBodies(CapturedOutput output) throws Exception {
+        AtomicInteger attempts = new AtomicInteger();
+        SafeZipExtractor failingExtractor = new SafeZipExtractor(root -> {
+            attempts.incrementAndGet();
+            throw new IOException("credential-body-FX05 /tmp/customer/private.pem");
+        });
+        var extracted = failingExtractor.extract(file("model.zip", zip(Map.of("manifest.yml", "version: 1"))));
+        var root = extracted.root();
+
+        try {
+            assertCode("CLEANUP_FAILED", extracted::close);
+            assertThat(attempts).hasValue(2);
+            assertThat(output.getAll())
+                .contains("Temporary model import archive cleanup still failed after retry")
+                .doesNotContain("credential-body-FX05", "/tmp/customer/private.pem");
+        } finally {
+            SafeZipExtractor.deleteRecursivelyOnce(root);
+        }
     }
 
     private static MockMultipartFile file(String name, byte[] content) {

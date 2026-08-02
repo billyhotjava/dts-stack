@@ -1,5 +1,5 @@
 {
-  "version": "2026-07-25",
+  "version": "2026-08-02",
   "description": "System-wide audit action catalog mapped to portal and admin menus. Each action describes human-readable display text, aggregation phases, and flow aggregation hints.",
   "sections": [
     {
@@ -1270,6 +1270,96 @@
           ]
         },
         {
+          "key": "modeling.dbt-roundtrip",
+          "title": "dbt 可视化往返建模",
+          "actions": [
+            {
+              "code": "MODELING_DBT_IMPORT_INSPECT",
+              "display": "检查 dbt 导入包",
+              "phases": ["BEGIN", "SUCCESS", "FAIL"],
+              "supportsFlow": true
+            },
+            {
+              "code": "MODEL_SPEC_IMPORT_PREVIEW",
+              "display": "预检 dbt 模型导入",
+              "phases": ["BEGIN", "SUCCESS", "FAIL"],
+              "supportsFlow": true
+            },
+            {
+              "code": "MODELING_DBT_IMPORT_APPLY",
+              "display": "应用 dbt 模型导入",
+              "phases": ["BEGIN", "SUCCESS", "FAIL"],
+              "supportsFlow": true
+            },
+            {
+              "code": "MODELING_DBT_IMPORT_RETRY",
+              "display": "重试 dbt 模型导入",
+              "phases": ["BEGIN", "SUCCESS", "FAIL"],
+              "supportsFlow": true
+            },
+            {
+              "code": "MODELING_DBT_IMPORT_FORWARD_UNDO",
+              "display": "前向撤销 dbt 模型导入",
+              "phases": ["BEGIN", "SUCCESS", "FAIL"],
+              "supportsFlow": true
+            },
+            {
+              "code": "MODELING_DBT_IMPORT_FORWARD_UNDO_ITEM",
+              "display": "恢复单个 dbt 模型版本",
+              "phases": ["SUCCESS"],
+              "supportsFlow": false
+            },
+            {
+              "code": "MODELING_DBT_IMPORT_CONFLICT",
+              "display": "处理 dbt 导入冲突",
+              "phases": ["SUCCESS", "FAIL"],
+              "supportsFlow": true
+            },
+            {
+              "code": "MODELING_DBT_DRAFT_CREATE",
+              "display": "创建高级 dbt 草稿",
+              "phases": ["SUCCESS", "FAIL"],
+              "supportsFlow": false
+            },
+            {
+              "code": "MODELING_DBT_DRAFT_SAVE",
+              "display": "保存高级 dbt 草稿",
+              "phases": ["SUCCESS", "FAIL"],
+              "supportsFlow": false
+            },
+            {
+              "code": "MODELING_DBT_DRAFT_VALIDATE",
+              "display": "校验高级 dbt 草稿",
+              "phases": ["SUCCESS", "FAIL"],
+              "supportsFlow": false
+            },
+            {
+              "code": "MODELING_DBT_DRAFT_COMMIT",
+              "display": "提交高级 dbt 实现版本",
+              "phases": ["BEGIN", "SUCCESS", "FAIL"],
+              "supportsFlow": true
+            },
+            {
+              "code": "MODELING_DBT_DRAFT_PURGE",
+              "display": "清理过期高级 dbt 草稿",
+              "phases": ["SUCCESS", "FAIL"],
+              "supportsFlow": false
+            },
+            {
+              "code": "MODELING_CATALOG_PROJECTION",
+              "display": "投影模型资产服务版本",
+              "phases": ["BEGIN", "SUCCESS", "FAIL"],
+              "supportsFlow": true
+            },
+            {
+              "code": "MODELING_PHYSICAL_PREVIEW",
+              "display": "预览模型物理样例",
+              "phases": ["SUCCESS", "FAIL"],
+              "supportsFlow": false
+            }
+          ]
+        },
+        {
           "key": "modeling.dimension-definition",
           "title": "业务维度",
           "actions": [
@@ -1739,13 +1829,23 @@
               "supportsFlow": false
             },
             {
-              "code": "GOV_QUALITY_RUN_EXECUTE",
-              "display": "执行质量检测运行",
+              "code": "GOV_QUALITY_FAILING_ROW_VIEW",
+              "display": "查看质量失败行明细",
               "phases": [
                 "SUCCESS",
                 "FAIL"
               ],
               "supportsFlow": false
+            },
+            {
+              "code": "GOV_QUALITY_RUN_EXECUTE",
+              "display": "执行质量检测运行",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
             }
           ]
         },
@@ -1936,10 +2036,11 @@
               "code": "GOV_QUALITY_TASK_EXECUTE",
               "display": "执行质量巡检计划",
               "phases": [
+                "BEGIN",
                 "SUCCESS",
                 "FAIL"
               ],
-              "supportsFlow": false
+              "supportsFlow": true
             }
           ]
         },
@@ -2037,10 +2138,11 @@
               "code": "GOV_QUALITY_REPORT_EXPORT",
               "display": "导出质量报告",
               "phases": [
+                "BEGIN",
                 "SUCCESS",
                 "FAIL"
               ],
-              "supportsFlow": false
+              "supportsFlow": true
             }
           ]
         },

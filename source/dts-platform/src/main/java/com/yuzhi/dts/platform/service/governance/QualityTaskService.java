@@ -113,6 +113,7 @@ public class QualityTaskService {
             GovQualityTask task = new GovQualityTask();
             applyUpsert(task, request, activeDeptHeader);
             GovQualityTask saved = taskRepository.save(task);
+            taskRepository.flush();
             auditTaskAction(
                 "GOV_QUALITY_TASK_CREATE",
                 AuditStage.SUCCESS,
@@ -134,6 +135,7 @@ public class QualityTaskService {
             ensureAccessible(task, activeDeptHeader);
             applyUpsert(task, request, activeDeptHeader);
             GovQualityTask saved = taskRepository.save(task);
+            taskRepository.flush();
             auditTaskAction(
                 "GOV_QUALITY_TASK_UPDATE",
                 AuditStage.SUCCESS,
@@ -152,6 +154,7 @@ public class QualityTaskService {
     public void delete(UUID id, String actor) {
         try {
             taskRepository.deleteById(id);
+            taskRepository.flush();
             auditTaskAction(
                 "GOV_QUALITY_TASK_DELETE",
                 AuditStage.SUCCESS,
@@ -173,6 +176,7 @@ public class QualityTaskService {
             ensureAccessible(task, activeDeptHeader);
             task.setEnabled(enabled);
             GovQualityTask saved = taskRepository.save(task);
+            taskRepository.flush();
             auditTaskAction(
                 "GOV_QUALITY_TASK_TOGGLE",
                 AuditStage.SUCCESS,
@@ -196,6 +200,7 @@ public class QualityTaskService {
             List<Map<String, Object>> runs = triggerInternal(task, actor, "MANUAL");
             task.setLastTriggeredAt(Instant.now());
             taskRepository.save(task);
+            taskRepository.flush();
             boolean failed = hasTriggerErrors(runs);
             auditTaskAction(
                 "GOV_QUALITY_TASK_EXECUTE",
@@ -326,6 +331,22 @@ public class QualityTaskService {
                         createIssueForTaskFailure(task, errorCategory, attemptIdentity, scheduleSlot)
                     );
                 } catch (RuntimeException issueFailure) {
+                    Map<String, Object> issuePayload = new LinkedHashMap<>();
+                    issuePayload.put("summary", "自动创建质量巡检问题失败");
+                    issuePayload.put("sourceType", "QUALITY_TASK");
+                    issuePayload.put("sourceId", String.valueOf(task.getId()));
+                    if (task.getDatasetId() != null) {
+                        issuePayload.put("datasetId", task.getDatasetId().toString());
+                    }
+                    issuePayload.put("errorType", issueFailure.getClass().getSimpleName());
+                    issuePayload.put("errorCategory", "ISSUE_PERSISTENCE_FAILED");
+                    safeRecordMachineFailure(
+                        attemptIdentity + ":ISSUE:FAIL",
+                        scheduleSlot,
+                        "GOV_ISSUE_CREATE",
+                        String.valueOf(task.getId()),
+                        issuePayload
+                    );
                     log.warn(
                         "event=quality_task_issue_create_failed taskId={} errorType={}",
                         task.getId(),

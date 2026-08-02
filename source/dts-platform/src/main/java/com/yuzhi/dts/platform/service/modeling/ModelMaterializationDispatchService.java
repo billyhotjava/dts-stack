@@ -48,6 +48,7 @@ public class ModelMaterializationDispatchService {
     private final DbtDagService dags;
     private final DbtExecutionGateway gateway;
     private final ModelRuntimeSpecTokenCodec tokens;
+    private final DbtRuntimeCertificationService runtimeCertification;
     private final ModelMaterializationSourceAvailabilityGuard sourceAvailability;
     private final AuditService auditService;
     private final Clock clock;
@@ -61,6 +62,7 @@ public class ModelMaterializationDispatchService {
         DbtDagService dags,
         DbtExecutionGateway gateway,
         ModelRuntimeSpecTokenCodec tokens,
+        DbtRuntimeCertificationService runtimeCertification,
         ModelMaterializationSourceAvailabilityGuard sourceAvailability,
         AuditService auditService,
         PlatformTransactionManager transactionManager
@@ -72,6 +74,7 @@ public class ModelMaterializationDispatchService {
             dags,
             gateway,
             tokens,
+            runtimeCertification,
             sourceAvailability,
             auditService,
             Clock.systemUTC(),
@@ -86,6 +89,7 @@ public class ModelMaterializationDispatchService {
         DbtDagService dags,
         DbtExecutionGateway gateway,
         ModelRuntimeSpecTokenCodec tokens,
+        DbtRuntimeCertificationService runtimeCertification,
         ModelMaterializationSourceAvailabilityGuard sourceAvailability,
         AuditService auditService,
         Clock clock,
@@ -111,6 +115,10 @@ public class ModelMaterializationDispatchService {
         this.tokens = Objects.requireNonNull(
             tokens,
             "tokens is required"
+        );
+        this.runtimeCertification = Objects.requireNonNull(
+            runtimeCertification,
+            "runtimeCertification is required"
         );
         this.sourceAvailability = Objects.requireNonNull(sourceAvailability, "sourceAvailability is required");
         this.auditService = Objects.requireNonNull(
@@ -147,8 +155,9 @@ public class ModelMaterializationDispatchService {
                 builds.loadCandidateBuildScope(
                     dispatch.tenantId(),
                     dispatch.id()
-                );
+            );
             validateIdentity(dispatch, scope);
+            runtimeCertification.requireCertified();
 
             Optional<ReleaseBuildRequest> recoveryRequest =
                 recoveryRequest(dispatch);
@@ -464,7 +473,7 @@ public class ModelMaterializationDispatchService {
         payload.put("status", status);
         if (errorCode != null) payload.put("errorCode", errorCode);
         try {
-            auditService.auditActionAs(
+            auditService.auditActionAsStrict(
                 "scheduler",
                 dispatchEventIdentity(dispatch, status),
                 occurredAt,

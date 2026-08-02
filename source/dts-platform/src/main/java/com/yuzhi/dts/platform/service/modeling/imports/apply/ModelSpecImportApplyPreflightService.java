@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.Attempt;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.CandidateResult;
+import com.yuzhi.dts.platform.service.modeling.imports.reconciliation.ModelSpecImportReconciliationContract.ConflictResolution;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.Kind;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.ModelSpecImportApplyException;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.ResultStatus;
@@ -62,6 +63,7 @@ public class ModelSpecImportApplyPreflightService {
             retrySource,
             Map.of(),
             Map.of(),
+            Map.of(),
             now
         );
     }
@@ -76,6 +78,30 @@ public class ModelSpecImportApplyPreflightService {
         Map<String, Set<String>> syntheticDependencies,
         Instant now
     ) {
+        return prepare(
+            tenantId,
+            stored,
+            previewHash,
+            requestedUniqueIds,
+            retrySource,
+            retrySuccesses,
+            syntheticDependencies,
+            Map.of(),
+            now
+        );
+    }
+
+    public PreparedApply prepare(
+        String tenantId,
+        StoredApplyPlan stored,
+        String previewHash,
+        List<String> requestedUniqueIds,
+        Attempt retrySource,
+        Map<String, CandidateResult> retrySuccesses,
+        Map<String, Set<String>> syntheticDependencies,
+        Map<String, ConflictResolution> conflictResolutions,
+        Instant now
+    ) {
         requireStoredIntegrity(stored, previewHash, now);
         JsonNode context = tree(stored.contextSnapshotJson());
         PlanSnapshot plan = previewRepository
@@ -85,8 +111,13 @@ public class ModelSpecImportApplyPreflightService {
         requireDomainSnapshot(tenantId, plan.id(), context.path("domains"));
         requireSourceSnapshot(tenantId, plan.id(), context.path("sources"));
 
+        Map<String, ConflictResolution> resolutions = conflictResolutions == null ? Map.of() : Map.copyOf(conflictResolutions);
         LinkedHashMap<String, Candidate> candidates = new LinkedHashMap<>();
         stored.applyPlan().candidates().forEach(candidate -> candidates.put(candidate.dbtUniqueId(), candidate));
+        candidates.replaceAll((uniqueId, candidate) -> resolveConflict(candidate, resolutions.get(uniqueId)));
+        if (resolutions.keySet().stream().anyMatch(uniqueId -> !candidates.containsKey(uniqueId))) {
+            throw badRequest("MODEL_IMPORT_CONFLICT_RESOLUTION_INVALID", "Conflict resolution identifies an unknown candidate");
+        }
         Map<String, Set<String>> dependencies = mergeDependencies(
             dependencies(candidates),
             syntheticDependencies
@@ -103,7 +134,7 @@ public class ModelSpecImportApplyPreflightService {
             selected = retrySource
                 .results()
                 .stream()
-                .filter(item -> item.status() == ResultStatus.FAILED)
+                .filter(CandidateResult::retryable)
                 .map(item -> item.dbtUniqueId())
                 .toList();
             Set<String> unresolved = new LinkedHashSet<>();
@@ -113,7 +144,7 @@ public class ModelSpecImportApplyPreflightService {
                 .filter(item -> item.status() == ResultStatus.FAILED || item.status() == ResultStatus.BLOCKED)
                 .map(item -> item.dbtUniqueId())
                 .forEach(unresolved::add);
-            closure = stored.applyPlan().topology().stream().filter(unresolved::contains).toList();
+            closure = retryClosure(selected, unresolved, dependencies, stored.applyPlan().topology());
             if (selected.isEmpty() || closure.isEmpty()) {
                 throw conflict("MODEL_IMPORT_RETRY_NOT_AVAILABLE", "The latest apply attempt has no unresolved candidates");
             }
@@ -280,6 +311,46 @@ public class ModelSpecImportApplyPreflightService {
         return Map.copyOf(immutable);
     }
 
+    static Candidate resolveConflict(Candidate candidate, ConflictResolution resolution) {
+        boolean conflict = "CONFLICT".equals(candidate.action());
+        if (!conflict && resolution != null) {
+            throw badRequest(
+                "MODEL_IMPORT_CONFLICT_RESOLUTION_INVALID",
+                "Conflict resolution can be supplied only for a conflicting candidate"
+            );
+        }
+        if (!conflict || resolution == null) return candidate;
+        String action = switch (resolution) {
+            case KEEP_CURRENT -> "SKIP";
+            case ACCEPT_INCOMING -> "UPDATE";
+            case CANCEL -> "CANCEL";
+        };
+        boolean retainCurrent = resolution != ConflictResolution.ACCEPT_INCOMING;
+        return new Candidate(
+            candidate.dbtUniqueId(),
+            candidate.targetModelSpecId(),
+            retainCurrent ? candidate.expectedModelRevision() : candidate.targetRevision(),
+            retainCurrent ? candidate.expectedImplementationRevision() : candidate.targetImplementationRevision(),
+            candidate.expectedModelRevision(),
+            candidate.expectedModelChecksum(),
+            candidate.expectedModelStatus(),
+            candidate.expectedImplementationRevision(),
+            candidate.expectedImplementationChecksum(),
+            retainCurrent ? candidate.expectedModelChecksum() : candidate.proposedModelSpecChecksum(),
+            retainCurrent ? candidate.expectedImplementationChecksum() : candidate.proposedImplementationChecksum(),
+            action,
+            candidate.conversionMode(),
+            candidate.modelSpecJson(),
+            candidate.implementationJson(),
+            candidate.artifactJson(),
+            candidate.evidenceJson(),
+            candidate.dependencyPinsJson(),
+            candidate.sourcePinsJson(),
+            candidate.incomingExternalChecksum(),
+            candidate.dependencyUniqueIds()
+        );
+    }
+
     private void requireRetryDependencyFacts(UUID planId, CandidateResult appliedDependency, ModelOwnershipSnapshot current) {
         if (
             appliedDependency == null ||
@@ -341,6 +412,29 @@ public class ModelSpecImportApplyPreflightService {
                 collect(dependency, candidates, dependencies, result);
             }
         }
+    }
+
+    private static List<String> retryClosure(
+        List<String> selected,
+        Set<String> unresolved,
+        Map<String, Set<String>> dependencies,
+        List<String> topology
+    ) {
+        LinkedHashSet<String> reachable = new LinkedHashSet<>(selected);
+        boolean changed;
+        do {
+            changed = false;
+            for (String uniqueId : topology) {
+                if (
+                    unresolved.contains(uniqueId) &&
+                    !reachable.contains(uniqueId) &&
+                    dependencies.getOrDefault(uniqueId, Set.of()).stream().anyMatch(reachable::contains)
+                ) {
+                    changed = reachable.add(uniqueId) || changed;
+                }
+            }
+        } while (changed);
+        return topology.stream().filter(reachable::contains).toList();
     }
 
     private JsonNode tree(String json) {

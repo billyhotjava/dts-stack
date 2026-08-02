@@ -48,7 +48,7 @@
 
 数据集成中的凭据兼容恢复采用独立 `ingestion_secret_restore_audit` 证据账本和投递 outbox：仅接受 dts-platform 服务令牌、route grant、转发用户、`ROLE_ADMIN` 四项同时成立的请求；证据字段禁止 UPDATE/DELETE/TRUNCATE。outbox 的 `delivery_attempts` 同时作为 claim fencing token，陈旧 worker 无法覆盖新领取代次。
 
-生产审计租户必须显式配置 `AUDIT_TENANCY_MODE=SINGLE_TENANT` 与非空 `AUDIT_TENANT_ID`；审计 outbox 已存在真实租户证据时，tenant 列迁移回滚会锁表并失败关闭。
+当前版本不支持多租户，审计所有者由服务内部固定为 `SINGLE_TENANT/default`，部署不再接收审计租户参数；审计 outbox 仍保留 `tenant_id` 作为归属与重放隔离证据，已有真实租户证据时，tenant 列迁移回滚仍会锁表并失败关闭。
 
 **依赖规则**：上层只依赖下层公开端口；任何模块不得 import 其他模块的 repository/entity。查询投影可跨模块组合，但必须通过只读 port，不反向成为 owner。
 
@@ -245,7 +245,7 @@ Go/No-Go 条件：
 
 回滚边界：应用切换前可使用 changeset 自带 rollback 删除新约束和列，并核对原行数/状态；应用已开始写入真实 `tenant_id` 后不得直接回滚列，因为会不可逆丢失租户所有权。此时应停止写入，使用发布前备份恢复或执行单独评审的前向修复，再复核中央审计投递连续性。
 
-生产启动必须显式提供 `AUDIT_TENANCY_MODE=SINGLE_TENANT` 和非空 `AUDIT_TENANT_ID`；默认值只存在于 dev/test profile。当前版本不具备可信的请求级租户上下文，因此 `MULTI_TENANT` 必须启动失败，不能退化成共享默认租户。
+当前版本不具备可信的请求级租户上下文，因此部署面不开放租户模式与租户标识，服务内部固定使用 `SINGLE_TENANT/default`。`MULTI_TENANT` 仍不受支持，不能通过外部配置退化成共享默认租户；审计表中的 `tenant_id` 继续承担事件归属和重放隔离职责。
 
 人工重放只接受服务端封闭枚举中的 `reasonCode`，不接受自由文本 note。服务必须在同一事务中完成 `DEAD` 状态、租户、调用方 hash、数据库 `body_json` 重算 hash 和 CAS 校验，并使用 strict audit 写入回执；strict audit 关闭、操作者缺失或 outbox 写入失败时，重放状态必须回滚。
 

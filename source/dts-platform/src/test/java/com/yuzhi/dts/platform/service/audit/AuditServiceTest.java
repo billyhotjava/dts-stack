@@ -68,6 +68,32 @@ class AuditServiceTest {
     }
 
     @Test
+    void auditActionAsStrictAcceptsTheExplicitIngestionMachineIdentity() {
+        AuditForwarderService forwarder = mock(AuditForwarderService.class);
+        ObjectProvider<AuditForwarderService> provider = mockProvider(forwarder);
+        AuditService service = newService(provider, mock(PortalSessionRegistry.class));
+        when(forwarder.recordTrustedMachineStrict(any(), eq("ingestion-run-17")))
+            .thenReturn(UUID.fromString("66b7b954-5fd6-4e89-a5e5-dab8f78b91d9"));
+
+        service.auditActionAsStrict(
+            "service:dts-ingestion",
+            "ingestion-run-17",
+            Instant.parse("2026-08-01T02:03:04Z"),
+            "GOV_QUALITY_RUN_EXECUTE",
+            AuditStage.BEGIN,
+            "run-17",
+            Map.of("summary", "ingestion quality trigger")
+        );
+
+        ArgumentCaptor<AuditForwarderService.PendingAuditEvent> captor = ArgumentCaptor.forClass(
+            AuditForwarderService.PendingAuditEvent.class
+        );
+        verify(forwarder).recordTrustedMachineStrict(captor.capture(), eq("ingestion-run-17"));
+        assertThat(captor.getValue().actor).isEqualTo("_system:ingestion");
+        assertThat(captor.getValue().actorRole).isEqualTo("MACHINE");
+    }
+
+    @Test
     void auditActionAsStrictMustReturnDurableMachineReceipt() {
         AuditForwarderService forwarder = mock(AuditForwarderService.class);
         ObjectProvider<AuditForwarderService> provider = mockProvider(forwarder);

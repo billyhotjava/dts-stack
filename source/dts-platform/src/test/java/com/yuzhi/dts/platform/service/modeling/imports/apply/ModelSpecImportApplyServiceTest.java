@@ -50,6 +50,7 @@ class ModelSpecImportApplyServiceTest {
     private final ModelSpecImportPreviewRepository previewRepository = mock(ModelSpecImportPreviewRepository.class);
     private final ModelSpecImportApplyRepository applyRepository = mock(ModelSpecImportApplyRepository.class);
     private final ModelSpecImportApplyPreflightService preflight = mock(ModelSpecImportApplyPreflightService.class);
+    private final ModelSpecImportApplyPayloadCodec payloadCodec = mock(ModelSpecImportApplyPayloadCodec.class);
     private final WarehousePlanActorProvider actorProvider = mock(WarehousePlanActorProvider.class);
     private final WarehousePlanAuthorizationGuard authorizationGuard = mock(WarehousePlanAuthorizationGuard.class);
     private final ModelSpecImportApplyService service = new ModelSpecImportApplyService(
@@ -59,7 +60,7 @@ class ModelSpecImportApplyServiceTest {
         mock(ModelSpecImportCandidateTransactionWorker.class),
         actorProvider,
         authorizationGuard,
-        mock(ModelSpecImportApplyPayloadCodec.class),
+        payloadCodec,
         new ObjectMapper(),
         TENANT
     );
@@ -68,6 +69,7 @@ class ModelSpecImportApplyServiceTest {
     void setUp() {
         when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("actor", "dept"));
         when(previewRepository.findPlan(TENANT, PLAN_ID)).thenReturn(Optional.of(plan()));
+        when(payloadCodec.checksum(org.mockito.ArgumentMatchers.any())).thenReturn("request-hash");
     }
 
     @Test
@@ -76,7 +78,7 @@ class ModelSpecImportApplyServiceTest {
         when(previewRepository.findRun(TENANT, RUN_ID)).thenReturn(Optional.of(run(freshExpiry())));
         when(previewRepository.findApplyPlan(TENANT, RUN_ID)).thenReturn(Optional.of(stored(canonical)));
         when(applyRepository.findByIdempotencyKey(TENANT, "same-key")).thenReturn(
-            Optional.of(attempt(AttemptStatus.SUCCEEDED, canonical))
+            Optional.of(attempt(AttemptStatus.SUCCESS, canonical))
         );
 
         var response = service.apply(
@@ -105,10 +107,10 @@ class ModelSpecImportApplyServiceTest {
             Optional.of(run(Instant.now().minusSeconds(60)))
         );
         when(applyRepository.findLatest(TENANT, RUN_ID)).thenReturn(
-            Optional.of(attempt(AttemptStatus.SUCCEEDED, List.of("model.pjm.fact")))
+            Optional.of(attempt(AttemptStatus.SUCCESS, List.of("model.pjm.fact")))
         );
 
-        assertThat(service.latest(RUN_ID).status()).isEqualTo(AttemptStatus.SUCCEEDED);
+        assertThat(service.latest(RUN_ID).status()).isEqualTo(AttemptStatus.SUCCESS);
         assertThatThrownBy(() ->
             service.apply(
                 new ApplyRequest(RUN_ID, PREVIEW_HASH, List.of("model.pjm.fact"), "expired-apply-key")
@@ -152,6 +154,9 @@ class ModelSpecImportApplyServiceTest {
                 org.mockito.ArgumentMatchers.eq(PREVIEW_HASH),
                 org.mockito.ArgumentMatchers.eq(selected),
                 org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.anyMap(),
+                org.mockito.ArgumentMatchers.anyMap(),
+                org.mockito.ArgumentMatchers.anyMap(),
                 org.mockito.ArgumentMatchers.any()
             )
         ).thenThrow(
@@ -200,6 +205,40 @@ class ModelSpecImportApplyServiceTest {
     }
 
     @Test
+    void allocatesExternalDbtTechnicalNodesEvenForDesignerRepresentableSql() {
+        Candidate candidate = new Candidate(
+            "model.pjm.simple",
+            UUID.randomUUID(),
+            1,
+            1,
+            0,
+            null,
+            "DRAFT",
+            0,
+            null,
+            "model-checksum",
+            "implementation-checksum",
+            "CREATE",
+            "DESIGNER_GENERATED",
+            "{}",
+            "{\"command\":{\"ownership\":\"DBT_MANAGED\"}}",
+            "{}",
+            "{}",
+            "{\"canonicalDependencies\":[],\"technicalPathNodes\":[\"model.pjm.simple_stg\"]}",
+            "{}"
+        );
+
+        ModelSpecImportApplyService.TechnicalAllocation allocation = service.technicalAllocation(
+            stored(List.of(candidate.dbtUniqueId()), List.of(candidate)),
+            List.of(candidate.dbtUniqueId()),
+            Map.of()
+        );
+
+        assertThat(allocation.ownedTechnicalNodeIds().get(candidate.dbtUniqueId()))
+            .containsExactly("model.pjm.simple_stg");
+    }
+
+    @Test
     void aggregatesSuccessfulPinsAcrossMultiHopRetryAncestors() {
         UUID rootAttemptId = UUID.fromString("20000000-0000-0000-0000-000000000010");
         UUID latestAttemptId = UUID.fromString("20000000-0000-0000-0000-000000000011");
@@ -227,6 +266,55 @@ class ModelSpecImportApplyServiceTest {
             "model.pjm.sharer"
         );
         assertThat(history.successfulResults()).containsEntry("model.pjm.owner", ownerSuccess);
+    }
+
+    @Test
+    void canonicalRunKeepsUnresolvedRootFailuresWhenLatestRetrySucceeds() {
+        UUID rootAttemptId = UUID.fromString("20000000-0000-0000-0000-000000000020");
+        UUID retryAttemptId = UUID.fromString("20000000-0000-0000-0000-000000000021");
+        Attempt root = attempt(
+            rootAttemptId,
+            null,
+            AttemptStatus.PARTIAL,
+            List.of("model.pjm.ready", "model.pjm.retried", "model.pjm.unresolved"),
+            List.of(
+                result("model.pjm.ready", ResultStatus.CREATED),
+                result("model.pjm.retried", ResultStatus.FAILED),
+                result("model.pjm.unresolved", ResultStatus.BLOCKED)
+            )
+        );
+        Attempt retry = attempt(
+            retryAttemptId,
+            rootAttemptId,
+            AttemptStatus.SUCCESS,
+            List.of("model.pjm.retried"),
+            List.of(result("model.pjm.retried", ResultStatus.CREATED))
+        );
+        when(applyRepository.find(TENANT, rootAttemptId)).thenReturn(Optional.of(root));
+
+        var overall = service.canonicalRun(retry);
+
+        assertThat(overall.rootAttemptId()).isEqualTo(rootAttemptId);
+        assertThat(overall.status()).isEqualTo(AttemptStatus.PARTIAL);
+        assertThat(overall.summary().created()).isEqualTo(2);
+        assertThat(overall.summary().blocked()).isOne();
+        assertThat(overall.items())
+            .extracting(CandidateResult::dbtUniqueId, CandidateResult::status)
+            .containsExactly(
+                org.assertj.core.groups.Tuple.tuple("model.pjm.ready", ResultStatus.CREATED),
+                org.assertj.core.groups.Tuple.tuple("model.pjm.retried", ResultStatus.CREATED),
+                org.assertj.core.groups.Tuple.tuple("model.pjm.unresolved", ResultStatus.BLOCKED)
+            );
+    }
+
+    @Test
+    void retryDiagnosticsUseRetryStage() {
+        assertThat(ModelSpecImportApplyService.diagnosticStage(null)).isEqualTo("APPLY");
+        assertThat(
+            ModelSpecImportApplyService.diagnosticStage(
+                attempt(AttemptStatus.FAILED, List.of("model.pjm.retry"))
+            )
+        ).isEqualTo("RETRY");
     }
 
     @Test

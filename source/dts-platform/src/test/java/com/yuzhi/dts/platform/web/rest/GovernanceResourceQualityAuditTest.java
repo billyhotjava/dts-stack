@@ -12,29 +12,30 @@ import static org.mockito.Mockito.when;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.config.GovernanceProperties;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
-import com.yuzhi.dts.platform.domain.governance.GovCleansingFunction;
+import com.yuzhi.dts.platform.domain.governance.GovQualityFailingRow;
 import com.yuzhi.dts.platform.domain.governance.GovQualityTemplate;
 import com.yuzhi.dts.platform.domain.governance.GovRule;
 import com.yuzhi.dts.platform.domain.governance.GovRuleBinding;
 import com.yuzhi.dts.platform.domain.governance.GovRuleVersion;
-import com.yuzhi.dts.platform.repository.governance.GovCleansingFunctionRepository;
 import com.yuzhi.dts.platform.repository.governance.GovQualityFailingRowRepository;
 import com.yuzhi.dts.platform.repository.governance.GovQualityTemplateRepository;
 import com.yuzhi.dts.platform.repository.governance.GovRuleRepository;
 import com.yuzhi.dts.platform.repository.governance.GovRuleBindingRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.service.audit.AuditService;
-import com.yuzhi.dts.platform.service.governance.DataCleansingService;
 import com.yuzhi.dts.platform.service.governance.QualityAuditRecorder;
 import com.yuzhi.dts.platform.service.governance.QualityDatasetReadGuard;
 import com.yuzhi.dts.platform.service.governance.QualityReportExportService;
 import com.yuzhi.dts.platform.service.governance.QualityRuleService;
 import com.yuzhi.dts.platform.service.governance.QualityRunService;
 import com.yuzhi.dts.platform.service.governance.dto.QualityRuleDto;
+import com.yuzhi.dts.platform.service.governance.dto.QualityRunDto;
 import com.yuzhi.dts.platform.service.governance.SqlRepairService;
 import com.yuzhi.dts.platform.service.governance.SqlTemplateRenderer;
 import jakarta.servlet.ServletOutputStream;
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -47,6 +48,8 @@ import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.ArgumentCaptor;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.annotation.Propagation;
@@ -71,9 +74,6 @@ class GovernanceResourceQualityAuditTest {
     private GovQualityFailingRowRepository failingRowRepository;
 
     @Mock
-    private GovCleansingFunctionRepository cleansingFunctionRepository;
-
-    @Mock
     private QualityReportExportService qualityReportExportService;
 
     @Mock
@@ -87,9 +87,6 @@ class GovernanceResourceQualityAuditTest {
 
     @Mock
     private QualityDatasetReadGuard qualityDatasetReadGuard;
-
-    @Mock
-    private DataCleansingService dataCleansingService;
 
     @Mock
     private GovRuleRepository ruleRepository;
@@ -148,6 +145,70 @@ class GovernanceResourceQualityAuditTest {
     }
 
     @Test
+    void hidesTheUnsupportedCrossAssetTemplate() {
+        GovQualityTemplate supported = new GovQualityTemplate();
+        supported.setCode("NULL_CHECK");
+        supported.setEnabled(Boolean.TRUE);
+        supported.setDialect("INCEPTOR");
+        GovQualityTemplate crossAsset = new GovQualityTemplate();
+        crossAsset.setCode("CROSS_TABLE_REF");
+        when(templateRepository.findAll()).thenReturn(List.of(supported, crossAsset));
+
+        assertThat(resource.listTemplates().getData()).containsExactly(supported);
+    }
+
+    @Test
+    void failingRowReadAuditsOnlyRunDatasetAndCountsWithoutActualValues() {
+        UUID runId = UUID.fromString("11000000-0000-0000-0000-000000000031");
+        UUID datasetId = UUID.fromString("12000000-0000-0000-0000-000000000031");
+        QualityRunDto run = new QualityRunDto();
+        run.setId(runId);
+        run.setDatasetId(datasetId);
+        GovQualityFailingRow row = new GovQualityFailingRow();
+        row.setId(UUID.fromString("13000000-0000-0000-0000-000000000031"));
+        row.setRowId("customer-42");
+        row.setColumnName("secret_token");
+        row.setActualValue("top-secret-value");
+        when(qualityRunService.getRun(runId, "D01")).thenReturn(run);
+        when(failingRowRepository.findByRunId(eq(runId), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(row)));
+
+        assertThat(resource.listFailingRows(runId, 0, 20, null, "D01").getData().get("content").toString())
+            .contains("top-secret-value");
+
+        ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
+        verify(qualityAuditRecorder).recordAction(
+            eq("GOV_QUALITY_FAILING_ROW_VIEW"),
+            eq(AuditStage.SUCCESS),
+            eq(runId.toString()),
+            payload.capture()
+        );
+        assertThat(String.valueOf(payload.getValue()))
+            .contains(runId.toString())
+            .contains(datasetId.toString())
+            .contains("returnedCount=1")
+            .doesNotContain("customer-42")
+            .doesNotContain("secret_token")
+            .doesNotContain("top-secret-value");
+    }
+
+    @Test
+    void failingRowAuthorizationDenialWritesFailureAudit() {
+        UUID runId = UUID.fromString("14000000-0000-0000-0000-000000000031");
+        org.springframework.security.access.AccessDeniedException denied =
+            new org.springframework.security.access.AccessDeniedException("denied");
+        when(qualityRunService.getRun(runId, "D01")).thenThrow(denied);
+
+        assertThatThrownBy(() -> resource.listFailingRows(runId, 0, 20, null, "D01")).isSameAs(denied);
+
+        verify(qualityAuditRecorder).recordFailureAction(
+            eq("GOV_QUALITY_FAILING_ROW_VIEW"),
+            eq(runId.toString()),
+            any()
+        );
+    }
+
+    @Test
     void auditsQualityReportExport() throws Exception {
         UUID datasetId = UUID.fromString("20000000-0000-0000-0000-000000000031");
         HttpServletResponse response = mock(HttpServletResponse.class);
@@ -157,11 +218,96 @@ class GovernanceResourceQualityAuditTest {
 
         resource.exportQualityReport(datasetId, 30, "D01", response);
 
+        verify(qualityAuditRecorder).recordAttempt(
+            eq("GOV_QUALITY_REPORT_EXPORT"),
+            eq(AuditStage.BEGIN),
+            eq(datasetId.toString()),
+            any()
+        );
         verify(qualityAuditRecorder).recordAction(
             eq("GOV_QUALITY_REPORT_EXPORT"),
             eq(AuditStage.SUCCESS),
             eq(datasetId.toString()),
             any()
+        );
+    }
+
+    @Test
+    void reportBeginAuditFailurePreventsAnyResponseDelivery() throws Exception {
+        UUID datasetId = UUID.fromString("20000000-0000-0000-0000-000000000033");
+        HttpServletResponse response = mock(HttpServletResponse.class);
+        IllegalStateException auditFailure = new IllegalStateException("strict audit unavailable");
+        org.mockito.Mockito.doThrow(auditFailure).when(qualityAuditRecorder).recordAttempt(
+            eq("GOV_QUALITY_REPORT_EXPORT"),
+            eq(AuditStage.BEGIN),
+            eq(datasetId.toString()),
+            any()
+        );
+
+        assertThatThrownBy(() -> resource.exportQualityReport(datasetId, 30, "D01", response))
+            .isSameAs(auditFailure);
+
+        org.mockito.Mockito.verifyNoInteractions(qualityReportExportService);
+        verify(response, org.mockito.Mockito.never()).getOutputStream();
+        verify(qualityAuditRecorder).recordFailureAction(
+            eq("GOV_QUALITY_REPORT_EXPORT"),
+            eq(datasetId.toString()),
+            any()
+        );
+    }
+
+    @Test
+    void reportSuccessAuditFailureStillLeavesDurableBeginEvidence() throws Exception {
+        UUID datasetId = UUID.fromString("20000000-0000-0000-0000-000000000034");
+        HttpServletResponse response = mock(HttpServletResponse.class);
+        ServletOutputStream output = mock(ServletOutputStream.class);
+        when(response.getOutputStream()).thenReturn(output);
+        when(qualityReportExportService.exportExcel(datasetId, 30, "D01")).thenReturn(new byte[] { 1, 2, 3 });
+        IllegalStateException successAuditFailure = new IllegalStateException("success audit commit failed");
+        org.mockito.Mockito.doThrow(successAuditFailure).when(qualityAuditRecorder).recordAction(
+            eq("GOV_QUALITY_REPORT_EXPORT"),
+            eq(AuditStage.SUCCESS),
+            eq(datasetId.toString()),
+            any()
+        );
+
+        assertThatThrownBy(() -> resource.exportQualityReport(datasetId, 30, "D01", response))
+            .isSameAs(successAuditFailure);
+
+        verify(qualityAuditRecorder).recordAttempt(
+            eq("GOV_QUALITY_REPORT_EXPORT"),
+            eq(AuditStage.BEGIN),
+            eq(datasetId.toString()),
+            any()
+        );
+        verify(output).write(any(byte[].class));
+        verify(qualityAuditRecorder).recordFailureAction(
+            eq("GOV_QUALITY_REPORT_EXPORT"),
+            eq(datasetId.toString()),
+            any()
+        );
+    }
+
+    @Test
+    void reportStreamFailureWritesOnlyFailureAudit() throws Exception {
+        UUID datasetId = UUID.fromString("20000000-0000-0000-0000-000000000032");
+        HttpServletResponse response = mock(HttpServletResponse.class);
+        ServletOutputStream output = mock(ServletOutputStream.class);
+        when(response.getOutputStream()).thenReturn(output);
+        when(qualityReportExportService.exportExcel(datasetId, 30, "D01")).thenReturn(new byte[] { 1, 2, 3 });
+        org.mockito.Mockito.doThrow(new IOException("client disconnected"))
+            .when(output)
+            .write(any(byte[].class));
+
+        assertThatThrownBy(() -> resource.exportQualityReport(datasetId, 30, "D01", response))
+            .isInstanceOf(IOException.class)
+            .hasMessage("client disconnected");
+
+        verify(qualityAuditRecorder, org.mockito.Mockito.never()).recordAction(
+            eq("GOV_QUALITY_REPORT_EXPORT"), eq(AuditStage.SUCCESS), eq(datasetId.toString()), any()
+        );
+        verify(qualityAuditRecorder).recordFailureAction(
+            eq("GOV_QUALITY_REPORT_EXPORT"), eq(datasetId.toString()), any()
         );
     }
 
@@ -281,7 +427,6 @@ class GovernanceResourceQualityAuditTest {
             eq("ods_budget_v2"),
             any()
         );
-        org.mockito.Mockito.verifyNoInteractions(dataCleansingService);
     }
 
     @Test
@@ -363,12 +508,51 @@ class GovernanceResourceQualityAuditTest {
             );
         com.yuzhi.dts.platform.service.governance.request.QualityRunTriggerRequest request =
             new com.yuzhi.dts.platform.service.governance.request.QualityRunTriggerRequest();
-        when(qualityRunService.trigger(request, "service:dts-ingestion")).thenReturn(List.of());
+        when(qualityRunService.triggerTrustedIngestion(request)).thenReturn(List.of());
 
         resource.triggerQualityRun(request, "D01");
 
-        verify(qualityRunService).trigger(request, "service:dts-ingestion");
+        verify(qualityRunService).triggerTrustedIngestion(request);
         verify(qualityRunService, org.mockito.Mockito.never()).trigger(request, "service:dts-ingestion", "D01");
+        verify(qualityAuditRecorder).recordMachine(
+            eq("ingestion"),
+            org.mockito.ArgumentMatchers.startsWith("quality-ingestion-trigger:"),
+            any(Instant.class),
+            eq("GOV_RULE_EXECUTE"),
+            eq(AuditStage.SUCCESS),
+            eq("trigger"),
+            any()
+        );
+    }
+
+    @Test
+    void sameNamedHumanPrincipalCannotSelectTrustedIngestionTrigger() {
+        SecurityContextHolder
+            .getContext()
+            .setAuthentication(
+                new TestingAuthenticationToken(
+                    "service:dts-ingestion",
+                    "n/a",
+                    AuthoritiesConstants.ADMIN
+                )
+            );
+        com.yuzhi.dts.platform.service.governance.request.QualityRunTriggerRequest request =
+            new com.yuzhi.dts.platform.service.governance.request.QualityRunTriggerRequest();
+        when(qualityRunService.trigger(request, "service:dts-ingestion", "D01")).thenReturn(List.of());
+
+        resource.triggerQualityRun(request, "D01");
+
+        verify(qualityRunService).trigger(request, "service:dts-ingestion", "D01");
+        verify(qualityRunService, org.mockito.Mockito.never()).triggerTrustedIngestion(request);
+        verify(qualityAuditRecorder, org.mockito.Mockito.never()).recordMachine(
+            eq("ingestion"),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any()
+        );
     }
 
     @Test
@@ -390,7 +574,7 @@ class GovernanceResourceQualityAuditTest {
             .isInstanceOf(UnsupportedOperationException.class)
             .hasMessage("质量自动清洗暂未开放");
 
-        org.mockito.Mockito.verifyNoInteractions(dataCleansingService, qualityRunService);
+        org.mockito.Mockito.verifyNoInteractions(qualityRunService);
     }
 
     @Test
@@ -408,6 +592,6 @@ class GovernanceResourceQualityAuditTest {
             .isInstanceOf(org.springframework.security.access.AccessDeniedException.class)
             .hasMessage("请求表与授权数据集不匹配");
 
-        org.mockito.Mockito.verifyNoInteractions(dataCleansingService, qualityRunService);
+        org.mockito.Mockito.verifyNoInteractions(qualityRunService);
     }
 }

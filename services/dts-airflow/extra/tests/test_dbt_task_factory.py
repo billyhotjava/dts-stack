@@ -67,6 +67,31 @@ class DbtTaskFactoryTest(unittest.TestCase):
             "profileLeaseId": "20000000-0000-0000-0000-000000000002",
             "expiresAt": "2026-07-27T12:00:00Z",
             "credentialVersionRef": "sha256:" + "b" * 64,
+            "runtimeProfileId": (
+                "H83-CERT-RT01-LINUX-AMD64-EVIDENCE-"
+                "bcd2fc84b05b9508990538c6642be7ac7b35073ec034e6b1980b22f556345a68"
+            ),
+            "candidateProfileId": (
+                "H83-RT01-LINUX-AMD64-DBT11022-PG1100-LOCK-"
+                "01d7c02b6bf4fefdfc188cbf9ef8aed4fb243c227c060103f195c4ca45af5f02"
+            ),
+            "dbtCoreVersion": "1.10.22",
+            "dbtPostgresVersion": "1.10.0",
+            "adapter": "postgres",
+            "databaseType": "PostgreSQL",
+            "requirementsLockSha256": (
+                "01d7c02b6bf4fefdfc188cbf9ef8aed4fb243c227c060103f195c4ca45af5f02"
+            ),
+            "candidateImageDigest": (
+                "sha256:fe1d15f1b4215e693dadfc1d99be2ae07c7e50e8df144504005feb41cc7686b7"
+            ),
+            "imageRef": (
+                "registry.example/dts-dbt@sha256:"
+                "2f6dddb7237fdb7141f452b6d09da0379ef7569f2f82560473f304b265cbbd85"
+            ),
+            "evidenceManifestSha256": (
+                "bcd2fc84b05b9508990538c6642be7ac7b35073ec034e6b1980b22f556345a68"
+            ),
         }
 
     def lease_response(self, *, lease_id=None, expires_at=None):
@@ -215,7 +240,7 @@ class DbtTaskFactoryTest(unittest.TestCase):
     def test_builds_argument_array_from_fixed_roots_and_opaque_ids(self):
         command = self.factory._build_docker_command(
             self.runtime_spec(),
-            image="dts-dbt:1.10.0",
+            image=self.runtime_spec()["imageRef"],
             project_host_root="/srv/dts/services/dts-dbt",
             profile_host_root="/dev/shm/dts-dbt-runtime",
             docker_network="dts-core",
@@ -482,7 +507,7 @@ class DbtTaskFactoryTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.factory._build_docker_command(
                 invalid_bundle,
-                "dts-dbt:1.10.0",
+                self.runtime_spec()["imageRef"],
                 "/srv/dts/services/dts-dbt",
                 "/dev/shm/dts-dbt-runtime",
                 "dts-core",
@@ -490,11 +515,50 @@ class DbtTaskFactoryTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.factory._build_docker_command(
                 invalid_lease,
-                "dts-dbt:1.10.0",
+                self.runtime_spec()["imageRef"],
                 "/srv/dts/services/dts-dbt",
                 "/dev/shm/dts-dbt-runtime",
                 "dts-core",
             )
+
+    def test_release_runtime_rejects_certification_or_digest_drift(self):
+        wrong_adapter = {**self.runtime_spec(), "adapter": "duckdb"}
+        wrong_digest = {
+            **self.runtime_spec(),
+            "imageRef": "registry.example/dts-dbt@sha256:" + "f" * 64,
+        }
+        missing_profile = dict(self.runtime_spec())
+        missing_profile.pop("runtimeProfileId")
+
+        for runtime in (wrong_adapter, wrong_digest, missing_profile):
+            with self.subTest(runtime=runtime):
+                with self.assertRaises(ValueError):
+                    self.factory._validate_runtime_spec(runtime)
+
+    def test_release_runtime_rejects_revoked_r1_derivative(self):
+        revoked = {
+            **self.runtime_spec(),
+            "imageRef": (
+                "registry.example/dts-dbt@sha256:"
+                "423926d8ce77a9bdce23db23501910843e9c7b17476b1c025320a3098e2d33f8"
+            ),
+        }
+
+        with self.assertRaisesRegex(ValueError, "not certified"):
+            self.factory._validate_runtime_spec(revoked)
+
+    def test_operational_runtime_does_not_require_release_certification(self):
+        runtime = {
+            key: value
+            for key, value in self.runtime_spec().items()
+            if key not in self.factory._RUNTIME_CERTIFICATION_KEYS
+        }
+        runtime["runPurpose"] = "OPERATIONAL_RUN"
+
+        normalized = self.factory._validate_runtime_spec(runtime)
+
+        self.assertEqual(normalized["runPurpose"], "OPERATIONAL_RUN")
+        self.assertNotIn("imageRef", normalized)
 
     def test_short_build_does_not_send_an_unnecessary_lease_renewal(self):
         runtime = self.runtime_spec()
@@ -505,6 +569,10 @@ class DbtTaskFactoryTest(unittest.TestCase):
         paths = []
 
         with (
+            mock.patch.dict(
+                os.environ,
+                {"DBT_IMAGE": "attacker.example/dbt:mutable"},
+            ),
             mock.patch.object(
                 self.factory,
                 "_platform_request",
@@ -516,7 +584,7 @@ class DbtTaskFactoryTest(unittest.TestCase):
                 self.factory,
                 "_build_docker_command",
                 return_value=command,
-            ),
+            ) as build,
             mock.patch.object(
                 self.factory.subprocess,
                 "Popen",
@@ -534,6 +602,10 @@ class DbtTaskFactoryTest(unittest.TestCase):
             ],
         )
         self.assertEqual(process.wait_timeouts, [60.0])
+        self.assertEqual(
+            build.call_args.kwargs["image"],
+            runtime["imageRef"],
+        )
         legacy_run.assert_not_called()
 
     def test_long_build_renews_profile_lease_more_than_once(self):

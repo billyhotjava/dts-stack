@@ -21,6 +21,8 @@ import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateException.Ki
 import com.yuzhi.dts.platform.service.modeling.ModelExecutionTargetCatalogResolver.ResolvedCatalogTarget;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelStatus;
+import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelServingService;
+import com.yuzhi.dts.platform.repository.modeling.CatalogModelServingProjectionRepository.ProjectionMutation;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -51,6 +53,7 @@ public class CandidatePublicationCommitService {
     private final ModelExecutionTargetCatalogResolver targetResolver;
     private final Clock clock;
     private final AuditService auditService;
+    private final CatalogModelServingService catalogServing;
 
     @Autowired
     public CandidatePublicationCommitService(
@@ -63,7 +66,8 @@ public class CandidatePublicationCommitService {
         PlatformEventOutboxService outbox,
         ModelReleaseCandidateService candidateCommands,
         ModelExecutionTargetCatalogResolver targetResolver,
-        AuditService auditService
+        AuditService auditService,
+        CatalogModelServingService catalogServing
     ) {
         this(
             evidence,
@@ -76,7 +80,8 @@ public class CandidatePublicationCommitService {
             candidateCommands,
             targetResolver,
             Clock.systemUTC(),
-            auditService
+            auditService,
+            catalogServing
         );
     }
 
@@ -103,6 +108,7 @@ public class CandidatePublicationCommitService {
             candidateCommands,
             targetResolver,
             clock,
+            null,
             null
         );
     }
@@ -120,6 +126,36 @@ public class CandidatePublicationCommitService {
         Clock clock,
         AuditService auditService
     ) {
+        this(
+            evidence,
+            modelSpecs,
+            lifecycle,
+            codec,
+            lifecyclePublication,
+            publications,
+            outbox,
+            candidateCommands,
+            targetResolver,
+            clock,
+            auditService,
+            null
+        );
+    }
+
+    public CandidatePublicationCommitService(
+        CandidatePublicationEvidenceRepository evidence,
+        ModelSpecRepository modelSpecs,
+        ModelLifecycleRepository lifecycle,
+        ModelSpecSnapshotCodec codec,
+        ModelLifecyclePublicationService lifecyclePublication,
+        CandidatePublicationRepository publications,
+        PlatformEventOutboxService outbox,
+        ModelReleaseCandidateService candidateCommands,
+        ModelExecutionTargetCatalogResolver targetResolver,
+        Clock clock,
+        AuditService auditService,
+        CatalogModelServingService catalogServing
+    ) {
         this.evidence = evidence;
         this.modelSpecs = modelSpecs;
         this.lifecycle = lifecycle;
@@ -131,6 +167,7 @@ public class CandidatePublicationCommitService {
         this.targetResolver = targetResolver;
         this.clock = clock;
         this.auditService = auditService;
+        this.catalogServing = catalogServing;
     }
 
     @Transactional
@@ -172,6 +209,7 @@ public class CandidatePublicationCommitService {
             );
         }
         List<PublishedModelBinding> bindings = new ArrayList<>(observations.size());
+        int servingNotReadyCount = 0;
         for (PublicationUnit unit : dependencyOrder(candidate, units)) {
             PublicationEntryEvidence observation = unit.observation();
             ModelSpecView model = unit.model();
@@ -191,17 +229,35 @@ public class CandidatePublicationCommitService {
                 new PublishCommand(reason, lifecycleKey),
                 now
             );
-            bindings.add(
-                publications.registerModel(
+            if (catalogServing != null) {
+                catalogServing.projectLatestPublication(
                     candidate,
-                    target,
-                    observation,
                     published.model(),
-                    published.release(),
-                    actorId,
-                    now
-                )
+                    implementation,
+                    target,
+                    null
+                );
+            }
+            PublishedModelBinding binding = publications.registerModel(
+                candidate,
+                target,
+                observation,
+                published.model(),
+                published.release(),
+                actorId,
+                now
             );
+            bindings.add(binding);
+            if (catalogServing != null) {
+                ProjectionMutation serving = catalogServing.promoteSuccessfulServing(
+                    candidate,
+                    published.model(),
+                    implementation,
+                    target,
+                    null
+                );
+                if (serving.servingNotReady()) servingNotReadyCount++;
+            }
         }
         publications.rebuildManualBinding(candidate, List.copyOf(bindings), actorId, now);
         boolean publicationRetry = candidate.status() == DeliveryStatus.PARTIAL;
@@ -246,7 +302,9 @@ public class CandidatePublicationCommitService {
                     "scheduleMode",
                     "MANUAL_ONLY",
                     "entryCount",
-                    bindings.size()
+                    bindings.size(),
+                    "servingNotReadyCount",
+                    servingNotReadyCount
                 )
             )
         );
@@ -283,7 +341,9 @@ public class CandidatePublicationCommitService {
                     "version",
                     result.candidate().version(),
                     "entryCount",
-                    bindings.size()
+                    bindings.size(),
+                    "servingNotReadyCount",
+                    servingNotReadyCount
                 )
             );
         }
@@ -299,7 +359,7 @@ public class CandidatePublicationCommitService {
         if (auditService == null) return;
         Map<String, Object> auditPayload = new LinkedHashMap<>(payload);
         auditPayload.put("actor", actorId);
-        auditService.auditAction(
+        auditService.auditActionStrict(
             actionCode,
             AuditStage.SUCCESS,
             candidate.id().toString(),

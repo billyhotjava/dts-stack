@@ -212,6 +212,7 @@ public class AuditForwarderService {
         return switch (actor.trim().toLowerCase(Locale.ROOT)) {
             case "airflow", "dts-airflow", "service:dts-airflow", "_system:airflow" -> "_system:airflow";
             case "scheduler", "dts-scheduler", "service:dts-scheduler", "_system:scheduler" -> "_system:scheduler";
+            case "ingestion", "dts-ingestion", "service:dts-ingestion", "_system:ingestion" -> "_system:ingestion";
             default -> throw new IllegalArgumentException("machineActor is not trusted");
         };
     }

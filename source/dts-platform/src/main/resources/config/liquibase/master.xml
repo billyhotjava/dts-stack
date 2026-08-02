@@ -244,4 +244,11 @@
     <include file="config/liquibase/changelog/20260801_09_model_materialization_availability_pin.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260801_10_platform_audit_outbox_generation_attempts.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260801_11_rollback_dispatch_generation_attempts.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260801_12_quality_run_issue_identity.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260801_13_inceptor_quality_templates.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260802_01_model_spec_import_apply_status_canonical.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260802_02_modeling_dbt_implementation_draft.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260802_03_catalog_model_serving_projection.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260802_04_model_spec_import_reconciliation_undo.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260802_05_catalog_model_serving_asset_key_constraint.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

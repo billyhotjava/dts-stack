@@ -233,6 +233,29 @@ class QualityTaskServiceAuditTest {
     }
 
     @Test
+    void scheduledIssueCreationFailureWritesExplicitMachineFailureAudit() {
+        GovQualityTask task = dueTask();
+        task.setRuleId(null);
+        when(taskRepository.findByEnabledTrue()).thenReturn(List.of(task));
+        when(bindingRepository.findByDatasetIdAndRuleVersionStatus(DATASET_ID, "PUBLISHED")).thenReturn(List.of());
+        when(issueTicketService.createOrTouchWithDisposition(
+            eq("QUALITY_TASK"), eq(TASK_ID), any(), eq("system"), any()
+        )).thenThrow(new IllegalStateException("issue repository unavailable"));
+
+        service.runDueTasks();
+
+        verify(qualityAuditRecorder).recordMachineAttempt(
+            eq("scheduler"),
+            org.mockito.ArgumentMatchers.endsWith(":ISSUE:FAIL"),
+            any(Instant.class),
+            eq("GOV_ISSUE_CREATE"),
+            eq(AuditStage.FAIL),
+            eq(TASK_ID.toString()),
+            any()
+        );
+    }
+
+    @Test
     void taskFailureAuditIsSanitizedAndCannotMaskBusinessFailure() {
         GovQualityTask request = taskRequest("敏感失败计划");
         CatalogDataset dataset = mock(CatalogDataset.class);

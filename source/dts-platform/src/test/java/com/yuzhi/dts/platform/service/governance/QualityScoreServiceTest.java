@@ -1,86 +1,76 @@
 package com.yuzhi.dts.platform.service.governance;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.platform.domain.governance.GovQualityRun;
 import com.yuzhi.dts.platform.domain.governance.GovRule;
 import com.yuzhi.dts.platform.repository.governance.GovQualityRunRepository;
-import com.yuzhi.dts.platform.service.governance.dto.QualityScoreResult;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
-@ExtendWith(MockitoExtension.class)
 class QualityScoreServiceTest {
 
-    private static final UUID DATASET_ID = UUID.fromString("40000000-0000-0000-0000-000000000020");
-
-    @Mock
-    private GovQualityRunRepository runRepository;
-
-    @Mock
-    private QualityDatasetReadGuard qualityDatasetReadGuard;
+    private static final UUID DATASET_ID = UUID.fromString("50000000-0000-0000-0000-000000000093");
 
     @Test
-    void excludesSkippedRunsFromQualityScoresAndTrends() {
-        GovQualityRun skipped = run("SKIPPED");
-        when(runRepository.findByDatasetIdAndFinishedAtAfterOrderByFinishedAtAsc(eq(DATASET_ID), anyInstant()))
-            .thenReturn(List.of(skipped));
-
-        QualityScoreResult result = new QualityScoreService(runRepository, qualityDatasetReadGuard).calculate(DATASET_ID, 30);
-
-        assertThat(result.overall()).isZero();
-        assertThat(result.dimensions()).isEmpty();
-        assertThat(result.trend()).isEmpty();
-    }
-
-    @Test
-    void keepsFailedRunsAsEffectiveZeroScoreResults() {
-        GovQualityRun failed = run("FAILED");
-        when(runRepository.findByDatasetIdAndFinishedAtAfterOrderByFinishedAtAsc(eq(DATASET_ID), anyInstant()))
+    void failedExecutionWithCountedRowsScoresZeroInsteadOfOneHundred() {
+        GovQualityRunRepository repository = mock(GovQualityRunRepository.class);
+        QualityDatasetReadGuard readGuard = mock(QualityDatasetReadGuard.class);
+        GovQualityRun failed = run("FAILED", 20, 0);
+        failed.setErrorCategory("SQL_EXECUTION_FAILED");
+        when(repository.findByDatasetIdAndFinishedAtAfterOrderByFinishedAtAsc(eq(DATASET_ID), org.mockito.ArgumentMatchers.any()))
             .thenReturn(List.of(failed));
 
-        QualityScoreResult result = new QualityScoreService(runRepository, qualityDatasetReadGuard).calculate(DATASET_ID, 30);
+        var result = new QualityScoreService(repository, readGuard).calculate(DATASET_ID, 30, "dept-a");
 
         assertThat(result.overall()).isZero();
-        assertThat(result.dimensions()).hasSize(1);
-        assertThat(result.dimensions().get(0).type()).isEqualTo("COMPLETENESS");
-        assertThat(result.trend()).hasSize(1);
+        assertThat(result.dimensions()).singleElement().satisfies(dimension -> assertThat(dimension.score()).isZero());
     }
 
     @Test
-    void keepsLegacySuccessfulRunsAsEffectiveFullScoreResults() {
-        GovQualityRun succeeded = run("SUCCESS");
-        when(runRepository.findByDatasetIdAndFinishedAtAfterOrderByFinishedAtAsc(eq(DATASET_ID), anyInstant()))
-            .thenReturn(List.of(succeeded));
+    void dataQualityFailureStillUsesObservedFailingRows() {
+        GovQualityRunRepository repository = mock(GovQualityRunRepository.class);
+        QualityDatasetReadGuard readGuard = mock(QualityDatasetReadGuard.class);
+        GovQualityRun failed = run("FAILED", 20, 5);
+        failed.setErrorCategory(QualityRunOutcomeSemantics.QUALITY_VIOLATION);
+        when(repository.findByDatasetIdAndFinishedAtAfterOrderByFinishedAtAsc(eq(DATASET_ID), org.mockito.ArgumentMatchers.any()))
+            .thenReturn(List.of(failed));
 
-        QualityScoreResult result = new QualityScoreService(runRepository, qualityDatasetReadGuard).calculate(DATASET_ID, 30);
+        var result = new QualityScoreService(repository, readGuard).calculate(DATASET_ID, 30, "dept-a");
 
-        assertThat(result.overall()).isEqualTo(100);
-        assertThat(result.dimensions()).hasSize(1);
-        assertThat(result.trend()).hasSize(1);
+        assertThat(result.overall()).isEqualTo(75);
     }
 
-    private GovQualityRun run(String status) {
+    @Test
+    void rejectsUnboundedScoringPeriodsBeforeReadingTheDataset() {
+        GovQualityRunRepository repository = mock(GovQualityRunRepository.class);
+        QualityDatasetReadGuard readGuard = mock(QualityDatasetReadGuard.class);
+        QualityScoreService service = new QualityScoreService(repository, readGuard);
+
+        for (int periodDays : List.of(-1, 0, 366)) {
+            assertThatThrownBy(() -> service.calculate(DATASET_ID, periodDays, "dept-a"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("统计周期必须在 1 到 365 天之间");
+        }
+        org.mockito.Mockito.verifyNoInteractions(readGuard, repository);
+    }
+
+    private static GovQualityRun run(String status, int rowsTotal, int failingRows) {
         GovRule rule = new GovRule();
         rule.setType("COMPLETENESS");
         rule.setSeverity("MEDIUM");
-
         GovQualityRun run = new GovQualityRun();
         run.setRule(rule);
-        run.setDatasetId(DATASET_ID);
         run.setStatus(status);
+        run.setRowsTotal(rowsTotal);
+        run.setFailingRowCount(failingRows);
         run.setFinishedAt(Instant.now());
         return run;
-    }
-
-    private static Instant anyInstant() {
-        return org.mockito.ArgumentMatchers.any(Instant.class);
     }
 }

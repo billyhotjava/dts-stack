@@ -13,6 +13,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -121,8 +122,8 @@ class ModelMaterializationAvailabilityPinPostgresIT {
                         """,
                         dispatchId,
                         UUID.randomUUID(),
-                        NOW,
-                        NOW
+                        Timestamp.from(NOW),
+                        Timestamp.from(NOW)
                     );
                     jdbc.update(
                         "insert into modeling_warehouse_plan_source (id) values (?)",
@@ -137,7 +138,7 @@ class ModelMaterializationAvailabilityPinPostgresIT {
                         """,
                         UUID.randomUUID(),
                         dispatchId,
-                        NOW
+                        Timestamp.from(NOW)
                     );
                     jdbc.update(
                         """
@@ -166,6 +167,8 @@ class ModelMaterializationAvailabilityPinPostgresIT {
                         NOW
                     );
                 });
+                if (!connection.getAutoCommit()) connection.commit();
+                connection.setAutoCommit(false);
 
                 assertThat(
                     jdbc.queryForObject(
@@ -178,30 +181,38 @@ class ModelMaterializationAvailabilityPinPostgresIT {
                         dispatchId
                     )
                 ).isEqualTo(1);
-                assertThatThrownBy(() ->
-                    jdbc.update(
-                        """
-                        update modeling_materialization_source_pin
-                           set source_sequence = 101
-                         where dispatch_id = ?
-                        """,
-                        dispatchId
-                    )
-                ).hasStackTraceContaining(
-                    "MODEL_MATERIALIZATION_SOURCE_PIN_APPEND_ONLY"
-                );
-                assertThatThrownBy(() ->
-                    jdbc.update(
-                        """
-                        update modeling_materialization_dispatch
-                           set availability_pin_count = 2
-                         where id = ?
-                        """,
-                        dispatchId
-                    )
-                ).hasStackTraceContaining(
-                    "MODEL_MATERIALIZATION_AVAILABILITY_MARKER_IMMUTABLE"
-                );
+                try {
+                    assertThatThrownBy(() ->
+                        jdbc.update(
+                            """
+                            update modeling_materialization_source_pin
+                               set source_sequence = 101
+                             where dispatch_id = ?
+                            """,
+                            dispatchId
+                        )
+                    ).hasStackTraceContaining(
+                        "MODEL_MATERIALIZATION_SOURCE_PIN_APPEND_ONLY"
+                    );
+                } finally {
+                    connection.rollback();
+                }
+                try {
+                    assertThatThrownBy(() ->
+                        jdbc.update(
+                            """
+                            update modeling_materialization_dispatch
+                               set availability_pin_count = 2
+                             where id = ?
+                            """,
+                            dispatchId
+                        )
+                    ).hasStackTraceContaining(
+                        "MODEL_MATERIALIZATION_AVAILABILITY_MARKER_IMMUTABLE"
+                    );
+                } finally {
+                    connection.rollback();
+                }
 
                 jdbc.update(
                     """
@@ -278,15 +289,19 @@ class ModelMaterializationAvailabilityPinPostgresIT {
                     .containsEntry("dispatch_status", "FAILED")
                     .containsEntry("last_error_code", STALE_REASON)
                     .containsEntry("pipeline_status", "FAILED_STALE");
-                assertThatThrownBy(() ->
-                    liquibase.rollback(
-                        1,
-                        new Contexts(),
-                        new LabelExpression()
-                    )
-                ).hasStackTraceContaining(
-                    "ROLLBACK_BLOCKED_MODEL_MATERIALIZATION_AVAILABILITY_PIN_EXISTS"
-                );
+                try {
+                    assertThatThrownBy(() ->
+                        liquibase.rollback(
+                            1,
+                            new Contexts(),
+                            new LabelExpression()
+                        )
+                    ).hasStackTraceContaining(
+                        "ROLLBACK_BLOCKED_MODEL_MATERIALIZATION_AVAILABILITY_PIN_EXISTS"
+                    );
+                } finally {
+                    if (!connection.getAutoCommit()) connection.rollback();
+                }
                 assertThat(
                     tableExists(
                         connection,
@@ -295,7 +310,7 @@ class ModelMaterializationAvailabilityPinPostgresIT {
                     )
                 ).isTrue();
             } finally {
-                database.close();
+                if (!database.getConnection().isClosed()) database.close();
             }
         } finally {
             dropOwnedSchema(schema);

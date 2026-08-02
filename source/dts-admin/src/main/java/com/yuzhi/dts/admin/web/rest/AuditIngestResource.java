@@ -598,7 +598,11 @@ public class AuditIngestResource {
             for (Object candidate : candidates) {
                 if (candidate == null) continue;
                 String normalized = candidate.toString().trim().toLowerCase(Locale.ROOT);
-                if (normalized.equals("_system:airflow") || normalized.equals("_system:scheduler")) {
+                if (
+                    normalized.equals("_system:airflow") ||
+                    normalized.equals("_system:scheduler") ||
+                    normalized.equals("_system:ingestion")
+                ) {
                     return new ActorResolution(normalized, normalized);
                 }
             }

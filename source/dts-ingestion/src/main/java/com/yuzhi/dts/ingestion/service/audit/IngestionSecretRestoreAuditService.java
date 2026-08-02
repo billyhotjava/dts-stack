@@ -34,7 +34,7 @@ public class IngestionSecretRestoreAuditService {
     public IngestionSecretRestoreAuditService(
         IngestionSecretRestoreAuditOutboxRepository outbox,
         ObjectMapper objectMapper,
-        @Value("${AUDIT_TENANT_ID:default}") String tenantId
+        @Value("${auditing.tenant-id}") String tenantId
     ) {
         this.outbox = outbox;
         this.objectMapper = objectMapper;

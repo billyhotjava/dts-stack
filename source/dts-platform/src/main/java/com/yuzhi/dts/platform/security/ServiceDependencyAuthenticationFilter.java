@@ -148,6 +148,7 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
             return isAirflowProfileLease(method, path)
                 || isAirflowMaterializationRunGroup(method, path)
                 || isAirflowPlanExecution(method, path)
+                || isPost(method, path, "/api/etl/dbt/models/sync")
                 || isPost(
                     method,
                     path,

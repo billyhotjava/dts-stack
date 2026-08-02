@@ -1,0 +1,68 @@
+{
+  "schemaVersion": "dts.runtime-evidence/v1",
+  "candidateProfileId": "H83-RT01-LINUX-AMD64-DBT11022-PG1100-LOCK-01d7c02b6bf4fefdfc188cbf9ef8aed4fb243c227c060103f195c4ca45af5f02",
+  "platform": "linux/amd64",
+  "requirementsLockSha256": "01d7c02b6bf4fefdfc188cbf9ef8aed4fb243c227c060103f195c4ca45af5f02",
+  "basePlatformManifestDigest": "sha256:00af38ae2ed311628970782e8a2d7f014d8909dbc63cb97bc0a158187f4db045",
+  "candidateImagePlatformManifestDigest": null,
+  "lockGenerator": {
+    "platform": "linux/amd64",
+    "pipTools": "7.5.2",
+    "bootstrapPip": "24.0",
+    "bootstrapSetuptools": "79.0.1",
+    "bootstrapLockSha256": "e4860ac14f16fb4fd6f5b1383017f49f51ff4623174ae8e62458c9ac6c416f63"
+  },
+  "evidenceStatus": "INCOMPLETE",
+  "containsSecrets": false,
+  "sourceCommit": null,
+  "actor": null,
+  "startedAtUtc": null,
+  "completedAtUtc": null,
+  "correlationId": null,
+  "postgresqlServerVersion": null,
+  "commands": [
+    {"name": "pip-check", "status": "NOT_RUN", "exitCode": null, "invocationId": null},
+    {"name": "dbt-version", "status": "NOT_RUN", "exitCode": null, "invocationId": null},
+    {"name": "default-entrypoint-run-gate", "status": "NOT_RUN", "exitCode": null, "invocationId": null},
+    {"name": "default-entrypoint-compile-gate", "status": "NOT_RUN", "exitCode": null, "invocationId": null},
+    {"name": "default-entrypoint-docs-generate-gate", "status": "NOT_RUN", "exitCode": null, "invocationId": null},
+    {"name": "default-entrypoint-debug-gate", "status": "NOT_RUN", "exitCode": null, "invocationId": null},
+    {"name": "runtime-env-override-gate", "status": "NOT_RUN", "exitCode": null, "invocationId": null},
+    {"name": "dbt-parse", "status": "NOT_RUN", "exitCode": null, "invocationId": null},
+    {"name": "dbt-compile", "status": "NOT_RUN", "exitCode": null, "invocationId": null},
+    {"name": "dbt-build", "status": "NOT_RUN", "exitCode": null, "invocationId": null},
+    {"name": "dbt-run", "status": "NOT_RUN", "exitCode": null, "invocationId": null},
+    {"name": "dbt-docs-generate", "status": "NOT_RUN", "exitCode": null, "invocationId": null},
+    {"name": "relation-query", "status": "NOT_RUN", "exitCode": null, "invocationId": null},
+    {"name": "materialization-gate", "status": "NOT_RUN", "exitCode": null, "invocationId": null}
+  ],
+  "artifacts": {
+    "installedDistributions": {"path": null, "sha256": null},
+    "manifest": {"path": null, "sha256": null, "schemaVersion": null, "invocationId": null},
+    "catalog": {"path": null, "sha256": null, "schemaVersion": null, "invocationId": null},
+    "runResults": {"path": null, "sha256": null, "schemaVersion": null, "invocationId": null},
+    "relationEvidence": {"path": null, "sha256": null},
+    "redactedLogBundle": {"path": null, "sha256": null},
+    "rollbackEvidence": {"path": null, "sha256": null}
+  },
+  "relations": [
+    {"model": "stg_rt01_orders", "materialization": "view", "status": "NOT_VERIFIED", "rowCount": null},
+    {"model": "fct_rt01_orders", "materialization": "table", "status": "NOT_VERIFIED", "rowCount": null},
+    {"model": "inc_rt01_order_totals", "materialization": "incremental", "status": "NOT_VERIFIED", "rowCount": null}
+  ],
+  "safeFailureCodes": [
+    "DBT_RUNTIME_NOT_CERTIFIED",
+    "DBT_RUNTIME_METADATA_INVALID",
+    "DBT_RUNTIME_LOCK_NOT_EXACT",
+    "DBT_RUNTIME_LOCK_SHA256_MISMATCH",
+    "DBT_RUNTIME_CANDIDATE_IDENTITY_MISMATCH",
+    "DBT_RUNTIME_PLATFORM_MISMATCH",
+    "DBT_RUNTIME_DEPENDENCY_CHECK_FAILED",
+    "DBT_RUNTIME_DEPENDENCY_DRIFT",
+    "DBT_RUNTIME_UNREVIEWED_DISTRIBUTION",
+    "DBT_RUNTIME_VERSION_MISMATCH",
+    "DBT_RUNTIME_PRE_RELEASE_REJECTED",
+    "DBT_RUNTIME_STATUS_TAMPERED",
+    "DBT_RUNTIME_ENV_METADATA_MISMATCH"
+  ]
+}

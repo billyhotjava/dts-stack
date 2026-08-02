@@ -35,14 +35,23 @@ public class SqlTemplateRenderer {
         if (!StringUtils.hasText(sqlTemplate)) {
             throw new IllegalArgumentException("SQL 模板不能为空");
         }
-        Map<String, Object> safeParams = params != null ? params : Collections.emptyMap();
         List<Map<String, Object>> schema = paramSchema != null ? paramSchema : Collections.emptyList();
+        Map<String, Object> effectiveParams = new HashMap<>();
+        if (params != null) {
+            effectiveParams.putAll(params);
+        }
+        for (Map<String, Object> def : schema) {
+            String name = String.valueOf(def.get("name"));
+            if (!StringUtils.hasText(toString(effectiveParams.get(name))) && def.containsKey("default")) {
+                effectiveParams.put(name, def.get("default"));
+            }
+        }
 
         // 1. 校验必填参数
         for (Map<String, Object> def : schema) {
             String name = String.valueOf(def.get("name"));
             boolean required = Boolean.TRUE.equals(def.get("required"));
-            if (required && !StringUtils.hasText(toString(safeParams.get(name)))) {
+            if (required && !StringUtils.hasText(toString(effectiveParams.get(name)))) {
                 String label = toString(def.getOrDefault("label", name));
                 throw new IllegalArgumentException("参数 [" + label + "] 不能为空");
             }
@@ -60,7 +69,7 @@ public class SqlTemplateRenderer {
         while (matcher.find()) {
             String paramName = matcher.group(1);
             String modifier = matcher.group(2); // 可能为 null
-            String rawValue = toString(safeParams.get(paramName));
+            String rawValue = toString(effectiveParams.get(paramName));
             String paramType = typeMap.getOrDefault(paramName, "text");
             String replacement = renderParam(paramName, rawValue, paramType, modifier);
             matcher.appendReplacement(sb, Matcher.quoteReplacement(replacement));
@@ -93,8 +102,8 @@ public class SqlTemplateRenderer {
                 if ("csv".equals(modifier)) {
                     yield renderCsv(value);
                 }
-                // 普通文本直接替换（用于正则、描述等）
-                yield value;
+                // 普通文本占位符用于模板中的字符串字面量，必须转义单引号。
+                yield escapeSql(value);
             }
         };
     }

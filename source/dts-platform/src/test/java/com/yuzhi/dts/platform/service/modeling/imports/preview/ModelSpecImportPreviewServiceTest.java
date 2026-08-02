@@ -13,7 +13,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.service.modeling.ModelImplementationChecksumCodec;
 import com.yuzhi.dts.platform.service.modeling.ModelPackageCanonicalProjector;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecSnapshotCodec;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
 import com.yuzhi.dts.platform.service.modeling.imports.ModelPackageFixtures;
+import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyCommandCodec;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyPayloadCodec;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyPlanContract.ApplyPlan;
 import com.yuzhi.dts.platform.service.modeling.imports.checksum.ModelPackageChecksum;
@@ -39,6 +41,8 @@ import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPr
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewRepository.PlanSnapshot;
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewRepository.SourceBindingSnapshot;
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewRepository.StoredRun;
+import com.yuzhi.dts.platform.service.modeling.imports.reconciliation.ModelSpecImportReconciliationContract.MergeCheckpoint;
+import com.yuzhi.dts.platform.service.modeling.imports.reconciliation.ModelSpecImportReconciliationContract.RenameMapping;
 import com.yuzhi.dts.platform.service.modeling.warehouse.CatalogDomainResolutionPort;
 import com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider;
@@ -169,6 +173,106 @@ class ModelSpecImportPreviewServiceTest {
         });
     }
 
+    @Test
+    void acceptsAnExplicitBijectiveRenameButBlocksUntilCanonicalOwnershipReassociationExists() {
+        stubCurrentContext("source-v1");
+        String oldUniqueId = "model.pjm.budget_legacy";
+        when(repository.findOwnership(TENANT, "pjm", oldUniqueId)).thenReturn(
+            Optional.of(
+                new ModelOwnershipSnapshot(
+                    UUID.randomUUID(),
+                    UUID.randomUUID(),
+                    PLAN_ID,
+                    3,
+                    "a".repeat(64),
+                    4,
+                    "b".repeat(64),
+                    "DBT_MANAGED",
+                    "pjm",
+                    oldUniqueId,
+                    3,
+                    "a".repeat(64),
+                    "FACT",
+                    "DRAFT",
+                    null,
+                    null,
+                    "c".repeat(64)
+                )
+            )
+        );
+        PreviewRequest request = new PreviewRequest(
+            objectMapper.valueToTree(packageForPreview()),
+            null,
+            new PreviewContext(PLAN_ID, Map.of(), Map.of()),
+            List.of("model.pjm.budget"),
+            List.of(),
+            List.of(new RenameMapping(oldUniqueId, "model.pjm.budget"))
+        );
+
+        var response = service.preview(request);
+
+        assertThat(response.summary().blocked()).isEqualTo(1);
+        assertThat(response.items()).singleElement().satisfies(item -> {
+            assertThat(item.action()).isEqualTo(Action.BLOCKED);
+            assertThat(item.issues())
+                .extracting("code")
+                .contains("MODEL_IMPORT_RENAME_REQUIRES_CANONICAL_REASSOCIATION");
+        });
+        ArgumentCaptor<PersistedRun> runCaptor = ArgumentCaptor.forClass(PersistedRun.class);
+        verify(repository).save(runCaptor.capture(), any());
+        assertThat(runCaptor.getValue().requestJson()).contains("renameMappings", oldUniqueId);
+        ApplyPlan applyPlan = readValue(runCaptor.getValue().applyPlanJson(), ApplyPlan.class);
+        assertThat(applyPlan.candidates()).singleElement().satisfies(candidate -> {
+            assertThat(candidate.action()).isEqualTo("BLOCKED");
+            assertThat(candidate.evidenceJson())
+                .contains("BLOCKED_REMAP", "MODEL_IMPORT_RENAME_REQUIRES_CANONICAL_REASSOCIATION");
+        });
+    }
+
+    @Test
+    void rejectsARenameThatCrossesDbtPackageIdentity() {
+        PreviewRequest request = new PreviewRequest(
+            objectMapper.valueToTree(packageForPreview()),
+            null,
+            new PreviewContext(PLAN_ID, Map.of(), Map.of()),
+            List.of("model.pjm.budget"),
+            List.of(),
+            List.of(new RenameMapping("model.other.budget", "model.pjm.budget"))
+        );
+
+        assertThatThrownBy(() -> service.preview(request))
+            .isInstanceOfSatisfying(ModelSpecImportPreviewException.class, exception ->
+                assertThat(exception.code()).isEqualTo("MODEL_IMPORT_RENAME_IDENTITY_INVALID")
+            );
+        verify(repository, never()).save(any(), any());
+    }
+
+    @Test
+    void keepsExternalDbtOwnershipWhenSafeSqlCanBeProjectedToBusinessVisuals() {
+        stubCurrentContext("source-v1");
+
+        var response = service.preview(request(packageForPreview()));
+
+        assertThat(response.items()).singleElement().satisfies(item -> {
+            assertThat(item.proposedModelSpec().path("implementationMode").asText()).isEqualTo("DBT_MANAGED");
+            assertThat(item.proposedImplementation().path("command").path("ownership").asText()).isEqualTo("DBT_MANAGED");
+        });
+
+        ArgumentCaptor<PersistedRun> runCaptor = ArgumentCaptor.forClass(PersistedRun.class);
+        verify(repository).save(runCaptor.capture(), any());
+        PersistedRun persisted = runCaptor.getValue();
+        ApplyPlan applyPlan = readValue(persisted.applyPlanJson(), ApplyPlan.class);
+        var candidate = applyPlan.candidates().getFirst();
+        assertThat(candidate.conversionMode()).isEqualTo("DESIGNER_GENERATED");
+
+        var decoded = new ModelSpecImportApplyCommandCodec(objectMapper).decode(
+            candidate,
+            persisted.applyPayloadJson()
+        );
+        assertThat(decoded.implementationCommand().ownership()).isEqualTo(ImplementationMode.DBT_MANAGED);
+        assertThat(decoded.artifacts()).isNotEmpty();
+    }
+
     @ParameterizedTest
     @EnumSource(
         value = LifecycleStatus.class,
@@ -236,6 +340,7 @@ class ModelSpecImportPreviewServiceTest {
         when(repository.findOwnership(TENANT, "pjm", "model.pjm.budget")).thenReturn(
             Optional.of(existingOwnership(created, implementation))
         );
+        stubReconciliationBase(created, implementation);
 
         var response = service.preview(request(modelPackage));
 
@@ -256,6 +361,7 @@ class ModelSpecImportPreviewServiceTest {
         when(repository.findOwnership(TENANT, "pjm", "model.pjm.budget")).thenReturn(
             Optional.of(existingOwnership(created, implementation))
         );
+        stubReconciliationBase(created, implementation);
 
         var response = service.preview(request(dbtBackedPackage("select budget_id, amount from source_budget")));
 
@@ -742,6 +848,40 @@ class ModelSpecImportPreviewServiceTest {
             null,
             null,
             implementation.path("effectiveSqlChecksum").asText()
+        );
+    }
+
+    private void stubReconciliationBase(
+        PersistedItem created,
+        com.fasterxml.jackson.databind.JsonNode implementation
+    ) {
+        UUID modelSpecId = UUID.fromString("60000000-0000-0000-0000-000000000070");
+        String implementationChecksum = implementation.path("implementationChecksum").asText();
+        when(repository.findCurrentModelSpecSnapshot(TENANT, modelSpecId, 1)).thenReturn(
+            Optional.of(readTree(created.proposedModelSpecJson()))
+        );
+        when(
+            repository.findLatestMergeCheckpoint(
+                TENANT,
+                PLAN_ID,
+                modelSpecId,
+                UUID.fromString("50000000-0000-0000-0000-000000000070"),
+                "pjm",
+                "model.pjm.budget"
+            )
+        ).thenReturn(
+            Optional.of(
+                new MergeCheckpoint(
+                    TENANT,
+                    "pjm",
+                    "model.pjm.budget",
+                    implementationChecksum,
+                    1,
+                    implementationChecksum,
+                    1,
+                    created.modelSpecChecksum()
+                )
+            )
         );
     }
 

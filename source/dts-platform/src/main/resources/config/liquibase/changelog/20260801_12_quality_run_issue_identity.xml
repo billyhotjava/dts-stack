@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260801_12_quality_run_issue_identity" author="platform">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="gov_issue_ticket"/>
+            <columnExists tableName="gov_issue_ticket" columnName="source_type"/>
+            <columnExists tableName="gov_issue_ticket" columnName="source_ref_id"/>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*)
+                FROM (
+                    SELECT source_ref_id
+                    FROM gov_issue_ticket
+                    WHERE UPPER(source_type) = 'QUALITY_RUN'
+                      AND source_ref_id IS NOT NULL
+                    GROUP BY source_ref_id
+                    HAVING COUNT(*) &gt; 1
+                ) duplicate_quality_run_issue
+            </sqlCheck>
+        </preConditions>
+        <comment>Guarantee one issue ticket per quality run source identity</comment>
+
+        <sql dbms="postgresql">
+            CREATE UNIQUE INDEX uq_gov_issue_ticket_quality_run_source
+                ON gov_issue_ticket (source_ref_id)
+                WHERE UPPER(source_type) = 'QUALITY_RUN'
+                  AND source_ref_id IS NOT NULL
+        </sql>
+
+        <rollback>
+            <sql dbms="postgresql">DROP INDEX IF EXISTS uq_gov_issue_ticket_quality_run_source</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

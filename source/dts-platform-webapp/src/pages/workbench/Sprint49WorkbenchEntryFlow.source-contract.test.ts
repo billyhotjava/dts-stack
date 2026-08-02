@@ -45,9 +45,10 @@ test("Sprint-49 F3 registered homepage actions resolve to existing dashboard rou
 		assert.match(STATIC_ROUTES_SOURCE, new RegExp(`path:\\s*"${route.replace(/\//g, "\\/")}"`));
 	}
 
-	for (const route of ["/foundation/data-sources", "/governance/rules/runs", "/services/apis"]) {
+	for (const route of ["/foundation/data-sources", "/services/apis"]) {
 		assert.match(DYNAMIC_RESOLVER_SOURCE, new RegExp(route.replace(/[/?]/g, "\\$&")));
 	}
+	assert.match(STATIC_ROUTES_SOURCE, /path:\s*"governance\/rules\/runs"/);
 
 	assert.match(STATIC_ROUTES_SOURCE, /WorkbenchSectionRedirect/);
 	assert.match(STATIC_ROUTES_SOURCE, /section="data-management"/);

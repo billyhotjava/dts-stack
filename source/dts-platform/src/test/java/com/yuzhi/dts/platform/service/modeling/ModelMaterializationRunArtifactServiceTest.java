@@ -226,7 +226,7 @@ class ModelMaterializationRunArtifactServiceTest {
         );
         ArgumentCaptor<Object> auditPayload =
             ArgumentCaptor.forClass(Object.class);
-        verify(auditService).auditActionAs(
+        verify(auditService).auditActionAsStrict(
             eq("airflow"),
             eq("model-materialization-run:" + GROUP_ID + ":artifacts-synced:" + INVOCATION_ID),
             eq(NOW),
@@ -247,7 +247,7 @@ class ModelMaterializationRunArtifactServiceTest {
                 "selector",
                 "path"
             );
-        verify(auditService).auditActionAs(
+        verify(auditService).auditActionAsStrict(
             eq("airflow"),
             eq("model-materialization-run:" + GROUP_ID + ":relations-verified:" + INVOCATION_ID),
             eq(NOW),
@@ -263,7 +263,7 @@ class ModelMaterializationRunArtifactServiceTest {
         writeArtifacts("success", "b".repeat(64));
         doThrow(new IllegalStateException("audit unavailable"))
             .when(auditService)
-            .auditActionAs(
+            .auditActionAsStrict(
                 eq("airflow"),
                 eq("model-materialization-run:" + GROUP_ID + ":artifacts-synced:" + INVOCATION_ID),
                 eq(NOW),
@@ -322,7 +322,7 @@ class ModelMaterializationRunArtifactServiceTest {
             "MODEL_DBT_MANIFEST_IDENTITY_MISMATCH",
             NOW
         );
-        verify(auditService).auditActionAs(
+        verify(auditService).auditActionAsStrict(
             eq("airflow"),
             eq("model-materialization-run:" + GROUP_ID + ":failed:MODEL_DBT_MANIFEST_IDENTITY_MISMATCH"),
             eq(NOW),
@@ -817,7 +817,7 @@ class ModelMaterializationRunArtifactServiceTest {
         assertThat(result.status()).isEqualTo("BUILT");
         assertThat(result.modelCount()).isEqualTo(1);
         verify(runs).finalizeSucceeded(GROUP_ID, NOW);
-        verify(auditService).auditActionAs(
+        verify(auditService).auditActionAsStrict(
             eq("airflow"),
             eq("model-materialization-run:" + GROUP_ID + ":finalized:succeeded"),
             eq(NOW),
@@ -851,7 +851,7 @@ class ModelMaterializationRunArtifactServiceTest {
             "MODEL_DBT_AIRFLOW_UPSTREAM_FAILED",
             NOW
         );
-        verify(auditService).auditActionAs(
+        verify(auditService).auditActionAsStrict(
             eq("airflow"),
             eq("model-materialization-run:" + GROUP_ID + ":finalized:failed"),
             eq(NOW),

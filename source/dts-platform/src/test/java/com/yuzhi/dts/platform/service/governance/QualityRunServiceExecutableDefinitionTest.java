@@ -483,10 +483,12 @@ class QualityRunServiceExecutableDefinitionTest {
         );
         when(datasetRepository.findAllById(any())).thenReturn(List.of(readableDataset, deniedDataset));
         when(qualityDatasetReadGuard.readableDatasetIds(any(), eq("D01"))).thenReturn(Set.of(DATASET_ID));
-        when(metricRepository.findByRunId(readable.getId())).thenReturn(List.of());
+        when(metricRepository.findByRunIdIn(List.of(readable.getId()))).thenReturn(List.of());
 
         List<QualityRunDto> result = service.listRuns(null, null, null, null, null, null, 10, "D01");
 
         assertThat(result).extracting(QualityRunDto::getDatasetId).containsExactly(DATASET_ID);
+        verify(metricRepository).findByRunIdIn(List.of(readable.getId()));
+        verify(metricRepository, never()).findByRunId(any());
     }
 }

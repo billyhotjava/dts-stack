@@ -1,7 +1,7 @@
 import { AppstoreOutlined, PlusOutlined, SearchOutlined } from "@ant-design/icons";
 import { Alert, Button, Card, Col, Descriptions, Form, Input, Row, Select, Space, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import {
@@ -134,21 +134,36 @@ export function TableQualityDetailPage() {
 	const [score, setScore] = useState<QualityScoreResult>();
 	const [loading, setLoading] = useState(true);
 	const [loadError, setLoadError] = useState("");
+	const loadSequence = useRef(0);
+	const activeDatasetId = useRef(datasetId);
+	const loadedDatasetId = useRef<string>();
+	activeDatasetId.current = datasetId;
 
 	const load = useCallback(async () => {
+		const requestedDatasetId = datasetId;
+		const sequence = ++loadSequence.current;
+		loadedDatasetId.current = undefined;
+		setRules([]);
+		setScore(undefined);
 		setLoading(true);
 		setLoadError("");
 		try {
-			const [ruleResponse, scoreResponse] = await Promise.all([listQualityRules(), getQualityScore(datasetId, 30)]);
+			const [ruleResponse, scoreResponse] = await Promise.all([
+				listQualityRules(),
+				getQualityScore(requestedDatasetId, 30),
+			]);
+			if (sequence !== loadSequence.current || activeDatasetId.current !== requestedDatasetId) return;
 			if (!scoreResponse) throw new Error("资产质量评分未返回有效数据");
-			setRules(toList<QualityRule>(ruleResponse).filter((rule) => String(rule.datasetId) === datasetId));
+			setRules(toList<QualityRule>(ruleResponse).filter((rule) => String(rule.datasetId) === requestedDatasetId));
 			setScore(scoreResponse);
+			loadedDatasetId.current = requestedDatasetId;
 		} catch (error) {
+			if (sequence !== loadSequence.current || activeDatasetId.current !== requestedDatasetId) return;
 			const message = error instanceof Error ? error.message : "资产质量详情加载失败";
 			setLoadError(message);
 			toast.error(message);
 		} finally {
-			setLoading(false);
+			if (sequence === loadSequence.current && activeDatasetId.current === requestedDatasetId) setLoading(false);
 		}
 	}, [datasetId]);
 
@@ -157,7 +172,11 @@ export function TableQualityDetailPage() {
 	}, [load]);
 
 	const dataset = datasets.find((item) => item.id === datasetId);
-	const hasEffectiveRuns = hasEffectiveQualityScore(score);
+	const loadedDatasetIsCurrent = loadedDatasetId.current === datasetId;
+	const visibleRules = loadedDatasetIsCurrent ? rules : [];
+	const visibleScore = loadedDatasetIsCurrent ? score : undefined;
+	const detailLoading = loading || (!loadError && !loadedDatasetIsCurrent);
+	const hasEffectiveRuns = hasEffectiveQualityScore(visibleScore);
 	const columns: ColumnsType<QualityRule> = [
 		{
 			title: "规则",
@@ -186,7 +205,7 @@ export function TableQualityDetailPage() {
 						key="new"
 						type="primary"
 						icon={<PlusOutlined />}
-						disabled={!canManage}
+						disabled={!canManage || !loadedDatasetIsCurrent || loading || Boolean(loadError)}
 						onClick={() => navigate(`${qualityPath("rule-editor")}?datasetId=${encodeURIComponent(datasetId)}`)}
 					>
 						添加规则
@@ -200,7 +219,7 @@ export function TableQualityDetailPage() {
 					<Descriptions.Item label="物理表">{displayName(dataset?.tableName || dataset?.name)}</Descriptions.Item>
 				</Descriptions>
 			</Card>
-			{!loading && loadError ? (
+			{!detailLoading && loadError ? (
 				<Alert
 					showIcon
 					type="error"
@@ -210,14 +229,16 @@ export function TableQualityDetailPage() {
 				/>
 			) : (
 				<>
-					{!loading && score && !hasEffectiveRuns ? <Alert showIcon type="info" message="暂无有效检测结果" /> : null}
+					{!detailLoading && visibleScore && !hasEffectiveRuns ? (
+						<Alert showIcon type="info" message="暂无有效检测结果" />
+					) : null}
 					<div className="dq-metric-grid">
 						<QualityMetric
 							label="综合质量分"
-							value={hasEffectiveRuns ? score?.overall : "-"}
+							value={hasEffectiveRuns ? visibleScore?.overall : "-"}
 							note={hasEffectiveRuns ? "近 30 天" : "暂无有效检测结果"}
 						/>
-						{(hasEffectiveRuns ? score?.dimensions || [] : []).slice(0, 3).map((item) => (
+						{(hasEffectiveRuns ? visibleScore?.dimensions || [] : []).slice(0, 3).map((item) => (
 							<QualityMetric
 								key={item.type}
 								label={item.type}
@@ -228,7 +249,14 @@ export function TableQualityDetailPage() {
 						))}
 					</div>
 					<Card title="已绑定规则">
-						<Table rowKey="id" loading={loading} columns={columns} dataSource={rules} pagination={false} size="small" />
+						<Table
+							rowKey="id"
+							loading={detailLoading}
+							columns={columns}
+							dataSource={visibleRules}
+							pagination={false}
+							size="small"
+						/>
 					</Card>
 				</>
 			)}

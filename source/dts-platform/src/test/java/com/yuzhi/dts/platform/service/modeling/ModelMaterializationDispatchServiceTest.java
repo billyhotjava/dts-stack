@@ -54,6 +54,74 @@ class ModelMaterializationDispatchServiceTest {
     private static final String SCOPED_CHECKSUM = "b".repeat(64);
 
     @Test
+    void uncertifiedRuntimeBlocksBeforeAnyAirflowBoundary() {
+        Fixture fixture = fixture();
+        when(
+            fixture.dispatches.claimNext(
+                eq(NOW),
+                eq(Duration.ofMinutes(2))
+            )
+        ).thenReturn(Optional.of(dispatch()));
+        when(fixture.builds.loadCandidateBuildScope("tenant-a", GROUP_ID))
+            .thenReturn(scope());
+        when(fixture.runtimeCertification.requireCertified())
+            .thenThrow(
+                new ModelReleaseCandidateException(
+                    "DBT_RUNTIME_NOT_CERTIFIED",
+                    "Certified dbt runtime is unavailable",
+                    ModelReleaseCandidateException.Kind.PRECONDITION_REQUIRED
+                )
+            );
+
+        var result = fixture.service.dispatchNext().orElseThrow();
+
+        assertThat(result.status()).isEqualTo("BLOCKED");
+        assertThat(result.errorCode())
+            .isEqualTo("DBT_RUNTIME_NOT_CERTIFIED");
+        verify(fixture.gateway, never()).reconcileReleaseBuild(any());
+        verify(fixture.gateway, never()).submitReleaseBuild(any());
+        verify(fixture.scoped, never()).prepareCandidate(any());
+        assertThat(fixture.audit.singleCall().payload().toString())
+            .contains("DBT_RUNTIME_NOT_CERTIFIED")
+            .doesNotContain("sha256:")
+            .doesNotContain("registry");
+    }
+
+    @Test
+    void uncertifiedRuntimeFailsClosedWhenStrictAuditForwarderIsUnavailable() {
+        Fixture fixture = fixture();
+        when(
+            fixture.dispatches.claimNext(
+                eq(NOW),
+                eq(Duration.ofMinutes(2))
+            )
+        ).thenReturn(Optional.of(dispatch()));
+        when(fixture.builds.loadCandidateBuildScope("tenant-a", GROUP_ID))
+            .thenReturn(scope());
+        when(fixture.runtimeCertification.requireCertified())
+            .thenThrow(
+                new ModelReleaseCandidateException(
+                    "DBT_RUNTIME_NOT_CERTIFIED",
+                    "Certified dbt runtime is unavailable",
+                    ModelReleaseCandidateException.Kind.PRECONDITION_REQUIRED
+                )
+            );
+        fixture.audit.failNext(
+            new IllegalStateException("strict audit forwarder unavailable")
+        );
+
+        assertThatThrownBy(fixture.service::dispatchNext)
+            .isInstanceOf(RuntimeException.class)
+            .hasRootCauseMessage("strict audit forwarder unavailable");
+        verify(fixture.gateway, never()).reconcileReleaseBuild(any());
+        verify(fixture.gateway, never()).submitReleaseBuild(any());
+        verify(fixture.scoped, never()).prepareCandidate(any());
+        assertThat(fixture.transactions.rollbacks()).isOne();
+        assertThat(fixture.audit.singleCall().actionCode())
+            .isEqualTo("MODEL_MATERIALIZATION_DISPATCH_BLOCKED");
+    }
+
+    @Test
     void oneMultiEntryCandidateProducesOneAirflowSubmission() {
         Fixture fixture = fixture();
         when(
@@ -548,6 +616,9 @@ class ModelMaterializationDispatchServiceTest {
         var dags = mock(DbtDagService.class);
         var gateway = mock(DbtExecutionGateway.class);
         var tokens = mock(ModelRuntimeSpecTokenCodec.class);
+        var runtimeCertification = mock(
+            DbtRuntimeCertificationService.class
+        );
         var sourceAvailability = mock(ModelMaterializationSourceAvailabilityGuard.class);
         var audit = new RecordingAuditService();
         var transactions = new RecordingTransactionManager();
@@ -559,6 +630,9 @@ class ModelMaterializationDispatchServiceTest {
                 java.nio.file.Path.of("/tmp", DAG_ID + ".py")
             )
         );
+        when(runtimeCertification.requireCertified()).thenReturn(
+            DbtRuntimeCertificationServiceTest.runtime()
+        );
         var service = new ModelMaterializationDispatchService(
             dispatches,
             builds,
@@ -566,6 +640,7 @@ class ModelMaterializationDispatchServiceTest {
             dags,
             gateway,
             tokens,
+            runtimeCertification,
             sourceAvailability,
             audit,
             Clock.fixed(NOW, ZoneOffset.UTC),
@@ -578,6 +653,7 @@ class ModelMaterializationDispatchServiceTest {
             scoped,
             gateway,
             tokens,
+            runtimeCertification,
             sourceAvailability,
             audit,
             transactions
@@ -672,6 +748,7 @@ class ModelMaterializationDispatchServiceTest {
         DbtScopedProjectService scoped,
         DbtExecutionGateway gateway,
         ModelRuntimeSpecTokenCodec tokens,
+        DbtRuntimeCertificationService runtimeCertification,
         ModelMaterializationSourceAvailabilityGuard sourceAvailability,
         RecordingAuditService audit,
         RecordingTransactionManager transactions
@@ -700,7 +777,7 @@ class ModelMaterializationDispatchServiceTest {
         }
 
         @Override
-        public void auditActionAs(
+        public UUID auditActionAsStrict(
             String machineActor,
             String eventIdentity,
             Instant occurredAt,
@@ -726,6 +803,9 @@ class ModelMaterializationDispatchServiceTest {
                 nextFailure = null;
                 throw failure;
             }
+            return UUID.nameUUIDFromBytes(
+                eventIdentity.getBytes(java.nio.charset.StandardCharsets.UTF_8)
+            );
         }
 
         private void observe(Runnable observer) {

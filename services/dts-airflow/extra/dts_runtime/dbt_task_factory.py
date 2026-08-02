@@ -29,6 +29,9 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _DAG_ID = re.compile(r"^[a-z][a-z0-9_]{2,199}$")
 _SAFE_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]{0,127}$")
 _SAFE_IMAGE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,255}$")
+_DIGEST_IMAGE = re.compile(
+    r"^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,255}@sha256:[0-9a-f]{64}$"
+)
 _DOCKER_CONTAINER_ID = re.compile(r"^[0-9a-f]{64}$")
 _RELEASE_BUILD_CONF_KEYS = frozenset(
     {
@@ -52,7 +55,7 @@ _OPERATIONAL_RUN_CONF_KEYS = frozenset(
         "bundleChecksum",
     }
 )
-_RUNTIME_SPEC_KEYS = frozenset(
+_BASE_RUNTIME_SPEC_KEYS = frozenset(
     {
         "pipelineRunGroupId",
         "runPurpose",
@@ -63,6 +66,41 @@ _RUNTIME_SPEC_KEYS = frozenset(
         "expiresAt",
         "credentialVersionRef",
     }
+)
+_RUNTIME_CERTIFICATION_KEYS = frozenset(
+    {
+        "runtimeProfileId",
+        "candidateProfileId",
+        "dbtCoreVersion",
+        "dbtPostgresVersion",
+        "adapter",
+        "databaseType",
+        "requirementsLockSha256",
+        "candidateImageDigest",
+        "imageRef",
+        "evidenceManifestSha256",
+    }
+)
+_RUNTIME_SPEC_KEYS = _BASE_RUNTIME_SPEC_KEYS | _RUNTIME_CERTIFICATION_KEYS
+_EXPECTED_CANDIDATE_PROFILE_ID = (
+    "H83-RT01-LINUX-AMD64-DBT11022-PG1100-LOCK-"
+    "01d7c02b6bf4fefdfc188cbf9ef8aed4fb243c227c060103f195c4ca45af5f02"
+)
+_EXPECTED_REQUIREMENTS_LOCK_SHA256 = (
+    "01d7c02b6bf4fefdfc188cbf9ef8aed4fb243c227c060103f195c4ca45af5f02"
+)
+_EXPECTED_CERTIFICATION_PROFILE_ID = (
+    "H83-CERT-RT01-LINUX-AMD64-EVIDENCE-"
+    "bcd2fc84b05b9508990538c6642be7ac7b35073ec034e6b1980b22f556345a68"
+)
+_EXPECTED_CANDIDATE_IMAGE_DIGEST = (
+    "sha256:fe1d15f1b4215e693dadfc1d99be2ae07c7e50e8df144504005feb41cc7686b7"
+)
+_EXPECTED_CERTIFIED_IMAGE_DIGEST = (
+    "sha256:2f6dddb7237fdb7141f452b6d09da0379ef7569f2f82560473f304b265cbbd85"
+)
+_EXPECTED_EVIDENCE_MANIFEST_SHA256 = (
+    "bcd2fc84b05b9508990538c6642be7ac7b35073ec034e6b1980b22f556345a68"
 )
 _PREPARE_TASK_ID = "prepare_runtime"
 _BUILD_TASK_ID = "dbt_build"
@@ -203,7 +241,9 @@ def _validate_runtime_spec(runtime_spec: Any) -> dict[str, str]:
         raise ValueError(
             "runtime spec contains unsupported keys: " + ", ".join(unsupported)
         )
-    missing = sorted(key for key in _RUNTIME_SPEC_KEYS if key not in runtime_spec)
+    missing = sorted(
+        key for key in _BASE_RUNTIME_SPEC_KEYS if key not in runtime_spec
+    )
     if missing:
         raise ValueError(
             "runtime spec is missing required keys: " + ", ".join(missing)
@@ -214,7 +254,7 @@ def _validate_runtime_spec(runtime_spec: Any) -> dict[str, str]:
     selector = _required_text(runtime_spec["selector"], "selector")
     if "\x00" in selector or "\n" in selector or "\r" in selector:
         raise ValueError("selector is invalid")
-    return {
+    normalized = {
         "pipelineRunGroupId": _uuid_text(
             runtime_spec["pipelineRunGroupId"], "pipelineRunGroupId"
         ),
@@ -232,6 +272,73 @@ def _validate_runtime_spec(runtime_spec: Any) -> dict[str, str]:
             runtime_spec["credentialVersionRef"], "credentialVersionRef"
         ),
     }
+    if purpose == "RELEASE_BUILD":
+        missing_certification = sorted(
+            key
+            for key in _RUNTIME_CERTIFICATION_KEYS
+            if key not in runtime_spec
+        )
+        if missing_certification:
+            raise ValueError(
+                "runtime certification is missing required keys: "
+                + ", ".join(missing_certification)
+            )
+        image_ref = _required_text(runtime_spec["imageRef"], "imageRef")
+        if (
+            not _DIGEST_IMAGE.fullmatch(image_ref)
+            or not image_ref.endswith("@" + _EXPECTED_CERTIFIED_IMAGE_DIGEST)
+        ):
+            raise ValueError("runtime imageRef is not certified")
+        certification = {
+            "runtimeProfileId": _safe_name(
+                runtime_spec["runtimeProfileId"], "runtimeProfileId"
+            ),
+            "candidateProfileId": _required_text(
+                runtime_spec["candidateProfileId"], "candidateProfileId"
+            ),
+            "dbtCoreVersion": _required_text(
+                runtime_spec["dbtCoreVersion"], "dbtCoreVersion"
+            ),
+            "dbtPostgresVersion": _required_text(
+                runtime_spec["dbtPostgresVersion"], "dbtPostgresVersion"
+            ),
+            "adapter": _required_text(runtime_spec["adapter"], "adapter"),
+            "databaseType": _required_text(
+                runtime_spec["databaseType"], "databaseType"
+            ),
+            "requirementsLockSha256": _checksum(
+                runtime_spec["requirementsLockSha256"],
+                "requirementsLockSha256",
+            ),
+            "candidateImageDigest": _required_text(
+                runtime_spec["candidateImageDigest"],
+                "candidateImageDigest",
+            ),
+            "imageRef": image_ref,
+            "evidenceManifestSha256": _checksum(
+                runtime_spec["evidenceManifestSha256"],
+                "evidenceManifestSha256",
+            ),
+        }
+        if (
+            certification["runtimeProfileId"]
+            != _EXPECTED_CERTIFICATION_PROFILE_ID
+            or certification["candidateProfileId"]
+            != _EXPECTED_CANDIDATE_PROFILE_ID
+            or certification["dbtCoreVersion"] != "1.10.22"
+            or certification["dbtPostgresVersion"] != "1.10.0"
+            or certification["adapter"] != "postgres"
+            or certification["databaseType"] != "PostgreSQL"
+            or certification["requirementsLockSha256"]
+            != _EXPECTED_REQUIREMENTS_LOCK_SHA256
+            or certification["candidateImageDigest"]
+            != _EXPECTED_CANDIDATE_IMAGE_DIGEST
+            or certification["evidenceManifestSha256"]
+            != _EXPECTED_EVIDENCE_MANIFEST_SHA256
+        ):
+            raise ValueError("runtime certification does not match executor")
+        normalized.update(certification)
+    return normalized
 
 
 def _build_docker_command(
@@ -245,6 +352,11 @@ def _build_docker_command(
     safe_image = _required_text(image, "dbt image")
     if not _SAFE_IMAGE.fullmatch(safe_image):
         raise ValueError("dbt image is invalid")
+    if (
+        runtime["runPurpose"] == "RELEASE_BUILD"
+        and safe_image != runtime["imageRef"]
+    ):
+        raise ValueError("release build image does not match runtime spec")
     safe_network = _safe_name(docker_network, "docker network")
     project_root = _fixed_root(project_host_root, "project host root")
     profile_root = _fixed_root(profile_host_root, "profile host root")
@@ -671,9 +783,14 @@ def _dbt_build_task(**context: Any) -> None:
         lease_id,
         "consume",
     )
+    image = (
+        runtime["imageRef"]
+        if runtime["runPurpose"] == "RELEASE_BUILD"
+        else os.getenv("DBT_IMAGE", "dts-dbt:1.10.0")
+    )
     command = _build_docker_command(
         runtime,
-        image=os.getenv("DBT_IMAGE", "dts-dbt:1.10.0"),
+        image=image,
         project_host_root=os.getenv("DTS_DBT_PROJECT_HOST_ROOT", ""),
         profile_host_root=os.getenv(
             "DTS_DBT_RUNTIME_PROFILE_HOST_ROOT", ""

@@ -24,6 +24,7 @@ class QualityAuditCatalogContractTest {
         "GOV_OPS_TREND_VIEW",
         "GOV_OPS_RELEASE_GATE_VIEW",
         "GOV_QUALITY_RUN_EXECUTE",
+        "GOV_QUALITY_FAILING_ROW_VIEW",
         "GOV_QUALITY_TEMPLATE_LIST",
         "GOV_QUALITY_TEMPLATE_VIEW",
         "GOV_QUALITY_TEMPLATE_CREATE",
@@ -61,8 +62,25 @@ class QualityAuditCatalogContractTest {
         canonicalTree.findValues("code").forEach(node -> codes.add(node.asText()));
 
         assertThat(codes).containsAll(REQUIRED_CODES);
+        assertFlowAction(canonicalTree, "GOV_QUALITY_REPORT_EXPORT");
+        assertFlowAction(canonicalTree, "GOV_QUALITY_RUN_EXECUTE");
+        assertFlowAction(canonicalTree, "GOV_QUALITY_TASK_EXECUTE");
         for (Path fallback : catalogs.subList(1, catalogs.size())) {
             assertThat(mapper.readTree(Files.readString(fallback))).isEqualTo(canonicalTree);
         }
+    }
+
+    private static JsonNode findAction(JsonNode catalog, String code) {
+        return catalog.findParents("code")
+            .stream()
+            .filter(action -> code.equals(action.path("code").asText()))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("Missing audit action: " + code));
+    }
+
+    private static void assertFlowAction(JsonNode catalog, String code) {
+        JsonNode action = findAction(catalog, code);
+        assertThat(action.path("supportsFlow").asBoolean()).as(code).isTrue();
+        assertThat(action.path("phases").toString()).as(code).isEqualTo("[\"BEGIN\",\"SUCCESS\",\"FAIL\"]");
     }
 }

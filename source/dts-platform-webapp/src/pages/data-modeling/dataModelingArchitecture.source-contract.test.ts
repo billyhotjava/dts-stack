@@ -73,17 +73,18 @@ describe("prototype-driven data-modeling architecture", () => {
 		);
 	});
 
-	it("keeps the new UI front-end-only, fail-closed, and within the file-size gate", () => {
+	it("keeps the modeling UI on dedicated APIs, fail-closed, and within the file-size gate", () => {
 		const productionFiles = collectFiles(MODULE_ROOT).filter(
 			(file) => /\.(tsx?|css)$/.test(file) && !/(\.test|source-contract\.test)\./.test(file),
 		);
 		const source = productionFiles.map((file) => readFileSync(file, "utf8")).join("\n");
-		expect(source).not.toMatch(/from ["']@\/api\//);
+		expect(source).not.toMatch(/from ["']@\/api\/platformApi/);
 		expect(source).not.toMatch(/\bfetch\s*\(/);
 		expect(source).not.toMatch(/\baxios\b/);
+		expect(source).not.toMatch(/\/api\/etl\/dbt\/(?:files|preview)/);
 		expect(source).not.toMatch(/message\.success|notification\.success/);
 		expect(source).not.toMatch(/xzmfly|@163\.com|Xieha/);
-		expect(source).toContain("BackendPendingButton");
+		expect(source).toContain("modelRepresentationApi");
 
 		for (const file of productionFiles) {
 			const lines = readFileSync(file, "utf8").split(/\r?\n/).length;

@@ -268,6 +268,19 @@ dts:
       runtime-profile-lease-ttl: ${DTS_DBT_RUNTIME_PROFILE_LEASE_TTL:10m}
       runtime-spec-signing-key: ${DTS_MODEL_RUNTIME_SPEC_SIGNING_KEY:}
       runtime-spec-token-ttl: ${DTS_MODEL_RUNTIME_SPEC_TOKEN_TTL:15m}
+      dbt-runtime-certification:
+        status: ${DTS_DBT_RUNTIME_CERTIFICATION_STATUS:NOT_CERTIFIED}
+        profile-id: ${DTS_DBT_RUNTIME_CERTIFICATION_PROFILE_ID:}
+        candidate-profile-id: ${DTS_DBT_RUNTIME_CERTIFICATION_CANDIDATE_PROFILE_ID:}
+        platform: ${DTS_DBT_RUNTIME_CERTIFICATION_PLATFORM:}
+        dbt-core-version: ${DTS_DBT_RUNTIME_CERTIFICATION_CORE_VERSION:}
+        dbt-postgres-version: ${DTS_DBT_RUNTIME_CERTIFICATION_POSTGRES_VERSION:}
+        adapter: ${DTS_DBT_RUNTIME_CERTIFICATION_ADAPTER:}
+        database-type: ${DTS_DBT_RUNTIME_CERTIFICATION_DATABASE_TYPE:}
+        requirements-lock-sha256: ${DTS_DBT_RUNTIME_CERTIFICATION_LOCK_SHA256:}
+        candidate-image-digest: ${DTS_DBT_RUNTIME_CERTIFICATION_CANDIDATE_IMAGE_DIGEST:}
+        image-ref: ${DTS_DBT_RUNTIME_CERTIFICATION_IMAGE_REF:}
+        evidence-manifest-sha256: ${DTS_DBT_RUNTIME_CERTIFICATION_EVIDENCE_SHA256:}
   dbt:
     enabled: ${DTS_DBT_ENABLED:true}
     config-path: ${DTS_DBT_CONFIG_PATH:/opt/dts/upload/dbt-config.json}
@@ -422,6 +435,10 @@ jhipster:
 
 auditing:
   enabled: true
+  # This release is single-tenant. Keep one internal audit owner while retaining
+  # tenant_id in the durable ledger for ownership and replay isolation.
+  tenancy-mode: SINGLE_TENANT
+  tenant-id: default
   outbox:
     dispatch-delay-ms: ${AUDIT_OUTBOX_DISPATCH_DELAY_MS:2000}
     batch-size: ${AUDIT_OUTBOX_BATCH_SIZE:100}

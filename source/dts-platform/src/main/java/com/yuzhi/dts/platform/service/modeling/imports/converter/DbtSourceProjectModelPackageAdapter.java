@@ -4,6 +4,7 @@ import com.yuzhi.dts.platform.service.modeling.imports.checksum.ModelPackageChec
 import com.yuzhi.dts.platform.service.modeling.imports.classifier.ModelConversionClassifier;
 import com.yuzhi.dts.platform.service.modeling.imports.classifier.ModelConversionClassifier.ClassificationInput;
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract;
+import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.Column;
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.ConversionMode;
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.ConversionResult;
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.DbtMetadata;
@@ -16,6 +17,9 @@ import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageCont
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.SourceRef;
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.SqlArtifact;
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.TechnicalNode;
+import com.yuzhi.dts.platform.service.modeling.imports.converter.SourceOnlySchemaContractReader.ModelContract;
+import com.yuzhi.dts.platform.service.modeling.imports.converter.SourceOnlySchemaContractReader.ResolvedConfiguration;
+import com.yuzhi.dts.platform.service.modeling.imports.converter.SourceOnlySchemaContractReader.SchemaCatalog;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
@@ -110,6 +114,8 @@ final class DbtSourceProjectModelPackageAdapter {
         if (seeds.isEmpty()) {
             throw error("SOURCE_PROJECT_EMPTY", "dbt 项目的 models 目录中没有可读取的 SQL 模型");
         }
+        SchemaCatalog schemaCatalog = SourceOnlySchemaContractReader.read(projectRoot, project.modelPaths());
+        seeds = applyTrustedConfigurations(seeds, schemaCatalog);
 
         Map<String, ModelSeed> byUniqueId = new TreeMap<>();
         Map<String, String> uniqueIdByName = new HashMap<>();
@@ -124,6 +130,7 @@ final class DbtSourceProjectModelPackageAdapter {
         Map<String, List<String>> dependencies = new TreeMap<>();
         Map<String, List<String>> unresolvedRefs = new TreeMap<>();
         Map<String, List<String>> dynamicCalls = new TreeMap<>();
+        Map<String, SourceOnlyJinjaGuard.Risk> jinjaRisks = new TreeMap<>();
         int staticCallCount = 0;
         for (Map.Entry<String, ModelSeed> entry : byUniqueId.entrySet()) {
             ParsedDependencies parsed = parseDependencies(
@@ -137,6 +144,7 @@ final class DbtSourceProjectModelPackageAdapter {
             dependencies.put(entry.getKey(), parsed.dependencies());
             unresolvedRefs.put(entry.getKey(), parsed.unresolvedRefs());
             dynamicCalls.put(entry.getKey(), parsed.dynamicCalls());
+            jinjaRisks.put(entry.getKey(), SourceOnlyJinjaGuard.inspect(entry.getValue().sql()));
             staticCallCount = boundedAdd(staticCallCount, parsed.callCount(), "dbt 静态调用数量超过安全上限");
         }
 
@@ -145,9 +153,20 @@ final class DbtSourceProjectModelPackageAdapter {
         validateGraphBudget(byUniqueId.keySet(), sources.keySet(), dependencies, macros.nodes(), staticCallCount);
         TraversalBudget reachabilityBudget = new TraversalBudget(MAX_GRAPH_TRAVERSAL_STEPS);
 
+        Map<String, Set<String>> directBlocks = directBlockReasons(
+            byUniqueId,
+            schemaCatalog,
+            unresolvedRefs,
+            dynamicCalls,
+            jinjaRisks
+        );
+        Map<String, Set<String>> closureBlocks = propagateBlockReasons(byUniqueId.keySet(), dependencies, directBlocks);
+
         List<TechnicalNode> technicalNodes = new ArrayList<>(macros.nodes());
         List<PackageModel> models = new ArrayList<>();
         List<ImportIssue> issues = new ArrayList<>(macros.issues());
+        addSourceOnlyBlockIssues(issues, closureBlocks);
+        addLegacyDependencyIssues(issues, unresolvedRefs, dynamicCalls);
         issues.add(
             new ImportIssue(
                 "DBT_SOURCE_PROJECT_STATIC_ANALYSIS",
@@ -162,6 +181,10 @@ final class DbtSourceProjectModelPackageAdapter {
         for (Map.Entry<String, ModelSeed> entry : byUniqueId.entrySet()) {
             String uniqueId = entry.getKey();
             ModelSeed seed = entry.getValue();
+            ModelContract schemaContract = schemaCatalog.contracts().get(seed.name());
+            List<Column> declaredColumns = schemaContract != null && schemaContract.verified()
+                ? schemaContract.columns()
+                : List.of();
             List<String> reachableSources = reachableSources(uniqueId, dependencies, reachabilityBudget);
             List<SourceRef> sourceRefs = reachableSources
                 .stream()
@@ -187,43 +210,41 @@ final class DbtSourceProjectModelPackageAdapter {
             ConversionResult conversion = classifier.classify(
                 new ClassificationInput("model", seed.materialization(), seed.sql(), semantics, technical)
             );
-            List<String> missingRefs = unresolvedRefs.getOrDefault(uniqueId, List.of());
-            if (!missingRefs.isEmpty()) {
-                conversion = new ConversionResult(
-                    ConversionMode.BLOCKED,
-                    append(conversion.reasonCodes(), "DEPENDENCY_GRAPH_UNVERIFIED")
-                );
-                issues.add(
-                    new ImportIssue(
-                        "DBT_SOURCE_PROJECT_REF_UNRESOLVED",
-                        "WARNING",
-                        "$.models[" + uniqueId + "].dependencies",
-                        uniqueId,
-                        "SQL 引用了包内不存在的 ref: " + String.join(", ", missingRefs),
-                        "补齐被引用模型，或在高级建模中修正 ref 后重新上传"
-                    )
-                );
+            if (
+                conversion.mode() == ConversionMode.BLOCKED &&
+                conversion.reasonCodes() != null &&
+                !conversion.reasonCodes().isEmpty() &&
+                conversion.reasonCodes().stream().allMatch(reason -> reason != null && reason.startsWith("MISSING_"))
+            ) {
+                conversion = new ConversionResult(ConversionMode.BLOCKED, List.of("SOURCE_SEMANTICS_INCOMPLETE"));
             }
-            List<String> dynamic = dynamicCalls.getOrDefault(uniqueId, List.of());
-            if (!dynamic.isEmpty()) {
-                conversion = new ConversionResult(
-                    ConversionMode.BLOCKED,
-                    append(conversion.reasonCodes(), "DEPENDENCY_GRAPH_UNVERIFIED")
-                );
-                issues.add(
-                    new ImportIssue(
-                        "DBT_SOURCE_PROJECT_DYNAMIC_REFERENCE",
-                        "WARNING",
-                        "$.models[" + uniqueId + "].dependencies",
-                        uniqueId,
-                        "SQL 包含无法静态解析的动态调用: " + String.join(", ", dynamic),
-                        "改用 literal ref/source，或提供 target/manifest.json 后重新上传"
-                    )
-                );
+            Set<String> blockers = closureBlocks.getOrDefault(uniqueId, Set.of());
+            if (!blockers.isEmpty()) {
+                List<String> reasons = conversion.reasonCodes();
+                for (String blocker : blockers) {
+                    reasons = append(reasons, blocker);
+                }
+                conversion = new ConversionResult(ConversionMode.BLOCKED, reasons);
             }
 
             Map<String, Object> config = new LinkedHashMap<>(seed.config());
             config.put("sourceProjectEvidence", seed.evidenceSource());
+            config.put("implementationOwnership", "DBT_MANAGED");
+            config.put("sourceConfigurationProvenance", "DECLARED");
+            config.put("sourceContractEnforced", schemaContract != null && schemaContract.verified());
+            if (!declaredColumns.isEmpty()) {
+                config.put("structureProvenance", "DECLARED");
+                TreeMap<String, String> fieldProvenance = new TreeMap<>();
+                declaredColumns.forEach(column -> fieldProvenance.put(column.name(), "DECLARED"));
+                config.put("fieldProvenance", Map.copyOf(fieldProvenance));
+                config.put(
+                    "declaredColumns",
+                    declaredColumns
+                        .stream()
+                        .map(column -> Map.of("name", column.name(), "dataType", column.dataType()))
+                        .toList()
+                );
+            }
             config.put("semanticConfirmationRequired", conversion.reasonCodes());
             if (technical) {
                 technicalNodes.add(
@@ -252,7 +273,7 @@ final class DbtSourceProjectModelPackageAdapter {
                     seed.materialization(),
                     Map.copyOf(config),
                     seed.tags(),
-                    List.of(),
+                    declaredColumns,
                     List.of(),
                     dependencies.getOrDefault(uniqueId, List.of()),
                     semantics,
@@ -261,12 +282,12 @@ final class DbtSourceProjectModelPackageAdapter {
             );
             issues.add(
                 new ImportIssue(
-                    "MODEL_PACKAGE_SEMANTIC_CONFIRMATION_REQUIRED",
+                    "SOURCE_SEMANTICS_INCOMPLETE",
                     "WARNING",
                     "$.models[" + uniqueId + "].semantics",
                     uniqueId,
                     "dbt 结构已识别，但业务模型类型、粒度和消费场景不能由 SQL 安全推断",
-                    "在普通建模预检中逐模型确认缺失业务语义；系统不会自动猜测"
+                    "COMPLETE_MAPPING"
                 )
             );
         }
@@ -278,7 +299,7 @@ final class DbtSourceProjectModelPackageAdapter {
                 .thenComparing(issue -> issue.modelUniqueId() == null ? "" : issue.modelUniqueId())
         );
 
-        String fingerprint = fingerprint(projectRoot, project, seeds);
+        String fingerprint = fingerprint(projectRoot, project, seeds, schemaCatalog.fingerprint());
         String packageId = normalizeSegment(project.name()) + "-" + ModelPackageChecksum.sha256Text(fingerprint);
         ModelPackage withoutChecksum = new ModelPackage(
             ModelPackageContract.SCHEMA_VERSION,
@@ -292,6 +313,49 @@ final class DbtSourceProjectModelPackageAdapter {
             List.copyOf(issues)
         );
         return Optional.of(ModelPackageChecksum.withChecksum(withoutChecksum));
+    }
+
+    private static List<ModelSeed> applyTrustedConfigurations(List<ModelSeed> seeds, SchemaCatalog schemaCatalog) {
+        List<ModelSeed> configured = new ArrayList<>();
+        for (ModelSeed seed : seeds) {
+            ResolvedConfiguration resolved = schemaCatalog.configurationFor(seed.resourcePath(), seed.name());
+            LinkedHashSet<String> tags = new LinkedHashSet<>(resolved.tags());
+            tags.addAll(seed.tags());
+            LinkedHashSet<String> blockers = new LinkedHashSet<>(resolved.blockers());
+            String layer = seed.layer();
+            Set<String> taggedLayers = tags
+                .stream()
+                .map(tag -> tag.toUpperCase(Locale.ROOT))
+                .filter(LAYERS::contains)
+                .collect(java.util.stream.Collectors.toCollection(TreeSet::new));
+            if (taggedLayers.size() > 1 || (layer != null && !taggedLayers.isEmpty() && !taggedLayers.contains(layer.toUpperCase(Locale.ROOT)))) {
+                blockers.add("SOURCE_DEPENDENCY_DYNAMIC");
+            } else if (layer == null && taggedLayers.size() == 1) {
+                layer = taggedLayers.iterator().next();
+            }
+            Map<String, Object> config = new LinkedHashMap<>(seed.config());
+            if (resolved.materialization() != null) {
+                config.put("declaredMaterialization", resolved.materialization());
+            }
+            if (!resolved.tags().isEmpty()) {
+                config.put("declaredTags", resolved.tags());
+            }
+            configured.add(
+                new ModelSeed(
+                    seed.name(),
+                    seed.resourcePath(),
+                    seed.sql(),
+                    layer,
+                    firstNonBlank(seed.materialization(), resolved.materialization()),
+                    List.copyOf(tags),
+                    seed.description(),
+                    Map.copyOf(config),
+                    seed.evidenceSource(),
+                    Set.copyOf(blockers)
+                )
+            );
+        }
+        return List.copyOf(configured);
     }
 
     private List<ModelSeed> readInventory(Path projectRoot, ProjectMetadata project) {
@@ -329,7 +393,8 @@ final class DbtSourceProjectModelPackageAdapter {
                 tags,
                 model.description(),
                 Map.copyOf(config),
-                "models.tsv+sql"
+                "models.tsv+sql",
+                Set.of()
             );
             if (!names.add(seed.name())) {
                 throw error("SOURCE_PROJECT_MODEL_DUPLICATE", "models.tsv 包含重复模型: " + seed.name());
@@ -460,8 +525,8 @@ final class DbtSourceProjectModelPackageAdapter {
             if (sql.isBlank()) {
                 throw error("SOURCE_PROJECT_SQL_INVALID", "dbt 模型 SQL 不能为空: " + entry.getKey());
             }
-            String staticSql = jinjaExpressions(stripComments(sql));
-            List<String> tags = inlineTags(staticSql);
+            SourceOnlyJinjaGuard.Risk jinja = SourceOnlyJinjaGuard.inspect(sql);
+            List<String> tags = jinja.tags();
             String layer = explicitLayer(tags);
             result.add(
                 new ModelSeed(
@@ -469,11 +534,12 @@ final class DbtSourceProjectModelPackageAdapter {
                     entry.getKey(),
                     sql,
                     layer,
-                    firstMatch(MATERIALIZED, staticSql),
+                    jinja.materialization(),
                     tags,
                     null,
                     Map.of("inventory", "dbt_project.yml#model-paths"),
-                    "sql-config"
+                    "sql-config",
+                    Set.of()
                 )
             );
         }
@@ -756,6 +822,147 @@ final class DbtSourceProjectModelPackageAdapter {
         }
     }
 
+    private static Map<String, Set<String>> directBlockReasons(
+        Map<String, ModelSeed> models,
+        SchemaCatalog schemaCatalog,
+        Map<String, List<String>> unresolvedRefs,
+        Map<String, List<String>> dynamicCalls,
+        Map<String, SourceOnlyJinjaGuard.Risk> jinjaRisks
+    ) {
+        TreeMap<String, Set<String>> result = new TreeMap<>();
+        for (Map.Entry<String, ModelSeed> entry : models.entrySet()) {
+            TreeSet<String> reasons = new TreeSet<>();
+            reasons.addAll(entry.getValue().configurationBlockers());
+            ModelContract contract = schemaCatalog.contracts().get(entry.getValue().name());
+            if (contract == null || !contract.verified()) {
+                reasons.add("SOURCE_FIELDS_UNVERIFIED");
+            }
+            if (!unresolvedRefs.getOrDefault(entry.getKey(), List.of()).isEmpty()) {
+                reasons.add("SOURCE_PACKAGE_MISSING");
+            }
+            SourceOnlyJinjaGuard.Risk risk = jinjaRisks.getOrDefault(
+                entry.getKey(),
+                new SourceOnlyJinjaGuard.Risk(false, false, null, List.of())
+            );
+            if (!dynamicCalls.getOrDefault(entry.getKey(), List.of()).isEmpty() || risk.dynamic()) {
+                reasons.add("SOURCE_DEPENDENCY_DYNAMIC");
+            }
+            if (risk.macro()) {
+                reasons.add("SOURCE_MACRO_DEPENDENCY_UNVERIFIED");
+            }
+            if (!reasons.isEmpty()) {
+                result.put(entry.getKey(), reasons);
+            }
+        }
+        return result;
+    }
+
+    private static Map<String, Set<String>> propagateBlockReasons(
+        Set<String> modelIds,
+        Map<String, List<String>> dependencies,
+        Map<String, Set<String>> directBlocks
+    ) {
+        TreeMap<String, Set<String>> result = new TreeMap<>();
+        directBlocks.forEach((model, reasons) -> result.put(model, new TreeSet<>(reasons)));
+        TreeMap<String, Set<String>> downstream = new TreeMap<>();
+        for (Map.Entry<String, List<String>> entry : dependencies.entrySet()) {
+            for (String dependency : entry.getValue()) {
+                if (modelIds.contains(dependency)) {
+                    downstream.computeIfAbsent(dependency, ignored -> new TreeSet<>()).add(entry.getKey());
+                }
+            }
+        }
+        TraversalBudget budget = new TraversalBudget(MAX_GRAPH_TRAVERSAL_STEPS);
+        for (Map.Entry<String, Set<String>> root : directBlocks.entrySet()) {
+            ArrayList<String> pending = new ArrayList<>();
+            Set<String> visited = new HashSet<>();
+            pending.add(root.getKey());
+            for (int index = 0; index < pending.size(); index++) {
+                budget.consume();
+                String current = pending.get(index);
+                if (!visited.add(current)) {
+                    continue;
+                }
+                if (!current.equals(root.getKey())) {
+                    result.computeIfAbsent(current, ignored -> new TreeSet<>()).addAll(root.getValue());
+                }
+                for (String caller : downstream.getOrDefault(current, Set.of())) {
+                    budget.consume();
+                    pending.add(caller);
+                }
+            }
+        }
+        TreeMap<String, Set<String>> immutable = new TreeMap<>();
+        result.forEach((model, reasons) -> immutable.put(model, Set.copyOf(reasons)));
+        return Map.copyOf(immutable);
+    }
+
+    private static void addSourceOnlyBlockIssues(List<ImportIssue> issues, Map<String, Set<String>> closureBlocks) {
+        closureBlocks.forEach((uniqueId, reasons) ->
+            reasons.forEach(reason ->
+                issues.add(
+                    new ImportIssue(
+                        reason,
+                        "WARNING",
+                        "$.models[" + uniqueId + "]",
+                        uniqueId,
+                        blockMessage(reason),
+                        blockRecovery(reason)
+                    )
+                )
+            )
+        );
+    }
+
+    private static void addLegacyDependencyIssues(
+        List<ImportIssue> issues,
+        Map<String, List<String>> unresolvedRefs,
+        Map<String, List<String>> dynamicCalls
+    ) {
+        unresolvedRefs.forEach((uniqueId, missing) -> {
+            if (!missing.isEmpty()) {
+                issues.add(
+                    new ImportIssue(
+                        "DBT_SOURCE_PROJECT_REF_UNRESOLVED",
+                        "WARNING",
+                        "$.models[" + uniqueId + "].dependencies",
+                        uniqueId,
+                        "SQL 引用了 ZIP 内不存在的 literal ref",
+                        "INCLUDE_DEPENDENCY"
+                    )
+                );
+            }
+        });
+        dynamicCalls.forEach((uniqueId, dynamic) -> {
+            if (!dynamic.isEmpty()) {
+                issues.add(
+                    new ImportIssue(
+                        "DBT_SOURCE_PROJECT_DYNAMIC_REFERENCE",
+                        "WARNING",
+                        "$.models[" + uniqueId + "].dependencies",
+                        uniqueId,
+                        "SQL 包含无法静态证明的 ref/source 调用",
+                        "REUPLOAD"
+                    )
+                );
+            }
+        });
+    }
+
+    private static String blockMessage(String reason) {
+        return switch (reason) {
+            case "SOURCE_FIELDS_UNVERIFIED" -> "模型没有 enforced 且 name/data_type 完整唯一的 schema 字段契约";
+            case "SOURCE_DEPENDENCY_DYNAMIC" -> "模型或其上游包含无法静态证明的动态依赖";
+            case "SOURCE_MACRO_DEPENDENCY_UNVERIFIED" -> "模型或其上游包含可能隐藏结构或依赖的 macro";
+            case "SOURCE_PACKAGE_MISSING" -> "模型或其上游引用了 ZIP 内缺失的 package/model";
+            default -> "source-only 模型的技术结构或依赖无法静态证明";
+        };
+    }
+
+    private static String blockRecovery(String reason) {
+        return "SOURCE_PACKAGE_MISSING".equals(reason) ? "INCLUDE_DEPENDENCY" : "REUPLOAD";
+    }
+
     private static Optional<Path> locateProjectRoot(Path archiveRoot) {
         List<Path> candidates = new ArrayList<>();
         addProjectRoot(candidates, archiveRoot);
@@ -797,7 +1004,12 @@ final class DbtSourceProjectModelPackageAdapter {
         );
     }
 
-    private static String fingerprint(Path projectRoot, ProjectMetadata project, List<ModelSeed> seeds) {
+    private static String fingerprint(
+        Path projectRoot,
+        ProjectMetadata project,
+        List<ModelSeed> seeds,
+        String schemaFingerprint
+    ) {
         StringBuilder value = new StringBuilder(project.name()).append('\n').append(project.version()).append('\n');
         seeds
             .stream()
@@ -813,7 +1025,10 @@ final class DbtSourceProjectModelPackageAdapter {
                     .append(seed.materialization())
                     .append('\n')
             );
-        value.append(relative(projectRoot, projectRoot.resolve("dbt_project.yml")));
+        value
+            .append(relative(projectRoot, projectRoot.resolve("dbt_project.yml")))
+            .append('\n')
+            .append(schemaFingerprint == null ? "" : schemaFingerprint);
         return value.toString();
     }
 
@@ -1164,7 +1379,8 @@ final class DbtSourceProjectModelPackageAdapter {
         List<String> tags,
         String description,
         Map<String, Object> config,
-        String evidenceSource
+        String evidenceSource,
+        Set<String> configurationBlockers
     ) {}
 
     private static final class TraversalBudget {

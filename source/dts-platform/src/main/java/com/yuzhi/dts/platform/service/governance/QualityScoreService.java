@@ -32,6 +32,7 @@ public class QualityScoreService {
     );
 
     private static final String UNKNOWN_DIMENSION = "OTHER";
+    private static final int MAX_PERIOD_DAYS = 365;
 
     private final GovQualityRunRepository runRepository;
     private final QualityDatasetReadGuard qualityDatasetReadGuard;
@@ -63,6 +64,9 @@ public class QualityScoreService {
     }
 
     public QualityScoreResult calculate(UUID datasetId, int periodDays, String activeDeptHeader) {
+        if (periodDays < 1 || periodDays > MAX_PERIOD_DAYS) {
+            throw new IllegalArgumentException("统计周期必须在 1 到 " + MAX_PERIOD_DAYS + " 天之间");
+        }
         qualityDatasetReadGuard.requireReadable(datasetId, activeDeptHeader);
         Instant now = Instant.now();
         Instant periodStart = now.minus(java.time.Duration.ofDays(periodDays));
@@ -185,26 +189,13 @@ public class QualityScoreService {
      * SUCCEEDED = 100, FAILED = 0.
      */
     private int computeRunScore(GovQualityRun run) {
-        Integer rowsTotal = run.getRowsTotal();
-        if (rowsTotal != null && rowsTotal > 0) {
-            int failing = run.getFailingRowCount() != null ? run.getFailingRowCount() : 0;
-            double passRate = (rowsTotal - failing) * 100.0 / rowsTotal;
-            return (int) Math.round(Math.max(0.0, Math.min(100.0, passRate)));
-        }
-        // Legacy data: no rowsTotal — use status-based scoring
-        String status = run.getStatus();
-        if (
-            "SUCCEEDED".equalsIgnoreCase(status) ||
-            "SUCCESS".equalsIgnoreCase(status) ||
-            "PASSED".equalsIgnoreCase(status) ||
-            "COMPLETED".equalsIgnoreCase(status)
-        ) {
-            return 100;
-        }
-        if ("FAILED".equalsIgnoreCase(status)) {
-            return 0;
-        }
-        return 0;
+        Integer score = QualityRunOutcomeSemantics.passRate(
+            run.getStatus(),
+            run.getErrorCategory(),
+            run.getRowsTotal(),
+            run.getFailingRowCount()
+        );
+        return score != null ? score : 0;
     }
 
     private boolean isScorableRun(GovQualityRun run) {

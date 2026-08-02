@@ -96,12 +96,6 @@ server:
     mime-types: text/html,text/xml,text/plain,text/css,application/javascript,application/json,image/svg+xml
     min-response-size: 1024
 
-# Production must name the audit ownership boundary explicitly. There is no
-# fallback tenant because an accidental cross-tenant audit stream is unsafe.
-auditing:
-  tenancy-mode: ${AUDIT_TENANCY_MODE}
-  tenant-id: ${AUDIT_TENANT_ID}
-
 # ===================================================================
 # JHipster specific properties
 #

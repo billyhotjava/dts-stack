@@ -18,6 +18,7 @@ import { UiStageNotice, WorkspacePage } from "../components/WorkspacePage";
 import { dataModelingPath } from "../navigation";
 import type { WorkspacePageProps } from "../types";
 import "./modeling-metrics.css";
+import "./modeling-dialogs.css";
 import "./modeling-metrics-extended.css";
 
 const TYPE_CONFIG: Array<{

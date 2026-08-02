@@ -3,16 +3,21 @@ package com.yuzhi.dts.platform.repository.modeling;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ArtifactWrite;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.GeneratedInput;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.InputMode;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.SaveImplementationCommand;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationChecksumCodec;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelStatus;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -22,6 +27,63 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 class ModelLifecycleRepositoryTest {
+
+    @Test
+    void restoresImportedDbtHeadAgainstOldPinsAndAppendsANewRevision() {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), any(Object[].class))).thenReturn(1);
+        ModelLifecycleRepository repository = new ModelLifecycleRepository(jdbcTemplate, new ObjectMapper());
+        UUID modelId = UUID.fromString("30000000-0000-0000-0000-000000000083");
+        UUID planId = UUID.fromString("10000000-0000-0000-0000-000000000083");
+        ModelSpecView restored = mock(ModelSpecView.class);
+        when(restored.id()).thenReturn(modelId);
+        when(restored.planId()).thenReturn(planId);
+        when(restored.revision()).thenReturn(12);
+        when(restored.checksum()).thenReturn("c".repeat(64));
+        when(restored.status()).thenReturn(ModelStatus.DRAFT);
+        when(restored.implementationMode()).thenReturn(ImplementationMode.DBT_MANAGED);
+        SaveImplementationCommand command = new SaveImplementationCommand(
+            InputMode.GENERATED,
+            List.of(new GeneratedInput("DBT", Map.of("projectKey", "finance", "dbtUniqueId", "model.finance.budget"))),
+            List.of(),
+            Map.of(),
+            ImplementationMode.DBT_MANAGED,
+            "table",
+            "undo-83"
+        );
+        String restoredImplementationChecksum = new ModelImplementationChecksumCodec(new ObjectMapper())
+            .contentChecksum(command);
+
+        int changed = repository.restoreImportedDbtImplementation(
+            "tenant-a",
+            "alice",
+            restored,
+            "finance",
+            "model.finance.budget",
+            command,
+            11,
+            "a".repeat(64),
+            6,
+            "b".repeat(64),
+            restoredImplementationChecksum,
+            Instant.parse("2026-08-02T00:00:00Z")
+        );
+
+        assertThat(changed).isEqualTo(1);
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Object[]> arguments = ArgumentCaptor.forClass(Object[].class);
+        verify(jdbcTemplate).queryForObject(sql.capture(), eq(Integer.class), arguments.capture());
+        assertThat(sql.getValue())
+            .contains("from modeling_model_spec")
+            .contains("spec.revision = ? and spec.current_checksum = ? and spec.status = 'DRAFT'")
+            .contains("implementation.model_revision = ? and implementation.model_checksum = ?")
+            .contains("implementation.implementation_revision = ?")
+            .contains("implementation.current_implementation_checksum = ?")
+            .contains("implementation_revision = locked_head.implementation_revision + 1")
+            .contains("insert into modeling_model_implementation_revision");
+        assertThat(sql.getValue().chars().filter(character -> character == '?').count())
+            .isEqualTo((long) arguments.getValue().length);
+    }
 
     @Test
     void persistsImplementationBoundEphemeralStgWithoutPhysicalAssetAndNeverUpdatesDbtManagedRows() {

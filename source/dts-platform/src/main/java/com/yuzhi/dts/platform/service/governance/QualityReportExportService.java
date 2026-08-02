@@ -4,9 +4,11 @@ import com.yuzhi.dts.platform.domain.governance.GovQualityRun;
 import com.yuzhi.dts.platform.domain.governance.GovRule;
 import com.yuzhi.dts.platform.repository.governance.GovQualityRunRepository;
 import com.yuzhi.dts.platform.repository.governance.GovRuleRepository;
+import com.yuzhi.dts.platform.security.policy.AssetAction;
 import com.yuzhi.dts.platform.service.governance.dto.QualityScoreResult;
 import com.yuzhi.dts.platform.service.governance.dto.QualityScoreResult.DimensionScore;
 import com.yuzhi.dts.platform.service.governance.dto.QualityScoreResult.TrendPoint;
+import com.yuzhi.dts.platform.service.security.AccessChecker;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Comparator;
@@ -20,6 +22,7 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,17 +44,20 @@ public class QualityReportExportService {
     private final GovRuleRepository ruleRepository;
     private final GovQualityRunRepository runRepository;
     private final QualityDatasetReadGuard qualityDatasetReadGuard;
+    private final AccessChecker accessChecker;
 
     public QualityReportExportService(
         QualityScoreService qualityScoreService,
         GovRuleRepository ruleRepository,
         GovQualityRunRepository runRepository,
-        QualityDatasetReadGuard qualityDatasetReadGuard
+        QualityDatasetReadGuard qualityDatasetReadGuard,
+        AccessChecker accessChecker
     ) {
         this.qualityScoreService = qualityScoreService;
         this.ruleRepository = ruleRepository;
         this.runRepository = runRepository;
         this.qualityDatasetReadGuard = qualityDatasetReadGuard;
+        this.accessChecker = accessChecker;
     }
 
     public byte[] exportExcel(UUID datasetId, int periodDays) throws IOException {
@@ -59,7 +65,10 @@ public class QualityReportExportService {
     }
 
     public byte[] exportExcel(UUID datasetId, int periodDays, String activeDeptHeader) throws IOException {
-        qualityDatasetReadGuard.requireReadable(datasetId, activeDeptHeader);
+        var dataset = qualityDatasetReadGuard.requireReadable(datasetId, activeDeptHeader);
+        if (!accessChecker.canPerform(dataset, AssetAction.EXPORT)) {
+            throw new AccessDeniedException("asset_action_not_allowed:" + AssetAction.EXPORT.code());
+        }
         QualityScoreResult scoreResult = qualityScoreService.calculate(datasetId, periodDays, activeDeptHeader);
         List<GovRule> rules = ruleRepository.findByDatasetId(datasetId);
 
@@ -129,20 +138,37 @@ public class QualityReportExportService {
             if (latestRun != null) {
                 String status = latestRun.getStatus();
                 row.createCell(3).setCellValue(status != null ? status : "");
-                // passRate: SUCCESS=100%, FAILED with failingRowCount info available
-                if ("SUCCESS".equalsIgnoreCase(status)) {
+                if (isPassed(status)) {
                     row.createCell(4).setCellValue("100%");
-                    row.createCell(5).setCellValue(0);
                 } else {
-                    row.createCell(4).setCellValue("-");
-                    row.createCell(5).setCellValue(0);
+                    row.createCell(4).setCellValue(formatPassRate(latestRun));
                 }
+                row.createCell(5).setCellValue(Math.max(0, latestRun.getFailingRowCount() != null ? latestRun.getFailingRowCount() : 0));
             } else {
                 row.createCell(3).setCellValue("-");
                 row.createCell(4).setCellValue("-");
                 row.createCell(5).setCellValue("-");
             }
         }
+    }
+
+    private boolean isPassed(String status) {
+        return "SUCCESS".equalsIgnoreCase(status) ||
+            "SUCCEEDED".equalsIgnoreCase(status) ||
+            "PASSED".equalsIgnoreCase(status);
+    }
+
+    private String formatPassRate(GovQualityRun run) {
+        if (run == null) {
+            return "-";
+        }
+        Integer passRate = QualityRunOutcomeSemantics.passRate(
+            run.getStatus(),
+            run.getErrorCategory(),
+            run.getRowsTotal(),
+            run.getFailingRowCount()
+        );
+        return passRate != null ? String.format(java.util.Locale.ROOT, "%.2f%%", passRate.doubleValue()) : "-";
     }
 
     private void buildTrendSheet(XSSFWorkbook workbook, QualityScoreResult scoreResult) {

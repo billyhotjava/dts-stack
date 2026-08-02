@@ -111,7 +111,7 @@ class DbtModelArchiveInspectServiceTest {
             });
         assertThat(result.issues())
             .extracting(issue -> issue.code())
-            .contains("DBT_SOURCE_PROJECT_STATIC_ANALYSIS", "MODEL_PACKAGE_SEMANTIC_CONFIRMATION_REQUIRED")
+            .contains("DBT_SOURCE_PROJECT_STATIC_ANALYSIS", "SOURCE_SEMANTICS_INCOMPLETE")
             .doesNotContain("LEGACY_MANIFEST_REQUIRED");
     }
 
@@ -164,7 +164,13 @@ class DbtModelArchiveInspectServiceTest {
         assertThat(result.models()).singleElement().satisfies(model -> {
             assertThat(model.dependencies()).isEmpty();
             assertThat(model.conversion().mode().name()).isEqualTo("BLOCKED");
-            assertThat(model.conversion().reasonCodes()).contains("DEPENDENCY_GRAPH_UNVERIFIED");
+            assertThat(model.conversion().reasonCodes())
+                .containsExactlyInAnyOrder(
+                    "SOURCE_SEMANTICS_INCOMPLETE",
+                    "SOURCE_FIELDS_UNVERIFIED",
+                    "SOURCE_PACKAGE_MISSING",
+                    "SOURCE_DEPENDENCY_DYNAMIC"
+                );
         });
         assertThat(result.sources()).isEmpty();
         assertThat(result.issues())
@@ -275,7 +281,7 @@ class DbtModelArchiveInspectServiceTest {
             });
         assertThat(result.issues())
             .extracting(issue -> issue.code())
-            .contains("DBT_SOURCE_PROJECT_STATIC_ANALYSIS", "MODEL_PACKAGE_SEMANTIC_CONFIRMATION_REQUIRED")
+            .contains("DBT_SOURCE_PROJECT_STATIC_ANALYSIS", "SOURCE_SEMANTICS_INCOMPLETE")
             .doesNotContain("LEGACY_MANIFEST_REQUIRED");
     }
 

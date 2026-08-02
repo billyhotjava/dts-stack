@@ -56,10 +56,12 @@ public class ModelMaterializationSourceSnapshotRepository {
     }
 
     public List<InputSnapshot> findDispatchInputs(UUID dispatchId) {
+        // candidate_version is the dispatch creation CAS. The Candidate head advances while the
+        // entry's implementation identity remains the immutable snapshot for this materialization.
         return jdbcTemplate.query(
             LOCKED_INPUTS_SELECT +
                 " join modeling_materialization_dispatch d " +
-                "on d.tenant_id = c.tenant_id and d.candidate_id = c.id and d.candidate_version = c.version " +
+                "on d.tenant_id = c.tenant_id and d.candidate_id = c.id " +
                 "where d.id = ? order by e.sort_order, e.id",
             ModelMaterializationSourceSnapshotRepository::map,
             dispatchId

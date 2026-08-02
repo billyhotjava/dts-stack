@@ -16,6 +16,9 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface CatalogDatasetRepository extends JpaRepository<CatalogDataset, UUID>, JpaSpecificationExecutor<CatalogDataset> {
+    @EntityGraph(attributePaths = {"domain"})
+    List<CatalogDataset> findBySourceIdAndEnabledTrueOrderByNameAscIdAsc(UUID sourceId);
+
     List<CatalogDataset> findByDomain(CatalogDomain domain);
 
     long countByDomain(CatalogDomain domain);

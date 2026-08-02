@@ -1,0 +1,37 @@
+{
+  "metadata": {
+    "dbt_schema_version": "https://schemas.getdbt.com/dbt/catalog/v1.json",
+    "dbt_version": "1.8.7"
+  },
+  "nodes": {
+    "model.sprint83_artifact_rich.stg_orders": {
+      "unique_id": "model.sprint83_artifact_rich.stg_orders",
+      "metadata": {"type": "VIEW", "schema": "analytics", "name": "stg_orders"},
+      "columns": {
+        "order_id": {"name": "order_id", "type": "bigint", "index": 1},
+        "order_date": {"name": "order_date", "type": "date", "index": 2},
+        "amount": {"name": "amount", "type": "numeric(18,2)", "index": 3}
+      }
+    },
+    "model.sprint83_artifact_rich.fct_orders": {
+      "unique_id": "model.sprint83_artifact_rich.fct_orders",
+      "metadata": {"type": "BASE TABLE", "schema": "analytics", "name": "fct_orders"},
+      "columns": {
+        "order_id": {"name": "order_id", "type": "bigint", "index": 1},
+        "order_date": {"name": "order_date", "type": "date", "index": 2},
+        "amount": {"name": "amount", "type": "numeric(18,2)", "index": 3}
+      }
+    }
+  },
+  "sources": {
+    "source.sprint83_artifact_rich.raw.orders": {
+      "unique_id": "source.sprint83_artifact_rich.raw.orders",
+      "metadata": {"type": "BASE TABLE", "schema": "raw", "name": "orders"},
+      "columns": {
+        "order_id": {"name": "order_id", "type": "bigint", "index": 1},
+        "order_date": {"name": "order_date", "type": "date", "index": 2},
+        "amount": {"name": "amount", "type": "numeric(18,2)", "index": 3}
+      }
+    }
+  }
+}

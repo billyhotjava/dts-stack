@@ -21,6 +21,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -97,12 +98,17 @@ public class QualityDashboardService {
             }
         }
 
-        // 5. pendingFixRows: count FAILED runs as a proxy (no per-row count available)
+        // 5. pendingFixRows: sum actual failing row counts from visible failed runs
         List<GovQualityRun> failedRuns = visibleRuns(
             runRepository.findTop100ByStatusOrderByCreatedDateDesc("FAILED"),
             readableDatasetIds
         );
-        long pendingFixRows = failedRuns.size();
+        long pendingFixRows = failedRuns
+            .stream()
+            .map(GovQualityRun::getFailingRowCount)
+            .filter(Objects::nonNull)
+            .mapToLong(value -> Math.max(0, value))
+            .sum();
 
         // 6. trend7d: pass rate per day for the last 7 days
         Instant sevenDaysAgo = Instant.now().minus(7, ChronoUnit.DAYS);
@@ -179,8 +185,8 @@ public class QualityDashboardService {
             if (run.getDatasetId() == null) {
                 continue;
             }
-            // Count each FAILED run as 1 (no per-row count available on entity)
-            byDataset.merge(run.getDatasetId(), 1L, Long::sum);
+            long failingRows = run.getFailingRowCount() != null ? Math.max(0, run.getFailingRowCount()) : 0L;
+            byDataset.merge(run.getDatasetId(), failingRows, Long::sum);
             // Use rule name as a proxy for dataset name if binding alias isn't available
             if (!datasetNames.containsKey(run.getDatasetId()) && run.getBinding() != null) {
                 String alias = run.getBinding().getDatasetAlias();

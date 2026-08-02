@@ -39,6 +39,8 @@ class QualityDashboardAuthorizationTest {
         GovRuleBinding hiddenBinding = binding(HIDDEN_ID, "hidden-table");
         GovQualityRun readableRun = run(readableRule, readableBinding, READABLE_ID);
         GovQualityRun hiddenRun = run(hiddenRule, hiddenBinding, HIDDEN_ID);
+        readableRun.setFailingRowCount(12);
+        hiddenRun.setFailingRowCount(99);
 
         when(datasetRepository.findAll()).thenReturn(List.of(readable, hidden));
         when(readGuard.readableDatasetIds(List.of(readable, hidden), "dept-a")).thenReturn(Set.of(READABLE_ID));
@@ -63,10 +65,11 @@ class QualityDashboardAuthorizationTest {
         assertThat(dashboard.coveredDatasets()).isEqualTo(1);
         assertThat(dashboard.totalDatasets()).isEqualTo(1);
         assertThat(dashboard.todayFailed()).isEqualTo(1);
-        assertThat(dashboard.pendingFixRows()).isEqualTo(1);
+        assertThat(dashboard.pendingFixRows()).isEqualTo(12);
         assertThat(dashboard.topFailingDatasets()).singleElement().satisfies(dataset ->
             assertThat(dataset.name()).isEqualTo("readable-table")
         );
+        assertThat(dashboard.topFailingDatasets().get(0).failingRows()).isEqualTo(12);
         assertThat(dashboard.recentFailedRuns()).singleElement().satisfies(run -> {
             assertThat(run.ruleName()).isEqualTo("readable-rule");
             assertThat(run.dataset()).isEqualTo("readable-table");

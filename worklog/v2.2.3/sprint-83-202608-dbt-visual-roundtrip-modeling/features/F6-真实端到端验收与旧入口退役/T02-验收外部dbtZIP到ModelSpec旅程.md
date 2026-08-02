@@ -2,7 +2,7 @@
 
 **优先级**：P0  
 **状态**：DRAFT  
-**依赖**：F3、F5
+**依赖**：F3/T01～T04、F5/T01～T03
 
 ## 目标
 
@@ -15,7 +15,7 @@
 3. 映射 WarehousePlan/域/来源并补业务语义。
 4. 查看 CREATE/UPDATE/SKIP/CONFLICT/BLOCKED 与 closure。
 5. apply，刷新恢复，核对逐项结果。
-6. 深链进入高级模式，校验 revision/checksum 与数据库一致。
+6. 默认进入普通业务可视化，确认 SQL/dbt 技术正文不可见并校验 revision/checksum；技术维护者可在同一模型详情显式进入高级 dbt 实现。
 
 ## 证据
 

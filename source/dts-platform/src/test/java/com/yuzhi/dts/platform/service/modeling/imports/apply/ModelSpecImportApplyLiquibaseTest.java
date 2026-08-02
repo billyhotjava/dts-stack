@@ -14,6 +14,8 @@ class ModelSpecImportApplyLiquibaseTest {
         "/config/liquibase/changelog/20260725_04_model_spec_import_apply.xml";
     private static final String LEASE_CHANGELOG =
         "/config/liquibase/changelog/20260725_05_model_spec_import_apply_lease.xml";
+    private static final String CANONICAL_STATUS_CHANGELOG =
+        "/config/liquibase/changelog/20260802_01_model_spec_import_apply_status_canonical.xml";
 
     @Test
     void definesAttemptResultIdempotencyRetryAndFrozenClosureControlPlane() throws Exception {
@@ -86,6 +88,52 @@ class ModelSpecImportApplyLiquibaseTest {
             .contains("ck_model_spec_import_apply_lease")
             .contains("status = 'RUNNING'")
             .contains("ROLLBACK_BLOCKED_MODEL_SPEC_IMPORT_APPLY_LEASE_FORWARD_ONLY");
+    }
+
+    @Test
+    void migratesLegacyApplyStatusesAndSummaryToTheSingleCanonicalAlgebra() throws IOException {
+        String xml = read(CANONICAL_STATUS_CHANGELOG);
+
+        assertThat(xml)
+            .contains("WHERE status = 'REPLAYED'")
+            .contains("SET status = 'SKIPPED'")
+            .contains("'RUNNING', 'SUCCESS', 'PARTIAL', 'FAILED', 'BLOCKED'")
+            .contains("'CREATED', 'UPDATED', 'SKIPPED', 'FAILED', 'BLOCKED'")
+            .contains("'selected', canonical.selected")
+            .contains("'pending', canonical.pending")
+            .contains("'succeeded', canonical.succeeded")
+            .contains("ck_model_spec_import_apply_summary_canonical")
+            .contains("(summary_json -&gt;&gt; 'succeeded')::int &gt;= 0")
+            .contains("(summary_json -&gt;&gt; 'created')::int &gt;= 0")
+            .contains("(summary_json -&gt;&gt; 'updated')::int &gt;= 0")
+            .contains("(summary_json -&gt;&gt; 'skipped')::int &gt;= 0")
+            .contains("(summary_json -&gt;&gt; 'failed')::int &gt;= 0")
+            .contains("(summary_json -&gt;&gt; 'blocked')::int &gt;= 0")
+            .contains("jsonb_array_elements_text(attempt.selected_closure_json)")
+            .contains("EXCEPT")
+            .contains("result.dbt_unique_id")
+			.contains("issues_json")
+			.contains("'stage'")
+			.contains("'category'")
+			.contains("'retryable'")
+            .contains("'correlationId'")
+            .contains("'dependencyUniqueId'")
+			.contains("ck_model_spec_import_apply_issue_contract")
+			.contains("INSPECT", "MAPPING", "PREVIEW", "APPLY", "RETRY", "UNDO")
+			.contains(
+				"VALIDATION",
+				"SECURITY",
+				"DEPENDENCY",
+				"CONFLICT",
+				"PERMISSION",
+				"STALE",
+				"PERSISTENCE",
+				"INTERNAL"
+			)
+			.contains("legacy-", "md5(result.id::text")
+			.doesNotContain("THEN 'RECOVERY'", "THEN 'LEASE'", "THEN 'LEGACY'", "'null'::jsonb")
+            .contains("ROLLBACK_BLOCKED_MODEL_SPEC_IMPORT_STATUS_CANONICAL_FORWARD_ONLY");
+        assertThat(xml).doesNotContain("ADD CONSTRAINT ck_model_spec_import_apply_result_status\n                CHECK (status IN ('CREATED', 'UPDATED', 'SKIPPED', 'REPLAYED'");
     }
 
     private static InputStream requiredStream(String resource) {

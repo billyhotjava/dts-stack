@@ -658,27 +658,10 @@ export const getSprint27AuditEvidence = () =>
 export const getSprint27ReleaseGovernance = (params: any = {}) =>
 	api.get<Sprint27ReleaseGovernance>({ url: "/platform/sprint27/release-governance", params });
 
-// dbt project file management
-export const getDbtFileTree = () => api.get({ url: "/etl/dbt/files/tree" });
-export const getDbtFileContent = (path: string) => api.get({ url: "/etl/dbt/files/content", params: { path } });
-export const saveDbtFileContent = (data: { path: string; content: string }) =>
-	api.put({ url: "/etl/dbt/files/content", data });
-export const createDbtFile = (data: { path: string; type: "file" | "directory"; content?: string }) =>
-	api.post({ url: "/etl/dbt/files", data });
-export const deleteDbtFile = (path: string) => api.delete({ url: "/etl/dbt/files", params: { path } });
-export const renameDbtFile = (data: { oldPath: string; newPath: string }) =>
-	api.put({ url: "/etl/dbt/files/rename", data });
-export const uploadDbtArchive = (data: FormData, clean = false) =>
-	api.post<{ extracted: string[]; skipped: string[]; cleaned: string[]; cleanBeforeExtract: boolean }>(
-		withModelingRequestTimeout({ url: "/etl/dbt/files/upload-archive", params: { clean }, data }),
-	);
 export const listDbtModels = () => api.get({ url: "/etl/dbt/models" });
 export const syncDbtModels = () => api.post(withModelingRequestTimeout({ url: "/etl/dbt/models/sync" }));
-export const getDbtSyncStatus = (params?: { models?: string }) =>
-	api.get(withModelingRequestTimeout({ url: "/etl/dbt/sync/status", params }));
-export const checkDagReady = (params?: { selector?: string }) =>
-	api.get(withModelingRequestTimeout({ url: "/etl/dbt/dag/ready", params }));
-export const listDbtRuns = (limit = 20, params?: { dagId?: string; selector?: string }) =>
+export const getDbtSyncStatus = () => api.get(withModelingRequestTimeout({ url: "/etl/dbt/sync/status" }));
+export const listDbtRuns = (limit = 20, params?: { dagId?: string }) =>
 	api.get(withModelingRequestTimeout({ url: "/etl/dbt/runs", params: { limit, ...(params || {}) } }));
 
 // dbt execution log (from Airflow)
@@ -710,21 +693,9 @@ export type AirflowTaskInstance = {
 	operator?: string;
 };
 
-// dbt data preview
-export const previewDbtModel = (model: string, limit = 100) =>
-	api.get(withModelingRequestTimeout({ url: "/etl/dbt/preview", params: { model, limit } }));
 export const getDbtModelDiagnostics = (model: string) =>
 	api.get(withModelingRequestTimeout({ url: `/etl/dbt/models/${encodeURIComponent(model)}/diagnostics` }));
 
-// dbt git operations
-export const getDbtGitStatus = () => api.get({ url: "/etl/dbt/git/status" });
-export const commitDbtChanges = (data: { message: string; authorName?: string; authorEmail?: string }) =>
-	api.post({ url: "/etl/dbt/git/commit", data });
-export const getDbtGitLog = (limit = 20) => api.get({ url: "/etl/dbt/git/log", params: { limit } });
-export const getDbtGitDiff = (path?: string) => api.get({ url: "/etl/dbt/git/diff", params: path ? { path } : {} });
-export const revertDbtFile = (path: string) => api.post({ url: "/etl/dbt/git/revert", data: { path } });
-export const getDbtFileAtCommit = (path: string, commitHash: string) =>
-	api.get({ url: "/etl/dbt/git/file-at-commit", params: { path, commitHash } });
 export const createStandardBindingDraftSnapshot = (data: any) =>
 	api.post(withModelingRequestTimeout({ url: "/modeling/standard-binding-drafts", data }));
 export const getStandardBindingDraftSnapshot = (id: string) =>
@@ -1074,6 +1045,18 @@ export interface QualityScoreResult {
 	trend: { date: string; overall: number }[];
 }
 
+export interface QualityDatasetOption {
+	id: string;
+	name: string;
+	schemaName?: string;
+	tableName?: string;
+	hiveDatabase?: string;
+	hiveTable?: string;
+	sourceId?: string;
+	domainId?: string;
+	domainName?: string;
+}
+
 export interface RuleRunHistory {
 	runId: string;
 	time: string;
@@ -1084,40 +1067,14 @@ export interface RuleRunHistory {
 
 export const getQualityDashboard = () => api.get<QualityDashboard>({ url: "/governance/quality/dashboard" });
 
+export const listQualityDatasetOptions = () =>
+	api.get<QualityDatasetOption[]>({ url: "/governance/quality/datasets" });
+
 export const getQualityScore = (datasetId: string, periodDays?: number) =>
 	api.get<QualityScoreResult>({ url: "/governance/quality/score", params: { datasetId, periodDays } });
 
 export const getRuleHistory = (ruleId: string, limit?: number) =>
 	api.get<RuleRunHistory[]>({ url: `/governance/quality/rules/${ruleId}/history`, params: { limit } });
-
-// Batch cleansing preview / execute
-export interface CleansingPreview {
-	affectedRows: number;
-	unresolvableRows: number;
-	samples: { rowId: number; before: string; after: string }[];
-}
-
-export const previewCleansing = (data: { runId: string; functionId: string; limit?: number }) =>
-	api.post<CleansingPreview>({ url: "/governance/quality/cleansing/preview", data });
-
-export const executeCleansing = (data: { runId: string; functionId: string }) =>
-	api.post<{ affectedRows: number }>({ url: "/governance/quality/cleansing/execute", data });
-
-// SQL Repair
-export const previewSqlRepair = (data: { sql: string; limit?: number }) =>
-	api.post<{
-		affectedRows: number;
-		samples: { rowId: any; columnValues: Record<string, string>; newValues?: Record<string, string> }[];
-	}>({
-		url: "/governance/quality/sql-repair/preview",
-		data,
-	});
-
-export const executeSqlRepair = (data: { sql: string; runId?: string }) =>
-	api.post<{ affectedRows: number; auditLogId: string }>({
-		url: "/governance/quality/sql-repair/execute",
-		data,
-	});
 
 // Governance
 export const listQualityRules = () => api.get({ url: "/governance/quality/rules" });
@@ -1146,30 +1103,9 @@ export const deleteQualityTemplate = (id: string) => api.delete({ url: `/governa
 export const previewTemplateSQL = (id: string, params: any) =>
 	api.post({ url: `/governance/quality/templates/${id}/preview`, data: params });
 
-// Cleansing functions
-export const listCleansingFunctions = () => api.get({ url: "/governance/cleansing/functions" });
-export const createCleansingFunction = (data: any) => api.post({ url: "/governance/cleansing/functions", data });
-export const updateCleansingFunction = (id: string, data: any) =>
-	api.put({ url: `/governance/cleansing/functions/${id}`, data });
-export const deleteCleansingFunction = (id: string) => api.delete({ url: `/governance/cleansing/functions/${id}` });
-
-// Quality auto-trigger
-export const triggerAutoQuality = (data: any) => api.post({ url: "/governance/quality/auto-trigger", data });
-
 // Failing rows
 export const listFailingRows = (runId: string, params: any = {}) =>
 	api.get({ url: `/governance/quality/runs/${runId}/failing-rows`, params });
-
-// Data editor (ODS)
-export const listOdsTables = () => api.get({ url: "/governance/data-editor/tables" });
-export const listOdsColumns = (tableName: string) => api.get({ url: `/governance/data-editor/${tableName}/columns` });
-export const listOdsRows = (tableName: string, params: any = {}) =>
-	api.get({ url: `/governance/data-editor/${tableName}/rows`, params });
-export const updateOdsRow = (tableName: string, rowId: string, data: any) =>
-	api.put({ url: `/governance/data-editor/${tableName}/rows/${rowId}`, data });
-export const insertOdsRow = (tableName: string, data: any) =>
-	api.post({ url: `/governance/data-editor/${tableName}/rows`, data });
-export const listEditLogs = (params: any = {}) => api.get({ url: "/governance/data-editor/audit-log", params });
 
 // Quality tasks (巡检计划)
 export const listQualityTasks = () => api.get<any[]>({ url: "/governance/quality/tasks" });
@@ -1189,6 +1125,8 @@ export const deleteComplianceBatch = (id: string) => api.delete({ url: `/governa
 
 export const listIssues = (params: any = {}) => api.get<any[]>({ url: "/governance/issues", params });
 export const getIssue = (id: string) => api.get({ url: `/governance/issues/${id}` });
+export const getIssueBySource = (sourceType: string, sourceId: string) =>
+	api.get({ url: "/governance/issues/by-source", params: { sourceType, sourceId } });
 export const createIssue = (data: any) => api.post({ url: "/governance/issues", data });
 export const updateIssue = (id: string, data: any) => api.put({ url: `/governance/issues/${id}`, data });
 export const closeIssue = (id: string, resolution?: string) =>

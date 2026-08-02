@@ -18,6 +18,27 @@ test("queued, running, and empty runs do not expose placeholder statistics", () 
 	assert.equal(getQualityRunCounts({ status: "PASSED", rowsTotal: 0, failingRowCount: 0 }).hasStatistics, false);
 });
 
+test("failed SQL execution never presents counted rows as fully passed", () => {
+	assert.deepEqual(
+		getQualityRunCounts({
+			status: "FAILED",
+			errorCategory: "SQL_EXECUTION_FAILED",
+			rowsTotal: 20,
+			failingRowCount: 0,
+		}),
+		{ total: 20, failed: 0, passed: 0, passRate: 0, hasStatistics: false },
+	);
+	assert.equal(
+		getQualityRunCounts({
+			status: "FAILED",
+			errorCategory: "QUALITY_VIOLATION",
+			rowsTotal: 20,
+			failingRowCount: 5,
+		}).passRate,
+		75,
+	);
+});
+
 test("only enabled published rules are executable, and monitor selection must match the dataset", () => {
 	const published = {
 		enabled: true,

@@ -14,8 +14,12 @@ const MONITORS = read("./MonitorPages.tsx");
 const REPORTS = read("./ReportPages.tsx");
 const RULE_EDITOR = read("./RuleEditorPage.tsx");
 const RULES = read("./RulesPages.tsx");
+const CONFIGURATION = read("./ConfigurationPages.tsx");
+const TEMPLATES = read("./TemplatePages.tsx");
 const RUN_ISSUES = read("./RunIssueDisposition.tsx");
 const RUNS = read("./RunPages.tsx");
+const DATASET_HOOK = read("./useDefaultLakeDatasets.ts");
+const PLATFORM_API = read("../../api/platformApi.ts");
 const OVERVIEW = read("./OverviewPage.tsx");
 const WORKFLOW_CENTER = read("../../pages/workbench/WorkflowCenterPage.tsx");
 const MENU_SEED = read("../../../../dts-admin/src/main/resources/config/data/portal-menu-seed.json");
@@ -102,10 +106,10 @@ test("rule detail clears stale route state and gates version mutations on the lo
 });
 
 test("issue creation stays closed unless a total-backed lookup completes and is repeated immediately before create", () => {
-	assert.match(RUN_ISSUES, /collectCompletePages<RunIssue>/);
-	assert.match(RUN_ISSUES, /creationBlockedReason/);
+	assert.match(PLATFORM_API, /getIssueBySource[\s\S]*?\/governance\/issues\/by-source/);
+	assert.match(RUN_ISSUES, /getIssueBySource\("QUALITY_RUN", runId\)/);
 	assert.match(RUN_ISSUES, /const verification = await lookupRunIssue\(\)/);
-	assert.match(RUN_ISSUES, /if \(!verification\.complete\)/);
+	assert.doesNotMatch(RUN_ISSUES, /collectCompletePages|listIssues|creationBlockedReason/);
 });
 
 test("unfinished or empty runs and a dashboard day without runs render explicit empty statistics", () => {
@@ -153,6 +157,39 @@ test("monitor editor isolates route loads and saves only the currently loaded ta
 	assert.match(MONITORS, /if \(operationTaskId && !isLoadedTaskCurrent\(operationTaskId\)\)/);
 });
 
+test("monitor detail ignores stale task responses and edits only the loaded route identity", () => {
+	assert.match(MONITORS, /const requestedTaskId = taskId/);
+	assert.match(MONITORS, /sequence !== loadSequence\.current \|\| activeTaskId\.current !== requestedTaskId/);
+	assert.match(MONITORS, /loadedTaskId\.current === taskId && String\(task\?\.id \|\| ""\) === taskId/);
+	assert.match(MONITORS, /disabled=\{!canManage \|\| !loadedTaskIsCurrent \|\| loading\}/);
+});
+
+test("template detail isolates route loads, saves, and previews to the loaded template identity", () => {
+	assert.match(TEMPLATES, /const requestedTemplateId = templateId/);
+	assert.match(
+		TEMPLATES,
+		/sequence !== loadSequence\.current \|\| activeTemplateId\.current !== requestedTemplateId/,
+	);
+	assert.match(TEMPLATES, /const operationTemplateId = templateId/);
+	assert.match(TEMPLATES, /await updateQualityTemplate\(operationTemplateId, templatePayload\(values\)\)/);
+	assert.match(TEMPLATES, /await previewTemplateSQL\(operationTemplateId/);
+	assert.match(TEMPLATES, /disabled=\{!canManage \|\| !loadedTemplateIsCurrent \|\| loading\}/);
+});
+
+test("table quality detail ignores stale dataset score and rule responses before binding a new rule", () => {
+	assert.match(CONFIGURATION, /const requestedDatasetId = datasetId/);
+	assert.match(
+		CONFIGURATION,
+		/sequence !== loadSequence\.current \|\| activeDatasetId\.current !== requestedDatasetId/,
+	);
+	assert.match(CONFIGURATION, /const visibleRules = loadedDatasetIsCurrent \? rules : \[\]/);
+	assert.match(CONFIGURATION, /const visibleScore = loadedDatasetIsCurrent \? score : undefined/);
+	assert.match(
+		CONFIGURATION,
+		/disabled=\{!canManage \|\| !loadedDatasetIsCurrent \|\| loading \|\| Boolean\(loadError\)\}/,
+	);
+});
+
 test("quality report commits score and query only for the current dataset and period request", () => {
 	assert.match(REPORTS, /const requestedDatasetId = datasetId/);
 	assert.match(REPORTS, /const requestedPeriodDays = periodDays/);
@@ -172,4 +209,14 @@ test("unsafe SQL repair and cleansing writes stay explicit and fail closed", () 
 	assert.match(RUNS, /<Button disabled>执行 SQL 修复（暂未开放）<\/Button>/);
 	assert.match(RUNS, /<Button disabled>执行数据清洗（暂未开放）<\/Button>/);
 	assert.doesNotMatch(RUNS, /previewSqlRepair|executeSqlRepair|previewCleansing|executeCleansing/);
+	assert.doesNotMatch(
+		PLATFORM_API,
+		/previewSqlRepair|executeSqlRepair|previewCleansing|executeCleansing|listCleansingFunctions|createCleansingFunction|updateCleansingFunction|deleteCleansingFunction|triggerAutoQuality/,
+	);
+});
+
+test("quality selectors use the object-filtered dataset endpoint instead of enumerating the catalog", () => {
+	assert.match(PLATFORM_API, /listQualityDatasetOptions[\s\S]*?\/governance\/quality\/datasets/);
+	assert.match(DATASET_HOOK, /listQualityDatasetOptions\(\)/);
+	assert.doesNotMatch(DATASET_HOOK, /listDatasets|collectDatasetPages|\/catalog\/datasets/);
 });

@@ -3,14 +3,13 @@ package com.yuzhi.dts.platform.web.rest;
 import com.yuzhi.dts.platform.config.AirflowProperties;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.config.Constants;
+import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.etl.AirflowClient;
 import com.yuzhi.dts.platform.service.etl.DbtConfigService;
 import com.yuzhi.dts.platform.service.etl.DbtManifestService;
 import com.yuzhi.dts.platform.service.etl.DbtModelDiagnosticsService;
 import com.yuzhi.dts.platform.service.etl.DbtAssetSyncService;
-import com.yuzhi.dts.platform.service.etl.DbtDagService;
-import com.yuzhi.dts.platform.service.etl.DbtPreviewService;
 import com.yuzhi.dts.platform.service.etl.DbtArtifactSyncState;
 import com.yuzhi.dts.platform.service.etl.DbtRunResultService;
 import com.yuzhi.dts.platform.service.etl.DbtSourceService;
@@ -23,6 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -31,13 +31,19 @@ import org.springframework.web.server.ResponseStatusException;
 @RequestMapping("/api/etl")
 public class EtlResource {
 
+    private static final String INFRA_MAINTAINER_EXPRESSION =
+        "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).INFRA_MAINTAINERS)";
+    private static final String AIRFLOW_SYNC_EXPRESSION =
+        INFRA_MAINTAINER_EXPRESSION +
+        " or (hasAuthority('" +
+        AuthoritiesConstants.SERVICE_INTERNAL +
+        "') and authentication.name == 'service:dts-airflow')";
+
     private final DbtConfigService dbtConfigService;
     private final DbtManifestService manifestService;
     private final DbtModelDiagnosticsService dbtModelDiagnosticsService;
     private final DbtSourceService dbtSourceService;
     private final DbtAssetSyncService dbtAssetSyncService;
-    private final DbtDagService dbtDagService;
-    private final DbtPreviewService dbtPreviewService;
     private final DbtRunResultService dbtRunResultService;
     private final DbtArtifactSyncState dbtArtifactSyncState;
     private final AirflowClient airflowClient;
@@ -54,8 +60,6 @@ public class EtlResource {
         DbtModelDiagnosticsService dbtModelDiagnosticsService,
         DbtSourceService dbtSourceService,
         DbtAssetSyncService dbtAssetSyncService,
-        DbtDagService dbtDagService,
-        DbtPreviewService dbtPreviewService,
         DbtRunResultService dbtRunResultService,
         DbtArtifactSyncState dbtArtifactSyncState,
         AirflowClient airflowClient,
@@ -69,8 +73,6 @@ public class EtlResource {
         this.dbtModelDiagnosticsService = dbtModelDiagnosticsService;
         this.dbtSourceService = dbtSourceService;
         this.dbtAssetSyncService = dbtAssetSyncService;
-        this.dbtDagService = dbtDagService;
-        this.dbtPreviewService = dbtPreviewService;
         this.dbtRunResultService = dbtRunResultService;
         this.dbtArtifactSyncState = dbtArtifactSyncState;
         this.airflowClient = airflowClient;
@@ -88,6 +90,7 @@ public class EtlResource {
     }
 
     @PutMapping("/dbt/config")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ApiResponse<DbtConfigService.DbtConfigView> updateDbtConfig(
         @RequestBody DbtConfigService.DbtWorkspaceConfigRequest request
     ) {
@@ -110,17 +113,8 @@ public class EtlResource {
         return response;
     }
 
-    @GetMapping("/dbt/preview")
-    public ApiResponse<DbtPreviewService.PreviewResult> previewModel(
-        @RequestParam String model,
-        @RequestParam(defaultValue = "100") int limit
-    ) {
-        DbtPreviewService.PreviewResult result = dbtPreviewService.preview(model, Math.min(limit, 500));
-        auditService.auditAction("ETL_DBT_PREVIEW_READ", AuditStage.SUCCESS, model, null);
-        return ApiResponses.ok(result);
-    }
-
     @PostMapping("/dbt/sources/refresh")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ApiResponse<DbtSourceService.DbtSourceRefreshResult> refreshDbtSources() {
         ApiResponse<DbtSourceService.DbtSourceRefreshResult> response = ApiResponses.ok(dbtSourceService.refreshOdsSources());
         auditService.auditAction("ETL_DBT_SOURCES_EXECUTE", AuditStage.SUCCESS, "refresh", null);
@@ -128,6 +122,7 @@ public class EtlResource {
     }
 
     @PostMapping("/dbt/models/sync")
+    @PreAuthorize(AIRFLOW_SYNC_EXPRESSION)
     public ApiResponse<DbtAssetSyncService.DbtAssetSyncResult> syncDbtModels(
         @RequestBody(required = false) DbtArtifactSyncRequest request
     ) {
@@ -159,11 +154,11 @@ public class EtlResource {
     }
 
     @GetMapping("/dbt/sync/status")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ApiResponse<DbtArtifactSyncState.DbtArtifactSyncStatus> getDbtSyncStatus(
-        @RequestParam(required = false) String models,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        syncDbtBuildRuns(models, activeDept);
+        syncDbtBuildRuns(activeDept);
         DbtRunResultService.DbtRunSummary latestRun = dbtRunResultService.loadLatestBuildSummary(20);
         if (latestRun != null) {
             dbtArtifactSyncState.recordLatestRun(latestRun);
@@ -171,40 +166,14 @@ public class EtlResource {
         return ApiResponses.ok(dbtArtifactSyncState.snapshot());
     }
 
-    @GetMapping("/dbt/dag/ready")
-    public ApiResponse<Map<String, Object>> checkDagReady(
-        @RequestParam(required = false) String selector
-    ) {
-        String dagSelector = resolveDagSelector(selector);
-        String dagId = dbtDagService.ensureDagForSelector(dagSelector);
-        if (!StringUtils.hasText(dagId)) {
-            dagId = airflowProperties.getDagId();
-        }
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("dagId", dagId);
-        if (!airflowProperties.isEnabled()) {
-            result.put("ready", false);
-            result.put("message", "Airflow 集成未启用");
-            return ApiResponses.ok(result);
-        }
-        Map<String, Object> dag = findDag(dagId);
-        boolean ready = dag != null;
-        result.put("ready", ready);
-        result.put("message", ready ? "DAG 已就绪" : "DAG [" + dagId + "] 尚未在 Airflow 中注册，请稍后重试（通常需要 30 秒）");
-        if (dag != null) {
-            result.put("isPaused", boolVal(dag.get("is_paused")));
-        }
-        return ApiResponses.ok(result);
-    }
-
     @GetMapping("/dbt/runs")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ApiResponse<Map<String, Object>> listDbtRuns(
         @RequestParam(defaultValue = "20") int limit,
         @RequestParam(required = false) String dagId,
-        @RequestParam(required = false) String selector,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        String effectiveDagId = resolveRunDagId(dagId, selector);
+        String effectiveDagId = resolveRunDagId(dagId);
         Map<String, Object> payload = new LinkedHashMap<>(
             airflowClient.listDagRuns(effectiveDagId, Math.max(1, Math.min(limit, 50))).orElse(Map.of())
         );
@@ -328,6 +297,7 @@ public class EtlResource {
     }
 
     @PostMapping("/airflow/jobs/{dagId}/trigger")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ApiResponse<Map<String, Object>> triggerAirflowJob(
         @PathVariable String dagId,
         @RequestBody(required = false) Map<String, Object> body,
@@ -384,15 +354,11 @@ public class EtlResource {
 
     public record DbtArtifactSyncRequest(String projectDir, Boolean syncManifest) {}
 
-    private void syncDbtBuildRuns(String selector, String activeDept) {
+    private void syncDbtBuildRuns(String activeDept) {
         if (!airflowProperties.isEnabled()) {
             return;
         }
-        String dagSelector = resolveDagSelector(selector);
-        String dagId = dbtDagService.ensureDagForSelector(dagSelector);
-        if (!StringUtils.hasText(dagId)) {
-            dagId = airflowProperties.getDagId();
-        }
+        String dagId = airflowProperties.getDagId();
         if (!StringUtils.hasText(dagId)) {
             return;
         }
@@ -509,24 +475,9 @@ public class EtlResource {
         return Boolean.parseBoolean(stringVal(value));
     }
 
-    private String resolveDagSelector(String selector) {
-        if (StringUtils.hasText(selector) && selector.trim().toLowerCase().contains("tag:")) {
-            return selector;
-        }
-        if (StringUtils.hasText(selector)) {
-            return "tag:dbt " + selector;
-        }
-        return "tag:dbt";
-    }
-
-    private String resolveRunDagId(String dagId, String selector) {
+    private String resolveRunDagId(String dagId) {
         if (StringUtils.hasText(dagId)) {
             return dagId.trim();
-        }
-        String dagSelector = resolveDagSelector(selector);
-        String resolvedDagId = dbtDagService.ensureDagForSelector(dagSelector);
-        if (StringUtils.hasText(resolvedDagId)) {
-            return resolvedDagId;
         }
         return airflowProperties.getDagId();
     }
