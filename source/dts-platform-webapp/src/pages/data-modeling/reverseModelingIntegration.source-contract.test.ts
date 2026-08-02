@@ -60,4 +60,13 @@ describe("Sprint-83 artifact-rich dbt reverse modeling", () => {
 		}
 		expect(source).not.toContain("applyResult.summary.failed + applyResult.summary.blocked > 0");
 	});
+
+	it("lets operators recover a persisted run without inventing a local history ledger", () => {
+		const source = read("./components/ReverseModelingWizard.tsx");
+
+		expect(source).toContain("resumeRunId");
+		expect(source).toContain('aria-label="导入运行 ID"');
+		expect(source).toContain("preview.runId");
+		expect(source).not.toContain("IMPORT_HISTORY");
+	});
 });

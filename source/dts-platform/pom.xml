@@ -488,6 +488,7 @@
                             <resources>
                                 <resource>
                                     <directory>${project.basedir}/../dts-common/src/main/resources/config</directory>
+                                    <targetPath>config</targetPath>
                                     <includes>
                                         <include>audit-action-catalog.json</include>
                                     </includes>
@@ -555,11 +556,18 @@
                         <testInclude>**/service/modeling/ModelImplementationInputPolicyTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelImplementationExecutionPlannerTest.java</testInclude>
                         <testInclude>**/service/modeling/CanonicalModelLifecycleCompilerAdapterTest.java</testInclude>
+                        <testInclude>**/service/modeling/DimensionModelApplicationServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/DimensionModelCreateRequestDecoderTest.java</testInclude>
                         <testInclude>**/service/modeling/representation/*.java</testInclude>
                         <testInclude>**/service/modeling/serving/*.java</testInclude>
                         <testInclude>**/service/modeling/dbtdraft/*.java</testInclude>
                         <testInclude>**/service/modeling/observability/*.java</testInclude>
                         <testInclude>**/web/rest/ModelRepresentationResourceTest.java</testInclude>
+                        <testInclude>**/web/rest/DimensionModelResourceTest.java</testInclude>
+                        <testInclude>**/web/rest/DimensionDefinitionReservedIdempotencyBoundaryTest.java</testInclude>
+                        <testInclude>**/web/rest/DimensionModelAuthorizationIT.java</testInclude>
+                        <testInclude>**/web/filter/DimensionModelBodyLimitFilterTest.java</testInclude>
+                        <testInclude>**/service/governance/QualityAuditCatalogContractTest.java</testInclude>
                         <testInclude>**/web/rest/ModelSpecImportPreviewAuditTest.java</testInclude>
                         <testInclude>**/web/rest/ModelPhysicalPreviewResourceTest.java</testInclude>
                         <testInclude>**/web/rest/DbtImplementationDraftResourceTest.java</testInclude>
@@ -692,6 +700,7 @@
                         <testInclude>**/web/filter/ModelSpecImportCorrelationFilterTest.java</testInclude>
                         <testInclude>**/web/filter/AuditLoggingFilterTest.java</testInclude>
                         <testInclude>**/web/rest/ModelSpecResourceTest.java</testInclude>
+                        <testInclude>**/web/rest/ModelSpecReservedIdempotencyBoundaryTest.java</testInclude>
                         <testInclude>**/web/rest/ModelLifecycleResourceTest.java</testInclude>
                         <testInclude>**/web/rest/ModelBuildIntentResourceTest.java</testInclude>
                         <testInclude>**/web/rest/ModelPublicationIntentResourceTest.java</testInclude>

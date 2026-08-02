@@ -73,7 +73,7 @@ class PlatformInfraClientTest {
 
     @BeforeEach
     void setUp() {
-        // 默认:settings 中含 baseUrl/apiPath/serviceToken,settings 优先于 properties
+        // 默认 settings 含历史运行参数；部署配置中的 pairwise token 仍须保持最高优先级。
         when(settingsService.getSettings(IngestionSettingsService.SERVICE_PLATFORM))
             .thenReturn(
                 new IngestionSettingsService.SettingsSnapshot(
@@ -83,15 +83,15 @@ class PlatformInfraClientTest {
     }
 
     @Test
-    void fetchDataSourceDetailUsesRuntimeEndpointWithSettingsToken() {
-        // settings.serviceToken 优先于 properties.serviceToken
+    void fetchDataSourceDetailUsesRuntimeEndpointWithConfiguredToken() {
+        // 部署配置中的 pairwise token 必须优先，避免历史 settings 密钥覆盖轮换后的凭据。
         PlatformInfraClient client = buildClient(props("env-runtime-secret"));
         MockRestServiceServer server = bindServer(client);
         server
             .expect(requestTo("http://platform.test/api/infra/data-sources/" + DATA_SOURCE_ID + "/runtime-detail"))
             .andExpect(method(GET))
             .andExpect(header("X-DTS-Service", "dts-ingestion"))
-            .andExpect(header("X-DTS-Service-Token", "db-runtime-secret"))
+            .andExpect(header("X-DTS-Service-Token", "env-runtime-secret"))
             .andRespond(withSuccess(SUCCESS_BODY, MediaType.APPLICATION_JSON));
 
         PlatformInfraClient.DataSourceDetail detail = client.fetchDataSourceDetail(DATA_SOURCE_ID);
@@ -101,19 +101,12 @@ class PlatformInfraClientTest {
     }
 
     @Test
-    void fetchDataSourceDetailFallsBackToPropertiesTokenWhenSettingsBlank() {
-        // settings 没有 serviceToken → 走 properties fallback
-        when(settingsService.getSettings(IngestionSettingsService.SERVICE_PLATFORM))
-            .thenReturn(
-                new IngestionSettingsService.SettingsSnapshot(
-                    Map.of("baseUrl", "http://platform.test", "apiPath", "/api")
-                )
-            );
-        PlatformInfraClient client = buildClient(props("env-runtime-secret"));
+    void fetchDataSourceDetailFallsBackToLegacySettingsTokenWhenConfiguredTokenBlank() {
+        PlatformInfraClient client = buildClient(props(null));
         MockRestServiceServer server = bindServer(client);
         server
             .expect(requestTo("http://platform.test/api/infra/data-sources/" + DATA_SOURCE_ID + "/runtime-detail"))
-            .andExpect(header("X-DTS-Service-Token", "env-runtime-secret"))
+            .andExpect(header("X-DTS-Service-Token", "db-runtime-secret"))
             .andRespond(withSuccess(SUCCESS_BODY, MediaType.APPLICATION_JSON));
 
         client.fetchDataSourceDetail(DATA_SOURCE_ID);
@@ -142,16 +135,16 @@ class PlatformInfraClientTest {
 
     @Test
     void fetchDataSourceDetailUsesPropertiesBaseUrlWhenSettingsLackIt() {
-        // settings 不含 baseUrl → 走 properties.baseUrl
+        // settings 不含 baseUrl → 走 properties.baseUrl；鉴权仍以部署配置为准。
         when(settingsService.getSettings(IngestionSettingsService.SERVICE_PLATFORM))
             .thenReturn(new IngestionSettingsService.SettingsSnapshot(Map.of("serviceToken", "tok")));
-        IngestionOutboundPlatformProperties p = props("ignored");
+        IngestionOutboundPlatformProperties p = props("env-runtime-secret");
         p.setBaseUrl("http://from-properties.test");
         PlatformInfraClient client = buildClient(p);
         MockRestServiceServer server = bindServer(client);
         server
             .expect(requestTo("http://from-properties.test/api/infra/data-sources/" + DATA_SOURCE_ID + "/runtime-detail"))
-            .andExpect(header("X-DTS-Service-Token", "tok"))
+            .andExpect(header("X-DTS-Service-Token", "env-runtime-secret"))
             .andRespond(withSuccess(SUCCESS_BODY, MediaType.APPLICATION_JSON));
 
         client.fetchDataSourceDetail(DATA_SOURCE_ID);

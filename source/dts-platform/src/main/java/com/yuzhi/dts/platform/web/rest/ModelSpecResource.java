@@ -10,6 +10,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.Layer;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelRevisionRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
+import com.yuzhi.dts.platform.service.modeling.DimensionModelCreateRequestDecoder;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecCreateRequestDecoder;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecException;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecStageGateService;
@@ -76,6 +77,18 @@ public class ModelSpecResource {
     public ResponseEntity<ApiResponse<ModelSpecView>> create(@RequestBody JsonNode body) {
         ModelSpecCreateRequestDecoder.DecodeResult decoded = createDecoder.decode(body);
         if (!decoded.valid()) throw invalidRequest(decoded.issues());
+        if (DimensionModelCreateRequestDecoder.isInternalIdempotencyKey(decoded.command().idempotencyKey())) {
+            throw invalidRequest(
+                List.of(
+                    new FieldIssue(
+                        "MODEL_SPEC_IDEMPOTENCY_KEY_RESERVED",
+                        "idempotencyKey",
+                        ModelSpecContract.IssueSeverity.ERROR,
+                        "The idempotency key uses a server-reserved namespace"
+                    )
+                )
+            );
+        }
         CreateResult result = service.create(serverTenantId, actorId(), decoded.command());
         HttpStatus status = result.replayed() ? HttpStatus.OK : HttpStatus.CREATED;
         return ResponseEntity

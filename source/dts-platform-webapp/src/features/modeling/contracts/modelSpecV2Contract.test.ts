@@ -262,6 +262,26 @@ test("canonical update is a full replacement without create-only or retired meta
 	}
 });
 
+test("canonical dimension update keeps SCD and hierarchy but moves code and reuse scope to the definition", () => {
+	const {
+		idempotencyKey: _idempotencyKey,
+		dimensionDefinitionRef: _dimensionDefinitionRef,
+		...dimension
+	} = valid("DIMENSION");
+	const canonicalProfile = {
+		hierarchies: [],
+		scdPolicy: { type: "NONE" as const },
+	};
+	assert.deepEqual(validateModelSpecUpdate({ ...dimension, dimensionProfile: canonicalProfile }), []);
+	assert.deepEqual(
+		validateModelSpecUpdate({
+			...dimension,
+			dimensionProfile: { ...canonicalProfile, dimensionCode: "DIM_CUSTOMER", reuseScope: "DOMAIN" },
+		}).map((issue) => issue.code),
+		["MODEL_SPEC_DIMENSION_PROFILE_INVALID"],
+	);
+});
+
 test("canonical CAS token produces the backend strong ETag exactly", () => {
 	assert.equal(
 		toModelSpecEtag({
@@ -576,7 +596,7 @@ test("legacy v2 dimension definition and key mapping remain backward compatible"
 	);
 });
 
-test("dimension profile is canonical but remains optional for legacy v2 drafts", () => {
+test("dimension profile remains optional but legacy code and reuse fields are read-only", () => {
 	const legacyDimension = minimal("DIMENSION");
 	assert.deepEqual(validateModelSpecCreate(legacyDimension), []);
 	const dimensionProfile = {
@@ -594,13 +614,16 @@ test("dimension profile is canonical but remains optional for legacy v2 drafts",
 		scdPolicy: { type: "TYPE1" },
 		reuseScope: "PLAN",
 	};
-	assert.deepEqual(validateModelSpecCreate({ ...valid("DIMENSION"), dimensionProfile } as unknown), []);
+	assert.deepEqual(
+		validateModelSpecCreate({ ...valid("DIMENSION"), dimensionProfile } as unknown).map((issue) => issue.code),
+		["MODEL_SPEC_DIMENSION_PROFILE_INVALID"],
+	);
 	assert.deepEqual(
 		validateModelSpecCreate({
 			...valid("DIMENSION"),
 			dimensionProfile: { ...dimensionProfile, dimensionCode: "invalid-code" },
 		} as unknown).map((issue) => issue.code),
-		["MODEL_SPEC_DIMENSION_CODE_INVALID"],
+		["MODEL_SPEC_DIMENSION_CODE_INVALID", "MODEL_SPEC_DIMENSION_PROFILE_INVALID"],
 	);
 });
 

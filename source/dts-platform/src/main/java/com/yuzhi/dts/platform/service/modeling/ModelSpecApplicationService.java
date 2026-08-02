@@ -1392,6 +1392,13 @@ public class ModelSpecApplicationService {
         if (!planVisible || !domainVisible) throw notFound(stored.id());
     }
 
+    /** Reuses the canonical owner-scoped replay policy for package-local composite commands. */
+    void requireReplayAccess(String tenantId, String actorId, StoredModelSpec stored) {
+        requireServerContext(tenantId, actorId);
+        if (stored == null) throw notFound(null);
+        validateReplayAccess(tenantId, actorId, stored);
+    }
+
     private void requireCanonicalWriteEnabled() {
         if (featureFlags.canonicalWriteEnabled()) return;
         throw new ModelSpecException(

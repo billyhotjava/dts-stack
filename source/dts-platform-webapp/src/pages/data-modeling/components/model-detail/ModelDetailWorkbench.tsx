@@ -1,4 +1,4 @@
-import { Code2, GitBranch, Layers3, RefreshCw, TableProperties } from "lucide-react";
+import { Code2, GitBranch, Layers3, Pencil, RefreshCw, TableProperties } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { getModelRepresentation } from "@/api/modelRepresentationApi";
 import { getModelLifecycle } from "@/api/modelSpecApi";
@@ -19,7 +19,7 @@ const safeErrorMessage = (error: unknown) => {
 	return candidate.response?.data?.code || candidate.response?.data?.message;
 };
 
-export function ModelDetailWorkbench({ model }: { model: ModelSpecView }) {
+export function ModelDetailWorkbench({ model, onEdit }: { model: ModelSpecView; onEdit?: () => void }) {
 	const canMaintain = useCatalogMaintainerAccess();
 	const [view, setView] = useState<DetailView>("business");
 	const [business, setBusiness] = useState<ModelRepresentationView | null>(null);
@@ -93,6 +93,12 @@ export function ModelDetailWorkbench({ model }: { model: ModelSpecView }) {
 				</div>
 			</div>
 			<div className="dm-editor-toolbar">
+				{onEdit && canMaintain && model.compatibilityMode === "CANONICAL" ? (
+					<ActionButton onClick={onEdit}>
+						<Pencil aria-hidden="true" size={14} />
+						编辑模型
+					</ActionButton>
+				) : null}
 				<ActionButton onClick={openBusiness}>
 					<Layers3 aria-hidden="true" size={14} />
 					业务可视化

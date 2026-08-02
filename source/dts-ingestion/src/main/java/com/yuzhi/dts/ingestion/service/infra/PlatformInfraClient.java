@@ -403,9 +403,14 @@ public class PlatformInfraClient {
     }
 
     private String resolveServiceToken() {
+        String configuredToken = StringUtils.hasText(outboundProps.getServiceToken())
+            ? outboundProps.getServiceToken().trim()
+            : null;
+        if (StringUtils.hasText(configuredToken)) {
+            return configuredToken;
+        }
         IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_PLATFORM);
-        String envFallback = StringUtils.hasText(outboundProps.getServiceToken()) ? outboundProps.getServiceToken().trim() : null;
-        return settings.getString("serviceToken", envFallback);
+        return settings.getString("serviceToken", null);
     }
 
     private List<Map<String, Object>> openLineageDatasets(JsonNode datasets, Long rowCount, String rowField) {

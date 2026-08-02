@@ -46,6 +46,10 @@ class AuditActionCatalogResourceTest {
         assertThat(catalog)
             .contains("\"key\": \"modeling.model-spec\"")
             .contains("\"code\": \"MODELING_MODEL_SPEC_CREATE\"")
+            .contains("\"code\": \"MODELING_DIMENSION_MODEL_CREATE\"")
+            .containsPattern(
+                "(?s)\\\"code\\\": \\\"MODELING_DIMENSION_MODEL_CREATE\\\".*?\\\"phases\\\": \\[.*?\\\"SUCCESS\\\".*?\\\"FAIL\\\".*?\\]"
+            )
             .contains("\"code\": \"MODELING_MODEL_SPEC_IMPORT_CREATE\"")
             .contains("\"code\": \"MODELING_MODEL_SPEC_UPDATE\"")
             .contains("\"code\": \"MODELING_MODEL_SPEC_RECLASSIFY\"")

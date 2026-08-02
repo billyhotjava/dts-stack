@@ -22,6 +22,7 @@ import com.yuzhi.dts.platform.repository.modeling.CatalogModelServingProjectionR
 import com.yuzhi.dts.platform.repository.modeling.DbtRuntimeProfileLeaseRepository;
 import com.yuzhi.dts.platform.repository.modeling.DbtRuntimeProfileLeaseRepository.LeaseRecord;
 import com.yuzhi.dts.platform.repository.modeling.DbtRuntimeProfileLeaseRepository.LeaseStatus;
+import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelLifecycleRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationAvailabilityPinRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationBuildRepository;
@@ -58,6 +59,9 @@ import com.yuzhi.dts.platform.service.modeling.PhysicalRelationInspector.Expecte
 import com.yuzhi.dts.platform.service.modeling.PhysicalRelationInspector.PhysicalColumn;
 import com.yuzhi.dts.platform.service.modeling.PhysicalRelationInspector.PhysicalRelationObservation;
 import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelServingService;
+import com.yuzhi.dts.platform.service.modeling.warehouse.CatalogDomainResolutionPort;
+import com.yuzhi.dts.platform.service.modeling.warehouse.CatalogDomainResolutionPort.DomainResolution;
+import com.yuzhi.dts.platform.service.modeling.warehouse.CatalogDomainResolutionPort.ResolutionStatus;
 import jakarta.persistence.EntityManager;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -70,8 +74,10 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -92,6 +98,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -119,6 +126,23 @@ class F4StrictAuditRollbackPostgresIT {
     private static final String MODEL_CHECKSUM = "b".repeat(64);
     private static final String IMPLEMENTATION_CHECKSUM = "c".repeat(64);
     private static final String AUDIT_PAYLOAD_HASH = "f".repeat(64);
+    private static final String ATOMIC_TENANT = "s84-f4-dimension-model";
+    private static final String ATOMIC_ACTOR = "dimension-model-owner";
+    private static final UUID ATOMIC_PLAN_ID = UUID.fromString(
+        "10000000-0000-4000-8000-000000000084"
+    );
+    private static final UUID ATOMIC_DOMAIN_ID = UUID.fromString(
+        "20000000-0000-4000-8000-000000000084"
+    );
+    private static final UUID ATOMIC_OPERATION_ID = UUID.fromString(
+        "50000000-0000-4000-8000-000000000084"
+    );
+    private static final String ATOMIC_DEFINITION_KEY =
+        "dm:v2:dimension:" + ATOMIC_OPERATION_ID;
+    private static final String ATOMIC_MODEL_KEY =
+        "dm:v2:model:" + ATOMIC_OPERATION_ID;
+    private static final String ATOMIC_AUDIT_EVENT_ID =
+        "f4-dimension-model-" + ATOMIC_OPERATION_ID;
 
     @Container
     private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>(
@@ -180,6 +204,15 @@ class F4StrictAuditRollbackPostgresIT {
     @Autowired
     private PlatformTransactionManager transactionManager;
 
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @Autowired
+    private DimensionModelCreateRequestDecoder dimensionModelDecoder;
+
+    @Autowired
+    private DimensionModelApplicationService dimensionModels;
+
     @MockBean
     private ModelExecutionTargetCatalogResolver targetResolver;
 
@@ -228,6 +261,161 @@ class F4StrictAuditRollbackPostgresIT {
         @Bean
         ModelSpecRepository modelSpecRepository(JdbcTemplate jdbc, ObjectMapper objectMapper) {
             return new ModelSpecRepository(jdbc, objectMapper);
+        }
+
+        @Bean
+        DimensionDefinitionRepository dimensionDefinitionRepository(
+            JdbcTemplate jdbc,
+            ObjectMapper objectMapper
+        ) {
+            return new DimensionDefinitionRepository(jdbc, objectMapper);
+        }
+
+        @Bean
+        ModelSpecReader modelSpecReader(
+            ModelSpecRepository repository,
+            ModelSpecSnapshotCodec codec
+        ) {
+            return new ModelSpecReader(repository, codec);
+        }
+
+        @Bean
+        ModelSpecFeatureFlags modelSpecFeatureFlags() {
+            return new ModelSpecFeatureFlags(true);
+        }
+
+        @Bean
+        ModelSpecDomainWriteAccessPort modelSpecDomainWriteAccessPort() {
+            return domainId -> true;
+        }
+
+        @Bean
+        ModelSpecDomainReadAccessPort modelSpecDomainReadAccessPort() {
+            return new ModelSpecDomainReadAccessPort() {
+                @Override
+                public boolean canRead(UUID domainId) {
+                    return true;
+                }
+
+                @Override
+                public Set<UUID> visibleDomainIds() {
+                    return Set.of(ATOMIC_DOMAIN_ID);
+                }
+            };
+        }
+
+        @Bean
+        ModelSpecPlanWriteAccessPort modelSpecPlanWriteAccessPort(
+            JdbcTemplate jdbc
+        ) {
+            return new ModelSpecPlanWriteAccessAdapter(jdbc);
+        }
+
+        @Bean
+        CatalogDomainResolutionPort catalogDomainResolutionPort() {
+            return domainId ->
+                new DomainResolution(
+                    domainId,
+                    ResolutionStatus.AVAILABLE,
+                    "Atomic dimension domain",
+                    "ATOMIC_DIMENSION_DOMAIN",
+                    ATOMIC_ACTOR,
+                    "Strict audit rollback fixture"
+                );
+        }
+
+        @Bean
+        DimensionDefinitionApplicationService dimensionDefinitionApplicationService(
+            DimensionDefinitionRepository repository,
+            ObjectMapper objectMapper,
+            ModelSpecDomainWriteAccessPort domainWriteAccess,
+            ModelSpecDomainReadAccessPort domainReadAccess,
+            AuditService auditService
+        ) {
+            return new DimensionDefinitionApplicationService(
+                repository,
+                objectMapper,
+                domainWriteAccess,
+                domainReadAccess,
+                auditService
+            );
+        }
+
+        @Bean
+        ModelSpecApplicationService modelSpecApplicationService(
+            ModelSpecRepository repository,
+            DimensionDefinitionRepository dimensionDefinitions,
+            ModelSpecSnapshotCodec codec,
+            CatalogDomainResolutionPort domainResolution,
+            ModelSpecDomainWriteAccessPort domainWriteAccess,
+            ModelSpecDomainReadAccessPort domainReadAccess,
+            ModelSpecPlanWriteAccessPort planWriteAccess,
+            ModelSpecSourceValidationPort sourceValidation,
+            ModelSpecReader reader,
+            ModelSpecFeatureFlags featureFlags,
+            AuditService auditService
+        ) {
+            return new ModelSpecApplicationService(
+                repository,
+                dimensionDefinitions,
+                codec,
+                domainResolution,
+                domainWriteAccess,
+                domainReadAccess,
+                planWriteAccess,
+                sourceValidation,
+                reader,
+                featureFlags,
+                auditService
+            );
+        }
+
+        @Bean
+        ModelSpecCreateRequestDecoder modelSpecCreateRequestDecoder(
+            ObjectMapper objectMapper
+        ) {
+            return new ModelSpecCreateRequestDecoder(objectMapper);
+        }
+
+        @Bean
+        ModelSpecUpdateRequestDecoder modelSpecUpdateRequestDecoder(
+            ObjectMapper objectMapper
+        ) {
+            return new ModelSpecUpdateRequestDecoder(objectMapper);
+        }
+
+        @Bean
+        DimensionModelCreateRequestDecoder dimensionModelCreateRequestDecoder(
+            ObjectMapper objectMapper,
+            ModelSpecCreateRequestDecoder createDecoder,
+            ModelSpecUpdateRequestDecoder updateDecoder
+        ) {
+            return new DimensionModelCreateRequestDecoder(
+                objectMapper,
+                createDecoder,
+                updateDecoder
+            );
+        }
+
+        @Bean
+        DimensionModelApplicationService dimensionModelApplicationService(
+            DimensionDefinitionApplicationService dimensionDefinitions,
+            ModelSpecApplicationService modelSpecs,
+            DimensionDefinitionRepository dimensionDefinitionRepository,
+            ModelSpecRepository modelSpecRepository,
+            DimensionModelCreateRequestDecoder decoder,
+            ModelSpecSnapshotCodec codec,
+            AuditService auditService
+        ) {
+            return new DimensionModelApplicationService(
+                dimensionDefinitions,
+                modelSpecs,
+                dimensionDefinitionRepository,
+                modelSpecRepository,
+                decoder,
+                codec,
+                auditService
+            );
         }
 
         @Bean
@@ -631,6 +819,312 @@ class F4StrictAuditRollbackPostgresIT {
         assertThat(candidateStatus(scope)).isEqualTo("BUILDING");
         assertThat(candidateVersion(scope)).isEqualTo(2);
         assertThat(auditOutboxCount(scope.auditEventId())).isZero();
+    }
+
+    @Test
+    void dimensionModelStrictAuditFailureRollsBackBothRevisionLedgersAndAuditOutbox()
+        throws Exception {
+        cleanupAtomicFixture();
+        seedAtomicPlanAndDomain();
+        AtomicBoolean strictAuditReached = new AtomicBoolean();
+        AtomicReference<UUID> definitionId = new AtomicReference<>();
+        AtomicReference<UUID> modelId = new AtomicReference<>();
+        try {
+            DimensionModelCreateRequestDecoder.PreparedCreate prepared =
+                dimensionModelDecoder.decode(
+                    objectMapper.readTree(atomicDimensionModelRequest())
+            );
+            doAnswer(invocation -> {
+                assertThat(
+                    TransactionSynchronizationManager.isActualTransactionActive()
+                ).isTrue();
+                entityManager.flush();
+                UUID persistedDefinitionId = jdbc.queryForObject(
+                    "select id from modeling_dimension_definition where tenant_id = ? and idempotency_key = ?",
+                    UUID.class,
+                    ATOMIC_TENANT,
+                    ATOMIC_DEFINITION_KEY
+                );
+                UUID persistedModelId = jdbc.queryForObject(
+                    "select id from modeling_model_spec where tenant_id = ? and idempotency_key = ?",
+                    UUID.class,
+                    ATOMIC_TENANT,
+                    ATOMIC_MODEL_KEY
+                );
+                definitionId.set(persistedDefinitionId);
+                modelId.set(persistedModelId);
+
+                assertThat(
+                    jdbc.queryForObject(
+                        "select revision from modeling_dimension_definition where tenant_id = ? and id = ?",
+                        Integer.class,
+                        ATOMIC_TENANT,
+                        persistedDefinitionId
+                    )
+                ).isEqualTo(2);
+                assertThat(
+                    jdbc.queryForList(
+                        "select revision from modeling_dimension_definition_revision where tenant_id = ? and dimension_definition_id = ? order by revision",
+                        Integer.class,
+                        ATOMIC_TENANT,
+                        persistedDefinitionId
+                    )
+                ).containsExactly(1, 2);
+                assertThat(
+                    jdbc.queryForObject(
+                        "select revision from modeling_model_spec where tenant_id = ? and id = ?",
+                        Integer.class,
+                        ATOMIC_TENANT,
+                        persistedModelId
+                    )
+                ).isEqualTo(2);
+                assertThat(
+                    jdbc.queryForList(
+                        "select revision from modeling_model_spec_revision where tenant_id = ? and model_spec_id = ? order by revision",
+                        Integer.class,
+                        ATOMIC_TENANT,
+                        persistedModelId
+                    )
+                ).containsExactly(1, 2);
+
+                auditOutbox.enqueue(
+                    new EnqueueCommand(
+                        ATOMIC_TENANT,
+                        ATOMIC_AUDIT_EVENT_ID,
+                        NOW,
+                        AUDIT_PAYLOAD_HASH,
+                        "{}"
+                    )
+                );
+                assertThat(auditOutboxCount(ATOMIC_AUDIT_EVENT_ID)).isOne();
+                assertThat(
+                    count(
+                        "select count(*) from platform_audit_outbox where tenant_id = ?",
+                        ATOMIC_TENANT
+                    )
+                ).isOne();
+                strictAuditReached.set(true);
+                throw new IllegalStateException(
+                    "dimension model strict audit unavailable"
+                );
+            })
+                .when(auditService)
+                .auditActionStrict(
+                    eq("MODELING_DIMENSION_MODEL_CREATE"),
+                    eq(AuditStage.SUCCESS),
+                    anyString(),
+                    any()
+                );
+
+            assertThat(AopUtils.isAopProxy(dimensionModels)).isTrue();
+            assertThatThrownBy(() ->
+                dimensionModels.create(ATOMIC_TENANT, ATOMIC_ACTOR, prepared)
+            )
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("dimension model strict audit unavailable");
+
+            assertThat(strictAuditReached).isTrue();
+            assertThat(definitionId.get()).isNotNull();
+            assertThat(modelId.get()).isNotNull();
+            assertThat(
+                count(
+                    "select count(*) from modeling_dimension_definition where tenant_id = ? and id = ?",
+                    ATOMIC_TENANT,
+                    definitionId.get()
+                )
+            ).isZero();
+            assertThat(
+                count(
+                    "select count(*) from modeling_dimension_definition_revision where tenant_id = ? and dimension_definition_id = ?",
+                    ATOMIC_TENANT,
+                    definitionId.get()
+                )
+            ).isZero();
+            assertThat(
+                count(
+                    "select count(*) from modeling_model_spec where tenant_id = ? and id = ?",
+                    ATOMIC_TENANT,
+                    modelId.get()
+                )
+            ).isZero();
+            assertThat(
+                count(
+                    "select count(*) from modeling_model_spec_revision where tenant_id = ? and model_spec_id = ?",
+                    ATOMIC_TENANT,
+                    modelId.get()
+                )
+            ).isZero();
+            assertThat(auditOutboxCount(ATOMIC_AUDIT_EVENT_ID)).isZero();
+            assertThat(
+                count(
+                    "select count(*) from platform_audit_outbox where tenant_id = ?",
+                    ATOMIC_TENANT
+                )
+            ).isZero();
+        } finally {
+            cleanupAtomicFixture();
+        }
+    }
+
+    private void seedAtomicPlanAndDomain() {
+        new TransactionTemplate(transactionManager).executeWithoutResult(ignored -> {
+            jdbc.update(
+                """
+                insert into catalog_domain (
+                    id, name, code, lifecycle_status, access_policy
+                ) values (?, 'Atomic dimension domain',
+                          'ATOMIC_DIMENSION_DOMAIN_84', 'ACTIVE', 'PUBLIC')
+                """,
+                ATOMIC_DOMAIN_ID
+            );
+            jdbc.update(
+                """
+                insert into modeling_warehouse_plan (
+                    id, tenant_id, owner, code, name, owner_id,
+                    onboarding_mode, lifecycle_status, status, version,
+                    created_date, last_modified_date
+                ) values (?, ?, ?, 'atomic_dimension_plan_84',
+                          'Atomic dimension plan', ?, 'BUSINESS_FIRST',
+                          'BASELINE_READY', 'DRAFT', 1,
+                          current_timestamp, current_timestamp)
+                """,
+                ATOMIC_PLAN_ID,
+                ATOMIC_TENANT,
+                ATOMIC_ACTOR,
+                ATOMIC_ACTOR
+            );
+            jdbc.update(
+                """
+                insert into modeling_warehouse_plan_domain (
+                    id, tenant_id, plan_id, domain_id, confirmation_status,
+                    last_validated_at, created_date, last_modified_date
+                ) values (?, ?, ?, ?, 'CONFIRMED', current_timestamp,
+                          current_timestamp, current_timestamp)
+                """,
+                UUID.fromString("30000000-0000-4000-8000-000000000084"),
+                ATOMIC_TENANT,
+                ATOMIC_PLAN_ID,
+                ATOMIC_DOMAIN_ID
+            );
+        });
+    }
+
+    private void cleanupAtomicFixture() {
+        new TransactionTemplate(transactionManager).executeWithoutResult(ignored -> {
+            jdbc.update(
+                "delete from platform_audit_outbox where tenant_id = ? and event_id = ?",
+                ATOMIC_TENANT,
+                ATOMIC_AUDIT_EVENT_ID
+            );
+            jdbc.update(
+                """
+                delete from modeling_model_spec_revision
+                 where tenant_id = ? and model_spec_id in (
+                       select id from modeling_model_spec
+                        where tenant_id = ? and idempotency_key = ?)
+                """,
+                ATOMIC_TENANT,
+                ATOMIC_TENANT,
+                ATOMIC_MODEL_KEY
+            );
+            jdbc.update(
+                "delete from modeling_model_spec where tenant_id = ? and idempotency_key = ?",
+                ATOMIC_TENANT,
+                ATOMIC_MODEL_KEY
+            );
+            jdbc.update(
+                """
+                delete from modeling_dimension_definition_revision
+                 where tenant_id = ? and dimension_definition_id in (
+                       select id from modeling_dimension_definition
+                        where tenant_id = ? and idempotency_key = ?)
+                """,
+                ATOMIC_TENANT,
+                ATOMIC_TENANT,
+                ATOMIC_DEFINITION_KEY
+            );
+            jdbc.update(
+                "delete from modeling_dimension_definition where tenant_id = ? and idempotency_key = ?",
+                ATOMIC_TENANT,
+                ATOMIC_DEFINITION_KEY
+            );
+            jdbc.update(
+                "delete from modeling_warehouse_plan_domain where tenant_id = ? and plan_id = ?",
+                ATOMIC_TENANT,
+                ATOMIC_PLAN_ID
+            );
+            jdbc.update(
+                "delete from modeling_warehouse_plan where tenant_id = ? and id = ?",
+                ATOMIC_TENANT,
+                ATOMIC_PLAN_ID
+            );
+            jdbc.update(
+                "delete from catalog_domain where id = ?",
+                ATOMIC_DOMAIN_ID
+            );
+        });
+    }
+
+    private static String atomicDimensionModelRequest() {
+        return """
+            {
+              "operationId":"50000000-0000-4000-8000-000000000084",
+              "definitionBinding":{
+                "mode":"CREATE",
+                "definition":{
+                  "domainId":"20000000-0000-4000-8000-000000000084",
+                  "name":"Atomic customer dimension",
+                  "definition":"Strict audit rollback fixture",
+                  "ownerId":"dimension-model-owner",
+                  "reuseScope":"DOMAIN",
+                  "scopeType":"DOMAIN",
+                  "hierarchies":[],
+                  "attributes":[{
+                    "code":"CUSTOMER_CODE",
+                    "name":"Customer code",
+                    "definition":"Stable customer business key",
+                    "primaryKey":true,
+                    "order":1
+                  }]
+                }
+              },
+              "modelSpec":{
+                "planId":"10000000-0000-4000-8000-000000000084",
+                "domainId":"20000000-0000-4000-8000-000000000084",
+                "modelType":"DIMENSION",
+                "layer":"DWD",
+                "name":"dim_atomic_customer",
+                "description":"Complete atomic dimension model",
+                "implementationMode":"DESIGNER_GENERATED",
+                "materialization":"table",
+                "businessActivityRef":null,
+                "consumptionScenario":null,
+                "grain":{"statement":"one row per customer","keys":["customer_code"]},
+                "factShape":null,
+                "timeSemantics":null,
+                "generationStrategy":null,
+                "dimensionProfile":{
+                  "hierarchies":[],
+                  "scdPolicy":{"type":"NONE"}
+                },
+                "dataMartId":null,
+                "variantCode":"DEFAULT",
+                "fields":[{
+                  "name":"customer_code",
+                  "displayName":"Customer code",
+                  "dataType":"STRING",
+                  "nullable":false,
+                  "role":"KEY",
+                  "dimensionAttributeCode":"CUSTOMER_CODE"
+                }],
+                "sourceRefs":[],
+                "dependsOn":[],
+                "dimensionRefs":[],
+                "metricRefs":[],
+                "standardBindings":[]
+              }
+            }
+            """;
     }
 
     private void seedCanonicalModelAndCandidate(

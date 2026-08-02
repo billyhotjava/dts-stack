@@ -1,9 +1,41 @@
-import { Code2, Link2, ListChecks, RefreshCw, Settings2, TableProperties, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Code2, ListChecks, Settings2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { listDimensionDefinitions } from "@/api/dimensionDefinitionApi";
+import { listModelFieldStandardOptions, type ModelFieldStandardOption } from "@/api/modelingStandardsApi";
+import {
+	type CreateDimensionModelCommand,
+	createDimensionModel,
+	createModelSpec,
+	getModelSpecStageGates,
+	type ModelSpecStageGate,
+	updateModelSpec,
+} from "@/api/modelSpecApi";
+import {
+	getWarehousePlanCategories,
+	listWarehousePlans,
+	type WarehousePlanCategoryBindingView,
+	type WarehousePlanHeader,
+} from "@/api/warehousePlanApi";
+import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
+import {
+	type CanonicalModelSpecView,
+	type ModelSpecField,
+	type ModelSpecLayer,
+	type ModelSpecStandardBinding,
+	type ModelSpecType,
+	type ModelSpecView,
+	type UpdateModelSpecCommand,
+	validateModelSpecUpdate,
+} from "@/features/modeling/contracts/modelSpecV2Contract";
+import { persistDimensionModelDraft } from "@/features/modeling/operations/dimensionModelDraftSession";
+import { useCatalogMaintainerAccess } from "@/hooks/useModuleManageAccess";
+import { useUserInfo } from "@/store/userStore";
 import { MODEL_FIELD_DISPLAY_COLUMNS, type ModelingDialogKind, ModelingDialogs } from "./ModelingDialogs";
-import { ActionButton, BackendPendingButton, StatusTag } from "./WorkspacePage";
+import { ModelingBasicInfoSection, ModelingEditorHeader } from "./ModelingEditorSections";
+import { type ModelingFieldRow, ModelingFieldTable } from "./ModelingFieldTable";
+import { ActionButton, StatusTag } from "./WorkspacePage";
 
-export type ModelObjectType = "dimension" | "source" | "dimension-table" | "fact" | "aggregate" | "application";
+export type ModelObjectType = "dimension" | "dimension-table" | "fact" | "aggregate" | "application";
 
 export type ModelSelection = {
 	type: ModelObjectType;
@@ -14,490 +46,670 @@ export type ModelSelection = {
 	isNew?: boolean;
 };
 
-type BasicField = {
-	label: string;
-	value: string;
-	kind?: "input" | "select" | "textarea";
-	required?: boolean;
+type FieldRow = ModelingFieldRow;
+
+type EditorProps = {
+	selection: ModelSelection;
+	model?: ModelSpecView | null;
+	dimensionOperationId?: string | null;
+	dimensionActorScope?: string;
+	initialDimensionCommand?: CreateDimensionModelCommand | null;
+	onBusyChange?: (busy: boolean) => void;
+	onSaved: (model: CanonicalModelSpecView, completedOperationId?: string) => void | Promise<void>;
+	onCancel?: () => void;
 };
 
-type FieldRow = {
-	id: string;
-	code: string;
-	dataType: string;
-	displayName: string;
-	primaryKey: boolean;
-	notNull: boolean;
-	attributeCode: string;
+const MODEL_CONFIG: Record<ModelObjectType, { modelType: ModelSpecType; layer: ModelSpecLayer; label: string }> = {
+	dimension: { modelType: "DIMENSION", layer: "DWD", label: "维度" },
+	"dimension-table": { modelType: "DIMENSION", layer: "DWD", label: "维度表" },
+	fact: { modelType: "FACT", layer: "DWD", label: "明细模型" },
+	aggregate: { modelType: "SUMMARY", layer: "DWS", label: "汇总模型" },
+	application: { modelType: "APPLICATION", layer: "ADS", label: "应用模型" },
 };
 
-const BASIC_FIELDS: Record<ModelObjectType, BasicField[]> = {
-	dimension: [
-		{ label: "数仓分层", value: "公共层 / 维度层", kind: "select", required: true },
-		{ label: "业务分类", value: "财务管理", kind: "select" },
-		{ label: "数据域", value: "财务域", kind: "select", required: true },
-		{ label: "英文缩写", value: "budget_account", required: true },
-		{ label: "中文名称", value: "预算科目", required: true },
-		{ label: "描述", value: "财务预算分析使用的统一预算科目。", kind: "textarea" },
-	],
-	source: [
-		{ label: "数仓分层", value: "贴源层", kind: "select", required: true },
-		{ label: "业务分类", value: "财务管理", kind: "select" },
-		{ label: "存储策略", value: "默认存储策略", kind: "select" },
-		{ label: "表名规则", value: "ODS 表命名规范", kind: "select" },
-		{ label: "表名", value: "ods_budget_execution", required: true },
-		{ label: "表中文名", value: "预算执行导入表", required: true },
-		{ label: "生命周期", value: "365" },
-		{ label: "负责人", value: "示例负责人", kind: "select", required: true },
-		{ label: "描述", value: "离线 Excel 导入的预算执行原始数据。", kind: "textarea" },
-	],
-	"dimension-table": [
-		{ label: "数仓分层", value: "公共层 / 维度层", kind: "select", required: true },
-		{ label: "业务分类", value: "财务管理", kind: "select" },
-		{ label: "数据域", value: "财务域", kind: "select", required: true },
-		{ label: "存储策略", value: "默认存储策略", kind: "select" },
-		{ label: "维度", value: "预算科目", kind: "select", required: true },
-		{ label: "表名规则", value: "DIM 表命名规范", kind: "select" },
-		{ label: "表名", value: "dim_budget_account", required: true },
-		{ label: "表中文名", value: "预算科目维度表", required: true },
-		{ label: "生命周期", value: "长期" },
-		{ label: "负责人", value: "示例负责人", kind: "select", required: true },
-		{ label: "描述", value: "统一维护预算科目编码、名称、类别及状态。", kind: "textarea" },
-	],
-	fact: [
-		{ label: "数仓分层", value: "公共层 / 明细层", kind: "select", required: true },
-		{ label: "业务分类", value: "财务管理", kind: "select" },
-		{ label: "业务过程", value: "预算执行", kind: "select", required: true },
-		{ label: "存储策略", value: "默认存储策略", kind: "select" },
-		{ label: "表名规则", value: "DWD 表命名规范", kind: "select" },
-		{ label: "表名", value: "fct_budget_execution", required: true },
-		{ label: "表中文名", value: "预算执行明细表", required: true },
-		{ label: "生命周期", value: "1095" },
-		{ label: "负责人", value: "示例负责人", kind: "select", required: true },
-		{
-			label: "描述",
-			value: "一个预算执行事项一行，记录预算、预付、成本与应付金额。",
-			kind: "textarea",
-		},
-	],
-	aggregate: [
-		{ label: "数仓分层", value: "公共层 / 汇总层", kind: "select", required: true },
-		{ label: "业务分类", value: "财务管理", kind: "select" },
-		{ label: "数据域", value: "财务域", kind: "select", required: true },
-		{ label: "统计粒度", value: "项目 + 预算科目 + 月", kind: "select", required: true },
-		{ label: "统计周期", value: "月", kind: "select", required: true },
-		{ label: "修饰词", value: "累计", kind: "select" },
-		{ label: "表名规则", value: "DWS 表命名规范", kind: "select" },
-		{ label: "表名", value: "agg_budget_monthly", required: true },
-		{ label: "表中文名", value: "月度预算执行汇总表", required: true },
-		{ label: "生命周期", value: "1095" },
-		{ label: "负责人", value: "示例负责人", kind: "select", required: true },
-		{ label: "描述", value: "按项目、预算科目和月份汇总预算执行金额。", kind: "textarea" },
-	],
-	application: [
-		{ label: "数仓分层", value: "应用层", kind: "select", required: true },
-		{ label: "业务分类", value: "财务管理", kind: "select" },
-		{ label: "主题域", value: "预算驾驶舱", kind: "select", required: true },
-		{ label: "统计粒度", value: "项目 + 月", kind: "select", required: true },
-		{ label: "统计周期", value: "月", kind: "select", required: true },
-		{ label: "修饰词", value: "累计", kind: "select" },
-		{ label: "表名规则", value: "ADS 表命名规范", kind: "select" },
-		{ label: "表名", value: "app_budget_dashboard", required: true },
-		{ label: "表中文名", value: "预算驾驶舱应用表", required: true },
-		{ label: "生命周期", value: "1095" },
-		{ label: "负责人", value: "示例负责人", kind: "select", required: true },
-		{ label: "描述", value: "面向预算驾驶舱的发布数据集。", kind: "textarea" },
-	],
+const newField = (id: string): FieldRow => ({
+	id,
+	code: "",
+	dataType: "STRING",
+	displayName: "",
+	role: "ATTRIBUTE",
+	notNull: false,
+	attributeCode: "",
+	standardElementId: "",
+	standardElementVersion: null,
+	originalCode: "",
+	sourceFieldRef: null,
+	securityLevel: null,
+	redundant: false,
+	redundancySourceRef: null,
+});
+
+const isCanonical = (model?: ModelSpecView | null): model is CanonicalModelSpecView =>
+	Boolean(model && model.compatibilityMode === "CANONICAL" && model.contractVersion === 2);
+
+export const rowsFromModel = (model?: Pick<ModelSpecView, "id" | "fields" | "standardBindings"> | null): FieldRow[] =>
+	model?.fields.length
+		? model.fields.map((field, index) => {
+				const binding = model.standardBindings.find((item) => item.fieldName === field.name);
+				return {
+					id: `${model.id}-${index}`,
+					code: field.name,
+					dataType: field.dataType,
+					displayName: field.displayName || "",
+					role: field.role,
+					notNull: !field.nullable,
+					attributeCode: field.dimensionAttributeCode || "",
+					standardElementId: binding?.standardElementId || "",
+					standardElementVersion: binding?.standardElementVersion || null,
+					originalCode: field.name,
+					sourceFieldRef: field.sourceFieldRef || null,
+					securityLevel: field.securityLevel || null,
+					redundant: field.redundant || false,
+					redundancySourceRef: field.redundancySourceRef || null,
+				};
+			})
+		: [newField("new-field-1")];
+
+export const rowsFromCommand = (command?: CreateDimensionModelCommand | null): FieldRow[] => {
+	if (!command?.modelSpec.fields.length) return [newField("new-field-1")];
+	return command.modelSpec.fields.map((field, index) => {
+		const binding = command.modelSpec.standardBindings.find((item) => item.fieldName === field.name);
+		return {
+			id: `pending-${index}`,
+			code: field.name,
+			dataType: field.dataType,
+			displayName: field.displayName || "",
+			role: field.role,
+			notNull: !field.nullable,
+			attributeCode: field.dimensionAttributeCode || "",
+			standardElementId: binding?.standardElementId || "",
+			standardElementVersion: binding?.standardElementVersion || null,
+			originalCode: field.name,
+			sourceFieldRef: field.sourceFieldRef || null,
+			securityLevel: field.securityLevel || null,
+			redundant: field.redundant || false,
+			redundancySourceRef: field.redundancySourceRef || null,
+		};
+	});
 };
 
-const FIELD_SEEDS: Record<ModelObjectType, Array<Omit<FieldRow, "id">>> = {
-	dimension: [
-		{
-			code: "account_code",
-			dataType: "STRING",
-			displayName: "科目编码",
-			primaryKey: true,
-			notNull: true,
-			attributeCode: "ACCOUNT_CODE",
-		},
-		{
-			code: "account_name",
-			dataType: "STRING",
-			displayName: "科目名称",
-			primaryKey: false,
-			notNull: true,
-			attributeCode: "ACCOUNT_NAME",
-		},
-	],
-	source: [
-		{
-			code: "project_no",
-			dataType: "STRING",
-			displayName: "项目号",
-			primaryKey: false,
-			notNull: false,
-			attributeCode: "",
-		},
-		{
-			code: "budget_no",
-			dataType: "STRING",
-			displayName: "预算编号",
-			primaryKey: false,
-			notNull: false,
-			attributeCode: "",
-		},
-		{
-			code: "budget_amount_adjusted",
-			dataType: "DECIMAL(18,2)",
-			displayName: "调整后预算金额",
-			primaryKey: false,
-			notNull: false,
-			attributeCode: "",
-		},
-		{
-			code: "_dts_import_time",
-			dataType: "TIMESTAMP",
-			displayName: "导入时间",
-			primaryKey: false,
-			notNull: false,
-			attributeCode: "",
-		},
-	],
-	"dimension-table": [
-		{
-			code: "account_code",
-			dataType: "STRING",
-			displayName: "科目编码",
-			primaryKey: true,
-			notNull: true,
-			attributeCode: "ACCOUNT_CODE",
-		},
-		{
-			code: "account_name",
-			dataType: "STRING",
-			displayName: "科目名称",
-			primaryKey: false,
-			notNull: true,
-			attributeCode: "ACCOUNT_NAME",
-		},
-		{
-			code: "account_category",
-			dataType: "STRING",
-			displayName: "科目类别",
-			primaryKey: false,
-			notNull: false,
-			attributeCode: "ACCOUNT_CATEGORY",
-		},
-		{
-			code: "enabled_flag",
-			dataType: "BOOLEAN",
-			displayName: "是否启用",
-			primaryKey: false,
-			notNull: true,
-			attributeCode: "ENABLED_FLAG",
-		},
-	],
-	fact: [
-		{
-			code: "budget_execution_id",
-			dataType: "BIGINT",
-			displayName: "预算执行主键",
-			primaryKey: true,
-			notNull: true,
-			attributeCode: "",
-		},
-		{
-			code: "date_key",
-			dataType: "INT",
-			displayName: "财务日期键",
-			primaryKey: false,
-			notNull: true,
-			attributeCode: "DATE_KEY",
-		},
-		{
-			code: "account_code",
-			dataType: "STRING",
-			displayName: "预算科目编码",
-			primaryKey: false,
-			notNull: true,
-			attributeCode: "ACCOUNT_CODE",
-		},
-		{
-			code: "project_no",
-			dataType: "STRING",
-			displayName: "项目号",
-			primaryKey: false,
-			notNull: true,
-			attributeCode: "PROJECT_NO",
-		},
-		{
-			code: "budget_amount",
-			dataType: "DECIMAL(18,2)",
-			displayName: "预算金额",
-			primaryKey: false,
-			notNull: false,
-			attributeCode: "",
-		},
-	],
-	aggregate: [
-		{
-			code: "month_key",
-			dataType: "INT",
-			displayName: "月份键",
-			primaryKey: true,
-			notNull: true,
-			attributeCode: "",
-		},
-		{
-			code: "project_no",
-			dataType: "STRING",
-			displayName: "项目号",
-			primaryKey: true,
-			notNull: true,
-			attributeCode: "PROJECT_NO",
-		},
-		{
-			code: "account_code",
-			dataType: "STRING",
-			displayName: "预算科目编码",
-			primaryKey: true,
-			notNull: true,
-			attributeCode: "ACCOUNT_CODE",
-		},
-		{
-			code: "execution_rate",
-			dataType: "DECIMAL(9,4)",
-			displayName: "预算执行率",
-			primaryKey: false,
-			notNull: false,
-			attributeCode: "",
-		},
-	],
-	application: [
-		{
-			code: "month_key",
-			dataType: "INT",
-			displayName: "月份键",
-			primaryKey: true,
-			notNull: true,
-			attributeCode: "",
-		},
-		{
-			code: "project_no",
-			dataType: "STRING",
-			displayName: "项目号",
-			primaryKey: true,
-			notNull: true,
-			attributeCode: "PROJECT_NO",
-		},
-		{
-			code: "budget_amount",
-			dataType: "DECIMAL(18,2)",
-			displayName: "预算金额",
-			primaryKey: false,
-			notNull: false,
-			attributeCode: "",
-		},
-		{
-			code: "executed_amount",
-			dataType: "DECIMAL(18,2)",
-			displayName: "已执行金额",
-			primaryKey: false,
-			notNull: false,
-			attributeCode: "",
-		},
-	],
+export const modelSpecFieldFromRow = (row: FieldRow): ModelSpecField => ({
+	name: row.code.trim(),
+	displayName: row.displayName.trim(),
+	dataType: row.dataType.trim(),
+	nullable: !row.notNull,
+	sourceFieldRef: row.sourceFieldRef,
+	role: row.role,
+	securityLevel: row.securityLevel,
+	dimensionAttributeCode: row.attributeCode.trim() || null,
+	redundant: row.redundant,
+	redundancySourceRef: row.redundancySourceRef,
+});
+
+const safeErrorCode = (error: unknown, fallback: string) => {
+	if (!error || typeof error !== "object") return fallback;
+	const candidate = error as { response?: { status?: number; data?: { code?: string; message?: string } } };
+	if (candidate.response?.status === 401 || candidate.response?.status === 403) return "MODEL_SPEC_WRITE_FORBIDDEN";
+	return candidate.response?.data?.code || candidate.response?.data?.message || fallback;
 };
 
-function buildBasicValues(selection: ModelSelection) {
-	const values = Object.fromEntries(BASIC_FIELDS[selection.type].map((field) => [field.label, field.value]));
-	if (selection.type === "dimension") {
-		values["英文缩写"] = selection.code.replace(/^dim_/, "");
-		values["中文名称"] = selection.name.replace(/维度表$/, "");
-	} else {
-		values["表名"] = selection.code;
-		values["表中文名"] = selection.name;
-	}
-	values["数仓分层"] = selection.layer;
-	values["数据域"] = selection.domain;
-	return values;
-}
-
-function seedRows(selection: ModelSelection): FieldRow[] {
-	const seeds =
-		selection.code === "dim_fin_date"
-			? [
-					{
-						code: "date_key",
-						dataType: "INT",
-						displayName: "日期键",
-						primaryKey: true,
-						notNull: true,
-						attributeCode: "DATE_KEY",
-					},
-					{
-						code: "full_date",
-						dataType: "DATE",
-						displayName: "完整日期",
-						primaryKey: false,
-						notNull: true,
-						attributeCode: "FULL_DATE",
-					},
-					{
-						code: "month_no",
-						dataType: "INT",
-						displayName: "月份",
-						primaryKey: false,
-						notNull: true,
-						attributeCode: "MONTH_NO",
-					},
-				]
-			: FIELD_SEEDS[selection.type];
-	return seeds.map((field, index) => ({ ...field, id: `${selection.code}-${index}` }));
-}
-
-export function ModelingEditor({ selection }: { selection: ModelSelection }) {
-	const [basicValues, setBasicValues] = useState<Record<string, string>>(() => buildBasicValues(selection));
-	const [rows, setRows] = useState<FieldRow[]>(() => seedRows(selection));
+export function ModelingEditor({
+	selection,
+	model,
+	dimensionOperationId = null,
+	dimensionActorScope = "",
+	initialDimensionCommand = null,
+	onBusyChange,
+	onSaved,
+	onCancel,
+}: EditorProps) {
+	const canMaintain = useCatalogMaintainerAccess();
+	const userInfo = useUserInfo();
+	const canonicalModel = isCanonical(model) ? model : null;
+	const config = MODEL_CONFIG[selection.type];
+	const [persistedModel, setPersistedModel] = useState<CanonicalModelSpecView | null>(canonicalModel);
+	const [plans, setPlans] = useState<WarehousePlanHeader[]>([]);
+	const [categories, setCategories] = useState<WarehousePlanCategoryBindingView[]>([]);
+	const [dimensionDefinitions, setDimensionDefinitions] = useState<DimensionDefinitionView[]>([]);
+	const [standardOptions, setStandardOptions] = useState<ModelFieldStandardOption[]>([]);
+	const pendingModel = initialDimensionCommand?.modelSpec || null;
+	const pendingDefinitionRef =
+		initialDimensionCommand?.definitionBinding.mode === "EXISTING"
+			? initialDimensionCommand.definitionBinding.dimensionDefinitionRef
+			: null;
+	const pendingCreatedDefinition =
+		initialDimensionCommand?.definitionBinding.mode === "CREATE"
+			? initialDimensionCommand.definitionBinding.definition
+			: null;
+	const [planId, setPlanId] = useState(canonicalModel?.planId || pendingModel?.planId || "");
+	const [domainId, setDomainId] = useState(canonicalModel?.domainId || pendingModel?.domainId || "");
+	const [dimensionDefinitionId, setDimensionDefinitionId] = useState(
+		canonicalModel?.dimensionDefinitionRef?.dimensionDefinitionId || pendingDefinitionRef?.dimensionDefinitionId || "",
+	);
+	const [dimensionDefinitionRevision, setDimensionDefinitionRevision] = useState(
+		canonicalModel?.dimensionDefinitionRef?.revision || pendingDefinitionRef?.revision || 0,
+	);
+	const [name, setName] = useState(canonicalModel?.name || pendingModel?.name || "");
+	const [description, setDescription] = useState(canonicalModel?.description || pendingModel?.description || "");
+	const [variantCode, setVariantCode] = useState(canonicalModel?.variantCode || pendingModel?.variantCode || "");
+	const [grainStatement, setGrainStatement] = useState(
+		canonicalModel?.grain?.statement || pendingModel?.grain?.statement || "",
+	);
+	const [materialization, setMaterialization] = useState(
+		canonicalModel?.materialization || pendingModel?.materialization || "table",
+	);
+	const [dimensionReuseScope, setDimensionReuseScope] = useState<"PLAN" | "DOMAIN" | "TENANT">(
+		canonicalModel?.dimensionProfile?.reuseScope || pendingCreatedDefinition?.reuseScope || "DOMAIN",
+	);
+	const [dimensionScdType, setDimensionScdType] = useState<"NONE" | "TYPE1" | "TYPE2">(
+		canonicalModel?.dimensionProfile?.scdPolicy.type || pendingModel?.dimensionProfile?.scdPolicy.type || "NONE",
+	);
+	const [rows, setRows] = useState<FieldRow[]>(() =>
+		canonicalModel ? rowsFromModel(canonicalModel) : rowsFromCommand(initialDimensionCommand),
+	);
 	const [mode, setMode] = useState<"quick" | "code">("quick");
 	const [insertCount, setInsertCount] = useState(1);
 	const [dialog, setDialog] = useState<ModelingDialogKind>(null);
 	const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
 		() => new Set(MODEL_FIELD_DISPLAY_COLUMNS.map(([key]) => key)),
 	);
+	const [contextLoading, setContextLoading] = useState(false);
+	const [saving, setSaving] = useState(false);
+	const [checking, setChecking] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+	const [notice, setNotice] = useState<string | null>(null);
+	const [gates, setGates] = useState<ModelSpecStageGate[]>([]);
 	const rowCounter = useRef(100);
+	const modelCreateIdempotencyKeyRef = useRef(crypto.randomUUID());
+	const mountedRef = useRef(true);
+	const requestEpochRef = useRef(0);
+	const saveAbortRef = useRef<AbortController | null>(null);
 
 	useEffect(() => {
-		setBasicValues(buildBasicValues(selection));
-		setRows(seedRows(selection));
+		const restoredModel = initialDimensionCommand?.modelSpec || null;
+		const restoredRef =
+			initialDimensionCommand?.definitionBinding.mode === "EXISTING"
+				? initialDimensionCommand.definitionBinding.dimensionDefinitionRef
+				: null;
+		setPersistedModel(canonicalModel);
+		setPlanId(canonicalModel?.planId || restoredModel?.planId || "");
+		setDomainId(canonicalModel?.domainId || restoredModel?.domainId || "");
+		setDimensionDefinitionId(
+			canonicalModel?.dimensionDefinitionRef?.dimensionDefinitionId || restoredRef?.dimensionDefinitionId || "",
+		);
+		setDimensionDefinitionRevision(canonicalModel?.dimensionDefinitionRef?.revision || restoredRef?.revision || 0);
+		setName(canonicalModel?.name || restoredModel?.name || "");
+		setDescription(canonicalModel?.description || restoredModel?.description || "");
+		setVariantCode(canonicalModel?.variantCode || restoredModel?.variantCode || "");
+		setGrainStatement(canonicalModel?.grain?.statement || restoredModel?.grain?.statement || "");
+		setMaterialization(canonicalModel?.materialization || restoredModel?.materialization || "table");
+		setDimensionReuseScope(
+			canonicalModel?.dimensionProfile?.reuseScope ||
+				(initialDimensionCommand?.definitionBinding.mode === "CREATE"
+					? initialDimensionCommand.definitionBinding.definition.reuseScope
+					: null) ||
+				"DOMAIN",
+		);
+		setDimensionScdType(
+			canonicalModel?.dimensionProfile?.scdPolicy.type || restoredModel?.dimensionProfile?.scdPolicy.type || "NONE",
+		);
+		setRows(canonicalModel ? rowsFromModel(canonicalModel) : rowsFromCommand(initialDimensionCommand));
 		setMode("quick");
-	}, [selection]);
+		setError(null);
+		setNotice(null);
+		setGates([]);
+		modelCreateIdempotencyKeyRef.current = crypto.randomUUID();
+	}, [canonicalModel, initialDimensionCommand]);
+
+	useEffect(() => {
+		mountedRef.current = true;
+		return () => {
+			mountedRef.current = false;
+			requestEpochRef.current += 1;
+			saveAbortRef.current?.abort();
+		};
+	}, []);
+
+	useEffect(() => {
+		onBusyChange?.(saving);
+		return () => onBusyChange?.(false);
+	}, [onBusyChange, saving]);
+
+	useEffect(() => {
+		let active = true;
+		setContextLoading(true);
+		void Promise.all([listWarehousePlans(), listModelFieldStandardOptions()])
+			.then(([planResult, standardResult]) => {
+				if (!active) return;
+				setPlans(planResult.filter((plan) => plan.lifecycleStatus !== "ARCHIVED"));
+				setStandardOptions(standardResult);
+			})
+			.catch((cause) => {
+				if (active) setError(safeErrorCode(cause, "MODEL_EDITOR_CONTEXT_READ_FAILED"));
+			})
+			.finally(() => {
+				if (active) setContextLoading(false);
+			});
+		return () => {
+			active = false;
+		};
+	}, []);
+
+	useEffect(() => {
+		let active = true;
+		if (!planId) {
+			setCategories([]);
+			return () => {
+				active = false;
+			};
+		}
+		setContextLoading(true);
+		void getWarehousePlanCategories(planId)
+			.then((result) => {
+				if (!active) return;
+				const available = result.value.domainBindings.filter(
+					(binding) => binding.confirmationStatus !== "EXCLUDED" && binding.resolutionStatus === "AVAILABLE",
+				);
+				setCategories(available);
+				if (!domainId && available[0]) setDomainId(available[0].domainId);
+			})
+			.catch((cause) => {
+				if (active) setError(safeErrorCode(cause, "WAREHOUSE_PLAN_CATEGORY_READ_FAILED"));
+			})
+			.finally(() => {
+				if (active) setContextLoading(false);
+			});
+		return () => {
+			active = false;
+		};
+	}, [domainId, planId]);
+
+	useEffect(() => {
+		let active = true;
+		if (config.modelType !== "DIMENSION" || !domainId || selection.type === "dimension") {
+			setDimensionDefinitions([]);
+			return () => {
+				active = false;
+			};
+		}
+		void listDimensionDefinitions({ domainId, status: "CURRENT" })
+			.then((result) => {
+				if (!active) return;
+				setDimensionDefinitions(result);
+				if (!dimensionDefinitionId && result[0]) {
+					setDimensionDefinitionId(result[0].id);
+					setDimensionDefinitionRevision(result[0].revision);
+				}
+			})
+			.catch((cause) => {
+				if (active) setError(safeErrorCode(cause, "DIMENSION_DEFINITION_LIST_FAILED"));
+			});
+		return () => {
+			active = false;
+		};
+	}, [config.modelType, dimensionDefinitionId, domainId, selection.type]);
 
 	const codePreview = useMemo(
 		() =>
 			[
-				`MODEL ${selection.code} {`,
+				`MODEL ${variantCode || "new_model"} {`,
 				...rows.map(
-					(row) =>
-						`  ${row.code || "new_field"} ${row.dataType}${row.primaryKey ? " KEY" : ""}${row.notNull ? " NOT NULL" : ""};`,
+					(row) => `  ${row.code || "new_field"} ${row.dataType} ${row.role}${row.notNull ? " NOT NULL" : ""};`,
 				),
 				"}",
 			].join("\n"),
-		[rows, selection.code],
+		[rows, variantCode],
 	);
 
-	const updateRow = <K extends keyof FieldRow>(id: string, key: K, value: FieldRow[K]) => {
-		setRows((current) => current.map((row) => (row.id === id ? { ...row, [key]: value } : row)));
+	const validRows = useMemo(
+		() => rows.filter((row) => row.code.trim() && row.displayName.trim() && row.dataType.trim()),
+		[rows],
+	);
+	const keyNames = useMemo(
+		() => validRows.filter((row) => row.role === "KEY").map((row) => row.code.trim()),
+		[validRows],
+	);
+
+	const patchRow = (id: string, patch: Partial<FieldRow>) => {
+		setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
 	};
 
 	const addRows = () => {
-		const additions = Array.from({ length: Math.max(1, insertCount) }, () => ({
-			id: `new-field-${rowCounter.current++}`,
-			code: "",
-			dataType: "STRING",
-			displayName: "",
-			primaryKey: false,
-			notNull: false,
-			attributeCode: "",
-		}));
+		const additions = Array.from({ length: Math.max(1, insertCount) }, () =>
+			newField(`new-field-${rowCounter.current++}`),
+		);
 		setRows((current) => [...current, ...additions]);
 	};
 
-	const resetEditor = () => {
-		setBasicValues(buildBasicValues(selection));
-		setRows(seedRows(selection));
+	const buildStandardBindings = useCallback(
+		(base?: Pick<UpdateModelSpecCommand, "standardBindings"> | null): ModelSpecStandardBinding[] =>
+			validRows.flatMap<ModelSpecStandardBinding>((row) => {
+				const prior = base?.standardBindings?.find(
+					(binding) => binding.fieldName === (row.originalCode || row.code.trim()),
+				);
+				const fieldName = row.code.trim();
+				if (row.standardElementId && row.standardElementVersion) {
+					return [
+						{
+							...prior,
+							fieldName,
+							standardElementId: row.standardElementId,
+							standardElementVersion: row.standardElementVersion,
+						},
+					];
+				}
+				if (prior?.referenceCode || prior?.measurementUnitId || prior?.securityLevel) {
+					return [{ ...prior, fieldName, standardElementId: null, standardElementVersion: null }];
+				}
+				return [];
+			}),
+		[validRows],
+	);
+
+	const buildUpdate = useCallback(
+		(base?: CanonicalModelSpecView | null): UpdateModelSpecCommand => {
+			const restored = base || initialDimensionCommand?.modelSpec || null;
+			return {
+				planId,
+				domainId,
+				modelType: config.modelType,
+				layer: config.layer,
+				name: name.trim(),
+				description: description.trim() || null,
+				implementationMode: restored?.implementationMode || "DESIGNER_GENERATED",
+				materialization,
+				businessActivityRef: restored?.businessActivityRef || null,
+				consumptionScenario: restored?.consumptionScenario || null,
+				grain: { statement: grainStatement.trim(), keys: keyNames },
+				factShape: config.modelType === "FACT" ? restored?.factShape || "TRANSACTION" : null,
+				timeSemantics: config.modelType === "FACT" ? restored?.timeSemantics || null : null,
+				generationStrategy: config.modelType === "DIMENSION" ? restored?.generationStrategy || null : null,
+				dimensionProfile:
+					config.modelType === "DIMENSION"
+						? {
+								hierarchies: restored?.dimensionProfile?.hierarchies || [],
+								scdPolicy:
+									dimensionScdType === "TYPE2"
+										? { ...restored?.dimensionProfile?.scdPolicy, type: "TYPE2" }
+										: { type: dimensionScdType },
+							}
+						: null,
+				dataMartId: restored?.dataMartId || null,
+				variantCode: variantCode.trim().toUpperCase() || null,
+				fields: validRows.map(modelSpecFieldFromRow),
+				sourceRefs: restored?.sourceRefs || [],
+				dependsOn: restored?.dependsOn || [],
+				dimensionRefs: restored?.dimensionRefs || [],
+				metricRefs: restored?.metricRefs || [],
+				standardBindings: buildStandardBindings(restored),
+			};
+		},
+		[
+			buildStandardBindings,
+			config.layer,
+			config.modelType,
+			description,
+			dimensionScdType,
+			domainId,
+			grainStatement,
+			initialDimensionCommand,
+			keyNames,
+			materialization,
+			name,
+			planId,
+			validRows,
+			variantCode,
+		],
+	);
+
+	const buildDimensionCreateCommand = (): CreateDimensionModelCommand => {
+		if (!dimensionOperationId) throw new Error("DIMENSION_MODEL_OPERATION_ID_REQUIRED");
+		const modelSpec = buildUpdate(null);
+		if (
+			modelSpec.modelType !== "DIMENSION" ||
+			modelSpec.layer !== "DWD" ||
+			modelSpec.implementationMode !== "DESIGNER_GENERATED"
+		) {
+			throw new Error("DIMENSION_MODEL_COMMAND_BOUNDARY_INVALID");
+		}
+		const exactModelSpec: CreateDimensionModelCommand["modelSpec"] = {
+			...modelSpec,
+			modelType: "DIMENSION",
+			layer: "DWD",
+			implementationMode: "DESIGNER_GENERATED",
+			dimensionProfile: {
+				hierarchies: modelSpec.dimensionProfile?.hierarchies || [],
+				scdPolicy: modelSpec.dimensionProfile?.scdPolicy || { type: "NONE" },
+			},
+			fields: modelSpec.fields || [],
+			sourceRefs: modelSpec.sourceRefs || [],
+			dependsOn: modelSpec.dependsOn || [],
+			dimensionRefs: modelSpec.dimensionRefs || [],
+			metricRefs: modelSpec.metricRefs || [],
+			standardBindings: modelSpec.standardBindings || [],
+		};
+		if (selection.type === "dimension") {
+			if (!userInfo.id) throw new Error("DIMENSION_OWNER_REQUIRED");
+			const priorDefinition =
+				initialDimensionCommand?.definitionBinding.mode === "CREATE"
+					? initialDimensionCommand.definitionBinding.definition
+					: null;
+			return {
+				operationId: dimensionOperationId,
+				definitionBinding: {
+					mode: "CREATE",
+					definition: {
+						...priorDefinition,
+						domainId,
+						name: name.trim(),
+						definition: description.trim() || name.trim(),
+						ownerId: priorDefinition?.ownerId || userInfo.id,
+						reuseScope: dimensionReuseScope,
+						scopeType: priorDefinition?.scopeType || "DOMAIN",
+						attributes: validRows.map((row, index) => ({
+							code: (row.attributeCode.trim() || row.code.trim()).toUpperCase(),
+							name: row.displayName.trim(),
+							definition: row.displayName.trim(),
+							primaryKey: row.role === "KEY",
+							standardRef: row.standardElementId || null,
+							standardVersion: row.standardElementVersion == null ? null : String(row.standardElementVersion),
+							order: index + 1,
+						})),
+					},
+				},
+				modelSpec: exactModelSpec,
+			};
+		}
+		const definition = dimensionDefinitions.find((item) => item.id === dimensionDefinitionId);
+		const revision = dimensionDefinitionRevision || definition?.revision || 0;
+		if (!dimensionDefinitionId || revision < 1) throw new Error("DIMENSION_DEFINITION_REQUIRED");
+		return {
+			operationId: dimensionOperationId,
+			definitionBinding: {
+				mode: "EXISTING",
+				dimensionDefinitionRef: { dimensionDefinitionId, revision },
+			},
+			modelSpec: exactModelSpec,
+		};
+	};
+
+	const save = async () => {
+		setError(null);
+		setNotice(null);
+		if (!canMaintain) {
+			setError("MODEL_SPEC_WRITE_FORBIDDEN");
+			return;
+		}
+		if (!planId || !domainId || !name.trim() || !grainStatement.trim() || keyNames.length === 0) {
+			setError("MODEL_SPEC_REQUIRED_CONTEXT_OR_GRAIN_MISSING");
+			return;
+		}
+		if (validRows.length !== rows.length || validRows.length === 0) {
+			setError("MODEL_SPEC_FIELD_INCOMPLETE");
+			return;
+		}
+		setSaving(true);
+		saveAbortRef.current?.abort();
+		const requestController = new AbortController();
+		saveAbortRef.current = requestController;
+		const requestEpoch = ++requestEpochRef.current;
+		const isCurrentRequest = () => mountedRef.current && requestEpochRef.current === requestEpoch;
+		let base = persistedModel;
+		try {
+			if (!base) {
+				if (config.modelType === "DIMENSION") {
+					const command = buildDimensionCreateCommand();
+					const issues = validateModelSpecUpdate(command.modelSpec);
+					if (issues.length) {
+						setError(issues.map((issue) => `${issue.field}:${issue.code}`).join("；"));
+						return;
+					}
+					if (!dimensionActorScope) throw new Error("DIMENSION_MODEL_ACTOR_SCOPE_REQUIRED");
+					await persistDimensionModelDraft(command, dimensionActorScope);
+					const created = await createDimensionModel(command, requestController.signal);
+					if (!isCurrentRequest()) return;
+					const expectedDefinitionRevision =
+						command.definitionBinding.mode === "CREATE" ? 2 : command.definitionBinding.dimensionDefinitionRef.revision;
+					if (
+						created.operationId !== command.operationId ||
+						created.bindingMode !== command.definitionBinding.mode ||
+						created.dimensionDefinitionRevision.revision !== expectedDefinitionRevision ||
+						created.modelSpecRevision.revision !== 2 ||
+						created.modelSpecRevision.id !== created.currentModelSpec.id ||
+						created.currentModelSpec.contractVersion !== 2
+					) {
+						throw new Error("DIMENSION_MODEL_OPERATION_RESPONSE_INVALID");
+					}
+					base = created.currentModelSpec;
+					setPersistedModel(base);
+					setNotice(`MODEL_SPEC_SAVED_R${base.revision}`);
+					await onSaved(base, command.operationId);
+					return;
+				} else {
+					base = await createModelSpec({
+						planId,
+						domainId,
+						modelType: config.modelType,
+						name: name.trim(),
+						description: description.trim() || null,
+						variantCode: variantCode.trim().toUpperCase() || null,
+						idempotencyKey: modelCreateIdempotencyKeyRef.current,
+					} as Parameters<typeof createModelSpec>[0]);
+				}
+				if (!isCurrentRequest()) return;
+				setPersistedModel(base);
+			}
+			const update = buildUpdate(base);
+			const issues = validateModelSpecUpdate(update);
+			if (issues.length) {
+				setError(issues.map((issue) => `${issue.field}:${issue.code}`).join("；"));
+				return;
+			}
+			const saved = await updateModelSpec(base, update);
+			if (!isCurrentRequest()) return;
+			setPersistedModel(saved);
+			setNotice(`MODEL_SPEC_SAVED_R${saved.revision}`);
+			await onSaved(saved);
+		} catch (cause) {
+			if (isCurrentRequest() && !requestController.signal.aborted) {
+				setError(safeErrorCode(cause, cause instanceof Error ? cause.message : "MODEL_SPEC_SAVE_FAILED"));
+			}
+		} finally {
+			if (isCurrentRequest()) setSaving(false);
+		}
+	};
+
+	const cancel = () => {
+		if (saving) return;
+		onCancel?.();
+	};
+
+	const checkGates = async () => {
+		if (!persistedModel) return;
+		setChecking(true);
+		setError(null);
+		try {
+			const result = await getModelSpecStageGates(persistedModel.id);
+			setGates(result);
+			const blocked = result.filter((gate) => gate.status === "BLOCKED").length;
+			setNotice(blocked ? `MODEL_SPEC_GATES_BLOCKED_${blocked}` : "MODEL_SPEC_GATES_READY");
+		} catch (cause) {
+			setError(safeErrorCode(cause, "MODEL_SPEC_STAGE_GATE_READ_FAILED"));
+		} finally {
+			setChecking(false);
+		}
 	};
 
 	return (
-		<section className="dm-model-editor">
-			<div className="dm-editor-tabs">
-				<div className="dm-editor-tab is-active">
-					<TableProperties aria-hidden="true" size={15} />
-					<strong>{selection.name}</strong>
-					<span>{selection.isNew ? "新建" : "草稿 v1"}</span>
-				</div>
-			</div>
-			<div className="dm-editor-toolbar">
-				<BackendPendingButton>保存</BackendPendingButton>
-				<BackendPendingButton>提交</BackendPendingButton>
-				<ActionButton onClick={resetEditor}>
-					<RefreshCw aria-hidden="true" size={14} />
-					刷新
-				</ActionButton>
-				<ActionButton onClick={() => setDialog("association")}>
-					<Link2 aria-hidden="true" size={14} />
-					关联关系
-				</ActionButton>
-				<ActionButton onClick={() => setDialog("release")}>发布与物化</ActionButton>
-				<ActionButton disabled title="后台重构阶段接入运行日志">
-					日志
-				</ActionButton>
-				<ActionButton disabled title="后台重构阶段接入质量规则">
-					质量规则
-				</ActionButton>
-				<span className="dm-editor-toolbar__status">
-					<StatusTag tone="warning">未发布</StatusTag>
-				</span>
-			</div>
+		<section aria-busy={saving} className="dm-model-editor">
+			<ModelingEditorHeader
+				canMaintain={canMaintain}
+				checking={checking}
+				contextLoading={contextLoading}
+				error={error}
+				gates={gates}
+				model={persistedModel}
+				modelLabel={config.label}
+				name={name}
+				notice={notice}
+				onCancel={onCancel ? cancel : undefined}
+				onCheckGates={() => void checkGates()}
+				onRefresh={() => {
+					setRows(rowsFromModel(persistedModel));
+					setError(null);
+					setNotice(null);
+				}}
+				onRelease={() => setDialog("release")}
+				onSave={() => void save()}
+				saving={saving}
+			/>
+
 			<div className="dm-model-editor__scroll">
-				<section className="dm-editor-section">
-					<h2>基本信息</h2>
-					<div className="dm-model-form">
-						{BASIC_FIELDS[selection.type].map((field) => {
-							const value = basicValues[field.label] ?? "";
-							const wide = field.kind === "textarea";
-							return (
-								<div className={`dm-model-form__field ${wide ? "dm-model-form__field--wide" : ""}`} key={field.label}>
-									<span>
-										{field.required ? <b>*</b> : null}
-										{field.label}
-									</span>
-									{field.kind === "select" ? (
-										<select
-											aria-label={field.label}
-											className="dm-select"
-											onChange={(event) =>
-												setBasicValues((current) => ({
-													...current,
-													[field.label]: event.target.value,
-												}))
-											}
-											value={value}
-										>
-											<option>{value}</option>
-											<option>请选择</option>
-										</select>
-									) : field.kind === "textarea" ? (
-										<textarea
-											aria-label={field.label}
-											className="dm-textarea"
-											onChange={(event) =>
-												setBasicValues((current) => ({
-													...current,
-													[field.label]: event.target.value,
-												}))
-											}
-											rows={2}
-											value={value}
-										/>
-									) : (
-										<input
-											aria-label={field.label}
-											className="dm-input"
-											onChange={(event) =>
-												setBasicValues((current) => ({
-													...current,
-													[field.label]: event.target.value,
-												}))
-											}
-											value={value}
-										/>
-									)}
-								</div>
-							);
-						})}
-					</div>
-				</section>
+				<ModelingBasicInfoSection
+					categories={categories}
+					description={description}
+					dimensionDefinitionId={dimensionDefinitionId}
+					dimensionDefinitions={dimensionDefinitions}
+					dimensionReuseScope={dimensionReuseScope}
+					dimensionScdType={dimensionScdType}
+					domainId={domainId}
+					grainStatement={grainStatement}
+					isDimension={config.modelType === "DIMENSION"}
+					isDimensionDefinition={selection.type === "dimension"}
+					isDimensionTable={selection.type === "dimension-table"}
+					materialization={materialization}
+					modelLabel={config.label}
+					modelLayer={config.layer}
+					name={name}
+					onDescriptionChange={setDescription}
+					onDimensionDefinitionChange={(nextId) => {
+						setDimensionDefinitionId(nextId);
+						setDimensionDefinitionRevision(dimensionDefinitions.find((item) => item.id === nextId)?.revision || 0);
+					}}
+					onDimensionReuseScopeChange={setDimensionReuseScope}
+					onDimensionScdTypeChange={setDimensionScdType}
+					onDomainChange={(nextDomainId) => {
+						setDomainId(nextDomainId);
+						setDimensionDefinitionId("");
+						setDimensionDefinitionRevision(0);
+					}}
+					onGrainStatementChange={setGrainStatement}
+					onMaterializationChange={setMaterialization}
+					onNameChange={setName}
+					onPlanChange={(nextPlanId) => {
+						setPlanId(nextPlanId);
+						setDomainId("");
+						setDimensionDefinitionId("");
+						setDimensionDefinitionRevision(0);
+					}}
+					onVariantCodeChange={setVariantCode}
+					pendingDefinitionRef={pendingDefinitionRef}
+					persisted={Boolean(persistedModel)}
+					placeholder="UPPER_SNAKE_CASE"
+					planId={planId}
+					plans={plans}
+					variantCode={variantCode}
+				/>
 
 				<section className="dm-editor-section">
 					<div className="dm-editor-section__title">
@@ -510,28 +722,20 @@ export function ModelingEditor({ selection }: { selection: ModelSelection }) {
 							</button>
 							<button className={mode === "code" ? "is-active" : ""} onClick={() => setMode("code")} type="button">
 								<Code2 aria-hidden="true" size={13} />
-								代码模式
+								定义预览
 							</button>
 						</fieldset>
 					</div>
 					{mode === "code" ? (
 						<div className="dm-code-editor">
 							<div>
-								<span>FML 模型定义预览</span>
-								<StatusTag tone="info">只读预览</StatusTag>
+								<span>业务模型定义预览</span>
+								<StatusTag tone="info">只读</StatusTag>
 							</div>
-							<textarea aria-label="FML 模型定义" readOnly spellCheck={false} value={codePreview} />
+							<textarea aria-label="业务模型定义" readOnly spellCheck={false} value={codePreview} />
 						</div>
 					) : (
 						<>
-							<div className="dm-field-import">
-								<span>从表/视图导入</span>
-								<small>后台接入后可选择数据源并识别字段</small>
-								<ActionButton disabled>选择上游表</ActionButton>
-								<ActionButton kind="quiet" onClick={() => setDialog("association")}>
-									字段关联
-								</ActionButton>
-							</div>
 							<div className="dm-field-actions">
 								<ActionButton
 									onClick={() =>
@@ -559,114 +763,13 @@ export function ModelingEditor({ selection }: { selection: ModelSelection }) {
 									字段显示设置
 								</ActionButton>
 							</div>
-							<div className="dm-field-table-wrap">
-								<table className="dm-field-table">
-									<thead>
-										<tr>
-											{visibleColumns.has("sequence") ? <th>序号</th> : null}
-											{visibleColumns.has("code") ? <th>字段名称</th> : null}
-											{visibleColumns.has("dataType") ? <th>类型</th> : null}
-											{visibleColumns.has("displayName") ? <th>字段显示名</th> : null}
-											{visibleColumns.has("primaryKey") ? <th>主键</th> : null}
-											{visibleColumns.has("notNull") ? <th>非空</th> : null}
-											{visibleColumns.has("attributeCode") ? <th>维度属性编码</th> : null}
-											{visibleColumns.has("operation") ? <th>操作</th> : null}
-										</tr>
-									</thead>
-									<tbody>
-										{rows.map((row, index) => (
-											<tr key={row.id}>
-												{visibleColumns.has("sequence") ? <td>{index + 1}</td> : null}
-												{visibleColumns.has("code") ? (
-													<td>
-														<input
-															aria-label={`第 ${index + 1} 行字段名称`}
-															onChange={(event) => updateRow(row.id, "code", event.target.value)}
-															placeholder="field_name"
-															value={row.code}
-														/>
-													</td>
-												) : null}
-												{visibleColumns.has("dataType") ? (
-													<td>
-														<select
-															aria-label={`第 ${index + 1} 行数据类型`}
-															onChange={(event) => updateRow(row.id, "dataType", event.target.value)}
-															value={row.dataType}
-														>
-															{["STRING", "INT", "BIGINT", "DECIMAL(18,2)", "BOOLEAN", "DATE", "TIMESTAMP"].map(
-																(type) => (
-																	<option key={type}>{type}</option>
-																),
-															)}
-														</select>
-													</td>
-												) : null}
-												{visibleColumns.has("displayName") ? (
-													<td>
-														<input
-															aria-label={`第 ${index + 1} 行字段显示名`}
-															onChange={(event) => updateRow(row.id, "displayName", event.target.value)}
-															placeholder="字段中文名"
-															value={row.displayName}
-														/>
-													</td>
-												) : null}
-												{visibleColumns.has("primaryKey") ? (
-													<td className="dm-field-table__check">
-														<input
-															aria-label={`第 ${index + 1} 行主键`}
-															checked={row.primaryKey}
-															onChange={(event) => updateRow(row.id, "primaryKey", event.target.checked)}
-															type="checkbox"
-														/>
-													</td>
-												) : null}
-												{visibleColumns.has("notNull") ? (
-													<td className="dm-field-table__check">
-														<input
-															aria-label={`第 ${index + 1} 行非空`}
-															checked={row.notNull}
-															onChange={(event) => updateRow(row.id, "notNull", event.target.checked)}
-															type="checkbox"
-														/>
-													</td>
-												) : null}
-												{visibleColumns.has("attributeCode") ? (
-													<td>
-														<input
-															aria-label={`第 ${index + 1} 行维度属性编码`}
-															onChange={(event) => updateRow(row.id, "attributeCode", event.target.value)}
-															placeholder="可选"
-															value={row.attributeCode}
-														/>
-													</td>
-												) : null}
-												{visibleColumns.has("operation") ? (
-													<td>
-														<button
-															aria-label={`删除第 ${index + 1} 行`}
-															className="dm-text-action dm-text-action--danger"
-															onClick={() => setRows((current) => current.filter((item) => item.id !== row.id))}
-															type="button"
-														>
-															<Trash2 aria-hidden="true" size={13} />
-															删除
-														</button>
-													</td>
-												) : null}
-											</tr>
-										))}
-									</tbody>
-								</table>
-							</div>
-							<div className="dm-partition-row">
-								<strong>分区字段</strong>
-								<code>ds</code>
-								<span>STRING</span>
-								<span>业务日期，格式 yyyymmdd</span>
-								<StatusTag tone="info">非空</StatusTag>
-							</div>
+							<ModelingFieldTable
+								onDelete={(id) => setRows((current) => current.filter((item) => item.id !== id))}
+								onPatch={patchRow}
+								rows={rows}
+								standardOptions={standardOptions}
+								visibleColumns={visibleColumns}
+							/>
 						</>
 					)}
 				</section>
@@ -674,6 +777,7 @@ export function ModelingEditor({ selection }: { selection: ModelSelection }) {
 
 			<ModelingDialogs
 				dialog={dialog}
+				model={persistedModel}
 				onClose={() => setDialog(null)}
 				onToggleColumn={(key, checked) =>
 					setVisibleColumns((current) => {
@@ -684,7 +788,7 @@ export function ModelingEditor({ selection }: { selection: ModelSelection }) {
 					})
 				}
 				rows={rows}
-				selectionCode={selection.code}
+				selectionCode={variantCode || selection.code}
 				visibleColumns={visibleColumns}
 			/>
 		</section>

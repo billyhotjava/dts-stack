@@ -1,155 +1,107 @@
-import { Download, FileCheck2, FileInput, FileOutput, ScanSearch, ShieldCheck, Upload } from "lucide-react";
 import {
-	ActionButton,
-	BackendPendingButton,
-	DataTable,
-	Panel,
-	StatusTag,
-	UiStageNotice,
-	WorkspacePage,
-} from "../components/WorkspacePage";
-import type { DemoRow, TableColumn, WorkspacePageProps } from "../types";
+	ArchiveRestore,
+	ArrowRight,
+	FileArchive,
+	GitBranch,
+	ListChecks,
+	type LucideIcon,
+	ScrollText,
+} from "lucide-react";
+import { useNavigate } from "react-router";
+import {
+	type DataModelingToolWorkflow,
+	type DataModelingToolWorkflowKey,
+	getDataModelingToolWorkflows,
+} from "@/features/modeling/navigation/dataModelingToolWorkflows";
+import { ActionButton, EmptyState, Panel, StatusTag, WorkspacePage } from "../components/WorkspacePage";
+import type { WorkspacePageProps } from "../types";
 import "./tools-graphs.css";
 
-const TOOL_CARDS = [
-	{
-		title: "模型批量导入",
-		description: "读取受支持的模型模板并在提交前完成结构预检。",
-		icon: FileInput,
-	},
-	{
-		title: "模型批量导出",
-		description: "按建模空间、分层和模型类型生成可交付文件。",
-		icon: FileOutput,
-	},
-	{
-		title: "字段标准检查",
-		description: "检查技术名称、数据类型和字段标准映射完整性。",
-		icon: ShieldCheck,
-	},
-	{
-		title: "模型差异比较",
-		description: "比较模型草稿、已发布版本和上游结构之间的差异。",
-		icon: ScanSearch,
-	},
-	{
-		title: "DDL 结构解析",
-		description: "解析建表语句并形成待确认的字段结构草稿。",
-		icon: FileCheck2,
-	},
-	{
-		title: "交付清单生成",
-		description: "汇总模型、标准、指标和物化前置检查项。",
-		icon: Download,
-	},
-];
+const WORKFLOW_ICONS: Record<DataModelingToolWorkflowKey, LucideIcon> = {
+	"dbt-zip-import": FileArchive,
+	"standard-package-import": ArchiveRestore,
+	"standard-code-governance": ListChecks,
+	"lineage-import": GitBranch,
+	"model-release-gates": ListChecks,
+	"audit-evidence": ScrollText,
+};
 
-const HISTORY_COLUMNS: TableColumn[] = [
-	{ key: "task", title: "任务名称" },
-	{ key: "type", title: "类型", width: 120 },
-	{ key: "scope", title: "对象范围" },
-	{ key: "operator", title: "发起人", width: 120 },
-	{ key: "time", title: "发起时间", width: 170 },
-	{ key: "status", title: "状态", width: 110 },
-];
+function WorkflowCards({ workflows }: { workflows: DataModelingToolWorkflow[] }) {
+	const navigate = useNavigate();
 
-const IMPORT_ROWS: DemoRow[] = [
-	{
-		id: "IMP-DEMO-001",
-		task: "模型模板预检（界面示例）",
-		type: "导入",
-		scope: "公共层 / 维度表",
-		operator: "示例用户",
-		time: "2026-07-31 10:20",
-		status: "待接入",
-	},
-];
-
-const EXPORT_ROWS: DemoRow[] = [
-	{
-		id: "EXP-DEMO-001",
-		task: "模型交付包（界面示例）",
-		type: "导出",
-		scope: "应用层 / 汇总表",
-		operator: "示例用户",
-		time: "2026-07-31 09:40",
-		status: "待接入",
-	},
-];
+	return (
+		<div className="dm-card-list dm-tool-grid">
+			{workflows.map((workflow) => {
+				const Icon = WORKFLOW_ICONS[workflow.key];
+				return (
+					<article className="dm-card dm-tool-card" key={workflow.key}>
+						<div className="dm-tool-card__icon">
+							<Icon aria-hidden="true" size={21} />
+						</div>
+						<h3>{workflow.title}</h3>
+						<p>{workflow.description}</p>
+						<div className="dm-card__footer">
+							<div>
+								<StatusTag tone="success">真实流程</StatusTag>
+								<small> {workflow.owner}</small>
+							</div>
+							<ActionButton onClick={() => navigate(workflow.path)}>
+								进入流程 <ArrowRight aria-hidden="true" size={14} />
+							</ActionButton>
+						</div>
+					</article>
+				);
+			})}
+		</div>
+	);
+}
 
 function Toolbox() {
+	const workflows = getDataModelingToolWorkflows();
+
 	return (
 		<>
-			<div className="dm-card-list dm-tool-grid">
-				{TOOL_CARDS.map((tool) => {
-					const Icon = tool.icon;
-					return (
-						<article className="dm-card dm-tool-card" key={tool.title}>
-							<div className="dm-tool-card__icon">
-								<Icon aria-hidden="true" size={21} />
-							</div>
-							<h3>{tool.title}</h3>
-							<p>{tool.description}</p>
-							<div className="dm-card__footer">
-								<StatusTag tone="info">后台待接入</StatusTag>
-								<ActionButton disabled title="后台能力将在界面评审通过后接入">
-									打开
-								</ActionButton>
-							</div>
-						</article>
-					);
-				})}
-			</div>
-			<Panel title="最近执行" subtitle="仅用于本轮界面布局评审，不代表真实任务记录。">
-				<DataTable columns={HISTORY_COLUMNS} rowKey="id" rows={[...IMPORT_ROWS, ...EXPORT_ROWS]} />
+			<WorkflowCards workflows={workflows} />
+			<Panel title="执行与审计边界" subtitle="没有统一的工具运行台账，也不会在前端拼接模拟历史。">
+				<p>
+					上传、预检、应用、发布和审计结果均由目标流程保存并展示。进入目标流程后，由其服务端执行权限校验、状态恢复和审计留痕。
+				</p>
 			</Panel>
 		</>
 	);
 }
 
-function RecordList({ type }: { type: "imports" | "exports" }) {
-	const isImport = type === "imports";
-	const rows = isImport ? IMPORT_ROWS : EXPORT_ROWS;
+function ImportWorkflows() {
 	return (
 		<Panel
-			actions={
-				<BackendPendingButton>
-					{isImport ? <Upload aria-hidden="true" size={15} /> : <Download aria-hidden="true" size={15} />}
-					{isImport ? "新建导入" : "新建导出"}
-				</BackendPendingButton>
-			}
-			subtitle="任务执行、文件上传和结果下载将在后台阶段接入。"
-			title={isImport ? "导入任务" : "导出任务"}
+			subtitle="导入能力按 canonical owner 分组；运行状态、失败原因和重试入口保留在各自流程。"
+			title="真实导入流程"
 		>
-			<div className="dm-toolbar">
-				<input
-					aria-label="搜索任务名称"
-					className="dm-input dm-toolbar__search"
-					placeholder="搜索任务名称"
-					type="search"
-				/>
-				<select aria-label="任务状态" className="dm-select dm-record-filter" defaultValue="all">
-					<option value="all">全部状态</option>
-					<option value="pending">待接入</option>
-					<option value="running">执行中</option>
-					<option value="done">已完成</option>
-				</select>
+			<WorkflowCards workflows={getDataModelingToolWorkflows("import")} />
+			<div className="dm-stage-notice" role="note">
+				没有统一的工具运行台账。请进入对应流程查看真实运行结果，避免跨 owner 合成不一致状态。
 			</div>
-			<DataTable columns={HISTORY_COLUMNS} rowKey="id" rows={rows} />
+		</Panel>
+	);
+}
+
+function ExportBoundary() {
+	return (
+		<Panel title="建模导出边界">
+			<EmptyState
+				description="为避免生成不可追踪文件，原无 owner 的导出和辅助生成按钮已移除。后续只有在明确 canonical owner、权限和审计契约后才会提供入口。"
+				title="当前没有归属明确的建模导出流程"
+			/>
 		</Panel>
 	);
 }
 
 export function ToolsWorkspace({ route }: WorkspacePageProps) {
 	return (
-		<WorkspacePage
-			actions={route.view === "toolbox" ? <BackendPendingButton>执行工具</BackendPendingButton> : undefined}
-			description={route.description}
-			eyebrow="通用工具"
-			title={route.title}
-		>
-			<UiStageNotice />
-			{route.view === "toolbox" ? <Toolbox /> : <RecordList type={route.view === "imports" ? "imports" : "exports"} />}
+		<WorkspacePage description={route.description} eyebrow="数据建模 / 通用工具" title={route.title}>
+			{route.view === "toolbox" ? <Toolbox /> : null}
+			{route.view === "imports" ? <ImportWorkflows /> : null}
+			{route.view === "exports" ? <ExportBoundary /> : null}
 		</WorkspacePage>
 	);
 }

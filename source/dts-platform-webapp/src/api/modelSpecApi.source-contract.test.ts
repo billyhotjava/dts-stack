@@ -17,6 +17,14 @@ test("canonical ModelSpec client owns one non-vnext CRUD surface and strong CAS 
 		/`\$\{MODEL_SPEC_RESOURCE\}\/\$\{encodeURIComponent\(id\)\}\/revisions\/\$\{encodeURIComponent\(String\(revision\)\)\}`/,
 	);
 	assert.match(source, /export const createModelSpec/);
+	assert.match(source, /export const createDimensionModel/);
+	assert.match(source, /url: `\$\{MODEL_SPEC_RESOURCE\}\/dimension`/);
+	assert.match(source, /definitionBinding:/);
+	assert.match(source, /mode: "CREATE"/);
+	assert.match(source, /mode: "EXISTING"/);
+	assert.match(source, /currentModelSpec: CanonicalModelSpecView/);
+	assert.match(source, /export const getDimensionModelOperation/);
+	assert.match(source, /dimension\/operations\/\$\{encodeURIComponent\(operationId\)\}/);
 	assert.match(source, /export const updateModelSpec/);
 	assert.match(source, /headers: \{ "If-Match": toModelSpecEtag\(expected\) \}/);
 });

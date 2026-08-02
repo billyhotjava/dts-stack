@@ -1,5 +1,9 @@
 import api from "@/api/apiClient";
 import type {
+	CreateDimensionDefinitionCommand,
+	DimensionDefinitionView,
+} from "@/features/modeling/contracts/dimensionDefinitionContract";
+import type {
 	ModelImplementationCasToken,
 	ModelImplementationView,
 } from "@/features/modeling/contracts/modelImplementationContract";
@@ -8,8 +12,11 @@ import type {
 	CanonicalModelSpecView,
 	CreateModelSpecCommand,
 	ModelSpecCasToken,
+	ModelSpecCollections,
+	ModelSpecDimensionHierarchy,
 	ModelSpecLayer,
 	ModelSpecRevisionConflictDetails,
+	ModelSpecScdPolicy,
 	ModelSpecType,
 	ModelSpecView,
 	UpdateModelSpecCommand,
@@ -24,6 +31,43 @@ export type ModelSpecListParams = {
 	modelType?: ModelSpecType;
 	layer?: ModelSpecLayer;
 };
+
+export type CreateDimensionModelCommand = {
+	operationId: string;
+	definitionBinding:
+		| {
+				mode: "CREATE";
+				definition: Omit<CreateDimensionDefinitionCommand, "idempotencyKey">;
+		  }
+		| {
+				mode: "EXISTING";
+				dimensionDefinitionRef: { dimensionDefinitionId: string; revision: number };
+		  };
+	modelSpec: Omit<
+		UpdateModelSpecCommand,
+		"modelType" | "layer" | "implementationMode" | "dimensionProfile" | keyof ModelSpecCollections
+	> &
+		ModelSpecCollections & {
+			modelType: "DIMENSION";
+			layer: "DWD";
+			implementationMode: "DESIGNER_GENERATED";
+			dimensionProfile: {
+				hierarchies: ModelSpecDimensionHierarchy[];
+				scdPolicy: ModelSpecScdPolicy;
+			};
+		};
+};
+
+export type CreateDimensionModelResult = {
+	operationId: string;
+	bindingMode: "CREATE" | "EXISTING";
+	dimensionDefinitionRevision: DimensionDefinitionView;
+	modelSpecRevision: CanonicalModelSpecView;
+	currentModelSpec: CanonicalModelSpecView;
+	replayed: boolean;
+};
+
+export type DimensionModelOperationView = CreateDimensionModelResult;
 
 export type ModelSpecRevisionConflict = {
 	code: "MODEL_SPEC_REVISION_CONFLICT";
@@ -219,6 +263,21 @@ export const getModelSpecDependencies = (id: string) =>
 
 export const createModelSpec = (data: CreateModelSpecCommand) =>
 	api.post<CanonicalModelSpecView>({ url: MODEL_SPEC_RESOURCE, data, _skipErrorToast: true } as any);
+
+export const createDimensionModel = (data: CreateDimensionModelCommand, signal?: AbortSignal) =>
+	api.post<CreateDimensionModelResult>({
+		url: `${MODEL_SPEC_RESOURCE}/dimension`,
+		data,
+		signal,
+		_skipErrorToast: true,
+	} as any);
+
+export const getDimensionModelOperation = (operationId: string, signal?: AbortSignal) =>
+	api.get<DimensionModelOperationView>({
+		url: `${MODEL_SPEC_RESOURCE}/dimension/operations/${encodeURIComponent(operationId)}`,
+		signal,
+		_skipErrorToast: true,
+	} as any);
 
 export const validateModelSpecPhysicalName = (
 	planId: string,

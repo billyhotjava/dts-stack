@@ -104,7 +104,7 @@ export function ReverseModelingWizard() {
 	const [undoSelected, setUndoSelected] = useState<Set<string>>(new Set());
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
-	const [lastRunId] = useState(() => sessionStorage.getItem(LAST_RUN_KEY) || "");
+	const [resumeRunId, setResumeRunId] = useState(() => sessionStorage.getItem(LAST_RUN_KEY) || "");
 
 	useEffect(() => {
 		let active = true;
@@ -131,8 +131,7 @@ export function ReverseModelingWizard() {
 						(item.action !== "CONFLICT" ||
 							["KEEP_CURRENT", "ACCEPT_INCOMING"].includes(conflictResolutions[item.dbtUniqueId] || "")),
 				)
-				.map((item) => item.dbtUniqueId) ||
-			[],
+				.map((item) => item.dbtUniqueId) || [],
 		[conflictResolutions, preview],
 	);
 	const retryableItems = useMemo(
@@ -191,6 +190,7 @@ export function ReverseModelingWizard() {
 			});
 			setPreview(result);
 			sessionStorage.setItem(LAST_RUN_KEY, result.runId);
+			setResumeRunId(result.runId);
 			setStep(2);
 		} catch (cause) {
 			setError(errorMessage(cause));
@@ -276,16 +276,18 @@ export function ReverseModelingWizard() {
 	};
 
 	const resumeLastRun = async () => {
-		if (!lastRunId) return;
+		const runId = resumeRunId.trim();
+		if (!runId) return;
 		setStarted(true);
 		setBusy(true);
 		setError("");
 		try {
-			const restoredPreview = await getModelSpecImportPreviewRun(lastRunId);
+			const restoredPreview = await getModelSpecImportPreviewRun(runId);
 			setPreview(restoredPreview);
 			setPlanId(restoredPreview.planId || "");
+			sessionStorage.setItem(LAST_RUN_KEY, runId);
 			try {
-				setApplyResult(await getModelSpecImportApplyResult(lastRunId));
+				setApplyResult(await getModelSpecImportApplyResult(runId));
 				setStep(3);
 			} catch (cause) {
 				const status = (cause as { response?: { status?: number } })?.response?.status;
@@ -328,8 +330,19 @@ export function ReverseModelingWizard() {
 						<ActionButton kind="primary" onClick={() => setStarted(true)}>
 							上传 dbt ZIP
 						</ActionButton>
-						{lastRunId ? <ActionButton onClick={() => void resumeLastRun()}>恢复最近导入</ActionButton> : null}
 					</div>
+					<label>
+						<span>恢复已有导入</span>
+						<input
+							aria-label="导入运行 ID"
+							onChange={(event) => setResumeRunId(event.target.value)}
+							placeholder="输入预检返回的 runId"
+							value={resumeRunId}
+						/>
+					</label>
+					<ActionButton disabled={busy || !resumeRunId.trim()} onClick={() => void resumeLastRun()}>
+						{busy ? "恢复中…" : "恢复导入"}
+					</ActionButton>
 				</div>
 				<aside>
 					<strong>反向建模流程</strong>
@@ -470,19 +483,19 @@ export function ReverseModelingWizard() {
 														type="checkbox"
 													/>
 												</td>
-											<td>
-												<code>{model.dbtUniqueId}</code>
-											</td>
-											<td>
-												<input
-													aria-label={`${model.dbtUniqueId} 原 uniqueId`}
-													onChange={(event) =>
-														setRenameSources((current) => ({ ...current, [model.dbtUniqueId]: event.target.value }))
-													}
-													placeholder="例如 model.pkg.old_name"
-													value={renameSources[model.dbtUniqueId] || ""}
-												/>
-											</td>
+												<td>
+													<code>{model.dbtUniqueId}</code>
+												</td>
+												<td>
+													<input
+														aria-label={`${model.dbtUniqueId} 原 uniqueId`}
+														onChange={(event) =>
+															setRenameSources((current) => ({ ...current, [model.dbtUniqueId]: event.target.value }))
+														}
+														placeholder="例如 model.pkg.old_name"
+														value={renameSources[model.dbtUniqueId] || ""}
+													/>
+												</td>
 												<td>
 													<input
 														aria-label={`${model.dbtUniqueId} 业务名称`}
@@ -557,6 +570,10 @@ export function ReverseModelingWizard() {
 					<div className="dm-reverse-confirm">
 						<div className="dm-reverse-summary">
 							<div>
+								<span>运行 ID</span>
+								<strong>{preview.runId}</strong>
+							</div>
+							<div>
 								<span>候选</span>
 								<strong>{preview.summary.total}</strong>
 							</div>
@@ -597,35 +614,29 @@ export function ReverseModelingWizard() {
 													{item.action}
 												</StatusTag>
 											</td>
-										<td>{item.conversionMode}</td>
-										<td>
-											{item.action === "CONFLICT" ? (
-												<select
-													aria-label={`${item.dbtUniqueId} 冲突决策`}
-													onChange={(event) =>
-														setConflictResolutions((current) => ({
-															...current,
-															[item.dbtUniqueId]: event.target.value as ModelSpecImportConflictResolution,
-														}))
-													}
-													value={conflictResolutions[item.dbtUniqueId] || ""}
-												>
-													<option value="">请选择</option>
-													<option value="KEEP_CURRENT">保留当前</option>
-													<option value="ACCEPT_INCOMING">接受导入</option>
-													<option value="CANCEL">取消该项</option>
-												</select>
-											) : (
-												"—"
-											)}
-										</td>
+											<td>{item.conversionMode}</td>
 											<td>
-												{item.issues.length
-													? item.issues
-													.map(formatIssue)
-															.join("；")
-													: "—"}
+												{item.action === "CONFLICT" ? (
+													<select
+														aria-label={`${item.dbtUniqueId} 冲突决策`}
+														onChange={(event) =>
+															setConflictResolutions((current) => ({
+																...current,
+																[item.dbtUniqueId]: event.target.value as ModelSpecImportConflictResolution,
+															}))
+														}
+														value={conflictResolutions[item.dbtUniqueId] || ""}
+													>
+														<option value="">请选择</option>
+														<option value="KEEP_CURRENT">保留当前</option>
+														<option value="ACCEPT_INCOMING">接受导入</option>
+														<option value="CANCEL">取消该项</option>
+													</select>
+												) : (
+													"—"
+												)}
 											</td>
+											<td>{item.issues.length ? item.issues.map(formatIssue).join("；") : "—"}</td>
 										</tr>
 									))}
 								</tbody>
@@ -642,6 +653,7 @@ export function ReverseModelingWizard() {
 							<RefreshCw aria-hidden="true" size={30} />
 						)}
 						<h3>最新尝试状态：{applyResult.status}</h3>
+						<p>运行 ID：{preview?.runId || "—"}</p>
 						<p>
 							选中 {applyResult.summary.selected}，处理中 {applyResult.summary.pending}，成功{" "}
 							{applyResult.summary.succeeded}，跳过 {applyResult.summary.skipped}，失败 {applyResult.summary.failed}
@@ -691,13 +703,7 @@ export function ReverseModelingWizard() {
 											</td>
 											<td>{item.status}</td>
 											<td>{item.modelSpecId || "—"}</td>
-											<td>
-												{item.issues.length
-													? item.issues
-													.map(formatIssue)
-															.join("；")
-													: "—"}
-											</td>
+											<td>{item.issues.length ? item.issues.map(formatIssue).join("；") : "—"}</td>
 										</tr>
 									))}
 								</tbody>
@@ -715,10 +721,10 @@ export function ReverseModelingWizard() {
 							</ActionButton>
 						) : null}
 						{undoResult ? (
-							<div className="dm-stage-notice" role="status">
-								前向撤销状态：{undoResult.status}；成功 {undoResult.summary.succeeded}，失败{" "}
-								{undoResult.summary.failed}，阻断 {undoResult.summary.blocked}。
-							</div>
+							<output className="dm-stage-notice">
+								前向撤销状态：{undoResult.status}；成功 {undoResult.summary.succeeded}，失败 {undoResult.summary.failed}
+								，阻断 {undoResult.summary.blocked}。
+							</output>
 						) : null}
 					</div>
 				) : null}

@@ -159,10 +159,10 @@ export type ModelSpecScdPolicy = {
 	currentFlagField?: string | null;
 };
 export type ModelSpecDimensionProfile = {
-	dimensionCode: string;
+	dimensionCode?: string | null;
 	hierarchies: ModelSpecDimensionHierarchy[];
 	scdPolicy: ModelSpecScdPolicy;
-	reuseScope: ModelSpecReuseScope;
+	reuseScope?: ModelSpecReuseScope | null;
 };
 export type ModelSpecDimensionDefinitionRef = {
 	dimensionDefinitionId: string;
@@ -547,10 +547,13 @@ const rawModelSpecIssues = (raw: Record<string, unknown>): ModelSpecFieldIssue[]
 			add("MODEL_SPEC_DIMENSION_PROFILE_INVALID", "dimensionProfile", "Dimension profile is invalid");
 		} else {
 			const profile = raw.dimensionProfile;
-			if (!isNonBlankString(profile.dimensionCode) || !DIMENSION_CODE_PATTERN.test(profile.dimensionCode.trim())) {
+			if (
+				profile.dimensionCode != null &&
+				(!isNonBlankString(profile.dimensionCode) || !DIMENSION_CODE_PATTERN.test(profile.dimensionCode.trim()))
+			) {
 				add("MODEL_SPEC_DIMENSION_CODE_INVALID", "dimensionProfile", "Dimension code is invalid");
 			}
-			if (!MODEL_SPEC_REUSE_SCOPES.has(profile.reuseScope as ModelSpecReuseScope)) {
+			if (profile.reuseScope != null && !MODEL_SPEC_REUSE_SCOPES.has(profile.reuseScope as ModelSpecReuseScope)) {
 				add("MODEL_SPEC_DIMENSION_REUSE_SCOPE_INVALID", "dimensionProfile.reuseScope", "Reuse scope is invalid");
 			}
 			if (
@@ -989,5 +992,16 @@ export const validateModelSpecUpdate = (input: unknown): ModelSpecFieldIssue[] =
 	for (const field of MODEL_SPEC_UPDATE_FIELDS) {
 		if (Object.hasOwn(input, field)) createShape[field] = input[field];
 	}
-	return [...fieldIssues, ...validateModelSpecFull(createShape)];
+	const profile = isRecord(input.dimensionProfile) ? input.dimensionProfile : null;
+	const movedDefinitionIssues =
+		profile && (profile.dimensionCode != null || profile.reuseScope != null)
+			? [
+					issue(
+						"MODEL_SPEC_DIMENSION_PROFILE_INVALID",
+						"dimensionProfile",
+						"Dimension code and reuse scope are maintained by the business dimension definition",
+					),
+				]
+			: [];
+	return [...fieldIssues, ...validateModelSpecFull(createShape), ...movedDefinitionIssues];
 };

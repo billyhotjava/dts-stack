@@ -1182,6 +1182,15 @@
               "supportsFlow": false
             },
             {
+              "code": "MODELING_DIMENSION_MODEL_CREATE",
+              "display": "创建业务维度模型",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
               "code": "MODELING_MODEL_SPEC_IMPORT_CREATE",
               "display": "导入模型定义",
               "phases": [

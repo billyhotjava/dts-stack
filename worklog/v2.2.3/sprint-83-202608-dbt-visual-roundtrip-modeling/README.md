@@ -141,6 +141,11 @@ WarehousePlan → ModelSpec v2/revision → StageGate → Lifecycle
 | G0-RUNTIME | dbt runtime 修复与 RT-01 认证 | BLOCKED（仅阻断 S3） | `assets/dbt-runtime-hotfix-prerequisite.md`：当前 PostgreSQL 候选为 NOT_CERTIFIED | H83-01、F0/T05 |
 | G1 | 当前切片端到端契约链 | PASS（83a） | 本文“端到端契约链” + F0/T04 三轮复核 | - |
 | G1 | 非功能预算 | GAP | `assets/nfr-budget.md` | F0/T02、F0/T05、F5/T01～T04 |
+| G2-UI-TRUTH | 生产页面与控件真实性 | GAP | `../sprint-84-202608-data-modeling-real-capabilities/assets/page-capability-matrix.md`：维度建模 PARTIAL；其余六页 FAKE | F2～F4、Sprint-84 F1～F4 |
+| G2-CONTRACT-WIRING | UI→API→Service→canonical data→server audit | GAP | `../sprint-84-202608-data-modeling-real-capabilities/assets/button-component-matrix.md` | F2～F5、Sprint-84 F1～F4 |
+| G2-STATE-COMPLETE | loading/empty/disabled reason/error-retry/permission/success | GAP | 聚焦组件测试待补 | F2、F3、Sprint-84 F1～F4 |
+| G2-NO-FALLBACK-DEMO | 空数据或失败不得回退演示数据 | GAP | 当前 `ModelingEditor` 仍有财务示例 | F2、Sprint-84 F1～F4 |
+| G2-EVIDENCE | 聚焦 RED/GREEN + 模块构建；最终 E2E 只执行一次 | GAP | 编码尚未全部完成 | F6、Sprint-84 F5 |
 | G3 | 发布/回滚安全 | GAP | `assets/release-plan.md` 已冻结 expand/migrate/contract、shadow relation 与回退；待实现后演练 | F4、F5、F6 |
 | G4 | 可运维性 | GAP | `assets/runbook.md` 已冻结信号/阈值/处置；待指标、审计和故障演练 | F5、F6 |
 | G4 | 最终 DoD | PENDING | `it/README.md` | F6 |
@@ -149,7 +154,7 @@ WarehousePlan → ModelSpec v2/revision → StageGate → Lifecycle
 
 | ID | Feature | Task 数 | 优先级 | 状态 |
 |---|---|---:|---|---|
-| F0 | 架构基线与产品决策冻结 | 5 | P0×5（T05 仅 S3） | DRAFT |
+| F0 | 架构基线与产品决策冻结 | 5 | P0×5（T05 仅 S3） | IN_PROGRESS（T01～T04 DONE；T05 阻断 S3） |
 | F1 | 统一 dbt 快照与可视化投影 | 5 | P0×4 / P1×1 | DRAFT |
 | F2 | 业务可视化与高级 dbt 实现分层 | 5 | P0×2 / P1×3 | DRAFT |
 | F3 | 外部 dbt 包逆向建模产品化 | 6 | P0×4 / P1×2 | DRAFT |
@@ -157,7 +162,7 @@ WarehousePlan → ModelSpec v2/revision → StageGate → Lifecycle
 | F5 | 安全、审计与可运维收敛 | 5 | P0×3 / P1×1 / P2×1 | DRAFT |
 | F6 | 真实端到端验收与旧入口退役 | 5 | P0×1 / P1×3 / P2×1 | DRAFT |
 
-**总计**：35 个 Task，全部 DRAFT；P0=19（其中 F0/T05 只阻断 S3），P1=14，P2=2。
+**总计**：35 个 Task；F0/T01～T04 DONE，F0/T05 仅阻断 S3，其余功能任务按切片保持 DRAFT/IN_PROGRESS。P0=19（其中 F0/T05 只阻断 S3），P1=14，P2=2。
 **编码门禁**：F0/T04 只评审当前待拉取切片；S1/S2 不等待 H83-01/F0/T05，S3 materialization 必须等待 `G0-RUNTIME=PASS`。P1/P2 可保持 DRAFT，不得反向阻断 P0。
 
 ### 交付切片

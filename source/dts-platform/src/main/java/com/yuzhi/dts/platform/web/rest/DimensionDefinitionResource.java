@@ -17,6 +17,7 @@ import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.Field
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.Status;
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.UpdateCommand;
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.View;
+import com.yuzhi.dts.platform.service.modeling.DimensionModelCreateRequestDecoder;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecException;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider;
 import java.net.URI;
@@ -73,6 +74,17 @@ public class DimensionDefinitionResource {
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<View>> create(@RequestBody JsonNode body) {
         CreateCommand command = decode(body, DimensionDefinitionContract.CREATE_FIELDS, CreateCommand.class);
+        if (DimensionModelCreateRequestDecoder.isInternalIdempotencyKey(command.idempotencyKey())) {
+            throw invalidRequest(
+                List.of(
+                    new FieldIssue(
+                        "idempotencyKey",
+                        "DIMENSION_DEFINITION_IDEMPOTENCY_KEY_RESERVED",
+                        "The idempotency key uses a server-reserved namespace"
+                    )
+                )
+            );
+        }
         CreateResult result = service.create(serverTenantId, actorId(), command);
         View view = result.dimensionDefinition();
         return ResponseEntity
