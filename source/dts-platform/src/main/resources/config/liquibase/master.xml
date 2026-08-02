@@ -251,4 +251,5 @@
     <include file="config/liquibase/changelog/20260802_03_catalog_model_serving_projection.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260802_04_model_spec_import_reconciliation_undo.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260802_05_catalog_model_serving_asset_key_constraint.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260802_06_model_spec_import_json_contract_hardening.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

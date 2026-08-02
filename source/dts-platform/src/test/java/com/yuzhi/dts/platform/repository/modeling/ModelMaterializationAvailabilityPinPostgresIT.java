@@ -72,11 +72,14 @@ class ModelMaterializationAvailabilityPinPostgresIT {
             database.setDefaultSchemaName(schema);
             database.setLiquibaseSchemaName(schema);
             try (
+                AutoCloseable databaseCloser = () -> closeDatabase(database);
                 Liquibase liquibase = new Liquibase(
                     CHANGELOG,
                     resources,
                     database
-                )
+                );
+                AutoCloseable sharedConnectionGuard = () ->
+                    restorePublicSearchPath(connection)
             ) {
                 liquibase.setChangeLogParameter("uuidType", "uuid");
                 liquibase.setChangeLogParameter(
@@ -309,8 +312,6 @@ class ModelMaterializationAvailabilityPinPostgresIT {
                         "modeling_materialization_source_pin"
                     )
                 ).isTrue();
-            } finally {
-                if (!database.getConnection().isClosed()) database.close();
             }
         } finally {
             dropOwnedSchema(schema);
@@ -396,6 +397,20 @@ class ModelMaterializationAvailabilityPinPostgresIT {
         try (Statement statement = connection.createStatement()) {
             statement.execute("set search_path to " + schema);
         }
+    }
+
+    private static void restorePublicSearchPath(Connection connection)
+        throws Exception {
+        if (connection.isClosed()) return;
+        if (!connection.getAutoCommit()) connection.rollback();
+        connection.setAutoCommit(true);
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("set search_path to public");
+        }
+    }
+
+    private static void closeDatabase(Database database) throws Exception {
+        if (!database.getConnection().isClosed()) database.close();
     }
 
     private static boolean tableExists(

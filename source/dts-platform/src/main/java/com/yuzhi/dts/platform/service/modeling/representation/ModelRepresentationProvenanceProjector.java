@@ -80,7 +80,7 @@ public class ModelRepresentationProvenanceProjector {
             } else if (compiledFields.containsKey(field.name()) && schemaArtifact.isPresent()) {
                 fieldProvenance.put(
                     field.name(),
-                    new ProvenanceRef(Provenance.COMPILED, schemaArtifact.get().artifactChecksum(), null)
+                    new ProvenanceRef(Provenance.COMPILED, schemaArtifact.orElseThrow().artifactChecksum(), null)
                 );
             }
         }
@@ -89,7 +89,7 @@ public class ModelRepresentationProvenanceProjector {
         if (observedCoversDeclared) {
             modelProvenance = new ProvenanceRef(Provenance.OBSERVED, runtime.metadataChecksum(), runtime.observedAt());
         } else if (compiledCoversDeclared && schemaArtifact.isPresent()) {
-            modelProvenance = new ProvenanceRef(Provenance.COMPILED, schemaArtifact.get().artifactChecksum(), null);
+            modelProvenance = new ProvenanceRef(Provenance.COMPILED, schemaArtifact.orElseThrow().artifactChecksum(), null);
         } else {
             modelProvenance = new ProvenanceRef(Provenance.DECLARED, model.checksum(), null);
         }

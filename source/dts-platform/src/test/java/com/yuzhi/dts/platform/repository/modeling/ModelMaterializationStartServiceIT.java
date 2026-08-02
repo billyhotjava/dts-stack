@@ -40,13 +40,16 @@ import java.time.ZoneOffset;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import javax.sql.DataSource;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -59,6 +62,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 class ModelMaterializationStartServiceIT {
 
     private static final Instant NOW = Instant.parse("2026-07-27T12:00:00Z");
+
+    private final Queue<Scope> trackedScopes = new ConcurrentLinkedQueue<>();
 
     @Autowired
     private ModelReleaseCandidateRepository candidates;
@@ -92,6 +97,28 @@ class ModelMaterializationStartServiceIT {
 
     @Autowired
     private PlatformTransactionManager transactionManager;
+
+    @AfterEach
+    void cleanupTrackedScopes() {
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        RuntimeException cleanupFailure = null;
+        Scope scope;
+        while ((scope = trackedScopes.poll()) != null) {
+            try {
+                Scope trackedScope = scope;
+                transaction.executeWithoutResult(status -> cleanup(trackedScope));
+            } catch (RuntimeException failure) {
+                if (cleanupFailure == null) {
+                    cleanupFailure = failure;
+                } else {
+                    cleanupFailure.addSuppressed(failure);
+                }
+            }
+        }
+        if (cleanupFailure != null) {
+            throw cleanupFailure;
+        }
+    }
 
     @Test
     void commitsBuildingSnapshotClaimAndOneQueuedRunAsOneUnit() {
@@ -2034,61 +2061,111 @@ class ModelMaterializationStartServiceIT {
     }
 
     private void cleanup(Scope scope) {
-        jdbcTemplate.update(
-            "delete from modeling_materialization_dispatch where tenant_id = ? and candidate_id = ?",
-            scope.tenant(),
-            scope.candidateId()
+        disableAppendOnlyCleanupTriggers();
+        boolean cleanupCompleted = false;
+        try {
+            jdbcTemplate.update(
+                """
+                delete from modeling_materialization_source_pin
+                 where dispatch_id in (
+                     select id from modeling_materialization_dispatch where tenant_id = ?
+                 )
+                """,
+                scope.tenant()
+            );
+            jdbcTemplate.update(
+                "delete from modeling_physical_relation_observation where tenant_id = ?",
+                scope.tenant()
+            );
+            jdbcTemplate.update(
+                "delete from modeling_model_release_candidate_command where tenant_id = ?",
+                scope.tenant()
+            );
+            jdbcTemplate.update(
+                "delete from modeling_materialization_dispatch where tenant_id = ?",
+                scope.tenant()
+            );
+            jdbcTemplate.update(
+                "delete from modeling_dbt_runtime_profile_lease where tenant_id = ?",
+                scope.tenant()
+            );
+            jdbcTemplate.update(
+                "delete from modeling_pipeline_run where tenant_id = ?",
+                scope.tenant()
+            );
+            jdbcTemplate.update(
+                "delete from modeling_model_release_candidate_entry where tenant_id = ?",
+                scope.tenant()
+            );
+            jdbcTemplate.update(
+                "delete from modeling_model_release_candidate where tenant_id = ?",
+                scope.tenant()
+            );
+            jdbcTemplate.update(
+                "delete from modeling_dbt_artifact where model_spec_id = ?",
+                scope.modelId()
+            );
+            jdbcTemplate.update(
+                "delete from modeling_model_implementation_revision where tenant_id = ? and implementation_id = ?",
+                scope.tenant(),
+                scope.implementationId()
+            );
+            jdbcTemplate.update(
+                "delete from modeling_model_implementation where tenant_id = ? and id = ?",
+                scope.tenant(),
+                scope.implementationId()
+            );
+            jdbcTemplate.update(
+                "delete from modeling_model_spec_revision where tenant_id = ? and model_spec_id = ?",
+                scope.tenant(),
+                scope.modelId()
+            );
+            jdbcTemplate.update(
+                "delete from modeling_model_spec where tenant_id = ? and id = ?",
+                scope.tenant(),
+                scope.modelId()
+            );
+            jdbcTemplate.update("delete from catalog_domain where id = ?", scope.domainId());
+            jdbcTemplate.update(
+                "delete from modeling_warehouse_plan where tenant_id = ? and id = ?",
+                scope.tenant(),
+                scope.planId()
+            );
+            cleanupCompleted = true;
+        } finally {
+            if (cleanupCompleted) {
+                enableAppendOnlyCleanupTriggers();
+            }
+        }
+    }
+
+    private void disableAppendOnlyCleanupTriggers() {
+        jdbcTemplate.execute(
+            "alter table modeling_materialization_source_pin disable trigger trg_materialization_source_pin_append_only"
         );
-        jdbcTemplate.update(
-            "delete from modeling_pipeline_run where tenant_id = ? and release_candidate_id = ?",
-            scope.tenant(),
-            scope.candidateId()
+        jdbcTemplate.execute(
+            "alter table modeling_physical_relation_observation disable trigger trg_physical_relation_observation_append_only"
         );
-        jdbcTemplate.update(
-            "delete from modeling_model_release_candidate_entry where tenant_id = ? and candidate_id = ?",
-            scope.tenant(),
-            scope.candidateId()
-        );
-        jdbcTemplate.update(
-            "delete from modeling_model_release_candidate where tenant_id = ? and id = ?",
-            scope.tenant(),
-            scope.candidateId()
-        );
-        jdbcTemplate.update(
-            "delete from modeling_dbt_artifact where model_spec_id = ?",
-            scope.modelId()
-        );
-        jdbcTemplate.update(
-            "delete from modeling_model_implementation_revision where tenant_id = ? and implementation_id = ?",
-            scope.tenant(),
-            scope.implementationId()
-        );
-        jdbcTemplate.update(
-            "delete from modeling_model_implementation where tenant_id = ? and id = ?",
-            scope.tenant(),
-            scope.implementationId()
-        );
-        jdbcTemplate.update(
-            "delete from modeling_model_spec_revision where tenant_id = ? and model_spec_id = ?",
-            scope.tenant(),
-            scope.modelId()
-        );
-        jdbcTemplate.update(
-            "delete from modeling_model_spec where tenant_id = ? and id = ?",
-            scope.tenant(),
-            scope.modelId()
-        );
-        jdbcTemplate.update("delete from catalog_domain where id = ?", scope.domainId());
-        jdbcTemplate.update(
-            "delete from modeling_warehouse_plan where tenant_id = ? and id = ?",
-            scope.tenant(),
-            scope.planId()
+        jdbcTemplate.execute(
+            "alter table modeling_model_release_candidate_command disable trigger trg_model_release_candidate_command_append_only"
         );
     }
 
-    private static Scope scope(String suffix) {
+    private void enableAppendOnlyCleanupTriggers() {
+        jdbcTemplate.execute(
+            "alter table modeling_model_release_candidate_command enable trigger trg_model_release_candidate_command_append_only"
+        );
+        jdbcTemplate.execute(
+            "alter table modeling_physical_relation_observation enable trigger trg_physical_relation_observation_append_only"
+        );
+        jdbcTemplate.execute(
+            "alter table modeling_materialization_source_pin enable trigger trg_materialization_source_pin_append_only"
+        );
+    }
+
+    private Scope scope(String suffix) {
         UUID modelId = UUID.randomUUID();
-        return new Scope(
+        Scope scope = new Scope(
             "s76-" + suffix + "-" + UUID.randomUUID(),
             UUID.randomUUID(),
             UUID.randomUUID(),
@@ -2102,6 +2179,8 @@ class ModelMaterializationStartServiceIT {
             "dwd_s76_" +
             modelId.toString().replace("-", "").substring(0, 16)
         );
+        trackedScopes.add(scope);
+        return scope;
     }
 
     private static String sha256(String value) {

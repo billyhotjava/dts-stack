@@ -216,7 +216,7 @@ public class DbtImplementationDraftService {
             actorId,
             idempotencyKey
         );
-        if (replay.isPresent()) return createdDraft(replay.get(), requestHash, now, correlationId);
+        if (replay.isPresent()) return createdDraft(replay.orElseThrow(), requestHash, now, correlationId);
 
         ModelSpecView model = requireEditableModel(tenantId, actorId, modelSpecId, request.planId());
         if (model.revision() != request.baseModelRevision() || !Objects.equals(model.checksum(), modelChecksum)) {

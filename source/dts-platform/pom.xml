@@ -545,6 +545,7 @@
                         <testInclude>**/repository/modeling/ModelImplementationCommandReceiptLiquibaseIT.java</testInclude>
                         <testInclude>**/repository/modeling/ModelMaterializationStartServiceIT.java</testInclude>
                         <testInclude>**/repository/modeling/ModelMaterializationAvailabilityPinPostgresIT.java</testInclude>
+                        <testInclude>**/service/modeling/migration/Sprint83G3DatabaseRehearsalPostgresIT.java</testInclude>
                         <testInclude>**/repository/modeling/CandidatePublicationRepositoryIT.java</testInclude>
                         <testInclude>**/repository/modeling/ModelReleaseCandidateRepositoryIT.java</testInclude>
                         <testInclude>**/repository/modeling/ModelSpecRepositoryIT.java</testInclude>
