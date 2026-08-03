@@ -7,14 +7,11 @@ Sprint-11 accumulated 10 production bugs that code review and unit tests all mis
 ```bash
 cd source/dts-platform-webapp
 
-# Default: hits https://bi.yuzhicloud.com
-pnpm e2e
+# Production-like target requires explicit endpoint and authorized credentials
+E2E_BASE_URL=https://bi.yuzhicloud.com E2E_USERNAME='<user>' E2E_PASSWORD='<password>' pnpm e2e
 
 # Override target (dev server)
-E2E_BASE_URL=http://localhost:3001 pnpm e2e
-
-# Custom credentials
-E2E_USERNAME=opadmin E2E_PASSWORD=opadmin123 pnpm e2e
+E2E_BASE_URL=http://localhost:3001 E2E_USERNAME='<user>' E2E_PASSWORD='<password>' pnpm e2e
 
 # Headed mode for debugging
 pnpm e2e:headed
@@ -28,10 +25,21 @@ pnpm e2e:ui
 | Variable | Default | Purpose |
 |---|---|---|
 | `E2E_BASE_URL` | `http://localhost:3001` | Base URL of the platform webapp |
-| `E2E_USERNAME` | `opadmin` | Login username |
-| `E2E_PASSWORD` | `opadmin123` | Login password |
+| `E2E_USERNAME` | required | Authorized test username |
+| `E2E_PASSWORD` | required | Authorized test password |
 
-Credentials are never hardcoded in source files. The auth setup calls `/api/keycloak/auth/login` and writes a Playwright storageState to `e2e/.auth/user.json` (gitignored).
+The writable Sprint-83/84 roundtrip additionally requires all of the following. Missing values fail the selected suite instead of skipping it:
+
+| Variable | Required value | Purpose |
+|---|---|---|
+| `E2E_MODELING_WRITE_ALLOWED` | `true` | Explicit authorization for modeling writes |
+| `E2E_MODELING_PLAN_OPTION` | exact visible option | Dedicated test construction plan selected in the UI |
+| `E2E_MODELING_PREFIX` | starts with `E2E_` | Identifies every retained test business name |
+| `E2E_MODELING_CLEANUP_MODE` | `retain` | Retains published/materialized evidence under the test prefix; hard delete is forbidden |
+| `E2E_MODELING_DOMAIN_OPTION` | exact visible option when requested | Maps an imported package domain to a confirmed plan domain |
+| `E2E_MODELING_SOURCE_OPTION` | exact visible option when requested | Maps an imported dbt source to a plan source binding |
+
+Credentials are never hardcoded in source files. The auth setup fails closed when either variable is absent, calls `/api/keycloak/auth/login`, and writes a Playwright storageState to `e2e/.auth/user.json` (gitignored).
 
 ## Test inventory
 
@@ -71,6 +79,14 @@ Verifies: `SELECT ... FROM information_schema.tables LIMIT 5` succeeds ("成功"
 
 Verifies: clicking "图表" tab after execution produces no `pageerror` events containing "Rendered more hooks".
 
+### `sprint84-data-modeling-real.spec.ts`
+
+Production read-only smoke only: uses the real authenticated menu, clicks all 27 data-modeling leaves owned by the reviewed prototype, blocks every DTS API write, checks 1366×768 and narrow layout, and stores representative screenshots plus sanitized auth/API evidence. During the prototype-owned UI migration it requires only the real menu-tree API; CRUD, import, publish, materialization, audit, and page-specific backend reads remain separate acceptance gates.
+
+### `sprint83-84-modeling-roundtrip.spec.ts`
+
+Explicitly authorized writable acceptance: clicks the real reverse-modeling menu, imports the pinned synthetic artifact-rich ZIP, records canonical ModelSpec IDs, saves the business model, creates/validates/commits an advanced dbt draft, starts the ReleaseCandidate build, publishes it, reads serving relation evidence and a masked physical sample, and verifies the corresponding public audit actions. It fails closed without an exact test plan, `E2E_` prefix, write authorization and retained-evidence policy; it also fails if the browser calls any retired `/api/etl/dbt/*` control plane.
+
 ## Adding a new test
 
 1. Create `e2e/your-test.spec.ts`.
@@ -84,4 +100,4 @@ Verifies: clicking "图表" tab after execution produces no `pageerror` events c
 - CI wiring (deferred)
 - Cross-browser matrix (Chromium only)
 - Test data seeding
-- Tests beyond the 5 Sprint-11 smoke cases
+- Sprint-84 mutation journeys (CRUD/import/publish/materialization/audit) without an explicitly authorized writable test tenant

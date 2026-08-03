@@ -1,6 +1,8 @@
 package com.yuzhi.dts.ingestion.service.etl;
 
 import java.sql.Types;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -46,6 +48,32 @@ final class DtsOdsTechnicalColumns {
         }
         String lower = name.toLowerCase(Locale.ROOT);
         return COMMON_NAMES.contains(lower) || FILE_NAMES.contains(lower);
+    }
+
+    static List<JdbcMetadataService.ColumnMeta> businessColumns(
+        List<JdbcMetadataService.ColumnMeta> sourceColumns
+    ) {
+        if (sourceColumns == null || sourceColumns.isEmpty()) {
+            return List.of();
+        }
+        Set<String> usedNames = new LinkedHashSet<>();
+        usedNames.addAll(COMMON_NAMES);
+        usedNames.addAll(FILE_NAMES);
+        List<JdbcMetadataService.ColumnMeta> landingColumns = new ArrayList<>(sourceColumns.size());
+        for (JdbcMetadataService.ColumnMeta sourceColumn : sourceColumns) {
+            String sourceName = sourceColumn == null ? null : sourceColumn.name();
+            if (sourceName == null || sourceName.isBlank()) {
+                throw new IllegalStateException("create table mapping validation failed: 源字段名称不能为空");
+            }
+            String base = sourceName.trim();
+            String targetName = base;
+            int suffix = 2;
+            while (!usedNames.add(targetName.toLowerCase(Locale.ROOT))) {
+                targetName = base + "_" + suffix++;
+            }
+            landingColumns.add(sourceColumn.withName(targetName));
+        }
+        return List.copyOf(landingColumns);
     }
 
     static List<JdbcMetadataService.ColumnMeta> commonJdbcColumns() {

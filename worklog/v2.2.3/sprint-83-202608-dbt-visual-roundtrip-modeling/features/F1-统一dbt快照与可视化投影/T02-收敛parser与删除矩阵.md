@@ -1,7 +1,7 @@
 # T02：收敛规范化 projection seam 与 parser 删除门禁
 
-**优先级**：P0  
-**状态**：DRAFT  
+**优先级**：P0
+**状态**：CODE_COMPLETE
 **依赖**：T01
 
 ## 目标

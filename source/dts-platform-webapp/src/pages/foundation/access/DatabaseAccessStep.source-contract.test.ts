@@ -10,6 +10,10 @@ const DISCOVERY_SOURCE = WIZARD_SOURCE.slice(
 	WIZARD_SOURCE.indexOf("const discoverTables"),
 	WIZARD_SOURCE.indexOf("const previewApi"),
 );
+const SUBMIT_SOURCE = WIZARD_SOURCE.slice(
+	WIZARD_SOURCE.indexOf("const submit"),
+	WIZARD_SOURCE.indexOf("return {", WIZARD_SOURCE.indexOf("const submit")),
+);
 
 test("database ingestion exposes one authoritative table-selection workflow", () => {
 	assert.match(STEP_SOURCE, /name="tableSelectionMode"/);
@@ -33,6 +37,12 @@ test("table discovery invalidates stale selection and ignores superseded results
 	assert.match(DISCOVERY_SOURCE, /const requestId = \+\+discoveryRequestIdRef\.current/);
 	assert.match(DISCOVERY_SOURCE, /databaseDiscoveryFingerprint\(form\.getFieldsValue\(true\)\) !== fingerprint/);
 	assert.match(DISCOVERY_SOURCE, /数据库连接或筛选条件已变更，请重新发现源表/);
+});
+
+test("database plan submission reads preserved values from every wizard step", () => {
+	assert.match(SUBMIT_SOURCE, /await form\.validateFields\(\);/);
+	assert.match(SUBMIT_SOURCE, /const values = form\.getFieldsValue\(true\);/);
+	assert.ok(SUBMIT_SOURCE.indexOf("await form.validateFields();") < SUBMIT_SOURCE.indexOf("form.getFieldsValue(true)"));
 });
 
 test("access detail shows the saved source-to-target mapping without exposing connection configuration", () => {

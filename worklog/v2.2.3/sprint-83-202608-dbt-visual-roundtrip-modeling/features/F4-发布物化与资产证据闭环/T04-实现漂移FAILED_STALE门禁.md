@@ -1,7 +1,7 @@
 # T04：实现来源/实施漂移的 FAILED_STALE 门禁
 
 **优先级**：P1
-**状态**：DRAFT  
+**状态**：CODE_COMPLETE
 **依赖**：T02～T03
 
 ## 目标

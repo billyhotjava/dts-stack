@@ -38,3 +38,13 @@ test("canonical client keeps legacy reads in the response union but excludes the
 	assert.match(source, /ModelSpecCasToken/);
 	assert.match(source, /ModelSpecRevisionConflictDetails/);
 });
+
+test("plan-owned release candidate lifecycle exposes create lock retry and publish with CAS", () => {
+	const source = readFileSync(API_URL, "utf8");
+	assert.match(source, /export const createReleaseCandidate/);
+	assert.match(source, /export const lockReleaseCandidate/);
+	assert.match(source, /export const retryReleaseCandidate/);
+	assert.match(source, /export const publishReleaseCandidate/);
+	assert.match(source, /releaseCandidateItemUrl\(planId, expected\.id, "\/publish"\)/);
+	assert.match(source, /headers: releaseCandidateWriteHeaders\(idempotencyKey, expected\)/);
+});

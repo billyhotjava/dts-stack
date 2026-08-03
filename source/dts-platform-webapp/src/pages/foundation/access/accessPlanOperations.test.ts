@@ -14,9 +14,8 @@ const createApi = () => {
 			calls.push(`execute:${taskId}`);
 			return { taskId };
 		},
-		rebuildDag: async (taskId: number) => {
-			calls.push(`rebuild:${taskId}`);
-			return { id: taskId };
+		deleteTask: async (taskId: number) => {
+			calls.push(`delete:${taskId}`);
 		},
 	} as AccessPlanOperationApi;
 	return { api, calls };
@@ -27,14 +26,14 @@ test("access plan operations call the existing ingestion contracts", async () =>
 
 	await runAccessPlanOperation("admit", 19, api);
 	await runAccessPlanOperation("execute", 19, api);
-	await runAccessPlanOperation("rebuildDag", 19, api);
+	await runAccessPlanOperation("delete", 19, api);
 
-	assert.deepEqual(calls, ["admit:19", "execute:19", "rebuild:19"]);
+	assert.deepEqual(calls, ["admit:19", "execute:19", "delete:19"]);
 });
 
-test("access plan operations reject invalid task identifiers before making requests", async () => {
+test("access plan operations reject invalid task identifiers before making requests", () => {
 	const { api, calls } = createApi();
 
-	await assert.rejects(() => runAccessPlanOperation("execute", 0, api), /接入任务编号无效/);
+	assert.throws(() => runAccessPlanOperation("execute", 0, api), /接入任务编号无效/);
 	assert.deepEqual(calls, []);
 });

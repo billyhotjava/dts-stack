@@ -3,6 +3,7 @@ package com.yuzhi.dts.ingestion.web.rest;
 import static org.mockito.Mockito.verify;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
@@ -612,11 +613,36 @@ class IngestionTaskResourceTest {
         task.setId(1L);
         task.setName("demo-task");
         when(ingestionTaskService.delete(1L)).thenReturn(task);
+        when(ingestionTaskService.cleanupRetiredTaskArtifacts(1L)).thenReturn(
+            new IngestionTaskService.RuntimeArtifactCleanupResult(true, true, false, null, null)
+        );
 
         mockMvc.perform(delete("/api/ingestion/tasks/1"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value(200))
-            .andExpect(jsonPath("$.data.taskId").value(1));
+            .andExpect(jsonPath("$.data.taskId").value(1))
+            .andExpect(jsonPath("$.data.runtimeArtifactCleanup.retryable").value(false));
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(ingestionTaskService);
+        order.verify(ingestionTaskService).delete(1L);
+        order.verify(ingestionTaskService).cleanupRetiredTaskArtifacts(1L);
+    }
+
+    @Test
+    void deleteTask_returnsConflictWhenExecutionIsInProgress() throws Exception {
+        when(ingestionTaskService.delete(1L)).thenThrow(new IllegalStateException("任务正在执行，无法删除"));
+
+        mockMvc.perform(delete("/api/ingestion/tasks/1"))
+            .andExpect(status().isConflict());
+
+        verify(ingestionTaskService, never()).cleanupRetiredTaskArtifacts(1L);
+
+        verify(auditService).auditAction(
+            eq("INGESTION_TASK_DELETE"),
+            eq(AuditStage.FAIL),
+            eq("1"),
+            argThat(metadata -> "IllegalStateException".equals(metadata.get("errorType")))
+        );
     }
 
     @Test

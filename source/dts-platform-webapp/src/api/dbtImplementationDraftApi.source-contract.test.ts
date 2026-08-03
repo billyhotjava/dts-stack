@@ -24,16 +24,19 @@ describe("advanced dbt implementation draft contract", () => {
 	});
 
 	it("keeps maintainer-only editing in the existing workbench with dirty and conflict states", () => {
-		const workbench = read("../pages/data-modeling/components/model-detail/ModelDetailWorkbench.tsx");
-		const editor = read("../pages/data-modeling/components/model-detail/AdvancedDbtImplementationView.tsx");
+		const workbench = read("../pages/data-modeling/prototype/ModelingWorkbenchPage.tsx");
+		const editor = read("../pages/data-modeling/prototype/ModelWorkbenchDialog.tsx");
 
 		expect(workbench).toContain("useCatalogMaintainerAccess");
-		expect(workbench).toContain('ownershipMode === "DBT_MANAGED"');
+		expect(workbench).toContain("disabled={!selectedModel || !canMaintain}");
+		expect(editor).toContain('representationScope: "TECHNICAL"');
+		expect(editor).toContain("if (!canMaintain)");
+		expect(editor).toContain('includes("OPEN_ADVANCED_DBT")');
 		expect(editor).toContain("dirty");
 		expect(editor).toContain("conflict");
 		expect(editor).toContain("validateDbtImplementationDraft");
 		expect(editor).toContain("commitDbtImplementationDraft");
-		expect(editor).toContain("created.sourceBundle.files");
+		expect(editor).toContain("created.sourceBundle?.files");
 		expect(editor).not.toContain("initialFiles");
 		expect(editor).not.toContain('path: "dbt_project.yml"');
 		expect(editor).not.toContain("model-paths: [models]");

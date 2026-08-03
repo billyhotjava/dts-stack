@@ -1,7 +1,7 @@
 # T02：统一 ReleaseCandidate 与 DbtExecutionGateway 执行
 
 **优先级**：P1
-**状态**：DRAFT  
+**状态**：CODE_COMPLETE
 **依赖**：T01、F0/T05
 
 ## 目标

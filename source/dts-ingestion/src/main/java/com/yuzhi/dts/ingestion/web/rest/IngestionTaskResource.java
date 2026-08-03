@@ -2362,7 +2362,22 @@ public class IngestionTaskResource {
                 Map.of("summary", "删除入湖任务失败", "taskId", id, "operator", operator)
             );
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
+        } catch (IllegalStateException ex) {
+            auditService.auditAction(
+                "INGESTION_TASK_DELETE",
+                AuditStage.FAIL,
+                String.valueOf(id),
+                Map.of(
+                    "summary", "删除入湖任务失败",
+                    "taskId", id,
+                    "operator", operator,
+                    "errorType", ex.getClass().getSimpleName()
+                )
+            );
+            throw new ResponseStatusException(HttpStatus.CONFLICT, ex.getMessage());
         }
+        com.yuzhi.dts.ingestion.service.IngestionTaskService.RuntimeArtifactCleanupResult runtimeArtifactCleanup =
+            ingestionTaskService.cleanupRetiredTaskArtifacts(id);
         auditService.auditAction(
             "INGESTION_TASK_DELETE",
             AuditStage.SUCCESS,
@@ -2373,6 +2388,7 @@ public class IngestionTaskResource {
         payload.put("task", task);
         payload.put("taskId", id);
         payload.put("status", "deleted");
+        payload.put("runtimeArtifactCleanup", runtimeArtifactCleanup);
         return ResponseEntity.ok(ApiResponses.ok(payload));
     }
 

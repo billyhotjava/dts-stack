@@ -1,8 +1,8 @@
 # Sprint-83：dbt 双向可视化建模与外部项目接入
 
-**时间**：2026-08  
-**状态**：IN_PROGRESS（S0 工程准入已通过，S1/S2 正在编码；H83-01 只阻断 S3 materialization；客户脱敏包只阻断客户兼容声明，不阻断通用实现）
-**类型**：Architecture / Product Design / dbt Integration / Full-stack  
+**时间**：2026-08
+**状态**：CODE_COMPLETE / BUILD_PASS / FRONTEND_DEPLOYED / E2E_INPUT_PENDING（S1～S4 已完成代码与聚焦回归；当前前端已部署，认证 runtime 激活、真实物化与现场验收仍待 F6）
+**类型**：Architecture / Product Design / dbt Integration / Full-stack
 **目标**：让建模人员在同一个 canonical 模型上下文中完成业务可视化设计、选择或确认 dbt 物化实现并查看依赖与物化结果；SQL/Jinja 不出现在普通可视化界面，只在显式的高级 dbt 实现视图中受控维护。外部 dbt 项目通过可审计的预检、冲突处理和幂等应用导入为 `ModelSpec DRAFT + DBT_MANAGED Implementation Revision`，不产生第二套模型、解析、发布或运行控制面。
 
 ## 背景与价值
@@ -39,7 +39,7 @@ WarehousePlan → ModelSpec v2/revision → StageGate → Lifecycle
 | ADR-83-12 | 通用 `/api/etl/dbt/files` 只可作为受控 staging 工具，不能成为建模事实源；证明建模调用方完成迁移后再决定删除或保留其非建模用途 | 共享可变文件树不具备修订固定语义 | ACCEPTED（2026-08-02） |
 | ADR-83-13 | Catalog 使用稳定逻辑资产的 `latestPublishedRef` 与 `servingRef` 双指针：PUBLISHED 可发现，成功 MATERIALIZED 才切换可消费 serving；旧 serving 在新版本失败/stale 时保持 | 发布治理事实和物理可用性不能用一个状态冒充 | ACCEPTED（2026-08-01） |
 | ADR-83-14 | S3 物化切片提供显式加载、默认 100/最大 500 的受控样例；普通视图只预览 serving，高级维护者可预览成功 candidate 并标记非正式；历史 revision 仅看结构；密级/列策略 fail-closed，样例不缓存或导出 | 防止自动敏感读取、历史错配和候选结果冒充正式资产 | ACCEPTED（2026-08-01） |
-| ADR-83-15 | dbt 兼容拆分为 inspect、import projection、materialization 三轴；只有精确 Core+adapter+数据源+image digest 的真实矩阵可标记 materialization CERTIFIED | “包能读”或“模型能导入”不能冒充“当前运行时可物化” | ACCEPTED_POLICY / CERTIFICATION_BLOCKED（2026-08-02） |
+| ADR-83-15 | dbt 兼容拆分为 inspect、import projection、materialization 三轴；只有精确 Core+adapter+数据源+image digest 的真实矩阵可标记 materialization CERTIFIED | “包能读”或“模型能导入”不能冒充“当前运行时可物化” | ACCEPTED_POLICY / CERTIFIED_EVIDENCE / DEPLOYMENT_PENDING（2026-08-03） |
 | ADR-83-16 | source-only 只有 enforced schema contract（字段 `name+data_type` 完整）、literal 依赖闭包和业务语义齐备时可导入；其余结构最多只读且 apply BLOCKED。独立合格闭包可单独选择；PARTIAL 只来自已选合格项启动后的逐项失败；成功项 ownership 固定为 DBT_MANAGED | 防止从 SQL/不完整 YAML 猜结构、把预览混合结果冒充 PARTIAL 或静默改变所有权 | ACCEPTED（2026-08-02） |
 | ADR-83-17 | 治理发布先推进 `latestPublishedRef`，物理消费只由成功 evidence CAS 推进 `servingRef`；新 revision 构建到版本化 shadow relation，成功后原子切换 serving indirection，失败/stale 不得污染旧 serving | 双指针若共用同一可变目标表，只保留引用无法保护旧服务版本 | ACCEPTED IMPLEMENTATION CONSTRAINT（2026-08-02） |
 | ADR-83-18 | 兼容证据分为 `G0-RUNTIME`、`G1-PARSER`、`G4-REGRESSION/CUSTOMER`：RT-01 认证精确运行时；按切片归档、重新构造或许可固定的 FX-01～05 允许对应工程切片编码；客户脱敏包只控制客户兼容声明和现场验收 | 避免客户样本不可得导致编码门禁死锁，同时禁止用合成 fixture 冒充客户适配证据 | ACCEPTED（2026-08-02） |
@@ -138,14 +138,14 @@ WarehousePlan → ModelSpec v2/revision → StageGate → Lifecycle
 | G0 | 客户兼容画像 | GAP（非编码阻断） | 尚无客户脱敏 dbt 包；只阻断 CUSTOMER-VALIDATION 与客户可见声明 | 客户现场验收，不关联通用实现 Task |
 | G0 | DTS 领域不变量 | PASS | ADR-83-01～12；复用 ModelSpec/Catalog/Audit/Release/dbt gateway | - |
 | G1 | 产品决策与所有权 | PASS | `assets/decision-register.md`：D01～D13 已确认；D09 认证缺口单列在 G0/G1 兼容门 | - |
-| G0-RUNTIME | dbt runtime 修复与 RT-01 认证 | BLOCKED（仅阻断 S3） | `assets/dbt-runtime-hotfix-prerequisite.md`：当前 PostgreSQL 候选为 NOT_CERTIFIED | H83-01、F0/T05 |
+| G0-RUNTIME | dbt runtime 修复与 RT-01 认证 | PASS_EVIDENCE / DEPLOYMENT_PENDING | H83-01 候选保持 NOT_CERTIFIED；F0/T05 已登记独立 certified derivative，生产激活待 F6 | F6/T03～T04 |
 | G1 | 当前切片端到端契约链 | PASS（83a） | 本文“端到端契约链” + F0/T04 三轮复核 | - |
 | G1 | 非功能预算 | GAP | `assets/nfr-budget.md` | F0/T02、F0/T05、F5/T01～T04 |
-| G2-UI-TRUTH | 生产页面与控件真实性 | GAP | `../sprint-84-202608-data-modeling-real-capabilities/assets/page-capability-matrix.md`：维度建模 PARTIAL；其余六页 FAKE | F2～F4、Sprint-84 F1～F4 |
-| G2-CONTRACT-WIRING | UI→API→Service→canonical data→server audit | GAP | `../sprint-84-202608-data-modeling-real-capabilities/assets/button-component-matrix.md` | F2～F5、Sprint-84 F1～F4 |
-| G2-STATE-COMPLETE | loading/empty/disabled reason/error-retry/permission/success | GAP | 聚焦组件测试待补 | F2、F3、Sprint-84 F1～F4 |
-| G2-NO-FALLBACK-DEMO | 空数据或失败不得回退演示数据 | GAP | 当前 `ModelingEditor` 仍有财务示例 | F2、Sprint-84 F1～F4 |
-| G2-EVIDENCE | 聚焦 RED/GREEN + 模块构建；最终 E2E 只执行一次 | GAP | 编码尚未全部完成 | F6、Sprint-84 F5 |
+| G2-UI-TRUTH | 生产页面与控件真实性 | PASS_CODE | 旧页面、`prototypeData.ts` 与模拟成功已删除；生产页以 prototype-owned UI + canonical owner 为唯一实现 | - |
+| G2-CONTRACT-WIRING | UI→API→Service→canonical data→server audit | PASS_CODE | Sprint-84 页面/按钮矩阵、最终独立 Review 与聚焦契约回归 | - |
+| G2-STATE-COMPLETE | loading/empty/disabled reason/error-retry/permission/success | PASS_CODE | 新 prototype 页面请求状态机、权限 fail-closed 与行为测试 | - |
+| G2-NO-FALLBACK-DEMO | 空数据或失败不得回退演示数据 | PASS_CODE | 源码门禁确认无 `prototypeData`、无旧财务/项目 Demo 回退 | - |
+| G2-EVIDENCE | 聚焦 RED/GREEN + 模块构建；最终 E2E 只执行一次 | PASS_BUILD_FRONTEND_DEPLOY / E2E_INPUT_PENDING | 最终前端 Vitest 13 files/73 tests、Node 8/8、TypeScript/生产构建/镜像部署通过；E2E 凭据与可写测试边界待提供 | F6、Sprint-84 F5/T02 |
 | G3 | 发布/回滚安全 | GAP | `assets/release-plan.md` 已冻结 expand/migrate/contract、shadow relation 与回退；待实现后演练 | F4、F5、F6 |
 | G4 | 可运维性 | GAP | `assets/runbook.md` 已冻结信号/阈值/处置；待指标、审计和故障演练 | F5、F6 |
 | G4 | 最终 DoD | PENDING | `it/README.md` | F6 |
@@ -154,16 +154,16 @@ WarehousePlan → ModelSpec v2/revision → StageGate → Lifecycle
 
 | ID | Feature | Task 数 | 优先级 | 状态 |
 |---|---|---:|---|---|
-| F0 | 架构基线与产品决策冻结 | 5 | P0×5（T05 仅 S3） | IN_PROGRESS（T01～T04 DONE；T05 阻断 S3） |
-| F1 | 统一 dbt 快照与可视化投影 | 5 | P0×4 / P1×1 | DRAFT |
-| F2 | 业务可视化与高级 dbt 实现分层 | 5 | P0×2 / P1×3 | DRAFT |
-| F3 | 外部 dbt 包逆向建模产品化 | 6 | P0×4 / P1×2 | DRAFT |
-| F4 | 发布、物化与资产证据闭环 | 4 | P1×4 | DRAFT |
-| F5 | 安全、审计与可运维收敛 | 5 | P0×3 / P1×1 / P2×1 | DRAFT |
-| F6 | 真实端到端验收与旧入口退役 | 5 | P0×1 / P1×3 / P2×1 | DRAFT |
+| F0 | 架构基线与产品决策冻结 | 5 | P0×5（T05 仅 S3） | DONE_EVIDENCE |
+| F1 | 统一 dbt 快照与可视化投影 | 5 | P0×4 / P1×1 | CODE_COMPLETE |
+| F2 | 业务可视化与高级 dbt 实现分层 | 5 | P0×2 / P1×3 | CODE_COMPLETE |
+| F3 | 外部 dbt 包逆向建模产品化 | 6 | P0×4 / P1×2 | CODE_COMPLETE |
+| F4 | 发布、物化与资产证据闭环 | 4 | P1×4 | CODE_COMPLETE / RUNTIME_E2E_PENDING |
+| F5 | 安全、审计与可运维收敛 | 5 | P0×3 / P1×1 / P2×1 | CODE_COMPLETE / RUNTIME_RETIREMENT_PENDING |
+| F6 | 真实端到端验收与旧入口退役 | 5 | P0×1 / P1×3 / P2×1 | TEST_MATRIX_PASS / E2E_PENDING |
 
-**总计**：35 个 Task；F0/T01～T04 DONE，F0/T05 仅阻断 S3，其余功能任务按切片保持 DRAFT/IN_PROGRESS。P0=19（其中 F0/T05 只阻断 S3），P1=14，P2=2。
-**编码门禁**：F0/T04 只评审当前待拉取切片；S1/S2 不等待 H83-01/F0/T05，S3 materialization 必须等待 `G0-RUNTIME=PASS`。P1/P2 可保持 DRAFT，不得反向阻断 P0。
+**总计**：35 个 Task；F0～F5 功能代码已完成，F6/T01 聚焦矩阵已通过，F6/T02～T05 保持真实 E2E/现场退役门禁。P0=19，P1=14，P2=2。
+**编码门禁**：代码冻结后不再分散运行 E2E；先部署当前前端与认证 runtime pin，再统一执行 F6 的真实菜单、ZIP、发布/物化、审计和退役验收。
 
 ### 交付切片
 
@@ -230,7 +230,7 @@ F5/T04 是跨切片可观测性前置证据，F6/T01 是编码后兼容回归任
 
 ## 分切片完成标准
 
-每个切片只按自身主链和 IT 子项判定完成；未排期的 P1/P2 切片保持 DRAFT，不反向阻断 S1/S2。只有下列全部切片及物理退役均完成时，Sprint-83 才可整体标记 DONE。
+每个切片只按自身主链和 IT 子项判定完成。当前 S1～S4 已达到代码/契约完成，但下列勾选只能由最终真实 E2E 证据关闭；只有全部切片及物理退役均完成时，Sprint-83 才可整体标记 DONE。
 
 - [ ] **S1**：普通业务可视化只展示逻辑结构和业务/模型依赖，任何状态下均不显示 SQL/Jinja、macro、compiled SQL 或 project path；显式高级技术只读视图复用同一固定模型上下文。
 - [ ] **S2**：artifact-rich dbt ZIP 通过带 30 分钟 `inspectionProof` 的 inspect → preview → apply/retry 进入 canonical DRAFT；技术包篡改、跨 tenant/actor 重放和过期均 fail-closed；每个 FAILED/BLOCKED 项均展示稳定失败码、阶段、安全原因、retryable、恢复动作和 correlationId，且 canonical status/summary 与明细一致，`SUCCEEDED/REPLAYED` 已完成前向迁移。

@@ -1,7 +1,7 @@
 # T01：统一接入 StageGate 与 Lifecycle
 
 **优先级**：P1
-**状态**：DRAFT  
+**状态**：CODE_COMPLETE
 **依赖**：F1/T03，以及 F2/T03 或 F3/T04 至少一个已固定 ImplementationRevision 生产者
 
 ## 目标

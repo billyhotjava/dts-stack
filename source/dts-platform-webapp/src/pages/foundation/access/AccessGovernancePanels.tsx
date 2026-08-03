@@ -304,38 +304,3 @@ export function AccessQualityPanel({
 		</div>
 	);
 }
-
-export function AccessStructureDriftPanel({ task }: { task: IngestionTaskDTO }) {
-	const router = useRouter();
-	const kind = inferAccessKind(task);
-	return (
-		<div style={{ display: "grid", gap: 16 }}>
-			<Alert
-				type="info"
-				showIcon
-				message="结构漂移由元数据域统一判定"
-				description="接入详情提供同一工作上下文入口；结构快照、漂移事件、策略和处置工单仍以元数据管理为唯一事实源。"
-			/>
-			<Card title="当前结构上下文">
-				<Descriptions bordered size="small" column={{ xs: 1, md: 2 }}>
-					<Descriptions.Item label="接入方式">
-						{kind === "database" ? "数据库" : kind === "api" ? "API" : "离线文件"}
-					</Descriptions.Item>
-					<Descriptions.Item label="源连接标识">
-						{task.sourceDataSourceId || "文件制品，无数据库连接"}
-					</Descriptions.Item>
-					<Descriptions.Item label="当前 Revision">
-						{task.revisionNumber ? `R${task.revisionNumber}` : "未版本化"}
-					</Descriptions.Item>
-					<Descriptions.Item label="漂移结果">未在接入任务内复制</Descriptions.Item>
-				</Descriptions>
-				<Space wrap style={{ marginTop: 16 }}>
-					<Button type="primary" onClick={() => router.push("/catalog/metadata")}>
-						查看结构漂移台账
-					</Button>
-					<Button onClick={() => router.push("/catalog/metadata-management")}>查看元数据资产</Button>
-				</Space>
-			</Card>
-		</div>
-	);
-}

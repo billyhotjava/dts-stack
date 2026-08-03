@@ -1,9 +1,11 @@
 # Sprint-84：数据建模七入口真实能力收敛
 
-**时间**：2026-08  
-**状态**：IN_PROGRESS（代码/契约已冻结并完成构建，待部署与一次联合 E2E）  
-**类型**：UI Productization / Contract Wiring / Controlled Capability Retirement  
+**时间**：2026-08
+**状态**：CODE_COMPLETE / BUILD_PASS / DEPLOYED / E2E_INPUT_PENDING
+**类型**：UI Productization / Contract Wiring / Controlled Capability Retirement
 **目标**：让用户在现有“数据建模”七个入口中读取真实数据、执行真实业务动作并获得完整状态反馈；没有 canonical owner 的演示能力直接删除，不新增菜单、平行台账或万能工具引擎。
+
+> 2026-08-03 纠偏收口：一度存在的 `prototypeData.ts` 与模拟成功已删除；生产页面现以 `worklog/prototype/dm/dataworks-kimball/` 为唯一 UI 基线，数据和动作仅接 canonical owner。详细差异与当前验证证据见 `assets/prototype-conformance-review-20260803.md`。
 
 ## 架构决策
 
@@ -62,12 +64,12 @@
 | G0 | 页面能力矩阵 | PASS | `assets/page-capability-matrix.md` | - |
 | G0 | 按钮/组件矩阵 | PASS | `assets/button-component-matrix.md` | - |
 | G1 | 契约与 owner 映射 | PASS | 本文契约链、页面/按钮矩阵与独立 Review | - |
-| G2-UI-TRUTH | 无演示数据、无无处理器控件 | PASS_CODE | 30 files / 122 Vitest + source-contract；总代码 Review PASS | 部署后复核 |
-| G2-CONTRACT-WIRING | 写动作完整追踪到服务端审计 | PASS_CODE | 原子维度 POST/GET、标准/指标/规划 owner 与 87/87 后端测试 | 部署后审计抽样 |
-| G2-STATE-COMPLETE | 七态完整 | PASS_CODE | 页面聚焦测试与错误/权限/重试契约 | 浏览器验收 |
-| G2-NO-FALLBACK-DEMO | API 空/失败不回退示例 | PASS_CODE | 页面架构门禁与独立 Review | 浏览器验收 |
-| G2-EVIDENCE | RED/GREEN、构建、最终一次 E2E | PASS_BUILD | Chrome 95 build PASS；E2E 尚未执行 | F5/T02 |
-| G4 | 联合 DoD | PENDING_E2E | `it/README.md` | F5/T02、Sprint-83 F6 |
+| G2-UI-TRUTH | 无演示数据、无无处理器控件 | PASS_CODE | 旧页面与静态 Demo 已删除；源码契约 47/47 | - |
+| G2-CONTRACT-WIRING | 写动作完整追踪到服务端 owner/审计 | PASS_CODE | 规划、标准、ModelSpec/dbt、指标均消费 canonical API；无 owner 动作不渲染为可执行 | - |
+| G2-STATE-COMPLETE | loading/empty/error/permission/success 及 disabled reason 完整 | PASS_CODE | `PrototypePrimitives.tsx` 与各页请求状态机；编辑权限统一门禁 | - |
+| G2-NO-FALLBACK-DEMO | API 空/失败不回退示例 | PASS_CODE | 源码门禁不存在 `prototypeData`、`usePrototypeToast` 或财务/项目 Demo 事实 | - |
+| G2-EVIDENCE | RED/GREEN、构建、部署、最终一次 E2E | PASS_BUILD_DEPLOY / E2E_INPUT_PENDING | 最终聚焦回归 Vitest 13 files/73 tests、Node 8/8；TypeScript、Chrome 95 target 构建、独立 Review、GitNexus 检测通过；当前前端镜像已部署并对外 HTTP 200 | F5/T02 |
+| G4 | 联合 DoD | PENDING_E2E_INPUT | 当前纠偏镜像已部署；授权 DTS 测试身份、可写测试租户/清理边界与 Chrome 95 实机仍待提供 | F5/T02、Sprint-83 F6 |
 
 ## Feature 列表
 
@@ -75,10 +77,10 @@
 |---|---|---:|---|
 | F0 | 真实性基线与纠偏门禁 | 2 | DONE |
 | F1 | 规划与建模概览真实化 | 3 | CODE_COMPLETE |
-| F2 | 数据标准真实化 | 3 | CODE_COMPLETE |
+| F2 | 数据标准真实化 | 3 | CODE_COMPLETE_WITH_OWNER_GAPS |
 | F3 | 数据指标真实化 | 3 | CODE_COMPLETE |
-| F4 | 关系图与通用工具收敛 | 3 | CODE_COMPLETE |
-| F5 | 集中验证与交付证据 | 2 | IN_PROGRESS（T01 DONE / T02 READY） |
+| F4 | 关系图与通用工具收敛 | 3 | CODE_COMPLETE_WITH_OWNER_GAPS |
+| F5 | 集中验证与交付证据 | 2 | BUILD_DEPLOY_PASS / E2E_INPUT_PENDING |
 
 **顺序**：F0 → F1/F2 → Sprint-83 F2～F5 → F3 → F4 → Sprint-83 F6 + F5。
 
@@ -95,12 +97,14 @@
 ## 完成标准与纠偏硬规则
 
 - [x] 生产页面没有内置客户/财务/项目示例数据，也不会在 API 空或失败时回退示例。
-- [x] 每个可见写控件可追踪到 handler、API、service、canonical data 和服务端审计。
-- [x] 每个切片具备 default/loading/empty/disabled reason/error-retry/permission/success。
-- [x] 生产页面已清除 `UiStageNotice`、`BackendPendingButton`、无 handler 按钮和模拟记录。
+- [x] 每个可见写控件可追踪到 handler、API、service 和 canonical data；无 owner 能力不伪装可执行。
+- [x] 页面具备 loading/empty/disabled reason/error-retry/permission/success 的真实状态语义。
+- [x] 生产页面已清除旧阶段流程、无 handler 按钮和模拟记录。
 - [x] 状态汇报分列“代码/契约完成度”和“部署后用户可操作能力”。
-- [x] 冻结快照已完成聚焦测试、Chrome 95 构建和 Java/TypeScript/安全/总代码 Review。
-- [ ] 部署最终镜像后只执行一次联合 E2E，并归档真实认证、审计与截图证据。
+- [x] 当前纠偏实现完成聚焦测试、TypeScript 检查和 Chrome 95 target 构建。
+- [ ] 当前纠偏实现完成独立 Review。
+- [x] 当前纠偏实现的最终镜像已部署并完成健康检查。
+- [ ] 获得授权测试身份与可写测试租户后只执行一次联合 E2E，并归档真实认证、审计与截图证据。
 
 ## 本轮约束纠偏（2026-08-02）
 
@@ -111,29 +115,38 @@
 | 编码完成度、聚焦测试、构建、部署和真实 E2E 混为一个状态 | 五类证据分开登记，缺任一项不得把用户可操作能力标为 DONE | Feature 保持 `IN_PROGRESS`，直到 F5 完成集中 build、独立 review、部署和联合 E2E |
 | 在编码过程中重复宽扫、重复构建和提前跑 E2E，消耗大量 token | Recon 只做一次；编码期只执行与当前切片相关的 RED/GREEN；全部代码冻结后统一验证 | 使用 CL-84 账本复用事实；最终只运行一次联合 E2E |
 | 为补齐原型页面而新建万能后端、平行台账或本地 fallback | 缺 canonical owner 的能力必须删除或显示真实空态，不得由前端猜测数据 | 概览不建最近访问/任务表，关系图不落库，工具不建统一历史，规划无 owner 项不伪造 CRUD |
+| 把建设计划管理放进共享 `PlanningWorkspace`，导致所有数仓规划目录重复出现新建计划和上下文 | 共享页面容器不等于共享业务能力；控件必须按当前叶子页面的 owner 和用途显示 | 建模空间独占计划 CRUD；规划参数配置只选择计划；其余 6 个目录不读取计划头也不渲染计划模块，组件回归覆盖跨菜单清理 |
 | 关系图只“跳到页面”而不定位真实资产 | 深链参数必须由目标页面消费；未命中需显式反馈，不能静默忽略 | `planId`、`standardId`、`indicatorId` 进入目标页面真实选择上下文并保留其他查询参数 |
 | 新维度采用前端 `create definition → confirm → create ModelSpec`，刷新或响应丢失会留下孤儿定义 | 跨聚合写入必须由服务端单事务编排；重放固定使用首次确认的维度 revision 2，并要求维度/模型幂等状态一致 | `POST /api/modeling/model-specs/dimension` 复用既有 service、权限与幂等记录；严格组合审计失败时整笔事务回滚 |
 | 第一版组合命令只创建 ModelSpec seed r1，前端随后独立 PUT；却被误判为“原子创建完成” | 用户一次保存的原子边界必须覆盖完整逻辑设计，服务端在一个事务内形成固定 ModelSpec r2 后才能返回成功 | v2 组合命令同时支持新建定义和绑定现行定义；前端不再追加 PUT，POST 重放以 seed r1 + 完整命令重算并核验固定 r2 checksum |
 | 只把 `dmOperationId` 放进 URL，却没有恢复 selection、表单和未知响应状态 | URL 标识只能定位操作，不能替代编辑态；恢复顺序固定为操作恢复 → 显式深链 → 创建意图 → 默认选择 | GET 操作状态只读取既有幂等记录、不建表；未提交或回滚时从短期 `sessionStorage` 恢复同一完整命令，无有效草稿则进入显式错误态，禁止自动重提 |
 | 保存中仍可取消、切换目录，旧响应可清参数并覆盖新页面；维度表失败重试还可能静默复用旧定义引用 | 每个异步保存必须绑定 editor instance、request epoch 和 operationId；未知结果不得清理恢复锚点，定义引用必须进入完整请求指纹 | 保存期间禁用内部取消和目录切换；卸载仅中止客户端等待；workspace 完成模型选中和 canonical URL ack 后才清 operationId/临时草稿 |
 | 请求边界只做语义校验，未限制 JSON 体积、深度和集合预算；资源测试关闭过滤器后把注解存在当成授权证据 | 新写端点必须在 Jackson 前限制字节数，并覆盖普通用户拒绝、维护角色成功；语义解码还需限制层级、层次数和字符串长度 | v2 请求仅接收 JSON，使用固定 1 MiB wire budget、严格字段/深度/集合预算和稳定 413；权限与事务回滚分别用 WebMvc 和 Postgres 聚焦测试证明 |
-| 以一次构建通过掩盖后续 review 修复尚未重新验证 | 每次状态只引用最后一次修改之后的证据；旧构建结果只能作为历史证据 | 当前代码冻结后只补一次聚焦测试/模块构建；部署与最终 E2E 仍独立登记 |
+| 以一次构建通过掩盖后续 review 修复尚未重新验证 | 每次状态只引用最后一次修改之后的证据；旧构建结果只能作为历史证据 | 当前代码冻结后只补一次聚焦测试/模块构建；部署已独立登记，最终 E2E 仍保持单独门禁 |
 | 标准代码把 `bizCatalog` 与 `stdLevel` 合并显示，普通名称编辑也可能互相覆盖 | UI 字段必须与 owner 字段一一映射并可无损读写；serializer 不支持的输入不得显示为可编辑 | 标准代码分别映射“数据域/适用范围”，新增 name-only round-trip；码表隐藏业务定义、词典隐藏适用范围 |
 | 路由或对象切换期间的旧读取响应可能覆盖新选择，甚至将旧版本与新对象组合提交 | 可重入读取统一使用 request epoch；迟到成功、失败和 finally 均不得写状态，写动作在 loading 期间禁用 | `PlanningWorkspace`、`MetricEditor` 增加 latest-request-wins；规划参数加载中不可保存 |
 | 将 Node `node:test` 契约文件交给 Vitest，真实断言通过却产生“无 suite”噪声 | 测试执行器必须与文件契约一致，失败归因不能混淆业务缺陷和 runner 配置 | Vitest 只运行组件/adapter 30 files / 122 tests；两个 Node 契约由 `node --test` 独立运行 36/36 |
 | 审计目录源码已更新，但 Maven 把共享资源复制到 classpath 根目录，运行时仍读取旧 `config/` 资源 | 公共治理资源必须验证最终 classpath/镜像路径，不能只看源码三份一致 | `attach-audit-common-resources` 固定 `targetPath=config`，`process-resources` 已证明复制到 `target/classes/config` |
 | 为赶进度可能放宽 800 行架构门禁 | 质量门禁本身是交付契约；超限必须最小拆分且不得搬动事务、幂等或并发控制 | 抽出纯展示 `ModelingEditorSections`，主编辑器 split 口径 797 行，原子保存与 request epoch 保留在父组件 |
 | 恢复接口只按 tenant 可见性读取，业务拒绝没有专项失败审计 | 操作恢复必须复用 plan/actor replay 授权；预期业务失败写严格、脱敏、fail-closed 的专项审计 | GET recovery 在任何版本读取前校验 actor；POST FAIL 仅记录 `errorCode/errorKind`；公共 create 禁用 `dm:v2:` 保留前缀 |
+| E2E 默认账号硬编码且 README 错称默认访问生产，容易把 401 或错误目标混入产品结论 | 生产/验收 E2E 必须显式提供目标、授权账号和密码；缺任一项 fail-closed，凭据不得写入仓库 | `auth.setup.ts` 删除 `opadmin/opadmin123` 默认值；认证预检确认旧默认值在当前环境返回 401 |
+| 直达 URL、标题可见和一次 GET 被称为“七入口联合验收” | 直达/只读检查只能登记为 smoke；完整 E2E 必须点击真实菜单并覆盖 CRUD、导入、发布、物化、关系跳转和公共审计 | 新增生产只读 smoke 仅验证真实菜单、2xx JSON API、宽/窄布局和无意外写；IT-84-01～05 继续保持 PENDING |
+| 为验证失败审计直接对生产发送未授权 POST，且仅凭 422 推断审计落库 | 任何验收写入都需显式授权、测试租户、精确 allowlist、可识别前缀和清理/归档方案；审计必须查询公共审计事实 | 默认 smoke 物理删除 POST；严格审计当前只引用 PostgreSQL 聚焦测试，浏览器审计闭环待授权 E2E |
+| Chrome 95 target 构建通过被等同于 Chrome 95 实机验收 | 构建目标兼容与真实浏览器运行分开登记；无对应二进制不得声明实机 PASS | 当前仅能证明 `chrome95` target bundle；主机 Chrome 为 150，本机未发现 Chrome 95，可用后再执行 IT-84-05 |
 
 后续状态汇报固定使用两列：`代码/契约完成度` 与 `部署后用户可操作能力`。前者通过不能替代后者。
 
 ## 冻结快照证据（2026-08-02）
 
-- 前端：Vitest `30 files / 122 tests`；Node 契约 `36/36`；标准对话框/adapter `7/7`；原子创建与字段保真 `2/2`。
+- 前端：冻结基线 Vitest `30 files / 122 tests`、Node 契约 `36/36`；最终 Review 修复后的集中回归 Vitest `13 files / 73 tests`、Node 契约 `8/8`，TypeScript 无错。
 - 后端：维度组合命令、权限、body limit、保留前缀、ModelSpec 共享回归和 PostgreSQL 回滚合计 `87/87`；其中真实 PostgreSQL 严格审计回滚 `4/4`。
 - Review：Java、TypeScript、安全和最终总代码 Review 均 PASS；最终总代码 Review 为 `CRITICAL/HIGH/MEDIUM/LOW = 0`。
 - 构建：`pnpm build` 使用 `LEGACY_BROWSER_BUILD=1`、Vite `chrome95` target，TypeScript 与生产 bundle 构建成功。
-- 尚未完成：最终镜像构建/部署、真实认证浏览器 E2E、审计后台抽样和 1366×768/窄屏截图；不得据此把 Sprint 标为 DONE。
+- 部署：`dts-platform` 保持既有 healthy；最终纠偏后的 `dts-platform-webapp:1.0.0` → `sha256:2bf603f5ce642319182ae4a89cc26e32063bc0ce910d9a7e6783f5b9f7bdc767`，容器内首页与外部 `https://bi.yuzhicloud.com/data-modeling` 均为 HTTP 200。
+- 回滚：本轮部署前前端镜像已保留为 `dts-platform-webapp:rollback-s83-s84-pre-e2e-20260803` → `sha256:bbcf508abdca82339e3c98d0dfab275f642d094164e9be77963be34c4664172b`；完整容器回滚/前滚演练仍未执行。
+- E2E 前置：现有 Sprint-80 用例会 mock 菜单，不能复用为真实验收；Sprint-84 只读 smoke 已改为零 mock、真实菜单点击、2xx JSON API、逐页截图/溢出和脱敏证据附件，并移除默认生产写入。
+- 尚未完成：授权 DTS 测试账号、可写测试租户/清理边界、真实认证浏览器 E2E、公共审计抽样和 Chrome 95 实机；不得据此把 Sprint 标为 DONE。旧默认 `opadmin/opadmin123` 预检为 HTTP 401。
+- 2026-08-03 增量修复回滚锚点：`dts-platform-webapp:rollback-planning-ui-20260803` → `sha256:b94d6d4f...36ab`；本次仅替换前端，无 schema、API 或后台变更。
 
 ## 非目标
 

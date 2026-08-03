@@ -150,7 +150,7 @@ public class AddaxJobService {
     ) {
         Map<String, Object> resolvedJob = resolveJobConfig(readerType, readerConfig, writerType, writerConfig, jobConfig, runtimeContext);
         if ("full_refresh".equalsIgnoreCase(syncMode)) {
-            applyFullRefreshPreSql(resolvedJob);
+            applyFullRefreshPreSql(resolvedJob, runtimeContext);
         }
         applyReaderRuntimeOverridesToJob(resolvedJob, runtimeReaderOverrides);
         String jobDir = resolveJobDir();
@@ -383,8 +383,14 @@ public class AddaxJobService {
         List<String> readerTables = extractTables(readerConfig);
         List<String> writerTables = extractTables(writerConfig);
 
-        // Only split when reader and writer have matching table counts > 1
-        if (readerTables.size() <= 1 || readerTables.size() != writerTables.size()) {
+        if (!readerTables.isEmpty() && !writerTables.isEmpty() && readerTables.size() != writerTables.size()) {
+            throw new IllegalStateException(
+                "type mismatch: Reader/Writer 表数量不一致: reader="
+                    + readerTables.size() + ", writer=" + writerTables.size()
+            );
+        }
+        // File/query readers may not expose a table list. Keep their single content block.
+        if (readerTables.size() <= 1) {
             Map<String, Object> content = new LinkedHashMap<>();
             content.put("reader", Map.of("name", readerType, "parameter", readerConfig));
             content.put("writer", Map.of("name", writerType, "parameter", writerConfig));
@@ -1717,6 +1723,7 @@ public class AddaxJobService {
         }
         // Source columns (with prefix/suffix applied)
         List<String> writerColNames = new java.util.ArrayList<>();
+        List<String> writerColTypes = new java.util.ArrayList<>();
         Set<String> sourceColumnNames = FileSourceColumnNames.reservedTechnicalNames();
         Set<String> ddlColumnNames = new java.util.LinkedHashSet<>();
         if (autoId && isPostgresWriter(writerType)) {
@@ -1737,6 +1744,7 @@ public class AddaxJobService {
             ddl.append(quoteIdentifier(targetColName))
                .append(" ").append(mapFileTypeToPostgres(colType, col));
             writerColNames.add(quoteIdentifier(targetColName));
+            writerColTypes.add(mapFileTypeToPostgres(colType, col));
         }
         // Extra columns (with DEFAULT values, not included in writer column list)
         Object extraObj = writerConfig.get("_extraColumns");
@@ -1761,13 +1769,35 @@ public class AddaxJobService {
         }
         ddl.append(")");
 
-        // In full rebuild semantics for file sources:
-        // drop target table first, then create it again from file metadata.
+        // Keep the existing target intact until the new batch has been written successfully.
         List<String> preSql = new java.util.ArrayList<>();
-        preSql.add("DROP TABLE IF EXISTS " + qualifiedTable);
         preSql.add(ddl.toString());
 
-        // Preserve existing preSql entries (skip duplicate DROP/TRUNCATE).
+        if (autoId && isPostgresWriter(writerType)) {
+            preSql.add("ALTER TABLE " + qualifiedTable + " ADD COLUMN IF NOT EXISTS \"id\" bigserial");
+        }
+        for (int i = 0; i < writerColNames.size(); i++) {
+            String targetColName = writerColNames.get(i);
+            preSql.add(
+                "ALTER TABLE " + qualifiedTable + " ADD COLUMN IF NOT EXISTS " + targetColName
+                    + " " + writerColTypes.get(i)
+            );
+        }
+        if (extraObj instanceof List<?> extraList) {
+            for (Object item : extraList) {
+                if (!(item instanceof Map<?, ?> extraMap)) continue;
+                String extraName = normalizeText(extraMap.get("name"));
+                String extraType = normalizeText(extraMap.get("type"));
+                if (!StringUtils.hasText(extraName)) continue;
+                preSql.add(
+                    "ALTER TABLE " + qualifiedTable + " ADD COLUMN IF NOT EXISTS "
+                        + quoteIdentifier(extraName.toLowerCase(Locale.ROOT)) + " "
+                        + mapExtraColumnType(extraType, extraMap)
+                );
+            }
+        }
+
+        // Preserve non-destructive existing preSql entries.
         Object existing = writerConfig.get("preSql");
         if (existing instanceof List<?> list) {
             for (Object item : list) {
@@ -1791,8 +1821,8 @@ public class AddaxJobService {
     }
 
     /**
-     * If _extraColumns is configured in writerConfig, inject ALTER TABLE + UPDATE as postSql.
-     * Extra columns are added AFTER data load to avoid column count mismatch with the reader.
+     * If _extraColumns is configured, provision them and their insert defaults before loading.
+     * Only row numbering runs after loading, scoped to rows from the current execution.
      */
     @SuppressWarnings("unchecked")
     private void injectExtraColumnsPostSql(Map<String, Object> writerConfig, String writerType, String sourceTableName) {
@@ -1804,6 +1834,14 @@ public class AddaxJobService {
         List<String> tables = extractTables(writerConfig);
         if (tables.isEmpty()) return;
 
+        List<String> preSql = new java.util.ArrayList<>();
+        Object existingPreSql = writerConfig.get("preSql");
+        if (existingPreSql instanceof List<?> list) {
+            for (Object item : list) {
+                String s = normalizeText(item);
+                if (StringUtils.hasText(s)) preSql.add(s);
+            }
+        }
         List<String> postSql = new java.util.ArrayList<>();
         // Preserve existing postSql
         Object existing = writerConfig.get("postSql");
@@ -1826,8 +1864,8 @@ public class AddaxJobService {
                 ? quoteIdentifier(schema) + "." + quoteIdentifier(tableName)
                 : quoteIdentifier(tableName);
 
-            StringBuilder updateSet = new StringBuilder();
             Integer rowNumberOffset = null;
+            String executionPredicate = null;
             for (Object item : extraList) {
                 if (!(item instanceof Map<?, ?> colMap)) continue;
                 String colName = normalizeText(colMap.get("name"));
@@ -1840,36 +1878,47 @@ public class AddaxJobService {
                     rowNumberOffset = toInt(colMap.get("rowNumberOffset"), 0);
                 }
 
-                postSql.add("ALTER TABLE " + qualifiedTable
+                preSql.add("ALTER TABLE " + qualifiedTable
                     + " ADD COLUMN IF NOT EXISTS " + quotedCol + " " + sqlType);
 
                 String renderedDefault = renderExtraDefaultValue(defaultVal, rawTable, sourceTableName);
                 if (StringUtils.hasText(renderedDefault)) {
-                    if (!updateSet.isEmpty()) updateSet.append(", ");
-                    updateSet.append(quotedCol).append(" = ").append(renderedDefault);
+                    preSql.add(
+                        "ALTER TABLE " + qualifiedTable + " ALTER COLUMN " + quotedCol
+                            + " SET DEFAULT " + renderedDefault
+                    );
+                    if (DtsOdsTechnicalColumns.EXECUTION_ID.equalsIgnoreCase(colName)) {
+                        executionPredicate = quotedCol + " = " + renderedDefault;
+                    }
                 }
             }
-            if (!updateSet.isEmpty()) {
-                postSql.add("UPDATE " + qualifiedTable + " SET " + updateSet + " WHERE TRUE");
-            }
             if (rowNumberOffset != null) {
-                postSql.add(buildRowNumberUpdateSql(qualifiedTable, rowNumberOffset));
+                postSql.add(buildRowNumberUpdateSql(qualifiedTable, rowNumberOffset, executionPredicate));
             }
         }
 
+        if (!preSql.isEmpty()) {
+            writerConfig.put("preSql", preSql);
+            LOG.info("Injected extra column defaults as preSql: {}", preSql);
+        }
         if (!postSql.isEmpty()) {
             writerConfig.put("postSql", postSql);
             LOG.info("Injected extra columns postSql: {}", postSql);
         }
     }
 
-    private String buildRowNumberUpdateSql(String qualifiedTable, int rowNumberOffset) {
+    private String buildRowNumberUpdateSql(String qualifiedTable, int rowNumberOffset, String executionPredicate) {
         String expression = "row_number() OVER (ORDER BY ctid)";
         if (rowNumberOffset > 0) {
             expression = expression + " + " + rowNumberOffset;
         }
         String column = quoteIdentifier(DtsOdsTechnicalColumns.ROW_NUMBER);
-        return "WITH numbered AS (SELECT ctid, " + expression + " AS dts_row_number FROM " + qualifiedTable + ") "
+        String predicate = quoteIdentifier(DtsOdsTechnicalColumns.ROW_NUMBER) + " IS NULL";
+        if (StringUtils.hasText(executionPredicate)) {
+            predicate = "(" + predicate + ") AND (" + executionPredicate + ")";
+        }
+        return "WITH numbered AS (SELECT ctid, " + expression + " AS dts_row_number FROM " + qualifiedTable
+            + " WHERE " + predicate + ") "
             + "UPDATE " + qualifiedTable + " t SET " + column + " = numbered.dts_row_number "
             + "FROM numbered WHERE t.ctid = numbered.ctid";
     }
@@ -3083,7 +3132,9 @@ public class AddaxJobService {
      * Workaround for Addax 6.0.8 bug: DataBaseType.quoteColumn() returns null for PostgreSQL,
      * causing dealColumnConf to corrupt column ["*"] into [null, null, ...] → invalid SQL.
      * This method resolves actual column names from the target database and replaces ["*"]
-     * in PostgreSQL writer configs so Addax skips its broken column resolution.
+     * in PostgreSQL writer configs so Addax skips its broken column resolution. When the
+     * source is a DTS-managed ODS table, it also expands the reader columns without the
+     * inherited DTS technical fields so reader and writer positions remain aligned.
      */
     @SuppressWarnings("unchecked")
     public void resolveWriterColumnsIfNeeded(String jobPath) {
@@ -3136,12 +3187,12 @@ public class AddaxJobService {
                 String password = normalizeText(params.get("password"));
                 String driver = normalizeText(params.get("driver"));
                 if (!StringUtils.hasText(jdbcUrl)) {
-                    continue;
+                    throw new IllegalStateException("无法解析目标数据库连接，拒绝保存未解析的 Addax 字段配置");
                 }
                 // Get the target table name
                 List<String> tables = extractTables(params);
                 if (tables.isEmpty()) {
-                    continue;
+                    throw new IllegalStateException("无法解析目标表，拒绝保存未解析的 Addax 字段配置");
                 }
                 String tableName = tables.get(0);
                 // Query actual columns from target database
@@ -3150,15 +3201,18 @@ public class AddaxJobService {
                 );
                 List<JdbcMetadataService.ColumnMeta> columns = jdbcMetadataService.getTableColumns(connInfo, tableName);
                 if (columns.isEmpty()) {
-                    LOG.warn("Could not resolve columns for target table {} — keeping [\"*\"]", tableName);
-                    continue;
+                    throw new IllegalStateException("无法解析目标表字段，拒绝保存未解析的 Addax 字段配置: " + tableName);
                 }
                 List<String> columnNames = columns.stream()
                     .map(JdbcMetadataService.ColumnMeta::name)
                     .map(name -> name != null ? name.toLowerCase(Locale.ROOT) : name)
                     .filter(name -> !DtsOdsTechnicalColumns.isTechnicalColumn(name))
                     .toList();
+                if (columnNames.isEmpty()) {
+                    throw new IllegalStateException("目标表没有可写入的业务字段: " + tableName);
+                }
                 // Replace ["*"] with actual column names
+                resolveReaderColumnsForManagedOds(contentMap, columnNames);
                 ((Map<String, Object>) paramMap).put("column", columnNames);
                 modified = true;
                 LOG.info("Resolved {} writer columns for table {}: {}", columnNames.size(), tableName,
@@ -3168,17 +3222,120 @@ public class AddaxJobService {
                 writeSealedJob(path, jobConfig);
                 LOG.info("Updated Addax job with resolved writer columns: {}", path);
             }
+        } catch (IllegalStateException ex) {
+            LOG.warn("Refused to persist inconsistent Addax columns for job {}: {}", jobPath, ex.getMessage());
+            throw ex;
         } catch (Exception ex) {
             LOG.warn("Failed to resolve writer columns for job {}: {}", jobPath, ex.getMessage());
+            throw new IllegalStateException("数据库字段解析失败: " + ex.getMessage(), ex);
         }
     }
 
+    @SuppressWarnings("unchecked")
+    private void resolveReaderColumnsForManagedOds(Map<?, ?> contentMap, List<String> writerColumns) {
+        Object readerObj = contentMap.get("reader");
+        if (!(readerObj instanceof Map<?, ?> readerMap)) {
+            return;
+        }
+        String readerName = normalizeText(readerMap.get("name"));
+        Object parameterObj = readerMap.get("parameter");
+        if (!(parameterObj instanceof Map<?, ?> parameterMap)) {
+            return;
+        }
+        int writerColumnCount = writerColumns == null ? 0 : writerColumns.size();
+        Object configuredColumns = parameterMap.get("column");
+        if (!isWildcardColumn(configuredColumns)) {
+            List<String> readerColumns = new java.util.ArrayList<>();
+            if (configuredColumns instanceof Iterable<?> iterable) {
+                for (Object configuredColumn : iterable) {
+                    String readerColumn = normalizeText(configuredColumn);
+                    if (StringUtils.hasText(readerColumn)) {
+                        readerColumns.add(readerColumn);
+                    }
+                }
+            } else {
+                String readerColumn = normalizeText(configuredColumns);
+                if (StringUtils.hasText(readerColumn)) {
+                    readerColumns.add(readerColumn);
+                }
+            }
+            if (readerColumns.size() != writerColumnCount) {
+                throw new IllegalStateException(
+                    "type mismatch: 数据库 Reader/Writer 显式字段数量不一致，拒绝保存 Addax 字段配置: reader="
+                        + readerColumns.size() + ", writer=" + writerColumnCount
+                );
+            }
+            return;
+        }
+        Map<String, Object> params = new LinkedHashMap<>();
+        parameterMap.forEach((key, value) -> {
+            if (key != null) {
+                params.put(key.toString(), value);
+            }
+        });
+        String jdbcUrl = resolveJdbcUrl(params);
+        if (!StringUtils.hasText(jdbcUrl) && !isJdbcReader(readerName)) {
+            return;
+        }
+        List<String> tables = extractTables(params);
+        if (!StringUtils.hasText(jdbcUrl) || tables.isEmpty()) {
+            throw new IllegalStateException("无法解析数据库 Reader 连接或源表，拒绝保存不对齐的 Addax 字段配置");
+        }
+        JdbcMetadataService.JdbcConnectionInfo sourceInfo = new JdbcMetadataService.JdbcConnectionInfo(
+            jdbcUrl,
+            normalizeText(params.get("username")),
+            normalizeText(params.get("password")),
+            normalizeText(params.get("driver")),
+            null,
+            null
+        );
+        List<JdbcMetadataService.ColumnMeta> sourceColumns = jdbcMetadataService.getTableColumns(sourceInfo, tables.get(0));
+        if (sourceColumns.isEmpty()) {
+            throw new IllegalStateException("无法解析数据库 Reader 源字段，拒绝保存不对齐的 Addax 字段配置: " + tables.get(0));
+        }
+        List<String> readerColumns = sourceColumns.stream()
+            .map(JdbcMetadataService.ColumnMeta::name)
+            .toList();
+        if (readerColumns.size() != writerColumnCount) {
+            throw new IllegalStateException(
+                "type mismatch: 数据库 Reader/Writer 业务字段数量不一致，拒绝保存 Addax 字段配置: reader="
+                    + readerColumns.size() + ", writer=" + writerColumnCount
+            );
+        }
+        ((Map<String, Object>) parameterMap).put("column", readerColumns);
+        LOG.info("Resolved {} reader columns for table {}", readerColumns.size(), tables.get(0));
+    }
+
+    private boolean isJdbcReader(String readerName) {
+        if (!StringUtils.hasText(readerName)) {
+            return false;
+        }
+        String type = readerName.toLowerCase(Locale.ROOT);
+        return type.contains("mysql")
+            || type.contains("mariadb")
+            || type.contains("postgres")
+            || type.contains("oracle")
+            || type.contains("sqlserver")
+            || type.contains("mssql")
+            || type.contains("clickhouse")
+            || type.contains("db2")
+            || type.contains("sqlite")
+            || type.contains("rdbms")
+            || type.contains("jdbc")
+            || type.equals("dmreader")
+            || type.contains("kingbase")
+            || type.contains("gbase")
+            || type.contains("hive")
+            || type.contains("inceptor");
+    }
+
     /**
-     * For full_refresh sync mode, add preSql: ["TRUNCATE TABLE <table>"] to each writer.
-     * This ensures the target table is cleared before inserting fresh data.
+     * For full_refresh, keep the last successful batch until the new batch is written, then
+     * remove rows that do not belong to the current execution. This avoids an empty target
+     * after a failed load and preserves table identity and dependent objects.
      */
     @SuppressWarnings("unchecked")
-    private void applyFullRefreshPreSql(Map<String, Object> jobConfig) {
+    private void applyFullRefreshPreSql(Map<String, Object> jobConfig, Map<String, Object> runtimeContext) {
         if (jobConfig == null || jobConfig.isEmpty()) {
             return;
         }
@@ -3204,21 +3361,78 @@ public class AddaxJobService {
             }
             Map<String, Object> params = new LinkedHashMap<>();
             paramMap.forEach((k, v) -> { if (k != null) params.put(k.toString(), v); });
-            // Skip if preSql is already configured
-            if (params.containsKey("preSql")) {
-                continue;
-            }
             List<String> tables = extractTables(params);
             if (tables.isEmpty()) {
                 continue;
             }
-            List<String> truncateStatements = tables.stream()
-                .filter(StringUtils::hasText)
-                .map(table -> "TRUNCATE TABLE " + table)
-                .toList();
-            if (!truncateStatements.isEmpty()) {
-                ((Map<String, Object>) paramMap).put("preSql", truncateStatements);
-                LOG.info("Added full_refresh preSql for tables: {}", tables);
+            List<String> safePreSql = new java.util.ArrayList<>();
+            Object existingPreSql = params.get("preSql");
+            if (existingPreSql instanceof List<?> list) {
+                for (Object sqlObj : list) {
+                    String sql = normalizeText(sqlObj);
+                    String upper = sql == null ? "" : sql.toUpperCase(Locale.ROOT);
+                    if (StringUtils.hasText(sql) && !upper.contains("TRUNCATE") && !upper.contains("DROP TABLE")) {
+                        safePreSql.add(sql);
+                    }
+                }
+            }
+            String executionId = normalizeRuntimeValue(runtimeContext, RUNTIME_EXECUTION_ID, null);
+            if (!StringUtils.hasText(executionId) || "unknown".equalsIgnoreCase(executionId)) {
+                throw new IllegalStateException(
+                    "type mismatch: full_refresh 缺少当前执行 ID，拒绝生成可能污染目标表的作业"
+                );
+            }
+            String writerName = normalizeText(writerMap.get("name"));
+            String targetJdbcUrl = resolveJdbcUrl(params);
+            boolean postgresTarget = isPostgresWriter(writerName)
+                || (StringUtils.hasText(targetJdbcUrl)
+                    && targetJdbcUrl.toLowerCase(Locale.ROOT).startsWith("jdbc:postgresql:"));
+            if (!postgresTarget) {
+                throw new IllegalStateException(
+                    "type mismatch: 非破坏 full_refresh 当前仅支持 PostgreSQL 目标，拒绝回退为预清空"
+                );
+            }
+            String renderedExecutionId = quoteSqlString(executionId);
+            String executionColumn = quoteIdentifier(DtsOdsTechnicalColumns.EXECUTION_ID);
+            for (String table : tables) {
+                if (!StringUtils.hasText(table)) continue;
+                String tableMarker = "ALTER TABLE " + table.toUpperCase(Locale.ROOT) + " ";
+                boolean executionColumnProvisioned = safePreSql.stream()
+                    .map(sql -> sql.toUpperCase(Locale.ROOT))
+                    .anyMatch(sql ->
+                        sql.contains(tableMarker)
+                            && sql.contains("ADD COLUMN IF NOT EXISTS \"_DTS_EXECUTION_ID\"")
+                    );
+                if (!executionColumnProvisioned) {
+                    safePreSql.add(
+                        "ALTER TABLE " + table + " ADD COLUMN IF NOT EXISTS " + executionColumn + " VARCHAR(128)"
+                    );
+                }
+                safePreSql.add(
+                    "ALTER TABLE " + table + " ALTER COLUMN " + executionColumn
+                        + " SET DEFAULT " + renderedExecutionId
+                );
+            }
+            ((Map<String, Object>) paramMap).put("preSql", safePreSql);
+
+            List<String> postSql = new java.util.ArrayList<>();
+            Object existingPostSql = params.get("postSql");
+            if (existingPostSql instanceof List<?> list) {
+                for (Object sqlObj : list) {
+                    String sql = normalizeText(sqlObj);
+                    if (StringUtils.hasText(sql)) postSql.add(sql);
+                }
+            }
+            for (String table : tables) {
+                if (!StringUtils.hasText(table)) continue;
+                postSql.add(
+                    "DELETE FROM " + table + " WHERE " + executionColumn + " <> " + renderedExecutionId
+                        + " OR " + executionColumn + " IS NULL"
+                );
+            }
+            if (!postSql.isEmpty()) {
+                ((Map<String, Object>) paramMap).put("postSql", postSql);
+                LOG.info("Added non-destructive full_refresh cleanup for tables: {}", tables);
             }
         }
     }

@@ -17,6 +17,6 @@
 | P6 | UI harness | PASS_WITH_GAPS | Google Chrome、Node 24.14.1、pnpm 10.33.0 可用；`https://bi.yuzhicloud.com` 返回 200；登录、上传与截图留到最终 E2E | F6/T04 |
 | P7 | 构建/测试命令 | PASS_WITH_GAPS | focused Maven test 实际 `BUILD SUCCESS`；webapp 全量 build 在全部前端编码完成后统一执行一次 | F6/T01 |
 | P8A | Airflow/API control-plane 可达性 | PASS | `dts-airflow-webserver` healthy；`/health` 与 `/api/v1/health` 均返回 200 | - |
-| P8B | 真实 dbt/PostgreSQL materialization | BLOCKED（仅 S3） | H83-01 原始证据经 F0/T05 登记为 CERTIFIED，DbtExecutionGateway 代表链可验收 | H83-01、F0/T05 |
+| P8B | 真实 dbt/PostgreSQL materialization | PASS_EVIDENCE / DEPLOYMENT_E2E_PENDING | H83-01 原始证据经 F0/T05 登记为 CERTIFIED；将认证 derivative 固定到目标环境后验收 DbtExecutionGateway 代表链 | F6/T03～T04 |
 
 P2/P5/P6/P7 的 GAP 是用户明确要求的“编码完成后集中 E2E/构建”调度约束，不代表已经完成真实验收，也不允许在最终 DoD 中降级或省略。它们不阻断 83a 编码，但最终整体验收必须补齐。P4B、P8B 等后续探针有具名 owner/status，不反向阻断 83a。

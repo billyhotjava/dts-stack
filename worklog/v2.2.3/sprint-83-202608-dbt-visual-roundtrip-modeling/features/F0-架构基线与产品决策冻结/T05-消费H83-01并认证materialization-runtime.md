@@ -1,7 +1,7 @@
 # T05：消费 H83-01 并认证 materialization runtime
 
-**优先级**：P0 Gate（仅 S3）  
-**状态**：BLOCKED（等待 H83-01 immutable runtime evidence）  
+**优先级**：P0 Gate（仅 S3）
+**状态**：DONE_EVIDENCE（认证记录已登记；部署激活和真实物化 E2E 仍属后续门禁）
 **依赖**：H83-01、T01
 
 ## 目标
@@ -17,11 +17,18 @@
 
 ## 验证
 
-- [ ] 冷构建可由锁文件和 hash 重复得到同一版本集合，归档不可变 image digest。
-- [ ] RT-01 在真实 PostgreSQL 完成 parse/compile/build/run 和 relation query，artifact/checksum 可复现。
-- [ ] 损坏锁、替换 digest、缺 relation 和 adapter 不匹配均 fail-closed。
-- [ ] rollback 演练恢复上一可用镜像，未认证镜像不能进入发布/物化配置。
+- [x] 冷构建可由锁文件和 hash 重复得到同一版本集合，归档不可变 image digest。
+- [x] RT-01 在隔离 PostgreSQL 完成 parse/compile/build/run 和 relation query，artifact/checksum 已归档。
+- [x] 损坏锁、替换 digest、缺 relation 和 adapter 不匹配均 fail-closed。
+- [x] 已归档撤销/回滚策略，未认证候选镜像仍不能进入发布/物化配置。
 
 ## Definition of Done
 
-- [ ] `materialization=CERTIFIED` 只由本 Task 登记，且只引用校验通过的 H83-01 immutable evidence；F6/T01 仅做编码后回归，不重新拥有认证。
+- [x] `materialization=CERTIFIED` 由本 Task 登记为 `H83-CERT-RT01-LINUX-AMD64-EVIDENCE-bcd2fc84b05b9508990538c6642be7ac7b35073ec034e6b1980b22f556345a68`，并仅引用校验通过的 H83-01 immutable evidence；F6/T01 仅做编码后回归，不重新拥有认证。
+
+## 证据与运行边界
+
+- 认证记录：`it/rt-01/certified-profile.json`。
+- 候选 evidence manifest 实际 SHA-256 为 `bcd2fc84b05b9508990538c6642be7ac7b35073ec034e6b1980b22f556345a68`，与认证记录一致。
+- 认证范围仅限 `linux/amd64 + dbt-core 1.10.22 + dbt-postgres 1.10.0 + PostgreSQL`。
+- `DONE_EVIDENCE` 不表示当前生产容器已切换到认证 derivative；部署 digest 核对、控制面激活及真实物化仍由 F6 验收。

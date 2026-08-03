@@ -37,21 +37,25 @@ test("access payload preserves the established database, API and file runtime co
 	assert.match(PAYLOAD_SOURCE, /if \(context\.kind === "api"\) return buildApiRequest\(context\)/);
 	assert.match(PAYLOAD_SOURCE, /if \(context\.kind === "file"\) return buildFileRequest\(context\)/);
 	assert.match(PAYLOAD_SOURCE, /return buildDatabaseRequest\(context\)/);
-	assert.match(PAYLOAD_SOURCE, /source:\s*\{ dataSourceId: sourceDataSourceId, type: readerType, config: readerConfig \}/);
+	assert.match(
+		PAYLOAD_SOURCE,
+		/source:\s*\{ dataSourceId: sourceDataSourceId, type: readerType, config: readerConfig \}/,
+	);
 	assert.match(PAYLOAD_SOURCE, /source:\s*\{ dataSourceId: sourceDataSourceId, type: "httpreader", config \}/);
 	assert.match(PAYLOAD_SOURCE, /type:\s*"txtfilereader"/);
 	assert.match(PAYLOAD_SOURCE, /usePlatformDefault:\s*true/);
 });
 
-test("access detail is the operational home for history, admission, execution, DAG rebuild and rollback", () => {
+test("access detail is the operational home for history, admission, execution and evidence-preserving deletion", () => {
 	for (const tab of ["概览", "运行历史", "密级准入", "变更记录"]) {
 		assert.match(DETAIL_SOURCE, new RegExp(`label:\\s*"${tab}"`));
 	}
 	assert.match(DETAIL_SOURCE, /<ExecutionHistoryTable taskId=\{taskId\}/);
 	assert.match(DETAIL_SOURCE, /<TaskAdmissionBasis task=\{admissionTask \|\| task\}/);
-	assert.match(DETAIL_SOURCE, /runAccessPlanOperation\("admit", operationTaskId\)/);
-	assert.match(DETAIL_SOURCE, /runAccessPlanOperation\("execute", operationTaskId\)/);
-	assert.match(DETAIL_SOURCE, /runAccessPlanOperation\("rebuildDag", operationTaskId\)/);
-	assert.match(DETAIL_SOURCE, /<RollbackImpactModal/);
+	assert.match(DETAIL_SOURCE, /runAccessPlanOperation\("admit", operationTaskId, ingestionTaskAPI\)/);
+	assert.match(DETAIL_SOURCE, /runAccessPlanOperation\("execute", operationTaskId, ingestionTaskAPI\)/);
+	assert.match(DETAIL_SOURCE, /runAccessPlanOperation\("delete", operationTaskId, ingestionTaskAPI\)/);
+	assert.match(DETAIL_SOURCE, /删除计划/);
+	assert.doesNotMatch(DETAIL_SOURCE, /更多操作|重建 DAG|数据回退 Level|RollbackImpactModal|rebuildDag/);
 	assert.match(DETAIL_SOURCE, /access\/new\?kind=\$\{inferAccessKind\(task\)\}&editId=/);
 });

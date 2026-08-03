@@ -3,7 +3,7 @@
 **状态**：FROZEN_POLICY / CERTIFICATION_GAP
 **确认日期**：2026-08-02
 **对应决策**：D09、D10、D11、D13
-**运行时前置项**：[`H83-01`](dbt-runtime-hotfix-prerequisite.md)，`BLOCKED / URGENT`
+**运行时前置项**：[`H83-01`](dbt-runtime-hotfix-prerequisite.md) 已产生候选证据，F0/T05 已登记 certified derivative；生产激活与真实物化待 F6。
 
 ## 1. 目的与边界
 

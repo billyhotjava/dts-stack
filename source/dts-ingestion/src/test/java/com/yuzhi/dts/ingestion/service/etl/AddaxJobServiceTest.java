@@ -9,6 +9,8 @@ import com.yuzhi.dts.ingestion.service.infra.InfraSettingsCryptoService;
 import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
@@ -23,6 +25,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
@@ -526,7 +529,7 @@ class AddaxJobServiceTest {
         assertThat(firstPreSql).noneMatch(sql -> sql.toLowerCase(java.util.Locale.ROOT).contains("ods_employee"));
         assertThat(firstPostSql).allMatch(sql -> sql.toLowerCase(java.util.Locale.ROOT).contains("ods_customer"));
         assertThat(firstPostSql).noneMatch(sql -> sql.toLowerCase(java.util.Locale.ROOT).contains("ods_employee"));
-        assertThat(firstPostSql).anyMatch(sql -> sql.contains("\"_dts_source_table\" = 'CUSTOMER'"));
+        assertThat(firstPreSql).anyMatch(sql -> sql.contains("\"_dts_source_table\"") && sql.contains("DEFAULT 'CUSTOMER'"));
 
         Map<String, Object> secondWriter = (Map<String, Object>) contentList.get(1).get("writer");
         Map<String, Object> secondParams = (Map<String, Object>) secondWriter.get("parameter");
@@ -536,7 +539,7 @@ class AddaxJobServiceTest {
         assertThat(secondPreSql).noneMatch(sql -> sql.toLowerCase(java.util.Locale.ROOT).contains("ods_customer"));
         assertThat(secondPostSql).allMatch(sql -> sql.toLowerCase(java.util.Locale.ROOT).contains("ods_employee"));
         assertThat(secondPostSql).noneMatch(sql -> sql.toLowerCase(java.util.Locale.ROOT).contains("ods_customer"));
-        assertThat(secondPostSql).anyMatch(sql -> sql.contains("\"_dts_source_table\" = 'EMPLOYEE'"));
+        assertThat(secondPreSql).anyMatch(sql -> sql.contains("\"_dts_source_table\"") && sql.contains("DEFAULT 'EMPLOYEE'"));
     }
 
     @Test
@@ -570,19 +573,19 @@ class AddaxJobServiceTest {
         Map<String, Object> content = (Map<String, Object>) ((java.util.List<?>) job.get("content")).get(0);
         Map<String, Object> writer = (Map<String, Object>) content.get("writer");
         Map<String, Object> writerParams = (Map<String, Object>) writer.get("parameter");
-        java.util.List<String> postSql = (java.util.List<String>) writerParams.get("postSql");
+        java.util.List<String> preSql = (java.util.List<String>) writerParams.getOrDefault("preSql", java.util.List.of());
 
-        assertThat(postSql)
-            .anyMatch(sql -> sql.contains("_dts_source_system") && sql.contains("'专利测试数据_三年1000条.xlsx'"));
-        assertThat(postSql)
-            .anyMatch(sql -> sql.contains("\"_dts_source_table\" = '专利测试数据_三年1000条.xlsx'"));
-        assertThat(postSql)
+        assertThat(preSql)
+            .anyMatch(sql -> sql.contains("_dts_source_system") && sql.contains("DEFAULT '专利测试数据_三年1000条.xlsx'"));
+        assertThat(preSql)
+            .anyMatch(sql -> sql.contains("_dts_source_table") && sql.contains("DEFAULT '专利测试数据_三年1000条.xlsx'"));
+        assertThat(preSql)
             .noneMatch(sql -> sql.contains("_dts_source_system\" = 'unknown'"));
     }
 
     @Test
     @SuppressWarnings("unchecked")
-    void shouldInjectDtsRuntimeColumnsIntoPostSql() throws Exception {
+    void shouldApplyDtsRuntimeColumnsAsInsertDefaultsWithoutRewritingHistory() throws Exception {
         Map<String, Object> readerConfig = Map.of(
             "connection", Map.of(
                 "jdbcUrl", "jdbc:dm://10.0.0.1:5236/ERPDEMO",
@@ -620,12 +623,16 @@ class AddaxJobServiceTest {
         Map<String, Object> content = (Map<String, Object>) ((java.util.List<?>) job.get("content")).get(0);
         Map<String, Object> writer = (Map<String, Object>) content.get("writer");
         Map<String, Object> writerParams = (Map<String, Object>) writer.get("parameter");
+        java.util.List<String> preSql = (java.util.List<String>) writerParams.get("preSql");
         java.util.List<String> postSql = (java.util.List<String>) writerParams.get("postSql");
 
-        assertThat(postSql).anyMatch(sql -> sql.contains("_dts_batch_id") && sql.contains("'batch-task-1-abc'"));
-        assertThat(postSql).anyMatch(sql -> sql.contains("_dts_execution_id") && sql.contains("'101'"));
-        assertThat(postSql).anyMatch(sql -> sql.contains("_dts_task_id") && sql.contains("'1'"));
-        assertThat(postSql).anyMatch(sql -> sql.contains("\"_dts_source_table\" = 'CUSTOMER'"));
+        assertThat(preSql).anyMatch(sql -> sql.contains("_dts_batch_id") && sql.contains("DEFAULT 'batch-task-1-abc'"));
+        assertThat(preSql).anyMatch(sql -> sql.contains("_dts_execution_id") && sql.contains("DEFAULT '101'"));
+        assertThat(preSql).anyMatch(sql -> sql.contains("_dts_task_id") && sql.contains("DEFAULT '1'"));
+        assertThat(preSql).noneMatch(sql -> sql.toUpperCase(java.util.Locale.ROOT).contains("TRUNCATE"));
+        assertThat(preSql).noneMatch(sql -> sql.toUpperCase(java.util.Locale.ROOT).contains("DROP TABLE"));
+        assertThat(postSql).anyMatch(sql -> sql.contains("DELETE FROM ods_customer") && sql.contains("<> '101'"));
+        assertThat(postSql).noneMatch(sql -> sql.contains("WHERE TRUE"));
     }
 
     @Test
@@ -676,10 +683,8 @@ class AddaxJobServiceTest {
         assertThat(createSql).contains("\"_dts_source_sheet\" VARCHAR(500) DEFAULT '计划表'");
         assertThat(createSql).contains("\"_dts_file_hash\" VARCHAR(500) DEFAULT 'sha256-demo'");
         assertThat(createSql).contains("\"_dts_row_number\" INTEGER");
-        assertThat(postSql).anyMatch(sql -> sql.contains("\"_dts_source_file\" = '项目计划.xlsx'"));
-        assertThat(postSql).anyMatch(sql -> sql.contains("\"_dts_source_sheet\" = '计划表'"));
-        assertThat(postSql).anyMatch(sql -> sql.contains("\"_dts_file_hash\" = 'sha256-demo'"));
         assertThat(postSql).anyMatch(sql -> sql.contains("row_number() OVER (ORDER BY ctid) + 1"));
+        assertThat(postSql).noneMatch(sql -> sql.contains("WHERE TRUE"));
     }
 
     @Test
@@ -730,7 +735,225 @@ class AddaxJobServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void shouldKeepDropAndCreatePreSqlForFileSourceFullRefresh() throws Exception {
+    void shouldPreserveDtsNamedDatabaseSourceColumnsWithDeterministicLandingNames() throws Exception {
+        String jobPath = addaxJobService.saveJobJson("""
+            {
+              "job": {
+                "setting": {"speed": {"channel": 1}},
+                "content": [{
+                  "reader": {
+                    "name": "mysqlreader",
+                    "parameter": {
+                      "jdbcUrl": "jdbc:mysql://source-db:3306/source",
+                      "username": "reader",
+                      "password": "reader-password",
+                      "table": ["ods_orders"],
+                      "column": ["*"]
+                    }
+                  },
+                  "writer": {
+                    "name": "postgresqlwriter",
+                    "parameter": {
+                      "jdbcUrl": "jdbc:postgresql://target-db:5432/lake",
+                      "username": "writer",
+                      "password": "writer-password",
+                      "table": ["ods_copy_orders"],
+                      "column": ["*"]
+                    }
+                  }
+                }]
+              }
+            }
+            """, 812L);
+        when(jdbcMetadataService.getTableColumns(
+            argThat(info -> info != null && info.jdbcUrl().contains("source-db")),
+            org.mockito.ArgumentMatchers.eq("ods_orders")
+        )).thenReturn(databaseColumns("id", "amount"));
+        when(jdbcMetadataService.getTableColumns(
+            argThat(info -> info != null && info.jdbcUrl().contains("target-db")),
+            org.mockito.ArgumentMatchers.eq("ods_copy_orders")
+        )).thenReturn(databaseColumns(
+            "id",
+            "amount",
+            "_dts_source_system_2",
+            "_dts_source_table_2",
+            "_dts_import_time_2",
+            "_dts_batch_id_2",
+            "_dts_execution_id_2",
+            "_dts_task_id_2"
+        ));
+
+        addaxJobService.resolveWriterColumnsIfNeeded(jobPath);
+
+        Map<String, Object> stored = addaxJobService.readManagedJob(Path.of(jobPath));
+        Map<String, Object> job = (Map<String, Object>) stored.get("job");
+        Map<String, Object> content = (Map<String, Object>) ((java.util.List<?>) job.get("content")).get(0);
+        Map<String, Object> reader = (Map<String, Object>) content.get("reader");
+        Map<String, Object> writer = (Map<String, Object>) content.get("writer");
+        Map<String, Object> readerParams = (Map<String, Object>) reader.get("parameter");
+        Map<String, Object> writerParams = (Map<String, Object>) writer.get("parameter");
+        assertThat((java.util.List<String>) readerParams.get("column")).containsExactly(
+            "id", "amount", "_dts_source_system", "_dts_source_table", "_dts_import_time",
+            "_dts_batch_id", "_dts_execution_id", "_dts_task_id"
+        );
+        assertThat((java.util.List<String>) writerParams.get("column")).containsExactly(
+            "id", "amount", "_dts_source_system_2", "_dts_source_table_2", "_dts_import_time_2",
+            "_dts_batch_id_2", "_dts_execution_id_2", "_dts_task_id_2"
+        );
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldValidateExplicitReaderColumnsAgainstRenamedWriterColumns() throws Exception {
+        String jobPath = addaxJobService.saveJobJson("""
+            {
+              "job": {"content": [{
+                "reader": {"name":"mysqlreader","parameter":{
+                  "jdbcUrl":"jdbc:mysql://source-db:3306/source","table":["orders"],
+                  "column":["id","_dts_source_system"]}},
+                "writer": {"name":"postgresqlwriter","parameter":{
+                  "jdbcUrl":"jdbc:postgresql://target-db:5432/lake","table":["ods_orders"],"column":["*"]}}
+              }]}
+            }
+            """, 815L);
+        when(jdbcMetadataService.getTableColumns(
+            argThat(info -> info != null && info.jdbcUrl().contains("target-db")),
+            org.mockito.ArgumentMatchers.eq("ods_orders")
+        )).thenReturn(databaseColumns("id", "_dts_source_system_2"));
+
+        addaxJobService.resolveWriterColumnsIfNeeded(jobPath);
+
+        Map<String, Object> stored = addaxJobService.readManagedJob(Path.of(jobPath));
+        Map<String, Object> job = (Map<String, Object>) stored.get("job");
+        Map<String, Object> content = (Map<String, Object>) ((java.util.List<?>) job.get("content")).get(0);
+        Map<String, Object> reader = (Map<String, Object>) content.get("reader");
+        Map<String, Object> writer = (Map<String, Object>) content.get("writer");
+        assertThat((java.util.List<String>) ((Map<String, Object>) reader.get("parameter")).get("column"))
+            .containsExactly("id", "_dts_source_system");
+        assertThat((java.util.List<String>) ((Map<String, Object>) writer.get("parameter")).get("column"))
+            .containsExactly("id", "_dts_source_system_2");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "db2reader", "sqlitereader" })
+    @SuppressWarnings("unchecked")
+    void shouldNotPersistWriterColumnsWhenDatabaseReaderMetadataCannotBeResolved(String readerName) throws Exception {
+        String jobPath = addaxJobService.saveJobJson("""
+            {
+              "job": {
+                "content": [{
+                  "reader": {
+                    "name": "%s",
+                    "parameter": {
+                      "jdbcUrl": "jdbc:mysql://source-db:3306/source",
+                      "table": ["ods_orders"],
+                      "column": ["*"]
+                    }
+                  },
+                  "writer": {
+                    "name": "postgresqlwriter",
+                    "parameter": {
+                      "jdbcUrl": "jdbc:postgresql://target-db:5432/lake",
+                      "table": ["ods_copy_orders"],
+                      "column": ["*"]
+                    }
+                  }
+                }]
+              }
+            }
+            """.formatted(readerName), 813L);
+        when(jdbcMetadataService.getTableColumns(
+            argThat(info -> info != null && info.jdbcUrl().contains("source-db")),
+            org.mockito.ArgumentMatchers.eq("ods_orders")
+        )).thenReturn(java.util.List.of());
+        when(jdbcMetadataService.getTableColumns(
+            argThat(info -> info != null && info.jdbcUrl().contains("target-db")),
+            org.mockito.ArgumentMatchers.eq("ods_copy_orders")
+        )).thenReturn(databaseColumns("id", "amount"));
+
+        assertThatThrownBy(() -> addaxJobService.resolveWriterColumnsIfNeeded(jobPath))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("拒绝保存不对齐");
+
+        Map<String, Object> stored = addaxJobService.readManagedJob(Path.of(jobPath));
+        Map<String, Object> job = (Map<String, Object>) stored.get("job");
+        Map<String, Object> content = (Map<String, Object>) ((java.util.List<?>) job.get("content")).get(0);
+        Map<String, Object> reader = (Map<String, Object>) content.get("reader");
+        Map<String, Object> writer = (Map<String, Object>) content.get("writer");
+        assertThat((java.util.List<String>) ((Map<String, Object>) reader.get("parameter")).get("column"))
+            .containsExactly("*");
+        assertThat((java.util.List<String>) ((Map<String, Object>) writer.get("parameter")).get("column"))
+            .containsExactly("*");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldNotPersistDatabaseColumnsWhenReaderAndWriterCountsDiffer() throws Exception {
+        String jobPath = addaxJobService.saveJobJson("""
+            {
+              "job": {
+                "content": [{
+                  "reader": {
+                    "name": "mysqlreader",
+                    "parameter": {
+                      "jdbcUrl": "jdbc:mysql://source-db:3306/source",
+                      "table": ["ods_orders"],
+                      "column": ["*"]
+                    }
+                  },
+                  "writer": {
+                    "name": "postgresqlwriter",
+                    "parameter": {
+                      "jdbcUrl": "jdbc:postgresql://target-db:5432/lake",
+                      "table": ["ods_copy_orders"],
+                      "column": ["*"]
+                    }
+                  }
+                }]
+              }
+            }
+            """, 814L);
+        when(jdbcMetadataService.getTableColumns(
+            argThat(info -> info != null && info.jdbcUrl().contains("source-db")),
+            org.mockito.ArgumentMatchers.eq("ods_orders")
+        )).thenReturn(databaseColumns("id", "amount"));
+        when(jdbcMetadataService.getTableColumns(
+            argThat(info -> info != null && info.jdbcUrl().contains("target-db")),
+            org.mockito.ArgumentMatchers.eq("ods_copy_orders")
+        )).thenReturn(databaseColumns("id", "amount", "status"));
+
+        assertThatThrownBy(() -> addaxJobService.resolveWriterColumnsIfNeeded(jobPath))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("数量不一致");
+
+        Map<String, Object> stored = addaxJobService.readManagedJob(Path.of(jobPath));
+        Map<String, Object> job = (Map<String, Object>) stored.get("job");
+        Map<String, Object> content = (Map<String, Object>) ((java.util.List<?>) job.get("content")).get(0);
+        Map<String, Object> reader = (Map<String, Object>) content.get("reader");
+        Map<String, Object> writer = (Map<String, Object>) content.get("writer");
+        assertThat((java.util.List<String>) ((Map<String, Object>) reader.get("parameter")).get("column"))
+            .containsExactly("*");
+        assertThat((java.util.List<String>) ((Map<String, Object>) writer.get("parameter")).get("column"))
+            .containsExactly("*");
+    }
+
+    private java.util.List<JdbcMetadataService.ColumnMeta> databaseColumns(String... businessColumns) {
+        java.util.List<JdbcMetadataService.ColumnMeta> columns = new java.util.ArrayList<>();
+        for (String businessColumn : businessColumns) {
+            columns.add(new JdbcMetadataService.ColumnMeta(businessColumn, java.sql.Types.VARCHAR, "VARCHAR", 200, null));
+        }
+        columns.add(new JdbcMetadataService.ColumnMeta("_dts_source_system", java.sql.Types.VARCHAR, "VARCHAR", 200, null));
+        columns.add(new JdbcMetadataService.ColumnMeta("_dts_source_table", java.sql.Types.VARCHAR, "VARCHAR", 300, null));
+        columns.add(new JdbcMetadataService.ColumnMeta("_dts_import_time", java.sql.Types.TIMESTAMP, "TIMESTAMP", null, null));
+        columns.add(new JdbcMetadataService.ColumnMeta("_dts_batch_id", java.sql.Types.VARCHAR, "VARCHAR", 128, null));
+        columns.add(new JdbcMetadataService.ColumnMeta("_dts_execution_id", java.sql.Types.VARCHAR, "VARCHAR", 128, null));
+        columns.add(new JdbcMetadataService.ColumnMeta("_dts_task_id", java.sql.Types.VARCHAR, "VARCHAR", 64, null));
+        return columns;
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldProvisionFileSourceWithoutDroppingPreviousSuccessfulTable() throws Exception {
         // Given
         Map<String, Object> readerConfig = Map.of(
             "_fileColumns", java.util.List.of(
@@ -754,7 +977,9 @@ class AddaxJobServiceTest {
             "postgresqlwriter",
             writerConfig,
             null,
-            "full_refresh"
+            "full_refresh",
+            null,
+            Map.of("executionId", "901", "batchId", "batch-901", "taskId", "9")
         );
 
         // Then
@@ -765,9 +990,12 @@ class AddaxJobServiceTest {
         java.util.List<String> preSql = (java.util.List<String>) writerParams.get("preSql");
 
         assertThat(preSql).isNotNull();
-        assertThat(preSql).anyMatch(sql -> sql.startsWith("DROP TABLE IF EXISTS"));
         assertThat(preSql).anyMatch(sql -> sql.startsWith("CREATE TABLE IF NOT EXISTS"));
+        assertThat(preSql).anyMatch(sql -> sql.startsWith("ALTER TABLE"));
+        assertThat(preSql).noneMatch(sql -> sql.startsWith("DROP TABLE IF EXISTS"));
         assertThat(preSql).noneMatch(sql -> sql.startsWith("TRUNCATE TABLE"));
+        java.util.List<String> postSql = (java.util.List<String>) writerParams.get("postSql");
+        assertThat(postSql).anyMatch(sql -> sql.contains("DELETE FROM ods_patent_info") && sql.contains("<> '901'"));
     }
 
     @Test
@@ -822,7 +1050,7 @@ class AddaxJobServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void shouldAddTruncatePreSqlForRdbmsFullRefresh() throws Exception {
+    void shouldDeletePreviousRdbmsBatchOnlyAfterSuccessfulFullRefreshWrite() throws Exception {
         // Given
         Map<String, Object> readerConfig = Map.of(
             "connection", Map.of(
@@ -845,7 +1073,9 @@ class AddaxJobServiceTest {
             "rdbmswriter",
             writerConfig,
             null,
-            "full_refresh"
+            "full_refresh",
+            null,
+            Map.of("executionId", "902", "batchId", "batch-902", "taskId", "10")
         );
 
         // Then
@@ -853,9 +1083,70 @@ class AddaxJobServiceTest {
         Map<String, Object> content = (Map<String, Object>) ((java.util.List<?>) job.get("content")).get(0);
         Map<String, Object> writer = (Map<String, Object>) content.get("writer");
         Map<String, Object> writerParams = (Map<String, Object>) writer.get("parameter");
-        java.util.List<String> preSql = (java.util.List<String>) writerParams.get("preSql");
+        java.util.List<String> preSql = (java.util.List<String>) writerParams.getOrDefault("preSql", java.util.List.of());
 
-        assertThat(preSql).contains("TRUNCATE TABLE ods_customer");
+        assertThat(preSql).noneMatch(sql -> sql.toUpperCase(java.util.Locale.ROOT).contains("TRUNCATE TABLE"));
+        assertThat(preSql).noneMatch(sql -> sql.toUpperCase(java.util.Locale.ROOT).contains("DROP TABLE"));
+        assertThat(preSql).anyMatch(sql -> sql.contains("_dts_execution_id") && sql.contains("DEFAULT '902'"));
+        java.util.List<String> postSql = (java.util.List<String>) writerParams.get("postSql");
+        assertThat(postSql).anyMatch(sql -> sql.contains("DELETE FROM ods_customer") && sql.contains("<> '902'"));
+    }
+
+    @Test
+    void shouldRejectFullRefreshWithoutCurrentExecutionId() {
+        Map<String, Object> readerConfig = Map.of(
+            "connection", Map.of(
+                "jdbcUrl", "jdbc:mysql://10.0.0.1:3306/source",
+                "table", java.util.List.of("customer")
+            )
+        );
+        Map<String, Object> writerConfig = Map.of(
+            "connection", Map.of(
+                "jdbcUrl", "jdbc:postgresql://10.0.0.2:5432/biadmin",
+                "table", java.util.List.of("ods_customer")
+            )
+        );
+
+        assertThatThrownBy(() -> addaxJobService.createJob(
+            "rdbms-full-refresh-without-execution-test",
+            "rdbmsreader",
+            readerConfig,
+            "rdbmswriter",
+            writerConfig,
+            null,
+            "full_refresh",
+            null,
+            Map.of()
+        ))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("full_refresh 缺少当前执行 ID");
+    }
+
+    @Test
+    void shouldRejectMismatchedDatabaseTableCountsBeforeGeneratingJob() {
+        Map<String, Object> readerConfig = Map.of(
+            "connection", Map.of(
+                "jdbcUrl", "jdbc:mysql://source-db:3306/source",
+                "table", java.util.List.of("orders", "customers")
+            )
+        );
+        Map<String, Object> writerConfig = Map.of(
+            "connection", Map.of(
+                "jdbcUrl", "jdbc:postgresql://target-db:5432/lake",
+                "table", java.util.List.of("ods_orders")
+            )
+        );
+
+        assertThatThrownBy(() -> addaxJobService.createJob(
+            "mismatched-tables",
+            "mysqlreader",
+            readerConfig,
+            "postgresqlwriter",
+            writerConfig,
+            null
+        ))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("Reader/Writer 表数量不一致");
     }
 
     @Test

@@ -1,7 +1,7 @@
 # F4：发布、物化与资产证据闭环
 
 **优先级**：P1
-**状态**：DRAFT  
+**状态**：CODE_COMPLETE / RUNTIME_E2E_PENDING
 **依赖**：F1/T03 与至少一个已固定 `ImplementationRevision` 生产者（F2/T03 或 F3/T04）。F4 面向统一实施契约，不要求高级提交与 ZIP apply 两条来源同时完成；F2/T04～T05 在 F4/T03 后收口，不形成 Feature 级依赖环。
 
 ## 目标
@@ -12,10 +12,10 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|
-| T01 | 将固定 Implementation Revision 接入 StageGate 与 Lifecycle | P1 | DRAFT | F1/T03；F2/T03 或 F3/T04 至少一个 |
-| T02 | 统一创建 ReleaseCandidate 并经 DbtExecutionGateway 执行 | P1 | DRAFT | T01、F0/T05 |
-| T03 | 回写 manifest/relation/lineage/quality/Catalog 证据 | P1 | DRAFT | T02 |
-| T04 | 执行期间实现/来源漂移时 fail-closed 为 FAILED_STALE | P1 | DRAFT | T02～T03 |
+| T01 | 将固定 Implementation Revision 接入 StageGate 与 Lifecycle | P1 | CODE_COMPLETE | F1/T03；F2/T03 或 F3/T04 至少一个 |
+| T02 | 统一创建 ReleaseCandidate 并经 DbtExecutionGateway 执行 | P1 | CODE_COMPLETE | T01、F0/T05 |
+| T03 | 回写 manifest/relation/lineage/quality/Catalog 证据 | P1 | CODE_COMPLETE | T02 |
+| T04 | 执行期间实现/来源漂移时 fail-closed 为 FAILED_STALE | P1 | CODE_COMPLETE | T02～T03 |
 
 ## 契约约束
 

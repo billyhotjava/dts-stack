@@ -461,48 +461,45 @@ public class IngestionTaskProxyResource {
                 return ingestionClient.deleteTask(id);
             }
         );
-        if (response != null && response.getStatus() >= 200 && response.getStatus() < 300) {
-            try {
-                odsTableMappingSyncService.removeFromIngestionPayload(response.getData());
-            } catch (RuntimeException ex) {
-                String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
-                auditService.auditAction(
-                    "INGESTION_MAPPING_DELETE",
-                    AuditStage.FAIL,
-                    String.valueOf(id),
-                    Map.of("summary", "删除 ODS 映射失败", "taskId", id, "operator", operator, "errorType", ex.getClass().getSimpleName())
-                );
-            }
-            try {
-                String taskName = null;
-                Map<String, Object> data = response.getData();
-                if (data != null) {
-                    Object taskObj = data.get("task");
-                    if (taskObj instanceof Map<?, ?> map) {
-                        Object nameObj = map.get("name");
-                        if (nameObj != null) {
-                            taskName = String.valueOf(nameObj).trim();
-                        }
-                    }
-                    if (!StringUtils.hasText(taskName)) {
-                        Object nameObj = data.get("name");
-                        if (nameObj != null) {
-                            taskName = String.valueOf(nameObj).trim();
-                        }
-                    }
-                }
-                externalRunLogService.deleteIngestionRuns(taskName, id);
-            } catch (RuntimeException ex) {
-                String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
-                auditService.auditAction(
-                    "INGESTION_RUNLOG_DELETE",
-                    AuditStage.FAIL,
-                    String.valueOf(id),
-                    Map.of("summary", "删除入湖运行日志失败", "taskId", id, "operator", operator, "errorType", ex.getClass().getSimpleName())
-                );
-            }
+        auditRuntimeArtifactCleanup(id, response);
+        // Deleting a plan is a logical retirement. ODS mappings, lineage and
+        // external run logs remain available as audit and traceability evidence.
+        return buildAsyncProxyResponse(response);
+    }
+
+    private void auditRuntimeArtifactCleanup(Long taskId, ApiResponse<Map<String, Object>> response) {
+        if (!isSuccessful(response) || response.getData() == null) {
+            return;
         }
-        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(response));
+        Object cleanupValue = response.getData().get("runtimeArtifactCleanup");
+        Map<String, Object> cleanup = mapValue(cleanupValue);
+        boolean evidenceMissing = cleanup.isEmpty();
+        boolean retryable = evidenceMissing || Boolean.parseBoolean(String.valueOf(cleanup.getOrDefault("retryable", false)));
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("summary", retryable ? "接入任务运行制品清理未完成" : "接入任务运行制品清理完成");
+        payload.put("taskId", taskId);
+        payload.put("subOperation", "RUNTIME_ARTIFACT_CLEANUP");
+        payload.put("operationOutcome", retryable ? "PARTIAL" : "SUCCESS");
+        payload.put("retryable", retryable);
+        payload.put("evidenceMissing", evidenceMissing);
+        copyCleanupAuditValue(cleanup, payload, "addaxCleaned");
+        copyCleanupAuditValue(cleanup, payload, "airflowCleaned");
+        copyCleanupAuditValue(cleanup, payload, "addaxErrorType");
+        copyCleanupAuditValue(cleanup, payload, "airflowErrorType");
+        auditService.auditActionStrict(
+            "INGESTION_TASK_DELETE",
+            retryable ? AuditStage.FAIL : AuditStage.SUCCESS,
+            String.valueOf(taskId),
+            Map.copyOf(payload)
+        );
+    }
+
+    private void copyCleanupAuditValue(Map<String, Object> source, Map<String, Object> target, String key) {
+        Object value = source.get(key);
+        if (value != null) {
+            target.put(key, value);
+        }
     }
 
     @PostMapping("/tasks/{id}/execute")
@@ -1331,13 +1328,15 @@ public class IngestionTaskProxyResource {
         DefaultDestinationSyncService.DefaultDestinationSnapshot resolved = requireDefaultDestination(snapshot);
         Object destinationObj = payload.get("destination");
         if (!(destinationObj instanceof Map<?, ?> destinationMap)) {
-            throw new org.springframework.web.server.ResponseStatusException(
-                org.springframework.http.HttpStatus.BAD_REQUEST,
-                "缺少目标端配置"
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少目标端配置");
         }
         Map<String, Object> overrides = extractConfig(destinationMap.get("config"));
-        Map<String, Object> mergedConfig = mergeDestinationConfig(resolved.destinationConfig(), overrides);
+        Map<String, Object> safeOverrides = extractConfig(accessDecisionService.retainExplicitSecrets(overrides, null));
+        if (!safeOverrides.equals(overrides)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "托管目标数据源不得提交原始凭据，请仅使用数据源引用");
+        }
+        Map<String, Object> mergedConfig = mergeDestinationConfig(resolved.destinationConfig(), safeOverrides);
+        mergedConfig = extractConfig(accessDecisionService.retainExplicitSecrets(mergedConfig, null));
         applyTargetDataSourceId(mergedConfig, resolved);
         ensureWriterJdbcUrl(mergedConfig);
         ensureWriterTables(mergedConfig);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dataModelingPath, resolveDataModelingRoute, retiredDataModelingHomeRedirect } from "./navigation";
+import { dataModelingPath, resolveDataModelingRoute } from "./navigation";
 
 const EXPECTED_ROUTES = [
 	["home", "workspace"],
@@ -53,17 +53,11 @@ describe("data-modeling navigation", () => {
 	});
 
 	it.each(["recent", "tasks"])("retires home/%s into the modeling overview", (view) => {
-		expect(retiredDataModelingHomeRedirect(`/data-modeling/home/${view}`)).toBe("/data-modeling/home/workspace");
 		expect(resolveDataModelingRoute(`/data-modeling/home/${view}`)).toMatchObject({
 			workspace: "home",
 			view: "workspace",
 			title: "建模概览",
 		});
-	});
-
-	it("does not redirect canonical modeling routes", () => {
-		expect(retiredDataModelingHomeRedirect("/data-modeling/home/workspace")).toBeNull();
-		expect(retiredDataModelingHomeRedirect("/data-modeling/planning/system")).toBeNull();
 	});
 
 	it("uses the reviewed planning parameter label", () => {

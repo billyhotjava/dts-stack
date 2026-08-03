@@ -54,7 +54,7 @@ public class CatalogDomainResource {
     }
 
     @GetMapping("/domains")
-    @Transactional(readOnly = true)
+    @Transactional
     public ApiResponse<Map<String, Object>> listDomains(
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "10") int size,
@@ -151,7 +151,7 @@ public class CatalogDomainResource {
      * 不另写 SQL 聚合，避免导航数字与台账口径漂移。缺省不带统计，既有调用方零影响。
      */
     @GetMapping("/domains/tree")
-    @Transactional(readOnly = true)
+    @Transactional
     public ApiResponse<Object> getDomainTree(
         @RequestParam(name = "withStats", defaultValue = "false") boolean withStats,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
@@ -212,7 +212,7 @@ public class CatalogDomainResource {
     }
 
     @GetMapping("/domains/{id}/asset-stats")
-    @Transactional(readOnly = true)
+    @Transactional
     public ApiResponse<Map<String, Object>> getDomainAssetStats(@PathVariable UUID id) {
         CatalogDomain domain = visibilityService
             .findVisibleById(id)

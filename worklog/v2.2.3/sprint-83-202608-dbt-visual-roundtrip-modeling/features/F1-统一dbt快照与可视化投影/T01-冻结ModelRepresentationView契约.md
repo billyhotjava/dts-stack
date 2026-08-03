@@ -1,7 +1,7 @@
 # T01：冻结 ModelRepresentationView 契约
 
-**优先级**：P0  
-**状态**：DRAFT  
+**优先级**：P0
+**状态**：CODE_COMPLETE
 **依赖**：F0/T04
 
 ## 目标

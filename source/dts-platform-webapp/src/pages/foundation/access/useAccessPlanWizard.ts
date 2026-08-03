@@ -8,6 +8,7 @@ import {
 } from "@/api/ingestion";
 import { createIngestionTask } from "@/api/platformApi";
 import dataSourcesService, { type DataSourceSelectionItem } from "@/api/services/dataSourcesService";
+import { deriveDataLevels } from "@/constants/governance";
 import { useUserInfo } from "@/store/userStore";
 import { normalizeText } from "@/utils/textUtils";
 import { classificationRank, normalizeClassification } from "@/utils/classification";
@@ -239,9 +240,7 @@ export const resolveUserClassificationRank = (user: unknown) => {
 		record.attributes && typeof record.attributes === "object"
 			? (record.attributes as Record<string, unknown>)
 			: {};
-	const values = [
-		record.maxDataLevel,
-		record.dataLevel,
+	const personnelValues = [
 		record.person_level,
 		record.personLevel,
 		record.personnel_level,
@@ -250,9 +249,6 @@ export const resolveUserClassificationRank = (user: unknown) => {
 		record.personSecurityLevel,
 		record.personnel_security_level,
 		record.personnelSecurityLevel,
-		attributes.max_data_level,
-		attributes.maxDataLevel,
-		attributes.data_level,
 		attributes.person_level,
 		attributes.personLevel,
 		attributes.personnel_level,
@@ -261,10 +257,27 @@ export const resolveUserClassificationRank = (user: unknown) => {
 		attributes.personSecurityLevel,
 		attributes.personnel_security_level,
 		attributes.personnelSecurityLevel,
+	];
+	const dataValues = [
+		record.maxDataLevel,
+		record.dataLevel,
+		attributes.max_data_level,
+		attributes.maxDataLevel,
+		attributes.data_level,
 		attributes.classification,
 	];
 	let highestRank: number | undefined;
-	for (const raw of values) {
+	const considerRank = (rank: number | undefined) => {
+		if (rank !== undefined && (highestRank === undefined || rank > highestRank)) highestRank = rank;
+	};
+	for (const raw of personnelValues) {
+		const candidates = Array.isArray(raw) ? raw : [raw];
+		for (const candidate of candidates) {
+			if (typeof candidate !== "string" || !candidate.trim()) continue;
+			for (const allowedLevel of deriveDataLevels(candidate)) considerRank(classificationRank(allowedLevel));
+		}
+	}
+	for (const raw of dataValues) {
 		const candidates = Array.isArray(raw) ? raw : [raw];
 		for (const candidate of candidates) {
 			if (typeof candidate !== "string" || !candidate.trim()) continue;
@@ -272,8 +285,7 @@ export const resolveUserClassificationRank = (user: unknown) => {
 			const lowFallback = normalizeClassification(candidate, "PUBLIC");
 			const highFallback = normalizeClassification(candidate, "CONFIDENTIAL");
 			if (lowFallback !== highFallback) continue;
-			const rank = classificationRank(lowFallback);
-			if (rank !== undefined && (highestRank === undefined || rank > highestRank)) highestRank = rank;
+			considerRank(classificationRank(lowFallback));
 		}
 	}
 	return highestRank;
@@ -509,7 +521,8 @@ export function useAccessPlanWizard({ kind, editId, form }: UseAccessPlanWizardI
 			throw new Error("编辑任务尚未加载完成，不能创建新任务");
 		}
 		if (state.uploadingFile) throw new Error("文件仍在上传解析，请等待完成后再保存");
-		const values = await form.validateFields();
+		await form.validateFields();
+		const values = form.getFieldsValue(true);
 		if (
 			kind === "database" &&
 			values.tableSelectionMode === "manual" &&

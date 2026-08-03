@@ -21,17 +21,12 @@ beforeEach(() => {
 });
 
 describe("modelingRelationshipGraphService", () => {
-	it("maps the standards view to the bounded canonical graph query", async () => {
+	it("loads an unfiltered bounded graph so both ends of standard and indicator edges survive", async () => {
 		apiMocks.getGraph.mockResolvedValue({ planId: "plan-1", nodes: [], edges: [], truncated: false });
 
 		await loadModelingRelationshipGraph("plan-1", { view: "standards", query: "  客户  ", cursor: "cursor-1" });
 
-		expect(apiMocks.getGraph).toHaveBeenCalledWith("plan-1", {
-			kind: "STANDARD",
-			query: "客户",
-			limit: 40,
-			cursor: "cursor-1",
-		});
+		expect(apiMocks.getGraph).toHaveBeenCalledWith("plan-1", { limit: 500 });
 	});
 
 	it("translates the canonical backend legacy detail route into the new modeling workspace", () => {
@@ -42,6 +37,12 @@ describe("modelingRelationshipGraphService", () => {
 			}),
 		).toBe("/data-modeling/dimensions/workbench?planId=plan-1&modelSpecId=model-1&revision=3");
 		expect(modelingRelationshipNodePath({ kind: "MODEL", route: "https://example.com/unsafe" })).toBeNull();
+		expect(
+			modelingRelationshipNodePath({
+				kind: "STANDARD",
+				route: "/modeling/workbench?assetId=standard-1&version=2",
+			}),
+		).toBeNull();
 	});
 
 	it("classifies authorization failures without falling back to local data", () => {

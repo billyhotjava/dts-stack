@@ -1,7 +1,7 @@
 # T05：退役旧 Bash DAG、不安全 preview、共享文件写与重复 parser 尾巴
 
-**优先级**：P2  
-**状态**：DRAFT  
+**优先级**：P2
+**状态**：CODE_COMPLETE / RUNTIME_EVIDENCE_PENDING
 **依赖**：T04、全部待退役调用方迁移完成
 
 ## 目标

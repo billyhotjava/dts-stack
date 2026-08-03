@@ -3,7 +3,6 @@ import { Outlet, ScrollRestoration, useLocation } from "react-router";
 import type { MenuTree } from "#/entity";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { LineLoading } from "@/components/loading";
-import { retiredDataModelingHomeRedirect } from "@/pages/data-modeling/navigation";
 import { useMenuStore } from "@/store/menuStore";
 import { cn } from "@/utils";
 import {
@@ -146,7 +145,7 @@ const Main = () => {
 	const menus = useMenuStore((s) => s.menus || []);
 
 	const { pathname } = useLocation();
-	const guardPath = retiredDataModelingHomeRedirect(pathname) ?? pathname;
+	const guardPath = pathname;
 	const authIndex = useMemo(() => buildAuthIndex(menus), [menus]);
 	const currentNavAuth = useMemo(() => resolveAuthForPath(authIndex, guardPath), [authIndex, guardPath]);
 	const menuPaths = useMemo(() => collectMenuPaths(menus), [menus]);

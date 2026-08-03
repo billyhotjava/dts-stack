@@ -116,10 +116,17 @@ public class IngestionSchemaSnapshotService {
             if (!technical && sourceIndex < safeSource.size()) {
                 source = safeSource.get(sourceIndex++);
             }
+            boolean renamed = source != null
+                && source.name() != null
+                && ods.name() != null
+                && !source.name().equals(ods.name());
             ObjectNode item = objectMapper.createObjectNode();
             item.put("ordinalPosition", i + 1);
             item.put("technical", technical);
-            item.put("conflictAction", technical ? "append_dts_technical" : "none");
+            item.put(
+                "conflictAction",
+                technical ? "append_dts_technical" : (renamed ? "rename_source_column" : "none")
+            );
             putText(item, "sourceName", source == null ? null : source.name());
             putText(item, "odsName", ods.name());
             putNumber(item, "sourceJdbcType", source == null ? null : source.jdbcType());

@@ -27,6 +27,7 @@ import com.yuzhi.dts.platform.repository.audit.PlatformAuditOutboxRepository.Rep
 import com.yuzhi.dts.platform.repository.audit.PlatformAuditOutboxRepository.ReplayTarget;
 import com.yuzhi.dts.platform.web.rest.AuditOutboxReplayRequest;
 import com.yuzhi.dts.platform.web.rest.AuditOutboxReplayResource;
+import com.yuzhi.dts.platform.web.rest.catalog.CatalogDomainResource;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -58,6 +59,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.mock.web.MockServletContext;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.support.AnnotationConfigWebApplicationContext;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
@@ -68,6 +70,13 @@ class AuditForwarderServiceTest {
     private static final String REPLAY_BODY_JSON = "{\"eventId\":\"event-17\",\"producer\":\"dts-platform\"}";
     private static final String REPLAY_HASH = sha256(REPLAY_BODY_JSON);
     private static final Instant REPLAY_NOW = Instant.parse("2026-08-01T08:09:10Z");
+
+    @Test
+    void auditedCatalogDomainReadsUseWritableTransactionsForTheOutboxInsert() throws NoSuchMethodException {
+        assertWritableCatalogRead("listDomains", int.class, int.class, String.class);
+        assertWritableCatalogRead("getDomainTree", boolean.class, String.class);
+        assertWritableCatalogRead("getDomainAssetStats", UUID.class);
+    }
 
     @Test
     void recordShouldPersistStableEventBeforeAnyRemoteDelivery() throws Exception {
@@ -627,6 +636,17 @@ class AuditForwarderServiceTest {
         ArgumentCaptor<EnqueueCommand> captor = ArgumentCaptor.forClass(EnqueueCommand.class);
         verify(outbox).enqueue(captor.capture());
         return captor.getValue();
+    }
+
+    private static void assertWritableCatalogRead(String methodName, Class<?>... parameterTypes)
+        throws NoSuchMethodException {
+        Method method = CatalogDomainResource.class.getDeclaredMethod(methodName, parameterTypes);
+        Transactional transactional = method.getAnnotation(Transactional.class);
+
+        assertThat(transactional).as("%s must declare a transaction", methodName).isNotNull();
+        assertThat(transactional.readOnly())
+            .as("%s writes a durable audit outbox row and cannot run in a read-only transaction", methodName)
+            .isFalse();
     }
 
     private static String sha256(String value) {

@@ -1,7 +1,7 @@
 # T02：验收外部 dbt ZIP → ModelSpec DRAFT 旅程
 
-**优先级**：P0  
-**状态**：DRAFT  
+**优先级**：P0
+**状态**：E2E_PENDING
 **依赖**：F3/T01～T04、F5/T01～T03
 
 ## 目标

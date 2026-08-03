@@ -100,7 +100,7 @@ public class IngestionTaskService {
     private static final ZoneId GOVERNANCE_DEFAULT_ZONE = ZoneId.of("Asia/Shanghai");
     private static final Duration GOVERNANCE_QUEUE_MAX_WAIT = Duration.ofSeconds(30);
     private static final Duration GOVERNANCE_QUEUE_POLL_INTERVAL = Duration.ofSeconds(2);
-    private static final List<String> IN_PROGRESS_STATUSES = List.of("running", "preparing");
+    private static final List<String> IN_PROGRESS_STATUSES = List.of("running", "preparing", "queued");
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
@@ -572,37 +572,110 @@ public class IngestionTaskService {
     }
 
     /**
-     * 删除任务（硬删除 + 级联清理）
-     * 清理执行记录、变更记录、Addax 作业与 DAG 文件
+     * 逻辑删除任务。
+     * 保留任务、执行历史、变更记录和增量检查点，仅停止调度并清理可再生运行制品。
      */
     public IngestionTaskDTO delete(Long id) {
         log.info("Request to delete IngestionTask : {}", id);
-        IngestionTask task = taskRepository.findById(id)
+        IngestionTask task = taskRepository.findByIdForUpdate(id)
             .orElseThrow(() -> new IllegalArgumentException("Task not found: " + id));
 
-        // Database cascade — must all succeed within the same transaction.
-        // Do NOT swallow exceptions here; if any DB delete fails, the whole
-        // transaction must roll back to avoid orphaned references.
-        executionRepository.deleteByTaskId(id);
-        incrementalSyncService.clearCheckpointByTaskId(id);
-        changeLogService.deleteByTaskId(id);
-        taskRepository.delete(task);
-        log.info("Deleted ingestion task ID: {} by user: {}", id, task.getLastModifiedBy());
+        if (!"deleted".equalsIgnoreCase(task.getStatus())) {
+            if (executionRepository.countByTaskIdAndStatusesIgnoreCase(id, IN_PROGRESS_STATUSES) > 0) {
+                throw new IllegalStateException("任务正在执行，无法删除；请等待执行结束后重试");
+            }
 
-        // Filesystem cleanup (best-effort, not transactional)
-        try {
-            addaxJobService.deleteJobIfExists(task.getAddaxJobPath());
-        } catch (Exception ex) {
-            log.warn("Failed to delete Addax job for task {}: {}", id, ex.getMessage());
-        }
-        try {
-            airflowDagService.deleteDagForTask(task);
-        } catch (Exception ex) {
-            log.warn("Failed to delete Airflow DAG for task {}: {}", id, ex.getMessage());
+            task.setStatus("deleted");
+            task.setAirflowEnabled(false);
+            taskRepository.save(task);
+            log.info("Soft-deleted ingestion task ID: {} by user: {}", id, task.getLastModifiedBy());
         }
 
         return taskMapper.toDto(task);
     }
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public RuntimeArtifactCleanupResult cleanupRetiredTaskArtifacts(Long id) {
+        IngestionTask task;
+        try {
+            task = taskRepository.findById(id)
+                .orElseThrow(() -> new IllegalStateException("Task not found after retirement: " + id));
+            if (!"deleted".equalsIgnoreCase(task.getStatus())) {
+                throw new IllegalStateException("Task is not retired: " + id);
+            }
+        } catch (RuntimeException ex) {
+            RuntimeArtifactCleanupResult result = new RuntimeArtifactCleanupResult(
+                false,
+                false,
+                true,
+                ex.getClass().getSimpleName(),
+                ex.getClass().getSimpleName()
+            );
+            auditRuntimeArtifactCleanup(id, result);
+            return result;
+        }
+        return cleanupRetiredTaskArtifacts(task);
+    }
+
+    private RuntimeArtifactCleanupResult cleanupRetiredTaskArtifacts(IngestionTask task) {
+        boolean addaxCleaned = true;
+        boolean airflowCleaned = true;
+        String addaxErrorType = null;
+        String airflowErrorType = null;
+
+        try {
+            addaxJobService.deleteJobIfExists(task.getAddaxJobPath());
+        } catch (Exception ex) {
+            addaxCleaned = false;
+            addaxErrorType = ex.getClass().getSimpleName();
+            log.warn("Failed to delete Addax job for task {}: {}", task.getId(), ex.getMessage());
+        }
+        try {
+            airflowDagService.deleteDagForTask(task);
+        } catch (Exception ex) {
+            airflowCleaned = false;
+            airflowErrorType = ex.getClass().getSimpleName();
+            log.warn("Failed to delete Airflow DAG for task {}: {}", task.getId(), ex.getMessage());
+        }
+        RuntimeArtifactCleanupResult result = new RuntimeArtifactCleanupResult(
+            addaxCleaned,
+            airflowCleaned,
+            !addaxCleaned || !airflowCleaned,
+            addaxErrorType,
+            airflowErrorType
+        );
+        auditRuntimeArtifactCleanup(task.getId(), result);
+        return result;
+    }
+
+    private void auditRuntimeArtifactCleanup(Long taskId, RuntimeArtifactCleanupResult result) {
+        Map<String, Object> auditMeta = new LinkedHashMap<>();
+        auditMeta.put("taskId", taskId);
+        auditMeta.put("addaxCleaned", result.addaxCleaned());
+        auditMeta.put("airflowCleaned", result.airflowCleaned());
+        auditMeta.put("retryable", result.retryable());
+        if (result.addaxErrorType() != null) {
+            auditMeta.put("addaxErrorType", result.addaxErrorType());
+        }
+        if (result.airflowErrorType() != null) {
+            auditMeta.put("airflowErrorType", result.airflowErrorType());
+        }
+        auditMeta.put("summary", result.retryable() ? "接入任务运行制品清理未完成，可再次删除进行补偿" : "接入任务运行制品清理完成");
+        auditService.auditAction(
+            "INGESTION_TASK_RUNTIME_ARTIFACT_CLEANUP",
+            result.retryable() ? AuditStage.FAIL : AuditStage.SUCCESS,
+            String.valueOf(taskId),
+            Map.copyOf(auditMeta)
+        );
+    }
+
+    public record RuntimeArtifactCleanupResult(
+        boolean addaxCleaned,
+        boolean airflowCleaned,
+        boolean retryable,
+        String addaxErrorType,
+        String airflowErrorType
+    ) {}
 
     /**
      * 执行任务
@@ -1653,7 +1726,7 @@ public class IngestionTaskService {
     private record RetryLineage(Long parentExecutionId, int retryCount, int maxRetries) {}
 
     private IngestionTask loadExecutableTask(Long taskId) {
-        IngestionTask task = taskRepository.findById(taskId)
+        IngestionTask task = taskRepository.findByIdForUpdate(taskId)
             .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
 
         requireSecretMigrationReady(taskId);
@@ -1679,7 +1752,7 @@ public class IngestionTaskService {
      * committed winner is returned after a conflict.
      */
     private IngestionTask loadScheduledRegistrationTask(Long taskId) {
-        IngestionTask task = taskRepository.findById(taskId)
+        IngestionTask task = taskRepository.findByIdForUpdate(taskId)
             .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
         requireSecretMigrationReady(taskId);
         requireActiveProductionTask(task);

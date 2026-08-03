@@ -1,7 +1,7 @@
 # F2：业务可视化与高级 dbt 实现分层
 
-**优先级**：P0  
-**状态**：DRAFT  
+**优先级**：P0
+**状态**：CODE_COMPLETE / E2E_PENDING
 **依赖**：F1
 
 ## 目标
@@ -24,11 +24,11 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|
-| T01 | 接入统一模型详情上下文 | P0 | DRAFT | F1/T01 |
-| T02 | 建立隐藏 SQL 的业务可视化与高级技术只读入口 | P0 | DRAFT | F1/T03～T04、T01 |
-| T03 | 接入显式高级 dbt 实现与版本提交 | P1 | DRAFT | T01～T02 |
-| T04 | 接入候选固定的物理表结构与样例数据 | P1 | DRAFT | F4/T02～T03 |
-| T05 | 完成脏状态、冲突、阻断、权限和历史修订 UX | P1 | DRAFT | T01～T04、F1/T05 |
+| T01 | 接入统一模型详情上下文 | P0 | CODE_COMPLETE | F1/T01 |
+| T02 | 建立隐藏 SQL 的业务可视化与高级技术只读入口 | P0 | CODE_COMPLETE | F1/T03～T04、T01 |
+| T03 | 接入显式高级 dbt 实现与版本提交 | P1 | CODE_COMPLETE | T01～T02 |
+| T04 | 接入候选固定的物理表结构与样例数据 | P1 | CODE_COMPLETE | F4/T02～T03 |
+| T05 | 完成脏状态、冲突、阻断、权限和历史修订 UX | P1 | CODE_COMPLETE | T01～T04、F1/T05 |
 
 ## Definition of Ready
 

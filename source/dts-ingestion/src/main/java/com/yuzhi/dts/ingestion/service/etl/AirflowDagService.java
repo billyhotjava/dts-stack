@@ -1339,9 +1339,9 @@ public class AirflowDagService {
     }
 
     /**
-     * Build DROP + CREATE TABLE DDL from file columns in the task's source config.
-     * DROP is needed because Addax validates columns during init() (before preSql),
-     * so the table must have the correct schema before the Addax container starts.
+     * Build non-destructive CREATE/ALTER DDL from file columns in the task's source config.
+     * Addax validates columns during init() (before preSql), so missing columns must be
+     * provisioned before the container starts without deleting the previous successful batch.
      */
     private String buildCreateTableDdl(IngestionTask task) {
         if (task == null) return null;
@@ -1380,16 +1380,17 @@ public class AirflowDagService {
         if (fileColumnsNode == null || !fileColumnsNode.isArray() || fileColumnsNode.size() == 0) return null;
         boolean autoId = sourceConfig.has("_autoId") && sourceConfig.get("_autoId").asBoolean(false);
 
-        // Build qualified table reference for DROP + CREATE
+        // Build qualified table reference for non-destructive CREATE + ALTER.
         String qualifiedTable = (StringUtils.hasText(schema) && !"public".equalsIgnoreCase(schema))
             ? pgQuote(schema) + "." + pgQuote(tableName)
             : pgQuote(tableName);
         StringBuilder ddl = new StringBuilder();
-        ddl.append("DROP TABLE IF EXISTS ").append(qualifiedTable).append(" CASCADE;\n");
         ddl.append("CREATE TABLE IF NOT EXISTS ").append(qualifiedTable).append(" (");
+        List<String> ensureColumns = new java.util.ArrayList<>();
         boolean first = true;
         if (autoId) {
             ddl.append("\"id\" bigserial primary key");
+            ensureColumns.add("ALTER TABLE " + qualifiedTable + " ADD COLUMN IF NOT EXISTS \"id\" bigserial");
             first = false;
         }
         Set<String> usedColumnNames = FileSourceColumnNames.reservedTechnicalNames();
@@ -1407,8 +1408,15 @@ public class AirflowDagService {
             first = false;
             ddl.append(pgQuote(colName))
                .append(" ").append(mapFileTypeToPg(colType, col));
+            ensureColumns.add(
+                "ALTER TABLE " + qualifiedTable + " ADD COLUMN IF NOT EXISTS "
+                    + pgQuote(colName) + " " + mapFileTypeToPg(colType, col)
+            );
         }
         ddl.append(")");
+        for (String ensureColumn : ensureColumns) {
+            ddl.append(";\n").append(ensureColumn);
+        }
         return ddl.toString();
     }
 

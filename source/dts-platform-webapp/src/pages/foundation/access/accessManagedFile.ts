@@ -128,6 +128,8 @@ export const buildManagedFileSourceConfig = (file: ManagedFileUploadResult, auto
 	_fileId: file.fileId,
 	_fileHash: file.fileHash,
 	_fileSize: file.fileSize,
+	_keyVersion: file.keyVersion,
+	_encrypted: file.encrypted,
 	_fileType: file.fileType,
 	_fileColumns: file.columns,
 	_originalName: file.originalName,

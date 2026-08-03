@@ -80,4 +80,32 @@ class IngestionSchemaSnapshotServiceTest {
             .containsExactly("id", "amount", "_dts_batch_id");
         assertThat(restored.get(1).decimalDigits()).isEqualTo(2);
     }
+
+    @Test
+    void shouldKeepExplicitSourceToLandingMappingWhenReservedNameIsInterleaved() {
+        IngestionTask task = new IngestionTask();
+        task.setId(11L);
+        List<JdbcMetadataService.ColumnMeta> sourceColumns = List.of(
+            new JdbcMetadataService.ColumnMeta("id", Types.BIGINT, "BIGINT", null, null),
+            new JdbcMetadataService.ColumnMeta("_dts_source_system", Types.VARCHAR, "VARCHAR", 200, null),
+            new JdbcMetadataService.ColumnMeta("amount", Types.DECIMAL, "DECIMAL", 18, 2)
+        );
+        List<JdbcMetadataService.ColumnMeta> odsColumns = List.of(
+            sourceColumns.get(0),
+            sourceColumns.get(1).withName("_dts_source_system_2"),
+            sourceColumns.get(2),
+            new JdbcMetadataService.ColumnMeta("_dts_source_system", Types.VARCHAR, "VARCHAR", 200, null)
+        );
+
+        IngestionSchemaSnapshot snapshot = service.saveSnapshot(
+            task, null, "mysqlreader", "ERP", null, "orders", "orders", "public", "ods_orders",
+            sourceColumns, odsColumns, List.of(), List.of(), List.of()
+        );
+
+        assertThat(snapshot.getColumnsJson().get(1).get("sourceName").asText()).isEqualTo("_dts_source_system");
+        assertThat(snapshot.getColumnsJson().get(1).get("odsName").asText()).isEqualTo("_dts_source_system_2");
+        assertThat(snapshot.getColumnsJson().get(1).get("conflictAction").asText()).isEqualTo("rename_source_column");
+        assertThat(snapshot.getColumnsJson().get(2).get("sourceName").asText()).isEqualTo("amount");
+        assertThat(snapshot.getColumnsJson().get(3).get("technical").asBoolean()).isTrue();
+    }
 }

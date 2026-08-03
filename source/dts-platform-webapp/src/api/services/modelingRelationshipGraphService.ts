@@ -3,10 +3,9 @@ import {
 	listWarehousePlans,
 	type WarehousePlanHeader,
 	type WarehousePlanRelationshipGraph,
-	type WarehousePlanRelationshipGraphKind,
 } from "../warehousePlanApi";
 
-const GRAPH_PAGE_SIZE = 40;
+const GRAPH_PAGE_SIZE = 500;
 
 export type ModelingRelationshipGraphFailure = {
 	kind: "permission" | "request";
@@ -19,23 +18,14 @@ export type ModelingRelationshipGraphQuery = {
 	cursor?: string;
 };
 
-const kindForView = (view: string): WarehousePlanRelationshipGraphKind | undefined => {
-	if (view === "standards") return "STANDARD";
-	if (view === "metrics") return "INDICATOR";
-	return undefined;
-};
-
 export const listModelingRelationshipPlans = (): Promise<WarehousePlanHeader[]> => listWarehousePlans();
 
 export const loadModelingRelationshipGraph = (
 	planId: string,
-	query: ModelingRelationshipGraphQuery,
+	_query: ModelingRelationshipGraphQuery,
 ): Promise<WarehousePlanRelationshipGraph> =>
 	getWarehousePlanRelationshipGraph(planId, {
-		kind: kindForView(query.view),
-		query: query.query?.trim() || undefined,
 		limit: GRAPH_PAGE_SIZE,
-		cursor: query.cursor || undefined,
 	});
 
 export function classifyModelingRelationshipGraphFailure(error: unknown): ModelingRelationshipGraphFailure {
@@ -43,19 +33,23 @@ export function classifyModelingRelationshipGraphFailure(error: unknown): Modeli
 	if (status === 401 || status === 403) {
 		return { kind: "permission", message: "当前账号无权访问该建设计划的关系图，请联系管理员授权。" };
 	}
-	const detail = error instanceof Error ? error.message.trim() : "";
 	return {
 		kind: "request",
-		message: detail || "关系图读取失败，请稍后重新加载。",
+		message: "关系图读取失败，请稍后重新加载。",
 	};
 }
 
 export function modelingRelationshipNodePath(
 	node: Pick<WarehousePlanRelationshipGraph["nodes"][number], "kind" | "route">,
 ): string | null {
+	if (node.kind !== "MODEL" && node.kind !== "INDICATOR") return null;
 	const raw = node.route?.trim();
 	if (!raw) return null;
-	if (raw.startsWith("/data-modeling/")) return raw;
+	if (raw.startsWith("/data-modeling/")) {
+		if (node.kind === "MODEL" && raw.startsWith("/data-modeling/dimensions/workbench")) return raw;
+		if (node.kind === "INDICATOR" && raw.startsWith("/data-modeling/metrics/")) return raw;
+		return null;
+	}
 
 	let legacy: URL;
 	try {
@@ -68,29 +62,15 @@ export function modelingRelationshipNodePath(
 	const planId = legacy.searchParams.get("planId");
 	const assetId = legacy.searchParams.get("assetId");
 	const revision = legacy.searchParams.get("revision");
-	const version = legacy.searchParams.get("version");
 	const params = new URLSearchParams();
 	if (planId) params.set("planId", planId);
 
 	let pathname: string;
 	switch (node.kind) {
-		case "PLAN":
-			pathname = "/data-modeling/planning/spaces";
-			break;
 		case "MODEL":
 			pathname = "/data-modeling/dimensions/workbench";
 			if (assetId) params.set("modelSpecId", assetId);
 			if (revision) params.set("revision", revision);
-			break;
-		case "DIMENSION":
-			pathname = "/data-modeling/dimensions/workbench";
-			if (assetId) params.set("dimensionDefinitionId", assetId);
-			if (revision) params.set("revision", revision);
-			break;
-		case "STANDARD":
-			pathname = "/data-modeling/standards/fields";
-			if (assetId) params.set("standardId", assetId);
-			if (version) params.set("version", version);
 			break;
 		case "INDICATOR":
 			pathname = "/data-modeling/metrics/atomic";

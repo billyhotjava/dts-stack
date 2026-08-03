@@ -10,6 +10,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -100,6 +101,9 @@ class IngestionTaskProxyResourceTest {
     @MockBean
     private AuditLoggingFilter auditLoggingFilter;
 
+    @MockBean
+    private com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftRejectionAudit dbtImplementationDraftRejectionAudit;
+
     @BeforeEach
     void preserveSecurityServicePayloadsInControllerFocusedTests() {
         IngestionAccessDecisionService boundaryService = new IngestionAccessDecisionService(
@@ -189,6 +193,95 @@ class IngestionTaskProxyResourceTest {
     }
 
     @Test
+    void deleteTaskRetiresPlanWithoutDeletingTraceabilityEvidence() throws Exception {
+        Map<String, Object> task = Map.of(
+            "id", 19,
+            "name", "finance-ods",
+            "status", "deleted"
+        );
+        when(ingestionClient.deleteTask(19L)).thenReturn(
+            new ApiResponse<>(
+                200,
+                "ok",
+                Map.of(
+                    "task", task,
+                    "taskId", 19,
+                    "status", "deleted",
+                    "runtimeArtifactCleanup", Map.of("addaxCleaned", true, "airflowCleaned", true, "retryable", false)
+                )
+            )
+        );
+
+        mockMvc.perform(delete("/api/ingestion/tasks/19"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("deleted"));
+
+        verify(accessDecisionService).requireTaskAccess(19L, true);
+        verify(ingestionClient).deleteTask(19L);
+        verify(auditService).auditActionStrict(
+            eq("INGESTION_TASK_DELETE"),
+            eq(AuditStage.SUCCESS),
+            eq("19"),
+            argThat(payload -> payload instanceof Map<?, ?> map && "RUNTIME_ARTIFACT_CLEANUP".equals(map.get("subOperation")))
+        );
+        verify(odsTableMappingSyncService, never()).removeFromIngestionPayload(anyMap());
+        verify(externalRunLogService, never()).deleteIngestionRuns(any(), eq(19L));
+    }
+
+    @Test
+    void deleteTaskPersistsPartialRuntimeArtifactCleanupAudit() throws Exception {
+        when(ingestionClient.deleteTask(19L)).thenReturn(
+            new ApiResponse<>(
+                200,
+                "ok",
+                Map.of(
+                    "taskId", 19,
+                    "status", "deleted",
+                    "runtimeArtifactCleanup",
+                    Map.of(
+                        "addaxCleaned", false,
+                        "airflowCleaned", true,
+                        "retryable", true,
+                        "addaxErrorType", "IllegalStateException"
+                    )
+                )
+            )
+        );
+
+        mockMvc.perform(delete("/api/ingestion/tasks/19"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.runtimeArtifactCleanup.retryable").value(true));
+
+        verify(auditService).auditActionStrict(
+            eq("INGESTION_TASK_DELETE"),
+            eq(AuditStage.FAIL),
+            eq("19"),
+            argThat(payload ->
+                payload instanceof Map<?, ?> map &&
+                "RUNTIME_ARTIFACT_CLEANUP".equals(map.get("subOperation")) &&
+                Boolean.TRUE.equals(map.get("retryable")) &&
+                "IllegalStateException".equals(map.get("addaxErrorType"))
+            )
+        );
+    }
+
+    @Test
+    void deleteTaskPropagatesDownstreamConflictStatus() throws Exception {
+        when(ingestionClient.deleteTask(19L)).thenReturn(
+            new ApiResponse<>(409, "任务正在执行，无法删除", null)
+        );
+
+        mockMvc.perform(delete("/api/ingestion/tasks/19"))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.status").value(409));
+
+        verify(accessDecisionService).requireTaskAccess(19L, true);
+        verify(ingestionClient).deleteTask(19L);
+        verify(odsTableMappingSyncService, never()).removeFromIngestionPayload(anyMap());
+        verify(externalRunLogService, never()).deleteIngestionRuns(any(), eq(19L));
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void createTaskUsesSelectedTargetDataSourceWhenProvided() throws Exception {
         String targetDataSourceId = "a0000000-0000-0000-0000-000000000001";
@@ -197,7 +290,11 @@ class IngestionTaskProxyResourceTest {
         DefaultDestinationSnapshot snapshot = new DefaultDestinationSnapshot(
             "postgresqlwriter",
             "数仓 (biadmin)",
-            Map.of("jdbcUrl", "jdbc:postgresql://dts-pg:5432/biadmin", "username", "biadmin"),
+            Map.of(
+                "jdbcUrl", "jdbc:postgresql://dts-pg:5432/biadmin",
+                "username", "biadmin",
+                "password", "managed-default-password"
+            ),
             targetDataSourceId
         );
         when(destinationSyncService.ensureDestination(targetDataSourceId)).thenReturn(snapshot);
@@ -230,6 +327,44 @@ class IngestionTaskProxyResourceTest {
         assertThat(config.get("targetDataSourceId")).isEqualTo(targetDataSourceId);
         assertThat(config.get("jdbcUrl")).isEqualTo("jdbc:postgresql://dts-pg:5432/biadmin");
         assertThat(config.get("username")).isEqualTo("biadmin");
+        assertThat(config).doesNotContainKey("password");
+    }
+
+    @Test
+    void createTaskRejectsExplicitManagedDestinationPassword() throws Exception {
+        String targetDataSourceId = "a0000000-0000-0000-0000-000000000001";
+        String sourceDataSourceId = "11111111-2222-3333-4444-555555555555";
+        configureClassifiedSource(sourceDataSourceId);
+        when(destinationSyncService.ensureDestination(targetDataSourceId))
+            .thenReturn(
+                new DefaultDestinationSnapshot(
+                    "postgresqlwriter",
+                    "数仓 (biadmin)",
+                    Map.of("jdbcUrl", "jdbc:postgresql://dts-pg:5432/biadmin"),
+                    targetDataSourceId
+                )
+            );
+
+        mockMvc.perform(post("/api/ingestion/tasks")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "name":"task-with-raw-password",
+                      "source":{"dataSourceId":"11111111-2222-3333-4444-555555555555"},
+                      "destination":{
+                        "usePlatformDefault":true,
+                        "config":{
+                          "targetDataSourceId":"a0000000-0000-0000-0000-000000000001",
+                          "password":"must-not-be-forwarded"
+                        }
+                      }
+                    }
+                    """
+                ))
+            .andExpect(status().isBadRequest());
+
+        verify(ingestionClient, never()).createIngestionTask(anyMap());
     }
 
     @Test

@@ -1,7 +1,7 @@
 # F0：架构基线与产品决策冻结
 
 **优先级**：P0  
-**状态**：IN_PROGRESS（83a 工程准入完成；T05 仅等待 S3 runtime）
+**状态**：DONE_EVIDENCE（T05 已登记认证 derivative；生产激活待 F6）
 
 ## 目标
 
@@ -23,7 +23,7 @@
 | T02 | 建立分级工程 fixtures 与 parser 兼容画像 | P0 | DONE（83a） | T01 |
 | T03 | 验证交付与验收基线 | P0 | DONE（PASS_WITH_GAPS） | T02 |
 | T04 | 冻结当前切片契约并完成 DoR 评审 | P0 | DONE（83a） | T01～T03 |
-| T05 | 消费 H83-01 并认证 materialization runtime | P0 Gate（仅 S3） | BLOCKED | H83-01、T01 |
+| T05 | 消费 H83-01 并认证 materialization runtime | P0 Gate（仅 S3） | DONE_EVIDENCE | H83-01、T01 |
 
 ## Definition of Ready
 

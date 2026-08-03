@@ -1,7 +1,7 @@
 # F3：外部 dbt 包逆向建模产品化
 
-**优先级**：P0  
-**状态**：DRAFT  
+**优先级**：P0
+**状态**：CODE_COMPLETE / E2E_PENDING
 **依赖**：F1
 
 ## 目标
@@ -26,12 +26,12 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|
-| T01 | 增加 dbt ZIP 来源模式并接入安全 inspect | P0 | DRAFT | F0/T02、F1/T02 |
-| T02 | 建立计划、域、来源映射和语义补全预检 | P0 | DRAFT | T01、F1/T03 |
-| T03 | 展示首次导入依赖闭包、差异和阻断选择 | P0 | DRAFT | T02、F1/T04 |
-| T04 | 接入 apply、进度恢复、结果、retry 与历史 | P0 | DRAFT | T03 |
-| T05 | 建立重新导入、三方漂移和前向撤销 | P1 | DRAFT | T04、F1/T05、D05/D07 |
-| T06 | 实现 source-only 与复杂依赖闭包 | P1 | DRAFT | F1/T02、T01～T04、D10 |
+| T01 | 增加 dbt ZIP 来源模式并接入安全 inspect | P0 | CODE_COMPLETE | F0/T02、F1/T02 |
+| T02 | 建立计划、域、来源映射和语义补全预检 | P0 | CODE_COMPLETE | T01、F1/T03 |
+| T03 | 展示首次导入依赖闭包、差异和阻断选择 | P0 | CODE_COMPLETE | T02、F1/T04 |
+| T04 | 接入 apply、进度恢复、结果、retry 与历史 | P0 | CODE_COMPLETE | T03 |
+| T05 | 建立重新导入、三方漂移和前向撤销 | P1 | CODE_COMPLETE | T04、F1/T05、D05/D07 |
+| T06 | 实现 source-only 与复杂依赖闭包 | P1 | CODE_COMPLETE | F1/T02、T01～T04、D10 |
 
 ## Definition of Ready
 

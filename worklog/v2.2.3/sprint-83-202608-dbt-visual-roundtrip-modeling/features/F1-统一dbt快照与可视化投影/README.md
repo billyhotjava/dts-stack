@@ -1,7 +1,7 @@
 # F1：统一 dbt 快照与可视化投影
 
-**优先级**：P0  
-**状态**：DRAFT  
+**优先级**：P0
+**状态**：CODE_COMPLETE
 **依赖**：F0
 
 ## 目标
@@ -30,11 +30,11 @@ dbt 包和运行时兼容由 [`assets/dbt-compatibility-and-source-only-contract
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|
-| T01 | 冻结版本固定的 ModelRepresentationView 契约 | P0 | DRAFT | F0/T04 |
-| T02 | 收敛规范化 projection seam 与 parser 删除门禁 | P0 | DRAFT | T01 |
-| T03 | 实现逻辑、技术、运行三类 provenance 投影 | P0 | DRAFT | T01～T02 |
-| T04 | 实现可视化能力判定 | P0 | DRAFT | T03 |
-| T05 | 实现技术三方漂移与语义映射状态机 | P1 | DRAFT | T03 |
+| T01 | 冻结版本固定的 ModelRepresentationView 契约 | P0 | CODE_COMPLETE | F0/T04 |
+| T02 | 收敛规范化 projection seam 与 parser 删除门禁 | P0 | CODE_COMPLETE（非建模 reader 作为 owner adapter 保留） | T01 |
+| T03 | 实现逻辑、技术、运行三类 provenance 投影 | P0 | CODE_COMPLETE | T01～T02 |
+| T04 | 实现可视化能力判定 | P0 | CODE_COMPLETE | T03 |
+| T05 | 实现技术三方漂移与语义映射状态机 | P1 | CODE_COMPLETE | T03 |
 
 ## UI/UX 规格
 

@@ -2,7 +2,7 @@
 
 **变更类型**：API 增量 + 数据建模前端能力替换  
 **风险等级**：中（涉及认证、权限和严格审计；不含数据库 schema 变更或数据回填）  
-**状态**：IN_PROGRESS（回滚锚点已保留，待部署、健康检查与回滚演练）
+**状态**：IN_PROGRESS（当前原型符合性重构已构建并部署，待授权真实 E2E 与完整回滚演练）
 
 ## 1. 迁移策略
 
@@ -40,7 +40,7 @@
 2. 执行 `docker compose -f docker-compose-app.yml up -d --no-deps --force-recreate dts-platform dts-platform-webapp`。
 3. 等待 `dts-platform` healthy，检查前端入口、API 和审计日志；失败则停止进一步操作。
 
-当前演练结果：rollback tag 已解析并核对到原镜像 digest；实际容器回滚/前滚尚未演练，因此 Gate G3 暂不标记 PASS。
+当前演练结果：rollback tag 已解析并核对到原镜像 digest；新镜像已按顺序部署并恢复健康，但实际容器回滚/前滚尚未演练，因此 Gate G3 暂不标记 PASS。
 
 ## 5. 部署顺序与影响面
 
@@ -50,3 +50,11 @@
 4. 运行一次 Sprint-83/84 联合真实认证 E2E；通过后补齐回滚演练和 Gate G3 证据。
 
 影响面：数据建模页面、原子维度创建/恢复、ModelSpec 内部幂等边界、建模审计。未触碰数据库 schema、数据集成容器、数据质量和数据资产后端。
+
+## 6. 当前制品与部署边界
+
+- 2026-08-03 当前制品：Biome 通过；最终集中回归 Vitest `13 files / 73 tests`、Node 契约 `8/8`；TypeScript 无错，Chrome 95 target 生产制品与镜像构建成功。
+- `dts-platform:1.0.0` 保持既有 healthy，本轮未重建、未重启。
+- `dts-platform-webapp:1.0.0`：`sha256:2bf603f5ce642319182ae4a89cc26e32063bc0ce910d9a7e6783f5b9f7bdc767`，容器 running；容器内首页与 `https://bi.yuzhicloud.com/data-modeling` 均为 HTTP 200。
+- 部署前前端回滚锚点：`dts-platform-webapp:rollback-s83-s84-pre-e2e-20260803` → `sha256:bbcf508abdca82339e3c98d0dfab275f642d094164e9be77963be34c4664172b`。
+- 启动日志仍有既存 `DBT_MODEL_SYNC` fallback 告警；它不属于 Sprint-84，未顺带扩修。

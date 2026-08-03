@@ -117,18 +117,21 @@ describe("buildAccessPlanCreateRequest", () => {
 			fileType: "excel",
 			originalName: "source.xlsx",
 			fileId: "file-1",
+			fileHash: "file-checksum",
+			keyVersion: "v1",
+			encrypted: true,
 			columns: [{ name: "customer_id", type: "string" }],
-			classification: "INTERNAL",
+			classification: "CONFIDENTIAL",
 			classificationSeal: {
 				sealId: "seal-1",
 				subjectType: "FILE",
 				subjectKey: "ingestion-upload:file-1",
-				effectiveLevel: "INTERNAL",
+				effectiveLevel: "CONFIDENTIAL",
 				snapshotVersion: 1,
 				checksum: "checksum",
 				sealedAt: "2026-07-31T00:00:00Z",
 			},
-			fieldClassifications: { customer_id: "INTERNAL" },
+			fieldClassifications: { customer_id: "CONFIDENTIAL" },
 		};
 		const request = buildAccessPlanCreateRequest(
 			context("file", baseValues({ fileTargetTable: "ods_customer" }), { fileUploadResult: file }),
@@ -137,14 +140,21 @@ describe("buildAccessPlanCreateRequest", () => {
 		expect(request).toMatchObject({
 			draft: true,
 			runNow: false,
-			source: { type: "txtfilereader", config: { _fileId: "file-1" } },
+			source: {
+				type: "txtfilereader",
+				config: {
+					_fileId: "file-1",
+					_fileHash: "file-checksum",
+					_keyVersion: "v1",
+					_encrypted: true,
+				},
+			},
 			streams: { selection: "manual", include: ["ods_customer"] },
-			classificationSeal: { sealId: "seal-1", fileFloor: "INTERNAL" },
-			fieldClassifications: { customer_id: "INTERNAL" },
+			classificationSeal: { sealId: "seal-1", fileFloor: "CONFIDENTIAL" },
+			fieldClassifications: { customer_id: "CONFIDENTIAL" },
 		});
 		expect(request.source.config).not.toHaveProperty("_filePath");
 		expect(request.source.config).not.toHaveProperty("_containerPath");
-		expect(request.source.config).not.toHaveProperty("_encrypted");
 	});
 });
 

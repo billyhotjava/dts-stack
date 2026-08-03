@@ -1,13 +1,15 @@
 # H83-01 dbt 运行时紧急修复前置契约
 
-**状态**：BLOCKED / URGENT  
-**类型**：独立热修复前置项，不受 Sprint-83 功能实现节奏约束  
-**确认日期**：2026-08-02  
+**状态**：DONE_CANDIDATE（F0/T05 已消费并登记认证 derivative；生产激活待 F6 验收）
+**类型**：独立热修复前置项，不受 Sprint-83 功能实现节奏约束
+**确认日期**：2026-08-02
 **关联决策**：D09、ADR-83-15、RT-01
+
+> 2026-08-03 收口：H83-01 已归档精确锁、候选镜像与 RT-01 证据；F0/T05 在 `it/rt-01/certified-profile.json` 登记了独立认证 derivative。原候选证据仍保持 `NOT_CERTIFIED`，不通过改环境变量就地“升级”。本状态只证明认证制品就绪，不代替部署 digest 核对和真实物化 E2E。
 
 ## 1. 触发事实与事件边界
 
-当前 `builds/dts-dbt/Dockerfile` 只直接固定 `dbt-postgres==1.10.0`，而本地 `dts-dbt:1.10.0` 镜像实际观测为 `dbt-core 2.0.0-alpha.5`、`dbt-adapters 1.24.5`、`dbt-common 1.38.0`。镜像标签与实际 Core 不一致，且传递依赖没有形成可复现的精确锁定集合，因此当前 PostgreSQL materialization profile 只能保持 `NOT_CERTIFIED`。
+修复前，`builds/dts-dbt/Dockerfile` 只直接固定 `dbt-postgres==1.10.0`，而当时本地 `dts-dbt:1.10.0` 镜像实际观测为 `dbt-core 2.0.0-alpha.5`、`dbt-adapters 1.24.5`、`dbt-common 1.38.0`。镜像标签与实际 Core 不一致，且传递依赖没有形成可复现的精确锁定集合，因此触发了本紧急修复。修复后的候选与认证 derivative 不再引用该 alpha 版本集合。
 
 该事实是需要紧急修复的工程准入缺口，不等于已发生生产事故。本契约不声明已经出现客户执行失败、数据错误、数据丢失或安全事件；若后续获得事故证据，应进入独立事故响应流程，不能用 H83-01 的完成状态代替事故结论。
 
@@ -73,15 +75,15 @@ H83-01 的唯一目标是修复运行镜像、建立一个可复现/可验证/�
 
 ## 6. 完成判定
 
-H83-01 只有在下列条件全部满足时才可从 `BLOCKED / URGENT` 变更为 `COMPLETE`；该状态只表示候选修复及原始证据完成，不表示产品 profile 已 `CERTIFIED`：
+H83-01 候选修复与原始证据已完成；下列条件只证明候选就绪，不单独表示产品 profile 已 `CERTIFIED`：
 
-- [ ] Core、PostgreSQL adapter 和全部传递依赖已精确、带 hash 锁定；
-- [ ] 基础镜像、候选镜像 digest、源码 commit 与 profile ID 已归档；
-- [ ] 同一 digest 的 `pip check` 与 `dbt --version` 证据通过；
-- [ ] 同一 digest 在声明的真实 PostgreSQL 版本完成 parse/compile/build/run；
-- [ ] manifest/catalog/run_results 与 PostgreSQL relation evidence 完整、可关联；
-- [ ] 未认证组合和漂移组合保持 fail-closed；
-- [ ] 发布与回滚演练通过，审计记录可按 correlation ID 查询；
-- [ ] 候选结果与原始证据回写兼容契约并交给 F0/T05；客户兼容声明和 Sprint-83 编码后回归仍按各自门禁独立记录。
+- [x] Core、PostgreSQL adapter 和全部传递依赖已精确、带 hash 锁定；
+- [x] 基础镜像、候选镜像 digest、源码 commit 与 profile ID 已归档；
+- [x] 同一 digest 的 `pip check` 与 `dbt --version` 证据通过；
+- [x] 同一 digest 在声明的真实 PostgreSQL 版本完成 parse/compile/build/run；
+- [x] manifest/catalog/run_results 与 PostgreSQL relation evidence 完整、可关联；
+- [x] 未认证组合和漂移组合保持 fail-closed；
+- [x] 候选回滚与认证 derivative 撤销策略已归档；生产切换/回切仍待 F6 现场演练；
+- [x] 候选结果与原始证据回写兼容契约并交给 F0/T05；客户兼容声明和 Sprint-83 真实 E2E 仍按各自门禁独立记录。
 
-完成 H83-01 只允许声明该精确 PostgreSQL runtime 候选及原始证据已准备好供认证评审；不得声明 `materialization=CERTIFIED`，不自动形成客户环境兼容承诺，也不能替代 F0/T05 的认证登记或 Sprint-83 编码完成后的 RT-01 回归。
+完成 H83-01 本身只允许声明该精确 PostgreSQL runtime 候选及原始证据就绪；`materialization=CERTIFIED` 的声明来自 F0/T05 的独立认证记录，不自动形成客户环境兼容承诺，也不能替代 Sprint-83 的部署后 RT-01 回归。

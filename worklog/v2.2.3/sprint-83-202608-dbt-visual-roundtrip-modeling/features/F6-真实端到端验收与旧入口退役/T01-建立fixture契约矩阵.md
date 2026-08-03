@@ -1,7 +1,7 @@
 # T01：固化编码后 dbt/adapter/恶意包回归矩阵
 
 **优先级**：P1
-**状态**：DRAFT  
+**状态**：PASS_CODE
 **依赖**：F0/T02、对应实现切片；S3 materialization 回归另依赖 F0/T05
 
 ## 目标

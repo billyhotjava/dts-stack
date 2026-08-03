@@ -1,7 +1,7 @@
 # F5：安全、审计与可运维收敛
 
-**优先级**：P0  
-**状态**：DRAFT  
+**优先级**：P0
+**状态**：CODE_COMPLETE / RUNTIME_RETIREMENT_PENDING
 **依赖**：F0；从 F1 起并行守卫
 
 ## 目标
@@ -12,11 +12,11 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|
-| T01 | 加固 ZIP、临时目录、依赖和非受信代码边界 | P0 | DRAFT | F0/T02 |
-| T02 | 补齐公共审计动作、outbox、correlation 与保留策略 | P0 | DRAFT | F1/T01 |
-| T03 | 固化权限、租户、密级与脱敏门禁 | P0 | DRAFT | 当前切片对应 F2/F3 合同 |
-| T04 | 建立解析、导入、预览与物化可观测性 | P1 | DRAFT | F1/T02、对应交付切片 |
-| T05 | 退役旧 Bash DAG、不安全 preview、共享文件写与重复 parser 尾巴 | P2 | DRAFT | T04、全部待退役调用方迁移完成 |
+| T01 | 加固 ZIP、临时目录、依赖和非受信代码边界 | P0 | CODE_COMPLETE | F0/T02 |
+| T02 | 补齐公共审计动作、outbox、correlation 与保留策略 | P0 | CODE_COMPLETE | F1/T01 |
+| T03 | 固化权限、租户、密级与脱敏门禁 | P0 | CODE_COMPLETE | 当前切片对应 F2/F3 合同 |
+| T04 | 建立解析、导入、预览与物化可观测性 | P1 | CODE_COMPLETE | F1/T02、对应交付切片 |
+| T05 | 退役旧 Bash DAG、不安全 preview、共享文件写与重复 parser 尾巴 | P2 | CODE_COMPLETE / RUNTIME_EVIDENCE_PENDING | T04、全部待退役调用方迁移完成 |
 
 ## 安全/审计契约
 

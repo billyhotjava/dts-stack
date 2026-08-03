@@ -12,30 +12,41 @@ test("access plan detail loads one task and its latest execution without list fa
 });
 
 test("access plan detail exposes the agreed operational tabs on real contracts", () => {
-	for (const label of ["概览", "运行历史", "结构漂移", "密级准入", "变更记录"]) {
+	for (const label of ["概览", "运行历史", "密级准入", "变更记录"]) {
 		assert.match(SOURCE, new RegExp(`label:\\s*"${label}"`));
 	}
 	assert.match(SOURCE, /label: inferAccessKind\(task\) === "file" \? "文件预检" : "异常数据"/);
 	assert.match(SOURCE, /<ExecutionHistoryTable taskId=\{taskId\}/);
-	assert.match(SOURCE, /<AccessStructureDriftPanel task=\{task\}/);
 	assert.match(SOURCE, /<AccessQualityPanel[\s\S]{0,180}task=\{task\}[\s\S]{0,180}onTaskChanged=/);
 	assert.match(SOURCE, /<TaskAdmissionBasis\s+task=\{admissionTask \|\| task\}\s*\/>/);
 	assert.match(SOURCE, /ingestionTaskAPI\.getChangeLogs\(\{/);
 	assert.match(SOURCE, /taskId,/);
+	assert.doesNotMatch(SOURCE, /结构漂移|AccessStructureDriftPanel|key:\s*"drift"/);
 });
 
-test("access plan detail preserves admission, execution, DAG rebuild and guarded rollback operations", () => {
-	assert.match(SOURCE, /runAccessPlanOperation\("admit", operationTaskId\)/);
-	assert.match(SOURCE, /runAccessPlanOperation\("execute", operationTaskId\)/);
-	assert.equal(SOURCE.match(/if \(!acquireSingleFlight\(operationLockRef\)\) return;/g)?.length, 3);
-	assert.equal(SOURCE.match(/onCancel:\s*\(\) => releaseSingleFlight\(operationLockRef\)/g)?.length, 2);
-	assert.match(SOURCE, /runAccessPlanOperation\("rebuildDag", operationTaskId\)/);
-	assert.match(SOURCE, /<RollbackImpactModal/);
+test("access plan detail preserves admission and execution while exposing evidence-preserving plan deletion", () => {
+	assert.match(SOURCE, /runAccessPlanOperation\("admit", operationTaskId, ingestionTaskAPI\)/);
+	assert.match(SOURCE, /runAccessPlanOperation\("execute", operationTaskId, ingestionTaskAPI\)/);
+	assert.equal(
+		SOURCE.match(/if \(!acquireOwnedSingleFlight\(operationLockRef, operationOwner\)\) return;/g)?.length,
+		3,
+	);
+	assert.equal(
+		SOURCE.match(/onCancel:\s*\(\) => releaseOwnedSingleFlight\(operationLockRef, operationOwner\)/g)?.length,
+		2,
+	);
+	assert.match(SOURCE, /resetOwnedSingleFlight\(operationLockRef\)/);
+	assert.match(SOURCE, /!ownsSingleFlight\(operationLockRef, operationOwner\)/);
+	assert.match(SOURCE, /const released = releaseOwnedSingleFlight\(operationLockRef, operationOwner\)/);
+	assert.match(SOURCE, /runAccessPlanOperation\("delete", operationTaskId, ingestionTaskAPI\)/);
 	assert.match(SOURCE, /准入草稿/);
 	assert.match(SOURCE, /立即执行/);
-	assert.match(SOURCE, /setRollbackOpen\(false\);\s*setRollbackRequest\(null\);/);
-	assert.match(SOURCE, /rollbackRequest\?\.taskId === taskId/);
-	assert.match(SOURCE, /key=\{`access-plan-rollback-\$\{taskId\}`\}/);
+	assert.match(SOURCE, /删除计划/);
+	assert.match(SOURCE, /title:\s*"确认删除接入计划"/);
+	assert.match(SOURCE, /ODS 数据不会被清空/);
+	assert.match(SOURCE, /运行历史、变更记录和审计证据仍会保留/);
+	assert.match(SOURCE, /router\.push\("\/foundation\/data-sources"\)/);
+	assert.doesNotMatch(SOURCE, /更多操作|重建 DAG|数据回退 Level|RollbackImpactModal|rebuildDag/);
 });
 
 test("access plan detail requires an explicit execution confirmation with a safe task summary", () => {
@@ -45,7 +56,7 @@ test("access plan detail requires an explicit execution confirmation with a safe
 	assert.match(SOURCE, /label="目标表"/);
 	assert.match(SOURCE, /label="写入策略"/);
 	assert.match(SOURCE, /onOk:\s*async \(\) =>/);
-	assert.match(SOURCE, /runAccessPlanOperation\("execute", operationTaskId\)/);
+	assert.match(SOURCE, /runAccessPlanOperation\("execute", operationTaskId, ingestionTaskAPI\)/);
 	assert.doesNotMatch(SOURCE, /toast\.error\([^)]*(?:error|response|message)\./i);
 });
 

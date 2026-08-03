@@ -1,14 +1,16 @@
 # RT-01 PostgreSQL runtime candidate evidence
 
-This directory contains immutable evidence templates for H83-01. It does not
-contain a certification record and it must never contain database credentials,
+This directory contains the immutable H83-01 candidate evidence together with
+the F0/T05 certification record. Candidate evidence remains append-only and
+`NOT_CERTIFIED`; `certified-profile.json` separately identifies the verified
+derivative that F0/T05 registered. No file may contain database credentials,
 tokens, private registry credentials, or complete connection strings.
 
 ## Fixed linux/amd64 candidate inputs
 
 - Platform: `linux/amd64` only
 - Candidate profile: `H83-RT01-LINUX-AMD64-DBT11022-PG1100-LOCK-01d7c02b6bf4fefdfc188cbf9ef8aed4fb243c227c060103f195c4ca45af5f02`
-- Candidate status: `NOT_CERTIFIED`
+- Candidate status: `NOT_CERTIFIED` (intentionally unchanged; certification belongs to the derivative)
 - Materialization failure code before F0/T05: `DBT_RUNTIME_NOT_CERTIFIED`
 - Base image index digest: `sha256:db3ff2e1800a8581e2c48a27c3995339d47bdf046da21c7627accd3d51053a93`
 - Base image linux/amd64 manifest digest: `sha256:00af38ae2ed311628970782e8a2d7f014d8909dbc63cb97bc0a158187f4db045`
@@ -72,8 +74,9 @@ the same isolated PostgreSQL instance:
    verify the deterministic three-row result.
 6. Hash `manifest.json`, `catalog.json`, `run_results.json`, redacted logs and
    relation evidence, then complete `evidence-manifest.json`.
-7. Exercise `verify-dbt-runtime --gate-materialization`; it must exit 42 with
-   `DBT_RUNTIME_NOT_CERTIFIED` until F0/T05 registers certification.
+7. Exercise `verify-dbt-runtime --gate-materialization`; the immutable
+   candidate must exit 42 with `DBT_RUNTIME_NOT_CERTIFIED`. F0/T05 records a
+   separate certified derivative and does not mutate this candidate evidence.
 
 All evidence records UTC time, source commit, actor, PostgreSQL server version,
 image digest, invocation ID, exit status and correlation ID. Logs must redact
@@ -81,10 +84,11 @@ passwords, tokens, registry credentials and full connection strings.
 
 ## Handoff boundary
 
-H83-01 may hand an evidence-complete candidate to F0/T05, but the candidate
-remains `NOT_CERTIFIED`. Only F0/T05 may create `certificationProfileId` and
-change the product control-plane status. Missing or mismatched evidence keeps
-materialization fail-closed.
+H83-01 handed an evidence-complete candidate to F0/T05 and the candidate
+remains `NOT_CERTIFIED`. F0/T05 created the only `certificationProfileId` in
+`certified-profile.json`; missing or mismatched evidence still keeps
+materialization fail-closed. This repository record does not by itself prove
+that a deployed environment is currently pinned to the certified derivative.
 
 The image entrypoint is defense in depth, not the authorization owner. Docker
 socket administrators can technically replace an entrypoint, so the platform

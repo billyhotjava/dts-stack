@@ -26,6 +26,13 @@ public class TargetTableProvisioner {
     private static final Logger LOG = LoggerFactory.getLogger(TargetTableProvisioner.class);
     private static final String TABLE_PLACEHOLDER = "${table}";
 
+    private record ProvisioningPlan(
+        TableMapping mapping,
+        TableId target,
+        List<JdbcMetadataService.ColumnMeta> sourceColumns,
+        List<JdbcMetadataService.ColumnMeta> odsColumns
+    ) {}
+
     private final JdbcMetadataService metadataService;
     private final ObjectMapper objectMapper;
     private final IngestionSchemaSnapshotService schemaSnapshotService;
@@ -73,23 +80,13 @@ public class TargetTableProvisioner {
             return;
         }
         try (Connection connection = metadataService.openConnection(targetInfo)) {
+            List<ProvisioningPlan> plans = new ArrayList<>();
             for (TableMapping mapping : mappings) {
                 if (!StringUtils.hasText(mapping.target())) {
                     continue;
                 }
                 TableId target = resolveTargetTable(mapping.target(), resolveSchema(writerConfig));
                 target = lowercaseForPostgres(target, targetInfo.jdbcUrl());
-                if (tableExists(connection, target)) {
-                    if (fullRefresh) {
-                        LOG.info("Dropping table {} for full_refresh task {}", target.qualifiedName(), task.getId());
-                        dropTable(connection, target);
-                    } else if (isPostgres(targetInfo.jdbcUrl()) && hasUppercaseColumns(connection, target)) {
-                        LOG.info("Dropping table {} with uppercase columns to recreate with lowercase", target.qualifiedName());
-                        dropTable(connection, target);
-                    } else {
-                        continue;
-                    }
-                }
                 List<JdbcMetadataService.ColumnMeta> sourceColumns = resolveColumns(sourceInfo, mapping.source(), readerConfig);
                 if (sourceColumns.isEmpty()) {
                     // For file sources, _fileColumns may provide columns
@@ -104,24 +101,50 @@ public class TargetTableProvisioner {
                 if (isPostgres(targetInfo.jdbcUrl())) {
                     columns = lowercaseColumnNames(columns);
                 }
+                columns = DtsOdsTechnicalColumns.businessColumns(columns);
                 columns = appendDtsTechnicalColumns(columns, task, readerConfig);
-                IngestionSchemaSnapshot snapshot = saveSchemaSnapshot(
+                plans.add(new ProvisioningPlan(mapping, target, sourceColumns, columns));
+            }
+
+            boolean transactionalDdl = isPostgres(targetInfo.jdbcUrl());
+            if (transactionalDdl) {
+                connection.setAutoCommit(false);
+            }
+            try {
+                for (ProvisioningPlan plan : plans) {
+                    createSchemaIfNeeded(connection, plan.target().schema());
+                    if (tableExists(connection, plan.target())) {
+                        ensureColumns(connection, plan.target(), plan.odsColumns());
+                        LOG.info("Reconciled table {} for task {} without destructive DDL", plan.target().qualifiedName(), task.getId());
+                    } else {
+                        createTable(connection, plan.target(), plan.odsColumns());
+                        LOG.info("Auto-created table {} for task {}", plan.target().qualifiedName(), task.getId());
+                    }
+                }
+                if (transactionalDdl) {
+                    connection.commit();
+                }
+            } catch (Exception ddlFailure) {
+                if (transactionalDdl) {
+                    try {
+                        connection.rollback();
+                    } catch (Exception rollbackFailure) {
+                        ddlFailure.addSuppressed(rollbackFailure);
+                    }
+                }
+                throw ddlFailure;
+            }
+            for (ProvisioningPlan plan : plans) {
+                saveSchemaSnapshot(
                     task,
                     execution,
-                    mapping,
-                    target,
+                    plan.mapping(),
+                    plan.target(),
                     readerConfig,
                     sourceInfo,
-                    sourceColumns,
-                    columns
+                    plan.sourceColumns(),
+                    plan.odsColumns()
                 );
-                List<JdbcMetadataService.ColumnMeta> snapshotColumns = schemaSnapshotService.toOdsColumns(snapshot);
-                if (!snapshotColumns.isEmpty()) {
-                    columns = snapshotColumns;
-                }
-                createSchemaIfNeeded(connection, target.schema());
-                createTable(connection, target, columns);
-                LOG.info("Auto-created table {} for task {}", target.qualifiedName(), task.getId());
             }
         } catch (Exception ex) {
             throw new IllegalStateException("自动建表失败: " + ex.getMessage(), ex);
@@ -402,37 +425,49 @@ public class TargetTableProvisioner {
         List<String> sources = extractTables(readerConfig);
         List<String> targets = extractTables(writerConfig);
         if (!mappings.isEmpty()) {
-            List<String> mappingSources = mappings.stream()
-                .map(TableMapping::source)
-                .filter(StringUtils::hasText)
-                .toList();
-            List<String> mappingTargets = mappings.stream()
-                .map(TableMapping::target)
-                .filter(StringUtils::hasText)
-                .toList();
-            if (!mappingSources.isEmpty() && !mappingTargets.isEmpty()) {
-                String prefix = resolveTablePrefix(writerConfig);
-                if (!StringUtils.hasText(prefix)) {
-                    prefix = inferTablePrefixFromTargets(mappingSources, targets);
-                }
-                if (isSourceAlignedTables(mappingSources, mappingTargets)) {
-                    if (!targets.isEmpty() && !isSourceAlignedTables(mappingSources, targets)) {
-                        mappingTargets = targets;
-                    } else {
-                        final String resolvedPrefix = prefix;
-                        mappingTargets = mappingSources.stream()
-                            .map(source -> buildTargetTableName(source, resolvedPrefix))
-                            .toList();
-                    }
-                }
-                int size = Math.min(mappingSources.size(), mappingTargets.size());
-                List<TableMapping> normalized = new ArrayList<>();
-                for (int i = 0; i < size; i++) {
-                    normalized.add(new TableMapping(mappingSources.get(i), mappingTargets.get(i)));
-                }
-                return normalized;
+            List<String> mappingSources = mappings.stream().map(TableMapping::source).toList();
+            if (mappingSources.stream().anyMatch(source -> !StringUtils.hasText(source))) {
+                throw mappingValidationFailure("表映射存在空来源表");
             }
-            return mappings;
+            boolean anyMappingTarget = mappings.stream().anyMatch(mapping -> StringUtils.hasText(mapping.target()));
+            boolean allMappingTargets = mappings.stream().allMatch(mapping -> StringUtils.hasText(mapping.target()));
+            if (anyMappingTarget && !allMappingTargets) {
+                throw mappingValidationFailure("表映射目标表只能全部填写或全部由平台生成");
+            }
+            List<String> mappingTargets = allMappingTargets
+                ? mappings.stream().map(TableMapping::target).toList()
+                : List.of();
+            String prefix = resolveTablePrefix(writerConfig);
+            if (!StringUtils.hasText(prefix)) {
+                prefix = inferTablePrefixFromTargets(mappingSources, targets);
+            }
+            if (mappingTargets.isEmpty()) {
+                if (!targets.isEmpty()) {
+                    requireSameTableCount(mappingSources, targets);
+                    mappingTargets = targets;
+                } else {
+                    final String resolvedPrefix = prefix;
+                    mappingTargets = mappingSources.stream()
+                        .map(source -> buildTargetTableName(source, resolvedPrefix))
+                        .toList();
+                }
+            } else if (isSourceAlignedTables(mappingSources, mappingTargets)) {
+                if (!targets.isEmpty() && !isSourceAlignedTables(mappingSources, targets)) {
+                    requireSameTableCount(mappingSources, targets);
+                    mappingTargets = targets;
+                } else if (StringUtils.hasText(prefix)) {
+                    final String resolvedPrefix = prefix;
+                    mappingTargets = mappingSources.stream()
+                        .map(source -> buildTargetTableName(source, resolvedPrefix))
+                        .toList();
+                }
+            }
+            requireSameTableCount(mappingSources, mappingTargets);
+            List<TableMapping> normalized = new ArrayList<>(mappingSources.size());
+            for (int i = 0; i < mappingSources.size(); i++) {
+                normalized.add(new TableMapping(mappingSources.get(i), mappingTargets.get(i)));
+            }
+            return normalized;
         }
         if (sources.isEmpty()) {
             return List.of();
@@ -458,12 +493,24 @@ public class TargetTableProvisioner {
                 .map(source -> buildTargetTableName(source, resolvedPrefix))
                 .toList();
         }
-        int size = Math.min(sources.size(), targets.size());
-        List<TableMapping> resolved = new ArrayList<>();
-        for (int i = 0; i < size; i++) {
+        requireSameTableCount(sources, targets);
+        List<TableMapping> resolved = new ArrayList<>(sources.size());
+        for (int i = 0; i < sources.size(); i++) {
             resolved.add(new TableMapping(sources.get(i), targets.get(i)));
         }
         return resolved;
+    }
+
+    private void requireSameTableCount(List<String> sources, List<String> targets) {
+        if (sources.size() != targets.size()) {
+            throw mappingValidationFailure(
+                "来源表与目标表数量不一致: source=" + sources.size() + ", target=" + targets.size()
+            );
+        }
+    }
+
+    private IllegalStateException mappingValidationFailure(String detail) {
+        return new IllegalStateException("create table mapping validation failed: " + detail);
     }
 
     private List<TableMapping> parseTableMapping(JsonNode node) {
@@ -882,6 +929,36 @@ public class TargetTableProvisioner {
         ddl.append(")");
         try (Statement statement = connection.createStatement()) {
             statement.execute(ddl.toString());
+        }
+    }
+
+    private void ensureColumns(
+        Connection connection,
+        TableId tableId,
+        List<JdbcMetadataService.ColumnMeta> expectedColumns
+    ) throws Exception {
+        java.util.Set<String> existing = new java.util.LinkedHashSet<>();
+        DatabaseMetaData meta = connection.getMetaData();
+        try (ResultSet rs = meta.getColumns(null, tableId.schema(), tableId.table(), null)) {
+            while (rs.next()) {
+                String name = rs.getString("COLUMN_NAME");
+                if (StringUtils.hasText(name)) {
+                    existing.add(name.toLowerCase(Locale.ROOT));
+                }
+            }
+        }
+        for (JdbcMetadataService.ColumnMeta column : expectedColumns) {
+            String name = column == null ? null : column.name();
+            if (!StringUtils.hasText(name) || existing.contains(name.toLowerCase(Locale.ROOT))) {
+                continue;
+            }
+            try (Statement statement = connection.createStatement()) {
+                statement.execute(
+                    "ALTER TABLE " + tableId.qualifiedName()
+                        + " ADD COLUMN " + quoteIdentifier(name) + " " + mapType(column)
+                );
+            }
+            existing.add(name.toLowerCase(Locale.ROOT));
         }
     }
 

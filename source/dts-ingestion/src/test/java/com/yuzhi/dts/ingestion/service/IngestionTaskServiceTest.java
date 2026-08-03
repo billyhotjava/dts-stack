@@ -59,6 +59,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
@@ -198,6 +199,9 @@ class IngestionTaskServiceTest {
             invocation.<Runnable>getArgument(0).run();
             return null;
         }).when(requiresNewExecutor).executeWithoutResult(any(Runnable.class));
+        lenient().when(taskRepository.findByIdForUpdate(any(Long.class))).thenAnswer(invocation ->
+            taskRepository.findById(invocation.getArgument(0))
+        );
 
         if (!org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
             org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
@@ -1450,24 +1454,92 @@ class IngestionTaskServiceTest {
     }
 
     @Test
-    void shouldDeleteTaskAndCascadeCleanup() {
-        // Given
+    void shouldSoftDeleteTaskAndPreserveHistoricalEvidence() {
         Long taskId = 1L;
         IngestionTask task = createTestTaskEntity();
         task.setId(taskId);
+        task.setStatus("active");
+        task.setAirflowEnabled(true);
+
+        when(taskRepository.findByIdForUpdate(taskId)).thenReturn(Optional.of(task));
+
+        ingestionTaskService.delete(taskId);
+
+        assertThat(task.getStatus()).isEqualTo("deleted");
+        assertThat(task.getAirflowEnabled()).isFalse();
+        verify(taskRepository).save(task);
+        verify(executionRepository, never()).deleteByTaskId(taskId);
+        verify(incrementalSyncService, never()).clearCheckpointByTaskId(taskId);
+        verify(changeLogService, never()).deleteByTaskId(taskId);
+        verifyNoInteractions(addaxJobService, airflowDagService);
+        verify(taskRepository, never()).delete(any(IngestionTask.class));
+    }
+
+    @Test
+    void deleteShouldBeIdempotentForDeletedTask() {
+        Long taskId = 1L;
+        IngestionTask task = createTestTaskEntity();
+        task.setId(taskId);
+        task.setStatus("deleted");
+
+        when(taskRepository.findByIdForUpdate(taskId)).thenReturn(Optional.of(task));
+
+        ingestionTaskService.delete(taskId);
+
+        verify(taskRepository, never()).save(any(IngestionTask.class));
+        verify(executionRepository, never()).countByTaskIdAndStatusesIgnoreCase(any(), any());
+        verify(executionRepository, never()).deleteByTaskId(any());
+        verifyNoInteractions(addaxJobService, airflowDagService);
+    }
+
+    @Test
+    void deleteShouldAuditRuntimeArtifactCleanupFailureAndAllowRetry() {
+        Long taskId = 1L;
+        IngestionTask task = createTestTaskEntity();
+        task.setId(taskId);
+        task.setStatus("deleted");
+
+        when(taskRepository.findByIdForUpdate(taskId)).thenReturn(Optional.of(task));
+        doThrow(new IllegalStateException("filesystem unavailable"))
+            .when(addaxJobService).deleteJobIfExists(task.getAddaxJobPath());
 
         when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
 
-        // When
-        ingestionTaskService.delete(taskId);
+        var result = ingestionTaskService.cleanupRetiredTaskArtifacts(taskId);
 
-        // Then
-        verify(executionRepository).deleteByTaskId(taskId);
-        verify(incrementalSyncService).clearCheckpointByTaskId(taskId);
-        verify(changeLogService).deleteByTaskId(taskId);
-        verify(addaxJobService).deleteJobIfExists(task.getAddaxJobPath());
+        assertThat(result.retryable()).isTrue();
+        assertThat(result.addaxCleaned()).isFalse();
+        assertThat(result.airflowCleaned()).isTrue();
         verify(airflowDagService).deleteDagForTask(task);
-        verify(taskRepository).delete(task);
+        verify(auditService).auditAction(
+            eq("INGESTION_TASK_RUNTIME_ARTIFACT_CLEANUP"),
+            eq(AuditStage.FAIL),
+            eq(String.valueOf(taskId)),
+            argThat(meta -> Boolean.TRUE.equals(meta.get("retryable")) && Boolean.FALSE.equals(meta.get("addaxCleaned")))
+        );
+    }
+
+    @Test
+    void deleteShouldRejectTaskWithExecutionInProgress() {
+        Long taskId = 1L;
+        IngestionTask task = createTestTaskEntity();
+        task.setId(taskId);
+        task.setStatus("active");
+
+        when(taskRepository.findByIdForUpdate(taskId)).thenReturn(Optional.of(task));
+        when(executionRepository.countByTaskIdAndStatusesIgnoreCase(taskId, List.of("running", "preparing", "queued")))
+            .thenReturn(1L);
+
+        assertThatThrownBy(() -> ingestionTaskService.delete(taskId))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("任务正在执行");
+
+        assertThat(task.getStatus()).isEqualTo("active");
+        verify(taskRepository, never()).save(any(IngestionTask.class));
+        verify(executionRepository, never()).deleteByTaskId(any());
+        verify(incrementalSyncService, never()).clearCheckpointByTaskId(any());
+        verify(changeLogService, never()).deleteByTaskId(any());
+        verifyNoInteractions(addaxJobService, airflowDagService);
     }
 
     @Test
@@ -1597,9 +1669,9 @@ class IngestionTaskServiceTest {
 
         when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
         when(taskRepository.save(task)).thenReturn(task);
-        when(executionRepository.countByTaskIdAndStatusesIgnoreCase(taskId, List.of("running", "preparing")))
+        when(executionRepository.countByTaskIdAndStatusesIgnoreCase(taskId, List.of("running", "preparing", "queued")))
             .thenReturn(1L);
-        when(executionRepository.findByStatusesIgnoreCase(List.of("running", "preparing")))
+        when(executionRepository.findByStatusesIgnoreCase(List.of("running", "preparing", "queued")))
             .thenReturn(List.of());
         when(executionMapper.toDto(any(IngestionExecution.class))).thenReturn(new IngestionExecutionDTO());
         doAnswer(invocation -> {
@@ -2124,6 +2196,7 @@ class IngestionTaskServiceTest {
         assertThat(execution.getEffectiveConfigChecksum()).isEqualTo("checksum-r12");
         assertThat(execution.getAirflowDagId()).isEqualTo("orders_task_1_revision_12");
         assertThat(execution.getStatus()).isEqualTo("running");
+        verify(taskRepository).findByIdForUpdate(taskId);
         verify(accessContractService, never()).bindActiveRevision(any(), any());
     }
 
@@ -2481,6 +2554,7 @@ class IngestionTaskServiceTest {
         assertThatThrownBy(() -> ingestionTaskService.validateAsyncExecutionRequest(taskId))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("任务仍在运行中");
+        verify(taskRepository).findByIdForUpdate(taskId);
     }
 
     @Test

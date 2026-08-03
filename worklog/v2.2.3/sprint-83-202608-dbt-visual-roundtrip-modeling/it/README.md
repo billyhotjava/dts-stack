@@ -1,6 +1,15 @@
 # Sprint-83 集成验收计划
 
-当前目录只定义未来验收口径，不包含完成证据。编码全部结束后集中执行，避免反复 E2E。
+当前目录定义真实验收口径，并保留编码后聚焦回归的准入证据。它尚不包含真实浏览器、PostgreSQL + Airflow/dbt 物化、公共审计抽样或现场退役的 PASS 证据；这些只在当前制品部署后集中执行一次。
+
+## 编码后准入证据（2026-08-03）
+
+- 前端页面/路由聚焦回归：`4 files / 47 tests` PASS。
+- 前端 dbt/ModelSpec API 契约：Vitest `4 files / 9 tests` PASS，Node source-contract `7/7` PASS。
+- 后端表示、ZIP、source-only、apply/retry/撤销、高级草稿、物理预览、发布/Catalog serving、审计/可观测与 runtime lease：两组聚焦 Maven 回归合计 `253 tests / 0 failures / 0 errors`。
+- dbt runtime 源码契约：`runtime-contract: PASS`；F0/T05 认证记录与 evidence manifest SHA-256 一致。
+- TypeScript 无错，Chrome 95 target 生产 bundle 和前端镜像已生成并部署；`dts-platform-webapp:1.0.0` 为 `sha256:2bf603f5ce642319182ae4a89cc26e32063bc0ce910d9a7e6783f5b9f7bdc767`，内外入口 HTTP 200。当前未提供授权 DTS E2E 凭据和可写测试边界，因此 IT-00～IT-08 仍不标记 PASS。
+- 联合可写验收用例 `e2e/sprint83-84-modeling-roundtrip.spec.ts` 已完成静态准入：Biome PASS、源契约 4/4、TypeScript PASS、Playwright 发现 3 个串行旅程、独立 Review APPROVED。它以本次 package/run/attempt/draft/candidate 资源 ID 绑定 ZIP 导入、高级 dbt、发布物化和公共审计证据，并在缺少显式写授权时 fail-closed；当前仍未启动浏览器或产生验收写入。
 
 ## 准入与兼容声明边界
 

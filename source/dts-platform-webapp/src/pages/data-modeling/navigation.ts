@@ -3,7 +3,7 @@ import type { DataModelingRoute, DataModelingWorkspace } from "./types";
 const ROUTES: Record<string, Omit<DataModelingRoute, "workspace" | "view">> = {
 	"home/workspace": {
 		title: "建模概览",
-		description: "统一查看建模资产、交付状态、最近访问和待处理事项。",
+		description: "统一查看建模资产、交付状态和可执行的后续入口。",
 	},
 	"planning/business-categories": {
 		title: "业务分类",
@@ -63,7 +63,7 @@ const ROUTES: Record<string, Omit<DataModelingRoute, "workspace" | "view">> = {
 	},
 	"dimensions/reverse": {
 		title: "逆向建模",
-		description: "从已有表和视图识别结构并生成模型草稿。",
+		description: "导入外部 dbt 项目 ZIP，识别结构证据并生成可视化模型草稿。",
 	},
 	"metrics/composite": {
 		title: "复合指标",
@@ -112,13 +112,6 @@ const ROUTES: Record<string, Omit<DataModelingRoute, "workspace" | "view">> = {
 };
 
 export const DEFAULT_DATA_MODELING_PATH = "/data-modeling/home/workspace";
-
-export const retiredDataModelingHomeRedirect = (pathname: string) => {
-	const normalized = pathname.replace(/\/+$/, "") || "/";
-	return normalized === "/data-modeling/home/recent" || normalized === "/data-modeling/home/tasks"
-		? DEFAULT_DATA_MODELING_PATH
-		: null;
-};
 
 export const DATA_MODELING_WORKSPACE_DEFAULTS: Record<DataModelingWorkspace, string> = {
 	home: "workspace",

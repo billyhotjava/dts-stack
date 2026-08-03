@@ -337,6 +337,9 @@ class AirflowDagServiceTest {
         assertThat(dag).contains("\\\"newcolumn_2\\\" varchar(500)");
         assertThat(dag).contains("\\\"_dts_source_system_2\\\" varchar(500)");
         assertThat(dag).doesNotContain("\\\"_dts_source_system\\\" varchar(500)");
+        assertThat(dag).contains("ALTER TABLE \\\"ods_duplicate_columns\\\" ADD COLUMN IF NOT EXISTS");
+        assertThat(dag).doesNotContain("DROP TABLE");
+        assertThat(dag).doesNotContain("CASCADE");
     }
 
     private IngestionTask task(String syncSchedule, String dagId) {

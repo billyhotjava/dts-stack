@@ -1,5 +1,5 @@
-import { ArrowLeftOutlined, EditOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Alert, Button, Descriptions, Dropdown, Empty, Modal, Space, Spin, Table, Tabs, Tag, Tooltip } from "antd";
+import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, ReloadOutlined } from "@ant-design/icons";
+import { Alert, Button, Descriptions, Empty, Modal, Space, Spin, Table, Tabs, Tag, Tooltip } from "antd";
 import type { ColumnsType, TablePaginationConfig } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
@@ -13,18 +13,22 @@ import {
 	ingestionTaskAPI,
 } from "@/api/ingestion";
 import { PageHeader } from "@/components/page-header";
-import RollbackImpactModal, { type RollbackRequest } from "@/components/rollback/RollbackImpactModal";
 import { useParams, useRouter } from "@/routes/hooks";
 import { formatNumber, formatTimestamp } from "@/utils/format";
-import ExecutionHistoryTable from "./shared/ExecutionHistoryTable";
-import TaskAdmissionBasis from "./shared/TaskAdmissionBasis";
-import { resolveTaskAdmissionState } from "./shared/fileClassificationAdmission.helpers";
-import { AccessQualityPanel, AccessStructureDriftPanel } from "./AccessGovernancePanels";
+import { AccessQualityPanel } from "./AccessGovernancePanels";
 import styles from "./AccessPlanDetailPage.module.css";
 import { type AccessPlanOperation, runAccessPlanOperation } from "./accessPlanOperations";
 import { inferAccessKind } from "./accessPlanPayload";
 import { resolveAccessRevisionView } from "./accessRevisionView";
-import { acquireSingleFlight, releaseSingleFlight } from "./accessSingleFlight";
+import {
+	acquireOwnedSingleFlight,
+	ownsSingleFlight,
+	releaseOwnedSingleFlight,
+	resetOwnedSingleFlight,
+} from "./accessSingleFlight";
+import ExecutionHistoryTable from "./shared/ExecutionHistoryTable";
+import { resolveTaskAdmissionState } from "./shared/fileClassificationAdmission.helpers";
+import TaskAdmissionBasis from "./shared/TaskAdmissionBasis";
 
 const CHANGE_TYPE_LABELS: Record<string, string> = {
 	TASK_CREATE: "新建任务",
@@ -135,7 +139,7 @@ const targetTableSummary = (mappings: TableMappingRow[]) => {
 };
 
 const resolveDetailTab = (value: string | null) =>
-	value && ["overview", "history", "drift", "quality", "admission", "changes"].includes(value) ? value : "overview";
+	value && ["overview", "history", "quality", "admission", "changes"].includes(value) ? value : "overview";
 
 export default function AccessPlanDetailPage() {
 	const { taskId: taskIdParam } = useParams();
@@ -159,19 +163,15 @@ export default function AccessPlanDetailPage() {
 	const [changesLoaded, setChangesLoaded] = useState(false);
 	const [changesPagination, setChangesPagination] = useState({ current: 1, pageSize: 10, total: 0 });
 	const [operation, setOperation] = useState<AccessPlanOperation | null>(null);
-	const [rollbackOpen, setRollbackOpen] = useState(false);
-	const [rollbackRequest, setRollbackRequest] = useState<RollbackRequest | null>(null);
 	const detailRequestIdRef = useRef(0);
 	const changesRequestIdRef = useRef(0);
 	const routeTaskIdRef = useRef(taskId);
-	const operationLockRef = useRef(false);
+	const operationLockRef = useRef<symbol | null>(null);
 	routeTaskIdRef.current = taskId;
 
 	const loadDetail = useCallback(async () => {
 		const requestId = ++detailRequestIdRef.current;
 		changesRequestIdRef.current += 1;
-		setRollbackOpen(false);
-		setRollbackRequest(null);
 		setTask(null);
 		setLatestExecution(null);
 		setRevisions([]);
@@ -239,7 +239,7 @@ export default function AccessPlanDetailPage() {
 	// biome-ignore lint/correctness/useExhaustiveDependencies: route task changes must clear an in-flight operation state.
 	useEffect(() => {
 		setOperation(null);
-		releaseSingleFlight(operationLockRef);
+		resetOwnedSingleFlight(operationLockRef);
 	}, [taskId]);
 
 	useEffect(() => {
@@ -345,22 +345,23 @@ export default function AccessPlanDetailPage() {
 			toast.error(admissionState.reason);
 			return;
 		}
-		if (!acquireSingleFlight(operationLockRef)) return;
 		const operationTaskId = taskId;
+		const operationOwner = Symbol("access-plan-admit");
+		if (!acquireOwnedSingleFlight(operationLockRef, operationOwner)) return;
 		setOperation("admit");
 		try {
-			await runAccessPlanOperation("admit", operationTaskId);
-			if (routeTaskIdRef.current !== operationTaskId) return;
+			await runAccessPlanOperation("admit", operationTaskId, ingestionTaskAPI);
+			if (routeTaskIdRef.current !== operationTaskId || !ownsSingleFlight(operationLockRef, operationOwner)) return;
 			toast.success("密级与准入已完成，任务现在可以执行");
 			setActiveTab("admission");
 			await loadDetail();
 		} catch {
-			if (routeTaskIdRef.current === operationTaskId) {
+			if (routeTaskIdRef.current === operationTaskId && ownsSingleFlight(operationLockRef, operationOwner)) {
 				toast.error("密级与准入失败，请检查封存依据后重试");
 			}
 		} finally {
-			releaseSingleFlight(operationLockRef);
-			if (routeTaskIdRef.current === operationTaskId) setOperation(null);
+			const released = releaseOwnedSingleFlight(operationLockRef, operationOwner);
+			if (released && routeTaskIdRef.current === operationTaskId) setOperation(null);
 		}
 	};
 
@@ -369,8 +370,9 @@ export default function AccessPlanDetailPage() {
 			toast.error(executeReason);
 			return;
 		}
-		if (!acquireSingleFlight(operationLockRef)) return;
 		const operationTaskId = taskId;
+		const operationOwner = Symbol("access-plan-execute");
+		if (!acquireOwnedSingleFlight(operationLockRef, operationOwner)) return;
 		const taskName = task.name || `任务 #${operationTaskId}`;
 		const executingDifferentRevision = hasDraftRevision && task.revisionNumber !== activeRevisionNumber;
 		const targetTables = executingDifferentRevision
@@ -405,73 +407,77 @@ export default function AccessPlanDetailPage() {
 				</Space>
 			),
 			onOk: async () => {
-				if (routeTaskIdRef.current !== operationTaskId) {
-					releaseSingleFlight(operationLockRef);
+				if (routeTaskIdRef.current !== operationTaskId || !ownsSingleFlight(operationLockRef, operationOwner)) {
+					releaseOwnedSingleFlight(operationLockRef, operationOwner);
 					return;
 				}
 				setOperation("execute");
 				try {
-					await runAccessPlanOperation("execute", operationTaskId);
-					if (routeTaskIdRef.current !== operationTaskId) return;
+					await runAccessPlanOperation("execute", operationTaskId, ingestionTaskAPI);
+					if (routeTaskIdRef.current !== operationTaskId || !ownsSingleFlight(operationLockRef, operationOwner)) return;
 					toast.success("任务已提交，后台正在触发执行");
 					setActiveTab("history");
 					await loadDetail();
 				} catch {
-					if (routeTaskIdRef.current === operationTaskId) {
+					if (routeTaskIdRef.current === operationTaskId && ownsSingleFlight(operationLockRef, operationOwner)) {
 						toast.error("任务提交失败，请稍后重试");
 					}
 				} finally {
-					releaseSingleFlight(operationLockRef);
-					if (routeTaskIdRef.current === operationTaskId) setOperation(null);
+					const released = releaseOwnedSingleFlight(operationLockRef, operationOwner);
+					if (released && routeTaskIdRef.current === operationTaskId) setOperation(null);
 				}
 			},
-			onCancel: () => releaseSingleFlight(operationLockRef),
+			onCancel: () => releaseOwnedSingleFlight(operationLockRef, operationOwner),
 		});
 	};
 
-	const handleRebuildDag = () => {
-		if (!task || !canExecuteActiveRevision || task.airflowEnabled === false) return;
-		if (!acquireSingleFlight(operationLockRef)) return;
+	const handleDelete = () => {
+		if (!task || taskDeleted) return;
 		const operationTaskId = taskId;
+		const operationOwner = Symbol("access-plan-delete");
+		if (!acquireOwnedSingleFlight(operationLockRef, operationOwner)) return;
 		Modal.confirm({
-			title: "重建 DAG",
-			content: `确定要重建任务“${task.name}”的 DAG 文件吗？`,
-			okText: "确认重建",
+			title: "确认删除接入计划",
+			width: 620,
+			okText: "确认删除",
+			okButtonProps: { danger: true },
 			cancelText: "取消",
+			content: (
+				<Space direction="vertical" size={12} className="w-full">
+					<Alert
+						type="warning"
+						showIcon
+						message={`将删除计划“${task.name || `任务 #${operationTaskId}`}”并停止后续调度`}
+						description="正在运行的计划不能删除；删除后不能再编辑或执行，已落地的 ODS 数据不会被清空，运行历史、变更记录和审计证据仍会保留。"
+					/>
+					<Descriptions bordered size="small" column={1}>
+						<Descriptions.Item label="任务编号">#{operationTaskId}</Descriptions.Item>
+						<Descriptions.Item label="当前状态">{statusTag(task.status)}</Descriptions.Item>
+					</Descriptions>
+				</Space>
+			),
 			onOk: async () => {
-				if (routeTaskIdRef.current !== operationTaskId) {
-					releaseSingleFlight(operationLockRef);
+				if (routeTaskIdRef.current !== operationTaskId || !ownsSingleFlight(operationLockRef, operationOwner)) {
+					releaseOwnedSingleFlight(operationLockRef, operationOwner);
 					return;
 				}
-				setOperation("rebuildDag");
+				setOperation("delete");
 				try {
-					await runAccessPlanOperation("rebuildDag", operationTaskId);
-					if (routeTaskIdRef.current !== operationTaskId) return;
-					toast.success("DAG 已重建");
-					await loadDetail();
+					await runAccessPlanOperation("delete", operationTaskId, ingestionTaskAPI);
+					if (routeTaskIdRef.current !== operationTaskId || !ownsSingleFlight(operationLockRef, operationOwner)) return;
+					toast.success("接入计划已删除，历史证据已保留");
+					router.push("/foundation/data-sources");
 				} catch {
-					if (routeTaskIdRef.current === operationTaskId) {
-						toast.error("DAG 重建失败，请稍后重试");
-						throw new Error("DAG rebuild failed");
+					if (routeTaskIdRef.current === operationTaskId && ownsSingleFlight(operationLockRef, operationOwner)) {
+						toast.error("删除失败；如任务正在运行，请等待执行结束后重试");
 					}
 				} finally {
-					releaseSingleFlight(operationLockRef);
-					if (routeTaskIdRef.current === operationTaskId) setOperation(null);
+					const released = releaseOwnedSingleFlight(operationLockRef, operationOwner);
+					if (released && routeTaskIdRef.current === operationTaskId) setOperation(null);
 				}
 			},
-			onCancel: () => releaseSingleFlight(operationLockRef),
+			onCancel: () => releaseOwnedSingleFlight(operationLockRef, operationOwner),
 		});
-	};
-
-	const openRollback = (level: number) => {
-		if (!task || taskDeleted) return;
-		setRollbackRequest({ level, scope: "task", taskId });
-		setRollbackOpen(true);
-	};
-
-	const closeRollback = () => {
-		setRollbackOpen(false);
-		setRollbackRequest(null);
 	};
 
 	if ((loading && !task) || !taskBelongsToRoute) {
@@ -745,28 +751,16 @@ export default function AccessPlanDetailPage() {
 								立即执行
 							</Button>
 						</Tooltip>
-						<Dropdown
-							disabled={operation !== null}
-							menu={{
-								items: [
-									{
-										key: "rebuild",
-										label: "重建 DAG",
-										disabled: taskDeleted || !canExecuteActiveRevision || task.airflowEnabled === false,
-									},
-									{ type: "divider" },
-									{ key: "rollback-1", label: "数据回退 Level 1 — 清空数据", disabled: taskDeleted },
-									{ key: "rollback-2", label: "数据回退 Level 2 — 重建表结构", disabled: taskDeleted },
-									{ key: "rollback-3", label: "数据回退 Level 3 — 全链路回退", danger: true, disabled: taskDeleted },
-								],
-								onClick: ({ key }) => {
-									if (key === "rebuild") handleRebuildDag();
-									if (key.startsWith("rollback-")) openRollback(Number(key.slice("rollback-".length)));
-								},
-							}}
+						<Button
+							danger
+							icon={<DeleteOutlined />}
+							loading={operation === "delete"}
+							disabled={taskDeleted || operation !== null}
+							onClick={handleDelete}
+							data-testid="platform-access-delete"
 						>
-							<Button loading={operation === "rebuildDag"}>更多操作</Button>
-						</Dropdown>
+							删除计划
+						</Button>
 						<Button
 							icon={<ReloadOutlined />}
 							onClick={() => void loadDetail()}
@@ -803,32 +797,17 @@ export default function AccessPlanDetailPage() {
 				items={[
 					{ key: "overview", label: "概览", children: overview },
 					{ key: "history", label: "运行历史", children: <ExecutionHistoryTable taskId={taskId} /> },
-					{ key: "drift", label: "结构漂移", children: <AccessStructureDriftPanel task={task} /> },
 					{
 						key: "quality",
 						label: inferAccessKind(task) === "file" ? "文件预检" : "异常数据",
 						children: (
-							<AccessQualityPanel
-								task={task}
-								latestExecution={latestExecution}
-								onTaskChanged={() => loadDetail()}
-							/>
+							<AccessQualityPanel task={task} latestExecution={latestExecution} onTaskChanged={() => loadDetail()} />
 						),
 					},
 					{ key: "admission", label: "密级准入", children: admission },
 					{ key: "changes", label: "变更记录", children: changeLog },
 				]}
 			/>
-
-			{rollbackRequest?.taskId === taskId ? (
-				<RollbackImpactModal
-					key={`access-plan-rollback-${taskId}`}
-					open={rollbackOpen}
-					request={rollbackRequest}
-					onClose={closeRollback}
-					onSuccess={() => void loadDetail()}
-				/>
-			) : null}
 		</div>
 	);
 }

@@ -1,7 +1,7 @@
 # T01：接入 dbt ZIP 来源模式与安全 inspect
 
-**优先级**：P0  
-**状态**：DRAFT  
+**优先级**：P0
+**状态**：CODE_COMPLETE
 **依赖**：F0/T02、F1/T02
 
 ## 目标

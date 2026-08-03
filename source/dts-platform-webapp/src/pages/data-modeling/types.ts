@@ -6,15 +6,3 @@ export type DataModelingRoute = {
 	title: string;
 	description: string;
 };
-
-export type DemoRow = Record<string, string | number>;
-
-export type TableColumn = {
-	key: string;
-	title: string;
-	width?: number;
-};
-
-export type WorkspacePageProps = {
-	route: DataModelingRoute;
-};

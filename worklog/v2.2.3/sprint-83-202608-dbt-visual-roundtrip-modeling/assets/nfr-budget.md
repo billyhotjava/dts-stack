@@ -21,10 +21,10 @@
 | 租户 | 所有 project/model/import run/draft/candidate 查询强制 server-side tenant | 双租户 IT；越权 403/404 且不泄露 checksum | F5/T03 | GAP |
 | 审计 | 100% 重要动作进入分类正确的公共审计；SQL/ZIP/secret 正文为 0 | PostgreSQL IT + dts-admin ingest 断言动作、stage、脱敏 | F5/T02 | GAP |
 | 漂移 | accepted base/current Implementation/incoming 技术 checksum 按三方矩阵处理；ModelSpec ETag 变化只触发映射重验，任何变化均不得静默覆盖 | 参数化 IT 断言技术双边分歧为 CONFLICT、业务语义保留、映射失效为 BLOCKED_REMAP，当前修订不变 | F1/T05、F3/T05 | GAP |
-| 兼容 | Chrome 95；dbt 拆分 INSPECT/IMPORT/MATERIALIZATION 三轴；只有精确 Core+adapter package+数据源+image digest 可标记 CERTIFIED；未认证 fail-closed | H83-01/RT-01 固定依赖锁、`pip check`、`dbt --version`、digest 与真实 PostgreSQL parse/compile/build/run/relation evidence；FX 参数化三轴；客户包单独标记 CUSTOMER-VALIDATION | H83-01、F0/T02、F0/T05、F6/T01～T04 | GAP/NOT_CERTIFIED |
+| 兼容 | Chrome 95；dbt 拆分 INSPECT/IMPORT/MATERIALIZATION 三轴；只有精确 Core+adapter package+数据源+image digest 可标记 CERTIFIED；未认证 fail-closed | H83-01/RT-01 固定依赖锁、`pip check`、`dbt --version`、digest 与真实 PostgreSQL parse/compile/build/run/relation evidence；FX 参数化三轴；客户包单独标记 CUSTOMER-VALIDATION | H83-01、F0/T02、F0/T05、F6/T01～T04 | PASS_EVIDENCE/E2E_PENDING |
 
 ## 未达标项处置
 
-- 工程超时初始预算由 RT-01/FX 的实测 P95 冻结；客户性能秒数和兼容分布只由 CUSTOMER-VALIDATION 画像确认。当前镜像 Core 与标签不一致，首个 PostgreSQL certification profile 必须先通过 H83-01 的精确依赖锁和真实运行验证。
+- 工程超时初始预算由 RT-01/FX 的实测 P95 冻结；客户性能秒数和兼容分布只由 CUSTOMER-VALIDATION 画像确认。历史镜像 Core 与标签不一致的缺口已由 H83-01/F0-T05 以精确依赖锁和认证 derivative 收口；生产激活仍待 F6。
 - 任何 `GAP` 行未绑定并通过可执行检查前，对应实现 Task 不得进入 DONE。
 - 不通过放宽 ZIP/SQL/图限制来迁就未知客户包；先画像，再单独评审容量变化。
