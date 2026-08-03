@@ -363,13 +363,19 @@ public class JdbcMetadataService {
 
     private List<TableMeta> readTables(DatabaseMetaData meta, String schema, String table, int limit) throws SQLException {
         List<TableMeta> tables = new ArrayList<>();
-        try (ResultSet rs = meta.getTables(null, schema, table, new String[] { "TABLE" })) {
+        boolean databaseIsCatalog = usesCatalogForDatabase(meta);
+        String catalog = databaseIsCatalog ? schema : null;
+        String schemaPattern = databaseIsCatalog ? null : schema;
+        try (ResultSet rs = meta.getTables(catalog, schemaPattern, table, new String[] { "TABLE" })) {
             while (rs.next()) {
                 String tableName = rs.getString("TABLE_NAME");
                 if (!StringUtils.hasText(tableName)) {
                     continue;
                 }
                 String tableSchema = rs.getString("TABLE_SCHEM");
+                if (!StringUtils.hasText(tableSchema)) {
+                    tableSchema = rs.getString("TABLE_CAT");
+                }
                 String type = rs.getString("TABLE_TYPE");
                 tables.add(new TableMeta(tableSchema, tableName, type));
                 if (tables.size() >= limit) {
@@ -378,6 +384,15 @@ public class JdbcMetadataService {
             }
         }
         return tables;
+    }
+
+    private boolean usesCatalogForDatabase(DatabaseMetaData meta) throws SQLException {
+        String productName = normalize(meta.getDatabaseProductName());
+        if (!StringUtils.hasText(productName)) {
+            return false;
+        }
+        String normalized = productName.toLowerCase(Locale.ROOT);
+        return normalized.contains("mysql") || normalized.contains("mariadb");
     }
 
     private ClassLoader resolveDriverClassLoader(JdbcConnectionInfo info) {

@@ -868,7 +868,18 @@ class IngestionTaskAPI {
 	 */
 	async getLatestExecution(taskId: number): Promise<IngestionExecutionDTO | null> {
 		try {
-			return await api.get({ url: `/ingestion/tasks/${taskId}/executions/latest` });
+			const response = await api.get<
+				IngestionExecutionDTO | { status: number | string; data: IngestionExecutionDTO | null }
+			>({
+				url: `/ingestion/tasks/${taskId}/executions/latest`,
+				_acceptedEnvelopeStatuses: [404],
+				_returnEnvelope: true,
+				_skipErrorToast: true,
+			} as any);
+			if (response && typeof response === "object" && "data" in response && "status" in response) {
+				return Number(response.status) === 404 ? null : response.data;
+			}
+			return response;
 		} catch (error: any) {
 			if (error.response?.status === 404) {
 				return null;
