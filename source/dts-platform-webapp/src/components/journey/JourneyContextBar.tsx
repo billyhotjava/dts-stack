@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Button, Card, Space, Tag, Typography } from "antd";
 import { useRouter } from "@/routes/hooks";
 import { cn } from "@/utils";
@@ -6,8 +5,6 @@ import {
 	JOURNEY_CONTEXT_PARAM_KEYS,
 	JOURNEY_CONTEXT_PARAM_LABELS,
 	buildJourneyParamClearUrl,
-	buildJourneyUrl,
-	journeyJoinDismissStorageKey,
 	resolveJourneyBarMode,
 	type DataProductJourneyStageKey,
 	type JourneyContextParamKey,
@@ -56,50 +53,9 @@ export function JourneyContextBar({ stage, className, validations }: JourneyCont
 	const clearParam = (key: JourneyContextParamKey) => {
 		router.push(buildJourneyParamClearUrl(stageState.route, context.params as Record<string, string>, key));
 	};
-	const [joinDismissed, setJoinDismissed] = useState(() => {
-		try {
-			return typeof window !== "undefined" && window.sessionStorage.getItem(journeyJoinDismissStorageKey(stage)) === "1";
-		} catch {
-			return false;
-		}
-	});
-	const dismissJoinHint = () => {
-		setJoinDismissed(true);
-		try {
-			window.sessionStorage.setItem(journeyJoinDismissStorageKey(stage), "1");
-		} catch {
-			// sessionStorage 不可用时仅在本次渲染周期内关闭。
-		}
-	};
-	const barMode = resolveJourneyBarMode(context.enabled, joinDismissed);
+	const barMode = resolveJourneyBarMode(context.enabled);
 
 	if (barMode === "hidden") return null;
-	if (barMode === "joinable") {
-		return (
-			<div
-				className={cn(
-					"flex flex-wrap items-center justify-between gap-2 rounded border border-dashed border-gray-200 bg-gray-50 px-3 py-1.5 text-sm",
-					className,
-				)}
-				data-testid="journey-join-hint"
-			>
-				<Text type="secondary">端到端旅程</Text>
-				<Space size={4}>
-					<Button
-						size="small"
-						type="link"
-						data-testid="journey-join-enter"
-						onClick={() => router.push(buildJourneyUrl(stageState.route))}
-					>
-						进入旅程
-					</Button>
-					<Button size="small" type="text" data-testid="journey-join-dismiss" onClick={dismissJoinHint}>
-						×
-					</Button>
-				</Space>
-			</div>
-		);
-	}
 
 	return (
 		<Card

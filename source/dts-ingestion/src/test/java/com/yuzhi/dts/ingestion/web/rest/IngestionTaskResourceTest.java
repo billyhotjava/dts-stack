@@ -44,6 +44,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.time.Instant;
+import java.sql.SQLException;
 import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.task.TaskRejectedException;
@@ -605,6 +606,46 @@ class IngestionTaskResourceTest {
             .andExpect(jsonPath("$.status").value(400))
             .andExpect(jsonPath("$.message").value("请求参数错误"))
             .andExpect(jsonPath("$.code").value("HTTP_400"));
+    }
+
+    @Test
+    void discoverTables_returnsSafeActionableAuthenticationFailure() throws Exception {
+        UUID sourceId = UUID.fromString("11111111-2222-3333-4444-555555555555");
+        JdbcMetadataService.JdbcConnectionInfo connectionInfo = new JdbcMetadataService.JdbcConnectionInfo(
+            "jdbc:mysql://database.example:3306/app",
+            "sensitive-user",
+            "sensitive-password",
+            null,
+            null,
+            Map.of()
+        );
+        when(ingestionSourceResolver.resolve(eq(sourceId), anyList()))
+            .thenReturn(new IngestionSourceResolver.ResolvedSource("mysqlreader", Map.of(), null));
+        when(ingestionSourceResolver.resolveJdbcInfo(sourceId)).thenReturn(connectionInfo);
+        when(jdbcMetadataService.listTables(eq(connectionInfo), eq(null), eq(null), eq(0)))
+            .thenThrow(
+                JdbcMetadataService.MetadataDiscoveryException.authenticationFailure(
+                    new SQLException("Access denied for sensitive-user; password=sensitive-password", "28000", 1045)
+                )
+            );
+
+        String response = mockMvc.perform(post("/api/ingestion/metadata/tables")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "source": {"dataSourceId": "11111111-2222-3333-4444-555555555555"},
+                      "filter": {"limit": 0, "includeColumns": false}
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(502))
+            .andExpect(jsonPath("$.message").value("数据库认证失败，请检查用户名、密码及来源 IP 授权"))
+            .andExpect(jsonPath("$.code").value("JDBC_METADATA_AUTH_FAILED"))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+        assertThat(response).doesNotContain("sensitive-user", "sensitive-password", "Access denied");
     }
 
     @Test

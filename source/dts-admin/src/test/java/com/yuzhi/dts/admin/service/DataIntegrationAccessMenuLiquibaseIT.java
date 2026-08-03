@@ -37,6 +37,8 @@ class DataIntegrationAccessMenuLiquibaseIT {
         "config/liquibase/changelog/20260731-03a_data_integration_access_menu_audit_width_prelude.xml";
     private static final String SNAPSHOT_WIDTH_CHANGELOG =
         "config/liquibase/changelog/20260731-03b_data_integration_access_menu_snapshot_width_prelude.xml";
+    private static final String RESOURCE_ROOT_BOOTSTRAP_CHANGELOG =
+        "config/liquibase/changelog/20260731-03c_data_integration_resource_root_bootstrap.xml";
     private static final String LEGACY_CHANGELOG =
         "config/liquibase/changelog/20260731-04_data_integration_access_menu_convergence.xml";
     private static final String CHANGELOG =
@@ -59,6 +61,7 @@ class DataIntegrationAccessMenuLiquibaseIT {
     private static final long EXISTING_DATABASE_ACCESS_ID = 19L;
     private static final long EXISTING_RUNTIME_ID = 20L;
     private static final long DUPLICATE_RUNTIME_ID = 21L;
+    private static final long PARTIAL_TREE_ROOT_ID = 90L;
 
     @Container
     private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17.4")
@@ -148,6 +151,40 @@ class DataIntegrationAccessMenuLiquibaseIT {
         assertThat(lastModifiedBy(PREDELETED_CONNECTORS_ID)).isEqualTo("fixture");
         assertThat(allRolesOnActiveAccessMenus())
             .doesNotContain("ROLE_PARENT", "ROLE_STALE_CHANGES", "ROLE_STALE_DEFAULTS", "ROLE_STALE_CONNECTORS");
+    }
+
+    @Test
+    void missingResourceRootInPartialFreshTreeDoesNotBlockFrozenConvergence() throws Exception {
+        resetToPartialFreshTree();
+
+        applyPreludeChangelog();
+        applySnapshotWidthChangelog();
+        applyResourceRootBootstrapChangelog();
+        applyLegacyChangelog();
+
+        long resourceId = longValue(
+            "select id from portal_menu where parent_id is null and deleted = false " +
+            "and metadata::jsonb ->> 'key' = 'resource'"
+        );
+        assertThat(menuName(resourceId)).isEqualTo("sys.nav.portal.dataIntegration");
+        assertThat(parentId(activeMenuId("sys.nav.portal.resourceAccessOverview"))).isEqualTo(resourceId);
+        assertThat(activeMenuId("sys.nav.portal.studioDataModeling")).isEqualTo(PARTIAL_TREE_ROOT_ID);
+    }
+
+    @Test
+    void rollbackAfterFrozenConvergenceRestoresPartialFreshTree() throws Exception {
+        resetToPartialFreshTree();
+
+        applyPreludeChangelog();
+        applySnapshotWidthChangelog();
+        applyResourceRootBootstrapChangelog();
+        applyLegacyChangelog();
+        rollbackLegacyChangelog();
+        rollbackResourceRootBootstrapChangelog();
+
+        assertThat(count("portal_menu", "true")).isEqualTo(1L);
+        assertThat(activeMenuId("sys.nav.portal.studioDataModeling")).isEqualTo(PARTIAL_TREE_ROOT_ID);
+        assertThat(count("portal_menu", "metadata::jsonb ->> 'sectionKey' = 'resource'")).isZero();
     }
 
     @Test
@@ -564,6 +601,25 @@ class DataIntegrationAccessMenuLiquibaseIT {
         insertVisibility(101L, SOURCES_ID, "ROLE_SOURCES", "source.read", "INTERNAL");
     }
 
+    private void resetToPartialFreshTree() throws Exception {
+        try (Connection connection = connectionInSchema(); Statement statement = connection.createStatement()) {
+            statement.execute("delete from portal_menu_visibility");
+            statement.execute("delete from portal_menu");
+            statement.execute(
+                """
+                insert into portal_menu (
+                    id, name, path, component, sort_order, metadata, parent_id, icon, security_level, deleted,
+                    created_by, created_date, last_modified_by, last_modified_date
+                ) values (
+                    %d, 'sys.nav.portal.studioDataModeling', 'modeling', null, 1,
+                    '{"key":"modeling","sectionKey":"modeling","titleKey":"sys.nav.portal.studioDataModeling"}',
+                    null, 'fixture', 'GENERAL', false, 'fixture', now(), 'fixture', now()
+                )
+                """.formatted(PARTIAL_TREE_ROOT_ID)
+            );
+        }
+    }
+
     private void insertMenu(long id, Long parentId, String titleKey, String key, boolean deleted) throws Exception {
         String sql =
             "insert into portal_menu (id, name, path, component, sort_order, metadata, parent_id, icon, security_level, deleted, " +
@@ -881,8 +937,20 @@ class DataIntegrationAccessMenuLiquibaseIT {
         runLiquibase(SNAPSHOT_WIDTH_CHANGELOG, liquibase -> liquibase.update(new Contexts(), new LabelExpression()));
     }
 
+    private void applyResourceRootBootstrapChangelog() throws Exception {
+        runLiquibase(RESOURCE_ROOT_BOOTSTRAP_CHANGELOG, liquibase -> liquibase.update(new Contexts(), new LabelExpression()));
+    }
+
     private void applyLegacyChangelog() throws Exception {
         runLiquibase(LEGACY_CHANGELOG, liquibase -> liquibase.update(new Contexts(), new LabelExpression()));
+    }
+
+    private void rollbackLegacyChangelog() throws Exception {
+        runLiquibase(LEGACY_CHANGELOG, liquibase -> liquibase.rollback(1, new Contexts(), new LabelExpression()));
+    }
+
+    private void rollbackResourceRootBootstrapChangelog() throws Exception {
+        runLiquibase(RESOURCE_ROOT_BOOTSTRAP_CHANGELOG, liquibase -> liquibase.rollback(1, new Contexts(), new LabelExpression()));
     }
 
     private void rollbackChangelog() throws Exception {

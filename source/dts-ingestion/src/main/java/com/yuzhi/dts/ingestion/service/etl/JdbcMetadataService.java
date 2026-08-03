@@ -79,6 +79,36 @@ public class JdbcMetadataService {
 
     public record IndexMeta(String name, boolean unique, List<String> columns) {}
 
+    public static final class MetadataDiscoveryException extends RuntimeException {
+
+        private final String code;
+
+        private MetadataDiscoveryException(String code, String message, Throwable cause) {
+            super(message, cause);
+            this.code = code;
+        }
+
+        public static MetadataDiscoveryException authenticationFailure(Throwable cause) {
+            return new MetadataDiscoveryException(
+                "JDBC_METADATA_AUTH_FAILED",
+                "数据库认证失败，请检查用户名、密码及来源 IP 授权",
+                cause
+            );
+        }
+
+        public static MetadataDiscoveryException connectionFailure(Throwable cause) {
+            return new MetadataDiscoveryException(
+                "JDBC_METADATA_CONNECTION_FAILED",
+                "数据库连接失败，请检查地址、端口、网络及数据库服务状态",
+                cause
+            );
+        }
+
+        public String getCode() {
+            return code;
+        }
+    }
+
     public List<TableMeta> listTables(JdbcConnectionInfo info, String schemaPattern, String tablePattern, Integer limit) {
         if (info == null || !StringUtils.hasText(info.jdbcUrl())) {
             return List.of();
@@ -108,9 +138,39 @@ public class JdbcMetadataService {
             }
             return tables;
         } catch (Exception ex) {
-            LOG.warn("Failed to list tables: {}", ex.getMessage());
-            return List.of();
+            SQLException sqlException = findSqlException(ex);
+            boolean authenticationFailure = isAuthenticationFailure(sqlException);
+            LOG.warn(
+                "Failed to list tables category={} sqlState={} vendorCode={} exceptionType={}",
+                authenticationFailure ? "AUTHENTICATION" : "CONNECTION",
+                sqlException == null ? "unknown" : sqlException.getSQLState(),
+                sqlException == null ? 0 : sqlException.getErrorCode(),
+                ex.getClass().getSimpleName()
+            );
+            if (authenticationFailure) {
+                throw MetadataDiscoveryException.authenticationFailure(ex);
+            }
+            throw MetadataDiscoveryException.connectionFailure(ex);
         }
+    }
+
+    private static SQLException findSqlException(Throwable error) {
+        Throwable current = error;
+        for (int depth = 0; current != null && depth < 8; depth++) {
+            if (current instanceof SQLException sqlException) {
+                return sqlException;
+            }
+            current = current.getCause();
+        }
+        return null;
+    }
+
+    private static boolean isAuthenticationFailure(SQLException error) {
+        if (error == null) {
+            return false;
+        }
+        String sqlState = error.getSQLState();
+        return (sqlState != null && sqlState.startsWith("28")) || error.getErrorCode() == 1045;
     }
 
     public List<ColumnMeta> getTableColumns(JdbcConnectionInfo info, String tableName) {

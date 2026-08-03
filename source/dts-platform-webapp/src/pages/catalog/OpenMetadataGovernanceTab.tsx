@@ -140,18 +140,9 @@ export function OpenMetadataGovernanceTab({ assetKey, dataset, onChanged, onOpen
 
 	return (
 		<div className="space-y-4 py-2">
-			<Alert
-				type="info"
-				showIcon
-				message="治理属性保存在 DTS 扩展层"
-				description="OpenMetadata 继续作为技术资产主目录；密级、归属部门、生命周期、权限/脱敏/行过滤引用由 DTS 维护。"
-			/>
 			<div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
 				<div>
 					<div className="font-semibold text-slate-900">不可降级密级事实</div>
-					<div className="mt-1 text-xs text-slate-600">
-						有效密级由来源声明、识别结果、人工下限和全部上游最高密级共同确定，只能升高不能降低。
-					</div>
 				</div>
 				<Descriptions bordered size="small" column={2}>
 					<Descriptions.Item label="来源声明">{classificationText(fact?.declaredLevel)}</Descriptions.Item>

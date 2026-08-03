@@ -535,12 +535,7 @@ export default function DataSearchPage() {
 										)}
 									</div>
 								) : (
-									<Alert
-										type="info"
-										showIcon
-										message="无匹配 assets-v2 资产"
-										description="如果旧数据集有结果但 assets-v2 无结果，请先同步 OpenMetadata 或补资产映射。"
-									/>
+									<div className="py-4 text-sm text-slate-400">无匹配资产</div>
 								),
 							},
 							{

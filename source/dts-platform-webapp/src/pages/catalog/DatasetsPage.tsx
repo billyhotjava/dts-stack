@@ -703,7 +703,6 @@ function AssetLedgerPage() {
 							<div className="mb-2 flex flex-wrap items-center justify-between gap-3">
 								<div>
 									<div className="text-sm font-semibold text-slate-900">资产登记台账</div>
-									<div className="mt-1 text-xs text-slate-500">按登记字段、治理状态、密级和消费动作核验当前资产。</div>
 								</div>
 								<Space size={8}>
 									<Button size="small" onClick={exportLedgerCsv} data-testid="asset-ledger-export">

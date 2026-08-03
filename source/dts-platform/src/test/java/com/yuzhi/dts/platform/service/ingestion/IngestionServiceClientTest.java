@@ -156,6 +156,33 @@ class IngestionServiceClientTest {
     }
 
     @Test
+    void shouldPreserveSafeTableDiscoveryFailureEnvelope() {
+        longServer
+            .expect(requestTo("http://ingestion.test/api/ingestion/metadata/tables"))
+            .andExpect(method(POST))
+            .andRespond(
+                withStatus(HttpStatus.OK)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(
+                        "{" +
+                        "\"status\":502," +
+                        "\"message\":\"数据库认证失败，请检查用户名、密码及来源 IP 授权\"," +
+                        "\"code\":\"JDBC_METADATA_AUTH_FAILED\"," +
+                        "\"data\":null" +
+                        "}"
+                    )
+            );
+
+        ApiResponse<Object> response = client.discoverTables(Map.of("source", Map.of("dataSourceId", UUID.randomUUID())));
+
+        assertThat(response.getStatus()).isEqualTo(502);
+        assertThat(response.getMessage()).isEqualTo("数据库认证失败，请检查用户名、密码及来源 IP 授权");
+        assertThat(response.getCode()).isEqualTo("JDBC_METADATA_AUTH_FAILED");
+        assertThat(response.getData()).isNull();
+        longServer.verify();
+    }
+
+    @Test
     void shouldProxyAccessDefaultsAndTaskRevisionEndpointsWithoutChangingTheirContract() {
         RestTemplate restTemplate = (RestTemplate) ReflectionTestUtils.getField(client, "restTemplate");
         MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).ignoreExpectOrder(true).build();

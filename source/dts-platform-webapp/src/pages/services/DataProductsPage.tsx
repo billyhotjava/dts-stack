@@ -228,12 +228,6 @@ export default function Page() {
 						description={`来源模型：${journeyModelId || "待绑定"} · 来源指标：${journeyMetricId || "待绑定"}；数据产品会优先带入当前数据集。`}
 					/>
 				) : null}
-				<Alert
-					className="mb-4"
-					type="info"
-					showIcon
-					message="数据产品从来源资产、消费方式、版本发布到下线归档形成统一生命周期。"
-				/>
 				<CompactTable rowKey={(record) => record.id} columns={columns} dataSource={products} loading={loading} />
 			</Card>
 

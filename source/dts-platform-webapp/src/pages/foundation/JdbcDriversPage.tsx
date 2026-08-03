@@ -202,13 +202,6 @@ export default function JdbcDriversPage() {
 					</Space>
 				}
 			/>
-			<Alert
-				className="mb-3"
-				type="info"
-				showIcon
-				message="标准连接器无需手动上传驱动"
-				description="连接器目录会自动绑定随包驱动。本页仅供基础设施维护人员补充通用 JDBC、厂商授权驱动或处理版本兼容；普通数据源创建无需进入本页。"
-			/>
 			<Card title="驱动资产">
 			<div className="mb-3 text-xs text-slate-500">
 				默认驱动目录：<Text code>services/dts-platform/drivers</Text>（上传后自动同步到该目录）

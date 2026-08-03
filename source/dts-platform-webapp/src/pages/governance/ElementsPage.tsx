@@ -358,7 +358,6 @@ export default function ElementsPage({ embedded = false }: ElementsPageProps = {
 				<div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
 					<div>
 						<div className="font-semibold text-slate-950">数据元</div>
-						<div className="mt-1 text-xs text-slate-500">维护字段标准正文、稳定版本和引用关系。</div>
 					</div>
 					{headerActions}
 				</div>
@@ -395,9 +394,6 @@ export default function ElementsPage({ embedded = false }: ElementsPageProps = {
 					}
 				/>
 			) : null}
-			<div className="rounded-md border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
-				数据元是模型字段的全局标准正文；模型字段只保存稳定 ID 和版本引用，通过引用关系可以查看实际使用位置。
-			</div>
 			{standardPackageApplied ? (
 				<Alert
 					type="success"

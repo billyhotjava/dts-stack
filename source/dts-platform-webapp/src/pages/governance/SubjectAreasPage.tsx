@@ -631,9 +631,6 @@ export default function SubjectAreasPage() {
 											<div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-4">
 												<div>
 													<div className="font-medium text-slate-900">当前范围：{activeDomain.name}</div>
-													<div className="mt-1 text-sm text-slate-500">
-														从业务分类、数据表和已有模型开始设计明细表与维度表。
-													</div>
 												</div>
 												<Button type="primary" onClick={continueLogicalModel}>
 													继续逻辑模型
@@ -759,21 +756,6 @@ export default function SubjectAreasPage() {
 									}
 									details={
 										<Card data-testid="canonical-plan-handoff" title="建设规划归属">
-											<Alert
-												showIcon
-												type="info"
-												message="业务分类是全局目录"
-												description={
-													returnPlanId
-														? "此处只维护分类正文；分类是否纳入建设范围、确认状态和数仓分层由当前建设规划统一管理。"
-														: "此处只维护分类正文。使用分类进入模型设计前，请先创建或选择建设规划。"
-												}
-												action={
-													<Button type="primary" onClick={returnToPlanning}>
-														{returnPlanId ? "返回建设计划" : "前往建设规划"}
-													</Button>
-												}
-											/>
 										</Card>
 									}
 									governance={

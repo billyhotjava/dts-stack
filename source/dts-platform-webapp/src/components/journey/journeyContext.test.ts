@@ -3,7 +3,6 @@ import {
 	buildJourneyParamClearUrl,
 	extractJourneyContextParams,
 	JOURNEY_CONTEXT_PARAM_KEYS,
-	journeyJoinDismissStorageKey,
 	resolveJourneyBarMode,
 } from "./journeyContext";
 
@@ -60,14 +59,8 @@ describe("journey context params utilities", () => {
 });
 
 describe("journey bar mode", () => {
-	it("prefers journey mode, then joinable, then hidden after dismissal", () => {
-		expect(resolveJourneyBarMode(true, false)).toBe("journey");
-		expect(resolveJourneyBarMode(true, true)).toBe("journey");
-		expect(resolveJourneyBarMode(false, false)).toBe("joinable");
-		expect(resolveJourneyBarMode(false, true)).toBe("hidden");
-	});
-
-	it("scopes the dismiss memory per stage", () => {
-		expect(journeyJoinDismissStorageKey("modeling")).not.toBe(journeyJoinDismissStorageKey("metrics"));
+	it("renders only for an explicitly active journey context", () => {
+		expect(resolveJourneyBarMode(true)).toBe("journey");
+		expect(resolveJourneyBarMode(false)).toBe("hidden");
 	});
 });

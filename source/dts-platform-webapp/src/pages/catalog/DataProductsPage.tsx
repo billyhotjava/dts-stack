@@ -416,12 +416,6 @@ export default function DataProductsPage() {
 				destroyOnClose
 			>
 				<Form form={form} layout="vertical" className="mt-4">
-					<Alert
-						type="info"
-						showIcon
-						className="mb-4"
-						message="数据产品应明确成员资产、核心指标、负责人、刷新 SLA 和消费边界；发布前仍需处理资产治理缺口与权限审批。"
-					/>
 					<Form.Item
 						name="name"
 						label="产品名称"

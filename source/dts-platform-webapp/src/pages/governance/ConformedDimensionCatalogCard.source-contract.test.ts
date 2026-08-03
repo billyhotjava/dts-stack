@@ -18,6 +18,5 @@ test("optional templates are isolated in a drawer and require explicit installat
 	assert.match(source, /listModelingTemplatesApi/);
 	assert.match(source, /installModelingTemplateApi/);
 	assert.match(source, /可选模板/);
-	assert.match(source, /安装只会生成候选/);
 	assert.doesNotMatch(source, /PJM|pjm/);
 });

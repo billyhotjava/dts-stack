@@ -205,12 +205,6 @@ export function AccessQualityPanel({
 
 	return (
 		<div style={{ display: "grid", gap: 16 }}>
-			<Alert
-				type="info"
-				showIcon
-				message="数据质量模块是规则唯一事实源"
-				description="接入任务只冻结已发布的数据集规则绑定引用，并记录质量运行编号；规则、版本、SQL、阈值和失败明细仍在数据质量模块维护。"
-			/>
 			<Card title={kind === "file" ? "文件预检" : "异常数据与运行后检查"}>
 				<Descriptions bordered size="small" column={{ xs: 1, md: 2 }}>
 					<Descriptions.Item label="检查阶段">{stage}</Descriptions.Item>

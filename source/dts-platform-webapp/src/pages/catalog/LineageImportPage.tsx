@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { } from "@ant-design/icons";
-import { Alert, Button, Card, Space, Upload } from "antd";
+import { Button, Card, Space, Upload } from "antd";
 import type { UploadProps } from "antd";
 import { toast } from "sonner";
 import { importDbtManifest, syncAddaxLineage } from "@/api/platformApi";
@@ -39,7 +39,6 @@ export default function LineageImportPage() {
 		<div className="space-y-4">
 			<Card title="血缘与影响分析 / 血缘导入">
 				<div className="mb-3"><LineageSectionNav section="import" /></div>
-				<Alert type="info" showIcon message="血缘导入用于平台管理员维护血缘底座。业务人员应在指标发布页查看指标上下文血缘，不需要导入 dbt 或同步 Addax。" />
 			</Card>
 			<Card title="血缘来源同步">
 				<Space wrap>

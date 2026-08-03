@@ -33,13 +33,11 @@ test("metadata management is asset semantic governance, not collection console",
 	assert.match(PAGE_SOURCE, /useCatalogMaintainerAccess/);
 	assert.doesNotMatch(PAGE_SOURCE, /syncCatalogAssetsV2|同步 OpenMetadata/);
 	assert.match(PAGE_SOURCE, /元数据管理/);
-	assert.match(PAGE_SOURCE, /资产语义元数据/);
 	assert.match(PAGE_SOURCE, /当前页待补齐/);
 	assert.match(PAGE_SOURCE, /当前页缺负责人/);
 	assert.match(PAGE_SOURCE, /当前页缺密级/);
 	assert.match(PAGE_SOURCE, /当前页缺主题域/);
 	assert.match(PAGE_SOURCE, /OpenMetadata 未映射/);
-	assert.match(PAGE_SOURCE, /已分级资产仍遵循原有密级和部门权限/);
 	assert.match(PAGE_SOURCE, /资产元数据加载失败/);
 	assert.match(PAGE_SOURCE, /isBlank\(row\.classification\) \? null/);
 	assert.match(PAGE_SOURCE, /updateCatalogAssetV2Governance/);

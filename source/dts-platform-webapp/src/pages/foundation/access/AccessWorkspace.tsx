@@ -316,15 +316,6 @@ export default function AccessWorkspace() {
 			<PageHeader title={KIND_META[kind].label} actions={createAction} />
 			<JourneyContextBar stage="integration" />
 
-			<section className={styles.intro}>
-				<div className={styles.introText}>
-					<h2 className={styles.introTitle}>一处查看现有接入任务</h2>
-					<p className={styles.introDescription}>
-						{KIND_META[kind].description} 页面聚合现有数据源与入湖任务，不改变运行契约。
-					</p>
-				</div>
-			</section>
-
 			{legacyCount > 0 ? (
 				<Alert
 					type="warning"

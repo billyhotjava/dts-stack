@@ -238,11 +238,6 @@ export function AssetActionMatrixPanel({
 
 	return (
 		<Space direction="vertical" size="middle" className="w-full">
-			<Alert
-				type="info"
-				showIcon
-				message="先选择授权对象和资源，再配置 8 类业务动作。变更必须经过他人审批，批准后才进入运行时权限判断。"
-			/>
 			<Card size="small" title="授权范围">
 				<Space wrap align="end">
 					<div>

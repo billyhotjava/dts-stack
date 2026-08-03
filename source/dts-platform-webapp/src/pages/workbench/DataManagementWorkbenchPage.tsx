@@ -483,12 +483,6 @@ export default function Page({
 			</Card>
 
 			<Card title="数仓分层规划" data-testid="warehouse-layer-planning">
-				<Alert
-					type="info"
-					showIcon
-					message="先确定数据进入哪一层，再生成模型和 SQL 草稿"
-					description="分层规划只表达当前阶段和下一步，不会在接入未完成时伪造模型已就绪。"
-				/>
 				<div className="mt-4 grid gap-3 xl:grid-cols-5 md:grid-cols-2">
 					{warehouseLayerPlan.map((layer) => (
 						<div key={layer.key} className="flex min-h-[168px] flex-col justify-between rounded border border-gray-200 p-3">

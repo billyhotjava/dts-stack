@@ -14,7 +14,6 @@ test("subject areas remain a global catalog and never create a browser-only ware
 
 test("category planning actions return to the canonical plan baseline", () => {
 	assert.match(source, /buildWarehousePlanRoute\(returnPlanId, "baseline", \{ tab: "categories" \}\)/);
-	assert.match(source, /业务分类是全局目录/);
 	assert.match(source, /前往建设规划|返回建设计划/);
 });
 

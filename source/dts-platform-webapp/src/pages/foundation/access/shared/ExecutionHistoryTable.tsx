@@ -1016,9 +1016,6 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 							},
 						]}
 					/>
-					<div className="mt-3 text-xs text-muted-foreground">
-						{`该区域是当前最新检查点快照；单次执行的前后水位请看\u201C执行历史 > 水位推进 > 详情\u201D。窗口回填按指定范围补数，不推进当前检查点。`}
-					</div>
 				</Card>
 			) : null}
 			<Modal
@@ -1032,12 +1029,6 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 				width={620}
 			>
 				<Space direction="vertical" size="middle" className="w-full">
-					<Alert
-						showIcon
-						type="info"
-						message="按 [开始时间, 结束时间) 提交一次历史回填"
-						description="回填运行会复用当前任务配置和调度链路，执行成功后不会推进主增量检查点。"
-					/>
 					<Form form={backfillForm} layout="vertical">
 						<Form.Item label="回填窗口" name="window" rules={[{ required: true, message: "请选择回填窗口" }]}>
 							<DatePicker.RangePicker showTime className="w-full" />

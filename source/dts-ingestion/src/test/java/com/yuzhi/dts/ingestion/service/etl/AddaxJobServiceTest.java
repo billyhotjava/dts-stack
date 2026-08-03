@@ -61,23 +61,7 @@ class AddaxJobServiceTest {
             .withProperty("spring.datasource.url", "jdbc:postgresql://localhost:5432/test")
             .withProperty("spring.datasource.username", "test")
             .withProperty("spring.datasource.password", "test");
-        InfraSecurityProperties securityProperties = new InfraSecurityProperties();
-        securityProperties.setEncryptionKey(Base64.getEncoder().encodeToString(
-            "0123456789abcdef0123456789abcdef".getBytes(StandardCharsets.UTF_8)
-        ));
-        securityProperties.setKeyVersion("v1");
-        InfraSettingsCryptoService cryptoService = new InfraSettingsCryptoService(securityProperties);
-        cryptoService.init();
-        addaxJobService = new AddaxJobService(
-            addaxProperties,
-            settingsService,
-            objectMapper,
-            jdbcMetadataService,
-            new AddaxJdbcConfigNormalizer(objectMapper),
-            mockEnv,
-            cryptoService
-        );
-        addaxJobService.setSourceResolver(sourceResolver);
+        addaxJobService = newAddaxJobServiceWithKey(mockEnv, "0123456789abcdef0123456789abcdef");
 
         // Mock settings service
         IngestionSettingsService.SettingsSnapshot settingsSnapshot = new IngestionSettingsService.SettingsSnapshot(
@@ -88,6 +72,30 @@ class AddaxJobServiceTest {
             )
         );
         lenient().when(settingsService.getSettings(anyString())).thenReturn(settingsSnapshot);
+    }
+
+    private AddaxJobService newAddaxJobServiceWithKey(
+        org.springframework.mock.env.MockEnvironment mockEnv,
+        String keyMaterial
+    ) {
+        InfraSecurityProperties securityProperties = new InfraSecurityProperties();
+        securityProperties.setEncryptionKey(Base64.getEncoder().encodeToString(
+            keyMaterial.getBytes(StandardCharsets.UTF_8)
+        ));
+        securityProperties.setKeyVersion("v1");
+        InfraSettingsCryptoService cryptoService = new InfraSettingsCryptoService(securityProperties);
+        cryptoService.init();
+        AddaxJobService service = new AddaxJobService(
+            addaxProperties,
+            settingsService,
+            objectMapper,
+            jdbcMetadataService,
+            new AddaxJdbcConfigNormalizer(objectMapper),
+            mockEnv,
+            cryptoService
+        );
+        service.setSourceResolver(sourceResolver);
+        return service;
     }
 
     @Test
@@ -1265,6 +1273,31 @@ class AddaxJobServiceTest {
         assertThat(first).startsWith(AddaxJobService.SEALED_JOB_PREFIX).doesNotContain("legacy-secret");
         assertThat(Files.readString(legacy)).isEqualTo(first);
         assertThat(addaxJobService.readManagedJob(legacy).toString()).contains("legacy-secret");
+    }
+
+    @Test
+    void startupMigrationShouldNotDecryptAlreadySealedJobsFromRetiredKey() throws Exception {
+        org.springframework.mock.env.MockEnvironment mockEnv = new org.springframework.mock.env.MockEnvironment()
+            .withProperty("spring.datasource.url", "jdbc:postgresql://localhost:5432/test")
+            .withProperty("spring.datasource.username", "test")
+            .withProperty("spring.datasource.password", "test");
+        AddaxJobService retiredKeyService = newAddaxJobServiceWithKey(
+            mockEnv,
+            "abcdef0123456789abcdef0123456789"
+        );
+        Path sealedJob = Path.of(retiredKeyService.saveJobJson(
+            """
+            {"job":{"content":[{"reader":{"parameter":{"password":"retired-secret"}}}],"setting":{}}}
+            """,
+            72L
+        ));
+        String sealedContent = Files.readString(sealedJob);
+        Files.setPosixFilePermissions(sealedJob, PosixFilePermissions.fromString("rw-rw-rw-"));
+
+        assertThatCode(addaxJobService::migrateLegacyPlaintextJobFiles).doesNotThrowAnyException();
+
+        assertThat(Files.readString(sealedJob)).isEqualTo(sealedContent).doesNotContain("retired-secret");
+        assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(sealedJob))).isEqualTo("rw-r-----");
     }
 
     @Test

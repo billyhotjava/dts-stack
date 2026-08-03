@@ -626,12 +626,6 @@ export default function AccessPlanDetailPage() {
 
 	const admission = (
 		<div className={styles.tabStack}>
-			<Alert
-				type="info"
-				showIcon
-				message="密级封存与任务版本是两个独立概念"
-				description={`密级封存版本 ${sealVersion === undefined ? "未记录" : `v${sealVersion}`} 只表示密级依据快照；接入任务版本为 ${revisionLabel}，两者分别审计。`}
-			/>
 			<section className={styles.section}>
 				<TaskAdmissionBasis task={admissionTask || task} />
 			</section>

@@ -581,9 +581,6 @@ export default function StandardPackagePage() {
 					) : null
 				}
 			/>
-			<div className="rounded-md border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
-				下载模板 → 填写业务术语/数据元/公共码表/计量单位 → 上传校验 → 确认应用，支持整包回滚。
-			</div>
 			<Tabs
 				activeKey={activeTab}
 				onChange={setActiveTab}

@@ -2785,21 +2785,20 @@ public class AddaxJobService {
             for (Path path : files.filter(this::isManagedJsonCandidate).toList()) {
                 try {
                     String stored = Files.readString(path, StandardCharsets.UTF_8);
-                    if (!isSealedJobToken(stored)
-                        && !(stored.contains("\"job\"") && stored.contains("\"content\""))) {
+                    if (isSealedJobToken(stored)) {
+                        setSecureJobPermissions(path);
+                        verified++;
+                        continue;
+                    }
+                    if (!(stored.contains("\"job\"") && stored.contains("\"content\""))) {
                         continue;
                     }
                     Map<String, Object> config = parseManagedJob(stored);
                     if (!looksLikeAddaxJob(config)) {
                         continue;
                     }
-                    if (isSealedJobToken(stored)) {
-                        setSecureJobPermissions(path);
-                        verified++;
-                    } else {
-                        writeSealedJob(path, config);
-                        migrated++;
-                    }
+                    writeSealedJob(path, config);
+                    migrated++;
                 } catch (Exception ex) {
                     failures++;
                 }

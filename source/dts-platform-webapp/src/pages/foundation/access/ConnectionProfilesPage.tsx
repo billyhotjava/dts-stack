@@ -227,7 +227,6 @@ export default function ConnectionProfilesPage() {
 					</Space>
 				}
 			/>
-			<Alert type="info" showIcon message="连接配置负责保存可复用的数据库与 API 连接；接入任务负责表、资源、调度和质量策略。" />
 			<div className="rounded-lg bg-white p-4">
 				<Space className="mb-4" wrap>
 					<Input.Search allowClear placeholder="搜索名称、连接器或地址" value={keyword} onChange={(event) => setKeyword(event.target.value)} style={{ width: 320 }} />

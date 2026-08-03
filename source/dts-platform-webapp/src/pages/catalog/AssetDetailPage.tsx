@@ -762,11 +762,6 @@ export default function AssetDetailPage() {
 											</Space>
 										</div>
 									)}
-									<Alert
-										type="info"
-										showIcon
-										message="治理状态用于评估修改影响面：包括授权范围、血缘传播范围、以及后续质量校验范围。"
-									/>
 								</Space>
 							),
 						},

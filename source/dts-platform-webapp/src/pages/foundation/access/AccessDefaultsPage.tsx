@@ -327,16 +327,6 @@ export default function AccessDefaultsPage() {
 					</Button>
 				}
 			/>
-			<p className={styles.pageDescription}>查看数据接入当前生效的版本化策略、运行目标、模板与连接器能力。</p>
-
-			<Alert
-				className={styles.snapshotNotice}
-				type="info"
-				showIcon
-				message="默认策略集中管理，任务保存时固化有效配置"
-				description="此处展示当前激活策略；每个任务仍可覆盖允许的参数，实际运行使用任务 Revision 中固化的有效配置与校验值。"
-			/>
-
 			{loading && !snapshot ? (
 				<div className={styles.section}>
 					<Spin tip="正在读取配置快照…" />

@@ -338,7 +338,6 @@ export default function AssetOverviewPage() {
 						}
 					/>
 					<div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-						<span>统计概览：查找、筛选与处置在台账完成。</span>
 						<button
 							type="button"
 							data-testid="scope-echo"

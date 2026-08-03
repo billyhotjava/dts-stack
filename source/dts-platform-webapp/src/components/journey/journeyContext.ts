@@ -149,16 +149,10 @@ export const buildJourneyUrl = (
 	return `${path}?${params.toString()}`;
 };
 
-export type JourneyBarMode = "journey" | "joinable" | "hidden";
+export type JourneyBarMode = "journey" | "hidden";
 
-// 上下文条渲染模式：旅程内=journey；菜单直达（无 journey 参数）且未被关闭=joinable 提示；关闭后=hidden。
-export const resolveJourneyBarMode = (enabled: boolean, dismissed: boolean): JourneyBarMode => {
-	if (enabled) return "journey";
-	return dismissed ? "hidden" : "joinable";
-};
-
-export const journeyJoinDismissStorageKey = (stage: DataProductJourneyStageKey) =>
-	`dts.journey.join-dismissed.${stage}`;
+// 仅显式旅程上下文渲染控制条；菜单直达页面不再展示旅程加入入口。
+export const resolveJourneyBarMode = (enabled: boolean): JourneyBarMode => (enabled ? "journey" : "hidden");
 
 export const extractJourneyContextParams = (searchParams: URLSearchParams): DataProductJourneyContextParams => {
 	const params = JOURNEY_CONTEXT_PARAM_KEYS.reduce<DataProductJourneyContextParams>((acc, key) => {

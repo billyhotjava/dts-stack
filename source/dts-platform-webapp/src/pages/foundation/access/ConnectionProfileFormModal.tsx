@@ -1064,12 +1064,6 @@ export default function ConnectionProfileFormModal({
 				destroyOnClose
 			>
 				<Space direction="vertical" style={{ width: "100%" }}>
-					<Alert
-						type="info"
-						showIcon
-						message="文件密级将在上传时封存，后续只能升高不能降低"
-						description="文件密级是所有字段的最低密级；字段解析后可对单个字段升密。"
-					/>
 					<Form layout="vertical">
 						<Form.Item label="文件密级" required>
 							<Select

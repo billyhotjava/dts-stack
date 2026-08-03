@@ -202,12 +202,6 @@ export default function Page() {
 						description={`来源模型：${journeyModelId || "待绑定"} · 来源指标：${journeyMetricId || "待绑定"}；新建服务会优先带入 URL 中的数据集上下文。`}
 					/>
 				) : null}
-				<Alert
-					className="mb-4"
-					type="info"
-					showIcon
-					message="API 发布前需绑定数据集、密级、限流与调用验证；查看调用用于验收近 7 日服务表现。"
-				/>
 				<CompactTable rowKey={(record) => record.id} columns={columns} dataSource={services} loading={loading} />
 			</Card>
 

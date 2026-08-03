@@ -39,6 +39,13 @@ test("table discovery invalidates stale selection and ignores superseded results
 	assert.match(DISCOVERY_SOURCE, /数据库连接或筛选条件已变更，请重新发现源表/);
 });
 
+test("table discovery renders safe actionable database connection failures", () => {
+	assert.match(STEP_SOURCE, /discoverError \? <Alert type="warning" showIcon message=\{discoverError\}/);
+	assert.match(WIZARD_SOURCE, /数据库认证失败，请检查用户名、密码及来源 IP 授权/);
+	assert.match(WIZARD_SOURCE, /数据库连接失败，请检查地址、端口、网络及数据库服务状态/);
+	assert.doesNotMatch(WIZARD_SOURCE, /Access denied|using password/i);
+});
+
 test("database plan submission reads preserved values from every wizard step", () => {
 	assert.match(SUBMIT_SOURCE, /await form\.validateFields\(\);/);
 	assert.match(SUBMIT_SOURCE, /const values = form\.getFieldsValue\(true\);/);

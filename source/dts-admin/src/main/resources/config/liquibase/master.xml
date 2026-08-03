@@ -127,6 +127,7 @@
     <include file="config/liquibase/changelog/20260731-03_sprint80_modeling_menu_review.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260731-03a_data_integration_access_menu_audit_width_prelude.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260731-03b_data_integration_access_menu_snapshot_width_prelude.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260731-03c_data_integration_resource_root_bootstrap.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260731-04_data_integration_access_menu_convergence.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260801-01_data_integration_access_menu_convergence_hardening.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260801-02_connection_profiles_and_access_defaults_visibility.xml" relativeToChangelogFile="false"/>

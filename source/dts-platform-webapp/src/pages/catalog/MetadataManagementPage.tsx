@@ -359,27 +359,6 @@ export default function MetadataManagementPage() {
 					) : null
 				}
 			/>
-			<div className="text-sm text-slate-500">
-				资产语义元数据用于补齐业务描述、权属、密级、主题域、生命周期和标准映射；表/字段结构由数据源结构采集提供。
-			</div>
-
-			<Alert
-				type="info"
-				showIcon
-				message="采集与管理已拆分"
-				description="数据集成负责扫描表、字段和索引；数据资产负责补齐业务含义、权属和可消费前置条件。"
-			/>
-			<Alert
-				type={canManage ? "warning" : "info"}
-				showIcon
-				message={canManage ? "治理待办视图" : "只读资产视图"}
-				description={
-					canManage
-						? "当前视图允许目录维护人员发现缺密级资产并补齐治理属性；已分级资产仍遵循原有密级和部门权限。"
-						: "当前账号可查看已满足访问条件的资产；治理属性维护和结构采集仅对目录维护角色开放。"
-				}
-			/>
-
 			<div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
 				<MetricTile
 					icon={<DatabaseOutlined />}

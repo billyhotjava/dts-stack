@@ -38,6 +38,7 @@ import {
 	loadAccessPlanEdit,
 	loadAccessPlanInitialization,
 	resolveUserClassificationRank,
+	safeAccessPlanErrorMessage,
 	saveAccessPlan,
 } from "./useAccessPlanWizard";
 
@@ -79,6 +80,23 @@ describe("resolveUserClassificationRank", () => {
 		expect(resolveUserClassificationRank({ maxDataLevel: "SECRET" })).toBe(2);
 		expect(resolveUserClassificationRank({ person_level: "INTERNAL" })).toBeUndefined();
 		expect(resolveUserClassificationRank({ person_level: "UNKNOWN" })).toBeUndefined();
+	});
+});
+
+describe("safeAccessPlanErrorMessage", () => {
+	it("shows the safe database authentication guidance and rejects raw JDBC details", () => {
+		expect(
+			safeAccessPlanErrorMessage(
+				new Error("数据库认证失败，请检查用户名、密码及来源 IP 授权"),
+				"源表发现失败",
+			),
+		).toBe("数据库认证失败，请检查用户名、密码及来源 IP 授权");
+		expect(
+			safeAccessPlanErrorMessage(
+				new Error("Access denied for user 'sensitive-user' (using password: YES)"),
+				"源表发现失败",
+			),
+		).toBe("源表发现失败");
 	});
 });
 

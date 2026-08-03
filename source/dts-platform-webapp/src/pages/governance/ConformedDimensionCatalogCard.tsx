@@ -324,13 +324,6 @@ export function ConformedDimensionCatalogCard({
 			</Modal>
 
 			<Drawer open={templateOpen} title="可选模板" width={520} onClose={() => setTemplateOpen(false)}>
-				<Alert
-					showIcon
-					type="info"
-					message="模板不会改变产品的通用模型"
-					description="安装只会生成候选，不会自动进入总线矩阵或后续建模；必须由当前主题域负责人确认。"
-					className="mb-4"
-				/>
 				<List
 					loading={templateLoading}
 					dataSource={templates}

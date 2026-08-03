@@ -941,9 +941,6 @@ export default function ReferenceCodesPage() {
 					</Space>
 				}
 			>
-				<div className="mb-3 rounded-md border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
-					dbt Seeds 同步把公共码表写入 dbt 项目证据面；模型字段绑定码表后，发布门禁会检查 seed 是否已同步。
-				</div>
 				<div className="mb-3 flex flex-wrap items-center gap-2">
 					<Input.Search
 						placeholder="搜索码表..."

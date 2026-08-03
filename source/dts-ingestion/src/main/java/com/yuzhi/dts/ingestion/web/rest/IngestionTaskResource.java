@@ -766,7 +766,12 @@ public class IngestionTaskResource {
         Integer limit = filter == null ? null : filter.limit();
         boolean includeColumns = filter != null && Boolean.TRUE.equals(filter.includeColumns());
 
-        List<JdbcMetadataService.TableMeta> tables = jdbcMetadataService.listTables(info, schema, tablePattern, limit);
+        List<JdbcMetadataService.TableMeta> tables;
+        try {
+            tables = jdbcMetadataService.listTables(info, schema, tablePattern, limit);
+        } catch (JdbcMetadataService.MetadataDiscoveryException ex) {
+            return new ApiResponse<>(HttpStatus.BAD_GATEWAY.value(), ex.getMessage(), ex.getCode(), null);
+        }
         List<TableInfo> payload = new java.util.ArrayList<>();
         for (JdbcMetadataService.TableMeta table : tables) {
             List<ColumnInfo> columns = List.of();

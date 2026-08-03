@@ -68,14 +68,6 @@ test("data source form uses connector-owned drivers and keeps upload selection f
 	assert.match(DRIVER_NOTICE_SOURCE, /通用 JDBC 驱动/);
 });
 
-test("JDBC driver library is presented as a maintainer exception instead of a standard setup step", () => {
-	assert.match(JDBC_DRIVERS_SOURCE, /标准连接器无需手动上传驱动/);
-	assert.match(JDBC_DRIVERS_SOURCE, /基础设施维护人员/);
-	assert.match(JDBC_DRIVERS_SOURCE, /通用 JDBC/);
-	assert.match(JDBC_DRIVERS_SOURCE, /厂商授权驱动/);
-	assert.match(JDBC_DRIVERS_SOURCE, /版本兼容/);
-});
-
 test("api data source form keeps auth providers aligned with runtime contract", () => {
 	assert.match(INGESTION_API_SOURCE, /enabled\?:\s*boolean/);
 	assert.match(CONNECTION_PROFILE_FORM_SOURCE, /disabled:\s*item\.enabled === false/);
@@ -112,7 +104,6 @@ test("api connection test only submits a managed id and a strict relative GET re
 });
 
 test("connection profiles stay separate from access plans", () => {
-	assert.match(CONNECTION_PROFILES_SOURCE, /连接配置负责保存可复用的数据库与 API 连接/);
 	assert.doesNotMatch(CONNECTION_PROFILES_SOURCE, /createIngestionTask|ODS 预检|同步任务生成/);
 });
 

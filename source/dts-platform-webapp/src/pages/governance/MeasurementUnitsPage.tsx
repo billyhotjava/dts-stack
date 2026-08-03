@@ -1,5 +1,4 @@
 import {
-	Alert,
 	Button,
 	Card,
 	Descriptions,
@@ -210,13 +209,6 @@ export default function MeasurementUnitsPage() {
 					</Button>
 				</Space>
 			</div>
-			<Alert
-				className="mb-4"
-				showIcon
-				type="info"
-				message="换算由专业模块显式维护"
-				description="conversionFactor 仅描述相对基准单位的关系；建模页面不会做隐式单位换算。"
-			/>
 			<Card>
 				<Table
 					rowKey="id"

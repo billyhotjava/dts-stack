@@ -196,7 +196,6 @@ const validateCronExpression = (value?: string) => {
 
 export default function MetadataPage() {
 	const [form] = Form.useForm();
-	const [helpOpen, setHelpOpen] = useState(false);
 	const [pipelines, setPipelines] = useState<SyncPipeline[]>([]);
 	const [selectedPipelineId, setSelectedPipelineId] = useState<string | undefined>();
 	const [runs, setRuns] = useState<SyncRun[]>([]);
@@ -676,7 +675,6 @@ export default function MetadataPage() {
 				extra={
 					<Space>
 						<Button onClick={() => void loadPipelines()}>刷新任务</Button>
-						<Button onClick={() => setHelpOpen(true)}>使用说明</Button>
 					</Space>
 				}
 			>
@@ -691,11 +689,6 @@ export default function MetadataPage() {
 				</Space>
 			</Card>
 
-			<Alert
-				type="info"
-				showIcon
-				message="采集任务会同步表/字段/索引等结构信息，供资产门户、质量校验与入湖配置复用。"
-			/>
 
 			<Row gutter={[24, 24]} align="top">
 				<Col xs={24} xl={12}>
@@ -991,23 +984,6 @@ export default function MetadataPage() {
 					pagination={{ defaultPageSize: 10 }}
 				/>
 			</Card>
-
-			<Modal
-				open={helpOpen}
-				title="使用说明"
-				onCancel={() => setHelpOpen(false)}
-				footer={[
-					<Button key="close" onClick={() => setHelpOpen(false)}>
-						关闭
-					</Button>,
-				]}
-			>
-				<div className="space-y-2 text-sm text-slate-600">
-					<div>1. 采集任务来自当前已启用的数据源或主数据连接。</div>
-					<div>2. 触发采集后可在“采集历史”查看执行结果与错误信息。</div>
-					<div>3. 结构采集结果预览来自平台采集或 OpenMetadata 服务。</div>
-				</div>
-			</Modal>
 
 			<Modal
 				open={driftActionOpen}

@@ -12,7 +12,7 @@ type Props = {
 	defaultDestination: DefaultDestinationStatus | null;
 };
 
-export function LandingScheduleStep({ form, kind, editing, targetDataSources, defaultDestination }: Props) {
+export function LandingScheduleStep({ form, kind, targetDataSources, defaultDestination }: Props) {
 	const scheduleType = Form.useWatch("scheduleType", form) || "manual";
 	const syncMode = Form.useWatch("syncMode", form) || "full_refresh";
 	const available = Boolean(
@@ -95,16 +95,6 @@ export function LandingScheduleStep({ form, kind, editing, targetDataSources, de
 					<Switch />
 				</Form.Item>
 			</div>
-			<Alert
-				type="info"
-				showIcon
-				message="接入计划先保存为待准入草稿"
-				description={
-					editing
-						? "保存修改后，当前生效版本继续运行；新草稿完成密级准入后才会生效。"
-						: "数据库、API 和离线文件任务均需先完成密级准入，之后才能手动执行或按调度运行。"
-				}
-			/>
 		</div>
 	);
 }

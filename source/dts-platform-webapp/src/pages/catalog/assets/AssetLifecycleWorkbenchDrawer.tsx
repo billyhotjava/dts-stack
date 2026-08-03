@@ -366,9 +366,6 @@ export function AssetLifecycleWorkbenchDrawer({
 					<div className="mb-3 flex flex-wrap items-center justify-between gap-2">
 						<div>
 							<div className="font-semibold text-slate-900">生命周期时间轴</div>
-							<div className="mt-1 text-xs text-slate-500">
-								创建、存储、使用、共享、归档和销毁均绑定当时的密级快照与审批证据。
-							</div>
 						</div>
 						<Space size={6}>
 							<Tag color={lifecycle.enabled === false ? "default" : "green"}>
@@ -687,12 +684,6 @@ export function AssetLifecycleWorkbenchDrawer({
 						label: "存量迁移",
 						children: (
 							<div className="space-y-4">
-								<Alert
-									type="info"
-									showIcon
-									message="先 dry-run、再分批 apply、最后双读对账和冻结旧降密入口"
-									description="dry-run 只写迁移控制报告，不修改业务表或密级事实。存在缺密级、未知编码或候选降级时，对应记录会被阻断。"
-								/>
 								<Space wrap>
 									<Button
 										type="primary"

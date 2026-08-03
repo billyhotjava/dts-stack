@@ -75,7 +75,6 @@ test("access plan detail routes legacy and explicit edits to the same-kind wizar
 });
 
 test("access plan detail separates the active revision from a pending draft and keeps seal version separate", () => {
-	assert.match(SOURCE, /任务版本/);
 	assert.match(SOURCE, /task\.revisionNumber/);
 	assert.match(SOURCE, /task\.revisionState/);
 	assert.match(SOURCE, /activeRevisionNumber/);

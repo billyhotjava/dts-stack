@@ -51,6 +51,6 @@ test("prototype modeling guidance lives in typed local topics", () => {
 	assert.match(DIMENSIONAL_MODELING, /BackendPendingButton|disabled title="后台阶段接入"/);
 	assert.doesNotMatch(`${DATA_MODELING}\n${DIMENSIONAL_MODELING}`, /pages\/modeling|SqlModelingPage/);
 	assert.doesNotMatch(JOURNEY_BAR, /此页面是数据产品旅程|从工作台开始可获得完整的上下文与下一步引导/);
-	assert.match(JOURNEY_BAR, /journey-join-enter/);
+	assert.doesNotMatch(JOURNEY_BAR, /journey-join-enter|进入旅程/);
 	assert.doesNotMatch(`${LAUNCHER}\n${PAGE}`, /dangerouslySetInnerHTML/);
 });
