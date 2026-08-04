@@ -174,6 +174,37 @@ class IngestionAccessContractServiceTest {
     }
 
     @Test
+    void refreshDraftRuntimeSnapshotShouldReplaceLegacyClassificationEvidenceWithCanonicalPlan() {
+        IngestionTask draftPlan = task(50L, "mysqlreader");
+        draftPlan.setClassificationSeal(objectMapper.createObjectNode().put("sealId", "legacy-seal"));
+        draftPlan.setFieldClassifications(objectMapper.createObjectNode().put("customer_id", "SECRET"));
+        when(revisionRepository.findAllByTaskIdForUpdate(50L)).thenReturn(List.of());
+        when(policyRepository.findFirstByPolicyKeyAndStatusOrderByVersionDesc("GLOBAL", "ACTIVE"))
+            .thenReturn(Optional.of(policy()));
+        when(revisionRepository.save(any(IngestionTaskRevision.class))).thenAnswer(invocation -> {
+            IngestionTaskRevision revision = invocation.getArgument(0);
+            revision.setId(550L);
+            return revision;
+        });
+        IngestionTaskRevision revision = service.recordDraftRevision(draftPlan, null, false);
+        String legacyChecksum = revision.getEffectiveConfigChecksum();
+
+        draftPlan.setClassificationSeal(null);
+        draftPlan.setFieldClassifications(null);
+        when(revisionRepository.findAllByTaskIdForUpdate(50L)).thenReturn(List.of(revision));
+
+        IngestionTaskRevision refreshed = service.refreshDraftRuntimeSnapshot(50L, draftPlan);
+
+        assertThat(refreshed.getClassificationSeal()).isNull();
+        assertThat(refreshed.getFieldClassifications()).isNull();
+        assertThat(refreshed.getTaskSnapshot().has("classificationSeal")).isFalse();
+        assertThat(refreshed.getTaskSnapshot().has("fieldClassifications")).isFalse();
+        assertThat(refreshed.getEffectiveConfig().path("task").has("classificationSeal")).isFalse();
+        assertThat(refreshed.getEffectiveConfig().path("task").has("fieldClassifications")).isFalse();
+        assertThat(refreshed.getEffectiveConfigChecksum()).hasSize(64).isNotEqualTo(legacyChecksum);
+    }
+
+    @Test
     void bindActiveRevisionShouldFreezeExecutionContract() {
         IngestionTask task = task(43L, "excelreader");
         task.setStatus("active");

@@ -22,8 +22,10 @@ export function LandingScheduleStep({ form, kind, targetDataSources, defaultDest
 	return (
 		<div className="space-y-5">
 			<div>
-				<Typography.Title level={4}>策略与准入</Typography.Title>
-				<Typography.Text type="secondary">目标端使用平台托管配置；页面不展示数据库凭据。</Typography.Text>
+				<Typography.Title level={4}>目标与调度</Typography.Title>
+				<Typography.Text type="secondary">
+					保存后配置立即生效；目标端使用平台托管配置，页面不展示数据库凭据。
+				</Typography.Text>
 			</div>
 			<Alert
 				showIcon

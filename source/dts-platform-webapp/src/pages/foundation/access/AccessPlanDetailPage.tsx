@@ -27,8 +27,6 @@ import {
 	resetOwnedSingleFlight,
 } from "./accessSingleFlight";
 import ExecutionHistoryTable from "./shared/ExecutionHistoryTable";
-import { resolveTaskAdmissionState } from "./shared/fileClassificationAdmission.helpers";
-import TaskAdmissionBasis from "./shared/TaskAdmissionBasis";
 
 const CHANGE_TYPE_LABELS: Record<string, string> = {
 	TASK_CREATE: "新建任务",
@@ -139,7 +137,7 @@ const targetTableSummary = (mappings: TableMappingRow[]) => {
 };
 
 const resolveDetailTab = (value: string | null) =>
-	value && ["overview", "history", "quality", "admission", "changes"].includes(value) ? value : "overview";
+	value && ["overview", "history", "quality", "changes"].includes(value) ? value : "overview";
 
 export default function AccessPlanDetailPage() {
 	const { taskId: taskIdParam } = useParams();
@@ -333,37 +331,12 @@ export default function AccessPlanDetailPage() {
 	};
 
 	const taskDeleted = String(task?.status || "").toLowerCase() === "deleted";
-	const { activeRevisionNumber, draftRevisionNumber, hasDraftRevision, canExecuteActiveRevision, executeReason } =
-		resolveAccessRevisionView(task, revisions, revisionsError);
-	const admissionTask = task && hasDraftRevision ? { ...task, status: "draft" } : task;
-	const admissionState = resolveTaskAdmissionState(admissionTask);
-	const showAdmissionAction = hasDraftRevision;
+	const { activeRevisionNumber, hasDraftRevision, canExecuteActiveRevision, executeReason } = resolveAccessRevisionView(
+		task,
+		revisions,
+		revisionsError,
+	);
 	const taskBelongsToRoute = !task || task.id === undefined || Number(task.id) === taskId;
-
-	const handleAdmit = async () => {
-		if (!task || !admissionState.canAdmit) {
-			toast.error(admissionState.reason);
-			return;
-		}
-		const operationTaskId = taskId;
-		const operationOwner = Symbol("access-plan-admit");
-		if (!acquireOwnedSingleFlight(operationLockRef, operationOwner)) return;
-		setOperation("admit");
-		try {
-			await runAccessPlanOperation("admit", operationTaskId, ingestionTaskAPI);
-			if (routeTaskIdRef.current !== operationTaskId || !ownsSingleFlight(operationLockRef, operationOwner)) return;
-			toast.success("密级与准入已完成，任务现在可以执行");
-			setActiveTab("admission");
-			await loadDetail();
-		} catch {
-			if (routeTaskIdRef.current === operationTaskId && ownsSingleFlight(operationLockRef, operationOwner)) {
-				toast.error("密级与准入失败，请检查封存依据后重试");
-			}
-		} finally {
-			const released = releaseOwnedSingleFlight(operationLockRef, operationOwner);
-			if (released && routeTaskIdRef.current === operationTaskId) setOperation(null);
-		}
-	};
 
 	const handleExecute = () => {
 		if (!task || !canExecuteActiveRevision) {
@@ -376,9 +349,9 @@ export default function AccessPlanDetailPage() {
 		const taskName = task.name || `任务 #${operationTaskId}`;
 		const executingDifferentRevision = hasDraftRevision && task.revisionNumber !== activeRevisionNumber;
 		const targetTables = executingDifferentRevision
-			? `以生效版本 R${activeRevisionNumber} 的冻结映射为准`
+			? "以当前有效配置的冻结映射为准"
 			: targetTableSummary(tableMappings);
-		const writeStrategy = executingDifferentRevision ? "以生效版本冻结策略为准" : writeStrategyLabel(task);
+		const writeStrategy = executingDifferentRevision ? "以当前有效配置的冻结策略为准" : writeStrategyLabel(task);
 		Modal.confirm({
 			title: "确认立即执行",
 			width: 620,
@@ -389,17 +362,16 @@ export default function AccessPlanDetailPage() {
 					<Alert
 						type="warning"
 						showIcon
-						message={`任务将按当前生效版本 R${activeRevisionNumber} 写入目标数据湖`}
+						message="任务将按当前有效配置写入目标数据湖"
 						description={
 							executingDifferentRevision
-								? `待准入草稿 R${task.revisionNumber} 不会参与本次执行。`
+								? "尚未完成文件预检的新配置不会参与本次执行。"
 								: "请核对任务、目标表和写入策略；提交后可在运行历史查看进度。"
 						}
 					/>
 					<Descriptions bordered size="small" column={1}>
 						<Descriptions.Item label="任务">{taskName}</Descriptions.Item>
 						<Descriptions.Item label="任务编号">#{operationTaskId}</Descriptions.Item>
-						<Descriptions.Item label="执行生效版本">R{activeRevisionNumber}</Descriptions.Item>
 						<Descriptions.Item label="目标表">{targetTables}</Descriptions.Item>
 						<Descriptions.Item label="写入策略">{writeStrategy}</Descriptions.Item>
 						<Descriptions.Item label="目标类型">{task.destinationType || "未记录"}</Descriptions.Item>
@@ -510,13 +482,6 @@ export default function AccessPlanDetailPage() {
 	}
 
 	const effectiveClassification = task.classificationSeal?.effectiveLevel;
-	const sealVersion = task.classificationSeal?.snapshotVersion;
-	const revisionNumber = Number(task.revisionNumber);
-	const versioned = Number.isInteger(revisionNumber) && revisionNumber > 0;
-	const revisionLabel = versioned
-		? `R${revisionNumber}${task.revisionState === "DRAFT" ? "（待准入草稿）" : ""}`
-		: "未版本化（存量任务）";
-	const activeRevisionLabel = activeRevisionNumber ? `R${activeRevisionNumber}` : "无生效 Revision";
 
 	const overview = (
 		<div className={styles.tabStack}>
@@ -532,7 +497,7 @@ export default function AccessPlanDetailPage() {
 				<Alert
 					type="error"
 					showIcon
-					message="Revision 状态加载失败"
+					message="有效配置状态加载失败"
 					description="无法确认当前生效版本，执行入口已关闭；刷新成功前不会根据任务状态猜测执行能力。"
 				/>
 			) : null}
@@ -547,15 +512,6 @@ export default function AccessPlanDetailPage() {
 					<Descriptions.Item label="任务编号">#{task.id || taskId}</Descriptions.Item>
 					<Descriptions.Item label="接入方式">{task.sourceType || "未记录"}</Descriptions.Item>
 					<Descriptions.Item label="同步模式">{syncModeLabel(task.syncMode)}</Descriptions.Item>
-					<Descriptions.Item label="当前编辑 Revision">
-						<Tag color={versioned ? "blue" : "warning"}>{revisionLabel}</Tag>
-					</Descriptions.Item>
-					<Descriptions.Item label="当前生效 Revision">
-						<Tag color={activeRevisionNumber ? "success" : "warning"}>{activeRevisionLabel}</Tag>
-					</Descriptions.Item>
-					<Descriptions.Item label="编辑版本状态">
-						{versioned ? task.revisionState || "未记录" : "不适用"}
-					</Descriptions.Item>
 					<Descriptions.Item label="源数据源">{task.sourceDataSourceId || "未关联"}</Descriptions.Item>
 					<Descriptions.Item label="目标类型">{task.destinationType || "未记录"}</Descriptions.Item>
 					<Descriptions.Item label="调度表达式">{task.syncSchedule || "手动触发"}</Descriptions.Item>
@@ -595,10 +551,6 @@ export default function AccessPlanDetailPage() {
 							<span>写入行数</span>
 							<strong>{formatNumber(latestExecution.rowsWritten) || "-"}</strong>
 						</div>
-						<div>
-							<span>执行版本</span>
-							<strong>{latestExecution.revisionNumber ? `R${latestExecution.revisionNumber}` : "未记录"}</strong>
-						</div>
 					</div>
 				) : (
 					<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚无运行记录" />
@@ -620,37 +572,6 @@ export default function AccessPlanDetailPage() {
 					pagination={tableMappings.length > 10 ? { pageSize: 10 } : false}
 					locale={{ emptyText: "任务未记录表级映射" }}
 				/>
-			</section>
-		</div>
-	);
-
-	const admission = (
-		<div className={styles.tabStack}>
-			<section className={styles.section}>
-				<TaskAdmissionBasis task={admissionTask || task} />
-			</section>
-			<section className={styles.section}>
-				<div className={styles.sectionHeading}>
-					<div>
-						<h2>密级封存摘要</h2>
-						<p>校验结果由现有密级准入规则计算；校验值与底层封存标识不在界面展示。</p>
-					</div>
-				</div>
-				<Descriptions bordered size="small" column={{ xs: 1, sm: 2, xl: 3 }}>
-					<Descriptions.Item label="有效密级">
-						{effectiveClassification ? (
-							<ClassificationTag value={effectiveClassification} />
-						) : (
-							<Tag color="orange">密级未记录</Tag>
-						)}
-					</Descriptions.Item>
-					<Descriptions.Item label="密级封存版本">
-						{sealVersion === undefined ? "未记录" : `v${sealVersion}`}
-					</Descriptions.Item>
-					<Descriptions.Item label="封存时间">
-						{formatTimestamp(task.classificationSeal?.sealedAt) || "未记录"}
-					</Descriptions.Item>
-				</Descriptions>
 			</section>
 		</div>
 	);
@@ -720,23 +641,9 @@ export default function AccessPlanDetailPage() {
 						>
 							编辑计划
 						</Button>
-						{showAdmissionAction ? (
-							<Tooltip title={admissionState.canAdmit ? undefined : admissionState.reason}>
-								<Button
-									type="primary"
-									loading={operation === "admit"}
-									disabled={!admissionState.canAdmit || operation !== null}
-									onClick={() => void handleAdmit()}
-									data-testid="platform-access-admit"
-								>
-									准入草稿
-									{draftRevisionNumber || task.revisionNumber ? ` R${draftRevisionNumber || task.revisionNumber}` : ""}
-								</Button>
-							</Tooltip>
-						) : null}
 						<Tooltip title={executeReason}>
 							<Button
-								type={showAdmissionAction ? "default" : "primary"}
+								type="primary"
 								loading={operation === "execute"}
 								disabled={taskDeleted || !canExecuteActiveRevision || operation !== null}
 								onClick={() => void handleExecute()}
@@ -769,18 +676,11 @@ export default function AccessPlanDetailPage() {
 			<section className={styles.identityBar}>
 				<div className={styles.identityMain}>
 					<span className={styles.eyebrow}>接入任务 #{task.id || taskId}</span>
-					<p>{task.description || "统一管理接入配置、运行结果、密级准入与变更留痕。"}</p>
+					<p>{task.description || "统一管理接入配置、运行结果、密级信息与变更留痕。"}</p>
 				</div>
 				<div className={styles.identityTags}>
 					{statusTag(task.status)}
-					<Tag color={activeRevisionNumber ? "success" : "warning"}>生效 {activeRevisionLabel}</Tag>
-					{hasDraftRevision ? <Tag color="gold">待准入 {revisionLabel}</Tag> : null}
-					{hasDraftRevision && effectiveClassification ? <Tag color="gold">草稿密级</Tag> : null}
-					{effectiveClassification ? (
-						<ClassificationTag value={effectiveClassification} />
-					) : (
-						<Tag color="orange">密级未记录</Tag>
-					)}
+					{effectiveClassification ? <ClassificationTag value={effectiveClassification} /> : null}
 				</div>
 			</section>
 
@@ -798,7 +698,6 @@ export default function AccessPlanDetailPage() {
 							<AccessQualityPanel task={task} latestExecution={latestExecution} onTaskChanged={() => loadDetail()} />
 						),
 					},
-					{ key: "admission", label: "密级准入", children: admission },
 					{ key: "changes", label: "变更记录", children: changeLog },
 				]}
 			/>

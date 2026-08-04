@@ -24,7 +24,6 @@ import {
 	type WarehousePlanHeader,
 	type WarehousePlanSourceBindingView,
 } from "@/api/warehousePlanApi";
-import { useCatalogMaintainerAccess } from "@/hooks/useModuleManageAccess";
 import { dataModelingPath } from "../navigation";
 import type { DataModelingRoute } from "../types";
 import { Button, PageHeader, RequestState, Status } from "./PrototypePrimitives";
@@ -35,6 +34,7 @@ import {
 	renameMappingRequests,
 } from "./services/modelImportUiState";
 import { normalizeModelingRequestFailure } from "./services/planningProjectionService";
+import { useDataModelingMenuGrant } from "./useDataModelingMenuGrant";
 
 const steps = ["逆向策略", "确认模型信息", "生成模型", "完成"];
 
@@ -64,7 +64,7 @@ const issueText = (
 		: "—";
 
 export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
-	const canMaintain = useCatalogMaintainerAccess();
+	const canMaintain = useDataModelingMenuGrant();
 	const navigate = useNavigate();
 	const [searchParams, setSearchParams] = useSearchParams();
 	const restoredRunId = searchParams.get("importRunId") || "";
@@ -104,7 +104,7 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 			if (requestEpoch.current !== epoch) return;
 			setPlans([]);
 			setPlanId("");
-			setFailure(normalizeModelingRequestFailure(error, "建设计划读取失败，无法建立导入上下文。"));
+			setFailure(normalizeModelingRequestFailure(error, "模型导入上下文读取失败。"));
 		} finally {
 			if (requestEpoch.current === epoch) setLoading(false);
 		}
@@ -175,7 +175,7 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 			.catch((error) => {
 				if (requestEpoch.current !== epoch) return;
 				setPlanContext({ domains: [], sources: [] });
-				setFailure(normalizeModelingRequestFailure(error, "建设计划的分类或来源基线读取失败。"));
+				setFailure(normalizeModelingRequestFailure(error, "数据域或来源基线读取失败。"));
 			});
 	}, [planId]);
 
@@ -392,7 +392,7 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 		<main className="dmx-page dmx-reverse-page">
 			<PageHeader description={route.description} title="逆向建模" trail="数据建模 / 维度建模" />
 			{loading ? (
-				<RequestState description="正在读取可用建设计划。" kind="loading" title="正在准备逆向建模" />
+				<RequestState description="正在准备模型导入上下文。" kind="loading" title="正在准备逆向建模" />
 			) : !started ? (
 				<section className="dmx-reverse-entry">
 					<div className="dmx-reverse-mark">
@@ -408,7 +408,9 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 					>
 						<Play size={16} /> 快速开始
 					</Button>
-					{!plans.length ? <p className="dmx-inline-error">没有可用建设计划，需先在数仓规划中建立计划。</p> : null}
+					{!plans.length ? (
+						<p className="dmx-inline-error">当前环境没有可用的模型导入上下文，请联系管理员初始化。</p>
+					) : null}
 					{!canMaintain ? <p className="dmx-capability-note">当前账号只有查看权限，不能发起 dbt 包导入。</p> : null}
 				</section>
 			) : (
@@ -430,7 +432,7 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 							/>
 						) : null}
 						{step === 0 ? (
-							<StrategyStep archive={archive} onArchive={setArchive} onPlan={setPlanId} planId={planId} plans={plans} />
+							<StrategyStep archive={archive} onArchive={setArchive} />
 						) : step === 1 && inspection ? (
 							<ConfirmStep
 								domainMappings={domainMappings}
@@ -548,15 +550,9 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 function StrategyStep({
 	archive,
 	onArchive,
-	onPlan,
-	planId,
-	plans,
 }: {
 	archive: File | null;
 	onArchive: (file: File | null) => void;
-	onPlan: (id: string) => void;
-	planId: string;
-	plans: WarehousePlanHeader[];
 }) {
 	return (
 		<>
@@ -576,16 +572,6 @@ function StrategyStep({
 					</span>
 				</button>
 			</div>
-			<label className="dmx-reverse-plan">
-				<span className="required">目标建设计划</span>
-				<select onChange={(event) => onPlan(event.target.value)} value={planId}>
-					{plans.map((plan) => (
-						<option key={plan.id} value={plan.id}>
-							{plan.name} · {plan.code}
-						</option>
-					))}
-				</select>
-			</label>
 			<div className="dmx-dbt-drop">
 				<FileArchive size={30} />
 				<strong>选择 dbt 项目 ZIP</strong>
@@ -652,7 +638,7 @@ function ConfirmStep({
 			<div className="dmx-wizard-heading">
 				<div>
 					<h3>确认模型信息</h3>
-					<p>检查兼容性，映射建设计划中的已确认数据域和来源，并选择导入对象。</p>
+					<p>检查兼容性，映射已确认的数据域和来源，并选择导入对象。</p>
 				</div>
 				<Status tone={inspection.compatibility.importProjection === "BLOCKED" ? "danger" : "info"}>
 					{inspection.compatibility.importProjection}

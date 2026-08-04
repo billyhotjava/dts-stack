@@ -79,6 +79,7 @@ class IngestionTaskAdmissionTransactionTest {
         task.setSourceType("mysqlreader");
         task.setDestinationType("postgresqlwriter");
         task.setSyncMode("full_refresh");
+        task.setSyncSchedule("cron:0 0 * * *");
         task.setStatus("draft");
         task.setClassificationSeal(seal);
         task.setFieldClassifications(fields);

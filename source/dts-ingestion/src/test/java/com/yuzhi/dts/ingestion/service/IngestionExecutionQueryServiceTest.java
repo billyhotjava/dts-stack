@@ -1,6 +1,8 @@
 package com.yuzhi.dts.ingestion.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.ingestion.domain.IngestionExecution;
@@ -80,6 +82,61 @@ class IngestionExecutionQueryServiceTest {
             .containsEntry("taskId", 1L)
             .containsEntry("executionId", 9L)
             .containsEntry("message", "Airflow 未启用，暂无日志");
+    }
+
+    @Test
+    void shouldFetchLogsFromExecutionDagInsteadOfCurrentTaskDag() {
+        IngestionTask task = new IngestionTask();
+        task.setId(3L);
+        task.setAirflowEnabled(true);
+        task.setAirflowDagId("task_task_dtstest1_manual_task_3");
+        IngestionExecution execution = new IngestionExecution();
+        execution.setId(19L);
+        execution.setTask(task);
+        execution.setExecutionId("manual__2026-08-04T01:21:25.574140+00:00");
+        execution.setAirflowDagId("ingestion_revision_5_execution_19_task_3");
+
+        when(taskRepository.findById(3L)).thenReturn(Optional.of(task));
+        when(executionRepository.findById(19L)).thenReturn(Optional.of(execution));
+        when(airflowAdapter.isEnabled()).thenReturn(true);
+        when(airflowDagService.resolveTaskIdForTask(task)).thenReturn("addax_run");
+        when(
+            airflowClient.listTaskInstances(
+                "ingestion_revision_5_execution_19_task_3",
+                "manual__2026-08-04T01:21:25.574140+00:00"
+            )
+        ).thenReturn(Optional.of(List.of(Map.of(
+            "task_id",
+            "addax_orders",
+            "state",
+            "success",
+            "try_number",
+            1
+        ))));
+        when(
+            airflowClient.getTaskLog(
+                "ingestion_revision_5_execution_19_task_3",
+                "manual__2026-08-04T01:21:25.574140+00:00",
+                "addax_orders",
+                1
+            )
+        ).thenReturn(Optional.of("addax execution completed"));
+
+        Map<String, Object> result = queryService.fetchExecutionLog(3L, 19L, 1, null, "single");
+
+        assertThat(result)
+            .containsEntry("dagId", "ingestion_revision_5_execution_19_task_3")
+            .containsEntry("taskInstanceId", "addax_orders")
+            .containsEntry("log", "addax execution completed");
+        verify(
+            airflowClient,
+            never()
+        ).getTaskLog(
+            "task_task_dtstest1_manual_task_3",
+            "manual__2026-08-04T01:21:25.574140+00:00",
+            "addax_orders",
+            1
+        );
     }
 
     @Test

@@ -62,14 +62,15 @@ export function normalizeClassification(
 ): ClassificationLevel | undefined;
 export function normalizeClassification(
 	value?: string,
-	fallback: ClassificationLevel | undefined = "INTERNAL",
+	...fallbackArgs: [] | [ClassificationLevel | undefined]
 ): ClassificationLevel | undefined {
+	const resolvedFallback: ClassificationLevel | undefined = fallbackArgs.length ? fallbackArgs[0] : "INTERNAL";
 	if (typeof value !== "string") {
-		return fallback;
+		return resolvedFallback;
 	}
 	const raw = value.trim();
 	if (!raw) {
-		return fallback;
+		return resolvedFallback;
 	}
 	const upper = raw.toUpperCase();
 	const upperNormalized = upper.replace(/[\s-]+/g, "_");
@@ -89,7 +90,7 @@ export function normalizeClassification(
 			return matched;
 		}
 	}
-	return fallback;
+	return resolvedFallback;
 }
 
 export function classificationToLabelZh(value?: string, fallback: string = CLASSIFICATION_LABELS_ZH.INTERNAL): string {

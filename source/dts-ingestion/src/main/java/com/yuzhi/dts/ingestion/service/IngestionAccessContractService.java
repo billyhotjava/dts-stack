@@ -331,6 +331,32 @@ public class IngestionAccessContractService {
             .filter(revision -> REVISION_DRAFT.equals(revision.getState()))
             .max(Comparator.comparing(IngestionTaskRevision::getRevisionNumber))
             .orElseThrow(() -> new IllegalStateException("Task has no draft revision: " + taskId));
+        String sourceKind = StringUtils.hasText(draft.getSourceKind())
+            ? draft.getSourceKind()
+            : resolveSourceKind(admittedPlan.getSourceType(), admittedPlan.getSourceConfig());
+        JsonNode taskSnapshot = buildTaskSnapshot(admittedPlan, sourceKind);
+        ObjectNode effectiveConfig = objectMapper.createObjectNode();
+        JsonNode existingDefaults = draft.getEffectiveConfig() == null
+            ? objectMapper.createObjectNode()
+            : draft.getEffectiveConfig().path("defaults");
+        effectiveConfig.set("defaults", sanitize(existingDefaults));
+        effectiveConfig.set("task", sanitize(taskSnapshot));
+        JsonNode canonicalEffectiveConfig = canonicalize(effectiveConfig);
+
+        draft.setSourceKind(sourceKind);
+        draft.setTaskSnapshot(taskSnapshot);
+        draft.setEffectiveConfig(canonicalEffectiveConfig);
+        draft.setEffectiveConfigChecksum(checksum(canonicalEffectiveConfig));
+        draft.setClassificationSeal(
+            admittedPlan.getClassificationSeal() == null || admittedPlan.getClassificationSeal().isNull()
+                ? null
+                : sanitize(admittedPlan.getClassificationSeal())
+        );
+        draft.setFieldClassifications(
+            admittedPlan.getFieldClassifications() == null || admittedPlan.getFieldClassifications().isNull()
+                ? null
+                : sanitize(admittedPlan.getFieldClassifications())
+        );
         captureRuntimeSnapshot(draft, admittedPlan);
         return revisionRepository.save(draft);
     }

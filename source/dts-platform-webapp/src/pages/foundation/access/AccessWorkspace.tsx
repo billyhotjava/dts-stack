@@ -156,8 +156,6 @@ export default function AccessWorkspace() {
 		};
 	}, [load]);
 
-	const legacyCount = rows.filter((row) => row.versionState === "legacy-unversioned").length;
-
 	const openCreate = (sourceKind: AccessSourceKind) => {
 		navigate(`/foundation/data-sources/access/new?kind=${sourceKind}`);
 	};
@@ -226,18 +224,11 @@ export default function AccessWorkspace() {
 			),
 		},
 		{
-			title: "有效配置",
-			key: "version",
-			width: 190,
-			render: (_, row) => (
-				<div className={styles.versionCell}>
-					<Space size={4} wrap>
-						<Tag>{row.versionLabel}</Tag>
-						<Text>{syncModeLabel(row.syncMode)}</Text>
-					</Space>
-					<span className={styles.migrationHint}>{row.versionHint}</span>
-				</div>
-			),
+			title: "同步模式",
+			dataIndex: "syncMode",
+			key: "syncMode",
+			width: 110,
+			render: syncModeLabel,
 		},
 		{
 			title: "生命周期",
@@ -274,7 +265,7 @@ export default function AccessWorkspace() {
 					{row.classification ? (
 						<ClassificationTag value={row.classification} size="small" />
 					) : (
-						<Tag color="orange">密级未记录</Tag>
+						<Text type="secondary">普通流程</Text>
 					)}
 				</div>
 			),
@@ -315,15 +306,6 @@ export default function AccessWorkspace() {
 		<div className={styles.workspace}>
 			<PageHeader title={KIND_META[kind].label} actions={createAction} />
 			<JourneyContextBar stage="integration" />
-
-			{legacyCount > 0 ? (
-				<Alert
-					type="warning"
-					showIcon
-					message={`当前页仍有 ${legacyCount} 个存量任务未版本化`}
-					description="这些任务会保持“未版本化”标识，完成后台迁移后自动显示真实 Revision 与策略版本。"
-				/>
-			) : null}
 
 			<section className={styles.tableShell}>
 				{error ? <Alert className="mb-3" type="error" showIcon message="接入任务加载失败" description={error} /> : null}

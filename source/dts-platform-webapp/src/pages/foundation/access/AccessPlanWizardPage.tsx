@@ -18,7 +18,7 @@ import { safeAccessPlanErrorMessage, useAccessPlanWizard } from "./useAccessPlan
 const STEP_ITEMS = [
 	{ title: "来源连接", description: "引用托管连接" },
 	{ title: "资源定义", description: "确定接入范围" },
-	{ title: "策略准入", description: "确认落地策略" },
+	{ title: "落地策略", description: "确认目标与调度" },
 ];
 
 const initialValues: AccessPlanFormValues = {
@@ -102,9 +102,7 @@ export default function AccessPlanWizardPage() {
 		try {
 			await validateCurrentStep();
 			const result = await wizard.submit();
-			toast.success(
-				result.updated ? "修改已保存为待准入草稿；当前生效版本继续运行" : "接入计划草稿已保存，请完成密级准入",
-			);
+			toast.success(result.updated ? "接入计划已更新并生效" : "接入计划已保存并生效");
 			if (result.taskId) router.push(`/foundation/data-sources/access/${result.taskId}`);
 			else router.push(listPath);
 		} catch (error: unknown) {
@@ -285,7 +283,7 @@ export default function AccessPlanWizardPage() {
 								</Button>
 							) : (
 								<Button type="primary" loading={wizard.saving} onClick={() => void submit()}>
-									{editId ? "保存修改为草稿" : "保存草稿"}
+									{editId ? "保存修改并生效" : "保存并生效"}
 								</Button>
 							)}
 						</Space>

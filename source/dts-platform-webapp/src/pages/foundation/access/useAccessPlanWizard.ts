@@ -10,23 +10,8 @@ import { createIngestionTask } from "@/api/platformApi";
 import dataSourcesService, { type DataSourceSelectionItem } from "@/api/services/dataSourcesService";
 import { deriveDataLevels } from "@/constants/governance";
 import { useUserInfo } from "@/store/userStore";
-import { normalizeText } from "@/utils/textUtils";
 import { classificationRank, normalizeClassification } from "@/utils/classification";
-import {
-	buildFileBaseName,
-	isApiDataSource,
-	isJdbcSource,
-	normalizeTableName,
-} from "./shared/ingestionFormHelpers";
-import { resolveCreatedTaskId } from "./shared/transformCreateAsyncRun.helpers";
-import { uploadTransformFileWithAdmission } from "./shared/transformCreateFileFlow.helpers";
-import {
-	ACCESS_KIND_LABELS,
-	type AccessKind,
-	type AccessPlanFormValues,
-	type AccessPlanPayloadContext,
-	type AccessPlanRuntimeState,
-} from "./accessPlan.types";
+import { normalizeText } from "@/utils/textUtils";
 import {
 	extractManagedFileFromTask,
 	resolveManagedFileAdmissionState,
@@ -35,12 +20,22 @@ import {
 	toManagedFile,
 } from "./accessManagedFile";
 import {
-	buildManagedApiConnectionTestRequest,
+	ACCESS_KIND_LABELS,
+	type AccessKind,
+	type AccessPlanFormValues,
+	type AccessPlanPayloadContext,
+	type AccessPlanRuntimeState,
+} from "./accessPlan.types";
+import {
 	buildAccessPlanCreateRequest,
 	buildAccessPlanUpdateDTO,
+	buildManagedApiConnectionTestRequest,
 	inferAccessKind,
 	toAccessPlanFormValues,
 } from "./accessPlanPayload";
+import { buildFileBaseName, isApiDataSource, isJdbcSource, normalizeTableName } from "./shared/ingestionFormHelpers";
+import { resolveCreatedTaskId } from "./shared/transformCreateAsyncRun.helpers";
+import { uploadTransformFileWithAdmission } from "./shared/transformCreateFileFlow.helpers";
 
 type BootstrapResult = {
 	dataSources: DataSourceSelectionItem[];
@@ -168,11 +163,18 @@ export async function saveAccessPlan(
 	if (input.existingTask?.id) {
 		const payload = buildAccessPlanUpdateDTO(input.existingTask, input);
 		const updated = await ingestionTaskAPI.updateTask(input.existingTask.id, payload);
-		return { taskId: updated?.id ?? input.existingTask.id, updated: true };
+		const taskId = Number(updated?.id ?? input.existingTask.id);
+		if (!Number.isSafeInteger(taskId) || taskId <= 0) throw new Error("接入任务编号无效");
+		await ingestionTaskAPI.admitTask(taskId);
+		return { taskId, updated: true };
 	}
 	const payload = buildAccessPlanCreateRequest(input);
 	const created = await createIngestionTask(payload);
-	return { taskId: resolveCreatedTaskId(created) ?? null, updated: false };
+	const resolvedTaskId = resolveCreatedTaskId(created);
+	const taskId = Number(resolvedTaskId);
+	if (!Number.isSafeInteger(taskId) || taskId <= 0) throw new Error("接入任务编号无效");
+	await ingestionTaskAPI.admitTask(taskId);
+	return { taskId, updated: false };
 }
 
 const INITIAL_STATE: AccessPlanRuntimeState = {
@@ -551,7 +553,7 @@ export function useAccessPlanWizard({ kind, editId, form }: UseAccessPlanWizardI
 				selectedSource,
 				selectedTarget,
 				fileUploadResult: state.fileUploadResult,
-		existingTask: state.existingTask,
+				existingTask: state.existingTask,
 				editId,
 			});
 		} finally {
@@ -568,6 +570,7 @@ export function useAccessPlanWizard({ kind, editId, form }: UseAccessPlanWizardI
 		state.existingTask,
 		state.fileUploadResult,
 		state.loadedContextKey,
+		state.loading,
 		state.targetDataSources,
 		state.uploadingFile,
 		userInfo,

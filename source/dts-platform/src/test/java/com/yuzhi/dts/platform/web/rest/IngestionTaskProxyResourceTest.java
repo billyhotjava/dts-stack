@@ -41,6 +41,8 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -190,6 +192,60 @@ class IngestionTaskProxyResourceTest {
         assertThat(command.getValue().upstreamLevels().stream().map(String::valueOf).toList())
             .containsExactly("SECRET");
         verify(classificationService, never()).resolve("ASSET", PREVIOUS_SOURCE_KEY);
+    }
+
+    @Test
+    void createTaskAllowsManagedDatasourceWithoutClassificationEvidence() throws Exception {
+        String sourceId = "22222222-3333-4444-5555-666666666666";
+        configureUnclassifiedSource(sourceId);
+        DefaultDestinationSnapshot snapshot = new DefaultDestinationSnapshot(
+            "rdbmswriter",
+            "lake",
+            Map.of("connection", java.util.List.of(Map.of("jdbcUrl", java.util.List.of("jdbc:pg")))),
+            sourceId
+        );
+        when(destinationSyncService.ensureDefaultDestination()).thenReturn(snapshot);
+        when(ingestionClient.createIngestionTask(anyMap()))
+            .thenReturn(new ApiResponse<>(200, "ok", Map.of("id", 2, "status", "active")));
+
+        mockMvc.perform(post("/api/ingestion/tasks")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"name\":\"plain-task\",\"source\":{\"dataSourceId\":\"" +
+                    sourceId +
+                    "\"},\"destination\":{\"config\":{\"table\":[\"t1\"]}}}"
+                ))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("active"));
+
+        ArgumentCaptor<Map<String, Object>> payload = ArgumentCaptor.forClass(Map.class);
+        verify(ingestionClient).createIngestionTask(payload.capture());
+        assertThat(payload.getValue()).doesNotContainKeys("classificationSeal", "fieldClassifications");
+        verify(classificationService, never()).sealOrRaise(any(CatalogClassificationService.SealCommand.class));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "", "UNKNOWN_LEVEL" })
+    void createDraftRejectsInvalidDatasourceClassificationInsteadOfTreatingItAsUnclassified(
+        String classification
+    ) throws Exception {
+        String sourceId = "44444444-5555-6666-7777-888888888888";
+        InfraDataSource source = new InfraDataSource();
+        source.setId(UUID.fromString(sourceId));
+        source.setName("invalid-classification-source");
+        source.setProps("{\"classification\":\"" + classification + "\"}");
+        when(dataSourceRepository.findById(source.getId())).thenReturn(Optional.of(source));
+
+        mockMvc.perform(post("/api/ingestion/tasks")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"name\":\"invalid-task\",\"draft\":true," +
+                    "\"source\":{\"dataSourceId\":\"" + sourceId + "\"}}"
+                ))
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.code").value("SOURCE_CLASSIFICATION_INVALID"));
+
+        verify(ingestionClient, never()).createIngestionTask(anyMap());
     }
 
     @Test
@@ -1433,6 +1489,55 @@ class IngestionTaskProxyResourceTest {
             .containsExactly(Map.entry("identity_no", "SECRET"));
     }
 
+    @Test
+    void admitTaskAllowsManagedDatasourceWithoutClassificationEvidence() throws Exception {
+        String sourceId = "33333333-4444-5555-6666-777777777777";
+        configureUnclassifiedSource(sourceId);
+        Map<String, Object> task = new LinkedHashMap<>();
+        task.put("id", 9);
+        task.put("name", "plain-draft");
+        task.put("status", "draft");
+        task.put("sourceType", "mysqlreader");
+        task.put("sourceDataSourceId", sourceId);
+        when(ingestionClient.getTask(9L)).thenReturn(new ApiResponse<>(200, "ok", task));
+        when(ingestionClient.admitTask(org.mockito.ArgumentMatchers.eq(9L), anyMap()))
+            .thenReturn(new ApiResponse<>(200, "ok", Map.of("id", 9, "status", "active")));
+
+        mockMvc.perform(post("/api/ingestion/tasks/9/admit"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("active"));
+
+        ArgumentCaptor<Map<String, Object>> admission = ArgumentCaptor.forClass(Map.class);
+        verify(ingestionClient).admitTask(org.mockito.ArgumentMatchers.eq(9L), admission.capture());
+        assertThat(admission.getValue()).isEmpty();
+        verify(classificationService, never()).sealOrRaise(any(CatalogClassificationService.SealCommand.class));
+    }
+
+    @Test
+    void admitTaskDiscardsLegacyEvidenceWhenTheManagedSourceIsNowUnclassified() throws Exception {
+        String sourceId = "55555555-6666-7777-8888-999999999999";
+        configureUnclassifiedSource(sourceId);
+        Map<String, Object> task = new LinkedHashMap<>();
+        task.put("id", 10);
+        task.put("name", "legacy-classified-draft");
+        task.put("status", "draft");
+        task.put("sourceType", "mysqlreader");
+        task.put("sourceDataSourceId", sourceId);
+        task.put("classificationSeal", Map.of("sealId", "legacy-seal"));
+        task.put("fieldClassifications", Map.of("customer_id", "SECRET"));
+        when(ingestionClient.getTask(10L)).thenReturn(new ApiResponse<>(200, "ok", task));
+        when(ingestionClient.admitTask(org.mockito.ArgumentMatchers.eq(10L), anyMap()))
+            .thenReturn(new ApiResponse<>(200, "ok", Map.of("id", 10, "status", "active")));
+
+        mockMvc.perform(post("/api/ingestion/tasks/10/admit"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("active"));
+
+        ArgumentCaptor<Map<String, Object>> admission = ArgumentCaptor.forClass(Map.class);
+        verify(ingestionClient).admitTask(org.mockito.ArgumentMatchers.eq(10L), admission.capture());
+        assertThat(admission.getValue()).isEmpty();
+    }
+
     private boolean isSafeTaskAuditPayload(Object value) {
         if (!(value instanceof Map<?, ?> payload)) {
             return false;
@@ -1480,6 +1585,14 @@ class IngestionTaskProxyResourceTest {
         snapshot.setPropagationStatus("SEALED");
         when(classificationService.sealOrRaise(any(CatalogClassificationService.SealCommand.class)))
             .thenReturn(snapshot);
+    }
+
+    private void configureUnclassifiedSource(String sourceId) {
+        InfraDataSource source = new InfraDataSource();
+        source.setId(UUID.fromString(sourceId));
+        source.setName("unclassified-source");
+        source.setProps("{}");
+        when(dataSourceRepository.findById(source.getId())).thenReturn(Optional.of(source));
     }
 
     private CatalogClassificationSnapshot snapshot(

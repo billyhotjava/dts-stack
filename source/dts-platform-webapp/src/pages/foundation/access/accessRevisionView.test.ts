@@ -14,11 +14,11 @@ test("an ACTIVE task with a DRAFT edit admits the draft but executes only the ac
 	expect(view.draftRevisionNumber).toBe(3);
 	expect(view.activeRevisionNumber).toBe(2);
 	expect(view.canExecuteActiveRevision).toBe(true);
-	expect(view.executeReason).toBe("将执行当前生效版本 R2");
+	expect(view.executeReason).toBe("将执行当前有效配置");
 });
 
 test("execution fails closed when revision history cannot prove an active revision", () => {
 	const view = resolveAccessRevisionView({ status: "active", revisionNumber: 3, revisionState: "DRAFT" }, [], true);
 	expect(view.canExecuteActiveRevision).toBe(false);
-	expect(view.executeReason).toBe("生效 Revision 加载失败，已禁止执行");
+	expect(view.executeReason).toBe("有效配置状态加载失败，已禁止执行");
 });

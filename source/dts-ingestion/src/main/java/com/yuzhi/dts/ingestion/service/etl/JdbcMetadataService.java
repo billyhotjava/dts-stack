@@ -125,6 +125,9 @@ public class JdbcMetadataService {
         String table = normalize(tablePattern);
         try (Connection connection = openConnection(info)) {
             DatabaseMetaData meta = connection.getMetaData();
+            if (!StringUtils.hasText(schema) && usesCatalogForDatabase(meta)) {
+                schema = normalize(connection.getCatalog());
+            }
             List<TableMeta> tables = readTables(meta, schema, table, max);
             if (tables.isEmpty()) {
                 String schemaUpper = schema == null ? null : schema.toUpperCase(Locale.ROOT);

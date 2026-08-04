@@ -14,8 +14,16 @@ class IngestionClassificationSealGuardTest {
     private final IngestionClassificationSealGuard guard = new IngestionClassificationSealGuard();
 
     @Test
-    void productionWriteRequiresASeal() {
-        assertThatThrownBy(() -> guard.requireProductionSeal(new IngestionTask()))
+    void unclassifiedTaskCanReachProductionWriteWithoutASeal() {
+        assertThatCode(() -> guard.requireProductionSeal(new IngestionTask())).doesNotThrowAnyException();
+    }
+
+    @Test
+    void fieldClassificationWithoutASealFailsClosed() {
+        IngestionTask task = new IngestionTask();
+        task.setFieldClassifications(objectMapper.createObjectNode().put("identity_no", "SECRET"));
+
+        assertThatThrownBy(() -> guard.requireProductionSeal(task))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("CLASSIFICATION_SEAL_REQUIRED");
     }

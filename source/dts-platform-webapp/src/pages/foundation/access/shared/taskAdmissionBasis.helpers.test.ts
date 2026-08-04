@@ -238,10 +238,10 @@ test("resolveTaskAdmissionBasis rejects null and empty snapshot versions instead
 	}
 });
 
-test("resolveTaskAdmissionBasis fails closed when the classification seal is missing", () => {
+test("resolveTaskAdmissionBasis presents an unclassified datasource as a normal workflow", () => {
 	const task = {
 		id: 44,
-		name: "invalid-task",
+		name: "unclassified-task",
 		sourceType: "mysqlreader",
 		sourceConfig: {},
 		syncMode: "full_refresh",
@@ -249,12 +249,13 @@ test("resolveTaskAdmissionBasis fails closed when the classification seal is mis
 	} as IngestionTaskDTO;
 
 	const basis = resolveTaskAdmissionBasis(task);
-	assert.equal(basis.status, "blocked");
-	assert.equal(basis.statusLabel, "不可准入");
-	assert.equal(basis.evidenceStatus, "incomplete");
-	assert.equal(basis.evidenceStatusLabel, "依据不完整");
-	assert.equal(basis.evidenceReason, "缺少密级封存");
+	assert.equal(basis.status, "pending");
+	assert.equal(basis.statusLabel, "待确认");
+	assert.equal(basis.evidenceStatus, "not_required");
+	assert.equal(basis.evidenceStatusLabel, "无需密级依据");
+	assert.equal(basis.evidenceReason, "当前数据源未配置密级，按普通接入流程处理");
 	assert.equal(basis.effectiveLevel, undefined);
-	assert.equal(basis.fieldCoverageLabel, "不可核验（仅任务级）");
-	assert.match(basis.statusReason, /缺少密级封存/);
+	assert.equal(basis.sourceLabel, "普通数据源");
+	assert.equal(basis.fieldCoverageLabel, "不适用");
+	assert.match(basis.statusReason, /普通接入流程/);
 });

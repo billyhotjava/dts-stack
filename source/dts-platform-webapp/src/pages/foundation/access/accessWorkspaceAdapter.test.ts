@@ -71,7 +71,7 @@ const tasks: IngestionTaskDTO[] = [
 	},
 ];
 
-test("projects versioned and legacy tasks without fabricating missing revision data", () => {
+test("projects access tasks without exposing internal revision state", () => {
 	const rows = toAccessWorkspaceRows(tasks, sources);
 
 	assert.deepEqual(
@@ -83,12 +83,9 @@ test("projects versioned and legacy tasks without fabricating missing revision d
 	assert.equal(rows[0].lifecycle, "active");
 	assert.equal(rows[0].health, "healthy");
 	assert.equal(rows[0].classification, "INTERNAL");
-	assert.equal(rows[0].versionState, "versioned");
-	assert.equal(rows[0].versionLabel, "R3");
-	assert.equal(rows[0].versionHint, "ACTIVE · 策略 v2");
-	assert.equal(rows[1].versionState, "legacy-unversioned");
-	assert.equal(rows[1].versionLabel, "未版本化");
-	assert.equal(rows[1].versionHint, "存量任务待后台迁移");
+	assert.equal("versionState" in rows[0], false);
+	assert.equal("versionLabel" in rows[0], false);
+	assert.equal("versionHint" in rows[0], false);
 	assert.equal(rows[1].resourceSummary, "GET /v1/budget/items");
 	assert.equal(rows[1].health, "attention");
 	assert.equal(rows[2].resourceSummary, "budget-2026-07.xlsx");

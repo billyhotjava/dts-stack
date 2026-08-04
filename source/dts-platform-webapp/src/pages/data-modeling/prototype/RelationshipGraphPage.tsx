@@ -7,7 +7,6 @@ import {
 	loadModelingRelationshipGraph,
 	type ModelingRelationshipGraphFailure,
 	modelingRelationshipNodePath,
-	type WarehousePlanHeader,
 	type WarehousePlanRelationshipGraph,
 	type WarehousePlanRelationshipGraphKind,
 	type WarehousePlanRelationshipGraphNode,
@@ -15,9 +14,9 @@ import {
 import type { DataModelingRoute } from "../types";
 import { Button, PageHeader, RequestState, Status } from "./PrototypePrimitives";
 
-const kindOrder: WarehousePlanRelationshipGraphKind[] = ["PLAN", "DIMENSION", "MODEL", "STANDARD", "INDICATOR"];
+const kindOrder: WarehousePlanRelationshipGraphKind[] = ["DIMENSION", "MODEL", "STANDARD", "INDICATOR"];
 const kindLabel: Record<WarehousePlanRelationshipGraphKind, string> = {
-	PLAN: "建设计划",
+	PLAN: "规划",
 	DIMENSION: "维度",
 	MODEL: "模型",
 	STANDARD: "数据标准",
@@ -38,7 +37,7 @@ const allowedKinds = (view: string): Set<WarehousePlanRelationshipGraphKind> =>
 		? new Set(["MODEL", "STANDARD"])
 		: view === "metrics"
 			? new Set(["MODEL", "INDICATOR"])
-			: new Set(["PLAN", "DIMENSION", "MODEL"]);
+			: new Set(["DIMENSION", "MODEL"]);
 
 function positionNodes(graph: WarehousePlanRelationshipGraph, view: string, query: string): PositionedNode[] {
 	const allowed = allowedKinds(view);
@@ -78,7 +77,6 @@ function positionNodes(graph: WarehousePlanRelationshipGraph, view: string, quer
 export function RelationshipGraphPage({ route }: { route: DataModelingRoute }) {
 	const navigate = useNavigate();
 	const requestEpoch = useRef(0);
-	const [plans, setPlans] = useState<WarehousePlanHeader[]>([]);
 	const [planId, setPlanId] = useState("");
 	const [graph, setGraph] = useState<WarehousePlanRelationshipGraph | null>(null);
 	const [query, setQuery] = useState("");
@@ -100,12 +98,10 @@ export function RelationshipGraphPage({ route }: { route: DataModelingRoute }) {
 					? await loadModelingRelationshipGraph(nextPlanId, { view: route.view, query: requestedQuery })
 					: null;
 				if (requestEpoch.current !== epoch) return;
-				setPlans(nextPlans);
 				setPlanId(nextPlanId);
 				setGraph(nextGraph);
 			} catch (error) {
 				if (requestEpoch.current !== epoch) return;
-				setPlans([]);
 				setPlanId("");
 				setGraph(null);
 				setFailure(classifyModelingRelationshipGraphFailure(error));
@@ -144,22 +140,6 @@ export function RelationshipGraphPage({ route }: { route: DataModelingRoute }) {
 				trail="数据建模 / 关系图"
 			/>
 			<div className="dmx-graph-toolbar">
-				<select
-					aria-label="建设计划"
-					disabled={loading || !plans.length}
-					onChange={(event) => {
-						setQuery("");
-						void load(event.target.value, "");
-					}}
-					value={planId}
-				>
-					{!plans.length ? <option value="">暂无建设计划</option> : null}
-					{plans.map((plan) => (
-						<option key={plan.id} value={plan.id}>
-							{plan.name} · {plan.code}
-						</option>
-					))}
-				</select>
 				<div className="dmx-graph-search">
 					<Search size={14} />
 					<input
@@ -198,7 +178,7 @@ export function RelationshipGraphPage({ route }: { route: DataModelingRoute }) {
 				</button>
 			</div>
 			{loading ? (
-				<RequestState description="正在读取当前建设计划的权威关系投影。" kind="loading" title="正在加载关系图" />
+				<RequestState description="正在读取模型关系投影。" kind="loading" title="正在加载关系图" />
 			) : failure ? (
 				<RequestState
 					description={failure.message}
@@ -206,15 +186,15 @@ export function RelationshipGraphPage({ route }: { route: DataModelingRoute }) {
 					onRetry={failure.kind === "request" ? () => void load(planId, query) : undefined}
 					title={failure.kind === "permission" ? "无权访问关系图" : "关系图加载失败"}
 				/>
-			) : !plans.length ? (
+			) : !graph ? (
 				<RequestState
-					description="先创建建设计划并归属模型后，关系图才有权威上下文。"
+					description="服务端尚未返回可用的模型关系投影。"
 					kind="empty"
-					title="暂无建设计划"
+					title="暂无关系数据"
 				/>
 			) : !nodes.length ? (
 				<RequestState
-					description="当前筛选没有返回权威节点，可清空检索词或切换建设计划。"
+					description="当前筛选没有返回权威节点，可清空检索词后重试。"
 					kind="empty"
 					title="暂无关系数据"
 				/>

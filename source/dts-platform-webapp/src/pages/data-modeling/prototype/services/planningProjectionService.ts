@@ -1,22 +1,14 @@
 import { listDataMarts } from "@/api/dataMartApi";
 import { listModelSpecs } from "@/api/modelSpecApi";
-import catalogDomainService, { type CatalogDomain } from "@/api/services/catalogDomainService";
 import {
 	listIndicatorsForModelingOverview,
 	listStandardsForModelingOverview,
 } from "@/api/services/modelingOverviewFactService";
 import type { Sprint64BusinessProcess } from "@/api/sprint64GovernanceApi";
 import { listBusinessProcessesApi, listWarehouseLayersApi } from "@/api/sprint64GovernanceApi";
-import {
-	getWarehousePlanPolicy,
-	getWarehousePlanStageProjection,
-	listWarehousePlans,
-	type WarehousePlanHeader,
-	type WarehousePlanPolicyView,
-} from "@/api/warehousePlanApi";
 import type { DataMartView } from "@/features/modeling/contracts/dataMartContract";
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
-import { warehouseStageLabel } from "@/features/modeling/navigation/warehousePlanViewModel";
+import { listPlanningCatalogDomains, type PlanningCatalogDomain } from "./planningCatalogDomainService";
 
 export type ModelingRequestFailure = {
 	kind: "permission" | "request";
@@ -41,17 +33,13 @@ export type ModelingOverviewProjection = {
 export type PlanningProjectionRow = {
 	id: string;
 	cells: string[];
-	plan?: WarehousePlanHeader;
-	source?: Sprint64BusinessProcess | DataMartView | CatalogDomain | Record<string, unknown>;
+	source?: Sprint64BusinessProcess | DataMartView | PlanningCatalogDomain | Record<string, unknown>;
 };
 
 export type PlanningProjection = {
 	headers: string[];
 	rows: PlanningProjectionRow[];
 	readOnlyReason: string | null;
-	plans: WarehousePlanHeader[];
-	selectedPlan: WarehousePlanHeader | null;
-	policy: { value: WarehousePlanPolicyView; version: number } | null;
 };
 
 const SAFE_ERROR_CODE = /^[A-Z][A-Z0-9_]{2,79}$/;
@@ -114,18 +102,15 @@ const modelTypeLabel = (model: ModelSpecView): string =>
 	({ DIMENSION: "维度表", FACT: "明细表", SUMMARY: "汇总表", APPLICATION: "应用表" })[model.modelType];
 
 export async function loadModelingOverviewProjection(): Promise<ModelingOverviewProjection> {
-	const [plans, models, standardsRaw, indicatorsRaw] = await Promise.all([
-		listWarehousePlans(),
+	const [catalogDomains, models, standardsRaw, indicatorsRaw] = await Promise.all([
+		listPlanningCatalogDomains(),
 		listModelSpecs(),
 		listStandardsForModelingOverview(),
 		listIndicatorsForModelingOverview(),
 	]);
-	const activePlans = plans.filter((plan) => plan.lifecycleStatus !== "ARCHIVED");
-	const projections = await Promise.all(
-		activePlans.map(async (plan) => ({ plan, projection: await getWarehousePlanStageProjection(plan.id) })),
-	);
 	const standards = arrayPayload<Record<string, unknown>>(standardsRaw);
 	const indicators = arrayPayload<Record<string, unknown>>(indicatorsRaw);
+	const businessCategories = catalogDomains.filter((item) => !item.parentId);
 	const recentModels = [...models]
 		.filter((model) => Boolean(model.updatedAt))
 		.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
@@ -139,35 +124,34 @@ export async function loadModelingOverviewProjection(): Promise<ModelingOverview
 			status: model.status,
 			updatedAt: model.updatedAt,
 		}));
-	const tasks = projections.flatMap(({ plan, projection }) =>
-		projection.primaryBlocker
-			? [
-					{
-						id: `${plan.id}:${projection.primaryBlocker.stageCode}`,
-						task: projection.primaryBlocker.message || "处理规划阶段阻塞",
-						object: plan.name,
-						stage: warehouseStageLabel(projection.primaryBlocker.stageCode),
-						next: projection.nextAction?.label || "查看建设计划",
-					},
-				]
-			: [],
-	);
-	const deliveryCodes = ["WAREHOUSE_PLANNING", "DATA_STANDARD", "MODEL_DESIGN", "BUILD_QUALITY_RELEASE"] as const;
-	const delivery = deliveryCodes.map((code) => {
-		const stages = projections.map(({ projection }) => projection.stages.find((stage) => stage.code === code));
-		const present = stages.filter((stage) => Boolean(stage));
-		const count = present.filter((stage) => stage?.status === "COMPLETE" && stage.freshness === "CURRENT").length;
-		const total = present.length;
-		return {
-			label: warehouseStageLabel(code),
-			count,
-			total,
-			percent: total ? Math.round((count / total) * 100) : 0,
-		};
-	});
+	const tasks = models
+		.filter((model) => model.status !== "PUBLISHED" && model.status !== "ARCHIVED")
+		.slice(0, 8)
+		.map((model) => ({
+			id: model.id,
+			task: `完善并发布模型：${model.name}`,
+			object: model.name,
+			stage: model.status,
+			next: "进入维度建模",
+		}));
+	const publishedModels = models.filter((model) => model.status === "PUBLISHED").length;
+	const delivery = [
+		{ label: "规划目录", count: catalogDomains.length, total: catalogDomains.length },
+		{ label: "数据标准", count: standards.length, total: standards.length },
+		{ label: "逻辑模型", count: publishedModels, total: models.length },
+		{ label: "数据指标", count: indicators.length, total: indicators.length },
+	].map((item) => ({
+		...item,
+		percent: item.total ? Math.round((item.count / item.total) * 100) : 0,
+	}));
 	return {
 		stats: [
-			{ label: "建设计划", value: activePlans.length, meta: `${plans.length} 个可见计划`, target: "planning/spaces" },
+			{
+				label: "业务分类",
+				value: businessCategories.length,
+				meta: `${catalogDomains.length - businessCategories.length} 个数据域`,
+				target: "planning/business-categories",
+			},
 			{
 				label: "逻辑模型",
 				value: models.length,
@@ -187,42 +171,45 @@ const emptyProjection = (readOnlyReason: string | null = null): PlanningProjecti
 	headers: [],
 	rows: [],
 	readOnlyReason,
-	plans: [],
-	selectedPlan: null,
-	policy: null,
 });
 
-export async function loadPlanningProjection(view: string, requestedPlanId?: string): Promise<PlanningProjection> {
+export async function loadPlanningProjection(view: string): Promise<PlanningProjection> {
 	if (view === "spaces") {
-		return emptyProjection(
-			"当前服务端没有独立建模空间 owner；旧建设计划编辑器不会映射为建模空间。配置 owner 契约前本页不提供模拟 CRUD。",
-		);
+		return emptyProjection("建模空间尚无独立服务端 owner；本页不会复用其他业务对象，也不提供模拟 CRUD。");
 	}
 	if (view === "domains" || view === "business-categories") {
-		const domains = await catalogDomainService.list();
+		const domains = await listPlanningCatalogDomains();
 		const names = new Map(domains.map((domain) => [domain.code, domain.name]));
-		const selected = view === "business-categories" ? domains.filter((domain) => !domain.parentCode) : domains;
+		const selected = domains.filter((domain) =>
+			view === "business-categories" ? !domain.parentId : Boolean(domain.parentId),
+		);
 		return {
-			...emptyProjection("业务分类与数据域由数据治理目录统一维护，本页展示真实只读投影。"),
-			headers: ["分类编码", "分类名称", "上级分类"],
+			...emptyProjection(),
+			headers: [view === "business-categories" ? "分类编码" : "数据域编码", "名称", "上级分类", "负责人", "说明"],
 			rows: selected.map((domain) => ({
-				id: domain.code,
-				cells: [domain.code, domain.name, domain.parentCode ? names.get(domain.parentCode) || domain.parentCode : "—"],
+				id: domain.id,
+				cells: [
+					domain.code,
+					domain.name,
+					domain.parentCode ? names.get(domain.parentCode) || domain.parentCode : "—",
+					domain.owner || "—",
+					domain.description || "—",
+				],
 				source: domain,
 			})),
 		};
 	}
 	if (view === "processes") {
-		const domains = await catalogDomainService.list();
+		const domains = (await listPlanningCatalogDomains()).filter((domain) => Boolean(domain.parentId));
 		const entries = await Promise.all(
-			domains.map(async (domain) => ({ domain, processes: await listBusinessProcessesApi(domain.code) })),
+			domains.map(async (domain) => ({ domain, processes: await listBusinessProcessesApi(domain.id) })),
 		);
 		return {
 			...emptyProjection(),
 			headers: ["过程编码", "过程名称", "数据域", "状态", "业务定义"],
 			rows: entries.flatMap(({ domain, processes }) =>
 				processes.map((item) => ({
-					id: `${domain.code}:${item.processId}`,
+					id: `${domain.id}:${item.processId}`,
 					cells: [item.processId, item.name, domain.name, item.confirmed ? "已确认" : "候选", item.description || "—"],
 					source: item,
 				})),
@@ -232,7 +219,7 @@ export async function loadPlanningProjection(view: string, requestedPlanId?: str
 	if (view === "layers") {
 		const layers = await listWarehouseLayersApi();
 		return {
-			...emptyProjection("系统分层字典只读；计划采用的策略请在规划参数配置中维护。"),
+			...emptyProjection("系统分层字典只读；分层策略请在规划参数配置中维护。"),
 			headers: ["分层编码", "分层名称", "分层类型", "加工责任", "命名前缀", "要求"],
 			rows: layers.map((item) => ({
 				id: item.code,
@@ -260,10 +247,7 @@ export async function loadPlanningProjection(view: string, requestedPlanId?: str
 		};
 	}
 	if (view === "system") {
-		const plans = await listWarehousePlans();
-		const selectedPlan = plans.find((plan) => plan.id === requestedPlanId) || plans[0] || null;
-		const policy = selectedPlan ? await getWarehousePlanPolicy(selectedPlan.id) : null;
-		return { ...emptyProjection(), plans, selectedPlan, policy };
+		return emptyProjection("规划参数尚无独立服务端 owner；本页不再复用旧流程的配置接口。");
 	}
 	return emptyProjection("当前对象尚无统一权威台账；确认 owner 前不提供本地模拟 CRUD。");
 }

@@ -126,7 +126,7 @@ describe("access plan steps", () => {
 
 		expect(html).toContain("平台默认湖");
 		expect(html).toContain("postgresqlwriter");
-		expect(html).toContain("接入计划先保存为待准入草稿");
+		expect(html).toContain("保存后配置立即生效");
 		expect(html).not.toContain("保存后立即运行");
 		expect(html).not.toContain("private-host");
 		expect(html).not.toContain("lake_admin");
@@ -161,10 +161,45 @@ describe("access plan steps", () => {
 		expect(html).toContain("订单 API");
 		expect(html).toContain("/orders");
 		expect(html).toContain("不会立即执行");
-		expect(html).toContain("保存草稿并等待密级准入");
+		expect(html).toContain("保存后立即生效，可按调度策略运行");
+		expect(html).not.toContain("密级准入");
 		expect(html).not.toContain("立即运行");
 		expect(html).not.toContain("审批");
 		expect(html).not.toContain("Revision");
 		expect(html).not.toContain("质量通过");
+	});
+
+	it("presents file quality detection as optional and activates the saved plan immediately", () => {
+		const html = renderToStaticMarkup(
+			<AccessPlanReviewStep
+				kind="file"
+				values={{
+					name: "预算文件入湖",
+					targetDataSourceId: "target-1",
+					tableSelectionMode: "manual",
+					selectedTables: [],
+					syncMode: "full_refresh",
+					scheduleType: "manual",
+					airflowEnabled: true,
+					runNow: false,
+					apiMethod: "GET",
+					fileClassification: "INTERNAL",
+					fileAutoId: true,
+				}}
+				targetName="平台默认湖"
+				fileUploadResult={{
+					fileId: "file-1",
+					fileType: "csv",
+					originalName: "budget.csv",
+					columns: [{ name: "amount", type: "string" }],
+					classification: "INTERNAL",
+				}}
+				apiPreview={null}
+			/>,
+		);
+
+		expect(html).toContain("保存后立即生效");
+		expect(html).toContain("质量检测为可选项");
+		expect(html).not.toContain("预检通过即自动生效");
 	});
 });

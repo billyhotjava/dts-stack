@@ -1,11 +1,25 @@
-import { Alert, Button, Card, Descriptions, Input, Modal, Select, Space, Switch, Table, Tag, Typography, message } from "antd";
+import {
+	Alert,
+	Button,
+	Card,
+	Descriptions,
+	Input,
+	Modal,
+	message,
+	Select,
+	Space,
+	Switch,
+	Table,
+	Tag,
+	Typography,
+} from "antd";
 import type { ColumnsType, TablePaginationConfig } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-	ingestionTaskAPI,
 	type IngestionExecutionDTO,
 	type IngestionStagingRow,
 	type IngestionTaskDTO,
+	ingestionTaskAPI,
 	type StagingErrorSummary,
 } from "@/api/ingestion";
 import { useRouter } from "@/routes/hooks";
@@ -48,7 +62,7 @@ export function AccessQualityPanel({
 	const kind = inferAccessKind(task);
 	const datasetId = qualityDatasetIdFromRef(resolveQualityPolicyRef(task, latestExecution));
 	const runId = latestExecution?.qualityRunId;
-	const stage = kind === "file" ? "发布前文件预检" : "同步批次写入后检查";
+	const stage = kind === "file" ? "可选文件质量检测" : "同步批次写入后检查";
 	const taskId = task.id;
 	const [operation, setOperation] = useState<"parse" | "check" | "recheck" | "drop" | "update" | null>(null);
 	const [hasStaging, setHasStaging] = useState(Boolean(task.stagingTableName));
@@ -112,12 +126,14 @@ export function AccessQualityPanel({
 				message.success(`已生成预检暂存区，共 ${result.totalRows || 0} 行`);
 			} else if (next === "check") {
 				const result = await ingestionTaskAPI.preCheckStaging(taskId);
-				if (result.status === "PASSED") message.success("文件预检通过");
-				else message.warning(`文件预检未通过，异常 ${result.failedRows || 0} 行`);
+				if (result.status === "PASSED") {
+					message.success("文件质量检测通过");
+				} else message.warning(`文件预检未通过，异常 ${result.failedRows || 0} 行`);
 			} else if (next === "recheck") {
 				const result = await ingestionTaskAPI.reCheckStaging(taskId);
-				if (result.status === "PASSED") message.success("重新检查通过");
-				else message.warning(`重新检查仍有 ${result.failedRows || 0} 行异常`);
+				if (result.status === "PASSED") {
+					message.success("重新检测通过");
+				} else message.warning(`重新检查仍有 ${result.failedRows || 0} 行异常`);
 			} else {
 				await ingestionTaskAPI.dropStaging(taskId);
 				setHasStaging(false);
@@ -194,7 +210,7 @@ export function AccessQualityPanel({
 		setOperation("update");
 		try {
 			await ingestionTaskAPI.updateStagingCell(taskId, rowNum, { column: editingColumn, value: editingValue });
-			message.success("暂存数据已修正，请重新检查后再准入");
+			message.success("暂存数据已修正，请重新检查");
 			setEditingRow(undefined);
 			await refreshTask();
 			await loadStaging();
@@ -205,7 +221,7 @@ export function AccessQualityPanel({
 
 	return (
 		<div style={{ display: "grid", gap: 16 }}>
-			<Card title={kind === "file" ? "文件预检" : "异常数据与运行后检查"}>
+			<Card title={kind === "file" ? "文件质量检测（可选）" : "异常数据与运行后检查"}>
 				<Descriptions bordered size="small" column={{ xs: 1, md: 2 }}>
 					<Descriptions.Item label="检查阶段">{stage}</Descriptions.Item>
 					<Descriptions.Item label="绑定状态">
@@ -214,30 +230,30 @@ export function AccessQualityPanel({
 					<Descriptions.Item label="质量数据集">{datasetId || "未记录"}</Descriptions.Item>
 					<Descriptions.Item label="最近质量运行">{runId || "尚无运行"}</Descriptions.Item>
 					{kind === "file" ? (
-						<Descriptions.Item label="文件预检状态" span={2}>
+						<Descriptions.Item label="质量检测状态" span={2}>
 							{task.preCheckStatus || "尚未执行"}
 						</Descriptions.Item>
 					) : null}
 				</Descriptions>
 				{datasetId ? (
 					<Text type="secondary" style={{ display: "block", marginTop: 12 }}>
-						当前 Revision 运行时按该数据集已发布的规则绑定触发检查，不在接入侧复制规则。
+						任务运行时按该数据集已发布的规则绑定触发检查，不在接入侧复制规则。
 					</Text>
 				) : (
 					<Alert
 						style={{ marginTop: 12 }}
-						type="warning"
+						type="info"
 						showIcon
-						message="尚未冻结权威质量绑定"
+						message="质量规则未配置（可选）"
 						description={
 							kind === "file"
-								? "当前只能确认文件安全、格式和解析门禁，不能宣称业务质量规则已通过。请先在数据质量模块为目标数据集发布规则绑定。"
-								: "任务可以运行，但本 Revision 不会产生正式质量运行。请为目标数据集发布规则绑定后重新保存并准入 Revision。"
+								? "质量检测为可选项，不影响接入计划保存、生效和执行；如需质量证据，可为目标数据集发布规则后再执行检测。"
+								: "任务可以运行，但当前配置不会产生正式质量运行。请为目标数据集发布规则绑定后重新保存计划。"
 						}
 					/>
 				)}
 				<Space wrap style={{ marginTop: 16 }}>
-					<Button onClick={() => router.push(qualityRoute("/governance/rules", datasetId))}>查看数据质量规则</Button>
+					<Button onClick={() => router.push(qualityRoute("/governance/rules", datasetId))}>配置数据质量规则</Button>
 					<Button
 						type="primary"
 						disabled={!datasetId && !runId}
@@ -248,13 +264,13 @@ export function AccessQualityPanel({
 				</Space>
 			</Card>
 			{kind === "file" ? (
-				<Card title="预检暂存区">
+				<Card title="质量检测暂存区（可选）">
 					<Space wrap style={{ marginBottom: 16 }}>
 						<Button type="primary" disabled={!taskId || operation !== null} loading={operation === "parse"} onClick={() => void runOperation("parse")}>
-							{hasStaging ? "重新解析文件" : "生成预检暂存区"}
+							{hasStaging ? "重新解析文件" : "生成检测暂存区"}
 						</Button>
 						<Button disabled={!hasStaging || operation !== null} loading={operation === "check"} onClick={() => void runOperation("check")}>
-							执行预检
+							执行质量检测
 						</Button>
 						<Button disabled={!hasStaging || operation !== null} loading={operation === "recheck"} onClick={() => void runOperation("recheck")}>
 							重新检查
@@ -285,7 +301,7 @@ export function AccessQualityPanel({
 							/>
 						</>
 					) : (
-						<Alert type="info" showIcon message="尚未生成预检暂存区" description="先保存文件接入草稿，再解析文件并调用数据质量模块的已发布规则。" />
+						<Alert type="info" showIcon message="尚未生成质量检测暂存区" description="质量检测为可选项；如需检测，可解析文件并调用数据质量模块中已发布的规则。" />
 					)}
 				</Card>
 			) : null}

@@ -2,6 +2,13 @@
 
 import { expect, test } from "vitest";
 import { qualityDatasetIdFromRef, qualityRoute, resolveQualityPolicyRef } from "./AccessGovernancePanels";
+import SOURCE from "./AccessGovernancePanels.tsx?raw";
+
+test("file quality detection is optional and never activates the access plan", () => {
+	expect(SOURCE).toContain("质量检测为可选项");
+	expect(SOURCE).not.toContain("文件预检通过，接入计划已自动生效");
+	expect(SOURCE).not.toContain("await ingestionTaskAPI.admitTask(taskId)");
+});
 
 test("qualityDatasetIdFromRef accepts only canonical dataset references", () => {
 	const datasetId = "6b6dc758-b894-4213-8008-62d0439f17d7";

@@ -27,7 +27,7 @@ describe("advanced dbt implementation draft contract", () => {
 		const workbench = read("../pages/data-modeling/prototype/ModelingWorkbenchPage.tsx");
 		const editor = read("../pages/data-modeling/prototype/ModelWorkbenchDialog.tsx");
 
-		expect(workbench).toContain("useCatalogMaintainerAccess");
+		expect(workbench).toContain("useDataModelingMenuGrant");
 		expect(workbench).toContain("disabled={!selectedModel || !canMaintain}");
 		expect(editor).toContain('representationScope: "TECHNICAL"');
 		expect(editor).toContain("if (!canMaintain)");

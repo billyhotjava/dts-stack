@@ -28,6 +28,7 @@ import com.yuzhi.dts.ingestion.service.etl.FileUploadService;
 import com.yuzhi.dts.ingestion.service.etl.IncrementalSyncService;
 import com.yuzhi.dts.ingestion.service.etl.ExecutionFailureClassifier;
 import com.yuzhi.dts.ingestion.service.etl.IngestionExecutionLineageSnapshot;
+import com.yuzhi.dts.ingestion.service.etl.JdbcMetadataService;
 import com.yuzhi.dts.ingestion.service.etl.api.ApiConnectorTypes;
 import com.yuzhi.dts.ingestion.service.etl.api.ApiIngestionExecutor;
 import com.yuzhi.dts.ingestion.service.etl.api.ApiIngestionResult;
@@ -134,6 +135,7 @@ public class IngestionTaskService {
     private IngestionTaskSecretMigrationService secretMigrationService;
     private IngestionRequiresNewExecutor requiresNewExecutor;
     private RollbackRecoveryService rollbackRecoveryService;
+    private JdbcMetadataService jdbcMetadataService;
 
     public IngestionTaskService(
         IngestionTaskRepository taskRepository,
@@ -209,6 +211,11 @@ public class IngestionTaskService {
     @Autowired
     void setRollbackRecoveryService(RollbackRecoveryService rollbackRecoveryService) {
         this.rollbackRecoveryService = rollbackRecoveryService;
+    }
+
+    @Autowired
+    void setJdbcMetadataService(JdbcMetadataService jdbcMetadataService) {
+        this.jdbcMetadataService = jdbcMetadataService;
     }
 
     /**
@@ -304,15 +311,14 @@ public class IngestionTaskService {
         IngestionTask draft = hasDraftRevision
             ? accessContractService.materializeLatestDraft(task)
             : task;
-        if (draft.getClassificationSeal() == null
-            || draft.getClassificationSeal().isNull()
-            || classificationSeal == null
-            || classificationSeal.isNull()
-            || draft.getFieldClassifications() == null
-            || draft.getFieldClassifications().isNull()
-            || fieldClassifications == null
-            || fieldClassifications.isNull()
-            || !java.util.Objects.equals(draft.getClassificationSeal(), classificationSeal)
+        boolean unclassifiedNonFileDraft = !isFileSourceType(draft.getSourceType())
+            && (classificationSeal == null || classificationSeal.isNull() || classificationSeal.isEmpty())
+            && (fieldClassifications == null || fieldClassifications.isNull() || fieldClassifications.isEmpty());
+        if (unclassifiedNonFileDraft) {
+            draft.setClassificationSeal(null);
+            draft.setFieldClassifications(null);
+        }
+        if (!java.util.Objects.equals(draft.getClassificationSeal(), classificationSeal)
             || !java.util.Objects.equals(draft.getFieldClassifications(), fieldClassifications)) {
             throw new IllegalStateException(
                 "CLASSIFICATION_SEAL_STALE: draft classification evidence changed; refresh before admission"
@@ -325,7 +331,6 @@ public class IngestionTaskService {
             fieldClassifications
         );
         classificationSealGuard.requireProductionSeal(validationCandidate);
-        requirePassedFilePreCheck(draft);
         verifyManagedFileTask(draft);
 
         IngestionTaskRevision draftRevision = null;
@@ -3406,6 +3411,28 @@ public class IngestionTaskService {
         admittedPlan.setAddaxJobPath(null);
         admittedPlan.setAirflowDagId(null);
 
+        // A manual full-refresh plan without an existing DAG has no scheduler workload
+        // to stage. Its Addax job and DAG are generated only after an execution record
+        // exists, so full_refresh can bind the real execution ID and keep target
+        // replacement non-destructive.
+        String admissionSchedule = admittedPlan.getSyncSchedule();
+        boolean manualSchedule = !StringUtils.hasText(admissionSchedule)
+            || "manual".equalsIgnoreCase(admissionSchedule.trim())
+            || "none".equalsIgnoreCase(admissionSchedule.trim());
+        if (!isFileSourceType(admittedPlan.getSourceType())
+            && !isApiSourceTask(admittedPlan)
+            && "full_refresh".equalsIgnoreCase(admittedPlan.getSyncMode())
+            && manualSchedule
+            && !StringUtils.hasText(draft.getAirflowDagId())) {
+            return new AdmissionArtifacts(
+                admittedPlan,
+                List.of(),
+                null,
+                draft.getAirflowDagId(),
+                revision == null ? null : revision.getId()
+            );
+        }
+
         String revisionKey = revision == null || revision.getId() == null
             ? "task_" + admittedPlan.getId() + "_" + UUID.randomUUID().toString().substring(0, 8)
             : "revision_" + revision.getId();
@@ -3848,19 +3875,6 @@ public class IngestionTaskService {
         requiresNewExecutor.executeWithoutResult(work);
     }
 
-    private void requirePassedFilePreCheck(IngestionTask task) {
-        if (task == null
-            || !isFileSourceType(task.getSourceType())
-            || !Boolean.TRUE.equals(task.getQualityPreCheckEnabled())) {
-            return;
-        }
-        if (!statusEquals(task.getPreCheckStatus(), "PASSED")) {
-            throw new IllegalStateException(
-                "FILE_PRECHECK_REQUIRED: 文件草稿必须完成质量预检并通过后才能准入"
-            );
-        }
-    }
-
     private void applyPlanSnapshot(IngestionTask target, IngestionTask source) {
         target.setName(source.getName());
         target.setDescription(source.getDescription());
@@ -4159,7 +4173,140 @@ public class IngestionTaskService {
         if (isFileSourceType(task.getSourceType())) {
             return null;
         }
-        return sourceResolver.resolve(task.getSourceDataSourceId(), List.of());
+        List<String> sourceTables = resolveExplicitSourceTables(task);
+        if (sourceTables.isEmpty() && !hasSourceQuerySql(task.getSourceConfig())) {
+            sourceTables = discoverAllSourceTables(task);
+        }
+        return sourceResolver.resolve(task.getSourceDataSourceId(), sourceTables);
+    }
+
+    private List<String> resolveExplicitSourceTables(IngestionTask task) {
+        if (task == null) {
+            return List.of();
+        }
+        java.util.LinkedHashSet<String> tables = new java.util.LinkedHashSet<>();
+        JsonNode mappings = task.getTableMapping();
+        if (mappings != null && mappings.isArray()) {
+            for (JsonNode mapping : mappings) {
+                addSourceTable(tables, mapping == null ? null : mapping.get("source"));
+            }
+        }
+        JsonNode sourceConfig = task.getSourceConfig();
+        if (sourceConfig != null && sourceConfig.isObject()) {
+            addSourceTable(tables, sourceConfig.get("table"));
+            addSourceTable(tables, sourceConfig.get("tables"));
+            JsonNode connection = sourceConfig.get("connection");
+            if (connection != null && connection.isObject()) {
+                addSourceTable(tables, connection.get("table"));
+                addSourceTable(tables, connection.get("tables"));
+            } else if (connection != null && connection.isArray()) {
+                for (JsonNode entry : connection) {
+                    if (entry != null && entry.isObject()) {
+                        addSourceTable(tables, entry.get("table"));
+                        addSourceTable(tables, entry.get("tables"));
+                    }
+                }
+            }
+        }
+        return List.copyOf(tables);
+    }
+
+    private void addSourceTable(java.util.Set<String> tables, JsonNode value) {
+        if (tables == null || value == null || value.isNull() || value.isMissingNode()) {
+            return;
+        }
+        if (value.isArray()) {
+            for (JsonNode item : value) {
+                addSourceTable(tables, item);
+            }
+            return;
+        }
+        String table = value.asText("").trim();
+        if (StringUtils.hasText(table) && !table.contains("${table}")) {
+            tables.add(table);
+        }
+    }
+
+    private boolean hasSourceQuerySql(JsonNode sourceConfig) {
+        if (sourceConfig == null || !sourceConfig.isObject()) {
+            return false;
+        }
+        if (hasNonEmptyJsonValue(sourceConfig.get("querySql"))) {
+            return true;
+        }
+        JsonNode connection = sourceConfig.get("connection");
+        if (connection != null && connection.isObject()) {
+            return hasNonEmptyJsonValue(connection.get("querySql"));
+        }
+        if (connection != null && connection.isArray()) {
+            for (JsonNode entry : connection) {
+                if (entry != null && entry.isObject() && hasNonEmptyJsonValue(entry.get("querySql"))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean hasNonEmptyJsonValue(JsonNode value) {
+        if (value == null || value.isNull() || value.isMissingNode()) {
+            return false;
+        }
+        if (value.isArray()) {
+            for (JsonNode item : value) {
+                if (hasNonEmptyJsonValue(item)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        return StringUtils.hasText(value.asText(""));
+    }
+
+    private List<String> discoverAllSourceTables(IngestionTask task) {
+        if (jdbcMetadataService == null || task == null || task.getSourceDataSourceId() == null) {
+            return List.of();
+        }
+        JdbcMetadataService.JdbcConnectionInfo info = sourceResolver.resolveJdbcInfo(task.getSourceDataSourceId());
+        if (info == null || !StringUtils.hasText(info.jdbcUrl())) {
+            return List.of();
+        }
+        String schema = sourceConfigText(task.getSourceConfig(), "schema", "schemaPattern", "database", "catalog");
+        String tablePattern = sourceConfigText(task.getSourceConfig(), "tablePattern");
+        List<JdbcMetadataService.TableMeta> discovered = jdbcMetadataService.listTables(info, schema, tablePattern, 0);
+        java.util.LinkedHashSet<String> tables = new java.util.LinkedHashSet<>();
+        for (JdbcMetadataService.TableMeta table : discovered) {
+            if (table == null || !StringUtils.hasText(table.name())) {
+                continue;
+            }
+            String tableName = table.name().trim();
+            if (StringUtils.hasText(table.schema())) {
+                tableName = table.schema().trim() + "." + tableName;
+            }
+            tables.add(tableName);
+        }
+        if (tables.isEmpty()) {
+            throw new IllegalStateException("全部表接入未发现可用源表，请检查数据库/Schema 与表筛选条件");
+        }
+        log.info("Resolved all-table ingestion task {} to {} source table(s)", task.getId(), tables.size());
+        return List.copyOf(tables);
+    }
+
+    private String sourceConfigText(JsonNode sourceConfig, String... keys) {
+        if (sourceConfig == null || !sourceConfig.isObject() || keys == null) {
+            return null;
+        }
+        for (String key : keys) {
+            JsonNode value = sourceConfig.get(key);
+            if (value == null || value.isNull() || value.isMissingNode()) {
+                continue;
+            }
+            String text = value.asText("").trim();
+            if (StringUtils.hasText(text)) {
+                return text;
+            }
+        }
+        return null;
     }
 
     private boolean isFileSourceType(String sourceType) {

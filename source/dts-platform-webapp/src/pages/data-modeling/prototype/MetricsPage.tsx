@@ -1,7 +1,6 @@
 import { Archive, CheckCircle2, Plus, RefreshCw, Save, Search, Send } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
-import { useCatalogMaintainerAccess } from "@/hooks/useModuleManageAccess";
 import type { DataModelingRoute } from "../types";
 import { Button, PageHeader, RequestState, Status, Toast, useTransientMessage } from "./PrototypePrimitives";
 import {
@@ -20,6 +19,7 @@ import {
 	saveIndicatorDraft,
 	supportsIndicatorCreation,
 } from "./services/indicatorProjectionService";
+import { useDataModelingMenuGrant } from "./useDataModelingMenuGrant";
 
 const typeByView: Record<string, MetricType> = {
 	composite: "复合指标",
@@ -48,7 +48,7 @@ const toForm = (selected: MetricSelection): IndicatorEditValues => ({
 });
 
 export function MetricsPage({ route }: { route: DataModelingRoute }) {
-	const canMaintain = useCatalogMaintainerAccess();
+	const canMaintain = useDataModelingMenuGrant();
 	const metricType = typeByView[route.view] || "原子指标";
 	const requestEpoch = useRef(0);
 	const [searchParams, setSearchParams] = useSearchParams();

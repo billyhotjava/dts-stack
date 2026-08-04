@@ -9,9 +9,7 @@ import {
 } from "@/api/modelSpecApi";
 import catalogDomainService, { type CatalogDomain } from "@/api/services/catalogDomainService";
 import {
-	getWarehousePlanCategories,
 	listWarehousePlans,
-	type WarehousePlanCategoryBindingView,
 	type WarehousePlanHeader,
 } from "@/api/warehousePlanApi";
 import type {
@@ -121,7 +119,7 @@ export function modelDraftFromView(model: ModelSpecView): ModelDraft {
 		partitionFields: model.implementationPolicy?.partitionFields?.join(",") || "",
 		loadStrategy: model.implementationPolicy?.loadStrategy || "FULL",
 		scdType: model.dimensionProfile?.scdPolicy.type || "NONE",
-		reuseScope: model.dimensionProfile?.reuseScope || "DOMAIN",
+		reuseScope: model.dimensionProfile?.reuseScope === "TENANT" ? "TENANT" : "DOMAIN",
 		dimensionDefinitionId: model.dimensionDefinitionRef?.dimensionDefinitionId || "",
 		standardBindings: model.standardBindings.map((binding) => ({ ...binding })),
 	};
@@ -140,14 +138,6 @@ export async function loadModelWorkbenchContext(): Promise<ModelWorkbenchContext
 		models: models.filter((model) => model.status !== "ARCHIVED"),
 		standards,
 	};
-}
-
-export async function loadConfirmedPlanDomains(planId: string): Promise<WarehousePlanCategoryBindingView[]> {
-	if (!planId) return [];
-	const categories = await getWarehousePlanCategories(planId);
-	return categories.value.domainBindings.filter(
-		(item) => item.confirmationStatus === "CONFIRMED" && item.resolutionStatus === "AVAILABLE",
-	);
 }
 
 export const loadCurrentDimensionDefinitions = (domainId: string) =>
@@ -210,7 +200,7 @@ const buildUpdate = (draft: ModelDraft): UpdateModelSpecCommand => {
 
 const validateDraft = (draft: ModelDraft, update: UpdateModelSpecCommand) => {
 	const missing: string[] = [];
-	if (!draft.planId) missing.push("建设计划");
+	if (!draft.planId) missing.push("可写建模上下文");
 	if (!draft.domainId) missing.push("数据域");
 	if (!draft.name.trim()) missing.push("模型名称");
 	if (!draft.grainStatement.trim()) missing.push("模型粒度");
@@ -231,9 +221,9 @@ export async function saveModelDraft(draft: ModelDraft, context: ModelSaveContex
 	if (update.modelType === "DIMENSION") {
 		if (!context.ownerId) throw new Error("当前登录身份缺少人员 ID，不能创建维度定义");
 		const definition = context.dimensionDefinitions.find((item) => item.id === draft.dimensionDefinitionId);
-		if (draft.createKind === "dimension-table" && !definition) throw new Error("请选择一个现行维度定义");
+		if (draft.createKind === "dimension-table" && !definition) throw new Error("请选择一个维度");
 		const existingDefinitionBinding = () => {
-			if (!definition) throw new Error("请选择一个现行维度定义");
+			if (!definition) throw new Error("请选择一个维度");
 			return {
 				mode: "EXISTING" as const,
 				dimensionDefinitionRef: { dimensionDefinitionId: definition.id, revision: definition.revision },

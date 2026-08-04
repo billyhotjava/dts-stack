@@ -43,7 +43,9 @@ export function AccessPlanReviewStep({
 			<div>
 				<Typography.Title level={4}>确认接入计划</Typography.Title>
 				<Typography.Text type="secondary">
-					确认后仅保存为待准入草稿，不会立即执行；准入后的运行结果和异常数据将在任务运行记录中呈现。
+					{kind === "file"
+						? "保存后立即生效，可按调度策略运行；质量检测为可选项，可在计划详情中按需执行。"
+						: "保存后立即生效，可按调度策略运行，但不会立即执行；运行结果和异常数据将在任务运行记录中呈现。"}
 				</Typography.Text>
 			</div>
 			<Descriptions bordered size="small" column={{ xs: 1, sm: 1, md: 2 }}>
@@ -61,7 +63,7 @@ export function AccessPlanReviewStep({
 					{kind === "file" ? "全量导入" : values.syncMode === "incremental" ? "增量同步" : "全量同步"}
 				</Descriptions.Item>
 				<Descriptions.Item label="提交后">
-					{editing ? "保存为待准入草稿；当前生效版本继续运行" : "保存草稿并等待密级准入"}
+					{editing ? "更新配置并立即生效" : "保存并立即生效"}
 				</Descriptions.Item>
 			</Descriptions>
 			{kind === "file" ? (
@@ -75,7 +77,9 @@ export function AccessPlanReviewStep({
 						</Space>
 					}
 					description={
-						fileUploadResult?.classificationSeal ? "封存证据已生成；任务保存后仍需完成准入。" : "尚未生成封存证据。"
+						fileUploadResult?.classificationSeal
+							? "封存证据已生成；质量检测可按需执行，不影响计划生效和数据接入。"
+							: "尚未生成封存证据。"
 					}
 				/>
 			) : null}

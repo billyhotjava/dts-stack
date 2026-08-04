@@ -22,8 +22,12 @@ public class IngestionClassificationSealGuard {
         }
         JsonNode seal = task.getClassificationSeal();
         if (seal == null || !seal.isObject()) {
+            JsonNode fields = task.getFieldClassifications();
+            if (fields == null || fields.isNull() || (fields.isObject() && fields.isEmpty())) {
+                return;
+            }
             throw new IllegalStateException(
-                "CLASSIFICATION_SEAL_REQUIRED: 任务缺少密级封存，只允许预检，不能执行生产写入"
+                "CLASSIFICATION_SEAL_REQUIRED: 任务存在字段密级但缺少密级封存，不能执行生产写入"
             );
         }
         requireText(seal, "sealId");

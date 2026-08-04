@@ -23,6 +23,7 @@ import com.yuzhi.dts.ingestion.service.etl.FileUploadService;
 import com.yuzhi.dts.ingestion.service.etl.TargetTableProvisioner;
 import com.yuzhi.dts.ingestion.service.etl.IncrementalSyncService;
 import com.yuzhi.dts.ingestion.service.etl.IngestionRetryService;
+import com.yuzhi.dts.ingestion.service.etl.JdbcMetadataService;
 import com.yuzhi.dts.ingestion.service.infra.PlatformInfraClient;
 import com.yuzhi.dts.ingestion.service.etl.api.ApiIngestionExecutor;
 import com.yuzhi.dts.ingestion.service.etl.api.ApiIngestionResult;
@@ -142,6 +143,9 @@ class IngestionTaskServiceTest {
     private IngestionClassificationSealGuard classificationSealGuard;
 
     @Mock
+    private JdbcMetadataService jdbcMetadataService;
+
+    @Mock
     private IngestionAccessContractService accessContractService;
 
     @Mock
@@ -192,6 +196,7 @@ class IngestionTaskServiceTest {
         );
         ingestionTaskService.setSecretMigrationService(secretMigrationService);
         ingestionTaskService.setRequiresNewExecutor(requiresNewExecutor);
+        ingestionTaskService.setJdbcMetadataService(jdbcMetadataService);
         lenient().when(requiresNewExecutor.execute(any())).thenAnswer(invocation ->
             invocation.<java.util.function.Supplier<?>>getArgument(0).get()
         );
@@ -328,6 +333,72 @@ class IngestionTaskServiceTest {
         assertThat(merged.get("baseUrl")).isEqualTo("https://managed.example");
         assertThat(merged.toString()).contains("managed-runtime-token").doesNotContain("legacy-task-token");
         assertThat(merged).containsKey("resource");
+    }
+
+    @Test
+    void databaseAllSelectionShouldDiscoverTablesBeforeResolvingRuntimeSource() throws Exception {
+        IngestionTask task = createTestTaskEntity();
+        task.setSourceDataSourceId(TEST_SOURCE_ID);
+        task.setSourceConfig(objectMapper.readTree("""
+            {"readerType":"mysqlreader","column":["*"]}
+            """));
+        task.setTableMapping(objectMapper.createArrayNode());
+        JdbcMetadataService.JdbcConnectionInfo connectionInfo = new JdbcMetadataService.JdbcConnectionInfo(
+            "jdbc:mysql://mysql.example:3306/test_db",
+            "managed-user",
+            "managed-password",
+            "com.mysql.cj.jdbc.Driver",
+            null,
+            Map.of()
+        );
+        var expected = new com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource(
+            "mysqlreader",
+            Map.of("table", List.of("test_db.customer", "test_db.orders")),
+            null
+        );
+        when(sourceResolver.resolveJdbcInfo(TEST_SOURCE_ID)).thenReturn(connectionInfo);
+        when(jdbcMetadataService.listTables(connectionInfo, null, null, 0)).thenReturn(
+            List.of(
+                new JdbcMetadataService.TableMeta("test_db", "customer", "TABLE"),
+                new JdbcMetadataService.TableMeta("test_db", "orders", "TABLE")
+            )
+        );
+        when(sourceResolver.resolve(TEST_SOURCE_ID, List.of("test_db.customer", "test_db.orders"))).thenReturn(expected);
+
+        Method method = IngestionTaskService.class.getDeclaredMethod(
+            "resolveSource",
+            IngestionTask.class,
+            com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource.class
+        );
+        method.setAccessible(true);
+
+        assertThat(method.invoke(ingestionTaskService, task, null)).isSameAs(expected);
+        verify(sourceResolver).resolve(TEST_SOURCE_ID, List.of("test_db.customer", "test_db.orders"));
+    }
+
+    @Test
+    void databaseQuerySqlShouldNotTriggerAllTableDiscovery() throws Exception {
+        IngestionTask task = createTestTaskEntity();
+        task.setSourceDataSourceId(TEST_SOURCE_ID);
+        task.setSourceConfig(objectMapper.readTree("""
+            {"readerType":"mysqlreader","querySql":["SELECT 1"]}
+            """));
+        var expected = new com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource(
+            "mysqlreader",
+            Map.of("querySql", List.of("SELECT 1")),
+            null
+        );
+        when(sourceResolver.resolve(TEST_SOURCE_ID, List.of())).thenReturn(expected);
+
+        Method method = IngestionTaskService.class.getDeclaredMethod(
+            "resolveSource",
+            IngestionTask.class,
+            com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource.class
+        );
+        method.setAccessible(true);
+
+        assertThat(method.invoke(ingestionTaskService, task, null)).isSameAs(expected);
+        verifyNoInteractions(jdbcMetadataService);
     }
 
     @Test
@@ -856,42 +927,6 @@ class IngestionTaskServiceTest {
     }
 
     @Test
-    void admitFileDraftShouldRequirePassedPreCheckWhenEnabled() {
-        Long taskId = 63L;
-        ObjectNode seal = createValidClassificationSeal();
-        ObjectNode fields = objectMapper.createObjectNode().put("customer_id", "INTERNAL");
-        IngestionTask active = createTestTaskEntity();
-        active.setId(taskId);
-        active.setStatus("active");
-        IngestionTask draft = createTestTaskEntity();
-        draft.setId(taskId);
-        draft.setStatus("draft");
-        draft.setSourceType("csv");
-        draft.setSourceDataSourceId(null);
-        draft.setClassificationSeal(seal);
-        draft.setFieldClassifications(fields);
-        draft.setQualityPreCheckEnabled(true);
-        draft.setPreCheckStatus("PENDING");
-        IngestionTaskRevision revision = new IngestionTaskRevision();
-        revision.setId(630L);
-        revision.setRevisionNumber(2);
-        revision.setState("DRAFT");
-
-        ingestionTaskService.setAccessContractService(accessContractService);
-        when(taskRepository.findByIdForUpdate(taskId)).thenReturn(Optional.of(active));
-        when(accessContractService.findLatestDraftRevision(taskId)).thenReturn(Optional.of(revision));
-        when(accessContractService.materializeLatestDraft(active)).thenReturn(draft);
-
-        assertThatThrownBy(() -> ingestionTaskService.admit(taskId, seal, fields))
-            .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("FILE_PRECHECK_REQUIRED");
-
-        verify(accessContractService, never()).activateDraftRevision(anyLong());
-        verifyNoInteractions(fileUploadService, addaxJobService, airflowDagService, dagPreheatService);
-        verify(taskRepository, never()).save(any(IngestionTask.class));
-    }
-
-    @Test
     void admit_shouldAtomicallyActivateDraftWithValidSeal() {
         Long taskId = 1L;
         IngestionTask task = createTestTaskEntity();
@@ -908,9 +943,6 @@ class IngestionTaskServiceTest {
         admitted.setFieldClassifications(fields);
 
         when(taskRepository.findByIdForUpdate(taskId)).thenReturn(Optional.of(task));
-        when(addaxJobService.createJobFromTask(any(IngestionTask.class))).thenReturn(
-            new AddaxJobService.AddaxJobResult("job.json", "/tmp/job.json", Map.of())
-        );
         when(taskRepository.save(task)).thenReturn(task);
         when(taskMapper.toDto(task)).thenReturn(admitted);
 
@@ -930,12 +962,128 @@ class IngestionTaskServiceTest {
     }
 
     @Test
+    void admit_shouldActivateUnclassifiedDraftWithoutInventingClassificationEvidence() {
+        Long taskId = 2L;
+        IngestionTask task = createTestTaskEntity();
+        task.setId(taskId);
+        task.setStatus("draft");
+        task.setAirflowEnabled(false);
+        IngestionTaskDTO admitted = createTestTaskDTO();
+        admitted.setId(taskId);
+        admitted.setStatus("active");
+
+        when(taskRepository.findByIdForUpdate(taskId)).thenReturn(Optional.of(task));
+        when(taskRepository.save(task)).thenReturn(task);
+        when(taskMapper.toDto(task)).thenReturn(admitted);
+
+        IngestionTaskDTO result = ingestionTaskService.admit(taskId, null, null);
+
+        assertThat(result.getStatus()).isEqualTo("active");
+        assertThat(task.getClassificationSeal()).isNull();
+        assertThat(task.getFieldClassifications()).isNull();
+        verify(classificationSealGuard).requireProductionSeal(any(IngestionTask.class));
+        verify(taskRepository).save(task);
+    }
+
+    @Test
+    void admitManualFullRefreshShouldNotGenerateExecutionScopedArtifactsBeforeExecutionExists() {
+        Long taskId = 22L;
+        IngestionTask active = createTestTaskEntity();
+        active.setId(taskId);
+        active.setStatus("active");
+        IngestionTask draft = createTestTaskEntity();
+        draft.setId(taskId);
+        draft.setStatus("draft");
+        draft.setSyncSchedule("");
+        draft.setAirflowEnabled(true);
+        ObjectNode seal = createValidClassificationSeal();
+        ObjectNode fields = objectMapper.createObjectNode().put("customer_id", "INTERNAL");
+        draft.setClassificationSeal(seal);
+        draft.setFieldClassifications(fields);
+        IngestionTaskRevision revision = new IngestionTaskRevision();
+        revision.setId(220L);
+        revision.setRevisionNumber(2);
+        revision.setState("DRAFT");
+        IngestionTaskDTO admitted = createTestTaskDTO();
+        admitted.setId(taskId);
+        admitted.setStatus("active");
+
+        ingestionTaskService.setAccessContractService(accessContractService);
+        when(taskRepository.findByIdForUpdate(taskId)).thenReturn(Optional.of(active));
+        when(accessContractService.findLatestDraftRevision(taskId)).thenReturn(Optional.of(revision));
+        when(accessContractService.materializeLatestDraft(active)).thenReturn(draft);
+        when(taskRepository.save(active)).thenReturn(active);
+        when(taskMapper.toDto(active)).thenReturn(admitted);
+        when(accessContractService.enrichTaskDto(admitted)).thenReturn(admitted);
+
+        IngestionTaskDTO result = ingestionTaskService.admit(taskId, seal, fields);
+
+        assertThat(result.getStatus()).isEqualTo("active");
+        assertThat(active.getStatus()).isEqualTo("active");
+        assertThat(active.getAddaxJobPath()).isNull();
+        assertThat(active.getAirflowDagId()).isNull();
+        verify(accessContractService).refreshDraftRuntimeSnapshot(eq(taskId), argThat(candidate ->
+            !org.springframework.util.StringUtils.hasText(candidate.getSyncSchedule())
+                && "full_refresh".equals(candidate.getSyncMode())
+        ));
+        verify(accessContractService).activateDraftRevision(taskId);
+        verifyNoInteractions(addaxJobService, airflowDagService, dagPreheatService);
+        verify(taskRepository).save(active);
+    }
+
+    @Test
+    void admit_shouldClearLegacyClassificationEvidenceForAnUnclassifiedNonFileDraft() {
+        Long taskId = 3L;
+        IngestionTask active = createTestTaskEntity();
+        active.setId(taskId);
+        active.setStatus("active");
+        IngestionTask draft = createTestTaskEntity();
+        draft.setId(taskId);
+        draft.setStatus("draft");
+        draft.setSourceType("httpreader");
+        draft.setSourceDataSourceId(TEST_SOURCE_ID);
+        draft.setAirflowEnabled(false);
+        draft.setClassificationSeal(createValidClassificationSeal());
+        draft.setFieldClassifications(objectMapper.createObjectNode().put("customer_id", "SECRET"));
+        IngestionTaskRevision revision = new IngestionTaskRevision();
+        revision.setId(3L);
+        revision.setRevisionNumber(1);
+        revision.setState("DRAFT");
+        IngestionTaskDTO admitted = createTestTaskDTO();
+        admitted.setId(taskId);
+        admitted.setStatus("active");
+
+        ingestionTaskService.setAccessContractService(accessContractService);
+        when(taskRepository.findByIdForUpdate(taskId)).thenReturn(Optional.of(active));
+        when(accessContractService.findLatestDraftRevision(taskId)).thenReturn(Optional.of(revision));
+        when(accessContractService.materializeLatestDraft(active)).thenReturn(draft);
+        when(taskRepository.save(active)).thenReturn(active);
+        when(taskMapper.toDto(active)).thenReturn(admitted);
+        when(accessContractService.enrichTaskDto(admitted)).thenReturn(admitted);
+
+        IngestionTaskDTO result = ingestionTaskService.admit(taskId, null, null);
+
+        assertThat(result.getStatus()).isEqualTo("active");
+        assertThat(active.getClassificationSeal()).isNull();
+        assertThat(active.getFieldClassifications()).isNull();
+        verify(classificationSealGuard).requireProductionSeal(argThat(candidate ->
+            candidate.getClassificationSeal() == null && candidate.getFieldClassifications() == null
+        ));
+        verify(accessContractService).refreshDraftRuntimeSnapshot(eq(taskId), argThat(candidate ->
+            candidate.getClassificationSeal() == null && candidate.getFieldClassifications() == null
+        ));
+        verify(accessContractService).activateDraftRevision(taskId);
+    }
+
+    @Test
     void admit_shouldStagePausedRevisionDagAndDeferCutoverUntilCommit() {
         Long taskId = 1L;
         IngestionTask task = createTestTaskEntity();
         task.setId(taskId);
         task.setStatus("draft");
         task.setAirflowEnabled(true);
+        task.setSyncSchedule("");
+        task.setAirflowDagId("ingestion_previous_scheduled");
         ObjectNode seal = createValidClassificationSeal();
         ObjectNode fields = objectMapper.createObjectNode().put("customer_id", "INTERNAL");
         task.setClassificationSeal(seal);
@@ -995,6 +1143,7 @@ class IngestionTaskServiceTest {
         task.setId(taskId);
         task.setStatus("draft");
         task.setAirflowEnabled(true);
+        task.setSyncSchedule("cron:0 0 * * *");
         ObjectNode seal = createValidClassificationSeal();
         ObjectNode fields = objectMapper.createObjectNode().put("customer_id", "INTERNAL");
         task.setClassificationSeal(seal);
@@ -1236,7 +1385,7 @@ class IngestionTaskServiceTest {
     }
 
     @Test
-    void admit_shouldResolveManagedFileByIdAndReplaceClientPathsBeforeJobGeneration() {
+    void admit_shouldAllowManagedFileWithoutOptionalQualityPreCheck() {
         Long taskId = 1L;
         String fileHash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         ObjectNode seal = createValidClassificationSeal();
@@ -1260,6 +1409,8 @@ class IngestionTaskServiceTest {
         task.setSourceConfig(sourceConfig);
         task.setClassificationSeal(seal);
         task.setFieldClassifications(fields);
+        task.setQualityPreCheckEnabled(true);
+        task.setPreCheckStatus("FAILED");
         IngestionTaskDTO admitted = createTestTaskDTO();
         admitted.setId(taskId);
         admitted.setStatus("active");
@@ -1279,8 +1430,10 @@ class IngestionTaskServiceTest {
         when(taskRepository.save(task)).thenReturn(task);
         when(taskMapper.toDto(task)).thenReturn(admitted);
 
-        ingestionTaskService.admit(taskId, seal, fields);
+        IngestionTaskDTO result = ingestionTaskService.admit(taskId, seal, fields);
 
+        assertThat(result.getStatus()).isEqualTo("active");
+        assertThat(task.getStatus()).isEqualTo("active");
         assertThat(task.getSourceConfig().path("_filePath").asText())
             .isEqualTo("/srv/addax/uploads/file-001.csv.enc");
         assertThat(task.getSourceConfig().path("_containerPath").asText())

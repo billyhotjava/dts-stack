@@ -16,19 +16,23 @@ test("data access workspace separates database, API and offline-file entry point
 	assert.match(WORKSPACE_SOURCE, /ingestionTaskAPI\.getTasks\(/);
 	assert.match(WORKSPACE_SOURCE, /access\/new\?kind=\$\{sourceKind\}/);
 	assert.match(WORKSPACE_SOURCE, /access\/\$\{row\.taskId\}/);
+	assert.match(WORKSPACE_SOURCE, /普通流程/);
 	assert.doesNotMatch(WORKSPACE_SOURCE, /<Card|card-list/);
+	assert.doesNotMatch(WORKSPACE_SOURCE, /Revision|未版本化|versionLabel|versionHint/);
 });
 
 test("access wizard uses one three-step shell for database, API and file plans", () => {
 	for (const component of ["DatabaseAccessStep", "ApiAccessStep", "FileAccessStep", "LandingScheduleStep"]) {
 		assert.match(WIZARD_SOURCE, new RegExp(component));
 	}
-	for (const step of ["来源连接", "资源定义", "策略准入"]) {
+	for (const step of ["来源连接", "资源定义", "落地策略"]) {
 		assert.match(WIZARD_SOURCE, new RegExp(step));
 	}
 	assert.match(WIZARD_SOURCE, /requireSafeApiResourcePath/);
 	assert.match(WIZARD_SOURCE, /连接凭据由平台托管/);
-	assert.match(WIZARD_SOURCE, /\{editId \? "保存修改为草稿" : "保存草稿"\}/);
+	assert.match(WIZARD_SOURCE, /"保存修改并生效"/);
+	assert.match(WIZARD_SOURCE, /"保存并生效"/);
+	assert.doesNotMatch(WIZARD_SOURCE, /保存修改为草稿|保存草稿/);
 	assert.doesNotMatch(WIZARD_SOURCE, /创建任务/);
 	assert.match(WIZARD_SOURCE, /access\/\$\{result\.taskId\}/);
 });
@@ -46,13 +50,12 @@ test("access payload preserves the established database, API and file runtime co
 	assert.match(PAYLOAD_SOURCE, /usePlatformDefault:\s*true/);
 });
 
-test("access detail is the operational home for history, admission, execution and evidence-preserving deletion", () => {
-	for (const tab of ["概览", "运行历史", "密级准入", "变更记录"]) {
+test("access detail is the operational home for history, execution and evidence-preserving deletion", () => {
+	for (const tab of ["概览", "运行历史", "变更记录"]) {
 		assert.match(DETAIL_SOURCE, new RegExp(`label:\\s*"${tab}"`));
 	}
 	assert.match(DETAIL_SOURCE, /<ExecutionHistoryTable taskId=\{taskId\}/);
-	assert.match(DETAIL_SOURCE, /<TaskAdmissionBasis task=\{admissionTask \|\| task\}/);
-	assert.match(DETAIL_SOURCE, /runAccessPlanOperation\("admit", operationTaskId, ingestionTaskAPI\)/);
+	assert.doesNotMatch(DETAIL_SOURCE, /TaskAdmissionBasis|runAccessPlanOperation\("admit"|密级准入|准入草稿/);
 	assert.match(DETAIL_SOURCE, /runAccessPlanOperation\("execute", operationTaskId, ingestionTaskAPI\)/);
 	assert.match(DETAIL_SOURCE, /runAccessPlanOperation\("delete", operationTaskId, ingestionTaskAPI\)/);
 	assert.match(DETAIL_SOURCE, /删除计划/);

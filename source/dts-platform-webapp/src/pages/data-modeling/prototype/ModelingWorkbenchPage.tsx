@@ -23,7 +23,6 @@ import { getModelRepresentation } from "@/api/modelRepresentationApi";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
 import type { ModelRepresentationView } from "@/features/modeling/contracts/modelRepresentationContract";
 import type { ModelSpecField, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
-import { useCatalogMaintainerAccess } from "@/hooks/useModuleManageAccess";
 import { useUserInfo } from "@/store/userStore";
 import { dataModelingPath } from "../navigation";
 import type { DataModelingRoute } from "../types";
@@ -31,7 +30,6 @@ import { ModelWorkbenchDialog, type WorkbenchDialog } from "./ModelWorkbenchDial
 import { Button, PageHeader, RequestState, Status, Toast, useTransientMessage } from "./PrototypePrimitives";
 import {
 	emptyModelDraft,
-	loadConfirmedPlanDomains,
 	loadCurrentDimensionDefinitions,
 	loadModelWorkbenchContext,
 	MODEL_KIND_CONFIG,
@@ -42,6 +40,7 @@ import {
 	saveModelDraft,
 } from "./services/modelWorkbenchService";
 import { normalizeModelingRequestFailure } from "./services/planningProjectionService";
+import { useDataModelingMenuGrant } from "./useDataModelingMenuGrant";
 
 const layerTabs = [
 	{ label: "贴源层", layers: ["ODS", "STG"] },
@@ -64,7 +63,7 @@ const ownerIdOf = (userInfo: unknown) => {
 
 export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const navigate = useNavigate();
-	const canMaintain = useCatalogMaintainerAccess();
+	const canMaintain = useDataModelingMenuGrant();
 	const userInfo = useUserInfo();
 	const requestEpoch = useRef(0);
 	const [searchParams, setSearchParams] = useSearchParams();
@@ -72,8 +71,8 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const [context, setContext] = useState<ModelWorkbenchContext | null>(null);
 	const [draft, setDraft] = useState<ModelDraft | null>(null);
 	const [fieldRowIds, setFieldRowIds] = useState<string[]>([]);
-	const [confirmedDomains, setConfirmedDomains] = useState<Awaited<ReturnType<typeof loadConfirmedPlanDomains>>>([]);
 	const [dimensionDefinitions, setDimensionDefinitions] = useState<DimensionDefinitionView[]>([]);
+	const [dimensionDefinitionFailure, setDimensionDefinitionFailure] = useState("");
 	const [layer, setLayer] = useState("公共层");
 	const [domain, setDomain] = useState("");
 	const [query, setQuery] = useState("");
@@ -90,7 +89,6 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const draftCreateKind = draft?.createKind || null;
 	const draftDimensionDefinitionId = draft?.dimensionDefinitionId || "";
 	const draftDomainId = draft?.domainId || "";
-	const draftPlanId = draft?.planId || "";
 
 	const load = useCallback(
 		async (preferredModelId?: string) => {
@@ -127,33 +125,13 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	}, [load]);
 
 	useEffect(() => {
-		if (!draftPlanId) {
-			setConfirmedDomains([]);
-			return;
-		}
-		let active = true;
-		void loadConfirmedPlanDomains(draftPlanId)
-			.then((items) => {
-				if (!active) return;
-				setConfirmedDomains(items);
-				if (!draftBase && items.length && !items.some((item) => item.domainId === draftDomainId)) {
-					setDraft((current) => (current ? { ...current, domainId: items[0].domainId } : current));
-				}
-			})
-			.catch((error) => {
-				if (active) setFailure(normalizeModelingRequestFailure(error, "建设计划的数据域基线读取失败。"));
-			});
-		return () => {
-			active = false;
-		};
-	}, [draftBase, draftDomainId, draftPlanId]);
-
-	useEffect(() => {
-		if (!draftCreateKind || MODEL_KIND_CONFIG[draftCreateKind].modelType !== "DIMENSION" || !draftDomainId) {
+		if (draftCreateKind !== "dimension-table" || !draftDomainId) {
 			setDimensionDefinitions([]);
+			setDimensionDefinitionFailure("");
 			return;
 		}
 		let active = true;
+		setDimensionDefinitionFailure("");
 		void loadCurrentDimensionDefinitions(draftDomainId)
 			.then((items) => {
 				if (!active) return;
@@ -163,7 +141,10 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 				}
 			})
 			.catch((error) => {
-				if (active) setFailure(normalizeModelingRequestFailure(error, "现行维度定义读取失败。"));
+				if (active) {
+					setDimensionDefinitions([]);
+					setDimensionDefinitionFailure(normalizeModelingRequestFailure(error, "维度目录读取失败。").message);
+				}
 			});
 		return () => {
 			active = false;
@@ -332,7 +313,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		<main className="dmx-workbench-page">
 			<PageHeader description={route.description} title="维度建模" trail="数据建模 / 维度建模" />
 			{loading ? (
-				<RequestState description="正在读取模型、建设计划和数据域。" kind="loading" title="正在加载模型工作台" />
+				<RequestState description="正在读取模型目录、数据域和标准。" kind="loading" title="正在加载模型工作台" />
 			) : failure?.kind === "permission" ? (
 				<RequestState description={failure.message} kind="permission" title="无权访问模型工作台" />
 			) : context ? (
@@ -546,8 +527,9 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 									</div>
 								) : null}
 								<ModelEditor
-									confirmedDomains={confirmedDomains}
+									dimensionDefinitionFailure={dimensionDefinitionFailure}
 									dimensionDefinitions={dimensionDefinitions}
+									domains={context.domains}
 									draft={draft}
 									fieldRowIds={fieldRowIds}
 									onAddField={addField}
@@ -570,7 +552,6 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 										})
 									}
 									onUpdateField={updateField}
-									plans={context.plans}
 									readOnly={!canMaintain || selectedModel?.compatibilityMode === "LEGACY_READONLY"}
 									standards={context.standards}
 								/>
@@ -612,8 +593,8 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 function ModelEditor({
 	draft,
 	onChange,
-	plans,
-	confirmedDomains,
+	domains,
+	dimensionDefinitionFailure,
 	dimensionDefinitions,
 	standards,
 	fieldRowIds,
@@ -625,8 +606,8 @@ function ModelEditor({
 }: {
 	draft: ModelDraft;
 	onChange: (draft: ModelDraft) => void;
-	plans: ModelWorkbenchContext["plans"];
-	confirmedDomains: Awaited<ReturnType<typeof loadConfirmedPlanDomains>>;
+	domains: ModelWorkbenchContext["domains"];
+	dimensionDefinitionFailure: string;
 	dimensionDefinitions: DimensionDefinitionView[];
 	standards: ModelWorkbenchContext["standards"];
 	fieldRowIds: string[];
@@ -644,34 +625,19 @@ function ModelEditor({
 				<h3>基本信息</h3>
 				<div className="dmx-form-grid">
 					<label>
-						<span className="required">建设计划</span>
-						<select
-							disabled={Boolean(draft.base)}
-							onChange={(event) => patch({ planId: event.target.value })}
-							value={draft.planId}
-						>
-							<option value="">请选择</option>
-							{plans.map((plan) => (
-								<option key={plan.id} value={plan.id}>
-									{plan.name} · {plan.code}
-								</option>
-							))}
-						</select>
-					</label>
-					<label>
 						<span className="required">数据域</span>
 						<select
 							disabled={Boolean(draft.base)}
 							onChange={(event) => patch({ domainId: event.target.value })}
 							value={draft.domainId}
 						>
-							<option value="">请选择已确认数据域</option>
-							{confirmedDomains.map((item) => (
-								<option key={item.domainId} value={item.domainId}>
-									{item.name || item.code || item.domainId}
+							<option value="">请选择数据域</option>
+							{domains.map((item) => (
+								<option key={item.code} value={item.code}>
+									{item.name} · {item.code}
 								</option>
 							))}
-							{draft.base && !confirmedDomains.some((item) => item.domainId === draft.domainId) ? (
+							{draft.base && !domains.some((item) => item.code === draft.domainId) ? (
 								<option value={draft.domainId}>{draft.domainId}</option>
 							) : null}
 						</select>
@@ -755,27 +721,28 @@ function ModelEditor({
 									onChange={(event) => patch({ reuseScope: event.target.value as ModelDraft["reuseScope"] })}
 									value={draft.reuseScope}
 								>
-									<option value="PLAN">当前建设计划</option>
 									<option value="DOMAIN">同一业务分类</option>
 									<option value="TENANT">当前租户</option>
 								</select>
 							</label>
 							{!draft.base && draft.createKind === "dimension-table" ? (
 								<label className="dmx-form-field--wide">
-									<span className="required">现行维度定义</span>
+									<span className="required">维度</span>
 									<select
 										onChange={(event) => patch({ dimensionDefinitionId: event.target.value })}
 										value={draft.dimensionDefinitionId}
 									>
-										<option value="">请选择</option>
+										<option value="">请选择维度</option>
 										{dimensionDefinitions.map((item) => (
 											<option key={item.id} value={item.id}>
 												{item.name} · {item.systemCode} · r{item.revision}
 											</option>
 										))}
 									</select>
-									{!dimensionDefinitions.length ? (
-										<small>当前数据域没有可复用的现行维度定义，请改为“创建维度”。</small>
+									{dimensionDefinitionFailure ? (
+										<small className="dmx-inline-error">{dimensionDefinitionFailure}</small>
+									) : !dimensionDefinitions.length ? (
+										<small>当前数据域暂无维度，请先创建维度。</small>
 									) : null}
 								</label>
 							) : null}

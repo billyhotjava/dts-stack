@@ -92,6 +92,50 @@ class JdbcMetadataServiceTest {
         }
     }
 
+    @Test
+    void listTablesDefaultsMySqlDiscoveryToTheCurrentCatalog() throws Exception {
+        DatabaseMetaData metadata = mock(DatabaseMetaData.class);
+        Connection connection = mock(Connection.class);
+        when(connection.getMetaData()).thenReturn(metadata);
+        when(connection.getCatalog()).thenReturn("test_db");
+        when(metadata.getDatabaseProductName()).thenReturn("MySQL");
+        when(
+            metadata.getTables(
+                nullable(String.class),
+                nullable(String.class),
+                nullable(String.class),
+                any(String[].class)
+            )
+        ).thenAnswer(invocation -> {
+            String catalog = invocation.getArgument(0);
+            if ("test_db".equals(catalog)) {
+                return tableRows(new TableRow("test_db", null, "customer", "TABLE"));
+            }
+            return tableRows(
+                new TableRow("test_db", null, "customer", "TABLE"),
+                new TableRow("audit_db", null, "event_log", "TABLE")
+            );
+        });
+        Driver driver = new FixedConnectionDriver(connection);
+        DriverManager.registerDriver(driver);
+        try {
+            JdbcMetadataService service = new JdbcMetadataService();
+            JdbcMetadataService.JdbcConnectionInfo info = new JdbcMetadataService.JdbcConnectionInfo(
+                "jdbc:dts-mysql-catalog:test",
+                null,
+                null,
+                null,
+                null,
+                Map.of()
+            );
+
+            assertThat(service.listTables(info, null, null, 0))
+                .containsExactly(new JdbcMetadataService.TableMeta("test_db", "customer", "TABLE"));
+        } finally {
+            DriverManager.deregisterDriver(driver);
+        }
+    }
+
     private static ResultSet tableRows(TableRow... rows) throws SQLException {
         ResultSet resultSet = mock(ResultSet.class);
         AtomicInteger cursor = new AtomicInteger(-1);

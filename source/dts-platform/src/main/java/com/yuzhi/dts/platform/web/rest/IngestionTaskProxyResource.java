@@ -146,7 +146,7 @@ public class IngestionTaskProxyResource {
             }
             resolvedPayload = accessDecisionService.canonicalizeTaskPayloadIdentifiers(resolvedPayload);
             accessDecisionService.requireCreateOrUpdateAccess(resolvedPayload, true);
-            resolvedPayload = attachCurrentSourceClassificationSeal(resolvedPayload, !draft);
+            resolvedPayload = attachCurrentSourceClassificationSeal(resolvedPayload, false);
             ApiResponse<Map<String, Object>> response = ingestionClient.createIngestionTask(resolvedPayload);
             Map<String, Object> outcome = safeAuditDetails(auditDetails);
             if (response != null) {
@@ -393,9 +393,11 @@ public class IngestionTaskProxyResource {
             existing.setData(canonicalTask);
             accessDecisionService.requireTaskPayloadAccess(canonicalTask, true);
 
-            Map<String, Object> sealedTask = attachCurrentSourceClassificationSeal(canonicalTask, true);
+            Map<String, Object> sealedTask = attachCurrentSourceClassificationSeal(canonicalTask, false);
             Map<String, Object> admission = new LinkedHashMap<>();
-            admission.put("classificationSeal", sealedTask.get("classificationSeal"));
+            if (sealedTask.get("classificationSeal") != null) {
+                admission.put("classificationSeal", sealedTask.get("classificationSeal"));
+            }
             if (sealedTask.get("fieldClassifications") != null) {
                 admission.put("fieldClassifications", sealedTask.get("fieldClassifications"));
             }
@@ -1698,16 +1700,22 @@ public class IngestionTaskProxyResource {
             );
         Map<String, Object> props = readDataSourceProps(dataSource);
         Object rawLevel = props.get("classification");
+        if (!props.containsKey("classification") || rawLevel == null) {
+            if (required) {
+                throw new CatalogClassificationException(
+                    "SOURCE_CLASSIFICATION_REQUIRED",
+                    "当前任务已有密级证据，请先恢复数据源密级或重新保存草稿"
+                );
+            }
+            return resolved;
+        }
         String declared;
         try {
             declared = SecurityLevelCatalog.requireDataLevel(rawLevel).code();
         } catch (IllegalArgumentException ex) {
-            if (!required) {
-                return resolved;
-            }
             throw new CatalogClassificationException(
-                "SOURCE_CLASSIFICATION_REQUIRED",
-                "请先为数据源明确选择密级，再创建生产接入任务"
+                "SOURCE_CLASSIFICATION_INVALID",
+                "数据源已配置密级字段，但密级值无效，请修正后重试"
             );
         }
         Map<String, String> fieldClassifications = mergeFieldClassifications(
@@ -1775,14 +1783,10 @@ public class IngestionTaskProxyResource {
         Map<String, Object> sourceConfig = source.get("config") instanceof Map<?, ?>
             ? mapValue(source.get("config"))
             : mapValue(resolved.get("sourceConfig"));
-        Map<String, Object> topLevelSourceConfig = mapValue(resolved.get("sourceConfig"));
         if (isFileTask(resolved, source, sourceConfig)) {
             return attachClassificationSeal(resolved, required);
         }
 
-        boolean hadClassificationSeal = resolved.get("classificationSeal") instanceof Map<?, ?> ||
-            sourceConfig.get("classificationSeal") instanceof Map<?, ?> ||
-            topLevelSourceConfig.get("classificationSeal") instanceof Map<?, ?>;
         resolved.remove("classificationSeal");
         resolved.remove("fieldClassifications");
         if (resolved.get("source") instanceof Map<?, ?>) {
@@ -1801,7 +1805,7 @@ public class IngestionTaskProxyResource {
             cleanConfig.remove("fieldClassifications");
             resolved.put("sourceConfig", cleanConfig);
         }
-        return attachClassificationSeal(resolved, required || hadClassificationSeal);
+        return attachClassificationSeal(resolved, required);
     }
 
     private Map<String, Object> attachProvidedClassificationSeal(

@@ -57,17 +57,20 @@ describe("AccessPlanWizardPage", () => {
 		expect(text).toContain("编辑 API 接入计划");
 		expect(text).toContain("来源连接");
 		expect(text).toContain("资源定义");
-		expect(text).toContain("策略准入");
+		expect(text).toContain("落地策略");
 		expect(text).not.toContain("切换为数据库");
 		expect(useWizard).toHaveBeenCalledWith(expect.objectContaining({ kind: "api", editId: 7 }));
 	});
 
-	it("acquires a synchronous submit lock before validation and reports a pending draft", () => {
+	it("acquires a synchronous submit lock before validation and reports a saved active plan", () => {
 		expect(SOURCE).toMatch(
 			/if \(!acquireSingleFlight\(submitLockRef\)\) return;\s*try \{\s*await validateCurrentStep\(\)/,
 		);
-		expect(SOURCE).toContain("修改已保存为待准入草稿；当前生效版本继续运行");
-		expect(SOURCE).toContain("接入计划草稿已保存，请完成密级准入");
+		expect(SOURCE).toContain("接入计划已更新并生效");
+		expect(SOURCE).toContain("接入计划已保存并生效");
+		expect(SOURCE).not.toContain("文件接入计划已保存，请完成文件预检");
+		expect(SOURCE).not.toContain('kind === "file" ? (editId ? "保存修改" : "保存计划")');
+		expect(SOURCE).not.toContain("待准入草稿");
 		expect(SOURCE).toMatch(/finally \{\s*releaseSingleFlight\(submitLockRef\)/);
 	});
 });

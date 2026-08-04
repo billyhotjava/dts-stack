@@ -162,7 +162,7 @@ test("resolveTaskAdmissionState only enables admission for valid drafts and exec
 	});
 });
 
-test("resolveTaskAdmissionState requires an enabled file quality pre-check to pass before admission", () => {
+test("resolveTaskAdmissionState never makes optional file quality checks an admission gate", () => {
 	const task = {
 		id: 43,
 		name: "quality-gated-file",
@@ -176,25 +176,51 @@ test("resolveTaskAdmissionState requires an enabled file quality pre-check to pa
 		status: "draft",
 	} as IngestionTaskDTO;
 
-	assert.equal(resolveTaskAdmissionState(task).canAdmit, false);
-	assert.match(resolveTaskAdmissionState(task).reason, /质量预检尚未通过/);
+	assert.equal(resolveTaskAdmissionState(task).canAdmit, true);
+	assert.doesNotMatch(resolveTaskAdmissionState(task).reason, /质量预检/);
 	assert.equal(resolveTaskAdmissionState({ ...task, preCheckStatus: "PASSED" }).canAdmit, true);
 });
 
-test("resolveTaskAdmissionState fails closed for a missing or stale seal", () => {
+test("resolveTaskAdmissionState allows an unclassified datasource through the normal lifecycle", () => {
 	const baseTask = {
 		id: 42,
-		name: "file-task",
-		sourceType: "txtfilereader",
+		name: "mysql-task",
+		sourceType: "mysqlreader",
+		sourceConfig: {},
+		syncMode: "full_refresh",
+		status: "draft",
+	} as IngestionTaskDTO;
+
+	assert.deepEqual(resolveTaskAdmissionState(baseTask), {
+		canAdmit: true,
+		canExecute: false,
+		classification: undefined,
+		reason: "未配置密级，按普通接入流程待确认",
+	});
+	assert.deepEqual(resolveTaskAdmissionState({ ...baseTask, status: "active" }), {
+		canAdmit: false,
+		canExecute: true,
+		classification: undefined,
+		reason: "未配置密级，按普通接入流程执行",
+	});
+});
+
+test("resolveTaskAdmissionState fails closed once classification evidence appears", () => {
+	const baseTask = {
+		id: 42,
+		name: "mysql-task",
+		sourceType: "mysqlreader",
 		sourceConfig: {},
 		syncMode: "full_refresh",
 		status: "active",
 	} as IngestionTaskDTO;
 
-	const missing = resolveTaskAdmissionState(baseTask);
-	assert.equal(missing.canAdmit, false);
-	assert.equal(missing.canExecute, false);
-	assert.match(missing.reason, /缺少密级封存/);
+	const missingSeal = resolveTaskAdmissionState({
+		...baseTask,
+		fieldClassifications: { identity_no: "SECRET" },
+	});
+	assert.equal(missingSeal.canExecute, false);
+	assert.match(missingSeal.reason, /缺少密级封存/);
 
 	const stale = resolveTaskAdmissionState({
 		...baseTask,

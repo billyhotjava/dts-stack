@@ -398,6 +398,45 @@ class AddaxJobServiceTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void shouldApplyPrefixWhenReplacingWriterTablePlaceholder() throws Exception {
+        Map<String, Object> readerConfig = Map.of(
+            "connection", Map.of(
+                "jdbcUrl", "jdbc:mysql://mysql:3306/source",
+                "table", java.util.List.of("city", "department")
+            )
+        );
+        Map<String, Object> writerConfig = Map.of(
+            "tablePrefix", "ods_",
+            "connection", Map.of(
+                "jdbcUrl", "jdbc:postgresql://pg:5432/biadmin",
+                "table", java.util.List.of("${table}")
+            )
+        );
+
+        AddaxJobService.AddaxJobResult result = addaxJobService.createJob(
+            "prefixed-placeholder-test",
+            "mysqlreader",
+            readerConfig,
+            "postgresqlwriter",
+            writerConfig,
+            null
+        );
+
+        Map<String, Object> job = (Map<String, Object>) result.jobConfig().get("job");
+        java.util.List<Map<String, Object>> contentList = (java.util.List<Map<String, Object>>) job.get("content");
+        assertThat(contentList).hasSize(2);
+        Map<String, Object> firstWriter = (Map<String, Object>) contentList.get(0).get("writer");
+        Map<String, Object> firstParams = (Map<String, Object>) firstWriter.get("parameter");
+        Map<String, Object> firstConn = (Map<String, Object>) ((java.util.List<?>) firstParams.get("connection")).get(0);
+        assertThat(firstConn.get("table")).isEqualTo(java.util.List.of("ods_city"));
+        Map<String, Object> secondWriter = (Map<String, Object>) contentList.get(1).get("writer");
+        Map<String, Object> secondParams = (Map<String, Object>) secondWriter.get("parameter");
+        Map<String, Object> secondConn = (Map<String, Object>) ((java.util.List<?>) secondParams.get("connection")).get(0);
+        assertThat(secondConn.get("table")).isEqualTo(java.util.List.of("ods_department"));
+    }
+
+    @Test
     void shouldSaveJobJson() throws Exception {
         // Given
         Long taskId = 123L;

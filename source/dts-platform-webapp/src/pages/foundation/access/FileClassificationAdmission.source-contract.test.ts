@@ -7,7 +7,7 @@ const FILE_STEP_SOURCE = readFileSync(new URL("./FileAccessStep.tsx", import.met
 const WIZARD_SOURCE = readFileSync(new URL("./useAccessPlanWizard.ts", import.meta.url), "utf8");
 const PAYLOAD_SOURCE = readFileSync(new URL("./accessPlanPayload.ts", import.meta.url), "utf8");
 const DETAIL_SOURCE = readFileSync(new URL("./AccessPlanDetailPage.tsx", import.meta.url), "utf8");
-const BASIS_SOURCE = readFileSync(new URL("./shared/TaskAdmissionBasis.tsx", import.meta.url), "utf8");
+const GOVERNANCE_SOURCE = readFileSync(new URL("./AccessGovernancePanels.tsx", import.meta.url), "utf8");
 
 test("offline file upload requires classification on the secure upload-and-parse path", () => {
 	assert.match(API_SOURCE, /formData\.append\("classification"/);
@@ -19,26 +19,14 @@ test("offline file upload requires classification on the secure upload-and-parse
 	assert.doesNotMatch(WIZARD_SOURCE, /excelPrepare/);
 });
 
-test("file task creation remains draft until explicit classification admission", () => {
+test("file task activation follows successful pre-check without a manual admission action", () => {
 	assert.match(PAYLOAD_SOURCE, /const buildFileRequest[\s\S]{0,1200}runNow:\s*false/);
 	assert.match(PAYLOAD_SOURCE, /const buildFileRequest[\s\S]{0,1200}draft:\s*true/);
 	assert.match(PAYLOAD_SOURCE, /buildManagedFileAdmissionFields/);
-	assert.match(PAYLOAD_SOURCE, /buildAccessPlanUpdateDTO[\s\S]{0,1800}status:\s*"draft"/);
-	assert.match(DETAIL_SOURCE, /TaskAdmissionBasis/);
-	assert.match(DETAIL_SOURCE, /runAccessPlanOperation\("admit", operationTaskId\)/);
-	assert.match(DETAIL_SOURCE, /准入草稿/);
-	assert.match(BASIS_SOURCE, /platform-transform-admission-basis/);
-	assert.match(BASIS_SOURCE, /准入依据/);
-	assert.match(BASIS_SOURCE, /有效密级/);
-	assert.match(BASIS_SOURCE, /密级来源/);
-	assert.match(BASIS_SOURCE, /字段覆盖/);
-	assert.match(BASIS_SOURCE, /最高字段密级/);
-	assert.match(BASIS_SOURCE, /封存版本/);
-	assert.match(BASIS_SOURCE, /封存时间/);
-	assert.match(BASIS_SOURCE, /不会修改源表或目标表结构/);
-	assert.match(
-		DETAIL_SOURCE,
-		/disabled=\{taskDeleted \|\| !canExecuteActiveRevision \|\| operation !== null\}/,
-	);
+	assert.match(GOVERNANCE_SOURCE, /result\.status === "PASSED"[\s\S]{0,240}ingestionTaskAPI\.admitTask\(taskId\)/);
+	assert.doesNotMatch(DETAIL_SOURCE, /runAccessPlanOperation\("admit"/);
+	assert.doesNotMatch(DETAIL_SOURCE, /准入草稿|密级准入|TaskAdmissionBasis/);
+	assert.doesNotMatch(GOVERNANCE_SOURCE, /当前 Revision|准入 Revision/);
+	assert.match(DETAIL_SOURCE, /disabled=\{taskDeleted \|\| !canExecuteActiveRevision \|\| operation !== null\}/);
 	assert.match(API_SOURCE, /api\.post\(\{ url: `\/ingestion\/tasks\/\$\{id\}\/admit` \}\)/);
 });

@@ -15,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -36,15 +37,18 @@ public class TargetTableProvisioner {
     private final JdbcMetadataService metadataService;
     private final ObjectMapper objectMapper;
     private final IngestionSchemaSnapshotService schemaSnapshotService;
+    private final IngestionSourceResolver sourceResolver;
 
     public TargetTableProvisioner(
         JdbcMetadataService metadataService,
         ObjectMapper objectMapper,
-        IngestionSchemaSnapshotService schemaSnapshotService
+        IngestionSchemaSnapshotService schemaSnapshotService,
+        IngestionSourceResolver sourceResolver
     ) {
         this.metadataService = metadataService;
         this.objectMapper = objectMapper;
         this.schemaSnapshotService = schemaSnapshotService;
+        this.sourceResolver = sourceResolver;
     }
 
     public void ensureTargetTables(IngestionTask task) {
@@ -74,7 +78,7 @@ public class TargetTableProvisioner {
             return;
         }
         JdbcMetadataService.JdbcConnectionInfo sourceInfo = buildConnectionInfo(readerConfig);
-        JdbcMetadataService.JdbcConnectionInfo targetInfo = buildConnectionInfo(writerConfig);
+        JdbcMetadataService.JdbcConnectionInfo targetInfo = resolveTargetConnectionInfo(writerConfig);
         if (!StringUtils.hasText(targetInfo.jdbcUrl())) {
             LOG.warn("Target jdbcUrl missing, skip auto-create tables for task={}", task.getId());
             return;
@@ -238,6 +242,35 @@ public class TargetTableProvisioner {
         String driverVersion = normalizeText(config.get("driverVersion"));
         Map<String, String> jdbcProps = resolveJdbcProperties(config);
         return new JdbcMetadataService.JdbcConnectionInfo(jdbcUrl, username, password, driverClass, driverVersion, jdbcProps);
+    }
+
+    private JdbcMetadataService.JdbcConnectionInfo resolveTargetConnectionInfo(Map<String, Object> config) {
+        String rawId = null;
+        for (String key : List.of("targetDataSourceId", "destinationDataSourceId", "dataSourceId")) {
+            String candidate = normalizeText(config.get(key));
+            if (StringUtils.hasText(candidate)) {
+                rawId = candidate;
+                break;
+            }
+        }
+        if (!StringUtils.hasText(rawId)) {
+            return buildConnectionInfo(config);
+        }
+        UUID dataSourceId;
+        try {
+            dataSourceId = UUID.fromString(rawId);
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("Invalid managed destination data source id", ex);
+        }
+        JdbcMetadataService.JdbcConnectionInfo resolved = sourceResolver.resolveJdbcInfo(dataSourceId);
+        return new JdbcMetadataService.JdbcConnectionInfo(
+            appendPostgresSslDisable(resolved.jdbcUrl()),
+            resolved.username(),
+            resolved.password(),
+            resolved.driverClass(),
+            resolved.driverVersion(),
+            resolved.jdbcProperties()
+        );
     }
 
     private Map<String, String> resolveJdbcProperties(Map<String, Object> config) {

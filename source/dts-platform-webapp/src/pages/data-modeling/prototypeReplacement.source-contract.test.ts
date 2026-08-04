@@ -44,7 +44,7 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(source).not.toMatch(
 			/PlanningWorkspace|HomeWorkspace|StandardsWorkspace|DimensionalModelingWorkspace|MetricsWorkspace/,
 		);
-		expect(source).not.toMatch(/prototypeData|usePrototypeToast|建设计划上下文|新建建设计划/);
+		expect(source).not.toMatch(/prototypeData|usePrototypeToast|建设计划上下文/);
 		expect(source).not.toMatch(/项目模型Demo|monthly_execution_rate|月度预算执行率/);
 
 		for (const label of ["建模概览", "数仓规划", "数据标准", "维度建模", "数据指标", "通用工具", "关系图"]) {
@@ -56,6 +56,24 @@ describe("prototype-owned data modeling frontend", () => {
 		for (const label of ["维度表", "明细表", "汇总表", "应用表"]) expect(source).toContain(`label: "${label}"`);
 	});
 
+	it("does not expose the retired construction-plan workflow in prototype pages", () => {
+		const pageSource = [
+			"./prototype/ModelingWorkbenchPage.tsx",
+			"./prototype/PlanningPage.tsx",
+			"./prototype/ReverseModelingPage.tsx",
+			"./prototype/RelationshipGraphPage.tsx",
+			"./prototype/PlanningCatalogEditors.tsx",
+		]
+			.map(read)
+			.join("\n");
+		const planningService = read("./prototype/services/planningProjectionService.ts");
+
+		expect(pageSource).not.toMatch(
+			/建设计划|WarehousePlanEditor|saveWarehousePlanPolicy|loadConfirmedPlanDomains|目标建设计划/,
+		);
+		expect(planningService).not.toMatch(/warehousePlanApi|warehouseStageLabel|listWarehousePlans/);
+	});
+
 	it("connects production pages to canonical owners and keeps unsupported actions disabled", () => {
 		const planning = read("./prototype/PlanningPage.tsx");
 		const modeling = read("./prototype/ModelingWorkbenchPage.tsx");
@@ -65,12 +83,13 @@ describe("prototype-owned data modeling frontend", () => {
 		const standardsService = read("./prototype/services/standardsProjectionService.ts");
 		const relationshipService = read("../../api/services/modelingRelationshipGraphService.ts");
 		const metrics = read("./prototype/MetricsPage.tsx");
+		const prototypeSource = collectSource(fileURLToPath(new URL("./prototype", import.meta.url)));
 
-		expect(planning).toMatch(/createBusinessProcessApi|createDataMart|saveWarehousePlanPolicy/);
+		expect(planning).toMatch(/createBusinessProcessApi|createDataMart|CatalogDomainEditor/);
 		expect(planning).toMatch(/DataMartDomainOption|value=\{item.id\}|canMaintain=\{canMaintain\}/);
 		expect(modeling).toMatch(/saveModelDraft|ModelWorkbenchDialog|创建贴源表（尚未接入）/);
 		expect(modeling).toMatch(/fieldRowIds|key=\{fieldRowIds\[index\]\}/);
-		expect(modeling).toMatch(/getModelRepresentation|representationScope: "BUSINESS"|useCatalogMaintainerAccess/);
+		expect(modeling).toMatch(/getModelRepresentation|representationScope: "BUSINESS"|useDataModelingMenuGrant/);
 		expect(modelDialogs).toMatch(/representationScope: "TECHNICAL"|OPEN_ADVANCED_DBT|canMaintain/);
 		expect(modelDialogs).toMatch(
 			/createReleaseCandidate|lockReleaseCandidate|retryReleaseCandidate|publishReleaseCandidate/,
@@ -80,7 +99,8 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(reverse).toMatch(/retryModelSpecImport|forwardUndoModelSpecImport|renameMappings/);
 		expect(reverse).toMatch(/defaultImportConflictResolutions|key=\{mapping\._clientId\}/);
 		expect(reverse).toContain('item.action !== "BLOCKED"');
-		expect(reverse).toContain("useCatalogMaintainerAccess");
+		expect(reverse).toContain("useDataModelingMenuGrant");
+		expect(prototypeSource).not.toContain("useCatalogMaintainerAccess");
 		expect(standardsService).not.toContain("deleteGlossaryTerm");
 		expect(relationshipService).toContain("limit: GRAPH_PAGE_SIZE");
 		expect(relationshipService).not.toMatch(/kind:\s*kindForView|query:\s*query\.query/);

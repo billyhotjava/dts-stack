@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
 	getDefaultDestinationStatus: vi.fn(),
 	getTask: vi.fn(),
 	updateTask: vi.fn(),
+	admitTask: vi.fn(),
 	createTask: vi.fn(),
 }));
 
@@ -24,6 +25,7 @@ vi.mock("@/api/ingestion", async (importOriginal) => {
 			getDefaultDestinationStatus: mocks.getDefaultDestinationStatus,
 			getTask: mocks.getTask,
 			updateTask: mocks.updateTask,
+			admitTask: mocks.admitTask,
 		},
 	};
 });
@@ -119,6 +121,7 @@ beforeEach(() => {
 		};
 	});
 	mocks.getDefaultDestinationStatus.mockResolvedValue(destination);
+	mocks.admitTask.mockImplementation(async (id: number) => ({ id, status: "active" }));
 });
 
 describe("loadAccessPlanBootstrap", () => {
@@ -202,7 +205,7 @@ describe("loadAccessPlanInitialization", () => {
 });
 
 describe("saveAccessPlan", () => {
-	it("updates by spreading the old DTO and applying changed fields", async () => {
+	it("updates a database plan and activates it within the same save flow", async () => {
 		const oldTask: IngestionTaskDTO = {
 			id: 14,
 			name: "旧名称",
@@ -228,9 +231,10 @@ describe("saveAccessPlan", () => {
 			14,
 			expect.objectContaining({ name: "客户表入湖", createdBy: "operator" }),
 		);
+		expect(mocks.admitTask).toHaveBeenCalledWith(14);
 	});
 
-	it("creates through the existing IngestionTaskRequest endpoint when no edit task exists", async () => {
+	it("creates and activates a database plan within the same save flow", async () => {
 		mocks.createTask.mockResolvedValue({ taskId: 21 });
 
 		const result = await saveAccessPlan({
@@ -242,6 +246,38 @@ describe("saveAccessPlan", () => {
 
 		expect(result).toEqual({ taskId: 21, updated: false });
 		expect(mocks.createTask).toHaveBeenCalledWith(expect.objectContaining({ name: "客户表入湖" }));
+		expect(mocks.admitTask).toHaveBeenCalledWith(21);
+	});
+
+	it("creates and activates a file plan without requiring an optional quality check", async () => {
+		mocks.createTask.mockResolvedValue({ taskId: 22 });
+
+		const result = await saveAccessPlan({
+			kind: "file",
+			values,
+			defaultDestination: destination,
+			existingTask: null,
+			fileUploadResult: {
+				fileId: "file-1",
+				fileType: "csv",
+				originalName: "customers.csv",
+				columns: [{ name: "id", type: "string" }],
+				classification: "INTERNAL",
+				classificationSeal: {
+					sealId: "seal-1",
+					subjectType: "FILE",
+					subjectKey: "ingestion-upload:file-1",
+					effectiveLevel: "INTERNAL",
+					snapshotVersion: 1,
+					checksum: "0123456789abcdef",
+					sealedAt: "2026-08-04T00:00:00Z",
+				},
+				fieldClassifications: { id: "INTERNAL" },
+			},
+		});
+
+		expect(result).toEqual({ taskId: 22, updated: false });
+		expect(mocks.admitTask).toHaveBeenCalledWith(22);
 	});
 
 	it("never falls back to create while an edit task is still unavailable", async () => {

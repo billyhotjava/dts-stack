@@ -1,34 +1,24 @@
 import { Archive, Plus, RotateCw, Save, Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createDataMart, retireDataMart, updateDataMart } from "@/api/dataMartApi";
-import catalogDomainService, { type CatalogDomain } from "@/api/services/catalogDomainService";
 import {
 	createBusinessProcessApi,
 	deleteBusinessProcessApi,
 	type Sprint64BusinessProcess,
 } from "@/api/sprint64GovernanceApi";
-import { saveWarehousePlanPolicy, type WarehousePlanPolicyInput } from "@/api/warehousePlanApi";
 import type { DataMartView } from "@/features/modeling/contracts/dataMartContract";
-import { useCatalogMaintainerAccess } from "@/hooks/useModuleManageAccess";
 import { useUserInfo } from "@/store/userStore";
 import type { DataModelingRoute } from "../types";
+import { CatalogDomainEditor } from "./PlanningCatalogEditors";
 import { Button, PageHeader, RequestState, Status, Toast, useTransientMessage } from "./PrototypePrimitives";
 import { type DataMartDomainOption, loadDataMartDomainOptions } from "./services/dataMartDomainOptions";
+import { listPlanningCatalogDomains, type PlanningCatalogDomain } from "./services/planningCatalogDomainService";
 import {
 	loadPlanningProjection,
 	normalizeModelingRequestFailure,
 	type PlanningProjection,
 } from "./services/planningProjectionService";
-
-const emptyPolicy: WarehousePlanPolicyInput = {
-	layerScheme: null,
-	namingPolicy: null,
-	historyPolicy: null,
-	defaultTimeZone: "Asia/Shanghai",
-	conceptualDesignAllowed: true,
-	standardCoverage: "KEY_AND_MEASURE",
-	qualityGate: "BLOCKING",
-};
+import { useDataModelingMenuGrant } from "./useDataModelingMenuGrant";
 
 const ownerIdOf = (userInfo: unknown) => {
 	if (!userInfo || typeof userInfo !== "object") return "";
@@ -37,14 +27,13 @@ const ownerIdOf = (userInfo: unknown) => {
 };
 
 export function PlanningPage({ route }: { route: DataModelingRoute }) {
-	const canMaintain = useCatalogMaintainerAccess();
+	const canMaintain = useDataModelingMenuGrant();
 	const userInfo = useUserInfo();
 	const requestEpoch = useRef(0);
 	const [projection, setProjection] = useState<PlanningProjection | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [failure, setFailure] = useState<{ kind: "permission" | "request"; message: string } | null>(null);
 	const [query, setQuery] = useState("");
-	const [selectedPlanId, setSelectedPlanId] = useState("");
 	const previousView = useRef(route.view);
 	const { message, show } = useTransientMessage();
 	const load = useCallback(async () => {
@@ -52,10 +41,9 @@ export function PlanningPage({ route }: { route: DataModelingRoute }) {
 		setLoading(true);
 		setFailure(null);
 		try {
-			const next = await loadPlanningProjection(route.view, selectedPlanId || undefined);
+			const next = await loadPlanningProjection(route.view);
 			if (requestEpoch.current !== epoch) return;
 			setProjection(next);
-			if (route.view === "system" && !selectedPlanId && next.selectedPlan) setSelectedPlanId(next.selectedPlan.id);
 		} catch (error) {
 			if (requestEpoch.current !== epoch) return;
 			setProjection(null);
@@ -63,7 +51,7 @@ export function PlanningPage({ route }: { route: DataModelingRoute }) {
 		} finally {
 			if (requestEpoch.current === epoch) setLoading(false);
 		}
-	}, [route.title, route.view, selectedPlanId]);
+	}, [route.title, route.view]);
 	useEffect(() => {
 		void load();
 		return () => {
@@ -73,7 +61,6 @@ export function PlanningPage({ route }: { route: DataModelingRoute }) {
 	useEffect(() => {
 		if (previousView.current !== route.view) {
 			setQuery("");
-			setSelectedPlanId("");
 			previousView.current = route.view;
 		}
 	}, [route.view]);
@@ -110,7 +97,18 @@ export function PlanningPage({ route }: { route: DataModelingRoute }) {
 				/>
 			) : projection ? (
 				<section className="dmx-catalog-panel">
-					{route.view === "processes" ? (
+					{route.view === "business-categories" || route.view === "domains" ? (
+						<CatalogDomainEditor
+							canMaintain={canMaintain}
+							key={route.view}
+							onChanged={async (result) => {
+								show(result);
+								await load();
+							}}
+							rows={projection.rows}
+							view={route.view}
+						/>
+					) : route.view === "processes" ? (
 						<BusinessProcessEditor
 							canMaintain={canMaintain}
 							onChanged={async (result) => {
@@ -129,23 +127,8 @@ export function PlanningPage({ route }: { route: DataModelingRoute }) {
 							ownerId={ownerIdOf(userInfo)}
 							rows={projection.rows}
 						/>
-					) : route.view === "system" ? (
-						<PolicyEditor
-							canMaintain={canMaintain}
-							onChanged={async (result) => {
-								show(result);
-								await load();
-							}}
-							onPlanChange={setSelectedPlanId}
-							projection={projection}
-							selectedPlanId={selectedPlanId}
-						/>
 					) : projection.readOnlyReason ? (
 						<div className="dmx-planning-unavailable">
-							<Button disabled>
-								<Plus size={14} />
-								新建{route.title}
-							</Button>
 							<div className="dmx-capability-note">{projection.readOnlyReason}</div>
 						</div>
 					) : null}
@@ -191,16 +174,16 @@ export function PlanningPage({ route }: { route: DataModelingRoute }) {
 								</table>
 							</div>
 							{!visibleRows.length ? (
-								<RequestState description="当前 owner 未返回任何记录。" kind="empty" title={`暂无${route.title}`} />
+								<RequestState description="当前目录暂无记录。" kind="empty" title={`暂无${route.title}`} />
 							) : null}
 						</>
-					) : route.view !== "system" ? (
+					) : (
 						<RequestState
-							description={projection.readOnlyReason || "当前 owner 未返回可展示记录。"}
+							description={projection.readOnlyReason || "当前目录暂无可展示记录。"}
 							kind="empty"
 							title={`暂无${route.title}`}
 						/>
-					) : null}
+					)}
 				</section>
 			) : null}
 			<Toast message={message} />
@@ -217,7 +200,7 @@ function BusinessProcessEditor({
 	canMaintain: boolean;
 	onChanged: (message: string) => Promise<void>;
 }) {
-	const [domains, setDomains] = useState<CatalogDomain[]>([]);
+	const [domains, setDomains] = useState<PlanningCatalogDomain[]>([]);
 	const [domainId, setDomainId] = useState("");
 	const [processId, setProcessId] = useState("");
 	const [name, setName] = useState("");
@@ -226,12 +209,12 @@ function BusinessProcessEditor({
 	const [error, setError] = useState("");
 	useEffect(() => {
 		let active = true;
-		void catalogDomainService
-			.list()
+		void listPlanningCatalogDomains()
 			.then((items) => {
 				if (active) {
-					setDomains(items);
-					setDomainId((current) => current || items[0]?.code || "");
+					const dataDomains = items.filter((item) => Boolean(item.parentId));
+					setDomains(dataDomains);
+					setDomainId((current) => current || dataDomains[0]?.id || "");
 				}
 			})
 			.catch((cause) => {
@@ -302,8 +285,8 @@ function BusinessProcessEditor({
 					>
 						<option value="">请选择</option>
 						{domains.map((item) => (
-							<option key={item.code} value={item.code}>
-								{item.name}
+							<option key={item.id} value={item.id}>
+								{item.name} · {item.code}
 							</option>
 						))}
 					</select>
@@ -531,162 +514,5 @@ function DataMartEditor({
 				) : null}
 			</div>
 		</div>
-	);
-}
-
-function PolicyEditor({
-	projection,
-	selectedPlanId,
-	onPlanChange,
-	onChanged,
-	canMaintain,
-}: {
-	projection: PlanningProjection;
-	selectedPlanId: string;
-	onPlanChange: (planId: string) => void;
-	onChanged: (message: string) => Promise<void>;
-	canMaintain: boolean;
-}) {
-	const [draft, setDraft] = useState<WarehousePlanPolicyInput>(emptyPolicy);
-	const [saving, setSaving] = useState(false);
-	const [error, setError] = useState("");
-	useEffect(() => {
-		if (!projection.policy) return setDraft(emptyPolicy);
-		const { readiness: _readiness, issues: _issues, ...value } = projection.policy.value;
-		setDraft(value);
-	}, [projection.policy]);
-	const save = async () => {
-		if (!canMaintain) return setError("当前账号无规划参数维护权限");
-		if (!projection.selectedPlan || !projection.policy) return;
-		setSaving(true);
-		setError("");
-		try {
-			await saveWarehousePlanPolicy(projection.selectedPlan.id, projection.policy.version, draft);
-			await onChanged("规划参数已保存");
-		} catch (cause) {
-			setError(normalizeModelingRequestFailure(cause, "规划参数保存失败，请重试。").message);
-		} finally {
-			setSaving(false);
-		}
-	};
-	if (!projection.plans.length) {
-		return <RequestState description="请先在建模空间创建建设计划。" kind="empty" title="暂无建设计划" />;
-	}
-	return (
-		<div className="dmx-planning-editor">
-			{!canMaintain ? <div className="dmx-capability-note">当前账号只有规划参数查看权限。</div> : null}
-			<div className="dmx-planning-editor__heading">
-				<strong>规划参数</strong>
-				<select
-					aria-label="建设计划"
-					onChange={(event) => onPlanChange(event.target.value)}
-					value={selectedPlanId || projection.selectedPlan?.id || ""}
-				>
-					{projection.plans.map((plan) => (
-						<option key={plan.id} value={plan.id}>
-							{plan.name}
-						</option>
-					))}
-				</select>
-			</div>
-			<div className="dmx-form-grid">
-				<PolicySelect
-					disabled={!canMaintain || saving}
-					label="分层策略"
-					onChange={(value) =>
-						setDraft((current) => ({ ...current, layerScheme: value as typeof current.layerScheme }))
-					}
-					options={["", "CLASSIC_ODS_DWD_DWS_ADS"]}
-					value={draft.layerScheme || ""}
-				/>
-				<PolicySelect
-					disabled={!canMaintain || saving}
-					label="命名策略"
-					onChange={(value) =>
-						setDraft((current) => ({ ...current, namingPolicy: value as typeof current.namingPolicy }))
-					}
-					options={["", "CLASSIC_LOWER_SNAKE", "CLASSIC_UPPER_SNAKE"]}
-					value={draft.namingPolicy || ""}
-				/>
-				<PolicySelect
-					disabled={!canMaintain || saving}
-					label="历史策略"
-					onChange={(value) =>
-						setDraft((current) => ({ ...current, historyPolicy: value as typeof current.historyPolicy }))
-					}
-					options={["", "PRESERVE_BUSINESS_HISTORY", "LATEST_STATE_ONLY"]}
-					value={draft.historyPolicy || ""}
-				/>
-				<PolicySelect
-					disabled={!canMaintain || saving}
-					label="标准覆盖"
-					onChange={(value) =>
-						setDraft((current) => ({ ...current, standardCoverage: value as typeof current.standardCoverage }))
-					}
-					options={["NONE", "KEY_AND_MEASURE", "ALL_FIELDS"]}
-					value={draft.standardCoverage}
-				/>
-				<PolicySelect
-					disabled={!canMaintain || saving}
-					label="质量门禁"
-					onChange={(value) =>
-						setDraft((current) => ({ ...current, qualityGate: value as typeof current.qualityGate }))
-					}
-					options={["ADVISORY", "BLOCKING"]}
-					value={draft.qualityGate}
-				/>
-				<label>
-					<span>默认时区</span>
-					<input
-						disabled={!canMaintain || saving}
-						onChange={(event) => setDraft((current) => ({ ...current, defaultTimeZone: event.target.value }))}
-						value={draft.defaultTimeZone || ""}
-					/>
-				</label>
-			</div>
-			{projection.policy?.value.issues.length ? (
-				<div className="dmx-capability-note">
-					{projection.policy.value.issues.map((issue) => issue.message).join("；")}
-				</div>
-			) : null}
-			{error ? (
-				<div className="dmx-inline-error" role="alert">
-					{error}
-				</div>
-			) : null}
-			<div className="dmx-catalog-actions">
-				<Button disabled={!canMaintain || saving || !projection.policy} primary onClick={() => void save()}>
-					<Save size={15} />
-					{saving ? "保存中…" : "保存参数"}
-				</Button>
-			</div>
-		</div>
-	);
-}
-
-function PolicySelect({
-	label,
-	value,
-	options,
-	onChange,
-	disabled,
-}: {
-	label: string;
-	value: string;
-	options: string[];
-	onChange: (value: string) => void;
-	disabled: boolean;
-}) {
-	return (
-		<label>
-			<span>{label}</span>
-			<select disabled={disabled} onChange={(event) => onChange(event.target.value)} value={value}>
-				{options.map((option) => (
-					<option key={option || "empty"} value={option}>
-						{option || "请选择"}
-					</option>
-				))}
-			</select>
-		</label>
 	);
 }

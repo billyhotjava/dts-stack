@@ -528,6 +528,51 @@ class IngestionTaskResourceTest {
     }
 
     @Test
+    void updateTask_keepsAllTablePlaceholderDynamicWhenAddingPrefix() throws Exception {
+        UUID sourceId = UUID.fromString("11111111-2222-3333-4444-555555555555");
+        Map<String, Object> readerConfig = new java.util.LinkedHashMap<>();
+        readerConfig.put("readerType", "mysqlreader");
+        readerConfig.put("table", List.of("${table}"));
+        IngestionSourceResolver.ResolvedSource resolvedSource =
+            new IngestionSourceResolver.ResolvedSource("mysqlreader", readerConfig, null);
+        when(ingestionSourceResolver.resolve(eq(sourceId), anyList())).thenReturn(resolvedSource);
+        when(connectorCapabilityService.normalizeSyncMode(any())).thenReturn("full_refresh");
+        when(ingestionTaskService.update(eq(3L), any(IngestionTaskDTO.class)))
+            .thenAnswer(invocation -> invocation.getArgument(1));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/ingestion/tasks/3")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "id": 3,
+                      "name": "dtstest1",
+                      "sourceType": "mysqlreader",
+                      "sourceDataSourceId": "11111111-2222-3333-4444-555555555555",
+                      "sourceConfig": {"readerType": "mysqlreader", "table": ["${table}"]},
+                      "destinationType": "postgresqlwriter",
+                      "destinationConfig": {
+                        "targetDataSourceId": "22222222-3333-4444-5555-666666666666"
+                      },
+                      "syncMode": "full_refresh",
+                      "syncPrefix": "ods_",
+                      "status": "draft",
+                      "tableMapping": [{"source": "${table}", "target": "ods_${table}"}]
+                    }
+                    """))
+            .andExpect(status().isOk());
+
+        ArgumentCaptor<IngestionTaskDTO> captor = ArgumentCaptor.forClass(IngestionTaskDTO.class);
+        verify(ingestionTaskService).update(eq(3L), captor.capture());
+        IngestionTaskDTO updated = captor.getValue();
+        assertThat(updated.getTableMapping().isArray()).isTrue();
+        assertThat(updated.getTableMapping()).isEmpty();
+        assertThat(updated.getDestinationConfig().get("tablePrefix").asText()).isEqualTo("ods_");
+        assertThat(updated.getDestinationConfig().get("table").isArray()).isTrue();
+        assertThat(updated.getDestinationConfig().get("table").get(0).asText()).isEqualTo("${table}");
+        assertThat(updated.getDestinationConfig().toString()).doesNotContain("ods_ods_", "$ods_");
+    }
+
+    @Test
     void updateTask_rejectsRetiredDirectDbtSelectors() throws Exception {
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/ingestion/tasks/1")
                 .contentType(MediaType.APPLICATION_JSON)

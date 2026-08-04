@@ -12,24 +12,24 @@ test("access plan detail loads one task and its latest execution without list fa
 });
 
 test("access plan detail exposes the agreed operational tabs on real contracts", () => {
-	for (const label of ["概览", "运行历史", "密级准入", "变更记录"]) {
+	for (const label of ["概览", "运行历史", "变更记录"]) {
 		assert.match(SOURCE, new RegExp(`label:\\s*"${label}"`));
 	}
+	assert.doesNotMatch(SOURCE, /label:\s*"密级准入"/);
 	assert.match(SOURCE, /label: inferAccessKind\(task\) === "file" \? "文件预检" : "异常数据"/);
 	assert.match(SOURCE, /<ExecutionHistoryTable taskId=\{taskId\}/);
 	assert.match(SOURCE, /<AccessQualityPanel[\s\S]{0,180}task=\{task\}[\s\S]{0,180}onTaskChanged=/);
-	assert.match(SOURCE, /<TaskAdmissionBasis\s+task=\{admissionTask \|\| task\}\s*\/>/);
 	assert.match(SOURCE, /ingestionTaskAPI\.getChangeLogs\(\{/);
 	assert.match(SOURCE, /taskId,/);
 	assert.doesNotMatch(SOURCE, /结构漂移|AccessStructureDriftPanel|key:\s*"drift"/);
 });
 
-test("access plan detail preserves admission and execution while exposing evidence-preserving plan deletion", () => {
-	assert.match(SOURCE, /runAccessPlanOperation\("admit", operationTaskId, ingestionTaskAPI\)/);
+test("access plan detail exposes execution and evidence-preserving deletion without manual admission", () => {
+	assert.doesNotMatch(SOURCE, /runAccessPlanOperation\("admit"/);
 	assert.match(SOURCE, /runAccessPlanOperation\("execute", operationTaskId, ingestionTaskAPI\)/);
 	assert.equal(
 		SOURCE.match(/if \(!acquireOwnedSingleFlight\(operationLockRef, operationOwner\)\) return;/g)?.length,
-		3,
+		2,
 	);
 	assert.equal(
 		SOURCE.match(/onCancel:\s*\(\) => releaseOwnedSingleFlight\(operationLockRef, operationOwner\)/g)?.length,
@@ -39,7 +39,7 @@ test("access plan detail preserves admission and execution while exposing eviden
 	assert.match(SOURCE, /!ownsSingleFlight\(operationLockRef, operationOwner\)/);
 	assert.match(SOURCE, /const released = releaseOwnedSingleFlight\(operationLockRef, operationOwner\)/);
 	assert.match(SOURCE, /runAccessPlanOperation\("delete", operationTaskId, ingestionTaskAPI\)/);
-	assert.match(SOURCE, /准入草稿/);
+	assert.doesNotMatch(SOURCE, /准入草稿/);
 	assert.match(SOURCE, /立即执行/);
 	assert.match(SOURCE, /删除计划/);
 	assert.match(SOURCE, /title:\s*"确认删除接入计划"/);
@@ -74,18 +74,17 @@ test("access plan detail routes legacy and explicit edits to the same-kind wizar
 	assert.match(SOURCE, /access\/new\?kind=\$\{inferAccessKind\(task\)\}&editId=/);
 });
 
-test("access plan detail separates the active revision from a pending draft and keeps seal version separate", () => {
+test("access plan detail keeps revision safety internal without exposing an admission workflow", () => {
 	assert.match(SOURCE, /task\.revisionNumber/);
-	assert.match(SOURCE, /task\.revisionState/);
 	assert.match(SOURCE, /activeRevisionNumber/);
-	assert.match(SOURCE, /draftRevisionNumber/);
-	assert.match(SOURCE, /resolveAccessRevisionView\(task, revisions, revisionsError\)/);
-	assert.match(SOURCE, /待准入草稿/);
-	assert.match(SOURCE, /执行生效版本/);
+	assert.match(SOURCE, /hasDraftRevision/);
+	assert.match(SOURCE, /resolveAccessRevisionView\(\s*task,\s*revisions,\s*revisionsError,?\s*\)/);
+	assert.doesNotMatch(SOURCE, /待准入草稿|准入草稿|密级准入|draftRevisionNumber/);
+	assert.doesNotMatch(SOURCE, /执行版本/);
+	assert.match(SOURCE, /当前有效配置/);
 	assert.match(SOURCE, /task\.defaultPolicyVersion/);
 	assert.match(SOURCE, /task\.effectiveConfigChecksum/);
-	assert.match(SOURCE, /未版本化（存量任务）/);
-	assert.match(SOURCE, /密级封存版本/);
+	assert.doesNotMatch(SOURCE, /当前编辑 Revision|当前生效 Revision|密级封存版本/);
 });
 
 test("access plan detail does not render raw or sensitive task configuration", () => {

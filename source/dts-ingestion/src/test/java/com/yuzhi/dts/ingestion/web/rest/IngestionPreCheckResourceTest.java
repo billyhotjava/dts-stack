@@ -209,6 +209,34 @@ class IngestionPreCheckResourceTest {
     }
 
     @Test
+    void parseShouldRemainAvailableAsOptionalQualityCheckForActiveTask() throws Exception {
+        Path csv = tempDir.resolve("active-optional-quality.csv");
+        Files.writeString(csv, "project,cost\nactive,9\n");
+
+        IngestionTask active = new IngestionTask();
+        active.setId(49L);
+        active.setStatus("active");
+        active.setSourceType("csv");
+        active.setSourceConfig(objectMapper.valueToTree(Map.of("_filePath", csv.toString(), "_fileType", "csv")));
+
+        List<ColumnInfo> columns = List.of(new ColumnInfo("project", "STRING", 100), new ColumnInfo("cost", "LONG", 100));
+        List<List<String>> rows = List.of(List.of("active", "9"));
+        when(taskRepository.findById(49L)).thenReturn(Optional.of(active));
+        when(accessContractService.findLatestDraftRevision(49L)).thenReturn(Optional.empty());
+        when(fileUploadService.readPlainBytes(csv)).thenReturn(Files.readAllBytes(csv));
+        when(csvParseService.parse(any(InputStream.class))).thenReturn(new ParseResult(1, columns, List.of(), List.of(), rows));
+        when(stagingTableService.create(any(UUID.class), eq(49L), eq(columns))).thenReturn("tmp_ingestion_49");
+
+        mockMvc.perform(post("/api/ingestion/tasks/49/parse"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.stagingTableName").value("tmp_ingestion_49"));
+
+        verify(taskRepository).save(active);
+        org.assertj.core.api.Assertions.assertThat(active.getStatus()).isEqualTo("active");
+        org.assertj.core.api.Assertions.assertThat(active.getPreCheckStatus()).isEqualTo("PENDING");
+    }
+
+    @Test
     void editingAStagingCellMustInvalidatePassedDraftPreCheck() throws Exception {
         IngestionTask active = new IngestionTask();
         active.setId(47L);

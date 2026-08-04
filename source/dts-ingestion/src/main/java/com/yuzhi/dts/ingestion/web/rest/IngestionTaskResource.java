@@ -2281,22 +2281,31 @@ public class IngestionTaskResource {
                 readerConfig.putIfAbsent("readerType", taskDTO.getSourceType());
             }
             Map<String, Object> writerConfig = jsonNodeToMap(taskDTO.getDestinationConfig());
-            List<String> selectionTables = mergeTables(extractTables(readerConfig), extractTables(writerConfig));
-            if (!selectionTables.isEmpty()) {
-                applyTables(readerConfig, selectionTables);
-                List<String> existingWriterTables = stripTablePlaceholders(extractTables(writerConfig));
-                String prefix = StringUtils.hasText(syncPrefix) ? syncPrefix : resolveTablePrefix(writerConfig);
-                if (existingWriterTables.isEmpty() || isSourceAlignedTables(selectionTables, existingWriterTables)) {
-                    List<String> writerTables = applyPrefixToTables(stripSchemaTables(selectionTables), prefix);
-                    applyTables(writerConfig, writerTables);
+            List<String> configuredSelectionTables = mergeTables(extractTables(readerConfig), extractTables(writerConfig));
+            List<String> selectionTables = stripTablePlaceholders(configuredSelectionTables);
+            boolean dynamicTableSelection = selectionTables.isEmpty()
+                && configuredSelectionTables.stream().anyMatch(this::hasTablePlaceholder);
+            if (dynamicTableSelection) {
+                applySyncPrefixToWriterConfig(writerConfig, syncPrefix);
+                applyTables(writerConfig, List.of("${table}"));
+                taskDTO.setTableMapping(objectMapper.createArrayNode());
+            } else {
+                if (!selectionTables.isEmpty()) {
+                    applyTables(readerConfig, selectionTables);
+                    List<String> existingWriterTables = stripTablePlaceholders(extractTables(writerConfig));
+                    String prefix = StringUtils.hasText(syncPrefix) ? syncPrefix : resolveTablePrefix(writerConfig);
+                    if (existingWriterTables.isEmpty() || isSourceAlignedTables(selectionTables, existingWriterTables)) {
+                        List<String> writerTables = applyPrefixToTables(stripSchemaTables(selectionTables), prefix);
+                        applyTables(writerConfig, writerTables);
+                    }
                 }
-            }
-            SyncSpec syncSpec = StringUtils.hasText(syncPrefix)
-                ? new SyncSpec(null, null, null, null, syncPrefix, null, null, null, null, null, null, null, null, null, null, null, null)
-                : null;
-            List<Map<String, String>> tableMapping = deriveTableMapping(readerConfig, writerConfig, syncSpec);
-            if (!tableMapping.isEmpty()) {
-                taskDTO.setTableMapping(toJsonNode(tableMapping));
+                SyncSpec syncSpec = StringUtils.hasText(syncPrefix)
+                    ? new SyncSpec(null, null, null, null, syncPrefix, null, null, null, null, null, null, null, null, null, null, null, null)
+                    : null;
+                List<Map<String, String>> tableMapping = deriveTableMapping(readerConfig, writerConfig, syncSpec);
+                if (!tableMapping.isEmpty()) {
+                    taskDTO.setTableMapping(toJsonNode(tableMapping));
+                }
             }
             if (!writerConfig.isEmpty()) {
                 taskDTO.setDestinationConfig(toJsonNode(writerConfig));

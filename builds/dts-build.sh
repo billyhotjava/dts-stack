@@ -556,12 +556,20 @@ locate_addax_runner_jar() {
 inject_addax_runner_jar_to_context() {
   local context_dir="$1"
   local destination="${context_dir}/addax-env-runner.jar"
+  local runner_build_script="${REPO_ROOT}/services/dts-airflow/runner/build-runner.sh"
   local source_jar
 
+  if [[ ! -x "${runner_build_script}" ]]; then
+    echo "[dts-build] ERROR: addax runner build script is missing or not executable: ${runner_build_script}" >&2
+    return 1
+  fi
+  if ! "${runner_build_script}"; then
+    echo "[dts-build] ERROR: failed to compile addax runner from current source." >&2
+    return 1
+  fi
   if ! source_jar="$(locate_addax_runner_jar)"; then
     echo "[dts-build] ERROR: addax-env-runner.jar not found."
-    echo "[dts-build]        Please run: ${REPO_ROOT}/services/dts-airflow/runner/build-runner.sh"
-    echo "[dts-build]        (compiled jar is required to bake into dts-addax image)."
+    echo "[dts-build]        Compiled runner jar is required to bake into dts-addax image."
     return 1
   fi
   INJECT_ADDAX_RUNNER_BACKUP=""

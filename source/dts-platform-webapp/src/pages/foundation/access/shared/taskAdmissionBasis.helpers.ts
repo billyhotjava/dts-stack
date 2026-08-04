@@ -10,8 +10,8 @@ export type TaskAdmissionBasis = {
 	status: "admitted" | "pending" | "blocked";
 	statusLabel: "已准入" | "待确认" | "不可准入";
 	statusReason: string;
-	evidenceStatus: "complete" | "incomplete" | "unverifiable";
-	evidenceStatusLabel: "依据完整" | "依据不完整" | "字段覆盖不可核验";
+	evidenceStatus: "complete" | "incomplete" | "unverifiable" | "not_required";
+	evidenceStatusLabel: "依据完整" | "依据不完整" | "字段覆盖不可核验" | "无需密级依据";
 	evidenceReason: string;
 	effectiveLevel?: ClassificationLevel;
 	sourceLabel: string;
@@ -187,6 +187,23 @@ export function resolveTaskAdmissionBasis(task: IngestionTaskDTO): TaskAdmission
 	const admission = resolveTaskAdmissionState(task);
 	const seal = asRecord(task.classificationSeal);
 	const fields = validFieldLevels(task);
+	const hasClassificationEvidence =
+		Object.keys(seal).length > 0 || Object.keys(asRecord(task.fieldClassifications)).length > 0;
+	const status = admission.canExecute ? "admitted" : admission.canAdmit ? "pending" : "blocked";
+	const statusLabel = status === "admitted" ? "已准入" : status === "pending" ? "待确认" : "不可准入";
+	if (!hasClassificationEvidence) {
+		return {
+			status,
+			statusLabel,
+			statusReason: admission.reason,
+			evidenceStatus: "not_required",
+			evidenceStatusLabel: "无需密级依据",
+			evidenceReason: "当前数据源未配置密级，按普通接入流程处理",
+			sourceLabel: "普通数据源",
+			fieldCoverageLabel: "不适用",
+			coveredFieldCount: 0,
+		};
+	}
 	const columns = sourceColumnNames(task);
 	const columnSet = new Set(columns);
 	const coveredFieldCount = columns.length
@@ -201,8 +218,6 @@ export function resolveTaskAdmissionBasis(task: IngestionTaskDTO): TaskAdmission
 			? `已封存 ${fields.levels.size} 项（总数不可核验）`
 			: "不可核验（仅任务级）";
 
-	const status = admission.canExecute ? "admitted" : admission.canAdmit ? "pending" : "blocked";
-	const statusLabel = status === "admitted" ? "已准入" : status === "pending" ? "待确认" : "不可准入";
 	const sealEvidence = validateSealEvidence(seal);
 	const fieldEvidenceReason =
 		sealEvidence.valid && sealEvidence.effectiveLevel

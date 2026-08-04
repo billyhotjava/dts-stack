@@ -278,9 +278,8 @@ public class IngestionPreCheckResource {
         }
 
         stagingTableService.updateCell(tableName, rowNum, request.column(), request.value());
-        // Any manual correction invalidates a previous PASS. Admission is allowed
-        // only after the edited draft has been checked again against the centrally
-        // managed quality rules.
+        // Any manual correction invalidates only the optional quality result. The
+        // ingestion plan remains active and executable without rerunning this check.
         task.setPreCheckStatus("PENDING");
         persistDraftState(context);
 
@@ -397,10 +396,10 @@ public class IngestionPreCheckResource {
             return new DraftTaskContext(persisted, accessContractService.materializeLatestDraft(persisted), true);
         }
         if (requireDraftForActiveTask && "active".equalsIgnoreCase(persisted.getStatus())) {
-            throw new ResponseStatusException(
-                HttpStatus.CONFLICT,
-                "DRAFT_REVISION_REQUIRED: 请先编辑并保存文件草稿，再执行解析或预检"
-            );
+            // Quality detection is an optional side flow. It may attach staging
+            // evidence to an active plan, but it never changes the active runtime
+            // configuration or blocks ingestion.
+            return new DraftTaskContext(persisted, persisted, false);
         }
         return new DraftTaskContext(persisted, persisted, false);
     }

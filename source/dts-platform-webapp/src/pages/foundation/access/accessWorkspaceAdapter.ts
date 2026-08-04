@@ -22,9 +22,6 @@ export type AccessWorkspaceRow = {
 	lastExecutedAt?: string;
 	owner: string;
 	classification?: string;
-	versionState: "versioned" | "legacy-unversioned";
-	versionLabel: string;
-	versionHint: string;
 };
 
 const API_TYPES = new Set(["api", "http", "https", "http_api", "api_http", "rest", "rest_api", "httpreader"]);
@@ -112,8 +109,6 @@ export const toAccessWorkspaceRows = (tasks: IngestionTaskDTO[], sources: DataSo
 		const source = task.sourceDataSourceId ? sourceById.get(String(task.sourceDataSourceId)) : undefined;
 		const kind = resolveKind(task, source);
 		const health = resolveHealth(task, source);
-		const revisionNumber = Number(task.revisionNumber);
-		const versioned = Number.isInteger(revisionNumber) && revisionNumber > 0;
 		return {
 			key: task.id == null ? `legacy-${index}-${task.name}` : String(task.id),
 			taskId: task.id,
@@ -129,11 +124,6 @@ export const toAccessWorkspaceRows = (tasks: IngestionTaskDTO[], sources: DataSo
 			lastExecutedAt: task.lastExecutedAt,
 			owner: task.createdBy || task.lastModifiedBy || "未记录",
 			classification: task.classificationSeal?.effectiveLevel,
-			versionState: versioned ? "versioned" : "legacy-unversioned",
-			versionLabel: versioned ? `R${revisionNumber}` : "未版本化",
-			versionHint: versioned
-				? `${task.revisionState || "UNKNOWN"} · 策略 v${task.defaultPolicyVersion || "未记录"}`
-				: "存量任务待后台迁移",
 		};
 	});
 };

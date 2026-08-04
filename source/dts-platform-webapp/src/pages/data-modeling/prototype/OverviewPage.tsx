@@ -171,7 +171,7 @@ function OverviewContent({
 							))}
 						</ul>
 					) : (
-						<RequestState description="当前可见计划没有阶段阻塞。" kind="empty" title="暂无待处理事项" />
+						<RequestState description="当前没有待完善的模型草稿。" kind="empty" title="暂无待处理事项" />
 					)}
 				</section>
 				<section className="dmx-panel dmx-panel--wide">

@@ -31,7 +31,7 @@ export const loadModelingRelationshipGraph = (
 export function classifyModelingRelationshipGraphFailure(error: unknown): ModelingRelationshipGraphFailure {
 	const status = Number((error as { response?: { status?: unknown } } | null)?.response?.status ?? 0);
 	if (status === 401 || status === 403) {
-		return { kind: "permission", message: "当前账号无权访问该建设计划的关系图，请联系管理员授权。" };
+		return { kind: "permission", message: "当前账号无权访问模型关系图，请联系管理员授权。" };
 	}
 	return {
 		kind: "request",
@@ -59,11 +59,9 @@ export function modelingRelationshipNodePath(
 	}
 	if (legacy.origin !== "http://dts.local" || legacy.pathname !== "/modeling/workbench") return null;
 
-	const planId = legacy.searchParams.get("planId");
 	const assetId = legacy.searchParams.get("assetId");
 	const revision = legacy.searchParams.get("revision");
 	const params = new URLSearchParams();
-	if (planId) params.set("planId", planId);
 
 	let pathname: string;
 	switch (node.kind) {

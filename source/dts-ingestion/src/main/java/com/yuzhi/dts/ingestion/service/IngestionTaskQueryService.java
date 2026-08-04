@@ -125,6 +125,13 @@ public class IngestionTaskQueryService {
             List<Predicate> predicates = new ArrayList<>();
             if (StringUtils.hasText(status)) {
                 predicates.add(criteriaBuilder.equal(criteriaBuilder.lower(root.get("status")), status.trim().toLowerCase(java.util.Locale.ROOT)));
+            } else {
+                predicates.add(
+                    criteriaBuilder.notEqual(
+                        criteriaBuilder.lower(criteriaBuilder.coalesce(root.<String>get("status"), "")),
+                        "deleted"
+                    )
+                );
             }
             if (sourceDataSourceId != null) {
                 predicates.add(criteriaBuilder.equal(root.get("sourceDataSourceId"), sourceDataSourceId));

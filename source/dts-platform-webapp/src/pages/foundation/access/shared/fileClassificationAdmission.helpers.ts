@@ -77,6 +77,18 @@ const fieldMapFrom = (value: unknown): Record<string, ClassificationLevel | stri
 	return result;
 };
 
+const hasFieldClassificationEvidence = (value: unknown): boolean => {
+	if (value === undefined || value === null) return false;
+	if (typeof value === "string") {
+		const trimmed = value.trim();
+		return Boolean(trimmed && trimmed !== "{}");
+	}
+	if (typeof value === "object" && !Array.isArray(value)) {
+		return Object.keys(value).length > 0;
+	}
+	return true;
+};
+
 const fileFloorFrom = (classification: unknown, seal?: ClassificationSealReference): ClassificationLevel | undefined =>
 	highestLevel(
 		classification,
@@ -301,7 +313,10 @@ export function resolveTaskAdmissionState(task: IngestionTaskDTO | null): TaskAd
 		sourceType.includes("file") ||
 		Boolean(seal?.fileFloor) ||
 		String(seal?.subjectKey || "").startsWith("ingestion-file:");
-	const validation = validateSealAndFields(seal, task.fieldClassifications, fileTask);
+	const hasClassificationEvidence = Boolean(seal) || hasFieldClassificationEvidence(task.fieldClassifications);
+	const validation = hasClassificationEvidence
+		? validateSealAndFields(seal, task.fieldClassifications, fileTask)
+		: { valid: true, reason: "未配置密级，按普通接入流程处理" };
 	if (!validation.valid) {
 		return {
 			canAdmit: false,
@@ -315,23 +330,11 @@ export function resolveTaskAdmissionState(task: IngestionTaskDTO | null): TaskAd
 		.trim()
 		.toLowerCase();
 	if (status === "draft") {
-		if (
-			fileTask &&
-			task.qualityPreCheckEnabled === true &&
-			String(task.preCheckStatus || "").trim().toUpperCase() !== "PASSED"
-		) {
-			return {
-				canAdmit: false,
-				canExecute: false,
-				classification: validation.classification,
-				reason: "文件质量预检尚未通过，请先在预检暂存区完成检查",
-			};
-		}
 		return {
 			canAdmit: true,
 			canExecute: false,
 			classification: validation.classification,
-			reason: "密级封存有效，待完成准入",
+			reason: hasClassificationEvidence ? "密级封存有效，待完成准入" : "未配置密级，按普通接入流程待确认",
 		};
 	}
 	if (status === "active") {
@@ -339,7 +342,7 @@ export function resolveTaskAdmissionState(task: IngestionTaskDTO | null): TaskAd
 			canAdmit: false,
 			canExecute: true,
 			classification: validation.classification,
-			reason: "密级与准入已完成",
+			reason: hasClassificationEvidence ? "密级与准入已完成" : "未配置密级，按普通接入流程执行",
 		};
 	}
 	return {

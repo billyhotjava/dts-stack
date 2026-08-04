@@ -23,12 +23,12 @@ export const resolveAccessRevisionView = (
 			.toLowerCase() === "active";
 	const canExecuteActiveRevision = taskActive && activeRevisionNumber !== undefined && !revisionsError;
 	const executeReason = revisionsError
-		? "生效 Revision 加载失败，已禁止执行"
+		? "有效配置状态加载失败，已禁止执行"
 		: !taskActive
 			? `任务状态 ${task?.status || "unknown"} 不允许执行`
 			: activeRevisionNumber === undefined
-				? "任务没有可执行的生效 Revision"
-				: `将执行当前生效版本 R${activeRevisionNumber}`;
+				? "任务没有可执行的有效配置"
+				: "将执行当前有效配置";
 	return {
 		activeRevisionNumber,
 		draftRevisionNumber,

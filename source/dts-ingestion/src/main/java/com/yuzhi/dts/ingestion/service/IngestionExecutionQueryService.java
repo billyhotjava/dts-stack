@@ -156,7 +156,9 @@ public class IngestionExecutionQueryService {
         if (!isAirflowEnabled(task)) {
             return Map.of("taskId", taskId, "executionId", executionId, "message", "Airflow 未启用，暂无日志");
         }
-        String dagId = airflowDagService.resolveDagIdForTask(task);
+        String dagId = StringUtils.hasText(execution.getAirflowDagId())
+            ? execution.getAirflowDagId()
+            : airflowDagService.resolveDagIdForTask(task);
         String preferredTaskId = airflowDagService.resolveTaskIdForTask(task);
         String dagRunId = execution.getExecutionId();
         int resolvedTry = tryNumber == null ? 1 : Math.max(1, tryNumber);

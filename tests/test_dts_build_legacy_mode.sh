@@ -26,6 +26,8 @@ setup_repo() {
     "${target_repo}/source/dts-analytics/target" \
     "${target_repo}/source/dts-metrics/target" \
     "${target_repo}/source/dts-airflow-om" \
+    "${target_repo}/services/dts-airflow/dags" \
+    "${target_repo}/services/dts-airflow/runner" \
     "${target_repo}/source"
 
   cp "${REPO_ROOT}/builds/dts-build.sh" "${target_repo}/builds/dts-build.sh"
@@ -34,6 +36,14 @@ setup_repo() {
   cat > "${target_repo}/source/pom.xml" <<'EOF_POM'
 <project />
 EOF_POM
+
+  cat > "${target_repo}/services/dts-airflow/runner/build-runner.sh" <<'EOF_RUNNER'
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+: > "${SCRIPT_DIR}/../dags/addax-env-runner.jar"
+EOF_RUNNER
+  chmod +x "${target_repo}/services/dts-airflow/runner/build-runner.sh"
 
   local dockerfile_paths=(
     "builds/dts-admin/Dockerfile"

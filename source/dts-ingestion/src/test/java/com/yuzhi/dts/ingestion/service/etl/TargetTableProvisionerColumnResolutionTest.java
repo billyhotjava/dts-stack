@@ -22,7 +22,9 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class TargetTableProvisionerColumnResolutionTest {
 
@@ -35,7 +37,8 @@ class TargetTableProvisionerColumnResolutionTest {
         TargetTableProvisioner provisioner = new TargetTableProvisioner(
             metadataService,
             new ObjectMapper(),
-            snapshotService
+            snapshotService,
+            mock(IngestionSourceResolver.class)
         );
         JdbcMetadataService.JdbcConnectionInfo sourceInfo = new JdbcMetadataService.JdbcConnectionInfo(
             "jdbc:postgresql://127.0.0.1:5432/source",
@@ -71,7 +74,8 @@ class TargetTableProvisionerColumnResolutionTest {
         TargetTableProvisioner provisioner = new TargetTableProvisioner(
             metadataService,
             new ObjectMapper(),
-            mock(IngestionSchemaSnapshotService.class)
+            mock(IngestionSchemaSnapshotService.class),
+            mock(IngestionSourceResolver.class)
         );
         JdbcMetadataService.JdbcConnectionInfo sourceInfo = new JdbcMetadataService.JdbcConnectionInfo(
             null,
@@ -95,10 +99,61 @@ class TargetTableProvisionerColumnResolutionTest {
     }
 
     @Test
+    void shouldResolveManagedDestinationCredentialsForProvisioning() throws Exception {
+        JdbcMetadataService metadataService = mock(JdbcMetadataService.class);
+        IngestionSchemaSnapshotService snapshotService = mock(IngestionSchemaSnapshotService.class);
+        IngestionSourceResolver sourceResolver = mock(IngestionSourceResolver.class);
+        UUID targetDataSourceId = UUID.fromString("a0000000-0000-0000-0000-000000000001");
+        JdbcMetadataService.JdbcConnectionInfo managedTarget = new JdbcMetadataService.JdbcConnectionInfo(
+            "jdbc:postgresql://dts-pg:5432/biadmin",
+            "biadmin",
+            "managed-password",
+            "org.postgresql.Driver",
+            null,
+            Map.of()
+        );
+        when(sourceResolver.resolveJdbcInfo(targetDataSourceId)).thenReturn(managedTarget);
+        targetConnection(metadataService, false);
+        when(metadataService.getTableColumns(any(), eq("orders"))).thenReturn(List.of(column("id")));
+        TargetTableProvisioner provisioner = new TargetTableProvisioner(
+            metadataService,
+            objectMapper,
+            snapshotService,
+            sourceResolver
+        );
+        IngestionTask task = task(List.of("orders"), List.of("ods_orders"));
+        task.setDestinationConfig(objectMapper.valueToTree(Map.of(
+            "targetDataSourceId",
+            targetDataSourceId.toString(),
+            "table",
+            List.of("ods_orders"),
+            "column",
+            List.of("*")
+        )));
+
+        provisioner.ensureTargetTables(task);
+
+        verify(sourceResolver).resolveJdbcInfo(targetDataSourceId);
+        ArgumentCaptor<JdbcMetadataService.JdbcConnectionInfo> targetInfo = ArgumentCaptor.forClass(
+            JdbcMetadataService.JdbcConnectionInfo.class
+        );
+        verify(metadataService).openConnection(targetInfo.capture());
+        assertThat(targetInfo.getValue().jdbcUrl()).isEqualTo("jdbc:postgresql://dts-pg:5432/biadmin?sslmode=disable");
+        assertThat(targetInfo.getValue().username()).isEqualTo("biadmin");
+        assertThat(targetInfo.getValue().password()).isEqualTo("managed-password");
+        assertThat(task.getDestinationConfig().has("password")).isFalse();
+    }
+
+    @Test
     void shouldPreserveCompleteDtsNamedSourceFieldsByRenamingThem() throws Exception {
         JdbcMetadataService metadataService = mock(JdbcMetadataService.class);
         IngestionSchemaSnapshotService snapshotService = mock(IngestionSchemaSnapshotService.class);
-        TargetTableProvisioner provisioner = new TargetTableProvisioner(metadataService, objectMapper, snapshotService);
+        TargetTableProvisioner provisioner = new TargetTableProvisioner(
+            metadataService,
+            objectMapper,
+            snapshotService,
+            mock(IngestionSourceResolver.class)
+        );
         Connection targetConnection = targetConnection(metadataService, false);
 
         when(metadataService.getTableColumns(any(), eq("ods_orders"))).thenReturn(managedOdsColumns("id", "amount"));
@@ -123,7 +178,12 @@ class TargetTableProvisionerColumnResolutionTest {
     void shouldPreservePartialDtsNameCollisionWithoutDroppingExistingTarget() throws Exception {
         JdbcMetadataService metadataService = mock(JdbcMetadataService.class);
         IngestionSchemaSnapshotService snapshotService = mock(IngestionSchemaSnapshotService.class);
-        TargetTableProvisioner provisioner = new TargetTableProvisioner(metadataService, objectMapper, snapshotService);
+        TargetTableProvisioner provisioner = new TargetTableProvisioner(
+            metadataService,
+            objectMapper,
+            snapshotService,
+            mock(IngestionSourceResolver.class)
+        );
         Connection targetConnection = targetConnection(metadataService, true);
 
         when(metadataService.getTableColumns(any(), eq("orders"))).thenReturn(List.of(column("id")));
@@ -160,7 +220,8 @@ class TargetTableProvisionerColumnResolutionTest {
         TargetTableProvisioner provisioner = new TargetTableProvisioner(
             metadataService,
             objectMapper,
-            mock(IngestionSchemaSnapshotService.class)
+            mock(IngestionSchemaSnapshotService.class),
+            mock(IngestionSourceResolver.class)
         );
         IngestionTask task = task(List.of("orders", "customers"), List.of("ods_orders", "ods_customers"));
         task.setTableMapping(objectMapper.valueToTree(List.of(
@@ -179,7 +240,12 @@ class TargetTableProvisionerColumnResolutionTest {
     void shouldRollbackPostgresFullRefreshWhenCreateFails() throws Exception {
         JdbcMetadataService metadataService = mock(JdbcMetadataService.class);
         IngestionSchemaSnapshotService snapshotService = mock(IngestionSchemaSnapshotService.class);
-        TargetTableProvisioner provisioner = new TargetTableProvisioner(metadataService, objectMapper, snapshotService);
+        TargetTableProvisioner provisioner = new TargetTableProvisioner(
+            metadataService,
+            objectMapper,
+            snapshotService,
+            mock(IngestionSourceResolver.class)
+        );
         Connection targetConnection = targetConnection(metadataService, false);
         Statement statement = targetConnection.createStatement();
         when(targetConnection.getAutoCommit()).thenReturn(true);

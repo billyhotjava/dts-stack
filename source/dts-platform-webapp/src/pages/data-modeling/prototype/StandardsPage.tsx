@@ -1,7 +1,6 @@
 import { Archive, Download, Pencil, Plus, Search } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { applyStandardPackageImport, previewStandardPackageImport } from "@/api/modelingStandardsApi";
-import { useCatalogMaintainerAccess } from "@/hooks/useModuleManageAccess";
 import type { DataModelingRoute } from "../types";
 import { Button, Modal, PageHeader, RequestState, Status, Toast, useTransientMessage } from "./PrototypePrimitives";
 import { normalizeModelingRequestFailure } from "./services/planningProjectionService";
@@ -14,6 +13,7 @@ import {
 	saveStandardsRow,
 	standardsCapability,
 } from "./services/standardsProjectionService";
+import { useDataModelingMenuGrant } from "./useDataModelingMenuGrant";
 
 const config: Record<
 	StandardsView,
@@ -97,7 +97,7 @@ const emptyEditor = (): StandardsEditorValues => ({
 });
 
 export function StandardsPage({ route }: { route: DataModelingRoute }) {
-	const canMaintain = useCatalogMaintainerAccess();
+	const canMaintain = useDataModelingMenuGrant();
 	const view = (route.view in config ? route.view : "fields") as StandardsView;
 	const page = config[view];
 	const capability = standardsCapability(view);
