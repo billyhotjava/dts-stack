@@ -360,8 +360,25 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 						<input disabled value={config.label} />
 					</label>
 					<label>
-						<span>目标分层</span>
-						<input disabled value={config.layer} />
+						<span className="required">数仓分层</span>
+						<select
+							onChange={(event) => patch({ warehouseLayerCode: event.target.value })}
+							value={draft.warehouseLayerCode}
+						>
+							<option value="">请选择数仓分层</option>
+							{context.warehouseLayers
+								.filter((layer) => layer.systemLayerCode === config.layer)
+								.map((layer) => (
+									<option key={layer.code} value={layer.code}>
+										{layer.name}（{layer.code}）{layer.builtin ? " · 系统" : " · 自定义"}
+									</option>
+								))}
+							{draft.base && !context.warehouseLayers.some((layer) => layer.code === draft.warehouseLayerCode) ? (
+								<option disabled value={draft.warehouseLayerCode}>
+									已删除分层 · {draft.warehouseLayerCode}
+								</option>
+							) : null}
+						</select>
 					</label>
 					<label>
 						<span className="required">模型名称</span>

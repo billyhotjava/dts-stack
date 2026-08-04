@@ -2,12 +2,21 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { confirmDimensionDefinition, createDimensionDefinition } from "@/api/dimensionDefinitionApi";
+import { listModelFieldStandardOptions } from "@/api/modelingStandardsApi";
+import { listModelSpecs, updateModelSpec } from "@/api/modelSpecApi";
+import catalogDomainService from "@/api/services/catalogDomainService";
+import { listWarehouseLayers, type WarehouseLayerView } from "@/api/warehouseLayerApi";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
-import type { ConceptDimensionDraft, ModelDraft } from "./modelWorkbenchService";
+import type { CanonicalModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
+import type { ConceptDimensionDraft, ModelDraft, ModelSpecDraft } from "./modelWorkbenchService";
 import {
 	confirmDimensionDefinitionDraft,
+	emptyModelDraft,
+	loadModelWorkbenchContext,
+	modelDraftFromView,
 	prepareModelDraftForSave,
 	saveDimensionDefinitionDraft,
+	saveModelDraft,
 	validateConceptDimensionDraftInput,
 	validateModelDraftInput,
 } from "./modelWorkbenchService";
@@ -17,6 +26,68 @@ vi.mock("@/api/dimensionDefinitionApi", () => ({
 	createDimensionDefinition: vi.fn(),
 	listDimensionDefinitions: vi.fn(),
 }));
+vi.mock("@/api/modelingStandardsApi", () => ({ listModelFieldStandardOptions: vi.fn() }));
+vi.mock("@/api/modelSpecApi", () => ({
+	listModelSpecs: vi.fn(),
+	updateModelSpec: vi.fn(),
+	createModelSpec: vi.fn(),
+}));
+vi.mock("@/api/services/catalogDomainService", () => ({ default: { list: vi.fn() } }));
+vi.mock("@/api/warehouseLayerApi", () => ({ listWarehouseLayers: vi.fn() }));
+
+const customLayer: WarehouseLayerView = {
+	code: "FIN_DETAIL",
+	name: "财务明细层",
+	systemLayerCode: "DWD",
+	kind: "DETAIL",
+	responsibility: "财务域明细",
+	namingPrefixes: ["fin_dwd_"],
+	optional: false,
+	builtin: false,
+	deletable: true,
+	disabledReason: null,
+};
+
+const canonicalFactView = (): CanonicalModelSpecView => ({
+	contractVersion: 2,
+	id: "30000000-0000-0000-0000-000000000001",
+	planId: "10000000-0000-0000-0000-000000000001",
+	domainId: "20000000-0000-0000-0000-000000000001",
+	modelType: "FACT",
+	layer: "DWD",
+	warehouseLayerCode: "DWD",
+	name: "budget_execution_detail",
+	description: null,
+	implementationMode: "DESIGNER_GENERATED",
+	materialization: "table",
+	businessActivityRef: null,
+	consumptionScenario: null,
+	grain: { statement: "one row per record", keys: ["record_id"] },
+	factShape: "TRANSACTION",
+	timeSemantics: { type: "EVENT_TIME", fields: ["event_time"] },
+	generationStrategy: null,
+	dimensionProfile: null,
+	dimensionDefinitionRef: null,
+	status: "DRAFT",
+	revision: 1,
+	checksum: "a".repeat(64),
+	createdAt: "2026-08-04T10:00:00Z",
+	updatedAt: "2026-08-04T10:00:00Z",
+	compatibilityMode: "CANONICAL",
+	legacyRefs: null,
+	dataMartId: null,
+	variantCode: null,
+	implementationPolicy: null,
+	fields: [
+		{ name: "record_id", dataType: "varchar", nullable: false, role: "KEY", securityLevel: "INTERNAL" },
+		{ name: "event_time", dataType: "timestamp", nullable: false, role: "TIME", securityLevel: "INTERNAL" },
+	],
+	sourceRefs: [],
+	dependsOn: [],
+	dimensionRefs: [],
+	metricRefs: [],
+	standardBindings: [],
+});
 
 const conceptDraft = (): ConceptDimensionDraft => ({
 	createKind: "dimension",
@@ -212,5 +283,38 @@ describe("model workbench draft validation", () => {
 		expect(validateModelDraftInput(invalid)).toMatchObject({
 			fields: "维度属性编码只能使用大写字母、数字和下划线，且必须以字母开头",
 		});
+	});
+
+	it("defaults new model drafts to the canonical target layer", () => {
+		const context = { domains: [], models: [], standards: [], warehouseLayers: [] } as never;
+		expect(emptyModelDraft("fact", context)).toMatchObject({ warehouseLayerCode: "DWD" });
+		expect(emptyModelDraft("summary", context)).toMatchObject({ warehouseLayerCode: "DWS" });
+		expect(emptyModelDraft("application", context)).toMatchObject({ warehouseLayerCode: "ADS" });
+	});
+
+	it("loads the governed warehouse layers into the workbench context", async () => {
+		vi.mocked(listWarehouseLayers).mockResolvedValue([customLayer]);
+		vi.mocked(catalogDomainService.list).mockResolvedValue([]);
+		vi.mocked(listModelSpecs).mockResolvedValue([]);
+		vi.mocked(listModelFieldStandardOptions).mockResolvedValue([]);
+
+		const context = await loadModelWorkbenchContext();
+
+		expect(context.warehouseLayers).toEqual([customLayer]);
+		expect(listWarehouseLayers).toHaveBeenCalledTimes(1);
+	});
+
+	it("carries the custom selection into the update command", async () => {
+		const base = canonicalFactView();
+		vi.mocked(updateModelSpec).mockResolvedValue(base);
+		const draft = modelDraftFromView(base) as ModelSpecDraft;
+		draft.warehouseLayerCode = "FIN_DETAIL";
+
+		await saveModelDraft(draft, { ownerId: "owner-1", dimensionDefinitions: [] });
+
+		expect(updateModelSpec).toHaveBeenCalledWith(
+			base,
+			expect.objectContaining({ layer: "DWD", warehouseLayerCode: "FIN_DETAIL" }),
+		);
 	});
 });

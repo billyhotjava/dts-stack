@@ -10,6 +10,7 @@ export const MODEL_SPEC_CREATE_FIELDS = [
 	"idempotencyKey",
 	"dataMartId",
 	"variantCode",
+	"warehouseLayerCode",
 ] as const;
 
 export const MODEL_SPEC_UPDATE_FIELDS = [
@@ -36,6 +37,8 @@ export const MODEL_SPEC_UPDATE_FIELDS = [
 	"dimensionProfile",
 	"dataMartId",
 	"variantCode",
+	"implementationPolicy",
+	"warehouseLayerCode",
 ] as const;
 
 export const MODEL_SPEC_REQUIRED_FIELD_CODES = {
@@ -206,6 +209,7 @@ type CreateModelSpecBase = {
 	domainId: string;
 	name: string;
 	description?: string | null;
+	warehouseLayerCode?: string | null;
 	idempotencyKey: string;
 	dataMartId?: string | null;
 	variantCode?: string | null;
@@ -226,6 +230,7 @@ export type UpdateModelSpecCommand = {
 	domainId: string;
 	modelType: ModelSpecType;
 	layer: ModelSpecLayer;
+	warehouseLayerCode: string;
 	name: string;
 	description?: string | null;
 	implementationMode: ModelSpecImplementationMode;
@@ -274,6 +279,7 @@ export const hasModelSpecTypeBoundaryMismatch = (
 
 type ModelSpecViewBase = Omit<UpdateModelSpecCommand, "planId" | "domainId" | keyof ModelSpecCollections> & {
 	dimensionDefinitionRef: ModelSpecDimensionDefinitionRef | null;
+	warehouseLayerCode: string;
 	id: string;
 	status: ModelSpecStatus;
 	revision: number;

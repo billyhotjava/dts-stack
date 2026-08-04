@@ -215,6 +215,24 @@ const canonicalView = (overrides: Partial<CanonicalModelSpecView> = {}): Canonic
 	} as CanonicalModelSpecView;
 };
 
+test("canonical create and update accept the additive warehouse-layer selection", () => {
+	assert.equal((MODEL_SPEC_CREATE_FIELDS as readonly string[]).includes("warehouseLayerCode"), true);
+	assert.equal((MODEL_SPEC_UPDATE_FIELDS as readonly string[]).includes("warehouseLayerCode"), true);
+	const { idempotencyKey: _idempotencyKey, ...update } = valid("FACT");
+	assert.deepEqual(validateModelSpecUpdate({ ...update, warehouseLayerCode: "FIN_DETAIL" }), []);
+	assert.deepEqual(
+		validateInteractiveModelSpecCreate({
+			planId: "10000000-0000-0000-0000-000000000001",
+			domainId: "20000000-0000-0000-0000-000000000001",
+			modelType: "FACT",
+			name: "finance_project_event",
+			idempotencyKey: "interactive-create-layer-contract",
+			warehouseLayerCode: "FIN_DETAIL",
+		}),
+		[],
+	);
+});
+
 test("canonical create fields exclude client-owned and retired metadata", () => {
 	assert.equal(MODEL_SPEC_CONTRACT_VERSION, 2);
 	assert.equal(new Set(MODEL_SPEC_CREATE_FIELDS).size, MODEL_SPEC_CREATE_FIELDS.length);

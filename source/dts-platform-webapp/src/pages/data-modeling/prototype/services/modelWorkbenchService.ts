@@ -13,6 +13,7 @@ import {
 } from "@/api/modelSpecApi";
 import catalogDomainService, { type CatalogDomain } from "@/api/services/catalogDomainService";
 import { resolveDefaultModelingContextId } from "@/api/services/modelingImportContextService";
+import { listWarehouseLayers, type WarehouseLayerView } from "@/api/warehouseLayerApi";
 import type {
 	DimensionDefinitionReuseScope,
 	DimensionDefinitionView,
@@ -48,6 +49,7 @@ export type ModelWorkbenchContext = {
 	domains: CatalogDomain[];
 	models: ModelSpecView[];
 	standards: ModelFieldStandardOption[];
+	warehouseLayers: WarehouseLayerView[];
 };
 
 export type ConceptDimensionDraft = {
@@ -78,6 +80,7 @@ export type ModelSpecDraft = {
 	reuseScope: DimensionDefinitionReuseScope;
 	dimensionDefinitionId: string;
 	standardBindings: ModelSpecStandardBinding[];
+	warehouseLayerCode: string;
 };
 
 export type ModelDraft = ConceptDimensionDraft | ModelSpecDraft;
@@ -145,6 +148,7 @@ export function emptyModelDraft(kind: ModelCreateKind, context: ModelWorkbenchCo
 		reuseScope: "DOMAIN",
 		dimensionDefinitionId: "",
 		standardBindings: [],
+		warehouseLayerCode: config.layer,
 	};
 }
 
@@ -179,19 +183,22 @@ export function modelDraftFromView(model: ModelSpecView): ModelSpecDraft {
 		reuseScope: model.dimensionProfile?.reuseScope === "TENANT" ? "TENANT" : "DOMAIN",
 		dimensionDefinitionId: model.dimensionDefinitionRef?.dimensionDefinitionId || "",
 		standardBindings: model.standardBindings.map((binding) => ({ ...binding })),
+		warehouseLayerCode: model.warehouseLayerCode || model.layer,
 	};
 }
 
 export async function loadModelWorkbenchContext(): Promise<ModelWorkbenchContext> {
-	const [domains, models, standards] = await Promise.all([
+	const [domains, models, standards, warehouseLayers] = await Promise.all([
 		catalogDomainService.list(),
 		listModelSpecs(),
 		listModelFieldStandardOptions(),
+		listWarehouseLayers(),
 	]);
 	return {
 		domains,
 		models: models.filter((model) => model.status !== "ARCHIVED"),
 		standards,
+		warehouseLayers,
 	};
 }
 
@@ -292,6 +299,7 @@ const buildUpdate = (draft: ModelSpecDraft): UpdateModelSpecCommand => {
 		domainId: draft.domainId,
 		modelType: config.modelType,
 		layer: config.layer,
+		warehouseLayerCode: draft.warehouseLayerCode,
 		name: draft.name.trim(),
 		description: draft.description.trim() || null,
 		implementationMode: base?.implementationMode || "DESIGNER_GENERATED",
@@ -340,6 +348,7 @@ const buildUpdate = (draft: ModelSpecDraft): UpdateModelSpecCommand => {
 const validateDraft = (draft: ModelSpecDraft, update: UpdateModelSpecCommand) => {
 	const missing: string[] = [];
 	if (!draft.planId) missing.push("可写建模上下文");
+	if (!draft.warehouseLayerCode) missing.push("请选择数仓分层");
 	const validationErrors = validateModelDraftInput(draft);
 	missing.push(...Object.values(validationErrors));
 	if (missing.length) throw new Error(`请补齐：${Array.from(new Set(missing)).join("、")}`);
@@ -394,6 +403,7 @@ export async function saveModelDraft(
 		modelType: update.modelType,
 		name: preparedDraft.name.trim(),
 		description: preparedDraft.description.trim() || null,
+		warehouseLayerCode: update.warehouseLayerCode,
 		idempotencyKey: crypto.randomUUID(),
 	});
 	return updateModelSpec(created, update);

@@ -29,6 +29,15 @@ test("canonical ModelSpec client owns one non-vnext CRUD surface and strong CAS 
 	assert.match(source, /headers: \{ "If-Match": toModelSpecEtag\(expected\) \}/);
 });
 
+test("canonical client carries the additive warehouse-layer selection through its command types", () => {
+	assert.equal(existsSync(API_URL), true, "canonical ModelSpec client is missing");
+	const source = readFileSync(API_URL, "utf8");
+	assert.match(source, /CreateModelSpecCommand/);
+	assert.match(source, /UpdateModelSpecCommand/);
+	assert.match(source, /createDimensionModel = /);
+	assert.match(source, /modelSpec:/);
+});
+
 test("canonical client keeps legacy reads in the response union but excludes them from writes", () => {
 	assert.equal(existsSync(API_URL), true, "canonical ModelSpec client is missing");
 	const source = readFileSync(API_URL, "utf8");

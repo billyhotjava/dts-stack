@@ -37,6 +37,7 @@ const makeDraft = (patch: Partial<ModelSpecDraft> = {}): ModelSpecDraft => ({
 	reuseScope: "DOMAIN",
 	dimensionDefinitionId: "dimension-1",
 	standardBindings: [],
+	warehouseLayerCode: "DWD",
 	...patch,
 });
 
@@ -70,6 +71,44 @@ const makeProps = (patch: Partial<ModelingWorkbenchEditorProps> = {}): ModelingW
 		],
 		models: [],
 		standards: [],
+		warehouseLayers: [
+			{
+				code: "DWD",
+				name: "明细事实 / 维度层",
+				systemLayerCode: "DWD",
+				kind: "DETAIL",
+				responsibility: "业务明细",
+				namingPrefixes: ["dwd_"],
+				optional: false,
+				builtin: true,
+				deletable: false,
+				disabledReason: "平台内置分层不可删除",
+			},
+			{
+				code: "FIN_DETAIL",
+				name: "财务明细层",
+				systemLayerCode: "DWD",
+				kind: "DETAIL",
+				responsibility: "财务域明细",
+				namingPrefixes: ["fin_dwd_"],
+				optional: false,
+				builtin: false,
+				deletable: true,
+				disabledReason: null,
+			},
+			{
+				code: "FIN_SUMMARY",
+				name: "财务汇总层",
+				systemLayerCode: "DWS",
+				kind: "SERVICE",
+				responsibility: "财务域汇总",
+				namingPrefixes: ["fin_dws_"],
+				optional: false,
+				builtin: false,
+				deletable: true,
+				disabledReason: null,
+			},
+		],
 	},
 	dimensionDefinitions: [definition],
 	dimensionDefinitionFailure: "",
@@ -260,7 +299,7 @@ describe("ModelingWorkbenchEditor", () => {
 		await render(
 			makeProps({
 				draft,
-				context: { domains: [], models: [], standards: [] },
+				context: { domains: [], models: [], standards: [], warehouseLayers: [] },
 				dimensionDefinitions: [],
 			}),
 		);
@@ -308,6 +347,42 @@ describe("ModelingWorkbenchEditor", () => {
 		expect(container.textContent).toContain("加载策略");
 	});
 
+	it("lists only DWD-compatible layers for FACT drafts and excludes DWS custom layers", async () => {
+		const draft = makeDraft({ createKind: "fact", warehouseLayerCode: "DWD" });
+		await render(makeProps({ draft }));
+
+		const select = [...container.querySelectorAll("select")].find((item) =>
+			[...item.options].some((option) => option.textContent?.includes("数仓分层") || item.value === "DWD"),
+		);
+		const options = Array.from(select?.options || []);
+		expect(options.some((option) => option.textContent?.includes("FIN_DETAIL"))).toBe(true);
+		expect(options.some((option) => option.textContent?.includes("FIN_SUMMARY"))).toBe(false);
+		expect(options.some((option) => option.textContent?.includes(" · 自定义"))).toBe(true);
+	});
+
+	it("shows a disabled deleted-layer option so a persisted selection is never silently replaced", async () => {
+		const draft = makeDraft({
+			createKind: "fact",
+			base: { id: "model-1" } as ModelSpecView,
+			warehouseLayerCode: "GONE_LAYER",
+		});
+		await render(makeProps({ draft }));
+
+		const option = Array.from(container.querySelectorAll("option")).find((item) => item.value === "GONE_LAYER");
+		expect(option).toBeDefined();
+		expect(option?.textContent).toContain("已删除分层 · GONE_LAYER");
+		expect(option?.disabled).toBe(true);
+		const select = option?.closest("select") as HTMLSelectElement | null;
+		expect(select?.value).toBe("GONE_LAYER");
+	});
+
+	it("keeps the concept-dimension form free of the warehouse layer selector", async () => {
+		await render(makeProps({ draft: makeConceptDraft() }));
+
+		expect(Array.from(container.querySelectorAll("option")).some((item) => item.value === "DWD")).toBe(false);
+		expect(Array.from(container.querySelectorAll("option")).some((item) => item.value === "FIN_DETAIL")).toBe(false);
+	});
+
 	it("locks and preserves a persisted compatibility draft whose domain is missing", async () => {
 		const draft = makeDraft({
 			createKind: "fact",
@@ -317,7 +392,7 @@ describe("ModelingWorkbenchEditor", () => {
 		await render(
 			makeProps({
 				draft,
-				context: { domains: [], models: [], standards: [] },
+				context: { domains: [], models: [], standards: [], warehouseLayers: [] },
 			}),
 		);
 
