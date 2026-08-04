@@ -835,7 +835,8 @@ class ModelSpecContractTest {
             base.legacyRefs(),
             base.dataMartId(),
             base.variantCode(),
-            base.implementationPolicy()
+            base.implementationPolicy(),
+            base.warehouseLayerCode()
         );
     }
 }

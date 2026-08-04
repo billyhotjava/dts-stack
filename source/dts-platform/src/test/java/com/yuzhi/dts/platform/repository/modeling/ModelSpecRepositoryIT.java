@@ -31,6 +31,46 @@ class ModelSpecRepositoryIT {
     @Autowired
     private ObjectMapper objectMapper;
 
+
+    @Test
+    void persistsWarehouseLayerSelectionOnInsertAndCas() throws Exception {
+        String tenant = "model-spec-layer-it-" + UUID.randomUUID();
+        String actor = "owner-1";
+        UUID planId = UUID.randomUUID();
+        UUID domainId = UUID.randomUUID();
+        UUID sourceBindingId = UUID.randomUUID();
+        seedContext(tenant, actor, planId, domainId, sourceBindingId);
+        ModelSpecSnapshotCodec codec = new ModelSpecSnapshotCodec(objectMapper);
+        CreateModelSpecCommand create = command(planId, domainId, sourceBindingId);
+        create = create.withLayerSelection(Layer.DWD, "FIN_DETAIL");
+        Instant now = Instant.parse("2026-08-04T00:00:00Z");
+        ModelSpecView first = codec.toCreatedView(UUID.randomUUID(), create, now);
+        String firstSnapshot = codec.write(first);
+        assertThat(repository.insertV2(tenant, actor, create, first, codec.requestHash(create), firstSnapshot)).isEqualTo(1);
+
+        String stored = jdbcTemplate.queryForObject(
+            "select warehouse_layer_code from modeling_model_spec where tenant_id = ? and id = ?",
+            String.class,
+            tenant,
+            first.id()
+        );
+        assertThat(stored).isEqualTo("FIN_DETAIL");
+
+        UpdateModelSpecCommand update = update(create, "customer_detail_v2");
+        update = update.withLayerSelection(Layer.DWD, "FIN_DETAIL");
+        ModelSpecView second = codec.toUpdatedView(first, update, 2, now.plusSeconds(60));
+        String secondSnapshot = codec.write(second);
+        assertThat(repository.compareAndSetV2(tenant, actor, 1, first.checksum(), second, secondSnapshot)).isEqualTo(1);
+
+        String storedAfterCas = jdbcTemplate.queryForObject(
+            "select warehouse_layer_code from modeling_model_spec where tenant_id = ? and id = ?",
+            String.class,
+            tenant,
+            first.id()
+        );
+        assertThat(storedAfterCas).isEqualTo("FIN_DETAIL");
+        assertThat(second.warehouseLayerCode()).isEqualTo("FIN_DETAIL");
+    }
     @Test
     void convergesIdempotentInsertAndUsesRevisionChecksumCas() throws Exception {
         String tenant = "model-spec-it-" + UUID.randomUUID();

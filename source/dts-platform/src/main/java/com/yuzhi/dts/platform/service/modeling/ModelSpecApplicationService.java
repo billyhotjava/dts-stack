@@ -17,6 +17,8 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelStatus;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.UpdateModelSpecCommand;
 import com.yuzhi.dts.platform.service.modeling.warehouse.CatalogDomainResolutionPort;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehouseLayerApplicationService;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehouseLayerContract;
 import com.yuzhi.dts.platform.service.modeling.warehouse.CatalogDomainResolutionPort.DomainResolution;
 import java.time.Clock;
 import java.time.Instant;
@@ -50,6 +52,7 @@ public class ModelSpecApplicationService {
     private final ModelSpecReader compatibilityReader;
     private final ModelSpecFeatureFlags featureFlags;
     private final AuditService auditService;
+    private final WarehouseLayerApplicationService warehouseLayers;
     private final Clock clock;
     private final Supplier<UUID> idGenerator;
 
@@ -65,7 +68,8 @@ public class ModelSpecApplicationService {
         ModelSpecSourceValidationPort sourceValidation,
         ModelSpecReader compatibilityReader,
         ModelSpecFeatureFlags featureFlags,
-        AuditService auditService
+        AuditService auditService,
+        WarehouseLayerApplicationService warehouseLayers
     ) {
         this(
             repository,
@@ -79,6 +83,7 @@ public class ModelSpecApplicationService {
             compatibilityReader,
             featureFlags,
             auditService,
+            warehouseLayers,
             Clock.systemUTC(),
             UUID::randomUUID
         );
@@ -94,6 +99,7 @@ public class ModelSpecApplicationService {
         ModelSpecSourceValidationPort sourceValidation,
         ModelSpecReader compatibilityReader,
         AuditService auditService,
+        WarehouseLayerApplicationService warehouseLayers,
         Clock clock,
         Supplier<UUID> idGenerator
     ) {
@@ -109,6 +115,7 @@ public class ModelSpecApplicationService {
             compatibilityReader,
             ModelSpecFeatureFlags.enabled(),
             auditService,
+            warehouseLayers,
             clock,
             idGenerator
         );
@@ -125,6 +132,7 @@ public class ModelSpecApplicationService {
         ModelSpecReader compatibilityReader,
         ModelSpecFeatureFlags featureFlags,
         AuditService auditService,
+        WarehouseLayerApplicationService warehouseLayers,
         Clock clock,
         Supplier<UUID> idGenerator
     ) {
@@ -140,6 +148,7 @@ public class ModelSpecApplicationService {
             compatibilityReader,
             featureFlags,
             auditService,
+            warehouseLayers,
             clock,
             idGenerator
         );
@@ -156,6 +165,7 @@ public class ModelSpecApplicationService {
         ModelSpecSourceValidationPort sourceValidation,
         ModelSpecReader compatibilityReader,
         AuditService auditService,
+        WarehouseLayerApplicationService warehouseLayers,
         Clock clock,
         Supplier<UUID> idGenerator
     ) {
@@ -171,6 +181,7 @@ public class ModelSpecApplicationService {
             compatibilityReader,
             ModelSpecFeatureFlags.enabled(),
             auditService,
+            warehouseLayers,
             clock,
             idGenerator
         );
@@ -188,6 +199,7 @@ public class ModelSpecApplicationService {
         ModelSpecReader compatibilityReader,
         ModelSpecFeatureFlags featureFlags,
         AuditService auditService,
+        WarehouseLayerApplicationService warehouseLayers,
         Clock clock,
         Supplier<UUID> idGenerator
     ) {
@@ -202,6 +214,7 @@ public class ModelSpecApplicationService {
         this.compatibilityReader = compatibilityReader;
         this.featureFlags = featureFlags;
         this.auditService = auditService;
+        this.warehouseLayers = warehouseLayers;
         this.clock = clock;
         this.idGenerator = idGenerator;
     }
@@ -255,6 +268,7 @@ public class ModelSpecApplicationService {
                 ? ModelSpecContract.validateInteractiveCreate(command)
                 : ModelSpecContract.validateCreate(command)
         );
+        command = resolveWarehouseLayerSelection(command);
         String requestHash = codec.requestHash(command);
         StoredModelSpec existing = repository.findByIdempotencyKey(serverTenantId, command.idempotencyKey()).orElse(null);
         if (existing != null) {
@@ -402,6 +416,7 @@ public class ModelSpecApplicationService {
                 Map.of("status", current.status())
             );
         }
+        command = resolveWarehouseLayerSelection(command);
         ModelSpecView replacement = codec.toUpdatedView(current, command, current.revision() + 1, clock.instant());
         requireDimensionDefinitionRef(replacement);
         rejectIssues(ModelSpecContract.validateView(replacement));
@@ -710,6 +725,7 @@ public class ModelSpecApplicationService {
             null,
             current.dataMartId(),
             command.targetType() == ModelType.DIMENSION ? current.variantCode() : null,
+            null,
             null
         );
     }
@@ -1530,6 +1546,30 @@ public class ModelSpecApplicationService {
 
     private static FieldIssue fieldIssue(String field, String message) {
         return new FieldIssue("MODEL_SPEC_FIELD_INVALID", field, ModelSpecContract.IssueSeverity.ERROR, message);
+    }
+
+    private CreateModelSpecCommand resolveWarehouseLayerSelection(CreateModelSpecCommand command) {
+        Layer canonicalLayer = ModelSpecContract.targetLayer(command.modelType());
+        if (canonicalLayer == null) {
+            return command;
+        }
+        WarehouseLayerContract.ResolvedWarehouseLayer selection = warehouseLayers.resolveSelection(
+            command.warehouseLayerCode(),
+            canonicalLayer
+        );
+        return command.withLayerSelection(canonicalLayer, selection.code());
+    }
+
+    private UpdateModelSpecCommand resolveWarehouseLayerSelection(UpdateModelSpecCommand command) {
+        Layer canonicalLayer = ModelSpecContract.targetLayer(command.modelType());
+        if (canonicalLayer == null) {
+            return command;
+        }
+        WarehouseLayerContract.ResolvedWarehouseLayer selection = warehouseLayers.resolveSelection(
+            command.warehouseLayerCode(),
+            canonicalLayer
+        );
+        return command.withLayerSelection(command.layer(), selection.code());
     }
 
     private static void requireServerContext(String tenantId, String actorId) {

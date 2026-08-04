@@ -511,7 +511,7 @@ public class ModelSpecRepository {
         return jdbcTemplate.update(
             """
             insert into modeling_model_spec (
-                id, tenant_id, plan_id, layer, model_type, implementation_mode, name, grain_statement,
+                id, tenant_id, plan_id, layer, warehouse_layer_code, model_type, implementation_mode, name, grain_statement,
                 materialization, status, revision, version, created_date, last_modified_date,
                 contract_version, domain_id, business_activity_ref, description, consumption_scenario,
                 fact_shape, grain_json, time_semantics, fields, source_refs, depends_on, dimension_refs,
@@ -519,7 +519,7 @@ public class ModelSpecRepository {
                 idempotency_request_hash, idempotency_response_snapshot, dimension_definition_id, dimension_definition_revision,
                 data_mart_id, variant_code
             ) values (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?,
                 2, ?, ?, ?, ?, ?, cast(? as jsonb), cast(? as jsonb), cast(? as jsonb), cast(? as jsonb),
                 cast(? as jsonb), cast(? as jsonb), cast(? as jsonb), cast(? as jsonb), cast(? as jsonb),
                 cast(? as jsonb), ?, ?, ?, cast(? as jsonb)
@@ -533,6 +533,7 @@ public class ModelSpecRepository {
             tenantId,
             view.planId(),
             view.layer().name(),
+            view.warehouseLayerCode(),
             view.modelType().name(),
             view.implementationMode().name(),
             view.name(),
@@ -579,7 +580,7 @@ public class ModelSpecRepository {
         return jdbcTemplate.update(
             """
             update modeling_model_spec
-               set layer = ?, model_type = ?, implementation_mode = ?, name = ?,
+               set layer = ?, warehouse_layer_code = ?, model_type = ?, implementation_mode = ?, name = ?,
                    grain_statement = ?, materialization = ?, business_activity_ref = ?, description = ?,
                    consumption_scenario = ?, fact_shape = ?, grain_json = cast(? as jsonb),
                    time_semantics = cast(? as jsonb), fields = cast(? as jsonb), source_refs = cast(? as jsonb),
@@ -593,6 +594,7 @@ public class ModelSpecRepository {
                and status = 'DRAFT'
             """,
             replacement.layer().name(),
+            replacement.warehouseLayerCode(),
             replacement.modelType().name(),
             replacement.implementationMode().name(),
             replacement.name(),

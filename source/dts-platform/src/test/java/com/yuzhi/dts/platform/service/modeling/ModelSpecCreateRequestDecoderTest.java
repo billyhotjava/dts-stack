@@ -221,6 +221,23 @@ class ModelSpecCreateRequestDecoderTest {
         assertThat(Modifier.isPublic(ModelSpecCreateRequestDecoder.class.getMethod("decode", JsonNode.class).getModifiers())).isTrue();
     }
 
+
+    @Test
+    void decoderAcceptsWarehouseLayerSelectionWithoutMakingItRequired() throws Exception {
+        ObjectNode candidate = genericFact();
+        candidate.put("warehouseLayerCode", "FIN_DETAIL");
+
+        ModelSpecCreateRequestDecoder.DecodeResult result = decoder.decode(candidate);
+
+        assertThat(result.valid()).isTrue();
+        assertThat(result.command().warehouseLayerCode()).isEqualTo("FIN_DETAIL");
+        assertThat(result.command().layer()).isEqualTo(ModelSpecContract.Layer.DWD);
+
+        ObjectNode legacy = genericFact();
+        ModelSpecCreateRequestDecoder.DecodeResult legacyResult = decoder.decode(legacy);
+        assertThat(legacyResult.valid()).isTrue();
+        assertThat(legacyResult.command().warehouseLayerCode()).isEqualTo("DWD");
+    }
     private ObjectNode genericFact() throws Exception {
         return lenientMapper
             .createObjectNode()

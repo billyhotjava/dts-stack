@@ -25,12 +25,20 @@ import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.StoredMode
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.ExpectedVersion;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.*;
+import com.yuzhi.dts.platform.repository.modeling.WarehouseLayerRepository;
 import com.yuzhi.dts.platform.service.modeling.warehouse.CatalogDomainResolutionPort;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehouseLayerApplicationService;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehouseLayerContract.ResolvedWarehouseLayer;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehouseLayerException;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.CreateResult;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.ExpectedVersion;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.ReclassificationPreviewRequest;
 import com.yuzhi.dts.platform.service.modeling.warehouse.CatalogDomainResolutionPort.DomainResolution;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -97,6 +105,7 @@ class ModelSpecApplicationServiceTest {
             sourceValidation,
             compatibilityReader,
             auditService,
+            warehouseLayers(),
             Clock.fixed(NOW, ZoneOffset.UTC),
             () -> MODEL_ID
         );
@@ -1533,6 +1542,7 @@ class ModelSpecApplicationServiceTest {
             compatibilityReader,
             new ModelSpecFeatureFlags(false),
             auditService,
+            warehouseLayers(),
             Clock.fixed(NOW, ZoneOffset.UTC),
             () -> MODEL_ID
         );
@@ -2179,4 +2189,128 @@ class ModelSpecApplicationServiceTest {
         );
     }
 
+
+
+    @Test
+    void resolvesWarehouseLayerSelectionBeforeHashingAndPersistsIt() {
+        WarehouseLayerApplicationService layers = org.mockito.Mockito.mock(WarehouseLayerApplicationService.class);
+        org.mockito.Mockito.when(layers.resolveSelection(eq("FIN_DETAIL"), eq(Layer.DWD)))
+            .thenReturn(new ResolvedWarehouseLayer("FIN_DETAIL", Layer.DWD, false));
+        service = new ModelSpecApplicationService(
+            repository,
+            dimensionDefinitions,
+            codec,
+            domainResolution,
+            domainWriteAccess,
+            domainReadAccess,
+            planWriteAccess,
+            sourceValidation,
+            compatibilityReader,
+            auditService,
+            layers,
+            Clock.fixed(NOW, ZoneOffset.UTC),
+            () -> MODEL_ID
+        );
+        CreateModelSpecCommand command = command("warehouse-layer-create-1", "budget_execution_detail");
+        command = command.withLayerSelection(Layer.DWD, "FIN_DETAIL");
+        org.mockito.Mockito.when(repository.insertV2(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString())).thenReturn(1);
+
+        CreateResult created = service.create(TENANT, ACTOR, command);
+
+        assertThat(created.modelSpec().warehouseLayerCode()).isEqualTo("FIN_DETAIL");
+        assertThat(created.modelSpec().layer()).isEqualTo(Layer.DWD);
+        org.mockito.Mockito.verify(layers).resolveSelection("FIN_DETAIL", Layer.DWD);
+    }
+
+    @Test
+    void rejectsWarehouseLayerSelectionTypeMismatchDuringCreate() {
+        WarehouseLayerApplicationService layers = org.mockito.Mockito.mock(WarehouseLayerApplicationService.class);
+        org.mockito.Mockito.when(layers.resolveSelection(eq("FIN_SUMMARY"), eq(Layer.DWD)))
+            .thenThrow(new WarehouseLayerException(
+                "MODEL_SPEC_WAREHOUSE_LAYER_TYPE_MISMATCH",
+                "分层 FIN_SUMMARY 的系统类型与模型目标层不匹配",
+                WarehouseLayerException.Kind.UNPROCESSABLE,
+                Map.of("warehouseLayerCode", "FIN_SUMMARY", "expectedSystemLayerCode", "DWD")
+            ));
+        service = new ModelSpecApplicationService(
+            repository,
+            dimensionDefinitions,
+            codec,
+            domainResolution,
+            domainWriteAccess,
+            domainReadAccess,
+            planWriteAccess,
+            sourceValidation,
+            compatibilityReader,
+            auditService,
+            layers,
+            Clock.fixed(NOW, ZoneOffset.UTC),
+            () -> MODEL_ID
+        );
+        CreateModelSpecCommand command = command("warehouse-layer-create-2", "budget_execution_detail")
+            .withLayerSelection(Layer.DWD, "FIN_SUMMARY");
+
+        assertThatThrownBy(() -> service.create(TENANT, ACTOR, command))
+            .isInstanceOf(WarehouseLayerException.class)
+            .extracting(error -> ((WarehouseLayerException) error).code())
+            .isEqualTo("MODEL_SPEC_WAREHOUSE_LAYER_TYPE_MISMATCH");
+        verify(repository, never()).insertV2(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void resetsWarehouseLayerSelectionToCanonicalCodeOnReclassification() {
+        WarehouseLayerApplicationService layers = org.mockito.Mockito.mock(WarehouseLayerApplicationService.class);
+        org.mockito.Mockito.when(layers.resolveSelection(eq("FIN_DETAIL"), eq(Layer.DWD)))
+            .thenReturn(new ResolvedWarehouseLayer("FIN_DETAIL", Layer.DWD, false));
+        service = new ModelSpecApplicationService(
+            repository,
+            dimensionDefinitions,
+            codec,
+            domainResolution,
+            domainWriteAccess,
+            domainReadAccess,
+            planWriteAccess,
+            sourceValidation,
+            compatibilityReader,
+            auditService,
+            layers,
+            Clock.fixed(NOW, ZoneOffset.UTC),
+            () -> MODEL_ID
+        );
+        CreateModelSpecCommand create = command("warehouse-layer-create-3", "budget_execution_detail")
+            .withLayerSelection(Layer.DWD, "FIN_DETAIL");
+        org.mockito.Mockito.when(repository.insertV2(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString())).thenReturn(1);
+        CreateResult created = service.create(TENANT, ACTOR, create);
+        ModelSpecView current = created.modelSpec();
+        assertThat(current.warehouseLayerCode()).isEqualTo("FIN_DETAIL");
+        when(repository.findCurrent(TENANT, current.id())).thenReturn(Optional.of(stored(current, null, null)));
+        when(compatibilityReader.read(any())).thenReturn(current);
+        when(repository.compareAndSetV2(eq(TENANT), eq(ACTOR), anyInt(), anyString(), any(), anyString())).thenReturn(1);
+
+        ModelSpecApplicationService.ReclassificationPreview preview = service.previewReclassification(
+            TENANT, ACTOR, current.id(), new ReclassificationPreviewRequest(ModelType.SUMMARY, null)
+        );
+        ModelSpecApplicationService.ReclassificationCommand reclassify =
+            new ModelSpecApplicationService.ReclassificationCommand(
+                ModelType.SUMMARY, null, preview.clearFields(), "reclassify-layer-reset"
+            );
+        ModelSpecView replacement = service.reclassify(
+            TENANT, ACTOR, current.id(),
+            new ExpectedVersion(current.id(), current.revision(), current.checksum()),
+            reclassify
+        );
+
+        assertThat(replacement.layer()).isEqualTo(Layer.DWS);
+        assertThat(replacement.warehouseLayerCode()).isEqualTo("DWS");
+    }
+    private static WarehouseLayerApplicationService warehouseLayers() {
+        WarehouseLayerApplicationService layers = org.mockito.Mockito.mock(WarehouseLayerApplicationService.class);
+        org.mockito.Mockito.lenient().when(layers.resolveSelection(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+            .thenAnswer(invocation -> {
+                com.yuzhi.dts.platform.service.modeling.ModelSpecContract.Layer expected =
+                    invocation.getArgument(1);
+                return new ResolvedWarehouseLayer(expected.name(), expected, true);
+            });
+        return layers;
+    }
 }

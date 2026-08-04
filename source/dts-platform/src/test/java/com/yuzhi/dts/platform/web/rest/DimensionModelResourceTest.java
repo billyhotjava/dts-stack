@@ -289,6 +289,7 @@ class DimensionModelResourceTest {
             null,
             null,
             "DEFAULT",
+            null,
             null
         );
     }

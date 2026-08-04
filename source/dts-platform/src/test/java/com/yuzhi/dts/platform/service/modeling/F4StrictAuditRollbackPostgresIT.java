@@ -59,6 +59,8 @@ import com.yuzhi.dts.platform.service.modeling.PhysicalRelationInspector.Expecte
 import com.yuzhi.dts.platform.service.modeling.PhysicalRelationInspector.PhysicalColumn;
 import com.yuzhi.dts.platform.service.modeling.PhysicalRelationInspector.PhysicalRelationObservation;
 import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelServingService;
+import com.yuzhi.dts.platform.repository.modeling.WarehouseLayerRepository;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehouseLayerApplicationService;
 import com.yuzhi.dts.platform.service.modeling.warehouse.CatalogDomainResolutionPort;
 import com.yuzhi.dts.platform.service.modeling.warehouse.CatalogDomainResolutionPort.DomainResolution;
 import com.yuzhi.dts.platform.service.modeling.warehouse.CatalogDomainResolutionPort.ResolutionStatus;
@@ -366,7 +368,8 @@ class F4StrictAuditRollbackPostgresIT {
                 sourceValidation,
                 reader,
                 featureFlags,
-                auditService
+                auditService,
+                new WarehouseLayerApplicationService(org.mockito.Mockito.mock(WarehouseLayerRepository.class), auditService)
             );
         }
 

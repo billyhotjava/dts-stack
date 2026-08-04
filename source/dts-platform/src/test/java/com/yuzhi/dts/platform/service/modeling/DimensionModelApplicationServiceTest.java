@@ -428,6 +428,7 @@ class DimensionModelApplicationServiceTest {
             null,
             null,
             "DEFAULT",
+            null,
             null
         );
     }

@@ -686,6 +686,10 @@
                         <testInclude>**/service/modeling/warehouse/WarehouseLayerApplicationServiceTest.java</testInclude>
                         <testInclude>**/repository/modeling/WarehouseLayerRepositoryIT.java</testInclude>
                         <testInclude>**/web/rest/WarehouseLayerResourceTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelSpecSnapshotCodecTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelSpecCreateRequestDecoderTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelSpecRequestDecoderTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelSpecContractTest.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehousePlanModelCandidateServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehousePlanContractTest.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehousePlanRelationshipGraphInboundIndexLiquibaseIT.java</testInclude>

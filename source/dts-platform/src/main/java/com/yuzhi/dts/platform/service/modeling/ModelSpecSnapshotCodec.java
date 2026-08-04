@@ -58,8 +58,19 @@ public class ModelSpecSnapshotCodec {
     public boolean matchesStoredContentChecksum(String snapshotJson, ModelSpecView view, String expectedChecksum) {
         if (expectedChecksum == null || view == null) return false;
         if (expectedChecksum.equals(contentChecksum(view))) return true;
-        if (!isHistoricalExtendedSnapshotBeforeDisplayName(snapshotJson, view)) return false;
-        return expectedChecksum.equals(sha256(writeCanonical(historicalExtendedContent(view))));
+        if (isHistoricalExtendedSnapshotBeforeDisplayName(snapshotJson, view) || isHistoricalSnapshotBeforeWarehouseLayer(snapshotJson)) {
+            return expectedChecksum.equals(sha256(writeCanonical(historicalExtendedContent(view))));
+        }
+        return false;
+    }
+
+    private boolean isHistoricalSnapshotBeforeWarehouseLayer(String snapshotJson) {
+        if (snapshotJson == null || snapshotJson.isBlank()) return false;
+        try {
+            return !objectMapper.readTree(snapshotJson).has("warehouseLayerCode");
+        } catch (JsonProcessingException exception) {
+            return false;
+        }
     }
 
     public ModelSpecView toCreatedView(UUID id, CreateModelSpecCommand command, Instant now) {
@@ -138,7 +149,8 @@ public class ModelSpecSnapshotCodec {
             null,
             view.dataMartId(),
             view.variantCode(),
-            view.implementationPolicy()
+            view.implementationPolicy(),
+            view.warehouseLayerCode()
         );
     }
 
@@ -169,7 +181,8 @@ public class ModelSpecSnapshotCodec {
             null,
             command.dataMartId(),
             command.variantCode(),
-            command.implementationPolicy()
+            command.implementationPolicy(),
+            command.warehouseLayerCode()
         );
     }
 
@@ -212,7 +225,8 @@ public class ModelSpecSnapshotCodec {
             updatedProfile,
             command.dataMartId() == null ? current.dataMartId() : command.dataMartId(),
             command.variantCode() == null ? current.variantCode() : command.variantCode(),
-            command.implementationPolicy() == null ? current.implementationPolicy() : command.implementationPolicy()
+            command.implementationPolicy() == null ? current.implementationPolicy() : command.implementationPolicy(),
+            command.warehouseLayerCode() == null ? current.warehouseLayerCode() : command.warehouseLayerCode()
         );
         return asCreate(effectiveCommand, current.dimensionDefinitionRef());
     }
@@ -297,7 +311,8 @@ public class ModelSpecSnapshotCodec {
             null,
             command.dataMartId(),
             command.variantCode(),
-            command.implementationPolicy()
+            command.implementationPolicy(),
+            command.warehouseLayerCode()
         );
     }
 
@@ -328,7 +343,8 @@ public class ModelSpecSnapshotCodec {
                 command.dimensionDefinitionRef(),
                 command.dataMartId(),
                 command.variantCode(),
-                command.implementationPolicy()
+                command.implementationPolicy(),
+                command.warehouseLayerCode()
             );
         }
         return new ModelContent(
@@ -384,7 +400,8 @@ public class ModelSpecSnapshotCodec {
                 view.dimensionDefinitionRef(),
                 view.dataMartId(),
                 view.variantCode(),
-                view.implementationPolicy()
+                view.implementationPolicy(),
+                view.warehouseLayerCode()
             );
         }
         return new ModelContent(
@@ -574,7 +591,8 @@ public class ModelSpecSnapshotCodec {
         @JsonInclude(JsonInclude.Include.NON_NULL) DimensionDefinitionRef dimensionDefinitionRef,
         @JsonInclude(JsonInclude.Include.NON_NULL) UUID dataMartId,
         String variantCode,
-        @JsonInclude(JsonInclude.Include.NON_NULL) ModelSpecContract.ImplementationPolicy implementationPolicy
+        @JsonInclude(JsonInclude.Include.NON_NULL) ModelSpecContract.ImplementationPolicy implementationPolicy,
+        String warehouseLayerCode
     ) {}
 
     private record HistoricalExtendedModelField(

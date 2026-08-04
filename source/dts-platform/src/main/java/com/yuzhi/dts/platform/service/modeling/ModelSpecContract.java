@@ -44,7 +44,8 @@ public final class ModelSpecContract {
         "idempotencyKey",
         "dataMartId",
         "variantCode",
-        "implementationPolicy"
+        "implementationPolicy",
+        "warehouseLayerCode"
     );
 
     public static final Set<String> INTERACTIVE_CREATE_FIELDS = Set.of(
@@ -56,7 +57,8 @@ public final class ModelSpecContract {
         "dimensionDefinitionRef",
         "idempotencyKey",
         "dataMartId",
-        "variantCode"
+        "variantCode",
+        "warehouseLayerCode"
     );
 
     public static final Set<String> UPDATE_FIELDS = Set.of(
@@ -82,7 +84,8 @@ public final class ModelSpecContract {
         "generationStrategy",
         "dimensionProfile",
         "dataMartId",
-        "variantCode"
+        "variantCode",
+        "warehouseLayerCode"
     );
 
     public static final Map<String, String> REQUIRED_FIELD_CODES = Map.of(
@@ -598,7 +601,8 @@ public final class ModelSpecContract {
         String idempotencyKey,
         @JsonInclude(JsonInclude.Include.NON_NULL) UUID dataMartId,
         String variantCode,
-        @JsonInclude(JsonInclude.Include.NON_NULL) ImplementationPolicy implementationPolicy
+        @JsonInclude(JsonInclude.Include.NON_NULL) ImplementationPolicy implementationPolicy,
+        String warehouseLayerCode
     ) {
         /** Compatibility constructor for callers created before data-mart and implementation policy metadata. */
         public CreateModelSpecCommand(
@@ -630,7 +634,7 @@ public final class ModelSpecContract {
                 planId, domainId, modelType, layer, name, description, implementationMode, materialization,
                 businessActivityRef, consumptionScenario, grain, factShape, timeSemantics, fields, sourceRefs,
                 dependsOn, dimensionRefs, metricRefs, standardBindings, generationStrategy, dimensionProfile,
-                dimensionDefinitionRef, idempotencyKey, null, null, null
+                dimensionDefinitionRef, idempotencyKey, null, null, null, null
             );
         }
 
@@ -663,7 +667,7 @@ public final class ModelSpecContract {
                 planId, domainId, modelType, layer, name, description, implementationMode, materialization,
                 businessActivityRef, consumptionScenario, grain, factShape, timeSemantics, fields, sourceRefs,
                 dependsOn, dimensionRefs, metricRefs, standardBindings, generationStrategy, dimensionProfile, null,
-                idempotencyKey, null, null, null
+                idempotencyKey, null, null, null, null
             );
         }
 
@@ -717,6 +721,7 @@ public final class ModelSpecContract {
                 idempotencyKey,
                 null,
                 null,
+                null,
                 null
             );
         }
@@ -735,6 +740,17 @@ public final class ModelSpecContract {
             standardBindings = immutable(standardBindings);
             idempotencyKey = trimToNull(idempotencyKey);
             variantCode = trimToNull(variantCode);
+            warehouseLayerCode = trimToNull(warehouseLayerCode == null ? (layer == null ? null : layer.name()) : warehouseLayerCode);
+        }
+
+        /** Returns a copy with the canonical execution layer and the persisted warehouse-layer selection fixed. */
+        public CreateModelSpecCommand withLayerSelection(Layer canonicalLayer, String layerCode) {
+            return new CreateModelSpecCommand(
+                planId, domainId, modelType, canonicalLayer, name, description, implementationMode, materialization,
+                businessActivityRef, consumptionScenario, grain, factShape, timeSemantics, fields, sourceRefs,
+                dependsOn, dimensionRefs, metricRefs, standardBindings, generationStrategy, dimensionProfile,
+                dimensionDefinitionRef, idempotencyKey, dataMartId, variantCode, implementationPolicy, layerCode
+            );
         }
     }
 
@@ -763,7 +779,8 @@ public final class ModelSpecContract {
         @JsonInclude(JsonInclude.Include.NON_NULL) DimensionProfile dimensionProfile,
         @JsonInclude(JsonInclude.Include.NON_NULL) UUID dataMartId,
         String variantCode,
-        @JsonInclude(JsonInclude.Include.NON_NULL) ImplementationPolicy implementationPolicy
+        @JsonInclude(JsonInclude.Include.NON_NULL) ImplementationPolicy implementationPolicy,
+        String warehouseLayerCode
     ) {
         /** Compatibility constructor for callers created before data-mart and implementation policy metadata. */
         public UpdateModelSpecCommand(
@@ -793,7 +810,7 @@ public final class ModelSpecContract {
                 planId, domainId, modelType, layer, name, description, implementationMode, materialization,
                 businessActivityRef, consumptionScenario, grain, factShape, timeSemantics, fields, sourceRefs,
                 dependsOn, dimensionRefs, metricRefs, standardBindings, generationStrategy, dimensionProfile,
-                null, null, null
+                null, null, null, null
             );
         }
 
@@ -844,6 +861,7 @@ public final class ModelSpecContract {
                 null,
                 null,
                 null,
+                null,
                 null
             );
         }
@@ -861,6 +879,17 @@ public final class ModelSpecContract {
             metricRefs = immutable(metricRefs);
             standardBindings = immutable(standardBindings);
             variantCode = trimToNull(variantCode);
+            warehouseLayerCode = trimToNull(warehouseLayerCode == null ? (layer == null ? null : layer.name()) : warehouseLayerCode);
+        }
+
+        /** Returns a copy with the canonical execution layer and the persisted warehouse-layer selection fixed. */
+        public UpdateModelSpecCommand withLayerSelection(Layer canonicalLayer, String layerCode) {
+            return new UpdateModelSpecCommand(
+                planId, domainId, modelType, canonicalLayer, name, description, implementationMode, materialization,
+                businessActivityRef, consumptionScenario, grain, factShape, timeSemantics, fields, sourceRefs,
+                dependsOn, dimensionRefs, metricRefs, standardBindings, generationStrategy, dimensionProfile,
+                dataMartId, variantCode, implementationPolicy, layerCode
+            );
         }
     }
 
@@ -898,7 +927,8 @@ public final class ModelSpecContract {
         LegacyRefs legacyRefs,
         @JsonInclude(JsonInclude.Include.NON_NULL) UUID dataMartId,
         String variantCode,
-        @JsonInclude(JsonInclude.Include.NON_NULL) ImplementationPolicy implementationPolicy
+        @JsonInclude(JsonInclude.Include.NON_NULL) ImplementationPolicy implementationPolicy,
+        String warehouseLayerCode
     ) {
         /** Compatibility constructor for snapshots created before data-mart and implementation policy metadata. */
         public ModelSpecView(
@@ -939,7 +969,7 @@ public final class ModelSpecContract {
                 materialization, businessActivityRef, consumptionScenario, grain, factShape, timeSemantics, fields,
                 sourceRefs, dependsOn, dimensionRefs, metricRefs, standardBindings, generationStrategy, dimensionProfile,
                 dimensionDefinitionRef, status, revision, checksum, createdAt, updatedAt, compatibilityMode, legacyRefs,
-                null, null, null
+                null, null, null, null
             );
         }
 
@@ -980,7 +1010,7 @@ public final class ModelSpecContract {
                 contractVersion, id, planId, domainId, modelType, layer, name, description, implementationMode,
                 materialization, businessActivityRef, consumptionScenario, grain, factShape, timeSemantics, fields,
                 sourceRefs, dependsOn, dimensionRefs, metricRefs, standardBindings, generationStrategy, dimensionProfile,
-                null, status, revision, checksum, createdAt, updatedAt, compatibilityMode, legacyRefs, null, null, null
+                null, status, revision, checksum, createdAt, updatedAt, compatibilityMode, legacyRefs, null, null, null, null
             );
         }
 
@@ -1050,7 +1080,14 @@ public final class ModelSpecContract {
                 legacyRefs,
                 null,
                 null,
+                null,
                 null
+            );
+        }
+
+        public ModelSpecView {
+            warehouseLayerCode = trimToNull(
+                warehouseLayerCode == null ? (layer == null ? null : layer.name()) : warehouseLayerCode
             );
         }
     }
@@ -1308,7 +1345,8 @@ public final class ModelSpecContract {
                 "__model_spec_view__",
                 view.dataMartId(),
                 view.variantCode(),
-                view.implementationPolicy()
+                view.implementationPolicy(),
+                view.warehouseLayerCode()
             )
         );
     }
@@ -1340,7 +1378,8 @@ public final class ModelSpecContract {
             "__model_spec_update__",
             command.dataMartId(),
             command.variantCode(),
-            command.implementationPolicy()
+            command.implementationPolicy(),
+            command.warehouseLayerCode()
         );
     }
 

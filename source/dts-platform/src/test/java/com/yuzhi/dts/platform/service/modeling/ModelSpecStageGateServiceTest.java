@@ -1101,7 +1101,8 @@ class ModelSpecStageGateServiceTest {
             null,
             type == ModelType.DIMENSION
                 ? new ImplementationPolicy("dwd_" + type.name().toLowerCase(), LoadStrategy.FULL, null, List.of())
-                : null
+                : null,
+            null
         );
     }
 
@@ -1166,7 +1167,8 @@ class ModelSpecStageGateServiceTest {
             model.legacyRefs(),
             model.dataMartId(),
             model.variantCode(),
-            model.implementationPolicy()
+            model.implementationPolicy(),
+            model.warehouseLayerCode()
         );
     }
 
@@ -1213,7 +1215,8 @@ class ModelSpecStageGateServiceTest {
             model.legacyRefs(),
             model.dataMartId(),
             model.variantCode(),
-            model.implementationPolicy()
+            model.implementationPolicy(),
+            model.warehouseLayerCode()
         );
     }
 
@@ -1252,7 +1255,8 @@ class ModelSpecStageGateServiceTest {
             model.legacyRefs(),
             model.dataMartId(),
             model.variantCode(),
-            model.implementationPolicy()
+            model.implementationPolicy(),
+            model.warehouseLayerCode()
         );
     }
 
@@ -1291,7 +1295,8 @@ class ModelSpecStageGateServiceTest {
             model.legacyRefs(),
             model.dataMartId(),
             model.variantCode(),
-            model.implementationPolicy()
+            model.implementationPolicy(),
+            model.warehouseLayerCode()
         );
     }
 
@@ -1330,7 +1335,8 @@ class ModelSpecStageGateServiceTest {
             model.legacyRefs(),
             model.dataMartId(),
             model.variantCode(),
-            model.implementationPolicy()
+            model.implementationPolicy(),
+            model.warehouseLayerCode()
         );
     }
 

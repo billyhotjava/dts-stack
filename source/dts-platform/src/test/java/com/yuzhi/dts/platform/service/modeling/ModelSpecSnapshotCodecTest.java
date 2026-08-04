@@ -58,6 +58,29 @@ class ModelSpecSnapshotCodecTest {
     }
 
     @Test
+    void readsHistoricalSnapshotsWithoutWarehouseLayerCodeAsCanonicalLayer() throws Exception {
+        CreateModelSpecCommand command = command("historical-layer");
+        ModelSpecView view = codec.toCreatedView(UUID.randomUUID(), command, Instant.EPOCH);
+        String snapshot = codec.write(view);
+        com.fasterxml.jackson.databind.JsonNode tree = new ObjectMapper().readTree(snapshot);
+
+        assertThat(tree.has("warehouseLayerCode")).isTrue();
+        ModelSpecView withCustom = codec.readView(
+            ((com.fasterxml.jackson.databind.node.ObjectNode) tree).put("warehouseLayerCode", "FIN_DETAIL").toString()
+        );
+        assertThat(withCustom.warehouseLayerCode()).isEqualTo("FIN_DETAIL");
+
+        com.fasterxml.jackson.databind.node.ObjectNode legacy = (com.fasterxml.jackson.databind.node.ObjectNode) new ObjectMapper().readTree(snapshot);
+        legacy.remove("warehouseLayerCode");
+        ModelSpecView historical = codec.readView(legacy.toString());
+        assertThat(historical.warehouseLayerCode()).isEqualTo("DWD");
+
+        ModelSpecView current = codec.readView(snapshot);
+        assertThat(codec.matchesStoredContentChecksum(snapshot, current, codec.contentChecksum(current)))
+            .isTrue();
+    }
+
+    @Test
     void readsPinnedDimensionDefinitionSnapshotsWhileKeepingHistoricalNullReferencesOutOfJson() throws Exception {
         ModelSpecView historical = codec.toCreatedView(
             UUID.fromString("30000000-0000-0000-0000-000000000001"),
