@@ -29,10 +29,9 @@ class WarehouseLayerRepositoryIT {
         StoredWarehouseLayer row = row("FIN_DETAIL", "DWD", null);
         assertThat(repository.insert(row)).isEqualTo(1);
 
-        Optional<StoredWarehouseLayer> found = repository.findByCode("FIN_DETAIL");
-        assertThat(found).isPresent();
-        assertThat(found.get().name()).isEqualTo("财务明细层");
-        assertThat(found.get().status()).isEqualTo("ACTIVE");
+        StoredWarehouseLayer found = repository.findByCode("FIN_DETAIL").orElseThrow();
+        assertThat(found.name()).isEqualTo("财务明细层");
+        assertThat(found.status()).isEqualTo("ACTIVE");
         assertThat(repository.findAllActive()).extracting(StoredWarehouseLayer::code).contains("FIN_DETAIL");
     }
 
@@ -44,7 +43,7 @@ class WarehouseLayerRepositoryIT {
 
         assertThat(repository.codeExists("FIN_DETAIL")).isTrue();
         assertThat(repository.findAllActive()).extracting(StoredWarehouseLayer::code).doesNotContain("FIN_DETAIL");
-        assertThat(repository.findByCode("FIN_DETAIL")).get().extracting(StoredWarehouseLayer::status).isEqualTo("DELETED");
+        assertThat(repository.findByCode("FIN_DETAIL").orElseThrow().status()).isEqualTo("DELETED");
 
         assertThatThrownBy(() -> repository.insert(row))
             .isInstanceOf(DataIntegrityViolationException.class);
@@ -70,7 +69,7 @@ class WarehouseLayerRepositoryIT {
         repository.insert(row);
 
         assertThat(repository.softDelete("FIN_DETAIL", 99, "bob", Instant.now())).isZero();
-        assertThat(repository.findByCode("FIN_DETAIL")).get().extracting(StoredWarehouseLayer::status).isEqualTo("ACTIVE");
+        assertThat(repository.findByCode("FIN_DETAIL").orElseThrow().status()).isEqualTo("ACTIVE");
     }
 
     private static StoredWarehouseLayer row(String code, String systemLayerCode, String prefix) {

@@ -20,6 +20,10 @@
 
 ## 数仓分层治理切片（2026-08-05）
 
+- 集中验证（2026-08-05）：后端 112 项聚焦（含 PG 真实库 IT）、前端 Vitest 41 项 + Node 契约 39/39、`dts-common` 审计目录 5/5；`mvnw -DskipTests package` 与 `LEGACY_BROWSER_BUILD=1 pnpm build` 均通过。
+- E2E `sprint84-warehouse-layer-governance.spec.ts` 已就绪并在 `globalSetup` 缺凭据时 fail-closed（`auth.setup.ts` 拒绝隐式凭据）。
+- **G4=BLOCKED_E2E_INPUT**：未提供 `E2E_BASE_URL`/`E2E_USERNAME`/`E2E_PASSWORD`/`E2E_MODELING_PLAN_ID`/`E2E_MODELING_DOMAIN_ID` 与 Chrome 95 实机，真实菜单/审计旅程未执行；不得将本切片标记为 REAL/DELIVERED。
+
 - canonical owner：`WarehouseLayerApplicationService`（全局自定义分层注册表 `modeling_warehouse_layer` + 系统字典 `Sprint64GovernanceContract` 合并投影）。
 - 后端：Liquibase 迁移（表/约束/ModelSpec 回填）、服务 15 项、仓库 IT 4 项（PG 真实库）、REST MockMvc 7 项、审计目录三副本一致；ModelSpec 选择持久化与历史 checksum 兼容回归通过（85 项聚焦）。
 - 前端：API 2 项、规划投影 5 项、PlanningPage 6 项、工作台服务 16 项、编辑器 13 项、契约 Node 39/39；`pnpm build` 待最终集中验证。
