@@ -156,6 +156,15 @@ describe("ModelingWorkbenchEditor", () => {
 		expect(tableName?.closest("label")?.textContent).toContain("表名只能使用小写字母、数字和下划线");
 	});
 
+	it("freezes editor mutations and toolbar actions while saving", async () => {
+		const selectedModel = { id: "model-1", compatibilityMode: "CANONICAL" } as ModelSpecView;
+		await render(makeProps({ saving: true, selectedModel }));
+
+		expect(container.querySelector("fieldset")).toHaveProperty("disabled", true);
+		for (const label of ["保存中…", "提交", "刷新", "关联关系", "发布", "日志", "质量规则", "模型开发", "导出"])
+			expect(button(label)).toHaveProperty("disabled", true);
+	});
+
 	it("keeps authority fields disabled while dimension draft values remain editable", async () => {
 		await render();
 
@@ -180,16 +189,29 @@ describe("ModelingWorkbenchEditor", () => {
 		);
 	});
 
-	it("preserves a persisted missing dimension reference as a disabled fallback", async () => {
+	it("locks persisted dimension contract selectors and preserves missing references", async () => {
 		const draft = makeDraft({
 			base: { id: "model-1" } as ModelSpecView,
+			domainId: "retired-domain",
 			dimensionDefinitionId: "retired-dimension",
 		});
-		await render(makeProps({ draft, dimensionDefinitions: [] }));
+		await render(
+			makeProps({
+				draft,
+				context: { domains: [], models: [], standards: [] },
+				dimensionDefinitions: [],
+			}),
+		);
 
-		const select = container.querySelector<HTMLSelectElement>('select[aria-label="维度"]');
-		expect(select?.value).toBe("retired-dimension");
-		expect(select?.querySelector('option[value="retired-dimension"]')).toHaveProperty("disabled", true);
+		const domainSelect = container.querySelector<HTMLSelectElement>('select[aria-label="数据域"]');
+		expect(domainSelect).toHaveProperty("disabled", true);
+		expect(domainSelect?.value).toBe("retired-domain");
+		expect(domainSelect?.querySelector('option[value="retired-domain"]')).toHaveProperty("disabled", true);
+
+		const definitionSelect = container.querySelector<HTMLSelectElement>('select[aria-label="维度"]');
+		expect(definitionSelect).toHaveProperty("disabled", true);
+		expect(definitionSelect?.value).toBe("retired-dimension");
+		expect(definitionSelect?.querySelector('option[value="retired-dimension"]')).toHaveProperty("disabled", true);
 	});
 
 	it("disables unpublished actions and maps every supported toolbar dialog", async () => {

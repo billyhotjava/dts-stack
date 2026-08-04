@@ -131,6 +131,9 @@ function DimensionDraftForm(props: DraftFormProps) {
 		definition,
 		currentOwnerId,
 	});
+	const missingPersistedDomain = Boolean(
+		draft.base && draft.domainId && !context.domains.some((item) => item.code === draft.domainId),
+	);
 	const missingPersistedDefinition = Boolean(
 		draft.base &&
 			draft.dimensionDefinitionId &&
@@ -154,6 +157,7 @@ function DimensionDraftForm(props: DraftFormProps) {
 						<span className="required">数据域</span>
 						<select
 							aria-label="数据域"
+							disabled={Boolean(draft.base)}
 							onChange={(event) => patch({ domainId: event.target.value })}
 							value={draft.domainId}
 						>
@@ -163,8 +167,10 @@ function DimensionDraftForm(props: DraftFormProps) {
 									{item.name} · {item.code}
 								</option>
 							))}
-							{draft.domainId && !context.domains.some((item) => item.code === draft.domainId) ? (
-								<option value={draft.domainId}>{draft.domainId}</option>
+							{missingPersistedDomain ? (
+								<option disabled value={draft.domainId}>
+									已保存数据域 · {draft.domainId}
+								</option>
 							) : null}
 						</select>
 						<ValidationMessage message={validationErrors.domainId} />
@@ -187,6 +193,7 @@ function DimensionDraftForm(props: DraftFormProps) {
 						<span className="required">维度</span>
 						<select
 							aria-label="维度"
+							disabled={Boolean(draft.base)}
 							onChange={(event) => patch({ dimensionDefinitionId: event.target.value })}
 							value={draft.dimensionDefinitionId}
 						>
@@ -388,31 +395,31 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 					<Save size={15} />
 					{saving ? "保存中…" : "保存"}
 				</button>
-				<button disabled={!persisted} onClick={() => onDialog("gates")} type="button">
+				<button disabled={saving || !persisted} onClick={() => onDialog("gates")} type="button">
 					<ListChecks size={15} />
 					提交
 				</button>
-				<button onClick={onRefresh} type="button">
+				<button disabled={saving} onClick={onRefresh} type="button">
 					<RefreshCw size={15} />
 					刷新
 				</button>
-				<button disabled={!persisted} onClick={() => onDialog("association")} type="button">
+				<button disabled={saving || !persisted} onClick={() => onDialog("association")} type="button">
 					<Link2 size={15} />
 					关联关系
 				</button>
-				<button disabled={!canWritePersisted} onClick={() => onDialog("publish")} type="button">
+				<button disabled={saving || !canWritePersisted} onClick={() => onDialog("publish")} type="button">
 					<Upload size={15} />
 					发布
 				</button>
-				<button disabled={!persisted} onClick={() => onDialog("logs")} type="button">
+				<button disabled={saving || !persisted} onClick={() => onDialog("logs")} type="button">
 					<FileDown size={15} />
 					日志
 				</button>
-				<button disabled={!persisted} onClick={() => onDialog("quality")} type="button">
+				<button disabled={saving || !persisted} onClick={() => onDialog("quality")} type="button">
 					<ShieldCheck size={15} />
 					质量规则
 				</button>
-				<button disabled={!canWritePersisted} onClick={() => onDialog("advanced")} type="button">
+				<button disabled={saving || !canWritePersisted} onClick={() => onDialog("advanced")} type="button">
 					<Settings2 size={15} />
 					模型开发
 				</button>
@@ -426,7 +433,7 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 					{failureMessage}
 				</div>
 			) : null}
-			<fieldset className="dmx-editor-fieldset dmx-editor-scroll" disabled={readOnly}>
+			<fieldset className="dmx-editor-fieldset dmx-editor-scroll" disabled={readOnly || saving}>
 				{isDimensionDraft(draft) ? <DimensionDraftForm {...props} /> : <CompatibilityDraftForm {...props} />}
 			</fieldset>
 		</div>

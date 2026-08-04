@@ -68,7 +68,7 @@ describe("prototype-owned data modeling frontend", () => {
 		);
 	});
 
-	it("normalizes a stale requested model id to one stable fallback", async () => {
+	it("keeps workbench route selection and navigation guards deterministic", async () => {
 		vi.doMock("@/api/modelRepresentationApi", () => ({}));
 		vi.doMock("@/store/userStore", () => ({}));
 		vi.doMock("./navigation", () => ({}));
@@ -86,6 +86,9 @@ describe("prototype-owned data modeling frontend", () => {
 					models: Array<{ id: string }>,
 					requestedModelId: string,
 			  ) => { selectedModel: { id: string } | null; normalizedModelId: string })
+			| undefined;
+		const shouldBlockWorkbenchNavigation = module.shouldBlockWorkbenchNavigation as
+			| ((dirty: boolean, currentPathname: string, nextPathname: string) => boolean)
 			| undefined;
 		const fallback = { id: "model-1" };
 		const requested = { id: "model-2" };
@@ -106,6 +109,22 @@ describe("prototype-owned data modeling frontend", () => {
 			selectedModel: null,
 			normalizedModelId: "",
 		});
+
+		expect(shouldBlockWorkbenchNavigation).toBeTypeOf("function");
+		if (!shouldBlockWorkbenchNavigation) return;
+		expect(
+			shouldBlockWorkbenchNavigation(true, "/data-modeling/dimensions/workbench", "/data-modeling/dimensions/reverse"),
+		).toBe(true);
+		expect(
+			shouldBlockWorkbenchNavigation(
+				true,
+				"/data-modeling/dimensions/workbench",
+				"/data-modeling/dimensions/workbench",
+			),
+		).toBe(false);
+		expect(
+			shouldBlockWorkbenchNavigation(false, "/data-modeling/dimensions/workbench", "/data-modeling/dimensions/reverse"),
+		).toBe(false);
 	});
 
 	it("integrates the approved editor contract into the workbench orchestrator", () => {
@@ -132,6 +151,9 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(modeling).toMatch(/import \{ ModelingWorkbenchEditor \} from "\.\/ModelingWorkbenchEditor"/);
 		expect(modeling).toMatch(/import \{[^}]*modelDraftFingerprint[^}]*\} from "\.\/modelWorkbenchPresentation"/s);
 		expect(modeling).toContain('"beforeunload"');
+		expect(modeling).toMatch(/const blocker = useBlocker\(/);
+		expect(modeling).toContain("blocker.proceed()");
+		expect(modeling).toContain("blocker.reset()");
 		expect(modeling).not.toMatch(/function ModelEditor|function FieldTable/);
 		expect(modelingLineCount).toBeLessThanOrEqual(800);
 	});

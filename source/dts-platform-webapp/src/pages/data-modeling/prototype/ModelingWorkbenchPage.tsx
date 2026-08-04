@@ -1,6 +1,6 @@
 import { ChevronDown, ChevronRight, FileDown, GitBranch, Import, ListFilter, Plus, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router";
+import { type BlockerFunction, useBlocker, useNavigate, useSearchParams } from "react-router";
 import { getModelRepresentation } from "@/api/modelRepresentationApi";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
 import type { ModelRepresentationView } from "@/features/modeling/contracts/modelRepresentationContract";
@@ -44,6 +44,8 @@ const modelTypeLabel: Record<string, string> = {
 	APPLICATION: "应用表",
 };
 
+const DISCARD_PROMPT = "当前模型有未保存修改，确认放弃吗？";
+
 const ownerIdOf = (userInfo: unknown) => {
 	if (!userInfo || typeof userInfo !== "object") return "";
 	const value = (userInfo as Record<string, unknown>).id;
@@ -62,11 +64,16 @@ export function resolveRequestedModelSelection<T extends { id: string }>(
 	};
 }
 
+export function shouldBlockWorkbenchNavigation(dirty: boolean, currentPathname: string, nextPathname: string): boolean {
+	return dirty && currentPathname !== nextPathname;
+}
+
 export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const navigate = useNavigate();
 	const canMaintain = useDataModelingMenuGrant();
 	const userInfo = useUserInfo();
 	const requestEpoch = useRef(0);
+	const savingRef = useRef(false);
 	const [searchParams, setSearchParams] = useSearchParams();
 	const requestedModelId = searchParams.get("modelSpecId") || "";
 	const requestedModelIdRef = useRef(requestedModelId);
@@ -97,7 +104,14 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const draftDimensionDefinitionId = draft?.dimensionDefinitionId || "";
 	const draftDomainId = draft?.domainId || "";
 	const dirty = draft !== null && cleanFingerprint !== null && modelDraftFingerprint(draft) !== cleanFingerprint;
-	const confirmDiscard = useCallback(() => !dirty || window.confirm("当前模型有未保存修改，确认放弃吗？"), [dirty]);
+	const blocker = useBlocker(
+		useCallback<BlockerFunction>(
+			({ currentLocation, nextLocation }) =>
+				shouldBlockWorkbenchNavigation(dirty, currentLocation.pathname, nextLocation.pathname),
+			[dirty],
+		),
+	);
+	const confirmDiscard = useCallback(() => !dirty || window.confirm(DISCARD_PROMPT), [dirty]);
 	const replaceDraft = useCallback((nextDraft: ModelDraft | null) => {
 		setDraft(nextDraft);
 		setCleanFingerprint(nextDraft ? modelDraftFingerprint(nextDraft) : null);
@@ -155,9 +169,15 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	}, [dirty]);
 
 	useEffect(() => {
+		if (blocker.state !== "blocked") return;
+		if (window.confirm(DISCARD_PROMPT)) blocker.proceed();
+		else blocker.reset();
+	}, [blocker]);
+
+	useEffect(() => {
 		const activeModelId = draftBase?.id || "";
 		if (!context || !requestedModelId || requestedModelId === activeModelId) return;
-		if (!confirmDiscard()) {
+		if (savingRef.current || !confirmDiscard()) {
 			const restored = new URLSearchParams(searchParams);
 			if (activeModelId) restored.set("modelSpecId", activeModelId);
 			else restored.delete("modelSpecId");
@@ -240,7 +260,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 				: "";
 
 	const chooseModel = (model: ModelSpecView) => {
-		if (!confirmDiscard()) return;
+		if (savingRef.current || !confirmDiscard()) return;
 		const nextDraft = modelDraftFromView(model);
 		replaceDraft(nextDraft);
 		setCreateOpen(false);
@@ -250,7 +270,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	};
 
 	const createModel = (kind: ModelCreateKind) => {
-		if (!context || !confirmDiscard()) return;
+		if (savingRef.current || !context || !confirmDiscard()) return;
 		const next = emptyModelDraft(kind, context);
 		if (draft?.domainId) next.domainId = draft.domainId;
 		replaceDraft(next);
@@ -261,12 +281,13 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	};
 
 	const save = async () => {
-		if (!draft || !context || !canMaintain) return;
+		if (savingRef.current || !draft || !context || !canMaintain) return;
 		setFailure(null);
 		const preparedDraft = prepareModelDraftForSave(draft, dimensionDefinitions);
 		const nextValidationErrors = validateModelDraftInput(preparedDraft);
 		setValidationErrors(nextValidationErrors);
 		if (Object.keys(nextValidationErrors).length) return;
+		savingRef.current = true;
 		setSaving(true);
 		try {
 			const saved = await saveModelDraft(preparedDraft, {
@@ -283,11 +304,13 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		} catch (error) {
 			setFailure(normalizeModelingRequestFailure(error, "模型保存失败。"));
 		} finally {
+			savingRef.current = false;
 			setSaving(false);
 		}
 	};
 
-	const updateField = (index: number, patch: Partial<ModelSpecField>) =>
+	const updateField = (index: number, patch: Partial<ModelSpecField>) => {
+		if (savingRef.current) return;
 		setDraft((current) => {
 			if (!current) return current;
 			const oldName = current.fields[index]?.name || "";
@@ -303,8 +326,9 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 							),
 			};
 		});
+	};
 	const addFields = (count: number) => {
-		if (!draft) return;
+		if (savingRef.current || !draft) return;
 		const additionCount = Number.isFinite(count) ? Math.max(1, Math.min(20, Math.floor(count))) : 1;
 		const nextFields = Array.from({ length: additionCount }, () => ({
 			name: "",
@@ -319,7 +343,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		setFieldRowIds((current) => [...current, ...nextRowIds]);
 	};
 	const removeBlankFields = () => {
-		if (!draft) return;
+		if (savingRef.current || !draft) return;
 		const keepIndexes = draft.fields
 			.map((field, index) => (isBlankModelField(field) ? -1 : index))
 			.filter((index) => index >= 0);
@@ -333,6 +357,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		setFieldRowIds((current) => keepIndexes.map((index) => current[index] || crypto.randomUUID()));
 	};
 	const deleteField = (index: number) => {
+		if (savingRef.current) return;
 		setFieldRowIds((current) => current.filter((_, row) => row !== index));
 		setDraft((current) => {
 			if (!current) return current;
@@ -344,7 +369,8 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 			};
 		});
 	};
-	const updateStandardBinding = (index: number, value: string) =>
+	const updateStandardBinding = (index: number, value: string) => {
+		if (savingRef.current) return;
 		setDraft((current) => {
 			if (!current) return current;
 			const fieldName = current.fields[index]?.name || "";
@@ -356,12 +382,13 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 				standardBindings: [...remaining, { fieldName, standardElementId, standardElementVersion: Number(version) }],
 			};
 		});
+	};
 	const selectedModel = draft?.base || null;
 	const refresh = () => {
-		if (confirmDiscard()) void load(selectedModel?.id);
+		if (!savingRef.current && confirmDiscard()) void load(selectedModel?.id);
 	};
 	const navigateToReverseModeling = () => {
-		if (confirmDiscard()) navigate(dataModelingPath("dimensions", "reverse"));
+		if (!savingRef.current) navigate(dataModelingPath("dimensions", "reverse"));
 	};
 	useEffect(() => {
 		if (!selectedModel) {
@@ -402,17 +429,17 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 							<div className="dmx-iconbar">
 								<button
 									aria-label="新建"
-									disabled={!canMaintain}
+									disabled={saving || !canMaintain}
 									onClick={() => setCreateOpen((open) => !open)}
 									title={canMaintain ? "新建模型" : "当前账号无建模维护权限"}
 									type="button"
 								>
 									<Plus size={16} />
 								</button>
-								<button aria-label="导入" onClick={navigateToReverseModeling} type="button">
+								<button aria-label="导入" disabled={saving} onClick={navigateToReverseModeling} type="button">
 									<Import size={16} />
 								</button>
-								<button aria-label="刷新" disabled={loading} onClick={refresh} type="button">
+								<button aria-label="刷新" disabled={saving || loading} onClick={refresh} type="button">
 									<RefreshCw size={16} />
 								</button>
 							</div>
@@ -421,6 +448,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 							{layerTabs.map((item) => (
 								<button
 									className={layer === item.label ? "active" : ""}
+									disabled={saving}
 									key={item.label}
 									onClick={() => setLayer(item.label)}
 									type="button"
@@ -430,7 +458,12 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 							))}
 						</div>
 						<div className="dmx-object-filters">
-							<select aria-label="筛选数据域" onChange={(event) => setDomain(event.target.value)} value={domain}>
+							<select
+								aria-label="筛选数据域"
+								disabled={saving}
+								onChange={(event) => setDomain(event.target.value)}
+								value={domain}
+							>
 								<option value="">全部数据域</option>
 								{modelDomainOptions.map((item) => (
 									<option key={item.id} value={item.id}>
@@ -442,6 +475,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 								<ListFilter size={14} />
 								<input
 									aria-label="搜索模型"
+									disabled={saving}
 									onChange={(event) => setQuery(event.target.value)}
 									placeholder="搜索模型"
 									value={query}
@@ -455,6 +489,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 									<div key={group}>
 										<button
 											className="dmx-tree-domain"
+											disabled={saving}
 											onClick={() => setDomainOpen((current) => ({ ...current, [group]: !open }))}
 											type="button"
 										>
@@ -467,6 +502,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 											? models.map((model) => (
 													<button
 														className={`dmx-tree-model${selectedModel?.id === model.id ? " active" : ""}`}
+														disabled={saving}
 														key={model.id}
 														onClick={() => chooseModel(model)}
 														type="button"
@@ -489,7 +525,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 						{createOpen ? (
 							<div className="dmx-create-menu">
 								<strong>概念模型</strong>
-								<button onClick={() => createModel("dimension")} type="button">
+								<button disabled={saving} onClick={() => createModel("dimension")} type="button">
 									创建维度
 								</button>
 								<strong>逻辑模型</strong>
@@ -497,7 +533,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 									创建贴源表（尚未接入）
 								</button>
 								{(["dimension-table", "fact", "summary", "application"] as ModelCreateKind[]).map((kind) => (
-									<button key={kind} onClick={() => createModel(kind)} type="button">
+									<button disabled={saving} key={kind} onClick={() => createModel(kind)} type="button">
 										创建{MODEL_KIND_CONFIG[kind].label}
 									</button>
 								))}
@@ -529,11 +565,14 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 								fieldRowIds={fieldRowIds}
 								onAddFields={addFields}
 								onChange={(nextDraft) => {
+									if (savingRef.current) return;
 									setDraft(nextDraft);
 									setValidationErrors({});
 								}}
 								onDeleteField={deleteField}
-								onDialog={setDialog}
+								onDialog={(nextDialog) => {
+									if (!savingRef.current) setDialog(nextDialog);
+								}}
 								onRefresh={refresh}
 								onRemoveBlankFields={removeBlankFields}
 								onSave={() => void save()}
@@ -551,11 +590,11 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 						)}
 					</section>
 					<aside className="dmx-record-rail">
-						<button disabled={!selectedModel} onClick={() => setDialog("versions")} type="button">
+						<button disabled={saving || !selectedModel} onClick={() => setDialog("versions")} type="button">
 							<GitBranch size={16} />
 							版本管理
 						</button>
-						<button disabled={!selectedModel} onClick={() => setDialog("releases")} type="button">
+						<button disabled={saving || !selectedModel} onClick={() => setDialog("releases")} type="button">
 							<FileDown size={16} />
 							发布记录
 						</button>

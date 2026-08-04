@@ -221,15 +221,35 @@ test.describe("Sprint-84 prototype-owned data-modeling smoke", () => {
 		if (!workbenchRoute) throw new Error("dimension workbench route contract is missing");
 		await navigateThroughRealMenu(page, workbenchRoute);
 		await expectRealRoute(page, workbenchRoute);
+		const dimensionDefinitionResponsesBefore = observations.filter(
+			(observation) => observation.pathname === "/api/modeling/dimension-definitions",
+		).length;
+		let dimensionSelectionChanged = false;
 		const existingDimensionTable = page.locator(".dmx-tree-model").filter({ hasText: "维度表" }).first();
 		if (await existingDimensionTable.isVisible()) {
-			await existingDimensionTable.click();
+			if (!(await existingDimensionTable.evaluate((element) => element.classList.contains("active")))) {
+				await existingDimensionTable.click();
+				dimensionSelectionChanged = true;
+			}
 		} else {
 			await page.getByRole("button", { name: "新建" }).click();
 			await page.getByRole("button", { name: "创建维度表", exact: true }).click();
+			dimensionSelectionChanged = true;
 		}
 
 		const editor = page.locator(".dmx-model-editor");
+		await expect(editor.getByRole("heading", { name: "基本信息" })).toBeVisible();
+		await expect(editor.locator("fieldset")).toBeVisible();
+		const selectedDomainId = await editor.getByLabel("数据域").inputValue();
+		if (dimensionSelectionChanged && selectedDomainId) {
+			await expect
+				.poll(
+					() =>
+						observations.filter((observation) => observation.pathname === "/api/modeling/dimension-definitions").length,
+					{ message: "the selected dimension draft must finish loading its dimension definitions", timeout: 15_000 },
+				)
+				.toBeGreaterThan(dimensionDefinitionResponsesBefore);
+		}
 		for (const label of [
 			"数仓分层",
 			"业务分类",
