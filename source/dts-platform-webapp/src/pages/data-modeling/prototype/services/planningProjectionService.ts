@@ -5,7 +5,7 @@ import {
 	listStandardsForModelingOverview,
 } from "@/api/services/modelingOverviewFactService";
 import type { Sprint64BusinessProcess } from "@/api/sprint64GovernanceApi";
-import { listBusinessProcessesApi, listWarehouseLayersApi } from "@/api/sprint64GovernanceApi";
+import { listBusinessProcessesApi } from "@/api/sprint64GovernanceApi";
 import { listWarehouseLayers } from "@/api/warehouseLayerApi";
 import type { DataMartView } from "@/features/modeling/contracts/dataMartContract";
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";

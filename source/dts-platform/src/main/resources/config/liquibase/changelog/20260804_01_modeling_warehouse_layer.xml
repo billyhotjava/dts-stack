@@ -42,37 +42,34 @@
             <column name="created_by" type="varchar(128)">
                 <constraints nullable="false"/>
             </column>
-            <column name="created_date" type="${timestampType}">
+            <column name="created_date" type="timestamp with time zone">
                 <constraints nullable="false"/>
             </column>
             <column name="last_modified_by" type="varchar(128)">
                 <constraints nullable="false"/>
             </column>
-            <column name="last_modified_date" type="${timestampType}">
+            <column name="last_modified_date" type="timestamp with time zone">
                 <constraints nullable="false"/>
             </column>
         </createTable>
 
-        <addCheckConstraint
-            tableName="modeling_warehouse_layer"
-            constraintName="ck_modeling_warehouse_layer_code_format"
-            checkCondition="code ~ '^[A-Z][A-Z0-9_]{1,63}$'"/>
-        <addCheckConstraint
-            tableName="modeling_warehouse_layer"
-            constraintName="ck_modeling_warehouse_layer_prefix_format"
-            checkCondition="naming_prefix IS NULL OR naming_prefix ~ '^[a-z][a-z0-9_]{0,63}$'"/>
-        <addCheckConstraint
-            tableName="modeling_warehouse_layer"
-            constraintName="ck_modeling_warehouse_layer_system_type"
-            checkCondition="system_layer_code in ('ODS_RAW', 'ODS_STANDARDIZED', 'STG', 'DWD', 'DWS', 'ADS')"/>
-        <addCheckConstraint
-            tableName="modeling_warehouse_layer"
-            constraintName="ck_modeling_warehouse_layer_status"
-            checkCondition="status in ('ACTIVE', 'DELETED')"/>
-        <addCheckConstraint
-            tableName="modeling_warehouse_layer"
-            constraintName="ck_modeling_warehouse_layer_version"
-            checkCondition="version >= 1"/>
+        <sql>
+            alter table modeling_warehouse_layer
+                add constraint ck_modeling_warehouse_layer_code_format
+                check (code ~ '^[A-Z][A-Z0-9_]{1,63}$');
+            alter table modeling_warehouse_layer
+                add constraint ck_modeling_warehouse_layer_prefix_format
+                check (naming_prefix is null or naming_prefix ~ '^[a-z][a-z0-9_]{0,63}$');
+            alter table modeling_warehouse_layer
+                add constraint ck_modeling_warehouse_layer_system_type
+                check (system_layer_code in ('ODS_RAW', 'ODS_STANDARDIZED', 'STG', 'DWD', 'DWS', 'ADS'));
+            alter table modeling_warehouse_layer
+                add constraint ck_modeling_warehouse_layer_status
+                check (status in ('ACTIVE', 'DELETED'));
+            alter table modeling_warehouse_layer
+                add constraint ck_modeling_warehouse_layer_version
+                check (version >= 1);
+        </sql>
 
         <createIndex
             indexName="idx_modeling_warehouse_layer_status_system"
@@ -96,12 +93,6 @@
             update modeling_model_spec set warehouse_layer_code = layer where warehouse_layer_code is null
         </sql>
 
-        <preConditions onFail="HALT" onError="HALT">
-            <sqlCheck expectedResult="0">
-                select count(*) from modeling_model_spec where warehouse_layer_code is null
-            </sqlCheck>
-        </preConditions>
-
         <addNotNullConstraint
             tableName="modeling_model_spec"
             columnName="warehouse_layer_code"
@@ -111,16 +102,5 @@
             <sql>DROP TABLE modeling_warehouse_layer;</sql>
             <sql>ALTER TABLE modeling_model_spec DROP COLUMN warehouse_layer_code;</sql>
         </rollback>
-    </changeSet>
-
-    <changeSet id="20260804-02-modeling-warehouse-layer-forward-only" author="codex" dbms="postgresql">
-        <preConditions onFail="HALT" onError="HALT">
-            <tableExists tableName="modeling_warehouse_layer"/>
-        </preConditions>
-        <comment>
-            Forward-only guard: logical deletion keeps rows so historical models stay resolvable.
-            Physical deletion of business rows is intentionally unsupported.
-        </comment>
-        <tagDatabase tag="modeling_warehouse_layer_forward_only"/>
     </changeSet>
 </databaseChangeLog>
