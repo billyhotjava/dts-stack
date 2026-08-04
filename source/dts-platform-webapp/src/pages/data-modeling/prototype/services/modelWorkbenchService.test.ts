@@ -42,6 +42,12 @@ describe("model workbench draft preparation", () => {
 		).toMatchObject({ grainStatement: "一个预算科目一行" });
 	});
 
+	it("falls back to the typed name when a selected dimension is no longer available", () => {
+		expect(prepareModelDraftForSave(validDimensionDraft(), [])).toMatchObject({
+			grainStatement: "一个预算科目维度表一行",
+		});
+	});
+
 	it("preserves an explicitly entered dimension-table grain", () => {
 		const existing = validDimensionDraft();
 		existing.grainStatement = "一个科目版本一行";
@@ -83,5 +89,14 @@ describe("model workbench draft validation", () => {
 		draft.grainStatement = "";
 
 		expect(validateModelDraftInput(draft)).toMatchObject({ grainStatement: "请填写模型粒度" });
+	});
+
+	it("rejects an invalid dimension attribute code on an otherwise complete field", () => {
+		const invalid = validDimensionDraft();
+		invalid.fields[0].dimensionAttributeCode = "invalid-code";
+
+		expect(validateModelDraftInput(invalid)).toMatchObject({
+			fields: "维度属性编码只能使用大写字母、数字和下划线，且必须以字母开头",
+		});
 	});
 });
