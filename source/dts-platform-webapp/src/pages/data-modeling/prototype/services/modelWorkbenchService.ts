@@ -8,10 +8,7 @@ import {
 	updateModelSpec,
 } from "@/api/modelSpecApi";
 import catalogDomainService, { type CatalogDomain } from "@/api/services/catalogDomainService";
-import {
-	listWarehousePlans,
-	type WarehousePlanHeader,
-} from "@/api/warehousePlanApi";
+import { resolveDefaultModelingContextId } from "@/api/services/modelingImportContextService";
 import type {
 	DimensionDefinitionReuseScope,
 	DimensionDefinitionView,
@@ -43,7 +40,6 @@ export const MODEL_KIND_CONFIG: Record<
 };
 
 export type ModelWorkbenchContext = {
-	plans: WarehousePlanHeader[];
 	domains: CatalogDomain[];
 	models: ModelSpecView[];
 	standards: ModelFieldStandardOption[];
@@ -87,7 +83,7 @@ export function emptyModelDraft(kind: ModelCreateKind, context: ModelWorkbenchCo
 	return {
 		createKind: kind,
 		base: null,
-		planId: context.plans[0]?.id || "",
+		planId: "",
 		domainId: context.domains[0]?.code || "",
 		name: "",
 		description: "",
@@ -126,14 +122,12 @@ export function modelDraftFromView(model: ModelSpecView): ModelDraft {
 }
 
 export async function loadModelWorkbenchContext(): Promise<ModelWorkbenchContext> {
-	const [plans, domains, models, standards] = await Promise.all([
-		listWarehousePlans(),
+	const [domains, models, standards] = await Promise.all([
 		catalogDomainService.list(),
 		listModelSpecs(),
 		listModelFieldStandardOptions(),
 	]);
 	return {
-		plans: plans.filter((plan) => plan.lifecycleStatus !== "ARCHIVED"),
 		domains,
 		models: models.filter((model) => model.status !== "ARCHIVED"),
 		standards,
@@ -215,13 +209,16 @@ const validateDraft = (draft: ModelDraft, update: UpdateModelSpecCommand) => {
 
 export async function saveModelDraft(draft: ModelDraft, context: ModelSaveContext): Promise<CanonicalModelSpecView> {
 	if (draft.base && draft.base.compatibilityMode !== "CANONICAL") throw new Error("历史只读模型不能在工作台中修改");
-	const update = buildUpdate(draft);
-	validateDraft(draft, update);
+	const backendContextId = draft.planId || (await resolveDefaultModelingContextId());
+	if (!backendContextId) throw new Error("服务端尚未提供可写建模上下文，请联系管理员初始化");
+	const writableDraft = draft.planId ? draft : { ...draft, planId: backendContextId };
+	const update = buildUpdate(writableDraft);
+	validateDraft(writableDraft, update);
 	if (draft.base) return updateModelSpec(draft.base, update);
 	if (update.modelType === "DIMENSION") {
 		if (!context.ownerId) throw new Error("当前登录身份缺少人员 ID，不能创建维度定义");
-		const definition = context.dimensionDefinitions.find((item) => item.id === draft.dimensionDefinitionId);
-		if (draft.createKind === "dimension-table" && !definition) throw new Error("请选择一个维度");
+		const definition = context.dimensionDefinitions.find((item) => item.id === writableDraft.dimensionDefinitionId);
+		if (writableDraft.createKind === "dimension-table" && !definition) throw new Error("请选择一个维度");
 		const existingDefinitionBinding = () => {
 			if (!definition) throw new Error("请选择一个维度");
 			return {
@@ -232,15 +229,15 @@ export async function saveModelDraft(draft: ModelDraft, context: ModelSaveContex
 		const command: CreateDimensionModelCommand = {
 			operationId: crypto.randomUUID(),
 			definitionBinding:
-				draft.createKind === "dimension"
+				writableDraft.createKind === "dimension"
 					? {
 							mode: "CREATE",
 							definition: {
-								domainId: draft.domainId,
-								name: draft.name.trim(),
-								definition: draft.description.trim() || draft.name.trim(),
+								domainId: writableDraft.domainId,
+								name: writableDraft.name.trim(),
+								definition: writableDraft.description.trim() || writableDraft.name.trim(),
 								ownerId: context.ownerId,
-								reuseScope: draft.reuseScope,
+								reuseScope: writableDraft.reuseScope,
 								scopeType: "DOMAIN",
 								attributes: update.fields?.map((field, index) => ({
 									...(() => {
@@ -280,11 +277,11 @@ export async function saveModelDraft(draft: ModelDraft, context: ModelSaveContex
 		return (await createDimensionModel(command)).currentModelSpec;
 	}
 	const created = await createModelSpec({
-		planId: draft.planId,
-		domainId: draft.domainId,
+		planId: writableDraft.planId,
+		domainId: writableDraft.domainId,
 		modelType: update.modelType,
-		name: draft.name.trim(),
-		description: draft.description.trim() || null,
+		name: writableDraft.name.trim(),
+		description: writableDraft.description.trim() || null,
 		idempotencyKey: crypto.randomUUID(),
 	});
 	return updateModelSpec(created, update);

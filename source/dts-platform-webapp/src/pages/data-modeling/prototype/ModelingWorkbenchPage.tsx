@@ -199,7 +199,6 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const createModel = (kind: ModelCreateKind) => {
 		if (!context) return;
 		const next = emptyModelDraft(kind, context);
-		if (draft?.planId) next.planId = draft.planId;
 		if (draft?.domainId) next.domainId = draft.domainId;
 		setDraft(next);
 		setFieldRowIds(next.fields.map(() => crypto.randomUUID()));

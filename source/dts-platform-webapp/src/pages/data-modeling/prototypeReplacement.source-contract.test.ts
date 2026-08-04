@@ -44,7 +44,7 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(source).not.toMatch(
 			/PlanningWorkspace|HomeWorkspace|StandardsWorkspace|DimensionalModelingWorkspace|MetricsWorkspace/,
 		);
-		expect(source).not.toMatch(/prototypeData|usePrototypeToast|建设计划上下文/);
+		expect(source).not.toMatch(/prototypeData|usePrototypeToast|建设计划/);
 		expect(source).not.toMatch(/项目模型Demo|monthly_execution_rate|月度预算执行率/);
 
 		for (const label of ["建模概览", "数仓规划", "数据标准", "维度建模", "数据指标", "通用工具", "关系图"]) {
@@ -67,11 +67,13 @@ describe("prototype-owned data modeling frontend", () => {
 			.map(read)
 			.join("\n");
 		const planningService = read("./prototype/services/planningProjectionService.ts");
+		const workbenchService = read("./prototype/services/modelWorkbenchService.ts");
 
 		expect(pageSource).not.toMatch(
-			/建设计划|WarehousePlanEditor|saveWarehousePlanPolicy|loadConfirmedPlanDomains|目标建设计划/,
+			/建设计划|WarehousePlan|warehousePlanApi|saveWarehousePlanPolicy|loadConfirmedPlanDomains|目标建设计划/,
 		);
 		expect(planningService).not.toMatch(/warehousePlanApi|warehouseStageLabel|listWarehousePlans/);
+		expect(workbenchService).not.toMatch(/warehousePlanApi|WarehousePlan|listWarehousePlans/);
 	});
 
 	it("connects production pages to canonical owners and keeps unsupported actions disabled", () => {
