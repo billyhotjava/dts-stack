@@ -69,6 +69,16 @@ export type ModelSaveContext = {
 	dimensionDefinitions: DimensionDefinitionView[];
 };
 
+export type ModelDraftErrorKey =
+	| "domainId"
+	| "dimensionDefinitionId"
+	| "physicalName"
+	| "name"
+	| "grainStatement"
+	| "fields";
+
+export type ModelDraftValidationErrors = Partial<Record<ModelDraftErrorKey, string>>;
+
 const modelKind = (model: ModelSpecView): ModelCreateKind =>
 	model.modelType === "DIMENSION"
 		? "dimension-table"
@@ -137,6 +147,50 @@ export async function loadModelWorkbenchContext(): Promise<ModelWorkbenchContext
 export const loadCurrentDimensionDefinitions = (domainId: string) =>
 	domainId ? listDimensionDefinitions({ domainId, status: "CURRENT", offset: 0, limit: 500 }) : Promise.resolve([]);
 
+const isDimensionDraft = (draft: ModelDraft): boolean => MODEL_KIND_CONFIG[draft.createKind].modelType === "DIMENSION";
+
+export function prepareModelDraftForSave(draft: ModelDraft, definitions: DimensionDefinitionView[]): ModelDraft {
+	if (!isDimensionDraft(draft) || draft.grainStatement.trim()) return draft;
+	const definition = definitions.find((item) => item.id === draft.dimensionDefinitionId);
+	const grainName = definition?.name.trim() || draft.name.trim();
+	return grainName ? { ...draft, grainStatement: `一个${grainName}一行` } : draft;
+}
+
+export function validateModelDraftInput(draft: ModelDraft): ModelDraftValidationErrors {
+	const errors: ModelDraftValidationErrors = {};
+	if (!draft.domainId.trim()) errors.domainId = "请选择数据域";
+	if (draft.createKind === "dimension-table" && !draft.dimensionDefinitionId.trim()) {
+		errors.dimensionDefinitionId = "请选择一个维度";
+	}
+	if (isDimensionDraft(draft)) {
+		if (!/[\u4e00-\u9fff]/.test(draft.name.trim())) errors.name = "请填写中文表名";
+		if (!/^[a-z][a-z0-9_]*$/.test(draft.physicalName.trim())) {
+			errors.physicalName = "表名只能使用小写字母、数字和下划线，且必须以字母开头";
+		}
+	} else if (!draft.grainStatement.trim()) {
+		errors.grainStatement = "请填写模型粒度";
+	}
+
+	if (!draft.fields.length) {
+		errors.fields = "请至少添加一个字段";
+	} else if (draft.fields.some((field) => !field.name.trim() || !field.dataType.trim())) {
+		errors.fields = "请补齐字段名称和数据类型";
+	} else if (!draft.fields.some((field) => field.role === "KEY")) {
+		errors.fields = "请至少设置一个主键字段";
+	} else if (new Set(draft.fields.map((field) => field.name.trim())).size !== draft.fields.length) {
+		errors.fields = "字段名称不能重复";
+	} else if (
+		isDimensionDraft(draft) &&
+		draft.fields.some(
+			(field) =>
+				field.dimensionAttributeCode?.trim() && !/^[A-Z][A-Z0-9_]{0,63}$/.test(field.dimensionAttributeCode.trim()),
+		)
+	) {
+		errors.fields = "维度属性编码只能使用大写字母、数字和下划线，且必须以字母开头";
+	}
+	return errors;
+}
+
 const buildUpdate = (draft: ModelDraft): UpdateModelSpecCommand => {
 	const config = MODEL_KIND_CONFIG[draft.createKind];
 	const keyNames = draft.fields.filter((field) => field.role === "KEY").map((field) => field.name.trim());
@@ -195,12 +249,8 @@ const buildUpdate = (draft: ModelDraft): UpdateModelSpecCommand => {
 const validateDraft = (draft: ModelDraft, update: UpdateModelSpecCommand) => {
 	const missing: string[] = [];
 	if (!draft.planId) missing.push("可写建模上下文");
-	if (!draft.domainId) missing.push("数据域");
-	if (!draft.name.trim()) missing.push("模型名称");
-	if (!draft.grainStatement.trim()) missing.push("模型粒度");
-	if (!draft.fields.length) missing.push("字段");
-	if (draft.fields.some((field) => !field.name.trim() || !field.dataType.trim())) missing.push("完整字段定义");
-	if (!draft.fields.some((field) => field.role === "KEY")) missing.push("业务主键字段");
+	const validationErrors = validateModelDraftInput(draft);
+	missing.push(...Object.values(validationErrors));
 	if (missing.length) throw new Error(`请补齐：${Array.from(new Set(missing)).join("、")}`);
 	const issues = validateModelSpecUpdate(update);
 	if (issues.length)
@@ -212,13 +262,14 @@ export async function saveModelDraft(draft: ModelDraft, context: ModelSaveContex
 	const backendContextId = draft.planId || (await resolveDefaultModelingContextId());
 	if (!backendContextId) throw new Error("服务端尚未提供可写建模上下文，请联系管理员初始化");
 	const writableDraft = draft.planId ? draft : { ...draft, planId: backendContextId };
-	const update = buildUpdate(writableDraft);
-	validateDraft(writableDraft, update);
+	const preparedDraft = prepareModelDraftForSave(writableDraft, context.dimensionDefinitions);
+	const update = buildUpdate(preparedDraft);
+	validateDraft(preparedDraft, update);
 	if (draft.base) return updateModelSpec(draft.base, update);
 	if (update.modelType === "DIMENSION") {
 		if (!context.ownerId) throw new Error("当前登录身份缺少人员 ID，不能创建维度定义");
-		const definition = context.dimensionDefinitions.find((item) => item.id === writableDraft.dimensionDefinitionId);
-		if (writableDraft.createKind === "dimension-table" && !definition) throw new Error("请选择一个维度");
+		const definition = context.dimensionDefinitions.find((item) => item.id === preparedDraft.dimensionDefinitionId);
+		if (preparedDraft.createKind === "dimension-table" && !definition) throw new Error("请选择一个维度");
 		const existingDefinitionBinding = () => {
 			if (!definition) throw new Error("请选择一个维度");
 			return {
@@ -229,15 +280,15 @@ export async function saveModelDraft(draft: ModelDraft, context: ModelSaveContex
 		const command: CreateDimensionModelCommand = {
 			operationId: crypto.randomUUID(),
 			definitionBinding:
-				writableDraft.createKind === "dimension"
+				preparedDraft.createKind === "dimension"
 					? {
 							mode: "CREATE",
 							definition: {
-								domainId: writableDraft.domainId,
-								name: writableDraft.name.trim(),
-								definition: writableDraft.description.trim() || writableDraft.name.trim(),
+								domainId: preparedDraft.domainId,
+								name: preparedDraft.name.trim(),
+								definition: preparedDraft.description.trim() || preparedDraft.name.trim(),
 								ownerId: context.ownerId,
-								reuseScope: writableDraft.reuseScope,
+								reuseScope: preparedDraft.reuseScope,
 								scopeType: "DOMAIN",
 								attributes: update.fields?.map((field, index) => ({
 									...(() => {
@@ -277,11 +328,11 @@ export async function saveModelDraft(draft: ModelDraft, context: ModelSaveContex
 		return (await createDimensionModel(command)).currentModelSpec;
 	}
 	const created = await createModelSpec({
-		planId: writableDraft.planId,
-		domainId: writableDraft.domainId,
+		planId: preparedDraft.planId,
+		domainId: preparedDraft.domainId,
 		modelType: update.modelType,
-		name: writableDraft.name.trim(),
-		description: writableDraft.description.trim() || null,
+		name: preparedDraft.name.trim(),
+		description: preparedDraft.description.trim() || null,
 		idempotencyKey: crypto.randomUUID(),
 	});
 	return updateModelSpec(created, update);
