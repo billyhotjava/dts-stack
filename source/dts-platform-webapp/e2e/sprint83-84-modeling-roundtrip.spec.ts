@@ -5,7 +5,7 @@ import path from "node:path";
 import { type APIResponse, expect, type Locator, type Page, test } from "@playwright/test";
 
 type ModelingWriteAuthorization = {
-	planOption: string;
+	modelingContextOption: string;
 	domainOption: string;
 	sourceOption: string;
 	prefix: string;
@@ -80,7 +80,7 @@ function readWriteAuthorization(): ModelingWriteAuthorization {
 		);
 	}
 	return {
-		planOption: requireEnvironment("E2E_MODELING_PLAN_OPTION"),
+		modelingContextOption: requireEnvironment("E2E_MODELING_CONTEXT_OPTION"),
 		domainOption: process.env.E2E_MODELING_DOMAIN_OPTION?.trim() || "",
 		sourceOption: process.env.E2E_MODELING_SOURCE_OPTION?.trim() || "",
 		prefix,
@@ -113,6 +113,25 @@ async function canonicalJson(page: Page, url: string): Promise<any> {
 	if (!response.ok())
 		throw new Error(`Canonical read failed: GET ${new URL(response.url()).pathname} -> ${response.status()}`);
 	return unwrapCanonical(await response.json());
+}
+
+async function resolveAuthorizedModelingContext(page: Page): Promise<string> {
+	const raw = await canonicalJson(page, "/api/modeling/warehouse-plans");
+	const contexts = Array.isArray(raw)
+		? raw.filter((item) => item && typeof item === "object" && item.lifecycleStatus !== "ARCHIVED")
+		: [];
+	const expected = authorization.modelingContextOption;
+	const authorized = contexts.find((item) => [item.id, item.code, item.name].map(String).includes(expected));
+	if (!authorized) {
+		throw new Error(`E2E_MODELING_CONTEXT_OPTION does not identify an active modeling context: ${expected}`);
+	}
+	const current = contexts[0];
+	if (!current || current.id !== authorized.id) {
+		throw new Error(
+			"The explicitly authorized modeling context is not the current server context; refusing writes before the UI starts",
+		);
+	}
+	return String(current.id);
 }
 
 async function canonicalResponseJson(response: APIResponse): Promise<any> {
@@ -397,12 +416,11 @@ test.describe("Sprint-83/84 authorized dbt visual roundtrip", () => {
 		await page.goto("/#/workbench");
 		await clickRealMenu(page, "/data-modeling/dimensions/reverse");
 		await expect(page.locator('main[class*="dmx-"] h1')).toHaveText("逆向建模");
+		selectedPlanId = await resolveAuthorizedModelingContext(page);
+		expect(selectedPlanId, "the authorized modeling context must resolve to a canonical id").toMatch(
+			/^[0-9a-f-]{36}$/i,
+		);
 		await page.getByRole("button", { name: /快速开始/ }).click();
-
-		const planSelect = page.locator("label.dmx-reverse-plan select");
-		await planSelect.selectOption({ label: authorization.planOption });
-		selectedPlanId = await planSelect.inputValue();
-		expect(selectedPlanId, "the authorized plan must resolve to a canonical id").toMatch(/^[0-9a-f-]{36}$/i);
 		await page.getByLabel("选择 dbt ZIP").setInputFiles(archivePath);
 		const inspectResponse = await clickAndRequireSuccess(
 			page,
@@ -596,17 +614,75 @@ test.describe("Sprint-83/84 authorized dbt visual roundtrip", () => {
 			(pathname, method) => pathname.includes("/physical-preview") && method === "GET",
 		);
 		await expect(previewDialog).toContainText("证据状态");
-		await clickAndRequireSuccess(
+		const sampleResponse = await clickAndRequireSuccess(
 			page,
 			previewDialog.getByRole("button", { name: "读取脱敏样本" }),
 			(pathname, method) => pathname.includes("/physical-preview") && method === "GET",
 		);
 		await expect(previewDialog).toContainText("脱敏摘要");
+		expect(sampleResponse.headers()["cache-control"] || "").toContain("no-store");
+		await expect(previewDialog.getByRole("button", { name: "导出" })).toHaveCount(0);
+
+		const sampleUrl = new URL(sampleResponse.url());
+		const maxRowsUrl = new URL(sampleUrl);
+		maxRowsUrl.searchParams.set("limit", "500");
+		const maxRowsResponse = await page.request.get(`${maxRowsUrl.pathname}${maxRowsUrl.search}`, {
+			headers: { Accept: "application/json", "Cache-Control": "no-store" },
+		});
+		expect(maxRowsResponse.status()).toBe(200);
+		expect(maxRowsResponse.headers()["cache-control"] || "").toContain("no-store");
+		const maxRows = unwrapCanonical(await maxRowsResponse.json());
+		expect(Number(maxRows.returnedRows || 0)).toBeLessThanOrEqual(500);
+
+		const overLimitUrl = new URL(sampleUrl);
+		overLimitUrl.searchParams.set("limit", "501");
+		const overLimitResponse = await page.request.get(`${overLimitUrl.pathname}${overLimitUrl.search}`, {
+			headers: { Accept: "application/json", "Cache-Control": "no-store" },
+		});
+		expect(overLimitResponse.status()).toBe(400);
+		expect(overLimitResponse.headers()["cache-control"] || "").toContain("no-store");
+		const overLimitFailure = await overLimitResponse.json();
+		expect(String(overLimitFailure.code || "")).toBe("PHYSICAL_PREVIEW_LIMIT_EXCEEDED");
+
+		const tamperedPinUrl = new URL(sampleUrl);
+		const evidenceChecksum = tamperedPinUrl.searchParams.get("evidenceChecksum") || "";
+		expect(evidenceChecksum).toMatch(/^[0-9a-f]{64}$/);
+		tamperedPinUrl.searchParams.set(
+			"evidenceChecksum",
+			`${evidenceChecksum.slice(0, -1)}${evidenceChecksum.endsWith("0") ? "1" : "0"}`,
+		);
+		const tamperedPinResponse = await page.request.get(`${tamperedPinUrl.pathname}${tamperedPinUrl.search}`, {
+			headers: { Accept: "application/json", "Cache-Control": "no-store" },
+		});
+		expect(tamperedPinResponse.status()).toBe(409);
+		expect(tamperedPinResponse.headers()["cache-control"] || "").toContain("no-store");
+		const tamperedPinFailure = await tamperedPinResponse.json();
+		expect(String(tamperedPinFailure.code || "")).toBe("PHYSICAL_PREVIEW_EVIDENCE_MISMATCH");
 		expect(evidence.legacyRequests, "roundtrip must stay on the canonical ModelSpec/dbt gateway path").toEqual([]);
 
 		await page.screenshot({ path: testInfo.outputPath("serving-physical-preview.png"), fullPage: true });
 		await testInfo.attach("roundtrip-api-evidence.json", {
 			body: Buffer.from(JSON.stringify(evidence.observations, null, 2)),
+			contentType: "application/json",
+		});
+		await testInfo.attach("physical-preview-security-evidence.json", {
+			body: Buffer.from(
+				JSON.stringify(
+					{
+						defaultLimit: Number(sampleUrl.searchParams.get("limit")),
+						maxLimitStatus: maxRowsResponse.status(),
+						maxReturnedRows: Number(maxRows.returnedRows || 0),
+						overLimitStatus: overLimitResponse.status(),
+						overLimitCode: overLimitFailure.code,
+						tamperedPinStatus: tamperedPinResponse.status(),
+						tamperedPinCode: tamperedPinFailure.code,
+						cacheControl: sampleResponse.headers()["cache-control"] || "",
+						exportControls: 0,
+					},
+					null,
+					2,
+				),
+			),
 			contentType: "application/json",
 		});
 	});

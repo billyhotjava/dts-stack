@@ -265,7 +265,7 @@ public class AddaxJobService {
     private static final List<String> FILE_METADATA_KEYS = List.of(
         "_fileId", "_filePath", "_containerPath", "_fileType", "_fileColumns", "_originalName", "_autoId",
         "_fileHash", "fileHash", "_fileSize", "fileSize", "_sheetName", "sheetName", "sheetIndex",
-        "_sourceSheet", "sourceSheet", "_rowNumberOffset", "_keyVersion", "_encrypted"
+        "_sourceSheet", "sourceSheet", "_rowNumberOffset", "_keyVersion", "_encrypted", "_fileLanding"
     );
     private static final List<String> FILE_TYPE_HINT_KEYS = List.of(
         "_fileType",
@@ -1423,6 +1423,7 @@ public class AddaxJobService {
         // column definitions. Using saved addaxConfig would skip DDL injection (DROP + CREATE),
         // causing stale table schema when columns are modified.
         if (isFileReaderType(resolvedReaderType)) {
+            applyManagedFileLandingTarget(readerConfig, writerConfig, writerType);
             jobConfig = null;
         }
         return createJob(
@@ -1473,6 +1474,105 @@ public class AddaxJobService {
             resolved.put("jdbcProperties", new LinkedHashMap<>(info.jdbcProperties()));
         }
         return resolved;
+    }
+
+    private void applyManagedFileLandingTarget(
+        Map<String, Object> readerConfig,
+        Map<String, Object> writerConfig,
+        String writerType
+    ) {
+        if (readerConfig == null || writerConfig == null) {
+            return;
+        }
+        Object landingConfig = readerConfig.get("_fileLanding");
+        if (!(landingConfig instanceof Map<?, ?> landing)) {
+            return;
+        }
+        String landingMode = normalizeText(landing.get("landingMode"));
+        if (!"create_new".equals(landingMode) && !"recreate_existing".equals(landingMode)) {
+            throw new IllegalStateException("文件落地方式无效");
+        }
+        String targetTable = validateManagedFileTableName(landing.get("targetTable"), "目标表", writerType);
+        if ("recreate_existing".equals(landingMode)) {
+            String referenceTable = validateManagedFileTableName(landing.get("referenceTable"), "参考表", writerType);
+            if (!sameManagedFileTable(targetTable, referenceTable, writerType)) {
+                throw new IllegalStateException("全量重建必须使用已选择的原表名");
+            }
+            Object confirmed = landing.get("recreateConfirmed");
+            boolean recreateConfirmed = Boolean.TRUE.equals(confirmed)
+                || (confirmed instanceof String value && Boolean.parseBoolean(value.trim()));
+            if (!recreateConfirmed) {
+                throw new IllegalStateException("未确认全量重建原表");
+            }
+        }
+        List<String> targetTables = List.of(targetTable);
+        boolean topLevelUpdated = setExistingManagedFileTableFields(writerConfig, targetTables);
+        Object connection = writerConfig.get("connection");
+        boolean connectionUpdated = false;
+        if (connection instanceof Map<?, ?> map) {
+            setManagedFileTableFields(map, targetTables);
+            connectionUpdated = true;
+        } else if (connection instanceof List<?> list) {
+            for (Object entry : list) {
+                if (entry instanceof Map<?, ?> entryMap) {
+                    setManagedFileTableFields(entryMap, targetTables);
+                    connectionUpdated = true;
+                }
+            }
+        }
+        if (!topLevelUpdated && !connectionUpdated) {
+            writerConfig.put("table", targetTables);
+        }
+    }
+
+    private String validateManagedFileTableName(Object raw, String label, String writerType) {
+        String tableName = normalizeText(raw);
+        if (!StringUtils.hasText(tableName)) {
+            throw new IllegalStateException("文件落地" + label + "不能为空");
+        }
+        String[] parts = tableName.split("\\.", -1);
+        if (parts.length > 2) {
+            throw new IllegalStateException("文件落地" + label + "格式不合法");
+        }
+        for (String part : parts) {
+            if (!part.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+                throw new IllegalStateException("文件落地" + label + "格式不合法");
+            }
+        }
+        return isPostgresWriter(writerType) ? tableName.toLowerCase(Locale.ROOT) : tableName;
+    }
+
+    private boolean sameManagedFileTable(String left, String right, String writerType) {
+        if (!isPostgresWriter(writerType)) {
+            return left.equals(right);
+        }
+        String normalizedLeft = left.contains(".") ? left : "public." + left;
+        String normalizedRight = right.contains(".") ? right : "public." + right;
+        return normalizedLeft.equals(normalizedRight);
+    }
+
+    private boolean setExistingManagedFileTableFields(Map<?, ?> config, List<String> targetTables) {
+        boolean updated = false;
+        if (config.containsKey("table")) {
+            putManagedFileTableField(config, "table", targetTables);
+            updated = true;
+        }
+        if (config.containsKey("tables")) {
+            putManagedFileTableField(config, "tables", targetTables);
+            updated = true;
+        }
+        return updated;
+    }
+
+    private void setManagedFileTableFields(Map<?, ?> config, List<String> targetTables) {
+        if (!setExistingManagedFileTableFields(config, targetTables)) {
+            putManagedFileTableField(config, "table", targetTables);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void putManagedFileTableField(Map<?, ?> config, String field, List<String> targetTables) {
+        ((Map<Object, Object>) config).put(field, targetTables);
     }
 
     private void putOrRemove(Map<String, Object> target, String key, String value) {

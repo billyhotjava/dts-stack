@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { Form } from "antd";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
@@ -108,6 +109,48 @@ describe("access plan steps", () => {
 		expect(html).toContain("当前用户密级未下发，已禁止文件上传");
 	});
 
+	it("extends the existing file resource step with reusable target schema mapping", () => {
+		const preview = Array.from({ length: 12 }, (_, index) => [`row-${index + 1}`]);
+		const html = renderInForm((form) => (
+			<FileAccessStep
+				form={form}
+				phase="resource"
+				fileUploadResult={{
+					fileId: "file-1",
+					fileType: "csv",
+					originalName: "orders.csv",
+					columns: [{ name: "order_id", label: "订单编号", type: "string" }],
+					preview,
+				}}
+				onFileUploadResultChange={vi.fn()}
+				uploading={false}
+				userClassificationRank={2}
+				onUpload={vi.fn()}
+				targetDataSources={[target]}
+				defaultDestination={{
+					available: true,
+					writerTypeReady: true,
+					writerConfigReady: true,
+					destinationName: "平台默认湖",
+					writerType: "postgresqlwriter",
+				}}
+			/>
+		));
+
+		expect(html).toContain("字段结构定义");
+		expect(html).toContain("引用已有表结构");
+		expect(html).toContain("按顺序填充未匹配字段");
+		expect(html).toContain("新建目标表");
+		expect(html).toContain("全量重建原表");
+		expect(html).toContain("平台默认湖");
+		expect(html).toContain("字段映射与数据预览");
+		expect(html).toContain("第 1 列");
+		expect(html).toContain("显示行数");
+		expect(html).toContain("row-10");
+		expect(html).not.toContain("row-11");
+		expect(html).not.toContain("上传数据预览");
+	});
+
 	it("shows only the platform destination summary and scheduling policy", () => {
 		const html = renderInForm((form) => (
 			<LandingScheduleStep
@@ -130,6 +173,26 @@ describe("access plan steps", () => {
 		expect(html).not.toContain("保存后立即运行");
 		expect(html).not.toContain("private-host");
 		expect(html).not.toContain("lake_admin");
+	});
+
+	it("does not repeat the target datasource editor in the file scheduling step", () => {
+		const html = renderInForm((form) => (
+			<LandingScheduleStep
+				form={form}
+				kind="file"
+				targetDataSources={[target]}
+				defaultDestination={{
+					available: true,
+					writerTypeReady: true,
+					writerConfigReady: true,
+					destinationName: "平台默认湖",
+					writerType: "postgresqlwriter",
+				}}
+			/>
+		));
+
+		expect(html).toContain("平台默认湖");
+		expect(html).not.toContain("目标数据源</label>");
 	});
 
 	it("reviews real task settings without fabricated approval or revision state", () => {

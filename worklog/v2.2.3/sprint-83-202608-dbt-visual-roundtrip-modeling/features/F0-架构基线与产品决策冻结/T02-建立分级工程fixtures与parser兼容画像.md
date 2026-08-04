@@ -18,7 +18,7 @@
 
 ## 验证
 
-- [x] 当前 P0 切片所需 FX-01、FX-03 基础分支及 FX-05 安全样本可离线重复；FX-02 source-only、FX-04 drift 保持 P1 DRAFT，不阻断首个 P0 切片。
+- [x] FX-01 artifact-rich、FX-02 enforced source-only、FX-03 基础 blocked、FX-04 three-way drift 与 FX-05 安全样本均可离线重复；non-enforced/no-column 与复杂依赖分支由参数化契约矩阵覆盖。
 - [x] 兼容版本、测试耗时、阻断规则与 hash 归档在 `assets/dbt-fixture-inventory.md`；NFR 继续引用该证据。
 
 ## Definition of Done

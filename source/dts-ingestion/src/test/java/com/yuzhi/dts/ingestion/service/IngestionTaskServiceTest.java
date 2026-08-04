@@ -1385,7 +1385,7 @@ class IngestionTaskServiceTest {
     }
 
     @Test
-    void admit_shouldAllowManagedFileWithoutOptionalQualityPreCheck() {
+    void admitManualFullRefreshFileShouldVerifyManagedUploadWithoutGeneratingExecutionScopedArtifacts() {
         Long taskId = 1L;
         String fileHash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         ObjectNode seal = createValidClassificationSeal();
@@ -1407,6 +1407,8 @@ class IngestionTaskServiceTest {
         task.setSourceType("csv");
         task.setSourceDataSourceId(null);
         task.setSourceConfig(sourceConfig);
+        task.setSyncSchedule("manual");
+        task.setAirflowEnabled(true);
         task.setClassificationSeal(seal);
         task.setFieldClassifications(fields);
         task.setQualityPreCheckEnabled(true);
@@ -1423,9 +1425,6 @@ class IngestionTaskServiceTest {
                 "/opt/addax/jobs/uploads/file-001.csv.enc",
                 fileHash
             )
-        );
-        when(addaxJobService.createJobFromTask(any(IngestionTask.class))).thenReturn(
-            new AddaxJobService.AddaxJobResult("job.json", "/tmp/job.json", Map.of())
         );
         when(taskRepository.save(task)).thenReturn(task);
         when(taskMapper.toDto(task)).thenReturn(admitted);
@@ -1444,9 +1443,8 @@ class IngestionTaskServiceTest {
         assertThat(task.getSourceConfig().has("filePath")).isFalse();
         assertThat(task.getSourceConfig().has("path")).isFalse();
         assertThat(task.getSourceConfig().has("containerPath")).isFalse();
-        InOrder order = inOrder(fileUploadService, addaxJobService);
-        order.verify(fileUploadService).verifyManagedUpload("file-001", fileHash);
-        order.verify(addaxJobService).createJobFromTask(any(IngestionTask.class));
+        verify(fileUploadService).verifyManagedUpload("file-001", fileHash);
+        verifyNoInteractions(addaxJobService, airflowDagService, dagPreheatService);
     }
 
     @Test

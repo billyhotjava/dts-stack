@@ -736,6 +736,174 @@ class AddaxJobServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void shouldKeepManagedFileLandingContractOutOfAddaxReaderAndDestructiveSql() throws Exception {
+        Map<String, Object> readerConfig = Map.of(
+            "_fileId", "file-landing-001",
+            "_fileColumns", java.util.List.of(Map.of("safeName", "order_no", "type", "string")),
+            "_fileLanding", Map.of(
+                "version", 1,
+                "landingMode", "recreate_existing",
+                "referenceTable", "public.ods_orders",
+                "targetTable", "public.ods_orders",
+                "recreateConfirmed", true
+            ),
+            "path", java.util.List.of("/opt/airflow/dags/exchange/excel/orders.xlsx")
+        );
+        Map<String, Object> writerConfig = Map.of(
+            "jdbcUrl", "jdbc:postgresql://127.0.0.1:5432/biadmin",
+            "username", "biadmin",
+            "password", "fixture-only-password",
+            "table", "public.ods_orders"
+        );
+
+        AddaxJobService.AddaxJobResult result = addaxJobService.createJob(
+            "managed-file-landing-contract",
+            "excelreader",
+            readerConfig,
+            "postgresqlwriter",
+            writerConfig,
+            null,
+            "full_refresh",
+            null,
+            Map.of("executionId", "902", "batchId", "batch-902", "taskId", "10")
+        );
+
+        Map<String, Object> job = (Map<String, Object>) result.jobConfig().get("job");
+        Map<String, Object> content = (Map<String, Object>) ((java.util.List<?>) job.get("content")).get(0);
+        Map<String, Object> reader = (Map<String, Object>) content.get("reader");
+        Map<String, Object> readerParams = (Map<String, Object>) reader.get("parameter");
+        Map<String, Object> writer = (Map<String, Object>) content.get("writer");
+        Map<String, Object> writerParams = (Map<String, Object>) writer.get("parameter");
+        java.util.List<String> preSql = (java.util.List<String>) writerParams.get("preSql");
+
+        assertThat(readerParams).doesNotContainKeys("_fileLanding", "_fileColumns", "_fileId");
+        assertThat(preSql).noneMatch(sql -> sql.toUpperCase(java.util.Locale.ROOT).contains("DROP TABLE"));
+        assertThat(preSql).noneMatch(sql -> sql.toUpperCase(java.util.Locale.ROOT).contains("TRUNCATE TABLE"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void managedFileTaskShouldResolveWriterPlaceholderFromLandingTarget() throws Exception {
+        IngestionTask task = new IngestionTask();
+        task.setName("managed-file-placeholder");
+        task.setSourceType("txtfilereader");
+        task.setSyncMode("full_refresh");
+        task.setSourceConfig(objectMapper.valueToTree(Map.of(
+            "_fileId", "file-landing-002",
+            "_fileType", "xlsx",
+            "_fileColumns", java.util.List.of(Map.of("safeName", "project_no", "type", "string")),
+            "_fileLanding", Map.of(
+                "version", 1,
+                "landingMode", "create_new",
+                "targetTable", "ods_project_subject_domain"
+            ),
+            "path", java.util.List.of("/decrypted/project-domain.xlsx")
+        )));
+        task.setDestinationType("postgresqlwriter");
+        task.setDestinationConfig(objectMapper.valueToTree(Map.of(
+            "jdbcUrl", "jdbc:postgresql://dts-pg:5432/biadmin",
+            "username", "biadmin",
+            "password", "fixture-only-password",
+            "tablePrefix", "ods_",
+            "connection", java.util.List.of(Map.of(
+                "jdbcUrl", java.util.List.of("jdbc:postgresql://dts-pg:5432/biadmin"),
+                "table", java.util.List.of("${table}"),
+                "tables", java.util.List.of("${table}")
+            ))
+        )));
+        task.setTableMapping(objectMapper.valueToTree(java.util.List.of(Map.of(
+            "source", "legacy_sheet",
+            "target", "ods_stale_target"
+        ))));
+
+        AddaxJobService.AddaxJobResult result = addaxJobService.createJobFromTask(
+            task,
+            null,
+            null,
+            null,
+            Map.of("executionId", "28", "batchId", "batch-28", "taskId", "4")
+        );
+
+        Map<String, Object> job = (Map<String, Object>) result.jobConfig().get("job");
+        Map<String, Object> content = (Map<String, Object>) ((java.util.List<?>) job.get("content")).get(0);
+        Map<String, Object> writer = (Map<String, Object>) content.get("writer");
+        Map<String, Object> writerParams = (Map<String, Object>) writer.get("parameter");
+        Map<String, Object> writerConnection = (Map<String, Object>) ((java.util.List<?>) writerParams.get("connection")).get(0);
+
+        assertThat(writerConnection.get("table")).isEqualTo(java.util.List.of("ods_project_subject_domain"));
+        assertThat(writerParams.toString()).doesNotContain("${table}");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void nonFileTaskShouldIgnoreManagedFileLandingMarker() throws Exception {
+        IngestionTask task = new IngestionTask();
+        task.setName("database-task-with-stale-file-marker");
+        task.setSourceType("mysqlreader");
+        task.setSyncMode("incremental");
+        task.setSourceConfig(objectMapper.valueToTree(Map.of(
+            "table", java.util.List.of("orders"),
+            "_fileLanding", Map.of(
+                "landingMode", "create_new",
+                "targetTable", "ods_hijacked"
+            )
+        )));
+        task.setDestinationType("postgresqlwriter");
+        task.setDestinationConfig(objectMapper.valueToTree(Map.of(
+            "jdbcUrl", "jdbc:postgresql://dts-pg:5432/biadmin",
+            "username", "biadmin",
+            "password", "fixture-only-password",
+            "table", java.util.List.of("ods_orders")
+        )));
+
+        AddaxJobService.AddaxJobResult result = addaxJobService.createJobFromTask(task);
+
+        Map<String, Object> job = (Map<String, Object>) result.jobConfig().get("job");
+        Map<String, Object> content = (Map<String, Object>) ((java.util.List<?>) job.get("content")).get(0);
+        Map<String, Object> writer = (Map<String, Object>) content.get("writer");
+        Map<String, Object> writerParams = (Map<String, Object>) writer.get("parameter");
+        Map<String, Object> writerConnection = (Map<String, Object>) ((java.util.List<?>) writerParams.get("connection")).get(0);
+
+        assertThat(writerConnection.get("table")).isEqualTo(java.util.List.of("ods_orders"));
+        assertThat(writerParams.toString()).doesNotContain("ods_hijacked");
+    }
+
+    @Test
+    void managedFileTaskShouldRejectUnsafeLandingTargetIdentifier() {
+        IngestionTask task = new IngestionTask();
+        task.setName("managed-file-unsafe-target");
+        task.setSourceType("excelreader");
+        task.setSyncMode("full_refresh");
+        task.setSourceConfig(objectMapper.valueToTree(Map.of(
+            "_fileType", "xlsx",
+            "_fileColumns", java.util.List.of(Map.of("safeName", "project_no", "type", "string")),
+            "_fileLanding", Map.of(
+                "landingMode", "create_new",
+                "targetTable", "ods_safe; DROP TABLE protected_table"
+            ),
+            "path", java.util.List.of("/decrypted/project-domain.xlsx")
+        )));
+        task.setDestinationType("postgresqlwriter");
+        task.setDestinationConfig(objectMapper.valueToTree(Map.of(
+            "jdbcUrl", "jdbc:postgresql://dts-pg:5432/biadmin",
+            "username", "biadmin",
+            "password", "fixture-only-password",
+            "table", java.util.List.of("${table}")
+        )));
+
+        assertThatThrownBy(() -> addaxJobService.createJobFromTask(
+            task,
+            null,
+            null,
+            null,
+            Map.of("executionId", "28", "batchId", "batch-28", "taskId", "4")
+        ))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("文件落地目标表格式不合法");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void shouldDeduplicateFileSourceWriterColumnsAndReserveTechnicalColumns() throws Exception {
         Map<String, Object> readerConfig = Map.of(
             "_fileColumns", java.util.List.of(

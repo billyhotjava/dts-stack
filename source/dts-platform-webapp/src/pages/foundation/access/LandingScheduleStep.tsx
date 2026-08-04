@@ -35,16 +35,22 @@ export function LandingScheduleStep({ form, kind, targetDataSources, defaultDest
 					.filter(Boolean)
 					.join(" · ")}
 			/>
-			<Form.Item name="targetDataSourceId" label="目标数据源" rules={[{ required: true, message: "请选择目标数据源" }]}>
-				<Select
-					showSearch
-					optionFilterProp="label"
-					options={targetDataSources.map((item) => ({
-						label: `${item.name}${item.recommended ? " · 推荐" : ""} · ${item.type}`,
-						value: item.id,
-					}))}
-				/>
-			</Form.Item>
+			{kind !== "file" ? (
+				<Form.Item
+					name="targetDataSourceId"
+					label="目标数据源"
+					rules={[{ required: true, message: "请选择目标数据源" }]}
+				>
+					<Select
+						showSearch
+						optionFilterProp="label"
+						options={targetDataSources.map((item) => ({
+							label: `${item.name}${item.recommended ? " · 推荐" : ""} · ${item.type}`,
+							value: item.id,
+						}))}
+					/>
+				</Form.Item>
+			) : null}
 			{kind === "file" ? (
 				<Space>
 					<Typography.Text>同步模式</Typography.Text>

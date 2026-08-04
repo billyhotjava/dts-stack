@@ -33,11 +33,11 @@ The writable Sprint-83/84 roundtrip additionally requires all of the following. 
 | Variable | Required value | Purpose |
 |---|---|---|
 | `E2E_MODELING_WRITE_ALLOWED` | `true` | Explicit authorization for modeling writes |
-| `E2E_MODELING_PLAN_OPTION` | exact visible option | Dedicated test construction plan selected in the UI |
+| `E2E_MODELING_CONTEXT_OPTION` | exact context id, code, or name | Authorizes the current server modeling context before any write; the retired planning selector is not exposed in the UI |
 | `E2E_MODELING_PREFIX` | starts with `E2E_` | Identifies every retained test business name |
 | `E2E_MODELING_CLEANUP_MODE` | `retain` | Retains published/materialized evidence under the test prefix; hard delete is forbidden |
-| `E2E_MODELING_DOMAIN_OPTION` | exact visible option when requested | Maps an imported package domain to a confirmed plan domain |
-| `E2E_MODELING_SOURCE_OPTION` | exact visible option when requested | Maps an imported dbt source to a plan source binding |
+| `E2E_MODELING_DOMAIN_OPTION` | exact visible option when requested | Maps an imported package domain to a confirmed modeling domain |
+| `E2E_MODELING_SOURCE_OPTION` | exact visible option when requested | Maps an imported dbt source to a confirmed source binding |
 
 Credentials are never hardcoded in source files. The auth setup fails closed when either variable is absent, calls `/api/keycloak/auth/login`, and writes a Playwright storageState to `e2e/.auth/user.json` (gitignored).
 
@@ -85,7 +85,11 @@ Production read-only smoke only: uses the real authenticated menu, clicks all 27
 
 ### `sprint83-84-modeling-roundtrip.spec.ts`
 
-Explicitly authorized writable acceptance: clicks the real reverse-modeling menu, imports the pinned synthetic artifact-rich ZIP, records canonical ModelSpec IDs, saves the business model, creates/validates/commits an advanced dbt draft, starts the ReleaseCandidate build, publishes it, reads serving relation evidence and a masked physical sample, and verifies the corresponding public audit actions. It fails closed without an exact test plan, `E2E_` prefix, write authorization and retained-evidence policy; it also fails if the browser calls any retired `/api/etl/dbt/*` control plane.
+Explicitly authorized writable acceptance: clicks the real reverse-modeling menu, verifies the explicitly authorized server modeling context without exposing the retired planning selector, imports the pinned synthetic artifact-rich ZIP, records canonical ModelSpec IDs, saves the business model, creates/validates/commits an advanced dbt draft, starts the ReleaseCandidate build, publishes it, reads serving relation evidence and a masked physical sample, and verifies the corresponding public audit actions. It fails closed without an exact modeling context, `E2E_` prefix, write authorization and retained-evidence policy; it also fails if the browser calls any retired `/api/etl/dbt/*` control plane.
+
+### `sprint83-modeling-recovery-security.spec.ts`
+
+Explicitly authorized API-level recovery acceptance that complements the real-menu journey without adding a second product path. It imports the pinned enforced source-only fixture, proves declared fields and `DBT_MANAGED` ownership, applies the base/incoming three-way fixtures under one stable dbt identity, verifies idempotent replay, fail-closed retry and forward undo, rejects a malicious model alias, and samples the retired execution boundary. Published evidence is retained under the authorized `E2E_` prefix; the suite never writes through `/api/etl/dbt/files`.
 
 ## Adding a new test
 

@@ -134,14 +134,20 @@ export type TableInfo = {
 export type ColumnInfo = {
 	name: string;
 	type: string;
-	nullable: string;
+	nullable: boolean;
+	description?: string;
+	defaultValue?: string;
+	autoIncrement?: boolean;
+	ordinalPosition?: number;
+	columnSize?: number;
+	decimalDigits?: number;
 };
 
 export const fetchCatalogTree = (payload: SqlCatalogRequest = {}) =>
 	api.post<SqlCatalogNode>({ url: "/sql/catalog", data: payload });
 
-export const listTables = (datasourceId: string) =>
-	api.get<TableInfo[]>({ url: `/sql/tables/${datasourceId}` });
+export const listTables = (datasourceId: string, options?: { keyword?: string; limit?: number }) =>
+	api.get<TableInfo[]>({ url: `/sql/tables/${datasourceId}`, params: options });
 
 export const listColumns = (datasourceId: string, schema: string, table: string) =>
 	api.get<ColumnInfo[]>({ url: `/sql/columns/${datasourceId}`, params: { schema, table } });
@@ -173,14 +179,11 @@ export const saveQuery = (payload: SavedQueryRequest) =>
 export const updateSavedQuery = (id: string, payload: SavedQueryRequest) =>
 	api.put<SavedQueryResponse>({ url: `/sql/saved-queries/${id}`, data: payload });
 
-export const listSavedQueries = () =>
-	api.get<SavedQueryResponse[]>({ url: "/sql/saved-queries" });
+export const listSavedQueries = () => api.get<SavedQueryResponse[]>({ url: "/sql/saved-queries" });
 
-export const getSavedQuery = (id: string) =>
-	api.get<SavedQueryResponse>({ url: `/sql/saved-queries/${id}` });
+export const getSavedQuery = (id: string) => api.get<SavedQueryResponse>({ url: `/sql/saved-queries/${id}` });
 
-export const deleteSavedQuery = (id: string) =>
-	api.delete<boolean>({ url: `/sql/saved-queries/${id}` });
+export const deleteSavedQuery = (id: string) => api.delete<boolean>({ url: `/sql/saved-queries/${id}` });
 
 // 审计日志
 export const auditCopy = (payload: { rowCount: number; columnCount: number; executionId?: string }) =>
@@ -192,14 +195,12 @@ export const validateSql = (payload: SqlValidateRequest) =>
 export const submitSql = (payload: SqlSubmitRequest) =>
 	api.post<SqlSubmitResponse>({ url: "/sql/submit", data: payload });
 
-export const getSqlStatus = (executionId: string) =>
-	api.get<SqlStatusResponse>({ url: `/sql/status/${executionId}` });
+export const getSqlStatus = (executionId: string) => api.get<SqlStatusResponse>({ url: `/sql/status/${executionId}` });
 
 export const getSqlResultPage = (executionId: string, page = 1, pageSize = 200) =>
 	api.get<SqlResultPageResponse>({ url: `/sql/result-page/${executionId}`, params: { page, pageSize } });
 
-export const cancelSql = (executionId: string) =>
-	api.post<boolean>({ url: `/sql/cancel/${executionId}` });
+export const cancelSql = (executionId: string) => api.post<boolean>({ url: `/sql/cancel/${executionId}` });
 
 export type QueryDatasetAsset = {
 	id: string;

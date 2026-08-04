@@ -61,6 +61,7 @@ test("managed file responses retain only opaque identity, seal and parsed metada
 			name: "order_id",
 			type: "string",
 			label: undefined,
+			description: undefined,
 			length: undefined,
 			precision: undefined,
 			scale: undefined,

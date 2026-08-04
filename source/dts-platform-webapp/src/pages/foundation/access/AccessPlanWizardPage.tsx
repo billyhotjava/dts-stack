@@ -13,6 +13,7 @@ import { acquireSingleFlight, releaseSingleFlight } from "./accessSingleFlight";
 import { DatabaseAccessStep } from "./DatabaseAccessStep";
 import { FileAccessStep } from "./FileAccessStep";
 import { LandingScheduleStep } from "./LandingScheduleStep";
+import { validateFileTargetColumns } from "./shared/fileTargetSchemaMapping";
 import { safeAccessPlanErrorMessage, useAccessPlanWizard } from "./useAccessPlanWizard";
 
 const STEP_ITEMS = [
@@ -34,6 +35,9 @@ const initialValues: AccessPlanFormValues = {
 	apiMethod: "GET",
 	apiPageSize: 100,
 	fileClassification: "INTERNAL",
+	fileStructureMode: "manual",
+	fileLandingMode: "create_new",
+	fileRecreateConfirmed: false,
 	fileAutoId: true,
 };
 
@@ -79,7 +83,21 @@ export default function AccessPlanWizardPage() {
 				await form.validateFields(["apiMethod", "apiResourcePath"]);
 				requireSafeApiResourcePath(values.apiResourcePath);
 			}
-			if (kind === "file") await form.validateFields(["fileTargetTable"]);
+			if (kind === "file") {
+				await form.validateFields([
+					"targetDataSourceId",
+					"fileStructureMode",
+					"fileReferenceTable",
+					"fileLandingMode",
+					"fileTargetTable",
+					"fileRecreateConfirmed",
+				]);
+				const issue = validateFileTargetColumns(wizard.fileUploadResult?.columns || [])[0];
+				if (issue) throw new Error(issue.message);
+				if (values.fileLandingMode === "recreate_existing" && !values.fileRecreateConfirmed) {
+					throw new Error("请确认全量重建原表");
+				}
+			}
 			return;
 		}
 		const fields: Array<keyof AccessPlanFormValues> = ["targetDataSourceId", "scheduleType"];
@@ -203,6 +221,8 @@ export default function AccessPlanWizardPage() {
 				onUpload={async (file) => {
 					await wizard.uploadFile(file);
 				}}
+				targetDataSources={wizard.targetDataSources}
+				defaultDestination={wizard.defaultDestination}
 			/>
 		);
 

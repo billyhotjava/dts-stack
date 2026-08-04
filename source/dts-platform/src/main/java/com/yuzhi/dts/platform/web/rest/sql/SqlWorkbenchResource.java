@@ -128,23 +128,27 @@ public class SqlWorkbenchResource {
     @GetMapping("/tables/{datasourceId}")
     public ApiResponse<List<TableInfo>> listTables(
         @PathVariable UUID datasourceId,
+        @RequestParam(name = "keyword", required = false) String keyword,
+        @RequestParam(name = "limit", required = false) Integer limit,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept,
         Principal principal
     ) {
-        List<TableInfo> tables = metadataService.listTables(datasourceId, activeDept);
+        List<TableInfo> tables = keyword == null
+            ? metadataService.listTables(datasourceId, activeDept)
+            : metadataService.searchTables(datasourceId, activeDept, keyword, limit);
         auditService.auditAction("SQL_WORKBENCH_TABLES_READ", AuditStage.SUCCESS, principal != null ? principal.getName() : "anonymous", null);
         return ApiResponses.ok(tables);
     }
 
     @GetMapping("/columns/{datasourceId}")
-    public ApiResponse<List<Map<String, String>>> listColumns(
+    public ApiResponse<List<Map<String, Object>>> listColumns(
         @PathVariable UUID datasourceId,
         @RequestParam String schema,
         @RequestParam String table,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept,
         Principal principal
     ) {
-        List<Map<String, String>> columns = metadataService.listColumns(datasourceId, schema, table, activeDept);
+        List<Map<String, Object>> columns = metadataService.listColumns(datasourceId, schema, table, activeDept);
         auditService.auditAction("SQL_WORKBENCH_COLUMNS_READ", AuditStage.SUCCESS, principal != null ? principal.getName() : "anonymous", null);
         return ApiResponses.ok(columns);
     }

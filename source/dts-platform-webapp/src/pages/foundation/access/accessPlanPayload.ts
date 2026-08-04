@@ -1,6 +1,21 @@
 import type { IngestionTaskDTO, ManagedApiConnectionTestRequestDTO, ManagedFileUploadResult } from "@/api/ingestion";
 import type { DataSourceSelectionItem } from "@/api/services/dataSourcesService";
 import {
+	buildManagedFileAdmissionFields,
+	buildManagedFileSourceConfig,
+	extractFileLandingFromTask,
+	extractManagedFileFromTask,
+} from "./accessManagedFile";
+import type {
+	AccessKind,
+	AccessPlanApiResourceDTO,
+	AccessPlanApiSourceConfigDTO,
+	AccessPlanCreateRequest,
+	AccessPlanFormValues,
+	AccessPlanPayloadContext,
+} from "./accessPlan.types";
+import { type FileLandingSpec, validateFileTargetColumns } from "./shared/fileTargetSchemaMapping";
+import {
 	applyReaderTypeToConfig,
 	buildApiReaderConfig,
 	buildFileBaseName,
@@ -14,19 +29,6 @@ import {
 	resolveReaderTypeFromDataSource,
 } from "./shared/ingestionFormHelpers";
 import { parseTableEntries } from "./shared/transformTableSelection.helpers";
-import {
-	buildManagedFileAdmissionFields,
-	buildManagedFileSourceConfig,
-	extractManagedFileFromTask,
-} from "./accessManagedFile";
-import type {
-	AccessKind,
-	AccessPlanApiResourceDTO,
-	AccessPlanApiSourceConfigDTO,
-	AccessPlanCreateRequest,
-	AccessPlanFormValues,
-	AccessPlanPayloadContext,
-} from "./accessPlan.types";
 
 const FILE_READER_TYPES = new Set(["txtfilereader", "excelreader", "csv", "excel", "file"]);
 
@@ -223,16 +225,51 @@ const buildApiRequest = (context: AccessPlanPayloadContext): AccessPlanCreateReq
 };
 
 const resolveFileTable = (values: AccessPlanFormValues, file: ManagedFileUploadResult) => {
-	const requested = normalizeTableName(values.fileTargetTable);
+	const normalizeQualifiedTableName = (value: unknown) => {
+		const text = normalizeText(value == null ? undefined : String(value));
+		if (!text) return "";
+		const parts = text.split(".");
+		if (parts.length > 2 || parts.some((part) => normalizeTableName(part) !== part)) return "";
+		return parts.join(".");
+	};
+	const requested = normalizeQualifiedTableName(values.fileTargetTable);
 	if (normalizeText(values.fileTargetTable) && !requested) throw new Error("目标表名格式不合法");
 	const generated = normalizeTableName(`${normalizeText(values.syncPrefix)}${buildFileBaseName(file.originalName)}`);
 	return requested || generated || "ods_file_import";
+};
+
+const buildFileLandingSpec = (
+	values: AccessPlanFormValues,
+	file: ManagedFileUploadResult,
+	targetTable: string,
+): FileLandingSpec => {
+	const structureMode = values.fileStructureMode === "reference_existing" ? "reference_existing" : "manual";
+	const landingMode = values.fileLandingMode === "recreate_existing" ? "recreate_existing" : "create_new";
+	const referenceTable = normalizeText(values.fileReferenceTable) || undefined;
+	const columnIssue = validateFileTargetColumns(file.columns)[0];
+	if (columnIssue) throw new Error(columnIssue.message);
+	if (structureMode === "reference_existing" && !referenceTable) throw new Error("请选择已有表结构");
+	if (landingMode === "recreate_existing") {
+		if (!referenceTable || targetTable !== referenceTable) throw new Error("全量重建必须使用已选择的原表名");
+		if (!values.fileRecreateConfirmed) throw new Error("请确认全量重建原表");
+	}
+	return {
+		version: 1,
+		structureMode,
+		landingMode,
+		referenceDataSourceId: normalizeText(values.targetDataSourceId) || undefined,
+		referenceTable,
+		targetTable,
+		recreateConfirmed: landingMode === "recreate_existing" && values.fileRecreateConfirmed === true,
+		columns: file.columns,
+	};
 };
 
 const buildFileRequest = (context: AccessPlanPayloadContext): AccessPlanCreateRequest => {
 	const { values, fileUploadResult } = context;
 	if (!fileUploadResult) throw new Error("请先上传并解析文件");
 	const table = resolveFileTable(values, fileUploadResult);
+	const landing = buildFileLandingSpec(values, fileUploadResult, table);
 	const admission = buildManagedFileAdmissionFields(fileUploadResult);
 	return {
 		name: requireText(values.name, "请输入任务名称"),
@@ -240,7 +277,7 @@ const buildFileRequest = (context: AccessPlanPayloadContext): AccessPlanCreateRe
 		owner: context.owner,
 		source: {
 			type: "txtfilereader",
-			config: buildManagedFileSourceConfig(fileUploadResult, values.fileAutoId),
+			config: buildManagedFileSourceConfig(fileUploadResult, values.fileAutoId, landing),
 		},
 		destination: buildDestination(context),
 		sync: buildSync(values, true),
@@ -327,6 +364,7 @@ const optionalText = (value: unknown) => normalizeText(typeof value === "string"
 
 export const toAccessPlanFormValues = (task: IngestionTaskDTO): Partial<AccessPlanFormValues> => {
 	const legacy = mapTaskToForm(task);
+	const fileLanding = extractFileLandingFromTask(task);
 	const pagination = parseObject(legacy.apiPaginationJson);
 	const cursor = parseObject(legacy.apiCursorJson);
 	return {
@@ -338,7 +376,11 @@ export const toAccessPlanFormValues = (task: IngestionTaskDTO): Partial<AccessPl
 		apiPageSize: Number(pagination.pageSize) > 0 ? Number(pagination.pageSize) : undefined,
 		apiCursorField: optionalText(cursor.field),
 		apiCursorParam: optionalText(cursor.parameterName),
-		fileTargetTable: normalizeText(legacy.fileTableName) || undefined,
+		fileTargetTable: fileLanding?.targetTable || normalizeText(legacy.fileTableName) || undefined,
+		fileStructureMode: fileLanding?.structureMode || "manual",
+		fileLandingMode: fileLanding?.landingMode || "create_new",
+		fileReferenceTable: fileLanding?.referenceTable,
+		fileRecreateConfirmed: fileLanding?.recreateConfirmed === true,
 		fileClassification: extractManagedFileFromTask(task)?.classification || "INTERNAL",
 	};
 };

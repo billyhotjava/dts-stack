@@ -5,24 +5,24 @@ import {
 	classifyModelingRelationshipGraphFailure,
 	listModelingRelationshipPlans,
 	loadModelingRelationshipGraph,
+	type ModelingRelationshipGraph,
 	type ModelingRelationshipGraphFailure,
+	type ModelingRelationshipGraphKind,
+	type ModelingRelationshipGraphNode,
 	modelingRelationshipNodePath,
-	type WarehousePlanRelationshipGraph,
-	type WarehousePlanRelationshipGraphKind,
-	type WarehousePlanRelationshipGraphNode,
 } from "@/api/services/modelingRelationshipGraphService";
 import type { DataModelingRoute } from "../types";
 import { Button, PageHeader, RequestState, Status } from "./PrototypePrimitives";
 
-const kindOrder: WarehousePlanRelationshipGraphKind[] = ["DIMENSION", "MODEL", "STANDARD", "INDICATOR"];
-const kindLabel: Record<WarehousePlanRelationshipGraphKind, string> = {
+const kindOrder: ModelingRelationshipGraphKind[] = ["DIMENSION", "MODEL", "STANDARD", "INDICATOR"];
+const kindLabel: Record<ModelingRelationshipGraphKind, string> = {
 	PLAN: "规划",
 	DIMENSION: "维度",
 	MODEL: "模型",
 	STANDARD: "数据标准",
 	INDICATOR: "数据指标",
 };
-const classByKind: Record<WarehousePlanRelationshipGraphKind, string> = {
+const classByKind: Record<ModelingRelationshipGraphKind, string> = {
 	PLAN: "domain",
 	DIMENSION: "domain",
 	MODEL: "model",
@@ -30,16 +30,16 @@ const classByKind: Record<WarehousePlanRelationshipGraphKind, string> = {
 	INDICATOR: "metric",
 };
 
-type PositionedNode = WarehousePlanRelationshipGraphNode & { x: number; y: number };
+type PositionedNode = ModelingRelationshipGraphNode & { x: number; y: number };
 
-const allowedKinds = (view: string): Set<WarehousePlanRelationshipGraphKind> =>
+const allowedKinds = (view: string): Set<ModelingRelationshipGraphKind> =>
 	view === "standards"
 		? new Set(["MODEL", "STANDARD"])
 		: view === "metrics"
 			? new Set(["MODEL", "INDICATOR"])
 			: new Set(["DIMENSION", "MODEL"]);
 
-function positionNodes(graph: WarehousePlanRelationshipGraph, view: string, query: string): PositionedNode[] {
+function positionNodes(graph: ModelingRelationshipGraph, view: string, query: string): PositionedNode[] {
 	const allowed = allowedKinds(view);
 	const candidates = graph.nodes.filter((node) => allowed.has(node.kind));
 	const normalized = query.trim().toLocaleLowerCase();
@@ -59,7 +59,7 @@ function positionNodes(graph: WarehousePlanRelationshipGraph, view: string, quer
 	}
 	const nodes = candidates.filter((node) => visibleIds.has(node.id)).slice(0, 120);
 	const populated = kindOrder.filter((kind) => nodes.some((node) => node.kind === kind));
-	const rows = new Map<WarehousePlanRelationshipGraphKind, number>();
+	const rows = new Map<ModelingRelationshipGraphKind, number>();
 	const totals = new Map(populated.map((kind) => [kind, nodes.filter((node) => node.kind === kind).length]));
 	return nodes.map((node) => {
 		const column = Math.max(0, populated.indexOf(node.kind));
@@ -78,7 +78,7 @@ export function RelationshipGraphPage({ route }: { route: DataModelingRoute }) {
 	const navigate = useNavigate();
 	const requestEpoch = useRef(0);
 	const [planId, setPlanId] = useState("");
-	const [graph, setGraph] = useState<WarehousePlanRelationshipGraph | null>(null);
+	const [graph, setGraph] = useState<ModelingRelationshipGraph | null>(null);
 	const [query, setQuery] = useState("");
 	const [scale, setScale] = useState(1);
 	const [loading, setLoading] = useState(true);
@@ -187,17 +187,9 @@ export function RelationshipGraphPage({ route }: { route: DataModelingRoute }) {
 					title={failure.kind === "permission" ? "无权访问关系图" : "关系图加载失败"}
 				/>
 			) : !graph ? (
-				<RequestState
-					description="服务端尚未返回可用的模型关系投影。"
-					kind="empty"
-					title="暂无关系数据"
-				/>
+				<RequestState description="服务端尚未返回可用的模型关系投影。" kind="empty" title="暂无关系数据" />
 			) : !nodes.length ? (
-				<RequestState
-					description="当前筛选没有返回权威节点，可清空检索词后重试。"
-					kind="empty"
-					title="暂无关系数据"
-				/>
+				<RequestState description="当前筛选没有返回权威节点，可清空检索词后重试。" kind="empty" title="暂无关系数据" />
 			) : (
 				<div className="dmx-graph-canvas">
 					<div className="dmx-graph-scale" style={{ transform: `scale(${scale})` }}>

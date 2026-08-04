@@ -12,6 +12,7 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.yuzhi.dts.ingestion.domain.IngestionTask;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -21,6 +22,7 @@ import java.sql.Types;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -269,6 +271,132 @@ class TargetTableProvisionerColumnResolutionTest {
         );
     }
 
+    @Test
+    void shouldRejectCreateNewWhenTargetTableAlreadyExists() throws Exception {
+        JdbcMetadataService metadataService = mock(JdbcMetadataService.class);
+        TargetTableProvisioner provisioner = new TargetTableProvisioner(
+            metadataService,
+            objectMapper,
+            mock(IngestionSchemaSnapshotService.class),
+            mock(IngestionSourceResolver.class)
+        );
+        Connection targetConnection = targetConnection(metadataService, true);
+        IngestionTask task = managedFileTask("create_new", true);
+
+        assertThatThrownBy(() -> provisioner.ensureTargetTables(task))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("目标表已存在")
+            .hasMessageContaining("public.ods_orders");
+
+        verify(targetConnection.createStatement(), never()).execute(
+            org.mockito.ArgumentMatchers.startsWith("DROP TABLE")
+        );
+    }
+
+    @Test
+    void shouldProvisionManagedFileTargetWhenPersistedTableMappingIsEmpty() throws Exception {
+        JdbcMetadataService metadataService = mock(JdbcMetadataService.class);
+        TargetTableProvisioner provisioner = new TargetTableProvisioner(
+            metadataService,
+            objectMapper,
+            mock(IngestionSchemaSnapshotService.class),
+            mock(IngestionSourceResolver.class)
+        );
+        Connection targetConnection = targetConnection(metadataService, false);
+        Statement statement = targetConnection.createStatement();
+        IngestionTask task = managedFileTask("create_new", false);
+        ObjectNode sourceConfig = (ObjectNode) task.getSourceConfig();
+        sourceConfig.put("_originalName", "ods_orders.xlsx");
+        ((ObjectNode) sourceConfig.get("_fileLanding")).put("targetTable", "ods_orders");
+        task.setTableMapping(null);
+        task.setDestinationConfig(objectMapper.valueToTree(Map.of(
+            "jdbcUrl", "jdbc:postgresql://target-db:5432/lake",
+            "username", "writer",
+            "password", "writer-password",
+            "connection", List.of(Map.of(
+                "jdbcUrl", List.of("jdbc:postgresql://target-db:5432/lake"),
+                "table", List.of("${table}")
+            )),
+            "column", List.of("*")
+        )));
+
+        provisioner.ensureTargetTables(task);
+
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        verify(statement, atLeastOnce()).execute(sql.capture());
+        assertThat(sql.getAllValues())
+            .anyMatch(value -> value.startsWith("create table \"public\".\"ods_orders\""));
+    }
+
+    @Test
+    void shouldRecreateConfirmedExistingFileTargetWithoutCascadeAndApplyComments() throws Exception {
+        JdbcMetadataService metadataService = mock(JdbcMetadataService.class);
+        TargetTableProvisioner provisioner = new TargetTableProvisioner(
+            metadataService,
+            objectMapper,
+            mock(IngestionSchemaSnapshotService.class),
+            mock(IngestionSourceResolver.class)
+        );
+        Connection targetConnection = targetConnection(metadataService, true);
+        Statement statement = targetConnection.createStatement();
+        IngestionTask task = managedFileTask("recreate_existing", true);
+
+        provisioner.ensureTargetTables(task);
+
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        verify(statement, atLeastOnce()).execute(sql.capture());
+        assertThat(sql.getAllValues())
+            .contains("DROP TABLE \"public\".\"ods_orders\"")
+            .anyMatch(value -> value.startsWith("create table \"public\".\"ods_orders\""))
+            .anyMatch(value -> value.contains("\"amount\" decimal(18,4)"))
+            .contains("COMMENT ON COLUMN \"public\".\"ods_orders\".\"order_no\" IS '订单编号'");
+        assertThat(sql.getAllValues()).noneMatch(value -> value.toUpperCase(Locale.ROOT).contains("CASCADE"));
+        verify(targetConnection).commit();
+    }
+
+    @Test
+    void shouldRejectRecreateWithoutExplicitConfirmation() throws Exception {
+        JdbcMetadataService metadataService = mock(JdbcMetadataService.class);
+        TargetTableProvisioner provisioner = new TargetTableProvisioner(
+            metadataService,
+            objectMapper,
+            mock(IngestionSchemaSnapshotService.class),
+            mock(IngestionSourceResolver.class)
+        );
+        targetConnection(metadataService, true);
+
+        assertThatThrownBy(() -> provisioner.ensureTargetTables(managedFileTask("recreate_existing", false)))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("未确认全量重建");
+    }
+
+    @Test
+    void shouldRollbackWhenExistingTargetCannotBeDroppedBecauseOfDependencies() throws Exception {
+        JdbcMetadataService metadataService = mock(JdbcMetadataService.class);
+        IngestionSchemaSnapshotService snapshotService = mock(IngestionSchemaSnapshotService.class);
+        TargetTableProvisioner provisioner = new TargetTableProvisioner(
+            metadataService,
+            objectMapper,
+            snapshotService,
+            mock(IngestionSourceResolver.class)
+        );
+        Connection targetConnection = targetConnection(metadataService, true);
+        Statement statement = targetConnection.createStatement();
+        doThrow(new java.sql.SQLException("cannot drop table because other objects depend on it"))
+            .when(statement)
+            .execute("DROP TABLE \"public\".\"ods_orders\"");
+
+        assertThatThrownBy(() -> provisioner.ensureTargetTables(managedFileTask("recreate_existing", true)))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("other objects depend on it");
+
+        verify(targetConnection).rollback();
+        verify(targetConnection, never()).commit();
+        verify(snapshotService, never()).saveSnapshot(
+            any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
+        );
+    }
+
     private Connection targetConnection(JdbcMetadataService metadataService, boolean exists) throws Exception {
         Connection connection = mock(Connection.class);
         DatabaseMetaData databaseMetaData = mock(DatabaseMetaData.class);
@@ -310,6 +438,41 @@ class TargetTableProvisionerColumnResolutionTest {
             mappings.add(Map.of("source", sources.get(i), "target", targets.get(i)));
         }
         task.setTableMapping(objectMapper.valueToTree(mappings));
+        return task;
+    }
+
+    private IngestionTask managedFileTask(String landingMode, boolean recreateConfirmed) {
+        IngestionTask task = task(List.of("upload.xlsx"), List.of("public.ods_orders"));
+        task.setSourceType("excelreader");
+        Map<String, Object> source = new LinkedHashMap<>();
+        source.put("_fileId", "file-001");
+        source.put("_fileColumns", List.of(
+            Map.of(
+                "name", "order_no",
+                "safeName", "order_no",
+                "type", "string",
+                "description", "订单编号"
+            ),
+            Map.of(
+                "name", "amount",
+                "safeName", "amount",
+                "type", "NUMERIC",
+                "precision", 18,
+                "scale", 4
+            )
+        ));
+        source.put("_fileLanding", Map.of(
+            "version", 1,
+            "structureMode", "reference_existing",
+            "landingMode", landingMode,
+            "referenceTable", "public.ods_orders",
+            "targetTable", "public.ods_orders",
+            "recreateConfirmed", recreateConfirmed
+        ));
+        task.setSourceConfig(objectMapper.valueToTree(source));
+        task.setTableMapping(objectMapper.valueToTree(List.of(
+            Map.of("source", "upload.xlsx", "target", "public.ods_orders")
+        )));
         return task;
     }
 

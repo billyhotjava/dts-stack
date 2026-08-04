@@ -3,8 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	type DefaultDestinationStatus,
 	type IngestionTaskDTO,
-	type ManagedFileUploadResult,
 	ingestionTaskAPI,
+	type ManagedFileUploadResult,
 } from "@/api/ingestion";
 import { createIngestionTask } from "@/api/platformApi";
 import dataSourcesService, { type DataSourceSelectionItem } from "@/api/services/dataSourcesService";
@@ -111,6 +111,13 @@ const SAFE_ACCESS_PLAN_MESSAGES = new Set([
 	"请先上传文件",
 	"缺少文件密级封存，请重新上传文件",
 	"文件上传响应无效",
+	"请选择已有表结构",
+	"请输入完整目标表名",
+	"目标字段名不能为空",
+	"目标字段名只能包含字母、数字和下划线，且不能以数字开头",
+	"目标字段名不能重复",
+	"全量重建必须使用已选择的原表名",
+	"请确认全量重建原表",
 ]);
 
 export const safeAccessPlanErrorMessage = (error: unknown, fallback: string) => {
@@ -241,9 +248,7 @@ export const resolveUserClassificationRank = (user: unknown) => {
 	if (!user || typeof user !== "object") return undefined;
 	const record = user as Record<string, unknown>;
 	const attributes =
-		record.attributes && typeof record.attributes === "object"
-			? (record.attributes as Record<string, unknown>)
-			: {};
+		record.attributes && typeof record.attributes === "object" ? (record.attributes as Record<string, unknown>) : {};
 	const personnelValues = [
 		record.person_level,
 		record.personLevel,
@@ -519,8 +524,7 @@ export function useAccessPlanWizard({ kind, editId, form }: UseAccessPlanWizardI
 	}, []);
 
 	const submit = useCallback(async () => {
-		const existingTaskMatches =
-			editId === undefined ? state.existingTask === null : state.existingTask?.id === editId;
+		const existingTaskMatches = editId === undefined ? state.existingTask === null : state.existingTask?.id === editId;
 		if (state.loading || state.loadedContextKey !== contextKey || !existingTaskMatches) {
 			throw new Error("编辑任务尚未加载完成，不能创建新任务");
 		}

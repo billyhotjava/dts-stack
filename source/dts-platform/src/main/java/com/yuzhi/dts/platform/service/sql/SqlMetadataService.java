@@ -11,8 +11,12 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -126,27 +130,89 @@ public class SqlMetadataService {
     }
 
     /**
+     * Searches JDBC metadata only. The keyword may match schema/table identity or a column name;
+     * no business rows are read.
+     */
+    public List<TableInfo> searchTables(UUID datasourceId, String activeDept, String keyword, Integer requestedLimit) {
+        String normalizedKeyword = keyword == null ? "" : keyword.trim().toLowerCase(Locale.ROOT);
+        int limit = Math.max(1, Math.min(requestedLimit == null ? 20 : requestedLimit, 50));
+        List<TableInfo> allTables = listTables(datasourceId, activeDept);
+        if (!StringUtils.hasText(normalizedKeyword)) {
+            return allTables.stream().limit(limit).toList();
+        }
+
+        Map<String, TableInfo> tablesByIdentity = new LinkedHashMap<>();
+        for (TableInfo table : allTables) {
+            tablesByIdentity.put(tableIdentity(table.schema(), table.name()), table);
+        }
+
+        Set<String> matchedIdentities = new LinkedHashSet<>();
+        for (TableInfo table : allTables) {
+            if (tableIdentity(table.schema(), table.name()).contains(normalizedKeyword)) {
+                matchedIdentities.add(tableIdentity(table.schema(), table.name()));
+                if (matchedIdentities.size() >= limit) {
+                    return resolveMatchedTables(matchedIdentities, tablesByIdentity);
+                }
+            }
+        }
+
+        JdbcConnectionTarget target = resolveConnectionTarget(datasourceId);
+        try (Connection conn = DriverManager.getConnection(target.jdbcUrl(), target.username(), target.password())) {
+            DatabaseMetaData meta = conn.getMetaData();
+            Set<String> schemas = new LinkedHashSet<>();
+            allTables.forEach(table -> schemas.add(table.schema()));
+            for (String schema : schemas) {
+                try (ResultSet rs = meta.getColumns(null, schema, "%", "%")) {
+                    while (rs.next()) {
+                        String columnName = rs.getString("COLUMN_NAME");
+                        if (columnName == null || !columnName.toLowerCase(Locale.ROOT).contains(normalizedKeyword)) {
+                            continue;
+                        }
+                        String identity = tableIdentity(rs.getString("TABLE_SCHEM"), rs.getString("TABLE_NAME"));
+                        if (tablesByIdentity.containsKey(identity)) {
+                            matchedIdentities.add(identity);
+                        }
+                        if (matchedIdentities.size() >= limit) {
+                            return resolveMatchedTables(matchedIdentities, tablesByIdentity);
+                        }
+                    }
+                }
+            }
+        } catch (SQLException ex) {
+            LOG.error("Failed to search table metadata from datasource {}: {}", target.name(), ex.getMessage());
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "搜索表元数据失败");
+        }
+        return resolveMatchedTables(matchedIdentities, tablesByIdentity);
+    }
+
+    /**
      * 列出表的列信息
      */
-    public List<Map<String, String>> listColumns(UUID datasourceId, String schema, String tableName, String activeDept) {
+    public List<Map<String, Object>> listColumns(UUID datasourceId, String schema, String tableName, String activeDept) {
         accessGuard.assertReadable(datasourceId, activeDept);
         String cacheKey = COLUMN_CACHE_KEY_PREFIX + datasourceId + ":" + schema + "." + tableName;
-        List<Map<String, String>> cached = getCachedList(COLUMN_CACHE_NAME, cacheKey);
+        List<Map<String, Object>> cached = getCachedList(COLUMN_CACHE_NAME, cacheKey);
         if (cached != null) {
             return cached;
         }
         JdbcConnectionTarget target = resolveConnectionTarget(datasourceId);
 
-        List<Map<String, String>> columns = new ArrayList<>();
+        List<Map<String, Object>> columns = new ArrayList<>();
         try (Connection conn = DriverManager.getConnection(target.jdbcUrl(), target.username(), target.password())) {
             DatabaseMetaData meta = conn.getMetaData();
             try (ResultSet rs = meta.getColumns(null, schema, tableName, "%")) {
                 while (rs.next()) {
-                    columns.add(Map.of(
-                        "name", rs.getString("COLUMN_NAME"),
-                        "type", rs.getString("TYPE_NAME"),
-                        "nullable", rs.getString("IS_NULLABLE")
-                    ));
+                    Map<String, Object> column = new LinkedHashMap<>();
+                    column.put("name", rs.getString("COLUMN_NAME"));
+                    column.put("type", rs.getString("TYPE_NAME"));
+                    column.put("nullable", "YES".equalsIgnoreCase(rs.getString("IS_NULLABLE")));
+                    column.put("description", rs.getString("REMARKS"));
+                    column.put("defaultValue", rs.getString("COLUMN_DEF"));
+                    column.put("autoIncrement", "YES".equalsIgnoreCase(rs.getString("IS_AUTOINCREMENT")));
+                    column.put("ordinalPosition", rs.getInt("ORDINAL_POSITION"));
+                    column.put("columnSize", rs.getInt("COLUMN_SIZE"));
+                    column.put("decimalDigits", rs.getInt("DECIMAL_DIGITS"));
+                    columns.add(column);
                 }
             }
         } catch (SQLException ex) {
@@ -158,6 +224,15 @@ public class SqlMetadataService {
             cacheList(COLUMN_CACHE_NAME, cacheKey, columns);
         }
         return columns;
+    }
+
+    private List<TableInfo> resolveMatchedTables(Set<String> identities, Map<String, TableInfo> tablesByIdentity) {
+        return identities.stream().map(tablesByIdentity::get).filter(java.util.Objects::nonNull).toList();
+    }
+
+    private String tableIdentity(String schema, String table) {
+        String effectiveSchema = StringUtils.hasText(schema) ? schema : "public";
+        return (effectiveSchema + "." + table).toLowerCase(Locale.ROOT);
     }
 
     @SuppressWarnings("unchecked")

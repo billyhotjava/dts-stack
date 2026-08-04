@@ -5,6 +5,7 @@ import {
 	resolveFileAdmissionState,
 	restoreFileAdmissionFromTask,
 } from "./shared/fileClassificationAdmission.helpers";
+import type { FileLandingSpec } from "./shared/fileTargetSchemaMapping";
 
 const asRecord = (value: unknown): Record<string, unknown> => {
 	if (value && typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
@@ -92,6 +93,8 @@ export const extractManagedFileFromTask = (task: IngestionTaskDTO): ManagedFileU
 								name,
 								type: typeof column.type === "string" && column.type.trim() ? column.type : "string",
 								label: typeof column.label === "string" ? column.label : undefined,
+								description: typeof column.description === "string" ? column.description : undefined,
+								_odsMatched: column._odsMatched === true || undefined,
 							},
 						]
 					: [];
@@ -124,7 +127,29 @@ export const extractManagedFileFromTask = (task: IngestionTaskDTO): ManagedFileU
 	});
 };
 
-export const buildManagedFileSourceConfig = (file: ManagedFileUploadResult, autoId: boolean) => ({
+export const extractFileLandingFromTask = (task: IngestionTaskDTO): FileLandingSpec | null => {
+	const sourceConfig = asRecord(task.sourceConfig);
+	const landing = asRecord(sourceConfig._fileLanding);
+	const targetTable = typeof landing.targetTable === "string" ? landing.targetTable.trim() : "";
+	if (!targetTable) return null;
+	return {
+		version: 1,
+		structureMode: landing.structureMode === "reference_existing" ? "reference_existing" : "manual",
+		landingMode: landing.landingMode === "recreate_existing" ? "recreate_existing" : "create_new",
+		referenceDataSourceId:
+			typeof landing.referenceDataSourceId === "string" ? landing.referenceDataSourceId : undefined,
+		referenceTable: typeof landing.referenceTable === "string" ? landing.referenceTable : undefined,
+		targetTable,
+		recreateConfirmed: landing.recreateConfirmed === true,
+		columns: extractManagedFileFromTask(task)?.columns || [],
+	};
+};
+
+export const buildManagedFileSourceConfig = (
+	file: ManagedFileUploadResult,
+	autoId: boolean,
+	fileLanding: FileLandingSpec,
+) => ({
 	_fileId: file.fileId,
 	_fileHash: file.fileHash,
 	_fileSize: file.fileSize,
@@ -134,6 +159,7 @@ export const buildManagedFileSourceConfig = (file: ManagedFileUploadResult, auto
 	_fileColumns: file.columns,
 	_originalName: file.originalName,
 	_autoId: autoId,
+	_fileLanding: fileLanding,
 	classification: file.classification,
 	classificationSeal: file.classificationSeal,
 	fieldClassifications: file.fieldClassifications,

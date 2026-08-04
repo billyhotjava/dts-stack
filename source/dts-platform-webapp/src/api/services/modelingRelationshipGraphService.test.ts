@@ -35,7 +35,7 @@ describe("modelingRelationshipGraphService", () => {
 				kind: "MODEL",
 				route: "/modeling/workbench?planId=plan-1&module=models&assetId=model-1&revision=3",
 			}),
-		).toBe("/data-modeling/dimensions/workbench?planId=plan-1&modelSpecId=model-1&revision=3");
+		).toBe("/data-modeling/dimensions/workbench?modelSpecId=model-1&revision=3");
 		expect(modelingRelationshipNodePath({ kind: "MODEL", route: "https://example.com/unsafe" })).toBeNull();
 		expect(
 			modelingRelationshipNodePath({
@@ -48,7 +48,7 @@ describe("modelingRelationshipGraphService", () => {
 	it("classifies authorization failures without falling back to local data", () => {
 		expect(classifyModelingRelationshipGraphFailure({ response: { status: 403 } })).toEqual({
 			kind: "permission",
-			message: "当前账号无权访问该建设计划的关系图，请联系管理员授权。",
+			message: "当前账号无权访问模型关系图，请联系管理员授权。",
 		});
 	});
 });

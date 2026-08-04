@@ -2,11 +2,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+	listDataMarts: vi.fn(),
 	listBusinessProcessesApi: vi.fn(),
 	listPlanningCatalogDomains: vi.fn(),
 }));
 
-vi.mock("@/api/dataMartApi", () => ({ listDataMarts: vi.fn() }));
+vi.mock("@/api/dataMartApi", () => ({ listDataMarts: mocks.listDataMarts }));
 vi.mock("@/api/modelSpecApi", () => ({ listModelSpecs: vi.fn() }));
 vi.mock("@/api/services/modelingOverviewFactService", () => ({
 	listIndicatorsForModelingOverview: vi.fn(),
@@ -47,5 +48,13 @@ describe("loadPlanningProjection catalog writes", () => {
 
 		expect(mocks.listBusinessProcessesApi).toHaveBeenCalledWith("domain-uuid");
 		expect(projection.rows[0]?.id).toBe("domain-uuid:BUDGET");
+	});
+
+	it("keeps the data-mart list window within the backend contract", async () => {
+		mocks.listDataMarts.mockResolvedValue([]);
+
+		await loadPlanningProjection("marts");
+
+		expect(mocks.listDataMarts).toHaveBeenCalledWith({ limit: 100 });
 	});
 });

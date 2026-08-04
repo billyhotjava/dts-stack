@@ -1,12 +1,30 @@
-import { Alert, Button, Form, Input, message, Select, Space, Switch, Tag, Typography, Upload as AntdUpload } from "antd";
+import {
+	Alert,
+	Upload as AntdUpload,
+	Button,
+	Checkbox,
+	Form,
+	Input,
+	message,
+	Radio,
+	Select,
+	Space,
+	Switch,
+	Tag,
+	Typography,
+} from "antd";
 import type { FormInstance } from "antd/es/form";
-import type { ManagedFileUploadResult } from "@/api/ingestion";
-import { CompactTable } from "@/components/table";
+import { useEffect, useState } from "react";
+import type { DefaultDestinationStatus, ManagedFileColumn, ManagedFileUploadResult } from "@/api/ingestion";
+import type { InfraDataSource } from "@/api/services/dataSourcesService";
+import { listColumns, listTables, type TableInfo } from "@/api/sql-workbench";
 import { Upload as SecureUpload } from "@/components/upload";
-import { CLASSIFICATION_LABELS_ZH, classificationRank, type ClassificationLevel } from "@/utils/classification";
-import { FileFieldClassificationSelect } from "./shared/FileClassificationIntake";
+import { CLASSIFICATION_LABELS_ZH, type ClassificationLevel, classificationRank } from "@/utils/classification";
 import { toAdmissionFile, toManagedFile } from "./accessManagedFile";
 import type { AccessPlanFormValues } from "./accessPlan.types";
+import { FileFieldMappingEditor } from "./FileFieldMappingEditor";
+import { FileFieldClassificationSelect } from "./shared/FileClassificationIntake";
+import { applyTargetSchemaTemplate, type TargetSchemaColumn } from "./shared/fileTargetSchemaMapping";
 
 type Props = {
 	form: FormInstance<AccessPlanFormValues>;
@@ -16,6 +34,8 @@ type Props = {
 	uploading: boolean;
 	userClassificationRank?: number;
 	onUpload: (file: File) => Promise<void>;
+	targetDataSources?: InfraDataSource[];
+	defaultDestination?: DefaultDestinationStatus | null;
 };
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
@@ -51,7 +71,89 @@ export function FileAccessStep({
 	uploading,
 	userClassificationRank,
 	onUpload,
+	targetDataSources = [],
+	defaultDestination,
 }: Props) {
+	const targetDataSourceId = Form.useWatch("targetDataSourceId", _form);
+	const structureMode = Form.useWatch("fileStructureMode", _form) || "manual";
+	const landingMode = Form.useWatch("fileLandingMode", _form) || "create_new";
+	const [tableKeyword, setTableKeyword] = useState("");
+	const [tableResults, setTableResults] = useState<TableInfo[]>([]);
+	const [targetColumns, setTargetColumns] = useState<TargetSchemaColumn[]>([]);
+	const [searchingTables, setSearchingTables] = useState(false);
+	const [loadingColumns, setLoadingColumns] = useState(false);
+
+	useEffect(() => {
+		if (phase !== "resource" || structureMode !== "reference_existing" || !targetDataSourceId) return;
+		const keyword = tableKeyword.trim();
+		if (keyword.length < 2) {
+			setTableResults([]);
+			setSearchingTables(false);
+			return;
+		}
+		let active = true;
+		const timer = window.setTimeout(() => {
+			setSearchingTables(true);
+			void listTables(targetDataSourceId, { keyword, limit: 20 })
+				.then((tables) => {
+					if (active) setTableResults(Array.isArray(tables) ? tables : []);
+				})
+				.catch(() => {
+					if (active) {
+						setTableResults([]);
+						message.error("目标表结构搜索失败");
+					}
+				})
+				.finally(() => {
+					if (active) setSearchingTables(false);
+				});
+		}, 300);
+		return () => {
+			active = false;
+			window.clearTimeout(timer);
+		};
+	}, [phase, structureMode, tableKeyword, targetDataSourceId]);
+
+	const updateFileColumns = (columns: ManagedFileColumn[]) => {
+		if (!fileUploadResult) return;
+		const nextClassifications = { ...(fileUploadResult.fieldClassifications || {}) };
+		fileUploadResult.columns.forEach((previous, index) => {
+			const next = columns[index];
+			if (!next || previous.name === next.name || !nextClassifications[previous.name]) return;
+			nextClassifications[next.name] = nextClassifications[previous.name];
+			delete nextClassifications[previous.name];
+		});
+		onFileUploadResultChange({ ...fileUploadResult, columns, fieldClassifications: nextClassifications });
+	};
+
+	const selectReferenceTable = async (qualifiedTable: string) => {
+		if (!targetDataSourceId || !fileUploadResult) return;
+		const separator = qualifiedTable.indexOf(".");
+		if (separator <= 0 || separator >= qualifiedTable.length - 1) {
+			message.error("目标表标识无效");
+			return;
+		}
+		const schema = qualifiedTable.slice(0, separator);
+		const table = qualifiedTable.slice(separator + 1);
+		_form.setFieldValue("fileReferenceTable", qualifiedTable);
+		if (landingMode === "recreate_existing") _form.setFieldValue("fileTargetTable", qualifiedTable);
+		setLoadingColumns(true);
+		try {
+			const columns = await listColumns(targetDataSourceId, schema, table);
+			const schemaColumns = (Array.isArray(columns) ? columns : []).map((column) => ({
+				...column,
+				ordinalPosition: Number(column.ordinalPosition) || undefined,
+			}));
+			setTargetColumns(schemaColumns);
+			updateFileColumns(applyTargetSchemaTemplate(fileUploadResult.columns, schemaColumns));
+		} catch {
+			setTargetColumns([]);
+			message.error("读取目标表字段失败");
+		} finally {
+			setLoadingColumns(false);
+		}
+	};
+
 	const classificationOptions = CLASSIFICATION_OPTIONS.map((option) => ({
 		...option,
 		disabled:
@@ -59,18 +161,120 @@ export function FileAccessStep({
 			(classificationRank(option.value) ?? Number.POSITIVE_INFINITY) > userClassificationRank,
 	}));
 	if (phase === "resource") {
+		const destinationAvailable = Boolean(
+			defaultDestination?.available && defaultDestination.writerTypeReady && defaultDestination.writerConfigReady,
+		);
 		return (
 			<div className="space-y-5">
 				<div>
 					<Typography.Title level={4}>定义文件落地资源</Typography.Title>
-					<Typography.Text type="secondary">目标表由文件名自动推导，也可以在此显式指定。</Typography.Text>
+					<Typography.Text type="secondary">可直接编辑字段，也可以引用目标数据库已有表的结构模板。</Typography.Text>
 				</div>
-				<Form.Item name="fileTargetTable" label="目标表名">
-					<Input placeholder="例如：ods_customer" />
+				<Alert
+					showIcon
+					type={destinationAvailable ? "success" : "warning"}
+					message={destinationAvailable ? "平台目标数据湖可用" : "平台目标数据湖不可用"}
+					description={[
+						defaultDestination?.destinationName,
+						defaultDestination?.writerType,
+						defaultDestination?.message,
+					]
+						.filter(Boolean)
+						.join(" · ")}
+				/>
+				<Form.Item
+					name="targetDataSourceId"
+					label="目标数据源"
+					rules={[{ required: true, message: "请选择目标数据源" }]}
+				>
+					<Select
+						showSearch
+						optionFilterProp="label"
+						onChange={() => {
+							_form.setFieldsValue({ fileReferenceTable: undefined, fileRecreateConfirmed: false });
+							setTargetColumns([]);
+							setTableResults([]);
+						}}
+						options={targetDataSources.map((item) => ({
+							label: `${item.name}${item.recommended ? " · 推荐" : ""} · ${item.type}`,
+							value: item.id,
+						}))}
+					/>
 				</Form.Item>
-				<Form.Item name="syncPrefix" label="ODS 表前缀">
-					<Input placeholder="例如：ods_file_" />
+				<div>
+					<Typography.Text strong>字段结构定义</Typography.Text>
+					<Form.Item name="fileStructureMode" className="mt-2">
+						<Radio.Group
+							onChange={(event) => {
+								if (event.target.value === "manual") {
+									_form.setFieldsValue({ fileReferenceTable: undefined, fileRecreateConfirmed: false });
+									setTargetColumns([]);
+								}
+							}}
+							options={[
+								{ label: "自行编辑", value: "manual" },
+								{ label: "引用已有表结构", value: "reference_existing" },
+							]}
+						/>
+					</Form.Item>
+				</div>
+				{structureMode === "reference_existing" ? (
+					<Form.Item
+						name="fileReferenceTable"
+						label="结构模板表"
+						rules={[{ required: true, message: "请选择已有表结构" }]}
+						extra="输入表名或字段关键字，平台仅搜索元数据，不扫描表数据。"
+					>
+						<Select
+							showSearch
+							filterOption={false}
+							loading={searchingTables || loadingColumns}
+							placeholder="至少输入 2 个字符，例如：customer 或 project_no"
+							onSearch={setTableKeyword}
+							onSelect={(value) => void selectReferenceTable(value)}
+							options={tableResults.map((table) => ({
+								label: `${table.schema}.${table.name}`,
+								value: `${table.schema}.${table.name}`,
+							}))}
+						/>
+					</Form.Item>
+				) : null}
+				<Form.Item name="fileLandingMode" label="落地方式">
+					<Radio.Group
+						onChange={(event) => {
+							_form.setFieldValue("fileRecreateConfirmed", false);
+							if (event.target.value === "recreate_existing") {
+								const reference = _form.getFieldValue("fileReferenceTable");
+								if (reference) _form.setFieldValue("fileTargetTable", reference);
+							}
+						}}
+						options={[
+							{ label: "新建目标表", value: "create_new" },
+							{ label: "全量重建原表", value: "recreate_existing", disabled: structureMode !== "reference_existing" },
+						]}
+					/>
 				</Form.Item>
+				<Form.Item
+					name="fileTargetTable"
+					label="完整目标表名"
+					rules={[{ required: true, message: "请输入完整目标表名" }]}
+					extra="可使用 table 或 schema.table；新建模式下不能与已有目标表重名。"
+				>
+					<Input disabled={landingMode === "recreate_existing"} placeholder="例如：public.ods_customer" />
+				</Form.Item>
+				{landingMode === "recreate_existing" ? (
+					<Alert
+						type="error"
+						showIcon
+						message="全量重建会先删除原表"
+						description="系统执行 DROP TABLE（不带 CASCADE）后按当前字段重建。若后续文件写入失败，原表数据不会自动恢复；存在依赖时操作将直接失败。"
+						action={
+							<Form.Item name="fileRecreateConfirmed" valuePropName="checked" noStyle>
+								<Checkbox>我已确认全量重建原表</Checkbox>
+							</Form.Item>
+						}
+					/>
+				) : null}
 				<Form.Item name="fileAutoId" label="自动增加主键" valuePropName="checked">
 					<Switch />
 				</Form.Item>
@@ -82,28 +286,19 @@ export function FileAccessStep({
 							message={`${fileUploadResult.originalName} · ${fileUploadResult.rowCount || 0} 行 · ${fileUploadResult.columns.length} 列`}
 							description="字段结构来自平台加密上传后的解析结果；字段只允许在文件密级基础上升密。"
 						/>
-						<CompactTable
-							size="small"
-							rowKey="name"
-							dataSource={fileUploadResult.columns}
-							pagination={{ pageSize: 10, showSizeChanger: false }}
-							columns={[
-								{ title: "字段", dataIndex: "label", key: "label", render: (value, row) => value || row.name },
-								{ title: "落地字段", dataIndex: "name", key: "name" },
-								{ title: "类型", dataIndex: "type", key: "type" },
-								{
-									title: "字段密级",
-									key: "classification",
-									width: 220,
-									render: (_value, row) => (
-										<FileFieldClassificationSelect
-											file={toAdmissionFile(fileUploadResult)}
-											fieldName={row.name}
-											onChange={(file) => onFileUploadResultChange(toManagedFile(file))}
-										/>
-									),
-								},
-							]}
+						<FileFieldMappingEditor
+							key={fileUploadResult.fileId}
+							columns={fileUploadResult.columns}
+							targetColumns={targetColumns}
+							preview={fileUploadResult.preview}
+							onChange={updateFileColumns}
+							renderClassification={(row) => (
+								<FileFieldClassificationSelect
+									file={toAdmissionFile(fileUploadResult)}
+									fieldName={row.name}
+									onChange={(file) => onFileUploadResultChange(toManagedFile(file))}
+								/>
+							)}
 						/>
 					</>
 				) : null}
@@ -180,7 +375,9 @@ export function FileAccessStep({
 						选择并上传文件
 					</Button>
 				</SecureUpload>
-				<Typography.Text type="secondary">支持 CSV/XLSX，最大 50MB；服务端将再次校验内容并生成密级封存。</Typography.Text>
+				<Typography.Text type="secondary">
+					支持 CSV/XLSX，最大 50MB；服务端将再次校验内容并生成密级封存。
+				</Typography.Text>
 			</Space>
 			{fileUploadResult ? (
 				<Alert

@@ -7,7 +7,7 @@ const source = readFileSync(new URL("./sprint83-84-modeling-roundtrip.spec.ts", 
 test("authorized modeling E2E fails closed before any write", () => {
 	for (const contract of [
 		'E2E_MODELING_WRITE_ALLOWED !== "true"',
-		"E2E_MODELING_PLAN_OPTION",
+		"E2E_MODELING_CONTEXT_OPTION",
 		"E2E_MODELING_PREFIX",
 		"E2E_MODELING_CLEANUP_MODE",
 		'cleanupMode !== "retain"',
@@ -15,6 +15,12 @@ test("authorized modeling E2E fails closed before any write", () => {
 		assert.match(source, new RegExp(contract.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 	}
 	assert.doesNotMatch(source, /test\.skip|describe\.skip/);
+});
+
+test("roundtrip resolves the authorized modeling context without reviving the retired planning selector", () => {
+	assert.match(source, /resolveAuthorizedModelingContext/);
+	assert.match(source, /\/api\/modeling\/warehouse-plans/);
+	assert.doesNotMatch(source, /dmx-reverse-plan|planSelect/);
 });
 
 test("roundtrip E2E covers the frozen Sprint-83 canonical chain", () => {
@@ -50,5 +56,18 @@ test("roundtrip evidence is pinned to this SQL draft, candidate and audit resour
 test("roundtrip E2E detects every retired dbt browser control plane", () => {
 	for (const retired of ["/api/etl/dbt/run", "/api/etl/dbt/preview", "/api/etl/dbt/files"]) {
 		assert.match(source, new RegExp(retired.replaceAll("/", "\\/")));
+	}
+});
+
+test("physical preview acceptance verifies cache, page-size and evidence-pin fail-closed boundaries", () => {
+	for (const evidence of [
+		"no-store",
+		"PHYSICAL_PREVIEW_LIMIT_EXCEEDED",
+		"PHYSICAL_PREVIEW_EVIDENCE_MISMATCH",
+		'searchParams.set("limit", "500")',
+		'searchParams.set("limit", "501")',
+		'getByRole("button", { name: "导出" })',
+	]) {
+		assert.ok(source.includes(evidence), `missing physical preview evidence: ${evidence}`);
 	}
 });

@@ -17,13 +17,12 @@ import {
 	retryModelSpecImport,
 } from "@/api/modelSpecImportApi";
 import {
-	getWarehousePlanCategories,
-	getWarehousePlanSources,
-	listWarehousePlans,
-	type WarehousePlanCategoryBindingView,
-	type WarehousePlanHeader,
-	type WarehousePlanSourceBindingView,
-} from "@/api/warehousePlanApi";
+	listModelingImportContexts,
+	loadModelingImportContext,
+	type ModelingImportContextHeader,
+	type ModelingImportDomainBinding,
+	type ModelingImportSourceBinding,
+} from "@/api/services/modelingImportContextService";
 import { dataModelingPath } from "../navigation";
 import type { DataModelingRoute } from "../types";
 import { Button, PageHeader, RequestState, Status } from "./PrototypePrimitives";
@@ -40,8 +39,8 @@ const steps = ["逆向策略", "确认模型信息", "生成模型", "完成"];
 
 type Failure = { kind: "permission" | "request"; message: string };
 type PlanContext = {
-	domains: WarehousePlanCategoryBindingView[];
-	sources: WarehousePlanSourceBindingView[];
+	domains: ModelingImportDomainBinding[];
+	sources: ModelingImportSourceBinding[];
 };
 const issueText = (
 	issues: Array<{
@@ -72,7 +71,7 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 	const restoredRunRef = useRef("");
 	const [started, setStarted] = useState(false);
 	const [step, setStep] = useState(0);
-	const [plans, setPlans] = useState<WarehousePlanHeader[]>([]);
+	const [plans, setPlans] = useState<ModelingImportContextHeader[]>([]);
 	const [planId, setPlanId] = useState("");
 	const [planContext, setPlanContext] = useState<PlanContext>({ domains: [], sources: [] });
 	const [archive, setArchive] = useState<File | null>(null);
@@ -96,7 +95,7 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 		setLoading(true);
 		setFailure(null);
 		try {
-			const next = (await listWarehousePlans()).filter((plan) => plan.lifecycleStatus !== "ARCHIVED");
+			const next = await listModelingImportContexts();
 			if (requestEpoch.current !== epoch) return;
 			setPlans(next);
 			setPlanId((current) => (next.some((plan) => plan.id === current) ? current : next[0]?.id || ""));
@@ -160,17 +159,10 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 			return;
 		}
 		const epoch = ++requestEpoch.current;
-		void Promise.all([getWarehousePlanCategories(planId), getWarehousePlanSources(planId)])
-			.then(([categories, sources]) => {
+		void loadModelingImportContext(planId)
+			.then((context) => {
 				if (requestEpoch.current !== epoch) return;
-				setPlanContext({
-					domains: categories.value.domainBindings.filter(
-						(item) => item.confirmationStatus === "CONFIRMED" && item.resolutionStatus === "AVAILABLE",
-					),
-					sources: sources.bindings.filter(
-						(item) => item.confirmationStatus === "CONFIRMED" && item.resolutionStatus === "AVAILABLE",
-					),
-				});
+				setPlanContext(context);
 			})
 			.catch((error) => {
 				if (requestEpoch.current !== epoch) return;
@@ -547,13 +539,7 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 	);
 }
 
-function StrategyStep({
-	archive,
-	onArchive,
-}: {
-	archive: File | null;
-	onArchive: (file: File | null) => void;
-}) {
+function StrategyStep({ archive, onArchive }: { archive: File | null; onArchive: (file: File | null) => void }) {
 	return (
 		<>
 			<div className="dmx-strategy-cards">
@@ -606,10 +592,10 @@ function ConfirmStep({
 	inspection: DbtArchiveInspection;
 	selected: string[];
 	onSelected: (ids: string[]) => void;
-	domains: WarehousePlanCategoryBindingView[];
+	domains: ModelingImportDomainBinding[];
 	domainMappings: Record<string, string>;
 	onDomainMapping: (code: string, value: string) => void;
-	sources: WarehousePlanSourceBindingView[];
+	sources: ModelingImportSourceBinding[];
 	sourceMappings: Record<string, string>;
 	onSourceMapping: (code: string, value: string) => void;
 	renameMappings: RenameMapping[];

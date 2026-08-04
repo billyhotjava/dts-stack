@@ -2,14 +2,15 @@
 
 当前目录定义真实验收口径，并保留编码后聚焦回归的准入证据。它尚不包含真实浏览器、PostgreSQL + Airflow/dbt 物化、公共审计抽样或现场退役的 PASS 证据；这些只在当前制品部署后集中执行一次。
 
-## 编码后准入证据（2026-08-03）
+## 编码后准入证据（2026-08-04）
 
 - 前端页面/路由聚焦回归：`4 files / 47 tests` PASS。
-- 前端 dbt/ModelSpec API 契约：Vitest `4 files / 9 tests` PASS，Node source-contract `7/7` PASS。
+- 前端 dbt/ModelSpec API 契约：Vitest `4 files / 9 tests` PASS；两份最终 E2E 的 Node source-contract 合计 `9/9` PASS。
 - 后端表示、ZIP、source-only、apply/retry/撤销、高级草稿、物理预览、发布/Catalog serving、审计/可观测与 runtime lease：两组聚焦 Maven 回归合计 `253 tests / 0 failures / 0 errors`。
-- dbt runtime 源码契约：`runtime-contract: PASS`；F0/T05 认证记录与 evidence manifest SHA-256 一致。
-- TypeScript 无错，Chrome 95 target 生产 bundle 和前端镜像已生成并部署；`dts-platform-webapp:1.0.0` 为 `sha256:2bf603f5ce642319182ae4a89cc26e32063bc0ce910d9a7e6783f5b9f7bdc767`，内外入口 HTTP 200。当前未提供授权 DTS E2E 凭据和可写测试边界，因此 IT-00～IT-08 仍不标记 PASS。
-- 联合可写验收用例 `e2e/sprint83-84-modeling-roundtrip.spec.ts` 已完成静态准入：Biome PASS、源契约 4/4、TypeScript PASS、Playwright 发现 3 个串行旅程、独立 Review APPROVED。它以本次 package/run/attempt/draft/candidate 资源 ID 绑定 ZIP 导入、高级 dbt、发布物化和公共审计证据，并在缺少显式写授权时 fail-closed；当前仍未启动浏览器或产生验收写入。
+- dbt runtime 源码契约：`runtime-contract: PASS`；F0/T05 认证记录与 evidence manifest SHA-256 一致。精确认证引用 `localhost:5500/dts-dbt@sha256:2f6dddb7237fdb7141f452b6d09da0379ef7569f2f82560473f304b265cbbd85`（dbt Core 1.10.22、postgres adapter 1.10.0）已注入并重建健康的 `dts-platform`；这只证明认证配置已部署，不替代 IT-00 的真实物化重放。
+- TypeScript 无错，Chrome 95 target 生产 bundle 和前端镜像已生成并部署；`dts-platform-webapp:1.0.0` 为 `sha256:100816e76b88051ebd17c3861aaf1e20679a400bc842a0361d34bba494d4965d`，内外入口 HTTP 200。当前未提供授权 DTS E2E 凭据和可写测试边界，因此 IT-00～IT-08 仍不标记 PASS。
+- 两份联合可写验收用例 `e2e/sprint83-84-modeling-roundtrip.spec.ts` 与 `e2e/sprint83-modeling-recovery-security.spec.ts` 已完成静态准入：Biome PASS、源契约 9/9、TypeScript PASS，共定义 6 个串行旅程。它们以本次 package/run/attempt/draft/candidate 资源 ID 绑定 ZIP 导入、source-only、三方漂移、恢复、高级 dbt、发布物化、安全拒绝和公共审计证据，并在缺少显式写授权时 fail-closed；当前仍未启动浏览器或产生验收写入。
+- FX-01～FX-05 均已归档并通过 `Sprint83DbtFixtureContractTest`（5/5）；`SHA256SUMS` 校验 20/20。该证据只用于工程准入，不替代客户包兼容声明和真实 runtime 验收。
 
 ## 准入与兼容声明边界
 

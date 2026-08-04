@@ -31,7 +31,15 @@ public class TargetTableProvisioner {
         TableMapping mapping,
         TableId target,
         List<JdbcMetadataService.ColumnMeta> sourceColumns,
-        List<JdbcMetadataService.ColumnMeta> odsColumns
+        List<JdbcMetadataService.ColumnMeta> odsColumns,
+        Map<String, String> columnComments
+    ) {}
+
+    private record FileLandingPolicy(
+        String landingMode,
+        TableId referenceTable,
+        TableId targetTable,
+        boolean recreateConfirmed
     ) {}
 
     private final JdbcMetadataService metadataService;
@@ -83,6 +91,10 @@ public class TargetTableProvisioner {
             LOG.warn("Target jdbcUrl missing, skip auto-create tables for task={}", task.getId());
             return;
         }
+        FileLandingPolicy fileLandingPolicy = resolveFileLandingPolicy(readerConfig, writerConfig, targetInfo.jdbcUrl());
+        if (fileLandingPolicy != null && mappings.size() != 1) {
+            throw new IllegalStateException("文件落地策略仅允许配置一个目标表");
+        }
         try (Connection connection = metadataService.openConnection(targetInfo)) {
             List<ProvisioningPlan> plans = new ArrayList<>();
             for (TableMapping mapping : mappings) {
@@ -91,6 +103,14 @@ public class TargetTableProvisioner {
                 }
                 TableId target = resolveTargetTable(mapping.target(), resolveSchema(writerConfig));
                 target = lowercaseForPostgres(target, targetInfo.jdbcUrl());
+                if (fileLandingPolicy != null) {
+                    target = normalizeManagedTarget(target, targetInfo.jdbcUrl());
+                    if (!target.equals(fileLandingPolicy.targetTable())) {
+                        throw new IllegalStateException(
+                            "文件落地目标与任务表映射不一致: " + target.qualifiedName()
+                        );
+                    }
+                }
                 List<JdbcMetadataService.ColumnMeta> sourceColumns = resolveColumns(sourceInfo, mapping.source(), readerConfig);
                 if (sourceColumns.isEmpty()) {
                     // For file sources, _fileColumns may provide columns
@@ -106,8 +126,9 @@ public class TargetTableProvisioner {
                     columns = lowercaseColumnNames(columns);
                 }
                 columns = DtsOdsTechnicalColumns.businessColumns(columns);
+                Map<String, String> columnComments = resolveFileColumnComments(readerConfig, columns);
                 columns = appendDtsTechnicalColumns(columns, task, readerConfig);
-                plans.add(new ProvisioningPlan(mapping, target, sourceColumns, columns));
+                plans.add(new ProvisioningPlan(mapping, target, sourceColumns, columns, columnComments));
             }
 
             boolean transactionalDdl = isPostgres(targetInfo.jdbcUrl());
@@ -117,12 +138,32 @@ public class TargetTableProvisioner {
             try {
                 for (ProvisioningPlan plan : plans) {
                     createSchemaIfNeeded(connection, plan.target().schema());
-                    if (tableExists(connection, plan.target())) {
+                    boolean exists = tableExists(connection, plan.target());
+                    if (fileLandingPolicy == null && exists) {
                         ensureColumns(connection, plan.target(), plan.odsColumns());
                         LOG.info("Reconciled table {} for task {} without destructive DDL", plan.target().qualifiedName(), task.getId());
-                    } else {
+                    } else if (fileLandingPolicy == null) {
                         createTable(connection, plan.target(), plan.odsColumns());
                         LOG.info("Auto-created table {} for task {}", plan.target().qualifiedName(), task.getId());
+                    } else if ("create_new".equals(fileLandingPolicy.landingMode())) {
+                        if (exists) {
+                            throw new IllegalStateException(
+                                "目标表已存在，不能按新建表方式落地: " + displayName(plan.target())
+                            );
+                        }
+                        createTable(connection, plan.target(), plan.odsColumns(), false);
+                        applyColumnComments(connection, plan.target(), plan.columnComments(), targetInfo.jdbcUrl());
+                        LOG.info("Created managed file landing table {} for task {}", plan.target().qualifiedName(), task.getId());
+                    } else {
+                        if (!exists) {
+                            throw new IllegalStateException(
+                                "待全量重建的原表不存在: " + displayName(plan.target())
+                            );
+                        }
+                        dropTable(connection, plan.target());
+                        createTable(connection, plan.target(), plan.odsColumns(), false);
+                        applyColumnComments(connection, plan.target(), plan.columnComments(), targetInfo.jdbcUrl());
+                        LOG.info("Recreated managed file landing table {} for task {}", plan.target().qualifiedName(), task.getId());
                     }
                 }
                 if (transactionalDdl) {
@@ -401,50 +442,191 @@ public class TargetTableProvisioner {
                 if (!StringUtils.hasText(name)) continue;
                 int jdbcType = mapFileTypeToJdbc(type);
                 String typeName = mapFileTypeToSql(type, colMap);
-                Integer size = "string".equalsIgnoreCase(type) ? toInt(colMap.get("length"), 500) : null;
-                cols.add(new JdbcMetadataService.ColumnMeta(name, jdbcType, typeName, size, null));
+                Integer size = null;
+                Integer scale = null;
+                if (isStringFileType(type)) {
+                    size = toInt(colMap.get("length"), 500);
+                } else if (isNumericFileType(type)) {
+                    size = toInt(colMap.get("precision"), 18);
+                    scale = toInt(colMap.get("scale"), 2);
+                }
+                cols.add(new JdbcMetadataService.ColumnMeta(name, jdbcType, typeName, size, scale));
             }
         }
         return cols;
     }
 
+    private Map<String, String> resolveFileColumnComments(
+        Map<String, Object> readerConfig,
+        List<JdbcMetadataService.ColumnMeta> businessColumns
+    ) {
+        if (readerConfig == null || businessColumns == null || businessColumns.isEmpty()) {
+            return Map.of();
+        }
+        Object fileColumnsObj = readerConfig.get("_fileColumns");
+        if (!(fileColumnsObj instanceof List<?> fileColumns) || fileColumns.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, String> comments = new LinkedHashMap<>();
+        int size = Math.min(fileColumns.size(), businessColumns.size());
+        for (int index = 0; index < size; index++) {
+            Object item = fileColumns.get(index);
+            JdbcMetadataService.ColumnMeta targetColumn = businessColumns.get(index);
+            if (!(item instanceof Map<?, ?> column) || targetColumn == null || !StringUtils.hasText(targetColumn.name())) {
+                continue;
+            }
+            String description = normalizeText(column.get("description"));
+            if (StringUtils.hasText(description)) {
+                comments.put(targetColumn.name(), description);
+            }
+        }
+        return comments;
+    }
+
+    private FileLandingPolicy resolveFileLandingPolicy(
+        Map<String, Object> readerConfig,
+        Map<String, Object> writerConfig,
+        String targetJdbcUrl
+    ) {
+        if (readerConfig == null) {
+            return null;
+        }
+        Object contract = readerConfig.get("_fileLanding");
+        if (!(contract instanceof Map<?, ?> landing)) {
+            return null;
+        }
+        String landingMode = normalizeText(landing.get("landingMode"));
+        if (!"create_new".equals(landingMode) && !"recreate_existing".equals(landingMode)) {
+            throw new IllegalStateException("文件落地方式无效");
+        }
+        TableId target = parseManagedTarget(landing.get("targetTable"), writerConfig, targetJdbcUrl, "目标表");
+        String referenceRaw = normalizeText(landing.get("referenceTable"));
+        TableId reference = StringUtils.hasText(referenceRaw)
+            ? parseManagedTarget(referenceRaw, writerConfig, targetJdbcUrl, "参考表")
+            : null;
+        boolean recreateConfirmed = Boolean.TRUE.equals(booleanValue(landing.get("recreateConfirmed")));
+        if ("recreate_existing".equals(landingMode)) {
+            if (reference == null || !reference.equals(target)) {
+                throw new IllegalStateException("全量重建必须使用已选择的原表名");
+            }
+            if (!recreateConfirmed) {
+                throw new IllegalStateException("未确认全量重建原表");
+            }
+        }
+        validateReferenceDataSource(landing, writerConfig);
+        return new FileLandingPolicy(landingMode, reference, target, recreateConfirmed);
+    }
+
+    private TableId parseManagedTarget(
+        Object raw,
+        Map<String, Object> writerConfig,
+        String targetJdbcUrl,
+        String label
+    ) {
+        String text = normalizeText(raw);
+        if (!StringUtils.hasText(text)) {
+            throw new IllegalStateException(label + "不能为空");
+        }
+        String[] parts = text.split("\\.", -1);
+        if (parts.length > 2) {
+            throw new IllegalStateException(label + "格式不合法: " + text);
+        }
+        for (String part : parts) {
+            if (!part.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+                throw new IllegalStateException(label + "格式不合法: " + text);
+            }
+        }
+        TableId parsed = resolveTargetTable(text, resolveSchema(writerConfig));
+        return normalizeManagedTarget(lowercaseForPostgres(parsed, targetJdbcUrl), targetJdbcUrl);
+    }
+
+    private TableId normalizeManagedTarget(TableId target, String targetJdbcUrl) {
+        if (target != null && isPostgres(targetJdbcUrl) && !StringUtils.hasText(target.schema())) {
+            return new TableId("public", target.table());
+        }
+        return target;
+    }
+
+    private void validateReferenceDataSource(Map<?, ?> landing, Map<String, Object> writerConfig) {
+        String referenceId = normalizeText(landing.get("referenceDataSourceId"));
+        if (!StringUtils.hasText(referenceId) || writerConfig == null) {
+            return;
+        }
+        String targetId = null;
+        for (String key : List.of("targetDataSourceId", "destinationDataSourceId", "dataSourceId")) {
+            targetId = normalizeText(writerConfig.get(key));
+            if (StringUtils.hasText(targetId)) {
+                break;
+            }
+        }
+        if (StringUtils.hasText(targetId) && !referenceId.equals(targetId)) {
+            throw new IllegalStateException("参考表与目标数据源不一致");
+        }
+    }
+
     private int mapFileTypeToJdbc(String fileType) {
         if (!StringUtils.hasText(fileType)) return Types.VARCHAR;
-        return switch (fileType.toLowerCase(Locale.ROOT)) {
-            case "long", "bigint" -> Types.BIGINT;
-            case "integer", "int" -> Types.INTEGER;
-            case "double" -> Types.DOUBLE;
-            case "numeric", "decimal" -> Types.NUMERIC;
+        String normalized = normalizeFileType(fileType);
+        if (isNumericFileType(normalized)) return Types.NUMERIC;
+        return switch (normalized) {
+            case "long", "bigint", "int8", "bigserial", "serial8" -> Types.BIGINT;
+            case "integer", "int", "int4", "serial", "serial4" -> Types.INTEGER;
+            case "smallint", "int2", "smallserial", "serial2" -> Types.SMALLINT;
+            case "double", "double precision", "float8" -> Types.DOUBLE;
+            case "real", "float4" -> Types.REAL;
             case "date" -> Types.DATE;
-            case "timestamp" -> Types.TIMESTAMP;
-            case "boolean" -> Types.BOOLEAN;
+            case "timestamp", "timestamp without time zone" -> Types.TIMESTAMP;
+            case "timestamptz", "timestamp with time zone" -> Types.TIMESTAMP_WITH_TIMEZONE;
+            case "boolean", "bool" -> Types.BOOLEAN;
             case "text" -> Types.LONGVARCHAR;
-            case "jsonb" -> Types.OTHER;
+            case "json", "jsonb", "uuid" -> Types.OTHER;
             default -> Types.VARCHAR;
         };
     }
 
     private String mapFileTypeToSql(String fileType, Map<?, ?> colMap) {
         if (!StringUtils.hasText(fileType)) return "TEXT";
-        return switch (fileType.toLowerCase(Locale.ROOT)) {
-            case "long", "bigint" -> "BIGINT";
-            case "integer", "int" -> "INTEGER";
-            case "double" -> "DOUBLE PRECISION";
-            case "numeric", "decimal" -> {
+        String normalized = normalizeFileType(fileType);
+        if (isNumericFileType(normalized)) {
                 int precision = toInt(colMap.get("precision"), 18);
                 int scale = toInt(colMap.get("scale"), 2);
-                yield "NUMERIC(" + precision + "," + scale + ")";
-            }
+                return "NUMERIC(" + precision + "," + scale + ")";
+        }
+        return switch (normalized) {
+            case "long", "bigint", "int8", "bigserial", "serial8" -> "BIGINT";
+            case "integer", "int", "int4", "serial", "serial4" -> "INTEGER";
+            case "smallint", "int2", "smallserial", "serial2" -> "SMALLINT";
+            case "double", "double precision", "float8" -> "DOUBLE PRECISION";
+            case "real", "float4" -> "REAL";
             case "date" -> "DATE";
-            case "timestamp" -> "TIMESTAMP";
-            case "boolean" -> "BOOLEAN";
+            case "timestamp", "timestamp without time zone" -> "TIMESTAMP";
+            case "timestamptz", "timestamp with time zone" -> "TIMESTAMP WITH TIME ZONE";
+            case "boolean", "bool" -> "BOOLEAN";
             case "text" -> "TEXT";
+            case "json" -> "JSON";
             case "jsonb" -> "JSONB";
+            case "uuid" -> "UUID";
             default -> {
                 int length = toInt(colMap.get("length"), 500);
                 yield "VARCHAR(" + length + ")";
             }
         };
+    }
+
+    private String normalizeFileType(String fileType) {
+        return fileType == null ? "" : fileType.trim().toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
+    }
+
+    private boolean isNumericFileType(String fileType) {
+        String normalized = normalizeFileType(fileType);
+        return normalized.startsWith("numeric") || normalized.startsWith("decimal");
+    }
+
+    private boolean isStringFileType(String fileType) {
+        String normalized = normalizeFileType(fileType);
+        return normalized.equals("string")
+            || normalized.equals("text")
+            || normalized.contains("char");
     }
 
     private int toInt(Object value, int defaultValue) {
@@ -503,7 +685,7 @@ public class TargetTableProvisioner {
             return normalized;
         }
         if (sources.isEmpty()) {
-            return List.of();
+            return resolveFileLandingMapping(readerConfig);
         }
         String prefix = resolveTablePrefix(writerConfig);
         if (!StringUtils.hasText(prefix)) {
@@ -532,6 +714,24 @@ public class TargetTableProvisioner {
             resolved.add(new TableMapping(sources.get(i), targets.get(i)));
         }
         return resolved;
+    }
+
+    private List<TableMapping> resolveFileLandingMapping(Map<String, Object> readerConfig) {
+        if (readerConfig == null) {
+            return List.of();
+        }
+        Object contract = readerConfig.get("_fileLanding");
+        if (!(contract instanceof Map<?, ?> landing)) {
+            return List.of();
+        }
+        String source = normalizeText(readerConfig.get("_originalName"));
+        if (!StringUtils.hasText(source)) {
+            source = normalizeText(readerConfig.get("_fileId"));
+        }
+        if (!StringUtils.hasText(source)) {
+            source = "uploaded_file";
+        }
+        return List.of(new TableMapping(source, normalizeText(landing.get("targetTable"))));
     }
 
     private void requireSameTableCount(List<String> sources, List<String> targets) {
@@ -929,7 +1129,7 @@ public class TargetTableProvisioner {
 
     private void dropTable(Connection connection, TableId tableId) throws Exception {
         try (Statement statement = connection.createStatement()) {
-            statement.execute("DROP TABLE IF EXISTS " + tableId.qualifiedName() + " CASCADE");
+            statement.execute("DROP TABLE " + tableId.qualifiedName());
         }
     }
 
@@ -950,8 +1150,21 @@ public class TargetTableProvisioner {
     }
 
     private void createTable(Connection connection, TableId tableId, List<JdbcMetadataService.ColumnMeta> columns) throws Exception {
+        createTable(connection, tableId, columns, true);
+    }
+
+    private void createTable(
+        Connection connection,
+        TableId tableId,
+        List<JdbcMetadataService.ColumnMeta> columns,
+        boolean ifNotExists
+    ) throws Exception {
         StringBuilder ddl = new StringBuilder();
-        ddl.append("create table if not exists ").append(tableId.qualifiedName()).append(" (");
+        ddl.append("create table ");
+        if (ifNotExists) {
+            ddl.append("if not exists ");
+        }
+        ddl.append(tableId.qualifiedName()).append(" (");
         for (int i = 0; i < columns.size(); i++) {
             JdbcMetadataService.ColumnMeta col = columns.get(i);
             ddl.append(quoteIdentifier(col.name())).append(" ").append(mapType(col));
@@ -963,6 +1176,34 @@ public class TargetTableProvisioner {
         try (Statement statement = connection.createStatement()) {
             statement.execute(ddl.toString());
         }
+    }
+
+    private void applyColumnComments(
+        Connection connection,
+        TableId tableId,
+        Map<String, String> comments,
+        String targetJdbcUrl
+    ) throws Exception {
+        if (!isPostgres(targetJdbcUrl) || comments == null || comments.isEmpty()) {
+            return;
+        }
+        for (Map.Entry<String, String> entry : comments.entrySet()) {
+            try (Statement statement = connection.createStatement()) {
+                statement.execute(
+                    "COMMENT ON COLUMN " + tableId.qualifiedName() + "." + quoteIdentifier(entry.getKey())
+                        + " IS '" + entry.getValue().replace("'", "''").replace(String.valueOf((char) 0), "") + "'"
+                );
+            }
+        }
+    }
+
+    private String displayName(TableId tableId) {
+        if (tableId == null) {
+            return "";
+        }
+        return StringUtils.hasText(tableId.schema())
+            ? tableId.schema() + "." + tableId.table()
+            : tableId.table();
     }
 
     private void ensureColumns(
@@ -1018,7 +1259,8 @@ public class TargetTableProvisioner {
             }
             case Types.DATE -> "date";
             case Types.TIME -> "time";
-            case Types.TIMESTAMP, Types.TIMESTAMP_WITH_TIMEZONE -> "timestamp";
+            case Types.TIMESTAMP -> "timestamp";
+            case Types.TIMESTAMP_WITH_TIMEZONE -> "timestamp with time zone";
             case Types.BINARY, Types.VARBINARY, Types.LONGVARBINARY, Types.BLOB -> "bytea";
             case Types.CHAR, Types.VARCHAR, Types.NCHAR, Types.NVARCHAR -> {
                 if (size != null && size > 0 && size <= 65535) {
@@ -1029,6 +1271,9 @@ public class TargetTableProvisioner {
             default -> {
                 if (typeName != null && typeName.toLowerCase(Locale.ROOT).contains("clob")) {
                     yield "text";
+                }
+                if (typeName != null && List.of("uuid", "json", "jsonb").contains(typeName.toLowerCase(Locale.ROOT))) {
+                    yield typeName.toLowerCase(Locale.ROOT);
                 }
                 yield "text";
             }

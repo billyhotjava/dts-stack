@@ -1,0 +1,4 @@
+name: sprint83_source_only
+version: "1.0"
+config-version: 2
+model-paths: [models]

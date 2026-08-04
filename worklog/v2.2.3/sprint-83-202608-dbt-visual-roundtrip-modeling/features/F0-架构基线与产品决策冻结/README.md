@@ -20,7 +20,7 @@
 | ID | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|
 | T01 | 冻结事实所有权与可视化能力等级 | P0 | DONE | - |
-| T02 | 建立分级工程 fixtures 与 parser 兼容画像 | P0 | DONE（83a） | T01 |
+| T02 | 建立分级工程 fixtures 与 parser 兼容画像 | P0 | DONE（83a/83b） | T01 |
 | T03 | 验证交付与验收基线 | P0 | DONE（PASS_WITH_GAPS） | T02 |
 | T04 | 冻结当前切片契约并完成 DoR 评审 | P0 | DONE（83a） | T01～T03 |
 | T05 | 消费 H83-01 并认证 materialization runtime | P0 Gate（仅 S3） | DONE_EVIDENCE | H83-01、T01 |

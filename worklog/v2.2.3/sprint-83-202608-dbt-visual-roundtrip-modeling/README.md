@@ -1,7 +1,7 @@
 # Sprint-83：dbt 双向可视化建模与外部项目接入
 
 **时间**：2026-08
-**状态**：CODE_COMPLETE / BUILD_PASS / FRONTEND_DEPLOYED / E2E_INPUT_PENDING（S1～S4 已完成代码与聚焦回归；当前前端已部署，认证 runtime 激活、真实物化与现场验收仍待 F6）
+**状态**：CODE_COMPLETE / BUILD_PASS / FRONTEND_DEPLOYED / RUNTIME_CERTIFIED_DEPLOYED / E2E_INPUT_PENDING（S1～S4 已完成代码、聚焦回归与最终验收脚本；认证 runtime 已在 `dts-platform` 激活，真实物化与现场验收仍待 F6）
 **类型**：Architecture / Product Design / dbt Integration / Full-stack
 **目标**：让建模人员在同一个 canonical 模型上下文中完成业务可视化设计、选择或确认 dbt 物化实现并查看依赖与物化结果；SQL/Jinja 不出现在普通可视化界面，只在显式的高级 dbt 实现视图中受控维护。外部 dbt 项目通过可审计的预检、冲突处理和幂等应用导入为 `ModelSpec DRAFT + DBT_MANAGED Implementation Revision`，不产生第二套模型、解析、发布或运行控制面。
 
@@ -134,18 +134,18 @@ WarehousePlan → ModelSpec v2/revision → StageGate → Lifecycle
 | Gate | 项目 | 状态 | 证据 | 未过则关联 Task |
 |---|---|---|---|---|
 | G0 | 当前切片交付基线 | PASS_WITH_GAPS | `it/baseline.md`：验收通道可达；真实登录/上传/UI 旅程按用户约束留到最终 E2E | F6/T02、F6/T04 |
-| G0 | 工程 fixture 与 parser 画像 | PASS（83a） | `assets/dbt-fixture-inventory.md` + `source/dts-platform/src/test/resources/fixtures/dbt-sprint83/` | - |
+| G0 | 工程 fixture 与 parser 画像 | PASS（83a/83b） | `assets/dbt-fixture-inventory.md` + `source/dts-platform/src/test/resources/fixtures/dbt-sprint83/`；FX-01～05 已归档 | - |
 | G0 | 客户兼容画像 | GAP（非编码阻断） | 尚无客户脱敏 dbt 包；只阻断 CUSTOMER-VALIDATION 与客户可见声明 | 客户现场验收，不关联通用实现 Task |
 | G0 | DTS 领域不变量 | PASS | ADR-83-01～12；复用 ModelSpec/Catalog/Audit/Release/dbt gateway | - |
 | G1 | 产品决策与所有权 | PASS | `assets/decision-register.md`：D01～D13 已确认；D09 认证缺口单列在 G0/G1 兼容门 | - |
-| G0-RUNTIME | dbt runtime 修复与 RT-01 认证 | PASS_EVIDENCE / DEPLOYMENT_PENDING | H83-01 候选保持 NOT_CERTIFIED；F0/T05 已登记独立 certified derivative，生产激活待 F6 | F6/T03～T04 |
+| G0-RUNTIME | dbt runtime 修复与 RT-01 认证 | PASS_CERTIFIED_DEPLOYED | F0/T05 的 certified derivative 已按精确 image digest、Core 1.10.22、postgres adapter 1.10.0 和 evidence SHA-256 激活到健康 `dts-platform`；真实物化仍由 F6 验收 | F6/T03～T04 |
 | G1 | 当前切片端到端契约链 | PASS（83a） | 本文“端到端契约链” + F0/T04 三轮复核 | - |
 | G1 | 非功能预算 | GAP | `assets/nfr-budget.md` | F0/T02、F0/T05、F5/T01～T04 |
 | G2-UI-TRUTH | 生产页面与控件真实性 | PASS_CODE | 旧页面、`prototypeData.ts` 与模拟成功已删除；生产页以 prototype-owned UI + canonical owner 为唯一实现 | - |
 | G2-CONTRACT-WIRING | UI→API→Service→canonical data→server audit | PASS_CODE | Sprint-84 页面/按钮矩阵、最终独立 Review 与聚焦契约回归 | - |
 | G2-STATE-COMPLETE | loading/empty/disabled reason/error-retry/permission/success | PASS_CODE | 新 prototype 页面请求状态机、权限 fail-closed 与行为测试 | - |
 | G2-NO-FALLBACK-DEMO | 空数据或失败不得回退演示数据 | PASS_CODE | 源码门禁确认无 `prototypeData`、无旧财务/项目 Demo 回退 | - |
-| G2-EVIDENCE | 聚焦 RED/GREEN + 模块构建；最终 E2E 只执行一次 | PASS_BUILD_FRONTEND_DEPLOY / E2E_INPUT_PENDING | 最终前端 Vitest 13 files/73 tests、Node 8/8、TypeScript/生产构建/镜像部署通过；E2E 凭据与可写测试边界待提供 | F6、Sprint-84 F5/T02 |
+| G2-EVIDENCE | 聚焦 RED/GREEN + 模块构建；最终 E2E 只执行一次 | PASS_BUILD_FRONTEND_DEPLOY / E2E_SCRIPT_COMPLETE / E2E_INPUT_PENDING | 最终前端 Vitest 13 files/73 tests、Sprint-83 E2E 源契约 9/9、TypeScript/生产构建/镜像部署通过；FX-01～05 契约 5/5、输入哈希 20/20；E2E 凭据与可写上下文待提供 | F6、Sprint-84 F5/T02 |
 | G3 | 发布/回滚安全 | GAP | `assets/release-plan.md` 已冻结 expand/migrate/contract、shadow relation 与回退；待实现后演练 | F4、F5、F6 |
 | G4 | 可运维性 | GAP | `assets/runbook.md` 已冻结信号/阈值/处置；待指标、审计和故障演练 | F5、F6 |
 | G4 | 最终 DoD | PENDING | `it/README.md` | F6 |
@@ -160,7 +160,7 @@ WarehousePlan → ModelSpec v2/revision → StageGate → Lifecycle
 | F3 | 外部 dbt 包逆向建模产品化 | 6 | P0×4 / P1×2 | CODE_COMPLETE |
 | F4 | 发布、物化与资产证据闭环 | 4 | P1×4 | CODE_COMPLETE / RUNTIME_E2E_PENDING |
 | F5 | 安全、审计与可运维收敛 | 5 | P0×3 / P1×1 / P2×1 | CODE_COMPLETE / RUNTIME_RETIREMENT_PENDING |
-| F6 | 真实端到端验收与旧入口退役 | 5 | P0×1 / P1×3 / P2×1 | TEST_MATRIX_PASS / E2E_PENDING |
+| F6 | 真实端到端验收与旧入口退役 | 5 | P0×1 / P1×3 / P2×1 | TEST_MATRIX_PASS / E2E_SCRIPT_COMPLETE / E2E_INPUT_PENDING |
 
 **总计**：35 个 Task；F0～F5 功能代码已完成，F6/T01 聚焦矩阵已通过，F6/T02～T05 保持真实 E2E/现场退役门禁。P0=19，P1=14，P2=2。
 **编码门禁**：代码冻结后不再分散运行 E2E；先部署当前前端与认证 runtime pin，再统一执行 F6 的真实菜单、ZIP、发布/物化、审计和退役验收。
@@ -221,7 +221,7 @@ F5/T04 是跨切片可观测性前置证据，F6/T01 是编码后兼容回归任
 ## Definition of Ready
 
 - [x] D01～D13 的产品与架构政策已确认；D09 的具体 runtime certification 由 H83-01 + F0/T05 阻断 S3，不把政策确认或 F0/T02 parser fixture 冒充运行时兼容证据。
-- [x] 83a 工程 fixture 已归档：artifact-rich、基础 blocked 与 malicious 均为重构无敏感版本，带 SHA-256 和可重复契约测试。
+- [x] 83a/83b 工程 fixture 已归档：artifact-rich、enforced source-only、基础 blocked、three-way drift 与 malicious 均为重构无敏感版本，带 SHA-256 和可重复契约测试。
 - [x] 客户脱敏包缺失登记为 CUSTOMER-VALIDATION GAP，不作为通用工程 DoR 条件。
 - [x] 83a 表示读模型、artifact-rich inspect/preview/apply/retry 与对应审计契约已冻结；S3/S4 只在各自拉取前按现有契约过门。
 - [x] parser normalized seam/adapter/删除矩阵已经评审，未新建平行解析器；物理删除不是 P0 DoR。

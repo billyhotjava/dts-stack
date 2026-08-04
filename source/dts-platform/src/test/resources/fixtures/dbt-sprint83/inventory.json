@@ -21,6 +21,17 @@
       "expectedInspection": "IMPORTABLE_WITH_EXPLICIT_SEMANTICS"
     },
     {
+      "id": "FX-02",
+      "kind": "SOURCE_ONLY_ENFORCED",
+      "dbtVersion": "UNDECLARED_STATIC_INPUT",
+      "manifestSchema": "source-project/v1",
+      "adapter": "static-no-execution",
+      "models": 1,
+      "fields": 2,
+      "expectedInspection": "IMPORTABLE_WITH_EXPLICIT_SEMANTICS",
+      "expectedOwnership": "DBT_MANAGED"
+    },
+    {
       "id": "FX-03",
       "kind": "SOURCE_ONLY_BLOCKED",
       "dbtVersion": "UNDECLARED_STATIC_INPUT",
@@ -37,6 +48,18 @@
         "SOURCE_PACKAGE_MISSING",
         "SOURCE_DEPENDENCY_DYNAMIC"
       ]
+    },
+    {
+      "id": "FX-04",
+      "kind": "THREE_WAY_DRIFT",
+      "variants": [
+        "base",
+        "incoming"
+      ],
+      "models": 1,
+      "expectedIdentity": "STABLE_DBT_UNIQUE_ID",
+      "expectedTechnicalChange": true,
+      "expectedDecisionWhenCurrentAlsoChanges": "CONFLICT/BOTH_CHANGED_DIVERGED"
     },
     {
       "id": "FX-05",

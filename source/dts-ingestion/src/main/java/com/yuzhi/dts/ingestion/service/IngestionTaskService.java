@@ -1158,7 +1158,8 @@ public class IngestionTaskService {
             boolean apiTask = isApiSourceTask(task);
             // API tasks provision their ODS landing table inside the DAG (raw_record + technical columns),
             // and they don't have an Addax job to resolve writer columns from.
-            if (!isFileSourceType(task.getSourceType()) && !apiTask) {
+            boolean managedFileLanding = hasManagedFileLanding(task);
+            if ((!isFileSourceType(task.getSourceType()) || managedFileLanding) && !apiTask) {
                 targetTableProvisioner.ensureTargetTables(task, source == null ? null : source.readerConfig(), execution);
             }
             if (!apiTask) {
@@ -1248,8 +1249,13 @@ public class IngestionTaskService {
             }
             log.info("Started execution {} for task ID: {}", execution.getExecutionId(), taskId);
 
-            auditService.auditAction("INGESTION_TASK_EXECUTE", AuditStage.SUCCESS, task.getName(),
-                Map.of("taskId", taskId, "executionId", execution.getId(), "batchId", execution.getBatchId(), "operator", resolveOperator(task)));
+            Map<String, Object> auditMeta = new LinkedHashMap<>();
+            auditMeta.put("taskId", taskId);
+            auditMeta.put("executionId", execution.getId());
+            auditMeta.put("batchId", execution.getBatchId());
+            auditMeta.put("operator", resolveOperator(task));
+            appendManagedFileLandingAuditMeta(task, auditMeta);
+            auditService.auditAction("INGESTION_TASK_EXECUTE", AuditStage.SUCCESS, task.getName(), auditMeta);
 
         } catch (Exception e) {
             if (airflowTriggered) {
@@ -1291,8 +1297,32 @@ public class IngestionTaskService {
             meta.put("failureCategory", failureCategory);
             meta.put("failureAdvice", failureAdvice);
             if (StringUtils.hasText(failureMessage)) meta.put("error", failureMessage);
+            appendManagedFileLandingAuditMeta(task != null ? task : canonicalTask, meta);
             auditService.auditAction("INGESTION_TASK_EXECUTE", AuditStage.FAIL, canonicalTask.getName(), meta);
             syncExecutionLineageQuietly(task != null ? task : canonicalTask, execution);
+        }
+    }
+
+    private boolean hasManagedFileLanding(IngestionTask task) {
+        JsonNode sourceConfig = task == null ? null : task.getSourceConfig();
+        return sourceConfig != null && sourceConfig.path("_fileLanding").isObject();
+    }
+
+    private void appendManagedFileLandingAuditMeta(IngestionTask task, Map<String, Object> auditMeta) {
+        if (auditMeta == null || !hasManagedFileLanding(task)) {
+            return;
+        }
+        JsonNode landing = task.getSourceConfig().path("_fileLanding");
+        String landingMode = landing.path("landingMode").asText(null);
+        String targetTable = landing.path("targetTable").asText(null);
+        if (StringUtils.hasText(landingMode)) {
+            auditMeta.put("landingMode", landingMode);
+        }
+        if (StringUtils.hasText(targetTable)) {
+            auditMeta.put("targetTable", targetTable);
+        }
+        if ("recreate_existing".equals(landingMode)) {
+            auditMeta.put("destructive", true);
         }
     }
 
@@ -3419,8 +3449,7 @@ public class IngestionTaskService {
         boolean manualSchedule = !StringUtils.hasText(admissionSchedule)
             || "manual".equalsIgnoreCase(admissionSchedule.trim())
             || "none".equalsIgnoreCase(admissionSchedule.trim());
-        if (!isFileSourceType(admittedPlan.getSourceType())
-            && !isApiSourceTask(admittedPlan)
+        if (!isApiSourceTask(admittedPlan)
             && "full_refresh".equalsIgnoreCase(admittedPlan.getSyncMode())
             && manualSchedule
             && !StringUtils.hasText(draft.getAirflowDagId())) {

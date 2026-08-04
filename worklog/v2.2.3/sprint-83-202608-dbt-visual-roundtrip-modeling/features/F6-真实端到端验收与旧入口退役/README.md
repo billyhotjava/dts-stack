@@ -1,7 +1,7 @@
 # F6：真实端到端验收与旧入口退役
 
 **优先级**：P0
-**状态**：TEST_MATRIX_PASS / E2E_PENDING
+**状态**：TEST_MATRIX_PASS / E2E_SCRIPT_COMPLETE / E2E_INPUT_PENDING
 **依赖**：按交付切片独立验收；F6 不再整体等待 F1～F5，也不参与首次产生 F0 认证证据
 
 ## 目标
@@ -13,9 +13,9 @@
 | ID | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|
 | T01 | 固化编码后 dbt/adapter/恶意包回归矩阵 | P1 | PASS_CODE | F0/T02、对应实现切片；S3 回归另依赖 F0/T05 |
-| T02 | 验收 artifact-rich dbt ZIP → ModelSpec DRAFT 旅程 | P0 | E2E_PENDING | F3/T01～T04、F5/T01～T03 |
-| T03 | 验收可视化选择 dbt 与高级实现的发布物化旅程 | P1 | E2E_PENDING | F0/T05、F2/T03～T04、F4/T01～T04、F5/T02～T03 |
-| T04 | 故障注入、Chrome95 与安全审计验收 | P1 | E2E_PENDING | 对应切片、T01～T03 |
+| T02 | 验收 artifact-rich dbt ZIP → ModelSpec DRAFT 旅程 | P0 | E2E_INPUT_PENDING | F3/T01～T04、F5/T01～T03 |
+| T03 | 验收可视化选择 dbt 与高级实现的发布物化旅程 | P1 | E2E_INPUT_PENDING | F0/T05、F2/T03～T04、F4/T01～T04、F5/T02～T03 |
+| T04 | 故障注入、Chrome95 与安全审计验收 | P1 | E2E_INPUT_PENDING | 对应切片、T01～T03 |
 | T05 | 验收旧执行面与解析尾巴物理退役 | P2 | RUNTIME_E2E_PENDING | F5/T05、T04 |
 
 ## 完成标准

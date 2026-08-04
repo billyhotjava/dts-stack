@@ -8,6 +8,7 @@ import type {
 } from "@/api/ingestion";
 import type { DataSourceSelectionItem } from "@/api/services/dataSourcesService";
 import type { ClassificationLevel } from "@/utils/classification";
+import type { FileLandingMode, FileStructureMode } from "./shared/fileTargetSchemaMapping";
 
 export type AccessKind = "database" | "api" | "file";
 export type AccessPlanStep = 0 | 1 | 2;
@@ -47,6 +48,10 @@ export type AccessPlanFormValues = {
 	apiCursorParam?: string;
 	fileClassification: ClassificationLevel;
 	fileTargetTable?: string;
+	fileStructureMode?: FileStructureMode;
+	fileLandingMode?: FileLandingMode;
+	fileReferenceTable?: string;
+	fileRecreateConfirmed?: boolean;
 	fileAutoId: boolean;
 };
 

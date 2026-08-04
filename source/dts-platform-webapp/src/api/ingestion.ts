@@ -1,4 +1,4 @@
-import { normalizeClassification, type ClassificationLevel } from "@/utils/classification";
+import { type ClassificationLevel, normalizeClassification } from "@/utils/classification";
 import api from "./apiClient";
 
 export type IngestionRevisionState = "DRAFT" | "ACTIVE" | "SUPERSEDED" | "LEGACY_UNSEALED";
@@ -360,6 +360,7 @@ export type ManagedFileColumn = {
 	name: string;
 	type: string;
 	label?: string;
+	description?: string;
 	length?: number;
 	precision?: number;
 	scale?: number;
@@ -563,7 +564,15 @@ const normalizeClassificationSeal = (value: unknown): ManagedFileClassificationS
 	const snapshotVersion = optionalNumber(seal.snapshotVersion);
 	const checksum = optionalString(seal.checksum);
 	const sealedAt = optionalString(seal.sealedAt);
-	if (!sealId || !subjectType || !subjectKey || !effectiveLevel || snapshotVersion === undefined || !checksum || !sealedAt) {
+	if (
+		!sealId ||
+		!subjectType ||
+		!subjectKey ||
+		!effectiveLevel ||
+		snapshotVersion === undefined ||
+		!checksum ||
+		!sealedAt
+	) {
 		return undefined;
 	}
 	return {
@@ -595,15 +604,19 @@ export const normalizeManagedFileUploadResult = (value: unknown): ManagedFileUpl
 		const column = ingestionRecord(item);
 		const name = optionalString(column.name);
 		if (!name) return [];
-		return [{
-			name,
-			type: optionalString(column.type) || optionalString(column.dataType) || "string",
-			label: optionalString(column.label),
-			length: optionalNumber(column.length),
-			precision: optionalNumber(column.precision),
-			scale: optionalNumber(column.scale),
-			_odsMatched: column._odsMatched === true || undefined,
-		}];
+		return [
+			{
+				name,
+				type: optionalString(column.type) || optionalString(column.dataType) || "string",
+				label: optionalString(column.label),
+				description:
+					optionalString(column.description) || optionalString(column.comment) || optionalString(column.remarks),
+				length: optionalNumber(column.length),
+				precision: optionalNumber(column.precision),
+				scale: optionalNumber(column.scale),
+				_odsMatched: column._odsMatched === true || undefined,
+			},
+		];
 	});
 	const fieldClassifications = Object.fromEntries(
 		Object.entries(ingestionRecord(result.fieldClassifications)).flatMap(([name, rawLevel]) => {
@@ -616,11 +629,11 @@ export const normalizeManagedFileUploadResult = (value: unknown): ManagedFileUpl
 		: undefined;
 	const sheets = Array.isArray(result.sheets)
 		? result.sheets.flatMap((item) => {
-			const sheet = ingestionRecord(item);
-			const index = optionalNumber(sheet.index);
-			const name = optionalString(sheet.name);
-			return index !== undefined && name ? [{ index, name }] : [];
-		})
+				const sheet = ingestionRecord(item);
+				const index = optionalNumber(sheet.index);
+				const name = optionalString(sheet.name);
+				return index !== undefined && name ? [{ index, name }] : [];
+			})
 		: undefined;
 	return {
 		fileId,

@@ -240,6 +240,53 @@ class IngestionTaskFullRefreshExecutionTest {
     }
 
     @Test
+    void execute_managedFileLanding_shouldProvisionTargetAndAuditDestructiveIntent() {
+        IngestionTask task = baseTask(106L, "excel", "full_refresh");
+        ObjectNode sourceConfig = (ObjectNode) task.getSourceConfig().deepCopy();
+        sourceConfig.set("_fileColumns", objectMapper.valueToTree(List.of(
+            Map.of("safeName", "order_no", "type", "string")
+        )));
+        sourceConfig.set("_fileLanding", objectMapper.valueToTree(Map.of(
+            "version", 1,
+            "landingMode", "recreate_existing",
+            "referenceTable", "public.ods_orders",
+            "targetTable", "public.ods_orders",
+            "recreateConfirmed", true
+        )));
+        task.setSourceConfig(sourceConfig);
+        task.setAddaxJobPath(null);
+
+        when(taskRepository.findByIdForUpdate(106L)).thenReturn(Optional.of(task));
+        when(taskRepository.findById(106L)).thenReturn(Optional.of(task));
+        when(fileUploadService.verifyManagedUpload("file-106", fileChecksum()))
+            .thenReturn(new FileUploadService.ManagedUpload(
+                "file-106",
+                "/tmp/file-106.xlsx",
+                "/opt/addax/jobs/uploads/file-106.xlsx",
+                fileChecksum()
+            ));
+        when(addaxJobService.createJobFromTask(eq(task), eq(null), eq(null), any(Map.class), any(Map.class)))
+            .thenReturn(new AddaxJobService.AddaxJobResult("job.json", "/tmp/file-job.json", Map.of()));
+        when(executionMapper.toDto(any(IngestionExecution.class))).thenReturn(new IngestionExecutionDTO());
+
+        service.execute(106L);
+        org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
+            .forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit);
+
+        verify(targetTableProvisioner).ensureTargetTables(eq(task), eq(null), any(IngestionExecution.class));
+        verify(auditService).auditAction(
+            eq("INGESTION_TASK_EXECUTE"),
+            any(),
+            eq(task.getName()),
+            org.mockito.ArgumentMatchers.argThat(meta ->
+                "recreate_existing".equals(meta.get("landingMode"))
+                    && "public.ods_orders".equals(meta.get("targetTable"))
+                    && Boolean.TRUE.equals(meta.get("destructive"))
+            )
+        );
+    }
+
+    @Test
     void execute_fileTaskWithInvalidFormula_shouldFailInAsyncPhase() throws Exception {
         IngestionTask task = baseTask(104L, "excel", "full_refresh");
         java.nio.file.Path file = Files.createTempFile("formula-invalid", ".xlsx");

@@ -3,6 +3,9 @@ import {
 	listWarehousePlans,
 	type WarehousePlanHeader,
 	type WarehousePlanRelationshipGraph,
+	type WarehousePlanRelationshipGraphEdge,
+	type WarehousePlanRelationshipGraphKind,
+	type WarehousePlanRelationshipGraphNode,
 } from "../warehousePlanApi";
 
 const GRAPH_PAGE_SIZE = 500;
@@ -18,12 +21,18 @@ export type ModelingRelationshipGraphQuery = {
 	cursor?: string;
 };
 
-export const listModelingRelationshipPlans = (): Promise<WarehousePlanHeader[]> => listWarehousePlans();
+export type ModelingRelationshipContextHeader = WarehousePlanHeader;
+export type ModelingRelationshipGraph = WarehousePlanRelationshipGraph;
+export type ModelingRelationshipGraphEdge = WarehousePlanRelationshipGraphEdge;
+export type ModelingRelationshipGraphKind = WarehousePlanRelationshipGraphKind;
+export type ModelingRelationshipGraphNode = WarehousePlanRelationshipGraphNode;
+
+export const listModelingRelationshipPlans = (): Promise<ModelingRelationshipContextHeader[]> => listWarehousePlans();
 
 export const loadModelingRelationshipGraph = (
 	planId: string,
 	_query: ModelingRelationshipGraphQuery,
-): Promise<WarehousePlanRelationshipGraph> =>
+): Promise<ModelingRelationshipGraph> =>
 	getWarehousePlanRelationshipGraph(planId, {
 		limit: GRAPH_PAGE_SIZE,
 	});
@@ -40,7 +49,7 @@ export function classifyModelingRelationshipGraphFailure(error: unknown): Modeli
 }
 
 export function modelingRelationshipNodePath(
-	node: Pick<WarehousePlanRelationshipGraph["nodes"][number], "kind" | "route">,
+	node: Pick<ModelingRelationshipGraph["nodes"][number], "kind" | "route">,
 ): string | null {
 	if (node.kind !== "MODEL" && node.kind !== "INDICATOR") return null;
 	const raw = node.route?.trim();
@@ -80,11 +89,3 @@ export function modelingRelationshipNodePath(
 	const search = params.toString();
 	return search ? `${pathname}?${search}` : pathname;
 }
-
-export type {
-	WarehousePlanHeader,
-	WarehousePlanRelationshipGraph,
-	WarehousePlanRelationshipGraphEdge,
-	WarehousePlanRelationshipGraphKind,
-	WarehousePlanRelationshipGraphNode,
-} from "../warehousePlanApi";

@@ -235,7 +235,7 @@ export async function loadPlanningProjection(view: string): Promise<PlanningProj
 		};
 	}
 	if (view === "marts") {
-		const marts = await listDataMarts({ limit: 500 });
+		const marts = await listDataMarts({ limit: 100 });
 		return {
 			...emptyProjection(),
 			headers: ["集市编码", "集市名称", "数据域", "负责人", "状态"],

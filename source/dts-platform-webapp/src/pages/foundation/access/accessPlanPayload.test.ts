@@ -8,6 +8,7 @@ import {
 	inferAccessKind,
 	normalizeAccessKind,
 	requireSafeApiResourcePath,
+	toAccessPlanFormValues,
 } from "./accessPlanPayload";
 
 const baseValues = (overrides: Partial<AccessPlanFormValues> = {}): AccessPlanFormValues => ({
@@ -134,7 +135,16 @@ describe("buildAccessPlanCreateRequest", () => {
 			fieldClassifications: { customer_id: "CONFIDENTIAL" },
 		};
 		const request = buildAccessPlanCreateRequest(
-			context("file", baseValues({ fileTargetTable: "ods_customer" }), { fileUploadResult: file }),
+			context(
+				"file",
+				baseValues({
+					fileTargetTable: "public.ods_customer",
+					fileStructureMode: "reference_existing",
+					fileLandingMode: "create_new",
+					fileReferenceTable: "public.customer_template",
+				}),
+				{ fileUploadResult: file },
+			),
 		);
 
 		expect(request).toMatchObject({
@@ -147,14 +157,54 @@ describe("buildAccessPlanCreateRequest", () => {
 					_fileHash: "file-checksum",
 					_keyVersion: "v1",
 					_encrypted: true,
+					_fileLanding: {
+						version: 1,
+						structureMode: "reference_existing",
+						landingMode: "create_new",
+						referenceTable: "public.customer_template",
+						targetTable: "public.ods_customer",
+						recreateConfirmed: false,
+					},
 				},
 			},
-			streams: { selection: "manual", include: ["ods_customer"] },
+			streams: { selection: "manual", include: ["public.ods_customer"] },
 			classificationSeal: { sealId: "seal-1", fileFloor: "CONFIDENTIAL" },
 			fieldClassifications: { customer_id: "CONFIDENTIAL" },
 		});
 		expect(request.source.config).not.toHaveProperty("_filePath");
 		expect(request.source.config).not.toHaveProperty("_containerPath");
+	});
+
+	it("requires explicit confirmation and the selected full name for destructive recreation", () => {
+		const file: ManagedFileUploadResult = {
+			fileType: "csv",
+			originalName: "orders.csv",
+			fileId: "file-2",
+			columns: [{ name: "order_id", label: "order_id", type: "varchar", description: "订单编号" }],
+			classification: "INTERNAL",
+		};
+		const recreateValues = baseValues({
+			fileTargetTable: "public.orders",
+			fileStructureMode: "reference_existing",
+			fileLandingMode: "recreate_existing",
+			fileReferenceTable: "public.orders",
+			fileRecreateConfirmed: false,
+		});
+
+		expect(() => buildAccessPlanCreateRequest(context("file", recreateValues, { fileUploadResult: file }))).toThrow(
+			"请确认全量重建原表",
+		);
+
+		const request = buildAccessPlanCreateRequest(
+			context("file", { ...recreateValues, fileRecreateConfirmed: true }, { fileUploadResult: file }),
+		);
+		expect(request.source.config._fileLanding).toMatchObject({
+			landingMode: "recreate_existing",
+			referenceTable: "public.orders",
+			targetTable: "public.orders",
+			recreateConfirmed: true,
+			columns: [{ name: "order_id", description: "订单编号" }],
+		});
 	});
 });
 
@@ -176,6 +226,48 @@ describe("requireSafeApiResourcePath", () => {
 			expect(() => requireSafeApiResourcePath(path)).toThrow("API 资源路径不能包含凭据参数");
 		},
 	);
+});
+
+describe("toAccessPlanFormValues", () => {
+	it("restores the persisted file landing contract and editable column metadata", () => {
+		const values = toAccessPlanFormValues({
+			id: 88,
+			name: "订单文件",
+			sourceType: "txtfilereader",
+			sourceConfig: {
+				_fileId: "file-88",
+				_fileType: "csv",
+				_originalName: "orders.csv",
+				_fileColumns: [
+					{
+						name: "order_id",
+						label: "订单编号",
+						type: "varchar",
+						description: "订单唯一编号",
+						_odsMatched: true,
+					},
+				],
+				_fileLanding: {
+					version: 1,
+					structureMode: "reference_existing",
+					landingMode: "recreate_existing",
+					referenceTable: "public.orders",
+					targetTable: "public.orders",
+					recreateConfirmed: true,
+				},
+			},
+			destinationConfig: { targetDataSourceId: "target-1" },
+			syncMode: "full_refresh",
+		});
+
+		expect(values).toMatchObject({
+			fileStructureMode: "reference_existing",
+			fileLandingMode: "recreate_existing",
+			fileReferenceTable: "public.orders",
+			fileTargetTable: "public.orders",
+			fileRecreateConfirmed: true,
+		});
+	});
 });
 
 describe("buildManagedApiConnectionTestRequest", () => {
