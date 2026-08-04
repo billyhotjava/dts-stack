@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 const read = (relative: string) => readFileSync(new URL(relative, import.meta.url), "utf8");
 
@@ -44,7 +44,7 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(source).not.toMatch(
 			/PlanningWorkspace|HomeWorkspace|StandardsWorkspace|DimensionalModelingWorkspace|MetricsWorkspace/,
 		);
-		expect(source).not.toMatch(/prototypeData|usePrototypeToast|建设计划上下文/);
+		expect(source).not.toMatch(/prototypeData|usePrototypeToast|建设计划/);
 		expect(source).not.toMatch(/项目模型Demo|monthly_execution_rate|月度预算执行率/);
 
 		for (const label of ["建模概览", "数仓规划", "数据标准", "维度建模", "数据指标", "通用工具", "关系图"]) {
@@ -56,22 +56,114 @@ describe("prototype-owned data modeling frontend", () => {
 		for (const label of ["维度表", "明细表", "汇总表", "应用表"]) expect(source).toContain(`label: "${label}"`);
 	});
 
-	it("does not expose the retired construction-plan workflow in prototype pages", () => {
-		const pageSource = [
-			"./prototype/ModelingWorkbenchPage.tsx",
-			"./prototype/PlanningPage.tsx",
-			"./prototype/ReverseModelingPage.tsx",
-			"./prototype/RelationshipGraphPage.tsx",
-			"./prototype/PlanningCatalogEditors.tsx",
-		]
-			.map(read)
-			.join("\n");
+	it("does not expose the retired construction-plan workflow in the workbench owner", () => {
 		const planningService = read("./prototype/services/planningProjectionService.ts");
+		const workbenchService = read("./prototype/services/modelWorkbenchService.ts");
+		const workbenchEditor = read("./prototype/ModelingWorkbenchEditor.tsx");
+		const workbenchSource = `${read("./prototype/ModelingWorkbenchPage.tsx")}\n${workbenchService}\n${workbenchEditor}`;
 
-		expect(pageSource).not.toMatch(
-			/建设计划|WarehousePlanEditor|saveWarehousePlanPolicy|loadConfirmedPlanDomains|目标建设计划/,
-		);
 		expect(planningService).not.toMatch(/warehousePlanApi|warehouseStageLabel|listWarehousePlans/);
+		expect(workbenchSource).not.toMatch(
+			/建设计划|WarehousePlan|warehousePlanApi|saveWarehousePlanPolicy|loadConfirmedPlanDomains|listWarehousePlans|目标建设计划/,
+		);
+	});
+
+	it("keeps workbench route selection and navigation guards deterministic", async () => {
+		vi.doMock("@/api/modelRepresentationApi", () => ({}));
+		vi.doMock("@/store/userStore", () => ({}));
+		vi.doMock("./navigation", () => ({}));
+		vi.doMock("./prototype/ModelFieldEditorTable", () => ({}));
+		vi.doMock("./prototype/ModelingWorkbenchEditor", () => ({}));
+		vi.doMock("./prototype/ModelWorkbenchDialog", () => ({}));
+		vi.doMock("./prototype/modelWorkbenchPresentation", () => ({}));
+		vi.doMock("./prototype/PrototypePrimitives", () => ({}));
+		vi.doMock("./prototype/services/modelWorkbenchService", () => ({}));
+		vi.doMock("./prototype/services/planningProjectionService", () => ({}));
+		vi.doMock("./prototype/useDataModelingMenuGrant", () => ({}));
+		const module = (await import("./prototype/ModelingWorkbenchPage")) as Record<string, unknown>;
+		const resolveRequestedModelSelection = module.resolveRequestedModelSelection as
+			| ((
+					models: Array<{ id: string }>,
+					requestedModelId: string,
+			  ) => { selectedModel: { id: string } | null; normalizedModelId: string })
+			| undefined;
+		const shouldBlockWorkbenchNavigation = module.shouldBlockWorkbenchNavigation as
+			| ((dirty: boolean, currentPathname: string, nextPathname: string) => boolean)
+			| undefined;
+		const fallback = { id: "model-1" };
+		const requested = { id: "model-2" };
+
+		expect(resolveRequestedModelSelection).toBeTypeOf("function");
+		if (!resolveRequestedModelSelection) return;
+		const normalized = resolveRequestedModelSelection([fallback, requested], "missing-model");
+		expect(normalized).toEqual({
+			selectedModel: fallback,
+			normalizedModelId: fallback.id,
+		});
+		expect(resolveRequestedModelSelection([fallback, requested], normalized.normalizedModelId)).toEqual(normalized);
+		expect(resolveRequestedModelSelection([fallback, requested], requested.id)).toEqual({
+			selectedModel: requested,
+			normalizedModelId: requested.id,
+		});
+		expect(resolveRequestedModelSelection([], "missing-model")).toEqual({
+			selectedModel: null,
+			normalizedModelId: "",
+		});
+
+		expect(shouldBlockWorkbenchNavigation).toBeTypeOf("function");
+		if (!shouldBlockWorkbenchNavigation) return;
+		expect(
+			shouldBlockWorkbenchNavigation(true, "/data-modeling/dimensions/workbench", "/data-modeling/dimensions/reverse"),
+		).toBe(true);
+		expect(
+			shouldBlockWorkbenchNavigation(
+				true,
+				"/data-modeling/dimensions/workbench",
+				"/data-modeling/dimensions/workbench",
+			),
+		).toBe(false);
+		expect(
+			shouldBlockWorkbenchNavigation(false, "/data-modeling/dimensions/workbench", "/data-modeling/dimensions/reverse"),
+		).toBe(false);
+	});
+
+	it("integrates the approved editor contract into the workbench orchestrator", () => {
+		const modeling = read("./prototype/ModelingWorkbenchPage.tsx");
+		const editor = read("./prototype/ModelingWorkbenchEditor.tsx");
+		const fieldTable = read("./prototype/ModelFieldEditorTable.tsx");
+		const modelingLineCount = modeling.trimEnd().split("\n").length;
+
+		for (const label of [
+			"数仓分层",
+			"业务分类",
+			"存储策略",
+			"表名规则",
+			"表中文名",
+			"生命周期",
+			"负责人",
+			"质量规则",
+			"模型开发",
+		])
+			expect(editor).toContain(label);
+		expect(fieldTable).toContain('["序号", "字段名称", "类型", "字段显示名", "主键", "非空", "维度属性编码"]');
+		expect(fieldTable).not.toContain("安全等级");
+		expect(fieldTable).toContain("当前版本尚无字段级表结构导入契约");
+		expect(modeling).toMatch(/import \{ ModelingWorkbenchEditor \} from "\.\/ModelingWorkbenchEditor"/);
+		expect(modeling).toMatch(/import \{[^}]*modelDraftFingerprint[^}]*\} from "\.\/modelWorkbenchPresentation"/s);
+		expect(modeling).toMatch(/saveDimensionDefinitionDraft/);
+		expect(modeling).toMatch(/confirmDimensionDefinitionDraft/);
+		expect(modeling).toMatch(/ConceptDimensionRecordDialog/);
+		expect(modeling).toMatch(/saveModelDraft/);
+		expect(modeling).toMatch(/isConceptDimensionDraft/);
+		expect(modeling).toMatch(/conceptDimensionDraftFromView/);
+		expect(modeling).toMatch(/\{draft \? \(\s*<aside className="dmx-record-rail"/s);
+		expect(modeling).not.toMatch(/isModelSpecDraft\(draft\) \? \(\s*<aside className="dmx-record-rail"/s);
+		expect(modeling).toContain('"beforeunload"');
+		expect(modeling).toMatch(/const blocker = useBlocker\(/);
+		expect(modeling).toContain("blocker.proceed()");
+		expect(modeling).toContain("blocker.reset()");
+		expect(modeling).not.toMatch(/function ModelEditor|function FieldTable/);
+		expect(modelingLineCount).toBeLessThanOrEqual(800);
 	});
 
 	it("connects production pages to canonical owners and keeps unsupported actions disabled", () => {

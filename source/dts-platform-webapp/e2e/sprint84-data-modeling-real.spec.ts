@@ -216,13 +216,67 @@ test.describe("Sprint-84 prototype-owned data-modeling smoke", () => {
 		});
 		const observations = collectApiObservations(page);
 
-		await page.goto("/#/data-modeling/dimensions/workbench");
+		await page.goto("/#/workbench");
 		const workbenchRoute = representativeRoutes.find((route) => route.path.endsWith("/dimensions/workbench"));
 		if (!workbenchRoute) throw new Error("dimension workbench route contract is missing");
+		await navigateThroughRealMenu(page, workbenchRoute);
 		await expectRealRoute(page, workbenchRoute);
+		const editor = page.locator(".dmx-model-editor");
+		const dimensionDefinitionResponsesBefore = observations.filter(
+			(observation) => observation.pathname === "/api/modeling/dimension-definitions",
+		).length;
+
 		await page.getByRole("button", { name: "新建" }).click();
-		await expect(page.getByRole("button", { name: "创建维度" })).toBeVisible();
-		await expect(page.getByRole("button", { name: "创建贴源表" })).toBeVisible();
+		await page.getByRole("button", { name: "创建维度", exact: true }).click();
+		await expect(editor.getByRole("heading", { name: "基本信息" })).toBeVisible();
+		for (const label of ["数仓分层", "业务分类", "数据域", "系统编码", "中文名称", "描述"])
+			await expect(editor).toContainText(label);
+		await expect(editor.getByLabel("系统编码")).toHaveValue("保存后生成");
+		await expect(editor.getByRole("toolbar").getByRole("button")).toHaveCount(1);
+		await expect(editor).not.toContainText(/字段管理|存储策略|表名规则|表中文名|生命周期|负责人/);
+		const conceptRail = page.locator(".dmx-record-rail");
+		await expect(conceptRail).toBeVisible();
+		for (const label of ["版本管理", "发布记录"])
+			await expect(conceptRail.getByRole("button", { name: label })).toBeDisabled();
+		await capture(page, testInfo, "create-concept-dimension-768x900.png");
+
+		await page.getByRole("button", { name: "新建" }).click();
+		await page.getByRole("button", { name: "创建维度表", exact: true }).click();
+		await expect(editor.getByRole("heading", { name: "基本信息" })).toBeVisible();
+		await expect(editor.locator("fieldset")).toBeVisible();
+		const selectedDomainId = await editor.getByLabel("数据域").inputValue();
+		if (selectedDomainId) {
+			await expect
+				.poll(
+					() =>
+						observations.filter((observation) => observation.pathname === "/api/modeling/dimension-definitions").length,
+					{ message: "the selected dimension draft must finish loading its dimension definitions", timeout: 15_000 },
+				)
+				.toBeGreaterThan(dimensionDefinitionResponsesBefore);
+		}
+		for (const label of [
+			"数仓分层",
+			"业务分类",
+			"数据域",
+			"存储策略",
+			"维度",
+			"表名规则",
+			"表名",
+			"表中文名",
+			"生命周期",
+			"负责人",
+			"描述",
+			"字段名称",
+			"类型",
+			"字段显示名",
+			"主键",
+			"非空",
+			"维度属性编码",
+		])
+			await expect(editor).toContainText(label);
+		await expect(editor).not.toContainText(
+			/模型类型|目标分层|业务定义|模型粒度|物化方式|SCD 策略|复用范围|安全等级|物理预览|高级 dbt|质量门禁|发布与物化|提交检查/,
+		);
 		await expectNoHorizontalPageOverflow(page);
 		await capture(page, testInfo, "dimension-workbench-768x900.png");
 		await testInfo.attach("narrow-api-observations.json", {
