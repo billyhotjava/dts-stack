@@ -682,6 +682,10 @@
                         <testInclude>**/service/modeling/migration/LegacyModelingPlanSqlModelRetirementLiquibaseIT.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehousePlanApplicationServiceIT.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehousePlanSourceInventoryApplicationServiceIT.java</testInclude>
+                        <testInclude>**/service/modeling/warehouse/WarehouseLayerGovernanceLiquibaseTest.java</testInclude>
+                        <testInclude>**/service/modeling/warehouse/WarehouseLayerApplicationServiceTest.java</testInclude>
+                        <testInclude>**/repository/modeling/WarehouseLayerRepositoryIT.java</testInclude>
+                        <testInclude>**/web/rest/WarehouseLayerResourceTest.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehousePlanModelCandidateServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehousePlanContractTest.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehousePlanRelationshipGraphInboundIndexLiquibaseIT.java</testInclude>
