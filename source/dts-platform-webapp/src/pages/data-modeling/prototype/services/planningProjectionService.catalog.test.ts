@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
 	listDataMarts: vi.fn(),
 	listBusinessProcessesApi: vi.fn(),
 	listPlanningCatalogDomains: vi.fn(),
-	listWarehouseLayersApi: vi.fn(),
+	listWarehouseLayers: vi.fn(),
 }));
 
 vi.mock("@/api/dataMartApi", () => ({ listDataMarts: mocks.listDataMarts }));
@@ -16,13 +16,42 @@ vi.mock("@/api/services/modelingOverviewFactService", () => ({
 }));
 vi.mock("@/api/sprint64GovernanceApi", () => ({
 	listBusinessProcessesApi: mocks.listBusinessProcessesApi,
-	listWarehouseLayersApi: mocks.listWarehouseLayersApi,
+}));
+vi.mock("@/api/warehouseLayerApi", () => ({
+	listWarehouseLayers: mocks.listWarehouseLayers,
 }));
 vi.mock("./planningCatalogDomainService", () => ({
 	listPlanningCatalogDomains: mocks.listPlanningCatalogDomains,
 }));
 
+import type { WarehouseLayerView } from "@/api/warehouseLayerApi";
 import { loadPlanningProjection } from "./planningProjectionService";
+
+const builtinDwd: WarehouseLayerView = {
+	code: "DWD",
+	name: "明细事实 / 维度层",
+	systemLayerCode: "DWD",
+	kind: "DETAIL",
+	responsibility: "业务明细",
+	namingPrefixes: ["dwd_"],
+	optional: false,
+	builtin: true,
+	deletable: false,
+	disabledReason: "平台内置分层不可删除",
+};
+
+const customFinDetail: WarehouseLayerView = {
+	code: "FIN_DETAIL",
+	name: "财务明细层",
+	systemLayerCode: "DWD",
+	kind: "DETAIL",
+	responsibility: "财务域明细",
+	namingPrefixes: ["fin_dwd_"],
+	optional: false,
+	builtin: false,
+	deletable: true,
+	disabledReason: null,
+};
 
 describe("loadPlanningProjection catalog writes", () => {
 	beforeEach(() => {
@@ -59,15 +88,16 @@ describe("loadPlanningProjection catalog writes", () => {
 		expect(mocks.listDataMarts).toHaveBeenCalledWith({ limit: 100 });
 	});
 
-	it("describes the built-in layer dictionary without pointing to an unavailable configuration page", async () => {
-		mocks.listWarehouseLayersApi.mockResolvedValue([]);
+	it("projects built-in and custom layers as maintainable catalog rows", async () => {
+		mocks.listWarehouseLayers.mockResolvedValue([builtinDwd, customFinDetail]);
 
 		const projection = await loadPlanningProjection("layers");
 
-		expect(projection.readOnlyReason).toBe(
-			"系统分层字典由平台内置并统一生效，当前版本只读，暂无独立的分层策略配置入口。",
-		);
-		expect(projection.readOnlyReason).not.toContain("规划参数配置中维护");
+		expect(projection.readOnlyReason).toBeNull();
+		expect(projection.headers).toEqual(["分层编码", "分层名称", "所属系统类型", "加工责任", "命名前缀", "来源"]);
+		expect(projection.rows.map((row) => row.id)).toEqual(["DWD", "FIN_DETAIL"]);
+		expect(projection.rows.map((row) => row.cells[5])).toEqual(["系统", "自定义"]);
+		expect(projection.rows[1]?.source).toEqual(customFinDetail);
 	});
 
 	it("states the current planning-parameter boundary in customer-facing language", async () => {

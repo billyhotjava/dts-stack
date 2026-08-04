@@ -6,6 +6,7 @@ import {
 } from "@/api/services/modelingOverviewFactService";
 import type { Sprint64BusinessProcess } from "@/api/sprint64GovernanceApi";
 import { listBusinessProcessesApi, listWarehouseLayersApi } from "@/api/sprint64GovernanceApi";
+import { listWarehouseLayers } from "@/api/warehouseLayerApi";
 import type { DataMartView } from "@/features/modeling/contracts/dataMartContract";
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { listPlanningCatalogDomains, type PlanningCatalogDomain } from "./planningCatalogDomainService";
@@ -217,20 +218,21 @@ export async function loadPlanningProjection(view: string): Promise<PlanningProj
 		};
 	}
 	if (view === "layers") {
-		const layers = await listWarehouseLayersApi();
+		const layers = await listWarehouseLayers();
 		return {
-			...emptyProjection("系统分层字典由平台内置并统一生效，当前版本只读，暂无独立的分层策略配置入口。"),
-			headers: ["分层编码", "分层名称", "分层类型", "加工责任", "命名前缀", "要求"],
+			...emptyProjection(),
+			headers: ["分层编码", "分层名称", "所属系统类型", "加工责任", "命名前缀", "来源"],
 			rows: layers.map((item) => ({
 				id: item.code,
 				cells: [
 					item.code,
-					item.title,
-					item.kind || "—",
+					item.name,
+					item.systemLayerCode,
 					item.responsibility,
 					item.namingPrefixes.join("、") || "—",
-					item.optional ? "可选" : "必选",
+					item.builtin ? "系统" : "自定义",
 				],
+				source: item,
 			})),
 		};
 	}
