@@ -223,4 +223,26 @@ describe("ModelingWorkbenchEditor", () => {
 		expect(container.textContent).toContain("模型粒度");
 		expect(container.textContent).toContain("加载策略");
 	});
+
+	it("locks and preserves a persisted compatibility draft whose domain is missing", async () => {
+		const draft = makeDraft({
+			createKind: "fact",
+			base: { id: "model-1" } as ModelSpecView,
+			domainId: "retired-domain",
+		});
+		await render(
+			makeProps({
+				draft,
+				context: { domains: [], models: [], standards: [] },
+			}),
+		);
+
+		const domainLabel = Array.from(container.querySelectorAll("label")).find((item) =>
+			item.querySelector("span")?.textContent?.includes("数据域"),
+		);
+		const select = domainLabel?.querySelector("select");
+		expect(select).toHaveProperty("disabled", true);
+		expect(select?.value).toBe("retired-domain");
+		expect(select?.querySelector('option[value="retired-domain"]')).toHaveProperty("disabled", true);
+	});
 });

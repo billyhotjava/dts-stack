@@ -256,6 +256,9 @@ function CompatibilityDraftForm(props: DraftFormProps) {
 	const { draft, context, validationErrors, onChange } = props;
 	const config = MODEL_KIND_CONFIG[draft.createKind];
 	const patch = (next: Partial<ModelDraft>) => onChange({ ...draft, ...next });
+	const missingPersistedDomain = Boolean(
+		draft.base && draft.domainId && !context.domains.some((item) => item.code === draft.domainId),
+	);
 	return (
 		<>
 			<section className="dmx-editor-panel">
@@ -263,13 +266,22 @@ function CompatibilityDraftForm(props: DraftFormProps) {
 				<div className="dmx-workbench-editor__basic-grid">
 					<label>
 						<span className="required">数据域</span>
-						<select onChange={(event) => patch({ domainId: event.target.value })} value={draft.domainId}>
+						<select
+							disabled={Boolean(draft.base)}
+							onChange={(event) => patch({ domainId: event.target.value })}
+							value={draft.domainId}
+						>
 							<option value="">请选择数据域</option>
 							{context.domains.map((item) => (
 								<option key={item.code} value={item.code}>
 									{item.name} · {item.code}
 								</option>
 							))}
+							{missingPersistedDomain ? (
+								<option disabled value={draft.domainId}>
+									已保存数据域 · {draft.domainId}
+								</option>
+							) : null}
 						</select>
 						<ValidationMessage message={validationErrors.domainId} />
 					</label>
