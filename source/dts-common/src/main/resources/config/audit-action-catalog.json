@@ -744,6 +744,28 @@
                 "SUCCESS"
               ],
               "supportsFlow": false
+            },
+            {
+              "code": "MODELING_WAREHOUSE_LAYER_CREATE",
+              "display": "新建数仓分层",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true,
+              "resourceType": "WAREHOUSE_LAYER"
+            },
+            {
+              "code": "MODELING_WAREHOUSE_LAYER_DELETE",
+              "display": "删除数仓分层",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true,
+              "resourceType": "WAREHOUSE_LAYER"
             }
           ]
         },
@@ -1285,85 +1307,133 @@
             {
               "code": "MODELING_DBT_IMPORT_INSPECT",
               "display": "检查 dbt 导入包",
-              "phases": ["BEGIN", "SUCCESS", "FAIL"],
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
               "supportsFlow": true
             },
             {
               "code": "MODEL_SPEC_IMPORT_PREVIEW",
               "display": "预检 dbt 模型导入",
-              "phases": ["BEGIN", "SUCCESS", "FAIL"],
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
               "supportsFlow": true
             },
             {
               "code": "MODELING_DBT_IMPORT_APPLY",
               "display": "应用 dbt 模型导入",
-              "phases": ["BEGIN", "SUCCESS", "FAIL"],
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
               "supportsFlow": true
             },
             {
               "code": "MODELING_DBT_IMPORT_RETRY",
               "display": "重试 dbt 模型导入",
-              "phases": ["BEGIN", "SUCCESS", "FAIL"],
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
               "supportsFlow": true
             },
             {
               "code": "MODELING_DBT_IMPORT_FORWARD_UNDO",
               "display": "前向撤销 dbt 模型导入",
-              "phases": ["BEGIN", "SUCCESS", "FAIL"],
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
               "supportsFlow": true
             },
             {
               "code": "MODELING_DBT_IMPORT_FORWARD_UNDO_ITEM",
               "display": "恢复单个 dbt 模型版本",
-              "phases": ["SUCCESS"],
+              "phases": [
+                "SUCCESS"
+              ],
               "supportsFlow": false
             },
             {
               "code": "MODELING_DBT_IMPORT_CONFLICT",
               "display": "处理 dbt 导入冲突",
-              "phases": ["SUCCESS", "FAIL"],
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
               "supportsFlow": true
             },
             {
               "code": "MODELING_DBT_DRAFT_CREATE",
               "display": "创建高级 dbt 草稿",
-              "phases": ["SUCCESS", "FAIL"],
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
               "supportsFlow": false
             },
             {
               "code": "MODELING_DBT_DRAFT_SAVE",
               "display": "保存高级 dbt 草稿",
-              "phases": ["SUCCESS", "FAIL"],
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
               "supportsFlow": false
             },
             {
               "code": "MODELING_DBT_DRAFT_VALIDATE",
               "display": "校验高级 dbt 草稿",
-              "phases": ["SUCCESS", "FAIL"],
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
               "supportsFlow": false
             },
             {
               "code": "MODELING_DBT_DRAFT_COMMIT",
               "display": "提交高级 dbt 实现版本",
-              "phases": ["BEGIN", "SUCCESS", "FAIL"],
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
               "supportsFlow": true
             },
             {
               "code": "MODELING_DBT_DRAFT_PURGE",
               "display": "清理过期高级 dbt 草稿",
-              "phases": ["SUCCESS", "FAIL"],
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
               "supportsFlow": false
             },
             {
               "code": "MODELING_CATALOG_PROJECTION",
               "display": "投影模型资产服务版本",
-              "phases": ["BEGIN", "SUCCESS", "FAIL"],
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
               "supportsFlow": true
             },
             {
               "code": "MODELING_PHYSICAL_PREVIEW",
               "display": "预览模型物理样例",
-              "phases": ["SUCCESS", "FAIL"],
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
               "supportsFlow": false
             }
           ]

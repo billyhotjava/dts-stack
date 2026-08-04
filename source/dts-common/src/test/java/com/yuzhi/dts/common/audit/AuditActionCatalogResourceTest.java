@@ -66,6 +66,27 @@ class AuditActionCatalogResourceTest {
     }
 
     @Test
+    void registersWarehouseLayerGovernanceActionsInAllThreeRuntimeCopies() throws Exception {
+        java.nio.file.Path repo = java.nio.file.Paths.get(System.getProperty("user.dir")).getParent().getParent();
+        String canonical = new String(java.nio.file.Files.readAllBytes(
+            repo.resolve("source/dts-common/src/main/resources/config/audit-action-catalog.json")
+        ), StandardCharsets.UTF_8);
+        String platformFallback = new String(java.nio.file.Files.readAllBytes(
+            repo.resolve("source/dts-platform/src/main/docker/dts-common-fallback/src/main/resources/config/audit-action-catalog.json")
+        ), StandardCharsets.UTF_8);
+        String adminFallback = new String(java.nio.file.Files.readAllBytes(
+            repo.resolve("source/dts-admin/src/main/docker/dts-common-fallback/src/main/resources/config/audit-action-catalog.json")
+        ), StandardCharsets.UTF_8);
+
+        for (String catalog : java.util.List.of(canonical, platformFallback, adminFallback)) {
+            assertThat(catalog)
+                .contains("\"code\": \"MODELING_WAREHOUSE_LAYER_CREATE\"")
+                .contains("\"code\": \"MODELING_WAREHOUSE_LAYER_DELETE\"")
+                .contains("\"resourceType\": \"WAREHOUSE_LAYER\"");
+        }
+    }
+
+    @Test
     void registersModelMaterializationMachineAuditActions() throws Exception {
         String catalog;
         try (var input = getClass().getResourceAsStream("/config/audit-action-catalog.json")) {
