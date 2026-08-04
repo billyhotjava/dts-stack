@@ -1,17 +1,19 @@
 // @vitest-environment jsdom
 
+import { describe, expect, it } from "vitest";
 import type { CatalogDomain } from "@/api/services/catalogDomainService";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
-import { describe, expect, it } from "vitest";
-import type { ModelDraft } from "./services/modelWorkbenchService";
 import {
 	DIMENSION_STORAGE_OPTIONS,
-	isDimensionDraft,
+	isConceptDimensionDraft,
+	isDimensionTableDraft,
 	modelDraftFingerprint,
+	resolveConceptDimensionPresentation,
 	resolveDimensionFormPresentation,
 } from "./modelWorkbenchPresentation";
+import type { ConceptDimensionDraft, ModelSpecDraft } from "./services/modelWorkbenchService";
 
-const makeDraft = (patch: Partial<ModelDraft> = {}): ModelDraft => ({
+const makeDraft = (patch: Partial<ModelSpecDraft> = {}): ModelSpecDraft => ({
 	createKind: "dimension-table",
 	base: null,
 	planId: "",
@@ -28,6 +30,18 @@ const makeDraft = (patch: Partial<ModelDraft> = {}): ModelDraft => ({
 	reuseScope: "DOMAIN",
 	dimensionDefinitionId: "dimension-1",
 	standardBindings: [],
+	...patch,
+});
+
+const makeConceptDraft = (patch: Partial<ConceptDimensionDraft> = {}): ConceptDimensionDraft => ({
+	createKind: "dimension",
+	base: null,
+	definitionBase: null,
+	idempotencyKey: "concept-draft-1",
+	domainId: "finance",
+	name: "预算科目",
+	description: "统一预算科目定义",
+	reuseScope: "DOMAIN",
 	...patch,
 });
 
@@ -65,18 +79,32 @@ describe("dimension workbench presentation", () => {
 		expect(missing.tableNamingRule).toBe("不符合 DIM 表命名规范");
 	});
 
-	it("uses the current owner for a new dimension draft", () => {
-		const view = resolveDimensionFormPresentation({
-			draft: makeDraft({
-				createKind: "dimension",
-				dimensionDefinitionId: "",
-			}),
-			domains: [],
-			definition: null,
-			currentOwnerId: "current-user",
+	it("presents a new concept dimension with a server-generated code placeholder", () => {
+		const view = resolveConceptDimensionPresentation({
+			draft: makeConceptDraft(),
+			domains: [
+				{ code: "business", name: "财务业务" },
+				{ code: "finance", name: "财务域", parentCode: "business" },
+			],
 		});
 
-		expect(view.owner).toBe("current-user");
+		expect(view).toEqual({
+			warehouseLayer: "公共层 / 维度层",
+			businessCategory: "财务业务",
+			systemCode: "保存后生成",
+		});
+	});
+
+	it("shows only the system code returned by a saved concept dimension", () => {
+		const view = resolveConceptDimensionPresentation({
+			draft: makeConceptDraft({
+				definitionBase: { systemCode: "dim_generated_001" } as DimensionDefinitionView,
+			}),
+			domains: [],
+		});
+
+		expect(view.systemCode).toBe("dim_generated_001");
+		expect(view.businessCategory).toBe("未配置");
 	});
 
 	it("renders configured retention days from the saved implementation policy", () => {
@@ -84,7 +112,7 @@ describe("dimension workbench presentation", () => {
 			draft: makeDraft({
 				base: {
 					implementationPolicy: { retentionDays: 30 },
-				} as ModelDraft["base"],
+				} as ModelSpecDraft["base"],
 			}),
 			domains: [],
 			definition: null,
@@ -94,18 +122,23 @@ describe("dimension workbench presentation", () => {
 		expect(view.lifecycle).toBe("30 天");
 	});
 
-	it("identifies dimension drafts and fingerprints editable values only", () => {
-		expect(isDimensionDraft(makeDraft())).toBe(true);
-		expect(isDimensionDraft(makeDraft({ createKind: "fact" }))).toBe(false);
+	it("separates concept dimensions from dimension tables and fingerprints editable values only", () => {
+		expect(isConceptDimensionDraft(makeConceptDraft())).toBe(true);
+		expect(isConceptDimensionDraft(makeDraft())).toBe(false);
+		expect(isDimensionTableDraft(makeDraft())).toBe(true);
+		expect(isDimensionTableDraft(makeDraft({ createKind: "fact" }))).toBe(false);
 		expect(DIMENSION_STORAGE_OPTIONS).toEqual([
-		{ value: "table", label: "表存储" },
-		{ value: "incremental", label: "增量表" },
-		{ value: "view", label: "视图" },
-		{ value: "ephemeral", label: "临时模型" },
-	]);
+			{ value: "table", label: "表存储" },
+			{ value: "incremental", label: "增量表" },
+			{ value: "view", label: "视图" },
+			{ value: "ephemeral", label: "临时模型" },
+		]);
 		expect(modelDraftFingerprint(makeDraft({ name: "A" }))).not.toBe(modelDraftFingerprint(makeDraft({ name: "B" })));
 		expect(modelDraftFingerprint(makeDraft({ planId: "plan-a" }))).toBe(
 			modelDraftFingerprint(makeDraft({ planId: "plan-b" })),
+		);
+		expect(modelDraftFingerprint(makeConceptDraft({ name: "A" }))).not.toBe(
+			modelDraftFingerprint(makeConceptDraft({ name: "B" })),
 		);
 	});
 });

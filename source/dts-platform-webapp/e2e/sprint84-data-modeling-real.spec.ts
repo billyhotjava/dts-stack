@@ -221,27 +221,31 @@ test.describe("Sprint-84 prototype-owned data-modeling smoke", () => {
 		if (!workbenchRoute) throw new Error("dimension workbench route contract is missing");
 		await navigateThroughRealMenu(page, workbenchRoute);
 		await expectRealRoute(page, workbenchRoute);
+		const editor = page.locator(".dmx-model-editor");
 		const dimensionDefinitionResponsesBefore = observations.filter(
 			(observation) => observation.pathname === "/api/modeling/dimension-definitions",
 		).length;
-		let dimensionSelectionChanged = false;
-		const existingDimensionTable = page.locator(".dmx-tree-model").filter({ hasText: "维度表" }).first();
-		if (await existingDimensionTable.isVisible()) {
-			if (!(await existingDimensionTable.evaluate((element) => element.classList.contains("active")))) {
-				await existingDimensionTable.click();
-				dimensionSelectionChanged = true;
-			}
-		} else {
-			await page.getByRole("button", { name: "新建" }).click();
-			await page.getByRole("button", { name: "创建维度表", exact: true }).click();
-			dimensionSelectionChanged = true;
-		}
 
-		const editor = page.locator(".dmx-model-editor");
+		await page.getByRole("button", { name: "新建" }).click();
+		await page.getByRole("button", { name: "创建维度", exact: true }).click();
+		await expect(editor.getByRole("heading", { name: "基本信息" })).toBeVisible();
+		for (const label of ["数仓分层", "业务分类", "数据域", "系统编码", "中文名称", "描述"])
+			await expect(editor).toContainText(label);
+		await expect(editor.getByLabel("系统编码")).toHaveValue("保存后生成");
+		await expect(editor.getByRole("toolbar").getByRole("button")).toHaveCount(1);
+		await expect(editor).not.toContainText(/字段管理|存储策略|表名规则|表中文名|生命周期|负责人/);
+		const conceptRail = page.locator(".dmx-record-rail");
+		await expect(conceptRail).toBeVisible();
+		for (const label of ["版本管理", "发布记录"])
+			await expect(conceptRail.getByRole("button", { name: label })).toBeDisabled();
+		await capture(page, testInfo, "create-concept-dimension-768x900.png");
+
+		await page.getByRole("button", { name: "新建" }).click();
+		await page.getByRole("button", { name: "创建维度表", exact: true }).click();
 		await expect(editor.getByRole("heading", { name: "基本信息" })).toBeVisible();
 		await expect(editor.locator("fieldset")).toBeVisible();
 		const selectedDomainId = await editor.getByLabel("数据域").inputValue();
-		if (dimensionSelectionChanged && selectedDomainId) {
+		if (selectedDomainId) {
 			await expect
 				.poll(
 					() =>

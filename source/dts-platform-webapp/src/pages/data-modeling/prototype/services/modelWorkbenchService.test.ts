@@ -1,9 +1,53 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { confirmDimensionDefinition, createDimensionDefinition } from "@/api/dimensionDefinitionApi";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
-import type { ModelDraft } from "./modelWorkbenchService";
-import { prepareModelDraftForSave, validateModelDraftInput } from "./modelWorkbenchService";
+import type { ConceptDimensionDraft, ModelDraft } from "./modelWorkbenchService";
+import {
+	confirmDimensionDefinitionDraft,
+	prepareModelDraftForSave,
+	saveDimensionDefinitionDraft,
+	validateConceptDimensionDraftInput,
+	validateModelDraftInput,
+} from "./modelWorkbenchService";
+
+vi.mock("@/api/dimensionDefinitionApi", () => ({
+	confirmDimensionDefinition: vi.fn(),
+	createDimensionDefinition: vi.fn(),
+	listDimensionDefinitions: vi.fn(),
+}));
+
+const conceptDraft = (): ConceptDimensionDraft => ({
+	createKind: "dimension",
+	base: null,
+	definitionBase: null,
+	idempotencyKey: "concept-draft-1",
+	domainId: "finance",
+	name: "预算科目",
+	description: "统一预算科目定义",
+	reuseScope: "DOMAIN",
+});
+
+const definitionView: DimensionDefinitionView = {
+	id: "dimension-1",
+	systemCode: "dim_generated_001",
+	domainId: "finance",
+	name: "预算科目",
+	definition: "统一预算科目定义",
+	ownerId: "owner-1",
+	reuseScope: "DOMAIN",
+	hierarchies: [],
+	scopeType: "DOMAIN",
+	dataMartId: null,
+	attributes: [],
+	status: "DRAFT",
+	revision: 1,
+	checksum: "checksum-1",
+	usageCount: 0,
+	createdAt: "2026-08-04T10:00:00Z",
+	updatedAt: "2026-08-04T10:00:00Z",
+};
 
 const validDimensionDraft = (): ModelDraft => ({
 	createKind: "dimension-table",
@@ -31,6 +75,76 @@ const validDimensionDraft = (): ModelDraft => ({
 	reuseScope: "DOMAIN",
 	dimensionDefinitionId: "dimension-1",
 	standardBindings: [],
+});
+
+beforeEach(() => {
+	vi.clearAllMocks();
+});
+
+describe("concept dimension draft", () => {
+	it("creates only a DimensionDefinition and never sends a system code", async () => {
+		vi.mocked(createDimensionDefinition).mockResolvedValue(definitionView);
+
+		const saved = await saveDimensionDefinitionDraft(conceptDraft(), "owner-1");
+
+		expect(createDimensionDefinition).toHaveBeenCalledWith({
+			domainId: "finance",
+			name: "预算科目",
+			definition: "统一预算科目定义",
+			ownerId: "owner-1",
+			reuseScope: "DOMAIN",
+			scopeType: "DOMAIN",
+			dataMartId: null,
+			attributes: [],
+			hierarchies: [],
+			idempotencyKey: expect.any(String),
+		});
+		expect(vi.mocked(createDimensionDefinition).mock.calls[0]?.[0]).not.toHaveProperty("systemCode");
+		expect(saved.systemCode).toBe("dim_generated_001");
+	});
+
+	it("keeps one idempotency key when the same draft is retried", async () => {
+		vi.mocked(createDimensionDefinition).mockResolvedValue(definitionView);
+		const draft = conceptDraft();
+
+		await saveDimensionDefinitionDraft(draft, "owner-1");
+		await saveDimensionDefinitionDraft(draft, "owner-1");
+
+		const firstKey = vi.mocked(createDimensionDefinition).mock.calls[0]?.[0].idempotencyKey;
+		const retryKey = vi.mocked(createDimensionDefinition).mock.calls[1]?.[0].idempotencyKey;
+		expect(firstKey).toBeTruthy();
+		expect(retryKey).toBe(firstKey);
+	});
+
+	it("confirms a saved draft so dimension tables can bind the current revision", async () => {
+		const current = { ...definitionView, status: "CURRENT" as const, revision: 2 };
+		vi.mocked(confirmDimensionDefinition).mockResolvedValue(current);
+
+		const confirmed = await confirmDimensionDefinitionDraft({
+			...conceptDraft(),
+			definitionBase: definitionView,
+		});
+
+		expect(confirmDimensionDefinition).toHaveBeenCalledWith(definitionView);
+		expect(confirmed.definitionBase).toEqual(current);
+	});
+
+	it("allows a concept dimension with no model fields", () => {
+		expect(validateConceptDimensionDraftInput(conceptDraft())).toEqual({});
+	});
+
+	it("requires a domain and Chinese name without asking for table fields", () => {
+		expect(
+			validateConceptDimensionDraftInput({
+				...conceptDraft(),
+				domainId: "",
+				name: "budget_account",
+			}),
+		).toEqual({
+			domainId: "请选择数据域",
+			name: "请填写中文名称",
+		});
+	});
 });
 
 describe("model workbench draft preparation", () => {

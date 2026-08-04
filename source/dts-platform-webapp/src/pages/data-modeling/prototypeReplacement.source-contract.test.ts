@@ -150,6 +150,14 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(fieldTable).toContain("当前版本尚无字段级表结构导入契约");
 		expect(modeling).toMatch(/import \{ ModelingWorkbenchEditor \} from "\.\/ModelingWorkbenchEditor"/);
 		expect(modeling).toMatch(/import \{[^}]*modelDraftFingerprint[^}]*\} from "\.\/modelWorkbenchPresentation"/s);
+		expect(modeling).toMatch(/saveDimensionDefinitionDraft/);
+		expect(modeling).toMatch(/confirmDimensionDefinitionDraft/);
+		expect(modeling).toMatch(/ConceptDimensionRecordDialog/);
+		expect(modeling).toMatch(/saveModelDraft/);
+		expect(modeling).toMatch(/isConceptDimensionDraft/);
+		expect(modeling).toMatch(/conceptDimensionDraftFromView/);
+		expect(modeling).toMatch(/\{draft \? \(\s*<aside className="dmx-record-rail"/s);
+		expect(modeling).not.toMatch(/isModelSpecDraft\(draft\) \? \(\s*<aside className="dmx-record-rail"/s);
 		expect(modeling).toContain('"beforeunload"');
 		expect(modeling).toMatch(/const blocker = useBlocker\(/);
 		expect(modeling).toContain("blocker.proceed()");

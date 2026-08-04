@@ -1,14 +1,14 @@
 import { useState } from "react";
 import type { ModelSpecField } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { Button, RequestState } from "./PrototypePrimitives";
-import type { ModelDraft, ModelWorkbenchContext } from "./services/modelWorkbenchService";
+import type { ModelSpecDraft, ModelWorkbenchContext } from "./services/modelWorkbenchService";
 
 const DATA_TYPES = ["STRING", "BOOLEAN", "INT", "BIGINT", "DECIMAL", "DATE", "TIMESTAMP"];
 const IMPORT_UNAVAILABLE_REASON = "当前版本尚无字段级表结构导入契约";
 
 export type ModelFieldEditorTableProps = {
 	fields: ModelSpecField[];
-	bindings: ModelDraft["standardBindings"];
+	bindings: ModelSpecDraft["standardBindings"];
 	standards: ModelWorkbenchContext["standards"];
 	fieldRowIds: string[];
 	dimensionMode: boolean;
@@ -57,7 +57,16 @@ export function ModelFieldEditorTable({
 	const approvedDimensionColumns = ["序号", "字段名称", "类型", "字段显示名", "主键", "非空", "维度属性编码"];
 	const headers = dimensionMode
 		? [...approvedDimensionColumns, ...(showStandards ? ["字段标准"] : []), "操作"]
-		: ["序号", "字段名称", "类型", "字段显示名", "字段作用", ...(showStandards ? ["字段标准"] : []), "允许为空", "操作"];
+		: [
+				"序号",
+				"字段名称",
+				"类型",
+				"字段显示名",
+				"字段作用",
+				...(showStandards ? ["字段标准"] : []),
+				"允许为空",
+				"操作",
+			];
 	const addFields = () => {
 		const parsed = Number.parseInt(insertCount, 10);
 		onAddFields(Number.isFinite(parsed) ? Math.max(1, Math.min(20, parsed)) : 1);
@@ -69,7 +78,11 @@ export function ModelFieldEditorTable({
 				<Button disabled={!canOpenCode || readOnly} onClick={onOpenCode}>
 					代码模式
 				</Button>
-				<Button disabled={!canAssociate || readOnly} onClick={onOpenAssociation} title={canAssociate ? undefined : "请先保存模型后关联字段"}>
+				<Button
+					disabled={!canAssociate || readOnly}
+					onClick={onOpenAssociation}
+					title={canAssociate ? undefined : "请先保存模型后关联字段"}
+				>
 					字段关联
 				</Button>
 				<Button disabled title={IMPORT_UNAVAILABLE_REASON}>
@@ -117,10 +130,18 @@ export function ModelFieldEditorTable({
 									<tr key={fieldRowIds[index] || `${field.name}-${index}`}>
 										<td>{index + 1}</td>
 										<td>
-											<input disabled={readOnly} onChange={(event) => onUpdate(index, { name: event.target.value })} value={field.name} />
+											<input
+												disabled={readOnly}
+												onChange={(event) => onUpdate(index, { name: event.target.value })}
+												value={field.name}
+											/>
 										</td>
 										<td>
-											<select disabled={readOnly} onChange={(event) => onUpdate(index, { dataType: event.target.value })} value={field.dataType}>
+											<select
+												disabled={readOnly}
+												onChange={(event) => onUpdate(index, { dataType: event.target.value })}
+												value={field.dataType}
+											>
 												{selectableDataTypes(field.dataType).map((dataType) => (
 													<option key={dataType} value={dataType}>
 														{dataType}
@@ -169,7 +190,9 @@ export function ModelFieldEditorTable({
 												<td>
 													<select
 														disabled={readOnly}
-														onChange={(event) => onUpdate(index, { role: event.target.value as ModelSpecField["role"] })}
+														onChange={(event) =>
+															onUpdate(index, { role: event.target.value as ModelSpecField["role"] })
+														}
 														value={field.role}
 													>
 														<option value="KEY">键（KEY）</option>
@@ -198,7 +221,10 @@ export function ModelFieldEditorTable({
 												>
 													<option value="">不绑定</option>
 													{standards.map((standard) => (
-														<option key={`${standard.id}@${standard.version}`} value={`${standard.id}@${standard.version}`}>
+														<option
+															key={`${standard.id}@${standard.version}`}
+															value={`${standard.id}@${standard.version}`}
+														>
 															{standard.name} · {standard.code} · v{standard.version}
 														</option>
 													))}

@@ -1,4 +1,8 @@
-import { listDimensionDefinitions } from "@/api/dimensionDefinitionApi";
+import {
+	confirmDimensionDefinition,
+	createDimensionDefinition,
+	listDimensionDefinitions,
+} from "@/api/dimensionDefinitionApi";
 import { listModelFieldStandardOptions, type ModelFieldStandardOption } from "@/api/modelingStandardsApi";
 import {
 	type CreateDimensionModelCommand,
@@ -27,6 +31,7 @@ import {
 } from "@/features/modeling/contracts/modelSpecV2Contract";
 
 export type ModelCreateKind = "dimension" | "dimension-table" | "fact" | "summary" | "application";
+export type ModelSpecCreateKind = Exclude<ModelCreateKind, "dimension">;
 
 export const MODEL_KIND_CONFIG: Record<
 	ModelCreateKind,
@@ -45,8 +50,19 @@ export type ModelWorkbenchContext = {
 	standards: ModelFieldStandardOption[];
 };
 
-export type ModelDraft = {
-	createKind: ModelCreateKind;
+export type ConceptDimensionDraft = {
+	createKind: "dimension";
+	base: null;
+	definitionBase: DimensionDefinitionView | null;
+	idempotencyKey: string;
+	domainId: string;
+	name: string;
+	description: string;
+	reuseScope: DimensionDefinitionReuseScope;
+};
+
+export type ModelSpecDraft = {
+	createKind: ModelSpecCreateKind;
 	base: ModelSpecView | null;
 	planId: string;
 	domainId: string;
@@ -64,6 +80,16 @@ export type ModelDraft = {
 	standardBindings: ModelSpecStandardBinding[];
 };
 
+export type ModelDraft = ConceptDimensionDraft | ModelSpecDraft;
+
+export const isConceptDimensionDraft = (draft: ModelDraft): draft is ConceptDimensionDraft =>
+	draft.createKind === "dimension";
+
+export const isModelSpecDraft = (draft: ModelDraft): draft is ModelSpecDraft => draft.createKind !== "dimension";
+
+export const isDimensionTableDraft = (draft: ModelDraft): draft is ModelSpecDraft =>
+	draft.createKind === "dimension-table";
+
 export type ModelSaveContext = {
 	ownerId: string;
 	dimensionDefinitions: DimensionDefinitionView[];
@@ -79,7 +105,7 @@ export type ModelDraftErrorKey =
 
 export type ModelDraftValidationErrors = Partial<Record<ModelDraftErrorKey, string>>;
 
-const modelKind = (model: ModelSpecView): ModelCreateKind =>
+const modelKind = (model: ModelSpecView): ModelSpecCreateKind =>
 	model.modelType === "DIMENSION"
 		? "dimension-table"
 		: model.modelType === "FACT"
@@ -89,6 +115,18 @@ const modelKind = (model: ModelSpecView): ModelCreateKind =>
 				: "application";
 
 export function emptyModelDraft(kind: ModelCreateKind, context: ModelWorkbenchContext): ModelDraft {
+	if (kind === "dimension") {
+		return {
+			createKind: "dimension",
+			base: null,
+			definitionBase: null,
+			idempotencyKey: crypto.randomUUID(),
+			domainId: context.domains[0]?.code || "",
+			name: "",
+			description: "",
+			reuseScope: "DOMAIN",
+		};
+	}
 	const config = MODEL_KIND_CONFIG[kind];
 	return {
 		createKind: kind,
@@ -110,7 +148,20 @@ export function emptyModelDraft(kind: ModelCreateKind, context: ModelWorkbenchCo
 	};
 }
 
-export function modelDraftFromView(model: ModelSpecView): ModelDraft {
+export function conceptDimensionDraftFromView(definition: DimensionDefinitionView): ConceptDimensionDraft {
+	return {
+		createKind: "dimension",
+		base: null,
+		definitionBase: definition,
+		idempotencyKey: crypto.randomUUID(),
+		domainId: definition.domainId,
+		name: definition.name,
+		description: definition.definition,
+		reuseScope: definition.reuseScope,
+	};
+}
+
+export function modelDraftFromView(model: ModelSpecView): ModelSpecDraft {
 	return {
 		createKind: modelKind(model),
 		base: model,
@@ -147,16 +198,56 @@ export async function loadModelWorkbenchContext(): Promise<ModelWorkbenchContext
 export const loadCurrentDimensionDefinitions = (domainId: string) =>
 	domainId ? listDimensionDefinitions({ domainId, status: "CURRENT", offset: 0, limit: 500 }) : Promise.resolve([]);
 
-const isDimensionDraft = (draft: ModelDraft): boolean => MODEL_KIND_CONFIG[draft.createKind].modelType === "DIMENSION";
+const isDimensionDraft = (draft: ModelSpecDraft): boolean => draft.createKind === "dimension-table";
 
-export function prepareModelDraftForSave(draft: ModelDraft, definitions: DimensionDefinitionView[]): ModelDraft {
+export function prepareModelDraftForSave(
+	draft: ModelSpecDraft,
+	definitions: DimensionDefinitionView[],
+): ModelSpecDraft {
 	if (!isDimensionDraft(draft) || draft.grainStatement.trim()) return draft;
 	const definition = definitions.find((item) => item.id === draft.dimensionDefinitionId);
 	const grainName = definition?.name.trim() || draft.name.trim();
 	return grainName ? { ...draft, grainStatement: `一个${grainName}一行` } : draft;
 }
 
-export function validateModelDraftInput(draft: ModelDraft): ModelDraftValidationErrors {
+export function validateConceptDimensionDraftInput(draft: ConceptDimensionDraft): ModelDraftValidationErrors {
+	const errors: ModelDraftValidationErrors = {};
+	if (!draft.domainId.trim()) errors.domainId = "请选择数据域";
+	if (!/[\u4e00-\u9fff]/.test(draft.name.trim())) errors.name = "请填写中文名称";
+	return errors;
+}
+
+export async function saveDimensionDefinitionDraft(
+	draft: ConceptDimensionDraft,
+	ownerId: string,
+): Promise<DimensionDefinitionView> {
+	if (draft.definitionBase) throw new Error("已保存维度需通过维度版本流程编辑");
+	if (!ownerId.trim()) throw new Error("当前登录身份缺少人员 ID，不能创建维度定义");
+	const errors = Object.values(validateConceptDimensionDraftInput(draft));
+	if (errors.length) throw new Error(`请补齐：${errors.join("、")}`);
+	return createDimensionDefinition({
+		domainId: draft.domainId.trim(),
+		name: draft.name.trim(),
+		definition: draft.description.trim() || draft.name.trim(),
+		ownerId: ownerId.trim(),
+		reuseScope: draft.reuseScope,
+		scopeType: "DOMAIN",
+		dataMartId: null,
+		attributes: [],
+		hierarchies: [],
+		idempotencyKey: draft.idempotencyKey,
+	});
+}
+
+export async function confirmDimensionDefinitionDraft(draft: ConceptDimensionDraft): Promise<ConceptDimensionDraft> {
+	const definition = draft.definitionBase;
+	if (!definition) throw new Error("请先保存维度草稿");
+	if (definition.status === "CURRENT") return draft;
+	if (definition.status !== "DRAFT") throw new Error("只有草稿状态的维度可以确认");
+	return conceptDimensionDraftFromView(await confirmDimensionDefinition(definition));
+}
+
+export function validateModelDraftInput(draft: ModelSpecDraft): ModelDraftValidationErrors {
 	const errors: ModelDraftValidationErrors = {};
 	if (!draft.domainId.trim()) errors.domainId = "请选择数据域";
 	if (draft.createKind === "dimension-table" && !draft.dimensionDefinitionId.trim()) {
@@ -191,7 +282,7 @@ export function validateModelDraftInput(draft: ModelDraft): ModelDraftValidation
 	return errors;
 }
 
-const buildUpdate = (draft: ModelDraft): UpdateModelSpecCommand => {
+const buildUpdate = (draft: ModelSpecDraft): UpdateModelSpecCommand => {
 	const config = MODEL_KIND_CONFIG[draft.createKind];
 	const keyNames = draft.fields.filter((field) => field.role === "KEY").map((field) => field.name.trim());
 	const updateFieldNames = new Set(draft.fields.map((field) => field.name.trim()).filter(Boolean));
@@ -246,7 +337,7 @@ const buildUpdate = (draft: ModelDraft): UpdateModelSpecCommand => {
 	};
 };
 
-const validateDraft = (draft: ModelDraft, update: UpdateModelSpecCommand) => {
+const validateDraft = (draft: ModelSpecDraft, update: UpdateModelSpecCommand) => {
 	const missing: string[] = [];
 	if (!draft.planId) missing.push("可写建模上下文");
 	const validationErrors = validateModelDraftInput(draft);
@@ -257,7 +348,10 @@ const validateDraft = (draft: ModelDraft, update: UpdateModelSpecCommand) => {
 		throw new Error(issues.map((issue) => `${issue.field}：${issue.message || issue.code}`).join("；"));
 };
 
-export async function saveModelDraft(draft: ModelDraft, context: ModelSaveContext): Promise<CanonicalModelSpecView> {
+export async function saveModelDraft(
+	draft: ModelSpecDraft,
+	context: ModelSaveContext,
+): Promise<CanonicalModelSpecView> {
 	if (draft.base && draft.base.compatibilityMode !== "CANONICAL") throw new Error("历史只读模型不能在工作台中修改");
 	const backendContextId = draft.planId || (await resolveDefaultModelingContextId());
 	if (!backendContextId) throw new Error("服务端尚未提供可写建模上下文，请联系管理员初始化");
@@ -267,47 +361,14 @@ export async function saveModelDraft(draft: ModelDraft, context: ModelSaveContex
 	validateDraft(preparedDraft, update);
 	if (draft.base) return updateModelSpec(draft.base, update);
 	if (update.modelType === "DIMENSION") {
-		if (!context.ownerId) throw new Error("当前登录身份缺少人员 ID，不能创建维度定义");
 		const definition = context.dimensionDefinitions.find((item) => item.id === preparedDraft.dimensionDefinitionId);
-		if (preparedDraft.createKind === "dimension-table" && !definition) throw new Error("请选择一个维度");
-		const existingDefinitionBinding = () => {
-			if (!definition) throw new Error("请选择一个维度");
-			return {
-				mode: "EXISTING" as const,
-				dimensionDefinitionRef: { dimensionDefinitionId: definition.id, revision: definition.revision },
-			};
-		};
+		if (!definition) throw new Error("请选择一个维度");
 		const command: CreateDimensionModelCommand = {
 			operationId: crypto.randomUUID(),
-			definitionBinding:
-				preparedDraft.createKind === "dimension"
-					? {
-							mode: "CREATE",
-							definition: {
-								domainId: preparedDraft.domainId,
-								name: preparedDraft.name.trim(),
-								definition: preparedDraft.description.trim() || preparedDraft.name.trim(),
-								ownerId: context.ownerId,
-								reuseScope: preparedDraft.reuseScope,
-								scopeType: "DOMAIN",
-								attributes: update.fields?.map((field, index) => ({
-									...(() => {
-										const binding = update.standardBindings?.find((item) => item.fieldName === field.name);
-										return {
-											standardRef: binding?.standardElementId || null,
-											standardVersion:
-												binding?.standardElementVersion == null ? null : String(binding.standardElementVersion),
-										};
-									})(),
-									code: (field.dimensionAttributeCode || field.name).toUpperCase(),
-									name: field.displayName || field.name,
-									definition: field.displayName || field.name,
-									primaryKey: field.role === "KEY",
-									order: index + 1,
-								})),
-							},
-						}
-					: existingDefinitionBinding(),
+			definitionBinding: {
+				mode: "EXISTING",
+				dimensionDefinitionRef: { dimensionDefinitionId: definition.id, revision: definition.revision },
+			},
 			modelSpec: {
 				...update,
 				modelType: "DIMENSION",

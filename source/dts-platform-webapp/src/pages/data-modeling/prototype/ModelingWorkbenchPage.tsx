@@ -9,13 +9,19 @@ import { useUserInfo } from "@/store/userStore";
 import { dataModelingPath } from "../navigation";
 import type { DataModelingRoute } from "../types";
 
+import { ConceptDimensionRecordDialog } from "./ConceptDimensionRecordDialog";
 import { isBlankModelField } from "./ModelFieldEditorTable";
 import { ModelingWorkbenchEditor } from "./ModelingWorkbenchEditor";
 import { ModelWorkbenchDialog, type WorkbenchDialog } from "./ModelWorkbenchDialog";
 import { modelDraftFingerprint } from "./modelWorkbenchPresentation";
 import { PageHeader, RequestState, Status, Toast, useTransientMessage } from "./PrototypePrimitives";
 import {
+	conceptDimensionDraftFromView,
+	confirmDimensionDefinitionDraft,
 	emptyModelDraft,
+	isConceptDimensionDraft,
+	isDimensionTableDraft,
+	isModelSpecDraft,
 	loadCurrentDimensionDefinitions,
 	loadModelWorkbenchContext,
 	MODEL_KIND_CONFIG,
@@ -25,7 +31,9 @@ import {
 	type ModelWorkbenchContext,
 	modelDraftFromView,
 	prepareModelDraftForSave,
+	saveDimensionDefinitionDraft,
 	saveModelDraft,
+	validateConceptDimensionDraftInput,
 	validateModelDraftInput,
 } from "./services/modelWorkbenchService";
 import { normalizeModelingRequestFailure } from "./services/planningProjectionService";
@@ -99,9 +107,10 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const [representation, setRepresentation] = useState<ModelRepresentationView | null>(null);
 	const [representationFailure, setRepresentationFailure] = useState("");
 	const { message, show } = useTransientMessage();
-	const draftBase = draft?.base || null;
+	const draftBase = draft && isModelSpecDraft(draft) ? draft.base : null;
+	const conceptDraft = draft && isConceptDimensionDraft(draft) ? draft : null;
 	const draftCreateKind = draft?.createKind || null;
-	const draftDimensionDefinitionId = draft?.dimensionDefinitionId || "";
+	const draftDimensionDefinitionId = draft && isDimensionTableDraft(draft) ? draft.dimensionDefinitionId : "";
 	const draftDomainId = draft?.domainId || "";
 	const dirty = draft !== null && cleanFingerprint !== null && modelDraftFingerprint(draft) !== cleanFingerprint;
 	const blocker = useBlocker(
@@ -115,7 +124,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const replaceDraft = useCallback((nextDraft: ModelDraft | null) => {
 		setDraft(nextDraft);
 		setCleanFingerprint(nextDraft ? modelDraftFingerprint(nextDraft) : null);
-		setFieldRowIds(nextDraft?.fields.map(() => crypto.randomUUID()) || []);
+		setFieldRowIds(nextDraft && isModelSpecDraft(nextDraft) ? nextDraft.fields.map(() => crypto.randomUUID()) : []);
 		setValidationErrors({});
 	}, []);
 
@@ -200,7 +209,9 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 				if (!active) return;
 				setDimensionDefinitions(items);
 				if (!draftBase && draftCreateKind === "dimension-table" && !draftDimensionDefinitionId && items[0]) {
-					setDraft((current) => (current ? { ...current, dimensionDefinitionId: items[0].id } : current));
+					setDraft((current) =>
+						current && isDimensionTableDraft(current) ? { ...current, dimensionDefinitionId: items[0].id } : current,
+					);
 				}
 			})
 			.catch((error) => {
@@ -283,6 +294,24 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const save = async () => {
 		if (savingRef.current || !draft || !context || !canMaintain) return;
 		setFailure(null);
+		if (isConceptDimensionDraft(draft)) {
+			const nextValidationErrors = validateConceptDimensionDraftInput(draft);
+			setValidationErrors(nextValidationErrors);
+			if (Object.keys(nextValidationErrors).length) return;
+			savingRef.current = true;
+			setSaving(true);
+			try {
+				const saved = await saveDimensionDefinitionDraft(draft, ownerIdOf(userInfo));
+				replaceDraft(conceptDimensionDraftFromView(saved));
+				show(`维度草稿已保存：${saved.systemCode} · r${saved.revision}`);
+			} catch (error) {
+				setFailure(normalizeModelingRequestFailure(error, "维度保存失败。"));
+			} finally {
+				savingRef.current = false;
+				setSaving(false);
+			}
+			return;
+		}
 		const preparedDraft = prepareModelDraftForSave(draft, dimensionDefinitions);
 		const nextValidationErrors = validateModelDraftInput(preparedDraft);
 		setValidationErrors(nextValidationErrors);
@@ -308,11 +337,27 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 			setSaving(false);
 		}
 	};
+	const confirmConceptVersion = async () => {
+		if (savingRef.current || !conceptDraft?.definitionBase || !canMaintain) return;
+		setFailure(null);
+		savingRef.current = true;
+		setSaving(true);
+		try {
+			const confirmed = await confirmDimensionDefinitionDraft(conceptDraft);
+			replaceDraft(confirmed);
+			show(`维度版本已确认：${confirmed.definitionBase?.systemCode} · r${confirmed.definitionBase?.revision}`);
+		} catch (error) {
+			setFailure(normalizeModelingRequestFailure(error, "维度版本确认失败。"));
+		} finally {
+			savingRef.current = false;
+			setSaving(false);
+		}
+	};
 
 	const updateField = (index: number, patch: Partial<ModelSpecField>) => {
 		if (savingRef.current) return;
 		setDraft((current) => {
-			if (!current) return current;
+			if (!current || !isModelSpecDraft(current)) return current;
 			const oldName = current.fields[index]?.name || "";
 			const nextName = patch.name == null ? oldName : patch.name;
 			return {
@@ -328,7 +373,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		});
 	};
 	const addFields = (count: number) => {
-		if (savingRef.current || !draft) return;
+		if (savingRef.current || !draft || !isModelSpecDraft(draft)) return;
 		const additionCount = Number.isFinite(count) ? Math.max(1, Math.min(20, Math.floor(count))) : 1;
 		const nextFields = Array.from({ length: additionCount }, () => ({
 			name: "",
@@ -339,11 +384,13 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 			dimensionAttributeCode: null,
 		}));
 		const nextRowIds = nextFields.map(() => crypto.randomUUID());
-		setDraft((current) => (current ? { ...current, fields: [...current.fields, ...nextFields] } : current));
+		setDraft((current) =>
+			current && isModelSpecDraft(current) ? { ...current, fields: [...current.fields, ...nextFields] } : current,
+		);
 		setFieldRowIds((current) => [...current, ...nextRowIds]);
 	};
 	const removeBlankFields = () => {
-		if (savingRef.current || !draft) return;
+		if (savingRef.current || !draft || !isModelSpecDraft(draft)) return;
 		const keepIndexes = draft.fields
 			.map((field, index) => (isBlankModelField(field) ? -1 : index))
 			.filter((index) => index >= 0);
@@ -360,7 +407,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		if (savingRef.current) return;
 		setFieldRowIds((current) => current.filter((_, row) => row !== index));
 		setDraft((current) => {
-			if (!current) return current;
+			if (!current || !isModelSpecDraft(current)) return current;
 			const fieldName = current.fields[index]?.name;
 			return {
 				...current,
@@ -372,7 +419,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const updateStandardBinding = (index: number, value: string) => {
 		if (savingRef.current) return;
 		setDraft((current) => {
-			if (!current) return current;
+			if (!current || !isModelSpecDraft(current)) return current;
 			const fieldName = current.fields[index]?.name || "";
 			const remaining = current.standardBindings.filter((binding) => binding.fieldName !== fieldName);
 			if (!value || !fieldName) return { ...current, standardBindings: remaining };
@@ -383,7 +430,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 			};
 		});
 	};
-	const selectedModel = draft?.base || null;
+	const selectedModel = draft && isModelSpecDraft(draft) ? draft.base : null;
 	const refresh = () => {
 		if (!savingRef.current && confirmDiscard()) void load(selectedModel?.id);
 	};
@@ -546,7 +593,11 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 							<strong>
 								{draft?.name || (draft ? `新建${MODEL_KIND_CONFIG[draft.createKind].label}` : "模型编辑器")}
 							</strong>
-							{selectedModel ? (
+							{draft && isConceptDimensionDraft(draft) && draft.definitionBase ? (
+								<Status tone="warning">
+									{draft.definitionBase.status} · r{draft.definitionBase.revision}
+								</Status>
+							) : selectedModel ? (
 								<Status tone={selectedModel.status === "PUBLISHED" ? "success" : "warning"}>
 									{selectedModel.status} · r{selectedModel.revision}
 								</Status>
@@ -589,16 +640,26 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 							<RequestState description="请从目录选择模型，或新建一个模型草稿。" kind="empty" title="请选择模型" />
 						)}
 					</section>
-					<aside className="dmx-record-rail">
-						<button disabled={saving || !selectedModel} onClick={() => setDialog("versions")} type="button">
-							<GitBranch size={16} />
-							版本管理
-						</button>
-						<button disabled={saving || !selectedModel} onClick={() => setDialog("releases")} type="button">
-							<FileDown size={16} />
-							发布记录
-						</button>
-					</aside>
+					{draft ? (
+						<aside className="dmx-record-rail">
+							<button
+								disabled={saving || !(selectedModel || conceptDraft?.definitionBase)}
+								onClick={() => setDialog("versions")}
+								type="button"
+							>
+								<GitBranch size={16} />
+								版本管理
+							</button>
+							<button
+								disabled={saving || !(selectedModel || conceptDraft?.definitionBase)}
+								onClick={() => setDialog("releases")}
+								type="button"
+							>
+								<FileDown size={16} />
+								发布记录
+							</button>
+						</aside>
+					) : null}
 				</div>
 			) : (
 				<RequestState
@@ -613,6 +674,14 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 				dialog={dialog}
 				model={selectedModel}
 				onClose={() => setDialog(null)}
+			/>
+			<ConceptDimensionRecordDialog
+				canMaintain={canMaintain}
+				dialog={conceptDraft && (dialog === "versions" || dialog === "releases") ? dialog : null}
+				draft={conceptDraft}
+				onClose={() => setDialog(null)}
+				onConfirm={() => void confirmConceptVersion()}
+				saving={saving}
 			/>
 			<Toast message={message} />
 		</main>

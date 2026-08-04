@@ -6,12 +6,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { ModelingWorkbenchEditor, type ModelingWorkbenchEditorProps } from "./ModelingWorkbenchEditor";
-import type { ModelDraft } from "./services/modelWorkbenchService";
+import type { ConceptDimensionDraft, ModelSpecDraft } from "./services/modelWorkbenchService";
 
 let container: HTMLDivElement;
 let root: Root;
 
-const makeDraft = (patch: Partial<ModelDraft> = {}): ModelDraft => ({
+const makeDraft = (patch: Partial<ModelSpecDraft> = {}): ModelSpecDraft => ({
 	createKind: "dimension-table",
 	base: null,
 	planId: "plan-1",
@@ -37,6 +37,18 @@ const makeDraft = (patch: Partial<ModelDraft> = {}): ModelDraft => ({
 	reuseScope: "DOMAIN",
 	dimensionDefinitionId: "dimension-1",
 	standardBindings: [],
+	...patch,
+});
+
+const makeConceptDraft = (patch: Partial<ConceptDimensionDraft> = {}): ConceptDimensionDraft => ({
+	createKind: "dimension",
+	base: null,
+	definitionBase: null,
+	idempotencyKey: "concept-draft-1",
+	domainId: "finance",
+	name: "预算科目",
+	description: "统一预算科目定义",
+	reuseScope: "DOMAIN",
 	...patch,
 });
 
@@ -108,6 +120,56 @@ afterEach(async () => {
 });
 
 describe("ModelingWorkbenchEditor", () => {
+	it("renders the concept-dimension form without dimension-table fields or lifecycle actions", async () => {
+		await render(makeProps({ draft: makeConceptDraft(), dimensionDefinitions: [], fieldRowIds: [] }));
+
+		for (const label of ["数仓分层", "业务分类", "数据域", "系统编码", "中文名称", "描述"])
+			expect(container.textContent).toContain(label);
+		for (const label of [
+			"存储策略",
+			"表名规则",
+			"表名",
+			"表中文名",
+			"生命周期",
+			"负责人",
+			"字段管理",
+			"字段名称",
+			"提交",
+			"刷新",
+			"关联关系",
+			"发布",
+			"日志",
+			"质量规则",
+			"模型开发",
+			"导出",
+		])
+			expect(container.textContent).not.toContain(label);
+
+		expect(container.querySelectorAll(".dmx-editor-toolbar button")).toHaveLength(1);
+		expect(button("保存")).toBeDefined();
+		expect(container.querySelector<HTMLInputElement>('input[aria-label="系统编码"]')).toHaveProperty(
+			"value",
+			"保存后生成",
+		);
+	});
+
+	it("shows the returned system code and locks a saved concept dimension", async () => {
+		await render(
+			makeProps({
+				draft: makeConceptDraft({ definitionBase: definition }),
+				dimensionDefinitions: [],
+				fieldRowIds: [],
+			}),
+		);
+
+		expect(container.querySelector<HTMLInputElement>('input[aria-label="系统编码"]')).toHaveProperty(
+			"value",
+			"DIM000001",
+		);
+		expect(container.querySelector("fieldset")).toHaveProperty("disabled", true);
+		expect(button("保存")).toHaveProperty("disabled", true);
+	});
+
 	it("renders the approved dimension form and toolbar without compatibility-only controls", async () => {
 		await render();
 		for (const label of [

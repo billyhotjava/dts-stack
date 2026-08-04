@@ -1,6 +1,14 @@
 import type { CatalogDomain } from "@/api/services/catalogDomainService";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
-import { MODEL_KIND_CONFIG, type ModelDraft } from "./services/modelWorkbenchService";
+import {
+	type ConceptDimensionDraft,
+	isConceptDimensionDraft,
+	isDimensionTableDraft,
+	type ModelDraft,
+	type ModelSpecDraft,
+} from "./services/modelWorkbenchService";
+
+export { isConceptDimensionDraft, isDimensionTableDraft };
 
 const UNCONFIGURED = "未配置";
 
@@ -20,16 +28,40 @@ export type DimensionFormPresentation = {
 };
 
 type DimensionFormPresentationInput = {
-	draft: ModelDraft;
+	draft: ModelSpecDraft;
 	domains: CatalogDomain[];
 	definition: DimensionDefinitionView | null;
 	currentOwnerId: string;
 };
 
+export type ConceptDimensionPresentation = {
+	warehouseLayer: string;
+	businessCategory: string;
+	systemCode: string;
+};
+
+type ConceptDimensionPresentationInput = {
+	draft: ConceptDimensionDraft;
+	domains: CatalogDomain[];
+};
+
 const configured = (value: string | null | undefined) => value?.trim() || UNCONFIGURED;
 
-export const isDimensionDraft = (draft: ModelDraft): boolean =>
-	MODEL_KIND_CONFIG[draft.createKind].modelType === "DIMENSION";
+const businessCategoryFor = (domainId: string, domains: CatalogDomain[]) => {
+	const domain = domains.find((item) => item.code === domainId);
+	return configured(domains.find((item) => item.code === domain?.parentCode)?.name);
+};
+
+export function resolveConceptDimensionPresentation({
+	draft,
+	domains,
+}: ConceptDimensionPresentationInput): ConceptDimensionPresentation {
+	return {
+		warehouseLayer: "公共层 / 维度层",
+		businessCategory: businessCategoryFor(draft.domainId, domains),
+		systemCode: draft.definitionBase?.systemCode || "保存后生成",
+	};
+}
 
 export function resolveDimensionFormPresentation({
 	draft,
@@ -37,23 +69,27 @@ export function resolveDimensionFormPresentation({
 	definition,
 	currentOwnerId,
 }: DimensionFormPresentationInput): DimensionFormPresentation {
-	const domain = domains.find((item) => item.code === draft.domainId);
-	const businessCategory = configured(domains.find((item) => item.code === domain?.parentCode)?.name);
 	const retentionDays = draft.base?.implementationPolicy?.retentionDays;
 	const owner = definition?.ownerId || (!draft.base ? currentOwnerId : "");
 
 	return {
 		warehouseLayer: "公共层 / 维度层",
-		businessCategory,
-		tableNamingRule: /^[a-z][a-z0-9_]*$/.test(draft.physicalName)
-			? "DIM 表命名规范"
-			: "不符合 DIM 表命名规范",
+		businessCategory: businessCategoryFor(draft.domainId, domains),
+		tableNamingRule: /^[a-z][a-z0-9_]*$/.test(draft.physicalName) ? "DIM 表命名规范" : "不符合 DIM 表命名规范",
 		lifecycle: retentionDays == null ? UNCONFIGURED : `${retentionDays} 天`,
 		owner: configured(owner),
 	};
 }
 
 export function modelDraftFingerprint(draft: ModelDraft): string {
+	if (isConceptDimensionDraft(draft)) {
+		return JSON.stringify({
+			domainId: draft.domainId,
+			name: draft.name,
+			description: draft.description,
+			reuseScope: draft.reuseScope,
+		});
+	}
 	return JSON.stringify({
 		domainId: draft.domainId,
 		name: draft.name,

@@ -6,13 +6,17 @@ import { ModelFieldEditorTable } from "./ModelFieldEditorTable";
 import type { WorkbenchDialog } from "./ModelWorkbenchDialog";
 import {
 	DIMENSION_STORAGE_OPTIONS,
-	isDimensionDraft,
+	isConceptDimensionDraft,
+	isDimensionTableDraft,
+	resolveConceptDimensionPresentation,
 	resolveDimensionFormPresentation,
 } from "./modelWorkbenchPresentation";
 import {
+	type ConceptDimensionDraft,
 	MODEL_KIND_CONFIG,
 	type ModelDraft,
 	type ModelDraftValidationErrors,
+	type ModelSpecDraft,
 	type ModelWorkbenchContext,
 } from "./services/modelWorkbenchService";
 import "./modeling-workbench.css";
@@ -64,6 +68,9 @@ type DraftFormProps = Pick<
 	| "onStandardChange"
 >;
 
+type ConceptDimensionFormProps = Omit<DraftFormProps, "draft"> & { draft: ConceptDimensionDraft };
+type ModelSpecFormProps = Omit<DraftFormProps, "draft"> & { draft: ModelSpecDraft };
+
 function ValidationMessage({ message }: { message?: string }) {
 	return message ? (
 		<small className="dmx-workbench-editor__validation" role="alert">
@@ -72,7 +79,7 @@ function ValidationMessage({ message }: { message?: string }) {
 	) : null;
 }
 
-function FieldsPanel(props: DraftFormProps & { dimensionMode: boolean }) {
+function FieldsPanel(props: ModelSpecFormProps & { dimensionMode: boolean }) {
 	const {
 		draft,
 		context,
@@ -113,7 +120,63 @@ function FieldsPanel(props: DraftFormProps & { dimensionMode: boolean }) {
 	);
 }
 
-function DimensionDraftForm(props: DraftFormProps) {
+function ConceptDimensionForm(props: ConceptDimensionFormProps) {
+	const { draft, context, validationErrors, onChange } = props;
+	const patch = (next: Partial<ConceptDimensionDraft>) => onChange({ ...draft, ...next });
+	const presentation = resolveConceptDimensionPresentation({ draft, domains: context.domains });
+
+	return (
+		<section className="dmx-editor-panel">
+			<h3>基本信息</h3>
+			<div className="dmx-workbench-editor__basic-grid">
+				<label>
+					<span>数仓分层</span>
+					<input aria-label="数仓分层" disabled value={presentation.warehouseLayer} />
+				</label>
+				<label>
+					<span>业务分类</span>
+					<input aria-label="业务分类" disabled value={presentation.businessCategory} />
+				</label>
+				<label>
+					<span className="required">数据域</span>
+					<select
+						aria-label="数据域"
+						disabled={Boolean(draft.definitionBase)}
+						onChange={(event) => patch({ domainId: event.target.value })}
+						value={draft.domainId}
+					>
+						<option value="">请选择数据域</option>
+						{context.domains.map((item) => (
+							<option key={item.code} value={item.code}>
+								{item.name} · {item.code}
+							</option>
+						))}
+					</select>
+					<ValidationMessage message={validationErrors.domainId} />
+				</label>
+				<label>
+					<span>系统编码</span>
+					<input aria-label="系统编码" disabled value={presentation.systemCode} />
+				</label>
+				<label>
+					<span className="required">中文名称</span>
+					<input aria-label="中文名称" onChange={(event) => patch({ name: event.target.value })} value={draft.name} />
+					<ValidationMessage message={validationErrors.name} />
+				</label>
+				<label className="dmx-workbench-editor__wide-field">
+					<span>描述</span>
+					<textarea
+						aria-label="描述"
+						onChange={(event) => patch({ description: event.target.value })}
+						value={draft.description}
+					/>
+				</label>
+			</div>
+		</section>
+	);
+}
+
+function DimensionDraftForm(props: ModelSpecFormProps) {
 	const {
 		draft,
 		context,
@@ -123,7 +186,7 @@ function DimensionDraftForm(props: DraftFormProps) {
 		validationErrors,
 		onChange,
 	} = props;
-	const patch = (next: Partial<ModelDraft>) => onChange({ ...draft, ...next });
+	const patch = (next: Partial<ModelSpecDraft>) => onChange({ ...draft, ...next });
 	const definition = dimensionDefinitions.find((item) => item.id === draft.dimensionDefinitionId) || null;
 	const presentation = resolveDimensionFormPresentation({
 		draft,
@@ -259,10 +322,10 @@ function DimensionDraftForm(props: DraftFormProps) {
 	);
 }
 
-function CompatibilityDraftForm(props: DraftFormProps) {
+function CompatibilityDraftForm(props: ModelSpecFormProps) {
 	const { draft, context, validationErrors, onChange } = props;
 	const config = MODEL_KIND_CONFIG[draft.createKind];
-	const patch = (next: Partial<ModelDraft>) => onChange({ ...draft, ...next });
+	const patch = (next: Partial<ModelSpecDraft>) => onChange({ ...draft, ...next });
 	const missingPersistedDomain = Boolean(
 		draft.base && draft.domainId && !context.domains.some((item) => item.code === draft.domainId),
 	);
@@ -329,7 +392,7 @@ function CompatibilityDraftForm(props: DraftFormProps) {
 					<label>
 						<span>加载策略</span>
 						<select
-							onChange={(event) => patch({ loadStrategy: event.target.value as ModelDraft["loadStrategy"] })}
+							onChange={(event) => patch({ loadStrategy: event.target.value as ModelSpecDraft["loadStrategy"] })}
 							value={draft.loadStrategy}
 						>
 							<option value="FULL">全量</option>
@@ -363,6 +426,7 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 		onRefresh,
 		onDialog,
 	} = props;
+	const conceptDimension = isConceptDimensionDraft(draft);
 	const persisted = Boolean(selectedModel);
 	const canWritePersisted = persisted && canMaintain && !readOnly;
 
@@ -387,54 +451,77 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 			<div className="dmx-editor-toolbar" role="toolbar">
 				<button
 					className="primary"
-					disabled={!canMaintain || readOnly || saving || !dirty}
+					disabled={!canMaintain || readOnly || saving || !dirty || (conceptDimension && Boolean(draft.definitionBase))}
 					onClick={onSave}
-					title={!canMaintain ? "当前账号无建模维护权限" : !dirty ? "当前没有待保存变更" : "保存模型草稿"}
+					title={
+						!canMaintain
+							? "当前账号无建模维护权限"
+							: conceptDimension && draft.definitionBase
+								? "已保存维度请通过维度版本流程编辑"
+								: !dirty
+									? "当前没有待保存变更"
+									: conceptDimension
+										? "保存维度草稿"
+										: "保存模型草稿"
+					}
 					type="button"
 				>
 					<Save size={15} />
 					{saving ? "保存中…" : "保存"}
 				</button>
-				<button disabled={saving || !persisted} onClick={() => onDialog("gates")} type="button">
-					<ListChecks size={15} />
-					提交
-				</button>
-				<button disabled={saving} onClick={onRefresh} type="button">
-					<RefreshCw size={15} />
-					刷新
-				</button>
-				<button disabled={saving || !persisted} onClick={() => onDialog("association")} type="button">
-					<Link2 size={15} />
-					关联关系
-				</button>
-				<button disabled={saving || !canWritePersisted} onClick={() => onDialog("publish")} type="button">
-					<Upload size={15} />
-					发布
-				</button>
-				<button disabled={saving || !persisted} onClick={() => onDialog("logs")} type="button">
-					<FileDown size={15} />
-					日志
-				</button>
-				<button disabled={saving || !persisted} onClick={() => onDialog("quality")} type="button">
-					<ShieldCheck size={15} />
-					质量规则
-				</button>
-				<button disabled={saving || !canWritePersisted} onClick={() => onDialog("advanced")} type="button">
-					<Settings2 size={15} />
-					模型开发
-				</button>
-				<button disabled title="尚无模型导出服务端契约" type="button">
-					<Import size={15} />
-					导出
-				</button>
+				{conceptDimension ? null : (
+					<>
+						<button disabled={saving || !persisted} onClick={() => onDialog("gates")} type="button">
+							<ListChecks size={15} />
+							提交
+						</button>
+						<button disabled={saving} onClick={onRefresh} type="button">
+							<RefreshCw size={15} />
+							刷新
+						</button>
+						<button disabled={saving || !persisted} onClick={() => onDialog("association")} type="button">
+							<Link2 size={15} />
+							关联关系
+						</button>
+						<button disabled={saving || !canWritePersisted} onClick={() => onDialog("publish")} type="button">
+							<Upload size={15} />
+							发布
+						</button>
+						<button disabled={saving || !persisted} onClick={() => onDialog("logs")} type="button">
+							<FileDown size={15} />
+							日志
+						</button>
+						<button disabled={saving || !persisted} onClick={() => onDialog("quality")} type="button">
+							<ShieldCheck size={15} />
+							质量规则
+						</button>
+						<button disabled={saving || !canWritePersisted} onClick={() => onDialog("advanced")} type="button">
+							<Settings2 size={15} />
+							模型开发
+						</button>
+						<button disabled title="尚无模型导出服务端契约" type="button">
+							<Import size={15} />
+							导出
+						</button>
+					</>
+				)}
 			</div>
 			{failureMessage ? (
 				<div className="dmx-inline-error" role="alert">
 					{failureMessage}
 				</div>
 			) : null}
-			<fieldset className="dmx-editor-fieldset dmx-editor-scroll" disabled={readOnly || saving}>
-				{isDimensionDraft(draft) ? <DimensionDraftForm {...props} /> : <CompatibilityDraftForm {...props} />}
+			<fieldset
+				className="dmx-editor-fieldset dmx-editor-scroll"
+				disabled={readOnly || saving || (conceptDimension && Boolean(draft.definitionBase))}
+			>
+				{conceptDimension ? (
+					<ConceptDimensionForm {...props} draft={draft} />
+				) : isDimensionTableDraft(draft) ? (
+					<DimensionDraftForm {...props} draft={draft} />
+				) : (
+					<CompatibilityDraftForm {...props} draft={draft} />
+				)}
 			</fieldset>
 		</div>
 	);
