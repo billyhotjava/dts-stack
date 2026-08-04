@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 const read = (relative: string) => readFileSync(new URL(relative, import.meta.url), "utf8");
 
@@ -66,6 +66,46 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(workbenchSource).not.toMatch(
 			/建设计划|WarehousePlan|warehousePlanApi|saveWarehousePlanPolicy|loadConfirmedPlanDomains|listWarehousePlans|目标建设计划/,
 		);
+	});
+
+	it("normalizes a stale requested model id to one stable fallback", async () => {
+		vi.doMock("@/api/modelRepresentationApi", () => ({}));
+		vi.doMock("@/store/userStore", () => ({}));
+		vi.doMock("./navigation", () => ({}));
+		vi.doMock("./prototype/ModelFieldEditorTable", () => ({}));
+		vi.doMock("./prototype/ModelingWorkbenchEditor", () => ({}));
+		vi.doMock("./prototype/ModelWorkbenchDialog", () => ({}));
+		vi.doMock("./prototype/modelWorkbenchPresentation", () => ({}));
+		vi.doMock("./prototype/PrototypePrimitives", () => ({}));
+		vi.doMock("./prototype/services/modelWorkbenchService", () => ({}));
+		vi.doMock("./prototype/services/planningProjectionService", () => ({}));
+		vi.doMock("./prototype/useDataModelingMenuGrant", () => ({}));
+		const module = (await import("./prototype/ModelingWorkbenchPage")) as Record<string, unknown>;
+		const resolveRequestedModelSelection = module.resolveRequestedModelSelection as
+			| ((
+					models: Array<{ id: string }>,
+					requestedModelId: string,
+			  ) => { selectedModel: { id: string } | null; normalizedModelId: string })
+			| undefined;
+		const fallback = { id: "model-1" };
+		const requested = { id: "model-2" };
+
+		expect(resolveRequestedModelSelection).toBeTypeOf("function");
+		if (!resolveRequestedModelSelection) return;
+		const normalized = resolveRequestedModelSelection([fallback, requested], "missing-model");
+		expect(normalized).toEqual({
+			selectedModel: fallback,
+			normalizedModelId: fallback.id,
+		});
+		expect(resolveRequestedModelSelection([fallback, requested], normalized.normalizedModelId)).toEqual(normalized);
+		expect(resolveRequestedModelSelection([fallback, requested], requested.id)).toEqual({
+			selectedModel: requested,
+			normalizedModelId: requested.id,
+		});
+		expect(resolveRequestedModelSelection([], "missing-model")).toEqual({
+			selectedModel: null,
+			normalizedModelId: "",
+		});
 	});
 
 	it("integrates the approved editor contract into the workbench orchestrator", () => {

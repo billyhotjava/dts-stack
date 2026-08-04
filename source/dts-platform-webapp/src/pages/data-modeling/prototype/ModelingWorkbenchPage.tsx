@@ -50,6 +50,18 @@ const ownerIdOf = (userInfo: unknown) => {
 	return value == null ? "" : String(value).trim();
 };
 
+export function resolveRequestedModelSelection<T extends { id: string }>(
+	models: readonly T[],
+	requestedModelId: string,
+) {
+	const requestedModel = requestedModelId ? models.find((model) => model.id === requestedModelId) : undefined;
+	const selectedModel = requestedModel || models[0] || null;
+	return {
+		selectedModel,
+		normalizedModelId: requestedModelId && !requestedModel ? selectedModel?.id || "" : requestedModelId,
+	};
+}
+
 export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const navigate = useNavigate();
 	const canMaintain = useDataModelingMenuGrant();
@@ -58,7 +70,9 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const [searchParams, setSearchParams] = useSearchParams();
 	const requestedModelId = searchParams.get("modelSpecId") || "";
 	const requestedModelIdRef = useRef(requestedModelId);
+	const searchParamsRef = useRef(searchParams);
 	requestedModelIdRef.current = requestedModelId;
+	searchParamsRef.current = searchParams;
 	const [context, setContext] = useState<ModelWorkbenchContext | null>(null);
 	const [draft, setDraft] = useState<ModelDraft | null>(null);
 	const [cleanFingerprint, setCleanFingerprint] = useState<string | null>(null);
@@ -101,8 +115,16 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 				if (requestEpoch.current !== epoch) return;
 				setContext(next);
 				const targetId = preferredModelId ?? requestedModelIdRef.current;
-				const target = next.models.find((model) => model.id === targetId) || next.models[0] || null;
-				replaceDraft(target ? modelDraftFromView(target) : null);
+				const { selectedModel, normalizedModelId } = resolveRequestedModelSelection(next.models, targetId);
+				replaceDraft(selectedModel ? modelDraftFromView(selectedModel) : null);
+				if (normalizedModelId !== requestedModelIdRef.current) {
+					const normalized = new URLSearchParams(searchParamsRef.current);
+					if (normalizedModelId) normalized.set("modelSpecId", normalizedModelId);
+					else normalized.delete("modelSpecId");
+					requestedModelIdRef.current = normalizedModelId;
+					searchParamsRef.current = normalized;
+					setSearchParams(normalized, { replace: true });
+				}
 			} catch (error) {
 				if (requestEpoch.current !== epoch) return;
 				setContext(null);
@@ -112,7 +134,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 				if (requestEpoch.current === epoch) setLoading(false);
 			}
 		},
-		[replaceDraft],
+		[replaceDraft, setSearchParams],
 	);
 
 	useEffect(() => {
