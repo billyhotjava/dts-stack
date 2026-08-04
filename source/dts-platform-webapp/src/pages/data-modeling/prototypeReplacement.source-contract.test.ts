@@ -56,24 +56,44 @@ describe("prototype-owned data modeling frontend", () => {
 		for (const label of ["维度表", "明细表", "汇总表", "应用表"]) expect(source).toContain(`label: "${label}"`);
 	});
 
-	it("does not expose the retired construction-plan workflow in prototype pages", () => {
-		const pageSource = [
-			"./prototype/ModelingWorkbenchPage.tsx",
-			"./prototype/PlanningPage.tsx",
-			"./prototype/ReverseModelingPage.tsx",
-			"./prototype/RelationshipGraphPage.tsx",
-			"./prototype/PlanningCatalogEditors.tsx",
-		]
-			.map(read)
-			.join("\n");
+	it("does not expose the retired construction-plan workflow in the workbench owner", () => {
 		const planningService = read("./prototype/services/planningProjectionService.ts");
 		const workbenchService = read("./prototype/services/modelWorkbenchService.ts");
+		const workbenchEditor = read("./prototype/ModelingWorkbenchEditor.tsx");
+		const workbenchSource = `${read("./prototype/ModelingWorkbenchPage.tsx")}\n${workbenchService}\n${workbenchEditor}`;
 
-		expect(pageSource).not.toMatch(
-			/建设计划|WarehousePlan|warehousePlanApi|saveWarehousePlanPolicy|loadConfirmedPlanDomains|目标建设计划/,
-		);
 		expect(planningService).not.toMatch(/warehousePlanApi|warehouseStageLabel|listWarehousePlans/);
-		expect(workbenchService).not.toMatch(/warehousePlanApi|WarehousePlan|listWarehousePlans/);
+		expect(workbenchSource).not.toMatch(
+			/建设计划|WarehousePlan|warehousePlanApi|saveWarehousePlanPolicy|loadConfirmedPlanDomains|listWarehousePlans|目标建设计划/,
+		);
+	});
+
+	it("integrates the approved editor contract into the workbench orchestrator", () => {
+		const modeling = read("./prototype/ModelingWorkbenchPage.tsx");
+		const editor = read("./prototype/ModelingWorkbenchEditor.tsx");
+		const fieldTable = read("./prototype/ModelFieldEditorTable.tsx");
+		const modelingLineCount = modeling.trimEnd().split("\n").length;
+
+		for (const label of [
+			"数仓分层",
+			"业务分类",
+			"存储策略",
+			"表名规则",
+			"表中文名",
+			"生命周期",
+			"负责人",
+			"质量规则",
+			"模型开发",
+		])
+			expect(editor).toContain(label);
+		expect(fieldTable).toContain('["序号", "字段名称", "类型", "字段显示名", "主键", "非空", "维度属性编码"]');
+		expect(fieldTable).not.toContain("安全等级");
+		expect(fieldTable).toContain("当前版本尚无字段级表结构导入契约");
+		expect(modeling).toMatch(/import \{ ModelingWorkbenchEditor \} from "\.\/ModelingWorkbenchEditor"/);
+		expect(modeling).toMatch(/import \{[^}]*modelDraftFingerprint[^}]*\} from "\.\/modelWorkbenchPresentation"/s);
+		expect(modeling).toContain('"beforeunload"');
+		expect(modeling).not.toMatch(/function ModelEditor|function FieldTable/);
+		expect(modelingLineCount).toBeLessThanOrEqual(800);
 	});
 
 	it("connects production pages to canonical owners and keeps unsupported actions disabled", () => {
