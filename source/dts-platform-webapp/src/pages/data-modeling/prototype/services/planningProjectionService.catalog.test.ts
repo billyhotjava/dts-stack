@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
 	listDataMarts: vi.fn(),
 	listBusinessProcessesApi: vi.fn(),
 	listPlanningCatalogDomains: vi.fn(),
+	listWarehouseLayersApi: vi.fn(),
 }));
 
 vi.mock("@/api/dataMartApi", () => ({ listDataMarts: mocks.listDataMarts }));
@@ -15,7 +16,7 @@ vi.mock("@/api/services/modelingOverviewFactService", () => ({
 }));
 vi.mock("@/api/sprint64GovernanceApi", () => ({
 	listBusinessProcessesApi: mocks.listBusinessProcessesApi,
-	listWarehouseLayersApi: vi.fn(),
+	listWarehouseLayersApi: mocks.listWarehouseLayersApi,
 }));
 vi.mock("./planningCatalogDomainService", () => ({
 	listPlanningCatalogDomains: mocks.listPlanningCatalogDomains,
@@ -56,5 +57,23 @@ describe("loadPlanningProjection catalog writes", () => {
 		await loadPlanningProjection("marts");
 
 		expect(mocks.listDataMarts).toHaveBeenCalledWith({ limit: 100 });
+	});
+
+	it("describes the built-in layer dictionary without pointing to an unavailable configuration page", async () => {
+		mocks.listWarehouseLayersApi.mockResolvedValue([]);
+
+		const projection = await loadPlanningProjection("layers");
+
+		expect(projection.readOnlyReason).toBe(
+			"系统分层字典由平台内置并统一生效，当前版本只读，暂无独立的分层策略配置入口。",
+		);
+		expect(projection.readOnlyReason).not.toContain("规划参数配置中维护");
+	});
+
+	it("states the current planning-parameter boundary in customer-facing language", async () => {
+		const projection = await loadPlanningProjection("system");
+
+		expect(projection.readOnlyReason).toBe("当前版本尚未提供可维护的规划参数；配置能力接入前，本页仅说明功能边界。");
+		expect(projection.readOnlyReason).not.toMatch(/owner|旧流程|配置接口/i);
 	});
 });

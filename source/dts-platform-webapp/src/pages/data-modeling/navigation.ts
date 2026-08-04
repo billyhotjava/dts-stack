@@ -11,7 +11,7 @@ const ROUTES: Record<string, Omit<DataModelingRoute, "workspace" | "view">> = {
 	},
 	"planning/layers": {
 		title: "数仓分层",
-		description: "定义贴源、公共和应用层的统一分层规范。",
+		description: "查看平台内置的贴源、公共和应用层统一分层规范。",
 	},
 	"planning/domains": {
 		title: "数据域",
@@ -35,7 +35,7 @@ const ROUTES: Record<string, Omit<DataModelingRoute, "workspace" | "view">> = {
 	},
 	"planning/system": {
 		title: "规划参数配置",
-		description: "维护数仓规划使用的系统参数和受控配置。",
+		description: "说明数仓规划参数的当前能力边界；当前版本暂不提供在线维护。",
 	},
 	"standards/fields": {
 		title: "字段标准",

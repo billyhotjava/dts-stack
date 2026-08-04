@@ -60,11 +60,18 @@ describe("data-modeling navigation", () => {
 		});
 	});
 
-	it("uses the reviewed planning parameter label", () => {
+	it("keeps the read-only planning routes honest", () => {
+		expect(resolveDataModelingRoute("/data-modeling/planning/layers")).toMatchObject({
+			workspace: "planning",
+			view: "layers",
+			title: "数仓分层",
+			description: "查看平台内置的贴源、公共和应用层统一分层规范。",
+		});
 		expect(resolveDataModelingRoute("/data-modeling/planning/system")).toMatchObject({
 			workspace: "planning",
 			view: "system",
 			title: "规划参数配置",
+			description: "说明数仓规划参数的当前能力边界；当前版本暂不提供在线维护。",
 		});
 	});
 });

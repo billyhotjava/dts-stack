@@ -219,7 +219,7 @@ export async function loadPlanningProjection(view: string): Promise<PlanningProj
 	if (view === "layers") {
 		const layers = await listWarehouseLayersApi();
 		return {
-			...emptyProjection("系统分层字典只读；分层策略请在规划参数配置中维护。"),
+			...emptyProjection("系统分层字典由平台内置并统一生效，当前版本只读，暂无独立的分层策略配置入口。"),
 			headers: ["分层编码", "分层名称", "分层类型", "加工责任", "命名前缀", "要求"],
 			rows: layers.map((item) => ({
 				id: item.code,
@@ -247,7 +247,7 @@ export async function loadPlanningProjection(view: string): Promise<PlanningProj
 		};
 	}
 	if (view === "system") {
-		return emptyProjection("规划参数尚无独立服务端 owner；本页不再复用旧流程的配置接口。");
+		return emptyProjection("当前版本尚未提供可维护的规划参数；配置能力接入前，本页仅说明功能边界。");
 	}
 	return emptyProjection("当前对象尚无统一权威台账；确认 owner 前不提供本地模拟 CRUD。");
 }

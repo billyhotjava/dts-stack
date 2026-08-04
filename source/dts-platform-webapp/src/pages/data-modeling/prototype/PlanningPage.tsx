@@ -127,7 +127,7 @@ export function PlanningPage({ route }: { route: DataModelingRoute }) {
 							ownerId={ownerIdOf(userInfo)}
 							rows={projection.rows}
 						/>
-					) : projection.readOnlyReason ? (
+					) : projection.headers.length > 0 && projection.readOnlyReason ? (
 						<div className="dmx-planning-unavailable">
 							<div className="dmx-capability-note">{projection.readOnlyReason}</div>
 						</div>
