@@ -92,6 +92,7 @@ graphify-out/
 graphify-out-fullcode/
 docs/intergration/graphify-out/
 .gitnexus
+.worktrees/
 
 # Sprint-78 F3: PostgreSQL backup artifacts
 backups/postgres/
