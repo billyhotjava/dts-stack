@@ -7,14 +7,22 @@ import type { DataModelingRoute } from "../types";
 
 const mocks = vi.hoisted(() => ({
 	loadPlanningProjection: vi.fn(),
+	createWarehouseLayer: vi.fn(),
+	deleteWarehouseLayer: vi.fn(),
+	normalizeModelingRequestFailure: vi.fn(),
+	canMaintain: false,
 }));
 
 vi.mock("@/store/userStore", () => ({ useUserInfo: () => ({ id: "user-1" }) }));
+vi.mock("@/api/warehouseLayerApi", () => ({
+	createWarehouseLayer: mocks.createWarehouseLayer,
+	deleteWarehouseLayer: mocks.deleteWarehouseLayer,
+}));
 vi.mock("./services/planningProjectionService", () => ({
 	loadPlanningProjection: mocks.loadPlanningProjection,
-	normalizeModelingRequestFailure: vi.fn(),
+	normalizeModelingRequestFailure: mocks.normalizeModelingRequestFailure,
 }));
-vi.mock("./useDataModelingMenuGrant", () => ({ useDataModelingMenuGrant: () => false }));
+vi.mock("./useDataModelingMenuGrant", () => ({ useDataModelingMenuGrant: () => mocks.canMaintain }));
 
 import { PlanningPage } from "./PlanningPage";
 
@@ -35,6 +43,37 @@ afterEach(async () => {
 });
 
 describe("PlanningPage", () => {
+	const layerRoute = (): DataModelingRoute => ({
+		workspace: "planning",
+		view: "layers",
+		title: "数仓分层",
+		description: "维护全局共享的自定义数仓分层。",
+	});
+	const builtinDwd = {
+		code: "DWD",
+		name: "明细事实 / 维度层",
+		systemLayerCode: "DWD",
+		kind: "DETAIL",
+		responsibility: "业务明细",
+		namingPrefixes: ["dwd_"],
+		optional: false,
+		builtin: true,
+		deletable: false,
+		disabledReason: "平台内置分层不可删除",
+	};
+	const customFinDetail = {
+		code: "FIN_DETAIL",
+		name: "财务明细层",
+		systemLayerCode: "DWD",
+		kind: "DETAIL",
+		responsibility: "财务域明细",
+		namingPrefixes: ["fin_dwd_"],
+		optional: false,
+		builtin: false,
+		deletable: true,
+		disabledReason: null,
+	};
+
 	it("renders an unavailable empty-state reason only once", async () => {
 		const reason = "当前版本尚未提供可维护的规划参数";
 		mocks.loadPlanningProjection.mockResolvedValue({ headers: [], rows: [], readOnlyReason: reason });
@@ -48,5 +87,156 @@ describe("PlanningPage", () => {
 		await act(async () => root.render(<PlanningPage route={route} />));
 
 		expect(container.textContent?.match(new RegExp(reason, "g"))).toHaveLength(1);
+	});
+
+	it("renders the warehouse layer editor with protected built-in rows and custom delete choices", async () => {
+		mocks.loadPlanningProjection.mockResolvedValue({
+			headers: ["分层编码", "分层名称", "所属系统类型", "加工责任", "命名前缀", "来源"],
+			rows: [
+				{ id: "DWD", cells: ["DWD", "明细事实 / 维度层", "DWD", "业务明细", "dwd_", "系统"], source: builtinDwd },
+				{
+					id: "FIN_DETAIL",
+					cells: ["FIN_DETAIL", "财务明细层", "DWD", "财务域明细", "fin_dwd_", "自定义"],
+					source: customFinDetail,
+				},
+			],
+			readOnlyReason: null,
+		});
+
+		await act(async () => root.render(<PlanningPage route={layerRoute()} />));
+
+		for (const label of ["分层编码", "分层名称", "所属系统类型", "加工责任", "命名前缀"]) {
+			expect(container.textContent).toContain(label);
+		}
+		expect(container.textContent).toContain("新建数仓分层");
+		expect(container.textContent).toContain("财务明细层 · FIN_DETAIL");
+		expect(container.textContent).not.toContain("系统分层字典由平台内置并统一生效，当前版本只读");
+	});
+
+	it("creates a custom layer with normalized values and refreshes the projection", async () => {
+		mocks.canMaintain = true;
+		mocks.createWarehouseLayer.mockResolvedValue(customFinDetail);
+		mocks.normalizeModelingRequestFailure.mockReturnValue({ message: "失败" });
+		mocks.loadPlanningProjection.mockResolvedValue({
+			headers: ["分层编码"],
+			rows: [],
+			readOnlyReason: null,
+		});
+
+		await act(async () => root.render(<PlanningPage route={layerRoute()} />));
+
+		const inputs = container.querySelectorAll("input");
+		const codeInput = [...inputs].find((input) => input.placeholder === "例如：FIN_DETAIL");
+		const nameInput = [...inputs].find((input) => input.placeholder === "例如：财务明细层");
+		const prefixInput = [...inputs].find((input) => input.placeholder === "例如：fin_dwd_");
+		expect(codeInput).toBeDefined();
+		expect(nameInput).toBeDefined();
+		expect(prefixInput).toBeDefined();
+
+		const setReactInputValue = (input: HTMLInputElement, value: string) => {
+			const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+			setter?.call(input, value);
+			input.dispatchEvent(new Event("input", { bubbles: true }));
+		};
+		await act(async () => {
+			setReactInputValue(codeInput!, "fin_detail");
+			setReactInputValue(nameInput!, "财务明细层");
+			setReactInputValue(prefixInput!, "FIN_DWD_");
+		});
+		await act(async () => {
+			(
+				[...container.querySelectorAll("button")].find((button) =>
+					button.textContent?.includes("新建数仓分层"),
+				) as HTMLButtonElement
+			).click();
+		});
+
+		expect(mocks.createWarehouseLayer).toHaveBeenCalledWith({
+			code: "FIN_DETAIL",
+			name: "财务明细层",
+			systemLayerCode: "DWD",
+			description: undefined,
+			namingPrefix: "fin_dwd_",
+		});
+		expect(mocks.loadPlanningProjection).toHaveBeenCalledTimes(2);
+	});
+
+	it("rejects deletion on the first confirmation and deletes after the second", async () => {
+		mocks.deleteWarehouseLayer.mockResolvedValue({});
+		mocks.loadPlanningProjection.mockResolvedValue({
+			headers: ["分层编码"],
+			rows: [{ id: "FIN_DETAIL", cells: ["FIN_DETAIL"], source: customFinDetail }],
+			readOnlyReason: null,
+		});
+
+		await act(async () => root.render(<PlanningPage route={layerRoute()} />));
+
+		const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+		const select = [...container.querySelectorAll("select")].find(
+			(item) => item.getAttribute("aria-label") === "删除数仓分层",
+		);
+		expect(select).toBeDefined();
+		await act(async () => {
+			select!.value = "FIN_DETAIL";
+			select!.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+		expect(mocks.deleteWarehouseLayer).not.toHaveBeenCalled();
+		confirm.mockReturnValue(true);
+		await act(async () => {
+			select!.value = "FIN_DETAIL";
+			select!.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+		expect(mocks.deleteWarehouseLayer).toHaveBeenCalledWith("FIN_DETAIL");
+		expect(mocks.loadPlanningProjection).toHaveBeenCalledTimes(2);
+		confirm.mockRestore();
+	});
+
+	it("keeps rows intact and shows a stable error when an in-use delete is rejected", async () => {
+		mocks.deleteWarehouseLayer.mockRejectedValue({
+			response: { data: { code: "WAREHOUSE_LAYER_IN_USE", message: "存在活动模型引用该分层" } },
+		});
+		mocks.normalizeModelingRequestFailure.mockReturnValue({ message: "数仓分层删除失败：存在活动模型引用该分层" });
+		mocks.loadPlanningProjection.mockResolvedValue({
+			headers: ["分层编码"],
+			rows: [{ id: "FIN_DETAIL", cells: ["FIN_DETAIL"], source: customFinDetail }],
+			readOnlyReason: null,
+		});
+
+		await act(async () => root.render(<PlanningPage route={layerRoute()} />));
+		vi.spyOn(window, "confirm").mockReturnValue(true);
+		const select = [...container.querySelectorAll("select")].find(
+			(item) => item.getAttribute("aria-label") === "删除数仓分层",
+		);
+		await act(async () => {
+			select!.value = "FIN_DETAIL";
+			select!.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+
+		expect(container.textContent).toContain("数仓分层删除失败：存在活动模型引用该分层");
+		expect(container.textContent).toContain("FIN_DETAIL");
+		expect(mocks.loadPlanningProjection).toHaveBeenCalledTimes(1);
+	});
+
+	it("disables all write controls without maintain permission", async () => {
+		mocks.canMaintain = false;
+		mocks.loadPlanningProjection.mockResolvedValue({
+			headers: ["分层编码"],
+			rows: [{ id: "DWD", cells: ["DWD"], source: builtinDwd }],
+			readOnlyReason: null,
+		});
+
+		await act(async () => root.render(<PlanningPage route={layerRoute()} />));
+
+		const editorInputs = [...container.querySelectorAll("input")].filter(
+			(input) => input.placeholder !== "搜索名称、编码或说明",
+		);
+		expect(editorInputs.every((input) => input.disabled)).toBe(true);
+		const button = [...container.querySelectorAll("button")].find((item) => item.textContent?.includes("新建数仓分层"));
+		expect((button as HTMLButtonElement).disabled).toBe(true);
+		const select = [...container.querySelectorAll("select")].find(
+			(item) => item.getAttribute("aria-label") === "删除数仓分层",
+		);
+		expect((select as HTMLSelectElement).disabled).toBe(true);
+		expect(container.textContent).toContain("当前账号无规划维护权限");
 	});
 });

@@ -6,6 +6,7 @@ import {
 	deleteBusinessProcessApi,
 	type Sprint64BusinessProcess,
 } from "@/api/sprint64GovernanceApi";
+import { createWarehouseLayer, deleteWarehouseLayer, type WarehouseLayerView } from "@/api/warehouseLayerApi";
 import type { DataMartView } from "@/features/modeling/contracts/dataMartContract";
 import { useUserInfo } from "@/store/userStore";
 import type { DataModelingRoute } from "../types";
@@ -125,6 +126,15 @@ export function PlanningPage({ route }: { route: DataModelingRoute }) {
 								await load();
 							}}
 							ownerId={ownerIdOf(userInfo)}
+							rows={projection.rows}
+						/>
+					) : route.view === "layers" ? (
+						<WarehouseLayerEditor
+							canMaintain={canMaintain}
+							onChanged={async (result) => {
+								show(result);
+								await load();
+							}}
 							rows={projection.rows}
 						/>
 					) : projection.headers.length > 0 && projection.readOnlyReason ? (
@@ -324,6 +334,165 @@ function BusinessProcessEditor({
 					{rows.map((row) => (
 						<option key={row.id} value={row.id}>
 							{row.cells[1]} · {row.cells[2]}
+						</option>
+					))}
+				</select>
+			</div>
+		</div>
+	);
+}
+
+function WarehouseLayerEditor({
+	rows,
+	canMaintain,
+	onChanged,
+}: {
+	rows: PlanningProjection["rows"];
+	canMaintain: boolean;
+	onChanged: (message: string) => Promise<void>;
+}) {
+	const [code, setCode] = useState("");
+	const [name, setName] = useState("");
+	const [systemLayerCode, setSystemLayerCode] = useState("DWD");
+	const [description, setDescription] = useState("");
+	const [namingPrefix, setNamingPrefix] = useState("");
+	const [busy, setBusy] = useState(false);
+	const [error, setError] = useState("");
+
+	const customLayers = rows
+		.map((row) => row.source)
+		.filter((source): source is WarehouseLayerView =>
+			Boolean(source && "builtin" in source && !source.builtin && source.deletable),
+		);
+
+	const create = async () => {
+		const normalizedCode = code.trim().toLocaleUpperCase();
+		const normalizedName = name.trim();
+		const normalizedPrefix = namingPrefix.trim().toLocaleLowerCase();
+		if (!/^[A-Z][A-Z0-9_]{1,63}$/.test(normalizedCode))
+			return setError("分层编码只能包含大写字母、数字和下划线，且不能以数字开头");
+		if (!normalizedName) return setError("分层名称不能为空");
+		if (normalizedPrefix && !/^[a-z][a-z0-9_]{0,63}$/.test(normalizedPrefix)) {
+			return setError("命名前缀只能包含小写字母、数字和下划线，且不能以数字开头");
+		}
+		setBusy(true);
+		setError("");
+		try {
+			await createWarehouseLayer({
+				code: normalizedCode,
+				name: normalizedName,
+				systemLayerCode: systemLayerCode as WarehouseLayerView["systemLayerCode"],
+				description: description.trim() || undefined,
+				namingPrefix: normalizedPrefix || undefined,
+			});
+			setCode("");
+			setName("");
+			setDescription("");
+			setNamingPrefix("");
+			await onChanged("数仓分层已创建");
+		} catch (cause) {
+			setError(normalizeModelingRequestFailure(cause, "数仓分层创建失败。").message);
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	const remove = async (layer: WarehouseLayerView) => {
+		if (!window.confirm(`确认删除自定义分层“${layer.name}（${layer.code}）”？`)) return;
+		setBusy(true);
+		setError("");
+		try {
+			await deleteWarehouseLayer(layer.code);
+			await onChanged("数仓分层已删除");
+		} catch (cause) {
+			setError(normalizeModelingRequestFailure(cause, "数仓分层删除失败。").message);
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	return (
+		<div className="dmx-planning-editor">
+			<div className="dmx-planning-editor__heading">
+				<strong>新建数仓分层</strong>
+				<span>真实 owner：modeling/warehouse-layers</span>
+			</div>
+			<div className="dmx-form-grid">
+				<label>
+					<span className="required">分层编码</span>
+					<input
+						disabled={!canMaintain || busy}
+						onChange={(event) => setCode(event.target.value)}
+						placeholder="例如：FIN_DETAIL"
+						value={code}
+					/>
+				</label>
+				<label>
+					<span className="required">分层名称</span>
+					<input
+						disabled={!canMaintain || busy}
+						onChange={(event) => setName(event.target.value)}
+						placeholder="例如：财务明细层"
+						value={name}
+					/>
+				</label>
+				<label>
+					<span className="required">所属系统类型</span>
+					<select
+						disabled={!canMaintain || busy}
+						onChange={(event) => setSystemLayerCode(event.target.value)}
+						value={systemLayerCode}
+					>
+						<option value="ODS_RAW">原始接入层 · ODS_RAW</option>
+						<option value="ODS_STANDARDIZED">标准化接入层 · ODS_STANDARDIZED</option>
+						<option value="STG">技术过渡层 · STG</option>
+						<option value="DWD">明细事实 / 维度层 · DWD</option>
+						<option value="DWS">汇总服务层 · DWS</option>
+						<option value="ADS">应用服务层 · ADS</option>
+					</select>
+				</label>
+				<label>
+					<span>命名前缀</span>
+					<input
+						disabled={!canMaintain || busy}
+						onChange={(event) => setNamingPrefix(event.target.value)}
+						placeholder="例如：fin_dwd_"
+						value={namingPrefix}
+					/>
+				</label>
+				<label className="dmx-form-field--wide">
+					<span>加工责任</span>
+					<textarea
+						disabled={!canMaintain || busy}
+						onChange={(event) => setDescription(event.target.value)}
+						value={description}
+					/>
+				</label>
+			</div>
+			{error ? (
+				<div className="dmx-inline-error" role="alert">
+					{error}
+				</div>
+			) : null}
+			<div className="dmx-catalog-actions">
+				<Button disabled={!canMaintain || busy} primary onClick={() => void create()}>
+					<Plus size={15} />
+					{busy ? "处理中…" : "新建数仓分层"}
+				</Button>
+				{!canMaintain ? <span className="dmx-capability-note">当前账号无规划维护权限。</span> : null}
+				<select
+					aria-label="删除数仓分层"
+					disabled={!canMaintain || busy}
+					onChange={(event) => {
+						const layer = customLayers.find((item) => item.code === event.target.value);
+						if (layer) void remove(layer);
+					}}
+					value=""
+				>
+					<option value="">选择要删除的自定义分层…</option>
+					{customLayers.map((layer) => (
+						<option key={layer.code} value={layer.code}>
+							{layer.name} · {layer.code}
 						</option>
 					))}
 				</select>
