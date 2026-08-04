@@ -29,7 +29,7 @@
 | 入口 | UI 触发 | API/owner | canonical data / audit |
 |---|---|---|---|
 | 建模概览 | 进入、刷新、新建模型 | 并发读取 WarehousePlan、ModelSpec、MetadataStandard、Indicator；新建跳转 ModelSpec 工作台 | 只读投影；写操作由目标服务审计 |
-| 数仓规划 | 选择计划、维护域/过程/层级/策略 | `warehousePlanApi`、CatalogDomain、Sprint64 planning adapter | WarehousePlan、Catalog Domain、既有过程/层级；服务端审计 |
+| 数仓规划 | 选择计划、维护域/过程/层级/策略；数仓分层新建/逻辑删除 | `warehousePlanApi`、CatalogDomain、Sprint64 planning adapter、`/api/modeling/warehouse-layers` | WarehousePlan、Catalog Domain、既有过程/层级、`modeling_warehouse_layer`（系统分层只读）；服务端严格审计 |
 | 数据标准 | 查询、新建、编辑、导入、映射 | `/modeling/standards/**`、`/modeling/metadata-standards/**`、standard packages/reference codes/glossary | 既有标准仓储与审计 |
 | 维度建模 | 新建、编辑、保存、提交、发布、物化、预览、ZIP 导入 | Sprint-83 `ModelSpec → Lifecycle → Candidate → Gateway` | ModelSpec/revision、implementation、run/evidence、公共审计 |
 | 数据指标 | 查询、新建、校验、保存、发布、归档 | `/governance/indicators/**` | GovIndicator definition/version/reference/run + 审计 |
@@ -76,7 +76,7 @@
 | ID | Feature | Task 数 | 状态 |
 |---|---|---:|---|
 | F0 | 真实性基线与纠偏门禁 | 2 | DONE |
-| F1 | 规划与建模概览真实化 | 3 | CODE_COMPLETE |
+| F1 | 规划与建模概览真实化 | 3 | CODE_COMPLETE（数仓分层切片 Tasks 1–7 完成；真实 E2E 待输入） |
 | F2 | 数据标准真实化 | 3 | CODE_COMPLETE_WITH_OWNER_GAPS |
 | F3 | 数据指标真实化 | 3 | CODE_COMPLETE |
 | F4 | 关系图与通用工具收敛 | 3 | CODE_COMPLETE_WITH_OWNER_GAPS |

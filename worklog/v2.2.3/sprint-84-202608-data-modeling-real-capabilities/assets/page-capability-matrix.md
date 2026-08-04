@@ -3,7 +3,7 @@
 | 页面 | 路由 | 数据/动作事实 | 当前评级 | 目标 |
 |---|---|---|---|---|
 | 建模概览 | `/data-modeling/home/workspace` | 并发投影 WarehousePlan、ModelSpec、MetadataStandard 和 Indicator | CODE_COMPLETE | 部署后核对空/错状态与真实数量 |
-| 数仓规划 | `/data-modeling/planning/**` | 逐叶消费 WarehousePlan/Catalog owner；无 owner 能力显式禁用并说明 | CODE_COMPLETE_WITH_OWNER_GAPS | 不共享建设计划模块，部署后验收 CRUD |
+| 数仓规划 | `/data-modeling/planning/**` | 逐叶消费 WarehousePlan/Catalog owner；无 owner 能力显式禁用并说明；数仓分层由 `WarehouseLayerApplicationService` 提供新建/逻辑删除（系统分层只读） | CODE_COMPLETE_WITH_OWNER_GAPS | 不共享建设计划模块，部署后验收 CRUD；分层切片见 F1 |
 | 数据标准 | `/data-modeling/standards/**` | 标准/码表/词典使用真实 owner；映射与词根按当前 owner 能力只读/禁用 | CODE_COMPLETE_WITH_OWNER_GAPS | 部署后验收权限、CRUD 和导入 |
 | 维度建模 | `/data-modeling/dimensions/**` | 对象树 + 单页编辑器已接 ModelSpec/表示/release/build/preview；逆向建模已接 ZIP 主链 | CODE_COMPLETE | 部署后验收保存、发布、物化和部分成功 |
 | 数据指标 | `/data-modeling/metrics/**` | 指标目录、校验、保存、发布和归档使用 Governance Indicator owner | CODE_COMPLETE | 部署后验收编辑与发布 |

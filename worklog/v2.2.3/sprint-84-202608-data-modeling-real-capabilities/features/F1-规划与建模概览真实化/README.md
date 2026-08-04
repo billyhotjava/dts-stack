@@ -11,8 +11,9 @@
 
 | UI | API | Owner |
 |---|---|---|
-| `PlanningWorkspace` | `warehousePlanApi`、CatalogDomain、planning adapter | WarehousePlan/CatalogDomain/既有过程层级 |
-| `HomeWorkspace` | 并发 list plans/model specs/standards/indicators；必要时只新增无表的只读聚合 | 既有事实投影 |
+| `PlanningPage` | `warehousePlanApi`、CatalogDomain、planning adapter | WarehousePlan/CatalogDomain/既有过程层级 |
+| `PlanningPage`（数仓分层） | `/api/modeling/warehouse-layers`（`warehouseLayerApi`） | `WarehouseLayerApplicationService` + `modeling_warehouse_layer` |
+| `OverviewPage` | 并发 list plans/model specs/standards/indicators；必要时只新增无表的只读聚合 | 既有事实投影 |
 
 ## 四态与交互
 
@@ -22,7 +23,7 @@
 
 | Task | 状态 |
 |---|---|
-| T01 接入规划真实目录和可维护动作 | CODE_COMPLETE |
+| T01 接入规划真实目录和可维护动作 | CODE_COMPLETE（含数仓分层切片 Tasks 1–7） |
 | T02 接入建模概览真实投影 | CODE_COMPLETE |
 | T03 完成七态与聚焦契约测试 | CODE_COMPLETE |
 
@@ -32,6 +33,15 @@
 - [x] UI 控件已登记
 - [x] 无平行表/审计方案
 - [x] 验收可由聚焦测试与 IT-84-01 证明
+
+## 数仓分层切片（2026-08-05）
+
+- 系统分层：代码字典（`Sprint64GovernanceContract`），只读，删除返回 `WAREHOUSE_LAYER_BUILTIN_PROTECTED`。
+- 自定义分层：`modeling_warehouse_layer`，全局共享，可新增/逻辑删除；编码删除后不可复用。
+- 模型选择：ModelSpec 当前头与 revision snapshot 保存 `warehouseLayerCode`；canonical 执行语义仍由 `layer` 承担；旧调用方缺省回退 canonical layer。
+- 删除保护：非 `ARCHIVED` ModelSpec 引用返回 `WAREHOUSE_LAYER_IN_USE`（409 + referenceCount）。
+- 审计：`MODELING_WAREHOUSE_LAYER_CREATE/DELETE` 严格写入公共审计。
+- 真实交付状态：代码/契约测试完成；认证 E2E 未执行前保持 `PENDING/BLOCKED_E2E_INPUT`。
 
 ## 当前编码证据（2026-08-03）
 
