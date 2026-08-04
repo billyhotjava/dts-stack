@@ -95,6 +95,9 @@ public class TargetTableProvisioner {
         if (fileLandingPolicy != null && mappings.size() != 1) {
             throw new IllegalStateException("文件落地策略仅允许配置一个目标表");
         }
+        if (fileLandingPolicy != null && !fullRefresh) {
+            throw new IllegalStateException("文件落地仅支持全量导入");
+        }
         try (Connection connection = metadataService.openConnection(targetInfo)) {
             List<ProvisioningPlan> plans = new ArrayList<>();
             for (TableMapping mapping : mappings) {
@@ -139,6 +142,9 @@ public class TargetTableProvisioner {
                 for (ProvisioningPlan plan : plans) {
                     createSchemaIfNeeded(connection, plan.target().schema());
                     boolean exists = tableExists(connection, plan.target());
+                    if (fileLandingPolicy != null && exists && !transactionalDdl) {
+                        throw new IllegalStateException("替换已有文件落地表仅支持 PostgreSQL");
+                    }
                     if (fileLandingPolicy == null && exists) {
                         ensureColumns(connection, plan.target(), plan.odsColumns());
                         LOG.info("Reconciled table {} for task {} without destructive DDL", plan.target().qualifiedName(), task.getId());
@@ -147,13 +153,16 @@ public class TargetTableProvisioner {
                         LOG.info("Auto-created table {} for task {}", plan.target().qualifiedName(), task.getId());
                     } else if ("create_new".equals(fileLandingPolicy.landingMode())) {
                         if (exists) {
-                            throw new IllegalStateException(
-                                "目标表已存在，不能按新建表方式落地: " + displayName(plan.target())
-                            );
+                            dropTable(connection, plan.target());
                         }
                         createTable(connection, plan.target(), plan.odsColumns(), false);
                         applyColumnComments(connection, plan.target(), plan.columnComments(), targetInfo.jdbcUrl());
-                        LOG.info("Created managed file landing table {} for task {}", plan.target().qualifiedName(), task.getId());
+                        LOG.info(
+                            "{} managed file landing table {} for task {}",
+                            exists ? "Recreated" : "Created",
+                            plan.target().qualifiedName(),
+                            task.getId()
+                        );
                     } else {
                         if (!exists) {
                             throw new IllegalStateException(

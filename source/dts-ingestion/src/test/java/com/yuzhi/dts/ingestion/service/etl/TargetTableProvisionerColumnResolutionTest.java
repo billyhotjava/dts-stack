@@ -272,7 +272,7 @@ class TargetTableProvisionerColumnResolutionTest {
     }
 
     @Test
-    void shouldRejectCreateNewWhenTargetTableAlreadyExists() throws Exception {
+    void shouldDropExistingCreateNewTargetBeforeRecreatingWithoutCascade() throws Exception {
         JdbcMetadataService metadataService = mock(JdbcMetadataService.class);
         TargetTableProvisioner provisioner = new TargetTableProvisioner(
             metadataService,
@@ -281,16 +281,89 @@ class TargetTableProvisionerColumnResolutionTest {
             mock(IngestionSourceResolver.class)
         );
         Connection targetConnection = targetConnection(metadataService, true);
+        Statement statement = targetConnection.createStatement();
         IngestionTask task = managedFileTask("create_new", true);
+
+        provisioner.ensureTargetTables(task);
+
+        org.mockito.InOrder ddlOrder = org.mockito.Mockito.inOrder(statement);
+        ddlOrder.verify(statement).execute("DROP TABLE \"public\".\"ods_orders\"");
+        ddlOrder.verify(statement).execute(
+            org.mockito.ArgumentMatchers.startsWith("create table \"public\".\"ods_orders\"")
+        );
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        verify(statement, atLeastOnce()).execute(sql.capture());
+        assertThat(sql.getAllValues()).noneMatch(value -> value.toUpperCase(Locale.ROOT).contains("CASCADE"));
+        verify(targetConnection).commit();
+    }
+
+    @Test
+    void shouldRollbackCreateNewDropWhenReplacementCreateFails() throws Exception {
+        JdbcMetadataService metadataService = mock(JdbcMetadataService.class);
+        TargetTableProvisioner provisioner = new TargetTableProvisioner(
+            metadataService,
+            objectMapper,
+            mock(IngestionSchemaSnapshotService.class),
+            mock(IngestionSourceResolver.class)
+        );
+        Connection targetConnection = targetConnection(metadataService, true);
+        Statement statement = targetConnection.createStatement();
+        doThrow(new java.sql.SQLException("replacement create failed"))
+            .when(statement)
+            .execute(org.mockito.ArgumentMatchers.startsWith("create table"));
+
+        assertThatThrownBy(() -> provisioner.ensureTargetTables(managedFileTask("create_new", true)))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("replacement create failed");
+
+        verify(statement).execute("DROP TABLE \"public\".\"ods_orders\"");
+        verify(targetConnection).rollback();
+        verify(targetConnection, never()).commit();
+    }
+
+    @Test
+    void shouldRejectManagedFileReplacementOutsideFullRefresh() throws Exception {
+        JdbcMetadataService metadataService = mock(JdbcMetadataService.class);
+        TargetTableProvisioner provisioner = new TargetTableProvisioner(
+            metadataService,
+            objectMapper,
+            mock(IngestionSchemaSnapshotService.class),
+            mock(IngestionSourceResolver.class)
+        );
+        IngestionTask task = managedFileTask("create_new", true);
+        task.setSyncMode("incremental");
 
         assertThatThrownBy(() -> provisioner.ensureTargetTables(task))
             .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("目标表已存在")
-            .hasMessageContaining("public.ods_orders");
+            .hasMessageContaining("文件落地仅支持全量导入");
 
-        verify(targetConnection.createStatement(), never()).execute(
-            org.mockito.ArgumentMatchers.startsWith("DROP TABLE")
+        verify(metadataService, never()).openConnection(any());
+    }
+
+    @Test
+    void shouldRejectExistingFileTargetReplacementOutsidePostgres() throws Exception {
+        JdbcMetadataService metadataService = mock(JdbcMetadataService.class);
+        TargetTableProvisioner provisioner = new TargetTableProvisioner(
+            metadataService,
+            objectMapper,
+            mock(IngestionSchemaSnapshotService.class),
+            mock(IngestionSourceResolver.class)
         );
+        Connection targetConnection = targetConnection(metadataService, true);
+        Statement statement = targetConnection.createStatement();
+        IngestionTask task = managedFileTask("create_new", true);
+        task.setDestinationConfig(objectMapper.valueToTree(Map.of(
+            "jdbcUrl", "jdbc:mysql://target-db:3306/lake",
+            "username", "writer",
+            "password", "writer-password",
+            "table", List.of("public.ods_orders")
+        )));
+
+        assertThatThrownBy(() -> provisioner.ensureTargetTables(task))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("替换已有文件落地表仅支持 PostgreSQL");
+
+        verify(statement, never()).execute(org.mockito.ArgumentMatchers.startsWith("DROP TABLE"));
     }
 
     @Test

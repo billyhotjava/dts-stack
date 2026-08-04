@@ -1321,7 +1321,7 @@ public class IngestionTaskService {
         if (StringUtils.hasText(targetTable)) {
             auditMeta.put("targetTable", targetTable);
         }
-        if ("recreate_existing".equals(landingMode)) {
+        if ("recreate_existing".equals(landingMode) || "create_new".equals(landingMode)) {
             auditMeta.put("destructive", true);
         }
     }

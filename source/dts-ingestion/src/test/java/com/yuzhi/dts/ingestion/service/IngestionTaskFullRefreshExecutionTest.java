@@ -240,7 +240,7 @@ class IngestionTaskFullRefreshExecutionTest {
     }
 
     @Test
-    void execute_managedFileLanding_shouldProvisionTargetAndAuditDestructiveIntent() {
+    void execute_createNewManagedFileLanding_shouldAuditDestructiveIntent() {
         IngestionTask task = baseTask(106L, "excel", "full_refresh");
         ObjectNode sourceConfig = (ObjectNode) task.getSourceConfig().deepCopy();
         sourceConfig.set("_fileColumns", objectMapper.valueToTree(List.of(
@@ -248,7 +248,7 @@ class IngestionTaskFullRefreshExecutionTest {
         )));
         sourceConfig.set("_fileLanding", objectMapper.valueToTree(Map.of(
             "version", 1,
-            "landingMode", "recreate_existing",
+            "landingMode", "create_new",
             "referenceTable", "public.ods_orders",
             "targetTable", "public.ods_orders",
             "recreateConfirmed", true
@@ -279,7 +279,7 @@ class IngestionTaskFullRefreshExecutionTest {
             any(),
             eq(task.getName()),
             org.mockito.ArgumentMatchers.argThat(meta ->
-                "recreate_existing".equals(meta.get("landingMode"))
+                "create_new".equals(meta.get("landingMode"))
                     && "public.ods_orders".equals(meta.get("targetTable"))
                     && Boolean.TRUE.equals(meta.get("destructive"))
             )
