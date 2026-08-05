@@ -14,6 +14,7 @@ import { listPlanningCatalogDomains, type PlanningCatalogDomain } from "./planni
 export type ModelingRequestFailure = {
 	kind: "permission" | "request";
 	message: string;
+	code?: string | null;
 };
 
 export type ModelingOverviewProjection = {
@@ -93,7 +94,7 @@ export function normalizeModelingRequestFailure(error: unknown, fallback: string
 		const evidence = [code ? `错误码 ${code}` : null, correlationId ? `关联 ID ${correlationId}` : null].filter(
 			Boolean,
 		);
-		return { kind: "request", message: evidence.length ? `${fallback}（${evidence.join("；")}）` : fallback };
+		return { kind: "request", message: evidence.length ? `${fallback}（${evidence.join("；")}）` : fallback, code };
 	}
 	const detail = error instanceof Error ? error.message.trim() : "";
 	return { kind: "request", message: detail || fallback };

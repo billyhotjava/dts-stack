@@ -70,6 +70,7 @@ describe("prototype-owned data modeling frontend", () => {
 
 	it("keeps workbench route selection and navigation guards deterministic", async () => {
 		vi.doMock("@/api/modelRepresentationApi", () => ({}));
+		vi.doMock("@/api/dimensionDefinitionApi", () => ({}));
 		vi.doMock("@/store/userStore", () => ({}));
 		vi.doMock("./navigation", () => ({}));
 		vi.doMock("./prototype/ModelFieldEditorTable", () => ({}));

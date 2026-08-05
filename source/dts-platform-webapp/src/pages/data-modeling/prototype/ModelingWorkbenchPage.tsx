@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronRight, FileDown, GitBranch, Import, ListFilter, Plus, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type BlockerFunction, useBlocker, useNavigate, useSearchParams } from "react-router";
+import { listDimensionDefinitions } from "@/api/dimensionDefinitionApi";
 import { getModelRepresentation } from "@/api/modelRepresentationApi";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
 import type { ModelRepresentationView } from "@/features/modeling/contracts/modelRepresentationContract";
@@ -16,6 +17,7 @@ import { ModelWorkbenchDialog, type WorkbenchDialog } from "./ModelWorkbenchDial
 import { modelDraftFingerprint } from "./modelWorkbenchPresentation";
 import { PageHeader, RequestState, Status, Toast, useTransientMessage } from "./PrototypePrimitives";
 import {
+	type ConceptDimensionDraft,
 	conceptDimensionDraftFromView,
 	confirmDimensionDefinitionDraft,
 	emptyModelDraft,
@@ -36,7 +38,7 @@ import {
 	validateConceptDimensionDraftInput,
 	validateModelDraftInput,
 } from "./services/modelWorkbenchService";
-import { normalizeModelingRequestFailure } from "./services/planningProjectionService";
+import { type ModelingRequestFailure, normalizeModelingRequestFailure } from "./services/planningProjectionService";
 import { useDataModelingMenuGrant } from "./useDataModelingMenuGrant";
 
 const layerTabs = [
@@ -121,6 +123,31 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		),
 	);
 	const confirmDiscard = useCallback(() => !dirty || window.confirm(DISCARD_PROMPT), [dirty]);
+	const recoverConflictingDimensionDefinition = async (
+		draft: ConceptDimensionDraft,
+		failure: ModelingRequestFailure,
+	): Promise<boolean> => {
+		const conflictMessage = "该数据域下已存在同名维度，请更换名称，或直接使用已有维度。";
+		try {
+			const definitions = await listDimensionDefinitions({
+				domainId: draft.domainId,
+				offset: 0,
+				limit: 500,
+			});
+			const match = definitions.find((item) => item.name.trim() === draft.name.trim());
+			if (!match) {
+				setFailure({ ...failure, message: conflictMessage });
+				return false;
+			}
+			replaceDraft(conceptDimensionDraftFromView(match));
+			setFailure(null);
+			show(`该数据域下已存在同名维度，已为你打开：${match.systemCode} · r${match.revision}`);
+			return true;
+		} catch {
+			setFailure({ ...failure, message: conflictMessage });
+			return false;
+		}
+	};
 	const replaceDraft = useCallback((nextDraft: ModelDraft | null) => {
 		setDraft(nextDraft);
 		setCleanFingerprint(nextDraft ? modelDraftFingerprint(nextDraft) : null);
@@ -305,7 +332,16 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 				replaceDraft(conceptDimensionDraftFromView(saved));
 				show(`维度草稿已保存：${saved.systemCode} · r${saved.revision}`);
 			} catch (error) {
-				setFailure(normalizeModelingRequestFailure(error, "维度保存失败。"));
+				const failure = normalizeModelingRequestFailure(error, "维度保存失败。");
+				if (failure.code === "DIMENSION_DEFINITION_NAME_CONFLICT") {
+					const recovered = await recoverConflictingDimensionDefinition(draft, failure);
+					if (recovered) {
+						setSaving(false);
+						savingRef.current = false;
+						return;
+					}
+				}
+				setFailure(failure);
 			} finally {
 				savingRef.current = false;
 				setSaving(false);

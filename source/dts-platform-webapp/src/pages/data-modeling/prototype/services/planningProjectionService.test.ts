@@ -31,6 +31,7 @@ describe("normalizeModelingRequestFailure", () => {
 		expect(failure).toEqual({
 			kind: "request",
 			message: "dbt 操作失败。（错误码 DBT_DRAFT_INVALID；关联 ID req-83a.42）",
+			code: "DBT_DRAFT_INVALID",
 		});
 		expect(failure.message).not.toContain("private_schema");
 		expect(failure.message).not.toContain("secret");
