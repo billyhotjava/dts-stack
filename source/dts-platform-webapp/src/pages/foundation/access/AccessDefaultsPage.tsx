@@ -1,5 +1,5 @@
 import { ReloadOutlined } from "@ant-design/icons";
-import { Alert, Button, Descriptions, Empty, Space, Spin, Table, Tag, Typography } from "antd";
+import { Alert, Button, Descriptions, Empty, Spin, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -8,7 +8,6 @@ import {
 	type DefaultDestinationStatus,
 	type IngestionAccessDefaultPolicyDTO,
 	type IngestionConnectorCapabilityDTO,
-	type IngestionTaskTemplateDTO,
 	ingestionTaskAPI,
 } from "@/api/ingestion";
 import { PageHeader } from "@/components/page-header";
@@ -63,7 +62,6 @@ const isValidApiConnectorContract = (value: unknown): value is ApiConnectorContr
 export type AccessDefaultsDependencies = {
 	getAccessDefaultPolicy: () => Promise<IngestionAccessDefaultPolicyDTO>;
 	getDefaultDestinationStatus: () => Promise<DefaultDestinationStatus>;
-	getTaskTemplates: () => Promise<IngestionTaskTemplateDTO[]>;
 	getConnectorCapabilities: () => Promise<IngestionConnectorCapabilityDTO[]>;
 	getApiConnectorContract: () => Promise<ApiConnectorContractDTO | null>;
 };
@@ -71,7 +69,6 @@ export type AccessDefaultsDependencies = {
 export type AccessDefaultsSnapshot = {
 	policy: IngestionAccessDefaultPolicyDTO;
 	destination: DefaultDestinationStatus;
-	templates: IngestionTaskTemplateDTO[];
 	capabilities: IngestionConnectorCapabilityDTO[];
 	apiContract: ApiConnectorContractDTO | null;
 };
@@ -79,7 +76,6 @@ export type AccessDefaultsSnapshot = {
 const DEFAULT_DEPENDENCIES: AccessDefaultsDependencies = {
 	getAccessDefaultPolicy: () => ingestionTaskAPI.getAccessDefaultPolicy(),
 	getDefaultDestinationStatus: () => ingestionTaskAPI.getDefaultDestinationStatus(),
-	getTaskTemplates: () => ingestionTaskAPI.getTaskTemplates(),
 	getConnectorCapabilities: () => ingestionTaskAPI.getConnectorCapabilities(),
 	getApiConnectorContract: () => ingestionTaskAPI.getApiConnectorContract(),
 };
@@ -106,10 +102,9 @@ export const redactSensitiveConfiguration = <T,>(value: T, parentKey = ""): T =>
 export const loadAccessDefaultsSnapshot = async (
 	dependencies: AccessDefaultsDependencies = DEFAULT_DEPENDENCIES,
 ): Promise<AccessDefaultsSnapshot> => {
-	const [policy, destination, templates, capabilities, apiContract] = await Promise.all([
+	const [policy, destination, capabilities, apiContract] = await Promise.all([
 		dependencies.getAccessDefaultPolicy(),
 		dependencies.getDefaultDestinationStatus(),
-		dependencies.getTaskTemplates(),
 		dependencies.getConnectorCapabilities(),
 		dependencies.getApiConnectorContract(),
 	]);
@@ -129,11 +124,10 @@ export const loadAccessDefaultsSnapshot = async (
 	if (!destination || typeof destination.available !== "boolean") {
 		throw new Error("默认数据湖状态响应无效");
 	}
-	if (!Array.isArray(templates) || !Array.isArray(capabilities)) {
+	if (!Array.isArray(capabilities)) {
 		throw new Error("默认配置响应无效");
 	}
 	if (
-		templates.some((template) => !template || typeof template.id !== "string" || typeof template.name !== "string") ||
 		capabilities.some(
 			(capability) =>
 				!capability || typeof capability.connectorType !== "string" || !Array.isArray(capability.capabilities),
@@ -151,10 +145,6 @@ export const loadAccessDefaultsSnapshot = async (
 			defaults: redactSensitiveConfiguration(policy.defaults),
 		},
 		destination,
-		templates: templates.map((template) => ({
-			...template,
-			defaults: redactSensitiveConfiguration(template.defaults),
-		})),
 		capabilities: capabilities.map((capability) => ({
 			...capability,
 			constraints: redactSensitiveConfiguration(capability.constraints),
@@ -177,51 +167,6 @@ const ConfigurationPreview = ({ value }: { value?: Record<string, unknown> }) =>
 	if (!value || Object.keys(value).length === 0) return <Text type="secondary">未声明</Text>;
 	return <pre className={styles.codePreview}>{JSON.stringify(value, null, 2)}</pre>;
 };
-
-const templateColumns: ColumnsType<IngestionTaskTemplateDTO> = [
-	{
-		title: "模板",
-		dataIndex: "name",
-		key: "name",
-		width: 190,
-		render: (value: string, row) => (
-			<Space direction="vertical" size={0}>
-				<Text strong>{value || row.id}</Text>
-				<Text type="secondary">{row.id}</Text>
-			</Space>
-		),
-	},
-	{
-		title: "接入分类",
-		dataIndex: "sourceCategory",
-		key: "sourceCategory",
-		width: 110,
-		render: (value) => value || "—",
-	},
-	{ title: "连接器", dataIndex: "connectorType", key: "connectorType", width: 120, render: (value) => value || "—" },
-	{ title: "模板版本", dataIndex: "version", key: "version", width: 100, render: (value) => value || "—" },
-	{
-		title: "模板默认值（非生效策略）",
-		dataIndex: "defaults",
-		key: "defaults",
-		width: 360,
-		render: (value?: Record<string, unknown>) => <ConfigurationPreview value={value} />,
-	},
-	{
-		title: "必填参数",
-		dataIndex: "requiredParams",
-		key: "requiredParams",
-		width: 180,
-		render: (value?: string[]) => value?.join("、") || "—",
-	},
-	{
-		title: "提示",
-		dataIndex: "warnings",
-		key: "warnings",
-		width: 220,
-		render: (value?: string[]) => value?.join("；") || "—",
-	},
-];
 
 const capabilityColumns: ColumnsType<IngestionConnectorCapabilityDTO> = [
 	{
@@ -390,24 +335,6 @@ export default function AccessDefaultsPage() {
 								{snapshot.destination.message || "—"}
 							</Descriptions.Item>
 						</Descriptions>
-					</section>
-
-					<section className={styles.section}>
-						<div className={styles.sectionHeader}>
-							<div>
-								<h2 className={styles.sectionTitle}>任务模板默认值</h2>
-								<p className={styles.sectionDescription}>模板仅提供创建建议；任务保存后的覆盖参数以任务详情为准。</p>
-							</div>
-							<Tag>{snapshot.templates.length} 个模板</Tag>
-						</div>
-						<Table<IngestionTaskTemplateDTO>
-							rowKey="id"
-							columns={templateColumns}
-							dataSource={snapshot.templates}
-							scroll={{ x: 1280 }}
-							pagination={{ pageSize: 10, showSizeChanger: true }}
-							locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无任务模板" /> }}
-						/>
 					</section>
 
 					<section className={styles.section}>

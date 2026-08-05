@@ -6,7 +6,6 @@ import type {
 	DefaultDestinationStatus,
 	IngestionAccessDefaultPolicyDTO,
 	IngestionConnectorCapabilityDTO,
-	IngestionTaskTemplateDTO,
 } from "../../../api/ingestion";
 import {
 	type AccessDefaultsDependencies,
@@ -33,23 +32,6 @@ const policy: IngestionAccessDefaultPolicyDTO = {
 	activatedAt: "2026-07-31T00:00:00Z",
 };
 
-const templates: IngestionTaskTemplateDTO[] = [
-	{
-		id: "mysql-incremental",
-		name: "MySQL 增量接入",
-		sourceCategory: "database",
-		connectorType: "mysql",
-		version: "1.2",
-		defaults: {
-			channel: 2,
-			password: "must-not-leak",
-			auth: { apiToken: "nested-secret", timeoutSeconds: 30 },
-		},
-		requiredParams: ["sourceDataSourceId"],
-		warnings: ["首次运行需确认增量字段"],
-	},
-];
-
 const capabilities: IngestionConnectorCapabilityDTO[] = [
 	{
 		connectorType: "mysql",
@@ -72,7 +54,6 @@ const apiContract: ApiConnectorContractDTO = {
 const dependencies = (overrides: Partial<AccessDefaultsDependencies> = {}): AccessDefaultsDependencies => ({
 	getAccessDefaultPolicy: async () => policy,
 	getDefaultDestinationStatus: async () => destination,
-	getTaskTemplates: async () => templates,
 	getConnectorCapabilities: async () => capabilities,
 	getApiConnectorContract: async () => apiContract,
 	...overrides,
@@ -85,11 +66,8 @@ describe("AccessDefaultsPage data contract", () => {
 		assert.equal(snapshot.policy.version, 3);
 		assert.equal(snapshot.policy.defaults.apiToken, "[已隐藏]");
 		assert.deepEqual(snapshot.destination, destination);
-		assert.equal(snapshot.templates.length, 1);
 		assert.equal(snapshot.capabilities.length, 1);
 		assert.deepEqual(snapshot.apiContract, apiContract);
-		assert.equal(snapshot.templates[0].defaults?.password, "[已隐藏]");
-		assert.equal((snapshot.templates[0].defaults?.auth as Record<string, unknown>).apiToken, "[已隐藏]");
 		assert.equal(snapshot.capabilities[0].constraints?.accessToken, "[已隐藏]");
 	});
 
@@ -97,12 +75,12 @@ describe("AccessDefaultsPage data contract", () => {
 		await assert.rejects(
 			loadAccessDefaultsSnapshot(
 				dependencies({
-					getTaskTemplates: async () => {
-						throw new Error("template service unavailable");
+					getConnectorCapabilities: async () => {
+						throw new Error("capability service unavailable");
 					},
 				}),
 			),
-			/template service unavailable/,
+			/capability service unavailable/,
 		);
 	});
 
@@ -147,7 +125,7 @@ describe("AccessDefaultsPage data contract", () => {
 		assert.equal(isExplicitlyEnabled("true"), false);
 	});
 
-	it("rejects malformed template and capability entries", async () => {
+	it("rejects malformed capability entries", async () => {
 		await assert.rejects(
 			loadAccessDefaultsSnapshot(
 				dependencies({
