@@ -147,7 +147,7 @@ function ConceptDimensionForm(props: ConceptDimensionFormProps) {
 					>
 						<option value="">请选择数据域</option>
 						{context.domains.map((item) => (
-							<option key={item.code} value={item.code}>
+							<option key={item.id} value={item.id}>
 								{item.name} · {item.code}
 							</option>
 						))}
@@ -195,7 +195,7 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 		currentOwnerId,
 	});
 	const missingPersistedDomain = Boolean(
-		draft.base && draft.domainId && !context.domains.some((item) => item.code === draft.domainId),
+		draft.base && draft.domainId && !context.domains.some((item) => item.id === draft.domainId),
 	);
 	const missingPersistedDefinition = Boolean(
 		draft.base &&
@@ -226,7 +226,7 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 						>
 							<option value="">请选择数据域</option>
 							{context.domains.map((item) => (
-								<option key={item.code} value={item.code}>
+								<option key={item.id} value={item.id}>
 									{item.name} · {item.code}
 								</option>
 							))}
@@ -327,7 +327,7 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 	const config = MODEL_KIND_CONFIG[draft.createKind];
 	const patch = (next: Partial<ModelSpecDraft>) => onChange({ ...draft, ...next });
 	const missingPersistedDomain = Boolean(
-		draft.base && draft.domainId && !context.domains.some((item) => item.code === draft.domainId),
+		draft.base && draft.domainId && !context.domains.some((item) => item.id === draft.domainId),
 	);
 	return (
 		<>
@@ -343,7 +343,7 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 						>
 							<option value="">请选择数据域</option>
 							{context.domains.map((item) => (
-								<option key={item.code} value={item.code}>
+								<option key={item.id} value={item.id}>
 									{item.name} · {item.code}
 								</option>
 							))}

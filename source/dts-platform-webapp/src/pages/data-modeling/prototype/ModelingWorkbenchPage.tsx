@@ -225,7 +225,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		};
 	}, [draftBase, draftCreateKind, draftDimensionDefinitionId, draftDomainId]);
 
-	const domainNames = useMemo(() => new Map((context?.domains || []).map((item) => [item.code, item.name])), [context]);
+	const domainNames = useMemo(() => new Map((context?.domains || []).map((item) => [item.id, item.name])), [context]);
 	const modelDomainOptions = useMemo(
 		() =>
 			Array.from(

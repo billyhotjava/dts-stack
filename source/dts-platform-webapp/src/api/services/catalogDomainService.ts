@@ -10,6 +10,7 @@ import { getDomainTree, listDomains } from "@/api/platformApi";
  */
 
 export interface CatalogDomain {
+	id: string;
 	code: string;
 	name: string;
 	parentCode?: string | null;
@@ -19,6 +20,15 @@ function pickKey(raw: unknown): string {
 	if (!raw || typeof raw !== "object") return "";
 	const obj = raw as Record<string, unknown>;
 	const candidate = obj.code ?? obj.key ?? obj.id;
+	if (candidate == null) return "";
+	const s = String(candidate).trim();
+	return s;
+}
+
+function pickId(raw: unknown): string {
+	if (!raw || typeof raw !== "object") return "";
+	const obj = raw as Record<string, unknown>;
+	const candidate = obj.id ?? obj.key ?? obj.code;
 	if (candidate == null) return "";
 	const s = String(candidate).trim();
 	return s;
@@ -38,7 +48,7 @@ function flattenTree(nodes: unknown, parentCode: string | null, out: CatalogDoma
 		const code = pickKey(node);
 		const name = pickName(node);
 		if (!code || !name) continue;
-		out.push({ code, name, parentCode });
+		out.push({ id: pickId(node), code, name, parentCode });
 		const children = (node as Record<string, unknown>).children;
 		if (Array.isArray(children) && children.length) {
 			flattenTree(children, code, out);
@@ -77,7 +87,7 @@ async function fetchFromList(): Promise<CatalogDomain[]> {
 			const code = pickKey(node);
 			const name = pickName(node);
 			if (!code || !name) continue;
-			out.push({ code, name, parentCode: null });
+			out.push({ id: pickId(node), code, name, parentCode: null });
 		}
 	}
 	return out;

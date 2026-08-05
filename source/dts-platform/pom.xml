@@ -686,6 +686,7 @@
                         <testInclude>**/service/modeling/warehouse/WarehouseLayerApplicationServiceTest.java</testInclude>
                         <testInclude>**/repository/modeling/WarehouseLayerRepositoryIT.java</testInclude>
                         <testInclude>**/web/rest/WarehouseLayerResourceTest.java</testInclude>
+                        <testInclude>**/web/rest/WorkbenchDimensionCreateDecodeReproTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelSpecSnapshotCodecTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelSpecCreateRequestDecoderTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelSpecRequestDecoderTest.java</testInclude>

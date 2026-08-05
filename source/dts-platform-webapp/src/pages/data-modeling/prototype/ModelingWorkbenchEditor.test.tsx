@@ -66,8 +66,8 @@ const makeProps = (patch: Partial<ModelingWorkbenchEditorProps> = {}): ModelingW
 	draft: makeDraft(),
 	context: {
 		domains: [
-			{ code: "business", name: "财务业务" },
-			{ code: "finance", name: "财务域", parentCode: "business" },
+			{ id: "10000000-0000-0000-0000-000000000001", code: "business", name: "财务业务" },
+			{ id: "20000000-0000-0000-0000-000000000001", code: "finance", name: "财务域", parentCode: "business" },
 		],
 		models: [],
 		standards: [],

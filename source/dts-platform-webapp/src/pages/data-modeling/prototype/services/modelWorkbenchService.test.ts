@@ -292,6 +292,21 @@ describe("model workbench draft validation", () => {
 		expect(emptyModelDraft("application", context)).toMatchObject({ warehouseLayerCode: "ADS" });
 	});
 
+	it("uses the canonical domain id for new draft domain binding", () => {
+		const context = {
+			domains: [{ id: "1d9a3e90-7b38-485a-8e6d-c428dc17a61e", code: "FinanceDomain", name: "财务域" }],
+			models: [],
+			standards: [],
+			warehouseLayers: [],
+		} as never;
+		expect(emptyModelDraft("dimension", context)).toMatchObject({
+			domainId: "1d9a3e90-7b38-485a-8e6d-c428dc17a61e",
+		});
+		expect(emptyModelDraft("fact", context)).toMatchObject({
+			domainId: "1d9a3e90-7b38-485a-8e6d-c428dc17a61e",
+		});
+	});
+
 	it("loads the governed warehouse layers into the workbench context", async () => {
 		vi.mocked(listWarehouseLayers).mockResolvedValue([customLayer]);
 		vi.mocked(catalogDomainService.list).mockResolvedValue([]);

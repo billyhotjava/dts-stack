@@ -17,7 +17,7 @@ const makeDraft = (patch: Partial<ModelSpecDraft> = {}): ModelSpecDraft => ({
 	createKind: "dimension-table",
 	base: null,
 	planId: "",
-	domainId: "finance",
+	domainId: "20000000-0000-0000-0000-000000000001",
 	name: "预算科目维度表",
 	description: "统一维护预算科目",
 	physicalName: "dim_budget_account",
@@ -50,8 +50,8 @@ describe("dimension workbench presentation", () => {
 		const view = resolveDimensionFormPresentation({
 			draft: makeDraft({ physicalName: "dim_budget_account" }),
 			domains: [
-				{ code: "business", name: "财务业务" },
-				{ code: "finance", name: "财务域", parentCode: "business" },
+				{ id: "10000000-0000-0000-0000-000000000001", code: "business", name: "财务业务" },
+				{ id: "20000000-0000-0000-0000-000000000001", code: "finance", name: "财务域", parentCode: "business" },
 			] satisfies CatalogDomain[],
 			definition: { id: "dimension-1", name: "预算科目", ownerId: "owner-1" } as DimensionDefinitionView,
 			currentOwnerId: "current-user",
@@ -69,7 +69,7 @@ describe("dimension workbench presentation", () => {
 	it("marks unavailable authority and invalid physical names as unconfigured", () => {
 		const missing = resolveDimensionFormPresentation({
 			draft: makeDraft({ physicalName: "Bad-Name" }),
-			domains: [{ code: "finance", name: "财务域" }],
+			domains: [{ id: "20000000-0000-0000-0000-000000000001", code: "finance", name: "财务域" }],
 			definition: null,
 			currentOwnerId: "",
 		});
@@ -81,10 +81,13 @@ describe("dimension workbench presentation", () => {
 
 	it("presents a new concept dimension with a server-generated code placeholder", () => {
 		const view = resolveConceptDimensionPresentation({
-			draft: makeConceptDraft(),
+			draft: makeConceptDraft({
+				domainId: "20000000-0000-0000-0000-000000000001",
+				domainId: "20000000-0000-0000-0000-000000000001",
+			}),
 			domains: [
-				{ code: "business", name: "财务业务" },
-				{ code: "finance", name: "财务域", parentCode: "business" },
+				{ id: "10000000-0000-0000-0000-000000000001", code: "business", name: "财务业务" },
+				{ id: "20000000-0000-0000-0000-000000000001", code: "finance", name: "财务域", parentCode: "business" },
 			],
 		});
 
@@ -98,6 +101,7 @@ describe("dimension workbench presentation", () => {
 	it("shows only the system code returned by a saved concept dimension", () => {
 		const view = resolveConceptDimensionPresentation({
 			draft: makeConceptDraft({
+				domainId: "20000000-0000-0000-0000-000000000001",
 				definitionBase: { systemCode: "dim_generated_001" } as DimensionDefinitionView,
 			}),
 			domains: [],

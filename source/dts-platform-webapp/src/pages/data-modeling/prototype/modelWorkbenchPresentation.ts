@@ -48,7 +48,7 @@ type ConceptDimensionPresentationInput = {
 const configured = (value: string | null | undefined) => value?.trim() || UNCONFIGURED;
 
 const businessCategoryFor = (domainId: string, domains: CatalogDomain[]) => {
-	const domain = domains.find((item) => item.code === domainId);
+	const domain = domains.find((item) => item.id === domainId);
 	return configured(domains.find((item) => item.code === domain?.parentCode)?.name);
 };
 
