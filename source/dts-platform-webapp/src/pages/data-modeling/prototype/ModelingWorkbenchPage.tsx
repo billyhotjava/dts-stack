@@ -96,6 +96,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const [validationErrors, setValidationErrors] = useState<ModelDraftValidationErrors>({});
 	const [fieldRowIds, setFieldRowIds] = useState<string[]>([]);
 	const [dimensionDefinitions, setDimensionDefinitions] = useState<DimensionDefinitionView[]>([]);
+	const [conceptDimensions, setConceptDimensions] = useState<DimensionDefinitionView[]>([]);
 	const [dimensionDefinitionFailure, setDimensionDefinitionFailure] = useState("");
 	const [layer, setLayer] = useState("公共层");
 	const [domain, setDomain] = useState("");
@@ -253,6 +254,25 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	}, [draftBase, draftCreateKind, draftDimensionDefinitionId, draftDomainId]);
 
 	const domainNames = useMemo(() => new Map((context?.domains || []).map((item) => [item.id, item.name])), [context]);
+	const loadConceptDimensions = useCallback(async (domainValue: string) => {
+		try {
+			const items = await listDimensionDefinitions({
+				...(domainValue ? { domainId: domainValue } : {}),
+				offset: 0,
+				limit: 500,
+			});
+			const visible = Array.isArray(items)
+				? items.filter((item) => item.status === "DRAFT" || item.status === "CURRENT")
+				: [];
+			setConceptDimensions(visible);
+		} catch {
+			setConceptDimensions([]);
+		}
+	}, []);
+	useEffect(() => {
+		void loadConceptDimensions(domain);
+	}, [domain, loadConceptDimensions]);
+
 	const modelDomainOptions = useMemo(
 		() =>
 			Array.from(
@@ -307,6 +327,16 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		setSearchParams(next, { replace: true });
 	};
 
+	const openConceptDimension = (definition: DimensionDefinitionView) => {
+		if (savingRef.current || !confirmDiscard()) return;
+		replaceDraft(conceptDimensionDraftFromView(definition));
+		setCreateOpen(false);
+		if (definition.domainId !== domain) setDomain(definition.domainId);
+		const next = new URLSearchParams(searchParams);
+		next.delete("modelSpecId");
+		setSearchParams(next, { replace: true });
+	};
+
 	const createModel = (kind: ModelCreateKind) => {
 		if (savingRef.current || !context || !confirmDiscard()) return;
 		const next = emptyModelDraft(kind, context);
@@ -330,6 +360,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 			try {
 				const saved = await saveDimensionDefinitionDraft(draft, ownerIdOf(userInfo));
 				replaceDraft(conceptDimensionDraftFromView(saved));
+				void loadConceptDimensions(domain);
 				show(`维度草稿已保存：${saved.systemCode} · r${saved.revision}`);
 			} catch (error) {
 				const failure = normalizeModelingRequestFailure(error, "维度保存失败。");
@@ -566,6 +597,30 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 							</div>
 						</div>
 						<div className="dmx-object-tree">
+							{conceptDimensions.length ? (
+								<div className="dmx-tree-domain dmx-tree-domain--concepts">
+									<span>🧭</span>
+									<strong>概念维度</strong>
+									<em>({conceptDimensions.length})</em>
+								</div>
+							) : null}
+							{conceptDimensions.map((definition) => (
+								<button
+									className={`dmx-tree-model${draft && isConceptDimensionDraft(draft) && draft.definitionBase?.id === definition.id ? " active" : ""}`}
+									disabled={saving}
+									key={definition.id}
+									onClick={() => openConceptDimension(definition)}
+									type="button"
+								>
+									<span>🧭</span>
+									<span className="dmx-tree-model-copy">
+										<b>{definition.name}</b>
+										<small>
+											{definition.systemCode} · {definition.status} · r{definition.revision}
+										</small>
+									</span>
+								</button>
+							))}
 							{groups.map(([group, models]) => {
 								const open = domainOpen[group] !== false;
 								return (
@@ -603,7 +658,9 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 									</div>
 								);
 							})}
-							{!groups.length ? <RequestState description={catalogEmptyMessage} kind="empty" title="暂无模型" /> : null}
+							{!groups.length && !conceptDimensions.length ? (
+								<RequestState description={catalogEmptyMessage} kind="empty" title="暂无模型" />
+							) : null}
 						</div>
 						{createOpen ? (
 							<div className="dmx-create-menu">
