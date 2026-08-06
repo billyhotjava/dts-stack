@@ -139,6 +139,20 @@ describe("dimension workbench presentation", () => {
 			{ value: "ephemeral", label: "临时模型" },
 		]);
 		expect(modelDraftFingerprint(makeDraft({ name: "A" }))).not.toBe(modelDraftFingerprint(makeDraft({ name: "B" })));
+		expect(
+			modelDraftFingerprint(
+				makeConceptDraft({ attributes: [{ code: "A", name: "属性", primaryKey: true, order: 1 }] }),
+			),
+		).not.toBe(modelDraftFingerprint(makeConceptDraft()));
+		expect(
+			modelDraftFingerprint(
+				makeConceptDraft({ attributes: [{ code: "A", name: "属性", primaryKey: false, order: 1 }] }),
+			),
+		).not.toBe(
+			modelDraftFingerprint(
+				makeConceptDraft({ attributes: [{ code: "A", name: "属性", primaryKey: true, order: 1 }] }),
+			),
+		);
 		expect(modelDraftFingerprint(makeDraft({ planId: "plan-a" }))).toBe(
 			modelDraftFingerprint(makeDraft({ planId: "plan-b" })),
 		);

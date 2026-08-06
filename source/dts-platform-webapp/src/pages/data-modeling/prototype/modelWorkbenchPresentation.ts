@@ -88,6 +88,7 @@ export function modelDraftFingerprint(draft: ModelDraft): string {
 			name: draft.name,
 			description: draft.description,
 			reuseScope: draft.reuseScope,
+			attributes: draft.attributes,
 		});
 	}
 	return JSON.stringify({
