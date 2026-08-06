@@ -203,7 +203,7 @@ export async function loadModelWorkbenchContext(): Promise<ModelWorkbenchContext
 }
 
 export const loadCurrentDimensionDefinitions = (domainId: string) =>
-	domainId ? listDimensionDefinitions({ domainId, status: "CURRENT", offset: 0, limit: 500 }) : Promise.resolve([]);
+	domainId ? listDimensionDefinitions({ domainId, status: "CURRENT", offset: 0, limit: 100 }) : Promise.resolve([]);
 
 const isDimensionDraft = (draft: ModelSpecDraft): boolean => draft.createKind === "dimension-table";
 

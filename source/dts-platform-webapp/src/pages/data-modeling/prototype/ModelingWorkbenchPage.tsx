@@ -259,7 +259,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 			const items = await listDimensionDefinitions({
 				...(domainValue ? { domainId: domainValue } : {}),
 				offset: 0,
-				limit: 500,
+				limit: 100,
 			});
 			const visible = Array.isArray(items)
 				? items.filter((item) => item.status === "DRAFT" || item.status === "CURRENT")
