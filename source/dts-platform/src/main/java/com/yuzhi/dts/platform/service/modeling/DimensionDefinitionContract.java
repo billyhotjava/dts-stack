@@ -13,6 +13,7 @@ public final class DimensionDefinitionContract {
     public static final Set<String> CREATE_FIELDS = Set.of(
         "domainId",
         "name",
+        "abbreviation",
         "definition",
         "ownerId",
         "reuseScope",
@@ -25,6 +26,7 @@ public final class DimensionDefinitionContract {
 
     public static final Set<String> UPDATE_FIELDS = Set.of(
         "name",
+        "abbreviation",
         "definition",
         "ownerId",
         "reuseScope",
@@ -74,6 +76,7 @@ public final class DimensionDefinitionContract {
     public record CreateCommand(
         UUID domainId,
         String name,
+        String abbreviation,
         String definition,
         String ownerId,
         ReuseScope reuseScope,
@@ -86,18 +89,44 @@ public final class DimensionDefinitionContract {
         public CreateCommand(
             UUID domainId,
             String name,
+            String abbreviation,
             String definition,
             String ownerId,
             ReuseScope reuseScope,
             List<HierarchySemantic> hierarchies,
             String idempotencyKey
         ) {
-            this(domainId, name, definition, ownerId, reuseScope, hierarchies, idempotencyKey, null, null, List.of());
+            this(
+                domainId,
+                name,
+                abbreviation,
+                definition,
+                ownerId,
+                reuseScope,
+                hierarchies,
+                idempotencyKey,
+                null,
+                null,
+                List.of()
+            );
+        }
+
+        public CreateCommand(
+            UUID domainId,
+            String name,
+            String definition,
+            String ownerId,
+            ReuseScope reuseScope,
+            List<HierarchySemantic> hierarchies,
+            String idempotencyKey
+        ) {
+            this(domainId, name, null, definition, ownerId, reuseScope, hierarchies, idempotencyKey, null, null, List.of());
         }
     }
 
     public record UpdateCommand(
         String name,
+        String abbreviation,
         String definition,
         String ownerId,
         ReuseScope reuseScope,
@@ -108,12 +137,17 @@ public final class DimensionDefinitionContract {
     ) {
         public UpdateCommand(
             String name,
+            String abbreviation,
             String definition,
             String ownerId,
             ReuseScope reuseScope,
             List<HierarchySemantic> hierarchies
         ) {
-            this(name, definition, ownerId, reuseScope, hierarchies, null, null, null);
+            this(name, abbreviation, definition, ownerId, reuseScope, hierarchies, null, null, null);
+        }
+
+        public UpdateCommand(String name, String definition, String ownerId, ReuseScope reuseScope, List<HierarchySemantic> hierarchies) {
+            this(name, null, definition, ownerId, reuseScope, hierarchies, null, null, null);
         }
     }
 
@@ -122,6 +156,7 @@ public final class DimensionDefinitionContract {
         String systemCode,
         UUID domainId,
         String name,
+        String abbreviation,
         String definition,
         String ownerId,
         ReuseScope reuseScope,
@@ -147,6 +182,7 @@ public final class DimensionDefinitionContract {
             String systemCode,
             UUID domainId,
             String name,
+            String abbreviation,
             String definition,
             String ownerId,
             ReuseScope reuseScope,
@@ -163,6 +199,7 @@ public final class DimensionDefinitionContract {
                 systemCode,
                 domainId,
                 name,
+                abbreviation,
                 definition,
                 ownerId,
                 reuseScope,

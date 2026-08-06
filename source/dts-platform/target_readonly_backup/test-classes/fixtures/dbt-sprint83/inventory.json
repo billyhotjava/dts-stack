@@ -1,0 +1,70 @@
+{
+  "schemaVersion": "dts.dbt-fixture-inventory/v1",
+  "generatedBy": "synthetic-sprint83",
+  "containsCustomerData": false,
+  "networkRequired": false,
+  "materialization": "NOT_CERTIFIED",
+  "fixtures": [
+    {
+      "id": "FX-01",
+      "kind": "ARTIFACT_RICH",
+      "dbtVersion": "1.8.7",
+      "manifestSchema": "v12",
+      "adapter": "postgres",
+      "models": 2,
+      "businessModels": 1,
+      "sources": 1,
+      "tests": 1,
+      "macros": 1,
+      "edges": 4,
+      "maxDepth": 3,
+      "expectedInspection": "IMPORTABLE_WITH_EXPLICIT_SEMANTICS"
+    },
+    {
+      "id": "FX-02",
+      "kind": "SOURCE_ONLY_ENFORCED",
+      "dbtVersion": "UNDECLARED_STATIC_INPUT",
+      "manifestSchema": "source-project/v1",
+      "adapter": "static-no-execution",
+      "models": 1,
+      "fields": 2,
+      "expectedInspection": "IMPORTABLE_WITH_EXPLICIT_SEMANTICS",
+      "expectedOwnership": "DBT_MANAGED"
+    },
+    {
+      "id": "FX-03",
+      "kind": "SOURCE_ONLY_BLOCKED",
+      "dbtVersion": "UNDECLARED_STATIC_INPUT",
+      "manifestSchema": "source-project/v1",
+      "adapter": "static-no-execution",
+      "models": 1,
+      "dynamicExpressionRatio": 1.0,
+      "expectedInspection": "BLOCKED",
+      "expectedCodes": [
+        "DBT_SOURCE_PROJECT_REF_UNRESOLVED",
+        "DBT_SOURCE_PROJECT_DYNAMIC_REFERENCE",
+        "SOURCE_SEMANTICS_INCOMPLETE",
+        "SOURCE_FIELDS_UNVERIFIED",
+        "SOURCE_PACKAGE_MISSING",
+        "SOURCE_DEPENDENCY_DYNAMIC"
+      ]
+    },
+    {
+      "id": "FX-04",
+      "kind": "THREE_WAY_DRIFT",
+      "variants": [
+        "base",
+        "incoming"
+      ],
+      "models": 1,
+      "expectedIdentity": "STABLE_DBT_UNIQUE_ID",
+      "expectedTechnicalChange": true,
+      "expectedDecisionWhenCurrentAlsoChanges": "CONFLICT/BOTH_CHANGED_DIVERGED"
+    },
+    {
+      "id": "FX-05",
+      "kind": "MALICIOUS_ARCHIVE_CASES",
+      "expectedInspection": "REJECTED_BEFORE_PERSISTENCE"
+    }
+  ]
+}

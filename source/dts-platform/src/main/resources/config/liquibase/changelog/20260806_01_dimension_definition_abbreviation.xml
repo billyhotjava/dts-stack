@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260806-01-dimension-definition-abbreviation" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="modeling_dimension_definition"/>
+            <tableExists tableName="modeling_dimension_definition_revision"/>
+            <not>
+                <columnExists tableName="modeling_dimension_definition" columnName="abbreviation"/>
+            </not>
+            <not>
+                <columnExists tableName="modeling_dimension_definition_revision" columnName="abbreviation"/>
+            </not>
+        </preConditions>
+        <comment>Add optional abbreviation to dimension definitions and revision snapshots.</comment>
+
+        <addColumn tableName="modeling_dimension_definition">
+            <column name="abbreviation" type="varchar(64)"/>
+        </addColumn>
+        <addColumn tableName="modeling_dimension_definition_revision">
+            <column name="abbreviation" type="varchar(64)"/>
+        </addColumn>
+
+        <rollback>
+            <dropColumn tableName="modeling_dimension_definition" columnName="abbreviation"/>
+            <dropColumn tableName="modeling_dimension_definition_revision" columnName="abbreviation"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "dts.dbt-malicious-fixtures/v1",
+  "cases": [
+    {
+      "id": "zip-slip-parent",
+      "entryName": "../outside.sql",
+      "expectedCode": "MODEL_IMPORT_ARCHIVE_ZIP_SLIP"
+    },
+    {
+      "id": "zip-slip-absolute",
+      "entryName": "/tmp/outside.sql",
+      "expectedCode": "MODEL_IMPORT_ARCHIVE_ZIP_SLIP"
+    },
+    {
+      "id": "duplicate-entry",
+      "entryName": "manifest.json",
+      "repeat": 2,
+      "expectedCode": "MODEL_IMPORT_ARCHIVE_DUPLICATE_ENTRY"
+    },
+    {
+      "id": "compression-budget",
+      "entryName": "models/oversized.sql",
+      "uncompressedBytes": 134217729,
+      "expectedCode": "MODEL_IMPORT_ARCHIVE_TOO_LARGE"
+    }
+  ]
+}

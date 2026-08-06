@@ -35,7 +35,7 @@ public class DimensionDefinitionRepository {
 
     private static final String CURRENT_COLUMNS = """
         select true as current_head, d.tenant_id, d.id, d.system_code, d.domain_id, d.name, d.definition,
-               d.owner_id, d.reuse_scope, d.hierarchies_json::text as hierarchies_json,
+               d.owner_id, d.abbreviation, d.reuse_scope, d.hierarchies_json::text as hierarchies_json,
                d.scope_type, d.data_mart_id, d.attributes_json::text as attributes_json, d.status, d.revision,
                d.current_checksum, r.content_checksum as revision_checksum, r.snapshot_json::text as current_snapshot,
                d.idempotency_key, d.idempotency_request_hash,
@@ -161,7 +161,7 @@ public class DimensionDefinitionRepository {
         StringBuilder sql = new StringBuilder(
             """
             select false as current_head, r.tenant_id, r.dimension_definition_id as id, r.system_code,
-                   r.domain_id, r.name, r.definition, r.owner_id, r.reuse_scope,
+                   r.domain_id, r.name, r.definition, r.owner_id, r.abbreviation, r.reuse_scope,
                    r.hierarchies_json::text as hierarchies_json, r.scope_type, r.data_mart_id,
                    r.attributes_json::text as attributes_json, r.status, r.revision,
                    null as current_checksum, r.content_checksum as revision_checksum,
@@ -211,7 +211,7 @@ public class DimensionDefinitionRepository {
             .query(
                 """
                 select false as current_head, r.tenant_id, r.dimension_definition_id as id, r.system_code,
-                       r.domain_id, r.name, r.definition, r.owner_id, r.reuse_scope,
+                       r.domain_id, r.name, r.definition, r.owner_id, r.abbreviation, r.reuse_scope,
                        r.hierarchies_json::text as hierarchies_json, r.scope_type, r.data_mart_id,
                        r.attributes_json::text as attributes_json, r.status, r.revision,
                        null as current_checksum, r.content_checksum as revision_checksum,
@@ -292,12 +292,12 @@ public class DimensionDefinitionRepository {
             with inserted_head as (
                 insert into modeling_dimension_definition (
                     id, tenant_id, system_code, domain_id, name, definition, owner_id, reuse_scope,
-                    hierarchies_json, scope_type, data_mart_id, attributes_json,
+                    abbreviation, hierarchies_json, scope_type, data_mart_id, attributes_json,
                     status, revision, current_checksum, idempotency_key,
                     idempotency_request_hash, idempotency_response_snapshot, created_by, last_modified_by,
                     created_date, last_modified_date
                 ) values (
-                    ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), ?, ?, cast(? as jsonb),
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), ?, ?, cast(? as jsonb),
                     ?, 1, ?, ?, ?, cast(? as jsonb), ?, ?, ?, ?
                 )
                 on conflict (tenant_id, idempotency_key) do nothing
@@ -306,11 +306,11 @@ public class DimensionDefinitionRepository {
             inserted_revision as (
                 insert into modeling_dimension_definition_revision (
                     id, tenant_id, dimension_definition_id, revision, system_code, domain_id, name,
-                    definition, owner_id, reuse_scope, hierarchies_json, scope_type, data_mart_id,
+                    definition, owner_id, abbreviation, reuse_scope, hierarchies_json, scope_type, data_mart_id,
                     attributes_json, status, content_checksum,
                     snapshot_json, created_by, created_date
                 )
-                select ?, inserted_head.tenant_id, inserted_head.id, 1, ?, ?, ?, ?, ?, ?,
+                select ?, inserted_head.tenant_id, inserted_head.id, 1, ?, ?, ?, ?, ?, ?, ?,
                        cast(? as jsonb), ?, ?, cast(? as jsonb), ?, ?, cast(? as jsonb), ?, ?
                   from inserted_head
                 returning 1
@@ -325,6 +325,7 @@ public class DimensionDefinitionRepository {
             view.name(),
             view.definition(),
             view.ownerId(),
+            view.abbreviation(),
             view.reuseScope().name(),
             json(view.hierarchies()),
             view.scopeType().name(),
@@ -345,6 +346,7 @@ public class DimensionDefinitionRepository {
             view.name(),
             view.definition(),
             view.ownerId(),
+            view.abbreviation(),
             view.reuseScope().name(),
             json(view.hierarchies()),
             view.scopeType().name(),
@@ -389,7 +391,8 @@ public class DimensionDefinitionRepository {
             """
             with updated_head as (
                 update modeling_dimension_definition
-                   set name = ?, definition = ?, owner_id = ?, reuse_scope = ?, hierarchies_json = cast(? as jsonb),
+                   set name = ?, definition = ?, owner_id = ?, abbreviation = ?, reuse_scope = ?,
+                       hierarchies_json = cast(? as jsonb),
                        scope_type = ?, data_mart_id = ?, attributes_json = cast(? as jsonb),
                        status = ?, revision = ?, current_checksum = ?, last_modified_by = ?, last_modified_date = ?
                  where tenant_id = ? and id = ? and revision = ? and current_checksum = ?
@@ -399,11 +402,12 @@ public class DimensionDefinitionRepository {
             inserted_revision as (
                 insert into modeling_dimension_definition_revision (
                     id, tenant_id, dimension_definition_id, revision, system_code, domain_id, name,
-                    definition, owner_id, reuse_scope, hierarchies_json, scope_type, data_mart_id,
+                    definition, owner_id, abbreviation, reuse_scope, hierarchies_json, scope_type,
+                    data_mart_id,
                     attributes_json, status, content_checksum,
                     snapshot_json, created_by, created_date
                 )
-                select ?, updated_head.tenant_id, updated_head.id, ?, ?, ?, ?, ?, ?, ?,
+                select ?, updated_head.tenant_id, updated_head.id, ?, ?, ?, ?, ?, ?, ?, ?,
                        cast(? as jsonb), ?, ?, cast(? as jsonb), ?, ?, cast(? as jsonb), ?, ?
                   from updated_head
                 returning 1
@@ -414,6 +418,7 @@ public class DimensionDefinitionRepository {
             replacement.name(),
             replacement.definition(),
             replacement.ownerId(),
+            replacement.abbreviation(),
             replacement.reuseScope().name(),
             json(replacement.hierarchies()),
             replacement.scopeType().name(),
@@ -438,6 +443,7 @@ public class DimensionDefinitionRepository {
             replacement.name(),
             replacement.definition(),
             replacement.ownerId(),
+            replacement.abbreviation(),
             replacement.reuseScope().name(),
             json(replacement.hierarchies()),
             replacement.scopeType().name(),
@@ -516,6 +522,7 @@ public class DimensionDefinitionRepository {
             row.getString("name"),
             row.getString("definition"),
             row.getString("owner_id"),
+            row.getString("abbreviation"),
             ReuseScope.valueOf(row.getString("reuse_scope")),
             hierarchies(row.getString("hierarchies_json")),
             ScopeType.valueOf(row.getString("scope_type")),
@@ -565,6 +572,7 @@ public class DimensionDefinitionRepository {
         String name,
         String definition,
         String ownerId,
+        String abbreviation,
         ReuseScope reuseScope,
         List<HierarchySemantic> hierarchies,
         ScopeType scopeType,
@@ -590,6 +598,7 @@ public class DimensionDefinitionRepository {
             String name,
             String definition,
             String ownerId,
+            String abbreviation,
             ReuseScope reuseScope,
             List<HierarchySemantic> hierarchies,
             Status status,
@@ -612,6 +621,7 @@ public class DimensionDefinitionRepository {
                 name,
                 definition,
                 ownerId,
+                abbreviation,
                 reuseScope,
                 hierarchies,
                 ScopeType.DOMAIN,
@@ -640,6 +650,7 @@ public class DimensionDefinitionRepository {
                 systemCode,
                 domainId,
                 name,
+                abbreviation,
                 definition,
                 ownerId,
                 reuseScope,

@@ -367,6 +367,7 @@ class DimensionModelApplicationServiceTest {
             "dim_30000000000000000000000000000001",
             DOMAIN_ID,
             "Customer",
+            null,
             "Customer dimension",
             ACTOR,
             ReuseScope.DOMAIN,

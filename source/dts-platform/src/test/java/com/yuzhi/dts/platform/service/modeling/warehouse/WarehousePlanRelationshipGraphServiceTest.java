@@ -1761,6 +1761,7 @@ class WarehousePlanRelationshipGraphServiceTest {
             "dim_customer",
             DOMAIN_ID,
             "Customer",
+            "CUS",
             "Customer dimension",
             "owner-1",
             DimensionDefinitionContract.ReuseScope.DOMAIN,

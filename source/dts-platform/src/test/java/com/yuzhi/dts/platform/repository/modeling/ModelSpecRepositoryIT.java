@@ -141,6 +141,7 @@ class ModelSpecRepositoryIT {
             "dim_" + definitionId.toString().replace("-", ""),
             domainId,
             definitionCommand.name(),
+            definitionCommand.abbreviation(),
             definitionCommand.definition(),
             definitionCommand.ownerId(),
             definitionCommand.reuseScope(),

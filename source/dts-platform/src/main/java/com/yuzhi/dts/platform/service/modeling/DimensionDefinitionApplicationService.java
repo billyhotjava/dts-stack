@@ -122,6 +122,7 @@ public class DimensionDefinitionApplicationService {
                 systemCode(id),
                 command.domainId(),
                 command.name(),
+                command.abbreviation(),
                 command.definition(),
                 command.ownerId(),
                 command.reuseScope(),
@@ -305,6 +306,7 @@ public class DimensionDefinitionApplicationService {
                 current.systemCode(),
                 current.domainId(),
                 command.name(),
+                command.abbreviation(),
                 command.definition(),
                 command.ownerId(),
                 command.reuseScope(),
@@ -376,6 +378,7 @@ public class DimensionDefinitionApplicationService {
                 current.systemCode(),
                 current.domainId(),
                 current.name(),
+                current.abbreviation(),
                 current.definition(),
                 current.ownerId(),
                 current.reuseScope(),
@@ -525,6 +528,7 @@ public class DimensionDefinitionApplicationService {
             view.systemCode(),
             view.domainId(),
             view.name(),
+            view.abbreviation(),
             view.definition(),
             view.ownerId(),
             view.reuseScope(),
@@ -548,6 +552,7 @@ public class DimensionDefinitionApplicationService {
                 view.systemCode(),
                 view.domainId(),
                 view.name(),
+                view.abbreviation(),
                 view.definition(),
                 view.ownerId(),
                 view.reuseScope(),
@@ -580,6 +585,7 @@ public class DimensionDefinitionApplicationService {
         List<AttributeSemantic> attributes
     ) {
         return (
+            Objects.equals(current.abbreviation(), command.abbreviation()) &&
             Objects.equals(current.name(), command.name()) &&
             Objects.equals(current.definition(), command.definition()) &&
             Objects.equals(current.ownerId(), command.ownerId()) &&
@@ -599,6 +605,7 @@ public class DimensionDefinitionApplicationService {
             Objects.equals(response.systemCode(), revision.systemCode()) &&
             Objects.equals(response.domainId(), revision.domainId()) &&
             Objects.equals(response.name(), revision.name()) &&
+            Objects.equals(response.abbreviation(), revision.abbreviation()) &&
             Objects.equals(response.definition(), revision.definition()) &&
             Objects.equals(response.ownerId(), revision.ownerId()) &&
             response.reuseScope() == revision.reuseScope() &&
@@ -797,6 +804,7 @@ public class DimensionDefinitionApplicationService {
         String systemCode,
         UUID domainId,
         String name,
+        String abbreviation,
         String definition,
         String ownerId,
         ReuseScope reuseScope,

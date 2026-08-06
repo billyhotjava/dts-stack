@@ -253,4 +253,5 @@
     <include file="config/liquibase/changelog/20260802_05_catalog_model_serving_asset_key_constraint.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260802_06_model_spec_import_json_contract_hardening.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260804_01_modeling_warehouse_layer.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260806_01_dimension_definition_abbreviation.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

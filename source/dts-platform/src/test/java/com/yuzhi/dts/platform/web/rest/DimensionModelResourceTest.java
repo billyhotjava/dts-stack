@@ -228,6 +228,7 @@ class DimensionModelResourceTest {
             "dim_30000000000000000000000000000001",
             DOMAIN_ID,
             "Customer",
+            null,
             "Customer dimension",
             "alice",
             ReuseScope.DOMAIN,

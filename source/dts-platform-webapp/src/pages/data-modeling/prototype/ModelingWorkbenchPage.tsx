@@ -331,6 +331,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		if (savingRef.current || !confirmDiscard()) return;
 		replaceDraft(conceptDimensionDraftFromView(definition));
 		setCreateOpen(false);
+		setDialog(null);
 		if (definition.domainId !== domain) setDomain(definition.domainId);
 		const next = new URLSearchParams(searchParams);
 		next.delete("modelSpecId");
@@ -343,6 +344,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		if (draft?.domainId) next.domainId = draft.domainId;
 		replaceDraft(next);
 		setCreateOpen(false);
+		setDialog(null);
 		const params = new URLSearchParams(searchParams);
 		params.delete("modelSpecId");
 		setSearchParams(params, { replace: true });
