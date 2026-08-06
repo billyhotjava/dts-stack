@@ -157,8 +157,7 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(modeling).toMatch(/saveModelDraft/);
 		expect(modeling).toMatch(/isConceptDimensionDraft/);
 		expect(modeling).toMatch(/conceptDimensionDraftFromView/);
-		expect(modeling).toMatch(/\{draft \? \(\s*<aside className="dmx-record-rail"/s);
-		expect(modeling).not.toMatch(/isModelSpecDraft\(draft\) \? \(\s*<aside className="dmx-record-rail"/s);
+		expect(modeling).toMatch(/\{selectedModel \? \(\s*<aside className="dmx-record-rail"/s);
 		expect(modeling).toContain('"beforeunload"');
 		expect(modeling).toMatch(/const blocker = useBlocker\(/);
 		expect(modeling).toContain("blocker.proceed()");

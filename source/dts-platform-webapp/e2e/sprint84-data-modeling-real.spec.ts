@@ -235,9 +235,7 @@ test.describe("Sprint-84 prototype-owned data-modeling smoke", () => {
 		await expect(editor.getByRole("toolbar").getByRole("button")).toHaveCount(1);
 		await expect(editor).not.toContainText(/字段管理|存储策略|表名规则|表中文名|生命周期|负责人/);
 		const conceptRail = page.locator(".dmx-record-rail");
-		await expect(conceptRail).toBeVisible();
-		for (const label of ["版本管理", "发布记录"])
-			await expect(conceptRail.getByRole("button", { name: label })).toBeDisabled();
+		await expect(conceptRail).not.toBeVisible();
 		await capture(page, testInfo, "create-concept-dimension-768x900.png");
 
 		await page.getByRole("button", { name: "新建" }).click();

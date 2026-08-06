@@ -223,11 +223,11 @@ function ConceptDimensionAttributesEditor({
 	return (
 		<section className="dmx-editor-panel">
 			<h3>维度属性</h3>
-			<p className="dmx-capability-note">确认版本前至少需要一个属性，并将其中一个属性设为主键。</p>
+			<p className="dmx-capability-note">确认前至少需要一个属性，并将其中一个属性设为主键。</p>
 			{attributes.length ? (
 				<div className="dmx-workbench-editor__attribute-rows">
 					{attributes.map((attribute, index) => (
-						<div className="dmx-workbench-editor__attribute-row" key={index}>
+						<div className="dmx-workbench-editor__attribute-row" key={attribute.code || attribute.name || index}>
 							<label>
 								<span>属性编码</span>
 								<input
@@ -373,7 +373,7 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 							<option value="">请选择维度</option>
 							{dimensionDefinitions.map((item) => (
 								<option key={item.id} value={item.id}>
-									{item.name} · {item.systemCode} · r{item.revision}
+									{item.name} · {item.systemCode}
 								</option>
 							))}
 							{missingPersistedDefinition ? (

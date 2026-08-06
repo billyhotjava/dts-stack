@@ -142,7 +142,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 			}
 			replaceDraft(conceptDimensionDraftFromView(match));
 			setFailure(null);
-			show(`该数据域下已存在同名维度，已为你打开：${match.systemCode} · r${match.revision}`);
+			show(`该数据域下已存在同名维度，已为你打开：${match.systemCode}`);
 			return true;
 		} catch {
 			setFailure({ ...failure, message: conflictMessage });
@@ -361,7 +361,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 				const saved = await saveDimensionDefinitionDraft(draft, ownerIdOf(userInfo));
 				replaceDraft(conceptDimensionDraftFromView(saved));
 				void loadConceptDimensions(domain);
-				show(`维度草稿已保存：${saved.systemCode} · r${saved.revision}`);
+				show(`维度草稿已保存：${saved.systemCode}`);
 			} catch (error) {
 				const failure = normalizeModelingRequestFailure(error, "维度保存失败。");
 				if (failure.code === "DIMENSION_DEFINITION_NAME_CONFLICT") {
@@ -413,9 +413,9 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 			const confirmed = await confirmDimensionDefinitionDraft(conceptDraft);
 			replaceDraft(confirmed);
 			void loadConceptDimensions(domain);
-			show(`维度版本已确认：${confirmed.definitionBase?.systemCode} · r${confirmed.definitionBase?.revision}`);
+			show(`维度定义已确认：${confirmed.definitionBase?.systemCode}`);
 		} catch (error) {
-			const failure = normalizeModelingRequestFailure(error, "维度版本确认失败。");
+			const failure = normalizeModelingRequestFailure(error, "维度定义确认失败。");
 			if (failure.code === "DIMENSION_DEFINITION_ATTRIBUTES_REQUIRED_FOR_CONFIRMATION") {
 				setFailure({
 					...failure,
@@ -625,7 +625,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 									<span className="dmx-tree-model-copy">
 										<b>{definition.name}</b>
 										<small>
-											{definition.systemCode} · {definition.status} · r{definition.revision}
+											{definition.systemCode} · {definition.status}
 										</small>
 									</span>
 								</button>
@@ -696,9 +696,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 								{draft?.name || (draft ? `新建${MODEL_KIND_CONFIG[draft.createKind].label}` : "模型编辑器")}
 							</strong>
 							{draft && isConceptDimensionDraft(draft) && draft.definitionBase ? (
-								<Status tone="warning">
-									{draft.definitionBase.status} · r{draft.definitionBase.revision}
-								</Status>
+								<Status tone="warning">{draft.definitionBase.status}</Status>
 							) : selectedModel ? (
 								<Status tone={selectedModel.status === "PUBLISHED" ? "success" : "warning"}>
 									{selectedModel.status} · r{selectedModel.revision}
@@ -742,21 +740,13 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 							<RequestState description="请从目录选择模型，或新建一个模型草稿。" kind="empty" title="请选择模型" />
 						)}
 					</section>
-					{draft ? (
+					{selectedModel ? (
 						<aside className="dmx-record-rail">
-							<button
-								disabled={saving || !(selectedModel || conceptDraft?.definitionBase)}
-								onClick={() => setDialog("versions")}
-								type="button"
-							>
+							<button disabled={saving || !selectedModel} onClick={() => setDialog("versions")} type="button">
 								<GitBranch size={16} />
 								版本管理
 							</button>
-							<button
-								disabled={saving || !(selectedModel || conceptDraft?.definitionBase)}
-								onClick={() => setDialog("releases")}
-								type="button"
-							>
+							<button disabled={saving || !selectedModel} onClick={() => setDialog("releases")} type="button">
 								<FileDown size={16} />
 								发布记录
 							</button>

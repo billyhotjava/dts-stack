@@ -70,10 +70,9 @@ describe("ConceptDimensionRecordDialog", () => {
 		);
 
 		expect(container.textContent).toContain("dim_1234567890abcdef");
-		expect(container.textContent).toContain("DRAFT · r1");
-		const confirm = Array.from(container.querySelectorAll("button")).find(
-			(item) => item.textContent === "确认当前版本",
-		);
+		expect(container.textContent).toContain("DRAFT");
+		expect(container.textContent).not.toContain("r1");
+		const confirm = Array.from(container.querySelectorAll("button")).find((item) => item.textContent === "确认定义");
 		expect(confirm).toHaveProperty("disabled", false);
 		await act(async () => confirm?.click());
 		expect(onConfirm).toHaveBeenCalledOnce();
@@ -93,8 +92,9 @@ describe("ConceptDimensionRecordDialog", () => {
 			),
 		);
 
-		expect(container.textContent).toContain("CURRENT · r2");
-		expect(container.textContent).not.toContain("确认当前版本");
+		expect(container.textContent).toContain("CURRENT");
+		expect(container.textContent).not.toContain("r2");
+		expect(container.textContent).not.toContain("确认定义");
 	});
 
 	it("states the release-record contract boundary", async () => {
@@ -112,6 +112,6 @@ describe("ConceptDimensionRecordDialog", () => {
 		);
 
 		expect(container.textContent).toContain("当前维度定义接口未提供独立发布记录");
-		expect(container.textContent).not.toContain("确认当前版本");
+		expect(container.textContent).not.toContain("确认定义");
 	});
 });

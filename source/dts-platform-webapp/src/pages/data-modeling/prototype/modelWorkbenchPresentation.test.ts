@@ -84,7 +84,6 @@ describe("dimension workbench presentation", () => {
 		const view = resolveConceptDimensionPresentation({
 			draft: makeConceptDraft({
 				domainId: "20000000-0000-0000-0000-000000000001",
-				domainId: "20000000-0000-0000-0000-000000000001",
 			}),
 			domains: [
 				{ id: "10000000-0000-0000-0000-000000000001", code: "business", name: "财务业务" },
