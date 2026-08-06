@@ -1,13 +1,13 @@
 package com.yuzhi.dts.platform.web.rest;
 
-import com.yuzhi.dts.platform.service.modeling.DataMartApplicationService;
-import com.yuzhi.dts.platform.service.modeling.DataMartApplicationService.CreateResult;
-import com.yuzhi.dts.platform.service.modeling.DataMartContract.CreateCommand;
-import com.yuzhi.dts.platform.service.modeling.DataMartContract.ExpectedVersion;
-import com.yuzhi.dts.platform.service.modeling.DataMartContract.Status;
-import com.yuzhi.dts.platform.service.modeling.DataMartContract.UpdateCommand;
-import com.yuzhi.dts.platform.service.modeling.DataMartContract.View;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecException;
+import com.yuzhi.dts.platform.service.modeling.SubjectDomainApplicationService;
+import com.yuzhi.dts.platform.service.modeling.SubjectDomainApplicationService.CreateResult;
+import com.yuzhi.dts.platform.service.modeling.SubjectDomainContract.CreateCommand;
+import com.yuzhi.dts.platform.service.modeling.SubjectDomainContract.ExpectedVersion;
+import com.yuzhi.dts.platform.service.modeling.SubjectDomainContract.Status;
+import com.yuzhi.dts.platform.service.modeling.SubjectDomainContract.UpdateCommand;
+import com.yuzhi.dts.platform.service.modeling.SubjectDomainContract.View;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider;
 import java.net.URI;
 import java.util.List;
@@ -29,22 +29,23 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/** Strict canonical REST boundary for the modeling subject-domain ledger. */
 @RestController
-@RequestMapping("/api/modeling/data-marts")
-public class DataMartResource {
+@RequestMapping("/api/modeling/subject-domains")
+public class SubjectDomainResource {
 
     private static final String MODELING_MAINTAINER_EXPRESSION =
         "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).CATALOG_MAINTAINERS)";
     private static final Pattern STRONG_ETAG = Pattern.compile(
-        "^\\\"data-mart:([0-9a-fA-F-]{36}):([1-9][0-9]*):([0-9a-f]{64})\\\"$"
+        "^\\\"subject-domain:([0-9a-fA-F-]{36}):([1-9][0-9]*):([0-9a-f]{64})\\\"$"
     );
 
-    private final DataMartApplicationService service;
+    private final SubjectDomainApplicationService service;
     private final WarehousePlanActorProvider actorProvider;
     private final String serverTenantId;
 
-    public DataMartResource(
-        DataMartApplicationService service,
+    public SubjectDomainResource(
+        SubjectDomainApplicationService service,
         WarehousePlanActorProvider actorProvider,
         @Value("${dts.platform.modeling.default-tenant-id:default}") String serverTenantId
     ) {
@@ -57,29 +58,28 @@ public class DataMartResource {
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<View>> create(@RequestBody CreateCommand command) {
         CreateResult result = service.create(serverTenantId, actorId(), command);
-        View view = result.dataMart();
+        View view = result.subjectDomain();
         return ResponseEntity
             .status(result.replayed() ? HttpStatus.OK : HttpStatus.CREATED)
-            .location(URI.create("/api/modeling/data-marts/" + view.id()))
-            .eTag(DataMartApplicationService.etag(view))
+            .location(URI.create("/api/modeling/subject-domains/" + view.id()))
+            .eTag(SubjectDomainApplicationService.etag(view))
             .body(ApiResponses.ok(view));
     }
 
     @GetMapping
     public ApiResponse<List<View>> list(
-        @RequestParam(required = false) UUID businessCategoryId,
+        @RequestParam(required = false) UUID martId,
         @RequestParam(required = false) Status status,
         @RequestParam(required = false) String keyword,
         @RequestParam(defaultValue = "0") int offset,
-        @RequestParam(defaultValue = "" + DataMartApplicationService.DEFAULT_LIST_LIMIT) int limit
+        @RequestParam(defaultValue = "" + SubjectDomainApplicationService.DEFAULT_LIST_LIMIT) int limit
     ) {
-        return ApiResponses.ok(service.list(serverTenantId, businessCategoryId, status, keyword, offset, limit));
+        return ApiResponses.ok(service.list(serverTenantId, martId, status, keyword, offset, limit));
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<View>> get(@PathVariable UUID id) {
-        View view = service.get(serverTenantId, id);
-        return response(view);
+        return response(service.get(serverTenantId, id));
     }
 
     @PutMapping("/{id}")
@@ -126,13 +126,13 @@ public class DataMartResource {
     }
 
     private ResponseEntity<ApiResponse<View>> response(View view) {
-        return ResponseEntity.ok().eTag(DataMartApplicationService.etag(view)).body(ApiResponses.ok(view));
+        return ResponseEntity.ok().eTag(SubjectDomainApplicationService.etag(view)).body(ApiResponses.ok(view));
     }
 
     private static ExpectedVersion expected(UUID id, String ifMatch) {
         if (ifMatch == null || ifMatch.isBlank()) {
             throw new ModelSpecException(
-                "DATA_MART_IF_MATCH_REQUIRED",
+                "SUBJECT_DOMAIN_IF_MATCH_REQUIRED",
                 "If-Match is required",
                 ModelSpecException.Kind.PRECONDITION_REQUIRED
             );
@@ -140,8 +140,8 @@ public class DataMartResource {
         Matcher matcher = STRONG_ETAG.matcher(ifMatch.trim());
         if (!matcher.matches() || !id.equals(UUID.fromString(matcher.group(1)))) {
             throw new ModelSpecException(
-                "DATA_MART_IF_MATCH_INVALID",
-                "If-Match does not identify this data mart",
+                "SUBJECT_DOMAIN_IF_MATCH_INVALID",
+                "If-Match does not identify this subject domain",
                 ModelSpecException.Kind.BAD_REQUEST
             );
         }
@@ -149,14 +149,7 @@ public class DataMartResource {
     }
 
     private String actorId() {
-        String actor = actorProvider.currentActor().ownerId();
-        if (actor == null || actor.isBlank()) {
-            throw new ModelSpecException(
-                "DATA_MART_ACTOR_REQUIRED",
-                "Authenticated actor is required",
-                ModelSpecException.Kind.FORBIDDEN
-            );
-        }
-        return actor;
+        WarehousePlanActorProvider.WarehousePlanActor actor = actorProvider.currentActor();
+        return actor == null ? null : actor.ownerId();
     }
 }

@@ -63,7 +63,7 @@ public class DataMartApplicationService {
             }
             return new CreateResult(view(tenantId, replay), true);
         }
-        requireDomains(command.domainIds());
+        requireBusinessCategories(command.businessCategoryIds());
         requireUniqueName(tenantId, command.name(), null);
         Instant now = Instant.now();
         UUID id = UUID.randomUUID();
@@ -74,7 +74,7 @@ public class DataMartApplicationService {
                 command.name(),
                 command.purpose(),
                 command.ownerId(),
-                List.copyOf(command.domainIds()),
+                List.copyOf(command.businessCategoryIds()),
                 Status.DRAFT,
                 1,
                 "",
@@ -102,14 +102,14 @@ public class DataMartApplicationService {
     }
 
     @Transactional(readOnly = true)
-    public List<View> list(String tenantId, UUID domainId, Status status, int offset, int limit) {
-        return list(tenantId, domainId, status, null, offset, limit);
+    public List<View> list(String tenantId, UUID businessCategoryId, Status status, int offset, int limit) {
+        return list(tenantId, businessCategoryId, status, null, offset, limit);
     }
 
     @Transactional(readOnly = true)
     public List<View> list(
         String tenantId,
-        UUID domainId,
+        UUID businessCategoryId,
         Status status,
         String keyword,
         int offset,
@@ -119,13 +119,17 @@ public class DataMartApplicationService {
         if (offset < 0 || limit < 1 || limit > MAX_LIST_LIMIT) {
             throw badRequest("DATA_MART_LIST_WINDOW_INVALID", "Offset must be non-negative and limit must be between 1 and 100");
         }
-        List<StoredDataMart> stored = repository.list(tenantId, domainId, status, keyword, offset, limit);
+        List<StoredDataMart> stored = repository.list(tenantId, businessCategoryId, status, keyword, offset, limit);
         List<UUID> ids = stored.stream().map(StoredDataMart::id).toList();
-        Map<UUID, List<UUID>> domains = repository.domainIds(tenantId, ids);
+        Map<UUID, List<UUID>> businessCategories = repository.businessCategoryIds(tenantId, ids);
         Map<UUID, Long> usages = repository.usageCounts(tenantId, ids);
         return stored
             .stream()
-            .map(item -> view(item, domains.getOrDefault(item.id(), List.of()), usages.getOrDefault(item.id(), 0L)))
+            .map(item -> view(
+                item,
+                businessCategories.getOrDefault(item.id(), List.of()),
+                usages.getOrDefault(item.id(), 0L)
+            ))
             .toList();
     }
 
@@ -133,7 +137,7 @@ public class DataMartApplicationService {
     public View update(String tenantId, String actorId, UUID id, ExpectedVersion expected, UpdateCommand command) {
         requireContext(tenantId, actorId);
         reject(DataMartContract.validateUpdate(command));
-        requireDomains(command.domainIds());
+        requireBusinessCategories(command.businessCategoryIds());
         View current = get(tenantId, id);
         requireExpected(current, expected);
         if (current.status() == Status.RETIRED) {
@@ -141,7 +145,7 @@ public class DataMartApplicationService {
         }
         if (
             current.usageCount() > 0 &&
-            !Set.copyOf(current.domainIds()).equals(Set.copyOf(command.domainIds()))
+            !Set.copyOf(current.businessCategoryIds()).equals(Set.copyOf(command.businessCategoryIds()))
         ) {
             throw conflict(
                 "DATA_MART_SCOPE_IN_USE",
@@ -156,7 +160,7 @@ public class DataMartApplicationService {
                 command.name(),
                 command.purpose(),
                 command.ownerId(),
-                List.copyOf(command.domainIds()),
+                List.copyOf(command.businessCategoryIds()),
                 current.status(),
                 current.revision() + 1,
                 "",
@@ -261,7 +265,7 @@ public class DataMartApplicationService {
                 current.name(),
                 current.purpose(),
                 current.ownerId(),
-                current.domainIds(),
+                current.businessCategoryIds(),
                 target,
                 current.revision() + 1,
                 "",
@@ -285,19 +289,19 @@ public class DataMartApplicationService {
         List<UUID> ids = List.of(stored.id());
         return view(
             stored,
-            repository.domainIds(tenantId, ids).getOrDefault(stored.id(), List.of()),
+            repository.businessCategoryIds(tenantId, ids).getOrDefault(stored.id(), List.of()),
             repository.usageCounts(tenantId, ids).getOrDefault(stored.id(), 0L)
         );
     }
 
-    private static View view(StoredDataMart stored, List<UUID> domainIds, long usageCount) {
+    private static View view(StoredDataMart stored, List<UUID> businessCategoryIds, long usageCount) {
         return new View(
             stored.id(),
             stored.code(),
             stored.name(),
             stored.purpose(),
             stored.ownerId(),
-            List.copyOf(domainIds),
+            List.copyOf(businessCategoryIds),
             stored.status(),
             stored.revision(),
             stored.checksum(),
@@ -314,7 +318,7 @@ public class DataMartApplicationService {
                 view.name(),
                 view.purpose(),
                 view.ownerId(),
-                view.domainIds(),
+                view.businessCategoryIds(),
                 view.status(),
                 view.revision()
             )
@@ -325,7 +329,7 @@ public class DataMartApplicationService {
             view.name(),
             view.purpose(),
             view.ownerId(),
-            view.domainIds(),
+            view.businessCategoryIds(),
             view.status(),
             view.revision(),
             checksum,
@@ -335,10 +339,10 @@ public class DataMartApplicationService {
         );
     }
 
-    private void requireDomains(List<UUID> domainIds) {
-        if (!repository.domainsExist(domainIds)) {
+    private void requireBusinessCategories(List<UUID> businessCategoryIds) {
+        if (!repository.businessCategoriesExist(businessCategoryIds)) {
             throw new ModelSpecException(
-                "DATA_MART_DOMAIN_NOT_FOUND",
+                "DATA_MART_BUSINESS_CATEGORY_NOT_FOUND",
                 "One or more business categories do not exist",
                 ModelSpecException.Kind.UNPROCESSABLE
             );

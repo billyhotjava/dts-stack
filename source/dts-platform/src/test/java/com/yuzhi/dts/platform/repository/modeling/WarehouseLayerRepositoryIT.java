@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.yuzhi.dts.platform.IntegrationTest;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehouseLayerContract;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehouseLayerContract.StoredWarehouseLayer;
 import java.time.Instant;
 import java.util.Optional;
@@ -32,6 +33,7 @@ class WarehouseLayerRepositoryIT {
         StoredWarehouseLayer found = repository.findByCode("FIN_DETAIL").orElseThrow();
         assertThat(found.name()).isEqualTo("财务明细层");
         assertThat(found.status()).isEqualTo("ACTIVE");
+        assertThat(found.layerGroup()).isEqualTo(WarehouseLayerContract.LayerGroup.COMMON);
         assertThat(repository.findAllActive()).extracting(StoredWarehouseLayer::code).contains("FIN_DETAIL");
     }
 
@@ -75,7 +77,7 @@ class WarehouseLayerRepositoryIT {
     private static StoredWarehouseLayer row(String code, String systemLayerCode, String prefix) {
         Instant now = Instant.now();
         return new StoredWarehouseLayer(
-            UUID.randomUUID(), code, "财务明细层", systemLayerCode, "财务域明细", prefix,
+            UUID.randomUUID(), code, "财务明细层", systemLayerCode, WarehouseLayerContract.groupOf(systemLayerCode), "财务域明细", prefix,
             "ACTIVE", 1, "alice", now, "alice", now
         );
     }

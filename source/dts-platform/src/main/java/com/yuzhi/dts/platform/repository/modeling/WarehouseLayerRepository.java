@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.repository.modeling;
 
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehouseLayerContract.StoredWarehouseLayer;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehouseLayerContract.LayerGroup;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -19,7 +20,7 @@ import org.springframework.stereotype.Repository;
 public class WarehouseLayerRepository {
 
     private static final String COLUMNS =
-        "id, code, name, system_layer_code, description, naming_prefix, status, version, " +
+        "id, code, name, system_layer_code, layer_group, description, naming_prefix, status, version, " +
         "created_by, created_date, last_modified_by, last_modified_date";
 
     private final JdbcTemplate jdbcTemplate;
@@ -54,11 +55,12 @@ public class WarehouseLayerRepository {
 
     public int insert(StoredWarehouseLayer row) {
         return jdbcTemplate.update(
-            "insert into modeling_warehouse_layer (" + COLUMNS + ") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "insert into modeling_warehouse_layer (" + COLUMNS + ") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             row.id(),
             row.code(),
             row.name(),
             row.systemLayerCode(),
+            row.layerGroup().name(),
             row.description(),
             row.namingPrefix(),
             row.status(),
@@ -97,6 +99,7 @@ public class WarehouseLayerRepository {
             rs.getString("code"),
             rs.getString("name"),
             rs.getString("system_layer_code"),
+            java.util.Optional.ofNullable(rs.getString("layer_group")).map(LayerGroup::valueOf).orElse(null),
             rs.getString("description"),
             rs.getString("naming_prefix"),
             rs.getString("status"),

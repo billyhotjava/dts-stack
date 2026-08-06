@@ -10,7 +10,6 @@ import { useUserInfo } from "@/store/userStore";
 import { dataModelingPath } from "../navigation";
 import type { DataModelingRoute } from "../types";
 
-import { ConceptDimensionRecordDialog } from "./ConceptDimensionRecordDialog";
 import { isBlankModelField } from "./ModelFieldEditorTable";
 import { ModelingWorkbenchEditor } from "./ModelingWorkbenchEditor";
 import { ModelWorkbenchDialog, type WorkbenchDialog } from "./ModelWorkbenchDialog";
@@ -19,7 +18,6 @@ import { PageHeader, RequestState, Status, Toast, useTransientMessage } from "./
 import {
 	type ConceptDimensionDraft,
 	conceptDimensionDraftFromView,
-	confirmDimensionDefinitionDraft,
 	emptyModelDraft,
 	isConceptDimensionDraft,
 	isDimensionTableDraft,
@@ -96,7 +94,6 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const [validationErrors, setValidationErrors] = useState<ModelDraftValidationErrors>({});
 	const [fieldRowIds, setFieldRowIds] = useState<string[]>([]);
 	const [dimensionDefinitions, setDimensionDefinitions] = useState<DimensionDefinitionView[]>([]);
-	const [conceptDimensions, setConceptDimensions] = useState<DimensionDefinitionView[]>([]);
 	const [dimensionDefinitionFailure, setDimensionDefinitionFailure] = useState("");
 	const [layer, setLayer] = useState("公共层");
 	const [domain, setDomain] = useState("");
@@ -111,7 +108,6 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const [representationFailure, setRepresentationFailure] = useState("");
 	const { message, show } = useTransientMessage();
 	const draftBase = draft && isModelSpecDraft(draft) ? draft.base : null;
-	const conceptDraft = draft && isConceptDimensionDraft(draft) ? draft : null;
 	const draftCreateKind = draft?.createKind || null;
 	const draftDimensionDefinitionId = draft && isDimensionTableDraft(draft) ? draft.dimensionDefinitionId : "";
 	const draftDomainId = draft?.domainId || "";
@@ -254,25 +250,6 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	}, [draftBase, draftCreateKind, draftDimensionDefinitionId, draftDomainId]);
 
 	const domainNames = useMemo(() => new Map((context?.domains || []).map((item) => [item.id, item.name])), [context]);
-	const loadConceptDimensions = useCallback(async (domainValue: string) => {
-		try {
-			const items = await listDimensionDefinitions({
-				...(domainValue ? { domainId: domainValue } : {}),
-				offset: 0,
-				limit: 100,
-			});
-			const visible = Array.isArray(items)
-				? items.filter((item) => item.status === "DRAFT" || item.status === "CURRENT")
-				: [];
-			setConceptDimensions(visible);
-		} catch {
-			setConceptDimensions([]);
-		}
-	}, []);
-	useEffect(() => {
-		void loadConceptDimensions(domain);
-	}, [domain, loadConceptDimensions]);
-
 	const modelDomainOptions = useMemo(
 		() =>
 			Array.from(
@@ -327,17 +304,6 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		setSearchParams(next, { replace: true });
 	};
 
-	const openConceptDimension = (definition: DimensionDefinitionView) => {
-		if (savingRef.current || !confirmDiscard()) return;
-		replaceDraft(conceptDimensionDraftFromView(definition));
-		setCreateOpen(false);
-		setDialog(null);
-		if (definition.domainId !== domain) setDomain(definition.domainId);
-		const next = new URLSearchParams(searchParams);
-		next.delete("modelSpecId");
-		setSearchParams(next, { replace: true });
-	};
-
 	const createModel = (kind: ModelCreateKind) => {
 		if (savingRef.current || !context || !confirmDiscard()) return;
 		const next = emptyModelDraft(kind, context);
@@ -362,7 +328,6 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 			try {
 				const saved = await saveDimensionDefinitionDraft(draft, ownerIdOf(userInfo));
 				replaceDraft(conceptDimensionDraftFromView(saved));
-				void loadConceptDimensions(domain);
 				show(`维度草稿已保存：${saved.systemCode}`);
 			} catch (error) {
 				const failure = normalizeModelingRequestFailure(error, "维度保存失败。");
@@ -406,32 +371,6 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 			setSaving(false);
 		}
 	};
-	const confirmConceptVersion = async () => {
-		if (savingRef.current || !conceptDraft?.definitionBase || !canMaintain) return;
-		setFailure(null);
-		savingRef.current = true;
-		setSaving(true);
-		try {
-			const confirmed = await confirmDimensionDefinitionDraft(conceptDraft);
-			replaceDraft(confirmed);
-			void loadConceptDimensions(domain);
-			show(`维度定义已确认：${confirmed.definitionBase?.systemCode}`);
-		} catch (error) {
-			const failure = normalizeModelingRequestFailure(error, "维度定义确认失败。");
-			if (failure.code === "DIMENSION_DEFINITION_ATTRIBUTES_REQUIRED_FOR_CONFIRMATION") {
-				setFailure({
-					...failure,
-					message: "确认前请至少添加一个维度属性，并将其中一个属性设为主键。",
-				});
-			} else {
-				setFailure(failure);
-			}
-		} finally {
-			savingRef.current = false;
-			setSaving(false);
-		}
-	};
-
 	const updateField = (index: number, patch: Partial<ModelSpecField>) => {
 		if (savingRef.current) return;
 		setDraft((current) => {
@@ -608,30 +547,6 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 							</div>
 						</div>
 						<div className="dmx-object-tree">
-							{conceptDimensions.length ? (
-								<div className="dmx-tree-domain dmx-tree-domain--concepts">
-									<span>🧭</span>
-									<strong>概念维度</strong>
-									<em>({conceptDimensions.length})</em>
-								</div>
-							) : null}
-							{conceptDimensions.map((definition) => (
-								<button
-									className={`dmx-tree-model${draft && isConceptDimensionDraft(draft) && draft.definitionBase?.id === definition.id ? " active" : ""}`}
-									disabled={saving}
-									key={definition.id}
-									onClick={() => openConceptDimension(definition)}
-									type="button"
-								>
-									<span>🧭</span>
-									<span className="dmx-tree-model-copy">
-										<b>{definition.name}</b>
-										<small>
-											{definition.systemCode} · {definition.status}
-										</small>
-									</span>
-								</button>
-							))}
 							{groups.map(([group, models]) => {
 								const open = domainOpen[group] !== false;
 								return (
@@ -669,21 +584,20 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 									</div>
 								);
 							})}
-							{!groups.length && !conceptDimensions.length ? (
+							{!groups.length ? (
 								<RequestState description={catalogEmptyMessage} kind="empty" title="暂无模型" />
 							) : null}
 						</div>
 						{createOpen ? (
 							<div className="dmx-create-menu">
-								<strong>概念模型</strong>
-								<button disabled={saving} onClick={() => createModel("dimension")} type="button">
+								<strong>创建模型</strong>
+								<button disabled={saving} onClick={() => createModel("dimension-table")} type="button">
 									创建维度
 								</button>
-								<strong>逻辑模型</strong>
 								<button disabled title="当前 ModelSpec 契约不拥有 ODS/STG 贴源对象" type="button">
 									创建贴源表（尚未接入）
 								</button>
-								{(["dimension-table", "fact", "summary", "application"] as ModelCreateKind[]).map((kind) => (
+								{(["fact", "summary", "application"] as ModelCreateKind[]).map((kind) => (
 									<button disabled={saving} key={kind} onClick={() => createModel(kind)} type="button">
 										创建{MODEL_KIND_CONFIG[kind].label}
 									</button>
@@ -742,7 +656,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 							<RequestState description="请从目录选择模型，或新建一个模型草稿。" kind="empty" title="请选择模型" />
 						)}
 					</section>
-					{selectedModel ? (
+					{selectedModel?.modelType === "FACT" ? (
 						<aside className="dmx-record-rail">
 							<button disabled={saving || !selectedModel} onClick={() => setDialog("versions")} type="button">
 								<GitBranch size={16} />
@@ -768,14 +682,6 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 				dialog={dialog}
 				model={selectedModel}
 				onClose={() => setDialog(null)}
-			/>
-			<ConceptDimensionRecordDialog
-				canMaintain={canMaintain}
-				dialog={conceptDraft && (dialog === "versions" || dialog === "releases") ? dialog : null}
-				draft={conceptDraft}
-				onClose={() => setDialog(null)}
-				onConfirm={() => void confirmConceptVersion()}
-				saving={saving}
 			/>
 			<Toast message={message} />
 		</main>

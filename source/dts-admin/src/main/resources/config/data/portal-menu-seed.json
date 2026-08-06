@@ -279,14 +279,6 @@
               ]
             },
             {
-              "key": "planning-spaces",
-              "path": "spaces",
-              "icon": "solar:buildings-2-bold-duotone",
-              "titleKey": "sys.nav.portal.planningSpaces",
-              "title": "建模空间",
-              "externalLink": "/data-modeling/planning/spaces"
-            },
-            {
               "key": "planning-system",
               "path": "system",
               "icon": "solar:settings-bold-duotone",

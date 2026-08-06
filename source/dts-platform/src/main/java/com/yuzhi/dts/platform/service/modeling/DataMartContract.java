@@ -8,7 +8,11 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
-/** Contract for a planning data mart. It is deliberately separate from the published asset ledger. */
+/**
+ * Contract for a planning data mart. Aligned with DataWorks: a data mart is a consumption
+ * refinement of one or more business categories (application-side chain), deliberately separate
+ * from the published asset ledger.
+ */
 public final class DataMartContract {
 
     private static final Pattern CODE = Pattern.compile("^[A-Z][A-Z0-9_]{1,63}$");
@@ -28,7 +32,7 @@ public final class DataMartContract {
         String name,
         String purpose,
         String ownerId,
-        List<UUID> domainIds,
+        List<UUID> businessCategoryIds,
         String idempotencyKey
     ) {
         public CreateCommand {
@@ -36,17 +40,17 @@ public final class DataMartContract {
             name = trimToNull(name);
             purpose = trimToNull(purpose);
             ownerId = trimToNull(ownerId);
-            domainIds = domainIds == null ? null : List.copyOf(domainIds);
+            businessCategoryIds = businessCategoryIds == null ? null : List.copyOf(businessCategoryIds);
             idempotencyKey = trimToNull(idempotencyKey);
         }
     }
 
-    public record UpdateCommand(String name, String purpose, String ownerId, List<UUID> domainIds) {
+    public record UpdateCommand(String name, String purpose, String ownerId, List<UUID> businessCategoryIds) {
         public UpdateCommand {
             name = trimToNull(name);
             purpose = trimToNull(purpose);
             ownerId = trimToNull(ownerId);
-            domainIds = domainIds == null ? null : List.copyOf(domainIds);
+            businessCategoryIds = businessCategoryIds == null ? null : List.copyOf(businessCategoryIds);
         }
     }
 
@@ -56,7 +60,7 @@ public final class DataMartContract {
         String name,
         String purpose,
         String ownerId,
-        List<UUID> domainIds,
+        List<UUID> businessCategoryIds,
         Status status,
         int revision,
         String checksum,
@@ -65,7 +69,7 @@ public final class DataMartContract {
         Instant updatedAt
     ) {
         public View {
-            domainIds = domainIds == null ? List.of() : List.copyOf(domainIds);
+            businessCategoryIds = businessCategoryIds == null ? List.of() : List.copyOf(businessCategoryIds);
         }
     }
 
@@ -92,7 +96,7 @@ public final class DataMartContract {
             command.name(),
             command.purpose(),
             command.ownerId(),
-            command.domainIds()
+            command.businessCategoryIds()
         );
         if (isBlank(command.code())) {
             issues.add(0, new FieldIssue("code", "DATA_MART_CODE_REQUIRED", "Code is required"));
@@ -107,7 +111,9 @@ public final class DataMartContract {
         if (command == null) {
             return List.of(new FieldIssue("command", "DATA_MART_REQUEST_REQUIRED", "Data mart request is required"));
         }
-        return List.copyOf(validateBusinessFields(null, command.name(), command.purpose(), command.ownerId(), command.domainIds()));
+        return List.copyOf(
+            validateBusinessFields(null, command.name(), command.purpose(), command.ownerId(), command.businessCategoryIds())
+        );
     }
 
     public static List<FieldIssue> validatePlanBaseline(PlanBaselineCommand command) {
@@ -129,7 +135,7 @@ public final class DataMartContract {
         String name,
         String purpose,
         String ownerId,
-        List<UUID> domainIds
+        List<UUID> businessCategoryIds
     ) {
         List<FieldIssue> issues = new ArrayList<>();
         if (!isBlank(code) && !CODE.matcher(code).matches()) {
@@ -144,8 +150,14 @@ public final class DataMartContract {
         if (isBlank(ownerId)) {
             issues.add(new FieldIssue("ownerId", "DATA_MART_OWNER_REQUIRED", "Owner is required"));
         }
-        if (!validIds(domainIds, false)) {
-            issues.add(new FieldIssue("domainIds", "DATA_MART_DOMAIN_IDS_INVALID", "Select 1 to 100 unique business categories"));
+        if (!validIds(businessCategoryIds, false)) {
+            issues.add(
+                new FieldIssue(
+                    "businessCategoryIds",
+                    "DATA_MART_BUSINESS_CATEGORY_IDS_INVALID",
+                    "Select 1 to 100 unique business categories"
+                )
+            );
         }
         return issues;
     }

@@ -1,33 +1,37 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { loadDataMartDomainOptions } from "./dataMartDomainOptions";
+import { loadDataMartCategoryOptions } from "./dataMartDomainOptions";
 
-const apiMocks = vi.hoisted(() => ({ listDomains: vi.fn() }));
+const apiMocks = vi.hoisted(() => ({ listPlanningCatalogDomains: vi.fn() }));
 
-vi.mock("@/api/platformApi", () => ({ listDomains: apiMocks.listDomains }));
+vi.mock("./planningCatalogDomainService", () => ({
+	listPlanningCatalogDomains: apiMocks.listPlanningCatalogDomains,
+}));
 
-beforeEach(() => apiMocks.listDomains.mockReset());
+beforeEach(() => apiMocks.listPlanningCatalogDomains.mockReset());
 
-describe("loadDataMartDomainOptions", () => {
-	it("preserves the catalog UUID separately from the displayed business code", async () => {
-		apiMocks.listDomains.mockResolvedValue({
-			data: {
-				content: [
-					{
-						id: "9bb4e351-41f7-4e2f-b27e-adb55ca6cb11",
-						code: "FIN",
-						name: "财务域",
-					},
-				],
-			},
-		});
-
-		await expect(loadDataMartDomainOptions()).resolves.toEqual([
+describe("loadDataMartCategoryOptions", () => {
+	it("exposes only business-category roots as data-mart scopes", async () => {
+		apiMocks.listPlanningCatalogDomains.mockResolvedValue([
 			{
 				id: "9bb4e351-41f7-4e2f-b27e-adb55ca6cb11",
 				code: "FIN",
+				name: "财务管理",
+				parentId: null,
+			},
+			{
+				id: "7aa4e351-0000-0000-0000-000000000002",
+				code: "FIN_DOMAIN",
 				name: "财务域",
+				parentId: "9bb4e351-41f7-4e2f-b27e-adb55ca6cb11",
 			},
 		]);
-		expect(apiMocks.listDomains).toHaveBeenCalledWith(0, 500, "");
+
+		await expect(loadDataMartCategoryOptions()).resolves.toEqual([
+			{
+				id: "9bb4e351-41f7-4e2f-b27e-adb55ca6cb11",
+				code: "FIN",
+				name: "财务管理",
+			},
+		]);
 	});
 });

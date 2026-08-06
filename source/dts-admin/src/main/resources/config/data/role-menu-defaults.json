@@ -108,12 +108,6 @@
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.planningSpaces",
-    "title": "建模空间",
-    "route": "/data-modeling/planning/spaces",
-    "requiredRoles": []
-  },
-  {
     "code": "sys.nav.portal.planningSystem",
     "title": "规划参数配置",
     "route": "/data-modeling/planning/system",

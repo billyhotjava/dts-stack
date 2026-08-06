@@ -84,6 +84,33 @@ export function Modal({
 	);
 }
 
+export function Drawer({
+	title,
+	children,
+	onClose,
+	footer,
+}: {
+	title: string;
+	children: ReactNode;
+	onClose: () => void;
+	footer?: ReactNode;
+}) {
+	return (
+		<div className="dmx-drawer-backdrop" onClick={onClose}>
+			<section aria-modal="true" className="dmx-drawer" onClick={(event) => event.stopPropagation()} role="dialog">
+				<header className="dmx-drawer__header">
+					<h2>{title}</h2>
+					<button aria-label="关闭" onClick={onClose} type="button">
+						<X size={18} />
+					</button>
+				</header>
+				<div className="dmx-drawer__body">{children}</div>
+				{footer ? <footer className="dmx-drawer__footer">{footer}</footer> : null}
+			</section>
+		</div>
+	);
+}
+
 export function Toast({ message }: { message: string }) {
 	if (!message) return null;
 	return (

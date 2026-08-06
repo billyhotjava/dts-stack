@@ -11,8 +11,10 @@ class WarehouseLayerGovernanceLiquibaseTest {
     void addsGlobalCustomLayerRegistryAndBackfillsModelSelections() throws Exception {
         String master = resource("config/liquibase/master.xml");
         String migration = resource("config/liquibase/changelog/20260804_01_modeling_warehouse_layer.xml");
+        String groupMigration = resource("config/liquibase/changelog/20260806_02_modeling_warehouse_layer_group.xml");
 
         assertThat(master).contains("20260804_01_modeling_warehouse_layer.xml");
+        assertThat(master).contains("20260806_02_modeling_warehouse_layer_group.xml");
         assertThat(migration)
             .contains("modeling_warehouse_layer")
             .contains("system_layer_code")
@@ -22,6 +24,10 @@ class WarehouseLayerGovernanceLiquibaseTest {
             .contains("set warehouse_layer_code = layer")
             .contains("nullable=\"false\"")
             .doesNotContain("tenant_id");
+        assertThat(groupMigration)
+            .contains("layer_group")
+            .contains("'STAGING', 'COMMON', 'APPLICATION'")
+            .contains("alter column layer_group set not null");
     }
 
     private static String resource(String path) throws Exception {

@@ -12,7 +12,7 @@ type FormValues = {
 	name: string;
 	purpose: string;
 	ownerId: string;
-	domainIds: string[];
+	businessCategoryIds: string[];
 };
 
 type Props = {
@@ -68,7 +68,9 @@ export function DataMartWorkspace({ domainId, domainOptions, canManage }: Props)
 		setLoading(true);
 		setError("");
 		try {
-			setItems(await listDataMarts({ domainId, keyword: appliedQuery || undefined, offset: 0, limit: 100 }));
+			setItems(
+				await listDataMarts({ businessCategoryId: domainId, keyword: appliedQuery || undefined, offset: 0, limit: 100 }),
+			);
 		} catch (loadError) {
 			setError(errorMessage(loadError));
 		} finally {
@@ -95,7 +97,7 @@ export function DataMartWorkspace({ domainId, domainOptions, canManage }: Props)
 	const openCreate = () => {
 		setEditing(null);
 		form.resetFields();
-		form.setFieldsValue({ domainIds: [domainId] });
+		form.setFieldsValue({ businessCategoryIds: [domainId] });
 		setDirectoryUsers([]);
 		setDirectoryQuery("");
 		void loadOwners();
@@ -109,7 +111,7 @@ export function DataMartWorkspace({ domainId, domainOptions, canManage }: Props)
 			name: item.name,
 			purpose: item.purpose,
 			ownerId: item.ownerId,
-			domainIds: item.domainIds,
+			businessCategoryIds: item.businessCategoryIds,
 		});
 		setDirectoryUsers([]);
 		setDirectoryQuery(item.ownerId);
@@ -133,7 +135,7 @@ export function DataMartWorkspace({ domainId, domainOptions, canManage }: Props)
 					name: values.name.trim(),
 					purpose: values.purpose.trim(),
 					ownerId: values.ownerId.trim(),
-					domainIds: values.domainIds,
+					businessCategoryIds: values.businessCategoryIds,
 				});
 			} else {
 				await createDataMart({
@@ -141,7 +143,7 @@ export function DataMartWorkspace({ domainId, domainOptions, canManage }: Props)
 					name: values.name.trim(),
 					purpose: values.purpose.trim(),
 					ownerId: values.ownerId.trim(),
-					domainIds: values.domainIds,
+					businessCategoryIds: values.businessCategoryIds,
 					idempotencyKey: idempotencyKey(),
 				});
 			}
@@ -222,7 +224,7 @@ export function DataMartWorkspace({ domainId, domainOptions, canManage }: Props)
 						title: "业务分类",
 						key: "domains",
 						width: 120,
-						render: (_, item) => `${item.domainIds.length} 个`,
+						render: (_, item) => `${item.businessCategoryIds.length} 个`,
 					},
 					{
 						title: "状态",
@@ -329,7 +331,7 @@ export function DataMartWorkspace({ domainId, domainOptions, canManage }: Props)
 						/>
 					</Form.Item>
 					<Form.Item
-						name="domainIds"
+						name="businessCategoryIds"
 						label="包含的业务分类"
 						extra={
 							editing && editing.usageCount > 0

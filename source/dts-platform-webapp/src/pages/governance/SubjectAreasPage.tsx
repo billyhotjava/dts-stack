@@ -746,7 +746,10 @@ export default function SubjectAreasPage() {
 										<DataMartWorkspace
 											domainId={activeDomain.id as string}
 											domainOptions={domainOptions
-												.filter((domain): domain is DomainNode & { id: string } => Boolean(domain.id))
+												.filter(
+													(domain): domain is DomainNode & { id: string } =>
+														Boolean(domain.id) && !domain.parentId,
+												)
 												.map((domain) => ({
 													value: domain.id,
 													label: `${domain.name || "未命名分类"}${domain.code ? `（${domain.code}）` : ""}`,

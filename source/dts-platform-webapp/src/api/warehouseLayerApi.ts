@@ -6,10 +6,14 @@ const quietDelete = <T>(url: string) => api.delete<T>({ url, _skipErrorToast: tr
 
 export type WarehouseSystemLayerCode = "ODS_RAW" | "ODS_STANDARDIZED" | "STG" | "DWD" | "DWS" | "ADS";
 
+export type WarehouseLayerGroup = "STAGING" | "COMMON" | "APPLICATION";
+
 export type WarehouseLayerView = {
 	code: string;
 	name: string;
 	systemLayerCode: WarehouseSystemLayerCode;
+	layerGroup: WarehouseLayerGroup;
+	modelTypes: string[];
 	kind: string;
 	responsibility: string;
 	namingPrefixes: string[];
@@ -40,7 +44,11 @@ export const normalizeWarehouseLayerView = (value: unknown): WarehouseLayerView 
 	const code = typeof record.code === "string" ? record.code : undefined;
 	const name = typeof record.name === "string" ? record.name : undefined;
 	const systemLayerCode = typeof record.systemLayerCode === "string" ? record.systemLayerCode : undefined;
-	if (!code || !name || !systemLayerCode) return undefined;
+	const layerGroup =
+		record.layerGroup === "STAGING" || record.layerGroup === "COMMON" || record.layerGroup === "APPLICATION"
+			? record.layerGroup
+			: undefined;
+	if (!code || !name || !systemLayerCode || !layerGroup) return undefined;
 	const prefixes = Array.isArray(record.namingPrefixes)
 		? record.namingPrefixes.filter((item): item is string => typeof item === "string")
 		: [];
@@ -48,6 +56,10 @@ export const normalizeWarehouseLayerView = (value: unknown): WarehouseLayerView 
 		code,
 		name,
 		systemLayerCode: systemLayerCode as WarehouseSystemLayerCode,
+		layerGroup,
+		modelTypes: Array.isArray(record.modelTypes)
+			? record.modelTypes.filter((item): item is string => typeof item === "string")
+			: [],
 		kind: typeof record.kind === "string" ? record.kind : "",
 		responsibility: typeof record.responsibility === "string" ? record.responsibility : "",
 		namingPrefixes: prefixes,

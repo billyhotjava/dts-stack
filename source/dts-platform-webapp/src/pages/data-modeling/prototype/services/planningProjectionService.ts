@@ -6,6 +6,7 @@ import {
 } from "@/api/services/modelingOverviewFactService";
 import type { Sprint64BusinessProcess } from "@/api/sprint64GovernanceApi";
 import { listBusinessProcessesApi } from "@/api/sprint64GovernanceApi";
+import { listSubjectDomains } from "@/api/subjectDomainApi";
 import { listWarehouseLayers } from "@/api/warehouseLayerApi";
 import type { DataMartView } from "@/features/modeling/contracts/dataMartContract";
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
@@ -102,6 +103,19 @@ export function normalizeModelingRequestFailure(error: unknown, fallback: string
 
 const modelTypeLabel = (model: ModelSpecView): string =>
 	({ DIMENSION: "维度表", FACT: "明细表", SUMMARY: "汇总表", APPLICATION: "应用表" })[model.modelType];
+
+const LAYER_GROUP_LABEL: Record<string, string> = {
+	STAGING: "贴源层",
+	COMMON: "公共层",
+	APPLICATION: "应用层",
+};
+
+const LAYER_MODEL_TYPE_LABEL: Record<string, string> = {
+	DIMENSION: "维度",
+	FACT: "明细表",
+	SUMMARY: "汇总表",
+	APPLICATION: "应用表",
+};
 
 export async function loadModelingOverviewProjection(): Promise<ModelingOverviewProjection> {
 	const [catalogDomains, models, standardsRaw, indicatorsRaw] = await Promise.all([
@@ -222,13 +236,15 @@ export async function loadPlanningProjection(view: string): Promise<PlanningProj
 		const layers = await listWarehouseLayers();
 		return {
 			...emptyProjection(),
-			headers: ["分层编码", "分层名称", "所属系统类型", "加工责任", "命名前缀", "来源"],
+			headers: ["分层编码", "分层名称", "分层归属", "所属系统类型", "模型类型", "加工责任", "命名前缀", "来源"],
 			rows: layers.map((item) => ({
 				id: item.code,
 				cells: [
 					item.code,
 					item.name,
+					LAYER_GROUP_LABEL[item.layerGroup] || item.layerGroup,
 					item.systemLayerCode,
+					item.modelTypes.map((type) => LAYER_MODEL_TYPE_LABEL[type] || type).join("、") || "—",
 					item.responsibility,
 					item.namingPrefixes.join("、") || "—",
 					item.builtin ? "系统" : "自定义",
@@ -239,13 +255,40 @@ export async function loadPlanningProjection(view: string): Promise<PlanningProj
 	}
 	if (view === "marts") {
 		const marts = await listDataMarts({ limit: 100 });
+		const categories = (await listPlanningCatalogDomains()).filter((item) => !item.parentId);
+		const categoryNames = new Map(categories.map((item) => [item.id, item.name]));
 		return {
 			...emptyProjection(),
-			headers: ["集市编码", "集市名称", "数据域", "负责人", "状态"],
+			headers: ["集市编码", "集市名称", "业务分类", "负责人", "状态"],
 			rows: marts.map((mart) => ({
 				id: mart.id,
-				cells: [mart.code, mart.name, mart.domainIds.join("、") || "—", mart.ownerId, mart.status],
+				cells: [
+					mart.code,
+					mart.name,
+					mart.businessCategoryIds.map((id) => categoryNames.get(id) || id).join("、") || "—",
+					mart.ownerId,
+					mart.status,
+				],
 				source: mart,
+			})),
+		};
+	}
+	if (view === "subjects") {
+		const [subjects, marts] = await Promise.all([listSubjectDomains({ limit: 100 }), listDataMarts({ limit: 100 })]);
+		const martNames = new Map(marts.map((mart) => [mart.id, mart.name]));
+		return {
+			...emptyProjection(),
+			headers: ["主题域编码", "主题域名称", "数据集市", "用途说明", "状态"],
+			rows: subjects.map((item) => ({
+				id: item.id,
+				cells: [
+					item.code,
+					item.name,
+					martNames.get(item.martId) || item.martId,
+					item.purpose || "—",
+					item.status,
+				],
+				source: item,
 			})),
 		};
 	}

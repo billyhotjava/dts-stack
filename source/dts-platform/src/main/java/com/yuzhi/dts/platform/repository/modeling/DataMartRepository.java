@@ -49,7 +49,7 @@ public class DataMartRepository {
 
     public List<StoredDataMart> list(
         String tenantId,
-        UUID domainId,
+        UUID businessCategoryId,
         Status status,
         String keyword,
         int offset,
@@ -63,11 +63,11 @@ public class DataMartRepository {
             sql.append(" and status = ?");
             parameters.add(status.name());
         }
-        if (domainId != null) {
+        if (businessCategoryId != null) {
             sql.append(
                 " and exists (select 1 from modeling_data_mart_domain d where d.tenant_id = modeling_data_mart.tenant_id and d.data_mart_id = modeling_data_mart.id and d.domain_id = ?)"
             );
-            parameters.add(domainId);
+            parameters.add(businessCategoryId);
         }
         if (keyword != null && !keyword.isBlank()) {
             sql.append(
@@ -85,17 +85,18 @@ public class DataMartRepository {
         return jdbcTemplate.query(sql.toString(), this::map, parameters.toArray());
     }
 
-    public boolean domainsExist(List<UUID> domainIds) {
-        if (domainIds.isEmpty()) {
+    /** Only business-category roots ({@code parent_id is null}) are valid data-mart scopes. */
+    public boolean businessCategoriesExist(List<UUID> businessCategoryIds) {
+        if (businessCategoryIds.isEmpty()) {
             return false;
         }
-        String placeholders = String.join(",", java.util.Collections.nCopies(domainIds.size(), "?"));
+        String placeholders = String.join(",", java.util.Collections.nCopies(businessCategoryIds.size(), "?"));
         Integer count = jdbcTemplate.queryForObject(
-            "select count(*) from catalog_domain where id in (" + placeholders + ")",
+            "select count(*) from catalog_domain where parent_id is null and id in (" + placeholders + ")",
             Integer.class,
-            domainIds.toArray()
+            businessCategoryIds.toArray()
         );
-        return count != null && count == domainIds.size();
+        return count != null && count == businessCategoryIds.size();
     }
 
     public boolean activeNameExists(String tenantId, String name, UUID excludingId) {
@@ -146,7 +147,7 @@ public class DataMartRepository {
         if (inserted == 0) {
             return 0;
         }
-        replaceDomains(tenantId, actorId, view.id(), view.domainIds(), view.updatedAt());
+        replaceBusinessCategories(tenantId, actorId, view.id(), view.businessCategoryIds(), view.updatedAt());
         insertRevision(tenantId, actorId, view, snapshot);
         return 1;
     }
@@ -181,12 +182,17 @@ public class DataMartRepository {
         if (updated == 0) {
             return 0;
         }
-        replaceDomains(tenantId, actorId, replacement.id(), replacement.domainIds(), replacement.updatedAt());
+        replaceBusinessCategories(tenantId, actorId, replacement.id(), replacement.businessCategoryIds(), replacement.updatedAt());
         insertRevision(tenantId, actorId, replacement, snapshot);
         return 1;
     }
 
-    public Map<UUID, List<UUID>> domainIds(String tenantId, List<UUID> dataMartIds) {
+    /**
+     * Resolves the business categories bound to the given data marts. The physical join table
+     * keeps the legacy {@code modeling_data_mart_domain} name; semantically the referenced
+     * {@code catalog_domain} rows are business-category roots.
+     */
+    public Map<UUID, List<UUID>> businessCategoryIds(String tenantId, List<UUID> dataMartIds) {
         Map<UUID, List<UUID>> result = new LinkedHashMap<>();
         dataMartIds.forEach(id -> result.put(id, new ArrayList<>()));
         if (dataMartIds.isEmpty()) {
@@ -363,9 +369,15 @@ public class DataMartRepository {
         return 1;
     }
 
-    private void replaceDomains(String tenantId, String actorId, UUID dataMartId, List<UUID> domainIds, Instant now) {
+    private void replaceBusinessCategories(
+        String tenantId,
+        String actorId,
+        UUID dataMartId,
+        List<UUID> businessCategoryIds,
+        Instant now
+    ) {
         jdbcTemplate.update("delete from modeling_data_mart_domain where tenant_id = ? and data_mart_id = ?", tenantId, dataMartId);
-        for (UUID domainId : domainIds) {
+        for (UUID categoryId : businessCategoryIds) {
             jdbcTemplate.update(
                 """
                 insert into modeling_data_mart_domain (
@@ -375,7 +387,7 @@ public class DataMartRepository {
                 UUID.randomUUID(),
                 tenantId,
                 dataMartId,
-                domainId,
+                categoryId,
                 actorId,
                 Timestamp.from(now)
             );

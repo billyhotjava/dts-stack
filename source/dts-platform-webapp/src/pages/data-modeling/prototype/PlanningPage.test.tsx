@@ -2,6 +2,7 @@
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DataModelingRoute } from "../types";
 
@@ -9,6 +10,17 @@ const mocks = vi.hoisted(() => ({
 	loadPlanningProjection: vi.fn(),
 	createWarehouseLayer: vi.fn(),
 	deleteWarehouseLayer: vi.fn(),
+	deleteBusinessProcessApi: vi.fn(),
+	createDataMart: vi.fn(),
+	confirmDataMart: vi.fn(),
+	retireDataMart: vi.fn(),
+	updateDataMart: vi.fn(),
+	createSubjectDomain: vi.fn(),
+	confirmSubjectDomain: vi.fn(),
+	retireSubjectDomain: vi.fn(),
+	updateSubjectDomain: vi.fn(),
+	listPlanningCatalogDomains: vi.fn(),
+	listDataMarts: vi.fn(),
 	normalizeModelingRequestFailure: vi.fn(),
 	canMaintain: false,
 }));
@@ -17,6 +29,31 @@ vi.mock("@/store/userStore", () => ({ useUserInfo: () => ({ id: "user-1" }) }));
 vi.mock("@/api/warehouseLayerApi", () => ({
 	createWarehouseLayer: mocks.createWarehouseLayer,
 	deleteWarehouseLayer: mocks.deleteWarehouseLayer,
+}));
+vi.mock("@/api/sprint64GovernanceApi", () => ({
+	createBusinessProcessApi: vi.fn(),
+	deleteBusinessProcessApi: mocks.deleteBusinessProcessApi,
+	listBusinessProcessesApi: vi.fn(),
+}));
+vi.mock("@/api/dataMartApi", () => ({
+	createDataMart: mocks.createDataMart,
+	confirmDataMart: mocks.confirmDataMart,
+	retireDataMart: mocks.retireDataMart,
+	updateDataMart: mocks.updateDataMart,
+	listDataMarts: mocks.listDataMarts,
+}));
+vi.mock("@/api/subjectDomainApi", () => ({
+	createSubjectDomain: mocks.createSubjectDomain,
+	confirmSubjectDomain: mocks.confirmSubjectDomain,
+	retireSubjectDomain: mocks.retireSubjectDomain,
+	updateSubjectDomain: mocks.updateSubjectDomain,
+	listSubjectDomains: vi.fn(),
+}));
+vi.mock("./services/planningCatalogDomainService", () => ({
+	listPlanningCatalogDomains: mocks.listPlanningCatalogDomains,
+	createPlanningCatalogDomain: vi.fn(),
+	updatePlanningCatalogDomain: vi.fn(),
+	deletePlanningCatalogDomain: vi.fn(),
 }));
 vi.mock("./services/planningProjectionService", () => ({
 	loadPlanningProjection: mocks.loadPlanningProjection,
@@ -42,6 +79,16 @@ afterEach(async () => {
 	vi.clearAllMocks();
 });
 
+async function renderPlanning(route: DataModelingRoute) {
+	await act(async () =>
+		root.render(
+			<MemoryRouter>
+				<PlanningPage route={route} />
+			</MemoryRouter>,
+		),
+	);
+}
+
 describe("PlanningPage", () => {
 	const layerRoute = (): DataModelingRoute => ({
 		workspace: "planning",
@@ -53,6 +100,8 @@ describe("PlanningPage", () => {
 		code: "DWD",
 		name: "明细事实 / 维度层",
 		systemLayerCode: "DWD",
+		layerGroup: "COMMON",
+		modelTypes: ["DIMENSION", "FACT"],
 		kind: "DETAIL",
 		responsibility: "业务明细",
 		namingPrefixes: ["dwd_"],
@@ -65,6 +114,8 @@ describe("PlanningPage", () => {
 		code: "FIN_DETAIL",
 		name: "财务明细层",
 		systemLayerCode: "DWD",
+		layerGroup: "COMMON",
+		modelTypes: ["DIMENSION", "FACT"],
 		kind: "DETAIL",
 		responsibility: "财务域明细",
 		namingPrefixes: ["fin_dwd_"],
@@ -74,7 +125,7 @@ describe("PlanningPage", () => {
 		disabledReason: null,
 	};
 
-	it("renders an unavailable empty-state reason only once", async () => {
+	it("renders the DataWorks planning tree and hides the modeling space", async () => {
 		const reason = "当前版本尚未提供可维护的规划参数";
 		mocks.loadPlanningProjection.mockResolvedValue({ headers: [], rows: [], readOnlyReason: reason });
 		const route: DataModelingRoute = {
@@ -84,36 +135,48 @@ describe("PlanningPage", () => {
 			description: "说明数仓规划参数的当前能力边界；当前版本暂不提供在线维护。",
 		};
 
-		await act(async () => root.render(<PlanningPage route={route} />));
+		await renderPlanning(route);
 
+		for (const label of ["业务分类", "数仓分层", "公共层", "数据域", "业务过程", "应用层", "数据集市", "主题域", "规划参数配置"]) {
+			expect(container.textContent).toContain(label);
+		}
+		expect(container.textContent).not.toContain("建模空间");
 		expect(container.textContent?.match(new RegExp(reason, "g"))).toHaveLength(1);
 	});
 
-	it("renders the warehouse layer editor with protected built-in rows and custom delete choices", async () => {
+	it("renders layer rows with built-in protection and opens the create drawer", async () => {
+		mocks.canMaintain = true;
 		mocks.loadPlanningProjection.mockResolvedValue({
-			headers: ["分层编码", "分层名称", "所属系统类型", "加工责任", "命名前缀", "来源"],
+			headers: ["分层编码", "分层名称", "分层归属"],
 			rows: [
-				{ id: "DWD", cells: ["DWD", "明细事实 / 维度层", "DWD", "业务明细", "dwd_", "系统"], source: builtinDwd },
-				{
-					id: "FIN_DETAIL",
-					cells: ["FIN_DETAIL", "财务明细层", "DWD", "财务域明细", "fin_dwd_", "自定义"],
-					source: customFinDetail,
-				},
+				{ id: "DWD", cells: ["DWD", "明细事实 / 维度层", "公共层"], source: builtinDwd },
+				{ id: "FIN_DETAIL", cells: ["FIN_DETAIL", "财务明细层", "公共层"], source: customFinDetail },
 			],
 			readOnlyReason: null,
 		});
 
-		await act(async () => root.render(<PlanningPage route={layerRoute()} />));
+		await renderPlanning(layerRoute());
 
-		for (const label of ["分层编码", "分层名称", "所属系统类型", "加工责任", "命名前缀"]) {
+		for (const label of ["分层编码", "分层名称", "分层归属"]) {
 			expect(container.textContent).toContain(label);
 		}
 		expect(container.textContent).toContain("新建数仓分层");
-		expect(container.textContent).toContain("财务明细层 · FIN_DETAIL");
-		expect(container.textContent).not.toContain("系统分层字典由平台内置并统一生效，当前版本只读");
+		expect(container.textContent).toContain("财务明细层");
+		expect(container.textContent).toContain("内置");
+
+		await act(async () => {
+			(
+				[...container.querySelectorAll("button")].find((button) =>
+					button.textContent?.includes("新建数仓分层"),
+				) as HTMLButtonElement
+			).click();
+		});
+
+		const codeInput = [...container.querySelectorAll("input")].find((input) => input.placeholder === "例如：FIN_DETAIL");
+		expect(codeInput).toBeDefined();
 	});
 
-	it("creates a custom layer with normalized values and refreshes the projection", async () => {
+	it("creates a custom layer from the drawer with normalized values and refreshes", async () => {
 		mocks.canMaintain = true;
 		mocks.createWarehouseLayer.mockResolvedValue(customFinDetail);
 		mocks.normalizeModelingRequestFailure.mockReturnValue({ message: "失败" });
@@ -123,21 +186,24 @@ describe("PlanningPage", () => {
 			readOnlyReason: null,
 		});
 
-		await act(async () => root.render(<PlanningPage route={layerRoute()} />));
+		await renderPlanning(layerRoute());
 
-		const inputs = container.querySelectorAll("input");
-		const codeInput = [...inputs].find((input) => input.placeholder === "例如：FIN_DETAIL");
-		const nameInput = [...inputs].find((input) => input.placeholder === "例如：财务明细层");
-		const prefixInput = [...inputs].find((input) => input.placeholder === "例如：fin_dwd_");
-		expect(codeInput).toBeDefined();
-		expect(nameInput).toBeDefined();
-		expect(prefixInput).toBeDefined();
+		await act(async () => {
+			(
+				[...container.querySelectorAll("button")].find((button) =>
+					button.textContent?.includes("新建数仓分层"),
+				) as HTMLButtonElement
+			).click();
+		});
 
 		const setReactInputValue = (input: HTMLInputElement, value: string) => {
 			const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
 			setter?.call(input, value);
 			input.dispatchEvent(new Event("input", { bubbles: true }));
 		};
+		const codeInput = [...container.querySelectorAll("input")].find((input) => input.placeholder === "例如：FIN_DETAIL");
+		const nameInput = [...container.querySelectorAll("input")].find((input) => input.placeholder === "例如：财务明细层");
+		const prefixInput = [...container.querySelectorAll("input")].find((input) => input.placeholder === "例如：fin_dwd_");
 		await act(async () => {
 			setReactInputValue(codeInput!, "fin_detail");
 			setReactInputValue(nameInput!, "财务明细层");
@@ -145,7 +211,7 @@ describe("PlanningPage", () => {
 		});
 		await act(async () => {
 			(
-				[...container.querySelectorAll("button")].find((button) =>
+				[...container.querySelectorAll(".dmx-drawer button")].find((button) =>
 					button.textContent?.includes("新建数仓分层"),
 				) as HTMLButtonElement
 			).click();
@@ -161,7 +227,8 @@ describe("PlanningPage", () => {
 		expect(mocks.loadPlanningProjection).toHaveBeenCalledTimes(2);
 	});
 
-	it("rejects deletion on the first confirmation and deletes after the second", async () => {
+	it("deletes a custom layer through the row action after confirmation", async () => {
+		mocks.canMaintain = true;
 		mocks.deleteWarehouseLayer.mockResolvedValue({});
 		mocks.loadPlanningProjection.mockResolvedValue({
 			headers: ["分层编码"],
@@ -169,29 +236,24 @@ describe("PlanningPage", () => {
 			readOnlyReason: null,
 		});
 
-		await act(async () => root.render(<PlanningPage route={layerRoute()} />));
+		await renderPlanning(layerRoute());
 
 		const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
-		const select = [...container.querySelectorAll("select")].find(
-			(item) => item.getAttribute("aria-label") === "删除数仓分层",
-		);
-		expect(select).toBeDefined();
-		await act(async () => {
-			select!.value = "FIN_DETAIL";
-			select!.dispatchEvent(new Event("change", { bubbles: true }));
-		});
+		const deleteButton = [...container.querySelectorAll("button")].find((button) =>
+			button.textContent?.includes("删除"),
+		) as HTMLButtonElement;
+		expect(deleteButton).toBeDefined();
+		await act(async () => deleteButton.click());
 		expect(mocks.deleteWarehouseLayer).not.toHaveBeenCalled();
 		confirm.mockReturnValue(true);
-		await act(async () => {
-			select!.value = "FIN_DETAIL";
-			select!.dispatchEvent(new Event("change", { bubbles: true }));
-		});
+		await act(async () => deleteButton.click());
 		expect(mocks.deleteWarehouseLayer).toHaveBeenCalledWith("FIN_DETAIL");
 		expect(mocks.loadPlanningProjection).toHaveBeenCalledTimes(2);
 		confirm.mockRestore();
 	});
 
 	it("keeps rows intact and shows a stable error when an in-use delete is rejected", async () => {
+		mocks.canMaintain = true;
 		mocks.deleteWarehouseLayer.mockRejectedValue({
 			response: { data: { code: "WAREHOUSE_LAYER_IN_USE", message: "存在活动模型引用该分层" } },
 		});
@@ -202,41 +264,35 @@ describe("PlanningPage", () => {
 			readOnlyReason: null,
 		});
 
-		await act(async () => root.render(<PlanningPage route={layerRoute()} />));
+		await renderPlanning(layerRoute());
 		vi.spyOn(window, "confirm").mockReturnValue(true);
-		const select = [...container.querySelectorAll("select")].find(
-			(item) => item.getAttribute("aria-label") === "删除数仓分层",
-		);
-		await act(async () => {
-			select!.value = "FIN_DETAIL";
-			select!.dispatchEvent(new Event("change", { bubbles: true }));
-		});
+		const deleteButton = [...container.querySelectorAll("button")].find((button) =>
+			button.textContent?.includes("删除"),
+		) as HTMLButtonElement;
+		await act(async () => deleteButton.click());
 
 		expect(container.textContent).toContain("数仓分层删除失败：存在活动模型引用该分层");
 		expect(container.textContent).toContain("FIN_DETAIL");
 		expect(mocks.loadPlanningProjection).toHaveBeenCalledTimes(1);
 	});
 
-	it("disables all write controls without maintain permission", async () => {
+	it("disables create and row actions without maintain permission", async () => {
 		mocks.canMaintain = false;
 		mocks.loadPlanningProjection.mockResolvedValue({
 			headers: ["分层编码"],
-			rows: [{ id: "DWD", cells: ["DWD"], source: builtinDwd }],
+			rows: [{ id: "FIN_DETAIL", cells: ["FIN_DETAIL"], source: customFinDetail }],
 			readOnlyReason: null,
 		});
 
-		await act(async () => root.render(<PlanningPage route={layerRoute()} />));
+		await renderPlanning(layerRoute());
 
-		const editorInputs = [...container.querySelectorAll("input")].filter(
-			(input) => input.placeholder !== "搜索名称、编码或说明",
-		);
-		expect(editorInputs.every((input) => input.disabled)).toBe(true);
-		const button = [...container.querySelectorAll("button")].find((item) => item.textContent?.includes("新建数仓分层"));
-		expect((button as HTMLButtonElement).disabled).toBe(true);
-		const select = [...container.querySelectorAll("select")].find(
-			(item) => item.getAttribute("aria-label") === "删除数仓分层",
-		);
-		expect((select as HTMLSelectElement).disabled).toBe(true);
-		expect(container.textContent).toContain("当前账号无规划维护权限");
+		const createButton = [...container.querySelectorAll("button")].find((button) =>
+			button.textContent?.includes("新建数仓分层"),
+		) as HTMLButtonElement;
+		expect(createButton.disabled).toBe(true);
+		const deleteButton = [...container.querySelectorAll("button")].find((button) =>
+			button.textContent?.includes("删除"),
+		) as HTMLButtonElement;
+		expect(deleteButton.disabled).toBe(true);
 	});
 });

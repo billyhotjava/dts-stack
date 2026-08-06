@@ -98,16 +98,20 @@ export type Sprint64GrainValidation = {
 };
 
 export const listBusinessProcessesApi = (domainId: string) =>
-	quietGet<Sprint64BusinessProcess[]>(`/governance/sprint64/domains/${encodeURIComponent(domainId)}/processes`);
+	quietGet<Sprint64BusinessProcess[]>(`/modeling/business-processes?domainId=${encodeURIComponent(domainId)}`);
 
 export const createBusinessProcessApi = (
 	domainId: string,
 	data: { processId: string; name: string; description?: string },
-) => quietPost<Sprint64BusinessProcess>(`/governance/sprint64/domains/${encodeURIComponent(domainId)}/processes`, data);
+) =>
+	quietPost<Sprint64BusinessProcess>(
+		`/modeling/business-processes?domainId=${encodeURIComponent(domainId)}`,
+		data,
+	);
 
 export const deleteBusinessProcessApi = (domainId: string, processId: string) =>
 	quietDelete<boolean>(
-		`/governance/sprint64/domains/${encodeURIComponent(domainId)}/processes/${encodeURIComponent(processId)}`,
+		`/modeling/business-processes/${encodeURIComponent(processId)}?domainId=${encodeURIComponent(domainId)}`,
 	);
 
 export const listWarehouseLayersApi = () => quietGet<Sprint64WarehouseLayer[]>("/governance/sprint64/warehouse-layers");

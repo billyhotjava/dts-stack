@@ -5,7 +5,7 @@ export type CreateDataMartCommand = {
 	name: string;
 	purpose: string;
 	ownerId: string;
-	domainIds: string[];
+	businessCategoryIds: string[];
 	idempotencyKey: string;
 };
 
@@ -17,7 +17,7 @@ export type DataMartView = {
 	name: string;
 	purpose: string;
 	ownerId: string;
-	domainIds: string[];
+	businessCategoryIds: string[];
 	status: DataMartStatus;
 	revision: number;
 	checksum: string;

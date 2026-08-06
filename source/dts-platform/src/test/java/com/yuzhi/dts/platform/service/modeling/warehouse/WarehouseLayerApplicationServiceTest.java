@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.modeling.WarehouseLayerRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.Layer;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehouseLayerContract.CreateWarehouseLayerCommand;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehouseLayerContract.ResolvedWarehouseLayer;
@@ -56,6 +57,12 @@ class WarehouseLayerApplicationServiceTest {
         assertThat(views.get(6).builtin()).isFalse();
         assertThat(views.get(6).deletable()).isTrue();
         assertThat(views.get(6).disabledReason()).isNull();
+        assertThat(views.get(0).layerGroup()).isEqualTo(WarehouseLayerContract.LayerGroup.STAGING);
+        assertThat(views.get(3).layerGroup()).isEqualTo(WarehouseLayerContract.LayerGroup.COMMON);
+        assertThat(views.get(5).layerGroup()).isEqualTo(WarehouseLayerContract.LayerGroup.APPLICATION);
+        assertThat(views.get(3).modelTypes())
+            .containsExactly(ModelSpecContract.ModelType.DIMENSION, ModelSpecContract.ModelType.FACT);
+        assertThat(views.get(0).modelTypes()).isEmpty();
     }
 
     @Test
@@ -70,6 +77,9 @@ class WarehouseLayerApplicationServiceTest {
         assertThat(view.code()).isEqualTo("FIN_DETAIL");
         assertThat(view.systemLayerCode()).isEqualTo("DWD");
         assertThat(view.builtin()).isFalse();
+        assertThat(view.layerGroup()).isEqualTo(WarehouseLayerContract.LayerGroup.COMMON);
+        assertThat(view.modelTypes())
+            .containsExactly(ModelSpecContract.ModelType.DIMENSION, ModelSpecContract.ModelType.FACT);
         verify(repository).insert(any(StoredWarehouseLayer.class));
         verify(audit).auditActionStrict(eq("MODELING_WAREHOUSE_LAYER_CREATE"), eq(AuditStage.SUCCESS), eq("FIN_DETAIL"), any());
     }
@@ -161,7 +171,7 @@ class WarehouseLayerApplicationServiceTest {
             .isEqualTo("MODEL_SPEC_WAREHOUSE_LAYER_NOT_FOUND");
 
         StoredWarehouseLayer deleted = new StoredWarehouseLayer(
-            UUID.randomUUID(), "GONE_LAYER", "已删除", "DWD", null, null, "DELETED", 2, "alice",
+            UUID.randomUUID(), "GONE_LAYER", "已删除", "DWD", WarehouseLayerContract.groupOf("DWD"), null, null, "DELETED", 2, "alice",
             Instant.now(), "alice", Instant.now()
         );
         when(repository.findByCode("GONE_LAYER")).thenReturn(Optional.of(deleted));
@@ -205,7 +215,7 @@ class WarehouseLayerApplicationServiceTest {
             .isEqualTo("WAREHOUSE_LAYER_NOT_FOUND");
 
         StoredWarehouseLayer deleted = new StoredWarehouseLayer(
-            UUID.randomUUID(), "GONE_LAYER", "已删除", "DWD", null, null, "DELETED", 2, "alice",
+            UUID.randomUUID(), "GONE_LAYER", "已删除", "DWD", WarehouseLayerContract.groupOf("DWD"), null, null, "DELETED", 2, "alice",
             Instant.now(), "alice", Instant.now()
         );
         when(repository.findByCode("GONE_LAYER")).thenReturn(Optional.of(deleted));
@@ -245,7 +255,7 @@ class WarehouseLayerApplicationServiceTest {
 
     private static StoredWarehouseLayer active(String code, String systemLayerCode, String prefix) {
         return new StoredWarehouseLayer(
-            UUID.randomUUID(), code, "层-" + code, systemLayerCode, "说明", prefix, "ACTIVE", 1, "alice",
+            UUID.randomUUID(), code, "层-" + code, systemLayerCode, WarehouseLayerContract.groupOf(systemLayerCode), "说明", prefix, "ACTIVE", 1, "alice",
             Instant.now(), "alice", Instant.now()
         );
     }

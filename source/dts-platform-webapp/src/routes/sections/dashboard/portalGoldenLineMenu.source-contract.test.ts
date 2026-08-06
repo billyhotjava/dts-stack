@@ -114,7 +114,7 @@ test("data modeling is a top-level section and studio no longer owns modeling me
 	);
 });
 
-test("prototype hierarchy exposes the overview, six groups, and exactly 27 canonical leaves", () => {
+test("prototype hierarchy exposes the overview, six groups, and exactly 26 canonical leaves", () => {
 	const modeling = section("modeling");
 
 	const planning = child(modeling, "warehouse-planning");
@@ -125,9 +125,12 @@ test("prototype hierarchy exposes the overview, six groups, and exactly 27 canon
 			"planning-layers",
 			"planning-public",
 			"planning-application",
-			"planning-spaces",
 			"planning-system",
 		],
+	);
+	assert.equal(
+		planning.children?.some((item) => item.key === "planning-spaces"),
+		false,
 	);
 	assert.deepEqual(
 		child(planning, "planning-public").children?.map((item) => item.key),
@@ -160,8 +163,8 @@ test("prototype hierarchy exposes the overview, six groups, and exactly 27 canon
 	);
 
 	const modelingLeaves = leaves(modeling);
-	assert.equal(modelingLeaves.length, 27);
-	assert.equal(new Set(modelingLeaves.map((item) => item.externalLink)).size, 27);
+	assert.equal(modelingLeaves.length, 26);
+	assert.equal(new Set(modelingLeaves.map((item) => item.externalLink)).size, 26);
 	for (const leaf of modelingLeaves) {
 		assert.match(leaf.externalLink || "", /^\/data-modeling\//);
 	}
@@ -175,10 +178,10 @@ test("prototype hierarchy exposes the overview, six groups, and exactly 27 canon
 	);
 });
 
-test("role defaults mirror all 27 modeling leaves without broadening roles", () => {
+test("role defaults mirror all 26 modeling leaves without broadening roles", () => {
 	const modelingLeaves = leaves(section("modeling"));
 	const modelingRoleDefaults = ROLE_DEFAULT_ENTRIES.filter((entry) => entry.route.startsWith("/data-modeling/"));
-	assert.equal(modelingRoleDefaults.length, 27);
+	assert.equal(modelingRoleDefaults.length, 26);
 
 	const defaultsByCode = new Map(modelingRoleDefaults.map((entry) => [entry.code, entry]));
 	for (const leaf of modelingLeaves) {

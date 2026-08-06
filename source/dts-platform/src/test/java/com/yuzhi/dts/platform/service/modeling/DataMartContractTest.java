@@ -28,9 +28,12 @@ class DataMartContractTest {
 
         assertThat(DataMartContract.validateCreate(command)).isEmpty();
         assertThat(
-            DataMartContract.validateUpdate(
-                new UpdateCommand(command.name(), command.purpose(), command.ownerId(), command.domainIds())
-            )
+            DataMartContract.validateUpdate(new UpdateCommand(
+                command.name(),
+                command.purpose(),
+                command.ownerId(),
+                command.businessCategoryIds()
+            ))
         )
             .isEmpty();
     }
@@ -53,7 +56,7 @@ class DataMartContractTest {
                 "DATA_MART_NAME_REQUIRED",
                 "DATA_MART_PURPOSE_REQUIRED",
                 "DATA_MART_OWNER_REQUIRED",
-                "DATA_MART_DOMAIN_IDS_INVALID",
+                "DATA_MART_BUSINESS_CATEGORY_IDS_INVALID",
                 "DATA_MART_IDEMPOTENCY_KEY_REQUIRED"
             );
     }

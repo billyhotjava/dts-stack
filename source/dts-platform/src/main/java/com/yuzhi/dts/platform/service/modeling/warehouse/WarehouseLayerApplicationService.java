@@ -70,21 +70,23 @@ public class WarehouseLayerApplicationService {
     public List<WarehouseLayerView> list() {
         List<WarehouseLayerView> views = new ArrayList<>();
         for (WarehouseLayerDto builtin : Sprint64GovernanceContract.warehouseLayers()) {
-            views.add(
-                new WarehouseLayerView(
-                    builtin.code(),
-                    builtin.title(),
-                    builtin.code(),
-                    builtin.kind(),
-                    builtin.responsibility(),
-                    builtin.namingPrefixes(),
-                    builtin.optional(),
-                    true,
-                    false,
-                    BUILTIN_DISABLED_REASON
-                )
-            );
-        }
+                views.add(
+                    new WarehouseLayerView(
+                        builtin.code(),
+                        builtin.title(),
+                        builtin.code(),
+                        builtin.kind(),
+                        builtin.responsibility(),
+                        builtin.namingPrefixes(),
+                        builtin.optional(),
+                        true,
+                        false,
+                        BUILTIN_DISABLED_REASON,
+                        WarehouseLayerContract.groupOf(builtin.code()),
+                        WarehouseLayerContract.modelTypesOf(builtin.code())
+                    )
+                );
+            }
         List<StoredWarehouseLayer> customs = repository.findAllActive().stream()
             .sorted(
                 java.util.Comparator
@@ -128,6 +130,7 @@ public class WarehouseLayerApplicationService {
             code,
             name,
             systemLayerCode,
+            WarehouseLayerContract.groupOf(systemLayerCode),
             description,
             prefix,
             "ACTIVE",
@@ -244,7 +247,9 @@ public class WarehouseLayerApplicationService {
             system.optional(),
             false,
             true,
-            null
+            null,
+            row.layerGroup(),
+            WarehouseLayerContract.modelTypesOf(row.systemLayerCode())
         );
     }
 

@@ -539,6 +539,9 @@
                         <testInclude>**/service/catalog/CatalogGrantClassificationProjectionPostgresIT.java</testInclude>
                         <testInclude>**/repository/audit/PlatformAuditOutboxRepositoryPostgresIT.java</testInclude>
                         <testInclude>**/repository/modeling/DataMartRepositoryTest.java</testInclude>
+                        <testInclude>**/service/modeling/DataMartContractTest.java</testInclude>
+                        <testInclude>**/service/modeling/SubjectDomainContractTest.java</testInclude>
+                        <testInclude>**/service/modeling/SubjectDomainGovernanceLiquibaseTest.java</testInclude>
                         <testInclude>**/repository/modeling/ModelLifecycleRepositoryTest.java</testInclude>
                         <testInclude>**/repository/modeling/ModelSpecRepositoryForwardUndoTest.java</testInclude>
                         <testInclude>**/service/modeling/imports/reconciliation/ModelSpecImportForwardRestorePostgresIT.java</testInclude>
@@ -686,6 +689,8 @@
                         <testInclude>**/service/modeling/warehouse/WarehouseLayerApplicationServiceTest.java</testInclude>
                         <testInclude>**/repository/modeling/WarehouseLayerRepositoryIT.java</testInclude>
                         <testInclude>**/web/rest/WarehouseLayerResourceTest.java</testInclude>
+                        <testInclude>**/web/rest/SubjectDomainResourceTest.java</testInclude>
+                        <testInclude>**/web/rest/ModelingBusinessProcessResourceTest.java</testInclude>
                         <testInclude>**/web/rest/WorkbenchDimensionCreateDecodeReproTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelSpecSnapshotCodecTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelSpecCreateRequestDecoderTest.java</testInclude>

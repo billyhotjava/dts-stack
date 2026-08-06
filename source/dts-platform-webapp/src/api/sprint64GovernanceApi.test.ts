@@ -39,16 +39,16 @@ describe("sprint64 governance API", () => {
 		await saveBusMatrixLinkApi("domain-1", { processId: "node-plan-loop", dimensionId: "node-type", enabled: true });
 
 		expect(get).toHaveBeenNthCalledWith(1, {
-			url: "/governance/sprint64/domains/domain-1/processes",
+			url: "/modeling/business-processes?domainId=domain-1",
 			_skipErrorToast: true,
 		});
 		expect(post).toHaveBeenCalledWith({
-			url: "/governance/sprint64/domains/domain-1/processes",
+			url: "/modeling/business-processes?domainId=domain-1",
 			data: { processId: "node-plan-loop", name: "节点计划闭环" },
 			_skipErrorToast: true,
 		});
 		expect(del).toHaveBeenCalledWith({
-			url: "/governance/sprint64/domains/domain-1/processes/node-plan-loop",
+			url: "/modeling/business-processes/node-plan-loop?domainId=domain-1",
 			_skipErrorToast: true,
 		});
 		expect(put).toHaveBeenCalledWith({

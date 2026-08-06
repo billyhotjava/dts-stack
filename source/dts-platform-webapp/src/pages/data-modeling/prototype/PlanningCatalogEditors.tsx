@@ -8,9 +8,7 @@ import {
 	type PlanningCatalogDomain,
 	updatePlanningCatalogDomain,
 } from "./services/planningCatalogDomainService";
-import { normalizeModelingRequestFailure, type PlanningProjection } from "./services/planningProjectionService";
-
-type Changed = (message: string) => Promise<void>;
+import { normalizeModelingRequestFailure } from "./services/planningProjectionService";
 
 const asPlanningDomain = (value: unknown): PlanningCatalogDomain | null => {
 	if (!value || typeof value !== "object") return null;
@@ -18,31 +16,30 @@ const asPlanningDomain = (value: unknown): PlanningCatalogDomain | null => {
 	return candidate.id && candidate.code && candidate.name ? (candidate as PlanningCatalogDomain) : null;
 };
 
-export function CatalogDomainEditor({
+/**
+ * Drawer form for 业务分类 (root catalog domains) and 数据域 (child catalog domains).
+ * Editing is driven by the selected row; the domain picker only offers business-category roots.
+ */
+export function CatalogDomainForm({
 	view,
-	rows,
+	initial,
 	canMaintain,
-	onChanged,
+	onDone,
 }: {
 	view: "business-categories" | "domains";
-	rows: PlanningProjection["rows"];
+	initial: unknown;
 	canMaintain: boolean;
-	onChanged: Changed;
+	onDone: (message: string) => Promise<void>;
 }) {
 	const isCategory = view === "business-categories";
 	const label = isCategory ? "业务分类" : "数据域";
-	const items = useMemo(
-		() =>
-			rows.map((row) => asPlanningDomain(row.source)).filter((item): item is PlanningCatalogDomain => Boolean(item)),
-		[rows],
-	);
+	const editing = useMemo(() => asPlanningDomain(initial), [initial]);
 	const [categories, setCategories] = useState<PlanningCatalogDomain[]>([]);
-	const [editing, setEditing] = useState<PlanningCatalogDomain | null>(null);
-	const [code, setCode] = useState("");
-	const [name, setName] = useState("");
-	const [owner, setOwner] = useState("");
-	const [description, setDescription] = useState("");
-	const [parentId, setParentId] = useState("");
+	const [code, setCode] = useState(editing?.code || "");
+	const [name, setName] = useState(editing?.name || "");
+	const [owner, setOwner] = useState(editing?.owner || "");
+	const [description, setDescription] = useState(editing?.description || "");
+	const [parentId, setParentId] = useState(editing?.parentId || "");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
 
@@ -64,27 +61,6 @@ export function CatalogDomainEditor({
 		};
 	}, [isCategory]);
 
-	const reset = () => {
-		setEditing(null);
-		setCode("");
-		setName("");
-		setOwner("");
-		setDescription("");
-		setParentId(isCategory ? "" : categories[0]?.id || "");
-		setError("");
-	};
-
-	const select = (item: PlanningCatalogDomain | null) => {
-		if (!item) return reset();
-		setEditing(item);
-		setCode(item.code);
-		setName(item.name);
-		setOwner(item.owner);
-		setDescription(item.description);
-		setParentId(item.parentId || "");
-		setError("");
-	};
-
 	const save = async () => {
 		if (!canMaintain) return setError("当前菜单未授权维护操作");
 		if (!code.trim() || !name.trim()) return setError(`请补齐${label}编码和名称`);
@@ -92,7 +68,6 @@ export function CatalogDomainEditor({
 		setBusy(true);
 		setError("");
 		try {
-			const wasEditing = Boolean(editing);
 			const input = {
 				code: code.trim(),
 				name: name.trim(),
@@ -102,8 +77,7 @@ export function CatalogDomainEditor({
 			};
 			if (editing) await updatePlanningCatalogDomain(editing.id, input);
 			else await createPlanningCatalogDomain(input);
-			reset();
-			await onChanged(`${label}已${wasEditing ? "更新" : "创建"}`);
+			await onDone(`${label}已${editing ? "更新" : "创建"}`);
 		} catch (cause) {
 			setError(normalizeModelingRequestFailure(cause, `${label}保存失败。`).message);
 		} finally {
@@ -118,8 +92,7 @@ export function CatalogDomainEditor({
 		setError("");
 		try {
 			await deletePlanningCatalogDomain(editing.id);
-			reset();
-			await onChanged(`${label}已删除`);
+			await onDone(`${label}已删除`);
 		} catch (cause) {
 			setError(normalizeModelingRequestFailure(cause, `${label}删除失败，请先确认没有下级或关联对象。`).message);
 		} finally {
@@ -129,21 +102,6 @@ export function CatalogDomainEditor({
 
 	return (
 		<div className="dmx-planning-editor">
-			<div className="dmx-planning-editor__heading">
-				<strong>{editing ? `编辑${label}` : `新建${label}`}</strong>
-				<select
-					aria-label={`选择已有${label}`}
-					onChange={(event) => select(items.find((item) => item.id === event.target.value) || null)}
-					value={editing?.id || ""}
-				>
-					<option value="">新建{label}</option>
-					{items.map((item) => (
-						<option key={item.id} value={item.id}>
-							{item.name} · {item.code}
-						</option>
-					))}
-				</select>
-			</div>
 			<div className="dmx-form-grid">
 				<label>
 					<span className="required">{label}编码</span>
@@ -194,14 +152,9 @@ export function CatalogDomainEditor({
 					{busy ? "处理中…" : editing ? `保存${label}` : `新建${label}`}
 				</Button>
 				{editing ? (
-					<>
-						<Button disabled={busy} onClick={reset}>
-							取消编辑
-						</Button>
-						<Button danger disabled={!canMaintain || busy} onClick={() => void remove()}>
-							<Archive size={15} /> 删除
-						</Button>
-					</>
+					<Button danger disabled={!canMaintain || busy} onClick={() => void remove()}>
+						<Archive size={15} /> 删除
+					</Button>
 				) : null}
 			</div>
 		</div>

@@ -12,7 +12,7 @@ import {
 const DATA_MART_RESOURCE = "/modeling/data-marts";
 
 export const listDataMarts = (params?: {
-	domainId?: string;
+	businessCategoryId?: string;
 	status?: DataMartStatus;
 	keyword?: string;
 	offset?: number;

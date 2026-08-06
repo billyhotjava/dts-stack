@@ -168,6 +168,9 @@ describe("prototype-owned data modeling frontend", () => {
 
 	it("connects production pages to canonical owners and keeps unsupported actions disabled", () => {
 		const planning = read("./prototype/PlanningPage.tsx");
+		const planningEditors = read("./prototype/PlanningEditors.tsx");
+		const catalogEditors = read("./prototype/PlanningCatalogEditors.tsx");
+		const planningSidebar = read("./prototype/PlanningSidebar.tsx");
 		const modeling = read("./prototype/ModelingWorkbenchPage.tsx");
 		const modelDialogs = read("./prototype/ModelWorkbenchDialog.tsx");
 		const reverse = read("./prototype/ReverseModelingPage.tsx");
@@ -177,8 +180,12 @@ describe("prototype-owned data modeling frontend", () => {
 		const metrics = read("./prototype/MetricsPage.tsx");
 		const prototypeSource = collectSource(fileURLToPath(new URL("./prototype", import.meta.url)));
 
-		expect(planning).toMatch(/createBusinessProcessApi|createDataMart|CatalogDomainEditor/);
-		expect(planning).toMatch(/DataMartDomainOption|value=\{item.id\}|canMaintain=\{canMaintain\}/);
+		expect(planning).toMatch(/PlanningSidebar|Drawer|新建/);
+		expect(planning).toMatch(/CatalogDomainForm|BusinessProcessForm|DataMartForm|SubjectDomainForm/);
+		expect(planningEditors).toMatch(/createBusinessProcessApi|createDataMart|createSubjectDomain/);
+		expect(planningEditors).toMatch(/confirmDataMart|confirmSubjectDomain/);
+		expect(catalogEditors).toMatch(/CatalogDomainForm|listPlanningCatalogDomains/);
+		expect(planningSidebar).not.toContain("建模空间");
 		expect(modeling).toMatch(/saveModelDraft|ModelWorkbenchDialog|创建贴源表（尚未接入）/);
 		expect(modeling).toMatch(/fieldRowIds|key=\{fieldRowIds\[index\]\}/);
 		expect(modeling).toMatch(/getModelRepresentation|representationScope: "BUSINESS"|useDataModelingMenuGrant/);

@@ -2154,3 +2154,131 @@
 		overflow: auto;
 	}
 }
+
+/* ---- 数仓规划：左侧对象树 + 内容区（DataWorks IA） ---- */
+.dmx-planning-layout {
+	display: flex;
+	align-items: flex-start;
+	gap: 18px;
+}
+
+.dmx-planning-sidebar {
+	flex: 0 0 218px;
+	position: sticky;
+	top: 16px;
+	background: var(--dmx-panel, #fff);
+	border: 1px solid var(--dmx-border, #e5e7eb);
+	border-radius: 10px;
+	padding: 10px 8px;
+	max-height: calc(100vh - 150px);
+	overflow: auto;
+}
+
+.dmx-planning-sidebar a {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 7px 10px;
+	border-radius: 8px;
+	color: inherit;
+	text-decoration: none;
+	font-size: 13px;
+}
+
+.dmx-planning-sidebar a:hover {
+	background: rgba(0, 0, 0, 0.05);
+}
+
+.dmx-planning-sidebar a.active {
+	background: rgba(64, 128, 255, 0.12);
+	color: #2456c4;
+	font-weight: 600;
+}
+
+.dmx-planning-sidebar__group {
+	margin-top: 6px;
+	padding: 7px 10px 3px;
+	font-size: 12px;
+	color: #8a919f;
+	letter-spacing: 0.04em;
+}
+
+.dmx-planning-sidebar__group + .dmx-planning-sidebar__group {
+	margin-top: 10px;
+}
+
+.dmx-planning-content {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+/* ---- 数仓规划：右侧抽屉编辑 ---- */
+.dmx-drawer-backdrop {
+	position: fixed;
+	inset: 0;
+	background: rgba(15, 23, 42, 0.38);
+	z-index: 60;
+	display: flex;
+	justify-content: flex-end;
+}
+
+.dmx-drawer {
+	width: min(520px, 92vw);
+	height: 100%;
+	background: #fff;
+	box-shadow: -12px 0 32px rgba(15, 23, 42, 0.18);
+	display: flex;
+	flex-direction: column;
+}
+
+.dmx-drawer__header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 16px 20px;
+	border-bottom: 1px solid #e5e7eb;
+}
+
+.dmx-drawer__header h2 {
+	margin: 0;
+	font-size: 16px;
+}
+
+.dmx-drawer__header button {
+	border: 0;
+	background: transparent;
+	cursor: pointer;
+	padding: 4px;
+}
+
+.dmx-drawer__body {
+	flex: 1 1 auto;
+	overflow: auto;
+	padding: 18px 20px;
+}
+
+.dmx-drawer__footer {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	padding: 14px 20px;
+	border-top: 1px solid #e5e7eb;
+}
+
+.dmx-table-actions {
+	display: flex;
+	gap: 6px;
+	align-items: center;
+	flex-wrap: wrap;
+}
+
+.dmx-table-actions .dmx-button {
+	padding: 3px 8px;
+	font-size: 12px;
+}
+
+.dmx-table-group td {
+	background: rgba(0, 0, 0, 0.04);
+	font-weight: 600;
+	color: #4b5563;
+}

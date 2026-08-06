@@ -25,6 +25,8 @@ const view = {
 	code: "FIN_DETAIL",
 	name: "财务明细层",
 	systemLayerCode: "DWD",
+	layerGroup: "COMMON",
+	modelTypes: ["DIMENSION", "FACT"],
 	kind: "DETAIL",
 	responsibility: "财务域明细",
 	namingPrefixes: ["fin_dwd_", "dwd_"],

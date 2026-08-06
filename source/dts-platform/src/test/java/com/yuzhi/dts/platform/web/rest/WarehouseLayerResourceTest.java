@@ -14,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.yuzhi.dts.platform.security.session.PortalSessionInactivityFilter;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehouseLayerApplicationService;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehouseLayerContract.CreateWarehouseLayerCommand;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehouseLayerContract.LayerGroup;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehouseLayerContract.WarehouseLayerView;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehouseLayerException;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider;
@@ -67,7 +68,8 @@ class WarehouseLayerResourceTest {
     void listsMergedWarehouseLayers() throws Exception {
         when(service.list()).thenReturn(
             List.of(new WarehouseLayerView(
-                "DWD", "明细事实 / 维度层", "DWD", "DETAIL", "业务明细", List.of("dwd_"), false, true, false, "平台内置分层不可删除"
+                "DWD", "明细事实 / 维度层", "DWD", "DETAIL", "业务明细", List.of("dwd_"), false, true, false,
+                "平台内置分层不可删除", LayerGroup.COMMON, List.of(com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType.DIMENSION)
             ))
         );
 
@@ -75,7 +77,8 @@ class WarehouseLayerResourceTest {
             .perform(get("/api/modeling/warehouse-layers"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data[0].code").value("DWD"))
-            .andExpect(jsonPath("$.data[0].builtin").value(true));
+            .andExpect(jsonPath("$.data[0].builtin").value(true))
+            .andExpect(jsonPath("$.data[0].layerGroup").value("COMMON"));
     }
 
     @Test
@@ -83,7 +86,8 @@ class WarehouseLayerResourceTest {
         when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", "department"));
         when(service.create(eq("alice"), any(CreateWarehouseLayerCommand.class)))
             .thenReturn(new WarehouseLayerView(
-                "FIN_DETAIL", "财务明细层", "DWD", "DETAIL", "财务域明细", List.of("fin_dwd_"), false, false, true, null
+                "FIN_DETAIL", "财务明细层", "DWD", "DETAIL", "财务域明细", List.of("fin_dwd_"), false, false, true,
+                null, LayerGroup.COMMON, List.of(com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType.DIMENSION, com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType.FACT)
             ));
 
         mockMvc
@@ -96,7 +100,8 @@ class WarehouseLayerResourceTest {
             .andExpect(status().isCreated())
             .andExpect(header().string("Location", "/api/modeling/warehouse-layers/FIN_DETAIL"))
             .andExpect(jsonPath("$.data.code").value("FIN_DETAIL"))
-            .andExpect(jsonPath("$.data.builtin").value(false));
+            .andExpect(jsonPath("$.data.builtin").value(false))
+            .andExpect(jsonPath("$.data.layerGroup").value("COMMON"));
     }
 
     @Test
