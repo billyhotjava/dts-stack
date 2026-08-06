@@ -42,6 +42,7 @@ const makeConceptDraft = (patch: Partial<ConceptDimensionDraft> = {}): ConceptDi
 	name: "预算科目",
 	description: "统一预算科目定义",
 	reuseScope: "DOMAIN",
+	attributes: [],
 	...patch,
 });
 

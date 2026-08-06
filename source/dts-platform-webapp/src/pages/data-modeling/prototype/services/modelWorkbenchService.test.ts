@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { confirmDimensionDefinition, createDimensionDefinition } from "@/api/dimensionDefinitionApi";
+import {
+	confirmDimensionDefinition,
+	createDimensionDefinition,
+	updateDimensionDefinition,
+} from "@/api/dimensionDefinitionApi";
 import { listModelFieldStandardOptions } from "@/api/modelingStandardsApi";
 import { listModelSpecs, updateModelSpec } from "@/api/modelSpecApi";
 import catalogDomainService from "@/api/services/catalogDomainService";
@@ -25,6 +29,7 @@ vi.mock("@/api/dimensionDefinitionApi", () => ({
 	confirmDimensionDefinition: vi.fn(),
 	createDimensionDefinition: vi.fn(),
 	listDimensionDefinitions: vi.fn(),
+	updateDimensionDefinition: vi.fn(),
 }));
 vi.mock("@/api/modelingStandardsApi", () => ({ listModelFieldStandardOptions: vi.fn() }));
 vi.mock("@/api/modelSpecApi", () => ({
@@ -98,6 +103,7 @@ const conceptDraft = (): ConceptDimensionDraft => ({
 	name: "预算科目",
 	description: "统一预算科目定义",
 	reuseScope: "DOMAIN",
+	attributes: [],
 });
 
 const definitionView: DimensionDefinitionView = {
@@ -111,7 +117,7 @@ const definitionView: DimensionDefinitionView = {
 	hierarchies: [],
 	scopeType: "DOMAIN",
 	dataMartId: null,
-	attributes: [],
+	attributes: [{ code: "SUBJECT_CODE", name: "预算科目编码", definition: "唯一编码", primaryKey: true, order: 1 }],
 	status: "DRAFT",
 	revision: 1,
 	checksum: "checksum-1",
@@ -283,6 +289,63 @@ describe("model workbench draft validation", () => {
 		expect(validateModelDraftInput(invalid)).toMatchObject({
 			fields: "维度属性编码只能使用大写字母、数字和下划线，且必须以字母开头",
 		});
+	});
+
+	it("updates a saved DRAFT definition with attributes instead of blocking the edit", async () => {
+		const draft = conceptDraft();
+		draft.definitionBase = { ...definitionView, status: "DRAFT" };
+		draft.attributes = [
+			{ code: "COST_CENTER_CODE", name: "成本中心编码", definition: "唯一编码", primaryKey: true, order: 1 },
+		];
+		vi.mocked(updateDimensionDefinition).mockResolvedValue({ ...definitionView, attributes: draft.attributes });
+
+		const saved = await saveDimensionDefinitionDraft(draft, "owner-1");
+
+		expect(updateDimensionDefinition).toHaveBeenCalledWith(
+			{ id: "dimension-1", revision: 1, checksum: "checksum-1" },
+			expect.objectContaining({
+				name: "预算科目",
+				attributes: expect.arrayContaining([
+					expect.objectContaining({ code: "COST_CENTER_CODE", primaryKey: true, order: 1 }),
+				]),
+			}),
+		);
+		expect(saved.attributes).toEqual(draft.attributes);
+	});
+
+	it("rejects edits to confirmed or retired dimension definitions", async () => {
+		const draft = conceptDraft();
+		draft.definitionBase = { ...definitionView, status: "CURRENT" };
+
+		await expect(saveDimensionDefinitionDraft(draft, "owner-1")).rejects.toThrow("已确认或已退役的维度不能修改");
+		expect(updateDimensionDefinition).not.toHaveBeenCalled();
+	});
+
+	it("blocks confirmation until attributes include a primary key", async () => {
+		const draft = conceptDraft();
+		draft.definitionBase = { ...definitionView, attributes: [] };
+
+		await expect(confirmDimensionDefinitionDraft(draft)).rejects.toThrow("确认前请至少添加一个维度属性");
+
+		draft.definitionBase = {
+			...definitionView,
+			attributes: [{ code: "A", name: "属性", primaryKey: false, order: 1 }],
+		};
+		await expect(confirmDimensionDefinitionDraft(draft)).rejects.toThrow("设为主键");
+	});
+
+	it("confirms once attributes include a primary key", async () => {
+		const draft = conceptDraft();
+		draft.definitionBase = {
+			...definitionView,
+			attributes: [{ code: "A", name: "属性", primaryKey: true, order: 1 }],
+		};
+		vi.mocked(confirmDimensionDefinition).mockResolvedValue({ ...definitionView, status: "CURRENT" });
+
+		const confirmed = await confirmDimensionDefinitionDraft(draft);
+
+		expect(confirmed.definitionBase?.status).toBe("CURRENT");
+		expect(confirmDimensionDefinition).toHaveBeenCalledWith(draft.definitionBase);
 	});
 
 	it("defaults new model drafts to the canonical target layer", () => {

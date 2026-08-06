@@ -1,5 +1,8 @@
 import { FileDown, Import, Link2, ListChecks, RefreshCw, Save, Settings2, ShieldCheck, Upload } from "lucide-react";
-import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
+import type {
+	DimensionDefinitionAttribute,
+	DimensionDefinitionView,
+} from "@/features/modeling/contracts/dimensionDefinitionContract";
 import type { ModelRepresentationView } from "@/features/modeling/contracts/modelRepresentationContract";
 import type { ModelSpecField, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { ModelFieldEditorTable } from "./ModelFieldEditorTable";
@@ -11,6 +14,7 @@ import {
 	resolveConceptDimensionPresentation,
 	resolveDimensionFormPresentation,
 } from "./modelWorkbenchPresentation";
+import { RequestState } from "./PrototypePrimitives";
 import {
 	type ConceptDimensionDraft,
 	MODEL_KIND_CONFIG,
@@ -124,54 +128,160 @@ function ConceptDimensionForm(props: ConceptDimensionFormProps) {
 	const { draft, context, validationErrors, onChange } = props;
 	const patch = (next: Partial<ConceptDimensionDraft>) => onChange({ ...draft, ...next });
 	const presentation = resolveConceptDimensionPresentation({ draft, domains: context.domains });
+	const attributesEditable = !draft.definitionBase || draft.definitionBase.status === "DRAFT";
+
+	return (
+		<>
+			<section className="dmx-editor-panel">
+				<h3>基本信息</h3>
+				<div className="dmx-workbench-editor__basic-grid">
+					<label>
+						<span>数仓分层</span>
+						<input aria-label="数仓分层" disabled value={presentation.warehouseLayer} />
+					</label>
+					<label>
+						<span>业务分类</span>
+						<input aria-label="业务分类" disabled value={presentation.businessCategory} />
+					</label>
+					<label>
+						<span className="required">数据域</span>
+						<select
+							aria-label="数据域"
+							disabled={Boolean(draft.definitionBase)}
+							onChange={(event) => patch({ domainId: event.target.value })}
+							value={draft.domainId}
+						>
+							<option value="">请选择数据域</option>
+							{context.domains.map((item) => (
+								<option key={item.id} value={item.id}>
+									{item.name} · {item.code}
+								</option>
+							))}
+						</select>
+						<ValidationMessage message={validationErrors.domainId} />
+					</label>
+					<label>
+						<span>系统编码</span>
+						<input aria-label="系统编码" disabled value={presentation.systemCode} />
+					</label>
+					<label>
+						<span className="required">中文名称</span>
+						<input aria-label="中文名称" onChange={(event) => patch({ name: event.target.value })} value={draft.name} />
+						<ValidationMessage message={validationErrors.name} />
+					</label>
+					<label className="dmx-workbench-editor__wide-field">
+						<span>描述</span>
+						<textarea
+							aria-label="描述"
+							onChange={(event) => patch({ description: event.target.value })}
+							value={draft.description}
+						/>
+					</label>
+				</div>
+			</section>
+			<ConceptDimensionAttributesEditor
+				attributes={draft.attributes}
+				editable={attributesEditable}
+				onChange={(attributes) => patch({ attributes })}
+			/>
+		</>
+	);
+}
+
+function ConceptDimensionAttributesEditor({
+	attributes,
+	editable,
+	onChange,
+}: {
+	attributes: DimensionDefinitionAttribute[];
+	editable: boolean;
+	onChange: (attributes: DimensionDefinitionAttribute[]) => void;
+}) {
+	const patchAttribute = (index: number, next: Partial<DimensionDefinitionAttribute>) => {
+		onChange(
+			attributes.map((attribute, attributeIndex) => (attributeIndex === index ? { ...attribute, ...next } : attribute)),
+		);
+	};
+	const add = () => {
+		onChange([
+			...attributes,
+			{
+				code: "",
+				name: "",
+				definition: "",
+				primaryKey: attributes.length === 0,
+				standardRef: null,
+				standardVersion: null,
+				order: attributes.length + 1,
+			},
+		]);
+	};
+	const remove = (index: number) => {
+		onChange(attributes.filter((_, attributeIndex) => attributeIndex !== index));
+	};
 
 	return (
 		<section className="dmx-editor-panel">
-			<h3>基本信息</h3>
-			<div className="dmx-workbench-editor__basic-grid">
-				<label>
-					<span>数仓分层</span>
-					<input aria-label="数仓分层" disabled value={presentation.warehouseLayer} />
-				</label>
-				<label>
-					<span>业务分类</span>
-					<input aria-label="业务分类" disabled value={presentation.businessCategory} />
-				</label>
-				<label>
-					<span className="required">数据域</span>
-					<select
-						aria-label="数据域"
-						disabled={Boolean(draft.definitionBase)}
-						onChange={(event) => patch({ domainId: event.target.value })}
-						value={draft.domainId}
-					>
-						<option value="">请选择数据域</option>
-						{context.domains.map((item) => (
-							<option key={item.id} value={item.id}>
-								{item.name} · {item.code}
-							</option>
-						))}
-					</select>
-					<ValidationMessage message={validationErrors.domainId} />
-				</label>
-				<label>
-					<span>系统编码</span>
-					<input aria-label="系统编码" disabled value={presentation.systemCode} />
-				</label>
-				<label>
-					<span className="required">中文名称</span>
-					<input aria-label="中文名称" onChange={(event) => patch({ name: event.target.value })} value={draft.name} />
-					<ValidationMessage message={validationErrors.name} />
-				</label>
-				<label className="dmx-workbench-editor__wide-field">
-					<span>描述</span>
-					<textarea
-						aria-label="描述"
-						onChange={(event) => patch({ description: event.target.value })}
-						value={draft.description}
-					/>
-				</label>
-			</div>
+			<h3>维度属性</h3>
+			<p className="dmx-capability-note">确认版本前至少需要一个属性，并将其中一个属性设为主键。</p>
+			{attributes.length ? (
+				<div className="dmx-workbench-editor__attribute-rows">
+					{attributes.map((attribute, index) => (
+						<div className="dmx-workbench-editor__attribute-row" key={index}>
+							<label>
+								<span>属性编码</span>
+								<input
+									disabled={!editable}
+									onChange={(event) => patchAttribute(index, { code: event.target.value })}
+									value={attribute.code}
+								/>
+							</label>
+							<label>
+								<span>属性名称</span>
+								<input
+									disabled={!editable}
+									onChange={(event) => patchAttribute(index, { name: event.target.value })}
+									value={attribute.name}
+								/>
+							</label>
+							<label>
+								<span>说明</span>
+								<input
+									disabled={!editable}
+									onChange={(event) => patchAttribute(index, { definition: event.target.value })}
+									value={attribute.definition}
+								/>
+							</label>
+							<label className="dmx-workbench-editor__attribute-primary-key">
+								<span>主键</span>
+								<input
+									checked={attribute.primaryKey}
+									disabled={!editable}
+									onChange={(event) => patchAttribute(index, { primaryKey: event.target.checked })}
+									type="checkbox"
+								/>
+							</label>
+							{editable ? (
+								<button
+									aria-label={`删除属性 ${attribute.code || index + 1}`}
+									onClick={() => remove(index)}
+									title="删除属性"
+									type="button"
+								>
+									删除
+								</button>
+							) : null}
+						</div>
+					))}
+				</div>
+			) : (
+				<RequestState description="尚未定义维度属性。" kind="empty" title="暂无属性" />
+			)}
+			{editable ? (
+				<button onClick={add} type="button">
+					+ 添加属性
+				</button>
+			) : null}
 		</section>
 	);
 }

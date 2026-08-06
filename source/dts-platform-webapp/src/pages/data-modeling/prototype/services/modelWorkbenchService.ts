@@ -2,6 +2,7 @@ import {
 	confirmDimensionDefinition,
 	createDimensionDefinition,
 	listDimensionDefinitions,
+	updateDimensionDefinition,
 } from "@/api/dimensionDefinitionApi";
 import { listModelFieldStandardOptions, type ModelFieldStandardOption } from "@/api/modelingStandardsApi";
 import {
@@ -15,6 +16,7 @@ import catalogDomainService, { type CatalogDomain } from "@/api/services/catalog
 import { resolveDefaultModelingContextId } from "@/api/services/modelingImportContextService";
 import { listWarehouseLayers, type WarehouseLayerView } from "@/api/warehouseLayerApi";
 import type {
+	DimensionDefinitionAttribute,
 	DimensionDefinitionReuseScope,
 	DimensionDefinitionView,
 } from "@/features/modeling/contracts/dimensionDefinitionContract";
@@ -61,6 +63,7 @@ export type ConceptDimensionDraft = {
 	name: string;
 	description: string;
 	reuseScope: DimensionDefinitionReuseScope;
+	attributes: DimensionDefinitionAttribute[];
 };
 
 export type ModelSpecDraft = {
@@ -128,6 +131,7 @@ export function emptyModelDraft(kind: ModelCreateKind, context: ModelWorkbenchCo
 			name: "",
 			description: "",
 			reuseScope: "DOMAIN",
+			attributes: [],
 		};
 	}
 	const config = MODEL_KIND_CONFIG[kind];
@@ -162,6 +166,7 @@ export function conceptDimensionDraftFromView(definition: DimensionDefinitionVie
 		name: definition.name,
 		description: definition.definition,
 		reuseScope: definition.reuseScope,
+		attributes: definition.attributes.map((attribute) => ({ ...attribute })),
 	};
 }
 
@@ -228,29 +233,60 @@ export async function saveDimensionDefinitionDraft(
 	draft: ConceptDimensionDraft,
 	ownerId: string,
 ): Promise<DimensionDefinitionView> {
-	if (draft.definitionBase) throw new Error("已保存维度需通过维度版本流程编辑");
+	if (draft.definitionBase && draft.definitionBase.status !== "DRAFT") {
+		throw new Error("已确认或已退役的维度不能修改，请新建维度。");
+	}
 	if (!ownerId.trim()) throw new Error("当前登录身份缺少人员 ID，不能创建维度定义");
 	const errors = Object.values(validateConceptDimensionDraftInput(draft));
 	if (errors.length) throw new Error(`请补齐：${errors.join("、")}`);
-	return createDimensionDefinition({
-		domainId: draft.domainId.trim(),
+	const command = {
 		name: draft.name.trim(),
 		definition: draft.description.trim() || draft.name.trim(),
 		ownerId: ownerId.trim(),
 		reuseScope: draft.reuseScope,
-		scopeType: "DOMAIN",
+		scopeType: "DOMAIN" as const,
 		dataMartId: null,
-		attributes: [],
+		attributes: normalizedDimensionAttributes(draft.attributes),
 		hierarchies: [],
+	};
+	if (draft.definitionBase) {
+		return updateDimensionDefinition(
+			{
+				id: draft.definitionBase.id,
+				revision: draft.definitionBase.revision,
+				checksum: draft.definitionBase.checksum,
+			},
+			command,
+		);
+	}
+	return createDimensionDefinition({
+		...command,
+		domainId: draft.domainId.trim(),
 		idempotencyKey: draft.idempotencyKey,
 	});
 }
+
+const normalizedDimensionAttributes = (attributes: DimensionDefinitionAttribute[]): DimensionDefinitionAttribute[] =>
+	attributes
+		.map((attribute, index) => ({
+			code: attribute.code.trim(),
+			name: attribute.name.trim(),
+			definition: attribute.definition?.trim() || "",
+			primaryKey: attribute.primaryKey === true,
+			standardRef: attribute.standardRef?.trim() || null,
+			standardVersion: attribute.standardVersion?.trim() || null,
+			order: index + 1,
+		}))
+		.filter((attribute) => Boolean(attribute.code) && Boolean(attribute.name));
 
 export async function confirmDimensionDefinitionDraft(draft: ConceptDimensionDraft): Promise<ConceptDimensionDraft> {
 	const definition = draft.definitionBase;
 	if (!definition) throw new Error("请先保存维度草稿");
 	if (definition.status === "CURRENT") return draft;
 	if (definition.status !== "DRAFT") throw new Error("只有草稿状态的维度可以确认");
+	if (!definition.attributes.length || !definition.attributes.some((attribute) => attribute.primaryKey)) {
+		throw new Error("确认前请至少添加一个维度属性，并将其中一个属性设为主键。");
+	}
 	return conceptDimensionDraftFromView(await confirmDimensionDefinition(definition));
 }
 

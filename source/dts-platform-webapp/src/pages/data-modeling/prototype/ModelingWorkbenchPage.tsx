@@ -412,9 +412,18 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		try {
 			const confirmed = await confirmDimensionDefinitionDraft(conceptDraft);
 			replaceDraft(confirmed);
+			void loadConceptDimensions(domain);
 			show(`维度版本已确认：${confirmed.definitionBase?.systemCode} · r${confirmed.definitionBase?.revision}`);
 		} catch (error) {
-			setFailure(normalizeModelingRequestFailure(error, "维度版本确认失败。"));
+			const failure = normalizeModelingRequestFailure(error, "维度版本确认失败。");
+			if (failure.code === "DIMENSION_DEFINITION_ATTRIBUTES_REQUIRED_FOR_CONFIRMATION") {
+				setFailure({
+					...failure,
+					message: "确认前请至少添加一个维度属性，并将其中一个属性设为主键。",
+				});
+			} else {
+				setFailure(failure);
+			}
 		} finally {
 			savingRef.current = false;
 			setSaving(false);
