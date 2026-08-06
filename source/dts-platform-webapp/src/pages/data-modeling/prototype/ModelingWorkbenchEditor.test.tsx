@@ -193,10 +193,46 @@ describe("ModelingWorkbenchEditor", () => {
 		);
 	});
 
-	it("shows the returned system code and locks a saved concept dimension", async () => {
+	it("allows editing a saved DRAFT concept dimension so attributes can be added before confirmation", async () => {
 		await render(
 			makeProps({
-				draft: makeConceptDraft({ definitionBase: definition }),
+				draft: makeConceptDraft({
+					definitionBase: { ...definition, status: "DRAFT" as const },
+					attributes: [{ code: "SUBJECT_CODE", name: "预算科目编码", definition: "", primaryKey: true, order: 1 }],
+				}),
+				dimensionDefinitions: [],
+				fieldRowIds: [],
+			}),
+		);
+
+		expect(container.querySelector("fieldset")).not.toHaveProperty("disabled", true);
+		const saveButton = [...container.querySelectorAll("button")].find(
+			(item) => item.textContent?.includes("保存") && !item.textContent?.includes("保存中"),
+		);
+		expect(saveButton).toBeDefined();
+		expect((saveButton as HTMLButtonElement).disabled).toBe(false);
+		const pkCheckbox = container.querySelector<HTMLInputElement>('input[type="checkbox"]');
+		expect(pkCheckbox).not.toBeNull();
+		expect(pkCheckbox?.disabled).toBe(false);
+	});
+
+	it("locks a confirmed concept dimension and its attributes", async () => {
+		await render(
+			makeProps({
+				draft: makeConceptDraft({ definitionBase: { ...definition, status: "CURRENT" as const } }),
+				dimensionDefinitions: [],
+				fieldRowIds: [],
+			}),
+		);
+
+		expect(container.querySelector("fieldset")).toHaveProperty("disabled", true);
+		expect(button("保存")).toHaveProperty("disabled", true);
+	});
+
+	it("shows the returned system code and locks a confirmed concept dimension", async () => {
+		await render(
+			makeProps({
+				draft: makeConceptDraft({ definitionBase: { ...definition, status: "CURRENT" as const } }),
 				dimensionDefinitions: [],
 				fieldRowIds: [],
 			}),

@@ -578,13 +578,19 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 			<div className="dmx-editor-toolbar" role="toolbar">
 				<button
 					className="primary"
-					disabled={!canMaintain || readOnly || saving || !dirty || (conceptDimension && Boolean(draft.definitionBase))}
+					disabled={
+						!canMaintain ||
+						readOnly ||
+						saving ||
+						!dirty ||
+						(conceptDimension && draft.definitionBase?.status != null && draft.definitionBase.status !== "DRAFT")
+					}
 					onClick={onSave}
 					title={
 						!canMaintain
 							? "当前账号无建模维护权限"
-							: conceptDimension && draft.definitionBase
-								? "已保存维度请通过维度版本流程编辑"
+							: conceptDimension && draft.definitionBase && draft.definitionBase.status !== "DRAFT"
+								? "已确认或已退役的维度不能修改，请新建维度"
 								: !dirty
 									? "当前没有待保存变更"
 									: conceptDimension
@@ -640,7 +646,11 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 			) : null}
 			<fieldset
 				className="dmx-editor-fieldset dmx-editor-scroll"
-				disabled={readOnly || saving || (conceptDimension && Boolean(draft.definitionBase))}
+				disabled={
+					readOnly ||
+					saving ||
+					(conceptDimension && draft.definitionBase?.status != null && draft.definitionBase.status !== "DRAFT")
+				}
 			>
 				{conceptDimension ? (
 					<ConceptDimensionForm {...props} draft={draft} />
