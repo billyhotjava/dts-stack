@@ -1,6 +1,0 @@
-name: sprint83_artifact_rich
-version: 1.0.0
-config-version: 2
-profile: sprint83_offline_fixture
-model-paths: [models]
-macro-paths: [macros]

@@ -1,3 +1,0 @@
-org.springframework.test.context.ContextCustomizerFactory = \
-    com.yuzhi.dts.platform.config.\
-    SqlTestContainersSpringContextCustomizerFactory
