@@ -133,7 +133,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 			const definitions = await listDimensionDefinitions({
 				domainId: draft.domainId,
 				offset: 0,
-				limit: 500,
+				limit: 100,
 			});
 			const match = definitions.find((item) => item.name.trim() === draft.name.trim());
 			if (!match) {
