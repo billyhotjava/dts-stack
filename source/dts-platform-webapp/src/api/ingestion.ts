@@ -145,6 +145,7 @@ export interface IngestionExecutionLog {
 	taskStates?: Record<string, string>;
 	failureCategory?: string;
 	failureAdvice?: string;
+	errorMessage?: string;
 	log?: string;
 	message?: string;
 }

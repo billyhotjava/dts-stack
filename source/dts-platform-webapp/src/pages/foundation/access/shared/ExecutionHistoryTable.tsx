@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {} from "@ant-design/icons";
 import {
 	Alert,
 	Button,
@@ -8,6 +8,7 @@ import {
 	Form,
 	Input,
 	Modal,
+	message,
 	Progress,
 	Segmented,
 	Select,
@@ -16,21 +17,20 @@ import {
 	Tag,
 	Tooltip,
 	Typography,
-	message,
 } from "antd";
-import { CompactTable } from "@/components/table";
-import { } from "@ant-design/icons";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-	ingestionTaskAPI,
 	type IngestionExecutionDTO,
-	type IngestionTaskDTO,
 	type IngestionExecutionLog,
 	type IngestionIncrementalAuditDTO,
 	type IngestionIncrementalStateDTO,
+	type IngestionTaskDTO,
+	ingestionTaskAPI,
 } from "@/api/ingestion";
-import { resolveAsyncRunSubmitFeedback } from "./transformCreateAsyncRun.helpers";
-import { formatTimestamp, formatNumber } from "@/utils/format";
+import { CompactTable } from "@/components/table";
+import { formatNumber, formatTimestamp } from "@/utils/format";
 import { normalizeText } from "@/utils/textUtils";
+import { resolveAsyncRunSubmitFeedback } from "./transformCreateAsyncRun.helpers";
 
 type ExecutionProgressView = {
 	percent: number;
@@ -441,7 +441,9 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 				scope: logScope,
 			});
 			setLogMeta(result);
-			const content = String(result?.log || result?.message || "");
+			const logText = String(result?.log || "");
+			const fallbackError = [result?.errorMessage, result?.failureAdvice].filter(Boolean).join("\n");
+			const content = logText || fallbackError || String(result?.message || "");
 			setLogContent(content);
 		} catch (error: any) {
 			if (!opts?.silent) {
@@ -514,7 +516,9 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 		if (!Array.isArray(value)) {
 			return [];
 		}
-		return value.filter((item): item is Record<string, any> => Boolean(item) && typeof item === "object" && !Array.isArray(item));
+		return value.filter(
+			(item): item is Record<string, any> => Boolean(item) && typeof item === "object" && !Array.isArray(item),
+		);
 	};
 
 	const apiResourceRows = (record: IngestionExecutionDTO) =>
@@ -569,7 +573,7 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 			}
 			const item = summary.get(executionId) || { total: 0, advanced: 0, unchanged: 0 };
 			item.total += 1;
-			if (Boolean(audit.advanced)) {
+			if (audit.advanced) {
 				item.advanced += 1;
 			} else {
 				item.unchanged += 1;
@@ -588,7 +592,7 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 			}
 			const sourceTable = normalizeText(audit.sourceTable) || "-";
 			const item = map.get(executionId) || { advanced: [], unchanged: [] };
-			const list = Boolean(audit.advanced) ? item.advanced : item.unchanged;
+			const list = audit.advanced ? item.advanced : item.unchanged;
 			if (!list.includes(sourceTable)) {
 				list.push(sourceTable);
 			}
@@ -633,7 +637,8 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 		{
 			title: "执行ID",
 			dataIndex: "executionId",
-			sorter: (a: IngestionExecutionDTO, b: IngestionExecutionDTO) => (a.executionId || "").localeCompare(b.executionId || ""),
+			sorter: (a: IngestionExecutionDTO, b: IngestionExecutionDTO) =>
+				(a.executionId || "").localeCompare(b.executionId || ""),
 			key: "executionId",
 			width: 200,
 		},
@@ -795,7 +800,9 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 			width: 220,
 			render: (_: any, record: IngestionExecutionDTO) => (
 				<Space size={4}>
-					<Button size="small" onClick={() => loadLog(record)}
+					<Button
+						size="small"
+						onClick={() => loadLog(record)}
 						disabled={normalizeText(record.status).toLowerCase() === "preparing"}
 					>
 						查看日志
@@ -844,10 +851,16 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 							type="primary"
 							onClick={handleExecute}
 							loading={executeSubmitting}
-							disabled={task?.status === "deleted" || ["preparing", "running"].includes((task?.lastExecutionStatus || "").toLowerCase())}
+							disabled={
+								task?.status === "deleted" ||
+								["preparing", "running"].includes((task?.lastExecutionStatus || "").toLowerCase())
+							}
 						>
-							{(task?.lastExecutionStatus || "").toLowerCase() === "preparing" ? "准备中" :
-							 (task?.lastExecutionStatus || "").toLowerCase() === "running" ? "执行中" : "执行任务"}
+							{(task?.lastExecutionStatus || "").toLowerCase() === "preparing"
+								? "准备中"
+								: (task?.lastExecutionStatus || "").toLowerCase() === "running"
+									? "执行中"
+									: "执行任务"}
 						</Button>
 						{isTimeWindowBackfillSupported() ? (
 							<Button
@@ -1116,10 +1129,7 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 							onChange={(event) => setLogKeyword(event.target.value)}
 							style={{ width: 180 }}
 						/>
-						<Button
-							loading={logLoading}
-							onClick={() => activeExecution && loadLog(activeExecution, { silent: true })}
-						>
+						<Button loading={logLoading} onClick={() => activeExecution && loadLog(activeExecution, { silent: true })}>
 							刷新
 						</Button>
 					</Space>
