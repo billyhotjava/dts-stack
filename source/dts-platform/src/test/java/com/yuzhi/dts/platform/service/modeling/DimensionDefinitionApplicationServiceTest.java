@@ -649,6 +649,57 @@ class DimensionDefinitionApplicationServiceTest {
     }
 
     @Test
+    void deletesOnlyDraftDefinitionsWithCasAndAudits() {
+        View draft = createPersisted(createCommand("delete-draft", "Customer"));
+        reset(repository);
+        when(repository.findCurrent(TENANT, DEFINITION_ID)).thenReturn(Optional.of(stored(draft, null, null)));
+        when(repository.usageCount(TENANT, DEFINITION_ID)).thenReturn(0L);
+        when(repository.deleteDraft(TENANT, DEFINITION_ID, draft.checksum())).thenReturn(true);
+
+        service.delete(TENANT, ACTOR, DEFINITION_ID, expected(draft));
+
+        verify(repository).deleteDraft(TENANT, DEFINITION_ID, draft.checksum());
+        verify(auditService).auditAction(
+            eq("MODELING_DIMENSION_DEFINITION_DELETE"),
+            eq(AuditStage.SUCCESS),
+            eq(DEFINITION_ID.toString()),
+            any()
+        );
+    }
+
+    @Test
+    void rejectsDeletingConfirmedDefinitions() {
+        View current = new View(
+            DEFINITION_ID,
+            "dim_30000000000000000000000000000001",
+            DOMAIN_ID,
+            "Customer",
+            null,
+            "Customer definition",
+            ACTOR,
+            ReuseScope.DOMAIN,
+            List.of(),
+            Status.CURRENT,
+            2,
+            "c".repeat(64),
+            0L,
+            NOW,
+            NOW,
+            DimensionDefinitionContract.ScopeType.DOMAIN,
+            null,
+            List.of()
+        );
+        when(repository.findCurrent(TENANT, DEFINITION_ID)).thenReturn(Optional.of(stored(current, null, null)));
+        when(repository.usageCount(TENANT, DEFINITION_ID)).thenReturn(0L);
+
+        assertCode(
+            () -> service.delete(TENANT, ACTOR, DEFINITION_ID, expected(current)),
+            "DIMENSION_DEFINITION_DELETE_INVALID"
+        );
+        verify(repository, never()).deleteDraft(anyString(), any(), anyString());
+    }
+
+    @Test
     void requiresAuthenticatedActorAndTranslatesPersistenceConflicts() {
         CreateCommand command = createCommand("actor", "Customer");
         assertCode(

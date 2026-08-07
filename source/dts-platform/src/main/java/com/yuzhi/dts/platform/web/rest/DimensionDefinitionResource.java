@@ -31,6 +31,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -150,6 +151,16 @@ public class DimensionDefinitionResource {
     ) {
         View view = service.retire(serverTenantId, actorId(), id, parseExpected(id, ifMatch));
         return response(view);
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Void>> delete(
+        @PathVariable UUID id,
+        @RequestHeader(value = "If-Match", required = false) String ifMatch
+    ) {
+        service.delete(serverTenantId, actorId(), id, parseExpected(id, ifMatch));
+        return ResponseEntity.ok(ApiResponses.ok((Void) null));
     }
 
     @ExceptionHandler(ModelSpecException.class)

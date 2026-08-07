@@ -1,5 +1,20 @@
 # DTS UI 手工实施 Runbook
 
+## 0.1 重构后入口映射（旧文档 → 当前 DTS v2.2.3）
+
+| 旧入口/对象 | 当前入口/对象 |
+|---|---|
+| `/modeling/plans`（建设计划） | 已下线；建模空间隐藏为默认单空间，计划由服务端默认建模上下文提供，规划 UI 暂无计划维护页 |
+| `/governance/subjects`（业务域） | `/data-modeling/planning/business-categories`（业务分类，根）+ `/data-modeling/planning/domains`（数据域，公共层） |
+| 业务过程 | `/data-modeling/planning/processes` |
+| 数仓分层 | `/data-modeling/planning/layers` |
+| 数据集市 | `/data-modeling/planning/marts`（应用层） |
+| 主题域 | `/data-modeling/planning/subjects`（应用层，挂数据集市） |
+| `/modeling/dimensions`（维度目录，含维度属性） | `/data-modeling/dimensions/workbench`（概念维度，无属性；主键/维度属性编码在维度表字段中定义） |
+| `/modeling/models`（模型中心） | 同一工作台：新建维度表/明细表/汇总表/应用表 |
+| `/modeling/metric-workbench` | `/data-modeling/metrics/atomic`、`composite`、`derived`、`modifiers`、`periods` |
+| 血缘入口 | `/data-modeling/graphs/models`、`standards`、`metrics` |
+
 ## 0. 执行前准备
 
 准备以下信息，但不得提交到本目录：
@@ -93,82 +108,78 @@ ods_it_demo_task_snapshot   8
 
 密级与业务标签分别维护。
 
-## 3. 业务分类与数据集市
+## 3. 数仓规划：业务分类、数据域、业务过程、数据集市、主题域
 
-入口：`/governance/subjects`
+入口（重构后）：
 
-### 3.1 业务域
+| 对象 | 入口 | 说明 |
+|---|---|---|
+| 业务分类 | `/data-modeling/planning/business-categories` | 顶层领域（根），如 研发项目治理 |
+| 数据域 | `/data-modeling/planning/domains` | 挂在业务分类下，属于公共层 |
+| 业务过程 | `/data-modeling/planning/processes` | 挂在数据域下，如 项目健康监测 |
+| 数仓分层 | `/data-modeling/planning/layers` | 贴源层/公共层/应用层；平台内置 ODS/DWD/DWS/ADS |
+| 数据集市 | `/data-modeling/planning/marts` | 应用层对象，挂业务分类 |
+| 主题域 | `/data-modeling/planning/subjects` | 应用层对象，挂数据集市 |
+| 规划参数配置 | `/data-modeling/planning/system` | 当前版本尚未提供可维护规划参数 |
+
+### 3.1 创建业务分类（根）
 
 | 字段 | 值 |
 |---|---|
 | 编码 | `IT_DEMO_PROJECT` |
 | 名称 | 研发项目治理 |
 | 定义 | 对研发项目计划、任务执行、风险和成本进行统一治理 |
-| owner/责任部门 | 实际人员和组织 |
 
-### 3.2 业务过程
+### 3.2 创建数据域（公共层，挂业务分类）
+
+| 字段 | 值 |
+|---|---|
+| 编码 | `IT_DEMO_PROJECT_DOMAIN` |
+| 名称 | 研发项目治理域 |
+| 上级分类 | `IT_DEMO_PROJECT`（研发项目治理） |
+| 说明 | 数据域属于公共层；贴源层 Tab 不显示数据域 |
+
+### 3.3 创建业务过程（挂数据域）
 
 | 字段 | 值 |
 |---|---|
 | 编码 | `IT_DEMO_PROJECT_HEALTH` |
 | 名称 | 项目健康监测 |
 | 定义 | 按快照日期检查项目任务进度、延期、风险和成本 |
+| 所属数据域 | `IT_DEMO_PROJECT_DOMAIN` |
 
-### 3.3 数据集市
-
-在业务域的“数据集市”页签创建：
+### 3.4 创建数据集市（应用层）
 
 | 字段 | 值 |
 |---|---|
 | 编码 | `IT_DEMO_PM_MART` |
 | 名称 | 项目健康分析集市 |
 | 用途 | 为项目负责人提供进度、延期、风险和成本分析 |
-| 所属业务域 | 研发项目治理 |
-| owner | 实际负责人 |
+| 所属业务分类 | `IT_DEMO_PROJECT` |
 
 创建后执行“确认”，使状态变成 CURRENT/现行。
 
-## 4. 建设计划与来源基线
+### 3.5 创建主题域（可选，应用层）
 
-入口：`/modeling/plans`
+在数据集市页创建主题域（如 项目执行分析、项目风险分析），状态确认后供应用层建模引用。
 
-### 4.1 创建计划
+## 4. 建模空间与建模上下文（重构后）
 
-| 字段 | 值 |
+- 旧“建设计划”UI（`/modeling/plans`）已下线；按需求“建模空间”隐藏为默认单空间占位，界面不显示。
+- 模型写入使用服务端默认建模上下文（由管理员初始化的现行计划）。若保存模型提示缺少可写上下文，需先由管理员在服务端初始化/确认计划。
+- 计划内的业务分类确认、来源基线确认等能力，当前重构后的规划页面未暴露，属于已记录缺口；模型创建时服务端会校验数据域是否已在当前计划中确认。
+
+> 若使用当前测试租户：`E2E 验收计划` 已确认 `财务业务` 分类。需要新增数据域时，可先用规划页创建业务分类+数据域，再请管理员在计划中确认该域（或用等价计划配置能力），否则保存模型会被 `MODEL_SPEC_DOMAIN_NOT_CONFIRMED` 拦截。
+
+## 5. 数据标准（重构后入口）
+
+| 对象 | 入口 |
 |---|---|
-| 名称 | IT Demo 项目健康度建设计划 |
-| 建设目标 | 打通 DTS 数据接入、治理、建模、质量、指标、资产、权限、血缘和消费闭环 |
-| 建设范围 | 仅限 `it_demo_src`、3 张 Demo ODS 和 6 个 Demo 模型 |
-| owner/责任部门 | 实际人员和组织 |
-| 接入方式 | 从现有资产开始 |
-
-### 4.2 规划策略
-
-| 字段 | 值 |
-|---|---|
-| 字段标准覆盖范围 | 键字段和度量字段 |
-| 质量测试要求 | 必须通过，否则阻止发布 |
-| 默认时区 | `Asia/Shanghai` |
-
-### 4.3 基线确认
-
-依次完成：
-
-1. 将 `IT_DEMO_PROJECT` 业务域和 `IT_DEMO_PROJECT_HEALTH` 业务过程纳入并确认。
-2. 将现行数据集市 `IT_DEMO_PM_MART` 纳入计划。
-3. 在“来源盘点”中从正式目录加入 3 张 Demo ODS。
-4. 每个来源结论设为“确认纳入”，确认 freshness 为 CURRENT。
-
-来源只登记 ODS 物理资产；STG 不作为计划中的第五类业务模型。
-
-## 5. 数据标准
-
-入口：
-
-- 业务术语：`/governance/standards/glossary`
-- 数据元：`/governance/standards/elements`
-- 公共码表：`/governance/standards/reference`
-- 计量单位：`/governance/standards/units`
+| 字段标准 | `/data-modeling/standards/fields` |
+| 标准代码 | `/data-modeling/standards/codes` |
+| 词根 | `/data-modeling/standards/roots` |
+| 命名词典 | `/data-modeling/standards/dictionary` |
+| 标准映射 | `/data-modeling/standards/mappings` |
 
 按照 `02-data-governance-design.md` 创建或复用：
 
@@ -184,44 +195,83 @@ ods_it_demo_task_snapshot   8
 - 标准发布/生效后再绑定模型字段。
 - 不得覆盖客户已有同编码内容；若冲突，应更换 Demo 编码或停止并核查。
 
-## 6. 维度目录
+## 6. 维度建模：创建概念维度（重构后，无属性）
 
-入口：`/modeling/dimensions`
+入口：`/data-modeling/dimensions/workbench`（维度建模工作台）
 
-在计划上下文中依次“登记业务维度”：
+操作步骤：
 
-### 6.1 日期
+1. 左侧“模型目录”选择 **公共层** Tab（概念维度属于公共层/维度层）。
+2. 点击目录右上角 **“+”**，弹出“新建模型”菜单。
+3. 在“概念模型”分组点击 **创建维度**。
+4. 填写“基本信息”：
+   - 数据域：选择目标数据域（如 `IT_DEMO_PROJECT_DOMAIN`）。
+   - 中文名称：如 `研发项目`。
+   - 描述：可选。
+   - 数仓分层固定为“公共层 / 维度层”；业务分类、系统编码自动带出，无需填写。
+   - **不再填写维度属性、主键属性**（重构后契约）。
+5. 点击 **保存**，保存草稿并生成系统编码（`dim_...`）。
+6. 点击 **确认定义**，状态变为 CURRENT（现行），维度表才能引用。
 
-- 名称：日期
-- 定义：统一的公历日期分析维度
-- 范围：DOMAIN
-- 复用范围：TENANT
-- 属性：`DATE_KEY` 主键、`FULL_DATE`、`YEAR_NO`、`MONTH_NO`、`ISO_WEEK_NO`、`IS_WORKDAY`
-- 层级：`YEAR_NO` → `MONTH_NO` → `FULL_DATE`
+建议按旧设计创建三个概念维度：
 
-### 6.2 组织机构
+| 名称 | 数据域 | 说明 |
+|---|---|---|
+| 日期 | `IT_DEMO_PROJECT_DOMAIN` | 统一的公历日期分析维度 |
+| 组织机构 | `IT_DEMO_PROJECT_DOMAIN` | 承担项目责任的组织主数据 |
+| 研发项目 | `IT_DEMO_PROJECT_DOMAIN` | 具有稳定编码、计划周期和责任组织的项目主数据 |
 
-- 名称：组织机构
-- 定义：承担项目责任的组织主数据
-- 范围：DOMAIN
-- 复用范围：DOMAIN
-- 属性：`ORG_CODE` 主键、`ORG_NAME`、`PARENT_ORG_CODE`、`ORG_LEVEL_CODE`、`RECORD_STATUS_CODE`
-- 层级：总部 → 部门
+## 7. 维度建模：创建维度表 / 明细表 / 汇总表 / 应用表
 
-### 6.3 研发项目
+入口：同一工作台 `/data-modeling/dimensions/workbench`，点击 **“+”** 后选择“逻辑模型”下的类型。
 
-- 名称：研发项目
-- 定义：具有稳定编码、计划周期和责任组织的研发项目
-- 范围：DATA_MART
-- 数据集市：项目健康分析集市
-- 复用范围：PLAN
-- 属性：`PROJECT_CODE` 主键、`PROJECT_NAME`、`OWNER_ORG_CODE`、`MANAGER_NAME`、`PROJECT_STATUS_CODE`
+### 7.1 创建维度表
 
-每个定义保存后执行“设为现行”。只有 CURRENT 维度才会出现在新建 DIMENSION 模型的选择器中。
+1. 公共层 Tab → **“+”** → 逻辑模型 → **创建维度表**。
+2. “基本信息”：
+   - 数据域：与所选维度一致（如 `IT_DEMO_PROJECT_DOMAIN`）。
+   - 维度：选择已“确认定义”的现行维度（如 研发项目）。
+   - 表名：小写英文、数字、下划线，以 `dim_` 开头（如 `dim_it_demo_project`）。
+   - 表中文名：如 `研发项目维度表`。
+   - 存储策略、描述按需。
+3. “字段管理”：
+   - 点击 **插入字段** 添加行。
+   - 字段名称（技术名，小写）、类型、字段显示名（中文）。
+   - 勾选 **主键**：业务主键字段（如 `project_code`）。
+   - **非空**：按需要勾选。
+   - **维度属性编码**：绑定概念维度上已定义的属性编码；未定义属性时留空（主键在字段层声明，不再依赖维度属性）。
+   - 字段标准/码表绑定按规划配置。
+4. 点击 **保存** 保存草稿；保存后可继续编辑，目录中可见该维度表。
 
-## 7. 模型中心
+### 7.2 创建明细表 / 汇总表 / 应用表
 
-入口：`/modeling/models`
+同一“+”菜单：
+
+| 类型 | 菜单项 | 关键配置 |
+|---|---|---|
+| 明细表 | 创建明细表 | 模型粒度、主键字段；来源按数据实现侧配置 |
+| 汇总表 | 创建汇总表 | 上游模型引用、聚合度量字段 |
+| 应用表 | 创建应用表 | 消费场景、上游模型引用 |
+
+### 7.3 阶段动作（每个模型）
+
+```text
+保存逻辑设计
+  → 配置数据实现（物理表名/装载策略等，已不在模型表单写契约中）
+  → 验证实现
+  → 发布/物化
+```
+
+注意：重构后 ModelSpec 写契约不再接收 `implementationPolicy`（物理目标、装载、分区、保留策略由数据实现侧维护），表名/装载等物理信息以数据实现配置为准。
+
+建议按旧设计创建六个模型：
+
+1. `it_demo_dwd_dim_date`（维度表，绑定 日期）
+2. `it_demo_dwd_dim_org`（维度表，绑定 组织机构）
+3. `it_demo_dwd_dim_project`（维度表，绑定 研发项目）
+4. `it_demo_dwd_fct_task_snapshot`（明细表）
+5. `it_demo_dws_project_health`（汇总表）
+6. `it_demo_ads_project_overview`（应用表）
 
 创建顺序必须遵循依赖拓扑：
 
@@ -373,7 +423,13 @@ psql "$IT_DEMO_SOURCE_DSN" -v ON_ERROR_STOP=1 \
 
 ## 9. 指标工作台
 
-入口：`/modeling/metric-workbench`
+入口（重构后）：
+
+- 原子指标：`/data-modeling/metrics/atomic`
+- 复合指标：`/data-modeling/metrics/composite`
+- 派生指标：`/data-modeling/metrics/derived`
+- 修饰词：`/data-modeling/metrics/modifiers`
+- 时间周期：`/data-modeling/metrics/periods`
 
 选择当前已发布的 DWS 模型，依次从 MEASURE 字段创建原子指标草稿：
 
@@ -408,10 +464,11 @@ nullif({{metric:IT_TASK_TOTAL}}, 0)
 
 ### 10.1 血缘
 
-入口：
+入口（重构后）：
 
-- `/catalog/lineage/graph`
-- `/catalog/lineage/impact`
+- 模型关系：`/data-modeling/graphs/models`
+- 标准关系：`/data-modeling/graphs/standards`
+- 指标血缘：`/data-modeling/graphs/metrics`
 
 确认 source→ODS→DWD→DWS→ADS 表级血缘和关键字段血缘。缺少 source、target 或运行证据时保持待治理，不能手工把状态改成已通过。
 
@@ -484,6 +541,10 @@ nullif({{metric:IT_TASK_TOTAL}}, 0)
 每次记录 run ID、开始/结束时间、输入批次、输出行数、规则结果、模型 revision、受影响资产和恢复动作。
 
 ## 12. 当前已知阻断
+
+> 2026-08-07 更新：业务过程创建接口曾因 SpEL 写法 `hasAnyAuthority(数组A, 数组B)` 恒为 403，
+> 已修复为单一 `DATA_MAINTAINER_ROLES`（`ModelingBusinessProcessResource`、
+> `Sprint64GovernanceResource`、`IndustryModelingTemplateResource`），需部署后实测确认。
 
 最终物化前必须确认当前部署已经修复以下源码契约：
 

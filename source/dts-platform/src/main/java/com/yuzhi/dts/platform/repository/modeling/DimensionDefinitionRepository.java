@@ -325,8 +325,8 @@ public class DimensionDefinitionRepository {
             view.name(),
             view.definition(),
             view.ownerId(),
-            view.abbreviation(),
             view.reuseScope().name(),
+            view.abbreviation(),
             json(view.hierarchies()),
             view.scopeType().name(),
             view.dataMartId(),
@@ -456,6 +456,31 @@ public class DimensionDefinitionRepository {
             Timestamp.from(replacement.updatedAt())
         );
         return updated == null ? 0 : updated;
+    }
+
+    public boolean deleteDraft(String tenantId, UUID id, String checksum) {
+        Integer deleted = jdbcTemplate.queryForObject(
+            """
+            with deleted_revisions as (
+                delete from modeling_dimension_definition_revision
+                 where tenant_id = ?
+                   and dimension_definition_id = ?
+            )
+            delete from modeling_dimension_definition
+             where tenant_id = ?
+               and id = ?
+               and status = 'DRAFT'
+               and current_checksum = ?
+            returning 1
+            """,
+            Integer.class,
+            tenantId,
+            id,
+            tenantId,
+            id,
+            checksum
+        );
+        return deleted != null && deleted == 1;
     }
 
     public long usageCount(String tenantId, UUID id) {

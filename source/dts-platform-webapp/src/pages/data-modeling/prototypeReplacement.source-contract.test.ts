@@ -71,6 +71,7 @@ describe("prototype-owned data modeling frontend", () => {
 	it("keeps workbench route selection and navigation guards deterministic", async () => {
 		vi.doMock("@/api/modelRepresentationApi", () => ({}));
 		vi.doMock("@/api/dimensionDefinitionApi", () => ({}));
+		vi.doMock("@/api/modelSpecApi", () => ({}));
 		vi.doMock("@/store/userStore", () => ({}));
 		vi.doMock("./navigation", () => ({}));
 		vi.doMock("./prototype/ModelFieldEditorTable", () => ({}));
@@ -152,7 +153,7 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(modeling).toMatch(/import \{ ModelingWorkbenchEditor \} from "\.\/ModelingWorkbenchEditor"/);
 		expect(modeling).toMatch(/import \{[^}]*modelDraftFingerprint[^}]*\} from "\.\/modelWorkbenchPresentation"/s);
 		expect(modeling).toMatch(/saveDimensionDefinitionDraft/);
-		expect(modeling).toMatch(/confirmDimensionDefinitionDraft/);
+		expect(modeling).toMatch(/useConceptDimensionWorkflow|confirmConceptVersion/);
 		expect(modeling).toMatch(/ConceptDimensionRecordDialog/);
 		expect(modeling).toMatch(/saveModelDraft/);
 		expect(modeling).toMatch(/isConceptDimensionDraft/);
@@ -172,6 +173,8 @@ describe("prototype-owned data modeling frontend", () => {
 		const catalogEditors = read("./prototype/PlanningCatalogEditors.tsx");
 		const planningSidebar = read("./prototype/PlanningSidebar.tsx");
 		const modeling = read("./prototype/ModelingWorkbenchPage.tsx");
+		const widgets = read("./prototype/WorkbenchCatalogWidgets.tsx");
+		const catalogActions = read("./prototype/useCatalogActions.ts");
 		const modelDialogs = read("./prototype/ModelWorkbenchDialog.tsx");
 		const reverse = read("./prototype/ReverseModelingPage.tsx");
 		const tools = read("./prototype/ToolsPage.tsx");
@@ -186,15 +189,28 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(planningEditors).toMatch(/confirmDataMart|confirmSubjectDomain/);
 		expect(catalogEditors).toMatch(/CatalogDomainForm|listPlanningCatalogDomains/);
 		expect(planningSidebar).not.toContain("建模空间");
-		expect(modeling).toMatch(/saveModelDraft|ModelWorkbenchDialog|创建贴源表（尚未接入）/);
-		expect(modeling).toMatch(/创建维度\s*<\/button>[\s\S]*创建维度表\s*<\/button>/);
-		expect(modeling).toMatch(/createModel\("dimension"\)[\s\S]*createModel\("dimension-table"\)/);
+		expect(modeling).toMatch(/saveModelDraft|ModelWorkbenchDialog/);
+		expect(modeling).toMatch(/WorkbenchCreateMenu|WorkbenchModelRow/);
+		expect(widgets).toMatch(/onCreate\("dimension"\)/);
+		expect(widgets).toContain('kind: "dimension-table"');
+		expect(widgets).toContain("创建贴源表（尚未接入）");
+		expect(widgets).toContain('label: "创建维度表"');
+		expect(widgets).toContain('label: "创建明细表"');
+		expect(widgets).toContain('label: "创建汇总表"');
+		expect(widgets).toContain('label: "创建应用表"');
 		expect(modeling).toMatch(/onConfirmDimension=\{\(\) => void confirmConceptVersion\(\)\}/);
 		expect(modeling).toMatch(/fieldRowIds|key=\{fieldRowIds\[index\]\}/);
 		expect(modeling).toMatch(/dataDomains/);
-		expect(modeling).toMatch(/group\.models\.length/);
+		expect(modeling).toMatch(/buildWorkbenchCatalogGroups|workbenchCatalogEmptyMessage/);
 		expect(modeling).toMatch(/数据域视角|业务分类视角/);
 		expect(modeling).toMatch(/effectiveView/);
+		expect(widgets).toContain("概念模型");
+		expect(widgets).toContain("逻辑模型");
+		expect(widgets).toContain("请选择业务分类");
+		expect(widgets).toContain("前往关系图");
+		expect(widgets).toContain("克隆");
+		expect(modeling).toMatch(/useCatalogActions/);
+		expect(catalogActions).toMatch(/deleteModelSpec|deleteDimensionDefinition|retireDimensionDefinition/);
 		expect(modeling).toMatch(/getModelRepresentation|representationScope: "BUSINESS"|useDataModelingMenuGrant/);
 		expect(modelDialogs).toMatch(/representationScope: "TECHNICAL"|OPEN_ADVANCED_DBT|canMaintain/);
 		expect(modelDialogs).toMatch(

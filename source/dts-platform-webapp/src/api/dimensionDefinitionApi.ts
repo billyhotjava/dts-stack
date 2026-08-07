@@ -64,3 +64,10 @@ export const retireDimensionDefinition = (expected: DimensionDefinitionCasToken)
 		headers: versionHeaders(expected),
 		_skipErrorToast: true,
 	} as any);
+
+export const deleteDimensionDefinition = (expected: DimensionDefinitionCasToken) =>
+	api.delete<void>({
+		url: `${DIMENSION_DEFINITION_RESOURCE}/${encodeURIComponent(expected.id)}`,
+		headers: versionHeaders(expected),
+		_skipErrorToast: true,
+	} as any);

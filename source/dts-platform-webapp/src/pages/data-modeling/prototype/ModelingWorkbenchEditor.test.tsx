@@ -71,6 +71,7 @@ const makeProps = (patch: Partial<ModelingWorkbenchEditorProps> = {}): ModelingW
 			{ id: "20000000-0000-0000-0000-000000000001", code: "finance", name: "财务域", parentCode: "business" },
 		],
 		models: [],
+		dimensions: [],
 		standards: [],
 		warehouseLayers: [
 			{
@@ -193,7 +194,7 @@ describe("ModelingWorkbenchEditor", () => {
 		);
 	});
 
-	it("allows editing a saved DRAFT concept dimension so attributes can be added before confirmation", async () => {
+	it("keeps a saved DRAFT concept dimension editable without an attributes section", async () => {
 		await render(
 			makeProps({
 				draft: makeConceptDraft({
@@ -211,12 +212,11 @@ describe("ModelingWorkbenchEditor", () => {
 		);
 		expect(saveButton).toBeDefined();
 		expect((saveButton as HTMLButtonElement).disabled).toBe(false);
-		const pkCheckbox = container.querySelector<HTMLInputElement>('input[type="checkbox"]');
-		expect(pkCheckbox).not.toBeNull();
-		expect(pkCheckbox?.disabled).toBe(false);
+		expect(container.textContent).not.toContain("维度属性");
+		expect(container.querySelector<HTMLInputElement>('input[type="checkbox"]')).toBeNull();
 	});
 
-	it("locks a confirmed concept dimension and its attributes", async () => {
+	it("locks a confirmed concept dimension", async () => {
 		await render(
 			makeProps({
 				draft: makeConceptDraft({ definitionBase: { ...definition, status: "CURRENT" as const } }),
@@ -336,7 +336,7 @@ describe("ModelingWorkbenchEditor", () => {
 		await render(
 			makeProps({
 				draft,
-				context: { domains: [], models: [], standards: [], warehouseLayers: [] },
+				context: { domains: [], models: [], dimensions: [], standards: [], warehouseLayers: [] },
 				dimensionDefinitions: [],
 			}),
 		);
@@ -429,7 +429,7 @@ describe("ModelingWorkbenchEditor", () => {
 		await render(
 			makeProps({
 				draft,
-				context: { domains: [], models: [], standards: [], warehouseLayers: [] },
+				context: { domains: [], models: [], dimensions: [], standards: [], warehouseLayers: [] },
 			}),
 		);
 

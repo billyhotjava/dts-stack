@@ -1,5 +1,9 @@
 .dmx-workbench-editor {
 	min-width: 0;
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-height: 0;
 }
 
 .dmx-workbench-editor .dmx-editor-toolbar {

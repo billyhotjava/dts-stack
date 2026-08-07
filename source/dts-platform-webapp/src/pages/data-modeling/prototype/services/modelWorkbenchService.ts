@@ -50,6 +50,7 @@ export const MODEL_KIND_CONFIG: Record<
 export type ModelWorkbenchContext = {
 	domains: CatalogDomain[];
 	models: ModelSpecView[];
+	dimensions: DimensionDefinitionView[];
 	standards: ModelFieldStandardOption[];
 	warehouseLayers: WarehouseLayerView[];
 };
@@ -193,15 +194,17 @@ export function modelDraftFromView(model: ModelSpecView): ModelSpecDraft {
 }
 
 export async function loadModelWorkbenchContext(): Promise<ModelWorkbenchContext> {
-	const [domains, models, standards, warehouseLayers] = await Promise.all([
+	const [domains, models, dimensions, standards, warehouseLayers] = await Promise.all([
 		catalogDomainService.list(),
 		listModelSpecs(),
+		listDimensionDefinitions({ offset: 0, limit: 100 }),
 		listModelFieldStandardOptions(),
 		listWarehouseLayers(),
 	]);
 	return {
 		domains,
 		models: models.filter((model) => model.status !== "ARCHIVED"),
+		dimensions: dimensions.filter((definition) => definition.status !== "RETIRED"),
 		standards,
 		warehouseLayers,
 	};
@@ -284,9 +287,6 @@ export async function confirmDimensionDefinitionDraft(draft: ConceptDimensionDra
 	if (!definition) throw new Error("请先保存维度草稿");
 	if (definition.status === "CURRENT") return draft;
 	if (definition.status !== "DRAFT") throw new Error("只有草稿状态的维度可以确认");
-	if (!definition.attributes.length || !definition.attributes.some((attribute) => attribute.primaryKey)) {
-		throw new Error("确认前请至少添加一个维度属性，并将其中一个属性设为主键。");
-	}
 	return conceptDimensionDraftFromView(await confirmDimensionDefinition(definition));
 }
 
@@ -349,23 +349,14 @@ const buildUpdate = (draft: ModelSpecDraft): UpdateModelSpecCommand => {
 		dimensionProfile:
 			config.modelType === "DIMENSION"
 				? {
-						dimensionCode: base?.dimensionProfile?.dimensionCode || null,
+						dimensionCode: null,
 						hierarchies: base?.dimensionProfile?.hierarchies || [],
 						scdPolicy: { type: draft.scdType },
-						reuseScope: draft.reuseScope,
+						reuseScope: null,
 					}
 				: null,
 		dataMartId: base?.dataMartId || null,
 		variantCode: base?.variantCode || null,
-		implementationPolicy: {
-			physicalName: draft.physicalName.trim() || null,
-			loadStrategy: draft.loadStrategy,
-			retentionDays: base?.implementationPolicy?.retentionDays || null,
-			partitionFields: draft.partitionFields
-				.split(",")
-				.map((field) => field.trim())
-				.filter(Boolean),
-		},
 		fields: draft.fields.map((field) => ({
 			...field,
 			name: field.name.trim(),

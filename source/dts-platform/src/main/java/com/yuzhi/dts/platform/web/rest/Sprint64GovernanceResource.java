@@ -34,7 +34,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class Sprint64GovernanceResource {
 
     private static final String GOVERNANCE_MAINTAINER_EXPRESSION =
-        "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).GOVERNANCE_MAINTAINERS, T(com.yuzhi.dts.platform.security.AuthoritiesConstants).CATALOG_MAINTAINERS)";
+        "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).DATA_MAINTAINER_ROLES)";
 
     private final Sprint64GovernanceService service;
     private final AuditService audit;

@@ -341,6 +341,36 @@ public class DimensionDefinitionApplicationService {
         return retired;
     }
 
+    @Transactional
+    public void delete(String tenantId, String actorId, UUID id, ExpectedVersion expected) {
+        requireServerContext(tenantId, actorId);
+        View current = currentForMutation(tenantId, id);
+        requireExpected(id, current, expected);
+        if (current.status() != Status.DRAFT) {
+            throw new ModelSpecException(
+                "DIMENSION_DEFINITION_DELETE_INVALID",
+                "Only DRAFT dimension definitions can be deleted; confirmed definitions must be retired",
+                ModelSpecException.Kind.CONFLICT,
+                Map.of("dimensionDefinitionId", id, "currentStatus", current.status())
+            );
+        }
+        boolean deleted;
+        try {
+            deleted = repository.deleteDraft(tenantId, id, current.checksum());
+        } catch (DataIntegrityViolationException exception) {
+            throw new ModelSpecException(
+                "DIMENSION_DEFINITION_DELETE_IN_USE",
+                "The DRAFT dimension definition is referenced by a model and cannot be deleted",
+                ModelSpecException.Kind.CONFLICT,
+                Map.of("dimensionDefinitionId", id)
+            );
+        }
+        if (!deleted) {
+            throw revisionConflict(current);
+        }
+        audit("MODELING_DIMENSION_DEFINITION_DELETE", tenantId, actorId, current);
+    }
+
     private View transition(
         String tenantId,
         String actorId,
@@ -358,18 +388,6 @@ public class DimensionDefinitionApplicationService {
                 "Dimension definition lifecycle does not allow this transition",
                 ModelSpecException.Kind.CONFLICT,
                 Map.of("currentStatus", current.status(), "requiredStatus", required, "targetStatus", target)
-            );
-        }
-        if (
-            target == Status.CURRENT &&
-            (current.attributes().isEmpty() ||
-                current.attributes().stream().noneMatch(DimensionDefinitionContract.AttributeSemantic::primaryKey))
-        ) {
-            throw new ModelSpecException(
-                "DIMENSION_DEFINITION_ATTRIBUTES_REQUIRED_FOR_CONFIRMATION",
-                "Add dimension attributes and select one business primary key before confirmation",
-                ModelSpecException.Kind.UNPROCESSABLE,
-                Map.of("dimensionDefinitionId", current.id(), "repairRoute", "/modeling/dimensions?edit=" + current.id())
             );
         }
         View replacement = checksum(

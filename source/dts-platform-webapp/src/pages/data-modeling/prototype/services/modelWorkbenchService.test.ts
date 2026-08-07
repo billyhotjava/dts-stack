@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	confirmDimensionDefinition,
 	createDimensionDefinition,
+	listDimensionDefinitions,
 	updateDimensionDefinition,
 } from "@/api/dimensionDefinitionApi";
 import { listModelFieldStandardOptions } from "@/api/modelingStandardsApi";
@@ -321,17 +322,16 @@ describe("model workbench draft validation", () => {
 		expect(updateDimensionDefinition).not.toHaveBeenCalled();
 	});
 
-	it("blocks confirmation until attributes include a primary key", async () => {
+	it("confirms a saved definition without attributes (DataWorks 对齐)", async () => {
 		const draft = conceptDraft();
 		draft.definitionBase = { ...definitionView, attributes: [] };
+		vi.mocked(confirmDimensionDefinition).mockResolvedValue({ ...definitionView, status: "CURRENT", attributes: [] });
 
-		await expect(confirmDimensionDefinitionDraft(draft)).rejects.toThrow("确认前请至少添加一个维度属性");
-
-		draft.definitionBase = {
-			...definitionView,
-			attributes: [{ code: "A", name: "属性", primaryKey: false, order: 1 }],
-		};
-		await expect(confirmDimensionDefinitionDraft(draft)).rejects.toThrow("设为主键");
+		const confirmed = await confirmDimensionDefinitionDraft(draft);
+		expect(confirmDimensionDefinition).toHaveBeenCalledWith(
+			expect.objectContaining({ id: "dimension-1", status: "DRAFT", attributes: [] }),
+		);
+		expect(confirmed.definitionBase?.status).toBe("CURRENT");
 	});
 
 	it("confirms once attributes include a primary key", async () => {
@@ -374,12 +374,15 @@ describe("model workbench draft validation", () => {
 		vi.mocked(listWarehouseLayers).mockResolvedValue([customLayer]);
 		vi.mocked(catalogDomainService.list).mockResolvedValue([]);
 		vi.mocked(listModelSpecs).mockResolvedValue([]);
+		vi.mocked(listDimensionDefinitions).mockResolvedValue([]);
 		vi.mocked(listModelFieldStandardOptions).mockResolvedValue([]);
 
 		const context = await loadModelWorkbenchContext();
 
 		expect(context.warehouseLayers).toEqual([customLayer]);
+		expect(context.dimensions).toEqual([]);
 		expect(listWarehouseLayers).toHaveBeenCalledTimes(1);
+		expect(listDimensionDefinitions).toHaveBeenCalledWith({ offset: 0, limit: 100 });
 	});
 
 	it("carries the custom selection into the update command", async () => {
@@ -394,5 +397,39 @@ describe("model workbench draft validation", () => {
 			base,
 			expect.objectContaining({ layer: "DWD", warehouseLayerCode: "FIN_DETAIL" }),
 		);
+	});
+
+	it("keeps dimensionProfile free of dimensionCode/reuseScope when saving a dimension table", async () => {
+		const base = {
+			...canonicalFactView(),
+			modelType: "DIMENSION" as const,
+			layer: "DWD" as const,
+			name: "成本中心维度表",
+			implementationPolicy: {
+				physicalName: "dim_budget_account",
+				loadStrategy: "FULL" as const,
+				retentionDays: null,
+				partitionFields: [],
+			},
+			dimensionDefinitionRef: { dimensionDefinitionId: "dimension-1", revision: 1 },
+			dimensionProfile: {
+				dimensionCode: "COST_CENTER",
+				hierarchies: [],
+				scdPolicy: { type: "TYPE1" as const },
+				reuseScope: "DOMAIN" as const,
+			},
+		};
+		vi.mocked(updateModelSpec).mockResolvedValue(base);
+		const draft = modelDraftFromView(base) as ModelSpecDraft;
+
+		await saveModelDraft(draft, { ownerId: "owner-1", dimensionDefinitions: [] });
+
+		expect(updateModelSpec).toHaveBeenCalledWith(
+			base,
+			expect.objectContaining({
+				dimensionProfile: expect.objectContaining({ dimensionCode: null, reuseScope: null }),
+			}),
+		);
+		expect(vi.mocked(updateModelSpec).mock.calls[0][1]).not.toHaveProperty("implementationPolicy");
 	});
 });

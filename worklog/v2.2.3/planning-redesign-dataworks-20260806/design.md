@@ -83,3 +83,42 @@
 - 维度建模工作台按 DataWorks 管理视角重构：公共层支持数据域/业务分类双视角切换，贴源层/应用层固定业务分类视角；空分组不再渲染，财务域空节点不再“始终显示”。
 - 浏览器验证：空态下贴源/公共/应用层均不显示财务域；临时模型挂财务域时，数据域视角归“财务域”、业务分类视角归“财务业务”；临时模型与计划域绑定均已清理/恢复。
 - E2E：sprint80（5）+ sprint84 真实租户 smoke（2）+ 数仓分层治理联合旅程（1）全绿；`tsc` 与 data-modeling 130 条单测通过；`dts-platform-webapp:1.0.0` 重建并部署 v223。
+
+## 新建菜单与模型项操作（2026-08-07 第二轮，xiezm/sa @ bi.yuzhicloud.com v223）
+
+- 任意分层 Tab 点击“+”均弹出与 DataWorks 参考一致的菜单：业务分类选择 + 搜索 + 概念模型（创建维度）/ 逻辑模型（贴源表/维度表/明细表/汇总表/应用表）分组；贴源表保持“尚未接入”禁用。
+- 目录模型行悬停出现“前往关系图”（带 `?query=` 直达并预填关系图搜索框）与“删除”（确认后调用 DELETE，删除后刷新目录）；按需求未做克隆。
+- 新建菜单与模型行抽成 `WorkbenchCatalogWidgets.tsx` 组件，页面行数控制在 800 行契约内；`tsc` + data-modeling 135 条单测通过。
+- 浏览器实测：三个 Tab 菜单一致、搜索过滤生效；临时模型可跳转关系图、可确认删除；E2E 8/8 通过（sprint80 首条一次偶发 30s 加载超时，重跑通过）。
+
+## 概念维度创建对齐 DataWorks（2026-08-07 第三轮，xiezm/sa @ bi.yuzhicloud.com v223）
+
+- 概念维度表单移除“维度属性”区，只保留基础信息（数仓分层/业务分类/数据域/系统编码/中文名称/描述），与 DataWorks 创建概念模型：维度一致。
+- 前后端确认定义不再要求属性/主键（去掉 `DIMENSION_DEFINITION_ATTRIBUTES_REQUIRED_FOR_CONFIRMATION` 校验与前端拦截文案）。
+- 修复真实缺陷：`DimensionDefinitionRepository.insert` 绑定参数顺序把 `reuseScope` 与 `abbreviation` 写反，导致创建维度保存必报 `DIMENSION_DEFINITION_PERSISTENCE_CONFLICT`（reuse_scope 为 null 违反非空约束）；已交换参数顺序并验证。
+- 验证：`tsc` + data-modeling 135 条单测、`DimensionDefinitionApplicationServiceTest` 通过；浏览器实测创建维度（无属性）保存草稿 → 确认定义成功，临时维度已退役；E2E 8/8 全绿。
+
+## 概念维度目录可见性修复（2026-08-07 第四轮，xiezm/sa @ bi.yuzhicloud.com v223）
+
+- 工作台目录此前只渲染 ModelSpec，概念维度（DimensionDefinition）不进树，保存后刷新左侧“暂无模型”。现 `loadModelWorkbenchContext` 同时加载维度定义（limit 100，过滤 RETIRED），目录分组支持维度归组（公共层数据域/业务分类视角，贴源/应用层不显示），新增维度行（◈ + 系统编码）与 `dimensionDefinitionId` URL 定位，保存/刷新/点击均可重新打开。
+- 工程上把目录树抽成 `WorkbenchCatalogTree`、概念维度工作流抽成 `useConceptDimensionWorkflow`，页面保持在 800 行契约内。
+- 验证：`tsc` + data-modeling 137 条单测通过；浏览器实测创建维度保存 → 刷新 → 左侧目录可见并可点击重新打开，贴源层不显示维度；临时维度已全部退役；E2E 8/8 全绿。
+
+## 维度记录行操作（2026-08-07 第五轮，xiezm/sa @ bi.yuzhicloud.com v223）
+
+- 评估结论：不做右键菜单，沿用模型行的“悬浮行内按钮”，Chrome 95 兼容且与现有交互一致；维度行新增 前往关系图 / 克隆 / 删除 三个按钮（克隆按需求保留）。
+- 后端新增：草稿维度 DELETE（仅 DRAFT 可删，CURRENT/RETIRED 走退役；引用中被模型占用时返回冲突），删除返回 200 信封与前端 apiClient 契约一致；行操作抽到 `useCatalogActions`。
+- 验证：`tsc` + data-modeling 137 条单测、`DimensionDefinitionApplicationServiceTest`（含新增删除用例）通过；浏览器实测悬停出现三按钮、前往关系图跳转并预填搜索、克隆生成“（副本）”并进入目录、草稿删除确认后消失；E2E 8/8 全绿。
+
+## 字段管理滚动修复（2026-08-07 第六轮，xiezm/sa @ bi.yuzhicloud.com v223）
+
+- 根因：编辑器内容区 `.dmx-workbench-editor` 不是 flex 列容器，字段管理所在 `.dmx-editor-scroll` 的 `flex:1` 无法约束高度，内容被外层 `overflow:hidden` 裁掉且无滚动条。
+- 修复：`.dmx-workbench-editor` 改为 `display:flex; flex-direction:column; flex:1; min-height:0`，`.dmx-editor-scroll` 增加 `min-height:0`，编辑器内部可纵向滚动。
+- 验证：浏览器实测新建维度表插入多行字段后，字段管理区 `overflow-y:auto` 且可滚动到底部最后一行；data-modeling 单测与 E2E 8/8 全绿。
+
+## 维度表保存契约修复（2026-08-07 第七轮，xiezm/sa @ bi.yuzhicloud.com v223）
+
+- 根因一：保存维度表时 `buildUpdate` 把 `dimensionProfile.dimensionCode/reuseScope` 一起发送，前端 `validateModelSpecUpdate` 直接报“Dimension code and reuse scope are maintained by the business dimension definition”。
+- 根因二（同轮暴露）：v2 契约已把物化策略移到数据实现侧，请求里带 `implementationPolicy` 会被后端 `MODEL_SPEC_IMPLEMENTATION_POLICY_MOVED` 拒绝（维度表创建 422）。
+- 修复：`buildUpdate` 不再发送 `dimensionCode/reuseScope`（置 null）与 `implementationPolicy`（整体移除）；补单测断言。
+- 验证：`tsc` + data-modeling 单测通过；浏览器实测新建维度表（选维度、填表名/中文名、加主键字段）保存成功（201，toast 模型草稿已保存）；临时维度与模型已清理；E2E 8/8 全绿。

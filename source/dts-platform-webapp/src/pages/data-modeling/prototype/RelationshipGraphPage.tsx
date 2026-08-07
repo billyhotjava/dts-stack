@@ -1,6 +1,6 @@
 import { Focus, Minus, Plus, RefreshCw, Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import {
 	classifyModelingRelationshipGraphFailure,
 	listModelingRelationshipPlans,
@@ -76,7 +76,9 @@ function positionNodes(graph: ModelingRelationshipGraph, view: string, query: st
 
 export function RelationshipGraphPage({ route }: { route: DataModelingRoute }) {
 	const navigate = useNavigate();
+	const [searchParams] = useSearchParams();
 	const requestEpoch = useRef(0);
+	const initialQuery = useRef(searchParams.get("query") || "");
 	const [planId, setPlanId] = useState("");
 	const [graph, setGraph] = useState<ModelingRelationshipGraph | null>(null);
 	const [query, setQuery] = useState("");
@@ -112,9 +114,9 @@ export function RelationshipGraphPage({ route }: { route: DataModelingRoute }) {
 		[route.view],
 	);
 	useEffect(() => {
-		setQuery("");
+		setQuery(initialQuery.current);
 		setScale(1);
-		void load();
+		void load(undefined, initialQuery.current);
 		return () => {
 			requestEpoch.current += 1;
 		};
