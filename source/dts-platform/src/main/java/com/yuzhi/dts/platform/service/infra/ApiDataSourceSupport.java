@@ -4,6 +4,7 @@ import com.yuzhi.dts.platform.service.infra.dto.DataSourceRequest;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -73,6 +74,17 @@ final class ApiDataSourceSupport {
         normalized.putIfAbsent("contractVersion", "1.2.0");
         if (!StringUtils.hasText(extractAuthProvider(normalized))) {
             normalized.put("authProvider", "none");
+        }
+        // The ingestion runtime reads requestPolicy/retryPolicy/rateLimit/tls and
+        // defaultHeaders from the source-config top level. Connections saved by older
+        // clients may keep them nested under "api"; lift them so execution honors them.
+        Object nestedApi = normalized.get("api");
+        if (nestedApi instanceof Map<?, ?> apiMap) {
+            for (String key : List.of("requestPolicy", "retryPolicy", "rateLimit", "tls", "defaultHeaders")) {
+                if (!normalized.containsKey(key) && apiMap.containsKey(key)) {
+                    normalized.put(key, apiMap.get(key));
+                }
+            }
         }
         return normalized;
     }

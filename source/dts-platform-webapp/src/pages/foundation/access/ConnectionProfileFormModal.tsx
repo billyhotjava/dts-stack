@@ -501,6 +501,10 @@ export default function ConnectionProfileFormModal({
 			baseUrl,
 			authProvider,
 			auth,
+			requestPolicy: resolvedRequestPolicy,
+			...(rateLimit ? { rateLimit } : {}),
+			...(tls ? { tls } : {}),
+			...(defaultHeaders ? { defaultHeaders } : {}),
 			api: apiNode,
 			readerConfig: {
 				...(asRecord(baseProps?.readerConfig) || {}),
