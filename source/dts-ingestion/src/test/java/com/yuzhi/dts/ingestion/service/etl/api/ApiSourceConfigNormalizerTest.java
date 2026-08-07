@@ -111,4 +111,40 @@ class ApiSourceConfigNormalizerTest {
         assertThat(resources).hasSize(1);
         assertThat(resources.get(0)).containsEntry("path", "/v1/orders").containsEntry("recordPath", "$.data.items");
     }
+
+    @Test
+    void promotesRuntimePoliciesFromEmbeddedDatasourcePropsSnapshot() {
+        Map<String, Object> normalized = ApiSourceConfigNormalizer.normalize(
+            Map.of(
+                "baseUrl",
+                "http://api.example",
+                "auth",
+                Map.of("provider", "basic"),
+                "props",
+                Map.of(
+                    "api",
+                    Map.of(
+                        "requestPolicy",
+                        Map.of("allowHttp", true, "readTimeoutMillis", 9000),
+                        "rateLimit",
+                        Map.of("requestsPerSecond", 3)
+                    ),
+                    "readerConfig",
+                    Map.of(
+                        "tls",
+                        Map.of("verifyTls", false)
+                    ),
+                    "baseUrl",
+                    "http://api.example"
+                )
+            ),
+            UUID.randomUUID(),
+            "legacy-api-task"
+        );
+
+        assertThat(normalized)
+            .containsEntry("requestPolicy", Map.of("allowHttp", true, "readTimeoutMillis", 9000))
+            .containsEntry("rateLimit", Map.of("requestsPerSecond", 3))
+            .containsEntry("tls", Map.of("verifyTls", false));
+    }
 }

@@ -134,6 +134,11 @@ public final class ApiSourceConfigNormalizer {
     private static void promoteNestedRuntimeConfig(Map<String, Object> sourceConfig) {
         Map<String, Object> apiNode = asMap(sourceConfig.get("api"));
         Map<String, Object> readerNode = asMap(sourceConfig.get("readerConfig"));
+        // Older task snapshots embed the whole datasource props under "props";
+        // consult those nested nodes as well so runtime policies survive round-trips.
+        Map<String, Object> propsNode = asMap(sourceConfig.get("props"));
+        Map<String, Object> propsApiNode = asMap(propsNode == null ? null : propsNode.get("api"));
+        Map<String, Object> propsReaderNode = asMap(propsNode == null ? null : propsNode.get("readerConfig"));
         for (String key : NESTED_RUNTIME_KEYS) {
             if (sourceConfig.containsKey(key) && sourceConfig.get(key) != null) {
                 continue;
@@ -141,6 +146,15 @@ public final class ApiSourceConfigNormalizer {
             Object value = apiNode.get(key);
             if (value == null) {
                 value = readerNode.get(key);
+            }
+            if (value == null) {
+                value = propsNode == null ? null : propsNode.get(key);
+            }
+            if (value == null) {
+                value = propsApiNode.get(key);
+            }
+            if (value == null) {
+                value = propsReaderNode.get(key);
             }
             if (value != null) {
                 sourceConfig.put(key, value);
