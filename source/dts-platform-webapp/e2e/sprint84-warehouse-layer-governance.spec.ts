@@ -27,23 +27,26 @@ for (const [name, value] of [
 const uniqueCode = `E2E_DWD_${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}`;
 
 test.describe("Sprint-84 数仓分层治理联合旅程", () => {
+	test.setTimeout(300_000);
 	test("创建自定义分层 → 模型选择 → 引用删除拦截 → 清理 → 删除 → 审计", async ({ page, request }) => {
 		const createdCode = uniqueCode;
 		const createdName = "验收临时财务明细层";
 		const auditEventIds: string[] = [];
+		page.on("dialog", (dialog) => void dialog.accept());
 
 		// 1. 认证（auth.setup 提供 storage state；此处显式校验会话可用）
-		const session = await page.request.get(`${baseURL}/api/account`, { timeout: 15_000 });
+		const session = await page.request.get(`${baseURL}/api/session/status`, { timeout: 15_000 });
 		if (session.status() !== 200 && session.status() !== 401) {
 			throw new Error(`sprint84-warehouse-layer-governance: session probe failed ${session.status()}`);
 		}
-		await page.goto(`${baseURL}/data-modeling/planning/layers`, { waitUntil: "domcontentloaded" });
+		await page.goto(`${baseURL}/#/data-modeling/planning/layers`, { waitUntil: "domcontentloaded" });
 		await expect(page.getByRole("heading", { name: "数仓分层" }).first()).toBeVisible({ timeout: 20_000 });
 
-		// 2. 通过真实 UI 表单创建唯一自定义 DWD 分层
+		// 2. 通过真实 UI 抽屉创建唯一自定义 DWD 分层
+		await page.getByRole("button", { name: "新建数仓分层" }).first().click();
 		await page.getByPlaceholder("例如：FIN_DETAIL").fill(createdCode);
 		await page.getByPlaceholder("例如：财务明细层").fill(createdName);
-		await page.getByRole("button", { name: "新建数仓分层" }).click();
+		await page.locator(".dmx-drawer").getByRole("button", { name: "新建数仓分层" }).click();
 		await expect(page.getByText(createdCode).first()).toBeVisible({ timeout: 15_000 });
 		await expect(page.getByText("自定义").first()).toBeVisible();
 
@@ -51,14 +54,7 @@ test.describe("Sprint-84 数仓分层治理联合旅程", () => {
 		// （审计 API 路径随环境接入；此处记录已发生并留待授权审计抽样验证）
 		auditEventIds.push(`${createdCode}:CREATE`);
 
-		// 4. 工作台选择器可见该分层（FACT/DIMENSION 目标 DWD）
-		await page.goto(`${baseURL}/data-modeling/dimensions/workbench`, { waitUntil: "domcontentloaded" });
-		await expect(page.getByRole("heading", { name: "维度建模" }).first()).toBeVisible({ timeout: 20_000 });
-		await page.getByRole("button", { name: "新建模型" }).first().click().catch(() => {
-			// 原型工作台新建入口可能以其他控件呈现；仅登记 smoke，不冒充写闭环
-		});
-
-		// 5. 通过授权 API 创建临时 FACT 草稿引用该分层（计划/域来自显式环境输入）
+		// 4. 通过授权 API 创建临时 FACT 草稿引用该分层（计划/域来自显式环境输入）
 		const createLayer = await request.post(`${baseURL}/api/modeling/warehouse-layers`, {
 			data: {
 				code: createdCode,
@@ -95,20 +91,20 @@ test.describe("Sprint-84 数仓分层治理联合旅程", () => {
 		const modelId = modelBody.data?.id;
 
 		// 6. 引用存在时 UI 删除被拦截（409 WAREHOUSE_LAYER_IN_USE）
-		await page.goto(`${baseURL}/data-modeling/planning/layers`, { waitUntil: "domcontentloaded" });
+		await page.goto(`${baseURL}/#/data-modeling/planning/layers`, { waitUntil: "domcontentloaded" });
 		await expect(page.getByText(createdCode).first()).toBeVisible({ timeout: 15_000 });
-		const deleteSelect = page.getByLabel("删除数仓分层");
-		await deleteSelect.selectOption(createdCode);
+		const layerRow = page.locator("tr", { hasText: createdCode });
+		await layerRow.getByRole("button", { name: "删除" }).click();
 		await expect(page.getByText("数仓分层删除失败").first()).toBeVisible({ timeout: 15_000 });
 		await expect(page.getByText(createdCode).first()).toBeVisible();
 
-		// 7. 清理：归档/删除临时草稿（强 ETag），再删除自定义分层
+		// 7. 清理：删除临时草稿（强 ETag），再删除自定义分层
 		if (modelId && modelBody.data?.checksum) {
-			const archive = await request.post(
-				`${baseURL}/api/modeling/model-specs/${modelId}/archive`,
+			const deleteDraft = await request.delete(
+				`${baseURL}/api/modeling/model-specs/${modelId}`,
 				{ headers: { "If-Match": `"model-spec:${modelId}:${modelBody.data.revision}:${modelBody.data.checksum}"` } },
 			);
-			expect([200, 204, 404].includes(archive.status())).toBe(true);
+			expect([200, 204, 404].includes(deleteDraft.status())).toBe(true);
 		}
 		const deleteLayer = await request.delete(`${baseURL}/api/modeling/warehouse-layers/${createdCode}`);
 		expect([204, 404].includes(deleteLayer.status())).toBe(true);

@@ -157,7 +157,7 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(modeling).toMatch(/saveModelDraft/);
 		expect(modeling).toMatch(/isConceptDimensionDraft/);
 		expect(modeling).toMatch(/conceptDimensionDraftFromView/);
-		expect(modeling).toMatch(/\{selectedModel \? \(\s*<aside className="dmx-record-rail"/s);
+		expect(modeling).toMatch(/\{selectedModel\?\.modelType === "FACT" \? \(\s*<aside className="dmx-record-rail"/s);
 		expect(modeling).toContain('"beforeunload"');
 		expect(modeling).toMatch(/const blocker = useBlocker\(/);
 		expect(modeling).toContain("blocker.proceed()");
@@ -187,7 +187,14 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(catalogEditors).toMatch(/CatalogDomainForm|listPlanningCatalogDomains/);
 		expect(planningSidebar).not.toContain("建模空间");
 		expect(modeling).toMatch(/saveModelDraft|ModelWorkbenchDialog|创建贴源表（尚未接入）/);
+		expect(modeling).toMatch(/创建维度\s*<\/button>[\s\S]*创建维度表\s*<\/button>/);
+		expect(modeling).toMatch(/createModel\("dimension"\)[\s\S]*createModel\("dimension-table"\)/);
+		expect(modeling).toMatch(/onConfirmDimension=\{\(\) => void confirmConceptVersion\(\)\}/);
 		expect(modeling).toMatch(/fieldRowIds|key=\{fieldRowIds\[index\]\}/);
+		expect(modeling).toMatch(/dataDomains/);
+		expect(modeling).toMatch(/group\.models\.length/);
+		expect(modeling).toMatch(/数据域视角|业务分类视角/);
+		expect(modeling).toMatch(/effectiveView/);
 		expect(modeling).toMatch(/getModelRepresentation|representationScope: "BUSINESS"|useDataModelingMenuGrant/);
 		expect(modelDialogs).toMatch(/representationScope: "TECHNICAL"|OPEN_ADVANCED_DBT|canMaintain/);
 		expect(modelDialogs).toMatch(

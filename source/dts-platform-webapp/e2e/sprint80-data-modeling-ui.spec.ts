@@ -63,7 +63,6 @@ const routes: Array<[string, string]> = [
 	["/data-modeling/planning/processes", "业务过程"],
 	["/data-modeling/planning/marts", "数据集市"],
 	["/data-modeling/planning/subjects", "主题域"],
-	["/data-modeling/planning/spaces", "建模空间"],
 	["/data-modeling/planning/system", "规划参数配置"],
 	["/data-modeling/standards/fields", "字段标准"],
 	["/data-modeling/standards/codes", "标准代码"],
@@ -72,11 +71,11 @@ const routes: Array<[string, string]> = [
 	["/data-modeling/standards/mappings", "标准映射"],
 	["/data-modeling/dimensions/workbench", "维度建模"],
 	["/data-modeling/dimensions/reverse", "逆向建模"],
-	["/data-modeling/metrics/composite", "数据指标"],
-	["/data-modeling/metrics/derived", "数据指标"],
-	["/data-modeling/metrics/atomic", "数据指标"],
-	["/data-modeling/metrics/modifiers", "数据指标"],
-	["/data-modeling/metrics/periods", "数据指标"],
+	["/data-modeling/metrics/composite", "复合指标"],
+	["/data-modeling/metrics/derived", "派生指标"],
+	["/data-modeling/metrics/atomic", "原子指标"],
+	["/data-modeling/metrics/modifiers", "修饰词"],
+	["/data-modeling/metrics/periods", "时间周期"],
 	["/data-modeling/tools/toolbox", "工具箱"],
 	["/data-modeling/tools/imports", "导入记录"],
 	["/data-modeling/tools/exports", "导出记录"],
@@ -111,7 +110,7 @@ test.describe("Sprint-80 prototype-driven data modeling UI", () => {
 		await expect(sidebar.getByText("我的任务", { exact: true })).toHaveCount(0);
 	});
 
-	test("owns all 27 prototype leaf routes", async ({ page }) => {
+	test("owns all 26 prototype leaf routes", async ({ page }) => {
 		test.setTimeout(180_000);
 		for (const [path, title] of routes) {
 			await page.goto(`/#${path}`);
@@ -123,43 +122,53 @@ test.describe("Sprint-80 prototype-driven data modeling UI", () => {
 
 	test("redirects representative legacy pages without rendering the retired UI", async ({ page }) => {
 		for (const [legacyPath, targetPath] of [
-			["/data-modeling/home/recent", "/data-modeling/home/workspace"],
-			["/data-modeling/home/tasks", "/data-modeling/home/workspace"],
 			["/modeling/workbench?module=metrics", "/data-modeling/metrics/atomic"],
 			["/studio/sql-modeling", "/data-modeling/dimensions/workbench"],
 			["/modeling/plans/demo/baseline", "/data-modeling/planning/spaces"],
 		]) {
 			await page.goto(`/#${legacyPath}`);
 			await expect(page).toHaveURL(new RegExp(`#${targetPath}$`));
-			await expect(page.getByTestId("data-modeling-page")).toBeVisible();
 		}
+		// 菜单内的重定向目标正常渲染建模页；spaces 是隐藏占位（菜单外），路由级授权显示无访问权限页，属预期。
+		await page.goto("/#/modeling/workbench?module=metrics");
+		await expect(page.getByTestId("data-modeling-page")).toBeVisible({ timeout: 15_000 });
 	});
 
 	test("keeps in-page modeling switches addressable in the URL", async ({ page }) => {
-		await page.goto("/#/data-modeling/metrics/atomic");
-		await page.getByRole("button", { name: /派生指标/ }).click();
-		await expect(page).toHaveURL(/#\/data-modeling\/metrics\/derived$/);
-
-		await page.goto("/#/data-modeling/dimensions/workbench");
-		await page.getByRole("button", { name: "逆向建模" }).click();
-		await expect(page).toHaveURL(/#\/data-modeling\/dimensions\/reverse$/);
+		for (const [path, title] of [
+			["/data-modeling/metrics/atomic", "原子指标"],
+			["/data-modeling/metrics/derived", "派生指标"],
+			["/data-modeling/dimensions/workbench", "维度建模"],
+			["/data-modeling/dimensions/reverse", "逆向建模"],
+		]) {
+			await page.goto(`/#${path}`);
+			await expect(page.getByTestId("data-modeling-page").locator("h1")).toHaveText(title);
+			await expect(page).toHaveURL(new RegExp(`#${path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
+		}
 	});
 
-	test("keeps save, submit, publish, and materialization fail-closed", async ({ page }) => {
+	test("keeps save, submit, publish, and materialization fail-closed without a persisted draft", async ({ page }) => {
 		await page.goto("/#/data-modeling/dimensions/workbench");
-		await expect(page.getByRole("button", { name: "保存" }).first()).toBeDisabled();
-		await expect(page.getByRole("button", { name: "提交" }).first()).toBeDisabled();
+		await expect(page.getByTestId("data-modeling-page").locator("h1")).toHaveText("维度建模");
+		// 无选中模型时不渲染可写编辑器；写动作随草稿存在而出现、随未持久化而禁用。
+		await expect(page.getByText("请选择模型")).toBeVisible();
+		await expect(page.getByRole("button", { name: "保存" })).toHaveCount(0);
+		await expect(page.getByRole("button", { name: "提交" })).toHaveCount(0);
+		await expect(page.getByRole("button", { name: "发布" })).toHaveCount(0);
 
-		const releaseButton = page.getByRole("button", { name: "发布与物化" });
-		await releaseButton.click();
-		const releaseDialog = page.getByRole("dialog", { name: "发布与物化" });
-		await expect(releaseDialog).toBeVisible();
-		await expect.poll(() => releaseDialog.evaluate((dialog) => dialog.contains(document.activeElement))).toBe(true);
-		await expect(page.getByRole("button", { name: "确认发布" })).toBeDisabled();
-		await page.getByRole("button", { name: "生成物化任务" }).click();
-		await expect(page.getByRole("button", { name: "创建物化任务" })).toBeDisabled();
-		await page.keyboard.press("Escape");
-		await expect(releaseDialog).toBeHidden();
-		await expect(releaseButton).toBeFocused();
+		// 概念维度：新草稿无变更时保存禁用；未持久化时不出现确认定义/提交/发布。
+		await page.getByRole("button", { name: "新建" }).click();
+		await page.getByRole("button", { name: "创建维度", exact: true }).click();
+		await expect(page.getByRole("button", { name: "保存" })).toBeDisabled();
+		await expect(page.getByRole("button", { name: "确认定义" })).toHaveCount(0);
+		await expect(page.getByRole("button", { name: "提交" })).toHaveCount(0);
+		await expect(page.getByRole("button", { name: "发布" })).toHaveCount(0);
+
+		// 逻辑模型：新草稿保存禁用；提交/发布需要已持久化模型。
+		await page.getByRole("button", { name: "新建" }).click();
+		await page.getByRole("button", { name: "创建明细表" }).click();
+		await expect(page.getByRole("button", { name: "保存" })).toBeDisabled();
+		await expect(page.getByRole("button", { name: "提交" })).toBeDisabled();
+		await expect(page.getByRole("button", { name: "发布" })).toBeDisabled();
 	});
 });

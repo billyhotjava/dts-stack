@@ -101,6 +101,7 @@ public class WarehouseLayerApplicationService {
         return List.copyOf(views);
     }
 
+    @Transactional
     public WarehouseLayerView create(String actor, CreateWarehouseLayerCommand command) {
         requireActor(actor);
         if (command == null) {
@@ -141,11 +142,14 @@ public class WarehouseLayerApplicationService {
             now
         );
         repository.insert(row);
+        Map<String, Object> auditDetails = new java.util.LinkedHashMap<>();
+        auditDetails.put("systemLayerCode", systemLayerCode);
+        auditDetails.put("namingPrefix", prefix == null ? "" : prefix);
         auditService.auditActionStrict(
             "MODELING_WAREHOUSE_LAYER_CREATE",
             AuditStage.SUCCESS,
             code,
-            Map.of("systemLayerCode", systemLayerCode, "namingPrefix", prefix)
+            auditDetails
         );
         return toCustomView(row);
     }

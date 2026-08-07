@@ -41,6 +41,7 @@ function toStorageCookies(headers: string[], origin: URL) {
 				httpOnly: true,
 				secure: origin.protocol === "https:",
 				sameSite: "Lax" as const,
+				expires: -1,
 			};
 		})
 		.filter((cookie): cookie is NonNullable<typeof cookie> => cookie !== null);

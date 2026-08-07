@@ -2,6 +2,8 @@ import type { Page, Request } from "@playwright/test";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const DTS_API_PREFIXES = ["/api/", "/admin/api/", "/analytics/api/", "/bi/api/"];
+// 应用自身的审计上报是合法写路径，不是业务写；只读屏障放行，避免误伤正常页面行为。
+const ALLOWED_WRITE_PATHNAMES = new Set(["/api/workbench/audit"]);
 
 export type Sprint79ReadOnlyFailures = {
 	pageErrors: string[];
@@ -41,12 +43,13 @@ export const installSprint79ProductionReadOnlyBarrier = async (page: Page): Prom
 	});
 	await page.route("**/*", async (route) => {
 		const request = route.request();
-		if (!isProtectedDtsApiWrite(request.method(), request.url())) {
+		const pathname = new URL(request.url()).pathname;
+		if (!isProtectedDtsApiWrite(request.method(), request.url()) || ALLOWED_WRITE_PATHNAMES.has(pathname)) {
 			await route.continue();
 			return;
 		}
 		blockedRequests.add(request);
-		failures.modelingWrites.push(`${request.method()} ${new URL(request.url()).pathname}`);
+		failures.modelingWrites.push(`${request.method()} ${pathname}`);
 		await route.abort("blockedbyclient");
 	});
 	return failures;

@@ -5,5 +5,9 @@ import "./data-modeling.css";
 
 export default function DataModelingPage() {
 	const location = useLocation();
-	return <DataModelingSurface route={resolveDataModelingRoute(location.pathname)} />;
+	return (
+		<div data-testid="data-modeling-page">
+			<DataModelingSurface route={resolveDataModelingRoute(location.pathname)} />
+		</div>
+	);
 }

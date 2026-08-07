@@ -11,6 +11,7 @@ import { dataModelingPath } from "../navigation";
 import type { DataModelingRoute } from "../types";
 
 import { isBlankModelField } from "./ModelFieldEditorTable";
+import { ConceptDimensionRecordDialog } from "./ConceptDimensionRecordDialog";
 import { ModelingWorkbenchEditor } from "./ModelingWorkbenchEditor";
 import { ModelWorkbenchDialog, type WorkbenchDialog } from "./ModelWorkbenchDialog";
 import { modelDraftFingerprint } from "./modelWorkbenchPresentation";
@@ -18,6 +19,7 @@ import { PageHeader, RequestState, Status, Toast, useTransientMessage } from "./
 import {
 	type ConceptDimensionDraft,
 	conceptDimensionDraftFromView,
+	confirmDimensionDefinitionDraft,
 	emptyModelDraft,
 	isConceptDimensionDraft,
 	isDimensionTableDraft,
@@ -99,6 +101,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const [domain, setDomain] = useState("");
 	const [query, setQuery] = useState("");
 	const [createOpen, setCreateOpen] = useState(false);
+	const [viewMode, setViewMode] = useState<"domain" | "category">("domain");
 	const [dialog, setDialog] = useState<WorkbenchDialog>(null);
 	const [domainOpen, setDomainOpen] = useState<Record<string, boolean>>({});
 	const [loading, setLoading] = useState(true);
@@ -108,6 +111,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const [representationFailure, setRepresentationFailure] = useState("");
 	const { message, show } = useTransientMessage();
 	const draftBase = draft && isModelSpecDraft(draft) ? draft.base : null;
+	const conceptDraft = draft && isConceptDimensionDraft(draft) ? draft : null;
 	const draftCreateKind = draft?.createKind || null;
 	const draftDimensionDefinitionId = draft && isDimensionTableDraft(draft) ? draft.dimensionDefinitionId : "";
 	const draftDomainId = draft?.domainId || "";
@@ -120,6 +124,30 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		),
 	);
 	const confirmDiscard = useCallback(() => !dirty || window.confirm(DISCARD_PROMPT), [dirty]);
+	const confirmConceptVersion = async () => {
+		if (savingRef.current || !conceptDraft?.definitionBase || !canMaintain) return;
+		setFailure(null);
+		savingRef.current = true;
+		setSaving(true);
+		try {
+			const confirmed = await confirmDimensionDefinitionDraft(conceptDraft);
+			replaceDraft(confirmed);
+			show(`维度定义已确认：${confirmed.definitionBase?.systemCode}`);
+		} catch (error) {
+			const failure = normalizeModelingRequestFailure(error, "维度定义确认失败。");
+			if (failure.code === "DIMENSION_DEFINITION_ATTRIBUTES_REQUIRED_FOR_CONFIRMATION") {
+				setFailure({
+					...failure,
+					message: "确认前请至少添加一个维度属性，并将其中一个属性设为主键。",
+				});
+			} else {
+				setFailure(failure);
+			}
+		} finally {
+			savingRef.current = false;
+			setSaving(false);
+		}
+	};
 	const recoverConflictingDimensionDefinition = async (
 		draft: ConceptDimensionDraft,
 		failure: ModelingRequestFailure,
@@ -249,20 +277,26 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		};
 	}, [draftBase, draftCreateKind, draftDimensionDefinitionId, draftDomainId]);
 
-	const domainNames = useMemo(() => new Map((context?.domains || []).map((item) => [item.id, item.name])), [context]);
+	// DataWorks 工作台左侧在分层下展示完整数据域树：数据域节点来自数仓规划台账，
+	// 而不是从“有模型的域”反推，保证空域也可见。
+	const dataDomains = useMemo(() => {
+		const all = context?.domains || [];
+		const children = all.filter((item) => Boolean(item.parentCode));
+		return children.length ? children : all;
+	}, [context?.domains]);
+	const categoryRoots = useMemo(
+		() => (context?.domains || []).filter((item) => !item.parentCode),
+		[context?.domains],
+	);
+	const domainByCode = useMemo(
+		() => new Map((context?.domains || []).map((item) => [item.code, item])),
+		[context?.domains],
+	);
+	// DataWorks 建模视角：公共层支持 数据域/业务分类 两种视角；贴源层、应用层仅业务分类视角。
+	const effectiveView: "domain" | "category" = layer === "公共层" ? viewMode : "category";
 	const modelDomainOptions = useMemo(
-		() =>
-			Array.from(
-				new Set(
-					(context?.models || [])
-						.map((model) => model.domainId)
-						.filter((domainId): domainId is string => Boolean(domainId)),
-				),
-			).map((domainId) => ({
-				id: domainId,
-				name: domainNames.get(domainId) || domainId,
-			})),
-		[context?.models, domainNames],
+		() => dataDomains.map((item) => ({ id: item.id, name: item.name })),
+		[dataDomains],
 	);
 	const filteredModels = useMemo(() => {
 		const activeLayers = layerTabs.find((item) => item.label === layer)?.layers || [];
@@ -278,21 +312,65 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 				)
 			: filteredModels;
 	}, [filteredModels, query]);
+	type ViewGroup = {
+		key: string;
+		label: string;
+		kind: "category" | "domain" | "unassigned";
+		models: ModelSpecView[];
+	};
 	const groups = useMemo(() => {
-		const result = new Map<string, ModelSpecView[]>();
-		for (const model of visibleModels) {
-			const label = domainNames.get(model.domainId || "") || model.domainId || "未归属数据域";
-			result.set(label, [...(result.get(label) || []), model]);
+		const byKey = new Map<string, ViewGroup>();
+		const ensure = (key: string, label: string, kind: ViewGroup["kind"]): ViewGroup => {
+			const existing = byKey.get(key);
+			if (existing) return existing;
+			const created: ViewGroup = { key, label, kind, models: [] };
+			byKey.set(key, created);
+			return created;
+		};
+		if (effectiveView === "domain") {
+			for (const domain of dataDomains) ensure(domain.id, domain.name, "domain");
 		}
-		return Array.from(result.entries());
-	}, [domainNames, visibleModels]);
-	const catalogEmptyMessage = !(context?.models.length || 0)
-		? "当前数据域尚无模型。"
-		: !filteredModels.length
-			? "当前分层或数据域下暂无模型。"
-			: !visibleModels.length
-				? "没有符合搜索条件的模型。"
-				: "";
+		for (const root of categoryRoots) ensure(root.id, root.name, "category");
+		for (const model of visibleModels) {
+			if (effectiveView === "domain") {
+				const domain = dataDomains.find((item) => item.id === model.domainId);
+				if (domain) {
+					ensure(domain.id, domain.name, "domain").models.push(model);
+					continue;
+				}
+				const root = categoryRoots.find((item) => item.id === model.domainId);
+				if (root) {
+					ensure(root.id, root.name, "category").models.push(model);
+					continue;
+				}
+			} else {
+				const root = categoryRoots.find((item) => item.id === model.domainId);
+				if (root) {
+					ensure(root.id, root.name, "category").models.push(model);
+					continue;
+				}
+				const domain = dataDomains.find((item) => item.id === model.domainId);
+				const parent = domain?.parentCode ? domainByCode.get(domain.parentCode) : undefined;
+				if (parent) {
+					ensure(parent.id, parent.name, "category").models.push(model);
+					continue;
+				}
+			}
+			ensure("__unassigned__", "未归属数据域", "unassigned").models.push(model);
+		}
+		return Array.from(byKey.values()).filter((group) => group.models.length > 0);
+	}, [categoryRoots, dataDomains, domainByCode, effectiveView, visibleModels]);
+	const catalogEmptyMessage = (() => {
+		if (effectiveView === "domain") {
+			if (!dataDomains.length) return "当前没有数据域，请先在数仓规划中创建数据域。";
+		} else if (!categoryRoots.length) {
+			return "当前没有业务分类，请先在数仓规划中创建业务分类。";
+		}
+		if (!(context?.models.length || 0)) return "当前尚无模型。";
+		if (!filteredModels.length)
+			return `当前“${layer}”暂无模型；切换分层查看其他模型，或在右侧新建模型。`;
+		return "没有符合搜索条件的模型。";
+	})();
 
 	const chooseModel = (model: ModelSpecView) => {
 		if (savingRef.current || !confirmDiscard()) return;
@@ -308,6 +386,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		if (savingRef.current || !context || !confirmDiscard()) return;
 		const next = emptyModelDraft(kind, context);
 		if (draft?.domainId) next.domainId = draft.domainId;
+		else if (domain) next.domainId = domain;
 		replaceDraft(next);
 		setCreateOpen(false);
 		setDialog(null);
@@ -521,6 +600,26 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 								</button>
 							))}
 						</div>
+						{layer === "公共层" ? (
+							<div className="dmx-view-switch" role="group" aria-label="管理视角">
+								<button
+									className={effectiveView === "domain" ? "active" : ""}
+									disabled={saving}
+									onClick={() => setViewMode("domain")}
+									type="button"
+								>
+									数据域视角
+								</button>
+								<button
+									className={effectiveView === "category" ? "active" : ""}
+									disabled={saving}
+									onClick={() => setViewMode("category")}
+									type="button"
+								>
+									业务分类视角
+								</button>
+							</div>
+						) : null}
 						<div className="dmx-object-filters">
 							<select
 								aria-label="筛选数据域"
@@ -547,23 +646,23 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 							</div>
 						</div>
 						<div className="dmx-object-tree">
-							{groups.map(([group, models]) => {
-								const open = domainOpen[group] !== false;
+							{groups.map((group) => {
+								const open = domainOpen[group.key] !== false;
 								return (
-									<div key={group}>
+									<div key={group.key}>
 										<button
 											className="dmx-tree-domain"
 											disabled={saving}
-											onClick={() => setDomainOpen((current) => ({ ...current, [group]: !open }))}
+											onClick={() => setDomainOpen((current) => ({ ...current, [group.key]: !open }))}
 											type="button"
 										>
 											{open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-											<span>🌐</span>
-											<strong>{group}</strong>
-											<em>({models.length})</em>
+											<span>{group.kind === "category" ? "🗂" : group.kind === "domain" ? "🌐" : "▦"}</span>
+											<strong>{group.label}</strong>
+											<em>({group.models.length})</em>
 										</button>
 										{open
-											? models.map((model) => (
+											? group.models.map((model) => (
 													<button
 														className={`dmx-tree-model${selectedModel?.id === model.id ? " active" : ""}`}
 														disabled={saving}
@@ -591,8 +690,11 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 						{createOpen ? (
 							<div className="dmx-create-menu">
 								<strong>创建模型</strong>
-								<button disabled={saving} onClick={() => createModel("dimension-table")} type="button">
+								<button disabled={saving} onClick={() => createModel("dimension")} type="button">
 									创建维度
+								</button>
+								<button disabled={saving} onClick={() => createModel("dimension-table")} type="button">
+									创建维度表
 								</button>
 								<button disabled title="当前 ModelSpec 契约不拥有 ODS/STG 贴源对象" type="button">
 									创建贴源表（尚未接入）
@@ -637,6 +739,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 									setValidationErrors({});
 								}}
 								onDeleteField={deleteField}
+								onConfirmDimension={() => void confirmConceptVersion()}
 								onDialog={(nextDialog) => {
 									if (!savingRef.current) setDialog(nextDialog);
 								}}
@@ -682,6 +785,14 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 				dialog={dialog}
 				model={selectedModel}
 				onClose={() => setDialog(null)}
+			/>
+			<ConceptDimensionRecordDialog
+				canMaintain={canMaintain}
+				dialog={conceptDraft && (dialog === "versions" || dialog === "releases") ? dialog : null}
+				draft={conceptDraft}
+				onClose={() => setDialog(null)}
+				onConfirm={() => void confirmConceptVersion()}
+				saving={saving}
 			/>
 			<Toast message={message} />
 		</main>

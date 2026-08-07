@@ -1,4 +1,15 @@
-import { FileDown, Import, Link2, ListChecks, RefreshCw, Save, Settings2, ShieldCheck, Upload } from "lucide-react";
+import {
+	CheckCircle2,
+	FileDown,
+	Import,
+	Link2,
+	ListChecks,
+	RefreshCw,
+	Save,
+	Settings2,
+	ShieldCheck,
+	Upload,
+} from "lucide-react";
 import type {
 	DimensionDefinitionAttribute,
 	DimensionDefinitionView,
@@ -43,6 +54,7 @@ export type ModelingWorkbenchEditorProps = {
 	fieldRowIds: string[];
 	onChange: (draft: ModelDraft) => void;
 	onSave: () => void;
+	onConfirmDimension?: () => void;
 	onRefresh: () => void;
 	onDialog: (dialog: Exclude<WorkbenchDialog, null>) => void;
 	onAddFields: (count: number) => void;
@@ -550,6 +562,7 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 		dirty,
 		failureMessage,
 		onSave,
+		onConfirmDimension,
 		onRefresh,
 		onDialog,
 	} = props;
@@ -602,6 +615,17 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 					<Save size={15} />
 					{saving ? "保存中…" : "保存"}
 				</button>
+				{conceptDimension && draft.definitionBase?.status === "DRAFT" ? (
+					<button
+						disabled={!canMaintain || readOnly || saving}
+						onClick={onConfirmDimension}
+						title="确认后，该定义将成为维度表可绑定的当前定义"
+						type="button"
+					>
+						<CheckCircle2 size={15} />
+						确认定义
+					</button>
+				) : null}
 				{conceptDimension ? null : (
 					<>
 						<button disabled={saving || !persisted} onClick={() => onDialog("gates")} type="button">

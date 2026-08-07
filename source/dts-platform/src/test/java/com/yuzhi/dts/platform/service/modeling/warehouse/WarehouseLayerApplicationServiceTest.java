@@ -85,6 +85,18 @@ class WarehouseLayerApplicationServiceTest {
     }
 
     @Test
+    void createsCustomLayerWithoutNamingPrefixWithoutFailing() {
+        when(repository.codeExists("FIN_DETAIL")).thenReturn(false);
+
+        WarehouseLayerView view = service.create("alice", new CreateWarehouseLayerCommand("FIN_DETAIL", "财务明细层", "DWD", null, null));
+
+        assertThat(view.code()).isEqualTo("FIN_DETAIL");
+        assertThat(view.layerGroup()).isEqualTo(WarehouseLayerContract.LayerGroup.COMMON);
+        verify(repository).insert(any(StoredWarehouseLayer.class));
+        verify(audit).auditActionStrict(eq("MODELING_WAREHOUSE_LAYER_CREATE"), eq(AuditStage.SUCCESS), eq("FIN_DETAIL"), any());
+    }
+
+    @Test
     void rejectsCreationWhenCodeCollidesWithBuiltIn() {
         assertThatThrownBy(() -> service.create("alice", new CreateWarehouseLayerCommand("DWD", "内置", "DWD", null, null)))
             .isInstanceOf(WarehouseLayerException.class)

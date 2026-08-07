@@ -701,6 +701,27 @@
 	font-weight: 650;
 }
 
+.dmx-view-switch {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: 4px;
+	padding: 8px 10px 0;
+}
+.dmx-view-switch button {
+	height: 30px;
+	border: 1px solid #d4dbe5;
+	border-radius: 3px;
+	background: #fff;
+	color: var(--dmx-muted);
+	cursor: pointer;
+}
+.dmx-view-switch button.active {
+	border-color: var(--dmx-blue);
+	background: var(--dmx-blue-soft);
+	color: var(--dmx-blue);
+	font-weight: 650;
+}
+
 .dmx-object-filters {
 	display: grid;
 	gap: 8px;

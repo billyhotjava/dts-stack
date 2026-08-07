@@ -15,6 +15,7 @@ type RouteExpectation = {
 	path: string;
 	title: string;
 	section?: string;
+	group?: string;
 	marker: string;
 };
 
@@ -27,16 +28,39 @@ const representativeRoutes: RouteExpectation[] = [
 		marker: "新建业务分类",
 	},
 	{ path: "/data-modeling/planning/layers", title: "数仓分层", section: "数仓规划", marker: "新建数仓分层" },
-	{ path: "/data-modeling/planning/domains", title: "数据域", section: "数仓规划", marker: "新建数据域" },
-	{ path: "/data-modeling/planning/processes", title: "业务过程", section: "数仓规划", marker: "新建业务过程" },
-	{ path: "/data-modeling/planning/marts", title: "数据集市", section: "数仓规划", marker: "新建数据集市" },
-	{ path: "/data-modeling/planning/subjects", title: "主题域", section: "数仓规划", marker: "新建主题域" },
-	{ path: "/data-modeling/planning/spaces", title: "建模空间", section: "数仓规划", marker: "新建建模空间" },
+	{
+		path: "/data-modeling/planning/domains",
+		title: "数据域",
+		section: "数仓规划",
+		group: "公共层",
+		marker: "新建数据域",
+	},
+	{
+		path: "/data-modeling/planning/processes",
+		title: "业务过程",
+		section: "数仓规划",
+		group: "公共层",
+		marker: "新建业务过程",
+	},
+	{
+		path: "/data-modeling/planning/marts",
+		title: "数据集市",
+		section: "数仓规划",
+		group: "应用层",
+		marker: "新建数据集市",
+	},
+	{
+		path: "/data-modeling/planning/subjects",
+		title: "主题域",
+		section: "数仓规划",
+		group: "应用层",
+		marker: "新建主题域",
+	},
 	{
 		path: "/data-modeling/planning/system",
 		title: "规划参数配置",
 		section: "数仓规划",
-		marker: "新增配置",
+		marker: "当前版本尚未提供可维护的规划参数",
 	},
 	{ path: "/data-modeling/standards/fields", title: "字段标准", section: "数据标准", marker: "新建字段标准" },
 	{ path: "/data-modeling/standards/codes", title: "标准代码", section: "数据标准", marker: "新建标准代码" },
@@ -65,17 +89,17 @@ const representativeRoutes: RouteExpectation[] = [
 		section: "维度建模",
 		marker: "快速开始",
 	},
-	{ path: "/data-modeling/metrics/composite", title: "复合指标", section: "数据指标", marker: "复合指标基本信息" },
-	{ path: "/data-modeling/metrics/derived", title: "派生指标", section: "数据指标", marker: "派生指标基本信息" },
-	{ path: "/data-modeling/metrics/atomic", title: "原子指标", section: "数据指标", marker: "原子指标基本信息" },
-	{ path: "/data-modeling/metrics/modifiers", title: "修饰词", section: "数据指标", marker: "修饰词基本信息" },
-	{ path: "/data-modeling/metrics/periods", title: "时间周期", section: "数据指标", marker: "时间周期基本信息" },
-	{ path: "/data-modeling/tools/toolbox", title: "工具箱", section: "通用工具", marker: "模型批量导入" },
-	{ path: "/data-modeling/tools/imports", title: "导入记录", section: "通用工具", marker: "IMPORT-20260730-03" },
-	{ path: "/data-modeling/tools/exports", title: "导出记录", section: "通用工具", marker: "EXPORT-20260730-01" },
-	{ path: "/data-modeling/graphs/models", title: "模型关系", section: "关系图", marker: "monthly_execution_rate" },
-	{ path: "/data-modeling/graphs/standards", title: "标准关系", section: "关系图", marker: "ACCOUNT_CODE" },
-	{ path: "/data-modeling/graphs/metrics", title: "指标血缘", section: "关系图", marker: "monthly_execution_rate" },
+	{ path: "/data-modeling/metrics/composite", title: "复合指标", section: "数据指标", marker: "全部数据域" },
+	{ path: "/data-modeling/metrics/derived", title: "派生指标", section: "数据指标", marker: "全部数据域" },
+	{ path: "/data-modeling/metrics/atomic", title: "原子指标", section: "数据指标", marker: "全部数据域" },
+	{ path: "/data-modeling/metrics/modifiers", title: "修饰词", section: "数据指标", marker: "全部数据域" },
+	{ path: "/data-modeling/metrics/periods", title: "时间周期", section: "数据指标", marker: "全部数据域" },
+	{ path: "/data-modeling/tools/toolbox", title: "工具箱", section: "通用工具", marker: "执行与审计边界" },
+	{ path: "/data-modeling/tools/imports", title: "导入记录", section: "通用工具", marker: "真实流程" },
+	{ path: "/data-modeling/tools/exports", title: "导出记录", section: "通用工具", marker: "当前没有归属明确的建模导出流程" },
+	{ path: "/data-modeling/graphs/models", title: "模型关系", section: "关系图", marker: "查看规划、维度和模型对象之间的依赖关系" },
+	{ path: "/data-modeling/graphs/standards", title: "标准关系", section: "关系图", marker: "查看数据标准在模型和字段中的引用关系" },
+	{ path: "/data-modeling/graphs/metrics", title: "指标血缘", section: "关系图", marker: "追踪指标、模型字段和上游业务过程之间的血缘" },
 ];
 
 function collectApiObservations(page: Page): ApiObservation[] {
@@ -117,14 +141,31 @@ async function navigateThroughRealMenu(page: Page, route: RouteExpectation) {
 	const navigation = page.getByRole("navigation").first();
 	const target = navigation.locator(`a[href*="${route.path}"]`).last();
 	if (!(await target.isVisible())) {
-		for (const label of ["数据建模", route.section].filter((value): value is string => Boolean(value))) {
-			const control = navigation.getByText(label, { exact: true }).last();
-			if (await control.isVisible()) await control.click();
+		for (const label of ["数据建模", route.section, route.group].filter((value): value is string => Boolean(value))) {
 			if (await target.isVisible()) break;
+			const control = navigation.getByText(label, { exact: true }).last();
+			if (!(await control.isVisible())) continue;
+			const state = await control.evaluate((el) => {
+				let node = el as HTMLElement | null;
+				for (let i = 0; i < 8 && node; i++) {
+					node = node.parentElement;
+					const ds = node?.getAttribute?.("data-state");
+					if (ds) return ds;
+				}
+				return null;
+			});
+			// 已展开的祖先再点击会收起（Radix 切换）；只在 closed 时点击。
+			if (state !== "open") {
+				await control.click();
+				await page.waitForTimeout(250);
+			}
 		}
 	}
 	await expect(target, `${route.path} must be reachable from the real menu`).toBeVisible();
-	await target.click();
+	// 菜单在路由切换后会整体重渲染；用 dispatchEvent 触发导航，避免 click 的
+	// “element was detached” 重试死循环，然后以 URL 断言导航结果。
+	await target.dispatchEvent("click");
+	await expect(page).toHaveURL(new RegExp(`#${route.path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
 }
 
 function expectNoReadOnlyFailures(failures: Sprint79ReadOnlyFailures, consoleErrors: string[]) {
@@ -140,7 +181,7 @@ async function capture(page: Page, testInfo: TestInfo, name: string) {
 }
 
 test.describe("Sprint-84 prototype-owned data-modeling smoke", () => {
-	test("clicks the real menu and renders all 27 modeling leaves without writes", async ({ page }, testInfo) => {
+	test("clicks the real menu and renders all 26 modeling leaves without writes", async ({ page }, testInfo) => {
 		test.setTimeout(180_000);
 		await page.setViewportSize({ width: 1366, height: 768 });
 		const failures = await installSprint79ProductionReadOnlyBarrier(page);
@@ -216,11 +257,10 @@ test.describe("Sprint-84 prototype-owned data-modeling smoke", () => {
 		});
 		const observations = collectApiObservations(page);
 
-		await page.goto("/#/workbench");
-		const workbenchRoute = representativeRoutes.find((route) => route.path.endsWith("/dimensions/workbench"));
-		if (!workbenchRoute) throw new Error("dimension workbench route contract is missing");
-		await navigateThroughRealMenu(page, workbenchRoute);
-		await expectRealRoute(page, workbenchRoute);
+		// 窄视口下左侧菜单折叠，无法通过菜单锚点导航；菜单可达性已由桌面宽度用例覆盖，
+		// 本用例聚焦窄视口下工作台本身可用。
+		await page.goto("/#/data-modeling/dimensions/workbench");
+		await expect(page.locator('main[class*="dmx-"]').first().locator("h1")).toHaveText("维度建模");
 		const editor = page.locator(".dmx-model-editor");
 		const dimensionDefinitionResponsesBefore = observations.filter(
 			(observation) => observation.pathname === "/api/modeling/dimension-definitions",
