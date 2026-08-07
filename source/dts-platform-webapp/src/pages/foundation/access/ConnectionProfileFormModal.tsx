@@ -33,6 +33,7 @@ import jdbcDriversService, { type InfraJdbcDriver } from "@/api/services/jdbcDri
 import { Upload } from "@/components/upload";
 import { useRouter } from "@/routes/hooks";
 import { ConnectorDriverNotice } from "../components/ConnectorDriverNotice";
+import type { ApiAuthCatalogProvider } from "../dataSources/helpers";
 import {
 	asRecord,
 	buildApiAuthFieldInput,
@@ -51,6 +52,7 @@ import {
 	readApiAuthSecretRefs,
 	readApiBaseUrl,
 	readApiConfigPart,
+	resolveApiAuthCatalog,
 	stringifyJson,
 } from "../dataSources/helpers";
 
@@ -314,13 +316,7 @@ export default function ConnectionProfileFormModal({
 	const connectorUsesCustomDriver = selectedConnector?.driver?.status === "CUSTOM_REQUIRED";
 	const connectorDriverBlocked = selectedConnector?.driver?.status === "MISSING";
 
-	const apiAuthProviders = useMemo(
-		() =>
-			apiContract?.authProviders?.length
-				? apiContract.authProviders
-				: [{ id: "none", label: "无鉴权", description: "不向请求注入任何鉴权信息", fields: [] }],
-		[apiContract],
-	);
+	const apiAuthProviders = useMemo(() => resolveApiAuthCatalog(apiContract?.authProviders), [apiContract]);
 
 	const selectedApiAuthProvider = useMemo(
 		() =>
@@ -399,7 +395,10 @@ export default function ConnectionProfileFormModal({
 		form.setFieldsValue(next);
 	};
 
-	const buildApiSecrets = (values: Record<string, any>, descriptor?: ApiAuthProviderDescriptorDTO) => {
+	const buildApiSecrets = (
+		values: Record<string, any>,
+		descriptor?: ApiAuthProviderDescriptorDTO | ApiAuthCatalogProvider,
+	) => {
 		const secrets: Record<string, any> = {};
 		const secretValues = asRecord(values.apiAuthSecrets) || {};
 		(descriptor?.fields || []).forEach((field) => {
@@ -415,7 +414,7 @@ export default function ConnectionProfileFormModal({
 	const buildApiProps = (
 		values: Record<string, any>,
 		baseProps: Record<string, any> | undefined,
-		descriptor?: ApiAuthProviderDescriptorDTO,
+		descriptor?: ApiAuthProviderDescriptorDTO | ApiAuthCatalogProvider,
 	) => {
 		const baseUrl = String(values.apiBaseUrl || "").trim();
 		const authProvider = String(values.apiAuthProvider || "none").trim() || "none";
@@ -433,11 +432,24 @@ export default function ConnectionProfileFormModal({
 				.filter((field) => !field.sensitive || String(field.type || "").toLowerCase() === "secretref")
 				.map((field) => field.name),
 		);
-		const authConfig = cleanRecord(
+		let authConfig = cleanRecord(
 			configFieldNames.size
 				? Object.fromEntries(Object.entries(rawAuthConfig || {}).filter(([key]) => configFieldNames.has(key)))
 				: rawAuthConfig,
 		);
+		if (authProvider === "jwtLogin") {
+			const username = String(authConfig?.username ?? "").trim();
+			const jwtConfig = {
+				...(authConfig || {}),
+				...(username ? { loginBodyTemplate: JSON.stringify({ username, password: "{{secrets.password}}" }) } : {}),
+				tokenPath: String(authConfig?.tokenPath ?? "").trim() || "access_token",
+				loginMethod:
+					String(authConfig?.loginMethod ?? "")
+						.trim()
+						.toUpperCase() || "POST",
+			};
+			authConfig = jwtConfig;
+		}
 		const secretFieldNames = new Set(
 			(descriptor?.fields || [])
 				.filter((field) => field.sensitive && String(field.type || "").toLowerCase() !== "secretref")
@@ -542,7 +554,7 @@ export default function ConnectionProfileFormModal({
 			const apiSourceFlag = isApiSourceType(values.type);
 			const jdbc = !apiSourceFlag && isJdbcType(values.type, values.jdbcUrl);
 			let props = values.propsJson ? parseJson(values.propsJson) : undefined;
-			const selectedApiDescriptor = (apiContract?.authProviders || []).find(
+			const selectedApiDescriptor = apiAuthProviders.find(
 				(item) => String(item.id).toLowerCase() === String(values.apiAuthProvider || "none").toLowerCase(),
 			);
 			if (apiSourceFlag && selectedApiDescriptor?.enabled === false) {
