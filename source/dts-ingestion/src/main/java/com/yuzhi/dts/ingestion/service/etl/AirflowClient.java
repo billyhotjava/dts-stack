@@ -179,19 +179,43 @@ public class AirflowClient {
         if (!settings.enabled() || !StringUtils.hasText(settings.baseUrl()) || !StringUtils.hasText(dagId)) {
             throw new IllegalStateException("Airflow DAG state update is not configured: " + dagId);
         }
+        // A freshly published DAG file is parsed by the Airflow scheduler on its
+        // directory-scan interval (seconds). PATCHing before the first parse returns
+        // 404; retry briefly so admission does not fail on the deploy race. The
+        // background reconciliation loop still owns any longer-lived failure.
         URI uri = buildUri(settings, "/dags/" + dagId, null);
+        int maxAttempts = 15;
+        long retryDelayMillis = 2000L;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                HttpHeaders headers = defaultHeaders(settings);
+                HttpEntity<Map<String, Object>> entity = new HttpEntity<>(Map.of("is_paused", paused), headers);
+                restTemplate.exchange(uri, HttpMethod.PATCH, entity, Map.class);
+                return;
+            } catch (HttpStatusCodeException ex) {
+                int status = ex.getStatusCode().value();
+                if (status != 404 || attempt == maxAttempts) {
+                    LOG.warn("Airflow DAG state update failed status={} body={}", status, sanitized(ex.getResponseBodyAsString()));
+                    throw new IllegalStateException(
+                        "AIRFLOW_DAG_STATE_UPDATE_HTTP_FAILED: status=" + status
+                    );
+                }
+                LOG.info("Airflow DAG {} not parsed yet (attempt {}/{}), retrying in {}ms", dagId, attempt, maxAttempts, retryDelayMillis);
+                sleepQuietly(retryDelayMillis);
+            } catch (Exception ex) {
+                LOG.warn("Airflow DAG state update failed detail={}", sanitized(ex.getMessage()));
+                throw new IllegalStateException("AIRFLOW_DAG_STATE_UPDATE_FAILED");
+            }
+        }
+        throw new IllegalStateException("AIRFLOW_DAG_STATE_UPDATE_HTTP_FAILED: status=404");
+    }
+
+    private static void sleepQuietly(long millis) {
         try {
-            HttpHeaders headers = defaultHeaders(settings);
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(Map.of("is_paused", paused), headers);
-            restTemplate.exchange(uri, HttpMethod.PATCH, entity, Map.class);
-        } catch (HttpStatusCodeException ex) {
-            LOG.warn("Airflow DAG state update failed status={} body={}", ex.getStatusCode().value(), sanitized(ex.getResponseBodyAsString()));
-            throw new IllegalStateException(
-                "AIRFLOW_DAG_STATE_UPDATE_HTTP_FAILED: status=" + ex.getStatusCode().value()
-            );
-        } catch (Exception ex) {
-            LOG.warn("Airflow DAG state update failed detail={}", sanitized(ex.getMessage()));
-            throw new IllegalStateException("AIRFLOW_DAG_STATE_UPDATE_FAILED");
+            Thread.sleep(millis);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("AIRFLOW_DAG_STATE_UPDATE_INTERRUPTED", interrupted);
         }
     }
 

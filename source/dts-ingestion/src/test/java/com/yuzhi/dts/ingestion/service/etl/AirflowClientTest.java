@@ -59,6 +59,32 @@ class AirflowClientTest {
     }
 
     @Test
+    void setDagPausedRetriesWhenAirflowHasNotParsedTheFreshlyPublishedDag() {
+        server.expect(requestTo("http://airflow.example/api/v1/dags/ingestion_revision_45_task_12_revision_45"))
+            .andExpect(method(HttpMethod.PATCH))
+            .andRespond(withStatus(HttpStatus.NOT_FOUND).body("{\"detail\":\"Dag not found\"}"));
+        server.expect(requestTo("http://airflow.example/api/v1/dags/ingestion_revision_45_task_12_revision_45"))
+            .andExpect(method(HttpMethod.PATCH))
+            .andRespond(withStatus(HttpStatus.OK));
+
+        client.setDagPausedStrict("ingestion_revision_45_task_12_revision_45", false);
+
+        server.verify();
+    }
+
+    @Test
+    void setDagPausedFailsImmediatelyOnNonNotFoundErrors() {
+        server.expect(requestTo("http://airflow.example/api/v1/dags/orders"))
+            .andExpect(method(HttpMethod.PATCH))
+            .andRespond(withStatus(HttpStatus.FORBIDDEN));
+
+        assertThatThrownBy(() -> client.setDagPausedStrict("orders", true))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("AIRFLOW_DAG_STATE_UPDATE_HTTP_FAILED: status=403");
+        server.verify();
+    }
+
+    @Test
     void triggerFailureMustReturnStableMessageInsteadOfExternalResponseBody() {
         server.expect(requestTo("http://airflow.example/api/v1/dags/orders/dagRuns"))
             .andExpect(method(HttpMethod.POST))
