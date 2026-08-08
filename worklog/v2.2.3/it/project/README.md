@@ -48,6 +48,7 @@ Demo 选择“研发项目健康度”作为中性业务场景，以尽量少的
 | [02-data-governance-design.md](02-data-governance-design.md) | 源数据、标准、码表、维度、模型、质量和指标设计 |
 | [03-ui-runbook.md](03-ui-runbook.md) | 按当前 DTS UI 手工实施的顺序、入口和填写值 |
 | [04-acceptance-checklist.md](04-acceptance-checklist.md) | 正向、阻断、修复、权限、血缘、消费和运维验收 |
+| [06-model-ddl.md](06-model-ddl.md) | 6 个模型的 PostgreSQL DDL、字段注释与页面录入对照表（建表帮助） |
 | [05-local-validation-report.md](05-local-validation-report.md) | PostgreSQL/dbt 基线、阻断和修复的本地制品验证结果 |
 | [assets/model-field-matrix.csv](assets/model-field-matrix.csv) | 6 个模型的逐字段 UI 录入矩阵 |
 | [assets/demo-object-register.csv](assets/demo-object-register.csv) | 手工记录各模块实际 ID、状态和证据路径 |

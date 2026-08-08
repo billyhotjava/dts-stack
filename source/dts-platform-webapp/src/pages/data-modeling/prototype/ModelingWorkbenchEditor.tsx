@@ -47,6 +47,7 @@ export type ModelingWorkbenchEditorProps = {
 	dirty: boolean;
 	validationErrors: ModelDraftValidationErrors;
 	failureMessage: string;
+	editorAccessMessage: string;
 	fieldRowIds: string[];
 	onChange: (draft: ModelDraft) => void;
 	onSave: () => void;
@@ -208,8 +209,25 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 		definition,
 		currentOwnerId,
 	});
+	const categoryRoots = context.domains.filter((item) => !item.parentCode);
+	const selectedDomain = context.domains.find((item) => item.id === draft.domainId);
+	const selectedCategory = selectedDomain
+		? selectedDomain.parentCode
+			? context.domains.find((item) => item.code === selectedDomain.parentCode)
+			: selectedDomain
+		: undefined;
+	const categoryCode = selectedCategory?.code || "";
+	const domainOptions = context.domains.filter((item) => item.parentCode === categoryCode);
+	const implementationSourceValue =
+		draft.implementationInputMode === "GENERATED"
+			? draft.generationStrategyType
+			: draft.implementationInputMode;
+	const chooseCategory = (code: string) => {
+		const firstChild = context.domains.find((item) => item.parentCode === code);
+		patch({ domainId: firstChild?.id || "" });
+	};
 	const missingPersistedDomain = Boolean(
-		draft.base && draft.domainId && !context.domains.some((item) => item.id === draft.domainId),
+		draft.domainId && !domainOptions.some((item) => item.id === draft.domainId),
 	);
 	const missingPersistedDefinition = Boolean(
 		draft.base &&
@@ -224,11 +242,30 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 				<div className="dmx-workbench-editor__basic-grid">
 					<label>
 						<span>数仓分层</span>
-						<input aria-label="数仓分层" disabled value={presentation.warehouseLayer} />
+						<select
+							aria-label="数仓分层"
+							disabled={Boolean(draft.base)}
+							onChange={() => undefined}
+							value="公共层 / 维度层"
+						>
+							<option value="公共层 / 维度层">公共层 / 维度层</option>
+						</select>
 					</label>
 					<label>
 						<span>业务分类</span>
-						<input aria-label="业务分类" disabled value={presentation.businessCategory} />
+						<select
+							aria-label="业务分类"
+							disabled={Boolean(draft.base)}
+							onChange={(event) => chooseCategory(event.target.value)}
+							value={categoryCode}
+						>
+							<option value="">请选择业务分类</option>
+							{categoryRoots.map((item) => (
+								<option key={item.id} value={item.code}>
+									{item.name} · {item.code}
+								</option>
+							))}
+						</select>
 					</label>
 					<label>
 						<span className="required">数据域</span>
@@ -239,7 +276,7 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 							value={draft.domainId}
 						>
 							<option value="">请选择数据域</option>
-							{context.domains.map((item) => (
+							{domainOptions.map((item) => (
 								<option key={item.id} value={item.id}>
 									{item.name} · {item.code}
 								</option>
@@ -251,12 +288,20 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 							) : null}
 						</select>
 						<ValidationMessage message={validationErrors.domainId} />
+						{!missingPersistedDomain && categoryCode && !domainOptions.length ? (
+							<small>该业务分类下暂无数据域，请先在数仓规划中创建数据域。</small>
+						) : null}
 					</label>
 					<label>
 						<span>存储策略</span>
 						<select
 							aria-label="存储策略"
-							onChange={(event) => patch({ materialization: event.target.value })}
+							onChange={(event) =>
+								patch({
+									materialization: event.target.value,
+									loadStrategy: event.target.value === "incremental" ? "INCREMENTAL" : "FULL",
+								})
+							}
 							value={draft.materialization}
 						>
 							{DIMENSION_STORAGE_OPTIONS.map((item) => (
@@ -265,6 +310,37 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 								</option>
 							))}
 						</select>
+					</label>
+					<label>
+						<span>实现来源</span>
+						<select
+							aria-label="实现来源"
+							disabled={Boolean(draft.implementationBase)}
+							onChange={(event) =>
+								patch(
+									event.target.value === "DATE_DIMENSION"
+										? { implementationInputMode: "GENERATED", generationStrategyType: "DATE_DIMENSION" }
+										: { implementationInputMode: "", generationStrategyType: "" },
+								)
+							}
+							value={implementationSourceValue}
+						>
+							<option value="">待配置</option>
+							<option value="DATE_DIMENSION">受控日期维度生成器</option>
+							{draft.implementationInputMode === "PHYSICAL_ASSET" ? (
+								<option value="PHYSICAL_ASSET">已关联物理来源</option>
+							) : null}
+							{draft.implementationInputMode === "UPSTREAM_MODEL" ? (
+								<option value="UPSTREAM_MODEL">已关联上游模型</option>
+							) : null}
+						</select>
+						<small>
+							{draft.implementationBase
+								? `当前实现输入：${draft.implementationBase.inputMode}`
+								: draft.generationStrategyType === "DATE_DIMENSION"
+									? "保存时将创建受控日期维度数据实现。"
+									: "尚无数据实现；普通模型需先关联物理来源或上游模型。"}
+						</small>
 					</label>
 					<label>
 						<span className="required">维度</span>
@@ -276,8 +352,9 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 						>
 							<option value="">请选择维度</option>
 							{dimensionDefinitions.map((item) => (
-								<option key={item.id} value={item.id}>
+								<option disabled={item.status !== "CURRENT"} key={item.id} value={item.id}>
 									{item.name} · {item.systemCode}
+									{item.status === "DRAFT" ? "（草稿，需先确认定义）" : ""}
 								</option>
 							))}
 							{missingPersistedDefinition ? (
@@ -293,6 +370,8 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 							</small>
 						) : !dimensionDefinitions.length && !missingPersistedDefinition ? (
 							<small>当前数据域暂无维度，请先创建维度。</small>
+						) : dimensionDefinitions.every((item) => item.status !== "CURRENT") ? (
+							<small>当前数据域有 {dimensionDefinitions.length} 个未确认维度，请先“确认定义”后再绑定。</small>
 						) : null}
 					</label>
 					<label>
@@ -307,6 +386,9 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 							value={draft.physicalName}
 						/>
 						<ValidationMessage message={validationErrors.physicalName} />
+						{draft.base && !draft.physicalName.trim() ? (
+							<small>历史草稿尚未保存物理表名，请补录后保存。</small>
+						) : null}
 					</label>
 					<label>
 						<span className="required">表中文名</span>
@@ -322,12 +404,13 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 						<input aria-label="负责人" disabled value={presentation.owner} />
 					</label>
 					<label className="dmx-workbench-editor__wide-field">
-						<span>描述</span>
+						<span className="required">描述（维度定义）</span>
 						<textarea
 							aria-label="描述"
 							onChange={(event) => patch({ description: event.target.value })}
 							value={draft.description}
 						/>
+						<ValidationMessage message={validationErrors.description} />
 					</label>
 				</div>
 			</section>
@@ -453,6 +536,7 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 		saving,
 		dirty,
 		failureMessage,
+		editorAccessMessage,
 		onSave,
 		onConfirmDimension,
 		onRefresh,
@@ -480,6 +564,11 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 				</div>
 			) : null}
 			{representationFailure ? <div className="dmx-capability-note">{representationFailure}</div> : null}
+			{editorAccessMessage ? (
+				<output className="dmx-editor-access-note">
+					{editorAccessMessage}
+				</output>
+			) : null}
 			<div className="dmx-editor-toolbar" role="toolbar">
 				<button
 					className="primary"

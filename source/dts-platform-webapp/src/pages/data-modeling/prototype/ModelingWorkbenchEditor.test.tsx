@@ -38,6 +38,10 @@ const makeDraft = (patch: Partial<ModelSpecDraft> = {}): ModelSpecDraft => ({
 	dimensionDefinitionId: "dimension-1",
 	standardBindings: [],
 	warehouseLayerCode: "DWD",
+	implementationBase: null,
+	implementationInputMode: "",
+	generationStrategyType: "",
+	implementationIdempotencyKey: "implementation-draft-1",
 	...patch,
 });
 
@@ -124,6 +128,7 @@ const makeProps = (patch: Partial<ModelingWorkbenchEditorProps> = {}): ModelingW
 	dirty: true,
 	validationErrors: {},
 	failureMessage: "",
+	editorAccessMessage: "",
 	fieldRowIds: ["field-1"],
 	onChange: vi.fn(),
 	onSave: vi.fn(),
@@ -294,6 +299,52 @@ describe("ModelingWorkbenchEditor", () => {
 		expect(tableName?.closest("label")?.textContent).toContain("表名只能使用小写字母、数字和下划线");
 	});
 
+	it("keeps a missing persisted table name editable and explains the required backfill", async () => {
+		await render(
+			makeProps({
+				draft: makeDraft({ base: { status: "DRAFT" } as ModelSpecView, physicalName: "" }),
+			}),
+		);
+
+		const tableName = container.querySelector<HTMLInputElement>('input[aria-label="表名"]');
+		expect(tableName).toHaveProperty("disabled", false);
+		expect(tableName?.closest("label")?.textContent).toContain("历史草稿尚未保存物理表名，请补录后保存");
+	});
+
+	it("shows the reason for a read-only editor instead of a silent disabled form", async () => {
+		await render(
+			makeProps({
+				readOnly: true,
+				editorAccessMessage: "当前版本为 PUBLISHED，只能查看；请创建新的草稿版本后修改。",
+			}),
+		);
+
+		expect(container.querySelector("output.dmx-editor-access-note")?.textContent).toContain("PUBLISHED");
+		expect(container.querySelector("fieldset")).toHaveProperty("disabled", true);
+	});
+
+	it("requires an explicit controlled generator choice for a new date implementation", async () => {
+		const props = makeProps({
+			draft: makeDraft({ implementationBase: null, implementationInputMode: "", generationStrategyType: "" }),
+		});
+		await render(props);
+
+		const source = container.querySelector<HTMLSelectElement>('select[aria-label="实现来源"]');
+		expect(source).toBeDefined();
+		expect(source?.value).toBe("");
+		await act(async () => {
+			if (!source) return;
+			source.value = "DATE_DIMENSION";
+			source.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+		expect(props.onChange).toHaveBeenCalledWith(
+			expect.objectContaining({
+				implementationInputMode: "GENERATED",
+				generationStrategyType: "DATE_DIMENSION",
+			}),
+		);
+	});
+
 	it("freezes editor mutations and toolbar actions while saving", async () => {
 		const selectedModel = { id: "model-1", compatibilityMode: "CANONICAL" } as ModelSpecView;
 		await render(makeProps({ saving: true, selectedModel }));
@@ -303,18 +354,18 @@ describe("ModelingWorkbenchEditor", () => {
 			expect(button(label)).toHaveProperty("disabled", true);
 	});
 
-	it("keeps authority fields disabled while dimension draft values remain editable", async () => {
+	it("keeps dimension draft selects editable and authority inputs disabled", async () => {
 		await render();
 
-		for (const label of ["业务分类", "表名规则", "生命周期", "负责人"])
-			expect(container.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)).toHaveProperty(
-				"disabled",
-				true,
-			);
-		for (const label of ["数据域", "存储策略", "维度"])
+		for (const label of ["数仓分层", "业务分类", "数据域", "存储策略", "维度"])
 			expect(container.querySelector<HTMLSelectElement>(`select[aria-label="${label}"]`)).toHaveProperty(
 				"disabled",
 				false,
+			);
+		for (const label of ["表名规则", "生命周期", "负责人"])
+			expect(container.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)).toHaveProperty(
+				"disabled",
+				true,
 			);
 		for (const label of ["表名", "表中文名"])
 			expect(container.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)).toHaveProperty(

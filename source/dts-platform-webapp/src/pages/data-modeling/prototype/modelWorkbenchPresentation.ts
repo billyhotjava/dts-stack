@@ -70,7 +70,11 @@ export function resolveDimensionFormPresentation({
 	definition,
 	currentOwnerId,
 }: DimensionFormPresentationInput): DimensionFormPresentation {
-	const retentionDays = draft.base?.implementationPolicy?.retentionDays;
+	const implementationRetention = draft.implementationBase?.settings?.retentionDays;
+	const retentionDays =
+		typeof implementationRetention === "number"
+			? implementationRetention
+			: draft.base?.implementationPolicy?.retentionDays;
 	const owner = definition?.ownerId || (!draft.base ? currentOwnerId : "");
 
 	return {
@@ -106,6 +110,8 @@ export function modelDraftFingerprint(draft: ModelDraft): string {
 		reuseScope: draft.reuseScope,
 		dimensionDefinitionId: draft.dimensionDefinitionId,
 		standardBindings: draft.standardBindings,
+		implementationInputMode: draft.implementationInputMode,
+		generationStrategyType: draft.generationStrategyType,
 	});
 }
 

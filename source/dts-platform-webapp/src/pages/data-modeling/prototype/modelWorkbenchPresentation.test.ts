@@ -30,6 +30,11 @@ const makeDraft = (patch: Partial<ModelSpecDraft> = {}): ModelSpecDraft => ({
 	reuseScope: "DOMAIN",
 	dimensionDefinitionId: "dimension-1",
 	standardBindings: [],
+	warehouseLayerCode: "DWD",
+	implementationBase: null,
+	implementationInputMode: "",
+	generationStrategyType: "",
+	implementationIdempotencyKey: "implementation-draft-1",
 	...patch,
 });
 

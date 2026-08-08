@@ -5,7 +5,7 @@ import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Con
 import {
 	conceptDimensionDraftFromView,
 	confirmDimensionDefinitionDraft,
-	loadCurrentDimensionDefinitions,
+	loadDimensionDefinitionOptions,
 	type ConceptDimensionDraft,
 	type ModelDraft,
 } from "./services/modelWorkbenchService";
@@ -100,14 +100,15 @@ export function useConceptDimensionWorkflow({
 		}
 		let active = true;
 		setDimensionDefinitionFailure("");
-		void loadCurrentDimensionDefinitions(draftDomainId)
+		void loadDimensionDefinitionOptions(draftDomainId)
 			.then((items) => {
 				if (!active) return;
 				setDimensionDefinitions(items);
-				if (!draftBase && draftCreateKind === "dimension-table" && !draftDimensionDefinitionId && items[0]) {
+				const firstCurrent = items.find((item) => item.status === "CURRENT");
+				if (!draftBase && draftCreateKind === "dimension-table" && !draftDimensionDefinitionId && firstCurrent) {
 					setDraft((current) =>
 						current && current.createKind === "dimension-table"
-							? { ...current, dimensionDefinitionId: items[0].id }
+							? { ...current, dimensionDefinitionId: firstCurrent.id }
 							: current,
 					);
 				}

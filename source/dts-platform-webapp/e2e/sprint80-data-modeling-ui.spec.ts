@@ -150,11 +150,8 @@ test.describe("Sprint-80 prototype-driven data modeling UI", () => {
 	test("keeps save, submit, publish, and materialization fail-closed without a persisted draft", async ({ page }) => {
 		await page.goto("/#/data-modeling/dimensions/workbench");
 		await expect(page.getByTestId("data-modeling-page").locator("h1")).toHaveText("维度建模");
-		// 无选中模型时不渲染可写编辑器；写动作随草稿存在而出现、随未持久化而禁用。
-		await expect(page.getByText("请选择模型")).toBeVisible();
-		await expect(page.getByRole("button", { name: "保存" })).toHaveCount(0);
-		await expect(page.getByRole("button", { name: "提交" })).toHaveCount(0);
-		await expect(page.getByRole("button", { name: "发布" })).toHaveCount(0);
+		// 测试租户目录可能已有保存对象（工作台会自动选中），不再断言空态；
+		// 写动作的 fail-closed 通过下方“新草稿”断言覆盖，不依赖目录状态。
 
 		// 概念维度：新草稿无变更时保存禁用；未持久化时不出现确认定义/提交/发布。
 		await page.getByRole("button", { name: "新建" }).click();

@@ -133,6 +133,7 @@ describe("prototype-owned data modeling frontend", () => {
 		const modeling = read("./prototype/ModelingWorkbenchPage.tsx");
 		const editor = read("./prototype/ModelingWorkbenchEditor.tsx");
 		const fieldTable = read("./prototype/ModelFieldEditorTable.tsx");
+		const workbenchService = read("./prototype/services/modelWorkbenchService.ts");
 		const modelingLineCount = modeling.trimEnd().split("\n").length;
 
 		for (const label of [
@@ -156,6 +157,10 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(modeling).toMatch(/useConceptDimensionWorkflow|confirmConceptVersion/);
 		expect(modeling).toMatch(/ConceptDimensionRecordDialog/);
 		expect(modeling).toMatch(/saveModelDraft/);
+		expect(modeling).toMatch(/ModelWorkbenchCatalogList|catalogMode/);
+		expect(modeling).toMatch(/loadModelWorkbenchDraft/);
+		expect(modeling).not.toContain("await load(saved.id)");
+		expect(workbenchService).toMatch(/saveModelImplementation|targetPhysicalName/);
 		expect(modeling).toMatch(/isConceptDimensionDraft/);
 		expect(modeling).toMatch(/conceptDimensionDraftFromView/);
 		expect(modeling).toMatch(/\{selectedModel\?\.modelType === "FACT" \? \(\s*<aside className="dmx-record-rail"/s);
@@ -173,6 +178,7 @@ describe("prototype-owned data modeling frontend", () => {
 		const catalogEditors = read("./prototype/PlanningCatalogEditors.tsx");
 		const planningSidebar = read("./prototype/PlanningSidebar.tsx");
 		const modeling = read("./prototype/ModelingWorkbenchPage.tsx");
+		const catalogPanel = read("./prototype/ModelWorkbenchCatalogPanel.tsx");
 		const widgets = read("./prototype/WorkbenchCatalogWidgets.tsx");
 		const catalogActions = read("./prototype/useCatalogActions.ts");
 		const modelDialogs = read("./prototype/ModelWorkbenchDialog.tsx");
@@ -190,7 +196,7 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(catalogEditors).toMatch(/CatalogDomainForm|listPlanningCatalogDomains/);
 		expect(planningSidebar).not.toContain("建模空间");
 		expect(modeling).toMatch(/saveModelDraft|ModelWorkbenchDialog/);
-		expect(modeling).toMatch(/WorkbenchCreateMenu|WorkbenchModelRow/);
+		expect(catalogPanel).toMatch(/WorkbenchCreateMenu|WorkbenchCatalogTree/);
 		expect(widgets).toMatch(/onCreate\("dimension"\)/);
 		expect(widgets).toContain('kind: "dimension-table"');
 		expect(widgets).toContain("创建贴源表（尚未接入）");
@@ -202,7 +208,7 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(modeling).toMatch(/fieldRowIds|key=\{fieldRowIds\[index\]\}/);
 		expect(modeling).toMatch(/dataDomains/);
 		expect(modeling).toMatch(/buildWorkbenchCatalogGroups|workbenchCatalogEmptyMessage/);
-		expect(modeling).toMatch(/数据域视角|业务分类视角/);
+		expect(catalogPanel).toMatch(/数据域视角|业务分类视角/);
 		expect(modeling).toMatch(/effectiveView/);
 		expect(widgets).toContain("概念模型");
 		expect(widgets).toContain("逻辑模型");

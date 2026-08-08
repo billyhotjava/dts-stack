@@ -82,6 +82,104 @@
 	background: var(--dmx-canvas);
 }
 
+.dmx-editor-access-note {
+	margin: 10px 16px 0;
+	padding: 9px 12px;
+	border: 1px solid #f2ce83;
+	border-radius: 4px;
+	background: #fff8e8;
+	color: #795600;
+	font-size: 13px;
+}
+
+.dmx-model-list-workspace {
+	min-height: 620px;
+	border: 1px solid var(--dmx-border);
+	border-radius: 4px;
+	background: var(--dmx-surface);
+	overflow: hidden;
+}
+
+.dmx-model-list-workspace > header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	padding: 18px 20px;
+	border-bottom: 1px solid var(--dmx-border);
+}
+
+.dmx-model-list-workspace h2,
+.dmx-model-list-workspace p {
+	margin: 0;
+}
+
+.dmx-model-list-workspace p {
+	margin-top: 4px;
+	color: var(--dmx-muted);
+	font-size: 13px;
+}
+
+.dmx-model-list-workspace button,
+.dmx-model-list-toolbar label {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+}
+
+.dmx-model-list-workspace button {
+	min-height: 32px;
+	padding: 5px 11px;
+	border: 1px solid var(--dmx-border);
+	border-radius: 3px;
+	background: var(--dmx-surface);
+	color: var(--dmx-ink);
+	cursor: pointer;
+}
+
+.dmx-model-list-toolbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 14px;
+	padding: 14px 20px;
+}
+
+.dmx-model-list-toolbar label {
+	width: min(520px, 100%);
+	padding: 0 10px;
+	border: 1px solid var(--dmx-border);
+	border-radius: 3px;
+}
+
+.dmx-model-list-toolbar input {
+	width: 100%;
+	min-height: 34px;
+	border: 0;
+	outline: 0;
+	background: transparent;
+	color: var(--dmx-ink);
+}
+
+.dmx-model-list-toolbar > span {
+	color: var(--dmx-muted);
+	font-size: 13px;
+	white-space: nowrap;
+}
+
+.dmx-model-list-table {
+	margin: 0 20px 20px;
+}
+
+.dmx-model-list-table table {
+	min-width: 900px;
+}
+
+.dmx-model-list-table .dmx-table-action {
+	border-color: transparent;
+	color: var(--dmx-primary);
+}
+
 @media (max-width: 900px) {
 	.dmx-workbench-editor__basic-grid {
 		grid-template-columns: minmax(0, 1fr);
@@ -89,5 +187,15 @@
 
 	.dmx-workbench-editor__wide-field {
 		grid-column: auto;
+	}
+
+	.dmx-model-list-workspace > header,
+	.dmx-model-list-toolbar {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.dmx-model-list-toolbar > span {
+		align-self: flex-end;
 	}
 }

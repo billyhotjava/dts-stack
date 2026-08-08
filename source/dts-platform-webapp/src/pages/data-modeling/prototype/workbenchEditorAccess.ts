@@ -1,0 +1,43 @@
+import type { ModelDraft } from "./services/modelWorkbenchService";
+
+export type WorkbenchEditorMode = "CREATE_DRAFT" | "EDIT_DRAFT" | "VIEW_VERSION" | "LEGACY_READONLY" | "NO_PERMISSION";
+
+export type WorkbenchEditorAccess = {
+	mode: WorkbenchEditorMode;
+	readOnly: boolean;
+	message: string;
+};
+
+export function resolveWorkbenchEditorAccess(canMaintain: boolean, draft: ModelDraft | null): WorkbenchEditorAccess {
+	if (!canMaintain) {
+		return {
+			mode: "NO_PERMISSION",
+			readOnly: true,
+			message: "当前账号仅有查看权限，不能修改模型。",
+		};
+	}
+	if (!draft) return { mode: "VIEW_VERSION", readOnly: true, message: "" };
+	if (draft.createKind === "dimension") {
+		if (!draft.definitionBase) return { mode: "CREATE_DRAFT", readOnly: false, message: "" };
+		if (draft.definitionBase.status === "DRAFT") return { mode: "EDIT_DRAFT", readOnly: false, message: "" };
+		return {
+			mode: "VIEW_VERSION",
+			readOnly: true,
+			message: `当前维度定义为 ${draft.definitionBase.status}，只能查看；如需调整请新建维度草稿。`,
+		};
+	}
+	if (!draft.base) return { mode: "CREATE_DRAFT", readOnly: false, message: "" };
+	if (draft.base.compatibilityMode === "LEGACY_READONLY") {
+		return {
+			mode: "LEGACY_READONLY",
+			readOnly: true,
+			message: "该模型使用历史兼容契约，只能查看，不能在当前工作台修改。",
+		};
+	}
+	if (draft.base.status === "DRAFT") return { mode: "EDIT_DRAFT", readOnly: false, message: "" };
+	return {
+		mode: "VIEW_VERSION",
+		readOnly: true,
+		message: `当前模型版本为 ${draft.base.status}，只能查看；请进入版本流程创建新的草稿版本后修改。`,
+	};
+}

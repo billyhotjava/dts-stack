@@ -4,11 +4,13 @@ import {
 	listDimensionDefinitions,
 	updateDimensionDefinition,
 } from "@/api/dimensionDefinitionApi";
+import { saveModelImplementation } from "@/api/modelImplementationApi";
 import { listModelFieldStandardOptions, type ModelFieldStandardOption } from "@/api/modelingStandardsApi";
 import {
 	type CreateDimensionModelCommand,
 	createDimensionModel,
 	createModelSpec,
+	getModelLifecycle,
 	listModelSpecs,
 	updateModelSpec,
 } from "@/api/modelSpecApi";
@@ -20,6 +22,13 @@ import type {
 	DimensionDefinitionReuseScope,
 	DimensionDefinitionView,
 } from "@/features/modeling/contracts/dimensionDefinitionContract";
+import type {
+	GeneratedImplementationInput,
+	ModelImplementationInput,
+	ModelImplementationInputMode,
+	ModelImplementationView,
+	ModelImplementationWriteCommand,
+} from "@/features/modeling/contracts/modelImplementationContract";
 import {
 	type CanonicalModelSpecView,
 	type ModelSpecField,
@@ -85,6 +94,10 @@ export type ModelSpecDraft = {
 	dimensionDefinitionId: string;
 	standardBindings: ModelSpecStandardBinding[];
 	warehouseLayerCode: string;
+	implementationBase: ModelImplementationView | null;
+	implementationInputMode: ModelImplementationInputMode | "";
+	generationStrategyType: "" | "DATE_DIMENSION";
+	implementationIdempotencyKey: string;
 };
 
 export type ModelDraft = ConceptDimensionDraft | ModelSpecDraft;
@@ -100,6 +113,12 @@ export const isDimensionTableDraft = (draft: ModelDraft): draft is ModelSpecDraf
 export type ModelSaveContext = {
 	ownerId: string;
 	dimensionDefinitions: DimensionDefinitionView[];
+	models?: ModelSpecView[];
+};
+
+export type ModelDraftSaveResult = {
+	model: CanonicalModelSpecView;
+	implementation: ModelImplementationView | null;
 };
 
 export type ModelDraftErrorKey =
@@ -107,6 +126,7 @@ export type ModelDraftErrorKey =
 	| "dimensionDefinitionId"
 	| "physicalName"
 	| "name"
+	| "description"
 	| "grainStatement"
 	| "fields";
 
@@ -136,11 +156,15 @@ export function emptyModelDraft(kind: ModelCreateKind, context: ModelWorkbenchCo
 		};
 	}
 	const config = MODEL_KIND_CONFIG[kind];
+	const defaultDomainId =
+		kind === "dimension-table"
+			? context.domains.find((item) => Boolean(item.parentCode))?.id || context.domains[0]?.id || ""
+			: context.domains[0]?.id || "";
 	return {
 		createKind: kind,
 		base: null,
 		planId: "",
-		domainId: context.domains[0]?.id || "",
+		domainId: defaultDomainId,
 		name: "",
 		description: "",
 		physicalName: "",
@@ -154,6 +178,10 @@ export function emptyModelDraft(kind: ModelCreateKind, context: ModelWorkbenchCo
 		dimensionDefinitionId: "",
 		standardBindings: [],
 		warehouseLayerCode: config.layer,
+		implementationBase: null,
+		implementationInputMode: "",
+		generationStrategyType: "",
+		implementationIdempotencyKey: crypto.randomUUID(),
 	};
 }
 
@@ -171,7 +199,31 @@ export function conceptDimensionDraftFromView(definition: DimensionDefinitionVie
 	};
 }
 
-export function modelDraftFromView(model: ModelSpecView): ModelSpecDraft {
+const implementationSetting = (implementation: ModelImplementationView | null, key: string): unknown =>
+	implementation?.settings?.[key];
+
+const implementationText = (implementation: ModelImplementationView | null, key: string): string => {
+	const value = implementationSetting(implementation, key);
+	return typeof value === "string" ? value : "";
+};
+
+const implementationStringList = (implementation: ModelImplementationView | null, key: string): string[] => {
+	const value = implementationSetting(implementation, key);
+	return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+};
+
+const generatedInput = (implementation: ModelImplementationView | null): GeneratedImplementationInput | null => {
+	if (implementation?.inputMode !== "GENERATED") return null;
+	const input = implementation.inputs[0];
+	return input && "generatorType" in input ? input : null;
+};
+
+export function modelDraftFromView(
+	model: ModelSpecView,
+	implementation: ModelImplementationView | null = null,
+): ModelSpecDraft {
+	const implementationLoadStrategy = implementationText(implementation, "loadStrategy");
+	const generationStrategyType = generatedInput(implementation)?.generatorType || model.generationStrategy?.type || "";
 	return {
 		createKind: modelKind(model),
 		base: model,
@@ -179,18 +231,34 @@ export function modelDraftFromView(model: ModelSpecView): ModelSpecDraft {
 		domainId: model.domainId || "",
 		name: model.name,
 		description: model.description || "",
-		physicalName: model.implementationPolicy?.physicalName || "",
-		materialization: model.materialization || "table",
+		physicalName: implementationText(implementation, "targetPhysicalName") || model.implementationPolicy?.physicalName || "",
+		materialization: implementation?.materialization || model.materialization || "table",
 		grainStatement: model.grain?.statement || "",
 		fields: model.fields.map((field) => ({ ...field })),
-		partitionFields: model.implementationPolicy?.partitionFields?.join(",") || "",
-		loadStrategy: model.implementationPolicy?.loadStrategy || "FULL",
+		partitionFields:
+			implementationStringList(implementation, "partitionFields").join(",") ||
+			model.implementationPolicy?.partitionFields?.join(",") ||
+			"",
+		loadStrategy:
+			implementationLoadStrategy === "INCREMENTAL" || implementationLoadStrategy === "SNAPSHOT"
+				? implementationLoadStrategy
+				: model.implementationPolicy?.loadStrategy || "FULL",
 		scdType: model.dimensionProfile?.scdPolicy.type || "NONE",
 		reuseScope: model.dimensionProfile?.reuseScope === "TENANT" ? "TENANT" : "DOMAIN",
 		dimensionDefinitionId: model.dimensionDefinitionRef?.dimensionDefinitionId || "",
 		standardBindings: model.standardBindings.map((binding) => ({ ...binding })),
 		warehouseLayerCode: model.warehouseLayerCode || model.layer,
+		implementationBase: implementation,
+		implementationInputMode:
+			implementation?.inputMode || (generationStrategyType === "DATE_DIMENSION" ? "GENERATED" : ""),
+		generationStrategyType: generationStrategyType === "DATE_DIMENSION" ? "DATE_DIMENSION" : "",
+		implementationIdempotencyKey: crypto.randomUUID(),
 	};
+}
+
+export async function loadModelWorkbenchDraft(model: ModelSpecView): Promise<ModelSpecDraft> {
+	const lifecycle = await getModelLifecycle(model.id);
+	return modelDraftFromView(model, lifecycle.implementation);
 }
 
 export async function loadModelWorkbenchContext(): Promise<ModelWorkbenchContext> {
@@ -210,8 +278,16 @@ export async function loadModelWorkbenchContext(): Promise<ModelWorkbenchContext
 	};
 }
 
-export const loadCurrentDimensionDefinitions = (domainId: string) =>
-	domainId ? listDimensionDefinitions({ domainId, status: "CURRENT", offset: 0, limit: 100 }) : Promise.resolve([]);
+/**
+ * 维度表可绑定的维度选项：返回数据域下全部未退役定义（DRAFT/CURRENT），
+ * 由编辑器区分“现行（可绑定）”与“草稿（需先确认定义）”。
+ */
+export const loadDimensionDefinitionOptions = (domainId: string) =>
+	domainId
+		? listDimensionDefinitions({ domainId, offset: 0, limit: 100 }).then((items) =>
+				items.filter((definition) => definition.status !== "RETIRED"),
+			)
+		: Promise.resolve([]);
 
 const isDimensionDraft = (draft: ModelSpecDraft): boolean => draft.createKind === "dimension-table";
 
@@ -301,6 +377,7 @@ export function validateModelDraftInput(draft: ModelSpecDraft): ModelDraftValida
 		if (!/^[a-z][a-z0-9_]*$/.test(draft.physicalName.trim())) {
 			errors.physicalName = "表名只能使用小写字母、数字和下划线，且必须以字母开头";
 		}
+		if (!draft.description.trim()) errors.description = "请填写维度定义（描述）";
 	} else if (!draft.grainStatement.trim()) {
 		errors.grainStatement = "请填写模型粒度";
 	}
@@ -345,7 +422,12 @@ const buildUpdate = (draft: ModelSpecDraft): UpdateModelSpecCommand => {
 		grain: { statement: draft.grainStatement.trim(), keys: keyNames },
 		factShape: config.modelType === "FACT" ? base?.factShape || "TRANSACTION" : null,
 		timeSemantics: config.modelType === "FACT" ? base?.timeSemantics || null : null,
-		generationStrategy: config.modelType === "DIMENSION" ? base?.generationStrategy || null : null,
+		generationStrategy:
+			config.modelType === "DIMENSION"
+				? draft.generationStrategyType
+					? { type: draft.generationStrategyType, reference: null }
+					: base?.generationStrategy || null
+				: null,
 		dimensionProfile:
 			config.modelType === "DIMENSION"
 				? {
@@ -384,10 +466,112 @@ const validateDraft = (draft: ModelSpecDraft, update: UpdateModelSpecCommand) =>
 		throw new Error(issues.map((issue) => `${issue.field}：${issue.message || issue.code}`).join("；"));
 };
 
+type ResolvedImplementationInputs = {
+	inputMode: ModelImplementationInputMode;
+	inputs: ModelImplementationInput[];
+};
+
+const implementationInputs = (
+	draft: ModelSpecDraft,
+	context: ModelSaveContext,
+): ResolvedImplementationInputs | null => {
+	if (draft.implementationBase) {
+		return {
+			inputMode: draft.implementationBase.inputMode,
+			inputs: draft.implementationBase.inputs,
+		};
+	}
+	if (draft.implementationInputMode === "GENERATED" && draft.generationStrategyType === "DATE_DIMENSION") {
+		return {
+			inputMode: "GENERATED",
+			inputs: [{ generatorType: "DATE_DIMENSION", config: {} }],
+		};
+	}
+	const sourceRefs = draft.base?.sourceRefs || [];
+	const resolvedSourceRefs = sourceRefs.flatMap((source) =>
+		typeof source.sourceBindingId === "string" &&
+		source.sourceBindingId.trim() &&
+		typeof source.resolvedVersion === "string" &&
+		source.resolvedVersion.trim()
+			? [{ sourceBindingId: source.sourceBindingId, resolvedVersion: source.resolvedVersion }]
+			: [],
+	);
+	if (sourceRefs.length && resolvedSourceRefs.length === sourceRefs.length) {
+		return {
+			inputMode: "PHYSICAL_ASSET",
+			inputs: resolvedSourceRefs,
+		};
+	}
+	const dependencies = draft.base?.dependsOn || [];
+	if (dependencies.length) {
+		const models = context.models || [];
+		const inputs = dependencies.map((dependency) => {
+			const model = models.find(
+				(item) => item.id === dependency.modelSpecId && item.revision === dependency.revision,
+			);
+			return model
+				? { modelSpecId: model.id, revision: model.revision, checksum: model.checksum }
+				: { modelSpecId: dependency.modelSpecId, revision: dependency.revision, checksum: "" };
+		});
+		if (inputs.every((input) => input.checksum)) return { inputMode: "UPSTREAM_MODEL", inputs };
+	}
+	return null;
+};
+
+const implementationNeedsSave = (draft: ModelSpecDraft): boolean => {
+	if (draft.implementationBase?.ownership === "DESIGNER_GENERATED") return true;
+	if (draft.implementationBase?.ownership === "DBT_MANAGED") {
+		return (
+			draft.physicalName.trim() !== implementationText(draft.implementationBase, "targetPhysicalName") ||
+			draft.loadStrategy !== implementationText(draft.implementationBase, "loadStrategy") ||
+			draft.partitionFields.trim() !==
+				implementationStringList(draft.implementationBase, "partitionFields").join(",") ||
+			draft.materialization !== draft.implementationBase.materialization
+		);
+	}
+	const legacy = draft.base?.implementationPolicy;
+	return (
+		Boolean(draft.generationStrategyType) ||
+		draft.physicalName.trim() !== (legacy?.physicalName || "") ||
+		draft.loadStrategy !== (legacy?.loadStrategy || "FULL") ||
+		draft.partitionFields.trim() !== (legacy?.partitionFields?.join(",") || "")
+	);
+};
+
+const buildImplementationCommand = (
+	draft: ModelSpecDraft,
+	model: CanonicalModelSpecView,
+	resolved: ResolvedImplementationInputs,
+): ModelImplementationWriteCommand => {
+	const materialization = draft.loadStrategy === "INCREMENTAL" ? "incremental" : draft.materialization;
+	if (!new Set(["table", "view", "incremental"]).has(materialization)) {
+		throw new Error("当前数据实现仅支持表、视图或增量物化方式");
+	}
+	return {
+		inputMode: resolved.inputMode,
+		inputs: resolved.inputs as never,
+		fieldMappings: draft.implementationBase?.fieldMappings || [],
+		settings: {
+			...(draft.implementationBase?.settings || {}),
+			targetPhysicalName: draft.physicalName.trim(),
+			loadStrategy: draft.loadStrategy,
+			partitionFields: draft.partitionFields
+				.split(",")
+				.map((field) => field.trim())
+				.filter(Boolean),
+		},
+		ownership: model.implementationMode,
+		materialization,
+		projectKey: draft.implementationBase?.projectKey || "system-managed",
+		dbtUniqueId: draft.implementationBase?.dbtUniqueId || `model.${model.id}`,
+		idempotencyKey: draft.implementationIdempotencyKey,
+	};
+};
+
 export async function saveModelDraft(
 	draft: ModelSpecDraft,
 	context: ModelSaveContext,
-): Promise<CanonicalModelSpecView> {
+): Promise<ModelDraftSaveResult> {
 	if (draft.base && draft.base.compatibilityMode !== "CANONICAL") throw new Error("历史只读模型不能在工作台中修改");
 	const backendContextId = draft.planId || (await resolveDefaultModelingContextId());
 	if (!backendContextId) throw new Error("服务端尚未提供可写建模上下文，请联系管理员初始化");
@@ -395,8 +579,17 @@ export async function saveModelDraft(
 	const preparedDraft = prepareModelDraftForSave(writableDraft, context.dimensionDefinitions);
 	const update = buildUpdate(preparedDraft);
 	validateDraft(preparedDraft, update);
-	if (draft.base) return updateModelSpec(draft.base, update);
-	if (update.modelType === "DIMENSION") {
+	const needsImplementationSave = implementationNeedsSave(preparedDraft);
+	const resolvedImplementationInputs = needsImplementationSave ? implementationInputs(preparedDraft, context) : null;
+	if (needsImplementationSave && !resolvedImplementationInputs) {
+		throw new Error("请先配置数据实现来源；日期维度可选择受控日期维度生成器，普通模型需关联物理来源或上游模型");
+	}
+	if (preparedDraft.implementationBase?.ownership === "DBT_MANAGED" && needsImplementationSave) {
+		throw new Error("DBT 管理的物理实现不能在基础信息中修改，请进入模型开发处理");
+	}
+	let savedModel: CanonicalModelSpecView;
+	if (draft.base) savedModel = await updateModelSpec(draft.base, update);
+	else if (update.modelType === "DIMENSION") {
 		const definition = context.dimensionDefinitions.find((item) => item.id === preparedDraft.dimensionDefinitionId);
 		if (!definition) throw new Error("请选择一个维度");
 		const command: CreateDimensionModelCommand = {
@@ -422,16 +615,25 @@ export async function saveModelDraft(
 				standardBindings: update.standardBindings || [],
 			},
 		};
-		return (await createDimensionModel(command)).currentModelSpec;
+		savedModel = (await createDimensionModel(command)).currentModelSpec;
+	} else {
+		const created = await createModelSpec({
+			planId: preparedDraft.planId,
+			domainId: preparedDraft.domainId,
+			modelType: update.modelType,
+			name: preparedDraft.name.trim(),
+			description: preparedDraft.description.trim() || null,
+			warehouseLayerCode: update.warehouseLayerCode,
+			idempotencyKey: crypto.randomUUID(),
+		});
+		savedModel = await updateModelSpec(created, update);
 	}
-	const created = await createModelSpec({
-		planId: preparedDraft.planId,
-		domainId: preparedDraft.domainId,
-		modelType: update.modelType,
-		name: preparedDraft.name.trim(),
-		description: preparedDraft.description.trim() || null,
-		warehouseLayerCode: update.warehouseLayerCode,
-		idempotencyKey: crypto.randomUUID(),
-	});
-	return updateModelSpec(created, update);
+	const implementation = resolvedImplementationInputs
+		? await saveModelImplementation(
+				savedModel,
+				preparedDraft.implementationBase,
+				buildImplementationCommand(preparedDraft, savedModel, resolvedImplementationInputs),
+			)
+		: preparedDraft.implementationBase;
+	return { model: savedModel, implementation };
 }

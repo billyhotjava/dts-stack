@@ -8,16 +8,19 @@ import {
 	updateDimensionDefinition,
 } from "@/api/dimensionDefinitionApi";
 import { listModelFieldStandardOptions } from "@/api/modelingStandardsApi";
-import { listModelSpecs, updateModelSpec } from "@/api/modelSpecApi";
+import { saveModelImplementation } from "@/api/modelImplementationApi";
+import { getModelLifecycle, listModelSpecs, updateModelSpec } from "@/api/modelSpecApi";
 import catalogDomainService from "@/api/services/catalogDomainService";
 import { listWarehouseLayers, type WarehouseLayerView } from "@/api/warehouseLayerApi";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
+import type { ModelImplementationView } from "@/features/modeling/contracts/modelImplementationContract";
 import type { CanonicalModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import type { ConceptDimensionDraft, ModelDraft, ModelSpecDraft } from "./modelWorkbenchService";
 import {
 	confirmDimensionDefinitionDraft,
 	emptyModelDraft,
 	loadModelWorkbenchContext,
+	loadModelWorkbenchDraft,
 	modelDraftFromView,
 	prepareModelDraftForSave,
 	saveDimensionDefinitionDraft,
@@ -33,7 +36,9 @@ vi.mock("@/api/dimensionDefinitionApi", () => ({
 	updateDimensionDefinition: vi.fn(),
 }));
 vi.mock("@/api/modelingStandardsApi", () => ({ listModelFieldStandardOptions: vi.fn() }));
+vi.mock("@/api/modelImplementationApi", () => ({ saveModelImplementation: vi.fn() }));
 vi.mock("@/api/modelSpecApi", () => ({
+	getModelLifecycle: vi.fn(),
 	listModelSpecs: vi.fn(),
 	updateModelSpec: vi.fn(),
 	createModelSpec: vi.fn(),
@@ -95,6 +100,34 @@ const canonicalFactView = (): CanonicalModelSpecView => ({
 	standardBindings: [],
 });
 
+const generatedImplementation = (
+	model: CanonicalModelSpecView,
+	patch: Partial<ModelImplementationView> = {},
+): ModelImplementationView => ({
+	id: "40000000-0000-0000-0000-000000000001",
+	modelSpecId: model.id,
+	planId: model.planId,
+	revision: model.revision,
+	modelChecksum: model.checksum,
+	ownership: "DESIGNER_GENERATED",
+	projectKey: "system-managed",
+	dbtUniqueId: `model.${model.id}`,
+	status: "ACTIVE",
+	implementationRevision: 1,
+	implementationChecksum: "c".repeat(64),
+	inputMode: "GENERATED",
+	inputs: [{ generatorType: "DATE_DIMENSION", config: {} }],
+	fieldMappings: [],
+	settings: {
+		targetPhysicalName: "dim_finance_date",
+		loadStrategy: "FULL",
+		partitionFields: [],
+		retentionDays: 3650,
+	},
+	materialization: "table",
+	...patch,
+});
+
 const conceptDraft = (): ConceptDimensionDraft => ({
 	createKind: "dimension",
 	base: null,
@@ -153,6 +186,9 @@ const validDimensionDraft = (): ModelDraft => ({
 	reuseScope: "DOMAIN",
 	dimensionDefinitionId: "dimension-1",
 	standardBindings: [],
+	implementationBase: null,
+	implementationInputMode: "GENERATED",
+	generationStrategyType: "DATE_DIMENSION",
 });
 
 beforeEach(() => {
@@ -226,6 +262,37 @@ describe("concept dimension draft", () => {
 });
 
 describe("model workbench draft preparation", () => {
+	it("loads physical settings from the canonical implementation instead of the legacy model projection", () => {
+		const model = {
+			...canonicalFactView(),
+			modelType: "DIMENSION" as const,
+			dimensionDefinitionRef: { dimensionDefinitionId: "dimension-1", revision: 1 },
+		};
+		const implementation = generatedImplementation(model);
+
+		expect(modelDraftFromView(model, implementation)).toMatchObject({
+			physicalName: "dim_finance_date",
+			loadStrategy: "FULL",
+			partitionFields: "",
+			materialization: "table",
+			implementationBase: implementation,
+			implementationInputMode: "GENERATED",
+			generationStrategyType: "DATE_DIMENSION",
+		});
+	});
+
+	it("loads only the selected model lifecycle when opening a workbench draft", async () => {
+		const model = canonicalFactView();
+		const implementation = generatedImplementation(model);
+		vi.mocked(getModelLifecycle).mockResolvedValue({ implementation, artifacts: [], events: [] });
+
+		const draft = await loadModelWorkbenchDraft(model);
+
+		expect(getModelLifecycle).toHaveBeenCalledWith(model.id);
+		expect(draft.physicalName).toBe("dim_finance_date");
+		expect(listModelSpecs).not.toHaveBeenCalled();
+	});
+
 	it("derives an empty dimension-table grain from the selected definition", () => {
 		expect(
 			prepareModelDraftForSave(validDimensionDraft(), [
@@ -405,6 +472,7 @@ describe("model workbench draft validation", () => {
 			modelType: "DIMENSION" as const,
 			layer: "DWD" as const,
 			name: "成本中心维度表",
+			description: "统一的成本中心分析维度",
 			implementationPolicy: {
 				physicalName: "dim_budget_account",
 				loadStrategy: "FULL" as const,
@@ -431,5 +499,91 @@ describe("model workbench draft validation", () => {
 			}),
 		);
 		expect(vi.mocked(updateModelSpec).mock.calls[0][1]).not.toHaveProperty("implementationPolicy");
+	});
+
+	it("saves logical design and generated physical settings through their canonical APIs", async () => {
+		const base = {
+			...canonicalFactView(),
+			modelType: "DIMENSION" as const,
+			name: "日期维度表",
+			description: "统一公历日期维度",
+			dimensionDefinitionRef: { dimensionDefinitionId: "dimension-1", revision: 1 },
+			dimensionProfile: {
+				dimensionCode: null,
+				hierarchies: [],
+				scdPolicy: { type: "TYPE1" as const },
+				reuseScope: null,
+			},
+		};
+		const savedModel = { ...base, revision: 2, checksum: "b".repeat(64) };
+		const savedImplementation = generatedImplementation(savedModel);
+		vi.mocked(updateModelSpec).mockResolvedValue(savedModel);
+		vi.mocked(saveModelImplementation).mockResolvedValue(savedImplementation);
+		const draft = {
+			...modelDraftFromView(base),
+			physicalName: "dim_finance_date",
+			implementationInputMode: "GENERATED" as const,
+			generationStrategyType: "DATE_DIMENSION",
+		};
+
+		const result = await saveModelDraft(draft, {
+			ownerId: "owner-1",
+			dimensionDefinitions: [{ ...definitionView, status: "CURRENT" }],
+			models: [base],
+		});
+
+		expect(vi.mocked(updateModelSpec).mock.calls[0][1]).not.toHaveProperty("implementationPolicy");
+		expect(updateModelSpec).toHaveBeenCalledWith(
+			base,
+			expect.objectContaining({ generationStrategy: { type: "DATE_DIMENSION", reference: null } }),
+		);
+		expect(saveModelImplementation).toHaveBeenCalledWith(
+			savedModel,
+			null,
+			expect.objectContaining({
+				inputMode: "GENERATED",
+				inputs: [{ generatorType: "DATE_DIMENSION", config: {} }],
+				settings: expect.objectContaining({
+					targetPhysicalName: "dim_finance_date",
+					loadStrategy: "FULL",
+					partitionFields: [],
+				}),
+			}),
+		);
+		expect(result).toEqual({ model: savedModel, implementation: savedImplementation });
+	});
+
+	it("preserves the canonical implementation input while updating physical settings", async () => {
+		const base = canonicalFactView();
+		const currentImplementation = generatedImplementation(base, {
+			inputMode: "PHYSICAL_ASSET",
+			inputs: [
+				{
+					sourceBindingId: "50000000-0000-0000-0000-000000000001",
+					resolvedVersion: "source-v1",
+				},
+			],
+		});
+		const savedModel = { ...base, revision: 2, checksum: "d".repeat(64) };
+		const savedImplementation = generatedImplementation(savedModel, {
+			inputMode: "PHYSICAL_ASSET",
+			inputs: currentImplementation.inputs,
+			implementationRevision: 2,
+			implementationChecksum: "e".repeat(64),
+		});
+		vi.mocked(updateModelSpec).mockResolvedValue(savedModel);
+		vi.mocked(saveModelImplementation).mockResolvedValue(savedImplementation);
+		const draft = {
+			...modelDraftFromView(base, currentImplementation),
+			physicalName: "dwd_budget_execution",
+		};
+
+		await saveModelDraft(draft, { ownerId: "owner-1", dimensionDefinitions: [], models: [base] });
+
+		expect(saveModelImplementation).toHaveBeenCalledWith(
+			savedModel,
+			currentImplementation,
+			expect.objectContaining({ inputMode: "PHYSICAL_ASSET", inputs: currentImplementation.inputs }),
+		);
 	});
 });

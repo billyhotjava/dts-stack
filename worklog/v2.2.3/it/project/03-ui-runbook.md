@@ -229,7 +229,9 @@ ods_it_demo_task_snapshot   8
 
 1. 公共层 Tab → **“+”** → 逻辑模型 → **创建维度表**。
 2. “基本信息”：
-   - 数据域：与所选维度一致（如 `IT_DEMO_PROJECT_DOMAIN`）。
+   - 数仓分层：选择“公共层 / 维度层”（当前后端仅支持公共层维度表）。
+   - 业务分类：选择 `IT_DEMO_PROJECT`（研发项目治理）。
+   - 数据域：下拉只显示所选业务分类下的数据域，选择 `IT_DEMO_PROJECT_DOMAIN`（与所选维度一致）。
    - 维度：选择已“确认定义”的现行维度（如 研发项目）。
    - 表名：小写英文、数字、下划线，以 `dim_` 开头（如 `dim_it_demo_project`）。
    - 表中文名：如 `研发项目维度表`。
@@ -272,6 +274,9 @@ ods_it_demo_task_snapshot   8
 4. `it_demo_dwd_fct_task_snapshot`（明细表）
 5. `it_demo_dws_project_health`（汇总表）
 6. `it_demo_ads_project_overview`（应用表）
+
+> 建表时逐字段对照 [06-model-ddl.md](06-model-ddl.md)：每个模型都给出了 PostgreSQL DDL、
+> 字段中文注释和“页面录入对照表”（字段名称/类型/字段显示名/主键/非空/数据元/单位/来源表达式）。
 
 创建顺序必须遵循依赖拓扑：
 

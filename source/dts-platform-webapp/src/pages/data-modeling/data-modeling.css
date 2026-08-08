@@ -705,7 +705,10 @@
 	display: grid;
 	grid-template-columns: repeat(2, 1fr);
 	gap: 4px;
+	min-width: 0;
+	margin: 0;
 	padding: 8px 10px 0;
+	border: 0;
 }
 .dmx-view-switch button {
 	height: 30px;
