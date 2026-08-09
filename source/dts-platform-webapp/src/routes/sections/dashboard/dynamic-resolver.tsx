@@ -64,7 +64,7 @@ const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 	// ── Platform pages ──
 	"/governance": "/pages/governance/GovernanceCenterPage",
 	"/catalog/assets": "/pages/catalog/AssetOverviewPage",
-	"/catalog/assets/ledger": "/pages/catalog/DatasetsPage",
+	"/catalog/assets/ledger": "/pages/catalog/LegacyAssetLedgerRedirect",
 	"/catalog/asset-detail": "/pages/catalog/LegacyAssetDetailRedirect",
 	"/catalog/search": "/pages/catalog/DataSearchPage",
 	"/catalog/metadata-management": "/pages/catalog/MetadataManagementPage",

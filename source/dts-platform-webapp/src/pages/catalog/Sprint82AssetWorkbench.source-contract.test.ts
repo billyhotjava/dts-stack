@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const MAP = readFileSync(new URL("./AssetOverviewPage.tsx", import.meta.url), "utf8");
-const LEDGER_PAGE = readFileSync(new URL("./DatasetsPage.tsx", import.meta.url), "utf8");
+const SEARCH_PAGE = readFileSync(new URL("./DataSearchPage.tsx", import.meta.url), "utf8");
 const LEDGER_VIEW = readFileSync(new URL("./assets/AssetLedgerView.tsx", import.meta.url), "utf8");
 const TAG_MANAGEMENT = readFileSync(
 	new URL("../../components/catalog/tags/TagManagementTab.tsx", import.meta.url),
@@ -12,10 +12,9 @@ const TAG_MANAGEMENT = readFileSync(
 
 test("Sprint-82 keeps the map summary-only and makes the ledger the tag workspace owner", () => {
 	assert.doesNotMatch(MAP, /TagManagementTab/);
-	assert.match(LEDGER_PAGE, /AssetTagsWorkspace/);
-	assert.match(LEDGER_PAGE, /tab.*catalog-tags/);
-	assert.match(LEDGER_PAGE, /资产列表/);
-	assert.match(LEDGER_PAGE, /数据标签/);
+	assert.match(SEARCH_PAGE, /AssetTagsWorkspace/);
+	assert.match(SEARCH_PAGE, /tab.*catalog-tags/);
+	assert.match(SEARCH_PAGE, /标签工作台/);
 });
 
 test("Sprint-82 keeps the ledger action column to the governance entry plus one navigation action", () => {

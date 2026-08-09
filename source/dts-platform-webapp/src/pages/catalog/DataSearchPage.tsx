@@ -1,16 +1,23 @@
 import { DownOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Dropdown, Input, Select, Tabs, Tag } from "antd";
+import { Alert, Button, Card, Dropdown, Input, Pagination, Segmented, Select, Tag } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { toast } from "sonner";
-import { type AssetRefPage, type CatalogTagDto, searchCatalogAssetsByTags } from "@/api/catalogTagsApi";
-import { listCatalogAssetsV2, listDomains, searchCatalog } from "@/api/platformApi";
+import type { CatalogTagDto } from "@/api/catalogTagsApi";
+import { listCatalogAssetsV2, listDomains } from "@/api/platformApi";
 import { AssetTagChips } from "@/components/catalog/tags/AssetTagChips";
 import { AssetTagFilter } from "@/components/catalog/tags/AssetTagFilter";
 import { readTagIds, writeTagIds } from "@/components/catalog/tags/catalogTagUrlState";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
-import { ASSET_PORTAL_V2_ENABLED, classificationTagColor } from "./assets/assetPageShared";
+import { AssetLedgerView } from "./assets/AssetLedgerView";
+import { AssetTagsWorkspace } from "./assets/AssetTagsWorkspace";
+import {
+	ASSET_PORTAL_V2_ENABLED,
+	type AssetRow,
+	classificationTagColor,
+	LEDGER_PAGE_SIZE,
+} from "./assets/assetPageShared";
 import { buildAssetV2Query } from "./assets/assetV2Query";
 
 type SearchRow = {
@@ -106,6 +113,11 @@ function readStoredSearchForm(): StoredSearchForm {
 
 export default function DataSearchPage() {
 	const [searchParams, setSearchParams] = useSearchParams();
+	// 旧标签工作台深链（标签管理 → 查看资产/关联资产）：tab=catalog-tags 时直接进入标签工作台
+	const isTagsWorkspace = searchParams.get("tab") === "catalog-tags";
+	if (isTagsWorkspace) {
+		return <AssetTagsWorkspace />;
+	}
 	const selectedTagIds = useMemo(() => readTagIds(searchParams), [searchParams]);
 	const effectiveSelectedTagIds = ASSET_PORTAL_V2_ENABLED ? selectedTagIds : [];
 	const selectedTagIdsKey = effectiveSelectedTagIds.join("\u0000");
@@ -124,6 +136,9 @@ export default function DataSearchPage() {
 	const [results, setResults] = useState<SearchRow[]>([]);
 	const [domains, setDomains] = useState<{ id: string; name: string }[]>([]);
 	const [searched, setSearched] = useState(false);
+	const [view, setView] = useState<"card" | "table">(() => (searchParams.get("view") === "table" ? "table" : "card"));
+	const [assetRows, setAssetRows] = useState<AssetRow[]>([]);
+	const [pageState, setPageState] = useState({ page: 1, size: LEDGER_PAGE_SIZE, total: 0 });
 	const searchRequestSequence = useRef(0);
 
 	useEffect(() => {
@@ -146,15 +161,7 @@ export default function DataSearchPage() {
 		return [{ label: "全部主题域", value: "ALL" }, ...domains.map((item) => ({ label: item.name, value: item.id }))];
 	}, [domains]);
 
-	const grouped = useMemo(
-		() => ({
-			ASSET: results.filter((r) => r.assetKind === "ASSET"),
-			DATASET: results.filter((r) => r.assetKind === "DATASET"),
-			TABLE: results.filter((r) => r.assetKind === "TABLE"),
-			COLUMN: results.filter((r) => r.assetKind === "COLUMN"),
-		}),
-		[results],
-	);
+	const domainMap = useMemo(() => new Map(domains.map((item) => [item.id, item.name])), [domains]);
 
 	const persistCurrentQuery = () => {
 		const payload = {
@@ -220,62 +227,6 @@ export default function DataSearchPage() {
 		}
 	};
 
-	const normalizeRows = (payload: any): SearchRow[] => {
-		const rows: SearchRow[] = [];
-		const datasets = Array.isArray(payload?.datasets) ? payload.datasets : [];
-		const tables = Array.isArray(payload?.tables) ? payload.tables : [];
-		const columns = Array.isArray(payload?.columns) ? payload.columns : [];
-		datasets.forEach((item: any) => {
-			if (!item) return;
-			rows.push({
-				id: String(item.id || `dataset-${rows.length}`),
-				name: String(item.name || item.hiveTable || "-"),
-				type: item.type ? String(item.type) : "DATASET",
-				assetKind: "DATASET",
-				domainId: item.domainId ? String(item.domainId) : undefined,
-				domain: item.domainName || undefined,
-				owner: item.owner || item.ownerDept || undefined,
-				updatedAt: item.updatedAt || undefined,
-				assetType: item.assetType || "DATASET",
-				assetKey: item.assetKey || undefined,
-				assetTags: Array.isArray(item.assetTags) ? item.assetTags : [],
-			});
-		});
-		tables.forEach((item: any) => {
-			if (!item) return;
-			rows.push({
-				id: String(item.id || `table-${rows.length}`),
-				name: String(item.name || "-"),
-				type: "TABLE",
-				assetKind: "TABLE",
-				domainId: item.domainId ? String(item.domainId) : undefined,
-				domain: item.domainName || undefined,
-				owner: item.owner || item.datasetOwnerDept || undefined,
-				datasetName: item.datasetName || undefined,
-				datasetAssetKey: item.datasetAssetKey || undefined,
-				datasetAssetTags: Array.isArray(item.datasetAssetTags) ? item.datasetAssetTags : [],
-			});
-		});
-		columns.forEach((item: any) => {
-			if (!item) return;
-			const columnName = String(item.name || "-");
-			const tableName = String(item.tableName || item.datasetName || "").trim();
-			rows.push({
-				id: String(item.id || `column-${rows.length}`),
-				name: tableName ? `${tableName}.${columnName}` : columnName,
-				type: "COLUMN",
-				assetKind: "COLUMN",
-				domainId: item.domainId ? String(item.domainId) : undefined,
-				domain: item.domainName || undefined,
-				owner: item.datasetOwnerDept || undefined,
-				datasetName: item.datasetName || undefined,
-				datasetAssetKey: item.datasetAssetKey || undefined,
-				datasetAssetTags: Array.isArray(item.datasetAssetTags) ? item.datasetAssetTags : [],
-			});
-		});
-		return rows;
-	};
-
 	const normalizeAssetRows = (payload: any): SearchRow[] => {
 		const content = Array.isArray(payload?.content) ? payload.content : [];
 		return content.map((item: any, index: number) => ({
@@ -296,35 +247,13 @@ export default function DataSearchPage() {
 		}));
 	};
 
-	const normalizeExactTagRows = (payload: AssetRefPage | undefined): SearchRow[] => {
-		const content = Array.isArray(payload?.content) ? payload.content : [];
-		const rows: SearchRow[] = [];
-		for (const item of content) {
-			const assetType = String(item.assetType || "ASSET")
-				.trim()
-				.toUpperCase();
-			const assetKey = String(item.assetKey || "").trim();
-			if (!assetKey) continue;
-			const keySegments = assetKey.split("/");
-			rows.push({
-				id: `tag-hit-${assetType}-${assetKey}`,
-				name: keySegments[keySegments.length - 1] || assetKey,
-				type: assetType,
-				assetKind: "ASSET",
-				assetType,
-				assetKey,
-				assetTags: [],
-				source: "标签索引",
-			});
-		}
-		return rows;
-	};
-
-	const runSearch = async (notifyWhenEmpty = true) => {
+	// 合并台账后以 assets-v2 为唯一数据源：搜索、浏览、治理作业共用同一份资产列表与分页
+	const runSearch = async (notifyWhenEmpty = true, page = 1, size = LEDGER_PAGE_SIZE) => {
 		const sequence = ++searchRequestSequence.current;
 		const trimmed = keyword.trim();
 		if (!trimmed && effectiveSelectedTagIds.length === 0) {
 			setResults([]);
+			setAssetRows([]);
 			setSearched(false);
 			setLoading(false);
 			if (notifyWhenEmpty) {
@@ -335,80 +264,37 @@ export default function DataSearchPage() {
 		setLoading(true);
 		setSearched(true);
 		try {
-			const shouldSearchAssetsV2 =
-				ASSET_PORTAL_V2_ENABLED &&
-				(assetType === "ALL" || assetType === "ASSET" || assetType === "DATASET" || assetType === "TABLE");
-			const shouldSearchLegacyCatalog = assetType !== "ASSET";
-			const hasExactTagIncompatibleFilters =
-				Boolean(trimmed) ||
-				Boolean(domain && domain !== "ALL") ||
-				datasetType !== "ALL" ||
-				classification !== "ALL" ||
-				warehouseLayer !== "ALL";
-			const exactAssetType = assetType === "DATASET" ? "DATASET" : undefined;
-			const shouldSearchExactTags =
-				effectiveSelectedTagIds.length > 0 &&
-				!hasExactTagIncompatibleFilters &&
-				(assetType === "ALL" || assetType === "ASSET" || assetType === "DATASET");
-			const [tagSearchResult, assetsResult, legacyResult] = await Promise.allSettled([
-				shouldSearchExactTags
-					? searchCatalogAssetsByTags({
-							tagIds: effectiveSelectedTagIds,
-							assetType: exactAssetType,
-							page: 0,
-							size: 100,
-						})
-					: Promise.resolve({ content: [], total: 0, page: 0, size: 100 }),
-				shouldSearchAssetsV2
-					? listCatalogAssetsV2(
-							buildAssetV2Query(
-								{
-									keyword: trimmed,
-									tagIds: effectiveSelectedTagIds,
-									domainId: domain && domain !== "ALL" ? domain : undefined,
-									assetType: datasetType,
-									classification,
-									warehouseLayer,
-									governanceStatus: governanceFilter,
-									unclassified: unclassifiedFilter,
-									stale: staleFilter,
-								},
-								0,
-								100,
-							),
-						)
-					: Promise.resolve({ content: [] }),
-				shouldSearchLegacyCatalog
-					? searchCatalog({
-							keyword: trimmed || undefined,
-							tagIds: effectiveSelectedTagIds,
-							types: assetType === "ALL" ? undefined : assetType,
-							domainId: domain && domain !== "ALL" ? domain : undefined,
-							classification: classification === "ALL" ? undefined : classification,
-							warehouseLayer: warehouseLayer === "ALL" ? undefined : warehouseLayer,
-							datasetType: datasetType === "ALL" ? undefined : datasetType,
-							enabledOnly: true,
-							limit: 200,
-						})
-					: Promise.resolve({ datasets: [], tables: [], columns: [] }),
-			]);
+			const resp = await listCatalogAssetsV2(
+				buildAssetV2Query(
+					{
+						keyword: trimmed,
+						tagIds: effectiveSelectedTagIds,
+						domainId: domain && domain !== "ALL" ? domain : undefined,
+						assetType: datasetType,
+						classification,
+						warehouseLayer,
+						governanceStatus: governanceFilter,
+						unclassified: unclassifiedFilter,
+						stale: staleFilter,
+					},
+					page - 1,
+					size,
+				),
+			);
 			if (sequence !== searchRequestSequence.current) return;
-			const exactTagRows = tagSearchResult.status === "fulfilled" ? normalizeExactTagRows(tagSearchResult.value) : [];
-			const assetRows = assetsResult.status === "fulfilled" ? normalizeAssetRows(assetsResult.value || {}) : [];
-			const legacyRows = legacyResult.status === "fulfilled" ? normalizeRows(legacyResult.value || {}) : [];
-			const resolvedAssetKeys = new Set(
-				[...assetRows, ...legacyRows]
-					.filter((row) => row.assetKey)
-					.map((row) => `${row.assetType || row.type}\u0000${row.assetKey}`),
-			);
-			const unresolvedExactTagRows = exactTagRows.filter(
-				(row) => !resolvedAssetKeys.has(`${row.assetType || row.type}\u0000${row.assetKey}`),
-			);
-			setResults([...assetRows, ...legacyRows, ...unresolvedExactTagRows]);
+			const content = Array.isArray(resp?.content) ? resp.content : [];
+			setAssetRows(content as AssetRow[]);
+			setResults(normalizeAssetRows(resp || {}));
+			setPageState({
+				page: Number(resp?.page ?? page - 1) + 1,
+				size: Number(resp?.size ?? size),
+				total: Number(resp?.total ?? content.length),
+			});
 			persistCurrentQuery();
 		} catch {
 			if (sequence !== searchRequestSequence.current) return;
 			setResults([]);
+			setAssetRows([]);
 			// error toast handled by global interceptor
 		} finally {
 			if (sequence === searchRequestSequence.current) setLoading(false);
@@ -509,9 +395,11 @@ export default function DataSearchPage() {
 		else params.delete("classification");
 		if (warehouseLayer !== "ALL") params.set("layer", warehouseLayer);
 		else params.delete("layer");
+		if (view === "table") params.set("view", "table");
+		else params.delete("view");
 		const next = params.toString();
 		if (next !== searchParams.toString()) setSearchParams(params, { replace: true });
-	}, [urlFilterKey, searchParams, setSearchParams]);
+	}, [urlFilterKey, view, searchParams, setSearchParams]);
 
 	return (
 		<div className="space-y-4">
@@ -613,13 +501,36 @@ export default function DataSearchPage() {
 				</div>
 			</Card>
 
-			<Card title="搜索结果">
+			<Card
+				title={
+					<span className="flex flex-wrap items-center gap-3">
+						检索结果
+						{searched ? (
+							<span className="text-xs font-normal text-slate-400">
+								共 {pageState.total} 条 · 第 {pageState.page} 页
+							</span>
+						) : null}
+					</span>
+				}
+				extra={
+					searched ? (
+						<Segmented
+							value={view}
+							onChange={(value) => setView(value as "card" | "table")}
+							options={[
+								{ label: "卡片", value: "card" },
+								{ label: "表格", value: "table" },
+							]}
+						/>
+					) : null
+				}
+			>
 				{unclassifiedFilter || staleFilter ? (
 					<Alert
 						type="info"
 						showIcon
 						className="mb-3"
-						message={`当前搜索已按治理缺口筛选：${[
+						message={`当前检索已按治理缺口筛选：${[
 							unclassifiedFilter ? "未定密" : null,
 							staleFilter ? "已失效（DEPRECATED/ARCHIVED/BLOCKED）" : null,
 						]
@@ -629,133 +540,58 @@ export default function DataSearchPage() {
 					/>
 				) : null}
 				{searched ? (
-					<Tabs
-						items={[
-							{
-								key: "ASSET",
-								label: `资产（${grouped.ASSET.length}）`,
-								children: grouped.ASSET.length ? (
-									<div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-										{grouped.ASSET.map((row) =>
-											row.source === "标签索引" ? (
-												<div
-													key={row.id}
-													title="标签索引命中：暂无对应详情页，可在台账/详情中确认该资产"
-													className="rounded-lg border border-dashed border-slate-300 bg-slate-50/60 px-4 py-3 text-left"
-												>
-													<div className="font-semibold text-sm text-slate-900">{row.name}</div>
-													<div className="mt-1 truncate font-mono text-xs text-slate-500">{row.assetKey || row.id}</div>
-													<div className="mt-2 flex flex-wrap gap-1">
-														<Tag style={{ fontSize: 10 }}>{row.type || "ASSET"}</Tag>
-														<Tag color="blue" style={{ fontSize: 10 }}>
-															{row.source}
-														</Tag>
-													</div>
-												</div>
-											) : (
-												<Link
-													key={row.id}
-													to={`/catalog/datasets/${row.id}`}
-													className="cursor-pointer rounded-lg border border-slate-200 bg-white px-4 py-3 text-left transition-all hover:border-blue-300 hover:shadow-sm"
-												>
-													<div className="font-semibold text-sm text-slate-900">{row.name}</div>
-													<div className="mt-1 truncate font-mono text-xs text-slate-500">{row.assetKey || row.id}</div>
-													<div className="mt-2 flex flex-wrap gap-1">
-														<Tag style={{ fontSize: 10 }}>{row.type || "ASSET"}</Tag>
-														<Tag color={classificationTagColor(row.classification, "default")} style={{ fontSize: 10 }}>
-															{row.classification || "未定密"}
-														</Tag>
-														<Tag color={row.warehouseLayer ? "blue" : "default"} style={{ fontSize: 10 }}>
-															{row.warehouseLayer || "未分层"}
-														</Tag>
-														<Tag color="blue" style={{ fontSize: 10 }}>
-															{row.source || "assets-v2"}
-														</Tag>
-													</div>
-													<AssetTagChips tags={row.assetTags || []} variant="inline" />
-												</Link>
-											),
-										)}
-									</div>
-								) : (
-									<div className="py-4 text-sm text-slate-400">无匹配资产</div>
-								),
-							},
-							{
-								key: "DATASET",
-								label: `数据集（${grouped.DATASET.length}）`,
-								children: grouped.DATASET.length ? (
-									<div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-										{grouped.DATASET.map((row) => (
-											<Link
-												key={row.id}
-												to={`/catalog/datasets/${row.id}`}
-												className="cursor-pointer rounded-[18px] border border-slate-200 bg-white px-4 py-3 text-left transition-all hover:border-blue-300 hover:shadow-sm"
-											>
-												<div className="font-semibold text-sm text-slate-900">{row.name}</div>
-												<div className="mt-1 text-xs text-slate-500">{row.domain ?? "未归域"}</div>
-												<Tag style={{ fontSize: 10 }} className="mt-1">
-													DATASET
-												</Tag>
-												<AssetTagChips tags={row.assetTags || []} variant="inline" />
-											</Link>
-										))}
-									</div>
-								) : (
-									<div className="py-4 text-sm text-slate-400">无匹配数据集</div>
-								),
-							},
-							{
-								key: "TABLE",
-								label: `表（${grouped.TABLE.length}）`,
-								children: grouped.TABLE.length ? (
-									<div className="space-y-2">
-										{grouped.TABLE.map((row) => (
-											<div key={row.id} className="rounded-[14px] border border-slate-200 px-3 py-2 text-sm">
-												<span className="font-medium">{row.name}</span>
-												{row.datasetName && <span className="ml-2 text-slate-400 text-xs">in {row.datasetName}</span>}
-												{row.datasetAssetTags?.length ? (
-													<div className="mt-1">
-														<div className="text-xs text-slate-500">所属数据集标签</div>
-														<AssetTagChips tags={row.datasetAssetTags} variant="inline" />
-													</div>
-												) : null}
-											</div>
-										))}
-									</div>
-								) : (
-									<div className="py-4 text-sm text-slate-400">无匹配表</div>
-								),
-							},
-							{
-								key: "COLUMN",
-								label: `字段（${grouped.COLUMN.length}）`,
-								children: grouped.COLUMN.length ? (
-									<div className="space-y-2">
-										{grouped.COLUMN.map((row) => (
-											<div key={row.id} className="rounded-[14px] border border-slate-200 px-3 py-2 text-sm">
-												<span className="font-mono text-xs">{row.name}</span>
-												{row.type && (
-													<Tag className="ml-2" style={{ fontSize: 10 }}>
-														{row.type}
-													</Tag>
-												)}
-												{row.datasetName && <span className="ml-2 text-slate-400 text-xs">in {row.datasetName}</span>}
-												{row.datasetAssetTags?.length ? (
-													<div className="mt-1">
-														<div className="text-xs text-slate-500">所属数据集标签</div>
-														<AssetTagChips tags={row.datasetAssetTags} variant="inline" />
-													</div>
-												) : null}
-											</div>
-										))}
-									</div>
-								) : (
-									<div className="py-4 text-sm text-slate-400">无匹配字段</div>
-								),
-							},
-						]}
-					/>
+					<>
+						{view === "table" ? (
+							<AssetLedgerView
+								records={assetRows}
+								domainMap={domainMap}
+								ledgerIssueCount={assetRows.filter((row) => !row.classification).length}
+								readyCount={0}
+								selectedDomainName={domain ? domainMap.get(domain) || domain : "全部主题域"}
+								missingDomainCount={assetRows.filter((row) => !row.domain && !row.domainId).length}
+								onAssetChanged={() => void runSearch(false, pageState.page, pageState.size)}
+							/>
+						) : results.length ? (
+							<div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+								{results.map((row) => (
+									<Link
+										key={row.id}
+										to={`/catalog/datasets/${row.id}`}
+										className="cursor-pointer rounded-lg border border-slate-200 bg-white px-4 py-3 text-left transition-all hover:border-blue-300 hover:shadow-sm"
+									>
+										<div className="font-semibold text-sm text-slate-900">{row.name}</div>
+										<div className="mt-1 truncate font-mono text-xs text-slate-500">{row.assetKey || row.id}</div>
+										<div className="mt-2 flex flex-wrap gap-1">
+											<Tag style={{ fontSize: 10 }}>{row.type || "ASSET"}</Tag>
+											<Tag color={classificationTagColor(row.classification, "default")} style={{ fontSize: 10 }}>
+												{row.classification || "未定密"}
+											</Tag>
+											<Tag color={row.warehouseLayer ? "blue" : "default"} style={{ fontSize: 10 }}>
+												{row.warehouseLayer || "未分层"}
+											</Tag>
+											<Tag color="blue" style={{ fontSize: 10 }}>
+												{row.source || "assets-v2"}
+											</Tag>
+										</div>
+										<AssetTagChips tags={row.assetTags || []} variant="inline" />
+									</Link>
+								))}
+							</div>
+						) : (
+							<EmptyState title="无匹配资产" description="调整关键词或筛选条件后重试。" />
+						)}
+						<div className="mt-3 flex justify-end">
+							<Pagination
+								size="small"
+								current={pageState.page}
+								pageSize={pageState.size}
+								total={pageState.total}
+								showSizeChanger
+								pageSizeOptions={[10, 20, 50]}
+								onChange={(page, size) => void runSearch(false, page, size)}
+							/>
+						</div>
+					</>
 				) : (
 					<EmptyState title="开始检索" description="输入关键词并点击搜索。" />
 				)}

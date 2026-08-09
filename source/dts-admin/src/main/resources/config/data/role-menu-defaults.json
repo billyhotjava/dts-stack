@@ -282,12 +282,6 @@
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.dataPortalDetail",
-    "title": "资产台账",
-    "route": "/catalog/assets/ledger",
-    "requiredRoles": []
-  },
-  {
     "code": "sys.nav.portal.dataPortalLineage",
     "title": "血缘与影响分析",
     "route": "/catalog/lineage",

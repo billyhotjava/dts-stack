@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const LEDGER = readFileSync(new URL("./assets/AssetLedgerView.tsx", import.meta.url), "utf8");
-const DATASETS = readFileSync(new URL("./DatasetsPage.tsx", import.meta.url), "utf8");
+const SEARCH = readFileSync(new URL("./DataSearchPage.tsx", import.meta.url), "utf8");
 const DATASET_DETAIL = readFileSync(new URL("./DatasetDetailPage.tsx", import.meta.url), "utf8");
 const GOVERNANCE_EXTENSION = readFileSync(new URL("./OpenMetadataGovernanceTab.tsx", import.meta.url), "utf8");
 const WORKBENCH = readFileSync(new URL("./assets/AssetLifecycleWorkbenchDrawer.tsx", import.meta.url), "utf8");
@@ -27,20 +27,12 @@ test("Sprint-72 asset ledger explains immutable classification facts separately 
 	}
 	assert.match(FACTS, /数据标签与合规密级相互独立/);
 	assert.doesNotMatch(FACTS, /降低密级|降密原因/);
-	assert.match(DATASETS, /breakpoint="md"/);
-	assert.match(DATASETS, /collapsedWidth=\{0\}/);
+	assert.match(SEARCH, /view === "table"/);
+	assert.match(SEARCH, /records=\{assetRows\}/);
 });
 
 test("Sprint-72 lifecycle workbench closes approval, trash, restoration and proof journeys", () => {
-	for (const label of [
-		"申请归档",
-		"申请临时销毁",
-		"申请恢复",
-		"申请永久销毁",
-		"批准",
-		"驳回",
-		"销毁证明",
-	]) {
+	for (const label of ["申请归档", "申请临时销毁", "申请恢复", "申请永久销毁", "批准", "驳回", "销毁证明"]) {
 		assert.match(WORKBENCH, new RegExp(label));
 	}
 	assert.match(WORKBENCH, /永久销毁不可恢复/);

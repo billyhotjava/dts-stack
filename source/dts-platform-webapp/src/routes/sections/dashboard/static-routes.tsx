@@ -16,7 +16,7 @@ const ConnectionProfilesPage = lazy(() => import("@/pages/foundation/access/Conn
 const ConnectionProfileDetailPage = lazy(() => import("@/pages/foundation/access/ConnectionProfileDetailPage"));
 const StandardPackagePage = lazy(() => import("@/pages/foundation/StandardPackagePage"));
 const AssetOverviewPage = lazy(() => import("@/pages/catalog/AssetOverviewPage"));
-const DatasetsPage = lazy(() => import("@/pages/catalog/DatasetsPage"));
+const LegacyAssetLedgerRedirect = lazy(() => import("@/pages/catalog/LegacyAssetLedgerRedirect"));
 const MetadataManagementPage = lazy(() => import("@/pages/catalog/MetadataManagementPage"));
 const AssetOwnershipPage = lazy(() => import("@/pages/governance/AssetOwnershipPage"));
 const AssetGrantPage = lazy(() => import("@/pages/governance/AssetGrantPage"));
@@ -249,7 +249,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "catalog/assets/ledger",
 		element: (
 			<S>
-				<DatasetsPage />
+				<LegacyAssetLedgerRedirect />
 			</S>
 		),
 	},

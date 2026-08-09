@@ -46,11 +46,11 @@ test("asset map is summary-only and relocates the tag dictionary to the ledger",
 	assert.match(PAGE, /router\.replace/);
 });
 
-test("overview and ledger are two routes", () => {
+test("overview stays a dashboard while the ledger route converges to the search table view", () => {
 	assert.match(STATIC_ROUTES, /path:\s*"catalog\/assets"[\s\S]*?<AssetOverviewPage \/>/);
-	assert.match(STATIC_ROUTES, /path:\s*"catalog\/assets\/ledger"[\s\S]*?<DatasetsPage \/>/);
+	assert.match(STATIC_ROUTES, /path:\s*"catalog\/assets\/ledger"[\s\S]*?<LegacyAssetLedgerRedirect \/>/);
 	assert.match(DYNAMIC_RESOLVER, /"\/catalog\/assets": "\/pages\/catalog\/AssetOverviewPage"/);
-	assert.match(DYNAMIC_RESOLVER, /"\/catalog\/assets\/ledger": "\/pages\/catalog\/DatasetsPage"/);
+	assert.match(DYNAMIC_RESOLVER, /"\/catalog\/assets\/ledger": "\/pages\/catalog\/LegacyAssetLedgerRedirect"/);
 });
 
 test("范围选择进入 URL 而非组件内部 state", () => {

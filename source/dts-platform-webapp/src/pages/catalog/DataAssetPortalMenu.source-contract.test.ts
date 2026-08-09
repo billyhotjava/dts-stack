@@ -20,11 +20,10 @@ type MenuNode = {
 
 const MENU = JSON.parse(MENU_SEED) as { portalNavSections: MenuNode[] };
 
-test("data asset portal menu routes ledger entry to assets-v2 ledger view", () => {
-	assert.match(MENU_SEED, /"title": "资产台账"/);
-	assert.match(MENU_SEED, /"externalLink": "\/catalog\/assets\/ledger"/);
-	assert.match(ROLE_DEFAULTS, /"title": "资产台账"/);
-	assert.match(ROLE_DEFAULTS, /"route": "\/catalog\/assets\/ledger"/);
+test("asset ledger menu entry is retired and converges to the search table view", () => {
+	assert.doesNotMatch(MENU_SEED, /"title": "资产台账"/);
+	assert.doesNotMatch(MENU_SEED, /"externalLink": "\/catalog\/assets\/ledger"/);
+	assert.doesNotMatch(ROLE_DEFAULTS, /"route": "\/catalog\/assets\/ledger"/);
 	assert.doesNotMatch(MENU_SEED, /"externalLink": "\/catalog\/asset-detail"/);
 	assert.doesNotMatch(ROLE_DEFAULTS, /"route": "\/catalog\/asset-detail"/);
 });

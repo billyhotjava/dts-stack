@@ -4,87 +4,59 @@ import test from "node:test";
 
 const SOURCE = readFileSync(new URL("./DataSearchPage.tsx", import.meta.url), "utf8");
 
-test("data search page searches assets-v2 as the primary asset source", () => {
+test("data search page consumes assets-v2 as the single data source", () => {
 	assert.match(SOURCE, /listCatalogAssetsV2/);
 	assert.match(SOURCE, /normalizeAssetRows/);
 	assert.match(SOURCE, /assetKind: "ASSET"/);
 	assert.match(SOURCE, /assets-v2/);
-	assert.match(SOURCE, /key: "ASSET"/);
+	assert.doesNotMatch(SOURCE, /searchCatalogAssetsByTags/);
+	assert.doesNotMatch(SOURCE, /searchCatalog\(/);
+	assert.doesNotMatch(SOURCE, /normalizeExactTagRows/);
+	assert.doesNotMatch(SOURCE, /标签索引/);
 });
 
-test("data search page reuses the same asset filter cache as asset map", () => {
+test("data search keeps the shared asset filter cache and URL tag protocol", () => {
 	assert.match(SOURCE, /catalog\.asset\.filter\.v2/);
 	assert.doesNotMatch(SOURCE, /catalog\.asset\.filter\.v1/);
 	assert.match(SOURCE, /setAssetType\(typeof saved\?\.assetType/);
 	assert.match(SOURCE, /setKeyword\(typeof saved\?\.keyword/);
-});
-
-test("data search sends the same repeated tag filter to every compatible search backend", () => {
 	assert.match(SOURCE, /useSearchParams/);
 	assert.match(SOURCE, /const selectedTagIds = useMemo\([\s\S]*?readTagIds\(searchParams\)/);
 	assert.match(SOURCE, /<AssetTagFilter/);
 	assert.match(SOURCE, /writeTagIds\(searchParams,\s*nextIds\)/);
-	const calls = SOURCE.match(/tagIds:\s*effectiveSelectedTagIds/g) || [];
-	assert.equal(calls.length, 3, "exact, assets-v2 and legacy search must receive the same effective tagIds");
 	assert.match(SOURCE, /if \(!trimmed && effectiveSelectedTagIds\.length === 0\)/);
 });
 
-test("data search consumes hydrated tags without per-result requests", () => {
-	assert.match(SOURCE, /assetType:\s*item\.assetType/);
-	assert.match(SOURCE, /assetTags:\s*Array\.isArray\(item\.assetTags\)/);
-	assert.match(SOURCE, /datasetAssetKey:\s*item\.datasetAssetKey/);
-	assert.match(SOURCE, /datasetAssetTags:\s*Array\.isArray\(item\.datasetAssetTags\)/);
-	assert.match(SOURCE, /所属数据集标签/);
-	assert.match(SOURCE, /<AssetTagChips/);
-	assert.doesNotMatch(SOURCE, /listAssetTags/);
+test("data search hosts the ledger table view with pagination shared by both views", () => {
+	assert.match(SOURCE, /<AssetLedgerView/);
+	assert.match(SOURCE, /records=\{assetRows\}/);
+	assert.match(SOURCE, /view === "table"/);
+	assert.match(SOURCE, /Segmented/);
+	assert.match(SOURCE, /searchParams\.get\("view"\) === "table"/);
+	assert.match(SOURCE, /if \(view === "table"\) params\.set\("view", "table"\)/);
+	assert.match(SOURCE, /<Pagination/);
+	assert.match(SOURCE, /onChange=\{\(page, size\) => void runSearch\(false, page, size\)\}/);
+	assert.match(SOURCE, /共 \{pageState\.total\} 条/);
 });
 
-test("data search renders exact tag hits for every backend-supported asset type", () => {
-	assert.match(SOURCE, /searchCatalogAssetsByTags/);
-	assert.match(SOURCE, /normalizeExactTagRows/);
-	assert.match(SOURCE, /const assetType = String\(item\.assetType/);
-	assert.match(SOURCE, /const assetKey = String\(item\.assetKey/);
-	assert.match(SOURCE, /source:\s*"标签索引"/);
-	assert.match(SOURCE, /tagSearchResult\.status === "fulfilled"/);
-	assert.doesNotMatch(SOURCE, /SUPPORTED_TAG_ASSET_TYPES|TAG_ASSET_TYPE_ALLOWLIST/);
+test("data search keeps the governance-gap deep-link protocol", () => {
+	assert.match(SOURCE, /searchParams\.get\("unclassified"\) === "1"/);
+	assert.match(SOURCE, /searchParams\.get\("stale"\) === "1"/);
+	assert.match(SOURCE, /governanceStatus: governanceFilter/);
+	assert.match(SOURCE, /unclassified: unclassifiedFilter/);
+	assert.match(SOURCE, /stale: staleFilter/);
+	assert.match(SOURCE, /治理缺口筛选/);
+	assert.match(SOURCE, /清除 URL 参数 \?unclassified\/\?stale/);
 });
 
-test("exact tag references do not bypass richer search filters or send legacy table types", () => {
-	assert.match(SOURCE, /const hasExactTagIncompatibleFilters =/);
-	assert.match(SOURCE, /Boolean\(trimmed\)/);
-	assert.match(SOURCE, /datasetType !== "ALL"/);
-	assert.match(SOURCE, /classification !== "ALL"/);
-	assert.match(SOURCE, /warehouseLayer !== "ALL"/);
-	assert.match(SOURCE, /const exactAssetType = assetType === "DATASET" \? "DATASET" : undefined/);
-	assert.match(SOURCE, /const shouldSearchExactTags =/);
-	assert.match(SOURCE, /assetType === "ALL" \|\| assetType === "ASSET" \|\| assetType === "DATASET"/);
-	assert.doesNotMatch(SOURCE, /\["DATASET", "TABLE", "COLUMN"\]\.includes\(assetType\)/);
-});
-
-test("legacy asset portal disables tag filtering with an explicit explanation", () => {
-	assert.match(SOURCE, /ASSET_PORTAL_V2_ENABLED/);
-	assert.match(SOURCE, /const effectiveSelectedTagIds = ASSET_PORTAL_V2_ENABLED \? selectedTagIds : \[\]/);
-	assert.match(SOURCE, /disabled=\{!ASSET_PORTAL_V2_ENABLED\}/);
-	assert.match(SOURCE, /旧版资产门户未启用业务数据标签筛选/);
-});
-
-test("asset result cards use keyboard-native links instead of buttons that contain tag lists", () => {
-	assert.match(SOURCE, /import \{ Link, useSearchParams \} from "react-router"/);
-	assert.equal(SOURCE.match(/<Link/g)?.length, 2);
-	assert.equal(SOURCE.match(/<\/Link>/g)?.length, 2);
+test("data search result cards are keyboard-native links without tag-list buttons", () => {
+	assert.equal(SOURCE.match(/<Link/g)?.length, 1);
+	assert.equal(SOURCE.match(/<\/Link>/g)?.length, 1);
 	assert.match(SOURCE, /to=\{`\/catalog\/datasets\/\$\{row\.id\}`\}/);
 	assert.doesNotMatch(
 		SOURCE,
 		/<button[\s\S]*?<AssetTagChips tags=\{row\.assetTags \|\| \[\]\} variant="inline" \/>[\s\S]*?<\/button>/,
 	);
-});
-
-test("data search ignores stale responses and clears the last URL-backed tag filter", () => {
-	assert.match(SOURCE, /searchRequestSequence/);
-	assert.match(SOURCE, /sequence !== searchRequestSequence\.current/);
-	assert.match(SOURCE, /runSearchRef\.current\(false\)/);
-	assert.match(SOURCE, /setResults\(\[\]\)/);
-	assert.doesNotMatch(SOURCE, /if \(selectedTagIds\.length > 0\)/);
 });
 
 test("URL-backed tag search starts with the synchronously hydrated saved form", () => {
@@ -107,23 +79,19 @@ test("URL-backed tag search starts with the synchronously hydrated saved form", 
 	assert.doesNotMatch(initialEffect, /SEARCH_FORM_STORAGE_KEY|setKeyword/);
 });
 
-test("data search shares the asset-v2 query builder with the ledger as the single source of truth", () => {
+test("data search shares the asset-v2 query builder as the single source of truth", () => {
 	assert.match(SOURCE, /import \{ buildAssetV2Query \} from "\.\/assets\/assetV2Query"/);
 	assert.match(SOURCE, /listCatalogAssetsV2\(\s*buildAssetV2Query\(/);
 	assert.match(SOURCE, /buildAssetV2Query\(\s*\{[\s\S]*?keyword: trimmed/);
 	assert.match(SOURCE, /buildAssetV2Query\(\s*\{[\s\S]*?tagIds: effectiveSelectedTagIds/);
 });
 
-test("data search consumes the same URL deep-link protocol as the ledger", () => {
-	assert.match(SOURCE, /searchParams\.get\("unclassified"\) === "1"/);
-	assert.match(SOURCE, /searchParams\.get\("stale"\) === "1"/);
-	assert.match(SOURCE, /searchParams\.get\("governance"\)/);
+test("data search consumes the same URL deep-link protocol as the retired ledger", () => {
 	assert.match(SOURCE, /searchParams\.get\("layer"\)/);
+	assert.match(SOURCE, /searchParams\.get\("governance"\)/);
 	assert.match(SOURCE, /setUnclassifiedFilter\(true\)/);
 	assert.match(SOURCE, /setStaleFilter\(true\)/);
-	assert.match(SOURCE, /governanceStatus: governanceFilter/);
-	assert.match(SOURCE, /unclassified: unclassifiedFilter/);
-	assert.match(SOURCE, /stale: staleFilter/);
-	assert.match(SOURCE, /治理缺口筛选/);
-	assert.match(SOURCE, /清除 URL 参数 \?unclassified\/\?stale/);
+	assert.match(SOURCE, /params\.set\("domain", domain\)/);
+	assert.match(SOURCE, /params\.set\("layer", warehouseLayer\)/);
+	assert.match(SOURCE, /setSearchParams\(params, \{ replace: true \}\)/);
 });

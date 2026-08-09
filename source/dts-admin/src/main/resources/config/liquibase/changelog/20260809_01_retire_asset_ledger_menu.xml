@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260809-01-retire-asset-ledger-menu" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="portal_menu"/>
+        </preConditions>
+        <comment>
+            UI 收敛：资产台账并入数据搜索页表格视图（/catalog/search?view=table）。
+            /catalog/assets/ledger 旧深链由前端重定向，菜单项 soft-delete 以避免角色授权引用失效。
+        </comment>
+        <sql>
+            UPDATE portal_menu
+               SET deleted = TRUE,
+                   last_modified_by = 'system',
+                   last_modified_date = now()
+             WHERE deleted = FALSE
+               AND (
+                   name = 'sys.nav.portal.dataPortalDetail'
+                   OR metadata LIKE '%"externalLink":"/catalog/assets/ledger"%'
+                   OR metadata LIKE '%"title":"资产台账"%'
+               );
+        </sql>
+    </changeSet>
+</databaseChangeLog>

@@ -518,14 +518,6 @@
               "externalLink": "/catalog/metadata-management"
             },
             {
-              "key": "detail",
-              "path": "detail",
-              "icon": "solar:document-text-bold-duotone",
-              "titleKey": "sys.nav.portal.dataPortalDetail",
-              "title": "资产台账",
-              "externalLink": "/catalog/assets/ledger"
-            },
-            {
               "key": "lineage",
               "path": "lineage",
               "icon": "solar:share-circle-bold-duotone",
