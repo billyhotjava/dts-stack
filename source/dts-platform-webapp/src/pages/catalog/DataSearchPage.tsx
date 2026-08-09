@@ -433,52 +433,84 @@ export default function DataSearchPage() {
 		searchParams.get("assetType"),
 		searchParams.get("datasetType"),
 	].join("\u0000");
+	// biome-ignore lint/correctness/useExhaustiveDependencies: 派生 key 聚合 URL 参数，searchParams 已捕获底层变化
 	useEffect(() => {
 		if (!ASSET_PORTAL_V2_ENABLED) return;
 		const params = searchParams;
 		let merged = false;
+		// 仅当 URL 值与当前筛选不同才合并，避免筛选回写 URL 后触发重复检索
 		const layer = params.get("layer");
-		if (layer) {
+		if (layer && layer !== warehouseLayer) {
 			setWarehouseLayer(layer);
 			merged = true;
 		}
 		const governance = params.get("governance");
-		if (governance) {
+		if (governance && governance !== governanceFilter) {
 			setGovernanceFilter(governance);
 			merged = true;
 		}
 		const domainParam = params.get("domain");
-		if (domainParam) {
+		if (domainParam && domainParam !== domain) {
 			setDomain(domainParam);
 			merged = true;
 		}
 		const classificationParam = params.get("classification");
-		if (classificationParam) {
+		if (classificationParam && classificationParam !== classification) {
 			setClassification(classificationParam);
 			merged = true;
 		}
 		const assetTypeParam = params.get("assetType");
-		if (assetTypeParam) {
+		if (assetTypeParam && assetTypeParam !== assetType) {
 			setAssetType(assetTypeParam);
 			merged = true;
 		}
 		const datasetTypeParam = params.get("datasetType");
-		if (datasetTypeParam) {
+		if (datasetTypeParam && datasetTypeParam !== datasetType) {
 			setDatasetType(datasetTypeParam);
 			merged = true;
 		}
-		if (params.get("unclassified") === "1") {
+		if (params.get("unclassified") === "1" && !unclassifiedFilter) {
 			setUnclassifiedFilter(true);
 			merged = true;
 		}
-		if (params.get("stale") === "1") {
+		if (params.get("stale") === "1" && !staleFilter) {
 			setStaleFilter(true);
 			merged = true;
 		}
 		if (merged) {
 			runSearchRef.current(false);
 		}
-	}, [deepLinkFilterKey]);
+	}, [
+		deepLinkFilterKey,
+		warehouseLayer,
+		governanceFilter,
+		domain,
+		classification,
+		assetType,
+		datasetType,
+		unclassifiedFilter,
+		staleFilter,
+		searchParams,
+	]);
+
+	// 与台账一致的 URL 回写：筛选选择后立即进入 URL（keyword 仍走本地缓存，避免每键重写）
+	const urlFilterKey = [domain || "ALL", assetType, datasetType, classification, warehouseLayer].join("\u0000");
+	// biome-ignore lint/correctness/useExhaustiveDependencies: 派生 key 聚合筛选状态，各状态已作为依赖
+	useEffect(() => {
+		const params = new URLSearchParams(searchParams);
+		if (domain && domain !== "ALL") params.set("domain", domain);
+		else params.delete("domain");
+		if (assetType !== "ALL") params.set("assetType", assetType);
+		else params.delete("assetType");
+		if (datasetType !== "ALL") params.set("datasetType", datasetType);
+		else params.delete("datasetType");
+		if (classification !== "ALL") params.set("classification", classification);
+		else params.delete("classification");
+		if (warehouseLayer !== "ALL") params.set("layer", warehouseLayer);
+		else params.delete("layer");
+		const next = params.toString();
+		if (next !== searchParams.toString()) setSearchParams(params, { replace: true });
+	}, [urlFilterKey, searchParams, setSearchParams]);
 
 	return (
 		<div className="space-y-4">

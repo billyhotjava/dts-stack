@@ -16,6 +16,7 @@ import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { CompactTable } from "@/components/table";
 import { useCatalogMaintainerAccess } from "@/hooks/useModuleManageAccess";
+import { useSearchParams } from "react-router";
 import { useRouter } from "@/routes/hooks";
 import { classificationRank } from "@/utils/classification";
 import {
@@ -101,14 +102,16 @@ const isOpenMetadataUnmapped = (row: MetadataAssetRow) =>
 export default function MetadataManagementPage() {
 	const router = useRouter();
 	const { message: toast } = App.useApp();
+	const [searchParams, setSearchParams] = useSearchParams();
 	const canManage = useCatalogMaintainerAccess();
 	const requestSeqRef = useRef(0);
 	const pageSizeRef = useRef(LEDGER_PAGE_SIZE);
 	const scheduledLoadRef = useRef<number | null>(null);
-	const [keyword, setKeyword] = useState("");
-	const [classification, setClassification] = useState("ALL");
-	const [governanceStatus, setGovernanceStatus] = useState("ALL");
-	const [matchStatus, setMatchStatus] = useState("ALL");
+	// 与台账/搜索一致的 URL 筛选协议：classification/governance/match 可深链、可刷新恢复
+	const [keyword, setKeyword] = useState(() => searchParams.get("keyword") || "");
+	const [classification, setClassification] = useState(() => searchParams.get("classification") || "ALL");
+	const [governanceStatus, setGovernanceStatus] = useState(() => searchParams.get("governance") || "ALL");
+	const [matchStatus, setMatchStatus] = useState(() => searchParams.get("match") || "ALL");
 	const [loading, setLoading] = useState(false);
 	const [loadError, setLoadError] = useState<string | null>(null);
 	const [records, setRecords] = useState<MetadataAssetRow[]>([]);
@@ -185,6 +188,20 @@ export default function MetadataManagementPage() {
 		}, 260);
 		return cancelScheduledLoad;
 	}, [cancelScheduledLoad, loadAssets]);
+
+	useEffect(() => {
+		const params = new URLSearchParams(searchParams);
+		if (keyword.trim()) params.set("keyword", keyword.trim());
+		else params.delete("keyword");
+		if (classification !== "ALL") params.set("classification", classification);
+		else params.delete("classification");
+		if (governanceStatus !== "ALL") params.set("governance", governanceStatus);
+		else params.delete("governance");
+		if (matchStatus !== "ALL") params.set("match", matchStatus);
+		else params.delete("match");
+		const next = params.toString();
+		if (next !== searchParams.toString()) setSearchParams(params, { replace: true });
+	}, [keyword, classification, governanceStatus, matchStatus, searchParams, setSearchParams]);
 
 	const classificationOptions = useMemo(() => {
 		const currentRank = classificationRank(classificationAsset?.classification);

@@ -67,3 +67,13 @@ test("classification rank accepts backend-compatible legacy aliases", () => {
 	assert.equal(classificationRank("DATA_SECRET"), 2);
 	assert.equal(classificationRank("CORE"), 3);
 });
+
+test("metadata management shares the URL filter protocol with the ledger", () => {
+	assert.match(PAGE_SOURCE, /searchParams\.get\("classification"\) \|\| "ALL"/);
+	assert.match(PAGE_SOURCE, /searchParams\.get\("governance"\) \|\| "ALL"/);
+	assert.match(PAGE_SOURCE, /searchParams\.get\("match"\) \|\| "ALL"/);
+	assert.match(PAGE_SOURCE, /params\.set\("classification", classification\)/);
+	assert.match(PAGE_SOURCE, /params\.set\("governance", governanceStatus\)/);
+	assert.match(PAGE_SOURCE, /params\.set\("match", matchStatus\)/);
+	assert.match(PAGE_SOURCE, /setSearchParams\(params, \{ replace: true \}\)/);
+});
