@@ -1,7 +1,7 @@
 # F1: 资产范围导航极简化
 
 **优先级**: P0
-**状态**: READY
+**状态**: IMPLEMENTATION_DONE
 
 ## 目标
 

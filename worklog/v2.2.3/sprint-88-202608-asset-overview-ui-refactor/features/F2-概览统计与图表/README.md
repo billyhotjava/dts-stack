@@ -1,7 +1,7 @@
 # F2: 概览统计与图表
 
 **优先级**: P0
-**状态**: READY
+**状态**: IMPLEMENTATION_DONE
 
 ## 目标
 
