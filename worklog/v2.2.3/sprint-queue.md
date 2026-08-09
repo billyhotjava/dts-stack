@@ -1844,3 +1844,13 @@
 
 **执行顺序**: F0 → F1/F2 → Sprint-83 ModelSpec/dbt 主链 → F3 → F4 → Sprint-83 F6 + Sprint-84 F5 一次集中 E2E。
 **关键决策**: 页面是产品真值；不保留演示数据回退；无真实 owner 的控件删除；概览与关系图只做既有事实投影；所有写审计由服务端业务动作产生；不新增菜单、页面或平行表。
+## Sprint-85: 数据资产体验收敛与功能串联 (202608)
+
+**目录**: `worklog/v2.2.3/sprint-85-202608-data-asset-experience-convergence`
+**状态**: DELIVERED（代码/契约/构建/部署证据齐；E2E 按 G4 登记 BLOCKED_E2E_INPUT，runbook 见 F5 feature）
+**类型**: UX Productization / Feature Convergence / Contract Unification
+**目标**: 资产地图→概览导航收敛；台账/搜索单一事实源+统一 URL 筛选协议；血缘单语义+契约下沉+URL 化；权限申请旅程串联；详情页统一与旧页退役。
+**执行顺序**: F0 概览导航 → F1 单一事实源/筛选协议 → F2 血缘收敛 → F3 权限旅程 → F4 详情统一/旧页退役 → F5 集中验证。
+**证据**: 提交 32292c7d5 / 42c722c79 / f72570ea9 / 336d7a179 / fda18014d；镜像 digest sha256:2442012bd2526389…（回滚锚点 e1c63c07d97c1bc62…）；node 契约 93/100（7 项基线既有失败）；Vitest 15/15。
+**遗留**: E2E 实机一次执行（授权账号）；台账页 800 行契约超限（842 行）与 F5-T04 security 深链断言过期为基线债务，非本 sprint 引入。
+

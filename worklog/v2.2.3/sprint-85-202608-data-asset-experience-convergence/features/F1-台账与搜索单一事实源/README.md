@@ -1,7 +1,7 @@
 # F1：资产台账与搜索单一事实源
 
 **优先级**：P0
-**状态**：DESIGN_APPROVED / IMPLEMENTATION_PENDING
+**状态**：IMPLEMENTATION_DONE
 
 ## 目标
 

@@ -1,7 +1,7 @@
 # F3：权限申请旅程串联
 
 **优先级**：P0
-**状态**：DESIGN_APPROVED / IMPLEMENTATION_PENDING
+**状态**：IMPLEMENTATION_DONE
 
 ## 目标
 

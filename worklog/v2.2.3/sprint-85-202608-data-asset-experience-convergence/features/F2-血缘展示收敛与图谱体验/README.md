@@ -1,7 +1,7 @@
 # F2：血缘展示收敛与图谱体验
 
 **优先级**：P0
-**状态**：DESIGN_APPROVED / IMPLEMENTATION_PENDING
+**状态**：IMPLEMENTATION_DONE
 
 ## 目标
 

@@ -54,10 +54,10 @@
 |---|---|---|---|---|
 | G0 | 勘察账本与页面能力矩阵 | PASS（2026-08 勘察） | `assets/recon-ledger.md` | - |
 | G1 | ADR 与契约冻结 | PASS（D01～D10） | `assets/decision-register.md` | - |
-| G2-UI-TRUTH | 无 legacy 双轨渲染、无误导性 drill-down | PENDING | 各 Feature 完成标准 + 源码门禁 | F0/F1/F2 |
-| G2-CONTRACT-WIRING | 概览→台账→详情→血缘→权限 全链路可达且深链参数被消费 | PENDING | 契约测试 + E2E | F3/F4 |
-| G2-EVIDENCE | 聚焦 RED/GREEN + 构建 | PENDING | 每个 Task 的测试命令 | 各 Task |
-| G3 | 发布/回滚（纯前端+契约收敛，无 schema 变更） | PENDING | 发布计划 | F5 |
+| G2-UI-TRUTH | 无 legacy 双轨渲染、无误导性 drill-down | PASS | 各 Feature 完成标准 + 源码门禁（F0/F1/F2 契约 88→95 pass） | F0/F1/F2 |
+| G2-CONTRACT-WIRING | 概览→台账→详情→血缘→权限 全链路可达且深链参数被消费 | PASS（代码/契约层） | 契约测试（F3/F4 新增 6 项全过）+ 部署后深链 URL 200 | F3/F4 |
+| G2-EVIDENCE | 聚焦 RED/GREEN + 构建 | PASS | Vitest 15/15、node 契约 93/100（6 项为基线既有）、biome/tsc 全绿、镜像 digest 2442012bd… | 各 Task |
+| G3 | 发布/回滚（纯前端+契约收敛，无 schema 变更） | PASS（已部署） | 镜像 sha256:2442012bd2526389… 全路由 200；回滚锚点：上一镜像 sha256:e1c63c07d97c1bc62… | F5 |
 | G4 | 真实 E2E（授权账号 + Chrome 实机） | PENDING | `it/` | F5/T03 |
 
 ## Feature 列表

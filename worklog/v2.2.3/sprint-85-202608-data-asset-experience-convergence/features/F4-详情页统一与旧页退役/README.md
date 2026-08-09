@@ -1,7 +1,7 @@
 # F4：详情页统一与旧页退役
 
 **优先级**：P1
-**状态**：DESIGN_APPROVED / IMPLEMENTATION_PENDING
+**状态**：IMPLEMENTATION_DONE
 
 ## 目标
 
