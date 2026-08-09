@@ -83,12 +83,37 @@ class CatalogAssetOverviewAggregatorTest {
     }
 
     @Test
+    @DisplayName("按层统计去重后的主题域数，供前端诚实展示其他域")
+    void aggregate_countsDistinctDomainsPerLayer() {
+        UUID domainA = UUID.randomUUID();
+        UUID domainB = UUID.randomUUID();
+        CatalogAssetOverviewAggregator.AssetOverview overview = CatalogAssetOverviewAggregator.aggregate(
+            List.of(
+                summaryWithDomain("ODS", domainA),
+                summaryWithDomain("ODS", domainA),
+                summaryWithDomain("ODS", domainB),
+                summaryWithDomain("DWD", null)
+            ),
+            0,
+            false
+        );
+
+        assertThat(overview.domainCountByLayer()).containsEntry("ODS", 2L);
+        assertThat(overview.domainCountByLayer()).doesNotContainKey("DWD");
+        assertThat(overview.domainCountByLayer().get("OTHER")).isNull();
+    }
+
+    @Test
     @DisplayName("截断标记透传，空列表安全")
     void aggregate_truncatedAndEmpty() {
         CatalogAssetOverviewAggregator.AssetOverview overview = CatalogAssetOverviewAggregator.aggregate(List.of(), 0, true);
         assertThat(overview.total()).isZero();
         assertThat(overview.truncated()).isTrue();
         assertThat(overview.matrix()).isEmpty();
+    }
+
+    private AssetSummary summaryWithDomain(String layer, UUID domainId) {
+        return summary(layer, domainId, "INTERNAL", null, "GOVERNED");
     }
 
     private AssetSummary summaryWithLifecycle(String lifecycle) {

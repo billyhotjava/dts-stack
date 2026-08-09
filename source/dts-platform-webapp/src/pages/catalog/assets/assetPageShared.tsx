@@ -3,7 +3,7 @@ import type { CatalogTagDto } from "@/api/catalogTagsApi";
 import type { DomainScopeNode, DomainScopeStats } from "@/components/catalog/DomainScopeNav";
 import { GOVERNANCE_STATUS_DICT } from "./assetEnumLabels";
 
-// DatasetsPage（资产地图/台账）拆分出的共享层：类型、常量、纯工具与指标卡片。
+// DatasetsPage（资产概览/台账）拆分出的共享层：类型、常量、纯工具与指标卡片。
 // 视图组件与页面容器均从此处取用，保持单一事实源。
 
 export type AssetRow = {

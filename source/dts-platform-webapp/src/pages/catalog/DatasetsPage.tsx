@@ -98,6 +98,9 @@ function AssetLedgerPage() {
 	const [warehouseLayer, setWarehouseLayer] = useState<string>(() => searchParams.get("layer") || "ALL");
 	// 地图页缺口面板下钻会带 ?governance=，必须真正接进筛选，否则用户以为筛了实际没筛
 	const [governanceStatus, setGovernanceStatus] = useState<string>(() => searchParams.get("governance") || "ALL");
+	// 地图页缺口下钻的未定密/失效原因：?unclassified=1 / ?stale=1 由台账消费
+	const [unclassifiedFilter, setUnclassifiedFilter] = useState<boolean>(() => searchParams.get("unclassified") === "1");
+	const [staleFilter, setStaleFilter] = useState<boolean>(() => searchParams.get("stale") === "1");
 	const [matchStatus, setMatchStatus] = useState<string>("ALL");
 	const [loading, setLoading] = useState(false);
 	const [syncing, setSyncing] = useState(false);
@@ -147,6 +150,10 @@ function AssetLedgerPage() {
 					typeof saved?.governanceStatus === "string" && saved.governanceStatus ? saved.governanceStatus : "ALL",
 				);
 			}
+			if (!searchParams.get("unclassified") && !searchParams.get("stale")) {
+				setUnclassifiedFilter(saved?.unclassifiedFilter === true);
+				setStaleFilter(saved?.staleFilter === true);
+			}
 			setMatchStatus(typeof saved?.matchStatus === "string" && saved.matchStatus ? saved.matchStatus : "ALL");
 			if (!hasDeepLinkFilters) {
 				// 恢复本地缓存属于「纠正 URL」而非用户导航，用 replace 避免多压一条历史
@@ -189,7 +196,17 @@ function AssetLedgerPage() {
 			void loadGovernanceSignals();
 		}, 280);
 		return () => window.clearTimeout(timer);
-	}, [keyword, domain, assetType, classification, warehouseLayer, governanceStatus, matchStatus]);
+	}, [
+		keyword,
+		domain,
+		assetType,
+		classification,
+		warehouseLayer,
+		governanceStatus,
+		matchStatus,
+		unclassifiedFilter,
+		staleFilter,
+	]);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: tag key intentionally triggers this tag-only reload; stable refs provide the current page size and request function inputs.
 	useEffect(() => {
@@ -212,9 +229,20 @@ function AssetLedgerPage() {
 			warehouseLayer,
 			governanceStatus,
 			matchStatus,
+			unclassifiedFilter,
+			staleFilter,
 		};
 		localStorage.setItem(DATASET_FILTER_STORAGE_KEY, JSON.stringify(payload));
-	}, [keyword, assetType, classification, warehouseLayer, governanceStatus, matchStatus]);
+	}, [
+		keyword,
+		assetType,
+		classification,
+		warehouseLayer,
+		governanceStatus,
+		matchStatus,
+		unclassifiedFilter,
+		staleFilter,
+	]);
 
 	const domainMap = useMemo(() => new Map(domains.map((item) => [item.id, item.name])), [domains]);
 
@@ -256,6 +284,8 @@ function AssetLedgerPage() {
 		warehouseLayer: warehouseLayer === "ALL" ? undefined : warehouseLayer,
 		governanceStatus: governanceStatus === "ALL" ? undefined : governanceStatus,
 		matchStatus: matchStatus === "ALL" ? undefined : matchStatus,
+		unclassified: unclassifiedFilter || undefined,
+		stale: staleFilter || undefined,
 	});
 
 	const buildAssetListQuery = (page = 1, size = LEDGER_PAGE_SIZE) => ({
@@ -378,7 +408,7 @@ function AssetLedgerPage() {
 	const blockingGapCount = Number(governanceGapReport?.severityCounts?.BLOCKING || 0);
 	const lineageFailureCount = Array.isArray(lineageFailureReport?.content) ? lineageFailureReport.content.length : 0;
 	const pageTitle = "资产台账";
-	const pageSubtitle = "核验登记、权属、密级、治理和消费出口。查看统计概览请返回资产地图。";
+	const pageSubtitle = "核验登记、权属、密级、治理和消费出口。查看统计概览请返回资产概览。";
 	const ledgerIssueCount = unclassifiedCount + missingDomainCount + blockingGapCount + lineageFailureCount;
 	const governanceGapRows: GovernanceGapRow[] = Array.isArray(governanceGapReport?.content)
 		? governanceGapReport.content
@@ -624,6 +654,20 @@ function AssetLedgerPage() {
 											.join("；")
 									: undefined
 							}
+						/>
+					) : null}
+
+					{unclassifiedFilter || staleFilter ? (
+						<Alert
+							type="info"
+							showIcon
+							message={`当前列表已按治理缺口筛选：${[
+								unclassifiedFilter ? "未定密" : null,
+								staleFilter ? "已失效（DEPRECATED/ARCHIVED/BLOCKED）" : null,
+							]
+								.filter(Boolean)
+								.join("、")}`}
+							description="该筛选来自资产概览的治理缺口下钻；可清除 URL 参数 ?unclassified/?stale 回到全量列表。"
 						/>
 					) : null}
 

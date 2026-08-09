@@ -44,7 +44,7 @@ type AssetOverview = {
 };
 
 /**
- * 资产地图 = 纯统计概览：全量聚合数据源，零输入控件；
+ * 资产概览 = 纯统计仪表盘：全量聚合数据源，零输入控件；
  * 一切执行动作（搜索/筛选/行级操作/诊断运维）都在台账（/catalog/assets/ledger）。
  */
 export default function AssetOverviewPage() {
@@ -180,8 +180,8 @@ export default function AssetOverviewPage() {
 		const params = new URLSearchParams();
 		if (layer && layer !== "ALL") params.set("layer", layer);
 		if (domainKey === MERGED_DOMAIN_KEY) {
-			// 「其他 N 个域」是展示用的聚合列，不是真实域 id；台账把 domain 当 UUID 绑定，
-			// 传过去会 400。这里只带分层，域维度不加筛选。
+			// 「其他域」是展示用的聚合列，不是真实域 id；台账把 domain 当 UUID 绑定，传过去会 400。
+			// 点击打开该层全部主题域的台账（含已展示的域），文案必须诚实，不做"只筛其他域"的伪装。
 			if (domain) params.set("domain", domain);
 		} else if (domainKey === null) {
 			params.set("domain", UNASSIGNED_DOMAIN_KEY);
@@ -217,7 +217,7 @@ export default function AssetOverviewPage() {
 			...head,
 			{
 				key: MERGED_DOMAIN_KEY,
-				name: `其他 ${rest.length} 个域`,
+				name: `其他域（${rest.length}）`,
 				total: rest.reduce((sum, item) => sum + item.total, 0),
 				mergedNames: rest.map((item) => item.name),
 				mergedKeys: rest.map((item) => (item.key === null ? "__NULL__" : item.key)),
@@ -281,10 +281,13 @@ export default function AssetOverviewPage() {
 		(key: string) => {
 			const params = new URLSearchParams();
 			if (domain) params.set("domain", domain);
-			// 只传台账真正会读取的参数。未定密/失效在台账没有对应筛选位，
-			// 传了也不会生效，反而让用户以为筛过了——宁可只带范围。
-			// 尤其不能传 lifecycle=STALE：该取值不在 CatalogAssetLifecycleStatus 中，恒不命中。
-			if (key !== "UNCLASSIFIED" && key !== "STALE") {
+			// 台账侧已消费 unclassified/stale 过滤（见 DatasetsPage），缺口原因必须真实贯通，
+			// 否则用户以为筛了实际没筛。
+			if (key === "UNCLASSIFIED") {
+				params.set("unclassified", "1");
+			} else if (key === "STALE") {
+				params.set("stale", "1");
+			} else {
 				params.set("governance", key);
 			}
 			const rest = params.toString();
@@ -322,7 +325,7 @@ export default function AssetOverviewPage() {
 			<Layout.Content style={{ padding: "0 16px" }}>
 				<div className="space-y-4">
 					<PageHeader
-						title="资产地图"
+						title="资产概览"
 						actions={
 							<div className="flex items-center gap-2 text-xs text-slate-500">
 								<span>统计更新于 {lastUpdatedText}</span>
@@ -345,6 +348,24 @@ export default function AssetOverviewPage() {
 							className="rounded bg-slate-100 px-2 py-0.5 text-slate-700 transition hover:bg-slate-200"
 						>
 							当前范围：{scopeLabel}
+						</button>
+						<span className="mx-1 text-slate-300">|</span>
+
+						<button
+							type="button"
+							data-testid="goto-lineage-graph"
+							onClick={() => router.push("/catalog/lineage/graph")}
+							className="cursor-pointer text-blue-600 hover:text-blue-700"
+						>
+							查看血缘图谱
+						</button>
+						<button
+							type="button"
+							data-testid="goto-access-apply"
+							onClick={() => router.push("/security/dataset-access-approval?action=new")}
+							className="cursor-pointer text-blue-600 hover:text-blue-700"
+						>
+							申请权限
 						</button>
 					</div>
 					{overview?.truncated ? (
@@ -430,7 +451,16 @@ export default function AssetOverviewPage() {
 											<th className="px-2 py-1 text-left text-xs font-medium text-slate-400">分层 \ 主题域</th>
 											{matrixColumns.map((col) => (
 												<th key={String(col.key)} className="px-2 py-1 text-left text-xs font-medium text-slate-600">
-													<span className="line-clamp-1" title={(col as any).mergedNames?.join("、")}>
+													<span
+														className="line-clamp-1"
+														title={
+															col.key === MERGED_DOMAIN_KEY
+																? "被合并展示的域：" +
+																	((col as any).mergedNames || []).join("、") +
+																	"；点击单元格打开该层全部主题域的台账（含已展示的域）"
+																: (col as any).mergedNames?.join("、")
+														}
+													>
 														{col.name}
 													</span>
 												</th>
@@ -459,6 +489,9 @@ export default function AssetOverviewPage() {
 														<td key={String(col.key)} className="p-0">
 															<button
 																type="button"
+																title={
+																	col.key === MERGED_DOMAIN_KEY ? "打开该层全部主题域的台账（含已展示的域）" : undefined
+																}
 																className={`w-full rounded px-2 py-2 text-center text-xs font-semibold transition hover:ring-2 hover:ring-blue-200 ${cell.attention > 0 ? "bg-amber-50 text-amber-700" : "bg-green-50 text-green-700"}`}
 																onClick={() => drillToLedger(layer, col.key)}
 															>

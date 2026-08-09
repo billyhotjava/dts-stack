@@ -518,7 +518,7 @@ export default function AssetDetailPage() {
 				}
 				extra={
 					<Space wrap>
-						<Button onClick={() => router.push("/catalog/assets")}>资产地图</Button>
+						<Button onClick={() => router.push("/catalog/assets")}>资产概览</Button>
 						<Button onClick={() => void loadDatasets(1, pageState.size)} loading={loading}>
 							刷新
 						</Button>

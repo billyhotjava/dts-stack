@@ -89,7 +89,8 @@ test("不再有进入台账与去台账处置按钮", () => {
 test("矩阵列不再硬编码截断且单域时退化", () => {
 	assert.doesNotMatch(PAGE, /\.slice\(0,\s*8\)/);
 	assert.match(PAGE, /isSingleDomainScope/);
-	assert.match(PAGE, /其他 \$\{rest\.length\} 个域/);
+	assert.match(PAGE, /其他域（\$\{rest\.length\}）/);
+	assert.match(PAGE, /打开该层全部主题域的台账/);
 });
 
 test("分层呈现带中文 label 与弱化代号", () => {

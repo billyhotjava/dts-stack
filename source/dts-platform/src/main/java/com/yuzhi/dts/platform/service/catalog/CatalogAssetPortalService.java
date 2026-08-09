@@ -1433,7 +1433,9 @@ public class CatalogAssetPortalService {
         boolean domainUnassigned,
         List<UUID> tagIds,
         int page,
-        int size
+        int size,
+        Boolean unclassified,
+        Boolean stale
     ) {
         public AssetQuery {
             tagIds = tagIds == null ? List.of() : List.copyOf(tagIds);
@@ -1441,7 +1443,7 @@ public class CatalogAssetPortalService {
 
         /** 无任何筛选的全局查询，用于概览统计。 */
         public static AssetQuery unscoped() {
-            return new AssetQuery(null, null, null, null, null, null, null, null, null, null, null, null, false, List.of(), 0, 200);
+            return new AssetQuery(null, null, null, null, null, null, null, null, null, null, null, null, false, List.of(), 0, 200, null, null);
         }
 
         public AssetQuery(
@@ -1477,7 +1479,9 @@ public class CatalogAssetPortalService {
                 domainUnassigned,
                 List.of(),
                 page,
-                size
+                size,
+                null,
+                null
             );
         }
     }

@@ -311,7 +311,9 @@ class CatalogAssetPortalTagFilterTest {
             false,
             tagIds,
             page,
-            size
+            size,
+            null,
+            null
         );
     }
 

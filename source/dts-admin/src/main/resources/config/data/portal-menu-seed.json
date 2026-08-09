@@ -498,7 +498,7 @@
               "path": "map",
               "icon": "solar:map-point-bold-duotone",
               "titleKey": "sys.nav.portal.dataPortalMap",
-              "title": "资产地图",
+              "title": "资产概览",
               "externalLink": "/catalog/assets"
             },
             {

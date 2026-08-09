@@ -87,6 +87,8 @@ public class CatalogAssetPortalResource {
         @RequestParam(value = "tagIds", required = false) List<UUID> tagIds,
         @RequestParam(value = "page", required = false, defaultValue = "0") int page,
         @RequestParam(value = "size", required = false, defaultValue = "20") int size,
+        @RequestParam(value = "unclassified", required = false) Boolean unclassified,
+        @RequestParam(value = "stale", required = false) Boolean stale,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         String effDept = resolveActiveDepartment(activeDept);
@@ -107,7 +109,9 @@ public class CatalogAssetPortalResource {
                 domainUnassigned,
                 tagIds,
                 page,
-                size
+                size,
+                unclassified,
+                stale
             ),
             effDept
         );

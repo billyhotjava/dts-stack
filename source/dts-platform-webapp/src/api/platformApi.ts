@@ -90,6 +90,8 @@ export type CatalogAssetV2Query = {
 	matchStatus?: string;
 	domainId?: string;
 	domainUnassigned?: boolean;
+	unclassified?: boolean;
+	stale?: boolean;
 	page?: number;
 	size?: number;
 };
@@ -1067,8 +1069,7 @@ export interface RuleRunHistory {
 
 export const getQualityDashboard = () => api.get<QualityDashboard>({ url: "/governance/quality/dashboard" });
 
-export const listQualityDatasetOptions = () =>
-	api.get<QualityDatasetOption[]>({ url: "/governance/quality/datasets" });
+export const listQualityDatasetOptions = () => api.get<QualityDatasetOption[]>({ url: "/governance/quality/datasets" });
 
 export const getQualityScore = (datasetId: string, periodDays?: number) =>
 	api.get<QualityScoreResult>({ url: "/governance/quality/score", params: { datasetId, periodDays } });

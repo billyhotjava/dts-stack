@@ -45,6 +45,7 @@ public final class CatalogAssetOverviewAggregator {
         Map<String, Long> governanceStatusCounts,
         List<MatrixCell> matrix,
         Map<String, DomainStats> byDomain,
+        Map<String, Long> domainCountByLayer,
         int scanned,
         boolean truncated
     ) {}
@@ -111,6 +112,13 @@ public final class CatalogAssetOverviewAggregator {
 
         long untagged = rows.size() - tagged;
         int tagCoveragePercent = rows.isEmpty() ? 0 : (int) Math.round((tagged * 100.0d) / rows.size());
+        Map<String, Long> domainCountByLayer = new LinkedHashMap<>();
+        for (MatrixCell cell : matrix) {
+            if (cell.domainId() == null) {
+                continue;
+            }
+            domainCountByLayer.merge(cell.layer(), 1L, Long::sum);
+        }
         return new AssetOverview(
             rows.size(),
             unclassified,
@@ -124,6 +132,7 @@ public final class CatalogAssetOverviewAggregator {
             governanceStatusCounts,
             matrix,
             byDomain,
+            domainCountByLayer,
             scanned,
             truncated
         );

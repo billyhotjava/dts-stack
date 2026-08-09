@@ -58,7 +58,7 @@ test("data tags reuse the data asset page and do not create another menu entry",
 	const governance = MENU.portalNavSections.find((item) => item.key === "governance");
 	const assets = governance?.children?.find((item) => item.key === "assets");
 	const assetMap = assets?.children?.find((item) => item.key === "map");
-	assert.equal(assetMap?.title, "资产地图");
+	assert.equal(assetMap?.title, "资产概览");
 	assert.equal(assetMap?.externalLink, "/catalog/assets");
 	assert.doesNotMatch(MENU_SEED, /"title": "数据标签"/);
 	assert.doesNotMatch(ROLE_DEFAULTS, /"title": "数据标签"/);

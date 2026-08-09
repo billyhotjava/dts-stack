@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260808-01-data-asset-menu-title" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="portal_menu"/>
+        </preConditions>
+        <comment>
+            Sprint-85 ADR-85-01: rename the asset-map menu entry to 资产概览 so the
+            statistics dashboard is not presented as a navigable map.
+        </comment>
+        <sql>
+            UPDATE portal_menu
+               SET metadata = replace(metadata, '"title":"资产地图"', '"title":"资产概览"'),
+                   last_modified_by = 'system',
+                   last_modified_date = now()
+             WHERE deleted = FALSE
+               AND (
+                   name = 'sys.nav.portal.dataPortalMap'
+                   OR metadata LIKE '%"titleKey":"sys.nav.portal.dataPortalMap"%'
+                   OR metadata LIKE '%"title":"资产地图"%'
+               );
+        </sql>
+    </changeSet>
+</databaseChangeLog>
