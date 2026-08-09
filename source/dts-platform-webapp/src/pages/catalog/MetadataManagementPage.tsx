@@ -279,18 +279,6 @@ export default function MetadataManagementPage() {
 			render: (value?: string) => value || <Tag color="orange">待补齐</Tag>,
 		},
 		{
-			title: "负责人",
-			dataIndex: "owner",
-			width: 140,
-			render: (value?: string) => value || <Tag color="orange">缺负责人</Tag>,
-		},
-		{
-			title: "归属部门",
-			dataIndex: "ownerDept",
-			width: 140,
-			render: (value?: string) => value || "-",
-		},
-		{
 			title: "密级",
 			dataIndex: "classification",
 			width: 120,
@@ -308,18 +296,6 @@ export default function MetadataManagementPage() {
 			render: (_: unknown, row: MetadataAssetRow) => row.domain || row.domainId || <Tag color="orange">缺主题域</Tag>,
 		},
 		{
-			title: "生命周期",
-			dataIndex: "lifecycleStatus",
-			width: 120,
-			render: (value?: string) => value || "-",
-		},
-		{
-			title: "字段",
-			dataIndex: "columnCount",
-			width: 90,
-			render: (value?: number) => value ?? "-",
-		},
-		{
 			title: "映射",
 			dataIndex: "matchStatus",
 			width: 150,
@@ -333,7 +309,7 @@ export default function MetadataManagementPage() {
 		{
 			title: "更新时间",
 			dataIndex: "updatedAt",
-			width: 180,
+			width: 170,
 			render: formatTime,
 		},
 		{
@@ -488,7 +464,19 @@ export default function MetadataManagementPage() {
 								rowKey={(row: MetadataAssetRow) => row.id}
 								columns={columns}
 								dataSource={records}
-								scroll={{ x: 1900 }}
+								scroll={{ x: 1200 }}
+								expandable={{
+									rowExpandable: (row: MetadataAssetRow) =>
+										Boolean(row.owner || row.ownerDept || row.lifecycleStatus || row.columnCount),
+									expandedRowRender: (row: MetadataAssetRow) => (
+										<div className="flex flex-wrap gap-x-8 gap-y-1 px-4 py-2 text-xs text-slate-600">
+											<span>负责人：{row.owner || <span className="text-amber-600">缺负责人</span>}</span>
+											<span>归属部门：{row.ownerDept || "-"}</span>
+											<span>生命周期：{row.lifecycleStatus || "-"}</span>
+											<span>字段数：{row.columnCount ?? "-"}</span>
+										</div>
+									),
+								}}
 								pagination={{
 									current: pageState.page,
 									pageSize: pageState.size,

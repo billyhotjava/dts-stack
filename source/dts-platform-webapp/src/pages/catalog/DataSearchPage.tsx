@@ -1,5 +1,5 @@
 import { DownOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Dropdown, Input, Select, Space, Tabs, Tag } from "antd";
+import { Alert, Button, Card, Dropdown, Input, Select, Tabs, Tag } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { toast } from "sonner";
@@ -527,84 +527,90 @@ export default function DataSearchPage() {
 						description="当前仍可按关键词检索数据集；如需按业务数据标签检索全部资产类型，请启用新版资产门户。"
 					/>
 				) : null}
-				<Space size={12} wrap>
-					<Input.Search
-						placeholder="输入关键词"
-						style={{ width: 320 }}
-						value={keyword}
-						onChange={(event) => setKeyword(event.target.value)}
-						onSearch={() => void runSearch(true)}
-						allowClear
-					/>
-					<Select
-						allowClear
-						placeholder="主题域"
-						style={{ minWidth: 180 }}
-						value={domain || "ALL"}
-						onChange={(value) => setDomain(value === "ALL" ? undefined : value)}
-						options={domainOptions}
-					/>
-					<Select
-						allowClear
-						placeholder="资产类型"
-						style={{ minWidth: 180 }}
-						value={assetType}
-						onChange={(value) => setAssetType(value || "ALL")}
-						options={TYPE_OPTIONS}
-					/>
-					<Select
-						allowClear
-						placeholder="数据源类型"
-						style={{ minWidth: 180 }}
-						value={datasetType}
-						onChange={(value) => setDatasetType(value || "ALL")}
-						options={DATASET_TYPE_OPTIONS}
-					/>
-					<Select
-						allowClear
-						placeholder="密级"
-						style={{ minWidth: 180 }}
-						value={classification}
-						onChange={(value) => setClassification(value || "ALL")}
-						options={CLASSIFICATION_OPTIONS}
-					/>
-					<Select
-						allowClear
-						placeholder="分层"
-						style={{ minWidth: 180 }}
-						value={warehouseLayer}
-						onChange={(value) => setWarehouseLayer(value || "ALL")}
-						options={LAYER_OPTIONS}
-					/>
-					<AssetTagFilter
-						value={selectedTagIds}
-						disabled={!ASSET_PORTAL_V2_ENABLED}
-						onChange={(nextIds) => {
-							setSearchParams(writeTagIds(searchParams, nextIds), { replace: true });
-						}}
-					/>
-					<Button type="primary" onClick={() => void runSearch(true)} loading={loading}>
-						搜索
-					</Button>
-					<Dropdown
-						menu={{
-							items: [
-								{ key: "save", label: "保存当前条件", onClick: saveCurrentQuery },
-								{ key: "restore", label: "恢复已存条件", onClick: restoreSavedQuery },
-								{ type: "divider" },
-								{
-									key: "apply-ledger",
-									label: "应用台账筛选",
-									onClick: applyAssetFilters,
-								},
-							],
-						}}
-					>
-						<Button>
-							条件 <DownOutlined />
+				<div className="flex flex-col gap-2">
+					<div className="flex flex-wrap items-center gap-2">
+						<Input.Search
+							placeholder="输入关键词"
+							style={{ width: 320 }}
+							value={keyword}
+							onChange={(event) => setKeyword(event.target.value)}
+							onSearch={() => void runSearch(true)}
+							allowClear
+						/>
+						<span className="px-1 text-xs text-slate-400">范围</span>
+						<Select
+							allowClear
+							placeholder="主题域"
+							style={{ minWidth: 180 }}
+							value={domain || "ALL"}
+							onChange={(value) => setDomain(value === "ALL" ? undefined : value)}
+							options={domainOptions}
+						/>
+						<Select
+							allowClear
+							placeholder="资产类型"
+							style={{ minWidth: 170 }}
+							value={assetType}
+							onChange={(value) => setAssetType(value || "ALL")}
+							options={TYPE_OPTIONS}
+						/>
+						<Select
+							allowClear
+							placeholder="数据源类型"
+							style={{ minWidth: 170 }}
+							value={datasetType}
+							onChange={(value) => setDatasetType(value || "ALL")}
+							options={DATASET_TYPE_OPTIONS}
+						/>
+					</div>
+					<div className="flex flex-wrap items-center gap-2">
+						<span className="px-1 text-xs text-slate-400">属性</span>
+						<Select
+							allowClear
+							placeholder="密级"
+							style={{ minWidth: 170 }}
+							value={classification}
+							onChange={(value) => setClassification(value || "ALL")}
+							options={CLASSIFICATION_OPTIONS}
+						/>
+						<Select
+							allowClear
+							placeholder="分层"
+							style={{ minWidth: 170 }}
+							value={warehouseLayer}
+							onChange={(value) => setWarehouseLayer(value || "ALL")}
+							options={LAYER_OPTIONS}
+						/>
+						<AssetTagFilter
+							value={selectedTagIds}
+							disabled={!ASSET_PORTAL_V2_ENABLED}
+							onChange={(nextIds) => {
+								setSearchParams(writeTagIds(searchParams, nextIds), { replace: true });
+							}}
+						/>
+						<Button type="primary" onClick={() => void runSearch(true)} loading={loading}>
+							搜索
 						</Button>
-					</Dropdown>
-				</Space>
+						<Dropdown
+							menu={{
+								items: [
+									{ key: "save", label: "保存当前条件", onClick: saveCurrentQuery },
+									{ key: "restore", label: "恢复已存条件", onClick: restoreSavedQuery },
+									{ type: "divider" },
+									{
+										key: "apply-ledger",
+										label: "应用台账筛选",
+										onClick: applyAssetFilters,
+									},
+								],
+							}}
+						>
+							<Button>
+								条件 <DownOutlined />
+							</Button>
+						</Dropdown>
+					</div>
+				</div>
 			</Card>
 
 			<Card title="搜索结果">

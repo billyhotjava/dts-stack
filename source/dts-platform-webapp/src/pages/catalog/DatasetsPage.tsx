@@ -742,17 +742,14 @@ function AssetLedgerPage() {
 						/>
 						<MetricTile
 							icon={<SafetyCertificateOutlined />}
-							label="可消费资产"
-							value={Number(readinessCounts.READY || 0)}
-							footnote={`阻断 ${Number(readinessCounts.BLOCKED || 0)} 个 / 待确认 ${Number(readinessCounts.WARNING || 0)} 个`}
-							tone={Number(readinessCounts.BLOCKED || 0) > 0 ? "text-amber-600" : "text-green-600"}
-						/>
-						<MetricTile
-							icon={<SafetyCertificateOutlined />}
-							label="治理覆盖率"
+							label="治理健康度"
 							value={`${Math.max(0, governanceCoverage)}%`}
-							footnote={`血缘缺口 ${lineageFailureCount} 个 / 失效 ${staleCount} 个`}
-							tone={governanceCoverage >= 80 ? "text-green-600" : "text-amber-600"}
+							footnote={`可消费 ${Number(readinessCounts.READY || 0)} · 阻断 ${Number(readinessCounts.BLOCKED || 0)} · 待确认 ${Number(readinessCounts.WARNING || 0)} · 血缘缺口 ${lineageFailureCount} · 失效 ${staleCount}`}
+							tone={
+								Number(readinessCounts.BLOCKED || 0) > 0 || governanceCoverage < 80
+									? "text-amber-600"
+									: "text-green-600"
+							}
 						/>
 					</div>
 

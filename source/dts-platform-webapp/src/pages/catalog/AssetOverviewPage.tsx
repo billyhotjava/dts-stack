@@ -1,6 +1,6 @@
 import { DatabaseOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Alert, Button, Layout, Spin, Tag, Tooltip } from "antd";
-import { GitBranch, ShieldCheck } from "lucide-react";
+import { GitBranch, MapPin, ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { getCatalogAssetsOverview, getDomainTree, listCatalogAssetsV2 } from "@/api/platformApi";
@@ -25,6 +25,17 @@ const MATRIX_MAX_COLUMNS = 8;
 
 /** 合并列的伪 key。它不是真实域 id，下钻时必须特殊处理，否则台账按 UUID 绑定会 400。 */
 const MERGED_DOMAIN_KEY = "__OTHERS__";
+
+// 矩阵热力：数量分级底色，注意力缺口优先于数量色
+const matrixHeatTone = (total: number, attention: number) => {
+	if (attention > 0) return "bg-amber-50 text-amber-700 hover:bg-amber-100";
+	if (total >= 50) return "bg-green-600 text-white hover:bg-green-700";
+	if (total >= 20) return "bg-green-500 text-white hover:bg-green-600";
+	if (total >= 10) return "bg-green-400 text-white hover:bg-green-500";
+	if (total >= 5) return "bg-green-200 text-green-800 hover:bg-green-300";
+	if (total >= 1) return "bg-green-50 text-green-700 hover:bg-green-100";
+	return "bg-slate-50 text-slate-300";
+};
 
 type MatrixCell = { layer: string; domainId: string | null; total: number; attention: number };
 
@@ -346,8 +357,10 @@ export default function AssetOverviewPage() {
 							type="button"
 							data-testid="scope-echo"
 							onClick={() => drillToLedger()}
-							className="rounded bg-slate-100 px-2 py-0.5 text-slate-700 transition hover:bg-slate-200"
+							title="点击进入当前范围的资产台账"
+							className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-0.5 text-slate-600 transition hover:border-blue-300 hover:text-blue-700"
 						>
+							<MapPin className="h-3.5 w-3.5 text-slate-400" />
 							当前范围：{scopeLabel}
 						</button>
 						<span className="mx-1 text-slate-300">|</span>
@@ -495,7 +508,7 @@ export default function AssetOverviewPage() {
 																title={
 																	col.key === MERGED_DOMAIN_KEY ? "打开该层全部主题域的台账（含已展示的域）" : undefined
 																}
-																className={`w-full rounded px-2 py-2 text-center text-xs font-semibold transition hover:ring-2 hover:ring-blue-200 ${cell.attention > 0 ? "bg-amber-50 text-amber-700" : "bg-green-50 text-green-700"}`}
+																className={`w-full rounded px-2 py-2 text-center text-xs font-semibold transition hover:ring-2 hover:ring-blue-200 ${matrixHeatTone(cell.total, cell.attention)}`}
 																onClick={() => drillToLedger(layer, col.key)}
 															>
 																{cell.total}
