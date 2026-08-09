@@ -17,20 +17,12 @@ import {
 } from "@/api/modelPhysicalPreviewApi";
 import { getModelRepresentation } from "@/api/modelRepresentationApi";
 import {
-	createReleaseCandidate,
 	getModelLifecycle,
 	getModelSpecDependencies,
 	getModelSpecStageGates,
-	getReleaseCandidateWorkbench,
-	lockReleaseCandidate,
 	type ModelLifecycleTimeline,
 	type ModelSpecDependencyGraph,
 	type ModelSpecStageGate,
-	publishReleaseCandidate,
-	type ReleaseCandidateWorkbench,
-	retryReleaseCandidate,
-	startModelBuildIntent,
-	startModelPublicationIntent,
 } from "@/api/modelSpecApi";
 import type {
 	ModelRepresentationView,
@@ -38,6 +30,9 @@ import type {
 	PhysicalPreviewScope,
 } from "@/features/modeling/contracts/modelRepresentationContract";
 import type { CanonicalModelSpecView, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
+import { ModelLifecycleArtifactsTable } from "./ModelLifecycleArtifactsTable";
+import { ModelPublishDialog } from "./ModelPublishDialog";
+import { ModelStageGatePanel } from "./ModelStageGatePanel";
 import { Button, Modal, RequestState, Status } from "./PrototypePrimitives";
 import { normalizeModelingRequestFailure } from "./services/planningProjectionService";
 
@@ -102,7 +97,7 @@ export function ModelWorkbenchDialog({
 	}, [load]);
 
 	if (!dialog || !model) return null;
-	if (dialog === "publish") return <PublishDialog canMaintain={canMaintain} model={model} onClose={onClose} />;
+	if (dialog === "publish") return <ModelPublishDialog canMaintain={canMaintain} model={model} onClose={onClose} />;
 	if (dialog === "preview") return <PhysicalPreviewDialog canMaintain={canMaintain} model={model} onClose={onClose} />;
 	if (dialog === "advanced") return <AdvancedDbtDialog canMaintain={canMaintain} model={model} onClose={onClose} />;
 
@@ -112,7 +107,7 @@ export function ModelWorkbenchDialog({
 		releases: "发布记录",
 		logs: "生命周期日志",
 		quality: "质量与发布门禁",
-		gates: "提交检查",
+		gates: "设计提交检查",
 	}[dialog];
 	return (
 		<Modal
@@ -188,7 +183,10 @@ function DialogContent({
 			</>
 		);
 	}
-	if ((dialog === "gates" || dialog === "quality") && payload.gates) return <GateTable gates={payload.gates} />;
+	if ((dialog === "gates" || dialog === "quality") && payload.gates)
+		return (
+			<ModelStageGatePanel gates={payload.gates} targetStage={dialog === "gates" ? "DESIGNED" : "RELEASE_READY"} />
+		);
 	if ((dialog === "versions" || dialog === "releases" || dialog === "logs") && payload.lifecycle) {
 		const events =
 			dialog === "releases"
@@ -233,269 +231,12 @@ function DialogContent({
 					<RequestState description="当前没有符合条件的生命周期记录。" kind="empty" title="暂无记录" />
 				) : null}
 				{dialog === "versions" && payload.lifecycle.artifacts.length ? (
-					<div className="dmx-table-scroll">
-						<table className="dmx-table">
-							<thead>
-								<tr>
-									<th>制品</th>
-									<th>实现版本</th>
-									<th>物化方式</th>
-									<th>状态</th>
-									<th>校验和</th>
-								</tr>
-							</thead>
-							<tbody>
-								{payload.lifecycle.artifacts.map((item) => (
-									<tr key={item.id}>
-										<td>{item.path}</td>
-										<td>r{item.implementationRevision}</td>
-										<td>{item.materialization}</td>
-										<td>{item.status}</td>
-										<td>{item.checksum}</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
-					</div>
+					<ModelLifecycleArtifactsTable artifacts={payload.lifecycle.artifacts} />
 				) : null}
 			</>
 		);
 	}
 	return <RequestState description={`模型 ${model.name} 当前没有可展示的服务端事实。`} kind="empty" title="暂无数据" />;
-}
-
-function GateTable({ gates }: { gates: ModelSpecStageGate[] }) {
-	return (
-		<div className="dmx-table-scroll">
-			<table className="dmx-table">
-				<thead>
-					<tr>
-						<th>阶段</th>
-						<th>状态</th>
-						<th>阻断项</th>
-						<th>修复入口</th>
-					</tr>
-				</thead>
-				<tbody>
-					{gates.map((gate) => (
-						<tr key={gate.stage}>
-							<td>{gate.stage}</td>
-							<td>
-								<Status tone={gate.status === "READY" ? "success" : "danger"}>{gate.status}</Status>
-							</td>
-							<td>
-								{gate.blockers.length
-									? gate.blockers.map((blocker) => (
-											<div key={`${blocker.code}-${blocker.field}`}>
-												<b>{blocker.code}</b>：{blocker.message}
-											</div>
-										))
-									: "无"}
-							</td>
-							<td>
-								{gate.blockers
-									.map((blocker) => blocker.repairRoute)
-									.filter(Boolean)
-									.join("；") || "—"}
-							</td>
-						</tr>
-					))}
-				</tbody>
-			</table>
-		</div>
-	);
-}
-
-function PublishDialog({
-	model,
-	onClose,
-	canMaintain,
-}: {
-	model: ModelSpecView;
-	onClose: () => void;
-	canMaintain: boolean;
-}) {
-	const [tab, setTab] = useState<"materialize" | "publish">("materialize");
-	const [environment, setEnvironment] = useState("dev");
-	const [reason, setReason] = useState("从模型工作台发布");
-	const [workspace, setWorkspace] = useState<ReleaseCandidateWorkbench | null>(null);
-	const [busy, setBusy] = useState<"load" | "build" | "publish" | "">("load");
-	const [failure, setFailure] = useState<string>("");
-	const load = useCallback(async () => {
-		if (!model.planId) return;
-		setBusy("load");
-		setFailure("");
-		try {
-			setWorkspace(await getReleaseCandidateWorkbench(model.planId));
-		} catch (error) {
-			setFailure(normalizeModelingRequestFailure(error, "发布候选读取失败。").message);
-		} finally {
-			setBusy("");
-		}
-	}, [model.planId]);
-	useEffect(() => {
-		void load();
-	}, [load]);
-	const candidate = workspace?.candidate || null;
-	const candidateContainsModel = Boolean(candidate?.entries.some((entry) => entry.modelSpecId === model.id));
-	const buildAction = workspace?.allowedActions.includes("CREATE_CANDIDATE")
-		? "CREATE_CANDIDATE"
-		: candidateContainsModel && workspace?.allowedActions.includes("RETRY_BUILD")
-			? "RETRY_BUILD"
-			: candidateContainsModel && workspace?.allowedActions.includes("START_BUILD")
-				? "START_BUILD"
-				: null;
-	const canBuild = Boolean(buildAction);
-	const canPublish = Boolean(candidateContainsModel && workspace?.allowedActions.includes("PUBLISH"));
-	const build = async () => {
-		if (!canonical(model) || !canMaintain || !buildAction) return;
-		setBusy("build");
-		setFailure("");
-		try {
-			if (buildAction === "CREATE_CANDIDATE") {
-				const created = await createReleaseCandidate(model.planId, crypto.randomUUID(), {
-					environment,
-					entries: [{ modelSpecId: model.id, sortOrder: 0, selectedReason: "从模型工作台选择" }],
-					reason: "从模型工作台创建单模型候选",
-				});
-				await lockReleaseCandidate(model.planId, created.candidate, crypto.randomUUID(), "从模型工作台启动构建");
-			} else if (buildAction === "RETRY_BUILD" && candidate) {
-				await retryReleaseCandidate(model.planId, candidate, crypto.randomUUID(), "从模型工作台重试构建");
-			} else if (candidate?.origin === "BATCH_WORKBENCH") {
-				await lockReleaseCandidate(model.planId, candidate, crypto.randomUUID(), "从模型工作台启动构建");
-			} else {
-				await startModelBuildIntent(model, crypto.randomUUID(), { planId: model.planId, environment });
-			}
-			await load();
-			setTab("publish");
-		} catch (error) {
-			setFailure(normalizeModelingRequestFailure(error, "物化构建未能启动。").message);
-		} finally {
-			setBusy("");
-		}
-	};
-	const publish = async () => {
-		if (!canonical(model) || !candidate || !canMaintain || !canPublish) return;
-		setBusy("publish");
-		setFailure("");
-		try {
-			const publishReason = reason.trim() || "从模型工作台发布";
-			if (candidate.origin === "BATCH_WORKBENCH")
-				await publishReleaseCandidate(model.planId, candidate, crypto.randomUUID(), publishReason);
-			else await startModelPublicationIntent(model.id, candidate, crypto.randomUUID(), publishReason);
-			await load();
-		} catch (error) {
-			setFailure(normalizeModelingRequestFailure(error, "发布意图未能启动。").message);
-		} finally {
-			setBusy("");
-		}
-	};
-	return (
-		<Modal onClose={onClose} title="发布与物化" wide>
-			{!canMaintain ? (
-				<RequestState description="当前账号只有查看权限，不能启动构建或发布。" kind="permission" title="无发布权限" />
-			) : null}
-			<div className="dmx-publish-grid">
-				<nav>
-					<button className={tab === "materialize" ? "active" : ""} onClick={() => setTab("materialize")} type="button">
-						生成物化任务
-					</button>
-					<button className={tab === "publish" ? "active" : ""} onClick={() => setTab("publish")} type="button">
-						发布模型
-					</button>
-				</nav>
-				<section>
-					{failure ? (
-						<div className="dmx-inline-error" role="alert">
-							{failure}
-						</div>
-					) : null}
-					{!canonical(model) ? (
-						<RequestState description="历史只读模型不能进入发布与物化链路。" kind="empty" title="当前模型不可操作" />
-					) : tab === "materialize" ? (
-						<>
-							<h3>使用 dbt 生成物化任务</h3>
-							<p className="dmx-capability-note">
-								服务端根据模型修订、实现修订和执行目标生成 dbt 选择器与目标关系；前端不拼接 SQL 或表名。
-							</p>
-							<label>
-								<span>执行环境</span>
-								<select onChange={(event) => setEnvironment(event.target.value)} value={environment}>
-									<option value="dev">开发环境</option>
-									<option value="test">测试环境</option>
-									<option value="prod">生产环境</option>
-								</select>
-							</label>
-							<dl className="dmx-summary-list">
-								<dt>模型</dt>
-								<dd>
-									{model.name} · r{model.revision}
-								</dd>
-								<dt>物化方式</dt>
-								<dd>{model.materialization || "由实现策略决定"}</dd>
-								<dt>当前候选</dt>
-								<dd>
-									{workspace?.candidate ? `${workspace.candidate.status} · v${workspace.candidate.version}` : "尚无"}
-								</dd>
-								<dt>主要阻断</dt>
-								<dd>
-									{workspace?.primaryBlocker
-										? `${workspace.primaryBlocker.code}：${workspace.primaryBlocker.message}`
-										: "无"}
-								</dd>
-							</dl>
-							<div className="dmx-dialog-actions">
-								<Button onClick={onClose}>取消</Button>
-								<Button
-									disabled={!canMaintain || !canBuild || Boolean(busy)}
-									primary
-									title={canBuild ? undefined : workspace?.primaryBlocker?.message || "当前候选不允许启动构建"}
-									onClick={() => void build()}
-								>
-									{busy === "build"
-										? "处理中…"
-										: buildAction === "RETRY_BUILD"
-											? "重试构建"
-											: buildAction === "START_BUILD"
-												? "开始构建"
-												: "创建并运行"}
-								</Button>
-							</div>
-						</>
-					) : (
-						<>
-							<h3>发布模型</h3>
-							<p className="dmx-capability-note">只有当前候选包含该模型并且服务端允许 PUBLISH 时才能提交发布。</p>
-							<label>
-								<span>发布说明</span>
-								<input onChange={(event) => setReason(event.target.value)} value={reason} />
-							</label>
-							<dl className="dmx-summary-list">
-								<dt>候选状态</dt>
-								<dd>{workspace?.candidate?.status || "尚无候选"}</dd>
-								<dt>在线就绪证据</dt>
-								<dd>{workspace?.evidence.map((item) => `${item.type}:${item.state}`).join("；") || "—"}</dd>
-								<dt>允许动作</dt>
-								<dd>{workspace?.allowedActions.join("、") || "—"}</dd>
-								<dt>主要阻断</dt>
-								<dd>
-									{workspace?.primaryBlocker
-										? `${workspace.primaryBlocker.code}：${workspace.primaryBlocker.message}`
-										: "无"}
-								</dd>
-							</dl>
-							<div className="dmx-dialog-actions">
-								<Button onClick={onClose}>取消</Button>
-								<Button disabled={!canMaintain || !canPublish || Boolean(busy)} primary onClick={() => void publish()}>
-									{busy === "publish" ? "发布中…" : "发布"}
-								</Button>
-							</div>
-						</>
-					)}
-				</section>
-			</div>
-		</Modal>
-	);
 }
 
 function AdvancedDbtDialog({

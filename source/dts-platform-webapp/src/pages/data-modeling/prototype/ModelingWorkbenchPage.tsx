@@ -27,8 +27,8 @@ import {
 	isConceptDimensionDraft,
 	isDimensionTableDraft,
 	isModelSpecDraft,
-	loadModelWorkbenchDraft,
 	loadModelWorkbenchContext,
+	loadModelWorkbenchDraft,
 	MODEL_KIND_CONFIG,
 	type ModelCreateKind,
 	type ModelDraft,
@@ -75,6 +75,10 @@ export function resolveRequestedModelSelection<T extends { id: string }>(
 
 export function shouldBlockWorkbenchNavigation(dirty: boolean, currentPathname: string, nextPathname: string): boolean {
 	return dirty && currentPathname !== nextPathname;
+}
+
+export function resolveWorkbenchCreateAction(hasDraft: boolean, createMenuOpen: boolean) {
+	return !hasDraft && !createMenuOpen ? "CREATE_DIMENSION_TABLE" : "TOGGLE_CREATE_MENU";
 }
 
 export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
@@ -274,10 +278,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		const children = all.filter((item) => Boolean(item.parentCode));
 		return children.length ? children : all;
 	}, [context?.domains]);
-	const categoryRoots = useMemo(
-		() => (context?.domains || []).filter((item) => !item.parentCode),
-		[context?.domains],
-	);
+	const categoryRoots = useMemo(() => (context?.domains || []).filter((item) => !item.parentCode), [context?.domains]);
 	const domainByCode = useMemo(
 		() => new Map((context?.domains || []).map((item) => [item.code, item])),
 		[context?.domains],
@@ -653,6 +654,10 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 						onToggleCreate={() => {
 							setCreateCategory("");
 							setCreateQuery("");
+							if (resolveWorkbenchCreateAction(Boolean(draft), createOpen) === "CREATE_DIMENSION_TABLE") {
+								createModel("dimension-table");
+								return;
+							}
 							setCreateOpen((open) => !open);
 						}}
 						onToggleDomain={(key) => setDomainOpen((current) => ({ ...current, [key]: current[key] === false }))}

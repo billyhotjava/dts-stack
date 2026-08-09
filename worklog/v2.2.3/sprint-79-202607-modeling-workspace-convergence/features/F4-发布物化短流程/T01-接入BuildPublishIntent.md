@@ -35,3 +35,11 @@
 
 - 工作台仍只调用既有 Build/Publish Intent 与 Candidate owner，不新增发布状态表或前端 approve/publish 串联。
 - 本轮完成的是下游运行时租约安全收口，不把它等同于 IT-05 发布旅程通过。
+
+## 2026-08-09 日期维度物化回归证据
+
+- 修复 `MATERIALIZATION_ARTIFACT_MISSING`：工作台先读取已保存的 `ModelImplementation` 并调用 canonical lifecycle compile，编译成功后才创建、锁定 Candidate；编译失败或实现缺失时不创建 Candidate。
+- 定向 Vitest：3 个文件、17 个用例通过；`pnpm build`（TypeScript + legacy browser 产物）通过。
+- 受控浏览器回归：1/1 通过，写调用严格为 `lifecycle/compile → release-candidates → candidate/lock`，无非预期写请求、控制台错误或请求失败；1366×768 与 768×900 截图位于 `/tmp/dts-modeling-workbench-results/`。
+- 本机只有 Chrome 150，未提供 Chrome 95 可执行文件；本轮已验证 Chrome 95 构建目标与现代 Chromium 运行，但不替代 Chrome 95 真机回归。
+- 保存的真实认证态已失效并返回 401，因此浏览器写链采用受控 API fixture，未改动共享租户数据；IT-05 的真实认证 Candidate 旅程仍保持 PENDING。

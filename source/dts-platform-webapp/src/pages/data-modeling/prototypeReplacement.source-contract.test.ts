@@ -92,6 +92,9 @@ describe("prototype-owned data modeling frontend", () => {
 		const shouldBlockWorkbenchNavigation = module.shouldBlockWorkbenchNavigation as
 			| ((dirty: boolean, currentPathname: string, nextPathname: string) => boolean)
 			| undefined;
+		const resolveWorkbenchCreateAction = module.resolveWorkbenchCreateAction as
+			| ((hasDraft: boolean, createMenuOpen: boolean) => "CREATE_DIMENSION_TABLE" | "TOGGLE_CREATE_MENU")
+			| undefined;
 		const fallback = { id: "model-1" };
 		const requested = { id: "model-2" };
 
@@ -127,6 +130,12 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(
 			shouldBlockWorkbenchNavigation(false, "/data-modeling/dimensions/workbench", "/data-modeling/dimensions/reverse"),
 		).toBe(false);
+
+		expect(resolveWorkbenchCreateAction).toBeTypeOf("function");
+		if (!resolveWorkbenchCreateAction) return;
+		expect(resolveWorkbenchCreateAction(false, false)).toBe("CREATE_DIMENSION_TABLE");
+		expect(resolveWorkbenchCreateAction(true, false)).toBe("TOGGLE_CREATE_MENU");
+		expect(resolveWorkbenchCreateAction(false, true)).toBe("TOGGLE_CREATE_MENU");
 	});
 
 	it("integrates the approved editor contract into the workbench orchestrator", () => {
@@ -182,6 +191,7 @@ describe("prototype-owned data modeling frontend", () => {
 		const widgets = read("./prototype/WorkbenchCatalogWidgets.tsx");
 		const catalogActions = read("./prototype/useCatalogActions.ts");
 		const modelDialogs = read("./prototype/ModelWorkbenchDialog.tsx");
+		const modelPublishDialog = read("./prototype/ModelPublishDialog.tsx");
 		const reverse = read("./prototype/ReverseModelingPage.tsx");
 		const tools = read("./prototype/ToolsPage.tsx");
 		const standardsService = read("./prototype/services/standardsProjectionService.ts");
@@ -219,9 +229,11 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(catalogActions).toMatch(/deleteModelSpec|deleteDimensionDefinition|retireDimensionDefinition/);
 		expect(modeling).toMatch(/getModelRepresentation|representationScope: "BUSINESS"|useDataModelingMenuGrant/);
 		expect(modelDialogs).toMatch(/representationScope: "TECHNICAL"|OPEN_ADVANCED_DBT|canMaintain/);
-		expect(modelDialogs).toMatch(
+		expect(modelPublishDialog).toMatch(/getModelLifecycle|compileModelLifecycle/);
+		expect(modelPublishDialog).toMatch(
 			/createReleaseCandidate|lockReleaseCandidate|retryReleaseCandidate|publishReleaseCandidate/,
 		);
+		expect(modelDialogs.trimEnd().split("\n").length).toBeLessThanOrEqual(800);
 		expect(modelDialogs).toMatch(/state: "COMMITTED"|创建新草稿/);
 		expect(reverse).toMatch(/inspectDbtModelArchive|previewModelSpecImport|applyModelSpecImport/);
 		expect(reverse).toMatch(/retryModelSpecImport|forwardUndoModelSpecImport|renameMappings/);

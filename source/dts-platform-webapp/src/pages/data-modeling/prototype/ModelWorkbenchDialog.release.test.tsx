@@ -3,7 +3,8 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ReleaseCandidate, ReleaseCandidateWorkbench } from "@/api/modelSpecApi";
+import type { ModelSpecStageGate, ReleaseCandidate, ReleaseCandidateWorkbench } from "@/api/modelSpecApi";
+import type { ModelImplementationView } from "@/features/modeling/contracts/modelImplementationContract";
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { ModelWorkbenchDialog } from "./ModelWorkbenchDialog";
 
@@ -15,6 +16,9 @@ const apiMocks = vi.hoisted(() => ({
 	retryCandidate: vi.fn(),
 	startBuildIntent: vi.fn(),
 	startPublicationIntent: vi.fn(),
+	getStageGates: vi.fn(),
+	getLifecycle: vi.fn(),
+	compileLifecycle: vi.fn(),
 	getRepresentation: vi.fn(),
 	createDbtDraft: vi.fn(),
 	saveDbtFiles: vi.fn(),
@@ -31,6 +35,9 @@ vi.mock("@/api/modelSpecApi", async (importOriginal) => ({
 	retryReleaseCandidate: apiMocks.retryCandidate,
 	startModelBuildIntent: apiMocks.startBuildIntent,
 	startModelPublicationIntent: apiMocks.startPublicationIntent,
+	getModelSpecStageGates: apiMocks.getStageGates,
+	getModelLifecycle: apiMocks.getLifecycle,
+	compileModelLifecycle: apiMocks.compileLifecycle,
 }));
 
 vi.mock("@/api/modelRepresentationApi", () => ({ getModelRepresentation: apiMocks.getRepresentation }));
@@ -53,6 +60,25 @@ const model = {
 	implementationMode: "DESIGNER_GENERATED",
 	materialization: "table",
 } as unknown as ModelSpecView;
+
+const implementation = {
+	id: "40000000-0000-0000-0000-000000000001",
+	modelSpecId: model.id,
+	planId: model.planId,
+	revision: model.revision,
+	modelChecksum: model.checksum,
+	ownership: "DESIGNER_GENERATED",
+	projectKey: "system-managed",
+	dbtUniqueId: `model.${model.id}`,
+	status: "ACTIVE",
+	implementationRevision: 1,
+	implementationChecksum: "implementation-checksum",
+	inputMode: "GENERATED",
+	inputs: [{ generatorType: "DATE_DIMENSION", config: {} }],
+	fieldMappings: [],
+	settings: { targetPhysicalName: "dim_budget_date", loadStrategy: "FULL", partitionFields: [] },
+	materialization: "table",
+} satisfies ModelImplementationView;
 
 const candidate = (origin: ReleaseCandidate["origin"], status = "DRAFT"): ReleaseCandidate =>
 	({
@@ -98,6 +124,8 @@ beforeEach(() => {
 	document.body.appendChild(container);
 	root = createRoot(container);
 	Object.values(apiMocks).forEach((mock) => mock.mockReset());
+	apiMocks.getLifecycle.mockResolvedValue({ implementation, artifacts: [], events: [] });
+	apiMocks.compileLifecycle.mockResolvedValue({ implementation, artifacts: [], event: {} });
 	vi.stubGlobal("crypto", { randomUUID: vi.fn(() => "idem-1") });
 });
 
@@ -120,6 +148,8 @@ describe("release and materialization dispatch", () => {
 		await flush();
 		await act(async () => button("创建并运行")?.click());
 
+		expect(apiMocks.getLifecycle).toHaveBeenCalledWith(model.id);
+		expect(apiMocks.compileLifecycle).toHaveBeenCalledWith(model, implementation, "idem-1");
 		expect(apiMocks.createCandidate).toHaveBeenCalledWith(
 			model.planId,
 			"idem-1",
@@ -128,7 +158,43 @@ describe("release and materialization dispatch", () => {
 			}),
 		);
 		expect(apiMocks.lockCandidate).toHaveBeenCalledWith(model.planId, created, "idem-1", "从模型工作台启动构建");
+		expect(apiMocks.compileLifecycle.mock.invocationCallOrder[0]).toBeLessThan(
+			apiMocks.createCandidate.mock.invocationCallOrder[0],
+		);
+		expect(apiMocks.createCandidate.mock.invocationCallOrder[0]).toBeLessThan(
+			apiMocks.lockCandidate.mock.invocationCallOrder[0],
+		);
 		expect(apiMocks.startBuildIntent).not.toHaveBeenCalled();
+	});
+
+	it("does not create a release candidate when lifecycle compilation fails", async () => {
+		apiMocks.getWorkbench.mockResolvedValue(workspace(["CREATE_CANDIDATE"], null));
+		apiMocks.compileLifecycle.mockRejectedValue(new Error("当前模型实现编译失败"));
+
+		await act(async () =>
+			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+		);
+		await flush();
+		await act(async () => button("创建并运行")?.click());
+
+		expect(apiMocks.createCandidate).not.toHaveBeenCalled();
+		expect(apiMocks.lockCandidate).not.toHaveBeenCalled();
+		expect(container.textContent).toContain("当前模型实现编译失败");
+	});
+
+	it("does not create a release candidate when the saved implementation is missing", async () => {
+		apiMocks.getWorkbench.mockResolvedValue(workspace(["CREATE_CANDIDATE"], null));
+		apiMocks.getLifecycle.mockResolvedValue({ implementation: null, artifacts: [], events: [] });
+
+		await act(async () =>
+			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+		);
+		await flush();
+		await act(async () => button("创建并运行")?.click());
+
+		expect(apiMocks.compileLifecycle).not.toHaveBeenCalled();
+		expect(apiMocks.createCandidate).not.toHaveBeenCalled();
+		expect(container.textContent).toContain("当前模型尚未保存可编译的数据实现");
 	});
 
 	it("uses retry for a failed candidate instead of replaying the single-model build intent", async () => {
@@ -160,6 +226,46 @@ describe("release and materialization dispatch", () => {
 
 		expect(apiMocks.publishCandidate).toHaveBeenCalledWith(model.planId, approved, "idem-1", "从模型工作台发布");
 		expect(apiMocks.startPublicationIntent).not.toHaveBeenCalled();
+	});
+});
+
+describe("stage gate dispatch", () => {
+	it("binds submit check to DESIGNED instead of future RELEASE_READY blockers", async () => {
+		apiMocks.getStageGates.mockResolvedValue([
+			{
+				modelSpecId: model.id,
+				revision: model.revision,
+				checksum: model.checksum,
+				stage: "DESIGNED",
+				status: "READY",
+				blockers: [],
+			},
+			{
+				modelSpecId: model.id,
+				revision: model.revision,
+				checksum: model.checksum,
+				stage: "RELEASE_READY",
+				status: "BLOCKED",
+				blockers: [
+					{
+						code: "MODEL_SPEC_PERMISSION_EVIDENCE_STALE",
+						field: "fields",
+						message: "字段权限分级未完成",
+						repairRoute: "/modeling/models/model-1?tab=governance",
+					},
+				],
+			},
+		] satisfies ModelSpecStageGate[]);
+
+		await act(async () =>
+			root.render(<ModelWorkbenchDialog canMaintain dialog="gates" model={model} onClose={vi.fn()} />),
+		);
+		await flush();
+
+		expect(container.textContent).toContain("设计提交检查");
+		expect(container.querySelectorAll("tbody tr")).toHaveLength(1);
+		expect(container.querySelector("tbody")?.textContent).toContain("DESIGNED");
+		expect(container.textContent).not.toContain("MODEL_SPEC_PERMISSION_EVIDENCE_STALE");
 	});
 });
 
