@@ -9,6 +9,7 @@ import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.modeling.SubjectDomainRepository;
 import com.yuzhi.dts.platform.repository.modeling.SubjectDomainRepository.StoredSubjectDomain;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.ArchitectureDictionaryWriteGuard;
 import com.yuzhi.dts.platform.service.modeling.SubjectDomainContract.CreateCommand;
 import com.yuzhi.dts.platform.service.modeling.SubjectDomainContract.ExpectedVersion;
 import com.yuzhi.dts.platform.service.modeling.SubjectDomainContract.FieldIssue;
@@ -37,14 +38,17 @@ public class SubjectDomainApplicationService {
     private final SubjectDomainRepository repository;
     private final AuditService auditService;
     private final ObjectWriter canonicalWriter;
+    private final ArchitectureDictionaryWriteGuard writeGuard;
 
     public SubjectDomainApplicationService(
         SubjectDomainRepository repository,
         AuditService auditService,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        ArchitectureDictionaryWriteGuard writeGuard
     ) {
         this.repository = repository;
         this.auditService = auditService;
+        this.writeGuard = writeGuard;
         this.canonicalWriter = objectMapper
             .copy()
             .enable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
@@ -54,6 +58,7 @@ public class SubjectDomainApplicationService {
 
     @Transactional
     public CreateResult create(String tenantId, String actorId, CreateCommand command) {
+        writeGuard.requireWriteAccess();
         requireContext(tenantId, actorId);
         reject(SubjectDomainContract.validateCreate(command));
         String requestHash = hash(command);
@@ -115,6 +120,7 @@ public class SubjectDomainApplicationService {
 
     @Transactional
     public View update(String tenantId, String actorId, UUID id, ExpectedVersion expected, UpdateCommand command) {
+        writeGuard.requireWriteAccess();
         requireContext(tenantId, actorId);
         reject(SubjectDomainContract.validateUpdate(command));
         requireActiveMart(tenantId, command.martId());
@@ -145,11 +151,13 @@ public class SubjectDomainApplicationService {
 
     @Transactional
     public View confirm(String tenantId, String actorId, UUID id, ExpectedVersion expected) {
+        writeGuard.requireWriteAccess();
         return transition(tenantId, actorId, id, expected, Status.CURRENT);
     }
 
     @Transactional
     public View retire(String tenantId, String actorId, UUID id, ExpectedVersion expected) {
+        writeGuard.requireWriteAccess();
         return transition(tenantId, actorId, id, expected, Status.RETIRED);
     }
 
@@ -292,7 +300,7 @@ public class SubjectDomainApplicationService {
         payload.put("actor", actorId);
         payload.put("code", view.code());
         payload.put("name", view.name());
-        auditService.auditAction(action, AuditStage.SUCCESS, view.id().toString(), payload);
+        auditService.auditActionStrict(action, AuditStage.SUCCESS, view.id().toString(), payload);
     }
 
     private static void requireContext(String tenantId, String actorId) {

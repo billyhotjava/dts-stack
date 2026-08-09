@@ -1,7 +1,11 @@
 package com.yuzhi.dts.platform.web.rest;
 
+import static com.yuzhi.dts.platform.service.catalog.ArchitectureDictionaryWriteGuard.WRITE_EXPRESSION;
+import static com.yuzhi.dts.platform.service.modeling.BusinessProcessApplicationService.AuditSurface.LEGACY;
+
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.modeling.BusinessProcessApplicationService;
 import com.yuzhi.dts.platform.service.sprint64.Sprint64GovernanceService;
 import com.yuzhi.dts.platform.service.sprint64.Sprint64GovernanceService.BusinessProcessDto;
 import com.yuzhi.dts.platform.service.sprint64.Sprint64GovernanceService.BusinessProcessRequest;
@@ -38,33 +42,34 @@ public class Sprint64GovernanceResource {
 
     private final Sprint64GovernanceService service;
     private final AuditService audit;
+    private final BusinessProcessApplicationService businessProcesses;
 
-    public Sprint64GovernanceResource(Sprint64GovernanceService service, AuditService audit) {
+    public Sprint64GovernanceResource(
+        Sprint64GovernanceService service,
+        AuditService audit,
+        BusinessProcessApplicationService businessProcesses
+    ) {
         this.service = service;
         this.audit = audit;
+        this.businessProcesses = businessProcesses;
     }
 
     @GetMapping("/domains/{domainId}/processes")
     @Transactional(readOnly = true)
     public ApiResponse<List<BusinessProcessDto>> listProcesses(@PathVariable UUID domainId) {
-        List<BusinessProcessDto> data = service.listProcesses(domainId);
-        audit.auditAction("SPRINT64_PROCESS_LIST", AuditStage.SUCCESS, domainId.toString(), Map.of("count", data.size()));
-        return ApiResponses.ok(data);
+        return ApiResponses.ok(businessProcesses.list(domainId, LEGACY));
     }
 
     @PostMapping("/domains/{domainId}/processes")
-    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
+    @PreAuthorize(WRITE_EXPRESSION)
     public ApiResponse<BusinessProcessDto> createProcess(@PathVariable UUID domainId, @RequestBody BusinessProcessRequest request) {
-        BusinessProcessDto data = service.createProcess(domainId, request);
-        audit.auditAction("SPRINT64_PROCESS_CREATE", AuditStage.SUCCESS, data.processId(), Map.of("domainId", domainId.toString()));
-        return ApiResponses.ok(data);
+        return ApiResponses.ok(businessProcesses.create(domainId, request, LEGACY));
     }
 
     @DeleteMapping("/domains/{domainId}/processes/{processId}")
-    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
+    @PreAuthorize(WRITE_EXPRESSION)
     public ApiResponse<Boolean> deleteProcess(@PathVariable UUID domainId, @PathVariable String processId) {
-        service.deleteProcess(domainId, processId);
-        audit.auditAction("SPRINT64_PROCESS_DELETE", AuditStage.SUCCESS, processId, Map.of("domainId", domainId.toString()));
+        businessProcesses.delete(domainId, processId, LEGACY);
         return ApiResponses.ok(Boolean.TRUE);
     }
 

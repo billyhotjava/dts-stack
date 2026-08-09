@@ -15,7 +15,11 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.security.session.PortalSessionInactivityFilter;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.ArchitectureDictionaryWriteGuard;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetPortalService;
+import com.yuzhi.dts.platform.service.catalog.CatalogDomainCommandService;
 import com.yuzhi.dts.platform.service.catalog.CatalogDomainVisibilityService;
+import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftRejectionAudit;
 import com.yuzhi.dts.platform.web.filter.AuditLoggingFilter;
 import java.util.Optional;
 import java.util.UUID;
@@ -28,6 +32,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(
@@ -37,6 +42,7 @@ import org.springframework.test.web.servlet.MockMvc;
 )
 @AutoConfigureMockMvc(addFilters = false)
 @WithMockUser(authorities = "ROLE_INST_DATA_OWNER")
+@Import({ CatalogDomainCommandService.class, ArchitectureDictionaryWriteGuard.class })
 class CatalogDomainResourceWebMvcTest {
 
     @Autowired
@@ -55,10 +61,19 @@ class CatalogDomainResourceWebMvcTest {
     private CatalogDomainVisibilityService visibilityService;
 
     @MockBean
+    private CatalogAssetPortalService assetPortalService;
+
+    @MockBean
+    private CatalogResourceHelper catalogResourceHelper;
+
+    @MockBean
     private PortalSessionInactivityFilter portalSessionInactivityFilter;
 
     @MockBean
     private AuditLoggingFilter auditLoggingFilter;
+
+    @MockBean
+    private DbtImplementationDraftRejectionAudit dbtImplementationDraftRejectionAudit;
 
     @BeforeEach
     void setUp() {
@@ -154,5 +169,20 @@ class CatalogDomainResourceWebMvcTest {
                     .content("{\"name\":\"受限分类\",\"accessPolicy\":\"RESTRICTED\"}")
             )
             .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(authorities = "ROLE_DEPT_DATA_OWNER")
+    void departmentDataOwnerCannotWritePlatformArchitectureDictionary() throws Exception {
+        mockMvc
+            .perform(
+                post("/api/catalog/domains")
+                    .with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"name\":\"部门自建分类\",\"code\":\"dept_owned\"}")
+            )
+            .andExpect(status().isForbidden());
+
+        verify(domainRepository, never()).save(any(CatalogDomain.class));
     }
 }

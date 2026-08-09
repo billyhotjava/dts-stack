@@ -8,6 +8,7 @@ import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehouseLayerEx
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.modeling.WarehouseLayerRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.ArchitectureDictionaryWriteGuard;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.Layer;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehouseLayerContract.CreateWarehouseLayerCommand;
@@ -61,10 +62,16 @@ public class WarehouseLayerApplicationService {
 
     private final WarehouseLayerRepository repository;
     private final AuditService auditService;
+    private final ArchitectureDictionaryWriteGuard writeGuard;
 
-    public WarehouseLayerApplicationService(WarehouseLayerRepository repository, AuditService auditService) {
+    public WarehouseLayerApplicationService(
+        WarehouseLayerRepository repository,
+        AuditService auditService,
+        ArchitectureDictionaryWriteGuard writeGuard
+    ) {
         this.repository = repository;
         this.auditService = auditService;
+        this.writeGuard = writeGuard;
     }
 
     public List<WarehouseLayerView> list() {
@@ -103,6 +110,7 @@ public class WarehouseLayerApplicationService {
 
     @Transactional
     public WarehouseLayerView create(String actor, CreateWarehouseLayerCommand command) {
+        writeGuard.requireWriteAccess();
         requireActor(actor);
         if (command == null) {
             throw error("WAREHOUSE_LAYER_CODE_INVALID", "请求体不能为空", BAD_REQUEST, Map.of("field", "code"));
@@ -156,6 +164,7 @@ public class WarehouseLayerApplicationService {
 
     @Transactional(noRollbackFor = WarehouseLayerException.class)
     public void delete(String actor, String code) {
+        writeGuard.requireWriteAccess();
         requireActor(actor);
         String normalized = code == null ? "" : code.trim().toUpperCase(Locale.ROOT);
         if (Sprint64GovernanceContract.resolveLayer(normalized).isPresent()) {

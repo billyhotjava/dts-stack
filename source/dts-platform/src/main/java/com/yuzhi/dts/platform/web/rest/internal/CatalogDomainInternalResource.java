@@ -1,8 +1,8 @@
 package com.yuzhi.dts.platform.web.rest.internal;
 
-import com.yuzhi.dts.platform.domain.catalog.CatalogDomain;
-import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
+import com.yuzhi.dts.platform.service.catalog.CatalogDomainDictionaryReadPort;
+import com.yuzhi.dts.platform.service.catalog.CatalogDomainDictionaryReadPort.DomainRecord;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -27,10 +27,10 @@ public class CatalogDomainInternalResource {
 
     private static final int MAX_REFS = 200;
 
-    private final CatalogDomainRepository domainRepository;
+    private final CatalogDomainDictionaryReadPort domains;
 
-    public CatalogDomainInternalResource(CatalogDomainRepository domainRepository) {
-        this.domainRepository = domainRepository;
+    public CatalogDomainInternalResource(CatalogDomainDictionaryReadPort domains) {
+        this.domains = domains;
     }
 
     @PostMapping("/resolve")
@@ -45,9 +45,9 @@ public class CatalogDomainInternalResource {
 
         Set<String> lookupCodes = new LinkedHashSet<>();
         requestedRefs.forEach(ref -> lookupCodes.addAll(codeCandidates(ref)));
-        Map<String, List<CatalogDomain>> domainsByCandidate = indexDomains(domainRepository.findByCodeLowerIn(lookupCodes));
+        Map<String, List<DomainRecord>> domainsByCandidate = indexDomains(domains.findByCodeCandidates(lookupCodes));
 
-        List<DomainContract> domains = new ArrayList<>();
+        List<DomainContract> resolvedDomains = new ArrayList<>();
         List<String> missing = new ArrayList<>();
         List<String> ambiguous = new ArrayList<>();
         for (String ref : requestedRefs) {
@@ -56,14 +56,14 @@ public class CatalogDomainInternalResource {
                 ambiguous.add(ref);
                 continue;
             }
-            CatalogDomain domain = resolved.domain();
+            DomainRecord domain = resolved.domain();
             if (domain == null) {
                 missing.add(ref);
                 continue;
             }
-            domains.add(new DomainContract(ref, domain.getId(), domain.getCode(), domain.getName(), domain.getOwner()));
+            resolvedDomains.add(new DomainContract(ref, domain.id(), domain.code(), domain.name(), domain.owner()));
         }
-        return ResponseEntity.ok(new ResolveResponse(domains, missing, ambiguous));
+        return ResponseEntity.ok(new ResolveResponse(resolvedDomains, missing, ambiguous));
     }
 
     private static List<String> normalizeRequestedRefs(Collection<String> refs) {
@@ -79,25 +79,25 @@ public class CatalogDomainInternalResource {
         return List.copyOf(normalized);
     }
 
-    private static Map<String, List<CatalogDomain>> indexDomains(Collection<CatalogDomain> domains) {
-        Map<String, List<CatalogDomain>> index = new LinkedHashMap<>();
+    private static Map<String, List<DomainRecord>> indexDomains(Collection<DomainRecord> domains) {
+        Map<String, List<DomainRecord>> index = new LinkedHashMap<>();
         if (domains == null) {
             return index;
         }
-        for (CatalogDomain domain : domains) {
-            if (domain == null || !StringUtils.hasText(domain.getCode())) {
+        for (DomainRecord domain : domains) {
+            if (domain == null || !StringUtils.hasText(domain.code())) {
                 continue;
             }
-            for (String candidate : codeCandidates(domain.getCode())) {
+            for (String candidate : codeCandidates(domain.code())) {
                 index.computeIfAbsent(candidate, ignored -> new ArrayList<>()).add(domain);
             }
         }
         return index;
     }
 
-    private static DomainResolution findDomain(String ref, Map<String, List<CatalogDomain>> domainsByCandidate) {
+    private static DomainResolution findDomain(String ref, Map<String, List<DomainRecord>> domainsByCandidate) {
         for (String candidate : codeCandidates(ref)) {
-            List<CatalogDomain> domains = distinctDomains(domainsByCandidate.get(candidate));
+            List<DomainRecord> domains = distinctDomains(domainsByCandidate.get(candidate));
             if (domains.size() == 1) {
                 return new DomainResolution(domains.get(0), false);
             }
@@ -108,16 +108,16 @@ public class CatalogDomainInternalResource {
         return new DomainResolution(null, false);
     }
 
-    private static List<CatalogDomain> distinctDomains(List<CatalogDomain> domains) {
+    private static List<DomainRecord> distinctDomains(List<DomainRecord> domains) {
         if (domains == null || domains.isEmpty()) {
             return List.of();
         }
-        Map<UUID, CatalogDomain> byId = new LinkedHashMap<>();
-        for (CatalogDomain domain : domains) {
-            if (domain == null || domain.getId() == null) {
+        Map<UUID, DomainRecord> byId = new LinkedHashMap<>();
+        for (DomainRecord domain : domains) {
+            if (domain == null || domain.id() == null) {
                 continue;
             }
-            byId.putIfAbsent(domain.getId(), domain);
+            byId.putIfAbsent(domain.id(), domain);
         }
         return List.copyOf(byId.values());
     }
@@ -155,7 +155,7 @@ public class CatalogDomainInternalResource {
     }
 
     public record ResolveRequest(List<String> refs) {}
-    private record DomainResolution(CatalogDomain domain, boolean ambiguous) {}
+    private record DomainResolution(DomainRecord domain, boolean ambiguous) {}
 
     public record ResolveResponse(List<DomainContract> domains, List<String> missing, List<String> ambiguous) {}
     public record DomainContract(String ref, UUID id, String code, String name, String owner) {}

@@ -1,10 +1,15 @@
-# 关键数据模型关系与端到端契约（候选）
+# 关键数据模型关系与端到端契约
 
-**状态**：DRAFT / F1-T02 INPUT
+**状态**：CONFIRMED（架构契约；实现转 Sprint-87）
+
+**用途阶段**：F1/T02 OUTPUT / IT-03 INPUT
 
 **用途**：冻结跨模块关系、写 owner、稳定引用和端到端验收逻辑；不是数据库 ERD，也不授权本 Sprint 修改 schema、API 或运行数据。
 
 **事实基线**：2026-08-09 当前源码、Liquibase 与本地只读数据画像。
+
+**评审包**：[`f1-t02-decision-pack.md`](f1-t02-decision-pack.md)；最终 ADR 状态以
+[`decision-register.md`](decision-register.md) 为准。xiezm 已于 2026-08-09 批准本目标契约；它仍是待 Sprint-87 实现的目标事实，不得误报为当前 schema/API 已落地。
 
 ## 1. 三类对象必须分开
 
@@ -62,17 +67,17 @@ SOURCE_SYSTEM / ODS / STG 物理资产
                      DIMENSION / FACT ─────────────┤
                                                    ▼
                                         APPLICATION ModelSpec（ADS）
-                                      （数据集市 + 主题域，待 ADR）
+                                      （数据集市 + 主题域，ADR-86-14 已确认）
 ```
 
 | 模型关系 | 当前事实 | 目标约束 | 状态 |
 |---|---|---|---|
 | 维度定义 Revision → DIMENSION ModelSpec | head/revision 已有 `dimension_definition_id + dimension_definition_revision` 外键，且只允许 DIMENSION 使用 | 一个维度定义版本可产生多个受控实现变体；每个模型 revision 固定所用定义版本 | CONFIRMED |
-| 业务过程 ↔ 维度定义 | `sprint64_bus_matrix` 以 `(domain_id, process_id, dimension_id)` 记录，但 `dimension_id` 是字符串且无维度定义外键 | 业务矩阵引用稳定 DimensionDefinition ID/revision；过程和维度必须属于同一数据域或满足显式共享策略 | GAP |
-| 来源资产/模型 → DIMENSION/FACT | ModelSpec 支持来源引用，但跨 CatalogAsset/ModelSpec 的稳定身份仍需对账 | DWD 模型只引用已解析的上游资产或模型 revision；来源改名不改历史快照 | PROPOSED |
-| DIMENSION → FACT | 维度关系可在模型 source/relationship 中表达，尚无独立“事实采用维度版本”总账 | 事实模型固定粒度、业务过程和共享维度版本；维度键关系必须可校验 | GAP / ADR-86-15 |
-| FACT → SUMMARY | 模型类型和目标层已区分 FACT(DWD)/SUMMARY(DWS) | 汇总只依赖已发布的 DWD 事实/维度或允许的 DWS 上游，不得反向依赖 ADS | PROPOSED / ADR-86-15 |
-| DIMENSION/FACT/SUMMARY → APPLICATION | APPLICATION 目标层为 ADS，ModelSpec 可选 dataMartId；尚无 subjectDomainId | 应用模型固定数据集市，并按 ADR 决定是否强制主题域；不得成为公共层模型上游 | GAP / ADR-86-14/15 |
+| 业务过程 ↔ 维度定义 | `sprint64_bus_matrix` 以 `(domain_id, process_id, dimension_id)` 记录，但 `dimension_id` 是字符串且无维度定义外键 | 业务矩阵引用稳定 DimensionDefinition ID/revision；过程和维度必须属于同一数据域或满足显式共享策略 | CONFIRMED（target；implementation gap） |
+| 来源资产/模型 → DIMENSION/FACT | ModelSpec 支持来源引用，但跨 CatalogAsset/ModelSpec 的稳定身份仍需对账 | DWD 模型只引用已解析的上游资产或模型 revision；来源改名不改历史快照 | CONFIRMED（target；implementation gap） |
+| DIMENSION → FACT | 维度关系可在模型 source/relationship 中表达，尚无独立“事实采用维度版本”总账 | 事实模型固定粒度、业务过程和共享维度版本；维度键关系必须可校验 | CONFIRMED（ADR-86-15；implementation gap） |
+| FACT → SUMMARY | 模型类型和目标层已区分 FACT(DWD)/SUMMARY(DWS) | 汇总只依赖已发布的 DWD 事实/维度或允许的 DWS 上游，不得反向依赖 ADS | CONFIRMED（ADR-86-15；implementation gap） |
+| DIMENSION/FACT/SUMMARY → APPLICATION | APPLICATION 目标层为 ADS，ModelSpec 可选 dataMartId；尚无 subjectDomainId | 应用模型固定数据集市与主题域；不得成为公共层模型上游 | CONFIRMED（ADR-86-14/15；implementation gap） |
 
 模型依赖图必须是 DAG。批量物化不是“同时对多行发请求”，而是：固定选中模型 revision → 解析并校验依赖闭包 → 去重共享依赖 → 拓扑排序 → 创建一个 ReleaseCandidate → 逐项运行并汇总状态。若依赖未发布、跨计划越界、形成环或 revision 漂移，候选创建失败关闭并返回具名模型/关系。
 
@@ -80,7 +85,7 @@ SOURCE_SYSTEM / ODS / STG 物理资产
 
 ## 3. 当前关系、目标关系与缺口
 
-状态含义：`CONFIRMED` 为源码/schema 已有且目标沿用；`TARGET_CONFIRMED` 为既有业务决策但实现仍需收敛；`PROPOSED` 为本 Sprint 待评审建议；`GAP` 为当前链路缺口。
+状态含义：`CONFIRMED` 表示目标契约已批准；附注 `implementation gap` 表示当前源码/schema 尚未收敛，须由 Sprint-87 实现。当前物理事实仍以“当前事实”列为准。
 
 > **（RF-86-11 / RF-86-13）** 本表状态列是 `decision-register.md` ADR 状态的**投影**，不是独立事实源。
 > 跨文档词汇映射见 `decision-register.md` 的「状态词汇表」；ADR 冻结后须同步更新本表并标注 ADR 编号，
@@ -88,30 +93,32 @@ SOURCE_SYSTEM / ODS / STG 物理资产
 
 | 关系 | 当前事实 | 目标契约 | 状态 / Owner |
 |---|---|---|---|
-| 架构字典作用域 | `catalog_domain`、业务过程和 canonical 分层是全局；数据集市/主题域表仍带 `tenant_id` | 产品/API/UI 仅呈现一套平台全局架构字典；现有 tenant 列先作为兼容存储保留，默认 scope、唯一性和未来扩展策略待冻结 | TARGET_CONFIRMED + GAP / ADR-86-01、F1-T01 |
+| 架构字典作用域 | `catalog_domain`、业务过程和 canonical 分层是全局；数据集市/主题域表仍带 `tenant_id` | 产品/API/UI 仅呈现一套平台全局架构字典；现有 tenant 列保留，服务端固定平台 scope，真正多租户另立 ADR | CONFIRMED（ADR-86-01/10；implementation gap） / 数据架构 |
 | 业务分类 → 数据域 | `catalog_domain.parent_id` 单父级树，无显式类型列 | 根节点为业务分类、子节点为数据域；子域必须且只能有一个业务分类父节点 | CONFIRMED / 数据架构 |
 | 数据域 → 业务过程 | `sprint64_business_process.domain_id` 必填，`(domain_id, process_id)` 唯一 | 一个过程属于一个数据域；过程 ID 作为事实模型和原子指标稳定上下文 | CONFIRMED / 数据架构 |
-| 业务分类 → 数据集市 | 当前 `modeling_data_mart_domain` 可表达多对多；服务契约使用业务分类集合 | v1 既有决策是一个数据集市只属于一个业务分类；是收紧现有关系还是修订业务基数必须先决策 | TARGET_CONFIRMED + GAP，ADR-86-14 / 数据架构 |
+| 业务分类 → 数据集市 | 当前 `modeling_data_mart_domain` 可表达多对多；服务契约使用业务分类集合 | 一个数据集市只属于一个业务分类；兼容期保留关联表并由服务层强制单值，历史 0/>1 归属人工裁决 | CONFIRMED（ADR-86-14；implementation gap） / 数据架构 |
 | 数据集市 → 主题域 | `modeling_subject_domain.mart_id` 非空并有外键；状态为 DRAFT/CURRENT/RETIRED | 一个主题域只属于一个数据集市 | CONFIRMED / 数据架构 |
-| 数仓分层 → 模型 | canonical 模型层为 ODS/STG/DWD/DWS/ADS；DIMENSION 模型目标层为 DWD | 分层与业务树正交；维度是模型类型，不默认新增 DIM canonical layer | PROPOSED，受 RF-86-01 阻塞 / 数据架构 + 建模 |
-| 数仓计划 → 数据域/集市 | `modeling_warehouse_plan_domain`、`modeling_warehouse_plan_data_mart` 为范围关联 | 计划是建设范围聚合，不是架构字典；只允许选择 CURRENT 且父子关系一致的对象并固定基线版本 | PROPOSED / 数据建模规划 |
+| 数仓分层 → 模型 | canonical 模型层为 ODS/STG/DWD/DWS/ADS；DIMENSION 模型目标层为 DWD | 分层与业务树正交；DIM 兼容值归一为 `DWD + DIMENSION_TABLE`，SOURCE 归一为来源语义且 canonical layer 为空 | CONFIRMED（ADR-86-05；implementation gap） / 数据架构 + 建模 |
+| 数仓计划 → 数据域/集市 | `modeling_warehouse_plan_domain`、`modeling_warehouse_plan_data_mart` 为范围关联 | 计划是建设范围聚合，不是架构字典；只允许选择 CURRENT 且父子关系一致的对象并固定基线版本 | CONFIRMED（target；implementation gap） / 数据建模规划 |
 | 数仓计划 → ModelSpec | ModelSpec 直接引用 `plan_id`，v2 同时要求 `domain_id` | 模型必须属于一个计划；模型业务上下文必须落在计划已确认范围 | CONFIRMED + 补强校验 / 数据建模 |
-| ModelSpec → 数据域/过程/集市/主题域 | v2 有 `domain_id`、自由文本 `business_activity_ref` 和可选 `data_mart_id`；旧 `process_id` 已退出 v2 主契约；没有 `subject_domain_id` | 公共层模型至少固定数据域；事实/原子指标场景以稳定业务过程 ID 取代自由文本；应用模型是否强制主题域需 ADR 决策 | GAP / F1-T02、F3-T01 |
+| ModelSpec → 数据域/过程/集市/主题域 | v2 有 `domain_id`、自由文本 `business_activity_ref` 和可选 `data_mart_id`；旧 `process_id` 已退出 v2 主契约；没有 `subject_domain_id` | FACT 固定业务过程；APPLICATION 固定 dataMartId + subjectDomainId；所有值进入不可变 revision/candidate snapshot | CONFIRMED（ADR-86-14/15；implementation gap） / 数据建模 |
 | ModelSpec → Revision | `modeling_model_spec_revision` 以 `(model_spec_id, revision)` 唯一并保存 checksum/snapshot | 发布、指标引用和审计均引用不可变 revision，不引用可变 head 代替历史版本 | CONFIRMED / 数据建模 |
 | Revision → ReleaseCandidate | candidate entry 固定 `model_spec_id + revision + checksum + implementation` | 候选是批量交付边界；同一模型修订可进入不同环境/批次，候选不得漂移到新 head | CONFIRMED / 发布控制面 |
 | ReleaseCandidate → 物理关系证据 | dispatch 绑定 candidate；observation 绑定 candidate、run、ModelSpec 与 database/schema/identifier/type | 只有成功且未过期的观测才能证明物理关系存在；失败构建不得伪装为可服务资产 | CONFIRMED / 物化控制面 |
 | ModelSpec → 语义模型资产 | `modeling_catalog_model_serving_projection` 以 ModelSpec 为主键，保存 `SEMANTIC_MODEL` asset key、latest-published 与 serving 指针 | 逻辑/语义模型资产与物理表资产是两个身份，不得合并成同一状态 | CONFIRMED / 建模投影到资产 |
-| 物理观测 → CatalogDataset | 当前有完整 physical locator 证据，但不是对 `catalog_dataset.id` 的直接外键 | 以 datasource/database/schema/identifier/type 解析 CatalogAssetKey 并幂等投影；精确映射、冲突和撤销规则待冻结 | GAP，ADR-86-13 / 数据资产 |
-| 指标 → 业务上下文 | `GovIndicatorDefinition.category` 与 `datasetId` 仍为字符串，缺稳定分类/域/过程关系 | category 迁为单值 businessCategoryId；按指标类型校验 dataDomainId/businessProcessId，并固定来源模型/资产版本 | GAP / 数据指标 |
+| 物理观测 → CatalogDataset | 当前有完整 physical locator 证据，但不是对 `catalog_dataset.id` 的直接外键 | 以 datasource/database/schema/identifier/type 解析既有 CatalogAssetKey 并幂等投影；冲突失败关闭，重命名建新 key + `RENAMED_FROM`，撤销保留历史 | CONFIRMED（ADR-86-13；implementation gap） / 数据资产 |
+| 物理资产 → 生产者/登记证据 | 当前 SOURCE/ODS/dbt 同步链把来源类型、生成方式和登记动作混在不同字段/写入路径 | `ProducerRef` 固定生产者或上游来源；`RegistrationEvidence` 逐次记录扫描/集成/dbt/manual 渠道；多渠道观测幂等归并同一 CatalogAssetKey | CONFIRMED（ADR-86-18；implementation gap） / 数据资产 |
+| 物理资产 → 正交状态轴 | 当前候选文档曾用一个 `ConsumptionState` 混合 DISCOVERED/PUBLISHED/SERVING/STALE/RETIRED | 发现、治理、发布、服务健康和生命周期分别保存事实；消费资格由策略、质量和权限计算并返回原因 | CONFIRMED（ADR-86-19；implementation gap） / 数据资产 + 权限 + 质量 |
+| 指标 → 业务上下文 | `GovIndicatorDefinition.category` 与 `datasetId` 仍为字符串，缺稳定分类/域/过程关系 | 所有指标单值必填 businessCategoryId；ATOMIC 固定域/过程；DERIVED 同分类同域；COMPOSITE 可同分类跨域；v1 禁止跨分类 | CONFIRMED（ADR-86-06/07；implementation gap） / 数据指标 |
 | 质量规则版本 → 资产 | `GovRuleBinding.rule_version_id + dataset_id` 已形成版本化绑定 | 质量运行从绑定读取资产，不从页面展示字段临时拼接；字段范围随绑定快照审计 | CONFIRMED / 数据质量 |
-| 业务主数据 → 分析维度 | 现有 MDM 仅有人/组织同步，没有通用对象、金记录和分析投影契约 | 主数据金记录保留业务身份；DIMENSION ModelSpec 只承载分析投影，物化后才产生维度表资产 | PROPOSED，后续独立 Sprint / 主数据 + 建模 |
+| 业务主数据 → 分析维度 | 现有 MDM 仅有人/组织同步，没有通用对象、金记录和分析投影契约 | 主数据金记录保留业务身份；DIMENSION ModelSpec 只承载分析投影，物化后才产生维度表资产 | CONFIRMED（ADR-86-12 边界；实现转独立 Sprint） / 主数据 + 建模 |
 
 ## 4. 关系不变量
 
 1. 平台当前只暴露一个全局架构字典视图；底层遗留 `tenant_id` 不得被 UI/consumer 解释为已具备多租户能力。
 2. `dataDomain.parentId == businessCategoryId`；业务分类根节点不得作为数据域引用。
 3. `businessProcess.domainId == dataDomainId`；业务过程不能跨域挂接。
-4. 数据集市的业务分类基数在 ADR-86-14 冻结前，不新增依赖多归属语义的 UI 或 schema。
+4. 数据集市只属于一个业务分类；兼容期保留现有关联表，但任何新 UI/API 不得暴露多归属语义。
 5. `subjectDomain.martId == dataMartId`；若应用模型要求主题域，则其 dataMartId 必须一致。
 6. 计划是建设范围，不是新的架构字典 owner；ModelSpec 的域/集市必须包含于计划已确认基线。
 7. 模型类型、技术分层和业务上下文分别校验：维度模型不等于 DIM 分层，业务分类也不决定技术层。
@@ -123,6 +130,8 @@ SOURCE_SYSTEM / ODS / STG 物理资产
 13. 指标引用业务上下文和版本化来源；质量引用资产身份和规则版本；名称仅作展示，不能作为跨模块关联键。
 14. 未归域资产仍是资产；归域、定责、分级、质检和发布分别改变治理状态，不改变资产是否存在。
 15. 业务主数据金记录、架构字典和分析维度三者各有 owner；任何同步或投影都不得覆盖上游权威身份。
+16. 资产生产者/上游来源与登记渠道是两个维度；重复发现只能新增/刷新登记证据，不能改变 CatalogAssetKey 或覆盖历史生产者引用。
+17. 发现、治理、发布、服务健康、生命周期不得合并成一个互斥总状态；消费资格必须可解释到输入事实、质量门禁和权限决策。
 
 ## 5. 状态传播规则
 
@@ -133,6 +142,8 @@ SOURCE_SYSTEM / ODS / STG 物理资产
 | ModelSpec 保存/提交 | 产生或推进模型修订 | 不代表已有物理表 |
 | ReleaseCandidate PUBLISHED | 证明某组不可变修订经过发布流程 | 不代表每项仍在 SERVING |
 | 物理关系观测成功 | 可建立/刷新物理资产投影 | 不代表已归域、已质检或可授权消费 |
+| 新登记渠道再次发现同一 locator | 幂等解析同一 CatalogAssetKey，并新增/刷新该渠道的观测证据 | 不得生成第二个资产身份或覆盖生产者历史 |
+| 服务健康变为 STALE/FAILED | 阻断或降级消费资格，并保留发布/治理历史 | 不得自动把资产改成未发布、未治理或已退役 |
 | 质量通过 | 为指定资产/规则版本/运行提供证据 | 不自动改变模型 revision 或资产身份 |
 | MDM 金记录 CURRENT | 可供分析投影选择 | 不代表维度模型已构建或维度表已发布 |
 
@@ -146,7 +157,7 @@ SOURCE_SYSTEM / ODS / STG 物理资产
 | 2 | 建模负责人创建/确认数仓计划基线 | 建模规划 | 选择数据域与数据集市范围；非 CURRENT 或关系不一致不得确认 |
 | 3 | 建模人员创建 ModelSpec | 数据建模 | 固定 planId、domainId、模型类型、目标层及按类型要求的过程/集市上下文 |
 | 4 | 保存并提交模型 | 数据建模 | 生成不可变 Revision + checksum；标准、权限分级、关系校验不通过则停留当前阶段 |
-| 5 | 多选模型创建 ReleaseCandidate | 发布控制面 | 每个 entry 固定 revision/checksum/implementation；存在无资格项时逐项返回且不得静默跳过。**（RF-86-10）原子失败或显式排除策略属 ADR-86-15 关系语义，由 F1/T02 冻结**；F4 只负责该策略的交互呈现与失败可见性 |
+| 5 | 多选模型创建 ReleaseCandidate | 发布控制面 | 服务端先返回 root + dependency closure + blockers；任一 blocker 则零候选/零派发，用户显式取消无资格 root 后重新提交；成功时每个 entry 固定 revision/checksum/implementation |
 | 6 | 构建与物化 | 物化控制面 | dispatch/run/observation 全链路带 candidate、model、revision 和幂等键；成功/失败逐项收敛 |
 | 7 | 质量、评审与发布 | 数据质量 + 发布控制面 | 发布门禁证据绑定候选项、模型修订和物理观测；尚无 CatalogDataset 时不得伪造资产绑定；审核职责分离，只有满足门禁的候选才能 APPROVED/PUBLISHED |
 | 8 | 投影资产 | 数据资产 | PUBLISHED revision 投影语义模型 latest-published；健康 physical locator 投影表/视图资产并形成 serving 指针；失败对象不冒充可服务 |
@@ -156,7 +167,7 @@ SOURCE_SYSTEM / ODS / STG 物理资产
 
 ### E2E-B：从外部数据发现到纳入建模
 
-1. 集成或扫描器用 physical locator 幂等登记外部表/视图，`origin=SOURCE_SYSTEM`、`warehouseLayer=null`。
+1. 集成或扫描器用 physical locator 幂等登记外部表/视图，记录 `ProducerRef=SOURCE_SYSTEM + sourceSystemId`、本次 `RegistrationEvidence.channel` 和 `warehouseLayer=null`；多个渠道观测同一 locator 不创建第二个资产。
 2. 资产先进入“全部资产/未归域”，不得因没有 domainId 而不可见。
 3. 治理人员筛选并多选资产，批量归域；服务端逐项校验权限、目标域状态和幂等键，返回成功/失败明细并写审计。
 4. 建模人员从资产身份选择来源，ModelSpec revision 固定来源引用；后续 lineage 连接来源资产、目标模型和物理目标。
@@ -195,20 +206,21 @@ SOURCE_SYSTEM / ODS / STG 物理资产
 > Given/When/Then、owner、失败路径和证据类型。上述四类证据是**下一实施 Sprint 的执行要求**，
 > 本 Sprint 不执行、也不冒充已执行 E2E（见 `it/baseline.md`）。
 
-## 8. 必须先关闭的关系决策
+## 8. 已批准的关系决策与实施移交
 
-1. 数据集市/主题域现有 `tenant_id` 在平台全局产品范围下采用什么默认 scope 与唯一性策略，未来多租户扩展如何避免二次迁移。
-2. `modeling_data_mart_domain` 的当前多对多结构如何收敛到既有“业务分类 1:n 数据集市”决策：服务层强制单值并保留关联表，还是迁移为显式单外键。
-3. APPLICATION 模型是否强制 `subjectDomainId`；若强制，如何扩展 head、revision、导入导出与候选快照。
-4. ModelSpec 的自由文本 `business_activity_ref` 如何迁移为稳定业务过程 ID，并进入 revision、导入导出和候选校验。
-5. 业务矩阵的字符串 `dimension_id` 如何迁移为版本化 DimensionDefinition 引用，跨域共享维度如何审批。
-6. ModelSpec 依赖闭包、跨计划引用、循环检测、批量候选原子性和重试授权的精确契约。
-7. ModelSpec/physical observation 到 `CatalogDataset` 的唯一 locator、冲突、重命名、撤销和重放契约。
-8. 指标稳定业务上下文字段及 ATOMIC/DERIVED/COMPOSITE 必填矩阵。
-9. DIM 是资产兼容展示值还是 canonical 分层；在 RF-86-01 关闭前不扩展分层枚举。
-10. 通用 MDM 的对象范围、金记录生命周期和与既有人员/组织同步的复用边界；转入独立 Sprint，不阻塞 Sprint-86 的架构字典冻结。
-11. **（RF-86-08）** 纳管范围扩大后的资产/域统计口径与规模上限（ADR-86-16）。现有 5000 扫描上限、两轮全量扫描与不可靠的 `truncated` 判定是否沿用；若改为缓存/物化统计，治理状态是否必须可索引——该结论会反向约束第 3 节的资产状态设计。必须与 ADR-86-04 同批冻结。
-12. **（RF-86-09）** 在 read/write/export 三档粒度下，用什么机制保证不变量 15 及 I07 的「单一写 owner」（ADR-86-17）。若首版只能做到约定级，须显式接受并记为具名风险。
+以下结论已通过 `f1-t02-decision-pack.md`、`f2-f3-data-contract-pack.md` 和
+`consolidated-approval-pack.md` 获 xiezm 批准；精确 schema/API/UI 仍须通过 Sprint-87 G0/DoR 后实施。
+
+1. 遗留 `tenant_id` 保留，服务端固定平台 scope；真正多租户另立 ADR。
+2. 数据集市单业务分类；兼容期保留多对多关联表并由服务层强制单值，0/>1 历史归属进入 migration issue/人工裁决。
+3. APPLICATION 强制 `dataMartId + subjectDomainId`；业务过程、主题域与依赖引用进入 head/revision/import/export/candidate 快照。
+4. 自由文本业务活动和字符串维度引用采用 Expand + 唯一匹配回填；歧义失败关闭，不猜测。
+5. revision DAG、跨计划固定发布版本、候选全有或全无、运行逐项失败、二次物化新 attempt/observation。
+6. physical locator 解析既有 CatalogAssetKey；冲突阻断，重命名建新 key + 关系，撤销/重放保留历史。
+7. 指标按已批准的 ATOMIC/DERIVED/COMPOSITE 矩阵使用稳定业务上下文与来源版本。
+8. DIM 是 `DWD + DIMENSION_TABLE` 兼容归一，SOURCE 是 ProducerRef；不扩展 ModelSpec/dbt canonical layer。
+9. 资产采用 ProducerRef/RegistrationEvidence、五轴状态与增量统计投影；旧扫描 fallback 仅作具名近似降级。
+10. MDM 只冻结边界并转独立 Sprint；方案 A 权限、NFR 与所有运行验收进入 Sprint-87 对应 Task。
 
 ## 9. 实施依赖顺序
 

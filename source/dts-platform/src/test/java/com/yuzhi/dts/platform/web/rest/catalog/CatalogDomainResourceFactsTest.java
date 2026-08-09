@@ -17,6 +17,9 @@ import com.yuzhi.dts.platform.domain.catalog.CatalogDomain;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.ArchitectureDictionaryWriteGuard;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetPortalService;
+import com.yuzhi.dts.platform.service.catalog.CatalogDomainCommandService;
 import com.yuzhi.dts.platform.service.catalog.CatalogDomainVisibilityService;
 import java.util.List;
 import java.util.Map;
@@ -36,12 +39,28 @@ class CatalogDomainResourceFactsTest {
     private final CatalogDatasetRepository datasetRepository = mock(CatalogDatasetRepository.class);
     private final AuditService auditService = mock(AuditService.class);
     private final CatalogDomainVisibilityService visibilityService = mock(CatalogDomainVisibilityService.class);
+    private final CatalogAssetPortalService assetPortalService = mock(CatalogAssetPortalService.class);
+    private final CatalogResourceHelper helper = mock(CatalogResourceHelper.class);
+    private final ArchitectureDictionaryWriteGuard writeGuard = mock(ArchitectureDictionaryWriteGuard.class);
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
     private CatalogDomainResource resource;
 
     @BeforeEach
     void setUp() {
-        resource = new CatalogDomainResource(domainRepository, datasetRepository, auditService, visibilityService);
+        CatalogDomainCommandService commandService = new CatalogDomainCommandService(
+            domainRepository,
+            auditService,
+            visibilityService,
+            writeGuard
+        );
+        resource = new CatalogDomainResource(
+            datasetRepository,
+            auditService,
+            visibilityService,
+            assetPortalService,
+            helper,
+            commandService
+        );
         when(domainRepository.save(any(CatalogDomain.class))).thenAnswer(invocation -> {
             CatalogDomain domain = invocation.getArgument(0);
             if (domain.getId() == null) {
@@ -111,13 +130,13 @@ class CatalogDomainResourceFactsTest {
             .isInstanceOf(ResponseStatusException.class)
             .hasMessageContaining("403 FORBIDDEN");
 
-        verify(auditService, never()).auditAction(
+        verify(auditService, never()).auditActionStrict(
             org.mockito.ArgumentMatchers.eq("CATALOG_DOMAIN_CREATE"),
             any(),
             any(),
             any()
         );
-        verify(auditService, never()).auditAction(
+        verify(auditService, never()).auditActionStrict(
             org.mockito.ArgumentMatchers.eq("CATALOG_DOMAIN_UPDATE"),
             any(),
             any(),
@@ -133,7 +152,7 @@ class CatalogDomainResourceFactsTest {
         CatalogDomain saved = resource.createDomain(create).getData();
 
         assertThat(saved.getAccessPolicy()).isEqualTo(RESTRICTED);
-        verify(auditService).auditAction(
+        verify(auditService).auditActionStrict(
             org.mockito.ArgumentMatchers.eq("CATALOG_DOMAIN_CREATE"),
             any(),
             org.mockito.ArgumentMatchers.eq(saved.getId().toString()),
@@ -161,7 +180,7 @@ class CatalogDomainResourceFactsTest {
 
         verify(domainRepository, never()).deleteById(restricted.getId());
         verify(domainRepository, never()).save(restricted);
-        verify(auditService, never()).auditAction(
+        verify(auditService, never()).auditActionStrict(
             org.mockito.ArgumentMatchers.matches("CATALOG_DOMAIN_(UPDATE|DELETE|MOVE)"),
             any(),
             any(),
@@ -208,7 +227,8 @@ class CatalogDomainResourceFactsTest {
         CatalogDomain domain = domain(UUID.randomUUID(), ARCHIVED, RESTRICTED);
         when(visibilityService.findAllVisible()).thenReturn(List.of(domain));
 
-        List<Map<String, Object>> tree = resource.getDomainTree().getData();
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> tree = (List<Map<String, Object>>) resource.getDomainTree(false, null).getData();
 
         assertThat(tree).singleElement().satisfies(node -> {
             assertThat(node).containsEntry("id", domain.getId());
@@ -264,7 +284,8 @@ class CatalogDomainResourceFactsTest {
 
         Map<String, Object> list = resource.listDomains(0, 10, null).getData();
         String listJson = objectMapper.writeValueAsString(list);
-        List<Map<String, Object>> tree = resource.getDomainTree().getData();
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> tree = (List<Map<String, Object>>) resource.getDomainTree(false, null).getData();
 
         assertThat(listJson)
             .contains("\"parent\":null")

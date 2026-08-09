@@ -1,9 +1,35 @@
 # Sprint-86：平台级数据架构控制面与跨域语义收敛
 
-**时间**：2026-08
-**状态**：DRAFT / ARCHITECTURE_DISCUSSION
-**类型**：Architecture / Domain Modeling / Information Architecture / Compatibility Planning
+**时间盒**：2026-08-10 ～ 2026-08-21（10 个工作日）
+**状态**：DONE（Architecture；无代码、迁移、构建、部署或真实 E2E 交付）
+**类型**：Architecture Enabler / Domain Modeling / Information Architecture / Compatibility Planning
 **目标**：在不进入代码实施的前提下，冻结一套平台全局的数据架构元数据/架构字典、关键数据模型关系、资产纳管、指标业务归属和跨模块消费契约，使数据建模、数据资产、数据指标与数据质量不再各自解释业务分类、数据域、数仓分层、来源和版本状态。
+
+## 0. Sprint 治理与时间盒
+
+本 Sprint 是有明确退出条件的架构 Enabler，不是无限期“讨论”。实际人员姓名必须在首次评审前写入对应 IT 记录；仅写角色不能作为已完成证据。
+
+| 责任角色 | 决策责任 | 登记位置 |
+|---|---|---|
+| 产品决策负责人 | 确认业务目标、范围、优先级和可接受风险 | IT-01、IT-06 |
+| 数据架构负责人 | 主持 ADR，保证统一语言、关系、状态和 owner 一致 | IT-01～IT-04、IT-07 |
+| 受影响 canonical owner | 对本域契约、兼容路径和验收方式负责 | 各 Feature 对应 IT |
+| 安全/权限负责人 | 评审 ADR-86-17 及审计、职责分离边界 | IT-07 |
+| Sprint 记录负责人 | 维护状态、决议、异议、行动项和证据链接 | 全部 IT 记录 |
+
+决策规则：每项 ADR 至少由产品决策负责人、数据架构负责人和受影响 canonical owner 共同评审；涉及权限时必须包含安全/权限负责人。未达到该组合或存在未关闭异议时保持 `OPEN/PROPOSED`，不得写成 `ACCEPTED`。
+
+**已登记评审人**：xiezm，兼任本 Sprint 的产品决策、数据架构、安全/权限、交付及各受影响 canonical owner；各 IT 仍按实际评审范围分别记录 PASS/PENDING，不因角色兼任批量通过。
+
+| 里程碑 | 目标日期 | 退出条件 |
+|---|---|---|
+| Kickoff / IT-01 | 2026-08-10 | 真实参与者、统一语言输入和决策顺序登记完成 |
+| 架构关系检查点 | 2026-08-14 | F1/T01、F1/T02 有明确评审结论；未决项有 owner 和截止日期 |
+| 领域契约与 IA 评审 | 2026-08-18 | F2/F3/F4 的候选契约与失败路径完成评审 |
+| 迁移准入 / IT-06 | 2026-08-20 | 兼容切片、风险、NFR 和下一 Sprint DoR 可判定 |
+| Sprint close | 2026-08-21 | IT-01～IT-07 有真实记录；未完成项进入具名后续 Sprint |
+
+WIP 规则：F1 关闭前只允许 F1；随后 F2/F3 最多并行两个 Feature；F4、F5 按依赖顺序进入。时间盒内无法冻结的范围不得静默延期或带入编码，必须由产品决策负责人决定缩减 Sprint 目标或转入 Sprint-86B。
 
 ## 1. 背景与价值
 
@@ -26,7 +52,7 @@
 
 ## 3. 目标边界假设
 
-> 下图是本 Sprint 的核心架构假设。完整关系、当前物理事实、目标基数、状态传播和端到端用例见 [`assets/data-model-relationships.md`](assets/data-model-relationships.md)，须经 F1～F5 讨论后才能转为正式 ADR。
+> 下图是本 Sprint 已批准的目标架构。完整关系、当前物理事实、目标基数、状态传播和端到端用例见 [`assets/data-model-relationships.md`](assets/data-model-relationships.md)；当前源码/schema 与目标之间的实现缺口转入 Sprint-87。
 
 ```text
 平台级数据架构字典（唯一维护者，建议从建模中独立）
@@ -58,27 +84,29 @@
 - 数据质量负责规则、绑定和运行证据，数据集和数据域来自资产/架构投影。
 - 业务主数据负责业务实体金记录及来源映射，不拥有架构字典；分析维度只是主数据的下游投影。
 
-## 4. 已确认方向、建议与未决项
+## 4. 已批准方向与实施边界
 
-完整登记见 [`assets/decision-register.md`](assets/decision-register.md)。
+完整登记见 [`assets/decision-register.md`](assets/decision-register.md)；F1/T01 的统一语言、owner 与权限结论见 [`assets/f1-t01-decision-pack.md`](assets/f1-t01-decision-pack.md)，D01～D11、N01～N12 的集中批准记录见 [`assets/consolidated-approval-pack.md`](assets/consolidated-approval-pack.md)。所有结论均为架构约束，不代表运行实现已经完成。
 
 | 主题 | 当前状态 | 当前结论 |
 |---|---|---|
 | 租户范围 | 用户已确认 | 当前阶段按平台全局设计；不提供租户选择器，不新增租户级架构字典副本 |
 | 业务树 | 既有决策 | 业务分类 1:n 数据域，数据域单父级；数仓分层与业务树正交 |
-| 资产范围 | 方向已确认，边界待冻结 | 所有稳定、可寻址、可发现的真实表/视图都进入资产台账；是否可消费由独立状态决定 |
-| `SOURCE` | 建议 | 从“数仓分层”迁为“资产来源/来源区”语义；外部源表的 warehouseLayer 应为空 |
+| 资产范围 | ACCEPTED | 所有稳定、可寻址、可发现的真实表/视图都进入资产台账；是否可消费由独立状态决定 |
+| `SOURCE/DIM` | ACCEPTED | SOURCE 归一为 ProducerRef 且 canonical layer 为空；DIM 归一为 `DWD + DIMENSION_TABLE`，旧值兼容保留 |
 | 指标分类 | 用户已确认方向 | `category` 应表达业务分类；指标类型、指标分组必须另设语义 |
-| 关键关系链 | 候选，待 F1/T02 评审 | 架构字典 → 计划范围 → ModelSpec/Revision → 候选 → 物化证据 → 语义/物理资产 → 指标/质量 |
-| 业务主数据边界 | 方向已确认，精确能力待后续 Sprint | 人员/组织/项目/物料等属于独立 MDM；Sprint-86 只冻结其与架构字典、维度模型和资产的关系 |
-| 数据架构一级入口 | 建议，待批准 | 移动并收敛既有规划入口，不新建第二套页面、API 或数据表 |
-| UI 形态 | 建议，待蓝图评审 | 平面台账用搜索 + Table；层级架构字典用树/分组 + Table，按客户口径单一形态设计（不承诺自适应，RF-86-14）；复杂模型用列表 + 编辑器；批量物化在模型列表完成 |
-| 资产统计规模 | 新增 OPEN，须与资产范围同批冻结 | 现有 5000 扫描上限与两轮全量扫描和纳管范围扩大冲突；口径（实时/缓存/物化）待定（ADR-86-16、RF-86-08） |
-| 写权限强制 | 新增 OPEN，阻塞控制面归属 | read/write/export 三档无法按实体区分写权限，I07 运行时不可强制（ADR-86-17、RF-86-09） |
+| 关键关系链 | ACCEPTED | 双身份、集市单分类、APPLICATION 主题域、revision DAG、候选原子创建与二次物化规则已冻结 |
+| 业务主数据边界 | ACCEPTED | 只冻结 MDM 与架构字典、维度模型、资产的边界；人员/组织/项目/物料等具体能力后续实现 |
+| 数据架构逻辑控制面 | ACCEPTED | 公共架构字典归属平台数据架构；移动并收敛既有能力，不新建第二套表、API 或 CRUD。是否新增一级菜单由 ADR-86-09 决定 |
+| UI 形态 | ACCEPTED | 新增一级“数据架构”例外并只重组既有能力；模型记录树改搜索/筛选 + 多选 Table；层级选择仍用树 |
+| 资产统计规模 | ACCEPTED_DESIGN | 服务端增量投影 + 24h 对账；100,000 资产/50 域设计容量；P95 ≤1.5s；5/10 分钟 freshness/stale；运行验证转 Sprint-87 |
+| 写权限强制 | ACCEPTED（实施待后续 Sprint） | 唯一 command boundary + 现有权限 guard；仅 `ROLE_ADMIN/ROLE_OP_ADMIN/ROLE_INST_DATA_OWNER` 可写平台全局字典，部门角色只读（ADR-86-17、RF-86-09） |
+| 资产来源轴 | ACCEPTED | ProducerRef 与 RegistrationEvidence 分轴，多渠道发现幂等归并同一 CatalogAssetKey（ADR-86-18） |
+| 资产状态轴 | ACCEPTED | 发现、治理、发布、服务健康、生命周期五轴；消费资格由策略计算并返回原因（ADR-86-19） |
 
-## 5. 候选端到端契约链
+## 5. 已批准的端到端契约链
 
-当前仍为候选链，G1 在 F1/T02 的关系基数、稳定引用、状态传播和精确 API/DTO/迁移契约冻结前保持 `GAP`。
+关系基数、稳定引用、状态传播、失败规则和迁移顺序已通过架构 G1；精确 schema/API/DTO 及运行证据由 Sprint-87 在 G0/DoR 通过后补齐。
 
 端到端主路径不是“页面 A 跳到页面 B”，而是：架构对象 → 建设范围 → 不可变模型修订 → 发布候选 → 构建/质量/物化证据 → 语义资产与物理资产 → 指标/质量消费。任一环节都必须保留稳定 ID、版本、owner、失败状态和审计。
 
@@ -121,89 +149,92 @@
 | L23 | 架构字典当前存储作用域不一致：域/过程/canonical 分层全局，数据集市/主题域仍带 tenant_id；产品虽按平台全局，兼容 scope 仍需冻结 | `20260711_01_sprint64_governance.xml:8`、`20260727_01_modeling_data_mart.xml:14`、`20260806_03_modeling_subject_domain.xml:20` |
 | L24 | 维度定义 revision 已可被 DIMENSION ModelSpec head/revision 固定；业务矩阵仍以无外键字符串 `dimension_id` 连接过程与维度，模型依赖闭包需单独冻结 | `20260724_01_dimension_definition.xml:162`、`20260711_01_sprint64_governance.xml:34` |
 | L25 | **资产统计存在既有规模上限**：`ASSET_STATS_SCAN_CAP=5000`（分页 200×25 页），每次资产地图加载已跑两轮全量扫描，`truncated` 判定依赖波动“可达数千”的 legacy total 估算而非纯展示字段；`withStats` 域树统计复用同一路径。代码注释自陈“若要修，应连同该成本问题一并设计（例如缓存 domainStats）” | `CatalogAssetPortalService.java:60`、`:132-133`、`:500-509`；`CatalogDomainResource.java:166`；见 RF-86-08 |
-| L26 | **权限粒度仅 read/write/export**，无法按实体类型区分写权限，使 I07「架构字典单一写 owner」运行时不可强制，只能靠 UI 约定；这正是当前两套 `catalog_domain` CRUD 的成因类型 | `assets/domain-profile.md` §6；见 RF-86-09 |
+| L26 | 产品/前端授权能力仍是 `read/write/export` 粗粒度；后端另有 `CATALOG_MAINTAINERS/DATA_MAINTAINER_ROLES`、受限域 `EDIT/MANAGE` 校验和计划部门 guard，但不存在数据架构专属角色，且 `CatalogDomainResource` 仍直写 Repository。I07 可部分预防，尚未形成完整职责分离 | `AuthoritiesConstants.java:8-67`、`CatalogDomainResource.java:87-143,229-264`、`WarehousePlanAuthorizationGuard.java:16-91`；见 `assets/f1-t01-decision-pack.md`、RF-86-09 |
+| L27 | 初稿候选 `AssetOrigin` 同时包含生产者与登记方式，初稿 `ConsumptionState` 同时包含发现、发布、健康和退役；现已按 ADR-86-18/19 批准为正交来源/登记与五类状态轴 | `assets/capability-boundary.md`；见 RF-86-18 |
+| L28 | 当前前端已声明 8 个规划路由，其中业务分类、分层、数据域、业务过程、数据集市、主题域 6 个属于架构字典；空间和系统设置继续留在建模范围 | `source/dts-platform-webapp/src/pages/data-modeling/navigation.ts:8-36`；`source/dts-admin/src/main/resources/config/data/portal-menu-seed.json:216-287` |
+| L29 | `/governance/subjects` 的独有工作区固定为建模范围、数据集市、主题域信息、治理概览 4 个 Tab，必须逐项迁移而非整页删除 | `source/dts-platform-webapp/src/pages/governance/SubjectWorkspaceTabs.tsx:4-29` |
+| L30 | 既有发布候选控制面已提供 workspace、materializations、retry、refresh、cancel、rematerialize 和 rollback 等端点，批量/二次物化应兼容扩展该边界而非新增平行 `/bulk-materialize` | `source/dts-platform/src/main/java/com/yuzhi/dts/platform/web/rest/ModelReleaseCandidateResource.java:37-442` |
+| L31 | 资产与指标已有 canonical API seam：`/api/catalog/assets-v2`（含治理 PATCH）和 `/api/governance/indicators*`；下一实施 Sprint 采用兼容字段扩展和逐消费者切换 | `CatalogAssetPortalResource.java:42,368`；`GovernanceIndicatorResource.java:58,106-642` |
+| L32 | Sprint-87 已建立 F0～F6 的 BLOCKED 实施骨架；Sprint-86 ADR/IT 已通过，客户画像、GitNexus 刷新、登录、备份和 Chrome 95 仍是 G0 阻塞，不得因架构文档关闭提前编码 | `../sprint-87-202608-data-architecture-implementation/README.md` |
 
-> **评审标记**：本账本及以下各节存在 14 项独立评审发现（1 BLOCKER / 6 MAJOR / 7 MINOR），
+> **评审标记**：本账本及以下各节存在 20 项独立评审发现（1 BLOCKER / 11 MAJOR / 8 MINOR），
 > 登记于 [`assets/review-findings.md`](assets/review-findings.md)。
 > 第一轮 RF-86-01～07，第二轮（全量复核 20 文件 / 1254 行）新增 RF-86-08～14。
-> 仍为 OPEN 的三项：**RF-86-01**（DIM 定性，阻塞 ADR-86-05）、**RF-86-08**（统计规模冲突，阻塞 ADR-86-04/16）、
-> **RF-86-09**（写权限强制，阻塞 ADR-86-08）。
+> 第三轮按现代 Sprint/DoR/DoD/追溯要求新增 RF-86-15～20，并已通过本文档结构修订与集中批准关闭架构问题。
+> **RF-86-01**（DIM 定性）与 **RF-86-08**（统计规模冲突）均已关闭；运行实现与验证转入 Sprint-87。
+> **RF-86-09** 已因 ADR-86-08/17 冻结转为 `MITIGATED`，实现闭环由 F5/T01 转入下一实施 Sprint。
 
 ## 7. Gate Registry
 
 | Gate | 项目 | 状态 | 证据 | 未过则关联 Task |
 |---|---|---|---|---|
 | G0 | 交付基线 | N/A | `it/baseline.md`；本 Sprint 只做架构讨论，不交付运行功能 | - |
-| G0 | 领域与数据画像 | GAP | `assets/domain-profile.md`；当前环境已实测，客户/生产规模未知 | F1/T01、F5/T01 |
+| G0 | 领域与数据画像 | PASS（架构基线） | `assets/domain-profile.md`；本地事实与客户口径已分开，客户/生产画像缺口具名转入 Sprint-87 F0 | - |
 | G0 | DTS 领域不变量 | PASS | 本文 §3、§4；禁止平行 owner、密级与业务语义分离 | - |
-| G1 | 契约链贯通 | GAP | `assets/data-model-relationships.md` 已形成候选关系与 E2E，但基数/映射未全部冻结 | F1/T02、F2～F4 |
-| G1 | 非功能预算 | GAP | **部分 NFR 是架构决策输入而非实施细节**：资产统计 5000 扫描上限与纳管范围扩大直接冲突（L25、RF-86-08），必须在 ADR-86-04/16 冻结时一并评估；其余预算仍在实施 Sprint 立项时补充 | F2/T01、F5/T01 |
-| G2 | 变更范围与影响分析 | GAP | `assets/impact-baseline.md`；当前无源码修改，但前端影响面和新增关系链逐 owner impact 尚未完成（RF-86-04） | F4/T01、F5/T01 |
+| G1 | 契约链贯通 | PASS（架构设计） | 关系、基数、映射、失败规则与 E2E 用例设计已批准；运行证据转 Sprint-87 | - |
+| G1 | 非功能预算 | PASS（架构设计） | NFR-86-01～13 已有批准设计值/方案、owner 和 fitness function；运行验证转 Sprint-87 | - |
+| G2 | 变更范围与影响分析 | N/A | 本 Sprint 无源码修改；GitNexus 最新索引与逐 symbol impact 是 Sprint-87 G0/G2 门禁 | - |
 | G3 | 发布安全 | N/A | 本 Sprint 无代码、schema 或部署 | - |
 | G4 | 可运维性 | N/A | 本 Sprint 无运行能力 | - |
-| G4 | DoD 验收 | PENDING | `it/README.md`；等待 ADR 评审结论 | F5/T01 |
+| G4 | DoD 验收 | PASS（Architecture） | `it/README.md`；IT-01～07 均形成真实架构评审结论 | - |
 
 ## 8. Feature 列表
 
 | ID | Feature | Task 数 | 优先级 | 状态 |
 |---|---|---:|---|---|
-| F1 | 数据架构元数据与控制面 | 2 | P0 | DRAFT |
-| F2 | 资产范围、来源与分层语义 | 1 | P0 | DRAFT |
-| F3 | 指标业务上下文 | 1 | P0 | DRAFT |
-| F4 | 信息架构与页面形态 | 1 | P0 | DRAFT |
-| F5 | 兼容迁移与实施准入 | 1 | P0 | DRAFT |
+| F1 | 数据架构元数据与控制面 | 2 | P0 | DONE |
+| F2 | 资产范围、来源与分层语义 | 1 | P0 | DONE |
+| F3 | 指标业务上下文 | 1 | P1 | DONE |
+| F4 | 信息架构与页面形态 | 1 | P1 | DONE |
+| F5 | 兼容迁移与实施准入 | 1 | P0 | DONE |
 
-**讨论顺序**：F1/T01 → F1/T02 → F2/F3 → F4 → F5。F2 与 F3 可在关系契约确定后并行讨论；任何代码实施必须等待 F5 输出正式 ADR 和下一实施 Sprint。
+**完成顺序**：F1/T01 → F1/T02 → F2/F3 → F4 → F5。代码实施只允许在 Sprint-87 关闭 F0/G0 后开始。
 
 ## 9. 追溯矩阵
 
-| 需求点 | Feature / Task | 预期证据 |
-|---|---|---|
-| 公共底层数据从建模模块中独立出来 | F1/T01、F4/T01 | 权威归属矩阵、目标导航蓝图、页面收敛清单 |
-| 关键数据模型关系端到端逻辑贯通 | F1/T02、F2～F5 | 关系基数、稳定键、状态传播、E2E-A～D 与 IT-03 |
-| 平台暂不支持多租户，按全局设计 | F1/T01 | 全局作用域与兼容字段决策 |
-| 所有真实表进入资产，但 SOURCE 不混淆所有分层 | F2/T01 | 资产纳管矩阵、来源/分层/状态三轴契约 |
-| 指标 category 对应业务分类 | F3/T01 | 指标业务上下文关系、字段兼容方案 |
-| 模型工作台改用更易批量操作的 UI | F4/T01 | Table/树/编辑器适用规则、批量物化交互蓝图 |
-| 多表依赖与二次物化可追溯 | F1/T02、F4/T01、F5/T01 | DWD→DWS→ADS 依赖 DAG、候选依赖闭包、attempt/observation 历史与 E2E 用例 |
-| 避免破坏现有页面、深链和消费方 | F5/T01 | Expand/Contract 方案、影响清单、实施切片 |
-| 主数据模块后续可演进且不与本 Sprint 冲突 | F1/T01、F1/T02 | 架构元数据/业务主数据边界、MDM→维度模型→资产投影链、独立 Sprint 入口条件 |
+| 需求点 | ADR / 契约 | Feature / Task | 评审 | 证据位置与当前状态 |
+|---|---|---|---|---|
+| 公共底层数据从建模模块中独立出来 | ADR-86-08/17；owner 矩阵 | F1/T01、F4/T01 | IT-01、IT-02、IT-05、IT-07 | PASS；唯一 command boundary、方案 A 与 IA 蓝图已批准 |
+| 关键数据模型关系端到端逻辑贯通 | ADR-86-13/14/15；`data-model-relationships.md` | F1/T02、F2～F5 | IT-03、IT-04 | PASS；双身份、DAG、候选、attempt 与 E2E 用例设计已批准 |
+| 平台暂不支持多租户，按全局设计 | ADR-86-01/10 | F1/T01、F5/T01 | IT-01、IT-06 | PASS；平台 scope 与兼容迁移路线图已批准 |
+| 所有真实表进入资产，但 SOURCE/DIM 不混淆分层 | ADR-86-04/05/16/18/19 | F2/T01 | IT-04、IT-07 | PASS；纳管、来源/登记、五轴、统计与 NFR 设计已批准 |
+| 指标 category 对应业务分类 | ADR-86-06/07 | F3/T01 | IT-04 | PASS；指标上下文、兼容字段和逐消费者矩阵已批准 |
+| 模型工作台支持列表、多选和详情编辑 | ADR-86-09/15 | F4/T01 | IT-05 | PASS；页面蓝图、操作走查和旧路由映射已批准 |
+| 多表依赖与二次物化可追溯 | ADR-86-15；NFR-86-04～08/12 | F1/T02、F4/T01、F5/T01 | IT-03、IT-05、IT-07 | PASS；DAG、闭包、attempt/observation、并发和设计容量已批准 |
+| 避免破坏现有页面、深链和消费方 | ADR-86-10 | F5/T01 | IT-06 | PASS；Expand/Contract、回滚、观测和 Sprint-87 骨架已批准 |
+| 主数据模块后续可演进且不与本 Sprint 冲突 | ADR-86-12；E2E-D | F1/T01、F1/T02 | IT-02、IT-03 | PASS；只冻结 MDM 边界，E2E-D 转独立后续 Sprint |
 
-## 10. 本 Sprint 需要继续讨论的问题
+## 10. 集中审批已完成，外部输入已移交
 
-1. 是否批准把既有“数仓规划”能力提升为一级“数据架构”，还是保留一级菜单不变、只做内部权威控制面收敛？
-2. 平台级数据架构的首版实体范围是否只包含业务分类、数据域、业务过程、数仓分层、数据集市和主题域？建议数仓计划定性为建模建设范围，而不是架构字典。
-3. 资产纳管是“发现即登记”还是“验证后登记”？建议发现即登记、状态失败关闭，但需冻结状态机。
-4. 外部源表是否在同一资产台账展示？建议是，并以 `origin=SOURCE_SYSTEM`、`warehouseLayer=null` 区分。
-5. 指标是否强制单一业务分类？跨业务分类复合指标是首版禁止、审批例外，还是天然支持多归属？
-6. `businessCategoryId/dataDomainId/businessProcessId` 的必填规则如何随 ATOMIC/DERIVED/COMPOSITE 变化？
-7. `/governance/subjects` 的 4 个独有 Tab 分别迁入哪里，何时允许旧路由进入观测退役？
-8. 模型列表的批量物化选择范围按当前页、跨页还是显式候选集？失败重试、幂等和权限如何表现？
-9. **（RF-86-01）** DIM 是资产目录兼容值还是新增 canonical layer？建议 DIMENSION 模型继续归 DWD，资产侧 DIM 进入显式兼容归一化；定性前 F2 不得冻结分层轴。
-10. **（RF-86-03）** 归域率接近 0 时，如何让“全部资产/未归域/按域导航”均可达，并把批量归域作为首要治理动作？
-11. `modeling_data_mart_domain` 当前多对多如何收敛到既有“业务分类 1:n 数据集市”决策？
-12. APPLICATION 模型是否强制主题域；若是，`subjectDomainId` 如何进入 head/revision/candidate/导入导出契约？
-13. physical observation 如何唯一、幂等地映射 `CatalogDataset`，重命名、冲突和撤销如何处理？
-14. 通用业务主数据首版包含哪些对象，如何复用既有人员/组织 MDM 网关？该实现转入后续独立 Sprint。
-15. 数据集市/主题域遗留 `tenant_id` 在平台全局模式下采用什么默认 scope、唯一性与未来扩展策略？
-16. ModelSpec 自由文本业务活动如何迁为稳定业务过程 ID；业务矩阵维度引用、模型依赖 DAG、跨计划依赖、候选原子性和二次物化权限如何冻结？（**候选原子性已上收 F1/T02，见 RF-86-10**）
-17. **（RF-86-08）** 纳管范围扩大后资产/域统计采用什么口径与规模上限？现有 5000 扫描上限、两轮全量扫描与不可靠 `truncated` 是否沿用？触顶后产品如何表达？owner 为 F2/T01 + ADR-86-16，须与 ADR-86-04 同批冻结。
-18. **（RF-86-09）** 在 read/write/export 三档粒度下，用什么机制强制「架构字典单一写 owner」？若首版只能做到约定级，是否显式接受并记为具名风险？owner 为 F1/T01 + ADR-86-17，须在 ADR-86-08 冻结前给出。
+2026-08-09，xiezm 以全部法定评审角色批准 [`assets/consolidated-approval-pack.md`](assets/consolidated-approval-pack.md) 的全部选择：
+
+1. D01～D03：资产范围、SOURCE/DIM、指标上下文。
+2. D04：一级“数据架构”入口例外、模型多选 Table 与旧路由承接。
+3. D05：Expand/Contract、14 天 + 一个发布周期的观测门禁。
+4. D06～D08：语义/物理双身份、集市/主题域基数、DAG/批量/二次物化。
+5. D09～D11：统计投影、生产者/登记渠道、五轴状态。
+6. N01～N12：设计容量、P95、轮询、卡顿/取消、并发、Chrome 95 与兼容窗口。
+
+上述批准只冻结架构语义与设计预算。另有三类外部输入不在 Sprint-86 内伪造：客户/生产画像、可用的 GitNexus 索引、真实登录/备份/Chrome 95 条件。它们已进入 Sprint-87 F0/G0；MDM 具体实现继续留在独立后续 Sprint。
 
 ## 11. 完成标准
 
-- [ ] 统一语言、实体关系和 canonical owner 经架构评审确认。
-- [ ] 架构字典、计划、ModelSpec/Revision、候选、物化证据、语义/物理资产、指标和质量的关键关系全部冻结。
-- [ ] E2E-A～C 可从 UI 追溯到 API、数据和审计；E2E-D 明确作为后续 MDM Sprint 输入。
-- [ ] 平台全局作用域与未来 tenant 兼容策略冻结。
-- [ ] 物理资产纳管矩阵、来源/分层/状态三轴契约冻结。
-- [ ] 指标业务分类、数据域、业务过程、指标类型/分组关系冻结。
-- [ ] 数据架构、建模、资产、指标、质量的目标导航和页面职责冻结。
-- [ ] 旧字段、旧路由、重复 CRUD 的 Expand/Contract 迁移顺序和回滚原则冻结。
-- [ ] 资产统计口径与规模上限（ADR-86-16）与纳管范围（ADR-86-04）同批冻结。
-- [ ] 架构字典写权限强制手段（ADR-86-17）已明确，或约定级已被显式接受并记为具名风险。
-- [ ] 三套状态词汇已统一映射，ADR 冻结结果有单一写回位置（RF-86-11／13）。
-- [ ] 下一实施 Sprint 可按竖切片拆分，且每个 Task 具备精确 API/DTO/schema/UI 验收契约。
+- [x] 统一语言、实体关系和 canonical owner 经架构评审确认。
+- [x] 架构字典、计划、ModelSpec/Revision、候选、物化证据、语义/物理资产、指标和质量的关键关系全部冻结。
+- [x] E2E-A～C 的用例设计可追溯到下一实施 Sprint 的 UI、API、数据和审计证据类型；E2E-D 明确作为后续 MDM Sprint 输入。
+- [x] 平台全局作用域与未来 tenant 兼容策略冻结。
+- [x] 物理资产纳管矩阵、来源/分层/状态三轴契约冻结。
+- [x] 指标业务分类、数据域、业务过程、指标类型/分组关系冻结。
+- [x] 数据架构、建模、资产、指标、质量的目标导航和页面职责冻结。
+- [x] 旧字段、旧路由、重复 CRUD 的 Expand/Contract 迁移顺序和回滚原则冻结。
+- [x] 资产统计口径与规模上限（ADR-86-16）与纳管范围（ADR-86-04）同批冻结。
+- [x] 架构字典写权限强制手段（ADR-86-17）已明确；运行时实施由 F5/T01 具名承接。
+- [x] 资产生产者/来源与登记渠道（ADR-86-18）以及正交状态轴（ADR-86-19）冻结，不再使用混合枚举。
+- [x] `assets/nfr-budget.md` 的所有预算均有批准设计值/方案、owner 与可执行 fitness function 规格；运行证据转 Sprint-87。
+- [x] 三套状态词汇已统一映射，ADR 冻结结果有单一写回位置（RF-86-11／13）。
+- [x] Sprint 时间盒、真实参与者、决策记录和行动项完整登记；实现与外部输入进入具名 Sprint-87。
+- [x] 每个 Feature/Task 通过自己的架构 DoR/DoD，且可追溯到对应 IT 记录。
+- [x] 下一实施 Sprint 已按竖切片拆分，并以 F0/G0 和各 Task DoR 约束精确 API/DTO/schema/UI 实施契约。
 
 ## 12. 非目标
 

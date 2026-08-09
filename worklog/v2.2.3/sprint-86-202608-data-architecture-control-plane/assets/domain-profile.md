@@ -2,7 +2,7 @@
 
 **勘察日期**：2026-08-09
 **数据来源**：当前 `/opt/prod/s10/v2.2.3` 运行环境的 `dts_platform` PostgreSQL；该快照不是客户生产容量证明
-**结论**：可用于架构讨论；客户数据量、增长率和脏数据分布未取得，涉及迁移与性能的实施 Task 继续保持 DRAFT
+**结论**：可用于架构讨论；客户数据量、增长率和脏数据分布未取得，Sprint-87 F0 及相关实施 Task 继续保持 BLOCKED_INPUT
 
 ## 1. 统一语言
 
@@ -14,7 +14,7 @@
 | 数据集市 | 面向消费的业务分类细化空间 | 不再按数据域自由挂接解释 | 既有规划设计 |
 | 主题域 | 数据集市下的应用层主题组织 | 不再用“业务主题域”指代业务分类/数据域树 | 既有规划设计与资产侧术语漂移证据 |
 | 数仓分层 | ODS/STG/DWD/DWS/ADS 等 canonical 技术加工链位置，与业务树正交 | `SOURCE` 不作为所有资产的总分层；DIMENSION 模型不等于 DIM 分层 | `ModelSpecContract`、`WarehouseLayerApplicationService`、RF-86-01 |
-| 资产来源 | 资产如何进入平台，例如 SOURCE_SYSTEM、INGESTION、DBT、MANUAL | 不与 warehouseLayer 混为一个字段 | 本 Sprint 候选语义 |
+| 资产来源 | 资产的生产者引用；平台如何得知由独立登记渠道表达 | 不与 warehouseLayer 或 RegistrationEvidence 混为一个字段 | ADR-86-18 |
 | 物理数据资产 | 稳定、可寻址、可发现的真实表、视图或物化视图 | 不包括 CTE、ephemeral、临时表和仅存在于草稿中的 ModelSpec | 用户确认方向；dbt 物理实现判定现状 |
 | 治理完备度 | 资产是否已归域、定责、分级、质检并可消费 | “是资产”不等于“可发布/可消费” | 本 Sprint 核心不变量 |
 | 指标业务分类 | 指标由哪类业务产生和负责 | 不等同 ATOMIC/DERIVED/COMPOSITE，也不等同自定义指标分组 | 用户确认方向 |
@@ -32,7 +32,7 @@
 | I04 | 所有稳定真实关系可进入资产台账；资产身份与治理/可消费状态分离 | 用户确认方向 | 未治理表不可发现，或错误地把“已登记”当“可消费” | 2026-08-09 讨论 |
 | I05 | 跨模块引用稳定 ID；中文名称仅为展示投影 | 架构规则 | 改名后关联断裂、同名冲突、迁移不可审计 | 当前自由文本缺口 |
 | I06 | 指标业务分类、指标类型、指标分组是三个不同维度 | 用户确认方向 | `category` 同时表达多义，派生校验不可确定 | 2026-08-09 讨论 |
-| I07 | 架构字典只有一个写 owner，消费者不得复制 CRUD | DTS 领域硬约束（**当前运行时不可强制，见 §6 与 RF-86-09**） | 再次形成规划页与治理页双实现 | domain-dts A4 |
+| I07 | 架构字典只有一个写 owner，消费者不得复制 CRUD | DTS 领域硬约束（**ADR-86-17 方案 A 已冻结；当前运行时仍缺统一 command boundary 与收口后的 actor allowlist，见 §6 与 RF-86-09**） | 再次形成规划页与治理页双实现 | domain-dts A4 |
 | I08 | 密级/分类分级与业务分类、业务标签严格分离 | 合规硬约束 | 权限和审计语义被业务字段绕过 | domain-dts D1 |
 | I09 | ModelSpec、语义模型资产、物理表资产和业务主数据使用不同身份与状态 | 架构规则 | 用“已提交/已发布”误判物理表存在，或维度投影覆盖主数据身份 | `assets/data-model-relationships.md` |
 
@@ -86,20 +86,22 @@ select count(*) from gov_indicator_definition;
 - **（RF-86-03，信息架构结论）** 归域率为 0 不否定“全部资产/未归域/按域”三种导航；它说明当前 onboarding 的首要治理动作是批量归域，而不是要求用户先选一个空域。F4 必须保留全部资产与未归域入口，并让批量归域、逐项失败和审计成为一等能力。
 - **（RF-86-05）** `modeling_warehouse_layer` 25 条全部 DELETED、ACTIVE 为 0，当前 canonical 分层投影实际由内置代码承担。该事实不改变“分层与业务树正交”的 ADR-86-03，而是要求 F2/F5 明确首版是否开放自定义分层，以及 DELETED 记录是保留回滚锚点还是在后续迁移中清理。
 - 当前数据集市/主题域各 1 条不足以证明基数正确；现行 `modeling_data_mart_domain` 可表达多对多，必须与目标“业务分类 1:n 数据集市”分开评审。
-- **（RF-86-08，架构级冲突）** ADR-86-04 把纳管范围扩大到「所有稳定可寻址的真实关系」（外部源表、持久化 STG、失败构建残留），资产总量将显著上升，而 §3.1 的 5000 扫描上限只会更早触顶。三项后果：域导航计数在客户规模下不可靠（F4 蓝图无从验收）；`truncated` 本身判定不准；`withStats` 实时聚合方案可能需整体更换（缓存/物化统计表/增量维护），换法会反向约束 F2 的状态机设计——治理状态若参与统计则必须可索引。因此 ADR-86-04 与 ADR-86-16 必须同批冻结，且部分 NFR 属架构输入而非实施细节（Gate G1 已由 PENDING 降为 GAP）。
+- **（RF-86-08，架构结论）** ADR-86-04 把纳管范围扩大到「所有稳定可寻址的真实关系」（外部源表、持久化 STG、失败构建残留），资产总量将显著上升，而 §3.1 的 5000 扫描上限只会更早触顶。ADR-86-04/16 已同批批准服务端增量统计投影 + 24h 对账，治理状态须可索引；旧扫描只作具名近似降级。Gate G1 的设计已通过，运行容量验证转 Sprint-87。
 
-## 4. 资产纳管候选矩阵
+## 4. 已批准资产纳管矩阵
 
-| 对象 | 是否资产 | 候选 origin | warehouseLayer | 可消费状态 |
-|---|---|---|---|---|
-| 外部数据库稳定表/视图 | 是 | SOURCE_SYSTEM | 空 | DISCOVERED，治理后可授权消费 |
-| 已落地 ODS 表 | 是 | INGESTION | ODS | 按质量/发布状态决定 |
-| 持久化 STG 表/视图 | 是 | DBT/MANUAL | STG | 默认内部，是否开放待策略确认 |
-| DWD/DWS/ADS 表、视图、物化视图 | 是 | DBT/MANUAL | 对应层 | 按发布与健康状态决定 |
-| 资产目录中标记为 DIM 的表 | 是（若物理关系稳定存在） | DBT/MANUAL | **兼容值待归一化**；建模 DIMENSION 当前目标层为 DWD | RF-86-01 定性前不冻结写入策略 |
-| 失败构建留下的稳定关系 | 发现后登记 | 对应来源 | 对应层或空 | UNVERIFIED/STALE，禁止消费 |
-| dbt ephemeral、CTE、临时表 | 否 | - | - | 不进入物理资产台账 |
-| ModelSpec 草稿 | 不是物理资产 | - | 设计目标层 | 留在建模控制面 |
+| 对象 | 是否资产 | ProducerRef | 登记渠道 | warehouseLayer | 状态/消费规则 |
+|---|---|---|---|---|---|
+| 外部数据库稳定表/视图 | 是 | SOURCE_SYSTEM + sourceSystemId | SCANNER / MANUAL | 空 | DISCOVERED；治理与授权满足后才可消费 |
+| 已落地 ODS 表 | 是 | INGESTION_JOB + job/batch ref | INGESTION_EVENT | ODS | 按发现、治理、发布和健康轴共同决定 |
+| 持久化 STG 表/视图 | 是 | DBT_MODEL 或 MANUAL_BUILD + implementation ref | DBT_SYNC / MANUAL | STG | 默认内部，是否开放待策略确认 |
+| DWD/DWS/ADS 表、视图、物化视图 | 是 | DBT_MODEL、MANUAL_BUILD 或 MODELING + implementation ref | DBT_SYNC / MATERIALIZATION_OBSERVATION / MANUAL | 对应层 | 按发布、健康、质量与权限策略决定 |
+| 资产目录中标记为 DIM 的表 | 是（若物理关系稳定存在） | 对应稳定生产者 | 对应登记渠道 | 兼容归一为 DWD | `assetRole=DIMENSION_TABLE`；旧 DIM 保留到另批 Contract |
+| 失败构建留下的稳定关系 | 发现后登记 | 对应稳定生产者 | 对应登记渠道 | 对应层或空 | 健康为 FAILED/STALE，禁止消费；不覆盖其他状态轴 |
+| dbt ephemeral、CTE、临时表 | 否 | - | - | - | 不进入物理资产台账 |
+| ModelSpec 草稿 | 不是物理资产 | - | - | 设计目标层 | 留在建模控制面 |
+
+`ProducerRef` 回答“由谁/什么生成”，登记渠道回答“平台如何得知”。同一 physical locator 可被多个渠道观测，但必须归并到同一 `CatalogAssetKey`，并保留每次登记证据；不得因为后一次扫描而改写生产者或历史来源。
 
 ## 5. 外部边界
 
@@ -119,14 +121,11 @@ select count(*) from gov_indicator_definition;
 | 业务分类/标签不得替代密级 | 是 | classification 保持独立控制面 |
 | 架构字典与主数据写操作可授权、可审计 | 是 | 即使平台全局，也不等于所有人可写；两个 owner 分别授权 |
 | 兼容迁移不得静默丢关联 | 是 | dry-run、批次、回滚、漂移校验 |
-| 现有权限粒度仅 read/write/export | 已知缺口 | 实施 Sprint 必须显式记录依赖，不虚构细粒度权限。**（RF-86-09）** 该粒度无法按实体类型区分写权限，导致 §2 的 I07「架构字典单一写 owner」运行时不可强制，只能靠 UI 约定与代码自觉——而这正是当前两套 `catalog_domain` CRUD 的成因类型。ADR-86-17 须在 ADR-86-08 冻结前给出强制手段，或显式接受约定级并记为具名风险 |
+| 产品/前端授权为 read/write/export 粗粒度；后端另有宽角色与对象/部门 guard | 已知缺口 | 不虚构数据架构专属角色，也不抹去现有预防控制。**（RF-86-09）** ADR-86-17 已冻结两层实现：唯一 application command boundary 防止平行代码 owner；方案 A actor allowlist/对象 guard 限制人员写入。当前 `CatalogDomainResource` 仍直写 Repository，`CATALOG_MAINTAINERS` 又跨多种职责，故运行时职责分离尚不完整；审计只能补偿。批准方案见 `f1-t01-decision-pack.md` |
 
-## 7. 未决问题
+## 7. 外部画像缺口与审批边界
 
-- 客户环境真实域、资产、指标数量和增长率。**该数字同时是 ADR-86-09（页面形态）与 ADR-86-16（统计架构）的共同输入**：资产量级决定 5000 扫描上限是否可继续沿用。
-- 外部源资产是否需要单独“来源系统”视图，还是与数仓资产统一列表、通过筛选区分。
-- 失败构建残留关系的发现频率、保留期和自动清理责任。
-- 跨业务分类复合指标的归属与审批规则。
-- 平台全局架构字典是否仍需保留未来 tenant scope 字段的默认值策略。
-- `modeling_data_mart_domain` 多对多结构与目标单分类基数的迁移/约束选择。
-- APPLICATION 模型是否必须引用主题域，以及业务主数据首版对象范围。
+- 客户环境真实域、资产、指标数量、增长率、SOURCE/DIM 存量、典型批量和脏数据比例仍未知；Sprint-87 F0 必须补齐。
+- 失败构建残留关系的发现频率、保留期和自动清理责任需要运行画像，不在 Sprint-86 中假设。
+- 平台全局架构字典的遗留 tenant 物理字段继续保留；客户端不暴露 tenant，未来真正启动多租户时另立 ADR。
+- 外部源统一进入资产台账并以 ProducerRef/筛选区分；跨分类指标首版拒绝；集市单分类、APPLICATION 主题域必填等架构结论已由 xiezm 批准，见 `consolidated-approval-pack.md`。客户规模与脏数据画像仍由 Sprint-87 F0 补齐。

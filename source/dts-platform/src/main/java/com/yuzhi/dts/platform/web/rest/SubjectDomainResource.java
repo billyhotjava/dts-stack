@@ -1,5 +1,7 @@
 package com.yuzhi.dts.platform.web.rest;
 
+import static com.yuzhi.dts.platform.service.catalog.ArchitectureDictionaryWriteGuard.WRITE_EXPRESSION;
+
 import com.yuzhi.dts.platform.service.modeling.ModelSpecException;
 import com.yuzhi.dts.platform.service.modeling.SubjectDomainApplicationService;
 import com.yuzhi.dts.platform.service.modeling.SubjectDomainApplicationService.CreateResult;
@@ -34,8 +36,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/modeling/subject-domains")
 public class SubjectDomainResource {
 
-    private static final String MODELING_MAINTAINER_EXPRESSION =
-        "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).CATALOG_MAINTAINERS)";
     private static final Pattern STRONG_ETAG = Pattern.compile(
         "^\\\"subject-domain:([0-9a-fA-F-]{36}):([1-9][0-9]*):([0-9a-f]{64})\\\"$"
     );
@@ -55,7 +55,7 @@ public class SubjectDomainResource {
     }
 
     @PostMapping
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    @PreAuthorize(WRITE_EXPRESSION)
     public ResponseEntity<ApiResponse<View>> create(@RequestBody CreateCommand command) {
         CreateResult result = service.create(serverTenantId, actorId(), command);
         View view = result.subjectDomain();
@@ -83,7 +83,7 @@ public class SubjectDomainResource {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    @PreAuthorize(WRITE_EXPRESSION)
     public ResponseEntity<ApiResponse<View>> update(
         @PathVariable UUID id,
         @RequestHeader(value = "If-Match", required = false) String ifMatch,
@@ -93,7 +93,7 @@ public class SubjectDomainResource {
     }
 
     @PostMapping("/{id}/confirm")
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    @PreAuthorize(WRITE_EXPRESSION)
     public ResponseEntity<ApiResponse<View>> confirm(
         @PathVariable UUID id,
         @RequestHeader(value = "If-Match", required = false) String ifMatch
@@ -102,7 +102,7 @@ public class SubjectDomainResource {
     }
 
     @PostMapping("/{id}/retire")
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    @PreAuthorize(WRITE_EXPRESSION)
     public ResponseEntity<ApiResponse<View>> retire(
         @PathVariable UUID id,
         @RequestHeader(value = "If-Match", required = false) String ifMatch

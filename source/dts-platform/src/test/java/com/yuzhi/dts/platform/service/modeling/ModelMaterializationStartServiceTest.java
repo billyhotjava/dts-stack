@@ -166,6 +166,28 @@ class ModelMaterializationStartServiceTest {
     }
 
     @Test
+    void rematerializationQueuesTheNextAttemptWithoutReplacingTheCandidate() {
+        CandidateView building = candidate(DeliveryStatus.BUILDING);
+        when(candidateCommands.restartForRematerialization(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), any()))
+            .thenReturn(new CommandResult(building, false, List.of()));
+        when(builds.createRematerializationQueuedBuild(building, NOW))
+            .thenReturn(mock(ModelMaterializationBuildRepository.QueuedBuildGroup.class));
+
+        CommandResult result = service.rematerialize(
+            TENANT,
+            ACTOR,
+            CANDIDATE_ID,
+            4,
+            "rematerialize-key",
+            "rebuild immutable revision"
+        );
+
+        assertThat(result.candidate()).isSameAs(building);
+        verify(builds).createRematerializationQueuedBuild(building, NOW);
+        verify(builds, never()).createRetryQueuedBuild(any(), any());
+    }
+
+    @Test
     void canonicalDriftToStaleCreatesNoPipelineRun() {
         CandidateView stale = candidate(DeliveryStatus.STALE);
         when(candidateCommands.transition(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), any()))

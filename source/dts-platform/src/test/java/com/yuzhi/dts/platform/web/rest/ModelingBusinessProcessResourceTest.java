@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.web.rest;
 
+import static com.yuzhi.dts.platform.service.modeling.BusinessProcessApplicationService.AuditSurface.CANONICAL;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -12,7 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.yuzhi.dts.platform.security.session.PortalSessionInactivityFilter;
 import com.yuzhi.dts.platform.service.audit.AuditService;
-import com.yuzhi.dts.platform.service.sprint64.Sprint64GovernanceService;
+import com.yuzhi.dts.platform.service.modeling.BusinessProcessApplicationService;
 import com.yuzhi.dts.platform.service.sprint64.Sprint64GovernanceService.BusinessProcessDto;
 import java.time.Instant;
 import java.util.List;
@@ -41,7 +42,7 @@ class ModelingBusinessProcessResourceTest {
     private MockMvc mockMvc;
 
     @MockBean
-    private Sprint64GovernanceService service;
+    private BusinessProcessApplicationService service;
 
     @MockBean
     private AuditService auditService;
@@ -62,7 +63,7 @@ class ModelingBusinessProcessResourceTest {
 
     @Test
     void listsProcessesForADomain() throws Exception {
-        when(service.listProcesses(DOMAIN)).thenReturn(List.of(process("BUDGET")));
+        when(service.list(DOMAIN, CANONICAL)).thenReturn(List.of(process("BUDGET")));
 
         mockMvc
             .perform(get("/api/modeling/business-processes").param("domainId", DOMAIN.toString()))
@@ -72,7 +73,7 @@ class ModelingBusinessProcessResourceTest {
 
     @Test
     void createsProcessOnTheCanonicalResource() throws Exception {
-        when(service.createProcess(eq(DOMAIN), any())).thenReturn(process("BUDGET"));
+        when(service.create(eq(DOMAIN), any(), eq(CANONICAL))).thenReturn(process("BUDGET"));
 
         mockMvc
             .perform(post("/api/modeling/business-processes")
@@ -97,7 +98,7 @@ class ModelingBusinessProcessResourceTest {
     void mapsValidationFailuresToBadRequestWithStableCode() throws Exception {
         doThrow(new IllegalArgumentException("processId 不能为空"))
             .when(service)
-            .createProcess(eq(DOMAIN), any());
+            .create(eq(DOMAIN), any(), eq(CANONICAL));
 
         mockMvc
             .perform(post("/api/modeling/business-processes")
@@ -114,7 +115,7 @@ class ModelingBusinessProcessResourceTest {
     void mapsDuplicateProcessToConflictWithStableCode() throws Exception {
         doThrow(new DataIntegrityViolationException("duplicate key value violates unique constraint uk_sprint64_process_domain_key"))
             .when(service)
-            .createProcess(eq(DOMAIN), any());
+            .create(eq(DOMAIN), any(), eq(CANONICAL));
 
         mockMvc
             .perform(post("/api/modeling/business-processes")

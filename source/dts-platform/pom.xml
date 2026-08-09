@@ -640,6 +640,7 @@
                         <testInclude>**/service/modeling/ModelMaterializationStartServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/PostgresPhysicalRelationInspectorTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelReleaseCandidateApplicationServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelReleaseCandidatePreflightServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/CandidatePublicationAdmissionServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/CandidatePublicationCommitServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/CandidatePublicationCoordinatorTest.java</testInclude>
@@ -691,6 +692,7 @@
                         <testInclude>**/web/rest/WarehouseLayerResourceTest.java</testInclude>
                         <testInclude>**/web/rest/SubjectDomainResourceTest.java</testInclude>
                         <testInclude>**/web/rest/ModelingBusinessProcessResourceTest.java</testInclude>
+                        <testInclude>**/web/rest/Sprint64GovernanceResourceTest.java</testInclude>
                         <testInclude>**/web/rest/WorkbenchDimensionCreateDecodeReproTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelSpecSnapshotCodecTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelSpecCreateRequestDecoderTest.java</testInclude>
@@ -736,6 +738,15 @@
                         <testInclude>**/service/catalog/JdbcCanonicalModelIdentityReadAdapterPostgresIT.java</testInclude>
                         <testInclude>**/service/catalog/CatalogPhysicalLocatorTest.java</testInclude>
                         <testInclude>**/service/catalog/CatalogClassificationBoundaryAdapterTest.java</testInclude>
+                        <testInclude>**/service/catalog/ArchitectureDictionaryWriteGuardTest.java</testInclude>
+                        <testInclude>**/service/catalog/ArchitectureDictionaryOwnerAuthorizationTest.java</testInclude>
+                        <testInclude>**/service/catalog/ArchitectureDictionaryResourceAuthorizationContractTest.java</testInclude>
+                        <testInclude>**/service/catalog/ArchitectureDictionaryDependencyRulesTest.java</testInclude>
+                        <testInclude>**/service/catalog/CatalogDomainCommandBoundaryArchitectureTest.java</testInclude>
+                        <testInclude>**/service/catalog/CatalogDomainCommandServiceTest.java</testInclude>
+                        <testInclude>**/service/catalog/CatalogDomainDictionaryReadAdapterTest.java</testInclude>
+                        <testInclude>**/service/modeling/BusinessProcessApplicationServiceTest.java</testInclude>
+                        <testInclude>**/web/rest/internal/CatalogDomainInternalResourceTest.java</testInclude>
                         <testInclude>**/repository/iam/IamAssetActionPolicyRepositoryIT.java</testInclude>
                         <testInclude>**/security/policy/AssetActionTest.java</testInclude>
                         <testInclude>**/service/security/AccessCheckerCanPerformTest.java</testInclude>
@@ -764,6 +775,9 @@
                         <testInclude>**/web/rest/catalog/CatalogAssetPortalResourceTest.java</testInclude>
                         <testInclude>**/web/rest/catalog/CatalogAssetPortalTagFilterResourceTest.java</testInclude>
                         <testInclude>**/web/rest/catalog/CatalogAssetTagSearchResourceTest.java</testInclude>
+                        <testInclude>**/web/rest/catalog/CatalogDomainResourceAuditTest.java</testInclude>
+                        <testInclude>**/web/rest/catalog/CatalogDomainResourceFactsTest.java</testInclude>
+                        <testInclude>**/web/rest/catalog/CatalogDomainResourceWebMvcTest.java</testInclude>
                         <testInclude>**/web/rest/catalog/CatalogTag*.java</testInclude>
                         <testInclude>**/web/rest/internal/CatalogExternalAssetIdentity*.java</testInclude>
                         <testInclude>**/web/rest/internal/DbtRuntimeProfile*.java</testInclude>

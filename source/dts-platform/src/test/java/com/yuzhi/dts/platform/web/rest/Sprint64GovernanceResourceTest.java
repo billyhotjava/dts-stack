@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.web.rest;
 
+import static com.yuzhi.dts.platform.service.modeling.BusinessProcessApplicationService.AuditSurface.LEGACY;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -10,6 +11,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.modeling.BusinessProcessApplicationService;
 import com.yuzhi.dts.platform.service.sprint64.Sprint64GovernanceContract;
 import com.yuzhi.dts.platform.service.sprint64.Sprint64GovernanceService;
 import com.yuzhi.dts.platform.service.sprint64.Sprint64GovernanceService.BusinessProcessDto;
@@ -28,18 +30,19 @@ class Sprint64GovernanceResourceTest {
 
     private final Sprint64GovernanceService service = mock(Sprint64GovernanceService.class);
     private final AuditService audit = mock(AuditService.class);
-    private final Sprint64GovernanceResource resource = new Sprint64GovernanceResource(service, audit);
+    private final BusinessProcessApplicationService businessProcesses = mock(BusinessProcessApplicationService.class);
+    private final Sprint64GovernanceResource resource = new Sprint64GovernanceResource(service, audit, businessProcesses);
 
     @Test
     void processEndpointsKeepDomainAndProcessIdInTheContract() {
         UUID domainId = UUID.randomUUID();
         BusinessProcessDto process = new BusinessProcessDto(1, "node-plan-loop", domainId, "节点计划闭环", null, "MANUAL", null, null, true, null, null);
-        when(service.createProcess(eq(domainId), any(BusinessProcessRequest.class))).thenReturn(process);
+        when(businessProcesses.create(eq(domainId), any(BusinessProcessRequest.class), eq(LEGACY))).thenReturn(process);
 
         ApiResponse<BusinessProcessDto> response = resource.createProcess(domainId, new BusinessProcessRequest("node-plan-loop", "节点计划闭环", null));
 
         assertThat(response.getData()).isEqualTo(process);
-        verify(service).createProcess(eq(domainId), any(BusinessProcessRequest.class));
+        verify(businessProcesses).create(eq(domainId), any(BusinessProcessRequest.class), eq(LEGACY));
     }
 
     @Test

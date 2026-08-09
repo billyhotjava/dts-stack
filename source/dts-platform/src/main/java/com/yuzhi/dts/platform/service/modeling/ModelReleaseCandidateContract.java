@@ -24,7 +24,9 @@ import java.util.regex.Pattern;
 public final class ModelReleaseCandidateContract {
 
     private static final Pattern CHECKSUM = Pattern.compile("^[0-9a-f]{64}$");
-    public static final int MAX_SCOPE_ENTRIES = 100;
+    /** User-selected roots are bounded separately from their server-expanded dependency closure. */
+    public static final int MAX_ROOT_ENTRIES = 100;
+    public static final int MAX_SCOPE_ENTRIES = 500;
     public static final int MAX_COMMAND_REASON_BYTES = 3_500;
     public static final int MAX_SELECTED_REASON_BYTES = 1_024;
     public static final int MAX_RESPONSE_SNAPSHOT_BYTES = 1_048_576;

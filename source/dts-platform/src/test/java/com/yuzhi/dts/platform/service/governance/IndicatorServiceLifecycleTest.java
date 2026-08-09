@@ -16,13 +16,13 @@ import com.yuzhi.dts.platform.domain.governance.GovIndicatorDefinition;
 import com.yuzhi.dts.platform.domain.governance.GovIndicatorReference;
 import com.yuzhi.dts.platform.domain.governance.GovIndicatorVersion;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
-import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.repository.governance.GovIndicatorDefinitionRepository;
 import com.yuzhi.dts.platform.repository.governance.GovIndicatorReferenceRepository;
 import com.yuzhi.dts.platform.repository.governance.GovIndicatorVersionRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.policy.DataLevel;
 import com.yuzhi.dts.platform.service.catalog.CodeAssetGrantWriter;
+import com.yuzhi.dts.platform.service.catalog.CatalogDomainDictionaryReadPort;
 import com.yuzhi.dts.platform.service.governance.dto.IndicatorDto;
 import com.yuzhi.dts.platform.service.governance.request.IndicatorUpsertRequest;
 import com.yuzhi.dts.platform.service.query.QueryGateway;
@@ -57,7 +57,7 @@ class IndicatorServiceLifecycleTest {
     private final GovIndicatorDefinitionRepository indicatorRepository = mock(GovIndicatorDefinitionRepository.class);
     private final GovIndicatorVersionRepository versionRepository = mock(GovIndicatorVersionRepository.class);
     private final GovIndicatorReferenceRepository referenceRepository = mock(GovIndicatorReferenceRepository.class);
-    private final CatalogDomainRepository catalogDomainRepository = mock(CatalogDomainRepository.class);
+    private final CatalogDomainDictionaryReadPort catalogDomains = mock(CatalogDomainDictionaryReadPort.class);
     private final CodeAssetGrantWriter codeAssetGrantWriter = mock(CodeAssetGrantWriter.class);
     private final AccessChecker accessChecker = mock(AccessChecker.class);
     private final OrganizationVisibilityService organizationVisibilityService = mock(OrganizationVisibilityService.class);
@@ -75,7 +75,7 @@ class IndicatorServiceLifecycleTest {
         mock(QueryGateway.class),
         mock(SecuritySqlRewriter.class),
         objectMapper,
-        catalogDomainRepository,
+        catalogDomains,
         codeAssetGrantWriter,
         derivationValidationService
     );
@@ -458,7 +458,7 @@ class IndicatorServiceLifecycleTest {
         when(versionRepository.findByIndicatorAndVersion(current, "v3")).thenReturn(Optional.of(source));
         when(versionRepository.findByIndicatorOrderByCreatedDateDesc(current)).thenReturn(List.of(source));
         when(versionRepository.findByIndicatorAndVersion(current, "v4")).thenReturn(Optional.empty());
-        when(catalogDomainRepository.existsByCodeIgnoreCase("sales")).thenReturn(true);
+        when(catalogDomains.existsByCode("sales")).thenReturn(true);
         when(indicatorRepository.findFirstByCodeIgnoreCase(anyString())).thenAnswer(invocation -> {
             String code = invocation.getArgument(0);
             if ("STABLE_CODE".equalsIgnoreCase(code)) return Optional.of(current);

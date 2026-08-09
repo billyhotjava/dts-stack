@@ -6,8 +6,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.yuzhi.dts.platform.domain.catalog.CatalogDomain;
-import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
+import com.yuzhi.dts.platform.domain.catalog.CatalogDomainLifecycleStatus;
+import com.yuzhi.dts.platform.service.catalog.CatalogDomainDictionaryReadPort;
+import com.yuzhi.dts.platform.service.catalog.CatalogDomainDictionaryReadPort.DomainRecord;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
@@ -18,11 +20,11 @@ class CatalogDomainInternalResourceTest {
 
     @Test
     void resolvesCatalogDomainsAndReportsMissingRefs() {
-        CatalogDomainRepository repository = mock(CatalogDomainRepository.class);
-        CatalogDomain domain = domain("flower_rental", "花卉租赁");
-        when(repository.findByCodeLowerIn(anyCollection())).thenReturn(List.of(domain));
+        CatalogDomainDictionaryReadPort domains = mock(CatalogDomainDictionaryReadPort.class);
+        DomainRecord domain = domain("flower_rental", "花卉租赁");
+        when(domains.findByCodeCandidates(anyCollection())).thenReturn(List.of(domain));
 
-        CatalogDomainInternalResource resource = new CatalogDomainInternalResource(repository);
+        CatalogDomainInternalResource resource = new CatalogDomainInternalResource(domains);
         CatalogDomainInternalResource.ResolveResponse response = resource
             .resolve(new CatalogDomainInternalResource.ResolveRequest(List.of("domain:flower_rental", "domain:missing")))
             .getBody();
@@ -34,18 +36,18 @@ class CatalogDomainInternalResourceTest {
         assertThat(response.ambiguous()).isEmpty();
 
         ArgumentCaptor<Collection<String>> captor = ArgumentCaptor.forClass(Collection.class);
-        verify(repository).findByCodeLowerIn(captor.capture());
+        verify(domains).findByCodeCandidates(captor.capture());
         assertThat(captor.getValue()).contains("domain:flower_rental", "flower_rental", "domain:missing", "missing");
     }
 
     @Test
     void reportsAmbiguousDomainAliasRefs() {
-        CatalogDomainRepository repository = mock(CatalogDomainRepository.class);
-        CatalogDomain qualified = domain("domain.flower_rental", "花卉租赁");
-        CatalogDomain shortCode = domain("flower_rental", "花卉租赁短码");
-        when(repository.findByCodeLowerIn(anyCollection())).thenReturn(List.of(qualified, shortCode));
+        CatalogDomainDictionaryReadPort domains = mock(CatalogDomainDictionaryReadPort.class);
+        DomainRecord qualified = domain("domain.flower_rental", "花卉租赁");
+        DomainRecord shortCode = domain("flower_rental", "花卉租赁短码");
+        when(domains.findByCodeCandidates(anyCollection())).thenReturn(List.of(qualified, shortCode));
 
-        CatalogDomainInternalResource resource = new CatalogDomainInternalResource(repository);
+        CatalogDomainInternalResource resource = new CatalogDomainInternalResource(domains);
         CatalogDomainInternalResource.ResolveResponse response = resource
             .resolve(new CatalogDomainInternalResource.ResolveRequest(List.of("domain:flower_rental")))
             .getBody();
@@ -56,12 +58,15 @@ class CatalogDomainInternalResourceTest {
         assertThat(response.ambiguous()).containsExactly("domain:flower_rental");
     }
 
-    private static CatalogDomain domain(String code, String name) {
-        CatalogDomain domain = new CatalogDomain();
-        domain.setId(UUID.randomUUID());
-        domain.setCode(code);
-        domain.setName(name);
-        domain.setOwner("经营管理部");
-        return domain;
+    private static DomainRecord domain(String code, String name) {
+        return new DomainRecord(
+            UUID.randomUUID(),
+            code,
+            name,
+            "经营管理部",
+            null,
+            CatalogDomainLifecycleStatus.ACTIVE,
+            Instant.parse("2026-08-09T10:00:00Z")
+        );
     }
 }

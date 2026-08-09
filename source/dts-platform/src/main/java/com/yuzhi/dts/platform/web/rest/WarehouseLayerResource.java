@@ -1,5 +1,7 @@
 package com.yuzhi.dts.platform.web.rest;
 
+import static com.yuzhi.dts.platform.service.catalog.ArchitectureDictionaryWriteGuard.WRITE_EXPRESSION;
+
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehouseLayerApplicationService;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehouseLayerContract.CreateWarehouseLayerCommand;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehouseLayerContract.WarehouseLayerView;
@@ -25,9 +27,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/modeling/warehouse-layers")
 public class WarehouseLayerResource {
 
-    private static final String MODELING_MAINTAINER_EXPRESSION =
-        "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).CATALOG_MAINTAINERS)";
-
     private final WarehouseLayerApplicationService service;
     private final WarehousePlanActorProvider actorProvider;
 
@@ -42,7 +41,7 @@ public class WarehouseLayerResource {
     }
 
     @PostMapping
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    @PreAuthorize(WRITE_EXPRESSION)
     public ResponseEntity<ApiResponse<WarehouseLayerView>> create(@RequestBody CreateWarehouseLayerCommand command) {
         WarehouseLayerView view = service.create(actorId(), command);
         return ResponseEntity
@@ -52,7 +51,7 @@ public class WarehouseLayerResource {
     }
 
     @DeleteMapping("/{code}")
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    @PreAuthorize(WRITE_EXPRESSION)
     public ResponseEntity<Void> delete(@PathVariable String code) {
         service.delete(actorId(), code);
         return ResponseEntity.noContent().build();

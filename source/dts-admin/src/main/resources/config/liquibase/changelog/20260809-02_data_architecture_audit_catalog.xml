@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260809-02-data-architecture-audit-catalog" author="xiezm">
+        <comment>幂等登记平台数据架构字典的资源、模块及新旧兼容写动作；仅 Expand，不应用业务数据迁移</comment>
+        <sql splitStatements="true" stripComments="false"><![CDATA[
+            INSERT INTO audit_resource_dictionary (
+                resource_key, display_name, category, aliases, order_value, enabled, updated_at
+            )
+            VALUES (
+                'data_architecture',
+                '数据架构',
+                '数据架构',
+                'data_architecture,catalog_domain,modeling_business_process,modeling_warehouse_layer,modeling_data_mart,modeling_subject_domain',
+                31,
+                TRUE,
+                CURRENT_TIMESTAMP
+            )
+            ON CONFLICT (resource_key) DO UPDATE SET
+                display_name = EXCLUDED.display_name,
+                category = EXCLUDED.category,
+                aliases = EXCLUDED.aliases,
+                order_value = EXCLUDED.order_value,
+                enabled = EXCLUDED.enabled,
+                updated_at = EXCLUDED.updated_at;
+
+            WITH desired (module_key, module_name, order_value) AS (
+                VALUES
+                    ('modeling.architecture.domains', '业务分类与数据域', 100),
+                    ('modeling.architecture.businessProcesses', '业务过程', 110),
+                    ('modeling.architecture.warehouseLayers', '数仓分层', 120),
+                    ('modeling.architecture.dataMarts', '数据集市', 130),
+                    ('modeling.architecture.subjectDomains', '主题域', 140)
+            )
+            INSERT INTO audit_module_catalog (
+                source_system, module_key, module_name, parent_module_key, owner,
+                enabled, order_value, version, updated_at
+            )
+            SELECT
+                'platform',
+                desired.module_key,
+                desired.module_name,
+                'modeling',
+                'platform',
+                TRUE,
+                desired.order_value,
+                'sprint-87-f1',
+                CURRENT_TIMESTAMP
+              FROM desired
+            ON CONFLICT (source_system, module_key) DO UPDATE SET
+                module_name = EXCLUDED.module_name,
+                parent_module_key = EXCLUDED.parent_module_key,
+                owner = EXCLUDED.owner,
+                enabled = EXCLUDED.enabled,
+                order_value = EXCLUDED.order_value,
+                version = EXCLUDED.version,
+                updated_at = EXCLUDED.updated_at;
+
+            WITH desired (
+                action_code, module_key, module_name, operation_name, operation_kind
+            ) AS (
+                VALUES
+                    ('CATALOG_DOMAIN_CREATE', 'modeling.architecture.domains', '业务分类与数据域', '创建业务分类或数据域', 'CREATE'),
+                    ('CATALOG_DOMAIN_UPDATE', 'modeling.architecture.domains', '业务分类与数据域', '修改业务分类或数据域', 'UPDATE'),
+                    ('CATALOG_DOMAIN_DELETE', 'modeling.architecture.domains', '业务分类与数据域', '删除业务分类或数据域', 'DELETE'),
+                    ('CATALOG_DOMAIN_MOVE', 'modeling.architecture.domains', '业务分类与数据域', '移动业务分类或数据域', 'UPDATE'),
+                    ('MODELING_BUSINESS_PROCESS_CREATE', 'modeling.architecture.businessProcesses', '业务过程', '创建业务过程', 'CREATE'),
+                    ('MODELING_BUSINESS_PROCESS_DELETE', 'modeling.architecture.businessProcesses', '业务过程', '删除业务过程', 'DELETE'),
+                    ('SPRINT64_PROCESS_CREATE', 'modeling.architecture.businessProcesses', '业务过程', '通过兼容入口创建业务过程', 'CREATE'),
+                    ('SPRINT64_PROCESS_DELETE', 'modeling.architecture.businessProcesses', '业务过程', '通过兼容入口删除业务过程', 'DELETE'),
+                    ('MODELING_WAREHOUSE_LAYER_CREATE', 'modeling.architecture.warehouseLayers', '数仓分层', '创建数仓分层', 'CREATE'),
+                    ('MODELING_WAREHOUSE_LAYER_DELETE', 'modeling.architecture.warehouseLayers', '数仓分层', '删除数仓分层', 'DELETE'),
+                    ('MODELING_DATA_MART_CREATE', 'modeling.architecture.dataMarts', '数据集市', '创建数据集市', 'CREATE'),
+                    ('MODELING_DATA_MART_UPDATE', 'modeling.architecture.dataMarts', '数据集市', '修改数据集市', 'UPDATE'),
+                    ('MODELING_DATA_MART_CURRENT', 'modeling.architecture.dataMarts', '数据集市', '确认数据集市', 'UPDATE'),
+                    ('MODELING_DATA_MART_RETIRED', 'modeling.architecture.dataMarts', '数据集市', '退役数据集市', 'UPDATE'),
+                    ('MODELING_SUBJECT_DOMAIN_CREATE', 'modeling.architecture.subjectDomains', '主题域', '创建主题域', 'CREATE'),
+                    ('MODELING_SUBJECT_DOMAIN_UPDATE', 'modeling.architecture.subjectDomains', '主题域', '修改主题域', 'UPDATE'),
+                    ('MODELING_SUBJECT_DOMAIN_CURRENT', 'modeling.architecture.subjectDomains', '主题域', '确认主题域', 'UPDATE'),
+                    ('MODELING_SUBJECT_DOMAIN_RETIRED', 'modeling.architecture.subjectDomains', '主题域', '退役主题域', 'UPDATE')
+            )
+            INSERT INTO audit_action_catalog (
+                source_system, action_code, module_key, module_name, operation_code,
+                operation_name, operation_kind, resource_type, allow_empty_targets,
+                enabled, version, updated_at
+            )
+            SELECT
+                'platform',
+                desired.action_code,
+                desired.module_key,
+                desired.module_name,
+                desired.action_code,
+                desired.operation_name,
+                desired.operation_kind,
+                'data_architecture',
+                FALSE,
+                TRUE,
+                'sprint-87-f1',
+                CURRENT_TIMESTAMP
+              FROM desired
+            ON CONFLICT (source_system, action_code) DO UPDATE SET
+                module_key = EXCLUDED.module_key,
+                module_name = EXCLUDED.module_name,
+                operation_code = EXCLUDED.operation_code,
+                operation_name = EXCLUDED.operation_name,
+                operation_kind = EXCLUDED.operation_kind,
+                resource_type = EXCLUDED.resource_type,
+                allow_empty_targets = EXCLUDED.allow_empty_targets,
+                enabled = EXCLUDED.enabled,
+                version = EXCLUDED.version,
+                updated_at = EXCLUDED.updated_at;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="true" stripComments="false"><![CDATA[
+                -- Forward-only convergence: these shared dictionary rows can already be used by
+                -- durable audit evidence, so rollback intentionally preserves them.
+                SELECT 1;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

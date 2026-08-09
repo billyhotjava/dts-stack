@@ -10,6 +10,7 @@ import com.yuzhi.dts.platform.repository.modeling.DataMartRepository;
 import com.yuzhi.dts.platform.repository.modeling.DataMartRepository.PlanBinding;
 import com.yuzhi.dts.platform.repository.modeling.DataMartRepository.StoredDataMart;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.ArchitectureDictionaryWriteGuard;
 import com.yuzhi.dts.platform.service.modeling.DataMartContract.CreateCommand;
 import com.yuzhi.dts.platform.service.modeling.DataMartContract.ExpectedVersion;
 import com.yuzhi.dts.platform.service.modeling.DataMartContract.FieldIssue;
@@ -40,10 +41,17 @@ public class DataMartApplicationService {
     private final DataMartRepository repository;
     private final AuditService auditService;
     private final ObjectWriter canonicalWriter;
+    private final ArchitectureDictionaryWriteGuard writeGuard;
 
-    public DataMartApplicationService(DataMartRepository repository, AuditService auditService, ObjectMapper objectMapper) {
+    public DataMartApplicationService(
+        DataMartRepository repository,
+        AuditService auditService,
+        ObjectMapper objectMapper,
+        ArchitectureDictionaryWriteGuard writeGuard
+    ) {
         this.repository = repository;
         this.auditService = auditService;
+        this.writeGuard = writeGuard;
         this.canonicalWriter = objectMapper
             .copy()
             .enable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
@@ -53,6 +61,7 @@ public class DataMartApplicationService {
 
     @Transactional
     public CreateResult create(String tenantId, String actorId, CreateCommand command) {
+        writeGuard.requireWriteAccess();
         requireContext(tenantId, actorId);
         reject(DataMartContract.validateCreate(command));
         String requestHash = hash(command);
@@ -135,6 +144,7 @@ public class DataMartApplicationService {
 
     @Transactional
     public View update(String tenantId, String actorId, UUID id, ExpectedVersion expected, UpdateCommand command) {
+        writeGuard.requireWriteAccess();
         requireContext(tenantId, actorId);
         reject(DataMartContract.validateUpdate(command));
         requireBusinessCategories(command.businessCategoryIds());
@@ -176,11 +186,13 @@ public class DataMartApplicationService {
 
     @Transactional
     public View confirm(String tenantId, String actorId, UUID id, ExpectedVersion expected) {
+        writeGuard.requireWriteAccess();
         return transition(tenantId, actorId, id, expected, Status.CURRENT);
     }
 
     @Transactional
     public View retire(String tenantId, String actorId, UUID id, ExpectedVersion expected) {
+        writeGuard.requireWriteAccess();
         View current = get(tenantId, id);
         if (current.usageCount() > 0) {
             throw conflict("DATA_MART_IN_USE", "Remove this data mart from planning baselines before retiring it");
@@ -405,7 +417,7 @@ public class DataMartApplicationService {
         payload.put("actor", actorId);
         payload.put("code", view.code());
         payload.put("name", view.name());
-        auditService.auditAction(action, AuditStage.SUCCESS, view.id().toString(), payload);
+        auditService.auditActionStrict(action, AuditStage.SUCCESS, view.id().toString(), payload);
     }
 
     private static void requireContext(String tenantId, String actorId) {

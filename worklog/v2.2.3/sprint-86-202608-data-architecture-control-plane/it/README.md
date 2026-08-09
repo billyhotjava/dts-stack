@@ -2,14 +2,18 @@
 
 当前没有实现、构建、部署或 E2E 证据。本目录只登记架构 Sprint 的评审闭环。
 
-| Evidence | 状态 | 内容 |
-|---|---|---|
-| IT-01 统一语言评审 | PENDING | 业务分类、数据域、业务过程、集市、主题域、来源、分层 |
-| IT-02 能力边界评审 | PENDING | 数据架构、建模、资产、指标、质量、业务主数据的 owner 与消费关系 |
-| IT-03 关键关系与端到端评审 | PENDING | 关系基数、模型依赖 DAG、批量/二次物化、稳定键、状态传播、E2E-A～D。**（RF-86-12）本 Sprint 验收用例设计的完备性**——每个用例有明确 Given/When/Then、owner、失败路径与证据类型；UI/API/数据/审计四类证据是下一实施 Sprint 的执行要求，本 Sprint 不执行 |
-| IT-07 规模与权限约束评审 | PENDING | **（RF-86-08／09）** 资产统计口径与规模上限（ADR-86-16）与纳管范围（ADR-86-04）的联合结论；架构字典写权限强制手段（ADR-86-17）或显式接受的约定级风险 |
-| IT-04 数据契约评审 | PENDING | 资产三轴、指标业务上下文、稳定 ID 与状态机 |
-| IT-05 IA 蓝图评审 | PENDING | 菜单归属、Table/树/编辑器形态、旧页面承接 |
-| IT-06 迁移准入评审 | PENDING | Expand/Contract、回滚、影响分析与下一 Sprint |
+| Evidence | 状态 | Accountable role | 目标日期 | 记录 |
+|---|---|---|---|---|
+| IT-01 统一语言评审 | PASS | xiezm（兼任产品决策 + 数据架构 + 受影响 owner） | 2026-08-09 | [`IT-01-unified-language-review.md`](IT-01-unified-language-review.md) |
+| IT-02 能力边界评审 | PASS | xiezm（兼任数据架构 + 各 canonical owner + 安全/权限） | 2026-08-09 | [`IT-02-capability-owner-review.md`](IT-02-capability-owner-review.md) |
+| IT-03 关键关系与端到端评审 | PASS（架构用例设计） | xiezm（兼任数据架构 + 建模/发布/资产 owner） | 2026-08-09 | [`IT-03-relationship-e2e-review.md`](IT-03-relationship-e2e-review.md) |
+| IT-04 数据契约评审 | PASS（架构契约） | xiezm（兼任资产/指标/质量 owner） | 2026-08-09 | [`IT-04-data-contract-review.md`](IT-04-data-contract-review.md) |
+| IT-05 IA 蓝图评审 | PASS（架构蓝图） | xiezm（兼任产品决策 + 前端/平台 owner） | 2026-08-09 | [`IT-05-ia-blueprint-review.md`](IT-05-ia-blueprint-review.md) |
+| IT-06 迁移准入评审 | PASS（Sprint-86；Sprint-87 G0 仍 BLOCKED） | xiezm（兼任产品决策 + 架构/交付 owner） | 2026-08-09 | [`IT-06-migration-admission-review.md`](IT-06-migration-admission-review.md) |
+| IT-07 规模与权限约束评审 | PASS（架构设计） | xiezm（兼任架构/资产/安全/权限 owner） | 2026-08-09 | [`IT-07-nfr-permission-review.md`](IT-07-nfr-permission-review.md) |
 
-Sprint 只有在 IT-01～IT-07 均形成明确结论、README 的 OPEN 项关闭或转为具名风险后，才能标记架构 DONE。IT-03 至少逐项走查：关系一致性、批量交付、模型到资产、未归域治理、指标上下文；MDM 路径只评审边界并转入独立 Sprint。
+IT-01～IT-07 均已形成明确架构结论，README 的架构 OPEN 项已关闭或转为具名实施风险，Sprint-86 因此可标记 Architecture DONE。IT-03 通过只表示关系一致性、批量交付、模型到资产、未归域治理和指标上下文的用例设计通过；不表示真实 E2E 已执行。MDM 路径只评审边界并转入独立 Sprint。
+
+IT-03～07 共用 [`../assets/consolidated-approval-pack.md`](../assets/consolidated-approval-pack.md) 作为集中输入；xiezm 已于 2026-08-09 批准 D01～D11、N01～N12，选择、异议、行动项和证据已分别回填。
+
+本目录没有代码测试、构建、迁移、部署或浏览器执行证据；这些证据只能由 Sprint-87 在关闭 G0 后产生。

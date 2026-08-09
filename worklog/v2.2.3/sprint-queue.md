@@ -1857,20 +1857,64 @@
 ## Sprint-86: 平台级数据架构控制面与跨域语义收敛 (202608)
 
 **目录**: `worklog/v2.2.3/sprint-86-202608-data-architecture-control-plane`
-**状态**: DRAFT / ARCHITECTURE_DISCUSSION（只做架构讨论，不进入代码实施）
-**类型**: Architecture / Domain Modeling / Information Architecture / Compatibility Planning
+**时间盒**: 2026-08-10 ～ 2026-08-21
+**状态**: DONE（Architecture；无代码、迁移、构建、部署或真实 E2E 交付）
+**类型**: Architecture Enabler / Domain Modeling / Information Architecture / Compatibility Planning
 **目标**: 冻结平台全局的数据架构元数据、关键数据模型关系、物理资产纳管、指标业务归属和跨模块消费契约，使建模、资产、指标与质量共用稳定 ID、版本关系和唯一 owner，并与后续业务主数据管理划清边界。
 **依赖**: 复用 `catalog_domain`、现有规划台账、WarehouseLayer canonical projection、CatalogAssetKey、ModelSpec、指标与质量控制面；承接 `asset-domain-navigation-20260809` 的术语/双 CRUD 勘察，不新增平行实现。
 
 | Feature | 优先级 | Task 数 | 状态 |
 |---|---|---:|---|
-| F1-数据架构元数据与控制面 | P0 | 2 | DRAFT |
-| F2-资产范围来源与分层语义 | P0 | 1 | DRAFT |
-| F3-指标业务上下文 | P0 | 1 | DRAFT |
-| F4-信息架构与页面形态 | P0 | 1 | DRAFT |
-| F5-兼容迁移与实施准入 | P0 | 1 | DRAFT |
+| F1-数据架构元数据与控制面 | P0 | 2 | DONE |
+| F2-资产范围来源与分层语义 | P0 | 1 | DONE |
+| F3-指标业务上下文 | P1 | 1 | DONE |
+| F4-信息架构与页面形态 | P1 | 1 | DONE |
+| F5-兼容迁移与实施准入 | P0 | 1 | DONE |
 
-**统计**: DRAFT=6, READY=0, IN_PROGRESS=0, DONE=0, BLOCKED=0
-**执行顺序**: F1/T01（语言/owner）→ F1/T02（关系/E2E）→ F2/F3 → F4 → F5；F2/F3 可并行讨论，代码实施必须另立 Sprint。
-**关键决策**: 当前按平台全局设计；业务分类→数据域为单父级、分层正交；目标业务链为分类→域→过程与分类→集市→主题域；维度/事实/汇总/应用模型依赖为 DAG，批量候选固定依赖闭包，二次物化新增 attempt/observation；ModelSpec revision→候选→物化证据→语义/物理资产分别建模；真实稳定关系均可成为资产但治理/消费状态独立；指标 category 归于业务分类；架构元数据与业务 MDM 分离。“数据架构”一级入口、数据集市基数、DIM/SOURCE 兼容和精确状态机仍待评审。
-**已知风险**: 当前数据画像仅来自本地 v2.2.3 环境；`GovIndicatorDefinition` 预研影响为 HIGH；GitNexus 全量重建因解析器串行停滞未完成，实施前必须刷新索引并重跑逐符号 impact。
+**统计**: DONE=6（按 Task：F1/T01、F1/T02、F2/T01、F3/T01、F4/T01、F5/T01）
+**完成顺序**: F1/T01（语言/owner）→ F1/T02（关系/E2E）→ F2/F3 → F4 → F5；代码实施另由 Sprint-87 承接。
+**关键决策**: 当前按平台全局设计；业务分类→数据域为单父级、分层正交；平台数据架构是公共字典的逻辑控制面；MDM 只冻结边界、实现后置；架构字典采用唯一 command boundary 与权限方案 A。D01～D11、N01～N12 已由 xiezm 集中批准并写回 ADR/IT。
+**已知风险/移交**: 当前数据画像仅来自本地 v2.2.3 环境；`GovIndicatorDefinition` 实施影响为 HIGH；GitNexus 索引须在 Sprint-87 G0 刷新；客户画像、登录、Chrome 95、备份和迁移样本均已具名转入 Sprint-87。IT-01～07 全部为架构 PASS，不代表运行交付。
+
+## Sprint-87: 平台数据架构与跨域契约实施 (202608)
+
+**目录**: `worklog/v2.2.3/sprint-87-202608-data-architecture-implementation`
+**时间盒**: 2026-08-24 ～ 2026-09-04
+**状态**: BLOCKED（Sprint-86 架构已批准；等待 G0 外部输入）
+**类型**: Implementation / Compatibility Migration / UI Productization
+**目标**: 在复用既有 command boundary、ReleaseCandidate、CatalogAssetKey 和指标/质量 owner 的前提下，实现架构字典授权收口、模型 DAG/批量/二次物化、资产五轴与统计投影、指标稳定上下文和统一数据架构入口，并集中完成 Chrome 95 与真实菜单验收。
+**依赖**: Sprint-86 ADR/IT 已通过；仍依赖客户/生产画像、GitNexus 最新索引、登录/菜单/Chrome 95、备份和迁移 dry-run。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---|---|---:|---|
+| F0-交付基线与生产画像 | P0 | 1 | BLOCKED_INPUT |
+| F1-架构字典控制边界 | P0 | 1 | BLOCKED |
+| F2-模型关系与批量物化 | P0 | 1 | BLOCKED |
+| F3-资产语义与统计投影 | P0 | 1 | BLOCKED |
+| F4-指标上下文迁移 | P0 | 1 | BLOCKED（HIGH risk） |
+| F5-信息架构与路由收敛 | P1 | 1 | BLOCKED |
+| F6-集中验证与发布观测 | P0 | 1 | BLOCKED |
+
+**统计**: BLOCKED_INPUT=1, BLOCKED=6；未进入编码。
+**执行顺序**: F0 → F1 → F2/F3 → F4 → F5 → F6；所有编码完成后只执行一次集中验证，失败再做针对性重跑。
+**关键边界**: 不新建平行控制面；首轮只做 Expand/兼容迁移，不删除旧字段/API/路由；Contract 另批审批；MDM 不进入本 Sprint。
+**已知风险**: 设计容量尚未用客户数据校验；GitNexus 索引不可用；真实账号、Chrome 95、备份和迁移样本未提供；在 G0 关闭前不得把 BLOCKED 改为 READY。
+
+## Sprint-88: 资产概览页面 UI 重构 (202608)
+
+**目录**: `worklog/v2.2.3/sprint-88-202608-asset-overview-ui-refactor`
+**状态**: READY
+**类型**: UI Productization / Frontend Refactor
+**目标**: 用户进入「资产概览」后在一屏内看清当前范围的资产体量、治理缺口与主题域分布，并通过唯一出口带参跳进数据查询处置；左侧范围导航在 240px 内不溢出。
+**依赖**: 承接 ADR-86（台账并入 `/catalog/search?view=table`）；复用既有 `GET /api/catalog/assets/overview`、`getDomainTree({withStats})`、`@/components/chart`、`MetricTile`。**零 Java 改动、零迁移、零新依赖**。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---|---|---:|---|
+| F1-资产范围导航极简化 | P0 | 1 | READY |
+| F2-概览统计与图表 | P0 | 2 | READY |
+| F3-出口收敛与页面瘦身 | P0 | 1 | READY |
+
+**统计**: READY=4, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**执行顺序**: F1/T01 ∥ F2/T01 → F2/T02 → F3/T01（F3 做页面装配与契约测试改写，必须最后做，避免同文件冲突）
+**关键决策**: 域树递归扁平为一层 + Top6 折叠（父域统计不含子域，扁平不重复计数）；资产概览不再呈现 `warehouseLayer`（分层权威源在数据建模模块，避免双事实源）；图表只保留治理状态环形 + 主题域 Top6 堆叠条形；跳转目标唯一 `/catalog/search?view=table`，并以「push 路径字面量去重 == 1」作为机器可验证守卫；「待处置」KPI 不可下钻（后端无单一 attention 过滤参数，不做欺骗性 affordance）。
+**已知风险**: G0 交付基线为 GAP——规划期未启动运行实例，登录/真实域分布/Chrome 95 三项待验证（`it/baseline.md` B1–B3）；现网域数量仅 2 个，Top6 折叠路径真机无数据，只能由单测覆盖并须在 IT 中如实标注；`governanceStatusCounts` 是否存在字典未覆盖 key 待实测，决定环形图「其他」聚合是否为实际路径。F3/T01 未拿到真机四态证据前 Sprint 不得置 DONE。

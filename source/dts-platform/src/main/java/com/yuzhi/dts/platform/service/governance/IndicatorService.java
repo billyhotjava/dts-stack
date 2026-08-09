@@ -8,7 +8,6 @@ import com.yuzhi.dts.platform.domain.governance.GovIndicatorReference;
 import com.yuzhi.dts.platform.domain.governance.GovIndicatorVersion;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
-import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.repository.governance.GovIndicatorDefinitionRepository;
 import com.yuzhi.dts.platform.repository.governance.GovIndicatorReferenceRepository;
 import com.yuzhi.dts.platform.repository.governance.GovIndicatorVersionRepository;
@@ -19,6 +18,7 @@ import com.yuzhi.dts.platform.security.policy.DataLevel;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetIdentity;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetType;
+import com.yuzhi.dts.platform.service.catalog.CatalogDomainDictionaryReadPort;
 import com.yuzhi.dts.platform.service.catalog.CodeAssetLifecycleMapper;
 import com.yuzhi.dts.platform.service.catalog.CodeAssetGrantWriter;
 import com.yuzhi.dts.platform.service.governance.dto.IndicatorDto;
@@ -79,7 +79,7 @@ public class IndicatorService {
     private final QueryGateway queryGateway;
     private final SecuritySqlRewriter securitySqlRewriter;
     private final ObjectMapper objectMapper;
-    private final CatalogDomainRepository catalogDomainRepository;
+    private final CatalogDomainDictionaryReadPort catalogDomains;
     private final CodeAssetGrantWriter codeAssetGrantWriter;
     private final IndicatorDerivationValidationService derivationValidationService;
 
@@ -93,7 +93,7 @@ public class IndicatorService {
         QueryGateway queryGateway,
         SecuritySqlRewriter securitySqlRewriter,
         ObjectMapper objectMapper,
-        CatalogDomainRepository catalogDomainRepository,
+        CatalogDomainDictionaryReadPort catalogDomains,
         CodeAssetGrantWriter codeAssetGrantWriter,
         IndicatorDerivationValidationService derivationValidationService
     ) {
@@ -106,7 +106,7 @@ public class IndicatorService {
         this.queryGateway = queryGateway;
         this.securitySqlRewriter = securitySqlRewriter;
         this.objectMapper = objectMapper;
-        this.catalogDomainRepository = catalogDomainRepository;
+        this.catalogDomains = catalogDomains;
         this.codeAssetGrantWriter = codeAssetGrantWriter;
         this.derivationValidationService = derivationValidationService;
     }
@@ -1561,7 +1561,7 @@ public class IndicatorService {
     }
 
     private void validateDomainCode(String domain) {
-        if (StringUtils.hasText(domain) && !catalogDomainRepository.existsByCodeIgnoreCase(domain)) {
+        if (StringUtils.hasText(domain) && !catalogDomains.existsByCode(domain)) {
             throw new IndicatorRequestException("域编码不存在: " + domain);
         }
     }

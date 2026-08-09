@@ -118,7 +118,7 @@ public class ModelReleaseCandidateApplicationService {
         if (
             modelSpecIds == null ||
             modelSpecIds.isEmpty() ||
-            modelSpecIds.size() > ModelReleaseCandidateContract.MAX_SCOPE_ENTRIES ||
+            modelSpecIds.size() > ModelReleaseCandidateContract.MAX_ROOT_ENTRIES ||
             modelSpecIds.stream().anyMatch(id -> id == null) ||
             modelSpecIds.stream().distinct().count() != modelSpecIds.size()
         ) {

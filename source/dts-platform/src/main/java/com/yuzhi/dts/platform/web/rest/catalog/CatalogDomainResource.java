@@ -5,10 +5,10 @@ import com.yuzhi.dts.platform.domain.catalog.CatalogDomainAccessPolicy;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDomainLifecycleStatus;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
-import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetOverviewAggregator;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetPortalService;
+import com.yuzhi.dts.platform.service.catalog.CatalogDomainCommandService;
 import com.yuzhi.dts.platform.service.catalog.CatalogDomainVisibilityService;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import com.yuzhi.dts.platform.web.rest.ApiResponses;
@@ -24,33 +24,33 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
-import static com.yuzhi.dts.platform.web.rest.catalog.CatalogResourceHelper.CATALOG_MAINTAINER_EXPRESSION;
+import static com.yuzhi.dts.platform.service.catalog.ArchitectureDictionaryWriteGuard.WRITE_EXPRESSION;
 
 @RestController
 @RequestMapping("/api/catalog")
 public class CatalogDomainResource {
 
-    private final CatalogDomainRepository domainRepo;
     private final CatalogDatasetRepository datasetRepo;
     private final AuditService audit;
     private final CatalogDomainVisibilityService visibilityService;
     private final CatalogAssetPortalService assetPortalService;
     private final CatalogResourceHelper helper;
+    private final CatalogDomainCommandService commandService;
 
     public CatalogDomainResource(
-        CatalogDomainRepository domainRepo,
         CatalogDatasetRepository datasetRepo,
         AuditService audit,
         CatalogDomainVisibilityService visibilityService,
         CatalogAssetPortalService assetPortalService,
-        CatalogResourceHelper helper
+        CatalogResourceHelper helper,
+        CatalogDomainCommandService commandService
     ) {
-        this.domainRepo = domainRepo;
         this.datasetRepo = datasetRepo;
         this.audit = audit;
         this.visibilityService = visibilityService;
         this.assetPortalService = assetPortalService;
         this.helper = helper;
+        this.commandService = commandService;
     }
 
     @GetMapping("/domains")
@@ -85,62 +85,21 @@ public class CatalogDomainResource {
     }
 
     @PostMapping("/domains")
-    @Transactional
-    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
+    @PreAuthorize(WRITE_EXPRESSION)
     public ApiResponse<CatalogDomain> createDomain(@Valid @RequestBody CatalogDomain domain) {
-        if (domain.getId() != null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "New catalog domain must not include id");
-        }
-        if (domain.getLifecycleStatus() == null) {
-            domain.setLifecycleStatus(CatalogDomainLifecycleStatus.ACTIVE);
-        }
-        if (domain.getAccessPolicy() == null) {
-            domain.setAccessPolicy(CatalogDomainAccessPolicy.PUBLIC);
-        }
-        domain.setParent(resolveVisibleParent(domain.getParent()));
-        CatalogDomain saved = domainRepo.save(domain);
-        requireMaintainAccess(saved);
-        audit.auditAction("CATALOG_DOMAIN_CREATE", AuditStage.SUCCESS, saved.getId().toString(), null);
-        return ApiResponses.ok(saved);
+        return ApiResponses.ok(commandService.create(domain));
     }
 
     @PutMapping("/domains/{id}")
-    @Transactional
-    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
+    @PreAuthorize(WRITE_EXPRESSION)
     public ApiResponse<CatalogDomain> updateDomain(@PathVariable UUID id, @Valid @RequestBody CatalogDomain patch) {
-        CatalogDomain existing = domainRepo.findById(id).orElseThrow();
-        boolean restrictedBeforeUpdate = existing.getAccessPolicy() == CatalogDomainAccessPolicy.RESTRICTED;
-        if (restrictedBeforeUpdate) {
-            requireMaintainAccess(existing);
-        }
-        CatalogDomain resolvedParent = resolveVisibleParent(patch.getParent());
-        existing.setName(patch.getName());
-        existing.setCode(patch.getCode());
-        existing.setOwner(patch.getOwner());
-        existing.setDescription(patch.getDescription());
-        if (patch.getLifecycleStatus() != null) {
-            existing.setLifecycleStatus(patch.getLifecycleStatus());
-        }
-        if (patch.getAccessPolicy() != null) {
-            existing.setAccessPolicy(patch.getAccessPolicy());
-        }
-        existing.setParent(resolvedParent);
-        if (!restrictedBeforeUpdate) {
-            requireMaintainAccess(existing);
-        }
-        CatalogDomain saved = domainRepo.save(existing);
-        audit.auditAction("CATALOG_DOMAIN_UPDATE", AuditStage.SUCCESS, id.toString(), null);
-        return ApiResponses.ok(saved);
+        return ApiResponses.ok(commandService.update(id, patch));
     }
 
     @DeleteMapping("/domains/{id}")
-    @Transactional
-    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
+    @PreAuthorize(WRITE_EXPRESSION)
     public ApiResponse<Boolean> deleteDomain(@PathVariable UUID id) {
-        CatalogDomain domain = domainRepo.findById(id).orElseThrow();
-        requireMaintainAccess(domain);
-        domainRepo.deleteById(id);
-        audit.auditAction("CATALOG_DOMAIN_DELETE", AuditStage.SUCCESS, id.toString(), null);
+        commandService.delete(id);
         return ApiResponses.ok(Boolean.TRUE);
     }
 
@@ -227,44 +186,9 @@ public class CatalogDomainResource {
     }
 
     @PostMapping("/domains/{id}/move")
-    @Transactional
-    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
+    @PreAuthorize(WRITE_EXPRESSION)
     public ApiResponse<CatalogDomain> moveDomain(@PathVariable UUID id, @RequestBody Map<String, Object> body) {
-        CatalogDomain d = domainRepo.findById(id).orElseThrow();
-        requireMaintainAccess(d);
-        Object newParentId = body.get("newParentId");
-        if (newParentId == null || String.valueOf(newParentId).isBlank()) {
-            d.setParent(null);
-        } else {
-            try {
-                UUID pid = UUID.fromString(String.valueOf(newParentId));
-                d.setParent(resolveVisibleParent(pid));
-            } catch (IllegalArgumentException exception) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid catalog domain parent", exception);
-            }
-        }
-        CatalogDomain saved = domainRepo.save(d);
-        audit.auditAction("CATALOG_DOMAIN_MOVE", AuditStage.SUCCESS, id.toString(), null);
-        return ApiResponses.ok(saved);
-    }
-
-    private CatalogDomain resolveVisibleParent(CatalogDomain parent) {
-        return parent == null || parent.getId() == null ? null : resolveVisibleParent(parent.getId());
-    }
-
-    private CatalogDomain resolveVisibleParent(UUID parentId) {
-        return visibilityService
-            .findVisibleById(parentId)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Catalog domain parent not found"));
-    }
-
-    private void requireMaintainAccess(CatalogDomain domain) {
-        if (domain.getAccessPolicy() == CatalogDomainAccessPolicy.RESTRICTED && !visibilityService.canMaintain(domain)) {
-            throw new ResponseStatusException(
-                HttpStatus.FORBIDDEN,
-                "Restricted catalog domain requires EDIT or MANAGE access"
-            );
-        }
+        return ApiResponses.ok(commandService.move(id, body.get("newParentId")));
     }
 
     private static CatalogDomainListItem toListItem(CatalogDomain domain, Set<UUID> visibleParentIds) {

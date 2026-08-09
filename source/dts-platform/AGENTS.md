@@ -1,7 +1,7 @@
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **s10-stack** (51575 symbols, 151555 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **s10-platform-impl** (51870 symbols, 152467 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -24,10 +24,10 @@ This project is indexed by GitNexus as **s10-stack** (51575 symbols, 151555 rela
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/s10-stack/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/s10-stack/clusters` | All functional areas |
-| `gitnexus://repo/s10-stack/processes` | All execution flows |
-| `gitnexus://repo/s10-stack/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/s10-platform-impl/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/s10-platform-impl/clusters` | All functional areas |
+| `gitnexus://repo/s10-platform-impl/processes` | All execution flows |
+| `gitnexus://repo/s10-platform-impl/process/{name}` | Step-by-step execution trace |
 
 ## CLI
 

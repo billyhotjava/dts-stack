@@ -34,6 +34,7 @@ import com.yuzhi.dts.platform.repository.modeling.ModelReleaseCandidateRepositor
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository;
 import com.yuzhi.dts.platform.repository.modeling.PhysicalRelationObservationRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.ArchitectureDictionaryWriteGuard;
 import com.yuzhi.dts.platform.service.catalog.CatalogMaterializationSourceAvailabilityPort;
 import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService;
 import com.yuzhi.dts.platform.service.event.PlatformEventOutboxService;
@@ -369,7 +370,11 @@ class F4StrictAuditRollbackPostgresIT {
                 reader,
                 featureFlags,
                 auditService,
-                new WarehouseLayerApplicationService(org.mockito.Mockito.mock(WarehouseLayerRepository.class), auditService)
+                new WarehouseLayerApplicationService(
+                    org.mockito.Mockito.mock(WarehouseLayerRepository.class),
+                    auditService,
+                    org.mockito.Mockito.mock(ArchitectureDictionaryWriteGuard.class)
+                )
             );
         }
 

@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.modeling.WarehouseLayerRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.ArchitectureDictionaryWriteGuard;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.Layer;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehouseLayerContract.CreateWarehouseLayerCommand;
@@ -32,13 +33,15 @@ class WarehouseLayerApplicationServiceTest {
 
     private WarehouseLayerRepository repository;
     private AuditService audit;
+    private ArchitectureDictionaryWriteGuard writeGuard;
     private WarehouseLayerApplicationService service;
 
     @BeforeEach
     void setUp() {
         repository = mock(WarehouseLayerRepository.class);
         audit = mock(AuditService.class);
-        service = new WarehouseLayerApplicationService(repository, audit);
+        writeGuard = mock(ArchitectureDictionaryWriteGuard.class);
+        service = new WarehouseLayerApplicationService(repository, audit, writeGuard);
     }
 
     @Test

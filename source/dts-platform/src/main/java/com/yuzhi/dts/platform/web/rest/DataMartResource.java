@@ -1,5 +1,7 @@
 package com.yuzhi.dts.platform.web.rest;
 
+import static com.yuzhi.dts.platform.service.catalog.ArchitectureDictionaryWriteGuard.WRITE_EXPRESSION;
+
 import com.yuzhi.dts.platform.service.modeling.DataMartApplicationService;
 import com.yuzhi.dts.platform.service.modeling.DataMartApplicationService.CreateResult;
 import com.yuzhi.dts.platform.service.modeling.DataMartContract.CreateCommand;
@@ -33,8 +35,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/modeling/data-marts")
 public class DataMartResource {
 
-    private static final String MODELING_MAINTAINER_EXPRESSION =
-        "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).CATALOG_MAINTAINERS)";
     private static final Pattern STRONG_ETAG = Pattern.compile(
         "^\\\"data-mart:([0-9a-fA-F-]{36}):([1-9][0-9]*):([0-9a-f]{64})\\\"$"
     );
@@ -54,7 +54,7 @@ public class DataMartResource {
     }
 
     @PostMapping
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    @PreAuthorize(WRITE_EXPRESSION)
     public ResponseEntity<ApiResponse<View>> create(@RequestBody CreateCommand command) {
         CreateResult result = service.create(serverTenantId, actorId(), command);
         View view = result.dataMart();
@@ -83,7 +83,7 @@ public class DataMartResource {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    @PreAuthorize(WRITE_EXPRESSION)
     public ResponseEntity<ApiResponse<View>> update(
         @PathVariable UUID id,
         @RequestHeader(value = "If-Match", required = false) String ifMatch,
@@ -93,7 +93,7 @@ public class DataMartResource {
     }
 
     @PostMapping("/{id}/confirm")
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    @PreAuthorize(WRITE_EXPRESSION)
     public ResponseEntity<ApiResponse<View>> confirm(
         @PathVariable UUID id,
         @RequestHeader(value = "If-Match", required = false) String ifMatch
@@ -102,7 +102,7 @@ public class DataMartResource {
     }
 
     @PostMapping("/{id}/retire")
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    @PreAuthorize(WRITE_EXPRESSION)
     public ResponseEntity<ApiResponse<View>> retire(
         @PathVariable UUID id,
         @RequestHeader(value = "If-Match", required = false) String ifMatch

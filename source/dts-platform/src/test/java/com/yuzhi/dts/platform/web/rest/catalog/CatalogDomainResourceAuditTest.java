@@ -8,9 +8,10 @@ import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDomain;
-import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.ArchitectureDictionaryWriteGuard;
+import com.yuzhi.dts.platform.service.catalog.CatalogDomainCommandService;
 import com.yuzhi.dts.platform.service.catalog.CatalogDomainVisibilityService;
 import java.util.Optional;
 import java.util.UUID;
@@ -19,14 +20,14 @@ import org.junit.jupiter.api.Test;
 class CatalogDomainResourceAuditTest {
 
     private final CatalogDomainRepository domainRepository = mock(CatalogDomainRepository.class);
-    private final CatalogDatasetRepository datasetRepository = mock(CatalogDatasetRepository.class);
     private final AuditService auditService = mock(AuditService.class);
     private final CatalogDomainVisibilityService visibilityService = mock(CatalogDomainVisibilityService.class);
-    private final CatalogDomainResource resource = new CatalogDomainResource(
+    private final ArchitectureDictionaryWriteGuard writeGuard = mock(ArchitectureDictionaryWriteGuard.class);
+    private final CatalogDomainCommandService service = new CatalogDomainCommandService(
         domainRepository,
-        datasetRepository,
         auditService,
-        visibilityService
+        visibilityService,
+        writeGuard
     );
 
     @Test
@@ -36,17 +37,17 @@ class CatalogDomainResourceAuditTest {
         when(domainRepository.save(any(CatalogDomain.class))).thenReturn(domain);
         when(domainRepository.findById(id)).thenReturn(Optional.of(domain));
 
-        resource.createDomain(domain(null, "合同域", "contract"));
-        verify(auditService).auditAction(eq("CATALOG_DOMAIN_CREATE"), eq(AuditStage.SUCCESS), eq(id.toString()), eq(null));
+        service.create(domain(null, "合同域", "contract"));
+        verify(auditService).auditActionStrict(eq("CATALOG_DOMAIN_CREATE"), eq(AuditStage.SUCCESS), eq(id.toString()), eq(null));
 
-        resource.updateDomain(id, domain(null, "合同域2", "contract2"));
-        verify(auditService).auditAction(eq("CATALOG_DOMAIN_UPDATE"), eq(AuditStage.SUCCESS), eq(id.toString()), eq(null));
+        service.update(id, domain(null, "合同域2", "contract2"));
+        verify(auditService).auditActionStrict(eq("CATALOG_DOMAIN_UPDATE"), eq(AuditStage.SUCCESS), eq(id.toString()), eq(null));
 
-        resource.deleteDomain(id);
-        verify(auditService).auditAction(eq("CATALOG_DOMAIN_DELETE"), eq(AuditStage.SUCCESS), eq(id.toString()), eq(null));
+        service.delete(id);
+        verify(auditService).auditActionStrict(eq("CATALOG_DOMAIN_DELETE"), eq(AuditStage.SUCCESS), eq(id.toString()), eq(null));
 
-        resource.moveDomain(id, java.util.Map.of("newParentId", ""));
-        verify(auditService).auditAction(eq("CATALOG_DOMAIN_MOVE"), eq(AuditStage.SUCCESS), eq(id.toString()), eq(null));
+        service.move(id, null);
+        verify(auditService).auditActionStrict(eq("CATALOG_DOMAIN_MOVE"), eq(AuditStage.SUCCESS), eq(id.toString()), eq(null));
     }
 
     private CatalogDomain domain(UUID id, String name, String code) {

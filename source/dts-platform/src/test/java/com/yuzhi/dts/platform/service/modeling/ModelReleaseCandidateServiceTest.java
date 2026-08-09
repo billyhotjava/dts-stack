@@ -467,32 +467,32 @@ class ModelReleaseCandidateServiceTest {
     }
 
     @Test
-    void explicitRematerializationSupersedesABuiltCandidateWithoutInventingCanonicalDrift() {
+    void explicitRematerializationRestartsTheBuiltCandidateWithoutInventingCanonicalDrift() {
         CandidateView built = candidate(
             DeliveryStatus.BUILT,
             4,
             createdAudit(),
             List.of(entry(DeliveryStatus.BUILT, 1, CHECKSUM))
         );
-        when(repository.findCommandByIdempotencyKey(TENANT, "rematerialize-archive-key")).thenReturn(Optional.empty());
+        when(repository.findCommandByIdempotencyKey(TENANT, "rematerialize-attempt-key")).thenReturn(Optional.empty());
         when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(built));
         when(repository.transitionAndAppend(any(), anyInt(), any(), any(), anyString(), any(), any())).thenReturn(1);
 
-        var result = service.supersedeForRematerialization(
+        var result = service.restartForRematerialization(
             TENANT,
             ACTOR,
             CANDIDATE_ID,
-            new TransitionCommand(4, DeliveryStatus.STALE, "rematerialize-archive-key", "rebuild selected relations")
+            new TransitionCommand(4, DeliveryStatus.BUILDING, "rematerialize-attempt-key", "rebuild selected relations")
         );
 
-        assertThat(result.candidate().status()).isEqualTo(DeliveryStatus.STALE);
+        assertThat(result.candidate().status()).isEqualTo(DeliveryStatus.BUILDING);
         assertThat(result.candidate().version()).isEqualTo(5);
         assertThat(result.driftReasons()).isEmpty();
         ArgumentCaptor<CommandEventView> receipt = ArgumentCaptor.forClass(CommandEventView.class);
         verify(repository).transitionAndAppend(
             eq(built),
             eq(4),
-            eq(DeliveryStatus.STALE),
+            eq(DeliveryStatus.BUILDING),
             any(),
             eq(ACTOR),
             eq(NOW),

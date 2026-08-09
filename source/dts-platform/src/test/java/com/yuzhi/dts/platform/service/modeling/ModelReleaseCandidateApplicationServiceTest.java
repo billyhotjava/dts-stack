@@ -79,6 +79,9 @@ class ModelReleaseCandidateApplicationServiceTest {
     @Mock
     private ReleaseCandidateWorkbenchEvidencePort workbenchEvidence;
 
+    @Mock
+    private ModelReleaseCandidatePreflightService preflight;
+
     private ModelReleaseCandidateApplicationService service;
 
     @BeforeEach
@@ -92,12 +95,19 @@ class ModelReleaseCandidateApplicationServiceTest {
             publicationAdmission,
             publicationCoordinator,
             rollbackCommits,
-            workbenchEvidence
+            workbenchEvidence,
+            preflight
         );
         lenient().when(planAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
         lenient()
             .when(dutyResolver.currentDuties())
             .thenReturn(Set.of(DeliveryActorRole.MODEL_MAINTAINER));
+        lenient()
+            .when(preflight.requireEligible(eq(TENANT), any(CreateCandidateCommand.class)))
+            .thenAnswer(invocation -> {
+                CreateCandidateCommand command = invocation.getArgument(1);
+                return new ModelReleaseCandidatePreflightService.PreflightResult(null, command);
+            });
     }
 
     @Test
@@ -191,12 +201,9 @@ class ModelReleaseCandidateApplicationServiceTest {
     }
 
     @Test
-    void rematerializationSupersedesCreatesAndStartsOneReplacementInOrder() {
+    void rematerializationCreatesANewAttemptOnTheSameImmutableCandidate() {
         CandidateView built = candidate(DeliveryStatus.BUILT, List.of(entry(DeliveryStatus.BUILT)));
-        CandidateView stale = candidateAtVersion(DeliveryStatus.STALE, 5, CANDIDATE_ID);
-        UUID replacementId = UUID.fromString("20000000-0000-0000-0000-000000000002");
-        CandidateView replacement = candidateAtVersion(DeliveryStatus.DRAFT, 1, replacementId);
-        CandidateView building = candidateAtVersion(DeliveryStatus.BUILDING, 2, replacementId);
+        CandidateView building = candidateAtVersion(DeliveryStatus.BUILDING, 5, CANDIDATE_ID);
         CreateCandidateCommand request = new CreateCandidateCommand(
             PLAN_ID,
             "dev",
@@ -205,11 +212,7 @@ class ModelReleaseCandidateApplicationServiceTest {
             "rebuild selected relations"
         );
         when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(built));
-        when(commands.supersedeForRematerialization(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), any()))
-            .thenReturn(new CommandResult(stale, false, List.of()));
-        when(commands.createReplacement(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), eq(5), any()))
-            .thenReturn(new CommandResult(replacement, false, List.of()));
-        when(materializationStarts.start(eq(TENANT), eq(ACTOR), eq(replacementId), eq(1), any(), any()))
+        when(materializationStarts.rematerialize(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), eq(4), any(), any()))
             .thenReturn(new CommandResult(building, false, List.of()));
 
         CommandResult result = service.rematerialize(
@@ -222,10 +225,38 @@ class ModelReleaseCandidateApplicationServiceTest {
         );
 
         assertThat(result.candidate()).isEqualTo(building);
-        InOrder order = org.mockito.Mockito.inOrder(commands, materializationStarts);
-        order.verify(commands).supersedeForRematerialization(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), any());
-        order.verify(commands).createReplacement(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), eq(5), any());
-        order.verify(materializationStarts).start(eq(TENANT), eq(ACTOR), eq(replacementId), eq(1), any(), any());
+        verify(materializationStarts).rematerialize(
+            eq(TENANT),
+            eq(ACTOR),
+            eq(CANDIDATE_ID),
+            eq(4),
+            eq("rematerialize-root-key"),
+            eq("rebuild selected relations")
+        );
+        verify(commands, never()).createReplacement(any(), any(), any(), anyInt(), any());
+    }
+
+    @Test
+    void rematerializationRejectsScopeChangesBecauseCandidateRevisionsAreImmutable() {
+        UUID otherModelId = UUID.fromString("30000000-0000-0000-0000-000000000002");
+        CandidateView built = candidate(DeliveryStatus.BUILT, List.of(entry(DeliveryStatus.BUILT)));
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(built));
+        CreateCandidateCommand request = new CreateCandidateCommand(
+            PLAN_ID,
+            "dev",
+            List.of(new ScopeEntryCommand(otherModelId, 0, "selected")),
+            "rematerialize-root-key",
+            "rebuild selected relations"
+        );
+
+        assertThatThrownBy(() -> service.rematerialize(TENANT, ACTOR, PLAN_ID, CANDIDATE_ID, 4, request))
+            .isInstanceOf(ModelReleaseCandidateException.class)
+            .satisfies(error ->
+                assertThat(((ModelReleaseCandidateException) error).code())
+                    .isEqualTo("MODEL_RELEASE_REMATERIALIZATION_SCOPE_MISMATCH")
+            );
+
+        verifyNoInteractions(materializationStarts);
     }
 
     @Test

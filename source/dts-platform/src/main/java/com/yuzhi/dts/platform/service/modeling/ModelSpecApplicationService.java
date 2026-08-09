@@ -997,10 +997,12 @@ public class ModelSpecApplicationService {
             nodeKey(root.id(), root.revision()),
             new DependencyNode(
                 root.id(),
+                root.planId(),
                 root.revision(),
                 root.revision(),
                 root.name(),
                 root.modelType(),
+                root.layer(),
                 root.status(),
                 false
             )
@@ -1029,10 +1031,12 @@ public class ModelSpecApplicationService {
                 nodeKey(reference.modelSpecId(), reference.revision()),
                 new DependencyNode(
                     reference.modelSpecId(),
+                    restricted ? null : referenced.planId(),
                     reference.revision(),
                     currentRevision,
                     restricted ? null : referenced.name(),
                     restricted ? null : referenced.modelType(),
+                    restricted ? null : referenced.layer(),
                     restricted ? null : referenced.status(),
                     restricted
                 )
@@ -1651,10 +1655,12 @@ public class ModelSpecApplicationService {
 
     public record DependencyNode(
         UUID modelSpecId,
+        UUID planId,
         int pinnedRevision,
         Integer currentRevision,
         String name,
         ModelType modelType,
+        Layer layer,
         ModelStatus status,
         boolean restricted
     ) {}
