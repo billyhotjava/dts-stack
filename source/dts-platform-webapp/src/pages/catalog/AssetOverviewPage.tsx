@@ -1,64 +1,22 @@
-import { DatabaseOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Alert, Button, Layout, Spin, Tag, Tooltip } from "antd";
-import { GitBranch, MapPin, ShieldCheck } from "lucide-react";
+import {
+	DatabaseOutlined,
+	ReloadOutlined,
+	SafetyCertificateOutlined,
+	TagOutlined,
+	WarningOutlined,
+} from "@ant-design/icons";
+import { Alert, Button, Layout, Tooltip } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
-import { getCatalogAssetsOverview, getDomainTree, listCatalogAssetsV2 } from "@/api/platformApi";
-import { DomainScopeNav, type DomainScopeStats } from "@/components/catalog/DomainScopeNav";
-import { PageHeader } from "@/components/page-header";
+import { getCatalogAssetsOverview, getDomainTree } from "@/api/platformApi";
+import { DomainScopeNav, type DomainScopeNode } from "@/components/catalog/DomainScopeNav";
 import { useRouter } from "@/routes/hooks";
-import { resolveAssetReadiness } from "./assetPortalUx.helpers";
-import { GOVERNANCE_STATUS_DICT, resolveEnumLabel } from "./assets/assetEnumLabels";
-import type { AssetRow, DomainNode } from "./assets/assetPageShared";
-import {
-	buildDomainScopeNodes,
-	LAYER_META,
-	LAYER_ORDER,
-	MetricTile,
-	normalizeLayer,
-	UNASSIGNED_DOMAIN_KEY,
-} from "./assets/assetPageShared";
-import { GovernanceGapPanel } from "./assets/GovernanceGapPanel";
+import { AssetDomainBars } from "./assets/AssetDomainBars";
+import { AssetGovernanceDonut } from "./assets/AssetGovernanceDonut";
+import { buildDomainScopeNodes, MetricTile, UNASSIGNED_DOMAIN_KEY } from "./assets/assetPageShared";
 
-/** 矩阵最多展示的主题域列数，超出合并为「其他 N 个域」并明示 */
-const MATRIX_MAX_COLUMNS = 8;
-
-/** 合并列的伪 key。它不是真实域 id，下钻时必须特殊处理，否则台账按 UUID 绑定会 400。 */
-const MERGED_DOMAIN_KEY = "__OTHERS__";
-
-// 矩阵热力：数量分级底色，注意力缺口优先于数量色
-const matrixHeatTone = (total: number, attention: number) => {
-	if (attention > 0) return "bg-amber-50 text-amber-700 hover:bg-amber-100";
-	if (total >= 50) return "bg-green-600 text-white hover:bg-green-700";
-	if (total >= 20) return "bg-green-500 text-white hover:bg-green-600";
-	if (total >= 10) return "bg-green-400 text-white hover:bg-green-500";
-	if (total >= 5) return "bg-green-200 text-green-800 hover:bg-green-300";
-	if (total >= 1) return "bg-green-50 text-green-700 hover:bg-green-100";
-	return "bg-slate-50 text-slate-300";
-};
-
-type MatrixCell = { layer: string; domainId: string | null; total: number; attention: number };
-
-type AssetOverview = {
-	total?: number;
-	unclassified?: number;
-	missingDomain?: number;
-	stale?: number;
-	attention?: number;
-	tagged?: number;
-	untagged?: number;
-	tagCoveragePercent?: number;
-	byLayer?: Record<string, number>;
-	governanceStatusCounts?: Record<string, number>;
-	matrix?: MatrixCell[];
-	scanned?: number;
-	truncated?: boolean;
-};
-
-/**
- * 资产概览 = 纯统计仪表盘：全量聚合数据源，零输入控件；
- * 一切执行动作（搜索/筛选/行级操作/诊断运维）都在台账（/catalog/assets/ledger）。
- */
+// Sprint-88：资产概览 = 一屏统计仪表盘（KPI 四卡 + 治理状态环形 + 主题域条形）。
+// 唯一出口 = /catalog/search?view=table；分层矩阵与待处置清单已按 ADR-88-03/05 移除。
 export default function AssetOverviewPage() {
 	const router = useRouter();
 	const [searchParams, setSearchParams] = useSearchParams();
@@ -76,20 +34,8 @@ export default function AssetOverviewPage() {
 		},
 		[searchParams, setSearchParams],
 	);
-	const [overview, setOverview] = useState<AssetOverview | null>(null);
-	const [overviewLoading, setOverviewLoading] = useState(false);
-	const [attentionRows, setAttentionRows] = useState<AssetRow[]>([]);
-	const [domainTree, setDomainTree] = useState<DomainNode[]>([]);
-	const [domainStats, setDomainStats] = useState<{
-		all?: DomainScopeStats;
-		unassigned?: DomainScopeStats;
-		byDomain?: Record<string, DomainScopeStats>;
-		truncated?: boolean;
-	}>({});
-	const [treeLoading, setTreeLoading] = useState(false);
-	const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
 
-	// 旧深链兼容：台账已是独立路由，标签字典也归入台账治理工作区。
+	// 旧深链兼容：?tab=catalog-tags / ?view=table 无感跳到数据查询（行为与现网一致）
 	useEffect(() => {
 		if (!isLegacyRedirect) return;
 		const params = new URLSearchParams(searchParams);
@@ -100,12 +46,26 @@ export default function AssetOverviewPage() {
 		router.replace(`/catalog/assets/ledger${rest ? `?${rest}` : ""}`);
 	}, [isLegacyRedirect, isLegacyTagRedirect, router, searchParams]);
 
+	const [domainTree, setDomainTree] = useState<DomainScopeNode[]>([]);
+	const [domainStats, setDomainStats] = useState<{
+		all?: { total: number; attention: number };
+		unassigned?: { total: number; attention: number };
+		byDomain: Record<string, { total: number; attention: number }>;
+		truncated: boolean;
+	}>({
+		byDomain: {},
+		truncated: false,
+	});
+	const [treeLoading, setTreeLoading] = useState(false);
+	const [overview, setOverview] = useState<any | null>(null);
+	const [overviewLoading, setOverviewLoading] = useState(false);
+	const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+
 	useEffect(() => {
 		if (!isAssetMapActive) return;
 		void (async () => {
 			setTreeLoading(true);
 			try {
-				// 单次请求同时拿树与统计，消除「树取 getDomainTree、矩阵列名取 listDomains」的双数据源漂移
 				const resp = (await getDomainTree({ withStats: true })) as any;
 				const payload = resp?.data ?? resp;
 				const tree = Array.isArray(payload) ? payload : payload?.tree;
@@ -119,7 +79,7 @@ export default function AssetOverviewPage() {
 								byDomain: stats.byDomain || {},
 								truncated: Boolean(stats.truncated),
 							}
-						: {},
+						: { byDomain: {}, truncated: false },
 				);
 			} catch {
 				// error toast handled by global interceptor
@@ -129,53 +89,19 @@ export default function AssetOverviewPage() {
 		})();
 	}, [isAssetMapActive]);
 
-	// 矩阵列名与导航同源，避免域超过 listDomains 的取数上限时列名掉成「未知主题域」
-	const domainMap = useMemo(() => {
-		const map = new Map<string, string>();
-		const walk = (nodes: DomainNode[]) => {
-			for (const node of nodes) {
-				if (node.id) map.set(String(node.id), node.name ?? node.code ?? "未命名");
-				if (node.children?.length) walk(node.children);
-			}
-		};
-		walk(domainTree);
-		return map;
-	}, [domainTree]);
-
 	const loadOverview = useCallback(async () => {
 		if (!isAssetMapActive) return;
 		setOverviewLoading(true);
 		try {
-			const scope = {
-				domainId: domain && domain !== UNASSIGNED_DOMAIN_KEY ? domain : undefined,
-				domainUnassigned: domain === UNASSIGNED_DOMAIN_KEY || undefined,
-			};
-			const [overviewResp, rowsResp] = await Promise.all([
-				getCatalogAssetsOverview(scope) as Promise<AssetOverview>,
-				listCatalogAssetsV2({ page: 0, size: 50, ...scope }) as Promise<any>,
-			]);
-			setOverview(overviewResp || null);
+			const scope =
+				domain && domain !== UNASSIGNED_DOMAIN_KEY
+					? { domainId: domain, domainUnassigned: undefined }
+					: domain === UNASSIGNED_DOMAIN_KEY
+						? { domainId: undefined, domainUnassigned: true }
+						: {};
+			const result = (await getCatalogAssetsOverview(scope)) as any;
+			setOverview(result || null);
 			setLastUpdatedAt(new Date());
-			const rows: AssetRow[] = Array.isArray(rowsResp?.content)
-				? rowsResp.content.map((item: any) => ({
-						id: String(item.id || ""),
-						name: item.displayName || item.table || item.fqn || "",
-						type: item.type || "",
-						domainId: item.domainId ? String(item.domainId) : undefined,
-						classification: item.classification,
-						warehouseLayer: item.warehouseLayer,
-						lifecycleStatus: item.lifecycleStatus,
-						governanceStatus: item.governanceStatus,
-						matchStatus: item.matchStatus,
-					}))
-				: [];
-			setAttentionRows(
-				rows
-					.map((row) => ({ row, readiness: resolveAssetReadiness(row) }))
-					.filter((item) => item.readiness.state !== "READY")
-					.slice(0, 5)
-					.map((item) => item.row),
-			);
 		} catch {
 			// error toast handled by global interceptor
 		} finally {
@@ -188,132 +114,52 @@ export default function AssetOverviewPage() {
 		void loadOverview();
 	}, [isAssetMapActive, loadOverview]);
 
-	const drillToLedger = (layer?: string, domainKey?: string | null) => {
-		const params = new URLSearchParams();
-		if (layer && layer !== "ALL") params.set("layer", layer);
-		if (domainKey === MERGED_DOMAIN_KEY) {
-			// 「其他域」是展示用的聚合列，不是真实域 id；台账把 domain 当 UUID 绑定，传过去会 400。
-			// 点击打开该层全部主题域的台账（含已展示的域），文案必须诚实，不做"只筛其他域"的伪装。
-			if (domain) params.set("domain", domain);
-		} else if (domainKey === null) {
-			params.set("domain", UNASSIGNED_DOMAIN_KEY);
-		} else if (domainKey) {
-			params.set("domain", domainKey);
-		} else if (domain) {
-			params.set("domain", domain);
-		}
-		const rest = params.toString();
-		router.push(`/catalog/assets/ledger${rest ? `?${rest}` : ""}`);
-	};
-
-	const matrixColumns = useMemo(() => {
-		const cells = overview?.matrix || [];
-		const totals = new Map<string, { key: string | null; total: number }>();
-		for (const cell of cells) {
-			const key = cell.domainId === null ? "__NULL__" : cell.domainId;
-			const entry = totals.get(key) || { key: cell.domainId, total: 0 };
-			entry.total += cell.total;
-			totals.set(key, entry);
-		}
-		const sorted = [...totals.values()].sort((a, b) => b.total - a.total);
-		const named = sorted.map((entry) => ({
-			key: entry.key,
-			name: entry.key === null ? "未归域" : domainMap.get(entry.key) || "未知主题域",
-			total: entry.total,
-		}));
-		if (named.length <= MATRIX_MAX_COLUMNS) return named;
-		// 截断必须明示：此前静默 slice(0,8)，域多了用户不知道自己看的是局部
-		const head = named.slice(0, MATRIX_MAX_COLUMNS);
-		const rest = named.slice(MATRIX_MAX_COLUMNS);
-		return [
-			...head,
-			{
-				key: MERGED_DOMAIN_KEY,
-				name: `其他域（${rest.length}）`,
-				total: rest.reduce((sum, item) => sum + item.total, 0),
-				mergedNames: rest.map((item) => item.name),
-				mergedKeys: rest.map((item) => (item.key === null ? "__NULL__" : item.key)),
-			},
-		];
-	}, [overview, domainMap]);
-
-	const lastUpdatedText = useMemo(
-		() => (lastUpdatedAt ? lastUpdatedAt.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : "—"),
-		[lastUpdatedAt],
-	);
-
-	// 可见域 <=1 时矩阵退化为单行分层分布：否则会画出 8 行 x 1 列、其中多行是「-」的空表
-	const isSingleDomainScope = matrixColumns.length === 1;
-
-	const scopeLabel = domain
-		? domain === UNASSIGNED_DOMAIN_KEY
-			? "未归域"
-			: domainMap.get(domain) || "当前主题域"
-		: "全部主题域";
-
-	const matrixCellMap = useMemo(() => {
-		const map = new Map<string, MatrixCell>();
-		const mergedKeys = new Set((matrixColumns.find((col) => col.key === MERGED_DOMAIN_KEY) as any)?.mergedKeys ?? []);
-		for (const cell of overview?.matrix || []) {
-			const domainKey = cell.domainId === null ? "__NULL__" : cell.domainId;
-			map.set(`${cell.layer}|${domainKey}`, cell);
-			// 被合并进「其他 N 个域」的列必须预聚合，否则该列每格都查不到而恒显示 "-"
-			if (mergedKeys.has(domainKey)) {
-				const key = `${cell.layer}|${MERGED_DOMAIN_KEY}`;
-				const prev = map.get(key);
-				map.set(
-					key,
-					prev
-						? { ...prev, total: prev.total + cell.total, attention: prev.attention + cell.attention }
-						: { layer: cell.layer, domainId: "__OTHERS__", total: cell.total, attention: cell.attention },
-				);
+	const domainMap = useMemo(() => {
+		const map = new Map<string, string>();
+		const walk = (nodes: DomainScopeNode[]) => {
+			for (const node of nodes) {
+				if (node.id) map.set(String(node.id), node.name ?? node.code ?? "未命名");
+				if (node.children?.length) walk(node.children);
 			}
-		}
+		};
+		walk(domainTree);
 		return map;
-	}, [overview, matrixColumns]);
-
-	// 缺口原因合并三处口径：治理状态分布 + 未定密 + 失效，避免同一件事讲三遍
-	const gapReasons = useMemo(() => {
-		const counts = overview?.governanceStatusCounts || {};
-		const fromGovernance = Object.entries(counts)
-			.filter(([status]) => status !== "GOVERNED")
-			.map(([status, count]) => ({
-				key: status,
-				label: resolveEnumLabel(GOVERNANCE_STATUS_DICT, status),
-				count: Number(count) || 0,
-			}));
-		return [
-			...fromGovernance,
-			{ key: "UNCLASSIFIED", label: "未定密", count: overview?.unclassified ?? 0 },
-			{ key: "STALE", label: "失效", count: overview?.stale ?? 0 },
-		].sort((a, b) => b.count - a.count);
-	}, [overview]);
-
-	const drillToLedgerByReason = useCallback(
-		(key: string) => {
-			const params = new URLSearchParams();
-			if (domain) params.set("domain", domain);
-			// 台账侧已消费 unclassified/stale 过滤（见 DatasetsPage），缺口原因必须真实贯通，
-			// 否则用户以为筛了实际没筛。
-			if (key === "UNCLASSIFIED") {
-				params.set("unclassified", "1");
-			} else if (key === "STALE") {
-				params.set("stale", "1");
-			} else {
-				params.set("governance", key);
-			}
-			const rest = params.toString();
-			router.push(`/catalog/assets/ledger${rest ? `?${rest}` : ""}`);
-		},
-		[domain, router],
-	);
+	}, [domainTree]);
 
 	const scopeNodes = useMemo(
 		() => buildDomainScopeNodes(domainTree, domainStats.byDomain),
 		[domainTree, domainStats.byDomain],
 	);
 
+	const scopeLabel = domain
+		? domain === UNASSIGNED_DOMAIN_KEY
+			? "未归域"
+			: domainMap.get(domain) || "当前主题域"
+		: "全部主题域";
+	const lastUpdatedText = useMemo(
+		() => (lastUpdatedAt ? lastUpdatedAt.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : "—"),
+		[lastUpdatedAt],
+	);
+
+	const drillToSearch = (extra?: Record<string, string>) => {
+		const params = new URLSearchParams();
+		params.set("view", "table");
+		if (domain) params.set("domain", domain);
+		if (extra) {
+			for (const [key, value] of Object.entries(extra)) params.set(key, value);
+		}
+		router.push(`/catalog/search?${params.toString()}`);
+	};
+
 	if (isLegacyRedirect) return null;
+
+	const truncated = Boolean(overview?.truncated);
+	const total = Number(overview?.total ?? 0);
+	const attention = Number(overview?.attention ?? 0);
+	const unclassified = Number(overview?.unclassified ?? 0);
+	const tagged = Number(overview?.tagged ?? 0);
+	const tagCoverage = Number(overview?.tagCoveragePercent ?? 0);
+	const num = (value: number) => `${truncated ? "≥" : ""}${value}`;
 
 	return (
 		<Layout className="min-h-full bg-transparent">
@@ -336,236 +182,100 @@ export default function AssetOverviewPage() {
 			</Layout.Sider>
 			<Layout.Content style={{ padding: "0 16px" }}>
 				<div className="space-y-4">
-					<PageHeader
-						title="资产概览"
-						actions={
-							<div className="flex items-center gap-2 text-xs text-slate-500">
-								<span>统计更新于 {lastUpdatedText}</span>
-								<Button
-									type="text"
-									size="small"
-									icon={<ReloadOutlined />}
-									aria-label="刷新统计"
-									loading={overviewLoading}
-									onClick={() => void loadOverview()}
-								/>
-							</div>
-						}
-					/>
-					<div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-						<button
-							type="button"
-							data-testid="scope-echo"
-							onClick={() => drillToLedger()}
-							title="点击进入当前范围的资产台账"
-							className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-0.5 text-slate-600 transition hover:border-blue-300 hover:text-blue-700"
-						>
-							<MapPin className="h-3.5 w-3.5 text-slate-400" />
-							当前范围：{scopeLabel}
-						</button>
-						<span className="mx-1 text-slate-300">|</span>
-
-						<button
-							type="button"
-							data-testid="goto-lineage-graph"
-							onClick={() => router.push("/catalog/lineage/graph")}
-							className="inline-flex cursor-pointer items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-blue-700 transition hover:bg-blue-100"
-						>
-							<GitBranch className="h-3.5 w-3.5" />
-							查看血缘图谱
-						</button>
-						<button
-							type="button"
-							data-testid="goto-access-apply"
-							onClick={() => router.push("/security/dataset-access-approval?action=new")}
-							className="inline-flex cursor-pointer items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-blue-700 transition hover:bg-blue-100"
-						>
-							<ShieldCheck className="h-3.5 w-3.5" />
-							申请权限
-						</button>
+					<div className="flex flex-wrap items-center justify-between gap-2">
+						<div className="flex items-center gap-3">
+							<span className="text-lg font-bold text-slate-900">资产概览</span>
+							<Tooltip title="范围切换请使用左侧导航">
+								<span className="text-xs text-slate-500" data-testid="scope-echo">
+									当前范围：{scopeLabel}
+								</span>
+							</Tooltip>
+						</div>
+						<div className="flex items-center gap-2 text-xs text-slate-500">
+							<span>统计更新于 {lastUpdatedText}</span>
+							<Button
+								type="text"
+								size="small"
+								icon={<ReloadOutlined />}
+								aria-label="刷新统计"
+								loading={overviewLoading}
+								onClick={() => void loadOverview()}
+							/>
+							<Button type="primary" size="small" data-testid="goto-search-table" onClick={() => drillToSearch()}>
+								在数据查询中查看 →
+							</Button>
+						</div>
 					</div>
-					{overview?.truncated ? (
+					{truncated ? (
 						<Alert
 							type="warning"
 							showIcon
-							message={`统计基于前 ${overview.scanned} 条可见资产（已达统计上限），实际总量可能更多`}
+							message={`统计基于前 ${overview?.scanned} 条可见资产（已达统计上限），实际总量可能更多`}
 						/>
 					) : null}
 
-					<div className="grid gap-3 md:grid-cols-[minmax(180px,240px)_1fr]">
+					<div className="grid grid-cols-2 gap-3 md:grid-cols-4">
 						<MetricTile
+							testId="kpi-total"
 							icon={<DatabaseOutlined />}
 							label="资产总量"
-							value={overview?.truncated ? `≥${overview?.total ?? 0}` : (overview?.total ?? 0)}
-							footnote={
-								(domain ? domainMap.get(domain) || "未归域" : "全部主题域") +
-								" · 标签覆盖 " +
-								(overview?.tagCoveragePercent ?? 0) +
-								"%"
-							}
+							value={num(total)}
+							footnote={`${domainMap.size} 个主题域`}
 						/>
-						<GovernanceGapPanel
-							total={overview?.total ?? 0}
-							attention={overview?.attention ?? 0}
-							reasons={gapReasons}
-							onReasonClick={drillToLedgerByReason}
+						<div data-testid="kpi-attention">
+							<MetricTile
+								icon={<WarningOutlined />}
+								label="待处置"
+								value={num(attention)}
+								footnote={`占比 ${total > 0 ? Math.round((attention / total) * 100) : 0}%`}
+								tone="text-amber-600"
+							/>
+						</div>
+						<button
+							type="button"
+							data-testid="kpi-unclassified"
+							onClick={() => drillToSearch({ unclassified: "1" })}
+							className="cursor-pointer rounded-lg text-left transition hover:ring-2 hover:ring-blue-200"
+						>
+							<MetricTile
+								icon={<SafetyCertificateOutlined />}
+								label="未定密"
+								value={num(unclassified)}
+								footnote="需补定密 →"
+								tone="text-amber-600"
+							/>
+						</button>
+						<MetricTile
+							testId="kpi-tag-coverage"
+							icon={<TagOutlined />}
+							label="标签覆盖"
+							value={`${truncated ? "≥" : ""}${tagCoverage}%`}
+							footnote={`${num(tagged)}/${num(total)}`}
+						/>
+					</div>
+
+					<div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+						<AssetGovernanceDonut
+							counts={overview?.governanceStatusCounts || {}}
+							total={total}
+							truncated={truncated}
 							loading={overviewLoading}
-							truncated={Boolean(overview?.truncated)}
+							onSliceClick={(status) => drillToSearch({ governance: status })}
+							dataTestId="governance-donut-card"
 						/>
-					</div>
-
-					<div className="rounded-xl border border-slate-200 bg-white p-4" data-testid="asset-overview-matrix">
-						<div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-							<div>
-								<div className="text-sm font-semibold text-slate-900">
-									{isSingleDomainScope ? "分层分布" : "分层×主题域矩阵"}
-								</div>
-								<div className="mt-1 text-xs text-slate-500">
-									{isSingleDomainScope
-										? "当前范围只有一个主题域，按分层展示；点击进入台账查看明细。"
-										: "格子 = 该分层×主题域下的资产数，点击进入台账查看明细。"}
-								</div>
-							</div>
-							<Spin spinning={overviewLoading} size="small" />
-						</div>
-						{isSingleDomainScope ? (
-							<div className="flex flex-wrap gap-2" data-testid="layer-distribution">
-								{[...LAYER_ORDER].map((layer) => {
-									const cell = matrixCellMap.get(
-										`${layer}|${matrixColumns[0].key === null ? "__NULL__" : matrixColumns[0].key}`,
-									);
-									const meta = LAYER_META[layer];
-									return (
-										<button
-											key={layer}
-											type="button"
-											disabled={!cell}
-											onClick={() => cell && drillToLedger(layer, matrixColumns[0].key)}
-											className={`rounded-md border px-3 py-2 text-left text-xs transition ${
-												cell
-													? `${meta.tone} hover:ring-2 hover:ring-blue-200`
-													: "border-slate-100 bg-slate-50 text-slate-300"
-											}`}
-										>
-											<div className="font-medium text-slate-700">
-												{meta.label}
-												{meta.code ? <span className="ml-1 text-[10px] text-slate-400">{meta.code}</span> : null}
-											</div>
-											<div className="mt-0.5 tabular-nums font-semibold text-slate-900">{cell ? cell.total : "—"}</div>
-											{cell && cell.attention > 0 ? (
-												<div className="text-[10px] text-amber-600">待处置 {cell.attention}</div>
-											) : null}
-										</button>
-									);
-								})}
-							</div>
-						) : matrixColumns.length ? (
-							<div className="overflow-x-auto">
-								<table className="w-full min-w-[720px] border-separate" style={{ borderSpacing: 4 }}>
-									<thead>
-										<tr>
-											<th className="px-2 py-1 text-left text-xs font-medium text-slate-400">分层 \ 主题域</th>
-											{matrixColumns.map((col) => (
-												<th key={String(col.key)} className="px-2 py-1 text-left text-xs font-medium text-slate-600">
-													<span
-														className="line-clamp-1"
-														title={
-															col.key === MERGED_DOMAIN_KEY
-																? "被合并展示的域：" +
-																	((col as any).mergedNames || []).join("、") +
-																	"；点击单元格打开该层全部主题域的台账（含已展示的域）"
-																: (col as any).mergedNames?.join("、")
-														}
-													>
-														{col.name}
-													</span>
-												</th>
-											))}
-										</tr>
-									</thead>
-									<tbody>
-										{[...LAYER_ORDER].map((layer) => (
-											<tr key={layer}>
-												<td className="whitespace-nowrap px-2 py-1 text-xs font-medium text-slate-600">
-													{LAYER_META[layer].label}
-												</td>
-												{matrixColumns.map((col) => {
-													const cell = matrixCellMap.get(`${layer}|${col.key === null ? "__NULL__" : col.key}`);
-													if (!cell) {
-														return (
-															<td
-																key={String(col.key)}
-																className="rounded bg-slate-50 px-2 py-2 text-center text-xs text-slate-300"
-															>
-																-
-															</td>
-														);
-													}
-													return (
-														<td key={String(col.key)} className="p-0">
-															<button
-																type="button"
-																title={
-																	col.key === MERGED_DOMAIN_KEY ? "打开该层全部主题域的台账（含已展示的域）" : undefined
-																}
-																className={`w-full rounded px-2 py-2 text-center text-xs font-semibold transition hover:ring-2 hover:ring-blue-200 ${matrixHeatTone(cell.total, cell.attention)}`}
-																onClick={() => drillToLedger(layer, col.key)}
-															>
-																{cell.total}
-																{cell.attention > 0 ? (
-																	<span className="ml-1 text-[10px]">待处置 {cell.attention}</span>
-																) : null}
-															</button>
-														</td>
-													);
-												})}
-											</tr>
-										))}
-									</tbody>
-								</table>
-							</div>
-						) : (
-							<div className="py-8 text-center text-xs text-slate-400">
-								{overviewLoading ? "统计加载中…" : "当前范围内暂无资产"}
-							</div>
-						)}
-					</div>
-
-					<div className="rounded-xl border border-slate-200 bg-white p-4">
-						<div className="mb-3 flex items-center justify-between gap-3">
-							<div className="text-sm font-semibold text-slate-900">待处置 Top 5</div>
-						</div>
-						{attentionRows.length ? (
-							<div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
-								{attentionRows.map((row) => {
-									const readiness = resolveAssetReadiness(row);
-									return (
-										<button
-											key={row.id}
-											type="button"
-											className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-left transition hover:border-blue-200"
-											onClick={() => router.push(`/catalog/datasets/${row.id}`)}
-										>
-											<div className="flex items-start justify-between gap-2">
-												<Tooltip title={row.name}>
-													<div className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-800">{row.name}</div>
-												</Tooltip>
-												<Tag color={readiness.color} style={{ fontSize: 11 }}>
-													{readiness.label}
-												</Tag>
-											</div>
-											<div className="mt-1 truncate text-[11px] text-slate-500">
-												{LAYER_META[normalizeLayer(row.warehouseLayer)].label} · {readiness.reasons[0] || "待确认"}
-											</div>
-										</button>
-									);
-								})}
-							</div>
-						) : (
-							<div className="py-6 text-center text-xs text-slate-400">
-								{overviewLoading ? "加载中…" : "当前范围内没有待处置资产"}
-							</div>
-						)}
+						<AssetDomainBars
+							byDomain={overview?.byDomain || {}}
+							domainNames={domainMap}
+							unassigned={
+								Number(overview?.missingDomain ?? 0) > 0
+									? { total: Number(overview?.missingDomain ?? 0), attention: 0 }
+									: undefined
+							}
+							truncated={truncated}
+							loading={overviewLoading}
+							onBarClick={(domainKey) => drillToSearch({ domain: domainKey })}
+							dataTestId="domain-bars-card"
+						/>
 					</div>
 				</div>
 			</Layout.Content>

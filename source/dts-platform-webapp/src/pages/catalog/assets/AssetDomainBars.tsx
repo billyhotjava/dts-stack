@@ -1,6 +1,5 @@
-import { useMemo } from "react";
-import { Empty } from "antd";
 import type { EChartsOption } from "echarts";
+import { useMemo } from "react";
 import { Chart } from "@/components/chart";
 import { UNASSIGNED_DOMAIN_KEY } from "./assetPageShared";
 
@@ -13,6 +12,9 @@ export type AssetDomainBarsProps = {
 	truncated?: boolean;
 	loading?: boolean;
 	onBarClick: (domainKey: string) => void;
+	/** 卡片外壳标题（组件自带白色圆角卡片壳） */
+	title?: string;
+	dataTestId?: string;
 };
 
 const BAR_HEIGHT = 260;
@@ -24,6 +26,8 @@ export function AssetDomainBars({
 	truncated = false,
 	loading = false,
 	onBarClick,
+	title = "主题域分布 Top 6",
+	dataTestId,
 }: AssetDomainBarsProps) {
 	const rows = useMemo(() => {
 		const listed = Object.entries(byDomain)
@@ -46,8 +50,6 @@ export function AssetDomainBars({
 		}
 		return listed;
 	}, [byDomain, domainNames, unassigned]);
-
-	const total = rows.reduce((sum, row) => sum + row.total, 0);
 
 	const option = useMemo<EChartsOption>(() => {
 		const series = rows.length
@@ -98,27 +100,26 @@ export function AssetDomainBars({
 		return <Chart option={{}} height={BAR_HEIGHT} loading />;
 	}
 	if (!rows.length) {
-		return (
-			<div className="flex h-[260px] items-center justify-center text-sm text-slate-400">
-				当前范围内暂无资产
-			</div>
-		);
+		return <div className="flex h-[260px] items-center justify-center text-sm text-slate-400">当前范围内暂无资产</div>;
 	}
 
 	const summaryText = `主题域分布：${rows.map((row) => `${row.name} ${row.total}`).join("，")}`;
 
 	return (
-		<div>
+		<div className="rounded-xl border border-slate-200 bg-white p-4" data-testid={dataTestId}>
+			<div className="mb-2 text-sm font-semibold text-slate-900">{title}</div>
 			<Chart
 				option={option}
 				height={BAR_HEIGHT}
-				onEvents={{
-					click: (params: any) => {
-						const index = Number(params?.dataIndex);
-						const row = rows[index];
-						if (row) onBarClick(row.key);
-					},
-				} as Record<string, (params: unknown) => void>}
+				onEvents={
+					{
+						click: (params: any) => {
+							const index = Number(params?.dataIndex);
+							const row = rows[index];
+							if (row) onBarClick(row.key);
+						},
+					} as Record<string, (params: unknown) => void>
+				}
 			/>
 			<p className="sr-only">{summaryText}</p>
 		</div>

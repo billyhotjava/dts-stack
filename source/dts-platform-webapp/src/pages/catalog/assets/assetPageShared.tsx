@@ -172,7 +172,7 @@ export const formatTime = (value?: string | null) => {
 // 缺少标识的域保留 id: null，由 DomainScopeNav 渲染为禁用并给出说明；
 // 不再生成 fallback key —— 那会让点击被静默判成「全部资产」，用户以为筛了实际没筛。
 export const buildDomainScopeNodes = (
-	nodes: DomainNode[],
+	nodes: Array<{ id?: string | null; name?: string; code?: string; children?: any[] }>,
 	stats?: Record<string, DomainScopeStats>,
 ): DomainScopeNode[] =>
 	nodes.map((node) => {
@@ -192,14 +192,16 @@ export const MetricTile = ({
 	value,
 	footnote,
 	tone = "text-slate-700",
+	testId,
 }: {
 	icon: ReactNode;
 	label: string;
 	value: ReactNode;
 	footnote?: string;
 	tone?: string;
+	testId?: string;
 }) => (
-	<div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
+	<div className="rounded-lg border border-slate-200 bg-white px-4 py-3" data-testid={testId}>
 		<div className="flex items-center justify-between gap-3">
 			<div className="text-xs text-slate-500">{label}</div>
 			<div className={`text-lg ${tone}`}>{icon}</div>

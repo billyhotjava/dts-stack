@@ -4,7 +4,13 @@ import type { ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react-dom/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { flattenScopeNodes, rankScopeNodes, DomainScopeNav, SCOPE_TOP_N, SCOPE_SEARCH_THRESHOLD } from "./DomainScopeNav";
+import {
+	DomainScopeNav,
+	flattenScopeNodes,
+	rankScopeNodes,
+	SCOPE_SEARCH_THRESHOLD,
+	SCOPE_TOP_N,
+} from "./DomainScopeNav";
 
 let container: HTMLDivElement;
 let root: Root;
@@ -117,12 +123,7 @@ describe("DomainScopeNav", () => {
 	it("未归域独立分区且回传 __UNASSIGNED__", () => {
 		const onChange = vi.fn();
 		render(
-			<DomainScopeNav
-				nodes={[]}
-				value={undefined}
-				onChange={onChange}
-				unassignedStats={{ total: 6, attention: 6 }}
-			/>,
+			<DomainScopeNav nodes={[]} value={undefined} onChange={onChange} unassignedStats={{ total: 6, attention: 6 }} />,
 		);
 		click('[data-testid="domain-scope-row-unassigned"]');
 		expect(onChange).toHaveBeenCalledWith("__UNASSIGNED__");
