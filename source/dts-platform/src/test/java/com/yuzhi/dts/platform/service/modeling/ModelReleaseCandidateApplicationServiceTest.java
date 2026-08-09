@@ -181,12 +181,62 @@ class ModelReleaseCandidateApplicationServiceTest {
         var view = service.workspace(TENANT, ACTOR, PLAN_ID);
 
         assertThat(view.entryEvidence()).containsExactly(entryEvidence);
+		assertThat(view.allowedActions()).containsExactly(WorkspaceAction.RUN_QUALITY, WorkspaceAction.REMATERIALIZE);
         assertThat(view.evidence())
             .filteredOn(summary ->
                 summary.type() == com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryEvidenceType.ARTIFACT ||
                 summary.type() == com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryEvidenceType.BUILD_RUN
             )
             .allSatisfy(summary -> assertThat(summary.state()).isEqualTo(EvidenceState.PASSED));
+    }
+
+    @Test
+    void rematerializationSupersedesCreatesAndStartsOneReplacementInOrder() {
+        CandidateView built = candidate(DeliveryStatus.BUILT, List.of(entry(DeliveryStatus.BUILT)));
+        CandidateView stale = candidateAtVersion(DeliveryStatus.STALE, 5, CANDIDATE_ID);
+        UUID replacementId = UUID.fromString("20000000-0000-0000-0000-000000000002");
+        CandidateView replacement = candidateAtVersion(DeliveryStatus.DRAFT, 1, replacementId);
+        CandidateView building = candidateAtVersion(DeliveryStatus.BUILDING, 2, replacementId);
+        CreateCandidateCommand request = new CreateCandidateCommand(
+            PLAN_ID,
+            "dev",
+            List.of(new ScopeEntryCommand(MODEL_ID, 0, "selected in workbench")),
+            "rematerialize-root-key",
+            "rebuild selected relations"
+        );
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(built));
+        when(commands.supersedeForRematerialization(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), any()))
+            .thenReturn(new CommandResult(stale, false, List.of()));
+        when(commands.createReplacement(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), eq(5), any()))
+            .thenReturn(new CommandResult(replacement, false, List.of()));
+        when(materializationStarts.start(eq(TENANT), eq(ACTOR), eq(replacementId), eq(1), any(), any()))
+            .thenReturn(new CommandResult(building, false, List.of()));
+
+        CommandResult result = service.rematerialize(
+            TENANT,
+            ACTOR,
+            PLAN_ID,
+            CANDIDATE_ID,
+            4,
+            request
+        );
+
+        assertThat(result.candidate()).isEqualTo(building);
+        InOrder order = org.mockito.Mockito.inOrder(commands, materializationStarts);
+        order.verify(commands).supersedeForRematerialization(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), any());
+        order.verify(commands).createReplacement(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), eq(5), any());
+        order.verify(materializationStarts).start(eq(TENANT), eq(ACTOR), eq(replacementId), eq(1), any(), any());
+    }
+
+    @Test
+    void materializationStatusReadIsPlanAuthorizedAndBoundedToRequestedModels() {
+        List<ModelReleaseCandidateContract.ModelMaterializationStatusView> statuses = List.of();
+        when(workbenchEvidence.findLatest(TENANT, PLAN_ID, List.of(MODEL_ID))).thenReturn(statuses);
+
+        assertThat(service.materializationStatuses(TENANT, ACTOR, PLAN_ID, List.of(MODEL_ID))).isSameAs(statuses);
+
+        verify(planAccess).canMaintain(TENANT, PLAN_ID, ACTOR);
+        verify(workbenchEvidence).findLatest(TENANT, PLAN_ID, List.of(MODEL_ID));
     }
 
     @Test
@@ -1146,6 +1196,37 @@ class ModelReleaseCandidateApplicationServiceTest {
             ACTOR,
             NOW,
             entries
+        );
+    }
+
+    private static CandidateView candidateAtVersion(DeliveryStatus status, int version, UUID candidateId) {
+        EntryView item = new EntryView(
+            UUID.randomUUID(),
+            TENANT,
+            candidateId,
+            PLAN_ID,
+            MODEL_ID,
+            2,
+            "b".repeat(64),
+            null,
+            ImplementationMode.DBT_MANAGED,
+            status,
+            0,
+            "primary"
+        );
+        return new CandidateView(
+            candidateId,
+            TENANT,
+            PLAN_ID,
+            "dev",
+            status,
+            version,
+            "candidate-key-" + candidateId,
+            "c".repeat(64),
+            audit(),
+            ACTOR,
+            NOW.plusSeconds(version),
+            List.of(item)
         );
     }
 

@@ -228,13 +228,13 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(widgets).toContain("克隆");
 		expect(modeling).toMatch(/useCatalogActions/);
 		expect(catalogActions).toMatch(/deleteModelSpec|deleteDimensionDefinition|retireDimensionDefinition/);
-		expect(modeling).toMatch(/getModelRepresentation|representationScope: "BUSINESS"|useDataModelingMenuGrant/);
+		expect(modeling).toMatch(/getModelLifecycle|getModelRepresentation|implementationRevision|representationScope: "BUSINESS"|useDataModelingMenuGrant/);
 		expect(modelDialogs).toMatch(/representationScope: "TECHNICAL"|OPEN_ADVANCED_DBT|canMaintain/);
 		expect(modelDialogs).toMatch(/导入 dbt ZIP|intent=advanced/);
 		expect(modelDialogs).not.toMatch(/\/api\/etl\/dbt\/files|\/etl\/dbt\/files/);
 		expect(modelPublishDialog).toMatch(/getModelLifecycle|compileModelLifecycle/);
 		expect(modelPublishDialog).toMatch(
-			/createReleaseCandidate|lockReleaseCandidate|retryReleaseCandidate|publishReleaseCandidate/,
+			/createReleaseCandidate|lockReleaseCandidate|retryReleaseCandidate|rematerializeReleaseCandidate|publishReleaseCandidate/,
 		);
 		expect(modelDialogs.trimEnd().split("\n").length).toBeLessThanOrEqual(800);
 		expect(modelDialogs).toMatch(/state: "COMMITTED"|创建新草稿/);

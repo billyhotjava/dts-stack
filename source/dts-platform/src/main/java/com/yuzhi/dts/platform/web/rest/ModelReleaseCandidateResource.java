@@ -4,6 +4,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateApplicationS
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CandidateView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CommandResult;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CreateCandidateCommand;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.ModelMaterializationStatusView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.ReplaceScopeCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.ScopeEntryCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.WorkbenchView;
@@ -28,6 +29,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /** Strict plan-scoped REST boundary for release-candidate workbench reads and commands. */
@@ -75,6 +77,17 @@ public class ModelReleaseCandidateResource {
             .ok()
             .eTag(ModelReleaseCandidateApplicationService.etag(candidate))
             .body(ApiResponses.ok(candidate));
+    }
+
+    @GetMapping("/materializations")
+    @PreAuthorize(RELEASE_DUTY_EXPRESSION)
+    public ResponseEntity<ApiResponse<List<ModelMaterializationStatusView>>> materializationStatuses(
+        @PathVariable UUID planId,
+        @RequestParam List<UUID> modelSpecIds
+    ) {
+        return ResponseEntity.ok(
+            ApiResponses.ok(service.materializationStatuses(serverTenantId, actorId(), planId, modelSpecIds))
+        );
     }
 
     @PostMapping
@@ -236,6 +249,33 @@ public class ModelReleaseCandidateResource {
         String key = requiredIdempotencyKey(idempotencyKey);
         CreateRequest body = requiredRequest(request, "replacement request");
         CommandResult result = service.createReplacement(
+            serverTenantId,
+            actorId(),
+            planId,
+            candidateId,
+            expectedVersion,
+            new CreateCandidateCommand(planId, body.environment(), body.entries(), key, body.reason())
+        );
+        return ResponseEntity
+            .status(result.replayed() ? HttpStatus.OK : HttpStatus.CREATED)
+            .location(candidateLocation(planId, result.candidate().id()))
+            .eTag(ModelReleaseCandidateApplicationService.etag(result.candidate()))
+            .body(ApiResponses.ok(result));
+    }
+
+    @PostMapping("/{candidateId}/rematerialize")
+    @PreAuthorize(RELEASE_DUTY_EXPRESSION)
+    public ResponseEntity<ApiResponse<CommandResult>> rematerialize(
+        @PathVariable UUID planId,
+        @PathVariable UUID candidateId,
+        @RequestHeader(value = "If-Match", required = false) String ifMatch,
+        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+        @RequestBody(required = false) CreateRequest request
+    ) {
+        int expectedVersion = expectedVersion(candidateId, ifMatch);
+        String key = requiredIdempotencyKey(idempotencyKey);
+        CreateRequest body = requiredRequest(request, "rematerialization request");
+        CommandResult result = service.rematerialize(
             serverTenantId,
             actorId(),
             planId,

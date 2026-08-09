@@ -14,6 +14,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.Dri
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.EntryEvidenceView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.EvidenceState;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.EvidenceSummaryView;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.ModelMaterializationStatusView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.RelationEvidenceState;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.ReplaceScopeCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.TransitionCommand;
@@ -21,6 +22,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.Wor
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.WorkbenchView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.WorkspaceAction;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateException.Kind;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.List;
@@ -103,6 +105,30 @@ public class ModelReleaseCandidateApplicationService {
     public CandidateView get(String tenantId, String actorId, UUID planId, UUID candidateId) {
         Access access = authorizeRead(tenantId, actorId, planId);
         return candidateForPlan(access.tenantId(), access.planId(), candidateId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ModelMaterializationStatusView> materializationStatuses(
+        String tenantId,
+        String actorId,
+        UUID planId,
+        List<UUID> modelSpecIds
+    ) {
+        Access access = authorizeRead(tenantId, actorId, planId);
+        if (
+            modelSpecIds == null ||
+            modelSpecIds.isEmpty() ||
+            modelSpecIds.size() > ModelReleaseCandidateContract.MAX_SCOPE_ENTRIES ||
+            modelSpecIds.stream().anyMatch(id -> id == null) ||
+            modelSpecIds.stream().distinct().count() != modelSpecIds.size()
+        ) {
+            throw badRequest(
+                "MODEL_MATERIALIZATION_STATUS_SCOPE_INVALID",
+                "modelSpecIds must contain between 1 and 100 unique model identifiers"
+            );
+        }
+        List<UUID> ids = List.copyOf(modelSpecIds);
+        return workbenchEvidence.findLatest(access.tenantId(), access.planId(), ids);
     }
 
     public CommandResult create(
@@ -302,6 +328,90 @@ public class ModelReleaseCandidateApplicationService {
                 sourceCandidateId,
                 expectedVersion,
                 command
+            ),
+            access
+        );
+    }
+
+    @Transactional
+    public CommandResult rematerialize(
+        String tenantId,
+        String actorId,
+        UUID planId,
+        UUID sourceCandidateId,
+        int expectedVersion,
+        CreateCandidateCommand command
+    ) {
+        Access access = authorizeMaintainer(tenantId, actorId, planId);
+        CandidateView current = candidateForPlan(access.tenantId(), access.planId(), sourceCandidateId);
+        if (command == null || !access.planId().equals(command.planId())) {
+            throw badRequest(
+                "MODEL_RELEASE_CANDIDATE_PLAN_MISMATCH",
+                "Rematerialization plan must match the plan in the request path"
+            );
+        }
+        if (command.entries().isEmpty()) {
+            throw badRequest(ModelReleaseCandidateContract.SCOPE_EMPTY_ERROR_CODE, "Select at least one model to materialize");
+        }
+
+        CandidateView replacementSource;
+        if (
+            current.status() == DeliveryStatus.BUILT ||
+            (current.status() == DeliveryStatus.STALE && expectedVersion < current.version())
+        ) {
+            replacementSource = commands
+                .supersedeForRematerialization(
+                    access.tenantId(),
+                    access.actorId(),
+                    sourceCandidateId,
+                    new TransitionCommand(
+                        expectedVersion,
+                        DeliveryStatus.STALE,
+                        phaseKey(command.idempotencyKey(), sourceCandidateId, "archive"),
+                        command.reason()
+                    )
+                )
+                .candidate();
+        } else if (isReplacementSource(current.status())) {
+            replacementSource = current;
+        } else {
+            throw new ModelReleaseCandidateException(
+                "MODEL_RELEASE_CANDIDATE_REMATERIALIZATION_NOT_ALLOWED",
+                "Only a built or replaceable candidate can start rematerialization",
+                Kind.CONFLICT,
+                Map.of(
+                    "candidateId",
+                    current.id(),
+                    "currentStatus",
+                    current.status(),
+                    "currentVersion",
+                    current.version()
+                )
+            );
+        }
+
+        CommandResult replacement = commands.createReplacement(
+            access.tenantId(),
+            access.actorId(),
+            sourceCandidateId,
+            replacementSource.version(),
+            new CreateCandidateCommand(
+                command.planId(),
+                command.environment(),
+                command.entries(),
+                phaseKey(command.idempotencyKey(), sourceCandidateId, "replacement"),
+                command.reason()
+            )
+        );
+        CandidateView candidate = replacement.candidate();
+        return roleAware(
+            materializationStarts.start(
+                access.tenantId(),
+                access.actorId(),
+                candidate.id(),
+                candidate.version(),
+                phaseKey(command.idempotencyKey(), sourceCandidateId, "start"),
+                command.reason()
             ),
             access
         );
@@ -825,7 +935,7 @@ public class ModelReleaseCandidateApplicationService {
                 )
             );
         }
-        return candidate
+        List<WorkspaceAction> result = candidate
             .status()
             .allowedActions()
             .stream()
@@ -843,6 +953,15 @@ public class ModelReleaseCandidateApplicationService {
             )
             .map(action -> WorkspaceAction.valueOf(action.name()))
             .toList();
+        if (
+            candidate.status() == DeliveryStatus.BUILT &&
+            duties.contains(DeliveryActorRole.MODEL_MAINTAINER)
+        ) {
+            return java.util.stream.Stream
+                .concat(result.stream(), java.util.stream.Stream.of(WorkspaceAction.REMATERIALIZE))
+                .toList();
+        }
+        return result;
     }
 
     private List<EvidenceSummaryView> unavailableEvidence() {
@@ -1340,6 +1459,12 @@ public class ModelReleaseCandidateApplicationService {
             status == DeliveryStatus.CANCELLED ||
             status == DeliveryStatus.STALE
         );
+    }
+
+    private static String phaseKey(String idempotencyKey, UUID candidateId, String phase) {
+        return UUID
+            .nameUUIDFromBytes((idempotencyKey + "|" + candidateId + "|" + phase).getBytes(StandardCharsets.UTF_8))
+            .toString();
     }
 
     private CommandResult transition(

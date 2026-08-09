@@ -14,6 +14,7 @@ import type { DimensionDefinitionView } from "@/features/modeling/contracts/dime
 import type { ModelRepresentationView } from "@/features/modeling/contracts/modelRepresentationContract";
 import type { ModelSpecField, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { ModelFieldEditorTable } from "./ModelFieldEditorTable";
+import { ModelMaterializationStatusCard } from "./ModelMaterializationStatus";
 import type { WorkbenchDialog } from "./ModelWorkbenchDialog";
 import {
 	DIMENSION_STORAGE_OPTIONS,
@@ -49,6 +50,7 @@ export type ModelingWorkbenchEditorProps = {
 	failureMessage: string;
 	editorAccessMessage: string;
 	fieldRowIds: string[];
+	materializationRefreshKey?: number;
 	onChange: (draft: ModelDraft) => void;
 	onSave: () => void;
 	onConfirmDimension?: () => void;
@@ -541,6 +543,7 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 		onConfirmDimension,
 		onRefresh,
 		onDialog,
+		materializationRefreshKey,
 	} = props;
 	const conceptDimension = isConceptDimensionDraft(draft);
 	const persisted = Boolean(selectedModel);
@@ -564,6 +567,15 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 				</div>
 			) : null}
 			{representationFailure ? <div className="dmx-capability-note">{representationFailure}</div> : null}
+			{selectedModel ? (
+				<ModelMaterializationStatusCard
+					canMaintain={canMaintain}
+					currentImplementationRevision={representation?.implementationRevision}
+					key={`${selectedModel.id}:${materializationRefreshKey || 0}`}
+					model={selectedModel}
+					onOpen={() => onDialog("publish")}
+				/>
+			) : null}
 			{editorAccessMessage ? (
 				<output className="dmx-editor-access-note">
 					{editorAccessMessage}

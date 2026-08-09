@@ -82,6 +82,12 @@ class ModelReleaseCandidateResourceTest {
     @MockBean
     private AuditLoggingFilter auditLoggingFilter;
 
+    @MockBean
+    private com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftRejectionAudit dbtImplementationDraftRejectionAudit;
+
+    @MockBean
+    private com.yuzhi.dts.platform.service.audit.AuditService auditService;
+
     @Test
     void workspaceUsesServerTenantAndReturnsOneAggregateWithStrongEtag() throws Exception {
         when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", "department"));
@@ -494,6 +500,51 @@ class ModelReleaseCandidateResourceTest {
             eq(4),
             any()
         );
+    }
+
+    @Test
+    void rematerializationUsesTheSamePlanAuthorizationEtagAndIdempotencyBoundary() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", null));
+        when(service.rematerialize(eq("server-tenant"), eq("alice"), eq(PLAN_ID), eq(CANDIDATE_ID), eq(4), any()))
+            .thenReturn(new CommandResult(candidate(), false, List.of()));
+
+        mockMvc
+            .perform(
+                post(
+                    "/api/modeling/plans/{planId}/release-candidates/{candidateId}/rematerialize",
+                    PLAN_ID,
+                    CANDIDATE_ID
+                )
+                    .header("If-Match", ETAG)
+                    .header("Idempotency-Key", "rematerialize-1")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"environment":"dev","entries":[],"reason":"rebuild selected relations"}
+                        """
+                    )
+            )
+            .andExpect(status().isCreated())
+            .andExpect(header().string("ETag", ETAG));
+
+        verify(service).rematerialize(eq("server-tenant"), eq("alice"), eq(PLAN_ID), eq(CANDIDATE_ID), eq(4), any());
+    }
+
+    @Test
+    void materializationStatusQueryUsesTheServerTenantAndPlanBoundary() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", null));
+        UUID modelId = UUID.fromString("40000000-0000-0000-0000-000000000001");
+        when(service.materializationStatuses("server-tenant", "alice", PLAN_ID, List.of(modelId))).thenReturn(List.of());
+
+        mockMvc
+            .perform(
+                get("/api/modeling/plans/{planId}/release-candidates/materializations", PLAN_ID)
+                    .param("modelSpecIds", modelId.toString())
+            )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.length()").value(0));
+
+        verify(service).materializationStatuses("server-tenant", "alice", PLAN_ID, List.of(modelId));
     }
 
     @Test

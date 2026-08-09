@@ -527,6 +527,7 @@ export type ReleaseCandidateWorkspaceAction =
 	| "CREATE_CANDIDATE"
 	| "UPDATE_SCOPE"
 	| "REFRESH_CANDIDATE"
+	| "REMATERIALIZE"
 	| ReleaseCandidateLifecycleAction;
 
 export type ReleaseCandidateEvidenceType =
@@ -683,6 +684,17 @@ export type ReleaseCandidateEntryEvidence = {
 	finishedAt?: string | null;
 	observedAt?: string | null;
 	repairCode?: string | null;
+};
+
+export type ModelMaterializationStatus = {
+	modelSpecId: string;
+	candidateId: string;
+	candidateVersion: number;
+	environment: string;
+	candidateStatus: ReleaseCandidateDeliveryStatus;
+	candidateUpdatedAt: string;
+	currentImplementationRevision: number | null;
+	evidence: ReleaseCandidateEntryEvidence;
 };
 
 export type ReleaseCandidateBlocker = {
@@ -850,6 +862,13 @@ export const getReleaseCandidateWorkbench = (planId: string) =>
 		_skipErrorToast: true,
 	} as any);
 
+export const getModelMaterializationStatuses = (planId: string, modelSpecIds: string[]) =>
+	api.get<ModelMaterializationStatus[]>({
+		url: releaseCandidateItemUrl(planId, "materializations"),
+		params: { modelSpecIds: modelSpecIds.join(",") },
+		_skipErrorToast: true,
+	} as any);
+
 const planExecutionBindingResource = (planId: string) =>
 	`/modeling/plans/${encodeURIComponent(planId)}/execution-bindings`;
 
@@ -994,6 +1013,23 @@ export const createReplacementReleaseCandidate = (
 ) =>
 	api.post<ReleaseCandidateCommandResult>({
 		url: releaseCandidateItemUrl(planId, expected.id, "/replacement"),
+		headers: releaseCandidateWriteHeaders(idempotencyKey, expected),
+		data,
+		_skipErrorToast: true,
+	} as any);
+
+export const rematerializeReleaseCandidate = (
+	planId: string,
+	expected: ReleaseCandidateCasToken,
+	idempotencyKey: string,
+	data: {
+		environment: string;
+		entries: ReleaseCandidateScopeEntryInput[];
+		reason: string;
+	},
+) =>
+	api.post<ReleaseCandidateCommandResult>({
+		url: releaseCandidateItemUrl(planId, expected.id, "/rematerialize"),
 		headers: releaseCandidateWriteHeaders(idempotencyKey, expected),
 		data,
 		_skipErrorToast: true,

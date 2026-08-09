@@ -483,6 +483,7 @@ public final class ModelReleaseCandidateContract {
         CREATE_CANDIDATE,
         UPDATE_SCOPE,
         REFRESH_CANDIDATE,
+        REMATERIALIZE,
         START_BUILD,
         RETRY_BUILD,
         RUN_QUALITY,
@@ -557,6 +558,33 @@ public final class ModelReleaseCandidateContract {
             airflowRunId = optionalText(airflowRunId);
             if (attempt != null && attempt < 1) throw new IllegalArgumentException("attempt must be positive");
             repairCode = optionalText(repairCode);
+        }
+    }
+
+    /** Latest durable materialization state for one model, independent of the plan's current candidate. */
+    public record ModelMaterializationStatusView(
+        UUID modelSpecId,
+        UUID candidateId,
+        int candidateVersion,
+        String environment,
+        DeliveryStatus candidateStatus,
+        Instant candidateUpdatedAt,
+        Integer currentImplementationRevision,
+        EntryEvidenceView evidence
+    ) {
+        public ModelMaterializationStatusView {
+            modelSpecId = requiredUuid(modelSpecId, "modelSpecId");
+            candidateId = requiredUuid(candidateId, "candidateId");
+            if (candidateVersion < 1) throw new IllegalArgumentException("candidateVersion must be positive");
+            environment = requiredText(environment, "environment", 64);
+            if (candidateStatus == null) throw new IllegalArgumentException("candidateStatus is required");
+            if (candidateUpdatedAt == null) throw new IllegalArgumentException("candidateUpdatedAt is required");
+            if (currentImplementationRevision != null && currentImplementationRevision < 1) {
+                throw new IllegalArgumentException("currentImplementationRevision must be positive");
+            }
+            if (evidence == null || !modelSpecId.equals(evidence.modelSpecId())) {
+                throw new IllegalArgumentException("evidence must belong to modelSpecId");
+            }
         }
     }
 

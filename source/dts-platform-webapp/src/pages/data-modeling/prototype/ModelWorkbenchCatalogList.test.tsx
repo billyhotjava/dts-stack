@@ -7,6 +7,15 @@ import type { DimensionDefinitionView } from "@/features/modeling/contracts/dime
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { ModelWorkbenchCatalogList } from "./ModelWorkbenchCatalogList";
 
+const apiMocks = vi.hoisted(() => ({
+	getMaterializationStatuses: vi.fn(),
+}));
+
+vi.mock("@/api/modelSpecApi", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@/api/modelSpecApi")>()),
+	getModelMaterializationStatuses: apiMocks.getMaterializationStatuses,
+}));
+
 let container: HTMLDivElement;
 let root: Root;
 
@@ -19,6 +28,7 @@ const draftModel = {
 	revision: 2,
 	compatibilityMode: "CANONICAL",
 	domainId: "domain-1",
+	planId: "plan-1",
 } as ModelSpecView;
 const publishedModel = {
 	...draftModel,
@@ -41,6 +51,8 @@ beforeEach(() => {
 	container = document.createElement("div");
 	document.body.appendChild(container);
 	root = createRoot(container);
+	apiMocks.getMaterializationStatuses.mockReset();
+	apiMocks.getMaterializationStatuses.mockResolvedValue([]);
 });
 
 afterEach(async () => {
@@ -62,6 +74,7 @@ describe("ModelWorkbenchCatalogList", () => {
 					onBack={vi.fn()}
 					onChooseDimension={onChooseDimension}
 					onChooseModel={onChooseModel}
+					onMaterialize={vi.fn()}
 				/>,
 			),
 		);
@@ -85,5 +98,59 @@ describe("ModelWorkbenchCatalogList", () => {
 		});
 		expect(container.textContent).not.toContain("日期维度表");
 		expect(container.textContent).toContain("订单明细表");
+	});
+
+	it("multi-selects physical models from one plan and opens one batch materialization", async () => {
+		const onMaterialize = vi.fn();
+		apiMocks.getMaterializationStatuses.mockResolvedValue([
+			{
+				modelSpecId: draftModel.id,
+				candidateId: "candidate-1",
+				candidateVersion: 5,
+				environment: "dev",
+				candidateStatus: "BUILT",
+				candidateUpdatedAt: "2026-08-09T02:47:00Z",
+				currentImplementationRevision: 2,
+				evidence: {
+					modelSpecId: draftModel.id,
+					modelName: draftModel.name,
+					modelRevision: draftModel.revision,
+					implementationRevision: 2,
+					targetRelation: "public.it_demo_dwd_dim_date",
+					runStatus: "BUILT",
+					relationState: "VERIFIED",
+					attempt: 1,
+					finishedAt: "2026-08-09T02:47:00Z",
+				},
+			},
+		]);
+
+		await act(async () =>
+			root.render(
+				<ModelWorkbenchCatalogList
+					canMaintain
+					dimensions={[currentDimension]}
+					domains={[{ id: "domain-1", code: "finance", name: "财务域" }] as never}
+					models={[draftModel, publishedModel]}
+					onBack={vi.fn()}
+					onChooseDimension={vi.fn()}
+					onChooseModel={vi.fn()}
+					onMaterialize={onMaterialize}
+				/>,
+			),
+		);
+		await act(async () => Promise.resolve());
+
+		expect(container.textContent).toContain("已物化");
+		const dateSelection = container.querySelector<HTMLInputElement>('input[aria-label="选择 日期维度表"]');
+		const orderSelection = container.querySelector<HTMLInputElement>('input[aria-label="选择 订单明细表"]');
+		await act(async () => dateSelection?.click());
+		await act(async () => orderSelection?.click());
+		const materialize = Array.from(container.querySelectorAll("button")).find((item) =>
+			item.textContent?.includes("物化所选（2）"),
+		);
+		await act(async () => materialize?.click());
+
+		expect(onMaterialize).toHaveBeenCalledWith([draftModel, publishedModel]);
 	});
 });

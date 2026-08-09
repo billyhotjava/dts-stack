@@ -467,6 +467,42 @@ class ModelReleaseCandidateServiceTest {
     }
 
     @Test
+    void explicitRematerializationSupersedesABuiltCandidateWithoutInventingCanonicalDrift() {
+        CandidateView built = candidate(
+            DeliveryStatus.BUILT,
+            4,
+            createdAudit(),
+            List.of(entry(DeliveryStatus.BUILT, 1, CHECKSUM))
+        );
+        when(repository.findCommandByIdempotencyKey(TENANT, "rematerialize-archive-key")).thenReturn(Optional.empty());
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(built));
+        when(repository.transitionAndAppend(any(), anyInt(), any(), any(), anyString(), any(), any())).thenReturn(1);
+
+        var result = service.supersedeForRematerialization(
+            TENANT,
+            ACTOR,
+            CANDIDATE_ID,
+            new TransitionCommand(4, DeliveryStatus.STALE, "rematerialize-archive-key", "rebuild selected relations")
+        );
+
+        assertThat(result.candidate().status()).isEqualTo(DeliveryStatus.STALE);
+        assertThat(result.candidate().version()).isEqualTo(5);
+        assertThat(result.driftReasons()).isEmpty();
+        ArgumentCaptor<CommandEventView> receipt = ArgumentCaptor.forClass(CommandEventView.class);
+        verify(repository).transitionAndAppend(
+            eq(built),
+            eq(4),
+            eq(DeliveryStatus.STALE),
+            any(),
+            eq(ACTOR),
+            eq(NOW),
+            receipt.capture()
+        );
+        assertThat(receipt.getValue().reason()).isEqualTo("rebuild selected relations");
+        verify(repository, never()).findCurrentModelReferences(anyString(), any(), anyList());
+    }
+
+    @Test
     void retrySnapshotDriftUsesTheOriginalCommandReceiptToTransitionStale() {
         EntryView locked = entry(DeliveryStatus.BUILD_FAILED, 1, CHECKSUM);
         CandidateView current = candidate(

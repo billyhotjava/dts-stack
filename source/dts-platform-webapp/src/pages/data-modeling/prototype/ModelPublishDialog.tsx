@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
 	compileModelLifecycle,
 	createReleaseCandidate,
@@ -7,23 +7,50 @@ import {
 	lockReleaseCandidate,
 	publishReleaseCandidate,
 	type ReleaseCandidateWorkbench,
+	rematerializeReleaseCandidate,
 	retryReleaseCandidate,
 	startModelBuildIntent,
 	startModelPublicationIntent,
 } from "@/api/modelSpecApi";
 import type { CanonicalModelSpecView, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
-import { Button, Modal, RequestState } from "./PrototypePrimitives";
+import { Button, Modal, RequestState, Status } from "./PrototypePrimitives";
 import { normalizeModelingRequestFailure } from "./services/planningProjectionService";
+
+const MAX_MATERIALIZATION_MODELS = 100;
+const COMPILE_CONCURRENCY = 5;
 
 const canonical = (model: ModelSpecView): model is CanonicalModelSpecView =>
 	model.compatibilityMode === "CANONICAL" && model.contractVersion === 2;
 
+const formatTime = (value?: string | null) => {
+	if (!value) return "—";
+	const parsed = new Date(value);
+	return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString("zh-CN", { hour12: false });
+};
+
+async function compileSelectedModels(models: CanonicalModelSpecView[]) {
+	for (let offset = 0; offset < models.length; offset += COMPILE_CONCURRENCY) {
+		await Promise.all(
+			models.slice(offset, offset + COMPILE_CONCURRENCY).map(async (model) => {
+				const lifecycle = await getModelLifecycle(model.id);
+				if (!lifecycle.implementation)
+					throw new Error(
+						models.length === 1
+							? "当前模型尚未保存可编译的数据实现，请先保存数据实现后重试。"
+							: `${model.name} 尚未保存可编译的数据实现，请先保存数据实现后重试。`,
+					);
+				await compileModelLifecycle(model, lifecycle.implementation, crypto.randomUUID());
+			}),
+		);
+	}
+}
+
 export function ModelPublishDialog({
-	model,
+	models,
 	onClose,
 	canMaintain,
 }: {
-	model: ModelSpecView;
+	models: ModelSpecView[];
 	onClose: () => void;
 	canMaintain: boolean;
 }) {
@@ -33,56 +60,94 @@ export function ModelPublishDialog({
 	const [workspace, setWorkspace] = useState<ReleaseCandidateWorkbench | null>(null);
 	const [busy, setBusy] = useState<"load" | "build" | "publish" | "">("load");
 	const [failure, setFailure] = useState<string>("");
+	const selection = useMemo(() => Array.from(new Map(models.map((model) => [model.id, model])).values()), [models]);
+	const selectedIds = useMemo(() => new Set(selection.map((model) => model.id)), [selection]);
+	const primary = selection[0] || null;
+	const batch = selection.length > 1;
+	const selectionProblem = !selection.length
+		? "请至少选择一个模型。"
+		: selection.length > MAX_MATERIALIZATION_MODELS
+			? `一次最多物化 ${MAX_MATERIALIZATION_MODELS} 个模型。`
+			: selection.some((model) => !canonical(model))
+				? "历史只读模型不能进入发布与物化链路。"
+				: selection.some((model) => !model.planId)
+					? "所选模型尚未归属建模规划，不能启动物化。"
+					: new Set(selection.map((model) => model.planId)).size !== 1
+						? "批量物化只能选择同一规划下的模型。"
+						: "";
+	const planId = selectionProblem ? "" : primary?.planId || "";
 	const load = useCallback(async () => {
-		if (!model.planId) return;
+		if (!planId) {
+			setBusy("");
+			return;
+		}
 		setBusy("load");
 		setFailure("");
 		try {
-			setWorkspace(await getReleaseCandidateWorkbench(model.planId));
+			setWorkspace(await getReleaseCandidateWorkbench(planId));
 		} catch (error) {
 			setFailure(normalizeModelingRequestFailure(error, "发布候选读取失败。").message);
 		} finally {
 			setBusy("");
 		}
-	}, [model.planId]);
+	}, [planId]);
 	useEffect(() => {
 		void load();
 	}, [load]);
 	const candidate = workspace?.candidate || null;
-	const candidateContainsModel = Boolean(candidate?.entries.some((entry) => entry.modelSpecId === model.id));
+	const candidateScopeMatches = Boolean(
+		candidate &&
+			candidate.entries.length === selectedIds.size &&
+			candidate.entries.every((entry) => selectedIds.has(entry.modelSpecId)),
+	);
 	const buildAction = workspace?.allowedActions.includes("CREATE_CANDIDATE")
 		? "CREATE_CANDIDATE"
-		: candidateContainsModel && workspace?.allowedActions.includes("RETRY_BUILD")
-			? "RETRY_BUILD"
-			: candidateContainsModel && workspace?.allowedActions.includes("START_BUILD")
-				? "START_BUILD"
-				: null;
-	const canBuild = Boolean(buildAction);
-	const canPublish = Boolean(candidateContainsModel && workspace?.allowedActions.includes("PUBLISH"));
+		: candidate &&
+				(workspace?.allowedActions.includes("REMATERIALIZE") ||
+					workspace?.allowedActions.includes("CREATE_REPLACEMENT_CANDIDATE"))
+			? "REMATERIALIZE"
+			: candidateScopeMatches && workspace?.allowedActions.includes("RETRY_BUILD")
+				? "RETRY_BUILD"
+				: candidateScopeMatches && workspace?.allowedActions.includes("START_BUILD")
+					? "START_BUILD"
+					: null;
+	const canBuild = Boolean(!selectionProblem && buildAction);
+	const canPublish = Boolean(
+		!batch && primary && candidateScopeMatches && workspace?.allowedActions.includes("PUBLISH"),
+	);
+	const entries = selection.map((model, sortOrder) => ({
+		modelSpecId: model.id,
+		sortOrder,
+		selectedReason: "从模型工作台选择",
+	}));
 	const build = async () => {
-		if (!canonical(model) || !canMaintain || !buildAction) return;
+		if (!canMaintain || !canBuild || !planId || !primary || !selection.every(canonical)) return;
 		setBusy("build");
 		setFailure("");
 		try {
-			const lifecycle = await getModelLifecycle(model.id);
-			if (!lifecycle.implementation) throw new Error("当前模型尚未保存可编译的数据实现，请先保存数据实现后重试。");
-			await compileModelLifecycle(model, lifecycle.implementation, crypto.randomUUID());
+			await compileSelectedModels(selection);
 			if (buildAction === "CREATE_CANDIDATE") {
-				const created = await createReleaseCandidate(model.planId, crypto.randomUUID(), {
+				const created = await createReleaseCandidate(planId, crypto.randomUUID(), {
 					environment,
-					entries: [{ modelSpecId: model.id, sortOrder: 0, selectedReason: "从模型工作台选择" }],
-					reason: "从模型工作台创建单模型候选",
+					entries,
+					reason: batch ? "从模型列表创建批量物化候选" : "从模型工作台创建单模型候选",
 				});
-				await lockReleaseCandidate(model.planId, created.candidate, crypto.randomUUID(), "从模型工作台启动构建");
+				await lockReleaseCandidate(planId, created.candidate, crypto.randomUUID(), "从模型工作台启动构建");
+			} else if (buildAction === "REMATERIALIZE" && candidate) {
+				await rematerializeReleaseCandidate(planId, candidate, crypto.randomUUID(), {
+					environment,
+					entries,
+					reason: batch ? "从模型列表重新物化所选模型" : "从模型工作台重新物化",
+				});
 			} else if (buildAction === "RETRY_BUILD" && candidate) {
-				await retryReleaseCandidate(model.planId, candidate, crypto.randomUUID(), "从模型工作台重试构建");
+				await retryReleaseCandidate(planId, candidate, crypto.randomUUID(), "从模型工作台重试构建");
 			} else if (candidate?.origin === "BATCH_WORKBENCH") {
-				await lockReleaseCandidate(model.planId, candidate, crypto.randomUUID(), "从模型工作台启动构建");
+				await lockReleaseCandidate(planId, candidate, crypto.randomUUID(), "从模型工作台启动构建");
 			} else {
-				await startModelBuildIntent(model, crypto.randomUUID(), { planId: model.planId, environment });
+				await startModelBuildIntent(primary, crypto.randomUUID(), { planId, environment });
 			}
 			await load();
-			setTab("publish");
+			if (!batch) setTab("publish");
 		} catch (error) {
 			setFailure(normalizeModelingRequestFailure(error, "物化构建未能启动。").message);
 		} finally {
@@ -90,14 +155,14 @@ export function ModelPublishDialog({
 		}
 	};
 	const publish = async () => {
-		if (!canonical(model) || !candidate || !canMaintain || !canPublish) return;
+		if (!primary || !canonical(primary) || !candidate || !canMaintain || !canPublish) return;
 		setBusy("publish");
 		setFailure("");
 		try {
 			const publishReason = reason.trim() || "从模型工作台发布";
 			if (candidate.origin === "BATCH_WORKBENCH")
-				await publishReleaseCandidate(model.planId, candidate, crypto.randomUUID(), publishReason);
-			else await startModelPublicationIntent(model.id, candidate, crypto.randomUUID(), publishReason);
+				await publishReleaseCandidate(planId, candidate, crypto.randomUUID(), publishReason);
+			else await startModelPublicationIntent(primary.id, candidate, crypto.randomUUID(), publishReason);
 			await load();
 		} catch (error) {
 			setFailure(normalizeModelingRequestFailure(error, "发布意图未能启动。").message);
@@ -106,18 +171,20 @@ export function ModelPublishDialog({
 		}
 	};
 	return (
-		<Modal onClose={onClose} title="发布与物化" wide>
+		<Modal onClose={onClose} title={batch ? "批量物化" : "发布与物化"} wide>
 			{!canMaintain ? (
 				<RequestState description="当前账号只有查看权限，不能启动构建或发布。" kind="permission" title="无发布权限" />
 			) : null}
 			<div className="dmx-publish-grid">
 				<nav>
 					<button className={tab === "materialize" ? "active" : ""} onClick={() => setTab("materialize")} type="button">
-						生成物化任务
+						{batch ? "批量物化" : "生成物化任务"}
 					</button>
-					<button className={tab === "publish" ? "active" : ""} onClick={() => setTab("publish")} type="button">
-						发布模型
-					</button>
+					{batch ? null : (
+						<button className={tab === "publish" ? "active" : ""} onClick={() => setTab("publish")} type="button">
+							发布模型
+						</button>
+					)}
 				</nav>
 				<section>
 					{failure ? (
@@ -125,8 +192,8 @@ export function ModelPublishDialog({
 							{failure}
 						</div>
 					) : null}
-					{!canonical(model) ? (
-						<RequestState description="历史只读模型不能进入发布与物化链路。" kind="empty" title="当前模型不可操作" />
+					{selectionProblem ? (
+						<RequestState description={selectionProblem} kind="empty" title="当前选择不可物化" />
 					) : tab === "materialize" ? (
 						<>
 							<h3>使用 dbt 生成物化任务</h3>
@@ -142,16 +209,12 @@ export function ModelPublishDialog({
 								</select>
 							</label>
 							<dl className="dmx-summary-list">
-								<dt>模型</dt>
-								<dd>
-									{model.name} · r{model.revision}
-								</dd>
+								<dt>模型范围</dt>
+								<dd>{selection.map((model) => `${model.name} · r${model.revision}`).join("；")}</dd>
 								<dt>物化方式</dt>
-								<dd>{model.materialization || "由实现策略决定"}</dd>
+								<dd>{batch ? "按各模型实现策略" : primary?.materialization || "由实现策略决定"}</dd>
 								<dt>当前候选</dt>
-								<dd>
-									{workspace?.candidate ? `${workspace.candidate.status} · v${workspace.candidate.version}` : "尚无"}
-								</dd>
+								<dd>{candidate ? `${candidate.status} · v${candidate.version}` : "尚无"}</dd>
 								<dt>主要阻断</dt>
 								<dd>
 									{workspace?.primaryBlocker
@@ -159,21 +222,59 @@ export function ModelPublishDialog({
 										: "无"}
 								</dd>
 							</dl>
+							{workspace?.entryEvidence.length ? (
+								<div className="dmx-table-scroll dmx-materialization-evidence">
+									<table className="dmx-table">
+										<thead>
+											<tr>
+												<th>模型</th>
+												<th>目标关系</th>
+												<th>运行</th>
+												<th>关系核验</th>
+												<th>尝试</th>
+												<th>完成时间</th>
+											</tr>
+										</thead>
+										<tbody>
+											{workspace.entryEvidence.map((item) => (
+												<tr key={item.candidateEntryId}>
+													<td>{item.modelName}</td>
+													<td>{item.targetRelation || "—"}</td>
+													<td>{item.runStatus || "未启动"}</td>
+													<td>
+														<Status tone={item.relationState === "VERIFIED" ? "success" : "warning"}>
+															{item.relationState === "VERIFIED" ? "关系已核验" : item.relationState}
+														</Status>
+													</td>
+													<td>{item.attempt || "—"}</td>
+													<td>{formatTime(item.finishedAt)}</td>
+												</tr>
+											))}
+										</tbody>
+									</table>
+								</div>
+							) : (
+								<p className="dmx-capability-note">当前候选尚无逐表执行证据。</p>
+							)}
 							<div className="dmx-dialog-actions">
 								<Button onClick={onClose}>取消</Button>
 								<Button
 									disabled={!canMaintain || !canBuild || Boolean(busy)}
+									onClick={() => void build()}
 									primary
 									title={canBuild ? undefined : workspace?.primaryBlocker?.message || "当前候选不允许启动构建"}
-									onClick={() => void build()}
 								>
 									{busy === "build"
 										? "处理中…"
-										: buildAction === "RETRY_BUILD"
-											? "重试构建"
-											: buildAction === "START_BUILD"
-												? "开始构建"
-												: "创建并运行"}
+										: buildAction === "REMATERIALIZE"
+											? "重新物化"
+											: buildAction === "RETRY_BUILD"
+												? "重试构建"
+												: buildAction === "START_BUILD"
+													? "开始构建"
+													: batch
+														? `创建并运行 ${selection.length} 个模型`
+														: "创建并运行"}
 								</Button>
 							</div>
 						</>
@@ -187,7 +288,7 @@ export function ModelPublishDialog({
 							</label>
 							<dl className="dmx-summary-list">
 								<dt>候选状态</dt>
-								<dd>{workspace?.candidate?.status || "尚无候选"}</dd>
+								<dd>{candidate?.status || "尚无候选"}</dd>
 								<dt>在线就绪证据</dt>
 								<dd>{workspace?.evidence.map((item) => `${item.type}:${item.state}`).join("；") || "—"}</dd>
 								<dt>允许动作</dt>
@@ -201,7 +302,7 @@ export function ModelPublishDialog({
 							</dl>
 							<div className="dmx-dialog-actions">
 								<Button onClick={onClose}>取消</Button>
-								<Button disabled={!canMaintain || !canPublish || Boolean(busy)} primary onClick={() => void publish()}>
+								<Button disabled={!canMaintain || !canPublish || Boolean(busy)} onClick={() => void publish()} primary>
 									{busy === "publish" ? "发布中…" : "发布"}
 								</Button>
 							</div>

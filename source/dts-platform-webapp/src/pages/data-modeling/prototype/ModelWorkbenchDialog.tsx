@@ -99,7 +99,7 @@ export function ModelWorkbenchDialog({
 	}, [load]);
 
 	if (!dialog || !model) return null;
-	if (dialog === "publish") return <ModelPublishDialog canMaintain={canMaintain} model={model} onClose={onClose} />;
+	if (dialog === "publish") return <ModelPublishDialog canMaintain={canMaintain} models={[model]} onClose={onClose} />;
 	if (dialog === "preview") return <PhysicalPreviewDialog canMaintain={canMaintain} model={model} onClose={onClose} />;
 	if (dialog === "advanced") return <AdvancedDbtDialog canMaintain={canMaintain} model={model} onClose={onClose} />;
 
@@ -273,7 +273,10 @@ function AdvancedDbtDialog({
 			};
 		}
 		setBusy("load");
-		void getModelRepresentation(model.id, { modelRevision: model.revision, representationScope: "TECHNICAL" })
+		void getModelLifecycle(model.id)
+			.then(({ implementation }) =>
+				getModelRepresentation(model.id, { modelRevision: model.revision, implementationRevision: implementation?.implementationRevision, representationScope: "TECHNICAL" }),
+			)
 			.then((value) => {
 				if (active) setRepresentation(value);
 			})
@@ -396,6 +399,7 @@ function AdvancedDbtDialog({
 		try {
 			const latest = await getModelRepresentation(model.id, {
 				modelRevision: baseModelRevision,
+				implementationRevision: commit?.implementationRevision,
 				representationScope: "TECHNICAL",
 			});
 			setRepresentation(latest);

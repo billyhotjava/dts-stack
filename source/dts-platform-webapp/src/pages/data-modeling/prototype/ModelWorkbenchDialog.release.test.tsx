@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ModelSpecStageGate, ReleaseCandidate, ReleaseCandidateWorkbench } from "@/api/modelSpecApi";
 import type { ModelImplementationView } from "@/features/modeling/contracts/modelImplementationContract";
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
+import { ModelPublishDialog } from "./ModelPublishDialog";
 import { ModelWorkbenchDialog } from "./ModelWorkbenchDialog";
 
 const apiMocks = vi.hoisted(() => ({
@@ -14,6 +15,7 @@ const apiMocks = vi.hoisted(() => ({
 	lockCandidate: vi.fn(),
 	publishCandidate: vi.fn(),
 	retryCandidate: vi.fn(),
+	rematerializeCandidate: vi.fn(),
 	startBuildIntent: vi.fn(),
 	startPublicationIntent: vi.fn(),
 	getStageGates: vi.fn(),
@@ -33,6 +35,7 @@ vi.mock("@/api/modelSpecApi", async (importOriginal) => ({
 	lockReleaseCandidate: apiMocks.lockCandidate,
 	publishReleaseCandidate: apiMocks.publishCandidate,
 	retryReleaseCandidate: apiMocks.retryCandidate,
+	rematerializeReleaseCandidate: apiMocks.rematerializeCandidate,
 	startModelBuildIntent: apiMocks.startBuildIntent,
 	startModelPublicationIntent: apiMocks.startPublicationIntent,
 	getModelSpecStageGates: apiMocks.getStageGates,
@@ -49,6 +52,11 @@ vi.mock("@/api/dbtImplementationDraftApi", () => ({
 	validateDbtImplementationDraft: apiMocks.validateDbtDraft,
 }));
 
+vi.mock("react-router", async (importOriginal) => ({
+	...(await importOriginal<typeof import("react-router")>()),
+	useNavigate: () => vi.fn(),
+}));
+
 const model = {
 	id: "10000000-0000-0000-0000-000000000001",
 	planId: "20000000-0000-0000-0000-000000000001",
@@ -60,6 +68,11 @@ const model = {
 	implementationMode: "DESIGNER_GENERATED",
 	materialization: "table",
 } as unknown as ModelSpecView;
+const secondModel = {
+	...model,
+	id: "10000000-0000-0000-0000-000000000002",
+	name: "预算科目维度表",
+} as ModelSpecView;
 
 const implementation = {
 	id: "40000000-0000-0000-0000-000000000001",
@@ -182,6 +195,31 @@ describe("release and materialization dispatch", () => {
 		expect(container.textContent).toContain("当前模型实现编译失败");
 	});
 
+	it("compiles and submits one bounded candidate scope for multiple selected models", async () => {
+		const created = candidate("BATCH_WORKBENCH");
+		apiMocks.getWorkbench.mockResolvedValue(workspace(["CREATE_CANDIDATE"], null));
+		apiMocks.createCandidate.mockResolvedValue({ candidate: created });
+		apiMocks.lockCandidate.mockResolvedValue({ candidate: created });
+
+		await act(async () =>
+			root.render(<ModelPublishDialog canMaintain models={[model, secondModel]} onClose={vi.fn()} />),
+		);
+		await flush();
+		await act(async () => button("创建并运行 2 个模型")?.click());
+
+		expect(apiMocks.compileLifecycle).toHaveBeenCalledTimes(2);
+		expect(apiMocks.createCandidate).toHaveBeenCalledWith(
+			model.planId,
+			"idem-1",
+			expect.objectContaining({
+				entries: [
+					{ modelSpecId: model.id, sortOrder: 0, selectedReason: "从模型工作台选择" },
+					{ modelSpecId: secondModel.id, sortOrder: 1, selectedReason: "从模型工作台选择" },
+				],
+			}),
+		);
+	});
+
 	it("does not create a release candidate when the saved implementation is missing", async () => {
 		apiMocks.getWorkbench.mockResolvedValue(workspace(["CREATE_CANDIDATE"], null));
 		apiMocks.getLifecycle.mockResolvedValue({ implementation: null, artifacts: [], events: [] });
@@ -210,6 +248,47 @@ describe("release and materialization dispatch", () => {
 
 		expect(apiMocks.retryCandidate).toHaveBeenCalledWith(model.planId, failed, "idem-1", "从模型工作台重试构建");
 		expect(apiMocks.startBuildIntent).not.toHaveBeenCalled();
+	});
+
+	it("shows durable physical evidence and atomically rematerializes a successful candidate", async () => {
+		const built = candidate("BATCH_WORKBENCH", "BUILT");
+		apiMocks.getWorkbench.mockResolvedValue({
+			...workspace(["RUN_QUALITY", "REMATERIALIZE"], built),
+			entryEvidence: [
+				{
+					candidateEntryId: "entry-1",
+					modelSpecId: model.id,
+					modelName: model.name,
+					modelRevision: model.revision,
+					implementationRevision: 1,
+					targetRelation: "public.dim_budget_date",
+					runStatus: "BUILT",
+					relationState: "VERIFIED",
+					attempt: 2,
+					finishedAt: "2026-08-09T02:47:00Z",
+					observedAt: "2026-08-09T02:47:01Z",
+				},
+			],
+		});
+		apiMocks.rematerializeCandidate.mockResolvedValue({ candidate: built });
+
+		await act(async () =>
+			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+		);
+		await flush();
+
+		expect(container.textContent).toContain("public.dim_budget_date");
+		expect(container.textContent).toContain("关系已核验");
+		await act(async () => button("重新物化")?.click());
+
+		expect(apiMocks.rematerializeCandidate).toHaveBeenCalledWith(
+			model.planId,
+			built,
+			"idem-1",
+			expect.objectContaining({
+				entries: [{ modelSpecId: model.id, sortOrder: 0, selectedReason: "从模型工作台选择" }],
+			}),
+		);
 	});
 
 	it("publishes a batch candidate through the plan-owned endpoint", async () => {
@@ -325,6 +404,11 @@ describe("advanced dbt draft lifecycle", () => {
 			root.render(<ModelWorkbenchDialog canMaintain dialog="advanced" model={model} onClose={vi.fn()} />),
 		);
 		await flush();
+		expect(apiMocks.getRepresentation).toHaveBeenNthCalledWith(1, model.id, {
+			modelRevision: model.revision,
+			implementationRevision: implementation.implementationRevision,
+			representationScope: "TECHNICAL",
+		});
 		await act(async () => button("创建高级草稿")?.click());
 		await flush();
 		await act(async () => button("校验")?.click());
@@ -341,6 +425,7 @@ describe("advanced dbt draft lifecycle", () => {
 		await flush();
 		expect(apiMocks.getRepresentation).toHaveBeenLastCalledWith(model.id, {
 			modelRevision: 4,
+			implementationRevision: 3,
 			representationScope: "TECHNICAL",
 		});
 		expect(apiMocks.createDbtDraft).toHaveBeenLastCalledWith(

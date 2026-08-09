@@ -515,6 +515,29 @@ public class ModelReleaseCandidateService {
             candidateId,
             command,
             CommandEventType.STATUS_CHANGED,
+            true,
+            false
+        );
+    }
+
+    /** Explicitly supersedes successful physical evidence before creating a replacement build candidate. */
+    @Transactional
+    public CommandResult supersedeForRematerialization(
+        String tenantId,
+        String actorId,
+        UUID candidateId,
+        TransitionCommand command
+    ) {
+        if (command == null || command.targetStatus() != DeliveryStatus.STALE) {
+            throw invalid("rematerialization supersede command must target STALE");
+        }
+        return transition(
+            tenantId,
+            actorId,
+            candidateId,
+            command,
+            CommandEventType.STATUS_CHANGED,
+            true,
             true
         );
     }
@@ -536,6 +559,7 @@ public class ModelReleaseCandidateService {
             candidateId,
             command,
             CommandEventType.STATUS_CHANGED,
+            false,
             false
         );
     }
@@ -561,7 +585,8 @@ public class ModelReleaseCandidateService {
             candidateId,
             command,
             CommandEventType.PUBLICATION_REQUESTED,
-            true
+            true,
+            false
         );
     }
 
@@ -571,7 +596,8 @@ public class ModelReleaseCandidateService {
         UUID candidateId,
         TransitionCommand command,
         CommandEventType requestedEventType,
-        boolean auditStatusChange
+        boolean auditStatusChange,
+        boolean explicitRematerialization
     ) {
         String tenant = requiredText(tenantId, "tenantId");
         String actor = requiredText(actorId, "actorId");
@@ -590,6 +616,14 @@ public class ModelReleaseCandidateService {
 
         CandidateView current = repository.find(tenant, candidateId).orElseThrow(() -> notFound(candidateId));
         requireExpectedVersion(current, command.expectedVersion());
+        if (explicitRematerialization && current.status() != DeliveryStatus.BUILT) {
+            throw new ModelReleaseCandidateException(
+                "MODEL_RELEASE_CANDIDATE_REMATERIALIZATION_NOT_ALLOWED",
+                "Only a successfully built candidate can be explicitly rematerialized",
+                Kind.CONFLICT,
+                Map.of("candidateId", current.id(), "currentStatus", current.status(), "currentVersion", current.version())
+            );
+        }
         if (isReplacementSource(current.status())) {
             throw invalidTransition(current, command.targetStatus());
         }
@@ -603,7 +637,7 @@ public class ModelReleaseCandidateService {
             );
         }
 
-        List<DriftReasonView> driftReasons = cancellation
+        List<DriftReasonView> driftReasons = cancellation || explicitRematerialization
             ? List.of()
             : scopeDriftEntries(tenant, current.planId(), current.entries(), true);
         if (
@@ -618,7 +652,7 @@ public class ModelReleaseCandidateService {
                 ? List.of()
                 : List.copyOf(snapshotDrift);
         }
-        if (command.targetStatus() == DeliveryStatus.STALE && driftReasons.isEmpty()) {
+        if (command.targetStatus() == DeliveryStatus.STALE && driftReasons.isEmpty() && !explicitRematerialization) {
             throw new ModelReleaseCandidateException(
                 "MODEL_RELEASE_CANDIDATE_DRIFT_REQUIRED",
                 "The candidate can be refreshed only after canonical reference drift is confirmed",

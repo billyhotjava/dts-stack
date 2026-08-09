@@ -2,6 +2,7 @@ import { FileDown, GitBranch } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type BlockerFunction, useBlocker, useNavigate, useSearchParams } from "react-router";
 import { getModelRepresentation } from "@/api/modelRepresentationApi";
+import { getModelLifecycle } from "@/api/modelSpecApi";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
 import type { ModelRepresentationView } from "@/features/modeling/contracts/modelRepresentationContract";
 import type { ModelSpecField, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
@@ -15,6 +16,7 @@ import { ModelingWorkbenchEditor } from "./ModelingWorkbenchEditor";
 import { ModelWorkbenchCatalogList } from "./ModelWorkbenchCatalogList";
 import { ModelWorkbenchCatalogPanel } from "./ModelWorkbenchCatalogPanel";
 import { ModelWorkbenchDialog, type WorkbenchDialog } from "./ModelWorkbenchDialog";
+import { ModelPublishDialog } from "./ModelPublishDialog";
 import {
 	buildWorkbenchCatalogGroups,
 	modelDraftFingerprint,
@@ -125,6 +127,8 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const [selectedModelId, setSelectedModelId] = useState("");
 	const [selectedDimensionId, setSelectedDimensionId] = useState("");
 	const [dialog, setDialog] = useState<WorkbenchDialog>(null);
+	const [batchMaterializationModels, setBatchMaterializationModels] = useState<ModelSpecView[]>([]);
+	const [materializationRefreshKey, setMaterializationRefreshKey] = useState(0);
 	const [domainOpen, setDomainOpen] = useState<Record<string, boolean>>({});
 	const [loading, setLoading] = useState(true);
 	const [editorLoading, setEditorLoading] = useState(false);
@@ -584,10 +588,12 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		let active = true;
 		setRepresentation(null);
 		setRepresentationFailure("");
-		void getModelRepresentation(selectedModel.id, {
-			modelRevision: selectedModel.revision,
-			representationScope: "BUSINESS",
-		})
+		void getModelLifecycle(selectedModel.id)
+			.then(({ implementation }) => getModelRepresentation(selectedModel.id, {
+				modelRevision: selectedModel.revision,
+				implementationRevision: implementation?.implementationRevision,
+				representationScope: "BUSINESS",
+			}))
 			.then((value) => {
 				if (active) setRepresentation(value);
 			})
@@ -611,6 +617,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 					canMaintain={canMaintain}
 					dimensions={context.dimensions}
 					domains={context.domains}
+					key={`model-list:${materializationRefreshKey}`}
 					models={context.models}
 					onBack={() => setCatalogMode("tree")}
 					onChooseDimension={(item) => {
@@ -621,6 +628,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 						setCatalogMode("tree");
 						void chooseModel(item);
 					}}
+					onMaterialize={setBatchMaterializationModels}
 				/>
 			) : context ? (
 				<div className="dmx-model-workbench">
@@ -704,6 +712,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 								editorAccessMessage={editorAccess.message}
 								failureMessage={failure?.message || ""}
 								fieldRowIds={fieldRowIds}
+								materializationRefreshKey={materializationRefreshKey}
 								onAddFields={addFields}
 								onChange={(nextDraft) => {
 									if (savingRef.current) return;
@@ -756,8 +765,21 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 				canMaintain={canMaintain}
 				dialog={dialog}
 				model={selectedModel}
-				onClose={() => setDialog(null)}
+				onClose={() => {
+					if (dialog === "publish") setMaterializationRefreshKey((current) => current + 1);
+					setDialog(null);
+				}}
 			/>
+			{batchMaterializationModels.length ? (
+				<ModelPublishDialog
+					canMaintain={canMaintain}
+					models={batchMaterializationModels}
+					onClose={() => {
+						setBatchMaterializationModels([]);
+						setMaterializationRefreshKey((current) => current + 1);
+					}}
+				/>
+			) : null}
 			<ConceptDimensionRecordDialog
 				canMaintain={canMaintain}
 				dialog={conceptDraft && (dialog === "versions" || dialog === "releases") ? dialog : null}
