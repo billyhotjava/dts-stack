@@ -1854,3 +1854,23 @@
 **证据**: 提交 32292c7d5 / 42c722c79 / f72570ea9 / 336d7a179 / fda18014d；镜像 digest sha256:2442012bd2526389…（回滚锚点 e1c63c07d97c1bc62…）；node 契约 93/100（7 项基线既有失败）；Vitest 15/15。
 **遗留**: E2E 实机一次执行（授权账号）；台账页 800 行契约超限（842 行）与 F5-T04 security 深链断言过期为基线债务，非本 sprint 引入。
 
+## Sprint-86: 平台级数据架构控制面与跨域语义收敛 (202608)
+
+**目录**: `worklog/v2.2.3/sprint-86-202608-data-architecture-control-plane`
+**状态**: DRAFT / ARCHITECTURE_DISCUSSION（只做架构讨论，不进入代码实施）
+**类型**: Architecture / Domain Modeling / Information Architecture / Compatibility Planning
+**目标**: 冻结平台全局的数据架构元数据、关键数据模型关系、物理资产纳管、指标业务归属和跨模块消费契约，使建模、资产、指标与质量共用稳定 ID、版本关系和唯一 owner，并与后续业务主数据管理划清边界。
+**依赖**: 复用 `catalog_domain`、现有规划台账、WarehouseLayer canonical projection、CatalogAssetKey、ModelSpec、指标与质量控制面；承接 `asset-domain-navigation-20260809` 的术语/双 CRUD 勘察，不新增平行实现。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---|---|---:|---|
+| F1-数据架构元数据与控制面 | P0 | 2 | DRAFT |
+| F2-资产范围来源与分层语义 | P0 | 1 | DRAFT |
+| F3-指标业务上下文 | P0 | 1 | DRAFT |
+| F4-信息架构与页面形态 | P0 | 1 | DRAFT |
+| F5-兼容迁移与实施准入 | P0 | 1 | DRAFT |
+
+**统计**: DRAFT=6, READY=0, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**执行顺序**: F1/T01（语言/owner）→ F1/T02（关系/E2E）→ F2/F3 → F4 → F5；F2/F3 可并行讨论，代码实施必须另立 Sprint。
+**关键决策**: 当前按平台全局设计；业务分类→数据域为单父级、分层正交；目标业务链为分类→域→过程与分类→集市→主题域；维度/事实/汇总/应用模型依赖为 DAG，批量候选固定依赖闭包，二次物化新增 attempt/observation；ModelSpec revision→候选→物化证据→语义/物理资产分别建模；真实稳定关系均可成为资产但治理/消费状态独立；指标 category 归于业务分类；架构元数据与业务 MDM 分离。“数据架构”一级入口、数据集市基数、DIM/SOURCE 兼容和精确状态机仍待评审。
+**已知风险**: 当前数据画像仅来自本地 v2.2.3 环境；`GovIndicatorDefinition` 预研影响为 HIGH；GitNexus 全量重建因解析器串行停滞未完成，实施前必须刷新索引并重跑逐符号 impact。
