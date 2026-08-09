@@ -1,18 +1,18 @@
 import "@/polyfills/legacy-browser";
-import { useEffect, useMemo, useRef } from "react";
+import type { ComboConfig, Graph, GraphData, Item } from "@antv/g6";
 import G6 from "@antv/g6";
-import type { Graph, GraphData, Item, ComboConfig } from "@antv/g6";
 import { Empty } from "antd";
+import { useEffect, useMemo, useRef } from "react";
 import {
 	type ColumnLineage,
+	edgeEndpoint,
+	edgeLabel,
 	type ImpactEdge,
 	type ImpactNode,
 	type LayoutDirection,
-	edgeEndpoint,
-	edgeLabel,
 	nodeTone,
 	relationStroke,
-} from "@/pages/catalog/lineageShared";
+} from "@/features/catalog/lineageContracts";
 
 export interface LineageGraphProps {
 	nodes: ImpactNode[];
@@ -23,8 +23,6 @@ export interface LineageGraphProps {
 	selectedNodeId?: string | null;
 	/** 字段血缘开关：true 时把含列血缘的表渲染为 combo，列作为子节点 */
 	showColumns?: boolean;
-	/** 关键字高亮：命中节点 highlight，未命中 dim */
-	highlightKeyword?: string;
 	emptyText?: string;
 	showMiniMap?: boolean;
 	showToolbar?: boolean;
@@ -319,12 +317,6 @@ const registerCustomNodes = (() => {
 					if (name === "highlight") {
 						bg.attr("lineWidth", value ? 2 : 1);
 					}
-					if (name === "searched") {
-						bg.attr("shadowBlur", value ? 12 : 0);
-						bg.attr("shadowColor", value ? "rgba(250,204,21,0.85)" : "transparent");
-						bg.attr("stroke", value ? "#facc15" : (item.getModel() as unknown as LineageNodeModel).style.stroke);
-						bg.attr("lineWidth", value ? 2.4 : 1);
-					}
 				},
 			},
 			"single-node",
@@ -388,10 +380,6 @@ const registerCustomNodes = (() => {
 						bg.attr("lineWidth", value ? 1.6 : 1);
 						bg.attr("stroke", value ? "#1677ff" : "#cbd5e1");
 					}
-					if (name === "searched") {
-						bg.attr("stroke", value ? "#facc15" : "#cbd5e1");
-						bg.attr("lineWidth", value ? 1.8 : 1);
-					}
 				},
 			},
 			"single-node",
@@ -417,7 +405,10 @@ const collectReachable = (
 	downstream: Map<string, Set<string>>,
 ): Set<string> => {
 	const out = new Set<string>([startId]);
-	const queue: Array<[string, "up" | "down"]> = [[startId, "up"], [startId, "down"]];
+	const queue: Array<[string, "up" | "down"]> = [
+		[startId, "up"],
+		[startId, "down"],
+	];
 	while (queue.length) {
 		const [id, dir] = queue.shift()!;
 		const map = dir === "up" ? upstream : downstream;
@@ -430,18 +421,6 @@ const collectReachable = (
 		}
 	}
 	return out;
-};
-
-const matchKeyword = (model: LineageNodeModel | LineageColumnModel, keywordLower: string): boolean => {
-	if (!keywordLower) return false;
-	if (model.type === COLUMN_NODE_TYPE) {
-		const col = model as LineageColumnModel;
-		return col.label.toLowerCase().includes(keywordLower) || col.datasetId.toLowerCase().includes(keywordLower);
-	}
-	const t = model as LineageNodeModel;
-	const raw = t.raw;
-	const text = `${t.label} ${raw.db || ""} ${raw.table || ""} ${raw.owner || ""} ${raw.ownerDept || ""} ${raw.jobType || ""} ${raw.layer || ""}`.toLowerCase();
-	return text.includes(keywordLower);
 };
 
 const buildLayoutConfig = (showColumns: boolean, layoutDirection: LayoutDirection) => {
@@ -478,7 +457,6 @@ export function LineageGraph({
 	layoutDirection = "LR",
 	selectedNodeId,
 	showColumns = false,
-	highlightKeyword = "",
 	emptyText = "暂无血缘节点",
 	showMiniMap = true,
 	showToolbar = true,
@@ -507,9 +485,7 @@ export function LineageGraph({
 
 		const plugins: any[] = [];
 		if (showMiniMap) {
-			plugins.push(
-				new G6.Minimap({ size: [160, 100], type: "keyShape", className: "g6-minimap" }),
-			);
+			plugins.push(new G6.Minimap({ size: [160, 100], type: "keyShape", className: "g6-minimap" }));
 		}
 		if (showToolbar) {
 			plugins.push(new G6.ToolBar({ position: { x: 12, y: 12 } }));
@@ -567,12 +543,10 @@ export function LineageGraph({
 			edgeStateStyles: {
 				highlight: { stroke: "#1677ff", lineWidth: 2.4 },
 				dimmed: { opacity: 0.18 },
-				searched: { stroke: "#facc15", lineWidth: 2.2 },
 			},
 			comboStateStyles: {
 				selected: { lineWidth: 2, stroke: "#1677ff" },
 				dimmed: { opacity: 0.35 },
-				searched: { stroke: "#facc15", lineWidth: 2.2 },
 			},
 		});
 
@@ -596,17 +570,14 @@ export function LineageGraph({
 				graph.setItemState(n, "selected", false);
 				graph.setItemState(n, "dimmed", false);
 				graph.setItemState(n, "highlight", false);
-				graph.setItemState(n, "searched", false);
 			});
 			graph.getEdges().forEach((e) => {
 				graph.setItemState(e, "highlight", false);
 				graph.setItemState(e, "dimmed", false);
-				graph.setItemState(e, "searched", false);
 			});
 			graph.getCombos().forEach((c) => {
 				graph.setItemState(c, "selected", false);
 				graph.setItemState(c, "dimmed", false);
-				graph.setItemState(c, "searched", false);
 			});
 		});
 
@@ -633,8 +604,7 @@ export function LineageGraph({
 		const graph = graphRef.current;
 		if (!graph) return;
 
-		const layoutChanged =
-			lastShowColumnsRef.current !== showColumns || lastDirectionRef.current !== layoutDirection;
+		const layoutChanged = lastShowColumnsRef.current !== showColumns || lastDirectionRef.current !== layoutDirection;
 		if (layoutChanged) {
 			(graph as any).updateLayout(buildLayoutConfig(showColumns, layoutDirection));
 			lastShowColumnsRef.current = showColumns;
@@ -642,10 +612,7 @@ export function LineageGraph({
 		}
 
 		const data: GraphData = {
-			nodes: [
-				...built.tableNodes.map((m) => ({ ...m })),
-				...built.columnNodes.map((m) => ({ ...m })),
-			],
+			nodes: [...built.tableNodes.map((m) => ({ ...m })), ...built.columnNodes.map((m) => ({ ...m }))],
 			combos: built.combos.map((c) => ({ ...c })),
 			edges: built.edges.map((e) => ({
 				id: e.id,
@@ -676,20 +643,7 @@ export function LineageGraph({
 		const allEdges = graph.getEdges();
 		const allCombos = graph.getCombos();
 		const adj = computeAdjacency(built.edges);
-		const reachable = selectedNodeId
-			? collectReachable(selectedNodeId, adj.upstream, adj.downstream)
-			: null;
-
-		const keywordLower = highlightKeyword.trim().toLowerCase();
-		const allModels = [...built.tableNodes, ...built.columnNodes];
-		const searchedIds = keywordLower
-			? new Set(allModels.filter((m) => matchKeyword(m, keywordLower)).map((m) => m.id))
-			: null;
-		// 当只有 keyword 没有 selected 时，dim 未命中节点
-		const keywordDimSet =
-			keywordLower && !reachable
-				? new Set(allModels.filter((m) => !searchedIds!.has(m.id)).map((m) => m.id))
-				: null;
+		const reachable = selectedNodeId ? collectReachable(selectedNodeId, adj.upstream, adj.downstream) : null;
 
 		allNodes.forEach((n) => {
 			const id = String(n.getModel().id);
@@ -700,9 +654,8 @@ export function LineageGraph({
 			} else {
 				graph.setItemState(n, "selected", false);
 				graph.setItemState(n, "highlight", false);
-				graph.setItemState(n, "dimmed", Boolean(keywordDimSet && keywordDimSet.has(id)));
+				graph.setItemState(n, "dimmed", false);
 			}
-			graph.setItemState(n, "searched", Boolean(searchedIds && searchedIds.has(id)));
 		});
 
 		allCombos.forEach((c) => {
@@ -712,9 +665,8 @@ export function LineageGraph({
 				graph.setItemState(c, "dimmed", !reachable.has(id));
 			} else {
 				graph.setItemState(c, "selected", false);
-				graph.setItemState(c, "dimmed", Boolean(keywordDimSet && keywordDimSet.has(id)));
+				graph.setItemState(c, "dimmed", false);
 			}
-			graph.setItemState(c, "searched", Boolean(searchedIds && searchedIds.has(id)));
 		});
 
 		allEdges.forEach((e) => {
@@ -725,19 +677,12 @@ export function LineageGraph({
 				const onPath = reachable.has(sourceId) && reachable.has(targetId);
 				graph.setItemState(e, "highlight", onPath);
 				graph.setItemState(e, "dimmed", !onPath);
-				graph.setItemState(e, "searched", false);
-			} else if (searchedIds) {
-				const onSearch = searchedIds.has(sourceId) || searchedIds.has(targetId);
-				graph.setItemState(e, "searched", onSearch);
-				graph.setItemState(e, "dimmed", !onSearch);
-				graph.setItemState(e, "highlight", false);
 			} else {
 				graph.setItemState(e, "highlight", false);
 				graph.setItemState(e, "dimmed", false);
-				graph.setItemState(e, "searched", false);
 			}
 		});
-	}, [selectedNodeId, highlightKeyword, built]);
+	}, [selectedNodeId, built]);
 
 	const isEmpty = built.tableNodes.length === 0 && built.combos.length === 0;
 

@@ -1,16 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
 import { Alert, Button, Card, Space, Switch, Typography } from "antd";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router";
 import { toast } from "sonner";
-import { LineageGraph } from "@/components/lineage";
 import { getCatalogLineageImpact } from "@/api/platformApi";
+import { LineageGraph } from "@/components/lineage";
 import {
 	applyLayeredLayout,
 	type ColumnLineage,
 	downloadBlob,
+	EmptyAction,
 	edgeEndpoint,
 	edgeLabel,
-	EmptyAction,
-	type ImpactEdge,
 	type ImpactNode,
 	type ImpactResult,
 	type LayoutDirection,
@@ -31,34 +31,42 @@ const svgEscape = (value: unknown) =>
 		.replaceAll("&", "&amp;")
 		.replaceAll("<", "&lt;")
 		.replaceAll(">", "&gt;")
-		.replaceAll("\"", "&quot;");
+		.replaceAll('"', "&quot;");
 
 export default function LineageGraphPage() {
+	const [searchParams, setSearchParams] = useSearchParams();
 	const [datasets, setDatasets] = useState<Array<{ id: string; name: string }>>([]);
-	const [selectedId, setSelectedId] = useState<string>();
-	const [direction, setDirection] = useState<LineageDirection>("BOTH");
-	const [depth, setDepth] = useState(3);
-	const [projectName, setProjectName] = useState("");
-	const [layerFilters, setLayerFilters] = useState<string[]>([]);
-	const [changedWithinHours, setChangedWithinHours] = useState(0);
-	const [snapshotAt, setSnapshotAt] = useState("");
+	// 筛选状态全部进入 URL：刷新恢复、可分享、可深链（?datasetId= 来自详情页血缘 Tab）
+	const [selectedId, setSelectedId] = useState<string | undefined>(() => searchParams.get("datasetId") || undefined);
+	const [direction, setDirection] = useState<LineageDirection>(() =>
+		searchParams.get("direction") === "UPSTREAM" || searchParams.get("direction") === "DOWNSTREAM"
+			? (searchParams.get("direction") as LineageDirection)
+			: "BOTH",
+	);
+	const [depth, setDepth] = useState(() => {
+		const raw = Number(searchParams.get("depth") || 3);
+		return Number.isFinite(raw) && raw >= 1 && raw <= 10 ? raw : 3;
+	});
+	const [projectName, setProjectName] = useState(() => searchParams.get("project") || "");
+	const [layerFilters, setLayerFilters] = useState<string[]>(() =>
+		(searchParams.get("layers") || "").split(",").filter(Boolean),
+	);
+	const [changedWithinHours, setChangedWithinHours] = useState(() => {
+		const raw = Number(searchParams.get("changed") || 0);
+		return Number.isFinite(raw) && raw >= 0 ? raw : 0;
+	});
+	const [snapshotAt, setSnapshotAt] = useState(() => searchParams.get("at") || "");
 	const [keyword, setKeyword] = useState("");
-	const [layoutDirection, setLayoutDirection] = useState<LayoutDirection>("LR");
-	const [showColumns, setShowColumns] = useState(false);
+	const [layoutDirection, setLayoutDirection] = useState<LayoutDirection>(() =>
+		searchParams.get("layout") === "TB" ? "TB" : "LR",
+	);
+	const [showColumns, setShowColumns] = useState(() => searchParams.get("columns") === "1");
 	const [loading, setLoading] = useState(false);
 	const [impact, setImpact] = useState<ImpactResult | null>(null);
 	const [selectedNode, setSelectedNode] = useState<ImpactNode | null>(null);
 	const datasetOptions = useMemo(() => datasets.map((item) => ({ label: item.name, value: item.id })), [datasets]);
-	// 表格/导出 用 keyword 做数据级过滤；图渲染用全集 + highlightKeyword 做视觉高亮
+	// 关键词即过滤：图、表格、导出共用同一份过滤后的数据（单一语义）
 	const { nodes, edges } = useLineageData(impact, keyword);
-	const lineageNodes: ImpactNode[] = useMemo(
-		() => (Array.isArray(impact?.nodes) ? (impact?.nodes ?? []) : []),
-		[impact?.nodes],
-	);
-	const lineageEdges: ImpactEdge[] = useMemo(
-		() => (Array.isArray(impact?.edges) ? (impact?.edges ?? []) : []),
-		[impact?.edges],
-	);
 	const lineageColumns: ColumnLineage[] = useMemo(
 		() => (Array.isArray(impact?.columnLineages) ? (impact?.columnLineages ?? []) : []),
 		[impact?.columnLineages],
@@ -107,6 +115,40 @@ export default function LineageGraphPage() {
 		void loadImpact();
 	}, [selectedId, direction, depth, projectName, layerFilters, changedWithinHours, snapshotAt]);
 
+	useEffect(() => {
+		const params = new URLSearchParams(searchParams);
+		if (selectedId) params.set("datasetId", selectedId);
+		else params.delete("datasetId");
+		if (direction !== "BOTH") params.set("direction", direction);
+		else params.delete("direction");
+		if (depth !== 3) params.set("depth", String(depth));
+		else params.delete("depth");
+		if (projectName.trim()) params.set("project", projectName.trim());
+		else params.delete("project");
+		if (layerFilters.length) params.set("layers", layerFilters.join(","));
+		else params.delete("layers");
+		if (changedWithinHours > 0) params.set("changed", String(changedWithinHours));
+		else params.delete("changed");
+		if (snapshotAt) params.set("at", toIsoInstant(snapshotAt) || snapshotAt);
+		else params.delete("at");
+		if (layoutDirection !== "LR") params.set("layout", layoutDirection);
+		else params.delete("layout");
+		if (showColumns) params.set("columns", "1");
+		else params.delete("columns");
+		const next = params.toString();
+		if (next !== searchParams.toString()) setSearchParams(params, { replace: true });
+	}, [
+		selectedId,
+		direction,
+		depth,
+		projectName,
+		layerFilters,
+		changedWithinHours,
+		snapshotAt,
+		layoutDirection,
+		showColumns,
+	]);
+
 	const buildLineageSvg = () => {
 		if (!nodes.length) return null;
 		const positions = applyLayeredLayout(nodes, edges, layoutDirection);
@@ -130,7 +172,10 @@ export default function LineageGraphPage() {
 				const y1 = source.y + NODE_SIZE.height / 2 + padding;
 				const x2 = target.x + padding;
 				const y2 = target.y + NODE_SIZE.height / 2 + padding;
-				const dash = String(edge.verificationStatus || "").toUpperCase() === "KNOWN_UNVERIFIED" || edge.relationType === "MANUAL" ? " stroke-dasharray=\"5 5\"" : "";
+				const dash =
+					String(edge.verificationStatus || "").toUpperCase() === "KNOWN_UNVERIFIED" || edge.relationType === "MANUAL"
+						? ' stroke-dasharray="5 5"'
+						: "";
 				return `<path d="M ${x1} ${y1} L ${x2} ${y2}" fill="none" stroke="${relationStroke(edge.relationType)}" stroke-width="1.8"${dash} marker-end="url(#arrow)"/><text x="${(x1 + x2) / 2}" y="${(y1 + y2) / 2 - 6}" text-anchor="middle" font-size="10" fill="#595959">${svgEscape(edgeLabel(edge))}</text>`;
 			})
 			.join("\n");
@@ -139,7 +184,10 @@ export default function LineageGraphPage() {
 				const tone = nodeTone(node);
 				const x = position.x + padding;
 				const y = position.y + padding;
-				const detail = node.kind === "job" ? node.jobType || node.relationType || "JOB" : node.layer || node.assetType || node.type || "DATASET";
+				const detail =
+					node.kind === "job"
+						? node.jobType || node.relationType || "JOB"
+						: node.layer || node.assetType || node.type || "DATASET";
 				return `<rect x="${x}" y="${y}" width="${NODE_SIZE.width}" height="${NODE_SIZE.height}" rx="${node.kind === "job" ? 12 : 6}" fill="${tone.bg}" stroke="${tone.border}"/><text x="${x + 12}" y="${y + 22}" font-size="10" fill="#64748b">${svgEscape(String(node.kind || "dataset").toUpperCase())} · ${svgEscape(detail)}</text><text x="${x + 12}" y="${y + 44}" font-size="13" font-weight="600" fill="#0f172a">${svgEscape(node.name || node.table || "未知节点")}</text>`;
 			})
 			.join("\n");
@@ -158,7 +206,11 @@ ${svgNodes}
 			toast.warning("当前无可导出的图");
 			return;
 		}
-		downloadBlob(`lineage-graph-${new Date().toISOString().slice(0, 19).replaceAll(":", "-")}.svg`, graph.svg, "image/svg+xml;charset=utf-8;");
+		downloadBlob(
+			`lineage-graph-${new Date().toISOString().slice(0, 19).replaceAll(":", "-")}.svg`,
+			graph.svg,
+			"image/svg+xml;charset=utf-8;",
+		);
 		toast.success("已导出血缘图 SVG");
 	};
 
@@ -208,8 +260,22 @@ ${svgNodes}
 
 	return (
 		<div className="space-y-4">
-			<Card title="血缘与影响分析 / 血缘图谱" extra={<Space><Button onClick={handleExportSvg} disabled={!nodes.length}>导出SVG</Button><Button onClick={handleExportPng} disabled={!nodes.length}>导出PNG</Button></Space>}>
-				<div className="mb-3"><LineageSectionNav section="graph" /></div>
+			<Card
+				title="血缘与影响分析 / 血缘图谱"
+				extra={
+					<Space>
+						<Button onClick={handleExportSvg} disabled={!nodes.length}>
+							导出SVG
+						</Button>
+						<Button onClick={handleExportPng} disabled={!nodes.length}>
+							导出PNG
+						</Button>
+					</Space>
+				}
+			>
+				<div className="mb-3">
+					<LineageSectionNav section="graph" />
+				</div>
 				<LineageDataFilters
 					datasetOptions={datasetOptions}
 					selectedId={selectedId}
@@ -233,7 +299,14 @@ ${svgNodes}
 					showLayout
 				/>
 			</Card>
-			{!selectedId ? <Alert type="info" message="请选择一个数据集查看血缘图谱。" showIcon action={<EmptyAction onReload={loadDatasets} />} /> : null}
+			{!selectedId ? (
+				<Alert
+					type="info"
+					message="请选择一个数据集查看血缘图谱。"
+					showIcon
+					action={<EmptyAction onReload={loadDatasets} />}
+				/>
+			) : null}
 			{selectedId ? (
 				<Card
 					loading={loading}
@@ -242,7 +315,9 @@ ${svgNodes}
 						<Space size={16}>
 							<Typography.Text>血缘图</Typography.Text>
 							<Space size={6}>
-								<Typography.Text type="secondary" className="text-xs">显示字段血缘</Typography.Text>
+								<Typography.Text type="secondary" className="text-xs">
+									显示字段血缘
+								</Typography.Text>
 								<Switch
 									size="small"
 									checked={showColumns}
@@ -250,23 +325,26 @@ ${svgNodes}
 									disabled={!lineageColumns.length}
 								/>
 								{!lineageColumns.length ? (
-									<Typography.Text type="secondary" className="text-xs">（当前无字段血缘数据）</Typography.Text>
+									<Typography.Text type="secondary" className="text-xs">
+										（当前无字段血缘数据）
+									</Typography.Text>
 								) : (
-									<Typography.Text type="secondary" className="text-xs">{lineageColumns.length} 条字段关系</Typography.Text>
+									<Typography.Text type="secondary" className="text-xs">
+										{lineageColumns.length} 条字段关系
+									</Typography.Text>
 								)}
 							</Space>
 						</Space>
 					}
 				>
 					<LineageGraph
-						nodes={lineageNodes}
-						edges={lineageEdges}
+						nodes={nodes}
+						edges={edges}
 						columnLineages={lineageColumns}
 						showColumns={showColumns}
 						height={540}
 						layoutDirection={layoutDirection}
 						selectedNodeId={selectedNode?.id ?? null}
-						highlightKeyword={keyword}
 						emptyText="暂无血缘节点"
 						onNodeClick={(node) => setSelectedNode(node)}
 					/>

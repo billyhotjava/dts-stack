@@ -110,8 +110,8 @@ test("URL-backed tag search starts with the synchronously hydrated saved form", 
 test("data search shares the asset-v2 query builder with the ledger as the single source of truth", () => {
 	assert.match(SOURCE, /import \{ buildAssetV2Query \} from "\.\/assets\/assetV2Query"/);
 	assert.match(SOURCE, /listCatalogAssetsV2\(\s*buildAssetV2Query\(/);
-	assert.match(SOURCE, /buildAssetV2Query\(\{[\s\S]*?keyword: trimmed/);
-	assert.match(SOURCE, /buildAssetV2Query\(\{[\s\S]*?tagIds: effectiveSelectedTagIds/);
+	assert.match(SOURCE, /buildAssetV2Query\(\s*\{[\s\S]*?keyword: trimmed/);
+	assert.match(SOURCE, /buildAssetV2Query\(\s*\{[\s\S]*?tagIds: effectiveSelectedTagIds/);
 });
 
 test("data search consumes the same URL deep-link protocol as the ledger", () => {

@@ -380,50 +380,28 @@ function OpenMetadataLineageTab({ assetId }: { assetId: string }) {
 		);
 	}
 
+	// ADR-85-04：OM 血缘缓存降级为「同步状态与证据说明」，不再渲染第二张血缘图。
+	// 血缘语义统一由 DTS 本地影响链路（/catalog/lineage/impact）表达。
 	const edges = Array.isArray(lineage?.edges) ? lineage.edges : [];
-	if (!edges.length) {
-		return (
-			<div className="space-y-3 py-4 text-sm text-slate-500">
-				<div>暂无OpenMetadata血缘缓存。</div>
-				<Button size="small" onClick={() => void syncLineage()} loading={syncing}>
-					同步OpenMetadata血缘
-				</Button>
-			</div>
-		);
-	}
+	const nodes = Array.isArray(lineage?.nodes) ? lineage.nodes : [];
 	return (
-		<div className="space-y-3 py-2">
+		<div className="space-y-2 py-2">
 			<div className="flex items-center justify-between">
-				<Tag color="blue">OpenMetadata血缘缓存</Tag>
+				<Tag color="blue">OpenMetadata 血缘缓存（证据）</Tag>
 				<Button size="small" onClick={() => void syncLineage()} loading={syncing}>
 					同步血缘
 				</Button>
 			</div>
-			<CompactTable
-				size="small"
-				rowKey={(row: any, index) => row.id || `${row.fromFqn}-${row.toFqn}-${index}`}
-				dataSource={edges}
-				pagination={{ defaultPageSize: 10 }}
-				columns={[
-					{
-						title: "上游",
-						dataIndex: "fromFqn",
-						render: (value: any) => <span className="font-mono text-xs">{value || "-"}</span>,
-					},
-					{
-						title: "下游",
-						dataIndex: "toFqn",
-						render: (value: any) => <span className="font-mono text-xs">{value || "-"}</span>,
-					},
-					{
-						title: "来源",
-						dataIndex: "source",
-						width: 140,
-						render: (value: any) => <Tag>{value || "openmetadata"}</Tag>,
-					},
-					{ title: "类型", dataIndex: "edgeType", width: 120, render: (value: any) => value || "TABLE" },
-				]}
-			/>
+			<Descriptions size="small" column={1} bordered>
+				<Descriptions.Item label="来源">{lineage?.metadataSource || "openmetadata"}</Descriptions.Item>
+				<Descriptions.Item label="资产 FQN">{lineage?.fqn || "-"}</Descriptions.Item>
+				<Descriptions.Item label="缓存关系数">
+					{edges.length ? `${edges.length} 条边 / ${nodes.length} 个节点` : "暂无缓存关系"}
+				</Descriptions.Item>
+			</Descriptions>
+			<div className="text-sm text-slate-500">
+				该缓存仅作为血缘同步证据；血缘语义以 DTS 本地治理影响链路为准（见下方血缘与影响）。
+			</div>
 		</div>
 	);
 }
@@ -464,7 +442,7 @@ export function DatasetLineageImpactTab({ dataset }: { dataset: Record<string, a
 			/>
 			{hasOpenMetadataAsset ? (
 				<div>
-					<div className="mb-2 text-sm font-medium text-slate-700">OpenMetadata 血缘缓存</div>
+					<div className="mb-2 text-sm font-medium text-slate-700">OpenMetadata 血缘同步证据</div>
 					<OpenMetadataLineageTab assetId={String(dataset.id)} />
 				</div>
 			) : null}
