@@ -1,5 +1,5 @@
-import { Alert, Button, Card, Dropdown, Input, Select, Space, Tabs, Tag } from "antd";
 import { DownOutlined } from "@ant-design/icons";
+import { Alert, Button, Card, Dropdown, Input, Select, Space, Tabs, Tag } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { toast } from "sonner";
@@ -10,7 +10,7 @@ import { AssetTagFilter } from "@/components/catalog/tags/AssetTagFilter";
 import { readTagIds, writeTagIds } from "@/components/catalog/tags/catalogTagUrlState";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
-import { ASSET_PORTAL_V2_ENABLED } from "./assets/assetPageShared";
+import { ASSET_PORTAL_V2_ENABLED, classificationTagColor } from "./assets/assetPageShared";
 import { buildAssetV2Query } from "./assets/assetV2Query";
 
 type SearchRow = {
@@ -632,7 +632,11 @@ export default function DataSearchPage() {
 									<div className="grid grid-cols-1 gap-2 md:grid-cols-2">
 										{grouped.ASSET.map((row) =>
 											row.source === "标签索引" ? (
-												<div key={row.id} className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-left">
+												<div
+													key={row.id}
+													title="标签索引命中：暂无对应详情页，可在台账/详情中确认该资产"
+													className="rounded-lg border border-dashed border-slate-300 bg-slate-50/60 px-4 py-3 text-left"
+												>
 													<div className="font-semibold text-sm text-slate-900">{row.name}</div>
 													<div className="mt-1 truncate font-mono text-xs text-slate-500">{row.assetKey || row.id}</div>
 													<div className="mt-2 flex flex-wrap gap-1">
@@ -652,7 +656,7 @@ export default function DataSearchPage() {
 													<div className="mt-1 truncate font-mono text-xs text-slate-500">{row.assetKey || row.id}</div>
 													<div className="mt-2 flex flex-wrap gap-1">
 														<Tag style={{ fontSize: 10 }}>{row.type || "ASSET"}</Tag>
-														<Tag color={row.classification ? "orange" : "default"} style={{ fontSize: 10 }}>
+														<Tag color={classificationTagColor(row.classification, "default")} style={{ fontSize: 10 }}>
 															{row.classification || "未定密"}
 														</Tag>
 														<Tag color={row.warehouseLayer ? "blue" : "default"} style={{ fontSize: 10 }}>

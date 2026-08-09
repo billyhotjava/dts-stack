@@ -156,6 +156,10 @@ export const classificationText = (value?: string | null) => {
 	return normalized ? CLASSIFICATION_LABEL[normalized] || normalized : "未设定";
 };
 
+// C1 统一密级色板：有密级一律 orange；缺密级在管理语境（台账/元数据管理）用 red，结果卡语境用 default
+export const classificationTagColor = (value?: string | null, missing: "red" | "default" = "red") =>
+	value ? "orange" : missing;
+
 export const formatTime = (value?: string | null) => {
 	if (!value) return "-";
 	try {

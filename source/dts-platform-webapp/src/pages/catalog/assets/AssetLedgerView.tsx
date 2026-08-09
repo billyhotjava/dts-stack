@@ -1,3 +1,4 @@
+import { ToolOutlined } from "@ant-design/icons";
 import { Alert, Button, Space, Table, Tag } from "antd";
 import type { Key } from "react";
 import { useEffect, useMemo, useState } from "react";
@@ -16,6 +17,7 @@ import type { AssetRow } from "./assetPageShared";
 import {
 	ASSET_ACTION_COLUMN_WIDTH,
 	ASSET_TABLE_SCROLL_X,
+	classificationTagColor,
 	classificationText,
 	formatTime,
 	LAYER_META,
@@ -251,7 +253,7 @@ export function AssetLedgerView({
 										<div
 											title={`有效密级取来源声明、识别、人工下限和全部上游的最高值；快照 v${fact?.snapshotVersion ?? 0}`}
 										>
-											<Tag color={effective ? "orange" : "red"}>{classificationText(effective)}</Tag>
+											<Tag color={classificationTagColor(effective)}>{classificationText(effective)}</Tag>
 											<Tag color={fact?.propagationStatus === "PROPAGATED" ? "green" : "gold"}>
 												{fact?.sealed ? fact.propagationStatus || "已封存" : "待封存"}
 											</Tag>
@@ -285,6 +287,7 @@ export function AssetLedgerView({
 									<Button
 										type="primary"
 										size="small"
+										icon={<ToolOutlined />}
 										onClick={(event) => {
 											event.stopPropagation();
 											setGovernanceAsset(row);

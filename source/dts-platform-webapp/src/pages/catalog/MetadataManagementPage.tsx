@@ -1,13 +1,14 @@
 import {
 	DatabaseOutlined,
+	DownOutlined,
 	ExclamationCircleOutlined,
 	LinkOutlined,
 	SafetyCertificateOutlined,
 	TeamOutlined,
 } from "@ant-design/icons";
 import { Alert, App, Button, Card, Dropdown, Input, Modal, Select, Space, Spin, Tag, Tooltip } from "antd";
-import { DownOutlined } from "@ant-design/icons";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router";
 import {
 	listCatalogAssetsV2,
 	listCatalogGovernanceIntakeAssets,
@@ -17,11 +18,11 @@ import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { CompactTable } from "@/components/table";
 import { useCatalogMaintainerAccess } from "@/hooks/useModuleManageAccess";
-import { useSearchParams } from "react-router";
 import { useRouter } from "@/routes/hooks";
 import { classificationRank } from "@/utils/classification";
 import {
 	CLASSIFICATION_OPTIONS,
+	classificationTagColor,
 	classificationText,
 	formatTime,
 	GOVERNANCE_OPTIONS,
@@ -294,7 +295,11 @@ export default function MetadataManagementPage() {
 			dataIndex: "classification",
 			width: 120,
 			render: (value?: string) =>
-				value ? <Tag color="green">{classificationText(value)}</Tag> : <Tag color="orange">缺密级</Tag>,
+				value ? (
+					<Tag color={classificationTagColor(value)}>{classificationText(value)}</Tag>
+				) : (
+					<Tag color="red">缺密级</Tag>
+				),
 		},
 		{
 			title: "主题域",

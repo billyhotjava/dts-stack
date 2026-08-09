@@ -1,5 +1,6 @@
 import { DatabaseOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Alert, Button, Layout, Spin, Tag, Tooltip } from "antd";
+import { GitBranch, ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { getCatalogAssetsOverview, getDomainTree, listCatalogAssetsV2 } from "@/api/platformApi";
@@ -355,16 +356,18 @@ export default function AssetOverviewPage() {
 							type="button"
 							data-testid="goto-lineage-graph"
 							onClick={() => router.push("/catalog/lineage/graph")}
-							className="cursor-pointer text-blue-600 hover:text-blue-700"
+							className="inline-flex cursor-pointer items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-blue-700 transition hover:bg-blue-100"
 						>
+							<GitBranch className="h-3.5 w-3.5" />
 							查看血缘图谱
 						</button>
 						<button
 							type="button"
 							data-testid="goto-access-apply"
 							onClick={() => router.push("/security/dataset-access-approval?action=new")}
-							className="cursor-pointer text-blue-600 hover:text-blue-700"
+							className="inline-flex cursor-pointer items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-blue-700 transition hover:bg-blue-100"
 						>
+							<ShieldCheck className="h-3.5 w-3.5" />
 							申请权限
 						</button>
 					</div>

@@ -20,7 +20,8 @@ test("Sprint-82 keeps the map summary-only and makes the ledger the tag workspac
 
 test("Sprint-82 keeps the ledger action column to the governance entry plus one navigation action", () => {
 	assert.match(LEDGER_VIEW, /AssetGovernanceWorkbenchDrawer/);
-	assert.match(LEDGER_VIEW, />\s*治理资产\s*</);
+	// C4：行级治理入口带图标，仍保持主按钮语义
+	assert.match(LEDGER_VIEW, /icon=\{<ToolOutlined \/>\}[\s\S]*?\s*治理资产/);
 	// Sprint-85 ADR-85-06 允许行级「申请权限」作为唯一导航型操作；仍禁止入口泛滥
 	assert.match(LEDGER_VIEW, />\s*申请权限\s*</);
 	assert.doesNotMatch(LEDGER_VIEW, />\s*详情\s*</);

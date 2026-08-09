@@ -700,12 +700,20 @@ function AssetLedgerPage() {
 					) : null}
 					{ASSET_PORTAL_V2_ENABLED && !blockingGapCount && !lineageFailureCount ? (
 						<div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
-							<span>{signalsLoading ? "正在刷新治理信号..." : "治理信号正常：当前筛选未发现治理阻断和血缘证据缺口。"}</span>
+							<span>
+								{signalsLoading ? "正在刷新治理信号..." : "治理信号正常：当前筛选未发现治理阻断和血缘证据缺口。"}
+							</span>
 							<Space size={4}>
 								<Button type="link" size="small" className="px-2" onClick={() => void openRemediationWorkbench()}>
 									处置缺口
 								</Button>
-								<Button type="link" size="small" className="px-2" onClick={() => void loadGovernanceSignals()} loading={signalsLoading}>
+								<Button
+									type="link"
+									size="small"
+									className="px-2"
+									onClick={() => void loadGovernanceSignals()}
+									loading={signalsLoading}
+								>
 									刷新信号
 								</Button>
 							</Space>
