@@ -164,6 +164,8 @@ public class ModelMaterializationRunArtifactService {
         RunGroupRecord group = requireGroup(groupId);
         rejectPersistedAvailabilityStale(group);
         boolean terminalStatePersisted = false;
+        Map<UUID, String> perModelRunResults = Map.of();
+        UUID runInvocationId = null;
         try {
             requireSyncIdentity(group, command);
             CandidateBuildScope scope =
@@ -188,9 +190,16 @@ public class ModelMaterializationRunArtifactService {
                 manifest,
                 results
             );
+            runInvocationId = invocationId;
             Map<UUID, RelationLocator> locators =
                 validateManifest(scope, manifest);
-            validateRunResults(scope, results);
+            perModelRunResults = validateRunResults(scope, results);
+            if (perModelRunResults.values().stream().anyMatch(status -> !"DBT_SUCCEEDED".equals(status))) {
+                throw failure(
+                    "MODEL_DBT_BUILD_RESULT_FAILED",
+                    "At least one candidate model did not build successfully"
+                );
+            }
             Instant now = clock.instant();
             List<ObservationWrite> evidence =
                 observeRelations(
@@ -292,7 +301,12 @@ public class ModelMaterializationRunArtifactService {
             if (!terminalStatePersisted) {
                 try {
                     Instant failedAt = clock.instant();
+                    Map<UUID, String> itemResults = perModelRunResults;
+                    UUID failedInvocationId = runInvocationId;
                     transactions.executeWithoutResult(status -> {
+                        if (!itemResults.isEmpty()) {
+                            runs.recordDbtResults(groupId, failedInvocationId, itemResults, failedAt);
+                        }
                         runs.markFailed(
                             groupId,
                             stable.code(),
@@ -1099,7 +1113,7 @@ public class ModelMaterializationRunArtifactService {
         }
     }
 
-    private static void validateRunResults(
+    private static Map<UUID, String> validateRunResults(
         CandidateBuildScope scope,
         JsonNode runResults
     ) {
@@ -1126,18 +1140,17 @@ public class ModelMaterializationRunArtifactService {
                 }
             }
         }
+        Map<UUID, String> perModel = new LinkedHashMap<>();
         for (CandidateBuildEntry entry : scope.entries()) {
-            if (
-                !"success".equals(
-                    statuses.get(entry.dbtUniqueId())
-                )
-            ) {
-                throw failure(
-                    "MODEL_DBT_BUILD_RESULT_FAILED",
-                    "At least one candidate model did not build successfully"
-                );
-            }
+            String status = String.valueOf(statuses.get(entry.dbtUniqueId())).toLowerCase(Locale.ROOT);
+            String persisted = switch (status) {
+                case "success" -> "DBT_SUCCEEDED";
+                case "skipped" -> "SKIPPED_DEPENDENCY_FAILED";
+                default -> "FAILED";
+            };
+            perModel.put(entry.pipelineRunId(), persisted);
         }
+        return Map.copyOf(perModel);
     }
 
     private static ModelMaterializationRuntimeException stableFailure(

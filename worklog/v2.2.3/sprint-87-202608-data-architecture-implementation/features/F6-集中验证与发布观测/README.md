@@ -2,7 +2,9 @@
 
 **优先级**：P0
 
-**状态**：BLOCKED
+**状态**：PARTIAL_LOCAL_VERIFY_PASS（E2E / DEPLOYMENT / OBSERVABILITY 未执行）
+
+**证据**：`../../assets/implementation-evidence-20260810.md`
 
 ## 目标
 
@@ -12,7 +14,7 @@
 
 | ID | Task | 状态 | 依赖 |
 |---|---|---|---|
-| T01 | 完成集中验证、发布观测与 Contract 判定 | BLOCKED | F0～F5 DONE |
+| T01 | 完成集中验证、发布观测与 Contract 判定 | PARTIAL_LOCAL_VERIFY_PASS | F0 外部输入、E2E、部署与观测仍阻塞 |
 
 ## Feature DoD
 

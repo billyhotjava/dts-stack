@@ -45,7 +45,9 @@ public final class ModelSpecContract {
         "dataMartId",
         "variantCode",
         "implementationPolicy",
-        "warehouseLayerCode"
+        "warehouseLayerCode",
+        "businessProcessId",
+        "subjectDomainId"
     );
 
     public static final Set<String> INTERACTIVE_CREATE_FIELDS = Set.of(
@@ -58,7 +60,9 @@ public final class ModelSpecContract {
         "idempotencyKey",
         "dataMartId",
         "variantCode",
-        "warehouseLayerCode"
+        "warehouseLayerCode",
+        "businessProcessId",
+        "subjectDomainId"
     );
 
     public static final Set<String> UPDATE_FIELDS = Set.of(
@@ -85,7 +89,9 @@ public final class ModelSpecContract {
         "dimensionProfile",
         "dataMartId",
         "variantCode",
-        "warehouseLayerCode"
+        "warehouseLayerCode",
+        "businessProcessId",
+        "subjectDomainId"
     );
 
     public static final Map<String, String> REQUIRED_FIELD_CODES = Map.of(
@@ -188,7 +194,15 @@ public final class ModelSpecContract {
         "MODEL_SPEC_GRAIN_REQUIRED",
         "MODEL_SPEC_DIMENSION_KEY_REQUIRED",
         "MODEL_SPEC_UPSTREAM_REQUIRED",
-        "MODEL_SPEC_CONSUMPTION_SCENARIO_REQUIRED"
+        "MODEL_SPEC_CONSUMPTION_SCENARIO_REQUIRED",
+        "MODEL_SPEC_BUSINESS_PROCESS_REQUIRED",
+        "MODEL_SPEC_DATA_MART_REQUIRED",
+        "MODEL_SPEC_SUBJECT_DOMAIN_REQUIRED"
+    );
+    private static final Set<String> STABLE_CONTEXT_REQUIRED_ISSUE_CODES = Set.of(
+        "MODEL_SPEC_BUSINESS_PROCESS_REQUIRED",
+        "MODEL_SPEC_DATA_MART_REQUIRED",
+        "MODEL_SPEC_SUBJECT_DOMAIN_REQUIRED"
     );
     private static final Set<String> GRAIN_FIELDS = Set.of("statement", "keys");
     private static final Set<String> TIME_SEMANTICS_FIELDS = Set.of("type", "fields");
@@ -602,8 +616,49 @@ public final class ModelSpecContract {
         @JsonInclude(JsonInclude.Include.NON_NULL) UUID dataMartId,
         String variantCode,
         @JsonInclude(JsonInclude.Include.NON_NULL) ImplementationPolicy implementationPolicy,
-        String warehouseLayerCode
+        String warehouseLayerCode,
+        @JsonInclude(JsonInclude.Include.NON_NULL) UUID businessProcessId,
+        @JsonInclude(JsonInclude.Include.NON_NULL) UUID subjectDomainId
     ) {
+        /** Compatibility constructor for callers created before stable process and subject-domain references. */
+        public CreateModelSpecCommand(
+            UUID planId,
+            UUID domainId,
+            ModelType modelType,
+            Layer layer,
+            String name,
+            String description,
+            ImplementationMode implementationMode,
+            String materialization,
+            String businessActivityRef,
+            String consumptionScenario,
+            Grain grain,
+            FactShape factShape,
+            TimeSemantics timeSemantics,
+            List<ModelField> fields,
+            List<SourceRef> sourceRefs,
+            List<ModelRevisionRef> dependsOn,
+            List<ModelRevisionRef> dimensionRefs,
+            List<MetricRef> metricRefs,
+            List<StandardBinding> standardBindings,
+            GenerationStrategy generationStrategy,
+            DimensionProfile dimensionProfile,
+            DimensionDefinitionRef dimensionDefinitionRef,
+            String idempotencyKey,
+            UUID dataMartId,
+            String variantCode,
+            ImplementationPolicy implementationPolicy,
+            String warehouseLayerCode
+        ) {
+            this(
+                planId, domainId, modelType, layer, name, description, implementationMode, materialization,
+                businessActivityRef, consumptionScenario, grain, factShape, timeSemantics, fields, sourceRefs,
+                dependsOn, dimensionRefs, metricRefs, standardBindings, generationStrategy, dimensionProfile,
+                dimensionDefinitionRef, idempotencyKey, dataMartId, variantCode, implementationPolicy,
+                warehouseLayerCode, null, null
+            );
+        }
+
         /** Compatibility constructor for callers created before data-mart and implementation policy metadata. */
         public CreateModelSpecCommand(
             UUID planId,
@@ -749,7 +804,8 @@ public final class ModelSpecContract {
                 planId, domainId, modelType, canonicalLayer, name, description, implementationMode, materialization,
                 businessActivityRef, consumptionScenario, grain, factShape, timeSemantics, fields, sourceRefs,
                 dependsOn, dimensionRefs, metricRefs, standardBindings, generationStrategy, dimensionProfile,
-                dimensionDefinitionRef, idempotencyKey, dataMartId, variantCode, implementationPolicy, layerCode
+                dimensionDefinitionRef, idempotencyKey, dataMartId, variantCode, implementationPolicy, layerCode,
+                businessProcessId, subjectDomainId
             );
         }
     }
@@ -780,8 +836,46 @@ public final class ModelSpecContract {
         @JsonInclude(JsonInclude.Include.NON_NULL) UUID dataMartId,
         String variantCode,
         @JsonInclude(JsonInclude.Include.NON_NULL) ImplementationPolicy implementationPolicy,
-        String warehouseLayerCode
+        String warehouseLayerCode,
+        @JsonInclude(JsonInclude.Include.NON_NULL) UUID businessProcessId,
+        @JsonInclude(JsonInclude.Include.NON_NULL) UUID subjectDomainId
     ) {
+        /** Compatibility constructor for callers created before stable process and subject-domain references. */
+        public UpdateModelSpecCommand(
+            UUID planId,
+            UUID domainId,
+            ModelType modelType,
+            Layer layer,
+            String name,
+            String description,
+            ImplementationMode implementationMode,
+            String materialization,
+            String businessActivityRef,
+            String consumptionScenario,
+            Grain grain,
+            FactShape factShape,
+            TimeSemantics timeSemantics,
+            List<ModelField> fields,
+            List<SourceRef> sourceRefs,
+            List<ModelRevisionRef> dependsOn,
+            List<ModelRevisionRef> dimensionRefs,
+            List<MetricRef> metricRefs,
+            List<StandardBinding> standardBindings,
+            GenerationStrategy generationStrategy,
+            DimensionProfile dimensionProfile,
+            UUID dataMartId,
+            String variantCode,
+            ImplementationPolicy implementationPolicy,
+            String warehouseLayerCode
+        ) {
+            this(
+                planId, domainId, modelType, layer, name, description, implementationMode, materialization,
+                businessActivityRef, consumptionScenario, grain, factShape, timeSemantics, fields, sourceRefs,
+                dependsOn, dimensionRefs, metricRefs, standardBindings, generationStrategy, dimensionProfile,
+                dataMartId, variantCode, implementationPolicy, warehouseLayerCode, null, null
+            );
+        }
+
         /** Compatibility constructor for callers created before data-mart and implementation policy metadata. */
         public UpdateModelSpecCommand(
             UUID planId,
@@ -888,7 +982,7 @@ public final class ModelSpecContract {
                 planId, domainId, modelType, canonicalLayer, name, description, implementationMode, materialization,
                 businessActivityRef, consumptionScenario, grain, factShape, timeSemantics, fields, sourceRefs,
                 dependsOn, dimensionRefs, metricRefs, standardBindings, generationStrategy, dimensionProfile,
-                dataMartId, variantCode, implementationPolicy, layerCode
+                dataMartId, variantCode, implementationPolicy, layerCode, businessProcessId, subjectDomainId
             );
         }
     }
@@ -928,8 +1022,57 @@ public final class ModelSpecContract {
         @JsonInclude(JsonInclude.Include.NON_NULL) UUID dataMartId,
         String variantCode,
         @JsonInclude(JsonInclude.Include.NON_NULL) ImplementationPolicy implementationPolicy,
-        String warehouseLayerCode
+        String warehouseLayerCode,
+        @JsonInclude(JsonInclude.Include.NON_NULL) UUID businessProcessId,
+        @JsonInclude(JsonInclude.Include.NON_NULL) UUID subjectDomainId
     ) {
+        /** Compatibility constructor for snapshots created before stable process and subject-domain references. */
+        public ModelSpecView(
+            int contractVersion,
+            UUID id,
+            UUID planId,
+            UUID domainId,
+            ModelType modelType,
+            Layer layer,
+            String name,
+            String description,
+            ImplementationMode implementationMode,
+            String materialization,
+            String businessActivityRef,
+            String consumptionScenario,
+            Grain grain,
+            FactShape factShape,
+            TimeSemantics timeSemantics,
+            List<ModelField> fields,
+            List<SourceRef> sourceRefs,
+            List<ModelRevisionRef> dependsOn,
+            List<ModelRevisionRef> dimensionRefs,
+            List<MetricRef> metricRefs,
+            List<StandardBinding> standardBindings,
+            GenerationStrategy generationStrategy,
+            DimensionProfile dimensionProfile,
+            DimensionDefinitionRef dimensionDefinitionRef,
+            ModelStatus status,
+            int revision,
+            String checksum,
+            Instant createdAt,
+            Instant updatedAt,
+            CompatibilityMode compatibilityMode,
+            LegacyRefs legacyRefs,
+            UUID dataMartId,
+            String variantCode,
+            ImplementationPolicy implementationPolicy,
+            String warehouseLayerCode
+        ) {
+            this(
+                contractVersion, id, planId, domainId, modelType, layer, name, description, implementationMode,
+                materialization, businessActivityRef, consumptionScenario, grain, factShape, timeSemantics, fields,
+                sourceRefs, dependsOn, dimensionRefs, metricRefs, standardBindings, generationStrategy, dimensionProfile,
+                dimensionDefinitionRef, status, revision, checksum, createdAt, updatedAt, compatibilityMode, legacyRefs,
+                dataMartId, variantCode, implementationPolicy, warehouseLayerCode, null, null
+            );
+        }
+
         /** Compatibility constructor for snapshots created before data-mart and implementation policy metadata. */
         public ModelSpecView(
             int contractVersion,
@@ -1124,6 +1267,8 @@ public final class ModelSpecContract {
         rawUuid(fields.get("planId"), "MODEL_SPEC_PLAN_INVALID", "planId", issues);
         rawUuid(fields.get("domainId"), "MODEL_SPEC_DOMAIN_INVALID", "domainId", issues);
         rawUuid(fields.get("dataMartId"), "MODEL_SPEC_DATA_MART_INVALID", "dataMartId", issues);
+        rawUuid(fields.get("businessProcessId"), "MODEL_SPEC_BUSINESS_PROCESS_INVALID", "businessProcessId", issues);
+        rawUuid(fields.get("subjectDomainId"), "MODEL_SPEC_SUBJECT_DOMAIN_INVALID", "subjectDomainId", issues);
         rawEnum(fields.get("modelType"), MODEL_TYPES, "MODEL_SPEC_TYPE_INVALID", "modelType", issues);
         rawEnum(fields.get("layer"), LAYERS, "MODEL_SPEC_LAYER_INVALID", "layer", issues);
         rawText(fields.get("name"), false, "MODEL_SPEC_NAME_INVALID", "name", issues);
@@ -1273,6 +1418,12 @@ public final class ModelSpecContract {
         if (command.businessActivityRef() != null && command.modelType() != ModelType.FACT) {
             issues.add(issue("MODEL_SPEC_BUSINESS_ACTIVITY_NOT_ALLOWED", "businessActivityRef", "Business activity is optional FACT context only"));
         }
+        if (command.businessProcessId() != null && command.modelType() != ModelType.FACT) {
+            issues.add(issue("MODEL_SPEC_BUSINESS_PROCESS_NOT_ALLOWED", "businessProcessId", "Business process belongs to FACT models only"));
+        }
+        if (command.subjectDomainId() != null && command.modelType() != ModelType.APPLICATION) {
+            issues.add(issue("MODEL_SPEC_SUBJECT_DOMAIN_NOT_ALLOWED", "subjectDomainId", "Subject domain belongs to APPLICATION models only"));
+        }
         if (command.consumptionScenario() != null && command.modelType() != ModelType.APPLICATION) {
             issues.add(
                 issue(
@@ -1286,6 +1437,22 @@ public final class ModelSpecContract {
         validateImplementationPolicy(command.implementationPolicy(), command.fields(), issues);
         validateDimensionDefinitionRef(command, issues);
         validateTypeBoundary(command, issues);
+        return List.copyOf(issues);
+    }
+
+    /** Contract gate for import, submit and delivery paths after an editable draft is complete. */
+    static List<FieldIssue> validateDeliverableCreate(CreateModelSpecCommand command) {
+        List<FieldIssue> issues = new ArrayList<>(validateCreate(command));
+        if (command == null || command.modelType() == null) return List.copyOf(issues);
+        if (command.modelType() == ModelType.FACT && command.businessProcessId() == null) {
+            issues.add(issue("MODEL_SPEC_BUSINESS_PROCESS_REQUIRED", "businessProcessId", "FACT requires a stable business process reference"));
+        }
+        if (command.modelType() == ModelType.APPLICATION && command.dataMartId() == null) {
+            issues.add(issue("MODEL_SPEC_DATA_MART_REQUIRED", "dataMartId", "APPLICATION requires a data mart"));
+        }
+        if (command.modelType() == ModelType.APPLICATION && command.subjectDomainId() == null) {
+            issues.add(issue("MODEL_SPEC_SUBJECT_DOMAIN_REQUIRED", "subjectDomainId", "APPLICATION requires a subject domain"));
+        }
         return List.copyOf(issues);
     }
 
@@ -1305,6 +1472,15 @@ public final class ModelSpecContract {
         return validateCreate(asCreate(command))
             .stream()
             .filter(issue -> !"MODEL_SPEC_DIMENSION_DEFINITION_REQUIRED".equals(issue.code()))
+            .filter(issue -> !STABLE_CONTEXT_REQUIRED_ISSUE_CODES.contains(issue.code()))
+            .toList();
+    }
+
+    /** Expand-phase draft validation: stable context remains a submit/import gate, not an edit lock. */
+    static List<FieldIssue> validateEditableView(ModelSpecView view) {
+        return validateView(view)
+            .stream()
+            .filter(issue -> !STABLE_CONTEXT_REQUIRED_ISSUE_CODES.contains(issue.code()))
             .toList();
     }
 
@@ -1318,7 +1494,7 @@ public final class ModelSpecContract {
                 view.dimensionProfile().scdPolicy(),
                 null
             );
-        return validateCreate(
+        return validateDeliverableCreate(
             new CreateModelSpecCommand(
                 view.planId(),
                 view.domainId(),
@@ -1346,7 +1522,9 @@ public final class ModelSpecContract {
                 view.dataMartId(),
                 view.variantCode(),
                 view.implementationPolicy(),
-                view.warehouseLayerCode()
+                view.warehouseLayerCode(),
+                view.businessProcessId(),
+                view.subjectDomainId()
             )
         );
     }
@@ -1379,7 +1557,9 @@ public final class ModelSpecContract {
             command.dataMartId(),
             command.variantCode(),
             command.implementationPolicy(),
-            command.warehouseLayerCode()
+            command.warehouseLayerCode(),
+            command.businessProcessId(),
+            command.subjectDomainId()
         );
     }
 

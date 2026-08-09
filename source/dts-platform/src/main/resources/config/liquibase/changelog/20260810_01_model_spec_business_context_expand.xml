@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260810-01-model-spec-business-context-expand" author="xiezm" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="modeling_model_spec"/>
+            <tableExists tableName="modeling_model_spec_revision"/>
+            <tableExists tableName="sprint64_business_process"/>
+            <tableExists tableName="modeling_subject_domain"/>
+            <not><columnExists tableName="modeling_model_spec" columnName="business_process_id"/></not>
+            <not><columnExists tableName="modeling_model_spec" columnName="subject_domain_id"/></not>
+            <not><columnExists tableName="modeling_model_spec_revision" columnName="business_process_id"/></not>
+            <not><columnExists tableName="modeling_model_spec_revision" columnName="subject_domain_id"/></not>
+        </preConditions>
+        <comment>
+            Expand ModelSpec head and immutable revisions with stable FACT business-process and
+            APPLICATION subject-domain references. Existing text fields remain untouched; ambiguous
+            legacy values are recorded for manual resolution and are never guessed by this migration.
+        </comment>
+
+        <addColumn tableName="modeling_model_spec">
+            <column name="business_process_id" type="${uuidType}"/>
+            <column name="subject_domain_id" type="${uuidType}"/>
+        </addColumn>
+        <addColumn tableName="modeling_model_spec_revision">
+            <column name="business_process_id" type="${uuidType}"/>
+            <column name="subject_domain_id" type="${uuidType}"/>
+        </addColumn>
+
+        <addForeignKeyConstraint
+            baseTableName="modeling_model_spec"
+            baseColumnNames="business_process_id"
+            constraintName="fk_model_spec_business_process"
+            referencedTableName="sprint64_business_process"
+            referencedColumnNames="id"
+            onDelete="RESTRICT"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_model_spec_revision"
+            baseColumnNames="business_process_id"
+            constraintName="fk_model_spec_revision_business_process"
+            referencedTableName="sprint64_business_process"
+            referencedColumnNames="id"
+            onDelete="RESTRICT"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_model_spec"
+            baseColumnNames="tenant_id, subject_domain_id"
+            constraintName="fk_model_spec_subject_domain"
+            referencedTableName="modeling_subject_domain"
+            referencedColumnNames="tenant_id, id"
+            onDelete="RESTRICT"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_model_spec_revision"
+            baseColumnNames="tenant_id, subject_domain_id"
+            constraintName="fk_model_spec_revision_subject_domain"
+            referencedTableName="modeling_subject_domain"
+            referencedColumnNames="tenant_id, id"
+            onDelete="RESTRICT"/>
+
+        <createTable tableName="modeling_model_context_migration_issue">
+            <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="model_spec_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="revision" type="int"/>
+            <column name="issue_code" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="legacy_value" type="text"/>
+            <column name="candidate_refs" type="jsonb" defaultValueComputed="'[]'::jsonb"><constraints nullable="false"/></column>
+            <column name="resolution_status" type="varchar(16)" defaultValue="PENDING"><constraints nullable="false"/></column>
+            <column name="resolved_reference_id" type="${uuidType}"/>
+            <column name="resolution_note" type="text"/>
+            <column name="created_date" type="timestamptz" defaultValueComputed="CURRENT_TIMESTAMP"><constraints nullable="false"/></column>
+            <column name="last_modified_date" type="timestamptz" defaultValueComputed="CURRENT_TIMESTAMP"><constraints nullable="false"/></column>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="modeling_model_context_migration_issue"
+            baseColumnNames="tenant_id, model_spec_id"
+            constraintName="fk_model_context_issue_spec"
+            referencedTableName="modeling_model_spec"
+            referencedColumnNames="tenant_id, id"
+            onDelete="RESTRICT"/>
+
+        <createTable tableName="modeling_model_context_migration_batch">
+            <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="preview_hash" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(16)"><constraints nullable="false"/></column>
+            <column name="previewed_count" type="int"><constraints nullable="false"/></column>
+            <column name="applied_count" type="int" defaultValueNumeric="0"><constraints nullable="false"/></column>
+            <column name="created_by" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="correlation_id" type="varchar(128)"/>
+            <column name="created_date" type="timestamptz"><constraints nullable="false"/></column>
+            <column name="applied_date" type="timestamptz"/>
+            <column name="rolled_back_date" type="timestamptz"/>
+        </createTable>
+
+        <createTable tableName="modeling_model_context_migration_evidence">
+            <column name="batch_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="model_spec_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="revision_scope" type="int"><constraints nullable="false"/></column>
+            <column name="previous_business_process_id" type="${uuidType}"/>
+            <column name="previous_subject_domain_id" type="${uuidType}"/>
+            <column name="proposed_business_process_id" type="${uuidType}"/>
+            <column name="proposed_subject_domain_id" type="${uuidType}"/>
+            <column name="item_checksum" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="created_date" type="timestamptz"><constraints nullable="false"/></column>
+        </createTable>
+        <addPrimaryKey
+            tableName="modeling_model_context_migration_evidence"
+            columnNames="batch_id,tenant_id,model_spec_id,revision_scope"
+            constraintName="pk_model_context_migration_evidence"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_model_context_migration_evidence"
+            baseColumnNames="batch_id"
+            constraintName="fk_model_context_evidence_batch"
+            referencedTableName="modeling_model_context_migration_batch"
+            referencedColumnNames="id"
+            onDelete="CASCADE"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_model_context_migration_evidence"
+            baseColumnNames="tenant_id,model_spec_id"
+            constraintName="fk_model_context_evidence_spec"
+            referencedTableName="modeling_model_spec"
+            referencedColumnNames="tenant_id,id"
+            onDelete="RESTRICT"/>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE modeling_model_spec
+                ADD CONSTRAINT ck_model_spec_stable_business_context
+                CHECK (
+                    (business_process_id IS NULL OR model_type = 'FACT')
+                    AND (subject_domain_id IS NULL OR (model_type = 'APPLICATION' AND data_mart_id IS NOT NULL))
+                );
+            ALTER TABLE modeling_model_context_migration_issue
+                ADD CONSTRAINT ck_model_context_issue_status
+                CHECK (resolution_status IN ('PENDING', 'RESOLVED', 'IGNORED'));
+            ALTER TABLE modeling_model_context_migration_issue
+                ADD CONSTRAINT ck_model_context_issue_revision
+                CHECK (revision IS NULL OR revision >= 1);
+            CREATE INDEX idx_model_spec_business_process
+                ON modeling_model_spec (business_process_id, status)
+                WHERE business_process_id IS NOT NULL;
+            CREATE INDEX idx_model_spec_subject_domain
+                ON modeling_model_spec (tenant_id, subject_domain_id, status)
+                WHERE subject_domain_id IS NOT NULL;
+            CREATE INDEX idx_model_spec_revision_business_context
+                ON modeling_model_spec_revision (tenant_id, business_process_id, subject_domain_id, revision DESC)
+                WHERE business_process_id IS NOT NULL OR subject_domain_id IS NOT NULL;
+            CREATE UNIQUE INDEX uk_model_context_migration_issue
+                ON modeling_model_context_migration_issue (
+                    tenant_id,
+                    model_spec_id,
+                    coalesce(revision, 0),
+                    issue_code
+                );
+            CREATE INDEX idx_model_context_issue_pending
+                ON modeling_model_context_migration_issue (tenant_id, resolution_status, created_date, id);
+            ALTER TABLE modeling_model_context_migration_batch
+                ADD CONSTRAINT ck_model_context_migration_batch_status CHECK (
+                    status IN ('APPLIED', 'ROLLED_BACK')
+                    AND previewed_count >= 0
+                    AND applied_count >= 0
+                    AND applied_count <= previewed_count
+                );
+            ALTER TABLE modeling_model_context_migration_evidence
+                ADD CONSTRAINT ck_model_context_evidence_scope CHECK (revision_scope >= 0);
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="true" endDelimiter=";"><![CDATA[
+                DROP TABLE IF EXISTS modeling_model_context_migration_issue;
+                DROP TABLE IF EXISTS modeling_model_context_migration_evidence;
+                DROP TABLE IF EXISTS modeling_model_context_migration_batch;
+                ALTER TABLE modeling_model_spec_revision DROP CONSTRAINT IF EXISTS fk_model_spec_revision_subject_domain;
+                ALTER TABLE modeling_model_spec DROP CONSTRAINT IF EXISTS fk_model_spec_subject_domain;
+                ALTER TABLE modeling_model_spec_revision DROP CONSTRAINT IF EXISTS fk_model_spec_revision_business_process;
+                ALTER TABLE modeling_model_spec DROP CONSTRAINT IF EXISTS fk_model_spec_business_process;
+                ALTER TABLE modeling_model_spec DROP CONSTRAINT IF EXISTS ck_model_spec_stable_business_context;
+                DROP INDEX IF EXISTS idx_model_spec_revision_business_context;
+                DROP INDEX IF EXISTS idx_model_spec_subject_domain;
+                DROP INDEX IF EXISTS idx_model_spec_business_process;
+                ALTER TABLE modeling_model_spec_revision DROP COLUMN IF EXISTS subject_domain_id;
+                ALTER TABLE modeling_model_spec_revision DROP COLUMN IF EXISTS business_process_id;
+                ALTER TABLE modeling_model_spec DROP COLUMN IF EXISTS subject_domain_id;
+                ALTER TABLE modeling_model_spec DROP COLUMN IF EXISTS business_process_id;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

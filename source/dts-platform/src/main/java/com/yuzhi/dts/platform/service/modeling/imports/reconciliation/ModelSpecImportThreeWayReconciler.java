@@ -41,6 +41,8 @@ public class ModelSpecImportThreeWayReconciler {
         "dimensionProfile",
         "dimensionDefinitionRef",
         "dataMartId",
+        "businessProcessId",
+        "subjectDomainId",
         "variantCode",
         "implementationPolicy",
         "governanceBindings"

@@ -136,9 +136,15 @@ public class ModelPackageCanonicalProjector {
             null,
             null,
             dimensionDefinitionRef,
-            idempotencyKey(request)
+            idempotencyKey(request),
+            request.dataMartId(),
+            null,
+            null,
+            null,
+            request.businessProcessId(),
+            request.subjectDomainId()
         );
-        ModelSpecContract.validateCreate(modelCommand)
+        ModelSpecContract.validateDeliverableCreate(modelCommand)
             .forEach(issue -> issues.add(new CanonicalIssue(issue.code(), issue.field(), issue.message())));
 
         SaveImplementationCommand implementationCommand = implementation(request, modelCommand, dependencies, issues);
@@ -430,12 +436,43 @@ public class ModelPackageCanonicalProjector {
         List<SourceTarget> sources,
         List<DependencyTarget> dependencies,
         DimensionDefinitionRef dimensionDefinitionRef,
-        List<StandardBinding> standardBindings
+        List<StandardBinding> standardBindings,
+        UUID businessProcessId,
+        UUID dataMartId,
+        UUID subjectDomainId
     ) {
         public ProjectRequest {
             sources = sources == null ? List.of() : List.copyOf(sources);
             dependencies = dependencies == null ? List.of() : List.copyOf(dependencies);
             standardBindings = standardBindings == null ? List.of() : List.copyOf(standardBindings);
+        }
+
+        /** Compatibility constructor for callers created before stable business-context overrides. */
+        public ProjectRequest(
+            UUID planId,
+            UUID domainId,
+            String projectKey,
+            PackageModel model,
+            boolean externalDbtOwned,
+            List<SourceTarget> sources,
+            List<DependencyTarget> dependencies,
+            DimensionDefinitionRef dimensionDefinitionRef,
+            List<StandardBinding> standardBindings
+        ) {
+            this(
+                planId,
+                domainId,
+                projectKey,
+                model,
+                externalDbtOwned,
+                sources,
+                dependencies,
+                dimensionDefinitionRef,
+                standardBindings,
+                null,
+                null,
+                null
+            );
         }
 
         /** Compatibility constructor for canonical callers without target-environment semantic overrides. */
@@ -458,7 +495,10 @@ public class ModelPackageCanonicalProjector {
                 sources,
                 dependencies,
                 dimensionDefinitionRef,
-                List.of()
+                List.of(),
+                null,
+                null,
+                null
             );
         }
     }

@@ -68,7 +68,13 @@ export async function loadIndicatorCatalog(): Promise<IndicatorDefinition[]> {
 	return result;
 }
 
-export function classifyIndicator(row: Pick<IndicatorDefinition, "category" | "isDerived">): MetricType {
+export function classifyIndicator(row: Pick<IndicatorDefinition, "metricType" | "category" | "isDerived">): MetricType {
+	const metricType = String(row.metricType || "")
+		.trim()
+		.toUpperCase();
+	if (metricType === "COMPOSITE") return "复合指标";
+	if (metricType === "DERIVED") return "派生指标";
+	if (metricType === "ATOMIC") return "原子指标";
 	const category = String(row.category || "")
 		.trim()
 		.toUpperCase();
@@ -84,12 +90,13 @@ export function metricSelection(row: IndicatorDefinition): MetricSelection {
 
 export function filterIndicators(
 	rows: IndicatorDefinition[],
-	options: { type: MetricType; domain: string; query: string },
+	options: { type: MetricType; domain: string; businessCategoryId?: string; query: string },
 ) {
 	const query = options.query.trim().toLocaleLowerCase();
 	return rows.filter((row) => {
 		if (classifyIndicator(row) !== options.type) return false;
-		if (options.domain && String(row.domain || "") !== options.domain) return false;
+		if (options.businessCategoryId && String(row.businessCategoryId || "") !== options.businessCategoryId) return false;
+		if (options.domain && String(row.dataDomainId || row.domain || "") !== options.domain) return false;
 		if (!query) return true;
 		return [row.code, row.name, row.definition, row.owner].some((value) =>
 			String(value || "")
@@ -99,7 +106,8 @@ export function filterIndicators(
 	});
 }
 
-export const supportsIndicatorCreation = (type: MetricType) => type === "原子指标";
+export const supportsIndicatorCreation = (type: MetricType) =>
+	type === "原子指标" || type === "派生指标" || type === "复合指标";
 
 export function createIndicatorDraft(type: MetricType, domain = ""): MetricSelection {
 	const isDerived = type === "派生指标" || type === "复合指标";
@@ -110,6 +118,7 @@ export function createIndicatorDraft(type: MetricType, domain = ""): MetricSelec
 		name: "",
 		domain,
 		category,
+		metricType: type === "复合指标" ? "COMPOSITE" : type === "派生指标" ? "DERIVED" : "ATOMIC",
 		status: "DRAFT",
 		version: "v1",
 		isDerived,

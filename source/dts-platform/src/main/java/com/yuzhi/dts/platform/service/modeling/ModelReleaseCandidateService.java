@@ -184,6 +184,39 @@ public class ModelReleaseCandidateService {
         );
     }
 
+    /**
+     * Persists a server-expanded dependency closure while retaining the user root request as the
+     * idempotency identity. A replay therefore returns the original candidate even if the live DAG
+     * has changed since the first response.
+     */
+    @Transactional
+    public CommandResult createBatchWithExpandedScope(
+        String tenantId,
+        String actorId,
+        CreateCandidateCommand rootCommand,
+        List<ScopeEntryCommand> expandedEntries
+    ) {
+        if (rootCommand == null) throw invalid("create command is required");
+        if (rootCommand.entries().size() > ModelReleaseCandidateContract.MAX_ROOT_ENTRIES) {
+            throw invalid("batch root scope exceeds maximum");
+        }
+        CreateCandidateCommand expanded = new CreateCandidateCommand(
+            rootCommand.planId(),
+            rootCommand.environment(),
+            expandedEntries,
+            rootCommand.idempotencyKey(),
+            rootCommand.reason()
+        );
+        return createWithOrigin(
+            tenantId,
+            actorId,
+            expanded,
+            CandidateOrigin.BATCH_WORKBENCH,
+            AUDIT_CREATE,
+            hash(rootCommand)
+        );
+    }
+
     @Transactional
     public CommandResult createSingleModelIntent(
         String tenantId,
@@ -206,13 +239,26 @@ public class ModelReleaseCandidateService {
         CandidateOrigin origin,
         String auditActionCode
     ) {
+        return createWithOrigin(tenantId, actorId, command, origin, auditActionCode, null);
+    }
+
+    private CommandResult createWithOrigin(
+        String tenantId,
+        String actorId,
+        CreateCandidateCommand command,
+        CandidateOrigin origin,
+        String auditActionCode,
+        String requestHashOverride
+    ) {
         String tenant = requiredText(tenantId, "tenantId");
         String actor = requiredText(actorId, "actorId");
         if (command == null) throw invalid("create command is required");
         if (origin == null) throw invalid("candidate origin is required");
-        String requestHash = origin == CandidateOrigin.BATCH_WORKBENCH
-            ? hash(command)
-            : hash(Map.of("command", command, "origin", origin.name()));
+        String requestHash = requestHashOverride != null
+            ? requestHashOverride
+            : origin == CandidateOrigin.BATCH_WORKBENCH
+                ? hash(command)
+                : hash(Map.of("command", command, "origin", origin.name()));
         CommandResult eventReplay = replayCommand(tenant, null, command.idempotencyKey(), requestHash, actor);
         if (eventReplay != null) return requireOrigin(eventReplay, origin, command.idempotencyKey());
 

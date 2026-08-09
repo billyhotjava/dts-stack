@@ -1,0 +1,91 @@
+// @vitest-environment jsdom
+
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MetricEditor } from "./MetricsPage";
+
+let container: HTMLDivElement;
+let root: Root;
+
+beforeEach(() => {
+	(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+	container = document.createElement("div");
+	document.body.appendChild(container);
+	root = createRoot(container);
+});
+
+afterEach(async () => {
+	await act(async () => root.unmount());
+	container.remove();
+});
+
+describe("MetricEditor stable business context", () => {
+	it("writes the business-process row UUID and exposes version-pinned source references", async () => {
+		const onChange = vi.fn();
+		await act(async () =>
+			root.render(
+				<MetricEditor
+					businessCategories={[
+						{
+							id: "category-1",
+							code: "finance",
+							name: "财务",
+							owner: "",
+							description: "",
+							parentId: null,
+							parentCode: null,
+						},
+					]}
+					codeLocked={false}
+					dataDomains={[
+						{
+							id: "domain-1",
+							code: "budget",
+							name: "预算域",
+							owner: "",
+							description: "",
+							parentId: "category-1",
+							parentCode: "finance",
+						},
+					]}
+					onChange={onChange}
+					processes={[
+						{
+							id: "process-row-1",
+							version: 1,
+							processId: "budget_execution",
+							domainId: "domain-1",
+							name: "预算执行",
+							sourceType: "MANUAL",
+							confirmed: true,
+						},
+					]}
+					values={{
+						code: "BUDGET_AMOUNT",
+						name: "预算金额",
+						metricType: "ATOMIC",
+						businessCategoryId: "category-1",
+						dataDomainId: "domain-1",
+						sourceRefs: [{ sourceType: "SEMANTIC_MODEL_REVISION", sourceId: "model-1", sourceVersion: "r7" }],
+					}}
+				/>,
+			),
+		);
+
+		const processSelect = Array.from(container.querySelectorAll("select")).find((item) =>
+			item.querySelector('option[value="process-row-1"]'),
+		);
+		expect(processSelect).toBeDefined();
+		await act(async () => {
+			const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
+			setter?.call(processSelect, "process-row-1");
+			processSelect?.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+
+		expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ businessProcessId: "process-row-1" }));
+		expect(container.textContent).toContain("语义模型修订");
+		expect(container.querySelector<HTMLInputElement>('input[value="model-1"]')).not.toBeNull();
+		expect(container.querySelector<HTMLInputElement>('input[value="r7"]')).not.toBeNull();
+	});
+});

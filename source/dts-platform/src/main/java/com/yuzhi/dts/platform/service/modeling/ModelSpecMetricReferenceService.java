@@ -162,7 +162,13 @@ public class ModelSpecMetricReferenceService {
             metricRefs,
             view.standardBindings(),
             view.generationStrategy(),
-            view.dimensionProfile()
+            view.dimensionProfile(),
+            view.dataMartId(),
+            view.variantCode(),
+            view.implementationPolicy(),
+            view.warehouseLayerCode(),
+            view.businessProcessId(),
+            view.subjectDomainId()
         );
     }
 

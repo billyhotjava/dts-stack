@@ -15,6 +15,7 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogAssetExtensionRepository
 import com.yuzhi.dts.platform.repository.catalog.CatalogAssetMappingRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.catalog.OpenMetadataAssetCacheRepository;
 import com.yuzhi.dts.platform.repository.catalog.OpenMetadataColumnCacheRepository;
@@ -56,6 +57,8 @@ class CatalogAssetPortalTagFilterTest {
     @Mock
     private CatalogDatasetRepository datasetRepository;
     @Mock
+    private CatalogDomainRepository domainRepository;
+    @Mock
     private CatalogTableSchemaRepository tableSchemaRepository;
     @Mock
     private CatalogColumnSchemaRepository catalogColumnSchemaRepository;
@@ -65,6 +68,8 @@ class CatalogAssetPortalTagFilterTest {
     private CatalogClassificationService classificationService;
     @Mock
     private CatalogAssetTagService assetTagService;
+    @Mock
+    private CatalogAssetRegistrationService assetRegistrationService;
 
     private CatalogAssetPortalService service;
 
@@ -78,11 +83,13 @@ class CatalogAssetPortalTagFilterTest {
                 extensionRepository,
                 mappingRepository,
                 datasetRepository,
+                domainRepository,
                 tableSchemaRepository,
                 catalogColumnSchemaRepository,
                 accessChecker,
                 classificationService,
-                assetTagService
+                assetTagService,
+                assetRegistrationService
             );
     }
 

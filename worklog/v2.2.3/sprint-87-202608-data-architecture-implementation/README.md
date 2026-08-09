@@ -2,7 +2,7 @@
 
 **时间盒**：2026-08-24 ～ 2026-09-04（10 个工作日）
 
-**状态**：BLOCKED（Sprint-86 架构已批准；等待 G0 外部输入）
+**状态**：CODE_COMPLETE / BLOCKED_ACCEPTANCE（本地非 E2E 验证通过；等待 G0 外部输入、部署和真实验收）
 
 **类型**：Implementation / Compatibility Migration / UI Productization
 
@@ -10,7 +10,7 @@
 
 ## 1. 开工边界
 
-本 Sprint 只消费 Sprint-86 已批准 ADR，不重新发明业务语义。当前不得编码，直到 F0/T01 关闭：
+本 Sprint 只消费 Sprint-86 已批准 ADR，不重新发明业务语义。原计划要求 F0/T01 关闭后编码；经用户明确授权，源码实施和本地非 E2E 验证已先行完成，但该授权不替代以下发布与真实验收输入：
 
 - 客户/生产域、资产、SOURCE/DIM、指标、批量和增长画像；
 - GitNexus 索引成功刷新及逐符号 impact；
@@ -50,21 +50,21 @@
 | G0 | DTS 不变量 | PASS（设计） | Sprint-86 ADR；A3/A4/B1/D1/D4 | - |
 | G1 | 契约链 | PASS（架构设计） | Sprint-86 IT-03/04 与关系契约已批准；运行契约测试仍由各实施 Task 执行 | - |
 | G1 | NFR | PASS（设计预算） | Sprint-86 `assets/nfr-budget.md` 已批准；运行 fitness functions 仍由各实施 Task 执行 | - |
-| G2 | 影响分析 | BLOCKED | GitNexus 索引待刷新 | F0/T01 |
+| G2 | 影响分析 | PARTIAL_PASS | 逐符号 impact 已执行；detect_changes=LOW；新增文件/前端索引假阴性仍由测试与构建兜底 | F0/T01 |
 | G3 | 发布安全 | PASS（方案） | Sprint-86 `assets/implementation-roadmap.md` 已批准；发布演练仍由 F6/T01 执行 | F6/T01 |
-| G4 | 可运维/真实验收 | PENDING | `it/` | F6/T01 |
+| G4 | 可运维/真实验收 | BLOCKED_E2E_DEPLOYMENT | 本地集中验证通过；未部署、未执行真实菜单 E2E | F6/T01 |
 
 ## 5. Feature 列表
 
 | ID | Feature | Task 数 | 优先级 | 状态 |
 |---|---|---:|---|---|
 | F0 | 交付基线与生产画像 | 1 | P0 | BLOCKED_INPUT |
-| F1 | 架构字典控制边界 | 1 | P0 | BLOCKED |
-| F2 | 模型关系与批量物化 | 1 | P0 | BLOCKED |
-| F3 | 资产语义与统计投影 | 1 | P0 | BLOCKED |
-| F4 | 指标上下文迁移 | 1 | P0 | BLOCKED（HIGH risk） |
-| F5 | 信息架构与路由收敛 | 1 | P1 | BLOCKED |
-| F6 | 集中验证与发布观测 | 1 | P0 | BLOCKED |
+| F1 | 架构字典控制边界 | 1 | P0 | CODE_COMPLETE / LOCAL_VERIFIED_NON_E2E |
+| F2 | 模型关系与批量物化 | 1 | P0 | CODE_COMPLETE / LOCAL_VERIFIED_NON_E2E |
+| F3 | 资产语义与统计投影 | 1 | P0 | CODE_COMPLETE / LOCAL_VERIFIED_NON_E2E |
+| F4 | 指标上下文迁移 | 1 | P0 | CODE_COMPLETE / LOCAL_VERIFIED_NON_E2E |
+| F5 | 信息架构与路由收敛 | 1 | P1 | CODE_COMPLETE / LOCAL_VERIFIED_NON_E2E |
+| F6 | 集中验证与发布观测 | 1 | P0 | PARTIAL_LOCAL_VERIFY_PASS |
 
 **实施顺序**：F0 → F1 → F2/F3 → F4 → F5 → F6。F2/F3 只在共享身份契约与 migration baseline 就绪后并行；F4 独立发布；E2E 在编码完成后集中一次执行。
 
@@ -95,3 +95,7 @@
 - 不实现多租户产品 UI 或伪 tenant 隔离。
 - 不把所有页面统一为 Table；层级架构对象仍保留树/分组。
 - 不在首轮切换中删旧表、旧列或旧路由。
+
+## 9. 当前实施证据
+
+源码、测试、构建、影响检查和未执行边界见 `assets/implementation-evidence-20260810.md`。当前判定只到 `CODE_COMPLETE / LOCAL_VERIFIED_NON_E2E`，不等同于部署或真实交付。

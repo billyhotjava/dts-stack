@@ -191,6 +191,55 @@
       ]
     },
     {
+      "key": "data-architecture",
+      "path": "data-architecture",
+      "icon": "solar:structure-bold-duotone",
+      "titleKey": "sys.nav.portal.dataArchitecture",
+      "title": "数据架构",
+      "children": [
+        {
+          "key": "architecture-business-domains",
+          "path": "business-domains",
+          "icon": "solar:globus-bold-duotone",
+          "titleKey": "sys.nav.portal.architectureBusinessDomains",
+          "title": "业务分类与数据域",
+          "externalLink": "/data-architecture?view=business-domains"
+        },
+        {
+          "key": "architecture-processes",
+          "path": "processes",
+          "icon": "solar:diagram-up-bold-duotone",
+          "titleKey": "sys.nav.portal.architectureProcesses",
+          "title": "业务过程",
+          "externalLink": "/data-architecture?view=processes"
+        },
+        {
+          "key": "architecture-layers",
+          "path": "layers",
+          "icon": "solar:layers-bold-duotone",
+          "titleKey": "sys.nav.portal.architectureLayers",
+          "title": "数仓分层",
+          "externalLink": "/data-architecture?view=layers"
+        },
+        {
+          "key": "architecture-marts",
+          "path": "marts",
+          "icon": "solar:database-bold-duotone",
+          "titleKey": "sys.nav.portal.architectureMarts",
+          "title": "数据集市",
+          "externalLink": "/data-architecture?view=marts"
+        },
+        {
+          "key": "architecture-subjects",
+          "path": "subjects",
+          "icon": "solar:folder-with-files-bold-duotone",
+          "titleKey": "sys.nav.portal.architectureSubjects",
+          "title": "主题域",
+          "externalLink": "/data-architecture?view=subjects"
+        }
+      ]
+    },
+    {
       "key": "modeling",
       "path": "modeling",
       "icon": "solar:layers-minimalistic-bold-duotone",
@@ -212,72 +261,6 @@
           "titleKey": "sys.nav.portal.warehousePlanning",
           "title": "数仓规划",
           "children": [
-            {
-              "key": "planning-business-categories",
-              "path": "business-categories",
-              "icon": "solar:widget-4-bold-duotone",
-              "titleKey": "sys.nav.portal.planningBusinessCategories",
-              "title": "业务分类",
-              "externalLink": "/data-modeling/planning/business-categories"
-            },
-            {
-              "key": "planning-layers",
-              "path": "layers",
-              "icon": "solar:layers-bold-duotone",
-              "titleKey": "sys.nav.portal.planningLayers",
-              "title": "数仓分层",
-              "externalLink": "/data-modeling/planning/layers"
-            },
-            {
-              "key": "planning-public",
-              "path": "public",
-              "icon": "solar:database-bold-duotone",
-              "titleKey": "sys.nav.portal.planningPublicLayer",
-              "title": "公共层",
-              "children": [
-                {
-                  "key": "planning-domains",
-                  "path": "domains",
-                  "icon": "solar:globus-bold-duotone",
-                  "titleKey": "sys.nav.portal.planningDomains",
-                  "title": "数据域",
-                  "externalLink": "/data-modeling/planning/domains"
-                },
-                {
-                  "key": "planning-processes",
-                  "path": "processes",
-                  "icon": "solar:diagram-up-bold-duotone",
-                  "titleKey": "sys.nav.portal.planningProcesses",
-                  "title": "业务过程",
-                  "externalLink": "/data-modeling/planning/processes"
-                }
-              ]
-            },
-            {
-              "key": "planning-application",
-              "path": "application",
-              "icon": "solar:box-bold-duotone",
-              "titleKey": "sys.nav.portal.planningApplicationLayer",
-              "title": "应用层",
-              "children": [
-                {
-                  "key": "planning-marts",
-                  "path": "marts",
-                  "icon": "solar:database-bold-duotone",
-                  "titleKey": "sys.nav.portal.planningMarts",
-                  "title": "数据集市",
-                  "externalLink": "/data-modeling/planning/marts"
-                },
-                {
-                  "key": "planning-subjects",
-                  "path": "subjects",
-                  "icon": "solar:folder-with-files-bold-duotone",
-                  "titleKey": "sys.nav.portal.planningSubjects",
-                  "title": "主题域",
-                  "externalLink": "/data-modeling/planning/subjects"
-                }
-              ]
-            },
             {
               "key": "planning-system",
               "path": "system",

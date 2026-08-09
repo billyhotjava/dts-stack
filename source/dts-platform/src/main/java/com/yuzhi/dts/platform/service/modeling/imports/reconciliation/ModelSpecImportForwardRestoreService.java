@@ -323,7 +323,9 @@ public class ModelSpecImportForwardRestoreService {
             view.dataMartId(),
             view.variantCode(),
             view.implementationPolicy(),
-        view.warehouseLayerCode()
+            view.warehouseLayerCode(),
+            view.businessProcessId(),
+            view.subjectDomainId()
         );
     }
 

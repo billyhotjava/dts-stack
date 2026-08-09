@@ -18,7 +18,13 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.ArchitectureDictionaryWriteGuard;
-import com.yuzhi.dts.platform.service.catalog.CatalogAssetPortalService;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetRegistrationService;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticStore.StatsBucket;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticStore.StatsSnapshot;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetStatsProjectionView;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetType;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.Freshness;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.GovernanceReadiness;
 import com.yuzhi.dts.platform.service.catalog.CatalogDomainCommandService;
 import com.yuzhi.dts.platform.service.catalog.CatalogDomainVisibilityService;
 import java.util.List;
@@ -26,6 +32,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageImpl;
@@ -39,7 +46,7 @@ class CatalogDomainResourceFactsTest {
     private final CatalogDatasetRepository datasetRepository = mock(CatalogDatasetRepository.class);
     private final AuditService auditService = mock(AuditService.class);
     private final CatalogDomainVisibilityService visibilityService = mock(CatalogDomainVisibilityService.class);
-    private final CatalogAssetPortalService assetPortalService = mock(CatalogAssetPortalService.class);
+    private final CatalogAssetRegistrationService assetRegistrationService = mock(CatalogAssetRegistrationService.class);
     private final CatalogResourceHelper helper = mock(CatalogResourceHelper.class);
     private final ArchitectureDictionaryWriteGuard writeGuard = mock(ArchitectureDictionaryWriteGuard.class);
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
@@ -57,7 +64,7 @@ class CatalogDomainResourceFactsTest {
             datasetRepository,
             auditService,
             visibilityService,
-            assetPortalService,
+            assetRegistrationService,
             helper,
             commandService
         );
@@ -86,6 +93,36 @@ class CatalogDomainResourceFactsTest {
             .contains("\"code\":\"project_management\"")
             .contains("\"lifecycleStatus\":\"ACTIVE\"")
             .contains("\"accessPolicy\":\"PUBLIC\"");
+    }
+
+    @Test
+    void treeStatsReadTheBoundedProjectionAndExposeFreshnessEvidence() {
+        UUID domainId = UUID.randomUUID();
+        CatalogDomain domain = domain(domainId, ACTIVE, PUBLIC);
+        domain.setName("项目域");
+        when(visibilityService.findAllVisible()).thenReturn(List.of(domain));
+        Instant asOf = Instant.parse("2026-08-10T08:00:00Z");
+        when(assetRegistrationService.stats(null))
+            .thenReturn(
+                new StatsSnapshot(
+                    List.of(new StatsBucket(domainId, "DWD", CatalogAssetType.DATASET, GovernanceReadiness.GOVERNED, 4)),
+                    4,
+                    asOf,
+                    Freshness.FRESH,
+                    false,
+                    "FRESH"
+                )
+            );
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> payload = (Map<String, Object>) resource.getDomainTree(true, null).getData();
+        CatalogAssetStatsProjectionView stats = (CatalogAssetStatsProjectionView) payload.get("stats");
+
+        assertThat(stats.all().total()).isEqualTo(4);
+        assertThat(stats.byDomain().get(domainId.toString()).total()).isEqualTo(4);
+        assertThat(stats.freshness()).isEqualTo(Freshness.FRESH);
+        assertThat(stats.approximate()).isFalse();
+        verify(assetRegistrationService).stats(null);
     }
 
     @Test

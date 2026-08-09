@@ -93,12 +93,45 @@ test("published indicators move to the next draft version without clearing untou
 	} = original;
 	assert.deepEqual(payload, {
 		...upsertFields,
+		businessCategoryId: null,
+		dataDomainId: null,
+		businessProcessId: null,
+		metricType: null,
+		metricGroupCode: null,
+		sourceRefs: null,
 		name: "成交金额（含税）",
 		definition: "含税成交金额",
 		status: "DRAFT",
 		version: "v4",
 		dependencyIndicators: null,
 	});
+});
+
+test("stable business context and version-pinned source references survive upsert projection", () => {
+	const sourceRefs = [{ sourceType: "SEMANTIC_MODEL_REVISION" as const, sourceId: "model-1", sourceVersion: "r7" }];
+	const payload = buildIndicatorUpsertPayload(
+		{
+			code: "BUDGET_AMOUNT",
+			name: "预算金额",
+			status: "DRAFT",
+			version: "v1",
+			businessCategoryId: "category-1",
+			dataDomainId: "domain-1",
+			businessProcessId: "process-row-1",
+			metricType: "ATOMIC",
+			metricGroupCode: "finance.budget",
+			sourceRefs,
+		},
+		{},
+		["v1"],
+	);
+
+	assert.equal(payload.businessCategoryId, "category-1");
+	assert.equal(payload.dataDomainId, "domain-1");
+	assert.equal(payload.businessProcessId, "process-row-1");
+	assert.equal(payload.metricType, "ATOMIC");
+	assert.equal(payload.metricGroupCode, "finance.budget");
+	assert.deepEqual(payload.sourceRefs, sourceRefs);
 });
 
 test("draft updates keep their version and derived dependencies use stable codes", () => {

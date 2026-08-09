@@ -1,10 +1,25 @@
 export type IndicatorStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED" | "DEPRECATED" | string;
 
+export type IndicatorMetricType = "ATOMIC" | "DERIVED" | "COMPOSITE" | string;
+export type IndicatorSourceType = "SEMANTIC_MODEL_REVISION" | "PHYSICAL_ASSET" | "INDICATOR_VERSION";
+
+export type IndicatorMetricSourceRef = {
+	sourceType: IndicatorSourceType;
+	sourceId: string;
+	sourceVersion: string;
+};
+
 export type IndicatorDefinition = {
 	id?: string;
 	code?: string | null;
 	name?: string | null;
 	category?: string | null;
+	businessCategoryId?: string | null;
+	dataDomainId?: string | null;
+	businessProcessId?: string | null;
+	metricType?: IndicatorMetricType | null;
+	metricGroupCode?: string | null;
+	sourceRefs?: IndicatorMetricSourceRef[] | null;
 	definition?: string | null;
 	expressionSql?: string | null;
 	datasetId?: string | null;
@@ -92,6 +107,12 @@ const UPSERT_FIELDS = [
 	"code",
 	"name",
 	"category",
+	"businessCategoryId",
+	"dataDomainId",
+	"businessProcessId",
+	"metricType",
+	"metricGroupCode",
+	"sourceRefs",
 	"definition",
 	"expressionSql",
 	"datasetId",
@@ -274,6 +295,23 @@ export function validateIndicatorDefinition(values: IndicatorEditValues): string
 	const name = String(values.name ?? "").trim();
 	if (!code) issues.push("指标编码不能为空");
 	if (!name) issues.push("指标名称不能为空");
+	const metricType = String(values.metricType ?? "")
+		.trim()
+		.toUpperCase();
+	if (metricType) {
+		if (!["ATOMIC", "DERIVED", "COMPOSITE"].includes(metricType)) issues.push("指标类型无效");
+		const groupCode = String(values.metricGroupCode ?? "").trim();
+		if (groupCode && !/^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(groupCode)) {
+			issues.push("指标分组编码必须是稳定 ASCII 编码");
+		}
+		for (const ref of values.sourceRefs ?? []) {
+			if (!ref?.sourceType || !String(ref.sourceId || "").trim() || !String(ref.sourceVersion || "").trim()) {
+				issues.push("指标来源必须包含类型、稳定 ID 和固定版本");
+				break;
+			}
+		}
+		return issues;
+	}
 
 	if (values.isDerived) {
 		const dependencies = cleanCodes(values.dependencyCodes ?? []);

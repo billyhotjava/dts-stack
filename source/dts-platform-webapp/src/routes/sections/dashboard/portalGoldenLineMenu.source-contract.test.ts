@@ -74,7 +74,7 @@ const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\
 test("data modeling is a top-level section and studio no longer owns modeling menus", () => {
 	assert.deepEqual(
 		MENU_SEED.portalNavSections.map((item) => item.key),
-		["workbench", "resource", "studio", "modeling", "governance", "consumption"],
+		["workbench", "resource", "studio", "data-architecture", "modeling", "governance", "consumption"],
 	);
 	assert.deepEqual(
 		section("studio").children?.map((item) => item.key),
@@ -114,31 +114,17 @@ test("data modeling is a top-level section and studio no longer owns modeling me
 	);
 });
 
-test("prototype hierarchy exposes the overview, six groups, and exactly 26 canonical leaves", () => {
+test("modeling keeps one planning-parameter leaf after architecture dictionaries move to their owner", () => {
 	const modeling = section("modeling");
 
 	const planning = child(modeling, "warehouse-planning");
 	assert.deepEqual(
 		planning.children?.map((item) => item.key),
-		[
-			"planning-business-categories",
-			"planning-layers",
-			"planning-public",
-			"planning-application",
-			"planning-system",
-		],
+		["planning-system"],
 	);
 	assert.equal(
 		planning.children?.some((item) => item.key === "planning-spaces"),
 		false,
-	);
-	assert.deepEqual(
-		child(planning, "planning-public").children?.map((item) => item.key),
-		["planning-domains", "planning-processes"],
-	);
-	assert.deepEqual(
-		child(planning, "planning-application").children?.map((item) => item.key),
-		["planning-marts", "planning-subjects"],
 	);
 	assert.equal(child(planning, "planning-system").title, "规划参数配置");
 	assert.deepEqual(
@@ -163,8 +149,8 @@ test("prototype hierarchy exposes the overview, six groups, and exactly 26 canon
 	);
 
 	const modelingLeaves = leaves(modeling);
-	assert.equal(modelingLeaves.length, 26);
-	assert.equal(new Set(modelingLeaves.map((item) => item.externalLink)).size, 26);
+	assert.equal(modelingLeaves.length, 20);
+	assert.equal(new Set(modelingLeaves.map((item) => item.externalLink)).size, 20);
 	for (const leaf of modelingLeaves) {
 		assert.match(leaf.externalLink || "", /^\/data-modeling\//);
 	}
@@ -178,7 +164,36 @@ test("prototype hierarchy exposes the overview, six groups, and exactly 26 canon
 	);
 });
 
-test("role defaults mirror all 26 modeling leaves without broadening roles", () => {
+test("data architecture is the only visible owner for five global dictionary views", () => {
+	const architecture = section("data-architecture");
+	assert.equal(architecture.title, "数据架构");
+	assert.deepEqual(
+		leaves(architecture).map((item) => item.externalLink),
+		[
+			"/data-architecture?view=business-domains",
+			"/data-architecture?view=processes",
+			"/data-architecture?view=layers",
+			"/data-architecture?view=marts",
+			"/data-architecture?view=subjects",
+		],
+	);
+	assert.doesNotMatch(
+		JSON.stringify(section("modeling")),
+		/planning-(?:business-categories|domains|processes|layers|marts|subjects)/,
+	);
+	for (const leaf of leaves(architecture)) {
+		assert.ok(leaf.titleKey);
+		const localeKey = leaf.titleKey?.replace("sys.nav.portal.", "") || "";
+		assert.ok(ZH_PORTAL_LOCALE[localeKey]);
+		assert.ok(EN_PORTAL_LOCALE[localeKey]);
+		assert.deepEqual(
+			ROLE_DEFAULT_ENTRIES.find((entry) => entry.code === leaf.titleKey),
+			{ code: leaf.titleKey, title: leaf.title, route: leaf.externalLink, requiredRoles: [] },
+		);
+	}
+});
+
+test("role defaults mirror visible modeling leaves and retain old planning routes only as compatibility grants", () => {
 	const modelingLeaves = leaves(section("modeling"));
 	const modelingRoleDefaults = ROLE_DEFAULT_ENTRIES.filter((entry) => entry.route.startsWith("/data-modeling/"));
 	assert.equal(modelingRoleDefaults.length, 26);
@@ -193,7 +208,23 @@ test("role defaults mirror all 26 modeling leaves without broadening roles", () 
 			requiredRoles: [],
 		});
 	}
-	assert.equal(defaultsByCode.size, modelingLeaves.length);
+	assert.equal(defaultsByCode.size, 26);
+	assert.deepEqual(
+		modelingRoleDefaults
+			.filter(
+				(entry) => entry.code.startsWith("sys.nav.portal.planning") && entry.code !== "sys.nav.portal.planningSystem",
+			)
+			.map((entry) => entry.route)
+			.sort(),
+		[
+			"/data-modeling/planning/business-categories",
+			"/data-modeling/planning/domains",
+			"/data-modeling/planning/layers",
+			"/data-modeling/planning/marts",
+			"/data-modeling/planning/processes",
+			"/data-modeling/planning/subjects",
+		],
+	);
 	assert.equal(
 		ROLE_DEFAULT_ENTRIES.some((entry) =>
 			/^\/(?:modeling|studio\/(?:sql-modeling|projects|low-code-development))/.test(entry.route),
@@ -212,6 +243,9 @@ test("every prototype modeling menu title has Chinese and English locale coverag
 });
 
 test("new modeling routes have one page owner and old URLs are compatibility redirects only", () => {
+	assert.match(STATIC_ROUTES, /path: "data-architecture"[\s\S]*?<DataArchitecturePage \/>/);
+	assert.match(DYNAMIC_RESOLVER, /"\/data-architecture": "\/pages\/data-architecture\/DataArchitecturePage"/);
+	assert.match(DYNAMIC_RESOLVER, /"\/governance\/subjects": "\/pages\/data-architecture\/LegacySubjectAreasRedirect"/);
 	assert.match(STATIC_ROUTES, /path: "data-modeling\/\*"[\s\S]*?<DataModelingPage \/>/);
 	assert.match(DYNAMIC_RESOLVER, /normalized === "\/data-modeling"/);
 	assert.match(DYNAMIC_RESOLVER, /normalized\.startsWith\("\/data-modeling\/"\)/);

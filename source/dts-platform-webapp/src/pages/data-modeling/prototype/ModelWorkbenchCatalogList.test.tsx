@@ -9,11 +9,13 @@ import { ModelWorkbenchCatalogList } from "./ModelWorkbenchCatalogList";
 
 const apiMocks = vi.hoisted(() => ({
 	getMaterializationStatuses: vi.fn(),
+	listWorkbenchCatalogPage: vi.fn(),
 }));
 
 vi.mock("@/api/modelSpecApi", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@/api/modelSpecApi")>()),
 	getModelMaterializationStatuses: apiMocks.getMaterializationStatuses,
+	listModelWorkbenchCatalogPage: apiMocks.listWorkbenchCatalogPage,
 }));
 
 let container: HTMLDivElement;
@@ -53,6 +55,50 @@ beforeEach(() => {
 	root = createRoot(container);
 	apiMocks.getMaterializationStatuses.mockReset();
 	apiMocks.getMaterializationStatuses.mockResolvedValue([]);
+	apiMocks.listWorkbenchCatalogPage.mockReset();
+	const content = [
+		{
+			kind: "DIMENSION_DEFINITION",
+			id: currentDimension.id,
+			name: currentDimension.name,
+			code: currentDimension.systemCode,
+			planId: null,
+			domainId: currentDimension.domainId,
+			objectType: "DIMENSION_DEFINITION",
+			layer: null,
+			status: currentDimension.status,
+			revision: currentDimension.revision,
+		},
+		...[draftModel, publishedModel].map((model) => ({
+			kind: "MODEL_SPEC" as const,
+			id: model.id,
+			name: model.name,
+			code: model.implementationPolicy?.physicalName || "—",
+			planId: model.planId,
+			domainId: model.domainId,
+			objectType: model.modelType,
+			layer: model.layer,
+			status: model.status,
+			revision: model.revision,
+		})),
+	];
+	apiMocks.listWorkbenchCatalogPage.mockImplementation(
+		async (params: { query?: string; page: number; size: number }) => {
+			const query = params.query?.toLowerCase();
+			const filtered = query
+				? content.filter((entry) =>
+						[entry.name, entry.code, entry.objectType, entry.status].join(" ").toLowerCase().includes(query),
+					)
+				: content;
+			return {
+				content: filtered,
+				totalElements: filtered.length,
+				page: params.page,
+				size: params.size,
+				totalPages: filtered.length ? Math.ceil(filtered.length / params.size) : 0,
+			};
+		},
+	);
 });
 
 afterEach(async () => {
@@ -147,10 +193,81 @@ describe("ModelWorkbenchCatalogList", () => {
 		await act(async () => dateSelection?.click());
 		await act(async () => orderSelection?.click());
 		const materialize = Array.from(container.querySelectorAll("button")).find((item) =>
-			item.textContent?.includes("物化所选（2）"),
+			item.textContent?.includes("生成物化候选（2）"),
 		);
 		await act(async () => materialize?.click());
 
 		expect(onMaterialize).toHaveBeenCalledWith([draftModel, publishedModel]);
+	});
+
+	it("requests a server page and preserves model selection while paging", async () => {
+		const models = Array.from({ length: 11 }, (_, index) => ({
+			...draftModel,
+			id: `model-${index + 1}`,
+			name: `模型 ${index + 1}`,
+		})) as ModelSpecView[];
+		const entry = (model: ModelSpecView) => ({
+			kind: "MODEL_SPEC" as const,
+			id: model.id,
+			name: model.name,
+			code: "—",
+			planId: model.planId,
+			domainId: model.domainId,
+			objectType: model.modelType,
+			layer: model.layer,
+			status: model.status,
+			revision: model.revision,
+		});
+		apiMocks.listWorkbenchCatalogPage
+			.mockResolvedValueOnce({
+				content: models.slice(0, 10).map(entry),
+				totalElements: 11,
+				page: 0,
+				size: 10,
+				totalPages: 2,
+			})
+			.mockResolvedValueOnce({
+				content: [entry(models[10])],
+				totalElements: 11,
+				page: 1,
+				size: 10,
+				totalPages: 2,
+			});
+		const onMaterialize = vi.fn();
+
+		await act(async () =>
+			root.render(
+				<ModelWorkbenchCatalogList
+					canMaintain
+					dimensions={[]}
+					domains={[{ id: "domain-1", code: "finance", name: "财务域" }] as never}
+					models={models}
+					onBack={vi.fn()}
+					onChooseDimension={vi.fn()}
+					onChooseModel={vi.fn()}
+					onMaterialize={onMaterialize}
+				/>,
+			),
+		);
+		await act(async () => Promise.resolve());
+
+		const selectPage = Array.from(container.querySelectorAll("button")).find(
+			(button) => button.textContent === "选择当前页",
+		);
+		await act(async () => selectPage?.click());
+		expect(container.textContent).toContain("已选 10 个模型");
+		const next = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "下一页");
+		await act(async () => next?.click());
+		await act(async () => Promise.resolve());
+
+		expect(apiMocks.listWorkbenchCatalogPage).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, size: 10 }));
+		const last = container.querySelector<HTMLInputElement>('input[aria-label="选择 模型 11"]');
+		await act(async () => last?.click());
+		const materialize = Array.from(container.querySelectorAll("button")).find((button) =>
+			button.textContent?.includes("生成物化候选（11）"),
+		);
+		await act(async () => materialize?.click());
+
+		expect(onMaterialize).toHaveBeenCalledWith(models);
 	});
 });

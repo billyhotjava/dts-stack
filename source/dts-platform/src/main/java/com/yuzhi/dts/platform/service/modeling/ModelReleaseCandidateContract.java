@@ -590,6 +590,32 @@ public final class ModelReleaseCandidateContract {
         }
     }
 
+    /** One immutable dispatch attempt together with every per-model result and observation. */
+    public record MaterializationAttemptView(
+        UUID candidateId,
+        int candidateVersion,
+        UUID pipelineRunGroupId,
+        int attempt,
+        String dispatchStatus,
+        String errorCode,
+        Instant createdAt,
+        Instant updatedAt,
+        List<EntryEvidenceView> entries
+    ) {
+        public MaterializationAttemptView {
+            candidateId = requiredUuid(candidateId, "candidateId");
+            pipelineRunGroupId = requiredUuid(pipelineRunGroupId, "pipelineRunGroupId");
+            if (candidateVersion < 1) throw new IllegalArgumentException("candidateVersion must be positive");
+            if (attempt < 1) throw new IllegalArgumentException("attempt must be positive");
+            dispatchStatus = requiredText(dispatchStatus, "dispatchStatus", 32);
+            errorCode = optionalText(errorCode);
+            if (createdAt == null || updatedAt == null) {
+                throw new IllegalArgumentException("createdAt and updatedAt are required");
+            }
+            entries = entries == null ? List.of() : List.copyOf(entries);
+        }
+    }
+
     public record BlockerView(String code, String message) {
         public BlockerView {
             code = requiredText(code, "code");

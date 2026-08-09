@@ -266,7 +266,7 @@ public class ModelSpecApplicationService {
         rejectIssues(
             previewedModelSpecId == null
                 ? ModelSpecContract.validateInteractiveCreate(command)
-                : ModelSpecContract.validateCreate(command)
+                : ModelSpecContract.validateDeliverableCreate(command)
         );
         command = resolveWarehouseLayerSelection(command);
         String requestHash = codec.requestHash(command);
@@ -286,6 +286,14 @@ public class ModelSpecApplicationService {
         requireCanonicalWriteEnabled();
         validateWriteContext(serverTenantId, actorId, command.planId(), command.domainId());
         validateDataMartContext(serverTenantId, command.planId(), command.domainId(), command.dataMartId());
+        validateBusinessContext(
+            serverTenantId,
+            command.modelType(),
+            command.domainId(),
+            command.dataMartId(),
+            command.businessProcessId(),
+            command.subjectDomainId()
+        );
         validateSources(serverTenantId, actorId, command.planId(), command.sourceRefs());
         validateDimensionDefinition(
             serverTenantId,
@@ -419,13 +427,21 @@ public class ModelSpecApplicationService {
         command = resolveWarehouseLayerSelection(command);
         ModelSpecView replacement = codec.toUpdatedView(current, command, current.revision() + 1, clock.instant());
         requireDimensionDefinitionRef(replacement);
-        rejectIssues(ModelSpecContract.validateView(replacement));
+        rejectIssues(ModelSpecContract.validateEditableView(replacement));
         requireUniqueDimensionVariant(serverTenantId, replacement, current.id());
         validateDataMartContext(
             serverTenantId,
             replacement.planId(),
             replacement.domainId(),
             replacement.dataMartId()
+        );
+        validateBusinessContext(
+            serverTenantId,
+            replacement.modelType(),
+            replacement.domainId(),
+            replacement.dataMartId(),
+            replacement.businessProcessId(),
+            replacement.subjectDomainId()
         );
         validateSources(serverTenantId, actorId, command.planId(), command.sourceRefs());
         validateDimensionDefinition(
@@ -726,7 +742,9 @@ public class ModelSpecApplicationService {
             current.dataMartId(),
             command.targetType() == ModelType.DIMENSION ? current.variantCode() : null,
             null,
-            null
+            null,
+            command.targetType() == ModelType.FACT ? current.businessProcessId() : null,
+            command.targetType() == ModelType.APPLICATION ? current.subjectDomainId() : null
         );
     }
 
@@ -1153,6 +1171,43 @@ public class ModelSpecApplicationService {
                 "Select a confirmed data mart from the current warehouse planning baseline",
                 ModelSpecException.Kind.UNPROCESSABLE,
                 Map.of("planId", planId, "domainId", domainId, "dataMartId", dataMartId)
+            );
+        }
+    }
+
+    private void validateBusinessContext(
+        String tenantId,
+        ModelType modelType,
+        UUID domainId,
+        UUID dataMartId,
+        UUID businessProcessId,
+        UUID subjectDomainId
+    ) {
+        if (
+            modelType == ModelType.FACT &&
+            businessProcessId != null &&
+            !repository.hasConfirmedBusinessProcess(businessProcessId, domainId)
+        ) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_BUSINESS_PROCESS_CONTEXT_INVALID",
+                "Select a confirmed business process from the model data domain",
+                ModelSpecException.Kind.UNPROCESSABLE,
+                Map.of("domainId", domainId, "businessProcessId", businessProcessId)
+            );
+        }
+        if (
+            modelType == ModelType.APPLICATION &&
+            subjectDomainId != null &&
+            (dataMartId == null || !repository.hasCurrentSubjectDomain(tenantId, subjectDomainId, dataMartId))
+        ) {
+            Map<String, Object> context = new LinkedHashMap<>();
+            context.put("subjectDomainId", subjectDomainId);
+            if (dataMartId != null) context.put("dataMartId", dataMartId);
+            throw new ModelSpecException(
+                "MODEL_SPEC_SUBJECT_DOMAIN_CONTEXT_INVALID",
+                "Select a current subject domain from the model data mart",
+                ModelSpecException.Kind.UNPROCESSABLE,
+                Map.copyOf(context)
             );
         }
     }

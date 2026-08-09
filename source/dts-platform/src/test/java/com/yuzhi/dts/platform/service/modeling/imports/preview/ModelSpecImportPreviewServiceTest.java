@@ -34,6 +34,7 @@ import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPr
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewContract.PreviewRequest;
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewContract.PreviewSummary;
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewContract.RunStatus;
+import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewContract.SemanticOverride;
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewRepository.DomainBindingSnapshot;
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewRepository.ModelOwnershipSnapshot;
 import com.yuzhi.dts.platform.service.modeling.imports.preview.ModelSpecImportPreviewRepository.PersistedItem;
@@ -74,6 +75,9 @@ class ModelSpecImportPreviewServiceTest {
     private static final UUID PLAN_ID = UUID.fromString("10000000-0000-0000-0000-000000000070");
     private static final UUID DOMAIN_ID = UUID.fromString("20000000-0000-0000-0000-000000000070");
     private static final UUID BINDING_ID = UUID.fromString("30000000-0000-0000-0000-000000000070");
+    private static final UUID BUSINESS_PROCESS_ID = UUID.fromString("31000000-0000-0000-0000-000000000070");
+    private static final UUID DATA_MART_ID = UUID.fromString("32000000-0000-0000-0000-000000000070");
+    private static final UUID SUBJECT_DOMAIN_ID = UUID.fromString("33000000-0000-0000-0000-000000000070");
     private static final String DIMENSION_CODE = "dim_70000000000000000000000000000070";
     private static final Instant NOW = Instant.parse("2026-07-25T08:00:00Z");
 
@@ -292,11 +296,14 @@ class ModelSpecImportPreviewServiceTest {
         stubCurrentContext("source-v1");
         var request = new PreviewRequest(
             objectMapper.valueToTree(packageForPreview()),
+            null,
             new PreviewContext(
                 PLAN_ID,
                 Map.of("PROJECT_MANAGEMENT", DOMAIN_ID.toString()),
                 Map.of("source.pjm.budget", BINDING_ID.toString())
             ),
+            List.of(),
+            stableBusinessContexts(packageForPreview()),
             List.of()
         );
 
@@ -544,9 +551,37 @@ class ModelSpecImportPreviewServiceTest {
     private PreviewRequest request(ModelPackage modelPackage) {
         return new PreviewRequest(
             objectMapper.valueToTree(modelPackage),
+            null,
             new PreviewContext(PLAN_ID, Map.of(), Map.of()),
+            List.of(),
+            stableBusinessContexts(modelPackage),
             List.of()
         );
+    }
+
+    private static List<SemanticOverride> stableBusinessContexts(ModelPackage modelPackage) {
+        return modelPackage
+            .models()
+            .stream()
+            .map(model -> {
+                String type = model.semantics() == null ? null : model.semantics().modelType();
+                return new SemanticOverride(
+                    model.dbtUniqueId(),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    "FACT".equals(type) ? BUSINESS_PROCESS_ID : null,
+                    "APPLICATION".equals(type) ? DATA_MART_ID : null,
+                    "APPLICATION".equals(type) ? SUBJECT_DOMAIN_ID : null
+                );
+            })
+            .toList();
     }
 
     private static PlanSnapshot plan() {

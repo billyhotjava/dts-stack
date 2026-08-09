@@ -634,6 +634,20 @@
 	overflow: hidden;
 }
 
+.dmx-model-workbench--editor-only {
+	grid-template-columns: minmax(650px, 1fr) 52px;
+}
+
+.dmx-model-workbench--editor-only .dmx-editor-tab .dmx-table-action {
+	min-height: 28px;
+	padding: 3px 9px;
+	border: 1px solid var(--dmx-border);
+	border-radius: 3px;
+	background: #fff;
+	color: var(--dmx-blue);
+	cursor: pointer;
+}
+
 .dmx-object-panel {
 	position: relative;
 	display: flex;
@@ -1659,6 +1673,35 @@
 	background: #fff5df;
 	color: var(--dmx-warning);
 }
+.dmx-source-refs {
+	display: grid;
+	gap: 8px;
+}
+.dmx-source-ref-row {
+	display: grid;
+	grid-template-columns: minmax(150px, 0.8fr) minmax(180px, 1fr) minmax(150px, 0.8fr) 36px;
+	gap: 8px;
+}
+.dmx-source-ref-row > button,
+.dmx-source-ref-add {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 5px;
+	min-height: 35px;
+	border: 1px solid #ccd4df;
+	border-radius: 3px;
+	background: #fff;
+	color: #586476;
+	cursor: pointer;
+}
+.dmx-source-ref-row > button {
+	color: #c23a42;
+}
+.dmx-source-ref-add {
+	width: max-content;
+	padding: 0 12px;
+}
 .dmx-radio {
 	display: flex !important;
 	gap: 18px !important;
@@ -1883,7 +1926,9 @@
 	animation: dmx-spin 0.8s linear infinite;
 }
 @keyframes dmx-spin {
-	to { transform: rotate(360deg); }
+	to {
+		transform: rotate(360deg);
+	}
 }
 
 .dmx-inline-error,
@@ -2108,7 +2153,10 @@
 	outline: 0;
 	background: #101722;
 	color: #d8e2f2;
-	font: 12px/1.65 "SFMono-Regular", Consolas, monospace;
+	font:
+		12px / 1.65 "SFMono-Regular",
+		Consolas,
+		monospace;
 	tab-size: 2;
 }
 .dmx-dbt-editor > footer {
@@ -2183,6 +2231,9 @@
 	}
 	.dmx-model-workbench {
 		grid-template-columns: 270px minmax(620px, 1fr) 48px;
+	}
+	.dmx-model-workbench--editor-only {
+		grid-template-columns: minmax(560px, 1fr);
 	}
 	.dmx-metric-workbench {
 		grid-template-columns: 320px minmax(620px, 1fr);
@@ -2379,9 +2430,30 @@
 	margin-top: 10px;
 }
 
+.dmx-planning-sidebar__note {
+	margin: 12px 10px 4px;
+	color: #7b8494;
+	font-size: 12px;
+	line-height: 1.6;
+}
+
 .dmx-planning-content {
 	flex: 1 1 auto;
 	min-width: 0;
+}
+
+.dmx-pagination {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 10px;
+	padding: 12px 0;
+	color: var(--dmx-muted);
+	font-size: 12px;
+}
+
+.dmx-table tr.selected td {
+	background: #f2f6ff;
 }
 
 /* ---- 数仓规划：右侧抽屉编辑 ---- */

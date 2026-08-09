@@ -78,6 +78,12 @@ class ModelSpecResourceTest {
     @MockBean
     private AuditLoggingFilter auditLoggingFilter;
 
+    @MockBean
+    private com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftRejectionAudit dbtImplementationDraftRejectionAudit;
+
+    @MockBean
+    private com.yuzhi.dts.platform.service.audit.AuditService auditService;
+
     @Test
     void postsGetsAndPutsUsingServerTenantAndStrongEtags() throws Exception {
         ModelSpecView view = view();
@@ -213,19 +219,23 @@ class ModelSpecResourceTest {
                 List.of(
                     new ModelSpecApplicationService.DependencyNode(
                         MODEL_ID,
+                        PLAN_ID,
                         2,
                         2,
                         "customer_summary",
                         ModelType.SUMMARY,
+                        Layer.DWS,
                         ModelStatus.DRAFT,
                         false
                     ),
                     new ModelSpecApplicationService.DependencyNode(
                         upstreamId,
+                        PLAN_ID,
                         3,
                         4,
                         "customer_detail",
                         ModelType.FACT,
+                        Layer.DWD,
                         ModelStatus.PUBLISHED,
                         false
                     )

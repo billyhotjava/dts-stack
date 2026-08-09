@@ -12,11 +12,13 @@ import static org.mockito.Mockito.when;
 import com.yuzhi.dts.platform.domain.catalog.CatalogAssetExtension;
 import com.yuzhi.dts.platform.domain.catalog.CatalogClassificationSnapshot;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
+import com.yuzhi.dts.platform.domain.catalog.CatalogDomain;
 import com.yuzhi.dts.platform.domain.catalog.OpenMetadataAssetCache;
 import com.yuzhi.dts.platform.repository.catalog.CatalogAssetExtensionRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogAssetMappingRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.catalog.OpenMetadataAssetCacheRepository;
 import com.yuzhi.dts.platform.repository.catalog.OpenMetadataColumnCacheRepository;
@@ -61,6 +63,8 @@ class CatalogAssetPortalServicePermissionParityTest {
     @Mock
     private CatalogDatasetRepository datasetRepository;
     @Mock
+    private CatalogDomainRepository domainRepository;
+    @Mock
     private CatalogTableSchemaRepository tableSchemaRepository;
     @Mock
     private CatalogColumnSchemaRepository catalogColumnSchemaRepository;
@@ -70,6 +74,8 @@ class CatalogAssetPortalServicePermissionParityTest {
     private CatalogClassificationService classificationService;
     @Mock
     private CatalogAssetTagService assetTagService;
+    @Mock
+    private CatalogAssetRegistrationService assetRegistrationService;
 
     private CatalogAssetPortalService service;
 
@@ -83,11 +89,13 @@ class CatalogAssetPortalServicePermissionParityTest {
                 extensionRepository,
                 mappingRepository,
                 datasetRepository,
+                domainRepository,
                 tableSchemaRepository,
                 catalogColumnSchemaRepository,
                 accessChecker,
                 classificationService,
-                assetTagService
+                assetTagService,
+                assetRegistrationService
             );
     }
 
@@ -571,6 +579,42 @@ class CatalogAssetPortalServicePermissionParityTest {
         assertThat(legacy.getClassification()).isEqualTo("INTERNAL");
         assertThat(detail.asset().classification()).isEqualTo("INTERNAL");
         assertThat(detail.columns()).isEmpty();
+    }
+
+    @Test
+    void governanceMaintainerCanAssignALegacyAssetToAnExistingDomainAndRefreshTheProjection() {
+        authenticate(AuthoritiesConstants.DEPT_DATA_OWNER, "D01");
+        UUID datasetId = UUID.fromString("37373737-3737-3737-3737-373737373737");
+        UUID domainId = UUID.fromString("38383838-3838-3838-3838-383838383838");
+        CatalogDataset legacy = new CatalogDataset();
+        legacy.setId(datasetId);
+        legacy.setName("Legacy customers");
+        legacy.setEnabled(Boolean.TRUE);
+        legacy.setOwnerDept("D01");
+        CatalogDomain domain = new CatalogDomain();
+        domain.setId(domainId);
+        domain.setName("客户域");
+        when(datasetRepository.findById(datasetId)).thenReturn(Optional.of(legacy));
+        when(domainRepository.findById(domainId)).thenReturn(Optional.of(domain));
+        when(accessChecker.departmentAllowedExact(any(CatalogDataset.class), eq("D01"))).thenReturn(true);
+        when(datasetRepository.save(legacy)).thenReturn(legacy);
+        when(assetTagService.listAssetTags(any())).thenReturn(Map.of());
+
+        CatalogAssetPortalService.AssetDetail detail = service.updateGovernance(
+            datasetId,
+            new CatalogAssetPortalService.GovernanceUpdate(domainId, null, null, null, null, null, null, null),
+            "D01"
+        );
+
+        assertThat(legacy.getDomain()).isSameAs(domain);
+        assertThat(detail.asset().domainId()).isEqualTo(domainId);
+        verify(assetRegistrationService)
+            .updateGovernance(
+                CatalogAssetType.DATASET,
+                CatalogAssetKey.dataset(legacy),
+                domainId,
+                CatalogAssetSemanticsContract.GovernanceReadiness.INCOMPLETE
+            );
     }
 
     @Test

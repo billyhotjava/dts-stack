@@ -21,6 +21,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -202,13 +203,30 @@ public class ModelMaterializationBuildRepository
         CandidateView candidate,
         Instant now
     ) {
+        return createSubsequentQueuedBuild(candidate, now, Set.of("FAILED"), "retry");
+    }
+
+    @Transactional
+    public QueuedBuildGroup createRematerializationQueuedBuild(
+        CandidateView candidate,
+        Instant now
+    ) {
+        return createSubsequentQueuedBuild(candidate, now, Set.of("COMPLETED"), "rematerialization");
+    }
+
+    private QueuedBuildGroup createSubsequentQueuedBuild(
+        CandidateView candidate,
+        Instant now,
+        Set<String> acceptedPreviousStatuses,
+        String operation
+    ) {
         requireBuildingCandidate(candidate, now);
         RetryDispatch previous = lockLatestRetryDispatch(candidate);
         if (
-            !"FAILED".equals(previous.status()) ||
+            !acceptedPreviousStatuses.contains(previous.status()) ||
             previous.candidateVersion() >= candidate.version()
         ) {
-            throw retryReconciliationRequired(candidate, previous.status());
+            throw subsequentAttemptNotReady(candidate, previous.status(), operation);
         }
         List<RetryEntryRow> entries = lockRetryEntries(
             candidate,
@@ -218,9 +236,10 @@ public class ModelMaterializationBuildRepository
             entries.size() != candidate.entries().size() ||
             entries.isEmpty()
         ) {
-            throw retryReconciliationRequired(
+            throw subsequentAttemptNotReady(
                 candidate,
-                "INCOMPLETE_TERMINAL_SCOPE"
+                "INCOMPLETE_TERMINAL_SCOPE",
+                operation
             );
         }
         requireRetrySnapshotCurrent(candidate, previous, entries);
@@ -690,7 +709,10 @@ public class ModelMaterializationBuildRepository
                and e.artifact_bundle_checksum is not null
                and e.dependency_snapshot_checksum is not null
                and e.active_claim_key is not null
-               and pr.status in ('FAILED', 'BUILT')
+               and pr.status in (
+                    'FAILED', 'BUILT', 'DBT_SUCCEEDED',
+                    'SKIPPED_DEPENDENCY_FAILED'
+               )
              order by e.sort_order, e.id
              for update of e, pr
             """,
@@ -960,6 +982,20 @@ public class ModelMaterializationBuildRepository
                 "previousStatus",
                 status
             )
+        );
+    }
+
+    private static ModelReleaseCandidateException subsequentAttemptNotReady(
+        CandidateView candidate,
+        String status,
+        String operation
+    ) {
+        if ("retry".equals(operation)) return retryReconciliationRequired(candidate, status);
+        return failure(
+            "MODEL_REMATERIALIZATION_PREVIOUS_ATTEMPT_NOT_COMPLETED",
+            "The previous materialization attempt must complete before rematerialization",
+            Kind.CONFLICT,
+            Map.of("candidateId", candidate.id(), "previousStatus", status)
         );
     }
 
@@ -1339,17 +1375,33 @@ public class ModelMaterializationBuildRepository
                 select exists (
                     select 1
                       from modeling_model_spec s
-                     where s.tenant_id = ? and s.id = ? and s.plan_id = ?
-                       and s.revision = ? and s.current_checksum = ?
-                       and s.status = 'PUBLISHED' and s.contract_version = 2
+                      join modeling_model_spec_revision revision
+                        on revision.model_spec_id = s.id
+                       and revision.revision = ?
+                       and revision.content_checksum = ?
+                     where s.tenant_id = ? and s.id = ?
+                       and s.contract_version = 2
+                       and exists (
+                           select 1
+                             from modeling_model_lifecycle_event event
+                            where event.tenant_id = s.tenant_id
+                              and event.model_spec_id = s.id
+                              and event.model_revision = revision.revision
+                              and event.model_checksum = revision.content_checksum
+                              and event.event_type = 'RELEASE'
+                              and event.status = 'PUBLISHED'
+                              and event.details_json ->> 'executionTargetKey' = ?
+                              and upper(event.details_json ->> 'environment') = upper(?)
+                       )
                 )
                 """,
                 Boolean.class,
+                revision,
+                checksum,
                 candidate.tenantId(),
                 upstreamId,
-                candidate.planId(),
-                revision,
-                checksum
+                candidate.executionTargetKey(),
+                candidate.environment()
             );
             if (!Boolean.TRUE.equals(published)) {
                 throw failure(

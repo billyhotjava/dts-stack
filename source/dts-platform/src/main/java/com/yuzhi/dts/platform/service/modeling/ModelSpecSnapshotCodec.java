@@ -150,7 +150,9 @@ public class ModelSpecSnapshotCodec {
             view.dataMartId(),
             view.variantCode(),
             view.implementationPolicy(),
-            view.warehouseLayerCode()
+            view.warehouseLayerCode(),
+            view.businessProcessId(),
+            view.subjectDomainId()
         );
     }
 
@@ -182,7 +184,9 @@ public class ModelSpecSnapshotCodec {
             command.dataMartId(),
             command.variantCode(),
             command.implementationPolicy(),
-            command.warehouseLayerCode()
+            command.warehouseLayerCode(),
+            command.businessProcessId(),
+            command.subjectDomainId()
         );
     }
 
@@ -226,7 +230,9 @@ public class ModelSpecSnapshotCodec {
             command.dataMartId() == null ? current.dataMartId() : command.dataMartId(),
             command.variantCode() == null ? current.variantCode() : command.variantCode(),
             command.implementationPolicy() == null ? current.implementationPolicy() : command.implementationPolicy(),
-            command.warehouseLayerCode() == null ? current.warehouseLayerCode() : command.warehouseLayerCode()
+            command.warehouseLayerCode() == null ? current.warehouseLayerCode() : command.warehouseLayerCode(),
+            command.businessProcessId() == null ? current.businessProcessId() : command.businessProcessId(),
+            command.subjectDomainId() == null ? current.subjectDomainId() : command.subjectDomainId()
         );
         return asCreate(effectiveCommand, current.dimensionDefinitionRef());
     }
@@ -312,7 +318,9 @@ public class ModelSpecSnapshotCodec {
             command.dataMartId(),
             command.variantCode(),
             command.implementationPolicy(),
-            command.warehouseLayerCode()
+            command.warehouseLayerCode(),
+            command.businessProcessId(),
+            command.subjectDomainId()
         );
     }
 
@@ -344,7 +352,9 @@ public class ModelSpecSnapshotCodec {
                 command.dataMartId(),
                 command.variantCode(),
                 command.implementationPolicy(),
-                command.warehouseLayerCode()
+                command.warehouseLayerCode(),
+                command.businessProcessId(),
+                command.subjectDomainId()
             );
         }
         return new ModelContent(
@@ -401,7 +411,9 @@ public class ModelSpecSnapshotCodec {
                 view.dataMartId(),
                 view.variantCode(),
                 view.implementationPolicy(),
-                view.warehouseLayerCode()
+                view.warehouseLayerCode(),
+                view.businessProcessId(),
+                view.subjectDomainId()
             );
         }
         return new ModelContent(
@@ -489,6 +501,8 @@ public class ModelSpecSnapshotCodec {
             command.dataMartId() != null ||
             command.variantCode() != null ||
             command.implementationPolicy() != null ||
+            command.businessProcessId() != null ||
+            command.subjectDomainId() != null ||
             command.fields().stream().anyMatch(ModelSpecSnapshotCodec::hasExtendedMetadata)
         );
     }
@@ -498,6 +512,8 @@ public class ModelSpecSnapshotCodec {
             view.dataMartId() != null ||
             view.variantCode() != null ||
             view.implementationPolicy() != null ||
+            view.businessProcessId() != null ||
+            view.subjectDomainId() != null ||
             view.fields().stream().anyMatch(ModelSpecSnapshotCodec::hasExtendedMetadata)
         );
     }
@@ -592,7 +608,9 @@ public class ModelSpecSnapshotCodec {
         @JsonInclude(JsonInclude.Include.NON_NULL) UUID dataMartId,
         String variantCode,
         @JsonInclude(JsonInclude.Include.NON_NULL) ModelSpecContract.ImplementationPolicy implementationPolicy,
-        String warehouseLayerCode
+        String warehouseLayerCode,
+        @JsonInclude(JsonInclude.Include.NON_NULL) UUID businessProcessId,
+        @JsonInclude(JsonInclude.Include.NON_NULL) UUID subjectDomainId
     ) {}
 
     private record HistoricalExtendedModelField(

@@ -2,6 +2,7 @@ package com.yuzhi.dts.platform.repository.modeling;
 
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CandidateView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.EntryEvidenceView;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.MaterializationAttemptView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.ModelMaterializationStatusView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.RelationEvidenceState;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract;
@@ -13,7 +14,9 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -241,6 +244,104 @@ public class ReleaseCandidateWorkbenchEvidenceRepository
         );
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<MaterializationAttemptView> findHistory(CandidateView candidate) {
+        if (candidate == null) {
+            throw new IllegalArgumentException("candidate is required");
+        }
+        List<AttemptEvidenceRow> rows = jdbcTemplate.query(
+            """
+            select e.id as candidate_entry_id,
+                   e.model_spec_id, e.revision as model_revision,
+                   e.implementation_revision, e.target_identifier,
+                   coalesce(
+                       nullif(btrim(r.snapshot_json ->> 'name'), ''),
+                       nullif(btrim(r.snapshot_json ->> 'code'), ''),
+                       e.model_spec_id::text
+                   ) as model_name,
+                   d.id as pipeline_run_group_id,
+                   d.candidate_version, d.attempt,
+                   d.status as dispatch_status, d.last_error_code,
+                   d.created_at as dispatch_created_at,
+                   d.last_modified_at as dispatch_updated_at,
+                   d.airflow_dag_id, d.airflow_run_id,
+                   pr.dbt_invocation_id, pr.status as run_status,
+                   pr.started_date, pr.finished_date,
+                   observation.verified,
+                   observation.relation_exists,
+                   observation.database_name,
+                   observation.schema_name,
+                   observation.identifier,
+                   observation.observed_at,
+                   observation.error_code as observation_error_code
+              from modeling_materialization_dispatch d
+              join modeling_model_release_candidate_entry e
+                on e.tenant_id = d.tenant_id
+               and e.candidate_id = d.candidate_id
+              left join modeling_model_spec_revision r
+                on r.model_spec_id = e.model_spec_id
+               and r.revision = e.revision
+              left join modeling_pipeline_run pr
+                on pr.tenant_id = e.tenant_id
+               and pr.release_candidate_id = e.candidate_id
+               and pr.release_candidate_entry_id = e.id
+               and pr.pipeline_run_group_id = d.id
+               and pr.run_purpose = 'RELEASE_BUILD'
+              left join lateral (
+                    select observed.verified, observed.relation_exists,
+                           observed.database_name, observed.schema_name,
+                           observed.identifier, observed.observed_at,
+                           observed.error_code
+                      from modeling_physical_relation_observation observed
+                     where observed.pipeline_run_id = pr.id
+                     order by observed.observation_attempt desc,
+                              observed.created_date desc,
+                              observed.id desc
+                     limit 1
+              ) observation on true
+             where d.tenant_id = ?
+               and d.candidate_id = ?
+             order by d.attempt desc, e.sort_order, e.id
+            """,
+            (row, rowNumber) ->
+                new AttemptEvidenceRow(
+                    row.getObject("pipeline_run_group_id", UUID.class),
+                    row.getInt("candidate_version"),
+                    row.getInt("attempt"),
+                    row.getString("dispatch_status"),
+                    row.getString("last_error_code"),
+                    row.getTimestamp("dispatch_created_at").toInstant(),
+                    row.getTimestamp("dispatch_updated_at").toInstant(),
+                    mapEvidence(row, rowNumber)
+                ),
+            candidate.tenantId(),
+            candidate.id()
+        );
+        Map<UUID, List<AttemptEvidenceRow>> byAttempt = new LinkedHashMap<>();
+        for (AttemptEvidenceRow row : rows) {
+            byAttempt.computeIfAbsent(row.groupId(), ignored -> new ArrayList<>()).add(row);
+        }
+        List<MaterializationAttemptView> history = new ArrayList<>(byAttempt.size());
+        for (List<AttemptEvidenceRow> attemptRows : byAttempt.values()) {
+            AttemptEvidenceRow first = attemptRows.getFirst();
+            history.add(
+                new MaterializationAttemptView(
+                    candidate.id(),
+                    first.candidateVersion(),
+                    first.groupId(),
+                    first.attempt(),
+                    first.dispatchStatus(),
+                    first.errorCode(),
+                    first.createdAt(),
+                    first.updatedAt(),
+                    attemptRows.stream().map(AttemptEvidenceRow::evidence).toList()
+                )
+            );
+        }
+        return List.copyOf(history);
+    }
+
     private static EntryEvidenceView mapEvidence(ResultSet row, int rowNumber) throws SQLException {
         String runStatus = row.getString("run_status");
         Boolean verified = row.getObject("verified", Boolean.class);
@@ -350,4 +451,15 @@ public class ReleaseCandidateWorkbenchEvidenceRepository
     private static Instant instant(Timestamp timestamp) {
         return timestamp == null ? null : timestamp.toInstant();
     }
+
+    private record AttemptEvidenceRow(
+        UUID groupId,
+        int candidateVersion,
+        int attempt,
+        String dispatchStatus,
+        String errorCode,
+        Instant createdAt,
+        Instant updatedAt,
+        EntryEvidenceView evidence
+    ) {}
 }

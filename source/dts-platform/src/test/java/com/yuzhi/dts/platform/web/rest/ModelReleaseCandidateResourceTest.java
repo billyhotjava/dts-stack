@@ -29,6 +29,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.Wor
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.WorkbenchView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.WorkspaceAction;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateException;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidatePreflightService.BatchPreflightView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider.WarehousePlanActor;
@@ -545,6 +546,63 @@ class ModelReleaseCandidateResourceTest {
             .andExpect(jsonPath("$.data.length()").value(0));
 
         verify(service).materializationStatuses("server-tenant", "alice", PLAN_ID, List.of(modelId));
+    }
+
+    @Test
+    void materializationAttemptHistoryUsesTheExistingCandidateBoundary() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", null));
+        when(service.materializationHistory("server-tenant", "alice", PLAN_ID, CANDIDATE_ID)).thenReturn(List.of());
+
+        mockMvc
+            .perform(
+                get(
+                    "/api/modeling/plans/{planId}/release-candidates/{candidateId}/materialization-attempts",
+                    PLAN_ID,
+                    CANDIDATE_ID
+                )
+            )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.length()").value(0));
+
+        verify(service).materializationHistory("server-tenant", "alice", PLAN_ID, CANDIDATE_ID);
+    }
+
+    @Test
+    void batchPreflightUsesTheExistingPlanBoundaryAndReturnsAllBlockers() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", null));
+        BatchPreflightView preview = new BatchPreflightView(
+            PLAN_ID,
+            "dev",
+            true,
+            1,
+            1,
+            1,
+            0,
+            List.of(),
+            List.of(),
+            List.of()
+        );
+        when(service.preflight(eq("server-tenant"), eq("alice"), eq(PLAN_ID), any())).thenReturn(preview);
+
+        mockMvc
+            .perform(
+                post("/api/modeling/plans/{planId}/release-candidates/preflight", PLAN_ID)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {
+                          "environment":"dev",
+                          "entries":[{"modelSpecId":"40000000-0000-0000-0000-000000000001","sortOrder":0,"selectedReason":"selected"}],
+                          "reason":"preview batch materialization"
+                        }
+                        """
+                    )
+            )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.eligible").value(true))
+            .andExpect(jsonPath("$.data.rootCount").value(1));
+
+        verify(service).preflight(eq("server-tenant"), eq("alice"), eq(PLAN_ID), any());
     }
 
     @Test

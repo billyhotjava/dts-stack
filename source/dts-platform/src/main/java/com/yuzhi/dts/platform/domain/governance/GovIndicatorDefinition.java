@@ -29,6 +29,24 @@ public class GovIndicatorDefinition extends AbstractAuditingEntity<UUID> impleme
     @Column(name = "category", length = 128)
     private String category;
 
+    @Column(name = "business_category_id", columnDefinition = "uuid")
+    private UUID businessCategoryId;
+
+    @Column(name = "data_domain_id", columnDefinition = "uuid")
+    private UUID dataDomainId;
+
+    @Column(name = "business_process_id", columnDefinition = "uuid")
+    private UUID businessProcessId;
+
+    @Column(name = "metric_type", length = 16)
+    private String metricType;
+
+    @Column(name = "metric_group_code", length = 64)
+    private String metricGroupCode;
+
+    @Column(name = "source_refs", columnDefinition = "jsonb")
+    private String sourceRefs;
+
     @Column(name = "definition")
     private String definition;
 
@@ -213,6 +231,54 @@ public class GovIndicatorDefinition extends AbstractAuditingEntity<UUID> impleme
 
     public void setCategory(String category) {
         this.category = category;
+    }
+
+    public UUID getBusinessCategoryId() {
+        return businessCategoryId;
+    }
+
+    public void setBusinessCategoryId(UUID businessCategoryId) {
+        this.businessCategoryId = businessCategoryId;
+    }
+
+    public UUID getDataDomainId() {
+        return dataDomainId;
+    }
+
+    public void setDataDomainId(UUID dataDomainId) {
+        this.dataDomainId = dataDomainId;
+    }
+
+    public UUID getBusinessProcessId() {
+        return businessProcessId;
+    }
+
+    public void setBusinessProcessId(UUID businessProcessId) {
+        this.businessProcessId = businessProcessId;
+    }
+
+    public String getMetricType() {
+        return metricType;
+    }
+
+    public void setMetricType(String metricType) {
+        this.metricType = metricType;
+    }
+
+    public String getMetricGroupCode() {
+        return metricGroupCode;
+    }
+
+    public void setMetricGroupCode(String metricGroupCode) {
+        this.metricGroupCode = metricGroupCode;
+    }
+
+    public String getSourceRefs() {
+        return sourceRefs;
+    }
+
+    public void setSourceRefs(String sourceRefs) {
+        this.sourceRefs = sourceRefs;
     }
 
     public String getDefinition() {

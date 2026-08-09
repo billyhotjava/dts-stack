@@ -21,6 +21,10 @@ import com.yuzhi.dts.platform.service.catalog.CatalogAssetType;
 import com.yuzhi.dts.platform.service.catalog.CatalogDomainDictionaryReadPort;
 import com.yuzhi.dts.platform.service.catalog.CodeAssetLifecycleMapper;
 import com.yuzhi.dts.platform.service.catalog.CodeAssetGrantWriter;
+import com.yuzhi.dts.platform.service.governance.IndicatorBusinessContextContract.BusinessContext;
+import com.yuzhi.dts.platform.service.governance.IndicatorBusinessContextContract.MetricSourceRef;
+import com.yuzhi.dts.platform.service.governance.IndicatorBusinessContextContract.MetricType;
+import com.yuzhi.dts.platform.service.governance.IndicatorBusinessContextContract.ValidationIssue;
 import com.yuzhi.dts.platform.service.governance.dto.IndicatorDto;
 import com.yuzhi.dts.platform.service.governance.dto.IndicatorValidationResultDto;
 import com.yuzhi.dts.platform.service.governance.dto.IndicatorVersionDto;
@@ -82,6 +86,7 @@ public class IndicatorService {
     private final CatalogDomainDictionaryReadPort catalogDomains;
     private final CodeAssetGrantWriter codeAssetGrantWriter;
     private final IndicatorDerivationValidationService derivationValidationService;
+    private final IndicatorBusinessContextReadPort businessContexts;
 
     public IndicatorService(
         GovIndicatorDefinitionRepository repository,
@@ -95,7 +100,8 @@ public class IndicatorService {
         ObjectMapper objectMapper,
         CatalogDomainDictionaryReadPort catalogDomains,
         CodeAssetGrantWriter codeAssetGrantWriter,
-        IndicatorDerivationValidationService derivationValidationService
+        IndicatorDerivationValidationService derivationValidationService,
+        IndicatorBusinessContextReadPort businessContexts
     ) {
         this.repository = repository;
         this.versionRepository = versionRepository;
@@ -109,18 +115,43 @@ public class IndicatorService {
         this.catalogDomains = catalogDomains;
         this.codeAssetGrantWriter = codeAssetGrantWriter;
         this.derivationValidationService = derivationValidationService;
+        this.businessContexts = businessContexts;
     }
 
     @Transactional(readOnly = true)
     public Page<IndicatorDto> list(String keyword, String status, Pageable pageable, String activeDept) {
-        return list(keyword, status, null, null, null, pageable, activeDept);
+        return list(keyword, status, null, null, null, null, null, null, pageable, activeDept);
     }
 
     @Transactional(readOnly = true)
     public Page<IndicatorDto> list(String keyword, String status, String domain, String category, Boolean derived, Pageable pageable, String activeDept) {
+        return list(keyword, status, domain, category, derived, null, null, null, pageable, activeDept);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<IndicatorDto> list(
+        String keyword,
+        String status,
+        String domain,
+        String category,
+        Boolean derived,
+        UUID businessCategoryId,
+        UUID dataDomainId,
+        String metricType,
+        Pageable pageable,
+        String activeDept
+    ) {
         String trustedActiveDept = resolveTrustedActiveDept(activeDept);
         // Push domain/status/category/derived filtering to the database via Specification
-        Specification<GovIndicatorDefinition> spec = buildSpec(status, domain, category, derived);
+        Specification<GovIndicatorDefinition> spec = buildSpec(
+            status,
+            domain,
+            category,
+            derived,
+            businessCategoryId,
+            dataDomainId,
+            metricType
+        );
         List<GovIndicatorDefinition> dbFiltered = repository.findAll(spec);
 
         // Keyword and security filters remain in-memory (cross-field search + runtime context)
@@ -343,7 +374,15 @@ public class IndicatorService {
         }
     }
 
-    private Specification<GovIndicatorDefinition> buildSpec(String status, String domain, String category, Boolean derived) {
+    private Specification<GovIndicatorDefinition> buildSpec(
+        String status,
+        String domain,
+        String category,
+        Boolean derived,
+        UUID businessCategoryId,
+        UUID dataDomainId,
+        String metricType
+    ) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             if (StringUtils.hasText(status)) {
@@ -357,6 +396,15 @@ public class IndicatorService {
             }
             if (StringUtils.hasText(category)) {
                 predicates.add(cb.equal(cb.lower(root.get("category")), category.trim().toLowerCase(Locale.ROOT)));
+            }
+            if (businessCategoryId != null) {
+                predicates.add(cb.equal(root.get("businessCategoryId"), businessCategoryId));
+            }
+            if (dataDomainId != null) {
+                predicates.add(cb.equal(root.get("dataDomainId"), dataDomainId));
+            }
+            if (StringUtils.hasText(metricType)) {
+                predicates.add(cb.equal(cb.upper(root.get("metricType")), metricType.trim().toUpperCase(Locale.ROOT)));
             }
             if (derived != null) {
                 if (derived) {
@@ -1074,6 +1122,7 @@ public class IndicatorService {
         entity.setCode(snapshot.getCode());
         entity.setName(snapshot.getName());
         entity.setCategory(snapshot.getCategory());
+        IndicatorMapper.applyBusinessContext(entity, snapshot);
         entity.setDefinition(snapshot.getDefinition());
         entity.setExpressionSql(snapshot.getExpressionSql());
         entity.setDatasetId(snapshot.getDatasetId());
@@ -1335,6 +1384,7 @@ public class IndicatorService {
         if (entity == null) {
             throw new IndicatorRequestException("Invalid indicator");
         }
+        ensureBusinessContextDeliverable(entity);
         if (Boolean.TRUE.equals(entity.getIsDerived())) {
             IndicatorDerivationValidationResult result = validateDerivation(entity.getId(), activeDept);
             if (!result.valid()) {
@@ -1652,6 +1702,7 @@ public class IndicatorService {
                 throw new IndicatorRequestException("数据集ID格式错误", ex);
             }
         }
+        validateBusinessContextDraft(entity);
         if (!SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES)) {
             if (StringUtils.hasText(activeDept) && StringUtils.hasText(entity.getOwnerDept())) {
                 if (!isGlobalOrRoot(entity.getOwnerDept()) && !sameDepartment(entity.getOwnerDept(), activeDept)) {
@@ -1671,5 +1722,96 @@ public class IndicatorService {
         } catch (IllegalArgumentException ex) {
             throw new IndicatorRequestException("指标配置不合法：" + safeMessage(ex.getMessage()), ex);
         }
+    }
+
+    private void validateBusinessContextDraft(GovIndicatorDefinition entity) {
+        if (!hasStableBusinessContext(entity)) {
+            return;
+        }
+        BusinessContext context = businessContext(entity);
+        var result = IndicatorBusinessContextContract.validateDraft(context);
+        if (!result.valid()) {
+            throw new IndicatorRequestException(formatBusinessContextIssues(result.issues()));
+        }
+        validateBusinessContextReferences(context);
+    }
+
+    private void ensureBusinessContextDeliverable(GovIndicatorDefinition entity) {
+        BusinessContext target = businessContext(entity);
+        List<BusinessContext> upstream = parseDependencyCodes(entity.getDependencyIndicators())
+            .stream()
+            .map(code -> repository.findFirstByCodeIgnoreCase(code).orElse(null))
+            .filter(Objects::nonNull)
+            .map(this::businessContext)
+            .toList();
+        var result = IndicatorBusinessContextContract.validateDeliverable(target, upstream);
+        if (!result.valid()) {
+            throw new IndicatorConflictException(formatBusinessContextIssues(result.issues()));
+        }
+        validateBusinessContextReferences(target);
+    }
+
+    private void validateBusinessContextReferences(BusinessContext context) {
+        var category = businessContexts.domain(context.businessCategoryId()).orElse(null);
+        if (
+            context.businessCategoryId() != null &&
+            (category == null || category.parentId() != null || !"ACTIVE".equalsIgnoreCase(category.lifecycleStatus()))
+        ) {
+            throw new IndicatorRequestException("INDICATOR_BUSINESS_CATEGORY_INVALID: 业务分类必须是有效根节点");
+        }
+        var domain = businessContexts.domain(context.dataDomainId()).orElse(null);
+        if (
+            context.dataDomainId() != null &&
+            (domain == null || !Objects.equals(domain.parentId(), context.businessCategoryId()) || !"ACTIVE".equalsIgnoreCase(domain.lifecycleStatus()))
+        ) {
+            throw new IndicatorRequestException("INDICATOR_DATA_DOMAIN_INVALID: 数据域必须属于已选业务分类");
+        }
+        var process = businessContexts.businessProcess(context.businessProcessId()).orElse(null);
+        if (
+            context.businessProcessId() != null &&
+            (process == null || !process.confirmed() || !Objects.equals(process.domainId(), context.dataDomainId()))
+        ) {
+            throw new IndicatorRequestException("INDICATOR_BUSINESS_PROCESS_INVALID: 业务过程必须已确认且属于已选数据域");
+        }
+    }
+
+    private BusinessContext businessContext(GovIndicatorDefinition entity) {
+        MetricType metricType = null;
+        if (StringUtils.hasText(entity.getMetricType())) {
+            try {
+                metricType = MetricType.valueOf(entity.getMetricType().trim().toUpperCase(Locale.ROOT));
+            } catch (IllegalArgumentException error) {
+                throw new IndicatorRequestException("INDICATOR_METRIC_TYPE_INVALID: 指标类型无效", error);
+            }
+        }
+        List<MetricSourceRef> sourceRefs = List.of();
+        if (StringUtils.hasText(entity.getSourceRefs())) {
+            try {
+                sourceRefs = objectMapper.readValue(entity.getSourceRefs(), new TypeReference<>() {});
+            } catch (Exception error) {
+                throw new IndicatorRequestException("INDICATOR_SOURCE_REF_INVALID: sourceRefs 不是合法数组", error);
+            }
+        }
+        return new BusinessContext(
+            entity.getBusinessCategoryId(),
+            entity.getDataDomainId(),
+            entity.getBusinessProcessId(),
+            metricType,
+            entity.getMetricGroupCode(),
+            sourceRefs
+        );
+    }
+
+    private boolean hasStableBusinessContext(GovIndicatorDefinition entity) {
+        return entity.getBusinessCategoryId() != null ||
+        entity.getDataDomainId() != null ||
+        entity.getBusinessProcessId() != null ||
+        StringUtils.hasText(entity.getMetricType()) ||
+        StringUtils.hasText(entity.getMetricGroupCode()) ||
+        StringUtils.hasText(entity.getSourceRefs());
+    }
+
+    private String formatBusinessContextIssues(List<ValidationIssue> issues) {
+        return issues.stream().map(issue -> issue.code() + ": " + issue.message()).collect(java.util.stream.Collectors.joining("；"));
     }
 }

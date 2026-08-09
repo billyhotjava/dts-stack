@@ -6,8 +6,8 @@ import com.yuzhi.dts.platform.domain.catalog.CatalogDomainLifecycleStatus;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
-import com.yuzhi.dts.platform.service.catalog.CatalogAssetOverviewAggregator;
-import com.yuzhi.dts.platform.service.catalog.CatalogAssetPortalService;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetRegistrationService;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetStatsProjectionView;
 import com.yuzhi.dts.platform.service.catalog.CatalogDomainCommandService;
 import com.yuzhi.dts.platform.service.catalog.CatalogDomainVisibilityService;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
@@ -33,7 +33,7 @@ public class CatalogDomainResource {
     private final CatalogDatasetRepository datasetRepo;
     private final AuditService audit;
     private final CatalogDomainVisibilityService visibilityService;
-    private final CatalogAssetPortalService assetPortalService;
+    private final CatalogAssetRegistrationService assetRegistrationService;
     private final CatalogResourceHelper helper;
     private final CatalogDomainCommandService commandService;
 
@@ -41,14 +41,14 @@ public class CatalogDomainResource {
         CatalogDatasetRepository datasetRepo,
         AuditService audit,
         CatalogDomainVisibilityService visibilityService,
-        CatalogAssetPortalService assetPortalService,
+        CatalogAssetRegistrationService assetRegistrationService,
         CatalogResourceHelper helper,
         CatalogDomainCommandService commandService
     ) {
         this.datasetRepo = datasetRepo;
         this.audit = audit;
         this.visibilityService = visibilityService;
-        this.assetPortalService = assetPortalService;
+        this.assetRegistrationService = assetRegistrationService;
         this.helper = helper;
         this.commandService = commandService;
     }
@@ -106,8 +106,8 @@ public class CatalogDomainResource {
     /**
      * 主题域树。{@code withStats=true} 时额外返回域级资产统计，供资产地图左侧范围导航使用。
      *
-     * <p>统计复用 {@link CatalogAssetPortalService#domainStats} —— 即 listAssets 的可见性口径，
-     * 不另写 SQL 聚合，避免导航数字与台账口径漂移。缺省不带统计，既有调用方零影响。
+     * <p>统计只读增量投影，返回旧导航字段并补充 asOf/freshness/approximate 证据。
+     * 缺省不带统计，既有调用方零影响；投影重建或过期时不回退为请求内资产全表扫描。
      */
     @GetMapping("/domains/tree")
     @Transactional
@@ -120,21 +120,14 @@ public class CatalogDomainResource {
             audit.auditAction("CATALOG_DOMAIN_TREE", AuditStage.SUCCESS, "tree", null);
             return ApiResponses.ok(roots);
         }
-        // 与资产台账同一口径：优先请求头，回退 JWT 的 dept_code
-        String effDept = activeDept != null ? activeDept : helper.claim("dept_code");
-        CatalogAssetOverviewAggregator.AssetOverview overview = assetPortalService.domainStats(effDept);
-        Map<String, Object> stats = new LinkedHashMap<>();
-        stats.put("all", Map.of("total", overview.total(), "attention", overview.attention()));
-        stats.put("unassigned", Map.of("total", overview.missingDomain(), "attention", overview.missingDomain()));
-        stats.put("byDomain", overview.byDomain());
-        stats.put("scanned", overview.scanned());
-        stats.put("truncated", overview.truncated());
+        CatalogAssetStatsProjectionView stats = CatalogAssetStatsProjectionView.from(assetRegistrationService.stats(null));
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("tree", roots);
         payload.put("stats", stats);
         Map<String, Object> auditPayload = new LinkedHashMap<>();
-        auditPayload.put("scanned", overview.scanned());
-        auditPayload.put("truncated", overview.truncated());
+        auditPayload.put("freshness", stats.freshness().name());
+        auditPayload.put("approximate", stats.approximate());
+        auditPayload.put("projectionState", stats.projectionState());
         audit.auditAction("CATALOG_DOMAIN_TREE", AuditStage.SUCCESS, "tree-with-stats", auditPayload);
         return ApiResponses.ok(payload);
     }

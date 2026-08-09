@@ -193,18 +193,23 @@ export async function loadPlanningProjection(view: string): Promise<PlanningProj
 	if (view === "spaces") {
 		return emptyProjection("建模空间尚无独立服务端 owner；本页不会复用其他业务对象，也不提供模拟 CRUD。");
 	}
-	if (view === "domains" || view === "business-categories") {
+	if (view === "business-domains" || view === "domains" || view === "business-categories") {
 		const domains = await listPlanningCatalogDomains();
 		const names = new Map(domains.map((domain) => [domain.code, domain.name]));
-		const selected = domains.filter((domain) =>
-			view === "business-categories" ? !domain.parentId : Boolean(domain.parentId),
-		);
+		const selected =
+			view === "business-domains"
+				? domains
+				: domains.filter((domain) => (view === "business-categories" ? !domain.parentId : Boolean(domain.parentId)));
+		const combined = view === "business-domains";
 		return {
 			...emptyProjection(),
-			headers: [view === "business-categories" ? "分类编码" : "数据域编码", "名称", "上级分类", "负责人", "说明"],
+			headers: combined
+				? ["对象类型", "编码", "名称", "上级分类", "负责人", "说明"]
+				: [view === "business-categories" ? "分类编码" : "数据域编码", "名称", "上级分类", "负责人", "说明"],
 			rows: selected.map((domain) => ({
 				id: domain.id,
 				cells: [
+					...(combined ? [domain.parentId ? "数据域" : "业务分类"] : []),
 					domain.code,
 					domain.name,
 					domain.parentCode ? names.get(domain.parentCode) || domain.parentCode : "—",
@@ -281,13 +286,7 @@ export async function loadPlanningProjection(view: string): Promise<PlanningProj
 			headers: ["主题域编码", "主题域名称", "数据集市", "用途说明", "状态"],
 			rows: subjects.map((item) => ({
 				id: item.id,
-				cells: [
-					item.code,
-					item.name,
-					martNames.get(item.martId) || item.martId,
-					item.purpose || "—",
-					item.status,
-				],
+				cells: [item.code, item.name, martNames.get(item.martId) || item.martId, item.purpose || "—", item.status],
 				source: item,
 			})),
 		};

@@ -2,6 +2,7 @@ import { Archive, Plus, RotateCw, Search } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { deleteBusinessProcessApi, type Sprint64BusinessProcess } from "@/api/sprint64GovernanceApi";
 import { deleteWarehouseLayer, type WarehouseLayerView } from "@/api/warehouseLayerApi";
+import { useArchitectureDictionaryWriteAccess } from "@/pages/data-architecture/useArchitectureDictionaryWriteAccess";
 import { useUserInfo } from "@/store/userStore";
 import type { DataModelingRoute } from "../types";
 import { CatalogDomainForm } from "./PlanningCatalogEditors";
@@ -34,6 +35,7 @@ const LAYER_GROUP_LABEL: Record<string, string> = {
 };
 
 const CREATABLE_VIEWS = new Set([
+	"business-domains",
 	"business-categories",
 	"domains",
 	"layers",
@@ -42,16 +44,32 @@ const CREATABLE_VIEWS = new Set([
 	"subjects",
 ]);
 
-export function PlanningPage({ route }: { route: DataModelingRoute }) {
-	const canMaintain = useDataModelingMenuGrant();
+const PAGE_SIZE = 10;
+
+type PlanningPageProps = {
+	route: DataModelingRoute;
+	surface?: "modeling" | "architecture";
+	activeId?: string;
+	onActiveChange?: (id: string | null) => void;
+};
+
+export function PlanningPage({ route, surface = "modeling", activeId = "", onActiveChange }: PlanningPageProps) {
+	const modelingMenuGrant = useDataModelingMenuGrant();
+	const architectureWriteAccess = useArchitectureDictionaryWriteAccess();
+	const canMaintain = surface === "architecture" ? architectureWriteAccess : modelingMenuGrant;
 	const userInfo = useUserInfo();
 	const requestEpoch = useRef(0);
 	const [projection, setProjection] = useState<Awaited<ReturnType<typeof loadPlanningProjection>> | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [failure, setFailure] = useState<{ kind: "permission" | "request"; message: string } | null>(null);
 	const [query, setQuery] = useState("");
+	const [page, setPage] = useState(1);
 	const previousView = useRef(route.view);
-	const [drawer, setDrawer] = useState<{ open: boolean; editing: unknown }>({ open: false, editing: null });
+	const [drawer, setDrawer] = useState<{
+		open: boolean;
+		editing: unknown;
+		catalogView?: "business-categories" | "domains";
+	}>({ open: false, editing: null });
 	const { message, show } = useTransientMessage();
 
 	const load = useCallback(async () => {
@@ -81,10 +99,14 @@ export function PlanningPage({ route }: { route: DataModelingRoute }) {
 	useEffect(() => {
 		if (previousView.current !== route.view) {
 			setQuery("");
+			setPage(1);
 			setDrawer({ open: false, editing: null });
 			previousView.current = route.view;
 		}
 	}, [route.view]);
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: a search change intentionally returns to the first page.
+	useEffect(() => setPage(1), [query]);
 
 	const visibleRows = useMemo(() => {
 		const normalized = query.trim().toLocaleLowerCase();
@@ -93,6 +115,18 @@ export function PlanningPage({ route }: { route: DataModelingRoute }) {
 			row.cells.some((cell) => cell.toLocaleLowerCase().includes(normalized)),
 		);
 	}, [projection?.rows, query]);
+	const pageCount = Math.max(1, Math.ceil(visibleRows.length / PAGE_SIZE));
+	const currentPage = Math.min(page, pageCount);
+	const pageRows = visibleRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+	useEffect(() => {
+		if (page > pageCount) setPage(pageCount);
+	}, [page, pageCount]);
+	useEffect(() => {
+		if (!activeId) return;
+		const index = visibleRows.findIndex((row) => row.id === activeId);
+		if (index >= 0) setPage(Math.floor(index / PAGE_SIZE) + 1);
+	}, [activeId, visibleRows]);
 
 	const creatable = CREATABLE_VIEWS.has(route.view);
 	const hasActions = CREATABLE_VIEWS.has(route.view);
@@ -100,11 +134,28 @@ export function PlanningPage({ route }: { route: DataModelingRoute }) {
 	const handleDone = useCallback(
 		async (result: string) => {
 			setDrawer({ open: false, editing: null });
+			onActiveChange?.(null);
 			show(result);
 			await load();
 		},
-		[load, show],
+		[load, onActiveChange, show],
 	);
+
+	const closeDrawer = () => {
+		setDrawer({ open: false, editing: null });
+		onActiveChange?.(null);
+	};
+
+	const openRow = (row: PlanningProjectionRow) => {
+		const source = row.source as { parentId?: string | null } | undefined;
+		setDrawer({
+			open: true,
+			editing: row.source,
+			catalogView:
+				route.view === "business-domains" ? (source?.parentId ? "domains" : "business-categories") : undefined,
+		});
+		onActiveChange?.(row.id);
+	};
 
 	const deleteProcess = async (process: Sprint64BusinessProcess) => {
 		if (!window.confirm(`确认删除业务过程“${process.name}”？`)) return;
@@ -130,30 +181,36 @@ export function PlanningPage({ route }: { route: DataModelingRoute }) {
 
 	const renderActions = (row: PlanningProjectionRow) => {
 		switch (route.view) {
+			case "business-domains":
 			case "business-categories":
 			case "domains":
 			case "marts":
 			case "subjects":
-				return (
-					<Button disabled={!canMaintain} onClick={() => setDrawer({ open: true, editing: row.source })}>
-						编辑
-					</Button>
-				);
+				return <Button onClick={() => openRow(row)}>{canMaintain ? "编辑" : "查看"}</Button>;
 			case "processes": {
 				const process = row.source as Sprint64BusinessProcess;
 				return (
-					<Button danger disabled={!canMaintain} onClick={() => void deleteProcess(process)}>
-						<Archive size={14} /> 删除
-					</Button>
+					<div className="dmx-row-actions">
+						<Button onClick={() => openRow(row)}>{canMaintain ? "编辑" : "查看"}</Button>
+						<Button danger disabled={!canMaintain} onClick={() => void deleteProcess(process)}>
+							<Archive size={14} /> 删除
+						</Button>
+					</div>
 				);
 			}
 			case "layers": {
 				const layer = asWarehouseLayer(row.source);
-				if (!layer?.deletable) return <span className="dmx-capability-note">内置</span>;
 				return (
-					<Button danger disabled={!canMaintain} onClick={() => void deleteLayer(layer)}>
-						<Archive size={14} /> 删除
-					</Button>
+					<div className="dmx-row-actions">
+						<Button onClick={() => openRow(row)}>{layer?.builtin || !canMaintain ? "查看" : "编辑"}</Button>
+						{layer?.deletable ? (
+							<Button danger disabled={!canMaintain} onClick={() => void deleteLayer(layer)}>
+								<Archive size={14} /> 删除
+							</Button>
+						) : (
+							<span className="dmx-capability-note">内置</span>
+						)}
+					</div>
 				);
 			}
 			default:
@@ -163,6 +220,7 @@ export function PlanningPage({ route }: { route: DataModelingRoute }) {
 
 	const renderEditor = () => {
 		switch (route.view) {
+			case "business-domains":
 			case "business-categories":
 			case "domains":
 				return (
@@ -170,7 +228,11 @@ export function PlanningPage({ route }: { route: DataModelingRoute }) {
 						canMaintain={canMaintain}
 						initial={drawer.editing}
 						onDone={handleDone}
-						view={route.view}
+						view={
+							route.view === "business-domains"
+								? drawer.catalogView || "business-categories"
+								: (route.view as "business-categories" | "domains")
+						}
 					/>
 				);
 			case "processes":
@@ -195,7 +257,7 @@ export function PlanningPage({ route }: { route: DataModelingRoute }) {
 
 	return (
 		<main className="dmx-page dmx-planning-layout">
-			<PlanningSidebar activeView={route.view} />
+			<PlanningSidebar activeView={route.view} surface={surface} />
 			<section className="dmx-planning-content">
 				<PageHeader
 					actions={
@@ -204,7 +266,23 @@ export function PlanningPage({ route }: { route: DataModelingRoute }) {
 								<RotateCw size={15} />
 								刷新
 							</Button>
-							{creatable ? (
+							{creatable && route.view === "business-domains" ? (
+								<>
+									<Button
+										disabled={!canMaintain}
+										onClick={() => setDrawer({ open: true, editing: null, catalogView: "business-categories" })}
+									>
+										<Plus size={15} /> 新建业务分类
+									</Button>
+									<Button
+										disabled={!canMaintain}
+										onClick={() => setDrawer({ open: true, editing: null, catalogView: "domains" })}
+										primary
+									>
+										<Plus size={15} /> 新建数据域
+									</Button>
+								</>
+							) : creatable ? (
 								<Button disabled={!canMaintain} primary onClick={() => setDrawer({ open: true, editing: null })}>
 									<Plus size={15} />
 									新建{route.title}
@@ -214,7 +292,7 @@ export function PlanningPage({ route }: { route: DataModelingRoute }) {
 					}
 					description={route.description}
 					title={route.title}
-					trail="数据建模 / 数仓规划"
+					trail={surface === "architecture" ? "数据架构 / 平台全局架构" : "数据建模 / 数仓规划"}
 				/>
 				{loading ? (
 					<RequestState description={`正在读取${route.title}权威数据。`} kind="loading" title="正在加载" />
@@ -238,7 +316,9 @@ export function PlanningPage({ route }: { route: DataModelingRoute }) {
 											value={query}
 										/>
 									</label>
-									<span>共 {visibleRows.length} 条</span>
+									<span>
+										共 {visibleRows.length} 条，每页 {PAGE_SIZE} 条
+									</span>
 								</div>
 								<div className="dmx-table-scroll">
 									<table className="dmx-table dmx-table--catalog">
@@ -252,9 +332,9 @@ export function PlanningPage({ route }: { route: DataModelingRoute }) {
 										</thead>
 										<tbody>
 											{route.view === "layers"
-												? renderGroupedLayerRows(visibleRows, renderActions)
-												: visibleRows.map((row) => (
-														<tr key={row.id}>
+												? renderGroupedLayerRows(pageRows, renderActions, activeId)
+												: pageRows.map((row) => (
+														<tr className={row.id === activeId ? "selected" : ""} key={row.id}>
 															{row.cells.map((cell, index) => (
 																<td key={`${row.id}-${index}`}>
 																	{["已发布", "已确认", "启用"].includes(cell) ? (
@@ -272,6 +352,22 @@ export function PlanningPage({ route }: { route: DataModelingRoute }) {
 										</tbody>
 									</table>
 								</div>
+								{visibleRows.length ? (
+									<nav aria-label={`${route.title}分页`} className="dmx-pagination">
+										<Button disabled={currentPage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
+											上一页
+										</Button>
+										<span>
+											第 {currentPage} / {pageCount} 页
+										</span>
+										<Button
+											disabled={currentPage >= pageCount}
+											onClick={() => setPage((value) => Math.min(pageCount, value + 1))}
+										>
+											下一页
+										</Button>
+									</nav>
+								) : null}
 								{!visibleRows.length ? (
 									<RequestState description="当前目录暂无记录。" kind="empty" title={`暂无${route.title}`} />
 								) : null}
@@ -288,13 +384,11 @@ export function PlanningPage({ route }: { route: DataModelingRoute }) {
 			</section>
 			{drawer.open ? (
 				<Drawer
-					footer={
-						<Button onClick={() => setDrawer({ open: false, editing: null })}>
-							关闭
-						</Button>
-					}
-					onClose={() => setDrawer({ open: false, editing: null })}
-					title={`${drawer.editing ? "编辑" : "新建"}${route.title}`}
+					footer={<Button onClick={closeDrawer}>关闭</Button>}
+					onClose={closeDrawer}
+					title={`${drawer.editing ? (canMaintain ? "编辑" : "查看") : "新建"}${
+						route.view === "business-domains" ? (drawer.catalogView === "domains" ? "数据域" : "业务分类") : route.title
+					}`}
 				>
 					{renderEditor()}
 				</Drawer>
@@ -307,6 +401,7 @@ export function PlanningPage({ route }: { route: DataModelingRoute }) {
 function renderGroupedLayerRows(
 	rows: PlanningProjectionRow[],
 	renderActions: (row: PlanningProjectionRow) => ReactNode,
+	activeId = "",
 ) {
 	const nodes: ReactNode[] = [];
 	let lastGroup = "";
@@ -322,7 +417,7 @@ function renderGroupedLayerRows(
 			lastGroup = group;
 		}
 		nodes.push(
-			<tr key={row.id}>
+			<tr className={row.id === activeId ? "selected" : ""} key={row.id}>
 				{row.cells.map((cell, index) => (
 					<td key={`${row.id}-${index}`}>
 						{["已发布", "已确认", "启用"].includes(cell) ? (

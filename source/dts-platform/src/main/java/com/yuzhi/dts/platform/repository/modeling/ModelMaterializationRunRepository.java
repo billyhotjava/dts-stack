@@ -1,9 +1,15 @@
 package com.yuzhi.dts.platform.repository.modeling;
 
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
@@ -108,6 +114,70 @@ public class ModelMaterializationRunRepository {
             throw new IllegalStateException(
                 "dbt artifact synchronization row count does not match candidate scope"
             );
+        }
+    }
+
+    /** Persists one terminal dbt result per candidate entry before the batch failure is finalized. */
+    @Transactional
+    public void recordDbtResults(
+        UUID groupId,
+        UUID invocationId,
+        Map<UUID, String> statusesByPipelineRun,
+        Instant now
+    ) {
+        if (
+            groupId == null ||
+            invocationId == null ||
+            statusesByPipelineRun == null ||
+            statusesByPipelineRun.isEmpty() ||
+            statusesByPipelineRun.size() > 500 ||
+            now == null
+        ) {
+            throw new IllegalArgumentException("groupId, invocationId, bounded statuses and now are required");
+        }
+        Set<String> allowed = Set.of("DBT_SUCCEEDED", "FAILED", "SKIPPED_DEPENDENCY_FAILED");
+        if (
+            statusesByPipelineRun.entrySet().stream().anyMatch(entry -> entry.getKey() == null || !allowed.contains(entry.getValue()))
+        ) {
+            throw new IllegalArgumentException("Unsupported per-model dbt result status");
+        }
+        List<Map.Entry<UUID, String>> results = List.copyOf(statusesByPipelineRun.entrySet());
+        int[] updated = jdbcTemplate.batchUpdate(
+            """
+            update modeling_pipeline_run
+               set status = ?, dbt_invocation_id = ?,
+                   started_date = coalesce(started_date, ?),
+                   finished_date = coalesce(finished_date, ?),
+                   message = ?, last_modified_date = ?
+             where id = ?
+               and pipeline_run_group_id = ?
+               and run_purpose = 'RELEASE_BUILD'
+               and status in ('QUEUED', 'SUBMITTED', 'UNKNOWN')
+            """,
+            new BatchPreparedStatementSetter() {
+                @Override
+                public void setValues(PreparedStatement statement, int index) throws SQLException {
+                    Map.Entry<UUID, String> result = results.get(index);
+                    Timestamp occurredAt = Timestamp.from(now);
+                    statement.setString(1, result.getValue());
+                    statement.setObject(2, invocationId);
+                    statement.setTimestamp(3, occurredAt);
+                    statement.setTimestamp(4, occurredAt);
+                    statement.setString(5, resultMessage(result.getValue()));
+                    statement.setTimestamp(6, occurredAt);
+                    statement.setObject(7, result.getKey());
+                    statement.setObject(8, groupId);
+                }
+
+                @Override
+                public int getBatchSize() {
+                    return results.size();
+                }
+            }
+        );
+        int changed = java.util.Arrays.stream(updated).sum();
+        if (changed != results.size()) {
+            throw new IllegalStateException("Per-model dbt result row count does not match candidate scope");
         }
     }
 
@@ -329,7 +399,7 @@ public class ModelMaterializationRunRepository {
                 "groupId, errorCode and now are required"
             );
         }
-        return jdbcTemplate.update(
+        jdbcTemplate.update(
             """
             update modeling_pipeline_run
                set status = 'FAILED',
@@ -338,13 +408,39 @@ public class ModelMaterializationRunRepository {
                    last_modified_date = ?
              where pipeline_run_group_id = ?
                and run_purpose = 'RELEASE_BUILD'
-               and status not in ('BUILT', 'PUBLISHED', 'FAILED_STALE')
+               and status not in (
+                    'BUILT', 'PUBLISHED', 'FAILED_STALE',
+                    'DBT_SUCCEEDED', 'SKIPPED_DEPENDENCY_FAILED', 'FAILED'
+               )
             """,
             errorCode.trim(),
             Timestamp.from(now),
             Timestamp.from(now),
             groupId
         );
+        Integer terminalRows = jdbcTemplate.queryForObject(
+            """
+            select count(*)
+              from modeling_pipeline_run
+             where pipeline_run_group_id = ?
+               and run_purpose = 'RELEASE_BUILD'
+               and status in (
+                    'BUILT', 'PUBLISHED', 'FAILED_STALE',
+                    'DBT_SUCCEEDED', 'SKIPPED_DEPENDENCY_FAILED', 'FAILED'
+               )
+            """,
+            Integer.class,
+            groupId
+        );
+        return terminalRows == null ? 0 : terminalRows;
+    }
+
+    private static String resultMessage(String status) {
+        return switch (status) {
+            case "DBT_SUCCEEDED" -> "dbt model succeeded before batch completion";
+            case "SKIPPED_DEPENDENCY_FAILED" -> "dbt model skipped because an upstream dependency failed";
+            default -> "dbt model failed";
+        };
     }
 
     private void markDispatchTerminal(

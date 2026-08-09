@@ -23,6 +23,10 @@ import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.policy.DataLevel;
 import com.yuzhi.dts.platform.service.catalog.CodeAssetGrantWriter;
 import com.yuzhi.dts.platform.service.catalog.CatalogDomainDictionaryReadPort;
+import com.yuzhi.dts.platform.service.governance.IndicatorBusinessContextContract.MetricSourceRef;
+import com.yuzhi.dts.platform.service.governance.IndicatorBusinessContextContract.SourceType;
+import com.yuzhi.dts.platform.service.governance.IndicatorBusinessContextReadPort.BusinessProcessNode;
+import com.yuzhi.dts.platform.service.governance.IndicatorBusinessContextReadPort.DomainNode;
 import com.yuzhi.dts.platform.service.governance.dto.IndicatorDto;
 import com.yuzhi.dts.platform.service.governance.request.IndicatorUpsertRequest;
 import com.yuzhi.dts.platform.service.query.QueryGateway;
@@ -64,6 +68,7 @@ class IndicatorServiceLifecycleTest {
     private final IndicatorDerivationValidationService derivationValidationService = mock(
         IndicatorDerivationValidationService.class
     );
+    private final IndicatorBusinessContextReadPort businessContexts = mock(IndicatorBusinessContextReadPort.class);
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
     private final IndicatorService service = new IndicatorService(
         indicatorRepository,
@@ -77,7 +82,8 @@ class IndicatorServiceLifecycleTest {
         objectMapper,
         catalogDomains,
         codeAssetGrantWriter,
-        derivationValidationService
+        derivationValidationService,
+        businessContexts
     );
 
     @BeforeEach
@@ -418,6 +424,66 @@ class IndicatorServiceLifecycleTest {
         verify(versionRepository, never()).save(any(GovIndicatorVersion.class));
         verify(indicatorRepository).findByIdForUpdate(archived.getId());
         assertThat(archived.getStatus()).isEqualTo("ARCHIVED");
+    }
+
+    @Test
+    void publishRejectsDraftWithoutStableBusinessContext() {
+        GovIndicatorDefinition draft = indicator(UUID.randomUUID(), "GMV", "GMV", "DRAFT", "v1");
+        when(indicatorRepository.findByIdForUpdate(draft.getId())).thenReturn(Optional.of(draft));
+
+        assertThatThrownBy(() -> service.publish(draft.getId(), null))
+            .isInstanceOf(IndicatorConflictException.class)
+            .hasMessageContaining("INDICATOR_METRIC_TYPE_REQUIRED");
+
+        verify(indicatorRepository, never()).save(any(GovIndicatorDefinition.class));
+        verify(versionRepository, never()).save(any(GovIndicatorVersion.class));
+    }
+
+    @Test
+    void publishPersistsStableAtomicBusinessContextInVersionSnapshot() throws Exception {
+        UUID categoryId = UUID.randomUUID();
+        UUID domainId = UUID.randomUUID();
+        UUID processId = UUID.randomUUID();
+        GovIndicatorDefinition draft = indicator(UUID.randomUUID(), "GMV", "GMV", "DRAFT", "v1");
+        draft.setBusinessCategoryId(categoryId);
+        draft.setDataDomainId(domainId);
+        draft.setBusinessProcessId(processId);
+        draft.setMetricType("ATOMIC");
+        draft.setMetricGroupCode("sales.gmv");
+        draft.setSourceRefs(
+            objectMapper.writeValueAsString(List.of(new MetricSourceRef(SourceType.PHYSICAL_ASSET, "asset-gmv", "v1")))
+        );
+        draft.setDatasetId(UUID.randomUUID().toString());
+        draft.setExpressionSql("select 1 as gmv");
+        draft.setIsDerived(false);
+        markCurrentValidation(draft);
+
+        when(indicatorRepository.findByIdForUpdate(draft.getId())).thenReturn(Optional.of(draft));
+        when(businessContexts.domain(categoryId)).thenReturn(Optional.of(new DomainNode(categoryId, null, "ACTIVE")));
+        when(businessContexts.domain(domainId)).thenReturn(Optional.of(new DomainNode(domainId, categoryId, "ACTIVE")));
+        when(businessContexts.businessProcess(processId))
+            .thenReturn(Optional.of(new BusinessProcessNode(processId, domainId, true)));
+        when(versionRepository.findByIndicatorAndVersion(draft, "v1")).thenReturn(Optional.empty());
+
+        IndicatorDto published = service.publish(draft.getId(), null);
+
+        assertThat(published.getStatus()).isEqualTo("PUBLISHED");
+        assertThat(published.getBusinessCategoryId()).isEqualTo(categoryId);
+        assertThat(published.getDataDomainId()).isEqualTo(domainId);
+        assertThat(published.getBusinessProcessId()).isEqualTo(processId);
+        assertThat(published.getMetricType()).isEqualTo("ATOMIC");
+        assertThat(published.getSourceRefs())
+            .containsExactly(new MetricSourceRef(SourceType.PHYSICAL_ASSET, "asset-gmv", "v1"));
+
+        ArgumentCaptor<GovIndicatorVersion> snapshot = ArgumentCaptor.forClass(GovIndicatorVersion.class);
+        verify(versionRepository).save(snapshot.capture());
+        IndicatorDto persisted = objectMapper.readValue(snapshot.getValue().getSnapshotJson(), IndicatorDto.class);
+        assertThat(persisted.getBusinessCategoryId()).isEqualTo(categoryId);
+        assertThat(persisted.getDataDomainId()).isEqualTo(domainId);
+        assertThat(persisted.getBusinessProcessId()).isEqualTo(processId);
+        assertThat(persisted.getMetricType()).isEqualTo("ATOMIC");
+        assertThat(persisted.getSourceRefs())
+            .containsExactly(new MetricSourceRef(SourceType.PHYSICAL_ASSET, "asset-gmv", "v1"));
     }
 
     @Test

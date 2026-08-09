@@ -16,7 +16,7 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.security.session.PortalSessionInactivityFilter;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.ArchitectureDictionaryWriteGuard;
-import com.yuzhi.dts.platform.service.catalog.CatalogAssetPortalService;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetRegistrationService;
 import com.yuzhi.dts.platform.service.catalog.CatalogDomainCommandService;
 import com.yuzhi.dts.platform.service.catalog.CatalogDomainVisibilityService;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftRejectionAudit;
@@ -61,7 +61,7 @@ class CatalogDomainResourceWebMvcTest {
     private CatalogDomainVisibilityService visibilityService;
 
     @MockBean
-    private CatalogAssetPortalService assetPortalService;
+    private CatalogAssetRegistrationService assetRegistrationService;
 
     @MockBean
     private CatalogResourceHelper catalogResourceHelper;

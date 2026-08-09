@@ -15,6 +15,7 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogAssetExtensionRepository
 import com.yuzhi.dts.platform.repository.catalog.CatalogAssetMappingRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.catalog.OpenMetadataAssetCacheRepository;
 import com.yuzhi.dts.platform.repository.catalog.OpenMetadataColumnCacheRepository;
@@ -65,6 +66,9 @@ class CatalogAssetPortalStatsTest {
     private CatalogDatasetRepository datasetRepository;
 
     @Mock
+    private CatalogDomainRepository domainRepository;
+
+    @Mock
     private CatalogTableSchemaRepository tableSchemaRepository;
 
     @Mock
@@ -78,6 +82,9 @@ class CatalogAssetPortalStatsTest {
 
     @Mock
     private CatalogAssetTagService assetTagService;
+
+    @Mock
+    private CatalogAssetRegistrationService assetRegistrationService;
 
     private CatalogAssetPortalService service;
 
@@ -98,11 +105,13 @@ class CatalogAssetPortalStatsTest {
                 extensionRepository,
                 mappingRepository,
                 datasetRepository,
+                domainRepository,
                 tableSchemaRepository,
                 catalogColumnSchemaRepository,
                 accessChecker,
                 classificationService,
-                assetTagService
+                assetTagService,
+                assetRegistrationService
             );
         lenient().when(accessChecker.canRead(any())).thenReturn(true);
         lenient().when(accessChecker.departmentAllowed(any(), any())).thenReturn(true);

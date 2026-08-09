@@ -2,7 +2,9 @@
 
 **优先级**：P0
 
-**状态**：BLOCKED
+**状态**：PARTIAL_LOCAL_VERIFY_PASS（E2E / DEPLOYMENT / OBSERVABILITY 未执行）
+
+**证据**：`../../assets/implementation-evidence-20260810.md`
 
 **依赖**：F0～F5 DONE、ADR-86-10
 

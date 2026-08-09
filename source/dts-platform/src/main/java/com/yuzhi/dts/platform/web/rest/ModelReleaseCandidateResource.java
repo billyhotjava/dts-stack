@@ -5,11 +5,13 @@ import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.Can
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CommandResult;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CreateCandidateCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.ModelMaterializationStatusView;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.MaterializationAttemptView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.ReplaceScopeCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.ScopeEntryCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.WorkbenchView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateException;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateException.Kind;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidatePreflightService.BatchPreflightView;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider;
 import java.net.URI;
 import java.util.List;
@@ -87,6 +89,42 @@ public class ModelReleaseCandidateResource {
     ) {
         return ResponseEntity.ok(
             ApiResponses.ok(service.materializationStatuses(serverTenantId, actorId(), planId, modelSpecIds))
+        );
+    }
+
+    @GetMapping("/{candidateId}/materialization-attempts")
+    @PreAuthorize(RELEASE_DUTY_EXPRESSION)
+    public ResponseEntity<ApiResponse<List<MaterializationAttemptView>>> materializationHistory(
+        @PathVariable UUID planId,
+        @PathVariable UUID candidateId
+    ) {
+        return ResponseEntity.ok(
+            ApiResponses.ok(service.materializationHistory(serverTenantId, actorId(), planId, candidateId))
+        );
+    }
+
+    @PostMapping("/preflight")
+    @PreAuthorize(RELEASE_DUTY_EXPRESSION)
+    public ResponseEntity<ApiResponse<BatchPreflightView>> preflight(
+        @PathVariable UUID planId,
+        @RequestBody(required = false) CreateRequest request
+    ) {
+        CreateRequest body = requiredRequest(request, "preflight request");
+        return ResponseEntity.ok(
+            ApiResponses.ok(
+                service.preflight(
+                    serverTenantId,
+                    actorId(),
+                    planId,
+                    new CreateCandidateCommand(
+                        planId,
+                        body.environment(),
+                        body.entries(),
+                        "preflight",
+                        body.reason()
+                    )
+                )
+            )
         );
     }
 

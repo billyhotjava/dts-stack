@@ -111,6 +111,21 @@ export type CatalogAssetV2GovernanceUpdate = {
 	domainId?: string;
 	securityPolicyRefs?: string;
 };
+export type CatalogAssetStatsProjectionBucket = {
+	domainId?: string | null;
+	warehouseLayer?: string | null;
+	assetType: string;
+	governance: "UNASSIGNED" | "INCOMPLETE" | "GOVERNED";
+	count: number;
+};
+export type CatalogAssetStatsProjection = {
+	buckets: CatalogAssetStatsProjectionBucket[];
+	total: number;
+	asOf?: string | null;
+	freshness: "FRESH" | "STALE" | "REBUILDING";
+	approximate: boolean;
+	projectionState: string;
+};
 export const listCatalogAssetsV2 = (params: CatalogAssetV2Query = {}) =>
 	api.get<CatalogAssetV2Page>({
 		url: "/catalog/assets-v2",
@@ -138,6 +153,12 @@ export const getCatalogAssetsV2MigrationDryRun = () =>
 	api.get<Record<string, any>>({ url: "/catalog/assets-v2/migration/dry-run" });
 export const updateCatalogAssetV2Governance = (id: string, data: CatalogAssetV2GovernanceUpdate) =>
 	api.patch<Record<string, unknown>>({ url: `/catalog/assets-v2/${id}/governance`, data });
+export const getCatalogAssetStatsProjection = (domainId?: string) =>
+	api.get<CatalogAssetStatsProjection>({
+		url: "/catalog/assets-v2/stats-projection",
+		params: domainId ? { domainId } : undefined,
+		_skipErrorToast: true,
+	} as any);
 export const getCatalogAssetV2Lineage = (id: string) => api.get({ url: `/catalog/assets-v2/${id}/lineage` });
 export const syncCatalogAssetV2Lineage = (id: string, params?: { upstreamDepth?: number; downstreamDepth?: number }) =>
 	api.post({ url: `/catalog/assets-v2/${id}/lineage/sync`, params });

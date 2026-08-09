@@ -24,6 +24,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.Ent
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.EntryView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.EvidenceState;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.RelationEvidenceState;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.MaterializationAttemptView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.ScopeEntryCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.TransitionCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.WorkbenchState;
@@ -206,7 +207,7 @@ class ModelReleaseCandidateApplicationServiceTest {
         CandidateView building = candidateAtVersion(DeliveryStatus.BUILDING, 5, CANDIDATE_ID);
         CreateCandidateCommand request = new CreateCandidateCommand(
             PLAN_ID,
-            "dev",
+            "prod",
             List.of(new ScopeEntryCommand(MODEL_ID, 0, "selected in workbench")),
             "rematerialize-root-key",
             "rebuild selected relations"
@@ -268,6 +269,29 @@ class ModelReleaseCandidateApplicationServiceTest {
 
         verify(planAccess).canMaintain(TENANT, PLAN_ID, ACTOR);
         verify(workbenchEvidence).findLatest(TENANT, PLAN_ID, List.of(MODEL_ID));
+    }
+
+    @Test
+    void materializationHistoryIsCandidateScopedAndPreservesEveryAttempt() {
+        CandidateView built = candidate(DeliveryStatus.BUILT, List.of(entry(DeliveryStatus.BUILT)));
+        MaterializationAttemptView attempt = new MaterializationAttemptView(
+            CANDIDATE_ID,
+            4,
+            UUID.fromString("50000000-0000-0000-0000-000000000001"),
+            2,
+            "COMPLETED",
+            null,
+            NOW.minusSeconds(60),
+            NOW,
+            List.of()
+        );
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(built));
+        when(workbenchEvidence.findHistory(built)).thenReturn(List.of(attempt));
+
+        assertThat(service.materializationHistory(TENANT, ACTOR, PLAN_ID, CANDIDATE_ID))
+            .containsExactly(attempt);
+
+        verify(workbenchEvidence).findHistory(built);
     }
 
     @Test
@@ -386,10 +410,11 @@ class ModelReleaseCandidateApplicationServiceTest {
                     .isEqualTo("MODEL_RELEASE_CANDIDATE_ACTIVE_EXISTS")
             );
 
-        verify(commands, never()).create(
+        verify(commands, never()).createBatchWithExpandedScope(
             org.mockito.ArgumentMatchers.any(),
             org.mockito.ArgumentMatchers.any(),
-            org.mockito.ArgumentMatchers.any()
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.anyList()
         );
     }
 
@@ -405,12 +430,13 @@ class ModelReleaseCandidateApplicationServiceTest {
         );
         CommandResult replay = new CommandResult(active, true, List.of());
         when(repository.findByIdempotencyKey(TENANT, active.idempotencyKey())).thenReturn(Optional.of(active));
-        when(commands.create(TENANT, ACTOR, command)).thenReturn(replay);
+        when(commands.createBatchWithExpandedScope(TENANT, ACTOR, command, List.of())).thenReturn(replay);
 
         assertThat(service.create(TENANT, ACTOR, PLAN_ID, command)).isEqualTo(replay);
 
-        verify(commands).create(TENANT, ACTOR, command);
+        verify(commands).createBatchWithExpandedScope(TENANT, ACTOR, command, List.of());
         verify(repository, never()).listForWorkbench(TENANT, PLAN_ID);
+        verify(preflight, never()).requireEligible(eq(TENANT), any(CreateCandidateCommand.class));
     }
 
     @Test

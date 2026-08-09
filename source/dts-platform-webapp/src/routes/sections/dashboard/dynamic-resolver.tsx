@@ -63,6 +63,7 @@ const buildDirectRedirectPath = (redirectPath: string, currentSearch: string) =>
 const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 	// ── Platform pages ──
 	"/governance": "/pages/governance/GovernanceCenterPage",
+	"/data-architecture": "/pages/data-architecture/DataArchitecturePage",
 	"/catalog/assets": "/pages/catalog/AssetOverviewPage",
 	"/catalog/assets/ledger": "/pages/catalog/LegacyAssetLedgerRedirect",
 	"/catalog/asset-detail": "/pages/catalog/LegacyAssetDetailRedirect",
@@ -92,7 +93,7 @@ const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 	"/studio/low-code-development": "/pages/data-modeling/LegacyDataModelingRedirect",
 	"/studio/projects": "/pages/data-modeling/LegacyDataModelingRedirect",
 	"/studio/sql-modeling": "/pages/data-modeling/LegacyDataModelingRedirect",
-	"/governance/subjects": "/pages/governance/SubjectAreasPage",
+	"/governance/subjects": "/pages/data-architecture/LegacySubjectAreasRedirect",
 	"/governance/standards/glossary": "/pages/governance/GlossaryPage",
 	"/governance/standards/elements": "/pages/governance/ElementsPage",
 	"/governance/standards/reference": "/pages/governance/ReferenceCodesPage",
@@ -143,6 +144,7 @@ const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 export const resolveDashboardComponentOverride = (path?: string) => {
 	const normalized = normalizeMenuPath(path || "");
 	if (!normalized) return "";
+	if (normalized === "/data-architecture") return "/pages/data-architecture/DataArchitecturePage";
 	if (normalized === "/data-modeling" || normalized.startsWith("/data-modeling/")) {
 		return "/pages/data-modeling/DataModelingPage";
 	}

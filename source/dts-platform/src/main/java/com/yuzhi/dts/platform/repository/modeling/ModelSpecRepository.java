@@ -517,13 +517,13 @@ public class ModelSpecRepository {
                 fact_shape, grain_json, time_semantics, fields, source_refs, depends_on, dimension_refs,
                 metric_refs, standard_bindings, generation_strategy, dimension_profile, current_checksum, idempotency_key,
                 idempotency_request_hash, idempotency_response_snapshot, dimension_definition_id, dimension_definition_revision,
-                data_mart_id, variant_code
+                data_mart_id, variant_code, business_process_id, subject_domain_id
             ) values (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?,
                 2, ?, ?, ?, ?, ?, cast(? as jsonb), cast(? as jsonb), cast(? as jsonb), cast(? as jsonb),
                 cast(? as jsonb), cast(? as jsonb), cast(? as jsonb), cast(? as jsonb), cast(? as jsonb),
                 cast(? as jsonb), ?, ?, ?, cast(? as jsonb)
-                , ?, ?, ?, ?
+                , ?, ?, ?, ?, ?, ?
             )
             on conflict (tenant_id, idempotency_key)
             where contract_version = 2 and idempotency_key is not null
@@ -565,7 +565,9 @@ public class ModelSpecRepository {
             view.dimensionDefinitionRef() == null ? null : view.dimensionDefinitionRef().dimensionDefinitionId(),
             view.dimensionDefinitionRef() == null ? null : view.dimensionDefinitionRef().revision(),
             view.dataMartId(),
-            view.variantCode()
+            view.variantCode(),
+            view.businessProcessId(),
+            view.subjectDomainId()
         );
     }
 
@@ -587,7 +589,7 @@ public class ModelSpecRepository {
                    depends_on = cast(? as jsonb), dimension_refs = cast(? as jsonb), metric_refs = cast(? as jsonb),
                    standard_bindings = cast(? as jsonb), generation_strategy = cast(? as jsonb),
                    dimension_profile = cast(? as jsonb),
-                   data_mart_id = ?, variant_code = ?,
+                   data_mart_id = ?, variant_code = ?, business_process_id = ?, subject_domain_id = ?,
                    current_checksum = ?, revision = ?, version = version + 1, last_modified_date = ?
              where tenant_id = ? and id = ? and contract_version = 2
                and revision = ? and current_checksum = ?
@@ -616,6 +618,8 @@ public class ModelSpecRepository {
             jsonOrNull(replacement.dimensionProfile()),
             replacement.dataMartId(),
             replacement.variantCode(),
+            replacement.businessProcessId(),
+            replacement.subjectDomainId(),
             replacement.checksum(),
             replacement.revision(),
             Timestamp.from(replacement.updatedAt()),
@@ -664,9 +668,10 @@ public class ModelSpecRepository {
                     id, model_spec_id, revision, status, content_checksum,
                     created_date, last_modified_date, tenant_id, contract_version,
                     snapshot_json, created_by, dimension_definition_id,
-                    dimension_definition_revision, data_mart_id, variant_code
+                    dimension_definition_revision, data_mart_id, variant_code,
+                    business_process_id, subject_domain_id
                 )
-                select ?, advanced_head.id, ?, ?, ?, ?, ?, ?, 2, cast(? as jsonb), ?, ?, ?, ?, ?
+                select ?, advanced_head.id, ?, ?, ?, ?, ?, ?, 2, cast(? as jsonb), ?, ?, ?, ?, ?, ?, ?
                   from advanced_head
                 returning 1
             )
@@ -695,7 +700,9 @@ public class ModelSpecRepository {
                 ? null
                 : replacement.dimensionDefinitionRef().revision(),
             replacement.dataMartId(),
-            replacement.variantCode()
+            replacement.variantCode(),
+            replacement.businessProcessId(),
+            replacement.subjectDomainId()
         );
         return changed == null ? 0 : changed;
     }
@@ -819,7 +826,8 @@ public class ModelSpecRepository {
                 id, model_spec_id, revision, status, content_checksum, created_date, last_modified_date,
                 tenant_id, contract_version, snapshot_json, created_by
                 , dimension_definition_id, dimension_definition_revision, data_mart_id, variant_code
-            ) values (?, ?, ?, ?, ?, ?, ?, ?, 2, cast(? as jsonb), ?, ?, ?, ?, ?)
+                , business_process_id, subject_domain_id
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, 2, cast(? as jsonb), ?, ?, ?, ?, ?, ?, ?)
             """,
             UUID.randomUUID(),
             view.id(),
@@ -834,8 +842,48 @@ public class ModelSpecRepository {
             view.dimensionDefinitionRef() == null ? null : view.dimensionDefinitionRef().dimensionDefinitionId(),
             view.dimensionDefinitionRef() == null ? null : view.dimensionDefinitionRef().revision(),
             view.dataMartId(),
-            view.variantCode()
+            view.variantCode(),
+            view.businessProcessId(),
+            view.subjectDomainId()
         );
+    }
+
+    public boolean hasConfirmedBusinessProcess(UUID businessProcessId, UUID domainId) {
+        Boolean exists = jdbcTemplate.queryForObject(
+            """
+            select exists (
+                select 1
+                  from sprint64_business_process
+                 where id = ?
+                   and domain_id = ?
+                   and confirmed = true
+            )
+            """,
+            Boolean.class,
+            businessProcessId,
+            domainId
+        );
+        return Boolean.TRUE.equals(exists);
+    }
+
+    public boolean hasCurrentSubjectDomain(String tenantId, UUID subjectDomainId, UUID dataMartId) {
+        Boolean exists = jdbcTemplate.queryForObject(
+            """
+            select exists (
+                select 1
+                  from modeling_subject_domain
+                 where tenant_id = ?
+                   and id = ?
+                   and mart_id = ?
+                   and status = 'CURRENT'
+            )
+            """,
+            Boolean.class,
+            tenantId,
+            subjectDomainId,
+            dataMartId
+        );
+        return Boolean.TRUE.equals(exists);
     }
 
     public boolean planHasCurrentDataMart(String tenantId, UUID planId, UUID dataMartId, UUID domainId) {

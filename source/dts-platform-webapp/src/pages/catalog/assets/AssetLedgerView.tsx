@@ -1,17 +1,24 @@
 import { ToolOutlined } from "@ant-design/icons";
-import { Alert, Button, Space, Table, Tag } from "antd";
+import { Alert, Button, Select, Space, Table, Tag } from "antd";
 import type { Key } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { batchTagAssets } from "@/api/catalogTagsApi";
-import { type ClassificationFactView, getCatalogClassificationFacts } from "@/api/platformApi";
+import {
+	type CatalogAssetStatsProjection,
+	type ClassificationFactView,
+	getCatalogAssetStatsProjection,
+	getCatalogClassificationFacts,
+	updateCatalogAssetV2Governance,
+} from "@/api/platformApi";
 import { AssetTagChips } from "@/components/catalog/tags/AssetTagChips";
 import { writeTagIds } from "@/components/catalog/tags/catalogTagUrlState";
 import { useRouter } from "@/routes/hooks";
 import { resolveAssetReadiness } from "../assetPortalUx.helpers";
 import { AssetGovernanceWorkbenchDrawer } from "./AssetGovernanceWorkbenchDrawer";
 import { AssetLifecycleWorkbenchDrawer } from "./AssetLifecycleWorkbenchDrawer";
+import { type AssetDomainAssignmentFailure, assignAssetsToDomain } from "./assetBatchDomainAssignment";
 import { ASSET_TYPE_DICT, GOVERNANCE_STATUS_DICT, resolveEnumLabel } from "./assetEnumLabels";
 import type { AssetRow } from "./assetPageShared";
 import {
@@ -22,6 +29,7 @@ import {
 	formatTime,
 	LAYER_META,
 	normalizeLayer,
+	UNASSIGNED_DOMAIN_KEY,
 } from "./assetPageShared";
 
 export interface AssetLedgerViewProps {
@@ -53,10 +61,58 @@ export function AssetLedgerView({
 	const [governanceAsset, setGovernanceAsset] = useState<AssetRow | null>(null);
 	const [selectedAssetIds, setSelectedAssetIds] = useState<Key[]>([]);
 	const [associationSubmitting, setAssociationSubmitting] = useState(false);
+	const [batchDomainId, setBatchDomainId] = useState("");
+	const [batchSubmitting, setBatchSubmitting] = useState(false);
+	const [batchFailures, setBatchFailures] = useState<AssetDomainAssignmentFailure[]>([]);
+	const [projection, setProjection] = useState<CatalogAssetStatsProjection | null>(null);
+	const [projectionLoading, setProjectionLoading] = useState(false);
+	const [projectionError, setProjectionError] = useState("");
+	const projectionRequestRef = useRef(0);
+	const scopeDomain = searchParams.get("domain") || "";
 	const classificationFactMap = useMemo(
 		() => new Map(classificationFacts.map((fact) => [fact.subjectKey, fact])),
 		[classificationFacts],
 	);
+	const domainOptions = useMemo(
+		() =>
+			[...domainMap.entries()]
+				.map(([value, label]) => ({ value, label }))
+				.sort((left, right) => left.label.localeCompare(right.label)),
+		[domainMap],
+	);
+
+	useEffect(() => {
+		if (scopeDomain && scopeDomain !== UNASSIGNED_DOMAIN_KEY && domainMap.has(scopeDomain)) {
+			setBatchDomainId((current) => current || scopeDomain);
+		}
+	}, [domainMap, scopeDomain]);
+
+	const loadProjection = useCallback(async () => {
+		const requestId = projectionRequestRef.current + 1;
+		projectionRequestRef.current = requestId;
+		setProjectionLoading(true);
+		setProjectionError("");
+		const domainId = scopeDomain && scopeDomain !== UNASSIGNED_DOMAIN_KEY ? scopeDomain : undefined;
+		try {
+			const response = await getCatalogAssetStatsProjection(domainId);
+			if (projectionRequestRef.current !== requestId) return;
+			const snapshot = ((response as any)?.data ?? response) as CatalogAssetStatsProjection;
+			setProjection(snapshot);
+		} catch (error: unknown) {
+			if (projectionRequestRef.current !== requestId) return;
+			setProjection(null);
+			setProjectionError(error instanceof Error && error.message ? error.message : "资产统计投影读取失败");
+		} finally {
+			if (projectionRequestRef.current === requestId) setProjectionLoading(false);
+		}
+	}, [scopeDomain]);
+
+	useEffect(() => {
+		void loadProjection();
+		return () => {
+			projectionRequestRef.current += 1;
+		};
+	}, [loadProjection]);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: changing the association target starts a new bounded selection context.
 	useEffect(() => {
@@ -125,8 +181,63 @@ export function AssetLedgerView({
 		}
 	};
 
+	const assignSelectedAssets = async () => {
+		if (!batchDomainId || selectedAssetIds.length === 0 || batchSubmitting) return;
+		setBatchSubmitting(true);
+		setBatchFailures([]);
+		try {
+			const result = await assignAssetsToDomain(selectedAssetIds.map(String), batchDomainId, (id, domainId) =>
+				updateCatalogAssetV2Governance(id, { domainId }),
+			);
+			setBatchFailures(result.failures);
+			setSelectedAssetIds(result.failures.map((failure) => failure.assetId));
+			if (result.succeededIds.length > 0) {
+				toast.success(`已完成 ${result.succeededIds.length} 个资产归域`);
+				onAssetChanged?.();
+				void loadProjection();
+			}
+			if (result.failures.length > 0) {
+				toast.error(`${result.failures.length} 个资产归域失败，请查看逐项结果`);
+			}
+		} catch (error: unknown) {
+			toast.error(error instanceof Error && error.message ? error.message : "批量归域失败");
+		} finally {
+			setBatchSubmitting(false);
+		}
+	};
+
+	const projectionTotal = useMemo(() => {
+		if (!projection) return undefined;
+		if (scopeDomain !== UNASSIGNED_DOMAIN_KEY) return projection.total;
+		return projection.buckets
+			.filter((bucket) => !bucket.domainId)
+			.reduce((total, bucket) => total + Number(bucket.count || 0), 0);
+	}, [projection, scopeDomain]);
+	const projectionFreshnessLabel = projection
+		? { FRESH: "新鲜", STALE: "已过期", REBUILDING: "重建中" }[projection.freshness] || projection.freshness
+		: "—";
+
 	return (
 		<div className="asset-ledger-workbench space-y-3">
+			{projectionError ? (
+				<Alert
+					type="error"
+					showIcon
+					message="资产统计投影不可用"
+					description={`${projectionError}。资产明细仍可读取，但导航计数不应视为精确值。`}
+				/>
+			) : (
+				<Alert
+					type={projection?.freshness === "FRESH" && !projection.approximate ? "info" : "warning"}
+					showIcon
+					message={projectionLoading ? "正在读取资产统计投影" : `资产统计投影：${projectionFreshnessLabel}`}
+					description={
+						projection
+							? `当前范围 ${projectionTotal ?? 0} 个；统计时点 ${formatTime(projection.asOf)}；状态 ${projection.projectionState || "—"}；${projection.approximate ? "当前为近似计数" : "当前为精确计数"}。`
+							: "统计投影尚未生成；资产明细不受影响。"
+					}
+				/>
+			)}
 			{associationTagId ? (
 				<Alert
 					type="info"
@@ -146,6 +257,40 @@ export function AssetLedgerView({
 							</Button>
 						</Space>
 					}
+				/>
+			) : (
+				<div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3">
+					<div>
+						<div className="text-sm font-medium text-slate-900">批量归域</div>
+						<div className="text-xs text-slate-500">显式选择当前页资产，逐项执行并保留失败明细；单批最多 100 个。</div>
+					</div>
+					<Space wrap>
+						<Select
+							showSearch
+							optionFilterProp="label"
+							placeholder="选择目标主题域"
+							value={batchDomainId || undefined}
+							onChange={setBatchDomainId}
+							options={domainOptions}
+							style={{ width: 240 }}
+						/>
+						<Button
+							type="primary"
+							loading={batchSubmitting}
+							disabled={!batchDomainId || selectedAssetIds.length === 0}
+							onClick={() => void assignSelectedAssets()}
+						>
+							归域选中资产（{selectedAssetIds.length}）
+						</Button>
+					</Space>
+				</div>
+			)}
+			{batchFailures.length > 0 ? (
+				<Alert
+					type="error"
+					showIcon
+					message={`${batchFailures.length} 个资产归域失败`}
+					description={batchFailures.map((failure) => `${failure.assetId}：${failure.message}`).join("；")}
 				/>
 			) : null}
 			<div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -177,18 +322,20 @@ export function AssetLedgerView({
 					rowKey="id"
 					dataSource={records}
 					pagination={false}
-					rowSelection={
-						associationTagId
-							? {
-									selectedRowKeys: selectedAssetIds,
-									onChange: setSelectedAssetIds,
-									getCheckboxProps: (row) => ({
-										disabled: !row.assetType || !row.assetKey,
-										title: !row.assetType || !row.assetKey ? "资产身份不完整，无法关联标签" : undefined,
-									}),
-								}
-							: undefined
-					}
+					rowSelection={{
+						selectedRowKeys: selectedAssetIds,
+						onChange: (keys) => {
+							if (keys.length > 100) {
+								toast.error("单批最多选择 100 个资产");
+								return;
+							}
+							setSelectedAssetIds(keys);
+						},
+						getCheckboxProps: (row) => ({
+							disabled: Boolean(associationTagId) && (!row.assetType || !row.assetKey),
+							title: associationTagId && (!row.assetType || !row.assetKey) ? "资产身份不完整，无法关联标签" : undefined,
+						}),
+					}}
 					scroll={{ x: ASSET_TABLE_SCROLL_X }}
 					tableLayout="fixed"
 					className="catalog-assets-table"

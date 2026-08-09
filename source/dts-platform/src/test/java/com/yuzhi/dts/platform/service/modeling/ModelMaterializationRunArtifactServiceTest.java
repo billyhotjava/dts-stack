@@ -366,6 +366,42 @@ class ModelMaterializationRunArtifactServiceTest {
             "MODEL_DBT_BUILD_RESULT_FAILED",
             NOW
         );
+        verify(runs).recordDbtResults(
+            GROUP_ID,
+            INVOCATION_ID,
+            Map.of(scope().entries().getFirst().pipelineRunId(), "SKIPPED_DEPENDENCY_FAILED"),
+            NOW
+        );
+    }
+
+    @Test
+    void preservesDirectFailureAndDownstreamDependencySkipPerCandidateEntry() throws Exception {
+        CandidateBuildScope scope = twoEntryScope();
+        when(builds.loadCandidateBuildScope("tenant-a", GROUP_ID)).thenReturn(scope);
+        writeTwoEntryArtifacts("error", "skipped");
+
+        assertThatThrownBy(() ->
+            service.syncAndProbe(
+                GROUP_ID,
+                new ModelMaterializationRunArtifactService.SyncProbeCommand("RELEASE_BUILD", BUNDLE)
+            )
+        )
+            .isInstanceOf(ModelMaterializationRuntimeException.class)
+            .extracting(error -> ((ModelMaterializationRuntimeException) error).code())
+            .isEqualTo("MODEL_DBT_BUILD_RESULT_FAILED");
+
+        verify(runs).recordDbtResults(
+            GROUP_ID,
+            INVOCATION_ID,
+            Map.of(
+                scope.entries().get(0).pipelineRunId(),
+                "FAILED",
+                scope.entries().get(1).pipelineRunId(),
+                "SKIPPED_DEPENDENCY_FAILED"
+            ),
+            NOW
+        );
+        verify(runs).markFailed(GROUP_ID, "MODEL_DBT_BUILD_RESULT_FAILED", NOW);
     }
 
     @Test
@@ -1197,6 +1233,10 @@ class ModelMaterializationRunArtifactServiceTest {
     }
 
     private void writeTwoEntryArtifacts() throws Exception {
+        writeTwoEntryArtifacts("success", "success");
+    }
+
+    private void writeTwoEntryArtifacts(String firstStatus, String secondStatus) throws Exception {
         Files.createDirectories(project.resolve("target"));
         String manifest = """
             {
@@ -1267,14 +1307,16 @@ class ModelMaterializationRunArtifactServiceTest {
                 "invocation_id": "%s"
               },
               "results": [
-                {"unique_id": "%s", "status": "success"},
-                {"unique_id": "%s", "status": "success"}
+                {"unique_id": "%s", "status": "%s"},
+                {"unique_id": "%s", "status": "%s"}
               ]
             }
             """.formatted(
             INVOCATION_ID,
             UNIQUE_ID,
-            SECOND_UNIQUE_ID
+            firstStatus,
+            SECOND_UNIQUE_ID,
+            secondStatus
         );
         Files.writeString(
             project.resolve("target/manifest.json"),

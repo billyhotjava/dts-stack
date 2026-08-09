@@ -2,7 +2,9 @@
 
 **优先级**：P0
 
-**状态**：BLOCKED
+**状态**：CODE_COMPLETE / LOCAL_VERIFIED_NON_E2E
+
+**证据**：`../../assets/implementation-evidence-20260810.md`
 
 ## 目标
 
@@ -12,7 +14,7 @@
 
 | ID | Task | 状态 | 依赖 |
 |---|---|---|---|
-| T01 | 收口 command/read boundary 与授权审计 | BLOCKED | F0/T01 |
+| T01 | 收口 command/read boundary 与授权审计 | CODE_COMPLETE / LOCAL_VERIFIED_NON_E2E | F0/T01（发布验收仍阻塞） |
 
 ## Feature DoD
 

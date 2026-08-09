@@ -13,10 +13,10 @@ import type { DataModelingRoute } from "../types";
 import { ConceptDimensionRecordDialog } from "./ConceptDimensionRecordDialog";
 import { isBlankModelField } from "./ModelFieldEditorTable";
 import { ModelingWorkbenchEditor } from "./ModelingWorkbenchEditor";
+import { ModelPublishDialog } from "./ModelPublishDialog";
 import { ModelWorkbenchCatalogList } from "./ModelWorkbenchCatalogList";
 import { ModelWorkbenchCatalogPanel } from "./ModelWorkbenchCatalogPanel";
 import { ModelWorkbenchDialog, type WorkbenchDialog } from "./ModelWorkbenchDialog";
-import { ModelPublishDialog } from "./ModelPublishDialog";
 import {
 	buildWorkbenchCatalogGroups,
 	modelDraftFingerprint,
@@ -123,7 +123,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const [createCategory, setCreateCategory] = useState("");
 	const [createQuery, setCreateQuery] = useState("");
 	const [viewMode, setViewMode] = useState<"domain" | "category">("domain");
-	const [catalogMode, setCatalogMode] = useState<"tree" | "list">("tree");
+	const [catalogMode, setCatalogMode] = useState<"tree" | "list">("list");
 	const [selectedModelId, setSelectedModelId] = useState("");
 	const [selectedDimensionId, setSelectedDimensionId] = useState("");
 	const [dialog, setDialog] = useState<WorkbenchDialog>(null);
@@ -589,11 +589,13 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		setRepresentation(null);
 		setRepresentationFailure("");
 		void getModelLifecycle(selectedModel.id)
-			.then(({ implementation }) => getModelRepresentation(selectedModel.id, {
-				modelRevision: selectedModel.revision,
-				implementationRevision: implementation?.implementationRevision,
-				representationScope: "BUSINESS",
-			}))
+			.then(({ implementation }) =>
+				getModelRepresentation(selectedModel.id, {
+					modelRevision: selectedModel.revision,
+					implementationRevision: implementation?.implementationRevision,
+					representationScope: "BUSINESS",
+				}),
+			)
 			.then((value) => {
 				if (active) setRepresentation(value);
 			})
@@ -619,7 +621,17 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 					domains={context.domains}
 					key={`model-list:${materializationRefreshKey}`}
 					models={context.models}
-					onBack={() => setCatalogMode("tree")}
+					onBack={() => {
+						if (!confirmDiscard()) return;
+						replaceDraft(null);
+						setSelectedModelId("");
+						setSelectedDimensionId("");
+						setCatalogMode("tree");
+						syncWorkbenchUrl((params) => {
+							params.delete("modelSpecId");
+							params.delete("dimensionDefinitionId");
+						});
+					}}
 					onChooseDimension={(item) => {
 						setCatalogMode("tree");
 						chooseDimension(item);
@@ -631,61 +643,68 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 					onMaterialize={setBatchMaterializationModels}
 				/>
 			) : context ? (
-				<div className="dmx-model-workbench">
-					<ModelWorkbenchCatalogPanel
-						canMaintain={canMaintain}
-						categoryRoots={categoryRoots}
-						createCategory={createCategory}
-						createOpen={createOpen}
-						createQuery={createQuery}
-						domain={domain}
-						domainOpen={domainOpen}
-						effectiveView={effectiveView}
-						emptyMessage={catalogEmptyMessage}
-						groups={groups}
-						layer={layer}
-						loading={loading}
-						modelDomainOptions={modelDomainOptions}
-						onChooseDimension={chooseDimension}
-						onChooseModel={(item) => void chooseModel(item)}
-						onCloneDimension={(item) => void cloneDimension(item)}
-						onCreate={createModel}
-						onCreateCategoryChange={setCreateCategory}
-						onCreateQueryChange={setCreateQuery}
-						onDomainChange={setDomain}
-						onGoToGraph={goToGraph}
-						onGoToGraphDimension={goToDimensionGraph}
-						onImport={navigateToReverseModeling}
-						onLayerChange={(value) => {
-							setDomain("");
-							setLayer(value);
-						}}
-						onList={() => setCatalogMode("list")}
-						onQueryChange={setQuery}
-						onRefresh={refresh}
-						onRemoveDimension={(item) => void removeDimension(item)}
-						onRemoveModel={(item) => void removeModel(item)}
-						onToggleCreate={() => {
-							setCreateCategory("");
-							setCreateQuery("");
-							if (resolveWorkbenchCreateAction(Boolean(draft), createOpen) === "CREATE_DIMENSION_TABLE") {
-								createModel("dimension-table");
-								return;
-							}
-							setCreateOpen((open) => !open);
-						}}
-						onToggleDomain={(key) => setDomainOpen((current) => ({ ...current, [key]: current[key] === false }))}
-						onViewChange={(value) => {
-							setDomain("");
-							setViewMode(value);
-						}}
-						query={query}
-						saving={saving}
-						selectedDimensionId={selectedDimensionId}
-						selectedModelId={selectedModelId}
-					/>
+				<div className={`dmx-model-workbench${draft ? " dmx-model-workbench--editor-only" : ""}`}>
+					{draft ? null : (
+						<ModelWorkbenchCatalogPanel
+							canMaintain={canMaintain}
+							categoryRoots={categoryRoots}
+							createCategory={createCategory}
+							createOpen={createOpen}
+							createQuery={createQuery}
+							domain={domain}
+							domainOpen={domainOpen}
+							effectiveView={effectiveView}
+							emptyMessage={catalogEmptyMessage}
+							groups={groups}
+							layer={layer}
+							loading={loading}
+							modelDomainOptions={modelDomainOptions}
+							onChooseDimension={chooseDimension}
+							onChooseModel={(item) => void chooseModel(item)}
+							onCloneDimension={(item) => void cloneDimension(item)}
+							onCreate={createModel}
+							onCreateCategoryChange={setCreateCategory}
+							onCreateQueryChange={setCreateQuery}
+							onDomainChange={setDomain}
+							onGoToGraph={goToGraph}
+							onGoToGraphDimension={goToDimensionGraph}
+							onImport={navigateToReverseModeling}
+							onLayerChange={(value) => {
+								setDomain("");
+								setLayer(value);
+							}}
+							onList={() => setCatalogMode("list")}
+							onQueryChange={setQuery}
+							onRefresh={refresh}
+							onRemoveDimension={(item) => void removeDimension(item)}
+							onRemoveModel={(item) => void removeModel(item)}
+							onToggleCreate={() => {
+								setCreateCategory("");
+								setCreateQuery("");
+								if (resolveWorkbenchCreateAction(Boolean(draft), createOpen) === "CREATE_DIMENSION_TABLE") {
+									createModel("dimension-table");
+									return;
+								}
+								setCreateOpen((open) => !open);
+							}}
+							onToggleDomain={(key) => setDomainOpen((current) => ({ ...current, [key]: current[key] === false }))}
+							onViewChange={(value) => {
+								setDomain("");
+								setViewMode(value);
+							}}
+							query={query}
+							saving={saving}
+							selectedDimensionId={selectedDimensionId}
+							selectedModelId={selectedModelId}
+						/>
+					)}
 					<section className="dmx-model-editor">
 						<div className="dmx-editor-tab">
+							{draft ? (
+								<button className="dmx-table-action" onClick={() => setCatalogMode("list")} type="button">
+									返回模型列表
+								</button>
+							) : null}
 							<span>▤</span>
 							<strong>
 								{draft?.name || (draft ? `新建${MODEL_KIND_CONFIG[draft.createKind].label}` : "模型编辑器")}

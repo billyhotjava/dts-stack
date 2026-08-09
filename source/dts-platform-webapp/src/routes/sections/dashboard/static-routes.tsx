@@ -31,6 +31,7 @@ const OpsInstancesPage = lazy(() => import("@/pages/ops/OpsInstancesPage"));
 const OpsAlertLogPage = lazy(() => import("@/pages/ops/OpsAlertLogPage"));
 const OpsBackfillPage = lazy(() => import("@/pages/ops/OpsBackfillPage"));
 const WorkflowCenterPage = lazy(() => import("@/pages/workbench/WorkflowCenterPage"));
+const DataArchitecturePage = lazy(() => import("@/pages/data-architecture/DataArchitecturePage"));
 const DataModelingPage = lazy(() => import("@/pages/data-modeling/DataModelingPage"));
 const LegacyDataModelingRedirect = lazy(() => import("@/pages/data-modeling/LegacyDataModelingRedirect"));
 const MeasurementUnitsPage = lazy(() => import("@/pages/governance/MeasurementUnitsPage"));
@@ -234,6 +235,14 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		element: (
 			<S>
 				<StandardPackagePage />
+			</S>
+		),
+	},
+	{
+		path: "data-architecture",
+		element: (
+			<S>
+				<DataArchitecturePage />
 			</S>
 		),
 	},

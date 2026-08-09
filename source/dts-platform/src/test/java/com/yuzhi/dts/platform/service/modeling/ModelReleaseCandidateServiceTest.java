@@ -476,9 +476,12 @@ class ModelReleaseCandidateServiceTest {
         );
         when(repository.findCommandByIdempotencyKey(TENANT, "rematerialize-attempt-key")).thenReturn(Optional.empty());
         when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(built));
+        when(repository.findCurrentModelReferences(TENANT, PLAN_ID, List.of(MODEL_ID))).thenReturn(
+            Map.of(MODEL_ID, currentReference(1, CHECKSUM))
+        );
         when(repository.transitionAndAppend(any(), anyInt(), any(), any(), anyString(), any(), any())).thenReturn(1);
 
-        var result = service.restartForRematerialization(
+        var result = service.transition(
             TENANT,
             ACTOR,
             CANDIDATE_ID,
@@ -499,7 +502,7 @@ class ModelReleaseCandidateServiceTest {
             receipt.capture()
         );
         assertThat(receipt.getValue().reason()).isEqualTo("rebuild selected relations");
-        verify(repository, never()).findCurrentModelReferences(anyString(), any(), anyList());
+        verify(repository).findCurrentModelReferences(TENANT, PLAN_ID, List.of(MODEL_ID));
     }
 
     @Test

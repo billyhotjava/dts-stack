@@ -12,6 +12,7 @@ export type ModelingFactProvenance = {
 };
 
 export type Sprint64BusinessProcess = ModelingFactProvenance & {
+	id: string;
 	version: number;
 	processId: string;
 	domainId: string;
@@ -103,11 +104,7 @@ export const listBusinessProcessesApi = (domainId: string) =>
 export const createBusinessProcessApi = (
 	domainId: string,
 	data: { processId: string; name: string; description?: string },
-) =>
-	quietPost<Sprint64BusinessProcess>(
-		`/modeling/business-processes?domainId=${encodeURIComponent(domainId)}`,
-		data,
-	);
+) => quietPost<Sprint64BusinessProcess>(`/modeling/business-processes?domainId=${encodeURIComponent(domainId)}`, data);
 
 export const deleteBusinessProcessApi = (domainId: string, processId: string) =>
 	quietDelete<boolean>(

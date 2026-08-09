@@ -59,6 +59,9 @@ class ModelSpecApplicationServiceTest {
     private static final UUID DOMAIN_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
     private static final UUID MODEL_ID = UUID.fromString("30000000-0000-0000-0000-000000000001");
     private static final UUID SOURCE_BINDING_ID = UUID.fromString("50000000-0000-0000-0000-000000000001");
+    private static final UUID BUSINESS_PROCESS_ID = UUID.fromString("70000000-0000-0000-0000-000000000001");
+    private static final UUID DATA_MART_ID = UUID.fromString("71000000-0000-0000-0000-000000000001");
+    private static final UUID SUBJECT_DOMAIN_ID = UUID.fromString("72000000-0000-0000-0000-000000000001");
     private static final Instant NOW = Instant.parse("2026-07-19T00:00:00Z");
 
     @Mock
@@ -154,8 +157,14 @@ class ModelSpecApplicationServiceTest {
     @Test
     void createsAnImportedModelWithTheIdCommittedByPreview() {
         UUID previewedId = UUID.fromString("30000000-0000-0000-0000-000000000070");
-        CreateModelSpecCommand command = command("s70-import-create", "customer_imported");
+        CreateModelSpecCommand command = withBusinessContext(
+            command("s70-import-create", "customer_imported"),
+            BUSINESS_PROCESS_ID,
+            null,
+            null
+        );
         when(repository.findByIdempotencyKey(TENANT, command.idempotencyKey())).thenReturn(Optional.empty());
+        when(repository.hasConfirmedBusinessProcess(BUSINESS_PROCESS_ID, DOMAIN_ID)).thenReturn(true);
         when(repository.insertV2(eq(TENANT), eq(ACTOR), eq(command), any(), anyString(), anyString())).thenReturn(1);
 
         ModelSpecApplicationService.CreateResult result = service.createImported(TENANT, ACTOR, previewedId, command);
@@ -170,6 +179,51 @@ class ModelSpecApplicationServiceTest {
             eq(previewedId.toString()),
             any()
         );
+    }
+
+    @Test
+    void rejectsAnImportedFactWhoseStableProcessDoesNotBelongToTheModelDomain() {
+        CreateModelSpecCommand command = withBusinessContext(
+            command("fact-process-mismatch", "customer_process_mismatch"),
+            BUSINESS_PROCESS_ID,
+            null,
+            null
+        );
+        when(repository.findByIdempotencyKey(TENANT, command.idempotencyKey())).thenReturn(Optional.empty());
+        when(repository.hasConfirmedBusinessProcess(BUSINESS_PROCESS_ID, DOMAIN_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.createImported(TENANT, ACTOR, MODEL_ID, command))
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("MODEL_SPEC_BUSINESS_PROCESS_CONTEXT_INVALID");
+
+        verify(repository, never()).insertV2(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void rejectsAnImportedApplicationWhoseSubjectDoesNotBelongToTheSelectedMart() {
+        UUID upstreamId = UUID.fromString("73000000-0000-0000-0000-000000000001");
+        CreateModelSpecCommand command = withBusinessContext(
+            derivedCommand(
+                "application-subject-mismatch",
+                "customer_application_mismatch",
+                ModelType.APPLICATION,
+                List.of(new ModelRevisionRef(upstreamId, 1))
+            ),
+            null,
+            DATA_MART_ID,
+            SUBJECT_DOMAIN_ID
+        );
+        when(repository.findByIdempotencyKey(TENANT, command.idempotencyKey())).thenReturn(Optional.empty());
+        when(repository.planHasCurrentDataMart(TENANT, PLAN_ID, DATA_MART_ID, DOMAIN_ID)).thenReturn(true);
+        when(repository.hasCurrentSubjectDomain(TENANT, SUBJECT_DOMAIN_ID, DATA_MART_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.createImported(TENANT, ACTOR, MODEL_ID, command))
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("MODEL_SPEC_SUBJECT_DOMAIN_CONTEXT_INVALID");
+
+        verify(repository, never()).insertV2(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -1808,6 +1862,45 @@ class ModelSpecApplicationServiceTest {
             List.of(),
             null,
             idempotencyKey
+        );
+    }
+
+    private static CreateModelSpecCommand withBusinessContext(
+        CreateModelSpecCommand command,
+        UUID businessProcessId,
+        UUID dataMartId,
+        UUID subjectDomainId
+    ) {
+        return new CreateModelSpecCommand(
+            command.planId(),
+            command.domainId(),
+            command.modelType(),
+            command.layer(),
+            command.name(),
+            command.description(),
+            command.implementationMode(),
+            command.materialization(),
+            command.businessActivityRef(),
+            command.consumptionScenario(),
+            command.grain(),
+            command.factShape(),
+            command.timeSemantics(),
+            command.fields(),
+            command.sourceRefs(),
+            command.dependsOn(),
+            command.dimensionRefs(),
+            command.metricRefs(),
+            command.standardBindings(),
+            command.generationStrategy(),
+            command.dimensionProfile(),
+            command.dimensionDefinitionRef(),
+            command.idempotencyKey(),
+            dataMartId,
+            command.variantCode(),
+            command.implementationPolicy(),
+            command.warehouseLayerCode(),
+            businessProcessId,
+            subjectDomainId
         );
     }
 

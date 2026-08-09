@@ -14,6 +14,7 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogAssetExtensionRepository
 import com.yuzhi.dts.platform.repository.catalog.CatalogAssetMappingRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.catalog.OpenMetadataAssetCacheRepository;
 import com.yuzhi.dts.platform.repository.catalog.OpenMetadataColumnCacheRepository;
@@ -22,6 +23,7 @@ import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.catalog.dto.AssetRef;
 import com.yuzhi.dts.platform.service.catalog.dto.CatalogTagDto;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.GovernanceReadiness;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
@@ -84,11 +86,13 @@ public class CatalogAssetPortalService {
     private final CatalogAssetExtensionRepository extensionRepository;
     private final CatalogAssetMappingRepository mappingRepository;
     private final CatalogDatasetRepository datasetRepository;
+    private final CatalogDomainRepository domainRepository;
     private final CatalogTableSchemaRepository tableSchemaRepository;
     private final CatalogColumnSchemaRepository catalogColumnSchemaRepository;
     private final AccessChecker accessChecker;
     private final CatalogClassificationService classificationService;
     private final CatalogAssetTagService assetTagService;
+    private final CatalogAssetRegistrationService assetRegistrationService;
 
     public CatalogAssetPortalService(
         OpenMetadataAssetCacheRepository assetRepository,
@@ -97,11 +101,13 @@ public class CatalogAssetPortalService {
         CatalogAssetExtensionRepository extensionRepository,
         CatalogAssetMappingRepository mappingRepository,
         CatalogDatasetRepository datasetRepository,
+        CatalogDomainRepository domainRepository,
         CatalogTableSchemaRepository tableSchemaRepository,
         CatalogColumnSchemaRepository catalogColumnSchemaRepository,
         AccessChecker accessChecker,
         CatalogClassificationService classificationService,
-        CatalogAssetTagService assetTagService
+        CatalogAssetTagService assetTagService,
+        CatalogAssetRegistrationService assetRegistrationService
     ) {
         this.assetRepository = assetRepository;
         this.columnRepository = columnRepository;
@@ -109,11 +115,13 @@ public class CatalogAssetPortalService {
         this.extensionRepository = extensionRepository;
         this.mappingRepository = mappingRepository;
         this.datasetRepository = datasetRepository;
+        this.domainRepository = domainRepository;
         this.tableSchemaRepository = tableSchemaRepository;
         this.catalogColumnSchemaRepository = catalogColumnSchemaRepository;
         this.accessChecker = accessChecker;
         this.classificationService = classificationService;
         this.assetTagService = assetTagService;
+        this.assetRegistrationService = assetRegistrationService;
     }
 
     /**
@@ -696,6 +704,7 @@ public class CatalogAssetPortalService {
         extension.setGovernanceStatus(resolveGovernanceStatus(extension));
         extensionRepository.save(extension);
         AssetSummary summary = hydrateAssetTags(List.of(toSummary(asset, extension, mapping, legacy))).get(0);
+        synchronizeGovernanceProjection(summary);
         if (!canRead(extension, legacy, activeDept)) {
             return new AssetDetail(summary, List.of(), null, null);
         }
@@ -711,8 +720,15 @@ public class CatalogAssetPortalService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "资产不存在或无权访问");
         }
         if (update != null) {
-            if (update.domainId() != null || update.securityPolicyRefs() != null) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "该资产的主题域和安全策略请在资产治理页维护");
+            if (update.securityPolicyRefs() != null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "该资产的安全策略请在资产治理页维护");
+            }
+            if (update.domainId() != null) {
+                legacy.setDomain(
+                    domainRepository
+                        .findById(update.domainId())
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "目标主题域不存在"))
+                );
             }
             if (update.classification() != null) {
                 CatalogAssetContract contract = CatalogAssetContractMapper.fromLegacy(legacy);
@@ -739,7 +755,23 @@ public class CatalogAssetPortalService {
         }
         CatalogDataset saved = datasetRepository.save(legacy);
         AssetSummary summary = hydrateAssetTags(List.of(toLegacySummary(saved))).get(0);
+        synchronizeGovernanceProjection(summary);
         return new AssetDetail(summary, List.of(), null, null);
+    }
+
+    private void synchronizeGovernanceProjection(AssetSummary summary) {
+        if (summary == null || !"DATASET".equals(summary.assetType()) || !StringUtils.hasText(summary.assetKey())) {
+            return;
+        }
+        GovernanceReadiness readiness = "GOVERNED".equals(summary.governanceStatus())
+            ? GovernanceReadiness.GOVERNED
+            : summary.domainId() == null ? GovernanceReadiness.UNASSIGNED : GovernanceReadiness.INCOMPLETE;
+        assetRegistrationService.updateGovernance(
+            CatalogAssetType.DATASET,
+            summary.assetKey(),
+            summary.domainId(),
+            readiness
+        );
     }
 
     private String sealGovernanceClassification(

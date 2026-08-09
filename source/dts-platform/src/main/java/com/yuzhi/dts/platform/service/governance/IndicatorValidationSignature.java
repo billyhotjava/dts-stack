@@ -45,6 +45,12 @@ final class IndicatorValidationSignature {
         append(input, "name", normalize(entity.getName()));
         append(input, "code", normalize(entity.getCode()));
         append(input, "domain", normalizeLower(entity.getDomain()));
+        append(input, "businessCategoryId", uuid(entity.getBusinessCategoryId()));
+        append(input, "dataDomainId", uuid(entity.getDataDomainId()));
+        append(input, "businessProcessId", uuid(entity.getBusinessProcessId()));
+        append(input, "metricType", normalizeUpper(entity.getMetricType()));
+        append(input, "metricGroupCode", normalize(entity.getMetricGroupCode()));
+        append(input, "sourceRefs", canonicalJson(entity.getSourceRefs(), objectMapper, "sourceRefs"));
         append(input, "aggregation", normalizeUpper(entity.getAggregationType()));
         append(input, "measure", normalize(entity.getMeasureField()));
         append(input, "date", normalize(entity.getDateColumn()));
@@ -109,6 +115,13 @@ final class IndicatorValidationSignature {
             );
             append(state, "name", dependency != null ? normalize(dependency.getName()) : "");
             append(state, "domain", dependency != null ? normalizeLower(dependency.getDomain()) : "");
+            append(state, "businessCategoryId", dependency != null ? uuid(dependency.getBusinessCategoryId()) : "");
+            append(state, "dataDomainId", dependency != null ? uuid(dependency.getDataDomainId()) : "");
+            append(state, "businessProcessId", dependency != null ? uuid(dependency.getBusinessProcessId()) : "");
+            append(state, "metricType", dependency != null ? normalizeUpper(dependency.getMetricType()) : "");
+            append(state, "sourceRefs", dependency != null
+                ? canonicalJson(dependency.getSourceRefs(), objectMapper, "dependency.sourceRefs")
+                : "");
             append(
                 state,
                 "aggregation",
@@ -293,6 +306,10 @@ final class IndicatorValidationSignature {
 
     private static String normalize(String value) {
         return StringUtils.hasText(value) ? value.trim() : "";
+    }
+
+    private static String uuid(java.util.UUID value) {
+        return value == null ? "" : value.toString();
     }
 
     private static String normalizeUpper(String value) {

@@ -15,12 +15,14 @@ import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.Ent
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.EvidenceState;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.EvidenceSummaryView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.ModelMaterializationStatusView;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.MaterializationAttemptView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.RelationEvidenceState;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.ReplaceScopeCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.TransitionCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.WorkbenchState;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.WorkbenchView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.WorkspaceAction;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidatePreflightService.BatchPreflightView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateException.Kind;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -54,6 +56,7 @@ public class ModelReleaseCandidateApplicationService {
     private final CandidatePublicationCoordinator publicationCoordinator;
     private final CandidateRollbackCommitService rollbackCommits;
     private final ReleaseCandidateWorkbenchEvidencePort workbenchEvidence;
+    private final ModelReleaseCandidatePreflightService preflight;
 
     public ModelReleaseCandidateApplicationService(
         ModelReleaseCandidateRepository repository,
@@ -64,7 +67,8 @@ public class ModelReleaseCandidateApplicationService {
         CandidatePublicationAdmissionService publicationAdmission,
         CandidatePublicationCoordinator publicationCoordinator,
         CandidateRollbackCommitService rollbackCommits,
-        ReleaseCandidateWorkbenchEvidencePort workbenchEvidence
+        ReleaseCandidateWorkbenchEvidencePort workbenchEvidence,
+        ModelReleaseCandidatePreflightService preflight
     ) {
         this.repository = repository;
         this.commands = commands;
@@ -75,6 +79,7 @@ public class ModelReleaseCandidateApplicationService {
         this.publicationCoordinator = publicationCoordinator;
         this.rollbackCommits = rollbackCommits;
         this.workbenchEvidence = workbenchEvidence;
+        this.preflight = preflight;
     }
 
     @Transactional(readOnly = true)
@@ -131,6 +136,18 @@ public class ModelReleaseCandidateApplicationService {
         return workbenchEvidence.findLatest(access.tenantId(), access.planId(), ids);
     }
 
+    @Transactional(readOnly = true)
+    public List<MaterializationAttemptView> materializationHistory(
+        String tenantId,
+        String actorId,
+        UUID planId,
+        UUID candidateId
+    ) {
+        Access access = authorizeRead(tenantId, actorId, planId);
+        CandidateView candidate = candidateForPlan(access.tenantId(), access.planId(), candidateId);
+        return workbenchEvidence.findHistory(candidate);
+    }
+
     public CommandResult create(
         String tenantId,
         String actorId,
@@ -144,13 +161,16 @@ public class ModelReleaseCandidateApplicationService {
                 "Candidate plan must match the plan in the request path"
             );
         }
-        if (
-            repository
-                .findByIdempotencyKey(access.tenantId(), command.idempotencyKey())
-                .filter(existing -> access.planId().equals(existing.planId()))
-                .isPresent()
-        ) {
-            return roleAware(commands.create(access.tenantId(), access.actorId(), command), access);
+        if (repository.findByIdempotencyKey(access.tenantId(), command.idempotencyKey()).isPresent()) {
+            return roleAware(
+                commands.createBatchWithExpandedScope(
+                    access.tenantId(),
+                    access.actorId(),
+                    command,
+                    command.entries()
+                ),
+                access
+            );
         }
         CandidateView current = repository
             .listForWorkbench(access.tenantId(), access.planId())
@@ -175,7 +195,36 @@ public class ModelReleaseCandidateApplicationService {
                 )
             );
         }
-        return roleAware(commands.create(access.tenantId(), access.actorId(), command), access);
+        ModelReleaseCandidatePreflightService.PreflightResult evaluated = preflight.requireEligible(
+            access.tenantId(),
+            command
+        );
+        return roleAware(
+            commands.createBatchWithExpandedScope(
+                access.tenantId(),
+                access.actorId(),
+                command,
+                evaluated.command().entries()
+            ),
+            access
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public BatchPreflightView preflight(
+        String tenantId,
+        String actorId,
+        UUID planId,
+        CreateCandidateCommand command
+    ) {
+        Access access = authorizeMaintainer(tenantId, actorId, planId);
+        if (command == null || !access.planId().equals(command.planId())) {
+            throw badRequest(
+                "MODEL_RELEASE_CANDIDATE_PLAN_MISMATCH",
+                "Candidate plan must match the plan in the request path"
+            );
+        }
+        return preflight.preview(access.tenantId(), command);
     }
 
     public CommandResult replaceScope(
@@ -350,67 +399,41 @@ public class ModelReleaseCandidateApplicationService {
                 "Rematerialization plan must match the plan in the request path"
             );
         }
-        if (command.entries().isEmpty()) {
-            throw badRequest(ModelReleaseCandidateContract.SCOPE_EMPTY_ERROR_CODE, "Select at least one model to materialize");
-        }
-
-        CandidateView replacementSource;
+        Set<UUID> currentScope = current
+            .entries()
+            .stream()
+            .map(ModelReleaseCandidateContract.EntryView::modelSpecId)
+            .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        Set<UUID> requestedScope = command
+            .entries()
+            .stream()
+            .map(ModelReleaseCandidateContract.ScopeEntryCommand::modelSpecId)
+            .collect(java.util.stream.Collectors.toUnmodifiableSet());
         if (
-            current.status() == DeliveryStatus.BUILT ||
-            (current.status() == DeliveryStatus.STALE && expectedVersion < current.version())
+            !current.environment().equals(command.environment()) ||
+            (!requestedScope.isEmpty() && !currentScope.equals(requestedScope))
         ) {
-            replacementSource = commands
-                .supersedeForRematerialization(
-                    access.tenantId(),
-                    access.actorId(),
-                    sourceCandidateId,
-                    new TransitionCommand(
-                        expectedVersion,
-                        DeliveryStatus.STALE,
-                        phaseKey(command.idempotencyKey(), sourceCandidateId, "archive"),
-                        command.reason()
-                    )
-                )
-                .candidate();
-        } else if (isReplacementSource(current.status())) {
-            replacementSource = current;
-        } else {
             throw new ModelReleaseCandidateException(
-                "MODEL_RELEASE_CANDIDATE_REMATERIALIZATION_NOT_ALLOWED",
-                "Only a built or replaceable candidate can start rematerialization",
+                "MODEL_RELEASE_REMATERIALIZATION_SCOPE_MISMATCH",
+                "Rematerialization must retain the candidate environment and immutable model scope",
                 Kind.CONFLICT,
                 Map.of(
                     "candidateId",
                     current.id(),
-                    "currentStatus",
-                    current.status(),
-                    "currentVersion",
-                    current.version()
+                    "currentScope",
+                    currentScope,
+                    "requestedScope",
+                    requestedScope
                 )
             );
         }
-
-        CommandResult replacement = commands.createReplacement(
-            access.tenantId(),
-            access.actorId(),
-            sourceCandidateId,
-            replacementSource.version(),
-            new CreateCandidateCommand(
-                command.planId(),
-                command.environment(),
-                command.entries(),
-                phaseKey(command.idempotencyKey(), sourceCandidateId, "replacement"),
-                command.reason()
-            )
-        );
-        CandidateView candidate = replacement.candidate();
         return roleAware(
-            materializationStarts.start(
+            materializationStarts.rematerialize(
                 access.tenantId(),
                 access.actorId(),
-                candidate.id(),
-                candidate.version(),
-                phaseKey(command.idempotencyKey(), sourceCandidateId, "start"),
+                sourceCandidateId,
+                expectedVersion,
+                command.idempotencyKey(),
                 command.reason()
             ),
             access

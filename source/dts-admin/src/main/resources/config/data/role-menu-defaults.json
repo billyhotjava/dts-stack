@@ -66,6 +66,36 @@
     "requiredRoles": []
   },
   {
+    "code": "sys.nav.portal.architectureBusinessDomains",
+    "title": "业务分类与数据域",
+    "route": "/data-architecture?view=business-domains",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.architectureProcesses",
+    "title": "业务过程",
+    "route": "/data-architecture?view=processes",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.architectureLayers",
+    "title": "数仓分层",
+    "route": "/data-architecture?view=layers",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.architectureMarts",
+    "title": "数据集市",
+    "route": "/data-architecture?view=marts",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.architectureSubjects",
+    "title": "主题域",
+    "route": "/data-architecture?view=subjects",
+    "requiredRoles": []
+  },
+  {
     "code": "sys.nav.portal.modelingHomeWorkspace",
     "title": "建模概览",
     "route": "/data-modeling/home/workspace",

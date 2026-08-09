@@ -2,13 +2,21 @@ package com.yuzhi.dts.platform.service.governance.request;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
+import com.yuzhi.dts.platform.service.governance.IndicatorBusinessContextContract.MetricSourceRef;
 
 public class IndicatorUpsertRequest {
 
     private String code;
     private String name;
     private String category;
+    private UUID businessCategoryId;
+    private UUID dataDomainId;
+    private UUID businessProcessId;
+    private String metricType;
+    private String metricGroupCode;
+    private List<MetricSourceRef> sourceRefs;
     private String definition;
     private String expressionSql;
     private String datasetId;
@@ -88,6 +96,63 @@ public class IndicatorUpsertRequest {
 
     public void setCategory(String category) {
         this.category = category;
+    }
+
+    public UUID getBusinessCategoryId() {
+        return businessCategoryId;
+    }
+
+    public void setBusinessCategoryId(UUID businessCategoryId) {
+        this.businessCategoryId = businessCategoryId;
+    }
+
+    public UUID getDataDomainId() {
+        return dataDomainId;
+    }
+
+    public void setDataDomainId(UUID dataDomainId) {
+        this.dataDomainId = dataDomainId;
+    }
+
+    public UUID getBusinessProcessId() {
+        return businessProcessId;
+    }
+
+    public void setBusinessProcessId(UUID businessProcessId) {
+        this.businessProcessId = businessProcessId;
+    }
+
+    public String getMetricType() {
+        return metricType;
+    }
+
+    public void setMetricType(String metricType) {
+        this.metricType = metricType;
+    }
+
+    public String getMetricGroupCode() {
+        return metricGroupCode;
+    }
+
+    public void setMetricGroupCode(String metricGroupCode) {
+        this.metricGroupCode = metricGroupCode;
+    }
+
+    public List<MetricSourceRef> getSourceRefs() {
+        return sourceRefs;
+    }
+
+    public void setSourceRefs(List<MetricSourceRef> sourceRefs) {
+        this.sourceRefs = sourceRefs;
+    }
+
+    public boolean hasBusinessContextInput() {
+        return businessCategoryId != null ||
+        dataDomainId != null ||
+        businessProcessId != null ||
+        metricType != null ||
+        metricGroupCode != null ||
+        sourceRefs != null;
     }
 
     public String getDefinition() {

@@ -168,7 +168,7 @@ class ModelMaterializationStartServiceTest {
     @Test
     void rematerializationQueuesTheNextAttemptWithoutReplacingTheCandidate() {
         CandidateView building = candidate(DeliveryStatus.BUILDING);
-        when(candidateCommands.restartForRematerialization(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), any()))
+        when(candidateCommands.transition(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), any()))
             .thenReturn(new CommandResult(building, false, List.of()));
         when(builds.createRematerializationQueuedBuild(building, NOW))
             .thenReturn(mock(ModelMaterializationBuildRepository.QueuedBuildGroup.class));

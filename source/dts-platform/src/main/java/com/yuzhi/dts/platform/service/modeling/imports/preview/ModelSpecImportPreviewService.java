@@ -334,6 +334,7 @@ public class ModelSpecImportPreviewService {
         );
         Map<String, PackageModel> models = new TreeMap<>();
         Map<String, List<StandardBinding>> standardBindings = new TreeMap<>();
+        Map<String, ModelBusinessContext> businessContexts = new TreeMap<>();
         inspectedModels.forEach((uniqueId, inspected) -> {
             ResolvedSemanticOverride resolved = semanticOverrideResolver.resolve(
                 inspected,
@@ -341,6 +342,14 @@ public class ModelSpecImportPreviewService {
             );
             models.put(uniqueId, resolved.model());
             standardBindings.put(uniqueId, resolved.standardBindings());
+            businessContexts.put(
+                uniqueId,
+                new ModelBusinessContext(
+                    resolved.businessProcessId(),
+                    resolved.dataMartId(),
+                    resolved.subjectDomainId()
+                )
+            );
         });
         TreeSet<String> selected = new TreeSet<>();
         for (String uniqueId : safe(request.selectedUniqueIds())) {
@@ -381,6 +390,7 @@ public class ModelSpecImportPreviewService {
             normalizedHints(context.sourceMappings()),
             models,
             Map.copyOf(standardBindings),
+            Map.copyOf(businessContexts),
             renameSourcesByTarget,
             Set.copyOf(semanticOverrides.keySet())
         );
@@ -714,7 +724,10 @@ public class ModelSpecImportPreviewService {
                 canonicalSources(model, bindings),
                 canonicalDependencies(dependencies, projectedDependencies, input.models()),
                 dimensionDefinitionRef,
-                input.standardBindings().getOrDefault(model.dbtUniqueId(), List.of())
+                input.standardBindings().getOrDefault(model.dbtUniqueId(), List.of()),
+                input.businessContexts().getOrDefault(model.dbtUniqueId(), ModelBusinessContext.EMPTY).businessProcessId(),
+                input.businessContexts().getOrDefault(model.dbtUniqueId(), ModelBusinessContext.EMPTY).dataMartId(),
+                input.businessContexts().getOrDefault(model.dbtUniqueId(), ModelBusinessContext.EMPTY).subjectDomainId()
             )
         );
         addCanonicalIssues(model, canonical.issues(), issues);
@@ -1938,9 +1951,14 @@ public class ModelSpecImportPreviewService {
         Map<String, String> sourceMappings,
         Map<String, PackageModel> models,
         Map<String, List<StandardBinding>> standardBindings,
+        Map<String, ModelBusinessContext> businessContexts,
         Map<String, String> renameSourcesByTarget,
         Set<String> semanticOverrideIds
     ) {}
+
+    private record ModelBusinessContext(UUID businessProcessId, UUID dataMartId, UUID subjectDomainId) {
+        private static final ModelBusinessContext EMPTY = new ModelBusinessContext(null, null, null);
+    }
 
     private record ResolvedContext(List<ResolvedDomain> domains, List<ResolvedBinding> sources) {}
 

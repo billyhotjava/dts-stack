@@ -561,6 +561,8 @@
                         <testInclude>**/service/modeling/CanonicalModelLifecycleCompilerAdapterTest.java</testInclude>
                         <testInclude>**/service/modeling/DimensionModelApplicationServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/DimensionModelCreateRequestDecoderTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelWorkbenchCatalogQueryServiceTest.java</testInclude>
+                        <testInclude>**/repository/modeling/ModelWorkbenchCatalogRepositoryPostgresIT.java</testInclude>
                         <testInclude>**/service/modeling/representation/*.java</testInclude>
                         <testInclude>**/service/modeling/serving/*.java</testInclude>
                         <testInclude>**/service/modeling/dbtdraft/*.java</testInclude>
@@ -613,6 +615,9 @@
                         <testInclude>**/service/governance/SqlRepairServiceTest.java</testInclude>
                         <testInclude>**/service/governance/MeasurementUnitApplicationServiceTest.java</testInclude>
                         <testInclude>**/service/governance/IndicatorServiceLifecycleTest.java</testInclude>
+                        <testInclude>**/service/governance/IndicatorBusinessContextContractTest.java</testInclude>
+                        <testInclude>**/service/governance/IndicatorBusinessContextLiquibaseTest.java</testInclude>
+                        <testInclude>**/service/governance/IndicatorContextMigrationServiceIT.java</testInclude>
                         <testInclude>**/service/governance/ReferenceCodeServiceRelationshipGraphTest.java</testInclude>
                         <testInclude>**/service/infra/ConnectorDriverBindingServiceTest.java</testInclude>
                         <testInclude>**/service/infra/ConnectorRegistryServiceTest.java</testInclude>
@@ -661,6 +666,7 @@
                         <testInclude>**/service/modeling/ModelSpecCompilerProjectionTest.java</testInclude>
                         <testInclude>**/service/modeling/PjmModelingFixture.java</testInclude>
                         <testInclude>**/service/modeling/ModelSpecApplicationServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelContextMigrationServiceIT.java</testInclude>
                         <testInclude>**/service/modeling/ModelSpecReaderTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelSpecDomainWriteAccessAdapterTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelingCatalogBoundaryArchitectureTest.java</testInclude>
@@ -729,11 +735,15 @@
                         <testInclude>**/web/rest/GovernanceResourceQualityAuditTest.java</testInclude>
                         <testInclude>**/web/rest/RollbackProxyResourceTest.java</testInclude>
                         <testInclude>**/repository/catalog/CatalogAssetTag*.java</testInclude>
+                        <testInclude>**/repository/catalog/CatalogAssetSemanticStoreIT.java</testInclude>
                         <testInclude>**/repository/catalog/CatalogExternalAssetIdentityLiquibaseIT.java</testInclude>
                         <testInclude>**/repository/catalog/CatalogHarvestStatusLiquibaseIT.java</testInclude>
                         <testInclude>**/repository/catalog/CatalogTagLiquibaseIT.java</testInclude>
                         <testInclude>**/service/catalog/CatalogAssetOverviewAggregatorTest.java</testInclude>
                         <testInclude>**/service/catalog/CatalogAssetIdentityResolverTest.java</testInclude>
+                        <testInclude>**/service/catalog/CatalogAssetSemantics*.java</testInclude>
+                        <testInclude>**/service/catalog/CatalogAssetRegistrationServiceTest.java</testInclude>
+                        <testInclude>**/service/catalog/CatalogAssetNormalizationMigrationServiceIT.java</testInclude>
                         <testInclude>**/service/catalog/CatalogColumnSyncServiceTest.java</testInclude>
                         <testInclude>**/service/catalog/JdbcCanonicalModelIdentityReadAdapterPostgresIT.java</testInclude>
                         <testInclude>**/service/catalog/CatalogPhysicalLocatorTest.java</testInclude>

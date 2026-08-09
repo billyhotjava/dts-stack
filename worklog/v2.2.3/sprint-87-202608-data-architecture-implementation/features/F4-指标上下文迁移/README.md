@@ -2,7 +2,9 @@
 
 **优先级**：P0
 
-**状态**：BLOCKED（HIGH risk）
+**状态**：CODE_COMPLETE / LOCAL_VERIFIED_NON_E2E
+
+**证据**：`../../assets/implementation-evidence-20260810.md`
 
 ## 目标
 
@@ -12,7 +14,7 @@
 
 | ID | Task | 状态 | 依赖 |
 |---|---|---|---|
-| T01 | 实现指标上下文兼容迁移 | BLOCKED | F0/T01、F1/T01、F3/T01 |
+| T01 | 实现指标上下文兼容迁移 | CODE_COMPLETE / LOCAL_VERIFIED_NON_E2E | F0/T01（生产消费者观测仍阻塞） |
 
 ## Feature DoD
 

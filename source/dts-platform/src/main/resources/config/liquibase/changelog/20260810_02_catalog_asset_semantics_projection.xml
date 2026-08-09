@@ -1,0 +1,290 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260810-02-catalog-asset-semantics-projection" author="xiezm" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="catalog_dataset"/>
+            <tableExists tableName="catalog_domain"/>
+            <not><tableExists tableName="catalog_asset_semantic_projection"/></not>
+        </preConditions>
+        <comment>
+            Sprint-87 Expand phase: keep CatalogAssetType + CatalogAssetKey as the only identity, and add
+            independent producer history, registration evidence, five-axis state and bounded statistics projections.
+            Existing SOURCE/DIM rows are never guessed or rewritten by this migration.
+        </comment>
+
+        <createTable tableName="catalog_asset_semantic_projection">
+            <column name="asset_type" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="asset_key" type="varchar(512)"><constraints nullable="false"/></column>
+            <column name="resource_id" type="uuid"/>
+            <column name="relation_type" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="domain_id" type="uuid"/>
+            <column name="canonical_layer" type="varchar(16)"/>
+            <column name="legacy_layer_code" type="varchar(16)"/>
+            <column name="asset_role" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="discovery_state" type="varchar(24)"><constraints nullable="false"/></column>
+            <column name="governance_readiness" type="varchar(24)"><constraints nullable="false"/></column>
+            <column name="publication_state" type="varchar(24)"><constraints nullable="false"/></column>
+            <column name="serving_health" type="varchar(24)"><constraints nullable="false"/></column>
+            <column name="lifecycle_state" type="varchar(24)"><constraints nullable="false"/></column>
+            <column name="quality_gate_passed" type="boolean"/>
+            <column name="permission_gate_passed" type="boolean"/>
+            <column name="eligibility_decision" type="varchar(24)"><constraints nullable="false"/></column>
+            <column name="eligibility_reason_codes" type="jsonb" defaultValueComputed="'[]'::jsonb"><constraints nullable="false"/></column>
+            <column name="eligibility_evaluated_at" type="timestamp with time zone"><constraints nullable="false"/></column>
+            <column name="projection_version" type="bigint" defaultValueNumeric="1"><constraints nullable="false"/></column>
+            <column name="created_at" type="timestamp with time zone"><constraints nullable="false"/></column>
+            <column name="updated_at" type="timestamp with time zone"><constraints nullable="false"/></column>
+        </createTable>
+        <addPrimaryKey
+            tableName="catalog_asset_semantic_projection"
+            columnNames="asset_type,asset_key"
+            constraintName="pk_catalog_asset_semantic_projection"/>
+        <addForeignKeyConstraint
+            baseTableName="catalog_asset_semantic_projection"
+            baseColumnNames="domain_id"
+            referencedTableName="catalog_domain"
+            referencedColumnNames="id"
+            constraintName="fk_catalog_asset_semantic_domain"
+            onDelete="SET NULL"/>
+        <createIndex tableName="catalog_asset_semantic_projection" indexName="idx_catalog_asset_semantic_resource">
+            <column name="resource_id"/>
+        </createIndex>
+        <createIndex tableName="catalog_asset_semantic_projection" indexName="idx_catalog_asset_semantic_bucket">
+            <column name="domain_id"/>
+            <column name="canonical_layer"/>
+            <column name="asset_type"/>
+            <column name="governance_readiness"/>
+        </createIndex>
+
+        <createTable tableName="catalog_asset_producer_ref">
+            <column name="id" type="uuid"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_catalog_asset_producer_ref"/></column>
+            <column name="asset_type" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="asset_key" type="varchar(512)"><constraints nullable="false"/></column>
+            <column name="producer_kind" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="producer_id" type="varchar(512)"><constraints nullable="false"/></column>
+            <column name="producer_version" type="varchar(128)"/>
+            <column name="valid_from" type="timestamp with time zone"><constraints nullable="false"/></column>
+            <column name="valid_to" type="timestamp with time zone"/>
+            <column name="created_at" type="timestamp with time zone"><constraints nullable="false"/></column>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="catalog_asset_producer_ref"
+            baseColumnNames="asset_type,asset_key"
+            referencedTableName="catalog_asset_semantic_projection"
+            referencedColumnNames="asset_type,asset_key"
+            constraintName="fk_catalog_asset_producer_projection"
+            onDelete="CASCADE"/>
+
+        <createTable tableName="catalog_asset_registration_evidence">
+            <column name="id" type="uuid"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_catalog_asset_registration_evidence"/></column>
+            <column name="asset_type" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="asset_key" type="varchar(512)"><constraints nullable="false"/></column>
+            <column name="channel" type="varchar(40)"><constraints nullable="false"/></column>
+            <column name="evidence_ref" type="varchar(512)"><constraints nullable="false"/></column>
+            <column name="first_observed_at" type="timestamp with time zone"><constraints nullable="false"/></column>
+            <column name="last_observed_at" type="timestamp with time zone"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(16)"><constraints nullable="false"/></column>
+            <column name="created_at" type="timestamp with time zone"><constraints nullable="false"/></column>
+            <column name="updated_at" type="timestamp with time zone"><constraints nullable="false"/></column>
+        </createTable>
+        <addUniqueConstraint
+            tableName="catalog_asset_registration_evidence"
+            columnNames="asset_type,asset_key,channel,evidence_ref"
+            constraintName="uk_catalog_asset_registration_evidence"/>
+        <addForeignKeyConstraint
+            baseTableName="catalog_asset_registration_evidence"
+            baseColumnNames="asset_type,asset_key"
+            referencedTableName="catalog_asset_semantic_projection"
+            referencedColumnNames="asset_type,asset_key"
+            constraintName="fk_catalog_asset_evidence_projection"
+            onDelete="CASCADE"/>
+        <createIndex tableName="catalog_asset_registration_evidence" indexName="idx_catalog_asset_evidence_last_observed">
+            <column name="last_observed_at" descending="true"/>
+        </createIndex>
+
+        <createTable tableName="catalog_asset_stats_projection">
+            <column name="domain_key" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="domain_id" type="uuid"/>
+            <column name="warehouse_layer_key" type="varchar(16)"><constraints nullable="false"/></column>
+            <column name="asset_type" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="governance_readiness" type="varchar(24)"><constraints nullable="false"/></column>
+            <column name="asset_count" type="bigint"><constraints nullable="false"/></column>
+            <column name="as_of" type="timestamp with time zone"><constraints nullable="false"/></column>
+            <column name="projection_version" type="bigint"><constraints nullable="false"/></column>
+        </createTable>
+        <addPrimaryKey
+            tableName="catalog_asset_stats_projection"
+            columnNames="domain_key,warehouse_layer_key,asset_type,governance_readiness"
+            constraintName="pk_catalog_asset_stats_projection"/>
+        <createIndex tableName="catalog_asset_stats_projection" indexName="idx_catalog_asset_stats_domain">
+            <column name="domain_id"/>
+            <column name="as_of" descending="true"/>
+        </createIndex>
+
+        <createTable tableName="catalog_asset_stats_projection_meta">
+            <column name="projection_name" type="varchar(64)"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_catalog_asset_stats_meta"/></column>
+            <column name="state" type="varchar(16)"><constraints nullable="false"/></column>
+            <column name="as_of" type="timestamp with time zone"/>
+            <column name="last_reconciled_at" type="timestamp with time zone"/>
+            <column name="projection_version" type="bigint"><constraints nullable="false"/></column>
+            <column name="last_error" type="varchar(2048)"/>
+        </createTable>
+        <insert tableName="catalog_asset_stats_projection_meta">
+            <column name="projection_name" value="GLOBAL"/>
+            <column name="state" value="REBUILDING"/>
+            <column name="projection_version" valueNumeric="0"/>
+        </insert>
+
+        <createTable tableName="catalog_asset_projection_event">
+            <column name="id" type="uuid"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_catalog_asset_projection_event"/></column>
+            <column name="asset_type" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="asset_key" type="varchar(512)"><constraints nullable="false"/></column>
+            <column name="event_type" type="varchar(40)"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(16)"><constraints nullable="false"/></column>
+            <column name="created_at" type="timestamp with time zone"><constraints nullable="false"/></column>
+            <column name="processed_at" type="timestamp with time zone"/>
+            <column name="attempts" type="integer" defaultValueNumeric="0"><constraints nullable="false"/></column>
+            <column name="last_error" type="varchar(2048)"/>
+        </createTable>
+        <createIndex tableName="catalog_asset_projection_event" indexName="idx_catalog_asset_projection_event_pending">
+            <column name="status"/>
+            <column name="created_at"/>
+        </createIndex>
+
+        <createTable tableName="catalog_asset_normalization_issue">
+            <column name="id" type="uuid"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_catalog_asset_normalization_issue"/></column>
+            <column name="resource_id" type="uuid"/>
+            <column name="asset_type" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="asset_key" type="varchar(512)"/>
+            <column name="legacy_layer_code" type="varchar(16)"/>
+            <column name="reason_code" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(16)" defaultValue="PENDING"><constraints nullable="false"/></column>
+            <column name="resolved_by" type="varchar(128)"/>
+            <column name="resolved_at" type="timestamp with time zone"/>
+            <column name="created_at" type="timestamp with time zone"><constraints nullable="false"/></column>
+        </createTable>
+        <createIndex tableName="catalog_asset_normalization_issue" indexName="idx_catalog_asset_normalization_issue_status">
+            <column name="status"/>
+            <column name="reason_code"/>
+        </createIndex>
+
+        <createTable tableName="catalog_asset_normalization_batch">
+            <column name="id" type="uuid"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_catalog_asset_normalization_batch"/></column>
+            <column name="preview_hash" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(16)"><constraints nullable="false"/></column>
+            <column name="previewed_count" type="integer"><constraints nullable="false"/></column>
+            <column name="applied_count" type="integer" defaultValueNumeric="0"><constraints nullable="false"/></column>
+            <column name="created_by" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="correlation_id" type="varchar(128)"/>
+            <column name="created_at" type="timestamp with time zone"><constraints nullable="false"/></column>
+            <column name="applied_at" type="timestamp with time zone"/>
+            <column name="rolled_back_at" type="timestamp with time zone"/>
+        </createTable>
+
+        <createTable tableName="catalog_asset_normalization_batch_item">
+            <column name="batch_id" type="uuid"><constraints nullable="false"/></column>
+            <column name="resource_id" type="uuid"><constraints nullable="false"/></column>
+            <column name="asset_key" type="varchar(512)"><constraints nullable="false"/></column>
+            <column name="legacy_layer_code" type="varchar(16)"><constraints nullable="false"/></column>
+            <column name="action_code" type="varchar(48)"><constraints nullable="false"/></column>
+            <column name="producer_kind" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="producer_id" type="varchar(512)"><constraints nullable="false"/></column>
+            <column name="producer_version" type="varchar(128)"/>
+            <column name="relation_type" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="projection_version" type="bigint"><constraints nullable="false"/></column>
+            <column name="item_checksum" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="created_at" type="timestamp with time zone"><constraints nullable="false"/></column>
+        </createTable>
+        <addPrimaryKey
+            tableName="catalog_asset_normalization_batch_item"
+            columnNames="batch_id,resource_id"
+            constraintName="pk_catalog_asset_normalization_batch_item"/>
+        <addForeignKeyConstraint
+            baseTableName="catalog_asset_normalization_batch_item"
+            baseColumnNames="batch_id"
+            referencedTableName="catalog_asset_normalization_batch"
+            referencedColumnNames="id"
+            constraintName="fk_catalog_asset_normalization_item_batch"
+            onDelete="CASCADE"/>
+        <addForeignKeyConstraint
+            baseTableName="catalog_asset_normalization_batch_item"
+            baseColumnNames="resource_id"
+            referencedTableName="catalog_dataset"
+            referencedColumnNames="id"
+            constraintName="fk_catalog_asset_normalization_item_dataset"
+            onDelete="RESTRICT"/>
+        <createIndex tableName="catalog_asset_normalization_batch_item" indexName="idx_catalog_asset_normalization_item_key">
+            <column name="asset_key"/>
+        </createIndex>
+
+        <sql splitStatements="false"><![CDATA[
+            ALTER TABLE catalog_asset_semantic_projection
+                ADD CONSTRAINT ck_catalog_asset_semantic_projection CHECK (
+                    asset_type = 'DATASET'
+                    AND relation_type IN ('TABLE', 'VIEW', 'MATERIALIZED_VIEW')
+                    AND (canonical_layer IS NULL OR canonical_layer IN ('ODS', 'STG', 'DWD', 'DWS', 'ADS'))
+                    AND asset_role IN ('RELATION', 'DIMENSION_TABLE')
+                    AND discovery_state IN ('DISCOVERED', 'VERIFIED', 'MISSING')
+                    AND governance_readiness IN ('UNASSIGNED', 'INCOMPLETE', 'GOVERNED')
+                    AND publication_state IN ('UNPUBLISHED', 'PUBLISHED', 'WITHDRAWN')
+                    AND serving_health IN ('UNKNOWN', 'HEALTHY', 'STALE', 'FAILED')
+                    AND lifecycle_state IN ('ACTIVE', 'DEPRECATED', 'RETIRED')
+                    AND eligibility_decision IN ('ELIGIBLE', 'CONDITIONAL', 'BLOCKED')
+                    AND jsonb_typeof(eligibility_reason_codes) = 'array'
+                    AND projection_version > 0
+                    AND updated_at >= created_at
+                );
+
+            ALTER TABLE catalog_asset_stats_projection
+                ADD CONSTRAINT ck_catalog_asset_stats_projection CHECK (
+                    domain_key = coalesce(domain_id::text, '__UNASSIGNED__')
+                    AND warehouse_layer_key IN ('UNLAYERED', 'ODS', 'STG', 'DWD', 'DWS', 'ADS')
+                    AND governance_readiness IN ('UNASSIGNED', 'INCOMPLETE', 'GOVERNED')
+                    AND asset_count >= 0
+                    AND projection_version > 0
+                );
+
+            CREATE UNIQUE INDEX uk_catalog_asset_current_producer
+                ON catalog_asset_producer_ref(asset_type, asset_key)
+                WHERE valid_to IS NULL;
+
+            ALTER TABLE catalog_asset_normalization_batch
+                ADD CONSTRAINT ck_catalog_asset_normalization_batch_status CHECK (
+                    status IN ('APPLIED', 'ROLLED_BACK')
+                    AND previewed_count >= 0
+                    AND applied_count >= 0
+                    AND applied_count <= previewed_count
+                );
+        ]]></sql>
+
+        <sql splitStatements="false"><![CDATA[
+            INSERT INTO catalog_asset_normalization_issue(
+                id, resource_id, asset_type, legacy_layer_code, reason_code, status, created_at
+            )
+            SELECT gen_random_uuid(), dataset.id, 'DATASET', upper(btrim(dataset.warehouse_layer)),
+                   CASE upper(btrim(dataset.warehouse_layer))
+                       WHEN 'SOURCE' THEN 'SOURCE_PRODUCER_UNRESOLVED'
+                       ELSE 'LAYER_NORMALIZATION_REQUIRED'
+                   END,
+                   'PENDING', current_timestamp
+              FROM catalog_dataset dataset
+             WHERE upper(btrim(dataset.warehouse_layer)) IN ('SOURCE', 'DIM');
+        ]]></sql>
+
+        <rollback>
+            <dropTable tableName="catalog_asset_normalization_batch_item"/>
+            <dropTable tableName="catalog_asset_normalization_batch"/>
+            <dropTable tableName="catalog_asset_normalization_issue"/>
+            <dropTable tableName="catalog_asset_projection_event"/>
+            <dropTable tableName="catalog_asset_stats_projection_meta"/>
+            <dropTable tableName="catalog_asset_stats_projection"/>
+            <dropTable tableName="catalog_asset_registration_evidence"/>
+            <dropTable tableName="catalog_asset_producer_ref"/>
+            <dropTable tableName="catalog_asset_semantic_projection"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

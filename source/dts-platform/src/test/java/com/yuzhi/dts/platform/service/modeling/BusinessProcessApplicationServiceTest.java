@@ -83,6 +83,7 @@ class BusinessProcessApplicationServiceTest {
     private BusinessProcessDto process(String processId) {
         Instant now = Instant.parse("2026-08-09T12:00:00Z");
         return new BusinessProcessDto(
+            UUID.randomUUID(),
             1,
             processId,
             domainId,

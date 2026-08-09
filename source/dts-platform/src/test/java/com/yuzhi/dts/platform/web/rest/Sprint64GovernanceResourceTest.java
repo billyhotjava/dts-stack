@@ -36,12 +36,14 @@ class Sprint64GovernanceResourceTest {
     @Test
     void processEndpointsKeepDomainAndProcessIdInTheContract() {
         UUID domainId = UUID.randomUUID();
-        BusinessProcessDto process = new BusinessProcessDto(1, "node-plan-loop", domainId, "节点计划闭环", null, "MANUAL", null, null, true, null, null);
+        UUID processRowId = UUID.randomUUID();
+        BusinessProcessDto process = new BusinessProcessDto(processRowId, 1, "node-plan-loop", domainId, "节点计划闭环", null, "MANUAL", null, null, true, null, null);
         when(businessProcesses.create(eq(domainId), any(BusinessProcessRequest.class), eq(LEGACY))).thenReturn(process);
 
         ApiResponse<BusinessProcessDto> response = resource.createProcess(domainId, new BusinessProcessRequest("node-plan-loop", "节点计划闭环", null));
 
         assertThat(response.getData()).isEqualTo(process);
+        assertThat(response.getData().id()).isEqualTo(processRowId);
         verify(businessProcesses).create(eq(domainId), any(BusinessProcessRequest.class), eq(LEGACY));
     }
 

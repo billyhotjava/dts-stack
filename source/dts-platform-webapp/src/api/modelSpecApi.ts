@@ -32,6 +32,38 @@ export type ModelSpecListParams = {
 	layer?: ModelSpecLayer;
 };
 
+export type ModelWorkbenchCatalogEntry = {
+	kind: "DIMENSION_DEFINITION" | "MODEL_SPEC";
+	id: string;
+	name: string;
+	code: string;
+	planId: string | null;
+	domainId: string;
+	objectType: "DIMENSION_DEFINITION" | ModelSpecType;
+	layer: ModelSpecLayer | null;
+	status: string;
+	revision: number;
+};
+
+export type ModelWorkbenchCatalogPage = {
+	content: ModelWorkbenchCatalogEntry[];
+	totalElements: number;
+	page: number;
+	size: number;
+	totalPages: number;
+};
+
+export type ModelWorkbenchCatalogPageParams = {
+	page: number;
+	size: number;
+	query?: string;
+	planId?: string;
+	domainId?: string;
+	objectType?: ModelWorkbenchCatalogEntry["objectType"];
+	layer?: ModelSpecLayer;
+	status?: string;
+};
+
 export type CreateDimensionModelCommand = {
 	operationId: string;
 	definitionBinding:
@@ -236,6 +268,13 @@ export type ModelLifecycleRelease = {
 
 export const listModelSpecs = (params?: ModelSpecListParams) =>
 	api.get<ModelSpecView[]>({ url: MODEL_SPEC_RESOURCE, params, _skipErrorToast: true } as any);
+
+export const listModelWorkbenchCatalogPage = (params: ModelWorkbenchCatalogPageParams) =>
+	api.get<ModelWorkbenchCatalogPage>({
+		url: `${MODEL_SPEC_RESOURCE}/workbench`,
+		params,
+		_skipErrorToast: true,
+	} as any);
 
 export const getModelSpec = (id: string) =>
 	api.get<ModelSpecView>({

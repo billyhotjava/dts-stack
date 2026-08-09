@@ -2,7 +2,9 @@
 
 **优先级**：P1
 
-**状态**：BLOCKED
+**状态**：CODE_COMPLETE / LOCAL_VERIFIED_NON_E2E
+
+**证据**：`../../assets/implementation-evidence-20260810.md`
 
 **依赖**：F1～F4 DONE、ADR-86-09
 

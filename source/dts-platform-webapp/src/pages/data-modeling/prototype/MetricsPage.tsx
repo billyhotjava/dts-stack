@@ -1,6 +1,12 @@
-import { Archive, CheckCircle2, Plus, RefreshCw, Save, Search, Send } from "lucide-react";
+import { Archive, CheckCircle2, Plus, RefreshCw, Save, Search, Send, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
+import { listBusinessProcessesApi, type Sprint64BusinessProcess } from "@/api/sprint64GovernanceApi";
+import {
+	type IndicatorMetricSourceRef,
+	type IndicatorSourceType,
+	parseIndicatorDependencyCodes,
+} from "@/features/modeling/indicators/indicatorDefinitionContract";
 import type { DataModelingRoute } from "../types";
 import { Button, PageHeader, RequestState, Status, Toast, useTransientMessage } from "./PrototypePrimitives";
 import {
@@ -19,6 +25,7 @@ import {
 	saveIndicatorDraft,
 	supportsIndicatorCreation,
 } from "./services/indicatorProjectionService";
+import { listPlanningCatalogDomains, type PlanningCatalogDomain } from "./services/planningCatalogDomainService";
 import { useDataModelingMenuGrant } from "./useDataModelingMenuGrant";
 
 const typeByView: Record<string, MetricType> = {
@@ -35,16 +42,19 @@ const toForm = (selected: MetricSelection): IndicatorEditValues => ({
 	definition: selected.definition || "",
 	domain: selected.domain,
 	category: selected.category || "",
+	businessCategoryId: selected.businessCategoryId || null,
+	dataDomainId: selected.dataDomainId || null,
+	businessProcessId: selected.businessProcessId || null,
+	metricType: selected.metricType || null,
+	metricGroupCode: selected.metricGroupCode || "",
+	sourceRefs: selected.sourceRefs || [],
 	owner: selected.owner || "",
 	ownerDept: selected.ownerDept || "",
 	unit: selected.unit || "",
 	precisionScale: selected.precisionScale ?? 0,
 	aggregationType: selected.aggregationType || "",
 	measureField: selected.measureField || "",
-	dependencyCodes: String(selected.dependencyIndicators || "")
-		.split(",")
-		.map((item) => item.trim())
-		.filter(Boolean),
+	dependencyCodes: parseIndicatorDependencyCodes(selected.dependencyIndicators),
 });
 
 export function MetricsPage({ route }: { route: DataModelingRoute }) {
@@ -57,6 +67,11 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 	const [values, setValues] = useState<IndicatorEditValues>({});
 	const [query, setQuery] = useState("");
 	const [domain, setDomain] = useState("");
+	const [businessCategoryId, setBusinessCategoryId] = useState("");
+	const [architecture, setArchitecture] = useState<PlanningCatalogDomain[]>([]);
+	const [processes, setProcesses] = useState<Sprint64BusinessProcess[]>([]);
+	const [contextFailure, setContextFailure] = useState("");
+	const processEpoch = useRef(0);
 	const [loading, setLoading] = useState(true);
 	const [busy, setBusy] = useState<"save" | "validate" | "publish" | "archive" | "">("");
 	const [failure, setFailure] = useState<{ kind: "permission" | "request"; message: string } | null>(null);
@@ -97,21 +112,52 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 		};
 	}, [load]);
 	useEffect(() => {
+		let active = true;
+		void listPlanningCatalogDomains()
+			.then((items) => {
+				if (active) setArchitecture(items);
+			})
+			.catch(() => {
+				if (active) setContextFailure("业务分类与数据域读取失败；已有指标仍可查看，但稳定上下文暂不可修改。");
+			});
+		return () => {
+			active = false;
+		};
+	}, []);
+	useEffect(() => {
+		const dataDomainId = String(values.dataDomainId || "");
+		const epoch = ++processEpoch.current;
+		if (!dataDomainId) {
+			setProcesses([]);
+			return;
+		}
+		void listBusinessProcessesApi(dataDomainId)
+			.then((items) => {
+				if (processEpoch.current === epoch) setProcesses(items.filter((item) => item.confirmed));
+			})
+			.catch(() => {
+				if (processEpoch.current === epoch) {
+					setProcesses([]);
+					setContextFailure("业务过程读取失败；请刷新后重试。");
+				}
+			});
+	}, [values.dataDomainId]);
+	useEffect(() => {
 		if (previousMetricType.current !== metricType) {
 			setQuery("");
 			setDomain("");
+			setBusinessCategoryId("");
 			previousMetricType.current = metricType;
 		}
 	}, [metricType]);
 
 	const visible = useMemo(
-		() => filterIndicators(catalog, { type: metricType, domain, query }),
-		[catalog, domain, metricType, query],
+		() => filterIndicators(catalog, { type: metricType, domain, businessCategoryId, query }),
+		[businessCategoryId, catalog, domain, metricType, query],
 	);
-	const domains = useMemo(
-		() => Array.from(new Set(catalog.map((item) => String(item.domain || "")).filter(Boolean))).sort(),
-		[catalog],
-	);
+	const businessCategories = useMemo(() => architecture.filter((item) => !item.parentId), [architecture]);
+	const dataDomains = useMemo(() => architecture.filter((item) => Boolean(item.parentId)), [architecture]);
+	const domainLabels = useMemo(() => new Map(dataDomains.map((item) => [item.id, item.name])), [dataDomains]);
 	const choose = (row: IndicatorDefinition) => {
 		select(metricSelection(row));
 		const next = new URLSearchParams(searchParams);
@@ -119,7 +165,15 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 		setSearchParams(next, { replace: true });
 	};
 	const create = () => {
-		select(createIndicatorDraft(metricType, domain));
+		const selectedDomain = dataDomains.find((item) => item.id === domain);
+		const categoryId = businessCategoryId || selectedDomain?.parentId || "";
+		const selectedCategory = businessCategories.find((item) => item.id === categoryId);
+		select({
+			...createIndicatorDraft(metricType, selectedDomain?.code || ""),
+			businessCategoryId: categoryId || null,
+			dataDomainId: selectedDomain?.id || null,
+			category: selectedCategory?.name || null,
+		});
 		const next = new URLSearchParams(searchParams);
 		next.delete("indicatorId");
 		setSearchParams(next, { replace: true });
@@ -205,11 +259,32 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 							</div>
 						</header>
 						<div className="dmx-metric-layer">公共层</div>
+						<select
+							aria-label="业务分类"
+							onChange={(event) => {
+								setBusinessCategoryId(event.target.value);
+								if (domain && dataDomains.find((item) => item.id === domain)?.parentId !== event.target.value) {
+									setDomain("");
+								}
+							}}
+							value={businessCategoryId}
+						>
+							<option value="">全部业务分类</option>
+							{businessCategories.map((item) => (
+								<option key={item.id} value={item.id}>
+									{item.name}
+								</option>
+							))}
+						</select>
 						<select aria-label="数据域" onChange={(event) => setDomain(event.target.value)} value={domain}>
 							<option value="">全部数据域</option>
-							{domains.map((item) => (
-								<option key={item}>{item}</option>
-							))}
+							{dataDomains
+								.filter((item) => !businessCategoryId || item.parentId === businessCategoryId)
+								.map((item) => (
+									<option key={item.id} value={item.id}>
+										{item.name}
+									</option>
+								))}
 						</select>
 						<div className="dmx-metric-search">
 							<Search size={14} />
@@ -230,7 +305,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 								>
 									<span>△</span>
 									<span>
-										<small>{item.domain || "未归属"}</small>
+										<small>{domainLabels.get(String(item.dataDomainId || "")) || item.domain || "未归属"}</small>
 										<b>{item.code}</b>
 										<em>{item.name}</em>
 									</span>
@@ -284,9 +359,21 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 										{failure.message}
 									</div>
 								) : null}
+								{contextFailure ? (
+									<div className="dmx-inline-error" role="alert">
+										{contextFailure}
+									</div>
+								) : null}
 								{!canMaintain ? <div className="dmx-capability-note">当前账号只有指标查看权限。</div> : null}
 								<fieldset className="dmx-editor-fieldset" disabled={!canMaintain}>
-									<MetricEditor codeLocked={Boolean(selected.id)} values={values} onChange={setValues} />
+									<MetricEditor
+										businessCategories={businessCategories}
+										codeLocked={Boolean(selected.id)}
+										dataDomains={dataDomains}
+										onChange={setValues}
+										processes={processes}
+										values={values}
+									/>
 								</fieldset>
 							</>
 						) : (
@@ -308,16 +395,46 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 	);
 }
 
-function MetricEditor({
+export function MetricEditor({
 	values,
 	onChange,
 	codeLocked,
+	businessCategories,
+	dataDomains,
+	processes,
 }: {
 	values: IndicatorEditValues;
 	onChange: (values: IndicatorEditValues) => void;
 	codeLocked: boolean;
+	businessCategories: PlanningCatalogDomain[];
+	dataDomains: PlanningCatalogDomain[];
+	processes: Sprint64BusinessProcess[];
 }) {
 	const set = (key: keyof IndicatorEditValues, value: unknown) => onChange({ ...values, [key]: value });
+	const metricType = String(values.metricType || "ATOMIC").toUpperCase();
+	const selectedCategoryId = String(values.businessCategoryId || "");
+	const selectedDomainId = String(values.dataDomainId || "");
+	const availableDomains = dataDomains.filter((item) => item.parentId === selectedCategoryId);
+	const sourceRefs = values.sourceRefs || [];
+	const sourceTypes: Array<{ value: IndicatorSourceType; label: string }> =
+		metricType === "ATOMIC"
+			? [
+					{ value: "SEMANTIC_MODEL_REVISION", label: "语义模型修订" },
+					{ value: "PHYSICAL_ASSET", label: "物理资产" },
+				]
+			: [{ value: "INDICATOR_VERSION", label: "指标版本" }];
+	const updateSourceRef = (index: number, patch: Partial<IndicatorMetricSourceRef>) =>
+		set(
+			"sourceRefs",
+			sourceRefs.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)),
+		);
+	const removeSourceRef = (index: number) =>
+		set(
+			"sourceRefs",
+			sourceRefs.filter((_, itemIndex) => itemIndex !== index),
+		);
+	const addSourceRef = () =>
+		set("sourceRefs", [...sourceRefs, { sourceType: sourceTypes[0].value, sourceId: "", sourceVersion: "" }]);
 	return (
 		<div className="dmx-metric-scroll">
 			<section className="dmx-metric-section">
@@ -333,11 +450,77 @@ function MetricEditor({
 					<MetricField label="中文名称" required>
 						<input onChange={(event) => set("name", event.target.value)} value={String(values.name || "")} />
 					</MetricField>
-					<MetricField label="数据域">
-						<input onChange={(event) => set("domain", event.target.value)} value={String(values.domain || "")} />
+					<MetricField label="指标类型" required>
+						<input
+							disabled
+							value={{ ATOMIC: "原子指标", DERIVED: "派生指标", COMPOSITE: "复合指标" }[metricType] || metricType}
+						/>
 					</MetricField>
-					<MetricField label="指标分类">
-						<input onChange={(event) => set("category", event.target.value)} value={String(values.category || "")} />
+					<MetricField label="业务分类" required>
+						<select
+							onChange={(event) => {
+								const id = event.target.value;
+								const category = businessCategories.find((item) => item.id === id);
+								onChange({
+									...values,
+									businessCategoryId: id || null,
+									category: category?.name || null,
+									dataDomainId: null,
+									businessProcessId: null,
+									domain: null,
+								});
+							}}
+							value={selectedCategoryId}
+						>
+							<option value="">请选择业务分类</option>
+							{businessCategories.map((item) => (
+								<option key={item.id} value={item.id}>
+									{item.name}（{item.code}）
+								</option>
+							))}
+						</select>
+					</MetricField>
+					<MetricField label="数据域" required={metricType !== "COMPOSITE"}>
+						<select
+							onChange={(event) => {
+								const id = event.target.value;
+								const dataDomain = dataDomains.find((item) => item.id === id);
+								onChange({
+									...values,
+									dataDomainId: id || null,
+									businessProcessId: null,
+									domain: dataDomain?.code || null,
+								});
+							}}
+							value={selectedDomainId}
+						>
+							<option value="">{metricType === "COMPOSITE" ? "跨域时留空" : "请选择数据域"}</option>
+							{availableDomains.map((item) => (
+								<option key={item.id} value={item.id}>
+									{item.name}（{item.code}）
+								</option>
+							))}
+						</select>
+					</MetricField>
+					<MetricField label="业务过程" required={metricType === "ATOMIC"}>
+						<select
+							onChange={(event) => set("businessProcessId", event.target.value || null)}
+							value={String(values.businessProcessId || "")}
+						>
+							<option value="">{metricType === "ATOMIC" ? "请选择业务过程" : "多过程时留空"}</option>
+							{processes.map((item) => (
+								<option key={item.id} value={item.id}>
+									{item.name}（{item.processId}）
+								</option>
+							))}
+						</select>
+					</MetricField>
+					<MetricField label="指标分组编码">
+						<input
+							onChange={(event) => set("metricGroupCode", event.target.value)}
+							placeholder="例如 finance.budget"
+							value={String(values.metricGroupCode || "")}
+						/>
 					</MetricField>
 					<MetricField label="负责人">
 						<input onChange={(event) => set("owner", event.target.value)} value={String(values.owner || "")} />
@@ -350,6 +533,12 @@ function MetricEditor({
 							onChange={(event) => set("definition", event.target.value)}
 							value={String(values.definition || "")}
 						/>
+					</MetricField>
+					<MetricField label="兼容文本" wide>
+						<small>
+							旧业务分类：{String(values.category || "—")}；旧数据域：{String(values.domain || "—")}
+							。兼容字段只展示，不再作为关系主键。
+						</small>
 					</MetricField>
 				</div>
 			</section>
@@ -396,6 +585,47 @@ function MetricEditor({
 							}
 							value={Array.isArray(values.dependencyCodes) ? values.dependencyCodes.join(", ") : ""}
 						/>
+					</MetricField>
+					<MetricField label="固定来源版本" required wide>
+						<div className="dmx-source-refs">
+							{sourceRefs.map((ref, index) => (
+								<div className="dmx-source-ref-row" key={`${ref.sourceType}-${index}`}>
+									<select
+										onChange={(event) =>
+											updateSourceRef(index, { sourceType: event.target.value as IndicatorSourceType })
+										}
+										value={ref.sourceType}
+									>
+										{sourceTypes.map((item) => (
+											<option key={item.value} value={item.value}>
+												{item.label}
+											</option>
+										))}
+									</select>
+									<input
+										onChange={(event) => updateSourceRef(index, { sourceId: event.target.value })}
+										placeholder="稳定 ID"
+										value={ref.sourceId}
+									/>
+									<input
+										onChange={(event) => updateSourceRef(index, { sourceVersion: event.target.value })}
+										placeholder="固定版本，如 r7 / v3"
+										value={ref.sourceVersion}
+									/>
+									<button aria-label={`删除来源 ${index + 1}`} onClick={() => removeSourceRef(index)} type="button">
+										<Trash2 size={15} />
+									</button>
+								</div>
+							))}
+							<button className="dmx-source-ref-add" onClick={addSourceRef} type="button">
+								<Plus size={14} /> 添加固定来源
+							</button>
+							<small>
+								{metricType === "ATOMIC"
+									? "原子指标绑定语义模型修订或物理资产；发布时至少一项。"
+									: "派生/复合指标只绑定已固定的上游指标版本。"}
+							</small>
+						</div>
 					</MetricField>
 				</div>
 			</section>

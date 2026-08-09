@@ -2,7 +2,9 @@
 
 **优先级**：P1
 
-**状态**：BLOCKED
+**状态**：CODE_COMPLETE / LOCAL_VERIFIED_NON_E2E
+
+**证据**：`../../assets/implementation-evidence-20260810.md`
 
 ## 目标
 
@@ -12,7 +14,7 @@
 
 | ID | Task | 状态 | 依赖 |
 |---|---|---|---|
-| T01 | 收敛数据架构导航、模型 Table 与兼容路由 | BLOCKED | F1～F4 DONE |
+| T01 | 收敛数据架构导航、模型 Table 与兼容路由 | CODE_COMPLETE / LOCAL_VERIFIED_NON_E2E | 真实菜单 E2E 仍阻塞 |
 
 ## Feature DoD
 

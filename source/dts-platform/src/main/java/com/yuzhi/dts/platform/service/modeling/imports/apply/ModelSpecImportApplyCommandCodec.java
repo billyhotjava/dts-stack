@@ -253,7 +253,13 @@ public class ModelSpecImportApplyCommandCodec {
             command.metricRefs(),
             command.standardBindings(),
             command.generationStrategy(),
-            command.dimensionProfile()
+            command.dimensionProfile(),
+            command.dataMartId(),
+            command.variantCode(),
+            command.implementationPolicy(),
+            command.warehouseLayerCode(),
+            command.businessProcessId(),
+            command.subjectDomainId()
         );
     }
 

@@ -141,6 +141,37 @@ public class ModelMaterializationStartService {
         return result;
     }
 
+    /** Starts another durable attempt for the same immutable candidate revision and scope. */
+    @Transactional
+    public CommandResult rematerialize(
+        String tenantId,
+        String actorId,
+        UUID candidateId,
+        int expectedVersion,
+        String idempotencyKey,
+        String reason
+    ) {
+        CommandResult result = candidateCommands.transition(
+            tenantId,
+            actorId,
+            candidateId,
+            new TransitionCommand(
+                expectedVersion,
+                DeliveryStatus.BUILDING,
+                idempotencyKey,
+                reason
+            )
+        );
+        if (result.candidate().status() != DeliveryStatus.BUILDING) return result;
+        requireAvailable(tenantId, actorId, candidateId, result.candidate().version());
+        if (result.replayed()) {
+            builds.requireQueuedBuild(result.candidate());
+        } else {
+            builds.createRematerializationQueuedBuild(result.candidate(), clock.instant());
+        }
+        return result;
+    }
+
     private void requireAvailable(String tenantId, String actorId, UUID candidateId, int candidateVersion) {
         try {
             sourceAvailability.requireCandidateCurrent(tenantId, candidateId, candidateVersion);

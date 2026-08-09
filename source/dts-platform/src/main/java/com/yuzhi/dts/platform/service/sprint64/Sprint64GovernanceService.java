@@ -37,6 +37,7 @@ public class Sprint64GovernanceService {
             """,
             params().addValue("domainId", domainId),
             (rs, rowNum) -> new BusinessProcessDto(
+                rs.getObject("id", UUID.class),
                 rs.getInt("version"),
                 rs.getString("process_id"),
                 rs.getObject("domain_id", UUID.class),
@@ -332,6 +333,7 @@ public class Sprint64GovernanceService {
     }
 
     public record BusinessProcessDto(
+        UUID id,
         int version,
         String processId,
         UUID domainId,

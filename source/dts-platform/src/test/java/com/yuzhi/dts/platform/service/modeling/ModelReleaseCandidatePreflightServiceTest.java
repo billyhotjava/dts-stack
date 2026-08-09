@@ -47,8 +47,8 @@ class ModelReleaseCandidatePreflightServiceTest {
             new DependencyGraph(
                 DWS_ID,
                 List.of(
-                    node(DWS_ID, PLAN_ID, 4, Layer.DWS, ModelStatus.SUBMITTED),
-                    node(DWD_ID, PLAN_ID, 2, Layer.DWD, ModelStatus.SUBMITTED),
+                    node(DWS_ID, PLAN_ID, 4, Layer.DWS, ModelStatus.READY_TO_PUBLISH),
+                    node(DWD_ID, PLAN_ID, 2, Layer.DWD, ModelStatus.READY_TO_PUBLISH),
                     node(EXTERNAL_ID, OTHER_PLAN_ID, 7, Layer.DWD, ModelStatus.PUBLISHED)
                 ),
                 List.of(
@@ -79,7 +79,7 @@ class ModelReleaseCandidatePreflightServiceTest {
             new DependencyGraph(
                 DWS_ID,
                 List.of(
-                    node(DWS_ID, PLAN_ID, 4, Layer.DWS, ModelStatus.SUBMITTED),
+                    node(DWS_ID, PLAN_ID, 4, Layer.DWS, ModelStatus.READY_TO_PUBLISH),
                     new DependencyNode(
                         DWD_ID,
                         PLAN_ID,
@@ -88,7 +88,7 @@ class ModelReleaseCandidatePreflightServiceTest {
                         "受限明细模型",
                         ModelType.FACT,
                         Layer.DWD,
-                        ModelStatus.SUBMITTED,
+                        ModelStatus.READY_TO_PUBLISH,
                         true
                     )
                 ),

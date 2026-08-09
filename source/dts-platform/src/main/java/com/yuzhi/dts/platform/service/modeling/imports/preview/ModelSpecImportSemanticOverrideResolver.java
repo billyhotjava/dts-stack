@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 /** Resolves the D13 semantic allowlist without mutating inspected technical facts. */
 final class ModelSpecImportSemanticOverrideResolver {
@@ -54,7 +55,7 @@ final class ModelSpecImportSemanticOverrideResolver {
 
     ResolvedSemanticOverride resolve(PackageModel source, SemanticOverride override) {
         if (override == null) {
-            return new ResolvedSemanticOverride(source, List.of());
+            return new ResolvedSemanticOverride(source, List.of(), null, null, null);
         }
         if (source == null || !source.dbtUniqueId().equals(text(override.modelUniqueId()))) {
             throw invalid("semantic override does not match the inspected model");
@@ -136,7 +137,13 @@ final class ModelSpecImportSemanticOverrideResolver {
             semantics,
             reclassify(source, semantics)
         );
-        return new ResolvedSemanticOverride(projected, standardBindings(columns, override.standardBindings()));
+        return new ResolvedSemanticOverride(
+            projected,
+            standardBindings(columns, override.standardBindings()),
+            override.businessProcessId(),
+            override.dataMartId(),
+            override.subjectDomainId()
+        );
     }
 
     private static List<StandardBinding> standardBindings(
@@ -255,7 +262,13 @@ final class ModelSpecImportSemanticOverrideResolver {
         );
     }
 
-    record ResolvedSemanticOverride(PackageModel model, List<StandardBinding> standardBindings) {
+    record ResolvedSemanticOverride(
+        PackageModel model,
+        List<StandardBinding> standardBindings,
+        UUID businessProcessId,
+        UUID dataMartId,
+        UUID subjectDomainId
+    ) {
         ResolvedSemanticOverride {
             standardBindings = standardBindings == null ? List.of() : List.copyOf(standardBindings);
         }

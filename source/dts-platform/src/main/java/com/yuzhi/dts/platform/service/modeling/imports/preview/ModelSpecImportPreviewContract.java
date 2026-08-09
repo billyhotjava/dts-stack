@@ -93,8 +93,41 @@ public final class ModelSpecImportPreviewContract {
         Map<String, String> fieldRoles,
         List<String> businessKeys,
         List<SemanticStandardBindingOverride> standardBindings,
-        List<String> consumptionScenarios
-    ) {}
+        List<String> consumptionScenarios,
+        UUID businessProcessId,
+        UUID dataMartId,
+        UUID subjectDomainId
+    ) {
+        /** Compatibility constructor for requests created before stable business-context overrides. */
+        public SemanticOverride(
+            String modelUniqueId,
+            String modelType,
+            String layer,
+            String businessName,
+            String businessDefinition,
+            SemanticGrainOverride grain,
+            Map<String, String> fieldRoles,
+            List<String> businessKeys,
+            List<SemanticStandardBindingOverride> standardBindings,
+            List<String> consumptionScenarios
+        ) {
+            this(
+                modelUniqueId,
+                modelType,
+                layer,
+                businessName,
+                businessDefinition,
+                grain,
+                fieldRoles,
+                businessKeys,
+                standardBindings,
+                consumptionScenarios,
+                null,
+                null,
+                null
+            );
+        }
+    }
 
     @JsonIgnoreProperties(ignoreUnknown = false)
     public record SemanticGrainOverride(String statement, List<String> keys) {}
