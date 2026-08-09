@@ -643,9 +643,9 @@ function AssetLedgerPage() {
 						tagFilterEnabled={ASSET_PORTAL_V2_ENABLED}
 					/>
 
-					{diagnostics ? (
+					{diagnostics && Number(diagnostics.unmatchedCount || 0) > 0 ? (
 						<Alert
-							type={Number(diagnostics.unmatchedCount || 0) > 0 ? "warning" : "info"}
+							type="warning"
 							showIcon
 							message={`OpenMetadata映射诊断：资产 ${Number(diagnostics.assetCount || 0)}，已映射 ${Number(diagnostics.matchedCount || 0)}，未匹配 ${Number(diagnostics.unmatchedCount || 0)}，人工确认 ${Number(diagnostics.manualReviewCount || 0)}`}
 							description={
@@ -676,15 +676,11 @@ function AssetLedgerPage() {
 						/>
 					) : null}
 
-					{ASSET_PORTAL_V2_ENABLED ? (
+					{ASSET_PORTAL_V2_ENABLED && (blockingGapCount || lineageFailureCount) ? (
 						<Alert
-							type={blockingGapCount || lineageFailureCount ? "warning" : "success"}
+							type="warning"
 							showIcon
-							message={
-								blockingGapCount || lineageFailureCount
-									? `当前筛选存在治理阻断 ${blockingGapCount} 项、血缘证据缺口 ${lineageFailureCount} 项`
-									: "当前筛选未发现治理阻断和血缘证据缺口"
-							}
+							message={`当前筛选存在治理阻断 ${blockingGapCount} 项、血缘证据缺口 ${lineageFailureCount} 项`}
 							description={
 								signalsLoading
 									? "正在刷新治理信号..."
@@ -701,6 +697,19 @@ function AssetLedgerPage() {
 								</Space>
 							}
 						/>
+					) : null}
+					{ASSET_PORTAL_V2_ENABLED && !blockingGapCount && !lineageFailureCount ? (
+						<div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
+							<span>{signalsLoading ? "正在刷新治理信号..." : "治理信号正常：当前筛选未发现治理阻断和血缘证据缺口。"}</span>
+							<Space size={4}>
+								<Button type="link" size="small" className="px-2" onClick={() => void openRemediationWorkbench()}>
+									处置缺口
+								</Button>
+								<Button type="link" size="small" className="px-2" onClick={() => void loadGovernanceSignals()} loading={signalsLoading}>
+									刷新信号
+								</Button>
+							</Space>
+						</div>
 					) : null}
 
 					<div className="grid grid-cols-2 gap-3 lg:grid-cols-5">

@@ -39,7 +39,8 @@ test("metadata management is asset semantic governance, not collection console",
 	assert.match(PAGE_SOURCE, /当前页缺主题域/);
 	assert.match(PAGE_SOURCE, /OpenMetadata 未映射/);
 	assert.match(PAGE_SOURCE, /资产元数据加载失败/);
-	assert.match(PAGE_SOURCE, /isBlank\(row\.classification\) \? null/);
+	// B3 收敛：字段契约入口移入「更多」菜单，未定密时仍不提供该入口（条件语义保留）
+	assert.match(PAGE_SOURCE, /isBlank\(row\.classification\)\s*\?\s*\[\]/);
 	assert.match(PAGE_SOURCE, /updateCatalogAssetV2Governance/);
 	assert.match(PAGE_SOURCE, /补齐密级/);
 	assert.match(PAGE_SOURCE, /保存密级/);

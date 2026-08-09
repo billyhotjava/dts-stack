@@ -1,4 +1,5 @@
-import { Alert, Button, Card, Input, Select, Space, Tabs, Tag } from "antd";
+import { Alert, Button, Card, Dropdown, Input, Select, Space, Tabs, Tag } from "antd";
+import { DownOutlined } from "@ant-design/icons";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { toast } from "sonner";
@@ -585,9 +586,24 @@ export default function DataSearchPage() {
 					<Button type="primary" onClick={() => void runSearch(true)} loading={loading}>
 						搜索
 					</Button>
-					<Button onClick={saveCurrentQuery}>保存条件</Button>
-					<Button onClick={restoreSavedQuery}>恢复条件</Button>
-					<Button onClick={applyAssetFilters}>应用资产筛选</Button>
+					<Dropdown
+						menu={{
+							items: [
+								{ key: "save", label: "保存当前条件", onClick: saveCurrentQuery },
+								{ key: "restore", label: "恢复已存条件", onClick: restoreSavedQuery },
+								{ type: "divider" },
+								{
+									key: "apply-ledger",
+									label: "应用台账筛选",
+									onClick: applyAssetFilters,
+								},
+							],
+						}}
+					>
+						<Button>
+							条件 <DownOutlined />
+						</Button>
+					</Dropdown>
 				</Space>
 			</Card>
 

@@ -5,7 +5,8 @@ import {
 	SafetyCertificateOutlined,
 	TeamOutlined,
 } from "@ant-design/icons";
-import { Alert, App, Button, Card, Input, Modal, Select, Space, Spin, Tag } from "antd";
+import { Alert, App, Button, Card, Dropdown, Input, Modal, Select, Space, Spin, Tag, Tooltip } from "antd";
+import { DownOutlined } from "@ant-design/icons";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	listCatalogAssetsV2,
@@ -333,12 +334,12 @@ export default function MetadataManagementPage() {
 		{
 			title: "操作",
 			key: "actions",
-			width: 250,
+			width: 230,
 			fixed: "right" as const,
 			render: (_: unknown, row: MetadataAssetRow) => (
 				<Space size={6} wrap>
 					<Button size="small" onClick={() => router.push(`/catalog/datasets/${row.id}?tab=overview`)}>
-						查看资产
+						详情
 					</Button>
 					{canManage ? (
 						<>
@@ -349,14 +350,38 @@ export default function MetadataManagementPage() {
 							>
 								{isBlank(row.classification) ? "补齐密级" : "维护密级"}
 							</Button>
-							<Button size="small" onClick={() => router.push(`/catalog/datasets/${row.id}?tab=governance`)}>
-								治理属性
-							</Button>
-							{isBlank(row.classification) ? null : (
-								<Button size="small" onClick={() => router.push(`/catalog/datasets/${row.id}?tab=schema-contract`)}>
-									字段契约
+							<Dropdown
+								menu={{
+									items: [
+										{
+											key: "governance",
+											label: "治理属性",
+											onClick: () => router.push(`/catalog/datasets/${row.id}?tab=governance`),
+										},
+										...(isBlank(row.classification)
+											? []
+											: [
+													{
+														key: "contract",
+														label: "字段契约",
+														onClick: () => router.push(`/catalog/datasets/${row.id}?tab=schema-contract`),
+													},
+												]),
+										{
+											key: "access",
+											label: "申请权限",
+											onClick: () =>
+												router.push(
+													`/security/dataset-access-approval?action=new&assetId=${encodeURIComponent(row.id)}&assetType=dataset`,
+												),
+										},
+									],
+								}}
+							>
+								<Button size="small">
+									更多 <DownOutlined />
 								</Button>
-							)}
+							</Dropdown>
 						</>
 					) : null}
 				</Space>
@@ -376,28 +401,53 @@ export default function MetadataManagementPage() {
 					) : null
 				}
 			/>
+			<div className="flex items-center gap-2 text-xs text-slate-500">
+				<Tooltip title="缺口统计仅覆盖当前筛选结果中的当前页数据；翻页或调整筛选后数字会随之变化。全量治理缺口请查看资产概览。">
+					统计范围：第 {pageState.page} 页 / 共 {pageState.total} 条（当前筛选）
+				</Tooltip>
+			</div>
 			<div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
 				<MetricTile
 					icon={<DatabaseOutlined />}
 					label="当前页资产"
 					value={records.length}
-					footnote={`总数 ${pageState.total}`}
+					footnote={`第 ${pageState.page} 页 · 总数 ${pageState.total}`}
 				/>
 				<MetricTile
 					icon={<ExclamationCircleOutlined />}
 					label="当前页待补齐"
 					value={stats.completion}
 					tone="text-amber-600"
+					footnote={`第 ${pageState.page} 页`}
 				/>
-				<MetricTile icon={<TeamOutlined />} label="当前页缺负责人" value={stats.missingOwner} tone="text-amber-600" />
+				<MetricTile
+					icon={<TeamOutlined />}
+					label="当前页缺负责人"
+					value={stats.missingOwner}
+					tone="text-amber-600"
+					footnote={`第 ${pageState.page} 页`}
+				/>
 				<MetricTile
 					icon={<SafetyCertificateOutlined />}
 					label="当前页缺密级"
 					value={stats.missingClassification}
 					tone="text-amber-600"
+					footnote={`第 ${pageState.page} 页`}
 				/>
-				<MetricTile icon={<LinkOutlined />} label="当前页缺主题域" value={stats.missingDomain} tone="text-amber-600" />
-				<MetricTile icon={<LinkOutlined />} label="当前页未映射" value={stats.unmapped} tone="text-red-600" />
+				<MetricTile
+					icon={<LinkOutlined />}
+					label="当前页缺主题域"
+					value={stats.missingDomain}
+					tone="text-amber-600"
+					footnote={`第 ${pageState.page} 页`}
+				/>
+				<MetricTile
+					icon={<LinkOutlined />}
+					label="当前页未映射"
+					value={stats.unmapped}
+					tone="text-red-600"
+					footnote={`第 ${pageState.page} 页`}
+				/>
 			</div>
 
 			<Card>
