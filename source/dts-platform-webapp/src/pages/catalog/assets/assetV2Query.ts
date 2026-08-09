@@ -1,0 +1,31 @@
+import { LEDGER_PAGE_SIZE } from "./assetPageShared";
+
+export type AssetV2FilterState = {
+	keyword?: string;
+	domainId?: string;
+	domainUnassigned?: boolean;
+	assetType?: string;
+	classification?: string;
+	warehouseLayer?: string;
+	governanceStatus?: string;
+	matchStatus?: string;
+	unclassified?: boolean;
+	stale?: boolean;
+	tagIds?: string[];
+};
+
+export const buildAssetV2Query = (filters: AssetV2FilterState, page = 0, size = LEDGER_PAGE_SIZE) => ({
+	page,
+	size,
+	keyword: filters.keyword?.trim() || undefined,
+	domainId: filters.domainId,
+	domainUnassigned: filters.domainUnassigned || undefined,
+	type: filters.assetType === "ALL" ? undefined : filters.assetType,
+	classification: filters.classification === "ALL" ? undefined : filters.classification,
+	warehouseLayer: filters.warehouseLayer === "ALL" ? undefined : filters.warehouseLayer,
+	governanceStatus: filters.governanceStatus === "ALL" ? undefined : filters.governanceStatus,
+	matchStatus: filters.matchStatus === "ALL" ? undefined : filters.matchStatus,
+	unclassified: filters.unclassified || undefined,
+	stale: filters.stale || undefined,
+	tagIds: filters.tagIds?.length ? filters.tagIds : undefined,
+});

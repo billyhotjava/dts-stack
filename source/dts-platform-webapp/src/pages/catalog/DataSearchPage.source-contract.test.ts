@@ -106,3 +106,24 @@ test("URL-backed tag search starts with the synchronously hydrated saved form", 
 	const initialEffect = SOURCE.slice(initialEffectStart, initialEffectEnd);
 	assert.doesNotMatch(initialEffect, /SEARCH_FORM_STORAGE_KEY|setKeyword/);
 });
+
+test("data search shares the asset-v2 query builder with the ledger as the single source of truth", () => {
+	assert.match(SOURCE, /import \{ buildAssetV2Query \} from "\.\/assets\/assetV2Query"/);
+	assert.match(SOURCE, /listCatalogAssetsV2\(\s*buildAssetV2Query\(/);
+	assert.match(SOURCE, /buildAssetV2Query\(\{[\s\S]*?keyword: trimmed/);
+	assert.match(SOURCE, /buildAssetV2Query\(\{[\s\S]*?tagIds: effectiveSelectedTagIds/);
+});
+
+test("data search consumes the same URL deep-link protocol as the ledger", () => {
+	assert.match(SOURCE, /searchParams\.get\("unclassified"\) === "1"/);
+	assert.match(SOURCE, /searchParams\.get\("stale"\) === "1"/);
+	assert.match(SOURCE, /searchParams\.get\("governance"\)/);
+	assert.match(SOURCE, /searchParams\.get\("layer"\)/);
+	assert.match(SOURCE, /setUnclassifiedFilter\(true\)/);
+	assert.match(SOURCE, /setStaleFilter\(true\)/);
+	assert.match(SOURCE, /governanceStatus: governanceFilter/);
+	assert.match(SOURCE, /unclassified: unclassifiedFilter/);
+	assert.match(SOURCE, /stale: staleFilter/);
+	assert.match(SOURCE, /治理缺口筛选/);
+	assert.match(SOURCE, /清除 URL 参数 \?unclassified\/\?stale/);
+});

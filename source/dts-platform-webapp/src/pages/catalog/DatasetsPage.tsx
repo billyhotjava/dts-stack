@@ -48,6 +48,7 @@ import {
 	normalizeLayer,
 	UNASSIGNED_DOMAIN_KEY,
 } from "./assets/assetPageShared";
+import { buildAssetV2Query } from "./assets/assetV2Query";
 
 export default function Page() {
 	const [params, setParams] = useSearchParams();
@@ -273,20 +274,24 @@ function AssetLedgerPage() {
 		}
 	};
 
-	const buildAssetQuery = (page = 1, size = LEDGER_PAGE_SIZE) => ({
-		page: page - 1,
-		size,
-		keyword: keyword.trim() || undefined,
-		domainId: domain && domain !== "ALL" && domain !== UNASSIGNED_DOMAIN_KEY ? domain : undefined,
-		domainUnassigned: domain === UNASSIGNED_DOMAIN_KEY || undefined,
-		type: assetType === "ALL" ? undefined : assetType,
-		classification: classification === "ALL" ? undefined : classification,
-		warehouseLayer: warehouseLayer === "ALL" ? undefined : warehouseLayer,
-		governanceStatus: governanceStatus === "ALL" ? undefined : governanceStatus,
-		matchStatus: matchStatus === "ALL" ? undefined : matchStatus,
-		unclassified: unclassifiedFilter || undefined,
-		stale: staleFilter || undefined,
-	});
+	// 台账与搜索共用的资产查询唯一事实源：buildAssetV2Query（见 assets/assetV2Query.ts）
+	const buildAssetQuery = (page = 1, size = LEDGER_PAGE_SIZE) =>
+		buildAssetV2Query(
+			{
+				keyword,
+				domainId: domain && domain !== "ALL" && domain !== UNASSIGNED_DOMAIN_KEY ? domain : undefined,
+				domainUnassigned: domain === UNASSIGNED_DOMAIN_KEY,
+				assetType,
+				classification,
+				warehouseLayer,
+				governanceStatus,
+				matchStatus,
+				unclassified: unclassifiedFilter,
+				stale: staleFilter,
+			},
+			page - 1,
+			size,
+		);
 
 	const buildAssetListQuery = (page = 1, size = LEDGER_PAGE_SIZE) => ({
 		...buildAssetQuery(page, size),

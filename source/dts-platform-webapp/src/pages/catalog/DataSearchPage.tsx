@@ -10,6 +10,7 @@ import { readTagIds, writeTagIds } from "@/components/catalog/tags/catalogTagUrl
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { ASSET_PORTAL_V2_ENABLED } from "./assets/assetPageShared";
+import { buildAssetV2Query } from "./assets/assetV2Query";
 
 type SearchRow = {
 	id: string;
@@ -114,6 +115,10 @@ export default function DataSearchPage() {
 	const [datasetType, setDatasetType] = useState<string>(initialSearchForm.datasetType);
 	const [classification, setClassification] = useState<string>(initialSearchForm.classification);
 	const [warehouseLayer, setWarehouseLayer] = useState<string>(initialSearchForm.warehouseLayer);
+	// 与台账同协议的治理缺口深链：?unclassified=1 / ?stale=1 / ?governance= / ?layer= 等由 URL 优先注入
+	const [unclassifiedFilter, setUnclassifiedFilter] = useState<boolean>(() => searchParams.get("unclassified") === "1");
+	const [staleFilter, setStaleFilter] = useState<boolean>(() => searchParams.get("stale") === "1");
+	const [governanceFilter, setGovernanceFilter] = useState<string>(() => searchParams.get("governance") || "ALL");
 	const [loading, setLoading] = useState(false);
 	const [results, setResults] = useState<SearchRow[]>([]);
 	const [domains, setDomains] = useState<{ id: string; name: string }[]>([]);
@@ -354,16 +359,23 @@ export default function DataSearchPage() {
 						})
 					: Promise.resolve({ content: [], total: 0, page: 0, size: 100 }),
 				shouldSearchAssetsV2
-					? listCatalogAssetsV2({
-							keyword: trimmed || undefined,
-							tagIds: effectiveSelectedTagIds,
-							domainId: domain && domain !== "ALL" ? domain : undefined,
-							classification: classification === "ALL" ? undefined : classification,
-							warehouseLayer: warehouseLayer === "ALL" ? undefined : warehouseLayer,
-							type: datasetType === "ALL" ? undefined : datasetType,
-							page: 0,
-							size: 100,
-						})
+					? listCatalogAssetsV2(
+							buildAssetV2Query(
+								{
+									keyword: trimmed,
+									tagIds: effectiveSelectedTagIds,
+									domainId: domain && domain !== "ALL" ? domain : undefined,
+									assetType: datasetType,
+									classification,
+									warehouseLayer,
+									governanceStatus: governanceFilter,
+									unclassified: unclassifiedFilter,
+									stale: staleFilter,
+								},
+								0,
+								100,
+							),
+						)
 					: Promise.resolve({ content: [] }),
 				shouldSearchLegacyCatalog
 					? searchCatalog({
@@ -408,6 +420,65 @@ export default function DataSearchPage() {
 		void selectedTagIdsKey;
 		void runSearchRef.current(false);
 	}, [selectedTagIdsKey]);
+
+	// 统一筛选状态协议：与台账一致，URL 深链参数（layer/governance/unclassified/stale/domain/classification/assetType/datasetType）优先于本地缓存。
+	// 仅当 URL 显式携带时注入表单并立即检索，保证资产概览等入口的下钻在搜索页真实生效。
+	const deepLinkFilterKey = [
+		searchParams.get("layer"),
+		searchParams.get("governance"),
+		searchParams.get("unclassified"),
+		searchParams.get("stale"),
+		searchParams.get("domain"),
+		searchParams.get("classification"),
+		searchParams.get("assetType"),
+		searchParams.get("datasetType"),
+	].join("\u0000");
+	useEffect(() => {
+		if (!ASSET_PORTAL_V2_ENABLED) return;
+		const params = searchParams;
+		let merged = false;
+		const layer = params.get("layer");
+		if (layer) {
+			setWarehouseLayer(layer);
+			merged = true;
+		}
+		const governance = params.get("governance");
+		if (governance) {
+			setGovernanceFilter(governance);
+			merged = true;
+		}
+		const domainParam = params.get("domain");
+		if (domainParam) {
+			setDomain(domainParam);
+			merged = true;
+		}
+		const classificationParam = params.get("classification");
+		if (classificationParam) {
+			setClassification(classificationParam);
+			merged = true;
+		}
+		const assetTypeParam = params.get("assetType");
+		if (assetTypeParam) {
+			setAssetType(assetTypeParam);
+			merged = true;
+		}
+		const datasetTypeParam = params.get("datasetType");
+		if (datasetTypeParam) {
+			setDatasetType(datasetTypeParam);
+			merged = true;
+		}
+		if (params.get("unclassified") === "1") {
+			setUnclassifiedFilter(true);
+			merged = true;
+		}
+		if (params.get("stale") === "1") {
+			setStaleFilter(true);
+			merged = true;
+		}
+		if (merged) {
+			runSearchRef.current(false);
+		}
+	}, [deepLinkFilterKey]);
 
 	return (
 		<div className="space-y-4">
@@ -489,6 +560,20 @@ export default function DataSearchPage() {
 			</Card>
 
 			<Card title="搜索结果">
+				{unclassifiedFilter || staleFilter ? (
+					<Alert
+						type="info"
+						showIcon
+						className="mb-3"
+						message={`当前搜索已按治理缺口筛选：${[
+							unclassifiedFilter ? "未定密" : null,
+							staleFilter ? "已失效（DEPRECATED/ARCHIVED/BLOCKED）" : null,
+						]
+							.filter(Boolean)
+							.join("、")}`}
+						description="该筛选来自资产概览的治理缺口下钻；可清除 URL 参数 ?unclassified/?stale 回到全量检索。"
+					/>
+				) : null}
 				{searched ? (
 					<Tabs
 						items={[
