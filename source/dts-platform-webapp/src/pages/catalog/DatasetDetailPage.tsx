@@ -17,7 +17,6 @@ import {
 	DatasetFieldsTab,
 	DatasetGovernanceTab,
 	DatasetLineageImpactTab,
-	LegacyGovernanceNotice,
 	MetadataJsonBlock,
 } from "./DatasetDetailSupportTabs";
 import { resolveDatasetDetailId } from "./datasetDetailRoute";
@@ -69,7 +68,6 @@ const toDatasetFromAssetV2Detail = (id: string, detail: any) => {
 		schema: asset.schema,
 		columnCount: asset.columnCount,
 		securityPolicyRefs: asset.securityPolicyRefs,
-		__source: "openmetadata",
 		__fqn: asset.fqn,
 		__legacyDatasetId: asset.legacyDatasetId,
 		__columns: Array.isArray(detail?.columns) ? detail.columns : [],
@@ -88,6 +86,7 @@ export default function DatasetDetailPage() {
 	const requestedTab = searchParams.get("tab");
 	const [activeTab, setActiveTab] = useState(() => resolveDetailTabKey(requestedTab));
 	const [dataset, setDataset] = useState<Record<string, any> | null>(null);
+	const [legacyOnly, setLegacyOnly] = useState(false);
 	const [loading, setLoading] = useState(true);
 	const [assetContract, setAssetContract] = useState<Record<string, any> | null>(null);
 	const [schemaContract, setSchemaContract] = useState<Record<string, any> | null>(null);
@@ -101,6 +100,7 @@ export default function DatasetDetailPage() {
 		setDataset(null);
 		setAssetContract(null);
 		setSchemaContract(null);
+		setLegacyOnly(false);
 		if (!id) {
 			setLoading(false);
 			return;
@@ -108,17 +108,17 @@ export default function DatasetDetailPage() {
 		setLoading(true);
 		void (async () => {
 			try {
-				const legacyDataset: any = await getDataset(id);
+				// ADR-85-03：详情页以 assets-v2 为唯一事实源，Tab 渲染不再分流
+				const detail = await getCatalogAssetV2(id);
 				if (sequence === datasetRequestSequence.current) {
-					setDataset({ ...legacyDataset, __source: "dts-catalog" });
+					setDataset(toDatasetFromAssetV2Detail(id, detail));
 				}
 			} catch {
 				if (sequence !== datasetRequestSequence.current) return;
+				// 旧深链兼容：legacy 数据集仅用于识别并给出显式指引，不再参与 Tab 渲染
 				try {
-					const detail = await getCatalogAssetV2(id);
-					if (sequence === datasetRequestSequence.current) {
-						setDataset(toDatasetFromAssetV2Detail(id, detail));
-					}
+					await getDataset(id);
+					if (sequence === datasetRequestSequence.current) setLegacyOnly(true);
 				} catch {
 					if (sequence === datasetRequestSequence.current) setDataset(null);
 				}
@@ -166,6 +166,21 @@ export default function DatasetDetailPage() {
 			</div>
 		);
 	}
+	if (legacyOnly) {
+		return (
+			<div className="space-y-3 p-8">
+				<Alert
+					type="info"
+					showIcon
+					message="该资产仅存在于旧版数据目录，尚未映射为治理资产。"
+					description="Tab 渲染统一以治理资产（assets-v2）为事实源；可前往资产台账查看映射后的资产，或联系数据管理员完成映射。"
+				/>
+				<Button type="primary" onClick={() => router.push("/catalog/assets")}>
+					前往资产台账
+				</Button>
+			</div>
+		);
+	}
 	if (!dataset) {
 		return <div className="p-8 text-slate-500">数据集不存在或无权访问。</div>;
 	}
@@ -186,7 +201,7 @@ export default function DatasetDetailPage() {
 		owner: dataset.owner,
 		ownerDept: dataset.ownerDept,
 		governanceStatus: dataset.governanceStatus,
-		metadataSource: dataset.__source === "openmetadata" ? "openmetadata" : "dts-catalog",
+		metadataSource: dataset.metadataSource,
 		legacyDatasetId: dataset.__legacyDatasetId,
 		description: dataset.description,
 		hiveDatabase: dataset.hiveDatabase,
@@ -205,8 +220,8 @@ export default function DatasetDetailPage() {
 						<div className="text-xs text-slate-500">企业级资产工作台</div>
 						<h2 className="truncate text-xl font-bold text-slate-900">{dataset.name ?? "-"}</h2>
 					</div>
-					<Tag color={dataset.__source === "openmetadata" ? "blue" : "default"}>
-						{dataset.__source === "openmetadata" ? "assets-v2" : "legacy dataset"}
+					<Tag color={dataset.metadataSource === "openmetadata" ? "blue" : "default"}>
+						{dataset.metadataSource || "assets-v2"}
 					</Tag>
 					{dataset.warehouseLayer && (
 						<Tag
@@ -319,17 +334,13 @@ export default function DatasetDetailPage() {
 						key: "governance",
 						label: "治理责任",
 						children:
-							dataset.__source === "openmetadata" ? (
+							(
 								<OpenMetadataGovernanceTab
 									assetKey={assetKey}
 									dataset={dataset}
 									onChanged={setDataset}
 									onOpenLifecycle={() => setLifecycleWorkbenchOpen(true)}
 								/>
-							) : dataset.__source === "dts-catalog" ? (
-								<LegacyGovernanceNotice dataset={dataset} onChanged={setDataset} />
-							) : (
-								<div className="py-4 text-sm text-slate-500">暂无治理责任数据。</div>
 							),
 					},
 					{
@@ -432,7 +443,7 @@ function DatasetOverviewTab({
 
 	return (
 		<div className="space-y-3 py-2">
-			{dataset.__source === "openmetadata" && <Tag color="blue">OpenMetadata主目录</Tag>}
+			{dataset.metadataSource === "openmetadata" && <Tag color="blue">OpenMetadata主目录</Tag>}
 			<Alert
 				type={readiness.state === "BLOCKED" ? "warning" : readiness.state === "READY" ? "success" : "info"}
 				showIcon
@@ -463,7 +474,7 @@ function DatasetOverviewTab({
 					{schemaContract?.columnCount ?? dataset.columnCount ?? "-"}
 				</Descriptions.Item>
 				<Descriptions.Item label="资产来源">
-					{assetContract?.metadataSource ?? dataset.__source ?? "-"}
+					{assetContract?.metadataSource ?? dataset.metadataSource ?? "-"}
 				</Descriptions.Item>
 				{profile.rowCount != null && (
 					<Descriptions.Item label="数据行数">{profile.rowCount.toLocaleString()}</Descriptions.Item>
@@ -518,7 +529,7 @@ function DatasetSchemaContractTab({
 	const missingFields = Array.isArray(assetContract?.missingGovernanceFields)
 		? assetContract?.missingGovernanceFields
 		: [];
-	const schemaSource = schemaContract?.schemaSource || dataset.__source || "-";
+	const schemaSource = schemaContract?.schemaSource || dataset.metadataSource || "-";
 	const columnCount =
 		schemaContract?.columnCount ?? dataset.columnCount ?? (Array.isArray(columns) ? columns.length : undefined);
 	return (

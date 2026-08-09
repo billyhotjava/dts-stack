@@ -1,4 +1,4 @@
-import { Alert, Button, Descriptions, message, Select, Spin, Tag } from "antd";
+import { Alert, Button, Descriptions, Spin, Tag } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
 	getCatalogAssetV2Lineage,
@@ -6,162 +6,14 @@ import {
 	getDatasetFields,
 	getDatasetGovernanceHealth,
 	getDatasetIndicatorDeps,
-	listDomains,
 	syncCatalogAssetV2Lineage,
-	updateDataset,
 } from "@/api/platformApi";
 import { LineageGraph } from "@/components/lineage";
 import { CompactTable } from "@/components/table";
 import { useRouter } from "@/routes/hooks";
 import type { ImpactEdge, ImpactNode } from "./lineageShared";
 
-type LegacyGovernanceNoticeProps = {
-	dataset: Record<string, any>;
-	onChanged?: (next: Record<string, any>) => void;
-};
 
-type DomainOption = {
-	id: string;
-	name: string;
-};
-
-const legacyDatasetDomainPatch = (dataset: Record<string, any>, domainId: string) => ({
-	name: dataset.name,
-	type: dataset.type,
-	classification: dataset.classification,
-	ownerDept: dataset.ownerDept,
-	owner: dataset.owner,
-	domain: { id: domainId },
-	hiveDatabase: dataset.hiveDatabase,
-	hiveTable: dataset.hiveTable,
-	trinoCatalog: dataset.trinoCatalog,
-	tags: dataset.tags,
-	description: dataset.description,
-	warehouseLayer: dataset.warehouseLayer,
-	enabled: dataset.enabled,
-	exposedBy: dataset.exposedBy,
-	lifecycleStatus: dataset.lifecycleStatus,
-	retentionDays: dataset.retentionDays,
-	expiresAt: dataset.expiresAt,
-});
-
-export function LegacyGovernanceNotice({ dataset, onChanged }: LegacyGovernanceNoticeProps) {
-	const [domains, setDomains] = useState<DomainOption[]>([]);
-	const [domainId, setDomainId] = useState(String(dataset.domainId || ""));
-	const [domainsLoading, setDomainsLoading] = useState(true);
-	const [domainsError, setDomainsError] = useState("");
-	const [saving, setSaving] = useState(false);
-
-	useEffect(() => {
-		setDomainId(String(dataset.domainId || ""));
-	}, [dataset.domainId]);
-
-	useEffect(() => {
-		let cancelled = false;
-		setDomainsLoading(true);
-		setDomainsError("");
-		void listDomains(0, 200, "")
-			.then((response: any) => {
-				if (cancelled) return;
-				const payload = response?.data?.data ?? response?.data ?? response;
-				const rows = Array.isArray(payload?.content) ? payload.content : Array.isArray(payload) ? payload : [];
-				setDomains(
-					rows
-						.map((item: any) => ({
-							id: String(item?.id || "").trim(),
-							name: String(item?.name || "").trim(),
-						}))
-						.filter((item: DomainOption) => item.id && item.name),
-				);
-			})
-			.catch(() => {
-				if (!cancelled) {
-					setDomains([]);
-					setDomainsError("主题域目录加载失败，请刷新后重试。");
-				}
-			})
-			.finally(() => {
-				if (!cancelled) setDomainsLoading(false);
-			});
-		return () => {
-			cancelled = true;
-		};
-	}, []);
-
-	const saveDomain = async () => {
-		const selected = domains.find((item) => item.id === domainId);
-		if (!selected || !dataset.id || dataset.editable !== true) return;
-		setSaving(true);
-		try {
-			const saved: any = await updateDataset(String(dataset.id), legacyDatasetDomainPatch(dataset, selected.id));
-			onChanged?.({
-				...dataset,
-				...(saved && typeof saved === "object" ? saved : {}),
-				domainId: selected.id,
-				domainName: selected.name,
-				__source: "dts-catalog",
-			});
-			message.success("主题域已保存");
-		} finally {
-			setSaving(false);
-		}
-	};
-
-	return (
-		<div className="space-y-4 py-2">
-			<Alert
-				type={dataset.domainId ? "info" : "warning"}
-				showIcon
-				message={dataset.domainId ? "这是 DTS 原生资产" : "当前资产缺少主题域"}
-				description={
-					dataset.domainId
-						? "基础治理属性由 DTS 数据资产台账维护，质量和指标关系请在“质量与SLA”页查看。"
-						: "请选择负责该资产业务语义和治理责任的主题域；保存后系统会重新计算资产可引用状态。"
-				}
-			/>
-			<div className="rounded-lg border border-slate-200 bg-white p-4">
-				<div className="mb-2 text-sm font-medium text-slate-700">主题域</div>
-				<div className="flex flex-wrap items-center gap-3">
-					<Select
-						aria-label="设置主题域"
-						className="min-w-64"
-						showSearch
-						optionFilterProp="label"
-						loading={domainsLoading}
-						disabled={dataset.editable !== true || domainsLoading}
-						value={domainId || undefined}
-						placeholder="请选择主题域"
-						onChange={setDomainId}
-						options={domains.map((item) => ({ label: item.name, value: item.id }))}
-					/>
-					<Button
-						type="primary"
-						loading={saving}
-						disabled={
-							dataset.editable !== true || domainsLoading || !domainId || domainId === String(dataset.domainId || "")
-						}
-						onClick={() => void saveDomain()}
-					>
-						保存主题域
-					</Button>
-				</div>
-				{domainsError ? <Alert className="mt-3" type="error" showIcon message={domainsError} /> : null}
-				{dataset.editable !== true ? (
-					<Alert className="mt-3" type="info" showIcon message="当前账号无该资产编辑权限，主题域仅可查看。" />
-				) : null}
-			</div>
-			<Descriptions bordered size="small" column={2}>
-				<Descriptions.Item label="主题域">{dataset.domainName || "-"}</Descriptions.Item>
-				<Descriptions.Item label="密级">{dataset.classification || "-"}</Descriptions.Item>
-				<Descriptions.Item label="仓库分层">{dataset.warehouseLayer || "-"}</Descriptions.Item>
-				<Descriptions.Item label="负责人">{dataset.owner || "-"}</Descriptions.Item>
-				<Descriptions.Item label="归属部门">{dataset.ownerDept || "-"}</Descriptions.Item>
-				<Descriptions.Item label="生命周期">{dataset.lifecycleStatus || "-"}</Descriptions.Item>
-				<Descriptions.Item label="治理状态">{dataset.governanceStatus || "-"}</Descriptions.Item>
-			</Descriptions>
-		</div>
-	);
-}
 
 export function MetadataJsonBlock({ title, value }: { title: string; value?: string }) {
 	if (!value) {

@@ -5,14 +5,17 @@ import test from "node:test";
 const SOURCE = readFileSync(new URL("./DatasetDetailPage.tsx", import.meta.url), "utf8");
 const SUPPORT_SOURCE = readFileSync(new URL("./DatasetDetailSupportTabs.tsx", import.meta.url), "utf8");
 
-test("dataset detail page prefers the route-native dataset API before assets-v2 fallback", () => {
-	const firstAssetV2Read = SOURCE.indexOf("getCatalogAssetV2(id)");
-	const routeNativeRead = SOURCE.indexOf("const legacyDataset: any = await getDataset(id)");
+test("dataset detail page consumes assets-v2 as the single source of truth", () => {
+	const firstAssetV2Read = SOURCE.indexOf("const detail = await getCatalogAssetV2(id)");
+	const legacyRead = SOURCE.indexOf("await getDataset(id)");
 
-	assert.ok(firstAssetV2Read > 0, "expected assets-v2 detail API to be called");
-	assert.ok(routeNativeRead > 0, "expected route-native dataset API to remain available");
-	assert.ok(routeNativeRead < firstAssetV2Read, "dataset routes must avoid a noisy assets-v2 miss for legacy ids");
+	assert.ok(firstAssetV2Read > 0, "expected assets-v2 detail API to be the primary read");
+	assert.ok(legacyRead > 0, "expected legacy dataset API to remain only for old deep-link resolution");
+	assert.ok(firstAssetV2Read < legacyRead, "assets-v2 must be read before any legacy fallback");
 
+	assert.match(SOURCE, /ADR-85-03：详情页以 assets-v2 为唯一事实源/);
+	assert.match(SOURCE, /setLegacyOnly\(true\)/);
+	assert.doesNotMatch(SOURCE, /__source/);
 	assert.match(SOURCE, /企业级资产工作台/);
 	assert.match(SOURCE, /授权资产/);
 	assert.match(SOURCE, /字段契约/);
@@ -45,10 +48,11 @@ test("dataset detail page exposes enterprise asset workbench tabs", () => {
 	assert.match(SOURCE, /DatasetLineageImpactTab/);
 });
 
-test("legacy datasets enter the editable governance panel without requiring a mapping id", () => {
-	assert.match(SOURCE, /dataset\.__source === "dts-catalog"/);
-	assert.match(SOURCE, /<LegacyGovernanceNotice dataset=\{dataset\} onChanged=\{setDataset\}/);
-	assert.doesNotMatch(SOURCE, /\) : dataset\.__legacyDatasetId \? \(\s*<LegacyGovernanceNotice/);
+test("legacy-only assets get an explicit notice instead of a legacy render branch", () => {
+	assert.match(SOURCE, /该资产仅存在于旧版数据目录，尚未映射为治理资产/);
+	assert.match(SOURCE, /legacyOnly/);
+	assert.doesNotMatch(SOURCE, /dataset\.__source === "dts-catalog"/);
+	assert.doesNotMatch(SOURCE, /<LegacyGovernanceNotice/);
 });
 
 test("dataset detail page uses SPA navigation for catalog internal actions", () => {
