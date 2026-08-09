@@ -278,7 +278,7 @@ export function AssetLedgerView({
 						},
 						{
 							title: "操作",
-							width: ASSET_ACTION_COLUMN_WIDTH,
+							width: ASSET_ACTION_COLUMN_WIDTH + 84,
 							fixed: "right",
 							render: (_, row) => (
 								<div className="catalog-assets-actions">
@@ -291,6 +291,18 @@ export function AssetLedgerView({
 										}}
 									>
 										治理资产
+									</Button>
+									<Button
+										size="small"
+										data-testid="row-request-access"
+										onClick={(event) => {
+											event.stopPropagation();
+											router.push(
+												`/security/dataset-access-approval?action=new&assetId=${encodeURIComponent(row.id)}&assetType=dataset`,
+											);
+										}}
+									>
+										申请权限
 									</Button>
 								</div>
 							),

@@ -20,7 +20,10 @@ export type AssetReadiness = {
 	reasons: string[];
 };
 
-const normalize = (value?: string | null) => String(value || "").trim().toUpperCase();
+const normalize = (value?: string | null) =>
+	String(value || "")
+		.trim()
+		.toUpperCase();
 
 // 失效生命周期取值。历史代码比较的 "DISABLED" 属治理状态而非生命周期，
 // 且 "STALE" 不在 CatalogAssetLifecycleStatus 中，两者均不可达。
@@ -85,7 +88,8 @@ export function resolveAssetReadiness(asset: AssetReadinessInput): AssetReadines
 
 export function buildAssetGrantUrl(asset: { assetType?: string | null; assetId?: string | null }) {
 	const params = new URLSearchParams();
+	params.set("action", "new");
 	params.set("assetType", asset.assetType || "TABLE");
 	if (asset.assetId) params.set("assetId", asset.assetId);
-	return `/governance/asset-grants?${params.toString()}`;
+	return `/security/dataset-access-approval?${params.toString()}`;
 }

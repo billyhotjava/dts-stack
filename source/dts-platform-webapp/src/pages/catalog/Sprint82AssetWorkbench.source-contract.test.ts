@@ -18,10 +18,11 @@ test("Sprint-82 keeps the map summary-only and makes the ledger the tag workspac
 	assert.match(LEDGER_PAGE, /数据标签/);
 });
 
-test("Sprint-82 collapses row actions into one asset governance entry", () => {
+test("Sprint-82 keeps the ledger action column to the governance entry plus one navigation action", () => {
 	assert.match(LEDGER_VIEW, /AssetGovernanceWorkbenchDrawer/);
 	assert.match(LEDGER_VIEW, />\s*治理资产\s*</);
-	assert.doesNotMatch(LEDGER_VIEW, />\s*申请权限\s*</);
+	// Sprint-85 ADR-85-06 允许行级「申请权限」作为唯一导航型操作；仍禁止入口泛滥
+	assert.match(LEDGER_VIEW, />\s*申请权限\s*</);
 	assert.doesNotMatch(LEDGER_VIEW, />\s*详情\s*</);
 	assert.doesNotMatch(LEDGER_VIEW, />\s*更多\s*</);
 	assert.doesNotMatch(LEDGER_VIEW, /创建报表|生成数据产品|发布数据 API/);

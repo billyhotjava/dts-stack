@@ -31,9 +31,9 @@ describe("assetPortalUx helpers", () => {
 		expect(readiness.reasons).toContain("仅有主目录缓存，尚未沉淀为 DTS 治理资产");
 	});
 
-	it("builds an asset grant URL with encoded asset identity", () => {
+	it("builds an asset grant URL that deep-links into the new-request flow", () => {
 		expect(buildAssetGrantUrl({ assetType: "TABLE", assetId: "dwd.project/detail" })).toBe(
-			"/governance/asset-grants?assetType=TABLE&assetId=dwd.project%2Fdetail",
+			"/security/dataset-access-approval?action=new&assetType=TABLE&assetId=dwd.project%2Fdetail",
 		);
 	});
 });

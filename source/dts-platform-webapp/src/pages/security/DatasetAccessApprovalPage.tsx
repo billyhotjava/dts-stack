@@ -1,20 +1,23 @@
-import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
-import { Button, Card, Descriptions, Drawer, Input, Modal, Select, Space, Tabs, Tag, Typography } from "antd";
-import { CompactTable } from "@/components/table";
+import { Alert, Button, Card, Descriptions, Drawer, Input, Modal, Select, Space, Tabs, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { useCatalogManageAccess } from "@/hooks/useModuleManageAccess";
-import { PageHeader } from "@/components/page-header";
-import { useRouter } from "@/routes/hooks";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router";
+import { toast } from "sonner";
 import {
 	cancelDatasetAccessRequest,
 	decideDatasetAccessTask,
 	decideDatasetAccessTaskBatch,
+	getCatalogAssetV2,
 	getDatasetAccessRequestDetail,
 	listDoneDatasetAccessTasks,
 	listMyDatasetAccessRequests,
 	listPendingDatasetAccessTasks,
 } from "@/api/platformApi";
+import { PageHeader } from "@/components/page-header";
+import { DatasetAccessRequestDialog } from "@/components/security/DatasetAccessRequestDialog";
+import { CompactTable } from "@/components/table";
+import { useCatalogManageAccess } from "@/hooks/useModuleManageAccess";
+import { useRouter } from "@/routes/hooks";
 
 const { Text } = Typography;
 
@@ -65,19 +68,82 @@ const parsePage = <T,>(raw: any, fallbackPage: number, fallbackSize: number): Pa
 
 export default function Page() {
 	const router = useRouter();
+	const [searchParams, setSearchParams] = useSearchParams();
 	const canManage = useCatalogManageAccess();
 	const [activeTab, setActiveTab] = useState("requests");
 
-	const [requestsPage, setRequestsPage] = useState<PageResult<AccessRequest>>({ content: [], total: 0, page: 1, size: 10 });
-	const [pendingPage, setPendingPage] = useState<PageResult<TaskView>>({ content: [], total: 0, page: 1, size: 10 });
-	const [donePage, setDonePage] = useState<PageResult<TaskView>>({ content: [], total: 0, page: 1, size: 10 });
+	// 深链协议：?action=new[&assetId=&assetType=] 打开新建申请并预填资产（台账/概览/详情入口统一）
+	const deepLinkAction = searchParams.get("action");
+	const deepLinkAssetId = searchParams.get("assetId");
+	const [requestDialogOpen, setRequestDialogOpen] = useState(false);
+	const [deepLinkAsset, setDeepLinkAsset] = useState<Record<string, any> | null>(null);
+	const [deepLinkLoading, setDeepLinkLoading] = useState(false);
+	const [deepLinkMissing, setDeepLinkMissing] = useState(false);
 
-	const [requestsQuery, setRequestsQuery] = useState<{ page: number; size: number; status?: string; keyword?: string }>({
+	useEffect(() => {
+		if (deepLinkAction !== "new") return;
+		if (!deepLinkAssetId) {
+			setRequestDialogOpen(false);
+			setDeepLinkAsset(null);
+			setDeepLinkMissing(false);
+			return;
+		}
+		setRequestDialogOpen(true);
+		let cancelled = false;
+		setDeepLinkLoading(true);
+		setDeepLinkMissing(false);
+		void getCatalogAssetV2(deepLinkAssetId)
+			.then((result: any) => {
+				if (cancelled) return;
+				setDeepLinkAsset(result || null);
+				setDeepLinkMissing(!result);
+				if (!result) setRequestDialogOpen(false);
+			})
+			.catch(() => {
+				if (cancelled) return;
+				setDeepLinkMissing(true);
+				setRequestDialogOpen(false);
+			})
+			.finally(() => {
+				if (!cancelled) setDeepLinkLoading(false);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [deepLinkAction, deepLinkAssetId]);
+
+	const clearDeepLink = () => {
+		setRequestDialogOpen(false);
+		const params = new URLSearchParams(searchParams);
+		params.delete("action");
+		params.delete("assetId");
+		params.delete("assetType");
+		setSearchParams(params, { replace: true });
+	};
+
+	const [requestsPage, setRequestsPage] = useState<PageResult<AccessRequest>>({
+		content: [],
+		total: 0,
 		page: 1,
 		size: 10,
 	});
-	const [pendingQuery, setPendingQuery] = useState<{ page: number; size: number; keyword?: string }>({ page: 1, size: 10 });
-	const [doneQuery, setDoneQuery] = useState<{ page: number; size: number; status?: string; keyword?: string }>({ page: 1, size: 10 });
+	const [pendingPage, setPendingPage] = useState<PageResult<TaskView>>({ content: [], total: 0, page: 1, size: 10 });
+	const [donePage, setDonePage] = useState<PageResult<TaskView>>({ content: [], total: 0, page: 1, size: 10 });
+
+	const [requestsQuery, setRequestsQuery] = useState<{ page: number; size: number; status?: string; keyword?: string }>(
+		{
+			page: 1,
+			size: 10,
+		},
+	);
+	const [pendingQuery, setPendingQuery] = useState<{ page: number; size: number; keyword?: string }>({
+		page: 1,
+		size: 10,
+	});
+	const [doneQuery, setDoneQuery] = useState<{ page: number; size: number; status?: string; keyword?: string }>({
+		page: 1,
+		size: 10,
+	});
 
 	const [loadingRequests, setLoadingRequests] = useState(false);
 	const [loadingPending, setLoadingPending] = useState(false);
@@ -210,7 +276,12 @@ export default function Page() {
 	};
 
 	const requestColumns: ColumnsType<AccessRequest> = [
-		{ title: "数据集", dataIndex: "datasetName", render: (v) => v || "-" , sorter: (a, b) => (a.datasetName || "").localeCompare(b.datasetName || "") },
+		{
+			title: "数据集",
+			dataIndex: "datasetName",
+			render: (v) => v || "-",
+			sorter: (a, b) => (a.datasetName || "").localeCompare(b.datasetName || ""),
+		},
 		{ title: "申请人", dataIndex: "requesterName", render: (v) => v || "-" },
 		{ title: "目标用户", dataIndex: "targetName", render: (v) => v || "-" },
 		{
@@ -252,7 +323,12 @@ export default function Page() {
 		{ title: "数据集", dataIndex: ["request", "datasetName"], render: (v) => v || "-" },
 		{ title: "申请人", dataIndex: ["request", "requesterName"], render: (v) => v || "-" },
 		{ title: "步骤", dataIndex: ["task", "stepOrder"], width: 80, render: (v) => v ?? "-" },
-		{ title: "状态", dataIndex: ["task", "status"], width: 120, render: (v) => <Tag color={statusColor(v)}>{v || "-"}</Tag> },
+		{
+			title: "状态",
+			dataIndex: ["task", "status"],
+			width: 120,
+			render: (v) => <Tag color={statusColor(v)}>{v || "-"}</Tag>,
+		},
 		{ title: "创建时间", dataIndex: ["task", "createdDate"], render: (v) => formatDate(v) },
 		{
 			title: "操作",
@@ -261,7 +337,12 @@ export default function Page() {
 					<Button size="small" onClick={() => void openRequestDetail(record?.request?.id)}>
 						详情
 					</Button>
-					<Button size="small" type="primary" onClick={() => openDecision([record.task?.id], "approve")} disabled={!canManage}>
+					<Button
+						size="small"
+						type="primary"
+						onClick={() => openDecision([record.task?.id], "approve")}
+						disabled={!canManage}
+					>
 						批准
 					</Button>
 					<Button size="small" danger onClick={() => openDecision([record.task?.id], "reject")} disabled={!canManage}>
@@ -297,13 +378,56 @@ export default function Page() {
 	return (
 		<div className="space-y-6">
 			<PageHeader
-				title="数据资产门户 / 权限申请"
+				title="数据资产 · 权限申请与审批"
 				actions={
 					<Space>
-						<Button type="primary" onClick={() => router.push("/catalog/assets")}>申请权限</Button>
+						<Button onClick={() => router.push("/my/asset-grants")}>我的授权</Button>
+						<Button onClick={() => router.push("/governance/asset-grants")}>授权管理</Button>
 						<Button onClick={() => router.push("/governance/permission-audit")}>查看审计</Button>
 					</Space>
 				}
+			/>
+			{deepLinkAction === "new" && !deepLinkAssetId ? (
+				<Alert
+					type="info"
+					showIcon
+					message="未指定具体资产，无法预填申请。"
+					description="请从资产台账行级「申请权限」或资产详情页发起申请，以确保资产被自动预填。"
+				/>
+			) : null}
+			{deepLinkAction === "new" && deepLinkAssetId && deepLinkMissing && !deepLinkLoading ? (
+				<Alert
+					type="warning"
+					showIcon
+					message={`未找到指定资产（assetId=${deepLinkAssetId}），无法预填申请。`}
+					description="该资产可能已被删除或无权访问；可关闭后从资产台账/详情重新发起申请。"
+				/>
+			) : null}
+			<DatasetAccessRequestDialog
+				open={requestDialogOpen}
+				onOpenChange={(next) => {
+					setRequestDialogOpen(next);
+					if (!next) clearDeepLink();
+				}}
+				dataset={
+					deepLinkAsset
+						? {
+								id: String(deepLinkAsset.id || ""),
+								name: String(deepLinkAsset.name || ""),
+								classification: String(deepLinkAsset.classification || ""),
+								warehouseLayer: String(deepLinkAsset.warehouseLayer || ""),
+								ownerDept: String(deepLinkAsset.ownerDept || ""),
+							}
+						: { id: "", name: "" }
+				}
+				defaultActions={["query", "preview"]}
+				onSubmitted={async () => {
+					clearDeepLink();
+					setActiveTab("requests");
+					setRequestsQuery((prev) => ({ ...prev, page: 1, status: undefined }));
+					await loadRequests();
+					toast.success("已提交审批申请，可在「我的申请」中跟踪进展");
+				}}
 			/>
 			<Card>
 				<Tabs
@@ -336,7 +460,9 @@ export default function Page() {
 												{ label: "已驳回", value: "REJECTED" },
 												{ label: "已撤回", value: "CANCELLED" },
 											]}
-											onChange={(value) => setRequestsQuery((prev) => ({ ...prev, page: 1, status: value || undefined }))}
+											onChange={(value) =>
+												setRequestsQuery((prev) => ({ ...prev, page: 1, status: value || undefined }))
+											}
 										/>
 									</Space>
 									<CompactTable
@@ -371,7 +497,9 @@ export default function Page() {
 											placeholder="按数据集/申请人/目标用户搜索"
 											style={{ width: 280 }}
 											value={pendingQuery.keyword || ""}
-											onChange={(e) => setPendingQuery((prev) => ({ ...prev, page: 1, keyword: e.target.value || undefined }))}
+											onChange={(e) =>
+												setPendingQuery((prev) => ({ ...prev, page: 1, keyword: e.target.value || undefined }))
+											}
 										/>
 										<Button
 											type="primary"
@@ -424,7 +552,9 @@ export default function Page() {
 											placeholder="按数据集/申请人/目标用户搜索"
 											style={{ width: 280 }}
 											value={doneQuery.keyword || ""}
-											onChange={(e) => setDoneQuery((prev) => ({ ...prev, page: 1, keyword: e.target.value || undefined }))}
+											onChange={(e) =>
+												setDoneQuery((prev) => ({ ...prev, page: 1, keyword: e.target.value || undefined }))
+											}
 										/>
 										<Select
 											allowClear
@@ -494,8 +624,12 @@ export default function Page() {
 				<Space direction="vertical" size={12} className="w-full">
 					<Descriptions bordered size="small" column={1}>
 						<Descriptions.Item label="数据集">{detail?.request?.datasetName || "-"}</Descriptions.Item>
-						<Descriptions.Item label="申请人">{detail?.request?.requesterName || detail?.request?.requesterUsername || "-"}</Descriptions.Item>
-						<Descriptions.Item label="目标用户">{detail?.request?.targetName || detail?.request?.targetUsername || "-"}</Descriptions.Item>
+						<Descriptions.Item label="申请人">
+							{detail?.request?.requesterName || detail?.request?.requesterUsername || "-"}
+						</Descriptions.Item>
+						<Descriptions.Item label="目标用户">
+							{detail?.request?.targetName || detail?.request?.targetUsername || "-"}
+						</Descriptions.Item>
 						<Descriptions.Item label="申请状态">
 							<Tag color={statusColor(detail?.request?.status)}>{detail?.request?.status || "-"}</Tag>
 						</Descriptions.Item>
@@ -515,9 +649,24 @@ export default function Page() {
 								{ title: "步骤", dataIndex: "stepOrder", width: 80 },
 								{ title: "角色", dataIndex: "approverRole", width: 160 },
 								{ title: "部门", dataIndex: "deptCode", width: 140, render: (v) => v || "-" },
-								{ title: "状态", dataIndex: "status", width: 120, render: (v) => <Tag color={statusColor(v)}>{v || "-"}</Tag> },
+								{
+									title: "状态",
+									dataIndex: "status",
+									width: 120,
+									render: (v) => <Tag color={statusColor(v)}>{v || "-"}</Tag>,
+								},
 								{ title: "审批人", dataIndex: "decidedBy", width: 140, render: (v) => v || "-" },
-								{ title: "时间", dataIndex: "decidedAt", width: 180, render: (v) => formatDate(v) , sorter: (a, b) => { const ta = a.decidedAt ? new Date(a.decidedAt as any).getTime() : 0; const tb = b.decidedAt ? new Date(b.decidedAt as any).getTime() : 0; return ta - tb; } },
+								{
+									title: "时间",
+									dataIndex: "decidedAt",
+									width: 180,
+									render: (v) => formatDate(v),
+									sorter: (a, b) => {
+										const ta = a.decidedAt ? new Date(a.decidedAt as any).getTime() : 0;
+										const tb = b.decidedAt ? new Date(b.decidedAt as any).getTime() : 0;
+										return ta - tb;
+									},
+								},
 								{ title: "意见", dataIndex: "decisionNotes", render: (v) => v || "-" },
 							]}
 						/>
@@ -526,7 +675,9 @@ export default function Page() {
 					<Card title="授权结果" size="small" loading={detailLoading}>
 						<Descriptions bordered size="small" column={1}>
 							<Descriptions.Item label="授权类型">{detail?.grant?.grantType || "-"}</Descriptions.Item>
-							<Descriptions.Item label="授权用户">{detail?.grant?.granteeName || detail?.grant?.granteeUsername || "-"}</Descriptions.Item>
+							<Descriptions.Item label="授权用户">
+								{detail?.grant?.granteeName || detail?.grant?.granteeUsername || "-"}
+							</Descriptions.Item>
 							<Descriptions.Item label="权限">
 								<Space>
 									<Tag color={detail?.grant?.canQuery ? "green" : "default"}>查询</Tag>
