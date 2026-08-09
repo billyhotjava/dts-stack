@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.yuzhi.dts.platform.service.modeling.imports.ModelPackageFixtures;
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.ConversionMode;
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.ConversionResult;
+import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.DbtMetadata;
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.ModelPackage;
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.PackageModel;
 import com.yuzhi.dts.platform.service.modeling.imports.converter.DbtArchiveInspectionContract.ImportProjectionCompatibility;
@@ -91,5 +92,27 @@ class DbtCompatibilityEvaluatorTest {
         );
         assertThat(new DbtCompatibilityEvaluator().evaluate(unsafePackage).importProjection())
             .isEqualTo(ImportProjectionCompatibility.STRUCTURE_VIEW_ONLY);
+    }
+
+    @Test
+    void doesNotMisreportStaticSourceInspectionAsAnUnsupportedDatabaseAdapter() {
+        ModelPackage fixture = ModelPackageFixtures.validPackage();
+        ModelPackage sourceOnly = new ModelPackage(
+            fixture.schemaVersion(),
+            fixture.packageId(),
+            fixture.packageChecksum(),
+            new DbtMetadata("pjm", "1.0.0", "source-project/v1", "static-no-execution"),
+            fixture.defaults(),
+            fixture.sources(),
+            fixture.technicalNodes(),
+            fixture.models(),
+            fixture.issues()
+        );
+
+        var compatibility = new DbtCompatibilityEvaluator().evaluate(sourceOnly);
+
+        assertThat(compatibility.materialization()).isEqualTo(MaterializationCompatibility.UNKNOWN);
+        assertThat(compatibility.adapterType()).isNull();
+        assertThat(compatibility.issues()).extracting("code").doesNotContain("DBT_ADAPTER_UNSUPPORTED");
     }
 }

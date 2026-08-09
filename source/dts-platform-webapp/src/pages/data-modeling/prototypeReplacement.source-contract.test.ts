@@ -194,6 +194,7 @@ describe("prototype-owned data modeling frontend", () => {
 		const modelPublishDialog = read("./prototype/ModelPublishDialog.tsx");
 		const reverse = read("./prototype/ReverseModelingPage.tsx");
 		const tools = read("./prototype/ToolsPage.tsx");
+		const toolWorkflows = read("../../features/modeling/navigation/dataModelingToolWorkflows.ts");
 		const standardsService = read("./prototype/services/standardsProjectionService.ts");
 		const relationshipService = read("../../api/services/modelingRelationshipGraphService.ts");
 		const metrics = read("./prototype/MetricsPage.tsx");
@@ -229,6 +230,8 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(catalogActions).toMatch(/deleteModelSpec|deleteDimensionDefinition|retireDimensionDefinition/);
 		expect(modeling).toMatch(/getModelRepresentation|representationScope: "BUSINESS"|useDataModelingMenuGrant/);
 		expect(modelDialogs).toMatch(/representationScope: "TECHNICAL"|OPEN_ADVANCED_DBT|canMaintain/);
+		expect(modelDialogs).toMatch(/导入 dbt ZIP|intent=advanced/);
+		expect(modelDialogs).not.toMatch(/\/api\/etl\/dbt\/files|\/etl\/dbt\/files/);
 		expect(modelPublishDialog).toMatch(/getModelLifecycle|compileModelLifecycle/);
 		expect(modelPublishDialog).toMatch(
 			/createReleaseCandidate|lockReleaseCandidate|retryReleaseCandidate|publishReleaseCandidate/,
@@ -239,6 +242,10 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(reverse).toMatch(/retryModelSpecImport|forwardUndoModelSpecImport|renameMappings/);
 		expect(reverse).toMatch(/defaultImportConflictResolutions|key=\{mapping\._clientId\}/);
 		expect(reverse).toContain('item.action !== "BLOCKED"');
+		expect(reverse).toMatch(/conversionMode === "DBT_BACKED"|isAdvancedDbtImportResult/);
+		expect(reverse).toContain("open=advanced");
+		expect(modeling).toMatch(/searchParams\.get\("open"\)|requestedDialog/);
+		expect(modeling).toMatch(/setDialog\("advanced"\)/);
 		expect(reverse).toContain("useDataModelingMenuGrant");
 		expect(prototypeSource).not.toContain("useCatalogMaintainerAccess");
 		expect(standardsService).not.toContain("deleteGlossaryTerm");
@@ -248,6 +255,8 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(tools).toMatch(/getDataModelingToolWorkflows/);
 		expect(tools).not.toMatch(/mock|demo/i);
 		expect(tools).toContain("本页不创建统一工具运行台账，也不拼接模拟历史");
+		expect(toolWorkflows).toContain('title: "dbt ZIP 建模"');
+		expect(toolWorkflows).toContain('owner: "ModelSpec / 高级 dbt 实现"');
 	});
 
 	it("keeps the product copy aligned with the approved menu corrections", () => {

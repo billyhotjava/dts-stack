@@ -262,6 +262,8 @@ class ModelSpecImportResourceTest {
         var inspected = resource.inspectArchive(archive).getData();
         assertThat(inspected.modelPackage()).isEqualTo(modelPackage);
         assertThat(inspected.compatibility()).isEqualTo(compatibility);
+        assertThat(inspected.report()).isNotNull();
+        assertThat(inspected.report().summary().eligible()).isEqualTo(1);
         assertThat(inspected.inspectionProof()).isEqualTo("inspection-proof");
         assertThat(inspected.proofExpiresAt()).isEqualTo(expiresAt);
         org.mockito.InOrder inspectionOrder = org.mockito.Mockito.inOrder(

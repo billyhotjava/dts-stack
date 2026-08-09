@@ -8,6 +8,7 @@ import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportAppl
 import com.yuzhi.dts.platform.service.modeling.imports.converter.DbtModelArchiveInspectService;
 import com.yuzhi.dts.platform.service.modeling.imports.converter.DbtModelArchiveInspectService.ArchiveInspectionException;
 import com.yuzhi.dts.platform.service.modeling.imports.converter.DbtArchiveInspectionContract.InspectArchiveResponse;
+import com.yuzhi.dts.platform.service.modeling.imports.converter.DbtArchiveInspectionReportProjector;
 import com.yuzhi.dts.platform.service.modeling.imports.converter.DbtArchiveInspectionContract.ImportProjectionCompatibility;
 import com.yuzhi.dts.platform.service.modeling.imports.converter.DbtCompatibilityEvaluator;
 import com.yuzhi.dts.platform.service.modeling.imports.proof.ModelSpecImportInspectionProofCodec;
@@ -54,6 +55,7 @@ public class ModelSpecImportResource {
     private final DbtModelArchiveInspectService archiveInspectService;
     private final ModelSpecImportInspectionProofCodec inspectionProofCodec;
     private final DbtCompatibilityEvaluator compatibilityEvaluator;
+    private final DbtArchiveInspectionReportProjector inspectionReportProjector = new DbtArchiveInspectionReportProjector();
     private final ModelSpecImportForwardUndoService forwardUndoService;
 
     public ModelSpecImportResource(
@@ -168,6 +170,7 @@ public class ModelSpecImportResource {
             var modelPackage = archiveInspectService.inspect(archive);
             packageChecksum = modelPackage == null ? null : modelPackage.packageChecksum();
             var compatibility = requireCompatibilityEvaluator().evaluate(modelPackage);
+            var report = inspectionReportProjector.project(modelPackage, compatibility);
             if (compatibility.importProjection() == ImportProjectionCompatibility.BLOCKED) {
                 throw new ModelSpecImportPreviewException(
                     "MODEL_IMPORT_PROJECTION_BLOCKED",
@@ -180,6 +183,7 @@ public class ModelSpecImportResource {
             response = new InspectArchiveResponse(
                 modelPackage,
                 compatibility,
+                report,
                 issuedProof.inspectionProof(),
                 issuedProof.proofExpiresAt()
             );

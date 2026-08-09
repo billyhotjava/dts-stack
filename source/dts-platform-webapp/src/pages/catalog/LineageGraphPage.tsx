@@ -147,6 +147,8 @@ export default function LineageGraphPage() {
 		snapshotAt,
 		layoutDirection,
 		showColumns,
+		searchParams,
+		setSearchParams,
 	]);
 
 	const buildLineageSvg = () => {

@@ -1,5 +1,8 @@
 package com.yuzhi.dts.platform.service.modeling;
 
+import java.time.DateTimeException;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +34,24 @@ public final class ModelingDbtCompiler {
         "boolean"
     );
     private static final Set<String> JOIN_TYPES = Set.of("INNER", "LEFT", "RIGHT", "FULL");
+    private static final Set<String> DATE_DIMENSION_CONFIG_KEYS = Set.of("start", "end", "startYear", "endYear");
+    private static final long DATE_DIMENSION_MAX_DAYS = 73_200;
+    private static final Map<String, String> DATE_DIMENSION_EXPRESSIONS = Map.of(
+        "date_key",
+        "to_char(day_value, 'YYYYMMDD')::integer",
+        "full_date",
+        "day_value::date",
+        "year_no",
+        "extract(year from day_value)::integer",
+        "quarter_no",
+        "extract(quarter from day_value)::integer",
+        "month_no",
+        "extract(month from day_value)::integer",
+        "iso_week_no",
+        "extract(week from day_value)::integer",
+        "is_workday",
+        "extract(isodow from day_value)::integer between 1 and 5"
+    );
 
     private ModelingDbtCompiler() {}
 
@@ -199,7 +220,8 @@ public final class ModelingDbtCompiler {
         String select = columns.stream().map(column -> renderMappedColumn(column, mappings, casts)).collect(Collectors.joining(",\n"));
         StringBuilder sql = new StringBuilder("{{ config(materialized='ephemeral') }}\nwith ");
         if (projection.inputMode() == ModelLifecycleContract.InputMode.GENERATED) {
-            sql.append("generated_input as (\n    select current_date as generated_at\n),\ntransformed as (\n    select\n")
+            sql.append(renderDateDimensionInput(projection, columns))
+                .append(",\ntransformed as (\n    select\n")
                 .append(select)
                 .append("\n    from generated_input");
         } else {
@@ -228,6 +250,96 @@ public final class ModelingDbtCompiler {
             .append(columns.stream().map(column -> "    " + column).collect(Collectors.joining(",\n")))
             .append("\nfrom ranked\nwhere __dts_row_number = 1\n").toString();
     }
+
+    private static String renderDateDimensionInput(
+        ModelSpecCompilerProjection.ImplementationProjection projection,
+        List<String> columns
+    ) {
+        if (
+            projection.inputs().size() != 1 ||
+            !(projection.inputs().get(0) instanceof ModelLifecycleContract.GeneratedInput input) ||
+            !ModelImplementationInputPolicy.DATE_DIMENSION_GENERATOR.equals(input.generatorType())
+        ) {
+            throw new CompileException("DATE_DIMENSION_INPUT_INVALID");
+        }
+        if (!projection.fieldMappings().isEmpty()) {
+            throw new CompileException("DATE_DIMENSION_MAPPING_NOT_ALLOWED");
+        }
+        if (!DATE_DIMENSION_EXPRESSIONS.keySet().containsAll(columns)) {
+            throw new CompileException("DATE_DIMENSION_FIELD_UNSUPPORTED");
+        }
+        DateRange range = dateDimensionRange(input.config());
+        String generatedColumns = columns
+            .stream()
+            .map(column -> "        " + DATE_DIMENSION_EXPRESSIONS.get(column) + " as " + column)
+            .collect(Collectors.joining(",\n"));
+        return "generated_input as (\n    select\n" +
+            generatedColumns +
+            "\n    from generate_series(\n        " +
+            range.startExpression() +
+            ",\n        " +
+            range.endExpression() +
+            ",\n        interval '1 day'\n    ) as calendar(day_value)\n)";
+    }
+
+    private static DateRange dateDimensionRange(Map<String, Object> config) {
+        Map<String, Object> values = config == null ? Map.of() : config;
+        if (!DATE_DIMENSION_CONFIG_KEYS.containsAll(values.keySet())) {
+            throw new CompileException("DATE_DIMENSION_CONFIG_INVALID");
+        }
+        LocalDate startDate = configuredDate(values, "start");
+        LocalDate endDate = configuredDate(values, "end");
+        Integer startYear = configuredYear(values, "startYear");
+        Integer endYear = configuredYear(values, "endYear");
+        if ((startDate != null && startYear != null) || (endDate != null && endYear != null)) {
+            throw new CompileException("DATE_DIMENSION_CONFIG_INVALID");
+        }
+        if (startDate == null && startYear != null) startDate = LocalDate.of(startYear, 1, 1);
+        if (endDate == null && endYear != null) endDate = LocalDate.of(endYear, 12, 31);
+        if (startDate != null && endDate == null) {
+            if (startDate.getYear() == 9999) throw new CompileException("DATE_DIMENSION_CONFIG_INVALID");
+            endDate = LocalDate.of(startDate.getYear() + 1, 12, 31);
+        }
+        if (startDate != null && endDate != null) {
+            long days = ChronoUnit.DAYS.between(startDate, endDate);
+            if (days < 0 || days > DATE_DIMENSION_MAX_DAYS) {
+                throw new CompileException("DATE_DIMENSION_CONFIG_INVALID");
+            }
+        }
+        String startExpression = startDate == null
+            ? "date_trunc('year', current_date)::date"
+            : "date '" + startDate + "'";
+        String endExpression = endDate == null
+            ? "(date_trunc('year', current_date) + interval '2 years - 1 day')::date"
+            : "date '" + endDate + "'";
+        return new DateRange(startExpression, endExpression);
+    }
+
+    private static LocalDate configuredDate(Map<String, Object> config, String key) {
+        Object value = config.get(key);
+        if (value == null) return null;
+        if (!(value instanceof String text) || !text.matches("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")) {
+            throw new CompileException("DATE_DIMENSION_CONFIG_INVALID");
+        }
+        try {
+            return LocalDate.parse(text);
+        } catch (DateTimeException invalid) {
+            throw new CompileException("DATE_DIMENSION_CONFIG_INVALID");
+        }
+    }
+
+    private static Integer configuredYear(Map<String, Object> config, String key) {
+        Object value = config.get(key);
+        if (value == null) return null;
+        if (!(value instanceof Number number)) throw new CompileException("DATE_DIMENSION_CONFIG_INVALID");
+        int year = number.intValue();
+        if (number.doubleValue() != year || year < 1 || year > 9999) {
+            throw new CompileException("DATE_DIMENSION_CONFIG_INVALID");
+        }
+        return year;
+    }
+
+    private record DateRange(String startExpression, String endExpression) {}
 
     private static String sourceFrom(ModelingCompilerContract.SourceRef source) {
         return source.kind().equalsIgnoreCase("DBT_MODEL")

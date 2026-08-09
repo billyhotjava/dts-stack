@@ -15,6 +15,8 @@ import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService.CandidateArtif
 import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService.CandidateArtifactEntry;
 import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService.ScopedCandidateProject;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.TransitionCommand;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -44,6 +46,7 @@ public class ModelMaterializationDispatchService {
 
     private final ModelMaterializationDispatchRepository dispatches;
     private final ModelMaterializationBuildRepository builds;
+    private final ModelReleaseCandidateService candidates;
     private final DbtScopedProjectService scopedProjects;
     private final DbtDagService dags;
     private final DbtExecutionGateway gateway;
@@ -58,6 +61,7 @@ public class ModelMaterializationDispatchService {
     public ModelMaterializationDispatchService(
         ModelMaterializationDispatchRepository dispatches,
         ModelMaterializationBuildRepository builds,
+        ModelReleaseCandidateService candidates,
         DbtScopedProjectService scopedProjects,
         DbtDagService dags,
         DbtExecutionGateway gateway,
@@ -70,6 +74,7 @@ public class ModelMaterializationDispatchService {
         this(
             dispatches,
             builds,
+            candidates,
             scopedProjects,
             dags,
             gateway,
@@ -85,6 +90,7 @@ public class ModelMaterializationDispatchService {
     ModelMaterializationDispatchService(
         ModelMaterializationDispatchRepository dispatches,
         ModelMaterializationBuildRepository builds,
+        ModelReleaseCandidateService candidates,
         DbtScopedProjectService scopedProjects,
         DbtDagService dags,
         DbtExecutionGateway gateway,
@@ -102,6 +108,10 @@ public class ModelMaterializationDispatchService {
         this.builds = Objects.requireNonNull(
             builds,
             "builds is required"
+        );
+        this.candidates = Objects.requireNonNull(
+            candidates,
+            "candidates is required"
         );
         this.scopedProjects = Objects.requireNonNull(
             scopedProjects,
@@ -413,6 +423,17 @@ public class ModelMaterializationDispatchService {
                 : errorCode.trim();
         transactions.executeWithoutResult(status -> {
             dispatches.markBlocked(dispatch.id(), code, now);
+            candidates.transition(
+                dispatch.tenantId(),
+                "service:dts-platform",
+                dispatch.candidateId(),
+                new TransitionCommand(
+                    dispatch.candidateVersion(),
+                    DeliveryStatus.BUILD_FAILED,
+                    "materialization-dispatch-blocked-" + dispatch.id(),
+                    code
+                )
+            );
             auditDispatch(
                 dispatch,
                 "BLOCKED",

@@ -226,7 +226,7 @@ export const applyLayeredLayout = (nodes: ImpactNode[], edges: ImpactEdge[], dir
 			const fromRank = from ? rankById.get(from) : undefined;
 			const toRank = to ? rankById.get(to) : undefined;
 			if (fromRank == null || toRank == null || toRank > fromRank) continue;
-			rankById.set(to!, fromRank + 1);
+			if (to) rankById.set(to, fromRank + 1);
 			changed = true;
 		}
 		if (!changed) break;
@@ -255,4 +255,4 @@ export const applyLayeredLayout = (nodes: ImpactNode[], edges: ImpactEdge[], dir
 export const normalizeColumnNodeId = (datasetId?: string, columnName?: string) =>
 	datasetId && columnName ? `${datasetId}:${columnName}` : undefined;
 
-export const isColumnNodeId = (id?: string) => Boolean(id && id.includes(":"));
+export const isColumnNodeId = (id?: string) => Boolean(id?.includes(":"));

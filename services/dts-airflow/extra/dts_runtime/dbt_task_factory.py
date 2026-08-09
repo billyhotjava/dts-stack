@@ -882,11 +882,29 @@ def _sync_manifest_and_probe_task(**context: Any) -> None:
 
 def _finalize_task(**context: Any) -> None:
     task_instance = context["ti"]
+    dag_run = context["dag_run"]
     runtime = None
     succeeded = False
     try:
-        runtime = _runtime_from_xcom(task_instance)
-        dag_run = context["dag_run"]
+        raw_runtime = task_instance.xcom_pull(task_ids=_PREPARE_TASK_ID)
+        if raw_runtime is not None:
+            runtime = _validate_runtime_spec(raw_runtime)
+            identity = runtime
+        else:
+            supplied = getattr(dag_run, "conf", None)
+            purpose = (
+                supplied.get("runPurpose")
+                if isinstance(supplied, dict)
+                else None
+            )
+            if purpose == "RELEASE_BUILD":
+                identity = _validate_release_build_conf(supplied)
+            elif purpose == "OPERATIONAL_RUN":
+                identity = _validate_operational_run_conf(supplied)
+            else:
+                raise ValueError(
+                    "failed materialization run identity is unavailable"
+                )
         states = {
             instance.task_id: str(instance.state).lower()
             for instance in dag_run.get_task_instances()
@@ -902,11 +920,11 @@ def _finalize_task(**context: Any) -> None:
         _platform_request(
             (
                 "/api/internal/modeling/materialization/run-groups/"
-                if runtime["runPurpose"] == "RELEASE_BUILD"
+                if identity["runPurpose"] == "RELEASE_BUILD"
                 else
                 "/api/internal/modeling/execution-bindings/run-groups/"
             )
-            + f"{runtime['pipelineRunGroupId']}/finalize",
+            + f"{identity['pipelineRunGroupId']}/finalize",
             payload={"outcome": "SUCCEEDED" if succeeded else "FAILED"},
         )
     finally:
@@ -961,6 +979,7 @@ def build_dbt_dag(
         dag_id=dag_id,
         schedule=schedule,
         start_date=pendulum.datetime(2024, 1, 1, tz=timezone),
+        is_paused_upon_creation=False,
         catchup=False,
         max_active_runs=1,
         tags=list(tags or []) + [

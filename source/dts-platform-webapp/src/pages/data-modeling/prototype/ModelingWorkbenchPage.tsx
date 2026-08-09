@@ -90,6 +90,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const [searchParams, setSearchParams] = useSearchParams();
 	const requestedModelId = searchParams.get("modelSpecId") || "";
 	const requestedDimensionId = searchParams.get("dimensionDefinitionId") || "";
+	const requestedDialog = searchParams.get("open") || "";
 	const requestedModelIdRef = useRef(requestedModelId);
 	const requestedDimensionIdRef = useRef(requestedDimensionId);
 	const searchParamsRef = useRef(searchParams);
@@ -546,6 +547,11 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		});
 	};
 	const selectedModel = draft && isModelSpecDraft(draft) ? draft.base : null;
+	useEffect(() => {
+		if (requestedDialog !== "advanced" || !requestedModelId || selectedModel?.id !== requestedModelId) return;
+		setDialog("advanced");
+		syncWorkbenchUrl((params) => params.delete("open"));
+	}, [requestedDialog, requestedModelId, selectedModel?.id, syncWorkbenchUrl]);
 	const refresh = () => {
 		if (!savingRef.current && confirmDiscard()) void load(selectedModelId || undefined);
 	};

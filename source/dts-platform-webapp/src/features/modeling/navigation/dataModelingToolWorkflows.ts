@@ -21,11 +21,11 @@ export interface DataModelingToolWorkflow {
 const WORKFLOWS: readonly DataModelingToolWorkflow[] = [
 	{
 		key: "dbt-zip-import",
-		title: "dbt ZIP 反向建模",
-		description: "上传 dbt ZIP，完成安全检查、业务语义补齐、预检和可追踪的部分成功导入。",
+		title: "dbt ZIP 建模",
+		description: "统一导入 dbt ZIP，完成安全检查、业务语义补齐和预检，并生成可视化模型及模型级高级 dbt 实现。",
 		group: "import",
 		path: "/data-modeling/dimensions/reverse",
-		owner: "ModelSpec 逆向建模",
+		owner: "ModelSpec / 高级 dbt 实现",
 		resultOwner: "目标流程",
 	},
 	{

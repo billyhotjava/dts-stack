@@ -1143,6 +1143,55 @@ class DbtTaskFactoryTest(unittest.TestCase):
             any(kwargs.get("method") == "DELETE" for _, kwargs in requests)
         )
 
+    def test_finalizer_fails_run_when_prepare_runtime_has_no_xcom(self):
+        runtime = self.runtime_spec()
+        task_instance = mock.Mock()
+        task_instance.xcom_pull.return_value = None
+        dag_run = mock.Mock()
+        dag_run.conf = {
+            "pipelineRunGroupId": runtime["pipelineRunGroupId"],
+            "candidateId": "30000000-0000-0000-0000-000000000003",
+            "candidateVersion": 3,
+            "attempt": 1,
+            "runPurpose": "RELEASE_BUILD",
+            "runtimeSpecToken": "opaque",
+            "bundleChecksum": "c" * 64,
+        }
+        dag_run.get_task_instances.return_value = [
+            SimpleNamespace(
+                task_id=self.factory._PREPARE_TASK_ID,
+                state="failed",
+            )
+        ]
+
+        with (
+            mock.patch.object(
+                self.factory,
+                "_platform_request",
+                return_value={},
+            ) as platform_request,
+            mock.patch.object(
+                self.factory,
+                "_stop_dbt_container",
+            ) as stop_container,
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "materialization upstream task failed",
+            ):
+                self.factory._finalize_task(
+                    ti=task_instance,
+                    dag_run=dag_run,
+                )
+
+        platform_request.assert_called_once_with(
+            "/api/internal/modeling/materialization/run-groups/"
+            + runtime["pipelineRunGroupId"]
+            + "/finalize",
+            payload={"outcome": "FAILED"},
+        )
+        stop_container.assert_not_called()
+
     def test_finalizer_deletes_lease_only_after_cleanup_is_confirmed(self):
         runtime = self.runtime_spec()
         task_instance = mock.Mock()
@@ -1230,6 +1279,7 @@ class DbtTaskFactoryTest(unittest.TestCase):
         source = FACTORY_PATH.read_text(encoding="utf-8")
 
         self.assertIn("subprocess.Popen(command)", source)
+        self.assertIn("is_paused_upon_creation=False", source)
         self.assertNotIn("subprocess.run(", source)
         self.assertNotIn("shell=True", source)
         self.assertNotIn("|| true", source)

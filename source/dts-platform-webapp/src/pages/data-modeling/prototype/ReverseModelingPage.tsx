@@ -1,4 +1,4 @@
-import { Check, Database, FileArchive, Play, RefreshCw, RotateCcw } from "lucide-react";
+import { Check, Play, RefreshCw, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import {
@@ -26,13 +26,14 @@ import {
 import { dataModelingPath } from "../navigation";
 import type { DataModelingRoute } from "../types";
 import { Button, PageHeader, RequestState, Status } from "./PrototypePrimitives";
+import { ConfirmStep, StrategyStep } from "./ReverseModelingInspectionSteps";
 import {
-	createRenameMapping,
 	defaultImportConflictResolutions,
 	type RenameMapping,
 	renameMappingRequests,
 } from "./services/modelImportUiState";
 import { normalizeModelingRequestFailure } from "./services/planningProjectionService";
+import { isAdvancedDbtImportResult, isInspectionCandidateSelectable } from "./services/reverseModelingInspection";
 import { useDataModelingMenuGrant } from "./useDataModelingMenuGrant";
 
 const steps = ["逆向策略", "确认模型信息", "生成模型", "完成"];
@@ -67,6 +68,7 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 	const navigate = useNavigate();
 	const [searchParams, setSearchParams] = useSearchParams();
 	const restoredRunId = searchParams.get("importRunId") || "";
+	const advancedIntent = searchParams.get("intent") === "advanced";
 	const requestEpoch = useRef(0);
 	const restoredRunRef = useRef("");
 	const [started, setStarted] = useState(false);
@@ -154,7 +156,7 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 	}, [restoredRunId]);
 
 	useEffect(() => {
-		if (!planId) {
+		if (!planId || !inspection) {
 			setPlanContext({ domains: [], sources: [] });
 			return;
 		}
@@ -169,7 +171,7 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 				setPlanContext({ domains: [], sources: [] });
 				setFailure(normalizeModelingRequestFailure(error, "数据域或来源基线读取失败。"));
 			});
-	}, [planId]);
+	}, [inspection, planId]);
 
 	const packageDomains = useMemo(
 		() =>
@@ -233,14 +235,16 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 	};
 
 	const inspectArchive = async () => {
-		if (!archive || !planId) return;
+		if (!archive) return;
 		setBusy("inspect");
 		setFailure(null);
 		try {
 			const next = await inspectDbtModelArchive(archive);
 			setInspection(next);
 			setSelected(
-				next.package.models.filter((model) => model.conversion?.mode !== "BLOCKED").map((model) => model.dbtUniqueId),
+				next.package.models
+					.filter((model) => isInspectionCandidateSelectable(next, model.dbtUniqueId))
+					.map((model) => model.dbtUniqueId),
 			);
 			setSemanticOverrides(
 				Object.fromEntries(
@@ -382,26 +386,32 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 
 	return (
 		<main className="dmx-page dmx-reverse-page">
-			<PageHeader description={route.description} title="逆向建模" trail="数据建模 / 维度建模" />
-			{loading ? (
-				<RequestState description="正在准备模型导入上下文。" kind="loading" title="正在准备逆向建模" />
-			) : !started ? (
+			<PageHeader
+				description={
+					advancedIntent
+						? "导入与逆向建模共用同一 dbt ZIP 检查、预览和应用链路；DBT_BACKED 结果进入模型级高级实现。"
+						: route.description
+				}
+				title={advancedIntent ? "高级 dbt 包导入" : "逆向建模"}
+				trail="数据建模 / 维度建模"
+			/>
+			{!started ? (
 				<section className="dmx-reverse-entry">
 					<div className="dmx-reverse-mark">
 						<RotateCcw size={35} />
 					</div>
 					<h2>逆向建模</h2>
-					<p>导入外部 dbt 项目 ZIP，经检查与预览后生成可视化模型草稿。</p>
+					<p>导入外部 dbt 项目 ZIP，经检查与预览后生成可视化模型草稿和模型级高级 dbt 实现。</p>
 					<Button
-						disabled={!canMaintain || !plans.length}
+						disabled={!canMaintain}
 						primary
 						onClick={() => setStarted(true)}
 						title={canMaintain ? undefined : "当前账号无模型导入权限"}
 					>
 						<Play size={16} /> 快速开始
 					</Button>
-					{!plans.length ? (
-						<p className="dmx-inline-error">当前环境没有可用的模型导入上下文，请联系管理员初始化。</p>
+					{!loading && !plans.length ? (
+						<p className="dmx-capability-note">可以先检查 dbt 包；生成导入预览前需初始化规划上下文。</p>
 					) : null}
 					{!canMaintain ? <p className="dmx-capability-note">当前账号只有查看权限，不能发起 dbt 包导入。</p> : null}
 				</section>
@@ -430,11 +440,15 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 								domainMappings={domainMappings}
 								domains={planContext.domains}
 								inspection={inspection}
+								onPlanId={setPlanId}
 								onDomainMapping={(code, value) => setDomainMappings((current) => ({ ...current, [code]: value }))}
 								onRenameMappings={setRenameMappings}
 								onSelected={setSelected}
 								onSemanticOverride={(id, value) => setSemanticOverrides((current) => ({ ...current, [id]: value }))}
 								onSourceMapping={(code, value) => setSourceMappings((current) => ({ ...current, [code]: value }))}
+								planId={planId}
+								plans={plans}
+								plansLoading={loading}
 								selected={selected}
 								renameMappings={renameMappings}
 								semanticOverrides={semanticOverrides}
@@ -452,6 +466,12 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 						) : step === 3 && result ? (
 							<CompleteStep
 								onOpenWorkbench={() => navigate(dataModelingPath("dimensions", "workbench"))}
+								onOpenAdvanced={(modelSpecId) =>
+									navigate(
+										`${dataModelingPath("dimensions", "workbench")}?modelSpecId=${encodeURIComponent(modelSpecId)}&open=advanced`,
+									)
+								}
+								preview={preview}
 								result={result}
 							/>
 						) : (
@@ -469,7 +489,7 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 						) : null}
 						{step === 0 ? (
 							<Button
-								disabled={!canMaintain || !archive || !planId || Boolean(busy)}
+								disabled={!canMaintain || !archive || Boolean(busy)}
 								primary
 								onClick={() => void inspectArchive()}
 							>
@@ -480,6 +500,7 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 							<Button
 								disabled={
 									!canMaintain ||
+									!planId ||
 									!selected.length ||
 									packageDomains.some((code) => !domainMappings[code]) ||
 									Boolean(busy)
@@ -536,274 +557,6 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 				</section>
 			)}
 		</main>
-	);
-}
-
-function StrategyStep({ archive, onArchive }: { archive: File | null; onArchive: (file: File | null) => void }) {
-	return (
-		<>
-			<div className="dmx-strategy-cards">
-				<button disabled title="当前版本尚无数据库结构逆向契约" type="button">
-					<Database size={22} />
-					<span>
-						<strong>从数据源逆向</strong>
-						<small>尚未接入，当前不可用</small>
-					</span>
-				</button>
-				<button className="active" disabled type="button">
-					<FileArchive size={22} />
-					<span>
-						<strong>导入 dbt ZIP</strong>
-						<small>检查 manifest、catalog 与模型结构证据</small>
-					</span>
-				</button>
-			</div>
-			<div className="dmx-dbt-drop">
-				<FileArchive size={30} />
-				<strong>选择 dbt 项目 ZIP</strong>
-				<p>仅支持 ZIP；重新导入按项目身份和文件指纹更新，允许部分成功并逐项返回失败原因。</p>
-				<input
-					accept=".zip,application/zip"
-					aria-label="选择 dbt ZIP"
-					onChange={(event) => onArchive(event.target.files?.[0] || null)}
-					type="file"
-				/>
-				{archive ? <small>已选择：{archive.name}</small> : null}
-			</div>
-		</>
-	);
-}
-
-function ConfirmStep({
-	inspection,
-	selected,
-	onSelected,
-	domains,
-	domainMappings,
-	onDomainMapping,
-	sources,
-	sourceMappings,
-	onSourceMapping,
-	renameMappings,
-	onRenameMappings,
-	semanticOverrides,
-	onSemanticOverride,
-}: {
-	inspection: DbtArchiveInspection;
-	selected: string[];
-	onSelected: (ids: string[]) => void;
-	domains: ModelingImportDomainBinding[];
-	domainMappings: Record<string, string>;
-	onDomainMapping: (code: string, value: string) => void;
-	sources: ModelingImportSourceBinding[];
-	sourceMappings: Record<string, string>;
-	onSourceMapping: (code: string, value: string) => void;
-	renameMappings: RenameMapping[];
-	onRenameMappings: (mappings: RenameMapping[]) => void;
-	semanticOverrides: Record<string, ModelSpecImportSemanticOverride>;
-	onSemanticOverride: (id: string, value: ModelSpecImportSemanticOverride) => void;
-}) {
-	const packageDomains = Array.from(
-		new Set(
-			inspection.package.models
-				.map((model) => model.semantics?.domainCode?.trim())
-				.filter((value): value is string => Boolean(value)),
-		),
-	);
-	const packageSources = Array.from(
-		new Map([
-			...inspection.package.sources.map((source) => [source.dbtUniqueId, source.name] as const),
-			...inspection.package.models
-				.flatMap((model) => model.semantics?.sourceRefs || [])
-				.filter((source) => Boolean(source.ref))
-				.map((source) => [String(source.ref), String(source.ref)] as const),
-		]).entries(),
-	);
-	return (
-		<>
-			<div className="dmx-wizard-heading">
-				<div>
-					<h3>确认模型信息</h3>
-					<p>检查兼容性，映射已确认的数据域和来源，并选择导入对象。</p>
-				</div>
-				<Status tone={inspection.compatibility.importProjection === "BLOCKED" ? "danger" : "info"}>
-					{inspection.compatibility.importProjection}
-				</Status>
-			</div>
-			{inspection.compatibility.issues.length ? (
-				<pre className="dmx-issue-list">{issueText(inspection.compatibility.issues)}</pre>
-			) : null}
-			<div className="dmx-mapping-grid">
-				{packageDomains.map((code) => (
-					<label key={code}>
-						<span>数据域 {code}</span>
-						<select onChange={(event) => onDomainMapping(code, event.target.value)} value={domainMappings[code] || ""}>
-							<option value="">请选择已确认数据域</option>
-							{domains.map((domain) => (
-								<option key={domain.domainId} value={domain.domainId}>
-									{domain.name || domain.code || domain.domainId}
-								</option>
-							))}
-						</select>
-					</label>
-				))}
-				{packageSources.map(([sourceId, sourceName]) => (
-					<label key={sourceId}>
-						<span>来源 {sourceName}</span>
-						<select
-							onChange={(event) => onSourceMapping(sourceId, event.target.value)}
-							value={sourceMappings[sourceId] || ""}
-						>
-							<option value="">自动匹配（可能阻断）</option>
-							{sources.map((binding) => (
-								<option key={binding.bindingId} value={binding.bindingId}>
-									{binding.displayName || binding.sourceId || binding.bindingId}
-								</option>
-							))}
-						</select>
-					</label>
-				))}
-			</div>
-			<section className="dmx-rename-mappings">
-				<header>
-					<div>
-						<strong>重新导入重命名映射</strong>
-						<p>只有明确确认 old unique_id → new unique_id，系统才会按重命名处理；留空不会推断删除或改名。</p>
-					</div>
-					<Button onClick={() => onRenameMappings([...renameMappings, createRenameMapping()])}>新增映射</Button>
-				</header>
-				{renameMappings.map((mapping, index) => (
-					<div className="dmx-rename-mapping-row" key={mapping._clientId}>
-						<input
-							aria-label={`旧 unique_id ${index + 1}`}
-							onChange={(event) =>
-								onRenameMappings(
-									renameMappings.map((item, row) =>
-										row === index ? { ...item, oldUniqueId: event.target.value } : item,
-									),
-								)
-							}
-							placeholder="旧 unique_id"
-							value={mapping.oldUniqueId}
-						/>
-						<span>→</span>
-						<input
-							aria-label={`新 unique_id ${index + 1}`}
-							onChange={(event) =>
-								onRenameMappings(
-									renameMappings.map((item, row) =>
-										row === index ? { ...item, newUniqueId: event.target.value } : item,
-									),
-								)
-							}
-							placeholder="新 unique_id"
-							value={mapping.newUniqueId}
-						/>
-						<Button danger onClick={() => onRenameMappings(renameMappings.filter((_, row) => row !== index))}>
-							删除
-						</Button>
-					</div>
-				))}
-			</section>
-			<div className="dmx-table-scroll">
-				<table className="dmx-table dmx-import-semantics">
-					<thead>
-						<tr>
-							<th>选择</th>
-							<th>dbt 对象</th>
-							<th>业务名称</th>
-							<th>模型类型</th>
-							<th>目标分层</th>
-							<th>粒度说明</th>
-							<th>业务主键</th>
-							<th>字段数</th>
-						</tr>
-					</thead>
-					<tbody>
-						{inspection.package.models.map((model) => {
-							const checked = selected.includes(model.dbtUniqueId);
-							const blocked = model.conversion?.mode === "BLOCKED";
-							const override = semanticOverrides[model.dbtUniqueId] || { modelUniqueId: model.dbtUniqueId };
-							const patch = (next: Partial<ModelSpecImportSemanticOverride>) =>
-								onSemanticOverride(model.dbtUniqueId, { ...override, ...next, modelUniqueId: model.dbtUniqueId });
-							return (
-								<tr key={model.dbtUniqueId}>
-									<td>
-										<input
-											checked={checked}
-											disabled={blocked}
-											onChange={(event) =>
-												onSelected(
-													event.target.checked
-														? [...selected, model.dbtUniqueId]
-														: selected.filter((id) => id !== model.dbtUniqueId),
-												)
-											}
-											type="checkbox"
-										/>
-									</td>
-									<td>
-										{model.dbtUniqueId}
-										{blocked ? <Status tone="danger">不可导入</Status> : null}
-									</td>
-									<td>
-										<input
-											onChange={(event) => patch({ businessName: event.target.value })}
-											value={override.businessName || ""}
-										/>
-									</td>
-									<td>
-										<select
-											onChange={(event) => patch({ modelType: event.target.value || undefined })}
-											value={override.modelType || ""}
-										>
-											<option value="">请选择</option>
-											<option value="DIMENSION">维度表</option>
-											<option value="FACT">明细表</option>
-											<option value="SUMMARY">汇总表</option>
-											<option value="APPLICATION">应用表</option>
-										</select>
-									</td>
-									<td>
-										<select
-											onChange={(event) => patch({ layer: event.target.value || undefined })}
-											value={override.layer || ""}
-										>
-											<option value="">请选择</option>
-											<option value="DWD">DWD</option>
-											<option value="DWS">DWS</option>
-											<option value="ADS">ADS</option>
-										</select>
-									</td>
-									<td>
-										<input
-											onChange={(event) =>
-												patch({ grain: { statement: event.target.value, keys: override.grain?.keys || [] } })
-											}
-											value={override.grain?.statement || ""}
-										/>
-									</td>
-									<td>
-										<input
-											onChange={(event) => {
-												const keys = event.target.value
-													.split(",")
-													.map((item) => item.trim())
-													.filter(Boolean);
-												patch({ businessKeys: keys, grain: { statement: override.grain?.statement, keys } });
-											}}
-											placeholder="逗号分隔"
-											value={(override.businessKeys || override.grain?.keys || []).join(",")}
-										/>
-									</td>
-									<td>{model.columns?.length || 0}</td>
-								</tr>
-							);
-						})}
-					</tbody>
-				</table>
-			</div>
-		</>
 	);
 }
 
@@ -906,10 +659,14 @@ function GenerateStep({
 }
 
 function CompleteStep({
+	preview,
 	result,
+	onOpenAdvanced,
 	onOpenWorkbench,
 }: {
+	preview: ModelSpecImportPreview | null;
 	result: ModelSpecImportApplyResult;
+	onOpenAdvanced: (modelSpecId: string) => void;
 	onOpenWorkbench: () => void;
 }) {
 	const summary = result.overallRun?.summary || result.summary;
@@ -938,6 +695,7 @@ function CompleteStep({
 								<th>模型</th>
 								<th>版本</th>
 								<th>失败原因</th>
+								<th>后续操作</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -953,6 +711,15 @@ function CompleteStep({
 									<td>{item.revision ? `r${item.revision}` : "—"}</td>
 									<td>
 										<pre className="dmx-table-issues">{issueText(item.issues)}</pre>
+									</td>
+									<td>
+										{isAdvancedDbtImportResult(preview, item) && item.modelSpecId ? (
+											<Button onClick={() => item.modelSpecId && onOpenAdvanced(item.modelSpecId)}>
+												进入高级 dbt 实现
+											</Button>
+										) : (
+											"—"
+										)}
 									</td>
 								</tr>
 							))}

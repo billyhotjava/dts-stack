@@ -21,6 +21,8 @@ import com.yuzhi.dts.platform.service.etl.DbtDagService;
 import com.yuzhi.dts.platform.service.etl.DbtExecutionGateway;
 import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.TransitionCommand;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -263,6 +265,17 @@ class ModelMaterializationDispatchServiceTest {
             GROUP_ID,
             "MATERIALIZATION_ARTIFACT_BUNDLE_DRIFT",
             NOW
+        );
+        verify(fixture.candidates).transition(
+            "tenant-a",
+            "service:dts-platform",
+            CANDIDATE_ID,
+            new TransitionCommand(
+                3,
+                DeliveryStatus.BUILD_FAILED,
+                "materialization-dispatch-blocked-" + GROUP_ID,
+                "MATERIALIZATION_ARTIFACT_BUNDLE_DRIFT"
+            )
         );
         assertThat(fixture.audit.singleCall())
             .isEqualTo(
@@ -612,6 +625,7 @@ class ModelMaterializationDispatchServiceTest {
             ModelMaterializationDispatchRepository.class
         );
         var builds = mock(ModelMaterializationBuildRepository.class);
+        var candidates = mock(ModelReleaseCandidateService.class);
         var scoped = mock(DbtScopedProjectService.class);
         var dags = mock(DbtDagService.class);
         var gateway = mock(DbtExecutionGateway.class);
@@ -636,6 +650,7 @@ class ModelMaterializationDispatchServiceTest {
         var service = new ModelMaterializationDispatchService(
             dispatches,
             builds,
+            candidates,
             scoped,
             dags,
             gateway,
@@ -650,6 +665,7 @@ class ModelMaterializationDispatchServiceTest {
             service,
             dispatches,
             builds,
+            candidates,
             scoped,
             gateway,
             tokens,
@@ -745,6 +761,7 @@ class ModelMaterializationDispatchServiceTest {
         ModelMaterializationDispatchService service,
         ModelMaterializationDispatchRepository dispatches,
         ModelMaterializationBuildRepository builds,
+        ModelReleaseCandidateService candidates,
         DbtScopedProjectService scoped,
         DbtExecutionGateway gateway,
         ModelRuntimeSpecTokenCodec tokens,

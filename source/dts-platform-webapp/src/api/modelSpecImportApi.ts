@@ -60,12 +60,43 @@ export type DbtCompatibilityIssue = {
 	correlationId: string;
 };
 
+export type DbtPackageProfile = "ARTIFACT_RICH" | "SOURCE_ONLY" | "LEGACY_TSV";
+export type DbtImportCandidateEligibility = "ELIGIBLE" | "REQUIRES_MAPPING" | "BLOCKED";
+
+export type DbtInspectionReport = {
+	packageProfile: DbtPackageProfile;
+	summary: {
+		discovered: number;
+		technicalOnly: number;
+		eligible: number;
+		requiresMapping: number;
+		blocked: number;
+	};
+	candidates: Array<{
+		dbtUniqueId: string;
+		eligibility: DbtImportCandidateEligibility;
+		diagnosticCodes: string[];
+	}>;
+	diagnostics: Array<{
+		code: string;
+		severity: ModelSpecImportSeverity;
+		axis: "INSPECTION" | "IMPORT_PROJECTION" | "MATERIALIZATION";
+		blocksImport: boolean;
+		modelUniqueId?: string | null;
+		affectedUniqueIds: string[];
+		message: string;
+		recoveryAction?: string | null;
+		retryable: boolean;
+		correlationId?: string | null;
+	}>;
+};
+
 export type DbtArchiveInspection = {
 	package: ModelPackageJson;
 	compatibility: {
 		inspection: "SUPPORTED" | "UNSUPPORTED" | "UNKNOWN";
 		importProjection: "IMPORTABLE" | "STRUCTURE_VIEW_ONLY" | "BLOCKED";
-		materialization: "CERTIFIED" | "NOT_CERTIFIED" | "UNSUPPORTED";
+		materialization: "CERTIFIED" | "NOT_CERTIFIED" | "UNSUPPORTED" | "UNKNOWN";
 		dbtCoreVersion?: string | null;
 		manifestSchemaVersion?: string | null;
 		adapterType?: string | null;
@@ -73,6 +104,7 @@ export type DbtArchiveInspection = {
 		certificationProfileId?: string | null;
 		issues: DbtCompatibilityIssue[];
 	};
+	report?: DbtInspectionReport;
 	inspectionProof: string;
 	proofExpiresAt: string;
 };
@@ -276,7 +308,7 @@ export const retryModelSpecImport = (runId: string, data: { previewHash: string;
 			data,
 			_skipErrorToast: true,
 		}),
-		);
+	);
 
 export const forwardUndoModelSpecImport = (data: {
 	targetAttemptId: string;

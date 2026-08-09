@@ -332,19 +332,18 @@ class ModelingDbtCompilerTest {
 
     @Test
     void generatedImplementationDoesNotRequireAPhysicalSource() {
-        ModelingCompilerContract.CompilerModel base = PjmModelingFixture.projectNode().compilerModel();
         ModelingCompilerContract.CompilerModel generated = new ModelingCompilerContract.CompilerModel(
-            base.id(),
-            base.layer(),
+            "calendar-day-model",
+            ModelingCompilerContract.Layer.DWD,
             ModelingCompilerContract.ModelType.DIMENSION,
             ModelingCompilerContract.ImplementationMode.DESIGNER_GENERATED,
             "calendar_day",
-            base.grain(),
-            base.standardBindings(),
+            new ModelingCompilerContract.Grain("one row per calendar day", List.of("date_key")),
             List.of(),
-            base.dimensions(),
-            base.metrics(),
-            base.revision()
+            List.of(),
+            List.of("full_date", "year_no", "month_no", "iso_week_no", "is_workday"),
+            List.of(),
+            1
         );
 
         ModelingDbtCompiler.CompiledArtifacts artifacts = ModelingDbtCompiler.compile(new ModelSpecCompilerProjection.ImplementationProjection(
@@ -366,7 +365,57 @@ class ModelingDbtCompilerTest {
             typedFields(generated)
         ));
 
-        assertThat(artifacts.files().get("stg_calendar_day.sql")).contains("generated_input");
+        assertThat(artifacts.files().get("stg_calendar_day.sql"))
+            .contains("generate_series(")
+            .contains("date_trunc('year', current_date)::date")
+            .contains("date_trunc('year', current_date) + interval '2 years - 1 day'")
+            .contains("to_char(day_value, 'YYYYMMDD')::integer as date_key")
+            .contains("day_value::date as full_date")
+            .contains("extract(year from day_value)::integer as year_no")
+            .contains("extract(month from day_value)::integer as month_no")
+            .contains("extract(week from day_value)::integer as iso_week_no")
+            .contains("extract(isodow from day_value)::integer between 1 and 5 as is_workday")
+            .doesNotContain("current_date as generated_at");
+    }
+
+    @Test
+    void rejectsUntrustedDateDimensionRangeBeforeRenderingSql() {
+        ModelingCompilerContract.CompilerModel generated = new ModelingCompilerContract.CompilerModel(
+            "calendar-day-model",
+            ModelingCompilerContract.Layer.DWD,
+            ModelingCompilerContract.ModelType.DIMENSION,
+            ModelingCompilerContract.ImplementationMode.DESIGNER_GENERATED,
+            "calendar_day",
+            new ModelingCompilerContract.Grain("one row per calendar day", List.of("date_key")),
+            List.of(),
+            List.of(),
+            List.of("full_date"),
+            List.of(),
+            1
+        );
+        ModelSpecCompilerProjection.ImplementationProjection implementation =
+            new ModelSpecCompilerProjection.ImplementationProjection(
+                generated,
+                "tenant-a",
+                "a".repeat(64),
+                1,
+                "b".repeat(64),
+                "model.pjm.calendar_day",
+                InputMode.GENERATED,
+                List.of(new GeneratedInput("DATE_DIMENSION", Map.of("start", "2026-01-01'; drop table audit; --"))),
+                List.of(),
+                Map.of(
+                    "targetPhysicalName", "calendar_day",
+                    "loadStrategy", "FULL",
+                    "partitionFields", List.of()
+                ),
+                "table",
+                typedFields(generated)
+            );
+
+        assertThatThrownBy(() -> ModelingDbtCompiler.compile(implementation))
+            .isInstanceOf(ModelingDbtCompiler.CompileException.class)
+            .hasMessageContaining("DATE_DIMENSION_CONFIG_INVALID");
     }
 
     @Test

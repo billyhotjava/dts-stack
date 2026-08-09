@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router";
 import {
 	commitDbtImplementationDraft,
 	createDbtImplementationDraft,
@@ -30,6 +31,7 @@ import type {
 	PhysicalPreviewScope,
 } from "@/features/modeling/contracts/modelRepresentationContract";
 import type { CanonicalModelSpecView, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
+import { dataModelingPath } from "../navigation";
 import { ModelLifecycleArtifactsTable } from "./ModelLifecycleArtifactsTable";
 import { ModelPublishDialog } from "./ModelPublishDialog";
 import { ModelStageGatePanel } from "./ModelStageGatePanel";
@@ -248,6 +250,7 @@ function AdvancedDbtDialog({
 	onClose: () => void;
 	canMaintain: boolean;
 }) {
+	const navigate = useNavigate();
 	const [representation, setRepresentation] = useState<ModelRepresentationView | null>(null);
 	const [draft, setDraft] = useState<DbtImplementationDraft | null>(null);
 	const [files, setFiles] = useState<DbtDraftFile[]>([]);
@@ -442,7 +445,8 @@ function AdvancedDbtDialog({
 			) : !draft ? (
 				<>
 					<p className="dmx-capability-note">
-						SQL/Jinja 只在本高级弹层可见；业务可视化页面保持纯结构。草稿基于固定模型和实现修订创建。
+						SQL/Jinja 只在本高级弹层可见；业务可视化页面保持纯结构。已有 ZIP 请走统一 dbt
+						包导入，导入完成后进入对应模型的高级实现。
 					</p>
 					<dl className="dmx-summary-list">
 						<dt>模型</dt>
@@ -458,6 +462,12 @@ function AdvancedDbtDialog({
 					</dl>
 					<div className="dmx-dialog-actions">
 						<Button onClick={onClose}>取消</Button>
+						<Button
+							disabled={!canMaintain || Boolean(busy)}
+							onClick={() => navigate(`${dataModelingPath("dimensions", "reverse")}?intent=advanced`)}
+						>
+							导入 dbt ZIP
+						</Button>
 						<Button
 							disabled={!canMaintain || !canOpenAdvanced || Boolean(busy)}
 							primary

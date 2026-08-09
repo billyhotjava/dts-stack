@@ -13,8 +13,6 @@ import { CompactTable } from "@/components/table";
 import { useRouter } from "@/routes/hooks";
 import type { ImpactEdge, ImpactNode } from "./lineageShared";
 
-
-
 export function MetadataJsonBlock({ title, value }: { title: string; value?: string }) {
 	if (!value) {
 		return <Alert type="info" showIcon message={`${title} 未同步`} />;

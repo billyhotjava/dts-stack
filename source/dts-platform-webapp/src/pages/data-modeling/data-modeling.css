@@ -1386,6 +1386,9 @@
 	gap: 14px;
 	margin-bottom: 24px;
 }
+.dmx-strategy-cards-single {
+	grid-template-columns: 1fr;
+}
 .dmx-strategy-cards > button {
 	display: flex;
 	align-items: center;
@@ -1426,6 +1429,46 @@
 .dmx-wizard-heading p {
 	margin: 0;
 	color: var(--dmx-muted);
+}
+.dmx-inspection-axes {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 10px;
+	margin-bottom: 12px;
+}
+.dmx-inspection-axes > div {
+	display: grid;
+	gap: 5px;
+	padding: 12px;
+	border: 1px solid var(--dmx-border);
+	background: #fbfcfe;
+}
+.dmx-inspection-axes small,
+.dmx-inspection-diagnostics small {
+	color: var(--dmx-muted);
+}
+.dmx-inspection-summary {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-bottom: 14px;
+}
+.dmx-inspection-diagnostics {
+	display: grid;
+	gap: 7px;
+	max-height: 180px;
+	margin-bottom: 16px;
+	padding: 10px;
+	overflow: auto;
+	border: 1px solid #efd4ad;
+	background: #fff9ee;
+}
+.dmx-inspection-diagnostics > div {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: start;
+	gap: 8px;
+	font-size: 12px;
 }
 .dmx-generate-preview {
 	max-width: 720px;
@@ -2192,6 +2235,12 @@
 	.dmx-strategy-cards {
 		grid-template-columns: 1fr;
 	}
+	.dmx-inspection-axes {
+		grid-template-columns: 1fr;
+	}
+	.dmx-inspection-diagnostics > div {
+		grid-template-columns: 1fr;
+	}
 	.dmx-form-field--wide {
 		grid-column: auto;
 	}
@@ -2240,6 +2289,41 @@
 	}
 	.dmx-graph-canvas {
 		overflow: auto;
+	}
+	.dmx-modal-backdrop {
+		padding: 8px;
+	}
+	.dmx-modal {
+		width: calc(100vw - 16px);
+		max-height: calc(100vh - 16px);
+	}
+	.dmx-modal__body {
+		padding: 16px;
+	}
+	.dmx-publish-grid {
+		min-height: 0;
+		grid-template-columns: minmax(0, 1fr);
+		margin: -16px;
+	}
+	.dmx-publish-grid > nav {
+		flex-direction: row;
+		border-right: 0;
+		border-bottom: 1px solid var(--dmx-border);
+	}
+	.dmx-publish-grid > nav button {
+		flex: 1 1 0;
+		text-align: center;
+	}
+	.dmx-publish-grid > section {
+		min-width: 0;
+		padding: 18px 16px;
+	}
+	.dmx-summary-list {
+		grid-template-columns: minmax(82px, auto) minmax(0, 1fr);
+		gap: 10px 12px;
+	}
+	.dmx-dialog-actions {
+		flex-wrap: wrap;
 	}
 }
 
