@@ -7,6 +7,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /** Durable delivery ledger for platform audit events. */
@@ -21,7 +22,9 @@ public class PlatformAuditOutboxRepository {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    @Transactional
+    // 审计写入必须独立于调用方事务：概览/检索等只读端点会在 readOnly 事务内记审计，
+    // 若 enqueue 参与该事务，PG 会以 "cannot execute INSERT in a read-only transaction" 拒绝并导致端点 500。
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public UUID enqueue(EnqueueCommand command) {
         if (command == null) throw new IllegalArgumentException("command is required");
         UUID id = UUID.randomUUID();
