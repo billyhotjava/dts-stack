@@ -1,8 +1,9 @@
-import { Alert, Button, Drawer, Form, Input, Modal, Select, Space, Table, Tag, Typography } from "antd";
+import { Alert, Button, Drawer, Form, Input, Modal, Select, Space, Tag, Typography } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { confirmDataMart, createDataMart, listDataMarts, retireDataMart, updateDataMart } from "@/api/dataMartApi";
 import { searchUsers, type UserDirectoryEntry } from "@/api/services/userDirectoryService";
+import { CompactTable } from "@/components/table";
 import type { DataMartView } from "@/features/modeling/contracts/dataMartContract";
 
 const { Text } = Typography;
@@ -69,7 +70,12 @@ export function DataMartWorkspace({ domainId, domainOptions, canManage }: Props)
 		setError("");
 		try {
 			setItems(
-				await listDataMarts({ businessCategoryId: domainId, keyword: appliedQuery || undefined, offset: 0, limit: 100 }),
+				await listDataMarts({
+					businessCategoryId: domainId,
+					keyword: appliedQuery || undefined,
+					offset: 0,
+					limit: 100,
+				}),
 			);
 		} catch (loadError) {
 			setError(errorMessage(loadError));
@@ -201,11 +207,11 @@ export function DataMartWorkspace({ domainId, domainOptions, canManage }: Props)
 				onSearch={(value) => setAppliedQuery(value.trim())}
 				placeholder="搜索数据集市名称、编码、用途或责任人"
 			/>
-			<Table<DataMartView>
+			<CompactTable<DataMartView>
 				rowKey="id"
 				loading={loading}
 				dataSource={items}
-				pagination={{ pageSize: 10, showSizeChanger: false }}
+				pagination={{ pageSize: 10 }}
 				locale={{ emptyText: "当前业务分类尚未纳入数据集市" }}
 				columns={[
 					{

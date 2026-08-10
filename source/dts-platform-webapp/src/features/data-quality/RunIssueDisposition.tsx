@@ -1,7 +1,8 @@
-import { Alert, Button, Card, Descriptions, Input, Modal, Space, Table, Tag } from "antd";
+import { Alert, Button, Card, Descriptions, Input, Modal, Space, Tag } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { appendIssueAction, closeIssue, createIssue, getIssueBySource, updateIssue } from "@/api/platformApi";
+import { CompactTable } from "@/components/table";
 import { useUserInfo } from "@/store/userStore";
 import { formatTime } from "@/utils/textUtils";
 import { QualityStatus } from "./QualityShared";
@@ -224,12 +225,7 @@ export function RunIssueDisposition({
 						type="warning"
 						message="该异常运行尚未建立问题单"
 						action={
-							<Button
-								type="primary"
-								disabled={!canManage}
-								loading={saving}
-								onClick={createForRun}
-							>
+							<Button type="primary" disabled={!canManage} loading={saving} onClick={createForRun}>
 								创建问题单
 							</Button>
 						}
@@ -278,12 +274,11 @@ export function RunIssueDisposition({
 							</Button>
 						) : null}
 					</Space>
-					<Table<RunIssueAction>
+					<CompactTable<RunIssueAction>
 						rowKey={(row) => String(row.id || `${row.createdDate}-${row.actor}`)}
 						columns={actionColumns}
 						dataSource={issue.actions || []}
 						pagination={false}
-						size="small"
 					/>
 				</Space>
 			)}

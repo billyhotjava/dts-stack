@@ -1,11 +1,12 @@
 import { DownloadOutlined, EyeOutlined, FileAddOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Form, Input, Radio, Select, Space, Table, Tag } from "antd";
+import { Alert, Button, Card, Form, Input, Radio, Select, Space, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { getQualityScore, listQualityRules, type QualityScoreResult } from "@/api/platformApi";
 import { Chart } from "@/components/chart/chart";
+import { CompactTable } from "@/components/table";
 import { QualityMetric, QualityPageHeading, QualityStatus, UnavailableCapability } from "./QualityShared";
 import { qualityPath } from "./qualityRoutes";
 import { displayName, hasEffectiveQualityScore, type QualityRule, toList } from "./qualityTypes";
@@ -256,7 +257,7 @@ function LiveQualityReport({ preview = false }: { preview?: boolean }) {
 				</>
 			)}
 			<Card title="规则明细">
-				<Table rowKey="id" columns={ruleColumns} dataSource={reportRules} pagination={{ pageSize: 10 }} size="small" />
+				<CompactTable rowKey="id" columns={ruleColumns} dataSource={reportRules} pagination={{ pageSize: 10 }} />
 			</Card>
 			{!preview ? <UnavailableCapability capability="quality-subscription" title="报告订阅暂未开放" /> : null}
 		</div>

@@ -1,5 +1,5 @@
 import { AppstoreOutlined, PlusOutlined, SearchOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Col, Descriptions, Form, Input, Row, Select, Space, Table, Tag } from "antd";
+import { Alert, Button, Card, Col, Descriptions, Form, Input, Row, Select, Space, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
@@ -11,6 +11,7 @@ import {
 	previewTemplateSQL,
 	type QualityScoreResult,
 } from "@/api/platformApi";
+import { CompactTable } from "@/components/table";
 import { filterDatasetsByDomain, UNASSIGNED_DOMAIN_ID } from "./datasetDomains";
 import {
 	ManagePermissionHint,
@@ -94,12 +95,11 @@ export function RulesByTablePage() {
 					/>
 				</Space>
 			</Card>
-			<Table
+			<CompactTable
 				rowKey="id"
 				loading={loading}
 				dataSource={rows}
-				pagination={{ pageSize: 12 }}
-				size="small"
+				pagination={{ pageSize: 10 }}
 				columns={[
 					{
 						title: "数据资产",
@@ -249,13 +249,12 @@ export function TableQualityDetailPage() {
 						))}
 					</div>
 					<Card title="已绑定规则">
-						<Table
+						<CompactTable
 							rowKey="id"
 							loading={detailLoading}
 							columns={columns}
 							dataSource={visibleRules}
 							pagination={false}
-							size="small"
 						/>
 					</Card>
 				</>

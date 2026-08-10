@@ -1,20 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { Alert, Button, Card, DatePicker, Descriptions, Input, Popconfirm, Select, Space, Tag, Typography } from "antd";
 import type { Dayjs } from "dayjs";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import {
-	Alert,
-	Button,
-	Card,
-	DatePicker,
-	Descriptions,
-	Input,
-	Popconfirm,
-	Select,
-	Space,
-	Table,
-	Tag,
-	Typography,
-} from "antd";
 import iamPolicyService, {
 	type AssetAction,
 	type AssetActionEffect,
@@ -23,6 +10,7 @@ import iamPolicyService, {
 	type AssetActionResourceType,
 	type AssetActionSubjectType,
 } from "@/api/services/iamPolicyService";
+import { CompactTable } from "@/components/table";
 
 const { Text } = Typography;
 
@@ -308,8 +296,7 @@ export function AssetActionMatrixPanel({
 			</Card>
 
 			<Card size="small" title="动作权限矩阵">
-				<Table
-					size="small"
+				<CompactTable
 					pagination={false}
 					rowKey="action"
 					loading={loading}
@@ -326,9 +313,7 @@ export function AssetActionMatrixPanel({
 							title: "运行时状态",
 							width: 140,
 							render: (_, row) =>
-								policyStatusTag(
-									matrix?.actions.find((item) => item.action === row.action)?.policyStatus,
-								),
+								policyStatusTag(matrix?.actions.find((item) => item.action === row.action)?.policyStatus),
 						},
 						{
 							title: "申请调整为",
@@ -338,9 +323,7 @@ export function AssetActionMatrixPanel({
 									disabled={!matrix || Boolean(matrix.pendingRequest)}
 									options={EFFECT_OPTIONS}
 									value={desiredEffects[row.action] || "NONE"}
-									onChange={(value) =>
-										setDesiredEffects((previous) => ({ ...previous, [row.action]: value }))
-									}
+									onChange={(value) => setDesiredEffects((previous) => ({ ...previous, [row.action]: value }))}
 								/>
 							),
 						},
@@ -395,10 +378,9 @@ export function AssetActionMatrixPanel({
 					showIcon
 					message="仅机构级管理员可以审批，且申请人不能审批自己的申请。"
 				/>
-				<Table
-					size="small"
+				<CompactTable
 					rowKey="id"
-					pagination={{ pageSize: 8 }}
+					pagination={{ pageSize: 10 }}
 					dataSource={requests}
 					columns={[
 						{
@@ -422,18 +404,12 @@ export function AssetActionMatrixPanel({
 							width: 150,
 							render: (_, row) => (
 								<Space>
-									<Popconfirm
-										title="确认批准这项权限变更？"
-										onConfirm={() => void decideRequest(row.id, "APPROVE")}
-									>
+									<Popconfirm title="确认批准这项权限变更？" onConfirm={() => void decideRequest(row.id, "APPROVE")}>
 										<Button size="small" type="primary">
 											批准
 										</Button>
 									</Popconfirm>
-									<Popconfirm
-										title="确认驳回这项权限变更？"
-										onConfirm={() => void decideRequest(row.id, "REJECT")}
-									>
+									<Popconfirm title="确认驳回这项权限变更？" onConfirm={() => void decideRequest(row.id, "REJECT")}>
 										<Button size="small" danger>
 											驳回
 										</Button>

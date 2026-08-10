@@ -1,13 +1,14 @@
 import { DatabaseOutlined, FileTextOutlined, LinkOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Alert, Button, Input, Select, Space, Table, Tag, Tooltip, Typography } from "antd";
+import { Alert, Button, Input, Select, Space, Tag, Tooltip, Typography } from "antd";
 import type { ColumnsType, TablePaginationConfig } from "antd/es/table";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { ClassificationTag } from "@/analytics/pages/screens/components/ClassificationTag";
 import { ingestionTaskAPI } from "@/api/ingestion";
 import dataSourcesService from "@/api/services/dataSourcesService";
-import { PageHeader } from "@/components/page-header";
 import { JourneyContextBar } from "@/components/journey";
+import { PageHeader } from "@/components/page-header";
+import { CompactTable } from "@/components/table";
 import { formatTimestamp } from "@/utils/format";
 import styles from "./AccessWorkspace.module.css";
 import {
@@ -345,19 +346,15 @@ export default function AccessWorkspace() {
 						刷新
 					</Button>
 				</div>
-				<Table<AccessWorkspaceRow>
+				<CompactTable<AccessWorkspaceRow>
 					rowKey="key"
 					columns={columns}
 					dataSource={rows}
 					loading={loading}
-					scroll={{ x: 1380 }}
 					pagination={{
 						current: pagination.current,
 						pageSize: pagination.pageSize,
 						total: pagination.total,
-						showSizeChanger: true,
-						pageSizeOptions: [10, 20, 50],
-						showTotal: (total) => `服务器候选 ${total} 条`,
 					}}
 					onChange={(next) => onTableChange(next)}
 				/>

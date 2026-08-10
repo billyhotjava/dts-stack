@@ -159,25 +159,23 @@ export function RelationshipGraphPage({ route }: { route: DataModelingRoute }) {
 					查询
 				</Button>
 				<span />
-				<button
+				<Button
 					aria-label="缩小"
 					disabled={!nodes.length}
 					onClick={() => setScale((value) => Math.max(0.6, value - 0.1))}
-					type="button"
 				>
 					<Minus size={15} />
-				</button>
-				<button
+				</Button>
+				<Button
 					aria-label="放大"
 					disabled={!nodes.length}
 					onClick={() => setScale((value) => Math.min(1.4, value + 0.1))}
-					type="button"
 				>
 					<Plus size={15} />
-				</button>
-				<button aria-label="适应画布" disabled={!nodes.length} onClick={() => setScale(1)} type="button">
+				</Button>
+				<Button aria-label="适应画布" disabled={!nodes.length} onClick={() => setScale(1)}>
 					<Focus size={15} />
-				</button>
+				</Button>
 			</div>
 			{loading ? (
 				<RequestState description="正在读取模型关系投影。" kind="loading" title="正在加载关系图" />

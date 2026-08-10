@@ -59,8 +59,10 @@ describe("MetricEditor stable business context", () => {
 							name: "预算执行",
 							sourceType: "MANUAL",
 							confirmed: true,
+							lifecycleStatus: "ACTIVE",
 						},
 					]}
+					processMode="MANAGED"
 					values={{
 						code: "BUDGET_AMOUNT",
 						name: "预算金额",
@@ -84,6 +86,7 @@ describe("MetricEditor stable business context", () => {
 		});
 
 		expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ businessProcessId: "process-row-1" }));
+		expect(container.querySelector('select[aria-label="业务分类"]')).toBeNull();
 		expect(container.textContent).toContain("语义模型修订");
 		expect(container.querySelector<HTMLInputElement>('input[value="model-1"]')).not.toBeNull();
 		expect(container.querySelector<HTMLInputElement>('input[value="r7"]')).not.toBeNull();

@@ -2,12 +2,35 @@
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ModelSpecField } from "@/features/modeling/contracts/modelSpecV2Contract";
-import { ModelFieldEditorTable, dimensionNonNullPatch, dimensionPrimaryKeyPatch, isBlankModelField } from "./ModelFieldEditorTable";
+import {
+	dimensionNonNullPatch,
+	dimensionPrimaryKeyPatch,
+	isBlankModelField,
+	ModelFieldEditorTable,
+} from "./ModelFieldEditorTable";
 
 let container: HTMLDivElement;
 let root: Root;
+
+beforeAll(() => {
+	if (!window.matchMedia) {
+		Object.defineProperty(window, "matchMedia", {
+			writable: true,
+			value: (query: string) => ({
+				matches: false,
+				media: query,
+				onchange: null,
+				addListener: () => {},
+				removeListener: () => {},
+				addEventListener: () => {},
+				removeEventListener: () => {},
+				dispatchEvent: () => false,
+			}),
+		});
+	}
+});
 
 const field: ModelSpecField = {
 	name: "subject_code",
@@ -105,7 +128,9 @@ describe("ModelFieldEditorTable", () => {
 		click("字段关联");
 		expect(nextProps.onOpenCode).toHaveBeenCalledOnce();
 		expect(nextProps.onOpenAssociation).toHaveBeenCalledOnce();
-		const importButton = Array.from(container.querySelectorAll("button")).find((item) => item.textContent?.includes("从表/视图导入"));
+		const importButton = Array.from(container.querySelectorAll("button")).find((item) =>
+			item.textContent?.includes("从表/视图导入"),
+		);
 		expect(importButton).toHaveProperty("disabled", true);
 		expect(importButton?.getAttribute("title")).toBe("当前版本尚无字段级表结构导入契约");
 	});

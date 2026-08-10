@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { type CompactColumns, CompactTable } from "@/components/table";
 import type { ModelSpecField } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { Button, RequestState } from "./PrototypePrimitives";
 import type { ModelSpecDraft, ModelWorkbenchContext } from "./services/modelWorkbenchService";
@@ -31,6 +32,8 @@ export const dimensionPrimaryKeyPatch = (checked: boolean): Partial<ModelSpecFie
 
 export const dimensionNonNullPatch = (checked: boolean): Partial<ModelSpecField> => ({ nullable: !checked });
 
+type FieldRow = { key: string; field: ModelSpecField; index: number };
+
 function selectableDataTypes(value: string) {
 	return DATA_TYPES.includes(value) ? DATA_TYPES : [...DATA_TYPES, value];
 }
@@ -54,23 +57,173 @@ export function ModelFieldEditorTable({
 }: ModelFieldEditorTableProps) {
 	const [insertCount, setInsertCount] = useState("1");
 	const [showStandards, setShowStandards] = useState(false);
-	const approvedDimensionColumns = ["序号", "字段名称", "类型", "字段显示名", "主键", "非空", "维度属性编码"];
-	const headers = dimensionMode
-		? [...approvedDimensionColumns, ...(showStandards ? ["字段标准"] : []), "操作"]
-		: [
-				"序号",
-				"字段名称",
-				"类型",
-				"字段显示名",
-				"字段作用",
-				...(showStandards ? ["字段标准"] : []),
-				"允许为空",
-				"操作",
-			];
 	const addFields = () => {
 		const parsed = Number.parseInt(insertCount, 10);
 		onAddFields(Number.isFinite(parsed) ? Math.max(1, Math.min(20, parsed)) : 1);
 	};
+
+	const rows: FieldRow[] = fields.map((field, index) => ({
+		key: fieldRowIds[index] || `${field.name}-${index}`,
+		field,
+		index,
+	}));
+
+	const columns = useMemo<CompactColumns<FieldRow>>(() => {
+		const base: CompactColumns<FieldRow> = [
+			{ title: "序号", key: "seq", width: 64, render: (_, { index }) => index + 1 },
+			{
+				title: "字段名称",
+				key: "name",
+				render: (_, { field, index }) => (
+					<input
+						disabled={readOnly}
+						onChange={(event) => onUpdate(index, { name: event.target.value })}
+						value={field.name}
+					/>
+				),
+			},
+			{
+				title: "类型",
+				key: "dataType",
+				render: (_, { field, index }) => (
+					<select
+						disabled={readOnly}
+						onChange={(event) => onUpdate(index, { dataType: event.target.value })}
+						value={field.dataType}
+					>
+						{selectableDataTypes(field.dataType).map((dataType) => (
+							<option key={dataType} value={dataType}>
+								{dataType}
+							</option>
+						))}
+					</select>
+				),
+			},
+			{
+				title: "字段显示名",
+				key: "displayName",
+				render: (_, { field, index }) => (
+					<input
+						disabled={readOnly}
+						onChange={(event) => onUpdate(index, { displayName: event.target.value })}
+						value={field.displayName || ""}
+					/>
+				),
+			},
+		];
+		if (dimensionMode) {
+			base.push(
+				{
+					title: "主键",
+					key: "primaryKey",
+					align: "center",
+					render: (_, { field, index }) => (
+						<input
+							aria-label={`字段 ${index + 1} 为主键`}
+							checked={field.role === "KEY"}
+							disabled={readOnly}
+							onChange={(event) => onUpdate(index, dimensionPrimaryKeyPatch(event.target.checked))}
+							type="checkbox"
+						/>
+					),
+				},
+				{
+					title: "非空",
+					key: "nullable",
+					align: "center",
+					render: (_, { field, index }) => (
+						<input
+							aria-label={`字段 ${index + 1} 非空`}
+							checked={!field.nullable}
+							disabled={readOnly}
+							onChange={(event) => onUpdate(index, dimensionNonNullPatch(event.target.checked))}
+							type="checkbox"
+						/>
+					),
+				},
+				{
+					title: "维度属性编码",
+					key: "dimensionAttributeCode",
+					render: (_, { field, index }) => (
+						<input
+							disabled={readOnly}
+							onChange={(event) => onUpdate(index, { dimensionAttributeCode: event.target.value })}
+							placeholder="可选"
+							value={field.dimensionAttributeCode || ""}
+						/>
+					),
+				},
+			);
+		} else {
+			base.push({
+				title: "字段作用",
+				key: "role",
+				render: (_, { field, index }) => (
+					<select
+						disabled={readOnly}
+						onChange={(event) => onUpdate(index, { role: event.target.value as ModelSpecField["role"] })}
+						value={field.role}
+					>
+						<option value="KEY">键（KEY）</option>
+						<option value="ATTRIBUTE">属性</option>
+						<option value="TIME">时间</option>
+						<option value="MEASURE">度量</option>
+					</select>
+				),
+			});
+		}
+		if (showStandards) {
+			base.push({
+				title: "字段标准",
+				key: "standard",
+				render: (_, { field, index }) => {
+					const binding = bindings.find((item) => item.fieldName === field.name);
+					const standardValue = binding ? `${binding.standardElementId}@${binding.standardElementVersion}` : "";
+					return (
+						<select
+							disabled={readOnly || !field.name.trim()}
+							onChange={(event) => onStandardChange(index, event.target.value)}
+							value={standardValue}
+						>
+							<option value="">不绑定</option>
+							{standards.map((standard) => (
+								<option key={`${standard.id}@${standard.version}`} value={`${standard.id}@${standard.version}`}>
+									{standard.name} · {standard.code} · v{standard.version}
+								</option>
+							))}
+						</select>
+					);
+				},
+			});
+		}
+		if (!dimensionMode) {
+			base.push({
+				title: "允许为空",
+				key: "allowNull",
+				align: "center",
+				render: (_, { field, index }) => (
+					<input
+						aria-label={`字段 ${index + 1} 允许为空`}
+						checked={field.nullable}
+						disabled={readOnly}
+						onChange={(event) => onUpdate(index, { nullable: event.target.checked })}
+						type="checkbox"
+					/>
+				),
+			});
+		}
+		base.push({
+			title: "操作",
+			key: "actions",
+			width: 88,
+			render: (_, { index }) => (
+				<Button danger disabled={readOnly} onClick={() => onDelete(index)}>
+					删除
+				</Button>
+			),
+		});
+		return base;
+	}, [bindings, dimensionMode, onDelete, onStandardChange, onUpdate, readOnly, showStandards, standards]);
 
 	return (
 		<section aria-label="字段编辑器">
@@ -112,143 +265,16 @@ export function ModelFieldEditorTable({
 					字段显示设置
 				</Button>
 			</div>
-			<div className="dmx-field-table-wrap">
-				<table className="dmx-field-table">
-					<thead>
-						<tr>
-							{headers.map((header) => (
-								<th key={header}>{header}</th>
-							))}
-						</tr>
-					</thead>
-					<tbody>
-						{fields.length ? (
-							fields.map((field, index) => {
-								const binding = bindings.find((item) => item.fieldName === field.name);
-								const standardValue = binding ? `${binding.standardElementId}@${binding.standardElementVersion}` : "";
-								return (
-									<tr key={fieldRowIds[index] || `${field.name}-${index}`}>
-										<td>{index + 1}</td>
-										<td>
-											<input
-												disabled={readOnly}
-												onChange={(event) => onUpdate(index, { name: event.target.value })}
-												value={field.name}
-											/>
-										</td>
-										<td>
-											<select
-												disabled={readOnly}
-												onChange={(event) => onUpdate(index, { dataType: event.target.value })}
-												value={field.dataType}
-											>
-												{selectableDataTypes(field.dataType).map((dataType) => (
-													<option key={dataType} value={dataType}>
-														{dataType}
-													</option>
-												))}
-											</select>
-										</td>
-										<td>
-											<input
-												disabled={readOnly}
-												onChange={(event) => onUpdate(index, { displayName: event.target.value })}
-												value={field.displayName || ""}
-											/>
-										</td>
-										{dimensionMode ? (
-											<>
-												<td>
-													<input
-														aria-label={`字段 ${index + 1} 为主键`}
-														checked={field.role === "KEY"}
-														disabled={readOnly}
-														onChange={(event) => onUpdate(index, dimensionPrimaryKeyPatch(event.target.checked))}
-														type="checkbox"
-													/>
-												</td>
-												<td>
-													<input
-														aria-label={`字段 ${index + 1} 非空`}
-														checked={!field.nullable}
-														disabled={readOnly}
-														onChange={(event) => onUpdate(index, dimensionNonNullPatch(event.target.checked))}
-														type="checkbox"
-													/>
-												</td>
-												<td>
-													<input
-														disabled={readOnly}
-														onChange={(event) => onUpdate(index, { dimensionAttributeCode: event.target.value })}
-														placeholder="可选"
-														value={field.dimensionAttributeCode || ""}
-													/>
-												</td>
-											</>
-										) : (
-											<>
-												<td>
-													<select
-														disabled={readOnly}
-														onChange={(event) =>
-															onUpdate(index, { role: event.target.value as ModelSpecField["role"] })
-														}
-														value={field.role}
-													>
-														<option value="KEY">键（KEY）</option>
-														<option value="ATTRIBUTE">属性</option>
-														<option value="TIME">时间</option>
-														<option value="MEASURE">度量</option>
-													</select>
-												</td>
-												<td>
-													<input
-														aria-label={`字段 ${index + 1} 允许为空`}
-														checked={field.nullable}
-														disabled={readOnly}
-														onChange={(event) => onUpdate(index, { nullable: event.target.checked })}
-														type="checkbox"
-													/>
-												</td>
-											</>
-										)}
-										{showStandards ? (
-											<td>
-												<select
-													disabled={readOnly || !field.name.trim()}
-													onChange={(event) => onStandardChange(index, event.target.value)}
-													value={standardValue}
-												>
-													<option value="">不绑定</option>
-													{standards.map((standard) => (
-														<option
-															key={`${standard.id}@${standard.version}`}
-															value={`${standard.id}@${standard.version}`}
-														>
-															{standard.name} · {standard.code} · v{standard.version}
-														</option>
-													))}
-												</select>
-											</td>
-										) : null}
-										<td>
-											<Button danger disabled={readOnly} onClick={() => onDelete(index)}>
-												删除
-											</Button>
-										</td>
-									</tr>
-								);
-							})
-						) : (
-							<tr>
-								<td colSpan={headers.length}>
-									<RequestState description="点击插入字段新增字段。" kind="empty" title="暂无字段" />
-								</td>
-							</tr>
-						)}
-					</tbody>
-				</table>
-			</div>
+			<CompactTable<FieldRow>
+				className="dmx-field-editor-table"
+				columns={columns}
+				dataSource={rows}
+				pagination={false}
+				rowKey="key"
+				locale={{
+					emptyText: <RequestState description="点击插入字段新增字段。" kind="empty" title="暂无字段" />,
+				}}
+			/>
 		</section>
 	);
 }

@@ -1,5 +1,6 @@
 import { Archive, Plus, Save } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import type { WarehousePlanBusinessCategoryMode } from "@/api/warehousePlanApi";
 import { Button } from "./PrototypePrimitives";
 import {
 	createPlanningCatalogDomain,
@@ -8,6 +9,7 @@ import {
 	type PlanningCatalogDomain,
 	updatePlanningCatalogDomain,
 } from "./services/planningCatalogDomainService";
+import { loadPlanningContextPolicy } from "./services/planningContextPolicyService";
 import { normalizeModelingRequestFailure } from "./services/planningProjectionService";
 
 const asPlanningDomain = (value: unknown): PlanningCatalogDomain | null => {
@@ -40,22 +42,41 @@ export function CatalogDomainForm({
 	const [owner, setOwner] = useState(editing?.owner || "");
 	const [description, setDescription] = useState(editing?.description || "");
 	const [parentId, setParentId] = useState(editing?.parentId || "");
+	const [categoryMode, setCategoryMode] = useState<WarehousePlanBusinessCategoryMode>("SINGLE_DEFAULT");
+	const [policyLoaded, setPolicyLoaded] = useState(isCategory);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
 
 	useEffect(() => {
 		if (isCategory) return;
 		let active = true;
-		void listPlanningCatalogDomains()
-			.then((domains) => {
+		void (async () => {
+			try {
+				const domains = await listPlanningCatalogDomains();
 				if (!active) return;
 				const roots = domains.filter((domain) => !domain.parentId);
 				setCategories(roots);
-				setParentId((current) => current || roots[0]?.id || "");
-			})
-			.catch((cause) => {
+				try {
+					const planningContext = await loadPlanningContextPolicy();
+					if (!active) return;
+					setCategoryMode(planningContext.policy.businessCategoryMode);
+					const configuredId = planningContext.policy.defaultBusinessCategoryId;
+					setParentId(
+						(current) =>
+							current || (configuredId && roots.some((root) => root.id === configuredId) ? configuredId : ""),
+					);
+				} catch (cause) {
+					if (!active) return;
+					setCategoryMode("MULTI_SELECT");
+					setParentId((current) => current || (roots.length === 1 ? roots[0].id : ""));
+					setError(normalizeModelingRequestFailure(cause, "默认业务分类读取失败，请人工选择。").message);
+				}
+			} catch (cause) {
 				if (active) setError(normalizeModelingRequestFailure(cause, "业务分类读取失败。").message);
-			});
+			} finally {
+				if (active) setPolicyLoaded(true);
+			}
+		})();
 		return () => {
 			active = false;
 		};
@@ -64,7 +85,7 @@ export function CatalogDomainForm({
 	const save = async () => {
 		if (!canMaintain) return setError("当前菜单未授权维护操作");
 		if (!code.trim() || !name.trim()) return setError(`请补齐${label}编码和名称`);
-		if (!isCategory && !parentId) return setError("请选择所属业务分类");
+		if (!isCategory && !parentId) return setError("请先在规划参数配置中设置默认业务分类，或人工选择所属分类");
 		setBusy(true);
 		setError("");
 		try {
@@ -115,7 +136,7 @@ export function CatalogDomainForm({
 					<span className="required">{label}名称</span>
 					<input disabled={!canMaintain || busy} onChange={(e) => setName(e.target.value)} value={name} />
 				</label>
-				{!isCategory ? (
+				{!isCategory && policyLoaded && (categoryMode === "MULTI_SELECT" || !parentId) ? (
 					<label>
 						<span className="required">所属业务分类</span>
 						<select disabled={!canMaintain || busy} onChange={(e) => setParentId(e.target.value)} value={parentId}>
@@ -141,6 +162,12 @@ export function CatalogDomainForm({
 					/>
 				</label>
 			</div>
+			{!isCategory && !policyLoaded ? <p className="dmx-capability-note">正在读取默认业务分类…</p> : null}
+			{!isCategory && policyLoaded && categoryMode === "SINGLE_DEFAULT" && parentId ? (
+				<p className="dmx-capability-note">
+					将自动归属到默认业务分类“{categories.find((category) => category.id === parentId)?.name || parentId}”。
+				</p>
+			) : null}
 			{error ? (
 				<div className="dmx-inline-error" role="alert">
 					{error}

@@ -1,30 +1,29 @@
+import { useMemo } from "react";
 import type { ModelLifecycleArtifact } from "@/api/modelSpecApi";
+import { type CompactColumns, CompactTable } from "@/components/table";
 
 export function ModelLifecycleArtifactsTable({ artifacts }: { artifacts: ModelLifecycleArtifact[] }) {
+	const columns = useMemo<CompactColumns<ModelLifecycleArtifact>>(
+		() => [
+			{ title: "制品", dataIndex: "path" },
+			{
+				title: "实现版本",
+				dataIndex: "implementationRevision",
+				render: (value: number) => `r${value}`,
+			},
+			{ title: "物化方式", dataIndex: "materialization" },
+			{ title: "状态", dataIndex: "status" },
+			{ title: "校验和", dataIndex: "checksum" },
+		],
+		[],
+	);
 	return (
-		<div className="dmx-table-scroll">
-			<table className="dmx-table">
-				<thead>
-					<tr>
-						<th>制品</th>
-						<th>实现版本</th>
-						<th>物化方式</th>
-						<th>状态</th>
-						<th>校验和</th>
-					</tr>
-				</thead>
-				<tbody>
-					{artifacts.map((item) => (
-						<tr key={item.id}>
-							<td>{item.path}</td>
-							<td>r{item.implementationRevision}</td>
-							<td>{item.materialization}</td>
-							<td>{item.status}</td>
-							<td>{item.checksum}</td>
-						</tr>
-					))}
-				</tbody>
-			</table>
-		</div>
+		<CompactTable<ModelLifecycleArtifact>
+			className="dmx-lifecycle-artifacts-table"
+			columns={columns}
+			dataSource={artifacts}
+			pagination={false}
+			rowKey="id"
+		/>
 	);
 }

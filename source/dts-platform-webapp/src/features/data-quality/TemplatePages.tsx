@@ -1,5 +1,5 @@
 import { DeleteOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag } from "antd";
+import { Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
@@ -11,6 +11,7 @@ import {
 	previewTemplateSQL,
 	updateQualityTemplate,
 } from "@/api/platformApi";
+import { CompactTable } from "@/components/table";
 import { ManagePermissionHint, QualityEmpty, QualityPageHeading } from "./QualityShared";
 import { qualityPath } from "./qualityRoutes";
 import { displayName, type QualityTemplate, toList } from "./qualityTypes";
@@ -156,13 +157,12 @@ export function TemplateListPage() {
 					</Button>,
 				]}
 			/>
-			<Table
+			<CompactTable
 				rowKey="id"
 				loading={loading}
 				columns={columns}
 				dataSource={templates}
 				pagination={{ pageSize: 10 }}
-				size="small"
 			/>
 			<Modal
 				title="新建质量规则模板"
@@ -291,8 +291,7 @@ export function TemplateDetailPage() {
 	useEffect(() => {
 		void load();
 	}, [load]);
-	const loadedTemplateIsCurrent =
-		loadedTemplateId.current === templateId && String(template?.id || "") === templateId;
+	const loadedTemplateIsCurrent = loadedTemplateId.current === templateId && String(template?.id || "") === templateId;
 	const visibleTemplate = loadedTemplateIsCurrent ? template : undefined;
 	const detailLoading = loading || settledTemplateRequestId.current !== templateId;
 
@@ -301,11 +300,7 @@ export function TemplateDetailPage() {
 		if (!loadedTemplateIsCurrent) return;
 		try {
 			const values = await form.validateFields();
-			if (
-				activeTemplateId.current !== operationTemplateId ||
-				loadedTemplateId.current !== operationTemplateId
-			)
-				return;
+			if (activeTemplateId.current !== operationTemplateId || loadedTemplateId.current !== operationTemplateId) return;
 			setSaving(true);
 			await updateQualityTemplate(operationTemplateId, templatePayload(values));
 			if (activeTemplateId.current !== operationTemplateId) return;
@@ -331,11 +326,7 @@ export function TemplateDetailPage() {
 		if (!loadedTemplateIsCurrent) return;
 		try {
 			const result = await previewTemplateSQL(operationTemplateId, JSON.parse(previewParams || "{}"));
-			if (
-				activeTemplateId.current !== operationTemplateId ||
-				loadedTemplateId.current !== operationTemplateId
-			)
-				return;
+			if (activeTemplateId.current !== operationTemplateId || loadedTemplateId.current !== operationTemplateId) return;
 			setPreviewSql(
 				typeof result === "string"
 					? result

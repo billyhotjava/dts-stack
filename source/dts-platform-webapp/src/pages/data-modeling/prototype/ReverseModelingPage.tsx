@@ -23,6 +23,7 @@ import {
 	type ModelingImportDomainBinding,
 	type ModelingImportSourceBinding,
 } from "@/api/services/modelingImportContextService";
+import { type CompactColumns, CompactTable } from "@/components/table";
 import { dataModelingPath } from "../navigation";
 import type { DataModelingRoute } from "../types";
 import { Button, PageHeader, RequestState, Status } from "./PrototypePrimitives";
@@ -591,71 +592,93 @@ function GenerateStep({
 				<Status tone={preview.summary.conflict ? "warning" : "neutral"}>冲突 {preview.summary.conflict}</Status>
 				<Status tone={preview.summary.blocked ? "danger" : "neutral"}>阻断 {preview.summary.blocked}</Status>
 			</div>
-			<div className="dmx-table-scroll">
-				<table className="dmx-table">
-					<thead>
-						<tr>
-							<th>对象</th>
-							<th>选择来源</th>
-							<th>动作</th>
-							<th>转换模式</th>
-							<th>冲突处理</th>
-							<th>原因与处理建议</th>
-						</tr>
-					</thead>
-					<tbody>
-						{preview.items.map((item) => (
-							<tr key={item.dbtUniqueId}>
-								<td>{item.dbtUniqueId}</td>
-								<td>
-									<Status
-										tone={
-											!selected.includes(item.dbtUniqueId)
-												? "danger"
-												: requestedSelection.includes(item.dbtUniqueId)
-													? "info"
-													: "warning"
-										}
-									>
-										{!selected.includes(item.dbtUniqueId)
-											? "不可应用"
-											: requestedSelection.includes(item.dbtUniqueId)
-												? "用户选择"
-												: "依赖闭包补充"}
-									</Status>
-								</td>
-								<td>
-									<Status tone={item.action === "BLOCKED" ? "danger" : item.action === "CONFLICT" ? "warning" : "info"}>
-										{item.action}
-									</Status>
-								</td>
-								<td>{item.conversionMode}</td>
-								<td>
-									{item.action === "CONFLICT" ? (
-										<select
-											onChange={(event) =>
-												onConflictResolution(item.dbtUniqueId, event.target.value as ModelSpecImportConflictResolution)
-											}
-											value={conflictResolutions[item.dbtUniqueId] || "KEEP_CURRENT"}
-										>
-											<option value="KEEP_CURRENT">保留当前</option>
-											<option value="ACCEPT_INCOMING">采用导入版本</option>
-											<option value="CANCEL">取消该对象</option>
-										</select>
-									) : (
-										"—"
-									)}
-								</td>
-								<td>
-									<pre className="dmx-table-issues">{issueText(item.issues)}</pre>
-								</td>
-							</tr>
-						))}
-					</tbody>
-				</table>
-			</div>
+			<PreviewItemsTable
+				conflictResolutions={conflictResolutions}
+				onConflictResolution={onConflictResolution}
+				preview={preview}
+				requestedSelection={requestedSelection}
+				selected={selected}
+			/>
 		</>
 	);
+}
+
+function PreviewItemsTable({
+	preview,
+	selected,
+	requestedSelection,
+	conflictResolutions,
+	onConflictResolution,
+}: {
+	preview: ModelSpecImportPreview;
+	selected: string[];
+	requestedSelection: string[];
+	conflictResolutions: Record<string, ModelSpecImportConflictResolution>;
+	onConflictResolution: (id: string, value: ModelSpecImportConflictResolution) => void;
+}) {
+	const rows = useMemo(() => preview.items.map((item) => ({ key: item.dbtUniqueId, item })), [preview.items]);
+	const columns = useMemo<CompactColumns<(typeof rows)[number]>>(
+		() => [
+			{ title: "对象", key: "object", render: (_, { item }) => item.dbtUniqueId },
+			{
+				title: "选择来源",
+				key: "selection",
+				render: (_, { item }) => (
+					<Status
+						tone={
+							!selected.includes(item.dbtUniqueId)
+								? "danger"
+								: requestedSelection.includes(item.dbtUniqueId)
+									? "info"
+									: "warning"
+						}
+					>
+						{!selected.includes(item.dbtUniqueId)
+							? "不可应用"
+							: requestedSelection.includes(item.dbtUniqueId)
+								? "用户选择"
+								: "依赖闭包补充"}
+					</Status>
+				),
+			},
+			{
+				title: "动作",
+				key: "action",
+				render: (_, { item }) => (
+					<Status tone={item.action === "BLOCKED" ? "danger" : item.action === "CONFLICT" ? "warning" : "info"}>
+						{item.action}
+					</Status>
+				),
+			},
+			{ title: "转换模式", key: "conversionMode", render: (_, { item }) => item.conversionMode },
+			{
+				title: "冲突处理",
+				key: "conflict",
+				render: (_, { item }) =>
+					item.action === "CONFLICT" ? (
+						<select
+							onChange={(event) =>
+								onConflictResolution(item.dbtUniqueId, event.target.value as ModelSpecImportConflictResolution)
+							}
+							value={conflictResolutions[item.dbtUniqueId] || "KEEP_CURRENT"}
+						>
+							<option value="KEEP_CURRENT">保留当前</option>
+							<option value="ACCEPT_INCOMING">采用导入版本</option>
+							<option value="CANCEL">取消该对象</option>
+						</select>
+					) : (
+						"—"
+					),
+			},
+			{
+				title: "原因与处理建议",
+				key: "issues",
+				render: (_, { item }) => <pre className="dmx-table-issues">{issueText(item.issues)}</pre>,
+			},
+		],
+		[conflictResolutions, onConflictResolution, requestedSelection, selected],
+	);
+	return <CompactTable columns={columns} dataSource={rows} pagination={false} rowKey="key" />;
 }
 
 function CompleteStep({
@@ -685,51 +708,68 @@ function CompleteStep({
 				<Status tone={summary.failed ? "danger" : "neutral"}>失败 {summary.failed}</Status>
 				<Status tone={summary.blocked ? "danger" : "neutral"}>阻断 {summary.blocked}</Status>
 			</div>
-			{items.length ? (
-				<div className="dmx-table-scroll">
-					<table className="dmx-table">
-						<thead>
-							<tr>
-								<th>对象</th>
-								<th>结果</th>
-								<th>模型</th>
-								<th>版本</th>
-								<th>失败原因</th>
-								<th>后续操作</th>
-							</tr>
-						</thead>
-						<tbody>
-							{items.map((item) => (
-								<tr key={`${item.sequence || 0}-${item.dbtUniqueId}`}>
-									<td>{item.dbtUniqueId}</td>
-									<td>
-										<Status tone={["FAILED", "BLOCKED"].includes(item.status) ? "danger" : "success"}>
-											{item.status}
-										</Status>
-									</td>
-									<td>{item.modelSpecId || "—"}</td>
-									<td>{item.revision ? `r${item.revision}` : "—"}</td>
-									<td>
-										<pre className="dmx-table-issues">{issueText(item.issues)}</pre>
-									</td>
-									<td>
-										{isAdvancedDbtImportResult(preview, item) && item.modelSpecId ? (
-											<Button onClick={() => item.modelSpecId && onOpenAdvanced(item.modelSpecId)}>
-												进入高级 dbt 实现
-											</Button>
-										) : (
-											"—"
-										)}
-									</td>
-								</tr>
-							))}
-						</tbody>
-					</table>
-				</div>
-			) : null}
+			{items.length ? <CompleteItemsTable items={items} onOpenAdvanced={onOpenAdvanced} preview={preview} /> : null}
 			<Button disabled={!summary.succeeded} onClick={onOpenWorkbench}>
 				打开模型工作台
 			</Button>
+		</div>
+	);
+}
+
+function CompleteItemsTable({
+	items,
+	preview,
+	onOpenAdvanced,
+}: {
+	items: ModelSpecImportApplyResult["items"];
+	preview: ModelSpecImportPreview | null;
+	onOpenAdvanced: (modelSpecId: string) => void;
+}) {
+	const rows = useMemo(
+		() => items.map((item) => ({ key: `${item.sequence || 0}-${item.dbtUniqueId}`, item })),
+		[items],
+	);
+	const columns = useMemo<CompactColumns<(typeof rows)[number]>>(
+		() => [
+			{ title: "对象", key: "object", render: (_, { item }) => item.dbtUniqueId },
+			{
+				title: "结果",
+				key: "status",
+				render: (_, { item }) => (
+					<Status tone={["FAILED", "BLOCKED"].includes(item.status) ? "danger" : "success"}>{item.status}</Status>
+				),
+			},
+			{
+				title: "模型",
+				key: "modelSpecId",
+				render: (_, { item }) => item.modelSpecId || "—",
+			},
+			{
+				title: "版本",
+				key: "revision",
+				render: (_, { item }) => (item.revision ? `r${item.revision}` : "—"),
+			},
+			{
+				title: "失败原因",
+				key: "issues",
+				render: (_, { item }) => <pre className="dmx-table-issues">{issueText(item.issues)}</pre>,
+			},
+			{
+				title: "后续操作",
+				key: "actions",
+				render: (_, { item }) =>
+					isAdvancedDbtImportResult(preview, item) && item.modelSpecId ? (
+						<Button onClick={() => item.modelSpecId && onOpenAdvanced(item.modelSpecId)}>进入高级 dbt 实现</Button>
+					) : (
+						"—"
+					),
+			},
+		],
+		[onOpenAdvanced, preview],
+	);
+	return (
+		<div className="dmx-table-scroll">
+			<CompactTable columns={columns} dataSource={rows} pagination={false} rowKey="key" />
 		</div>
 	);
 }

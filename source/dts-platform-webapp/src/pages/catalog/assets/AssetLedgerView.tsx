@@ -1,5 +1,5 @@
 import { ToolOutlined } from "@ant-design/icons";
-import { Alert, Button, Select, Space, Table, Tag } from "antd";
+import { Alert, Button, Select, Space, Tag } from "antd";
 import type { Key } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
@@ -14,6 +14,7 @@ import {
 } from "@/api/platformApi";
 import { AssetTagChips } from "@/components/catalog/tags/AssetTagChips";
 import { writeTagIds } from "@/components/catalog/tags/catalogTagUrlState";
+import { CompactTable } from "@/components/table";
 import { useRouter } from "@/routes/hooks";
 import { resolveAssetReadiness } from "../assetPortalUx.helpers";
 import { AssetGovernanceWorkbenchDrawer } from "./AssetGovernanceWorkbenchDrawer";
@@ -23,7 +24,6 @@ import { ASSET_TYPE_DICT, GOVERNANCE_STATUS_DICT, resolveEnumLabel } from "./ass
 import type { AssetRow } from "./assetPageShared";
 import {
 	ASSET_ACTION_COLUMN_WIDTH,
-	ASSET_TABLE_SCROLL_X,
 	classificationTagColor,
 	classificationText,
 	formatTime,
@@ -316,9 +316,7 @@ export function AssetLedgerView({
 				</div>
 			</div>
 			<div className="rounded-lg border border-slate-200 bg-white">
-				<Table<AssetRow>
-					bordered
-					size="small"
+				<CompactTable<AssetRow>
 					rowKey="id"
 					dataSource={records}
 					pagination={false}
@@ -336,7 +334,6 @@ export function AssetLedgerView({
 							title: associationTagId && (!row.assetType || !row.assetKey) ? "资产身份不完整，无法关联标签" : undefined,
 						}),
 					}}
-					scroll={{ x: ASSET_TABLE_SCROLL_X }}
 					tableLayout="fixed"
 					className="catalog-assets-table"
 					onRow={(row) => ({

@@ -1,5 +1,5 @@
 import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Alert, Button, Descriptions, Empty, Modal, Space, Spin, Table, Tabs, Tag, Tooltip } from "antd";
+import { Alert, Button, Descriptions, Empty, Modal, Space, Spin, Tabs, Tag, Tooltip } from "antd";
 import type { ColumnsType, TablePaginationConfig } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
@@ -13,6 +13,7 @@ import {
 	ingestionTaskAPI,
 } from "@/api/ingestion";
 import { PageHeader } from "@/components/page-header";
+import { CompactTable } from "@/components/table";
 import { useParams, useRouter } from "@/routes/hooks";
 import { formatNumber, formatTimestamp } from "@/utils/format";
 import { AccessQualityPanel } from "./AccessGovernancePanels";
@@ -564,9 +565,8 @@ export default function AccessPlanDetailPage() {
 						<p>展示任务已保存的源到目标映射，不读取或回显连接参数。</p>
 					</div>
 				</div>
-				<Table<TableMappingRow>
+				<CompactTable<TableMappingRow>
 					rowKey="key"
-					size="small"
 					columns={mappingColumns}
 					dataSource={tableMappings}
 					pagination={tableMappings.length > 10 ? { pageSize: 10 } : false}
@@ -600,19 +600,15 @@ export default function AccessPlanDetailPage() {
 						刷新
 					</Button>
 				</div>
-				<Table<IngestionChangeLogDTO>
+				<CompactTable<IngestionChangeLogDTO>
 					rowKey={(row) => row.id || `${row.createdDate || "change"}-${row.changeType}`}
 					columns={changeColumns}
 					dataSource={changes}
 					loading={changesLoading}
-					scroll={{ x: 920 }}
 					pagination={{
 						current: changesPagination.current,
 						pageSize: changesPagination.pageSize,
 						total: changesPagination.total,
-						showSizeChanger: true,
-						pageSizeOptions: [10, 20, 50],
-						showTotal: (total) => `共 ${total} 条`,
 					}}
 					onChange={onChangesTableChange}
 					locale={{ emptyText: changesLoaded ? "暂无变更记录" : "正在读取变更记录" }}

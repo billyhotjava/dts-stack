@@ -10,6 +10,8 @@ import {
 	ShieldCheck,
 	Upload,
 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { listBusinessProcessesApi, type Sprint64BusinessProcess } from "@/api/sprint64GovernanceApi";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
 import type { ModelRepresentationView } from "@/features/modeling/contracts/modelRepresentationContract";
 import type { ModelSpecField, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
@@ -23,6 +25,7 @@ import {
 	resolveConceptDimensionPresentation,
 	resolveDimensionFormPresentation,
 } from "./modelWorkbenchPresentation";
+import { Button } from "./PrototypePrimitives";
 import {
 	type ConceptDimensionDraft,
 	MODEL_KIND_CONFIG,
@@ -31,6 +34,11 @@ import {
 	type ModelSpecDraft,
 	type ModelWorkbenchContext,
 } from "./services/modelWorkbenchService";
+import {
+	loadPlanningContextPolicy,
+	type PlanningBusinessProcessMode,
+	resolveBusinessProcessBinding,
+} from "./services/planningContextPolicyService";
 import "./modeling-workbench.css";
 
 export type ModelingWorkbenchEditorProps = {
@@ -150,10 +158,6 @@ function ConceptDimensionForm(props: ConceptDimensionFormProps) {
 						<input aria-label="数仓分层" disabled value={presentation.warehouseLayer} />
 					</label>
 					<label>
-						<span>业务分类</span>
-						<input aria-label="业务分类" disabled value={presentation.businessCategory} />
-					</label>
-					<label>
 						<span className="required">数据域</span>
 						<select
 							aria-label="数据域"
@@ -162,11 +166,13 @@ function ConceptDimensionForm(props: ConceptDimensionFormProps) {
 							value={draft.domainId}
 						>
 							<option value="">请选择数据域</option>
-							{context.domains.map((item) => (
-								<option key={item.id} value={item.id}>
-									{item.name} · {item.code}
-								</option>
-							))}
+							{context.domains
+								.filter((item) => Boolean(item.parentCode))
+								.map((item) => (
+									<option key={item.id} value={item.id}>
+										{item.name} · {item.code}
+									</option>
+								))}
 						</select>
 						<ValidationMessage message={validationErrors.domainId} />
 					</label>
@@ -211,26 +217,10 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 		definition,
 		currentOwnerId,
 	});
-	const categoryRoots = context.domains.filter((item) => !item.parentCode);
-	const selectedDomain = context.domains.find((item) => item.id === draft.domainId);
-	const selectedCategory = selectedDomain
-		? selectedDomain.parentCode
-			? context.domains.find((item) => item.code === selectedDomain.parentCode)
-			: selectedDomain
-		: undefined;
-	const categoryCode = selectedCategory?.code || "";
-	const domainOptions = context.domains.filter((item) => item.parentCode === categoryCode);
+	const domainOptions = context.domains.filter((item) => Boolean(item.parentCode));
 	const implementationSourceValue =
-		draft.implementationInputMode === "GENERATED"
-			? draft.generationStrategyType
-			: draft.implementationInputMode;
-	const chooseCategory = (code: string) => {
-		const firstChild = context.domains.find((item) => item.parentCode === code);
-		patch({ domainId: firstChild?.id || "" });
-	};
-	const missingPersistedDomain = Boolean(
-		draft.domainId && !domainOptions.some((item) => item.id === draft.domainId),
-	);
+		draft.implementationInputMode === "GENERATED" ? draft.generationStrategyType : draft.implementationInputMode;
+	const missingPersistedDomain = Boolean(draft.domainId && !domainOptions.some((item) => item.id === draft.domainId));
 	const missingPersistedDefinition = Boolean(
 		draft.base &&
 			draft.dimensionDefinitionId &&
@@ -254,22 +244,6 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 						</select>
 					</label>
 					<label>
-						<span>业务分类</span>
-						<select
-							aria-label="业务分类"
-							disabled={Boolean(draft.base)}
-							onChange={(event) => chooseCategory(event.target.value)}
-							value={categoryCode}
-						>
-							<option value="">请选择业务分类</option>
-							{categoryRoots.map((item) => (
-								<option key={item.id} value={item.code}>
-									{item.name} · {item.code}
-								</option>
-							))}
-						</select>
-					</label>
-					<label>
 						<span className="required">数据域</span>
 						<select
 							aria-label="数据域"
@@ -290,8 +264,8 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 							) : null}
 						</select>
 						<ValidationMessage message={validationErrors.domainId} />
-						{!missingPersistedDomain && categoryCode && !domainOptions.length ? (
-							<small>该业务分类下暂无数据域，请先在数仓规划中创建数据域。</small>
+						{!missingPersistedDomain && !domainOptions.length ? (
+							<small>当前规划暂无数据域，请先在数仓规划中创建数据域。</small>
 						) : null}
 					</label>
 					<label>
@@ -388,9 +362,7 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 							value={draft.physicalName}
 						/>
 						<ValidationMessage message={validationErrors.physicalName} />
-						{draft.base && !draft.physicalName.trim() ? (
-							<small>历史草稿尚未保存物理表名，请补录后保存。</small>
-						) : null}
+						{draft.base && !draft.physicalName.trim() ? <small>历史草稿尚未保存物理表名，请补录后保存。</small> : null}
 					</label>
 					<label>
 						<span className="required">表中文名</span>
@@ -425,6 +397,78 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 	const { draft, context, validationErrors, onChange } = props;
 	const config = MODEL_KIND_CONFIG[draft.createKind];
 	const patch = (next: Partial<ModelSpecDraft>) => onChange({ ...draft, ...next });
+	const factMode = draft.createKind === "fact";
+	const [processMode, setProcessMode] = useState<PlanningBusinessProcessMode>("AUTO_SELECT_SINGLE");
+	const [processes, setProcesses] = useState<Sprint64BusinessProcess[]>([]);
+	const [processLoaded, setProcessLoaded] = useState(false);
+	const [processFailure, setProcessFailure] = useState("");
+	useEffect(() => {
+		if (!factMode) return;
+		let active = true;
+		void loadPlanningContextPolicy(draft.planId)
+			.then((contextPolicy) => {
+				if (active) setProcessMode(contextPolicy.policy.businessProcessMode);
+			})
+			.catch(() => {
+				if (active) setProcessFailure("规划参数读取失败，暂按唯一过程自动选择处理。");
+			});
+		return () => {
+			active = false;
+		};
+	}, [draft.planId, factMode]);
+	useEffect(() => {
+		if (!factMode || !draft.domainId) {
+			setProcesses([]);
+			setProcessLoaded(!factMode);
+			return;
+		}
+		let active = true;
+		setProcessLoaded(false);
+		setProcessFailure("");
+		void listBusinessProcessesApi(draft.domainId)
+			.then((items) => {
+				if (active) setProcesses(items);
+			})
+			.catch(() => {
+				if (active) {
+					setProcesses([]);
+					setProcessFailure("业务过程读取失败，请刷新后重试。");
+				}
+			})
+			.finally(() => {
+				if (active) setProcessLoaded(true);
+			});
+		return () => {
+			active = false;
+		};
+	}, [draft.domainId, factMode]);
+	const processBinding = useMemo(
+		() => resolveBusinessProcessBinding(processMode, draft.businessProcessId, processes),
+		[draft.businessProcessId, processMode, processes],
+	);
+	useEffect(() => {
+		if (!factMode || !processLoaded) return;
+		const currentIsValid = processBinding.processes.some((item) => item.id === draft.businessProcessId);
+		if (draft.businessProcessId && !currentIsValid) {
+			onChange({ ...draft, businessProcessId: "" });
+			return;
+		}
+		if (
+			!processBinding.showSelector &&
+			processBinding.selectedId &&
+			draft.businessProcessId !== processBinding.selectedId
+		) {
+			onChange({ ...draft, businessProcessId: processBinding.selectedId });
+		}
+	}, [
+		draft,
+		factMode,
+		onChange,
+		processBinding.processes,
+		processBinding.selectedId,
+		processBinding.showSelector,
+		processLoaded,
+	]);
 	const missingPersistedDomain = Boolean(
 		draft.base && draft.domainId && !context.domains.some((item) => item.id === draft.domainId),
 	);
@@ -436,16 +480,19 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 					<label>
 						<span className="required">数据域</span>
 						<select
+							aria-label="数据域"
 							disabled={Boolean(draft.base)}
-							onChange={(event) => patch({ domainId: event.target.value })}
+							onChange={(event) => patch({ domainId: event.target.value, businessProcessId: "" })}
 							value={draft.domainId}
 						>
 							<option value="">请选择数据域</option>
-							{context.domains.map((item) => (
-								<option key={item.id} value={item.id}>
-									{item.name} · {item.code}
-								</option>
-							))}
+							{context.domains
+								.filter((item) => Boolean(item.parentCode))
+								.map((item) => (
+									<option key={item.id} value={item.id}>
+										{item.name} · {item.code}
+									</option>
+								))}
 							{missingPersistedDomain ? (
 								<option disabled value={draft.domainId}>
 									已保存数据域 · {draft.domainId}
@@ -454,6 +501,29 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 						</select>
 						<ValidationMessage message={validationErrors.domainId} />
 					</label>
+					{factMode ? (
+						<label>
+							<span className="required">业务过程</span>
+							{processBinding.showSelector ? (
+								<select
+									aria-label="业务过程"
+									onChange={(event) => patch({ businessProcessId: event.target.value })}
+									value={draft.businessProcessId || ""}
+								>
+									<option value="">请选择业务过程</option>
+									{processBinding.processes.map((item) => (
+										<option key={item.id} value={item.id}>
+											{item.name} · {item.processId}
+										</option>
+									))}
+								</select>
+							) : (
+								<small>{processLoaded ? processBinding.message : "正在读取业务过程…"}</small>
+							)}
+							<ValidationMessage message={validationErrors.businessProcessId} />
+							{processFailure ? <ValidationMessage message={processFailure} /> : null}
+						</label>
+					) : null}
 					<label>
 						<span>模型类型</span>
 						<input disabled value={config.label} />
@@ -576,14 +646,9 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 					onOpen={() => onDialog("publish")}
 				/>
 			) : null}
-			{editorAccessMessage ? (
-				<output className="dmx-editor-access-note">
-					{editorAccessMessage}
-				</output>
-			) : null}
+			{editorAccessMessage ? <output className="dmx-editor-access-note">{editorAccessMessage}</output> : null}
 			<div className="dmx-editor-toolbar" role="toolbar">
-				<button
-					className="primary"
+				<Button
 					disabled={
 						!canMaintain ||
 						readOnly ||
@@ -592,6 +657,7 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 						(conceptDimension && draft.definitionBase?.status != null && draft.definitionBase.status !== "DRAFT")
 					}
 					onClick={onSave}
+					primary
 					title={
 						!canMaintain
 							? "当前账号无建模维护权限"
@@ -603,56 +669,54 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 										? "保存维度草稿"
 										: "保存模型草稿"
 					}
-					type="button"
 				>
 					<Save size={15} />
 					{saving ? "保存中…" : "保存"}
-				</button>
+				</Button>
 				{conceptDimension && draft.definitionBase?.status === "DRAFT" ? (
-					<button
+					<Button
 						disabled={!canMaintain || readOnly || saving}
 						onClick={onConfirmDimension}
 						title="确认后，该定义将成为维度表可绑定的当前定义"
-						type="button"
 					>
 						<CheckCircle2 size={15} />
 						确认定义
-					</button>
+					</Button>
 				) : null}
 				{conceptDimension ? null : (
 					<>
-						<button disabled={saving || !persisted} onClick={() => onDialog("gates")} type="button">
+						<Button disabled={saving || !persisted} onClick={() => onDialog("gates")}>
 							<ListChecks size={15} />
 							提交
-						</button>
-						<button disabled={saving} onClick={onRefresh} type="button">
+						</Button>
+						<Button disabled={saving} onClick={onRefresh}>
 							<RefreshCw size={15} />
 							刷新
-						</button>
-						<button disabled={saving || !persisted} onClick={() => onDialog("association")} type="button">
+						</Button>
+						<Button disabled={saving || !persisted} onClick={() => onDialog("association")}>
 							<Link2 size={15} />
 							关联关系
-						</button>
-						<button disabled={saving || !canWritePersisted} onClick={() => onDialog("publish")} type="button">
+						</Button>
+						<Button disabled={saving || !canWritePersisted} onClick={() => onDialog("publish")}>
 							<Upload size={15} />
 							发布
-						</button>
-						<button disabled={saving || !persisted} onClick={() => onDialog("logs")} type="button">
+						</Button>
+						<Button disabled={saving || !persisted} onClick={() => onDialog("logs")}>
 							<FileDown size={15} />
 							日志
-						</button>
-						<button disabled={saving || !persisted} onClick={() => onDialog("quality")} type="button">
+						</Button>
+						<Button disabled={saving || !persisted} onClick={() => onDialog("quality")}>
 							<ShieldCheck size={15} />
 							质量规则
-						</button>
-						<button disabled={saving || !canWritePersisted} onClick={() => onDialog("advanced")} type="button">
+						</Button>
+						<Button disabled={saving || !canWritePersisted} onClick={() => onDialog("advanced")}>
 							<Settings2 size={15} />
 							模型开发
-						</button>
-						<button disabled title="尚无模型导出服务端契约" type="button">
+						</Button>
+						<Button disabled title="尚无模型导出服务端契约">
 							<Import size={15} />
 							导出
-						</button>
+						</Button>
 					</>
 				)}
 			</div>

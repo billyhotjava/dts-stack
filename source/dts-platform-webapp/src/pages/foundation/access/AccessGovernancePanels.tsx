@@ -1,18 +1,4 @@
-import {
-	Alert,
-	Button,
-	Card,
-	Descriptions,
-	Input,
-	Modal,
-	message,
-	Select,
-	Space,
-	Switch,
-	Table,
-	Tag,
-	Typography,
-} from "antd";
+import { Alert, Button, Card, Descriptions, Input, Modal, message, Select, Space, Switch, Tag, Typography } from "antd";
 import type { ColumnsType, TablePaginationConfig } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -22,6 +8,7 @@ import {
 	ingestionTaskAPI,
 	type StagingErrorSummary,
 } from "@/api/ingestion";
+import { CompactTable } from "@/components/table";
 import { useRouter } from "@/routes/hooks";
 import { inferAccessKind } from "./accessPlanPayload";
 
@@ -149,10 +136,7 @@ export function AccessQualityPanel({
 	};
 
 	const businessColumns = useMemo(
-		() =>
-			Array.from(
-				new Set(stagingRows.flatMap((row) => Object.keys(row).filter((name) => !name.startsWith("_")))),
-			),
+		() => Array.from(new Set(stagingRows.flatMap((row) => Object.keys(row).filter((name) => !name.startsWith("_"))))),
 		[stagingRows],
 	);
 
@@ -164,7 +148,9 @@ export function AccessQualityPanel({
 			key: "_status",
 			fixed: "left",
 			width: 90,
-			render: (value) => <Tag color={String(value).toUpperCase() === "ERROR" ? "error" : "success"}>{String(value || "CLEAN")}</Tag>,
+			render: (value) => (
+				<Tag color={String(value).toUpperCase() === "ERROR" ? "error" : "success"}>{String(value || "CLEAN")}</Tag>
+			),
 		},
 		...businessColumns.map((name) => ({
 			title: name,
@@ -172,7 +158,8 @@ export function AccessQualityPanel({
 			key: name,
 			width: 180,
 			ellipsis: true,
-			render: (value: unknown) => (value == null ? "—" : typeof value === "object" ? JSON.stringify(value) : String(value)),
+			render: (value: unknown) =>
+				value == null ? "—" : typeof value === "object" ? JSON.stringify(value) : String(value),
 		})),
 		{
 			title: "问题",
@@ -266,21 +253,53 @@ export function AccessQualityPanel({
 			{kind === "file" ? (
 				<Card title="质量检测暂存区（可选）">
 					<Space wrap style={{ marginBottom: 16 }}>
-						<Button type="primary" disabled={!taskId || operation !== null} loading={operation === "parse"} onClick={() => void runOperation("parse")}>
+						<Button
+							type="primary"
+							disabled={!taskId || operation !== null}
+							loading={operation === "parse"}
+							onClick={() => void runOperation("parse")}
+						>
 							{hasStaging ? "重新解析文件" : "生成检测暂存区"}
 						</Button>
-						<Button disabled={!hasStaging || operation !== null} loading={operation === "check"} onClick={() => void runOperation("check")}>
+						<Button
+							disabled={!hasStaging || operation !== null}
+							loading={operation === "check"}
+							onClick={() => void runOperation("check")}
+						>
 							执行质量检测
 						</Button>
-						<Button disabled={!hasStaging || operation !== null} loading={operation === "recheck"} onClick={() => void runOperation("recheck")}>
+						<Button
+							disabled={!hasStaging || operation !== null}
+							loading={operation === "recheck"}
+							onClick={() => void runOperation("recheck")}
+						>
 							重新检查
 						</Button>
-						<Button danger disabled={!hasStaging || operation !== null} loading={operation === "drop"} onClick={() => Modal.confirm({ title: "清理预检暂存区？", content: "暂存修正和预检结果将一并清除，源文件制品不会删除。", okType: "danger", onOk: () => runOperation("drop") })}>
+						<Button
+							danger
+							disabled={!hasStaging || operation !== null}
+							loading={operation === "drop"}
+							onClick={() =>
+								Modal.confirm({
+									title: "清理预检暂存区？",
+									content: "暂存修正和预检结果将一并清除，源文件制品不会删除。",
+									okType: "danger",
+									onOk: () => runOperation("drop"),
+								})
+							}
+						>
 							清理暂存区
 						</Button>
 						<Space size={4}>
 							<Text type="secondary">仅看异常行</Text>
-							<Switch checked={errorsOnly} disabled={!hasStaging} onChange={(checked) => { setErrorsOnly(checked); setStagingPage((current) => ({ ...current, current: 1 })); }} />
+							<Switch
+								checked={errorsOnly}
+								disabled={!hasStaging}
+								onChange={(checked) => {
+									setErrorsOnly(checked);
+									setStagingPage((current) => ({ ...current, current: 1 }));
+								}}
+							/>
 						</Space>
 					</Space>
 					{hasStaging ? (
@@ -290,25 +309,54 @@ export function AccessQualityPanel({
 								<Descriptions.Item label="正常行">{stagingSummary?.cleanRows ?? "—"}</Descriptions.Item>
 								<Descriptions.Item label="异常行">{stagingSummary?.errorRows ?? "—"}</Descriptions.Item>
 							</Descriptions>
-							<Table<IngestionStagingRow>
+							<CompactTable<IngestionStagingRow>
 								rowKey={(row) => String(row._row_num)}
 								loading={stagingLoading}
 								dataSource={stagingRows}
 								columns={stagingColumns}
-								scroll={{ x: Math.max(780, businessColumns.length * 180 + 520) }}
-								pagination={{ ...stagingPage, showSizeChanger: true, showTotal: (total) => `共 ${total} 行` }}
-								onChange={(next: TablePaginationConfig) => setStagingPage((current) => ({ current: next.current || 1, pageSize: next.pageSize || current.pageSize, total: current.total }))}
+								pagination={{ ...stagingPage }}
+								onChange={(next: TablePaginationConfig) =>
+									setStagingPage((current) => ({
+										current: next.current || 1,
+										pageSize: next.pageSize || current.pageSize,
+										total: current.total,
+									}))
+								}
 							/>
 						</>
 					) : (
-						<Alert type="info" showIcon message="尚未生成质量检测暂存区" description="质量检测为可选项；如需检测，可解析文件并调用数据质量模块中已发布的规则。" />
+						<Alert
+							type="info"
+							showIcon
+							message="尚未生成质量检测暂存区"
+							description="质量检测为可选项；如需检测，可解析文件并调用数据质量模块中已发布的规则。"
+						/>
 					)}
 				</Card>
 			) : null}
-			<Modal title={`修正暂存行 #${editingRow?._row_num || ""}`} open={Boolean(editingRow)} confirmLoading={operation === "update"} onCancel={() => setEditingRow(undefined)} onOk={() => void submitCellUpdate()} okText="保存修正">
+			<Modal
+				title={`修正暂存行 #${editingRow?._row_num || ""}`}
+				open={Boolean(editingRow)}
+				confirmLoading={operation === "update"}
+				onCancel={() => setEditingRow(undefined)}
+				onOk={() => void submitCellUpdate()}
+				okText="保存修正"
+			>
 				<Space direction="vertical" style={{ width: "100%" }}>
-					<Select value={editingColumn} options={businessColumns.map((column) => ({ value: column, label: column }))} onChange={(column) => { setEditingColumn(column); setEditingValue(editingRow?.[column] == null ? "" : String(editingRow?.[column])); }} style={{ width: "100%" }} />
-					<Input.TextArea value={editingValue} onChange={(event) => setEditingValue(event.target.value)} autoSize={{ minRows: 3, maxRows: 8 }} />
+					<Select
+						value={editingColumn}
+						options={businessColumns.map((column) => ({ value: column, label: column }))}
+						onChange={(column) => {
+							setEditingColumn(column);
+							setEditingValue(editingRow?.[column] == null ? "" : String(editingRow?.[column]));
+						}}
+						style={{ width: "100%" }}
+					/>
+					<Input.TextArea
+						value={editingValue}
+						onChange={(event) => setEditingValue(event.target.value)}
+						autoSize={{ minRows: 3, maxRows: 8 }}
+					/>
 				</Space>
 			</Modal>
 		</div>

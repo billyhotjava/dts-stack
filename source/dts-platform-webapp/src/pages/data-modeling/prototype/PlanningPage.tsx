@@ -1,7 +1,8 @@
 import { Archive, Plus, RotateCw, Search } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { deleteBusinessProcessApi, type Sprint64BusinessProcess } from "@/api/sprint64GovernanceApi";
 import { deleteWarehouseLayer, type WarehouseLayerView } from "@/api/warehouseLayerApi";
+import { type CompactColumns, CompactTable } from "@/components/table";
 import { useArchitectureDictionaryWriteAccess } from "@/pages/data-architecture/useArchitectureDictionaryWriteAccess";
 import { useUserInfo } from "@/store/userStore";
 import type { DataModelingRoute } from "../types";
@@ -13,6 +14,7 @@ import {
 	SubjectDomainForm,
 	WarehouseLayerForm,
 } from "./PlanningEditors";
+import { PlanningPolicyForm } from "./PlanningPolicyForm";
 import { PlanningSidebar } from "./PlanningSidebar";
 import { Button, Drawer, PageHeader, RequestState, Status, Toast, useTransientMessage } from "./PrototypePrimitives";
 import {
@@ -45,6 +47,14 @@ const CREATABLE_VIEWS = new Set([
 ]);
 
 const PAGE_SIZE = 10;
+
+type ProjectionTableRow = {
+	key: string;
+	id: string;
+	cells: string[];
+	group?: string;
+	source?: unknown;
+};
 
 type PlanningPageProps = {
 	route: DataModelingRoute;
@@ -167,13 +177,13 @@ export function PlanningPage({
 	};
 
 	const deleteProcess = async (process: Sprint64BusinessProcess) => {
-		if (!window.confirm(`确认删除业务过程“${process.name}”？`)) return;
+		if (!window.confirm(`确认停用业务过程“${process.name}”？稳定标识和历史引用将继续保留。`)) return;
 		try {
 			await deleteBusinessProcessApi(process.domainId, process.processId);
-			show("业务过程已删除");
+			show("业务过程已停用");
 			await load();
 		} catch (error) {
-			show(normalizeModelingRequestFailure(error, "业务过程删除失败。").message);
+			show(normalizeModelingRequestFailure(error, "业务过程停用失败。").message);
 		}
 	};
 
@@ -188,44 +198,48 @@ export function PlanningPage({
 		}
 	};
 
-	const renderActions = (row: PlanningProjectionRow) => {
-		switch (route.view) {
-			case "business-domains":
-			case "business-categories":
-			case "domains":
-			case "marts":
-			case "subjects":
-				return <Button onClick={() => openRow(row)}>{canMaintain ? "编辑" : "查看"}</Button>;
-			case "processes": {
-				const process = row.source as Sprint64BusinessProcess;
-				return (
-					<div className="dmx-row-actions">
-						<Button onClick={() => openRow(row)}>{canMaintain ? "编辑" : "查看"}</Button>
-						<Button danger disabled={!canMaintain} onClick={() => void deleteProcess(process)}>
-							<Archive size={14} /> 删除
-						</Button>
-					</div>
-				);
-			}
-			case "layers": {
-				const layer = asWarehouseLayer(row.source);
-				return (
-					<div className="dmx-row-actions">
-						<Button onClick={() => openRow(row)}>{layer?.builtin || !canMaintain ? "查看" : "编辑"}</Button>
-						{layer?.deletable ? (
-							<Button danger disabled={!canMaintain} onClick={() => void deleteLayer(layer)}>
-								<Archive size={14} /> 删除
+	const renderActions = useCallback(
+		(row: PlanningProjectionRow) => {
+			switch (route.view) {
+				case "business-domains":
+				case "business-categories":
+				case "domains":
+				case "marts":
+				case "subjects":
+					return <Button onClick={() => openRow(row)}>{canMaintain ? "编辑" : "查看"}</Button>;
+				case "processes": {
+					const process = row.source as Sprint64BusinessProcess;
+					const retired = String(process.lifecycleStatus || "ACTIVE").toUpperCase() === "RETIRED";
+					return (
+						<div className="dmx-row-actions">
+							<Button onClick={() => openRow(row)}>{canMaintain ? "编辑" : "查看"}</Button>
+							<Button danger disabled={!canMaintain || retired} onClick={() => void deleteProcess(process)}>
+								<Archive size={14} /> {retired ? "已停用" : "停用"}
 							</Button>
-						) : (
-							<span className="dmx-capability-note">内置</span>
-						)}
-					</div>
-				);
+						</div>
+					);
+				}
+				case "layers": {
+					const layer = asWarehouseLayer(row.source);
+					return (
+						<div className="dmx-row-actions">
+							<Button onClick={() => openRow(row)}>{layer?.builtin || !canMaintain ? "查看" : "编辑"}</Button>
+							{layer?.deletable ? (
+								<Button danger disabled={!canMaintain} onClick={() => void deleteLayer(layer)}>
+									<Archive size={14} /> 删除
+								</Button>
+							) : (
+								<span className="dmx-capability-note">内置</span>
+							)}
+						</div>
+					);
+				}
+				default:
+					return null;
 			}
-			default:
-				return null;
-		}
-	};
+		},
+		[canMaintain, deleteLayer, deleteProcess, openRow, route.view],
+	);
 
 	const renderEditor = () => {
 		switch (route.view) {
@@ -264,6 +278,58 @@ export function PlanningPage({
 		}
 	};
 
+	const projectionTableRows = useMemo<ProjectionTableRow[]>(() => {
+		if (route.view !== "layers") {
+			return pageRows.map((row) => ({ key: row.id, id: row.id, cells: row.cells, source: row.source }));
+		}
+		const nodes: ProjectionTableRow[] = [];
+		let lastGroup = "";
+		for (const row of pageRows) {
+			const layer = asWarehouseLayer(row.source);
+			const group = layer ? LAYER_GROUP_LABEL[layer.layerGroup] || layer.layerGroup : "";
+			if (group !== lastGroup) {
+				nodes.push({ key: `group-${group}`, id: "", cells: [], group });
+				lastGroup = group;
+			}
+			nodes.push({ key: row.id, id: row.id, cells: row.cells, source: row.source });
+		}
+		return nodes;
+	}, [pageRows, route.view]);
+
+	const headerNames = projection?.headers || [];
+	const columns = useMemo<CompactColumns<ProjectionTableRow>>(() => {
+		const total = headerNames.length + (hasActions ? 1 : 0);
+		return [
+			...headerNames.map((header, index) => ({
+				title: header,
+				dataIndex: index,
+				onCell: (record: ProjectionTableRow) => (record.group ? { colSpan: index === 0 ? total : 0 } : {}),
+				render: (_: unknown, record: ProjectionTableRow) => {
+					if (record.group) return index === 0 ? record.group : null;
+					const cell = record.cells[index];
+					return ["已发布", "已确认", "启用"].includes(cell) ? (
+						<Status tone="success">{cell}</Status>
+					) : ["草稿", "候选"].includes(cell) ? (
+						<Status tone="warning">{cell}</Status>
+					) : (
+						cell
+					);
+				},
+			})),
+			...(hasActions
+				? [
+						{
+							title: "操作",
+							dataIndex: "actions",
+							onCell: (record: ProjectionTableRow) => (record.group ? { colSpan: 0 } : {}),
+							render: (_: unknown, row: ProjectionTableRow) =>
+								row.group ? null : renderActions(row as PlanningProjectionRow),
+						},
+					]
+				: []),
+		];
+	}, [headerNames, hasActions, renderActions]);
+
 	return (
 		<main className="dmx-page dmx-planning-layout">
 			<PlanningSidebar activeView={sidebarActiveView} surface={navigationSurface} />
@@ -271,10 +337,12 @@ export function PlanningPage({
 				<PageHeader
 					actions={
 						<>
-							<Button disabled={loading} onClick={() => void load()}>
-								<RotateCw size={15} />
-								刷新
-							</Button>
+							{route.view !== "system" ? (
+								<Button disabled={loading} onClick={() => void load()}>
+									<RotateCw size={15} />
+									刷新
+								</Button>
+							) : null}
 							{creatable && route.view === "business-domains" ? (
 								<>
 									<Button
@@ -303,7 +371,9 @@ export function PlanningPage({
 					title={route.title}
 					trail={navigationSurface === "architecture" ? "数据架构 / 平台全局架构" : "数据建模 / 数仓规划"}
 				/>
-				{loading ? (
+				{route.view === "system" ? (
+					<PlanningPolicyForm canMaintain={canMaintain} />
+				) : loading ? (
 					<RequestState description={`正在读取${route.title}权威数据。`} kind="loading" title="正在加载" />
 				) : failure ? (
 					<RequestState
@@ -330,36 +400,15 @@ export function PlanningPage({
 									</span>
 								</div>
 								<div className="dmx-table-scroll">
-									<table className="dmx-table dmx-table--catalog">
-										<thead>
-											<tr>
-												{projection.headers.map((header) => (
-													<th key={header}>{header}</th>
-												))}
-												{hasActions ? <th>操作</th> : null}
-											</tr>
-										</thead>
-										<tbody>
-											{route.view === "layers"
-												? renderGroupedLayerRows(pageRows, renderActions, activeId)
-												: pageRows.map((row) => (
-														<tr className={row.id === activeId ? "selected" : ""} key={row.id}>
-															{row.cells.map((cell, index) => (
-																<td key={`${row.id}-${index}`}>
-																	{["已发布", "已确认", "启用"].includes(cell) ? (
-																		<Status tone="success">{cell}</Status>
-																	) : ["草稿", "候选"].includes(cell) ? (
-																		<Status tone="warning">{cell}</Status>
-																	) : (
-																		cell
-																	)}
-																</td>
-															))}
-															{hasActions ? <td>{renderActions(row)}</td> : null}
-														</tr>
-													))}
-										</tbody>
-									</table>
+									<CompactTable<ProjectionTableRow>
+										columns={columns}
+										dataSource={projectionTableRows}
+										pagination={false}
+										rowClassName={(record) =>
+											record.group ? "dmx-table-group" : record.id === activeId ? "selected" : ""
+										}
+										rowKey="key"
+									/>
 								</div>
 								{visibleRows.length ? (
 									<nav aria-label={`${route.title}分页`} className="dmx-pagination">
@@ -405,42 +454,4 @@ export function PlanningPage({
 			<Toast message={message} />
 		</main>
 	);
-}
-
-function renderGroupedLayerRows(
-	rows: PlanningProjectionRow[],
-	renderActions: (row: PlanningProjectionRow) => ReactNode,
-	activeId = "",
-) {
-	const nodes: ReactNode[] = [];
-	let lastGroup = "";
-	for (const row of rows) {
-		const layer = asWarehouseLayer(row.source);
-		const group = layer ? LAYER_GROUP_LABEL[layer.layerGroup] || layer.layerGroup : "";
-		if (group !== lastGroup) {
-			nodes.push(
-				<tr className="dmx-table-group" key={`group-${group}`}>
-					<td colSpan={rows.length ? row.cells.length + 1 : 1}>{group}</td>
-				</tr>,
-			);
-			lastGroup = group;
-		}
-		nodes.push(
-			<tr className={row.id === activeId ? "selected" : ""} key={row.id}>
-				{row.cells.map((cell, index) => (
-					<td key={`${row.id}-${index}`}>
-						{["已发布", "已确认", "启用"].includes(cell) ? (
-							<Status tone="success">{cell}</Status>
-						) : ["草稿", "候选"].includes(cell) ? (
-							<Status tone="warning">{cell}</Status>
-						) : (
-							cell
-						)}
-					</td>
-				))}
-				<td>{renderActions(row)}</td>
-			</tr>,
-		);
-	}
-	return nodes;
 }

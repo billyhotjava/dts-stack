@@ -8,11 +8,12 @@ import {
 	type ModelWorkbenchCatalogPage,
 } from "@/api/modelSpecApi";
 import type { CatalogDomain } from "@/api/services/catalogDomainService";
+import { type CompactColumns, CompactTable } from "@/components/table";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
 import type { ModelSpecLayer, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { resolveMaterializationPresentation } from "./ModelMaterializationStatus";
 import { ModelWorkbenchCreateMenu } from "./ModelWorkbenchCreateMenu";
-import { RequestState, Status } from "./PrototypePrimitives";
+import { Button, RequestState, Status } from "./PrototypePrimitives";
 import type { ModelCreateKind } from "./services/modelWorkbenchService";
 import "./modeling-workbench.css";
 
@@ -309,6 +310,156 @@ export function ModelWorkbenchCatalogList({
 		});
 	};
 
+	const catalogColumns = useMemo<CompactColumns<CatalogRow>>(
+		() => [
+			{
+				title: "选择",
+				key: "select",
+				width: 60,
+				align: "center",
+				render: (_, row) => {
+					const model = row.model;
+					if (!model) return <span className="dmx-table-muted">—</span>;
+					const selected = selectedIds.has(model.id);
+					const selectable = Boolean(
+						canMaintain &&
+							model.compatibilityMode === "CANONICAL" &&
+							(!selectedPlanId || selectedPlanId === model.planId),
+					);
+					return (
+						<input
+							aria-label={`选择 ${row.name}`}
+							checked={selected}
+							disabled={!selectable || (!selected && selectedIds.size >= 100)}
+							onChange={() => toggleModel(model)}
+							type="checkbox"
+						/>
+					);
+				},
+			},
+			{ title: "对象名称", dataIndex: "name" },
+			{ title: "编码 / 表名", dataIndex: "code" },
+			{ title: "对象类型", dataIndex: "type" },
+			{
+				title: "数据域",
+				dataIndex: "domainId",
+				render: (value: string) => domainById.get(value) || "未归属",
+			},
+			{
+				title: "状态",
+				dataIndex: "status",
+				render: (value: string) => <Status tone={value === "DRAFT" ? "warning" : "info"}>{value}</Status>,
+			},
+			{
+				title: "版本",
+				dataIndex: "revision",
+				render: (value: number) => `r${value}`,
+			},
+			{
+				title: "物化状态",
+				key: "materialization",
+				render: (_, row) => {
+					if (!row.model) return "不适用";
+					const materialization = resolveMaterializationPresentation(
+						materializationByModel.get(row.model.id) || null,
+						row.model.revision,
+					);
+					return <Status tone={materialization.tone}>{materialization.label}</Status>;
+				},
+			},
+			{
+				title: "操作",
+				key: "actions",
+				width: 250,
+				render: (_, row) => (
+					<div className="dmx-row-actions">
+						<Button
+							className="dmx-table-action"
+							disabled={busy || !row.open}
+							onClick={row.open || undefined}
+							type="link"
+						>
+							{row.open ? (row.editable ? "编辑" : "查看") : "详情未加载"}
+						</Button>
+						{row.model ? (
+							<>
+								<Button
+									className="dmx-table-action"
+									disabled={busy}
+									onClick={() => onGoToGraphModel(row.model as ModelSpecView)}
+									type="link"
+								>
+									<GitBranch size={13} />
+									关系图
+								</Button>
+								<Button
+									className="dmx-table-action"
+									disabled={busy || !canMaintain}
+									onClick={() => onMaterialize([row.model as ModelSpecView])}
+									type="link"
+								>
+									{materializationByModel.has(row.model.id) ? "物化历史 / 再次物化" : "物化详情"}
+								</Button>
+								<Button
+									className="dmx-table-action"
+									disabled={busy || !canMaintain || row.model.compatibilityMode !== "CANONICAL"}
+									onClick={() => onRemoveModel(row.model as ModelSpecView)}
+									type="link"
+								>
+									删除
+								</Button>
+							</>
+						) : row.dimension ? (
+							<>
+								<Button
+									className="dmx-table-action"
+									disabled={busy}
+									onClick={() => onGoToGraphDimension(row.dimension as DimensionDefinitionView)}
+									type="link"
+								>
+									<GitBranch size={13} />
+									关系图
+								</Button>
+								<Button
+									className="dmx-table-action"
+									disabled={busy || !canMaintain}
+									onClick={() => onCloneDimension(row.dimension as DimensionDefinitionView)}
+									type="link"
+								>
+									克隆
+								</Button>
+								<Button
+									className="dmx-table-action"
+									disabled={busy || !canMaintain}
+									onClick={() => onRemoveDimension(row.dimension as DimensionDefinitionView)}
+									type="link"
+								>
+									{row.dimension.status === "DRAFT" ? "删除" : "退役"}
+								</Button>
+							</>
+						) : null}
+					</div>
+				),
+			},
+		],
+		[
+			busy,
+			canMaintain,
+			domainById,
+			materializationByModel,
+			onCloneDimension,
+			onGoToGraphDimension,
+			onGoToGraphModel,
+			onMaterialize,
+			onRemoveDimension,
+			onRemoveModel,
+			selectedIds,
+			selectedPlanId,
+			toggleCurrentPage,
+			toggleModel,
+		],
+	);
+
 	return (
 		<section className="dmx-model-list-workspace" aria-label="模型列表管理">
 			<header>
@@ -317,28 +468,23 @@ export function ModelWorkbenchCatalogList({
 					<p>通过筛选和分页选择模型；详情进入同一编辑器，勾选只用于批量交付。</p>
 				</div>
 				<div className="dmx-model-list-header-actions">
-					<button
-						disabled={busy || catalogLoading}
-						onClick={onRefresh}
-						type="button"
-					>
+					<Button disabled={busy || catalogLoading} onClick={onRefresh}>
 						<RefreshCw size={15} />
 						刷新
-					</button>
-					<button disabled={busy} onClick={onImport} type="button">
+					</Button>
+					<Button disabled={busy} onClick={onImport}>
 						<Import size={15} />
 						逆向建模
-					</button>
-					<button
-						className="primary"
+					</Button>
+					<Button
 						disabled={busy || !canMaintain}
 						onClick={() => setCreateOpen((open) => !open)}
+						primary
 						title={canMaintain ? "新建模型" : "当前账号无建模维护权限"}
-						type="button"
 					>
 						<Plus size={15} />
 						新建模型
-					</button>
+					</Button>
 				</div>
 			</header>
 			{createOpen ? (
@@ -366,19 +512,14 @@ export function ModelWorkbenchCatalogList({
 					<span>
 						共 {totalElements} 条，每页 {PAGE_SIZE} 条；已选 {selectedModels.length} 个模型
 					</span>
-					{selectedModels.length ? (
-						<button onClick={() => setSelectedIds(new Set())} type="button">
-							清空已选
-						</button>
-					) : null}
-					<button
-						className="primary"
+					{selectedModels.length ? <Button onClick={() => setSelectedIds(new Set())}>清空已选</Button> : null}
+					<Button
 						disabled={!canMaintain || !selectedModels.length}
 						onClick={() => onMaterialize(selectedModels)}
-						type="button"
+						primary
 					>
 						生成物化候选（{selectedModels.length}）
-					</button>
+					</Button>
 				</div>
 			</div>
 			<fieldset className="dmx-model-list-filters" aria-label="模型组合筛选">
@@ -434,9 +575,9 @@ export function ModelWorkbenchCatalogList({
 						</option>
 					))}
 				</select>
-				<button disabled={!pageSelectableModels.length} onClick={toggleCurrentPage} type="button">
+				<Button disabled={!pageSelectableModels.length} onClick={toggleCurrentPage}>
 					{allPageModelsSelected ? "取消选择当前页" : "选择当前页"}
-				</button>
+				</Button>
 			</fieldset>
 			{compatibilityFallback ? (
 				<output className="dmx-model-list-feedback">
@@ -452,162 +593,20 @@ export function ModelWorkbenchCatalogList({
 			{catalogLoading && !compatibilityFallback ? (
 				<RequestState description="正在按当前条件读取模型。" kind="loading" title="加载模型列表" />
 			) : pageRows.length ? (
-				<>
-					<div className="dmx-table-scroll dmx-model-list-table">
-						<table className="dmx-table">
-							<thead>
-								<tr>
-									<th>选择</th>
-									<th>对象名称</th>
-									<th>编码 / 表名</th>
-									<th>对象类型</th>
-									<th>数据域</th>
-									<th>状态</th>
-									<th>版本</th>
-									<th>物化状态</th>
-									<th>操作</th>
-								</tr>
-							</thead>
-							<tbody>
-								{pageRows.map((row) => {
-									const selected = Boolean(row.model && selectedIds.has(row.model.id));
-									const selectable = Boolean(
-										row.model &&
-											canMaintain &&
-											row.model.compatibilityMode === "CANONICAL" &&
-											(!selectedPlanId || selectedPlanId === row.model.planId),
-									);
-									const materialization = row.model
-										? resolveMaterializationPresentation(
-												materializationByModel.get(row.model.id) || null,
-												row.model.revision,
-											)
-										: null;
-									return (
-										<tr className={selected ? "selected" : ""} key={`${row.objectType}-${row.id}`}>
-											<td>
-												{row.model ? (
-													<input
-														aria-label={`选择 ${row.name}`}
-														checked={selected}
-														disabled={!selectable || (!selected && selectedIds.size >= 100)}
-														onChange={() => toggleModel(row.model as ModelSpecView)}
-														type="checkbox"
-													/>
-												) : (
-													"—"
-												)}
-											</td>
-											<td>{row.name}</td>
-											<td>{row.code}</td>
-											<td>{row.type}</td>
-											<td>{domainById.get(row.domainId) || "未归属"}</td>
-											<td>
-												<Status tone={row.status === "DRAFT" ? "warning" : "info"}>{row.status}</Status>
-											</td>
-											<td>r{row.revision}</td>
-											<td>
-												{materialization ? (
-													<Status tone={materialization.tone}>{materialization.label}</Status>
-												) : (
-													"不适用"
-												)}
-											</td>
-											<td>
-												<div className="dmx-row-actions">
-													<button
-														className="dmx-table-action"
-														disabled={busy || !row.open}
-														onClick={row.open || undefined}
-														type="button"
-													>
-														{row.open ? (row.editable ? "编辑" : "查看") : "详情未加载"}
-													</button>
-													{row.model ? (
-														<>
-															<button
-																className="dmx-table-action"
-																disabled={busy}
-																onClick={() => onGoToGraphModel(row.model as ModelSpecView)}
-																type="button"
-															>
-																<GitBranch size={13} />
-																关系图
-															</button>
-															<button
-																className="dmx-table-action"
-																disabled={busy || !canMaintain}
-																onClick={() => onMaterialize([row.model as ModelSpecView])}
-																type="button"
-															>
-																{materialization ? "物化历史 / 再次物化" : "物化详情"}
-															</button>
-															<button
-																className="dmx-table-action"
-																disabled={busy || !canMaintain || row.model.compatibilityMode !== "CANONICAL"}
-																onClick={() => onRemoveModel(row.model as ModelSpecView)}
-																type="button"
-															>
-																删除
-															</button>
-														</>
-													) : row.dimension ? (
-														<>
-															<button
-																className="dmx-table-action"
-																disabled={busy}
-																onClick={() => onGoToGraphDimension(row.dimension as DimensionDefinitionView)}
-																type="button"
-															>
-																<GitBranch size={13} />
-																关系图
-															</button>
-															<button
-																className="dmx-table-action"
-																disabled={busy || !canMaintain}
-																onClick={() => onCloneDimension(row.dimension as DimensionDefinitionView)}
-																type="button"
-															>
-																克隆
-															</button>
-															<button
-																className="dmx-table-action"
-																disabled={busy || !canMaintain}
-																onClick={() => onRemoveDimension(row.dimension as DimensionDefinitionView)}
-																type="button"
-															>
-																{row.dimension.status === "DRAFT" ? "删除" : "退役"}
-															</button>
-														</>
-													) : null}
-												</div>
-											</td>
-										</tr>
-									);
-								})}
-							</tbody>
-						</table>
-					</div>
-					<nav aria-label="模型列表分页" className="dmx-pagination dmx-model-list-pagination">
-						<button
-							disabled={currentPage <= 1}
-							onClick={() => setPage((value) => Math.max(1, value - 1))}
-							type="button"
-						>
-							上一页
-						</button>
-						<span>
-							第 {currentPage} / {pageCount} 页
-						</span>
-						<button
-							disabled={currentPage >= pageCount}
-							onClick={() => setPage((value) => Math.min(pageCount, value + 1))}
-							type="button"
-						>
-							下一页
-						</button>
-					</nav>
-				</>
+				<CompactTable<CatalogRow>
+					className="dmx-model-list-table"
+					columns={catalogColumns}
+					dataSource={pageRows}
+					pagination={{
+						current: currentPage,
+						pageSize: PAGE_SIZE,
+						total: totalElements,
+						showSizeChanger: false,
+						onChange: (next) => setPage(next),
+					}}
+					rowClassName={(row) => (row.model && selectedIds.has(row.model.id) ? "selected" : "")}
+					rowKey={(row) => `${row.objectType}-${row.id}`}
+				/>
 			) : (
 				<RequestState description="请调整搜索关键词后重试。" kind="empty" title="没有匹配模型" />
 			)}

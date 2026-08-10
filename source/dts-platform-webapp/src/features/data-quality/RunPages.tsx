@@ -1,10 +1,11 @@
 import { ReloadOutlined, SearchOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Descriptions, Input, Progress, Select, Space, Table, Tag } from "antd";
+import { Alert, Button, Card, Descriptions, Input, Progress, Select, Space, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
 import { getQualityRun, listFailingRows, listQualityRules, listQualityRuns } from "@/api/platformApi";
+import { CompactTable } from "@/components/table";
 import { formatTime } from "@/utils/textUtils";
 import { QualityEmpty, QualityMetric, QualityPageHeading, QualityStatus, UnavailableCapability } from "./QualityShared";
 import { qualityPath } from "./qualityRoutes";
@@ -129,14 +130,12 @@ export function RunListPage() {
 					/>
 				</Space>
 			</Card>
-			<Table
+			<CompactTable
 				rowKey="id"
 				loading={loading}
 				columns={columns}
 				dataSource={filtered}
-				scroll={{ x: 1200 }}
-				pagination={{ pageSize: 12, showSizeChanger: true }}
-				size="small"
+				pagination={{ pageSize: 10 }}
 			/>
 		</div>
 	);
@@ -287,13 +286,11 @@ export function RunDetailPage() {
 				</Space>
 			</Card>
 			<Card title={`失败样本（${failingRows.length}）`}>
-				<Table
+				<CompactTable
 					rowKey={(row, index) => String(row.id || row.rowId || index)}
 					columns={sampleColumns}
 					dataSource={failingRows}
-					scroll={{ x: "max-content" }}
 					pagination={{ pageSize: 20 }}
-					size="small"
 				/>
 			</Card>
 		</div>

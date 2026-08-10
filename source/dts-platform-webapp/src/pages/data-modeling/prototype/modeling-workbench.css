@@ -10,11 +10,6 @@
 	flex-wrap: wrap;
 }
 
-.dmx-workbench-editor .dmx-editor-toolbar > button {
-	min-width: 84px;
-	justify-content: center;
-}
-
 .dmx-workbench-editor__basic-grid {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -175,23 +170,6 @@
 	font-size: 13px;
 }
 
-.dmx-model-list-workspace button,
-.dmx-model-list-toolbar label {
-	display: inline-flex;
-	align-items: center;
-	gap: 7px;
-}
-
-.dmx-model-list-workspace button {
-	min-height: 32px;
-	padding: 5px 11px;
-	border: 1px solid var(--dmx-border);
-	border-radius: 3px;
-	background: var(--dmx-surface);
-	color: var(--dmx-ink);
-	cursor: pointer;
-}
-
 .dmx-model-list-toolbar {
 	display: flex;
 	align-items: center;
@@ -201,6 +179,9 @@
 }
 
 .dmx-model-list-toolbar label {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
 	width: min(520px, 100%);
 	padding: 0 10px;
 	border: 1px solid var(--dmx-border);
@@ -272,19 +253,6 @@
 	overflow-wrap: anywhere;
 }
 
-.dmx-model-list-toolbar__actions button.primary,
-.dmx-model-list-header-actions button.primary {
-	border-color: var(--dmx-blue);
-	background: var(--dmx-blue);
-	color: #fff;
-}
-
-.dmx-model-list-toolbar__actions button:disabled,
-.dmx-model-list-header-actions button:disabled {
-	cursor: not-allowed;
-	opacity: 0.55;
-}
-
 .dmx-model-list-table tr.selected {
 	background: #f2f6ff;
 }
@@ -300,29 +268,29 @@
 	overflow: auto;
 }
 
-.dmx-materialization-evidence table {
-	min-width: 760px;
-}
-
 .dmx-model-list-table {
 	margin: 0 20px 20px;
-}
-
-.dmx-model-list-pagination {
-	padding: 0 20px 18px;
-}
-
-.dmx-model-list-table table {
-	min-width: 1180px;
 }
 
 .dmx-model-list-table .dmx-row-actions {
 	flex-wrap: wrap;
 }
 
-.dmx-model-list-table .dmx-table-action {
-	border-color: transparent;
-	color: var(--dmx-blue);
+.dmx-field-editor-table .ant-table-tbody td {
+	vertical-align: middle;
+}
+
+.dmx-field-editor-table .ant-table-tbody input:not([type="checkbox"]),
+.dmx-field-editor-table .ant-table-tbody select {
+	width: 100%;
+	min-height: 28px;
+	padding: 2px 6px;
+	border: 1px solid #cdd5df;
+	border-radius: 3px;
+	background: #fff;
+	color: var(--dmx-ink);
+	font: inherit;
+	font-size: 13px;
 }
 
 @media (max-width: 900px) {

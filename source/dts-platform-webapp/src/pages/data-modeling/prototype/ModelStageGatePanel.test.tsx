@@ -2,9 +2,27 @@
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { ModelSpecStageGate } from "@/api/modelSpecApi";
 import { ModelStageGatePanel } from "./ModelStageGatePanel";
+
+beforeAll(() => {
+	if (!window.matchMedia) {
+		Object.defineProperty(window, "matchMedia", {
+			writable: true,
+			value: (query: string) => ({
+				matches: false,
+				media: query,
+				onchange: null,
+				addListener: () => {},
+				removeListener: () => {},
+				addEventListener: () => {},
+				removeEventListener: () => {},
+				dispatchEvent: () => false,
+			}),
+		});
+	}
+});
 
 const gates: ModelSpecStageGate[] = [
 	{
@@ -67,7 +85,7 @@ describe("ModelStageGatePanel", () => {
 	it("treats a ready DESIGNED gate as a successful submit check without showing future release blockers", async () => {
 		await act(async () => root.render(<ModelStageGatePanel gates={gates} targetStage="DESIGNED" />));
 
-		const rows = container.querySelectorAll("tbody tr");
+		const rows = container.querySelectorAll("tbody tr.ant-table-row");
 		expect(rows).toHaveLength(1);
 		expect(rows[0]?.textContent).toContain("DESIGNED");
 		expect(rows[0]?.textContent).toContain("READY");
@@ -78,7 +96,7 @@ describe("ModelStageGatePanel", () => {
 	it("keeps release evidence blockers visible in the release gate view", async () => {
 		await act(async () => root.render(<ModelStageGatePanel gates={gates} targetStage="RELEASE_READY" />));
 
-		const rows = container.querySelectorAll("tbody tr");
+		const rows = container.querySelectorAll("tbody tr.ant-table-row");
 		expect(rows).toHaveLength(1);
 		expect(rows[0]?.textContent).toContain("RELEASE_READY");
 		expect(rows[0]?.textContent).toContain("MODEL_SPEC_PERMISSION_EVIDENCE_STALE");

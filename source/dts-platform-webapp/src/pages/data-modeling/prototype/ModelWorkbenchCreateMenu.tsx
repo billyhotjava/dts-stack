@@ -1,6 +1,7 @@
 import { Search } from "lucide-react";
 import { useState } from "react";
 import type { CatalogDomain } from "@/api/services/catalogDomainService";
+import { Button } from "./PrototypePrimitives";
 import type { ModelCreateKind } from "./services/modelWorkbenchService";
 
 const LOGICAL_CREATE_ENTRIES: Array<{
@@ -56,25 +57,20 @@ export function ModelWorkbenchCreateMenu({ categoryRoots, saving, onCreate }: Mo
 			</div>
 			<strong>概念模型</strong>
 			{visible("创建维度") ? (
-				<button disabled={saving} onClick={() => onCreate("dimension", category)} type="button">
+				<Button disabled={saving} onClick={() => onCreate("dimension", category)}>
 					创建维度
-				</button>
+				</Button>
 			) : null}
 			<strong>逻辑模型</strong>
 			{LOGICAL_CREATE_ENTRIES.filter((entry) => visible(entry.label)).map((entry) =>
 				entry.disabled ? (
-					<button disabled key={entry.label} title={entry.title} type="button">
+					<Button disabled key={entry.label} title={entry.title}>
 						{entry.label}
-					</button>
+					</Button>
 				) : (
-					<button
-						disabled={saving}
-						key={entry.label}
-						onClick={() => entry.kind && onCreate(entry.kind, category)}
-						type="button"
-					>
+					<Button disabled={saving} key={entry.label} onClick={() => entry.kind && onCreate(entry.kind, category)}>
 						{entry.label}
-					</button>
+					</Button>
 				),
 			)}
 		</div>

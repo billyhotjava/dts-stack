@@ -1,5 +1,6 @@
+import { Button as AntdButton } from "antd";
 import { AlertTriangle, CheckCircle2, LoaderCircle, LockKeyhole, X } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type ButtonHTMLAttributes, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
 export function PageHeader({
 	title,
@@ -32,6 +33,8 @@ export function Button({
 	disabled = false,
 	title,
 	className = "",
+	type,
+	...rest
 }: {
 	children: ReactNode;
 	primary?: boolean;
@@ -40,18 +43,20 @@ export function Button({
 	disabled?: boolean;
 	title?: string;
 	className?: string;
-}) {
-	const tone = primary ? " dmx-button--primary" : danger ? " dmx-button--danger" : "";
+	type?: "default" | "primary" | "link" | "text" | "dashed";
+} & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type" | "color">) {
 	return (
-		<button
-			className={`dmx-button${tone}${className ? ` ${className}` : ""}`}
+		<AntdButton
+			className={className || undefined}
 			disabled={disabled}
+			danger={danger}
 			onClick={onClick}
 			title={title}
-			type="button"
+			type={primary ? "primary" : (type ?? "default")}
+			{...rest}
 		>
 			{children}
-		</button>
+		</AntdButton>
 	);
 }
 

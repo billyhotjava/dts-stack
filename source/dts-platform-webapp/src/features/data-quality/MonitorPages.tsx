@@ -1,18 +1,5 @@
 import { DeleteOutlined, EditOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
-import {
-	Alert,
-	Button,
-	Card,
-	Descriptions,
-	Form,
-	Input,
-	InputNumber,
-	Popconfirm,
-	Select,
-	Space,
-	Switch,
-	Table,
-} from "antd";
+import { Alert, Button, Card, Descriptions, Form, Input, InputNumber, Popconfirm, Select, Space, Switch } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
@@ -27,6 +14,7 @@ import {
 	triggerQualityTask,
 	updateQualityTask,
 } from "@/api/platformApi";
+import { CompactTable } from "@/components/table";
 import { formatTime } from "@/utils/textUtils";
 import {
 	ManagePermissionHint,
@@ -200,15 +188,7 @@ export function MonitorListPage() {
 				]}
 			/>
 			<UnavailableCapability capability="quality-subscription" title="监控订阅暂未开放" />
-			<Table
-				rowKey="id"
-				loading={loading}
-				columns={columns}
-				dataSource={tasks}
-				scroll={{ x: 1100 }}
-				pagination={{ pageSize: 10 }}
-				size="small"
-			/>
+			<CompactTable rowKey="id" loading={loading} columns={columns} dataSource={tasks} pagination={{ pageSize: 10 }} />
 		</div>
 	);
 }
@@ -491,11 +471,10 @@ export function MonitorDetailPage() {
 				</Descriptions>
 			</Card>
 			<Card title={visibleTask?.ruleId ? "该规则调度运行" : "该资产全部调度运行"}>
-				<Table
+				<CompactTable
 					rowKey="id"
 					dataSource={visibleRuns}
 					pagination={false}
-					size="small"
 					columns={[
 						{ title: "运行 ID", dataIndex: "id", ellipsis: true },
 						{ title: "状态", dataIndex: "status", width: 110, render: (value) => <QualityStatus status={value} /> },

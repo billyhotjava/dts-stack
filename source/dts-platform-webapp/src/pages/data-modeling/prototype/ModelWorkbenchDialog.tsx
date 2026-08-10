@@ -25,6 +25,7 @@ import {
 	type ModelSpecDependencyGraph,
 	type ModelSpecStageGate,
 } from "@/api/modelSpecApi";
+import { type CompactColumns, CompactTable } from "@/components/table";
 import type {
 	ModelRepresentationView,
 	PhysicalPreviewReference,
@@ -150,38 +151,41 @@ function DialogContent({
 	if (!payload) return <RequestState description="服务端未返回该能力的数据。" kind="empty" title="暂无数据" />;
 	if (dialog === "association" && payload.dependencies) {
 		const graph = payload.dependencies;
+		const dependencyColumns: CompactColumns<ModelSpecDependencyGraph["edges"][number]> = [
+			{
+				title: "上游模型",
+				key: "upstream",
+				render: (_, edge) =>
+					graph.nodes.find((node) => node.modelSpecId === edge.toModelSpecId)?.name || edge.toModelSpecId,
+			},
+			{
+				title: "固定版本",
+				dataIndex: "pinnedRevision",
+				render: (value: number) => `r${value}`,
+			},
+			{
+				title: "当前版本",
+				dataIndex: "currentRevision",
+				render: (value: number | null) => (value ? `r${value}` : "—"),
+			},
+			{
+				title: "状态",
+				dataIndex: "state",
+				render: (value: string) => <Status tone={value === "CURRENT" ? "success" : "warning"}>{value}</Status>,
+			},
+		];
 		return (
 			<>
 				<p className="dmx-capability-note">关联关系来自当前模型的固定版本依赖，不在客户端推断。</p>
-				<div className="dmx-table-scroll">
-					<table className="dmx-table">
-						<thead>
-							<tr>
-								<th>上游模型</th>
-								<th>固定版本</th>
-								<th>当前版本</th>
-								<th>状态</th>
-							</tr>
-						</thead>
-						<tbody>
-							{graph.edges.map((edge) => (
-								<tr key={`${edge.fromModelSpecId}-${edge.toModelSpecId}`}>
-									<td>
-										{graph.nodes.find((node) => node.modelSpecId === edge.toModelSpecId)?.name || edge.toModelSpecId}
-									</td>
-									<td>r{edge.pinnedRevision}</td>
-									<td>{edge.currentRevision ? `r${edge.currentRevision}` : "—"}</td>
-									<td>
-										<Status tone={edge.state === "CURRENT" ? "success" : "warning"}>{edge.state}</Status>
-									</td>
-								</tr>
-							))}
-						</tbody>
-					</table>
-				</div>
 				{!graph.edges.length ? (
 					<RequestState description="当前模型没有固定上游模型依赖。" kind="empty" title="暂无关联" />
 				) : null}
+				<CompactTable<ModelSpecDependencyGraph["edges"][number]>
+					columns={dependencyColumns}
+					dataSource={graph.edges}
+					pagination={false}
+					rowKey={(edge) => `${edge.fromModelSpecId}-${edge.toModelSpecId}`}
+				/>
 			</>
 		);
 	}
@@ -194,6 +198,30 @@ function DialogContent({
 			dialog === "releases"
 				? payload.lifecycle.events.filter((event) => event.eventType === "RELEASE" || event.eventType === "ROLLBACK")
 				: payload.lifecycle.events;
+		const lifecycleColumns: CompactColumns<ModelLifecycleTimeline["events"][number]> = [
+			{ title: "事件", dataIndex: "eventType" },
+			{
+				title: "模型版本",
+				dataIndex: "revision",
+				render: (value: number) => `r${value}`,
+			},
+			{
+				title: "状态",
+				dataIndex: "status",
+				render: (value: string) => <Status tone={value.includes("FAIL") ? "danger" : "info"}>{value}</Status>,
+			},
+			{
+				title: "操作人",
+				dataIndex: "actorId",
+				render: (value: string | null) => value || "—",
+			},
+			{ title: "时间", dataIndex: "createdAt" },
+			{
+				title: "外部引用",
+				dataIndex: "externalRef",
+				render: (value: string | null) => value || "—",
+			},
+		];
 		return (
 			<>
 				<p className="dmx-capability-note">
@@ -201,37 +229,15 @@ function DialogContent({
 						? "当前接口提供生命周期事件和制品修订证据，不伪造完整版本清单。"
 						: "记录来自模型生命周期审计事实。"}
 				</p>
-				<div className="dmx-table-scroll">
-					<table className="dmx-table">
-						<thead>
-							<tr>
-								<th>事件</th>
-								<th>模型版本</th>
-								<th>状态</th>
-								<th>操作人</th>
-								<th>时间</th>
-								<th>外部引用</th>
-							</tr>
-						</thead>
-						<tbody>
-							{events.map((event) => (
-								<tr key={event.id}>
-									<td>{event.eventType}</td>
-									<td>r{event.revision}</td>
-									<td>
-										<Status tone={event.status.includes("FAIL") ? "danger" : "info"}>{event.status}</Status>
-									</td>
-									<td>{event.actorId || "—"}</td>
-									<td>{event.createdAt}</td>
-									<td>{event.externalRef || "—"}</td>
-								</tr>
-							))}
-						</tbody>
-					</table>
-				</div>
 				{!events.length ? (
 					<RequestState description="当前没有符合条件的生命周期记录。" kind="empty" title="暂无记录" />
 				) : null}
+				<CompactTable<ModelLifecycleTimeline["events"][number]>
+					columns={lifecycleColumns}
+					dataSource={events}
+					pagination={false}
+					rowKey="id"
+				/>
 				{dialog === "versions" && payload.lifecycle.artifacts.length ? (
 					<ModelLifecycleArtifactsTable artifacts={payload.lifecycle.artifacts} />
 				) : null}
@@ -275,7 +281,11 @@ function AdvancedDbtDialog({
 		setBusy("load");
 		void getModelLifecycle(model.id)
 			.then(({ implementation }) =>
-				getModelRepresentation(model.id, { modelRevision: model.revision, implementationRevision: implementation?.implementationRevision, representationScope: "TECHNICAL" }),
+				getModelRepresentation(model.id, {
+					modelRevision: model.revision,
+					implementationRevision: implementation?.implementationRevision,
+					representationScope: "TECHNICAL",
+				}),
 			)
 			.then((value) => {
 				if (active) setRepresentation(value);
@@ -491,14 +501,14 @@ function AdvancedDbtDialog({
 					<aside>
 						<strong>草稿文件</strong>
 						{files.map((file) => (
-							<button
+							<Button
 								className={selectedPath === file.path ? "active" : ""}
 								key={file.path}
 								onClick={() => setSelectedPath(file.path)}
-								type="button"
+								type="text"
 							>
 								{file.path}
-							</button>
+							</Button>
 						))}
 						<div>
 							<input
@@ -683,6 +693,18 @@ function PhysicalPreviewDialog({
 		rowOccurrences.set(signature, occurrence + 1);
 		return { key: `${signature}\u001f${occurrence}`, row };
 	});
+	const previewColumns: CompactColumns<(typeof previewRows)[number]> = columns.map((column) => ({
+		title: (
+			<>
+				{column.name}
+				<small>
+					{column.dataType} · {column.policy}
+				</small>
+			</>
+		),
+		key: column.name,
+		render: (_, { row }) => String(row[column.name] ?? ""),
+	}));
 	return (
 		<Modal
 			footer={
@@ -766,31 +788,12 @@ function PhysicalPreviewDialog({
 									，拒绝 {preview.maskingSummary.deniedColumnCount}
 								</dd>
 							</dl>
-							<div className="dmx-table-scroll">
-								<table className="dmx-table">
-									<thead>
-										<tr>
-											{columns.map((column) => (
-												<th key={column.name}>
-													{column.name}
-													<small>
-														{column.dataType} · {column.policy}
-													</small>
-												</th>
-											))}
-										</tr>
-									</thead>
-									<tbody>
-										{previewRows.map(({ key, row }) => (
-											<tr key={key}>
-												{columns.map((column) => (
-													<td key={column.name}>{String(row[column.name] ?? "")}</td>
-												))}
-											</tr>
-										))}
-									</tbody>
-								</table>
-							</div>
+							<CompactTable<(typeof previewRows)[number]>
+								columns={previewColumns}
+								dataSource={previewRows}
+								pagination={false}
+								rowKey="key"
+							/>
 						</>
 					) : null}
 				</>

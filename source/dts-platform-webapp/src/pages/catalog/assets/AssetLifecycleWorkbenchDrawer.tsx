@@ -1,34 +1,21 @@
-import {
-	Alert,
-	Button,
-	Descriptions,
-	Drawer,
-	Input,
-	message,
-	Modal,
-	Space,
-	Table,
-	Tabs,
-	Tag,
-	Typography,
-} from "antd";
+import { Alert, Button, Descriptions, Drawer, Input, Modal, message, Space, Tabs, Tag, Typography } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+	type AssetGovernanceWorkspace,
 	applyClassificationMigrationBatch,
 	approveCatalogLifecycleAction,
-	type AssetGovernanceWorkspace,
+	type ClassificationFactView,
 	type ClassificationMigrationItem,
 	type ClassificationMigrationReconciliation,
 	type ClassificationMigrationRun,
 	type ClassificationWriteFreeze,
-	type ClassificationFactView,
 	createClassificationMigrationDryRun,
 	freezeLegacyClassificationWrites,
+	type GovernanceIssueView,
 	getCatalogAssetGovernanceWorkspace,
 	getCatalogGovernanceIssues,
 	getCatalogLifecycleMetrics,
 	getClassificationMigrationRun,
-	type GovernanceIssueView,
 	type LifecycleActionView,
 	type LifecycleMetrics,
 	listClassificationMigrationItems,
@@ -40,6 +27,7 @@ import {
 	retryCatalogLifecycleDestruction,
 	submitCatalogLifecycleAction,
 } from "@/api/platformApi";
+import { CompactTable } from "@/components/table";
 import { useRouter } from "@/routes/hooks";
 import type { AssetRow } from "./assetPageShared";
 import { classificationText, formatTime } from "./assetPageShared";
@@ -153,13 +141,7 @@ const promptReason = (title: string, warning?: string) =>
 		});
 	});
 
-export function AssetLifecycleWorkbenchDrawer({
-	open,
-	asset,
-	classificationFact,
-	onClose,
-	onChanged,
-}: Props) {
+export function AssetLifecycleWorkbenchDrawer({ open, asset, classificationFact, onClose, onChanged }: Props) {
 	const router = useRouter();
 	const [workspace, setWorkspace] = useState<AssetGovernanceWorkspace | null>(null);
 	const [metrics, setMetrics] = useState<LifecycleMetrics | null>(null);
@@ -184,9 +166,7 @@ export function AssetLifecycleWorkbenchDrawer({
 		if (!open || !asset) return;
 		setLoading(true);
 		const [workspaceResult, metricsResult, issuesResult] = await Promise.allSettled([
-			datasetId && subjectKey
-				? getCatalogAssetGovernanceWorkspace(datasetId, subjectKey)
-				: Promise.resolve(null),
+			datasetId && subjectKey ? getCatalogAssetGovernanceWorkspace(datasetId, subjectKey) : Promise.resolve(null),
 			getCatalogLifecycleMetrics({ days: 30 }),
 			getCatalogGovernanceIssues(100),
 		]);
@@ -210,7 +190,9 @@ export function AssetLifecycleWorkbenchDrawer({
 		setMigrationRun(runResult.status === "fulfilled" ? runResult.value : null);
 		setMigrationItems(itemsResult.status === "fulfilled" && Array.isArray(itemsResult.value) ? itemsResult.value : []);
 		setReconciliation(reconciliationResult.status === "fulfilled" ? reconciliationResult.value : null);
-		setWriteFreezes(freezesResult.status === "fulfilled" && Array.isArray(freezesResult.value) ? freezesResult.value : []);
+		setWriteFreezes(
+			freezesResult.status === "fulfilled" && Array.isArray(freezesResult.value) ? freezesResult.value : [],
+		);
 	}, []);
 
 	useEffect(() => {
@@ -404,19 +386,11 @@ export function AssetLifecycleWorkbenchDrawer({
 									<Alert type="error" showIcon message="密级尚未封存，资产消费与生命周期动作应被阻断" />
 								)}
 								<Descriptions bordered size="small" column={2}>
-									<Descriptions.Item label="来源声明">
-										{classificationText(fact.declaredLevel)}
-									</Descriptions.Item>
-									<Descriptions.Item label="识别结果">
-										{classificationText(fact.detectedLevel)}
-									</Descriptions.Item>
-									<Descriptions.Item label="人工下限">
-										{classificationText(fact.manualFloor)}
-									</Descriptions.Item>
+									<Descriptions.Item label="来源声明">{classificationText(fact.declaredLevel)}</Descriptions.Item>
+									<Descriptions.Item label="识别结果">{classificationText(fact.detectedLevel)}</Descriptions.Item>
+									<Descriptions.Item label="人工下限">{classificationText(fact.manualFloor)}</Descriptions.Item>
 									<Descriptions.Item label="有效密级">
-										<Tag color={fact.effectiveLevel ? "orange" : "red"}>
-											{classificationText(fact.effectiveLevel)}
-										</Tag>
+										<Tag color={fact.effectiveLevel ? "orange" : "red"}>{classificationText(fact.effectiveLevel)}</Tag>
 									</Descriptions.Item>
 									<Descriptions.Item label="最高来源类型">
 										{fact.highestSourceType || fact.originType || "-"}
@@ -449,8 +423,7 @@ export function AssetLifecycleWorkbenchDrawer({
 										</div>
 									</div>
 								</div>
-								<Table
-									size="small"
+								<CompactTable
 									pagination={false}
 									rowKey={(row, index) => `${row.snapshotVersion || 0}-${index}`}
 									dataSource={fact.events || []}
@@ -471,177 +444,188 @@ export function AssetLifecycleWorkbenchDrawer({
 					{
 						key: "lifecycle",
 						label: "审批与回收站",
-						children: datasetId && workspace?.lifecycle ? (
-							<div className="space-y-4">
-								<Descriptions bordered size="small" column={2}>
-									<Descriptions.Item label="生命周期状态">
-										{workspace.lifecycle.lifecycleStatus || "-"}
-									</Descriptions.Item>
-									<Descriptions.Item label="当前密级">
-										{classificationText(workspace.lifecycle.effectiveLevel)}
-									</Descriptions.Item>
-									<Descriptions.Item label="回收站状态">
-										{workspace.lifecycle.trash?.status || "未进入回收站"}
-									</Descriptions.Item>
-									<Descriptions.Item label="保留至">
-										{formatTime(workspace.lifecycle.trash?.retainUntil)}
-									</Descriptions.Item>
-								</Descriptions>
-								<Space wrap>
-									{availableActions.map((actionType) => (
-										<Button
-											key={actionType}
-											danger={actionType === "PERMANENT_DESTROY"}
-											loading={actingId === actionType}
-											onClick={() => void submitAction(actionType)}
-										>
-											{ACTION_LABELS[actionType]}
-										</Button>
-									))}
-								</Space>
-								<Table<LifecycleActionView>
-									size="small"
-									rowKey="id"
-									pagination={{ pageSize: 8 }}
-									dataSource={workspace.actions || []}
-									columns={[
-										{ title: "动作", dataIndex: "actionType" },
-										{ title: "状态", dataIndex: "status", render: (value) => <Tag>{value}</Tag> },
-										{ title: "申请人", dataIndex: "requester" },
-										{ title: "密级", dataIndex: "effectiveLevel", render: classificationText },
-										{ title: "申请时间", dataIndex: "createdAt", render: formatTime },
-										{
-											title: "操作",
-											render: (_, row) => (
-												<Space>
-													{["PENDING", "SECOND_APPROVAL_PENDING"].includes(row.status) ? (
-														<>
-															<Button
-																size="small"
-																type="primary"
-																loading={actingId === row.id}
-																onClick={() => void decide(row, "approve")}
-															>
-																批准
-															</Button>
-															<Button size="small" onClick={() => void decide(row, "reject")}>
-																驳回
-															</Button>
-														</>
-													) : null}
-													{row.actionType === "PERMANENT_DESTROY" && row.status === "FAILED" ? (
-														<Button danger size="small" onClick={() => void retryDestruction(row)}>
-															重试
-														</Button>
-													) : null}
-												</Space>
-											),
-										},
-									]}
-								/>
-								<div>
-									<div className="mb-2 font-semibold text-slate-900">生命周期事件</div>
-									<Table
-										size="small"
-										rowKey="eventId"
-										pagination={{ pageSize: 8 }}
-										scroll={{ x: 900 }}
-										dataSource={lifecycleEvents}
+						children:
+							datasetId && workspace?.lifecycle ? (
+								<div className="space-y-4">
+									<Descriptions bordered size="small" column={2}>
+										<Descriptions.Item label="生命周期状态">
+											{workspace.lifecycle.lifecycleStatus || "-"}
+										</Descriptions.Item>
+										<Descriptions.Item label="当前密级">
+											{classificationText(workspace.lifecycle.effectiveLevel)}
+										</Descriptions.Item>
+										<Descriptions.Item label="回收站状态">
+											{workspace.lifecycle.trash?.status || "未进入回收站"}
+										</Descriptions.Item>
+										<Descriptions.Item label="保留至">
+											{formatTime(workspace.lifecycle.trash?.retainUntil)}
+										</Descriptions.Item>
+									</Descriptions>
+									<Space wrap>
+										{availableActions.map((actionType) => (
+											<Button
+												key={actionType}
+												danger={actionType === "PERMANENT_DESTROY"}
+												loading={actingId === actionType}
+												onClick={() => void submitAction(actionType)}
+											>
+												{ACTION_LABELS[actionType]}
+											</Button>
+										))}
+									</Space>
+									<CompactTable<LifecycleActionView>
+										rowKey="id"
+										pagination={{ pageSize: 10 }}
+										dataSource={workspace.actions || []}
 										columns={[
-											{
-												title: "阶段",
-												dataIndex: "stage",
-												render: (value) => LIFECYCLE_STAGE_LABELS[value] || value || "-",
-											},
-											{ title: "事件", dataIndex: "eventType" },
-											{
-												title: "状态",
-												dataIndex: "status",
-												render: (value) => <Tag color={lifecycleStatusColor(value)}>{lifecycleStatusText(value)}</Tag>,
-											},
+											{ title: "动作", dataIndex: "actionType" },
+											{ title: "状态", dataIndex: "status", render: (value) => <Tag>{value}</Tag> },
+											{ title: "申请人", dataIndex: "requester" },
 											{ title: "密级", dataIndex: "effectiveLevel", render: classificationText },
-											{ title: "操作人", dataIndex: "actor", render: (value) => value || "-" },
-											{ title: "来源", dataIndex: "requestSource", render: (value) => value || "-" },
-											{ title: "时间", dataIndex: "occurredAt", render: formatTime },
+											{ title: "申请时间", dataIndex: "createdAt", render: formatTime },
+											{
+												title: "操作",
+												render: (_, row) => (
+													<Space>
+														{["PENDING", "SECOND_APPROVAL_PENDING"].includes(row.status) ? (
+															<>
+																<Button
+																	size="small"
+																	type="primary"
+																	loading={actingId === row.id}
+																	onClick={() => void decide(row, "approve")}
+																>
+																	批准
+																</Button>
+																<Button size="small" onClick={() => void decide(row, "reject")}>
+																	驳回
+																</Button>
+															</>
+														) : null}
+														{row.actionType === "PERMANENT_DESTROY" && row.status === "FAILED" ? (
+															<Button danger size="small" onClick={() => void retryDestruction(row)}>
+																重试
+															</Button>
+														) : null}
+													</Space>
+												),
+											},
 										]}
 									/>
-								</div>
-								{destructionProofs.length > 0 ? (
 									<div>
-										<Alert
-											className="mb-2"
-											type="success"
-											showIcon
-											message={`已保留 ${destructionProofs.length} 份不可变销毁证明`}
-											description="证明仅保留对象清单摘要、校验和、审批人与执行结果，不保留已销毁业务数据。"
-										/>
-										<Table
-											size="small"
-											rowKey="id"
-											pagination={false}
-											scroll={{ x: 1180 }}
-											dataSource={destructionProofs}
-											expandable={{
-												expandedRowRender: (proof) => (
-													<div>
-														<div className="mb-1 text-xs font-medium text-slate-700">销毁对象摘要</div>
-														<pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded bg-slate-950 p-3 text-xs text-slate-100">
-															{JSON.stringify(proof.objectManifest || {}, null, 2)}
-														</pre>
-													</div>
-												),
-											}}
+										<div className="mb-2 font-semibold text-slate-900">生命周期事件</div>
+										<CompactTable
+											rowKey="eventId"
+											pagination={{ pageSize: 10 }}
+											dataSource={lifecycleEvents}
 											columns={[
-												{ title: "尝试", dataIndex: "attemptNo", width: 70 },
-												{ title: "适配器", dataIndex: "adapterCode", width: 130 },
 												{
-													title: "结果",
-													dataIndex: "resultStatus",
-													width: 110,
-													render: (value) => <Tag color={value === "SUCCEEDED" ? "green" : "red"}>{value || "-"}</Tag>,
+													title: "阶段",
+													dataIndex: "stage",
+													render: (value) => LIFECYCLE_STAGE_LABELS[value] || value || "-",
 												},
-												{ title: "第一审批人", dataIndex: "firstApprovedBy", width: 130, render: (value) => value || "-" },
-												{ title: "第二审批人", dataIndex: "secondApprovedBy", width: 130, render: (value) => value || "-" },
-												{ title: "执行人", dataIndex: "executedBy", width: 120, render: (value) => value || "-" },
+												{ title: "事件", dataIndex: "eventType" },
 												{
-													title: "外部源未触碰",
-													dataIndex: "externalSourceTouched",
-													width: 130,
-													render: (value) => <Tag color={value ? "red" : "green"}>{value ? "否" : "是"}</Tag>,
+													title: "状态",
+													dataIndex: "status",
+													render: (value) => (
+														<Tag color={lifecycleStatusColor(value)}>{lifecycleStatusText(value)}</Tag>
+													),
 												},
-												{
-													title: "证明校验和",
-													dataIndex: "manifestChecksum",
-													width: 210,
-													render: (value) =>
-														value ? (
-															<Typography.Text copyable={{ text: String(value) }} className="font-mono text-xs">
-																{String(value).slice(0, 18)}…
-															</Typography.Text>
-														) : "-",
-												},
-												{ title: "执行时间", dataIndex: "executedAt", width: 170, render: formatTime },
+												{ title: "密级", dataIndex: "effectiveLevel", render: classificationText },
+												{ title: "操作人", dataIndex: "actor", render: (value) => value || "-" },
+												{ title: "来源", dataIndex: "requestSource", render: (value) => value || "-" },
+												{ title: "时间", dataIndex: "occurredAt", render: formatTime },
 											]}
 										/>
 									</div>
-								) : null}
-							</div>
-						) : (
-							<Alert
-								type="info"
-								showIcon
-								message="当前资产尚未映射到 DTS 生命周期主体"
-								description="完成资产映射后，审批、回收站、恢复和销毁证明将在这里统一处理。"
-							/>
-						),
+									{destructionProofs.length > 0 ? (
+										<div>
+											<Alert
+												className="mb-2"
+												type="success"
+												showIcon
+												message={`已保留 ${destructionProofs.length} 份不可变销毁证明`}
+												description="证明仅保留对象清单摘要、校验和、审批人与执行结果，不保留已销毁业务数据。"
+											/>
+											<CompactTable
+												rowKey="id"
+												pagination={false}
+												dataSource={destructionProofs}
+												expandable={{
+													expandedRowRender: (proof) => (
+														<div>
+															<div className="mb-1 text-xs font-medium text-slate-700">销毁对象摘要</div>
+															<pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded bg-slate-950 p-3 text-xs text-slate-100">
+																{JSON.stringify(proof.objectManifest || {}, null, 2)}
+															</pre>
+														</div>
+													),
+												}}
+												columns={[
+													{ title: "尝试", dataIndex: "attemptNo", width: 70 },
+													{ title: "适配器", dataIndex: "adapterCode", width: 130 },
+													{
+														title: "结果",
+														dataIndex: "resultStatus",
+														width: 110,
+														render: (value) => (
+															<Tag color={value === "SUCCEEDED" ? "green" : "red"}>{value || "-"}</Tag>
+														),
+													},
+													{
+														title: "第一审批人",
+														dataIndex: "firstApprovedBy",
+														width: 130,
+														render: (value) => value || "-",
+													},
+													{
+														title: "第二审批人",
+														dataIndex: "secondApprovedBy",
+														width: 130,
+														render: (value) => value || "-",
+													},
+													{ title: "执行人", dataIndex: "executedBy", width: 120, render: (value) => value || "-" },
+													{
+														title: "外部源未触碰",
+														dataIndex: "externalSourceTouched",
+														width: 130,
+														render: (value) => <Tag color={value ? "red" : "green"}>{value ? "否" : "是"}</Tag>,
+													},
+													{
+														title: "证明校验和",
+														dataIndex: "manifestChecksum",
+														width: 210,
+														render: (value) =>
+															value ? (
+																<Typography.Text copyable={{ text: String(value) }} className="font-mono text-xs">
+																	{String(value).slice(0, 18)}…
+																</Typography.Text>
+															) : (
+																"-"
+															),
+													},
+													{ title: "执行时间", dataIndex: "executedAt", width: 170, render: formatTime },
+												]}
+											/>
+										</div>
+									) : null}
+								</div>
+							) : (
+								<Alert
+									type="info"
+									showIcon
+									message="当前资产尚未映射到 DTS 生命周期主体"
+									description="完成资产映射后，审批、回收站、恢复和销毁证明将在这里统一处理。"
+								/>
+							),
 					},
 					{
 						key: "metrics",
 						label: "生命周期监控",
 						children: metrics ? (
 							<div className="space-y-4">
-								<Table
-									size="small"
+								<CompactTable
 									pagination={false}
 									rowKey={(row) => `${row.lifecycleBucket}-${row.effectiveLevel}`}
 									dataSource={metrics.current || []}
@@ -661,8 +645,7 @@ export function AssetLifecycleWorkbenchDrawer({
 										{ title: "数据量未知资产", dataIndex: "unknownVolumeCount" },
 									]}
 								/>
-								<Table
-									size="small"
+								<CompactTable
 									pagination={{ pageSize: 10 }}
 									rowKey={(row, index) => `${row.day}-${row.stage}-${row.status}-${index}`}
 									dataSource={metrics.trends || []}
@@ -705,10 +688,7 @@ export function AssetLifecycleWorkbenchDrawer({
 									>
 										暂停
 									</Button>
-									<Button
-										disabled={migrationRun?.status !== "PAUSED"}
-										onClick={() => void operateMigration("resume")}
-									>
+									<Button disabled={migrationRun?.status !== "PAUSED"} onClick={() => void operateMigration("resume")}>
 										恢复
 									</Button>
 									<Button disabled={!migrationRun} onClick={() => void operateMigration("reconcile")}>
@@ -737,8 +717,7 @@ export function AssetLifecycleWorkbenchDrawer({
 										</Descriptions.Item>
 									</Descriptions>
 								) : null}
-								<Table<ClassificationMigrationItem>
-									size="small"
+								<CompactTable<ClassificationMigrationItem>
 									rowKey="id"
 									pagination={{ pageSize: 10 }}
 									dataSource={migrationItems}
@@ -757,8 +736,7 @@ export function AssetLifecycleWorkbenchDrawer({
 										{ title: "原因", dataIndex: "decisionReason", ellipsis: true },
 									]}
 								/>
-								<Table<ClassificationWriteFreeze>
-									size="small"
+								<CompactTable<ClassificationWriteFreeze>
 									pagination={false}
 									rowKey="sourceTable"
 									dataSource={writeFreezes}
@@ -780,8 +758,7 @@ export function AssetLifecycleWorkbenchDrawer({
 						key: "issues",
 						label: `治理通知${issues.length ? ` (${issues.length})` : ""}`,
 						children: (
-							<Table<GovernanceIssueView>
-								size="small"
+							<CompactTable<GovernanceIssueView>
 								rowKey={(row, index) => `${row.issueType}-${row.occurredAt}-${index}`}
 								pagination={{ pageSize: 10 }}
 								dataSource={issues}
@@ -798,10 +775,7 @@ export function AssetLifecycleWorkbenchDrawer({
 									{
 										title: "处理",
 										render: (_, row) => (
-											<Button
-												size="small"
-												onClick={() => row.repairRoute && router.push(row.repairRoute)}
-											>
+											<Button size="small" onClick={() => row.repairRoute && router.push(row.repairRoute)}>
 												定位修复
 											</Button>
 										),

@@ -1,6 +1,7 @@
 import { Archive, Download, Pencil, Plus, Search } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { applyStandardPackageImport, previewStandardPackageImport } from "@/api/modelingStandardsApi";
+import { type CompactColumns, CompactTable } from "@/components/table";
 import type { DataModelingRoute } from "../types";
 import { Button, Modal, PageHeader, RequestState, Status, Toast, useTransientMessage } from "./PrototypePrimitives";
 import { normalizeModelingRequestFailure } from "./services/planningProjectionService";
@@ -140,6 +141,61 @@ export function StandardsPage({ route }: { route: DataModelingRoute }) {
 		};
 	}, [load]);
 
+	const columns = useMemo<CompactColumns<StandardsRow>>(
+		() => [
+			...page.headers.map(([key, header]) =>
+				key === "state"
+					? {
+							title: header,
+							dataIndex: key,
+							render: (value: StandardsRow["state"]) => (
+								<Status
+									tone={value.includes("生效") || value.includes("发布") || value === "有效" ? "success" : "warning"}
+								>
+									{value}
+								</Status>
+							),
+						}
+					: { title: header, dataIndex: key },
+			),
+			...(capability.edit || capability.archive
+				? [
+						{
+							title: "操作",
+							dataIndex: "actions",
+							render: (_: unknown, row: StandardsRow) => (
+								<div className="dmx-row-actions">
+									{capability.edit ? (
+										<Button
+											disabled={!canMaintain}
+											onClick={() => setEditorRow(row)}
+											title={canMaintain ? undefined : "当前账号无标准维护权限"}
+											type="link"
+										>
+											<Pencil size={14} />
+											编辑
+										</Button>
+									) : null}
+									{capability.archive ? (
+										<ArchiveAction
+											disabled={!canMaintain}
+											onComplete={async () => {
+												show("标准对象已归档");
+												await load();
+											}}
+											row={row}
+											view={view}
+										/>
+									) : null}
+								</div>
+							),
+						},
+					]
+				: []),
+		],
+		[page, capability.edit, capability.archive, canMaintain, view, load, show],
+	);
+
 	return (
 		<main className="dmx-page dmx-catalog-page">
 			<PageHeader
@@ -195,65 +251,12 @@ export function StandardsPage({ route }: { route: DataModelingRoute }) {
 					/>
 				) : rows.length ? (
 					<div className="dmx-table-scroll">
-						<table className="dmx-table">
-							<thead>
-								<tr>
-									{page.headers.map(([, header]) => (
-										<th key={header}>{header}</th>
-									))}
-									{capability.edit || capability.archive ? <th>操作</th> : null}
-								</tr>
-							</thead>
-							<tbody>
-								{rows.map((row) => (
-									<tr key={row.id || row.code}>
-										{page.headers.map(([key]) => (
-											<td key={`${row.id}-${key}`}>
-												{key === "state" ? (
-													<Status
-														tone={
-															row.state.includes("生效") || row.state.includes("发布") || row.state === "有效"
-																? "success"
-																: "warning"
-														}
-													>
-														{row.state}
-													</Status>
-												) : (
-													(row[key] as string)
-												)}
-											</td>
-										))}
-										{capability.edit || capability.archive ? (
-											<td className="dmx-row-actions">
-												{capability.edit ? (
-													<button
-														disabled={!canMaintain}
-														onClick={() => setEditorRow(row)}
-														title={canMaintain ? undefined : "当前账号无标准维护权限"}
-														type="button"
-													>
-														<Pencil size={14} />
-														编辑
-													</button>
-												) : null}
-												{capability.archive ? (
-													<ArchiveAction
-														onComplete={async () => {
-															show("标准对象已归档");
-															await load();
-														}}
-														row={row}
-														disabled={!canMaintain}
-														view={view}
-													/>
-												) : null}
-											</td>
-										) : null}
-									</tr>
-								))}
-							</tbody>
-						</table>
+						<CompactTable<StandardsRow>
+							columns={columns}
+							dataSource={rows}
+							pagination={{ pageSize: 10 }}
+							rowKey={(row) => row.id || row.code}
+						/>
 					</div>
 				) : (
 					<RequestState
@@ -413,10 +416,10 @@ function ArchiveAction({
 	};
 	return (
 		<span title={error || undefined}>
-			<button disabled={disabled || busy} onClick={() => void run()} type="button">
+			<Button disabled={disabled || busy} onClick={() => void run()} type="link">
 				<Archive size={14} />
 				{busy ? "归档中…" : "归档"}
-			</button>
+			</Button>
 		</span>
 	);
 }

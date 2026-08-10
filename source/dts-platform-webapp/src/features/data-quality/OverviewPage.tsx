@@ -1,10 +1,11 @@
 import { PlusOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Col, Progress, Row, Skeleton, Space, Table, Tag } from "antd";
+import { Alert, Button, Card, Col, Progress, Row, Skeleton, Space, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { getQualityDashboard, type QualityDashboard } from "@/api/platformApi";
+import { CompactTable } from "@/components/table";
 import { formatTime } from "@/utils/textUtils";
 import { QualityMetric, QualityPageHeading, QualityStatus } from "./QualityShared";
 import { qualityPath } from "./qualityRoutes";
@@ -177,12 +178,11 @@ export function OverviewPage() {
 					</Row>
 
 					<Card title="最近失败运行">
-						<Table
+						<CompactTable
 							rowKey={(row) => `${row.ruleName}-${row.dataset}-${row.time}`}
 							columns={failureColumns}
 							dataSource={dashboard.recentFailedRuns}
 							pagination={false}
-							size="small"
 						/>
 					</Card>
 				</>

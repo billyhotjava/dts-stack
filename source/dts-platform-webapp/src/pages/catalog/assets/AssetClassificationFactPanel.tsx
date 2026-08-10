@@ -1,9 +1,7 @@
-import { Alert, Descriptions, Space, Spin, Table, Tag } from "antd";
+import { Alert, Descriptions, Space, Spin, Tag } from "antd";
 import { useEffect, useMemo, useState } from "react";
-import {
-	type ClassificationFactView,
-	getCatalogClassificationFacts,
-} from "@/api/platformApi";
+import { type ClassificationFactView, getCatalogClassificationFacts } from "@/api/platformApi";
+import { CompactTable } from "@/components/table";
 import { classificationText, formatTime } from "./assetPageShared";
 
 type Props = {
@@ -57,9 +55,7 @@ export function AssetClassificationFactPanel({ assetKey, columns = [] }: Props) 
 
 	const assetFact = facts.find((fact) => fact.subjectType === "ASSET");
 	const columnFactMap = new Map(
-		facts
-			.filter((fact) => fact.subjectType === "COLUMN")
-			.map((fact) => [fact.subjectKey, fact]),
+		facts.filter((fact) => fact.subjectType === "COLUMN").map((fact) => [fact.subjectKey, fact]),
 	);
 
 	if (!assetKey) {
@@ -76,15 +72,9 @@ export function AssetClassificationFactPanel({ assetKey, columns = [] }: Props) 
 					description="数据标签与合规密级相互独立；本页密级来自不可变来源事实、自动识别、人工下限和血缘继承。"
 				/>
 				<Descriptions bordered size="small" column={2}>
-					<Descriptions.Item label="来源声明">
-						{classificationText(assetFact?.declaredLevel)}
-					</Descriptions.Item>
-					<Descriptions.Item label="识别结果">
-						{classificationText(assetFact?.detectedLevel)}
-					</Descriptions.Item>
-					<Descriptions.Item label="人工下限">
-						{classificationText(assetFact?.manualFloor)}
-					</Descriptions.Item>
+					<Descriptions.Item label="来源声明">{classificationText(assetFact?.declaredLevel)}</Descriptions.Item>
+					<Descriptions.Item label="识别结果">{classificationText(assetFact?.detectedLevel)}</Descriptions.Item>
+					<Descriptions.Item label="人工下限">{classificationText(assetFact?.manualFloor)}</Descriptions.Item>
 					<Descriptions.Item label="有效密级">
 						<Tag color={assetFact?.effectiveLevel ? "orange" : "red"}>
 							{classificationText(assetFact?.effectiveLevel)}
@@ -101,8 +91,7 @@ export function AssetClassificationFactPanel({ assetKey, columns = [] }: Props) 
 					<Descriptions.Item label="快照版本">v{assetFact?.snapshotVersion ?? 0}</Descriptions.Item>
 					<Descriptions.Item label="封存时间">{formatTime(assetFact?.sealedAt)}</Descriptions.Item>
 				</Descriptions>
-				<Table
-					size="small"
+				<CompactTable
 					rowKey={(row) => String(row.id || row.name)}
 					pagination={{ pageSize: 20 }}
 					dataSource={columns}

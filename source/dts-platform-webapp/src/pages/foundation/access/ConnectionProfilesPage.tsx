@@ -1,13 +1,11 @@
 import { CheckCircleOutlined, CloseCircleOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Alert, Button, Input, Modal, Select, Space, Table, Tag, Typography, message } from "antd";
+import { Alert, Button, Input, Modal, message, Select, Space, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import dataSourcesService, {
-	type ConnectionTestResult,
-	type InfraDataSource,
-} from "@/api/services/dataSourcesService";
+import dataSourcesService, { type ConnectionTestResult, type InfraDataSource } from "@/api/services/dataSourcesService";
 import { PageHeader } from "@/components/page-header";
+import { CompactTable } from "@/components/table";
 import { formatTime } from "@/utils/textUtils";
 import { isAdminManagedSource, isApiSourceType, isFileSource } from "../dataSources/helpers";
 import ConnectionProfileFormModal from "./ConnectionProfileFormModal";
@@ -204,7 +202,14 @@ export default function ConnectionProfilesPage() {
 						<Button type="link" onClick={() => navigate(`/foundation/connections/${record.id}`)}>
 							详情
 						</Button>
-						<Button type="link" disabled={managed} onClick={() => { setEditing(record); setFormOpen(true); }}>
+						<Button
+							type="link"
+							disabled={managed}
+							onClick={() => {
+								setEditing(record);
+								setFormOpen(true);
+							}}
+						>
 							编辑
 						</Button>
 						<Button type="link" danger disabled={managed} onClick={() => handleDelete(record)}>
@@ -222,14 +227,24 @@ export default function ConnectionProfilesPage() {
 				title="连接管理"
 				actions={
 					<Space>
-						<Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>刷新</Button>
-						<Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新建连接</Button>
+						<Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>
+							刷新
+						</Button>
+						<Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+							新建连接
+						</Button>
 					</Space>
 				}
 			/>
 			<div className="rounded-lg bg-white p-4">
 				<Space className="mb-4" wrap>
-					<Input.Search allowClear placeholder="搜索名称、连接器或地址" value={keyword} onChange={(event) => setKeyword(event.target.value)} style={{ width: 320 }} />
+					<Input.Search
+						allowClear
+						placeholder="搜索名称、连接器或地址"
+						value={keyword}
+						onChange={(event) => setKeyword(event.target.value)}
+						style={{ width: 320 }}
+					/>
 					<Select<ProfileKind>
 						value={kind}
 						onChange={setKind}
@@ -243,21 +258,29 @@ export default function ConnectionProfilesPage() {
 					/>
 				</Space>
 				{error ? <Alert className="mb-4" type="error" showIcon message="加载失败" description={error} /> : null}
-				<Table<InfraDataSource>
+				<CompactTable<InfraDataSource>
 					rowKey="id"
 					loading={loading}
 					dataSource={filteredRows}
 					columns={columns}
-					scroll={{ x: 1250 }}
-					pagination={{ defaultPageSize: 10, showSizeChanger: true, showTotal: (total) => `共 ${total} 条` }}
+					pagination={{ defaultPageSize: 10 }}
 				/>
 			</div>
 			<ConnectionProfileFormModal
 				open={formOpen}
 				editing={editing}
 				initialConnectorKey={initialConnectorKey}
-				onClose={() => { setFormOpen(false); setEditing(null); setInitialConnectorKey(undefined); }}
-				onSaved={() => { setFormOpen(false); setEditing(null); setInitialConnectorKey(undefined); void load(); }}
+				onClose={() => {
+					setFormOpen(false);
+					setEditing(null);
+					setInitialConnectorKey(undefined);
+				}}
+				onSaved={() => {
+					setFormOpen(false);
+					setEditing(null);
+					setInitialConnectorKey(undefined);
+					void load();
+				}}
 			/>
 		</div>
 	);

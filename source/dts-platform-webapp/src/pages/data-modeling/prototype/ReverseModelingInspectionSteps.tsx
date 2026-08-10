@@ -1,10 +1,12 @@
 import { FileArchive } from "lucide-react";
+import { useMemo } from "react";
 import type { DbtArchiveInspection, ModelSpecImportSemanticOverride } from "@/api/modelSpecImportApi";
 import type {
 	ModelingImportContextHeader,
 	ModelingImportDomainBinding,
 	ModelingImportSourceBinding,
 } from "@/api/services/modelingImportContextService";
+import { type CompactColumns, CompactTable } from "@/components/table";
 import { Button, Status } from "./PrototypePrimitives";
 import { createRenameMapping, type RenameMapping } from "./services/modelImportUiState";
 import { candidateEligibility, inspectionSummary, packageProfileLabel } from "./services/reverseModelingInspection";
@@ -240,119 +242,194 @@ export function ConfirmStep(props: ConfirmStepProps) {
 					</div>
 				))}
 			</section>
-			<div className="dmx-table-scroll">
-				<table className="dmx-table dmx-import-semantics">
-					<thead>
-						<tr>
-							<th>选择</th>
-							<th>dbt 对象</th>
-							<th>业务名称</th>
-							<th>模型类型</th>
-							<th>目标分层</th>
-							<th>粒度说明</th>
-							<th>业务主键</th>
-							<th>字段数</th>
-						</tr>
-					</thead>
-					<tbody>
-						{inspection.package.models.map((model) => {
-							const eligibility = candidateEligibility(inspection, model.dbtUniqueId);
-							const checked = selected.includes(model.dbtUniqueId);
-							const override = semanticOverrides[model.dbtUniqueId] || { modelUniqueId: model.dbtUniqueId };
-							const patch = (next: Partial<ModelSpecImportSemanticOverride>) =>
-								onSemanticOverride(model.dbtUniqueId, { ...override, ...next, modelUniqueId: model.dbtUniqueId });
-							return (
-								<tr key={model.dbtUniqueId}>
-									<td>
-										<input
-											checked={checked}
-											disabled={eligibility === "BLOCKED"}
-											onChange={(event) =>
-												onSelected(
-													event.target.checked
-														? [...selected, model.dbtUniqueId]
-														: selected.filter((id) => id !== model.dbtUniqueId),
-												)
-											}
-											type="checkbox"
-										/>
-									</td>
-									<td>
-										{model.dbtUniqueId}
-										<Status
-											tone={
-												eligibility === "BLOCKED"
-													? "danger"
-													: eligibility === "REQUIRES_MAPPING"
-														? "warning"
-														: "success"
-											}
-										>
-											{eligibility === "BLOCKED"
-												? "不可导入"
-												: eligibility === "REQUIRES_MAPPING"
-													? "待补充"
-													: "可导入"}
-										</Status>
-										<small>{model.conversion?.reasonCodes?.join("、")}</small>
-									</td>
-									<td>
-										<input
-											onChange={(event) => patch({ businessName: event.target.value })}
-											value={override.businessName || ""}
-										/>
-									</td>
-									<td>
-										<select
-											onChange={(event) => patch({ modelType: event.target.value || undefined })}
-											value={override.modelType || ""}
-										>
-											<option value="">请选择</option>
-											<option value="DIMENSION">维度表</option>
-											<option value="FACT">明细表</option>
-											<option value="SUMMARY">汇总表</option>
-											<option value="APPLICATION">应用表</option>
-										</select>
-									</td>
-									<td>
-										<select
-											onChange={(event) => patch({ layer: event.target.value || undefined })}
-											value={override.layer || ""}
-										>
-											<option value="">请选择</option>
-											<option value="DWD">DWD</option>
-											<option value="DWS">DWS</option>
-											<option value="ADS">ADS</option>
-										</select>
-									</td>
-									<td>
-										<input
-											onChange={(event) =>
-												patch({ grain: { statement: event.target.value, keys: override.grain?.keys || [] } })
-											}
-											value={override.grain?.statement || ""}
-										/>
-									</td>
-									<td>
-										<input
-											onChange={(event) => {
-												const keys = event.target.value
-													.split(",")
-													.map((item) => item.trim())
-													.filter(Boolean);
-												patch({ businessKeys: keys, grain: { statement: override.grain?.statement, keys } });
-											}}
-											placeholder="逗号分隔"
-											value={(override.businessKeys || override.grain?.keys || []).join(",")}
-										/>
-									</td>
-									<td>{model.columns?.length || 0}</td>
-								</tr>
-							);
-						})}
-					</tbody>
-				</table>
-			</div>
+			<ImportSemanticsTable
+				inspection={inspection}
+				onSelected={onSelected}
+				onSemanticOverride={onSemanticOverride}
+				selected={selected}
+				semanticOverrides={semanticOverrides}
+			/>
 		</>
+	);
+}
+
+function ImportSemanticsTable({
+	inspection,
+	selected,
+	onSelected,
+	semanticOverrides,
+	onSemanticOverride,
+}: {
+	inspection: DbtArchiveInspection;
+	selected: string[];
+	onSelected: (ids: string[]) => void;
+	semanticOverrides: Record<string, ModelSpecImportSemanticOverride>;
+	onSemanticOverride: (id: string, value: ModelSpecImportSemanticOverride) => void;
+}) {
+	const rows = useMemo(
+		() =>
+			inspection.package.models.map((model, index) => ({
+				key: model.dbtUniqueId,
+				model,
+				index,
+			})),
+		[inspection.package.models],
+	);
+	const columns = useMemo<CompactColumns<(typeof rows)[number]>>(
+		() => [
+			{
+				title: "选择",
+				key: "select",
+				width: 56,
+				align: "center",
+				render: (_, { model }) => {
+					const eligibility = candidateEligibility(inspection, model.dbtUniqueId);
+					const checked = selected.includes(model.dbtUniqueId);
+					return (
+						<input
+							checked={checked}
+							disabled={eligibility === "BLOCKED"}
+							onChange={(event) =>
+								onSelected(
+									event.target.checked
+										? [...selected, model.dbtUniqueId]
+										: selected.filter((id) => id !== model.dbtUniqueId),
+								)
+							}
+							type="checkbox"
+						/>
+					);
+				},
+			},
+			{
+				title: "dbt 对象",
+				key: "object",
+				render: (_, { model }) => {
+					const eligibility = candidateEligibility(inspection, model.dbtUniqueId);
+					return (
+						<>
+							{model.dbtUniqueId}
+							<Status
+								tone={eligibility === "BLOCKED" ? "danger" : eligibility === "REQUIRES_MAPPING" ? "warning" : "success"}
+							>
+								{eligibility === "BLOCKED" ? "不可导入" : eligibility === "REQUIRES_MAPPING" ? "待补充" : "可导入"}
+							</Status>
+							<small>{model.conversion?.reasonCodes?.join("、")}</small>
+						</>
+					);
+				},
+			},
+			{
+				title: "业务名称",
+				key: "businessName",
+				render: (_, { model }) => {
+					const override = semanticOverrides[model.dbtUniqueId] || { modelUniqueId: model.dbtUniqueId };
+					const patch = (next: Partial<ModelSpecImportSemanticOverride>) =>
+						onSemanticOverride(model.dbtUniqueId, { ...override, ...next, modelUniqueId: model.dbtUniqueId });
+					return (
+						<input
+							onChange={(event) => patch({ businessName: event.target.value })}
+							value={override.businessName || ""}
+						/>
+					);
+				},
+			},
+			{
+				title: "模型类型",
+				key: "modelType",
+				render: (_, { model }) => {
+					const override = semanticOverrides[model.dbtUniqueId] || { modelUniqueId: model.dbtUniqueId };
+					const patch = (next: Partial<ModelSpecImportSemanticOverride>) =>
+						onSemanticOverride(model.dbtUniqueId, { ...override, ...next, modelUniqueId: model.dbtUniqueId });
+					return (
+						<select
+							onChange={(event) => patch({ modelType: event.target.value || undefined })}
+							value={override.modelType || ""}
+						>
+							<option value="">请选择</option>
+							<option value="DIMENSION">维度表</option>
+							<option value="FACT">明细表</option>
+							<option value="SUMMARY">汇总表</option>
+							<option value="APPLICATION">应用表</option>
+						</select>
+					);
+				},
+			},
+			{
+				title: "目标分层",
+				key: "layer",
+				render: (_, { model }) => {
+					const override = semanticOverrides[model.dbtUniqueId] || { modelUniqueId: model.dbtUniqueId };
+					const patch = (next: Partial<ModelSpecImportSemanticOverride>) =>
+						onSemanticOverride(model.dbtUniqueId, { ...override, ...next, modelUniqueId: model.dbtUniqueId });
+					return (
+						<select
+							onChange={(event) => patch({ layer: event.target.value || undefined })}
+							value={override.layer || ""}
+						>
+							<option value="">请选择</option>
+							<option value="DWD">DWD</option>
+							<option value="DWS">DWS</option>
+							<option value="ADS">ADS</option>
+						</select>
+					);
+				},
+			},
+			{
+				title: "粒度说明",
+				key: "grain",
+				render: (_, { model }) => {
+					const override = semanticOverrides[model.dbtUniqueId] || { modelUniqueId: model.dbtUniqueId };
+					const patch = (next: Partial<ModelSpecImportSemanticOverride>) =>
+						onSemanticOverride(model.dbtUniqueId, { ...override, ...next, modelUniqueId: model.dbtUniqueId });
+					return (
+						<input
+							onChange={(event) =>
+								patch({ grain: { statement: event.target.value, keys: override.grain?.keys || [] } })
+							}
+							value={override.grain?.statement || ""}
+						/>
+					);
+				},
+			},
+			{
+				title: "业务主键",
+				key: "businessKeys",
+				render: (_, { model }) => {
+					const override = semanticOverrides[model.dbtUniqueId] || { modelUniqueId: model.dbtUniqueId };
+					const patch = (next: Partial<ModelSpecImportSemanticOverride>) =>
+						onSemanticOverride(model.dbtUniqueId, { ...override, ...next, modelUniqueId: model.dbtUniqueId });
+					return (
+						<input
+							onChange={(event) => {
+								const keys = event.target.value
+									.split(",")
+									.map((item) => item.trim())
+									.filter(Boolean);
+								patch({ businessKeys: keys, grain: { statement: override.grain?.statement, keys } });
+							}}
+							placeholder="逗号分隔"
+							value={(override.businessKeys || override.grain?.keys || []).join(",")}
+						/>
+					);
+				},
+			},
+			{
+				title: "字段数",
+				key: "columns",
+				align: "right",
+				render: (_, { model }) => model.columns?.length || 0,
+			},
+		],
+		[inspection, onSelected, onSemanticOverride, selected, semanticOverrides],
+	);
+	return (
+		<CompactTable
+			className="dmx-import-semantics"
+			columns={columns}
+			dataSource={rows}
+			pagination={false}
+			rowKey="key"
+		/>
 	);
 }

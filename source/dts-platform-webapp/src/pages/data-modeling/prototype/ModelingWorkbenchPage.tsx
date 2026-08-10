@@ -17,7 +17,7 @@ import { ModelPublishDialog } from "./ModelPublishDialog";
 import { ModelWorkbenchCatalogList } from "./ModelWorkbenchCatalogList";
 import { ModelWorkbenchDialog, type WorkbenchDialog } from "./ModelWorkbenchDialog";
 import { modelDraftFingerprint } from "./modelWorkbenchPresentation";
-import { PageHeader, RequestState, Status, Toast, useTransientMessage } from "./PrototypePrimitives";
+import { Button, PageHeader, RequestState, Status, Toast, useTransientMessage } from "./PrototypePrimitives";
 import {
 	conceptDimensionDraftFromView,
 	emptyModelDraft,
@@ -572,9 +572,9 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 				<div className="dmx-model-workbench dmx-model-workbench--editor-only">
 					<section className="dmx-model-editor">
 						<div className="dmx-editor-tab">
-							<button className="dmx-table-action" onClick={returnToList} type="button">
+							<Button className="dmx-table-action" onClick={returnToList} type="link">
 								返回模型列表
-							</button>
+							</Button>
 							<span>▤</span>
 							<strong>
 								{draft?.name || (draft ? `新建${MODEL_KIND_CONFIG[draft.createKind].label}` : "模型编辑器")}
@@ -631,14 +631,14 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 					</section>
 					{selectedModel?.modelType === "FACT" ? (
 						<aside className="dmx-record-rail">
-							<button disabled={saving || !selectedModel} onClick={() => setDialog("versions")} type="button">
+							<Button disabled={saving || !selectedModel} onClick={() => setDialog("versions")}>
 								<GitBranch size={16} />
 								版本管理
-							</button>
-							<button disabled={saving || !selectedModel} onClick={() => setDialog("releases")} type="button">
+							</Button>
+							<Button disabled={saving || !selectedModel} onClick={() => setDialog("releases")}>
 								<FileDown size={16} />
 								发布记录
-							</button>
+							</Button>
 						</aside>
 					) : null}
 				</div>

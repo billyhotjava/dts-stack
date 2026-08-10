@@ -10,7 +10,6 @@ import {
 	Modal,
 	Select,
 	Space,
-	Table,
 	Tag,
 	Typography,
 } from "antd";
@@ -29,6 +28,7 @@ import {
 	type MeasurementUnitView,
 	updateMeasurementUnit,
 } from "@/api/platformApi";
+import { CompactTable } from "@/components/table";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 
 const { Text, Title } = Typography;
@@ -210,13 +210,12 @@ export default function MeasurementUnitsPage() {
 				</Space>
 			</div>
 			<Card>
-				<Table
+				<CompactTable
 					rowKey="id"
 					loading={loading}
 					columns={columns}
 					dataSource={units}
 					pagination={{ pageSize: 20 }}
-					scroll={{ x: 1050 }}
 				/>
 			</Card>
 
@@ -261,12 +260,11 @@ export default function MeasurementUnitsPage() {
 			</Modal>
 
 			<Modal title="版本历史" open={historyOpen} onCancel={() => setHistoryOpen(false)} footer={null} width={760}>
-				<Table
+				<CompactTable
 					rowKey={(row) => `${row.id}-${row.version}`}
 					dataSource={history}
 					pagination={false}
 					columns={columns.slice(0, 8)}
-					scroll={{ x: 900 }}
 				/>
 			</Modal>
 			<Modal title="引用影响" open={referencesOpen} onCancel={() => setReferencesOpen(false)} footer={null} width={720}>

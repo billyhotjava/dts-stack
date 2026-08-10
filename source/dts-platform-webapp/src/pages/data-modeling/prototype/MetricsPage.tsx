@@ -2,6 +2,7 @@ import { Archive, CheckCircle2, Plus, RefreshCw, Save, Search, Send, Trash2 } fr
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { listBusinessProcessesApi, type Sprint64BusinessProcess } from "@/api/sprint64GovernanceApi";
+import type { WarehousePlanBusinessProcessMode } from "@/api/warehousePlanApi";
 import {
 	type IndicatorMetricSourceRef,
 	type IndicatorSourceType,
@@ -26,6 +27,7 @@ import {
 	supportsIndicatorCreation,
 } from "./services/indicatorProjectionService";
 import { listPlanningCatalogDomains, type PlanningCatalogDomain } from "./services/planningCatalogDomainService";
+import { loadPlanningContextPolicy, resolveBusinessProcessBinding } from "./services/planningContextPolicyService";
 import { useDataModelingMenuGrant } from "./useDataModelingMenuGrant";
 
 const typeByView: Record<string, MetricType> = {
@@ -70,6 +72,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 	const [businessCategoryId, setBusinessCategoryId] = useState("");
 	const [architecture, setArchitecture] = useState<PlanningCatalogDomain[]>([]);
 	const [processes, setProcesses] = useState<Sprint64BusinessProcess[]>([]);
+	const [processMode, setProcessMode] = useState<WarehousePlanBusinessProcessMode>("AUTO_SELECT_SINGLE");
 	const [contextFailure, setContextFailure] = useState("");
 	const processEpoch = useRef(0);
 	const [loading, setLoading] = useState(true);
@@ -125,6 +128,19 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 		};
 	}, []);
 	useEffect(() => {
+		let active = true;
+		void loadPlanningContextPolicy()
+			.then((contextPolicy) => {
+				if (active) setProcessMode(contextPolicy.policy.businessProcessMode);
+			})
+			.catch(() => {
+				if (active) setContextFailure("规划参数读取失败，业务过程暂按唯一自动选择处理。");
+			});
+		return () => {
+			active = false;
+		};
+	}, []);
+	useEffect(() => {
 		const dataDomainId = String(values.dataDomainId || "");
 		const epoch = ++processEpoch.current;
 		if (!dataDomainId) {
@@ -133,7 +149,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 		}
 		void listBusinessProcessesApi(dataDomainId)
 			.then((items) => {
-				if (processEpoch.current === epoch) setProcesses(items.filter((item) => item.confirmed));
+				if (processEpoch.current === epoch) setProcesses(items);
 			})
 			.catch(() => {
 				if (processEpoch.current === epoch) {
@@ -142,6 +158,18 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 				}
 			});
 	}, [values.dataDomainId]);
+	useEffect(() => {
+		setValues((current) => {
+			const currentMetricType = String(current.metricType || "").toUpperCase();
+			if (currentMetricType !== "ATOMIC") {
+				return current.businessProcessId ? { ...current, businessProcessId: null } : current;
+			}
+			const binding = resolveBusinessProcessBinding(processMode, current.businessProcessId, processes);
+			const currentIsValid = binding.processes.some((item) => item.id === current.businessProcessId);
+			const nextId = binding.showSelector && currentIsValid ? String(current.businessProcessId) : binding.selectedId;
+			return (current.businessProcessId || null) === nextId ? current : { ...current, businessProcessId: nextId };
+		});
+	}, [processMode, processes]);
 	useEffect(() => {
 		if (previousMetricType.current !== metricType) {
 			setQuery("");
@@ -238,7 +266,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 						<header>
 							<h2>{metricType}</h2>
 							<div>
-								<button
+								<Button
 									aria-label="新建"
 									disabled={!canMaintain || !supportsIndicatorCreation(metricType)}
 									onClick={create}
@@ -249,13 +277,12 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 												? "新建指标"
 												: "当前 owner 不支持新建该对象"
 									}
-									type="button"
 								>
 									<Plus size={15} />
-								</button>
-								<button aria-label="刷新" disabled={loading} onClick={() => void load()} type="button">
+								</Button>
+								<Button aria-label="刷新" disabled={loading} onClick={() => void load()}>
 									<RefreshCw size={15} />
-								</button>
+								</Button>
 							</div>
 						</header>
 						<div className="dmx-metric-layer">公共层</div>
@@ -297,11 +324,10 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 						</div>
 						<div className="dmx-metric-tree">
 							{visible.map((item) => (
-								<button
+								<Button
 									className={selected?.id === item.id ? "active" : ""}
 									key={item.id || String(item.code)}
 									onClick={() => choose(item)}
-									type="button"
 								>
 									<span>△</span>
 									<span>
@@ -309,7 +335,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 										<b>{item.code}</b>
 										<em>{item.name}</em>
 									</span>
-								</button>
+								</Button>
 							))}
 							{!visible.length ? (
 								<RequestState description="当前筛选条件下没有指标。" kind="empty" title="暂无指标" />
@@ -372,6 +398,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 										dataDomains={dataDomains}
 										onChange={setValues}
 										processes={processes}
+										processMode={processMode}
 										values={values}
 									/>
 								</fieldset>
@@ -402,6 +429,7 @@ export function MetricEditor({
 	businessCategories,
 	dataDomains,
 	processes,
+	processMode = "AUTO_SELECT_SINGLE",
 }: {
 	values: IndicatorEditValues;
 	onChange: (values: IndicatorEditValues) => void;
@@ -409,12 +437,13 @@ export function MetricEditor({
 	businessCategories: PlanningCatalogDomain[];
 	dataDomains: PlanningCatalogDomain[];
 	processes: Sprint64BusinessProcess[];
+	processMode?: WarehousePlanBusinessProcessMode;
 }) {
 	const set = (key: keyof IndicatorEditValues, value: unknown) => onChange({ ...values, [key]: value });
 	const metricType = String(values.metricType || "ATOMIC").toUpperCase();
-	const selectedCategoryId = String(values.businessCategoryId || "");
 	const selectedDomainId = String(values.dataDomainId || "");
-	const availableDomains = dataDomains.filter((item) => item.parentId === selectedCategoryId);
+	const availableDomains = dataDomains;
+	const processBinding = resolveBusinessProcessBinding(processMode, values.businessProcessId, processes);
 	const sourceRefs = values.sourceRefs || [];
 	const sourceTypes: Array<{ value: IndicatorSourceType; label: string }> =
 		metricType === "ATOMIC"
@@ -456,37 +485,16 @@ export function MetricEditor({
 							value={{ ATOMIC: "原子指标", DERIVED: "派生指标", COMPOSITE: "复合指标" }[metricType] || metricType}
 						/>
 					</MetricField>
-					<MetricField label="业务分类" required>
-						<select
-							onChange={(event) => {
-								const id = event.target.value;
-								const category = businessCategories.find((item) => item.id === id);
-								onChange({
-									...values,
-									businessCategoryId: id || null,
-									category: category?.name || null,
-									dataDomainId: null,
-									businessProcessId: null,
-									domain: null,
-								});
-							}}
-							value={selectedCategoryId}
-						>
-							<option value="">请选择业务分类</option>
-							{businessCategories.map((item) => (
-								<option key={item.id} value={item.id}>
-									{item.name}（{item.code}）
-								</option>
-							))}
-						</select>
-					</MetricField>
 					<MetricField label="数据域" required={metricType !== "COMPOSITE"}>
 						<select
 							onChange={(event) => {
 								const id = event.target.value;
 								const dataDomain = dataDomains.find((item) => item.id === id);
+								const category = businessCategories.find((item) => item.id === dataDomain?.parentId);
 								onChange({
 									...values,
+									businessCategoryId: category?.id || null,
+									category: category?.name || null,
 									dataDomainId: id || null,
 									businessProcessId: null,
 									domain: dataDomain?.code || null,
@@ -502,19 +510,26 @@ export function MetricEditor({
 							))}
 						</select>
 					</MetricField>
-					<MetricField label="业务过程" required={metricType === "ATOMIC"}>
-						<select
-							onChange={(event) => set("businessProcessId", event.target.value || null)}
-							value={String(values.businessProcessId || "")}
-						>
-							<option value="">{metricType === "ATOMIC" ? "请选择业务过程" : "多过程时留空"}</option>
-							{processes.map((item) => (
-								<option key={item.id} value={item.id}>
-									{item.name}（{item.processId}）
-								</option>
-							))}
-						</select>
-					</MetricField>
+					{metricType === "ATOMIC" ? (
+						<MetricField label="业务过程" required>
+							{processBinding.showSelector ? (
+								<select
+									aria-label="业务过程"
+									onChange={(event) => set("businessProcessId", event.target.value || null)}
+									value={String(values.businessProcessId || "")}
+								>
+									<option value="">请选择业务过程</option>
+									{processBinding.processes.map((item) => (
+										<option key={item.id} value={item.id}>
+											{item.name}（{item.processId}）
+										</option>
+									))}
+								</select>
+							) : (
+								<small>{processBinding.message}</small>
+							)}
+						</MetricField>
+					) : null}
 					<MetricField label="指标分组编码">
 						<input
 							onChange={(event) => set("metricGroupCode", event.target.value)}
@@ -612,14 +627,14 @@ export function MetricEditor({
 										placeholder="固定版本，如 r7 / v3"
 										value={ref.sourceVersion}
 									/>
-									<button aria-label={`删除来源 ${index + 1}`} onClick={() => removeSourceRef(index)} type="button">
+									<Button aria-label={`删除来源 ${index + 1}`} onClick={() => removeSourceRef(index)}>
 										<Trash2 size={15} />
-									</button>
+									</Button>
 								</div>
 							))}
-							<button className="dmx-source-ref-add" onClick={addSourceRef} type="button">
+							<Button className="dmx-source-ref-add" onClick={addSourceRef}>
 								<Plus size={14} /> 添加固定来源
-							</button>
+							</Button>
 							<small>
 								{metricType === "ATOMIC"
 									? "原子指标绑定语义模型修订或物理资产；发布时至少一项。"

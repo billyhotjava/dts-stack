@@ -1,4 +1,6 @@
+import { useMemo } from "react";
 import type { ModelSpecStageGate } from "@/api/modelSpecApi";
+import { type CompactColumns, CompactTable } from "@/components/table";
 import { RequestState, Status } from "./PrototypePrimitives";
 
 type TargetStage = "DESIGNED" | "RELEASE_READY";
@@ -25,6 +27,38 @@ const stageCopy: Record<
 
 export function ModelStageGatePanel({ gates, targetStage }: { gates: ModelSpecStageGate[]; targetStage: TargetStage }) {
 	const gate = gates.find((item) => item.stage === targetStage);
+	const columns = useMemo<CompactColumns<ModelSpecStageGate>>(
+		() => [
+			{ title: "阶段", dataIndex: "stage" },
+			{
+				title: "状态",
+				dataIndex: "status",
+				render: (value: string) => <Status tone={value === "READY" ? "success" : "danger"}>{value}</Status>,
+			},
+			{
+				title: "阻断项",
+				dataIndex: "blockers",
+				render: (blockers: ModelSpecStageGate["blockers"]) =>
+					blockers.length
+						? blockers.map((blocker) => (
+								<div key={`${blocker.code}-${blocker.field}`}>
+									<b>{blocker.code}</b>：{blocker.message}
+								</div>
+							))
+						: "无",
+			},
+			{
+				title: "修复入口",
+				dataIndex: "blockers",
+				render: (blockers: ModelSpecStageGate["blockers"]) =>
+					blockers
+						.map((blocker) => blocker.repairRoute)
+						.filter(Boolean)
+						.join("；") || "—",
+			},
+		],
+		[],
+	);
 	if (!gate) {
 		return (
 			<RequestState
@@ -43,41 +77,13 @@ export function ModelStageGatePanel({ gates, targetStage }: { gates: ModelSpecSt
 				<Status tone={ready ? "success" : "warning"}>{ready ? "检查通过" : "待处理"}</Status>{" "}
 				{ready ? copy.ready : copy.blocked}
 			</output>
-			<div className="dmx-table-scroll">
-				<table className="dmx-table">
-					<thead>
-						<tr>
-							<th>阶段</th>
-							<th>状态</th>
-							<th>阻断项</th>
-							<th>修复入口</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr>
-							<td>{gate.stage}</td>
-							<td>
-								<Status tone={ready ? "success" : "danger"}>{gate.status}</Status>
-							</td>
-							<td>
-								{gate.blockers.length
-									? gate.blockers.map((blocker) => (
-											<div key={`${blocker.code}-${blocker.field}`}>
-												<b>{blocker.code}</b>：{blocker.message}
-											</div>
-										))
-									: "无"}
-							</td>
-							<td>
-								{gate.blockers
-									.map((blocker) => blocker.repairRoute)
-									.filter(Boolean)
-									.join("；") || "—"}
-							</td>
-						</tr>
-					</tbody>
-				</table>
-			</div>
+			<CompactTable<ModelSpecStageGate>
+				className="dmx-stage-gate-table"
+				columns={columns}
+				dataSource={[gate]}
+				pagination={false}
+				rowKey="stage"
+			/>
 		</>
 	);
 }

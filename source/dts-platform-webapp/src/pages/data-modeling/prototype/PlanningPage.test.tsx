@@ -3,7 +3,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter } from "react-router";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DataModelingRoute } from "../types";
 
 const mocks = vi.hoisted(() => ({
@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
 	retireSubjectDomain: vi.fn(),
 	updateSubjectDomain: vi.fn(),
 	listPlanningCatalogDomains: vi.fn(),
+	loadPlanningContextPolicy: vi.fn(),
 	listDataMarts: vi.fn(),
 	normalizeModelingRequestFailure: vi.fn(),
 	canMaintain: false,
@@ -63,16 +64,45 @@ vi.mock("./services/planningProjectionService", () => ({
 	loadPlanningProjection: mocks.loadPlanningProjection,
 	normalizeModelingRequestFailure: mocks.normalizeModelingRequestFailure,
 }));
+vi.mock("./services/planningContextPolicyService", () => ({
+	loadPlanningContextPolicy: mocks.loadPlanningContextPolicy,
+}));
 vi.mock("./useDataModelingMenuGrant", () => ({ useDataModelingMenuGrant: () => mocks.canMaintain }));
+vi.mock("./PlanningPolicyForm", () => ({ PlanningPolicyForm: () => <section>规划参数已接入权威策略</section> }));
 
 import { PlanningPage } from "./PlanningPage";
 
 let container: HTMLDivElement;
 let root: Root;
 
+beforeAll(() => {
+	if (!window.matchMedia) {
+		Object.defineProperty(window, "matchMedia", {
+			writable: true,
+			value: (query: string) => ({
+				matches: false,
+				media: query,
+				onchange: null,
+				addListener: () => {},
+				removeListener: () => {},
+				addEventListener: () => {},
+				removeEventListener: () => {},
+				dispatchEvent: () => false,
+			}),
+		});
+	}
+});
+
 beforeEach(() => {
 	mocks.canMaintain = false;
 	mocks.architectureCanMaintain = true;
+	mocks.loadPlanningContextPolicy.mockResolvedValue({
+		policy: {
+			businessCategoryMode: "SINGLE_DEFAULT",
+			defaultBusinessCategoryId: "category-1",
+			businessProcessMode: "AUTO_SELECT_SINGLE",
+		},
+	});
 	(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 	container = document.createElement("div");
 	document.body.appendChild(container);
@@ -132,8 +162,7 @@ describe("PlanningPage", () => {
 	};
 
 	it("renders the DataWorks planning tree and hides the modeling space", async () => {
-		const reason = "当前版本尚未提供可维护的规划参数";
-		mocks.loadPlanningProjection.mockResolvedValue({ headers: [], rows: [], readOnlyReason: reason });
+		mocks.loadPlanningProjection.mockResolvedValue({ headers: [], rows: [], readOnlyReason: null });
 		const route: DataModelingRoute = {
 			workspace: "planning",
 			view: "system",
@@ -157,7 +186,7 @@ describe("PlanningPage", () => {
 			expect(container.textContent).toContain(label);
 		}
 		expect(container.textContent).not.toContain("建模空间");
-		expect(container.textContent?.match(new RegExp(reason, "g"))).toHaveLength(1);
+		expect(container.textContent).toContain("规划参数已接入权威策略");
 	});
 
 	it("keeps navigation presentation separate from architecture write access", async () => {

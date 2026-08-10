@@ -1,6 +1,7 @@
 import { ArrowRight, BarChart3, Boxes, Database, GitBranch, Ruler, Sparkles } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
+import { type CompactColumns, CompactTable } from "@/components/table";
 import { dataModelingPath } from "../navigation";
 import type { DataModelingRoute } from "../types";
 import { Button, PageHeader, RequestState, Status } from "./PrototypePrimitives";
@@ -70,6 +71,34 @@ function OverviewContent({
 	projection: ModelingOverviewProjection;
 	navigate: ReturnType<typeof useNavigate>;
 }) {
+	const recentModelColumns = useMemo<CompactColumns<ModelingOverviewProjection["recentModels"][number]>>(
+		() => [
+			{
+				title: "模型名称",
+				dataIndex: "name",
+				render: (name: string, model) => (
+					<Button
+						onClick={() =>
+							navigate(`${dataModelingPath("dimensions", "workbench")}?modelSpecId=${encodeURIComponent(model.id)}`)
+						}
+						type="link"
+					>
+						{name}
+					</Button>
+				),
+			},
+			{ title: "模型类型", dataIndex: "type" },
+			{ title: "数据域", dataIndex: "domain" },
+			{ title: "版本", dataIndex: "version" },
+			{
+				title: "状态",
+				dataIndex: "status",
+				render: (status: string) => <Status tone={status === "PUBLISHED" ? "success" : "warning"}>{status}</Status>,
+			},
+			{ title: "更新时间", dataIndex: "updatedAt" },
+		],
+		[navigate],
+	);
 	return (
 		<>
 			<section className="dmx-summary-strip" aria-label="建模资产摘要">
@@ -93,48 +122,17 @@ function OverviewContent({
 				<section className="dmx-panel dmx-panel--wide">
 					<header>
 						<h2>最近模型</h2>
-						<button onClick={() => navigate(dataModelingPath("dimensions", "workbench"))} type="button">
+						<Button onClick={() => navigate(dataModelingPath("dimensions", "workbench"))} type="link">
 							进入维度建模 <ArrowRight size={14} />
-						</button>
+						</Button>
 					</header>
 					{projection.recentModels.length ? (
-						<div className="dmx-table-scroll">
-							<table className="dmx-table">
-								<thead>
-									<tr>
-										{["模型名称", "模型类型", "数据域", "版本", "状态", "更新时间"].map((item) => (
-											<th key={item}>{item}</th>
-										))}
-									</tr>
-								</thead>
-								<tbody>
-									{projection.recentModels.map((model) => (
-										<tr key={model.id}>
-											<td>
-												<button
-													className="dmx-table-link"
-													onClick={() =>
-														navigate(
-															`${dataModelingPath("dimensions", "workbench")}?modelSpecId=${encodeURIComponent(model.id)}`,
-														)
-													}
-													type="button"
-												>
-													{model.name}
-												</button>
-											</td>
-											<td>{model.type}</td>
-											<td>{model.domain}</td>
-											<td>{model.version}</td>
-											<td>
-												<Status tone={model.status === "PUBLISHED" ? "success" : "warning"}>{model.status}</Status>
-											</td>
-											<td>{model.updatedAt}</td>
-										</tr>
-									))}
-								</tbody>
-							</table>
-						</div>
+						<CompactTable<ModelingOverviewProjection["recentModels"][number]>
+							columns={recentModelColumns}
+							dataSource={projection.recentModels}
+							pagination={false}
+							rowKey="id"
+						/>
 					) : (
 						<RequestState description="当前租户尚无 ModelSpec。" kind="empty" title="暂无模型" />
 					)}

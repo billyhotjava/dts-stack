@@ -1,5 +1,5 @@
 import { ReloadOutlined } from "@ant-design/icons";
-import { Alert, Button, Descriptions, Empty, Spin, Table, Tag, Typography } from "antd";
+import { Alert, Button, Descriptions, Empty, Spin, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -11,6 +11,7 @@ import {
 	ingestionTaskAPI,
 } from "@/api/ingestion";
 import { PageHeader } from "@/components/page-header";
+import { CompactTable } from "@/components/table";
 import styles from "./AccessDefaultsPage.module.css";
 
 const { Text } = Typography;
@@ -294,16 +295,12 @@ export default function AccessDefaultsPage() {
 								<h2 className={styles.sectionTitle}>当前默认策略</h2>
 								<p className={styles.sectionDescription}>统一默认值按版本发布；任务运行不会动态漂移到新版本。</p>
 							</div>
-							<Tag color={snapshot.policy.status === "ACTIVE" ? "success" : "warning"}>
-								{snapshot.policy.status}
-							</Tag>
+							<Tag color={snapshot.policy.status === "ACTIVE" ? "success" : "warning"}>{snapshot.policy.status}</Tag>
 						</div>
 						<Descriptions bordered size="small" column={{ xs: 1, md: 2, xl: 4 }}>
 							<Descriptions.Item label="策略标识">{snapshot.policy.policyKey}</Descriptions.Item>
 							<Descriptions.Item label="版本">v{snapshot.policy.version}</Descriptions.Item>
-							<Descriptions.Item label="激活时间">
-								{snapshot.policy.activatedAt || "未记录"}
-							</Descriptions.Item>
+							<Descriptions.Item label="激活时间">{snapshot.policy.activatedAt || "未记录"}</Descriptions.Item>
 							<Descriptions.Item label="校验值">{snapshot.policy.checksum.slice(0, 12)}</Descriptions.Item>
 							<Descriptions.Item label="默认参数" span={4}>
 								<ConfigurationPreview value={snapshot.policy.defaults} />
@@ -345,12 +342,11 @@ export default function AccessDefaultsPage() {
 							</div>
 							<Tag>{snapshot.capabilities.length} 个连接器</Tag>
 						</div>
-						<Table<IngestionConnectorCapabilityDTO>
+						<CompactTable<IngestionConnectorCapabilityDTO>
 							rowKey="connectorType"
 							columns={capabilityColumns}
 							dataSource={snapshot.capabilities}
-							scroll={{ x: 980 }}
-							pagination={{ pageSize: 10, showSizeChanger: true }}
+							pagination={{ pageSize: 10 }}
 							locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无连接器能力声明" /> }}
 						/>
 					</section>
@@ -378,7 +374,7 @@ export default function AccessDefaultsPage() {
 										{snapshot.apiContract.sourceTypes?.join("、") || "—"}
 									</Descriptions.Item>
 								</Descriptions>
-								<Table<ApiAuthProviderDescriptorDTO>
+								<CompactTable<ApiAuthProviderDescriptorDTO>
 									rowKey="id"
 									columns={authProviderColumns}
 									dataSource={snapshot.apiContract.authProviders || []}

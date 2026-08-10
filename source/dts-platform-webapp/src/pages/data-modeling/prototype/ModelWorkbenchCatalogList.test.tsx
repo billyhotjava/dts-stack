@@ -2,10 +2,28 @@
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { ModelWorkbenchCatalogList } from "./ModelWorkbenchCatalogList";
+
+beforeAll(() => {
+	if (!window.matchMedia) {
+		Object.defineProperty(window, "matchMedia", {
+			writable: true,
+			value: (query: string) => ({
+				matches: false,
+				media: query,
+				onchange: null,
+				addListener: () => {},
+				removeListener: () => {},
+				addEventListener: () => {},
+				removeEventListener: () => {},
+				dispatchEvent: () => false,
+			}),
+		});
+	}
+});
 
 const apiMocks = vi.hoisted(() => ({
 	getMaterializationStatuses: vi.fn(),
@@ -294,8 +312,8 @@ describe("ModelWorkbenchCatalogList", () => {
 		);
 		await act(async () => selectPage?.click());
 		expect(container.textContent).toContain("已选 10 个模型");
-		const next = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "下一页");
-		await act(async () => next?.click());
+		const next = container.querySelector<HTMLElement>(".ant-pagination-next");
+		await act(async () => next?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		await act(async () => Promise.resolve());
 
 		expect(apiMocks.listWorkbenchCatalogPage).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, size: 10 }));

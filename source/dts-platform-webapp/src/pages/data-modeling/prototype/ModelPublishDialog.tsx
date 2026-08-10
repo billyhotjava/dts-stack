@@ -6,12 +6,14 @@ import {
 	getReleaseCandidateWorkbench,
 	lockReleaseCandidate,
 	publishReleaseCandidate,
+	type ReleaseCandidateEntryEvidence,
 	type ReleaseCandidateWorkbench,
 	rematerializeReleaseCandidate,
 	retryReleaseCandidate,
 	startModelBuildIntent,
 	startModelPublicationIntent,
 } from "@/api/modelSpecApi";
+import { type CompactColumns, CompactTable } from "@/components/table";
 import type { CanonicalModelSpecView, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { Button, Modal, RequestState, Status } from "./PrototypePrimitives";
 import { normalizeModelingRequestFailure } from "./services/planningProjectionService";
@@ -170,6 +172,25 @@ export function ModelPublishDialog({
 			setBusy("");
 		}
 	};
+	const evidenceColumns = useMemo<CompactColumns<ReleaseCandidateEntryEvidence>>(
+		() => [
+			{ title: "模型", dataIndex: "modelName" },
+			{ title: "目标关系", dataIndex: "targetRelation", render: (value?: string | null) => value || "—" },
+			{ title: "运行", dataIndex: "runStatus", render: (value?: string | null) => value || "未启动" },
+			{
+				title: "关系核验",
+				dataIndex: "relationState",
+				render: (value: ReleaseCandidateEntryEvidence["relationState"]) => (
+					<Status tone={value === "VERIFIED" ? "success" : "warning"}>
+						{value === "VERIFIED" ? "关系已核验" : value}
+					</Status>
+				),
+			},
+			{ title: "尝试", dataIndex: "attempt", render: (value?: number | null) => value ?? "—" },
+			{ title: "完成时间", dataIndex: "finishedAt", render: (value?: string | null) => formatTime(value) },
+		],
+		[],
+	);
 	return (
 		<Modal onClose={onClose} title={batch ? "批量物化" : "发布与物化"} wide>
 			{!canMaintain ? (
@@ -224,34 +245,12 @@ export function ModelPublishDialog({
 							</dl>
 							{workspace?.entryEvidence.length ? (
 								<div className="dmx-table-scroll dmx-materialization-evidence">
-									<table className="dmx-table">
-										<thead>
-											<tr>
-												<th>模型</th>
-												<th>目标关系</th>
-												<th>运行</th>
-												<th>关系核验</th>
-												<th>尝试</th>
-												<th>完成时间</th>
-											</tr>
-										</thead>
-										<tbody>
-											{workspace.entryEvidence.map((item) => (
-												<tr key={item.candidateEntryId}>
-													<td>{item.modelName}</td>
-													<td>{item.targetRelation || "—"}</td>
-													<td>{item.runStatus || "未启动"}</td>
-													<td>
-														<Status tone={item.relationState === "VERIFIED" ? "success" : "warning"}>
-															{item.relationState === "VERIFIED" ? "关系已核验" : item.relationState}
-														</Status>
-													</td>
-													<td>{item.attempt || "—"}</td>
-													<td>{formatTime(item.finishedAt)}</td>
-												</tr>
-											))}
-										</tbody>
-									</table>
+									<CompactTable<ReleaseCandidateEntryEvidence>
+										columns={evidenceColumns}
+										dataSource={workspace.entryEvidence}
+										pagination={false}
+										rowKey="candidateEntryId"
+									/>
 								</div>
 							) : (
 								<p className="dmx-capability-note">当前候选尚无逐表执行证据。</p>

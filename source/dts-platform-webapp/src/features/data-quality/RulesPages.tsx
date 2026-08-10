@@ -1,5 +1,5 @@
 import { DeleteOutlined, EditOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Button, Card, Descriptions, Input, Popconfirm, Space, Switch, Table, Tag } from "antd";
+import { Button, Card, Descriptions, Input, Popconfirm, Space, Switch, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
@@ -14,6 +14,7 @@ import {
 	triggerQualityDryRun,
 	triggerQualityRun,
 } from "@/api/platformApi";
+import { CompactTable } from "@/components/table";
 import { formatTime } from "@/utils/textUtils";
 import { ManagePermissionHint, QualityEmpty, QualityPageHeading, QualityStatus } from "./QualityShared";
 import { qualityPath } from "./qualityRoutes";
@@ -218,14 +219,12 @@ export function RuleListPage() {
 					style={{ maxWidth: 420 }}
 				/>
 			</Card>
-			<Table
+			<CompactTable
 				rowKey="id"
 				columns={columns}
 				dataSource={filtered}
 				loading={loading}
-				scroll={{ x: 1180 }}
-				pagination={{ pageSize: 10, showSizeChanger: true }}
-				size="small"
+				pagination={{ pageSize: 10 }}
 			/>
 		</div>
 	);
@@ -370,11 +369,10 @@ export function RuleDetailPage() {
 				</pre>
 			</Card>
 			<Card title="版本历史">
-				<Table
+				<CompactTable
 					rowKey={(row) => String(row.id || row.version)}
 					dataSource={versions}
 					pagination={false}
-					size="small"
 					columns={[
 						{ title: "版本", dataIndex: "version", width: 100, render: (value) => <Tag color="blue">v{value}</Tag> },
 						{ title: "状态", dataIndex: "status", width: 130, render: (value) => <QualityStatus status={value} /> },
@@ -385,11 +383,10 @@ export function RuleDetailPage() {
 				/>
 			</Card>
 			<Card title="最近执行">
-				<Table
+				<CompactTable
 					rowKey="runId"
 					dataSource={history}
 					pagination={false}
-					size="small"
 					columns={[
 						{ title: "运行 ID", dataIndex: "runId", ellipsis: true },
 						{ title: "时间", dataIndex: "time", width: 180, render: formatTime },

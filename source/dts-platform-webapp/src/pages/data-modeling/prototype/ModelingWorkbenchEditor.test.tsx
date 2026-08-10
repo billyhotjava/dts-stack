@@ -2,9 +2,54 @@
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
+
+beforeAll(() => {
+	if (!window.matchMedia) {
+		Object.defineProperty(window, "matchMedia", {
+			writable: true,
+			value: (query: string) => ({
+				matches: false,
+				media: query,
+				onchange: null,
+				addListener: () => {},
+				removeListener: () => {},
+				addEventListener: () => {},
+				removeEventListener: () => {},
+				dispatchEvent: () => false,
+			}),
+		});
+	}
+});
+
+const mocks = vi.hoisted(() => ({
+	listBusinessProcessesApi: vi.fn().mockResolvedValue([
+		{
+			id: "process-row-1",
+			version: 1,
+			processId: "budget_execution",
+			domainId: "finance",
+			name: "预算执行",
+			sourceType: "MANUAL",
+			confirmed: true,
+			lifecycleStatus: "ACTIVE",
+		},
+	]),
+	loadPlanningContextPolicy: vi.fn().mockResolvedValue({
+		policy: { businessProcessMode: "AUTO_SELECT_SINGLE" },
+	}),
+}));
+
+vi.mock("@/api/sprint64GovernanceApi", () => ({
+	listBusinessProcessesApi: mocks.listBusinessProcessesApi,
+}));
+vi.mock("./services/planningContextPolicyService", async (importOriginal) => ({
+	...(await importOriginal<typeof import("./services/planningContextPolicyService")>()),
+	loadPlanningContextPolicy: mocks.loadPlanningContextPolicy,
+}));
+
 import { ModelingWorkbenchEditor, type ModelingWorkbenchEditorProps } from "./ModelingWorkbenchEditor";
 import type { ConceptDimensionDraft, ModelSpecDraft } from "./services/modelWorkbenchService";
 
@@ -169,7 +214,7 @@ describe("ModelingWorkbenchEditor", () => {
 	it("renders the concept-dimension form without dimension-table fields or lifecycle actions", async () => {
 		await render(makeProps({ draft: makeConceptDraft(), dimensionDefinitions: [], fieldRowIds: [] }));
 
-		for (const label of ["数仓分层", "业务分类", "数据域", "系统编码", "中文名称", "描述"])
+		for (const label of ["数仓分层", "数据域", "系统编码", "中文名称", "描述"])
 			expect(container.textContent).toContain(label);
 		for (const label of [
 			"存储策略",
@@ -255,7 +300,6 @@ describe("ModelingWorkbenchEditor", () => {
 		await render();
 		for (const label of [
 			"数仓分层",
-			"业务分类",
 			"数据域",
 			"存储策略",
 			"维度",
@@ -357,7 +401,7 @@ describe("ModelingWorkbenchEditor", () => {
 	it("keeps dimension draft selects editable and authority inputs disabled", async () => {
 		await render();
 
-		for (const label of ["数仓分层", "业务分类", "数据域", "存储策略", "维度"])
+		for (const label of ["数仓分层", "数据域", "存储策略", "维度"])
 			expect(container.querySelector<HTMLSelectElement>(`select[aria-label="${label}"]`)).toHaveProperty(
 				"disabled",
 				false,

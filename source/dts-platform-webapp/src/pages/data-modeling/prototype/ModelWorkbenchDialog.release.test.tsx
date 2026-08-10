@@ -2,12 +2,30 @@
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ModelSpecStageGate, ReleaseCandidate, ReleaseCandidateWorkbench } from "@/api/modelSpecApi";
 import type { ModelImplementationView } from "@/features/modeling/contracts/modelImplementationContract";
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { ModelPublishDialog } from "./ModelPublishDialog";
 import { ModelWorkbenchDialog } from "./ModelWorkbenchDialog";
+
+beforeAll(() => {
+	if (!window.matchMedia) {
+		Object.defineProperty(window, "matchMedia", {
+			writable: true,
+			value: (query: string) => ({
+				matches: false,
+				media: query,
+				onchange: null,
+				addListener: () => {},
+				removeListener: () => {},
+				addEventListener: () => {},
+				removeEventListener: () => {},
+				dispatchEvent: () => false,
+			}),
+		});
+	}
+});
 
 const apiMocks = vi.hoisted(() => ({
 	createCandidate: vi.fn(),
@@ -128,8 +146,12 @@ const flush = async () => {
 	});
 };
 
-const button = (label: string) =>
-	Array.from(container.querySelectorAll("button")).find((item) => item.textContent?.trim() === label);
+const button = (label: string) => {
+	const normalize = (text: string) => text.replace(/\s+/g, "");
+	return Array.from(container.querySelectorAll("button")).find(
+		(item) => normalize(item.textContent ?? "") === normalize(label),
+	);
+};
 
 beforeEach(() => {
 	(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -342,7 +364,7 @@ describe("stage gate dispatch", () => {
 		await flush();
 
 		expect(container.textContent).toContain("设计提交检查");
-		expect(container.querySelectorAll("tbody tr")).toHaveLength(1);
+		expect(container.querySelectorAll("tbody tr.ant-table-row")).toHaveLength(1);
 		expect(container.querySelector("tbody")?.textContent).toContain("DESIGNED");
 		expect(container.textContent).not.toContain("MODEL_SPEC_PERMISSION_EVIDENCE_STALE");
 	});
