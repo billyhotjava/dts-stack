@@ -70,8 +70,8 @@ describe("data-modeling navigation", () => {
 		expect(resolveDataModelingRoute("/data-modeling/planning/system")).toMatchObject({
 			workspace: "planning",
 			view: "system",
-			title: "规划参数配置",
-			description: "说明数仓规划参数的当前能力边界；当前版本暂不提供在线维护。",
+			title: "建模策略",
+			description: "配置当前建模计划的默认业务分类、业务过程选择方式和交付策略。",
 		});
 	});
 });

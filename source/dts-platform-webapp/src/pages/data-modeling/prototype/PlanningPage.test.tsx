@@ -68,7 +68,7 @@ vi.mock("./services/planningContextPolicyService", () => ({
 	loadPlanningContextPolicy: mocks.loadPlanningContextPolicy,
 }));
 vi.mock("./useDataModelingMenuGrant", () => ({ useDataModelingMenuGrant: () => mocks.canMaintain }));
-vi.mock("./PlanningPolicyForm", () => ({ PlanningPolicyForm: () => <section>规划参数已接入权威策略</section> }));
+vi.mock("./PlanningPolicyForm", () => ({ PlanningPolicyForm: () => <section>建模策略已接入权威策略</section> }));
 
 import { PlanningPage } from "./PlanningPage";
 
@@ -161,35 +161,25 @@ describe("PlanningPage", () => {
 		disabledReason: null,
 	};
 
-	it("renders the DataWorks planning tree and hides the modeling space", async () => {
+	it("renders modeling strategy without a duplicate warehouse-planning sidebar", async () => {
 		mocks.loadPlanningProjection.mockResolvedValue({ headers: [], rows: [], readOnlyReason: null });
 		const route: DataModelingRoute = {
 			workspace: "planning",
 			view: "system",
-			title: "规划参数配置",
-			description: "说明数仓规划参数的当前能力边界；当前版本暂不提供在线维护。",
+			title: "建模策略",
+			description: "配置当前建模计划的默认业务分类、业务过程选择方式和交付策略。",
 		};
 
 		await renderPlanning(route);
 
-		for (const label of [
-			"业务分类",
-			"数仓分层",
-			"公共层",
-			"数据域",
-			"业务过程",
-			"应用层",
-			"数据集市",
-			"主题域",
-			"规划参数配置",
-		]) {
-			expect(container.textContent).toContain(label);
-		}
+		expect(container.textContent).toContain("建模策略");
 		expect(container.textContent).not.toContain("建模空间");
-		expect(container.textContent).toContain("规划参数已接入权威策略");
+		expect(container.textContent).not.toContain("平台数仓规划");
+		expect(container.querySelector('nav[aria-label="数仓规划目录"]')).toBeNull();
+		expect(container.textContent).toContain("建模策略已接入权威策略");
 	});
 
-	it("keeps navigation presentation separate from architecture write access", async () => {
+	it("keeps the canonical warehouse-planning navigation separate from architecture write access", async () => {
 		mocks.loadPlanningProjection.mockResolvedValue({ headers: [], rows: [], readOnlyReason: null });
 		const route: DataModelingRoute = {
 			workspace: "planning",
@@ -201,19 +191,18 @@ describe("PlanningPage", () => {
 		await act(async () =>
 			root.render(
 				<MemoryRouter>
-					<PlanningPage navigationSurface="modeling" route={route} sidebarActiveView="domains" surface="architecture" />
+					<PlanningPage navigationSurface="architecture" route={route} surface="architecture" />
 				</MemoryRouter>,
 			),
 		);
 
-		expect(container.textContent).toContain("公共层");
-		expect(container.textContent).not.toContain("平台全局架构");
-		expect(container.textContent).toContain("数据建模 / 数仓规划");
+		expect(container.textContent).toContain("平台数仓规划");
+		expect(container.textContent).toContain("数仓规划 / 平台规划");
 		expect(
 			[...container.querySelectorAll("a")]
 				.filter((link) => link.classList.contains("active"))
 				.map((link) => link.textContent?.trim()),
-		).toEqual(["数据域"]);
+		).toEqual(["业务分类与数据域"]);
 		expect(
 			[...container.querySelectorAll("button")].find((button) => button.textContent?.includes("新建业务分类"))
 				?.disabled,

@@ -27,35 +27,29 @@ const linkTarget = (label: string) =>
 		?.getAttribute("href");
 
 describe("PlanningSidebar", () => {
-	it("routes migrated planning dictionaries to the canonical data architecture owner", async () => {
+	it("shows only the canonical warehouse-planning dictionaries", async () => {
 		await act(async () =>
 			root.render(
-				<MemoryRouter initialEntries={["/data-modeling/planning/spaces"]}>
-					<PlanningSidebar activeView="spaces" />
+				<MemoryRouter initialEntries={["/data-architecture?view=business-domains"]}>
+					<PlanningSidebar activeView="business-domains" />
 				</MemoryRouter>,
 			),
 		);
 
-		expect(linkTarget("业务分类")).toBe(
-			"/data-architecture?view=business-domains&source=modeling-space&planningView=business-categories",
-		);
-		expect(linkTarget("数据域")).toBe(
-			"/data-architecture?view=business-domains&source=modeling-space&planningView=domains",
-		);
-		expect(linkTarget("数仓分层")).toBe("/data-architecture?view=layers&source=modeling-space&planningView=layers");
-		expect(linkTarget("业务过程")).toBe(
-			"/data-architecture?view=processes&source=modeling-space&planningView=processes",
-		);
-		expect(linkTarget("数据集市")).toBe("/data-architecture?view=marts&source=modeling-space&planningView=marts");
-		expect(linkTarget("主题域")).toBe("/data-architecture?view=subjects&source=modeling-space&planningView=subjects");
-		expect(linkTarget("规划参数配置")).toBe("/data-modeling/planning/system");
+		expect(linkTarget("业务分类与数据域")).toBe("/data-architecture?view=business-domains");
+		expect(linkTarget("数仓分层")).toBe("/data-architecture?view=layers");
+		expect(linkTarget("业务过程")).toBe("/data-architecture?view=processes");
+		expect(linkTarget("数据集市")).toBe("/data-architecture?view=marts");
+		expect(linkTarget("主题域")).toBe("/data-architecture?view=subjects");
+		expect(container.textContent).not.toContain("建模空间");
+		expect(container.textContent).not.toContain("建模策略");
 	});
 
 	it("shows icons and highlights only the selected query-backed architecture view", async () => {
 		await act(async () =>
 			root.render(
 				<MemoryRouter initialEntries={["/data-architecture?view=layers"]}>
-					<PlanningSidebar activeView="layers" surface="architecture" />
+					<PlanningSidebar activeView="layers" />
 				</MemoryRouter>,
 			),
 		);

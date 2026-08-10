@@ -117,7 +117,7 @@ test("workbench exposes the end-to-end data product journey from integration to 
 	}
 	for (const route of [
 		"/foundation/data-sources",
-		"/data-modeling/planning/spaces",
+		"/data-architecture",
 		"/catalog/metadata-management",
 		"/governance/standards/elements",
 		"/governance/standards/reference",

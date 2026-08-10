@@ -139,7 +139,7 @@
   },
   {
     "code": "sys.nav.portal.planningSystem",
-    "title": "规划参数配置",
+    "title": "建模策略",
     "route": "/data-modeling/planning/system",
     "requiredRoles": []
   },

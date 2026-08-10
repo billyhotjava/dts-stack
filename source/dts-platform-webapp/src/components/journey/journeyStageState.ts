@@ -126,7 +126,7 @@ export const DATA_PRODUCT_JOURNEY_STAGE_DEFINITIONS: JourneyStageDefinition[] = 
 		defaultGap: "缺少数据源：数仓规划需要先知道业务表来源。",
 		doneGap: "数仓规划入口已具备数据来源，可确认主题域和分层策略。",
 		nextStep: "确认主题域、业务过程和分层策略",
-		route: "/data-modeling/planning/spaces",
+		route: "/data-architecture?view=business-domains",
 		action: "确认数仓规划",
 		supportingRoute: "/catalog/metadata-management",
 		supportingAction: "核对资产目录",

@@ -410,7 +410,7 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 				if (active) setProcessMode(contextPolicy.policy.businessProcessMode);
 			})
 			.catch(() => {
-				if (active) setProcessFailure("规划参数读取失败，暂按唯一过程自动选择处理。");
+				if (active) setProcessFailure("建模策略读取失败，暂按唯一过程自动选择处理。");
 			});
 		return () => {
 			active = false;

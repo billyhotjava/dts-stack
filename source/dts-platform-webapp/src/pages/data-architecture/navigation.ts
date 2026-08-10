@@ -4,15 +4,6 @@ export const DATA_ARCHITECTURE_VIEWS = ["business-domains", "processes", "layers
 
 export type DataArchitectureView = (typeof DATA_ARCHITECTURE_VIEWS)[number];
 
-const MODELING_PLANNING_VIEWS = ["business-categories", "layers", "domains", "processes", "marts", "subjects"] as const;
-
-export type ModelingPlanningView = (typeof MODELING_PLANNING_VIEWS)[number];
-
-export type DataArchitectureNavigation = {
-	surface: "modeling" | "architecture";
-	activeView: string;
-};
-
 const VIEW_ROUTES: Record<DataArchitectureView, Pick<DataModelingRoute, "title" | "description">> = {
 	"business-domains": {
 		title: "业务分类与数据域",
@@ -39,14 +30,7 @@ const VIEW_ROUTES: Record<DataArchitectureView, Pick<DataModelingRoute, "title" 
 const LEGACY_PLANNING_VIEW: Record<string, DataArchitectureView> = {
 	"business-categories": "business-domains",
 	domains: "business-domains",
-	processes: "processes",
-	layers: "layers",
-	marts: "marts",
-	subjects: "subjects",
-};
-
-const DEFAULT_MODELING_VIEW: Record<DataArchitectureView, ModelingPlanningView> = {
-	"business-domains": "business-categories",
+	spaces: "business-domains",
 	processes: "processes",
 	layers: "layers",
 	marts: "marts",
@@ -76,28 +60,6 @@ export function dataArchitecturePath(view: DataArchitectureView, activeId?: stri
 	const params = new URLSearchParams({ view });
 	if (activeId?.trim()) params.set("active", activeId.trim());
 	return `/data-architecture?${params.toString()}`;
-}
-
-export function modelingSpaceDataArchitecturePath(
-	view: DataArchitectureView,
-	planningView: ModelingPlanningView,
-	activeId?: string | null,
-) {
-	const params = new URLSearchParams({ view, source: "modeling-space", planningView });
-	if (activeId?.trim()) params.set("active", activeId.trim());
-	return `/data-architecture?${params.toString()}`;
-}
-
-export function resolveDataArchitectureNavigation(
-	source: string | null | undefined,
-	planningView: string | null | undefined,
-	view: DataArchitectureView,
-): DataArchitectureNavigation {
-	if (source !== "modeling-space") return { surface: "architecture", activeView: view };
-	const activeView = MODELING_PLANNING_VIEWS.includes(planningView as ModelingPlanningView)
-		? (planningView as ModelingPlanningView)
-		: DEFAULT_MODELING_VIEW[view];
-	return { surface: "modeling", activeView };
 }
 
 export function legacyPlanningArchitectureTarget(pathname: string, search = "", hash = ""): string | null {
@@ -135,8 +97,6 @@ export function legacySubjectAreasTarget(search = "", hash = "") {
 		if (active) params.set("domain", active);
 		return withLocationState("/catalog/assets", params, hash);
 	}
-	params.set("view", "baseline");
-	params.set("tab", "categories");
-	if (active) params.set("domainId", active);
-	return withLocationState("/data-modeling/planning/spaces", params, hash);
+	params.set("view", "business-domains");
+	return withLocationState("/data-architecture", params, hash);
 }

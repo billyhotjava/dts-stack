@@ -83,7 +83,7 @@ describe("PlanningPolicyForm", () => {
 			processMode.dispatchEvent(new Event("change", { bubbles: true }));
 		});
 		const save = [...container.querySelectorAll("button")].find((button) =>
-			button.textContent?.includes("保存规划参数"),
+			button.textContent?.includes("保存建模策略"),
 		);
 		await act(async () => (save as HTMLButtonElement).click());
 
@@ -96,6 +96,6 @@ describe("PlanningPolicyForm", () => {
 				businessProcessMode: "MANAGED",
 			}),
 		);
-		expect(container.textContent).toContain("规划参数已保存");
+		expect(container.textContent).toContain("建模策略已保存");
 	});
 });

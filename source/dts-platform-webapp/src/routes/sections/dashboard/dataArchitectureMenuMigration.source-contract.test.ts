@@ -17,6 +17,10 @@ const planningGroupRepairUrl = new URL(
 	"../../../../../dts-admin/src/main/resources/config/liquibase/changelog/20260810-02_retire_legacy_modeling_layer_groups.xml",
 	import.meta.url,
 );
+const planningMenuConvergenceUrl = new URL(
+	"../../../../../dts-admin/src/main/resources/config/liquibase/changelog/20260810-03_converge_warehouse_planning_menu.xml",
+	import.meta.url,
+);
 
 describe("data architecture menu migration", () => {
 	it("installs the canonical root and all five views", () => {
@@ -46,5 +50,18 @@ describe("data architecture menu migration", () => {
 		assert.match(repair, /last_modified_by = actor \|\| '-retired'/);
 		assert.match(repair, /last_modified_by = actor \|\| '-rollback'/);
 		assert.doesNotMatch(repair, /DELETE FROM portal_menu(?:\s|$)/);
+	});
+
+	it("renames the canonical owner, promotes modeling strategy, and retires the hidden modeling space", () => {
+		assert.match(master, /20260810-03_converge_warehouse_planning_menu\.xml/);
+		const convergence = readFileSync(planningMenuConvergenceUrl, "utf8");
+		assert.match(convergence, /'title', '数仓规划'/);
+		assert.match(convergence, /sys\.nav\.portal\.planningSystem/);
+		assert.match(convergence, /'title', '建模策略'/);
+		assert.match(convergence, /sys\.nav\.portal\.planningSpaces/);
+		assert.match(convergence, /sys\.nav\.portal\.warehousePlanning/);
+		assert.match(convergence, /deleted = TRUE/);
+		assert.match(convergence, /last_modified_by = actor \|\| '-rollback'/);
+		assert.doesNotMatch(convergence, /DELETE FROM portal_menu(?:\s|$)/);
 	});
 });

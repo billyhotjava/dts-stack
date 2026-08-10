@@ -88,7 +88,7 @@ test("data modeling is a top-level section and studio no longer owns modeling me
 		modeling.children?.map((item) => item.key),
 		[
 			"modeling-home-workspace",
-			"warehouse-planning",
+			"planning-system",
 			"standards",
 			"dimensional-modeling",
 			"data-metrics",
@@ -114,19 +114,18 @@ test("data modeling is a top-level section and studio no longer owns modeling me
 	);
 });
 
-test("modeling keeps one planning-parameter leaf after architecture dictionaries move to their owner", () => {
+test("modeling exposes its strategy directly after warehouse planning moves to the canonical owner", () => {
 	const modeling = section("modeling");
-
-	const planning = child(modeling, "warehouse-planning");
-	assert.deepEqual(
-		planning.children?.map((item) => item.key),
-		["planning-system"],
-	);
 	assert.equal(
-		planning.children?.some((item) => item.key === "planning-spaces"),
+		flatten(modeling).some((item) => item.key === "warehouse-planning"),
 		false,
 	);
-	assert.equal(child(planning, "planning-system").title, "规划参数配置");
+	assert.equal(
+		flatten(modeling).some((item) => item.key === "planning-spaces"),
+		false,
+	);
+	assert.equal(child(modeling, "planning-system").title, "建模策略");
+	assert.equal(child(modeling, "planning-system").externalLink, "/data-modeling/planning/system");
 	assert.deepEqual(
 		child(modeling, "standards").children?.map((item) => item.key),
 		["standards-fields", "standards-codes", "standards-roots", "standards-dictionary", "standards-mappings"],
@@ -164,9 +163,9 @@ test("modeling keeps one planning-parameter leaf after architecture dictionaries
 	);
 });
 
-test("data architecture is the only visible owner for five global dictionary views", () => {
+test("warehouse planning is the only visible owner for five global dictionary views", () => {
 	const architecture = section("data-architecture");
-	assert.equal(architecture.title, "数据架构");
+	assert.equal(architecture.title, "数仓规划");
 	assert.deepEqual(
 		leaves(architecture).map((item) => item.externalLink),
 		[

@@ -134,7 +134,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 				if (active) setProcessMode(contextPolicy.policy.businessProcessMode);
 			})
 			.catch(() => {
-				if (active) setContextFailure("规划参数读取失败，业务过程暂按唯一自动选择处理。");
+				if (active) setContextFailure("建模策略读取失败，业务过程暂按唯一自动选择处理。");
 			});
 		return () => {
 			active = false;

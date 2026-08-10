@@ -189,15 +189,18 @@ describe("prototype-owned data modeling frontend", () => {
 		const metrics = read("./prototype/MetricsPage.tsx");
 		const prototypeSource = collectSource(fileURLToPath(new URL("./prototype", import.meta.url)));
 
-		expect(planning).toMatch(/PlanningSidebar|Drawer|新建/);
+		expect(planning).toMatch(/navigationSurface === "architecture"|PlanningSidebar|Drawer|新建/);
 		expect(planning).toMatch(/navigationSurface|sidebarActiveView/);
-		expect(dataArchitecturePage).toMatch(/resolveDataArchitectureNavigation|navigationSurface|sidebarActiveView/);
-		expect(dataArchitectureNavigation).toMatch(/modelingSpaceDataArchitecturePath|source:\s*"modeling-space"/);
+		expect(dataArchitecturePage).not.toContain("resolveDataArchitectureNavigation");
+		expect(dataArchitecturePage).toMatch(/navigationSurface="architecture"|sidebarActiveView/);
+		expect(dataArchitectureNavigation).not.toMatch(/modelingSpaceDataArchitecturePath|source:\s*"modeling-space"/);
 		expect(planning).toMatch(/CatalogDomainForm|BusinessProcessForm|DataMartForm|SubjectDomainForm/);
 		expect(planningEditors).toMatch(/createBusinessProcessApi|createDataMart|createSubjectDomain/);
 		expect(planningEditors).toMatch(/confirmDataMart|confirmSubjectDomain/);
 		expect(catalogEditors).toMatch(/CatalogDomainForm|listPlanningCatalogDomains/);
 		expect(planningSidebar).not.toContain("建模空间");
+		expect(planningSidebar).not.toContain("dataModelingPath");
+		expect(planningSidebar).not.toContain("modelingSpaceDataArchitecturePath");
 		expect(planningStyles).toMatch(/\.dmx-planning-sidebar__group\s*\{[^}]*font-weight:\s*(600|700)/s);
 		expect(planningStyles).toMatch(/\.dmx-planning-sidebar__icon\s*\{/);
 		expect(planningStyles).toMatch(/\.dmx-planning-sidebar a:focus-visible\s*\{/);
@@ -257,7 +260,7 @@ describe("prototype-owned data modeling frontend", () => {
 	it("keeps the product copy aligned with the approved menu corrections", () => {
 		const navigation = read("./navigation.ts");
 		expect(navigation).toContain('title: "建模概览"');
-		expect(navigation).toContain('title: "规划参数配置"');
+		expect(navigation).toContain('title: "建模策略"');
 		expect(navigation).not.toMatch(/title: "首页"|title: "系统管理"|home\/recent|home\/tasks/);
 	});
 });

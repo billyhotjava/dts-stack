@@ -56,7 +56,7 @@ test("journey routes cover the eight stage entry pages", () => {
 	const routes = collectJourneyRoutes();
 	for (const route of [
 		"/foundation/data-sources",
-		"/data-modeling/planning/spaces",
+		"/data-architecture",
 		"/governance/standards/elements",
 		"/data-modeling/dimensions/workbench",
 		"/data-modeling/metrics/atomic",

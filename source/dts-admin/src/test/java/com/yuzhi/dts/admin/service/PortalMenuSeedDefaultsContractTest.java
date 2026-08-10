@@ -377,8 +377,8 @@ class PortalMenuSeedDefaultsContractTest {
         assertEquals("modeling-home-workspace", modelingChildren.get(0).get("key"));
         assertEquals("建模概览", modelingChildren.get(0).get("title"));
         assertEquals("/data-modeling/home/workspace", modelingChildren.get(0).get("externalLink"));
-        assertEquals("warehouse-planning", modelingChildren.get(1).get("key"), "数仓规划 should follow 建模概览");
-        assertEquals("standards", modelingChildren.get(2).get("key"), "数据标准 should follow 数仓规划");
+        assertEquals("planning-system", modelingChildren.get(1).get("key"), "建模策略 should follow 建模概览");
+        assertEquals("standards", modelingChildren.get(2).get("key"), "数据标准 should follow 建模策略");
         assertEquals("dimensional-modeling", modelingChildren.get(3).get("key"), "维度建模 should follow 数据标准");
         assertEquals("data-metrics", modelingChildren.get(4).get("key"), "数据指标 should follow 维度建模");
         assertEquals("modeling-tools", modelingChildren.get(5).get("key"), "通用工具 should follow 数据指标");
@@ -388,19 +388,14 @@ class PortalMenuSeedDefaultsContractTest {
             "the redundant modeling home group must be removed"
         );
 
-        Map<String, Object> warehousePlanning = modelingChildren
-            .stream()
-            .filter(node -> "warehouse-planning".equals(node.get("key")))
-            .findFirst()
-            .orElse(null);
-        assertNotNull(warehousePlanning, "数据建模 root must expose 数仓规划");
-        Map<String, Object> planningSystem = listOfMaps(warehousePlanning.get("children"))
+        Map<String, Object> planningSystem = modelingChildren
             .stream()
             .filter(node -> "planning-system".equals(node.get("key")))
             .findFirst()
             .orElse(null);
-        assertNotNull(planningSystem, "数仓规划 must expose planning parameter configuration");
-        assertEquals("规划参数配置", planningSystem.get("title"));
+        assertNotNull(planningSystem, "数据建模 root must expose modeling strategy directly");
+        assertEquals("建模策略", planningSystem.get("title"));
+        assertFalse(modelingChildren.stream().anyMatch(node -> "warehouse-planning".equals(node.get("key"))));
 
         Map<String, Object> dimensionalModeling = modelingChildren
             .stream()
@@ -431,7 +426,7 @@ class PortalMenuSeedDefaultsContractTest {
             new TypeReference<List<Map<String, Object>>>() {}
         );
         assertEquals(
-            27,
+            26,
             defaults.stream().filter(rule -> String.valueOf(rule.get("route")).startsWith("/data-modeling/")).count(),
             "role defaults must document every prototype leaf without granting roles"
         );

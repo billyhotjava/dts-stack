@@ -51,7 +51,7 @@ test("journey stage model covers the eight product journey stages", () => {
 	}
 	for (const route of [
 		"/foundation/data-sources",
-		"/data-modeling/planning/spaces",
+		"/data-architecture?view=business-domains",
 		"/governance/standards/elements",
 		"/data-modeling/dimensions/workbench",
 		"/data-modeling/metrics/atomic",

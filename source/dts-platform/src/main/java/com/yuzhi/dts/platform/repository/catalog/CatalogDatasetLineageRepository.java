@@ -12,6 +12,18 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface CatalogDatasetLineageRepository extends JpaRepository<CatalogDatasetLineage, UUID> {
 
+    @Query(
+        """
+        select l.upstreamDatasetId, l.downstreamDatasetId
+        from CatalogDatasetLineage l
+        where lower(l.relationType) = 'dbt'
+          and l.validTo is null
+          and l.upstreamDatasetId is not null
+          and l.downstreamDatasetId is not null
+        """
+    )
+    List<Object[]> findCurrentDbtPairs();
+
     List<CatalogDatasetLineage> findByUpstreamDatasetId(UUID upstreamDatasetId);
 
     List<CatalogDatasetLineage> findByDownstreamDatasetId(UUID downstreamDatasetId);

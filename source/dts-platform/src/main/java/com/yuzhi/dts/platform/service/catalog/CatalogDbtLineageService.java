@@ -27,6 +27,9 @@ public class CatalogDbtLineageService {
 	private final ObjectMapper objectMapper;
 	private final CatalogClassificationPropagationJobService propagationJobService;
 
+	/** 未匹配明细返回上限，超出截断并标记 truncated */
+	private static final int UNMATCHED_DETAIL_LIMIT = 200;
+
 	public CatalogDbtLineageService(
 		CatalogDatasetRepository datasetRepo,
 		CatalogDatasetLineageRepository lineageRepo,
@@ -56,60 +59,73 @@ public class CatalogDbtLineageService {
 		@SuppressWarnings("unchecked")
 		Map<String, Object> nodes = nodesObj != null ? (Map<String, Object>) nodesObj : Collections.emptyMap();
 
-		// Pre-load datasets indexed by hiveTable (lowercase) using projection query
+		// 按 schema+表名（小写）建立索引；schema 缺失时退化纯表名，兼容既有数据
 		Map<String, UUID> tableIndex = new HashMap<>();
-		for (Object[] row : datasetRepo.findHiveTableAndIdProjection()) {
-			String hiveTable = (String) row[0];
-			UUID id = (UUID) row[1];
-			if (hiveTable != null) {
-				tableIndex.put(hiveTable.toLowerCase(), id);
+		for (Object[] row : datasetRepo.findSchemaTableAndIdProjection()) {
+			String hiveTable = (String) row[1];
+			if (hiveTable == null) {
+				continue;
+			}
+			UUID id = (UUID) row[2];
+			String schema = row[0] == null ? null : String.valueOf(row[0]).trim().toLowerCase();
+			tableIndex.put(hiveTable.toLowerCase(), id);
+			if (schema != null && !schema.isBlank()) {
+				tableIndex.put(schema + "." + hiveTable.toLowerCase(), id);
 			}
 		}
 
-		// Load existing lineage pairs into memory Set to avoid N+1 queries
-		Set<String> existingPairs = lineageRepo.findAll().stream()
-			.filter(l -> l.getUpstreamDatasetId() != null && l.getDownstreamDatasetId() != null && l.getValidTo() == null)
-			.filter(l -> "DBT".equalsIgnoreCase(l.getRelationType()))
-			.map(l -> l.getUpstreamDatasetId() + ":" + l.getDownstreamDatasetId())
+		// 只加载当前有效的 DBT 边（投影 id 对），不再全表加载
+		Set<String> existingPairs = lineageRepo.findCurrentDbtPairs().stream()
+			.map(row -> row[0] + ":" + row[1])
 			.collect(Collectors.toSet());
 
+		int skippedNotModel = 0;
+		int skippedMalformed = 0;
+		int skippedUnmatchedModel = 0;
+		int skippedUnmatchedParent = 0;
 		int skipped = 0;
 		Set<String> toCreateKeys = new HashSet<>();
 		List<CatalogDatasetLineage> toCreate = new ArrayList<>();
 		Set<UUID> affectedDownstreamIds = new LinkedHashSet<>();
+		List<Map<String, Object>> unmatched = new ArrayList<>();
 
 		for (Map.Entry<String, Object> entry : nodes.entrySet()) {
 			String nodeKey = entry.getKey();
-			if (!nodeKey.startsWith("model.")) {
+			if (nodeKey == null || !nodeKey.startsWith("model.")) {
+				// 非 model 节点（seed/source/exposure 等）不属于表级血缘导入范围
+				skippedNotModel++;
 				continue;
 			}
 			if (!(entry.getValue() instanceof Map)) {
-				skipped++;
+				skippedMalformed++;
 				continue;
 			}
 
 			@SuppressWarnings("unchecked")
 			Map<String, Object> node = (Map<String, Object>) entry.getValue();
 			String modelName = String.valueOf(node.getOrDefault("name", ""));
+			String modelSchema = text(node.get("schema"));
 
 			Object depsObj = node.getOrDefault("depends_on", Collections.emptyMap());
 			if (!(depsObj instanceof Map)) {
-				skipped++;
+				skippedMalformed++;
 				continue;
 			}
 			@SuppressWarnings("unchecked")
 			Map<String, Object> dependsOn = (Map<String, Object>) depsObj;
 			Object parentObj = dependsOn.getOrDefault("nodes", Collections.emptyList());
 			if (!(parentObj instanceof List)) {
-				skipped++;
+				skippedMalformed++;
 				continue;
 			}
 			@SuppressWarnings("unchecked")
 			List<String> parentKeys = (List<String>) parentObj;
 
-			UUID downstreamId = tableIndex.get(modelName.toLowerCase());
+			UUID downstreamId = resolveDatasetId(tableIndex, modelSchema, modelName);
 			if (downstreamId == null) {
+				skippedUnmatchedModel++;
 				skipped++;
+				addUnmatched(unmatched, nodeKey, modelName, "下游模型未匹配到目录资产（schema.table）");
 				continue;
 			}
 			CatalogLineageJob lineageJob = upsertDbtJob(nodeKey, modelName, node);
@@ -118,8 +134,14 @@ public class CatalogDbtLineageService {
 				String parentName = parentKey.contains(".")
 					? parentKey.substring(parentKey.lastIndexOf('.') + 1)
 					: parentKey;
-				UUID upstreamId = tableIndex.get(parentName.toLowerCase());
+				String parentSchema = parentKey.contains(".")
+					? parentKey.substring(parentKey.indexOf('.') + 1, parentKey.lastIndexOf('.'))
+					: null;
+				UUID upstreamId = resolveDatasetId(tableIndex, parentSchema, parentName);
 				if (upstreamId == null) {
+					skippedUnmatchedParent++;
+					skipped++;
+					addUnmatched(unmatched, parentKey, parentName, "上游父模型未匹配到目录资产（schema.table）");
 					continue;
 				}
 
@@ -152,6 +174,10 @@ public class CatalogDbtLineageService {
 				propagationEnqueued++;
 			}
 		}
+		boolean truncated = unmatched.size() > UNMATCHED_DETAIL_LIMIT;
+		List<Map<String, Object>> unmatchedDetail = truncated
+			? unmatched.subList(0, UNMATCHED_DETAIL_LIMIT)
+			: unmatched;
 		return Map.of(
 			"created",
 			created,
@@ -160,8 +186,49 @@ public class CatalogDbtLineageService {
 			"total",
 			nodes.size(),
 			"propagationEnqueued",
-			propagationEnqueued
+			propagationEnqueued,
+			"skippedReasons",
+			Map.of(
+				"notModel",
+				skippedNotModel,
+				"malformedNode",
+				skippedMalformed,
+				"unmatchedModel",
+				skippedUnmatchedModel,
+				"unmatchedParent",
+				skippedUnmatchedParent
+			),
+			"unmatched",
+			unmatchedDetail,
+			"truncated",
+			truncated
 		);
+	}
+
+	private void addUnmatched(List<Map<String, Object>> unmatched, String uniqueId, String name, String reason) {
+		if (unmatched.size() >= UNMATCHED_DETAIL_LIMIT) {
+			return;
+		}
+		Map<String, Object> row = new LinkedHashMap<>();
+		row.put("uniqueId", uniqueId);
+		row.put("name", name);
+		row.put("reason", reason);
+		unmatched.add(row);
+	}
+
+	/** 优先按 schema.table 精确匹配，退化为纯表名（兼容未带 schema 的模型）。 */
+	private UUID resolveDatasetId(Map<String, UUID> tableIndex, String schema, String table) {
+		if (table == null || table.isBlank()) {
+			return null;
+		}
+		String tableKey = table.trim().toLowerCase();
+		if (schema != null && !schema.isBlank()) {
+			UUID exact = tableIndex.get(schema.trim().toLowerCase() + "." + tableKey);
+			if (exact != null) {
+				return exact;
+			}
+		}
+		return tableIndex.get(tableKey);
 	}
 
 	private String sha256(String value) {

@@ -1,17 +1,12 @@
 import { useCallback } from "react";
 import { useSearchParams } from "react-router";
 import { PlanningPage } from "@/pages/data-modeling/prototype/PlanningPage";
-import { dataArchitectureRoute, resolveDataArchitectureNavigation, resolveDataArchitectureView } from "./navigation";
+import { dataArchitectureRoute, resolveDataArchitectureView } from "./navigation";
 import "@/pages/data-modeling/data-modeling.css";
 
 export default function DataArchitecturePage() {
 	const [searchParams, setSearchParams] = useSearchParams();
 	const view = resolveDataArchitectureView(searchParams.get("view"));
-	const navigation = resolveDataArchitectureNavigation(
-		searchParams.get("source"),
-		searchParams.get("planningView"),
-		view,
-	);
 	const activeId = searchParams.get("active") || "";
 	const setActiveId = useCallback(
 		(next: string | null) => {
@@ -28,10 +23,10 @@ export default function DataArchitecturePage() {
 		<div data-testid="data-architecture-page">
 			<PlanningPage
 				activeId={activeId}
-				navigationSurface={navigation.surface}
+				navigationSurface="architecture"
 				onActiveChange={setActiveId}
 				route={dataArchitectureRoute(view)}
-				sidebarActiveView={navigation.activeView}
+				sidebarActiveView={view}
 				surface="architecture"
 			/>
 		</div>

@@ -25,7 +25,7 @@ export function PlanningPolicyForm({ canMaintain }: { canMaintain: boolean }) {
 			setContext(await loadPlanningContextPolicy());
 		} catch (error) {
 			setContext(null);
-			setFailure(normalizeModelingRequestFailure(error, "规划参数读取失败，请稍后重试。").message);
+			setFailure(normalizeModelingRequestFailure(error, "建模策略读取失败，请稍后重试。").message);
 		} finally {
 			setLoading(false);
 		}
@@ -85,22 +85,22 @@ export function PlanningPolicyForm({ canMaintain }: { canMaintain: boolean }) {
 						}
 					: current,
 			);
-			setMessage("规划参数已保存；新的默认分类只用于后续创建，不会搬迁历史对象。");
+			setMessage("建模策略已保存；新的默认分类只用于后续创建，不会搬迁历史对象。");
 		} catch (error) {
-			setFailure(normalizeModelingRequestFailure(error, "规划参数保存失败，请刷新后重试。").message);
+			setFailure(normalizeModelingRequestFailure(error, "建模策略保存失败，请刷新后重试。").message);
 		} finally {
 			setSaving(false);
 		}
 	};
 
-	if (loading) return <RequestState description="正在读取当前规划策略与分类范围。" kind="loading" title="正在加载" />;
+	if (loading) return <RequestState description="正在读取当前建模策略与分类范围。" kind="loading" title="正在加载" />;
 	if (!context) {
 		return (
 			<RequestState
 				description={failure || "当前没有可用规划。"}
 				kind="error"
 				onRetry={() => void load()}
-				title="规划参数读取失败"
+				title="建模策略读取失败"
 			/>
 		);
 	}
@@ -180,7 +180,7 @@ export function PlanningPolicyForm({ canMaintain }: { canMaintain: boolean }) {
 				) : null}
 				<div className="dmx-catalog-actions">
 					<Button disabled={!canMaintain || saving} primary onClick={() => void save()}>
-						<Save size={15} /> {saving ? "保存中…" : "保存规划参数"}
+						<Save size={15} /> {saving ? "保存中…" : "保存建模策略"}
 					</Button>
 					<Button disabled={loading || saving} onClick={() => void load()}>
 						<RefreshCw size={15} /> 重新加载

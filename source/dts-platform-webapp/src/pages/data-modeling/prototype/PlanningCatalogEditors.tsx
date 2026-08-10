@@ -85,7 +85,7 @@ export function CatalogDomainForm({
 	const save = async () => {
 		if (!canMaintain) return setError("当前菜单未授权维护操作");
 		if (!code.trim() || !name.trim()) return setError(`请补齐${label}编码和名称`);
-		if (!isCategory && !parentId) return setError("请先在规划参数配置中设置默认业务分类，或人工选择所属分类");
+		if (!isCategory && !parentId) return setError("请先在建模策略中设置默认业务分类，或人工选择所属分类");
 		setBusy(true);
 		setError("");
 		try {

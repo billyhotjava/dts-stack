@@ -3,8 +3,6 @@ import {
 	dataArchitecturePath,
 	legacyPlanningArchitectureTarget,
 	legacySubjectAreasTarget,
-	modelingSpaceDataArchitecturePath,
-	resolveDataArchitectureNavigation,
 	resolveDataArchitectureView,
 } from "./navigation";
 
@@ -15,22 +13,10 @@ describe("data architecture navigation", () => {
 		expect(dataArchitecturePath("subjects", "subject-id")).toBe("/data-architecture?view=subjects&active=subject-id");
 	});
 
-	it("keeps the modeling-space menu context while using the canonical architecture owner", () => {
-		expect(modelingSpaceDataArchitecturePath("business-domains", "domains")).toBe(
-			"/data-architecture?view=business-domains&source=modeling-space&planningView=domains",
+	it("redirects the retired modeling-space route to the canonical warehouse-planning owner", () => {
+		expect(legacyPlanningArchitectureTarget("/data-modeling/planning/spaces", "?planId=plan-id", "#scope")).toBe(
+			"/data-architecture?planId=plan-id&view=business-domains#scope",
 		);
-		expect(resolveDataArchitectureNavigation("modeling-space", "domains", "business-domains")).toEqual({
-			surface: "modeling",
-			activeView: "domains",
-		});
-		expect(resolveDataArchitectureNavigation("modeling-space", "unknown", "layers")).toEqual({
-			surface: "modeling",
-			activeView: "layers",
-		});
-		expect(resolveDataArchitectureNavigation(null, "domains", "business-domains")).toEqual({
-			surface: "architecture",
-			activeView: "business-domains",
-		});
 	});
 
 	it("maps every legacy planning dictionary route without losing query or hash", () => {
@@ -55,7 +41,7 @@ describe("data architecture navigation", () => {
 			"/catalog/assets?tab=governance&active=domain-id&domain=domain-id#assets",
 		);
 		expect(legacySubjectAreasTarget("?tab=scope&active=domain-id&returnPlanId=plan-id", "#scope")).toBe(
-			"/data-modeling/planning/spaces?tab=categories&active=domain-id&returnPlanId=plan-id&view=baseline&domainId=domain-id#scope",
+			"/data-architecture?tab=scope&active=domain-id&returnPlanId=plan-id&view=business-domains#scope",
 		);
 	});
 });

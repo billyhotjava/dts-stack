@@ -329,10 +329,11 @@ export function PlanningPage({
 				: []),
 		];
 	}, [headerNames, hasActions, renderActions]);
+	const showPlanningSidebar = navigationSurface === "architecture";
 
 	return (
-		<main className="dmx-page dmx-planning-layout">
-			<PlanningSidebar activeView={sidebarActiveView} surface={navigationSurface} />
+		<main className={showPlanningSidebar ? "dmx-page dmx-planning-layout" : "dmx-page"}>
+			{showPlanningSidebar ? <PlanningSidebar activeView={sidebarActiveView} /> : null}
 			<section className="dmx-planning-content">
 				<PageHeader
 					actions={
@@ -369,7 +370,7 @@ export function PlanningPage({
 					}
 					description={route.description}
 					title={route.title}
-					trail={navigationSurface === "architecture" ? "数据架构 / 平台全局架构" : "数据建模 / 数仓规划"}
+					trail={showPlanningSidebar ? "数仓规划 / 平台规划" : "数据建模 / 建模策略"}
 				/>
 				{route.view === "system" ? (
 					<PlanningPolicyForm canMaintain={canMaintain} />

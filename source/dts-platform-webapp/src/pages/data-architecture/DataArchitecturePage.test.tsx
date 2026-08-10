@@ -33,7 +33,7 @@ afterEach(async () => {
 });
 
 describe("DataArchitecturePage", () => {
-	it("preserves the modeling-space navigation surface without changing the architecture permission surface", async () => {
+	it("ignores legacy modeling-space decoration and keeps the canonical planning surface", async () => {
 		await act(async () =>
 			root.render(
 				<MemoryRouter
@@ -46,8 +46,8 @@ describe("DataArchitecturePage", () => {
 
 		expect(mocks.planningPageProps).toHaveBeenLastCalledWith(
 			expect.objectContaining({
-				navigationSurface: "modeling",
-				sidebarActiveView: "domains",
+				navigationSurface: "architecture",
+				sidebarActiveView: "business-domains",
 				surface: "architecture",
 			}),
 		);

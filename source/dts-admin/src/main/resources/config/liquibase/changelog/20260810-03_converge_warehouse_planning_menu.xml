@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260810-03-converge-warehouse-planning-menu" author="xiezm" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="portal_menu"/>
+            <columnExists tableName="portal_menu" columnName="metadata"/>
+            <columnExists tableName="portal_menu" columnName="parent_id"/>
+            <columnExists tableName="portal_menu" columnName="path"/>
+            <columnExists tableName="portal_menu" columnName="sort_order"/>
+            <columnExists tableName="portal_menu" columnName="deleted"/>
+            <columnExists tableName="portal_menu" columnName="last_modified_by"/>
+            <columnExists tableName="portal_menu" columnName="last_modified_date"/>
+        </preConditions>
+        <comment>
+            将平台全局架构字典统一命名为“数仓规划”，把计划级“建模策略”提升为数据建模直属入口；
+            旧数仓规划空父节点与隐藏的建模空间仅软下线，保留菜单标识、权限绑定和兼容深链。
+        </comment>
+        <sql splitStatements="false"><![CDATA[
+            DO $do$
+            DECLARE
+                actor CONSTANT VARCHAR := 'sprint87-warehouse-planning-menu-convergence';
+                modeling_id BIGINT;
+                architecture_id BIGINT;
+                warehouse_planning_id BIGINT;
+                planning_system_id BIGINT;
+            BEGIN
+                PERFORM pg_advisory_xact_lock(hashtextextended('dts:portal-menu:warehouse-planning:20260810-03', 0));
+
+                SELECT id
+                  INTO modeling_id
+                  FROM portal_menu
+                 WHERE deleted = FALSE
+                   AND parent_id IS NULL
+                   AND (
+                       name = 'sys.nav.portal.studioDataModeling'
+                       OR metadata::jsonb ->> 'key' = 'modeling'
+                       OR metadata::jsonb ->> 'titleKey' = 'sys.nav.portal.studioDataModeling'
+                   )
+                 ORDER BY id
+                 LIMIT 1;
+
+                SELECT id
+                  INTO architecture_id
+                  FROM portal_menu
+                 WHERE deleted = FALSE
+                   AND parent_id IS NULL
+                   AND (
+                       name = 'sys.nav.portal.dataArchitecture'
+                       OR metadata::jsonb ->> 'key' = 'data-architecture'
+                       OR metadata::jsonb ->> 'titleKey' = 'sys.nav.portal.dataArchitecture'
+                   )
+                 ORDER BY id
+                 LIMIT 1;
+
+                SELECT id
+                  INTO warehouse_planning_id
+                  FROM portal_menu
+                 WHERE (
+                       name = 'sys.nav.portal.warehousePlanning'
+                       OR metadata::jsonb ->> 'key' = 'warehouse-planning'
+                       OR metadata::jsonb ->> 'titleKey' = 'sys.nav.portal.warehousePlanning'
+                   )
+                 ORDER BY CASE WHEN deleted = FALSE THEN 0 ELSE 1 END, id
+                 LIMIT 1;
+
+                SELECT id
+                  INTO planning_system_id
+                  FROM portal_menu
+                 WHERE (
+                       name = 'sys.nav.portal.planningSystem'
+                       OR metadata::jsonb ->> 'key' = 'planning-system'
+                       OR metadata::jsonb ->> 'titleKey' = 'sys.nav.portal.planningSystem'
+                   )
+                 ORDER BY CASE WHEN deleted = FALSE THEN 0 ELSE 1 END, id
+                 LIMIT 1;
+
+                IF modeling_id IS NULL OR architecture_id IS NULL OR warehouse_planning_id IS NULL OR planning_system_id IS NULL THEN
+                    RAISE EXCEPTION
+                        'Warehouse-planning convergence requires modeling, data architecture, warehouse planning, and planning system menus';
+                END IF;
+
+                UPDATE portal_menu
+                   SET metadata = (
+                           COALESCE(NULLIF(metadata, '')::jsonb, '{}'::jsonb)
+                           || jsonb_build_object('title', '数仓规划')
+                       )::TEXT,
+                       last_modified_by = actor || '-architecture',
+                       last_modified_date = now()
+                 WHERE id = architecture_id;
+
+                UPDATE portal_menu
+                   SET parent_id = modeling_id,
+                       path = 'modeling/planning/system',
+                       sort_order = 2,
+                       metadata = (
+                           COALESCE(NULLIF(metadata, '')::jsonb, '{}'::jsonb)
+                           || jsonb_build_object(
+                               'key', 'planning-system',
+                               'sectionKey', 'modeling',
+                               'entryKey', 'planning-system',
+                               'titleKey', 'sys.nav.portal.planningSystem',
+                               'title', '建模策略',
+                               'icon', 'solar:settings-bold-duotone',
+                               'externalLink', '/data-modeling/planning/system'
+                           )
+                       )::TEXT,
+                       icon = 'solar:settings-bold-duotone',
+                       deleted = FALSE,
+                       last_modified_by = actor || '-strategy',
+                       last_modified_date = now()
+                 WHERE id = planning_system_id;
+
+                WITH RECURSIVE retired_ids AS (
+                    SELECT id
+                      FROM portal_menu
+                     WHERE id = warehouse_planning_id
+                        OR name = 'sys.nav.portal.planningSpaces'
+                        OR metadata::jsonb ->> 'key' = 'planning-spaces'
+                        OR metadata::jsonb ->> 'titleKey' = 'sys.nav.portal.planningSpaces'
+                    UNION ALL
+                    SELECT child.id
+                      FROM portal_menu child
+                      JOIN retired_ids parent ON child.parent_id = parent.id
+                     WHERE child.deleted = FALSE
+                )
+                UPDATE portal_menu
+                   SET deleted = TRUE,
+                       last_modified_by = actor || '-retired',
+                       last_modified_date = now()
+                 WHERE deleted = FALSE
+                   AND id IN (SELECT id FROM retired_ids);
+            END $do$;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $do$
+                DECLARE
+                    actor CONSTANT VARCHAR := 'sprint87-warehouse-planning-menu-convergence';
+                    warehouse_planning_id BIGINT;
+                BEGIN
+                    PERFORM pg_advisory_xact_lock(hashtextextended('dts:portal-menu:warehouse-planning:20260810-03', 0));
+
+                    SELECT id
+                      INTO warehouse_planning_id
+                      FROM portal_menu
+                     WHERE name = 'sys.nav.portal.warehousePlanning'
+                        OR metadata::jsonb ->> 'key' = 'warehouse-planning'
+                        OR metadata::jsonb ->> 'titleKey' = 'sys.nav.portal.warehousePlanning'
+                     ORDER BY id
+                     LIMIT 1;
+
+                    UPDATE portal_menu
+                       SET deleted = FALSE,
+                           last_modified_by = actor || '-rollback',
+                           last_modified_date = now()
+                     WHERE deleted = TRUE
+                       AND last_modified_by = actor || '-retired';
+
+                    UPDATE portal_menu
+                       SET parent_id = warehouse_planning_id,
+                           path = 'modeling/planning/system',
+                           sort_order = 6,
+                           metadata = (
+                               COALESCE(NULLIF(metadata, '')::jsonb, '{}'::jsonb)
+                               || jsonb_build_object('title', '规划参数配置')
+                           )::TEXT,
+                           last_modified_by = actor || '-rollback',
+                           last_modified_date = now()
+                     WHERE last_modified_by = actor || '-strategy';
+
+                    UPDATE portal_menu
+                       SET metadata = (
+                               COALESCE(NULLIF(metadata, '')::jsonb, '{}'::jsonb)
+                               || jsonb_build_object('title', '数据架构')
+                           )::TEXT,
+                           last_modified_by = actor || '-rollback',
+                           last_modified_date = now()
+                     WHERE last_modified_by = actor || '-architecture';
+                END $do$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

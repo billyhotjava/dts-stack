@@ -195,7 +195,7 @@
       "path": "data-architecture",
       "icon": "solar:structure-bold-duotone",
       "titleKey": "sys.nav.portal.dataArchitecture",
-      "title": "数据架构",
+      "title": "数仓规划",
       "children": [
         {
           "key": "architecture-business-domains",
@@ -255,21 +255,12 @@
           "externalLink": "/data-modeling/home/workspace"
         },
         {
-          "key": "warehouse-planning",
-          "path": "planning",
-          "icon": "solar:map-point-bold-duotone",
-          "titleKey": "sys.nav.portal.warehousePlanning",
-          "title": "数仓规划",
-          "children": [
-            {
-              "key": "planning-system",
-              "path": "system",
-              "icon": "solar:settings-bold-duotone",
-              "titleKey": "sys.nav.portal.planningSystem",
-              "title": "规划参数配置",
-              "externalLink": "/data-modeling/planning/system"
-            }
-          ]
+          "key": "planning-system",
+          "path": "planning/system",
+          "icon": "solar:settings-bold-duotone",
+          "titleKey": "sys.nav.portal.planningSystem",
+          "title": "建模策略",
+          "externalLink": "/data-modeling/planning/system"
         },
         {
           "key": "standards",

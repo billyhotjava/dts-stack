@@ -75,6 +75,12 @@ public interface CatalogDatasetRepository extends JpaRepository<CatalogDataset, 
     @Query("SELECT d.hiveTable, d.id FROM CatalogDataset d WHERE d.hiveTable IS NOT NULL")
     List<Object[]> findHiveTableAndIdProjection();
 
+    /** 表级血缘按 schema+表名 建立索引：返回 (hiveDatabase, hiveTable, id)。 */
+    @Query(
+        "SELECT d.hiveDatabase, d.hiveTable, d.id FROM CatalogDataset d WHERE d.hiveTable IS NOT NULL"
+    )
+    List<Object[]> findSchemaTableAndIdProjection();
+
     // ------------------------------------------------------------------ Sprint-15 F1/T03: Asset KPI counts
 
     /**

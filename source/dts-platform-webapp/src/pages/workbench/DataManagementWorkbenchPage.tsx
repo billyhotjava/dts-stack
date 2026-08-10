@@ -269,7 +269,7 @@ export default function Page({
 	const headerActions = (
 		<Space wrap>
 			<Button onClick={() => router.push(withE2EJourney("/foundation/data-sources"))}>配置数据源</Button>
-			<Button onClick={() => router.push(withE2EJourney("/data-modeling/planning/spaces"))}>数仓规划</Button>
+			<Button onClick={() => router.push(withE2EJourney("/data-architecture?view=business-domains"))}>数仓规划</Button>
 			<Button onClick={() => router.push(withE2EJourney("/data-modeling/standards/fields"))}>数据标准</Button>
 			<Button onClick={() => router.push(withE2EJourney("/data-modeling/dimensions/workbench"))}>模型中心</Button>
 			<Button onClick={() => router.push(withE2EJourney("/data-modeling/metrics/atomic"))}>指标设计</Button>

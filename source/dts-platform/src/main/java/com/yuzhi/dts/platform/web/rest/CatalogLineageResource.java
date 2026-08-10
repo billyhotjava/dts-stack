@@ -270,7 +270,7 @@ public class CatalogLineageResource {
             .filter(Objects::nonNull)
             .toList();
 
-        List<Map<String, Object>> columnLineages = withColumns ? loadColumnLineageDtos(datasetEdges) : List.of();
+        List<Map<String, Object>> columnLineages = withColumns ? loadColumnLineageDtos(datasetEdges, snapshotAt) : List.of();
         List<Map<String, Object>> nodeDtos = filteredNodes.values().stream().map(this::toDatasetNodeDto).toList();
         List<Map<String, Object>> edgeDtos = datasetEdges;
         if (withJobs) {
@@ -330,6 +330,7 @@ public class CatalogLineageResource {
         payload.put("withJobs", withJobs);
         payload.put("withColumns", withColumns);
         payload.put("snapshotAt", snapshotAt.toString());
+        payload.put("columnLineageSnapshotAt", snapshotAt.toString());
         payload.put("timeTravel", StringUtils.hasText(at));
         payload.put("nodeCount", nodeDtos.size());
         payload.put("edgeCount", edgeDtos.size());
@@ -489,7 +490,7 @@ public class CatalogLineageResource {
         return result;
     }
 
-    private List<Map<String, Object>> loadColumnLineageDtos(List<Map<String, Object>> datasetEdges) {
+    private List<Map<String, Object>> loadColumnLineageDtos(List<Map<String, Object>> datasetEdges, java.time.Instant at) {
         if (datasetEdges == null || datasetEdges.isEmpty()) {
             return List.of();
         }
@@ -502,7 +503,7 @@ public class CatalogLineageResource {
             return List.of();
         }
         return columnLineageRepo
-            .findByDatasetLineageIdIn(edgeIds)
+            .findByDatasetLineageIdInAt(edgeIds, at)
             .stream()
             .map(this::toColumnLineageDto)
             .toList();

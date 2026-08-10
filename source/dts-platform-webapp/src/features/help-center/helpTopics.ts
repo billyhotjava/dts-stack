@@ -81,8 +81,8 @@ export const HELP_TOPICS: HelpTopic[] = [
 		id: "data-modeling",
 		title: "数据建模",
 		section: "数据建设",
-		summary: "在独立的数据建模工作区完成数仓规划、标准、模型、指标和关系设计。",
-		keywords: ["建模", "数仓规划", "标准", "维度", "模型", "指标", "关系图"],
+		summary: "在独立的数据建模工作区完成建模策略、标准、模型、指标和关系设计。",
+		keywords: ["建模", "建模策略", "标准", "维度", "模型", "指标", "关系图"],
 		routePrefixes: ["/data-modeling"],
 		prerequisites: ["至少有一个可用数据源", "已明确业务目标或现有数据范围"],
 		steps: [
@@ -102,9 +102,9 @@ export const HELP_TOPICS: HelpTopic[] = [
 		id: "construction-planning",
 		title: "数仓规划",
 		section: "数据建设",
-		summary: "规划业务分类、数仓分层、数据域、业务过程、数据集市、主题域和建模空间。",
+		summary: "统一规划业务分类、数据域、业务过程、数仓分层、数据集市和主题域。",
 		keywords: ["数仓规划", "业务分类", "分层", "数据域", "业务过程", "数据集市", "主题域"],
-		routePrefixes: ["/data-modeling/planning"],
+		routePrefixes: ["/data-architecture"],
 		prerequisites: ["已明确本次建设的业务目标或首批来源数据", "账号具备规划查看权限；新建和编辑还需规划维护权限"],
 		steps: [
 			"进入数据建设工作台，新建规划或选择已有规划。",
