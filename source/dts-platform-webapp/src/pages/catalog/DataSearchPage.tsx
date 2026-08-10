@@ -157,9 +157,19 @@ export default function DataSearchPage() {
 		})();
 	}, []);
 
+	// 回显兜底：URL 深链（?domain=uuid）进入时 domains 可能尚未加载完成或加载失败，
+	// 此时若选中值不在选项中，antd 会直接回显 value（uuid 序列号）。兜底保证回显始终是名称。
 	const domainOptions = useMemo(() => {
-		return [{ label: "全部主题域", value: "ALL" }, ...domains.map((item) => ({ label: item.name, value: item.id }))];
-	}, [domains]);
+		const options = [
+			{ label: "全部主题域", value: "ALL" },
+			...domains.map((item) => ({ label: item.name, value: item.id })),
+		];
+		if (domain && domain !== "ALL" && !options.some((option) => option.value === domain)) {
+			const matched = domains.find((item) => item.id === domain);
+			options.push({ label: matched ? matched.name : "主题域", value: domain });
+		}
+		return options;
+	}, [domains, domain]);
 
 	const domainMap = useMemo(() => new Map(domains.map((item) => [item.id, item.name])), [domains]);
 
@@ -416,6 +426,7 @@ export default function DataSearchPage() {
 					/>
 				) : null}
 				<div className="flex flex-col gap-2">
+					{/* 主筛选：关键词 + 范围（主题域）+ 核心属性（密级/分层） */}
 					<div className="flex flex-wrap items-center gap-2">
 						<Input.Search
 							placeholder="输入关键词"
@@ -425,7 +436,6 @@ export default function DataSearchPage() {
 							onSearch={() => void runSearch(true)}
 							allowClear
 						/>
-						<span className="px-1 text-xs text-slate-400">范围</span>
 						<Select
 							allowClear
 							placeholder="主题域"
@@ -434,25 +444,6 @@ export default function DataSearchPage() {
 							onChange={(value) => setDomain(value === "ALL" ? undefined : value)}
 							options={domainOptions}
 						/>
-						<Select
-							allowClear
-							placeholder="资产类型"
-							style={{ minWidth: 170 }}
-							value={assetType}
-							onChange={(value) => setAssetType(value || "ALL")}
-							options={TYPE_OPTIONS}
-						/>
-						<Select
-							allowClear
-							placeholder="数据源类型"
-							style={{ minWidth: 170 }}
-							value={datasetType}
-							onChange={(value) => setDatasetType(value || "ALL")}
-							options={DATASET_TYPE_OPTIONS}
-						/>
-					</div>
-					<div className="flex flex-wrap items-center gap-2">
-						<span className="px-1 text-xs text-slate-400">属性</span>
 						<Select
 							allowClear
 							placeholder="密级"
@@ -468,6 +459,25 @@ export default function DataSearchPage() {
 							value={warehouseLayer}
 							onChange={(value) => setWarehouseLayer(value || "ALL")}
 							options={LAYER_OPTIONS}
+						/>
+					</div>
+					{/* 次要筛选：资产类型 / 数据源类型 / 标签 + 动作 */}
+					<div className="flex flex-wrap items-center gap-2">
+						<Select
+							allowClear
+							placeholder="资产类型"
+							style={{ minWidth: 170 }}
+							value={assetType}
+							onChange={(value) => setAssetType(value || "ALL")}
+							options={TYPE_OPTIONS}
+						/>
+						<Select
+							allowClear
+							placeholder="数据源类型"
+							style={{ minWidth: 170 }}
+							value={datasetType}
+							onChange={(value) => setDatasetType(value || "ALL")}
+							options={DATASET_TYPE_OPTIONS}
 						/>
 						<AssetTagFilter
 							value={selectedTagIds}

@@ -95,3 +95,9 @@ test("data search consumes the same URL deep-link protocol as the retired ledger
 	assert.match(SOURCE, /params\.set\("layer", warehouseLayer\)/);
 	assert.match(SOURCE, /setSearchParams\(params, \{ replace: true \}\)/);
 });
+
+test("the domain filter never echoes a raw id when the option list is not ready", () => {
+	assert.match(SOURCE, /回显兜底/);
+	assert.match(SOURCE, /!options\.some\(\(option\) => option\.value === domain\)/);
+	assert.match(SOURCE, /options\.push\(\{ label: matched \? matched\.name : "主题域", value: domain \}\)/);
+});
