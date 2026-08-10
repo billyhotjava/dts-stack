@@ -2,9 +2,10 @@ package com.yuzhi.dts.platform.service.modeling.warehouse;
 
 import static com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver.ResolutionStatus.AVAILABLE;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.ConfirmationStatus.CONFIRMED;
-import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.OnboardingMode.ASSET_FIRST;
+import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.OnboardingMode.BUSINESS_FIRST;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceAction.EXCLUDE;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceAction.RECONFIRM;
+import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceChangeImpact.BREAKING;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceChangeImpact.COMPATIBLE;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceType.CATALOG_TABLE;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,6 +33,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -77,7 +79,7 @@ class Sprint89WarehousePlanSourceApplicationServiceIT {
                     null,
                     "owner-89",
                     "department-89",
-                    ASSET_FIRST,
+                    BUSINESS_FIRST,
                     List.of(),
                     "sprint89-" + UUID.randomUUID()
                 )
@@ -160,12 +162,24 @@ class Sprint89WarehousePlanSourceApplicationServiceIT {
                 datasetId
             )
         ).isEqualTo("RESOLVED");
+        ArgumentCaptor<java.util.Map<String, Object>> auditPayload = ArgumentCaptor.captor();
         verify(auditService, times(2)).auditAction(
             eq("MODELING_WAREHOUSE_SOURCE_INVENTORY_SAVE"),
             eq(AuditStage.SUCCESS),
             eq(planId.toString()),
-            any()
+            auditPayload.capture()
         );
+        assertThat(auditPayload.getAllValues().getLast())
+            .containsEntry("tenantId", tenant)
+            .containsEntry("actor", "owner-89")
+            .satisfies(payload -> {
+                assertThat(payload.get("correlationId")).asString().isNotBlank();
+                assertThat(String.valueOf(payload.get("reconfirmations")))
+                    .contains("assetKey=source:unknown/schema:public/table:orders")
+                    .contains("oldVersion=schema-v1")
+                    .contains("newVersion=schema-v2")
+                    .doesNotContain("\u0000");
+            });
 
         assertThatThrownBy(() ->
             service.saveSources(
@@ -224,6 +238,79 @@ class Sprint89WarehousePlanSourceApplicationServiceIT {
         assertThat(legacy.bindings()).hasSize(205);
         assertThat(legacy.totalElements()).isEqualTo(205);
         assertThat(legacy.totalPages()).isEqualTo(1);
+    }
+
+    @Test
+    void blocksBreakingDriftFromBlindReconfirmation() {
+        SourceInventoryView saved = service.saveSources(
+            tenant,
+            planId,
+            1,
+            new SourceInventoryCommand(
+                List.of(
+                    new SourceBindingCommand(
+                        null,
+                        CATALOG_TABLE,
+                        new SourceLocator(tableId, null, null, null, null, null, null),
+                        CONFIRMED,
+                        null
+                    )
+                )
+            ),
+            ACCESS
+        );
+        UUID bindingId = saved.bindings().getFirst().bindingId();
+        seedCompatibleDrift();
+        jdbcTemplate.update(
+            """
+            update catalog_schema_drift_event
+               set added_count = 0, removed_count = 1,
+                   details_json = cast(? as text)
+             where dataset_id = ?
+            """,
+            "{\"contractVersion\":1,\"impactLevel\":\"BREAKING\",\"changes\":[{\"field\":\"customer_id\",\"kind\":\"FIELD_REMOVED\",\"impact\":\"BREAKING\"}]}",
+            datasetId
+        );
+        when(sourceReferenceResolver.resolve(eq(CATALOG_TABLE), any(SourceLocator.class), any(AccessContext.class)))
+            .thenReturn(ResolvedSource.available("orders", "schema-v2"));
+
+        SourceInventoryView stale = service.getSources(tenant, planId, ACCESS, 0, 200, true);
+
+        assertThat(stale.bindings().getFirst().changeImpact()).isEqualTo(BREAKING);
+        assertThat(stale.bindings().getFirst().allowedActions()).containsExactly(EXCLUDE);
+        assertThat(stale.bindings().getFirst().reasonCode()).isEqualTo("SOURCE_DRIFT_BREAKING");
+        assertThatThrownBy(() ->
+            service.saveSources(
+                tenant,
+                planId,
+                2,
+                new SourceInventoryCommand(
+                    List.of(
+                        new SourceBindingCommand(
+                            bindingId,
+                            null,
+                            null,
+                            CONFIRMED,
+                            null,
+                            RECONFIRM,
+                            "schema-v1",
+                            "schema-v2"
+                        )
+                    )
+                ),
+                ACCESS
+            )
+        ).isInstanceOfSatisfying(WarehousePlanException.class, error -> {
+            assertThat(error.code()).isEqualTo("WAREHOUSE_PLAN_SOURCE_INVENTORY_INVALID");
+            assertThat(error.getMessage()).contains("SOURCE_RECONFIRM_BREAKING_CHANGE");
+        });
+        assertThat(
+            jdbcTemplate.queryForObject(
+                "select ticket_status from catalog_schema_drift_event where dataset_id = ?",
+                String.class,
+                datasetId
+            )
+        ).isEqualTo("OPEN");
     }
 
     private void seedCompatibleDrift() {

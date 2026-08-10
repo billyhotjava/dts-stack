@@ -4,6 +4,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
+import com.yuzhi.dts.platform.service.catalog.SchemaDriftDetailsReader;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.BusinessScope;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CategoryBindingView;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CategoryScopeCommand;
@@ -24,13 +26,17 @@ import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.P
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningPolicyView;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.ProcessBinding;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBinding;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceAction;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBindingCommand;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBindingView;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBusinessMapping;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceChangeImpact;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceDiffSummary;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceFreshness;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceInventoryCommand;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceInventoryView;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceLocator;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceSchemaChange;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceType;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.Versioned;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.WarehousePlanHeader;
@@ -49,6 +55,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.time.Instant;
@@ -74,6 +81,7 @@ public class WarehousePlanApplicationService {
     private final CatalogDomainResolutionPort catalogDomainResolutionPort;
     private final SourceReferenceResolver sourceReferenceResolver;
     private final AuditService auditService;
+    private final SchemaDriftDetailsReader schemaDriftDetailsReader;
     private final TransactionOperations transactions;
     private final TransactionOperations withoutTransactions;
 
@@ -83,6 +91,7 @@ public class WarehousePlanApplicationService {
         CatalogDomainResolutionPort catalogDomainResolutionPort,
         SourceReferenceResolver sourceReferenceResolver,
         AuditService auditService,
+        SchemaDriftDetailsReader schemaDriftDetailsReader,
         PlatformTransactionManager transactionManager
     ) {
         this.jdbcTemplate = jdbcTemplate;
@@ -90,6 +99,7 @@ public class WarehousePlanApplicationService {
         this.catalogDomainResolutionPort = catalogDomainResolutionPort;
         this.sourceReferenceResolver = sourceReferenceResolver;
         this.auditService = auditService;
+        this.schemaDriftDetailsReader = schemaDriftDetailsReader;
         this.transactions = new TransactionTemplate(transactionManager);
         TransactionTemplate nonTransactional = new TransactionTemplate(transactionManager);
         nonTransactional.setPropagationBehavior(TransactionDefinition.PROPAGATION_NOT_SUPPORTED);
@@ -600,14 +610,60 @@ public class WarehousePlanApplicationService {
         UUID planId,
         SourceReferenceResolver.AccessContext accessContext
     ) {
+        return getSources(serverTenantId, planId, accessContext, false);
+    }
+
+    public SourceInventoryView getSources(
+        String serverTenantId,
+        UUID planId,
+        SourceReferenceResolver.AccessContext accessContext,
+        boolean allowActions
+    ) {
         requireServerTenant(serverTenantId);
         SourceInventorySnapshot snapshot = Objects.requireNonNull(
             transactions.execute(status -> loadSourceInventorySnapshot(serverTenantId, planId)),
             "Source inventory snapshot is required"
         );
         return Objects.requireNonNull(
-            withoutTransactions.execute(status -> resolveSourceInventory(serverTenantId, snapshot, accessContext)),
+            withoutTransactions.execute(status -> resolveSourceInventory(serverTenantId, snapshot, accessContext, allowActions)),
             "Source inventory resolution is required"
+        );
+    }
+
+    public SourceInventoryView getSources(
+        String serverTenantId,
+        UUID planId,
+        SourceReferenceResolver.AccessContext accessContext,
+        int page,
+        int size,
+        boolean allowActions
+    ) {
+        requireServerTenant(serverTenantId);
+        validateSourcePage(page, size);
+        PagedSourceInventorySnapshot snapshot = Objects.requireNonNull(
+            transactions.execute(status -> loadPagedSourceInventorySnapshot(serverTenantId, planId, page, size)),
+            "Paged source inventory snapshot is required"
+        );
+        SourceInventoryView resolved = Objects.requireNonNull(
+            withoutTransactions.execute(status ->
+                resolveSourceInventory(serverTenantId, snapshot.inventory(), accessContext, allowActions)
+            ),
+            "Source inventory resolution is required"
+        );
+        int totalPages = snapshot.totalElements() == 0
+            ? 0
+            : (int) Math.ceil((double) snapshot.totalElements() / size);
+        return new SourceInventoryView(
+            resolved.bindings(),
+            resolved.readiness(),
+            resolved.issues(),
+            resolved.version(),
+            resolved.etag(),
+            resolved.checkedAt(),
+            page,
+            size,
+            snapshot.totalElements(),
+            totalPages
         );
     }
 
@@ -633,13 +689,27 @@ public class WarehousePlanApplicationService {
             transactions.execute(status -> loadSourceInventorySnapshot(serverTenantId, planId)),
             "Source inventory snapshot is required"
         );
-        requireExpectedEditVersion(snapshot.version(), expectedVersion, EditUnit.SOURCES);
         PreparedSourceInventory prepared = Objects.requireNonNull(
             withoutTransactions.execute(status ->
                 prepareSourceInventory(serverTenantId, snapshot.rows(), command, accessContext)
             ),
             "Resolved source inventory is required"
         );
+        if (snapshot.version() != expectedVersion) {
+            if (snapshot.version() == expectedVersion + 1 && prepared.allReconfirmationsReplayed()) {
+                return Objects.requireNonNull(
+                    withoutTransactions.execute(status -> resolveSourceInventory(serverTenantId, snapshot, accessContext, true)),
+                    "Replayed source inventory is required"
+                );
+            }
+            requireExpectedEditVersion(snapshot.version(), expectedVersion, EditUnit.SOURCES);
+        }
+        if (prepared.allReconfirmationsReplayed()) {
+            return Objects.requireNonNull(
+                withoutTransactions.execute(status -> resolveSourceInventory(serverTenantId, snapshot, accessContext, true)),
+                "Replayed source inventory is required"
+            );
+        }
         return Objects.requireNonNull(
             transactions.execute(status -> persistSourceInventory(serverTenantId, planId, expectedVersion, snapshot.plan(), prepared)),
             "Saved source inventory is required"
@@ -705,9 +775,39 @@ public class WarehousePlanApplicationService {
                     "Source cannot be registered until it is available"
                 );
             }
-            String confirmedVersion = resolution.status() == SourceReferenceResolver.ResolutionStatus.AVAILABLE
-                ? resolution.resolvedVersion()
-                : existing == null ? null : existing.sourceVersion();
+            boolean reconfirmation = binding.action() == SourceAction.RECONFIRM;
+            boolean replayed = false;
+            String confirmedVersion;
+            if (reconfirmation) {
+                if (existing == null || resolution.status() != SourceReferenceResolver.ResolutionStatus.AVAILABLE) {
+                    throw invalidSourceInventory(
+                        "SOURCE_RECONFIRM_NOT_ALLOWED",
+                        "The source must be available before it can be reconfirmed"
+                    );
+                }
+                if (!Objects.equals(binding.expectedCurrentVersion(), resolution.resolvedVersion())) {
+                    throw sourceVersionChanged();
+                }
+                if (Objects.equals(existing.sourceVersion(), binding.expectedCurrentVersion())) {
+                    replayed = true;
+                } else if (!Objects.equals(existing.sourceVersion(), binding.expectedConfirmedVersion())) {
+                    throw sourceVersionChanged();
+                }
+                SourceDriftEvidence evidence = sourceDriftEvidence(
+                    sourceType,
+                    locator,
+                    freshness(existing.sourceVersion(), resolution)
+                );
+                if (evidence.impact() == SourceChangeImpact.BREAKING) {
+                    throw invalidSourceInventory(
+                        "SOURCE_RECONFIRM_BREAKING_CHANGE",
+                        "Repair the affected field mappings before reconfirming this source"
+                    );
+                }
+                confirmedVersion = binding.expectedCurrentVersion();
+            } else {
+                confirmedVersion = existing == null ? resolution.resolvedVersion() : existing.sourceVersion();
+            }
             writes.add(
                 new ResolvedSourceWrite(
                     bindingId,
@@ -718,7 +818,10 @@ public class WarehousePlanApplicationService {
                     binding.exclusionReason(),
                     confirmedVersion,
                     resolution,
-                    checkedAt
+                    checkedAt,
+                    binding.action(),
+                    existing == null ? null : existing.sourceVersion(),
+                    replayed
                 )
             );
         }
@@ -728,7 +831,12 @@ public class WarehousePlanApplicationService {
                 "Existing sources must be retained and marked EXCLUDED to preserve audit history"
             );
         }
-        return new PreparedSourceInventory(writes, checkedAt);
+        return new PreparedSourceInventory(
+            writes,
+            checkedAt,
+            accessContext == null ? null : accessContext.actorId(),
+            UUID.randomUUID().toString()
+        );
     }
 
     private SourceInventoryView persistSourceInventory(
@@ -740,6 +848,9 @@ public class WarehousePlanApplicationService {
     ) {
         casEditUnit(serverTenantId, planId, expectedVersion, EditUnit.SOURCES);
         for (ResolvedSourceWrite write : prepared.writes()) {
+            if (write.reconfirmationReplayed()) {
+                continue;
+            }
             String locatorJson = write.locator() == null ? null : writeLocator(write.locator());
             int updated = jdbcTemplate.update(
                 """
@@ -784,28 +895,46 @@ public class WarehousePlanApplicationService {
                     Timestamp.from(write.checkedAt())
                 );
             }
+            if (write.action() == SourceAction.RECONFIRM) {
+                closeSourceDriftTickets(write, prepared.actorId());
+            }
         }
 
         SourceInventoryView result = WarehousePlanContract.evaluateSourceInventory(
-            prepared.writes().stream().map(this::toSourceBindingView).toList(),
+            prepared.writes().stream().map(write -> toSourceBindingView(write, true)).toList(),
             plan.onboardingMode(),
             expectedVersion + 1,
             prepared.checkedAt()
+        );
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("tenantId", serverTenantId);
+        auditPayload.put("actor", prepared.actorId());
+        auditPayload.put("correlationId", prepared.correlationId());
+        auditPayload.put("version", result.version());
+        auditPayload.put("bindingCount", result.bindings().size());
+        auditPayload.put("readiness", result.readiness().name());
+        auditPayload.put("checkedAt", result.checkedAt().toString());
+        auditPayload.put(
+            "reconfirmations",
+            prepared
+                .writes()
+                .stream()
+                .filter(write -> write.action() == SourceAction.RECONFIRM)
+                .map(write -> {
+                    Map<String, Object> evidence = new LinkedHashMap<>();
+                    evidence.put("bindingId", write.bindingId());
+                    evidence.put("assetKey", sourceAssetKey(write));
+                    evidence.put("oldVersion", write.previousConfirmedVersion());
+                    evidence.put("newVersion", write.confirmedVersion());
+                    return evidence;
+                })
+                .toList()
         );
         auditService.auditAction(
             "MODELING_WAREHOUSE_SOURCE_INVENTORY_SAVE",
             AuditStage.SUCCESS,
             planId.toString(),
-            Map.of(
-                "version",
-                result.version(),
-                "bindingCount",
-                result.bindings().size(),
-                "readiness",
-                result.readiness().name(),
-                "checkedAt",
-                result.checkedAt().toString()
-            )
+            auditPayload
         );
         return result;
     }
@@ -1362,6 +1491,15 @@ public class WarehousePlanApplicationService {
         SourceInventorySnapshot snapshot,
         SourceReferenceResolver.AccessContext accessContext
     ) {
+        return resolveSourceInventory(tenantId, snapshot, accessContext, false);
+    }
+
+    private SourceInventoryView resolveSourceInventory(
+        String tenantId,
+        SourceInventorySnapshot snapshot,
+        SourceReferenceResolver.AccessContext accessContext,
+        boolean allowActions
+    ) {
         Instant checkedAt = Instant.now();
         SourceReferenceResolver.AccessContext serverContext = serverAccessContext(tenantId, accessContext);
         List<SourceBindingView> bindings = snapshot
@@ -1381,7 +1519,8 @@ public class WarehousePlanApplicationService {
                     row.exclusionReason(),
                     row.sourceVersion(),
                     checkedAt,
-                    resolution
+                    resolution,
+                    allowActions
                 );
             })
             .toList();
@@ -1409,6 +1548,44 @@ public class WarehousePlanApplicationService {
         );
     }
 
+    private PagedSourceInventorySnapshot loadPagedSourceInventorySnapshot(
+        String tenantId,
+        UUID planId,
+        int page,
+        int size
+    ) {
+        WarehousePlanHeader plan = get(tenantId, planId);
+        long totalElements = Optional
+            .ofNullable(
+                jdbcTemplate.queryForObject(
+                    "select count(*) from modeling_warehouse_plan_source where tenant_id = ? and plan_id = ?",
+                    Long.class,
+                    tenantId,
+                    planId
+                )
+            )
+            .orElse(0L);
+        List<SourceRow> rows = jdbcTemplate.query(
+            """
+            select id, source_type, source_id, source_version, locator_json::text as locator_json,
+                   confirmation_status, exclusion_reason, resolution_status, last_validated_at
+              from modeling_warehouse_plan_source
+             where tenant_id = ? and plan_id = ?
+             order by source_type, source_id, id
+             limit ? offset ?
+            """,
+            WarehousePlanApplicationService::mapSourceRow,
+            tenantId,
+            planId,
+            size,
+            (long) page * size
+        );
+        return new PagedSourceInventorySnapshot(
+            new SourceInventorySnapshot(plan, rows, readEditUnitVersion(tenantId, planId, EditUnit.SOURCES)),
+            totalElements
+        );
+    }
+
     private List<SourceRow> loadSourceRows(String tenantId, UUID planId) {
         return jdbcTemplate.query(
             """
@@ -1418,26 +1595,27 @@ public class WarehousePlanApplicationService {
              where tenant_id = ? and plan_id = ?
              order by source_type, source_id, id
             """,
-            (row, rowNumber) ->
-                new SourceRow(
-                    row.getObject("id", UUID.class),
-                    SourceType.valueOf(row.getString("source_type")),
-                    row.getString("source_id"),
-                    row.getString("source_version"),
-                    row.getString("locator_json"),
-                    ConfirmationStatus.valueOf(row.getString("confirmation_status")),
-                    row.getString("exclusion_reason"),
-                    row.getString("resolution_status"),
-                    row.getTimestamp("last_validated_at") == null
-                        ? null
-                        : row.getTimestamp("last_validated_at").toInstant()
-                ),
+            WarehousePlanApplicationService::mapSourceRow,
             tenantId,
             planId
         );
     }
 
-    private SourceBindingView toSourceBindingView(ResolvedSourceWrite write) {
+    private static SourceRow mapSourceRow(ResultSet row, int rowNumber) throws SQLException {
+        return new SourceRow(
+            row.getObject("id", UUID.class),
+            SourceType.valueOf(row.getString("source_type")),
+            row.getString("source_id"),
+            row.getString("source_version"),
+            row.getString("locator_json"),
+            ConfirmationStatus.valueOf(row.getString("confirmation_status")),
+            row.getString("exclusion_reason"),
+            row.getString("resolution_status"),
+            row.getTimestamp("last_validated_at") == null ? null : row.getTimestamp("last_validated_at").toInstant()
+        );
+    }
+
+    private SourceBindingView toSourceBindingView(ResolvedSourceWrite write, boolean allowActions) {
         return projectSourceBinding(
             write.bindingId(),
             write.sourceType(),
@@ -1447,7 +1625,8 @@ public class WarehousePlanApplicationService {
             write.exclusionReason(),
             write.confirmedVersion(),
             write.checkedAt(),
-            write.resolution()
+            write.resolution(),
+            allowActions
         );
     }
 
@@ -1462,7 +1641,38 @@ public class WarehousePlanApplicationService {
         Instant checkedAt,
         SourceReferenceResolver.ResolvedSource resolution
     ) {
+        return projectSourceBinding(
+            bindingId,
+            sourceType,
+            locator,
+            sourceId,
+            confirmationStatus,
+            exclusionReason,
+            confirmedVersion,
+            checkedAt,
+            resolution,
+            false
+        );
+    }
+
+    private SourceBindingView projectSourceBinding(
+        UUID bindingId,
+        SourceType sourceType,
+        SourceLocator locator,
+        String sourceId,
+        ConfirmationStatus confirmationStatus,
+        String exclusionReason,
+        String confirmedVersion,
+        Instant checkedAt,
+        SourceReferenceResolver.ResolvedSource resolution,
+        boolean allowActions
+    ) {
         boolean identityVisible = resolution.status() == SourceReferenceResolver.ResolutionStatus.AVAILABLE;
+        SourceFreshness sourceFreshness = freshness(confirmedVersion, resolution);
+        SourceDriftEvidence drift = identityVisible
+            ? sourceDriftEvidence(sourceType, locator, sourceFreshness)
+            : SourceDriftEvidence.none();
+        String reasonCode = sourceReasonCode(confirmationStatus, resolution.status(), sourceFreshness, drift.impact());
         return new SourceBindingView(
             bindingId,
             sourceType,
@@ -1474,8 +1684,264 @@ public class WarehousePlanApplicationService {
             identityVisible ? confirmedVersion : null,
             identityVisible ? resolution.resolvedVersion() : null,
             resolution.status(),
-            freshness(confirmedVersion, resolution),
-            checkedAt
+            sourceFreshness,
+            checkedAt,
+            identityVisible ? resolution.resolvedVersion() : null,
+            drift.impact(),
+            drift.summary(),
+            drift.changes(),
+            allowedSourceActions(allowActions, confirmationStatus, resolution.status(), sourceFreshness, drift.impact()),
+            reasonCode,
+            sourceStatusSummary(reasonCode)
+        );
+    }
+
+    private SourceDriftEvidence sourceDriftEvidence(
+        SourceType sourceType,
+        SourceLocator locator,
+        SourceFreshness sourceFreshness
+    ) {
+        if (sourceFreshness != SourceFreshness.STALE) {
+            return SourceDriftEvidence.none();
+        }
+        Optional<UUID> datasetId = catalogDatasetId(sourceType, locator);
+        if (datasetId.isEmpty()) {
+            return SourceDriftEvidence.reviewRequired();
+        }
+        Optional<SourceDriftRow> driftRow = jdbcTemplate
+            .query(
+                """
+                select coalesce(added_count, 0) as added_count,
+                       coalesce(removed_count, 0) as removed_count,
+                       coalesce(changed_count, 0) as changed_count,
+                       details_json
+                  from catalog_schema_drift_event
+                 where dataset_id = ?
+                 order by created_date desc nulls last, id desc
+                 limit 1
+                """,
+                (row, rowNumber) ->
+                    new SourceDriftRow(
+                        row.getInt("added_count"),
+                        row.getInt("removed_count"),
+                        row.getInt("changed_count"),
+                        row.getString("details_json")
+                    ),
+                datasetId.get()
+            )
+            .stream()
+            .findFirst();
+        if (driftRow.isEmpty()) {
+            return SourceDriftEvidence.reviewRequired();
+        }
+        SourceDriftRow row = driftRow.get();
+        SchemaDriftDetailsReader.SchemaDriftDetails details = schemaDriftDetailsReader.read(row.detailsJson());
+        SourceChangeImpact impact = parseSourceChangeImpact(details.impactLevel());
+        List<SourceSchemaChange> changes = details
+            .changes()
+            .stream()
+            .map(change ->
+                new SourceSchemaChange(
+                    stringValue(change.get("field")),
+                    stringValue(change.get("kind")),
+                    change.get("before"),
+                    change.get("after"),
+                    stringValue(change.get("impact"))
+                )
+            )
+            .toList();
+        return new SourceDriftEvidence(
+            impact,
+            new SourceDiffSummary(row.added(), row.removed(), row.changed()),
+            changes
+        );
+    }
+
+    private Optional<UUID> catalogDatasetId(SourceType sourceType, SourceLocator locator) {
+        if (sourceType == null || locator == null) {
+            return Optional.empty();
+        }
+        List<UUID> ids = switch (sourceType) {
+            case CATALOG_TABLE ->
+                locator.assetId() == null
+                    ? List.of()
+                    : jdbcTemplate.query(
+                        "select dataset_id from catalog_table_schema where id = ?",
+                        (row, rowNumber) -> row.getObject("dataset_id", UUID.class),
+                        locator.assetId()
+                    );
+            case CONNECTION_TABLE ->
+                locator.connectionId() == null || isBlank(locator.namespace()) || isBlank(locator.objectName())
+                    ? List.of()
+                    : jdbcTemplate.query(
+                        """
+                        select id
+                          from catalog_dataset
+                         where source_id = ?
+                           and lower(hive_database) = lower(?)
+                           and lower(hive_table) = lower(?)
+                         order by last_modified_date desc nulls last, id
+                         limit 1
+                        """,
+                        (row, rowNumber) -> row.getObject("id", UUID.class),
+                        locator.connectionId(),
+                        locator.namespace(),
+                        locator.objectName()
+                    );
+            case EXCEL_FILE, DBT_NODE -> List.of();
+        };
+        return ids.stream().filter(Objects::nonNull).findFirst();
+    }
+
+    private static SourceChangeImpact parseSourceChangeImpact(String impactLevel) {
+        if (isBlank(impactLevel)) {
+            return SourceChangeImpact.REVIEW_REQUIRED;
+        }
+        try {
+            return SourceChangeImpact.valueOf(impactLevel.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            return SourceChangeImpact.REVIEW_REQUIRED;
+        }
+    }
+
+    private static String stringValue(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
+
+    private static List<SourceAction> allowedSourceActions(
+        boolean allowActions,
+        ConfirmationStatus confirmationStatus,
+        SourceReferenceResolver.ResolutionStatus resolutionStatus,
+        SourceFreshness sourceFreshness,
+        SourceChangeImpact changeImpact
+    ) {
+        if (!allowActions || confirmationStatus == ConfirmationStatus.EXCLUDED) {
+            return List.of();
+        }
+        if (resolutionStatus != SourceReferenceResolver.ResolutionStatus.AVAILABLE) {
+            return List.of(SourceAction.EXCLUDE);
+        }
+        if (confirmationStatus == ConfirmationStatus.CANDIDATE) {
+            return List.of(SourceAction.CONFIRM, SourceAction.EXCLUDE);
+        }
+        if (sourceFreshness == SourceFreshness.STALE && changeImpact != SourceChangeImpact.BREAKING) {
+            return List.of(SourceAction.RECONFIRM, SourceAction.EXCLUDE);
+        }
+        return List.of(SourceAction.EXCLUDE);
+    }
+
+    private static String sourceReasonCode(
+        ConfirmationStatus confirmationStatus,
+        SourceReferenceResolver.ResolutionStatus resolutionStatus,
+        SourceFreshness sourceFreshness,
+        SourceChangeImpact changeImpact
+    ) {
+        if (confirmationStatus == ConfirmationStatus.EXCLUDED) {
+            return "SOURCE_EXCLUDED";
+        }
+        return switch (resolutionStatus) {
+            case MISSING -> "SOURCE_MISSING";
+            case FORBIDDEN -> "SOURCE_FORBIDDEN";
+            case PROVIDER_ERROR -> "SOURCE_PROVIDER_ERROR";
+            case AVAILABLE -> {
+                if (sourceFreshness == SourceFreshness.CURRENT) {
+                    yield "SOURCE_CURRENT";
+                }
+                yield switch (changeImpact) {
+                    case COMPATIBLE -> "SOURCE_DRIFT_COMPATIBLE";
+                    case BREAKING -> "SOURCE_DRIFT_BREAKING";
+                    case NONE, REVIEW_REQUIRED -> "SOURCE_DRIFT_REVIEW_REQUIRED";
+                };
+            }
+        };
+    }
+
+    private static String sourceStatusSummary(String reasonCode) {
+        return switch (reasonCode) {
+            case "SOURCE_CURRENT" -> "来源结构与已确认版本一致";
+            case "SOURCE_DRIFT_COMPATIBLE" -> "来源结构已更新，现有模型可继续使用；确认后可采用新版本";
+            case "SOURCE_DRIFT_BREAKING" -> "来源结构变更影响现有模型，请先修复字段映射";
+            case "SOURCE_DRIFT_REVIEW_REQUIRED" -> "来源结构已更新，需要确认变化影响";
+            case "SOURCE_MISSING" -> "来源当前不可用，请恢复采集或排除该来源";
+            case "SOURCE_FORBIDDEN" -> "当前账号无权查看此来源";
+            case "SOURCE_PROVIDER_ERROR" -> "暂时无法校验来源状态，请稍后重试";
+            case "SOURCE_EXCLUDED" -> "该来源已排除，不参与后续建模";
+            default -> "来源状态待确认";
+        };
+    }
+
+    private void closeSourceDriftTickets(ResolvedSourceWrite write, String actorId) {
+        Optional<UUID> datasetId = catalogDatasetId(write.sourceType(), write.locator());
+        if (datasetId.isEmpty()) {
+            return;
+        }
+        String handledBy = isBlank(actorId) ? "_system" : actorId.trim();
+        if (handledBy.length() > 50) {
+            handledBy = handledBy.substring(0, 50);
+        }
+        jdbcTemplate.update(
+            """
+            update catalog_schema_drift_event
+               set ticket_status = 'RESOLVED', handled_at = current_timestamp, handled_by = ?,
+                   last_modified_by = ?, last_modified_date = current_timestamp
+             where dataset_id = ?
+               and coalesce(ticket_status, 'OPEN') in ('OPEN', 'IN_REVIEW')
+            """,
+            handledBy,
+            handledBy,
+            datasetId.get()
+        );
+    }
+
+    private String sourceAssetKey(ResolvedSourceWrite write) {
+        Optional<UUID> datasetId = catalogDatasetId(write.sourceType(), write.locator());
+        if (datasetId.isPresent()) {
+            Optional<String> catalogKey = jdbcTemplate
+                .query(
+                    """
+                    select source_id, hive_database, hive_table, name
+                      from catalog_dataset
+                     where id = ?
+                    """,
+                    (row, rowNumber) ->
+                        CatalogAssetKey.dataset(
+                            row.getObject("source_id", UUID.class),
+                            row.getString("hive_database"),
+                            row.getString("hive_database"),
+                            row.getString("hive_table"),
+                            row.getString("name")
+                        ),
+                    datasetId.get()
+                )
+                .stream()
+                .findFirst();
+            if (catalogKey.isPresent()) {
+                return catalogKey.get();
+            }
+        }
+        if (write.sourceType() == SourceType.DBT_NODE && write.locator() != null) {
+            return CatalogAssetKey.dbtModel(write.locator().uniqueId(), write.sourceId());
+        }
+        return write.sourceType().name().toLowerCase(java.util.Locale.ROOT) + ":" + write.sourceId();
+    }
+
+    private static void validateSourcePage(int page, int size) {
+        if (page < 0 || size < 1 || size > 200) {
+            throw new WarehousePlanException(
+                "WAREHOUSE_PLAN_SOURCE_PAGE_INVALID",
+                "Source inventory page must be non-negative and size must be between 1 and 200",
+                null,
+                EditUnit.SOURCES
+            );
+        }
+    }
+
+    private static WarehousePlanException sourceVersionChanged() {
+        return new WarehousePlanException(
+            "WAREHOUSE_PLAN_SOURCE_VERSION_CHANGED",
+            "The source changed after it was reviewed; reload the source inventory before reconfirming",
+            null,
+            EditUnit.SOURCES
         );
     }
 
@@ -1816,9 +2282,23 @@ public class WarehousePlanApplicationService {
         }
     }
 
-    private record PreparedSourceInventory(List<ResolvedSourceWrite> writes, Instant checkedAt) {
+    private record PagedSourceInventorySnapshot(SourceInventorySnapshot inventory, long totalElements) {}
+
+    private record PreparedSourceInventory(
+        List<ResolvedSourceWrite> writes,
+        Instant checkedAt,
+        String actorId,
+        String correlationId
+    ) {
         private PreparedSourceInventory {
             writes = List.copyOf(writes);
+        }
+
+        private boolean allReconfirmationsReplayed() {
+            return !writes.isEmpty() &&
+            writes
+                .stream()
+                .allMatch(write -> write.action() == SourceAction.RECONFIRM && write.reconfirmationReplayed());
         }
     }
 
@@ -1856,8 +2336,35 @@ public class WarehousePlanApplicationService {
         String exclusionReason,
         String confirmedVersion,
         SourceReferenceResolver.ResolvedSource resolution,
-        Instant checkedAt
+        Instant checkedAt,
+        SourceAction action,
+        String previousConfirmedVersion,
+        boolean reconfirmationReplayed
     ) {}
+
+    private record SourceDriftRow(int added, int removed, int changed, String detailsJson) {}
+
+    private record SourceDriftEvidence(
+        SourceChangeImpact impact,
+        SourceDiffSummary summary,
+        List<SourceSchemaChange> changes
+    ) {
+        private SourceDriftEvidence {
+            changes = List.copyOf(changes);
+        }
+
+        private static SourceDriftEvidence none() {
+            return new SourceDriftEvidence(SourceChangeImpact.NONE, SourceDiffSummary.empty(), List.of());
+        }
+
+        private static SourceDriftEvidence reviewRequired() {
+            return new SourceDriftEvidence(
+                SourceChangeImpact.REVIEW_REQUIRED,
+                SourceDiffSummary.empty(),
+                List.of()
+            );
+        }
+    }
 
     public static final class WarehousePlanException extends RuntimeException {
 

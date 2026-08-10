@@ -111,6 +111,19 @@ public final class WarehousePlanContract {
         NOT_REQUIRED_YET,
     }
 
+    public enum SourceAction {
+        CONFIRM,
+        RECONFIRM,
+        EXCLUDE,
+    }
+
+    public enum SourceChangeImpact {
+        NONE,
+        COMPATIBLE,
+        BREAKING,
+        REVIEW_REQUIRED,
+    }
+
     public enum SourceType {
         CONNECTION_TABLE,
         CATALOG_TABLE,
@@ -270,10 +283,25 @@ public final class WarehousePlanContract {
         SourceType sourceType,
         SourceLocator locator,
         ConfirmationStatus confirmationStatus,
-        String exclusionReason
+        String exclusionReason,
+        SourceAction action,
+        String expectedConfirmedVersion,
+        String expectedCurrentVersion
     ) {
+        public SourceBindingCommand(
+            UUID bindingId,
+            SourceType sourceType,
+            SourceLocator locator,
+            ConfirmationStatus confirmationStatus,
+            String exclusionReason
+        ) {
+            this(bindingId, sourceType, locator, confirmationStatus, exclusionReason, null, null, null);
+        }
+
         public SourceBindingCommand {
             exclusionReason = trimToNull(exclusionReason);
+            expectedConfirmedVersion = trimToNull(expectedConfirmedVersion);
+            expectedCurrentVersion = trimToNull(expectedCurrentVersion);
         }
     }
 
@@ -283,6 +311,14 @@ public final class WarehousePlanContract {
             bindings = immutable(bindings);
         }
     }
+
+    public record SourceDiffSummary(int added, int removed, int changed) {
+        public static SourceDiffSummary empty() {
+            return new SourceDiffSummary(0, 0, 0);
+        }
+    }
+
+    public record SourceSchemaChange(String field, String kind, Object before, Object after, String impact) {}
 
     public record SourceBindingView(
         UUID bindingId,
@@ -296,8 +332,57 @@ public final class WarehousePlanContract {
         String resolvedVersion,
         SourceReferenceResolver.ResolutionStatus resolutionStatus,
         SourceFreshness freshness,
-        Instant lastValidatedAt
-    ) {}
+        Instant lastValidatedAt,
+        String currentVersion,
+        SourceChangeImpact changeImpact,
+        SourceDiffSummary diffSummary,
+        List<SourceSchemaChange> changes,
+        List<SourceAction> allowedActions,
+        String reasonCode,
+        String statusSummary
+    ) {
+        public SourceBindingView(
+            UUID bindingId,
+            SourceType sourceType,
+            SourceLocator locator,
+            String sourceId,
+            ConfirmationStatus confirmationStatus,
+            String exclusionReason,
+            String displayName,
+            String confirmedVersion,
+            String resolvedVersion,
+            SourceReferenceResolver.ResolutionStatus resolutionStatus,
+            SourceFreshness freshness,
+            Instant lastValidatedAt
+        ) {
+            this(
+                bindingId,
+                sourceType,
+                locator,
+                sourceId,
+                confirmationStatus,
+                exclusionReason,
+                displayName,
+                confirmedVersion,
+                resolvedVersion,
+                resolutionStatus,
+                freshness,
+                lastValidatedAt,
+                resolvedVersion,
+                SourceChangeImpact.NONE,
+                SourceDiffSummary.empty(),
+                List.of(),
+                List.of(),
+                null,
+                null
+            );
+        }
+
+        public SourceBindingView {
+            changes = immutable(changes);
+            allowedActions = immutable(allowedActions);
+        }
+    }
 
     public record SourceInventoryView(
         List<SourceBindingView> bindings,
@@ -305,11 +390,40 @@ public final class WarehousePlanContract {
         List<DomainIssue> issues,
         int version,
         String etag,
-        Instant checkedAt
+        Instant checkedAt,
+        int page,
+        int size,
+        long totalElements,
+        int totalPages
     ) {
+        public SourceInventoryView(
+            List<SourceBindingView> bindings,
+            SourceInventoryReadiness readiness,
+            List<DomainIssue> issues,
+            int version,
+            String etag,
+            Instant checkedAt
+        ) {
+            this(
+                bindings,
+                readiness,
+                issues,
+                version,
+                etag,
+                checkedAt,
+                0,
+                bindings == null ? 0 : bindings.size(),
+                bindings == null ? 0 : bindings.size(),
+                1
+            );
+        }
+
         public SourceInventoryView {
             bindings = immutable(bindings);
             issues = immutable(issues);
+            if (page < 0 || size < 0 || totalElements < 0 || totalPages < 0) {
+                throw new IllegalArgumentException("Source inventory pagination cannot be negative");
+            }
         }
     }
 
@@ -573,6 +687,30 @@ public final class WarehousePlanContract {
                         "SOURCE_EXCLUSION_REASON_REQUIRED",
                         "Excluded sources require a reason",
                         field + ".exclusionReason"
+                    )
+                );
+            }
+            if (binding.action() == SourceAction.RECONFIRM) {
+                if (
+                    binding.bindingId() == null ||
+                    binding.confirmationStatus() != ConfirmationStatus.CONFIRMED ||
+                    isBlank(binding.expectedConfirmedVersion()) ||
+                    isBlank(binding.expectedCurrentVersion())
+                ) {
+                    issues.add(
+                        new DomainIssue(
+                            "SOURCE_RECONFIRM_VERSION_REQUIRED",
+                            "Reconfirmation requires the binding and both observed source versions",
+                            field + ".action"
+                        )
+                    );
+                }
+            } else if (binding.action() != null) {
+                issues.add(
+                    new DomainIssue(
+                        "SOURCE_ACTION_INVALID",
+                        "Only RECONFIRM is accepted as an explicit source action",
+                        field + ".action"
                     )
                 );
             }

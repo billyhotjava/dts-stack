@@ -1,7 +1,7 @@
 # F3: 建模失效处置与来源盘点
 
 **优先级**: P0
-**状态**: BLOCKED_INPUT
+**状态**: API_DONE / UI_BLOCKED_INPUT
 **依赖**: F2 完成；真实登录/来源样本用于验收
 **价值**: 让建模人员在现有数仓规划中看见来源变化、理解影响并安全重确认，而不是遇到笼统的 stale 错误。
 
@@ -28,12 +28,12 @@
 
 | Task | 状态 |
 |---|---|
-| T01-补齐来源状态差异与重确认契约 | DRAFT |
+| T01-补齐来源状态差异与重确认契约 | DONE |
 | T02-在现有数仓规划入口完成来源处置 | BLOCKED_INPUT |
 
 ## DoD
 
-- [ ] GET 返回结构化状态/diff/action，不泄露无权限 schema
-- [ ] PUT 重确认有 expectedVersion、幂等与审计，竞争更新返回稳定 409
+- [x] GET 返回结构化状态/diff/action，不泄露无权限 schema
+- [x] PUT 重确认有 expectedVersion、幂等与审计，竞争更新返回稳定 409
 - [ ] UI 五态、空/加载/错误/只读状态齐全，Chrome 95 通过
-- [ ] 反向建模、编译、发布和物化消费同一 confirmed/current 语义
+- [x] 反向建模、编译、发布和物化消费同一 confirmed/current 语义

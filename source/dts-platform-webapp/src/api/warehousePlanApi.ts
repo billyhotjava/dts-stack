@@ -80,11 +80,30 @@ export type WarehousePlanSourceBindingInput = {
 	locator?: WarehousePlanSourceLocator | null;
 	confirmationStatus: WarehousePlanConfirmationStatus;
 	exclusionReason?: string | null;
+	action?: WarehousePlanSourceAction | null;
+	expectedConfirmedVersion?: string | null;
+	expectedCurrentVersion?: string | null;
 };
 
 export type WarehousePlanSourceResolutionStatus = "AVAILABLE" | "MISSING" | "FORBIDDEN" | "PROVIDER_ERROR";
 export type WarehousePlanSourceFreshness = "CURRENT" | "STALE" | "UNKNOWN";
 export type WarehousePlanSourceInventoryReadiness = "DRAFT" | "READY" | "BLOCKED" | "NOT_REQUIRED_YET";
+export type WarehousePlanSourceAction = "CONFIRM" | "RECONFIRM" | "EXCLUDE";
+export type WarehousePlanSourceChangeImpact = "NONE" | "COMPATIBLE" | "BREAKING" | "REVIEW_REQUIRED";
+
+export type WarehousePlanSourceDiffSummary = {
+	added: number;
+	removed: number;
+	changed: number;
+};
+
+export type WarehousePlanSourceSchemaChange = {
+	field?: string | null;
+	kind?: string | null;
+	before?: unknown;
+	after?: unknown;
+	impact?: string | null;
+};
 
 export type WarehousePlanSourceBindingView = {
 	bindingId: string;
@@ -99,6 +118,13 @@ export type WarehousePlanSourceBindingView = {
 	resolutionStatus: WarehousePlanSourceResolutionStatus;
 	freshness: WarehousePlanSourceFreshness;
 	lastValidatedAt?: string | null;
+	currentVersion?: string | null;
+	changeImpact?: WarehousePlanSourceChangeImpact;
+	diffSummary?: WarehousePlanSourceDiffSummary;
+	changes?: WarehousePlanSourceSchemaChange[];
+	allowedActions?: WarehousePlanSourceAction[];
+	reasonCode?: string | null;
+	statusSummary?: string | null;
 };
 
 export type WarehousePlanSourceInventoryView = {
@@ -108,6 +134,10 @@ export type WarehousePlanSourceInventoryView = {
 	version: number;
 	etag: string;
 	checkedAt: string;
+	page?: number;
+	size?: number;
+	totalElements?: number;
+	totalPages?: number;
 };
 
 export type CreateWarehousePlanResult = {
@@ -327,10 +357,14 @@ export const saveWarehousePlanCategories = (
 		}),
 	);
 
-export const getWarehousePlanSources = (planId: string) =>
+export const getWarehousePlanSources = (planId: string, page?: number, size?: number) =>
 	api.get<WarehousePlanSourceInventoryView>(
 		withModelingRequestTimeout({
 			url: `${WAREHOUSE_PLAN_RESOURCE}/${planId}/baseline/sources`,
+			params:
+				page === undefined && size === undefined
+					? undefined
+					: { page: page ?? 0, size: size ?? 200 },
 			_skipErrorToast: true,
 		}),
 	);

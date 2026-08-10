@@ -276,9 +276,28 @@ public class WarehousePlanResource {
     }
 
     @GetMapping("/{id}/baseline/sources")
-    public ResponseEntity<ApiResponse<SourceInventoryView>> sources(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<SourceInventoryView>> sources(
+        @PathVariable UUID id,
+        @RequestParam(required = false) Integer page,
+        @RequestParam(required = false) Integer size
+    ) {
+        boolean paged = page != null || size != null;
+        int requestedPage = page == null ? 0 : page;
+        int requestedSize = size == null ? 200 : size;
+        if (paged) {
+            validateSourcePage(requestedPage, requestedSize);
+        }
         WarehousePlanActor actor = requirePlanRead(id);
-        SourceInventoryView result = service.getSources(serverTenantId, id, sourceAccessContext(actor));
+        SourceInventoryView result = paged
+            ? service.getSources(
+                serverTenantId,
+                id,
+                sourceAccessContext(actor),
+                requestedPage,
+                requestedSize,
+                canMaintainPlan(id, actor)
+            )
+            : service.getSources(serverTenantId, id, sourceAccessContext(actor));
         return sourceInventoryResponse(result);
     }
 
@@ -416,6 +435,26 @@ public class WarehousePlanResource {
         return actor;
     }
 
+    private boolean canMaintainPlan(UUID planId, WarehousePlanActor actor) {
+        try {
+            authorizationGuard.requirePlanMaintenance(service.get(serverTenantId, planId), actor);
+            return true;
+        } catch (WarehousePlanException exception) {
+            return false;
+        }
+    }
+
+    private static void validateSourcePage(int page, int size) {
+        if (page < 0 || size < 1 || size > 200) {
+            throw new WarehousePlanException(
+                "WAREHOUSE_PLAN_SOURCE_PAGE_INVALID",
+                "Source inventory page must be non-negative and size must be between 1 and 200",
+                null,
+                EditUnit.SOURCES
+            );
+        }
+    }
+
     private <T> T decode(JsonNode request, Class<T> type, EditUnit editUnit) {
         try (JsonParser parser = request.traverse(objectMapper)) {
             return objectMapper
@@ -536,7 +575,8 @@ public class WarehousePlanResource {
             "WAREHOUSE_PLAN_LIFECYCLE_CONFLICT".equals(code) ||
             "WAREHOUSE_PLAN_BASELINE_STALE".equals(code) ||
             "WAREHOUSE_PLAN_BASELINE_INCOMPLETE".equals(code) ||
-            "WAREHOUSE_PLAN_SOURCE_IN_USE".equals(code)
+            "WAREHOUSE_PLAN_SOURCE_IN_USE".equals(code) ||
+            "WAREHOUSE_PLAN_SOURCE_VERSION_CHANGED".equals(code)
         ) {
             return HttpStatus.CONFLICT;
         }
