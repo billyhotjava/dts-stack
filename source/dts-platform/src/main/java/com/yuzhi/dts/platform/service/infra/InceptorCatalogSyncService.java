@@ -13,6 +13,7 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogRowFilterRuleRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogSchemaDriftEventRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
+import com.yuzhi.dts.platform.service.catalog.SchemaDriftConsumerReferenceReadPort;
 import com.yuzhi.dts.platform.service.catalog.SchemaDriftDetector;
 import com.yuzhi.dts.platform.service.catalog.CatalogAutoLineageService;
 import com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry.InceptorDataSourceState;
@@ -67,6 +68,7 @@ public class InceptorCatalogSyncService {
     private final CatalogSchemaDriftEventRepository schemaDriftEventRepository;
     private final SchemaDriftDetector schemaDriftDetector;
     private final CatalogColumnSyncService columnSyncService;
+    private final SchemaDriftConsumerReferenceReadPort driftConsumerReferences;
 
     @Value("${dts.jdbc.statement-timeout-seconds:30}")
     private int statementTimeoutSeconds;
@@ -86,7 +88,8 @@ public class InceptorCatalogSyncService {
         CatalogAutoLineageService autoLineageService,
         CatalogSchemaDriftEventRepository schemaDriftEventRepository,
         SchemaDriftDetector schemaDriftDetector,
-        CatalogColumnSyncService columnSyncService
+        CatalogColumnSyncService columnSyncService,
+        SchemaDriftConsumerReferenceReadPort driftConsumerReferences
     ) {
         this.registry = registry;
         this.connectionService = connectionService;
@@ -103,6 +106,7 @@ public class InceptorCatalogSyncService {
         this.schemaDriftEventRepository = schemaDriftEventRepository;
         this.schemaDriftDetector = schemaDriftDetector;
         this.columnSyncService = columnSyncService;
+        this.driftConsumerReferences = driftConsumerReferences;
     }
 
     public CatalogSyncResult synchronize() {
@@ -250,7 +254,14 @@ public class InceptorCatalogSyncService {
                     .stream()
                     .map(col -> new SchemaDriftDetector.ColumnSnapshot(col.name(), col.dataType(), col.nullable()))
                     .toList();
-                SchemaDriftDetector.DriftSummary drift = schemaDriftDetector.diff(beforeSnapshot, afterSnapshot);
+                Set<String> referencedFields = driftConsumerReferences
+                    .findCurrentReferencedFields(tableSchema.getId(), dataset.getSourceId(), database, tableName)
+                    .orElse(null);
+                SchemaDriftDetector.DriftSummary drift = schemaDriftDetector.diff(
+                    beforeSnapshot,
+                    afterSnapshot,
+                    referencedFields
+                );
                 if (drift.added() > 0 || drift.removed() > 0 || drift.changed() > 0) {
                     recordSchemaDrift(runId, "INCEPTOR", dataset, database, tableName, drift);
                 }

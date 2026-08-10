@@ -20,6 +20,7 @@ import com.yuzhi.dts.platform.service.catalog.CatalogAssetGovernancePolicy;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
 import com.yuzhi.dts.platform.service.catalog.CatalogClassificationService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
+import com.yuzhi.dts.platform.service.catalog.SchemaDriftConsumerReferenceReadPort;
 import com.yuzhi.dts.platform.service.catalog.SchemaDriftDetector;
 import com.yuzhi.dts.platform.service.infra.dto.SchemaDiscoverDtos.SchemaDiscoverColumnDto;
 import com.yuzhi.dts.platform.service.infra.dto.SchemaDiscoverDtos.SchemaDiscoverDriftDto;
@@ -86,6 +87,7 @@ public class JdbcCatalogSyncService {
     private final InfraSchemaDiscoverCacheRepository schemaDiscoverCacheRepository;
     private final CatalogClassificationService classificationService;
     private final CatalogColumnSyncService columnSyncService;
+    private final SchemaDriftConsumerReferenceReadPort driftConsumerReferences;
 
     public JdbcCatalogSyncService(
         InfraDataSourceRepository infraDataSourceRepository,
@@ -100,7 +102,8 @@ public class JdbcCatalogSyncService {
         SchemaDriftDetector schemaDriftDetector,
         InfraSchemaDiscoverCacheRepository schemaDiscoverCacheRepository,
         CatalogClassificationService classificationService,
-        CatalogColumnSyncService columnSyncService
+        CatalogColumnSyncService columnSyncService,
+        SchemaDriftConsumerReferenceReadPort driftConsumerReferences
     ) {
         this.infraDataSourceRepository = infraDataSourceRepository;
         this.secretService = secretService;
@@ -115,6 +118,7 @@ public class JdbcCatalogSyncService {
         this.schemaDiscoverCacheRepository = schemaDiscoverCacheRepository;
         this.classificationService = classificationService;
         this.columnSyncService = columnSyncService;
+        this.driftConsumerReferences = driftConsumerReferences;
     }
 
     public List<JdbcSyncResult> synchronizeAllActive() {
@@ -320,7 +324,19 @@ public class JdbcCatalogSyncService {
                             .stream()
                             .map(col -> new SchemaDriftDetector.ColumnSnapshot(col.name(), col.dataType(), col.nullable()))
                             .toList();
-                        SchemaDriftDetector.DriftSummary drift = schemaDriftDetector.diff(beforeSnapshot, afterSnapshot);
+                        Set<String> referencedFields = driftConsumerReferences
+                            .findCurrentReferencedFields(
+                                tableSchema.getId(),
+                                savedDataset.getSourceId(),
+                                normalizedSchema,
+                                tableName
+                            )
+                            .orElse(null);
+                        SchemaDriftDetector.DriftSummary drift = schemaDriftDetector.diff(
+                            beforeSnapshot,
+                            afterSnapshot,
+                            referencedFields
+                        );
                         if (drift.added() > 0 || drift.removed() > 0 || drift.changed() > 0) {
                             recordSchemaDrift(runId, "JDBC", savedDataset, normalizedSchema, tableName, drift);
                         }

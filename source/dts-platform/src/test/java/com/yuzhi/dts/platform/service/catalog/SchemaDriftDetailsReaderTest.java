@@ -19,7 +19,9 @@ class SchemaDriftDetailsReaderTest {
 
         assertThat(details.contractVersion()).isEqualTo(1);
         assertThat(details.impactLevel()).isEqualTo("BREAKING");
-        assertThat(details.changes()).singleElement().containsEntry("field", "amount");
+        assertThat(details.changes())
+            .singleElement()
+            .satisfies(change -> assertThat(change).containsEntry("field", "amount"));
     }
 
     @Test
@@ -34,8 +36,11 @@ class SchemaDriftDetailsReaderTest {
         assertThat(details.impactLevel()).isEqualTo("REVIEW_REQUIRED");
         assertThat(details.changes())
             .singleElement()
-            .containsEntry("field", "legacy_code")
-            .containsEntry("kind", "FIELD_REMOVED")
-            .containsEntry("impact", "REVIEW_REQUIRED");
+            .satisfies(change ->
+                assertThat(change)
+                    .containsEntry("field", "legacy_code")
+                    .containsEntry("kind", "FIELD_REMOVED")
+                    .containsEntry("impact", "REVIEW_REQUIRED")
+            );
     }
 }

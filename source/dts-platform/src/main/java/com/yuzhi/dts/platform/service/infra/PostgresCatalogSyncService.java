@@ -13,6 +13,7 @@ import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
 import com.yuzhi.dts.platform.service.catalog.CatalogAutoLineageService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
+import com.yuzhi.dts.platform.service.catalog.SchemaDriftConsumerReferenceReadPort;
 import com.yuzhi.dts.platform.service.catalog.SchemaDriftDetector;
 import com.yuzhi.dts.platform.service.infra.InceptorCatalogSyncService.CatalogSyncResult;
 import jakarta.transaction.Transactional;
@@ -60,6 +61,7 @@ public class PostgresCatalogSyncService {
     private final CatalogSchemaDriftEventRepository schemaDriftEventRepository;
     private final SchemaDriftDetector schemaDriftDetector;
     private final CatalogColumnSyncService columnSyncService;
+    private final SchemaDriftConsumerReferenceReadPort driftConsumerReferences;
 
     public PostgresCatalogSyncService(
         InfraDataSourceRepository infraDataSourceRepository,
@@ -71,7 +73,8 @@ public class PostgresCatalogSyncService {
         CatalogAutoLineageService autoLineageService,
         CatalogSchemaDriftEventRepository schemaDriftEventRepository,
         SchemaDriftDetector schemaDriftDetector,
-        CatalogColumnSyncService columnSyncService
+        CatalogColumnSyncService columnSyncService,
+        SchemaDriftConsumerReferenceReadPort driftConsumerReferences
     ) {
         this.infraDataSourceRepository = infraDataSourceRepository;
         this.datasetRepository = datasetRepository;
@@ -83,6 +86,7 @@ public class PostgresCatalogSyncService {
         this.schemaDriftEventRepository = schemaDriftEventRepository;
         this.schemaDriftDetector = schemaDriftDetector;
         this.columnSyncService = columnSyncService;
+        this.driftConsumerReferences = driftConsumerReferences;
     }
 
     public boolean isFallbackActive() {
@@ -214,7 +218,14 @@ public class PostgresCatalogSyncService {
                     .stream()
                     .map(col -> new SchemaDriftDetector.ColumnSnapshot(col.name(), col.dataType(), col.nullable()))
                     .toList();
-                SchemaDriftDetector.DriftSummary drift = schemaDriftDetector.diff(beforeSnapshot, afterSnapshot);
+                Set<String> referencedFields = driftConsumerReferences
+                    .findCurrentReferencedFields(tableSchema.getId(), dataset.getSourceId(), schema, tableName)
+                    .orElse(null);
+                SchemaDriftDetector.DriftSummary drift = schemaDriftDetector.diff(
+                    beforeSnapshot,
+                    afterSnapshot,
+                    referencedFields
+                );
                 if (drift.added() > 0 || drift.removed() > 0 || drift.changed() > 0) {
                     recordSchemaDrift(runId, TYPE_POSTGRES, dataset, schema, tableName, drift);
                 }

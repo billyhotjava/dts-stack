@@ -7,6 +7,7 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogSchemaDriftEventRepository;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.SchemaDriftDetailsReader;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -37,6 +38,7 @@ public class CatalogSchemaDriftResource {
     private final CatalogDatasetRepository datasetRepo;
     private final AccessChecker accessChecker;
     private final AuditService audit;
+    private final SchemaDriftDetailsReader detailsReader;
 
     public record SchemaDriftPolicyRequest(String policyMode, String note) {}
 
@@ -46,12 +48,14 @@ public class CatalogSchemaDriftResource {
         CatalogSchemaDriftEventRepository driftRepo,
         CatalogDatasetRepository datasetRepo,
         AccessChecker accessChecker,
-        AuditService audit
+        AuditService audit,
+        SchemaDriftDetailsReader detailsReader
     ) {
         this.driftRepo = driftRepo;
         this.datasetRepo = datasetRepo;
         this.accessChecker = accessChecker;
         this.audit = audit;
+        this.detailsReader = detailsReader;
     }
 
     @GetMapping("/datasets/{datasetId}/schema-drift")
@@ -228,7 +232,11 @@ public class CatalogSchemaDriftResource {
         dto.put("handledAt", event.getHandledAt());
         dto.put("workflowNote", event.getWorkflowNote());
         dto.put("createdDate", event.getCreatedDate());
+        SchemaDriftDetailsReader.SchemaDriftDetails details = detailsReader.read(event.getDetailsJson());
+        dto.put("contractVersion", details.contractVersion());
+        dto.put("impactLevel", details.impactLevel());
         if (includeDetails) {
+            dto.put("changes", details.changes());
             dto.put("detailsJson", event.getDetailsJson());
         }
         return dto;

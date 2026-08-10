@@ -223,7 +223,8 @@ class JdbcClassificationLifecycleIT {
             new SchemaDriftDetector(objectMapper),
             discoverCacheRepository,
             classificationService,
-            new CatalogColumnSyncService(columnRepository, org.mockito.Mockito.mock(GovernedStandardReadPort.class))
+            new CatalogColumnSyncService(columnRepository, org.mockito.Mockito.mock(GovernedStandardReadPort.class)),
+            (catalogTableId, connectionId, namespace, objectName) -> Optional.of(java.util.Set.of())
         );
     }
 

@@ -28,12 +28,12 @@ STALE   --来源重现------> SYNCED（复用原 ID，生成 drift）
 | Task | 状态 |
 |---|---|
 | T01-统一采集软失效与稳定ID | DONE |
-| T02-建立兼容与破坏性变更判定 | IN_PROGRESS |
+| T02-建立兼容与破坏性变更判定 | DONE |
 
 ## DoD
 
-- [ ] PostgreSQL/JDBC/Inceptor 例行同步均无 dataset/table/column 物理删除
-- [ ] 列更新不再 delete-and-recreate，稳定 ID 与业务治理字段得到保留
-- [ ] STALE/UNKNOWN 被来源 resolver 正确映射，不再返回 AVAILABLE
-- [ ] drift 分类矩阵与消费者覆盖有自动化测试
+- [x] PostgreSQL/JDBC/Inceptor 例行同步均无 dataset/table/column 物理删除
+- [x] 列更新不再 delete-and-recreate，稳定 ID 与业务治理字段得到保留
+- [x] STALE/UNKNOWN 被来源 resolver 正确映射，不再返回 AVAILABLE
+- [x] drift 分类矩阵与消费者覆盖有自动化测试
 - [ ] 同步失败、并发与重复执行满足 `assets/nfr-budget.md`
