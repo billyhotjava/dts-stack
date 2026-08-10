@@ -92,11 +92,7 @@ export default function Page() {
 			title: "类型",
 			dataIndex: "type",
 			width: 140,
-			render: (value) => (
-				<Tag color={TODO_COLORS[value || ""] || "default"}>
-					{value || "TODO"}
-				</Tag>
-			),
+			render: (value) => <Tag color={TODO_COLORS[value || ""] || "default"}>{value || "TODO"}</Tag>,
 		},
 		{
 			title: "事项",
@@ -132,13 +128,25 @@ export default function Page() {
 			width: 160,
 			render: (_, record) => {
 				if (record.type === "ACCESS_APPROVAL") {
-					return <Button onClick={() => push("/security/dataset-access-approval")}>前往审批</Button>;
+					return (
+						<Button size="small" onClick={() => push("/security/dataset-access-approval")}>
+							前往审批
+						</Button>
+					);
 				}
 				if (record.type === "QUALITY") {
-					return <Button onClick={() => push("/governance/rules")}>查看质量</Button>;
+					return (
+						<Button size="small" onClick={() => push("/governance/rules")}>
+							查看质量
+						</Button>
+					);
 				}
 				if (record.type === "SCHEMA_DRIFT") {
-					return <Button onClick={() => push("/catalog/assets")}>查看详情</Button>;
+					return (
+						<Button size="small" onClick={() => push("/catalog/assets")}>
+							查看详情
+						</Button>
+					);
 				}
 				return "-";
 			},
@@ -151,9 +159,7 @@ export default function Page() {
 				title="待办中心"
 				extra={
 					<Space>
-						<Button onClick={() => push("/workbench")}>
-							返回工作台
-						</Button>
+						<Button onClick={() => push("/workbench")}>返回工作台</Button>
 						<Button type="primary" onClick={() => void loadTodos()}>
 							<RefreshCw className="h-4 w-4" />
 							刷新待办
@@ -164,27 +170,17 @@ export default function Page() {
 				<PlatformSummaryCards items={stats} />
 			</Card>
 
-			<Card
-				title="待办清单"
-				extra={<Tag>{filteredTodos.length} 条</Tag>}
-			>
+			<Card title="待办清单" extra={<Tag>{filteredTodos.length} 条</Tag>}>
 				<div className="mb-4 flex flex-wrap items-center gap-2">
-					<Select
-						value={typeFilter}
-						onChange={setTypeFilter}
-						options={TYPE_OPTIONS}
-						style={{ width: 180 }}
-					/>
-					<Button onClick={() => push("/security/dataset-access-approval")}>
-						审批入口
-					</Button>
-					<Button onClick={() => push("/governance/rules/catalog")}>
-						质量规则
-					</Button>
+					<Select value={typeFilter} onChange={setTypeFilter} options={TYPE_OPTIONS} style={{ width: 180 }} />
+					<Button onClick={() => push("/security/dataset-access-approval")}>审批入口</Button>
+					<Button onClick={() => push("/governance/rules/catalog")}>质量规则</Button>
 				</div>
 				{filteredTodos.length ? (
 					<CompactTable
-						rowKey={(record) => `${record.type}-${record.taskId || record.requestId || record.datasetId || record.title}`}
+						rowKey={(record) =>
+							`${record.type}-${record.taskId || record.requestId || record.datasetId || record.title}`
+						}
 						columns={columns}
 						dataSource={filteredTodos}
 						loading={loading}

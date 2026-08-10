@@ -183,17 +183,15 @@ export default function AccessWorkspace() {
 			key: "name",
 			width: 220,
 			render: (_, row) => (
-				<div className={styles.nameCell}>
-					<Button
-						className={styles.nameButton}
-						type="link"
-						onClick={() => openDetail(row)}
-						disabled={row.taskId == null}
-					>
-						{row.name}
-					</Button>
-					<span className={styles.secondary}>{row.taskId == null ? "任务编号未记录" : `任务 #${row.taskId}`}</span>
-				</div>
+				<Button
+					className={styles.nameButton}
+					type="link"
+					onClick={() => openDetail(row)}
+					disabled={row.taskId == null}
+					title={row.taskId == null ? undefined : `任务 #${row.taskId}`}
+				>
+					{row.name}
+				</Button>
 			),
 		},
 		{
@@ -213,15 +211,14 @@ export default function AccessWorkspace() {
 			title: "来源 / 资源",
 			key: "source",
 			width: 220,
+			ellipsis: true,
 			render: (_, row) => (
-				<div className={styles.sourceCell}>
+				<Space size={6}>
 					<Text strong>{row.sourceName}</Text>
 					<Tooltip title={`${row.sourceType} · ${row.resourceSummary}`}>
-						<span className={styles.secondary}>
-							{row.sourceType} · {row.resourceSummary}
-						</span>
+						<Text type="secondary">{row.resourceSummary}</Text>
 					</Tooltip>
-				</div>
+				</Space>
 			),
 		},
 		{
@@ -250,10 +247,10 @@ export default function AccessWorkspace() {
 			key: "lastRun",
 			width: 165,
 			render: (_, row) => (
-				<div className={styles.runCell}>
+				<Space size={6}>
 					<Text>{row.lastExecutionStatus || "尚未运行"}</Text>
-					<span className={styles.secondary}>{row.lastExecutedAt ? formatTimestamp(row.lastExecutedAt) : "-"}</span>
-				</div>
+					<Text type="secondary">{row.lastExecutedAt ? formatTimestamp(row.lastExecutedAt) : "-"}</Text>
+				</Space>
 			),
 		},
 		{
@@ -261,14 +258,14 @@ export default function AccessWorkspace() {
 			key: "owner",
 			width: 150,
 			render: (_, row) => (
-				<div className={styles.ownerCell}>
+				<Space size={6}>
 					<Text>{row.owner}</Text>
 					{row.classification ? (
 						<ClassificationTag value={row.classification} size="small" />
 					) : (
 						<Text type="secondary">普通流程</Text>
 					)}
-				</div>
+				</Space>
 			),
 		},
 		{
@@ -277,7 +274,7 @@ export default function AccessWorkspace() {
 			fixed: "right",
 			width: 90,
 			render: (_, row) => (
-				<Button type="link" onClick={() => openDetail(row)} disabled={row.taskId == null}>
+				<Button size="small" onClick={() => openDetail(row)} disabled={row.taskId == null}>
 					详情
 				</Button>
 			),

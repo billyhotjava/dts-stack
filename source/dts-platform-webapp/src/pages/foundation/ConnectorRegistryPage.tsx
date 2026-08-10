@@ -213,13 +213,11 @@ export default function ConnectorRegistryPage() {
 				key: "name",
 				width: 190,
 				render: (_: string, record) => (
-					<Space direction="vertical" size={0}>
+					<Space size={6}>
 						<Button type="link" className="h-auto p-0" onClick={() => openConnectorDrawer(record, "detail")}>
 							{record.name || record.connectorKey}
 						</Button>
-						<Text type="secondary" className="text-xs">
-							{record.connectorKey}
-						</Text>
+						<Text type="secondary">{record.connectorKey}</Text>
 					</Space>
 				),
 			},

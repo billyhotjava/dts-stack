@@ -658,11 +658,10 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 					return "-";
 				}
 				return (
-					<Space direction="vertical" size={0}>
-						<Space size={4}>
+					<Space size={6}>
+						<Tooltip title="不推进检查点">
 							<Tag color="cyan">{record.backfillColumn || "默认增量列"}</Tag>
-							<Typography.Text type="secondary">不推进检查点</Typography.Text>
-						</Space>
+						</Tooltip>
 						<Typography.Text type="secondary">
 							{record.backfillWindowStart ? formatTimestamp(record.backfillWindowStart) : "-"} ~{" "}
 							{record.backfillWindowEnd ? formatTimestamp(record.backfillWindowEnd) : "-"}
