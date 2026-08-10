@@ -33,7 +33,7 @@ afterEach(async () => {
 });
 
 describe("DataArchitecturePage", () => {
-	it("ignores legacy modeling-space decoration and keeps the canonical planning surface", async () => {
+	it("ignores legacy modeling-space decoration without adding page-local navigation", async () => {
 		await act(async () =>
 			root.render(
 				<MemoryRouter
@@ -44,12 +44,9 @@ describe("DataArchitecturePage", () => {
 			),
 		);
 
-		expect(mocks.planningPageProps).toHaveBeenLastCalledWith(
-			expect.objectContaining({
-				navigationSurface: "architecture",
-				sidebarActiveView: "business-domains",
-				surface: "architecture",
-			}),
-		);
+		const props = mocks.planningPageProps.mock.lastCall?.[0] as Record<string, unknown>;
+		expect(props).toEqual(expect.objectContaining({ surface: "architecture" }));
+		expect(props).not.toHaveProperty("navigationSurface");
+		expect(props).not.toHaveProperty("sidebarActiveView");
 	});
 });

@@ -173,7 +173,6 @@ describe("prototype-owned data modeling frontend", () => {
 		const dataArchitectureNavigation = read("../data-architecture/navigation.ts");
 		const planningEditors = read("./prototype/PlanningEditors.tsx");
 		const catalogEditors = read("./prototype/PlanningCatalogEditors.tsx");
-		const planningSidebar = read("./prototype/PlanningSidebar.tsx");
 		const planningStyles = read("./data-modeling.css");
 		const modeling = read("./prototype/ModelingWorkbenchPage.tsx");
 		const catalogList = read("./prototype/ModelWorkbenchCatalogList.tsx");
@@ -189,21 +188,17 @@ describe("prototype-owned data modeling frontend", () => {
 		const metrics = read("./prototype/MetricsPage.tsx");
 		const prototypeSource = collectSource(fileURLToPath(new URL("./prototype", import.meta.url)));
 
-		expect(planning).toMatch(/navigationSurface === "architecture"|PlanningSidebar|Drawer|新建/);
-		expect(planning).toMatch(/navigationSurface|sidebarActiveView/);
+		expect(planning).toMatch(/Drawer|新建/);
+		expect(planning).not.toMatch(/PlanningSidebar|navigationSurface|sidebarActiveView|dmx-planning-layout/);
 		expect(dataArchitecturePage).not.toContain("resolveDataArchitectureNavigation");
-		expect(dataArchitecturePage).toMatch(/navigationSurface="architecture"|sidebarActiveView/);
+		expect(dataArchitecturePage).not.toMatch(/navigationSurface|sidebarActiveView/);
 		expect(dataArchitectureNavigation).not.toMatch(/modelingSpaceDataArchitecturePath|source:\s*"modeling-space"/);
 		expect(planning).toMatch(/CatalogDomainForm|BusinessProcessForm|DataMartForm|SubjectDomainForm/);
 		expect(planningEditors).toMatch(/createBusinessProcessApi|createDataMart|createSubjectDomain/);
 		expect(planningEditors).toMatch(/confirmDataMart|confirmSubjectDomain/);
 		expect(catalogEditors).toMatch(/CatalogDomainForm|listPlanningCatalogDomains/);
-		expect(planningSidebar).not.toContain("建模空间");
-		expect(planningSidebar).not.toContain("dataModelingPath");
-		expect(planningSidebar).not.toContain("modelingSpaceDataArchitecturePath");
-		expect(planningStyles).toMatch(/\.dmx-planning-sidebar__group\s*\{[^}]*font-weight:\s*(600|700)/s);
-		expect(planningStyles).toMatch(/\.dmx-planning-sidebar__icon\s*\{/);
-		expect(planningStyles).toMatch(/\.dmx-planning-sidebar a:focus-visible\s*\{/);
+		expect(existsSync(new URL("./prototype/PlanningSidebar.tsx", import.meta.url))).toBe(false);
+		expect(planningStyles).not.toMatch(/\.dmx-planning-(?:layout|sidebar)/);
 		expect(modeling).toMatch(/saveModelDraft|ModelWorkbenchDialog/);
 		expect(modeling).not.toMatch(/ModelWorkbenchCatalogPanel|WorkbenchCatalogTree|buildWorkbenchCatalogGroups/);
 		expect(catalogList).toMatch(/ModelWorkbenchCreateMenu|新建模型/);

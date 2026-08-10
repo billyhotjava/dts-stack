@@ -179,7 +179,7 @@ describe("PlanningPage", () => {
 		expect(container.textContent).toContain("建模策略已接入权威策略");
 	});
 
-	it("keeps the canonical warehouse-planning navigation separate from architecture write access", async () => {
+	it("uses the platform menu as the only warehouse-planning navigation", async () => {
 		mocks.loadPlanningProjection.mockResolvedValue({ headers: [], rows: [], readOnlyReason: null });
 		const route: DataModelingRoute = {
 			workspace: "planning",
@@ -191,18 +191,15 @@ describe("PlanningPage", () => {
 		await act(async () =>
 			root.render(
 				<MemoryRouter>
-					<PlanningPage navigationSurface="architecture" route={route} surface="architecture" />
+					<PlanningPage route={route} surface="architecture" />
 				</MemoryRouter>,
 			),
 		);
 
-		expect(container.textContent).toContain("平台数仓规划");
 		expect(container.textContent).toContain("数仓规划 / 平台规划");
-		expect(
-			[...container.querySelectorAll("a")]
-				.filter((link) => link.classList.contains("active"))
-				.map((link) => link.textContent?.trim()),
-		).toEqual(["业务分类与数据域"]);
+		expect(container.textContent).not.toContain("平台数仓规划");
+		expect(container.querySelector('nav[aria-label="数仓规划目录"]')).toBeNull();
+		expect(container.querySelectorAll("a")).toHaveLength(0);
 		expect(
 			[...container.querySelectorAll("button")].find((button) => button.textContent?.includes("新建业务分类"))
 				?.disabled,

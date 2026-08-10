@@ -23,10 +23,8 @@ export default function DataArchitecturePage() {
 		<div data-testid="data-architecture-page">
 			<PlanningPage
 				activeId={activeId}
-				navigationSurface="architecture"
 				onActiveChange={setActiveId}
 				route={dataArchitectureRoute(view)}
-				sidebarActiveView={view}
 				surface="architecture"
 			/>
 		</div>

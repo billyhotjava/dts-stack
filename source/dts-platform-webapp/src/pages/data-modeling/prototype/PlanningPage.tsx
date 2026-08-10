@@ -15,7 +15,6 @@ import {
 	WarehouseLayerForm,
 } from "./PlanningEditors";
 import { PlanningPolicyForm } from "./PlanningPolicyForm";
-import { PlanningSidebar } from "./PlanningSidebar";
 import { Button, Drawer, PageHeader, RequestState, Status, Toast, useTransientMessage } from "./PrototypePrimitives";
 import {
 	loadPlanningProjection,
@@ -59,8 +58,6 @@ type ProjectionTableRow = {
 type PlanningPageProps = {
 	route: DataModelingRoute;
 	surface?: "modeling" | "architecture";
-	navigationSurface?: "modeling" | "architecture";
-	sidebarActiveView?: string;
 	activeId?: string;
 	onActiveChange?: (id: string | null) => void;
 };
@@ -68,8 +65,6 @@ type PlanningPageProps = {
 export function PlanningPage({
 	route,
 	surface = "modeling",
-	navigationSurface = surface,
-	sidebarActiveView = route.view,
 	activeId = "",
 	onActiveChange,
 }: PlanningPageProps) {
@@ -329,11 +324,8 @@ export function PlanningPage({
 				: []),
 		];
 	}, [headerNames, hasActions, renderActions]);
-	const showPlanningSidebar = navigationSurface === "architecture";
-
 	return (
-		<main className={showPlanningSidebar ? "dmx-page dmx-planning-layout" : "dmx-page"}>
-			{showPlanningSidebar ? <PlanningSidebar activeView={sidebarActiveView} /> : null}
+		<main className="dmx-page">
 			<section className="dmx-planning-content">
 				<PageHeader
 					actions={
@@ -370,7 +362,7 @@ export function PlanningPage({
 					}
 					description={route.description}
 					title={route.title}
-					trail={showPlanningSidebar ? "数仓规划 / 平台规划" : "数据建模 / 建模策略"}
+					trail={surface === "architecture" ? "数仓规划 / 平台规划" : "数据建模 / 建模策略"}
 				/>
 				{route.view === "system" ? (
 					<PlanningPolicyForm canMaintain={canMaintain} />
