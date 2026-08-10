@@ -695,10 +695,13 @@
                         <testInclude>**/service/modeling/migration/LegacyModelingPlanSqlModelRetirementLiquibaseIT.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehousePlanApplicationServiceIT.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehousePlanSourceInventoryApplicationServiceIT.java</testInclude>
+                        <testInclude>**/service/modeling/warehouse/Sprint89WarehousePlanSourceContractTest.java</testInclude>
+                        <testInclude>**/service/modeling/warehouse/Sprint89WarehousePlanSourceApplicationServiceIT.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehouseLayerGovernanceLiquibaseTest.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehouseLayerApplicationServiceTest.java</testInclude>
                         <testInclude>**/repository/modeling/WarehouseLayerRepositoryIT.java</testInclude>
                         <testInclude>**/web/rest/WarehouseLayerResourceTest.java</testInclude>
+                        <testInclude>**/web/rest/Sprint89WarehousePlanSourceResourceTest.java</testInclude>
                         <testInclude>**/web/rest/SubjectDomainResourceTest.java</testInclude>
                         <testInclude>**/web/rest/ModelingBusinessProcessResourceTest.java</testInclude>
                         <testInclude>**/web/rest/Sprint64GovernanceResourceTest.java</testInclude>
