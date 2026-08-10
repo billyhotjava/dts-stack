@@ -131,12 +131,11 @@ public class CatalogDbtLineageService {
 			CatalogLineageJob lineageJob = upsertDbtJob(nodeKey, modelName, node);
 
 			for (String parentKey : parentKeys) {
-				String parentName = parentKey.contains(".")
-					? parentKey.substring(parentKey.lastIndexOf('.') + 1)
-					: parentKey;
-				String parentSchema = parentKey.contains(".")
-					? parentKey.substring(parentKey.indexOf('.') + 1, parentKey.lastIndexOf('.'))
-					: null;
+				// dbt unique_id 形如 model.<project>.<schema>.<name> / source.<project>.<schema>.<name>：
+				// schema 取倒数第 2 段，name 取末段
+				String[] parentParts = parentKey.split("\\.");
+				String parentName = parentParts[parentParts.length - 1];
+				String parentSchema = parentParts.length >= 3 ? parentParts[parentParts.length - 2] : null;
 				UUID upstreamId = resolveDatasetId(tableIndex, parentSchema, parentName);
 				if (upstreamId == null) {
 					skippedUnmatchedParent++;
