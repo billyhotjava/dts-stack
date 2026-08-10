@@ -11,6 +11,7 @@ export const MODEL_SPEC_CREATE_FIELDS = [
 	"dataMartId",
 	"variantCode",
 	"warehouseLayerCode",
+	"businessProcessId",
 ] as const;
 
 export const MODEL_SPEC_UPDATE_FIELDS = [
@@ -23,6 +24,7 @@ export const MODEL_SPEC_UPDATE_FIELDS = [
 	"implementationMode",
 	"materialization",
 	"businessActivityRef",
+	"businessProcessId",
 	"consumptionScenario",
 	"grain",
 	"factShape",
@@ -213,6 +215,7 @@ type CreateModelSpecBase = {
 	idempotencyKey: string;
 	dataMartId?: string | null;
 	variantCode?: string | null;
+	businessProcessId?: string | null;
 };
 
 export type CreateModelSpecCommand =
@@ -236,6 +239,7 @@ export type UpdateModelSpecCommand = {
 	implementationMode: ModelSpecImplementationMode;
 	materialization?: string | null;
 	businessActivityRef?: string | null;
+	businessProcessId?: string | null;
 	consumptionScenario?: string | null;
 	grain?: ModelSpecGrain | null;
 	factShape?: ModelSpecFactShape | null;
@@ -254,6 +258,7 @@ export const hasModelSpecTypeBoundaryMismatch = (
 		| "factShape"
 		| "timeSemantics"
 		| "businessActivityRef"
+		| "businessProcessId"
 		| "consumptionScenario"
 		| "sourceRefs"
 		| "dependsOn"
@@ -273,6 +278,7 @@ export const hasModelSpecTypeBoundaryMismatch = (
 		(model.modelType !== "FACT" && model.factShape != null) ||
 		(model.modelType !== "FACT" && model.timeSemantics != null) ||
 		(model.modelType !== "FACT" && isNonBlankString(model.businessActivityRef)) ||
+		(model.modelType !== "FACT" && isNonBlankString(model.businessProcessId)) ||
 		(model.modelType !== "APPLICATION" && isNonBlankString(model.consumptionScenario))
 	);
 };
@@ -509,6 +515,9 @@ const rawModelSpecIssues = (raw: Record<string, unknown>): ModelSpecFieldIssue[]
 	}
 	if (!isNullableString(raw.businessActivityRef)) {
 		add("MODEL_SPEC_BUSINESS_ACTIVITY_INVALID", "businessActivityRef", "Business activity must be text or null");
+	}
+	if (raw.businessProcessId != null && !isUuid(raw.businessProcessId)) {
+		add("MODEL_SPEC_BUSINESS_PROCESS_INVALID", "businessProcessId", "Business process id must be a UUID");
 	}
 	if (!isNullableString(raw.consumptionScenario)) {
 		add("MODEL_SPEC_CONSUMPTION_SCENARIO_INVALID", "consumptionScenario", "Consumption scenario must be text or null");
@@ -751,6 +760,24 @@ const validateModelSpecFull = (input: unknown): ModelSpecFieldIssue[] => {
 				"MODEL_SPEC_BUSINESS_ACTIVITY_NOT_ALLOWED",
 				"businessActivityRef",
 				"Business activity is optional FACT context only",
+			),
+		);
+	}
+	if (command.businessProcessId != null && command.modelType !== "FACT") {
+		issues.push(
+			issue(
+				"MODEL_SPEC_BUSINESS_PROCESS_NOT_ALLOWED",
+				"businessProcessId",
+				"Business process belongs to FACT models only",
+			),
+		);
+	}
+	if (command.modelType === "FACT" && !isUuid(command.businessProcessId)) {
+		issues.push(
+			issue(
+				"MODEL_SPEC_BUSINESS_PROCESS_REQUIRED",
+				"businessProcessId",
+				"FACT requires a stable business process reference",
 			),
 		);
 	}

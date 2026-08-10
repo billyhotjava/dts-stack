@@ -86,6 +86,7 @@ export type ModelSpecDraft = {
 	physicalName: string;
 	materialization: string;
 	grainStatement: string;
+	businessProcessId?: string;
 	fields: ModelSpecField[];
 	partitionFields: string;
 	loadStrategy: ModelSpecLoadStrategy;
@@ -127,6 +128,7 @@ export type ModelDraftErrorKey =
 	| "physicalName"
 	| "name"
 	| "description"
+	| "businessProcessId"
 	| "grainStatement"
 	| "fields";
 
@@ -148,7 +150,7 @@ export function emptyModelDraft(kind: ModelCreateKind, context: ModelWorkbenchCo
 			base: null,
 			definitionBase: null,
 			idempotencyKey: crypto.randomUUID(),
-			domainId: context.domains[0]?.id || "",
+			domainId: context.domains.find((item) => Boolean(item.parentCode))?.id || "",
 			name: "",
 			description: "",
 			reuseScope: "DOMAIN",
@@ -156,10 +158,7 @@ export function emptyModelDraft(kind: ModelCreateKind, context: ModelWorkbenchCo
 		};
 	}
 	const config = MODEL_KIND_CONFIG[kind];
-	const defaultDomainId =
-		kind === "dimension-table"
-			? context.domains.find((item) => Boolean(item.parentCode))?.id || context.domains[0]?.id || ""
-			: context.domains[0]?.id || "";
+	const defaultDomainId = context.domains.find((item) => Boolean(item.parentCode))?.id || "";
 	return {
 		createKind: kind,
 		base: null,
@@ -170,6 +169,7 @@ export function emptyModelDraft(kind: ModelCreateKind, context: ModelWorkbenchCo
 		physicalName: "",
 		materialization: "table",
 		grainStatement: "",
+		businessProcessId: "",
 		fields: [],
 		partitionFields: "",
 		loadStrategy: "FULL",
@@ -231,9 +231,11 @@ export function modelDraftFromView(
 		domainId: model.domainId || "",
 		name: model.name,
 		description: model.description || "",
-		physicalName: implementationText(implementation, "targetPhysicalName") || model.implementationPolicy?.physicalName || "",
+		physicalName:
+			implementationText(implementation, "targetPhysicalName") || model.implementationPolicy?.physicalName || "",
 		materialization: implementation?.materialization || model.materialization || "table",
 		grainStatement: model.grain?.statement || "",
+		businessProcessId: model.businessProcessId || "",
 		fields: model.fields.map((field) => ({ ...field })),
 		partitionFields:
 			implementationStringList(implementation, "partitionFields").join(",") ||
@@ -381,6 +383,9 @@ export function validateModelDraftInput(draft: ModelSpecDraft): ModelDraftValida
 	} else if (!draft.grainStatement.trim()) {
 		errors.grainStatement = "请填写模型粒度";
 	}
+	if (draft.createKind === "fact" && !draft.businessProcessId?.trim()) {
+		errors.businessProcessId = "请选择业务过程";
+	}
 
 	if (!draft.fields.length) {
 		errors.fields = "请至少添加一个字段";
@@ -418,6 +423,7 @@ const buildUpdate = (draft: ModelSpecDraft): UpdateModelSpecCommand => {
 		implementationMode: base?.implementationMode || "DESIGNER_GENERATED",
 		materialization: draft.materialization || null,
 		businessActivityRef: base?.businessActivityRef || null,
+		businessProcessId: config.modelType === "FACT" ? draft.businessProcessId?.trim() || null : null,
 		consumptionScenario: base?.consumptionScenario || null,
 		grain: { statement: draft.grainStatement.trim(), keys: keyNames },
 		factShape: config.modelType === "FACT" ? base?.factShape || "TRANSACTION" : null,
@@ -506,9 +512,7 @@ const implementationInputs = (
 	if (dependencies.length) {
 		const models = context.models || [];
 		const inputs = dependencies.map((dependency) => {
-			const model = models.find(
-				(item) => item.id === dependency.modelSpecId && item.revision === dependency.revision,
-			);
+			const model = models.find((item) => item.id === dependency.modelSpecId && item.revision === dependency.revision);
 			return model
 				? { modelSpecId: model.id, revision: model.revision, checksum: model.checksum }
 				: { modelSpecId: dependency.modelSpecId, revision: dependency.revision, checksum: "" };
@@ -568,10 +572,7 @@ const buildImplementationCommand = (
 	};
 };
 
-export async function saveModelDraft(
-	draft: ModelSpecDraft,
-	context: ModelSaveContext,
-): Promise<ModelDraftSaveResult> {
+export async function saveModelDraft(draft: ModelSpecDraft, context: ModelSaveContext): Promise<ModelDraftSaveResult> {
 	if (draft.base && draft.base.compatibilityMode !== "CANONICAL") throw new Error("历史只读模型不能在工作台中修改");
 	const backendContextId = draft.planId || (await resolveDefaultModelingContextId());
 	if (!backendContextId) throw new Error("服务端尚未提供可写建模上下文，请联系管理员初始化");
@@ -624,6 +625,7 @@ export async function saveModelDraft(
 			name: preparedDraft.name.trim(),
 			description: preparedDraft.description.trim() || null,
 			warehouseLayerCode: update.warehouseLayerCode,
+			businessProcessId: update.modelType === "FACT" ? update.businessProcessId : null,
 			idempotencyKey: crypto.randomUUID(),
 		});
 		savedModel = await updateModelSpec(created, update);

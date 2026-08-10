@@ -429,7 +429,11 @@ public class WarehousePlanApplicationService {
         requireServerTenant(serverTenantId);
         get(serverTenantId, planId);
         int version = readEditUnitVersion(serverTenantId, planId, EditUnit.POLICY);
-        return new Versioned<>(WarehousePlanContract.evaluatePlanningPolicy(loadPlanningPolicyCommand(serverTenantId, planId)), version);
+        PlanningPolicyCommand policy = inferUniqueDefaultBusinessCategory(
+            loadPlanningPolicyCommand(serverTenantId, planId),
+            loadDomainBindings(serverTenantId, planId)
+        );
+        return new Versioned<>(WarehousePlanContract.evaluatePlanningPolicy(policy), version);
     }
 
     @Transactional
@@ -441,10 +445,13 @@ public class WarehousePlanApplicationService {
     ) {
         requireServerTenant(serverTenantId);
         get(serverTenantId, planId);
+        boolean planningContextRequested = hasPlanningContextFields(command);
         PlanningPolicyCommand mergedCommand = mergeGovernancePolicy(
             command,
             loadPlanningPolicyCommand(serverTenantId, planId)
         );
+        List<DomainBinding> domainBindings = loadDomainBindings(serverTenantId, planId);
+        mergedCommand = inferUniqueDefaultBusinessCategory(mergedCommand, domainBindings);
         PlanningPolicyView view = WarehousePlanContract.evaluatePlanningPolicy(mergedCommand);
         if (WarehousePlanContract.hasInvalidPolicyValues(view)) {
             throw new WarehousePlanException(
@@ -454,6 +461,13 @@ public class WarehousePlanApplicationService {
                 EditUnit.POLICY
             );
         }
+        if (planningContextRequested) {
+            CategoryScopeView categoryScope = Objects.requireNonNull(
+                withoutTransactions.execute(status -> resolveCategoryScope(domainBindings)),
+                "Category scope resolution is required"
+            );
+            validatePlanningContextPolicy(view, categoryScope);
+        }
 
         casEditUnit(serverTenantId, planId, expectedVersion, EditUnit.POLICY);
         int updated = jdbcTemplate.update(
@@ -461,6 +475,7 @@ public class WarehousePlanApplicationService {
             update modeling_warehouse_plan_policy
                set layer_policy_code = ?, naming_policy_ref = ?, history_policy = ?, default_time_zone = ?,
                    conceptual_design_allowed = ?, standard_coverage = ?, quality_gate = ?,
+                   business_category_mode = ?, default_business_category_id = ?, business_process_mode = ?,
                    last_modified_date = current_timestamp
              where tenant_id = ? and plan_id = ?
             """,
@@ -471,6 +486,9 @@ public class WarehousePlanApplicationService {
             view.conceptualDesignAllowed(),
             enumName(view.standardCoverage()),
             enumName(view.qualityGate()),
+            enumName(view.businessCategoryMode()),
+            view.defaultBusinessCategoryId(),
+            enumName(view.businessProcessMode()),
             serverTenantId,
             planId
         );
@@ -479,8 +497,9 @@ public class WarehousePlanApplicationService {
                 """
                 insert into modeling_warehouse_plan_policy
                     (plan_id, tenant_id, layer_policy_code, naming_policy_ref, history_policy, default_time_zone,
-                     conceptual_design_allowed, standard_coverage, quality_gate, created_date, last_modified_date)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, current_timestamp, current_timestamp)
+                     conceptual_design_allowed, standard_coverage, quality_gate, business_category_mode,
+                     default_business_category_id, business_process_mode, created_date, last_modified_date)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, current_timestamp, current_timestamp)
                 """,
                 planId,
                 serverTenantId,
@@ -490,7 +509,10 @@ public class WarehousePlanApplicationService {
                 view.defaultTimeZone(),
                 view.conceptualDesignAllowed(),
                 enumName(view.standardCoverage()),
-                enumName(view.qualityGate())
+                enumName(view.qualityGate()),
+                enumName(view.businessCategoryMode()),
+                view.defaultBusinessCategoryId(),
+                enumName(view.businessProcessMode())
             );
         }
         auditService.auditAction(
@@ -1467,7 +1489,8 @@ public class WarehousePlanApplicationService {
             .query(
                 """
                 select layer_policy_code, naming_policy_ref, history_policy, default_time_zone,
-                       conceptual_design_allowed, standard_coverage, quality_gate
+                       conceptual_design_allowed, standard_coverage, quality_gate,
+                       business_category_mode, default_business_category_id, business_process_mode
                   from modeling_warehouse_plan_policy
                  where tenant_id = ? and plan_id = ?
                 """,
@@ -1479,14 +1502,30 @@ public class WarehousePlanApplicationService {
                         row.getString("default_time_zone"),
                         row.getBoolean("conceptual_design_allowed"),
                         row.getString("standard_coverage"),
-                        row.getString("quality_gate")
+                        row.getString("quality_gate"),
+                        row.getString("business_category_mode"),
+                        row.getObject("default_business_category_id", UUID.class),
+                        row.getString("business_process_mode")
                     ),
                 tenantId,
                 planId
             )
             .stream()
             .findFirst()
-            .orElseGet(() -> new PlanningPolicyCommand(null, null, null, null, false, "ALL_FIELDS", "BLOCKING"));
+            .orElseGet(() ->
+                new PlanningPolicyCommand(
+                    null,
+                    null,
+                    null,
+                    null,
+                    false,
+                    "ALL_FIELDS",
+                    "BLOCKING",
+                    "SINGLE_DEFAULT",
+                    null,
+                    "AUTO_SELECT_SINGLE"
+                )
+            );
     }
 
     private static PlanningPolicyCommand mergeGovernancePolicy(
@@ -1497,7 +1536,18 @@ public class WarehousePlanApplicationService {
             ? new PlanningPolicyCommand(null, null, null, null)
             : requested;
         PlanningPolicyCommand current = stored == null
-            ? new PlanningPolicyCommand(null, null, null, null, false, "ALL_FIELDS", "BLOCKING")
+            ? new PlanningPolicyCommand(
+                null,
+                null,
+                null,
+                null,
+                false,
+                "ALL_FIELDS",
+                "BLOCKING",
+                "SINGLE_DEFAULT",
+                null,
+                "AUTO_SELECT_SINGLE"
+            )
             : stored;
         return new PlanningPolicyCommand(
             value.layerScheme(),
@@ -1506,8 +1556,102 @@ public class WarehousePlanApplicationService {
             value.defaultTimeZone(),
             value.conceptualDesignAllowed(),
             value.standardCoverage() == null ? current.standardCoverage() : value.standardCoverage(),
-            value.qualityGate() == null ? current.qualityGate() : value.qualityGate()
+            value.qualityGate() == null ? current.qualityGate() : value.qualityGate(),
+            value.businessCategoryMode() == null ? current.businessCategoryMode() : value.businessCategoryMode(),
+            value.defaultBusinessCategoryId() == null
+                ? current.defaultBusinessCategoryId()
+                : value.defaultBusinessCategoryId(),
+            value.businessProcessMode() == null ? current.businessProcessMode() : value.businessProcessMode()
         );
+    }
+
+    private static boolean hasPlanningContextFields(PlanningPolicyCommand command) {
+        return (
+            command != null &&
+            (
+                command.businessCategoryMode() != null ||
+                command.defaultBusinessCategoryId() != null ||
+                command.businessProcessMode() != null
+            )
+        );
+    }
+
+    private static PlanningPolicyCommand inferUniqueDefaultBusinessCategory(
+        PlanningPolicyCommand policy,
+        List<DomainBinding> bindings
+    ) {
+        PlanningPolicyCommand value = policy == null ? new PlanningPolicyCommand(null, null, null, null) : policy;
+        if (
+            value.defaultBusinessCategoryId() != null ||
+            "MULTI_SELECT".equals(value.businessCategoryMode())
+        ) {
+            return value;
+        }
+        List<UUID> confirmed = bindings == null
+            ? List.of()
+            : bindings
+                .stream()
+                .filter(binding -> binding.confirmationStatus() == ConfirmationStatus.CONFIRMED)
+                .map(DomainBinding::domainId)
+                .distinct()
+                .toList();
+        if (confirmed.size() != 1) {
+            return value;
+        }
+        return new PlanningPolicyCommand(
+            value.layerScheme(),
+            value.namingPolicy(),
+            value.historyPolicy(),
+            value.defaultTimeZone(),
+            value.conceptualDesignAllowed(),
+            value.standardCoverage(),
+            value.qualityGate(),
+            value.businessCategoryMode(),
+            confirmed.getFirst(),
+            value.businessProcessMode()
+        );
+    }
+
+    private static void validatePlanningContextPolicy(PlanningPolicyView policy, CategoryScopeView categoryScope) {
+        UUID defaultCategoryId = policy.defaultBusinessCategoryId();
+        if (
+            policy.businessCategoryMode() == WarehousePlanContract.BusinessCategoryMode.SINGLE_DEFAULT &&
+            defaultCategoryId == null
+        ) {
+            throw new WarehousePlanException(
+                "WAREHOUSE_PLAN_DEFAULT_CATEGORY_REQUIRED",
+                "defaultBusinessCategoryId must identify one confirmed business category in the current plan",
+                null,
+                EditUnit.POLICY
+            );
+        }
+        if (defaultCategoryId == null) {
+            return;
+        }
+        CategoryBindingView selected = categoryScope
+            .domainBindings()
+            .stream()
+            .filter(binding -> defaultCategoryId.equals(binding.domainId()))
+            .findFirst()
+            .orElseThrow(() ->
+                new WarehousePlanException(
+                    "WAREHOUSE_PLAN_DEFAULT_CATEGORY_OUT_OF_SCOPE",
+                    "defaultBusinessCategoryId must belong to the current plan",
+                    null,
+                    EditUnit.POLICY
+                )
+            );
+        if (
+            selected.confirmationStatus() != ConfirmationStatus.CONFIRMED ||
+            selected.resolutionStatus() != CatalogDomainResolutionPort.ResolutionStatus.AVAILABLE
+        ) {
+            throw new WarehousePlanException(
+                "WAREHOUSE_PLAN_DEFAULT_CATEGORY_UNAVAILABLE",
+                "defaultBusinessCategoryId must be confirmed and available",
+                null,
+                EditUnit.POLICY
+            );
+        }
     }
 
     private BaselineSnapshot loadBaselineSnapshot(String tenantId, UUID planId) {

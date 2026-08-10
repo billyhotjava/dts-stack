@@ -92,6 +92,16 @@ public final class WarehousePlanContract {
         BLOCKING,
     }
 
+    public enum BusinessCategoryMode {
+        SINGLE_DEFAULT,
+        MULTI_SELECT,
+    }
+
+    public enum BusinessProcessMode {
+        AUTO_SELECT_SINGLE,
+        MANAGED,
+    }
+
     public enum PlanningPolicyReadiness {
         DRAFT,
         MODEL_DESIGN_READY,
@@ -451,10 +461,13 @@ public final class WarehousePlanContract {
         String defaultTimeZone,
         Boolean conceptualDesignAllowed,
         String standardCoverage,
-        String qualityGate
+        String qualityGate,
+        String businessCategoryMode,
+        UUID defaultBusinessCategoryId,
+        String businessProcessMode
     ) {
         public PlanningPolicyCommand(String layerScheme, String namingPolicy, String historyPolicy, String defaultTimeZone) {
-            this(layerScheme, namingPolicy, historyPolicy, defaultTimeZone, false, null, null);
+            this(layerScheme, namingPolicy, historyPolicy, defaultTimeZone, false, null, null, null, null, null);
         }
 
         public PlanningPolicyCommand(
@@ -464,7 +477,30 @@ public final class WarehousePlanContract {
             String defaultTimeZone,
             Boolean conceptualDesignAllowed
         ) {
-            this(layerScheme, namingPolicy, historyPolicy, defaultTimeZone, conceptualDesignAllowed, null, null);
+            this(layerScheme, namingPolicy, historyPolicy, defaultTimeZone, conceptualDesignAllowed, null, null, null, null, null);
+        }
+
+        public PlanningPolicyCommand(
+            String layerScheme,
+            String namingPolicy,
+            String historyPolicy,
+            String defaultTimeZone,
+            Boolean conceptualDesignAllowed,
+            String standardCoverage,
+            String qualityGate
+        ) {
+            this(
+                layerScheme,
+                namingPolicy,
+                historyPolicy,
+                defaultTimeZone,
+                conceptualDesignAllowed,
+                standardCoverage,
+                qualityGate,
+                null,
+                null,
+                null
+            );
         }
 
         public PlanningPolicyCommand {
@@ -475,6 +511,8 @@ public final class WarehousePlanContract {
             conceptualDesignAllowed = Boolean.TRUE.equals(conceptualDesignAllowed);
             standardCoverage = trimToNull(standardCoverage);
             qualityGate = trimToNull(qualityGate);
+            businessCategoryMode = trimToNull(businessCategoryMode);
+            businessProcessMode = trimToNull(businessProcessMode);
         }
     }
 
@@ -486,6 +524,9 @@ public final class WarehousePlanContract {
         boolean conceptualDesignAllowed,
         StandardCoverage standardCoverage,
         QualityGate qualityGate,
+        BusinessCategoryMode businessCategoryMode,
+        UUID defaultBusinessCategoryId,
+        BusinessProcessMode businessProcessMode,
         PlanningPolicyReadiness readiness,
         List<DomainIssue> issues
     ) {
@@ -505,6 +546,9 @@ public final class WarehousePlanContract {
                 false,
                 StandardCoverage.KEY_AND_MEASURE,
                 QualityGate.BLOCKING,
+                BusinessCategoryMode.SINGLE_DEFAULT,
+                null,
+                BusinessProcessMode.AUTO_SELECT_SINGLE,
                 readiness,
                 issues
             );
@@ -527,6 +571,36 @@ public final class WarehousePlanContract {
                 conceptualDesignAllowed,
                 StandardCoverage.KEY_AND_MEASURE,
                 QualityGate.BLOCKING,
+                BusinessCategoryMode.SINGLE_DEFAULT,
+                null,
+                BusinessProcessMode.AUTO_SELECT_SINGLE,
+                readiness,
+                issues
+            );
+        }
+
+        public PlanningPolicyView(
+            LayerScheme layerScheme,
+            NamingPolicy namingPolicy,
+            HistoryPolicy historyPolicy,
+            String defaultTimeZone,
+            boolean conceptualDesignAllowed,
+            StandardCoverage standardCoverage,
+            QualityGate qualityGate,
+            PlanningPolicyReadiness readiness,
+            List<DomainIssue> issues
+        ) {
+            this(
+                layerScheme,
+                namingPolicy,
+                historyPolicy,
+                defaultTimeZone,
+                conceptualDesignAllowed,
+                standardCoverage,
+                qualityGate,
+                BusinessCategoryMode.SINGLE_DEFAULT,
+                null,
+                BusinessProcessMode.AUTO_SELECT_SINGLE,
                 readiness,
                 issues
             );
@@ -1087,6 +1161,22 @@ public final class WarehousePlanContract {
             "qualityGate",
             issues
         );
+        BusinessCategoryMode businessCategoryMode = parseOptionalEnum(
+            BusinessCategoryMode.class,
+            value.businessCategoryMode(),
+            BusinessCategoryMode.SINGLE_DEFAULT,
+            "BUSINESS_CATEGORY_MODE_UNSUPPORTED",
+            "businessCategoryMode",
+            issues
+        );
+        BusinessProcessMode businessProcessMode = parseOptionalEnum(
+            BusinessProcessMode.class,
+            value.businessProcessMode(),
+            BusinessProcessMode.AUTO_SELECT_SINGLE,
+            "BUSINESS_PROCESS_MODE_UNSUPPORTED",
+            "businessProcessMode",
+            issues
+        );
 
         PlanningPolicyReadiness readiness = layerScheme == null
             ? PlanningPolicyReadiness.DRAFT
@@ -1101,6 +1191,9 @@ public final class WarehousePlanContract {
             Boolean.TRUE.equals(value.conceptualDesignAllowed()),
             standardCoverage,
             qualityGate,
+            businessCategoryMode,
+            value.defaultBusinessCategoryId(),
+            businessProcessMode,
             readiness,
             issues
         );

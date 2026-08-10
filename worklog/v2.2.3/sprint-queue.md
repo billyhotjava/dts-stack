@@ -1940,3 +1940,27 @@
 **执行顺序**: F1/T01 → F1/T02 → F2 → F3 → F4/T01 → F4/T02；F0 外部输入并行补齐；编码完成后只运行一次集中构建/E2E。
 **关键决策**: 数据资产是唯一元数据 owner；`CATALOG_TABLE.sourceId` 是 table locator，资产身份从父 dataset 的 CatalogAssetKey 解析；例行采集只能 upsert+软失效，字段 ID 不得重采漂移；compatible 可在字段复核通过后继续，breaking/missing fail closed；复用 `/data-modeling/planning/spaces?view=baseline&tab=sources`，不新增菜单、页面或台账。
 **已知风险**: `CatalogDataset` GitNexus 影响 CRITICAL、`CatalogTableSchema` HIGH；当前本地库 plan source bindings=0，源码契约不一致尚未在真实绑定上复现；57/83 dataset 的 harvest_status 为空；未取得授权账号/Chrome 95/生产画像。详见 Sprint README、`assets/domain-profile.md` 与 `it/baseline.md`。
+
+## Sprint-90: 数据血缘可治理闭环 (202608)
+
+**目录**: `worklog/v2.2.3/sprint-90-202608-data-lineage-governance-closure`
+**时间盒**: 2026-08-11 ～ 2026-08-28
+**状态**: DRAFT（G0 未过：无运行实例、无真实血缘规模画像；F1 为纯后端契约修复已可 READY）
+**类型**: Governance Closure / Correctness Repair / UI Productization
+**目标**: 用户在「数据治理 > 血缘与影响分析」里不仅能看血缘，还能补录缺失血缘、核验存疑血缘、看懂采集为什么没连上——血缘从只读展示变为可治理资产。
+**依赖**: 复用既有 `catalog_dataset_lineage` / `catalog_column_lineage` / `catalog_lineage_job`、`CatalogLineageResource` 的 BFS 与时间旅行、`accessChecker` 部门鉴权、G6 `LineageGraph`、TanStack Query；承接 ADR-85-04（OM 血缘缓存维持"同步证据"降级）。**不新增血缘表、不新增菜单项、不引入新前端依赖。**
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---|---|---:|---|
+| F0-交付基线与血缘数据画像 | P0 | 1 | BLOCKED_INPUT |
+| F1-血缘事实正确性修复 | P0 | 2 | READY |
+| F2-人工血缘登记与核验闭环 | P0 | 3 | READY×2 / DRAFT×1 |
+| F3-血缘采集运营台 | P0 | 2 | READY×1 / DRAFT×1 |
+| F4-血缘查询一致性与性能收敛 | P1 | 4 | READY×2 / DRAFT×2 |
+| F5-纵向集成与验收 | P0 | 2 | BLOCKED_INPUT |
+
+**统计**: READY=5, DRAFT=4, BLOCKED_INPUT=5, IN_PROGRESS=0, DONE=0（共 14 task）
+**执行顺序**: F1 →（F2/T01 → F2/T02 → F2/T03）∥（F3/T01 → F3/T02）→ F4/T01 → F4/T02 → F4/T03 → F4/T04 → F5；F0 并行补外部输入。F4/T01 会重写四个 `Lineage*Page.tsx`，必须排在 F2/T03、F3/T02 之后，避免同文件冲突。
+**关键决策**: 人工血缘复用既有表以 `relation_type='MANUAL'` 区分（不建新表）；删除=软失效置 `valid_to`，时间旅行须能查回；采集重跑不得覆盖人工 `VERIFIED` 结论（四个写入点统一走 `LineageVerificationGuard`）；「血缘导入」页升级为采集运营台，路由与菜单 key 不变、仅改 title；四页统一采用图谱页现有 URL 协议且其既有契约测试零回归；字段血缘置信度本期只做可筛选，不升级 SQL 解析器。
+**已知风险**: G0 三项 GAP——无运行实例/账号、无血缘样本链路、无 Chrome 95 环境，F2/T03、F3/T02、F5 在此之前不得置 READY；现网血缘规模未知导致 F4/T04 的性能目标暂不可判定（`assets/nfr-budget.md` 阈值待实测校准）；`pending-verification` 的部门鉴权能否下推到 SQL 未确认，可能退化为查询后过滤；`DELETE /catalog/lineage/{id}` 返回体由 Boolean 改为对象，需确认无第三方集成。
+**非目标**: 快照对比补全（节点/字段差异、预设区间、导出）、`LineageBackfillResource` 真实实现（现为纯文本桩）、字段血缘 AST 级解析、OpenLineage 接入配置向导——全部顺延 Sprint-91。

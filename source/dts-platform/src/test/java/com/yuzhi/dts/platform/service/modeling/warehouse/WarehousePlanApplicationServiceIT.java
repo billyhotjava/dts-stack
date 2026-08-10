@@ -831,6 +831,109 @@ class WarehousePlanApplicationServiceIT {
     }
 
     @Test
+    void planningContextInfersOneConfirmedCategoryAndRejectsAmbiguousOrOutOfScopeDefaults() {
+        String tenant = tenant("planning-context");
+        UUID categoryId = UUID.randomUUID();
+        UUID anotherCategoryId = UUID.randomUUID();
+
+        try {
+            WarehousePlanHeader plan = service.create(
+                tenant,
+                createCommand(BUSINESS_FIRST, "planning-context-" + UUID.randomUUID())
+            ).plan();
+            service.saveCategoryScope(
+                tenant,
+                plan.id(),
+                1,
+                new CategoryScopeCommand(List.of(new DomainBinding(categoryId, CONFIRMED)))
+            );
+
+            assertThat(service.getPlanningPolicy(tenant, plan.id()).value().defaultBusinessCategoryId())
+                .isEqualTo(categoryId);
+            Versioned<WarehousePlanContract.PlanningPolicyView> saved = service.savePlanningPolicy(
+                tenant,
+                plan.id(),
+                1,
+                new PlanningPolicyCommand(
+                    null,
+                    null,
+                    null,
+                    null,
+                    false,
+                    null,
+                    null,
+                    "SINGLE_DEFAULT",
+                    null,
+                    "AUTO_SELECT_SINGLE"
+                )
+            );
+            assertThat(saved.value().defaultBusinessCategoryId()).isEqualTo(categoryId);
+            assertThat(saved.value().businessProcessMode())
+                .isEqualTo(WarehousePlanContract.BusinessProcessMode.AUTO_SELECT_SINGLE);
+
+            assertWarehouseError(
+                () ->
+                    service.savePlanningPolicy(
+                        tenant,
+                        plan.id(),
+                        saved.version(),
+                        new PlanningPolicyCommand(
+                            null,
+                            null,
+                            null,
+                            null,
+                            false,
+                            null,
+                            null,
+                            "SINGLE_DEFAULT",
+                            UUID.randomUUID(),
+                            "MANAGED"
+                        )
+                    ),
+                "WAREHOUSE_PLAN_DEFAULT_CATEGORY_OUT_OF_SCOPE",
+                null
+            );
+
+            WarehousePlanHeader ambiguous = service.create(
+                tenant,
+                createCommand(BUSINESS_FIRST, "planning-context-ambiguous-" + UUID.randomUUID())
+            ).plan();
+            service.saveCategoryScope(
+                tenant,
+                ambiguous.id(),
+                1,
+                new CategoryScopeCommand(
+                    List.of(new DomainBinding(categoryId, CONFIRMED), new DomainBinding(anotherCategoryId, CONFIRMED))
+                )
+            );
+            assertWarehouseError(
+                () ->
+                    service.savePlanningPolicy(
+                        tenant,
+                        ambiguous.id(),
+                        1,
+                        new PlanningPolicyCommand(
+                            null,
+                            null,
+                            null,
+                            null,
+                            false,
+                            null,
+                            null,
+                            "SINGLE_DEFAULT",
+                            null,
+                            "AUTO_SELECT_SINGLE"
+                        )
+                    ),
+                "WAREHOUSE_PLAN_DEFAULT_CATEGORY_REQUIRED",
+                null
+            );
+        } finally {
+            deleteTenant(tenant);
+        }
+    }
+
+    @Test
     void categoryAndPolicyWritesRespectTenantLifecycleAndValidateBeforeCas() {
         String tenant = tenant("category-policy-guard");
         String anotherTenant = tenant("category-policy-other");

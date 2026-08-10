@@ -91,7 +91,6 @@ public class ModelWorkbenchCatalogRepository {
                    and r.contract_version = 2
                  where s.tenant_id = ?
                    and s.contract_version = 2
-                   and s.legacy_refs is null
                    and s.domain_id in (%s)
             )
             """.formatted(placeholders, placeholders);

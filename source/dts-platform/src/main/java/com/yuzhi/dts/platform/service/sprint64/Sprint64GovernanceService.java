@@ -29,7 +29,7 @@ public class Sprint64GovernanceService {
         return jdbc.query(
             """
             select id, domain_id, version, process_id, name, description,
-                   source_type, source_id, source_version, confirmed,
+                   source_type, source_id, source_version, confirmed, lifecycle_status,
                    created_date, last_modified_date
               from sprint64_business_process
              where domain_id = :domainId
@@ -48,7 +48,8 @@ public class Sprint64GovernanceService {
                 rs.getString("source_version"),
                 rs.getBoolean("confirmed"),
                 instant(rs.getTimestamp("created_date")),
-                instant(rs.getTimestamp("last_modified_date"))
+                instant(rs.getTimestamp("last_modified_date")),
+                rs.getString("lifecycle_status")
             )
         );
     }
@@ -57,13 +58,35 @@ public class Sprint64GovernanceService {
         String processId = requiredProcessId(request == null ? null : request.processId());
         String name = required(request == null ? null : request.name(), "name");
         java.sql.Timestamp now = java.sql.Timestamp.from(Instant.now());
-        jdbc.update(
+        int reactivated = jdbc.update(
+            """
+            update sprint64_business_process
+               set name = :name,
+                   description = :description,
+                   source_type = 'MANUAL',
+                   source_id = null,
+                   source_version = null,
+                   confirmed = true,
+                   lifecycle_status = 'ACTIVE',
+                   last_modified_date = :now
+             where domain_id = :domainId
+               and process_id = :processId
+               and lifecycle_status = 'RETIRED'
+            """,
+            params()
+                .addValue("domainId", domainId)
+                .addValue("processId", processId)
+                .addValue("name", name)
+                .addValue("description", trimToNull(request == null ? null : request.description()))
+                .addValue("now", now)
+        );
+        if (reactivated == 0) jdbc.update(
             """
             insert into sprint64_business_process
                 (id, domain_id, version, process_id, name, description,
-                 source_type, source_id, source_version, confirmed, created_date, last_modified_date)
+                 source_type, source_id, source_version, confirmed, lifecycle_status, created_date, last_modified_date)
             values (:id, :domainId, :version, :processId, :name, :description,
-                    'MANUAL', null, null, true, :now, :now)
+                    'MANUAL', null, null, true, 'ACTIVE', :now, :now)
             """,
             params()
                 .addValue("id", UUID.randomUUID())
@@ -78,14 +101,23 @@ public class Sprint64GovernanceService {
     }
 
     public void deleteProcess(UUID domainId, String processId) {
-        jdbc.update(
-            "delete from sprint64_business_process where domain_id = :domainId and process_id = :processId",
-            params().addValue("domainId", domainId).addValue("processId", requiredProcessId(processId))
+        String normalizedProcessId = requiredProcessId(processId);
+        int updated = jdbc.update(
+            """
+            update sprint64_business_process
+               set lifecycle_status = 'RETIRED',
+                   confirmed = false,
+                   last_modified_date = :now
+             where domain_id = :domainId
+               and process_id = :processId
+               and lifecycle_status = 'ACTIVE'
+            """,
+            params()
+                .addValue("domainId", domainId)
+                .addValue("processId", normalizedProcessId)
+                .addValue("now", java.sql.Timestamp.from(Instant.now()))
         );
-        jdbc.update(
-            "delete from sprint64_bus_matrix where domain_id = :domainId and process_id = :processId",
-            params().addValue("domainId", domainId).addValue("processId", requiredProcessId(processId))
-        );
+        if (updated == 0) throw new IllegalArgumentException("业务过程不存在或已停用: " + normalizedProcessId);
     }
 
     @Transactional(readOnly = true)
@@ -185,6 +217,7 @@ public class Sprint64GovernanceService {
         List<String> processIds = normalizedIds(request.processIds(), Sprint64GovernanceService::requiredProcessId);
         List<String> dimensionIds = normalizedIds(request.dimensionIds(), Sprint64GovernanceService::requiredDimensionId);
         validateDomainIds(domainId, "sprint64_business_process", "process_id", processIds, "业务过程");
+        validateActiveProcessIds(domainId, processIds);
         validateDomainIds(domainId, "sprint64_conformed_dimension", "dimension_id", dimensionIds, "一致性维度");
 
         java.sql.Timestamp now = java.sql.Timestamp.from(Instant.now());
@@ -308,6 +341,24 @@ public class Sprint64GovernanceService {
         );
     }
 
+    private void validateActiveProcessIds(UUID domainId, List<String> processIds) {
+        if (processIds.isEmpty()) return;
+        Integer active = jdbc.queryForObject(
+            """
+            select count(*)
+              from sprint64_business_process
+             where domain_id = :domainId
+               and process_id in (:ids)
+               and lifecycle_status = 'ACTIVE'
+            """,
+            params().addValue("domainId", domainId).addValue("ids", processIds),
+            Integer.class
+        );
+        if (active == null || active != processIds.size()) {
+            throw new IllegalArgumentException("业务过程已停用，不能重新确认");
+        }
+    }
+
     private static List<String> normalizedIds(List<String> values, java.util.function.Function<String, String> normalizer) {
         if (values == null || values.isEmpty()) return List.of();
         Set<String> normalized = new LinkedHashSet<>();
@@ -344,8 +395,40 @@ public class Sprint64GovernanceService {
         String sourceVersion,
         boolean confirmed,
         Instant createdAt,
-        Instant updatedAt
-    ) {}
+        Instant updatedAt,
+        String lifecycleStatus
+    ) {
+        public BusinessProcessDto(
+            UUID id,
+            int version,
+            String processId,
+            UUID domainId,
+            String name,
+            String description,
+            String sourceType,
+            String sourceId,
+            String sourceVersion,
+            boolean confirmed,
+            Instant createdAt,
+            Instant updatedAt
+        ) {
+            this(
+                id,
+                version,
+                processId,
+                domainId,
+                name,
+                description,
+                sourceType,
+                sourceId,
+                sourceVersion,
+                confirmed,
+                createdAt,
+                updatedAt,
+                "ACTIVE"
+            );
+        }
+    }
 
     public record BusinessProcessRequest(String processId, String name, String description) {}
 

@@ -194,6 +194,8 @@ export type WarehousePlanNamingPolicy = "CLASSIC_LOWER_SNAKE" | "CLASSIC_UPPER_S
 export type WarehousePlanHistoryPolicy = "PRESERVE_BUSINESS_HISTORY" | "LATEST_STATE_ONLY";
 export type WarehousePlanStandardCoverage = "NONE" | "KEY_AND_MEASURE" | "ALL_FIELDS";
 export type WarehousePlanQualityGate = "ADVISORY" | "BLOCKING";
+export type WarehousePlanBusinessCategoryMode = "SINGLE_DEFAULT" | "MULTI_SELECT";
+export type WarehousePlanBusinessProcessMode = "AUTO_SELECT_SINGLE" | "MANAGED";
 export type WarehousePlanPolicyReadiness = "DRAFT" | "MODEL_DESIGN_READY" | "IMPLEMENTATION_READY";
 
 export type WarehousePlanPolicyInput = {
@@ -204,6 +206,9 @@ export type WarehousePlanPolicyInput = {
 	conceptualDesignAllowed: boolean;
 	standardCoverage: WarehousePlanStandardCoverage;
 	qualityGate: WarehousePlanQualityGate;
+	businessCategoryMode?: WarehousePlanBusinessCategoryMode | null;
+	defaultBusinessCategoryId?: string | null;
+	businessProcessMode?: WarehousePlanBusinessProcessMode | null;
 };
 
 export type WarehousePlanPolicyView = WarehousePlanPolicyInput & {
@@ -361,10 +366,7 @@ export const getWarehousePlanSources = (planId: string, page?: number, size?: nu
 	api.get<WarehousePlanSourceInventoryView>(
 		withModelingRequestTimeout({
 			url: `${WAREHOUSE_PLAN_RESOURCE}/${planId}/baseline/sources`,
-			params:
-				page === undefined && size === undefined
-					? undefined
-					: { page: page ?? 0, size: size ?? 200 },
+			params: page === undefined && size === undefined ? undefined : { page: page ?? 0, size: size ?? 200 },
 			_skipErrorToast: true,
 		}),
 	);

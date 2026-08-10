@@ -39,12 +39,15 @@ import {
 } from "@/api/sprint64GovernanceApi";
 import { GovernedAssetTagPanel } from "@/components/catalog/tags/GovernedAssetTagPanel";
 import { EmptyState } from "@/components/empty-state";
+import { buildBusinessModelingRoute } from "@/features/modeling/navigation/businessModelingContext";
+import { buildModelingJourneyRoute, modelingStagePath } from "@/features/modeling/navigation/modelingJourneyContext";
+import {
+	buildWarehousePlanRoute,
+	resolveWarehousePlanPageContext,
+} from "@/features/modeling/navigation/warehousePlanViewModel";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import { useRouter } from "@/routes/hooks";
 import { normalizeText } from "@/utils/textUtils";
-import { buildBusinessModelingRoute } from "@/features/modeling/navigation/businessModelingContext";
-import { buildModelingJourneyRoute, modelingStagePath } from "@/features/modeling/navigation/modelingJourneyContext";
-import { buildWarehousePlanRoute, resolveWarehousePlanPageContext } from "@/features/modeling/navigation/warehousePlanViewModel";
 import { ConformedDimensionCatalogCard } from "./ConformedDimensionCatalogCard";
 import { DataMartWorkspace } from "./DataMartWorkspace";
 import { DimensionalModelingAssist } from "./DimensionalModelingAssist";
@@ -284,7 +287,9 @@ export default function SubjectAreasPage() {
 				listConformedDimensionsApi(domainId),
 			]);
 			if (requestId !== modelingFactsRequest.current) return;
-			const processes = Array.isArray(apiProcesses) ? apiProcesses : [];
+			const processes = Array.isArray(apiProcesses)
+				? apiProcesses.filter((item) => String(item.lifecycleStatus || "ACTIVE").toUpperCase() !== "RETIRED")
+				: [];
 			const dimensions = Array.isArray(apiDimensions) ? apiDimensions : [];
 			setBusinessProcesses(processes);
 			setConformedDimensionCatalog(dimensions);
@@ -747,8 +752,7 @@ export default function SubjectAreasPage() {
 											domainId={activeDomain.id as string}
 											domainOptions={domainOptions
 												.filter(
-													(domain): domain is DomainNode & { id: string } =>
-														Boolean(domain.id) && !domain.parentId,
+													(domain): domain is DomainNode & { id: string } => Boolean(domain.id) && !domain.parentId,
 												)
 												.map((domain) => ({
 													value: domain.id,
@@ -757,10 +761,7 @@ export default function SubjectAreasPage() {
 											canManage={canManage}
 										/>
 									}
-									details={
-										<Card data-testid="canonical-plan-handoff" title="建设规划归属">
-										</Card>
-									}
+									details={<Card data-testid="canonical-plan-handoff" title="建设规划归属"></Card>}
 									governance={
 										<div className="space-y-4">
 											{activeDomain.code?.trim() ? (

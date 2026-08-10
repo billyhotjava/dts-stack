@@ -2,7 +2,7 @@
 
 **时间盒**：2026-08-24 ～ 2026-09-04（10 个工作日）
 
-**状态**：IN_PROGRESS / BLOCKED_ACCEPTANCE（F0～F6 已完成本地非 E2E 验证；后追加 F7 待另一实施 session 编码）
+**状态**：IN_PROGRESS / BLOCKED_ACCEPTANCE（F0～F7 已完成代码与本地非 E2E 验证；目标环境部署和真实菜单验收待执行）
 
 **类型**：Implementation / Compatibility Migration / UI Productization
 
@@ -65,9 +65,9 @@
 | F4 | 指标上下文迁移 | 1 | P0 | CODE_COMPLETE / LOCAL_VERIFIED_NON_E2E |
 | F5 | 信息架构与路由收敛 | 1 | P1 | CODE_COMPLETE / LOCAL_VERIFIED_NON_E2E |
 | F6 | 集中验证与发布观测 | 1 | P0 | PARTIAL_LOCAL_VERIFY_PASS |
-| F7 | 建模规划上下文简化 | 1 | P0 | IN_PROGRESS |
+| F7 | 建模规划上下文简化 | 1 | P0 | CODE_COMPLETE / LOCAL_VERIFIED_NON_E2E |
 
-**实施顺序**：原实施链 F0 → F1 → F2/F3 → F4 → F5 → F6 已完成本地验证。后追加链为 F7/T01 → F6/T01 定向回归与真实验收；F7 必须复用 F1 的唯一字典 owner、F4 的指标上下文契约和既有规划策略 API，不新建平行台账。E2E 仍在本轮新增编码全部完成后集中执行一次。
+**实施顺序**：原实施链 F0 → F1 → F2/F3 → F4 → F5 → F6 已完成本地验证；后追加的 F7/T01 也已完成代码与本地非 E2E 验证。下一门禁为 F6/T01 目标环境部署、定向回归与真实菜单验收；F7 复用 F1 的唯一字典 owner、F4 的指标上下文契约和既有规划策略 API，没有新建平行台账。
 
 ## 6. 追溯矩阵
 

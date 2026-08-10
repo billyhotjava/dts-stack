@@ -18,6 +18,7 @@ export type Sprint64BusinessProcess = ModelingFactProvenance & {
 	domainId: string;
 	name: string;
 	description?: string;
+	lifecycleStatus?: "ACTIVE" | "RETIRED" | string;
 	createdAt?: string;
 	updatedAt?: string;
 };

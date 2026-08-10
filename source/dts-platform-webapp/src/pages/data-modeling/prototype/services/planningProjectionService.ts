@@ -231,7 +231,17 @@ export async function loadPlanningProjection(view: string): Promise<PlanningProj
 			rows: entries.flatMap(({ domain, processes }) =>
 				processes.map((item) => ({
 					id: `${domain.id}:${item.processId}`,
-					cells: [item.processId, item.name, domain.name, item.confirmed ? "已确认" : "候选", item.description || "—"],
+					cells: [
+						item.processId,
+						item.name,
+						domain.name,
+						String(item.lifecycleStatus || "ACTIVE").toUpperCase() === "RETIRED"
+							? "已停用"
+							: item.confirmed
+								? "已确认"
+								: "候选",
+						item.description || "—",
+					],
 					source: item,
 				})),
 			),

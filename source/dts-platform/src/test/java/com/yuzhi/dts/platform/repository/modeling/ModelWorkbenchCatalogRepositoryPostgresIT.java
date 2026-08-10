@@ -86,8 +86,7 @@ class ModelWorkbenchCatalogRepositoryPostgresIT {
                 layer varchar(16) not null,
                 status varchar(32) not null,
                 revision int not null,
-                contract_version int not null,
-                legacy_refs jsonb
+                contract_version int not null
             )
             """
         );
@@ -117,8 +116,8 @@ class ModelWorkbenchCatalogRepositoryPostgresIT {
             """
             insert into modeling_model_spec (
                 tenant_id, id, name, plan_id, domain_id, model_type, layer,
-                status, revision, contract_version, legacy_refs
-            ) values (?, ?, ?, ?, ?, 'DIMENSION', 'DWD', 'DRAFT', 1, 2, null)
+                status, revision, contract_version
+            ) values (?, ?, ?, ?, ?, 'DIMENSION', 'DWD', 'DRAFT', 1, 2)
             """,
             tenant,
             id,
