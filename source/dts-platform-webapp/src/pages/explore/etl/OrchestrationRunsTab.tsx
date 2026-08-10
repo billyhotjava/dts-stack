@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Button, Card, Input, Select, Space, Tag, Typography } from "antd";
+import { Button, Card, Input, Select, Space, Tag, Tooltip, Typography } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { PageHeader } from "@/components/page-header";
@@ -180,7 +180,12 @@ export default function OrchestrationRunsTab() {
 			const normalized: AirflowRun[] = dagRuns.map((run) => ({
 				runId: String(run.dag_run_id || run.run_id || ""),
 				state: typeof run.state === "string" ? run.state : undefined,
-				logicalDate: typeof run.logical_date === "string" ? run.logical_date : (typeof run.execution_date === "string" ? run.execution_date : undefined),
+				logicalDate:
+					typeof run.logical_date === "string"
+						? run.logical_date
+						: typeof run.execution_date === "string"
+							? run.execution_date
+							: undefined,
 				startDate: typeof run.start_date === "string" ? run.start_date : undefined,
 				endDate: typeof run.end_date === "string" ? run.end_date : undefined,
 				duration: typeof run.duration === "number" ? run.duration : undefined,
@@ -233,11 +238,14 @@ export default function OrchestrationRunsTab() {
 		});
 	}, [jobs, keyword, projectFilter, tagFilter]);
 
-	const selectedJob = useMemo(() => filteredJobs.find((job) => job.dagId === selectedDagId) || null, [filteredJobs, selectedDagId]);
+	const selectedJob = useMemo(
+		() => filteredJobs.find((job) => job.dagId === selectedDagId) || null,
+		[filteredJobs, selectedDagId],
+	);
 
 	const failedJobs = useMemo(
 		() => filteredJobs.filter((job) => (job.lastState || "").toLowerCase() === "failed"),
-		[filteredJobs]
+		[filteredJobs],
 	);
 
 	const summary = useMemo(
@@ -250,7 +258,7 @@ export default function OrchestrationRunsTab() {
 			failed: failedJobs.length,
 			paused: filteredJobs.filter((job) => job.isPaused).length,
 		}),
-		[failedJobs.length, filteredJobs]
+		[failedJobs.length, filteredJobs],
 	);
 
 	const handleVisitExternal = async () => {
@@ -269,7 +277,9 @@ export default function OrchestrationRunsTab() {
 
 	const handleTrigger = async (dagId: string, runId?: string) => {
 		try {
-			const payload = runId ? { conf: { retryRunId: runId, source: "platform_orchestration" } } : { conf: { source: "platform_orchestration" } };
+			const payload = runId
+				? { conf: { retryRunId: runId, source: "platform_orchestration" } }
+				: { conf: { source: "platform_orchestration" } };
 			await triggerAirflowJob(dagId, payload);
 			toast.success("已触发重跑");
 			await loadJobs();
@@ -290,10 +300,9 @@ export default function OrchestrationRunsTab() {
 			key: "dagId",
 			width: 320,
 			render: (_, row) => (
-				<div className="space-y-1">
-					<div className="font-medium">{row.name || row.dagId}</div>
-					<div className="text-xs text-text-tertiary">{row.dagId}</div>
-				</div>
+				<Tooltip title={row.dagId}>
+					<span className="font-medium">{row.name || row.dagId}</span>
+				</Tooltip>
 			),
 		},
 		{
@@ -398,7 +407,12 @@ export default function OrchestrationRunsTab() {
 				const isDbt = Boolean(selectedDagId?.toLowerCase().includes("dbt"));
 				return (
 					<Space size={0}>
-						<Button type="link" size="small" onClick={() => void handleTrigger(selectedDagId || "", row.runId)} disabled={!selectedDagId}>
+						<Button
+							type="link"
+							size="small"
+							onClick={() => void handleTrigger(selectedDagId || "", row.runId)}
+							disabled={!selectedDagId}
+						>
 							重跑
 						</Button>
 						{isDbt && row.runId && (
@@ -491,10 +505,7 @@ export default function OrchestrationRunsTab() {
 							value={tagFilter}
 							onChange={(value) => setTagFilter(value)}
 							style={{ width: 160 }}
-							options={[
-								{ label: "全部标签", value: "ALL" },
-								...tags.map((tag) => ({ label: tag, value: tag })),
-							]}
+							options={[{ label: "全部标签", value: "ALL" }, ...tags.map((tag) => ({ label: tag, value: tag }))]}
 						/>
 						<Input
 							placeholder="搜索 DAG / 标签"
@@ -531,7 +542,12 @@ export default function OrchestrationRunsTab() {
 									<div className="mt-1 text-xs text-red-500">{job.dagId}</div>
 									<div className="mt-2 flex items-center justify-between text-xs">
 										<span>{formatDateTime(job.lastRun)}</span>
-										<Button size="small" danger type="link" onClick={() => void handleTrigger(job.dagId, job.lastRunId)}>
+										<Button
+											size="small"
+											danger
+											type="link"
+											onClick={() => void handleTrigger(job.dagId, job.lastRunId)}
+										>
 											重跑
 										</Button>
 									</div>

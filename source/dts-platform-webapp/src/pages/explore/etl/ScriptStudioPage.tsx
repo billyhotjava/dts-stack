@@ -1,4 +1,4 @@
-import { Badge, Button, Card, Input, Modal, Segmented, Select, Space, Tabs, Tag, message } from "antd";
+import { Badge, Button, Card, Input, Modal, Segmented, Select, Space, Tabs, Tag, Tooltip, message } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -112,10 +112,7 @@ export default function ScriptStudioPage() {
 		void loadScripts();
 	}, [loadScripts]);
 
-	const selected = useMemo(
-		() => scripts.find((item) => item.id === selectedId) || null,
-		[scripts, selectedId],
-	);
+	const selected = useMemo(() => scripts.find((item) => item.id === selectedId) || null, [scripts, selectedId]);
 
 	const filteredScripts = useMemo(() => {
 		if (activeType === "ALL") {
@@ -189,7 +186,7 @@ export default function ScriptStudioPage() {
 				}
 			}, 1500);
 		},
-		[activeRun?.id, loadRuns, loadScripts, stopPolling]
+		[activeRun?.id, loadRuns, loadScripts, stopPolling],
 	);
 
 	const summary = useMemo(
@@ -199,7 +196,7 @@ export default function ScriptStudioPage() {
 			running: runs.filter((item) => item.status === "RUNNING" || item.status === "PENDING").length,
 			failed: runs.filter((item) => item.status === "FAILED").length,
 		}),
-		[scripts, runs]
+		[scripts, runs],
 	);
 
 	const handleCreateScript = async () => {
@@ -296,10 +293,9 @@ export default function ScriptStudioPage() {
 			key: "name",
 			width: 240,
 			render: (_, row) => (
-				<div className="space-y-1">
-					<div className="font-medium text-text-primary">{row.name}</div>
-					<div className="text-xs text-text-tertiary">{row.description || "暂无说明"}</div>
-				</div>
+				<Tooltip title={row.description || "暂无说明"}>
+					<span className="font-medium text-text-primary">{row.name}</span>
+				</Tooltip>
 			),
 		},
 		{
@@ -465,10 +461,21 @@ export default function ScriptStudioPage() {
 												onChange={(e) => setVersionNote(e.target.value)}
 												style={{ width: 220 }}
 											/>
-											<Button size="small" onClick={() => void handleSaveVersion()} loading={savingVersion} disabled={!selectedId}>
+											<Button
+												size="small"
+												onClick={() => void handleSaveVersion()}
+												loading={savingVersion}
+												disabled={!selectedId}
+											>
 												保存版本
 											</Button>
-											<Button size="small" type="primary" onClick={() => void handleRunScript()} loading={running} disabled={!selectedId}>
+											<Button
+												size="small"
+												type="primary"
+												onClick={() => void handleRunScript()}
+												loading={running}
+												disabled={!selectedId}
+											>
 												运行
 											</Button>
 										</Space>
@@ -523,7 +530,11 @@ export default function ScriptStudioPage() {
 											rowKey="id"
 										/>
 									) : (
-										<EmptyState title="暂无运行记录" description="运行脚本后将在此处展示 executionId 与日志。" compact />
+										<EmptyState
+											title="暂无运行记录"
+											description="运行脚本后将在此处展示 executionId 与日志。"
+											compact
+										/>
 									)}
 								</Card>
 							</div>
@@ -601,9 +612,7 @@ export default function ScriptStudioPage() {
 							{activeRun.failureType ? <Tag color="red">{activeRun.failureType}</Tag> : null}
 						</div>
 						{activeRun.errorMessage ? (
-							<div className="rounded border border-red-300 bg-red-50 p-2 text-red-600">
-								{activeRun.errorMessage}
-							</div>
+							<div className="rounded border border-red-300 bg-red-50 p-2 text-red-600">{activeRun.errorMessage}</div>
 						) : null}
 						<pre className="max-h-[460px] overflow-auto rounded bg-slate-950 p-3 text-xs leading-5 text-slate-100">
 							{activeRun.logText || "暂无日志"}
