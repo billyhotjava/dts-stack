@@ -1983,7 +1983,7 @@ public class WarehousePlanApplicationService {
                     row.getInt("changed_count"),
                     row.getString("details_json")
                 ),
-            datasetId.get()
+            datasetId.orElseThrow()
         );
         if (driftRows.isEmpty()) {
             return SourceDriftEvidence.reviewRequired();
@@ -2199,12 +2199,12 @@ public class WarehousePlanApplicationService {
                             row.getString("hive_table"),
                             row.getString("name")
                         ),
-                    datasetId.get()
+                    datasetId.orElseThrow()
                 )
                 .stream()
                 .findFirst();
             if (catalogKey.isPresent()) {
-                return catalogKey.get();
+                return catalogKey.orElseThrow();
             }
         }
         if (write.sourceType() == SourceType.DBT_NODE && write.locator() != null) {
