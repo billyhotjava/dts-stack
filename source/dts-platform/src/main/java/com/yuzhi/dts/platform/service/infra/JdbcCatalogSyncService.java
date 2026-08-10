@@ -19,6 +19,7 @@ import com.yuzhi.dts.platform.service.catalog.CatalogAutoLineageService;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetGovernancePolicy;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
 import com.yuzhi.dts.platform.service.catalog.CatalogClassificationService;
+import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
 import com.yuzhi.dts.platform.service.catalog.SchemaDriftDetector;
 import com.yuzhi.dts.platform.service.infra.dto.SchemaDiscoverDtos.SchemaDiscoverColumnDto;
 import com.yuzhi.dts.platform.service.infra.dto.SchemaDiscoverDtos.SchemaDiscoverDriftDto;
@@ -84,6 +85,7 @@ public class JdbcCatalogSyncService {
     private final SchemaDriftDetector schemaDriftDetector;
     private final InfraSchemaDiscoverCacheRepository schemaDiscoverCacheRepository;
     private final CatalogClassificationService classificationService;
+    private final CatalogColumnSyncService columnSyncService;
 
     public JdbcCatalogSyncService(
         InfraDataSourceRepository infraDataSourceRepository,
@@ -97,7 +99,8 @@ public class JdbcCatalogSyncService {
         CatalogSchemaDriftEventRepository schemaDriftEventRepository,
         SchemaDriftDetector schemaDriftDetector,
         InfraSchemaDiscoverCacheRepository schemaDiscoverCacheRepository,
-        CatalogClassificationService classificationService
+        CatalogClassificationService classificationService,
+        CatalogColumnSyncService columnSyncService
     ) {
         this.infraDataSourceRepository = infraDataSourceRepository;
         this.secretService = secretService;
@@ -111,6 +114,7 @@ public class JdbcCatalogSyncService {
         this.schemaDriftDetector = schemaDriftDetector;
         this.schemaDiscoverCacheRepository = schemaDiscoverCacheRepository;
         this.classificationService = classificationService;
+        this.columnSyncService = columnSyncService;
     }
 
     public List<JdbcSyncResult> synchronizeAllActive() {
@@ -258,72 +262,32 @@ public class JdbcCatalogSyncService {
                     }
 
                     List<CatalogColumnSchema> existingColumns = columnRepository.findByTable(tableSchema);
-                    Map<String, LegacyColumnValues> legacyColumns = existingColumns
-                        .stream()
-                        .filter(existing -> existing.getName() != null)
-                        .collect(
-                            java.util.stream.Collectors.toMap(
-                                existing -> existing.getName().trim().toLowerCase(Locale.ROOT),
-                                existing ->
-                                    new LegacyColumnValues(
-                                        StringUtils.hasText(existing.getComment()) ? existing.getComment() : null,
-                                        StringUtils.hasText(existing.getTags()) ? existing.getTags() : null,
-                                        StringUtils.hasText(existing.getSensitiveTags()) ? existing.getSensitiveTags() : null,
-                                        StringUtils.hasText(existing.getStatus()) ? existing.getStatus() : null,
-                                        existing.getStandardId(),
-                                        StringUtils.hasText(existing.getStandardRule()) ? existing.getStandardRule() : null,
-                                        StringUtils.hasText(existing.getStandardMismatchReason())
-                                            ? existing.getStandardMismatchReason()
-                                            : null
-                                    ),
-                                (left, right) -> left,
-                                LinkedHashMap::new
-                            )
-                        );
                     Map<String, SchemaDriftDetector.ColumnSnapshot> beforeSnapshot = schemaDriftDetector.snapshotExisting(existingColumns);
 
                     List<ColumnMeta> columns = listColumns(connection, resolvedCatalog, normalizedSchema, tableName);
-                    columnRepository.deleteByTable(tableSchema);
-                    List<CatalogColumnSchema> columnEntities = new ArrayList<>();
-                    if (!columns.isEmpty()) {
-                        columnEntities = new ArrayList<>(columns.size());
-                        for (ColumnMeta column : columns) {
-                            CatalogColumnSchema entity = new CatalogColumnSchema();
-                            entity.setTable(tableSchema);
-                            entity.setName(column.name());
-                            entity.setDataType(column.dataType());
-                            entity.setNullable(column.nullable());
-                            String comment = column.comment();
-                            if (!StringUtils.hasText(comment)) {
-                                LegacyColumnValues legacy = legacyColumns.getOrDefault(column.name().toLowerCase(Locale.ROOT), null);
-                                comment = legacy != null ? legacy.comment() : null;
-                            }
-                            entity.setComment(normalizeComment(comment));
-                            LegacyColumnValues legacy = legacyColumns.getOrDefault(column.name().toLowerCase(Locale.ROOT), null);
-                        if (legacy != null) {
-                            entity.setTags(legacy.tags());
-                            entity.setSensitiveTags(legacy.sensitiveTags());
-                            if (StringUtils.hasText(legacy.status())) {
-                                entity.setStatus(legacy.status());
-                                }
-                                if (legacy.standardId() != null) {
-                                    entity.setStandardId(legacy.standardId());
-                                }
-                                if (StringUtils.hasText(legacy.standardRule())) {
-                                    entity.setStandardRule(legacy.standardRule());
-                                }
-                                if (StringUtils.hasText(legacy.standardMismatchReason())) {
-                                    entity.setStandardMismatchReason(legacy.standardMismatchReason());
-                            }
-                        }
-                        if (!StringUtils.hasText(entity.getStatus())) {
-                            entity.setStatus("ACTIVE");
-                        }
-                        columnEntities.add(entity);
-                    }
-                        columnEntities = columnRepository.saveAll(columnEntities);
-                        columnsImported += columnEntities.size();
-                    }
+                    columnsImported += columnSyncService.synchronizeSnapshot(
+                        tableSchema,
+                        columns
+                            .stream()
+                            .map(column ->
+                                new CatalogColumnSyncService.ColumnSpec(
+                                    column.name(),
+                                    column.dataType(),
+                                    column.nullable(),
+                                    normalizeComment(column.comment()),
+                                    null,
+                                    null,
+                                    null,
+                                    null
+                                )
+                            )
+                            .toList()
+                    );
+                    List<CatalogColumnSchema> columnEntities = columnRepository
+                        .findByTable(tableSchema)
+                        .stream()
+                        .filter(column -> CatalogColumnSyncService.STATUS_ACTIVE.equalsIgnoreCase(column.getStatus()))
+                        .toList();
 
                     CatalogClassificationSnapshotResult classificationResult = sealJdbcClassifications(
                         source,
@@ -1110,13 +1074,8 @@ public class JdbcCatalogSyncService {
             if (processedTablesLower.contains(tableName.trim().toLowerCase(Locale.ROOT))) {
                 continue;
             }
-            if (STALE_MODE_PURGE.equalsIgnoreCase(staleMode)) {
-                purgeDataset(dataset);
-                purged++;
-            } else {
-                markDatasetStale(dataset, snapshotTime);
-                marked++;
-            }
+            markDatasetStale(dataset, snapshotTime);
+            marked++;
         }
         return new StaleCleanupStats(marked, purged, marked + purged);
     }
@@ -1317,16 +1276,13 @@ public class JdbcCatalogSyncService {
     }
 
     private String resolveStaleCleanupMode(Map<String, Object> props) {
-        if (boolProp(props, "catalogPurgeStale", false)) {
-            return STALE_MODE_PURGE;
-        }
         String configured = stringProp(props, "catalogCleanupMode");
-        if (!StringUtils.hasText(configured)) {
-            return STALE_MODE_MARK;
-        }
-        String normalized = configured.trim().toUpperCase(Locale.ROOT);
-        if (STALE_MODE_PURGE.equals(normalized) || STALE_MODE_MARK.equals(normalized)) {
-            return normalized;
+        boolean purgeRequested = boolProp(props, "catalogPurgeStale", false) ||
+            (StringUtils.hasText(configured) && STALE_MODE_PURGE.equalsIgnoreCase(configured.trim()));
+        if (purgeRequested) {
+            LOG.warn(
+                "[catalog-stale-cleanup] requestedMode=PURGE effectiveMode=MARK reason=routine-sync-preserves-stable-identities"
+            );
         }
         return STALE_MODE_MARK;
     }
@@ -1977,16 +1933,6 @@ public class JdbcCatalogSyncService {
         String trimmed = message.trim();
         return trimmed.length() > 240 ? trimmed.substring(0, 240) : trimmed;
     }
-
-    private record LegacyColumnValues(
-        String comment,
-        String tags,
-        String sensitiveTags,
-        String status,
-        java.util.UUID standardId,
-        String standardRule,
-        String standardMismatchReason
-    ) {}
 
     private record TableMeta(String tableName, String tableType, String remarks) {
         boolean isView() {

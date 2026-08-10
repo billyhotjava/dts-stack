@@ -12,6 +12,7 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
 import com.yuzhi.dts.platform.service.catalog.CatalogAutoLineageService;
+import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
 import com.yuzhi.dts.platform.service.catalog.SchemaDriftDetector;
 import com.yuzhi.dts.platform.service.infra.InceptorCatalogSyncService.CatalogSyncResult;
 import jakarta.transaction.Transactional;
@@ -44,6 +45,8 @@ public class PostgresCatalogSyncService {
     private static final Logger LOG = LoggerFactory.getLogger(PostgresCatalogSyncService.class);
     private static final String TYPE_POSTGRES = "POSTGRES";
     private static final String STATUS_ACTIVE = "ACTIVE";
+    private static final String HARVEST_STATUS_SYNCED = "SYNCED";
+    private static final String HARVEST_STATUS_STALE = "STALE";
     private static final String DEFAULT_OWNER = "system";
     private static final String DEFAULT_EXPOSED_BY = "VIEW";
 
@@ -56,6 +59,7 @@ public class PostgresCatalogSyncService {
     private final CatalogAutoLineageService autoLineageService;
     private final CatalogSchemaDriftEventRepository schemaDriftEventRepository;
     private final SchemaDriftDetector schemaDriftDetector;
+    private final CatalogColumnSyncService columnSyncService;
 
     public PostgresCatalogSyncService(
         InfraDataSourceRepository infraDataSourceRepository,
@@ -66,7 +70,8 @@ public class PostgresCatalogSyncService {
         DataSource dataSource,
         CatalogAutoLineageService autoLineageService,
         CatalogSchemaDriftEventRepository schemaDriftEventRepository,
-        SchemaDriftDetector schemaDriftDetector
+        SchemaDriftDetector schemaDriftDetector,
+        CatalogColumnSyncService columnSyncService
     ) {
         this.infraDataSourceRepository = infraDataSourceRepository;
         this.datasetRepository = datasetRepository;
@@ -77,6 +82,7 @@ public class PostgresCatalogSyncService {
         this.autoLineageService = autoLineageService;
         this.schemaDriftEventRepository = schemaDriftEventRepository;
         this.schemaDriftDetector = schemaDriftDetector;
+        this.columnSyncService = columnSyncService;
     }
 
     public boolean isFallbackActive() {
@@ -123,7 +129,7 @@ public class PostgresCatalogSyncService {
 
         if (metadata.isEmpty()) {
             int datasetsRemoved = cleanupStaleDatasets(sourceId, schema, Collections.emptySet());
-            LOG.info("PostgreSQL catalog sync completed: schema={} has no tables (removed {} stale dataset(s))", schema, datasetsRemoved);
+            LOG.info("PostgreSQL catalog sync completed: schema={} has no tables (marked {} dataset(s) stale)", schema, datasetsRemoved);
             return new CatalogSyncResult(schema, 0, 0, 0, datasetsRemoved, 0, 0, List.of(), null);
         }
 
@@ -153,6 +159,7 @@ public class PostgresCatalogSyncService {
             dataset.setName(defaultIfBlank(dataset.getName(), tableName));
             dataset.setOwner(defaultIfBlank(dataset.getOwner(), DEFAULT_OWNER));
             dataset.setExposedBy(defaultIfBlank(dataset.getExposedBy(), DEFAULT_EXPOSED_BY));
+            dataset.setHarvestStatus(HARVEST_STATUS_SYNCED);
 
             dataset = datasetRepository.save(dataset);
             if (isNewDataset) {
@@ -182,67 +189,25 @@ public class PostgresCatalogSyncService {
             }
 
             List<CatalogColumnSchema> existingColumns = columnRepository.findByTable(tableSchema);
-            Map<String, LegacyColumnValues> legacyColumns = existingColumns
-                .stream()
-                .filter(existing -> existing.getName() != null)
-                .collect(
-                    java.util.stream.Collectors.toMap(
-                        existing -> existing.getName().trim().toLowerCase(java.util.Locale.ROOT),
-                        existing ->
-                            new LegacyColumnValues(
-                                org.springframework.util.StringUtils.hasText(existing.getComment()) ? existing.getComment() : null,
-                                org.springframework.util.StringUtils.hasText(existing.getTags()) ? existing.getTags() : null,
-                                org.springframework.util.StringUtils.hasText(existing.getSensitiveTags()) ? existing.getSensitiveTags() : null,
-                                org.springframework.util.StringUtils.hasText(existing.getStatus()) ? existing.getStatus() : null,
-                                existing.getStandardId(),
-                                org.springframework.util.StringUtils.hasText(existing.getStandardRule()) ? existing.getStandardRule() : null,
-                                org.springframework.util.StringUtils.hasText(existing.getStandardMismatchReason())
-                                    ? existing.getStandardMismatchReason()
-                                    : null
-                            ),
-                        (left, right) -> left,
-                        java.util.LinkedHashMap::new
-                    )
-                );
             Map<String, SchemaDriftDetector.ColumnSnapshot> beforeSnapshot = schemaDriftDetector.snapshotExisting(existingColumns);
-
-            columnRepository.deleteByTable(tableSchema);
-            if (!columns.isEmpty()) {
-                List<CatalogColumnSchema> columnEntities = new ArrayList<>(columns.size());
-                for (ColumnMeta column : columns) {
-                    CatalogColumnSchema entity = new CatalogColumnSchema();
-                    entity.setTable(tableSchema);
-                    entity.setName(column.name());
-                    entity.setDataType(column.dataType());
-                    entity.setNullable(column.nullable());
-                    String key = column.name() != null ? column.name().trim().toLowerCase(java.util.Locale.ROOT) : "";
-                    LegacyColumnValues legacy = key.isEmpty() ? null : legacyColumns.getOrDefault(key, null);
-                    String comment = column.comment();
-                    if (!org.springframework.util.StringUtils.hasText(comment) && legacy != null) {
-                        comment = legacy.comment();
-                    }
-                    entity.setComment(comment);
-                    if (legacy != null) {
-                        entity.setTags(legacy.tags());
-                        entity.setSensitiveTags(legacy.sensitiveTags());
-                        if (org.springframework.util.StringUtils.hasText(legacy.status())) {
-                            entity.setStatus(legacy.status());
-                        }
-                        if (legacy.standardId() != null) {
-                            entity.setStandardId(legacy.standardId());
-                        }
-                        if (org.springframework.util.StringUtils.hasText(legacy.standardRule())) {
-                            entity.setStandardRule(legacy.standardRule());
-                        }
-                        if (org.springframework.util.StringUtils.hasText(legacy.standardMismatchReason())) {
-                            entity.setStandardMismatchReason(legacy.standardMismatchReason());
-                        }
-                    }
-                    columnEntities.add(entity);
-                }
-                columnRepository.saveAll(columnEntities);
-                columnsImported += columnEntities.size();
-            }
+            columnsImported += columnSyncService.synchronizeSnapshot(
+                tableSchema,
+                columns
+                    .stream()
+                    .map(column ->
+                        new CatalogColumnSyncService.ColumnSpec(
+                            column.name(),
+                            column.dataType(),
+                            column.nullable(),
+                            column.comment(),
+                            null,
+                            null,
+                            null,
+                            null
+                        )
+                    )
+                    .toList()
+            );
 
             if (!beforeSnapshot.isEmpty() || !columns.isEmpty()) {
                 List<SchemaDriftDetector.ColumnSnapshot> afterSnapshot = columns
@@ -271,7 +236,7 @@ public class PostgresCatalogSyncService {
         datasetsRemoved = cleanupStaleDatasets(sourceId, schema, processedLower);
 
         LOG.info(
-            "PostgreSQL catalog sync completed: schema={}, tables={}, newDatasets={}, updatedDatasets={}, tablesCreated={}, columnsImported={}, removed={}",
+            "PostgreSQL catalog sync completed: schema={}, tables={}, newDatasets={}, updatedDatasets={}, tablesCreated={}, columnsImported={}, markedStale={}",
             schema,
             metadata.size(),
             datasetsCreated,
@@ -330,7 +295,7 @@ public class PostgresCatalogSyncService {
         if (existing.isEmpty()) {
             return 0;
         }
-        int removed = 0;
+        int markedStale = 0;
         for (CatalogDataset dataset : existing) {
             if (dataset == null || dataset.getId() == null) {
                 continue;
@@ -342,10 +307,13 @@ public class PostgresCatalogSyncService {
             if (processedTablesLower.contains(tableName.trim().toLowerCase(Locale.ROOT))) {
                 continue;
             }
-            purgeDataset(dataset);
-            removed++;
+            if (!HARVEST_STATUS_STALE.equalsIgnoreCase(dataset.getHarvestStatus())) {
+                dataset.setHarvestStatus(HARVEST_STATUS_STALE);
+                datasetRepository.save(dataset);
+                markedStale++;
+            }
         }
-        return removed;
+        return markedStale;
     }
 
     private void purgeDataset(CatalogDataset dataset) {
@@ -497,13 +465,4 @@ public class PostgresCatalogSyncService {
 
     private record ColumnMeta(String name, String dataType, boolean nullable, String comment) {}
 
-    private record LegacyColumnValues(
-        String comment,
-        String tags,
-        String sensitiveTags,
-        String status,
-        java.util.UUID standardId,
-        String standardRule,
-        String standardMismatchReason
-    ) {}
 }

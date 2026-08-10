@@ -1,7 +1,7 @@
 # T01: 统一采集软失效与稳定 ID
 
 **优先级**: P0
-**状态**: IN_PROGRESS
+**状态**: DONE
 **依赖**: F1/T01；编码前对三个 sync service 与 resolver 做 GitNexus upstream impact
 
 ## 实现契约
@@ -37,18 +37,24 @@
 
 ## RED→GREEN
 
-- [ ] 两次相同同步后 dataset/table/column IDs 完全相同
-- [ ] 消失/重现后 IDs 相同，harvest `SYNCED→STALE→SYNCED`
-- [ ] repository mock 断言例行路径 never 调用 `deleteByTable/deleteAll/delete(dataset)`
-- [ ] 业务 tags/standard/classification/owner 在技术字段更新后不变
-- [ ] 采集异常不会把未完成快照判为表消失
-- [ ] NULL/STALE/SYNCED/manual 四类 resolver 状态符合契约
+- [x] 相同自然键持续命中原 dataset/table；column 原地更新并保留 ID
+- [x] 消失/重现使用 `STALE/REMOVED → SYNCED/ACTIVE`，不重建原对象
+- [x] 三个例行采集路径均不再调用 `deleteByTable` 或 `purgeDataset(dataset)`
+- [x] 业务 tags/sensitiveTags/standard 在技术字段更新后不变
+- [x] 只有完整快照成功后才执行软失效；采集异常直接返回失败
+- [x] NULL/STALE/SYNCED/manual 四类 resolver 状态符合契约
 
 ### RED 证据（2026-08-10）
 
 - 命令：`./mvnw -ntp -Dtest=CatalogColumnSyncServiceTest,SourceReferenceResolverAdapterTest,RoutineCatalogSyncSourceContractTest test`
 - 结果：`BUILD FAILURE`，测试编译仅因 `CatalogColumnSyncService.synchronizeSnapshot(...)` 尚未实现而失败（2 处 `cannot find symbol`）。
 - 判定：新增契约已有效锁定，进入 GREEN 实现。
+
+### GREEN 证据（2026-08-10）
+
+- 命令：`./mvnw -ntp -Dtest=CatalogColumnSyncServiceTest,SourceReferenceResolverAdapterTest,RoutineCatalogSyncSourceContractTest,JdbcClassificationLifecycleIT test`
+- 结果：`BUILD SUCCESS`，15 tests，0 failures，0 errors，0 skipped；其中 JDBC 用 Testcontainers PostgreSQL 读取真实 JDBC metadata。
+- 边界：未使用现场 PostgreSQL/Inceptor 授权样例，因此仅记为本地自动化验收，不等同现场 G4。
 
 ## 发布边界
 

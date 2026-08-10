@@ -217,6 +217,7 @@ class SourceReferenceResolverAdapterTest {
         connection.setLastVerifiedAt(Instant.parse("2026-07-22T03:19:40Z"));
         CatalogDataset dataset = dataset("orders");
         dataset.setSourceId(CONNECTION_ID);
+        dataset.setHarvestStatus("SYNCED");
         dataset.setHiveDatabase("public");
         dataset.setHiveTable("orders");
         CatalogTableSchema table = table(dataset, TABLE_ID, "orders");

@@ -32,6 +32,7 @@ public class CatalogColumnSyncService {
     private static final Logger LOG = LoggerFactory.getLogger(CatalogColumnSyncService.class);
     public static final String STATUS_ACTIVE = "ACTIVE";
     public static final String STATUS_DRAFT = "DRAFT";
+    public static final String STATUS_REMOVED = "REMOVED";
 
     private final CatalogColumnSchemaRepository columnRepository;
     private final GovernedStandardReadPort governedStandards;
@@ -87,6 +88,47 @@ public class CatalogColumnSyncService {
 
     public int upsertColumns(CatalogTableSchema table, Collection<ColumnSpec> specs) {
         return upsertColumns(table, specs, STATUS_ACTIVE);
+    }
+
+    /**
+     * Applies a complete source snapshot without replacing existing column rows.
+     * Columns absent from the successful snapshot remain addressable for history
+     * and governance, but are no longer part of the active physical schema.
+     */
+    @Transactional
+    public int synchronizeSnapshot(CatalogTableSchema table, Collection<ColumnSpec> specs) {
+        if (table == null || specs == null) {
+            return 0;
+        }
+        List<ColumnSpec> snapshot = specs
+            .stream()
+            .filter(spec -> spec != null && StringUtils.hasText(spec.name()))
+            .toList();
+        int synchronizedColumns = snapshot.isEmpty() ? 0 : upsertColumns(table, snapshot, STATUS_ACTIVE);
+        if (snapshot.isEmpty() && table.getId() != null) {
+            try {
+                columnRepository.acquireTableColumnsLock(advisoryLockKey(table.getId()));
+            } catch (Exception ex) {
+                LOG.warn("[column-sync] failed to acquire advisory lock for table {}: {}", table.getId(), ex.getMessage());
+            }
+        }
+        Set<String> activeNames = snapshot
+            .stream()
+            .map(ColumnSpec::name)
+            .map(String::trim)
+            .map(name -> name.toLowerCase(Locale.ROOT))
+            .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        for (CatalogColumnSchema column : columnRepository.findByTable(table)) {
+            if (column == null || !StringUtils.hasText(column.getName())) {
+                continue;
+            }
+            String normalizedName = column.getName().trim().toLowerCase(Locale.ROOT);
+            if (!activeNames.contains(normalizedName) && !STATUS_REMOVED.equalsIgnoreCase(column.getStatus())) {
+                column.setStatus(STATUS_REMOVED);
+                columnRepository.save(column);
+            }
+        }
+        return synchronizedColumns;
     }
 
     /**

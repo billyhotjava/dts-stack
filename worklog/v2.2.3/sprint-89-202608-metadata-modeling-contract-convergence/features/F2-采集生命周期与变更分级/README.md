@@ -27,7 +27,7 @@ STALE   --来源重现------> SYNCED（复用原 ID，生成 drift）
 
 | Task | 状态 |
 |---|---|
-| T01-统一采集软失效与稳定ID | IN_PROGRESS |
+| T01-统一采集软失效与稳定ID | DONE |
 | T02-建立兼容与破坏性变更判定 | DRAFT |
 
 ## DoD

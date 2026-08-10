@@ -12,6 +12,7 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogMaskingRuleRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogRowFilterRuleRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogSchemaDriftEventRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
+import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
 import com.yuzhi.dts.platform.service.catalog.SchemaDriftDetector;
 import com.yuzhi.dts.platform.service.catalog.CatalogAutoLineageService;
 import com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry.InceptorDataSourceState;
@@ -46,6 +47,8 @@ public class InceptorCatalogSyncService {
 
     private static final Logger LOG = LoggerFactory.getLogger(InceptorCatalogSyncService.class);
     private static final String DATASET_TYPE = "INCEPTOR";
+    private static final String HARVEST_STATUS_SYNCED = "SYNCED";
+    private static final String HARVEST_STATUS_STALE = "STALE";
     private static final String DEFAULT_OWNER = "system";
     private static final String DEFAULT_EXPOSED_BY = "VIEW";
 
@@ -63,6 +66,7 @@ public class InceptorCatalogSyncService {
     private final CatalogAutoLineageService autoLineageService;
     private final CatalogSchemaDriftEventRepository schemaDriftEventRepository;
     private final SchemaDriftDetector schemaDriftDetector;
+    private final CatalogColumnSyncService columnSyncService;
 
     @Value("${dts.jdbc.statement-timeout-seconds:30}")
     private int statementTimeoutSeconds;
@@ -81,7 +85,8 @@ public class InceptorCatalogSyncService {
         com.yuzhi.dts.platform.config.CatalogFeatureProperties catalogFeatureProperties,
         CatalogAutoLineageService autoLineageService,
         CatalogSchemaDriftEventRepository schemaDriftEventRepository,
-        SchemaDriftDetector schemaDriftDetector
+        SchemaDriftDetector schemaDriftDetector,
+        CatalogColumnSyncService columnSyncService
     ) {
         this.registry = registry;
         this.connectionService = connectionService;
@@ -97,6 +102,7 @@ public class InceptorCatalogSyncService {
         this.autoLineageService = autoLineageService;
         this.schemaDriftEventRepository = schemaDriftEventRepository;
         this.schemaDriftDetector = schemaDriftDetector;
+        this.columnSyncService = columnSyncService;
     }
 
     public CatalogSyncResult synchronize() {
@@ -152,7 +158,7 @@ public class InceptorCatalogSyncService {
         if (metadata.isEmpty()) {
             int datasetsRemoved = cleanupStaleDatasets(sourceId, database, Collections.emptySet());
             LOG.info(
-                "Catalog sync completed: no tables discovered in database {} (removed {} stale dataset(s))",
+                "Catalog sync completed: no tables discovered in database {} (marked {} dataset(s) stale)",
                 database,
                 datasetsRemoved
             );
@@ -189,6 +195,7 @@ public class InceptorCatalogSyncService {
             dataset.setName(defaultIfBlank(dataset.getName(), tableName));
             dataset.setOwner(defaultIfBlank(dataset.getOwner(), DEFAULT_OWNER));
             dataset.setExposedBy(defaultIfBlank(dataset.getExposedBy(), DEFAULT_EXPOSED_BY));
+            dataset.setHarvestStatus(HARVEST_STATUS_SYNCED);
 
             dataset = datasetRepository.save(dataset);
             if (isNewDataset) {
@@ -218,70 +225,25 @@ public class InceptorCatalogSyncService {
             }
 
             List<CatalogColumnSchema> existingColumns = columnRepository.findByTable(tableSchema);
-            Map<String, LegacyColumnValues> legacyColumns = existingColumns
-                .stream()
-                .filter(existing -> existing.getName() != null)
-                .collect(
-                    Collectors.toMap(
-                        existing -> existing.getName().trim().toLowerCase(Locale.ROOT),
-                        existing ->
-                            new LegacyColumnValues(
-                                StringUtils.hasText(existing.getComment()) ? existing.getComment() : null,
-                                StringUtils.hasText(existing.getTags()) ? existing.getTags() : null,
-                                StringUtils.hasText(existing.getSensitiveTags()) ? existing.getSensitiveTags() : null,
-                                StringUtils.hasText(existing.getStatus()) ? existing.getStatus() : null,
-                                existing.getStandardId(),
-                                StringUtils.hasText(existing.getStandardRule()) ? existing.getStandardRule() : null,
-                                StringUtils.hasText(existing.getStandardMismatchReason())
-                                    ? existing.getStandardMismatchReason()
-                                    : null
-                            ),
-                        (left, right) -> left,
-                        LinkedHashMap::new
-                    )
-                );
             Map<String, SchemaDriftDetector.ColumnSnapshot> beforeSnapshot = schemaDriftDetector.snapshotExisting(existingColumns);
-
-            columnRepository.deleteByTable(tableSchema);
-            if (!columns.isEmpty()) {
-                List<CatalogColumnSchema> columnEntities = new ArrayList<>(columns.size());
-                for (ColumnMeta column : columns) {
-                    CatalogColumnSchema entity = new CatalogColumnSchema();
-                    entity.setTable(tableSchema);
-                    entity.setName(column.name());
-                    entity.setDataType(column.dataType());
-                    entity.setNullable(column.nullable());
-                    String comment = column.comment();
-                    if (!StringUtils.hasText(comment)) {
-                        LegacyColumnValues legacy = legacyColumns.getOrDefault(column.name().toLowerCase(Locale.ROOT), null);
-                        comment = legacy != null ? legacy.comment() : null;
-                    }
-                    entity.setComment(comment);
-                    LegacyColumnValues legacy = legacyColumns.getOrDefault(column.name().toLowerCase(Locale.ROOT), null);
-                    if (legacy != null) {
-                        entity.setTags(legacy.tags());
-                        entity.setSensitiveTags(legacy.sensitiveTags());
-                        if (StringUtils.hasText(legacy.status())) {
-                            entity.setStatus(legacy.status());
-                        }
-                        if (legacy.standardId() != null) {
-                            entity.setStandardId(legacy.standardId());
-                        }
-                        if (StringUtils.hasText(legacy.standardRule())) {
-                            entity.setStandardRule(legacy.standardRule());
-                        }
-                        if (StringUtils.hasText(legacy.standardMismatchReason())) {
-                            entity.setStandardMismatchReason(legacy.standardMismatchReason());
-                        }
-                    }
-                    if (!StringUtils.hasText(entity.getStatus())) {
-                        entity.setStatus("ACTIVE");
-                    }
-                    columnEntities.add(entity);
-                }
-                columnRepository.saveAll(columnEntities);
-                columnsImported += columnEntities.size();
-            }
+            columnsImported += columnSyncService.synchronizeSnapshot(
+                tableSchema,
+                columns
+                    .stream()
+                    .map(column ->
+                        new CatalogColumnSyncService.ColumnSpec(
+                            column.name(),
+                            column.dataType(),
+                            column.nullable(),
+                            column.comment(),
+                            null,
+                            null,
+                            null,
+                            null
+                        )
+                    )
+                    .toList()
+            );
 
             if (!beforeSnapshot.isEmpty() || !columns.isEmpty()) {
                 List<SchemaDriftDetector.ColumnSnapshot> afterSnapshot = columns
@@ -320,7 +282,7 @@ public class InceptorCatalogSyncService {
             .collect(Collectors.toCollection(HashSet::new));
         int datasetsRemoved = cleanupStaleDatasets(sourceId, database, processedLower);
         if (datasetsRemoved > 0) {
-            LOG.info("Catalog sync cleanup: removed {} stale datasets in database {}", datasetsRemoved, database);
+            LOG.info("Catalog sync cleanup: marked {} datasets stale in database {}", datasetsRemoved, database);
         }
         return new CatalogSyncResult(
             database,
@@ -577,7 +539,7 @@ public class InceptorCatalogSyncService {
         if (existingDatasets.isEmpty()) {
             return 0;
         }
-        int removed = 0;
+        int markedStale = 0;
         for (CatalogDataset dataset : existingDatasets) {
             if (dataset.getId() == null) {
                 continue;
@@ -596,10 +558,13 @@ public class InceptorCatalogSyncService {
             if (processedTablesLower.contains(tableName.trim().toLowerCase(Locale.ROOT))) {
                 continue;
             }
-            purgeDataset(dataset);
-            removed++;
+            if (!HARVEST_STATUS_STALE.equalsIgnoreCase(dataset.getHarvestStatus())) {
+                dataset.setHarvestStatus(HARVEST_STATUS_STALE);
+                datasetRepository.save(dataset);
+                markedStale++;
+            }
         }
-        return removed;
+        return markedStale;
     }
 
     private void purgeDataset(CatalogDataset dataset) {
@@ -630,15 +595,6 @@ public class InceptorCatalogSyncService {
         }
     }
 
-    private record LegacyColumnValues(
-        String comment,
-        String tags,
-        String sensitiveTags,
-        String status,
-        java.util.UUID standardId,
-        String standardRule,
-        String standardMismatchReason
-    ) {}
 
     public record CatalogSyncResult(
         String database,

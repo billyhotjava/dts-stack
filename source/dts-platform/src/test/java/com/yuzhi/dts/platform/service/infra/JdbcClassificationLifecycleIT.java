@@ -20,6 +20,8 @@ import com.yuzhi.dts.platform.repository.infra.InfraSchemaDiscoverCacheRepositor
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.catalog.CatalogAutoLineageService;
 import com.yuzhi.dts.platform.service.catalog.CatalogClassificationService;
+import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
+import com.yuzhi.dts.platform.service.modeling.GovernedStandardReadPort;
 import com.yuzhi.dts.platform.service.catalog.SchemaDriftDetector;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -153,11 +155,15 @@ class JdbcClassificationLifecycleIT {
             }
             return table;
         });
-        when(columnRepository.findByTable(any(CatalogTableSchema.class))).thenReturn(List.of());
-        when(columnRepository.saveAll(any())).thenAnswer(invocation -> {
-            List<CatalogColumnSchema> columns = new ArrayList<>(invocation.getArgument(0));
-            columns.forEach(column -> column.setId(UUID.randomUUID()));
-            return columns;
+        List<CatalogColumnSchema> synchronizedColumns = new ArrayList<>();
+        when(columnRepository.findByTable(any(CatalogTableSchema.class))).thenAnswer(invocation -> List.copyOf(synchronizedColumns));
+        when(columnRepository.save(any(CatalogColumnSchema.class))).thenAnswer(invocation -> {
+            CatalogColumnSchema column = invocation.getArgument(0);
+            if (column.getId() == null) {
+                column.setId(UUID.randomUUID());
+                synchronizedColumns.add(column);
+            }
+            return column;
         });
         when(classificationService.sealOrRaise(any(CatalogClassificationService.SealCommand.class)))
             .thenAnswer(invocation -> snapshot(invocation.getArgument(0)));
@@ -216,7 +222,8 @@ class JdbcClassificationLifecycleIT {
             driftEventRepository,
             new SchemaDriftDetector(objectMapper),
             discoverCacheRepository,
-            classificationService
+            classificationService,
+            new CatalogColumnSyncService(columnRepository, org.mockito.Mockito.mock(GovernedStandardReadPort.class))
         );
     }
 

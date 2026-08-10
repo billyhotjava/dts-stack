@@ -120,6 +120,14 @@ public class JpaCatalogSourceReferenceReadAdapter implements CatalogSourceRefere
     }
 
     private SourceSnapshot available(CatalogDataset dataset, CatalogTableSchema table) {
+        if (dataset.getSourceId() != null) {
+            if ("STALE".equalsIgnoreCase(dataset.getHarvestStatus())) {
+                return SourceSnapshot.missing();
+            }
+            if (!"SYNCED".equalsIgnoreCase(dataset.getHarvestStatus())) {
+                return SourceSnapshot.providerError();
+            }
+        }
         return SourceSnapshot.available(
             CatalogAssetType.DATASET,
             CatalogAssetKey.dataset(dataset),
