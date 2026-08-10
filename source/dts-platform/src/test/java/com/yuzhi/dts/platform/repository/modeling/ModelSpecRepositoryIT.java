@@ -4,11 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.IntegrationTest;
+import com.yuzhi.dts.platform.service.catalog.SchemaDriftConsumerReferenceReadPort;
+import com.yuzhi.dts.platform.service.catalog.SchemaDriftDetector;
 import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.*;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecSnapshotCodec;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +35,12 @@ class ModelSpecRepositoryIT {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private SchemaDriftConsumerReferenceReadPort driftConsumerReferences;
+
+    @Autowired
+    private SchemaDriftDetector schemaDriftDetector;
 
     @Test
     void resolvesCatalogTableLocatorThroughParentDataset() {
@@ -83,6 +94,91 @@ class ModelSpecRepositoryIT {
                 assertThat(source.layer()).isEqualTo(Layer.ODS);
                 assertThat(source.resolvedVersion()).isEqualTo("v1");
             });
+    }
+
+    @Test
+    void classifiesReferencedAndUnreferencedCatalogColumnsFromCurrentModelSpecs() throws Exception {
+        String tenant = "schema-drift-consumer-it-" + UUID.randomUUID();
+        String actor = "owner-1";
+        UUID planId = UUID.randomUUID();
+        UUID domainId = UUID.randomUUID();
+        UUID sourceBindingId = UUID.randomUUID();
+        UUID sourceId = UUID.randomUUID();
+        UUID datasetId = UUID.randomUUID();
+        UUID tableId = UUID.randomUUID();
+        seedContext(tenant, actor, planId, domainId, sourceBindingId);
+        jdbcTemplate.update(
+            """
+            insert into catalog_dataset (
+                id, name, type, source_id, hive_database, hive_table, warehouse_layer,
+                enabled, lifecycle_status, harvest_status, created_date, last_modified_date
+            ) values (?, 'orders', 'POSTGRES', ?, 'public', 'orders', 'ODS',
+                      true, 'DISCOVERED', 'SYNCED', current_timestamp, current_timestamp)
+            """,
+            datasetId,
+            sourceId
+        );
+        jdbcTemplate.update(
+            """
+            insert into catalog_table_schema (id, dataset_id, name, created_date, last_modified_date)
+            values (?, ?, 'orders', current_timestamp, current_timestamp)
+            """,
+            tableId,
+            datasetId
+        );
+        jdbcTemplate.update(
+            """
+            update modeling_warehouse_plan_source
+               set source_id = ?, locator_json = cast(? as jsonb)
+             where tenant_id = ? and plan_id = ? and id = ?
+            """,
+            tableId.toString(),
+            "{\"assetId\":\"" + tableId + "\"}",
+            tenant,
+            planId,
+            sourceBindingId
+        );
+
+        ModelSpecSnapshotCodec codec = new ModelSpecSnapshotCodec(objectMapper);
+        CreateModelSpecCommand create = command(planId, domainId, sourceBindingId);
+        Instant now = Instant.parse("2026-08-10T00:00:00Z");
+        ModelSpecView model = codec.toCreatedView(UUID.randomUUID(), create, now);
+        assertThat(repository.insertV2(tenant, actor, create, model, codec.requestHash(create), codec.write(model))).isEqualTo(1);
+        jdbcTemplate.update(
+            """
+            update modeling_model_spec
+               set fields = cast(? as jsonb), source_refs = cast(? as jsonb)
+             where tenant_id = ? and id = ?
+            """,
+            "[{\"name\":\"customer_id\",\"sourceFieldRef\":\"orders.customer_id\"}]",
+            "[{\"sourceBindingId\":\"" + sourceBindingId + "\",\"alias\":\"orders\"}]",
+            tenant,
+            model.id()
+        );
+
+        Set<String> referencedFields = driftConsumerReferences
+            .findCurrentReferencedFields(tableId, sourceId, "public", "orders")
+            .orElseThrow();
+        SchemaDriftDetector.DriftSummary drift = schemaDriftDetector.diff(
+            Map.of(
+                "customer_id",
+                new SchemaDriftDetector.ColumnSnapshot("customer_id", "varchar(32)", false),
+                "legacy_code",
+                new SchemaDriftDetector.ColumnSnapshot("legacy_code", "varchar(32)", true)
+            ),
+            List.of(),
+            referencedFields
+        );
+        Map<String, String> impactByField = new LinkedHashMap<>();
+        objectMapper
+            .readTree(drift.detailsJson())
+            .path("changes")
+            .forEach(change -> impactByField.put(change.path("field").asText(), change.path("impact").asText()));
+
+        assertThat(referencedFields).containsExactly("customer_id");
+        assertThat(impactByField)
+            .containsEntry("customer_id", "BREAKING")
+            .containsEntry("legacy_code", "COMPATIBLE");
     }
 
     @Test

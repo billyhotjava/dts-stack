@@ -748,6 +748,8 @@
                         <testInclude>**/service/catalog/CatalogAssetRegistrationServiceTest.java</testInclude>
                         <testInclude>**/service/catalog/CatalogAssetNormalizationMigrationServiceIT.java</testInclude>
                         <testInclude>**/service/catalog/CatalogColumnSyncServiceTest.java</testInclude>
+                        <testInclude>**/service/catalog/SchemaDriftDetectorTest.java</testInclude>
+                        <testInclude>**/service/catalog/SchemaDriftDetailsReaderTest.java</testInclude>
                         <testInclude>**/service/catalog/JdbcCanonicalModelIdentityReadAdapterPostgresIT.java</testInclude>
                         <testInclude>**/service/catalog/CatalogPhysicalLocatorTest.java</testInclude>
                         <testInclude>**/service/catalog/CatalogClassificationBoundaryAdapterTest.java</testInclude>
