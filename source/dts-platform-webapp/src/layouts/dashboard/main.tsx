@@ -127,16 +127,28 @@ const ALWAYS_ALLOWED_PREFIXES = [
 	"/settings",
 ];
 
+const INTERNAL_ROUTE_HOSTS: Record<string, string[]> = {
+	"/data-architecture": ["/data-modeling/planning/spaces"],
+};
+
 /** Check if pathname is reachable from any menu path (exact or prefix match). */
-const isPathInMenuTree = (menuPaths: Set<string>, pathname: string): boolean => {
+export const isPathInMenuTree = (menuPaths: Set<string>, pathname: string): boolean => {
 	if (menuPaths.size === 0) return true; // menus not loaded → graceful degradation
 	const normalized = pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
 	// Platform core paths are always allowed
-	if (ALWAYS_ALLOWED_PREFIXES.some((p) => normalized === p || normalized.startsWith(p + "/"))) return true;
+	if (ALWAYS_ALLOWED_PREFIXES.some((p) => normalized === p || normalized.startsWith(`${p}/`))) return true;
 	if (menuPaths.has(normalized)) return true;
+	for (const [internalPath, hosts] of Object.entries(INTERNAL_ROUTE_HOSTS)) {
+		if (
+			(normalized === internalPath || normalized.startsWith(`${internalPath}/`)) &&
+			hosts.some((host) => menuPaths.has(host))
+		) {
+			return true;
+		}
+	}
 	// Prefix match: /bi/dashboards/123 is reachable via /bi/dashboards
 	for (const menuPath of menuPaths) {
-		if (normalized.startsWith(menuPath + "/")) return true;
+		if (normalized.startsWith(`${menuPath}/`)) return true;
 	}
 	return false;
 };

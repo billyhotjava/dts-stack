@@ -2232,32 +2232,56 @@
 }
 
 .dmx-planning-sidebar a {
+	min-height: 38px;
 	display: flex;
 	align-items: center;
-	gap: 8px;
-	padding: 7px 10px;
+	gap: 9px;
+	padding: 8px 10px;
 	border-radius: 8px;
-	color: inherit;
+	color: #334155;
 	text-decoration: none;
-	font-size: 13px;
+	font-size: 14px;
+	line-height: 1.45;
+	transition:
+		background-color 120ms ease,
+		color 120ms ease,
+		box-shadow 120ms ease;
 }
 
 .dmx-planning-sidebar a:hover {
-	background: rgba(0, 0, 0, 0.05);
+	background: #f3f6fb;
+	color: #2456c4;
+}
+
+.dmx-planning-sidebar a:focus-visible {
+	outline: 2px solid rgba(36, 104, 242, 0.48);
+	outline-offset: 2px;
 }
 
 .dmx-planning-sidebar a.active {
-	background: rgba(64, 128, 255, 0.12);
+	background: var(--dmx-blue-soft, #eaf1ff);
+	box-shadow: inset 3px 0 0 var(--dmx-blue, #2468f2);
 	color: #2456c4;
 	font-weight: 600;
+}
+
+.dmx-planning-sidebar__icon {
+	flex: 0 0 auto;
+	color: #7a879b;
+}
+
+.dmx-planning-sidebar a:hover .dmx-planning-sidebar__icon,
+.dmx-planning-sidebar a.active .dmx-planning-sidebar__icon {
+	color: currentColor;
 }
 
 .dmx-planning-sidebar__group {
 	margin-top: 6px;
 	padding: 7px 10px 3px;
 	font-size: 12px;
-	color: #8a919f;
-	letter-spacing: 0.04em;
+	font-weight: 700;
+	color: #64748b;
+	letter-spacing: 0.02em;
 }
 
 .dmx-planning-sidebar__group + .dmx-planning-sidebar__group {

@@ -2,11 +2,11 @@
 
 **时间盒**：2026-08-24 ～ 2026-09-04（10 个工作日）
 
-**状态**：CODE_COMPLETE / BLOCKED_ACCEPTANCE（本地非 E2E 验证通过；等待 G0 外部输入、部署和真实验收）
+**状态**：IN_PROGRESS / BLOCKED_ACCEPTANCE（F0～F6 已完成本地非 E2E 验证；后追加 F7 待另一实施 session 编码）
 
 **类型**：Implementation / Compatibility Migration / UI Productization
 
-**目标**：在保留旧 API、字段和深链可回滚的前提下，让平台架构字典拥有唯一写边界，让模型批量/二次物化、物理资产状态和指标业务上下文使用同一组稳定 ID 与版本证据，并通过真实菜单和 Chrome 95 验收。
+**目标**：在保留旧 API、字段和深链可回滚的前提下，让平台架构字典拥有唯一写边界，让模型批量/二次物化、物理资产状态和指标业务上下文使用同一组稳定 ID 与版本证据；同时通过 F7 将业务分类、数据域、来源系统和业务过程收敛为“数据域优先、默认上下文自动派生”的建模流程，并通过真实菜单和 Chrome 95 验收。
 
 ## 1. 开工边界
 
@@ -65,8 +65,9 @@
 | F4 | 指标上下文迁移 | 1 | P0 | CODE_COMPLETE / LOCAL_VERIFIED_NON_E2E |
 | F5 | 信息架构与路由收敛 | 1 | P1 | CODE_COMPLETE / LOCAL_VERIFIED_NON_E2E |
 | F6 | 集中验证与发布观测 | 1 | P0 | PARTIAL_LOCAL_VERIFY_PASS |
+| F7 | 建模规划上下文简化 | 1 | P0 | IN_PROGRESS |
 
-**实施顺序**：F0 → F1 → F2/F3 → F4 → F5 → F6。F2/F3 只在共享身份契约与 migration baseline 就绪后并行；F4 独立发布；E2E 在编码完成后集中一次执行。
+**实施顺序**：原实施链 F0 → F1 → F2/F3 → F4 → F5 → F6 已完成本地验证。后追加链为 F7/T01 → F6/T01 定向回归与真实验收；F7 必须复用 F1 的唯一字典 owner、F4 的指标上下文契约和既有规划策略 API，不新建平行台账。E2E 仍在本轮新增编码全部完成后集中执行一次。
 
 ## 6. 追溯矩阵
 
@@ -78,10 +79,11 @@
 | ADR-86-06/07 | F4/T01 | 逐消费者兼容测试、迁移 issue、发布 E2E |
 | ADR-86-09 | F5/T01 | 菜单种子、旧路由映射、Chrome95、菜单点击 E2E |
 | ADR-86-10 | F0/T01、F6/T01 | 备份、批次回滚、观测、Contract NO-GO/GO |
+| 2026-08-10 建模简化决策 | F7/T01 | 规划策略扩展、默认分类/过程、来源映射复用、引用保护与 UI 旅程 |
 
 ## 7. Sprint Definition of Done
 
-- [ ] F0～F6 全部 DONE，任何 BLOCKED/GAP 均关闭或从 Sprint 目标中显式移除。
+- [ ] F0～F7 全部 DONE，任何 BLOCKED/GAP 均关闭或从 Sprint 目标中显式移除。
 - [ ] 迁移 preview/apply/rollback、代码测试、构建、部署和真实菜单 E2E 均有独立证据。
 - [ ] Chrome 95 下空/加载/错误/成功和批量/二次物化旅程通过。
 - [ ] 新旧 API/字段/路由在观测期内可回滚；首轮没有未经审批的删除。

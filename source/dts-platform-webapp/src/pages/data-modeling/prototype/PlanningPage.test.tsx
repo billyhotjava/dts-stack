@@ -23,9 +23,13 @@ const mocks = vi.hoisted(() => ({
 	listDataMarts: vi.fn(),
 	normalizeModelingRequestFailure: vi.fn(),
 	canMaintain: false,
+	architectureCanMaintain: true,
 }));
 
 vi.mock("@/store/userStore", () => ({ useUserInfo: () => ({ id: "user-1" }) }));
+vi.mock("@/pages/data-architecture/useArchitectureDictionaryWriteAccess", () => ({
+	useArchitectureDictionaryWriteAccess: () => mocks.architectureCanMaintain,
+}));
 vi.mock("@/api/warehouseLayerApi", () => ({
 	createWarehouseLayer: mocks.createWarehouseLayer,
 	deleteWarehouseLayer: mocks.deleteWarehouseLayer,
@@ -67,6 +71,8 @@ let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+	mocks.canMaintain = false;
+	mocks.architectureCanMaintain = true;
 	(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 	container = document.createElement("div");
 	document.body.appendChild(container);
@@ -137,11 +143,52 @@ describe("PlanningPage", () => {
 
 		await renderPlanning(route);
 
-		for (const label of ["业务分类", "数仓分层", "公共层", "数据域", "业务过程", "应用层", "数据集市", "主题域", "规划参数配置"]) {
+		for (const label of [
+			"业务分类",
+			"数仓分层",
+			"公共层",
+			"数据域",
+			"业务过程",
+			"应用层",
+			"数据集市",
+			"主题域",
+			"规划参数配置",
+		]) {
 			expect(container.textContent).toContain(label);
 		}
 		expect(container.textContent).not.toContain("建模空间");
 		expect(container.textContent?.match(new RegExp(reason, "g"))).toHaveLength(1);
+	});
+
+	it("keeps navigation presentation separate from architecture write access", async () => {
+		mocks.loadPlanningProjection.mockResolvedValue({ headers: [], rows: [], readOnlyReason: null });
+		const route: DataModelingRoute = {
+			workspace: "planning",
+			view: "business-domains",
+			title: "业务分类与数据域",
+			description: "维护平台全局业务分类和数据域。",
+		};
+
+		await act(async () =>
+			root.render(
+				<MemoryRouter>
+					<PlanningPage navigationSurface="modeling" route={route} sidebarActiveView="domains" surface="architecture" />
+				</MemoryRouter>,
+			),
+		);
+
+		expect(container.textContent).toContain("公共层");
+		expect(container.textContent).not.toContain("平台全局架构");
+		expect(container.textContent).toContain("数据建模 / 数仓规划");
+		expect(
+			[...container.querySelectorAll("a")]
+				.filter((link) => link.classList.contains("active"))
+				.map((link) => link.textContent?.trim()),
+		).toEqual(["数据域"]);
+		expect(
+			[...container.querySelectorAll("button")].find((button) => button.textContent?.includes("新建业务分类"))
+				?.disabled,
+		).toBe(false);
 	});
 
 	it("renders layer rows with built-in protection and opens the create drawer", async () => {
@@ -172,7 +219,9 @@ describe("PlanningPage", () => {
 			).click();
 		});
 
-		const codeInput = [...container.querySelectorAll("input")].find((input) => input.placeholder === "例如：FIN_DETAIL");
+		const codeInput = [...container.querySelectorAll("input")].find(
+			(input) => input.placeholder === "例如：FIN_DETAIL",
+		);
 		expect(codeInput).toBeDefined();
 	});
 
@@ -201,9 +250,15 @@ describe("PlanningPage", () => {
 			setter?.call(input, value);
 			input.dispatchEvent(new Event("input", { bubbles: true }));
 		};
-		const codeInput = [...container.querySelectorAll("input")].find((input) => input.placeholder === "例如：FIN_DETAIL");
-		const nameInput = [...container.querySelectorAll("input")].find((input) => input.placeholder === "例如：财务明细层");
-		const prefixInput = [...container.querySelectorAll("input")].find((input) => input.placeholder === "例如：fin_dwd_");
+		const codeInput = [...container.querySelectorAll("input")].find(
+			(input) => input.placeholder === "例如：FIN_DETAIL",
+		);
+		const nameInput = [...container.querySelectorAll("input")].find(
+			(input) => input.placeholder === "例如：财务明细层",
+		);
+		const prefixInput = [...container.querySelectorAll("input")].find(
+			(input) => input.placeholder === "例如：fin_dwd_",
+		);
 		await act(async () => {
 			setReactInputValue(codeInput!, "fin_detail");
 			setReactInputValue(nameInput!, "财务明细层");

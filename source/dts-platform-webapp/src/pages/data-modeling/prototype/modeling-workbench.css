@@ -274,8 +274,8 @@
 
 .dmx-model-list-toolbar__actions button.primary,
 .dmx-model-list-header-actions button.primary {
-	border-color: var(--dmx-primary);
-	background: var(--dmx-primary);
+	border-color: var(--dmx-blue);
+	background: var(--dmx-blue);
 	color: #fff;
 }
 
@@ -322,7 +322,7 @@
 
 .dmx-model-list-table .dmx-table-action {
 	border-color: transparent;
-	color: var(--dmx-primary);
+	color: var(--dmx-blue);
 }
 
 @media (max-width: 900px) {

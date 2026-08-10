@@ -71,6 +71,9 @@ const LAYER_OPTIONS = [
 	{ label: "ADS", value: "ADS" },
 ];
 
+// 筛选区统一排版：所有字段=固定高度标签 + 撑满栅格列的控件，杜绝逐个 style 宽度导致的高低/间距漂移
+const FILTER_LABEL_CLASS = "mb-1 block h-5 text-xs text-slate-500 leading-5";
+
 const SEARCH_FORM_STORAGE_KEY = "catalog.search.form.v1";
 const DATASET_FILTER_STORAGE_KEY = "catalog.asset.filter.v2";
 
@@ -425,89 +428,124 @@ export default function DataSearchPage() {
 						description="当前仍可按关键词检索数据集；如需按业务数据标签检索全部资产类型，请启用新版资产门户。"
 					/>
 				) : null}
-				<div className="flex flex-col gap-2">
-					{/* 主筛选：关键词 + 范围（主题域）+ 核心属性（密级/分层） */}
-					<div className="flex flex-wrap items-center gap-2">
+				{/* 筛选字段栅格：主筛选（关键词/主题域/密级/分层）与次要筛选（类型/系统/标签）共用同一列宽与行距 */}
+				<div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+					<div className="min-w-0">
+						<label className={FILTER_LABEL_CLASS} htmlFor="catalog-search-keyword">
+							关键词
+						</label>
 						<Input.Search
+							id="catalog-search-keyword"
+							className="w-full"
 							placeholder="输入关键词"
-							style={{ width: 320 }}
 							value={keyword}
 							onChange={(event) => setKeyword(event.target.value)}
 							onSearch={() => void runSearch(true)}
 							allowClear
 						/>
+					</div>
+					<div className="min-w-0">
+						<label className={FILTER_LABEL_CLASS} htmlFor="catalog-search-domain">
+							主题域
+						</label>
 						<Select
+							id="catalog-search-domain"
+							className="w-full"
 							allowClear
-							placeholder="主题域"
-							style={{ minWidth: 180 }}
+							placeholder="全部主题域"
 							value={domain || "ALL"}
 							onChange={(value) => setDomain(value === "ALL" ? undefined : value)}
 							options={domainOptions}
 						/>
+					</div>
+					<div className="min-w-0">
+						<label className={FILTER_LABEL_CLASS} htmlFor="catalog-search-classification">
+							密级
+						</label>
 						<Select
+							id="catalog-search-classification"
+							className="w-full"
 							allowClear
-							placeholder="密级"
-							style={{ minWidth: 170 }}
+							placeholder="全部密级"
 							value={classification}
 							onChange={(value) => setClassification(value || "ALL")}
 							options={CLASSIFICATION_OPTIONS}
 						/>
+					</div>
+					<div className="min-w-0">
+						<label className={FILTER_LABEL_CLASS} htmlFor="catalog-search-layer">
+							分层
+						</label>
 						<Select
+							id="catalog-search-layer"
+							className="w-full"
 							allowClear
-							placeholder="分层"
-							style={{ minWidth: 170 }}
+							placeholder="全部分层"
 							value={warehouseLayer}
 							onChange={(value) => setWarehouseLayer(value || "ALL")}
 							options={LAYER_OPTIONS}
 						/>
 					</div>
-					{/* 次要筛选：资产类型 / 数据源类型 / 标签 + 动作 */}
-					<div className="flex flex-wrap items-center gap-2">
+					<div className="min-w-0">
+						<label className={FILTER_LABEL_CLASS} htmlFor="catalog-search-asset-type">
+							资产类型
+						</label>
 						<Select
+							id="catalog-search-asset-type"
+							className="w-full"
 							allowClear
-							placeholder="资产类型"
-							style={{ minWidth: 170 }}
+							placeholder="全部类型"
 							value={assetType}
 							onChange={(value) => setAssetType(value || "ALL")}
 							options={TYPE_OPTIONS}
 						/>
+					</div>
+					<div className="min-w-0">
+						<label className={FILTER_LABEL_CLASS} htmlFor="catalog-search-dataset-type">
+							数据源类型
+						</label>
 						<Select
+							id="catalog-search-dataset-type"
+							className="w-full"
 							allowClear
-							placeholder="数据源类型"
-							style={{ minWidth: 170 }}
+							placeholder="全部系统"
 							value={datasetType}
 							onChange={(value) => setDatasetType(value || "ALL")}
 							options={DATASET_TYPE_OPTIONS}
 						/>
-						<AssetTagFilter
-							value={selectedTagIds}
-							disabled={!ASSET_PORTAL_V2_ENABLED}
-							onChange={(nextIds) => {
-								setSearchParams(writeTagIds(searchParams, nextIds), { replace: true });
-							}}
-						/>
-						<Button type="primary" onClick={() => void runSearch(true)} loading={loading}>
-							搜索
-						</Button>
-						<Dropdown
-							menu={{
-								items: [
-									{ key: "save", label: "保存当前条件", onClick: saveCurrentQuery },
-									{ key: "restore", label: "恢复已存条件", onClick: restoreSavedQuery },
-									{ type: "divider" },
-									{
-										key: "apply-ledger",
-										label: "应用台账筛选",
-										onClick: applyAssetFilters,
-									},
-								],
-							}}
-						>
-							<Button>
-								条件 <DownOutlined />
-							</Button>
-						</Dropdown>
 					</div>
+					<AssetTagFilter
+						className="min-w-0 sm:col-span-2"
+						value={selectedTagIds}
+						disabled={!ASSET_PORTAL_V2_ENABLED}
+						onChange={(nextIds) => {
+							setSearchParams(writeTagIds(searchParams, nextIds), { replace: true });
+						}}
+					/>
+				</div>
+				{/* 动作区与筛选字段分栏，避免按钮被卷进字段网格造成行高不齐 */}
+				<div className="mt-4 flex flex-wrap items-center justify-end gap-2 border-slate-100 border-t pt-3">
+					<Dropdown
+						menu={{
+							items: [
+								{ key: "save", label: "保存当前条件", onClick: saveCurrentQuery },
+								{ key: "restore", label: "恢复已存条件", onClick: restoreSavedQuery },
+								{ type: "divider" },
+								{
+									key: "apply-ledger",
+									label: "应用台账筛选",
+									onClick: applyAssetFilters,
+								},
+							],
+						}}
+					>
+						<Button>
+							条件 <DownOutlined />
+						</Button>
+					</Dropdown>
+					<Button type="primary" onClick={() => void runSearch(true)} loading={loading}>
+						搜索
+					</Button>
 				</div>
 			</Card>
 

@@ -49,11 +49,20 @@ const PAGE_SIZE = 10;
 type PlanningPageProps = {
 	route: DataModelingRoute;
 	surface?: "modeling" | "architecture";
+	navigationSurface?: "modeling" | "architecture";
+	sidebarActiveView?: string;
 	activeId?: string;
 	onActiveChange?: (id: string | null) => void;
 };
 
-export function PlanningPage({ route, surface = "modeling", activeId = "", onActiveChange }: PlanningPageProps) {
+export function PlanningPage({
+	route,
+	surface = "modeling",
+	navigationSurface = surface,
+	sidebarActiveView = route.view,
+	activeId = "",
+	onActiveChange,
+}: PlanningPageProps) {
 	const modelingMenuGrant = useDataModelingMenuGrant();
 	const architectureWriteAccess = useArchitectureDictionaryWriteAccess();
 	const canMaintain = surface === "architecture" ? architectureWriteAccess : modelingMenuGrant;
@@ -257,7 +266,7 @@ export function PlanningPage({ route, surface = "modeling", activeId = "", onAct
 
 	return (
 		<main className="dmx-page dmx-planning-layout">
-			<PlanningSidebar activeView={route.view} surface={surface} />
+			<PlanningSidebar activeView={sidebarActiveView} surface={navigationSurface} />
 			<section className="dmx-planning-content">
 				<PageHeader
 					actions={
@@ -292,7 +301,7 @@ export function PlanningPage({ route, surface = "modeling", activeId = "", onAct
 					}
 					description={route.description}
 					title={route.title}
-					trail={surface === "architecture" ? "数据架构 / 平台全局架构" : "数据建模 / 数仓规划"}
+					trail={navigationSurface === "architecture" ? "数据架构 / 平台全局架构" : "数据建模 / 数仓规划"}
 				/>
 				{loading ? (
 					<RequestState description={`正在读取${route.title}权威数据。`} kind="loading" title="正在加载" />

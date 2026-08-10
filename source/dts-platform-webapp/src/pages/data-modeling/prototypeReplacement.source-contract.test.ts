@@ -178,9 +178,12 @@ describe("prototype-owned data modeling frontend", () => {
 
 	it("connects production pages to canonical owners and keeps unsupported actions disabled", () => {
 		const planning = read("./prototype/PlanningPage.tsx");
+		const dataArchitecturePage = read("../data-architecture/DataArchitecturePage.tsx");
+		const dataArchitectureNavigation = read("../data-architecture/navigation.ts");
 		const planningEditors = read("./prototype/PlanningEditors.tsx");
 		const catalogEditors = read("./prototype/PlanningCatalogEditors.tsx");
 		const planningSidebar = read("./prototype/PlanningSidebar.tsx");
+		const planningStyles = read("./data-modeling.css");
 		const modeling = read("./prototype/ModelingWorkbenchPage.tsx");
 		const catalogList = read("./prototype/ModelWorkbenchCatalogList.tsx");
 		const createMenu = read("./prototype/ModelWorkbenchCreateMenu.tsx");
@@ -196,11 +199,17 @@ describe("prototype-owned data modeling frontend", () => {
 		const prototypeSource = collectSource(fileURLToPath(new URL("./prototype", import.meta.url)));
 
 		expect(planning).toMatch(/PlanningSidebar|Drawer|新建/);
+		expect(planning).toMatch(/navigationSurface|sidebarActiveView/);
+		expect(dataArchitecturePage).toMatch(/resolveDataArchitectureNavigation|navigationSurface|sidebarActiveView/);
+		expect(dataArchitectureNavigation).toMatch(/modelingSpaceDataArchitecturePath|source:\s*"modeling-space"/);
 		expect(planning).toMatch(/CatalogDomainForm|BusinessProcessForm|DataMartForm|SubjectDomainForm/);
 		expect(planningEditors).toMatch(/createBusinessProcessApi|createDataMart|createSubjectDomain/);
 		expect(planningEditors).toMatch(/confirmDataMart|confirmSubjectDomain/);
 		expect(catalogEditors).toMatch(/CatalogDomainForm|listPlanningCatalogDomains/);
 		expect(planningSidebar).not.toContain("建模空间");
+		expect(planningStyles).toMatch(/\.dmx-planning-sidebar__group\s*\{[^}]*font-weight:\s*(600|700)/s);
+		expect(planningStyles).toMatch(/\.dmx-planning-sidebar__icon\s*\{/);
+		expect(planningStyles).toMatch(/\.dmx-planning-sidebar a:focus-visible\s*\{/);
 		expect(modeling).toMatch(/saveModelDraft|ModelWorkbenchDialog/);
 		expect(modeling).not.toMatch(/ModelWorkbenchCatalogPanel|WorkbenchCatalogTree|buildWorkbenchCatalogGroups/);
 		expect(catalogList).toMatch(/ModelWorkbenchCreateMenu|新建模型/);

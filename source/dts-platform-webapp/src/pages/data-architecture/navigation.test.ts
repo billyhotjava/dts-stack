@@ -3,6 +3,8 @@ import {
 	dataArchitecturePath,
 	legacyPlanningArchitectureTarget,
 	legacySubjectAreasTarget,
+	modelingSpaceDataArchitecturePath,
+	resolveDataArchitectureNavigation,
 	resolveDataArchitectureView,
 } from "./navigation";
 
@@ -11,6 +13,24 @@ describe("data architecture navigation", () => {
 		expect(resolveDataArchitectureView("layers")).toBe("layers");
 		expect(resolveDataArchitectureView("unknown")).toBe("business-domains");
 		expect(dataArchitecturePath("subjects", "subject-id")).toBe("/data-architecture?view=subjects&active=subject-id");
+	});
+
+	it("keeps the modeling-space menu context while using the canonical architecture owner", () => {
+		expect(modelingSpaceDataArchitecturePath("business-domains", "domains")).toBe(
+			"/data-architecture?view=business-domains&source=modeling-space&planningView=domains",
+		);
+		expect(resolveDataArchitectureNavigation("modeling-space", "domains", "business-domains")).toEqual({
+			surface: "modeling",
+			activeView: "domains",
+		});
+		expect(resolveDataArchitectureNavigation("modeling-space", "unknown", "layers")).toEqual({
+			surface: "modeling",
+			activeView: "layers",
+		});
+		expect(resolveDataArchitectureNavigation(null, "domains", "business-domains")).toEqual({
+			surface: "architecture",
+			activeView: "business-domains",
+		});
 	});
 
 	it("maps every legacy planning dictionary route without losing query or hash", () => {

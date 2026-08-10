@@ -74,9 +74,10 @@ export function AssetTagFilter({ value, onChange, disabled = false, className }:
 
 	return (
 		<div className={className}>
-			<div className="mb-1 text-xs text-slate-500">同时包含所选标签</div>
+			{/* 与筛选区其它字段共用同一套标签排版（h-5/leading-5），保证同行控件顶部对齐 */}
+			<div className="mb-1 block h-5 text-xs text-slate-500 leading-5">同时包含所选标签</div>
 			<div className="flex min-w-0 items-center gap-2">
-				<Spin spinning={loading} size="small">
+				<Spin spinning={loading} size="small" wrapperClassName="min-w-0 flex-1">
 					<Select
 						mode="multiple"
 						aria-label="按业务数据标签筛选"
@@ -88,7 +89,7 @@ export function AssetTagFilter({ value, onChange, disabled = false, className }:
 						optionFilterProp="label"
 						showSearch
 						maxTagCount={2}
-						className="min-w-[220px]"
+						className="w-full min-w-[220px]"
 						notFoundContent={loadError ? "标签目录不可用" : "暂无可用业务标签"}
 					/>
 				</Spin>
