@@ -1097,12 +1097,14 @@ class ModelSpecStageGateServiceTest {
             Instant.EPOCH,
             CompatibilityMode.CANONICAL,
             null,
-            null,
+            type == ModelType.APPLICATION ? UUID.fromString("70000000-0000-0000-0000-000000000001") : null,
             null,
             type == ModelType.DIMENSION
                 ? new ImplementationPolicy("dwd_" + type.name().toLowerCase(), LoadStrategy.FULL, null, List.of())
                 : null,
-            null
+            null,
+            type == ModelType.FACT ? UUID.fromString("80000000-0000-0000-0000-000000000001") : null,
+            type == ModelType.APPLICATION ? UUID.fromString("90000000-0000-0000-0000-000000000001") : null
         );
     }
 
@@ -1168,7 +1170,9 @@ class ModelSpecStageGateServiceTest {
             model.dataMartId(),
             model.variantCode(),
             model.implementationPolicy(),
-            model.warehouseLayerCode()
+            model.warehouseLayerCode(),
+            model.businessProcessId(),
+            model.subjectDomainId()
         );
     }
 
@@ -1216,7 +1220,9 @@ class ModelSpecStageGateServiceTest {
             model.dataMartId(),
             model.variantCode(),
             model.implementationPolicy(),
-            model.warehouseLayerCode()
+            model.warehouseLayerCode(),
+            model.businessProcessId(),
+            model.subjectDomainId()
         );
     }
 
@@ -1256,7 +1262,9 @@ class ModelSpecStageGateServiceTest {
             model.dataMartId(),
             model.variantCode(),
             model.implementationPolicy(),
-            model.warehouseLayerCode()
+            model.warehouseLayerCode(),
+            model.businessProcessId(),
+            model.subjectDomainId()
         );
     }
 
@@ -1296,7 +1304,9 @@ class ModelSpecStageGateServiceTest {
             model.dataMartId(),
             model.variantCode(),
             model.implementationPolicy(),
-            model.warehouseLayerCode()
+            model.warehouseLayerCode(),
+            model.businessProcessId(),
+            model.subjectDomainId()
         );
     }
 
@@ -1336,7 +1346,9 @@ class ModelSpecStageGateServiceTest {
             model.dataMartId(),
             model.variantCode(),
             model.implementationPolicy(),
-            model.warehouseLayerCode()
+            model.warehouseLayerCode(),
+            model.businessProcessId(),
+            model.subjectDomainId()
         );
     }
 
@@ -1365,13 +1377,20 @@ class ModelSpecStageGateServiceTest {
             model.standardBindings(),
             model.generationStrategy(),
             model.dimensionProfile(),
+            model.dimensionDefinitionRef(),
             model.status(),
             model.revision(),
             model.checksum(),
             model.createdAt(),
             model.updatedAt(),
             model.compatibilityMode(),
-            model.legacyRefs()
+            model.legacyRefs(),
+            model.dataMartId(),
+            model.variantCode(),
+            model.implementationPolicy(),
+            model.warehouseLayerCode(),
+            model.businessProcessId(),
+            model.subjectDomainId()
         );
     }
 
@@ -1404,13 +1423,20 @@ class ModelSpecStageGateServiceTest {
             model.standardBindings(),
             model.generationStrategy(),
             model.dimensionProfile(),
+            model.dimensionDefinitionRef(),
             model.status(),
             model.revision(),
             model.checksum(),
             model.createdAt(),
             model.updatedAt(),
             model.compatibilityMode(),
-            model.legacyRefs()
+            model.legacyRefs(),
+            model.dataMartId(),
+            model.variantCode(),
+            model.implementationPolicy(),
+            model.warehouseLayerCode(),
+            model.businessProcessId(),
+            model.subjectDomainId()
         );
     }
 
@@ -1443,13 +1469,20 @@ class ModelSpecStageGateServiceTest {
             model.standardBindings(),
             model.generationStrategy(),
             model.dimensionProfile(),
+            model.dimensionDefinitionRef(),
             status,
             model.revision(),
             model.checksum(),
             model.createdAt(),
             model.updatedAt(),
             model.compatibilityMode(),
-            model.legacyRefs()
+            model.legacyRefs(),
+            model.dataMartId(),
+            model.variantCode(),
+            model.implementationPolicy(),
+            model.warehouseLayerCode(),
+            model.businessProcessId(),
+            model.subjectDomainId()
         );
     }
 

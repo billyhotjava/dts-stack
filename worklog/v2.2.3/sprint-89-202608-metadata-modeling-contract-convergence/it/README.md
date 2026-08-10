@@ -1,17 +1,25 @@
 # Sprint-89 集成验收计划
 
-**当前状态**: NOT_RUN（计划已冻结；不得将计划项当作通过证据）
+**当前状态**: AUTOMATED_PASS / REAL_INPUT_BLOCKED（自动化影响集通过；真实登录、Chrome 95、部署与现场来源样本未提供）
 
 | IT | 旅程 | 核心断言 | 当前状态 |
 |---|---|---|---|
 | IT-01 | CATALOG_TABLE 身份解析 | table locator 可解析父 dataset asset key；编译物理位置与分类 subject 一致 | PASS_AUTOMATED |
-| IT-02 | 采集消失/重现 | v1 同步 → 表消失 → v2 重现，三层 ID 不变且无 routine DELETE | BLOCKED_INPUT |
-| IT-03 | drift 分级 | add nullable、remove unused、remove used、type change、nullable tighten、comment-only 分级正确 | BLOCKED_INPUT |
-| IT-04 | 建模影响与重确认 | compatible 可继续且提示；breaking/missing 阻断；修复并重确认后恢复 | BLOCKED_INPUT |
-| IT-05 | 租户/权限/分类 | 跨租户、无目录权限、部门不匹配均不泄露；分类继承使用 canonical asset key | NOT_RUN |
+| IT-02 | 采集消失/重现 | v1 同步 → 表消失 → v2 重现，三层 ID 不变且无 routine DELETE | PASS_AUTOMATED |
+| IT-03 | drift 分级 | add nullable、remove unused、remove used、type change、nullable tighten、comment-only 分级正确 | PASS_AUTOMATED |
+| IT-04 | 建模影响与重确认 | compatible 可继续且提示；breaking/missing 阻断；修复并重确认后恢复 | PASS_AUTOMATED |
+| IT-05 | 租户/权限/分类 | 跨租户、无目录权限、部门不匹配均不泄露；分类继承使用 canonical asset key | PASS_AUTOMATED |
 | IT-06 | 来源盘点 UI | 真实菜单进入现有数仓规划来源页；四态、diff、重确认、排除均可用 | BLOCKED_INPUT |
-| IT-07 | 回滚/兼容 | 旧 locator fixture 可读；回滚后无数据丢失；若有 migration 完成 dry-run/rollback | NOT_RUN |
-| IT-08 | 全纵向链 | collect v1 → catalog → plan confirm → reverse/import → compile/publish/materialize → collect v2 → policy/处置 | BLOCKED_INPUT |
+| IT-07 | 回滚/兼容 | 旧 locator fixture 可读；回滚后无数据丢失；若有 migration 完成 dry-run/rollback | PASS_AUTOMATED_NO_MIGRATION |
+| IT-08 | 全纵向链 | collect v1 → catalog → plan confirm → reverse/import → compile/publish/materialize → collect v2 → policy/处置 | BLOCKED_INPUT_REAL_CHAIN |
+
+## 自动化执行证据（2026-08-10）
+
+- 采集稳定身份：`CatalogColumnSyncServiceTest,SourceReferenceResolverAdapterTest,RoutineCatalogSyncSourceContractTest,JdbcClassificationLifecycleIT`，15 tests，0 failures/errors/skipped。
+- drift 分级：`SchemaDriftDetectorTest,SchemaDriftDetailsReaderTest,ModelSpecRepositoryIT#classifiesReferencedAndUnreferencedCatalogColumnsFromCurrentModelSpecs`，18 tests，0 failures/errors/skipped。
+- 集中影响集：resolver、repository、sync、drift、来源盘点、compiler、classification、materialization 共 97 个唯一用例；首次 80 通过，17 个旧 stage-gate 夹具失败；夹具补齐既有业务过程/主题域引用后，定向重跑 31/31 通过，最终影响集 97/97。
+- 前端：`modelingImportContextService.sprint89.test.ts` 1/1 通过；`pnpm build` 成功。
+- 本轮无数据库 migration；旧三参数来源读取和未分页客户端兼容行为有自动化断言。未执行部署或真实浏览器操作。
 
 ## IT-03 测试矩阵
 

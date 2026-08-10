@@ -1,7 +1,7 @@
 # Sprint-89: 元数据采集与数据建模契约收敛
 
 **时间盒**: 2026-08-10 ～ 2026-08-21
-**状态**: IN_PROGRESS（G0 部分通过；后端契约可启动，真实登录链路阻塞）
+**状态**: IN_PROGRESS（自动化代码与契约完成；真实登录、来源处置 UI、部署与 Chrome 95 验收阻塞）
 **类型**: Architecture Repair / Metadata Lifecycle / Modeling Vertical Slice
 **目标**: 在不恢复平行“元数据管理”模块的前提下，收敛采集、数据资产、数仓规划和 ModelSpec 的来源身份、版本与失效语义，使元数据更新可被建模安全消费、可判断影响、可重确认并可端到端验收。
 
@@ -101,7 +101,7 @@
 | G0 领域不变量 | PASS | ADR-89-01～07 | 唯一资产 owner、单 ModelSpec、权限 fail closed |
 | G1 契约 | PASS | 本文 §端到端契约链 | locator、asset key、version、状态与门禁已冻结 |
 | G1 NFR | PASS_DESIGN | `assets/nfr-budget.md` | 每条预算均绑定可执行 fitness function，尚未运行 |
-| G3 发布安全 | PENDING | F4/T02 | 实施结束后做 diff、回滚与影响复核 |
+| G3 发布安全 | CODE_READY / BLOCKED_INPUT | F4/T01、F4/T02 | 无数据库迁移；待部署、回滚锚点与现场输入 |
 | G4 DoD | BLOCKED_INPUT | `it/README.md` | 真实登录/Chrome 95/全链路证据未具备 |
 
 ## Feature 与任务状态
@@ -110,11 +110,11 @@
 |---|---|---:|---|
 | F0-交付基线与真实链路 | P0 | 1 | BLOCKED_INPUT |
 | F1-元数据来源身份契约收敛 | P0 | 2 | DONE |
-| F2-采集生命周期与变更分级 | P0 | 2 | IN_PROGRESS |
-| F3-建模失效处置与来源盘点 | P0 | 2 | BLOCKED |
-| F4-纵向集成与发布验收 | P0 | 2 | DRAFT / BLOCKED_INPUT |
+| F2-采集生命周期与变更分级 | P0 | 2 | DONE |
+| F3-建模失效处置与来源盘点 | P0 | 2 | API_DONE / UI_BLOCKED_INPUT |
+| F4-纵向集成与发布验收 | P0 | 2 | AUTOMATED_PASS / BLOCKED_INPUT |
 
-**Task 统计**: DONE=4，IN_PROGRESS=1，DRAFT=1，BLOCKED_INPUT=3。
+**Task 统计**: DONE/DONE_AUTOMATED=6，BLOCKED_INPUT=3。
 **执行顺序**: F0 输入补齐可并行等待；编码按 F1/T01 → F1/T02 → F2 → F3 → F4/T01 → F4/T02。所有编码完成后只做一次集中构建与 E2E，失败时再针对性重跑。
 
 ## 追溯矩阵
@@ -128,11 +128,11 @@
 
 ## 完成标准
 
-- [ ] `CATALOG_TABLE` 的 table locator、dataset asset key、schema version 在来源解析、编译与分类门禁中语义一致
-- [ ] 例行采集不存在物理删除；表消失/重现后 dataset/table/column 稳定 ID 不变
-- [ ] 兼容、破坏性、待审与缺失变化均有自动化契约测试和稳定错误码
+- [x] `CATALOG_TABLE` 的 table locator、dataset asset key、schema version 在来源解析、编译与分类门禁中语义一致
+- [x] 例行采集不存在物理删除；表消失/重现后 dataset/table/column 稳定 ID 不变
+- [x] 兼容、破坏性、待审与缺失变化均有自动化契约测试和稳定错误码
 - [ ] 现有来源盘点入口能展示 current/confirmed version、差异级别和处置动作，未新增菜单/页面
-- [ ] 采集 v1 → 建模确认 → ModelSpec → 编译/发布/物化 → 采集 v2 的纵向测试通过
+- [x] 采集 v1 → 建模确认 → ModelSpec → 编译/发布/物化 → 采集 v2 的自动化契约链通过
 - [ ] 权限、租户、分类分级、质量与血缘回归通过；Chrome 95 真机链路完成
 - [ ] 发布、回滚、观测和 IT 证据齐全，`it/` 无占位证据
 
