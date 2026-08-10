@@ -431,9 +431,12 @@ public class ModelSpecRepository {
                            else 'ODS'
                        end as source_layer
                   from modeling_warehouse_plan_source s
+                  left join catalog_table_schema t
+                    on s.source_type = 'CATALOG_TABLE'
+                   and t.id::text = coalesce(nullif(s.locator_json ->> 'assetId', ''), s.source_id)
                   left join catalog_dataset c
                     on s.source_type = 'CATALOG_TABLE'
-                   and c.id::text = coalesce(nullif(s.locator_json ->> 'assetId', ''), s.source_id)
+                   and c.id = t.dataset_id
                  where s.tenant_id = ? and s.plan_id = ? and s.id = ?
                    and s.confirmation_status = 'CONFIRMED' and s.source_version = ?
                 """,

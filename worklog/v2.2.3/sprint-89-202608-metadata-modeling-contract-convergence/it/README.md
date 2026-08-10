@@ -4,7 +4,7 @@
 
 | IT | 旅程 | 核心断言 | 当前状态 |
 |---|---|---|---|
-| IT-01 | CATALOG_TABLE 身份解析 | table locator 可解析父 dataset asset key；编译物理位置与分类 subject 一致 | NOT_RUN |
+| IT-01 | CATALOG_TABLE 身份解析 | table locator 可解析父 dataset asset key；编译物理位置与分类 subject 一致 | PASS_AUTOMATED |
 | IT-02 | 采集消失/重现 | v1 同步 → 表消失 → v2 重现，三层 ID 不变且无 routine DELETE | BLOCKED_INPUT |
 | IT-03 | drift 分级 | add nullable、remove unused、remove used、type change、nullable tighten、comment-only 分级正确 | BLOCKED_INPUT |
 | IT-04 | 建模影响与重确认 | compatible 可继续且提示；breaking/missing 阻断；修复并重确认后恢复 | BLOCKED_INPUT |

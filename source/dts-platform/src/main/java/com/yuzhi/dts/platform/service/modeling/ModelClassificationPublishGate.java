@@ -268,7 +268,7 @@ public class ModelClassificationPublishGate {
         try {
             return switch (binding.sourceType()) {
                 case "CATALOG_TABLE" -> catalogSources
-                    .findDatasetAssetKey(UUID.fromString(binding.sourceId()))
+                    .findDatasetAssetKeyByTableId(UUID.fromString(binding.sourceId()))
                     .orElseGet(() -> missingBindingAsset(binding, blockers));
                 case "CONNECTION_TABLE" -> connectionDatasetAssetKey(binding)
                     .orElseGet(() -> missingBindingAsset(binding, blockers));

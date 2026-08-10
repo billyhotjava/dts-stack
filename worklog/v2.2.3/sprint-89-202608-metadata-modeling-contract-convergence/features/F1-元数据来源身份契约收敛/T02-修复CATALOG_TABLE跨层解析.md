@@ -1,7 +1,7 @@
 # T02: 修复 CATALOG_TABLE 跨层解析
 
 **优先级**: P0
-**状态**: IN_PROGRESS
+**状态**: DONE
 **依赖**: F1/T01 RED 证据
 
 ## 实现契约
@@ -24,8 +24,15 @@
 
 ## 验证
 
-- [ ] T01 全部从 RED 转 GREEN
-- [ ] `ModelSpecSourceValidationAdapterTest`、WarehousePlan source inventory tests 无回归
-- [ ] 分类 subject key 与 resolver 返回 asset key 完全一致
-- [ ] SQL 始终带 tenant/plan/binding/version 条件
-- [ ] 实施完成后运行 GitNexus detect changes，影响只落在预期 source resolution/compile/classification flows
+- [x] T01 全部从 RED 转 GREEN
+- [x] `ModelSpecSourceValidationAdapterTest` 与 `SourceReferenceResolverAdapterTest` 无回归
+- [x] 分类 subject key 由 table 的父 dataset canonical asset key 生成
+- [x] SQL 保留 tenant/plan/binding/version 条件
+- [x] 实施完成后运行 GitNexus detect changes，影响只落在预期 source resolution/compile/classification flows
+
+## GREEN 证据（2026-08-10）
+
+- `ModelClassificationPublishGateTest` + `SourceReferenceResolverAdapterTest`: 10/10 通过。
+- `ModelSpecSourceValidationAdapterTest`: 10/10 通过，覆盖 missing/forbidden/provider error/version drift 等 fail-closed 分支。
+- `ModelSpecRepositoryIT#resolvesCatalogTableLocatorThroughParentDataset`: PostgreSQL/Testcontainers 1/1 通过。
+- Maven `verify` BUILD SUCCESS，Checkstyle 0 违规；无迁移、无回填。

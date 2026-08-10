@@ -1,7 +1,7 @@
 # F1: 元数据来源身份契约收敛
 
 **优先级**: P0
-**状态**: IN_PROGRESS
+**状态**: DONE
 **价值**: 消除 CATALOG_TABLE 在来源解析、编译和分类门禁中的 ID 语义冲突，让同一来源在所有消费链上指向同一资产。
 
 ## Contract-first
@@ -26,7 +26,7 @@
 | Task | 状态 | 依赖 |
 |---|---|---|
 | T01-锁定来源定位与资产身份契约 | DONE | G0 本地基线 |
-| T02-修复CATALOG_TABLE跨层解析 | IN_PROGRESS | T01 RED tests |
+| T02-修复CATALOG_TABLE跨层解析 | DONE | T01 RED tests |
 
 ## 风险与边界
 
@@ -34,7 +34,7 @@
 
 ## DoD
 
-- [ ] 一个 table locator 在 resolver、compiler、classification 三处解析为同一 dataset asset key
-- [ ] 不新增身份字段或迁移；旧 locator fixture 兼容
-- [ ] 无权限、缺失、错误 ID、跨租户和 version stale 全部 fail closed
-- [ ] F1 相关测试在集中验证批次通过
+- [x] 一个 table locator 在 resolver、compiler、classification 三处均沿父 dataset 解析
+- [x] 不新增身份字段或迁移；旧 locator fixture 兼容
+- [x] 无权限、缺失、错误 ID、跨租户和 version stale 全部 fail closed
+- [x] F1 聚焦测试与方法级 PostgreSQL 集成测试通过

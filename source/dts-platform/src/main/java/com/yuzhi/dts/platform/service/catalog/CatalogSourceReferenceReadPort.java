@@ -17,6 +17,8 @@ public interface CatalogSourceReferenceReadPort {
 
     Optional<String> findDatasetAssetKey(UUID datasetId);
 
+    Optional<String> findDatasetAssetKeyByTableId(UUID tableId);
+
     Optional<String> findDatasetAssetKey(UUID sourceId, String namespace, String objectName);
 
     enum SourceStatus {

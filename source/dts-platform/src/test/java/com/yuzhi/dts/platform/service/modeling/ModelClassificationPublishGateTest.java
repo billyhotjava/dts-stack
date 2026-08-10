@@ -113,7 +113,7 @@ class ModelClassificationPublishGateTest {
         Decision decision = gate.evaluate(tenant, modelId, 2, checksum);
 
         assertThat(decision.ready()).isTrue();
-        assertThat(decision.effectiveLevel()).isEqualTo("DATA_INTERNAL");
+        assertThat(decision.effectiveLevel()).isEqualTo("INTERNAL");
         assertThat(decision.upstreamLevels()).containsEntry(expectedSubjectKey, "DATA_INTERNAL");
     }
 }

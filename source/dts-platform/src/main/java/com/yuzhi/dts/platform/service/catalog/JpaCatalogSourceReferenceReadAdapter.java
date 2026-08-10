@@ -94,6 +94,14 @@ public class JpaCatalogSourceReferenceReadAdapter implements CatalogSourceRefere
     }
 
     @Override
+    public Optional<String> findDatasetAssetKeyByTableId(UUID tableId) {
+        if (tableId == null) {
+            return Optional.empty();
+        }
+        return tables.findById(tableId).map(CatalogTableSchema::getDataset).map(CatalogAssetKey::dataset);
+    }
+
+    @Override
     public Optional<String> findDatasetAssetKey(UUID sourceId, String namespace, String objectName) {
         if (sourceId == null || isBlank(namespace) || isBlank(objectName)) {
             return Optional.empty();
