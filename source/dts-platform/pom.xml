@@ -696,7 +696,9 @@
                         <testInclude>**/service/modeling/warehouse/WarehousePlanApplicationServiceIT.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehousePlanSourceInventoryApplicationServiceIT.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/Sprint89WarehousePlanSourceContractTest.java</testInclude>
+                        <testInclude>**/service/modeling/warehouse/Sprint89WarehousePlanSourceActionContractTest.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/Sprint89WarehousePlanSourceApplicationServiceIT.java</testInclude>
+                        <testInclude>**/service/modeling/warehouse/Sprint89WarehousePlanSourceConsistencyIT.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehouseLayerGovernanceLiquibaseTest.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehouseLayerApplicationServiceTest.java</testInclude>
                         <testInclude>**/repository/modeling/WarehouseLayerRepositoryIT.java</testInclude>
@@ -791,6 +793,7 @@
                         <testInclude>**/service/catalog/CatalogExternalAssetIdentity*.java</testInclude>
                         <testInclude>**/service/catalog/CatalogTag*.java</testInclude>
                         <testInclude>**/service/infra/JdbcClassificationLifecycleIT.java</testInclude>
+                        <testInclude>**/service/infra/Sprint89JdbcCatalogSyncRollbackIT.java</testInclude>
                         <testInclude>**/security/ServiceDependencyAuthenticationFilterTest.java</testInclude>
                         <testInclude>**/web/rest/CatalogSearchResourceTagFilterTest.java</testInclude>
                         <testInclude>**/web/rest/catalog/CatalogAssetPortalResourceTest.java</testInclude>
