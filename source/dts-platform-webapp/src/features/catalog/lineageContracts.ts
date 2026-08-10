@@ -91,6 +91,8 @@ export type ImpactResult = {
 	datasetId?: string;
 	direction?: string;
 	depth?: number;
+	/** 字段血缘取自的表级血缘快照时刻（与 snapshotAt 同值），用于自证表级/字段级时间语义一致 */
+	columnLineageSnapshotAt?: string;
 	projectName?: string;
 	nodeCount?: number;
 	edgeCount?: number;

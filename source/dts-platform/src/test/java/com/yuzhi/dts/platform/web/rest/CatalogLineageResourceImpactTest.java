@@ -126,6 +126,7 @@ class CatalogLineageResourceImpactTest {
         Instant at = Instant.parse("2026-08-01T00:00:00Z");
         CatalogColumnLineage valid = column(UUID.randomUUID(), "id", "id", Instant.parse("2030-01-01T00:00:00Z"));
         when(datasetRepository.findById(rootId)).thenReturn(Optional.of(dataset(rootId)));
+        when(datasetRepository.findById(upId)).thenReturn(Optional.of(dataset(upId)));
         when(accessChecker.canRead(any())).thenReturn(true);
         when(accessChecker.departmentAllowed(any(), any())).thenReturn(true);
         when(lineageRepository.findByEitherSideAt(eq(rootId), eq(at))).thenReturn(List.of(edge()));
@@ -160,6 +161,7 @@ class CatalogLineageResourceImpactTest {
     void impactWithoutColumnsDoesNotQueryColumnLineageRepository() {
         Instant at = Instant.parse("2026-08-01T00:00:00Z");
         when(datasetRepository.findById(rootId)).thenReturn(Optional.of(dataset(rootId)));
+        when(datasetRepository.findById(upId)).thenReturn(Optional.of(dataset(upId)));
         when(accessChecker.canRead(any())).thenReturn(true);
         when(accessChecker.departmentAllowed(any(), any())).thenReturn(true);
         when(lineageRepository.findByEitherSideAt(eq(rootId), eq(at))).thenReturn(List.of(edge()));
