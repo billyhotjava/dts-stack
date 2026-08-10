@@ -1,7 +1,7 @@
 # F1: 元数据来源身份契约收敛
 
 **优先级**: P0
-**状态**: READY
+**状态**: IN_PROGRESS
 **价值**: 消除 CATALOG_TABLE 在来源解析、编译和分类门禁中的 ID 语义冲突，让同一来源在所有消费链上指向同一资产。
 
 ## Contract-first
@@ -25,8 +25,8 @@
 
 | Task | 状态 | 依赖 |
 |---|---|---|
-| T01-锁定来源定位与资产身份契约 | READY | G0 本地基线 |
-| T02-修复CATALOG_TABLE跨层解析 | DRAFT | T01 RED tests |
+| T01-锁定来源定位与资产身份契约 | DONE | G0 本地基线 |
+| T02-修复CATALOG_TABLE跨层解析 | IN_PROGRESS | T01 RED tests |
 
 ## 风险与边界
 

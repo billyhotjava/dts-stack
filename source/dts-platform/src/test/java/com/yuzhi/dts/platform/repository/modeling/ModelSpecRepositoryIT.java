@@ -31,6 +31,59 @@ class ModelSpecRepositoryIT {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Test
+    void resolvesCatalogTableLocatorThroughParentDataset() {
+        String tenant = "model-spec-catalog-source-it-" + UUID.randomUUID();
+        String actor = "owner-1";
+        UUID planId = UUID.randomUUID();
+        UUID domainId = UUID.randomUUID();
+        UUID sourceBindingId = UUID.randomUUID();
+        UUID sourceId = UUID.randomUUID();
+        UUID datasetId = UUID.randomUUID();
+        UUID tableId = UUID.randomUUID();
+        assertThat(tableId).isNotEqualTo(datasetId);
+        seedContext(tenant, actor, planId, domainId, sourceBindingId);
+
+        jdbcTemplate.update(
+            """
+            insert into catalog_dataset (
+                id, name, type, source_id, hive_database, hive_table, warehouse_layer,
+                enabled, lifecycle_status, harvest_status, created_date, last_modified_date
+            ) values (?, 'orders', 'POSTGRES', ?, 'public', 'orders', 'ODS',
+                      true, 'DISCOVERED', 'SYNCED', current_timestamp, current_timestamp)
+            """,
+            datasetId,
+            sourceId
+        );
+        jdbcTemplate.update(
+            """
+            insert into catalog_table_schema (id, dataset_id, name, created_date, last_modified_date)
+            values (?, ?, 'orders', current_timestamp, current_timestamp)
+            """,
+            tableId,
+            datasetId
+        );
+        jdbcTemplate.update(
+            """
+            update modeling_warehouse_plan_source
+               set source_id = ?, locator_json = cast(? as jsonb)
+             where tenant_id = ? and plan_id = ? and id = ?
+            """,
+            tableId.toString(),
+            "{\"assetId\":\"" + tableId + "\"}",
+            tenant,
+            planId,
+            sourceBindingId
+        );
+
+        assertThat(repository.findCurrentPhysicalSource(tenant, planId, sourceBindingId, "v1"))
+            .hasValueSatisfying(source -> {
+                assertThat(source.kind()).isEqualTo(SourceKind.TABLE);
+                assertThat(source.ref()).isEqualTo("public.orders");
+                assertThat(source.layer()).isEqualTo(Layer.ODS);
+                assertThat(source.resolvedVersion()).isEqualTo("v1");
+            });
+    }
 
     @Test
     void persistsWarehouseLayerSelectionOnInsertAndCas() throws Exception {

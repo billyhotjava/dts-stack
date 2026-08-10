@@ -649,6 +649,7 @@
                         <testInclude>**/service/modeling/CandidatePublicationAdmissionServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/CandidatePublicationCommitServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/CandidatePublicationCoordinatorTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelClassificationPublishGateTest.java</testInclude>
                         <testInclude>**/service/modeling/CandidateRollbackCommitServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelExecutionTargetCatalogResolverTest.java</testInclude>
                         <testInclude>**/service/modeling/CatalogPhysicalLocatorLiquibaseTest.java</testInclude>

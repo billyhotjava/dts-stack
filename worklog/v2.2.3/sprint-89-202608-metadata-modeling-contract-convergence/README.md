@@ -109,12 +109,12 @@
 | Feature | 优先级 | Task 数 | 状态 |
 |---|---|---:|---|
 | F0-交付基线与真实链路 | P0 | 1 | BLOCKED_INPUT |
-| F1-元数据来源身份契约收敛 | P0 | 2 | READY |
+| F1-元数据来源身份契约收敛 | P0 | 2 | IN_PROGRESS |
 | F2-采集生命周期与变更分级 | P0 | 2 | DRAFT |
 | F3-建模失效处置与来源盘点 | P0 | 2 | BLOCKED |
 | F4-纵向集成与发布验收 | P0 | 2 | DRAFT / BLOCKED_INPUT |
 
-**Task 统计**: READY=1，DRAFT=5，BLOCKED_INPUT=3。
+**Task 统计**: DONE=1，IN_PROGRESS=1，DRAFT=4，BLOCKED_INPUT=3。
 **执行顺序**: F0 输入补齐可并行等待；编码按 F1/T01 → F1/T02 → F2 → F3 → F4/T01 → F4/T02。所有编码完成后只做一次集中构建与 E2E，失败时再针对性重跑。
 
 ## 追溯矩阵

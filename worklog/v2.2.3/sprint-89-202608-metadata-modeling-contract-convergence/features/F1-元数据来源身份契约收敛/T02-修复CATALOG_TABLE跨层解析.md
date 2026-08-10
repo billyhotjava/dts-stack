@@ -1,7 +1,7 @@
 # T02: 修复 CATALOG_TABLE 跨层解析
 
 **优先级**: P0
-**状态**: DRAFT
+**状态**: IN_PROGRESS
 **依赖**: F1/T01 RED 证据
 
 ## 实现契约
