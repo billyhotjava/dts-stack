@@ -1918,3 +1918,25 @@
 **执行顺序**: F1/T01 ∥ F2/T01 → F2/T02 → F3/T01（F3 做页面装配与契约测试改写，必须最后做，避免同文件冲突）
 **关键决策**: 域树递归扁平为一层 + Top6 折叠（父域统计不含子域，扁平不重复计数）；资产概览不再呈现 `warehouseLayer`（分层权威源在数据建模模块，避免双事实源）；图表只保留治理状态环形 + 主题域 Top6 堆叠条形；跳转目标唯一 `/catalog/search?view=table`，并以「push 路径字面量去重 == 1」作为机器可验证守卫；「待处置」KPI 不可下钻（后端无单一 attention 过滤参数，不做欺骗性 affordance）。
 **已知风险**: G0 交付基线为 GAP——规划期未启动运行实例，登录/真实域分布/Chrome 95 三项待验证（`it/baseline.md` B1–B3）；现网域数量仅 2 个，Top6 折叠路径真机无数据，只能由单测覆盖并须在 IT 中如实标注；`governanceStatusCounts` 是否存在字典未覆盖 key 待实测，决定环形图「其他」聚合是否为实际路径。F3/T01 未拿到真机四态证据前 Sprint 不得置 DONE。
+
+## Sprint-89: 元数据采集与数据建模契约收敛 (202608)
+
+**目录**: `worklog/v2.2.3/sprint-89-202608-metadata-modeling-contract-convergence`
+**时间盒**: 2026-08-10 ～ 2026-08-21
+**状态**: IN_PROGRESS（G0 部分通过；F1 后端契约 READY，真实登录/来源样本/Chrome 95 阻塞 F3 与最终验收）
+**类型**: Architecture Repair / Metadata Lifecycle / Modeling Vertical Slice
+**目标**: 不恢复平行元数据模块，收敛采集、数据资产、数仓规划和 ModelSpec 的来源 locator、CatalogAssetKey、schema version 与失效语义，完成兼容/破坏性 drift 判定、现有入口重确认和采集到发布/物化的纵向验收。
+**依赖**: 复用 CatalogDataset/Table/Column、CatalogAssetKey、WarehousePlan source inventory、ModelSpec 与现有数仓规划页面；授权账号、非敏感可变更来源样本、生产脱敏画像和 Chrome 95 为外部输入。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---|---|---:|---|
+| F0-交付基线与真实链路 | P0 | 1 | BLOCKED_INPUT |
+| F1-元数据来源身份契约收敛 | P0 | 2 | READY |
+| F2-采集生命周期与变更分级 | P0 | 2 | DRAFT |
+| F3-建模失效处置与来源盘点 | P0 | 2 | BLOCKED_INPUT |
+| F4-纵向集成与发布验收 | P0 | 2 | DRAFT / BLOCKED_INPUT |
+
+**统计**: READY=1，DRAFT=5，BLOCKED_INPUT=3。
+**执行顺序**: F1/T01 → F1/T02 → F2 → F3 → F4/T01 → F4/T02；F0 外部输入并行补齐；编码完成后只运行一次集中构建/E2E。
+**关键决策**: 数据资产是唯一元数据 owner；`CATALOG_TABLE.sourceId` 是 table locator，资产身份从父 dataset 的 CatalogAssetKey 解析；例行采集只能 upsert+软失效，字段 ID 不得重采漂移；compatible 可在字段复核通过后继续，breaking/missing fail closed；复用 `/data-modeling/planning/spaces?view=baseline&tab=sources`，不新增菜单、页面或台账。
+**已知风险**: `CatalogDataset` GitNexus 影响 CRITICAL、`CatalogTableSchema` HIGH；当前本地库 plan source bindings=0，源码契约不一致尚未在真实绑定上复现；57/83 dataset 的 harvest_status 为空；未取得授权账号/Chrome 95/生产画像。详见 Sprint README、`assets/domain-profile.md` 与 `it/baseline.md`。

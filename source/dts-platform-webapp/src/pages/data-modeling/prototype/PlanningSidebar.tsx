@@ -3,18 +3,18 @@ import { dataArchitecturePath } from "@/pages/data-architecture/navigation";
 import { dataModelingPath } from "../navigation";
 
 const ITEMS = [
-	{ view: "business-categories", label: "业务分类" },
-	{ view: "layers", label: "数仓分层" },
+	{ view: "business-categories", architectureView: "business-domains", label: "业务分类" },
+	{ view: "layers", architectureView: "layers", label: "数仓分层" },
 ] as const;
 
 const PUBLIC_GROUP = [
-	{ view: "domains", label: "数据域" },
-	{ view: "processes", label: "业务过程" },
+	{ view: "domains", architectureView: "business-domains", label: "数据域" },
+	{ view: "processes", architectureView: "processes", label: "业务过程" },
 ] as const;
 
 const APPLICATION_GROUP = [
-	{ view: "marts", label: "数据集市" },
-	{ view: "subjects", label: "主题域" },
+	{ view: "marts", architectureView: "marts", label: "数据集市" },
+	{ view: "subjects", architectureView: "subjects", label: "主题域" },
 ] as const;
 
 /**
@@ -59,7 +59,7 @@ export function PlanningSidebar({
 				<NavLink
 					className={({ isActive }) => (isActive || activeView === item.view ? "active" : "")}
 					key={item.view}
-					to={dataModelingPath("planning", item.view)}
+					to={dataArchitecturePath(item.architectureView)}
 				>
 					{item.label}
 				</NavLink>
@@ -69,7 +69,7 @@ export function PlanningSidebar({
 				<NavLink
 					className={({ isActive }) => (isActive || activeView === item.view ? "active" : "")}
 					key={item.view}
-					to={dataModelingPath("planning", item.view)}
+					to={dataArchitecturePath(item.architectureView)}
 				>
 					{item.label}
 				</NavLink>
@@ -79,7 +79,7 @@ export function PlanningSidebar({
 				<NavLink
 					className={({ isActive }) => (isActive || activeView === item.view ? "active" : "")}
 					key={item.view}
-					to={dataModelingPath("planning", item.view)}
+					to={dataArchitecturePath(item.architectureView)}
 				>
 					{item.label}
 				</NavLink>
