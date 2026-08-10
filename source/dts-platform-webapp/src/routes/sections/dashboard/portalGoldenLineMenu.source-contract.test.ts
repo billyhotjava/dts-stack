@@ -71,10 +71,10 @@ const leaves = (node: MenuNode): MenuNode[] =>
 	node.children?.length ? node.children.flatMap(leaves) : node.externalLink ? [node] : [];
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-test("data modeling is a top-level section and studio no longer owns modeling menus", () => {
+test("primary modules follow the warehouse lifecycle order and modeling stays outside studio", () => {
 	assert.deepEqual(
 		MENU_SEED.portalNavSections.map((item) => item.key),
-		["workbench", "resource", "studio", "data-architecture", "modeling", "governance", "consumption"],
+		["workbench", "resource", "data-architecture", "modeling", "studio", "governance", "consumption"],
 	);
 	assert.deepEqual(
 		section("studio").children?.map((item) => item.key),

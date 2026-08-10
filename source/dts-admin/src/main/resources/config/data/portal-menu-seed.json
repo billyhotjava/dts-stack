@@ -108,89 +108,6 @@
       ]
     },
     {
-      "key": "studio",
-      "path": "studio",
-      "icon": "solar:code-bold-duotone",
-      "titleKey": "sys.nav.portal.studioCenter",
-      "title": "数据开发与运维",
-      "children": [
-        {
-          "key": "data-studio",
-          "path": "data-studio",
-          "icon": "solar:code-bold-duotone",
-          "titleKey": "sys.nav.portal.studioDataStudio",
-          "title": "Data Studio",
-          "children": [
-            {
-              "key": "scripts",
-              "path": "scripts",
-              "icon": "local:ic-scripts",
-              "titleKey": "sys.nav.portal.studioScripts",
-              "title": "脚本开发（Python/Spark）",
-              "externalLink": "/explore/etl/scripts"
-            },
-            {
-              "key": "orchestration",
-              "path": "orchestration",
-              "icon": "solar:diagram-up-bold-duotone",
-              "titleKey": "sys.nav.portal.studioOrchestration",
-              "title": "任务编排",
-              "externalLink": "/explore/etl/orchestration"
-            },
-            {
-              "key": "adhoc",
-              "path": "adhoc",
-              "icon": "solar:magic-stick-3-bold-duotone",
-              "titleKey": "sys.nav.portal.studioAdhoc",
-              "title": "即席查询",
-              "externalLink": "/explore/workbench"
-            }
-          ]
-        },
-        {
-          "key": "ops-center",
-          "path": "ops-center",
-          "icon": "solar:settings-bold-duotone",
-          "titleKey": "sys.nav.portal.studioOpsCenter",
-          "title": "运维中心",
-          "children": [
-            {
-              "key": "overview",
-              "path": "overview",
-              "icon": "solar:chart-square-bold-duotone",
-              "titleKey": "sys.nav.portal.opsOverview",
-              "title": "运行概览",
-              "externalLink": "/ops/overview"
-            },
-            {
-              "key": "instances",
-              "path": "instances",
-              "icon": "solar:history-bold-duotone",
-              "titleKey": "sys.nav.portal.opsInstances",
-              "title": "任务实例监控",
-              "externalLink": "/ops/instances"
-            },
-            {
-              "key": "alerts",
-              "path": "alerts",
-              "icon": "solar:bell-bing-bold-duotone",
-              "titleKey": "sys.nav.portal.opsAlerts",
-              "title": "告警记录",
-              "externalLink": "/ops/alerts"
-            },
-            {
-              "key": "backfill",
-              "path": "backfill",
-              "icon": "solar:refresh-bold-duotone",
-              "titleKey": "sys.nav.portal.opsBackfill",
-              "title": "补数管理",
-              "externalLink": "/ops/backfill"
-            }
-          ]
-        }
-      ]
-    },
-    {
       "key": "data-architecture",
       "path": "data-architecture",
       "icon": "solar:structure-bold-duotone",
@@ -448,6 +365,89 @@
               "titleKey": "sys.nav.portal.metricLineage",
               "title": "指标血缘",
               "externalLink": "/data-modeling/graphs/metrics"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "studio",
+      "path": "studio",
+      "icon": "solar:code-bold-duotone",
+      "titleKey": "sys.nav.portal.studioCenter",
+      "title": "数据开发与运维",
+      "children": [
+        {
+          "key": "data-studio",
+          "path": "data-studio",
+          "icon": "solar:code-bold-duotone",
+          "titleKey": "sys.nav.portal.studioDataStudio",
+          "title": "Data Studio",
+          "children": [
+            {
+              "key": "scripts",
+              "path": "scripts",
+              "icon": "local:ic-scripts",
+              "titleKey": "sys.nav.portal.studioScripts",
+              "title": "脚本开发（Python/Spark）",
+              "externalLink": "/explore/etl/scripts"
+            },
+            {
+              "key": "orchestration",
+              "path": "orchestration",
+              "icon": "solar:diagram-up-bold-duotone",
+              "titleKey": "sys.nav.portal.studioOrchestration",
+              "title": "任务编排",
+              "externalLink": "/explore/etl/orchestration"
+            },
+            {
+              "key": "adhoc",
+              "path": "adhoc",
+              "icon": "solar:magic-stick-3-bold-duotone",
+              "titleKey": "sys.nav.portal.studioAdhoc",
+              "title": "即席查询",
+              "externalLink": "/explore/workbench"
+            }
+          ]
+        },
+        {
+          "key": "ops-center",
+          "path": "ops-center",
+          "icon": "solar:settings-bold-duotone",
+          "titleKey": "sys.nav.portal.studioOpsCenter",
+          "title": "运维中心",
+          "children": [
+            {
+              "key": "overview",
+              "path": "overview",
+              "icon": "solar:chart-square-bold-duotone",
+              "titleKey": "sys.nav.portal.opsOverview",
+              "title": "运行概览",
+              "externalLink": "/ops/overview"
+            },
+            {
+              "key": "instances",
+              "path": "instances",
+              "icon": "solar:history-bold-duotone",
+              "titleKey": "sys.nav.portal.opsInstances",
+              "title": "任务实例监控",
+              "externalLink": "/ops/instances"
+            },
+            {
+              "key": "alerts",
+              "path": "alerts",
+              "icon": "solar:bell-bing-bold-duotone",
+              "titleKey": "sys.nav.portal.opsAlerts",
+              "title": "告警记录",
+              "externalLink": "/ops/alerts"
+            },
+            {
+              "key": "backfill",
+              "path": "backfill",
+              "icon": "solar:refresh-bold-duotone",
+              "titleKey": "sys.nav.portal.opsBackfill",
+              "title": "补数管理",
+              "externalLink": "/ops/backfill"
             }
           ]
         }
