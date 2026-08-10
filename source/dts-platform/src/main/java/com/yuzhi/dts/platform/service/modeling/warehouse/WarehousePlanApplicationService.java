@@ -711,7 +711,16 @@ public class WarehousePlanApplicationService {
             );
         }
         return Objects.requireNonNull(
-            transactions.execute(status -> persistSourceInventory(serverTenantId, planId, expectedVersion, snapshot.plan(), prepared)),
+            transactions.execute(status ->
+                persistSourceInventory(
+                    serverTenantId,
+                    planId,
+                    expectedVersion,
+                    snapshot.plan(),
+                    prepared,
+                    serverAccessContext(serverTenantId, accessContext)
+                )
+            ),
             "Saved source inventory is required"
         );
     }
@@ -775,6 +784,7 @@ public class WarehousePlanApplicationService {
                     "Source cannot be registered until it is available"
                 );
             }
+            validateExplicitSourceAction(binding.action(), existing, resolution);
             boolean reconfirmation = binding.action() == SourceAction.RECONFIRM;
             boolean replayed = false;
             String confirmedVersion;
@@ -793,21 +803,20 @@ public class WarehousePlanApplicationService {
                 } else if (!Objects.equals(existing.sourceVersion(), binding.expectedConfirmedVersion())) {
                     throw sourceVersionChanged();
                 }
-                SourceDriftEvidence evidence = sourceDriftEvidence(
-                    sourceType,
-                    locator,
-                    freshness(existing.sourceVersion(), resolution)
-                );
-                if (evidence.impact() == SourceChangeImpact.BREAKING) {
-                    throw invalidSourceInventory(
-                        "SOURCE_RECONFIRM_BREAKING_CHANGE",
-                        "Repair the affected field mappings before reconfirming this source"
+                if (!replayed) {
+                    requireCompatibleReconfirmation(
+                        sourceDriftEvidence(sourceType, locator, freshness(existing.sourceVersion(), resolution))
                     );
                 }
                 confirmedVersion = binding.expectedCurrentVersion();
             } else {
                 confirmedVersion = existing == null ? resolution.resolvedVersion() : existing.sourceVersion();
             }
+            boolean stateAlreadyApplied =
+                existing != null &&
+                existing.confirmationStatus() == binding.confirmationStatus() &&
+                Objects.equals(existing.exclusionReason(), binding.exclusionReason()) &&
+                Objects.equals(existing.sourceVersion(), confirmedVersion);
             writes.add(
                 new ResolvedSourceWrite(
                     bindingId,
@@ -821,7 +830,8 @@ public class WarehousePlanApplicationService {
                     checkedAt,
                     binding.action(),
                     existing == null ? null : existing.sourceVersion(),
-                    replayed
+                    replayed,
+                    stateAlreadyApplied
                 )
             );
         }
@@ -839,18 +849,119 @@ public class WarehousePlanApplicationService {
         );
     }
 
+    private static void validateExplicitSourceAction(
+        SourceAction action,
+        SourceRow existing,
+        SourceReferenceResolver.ResolvedSource resolution
+    ) {
+        if (action == null) {
+            return;
+        }
+        switch (action) {
+            case CONFIRM -> {
+                if (
+                    existing == null ||
+                    existing.confirmationStatus() != ConfirmationStatus.CANDIDATE ||
+                    resolution.status() != SourceReferenceResolver.ResolutionStatus.AVAILABLE
+                ) {
+                    throw invalidSourceInventory(
+                        "SOURCE_CONFIRM_NOT_ALLOWED",
+                        "Only an available candidate source can be confirmed"
+                    );
+                }
+            }
+            case EXCLUDE -> {
+                if (existing == null || existing.confirmationStatus() == ConfirmationStatus.EXCLUDED) {
+                    throw invalidSourceInventory(
+                        "SOURCE_EXCLUDE_NOT_ALLOWED",
+                        "Only an active source binding can be excluded"
+                    );
+                }
+            }
+            case RECONFIRM -> {
+                if (
+                    existing == null ||
+                    existing.confirmationStatus() != ConfirmationStatus.CONFIRMED ||
+                    resolution.status() != SourceReferenceResolver.ResolutionStatus.AVAILABLE
+                ) {
+                    throw invalidSourceInventory(
+                        "SOURCE_RECONFIRM_NOT_ALLOWED",
+                        "The source must be confirmed and available before it can be reconfirmed"
+                    );
+                }
+            }
+        }
+    }
+
+    private static void requireCompatibleReconfirmation(SourceDriftEvidence evidence) {
+        if (evidence.impact() == SourceChangeImpact.COMPATIBLE) {
+            return;
+        }
+        if (evidence.impact() == SourceChangeImpact.BREAKING) {
+            throw invalidSourceInventory(
+                "SOURCE_RECONFIRM_BREAKING_CHANGE",
+                "Repair the affected field mappings before reconfirming this source"
+            );
+        }
+        throw invalidSourceInventory(
+            "SOURCE_RECONFIRM_REVIEW_REQUIRED",
+            "Review the source changes before reconfirming this source"
+        );
+    }
+
+    private SourceDriftEvidence revalidateReconfirmation(
+        String serverTenantId,
+        UUID planId,
+        ResolvedSourceWrite write,
+        SourceReferenceResolver.AccessContext serverContext
+    ) {
+        List<String> storedVersions = jdbcTemplate.query(
+            "select source_version from modeling_warehouse_plan_source where tenant_id = ? and plan_id = ? and id = ?",
+            (row, rowNumber) -> row.getString("source_version"),
+            serverTenantId,
+            planId,
+            write.bindingId()
+        );
+        if (
+            storedVersions.size() != 1 ||
+            !Objects.equals(storedVersions.getFirst(), write.previousConfirmedVersion())
+        ) {
+            throw sourceVersionChanged();
+        }
+        SourceReferenceResolver.ResolvedSource resolution = write.locator() == null
+            ? SourceReferenceResolver.ResolvedSource.providerError()
+            : resolveSource(write.sourceType(), write.locator(), serverContext);
+        if (
+            resolution.status() != SourceReferenceResolver.ResolutionStatus.AVAILABLE ||
+            !Objects.equals(write.confirmedVersion(), resolution.resolvedVersion())
+        ) {
+            throw sourceVersionChanged();
+        }
+        SourceDriftEvidence evidence = sourceDriftEvidence(
+            write.sourceType(),
+            write.locator(),
+            freshness(write.previousConfirmedVersion(), resolution)
+        );
+        requireCompatibleReconfirmation(evidence);
+        return evidence;
+    }
+
     private SourceInventoryView persistSourceInventory(
         String serverTenantId,
         UUID planId,
         int expectedVersion,
         WarehousePlanHeader plan,
-        PreparedSourceInventory prepared
+        PreparedSourceInventory prepared,
+        SourceReferenceResolver.AccessContext serverContext
     ) {
         casEditUnit(serverTenantId, planId, expectedVersion, EditUnit.SOURCES);
         for (ResolvedSourceWrite write : prepared.writes()) {
             if (write.reconfirmationReplayed()) {
                 continue;
             }
+            SourceDriftEvidence reconfirmedEvidence = write.action() == SourceAction.RECONFIRM
+                ? revalidateReconfirmation(serverTenantId, planId, write, serverContext)
+                : SourceDriftEvidence.none();
             String locatorJson = write.locator() == null ? null : writeLocator(write.locator());
             int updated = jdbcTemplate.update(
                 """
@@ -896,7 +1007,7 @@ public class WarehousePlanApplicationService {
                 );
             }
             if (write.action() == SourceAction.RECONFIRM) {
-                closeSourceDriftTickets(write, prepared.actorId());
+                closeSourceDriftTickets(reconfirmedEvidence.eventIds(), prepared.actorId());
             }
         }
 
@@ -1708,52 +1819,68 @@ public class WarehousePlanApplicationService {
         if (datasetId.isEmpty()) {
             return SourceDriftEvidence.reviewRequired();
         }
-        Optional<SourceDriftRow> driftRow = jdbcTemplate
-            .query(
-                """
-                select coalesce(added_count, 0) as added_count,
-                       coalesce(removed_count, 0) as removed_count,
-                       coalesce(changed_count, 0) as changed_count,
-                       details_json
-                  from catalog_schema_drift_event
-                 where dataset_id = ?
-                 order by created_date desc nulls last, id desc
-                 limit 1
-                """,
-                (row, rowNumber) ->
-                    new SourceDriftRow(
-                        row.getInt("added_count"),
-                        row.getInt("removed_count"),
-                        row.getInt("changed_count"),
-                        row.getString("details_json")
-                    ),
-                datasetId.get()
-            )
-            .stream()
-            .findFirst();
-        if (driftRow.isEmpty()) {
+        List<SourceDriftRow> driftRows = jdbcTemplate.query(
+            """
+            select id,
+                   coalesce(added_count, 0) as added_count,
+                   coalesce(removed_count, 0) as removed_count,
+                   coalesce(changed_count, 0) as changed_count,
+                   details_json
+              from catalog_schema_drift_event
+             where dataset_id = ?
+               and coalesce(ticket_status, 'OPEN') in ('OPEN', 'IN_REVIEW')
+             order by created_date asc nulls first, id
+            """,
+            (row, rowNumber) ->
+                new SourceDriftRow(
+                    row.getObject("id", UUID.class),
+                    row.getInt("added_count"),
+                    row.getInt("removed_count"),
+                    row.getInt("changed_count"),
+                    row.getString("details_json")
+                ),
+            datasetId.get()
+        );
+        if (driftRows.isEmpty()) {
             return SourceDriftEvidence.reviewRequired();
         }
-        SourceDriftRow row = driftRow.get();
-        SchemaDriftDetailsReader.SchemaDriftDetails details = schemaDriftDetailsReader.read(row.detailsJson());
-        SourceChangeImpact impact = parseSourceChangeImpact(details.impactLevel());
-        List<SourceSchemaChange> changes = details
-            .changes()
-            .stream()
-            .map(change ->
-                new SourceSchemaChange(
-                    stringValue(change.get("field")),
-                    stringValue(change.get("kind")),
-                    change.get("before"),
-                    change.get("after"),
-                    stringValue(change.get("impact"))
-                )
-            )
-            .toList();
+        int added = 0;
+        int removed = 0;
+        int changed = 0;
+        SourceChangeImpact impact = SourceChangeImpact.NONE;
+        List<SourceSchemaChange> changes = new ArrayList<>();
+        List<UUID> eventIds = new ArrayList<>();
+        for (SourceDriftRow row : driftRows) {
+            added += row.added();
+            removed += row.removed();
+            changed += row.changed();
+            eventIds.add(row.eventId());
+            SchemaDriftDetailsReader.SchemaDriftDetails details = schemaDriftDetailsReader.read(row.detailsJson());
+            impact = higherSourceChangeImpact(impact, parseSourceChangeImpact(details.impactLevel()));
+            changes.addAll(
+                details
+                    .changes()
+                    .stream()
+                    .map(change ->
+                        new SourceSchemaChange(
+                            stringValue(change.get("field")),
+                            stringValue(change.get("kind")),
+                            change.get("before"),
+                            change.get("after"),
+                            stringValue(change.get("impact"))
+                        )
+                    )
+                    .toList()
+            );
+        }
+        if (impact == SourceChangeImpact.NONE) {
+            impact = SourceChangeImpact.REVIEW_REQUIRED;
+        }
         return new SourceDriftEvidence(
             impact,
-            new SourceDiffSummary(row.added(), row.removed(), row.changed()),
-            changes
+            new SourceDiffSummary(added, removed, changed),
+            changes,
+            eventIds
         );
     }
 
@@ -1804,6 +1931,22 @@ public class WarehousePlanApplicationService {
         }
     }
 
+    private static SourceChangeImpact higherSourceChangeImpact(
+        SourceChangeImpact left,
+        SourceChangeImpact right
+    ) {
+        return sourceChangeImpactRank(left) >= sourceChangeImpactRank(right) ? left : right;
+    }
+
+    private static int sourceChangeImpactRank(SourceChangeImpact impact) {
+        return switch (impact) {
+            case NONE -> 0;
+            case COMPATIBLE -> 1;
+            case REVIEW_REQUIRED -> 2;
+            case BREAKING -> 3;
+        };
+    }
+
     private static String stringValue(Object value) {
         return value == null ? null : String.valueOf(value);
     }
@@ -1824,7 +1967,7 @@ public class WarehousePlanApplicationService {
         if (confirmationStatus == ConfirmationStatus.CANDIDATE) {
             return List.of(SourceAction.CONFIRM, SourceAction.EXCLUDE);
         }
-        if (sourceFreshness == SourceFreshness.STALE && changeImpact != SourceChangeImpact.BREAKING) {
+        if (sourceFreshness == SourceFreshness.STALE && changeImpact == SourceChangeImpact.COMPATIBLE) {
             return List.of(SourceAction.RECONFIRM, SourceAction.EXCLUDE);
         }
         return List.of(SourceAction.EXCLUDE);
@@ -1870,27 +2013,28 @@ public class WarehousePlanApplicationService {
         };
     }
 
-    private void closeSourceDriftTickets(ResolvedSourceWrite write, String actorId) {
-        Optional<UUID> datasetId = catalogDatasetId(write.sourceType(), write.locator());
-        if (datasetId.isEmpty()) {
+    private void closeSourceDriftTickets(List<UUID> eventIds, String actorId) {
+        if (eventIds.isEmpty()) {
             return;
         }
         String handledBy = isBlank(actorId) ? "_system" : actorId.trim();
         if (handledBy.length() > 50) {
             handledBy = handledBy.substring(0, 50);
         }
-        jdbcTemplate.update(
-            """
-            update catalog_schema_drift_event
-               set ticket_status = 'RESOLVED', handled_at = current_timestamp, handled_by = ?,
-                   last_modified_by = ?, last_modified_date = current_timestamp
-             where dataset_id = ?
-               and coalesce(ticket_status, 'OPEN') in ('OPEN', 'IN_REVIEW')
-            """,
-            handledBy,
-            handledBy,
-            datasetId.get()
-        );
+        for (UUID eventId : eventIds) {
+            jdbcTemplate.update(
+                """
+                update catalog_schema_drift_event
+                   set ticket_status = 'RESOLVED', handled_at = current_timestamp, handled_by = ?,
+                       last_modified_by = ?, last_modified_date = current_timestamp
+                 where id = ?
+                   and coalesce(ticket_status, 'OPEN') in ('OPEN', 'IN_REVIEW')
+                """,
+                handledBy,
+                handledBy,
+                eventId
+            );
+        }
     }
 
     private String sourceAssetKey(ResolvedSourceWrite write) {
@@ -2295,10 +2439,10 @@ public class WarehousePlanApplicationService {
         }
 
         private boolean allReconfirmationsReplayed() {
-            return !writes.isEmpty() &&
-            writes
+            boolean hasReplayedReconfirmation = writes
                 .stream()
-                .allMatch(write -> write.action() == SourceAction.RECONFIRM && write.reconfirmationReplayed());
+                .anyMatch(write -> write.action() == SourceAction.RECONFIRM && write.reconfirmationReplayed());
+            return hasReplayedReconfirmation && writes.stream().allMatch(ResolvedSourceWrite::stateAlreadyApplied);
         }
     }
 
@@ -2339,28 +2483,32 @@ public class WarehousePlanApplicationService {
         Instant checkedAt,
         SourceAction action,
         String previousConfirmedVersion,
-        boolean reconfirmationReplayed
+        boolean reconfirmationReplayed,
+        boolean stateAlreadyApplied
     ) {}
 
-    private record SourceDriftRow(int added, int removed, int changed, String detailsJson) {}
+    private record SourceDriftRow(UUID eventId, int added, int removed, int changed, String detailsJson) {}
 
     private record SourceDriftEvidence(
         SourceChangeImpact impact,
         SourceDiffSummary summary,
-        List<SourceSchemaChange> changes
+        List<SourceSchemaChange> changes,
+        List<UUID> eventIds
     ) {
         private SourceDriftEvidence {
             changes = List.copyOf(changes);
+            eventIds = List.copyOf(eventIds);
         }
 
         private static SourceDriftEvidence none() {
-            return new SourceDriftEvidence(SourceChangeImpact.NONE, SourceDiffSummary.empty(), List.of());
+            return new SourceDriftEvidence(SourceChangeImpact.NONE, SourceDiffSummary.empty(), List.of(), List.of());
         }
 
         private static SourceDriftEvidence reviewRequired() {
             return new SourceDriftEvidence(
                 SourceChangeImpact.REVIEW_REQUIRED,
                 SourceDiffSummary.empty(),
+                List.of(),
                 List.of()
             );
         }

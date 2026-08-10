@@ -57,6 +57,10 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 @Component
@@ -88,6 +92,7 @@ public class JdbcCatalogSyncService {
     private final CatalogClassificationService classificationService;
     private final CatalogColumnSyncService columnSyncService;
     private final SchemaDriftConsumerReferenceReadPort driftConsumerReferences;
+    private final TransactionTemplate sourceTransactions;
 
     public JdbcCatalogSyncService(
         InfraDataSourceRepository infraDataSourceRepository,
@@ -103,7 +108,8 @@ public class JdbcCatalogSyncService {
         InfraSchemaDiscoverCacheRepository schemaDiscoverCacheRepository,
         CatalogClassificationService classificationService,
         CatalogColumnSyncService columnSyncService,
-        SchemaDriftConsumerReferenceReadPort driftConsumerReferences
+        SchemaDriftConsumerReferenceReadPort driftConsumerReferences,
+        PlatformTransactionManager transactionManager
     ) {
         this.infraDataSourceRepository = infraDataSourceRepository;
         this.secretService = secretService;
@@ -119,6 +125,8 @@ public class JdbcCatalogSyncService {
         this.classificationService = classificationService;
         this.columnSyncService = columnSyncService;
         this.driftConsumerReferences = driftConsumerReferences;
+        this.sourceTransactions = new TransactionTemplate(transactionManager);
+        this.sourceTransactions.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     public List<JdbcSyncResult> synchronizeAllActive() {
@@ -149,6 +157,18 @@ public class JdbcCatalogSyncService {
     }
 
     public JdbcSyncResult synchronize(InfraDataSource source, UUID runId, Boolean cleanupStaleOverride) {
+        return Objects.requireNonNull(
+            sourceTransactions.execute(status -> synchronizeInTransaction(source, runId, cleanupStaleOverride, status)),
+            "JDBC catalog source transaction must return a result"
+        );
+    }
+
+    private JdbcSyncResult synchronizeInTransaction(
+        InfraDataSource source,
+        UUID runId,
+        Boolean cleanupStaleOverride,
+        TransactionStatus transactionStatus
+    ) {
         if (source == null || source.getId() == null) {
             return JdbcSyncResult.failed(null, "invalid-source");
         }
@@ -401,6 +421,7 @@ public class JdbcCatalogSyncService {
             );
             return result;
         } catch (Exception ex) {
+            transactionStatus.setRollbackOnly();
             long elapsedMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
             LOG.warn("JDBC catalog sync failed: source={} cause={}", source.getName(), ex.getMessage());
             return new JdbcSyncResult(

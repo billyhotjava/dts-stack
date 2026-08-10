@@ -705,17 +705,48 @@ public final class WarehousePlanContract {
                         )
                     );
                 }
-            } else if (binding.action() != null) {
-                issues.add(
-                    new DomainIssue(
-                        "SOURCE_ACTION_INVALID",
-                        "Only RECONFIRM is accepted as an explicit source action",
-                        field + ".action"
-                    )
-                );
+            } else if (binding.action() == SourceAction.CONFIRM) {
+                validateSourceActionState(binding, ConfirmationStatus.CONFIRMED, field, issues);
+            } else if (binding.action() == SourceAction.EXCLUDE) {
+                validateSourceActionState(binding, ConfirmationStatus.EXCLUDED, field, issues);
             }
         }
         return List.copyOf(issues);
+    }
+
+    private static void validateSourceActionState(
+        SourceBindingCommand binding,
+        ConfirmationStatus expectedStatus,
+        String field,
+        List<DomainIssue> issues
+    ) {
+        if (binding.bindingId() == null) {
+            issues.add(
+                new DomainIssue(
+                    "SOURCE_ACTION_BINDING_REQUIRED",
+                    "Explicit source actions require an existing binding",
+                    field + ".bindingId"
+                )
+            );
+        }
+        if (binding.confirmationStatus() != expectedStatus) {
+            issues.add(
+                new DomainIssue(
+                    "SOURCE_ACTION_STATUS_INVALID",
+                    "Source action does not match confirmationStatus",
+                    field + ".confirmationStatus"
+                )
+            );
+        }
+        if (!isBlank(binding.expectedConfirmedVersion()) || !isBlank(binding.expectedCurrentVersion())) {
+            issues.add(
+                new DomainIssue(
+                    "SOURCE_ACTION_VERSION_NOT_ALLOWED",
+                    "Only reconfirmation accepts observed source versions",
+                    field + ".action"
+                )
+            );
+        }
     }
 
     public static String canonicalSourceId(SourceType sourceType, SourceLocator locator) {

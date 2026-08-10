@@ -38,6 +38,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -210,6 +213,8 @@ class JdbcClassificationLifecycleIT {
     }
 
     private JdbcCatalogSyncService service() {
+        PlatformTransactionManager transactionManager = org.mockito.Mockito.mock(PlatformTransactionManager.class);
+        when(transactionManager.getTransaction(any(TransactionDefinition.class))).thenReturn(new SimpleTransactionStatus());
         return new JdbcCatalogSyncService(
             sourceRepository,
             secretService,
@@ -224,7 +229,8 @@ class JdbcClassificationLifecycleIT {
             discoverCacheRepository,
             classificationService,
             new CatalogColumnSyncService(columnRepository, org.mockito.Mockito.mock(GovernedStandardReadPort.class)),
-            (catalogTableId, connectionId, namespace, objectName) -> Optional.of(java.util.Set.of())
+            (catalogTableId, connectionId, namespace, objectName) -> Optional.of(java.util.Set.of()),
+            transactionManager
         );
     }
 
