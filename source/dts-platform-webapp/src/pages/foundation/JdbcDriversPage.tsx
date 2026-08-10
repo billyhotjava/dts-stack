@@ -6,7 +6,10 @@ import { InboxOutlined } from "@ant-design/icons";
 import { Upload } from "@/components/upload";
 import { PageHeader } from "@/components/page-header";
 type UploadRequestOption = Parameters<NonNullable<import("antd").UploadProps["customRequest"]>>[0];
-import jdbcDriversService, { type InfraJdbcDriver, type JdbcDriverUpdatePayload } from "@/api/services/jdbcDriversService";
+import jdbcDriversService, {
+	type InfraJdbcDriver,
+	type JdbcDriverUpdatePayload,
+} from "@/api/services/jdbcDriversService";
 import { formatTime } from "@/utils/textUtils";
 
 const { Text } = Typography;
@@ -119,7 +122,13 @@ export default function JdbcDriversPage() {
 
 	const baseColumns = useMemo<ColumnsType<InfraJdbcDriver>>(
 		() => [
-			{ title: "JAR 文件", dataIndex: "fileName", key: "fileName", width: 220 , sorter: (a, b) => (a.fileName || "").localeCompare(b.fileName || "") },
+			{
+				title: "JAR 文件",
+				dataIndex: "fileName",
+				key: "fileName",
+				width: 220,
+				sorter: (a, b) => (a.fileName || "").localeCompare(b.fileName || ""),
+			},
 			{ title: "驱动主类", dataIndex: "driverClass", key: "driverClass", width: 260, ellipsis: true },
 			{ title: "版本号", dataIndex: "version", key: "version", width: 120 },
 			{
@@ -179,13 +188,10 @@ export default function JdbcDriversPage() {
 				),
 			},
 		],
-		[]
+		[],
 	);
 
-	const columns = useMemo(
-		() => appendDetailAction(baseColumns, (row) => setDetailRow(row)),
-		[baseColumns],
-	);
+	const columns = useMemo(() => appendDetailAction(baseColumns, (row) => setDetailRow(row)), [baseColumns]);
 
 	return (
 		<div className="space-y-4">
@@ -203,15 +209,11 @@ export default function JdbcDriversPage() {
 				}
 			/>
 			<Card title="驱动资产">
-			<div className="mb-3 text-xs text-slate-500">
-				默认驱动目录：<Text code>services/dts-platform/drivers</Text>（上传后自动同步到该目录）
-			</div>
-			<CompactTable<InfraJdbcDriver>
-				rowKey="id"
-				columns={columns}
-				dataSource={list}
-				loading={loading}
-			/>
+				<div className="mb-3 text-xs text-slate-500">
+					默认驱动目录：<Text code>services/dts-platform/drivers</Text>（上传后自动同步到该目录）
+				</div>
+				<CompactTable<InfraJdbcDriver> rowKey="id" columns={columns} dataSource={list} loading={loading} />
+			</Card>
 
 			<Modal
 				title="上传 JDBC 驱动"
@@ -221,11 +223,7 @@ export default function JdbcDriversPage() {
 				destroyOnClose
 			>
 				<Space direction="vertical" style={{ width: "100%" }}>
-					<Alert
-						type="warning"
-						showIcon
-						message="非密模块禁止上传涉密数据"
-					/>
+					<Alert type="warning" showIcon message="非密模块禁止上传涉密数据" />
 					<Upload
 						name="file"
 						multiple={false}
@@ -271,14 +269,13 @@ export default function JdbcDriversPage() {
 					</Form.Item>
 				</Form>
 			</Modal>
-				<RecordDetailDrawer<InfraJdbcDriver>
+			<RecordDetailDrawer<InfraJdbcDriver>
 				open={detailRow !== null}
 				onClose={() => setDetailRow(null)}
 				record={detailRow}
 				columns={baseColumns}
 				title="驱动详情"
-				/>
-			</Card>
+			/>
 		</div>
 	);
 }

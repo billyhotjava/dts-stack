@@ -371,7 +371,7 @@ export default function ConnectorRegistryPage() {
 								<Text type="secondary">连接器定义统一声明源类型、执行引擎、能力边界、配置要求和部署兼容性。</Text>
 							) : null}
 
-							<Descriptions bordered size="small" column={2}>
+							<Descriptions size="small" column={2}>
 								<Descriptions.Item label="连接器 Key">{selected.connectorKey}</Descriptions.Item>
 								<Descriptions.Item label="目录状态">
 									{selected.status ? CONNECTOR_STATUS_LABELS[selected.status] || selected.status : "-"}
@@ -410,7 +410,7 @@ export default function ConnectorRegistryPage() {
 							<div>
 								<Text strong>配置要求</Text>
 								<div className="mt-2">
-									<Descriptions bordered size="small" column={1}>
+									<Descriptions size="small" column={1}>
 										<Descriptions.Item label="必填字段">
 											{toArray(selected.configSchema?.required).join(", ") || "-"}
 										</Descriptions.Item>

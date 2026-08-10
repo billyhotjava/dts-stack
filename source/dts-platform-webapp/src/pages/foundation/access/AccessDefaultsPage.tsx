@@ -297,7 +297,7 @@ export default function AccessDefaultsPage() {
 							</div>
 							<Tag color={snapshot.policy.status === "ACTIVE" ? "success" : "warning"}>{snapshot.policy.status}</Tag>
 						</div>
-						<Descriptions bordered size="small" column={{ xs: 1, md: 2, xl: 4 }}>
+						<Descriptions size="small" column={{ xs: 1, md: 2, xl: 4 }}>
 							<Descriptions.Item label="策略标识">{snapshot.policy.policyKey}</Descriptions.Item>
 							<Descriptions.Item label="版本">v{snapshot.policy.version}</Descriptions.Item>
 							<Descriptions.Item label="激活时间">{snapshot.policy.activatedAt || "未记录"}</Descriptions.Item>
@@ -316,7 +316,7 @@ export default function AccessDefaultsPage() {
 							</div>
 							<ReadinessTag ready={destinationReady} readyText="可运行" blockedText="需配置" />
 						</div>
-						<Descriptions bordered size="small" column={{ xs: 1, md: 2, xl: 4 }}>
+						<Descriptions size="small" column={{ xs: 1, md: 2, xl: 4 }}>
 							<Descriptions.Item label="目标名称">{snapshot.destination.destinationName || "—"}</Descriptions.Item>
 							<Descriptions.Item label="Writer 类型">{snapshot.destination.writerType || "—"}</Descriptions.Item>
 							<Descriptions.Item label="Writer 可用">

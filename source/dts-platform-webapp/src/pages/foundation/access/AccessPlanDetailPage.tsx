@@ -370,7 +370,7 @@ export default function AccessPlanDetailPage() {
 								: "请核对任务、目标表和写入策略；提交后可在运行历史查看进度。"
 						}
 					/>
-					<Descriptions bordered size="small" column={1}>
+					<Descriptions size="small" column={1}>
 						<Descriptions.Item label="任务">{taskName}</Descriptions.Item>
 						<Descriptions.Item label="任务编号">#{operationTaskId}</Descriptions.Item>
 						<Descriptions.Item label="目标表">{targetTables}</Descriptions.Item>
@@ -423,7 +423,7 @@ export default function AccessPlanDetailPage() {
 						message={`将删除计划“${task.name || `任务 #${operationTaskId}`}”并停止后续调度`}
 						description="正在运行的计划不能删除；删除后不能再编辑或执行，已落地的 ODS 数据不会被清空，运行历史、变更记录和审计证据仍会保留。"
 					/>
-					<Descriptions bordered size="small" column={1}>
+					<Descriptions size="small" column={1}>
 						<Descriptions.Item label="任务编号">#{operationTaskId}</Descriptions.Item>
 						<Descriptions.Item label="当前状态">{statusTag(task.status)}</Descriptions.Item>
 					</Descriptions>
@@ -509,7 +509,7 @@ export default function AccessPlanDetailPage() {
 						<p>仅展示可审计的业务字段，不展示连接凭据和底层配置原文。</p>
 					</div>
 				</div>
-				<Descriptions bordered size="small" column={{ xs: 1, sm: 2, xl: 3 }}>
+				<Descriptions size="small" column={{ xs: 1, sm: 2, xl: 3 }}>
 					<Descriptions.Item label="任务编号">#{task.id || taskId}</Descriptions.Item>
 					<Descriptions.Item label="接入方式">{task.sourceType || "未记录"}</Descriptions.Item>
 					<Descriptions.Item label="同步模式">{syncModeLabel(task.syncMode)}</Descriptions.Item>

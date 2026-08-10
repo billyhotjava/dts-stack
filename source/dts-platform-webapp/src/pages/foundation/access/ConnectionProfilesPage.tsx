@@ -1,5 +1,5 @@
 import { CheckCircleOutlined, CloseCircleOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Alert, Button, Input, Modal, message, Select, Space, Tag, Typography } from "antd";
+import { Alert, Button, Card, Input, Modal, message, Select, Space, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
@@ -236,7 +236,7 @@ export default function ConnectionProfilesPage() {
 					</Space>
 				}
 			/>
-			<div className="rounded-lg bg-white p-4">
+			<Card>
 				<Space className="mb-4" wrap>
 					<Input.Search
 						allowClear
@@ -265,7 +265,7 @@ export default function ConnectionProfilesPage() {
 					columns={columns}
 					pagination={{ defaultPageSize: 10 }}
 				/>
-			</div>
+			</Card>
 			<ConnectionProfileFormModal
 				open={formOpen}
 				editing={editing}

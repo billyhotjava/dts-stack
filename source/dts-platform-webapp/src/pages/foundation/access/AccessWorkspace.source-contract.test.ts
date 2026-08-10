@@ -11,7 +11,7 @@ test("data access workspace separates database, API and offline-file entry point
 	for (const label of ["接入概览", "数据库接入", "API 接入", "离线文件接入"]) {
 		assert.match(WORKSPACE_SOURCE, new RegExp(label));
 	}
-	assert.match(WORKSPACE_SOURCE, /<Table<AccessWorkspaceRow>/);
+	assert.match(WORKSPACE_SOURCE, /CompactTable<AccessWorkspaceRow>/);
 	assert.match(WORKSPACE_SOURCE, /dataSourcesService\.selections\(\{ capability: "INGESTION_SOURCE" \}\)/);
 	assert.match(WORKSPACE_SOURCE, /ingestionTaskAPI\.getTasks\(/);
 	assert.match(WORKSPACE_SOURCE, /access\/new\?kind=\$\{sourceKind\}/);
