@@ -15,13 +15,8 @@ import { isBlankModelField } from "./ModelFieldEditorTable";
 import { ModelingWorkbenchEditor } from "./ModelingWorkbenchEditor";
 import { ModelPublishDialog } from "./ModelPublishDialog";
 import { ModelWorkbenchCatalogList } from "./ModelWorkbenchCatalogList";
-import { ModelWorkbenchCatalogPanel } from "./ModelWorkbenchCatalogPanel";
 import { ModelWorkbenchDialog, type WorkbenchDialog } from "./ModelWorkbenchDialog";
-import {
-	buildWorkbenchCatalogGroups,
-	modelDraftFingerprint,
-	workbenchCatalogEmptyMessage,
-} from "./modelWorkbenchPresentation";
+import { modelDraftFingerprint } from "./modelWorkbenchPresentation";
 import { PageHeader, RequestState, Status, Toast, useTransientMessage } from "./PrototypePrimitives";
 import {
 	conceptDimensionDraftFromView,
@@ -49,12 +44,6 @@ import { useConceptDimensionWorkflow } from "./useConceptDimensionWorkflow";
 import { useDataModelingMenuGrant } from "./useDataModelingMenuGrant";
 import { resolveWorkbenchEditorAccess } from "./workbenchEditorAccess";
 
-const layerTabs = [
-	{ label: "贴源层", layers: ["ODS", "STG"] },
-	{ label: "公共层", layers: ["DWD", "DWS"] },
-	{ label: "应用层", layers: ["ADS"] },
-];
-
 const DISCARD_PROMPT = "当前模型有未保存修改，确认放弃吗？";
 
 const ownerIdOf = (userInfo: unknown) => {
@@ -68,19 +57,14 @@ export function resolveRequestedModelSelection<T extends { id: string }>(
 	requestedModelId: string,
 ) {
 	const requestedModel = requestedModelId ? models.find((model) => model.id === requestedModelId) : undefined;
-	const selectedModel = requestedModel || models[0] || null;
 	return {
-		selectedModel,
-		normalizedModelId: requestedModelId && !requestedModel ? selectedModel?.id || "" : requestedModelId,
+		selectedModel: requestedModel || null,
+		normalizedModelId: requestedModel?.id || "",
 	};
 }
 
 export function shouldBlockWorkbenchNavigation(dirty: boolean, currentPathname: string, nextPathname: string): boolean {
 	return dirty && currentPathname !== nextPathname;
-}
-
-export function resolveWorkbenchCreateAction(hasDraft: boolean, createMenuOpen: boolean) {
-	return !hasDraft && !createMenuOpen ? "CREATE_DIMENSION_TABLE" : "TOGGLE_CREATE_MENU";
 }
 
 export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
@@ -116,20 +100,11 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const [fieldRowIds, setFieldRowIds] = useState<string[]>([]);
 	const [dimensionDefinitions, setDimensionDefinitions] = useState<DimensionDefinitionView[]>([]);
 	const [dimensionDefinitionFailure, setDimensionDefinitionFailure] = useState("");
-	const [layer, setLayer] = useState("公共层");
-	const [domain, setDomain] = useState("");
-	const [query, setQuery] = useState("");
-	const [createOpen, setCreateOpen] = useState(false);
-	const [createCategory, setCreateCategory] = useState("");
-	const [createQuery, setCreateQuery] = useState("");
-	const [viewMode, setViewMode] = useState<"domain" | "category">("domain");
-	const [catalogMode, setCatalogMode] = useState<"tree" | "list">("list");
 	const [selectedModelId, setSelectedModelId] = useState("");
 	const [selectedDimensionId, setSelectedDimensionId] = useState("");
 	const [dialog, setDialog] = useState<WorkbenchDialog>(null);
 	const [batchMaterializationModels, setBatchMaterializationModels] = useState<ModelSpecView[]>([]);
 	const [materializationRefreshKey, setMaterializationRefreshKey] = useState(0);
-	const [domainOpen, setDomainOpen] = useState<Record<string, boolean>>({});
 	const [loading, setLoading] = useState(true);
 	const [editorLoading, setEditorLoading] = useState(false);
 	const [saving, setSaving] = useState(false);
@@ -203,6 +178,12 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 					syncWorkbenchUrl((params) => params.delete("dimensionDefinitionId"));
 				}
 				const targetId = preferredModelId ?? requestedModelIdRef.current;
+				if (!targetId) {
+					setSelectedModelId("");
+					setSelectedDimensionId("");
+					replaceDraft(null);
+					return;
+				}
 				const { selectedModel, normalizedModelId } = resolveRequestedModelSelection(next.models, targetId);
 				setSelectedModelId(selectedModel?.id || "");
 				setSelectedDimensionId("");
@@ -232,7 +213,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 				setSelectedModelId("");
 				setSelectedDimensionId("");
 				replaceDraft(null);
-				setFailure(normalizeModelingRequestFailure(error, "模型目录读取失败。"));
+				setFailure(normalizeModelingRequestFailure(error, "模型列表读取失败。"));
 			} finally {
 				if (requestEpoch.current === epoch) setLoading(false);
 			}
@@ -276,70 +257,9 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		void load(requestedModelId);
 	}, [confirmDiscard, context, load, requestedModelId, searchParams, selectedModelId, setSearchParams]);
 
-	// DataWorks 工作台左侧在分层下展示完整数据域树：数据域节点来自数仓规划台账，
-	// 而不是从“有模型的域”反推，保证空域也可见。
-	const dataDomains = useMemo(() => {
-		const all = context?.domains || [];
-		const children = all.filter((item) => Boolean(item.parentCode));
-		return children.length ? children : all;
-	}, [context?.domains]);
-	const categoryRoots = useMemo(() => (context?.domains || []).filter((item) => !item.parentCode), [context?.domains]);
-	const domainByCode = useMemo(
-		() => new Map((context?.domains || []).map((item) => [item.code, item])),
-		[context?.domains],
-	);
-	// DataWorks 建模视角：公共层支持 数据域/业务分类 两种视角；贴源层、应用层仅业务分类视角。
-	const effectiveView: "domain" | "category" = layer === "公共层" ? viewMode : "category";
-	const modelDomainOptions = useMemo(
-		() =>
-			(effectiveView === "domain" ? dataDomains : categoryRoots).map((item) => ({
-				id: item.id,
-				name: item.name,
-			})),
-		[categoryRoots, dataDomains, effectiveView],
-	);
-	const filteredModels = useMemo(() => {
-		const activeLayers = layerTabs.find((item) => item.label === layer)?.layers || [];
-		return (context?.models || []).filter(
-			(model) => activeLayers.includes(model.layer) && (!domain || model.domainId === domain),
-		);
-	}, [context, domain, layer]);
-	const visibleModels = useMemo(() => {
-		const normalized = query.trim().toLowerCase();
-		return normalized
-			? filteredModels.filter((model) =>
-					`${model.name}${model.implementationPolicy?.physicalName || ""}`.toLowerCase().includes(normalized),
-				)
-			: filteredModels;
-	}, [filteredModels, query]);
-	// 概念维度属于公共层（维度层），只在公共层目录展示；贴源层/应用层不出现维度。
-	const visibleDimensions = useMemo(
-		() => (layer === "公共层" ? context?.dimensions || [] : []),
-		[context?.dimensions, layer],
-	);
-	const groups = useMemo(() => {
-		return buildWorkbenchCatalogGroups({
-			dataDomains,
-			categoryRoots,
-			domainByCode,
-			effectiveView,
-			visibleModels,
-			visibleDimensions,
-		});
-	}, [categoryRoots, dataDomains, domainByCode, effectiveView, visibleDimensions, visibleModels]);
-	const catalogEmptyMessage = workbenchCatalogEmptyMessage({
-		effectiveView,
-		dataDomains,
-		categoryRoots,
-		hasAnyModels: Boolean(context?.models.length || context?.dimensions.length),
-		hasLayerModels: filteredModels.length > 0 || visibleDimensions.length > 0,
-		layer,
-	});
-
 	const chooseModel = async (model: ModelSpecView) => {
 		if (savingRef.current || !confirmDiscard()) return;
 		const epoch = ++requestEpoch.current;
-		setCreateOpen(false);
 		setSelectedModelId(model.id);
 		setSelectedDimensionId("");
 		setEditorLoading(true);
@@ -369,7 +289,6 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		setEditorLoading(false);
 		setSelectedModelId("");
 		setSelectedDimensionId(definition.id);
-		setCreateOpen(false);
 		setDialog(null);
 		requestedModelIdRef.current = "";
 		requestedDimensionIdRef.current = definition.id;
@@ -379,16 +298,13 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		});
 	};
 
-	const createModel = (kind: ModelCreateKind) => {
+	const createModel = (kind: ModelCreateKind, categoryId = "") => {
 		if (savingRef.current || !context || !confirmDiscard()) return;
 		const next = emptyModelDraft(kind, context);
-		if (draft?.domainId) next.domainId = draft.domainId;
-		else if (createCategory) next.domainId = createCategory;
-		else if (domain) next.domainId = domain;
+		if (categoryId) next.domainId = categoryId;
 		replaceDraft(next);
 		setSelectedModelId("");
 		setSelectedDimensionId("");
-		setCreateOpen(false);
 		setDialog(null);
 		syncWorkbenchUrl((params) => {
 			params.delete("modelSpecId");
@@ -562,6 +478,23 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const navigateToReverseModeling = () => {
 		if (!savingRef.current) navigate(dataModelingPath("dimensions", "reverse"));
 	};
+	const returnToList = () => {
+		if (savingRef.current || !confirmDiscard()) return;
+		requestEpoch.current += 1;
+		setEditorLoading(false);
+		replaceDraft(null);
+		setSelectedModelId("");
+		setSelectedDimensionId("");
+		setDialog(null);
+		setFailure(null);
+		requestedModelIdRef.current = "";
+		requestedDimensionIdRef.current = "";
+		syncWorkbenchUrl((params) => {
+			params.delete("modelSpecId");
+			params.delete("dimensionDefinitionId");
+			params.delete("open");
+		});
+	};
 	const { goToGraph, removeModel, goToDimensionGraph, cloneDimension, removeDimension } = useCatalogActions({
 		canMaintain,
 		confirmDiscard,
@@ -611,100 +544,37 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		<main className="dmx-workbench-page">
 			<PageHeader description={route.description} title="维度建模" trail="数据建模 / 维度建模" />
 			{loading ? (
-				<RequestState description="正在读取模型目录、数据域和标准。" kind="loading" title="正在加载模型工作台" />
+				<RequestState description="正在读取模型列表、数据域和标准。" kind="loading" title="正在加载模型工作台" />
 			) : failure?.kind === "permission" ? (
 				<RequestState description={failure.message} kind="permission" title="无权访问模型工作台" />
-			) : context && catalogMode === "list" ? (
+			) : context && !draft && !editorLoading ? (
 				<ModelWorkbenchCatalogList
+					busy={saving}
 					canMaintain={canMaintain}
 					dimensions={context.dimensions}
 					domains={context.domains}
+					failureMessage={failure?.message || ""}
 					key={`model-list:${materializationRefreshKey}`}
 					models={context.models}
-					onBack={() => {
-						if (!confirmDiscard()) return;
-						replaceDraft(null);
-						setSelectedModelId("");
-						setSelectedDimensionId("");
-						setCatalogMode("tree");
-						syncWorkbenchUrl((params) => {
-							params.delete("modelSpecId");
-							params.delete("dimensionDefinitionId");
-						});
-					}}
-					onChooseDimension={(item) => {
-						setCatalogMode("tree");
-						chooseDimension(item);
-					}}
-					onChooseModel={(item) => {
-						setCatalogMode("tree");
-						void chooseModel(item);
-					}}
+					onCloneDimension={(item) => void cloneDimension(item)}
+					onChooseDimension={chooseDimension}
+					onChooseModel={(item) => void chooseModel(item)}
+					onCreate={createModel}
+					onGoToGraphDimension={goToDimensionGraph}
+					onGoToGraphModel={goToGraph}
+					onImport={navigateToReverseModeling}
 					onMaterialize={setBatchMaterializationModels}
+					onRefresh={refresh}
+					onRemoveDimension={(item) => void removeDimension(item)}
+					onRemoveModel={(item) => void removeModel(item)}
 				/>
 			) : context ? (
-				<div className={`dmx-model-workbench${draft ? " dmx-model-workbench--editor-only" : ""}`}>
-					{draft ? null : (
-						<ModelWorkbenchCatalogPanel
-							canMaintain={canMaintain}
-							categoryRoots={categoryRoots}
-							createCategory={createCategory}
-							createOpen={createOpen}
-							createQuery={createQuery}
-							domain={domain}
-							domainOpen={domainOpen}
-							effectiveView={effectiveView}
-							emptyMessage={catalogEmptyMessage}
-							groups={groups}
-							layer={layer}
-							loading={loading}
-							modelDomainOptions={modelDomainOptions}
-							onChooseDimension={chooseDimension}
-							onChooseModel={(item) => void chooseModel(item)}
-							onCloneDimension={(item) => void cloneDimension(item)}
-							onCreate={createModel}
-							onCreateCategoryChange={setCreateCategory}
-							onCreateQueryChange={setCreateQuery}
-							onDomainChange={setDomain}
-							onGoToGraph={goToGraph}
-							onGoToGraphDimension={goToDimensionGraph}
-							onImport={navigateToReverseModeling}
-							onLayerChange={(value) => {
-								setDomain("");
-								setLayer(value);
-							}}
-							onList={() => setCatalogMode("list")}
-							onQueryChange={setQuery}
-							onRefresh={refresh}
-							onRemoveDimension={(item) => void removeDimension(item)}
-							onRemoveModel={(item) => void removeModel(item)}
-							onToggleCreate={() => {
-								setCreateCategory("");
-								setCreateQuery("");
-								if (resolveWorkbenchCreateAction(Boolean(draft), createOpen) === "CREATE_DIMENSION_TABLE") {
-									createModel("dimension-table");
-									return;
-								}
-								setCreateOpen((open) => !open);
-							}}
-							onToggleDomain={(key) => setDomainOpen((current) => ({ ...current, [key]: current[key] === false }))}
-							onViewChange={(value) => {
-								setDomain("");
-								setViewMode(value);
-							}}
-							query={query}
-							saving={saving}
-							selectedDimensionId={selectedDimensionId}
-							selectedModelId={selectedModelId}
-						/>
-					)}
+				<div className="dmx-model-workbench dmx-model-workbench--editor-only">
 					<section className="dmx-model-editor">
 						<div className="dmx-editor-tab">
-							{draft ? (
-								<button className="dmx-table-action" onClick={() => setCatalogMode("list")} type="button">
-									返回模型列表
-								</button>
-							) : null}
+							<button className="dmx-table-action" onClick={returnToList} type="button">
+								返回模型列表
+							</button>
 							<span>▤</span>
 							<strong>
 								{draft?.name || (draft ? `新建${MODEL_KIND_CONFIG[draft.createKind].label}` : "模型编辑器")}
@@ -756,7 +626,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 								validationErrors={validationErrors}
 							/>
 						) : (
-							<RequestState description="请从目录选择模型，或新建一个模型草稿。" kind="empty" title="请选择模型" />
+							<RequestState description="未能打开模型，请返回模型列表重试。" kind="error" title="模型打开失败" />
 						)}
 					</section>
 					{selectedModel?.modelType === "FACT" ? (

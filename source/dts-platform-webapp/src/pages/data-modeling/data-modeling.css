@@ -648,16 +648,6 @@
 	cursor: pointer;
 }
 
-.dmx-object-panel {
-	position: relative;
-	display: flex;
-	min-width: 0;
-	flex-direction: column;
-	border-right: 1px solid var(--dmx-border);
-	background: #fbfcfe;
-}
-
-.dmx-object-panel > header,
 .dmx-metric-catalog > header {
 	min-height: 48px;
 	display: flex;
@@ -667,18 +657,15 @@
 	border-bottom: 1px solid var(--dmx-border);
 }
 
-.dmx-object-panel h2,
 .dmx-metric-catalog h2 {
 	margin: 0;
 	font-size: 15px;
 }
 
-.dmx-iconbar,
 .dmx-metric-catalog > header > div {
 	display: flex;
 	gap: 2px;
 }
-.dmx-iconbar button,
 .dmx-metric-catalog > header button {
 	width: 29px;
 	height: 29px;
@@ -690,63 +677,11 @@
 	color: #5c6879;
 	cursor: pointer;
 }
-.dmx-iconbar button:hover,
 .dmx-metric-catalog > header button:hover {
 	background: var(--dmx-blue-soft);
 	color: var(--dmx-blue);
 }
 
-.dmx-layer-tabs {
-	display: grid;
-	grid-template-columns: repeat(3, 1fr);
-	border-bottom: 1px solid var(--dmx-border);
-}
-.dmx-layer-tabs button {
-	height: 38px;
-	border: 0;
-	border-bottom: 2px solid transparent;
-	background: #fff;
-	color: var(--dmx-muted);
-	cursor: pointer;
-}
-.dmx-layer-tabs button.active {
-	border-color: var(--dmx-blue);
-	color: var(--dmx-blue);
-	font-weight: 650;
-}
-
-.dmx-view-switch {
-	display: grid;
-	grid-template-columns: repeat(2, 1fr);
-	gap: 4px;
-	min-width: 0;
-	margin: 0;
-	padding: 8px 10px 0;
-	border: 0;
-}
-.dmx-view-switch button {
-	height: 30px;
-	border: 1px solid #d4dbe5;
-	border-radius: 3px;
-	background: #fff;
-	color: var(--dmx-muted);
-	cursor: pointer;
-}
-.dmx-view-switch button.active {
-	border-color: var(--dmx-blue);
-	background: var(--dmx-blue-soft);
-	color: var(--dmx-blue);
-	font-weight: 650;
-}
-
-.dmx-object-filters {
-	display: grid;
-	gap: 8px;
-	padding: 10px;
-}
-.dmx-object-filters select,
-.dmx-object-filters label,
-.dmx-object-filters > div,
 .dmx-metric-catalog > select,
 .dmx-metric-search {
 	min-height: 34px;
@@ -754,12 +689,9 @@
 	border-radius: 3px;
 	background: #fff;
 }
-.dmx-object-filters select,
 .dmx-metric-catalog > select {
 	padding: 0 8px;
 }
-.dmx-object-filters label,
-.dmx-object-filters > div,
 .dmx-metric-search {
 	display: flex;
 	align-items: center;
@@ -767,102 +699,11 @@
 	padding: 0 8px;
 	color: #8c97a7;
 }
-.dmx-object-filters input,
 .dmx-metric-search input {
 	width: 100%;
 	border: 0;
 	outline: 0;
 	font: inherit;
-}
-
-.dmx-object-tree {
-	flex: 1;
-	overflow: auto;
-	padding-bottom: 12px;
-}
-.dmx-tree-domain,
-.dmx-tree-model {
-	width: 100%;
-	display: flex;
-	align-items: center;
-	border: 0;
-	background: transparent;
-	text-align: left;
-	cursor: pointer;
-}
-.dmx-tree-domain {
-	gap: 6px;
-	min-height: 36px;
-	padding: 0 10px;
-	color: #495568;
-}
-.dmx-tree-domain strong {
-	font-size: 13px;
-}
-.dmx-tree-domain em {
-	margin-left: auto;
-	color: #8c96a5;
-	font-size: 11px;
-	font-style: normal;
-}
-.dmx-tree-model {
-	gap: 8px;
-	min-height: 47px;
-	padding: 5px 10px 5px 35px;
-	color: #596477;
-}
-.dmx-tree-model-actions {
-	margin-left: auto;
-	display: none;
-	gap: 2px;
-	flex: none;
-}
-.dmx-tree-model:hover .dmx-tree-model-actions,
-.dmx-tree-model.active .dmx-tree-model-actions {
-	display: flex;
-}
-.dmx-tree-model-actions button {
-	width: 24px;
-	height: 24px;
-	display: grid;
-	place-items: center;
-	padding: 0;
-	border: 0;
-	border-radius: 3px;
-	background: transparent;
-	color: #8c96a5;
-	cursor: pointer;
-}
-.dmx-tree-model-actions button:hover {
-	background: #fff;
-	color: var(--dmx-blue);
-}
-.dmx-tree-model-actions button:disabled {
-	opacity: 0.4;
-	cursor: not-allowed;
-}
-.dmx-tree-model-copy {
-	min-width: 0;
-	display: grid;
-	gap: 2px;
-}
-.dmx-tree-model b {
-	overflow: hidden;
-	font-size: 12px;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-.dmx-tree-model small {
-	overflow: hidden;
-	color: #8a94a3;
-	font-size: 11px;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-.dmx-tree-model:hover,
-.dmx-tree-model.active {
-	background: var(--dmx-blue-soft);
-	color: var(--dmx-blue);
 }
 
 .dmx-create-menu {
@@ -2216,12 +2057,6 @@
 .dmx-field-table {
 	min-width: 1120px;
 }
-.dmx-object-tree .dmx-request-state {
-	min-height: 150px;
-	margin: 8px;
-	padding: 12px;
-}
-
 @media (max-width: 1450px) {
 	.dmx-summary-strip {
 		grid-template-columns: repeat(3, 1fr);
@@ -2306,7 +2141,6 @@
 	.dmx-metric-workbench {
 		display: block;
 	}
-	.dmx-object-panel,
 	.dmx-metric-catalog {
 		max-height: 430px;
 		border-right: 0;

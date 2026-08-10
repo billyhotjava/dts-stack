@@ -92,9 +92,6 @@ describe("prototype-owned data modeling frontend", () => {
 		const shouldBlockWorkbenchNavigation = module.shouldBlockWorkbenchNavigation as
 			| ((dirty: boolean, currentPathname: string, nextPathname: string) => boolean)
 			| undefined;
-		const resolveWorkbenchCreateAction = module.resolveWorkbenchCreateAction as
-			| ((hasDraft: boolean, createMenuOpen: boolean) => "CREATE_DIMENSION_TABLE" | "TOGGLE_CREATE_MENU")
-			| undefined;
 		const fallback = { id: "model-1" };
 		const requested = { id: "model-2" };
 
@@ -102,8 +99,8 @@ describe("prototype-owned data modeling frontend", () => {
 		if (!resolveRequestedModelSelection) return;
 		const normalized = resolveRequestedModelSelection([fallback, requested], "missing-model");
 		expect(normalized).toEqual({
-			selectedModel: fallback,
-			normalizedModelId: fallback.id,
+			selectedModel: null,
+			normalizedModelId: "",
 		});
 		expect(resolveRequestedModelSelection([fallback, requested], normalized.normalizedModelId)).toEqual(normalized);
 		expect(resolveRequestedModelSelection([fallback, requested], requested.id)).toEqual({
@@ -130,12 +127,6 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(
 			shouldBlockWorkbenchNavigation(false, "/data-modeling/dimensions/workbench", "/data-modeling/dimensions/reverse"),
 		).toBe(false);
-
-		expect(resolveWorkbenchCreateAction).toBeTypeOf("function");
-		if (!resolveWorkbenchCreateAction) return;
-		expect(resolveWorkbenchCreateAction(false, false)).toBe("CREATE_DIMENSION_TABLE");
-		expect(resolveWorkbenchCreateAction(true, false)).toBe("TOGGLE_CREATE_MENU");
-		expect(resolveWorkbenchCreateAction(false, true)).toBe("TOGGLE_CREATE_MENU");
 	});
 
 	it("integrates the approved editor contract into the workbench orchestrator", () => {
@@ -166,7 +157,11 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(modeling).toMatch(/useConceptDimensionWorkflow|confirmConceptVersion/);
 		expect(modeling).toMatch(/ConceptDimensionRecordDialog/);
 		expect(modeling).toMatch(/saveModelDraft/);
-		expect(modeling).toMatch(/ModelWorkbenchCatalogList|catalogMode/);
+		expect(modeling).toMatch(/ModelWorkbenchCatalogList/);
+		expect(modeling).not.toMatch(
+			/ModelWorkbenchCatalogPanel|catalogMode|buildWorkbenchCatalogGroups|workbenchCatalogEmptyMessage/,
+		);
+		expect(modeling).not.toContain("请从目录选择模型");
 		expect(modeling).toMatch(/loadModelWorkbenchDraft/);
 		expect(modeling).not.toContain("await load(saved.id)");
 		expect(workbenchService).toMatch(/saveModelImplementation|targetPhysicalName/);
@@ -187,8 +182,8 @@ describe("prototype-owned data modeling frontend", () => {
 		const catalogEditors = read("./prototype/PlanningCatalogEditors.tsx");
 		const planningSidebar = read("./prototype/PlanningSidebar.tsx");
 		const modeling = read("./prototype/ModelingWorkbenchPage.tsx");
-		const catalogPanel = read("./prototype/ModelWorkbenchCatalogPanel.tsx");
-		const widgets = read("./prototype/WorkbenchCatalogWidgets.tsx");
+		const catalogList = read("./prototype/ModelWorkbenchCatalogList.tsx");
+		const createMenu = read("./prototype/ModelWorkbenchCreateMenu.tsx");
 		const catalogActions = read("./prototype/useCatalogActions.ts");
 		const modelDialogs = read("./prototype/ModelWorkbenchDialog.tsx");
 		const modelPublishDialog = read("./prototype/ModelPublishDialog.tsx");
@@ -207,28 +202,28 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(catalogEditors).toMatch(/CatalogDomainForm|listPlanningCatalogDomains/);
 		expect(planningSidebar).not.toContain("建模空间");
 		expect(modeling).toMatch(/saveModelDraft|ModelWorkbenchDialog/);
-		expect(catalogPanel).toMatch(/WorkbenchCreateMenu|WorkbenchCatalogTree/);
-		expect(widgets).toMatch(/onCreate\("dimension"\)/);
-		expect(widgets).toContain('kind: "dimension-table"');
-		expect(widgets).toContain("创建贴源表（尚未接入）");
-		expect(widgets).toContain('label: "创建维度表"');
-		expect(widgets).toContain('label: "创建明细表"');
-		expect(widgets).toContain('label: "创建汇总表"');
-		expect(widgets).toContain('label: "创建应用表"');
+		expect(modeling).not.toMatch(/ModelWorkbenchCatalogPanel|WorkbenchCatalogTree|buildWorkbenchCatalogGroups/);
+		expect(catalogList).toMatch(/ModelWorkbenchCreateMenu|新建模型/);
+		expect(catalogList).not.toContain("进入目录编辑器");
+		expect(createMenu).toMatch(/onCreate\("dimension"/);
+		expect(createMenu).toContain('kind: "dimension-table"');
+		expect(createMenu).toContain("创建贴源表（尚未接入）");
+		expect(createMenu).toContain('label: "创建维度表"');
+		expect(createMenu).toContain('label: "创建明细表"');
+		expect(createMenu).toContain('label: "创建汇总表"');
+		expect(createMenu).toContain('label: "创建应用表"');
 		expect(modeling).toMatch(/onConfirmDimension=\{\(\) => void confirmConceptVersion\(\)\}/);
 		expect(modeling).toMatch(/fieldRowIds|key=\{fieldRowIds\[index\]\}/);
-		expect(modeling).toMatch(/dataDomains/);
-		expect(modeling).toMatch(/buildWorkbenchCatalogGroups|workbenchCatalogEmptyMessage/);
-		expect(catalogPanel).toMatch(/数据域视角|业务分类视角/);
-		expect(modeling).toMatch(/effectiveView/);
-		expect(widgets).toContain("概念模型");
-		expect(widgets).toContain("逻辑模型");
-		expect(widgets).toContain("请选择业务分类");
-		expect(widgets).toContain("前往关系图");
-		expect(widgets).toContain("克隆");
+		expect(createMenu).toContain("概念模型");
+		expect(createMenu).toContain("逻辑模型");
+		expect(createMenu).toContain("请选择业务分类");
+		expect(catalogList).toContain("关系图");
+		expect(catalogList).toContain("克隆");
 		expect(modeling).toMatch(/useCatalogActions/);
 		expect(catalogActions).toMatch(/deleteModelSpec|deleteDimensionDefinition|retireDimensionDefinition/);
-		expect(modeling).toMatch(/getModelLifecycle|getModelRepresentation|implementationRevision|representationScope: "BUSINESS"|useDataModelingMenuGrant/);
+		expect(modeling).toMatch(
+			/getModelLifecycle|getModelRepresentation|implementationRevision|representationScope: "BUSINESS"|useDataModelingMenuGrant/,
+		);
 		expect(modelDialogs).toMatch(/representationScope: "TECHNICAL"|OPEN_ADVANCED_DBT|canMaintain/);
 		expect(modelDialogs).toMatch(/导入 dbt ZIP|intent=advanced/);
 		expect(modelDialogs).not.toMatch(/\/api\/etl\/dbt\/files|\/etl\/dbt\/files/);

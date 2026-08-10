@@ -110,20 +110,40 @@ describe("ModelWorkbenchCatalogList", () => {
 	it("shows searchable records with explicit edit and view actions", async () => {
 		const onChooseModel = vi.fn();
 		const onChooseDimension = vi.fn();
+		const onCreate = vi.fn();
 		await act(async () =>
 			root.render(
 				<ModelWorkbenchCatalogList
+					busy={false}
 					canMaintain
 					dimensions={[currentDimension]}
 					domains={[{ id: "domain-1", code: "finance", name: "财务域" }] as never}
+					failureMessage=""
 					models={[draftModel, publishedModel]}
-					onBack={vi.fn()}
+					onCloneDimension={vi.fn()}
 					onChooseDimension={onChooseDimension}
 					onChooseModel={onChooseModel}
+					onCreate={onCreate}
+					onGoToGraphDimension={vi.fn()}
+					onGoToGraphModel={vi.fn()}
+					onImport={vi.fn()}
 					onMaterialize={vi.fn()}
+					onRefresh={vi.fn()}
+					onRemoveDimension={vi.fn()}
+					onRemoveModel={vi.fn()}
 				/>,
 			),
 		);
+
+		expect(container.textContent).not.toContain("进入目录编辑器");
+		const create = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "新建模型");
+		expect(create).toBeDefined();
+		await act(async () => create?.click());
+		const createDimensionTable = Array.from(container.querySelectorAll("button")).find(
+			(button) => button.textContent === "创建维度表",
+		);
+		await act(async () => createDimensionTable?.click());
+		expect(onCreate).toHaveBeenCalledWith("dimension-table", "");
 
 		expect(container.textContent).toContain("日期维度表");
 		expect(container.textContent).toContain("订单明细表");
@@ -174,14 +194,23 @@ describe("ModelWorkbenchCatalogList", () => {
 		await act(async () =>
 			root.render(
 				<ModelWorkbenchCatalogList
+					busy={false}
 					canMaintain
 					dimensions={[currentDimension]}
 					domains={[{ id: "domain-1", code: "finance", name: "财务域" }] as never}
+					failureMessage=""
 					models={[draftModel, publishedModel]}
-					onBack={vi.fn()}
+					onCloneDimension={vi.fn()}
 					onChooseDimension={vi.fn()}
 					onChooseModel={vi.fn()}
+					onCreate={vi.fn()}
+					onGoToGraphDimension={vi.fn()}
+					onGoToGraphModel={vi.fn()}
+					onImport={vi.fn()}
 					onMaterialize={onMaterialize}
+					onRefresh={vi.fn()}
+					onRemoveDimension={vi.fn()}
+					onRemoveModel={vi.fn()}
 				/>,
 			),
 		);
@@ -238,14 +267,23 @@ describe("ModelWorkbenchCatalogList", () => {
 		await act(async () =>
 			root.render(
 				<ModelWorkbenchCatalogList
+					busy={false}
 					canMaintain
 					dimensions={[]}
 					domains={[{ id: "domain-1", code: "finance", name: "财务域" }] as never}
+					failureMessage=""
 					models={models}
-					onBack={vi.fn()}
+					onCloneDimension={vi.fn()}
 					onChooseDimension={vi.fn()}
 					onChooseModel={vi.fn()}
+					onCreate={vi.fn()}
+					onGoToGraphDimension={vi.fn()}
+					onGoToGraphModel={vi.fn()}
+					onImport={vi.fn()}
 					onMaterialize={onMaterialize}
+					onRefresh={vi.fn()}
+					onRemoveDimension={vi.fn()}
+					onRemoveModel={vi.fn()}
 				/>,
 			),
 		);

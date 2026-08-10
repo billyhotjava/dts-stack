@@ -13,6 +13,10 @@ const master = readFileSync(
 	new URL("../../../../../dts-admin/src/main/resources/config/liquibase/master.xml", import.meta.url),
 	"utf8",
 );
+const planningGroupRepairUrl = new URL(
+	"../../../../../dts-admin/src/main/resources/config/liquibase/changelog/20260810-02_retire_legacy_modeling_layer_groups.xml",
+	import.meta.url,
+);
 
 describe("data architecture menu migration", () => {
 	it("installs the canonical root and all five views", () => {
@@ -31,5 +35,16 @@ describe("data architecture menu migration", () => {
 
 	it("is registered in the admin Liquibase master", () => {
 		assert.match(master, /20260810-01_data_architecture_navigation_expand\.xml/);
+	});
+
+	it("retires the orphaned public and application planning groups without deleting compatibility rows", () => {
+		assert.match(master, /20260810-02_retire_legacy_modeling_layer_groups\.xml/);
+		const repair = readFileSync(planningGroupRepairUrl, "utf8");
+		assert.match(repair, /sys\.nav\.portal\.planningPublicLayer/);
+		assert.match(repair, /sys\.nav\.portal\.planningApplicationLayer/);
+		assert.match(repair, /deleted = TRUE/);
+		assert.match(repair, /last_modified_by = actor \|\| '-retired'/);
+		assert.match(repair, /last_modified_by = actor \|\| '-rollback'/);
+		assert.doesNotMatch(repair, /DELETE FROM portal_menu(?:\s|$)/);
 	});
 });

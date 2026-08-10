@@ -1,4 +1,4 @@
-import { ArrowLeft, Search } from "lucide-react";
+import { GitBranch, Import, Plus, RefreshCw, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
 	getModelMaterializationStatuses,
@@ -11,7 +11,9 @@ import type { CatalogDomain } from "@/api/services/catalogDomainService";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
 import type { ModelSpecLayer, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { resolveMaterializationPresentation } from "./ModelMaterializationStatus";
+import { ModelWorkbenchCreateMenu } from "./ModelWorkbenchCreateMenu";
 import { RequestState, Status } from "./PrototypePrimitives";
+import type { ModelCreateKind } from "./services/modelWorkbenchService";
 import "./modeling-workbench.css";
 
 const MODEL_TYPE_LABEL: Record<string, string> = {
@@ -36,31 +38,51 @@ type CatalogRow = {
 	status: string;
 	revision: number;
 	editable: boolean;
+	dimension: DimensionDefinitionView | null;
 	model: ModelSpecView | null;
 	open: (() => void) | null;
 };
 
 export type ModelWorkbenchCatalogListProps = {
+	busy: boolean;
 	canMaintain: boolean;
 	dimensions: DimensionDefinitionView[];
 	domains: CatalogDomain[];
+	failureMessage: string;
 	models: ModelSpecView[];
-	onBack: () => void;
+	onCloneDimension: (dimension: DimensionDefinitionView) => void;
 	onChooseDimension: (dimension: DimensionDefinitionView) => void;
 	onChooseModel: (model: ModelSpecView) => void;
+	onCreate: (kind: ModelCreateKind, categoryId: string) => void;
+	onGoToGraphDimension: (dimension: DimensionDefinitionView) => void;
+	onGoToGraphModel: (model: ModelSpecView) => void;
+	onImport: () => void;
 	onMaterialize: (models: ModelSpecView[]) => void;
+	onRefresh: () => void;
+	onRemoveDimension: (dimension: DimensionDefinitionView) => void;
+	onRemoveModel: (model: ModelSpecView) => void;
 };
 
 export function ModelWorkbenchCatalogList({
+	busy,
 	canMaintain,
 	dimensions,
 	domains,
+	failureMessage,
 	models,
-	onBack,
+	onCloneDimension,
 	onChooseDimension,
 	onChooseModel,
+	onCreate,
+	onGoToGraphDimension,
+	onGoToGraphModel,
+	onImport,
 	onMaterialize,
+	onRefresh,
+	onRemoveDimension,
+	onRemoveModel,
 }: ModelWorkbenchCatalogListProps) {
+	const [createOpen, setCreateOpen] = useState(false);
 	const [query, setQuery] = useState("");
 	const [planFilter, setPlanFilter] = useState("");
 	const [domainFilter, setDomainFilter] = useState("");
@@ -90,6 +112,7 @@ export function ModelWorkbenchCatalogList({
 		[dimensions, models],
 	);
 	const normalized = query.trim().toLowerCase();
+	const categoryRoots = useMemo(() => domains.filter((domain) => !domain.parentCode), [domains]);
 
 	useEffect(() => {
 		let active = true;
@@ -135,6 +158,7 @@ export function ModelWorkbenchCatalogList({
 				status: dimension.status,
 				revision: dimension.revision,
 				editable: canMaintain && dimension.status === "DRAFT",
+				dimension,
 				model: null,
 				open: () => onChooseDimension(dimension),
 			})),
@@ -150,6 +174,7 @@ export function ModelWorkbenchCatalogList({
 				status: model.status,
 				revision: model.revision,
 				editable: canMaintain && model.status === "DRAFT" && model.compatibilityMode === "CANONICAL",
+				dimension: null,
 				model,
 				open: () => onChooseModel(model),
 			})),
@@ -229,6 +254,7 @@ export function ModelWorkbenchCatalogList({
 							((dimension && dimension.status === "DRAFT") ||
 								(model && model.status === "DRAFT" && model.compatibilityMode === "CANONICAL")),
 					),
+					dimension,
 					model,
 					open: dimension ? () => onChooseDimension(dimension) : model ? () => onChooseModel(model) : null,
 				};
@@ -290,11 +316,42 @@ export function ModelWorkbenchCatalogList({
 					<h2>模型列表</h2>
 					<p>通过筛选和分页选择模型；详情进入同一编辑器，勾选只用于批量交付。</p>
 				</div>
-				<button onClick={onBack} type="button">
-					<ArrowLeft size={15} />
-					进入目录编辑器
-				</button>
+				<div className="dmx-model-list-header-actions">
+					<button
+						disabled={busy || catalogLoading}
+						onClick={onRefresh}
+						type="button"
+					>
+						<RefreshCw size={15} />
+						刷新
+					</button>
+					<button disabled={busy} onClick={onImport} type="button">
+						<Import size={15} />
+						逆向建模
+					</button>
+					<button
+						className="primary"
+						disabled={busy || !canMaintain}
+						onClick={() => setCreateOpen((open) => !open)}
+						title={canMaintain ? "新建模型" : "当前账号无建模维护权限"}
+						type="button"
+					>
+						<Plus size={15} />
+						新建模型
+					</button>
+				</div>
 			</header>
+			{createOpen ? (
+				<ModelWorkbenchCreateMenu
+					categoryRoots={categoryRoots}
+					onCreate={(kind, categoryId) => {
+						setCreateOpen(false);
+						onCreate(kind, categoryId);
+					}}
+					saving={busy}
+				/>
+			) : null}
+			{failureMessage ? <output className="dmx-inline-error">{failureMessage}</output> : null}
 			<div className="dmx-model-list-toolbar">
 				<label>
 					<Search size={15} />
@@ -460,20 +517,68 @@ export function ModelWorkbenchCatalogList({
 												<div className="dmx-row-actions">
 													<button
 														className="dmx-table-action"
-														disabled={!row.open}
+														disabled={busy || !row.open}
 														onClick={row.open || undefined}
 														type="button"
 													>
 														{row.open ? (row.editable ? "编辑" : "查看") : "详情未加载"}
 													</button>
 													{row.model ? (
-														<button
-															className="dmx-table-action"
-															onClick={() => onMaterialize([row.model as ModelSpecView])}
-															type="button"
-														>
-															{materialization ? "物化历史 / 再次物化" : "物化详情"}
-														</button>
+														<>
+															<button
+																className="dmx-table-action"
+																disabled={busy}
+																onClick={() => onGoToGraphModel(row.model as ModelSpecView)}
+																type="button"
+															>
+																<GitBranch size={13} />
+																关系图
+															</button>
+															<button
+																className="dmx-table-action"
+																disabled={busy || !canMaintain}
+																onClick={() => onMaterialize([row.model as ModelSpecView])}
+																type="button"
+															>
+																{materialization ? "物化历史 / 再次物化" : "物化详情"}
+															</button>
+															<button
+																className="dmx-table-action"
+																disabled={busy || !canMaintain || row.model.compatibilityMode !== "CANONICAL"}
+																onClick={() => onRemoveModel(row.model as ModelSpecView)}
+																type="button"
+															>
+																删除
+															</button>
+														</>
+													) : row.dimension ? (
+														<>
+															<button
+																className="dmx-table-action"
+																disabled={busy}
+																onClick={() => onGoToGraphDimension(row.dimension as DimensionDefinitionView)}
+																type="button"
+															>
+																<GitBranch size={13} />
+																关系图
+															</button>
+															<button
+																className="dmx-table-action"
+																disabled={busy || !canMaintain}
+																onClick={() => onCloneDimension(row.dimension as DimensionDefinitionView)}
+																type="button"
+															>
+																克隆
+															</button>
+															<button
+																className="dmx-table-action"
+																disabled={busy || !canMaintain}
+																onClick={() => onRemoveDimension(row.dimension as DimensionDefinitionView)}
+																type="button"
+															>
+																{row.dimension.status === "DRAFT" ? "删除" : "退役"}
+															</button>
+														</>
 													) : null}
 												</div>
 											</td>
