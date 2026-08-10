@@ -1,7 +1,7 @@
 # T01: 统一采集软失效与稳定 ID
 
 **优先级**: P0
-**状态**: DRAFT
+**状态**: IN_PROGRESS
 **依赖**: F1/T01；编码前对三个 sync service 与 resolver 做 GitNexus upstream impact
 
 ## 实现契约
@@ -43,6 +43,12 @@
 - [ ] 业务 tags/standard/classification/owner 在技术字段更新后不变
 - [ ] 采集异常不会把未完成快照判为表消失
 - [ ] NULL/STALE/SYNCED/manual 四类 resolver 状态符合契约
+
+### RED 证据（2026-08-10）
+
+- 命令：`./mvnw -ntp -Dtest=CatalogColumnSyncServiceTest,SourceReferenceResolverAdapterTest,RoutineCatalogSyncSourceContractTest test`
+- 结果：`BUILD FAILURE`，测试编译仅因 `CatalogColumnSyncService.synchronizeSnapshot(...)` 尚未实现而失败（2 处 `cannot find symbol`）。
+- 判定：新增契约已有效锁定，进入 GREEN 实现。
 
 ## 发布边界
 

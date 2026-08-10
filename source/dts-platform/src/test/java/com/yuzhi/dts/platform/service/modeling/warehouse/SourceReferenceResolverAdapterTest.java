@@ -2,6 +2,7 @@ package com.yuzhi.dts.platform.service.modeling.warehouse;
 
 import static com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver.ResolutionStatus.AVAILABLE;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver.ResolutionStatus.FORBIDDEN;
+import static com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver.ResolutionStatus.MISSING;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver.ResolutionStatus.PROVIDER_ERROR;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -98,6 +99,31 @@ class SourceReferenceResolverAdapterTest {
         assertThat(result.displayName()).isEqualTo("orders");
         assertThat(result.resolvedVersion())
             .isEqualTo(sha256("orders\u0000order_id\u0000uuid\u0000false\u0000ACTIVE"));
+    }
+
+    @Test
+    void mapsHarvestStatusAfterAuthorizationAndKeepsManualAssetsCompatible() {
+        CatalogDataset dataset = dataset("orders");
+        dataset.setSourceId(CONNECTION_ID);
+        CatalogTableSchema table = table(dataset, TABLE_ID, "orders");
+        when(tableRepository.findById(TABLE_ID)).thenReturn(Optional.of(table));
+        when(columnRepository.findByTable(table)).thenReturn(List.of(column(table, "order_id", "uuid", false)));
+        when(accessChecker.canRead(dataset)).thenReturn(true);
+        when(accessChecker.departmentAllowedExact(dataset, "D01")).thenReturn(true);
+        SourceLocator locator = new SourceLocator(TABLE_ID, null, null, null, null, null, null);
+
+        dataset.setHarvestStatus("STALE");
+        assertThat(resolver.resolve(SourceType.CATALOG_TABLE, locator, ACCESS).status()).isEqualTo(MISSING);
+
+        dataset.setHarvestStatus(null);
+        assertThat(resolver.resolve(SourceType.CATALOG_TABLE, locator, ACCESS).status()).isEqualTo(PROVIDER_ERROR);
+
+        dataset.setHarvestStatus("SYNCED");
+        assertThat(resolver.resolve(SourceType.CATALOG_TABLE, locator, ACCESS).status()).isEqualTo(AVAILABLE);
+
+        dataset.setSourceId(null);
+        dataset.setHarvestStatus(null);
+        assertThat(resolver.resolve(SourceType.CATALOG_TABLE, locator, ACCESS).status()).isEqualTo(AVAILABLE);
     }
 
     @Test
