@@ -328,93 +328,17 @@ const resolveDedupeKey = (node: MenuTree, meta: Record<string, any> | null): str
 	return null;
 };
 
-/**
- * Menu category definitions — each group is separated by a divider in the sidebar.
- * The root menu is the visible category title; a second visual label would duplicate it.
- * `keys` match the `sectionKey` (or `key`) from menu metadata.
- * `flatten` strips children so the item renders as a single external link.
- */
-const NAV_CATEGORY_GROUPS: { keys: string[]; flatten?: boolean }[] = [
-	{ keys: ["workbench"] },
-	{ keys: ["resource"] },
-	{ keys: ["studio"] },
-	{ keys: ["modeling"] },
-	{ keys: ["governance"] },
-	{ keys: ["consumption"] },
-];
-
-const resolveSectionKey = (node: MenuTree): string => {
-	const meta = parseMenuMetadata(node.metadata);
-	const raw = meta?.sectionKey ?? meta?.key;
-	return typeof raw === "string" ? raw.trim().toLowerCase() : "";
-};
-
 const buildNavGroups = (menus: MenuTree[]): NavProps["data"] => {
 	if (!Array.isArray(menus) || menus.length === 0) {
 		return [];
 	}
 
-	// Index top-level nodes by section key
-	const keyToNodes = new Map<string, MenuTree[]>();
-	const uncategorized: MenuTree[] = [];
-	for (const node of menus) {
-		const sk = resolveSectionKey(node);
-		if (!sk) {
-			uncategorized.push(node);
-			continue;
-		}
-		const list = keyToNodes.get(sk);
-		if (list) {
-			list.push(node);
-		} else {
-			keyToNodes.set(sk, [node]);
-		}
-	}
-
 	const visited = new Set<string>();
-	const groups: NavProps["data"] = [];
+	const items = buildNavItemsInternal(menus, undefined, visited);
 
-	for (const { keys, flatten } of NAV_CATEGORY_GROUPS) {
-		const nodes: MenuTree[] = [];
-		for (const key of keys) {
-			const matched = keyToNodes.get(key);
-			if (matched) {
-				nodes.push(...matched);
-				keyToNodes.delete(key);
-			}
-		}
-		if (nodes.length === 0) continue;
-
-		const items = buildNavItemsInternal(nodes, undefined, visited);
-		if (items.length === 0) continue;
-
-		// Flatten: strip children so item acts as a single (external) link.
-		// Use the first child's path when the parent's own path isn't external.
-		if (flatten) {
-			for (const item of items) {
-				if (item.children?.length && !isExternalPath(item.path)) {
-					item.path = item.children[0].path;
-				}
-				item.children = undefined;
-			}
-		}
-
-		groups.push({ name: undefined, items });
-	}
-
-	// Append any nodes whose sectionKey didn't match a defined category
-	const remaining: MenuTree[] = [...uncategorized];
-	for (const nodes of keyToNodes.values()) {
-		remaining.push(...nodes);
-	}
-	if (remaining.length > 0) {
-		const items = buildNavItemsInternal(remaining, undefined, visited);
-		if (items.length > 0) {
-			groups.push({ name: undefined, items });
-		}
-	}
-
-	return groups;
+	// The dts-admin menu tree is the single ordering source. Keep one visual
+	// group per root item without maintaining a second section-order registry.
+	return items.map((item) => ({ name: undefined, items: [item] }));
 };
 
 const isPathAllowed = (path: string, allowedPaths: Set<string>): boolean => {

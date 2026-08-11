@@ -245,6 +245,12 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(relationshipService).toContain("limit: GRAPH_PAGE_SIZE");
 		expect(relationshipService).not.toMatch(/kind:\s*kindForView|query:\s*query\.query/);
 		expect(metrics).not.toContain("expressionSql");
+		expect(metrics).toContain('from "@/components/table"');
+		expect(metrics).toMatch(/<CompactTable<IndicatorDefinition>/);
+		expect(metrics).toContain('className="dmx-list-toolbar"');
+		expect(metrics).toContain("返回指标列表");
+		expect(metrics).not.toMatch(/<aside className="dmx-metric-catalog"/);
+		expect(metrics).not.toContain("dmx-metric-tree");
 		expect(tools).toMatch(/getDataModelingToolWorkflows/);
 		expect(tools).not.toMatch(/mock|demo/i);
 		expect(tools).toContain("本页不创建统一工具运行台账，也不拼接模拟历史");

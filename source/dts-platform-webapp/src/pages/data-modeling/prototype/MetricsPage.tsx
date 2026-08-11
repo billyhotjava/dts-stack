@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { listBusinessProcessesApi, type Sprint64BusinessProcess } from "@/api/sprint64GovernanceApi";
 import type { WarehousePlanBusinessProcessMode } from "@/api/warehousePlanApi";
+import { type CompactColumns, CompactTable } from "@/components/table";
 import {
 	type IndicatorMetricSourceRef,
 	type IndicatorSourceType,
@@ -59,6 +60,15 @@ const toForm = (selected: MetricSelection): IndicatorEditValues => ({
 	dependencyCodes: parseIndicatorDependencyCodes(selected.dependencyIndicators),
 });
 
+export function resolveMetricCatalogSelection(
+	rows: IndicatorDefinition[],
+	requestedIndicatorId: string,
+): MetricSelection | null {
+	if (!requestedIndicatorId) return null;
+	const target = rows.find((item) => item.id === requestedIndicatorId);
+	return target ? metricSelection(target) : null;
+}
+
 export function MetricsPage({ route }: { route: DataModelingRoute }) {
 	const canMaintain = useDataModelingMenuGrant();
 	const metricType = typeByView[route.view] || "原子指标";
@@ -85,7 +95,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 		setValues(next ? toForm(next) : {});
 	}, []);
 	const load = useCallback(
-		async (preferredIndicatorId?: string) => {
+		async (preferredIndicatorId?: string | null) => {
 			const epoch = ++requestEpoch.current;
 			setLoading(true);
 			setFailure(null);
@@ -93,10 +103,10 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 				const next = await loadIndicatorCatalog();
 				if (requestEpoch.current !== epoch) return;
 				setCatalog(next);
-				const requestedId = preferredIndicatorId || searchParams.get("indicatorId");
+				const requestedId =
+					preferredIndicatorId === undefined ? searchParams.get("indicatorId") || "" : preferredIndicatorId || "";
 				const visible = filterIndicators(next, { type: metricType, domain: "", query: "" });
-				const target = (requestedId ? visible.find((item) => item.id === requestedId) : undefined) || visible[0];
-				select(target ? metricSelection(target) : null);
+				select(resolveMetricCatalogSelection(visible, requestedId));
 			} catch (error) {
 				if (requestEpoch.current !== epoch) return;
 				setCatalog([]);
@@ -186,10 +196,20 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 	const businessCategories = useMemo(() => architecture.filter((item) => !item.parentId), [architecture]);
 	const dataDomains = useMemo(() => architecture.filter((item) => Boolean(item.parentId)), [architecture]);
 	const domainLabels = useMemo(() => new Map(dataDomains.map((item) => [item.id, item.name])), [dataDomains]);
+	const businessCategoryLabels = useMemo(
+		() => new Map(businessCategories.map((item) => [item.id, item.name])),
+		[businessCategories],
+	);
 	const choose = (row: IndicatorDefinition) => {
 		select(metricSelection(row));
 		const next = new URLSearchParams(searchParams);
 		if (row.id) next.set("indicatorId", row.id);
+		setSearchParams(next, { replace: true });
+	};
+	const returnToList = () => {
+		select(null);
+		const next = new URLSearchParams(searchParams);
+		next.delete("indicatorId");
 		setSearchParams(next, { replace: true });
 	};
 	const create = () => {
@@ -206,6 +226,50 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 		next.delete("indicatorId");
 		setSearchParams(next, { replace: true });
 	};
+	const catalogColumns: CompactColumns<IndicatorDefinition> = [
+		{
+			title: "指标编码",
+			dataIndex: "code",
+			width: 180,
+			render: (value) => <strong className="dmx-code-cell">{String(value || "—")}</strong>,
+		},
+		{ title: "指标名称", dataIndex: "name", width: 180 },
+		{
+			title: "业务分类",
+			dataIndex: "businessCategoryId",
+			width: 150,
+			render: (value) => businessCategoryLabels.get(String(value || "")) || "—",
+		},
+		{
+			title: "数据域",
+			dataIndex: "dataDomainId",
+			width: 150,
+			render: (value, row) => domainLabels.get(String(value || "")) || row.domain || "未归属",
+		},
+		{ title: "数仓分层", key: "layer", width: 100, render: () => "公共层" },
+		{ title: "负责人", dataIndex: "owner", width: 130, render: (value) => String(value || "—") },
+		{ title: "版本", dataIndex: "version", width: 90, render: (value) => String(value || "—") },
+		{
+			title: "状态",
+			dataIndex: "status",
+			width: 110,
+			render: (value) => {
+				const status = String(value || "DRAFT");
+				return <Status tone={status === "PUBLISHED" ? "success" : "warning"}>{status}</Status>;
+			},
+		},
+		{
+			title: "操作",
+			dataIndex: "actions",
+			fixed: "right",
+			width: 90,
+			render: (_value, row) => (
+				<Button className="dmx-table-action" onClick={() => choose(row)} type="link">
+					{canMaintain ? "编辑" : "查看"}
+				</Button>
+			),
+		},
+	];
 	const mutate = async (action: "save" | "validate" | "publish" | "archive") => {
 		if (!selected || !canMaintain) return;
 		setBusy(action);
@@ -231,7 +295,8 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 				if (!window.confirm(`确认归档“${selected.name}”？`)) return;
 				await archiveIndicatorDraft(selected);
 				show("指标已归档");
-				await load();
+				returnToList();
+				await load(null);
 				return;
 			}
 			const saved =
@@ -255,39 +320,121 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 
 	return (
 		<main className="dmx-metrics-page">
-			<PageHeader description={route.description} title={route.title} trail="数据建模 / 数据指标" />
+			<PageHeader
+				actions={
+					!selected ? (
+						<>
+							<Button disabled={loading} onClick={() => void load(null)}>
+								<RefreshCw size={15} />
+								刷新
+							</Button>
+							<Button
+								disabled={!canMaintain || !supportsIndicatorCreation(metricType)}
+								onClick={create}
+								primary
+								title={
+									!canMaintain
+										? "当前账号无指标维护权限"
+										: supportsIndicatorCreation(metricType)
+											? `新建${metricType}`
+											: "当前 owner 不支持新建该对象"
+								}
+							>
+								<Plus size={15} />
+								新建{metricType}
+							</Button>
+						</>
+					) : undefined
+				}
+				description={route.description}
+				title={route.title}
+				trail="数据建模 / 数据指标"
+			/>
 			{loading ? (
 				<RequestState description="正在读取指标目录与版本事实。" kind="loading" title="正在加载指标" />
 			) : failure?.kind === "permission" ? (
 				<RequestState description={failure.message} kind="permission" title="无权访问指标" />
-			) : (
+			) : failure?.kind === "request" && !selected && !catalog.length ? (
+				<RequestState description={failure.message} kind="error" onRetry={() => void load(null)} title="指标读取失败" />
+			) : selected ? (
 				<div className="dmx-metric-workbench">
-					<aside className="dmx-metric-catalog">
-						<header>
-							<h2>{metricType}</h2>
-							<div>
-								<Button
-									aria-label="新建"
-									disabled={!canMaintain || !supportsIndicatorCreation(metricType)}
-									onClick={create}
-									title={
-										!canMaintain
-											? "当前账号无指标维护权限"
-											: supportsIndicatorCreation(metricType)
-												? "新建指标"
-												: "当前 owner 不支持新建该对象"
-									}
-								>
-									<Plus size={15} />
-								</Button>
-								<Button aria-label="刷新" disabled={loading} onClick={() => void load()}>
-									<RefreshCw size={15} />
-								</Button>
+					<section className="dmx-metric-editor">
+						<div className="dmx-editor-tab">
+							<span>△</span>
+							<strong>{selected.name || `新建${metricType}`}</strong>
+							{selected.status ? (
+								<Status tone={selected.status === "PUBLISHED" ? "success" : "warning"}>{selected.status}</Status>
+							) : null}
+						</div>
+						<div className="dmx-metric-toolbar">
+							<Button disabled={Boolean(busy)} onClick={returnToList}>
+								返回指标列表
+							</Button>
+							<Button disabled={!canMaintain || Boolean(busy)} primary onClick={() => void mutate("save")}>
+								<Save size={15} />
+								{busy === "save" ? "保存中…" : "保存"}
+							</Button>
+							<Button disabled={!canMaintain || Boolean(busy) || !selected.id} onClick={() => void mutate("validate")}>
+								<CheckCircle2 size={15} />
+								{busy === "validate" ? "校验中…" : "校验"}
+							</Button>
+							<Button disabled={!canMaintain || Boolean(busy) || !selected.id} onClick={() => void mutate("publish")}>
+								<Send size={15} />
+								{busy === "publish" ? "发布中…" : "发布"}
+							</Button>
+							<Button
+								danger
+								disabled={!canMaintain || Boolean(busy) || !selected.id}
+								onClick={() => void mutate("archive")}
+							>
+								<Archive size={15} />
+								归档
+							</Button>
+						</div>
+						{failure ? (
+							<div className="dmx-inline-error" role="alert">
+								{failure.message}
 							</div>
-						</header>
-						<div className="dmx-metric-layer">公共层</div>
+						) : null}
+						{contextFailure ? (
+							<div className="dmx-inline-error" role="alert">
+								{contextFailure}
+							</div>
+						) : null}
+						{!canMaintain ? <div className="dmx-capability-note">当前账号只有指标查看权限。</div> : null}
+						<fieldset className="dmx-editor-fieldset" disabled={!canMaintain}>
+							<MetricEditor
+								businessCategories={businessCategories}
+								codeLocked={Boolean(selected.id)}
+								dataDomains={dataDomains}
+								onChange={setValues}
+								processes={processes}
+								processMode={processMode}
+								values={values}
+							/>
+						</fieldset>
+					</section>
+				</div>
+			) : (
+				<section className="dmx-catalog-panel dmx-catalog-panel--list" aria-label={`${metricType}列表`}>
+					{contextFailure ? (
+						<div className="dmx-inline-error" role="alert">
+							{contextFailure}
+						</div>
+					) : null}
+					{!canMaintain ? <div className="dmx-capability-note">当前账号只有指标查看权限。</div> : null}
+					<div className="dmx-list-toolbar">
+						<label>
+							<Search size={15} />
+							<input
+								aria-label="搜索指标列表"
+								onChange={(event) => setQuery(event.target.value)}
+								placeholder="搜索指标编码、名称、业务口径或负责人"
+								value={query}
+							/>
+						</label>
 						<select
-							aria-label="业务分类"
+							aria-label="按业务分类筛选"
 							onChange={(event) => {
 								setBusinessCategoryId(event.target.value);
 								if (domain && dataDomains.find((item) => item.id === domain)?.parentId !== event.target.value) {
@@ -303,7 +450,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 								</option>
 							))}
 						</select>
-						<select aria-label="数据域" onChange={(event) => setDomain(event.target.value)} value={domain}>
+						<select aria-label="按数据域筛选" onChange={(event) => setDomain(event.target.value)} value={domain}>
 							<option value="">全部数据域</option>
 							{dataDomains
 								.filter((item) => !businessCategoryId || item.parentId === businessCategoryId)
@@ -313,109 +460,23 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 									</option>
 								))}
 						</select>
-						<div className="dmx-metric-search">
-							<Search size={14} />
-							<input
-								aria-label="搜索指标"
-								onChange={(event) => setQuery(event.target.value)}
-								placeholder="搜索"
-								value={query}
+						<span>共 {visible.length} 条</span>
+					</div>
+					{visible.length ? (
+						<div className="dmx-table-scroll">
+							<CompactTable<IndicatorDefinition>
+								className="dmx-metric-table"
+								columns={catalogColumns}
+								dataSource={visible}
+								pagination={{ pageSize: 10 }}
+								rowKey={(row) => row.id || String(row.code)}
+								scroll={{ x: 1180 }}
 							/>
 						</div>
-						<div className="dmx-metric-tree">
-							{visible.map((item) => (
-								<Button
-									className={selected?.id === item.id ? "active" : ""}
-									key={item.id || String(item.code)}
-									onClick={() => choose(item)}
-								>
-									<span>△</span>
-									<span>
-										<small>{domainLabels.get(String(item.dataDomainId || "")) || item.domain || "未归属"}</small>
-										<b>{item.code}</b>
-										<em>{item.name}</em>
-									</span>
-								</Button>
-							))}
-							{!visible.length ? (
-								<RequestState description="当前筛选条件下没有指标。" kind="empty" title="暂无指标" />
-							) : null}
-						</div>
-					</aside>
-					<section className="dmx-metric-editor">
-						<div className="dmx-editor-tab">
-							<span>△</span>
-							<strong>{selected?.name || `新建${metricType}`}</strong>
-							{selected?.status ? (
-								<Status tone={selected.status === "PUBLISHED" ? "success" : "warning"}>{selected.status}</Status>
-							) : null}
-						</div>
-						{selected ? (
-							<>
-								<div className="dmx-metric-toolbar">
-									<Button disabled={!canMaintain || Boolean(busy)} primary onClick={() => void mutate("save")}>
-										<Save size={15} />
-										{busy === "save" ? "保存中…" : "保存"}
-									</Button>
-									<Button
-										disabled={!canMaintain || Boolean(busy) || !selected.id}
-										onClick={() => void mutate("validate")}
-									>
-										<CheckCircle2 size={15} />
-										{busy === "validate" ? "校验中…" : "校验"}
-									</Button>
-									<Button
-										disabled={!canMaintain || Boolean(busy) || !selected.id}
-										onClick={() => void mutate("publish")}
-									>
-										<Send size={15} />
-										{busy === "publish" ? "发布中…" : "发布"}
-									</Button>
-									<Button
-										danger
-										disabled={!canMaintain || Boolean(busy) || !selected.id}
-										onClick={() => void mutate("archive")}
-									>
-										<Archive size={15} />
-										归档
-									</Button>
-								</div>
-								{failure ? (
-									<div className="dmx-inline-error" role="alert">
-										{failure.message}
-									</div>
-								) : null}
-								{contextFailure ? (
-									<div className="dmx-inline-error" role="alert">
-										{contextFailure}
-									</div>
-								) : null}
-								{!canMaintain ? <div className="dmx-capability-note">当前账号只有指标查看权限。</div> : null}
-								<fieldset className="dmx-editor-fieldset" disabled={!canMaintain}>
-									<MetricEditor
-										businessCategories={businessCategories}
-										codeLocked={Boolean(selected.id)}
-										dataDomains={dataDomains}
-										onChange={setValues}
-										processes={processes}
-										processMode={processMode}
-										values={values}
-									/>
-								</fieldset>
-							</>
-						) : (
-							<RequestState
-								description={
-									supportsIndicatorCreation(metricType)
-										? "点击目录中的指标，或新建指标。"
-										: "当前 owner 未返回该类型指标。"
-								}
-								kind="empty"
-								title="请选择指标"
-							/>
-						)}
-					</section>
-				</div>
+					) : (
+						<RequestState description="请调整搜索或筛选条件后重试。" kind="empty" title={`暂无${metricType}`} />
+					)}
+				</section>
 			)}
 			<Toast message={message} />
 		</main>

@@ -571,64 +571,6 @@
 	cursor: pointer;
 }
 
-.dmx-metric-catalog > header {
-	min-height: 48px;
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	padding: 0 12px;
-	border-bottom: 1px solid var(--dmx-border);
-}
-
-.dmx-metric-catalog h2 {
-	margin: 0;
-	font-size: 15px;
-}
-
-.dmx-metric-catalog > header > div {
-	display: flex;
-	gap: 2px;
-}
-.dmx-metric-catalog > header button {
-	width: 29px;
-	height: 29px;
-	display: grid;
-	place-items: center;
-	border: 0;
-	border-radius: 3px;
-	background: transparent;
-	color: #5c6879;
-	cursor: pointer;
-}
-.dmx-metric-catalog > header button:hover {
-	background: var(--dmx-blue-soft);
-	color: var(--dmx-blue);
-}
-
-.dmx-metric-catalog > select,
-.dmx-metric-search {
-	min-height: 34px;
-	border: 1px solid #d4dbe5;
-	border-radius: 3px;
-	background: #fff;
-}
-.dmx-metric-catalog > select {
-	padding: 0 8px;
-}
-.dmx-metric-search {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	padding: 0 8px;
-	color: #8c97a7;
-}
-.dmx-metric-search input {
-	width: 100%;
-	border: 0;
-	outline: 0;
-	font: inherit;
-}
-
 .dmx-create-menu {
 	position: absolute;
 	top: 43px;
@@ -1203,69 +1145,11 @@
 	height: calc(100vh - 185px);
 	min-height: 620px;
 	display: grid;
-	grid-template-columns: 370px minmax(650px, 1fr);
+	grid-template-columns: minmax(650px, 1fr);
 	border: 1px solid var(--dmx-border);
 	border-radius: 5px;
 	background: #fff;
 	overflow: hidden;
-}
-.dmx-metric-catalog {
-	display: flex;
-	min-width: 0;
-	flex-direction: column;
-	border-right: 1px solid var(--dmx-border);
-	background: #fbfcfe;
-}
-.dmx-metric-layer {
-	margin: 10px;
-	padding: 7px;
-	border: 1px solid #cbd9f5;
-	border-radius: 3px;
-	background: #f1f6ff;
-	color: var(--dmx-blue);
-	text-align: center;
-	font-size: 12px;
-}
-.dmx-metric-catalog > select {
-	margin: 0 10px 8px;
-}
-.dmx-metric-search {
-	margin: 0 10px 8px;
-}
-.dmx-metric-tree {
-	flex: 1;
-	overflow: auto;
-}
-.dmx-metric-tree > button {
-	width: 100%;
-	display: flex;
-	gap: 9px;
-	padding: 9px 14px;
-	border: 0;
-	background: transparent;
-	color: #536074;
-	text-align: left;
-	cursor: pointer;
-}
-.dmx-metric-tree > button.active,
-.dmx-metric-tree > button:hover {
-	background: var(--dmx-blue-soft);
-	color: var(--dmx-blue);
-}
-.dmx-metric-tree > button > span:last-child {
-	display: grid;
-	gap: 2px;
-}
-.dmx-metric-tree small {
-	color: #8c96a5;
-}
-.dmx-metric-tree b {
-	font-size: 12px;
-}
-.dmx-metric-tree em {
-	color: #687386;
-	font-size: 11px;
-	font-style: normal;
 }
 .dmx-metric-editor {
 	min-width: 0;
@@ -1866,9 +1750,6 @@
 	.dmx-model-workbench--editor-only {
 		grid-template-columns: minmax(560px, 1fr);
 	}
-	.dmx-metric-workbench {
-		grid-template-columns: 320px minmax(620px, 1fr);
-	}
 }
 
 @media (max-width: 1120px) {
@@ -1876,6 +1757,13 @@
 	.dmx-workbench-page,
 	.dmx-metrics-page {
 		padding: 18px;
+	}
+	.dmx-metrics-page .dmx-list-toolbar {
+		flex-wrap: wrap;
+	}
+	.dmx-metrics-page .dmx-list-toolbar label {
+		min-width: 240px;
+		flex: 1 1 320px;
 	}
 	.dmx-overview-grid {
 		grid-template-columns: 1fr;
@@ -1898,8 +1786,7 @@
 	.dmx-metric-workbench {
 		height: auto;
 		min-height: 760px;
-		grid-template-columns: 280px minmax(560px, 1fr);
-		overflow: auto;
+		grid-template-columns: minmax(0, 1fr);
 	}
 	.dmx-graph-node {
 		width: 160px;
@@ -1936,11 +1823,6 @@
 	.dmx-model-workbench,
 	.dmx-metric-workbench {
 		display: block;
-	}
-	.dmx-metric-catalog {
-		max-height: 430px;
-		border-right: 0;
-		border-bottom: 1px solid var(--dmx-border);
 	}
 	.dmx-model-editor,
 	.dmx-metric-editor {

@@ -45,6 +45,10 @@ const EN_PORTAL_LOCALE = (
 ).sys.nav.portal;
 const STATIC_ROUTES = readFileSync(new URL("./static-routes.tsx", import.meta.url), "utf8");
 const DYNAMIC_RESOLVER = readFileSync(new URL("./dynamic-resolver.tsx", import.meta.url), "utf8");
+const PLATFORM_NAV_DATA = readFileSync(
+	new URL("../../../layouts/dashboard/nav/nav-data/index.tsx", import.meta.url),
+	"utf8",
+);
 const LIQUIBASE_MASTER = readFileSync(
 	new URL("../../../../../dts-admin/src/main/resources/config/liquibase/master.xml", import.meta.url),
 	"utf8",
@@ -112,6 +116,11 @@ test("primary modules follow the warehouse lifecycle order and modeling stays ou
 		flatten(modeling).some((item) => item.key === "modeling-home-tasks"),
 		false,
 	);
+});
+
+test("platform sidebar preserves the root order supplied by the menu service", () => {
+	assert.doesNotMatch(PLATFORM_NAV_DATA, /NAV_CATEGORY_GROUPS/);
+	assert.match(PLATFORM_NAV_DATA, /buildNavItemsInternal\(menus, undefined, visited\)/);
 });
 
 test("modeling exposes its strategy directly after warehouse planning moves to the canonical owner", () => {

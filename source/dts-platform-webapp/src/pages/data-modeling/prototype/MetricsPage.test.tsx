@@ -3,7 +3,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MetricEditor } from "./MetricsPage";
+import { MetricEditor, resolveMetricCatalogSelection } from "./MetricsPage";
 
 let container: HTMLDivElement;
 let root: Root;
@@ -90,5 +90,25 @@ describe("MetricEditor stable business context", () => {
 		expect(container.textContent).toContain("语义模型修订");
 		expect(container.querySelector<HTMLInputElement>('input[value="model-1"]')).not.toBeNull();
 		expect(container.querySelector<HTMLInputElement>('input[value="r7"]')).not.toBeNull();
+	});
+});
+
+describe("metric catalog table selection", () => {
+	const rows = [
+		{ id: "metric-1", code: "BUDGET_AMOUNT", name: "预算金额", domain: "finance" },
+		{ id: "metric-2", code: "BUDGET_RATE", name: "预算执行率", domain: "finance" },
+	] as never;
+
+	it("keeps the table visible until the user chooses a row", () => {
+		expect(resolveMetricCatalogSelection(rows, "")).toBeNull();
+		expect(resolveMetricCatalogSelection(rows, "missing")).toBeNull();
+	});
+
+	it("opens the exact indicator requested by a deep link", () => {
+		expect(resolveMetricCatalogSelection(rows, "metric-2")).toMatchObject({
+			id: "metric-2",
+			code: "BUDGET_RATE",
+			name: "预算执行率",
+		});
 	});
 });
