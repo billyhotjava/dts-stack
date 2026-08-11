@@ -163,11 +163,4 @@ describe("loadPlanningProjection catalog writes", () => {
 		expect(projection.rows.map((row) => row.cells[7])).toEqual(["系统", "自定义"]);
 		expect(projection.rows[1]?.source).toEqual(customFinDetail);
 	});
-
-	it("states the current planning-parameter boundary in customer-facing language", async () => {
-		const projection = await loadPlanningProjection("system");
-
-		expect(projection.readOnlyReason).toBe("当前版本尚未提供可维护的建模策略；配置能力接入前，本页仅说明功能边界。");
-		expect(projection.readOnlyReason).not.toMatch(/owner|旧流程|配置接口/i);
-	});
 });

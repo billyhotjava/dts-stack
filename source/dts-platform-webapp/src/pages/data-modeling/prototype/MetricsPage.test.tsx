@@ -61,8 +61,17 @@ describe("MetricEditor stable business context", () => {
 							confirmed: true,
 							lifecycleStatus: "ACTIVE",
 						},
+						{
+							id: "process-row-2",
+							version: 1,
+							processId: "budget_adjustment",
+							domainId: "domain-1",
+							name: "预算调整",
+							sourceType: "MANUAL",
+							confirmed: true,
+							lifecycleStatus: "ACTIVE",
+						},
 					]}
-					processMode="MANAGED"
 					values={{
 						code: "BUDGET_AMOUNT",
 						name: "预算金额",

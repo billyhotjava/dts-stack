@@ -373,28 +373,21 @@ class PortalMenuSeedDefaultsContractTest {
         assertEquals("数据建模", modeling.get("title"));
 
         List<Map<String, Object>> modelingChildren = listOfMaps(modeling.get("children"));
-        assertEquals(7, modelingChildren.size(), "modeling must expose one overview and six capability groups");
+        assertEquals(6, modelingChildren.size(), "modeling must expose one overview and five capability groups");
         assertEquals("modeling-home-workspace", modelingChildren.get(0).get("key"));
         assertEquals("建模概览", modelingChildren.get(0).get("title"));
         assertEquals("/data-modeling/home/workspace", modelingChildren.get(0).get("externalLink"));
-        assertEquals("planning-system", modelingChildren.get(1).get("key"), "建模策略 should follow 建模概览");
-        assertEquals("standards", modelingChildren.get(2).get("key"), "数据标准 should follow 建模策略");
-        assertEquals("dimensional-modeling", modelingChildren.get(3).get("key"), "维度建模 should follow 数据标准");
-        assertEquals("data-metrics", modelingChildren.get(4).get("key"), "数据指标 should follow 维度建模");
-        assertEquals("modeling-tools", modelingChildren.get(5).get("key"), "通用工具 should follow 数据指标");
-        assertEquals("modeling-graphs", modelingChildren.get(6).get("key"), "关系图 should be the final prototype group");
+        assertEquals("standards", modelingChildren.get(1).get("key"), "数据标准 should follow 建模概览");
+        assertEquals("dimensional-modeling", modelingChildren.get(2).get("key"), "维度建模 should follow 数据标准");
+        assertEquals("data-metrics", modelingChildren.get(3).get("key"), "数据指标 should follow 维度建模");
+        assertEquals("modeling-tools", modelingChildren.get(4).get("key"), "通用工具 should follow 数据指标");
+        assertEquals("modeling-graphs", modelingChildren.get(5).get("key"), "关系图 should be the final prototype group");
         assertFalse(
             modelingChildren.stream().anyMatch(node -> "modeling-home".equals(node.get("key"))),
             "the redundant modeling home group must be removed"
         );
 
-        Map<String, Object> planningSystem = modelingChildren
-            .stream()
-            .filter(node -> "planning-system".equals(node.get("key")))
-            .findFirst()
-            .orElse(null);
-        assertNotNull(planningSystem, "数据建模 root must expose modeling strategy directly");
-        assertEquals("建模策略", planningSystem.get("title"));
+        assertFalse(modelingChildren.stream().anyMatch(node -> "planning-system".equals(node.get("key"))));
         assertFalse(modelingChildren.stream().anyMatch(node -> "warehouse-planning".equals(node.get("key"))));
 
         Map<String, Object> dimensionalModeling = modelingChildren
@@ -426,7 +419,7 @@ class PortalMenuSeedDefaultsContractTest {
             new TypeReference<List<Map<String, Object>>>() {}
         );
         assertEquals(
-            26,
+            25,
             defaults.stream().filter(rule -> String.valueOf(rule.get("route")).startsWith("/data-modeling/")).count(),
             "role defaults must document every prototype leaf without granting roles"
         );
@@ -449,7 +442,8 @@ class PortalMenuSeedDefaultsContractTest {
                             "sys.nav.portal.studioSemanticObjects",
                             "sys.nav.portal.studioSemanticModels",
                             "sys.nav.portal.studioSqlModeling",
-                            "sys.nav.portal.studioMetricWorkbench"
+                            "sys.nav.portal.studioMetricWorkbench",
+                            "sys.nav.portal.planningSystem"
                         )
                         .contains(rule.get("code"))
                 ),

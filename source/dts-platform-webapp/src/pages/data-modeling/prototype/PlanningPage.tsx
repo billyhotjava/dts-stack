@@ -14,7 +14,6 @@ import {
 	SubjectDomainForm,
 	WarehouseLayerForm,
 } from "./PlanningEditors";
-import { PlanningPolicyForm } from "./PlanningPolicyForm";
 import { Button, Drawer, PageHeader, RequestState, Status, Toast, useTransientMessage } from "./PrototypePrimitives";
 import {
 	loadPlanningProjection,
@@ -62,12 +61,7 @@ type PlanningPageProps = {
 	onActiveChange?: (id: string | null) => void;
 };
 
-export function PlanningPage({
-	route,
-	surface = "modeling",
-	activeId = "",
-	onActiveChange,
-}: PlanningPageProps) {
+export function PlanningPage({ route, surface = "modeling", activeId = "", onActiveChange }: PlanningPageProps) {
 	const modelingMenuGrant = useDataModelingMenuGrant();
 	const architectureWriteAccess = useArchitectureDictionaryWriteAccess();
 	const canMaintain = surface === "architecture" ? architectureWriteAccess : modelingMenuGrant;
@@ -330,12 +324,10 @@ export function PlanningPage({
 				<PageHeader
 					actions={
 						<>
-							{route.view !== "system" ? (
-								<Button disabled={loading} onClick={() => void load()}>
-									<RotateCw size={15} />
-									刷新
-								</Button>
-							) : null}
+							<Button disabled={loading} onClick={() => void load()}>
+								<RotateCw size={15} />
+								刷新
+							</Button>
 							{creatable && route.view === "business-domains" ? (
 								<>
 									<Button
@@ -362,11 +354,9 @@ export function PlanningPage({
 					}
 					description={route.description}
 					title={route.title}
-					trail={surface === "architecture" ? "数仓规划 / 平台规划" : "数据建模 / 建模策略"}
+					trail={surface === "architecture" ? "数仓规划 / 平台规划" : "数据建模"}
 				/>
-				{route.view === "system" ? (
-					<PlanningPolicyForm canMaintain={canMaintain} />
-				) : loading ? (
+				{loading ? (
 					<RequestState description={`正在读取${route.title}权威数据。`} kind="loading" title="正在加载" />
 				) : failure ? (
 					<RequestState

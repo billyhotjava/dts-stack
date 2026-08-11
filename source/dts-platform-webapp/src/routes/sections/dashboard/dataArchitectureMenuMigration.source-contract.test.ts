@@ -21,6 +21,10 @@ const planningMenuConvergenceUrl = new URL(
 	"../../../../../dts-admin/src/main/resources/config/liquibase/changelog/20260810-03_converge_warehouse_planning_menu.xml",
 	import.meta.url,
 );
+const modelingStrategyRetirementUrl = new URL(
+	"../../../../../dts-admin/src/main/resources/config/liquibase/changelog/20260811-01_retire_legacy_modeling_strategy_menu.xml",
+	import.meta.url,
+);
 
 describe("data architecture menu migration", () => {
 	it("installs the canonical root and all five views", () => {
@@ -52,7 +56,7 @@ describe("data architecture menu migration", () => {
 		assert.doesNotMatch(repair, /DELETE FROM portal_menu(?:\s|$)/);
 	});
 
-	it("renames the canonical owner, promotes modeling strategy, and retires the hidden modeling space", () => {
+	it("records the historical owner convergence and hidden-space retirement", () => {
 		assert.match(master, /20260810-03_converge_warehouse_planning_menu\.xml/);
 		const convergence = readFileSync(planningMenuConvergenceUrl, "utf8");
 		assert.match(convergence, /'title', '数仓规划'/);
@@ -63,5 +67,14 @@ describe("data architecture menu migration", () => {
 		assert.match(convergence, /deleted = TRUE/);
 		assert.match(convergence, /last_modified_by = actor \|\| '-rollback'/);
 		assert.doesNotMatch(convergence, /DELETE FROM portal_menu(?:\s|$)/);
+	});
+
+	it("retires the obsolete plan-level modeling strategy without deleting its compatibility row", () => {
+		assert.match(master, /20260811-01_retire_legacy_modeling_strategy_menu\.xml/);
+		const retirement = readFileSync(modelingStrategyRetirementUrl, "utf8");
+		assert.match(retirement, /sys\.nav\.portal\.planningSystem/);
+		assert.match(retirement, /deleted = TRUE/);
+		assert.match(retirement, /last_modified_by = '20260811-retire-legacy-modeling-strategy-menu'/);
+		assert.doesNotMatch(retirement, /DELETE FROM portal_menu(?:\s|$)/);
 	});
 });

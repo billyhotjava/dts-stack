@@ -20,7 +20,6 @@ const mocks = vi.hoisted(() => ({
 	retireSubjectDomain: vi.fn(),
 	updateSubjectDomain: vi.fn(),
 	listPlanningCatalogDomains: vi.fn(),
-	loadPlanningContextPolicy: vi.fn(),
 	listDataMarts: vi.fn(),
 	normalizeModelingRequestFailure: vi.fn(),
 	canMaintain: false,
@@ -64,11 +63,7 @@ vi.mock("./services/planningProjectionService", () => ({
 	loadPlanningProjection: mocks.loadPlanningProjection,
 	normalizeModelingRequestFailure: mocks.normalizeModelingRequestFailure,
 }));
-vi.mock("./services/planningContextPolicyService", () => ({
-	loadPlanningContextPolicy: mocks.loadPlanningContextPolicy,
-}));
 vi.mock("./useDataModelingMenuGrant", () => ({ useDataModelingMenuGrant: () => mocks.canMaintain }));
-vi.mock("./PlanningPolicyForm", () => ({ PlanningPolicyForm: () => <section>建模策略已接入权威策略</section> }));
 
 import { PlanningPage } from "./PlanningPage";
 
@@ -96,13 +91,6 @@ beforeAll(() => {
 beforeEach(() => {
 	mocks.canMaintain = false;
 	mocks.architectureCanMaintain = true;
-	mocks.loadPlanningContextPolicy.mockResolvedValue({
-		policy: {
-			businessCategoryMode: "SINGLE_DEFAULT",
-			defaultBusinessCategoryId: "category-1",
-			businessProcessMode: "AUTO_SELECT_SINGLE",
-		},
-	});
 	(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 	container = document.createElement("div");
 	document.body.appendChild(container);
@@ -160,24 +148,6 @@ describe("PlanningPage", () => {
 		deletable: true,
 		disabledReason: null,
 	};
-
-	it("renders modeling strategy without a duplicate warehouse-planning sidebar", async () => {
-		mocks.loadPlanningProjection.mockResolvedValue({ headers: [], rows: [], readOnlyReason: null });
-		const route: DataModelingRoute = {
-			workspace: "planning",
-			view: "system",
-			title: "建模策略",
-			description: "配置当前建模计划的默认业务分类、业务过程选择方式和交付策略。",
-		};
-
-		await renderPlanning(route);
-
-		expect(container.textContent).toContain("建模策略");
-		expect(container.textContent).not.toContain("建模空间");
-		expect(container.textContent).not.toContain("平台数仓规划");
-		expect(container.querySelector('nav[aria-label="数仓规划目录"]')).toBeNull();
-		expect(container.textContent).toContain("建模策略已接入权威策略");
-	});
 
 	it("uses the platform menu as the only warehouse-planning navigation", async () => {
 		mocks.loadPlanningProjection.mockResolvedValue({ headers: [], rows: [], readOnlyReason: null });

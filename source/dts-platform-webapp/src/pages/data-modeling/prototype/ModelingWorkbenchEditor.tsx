@@ -34,11 +34,7 @@ import {
 	type ModelSpecDraft,
 	type ModelWorkbenchContext,
 } from "./services/modelWorkbenchService";
-import {
-	loadPlanningContextPolicy,
-	type PlanningBusinessProcessMode,
-	resolveBusinessProcessBinding,
-} from "./services/planningContextPolicyService";
+import { resolveBusinessProcessBinding } from "./services/planningContextPolicyService";
 import "./modeling-workbench.css";
 
 export type ModelingWorkbenchEditorProps = {
@@ -398,24 +394,9 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 	const config = MODEL_KIND_CONFIG[draft.createKind];
 	const patch = (next: Partial<ModelSpecDraft>) => onChange({ ...draft, ...next });
 	const factMode = draft.createKind === "fact";
-	const [processMode, setProcessMode] = useState<PlanningBusinessProcessMode>("AUTO_SELECT_SINGLE");
 	const [processes, setProcesses] = useState<Sprint64BusinessProcess[]>([]);
 	const [processLoaded, setProcessLoaded] = useState(false);
 	const [processFailure, setProcessFailure] = useState("");
-	useEffect(() => {
-		if (!factMode) return;
-		let active = true;
-		void loadPlanningContextPolicy(draft.planId)
-			.then((contextPolicy) => {
-				if (active) setProcessMode(contextPolicy.policy.businessProcessMode);
-			})
-			.catch(() => {
-				if (active) setProcessFailure("建模策略读取失败，暂按唯一过程自动选择处理。");
-			});
-		return () => {
-			active = false;
-		};
-	}, [draft.planId, factMode]);
 	useEffect(() => {
 		if (!factMode || !draft.domainId) {
 			setProcesses([]);
@@ -443,8 +424,8 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 		};
 	}, [draft.domainId, factMode]);
 	const processBinding = useMemo(
-		() => resolveBusinessProcessBinding(processMode, draft.businessProcessId, processes),
-		[draft.businessProcessId, processMode, processes],
+		() => resolveBusinessProcessBinding(draft.businessProcessId, processes),
+		[draft.businessProcessId, processes],
 	);
 	useEffect(() => {
 		if (!factMode || !processLoaded) return;

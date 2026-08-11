@@ -10,7 +10,6 @@ const EXPECTED_ROUTES = [
 	["planning", "marts"],
 	["planning", "subjects"],
 	["planning", "spaces"],
-	["planning", "system"],
 	["standards", "fields"],
 	["standards", "codes"],
 	["standards", "roots"],
@@ -60,7 +59,7 @@ describe("data-modeling navigation", () => {
 		});
 	});
 
-	it("keeps the read-only planning routes honest", () => {
+	it("keeps the read-only planning routes honest and retires the legacy strategy leaf", () => {
 		expect(resolveDataModelingRoute("/data-modeling/planning/layers")).toMatchObject({
 			workspace: "planning",
 			view: "layers",
@@ -69,9 +68,8 @@ describe("data-modeling navigation", () => {
 		});
 		expect(resolveDataModelingRoute("/data-modeling/planning/system")).toMatchObject({
 			workspace: "planning",
-			view: "system",
-			title: "建模策略",
-			description: "配置当前建模计划的默认业务分类、业务过程选择方式和交付策略。",
+			view: "business-categories",
+			title: "业务分类",
 		});
 	});
 });

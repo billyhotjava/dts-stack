@@ -33,10 +33,6 @@ const ROUTES: Record<string, Omit<DataModelingRoute, "workspace" | "view">> = {
 		title: "建模空间",
 		description: "管理模型所属空间、负责人和协作边界。",
 	},
-	"planning/system": {
-		title: "建模策略",
-		description: "配置当前建模计划的默认业务分类、业务过程选择方式和交付策略。",
-	},
 	"standards/fields": {
 		title: "字段标准",
 		description: "统一字段名称、数据类型、长度和业务含义。",

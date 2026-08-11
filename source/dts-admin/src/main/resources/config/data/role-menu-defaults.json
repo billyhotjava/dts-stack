@@ -138,12 +138,6 @@
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.planningSystem",
-    "title": "建模策略",
-    "route": "/data-modeling/planning/system",
-    "requiredRoles": []
-  },
-  {
     "code": "sys.nav.portal.standardFields",
     "title": "字段标准",
     "route": "/data-modeling/standards/fields",

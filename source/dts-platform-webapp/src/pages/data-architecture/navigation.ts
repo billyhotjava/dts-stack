@@ -31,6 +31,7 @@ const LEGACY_PLANNING_VIEW: Record<string, DataArchitectureView> = {
 	"business-categories": "business-domains",
 	domains: "business-domains",
 	spaces: "business-domains",
+	system: "business-domains",
 	processes: "processes",
 	layers: "layers",
 	marts: "marts",

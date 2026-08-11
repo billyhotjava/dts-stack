@@ -27,7 +27,9 @@ describe("data architecture navigation", () => {
 				"#processes",
 			),
 		).toBe("/data-architecture?domain=domain-id&returnPlanId=plan-id&view=processes&active=domain-id#processes");
-		expect(legacyPlanningArchitectureTarget("/data-modeling/planning/system", "?keep=1", "#system")).toBeNull();
+		expect(legacyPlanningArchitectureTarget("/data-modeling/planning/system", "?keep=1", "#system")).toBe(
+			"/data-architecture?keep=1&view=business-domains#system",
+		);
 	});
 
 	it("maps all subject workspace tabs to their unique owners", () => {

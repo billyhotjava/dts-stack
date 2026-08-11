@@ -172,14 +172,6 @@
           "externalLink": "/data-modeling/home/workspace"
         },
         {
-          "key": "planning-system",
-          "path": "planning/system",
-          "icon": "solar:settings-bold-duotone",
-          "titleKey": "sys.nav.portal.planningSystem",
-          "title": "建模策略",
-          "externalLink": "/data-modeling/planning/system"
-        },
-        {
           "key": "standards",
           "path": "standards",
           "icon": "solar:document-text-bold-duotone",

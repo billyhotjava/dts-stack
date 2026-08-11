@@ -197,6 +197,7 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(planningEditors).toMatch(/createBusinessProcessApi|createDataMart|createSubjectDomain/);
 		expect(planningEditors).toMatch(/confirmDataMart|confirmSubjectDomain/);
 		expect(catalogEditors).toMatch(/CatalogDomainForm|listPlanningCatalogDomains/);
+		expect(catalogEditors).not.toMatch(/loadPlanningContextPolicy|warehousePlanApi|建模策略/);
 		expect(existsSync(new URL("./prototype/PlanningSidebar.tsx", import.meta.url))).toBe(false);
 		expect(planningStyles).not.toMatch(/\.dmx-planning-(?:layout|sidebar)/);
 		expect(modeling).toMatch(/saveModelDraft|ModelWorkbenchDialog/);
@@ -245,6 +246,7 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(relationshipService).toContain("limit: GRAPH_PAGE_SIZE");
 		expect(relationshipService).not.toMatch(/kind:\s*kindForView|query:\s*query\.query/);
 		expect(metrics).not.toContain("expressionSql");
+		expect(metrics).not.toMatch(/loadPlanningContextPolicy|warehousePlanApi|建模策略/);
 		expect(metrics).toContain('from "@/components/table"');
 		expect(metrics).toMatch(/<CompactTable<IndicatorDefinition>/);
 		expect(metrics).toContain('className="dmx-list-toolbar"');
@@ -261,7 +263,7 @@ describe("prototype-owned data modeling frontend", () => {
 	it("keeps the product copy aligned with the approved menu corrections", () => {
 		const navigation = read("./navigation.ts");
 		expect(navigation).toContain('title: "建模概览"');
-		expect(navigation).toContain('title: "建模策略"');
+		expect(navigation).not.toContain('title: "建模策略"');
 		expect(navigation).not.toMatch(/title: "首页"|title: "系统管理"|home\/recent|home\/tasks/);
 	});
 });

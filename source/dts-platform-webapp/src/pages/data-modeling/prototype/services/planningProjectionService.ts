@@ -301,8 +301,5 @@ export async function loadPlanningProjection(view: string): Promise<PlanningProj
 			})),
 		};
 	}
-	if (view === "system") {
-		return emptyProjection("当前版本尚未提供可维护的建模策略；配置能力接入前，本页仅说明功能边界。");
-	}
 	return emptyProjection("当前对象尚无统一权威台账；确认 owner 前不提供本地模拟 CRUD。");
 }

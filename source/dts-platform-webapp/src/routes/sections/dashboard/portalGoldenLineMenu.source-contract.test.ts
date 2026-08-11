@@ -92,7 +92,6 @@ test("primary modules follow the warehouse lifecycle order and modeling stays ou
 		modeling.children?.map((item) => item.key),
 		[
 			"modeling-home-workspace",
-			"planning-system",
 			"standards",
 			"dimensional-modeling",
 			"data-metrics",
@@ -123,7 +122,7 @@ test("platform sidebar preserves the root order supplied by the menu service", (
 	assert.match(PLATFORM_NAV_DATA, /buildNavItemsInternal\(menus, undefined, visited\)/);
 });
 
-test("modeling exposes its strategy directly after warehouse planning moves to the canonical owner", () => {
+test("modeling excludes the retired plan-level strategy after warehouse planning moves to the canonical owner", () => {
 	const modeling = section("modeling");
 	assert.equal(
 		flatten(modeling).some((item) => item.key === "warehouse-planning"),
@@ -133,8 +132,10 @@ test("modeling exposes its strategy directly after warehouse planning moves to t
 		flatten(modeling).some((item) => item.key === "planning-spaces"),
 		false,
 	);
-	assert.equal(child(modeling, "planning-system").title, "建模策略");
-	assert.equal(child(modeling, "planning-system").externalLink, "/data-modeling/planning/system");
+	assert.equal(
+		flatten(modeling).some((item) => item.key === "planning-system"),
+		false,
+	);
 	assert.deepEqual(
 		child(modeling, "standards").children?.map((item) => item.key),
 		["standards-fields", "standards-codes", "standards-roots", "standards-dictionary", "standards-mappings"],
@@ -157,8 +158,8 @@ test("modeling exposes its strategy directly after warehouse planning moves to t
 	);
 
 	const modelingLeaves = leaves(modeling);
-	assert.equal(modelingLeaves.length, 20);
-	assert.equal(new Set(modelingLeaves.map((item) => item.externalLink)).size, 20);
+	assert.equal(modelingLeaves.length, 19);
+	assert.equal(new Set(modelingLeaves.map((item) => item.externalLink)).size, 19);
 	for (const leaf of modelingLeaves) {
 		assert.match(leaf.externalLink || "", /^\/data-modeling\//);
 	}
@@ -204,7 +205,7 @@ test("warehouse planning is the only visible owner for five global dictionary vi
 test("role defaults mirror visible modeling leaves and retain old planning routes only as compatibility grants", () => {
 	const modelingLeaves = leaves(section("modeling"));
 	const modelingRoleDefaults = ROLE_DEFAULT_ENTRIES.filter((entry) => entry.route.startsWith("/data-modeling/"));
-	assert.equal(modelingRoleDefaults.length, 26);
+	assert.equal(modelingRoleDefaults.length, 25);
 
 	const defaultsByCode = new Map(modelingRoleDefaults.map((entry) => [entry.code, entry]));
 	for (const leaf of modelingLeaves) {
@@ -216,12 +217,10 @@ test("role defaults mirror visible modeling leaves and retain old planning route
 			requiredRoles: [],
 		});
 	}
-	assert.equal(defaultsByCode.size, 26);
+	assert.equal(defaultsByCode.size, 25);
 	assert.deepEqual(
 		modelingRoleDefaults
-			.filter(
-				(entry) => entry.code.startsWith("sys.nav.portal.planning") && entry.code !== "sys.nav.portal.planningSystem",
-			)
+			.filter((entry) => entry.code.startsWith("sys.nav.portal.planning"))
 			.map((entry) => entry.route)
 			.sort(),
 		[

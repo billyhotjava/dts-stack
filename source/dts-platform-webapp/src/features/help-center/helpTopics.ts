@@ -81,8 +81,8 @@ export const HELP_TOPICS: HelpTopic[] = [
 		id: "data-modeling",
 		title: "数据建模",
 		section: "数据建设",
-		summary: "在独立的数据建模工作区完成建模策略、标准、模型、指标和关系设计。",
-		keywords: ["建模", "建模策略", "标准", "维度", "模型", "指标", "关系图"],
+		summary: "在独立的数据建模工作区完成标准、模型、指标和关系设计。",
+		keywords: ["建模", "标准", "维度", "模型", "指标", "关系图"],
 		routePrefixes: ["/data-modeling"],
 		prerequisites: ["至少有一个可用数据源", "已明确业务目标或现有数据范围"],
 		steps: [

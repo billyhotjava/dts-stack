@@ -141,6 +141,7 @@
     <include file="config/liquibase/changelog/20260810-02_retire_legacy_modeling_layer_groups.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260810-03_converge_warehouse_planning_menu.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260810-04_portal_primary_menu_order.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260811-01_retire_legacy_modeling_strategy_menu.xml" relativeToChangelogFile="false"/>
     <!-- jhipster-needle-liquibase-add-changelog - JHipster will add liquibase changelogs here -->
     <!-- jhipster-needle-liquibase-add-constraints-changelog - JHipster will add liquibase constraints changelogs here -->
     <!-- jhipster-needle-liquibase-add-incremental-changelog - JHipster will add incremental liquibase changelogs here -->

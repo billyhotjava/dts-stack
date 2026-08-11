@@ -2,7 +2,6 @@ import { Archive, CheckCircle2, Plus, RefreshCw, Save, Search, Send, Trash2 } fr
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { listBusinessProcessesApi, type Sprint64BusinessProcess } from "@/api/sprint64GovernanceApi";
-import type { WarehousePlanBusinessProcessMode } from "@/api/warehousePlanApi";
 import { type CompactColumns, CompactTable } from "@/components/table";
 import {
 	type IndicatorMetricSourceRef,
@@ -28,7 +27,7 @@ import {
 	supportsIndicatorCreation,
 } from "./services/indicatorProjectionService";
 import { listPlanningCatalogDomains, type PlanningCatalogDomain } from "./services/planningCatalogDomainService";
-import { loadPlanningContextPolicy, resolveBusinessProcessBinding } from "./services/planningContextPolicyService";
+import { resolveBusinessProcessBinding } from "./services/planningContextPolicyService";
 import { useDataModelingMenuGrant } from "./useDataModelingMenuGrant";
 
 const typeByView: Record<string, MetricType> = {
@@ -82,7 +81,6 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 	const [businessCategoryId, setBusinessCategoryId] = useState("");
 	const [architecture, setArchitecture] = useState<PlanningCatalogDomain[]>([]);
 	const [processes, setProcesses] = useState<Sprint64BusinessProcess[]>([]);
-	const [processMode, setProcessMode] = useState<WarehousePlanBusinessProcessMode>("AUTO_SELECT_SINGLE");
 	const [contextFailure, setContextFailure] = useState("");
 	const processEpoch = useRef(0);
 	const [loading, setLoading] = useState(true);
@@ -138,19 +136,6 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 		};
 	}, []);
 	useEffect(() => {
-		let active = true;
-		void loadPlanningContextPolicy()
-			.then((contextPolicy) => {
-				if (active) setProcessMode(contextPolicy.policy.businessProcessMode);
-			})
-			.catch(() => {
-				if (active) setContextFailure("建模策略读取失败，业务过程暂按唯一自动选择处理。");
-			});
-		return () => {
-			active = false;
-		};
-	}, []);
-	useEffect(() => {
 		const dataDomainId = String(values.dataDomainId || "");
 		const epoch = ++processEpoch.current;
 		if (!dataDomainId) {
@@ -174,12 +159,12 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 			if (currentMetricType !== "ATOMIC") {
 				return current.businessProcessId ? { ...current, businessProcessId: null } : current;
 			}
-			const binding = resolveBusinessProcessBinding(processMode, current.businessProcessId, processes);
+			const binding = resolveBusinessProcessBinding(current.businessProcessId, processes);
 			const currentIsValid = binding.processes.some((item) => item.id === current.businessProcessId);
 			const nextId = binding.showSelector && currentIsValid ? String(current.businessProcessId) : binding.selectedId;
 			return (current.businessProcessId || null) === nextId ? current : { ...current, businessProcessId: nextId };
 		});
-	}, [processMode, processes]);
+	}, [processes]);
 	useEffect(() => {
 		if (previousMetricType.current !== metricType) {
 			setQuery("");
@@ -409,7 +394,6 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 								dataDomains={dataDomains}
 								onChange={setValues}
 								processes={processes}
-								processMode={processMode}
 								values={values}
 							/>
 						</fieldset>
@@ -490,7 +474,6 @@ export function MetricEditor({
 	businessCategories,
 	dataDomains,
 	processes,
-	processMode = "AUTO_SELECT_SINGLE",
 }: {
 	values: IndicatorEditValues;
 	onChange: (values: IndicatorEditValues) => void;
@@ -498,13 +481,12 @@ export function MetricEditor({
 	businessCategories: PlanningCatalogDomain[];
 	dataDomains: PlanningCatalogDomain[];
 	processes: Sprint64BusinessProcess[];
-	processMode?: WarehousePlanBusinessProcessMode;
 }) {
 	const set = (key: keyof IndicatorEditValues, value: unknown) => onChange({ ...values, [key]: value });
 	const metricType = String(values.metricType || "ATOMIC").toUpperCase();
 	const selectedDomainId = String(values.dataDomainId || "");
 	const availableDomains = dataDomains;
-	const processBinding = resolveBusinessProcessBinding(processMode, values.businessProcessId, processes);
+	const processBinding = resolveBusinessProcessBinding(values.businessProcessId, processes);
 	const sourceRefs = values.sourceRefs || [];
 	const sourceTypes: Array<{ value: IndicatorSourceType; label: string }> =
 		metricType === "ATOMIC"

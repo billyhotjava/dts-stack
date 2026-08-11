@@ -37,17 +37,10 @@ const mocks = vi.hoisted(() => ({
 			lifecycleStatus: "ACTIVE",
 		},
 	]),
-	loadPlanningContextPolicy: vi.fn().mockResolvedValue({
-		policy: { businessProcessMode: "AUTO_SELECT_SINGLE" },
-	}),
 }));
 
 vi.mock("@/api/sprint64GovernanceApi", () => ({
 	listBusinessProcessesApi: mocks.listBusinessProcessesApi,
-}));
-vi.mock("./services/planningContextPolicyService", async (importOriginal) => ({
-	...(await importOriginal<typeof import("./services/planningContextPolicyService")>()),
-	loadPlanningContextPolicy: mocks.loadPlanningContextPolicy,
 }));
 
 import { ModelingWorkbenchEditor, type ModelingWorkbenchEditorProps } from "./ModelingWorkbenchEditor";
