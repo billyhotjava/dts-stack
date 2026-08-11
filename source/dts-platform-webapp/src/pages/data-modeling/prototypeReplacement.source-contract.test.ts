@@ -200,6 +200,8 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(catalogEditors).not.toMatch(/loadPlanningContextPolicy|warehousePlanApi|建模策略/);
 		expect(existsSync(new URL("./prototype/PlanningSidebar.tsx", import.meta.url))).toBe(false);
 		expect(planningStyles).not.toMatch(/\.dmx-planning-(?:layout|sidebar)/);
+		const publishSectionRule = planningStyles.match(/\.dmx-publish-grid > section\s*\{([^}]*)\}/)?.[1] || "";
+		expect(publishSectionRule).toContain("min-width: 0");
 		expect(modeling).toMatch(/saveModelDraft|ModelWorkbenchDialog/);
 		expect(modeling).not.toMatch(/ModelWorkbenchCatalogPanel|WorkbenchCatalogTree|buildWorkbenchCatalogGroups/);
 		expect(catalogList).toMatch(/ModelWorkbenchCreateMenu|新建模型/);

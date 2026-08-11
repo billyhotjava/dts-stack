@@ -895,6 +895,7 @@
 	font-weight: 650;
 }
 .dmx-publish-grid > section {
+	min-width: 0;
 	padding: 21px 24px;
 }
 .dmx-publish-grid h3 {
