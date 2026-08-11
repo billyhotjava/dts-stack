@@ -23,6 +23,7 @@ test("dataset detail page consumes assets-v2 as the single source of truth", () 
 
 test("dataset detail page keeps asset identity separate from business description", () => {
 	assert.match(SOURCE, /__fqn: asset\.fqn/);
+	assert.match(SOURCE, /metadataSource: asset\.metadataSource/);
 	assert.match(SOURCE, /const assetKey = String\(assetContract\?\.assetKey \|\| ""\)\.trim\(\)/);
 	assert.doesNotMatch(SOURCE, /assetContract\?\.assetKey \|\| dataset\.description \|\| "-"/);
 });
@@ -48,9 +49,13 @@ test("dataset detail page exposes enterprise asset workbench tabs", () => {
 	assert.match(SOURCE, /DatasetLineageImpactTab/);
 });
 
-test("legacy-only assets get an explicit notice instead of a legacy render branch", () => {
-	assert.match(SOURCE, /该资产仅存在于旧版数据目录，尚未映射为治理资产/);
+test("legacy deep-link failure guides users back to unified data search", () => {
+	assert.match(SOURCE, /该资产暂时无法打开治理详情/);
+	assert.match(SOURCE, /请返回数据搜索重新选择；如仍无法打开，请联系数据管理员检查资产同步状态/);
+	assert.match(SOURCE, /router\.push\("\/catalog\/search"\)/);
+	assert.match(SOURCE, /返回数据搜索/);
 	assert.match(SOURCE, /legacyOnly/);
+	assert.doesNotMatch(SOURCE, /前往资产台账|router\.push\("\/catalog\/assets"\)|Tab 渲染统一以治理资产/);
 	assert.doesNotMatch(SOURCE, /dataset\.__source === "dts-catalog"/);
 	assert.doesNotMatch(SOURCE, /<LegacyGovernanceNotice/);
 });

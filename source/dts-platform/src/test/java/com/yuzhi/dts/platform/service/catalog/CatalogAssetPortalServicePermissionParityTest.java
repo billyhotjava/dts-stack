@@ -237,6 +237,61 @@ class CatalogAssetPortalServicePermissionParityTest {
     }
 
     @Test
+    void legacyAssetDetailUsesTheUnifiedContractWhenConsumerReadable() {
+        UUID datasetId = UUID.fromString("2a2a2a2a-2a2a-2a2a-2a2a-2a2a2a2a2a2a");
+        CatalogDataset legacy = new CatalogDataset();
+        legacy.setId(datasetId);
+        legacy.setName("Legacy orders");
+        legacy.setHiveDatabase("dwd");
+        legacy.setHiveTable("orders");
+        legacy.setEnabled(Boolean.TRUE);
+        legacy.setClassification("DATA_INTERNAL");
+        legacy.setOwnerDept("D01");
+        when(assetRepository.findById(datasetId)).thenReturn(Optional.empty());
+        when(datasetRepository.findById(datasetId)).thenReturn(Optional.of(legacy));
+        when(accessChecker.canRead(legacy)).thenReturn(true);
+        when(accessChecker.departmentAllowed(legacy, "D01")).thenReturn(true);
+        when(assetTagService.listAssetTags(any())).thenReturn(Map.of());
+
+        CatalogAssetPortalService.AssetDetail detail = service.getAsset(datasetId, "D01");
+
+        assertThat(detail.asset().id()).isEqualTo(datasetId);
+        assertThat(detail.asset().legacyDatasetId()).isEqualTo(datasetId);
+        assertThat(detail.asset().assetKey()).isEqualTo(CatalogAssetKey.dataset(legacy));
+        assertThat(detail.asset().metadataSource()).isEqualTo("dts-catalog");
+        assertThat(detail.columns()).isEmpty();
+        assertThat(detail.rawJson()).isNull();
+        assertThat(detail.profileJson()).isNull();
+        verifyNoInteractions(columnRepository);
+    }
+
+    @Test
+    void governanceMaintainerGetsMinimalLegacyDetailBeforeClassification() {
+        authenticate(AuthoritiesConstants.DEPT_DATA_OWNER, "D01");
+        UUID datasetId = UUID.fromString("2b2b2b2b-2b2b-2b2b-2b2b-2b2b2b2b2b2b");
+        CatalogDataset legacy = new CatalogDataset();
+        legacy.setId(datasetId);
+        legacy.setName("Legacy customers");
+        legacy.setHiveDatabase("dwd");
+        legacy.setHiveTable("customers");
+        legacy.setEnabled(Boolean.TRUE);
+        legacy.setOwnerDept("D01");
+        when(assetRepository.findById(datasetId)).thenReturn(Optional.empty());
+        when(datasetRepository.findById(datasetId)).thenReturn(Optional.of(legacy));
+        when(accessChecker.departmentAllowedExact(legacy, "D01")).thenReturn(true);
+        when(assetTagService.listAssetTags(any())).thenReturn(Map.of());
+
+        CatalogAssetPortalService.AssetDetail detail = service.getAsset(datasetId, "D01");
+
+        assertThat(detail.asset().id()).isEqualTo(datasetId);
+        assertThat(detail.asset().metadataSource()).isEqualTo("dts-catalog");
+        assertThat(detail.columns()).isEmpty();
+        assertThat(detail.rawJson()).isNull();
+        assertThat(detail.profileJson()).isNull();
+        verifyNoInteractions(columnRepository);
+    }
+
+    @Test
     void governanceIntakeVisibilityDoesNotOpenContractOrSchemaContract() {
         authenticate(AuthoritiesConstants.DEPT_DATA_OWNER, "D01");
         OpenMetadataAssetCache asset = new OpenMetadataAssetCache();
