@@ -36,5 +36,5 @@ test("the search page hosts the ledger table view with governance actions", () =
 	assert.match(SEARCH, /<AssetLedgerView/);
 	assert.match(SEARCH, /records=\{assetRows\}/);
 	assert.match(SEARCH, /view === "table"/);
-	assert.match(SEARCH, /onAssetChanged=\{\(\) => void runSearch\(false, pageState\.page, pageState\.size\)\}/);
+	assert.match(SEARCH, /onAssetChanged=\{\(\) => void runSearch\(pageState\.page, pageState\.size\)\}/);
 });

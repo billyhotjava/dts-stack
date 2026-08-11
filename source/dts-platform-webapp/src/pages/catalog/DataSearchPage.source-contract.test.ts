@@ -24,7 +24,7 @@ test("data search keeps the shared asset filter cache and URL tag protocol", () 
 	assert.match(SOURCE, /const selectedTagIds = useMemo\([\s\S]*?readTagIds\(searchParams\)/);
 	assert.match(SOURCE, /<AssetTagFilter/);
 	assert.match(SOURCE, /writeTagIds\(searchParams,\s*nextIds\)/);
-	assert.match(SOURCE, /if \(!trimmed && effectiveSelectedTagIds\.length === 0\)/);
+	assert.doesNotMatch(SOURCE, /if \(!trimmed && effectiveSelectedTagIds\.length === 0\)/);
 });
 
 test("data search hosts the ledger table view with pagination shared by both views", () => {
@@ -35,7 +35,7 @@ test("data search hosts the ledger table view with pagination shared by both vie
 	assert.match(SOURCE, /searchParams\.get\("view"\) === "table"/);
 	assert.match(SOURCE, /if \(view === "table"\) params\.set\("view", "table"\)/);
 	assert.match(SOURCE, /<Pagination/);
-	assert.match(SOURCE, /onChange=\{\(page, size\) => void runSearch\(false, page, size\)\}/);
+	assert.match(SOURCE, /onChange=\{\(page, size\) => void runSearch\(page, size\)\}/);
 	assert.match(SOURCE, /共 \{pageState\.total\} 条/);
 });
 
@@ -59,24 +59,31 @@ test("data search result cards are keyboard-native links without tag-list button
 	);
 });
 
-test("URL-backed tag search starts with the synchronously hydrated saved form", () => {
+test("data search starts empty and saved conditions require explicit restoration", () => {
 	assert.match(SOURCE, /function readStoredSearchForm\(\): StoredSearchForm/);
-	assert.match(SOURCE, /const \[initialSearchForm\] = useState\(readStoredSearchForm\)/);
-	assert.match(SOURCE, /useState\(initialSearchForm\.keyword\)/);
-	assert.match(SOURCE, /useState<string \| undefined>\(initialSearchForm\.domain\)/);
-	assert.match(SOURCE, /useState<string>\(initialSearchForm\.assetType\)/);
-	assert.match(SOURCE, /useState<string>\(initialSearchForm\.datasetType\)/);
-	assert.match(SOURCE, /useState<string>\(initialSearchForm\.classification\)/);
-	assert.match(SOURCE, /useState<string>\(initialSearchForm\.warehouseLayer\)/);
+	assert.doesNotMatch(SOURCE, /useState\(readStoredSearchForm\)/);
+	assert.match(SOURCE, /useState\(EMPTY_SEARCH_FORM\.keyword\)/);
+	assert.match(SOURCE, /useState<string \| undefined>\(EMPTY_SEARCH_FORM\.domain\)/);
+	assert.match(SOURCE, /useState<string \| undefined>\(EMPTY_SEARCH_FORM\.assetType\)/);
+	assert.match(SOURCE, /useState<string \| undefined>\(EMPTY_SEARCH_FORM\.datasetType\)/);
+	assert.match(SOURCE, /useState<string \| undefined>\(EMPTY_SEARCH_FORM\.classification\)/);
+	assert.match(SOURCE, /useState<string \| undefined>\(EMPTY_SEARCH_FORM\.warehouseLayer\)/);
+	assert.match(SOURCE, /const saved = readStoredSearchForm\(\)/);
+	assert.match(SOURCE, /placeholder="请选择主题域"[\s\S]*?value=\{domain\}/);
+	assert.match(SOURCE, /placeholder="请选择密级"[\s\S]*?value=\{classification\}/);
+	assert.match(SOURCE, /placeholder="请选择分层"[\s\S]*?value=\{warehouseLayer\}/);
+	assert.match(SOURCE, /placeholder="请选择资产类型"[\s\S]*?value=\{assetType\}/);
+	assert.match(SOURCE, /placeholder="请选择数据源类型"[\s\S]*?value=\{datasetType\}/);
+});
 
-	const hydration = SOURCE.indexOf("const [initialSearchForm] = useState(readStoredSearchForm)");
-	const urlSearch = SOURCE.indexOf("void runSearchRef.current(false)");
-	assert.ok(hydration >= 0 && urlSearch > hydration, "saved fields must hydrate before the URL tag effect searches");
-	const initialEffectStart = SOURCE.indexOf("useEffect(() => {", hydration);
-	const initialEffectEnd = SOURCE.indexOf("\n\t}, []);", initialEffectStart);
-	assert.ok(initialEffectStart > hydration && initialEffectEnd > initialEffectStart);
-	const initialEffect = SOURCE.slice(initialEffectStart, initialEffectEnd);
-	assert.doesNotMatch(initialEffect, /SEARCH_FORM_STORAGE_KEY|setKeyword/);
+test("data search automatically queries all assets when no filters are selected", () => {
+	assert.match(SOURCE, /const runSearch = async \(page = 1, size = LEDGER_PAGE_SIZE\)/);
+	assert.match(
+		SOURCE,
+		/useEffect\(\(\) => \{\s*void selectedTagIdsKey;\s*void runSearchRef\.current\(\);\s*\}, \[selectedTagIdsKey\]\)/,
+	);
+	assert.doesNotMatch(SOURCE, /请输入关键词或选择业务数据标签后再搜索/);
+	assert.doesNotMatch(SOURCE, /<EmptyState title="开始检索"/);
 });
 
 test("data search shares the asset-v2 query builder as the single source of truth", () => {
