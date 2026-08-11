@@ -29,9 +29,11 @@ beforeAll(() => {
 
 const apiMocks = vi.hoisted(() => ({
 	createCandidate: vi.fn(),
+	createReplacementCandidate: vi.fn(),
 	getWorkbench: vi.fn(),
 	lockCandidate: vi.fn(),
 	publishCandidate: vi.fn(),
+	refreshCandidate: vi.fn(),
 	retryCandidate: vi.fn(),
 	rematerializeCandidate: vi.fn(),
 	startBuildIntent: vi.fn(),
@@ -49,9 +51,11 @@ const apiMocks = vi.hoisted(() => ({
 vi.mock("@/api/modelSpecApi", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@/api/modelSpecApi")>()),
 	createReleaseCandidate: apiMocks.createCandidate,
+	createReplacementReleaseCandidate: apiMocks.createReplacementCandidate,
 	getReleaseCandidateWorkbench: apiMocks.getWorkbench,
 	lockReleaseCandidate: apiMocks.lockCandidate,
 	publishReleaseCandidate: apiMocks.publishCandidate,
+	refreshReleaseCandidate: apiMocks.refreshCandidate,
 	retryReleaseCandidate: apiMocks.retryCandidate,
 	rematerializeReleaseCandidate: apiMocks.rematerializeCandidate,
 	startModelBuildIntent: apiMocks.startBuildIntent,
@@ -311,6 +315,54 @@ describe("release and materialization dispatch", () => {
 				entries: [{ modelSpecId: model.id, sortOrder: 0, selectedReason: "从模型工作台选择" }],
 			}),
 		);
+	});
+
+	it("supersedes a drifted review candidate and builds a replacement without reviewer approval", async () => {
+		const reviewPending = candidate("BATCH_WORKBENCH", "REVIEW_PENDING");
+		const stale = { ...reviewPending, status: "STALE", version: 5 } as ReleaseCandidate;
+		const replacement = {
+			...candidate("BATCH_WORKBENCH"),
+			id: "30000000-0000-0000-0000-000000000002",
+			version: 1,
+		} as ReleaseCandidate;
+		apiMocks.getWorkbench.mockResolvedValue(workspace(["REFRESH_CANDIDATE"], reviewPending));
+		apiMocks.refreshCandidate.mockResolvedValue({ candidate: stale });
+		apiMocks.createReplacementCandidate.mockResolvedValue({ candidate: replacement });
+		apiMocks.lockCandidate.mockResolvedValue({ candidate: replacement });
+
+		await act(async () =>
+			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+		);
+		await flush();
+		await act(async () => button("按新修订重新物化")?.click());
+
+		expect(apiMocks.refreshCandidate).toHaveBeenCalledWith(
+			model.planId,
+			reviewPending,
+			"idem-1",
+			"模型已发生新修订，废弃旧候选",
+		);
+		expect(apiMocks.createReplacementCandidate).toHaveBeenCalledWith(
+			model.planId,
+			stale,
+			"idem-1",
+			expect.objectContaining({
+				entries: [{ modelSpecId: model.id, sortOrder: 0, selectedReason: "从模型工作台选择" }],
+			}),
+		);
+		expect(apiMocks.lockCandidate).toHaveBeenCalledWith(
+			model.planId,
+			replacement,
+			"idem-1",
+			"从模型工作台启动新修订构建",
+		);
+		expect(apiMocks.refreshCandidate.mock.invocationCallOrder[0]).toBeLessThan(
+			apiMocks.createReplacementCandidate.mock.invocationCallOrder[0],
+		);
+		expect(apiMocks.createReplacementCandidate.mock.invocationCallOrder[0]).toBeLessThan(
+			apiMocks.lockCandidate.mock.invocationCallOrder[0],
+		);
+		expect(apiMocks.rematerializeCandidate).not.toHaveBeenCalled();
 	});
 
 	it("publishes a batch candidate through the plan-owned endpoint", async () => {
