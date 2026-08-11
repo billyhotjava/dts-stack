@@ -99,20 +99,19 @@ describe("DataSearchPage", () => {
 	});
 
 	it("starts empty instead of automatically applying a previously saved query", async () => {
-		localStorage.setItem(
-			"catalog.search.form.v1",
-			JSON.stringify({
-				keyword: "历史条件",
-				domain: "domain-1",
-				assetType: "TABLE",
-				datasetType: "HIVE",
-				classification: "SECRET",
-				warehouseLayer: "DWD",
-			}),
-		);
+		const savedQuery = JSON.stringify({
+			keyword: "历史条件",
+			domain: "domain-1",
+			assetType: "TABLE",
+			datasetType: "HIVE",
+			classification: "SECRET",
+			warehouseLayer: "DWD",
+		});
+		localStorage.setItem("catalog.search.form.v1", savedQuery);
 
 		await renderPage();
 
 		expect(mocks.listCatalogAssetsV2).toHaveBeenCalledWith(EMPTY_ASSET_QUERY);
+		expect(localStorage.getItem("catalog.search.form.v1")).toBe(savedQuery);
 	});
 });

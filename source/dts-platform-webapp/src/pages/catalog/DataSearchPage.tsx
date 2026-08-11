@@ -80,19 +80,19 @@ const DATASET_FILTER_STORAGE_KEY = "catalog.asset.filter.v2";
 type StoredSearchForm = {
 	keyword: string;
 	domain: string | undefined;
-	assetType: string;
-	datasetType: string;
-	classification: string;
-	warehouseLayer: string;
+	assetType: string | undefined;
+	datasetType: string | undefined;
+	classification: string | undefined;
+	warehouseLayer: string | undefined;
 };
 
 const EMPTY_SEARCH_FORM: StoredSearchForm = {
 	keyword: "",
 	domain: undefined,
-	assetType: "ALL",
-	datasetType: "ALL",
-	classification: "ALL",
-	warehouseLayer: "ALL",
+	assetType: undefined,
+	datasetType: undefined,
+	classification: undefined,
+	warehouseLayer: undefined,
 };
 
 function readStoredSearchForm(): StoredSearchForm {
@@ -103,11 +103,23 @@ function readStoredSearchForm(): StoredSearchForm {
 		const saved = JSON.parse(raw);
 		return {
 			keyword: typeof saved?.keyword === "string" ? saved.keyword : "",
-			domain: typeof saved?.domain === "string" && saved.domain ? saved.domain : undefined,
-			assetType: typeof saved?.assetType === "string" && saved.assetType ? saved.assetType : "ALL",
-			datasetType: typeof saved?.datasetType === "string" && saved.datasetType ? saved.datasetType : "ALL",
-			classification: typeof saved?.classification === "string" && saved.classification ? saved.classification : "ALL",
-			warehouseLayer: typeof saved?.warehouseLayer === "string" && saved.warehouseLayer ? saved.warehouseLayer : "ALL",
+			domain: typeof saved?.domain === "string" && saved.domain && saved.domain !== "ALL" ? saved.domain : undefined,
+			assetType:
+				typeof saved?.assetType === "string" && saved.assetType && saved.assetType !== "ALL"
+					? saved.assetType
+					: undefined,
+			datasetType:
+				typeof saved?.datasetType === "string" && saved.datasetType && saved.datasetType !== "ALL"
+					? saved.datasetType
+					: undefined,
+			classification:
+				typeof saved?.classification === "string" && saved.classification && saved.classification !== "ALL"
+					? saved.classification
+					: undefined,
+			warehouseLayer:
+				typeof saved?.warehouseLayer === "string" && saved.warehouseLayer && saved.warehouseLayer !== "ALL"
+					? saved.warehouseLayer
+					: undefined,
 		};
 	} catch {
 		return EMPTY_SEARCH_FORM;
@@ -124,13 +136,12 @@ export default function DataSearchPage() {
 	const selectedTagIds = useMemo(() => readTagIds(searchParams), [searchParams]);
 	const effectiveSelectedTagIds = ASSET_PORTAL_V2_ENABLED ? selectedTagIds : [];
 	const selectedTagIdsKey = effectiveSelectedTagIds.join("\u0000");
-	const [initialSearchForm] = useState(readStoredSearchForm);
-	const [keyword, setKeyword] = useState(initialSearchForm.keyword);
-	const [domain, setDomain] = useState<string | undefined>(initialSearchForm.domain);
-	const [assetType, setAssetType] = useState<string>(initialSearchForm.assetType);
-	const [datasetType, setDatasetType] = useState<string>(initialSearchForm.datasetType);
-	const [classification, setClassification] = useState<string>(initialSearchForm.classification);
-	const [warehouseLayer, setWarehouseLayer] = useState<string>(initialSearchForm.warehouseLayer);
+	const [keyword, setKeyword] = useState(EMPTY_SEARCH_FORM.keyword);
+	const [domain, setDomain] = useState<string | undefined>(EMPTY_SEARCH_FORM.domain);
+	const [assetType, setAssetType] = useState<string | undefined>(EMPTY_SEARCH_FORM.assetType);
+	const [datasetType, setDatasetType] = useState<string | undefined>(EMPTY_SEARCH_FORM.datasetType);
+	const [classification, setClassification] = useState<string | undefined>(EMPTY_SEARCH_FORM.classification);
+	const [warehouseLayer, setWarehouseLayer] = useState<string | undefined>(EMPTY_SEARCH_FORM.warehouseLayer);
 	// 与台账同协议的治理缺口深链：?unclassified=1 / ?stale=1 / ?governance= / ?layer= 等由 URL 优先注入
 	const [unclassifiedFilter, setUnclassifiedFilter] = useState<boolean>(() => searchParams.get("unclassified") === "1");
 	const [staleFilter, setStaleFilter] = useState<boolean>(() => searchParams.get("stale") === "1");
@@ -200,17 +211,13 @@ export default function DataSearchPage() {
 				toast.warning("暂无已保存的检索条件");
 				return;
 			}
-			const saved = JSON.parse(raw);
-			setKeyword(typeof saved?.keyword === "string" ? saved.keyword : "");
-			setDomain(typeof saved?.domain === "string" && saved.domain ? saved.domain : undefined);
-			setAssetType(typeof saved?.assetType === "string" && saved.assetType ? saved.assetType : "ALL");
-			setDatasetType(typeof saved?.datasetType === "string" && saved.datasetType ? saved.datasetType : "ALL");
-			setClassification(
-				typeof saved?.classification === "string" && saved.classification ? saved.classification : "ALL",
-			);
-			setWarehouseLayer(
-				typeof saved?.warehouseLayer === "string" && saved.warehouseLayer ? saved.warehouseLayer : "ALL",
-			);
+			const saved = readStoredSearchForm();
+			setKeyword(saved.keyword);
+			setDomain(saved.domain);
+			setAssetType(saved.assetType);
+			setDatasetType(saved.datasetType);
+			setClassification(saved.classification);
+			setWarehouseLayer(saved.warehouseLayer);
 			toast.success("已恢复检索条件");
 		} catch {
 			toast.error("检索条件恢复失败");
@@ -261,19 +268,9 @@ export default function DataSearchPage() {
 	};
 
 	// 合并台账后以 assets-v2 为唯一数据源：搜索、浏览、治理作业共用同一份资产列表与分页
-	const runSearch = async (notifyWhenEmpty = true, page = 1, size = LEDGER_PAGE_SIZE) => {
+	const runSearch = async (page = 1, size = LEDGER_PAGE_SIZE) => {
 		const sequence = ++searchRequestSequence.current;
 		const trimmed = keyword.trim();
-		if (!trimmed && effectiveSelectedTagIds.length === 0) {
-			setResults([]);
-			setAssetRows([]);
-			setSearched(false);
-			setLoading(false);
-			if (notifyWhenEmpty) {
-				toast.error(ASSET_PORTAL_V2_ENABLED ? "请输入关键词或选择业务数据标签后再搜索" : "请输入关键词后再搜索");
-			}
-			return;
-		}
 		setLoading(true);
 		setSearched(true);
 		try {
@@ -303,7 +300,6 @@ export default function DataSearchPage() {
 				size: Number(resp?.size ?? size),
 				total: Number(resp?.total ?? content.length),
 			});
-			persistCurrentQuery();
 		} catch {
 			if (sequence !== searchRequestSequence.current) return;
 			setResults([]);
@@ -318,7 +314,7 @@ export default function DataSearchPage() {
 	runSearchRef.current = runSearch;
 	useEffect(() => {
 		void selectedTagIdsKey;
-		void runSearchRef.current(false);
+		void runSearchRef.current();
 	}, [selectedTagIdsKey]);
 
 	// 统一筛选状态协议：与台账一致，URL 深链参数（layer/governance/unclassified/stale/domain/classification/assetType/datasetType）优先于本地缓存。
@@ -378,7 +374,7 @@ export default function DataSearchPage() {
 			merged = true;
 		}
 		if (merged) {
-			runSearchRef.current(false);
+			runSearchRef.current();
 		}
 	}, [
 		deepLinkFilterKey,
@@ -400,13 +396,13 @@ export default function DataSearchPage() {
 		const params = new URLSearchParams(searchParams);
 		if (domain && domain !== "ALL") params.set("domain", domain);
 		else params.delete("domain");
-		if (assetType !== "ALL") params.set("assetType", assetType);
+		if (assetType && assetType !== "ALL") params.set("assetType", assetType);
 		else params.delete("assetType");
-		if (datasetType !== "ALL") params.set("datasetType", datasetType);
+		if (datasetType && datasetType !== "ALL") params.set("datasetType", datasetType);
 		else params.delete("datasetType");
-		if (classification !== "ALL") params.set("classification", classification);
+		if (classification && classification !== "ALL") params.set("classification", classification);
 		else params.delete("classification");
-		if (warehouseLayer !== "ALL") params.set("layer", warehouseLayer);
+		if (warehouseLayer && warehouseLayer !== "ALL") params.set("layer", warehouseLayer);
 		else params.delete("layer");
 		if (view === "table") params.set("view", "table");
 		else params.delete("view");
@@ -440,7 +436,7 @@ export default function DataSearchPage() {
 							placeholder="输入关键词"
 							value={keyword}
 							onChange={(event) => setKeyword(event.target.value)}
-							onSearch={() => void runSearch(true)}
+							onSearch={() => void runSearch()}
 							allowClear
 						/>
 					</div>
@@ -452,8 +448,8 @@ export default function DataSearchPage() {
 							id="catalog-search-domain"
 							className="w-full"
 							allowClear
-							placeholder="全部主题域"
-							value={domain || "ALL"}
+							placeholder="请选择主题域"
+							value={domain}
 							onChange={(value) => setDomain(value === "ALL" ? undefined : value)}
 							options={domainOptions}
 						/>
@@ -466,9 +462,9 @@ export default function DataSearchPage() {
 							id="catalog-search-classification"
 							className="w-full"
 							allowClear
-							placeholder="全部密级"
+							placeholder="请选择密级"
 							value={classification}
-							onChange={(value) => setClassification(value || "ALL")}
+							onChange={(value) => setClassification(value === "ALL" ? undefined : value)}
 							options={CLASSIFICATION_OPTIONS}
 						/>
 					</div>
@@ -480,9 +476,9 @@ export default function DataSearchPage() {
 							id="catalog-search-layer"
 							className="w-full"
 							allowClear
-							placeholder="全部分层"
+							placeholder="请选择分层"
 							value={warehouseLayer}
-							onChange={(value) => setWarehouseLayer(value || "ALL")}
+							onChange={(value) => setWarehouseLayer(value === "ALL" ? undefined : value)}
 							options={LAYER_OPTIONS}
 						/>
 					</div>
@@ -494,9 +490,9 @@ export default function DataSearchPage() {
 							id="catalog-search-asset-type"
 							className="w-full"
 							allowClear
-							placeholder="全部类型"
+							placeholder="请选择资产类型"
 							value={assetType}
-							onChange={(value) => setAssetType(value || "ALL")}
+							onChange={(value) => setAssetType(value === "ALL" ? undefined : value)}
 							options={TYPE_OPTIONS}
 						/>
 					</div>
@@ -508,9 +504,9 @@ export default function DataSearchPage() {
 							id="catalog-search-dataset-type"
 							className="w-full"
 							allowClear
-							placeholder="全部系统"
+							placeholder="请选择数据源类型"
 							value={datasetType}
-							onChange={(value) => setDatasetType(value || "ALL")}
+							onChange={(value) => setDatasetType(value === "ALL" ? undefined : value)}
 							options={DATASET_TYPE_OPTIONS}
 						/>
 					</div>
@@ -543,7 +539,7 @@ export default function DataSearchPage() {
 							条件 <DownOutlined />
 						</Button>
 					</Dropdown>
-					<Button type="primary" onClick={() => void runSearch(true)} loading={loading}>
+					<Button type="primary" onClick={() => void runSearch()} loading={loading}>
 						搜索
 					</Button>
 				</div>
@@ -597,7 +593,7 @@ export default function DataSearchPage() {
 								readyCount={0}
 								selectedDomainName={domain ? domainMap.get(domain) || domain : "全部主题域"}
 								missingDomainCount={assetRows.filter((row) => !row.domain && !row.domainId).length}
-								onAssetChanged={() => void runSearch(false, pageState.page, pageState.size)}
+								onAssetChanged={() => void runSearch(pageState.page, pageState.size)}
 							/>
 						) : results.length ? (
 							<div className="grid grid-cols-1 gap-2 md:grid-cols-2">
@@ -636,12 +632,12 @@ export default function DataSearchPage() {
 								total={pageState.total}
 								showSizeChanger
 								pageSizeOptions={[10, 20, 50]}
-								onChange={(page, size) => void runSearch(false, page, size)}
+								onChange={(page, size) => void runSearch(page, size)}
 							/>
 						</div>
 					</>
 				) : (
-					<EmptyState title="开始检索" description="输入关键词并点击搜索。" />
+					<EmptyState title="正在加载数据资产" description="正在获取当前用户可见的数据资产。" />
 				)}
 			</Card>
 		</div>

@@ -84,6 +84,10 @@ test("data search automatically queries all assets when no filters are selected"
 	);
 	assert.doesNotMatch(SOURCE, /请输入关键词或选择业务数据标签后再搜索/);
 	assert.doesNotMatch(SOURCE, /<EmptyState title="开始检索"/);
+	const runSearchStart = SOURCE.indexOf("const runSearch = async");
+	const runSearchEnd = SOURCE.indexOf("const runSearchRef", runSearchStart);
+	assert.ok(runSearchStart >= 0 && runSearchEnd > runSearchStart);
+	assert.doesNotMatch(SOURCE.slice(runSearchStart, runSearchEnd), /persistCurrentQuery\(\)/);
 });
 
 test("data search shares the asset-v2 query builder as the single source of truth", () => {
