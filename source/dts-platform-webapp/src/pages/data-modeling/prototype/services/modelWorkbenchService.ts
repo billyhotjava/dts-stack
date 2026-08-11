@@ -437,10 +437,8 @@ const buildUpdate = (draft: ModelSpecDraft): UpdateModelSpecCommand => {
 		dimensionProfile:
 			config.modelType === "DIMENSION"
 				? {
-						dimensionCode: null,
 						hierarchies: base?.dimensionProfile?.hierarchies || [],
 						scdPolicy: { type: draft.scdType },
-						reuseScope: null,
 					}
 				: null,
 		dataMartId: base?.dataMartId || null,
