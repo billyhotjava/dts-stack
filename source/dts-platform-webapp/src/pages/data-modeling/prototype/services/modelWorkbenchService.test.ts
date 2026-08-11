@@ -22,6 +22,7 @@ import {
 	loadModelWorkbenchContext,
 	loadModelWorkbenchDraft,
 	modelDraftFromView,
+	modelDraftNeedsImplementationRecovery,
 	prepareModelDraftForSave,
 	saveDimensionDefinitionDraft,
 	saveModelDraft,
@@ -262,6 +263,18 @@ describe("concept dimension draft", () => {
 });
 
 describe("model workbench draft preparation", () => {
+	it("recognizes a saved generated model whose implementation save must be retried", () => {
+		const model = {
+			...canonicalFactView(),
+			modelType: "DIMENSION" as const,
+			generationStrategy: { type: "DATE_DIMENSION" as const, reference: null },
+			dimensionDefinitionRef: { dimensionDefinitionId: "dimension-1", revision: 1 },
+		};
+
+		expect(modelDraftNeedsImplementationRecovery(modelDraftFromView(model, null))).toBe(true);
+		expect(modelDraftNeedsImplementationRecovery(modelDraftFromView(model, generatedImplementation(model)))).toBe(false);
+	});
+
 	it("loads physical settings from the canonical implementation instead of the legacy model projection", () => {
 		const model = {
 			...canonicalFactView(),
