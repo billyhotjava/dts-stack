@@ -18,6 +18,8 @@ class ModelReleaseCandidateImplementationSnapshotLiquibaseTest {
             .contains("constraintName=\"fk_model_release_candidate_entry_implementation\"")
             .contains("constraintName=\"uk_modeling_implementation_revision_candidate_pin\"")
             .contains("columnNames=\"tenant_id, implementation_id, revision, content_checksum, ownership\"")
+            .contains("constraintName=\"fk_model_release_candidate_entry_implementation_identity\"")
+            .contains("baseColumnNames=\"tenant_id, implementation_id\"")
             .contains("constraintName=\"fk_model_release_candidate_entry_implementation_revision\"")
             .contains(
                 "baseColumnNames=\"tenant_id, implementation_id, implementation_revision, implementation_checksum, implementation_mode\""

@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260811-03-model-release-candidate-implementation-snapshot" author="xiezm" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="modeling_model_release_candidate_entry"/>
+            <tableExists tableName="modeling_model_implementation"/>
+            <tableExists tableName="modeling_model_implementation_revision"/>
+            <columnExists tableName="modeling_model_release_candidate_entry" columnName="implementation_revision"/>
+            <columnExists tableName="modeling_model_release_candidate_entry" columnName="implementation_checksum"/>
+            <sqlCheck expectedResult="1">
+                SELECT count(*)
+                  FROM pg_constraint
+                 WHERE conname = 'fk_model_release_candidate_entry_implementation'
+            </sqlCheck>
+            <sqlCheck expectedResult="0">
+                SELECT count(*)
+                  FROM pg_constraint
+                 WHERE conname = 'fk_model_release_candidate_entry_implementation_revision'
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Keep release candidates pinned to immutable implementation revisions while allowing the
+            model implementation head to advance after a maintainer changes the model.
+        </comment>
+
+        <sql splitStatements="false"><![CDATA[
+            DO $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1
+                      FROM modeling_model_release_candidate_entry e
+                     WHERE e.implementation_id IS NOT NULL
+                       AND (
+                           (e.implementation_revision IS NULL) <> (e.implementation_checksum IS NULL)
+                           OR (
+                               e.implementation_revision IS NOT NULL
+                               AND NOT EXISTS (
+                                   SELECT 1
+                                     FROM modeling_model_implementation_revision r
+                                    WHERE r.tenant_id = e.tenant_id
+                                      AND r.implementation_id = e.implementation_id
+                                      AND r.revision = e.implementation_revision
+                                      AND r.content_checksum = e.implementation_checksum
+                                      AND r.ownership = e.implementation_mode
+                               )
+                           )
+                       )
+                ) THEN
+                    RAISE EXCEPTION 'MODEL_RELEASE_CANDIDATE_IMPLEMENTATION_SNAPSHOT_INVALID';
+                END IF;
+            END $$;
+        ]]></sql>
+
+        <dropForeignKeyConstraint
+            baseTableName="modeling_model_release_candidate_entry"
+            constraintName="fk_model_release_candidate_entry_implementation"/>
+        <addUniqueConstraint
+            tableName="modeling_model_implementation_revision"
+            columnNames="tenant_id, implementation_id, revision, content_checksum, ownership"
+            constraintName="uk_modeling_implementation_revision_candidate_pin"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_model_release_candidate_entry"
+            baseColumnNames="tenant_id, implementation_id"
+            constraintName="fk_model_release_candidate_entry_implementation_identity"
+            referencedTableName="modeling_model_implementation"
+            referencedColumnNames="tenant_id, id"
+            onDelete="RESTRICT"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_model_release_candidate_entry"
+            baseColumnNames="tenant_id, implementation_id, implementation_revision, implementation_checksum, implementation_mode"
+            constraintName="fk_model_release_candidate_entry_implementation_revision"
+            referencedTableName="modeling_model_implementation_revision"
+            referencedColumnNames="tenant_id, implementation_id, revision, content_checksum, ownership"
+            onDelete="RESTRICT"/>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    IF EXISTS (
+                        SELECT 1
+                          FROM modeling_model_release_candidate_entry e
+                          LEFT JOIN modeling_model_implementation i
+                            ON i.tenant_id = e.tenant_id
+                           AND i.id = e.implementation_id
+                           AND i.plan_id = e.plan_id
+                           AND i.model_spec_id = e.model_spec_id
+                           AND i.model_revision = e.revision
+                           AND i.model_checksum = e.checksum
+                           AND i.ownership = e.implementation_mode
+                         WHERE e.implementation_id IS NOT NULL
+                           AND i.id IS NULL
+                    ) THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_MODEL_RELEASE_CANDIDATE_IMPLEMENTATION_HEAD_ADVANCED';
+                    END IF;
+                END $$;
+            ]]></sql>
+            <dropForeignKeyConstraint
+                baseTableName="modeling_model_release_candidate_entry"
+                constraintName="fk_model_release_candidate_entry_implementation_revision"/>
+            <dropForeignKeyConstraint
+                baseTableName="modeling_model_release_candidate_entry"
+                constraintName="fk_model_release_candidate_entry_implementation_identity"/>
+            <addForeignKeyConstraint
+                baseTableName="modeling_model_release_candidate_entry"
+                baseColumnNames="tenant_id, implementation_id, plan_id, model_spec_id, revision, checksum, implementation_mode"
+                constraintName="fk_model_release_candidate_entry_implementation"
+                referencedTableName="modeling_model_implementation"
+                referencedColumnNames="tenant_id, id, plan_id, model_spec_id, model_revision, model_checksum, ownership"
+                onDelete="RESTRICT"/>
+            <dropUniqueConstraint
+                tableName="modeling_model_implementation_revision"
+                constraintName="uk_modeling_implementation_revision_candidate_pin"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
