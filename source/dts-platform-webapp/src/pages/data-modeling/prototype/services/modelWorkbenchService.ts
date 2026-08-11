@@ -542,7 +542,13 @@ const implementationNeedsSave = (draft: ModelSpecDraft): boolean => {
 
 export const modelDraftNeedsImplementationRecovery = (draft: ModelDraft | null): boolean =>
 	Boolean(
-		draft && isModelSpecDraft(draft) && draft.base && !draft.implementationBase && implementationNeedsSave(draft),
+		draft &&
+			isModelSpecDraft(draft) &&
+			draft.base &&
+			(!draft.implementationBase ||
+				draft.implementationBase.revision !== draft.base.revision ||
+				draft.implementationBase.modelChecksum !== draft.base.checksum) &&
+			implementationNeedsSave(draft),
 	);
 
 const buildImplementationCommand = (
