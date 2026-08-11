@@ -32,6 +32,7 @@ import {
 	type ModelDraftValidationErrors,
 	type ModelWorkbenchContext,
 	modelDraftFromView,
+	modelDraftNeedsImplementationRecovery,
 	prepareModelDraftForSave,
 	saveDimensionDefinitionDraft,
 	saveModelDraft,
@@ -119,6 +120,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const draftDomainId = draft?.domainId || "";
 	const editorAccess = useMemo(() => resolveWorkbenchEditorAccess(canMaintain, draft), [canMaintain, draft]);
 	const dirty = draft !== null && cleanFingerprint !== null && modelDraftFingerprint(draft) !== cleanFingerprint;
+	const saveNeeded = dirty || modelDraftNeedsImplementationRecovery(draft);
 	const blocker = useBlocker(
 		useCallback<BlockerFunction>(
 			({ currentLocation, nextLocation }) =>
@@ -596,7 +598,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 								currentOwnerId={ownerIdOf(userInfo)}
 								dimensionDefinitionFailure={dimensionDefinitionFailure}
 								dimensionDefinitions={dimensionDefinitions}
-								dirty={dirty}
+								dirty={saveNeeded}
 								draft={draft}
 								editorAccessMessage={editorAccess.message}
 								failureMessage={failure?.message || ""}

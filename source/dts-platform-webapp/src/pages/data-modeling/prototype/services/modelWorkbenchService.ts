@@ -540,6 +540,11 @@ const implementationNeedsSave = (draft: ModelSpecDraft): boolean => {
 	);
 };
 
+export const modelDraftNeedsImplementationRecovery = (draft: ModelDraft | null): boolean =>
+	Boolean(
+		draft && isModelSpecDraft(draft) && draft.base && !draft.implementationBase && implementationNeedsSave(draft),
+	);
+
 const buildImplementationCommand = (
 	draft: ModelSpecDraft,
 	model: CanonicalModelSpecView,

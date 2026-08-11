@@ -272,7 +272,9 @@ describe("model workbench draft preparation", () => {
 		};
 
 		expect(modelDraftNeedsImplementationRecovery(modelDraftFromView(model, null))).toBe(true);
-		expect(modelDraftNeedsImplementationRecovery(modelDraftFromView(model, generatedImplementation(model)))).toBe(false);
+		expect(modelDraftNeedsImplementationRecovery(modelDraftFromView(model, generatedImplementation(model)))).toBe(
+			false,
+		);
 	});
 
 	it("loads physical settings from the canonical implementation instead of the legacy model projection", () => {
