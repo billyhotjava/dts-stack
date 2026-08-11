@@ -272,6 +272,11 @@ describe("model workbench draft preparation", () => {
 		};
 
 		expect(modelDraftNeedsImplementationRecovery(modelDraftFromView(model, null))).toBe(true);
+		expect(
+			modelDraftNeedsImplementationRecovery(
+				modelDraftFromView(model, generatedImplementation(model, { revision: model.revision - 1, modelChecksum: "b".repeat(64) })),
+			),
+		).toBe(true);
 		expect(modelDraftNeedsImplementationRecovery(modelDraftFromView(model, generatedImplementation(model)))).toBe(
 			false,
 		);
