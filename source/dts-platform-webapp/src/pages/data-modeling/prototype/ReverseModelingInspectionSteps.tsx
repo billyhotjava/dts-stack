@@ -24,15 +24,16 @@ export function StrategyStep({ archive, onArchive }: { archive: File | null; onA
 				</button>
 			</div>
 			<div className="dmx-dbt-drop">
-				<FileArchive size={30} />
-				<strong>选择 dbt 项目 ZIP</strong>
-				<p>先检查包内容，不执行其中的 SQL 或宏；检查完成后再选择规划上下文并生成预览。</p>
 				<input
 					accept=".zip,application/zip"
 					aria-label="选择 dbt ZIP"
+					className="dmx-dropzone-input"
 					onChange={(event) => onArchive(event.target.files?.[0] || null)}
 					type="file"
 				/>
+				<FileArchive size={30} />
+				<strong>选择 dbt 项目 ZIP</strong>
+				<p>先检查包内容，不执行其中的 SQL 或宏；检查完成后再选择规划上下文并生成预览。</p>
 				{archive ? <small>已选择：{archive.name}</small> : null}
 			</div>
 		</>

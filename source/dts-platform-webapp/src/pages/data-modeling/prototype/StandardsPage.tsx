@@ -486,6 +486,7 @@ function StandardPackageImport({ onClose, onComplete }: { onClose: () => void; o
 				<input
 					accept=".zip,application/zip"
 					aria-label="选择标准包"
+					className="dmx-dropzone-input"
 					onChange={(event) => {
 						setFile(event.target.files?.[0] || null);
 						setRunId("");
