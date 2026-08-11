@@ -15,10 +15,10 @@ projects_labeled AS (
       ELSE 'unknown'
     END AS major_key,
     CASE
-      WHEN b.project_status_id = 'project_status_in_progress'        THEN 'in_progress'
-      WHEN b.project_status_id = 'project_status_pending_expense'    THEN 'pending_expense'
-      WHEN b.project_status_id = 'project_status_pending_collection' THEN 'pending_collection'
-      WHEN b.project_status_id = 'project_status_audited'            THEN 'audited'
+      WHEN b.project_status_code = 'IN_PROGRESS'                  THEN 'in_progress'
+      WHEN b.project_status_code = 'PENDING_EXPENSE'              THEN 'pending_expense'
+      WHEN b.project_status_code = 'COMPLETED_PENDING_COLLECTION' THEN 'pending_collection'
+      WHEN b.project_status_code = 'COMPLETED_AUDIT'              THEN 'audited'
       ELSE 'unknown'
     END AS status_key
   FROM base b

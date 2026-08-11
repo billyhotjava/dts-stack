@@ -64,7 +64,7 @@ describe("prototype-owned data modeling frontend", () => {
 
 		expect(planningService).not.toMatch(/warehousePlanApi|warehouseStageLabel|listWarehousePlans/);
 		expect(workbenchSource).not.toMatch(
-			/建设计划|WarehousePlan|warehousePlanApi|saveWarehousePlanPolicy|loadConfirmedPlanDomains|listWarehousePlans|目标建设计划/,
+			/建设计划|saveWarehousePlanPolicy|loadConfirmedPlanDomains|listWarehousePlans|目标建设计划/,
 		);
 	});
 
@@ -134,6 +134,7 @@ describe("prototype-owned data modeling frontend", () => {
 		const editor = read("./prototype/ModelingWorkbenchEditor.tsx");
 		const fieldTable = read("./prototype/ModelFieldEditorTable.tsx");
 		const workbenchService = read("./prototype/services/modelWorkbenchService.ts");
+		const implementationBinding = read("./prototype/ModelImplementationBindingFields.tsx");
 		const modelingLineCount = modeling.trimEnd().split("\n").length;
 
 		for (const label of ["数仓分层", "存储策略", "表名规则", "表中文名", "生命周期", "负责人", "质量规则", "模型开发"])
@@ -156,6 +157,11 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(modeling).toMatch(/loadModelWorkbenchDraft/);
 		expect(modeling).not.toContain("await load(saved.id)");
 		expect(workbenchService).toMatch(/saveModelImplementation|targetPhysicalName/);
+		expect(editor).toMatch(/import \{ ModelImplementationBindingFields \} from "\.\/ModelImplementationBindingFields"/);
+		expect(implementationBinding).toMatch(/实现输入方式|物理来源|上游模型|事实类型|时间语义|应用场景/);
+		expect(workbenchService).toMatch(
+			/collectCurrentWarehousePlanSources|sourceRefs: draft\.sourceRefs|dependsOn: draft\.dependsOn/,
+		);
 		expect(modeling).toMatch(/isConceptDimensionDraft/);
 		expect(modeling).toMatch(/conceptDimensionDraftFromView/);
 		expect(modeling).toMatch(/\{selectedModel\?\.modelType === "FACT" \? \(\s*<aside className="dmx-record-rail"/s);

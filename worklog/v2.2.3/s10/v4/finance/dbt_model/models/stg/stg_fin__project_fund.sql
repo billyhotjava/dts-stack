@@ -10,33 +10,28 @@ SELECT
   ) AS source_row_id,
   'ods_finance_project_fund'::text AS source_table,
 
-  {{ parse_numeric_safe("row_no") }}::int AS row_no,
+  cast(row_no as integer) AS row_no,
 
-  {{ nullif_placeholder("project_id") }} AS project_id,
+  nullif(btrim(cast(project_id as text)), '') AS project_id,
 
   cast(cycle as text) AS cycle_raw,
-  {{ nullif_placeholder("cycle") }} AS cycle,
+  nullif(btrim(cast(cycle as text)), '') AS cycle,
 
-  {{ parse_numeric_safe("total_fund") }}::numeric(15,2) AS total_fund,
+  cast(total_fund as numeric(15,2)) AS total_fund,
 
-  CASE
-    WHEN {{ nullif_placeholder("is_major_project") }} IS NULL THEN NULL
-    WHEN upper({{ nullif_placeholder("is_major_project") }}) IN ('Y', 'YES', 'TRUE', 'T', '1', '是') THEN true
-    WHEN upper({{ nullif_placeholder("is_major_project") }}) IN ('N', 'NO', 'FALSE', 'F', '0', '否') THEN false
-    ELSE NULL
-  END AS is_major_project,
+  cast(is_major_project as boolean) AS is_major_project,
 
-  {{ nullif_placeholder("research_dept") }} AS research_dept,
+  nullif(btrim(cast(research_dept as text)), '') AS research_dept,
 
   cast(project_status as text) AS project_status_raw,
-  {{ nullif_placeholder("project_status") }} AS project_status,
+  nullif(btrim(cast(project_status as text)), '') AS project_status,
 
-  {{ parse_numeric_safe("direct_ctrl") }}::numeric(15,2) AS direct_ctrl,
-  {{ parse_numeric_safe("reserve_indirect") }}::numeric(15,2) AS reserve_indirect,
-  {{ parse_numeric_safe("direct_spent") }}::numeric(15,2) AS direct_spent,
-  {{ parse_numeric_safe("direct_rate") }}::numeric(8,2) AS direct_rate,
-  {{ parse_numeric_safe("indirect_spent") }}::numeric(15,2) AS indirect_spent,
-  {{ parse_numeric_safe("received_fund") }}::numeric(15,2) AS received_fund,
-  {{ parse_numeric_safe("receivable_fund") }}::numeric(15,2) AS receivable_fund
+  cast(direct_ctrl as numeric(15,2)) AS direct_ctrl,
+  cast(reserve_indirect as numeric(15,2)) AS reserve_indirect,
+  cast(direct_spent as numeric(15,2)) AS direct_spent,
+  cast(direct_rate as numeric(8,2)) AS direct_rate,
+  cast(indirect_spent as numeric(15,2)) AS indirect_spent,
+  cast(received_fund as numeric(15,2)) AS received_fund,
+  cast(receivable_fund as numeric(15,2)) AS receivable_fund
 FROM {{ source('fin_ods', 'project_fund') }}
-WHERE {{ nullif_placeholder("project_id") }} IS NOT NULL
+WHERE nullif(btrim(cast(project_id as text)), '') IS NOT NULL

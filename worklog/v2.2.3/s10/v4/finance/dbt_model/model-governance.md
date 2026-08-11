@@ -1,8 +1,24 @@
 # Finance 建模治理说明
 
-## 1. 目标架构
+## 1. 规划关系
 
-财务域统一采用从 ODS 到 ADS 的单链路模型：
+本项目采用以下规划基线，数仓分层与业务规划属性保持正交：
+
+```text
+业务分类“研究所业务”
+└── 数据域 FINANCE“财务管理域”
+    ├── 自有资金核算
+    ├── 项目经费核算
+    ├── 合同辅助核算
+    └── 个人辅助核算
+```
+
+- 业务分类是可配置的顶层组织边界，不等同于源系统。
+- 数据域承载稳定业务主题，不按“一个应用系统一个数据域”机械拆分。
+- 业务过程用于描述事实表对应的具体业务活动；维度表不强制绑定业务过程。
+- ODS 来源与数据域分别回答“数据来自哪里”和“数据表达什么业务”，不能互相替代。
+
+## 2. 目标架构
 
 ```text
 ODS -> STG -> DWD -> DWS -> ADS
@@ -11,105 +27,66 @@ ODS -> STG -> DWD -> DWS -> ADS
 | 层 | 材质化 | 职责 |
 |----|--------|------|
 | `ODS` | 现有物理表 | 保留原始落地结构，只承担追溯与装载边界 |
-| `STG` | `view` | 类型转换 + 占位符归 NULL + 字段改名 + 来源元数据 |
-| `DWD` | `table` | 业务解释：别名归一化、dim 打标签、派生口径、补业务主键 |
-| `DWS` | `table` | 主题汇总：沉淀大屏直接消费的聚合视角 |
-| `ADS` | `table` | 看板 KPI：应用侧真正要消费的字段 |
+| `STG` | `view` | 同行字段清洗、直接类型转换、字段改名和来源元数据 |
+| `DWD` | `table` | 维度标准化、业务派生和明细事实沉淀 |
+| `DWS` | `table` | 按稳定粒度沉淀主题汇总 |
+| `ADS` | `table` | 面向应用场景输出 KPI 和消费口径 |
 
-## 2. STG 层宪法（强制）
+## 3. STG 层约束
 
-**允许做**：
-- `parse_numeric_safe` / `parse_date_safe` 类型转换
-- `nullif_placeholder` 占位符归 NULL
-- `btrim` 收敛空白
-- 字段改名为业务语义名（例如 `金额1` → `total_cost`）
-- 保留来源元数据：`source_row_id`、`source_table`
+允许：
 
-**禁止做（一条不能出现）**：
-- `CASE WHEN`
-- `LIKE 'xxxx%'` / `column IN ('a','b')` 分类映射
-- `to_char(date, 'YYYY-MM')` 月份格式化
-- `EXTRACT(YEAR/QUARTER FROM ...)` 年份/季度派生
-- 复合字符串解析（`split_part` / 复杂 `substring`）
-- `abs()` / `+` / `-` / `*` / `/` 跨列或同列派生
-- 从数值派生文本标签（如 `balance > 0 → 'positive'`）
-- 派生布尔字段（`has_contract` / `is_balance_row` 等）
+- 使用 PostgreSQL 原生 `cast` / `::type` 做直接类型转换。
+- 使用 `btrim`、`nullif` 收敛空白与空字符串。
+- 字段改名为业务语义名，例如 `金额1` → `total_cost`。
+- 保留 `source_row_id`、`source_table` 等来源元数据。
 
-一句话：**STG 从 ODS 读一行，出来的行与 ODS 一一对应，字段只做"同位变换"，不做"跨列变换"或"值翻译"。**
+禁止：
 
-## 3. DWD 层职责
+- `CASE WHEN`、前缀匹配或枚举映射等业务分类。
+- 月份、年度、季度等跨字段或格式化派生。
+- 复合字符串拆分、跨列算术和业务标签派生。
+- 依赖项目私有宏完成基础解析；逆向导入器必须能静态识别字段和依赖。
 
-### 3.1 两类 dim 表
+STG 与 ODS 保持一行对一行，只做同位变换，不做值翻译。
 
-| 类型 | 命名 | 内容 |
-|------|------|------|
-| Canonical dim | `dim_*` | code → label → is_* flags，业务分类**唯一真值源** |
-| Prefix / Suffix 映射 | `dim_*_code_prefix` / `dim_*_suffix` | 科目前缀或年度后缀 → canonical code |
+## 4. DWD 维度与事实
 
-当前 Finance dim 清单：
-- `dim_fund_source`（年初/预计增加/预计使用）
-- `dim_fund_category`（事业基金/职工福利基金/安全生产基金）
-- `dim_project_status`（在研/支出待处理/已完成待收款/已完成审计）
-- `dim_balance_direction`（借方/贷方/零）
-- `dim_expense_category`（8 类费用）
-- `dim_personal_subject_category`（借款/薪酬/其他）
-- `dim_expense_code_prefix`（`5001` → 原材料/设备 等）
-- `dim_personal_subject_code_prefix`（`1122` → 借款 等）
+### 4.1 维度编码
 
-### 3.2 biz_dwd 流水线模板（三段论）
+- 维度主键和关联码必须使用稳定 ASCII code，不使用中文自然值作为连接键。
+- `raw_value` 保存源端中文值，`label` 保存展示名称，`code` 用于下游关联。
+- 前缀映射表只负责 `prefix → canonical code`，标准值由对应维度表统一定义。
 
-```
-stg → normalized (prefix/suffix join 归一化) → derived (跨列派生) → final (canonical dim join 打标签)
+当前维度/映射模型：
+
+- `dim_fund_source`、`dim_fund_category`、`dim_project_status`
+- `dim_balance_direction`、`dim_expense_category`、`dim_personal_subject_category`
+- `dim_expense_code_prefix`、`dim_personal_subject_code_prefix`
+
+### 4.2 明细事实
+
+```text
+stg → normalized（前缀/原始值归一）→ derived（业务派生）→ final（维度关联）
 ```
 
-## 4. 依赖规则
+- `biz_dwd_own_fund` → 自有资金核算
+- `biz_dwd_project_fund` → 项目经费核算
+- `biz_dwd_aux_balance` → 合同辅助核算
+- `biz_dwd_aux_balance_personal` → 个人辅助核算
 
-- `dwd/*` 禁止直接 `source(...)`
-- `dws/*` 禁止直接 `source(...)` 或 `ref('stg_*')`
-- `ads/*` 禁止直接 `source(...)` 或 `ref('stg_*')`
-- 所有下游模型必须从 `stg_fin__*` 进入语义链路
-- DWS/ADS 只消费 `biz_dwd_*` 或 `biz_dws_*`
+## 5. 依赖与命名规则
 
-## 5. 命名规则
+- `dwd/*` 禁止直接 `source(...)`。
+- `dws/*` 禁止直接 `source(...)` 或 `ref('stg_*')`。
+- `ads/*` 禁止直接 `source(...)` 或 `ref('stg_*')`。
+- DWS/ADS 只消费 `biz_dwd_*` 或 `biz_dws_*`。
+- `xxx_raw` 表示清洗后的源值，`xxx_code` 表示稳定编码，`xxx_id` 表示维度/事实主键，`xxx_label` 表示展示值。
+- 每个模型必须声明完整中文描述、输出列及 `data_type`，并启用 `contract.enforced: true`。
 
-| 层 | 字段后缀 | 含义 |
-|---|---------|------|
-| STG | `xxx_raw` | 原始清洗值（trim + nullif 后） |
-| STG | `xxx` | 当没有别名问题时直接用语义名 |
-| DWD | `xxx` | canonical code（归一化后） |
-| DWD | `xxx_id` | dim 表主键 |
-| DWD | `xxx_label` | dim 表 label |
-| DWD | `is_xxx` | 来自 dim 的布尔 flag |
+## 6. 治理原则
 
-## 6. 当前语义链路
-
-### STG
-- `stg_fin__own_fund`
-- `stg_fin__project_fund`
-- `stg_fin__aux_balance`
-- `stg_fin__aux_balance_personal`
-
-### DWD
-- 维度：`dim_fund_source` / `dim_fund_category` / `dim_project_status` / `dim_balance_direction` / `dim_expense_category` / `dim_personal_subject_category`
-- 映射：`dim_expense_code_prefix` / `dim_personal_subject_code_prefix`
-- 事实：`biz_dwd_own_fund` / `biz_dwd_project_fund` / `biz_dwd_aux_balance` / `biz_dwd_aux_balance_personal`
-
-### DWS
-- `biz_dws_own_fund_yearly`
-- `biz_dws_project_fund_summary`
-- `biz_dws_aux_balance_by_dept`
-- `biz_dws_aux_balance_personal_by_dept`
-
-### ADS
-- `biz_ads_own_fund_kpi`
-- `biz_ads_project_fund_kpi`
-- `biz_ads_aux_balance_kpi`
-- `biz_ads_aux_balance_personal_kpi`
-
-## 7. 治理原则
-
-- ODS 只保留原始结构，不塞业务口径
-- STG 只做"把数据变干净、让下游放心用"的层，不引入任何业务含义
-- 所有业务分类/映射/派生口径由 DWD 承担，且必须以 dim 表为真值源
-- 同一业务字段只保留一套命名
-- ODS DDL 仅作为部署参考，放在 `ods_ddl/` 目录
+- ODS 不承载新业务口径，STG 不引入业务含义。
+- 分类、映射和派生口径在 DWD 收敛，并以维度表为唯一真值源。
+- DWS 粒度必须明确，ADS 必须对应具体应用场景。
+- 同一业务字段只保留一套规范命名；ODS DDL 仅作为部署参考。

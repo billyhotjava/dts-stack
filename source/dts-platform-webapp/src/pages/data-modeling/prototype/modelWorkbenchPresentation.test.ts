@@ -35,6 +35,12 @@ const makeDraft = (patch: Partial<ModelSpecDraft> = {}): ModelSpecDraft => ({
 	implementationInputMode: "",
 	generationStrategyType: "",
 	implementationIdempotencyKey: "implementation-draft-1",
+	sourceRefs: [],
+	dependsOn: [],
+	factShape: "",
+	timeSemanticsType: "",
+	timeSemanticsFields: [],
+	consumptionScenario: "",
 	...patch,
 });
 
@@ -143,6 +149,24 @@ describe("dimension workbench presentation", () => {
 			{ value: "ephemeral", label: "临时模型" },
 		]);
 		expect(modelDraftFingerprint(makeDraft({ name: "A" }))).not.toBe(modelDraftFingerprint(makeDraft({ name: "B" })));
+		expect(
+			modelDraftFingerprint(
+				makeDraft({
+					implementationInputMode: "PHYSICAL_ASSET",
+					sourceRefs: [
+						{
+							kind: "TABLE",
+							ref: "ods_budget",
+							layer: "ODS",
+							role: "PRIMARY",
+							sortOrder: 0,
+							sourceBindingId: "50000000-0000-0000-0000-000000000001",
+							resolvedVersion: "v1",
+						},
+					],
+				}),
+			),
+		).not.toBe(modelDraftFingerprint(makeDraft()));
 		expect(
 			modelDraftFingerprint(
 				makeConceptDraft({ attributes: [{ code: "A", name: "属性", primaryKey: true, order: 1 }] }),

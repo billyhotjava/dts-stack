@@ -11,7 +11,12 @@ import { saveModelImplementation } from "@/api/modelImplementationApi";
 import { listModelFieldStandardOptions } from "@/api/modelingStandardsApi";
 import { getModelLifecycle, listModelSpecs, updateModelSpec } from "@/api/modelSpecApi";
 import catalogDomainService from "@/api/services/catalogDomainService";
+import {
+	collectCurrentWarehousePlanSources,
+	resolveDefaultModelingContextId,
+} from "@/api/services/modelingImportContextService";
 import { listWarehouseLayers, type WarehouseLayerView } from "@/api/warehouseLayerApi";
+import type { WarehousePlanSourceBindingView } from "@/api/warehousePlanApi";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
 import type { ModelImplementationView } from "@/features/modeling/contracts/modelImplementationContract";
 import type { CanonicalModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
@@ -45,6 +50,10 @@ vi.mock("@/api/modelSpecApi", () => ({
 	createModelSpec: vi.fn(),
 }));
 vi.mock("@/api/services/catalogDomainService", () => ({ default: { list: vi.fn() } }));
+vi.mock("@/api/services/modelingImportContextService", () => ({
+	collectCurrentWarehousePlanSources: vi.fn(),
+	resolveDefaultModelingContextId: vi.fn(),
+}));
 vi.mock("@/api/warehouseLayerApi", () => ({ listWarehouseLayers: vi.fn() }));
 
 const customLayer: WarehouseLayerView = {
@@ -73,6 +82,7 @@ const canonicalFactView = (): CanonicalModelSpecView => ({
 	implementationMode: "DESIGNER_GENERATED",
 	materialization: "table",
 	businessActivityRef: null,
+	businessProcessId: "60000000-0000-0000-0000-000000000001",
 	consumptionScenario: null,
 	grain: { statement: "one row per record", keys: ["record_id"] },
 	factShape: "TRANSACTION",
@@ -161,6 +171,19 @@ const definitionView: DimensionDefinitionView = {
 	updatedAt: "2026-08-04T10:00:00Z",
 };
 
+const physicalSource: WarehousePlanSourceBindingView = {
+	bindingId: "50000000-0000-0000-0000-000000000001",
+	sourceType: "CONNECTION_TABLE",
+	locator: { namespace: "public", objectName: "ods_budget_execution" },
+	sourceId: "ods_budget_execution",
+	confirmationStatus: "CONFIRMED",
+	displayName: "预算执行 ODS",
+	confirmedVersion: "source-v1",
+	resolvedVersion: "source-v1",
+	resolutionStatus: "AVAILABLE",
+	freshness: "CURRENT",
+};
+
 const validDimensionDraft = (): ModelDraft => ({
 	createKind: "dimension-table",
 	base: null,
@@ -187,9 +210,17 @@ const validDimensionDraft = (): ModelDraft => ({
 	reuseScope: "DOMAIN",
 	dimensionDefinitionId: "dimension-1",
 	standardBindings: [],
+	warehouseLayerCode: "DWD",
 	implementationBase: null,
 	implementationInputMode: "GENERATED",
 	generationStrategyType: "DATE_DIMENSION",
+	implementationIdempotencyKey: "implementation-draft-1",
+	sourceRefs: [],
+	dependsOn: [],
+	factShape: "",
+	timeSemanticsType: "",
+	timeSemanticsFields: [],
+	consumptionScenario: "",
 });
 
 beforeEach(() => {
@@ -439,18 +470,44 @@ describe("model workbench draft validation", () => {
 	});
 
 	it("defaults new model drafts to the canonical target layer", () => {
-		const context = { domains: [], models: [], standards: [], warehouseLayers: [] } as never;
+		const context = {
+			planId: "plan-1",
+			domains: [],
+			models: [],
+			dimensions: [],
+			standards: [],
+			warehouseLayers: [],
+			sources: [],
+		} as never;
 		expect(emptyModelDraft("fact", context)).toMatchObject({ warehouseLayerCode: "DWD" });
 		expect(emptyModelDraft("summary", context)).toMatchObject({ warehouseLayerCode: "DWS" });
 		expect(emptyModelDraft("application", context)).toMatchObject({ warehouseLayerCode: "ADS" });
+		expect(emptyModelDraft("fact", context)).toMatchObject({
+			planId: "plan-1",
+			implementationInputMode: "PHYSICAL_ASSET",
+			factShape: "TRANSACTION",
+			timeSemanticsType: "EVENT_TIME",
+		});
+		expect(emptyModelDraft("summary", context)).toMatchObject({ implementationInputMode: "UPSTREAM_MODEL" });
+		expect(emptyModelDraft("application", context)).toMatchObject({ implementationInputMode: "UPSTREAM_MODEL" });
 	});
 
 	it("uses the canonical domain id for new draft domain binding", () => {
 		const context = {
-			domains: [{ id: "1d9a3e90-7b38-485a-8e6d-c428dc17a61e", code: "FinanceDomain", name: "财务域" }],
+			planId: "plan-1",
+			domains: [
+				{
+					id: "1d9a3e90-7b38-485a-8e6d-c428dc17a61e",
+					code: "FinanceDomain",
+					name: "财务域",
+					parentCode: "Finance",
+				},
+			],
 			models: [],
+			dimensions: [],
 			standards: [],
 			warehouseLayers: [],
+			sources: [],
 		} as never;
 		expect(emptyModelDraft("dimension", context)).toMatchObject({
 			domainId: "1d9a3e90-7b38-485a-8e6d-c428dc17a61e",
@@ -461,6 +518,8 @@ describe("model workbench draft validation", () => {
 	});
 
 	it("loads the governed warehouse layers into the workbench context", async () => {
+		vi.mocked(resolveDefaultModelingContextId).mockResolvedValue("plan-1");
+		vi.mocked(collectCurrentWarehousePlanSources).mockResolvedValue([physicalSource]);
 		vi.mocked(listWarehouseLayers).mockResolvedValue([customLayer]);
 		vi.mocked(catalogDomainService.list).mockResolvedValue([]);
 		vi.mocked(listModelSpecs).mockResolvedValue([]);
@@ -470,7 +529,10 @@ describe("model workbench draft validation", () => {
 		const context = await loadModelWorkbenchContext();
 
 		expect(context.warehouseLayers).toEqual([customLayer]);
+		expect(context.planId).toBe("plan-1");
+		expect(context.sources).toEqual([physicalSource]);
 		expect(context.dimensions).toEqual([]);
+		expect(collectCurrentWarehousePlanSources).toHaveBeenCalledWith("plan-1");
 		expect(listWarehouseLayers).toHaveBeenCalledTimes(1);
 		expect(listDimensionDefinitions).toHaveBeenCalledWith({ offset: 0, limit: 100 });
 	});
@@ -583,7 +645,23 @@ describe("model workbench draft validation", () => {
 	});
 
 	it("preserves the canonical implementation input while updating physical settings", async () => {
-		const base = canonicalFactView();
+		const base = {
+			...canonicalFactView(),
+			sourceRefs: [
+				{
+					kind: "TABLE" as const,
+					ref: "预算执行 ODS",
+					layer: "ODS" as const,
+					role: "PRIMARY" as const,
+					alias: null,
+					joinType: null,
+					joinExpression: null,
+					sortOrder: 0,
+					sourceBindingId: "50000000-0000-0000-0000-000000000001",
+					resolvedVersion: "source-v1",
+				},
+			],
+		};
 		const currentImplementation = generatedImplementation(base, {
 			inputMode: "PHYSICAL_ASSET",
 			inputs: [
@@ -613,6 +691,100 @@ describe("model workbench draft validation", () => {
 			savedModel,
 			currentImplementation,
 			expect.objectContaining({ inputMode: "PHYSICAL_ASSET", inputs: currentImplementation.inputs }),
+		);
+	});
+
+	it("saves a selected warehouse source through logical and implementation bindings", async () => {
+		const base = canonicalFactView();
+		const savedModel = { ...base, revision: 2, checksum: "d".repeat(64) };
+		vi.mocked(updateModelSpec).mockResolvedValue(savedModel);
+		vi.mocked(saveModelImplementation).mockResolvedValue(
+			generatedImplementation(savedModel, {
+				inputMode: "PHYSICAL_ASSET",
+				inputs: [{ sourceBindingId: physicalSource.bindingId, resolvedVersion: "source-v1" }],
+			}),
+		);
+		const draft = {
+			...modelDraftFromView(base),
+			physicalName: "dwd_budget_execution",
+			implementationInputMode: "PHYSICAL_ASSET" as const,
+			sourceRefs: [
+				{
+					kind: "TABLE" as const,
+					ref: "预算执行 ODS",
+					layer: "ODS" as const,
+					role: "PRIMARY" as const,
+					alias: null,
+					joinType: null,
+					joinExpression: null,
+					sortOrder: 0,
+					sourceBindingId: physicalSource.bindingId,
+					resolvedVersion: "source-v1",
+				},
+			],
+		};
+
+		await saveModelDraft(draft, { ownerId: "owner-1", dimensionDefinitions: [], models: [base] });
+
+		expect(updateModelSpec).toHaveBeenCalledWith(
+			base,
+			expect.objectContaining({
+				sourceRefs: draft.sourceRefs,
+				factShape: "TRANSACTION",
+				timeSemantics: { type: "EVENT_TIME", fields: ["event_time"] },
+			}),
+		);
+		expect(saveModelImplementation).toHaveBeenCalledWith(
+			savedModel,
+			null,
+			expect.objectContaining({
+				inputMode: "PHYSICAL_ASSET",
+				inputs: [{ sourceBindingId: physicalSource.bindingId, resolvedVersion: "source-v1" }],
+			}),
+		);
+	});
+
+	it("saves a revision-pinned upstream model for derived models", async () => {
+		const upstream = canonicalFactView();
+		const summary = {
+			...canonicalFactView(),
+			id: "30000000-0000-0000-0000-000000000002",
+			modelType: "SUMMARY" as const,
+			layer: "DWS" as const,
+			warehouseLayerCode: "DWS",
+			businessProcessId: null,
+			factShape: null,
+			timeSemantics: null,
+			name: "项目预算汇总",
+		};
+		const savedModel = { ...summary, revision: 2, checksum: "e".repeat(64) };
+		vi.mocked(updateModelSpec).mockResolvedValue(savedModel);
+		vi.mocked(saveModelImplementation).mockResolvedValue(
+			generatedImplementation(savedModel, {
+				inputMode: "UPSTREAM_MODEL",
+				inputs: [{ modelSpecId: upstream.id, revision: upstream.revision, checksum: upstream.checksum }],
+			}),
+		);
+		const draft = {
+			...modelDraftFromView(summary),
+			physicalName: "dws_project_budget",
+			implementationInputMode: "UPSTREAM_MODEL" as const,
+			dependsOn: [{ modelSpecId: upstream.id, revision: upstream.revision }],
+		};
+
+		await saveModelDraft(draft, { ownerId: "owner-1", dimensionDefinitions: [], models: [upstream, summary] });
+
+		expect(updateModelSpec).toHaveBeenCalledWith(
+			summary,
+			expect.objectContaining({ dependsOn: [{ modelSpecId: upstream.id, revision: upstream.revision }] }),
+		);
+		expect(saveModelImplementation).toHaveBeenCalledWith(
+			savedModel,
+			null,
+			expect.objectContaining({
+				inputMode: "UPSTREAM_MODEL",
+				inputs: [{ modelSpecId: upstream.id, revision: upstream.revision, checksum: upstream.checksum }],
+			}),
 		);
 	});
 });

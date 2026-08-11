@@ -6,11 +6,13 @@ import { emptyModelDraft, type ModelSpecDraft, validateModelDraftInput } from ".
 describe("FACT business-process context", () => {
 	it("starts empty and blocks a FACT draft until a stable process is resolved", () => {
 		const draft = emptyModelDraft("fact", {
+			planId: "plan-1",
 			domains: [{ id: "domain-1", code: "PROJECT", name: "项目域", parentCode: "INSTITUTE" }],
 			models: [],
 			dimensions: [],
 			standards: [],
 			warehouseLayers: [{ code: "DWD", name: "明细层", systemLayerCode: "DWD", builtin: true }],
+			sources: [],
 		}) as ModelSpecDraft;
 
 		expect(draft.businessProcessId).toBe("");
@@ -23,11 +25,13 @@ describe("FACT business-process context", () => {
 	it("does not require a process for dimensions, summaries or application models", () => {
 		for (const kind of ["dimension-table", "summary", "application"] as const) {
 			const draft = emptyModelDraft(kind, {
+				planId: "plan-1",
 				domains: [{ id: "domain-1", code: "PROJECT", name: "项目域", parentCode: "INSTITUTE" }],
 				models: [],
 				dimensions: [],
 				standards: [],
 				warehouseLayers: [],
+				sources: [],
 			}) as ModelSpecDraft;
 			expect(validateModelDraftInput(draft).businessProcessId).toBeUndefined();
 		}

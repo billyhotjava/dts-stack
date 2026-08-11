@@ -27,9 +27,9 @@ joined AS (
     fc.is_safety
   FROM stg s
   LEFT JOIN {{ ref('dim_fund_source') }} fs
-    ON fs.code = s.fund_source
+    ON fs.raw_value = s.fund_source
   LEFT JOIN {{ ref('dim_fund_category') }} fc
-    ON fc.code = s.fund_category
+    ON fc.raw_value = s.fund_category
 )
 
 SELECT

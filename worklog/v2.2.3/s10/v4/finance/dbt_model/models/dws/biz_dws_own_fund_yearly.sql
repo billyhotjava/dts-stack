@@ -13,9 +13,9 @@ pivot_by_category AS (
     fund_category_code,
     fund_category_label,
     fund_category_sort,
-    coalesce(sum(CASE WHEN fund_source_code = '年初'     THEN amount ELSE 0 END), 0)::numeric(15,2) AS opening_amount,
-    coalesce(sum(CASE WHEN fund_source_code = '预计增加' THEN amount ELSE 0 END), 0)::numeric(15,2) AS increase_amount,
-    coalesce(sum(CASE WHEN fund_source_code = '预计使用' THEN amount ELSE 0 END), 0)::numeric(15,2) AS usage_amount,
+    coalesce(sum(CASE WHEN fund_source_code = 'OPENING'          THEN amount ELSE 0 END), 0)::numeric(15,2) AS opening_amount,
+    coalesce(sum(CASE WHEN fund_source_code = 'PLANNED_INCREASE' THEN amount ELSE 0 END), 0)::numeric(15,2) AS increase_amount,
+    coalesce(sum(CASE WHEN fund_source_code = 'PLANNED_USAGE'    THEN amount ELSE 0 END), 0)::numeric(15,2) AS usage_amount,
     count(DISTINCT fund_source_code) AS source_count,
     count(*) AS record_count
   FROM base
@@ -24,7 +24,7 @@ pivot_by_category AS (
 year_totals AS (
   SELECT
     year_num,
-    '全部'::text AS fund_category_code,
+    'ALL'::text AS fund_category_code,
     '全部基金'::text AS fund_category_label,
     99::int AS fund_category_sort,
     coalesce(sum(opening_amount), 0)::numeric(15,2) AS opening_amount,

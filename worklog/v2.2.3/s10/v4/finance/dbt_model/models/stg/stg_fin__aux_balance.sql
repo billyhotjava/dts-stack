@@ -14,13 +14,13 @@ SELECT
   ) AS source_row_id,
   'ods_finance_aux_balance'::text AS source_table,
 
-  {{ nullif_placeholder("subject_code") }} AS subject_code,
-  {{ nullif_placeholder("subject_name") }} AS subject_name,
-  {{ nullif_placeholder("dept_name") }} AS dept_name,
+  nullif(btrim(cast(subject_code as text)), '') AS subject_code,
+  nullif(btrim(cast(subject_name as text)), '') AS subject_name,
+  nullif(btrim(cast(dept_name as text)), '') AS dept_name,
 
   cast(contract_name as text) AS contract_name_raw,
-  {{ nullif_placeholder("contract_name") }} AS contract_name,
+  nullif(nullif(btrim(cast(contract_name as text)), ''), '—') AS contract_name,
 
-  {{ parse_numeric_safe("balance") }}::numeric(15,2) AS balance
+  cast(balance as numeric(15,2)) AS balance
 FROM {{ source('fin_ods', 'aux_balance') }}
-WHERE {{ nullif_placeholder("subject_code") }} IS NOT NULL
+WHERE nullif(btrim(cast(subject_code as text)), '') IS NOT NULL

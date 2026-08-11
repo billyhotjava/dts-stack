@@ -3,11 +3,11 @@
 SELECT prefix, expense_category_code
 FROM (
   VALUES
-    ('5001', '原材料/设备'),
-    ('5101', '外协/服务'),
-    ('5201', '折旧'),
-    ('5301', '检测试验'),
-    ('5401', '设计咨询'),
-    ('5501', '租赁'),
-    ('5601', '培训')
+    ('5001', 'MATERIAL_EQUIPMENT'),
+    ('5101', 'OUTSOURCING_SERVICE'),
+    ('5201', 'DEPRECIATION'),
+    ('5301', 'TESTING'),
+    ('5401', 'DESIGN_CONSULTING'),
+    ('5501', 'RENTAL'),
+    ('5601', 'TRAINING')
 ) AS t(prefix, expense_category_code)

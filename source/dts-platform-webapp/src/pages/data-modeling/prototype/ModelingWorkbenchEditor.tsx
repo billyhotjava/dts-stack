@@ -16,6 +16,7 @@ import type { DimensionDefinitionView } from "@/features/modeling/contracts/dime
 import type { ModelRepresentationView } from "@/features/modeling/contracts/modelRepresentationContract";
 import type { ModelSpecField, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { ModelFieldEditorTable } from "./ModelFieldEditorTable";
+import { ModelImplementationBindingFields } from "./ModelImplementationBindingFields";
 import { ModelMaterializationStatusCard } from "./ModelMaterializationStatus";
 import type { WorkbenchDialog } from "./ModelWorkbenchDialog";
 import {
@@ -214,8 +215,6 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 		currentOwnerId,
 	});
 	const domainOptions = context.domains.filter((item) => Boolean(item.parentCode));
-	const implementationSourceValue =
-		draft.implementationInputMode === "GENERATED" ? draft.generationStrategyType : draft.implementationInputMode;
 	const missingPersistedDomain = Boolean(draft.domainId && !domainOptions.some((item) => item.id === draft.domainId));
 	const missingPersistedDefinition = Boolean(
 		draft.base &&
@@ -282,37 +281,6 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 								</option>
 							))}
 						</select>
-					</label>
-					<label>
-						<span>实现来源</span>
-						<select
-							aria-label="实现来源"
-							disabled={Boolean(draft.implementationBase)}
-							onChange={(event) =>
-								patch(
-									event.target.value === "DATE_DIMENSION"
-										? { implementationInputMode: "GENERATED", generationStrategyType: "DATE_DIMENSION" }
-										: { implementationInputMode: "", generationStrategyType: "" },
-								)
-							}
-							value={implementationSourceValue}
-						>
-							<option value="">待配置</option>
-							<option value="DATE_DIMENSION">受控日期维度生成器</option>
-							{draft.implementationInputMode === "PHYSICAL_ASSET" ? (
-								<option value="PHYSICAL_ASSET">已关联物理来源</option>
-							) : null}
-							{draft.implementationInputMode === "UPSTREAM_MODEL" ? (
-								<option value="UPSTREAM_MODEL">已关联上游模型</option>
-							) : null}
-						</select>
-						<small>
-							{draft.implementationBase
-								? `当前实现输入：${draft.implementationBase.inputMode}`
-								: draft.generationStrategyType === "DATE_DIMENSION"
-									? "保存时将创建受控日期维度数据实现。"
-									: "尚无数据实现；普通模型需先关联物理来源或上游模型。"}
-						</small>
 					</label>
 					<label>
 						<span className="required">维度</span>
@@ -384,6 +352,12 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 					</label>
 				</div>
 			</section>
+			<ModelImplementationBindingFields
+				context={context}
+				draft={draft}
+				onChange={onChange}
+				validationErrors={validationErrors}
+			/>
 			<FieldsPanel {...props} dimensionMode />
 		</>
 	);
@@ -536,7 +510,12 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 					</label>
 					<label>
 						<span>物理表名</span>
-						<input onChange={(event) => patch({ physicalName: event.target.value })} value={draft.physicalName} />
+						<input
+							aria-label="物理表名"
+							onChange={(event) => patch({ physicalName: event.target.value })}
+							value={draft.physicalName}
+						/>
+						<ValidationMessage message={validationErrors.physicalName} />
 					</label>
 					<label className="dmx-workbench-editor__wide-field">
 						<span>业务定义</span>
@@ -573,6 +552,12 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 					</label>
 				</div>
 			</section>
+			<ModelImplementationBindingFields
+				context={context}
+				draft={draft}
+				onChange={onChange}
+				validationErrors={validationErrors}
+			/>
 			<FieldsPanel {...props} dimensionMode={false} />
 		</>
 	);

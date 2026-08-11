@@ -53,6 +53,36 @@
 	grid-column: 1 / -1;
 }
 
+.dmx-implementation-binding-list {
+	display: grid;
+	gap: 8px;
+	padding: 12px;
+	border: 1px solid var(--dmx-border);
+	border-radius: 4px;
+	background: var(--dmx-canvas);
+}
+
+.dmx-implementation-binding-list > label {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 10px;
+	border: 1px solid var(--dmx-border);
+	border-radius: 3px;
+	background: var(--dmx-surface);
+}
+
+.dmx-implementation-binding-list input[type="checkbox"] {
+	width: 16px;
+	min-height: 16px;
+	margin: 0;
+}
+
+.dmx-implementation-binding-list small {
+	color: var(--dmx-muted);
+}
+
 .dmx-workbench-editor__validation {
 	display: block;
 	color: var(--dmx-danger) !important;

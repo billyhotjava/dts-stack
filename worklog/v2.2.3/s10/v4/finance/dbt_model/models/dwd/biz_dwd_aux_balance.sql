@@ -7,7 +7,7 @@ normalized AS (
   SELECT
     s.*,
     substring(s.subject_code from 1 for 4) AS subject_code_prefix,
-    coalesce(p.expense_category_code, '其他') AS expense_category
+    coalesce(p.expense_category_code, 'OTHER') AS expense_category_code
   FROM stg s
   LEFT JOIN {{ ref('dim_expense_code_prefix') }} p
     ON p.prefix = substring(s.subject_code from 1 for 4)
@@ -48,7 +48,7 @@ SELECT
   d.abs_balance,
   d.balance_sign,
 
-  d.expense_category,
+  d.expense_category_code,
   dec.expense_category_id,
   dec.label AS expense_category_label,
   dec.sort_order AS expense_category_sort,
@@ -56,4 +56,4 @@ SELECT
   now() AS etl_time
 FROM derived d
 LEFT JOIN {{ ref('dim_expense_category') }} dec
-  ON dec.code = d.expense_category
+  ON dec.code = d.expense_category_code

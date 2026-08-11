@@ -80,6 +80,12 @@ const makeDraft = (patch: Partial<ModelSpecDraft> = {}): ModelSpecDraft => ({
 	implementationInputMode: "",
 	generationStrategyType: "",
 	implementationIdempotencyKey: "implementation-draft-1",
+	sourceRefs: [],
+	dependsOn: [],
+	factShape: "",
+	timeSemanticsType: "",
+	timeSemanticsFields: [],
+	consumptionScenario: "",
 	...patch,
 });
 
@@ -108,6 +114,7 @@ const definition = {
 const makeProps = (patch: Partial<ModelingWorkbenchEditorProps> = {}): ModelingWorkbenchEditorProps => ({
 	draft: makeDraft(),
 	context: {
+		planId: "plan-1",
 		domains: [
 			{ id: "10000000-0000-0000-0000-000000000001", code: "business", name: "财务业务" },
 			{ id: "20000000-0000-0000-0000-000000000001", code: "finance", name: "财务域", parentCode: "business" },
@@ -115,6 +122,19 @@ const makeProps = (patch: Partial<ModelingWorkbenchEditorProps> = {}): ModelingW
 		models: [],
 		dimensions: [],
 		standards: [],
+		sources: [
+			{
+				bindingId: "50000000-0000-0000-0000-000000000001",
+				sourceType: "CONNECTION_TABLE",
+				locator: { namespace: "public", objectName: "ods_budget_execution" },
+				sourceId: "ods_budget_execution",
+				confirmationStatus: "CONFIRMED",
+				displayName: "预算执行 ODS",
+				resolvedVersion: "source-v1",
+				resolutionStatus: "AVAILABLE",
+				freshness: "CURRENT",
+			},
+		],
 		warehouseLayers: [
 			{
 				code: "DWD",
@@ -204,6 +224,73 @@ afterEach(async () => {
 });
 
 describe("ModelingWorkbenchEditor", () => {
+	it("binds a manually created dimension table to a confirmed warehouse source", async () => {
+		const initial = await render();
+		const mode = container.querySelector<HTMLSelectElement>('select[aria-label="实现输入方式"]');
+		expect(mode).not.toBeNull();
+		await act(async () => {
+			if (!mode) return;
+			mode.value = "PHYSICAL_ASSET";
+			mode.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+		expect(initial.onChange).toHaveBeenCalledWith(
+			expect.objectContaining({ implementationInputMode: "PHYSICAL_ASSET" }),
+		);
+		const props = await render(makeProps({ draft: makeDraft({ implementationInputMode: "PHYSICAL_ASSET" }) }));
+
+		const source = container.querySelector<HTMLInputElement>('input[aria-label="选择来源 预算执行 ODS"]');
+		expect(source).not.toBeNull();
+		await act(async () => {
+			source?.click();
+		});
+
+		expect(props.onChange).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				implementationInputMode: "PHYSICAL_ASSET",
+				sourceRefs: [
+					expect.objectContaining({
+						kind: "TABLE",
+						layer: "ODS",
+						role: "PRIMARY",
+						sourceBindingId: "50000000-0000-0000-0000-000000000001",
+						resolvedVersion: "source-v1",
+					}),
+				],
+			}),
+		);
+	});
+
+	it("shows FACT semantics and APPLICATION consumption scenario in the unified form", async () => {
+		await render(
+			makeProps({
+				draft: makeDraft({
+					createKind: "fact",
+					grainStatement: "一条预算执行明细一行",
+					businessProcessId: "process-row-1",
+					factShape: "TRANSACTION",
+					timeSemanticsType: "EVENT_TIME",
+					timeSemanticsFields: ["event_time"],
+					fields: [...makeDraft().fields, { name: "event_time", dataType: "TIMESTAMP", nullable: false, role: "TIME" }],
+				}),
+			}),
+		);
+
+		for (const label of ["实现输入方式", "事实类型", "时间语义", "时间字段"])
+			expect(container.textContent).toContain(label);
+
+		await render(
+			makeProps({
+				draft: makeDraft({
+					createKind: "application",
+					warehouseLayerCode: "ADS",
+					grainStatement: "一个应用输出对象一行",
+					implementationInputMode: "UPSTREAM_MODEL",
+				}),
+			}),
+		);
+		expect(container.textContent).toContain("应用场景");
+	});
+
 	it("renders the concept-dimension form without dimension-table fields or lifecycle actions", async () => {
 		await render(makeProps({ draft: makeConceptDraft(), dimensionDefinitions: [], fieldRowIds: [] }));
 
@@ -366,12 +453,12 @@ describe("ModelingWorkbenchEditor", () => {
 		});
 		await render(props);
 
-		const source = container.querySelector<HTMLSelectElement>('select[aria-label="实现来源"]');
+		const source = container.querySelector<HTMLSelectElement>('select[aria-label="实现输入方式"]');
 		expect(source).toBeDefined();
 		expect(source?.value).toBe("");
 		await act(async () => {
 			if (!source) return;
-			source.value = "DATE_DIMENSION";
+			source.value = "GENERATED";
 			source.dispatchEvent(new Event("change", { bubbles: true }));
 		});
 		expect(props.onChange).toHaveBeenCalledWith(
@@ -424,7 +511,15 @@ describe("ModelingWorkbenchEditor", () => {
 		await render(
 			makeProps({
 				draft,
-				context: { domains: [], models: [], dimensions: [], standards: [], warehouseLayers: [] },
+				context: {
+					planId: "plan-1",
+					domains: [],
+					models: [],
+					dimensions: [],
+					standards: [],
+					warehouseLayers: [],
+					sources: [],
+				},
 				dimensionDefinitions: [],
 			}),
 		);
@@ -517,7 +612,15 @@ describe("ModelingWorkbenchEditor", () => {
 		await render(
 			makeProps({
 				draft,
-				context: { domains: [], models: [], dimensions: [], standards: [], warehouseLayers: [] },
+				context: {
+					planId: "plan-1",
+					domains: [],
+					models: [],
+					dimensions: [],
+					standards: [],
+					warehouseLayers: [],
+					sources: [],
+				},
 			}),
 		);
 

@@ -111,5 +111,11 @@ export function modelDraftFingerprint(draft: ModelDraft): string {
 		standardBindings: draft.standardBindings,
 		implementationInputMode: draft.implementationInputMode,
 		generationStrategyType: draft.generationStrategyType,
+		sourceRefs: draft.sourceRefs,
+		dependsOn: draft.dependsOn,
+		factShape: draft.factShape,
+		timeSemanticsType: draft.timeSemanticsType,
+		timeSemanticsFields: draft.timeSemanticsFields,
+		consumptionScenario: draft.consumptionScenario,
 	});
 }

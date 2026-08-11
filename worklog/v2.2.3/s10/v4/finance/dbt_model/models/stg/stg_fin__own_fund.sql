@@ -8,17 +8,17 @@ SELECT
   ) AS source_row_id,
   'ods_finance_own_fund'::text AS source_table,
 
-  {{ parse_numeric_safe("year_num") }}::int AS year_num,
+  cast(year_num as integer) AS year_num,
 
   cast(fund_source as text) AS fund_source_raw,
-  {{ nullif_placeholder("fund_source") }} AS fund_source,
+  nullif(btrim(cast(fund_source as text)), '') AS fund_source,
 
   cast(fund_category as text) AS fund_category_raw,
-  {{ nullif_placeholder("fund_category") }} AS fund_category,
+  nullif(btrim(cast(fund_category as text)), '') AS fund_category,
 
-  {{ parse_numeric_safe("amount") }}::numeric(15,2) AS amount,
-  {{ nullif_placeholder("note") }} AS note
+  cast(amount as numeric(15,2)) AS amount,
+  nullif(btrim(cast(note as text)), '') AS note
 FROM {{ source('fin_ods', 'own_fund') }}
-WHERE {{ parse_numeric_safe("year_num") }} IS NOT NULL
-  AND {{ nullif_placeholder("fund_source") }} IS NOT NULL
-  AND {{ nullif_placeholder("fund_category") }} IS NOT NULL
+WHERE year_num IS NOT NULL
+  AND nullif(btrim(cast(fund_source as text)), '') IS NOT NULL
+  AND nullif(btrim(cast(fund_category as text)), '') IS NOT NULL

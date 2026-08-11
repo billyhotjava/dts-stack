@@ -286,6 +286,52 @@ class DbtModelArchiveInspectServiceTest {
     }
 
     @Test
+    void convertsTheFinanceImportZipIntoMappableModelsWithoutTechnicalBlockers() throws Exception {
+        Path module = Path.of("").toAbsolutePath().normalize();
+        Path repository = module.endsWith(Path.of("source", "dts-platform")) ? module.getParent().getParent() : module;
+        Path fixture = repository.resolve("worklog/v2.2.3/s10/v4/finance/finance-dbt-model-reverse-import.zip");
+        assumeTrue(Files.isRegularFile(fixture), "Finance repository fixture is not available in this build context");
+
+        var result = service.inspect(
+            new MockMultipartFile("archive", fixture.getFileName().toString(), "application/zip", Files.readAllBytes(fixture))
+        );
+        var compatibility = new DbtCompatibilityEvaluator().evaluate(result);
+        var report = new DbtArchiveInspectionReportProjector().project(result, compatibility);
+
+        assertThat(result.dbt().projectName()).isEqualTo("finance_analytics");
+        assertThat(result.dbt().manifestVersion()).isEqualTo("source-project/v1");
+        assertThat(result.models()).hasSize(20);
+        assertThat(result.technicalNodes())
+            .hasSize(4)
+            .extracting(node -> node.dbtUniqueId())
+            .contains(
+                "model.finance_analytics.stg_fin__own_fund",
+                "model.finance_analytics.stg_fin__project_fund",
+                "model.finance_analytics.stg_fin__aux_balance",
+                "model.finance_analytics.stg_fin__aux_balance_personal"
+            );
+        assertThat(result.models())
+            .allSatisfy(model -> {
+                assertThat(model.semantics().domainCode()).isEqualTo("FINANCE");
+                assertThat(model.config()).containsEntry("sourceContractEnforced", true);
+                assertThat(model.columns()).isNotEmpty();
+                assertThat(model.conversion().reasonCodes()).containsExactly("SOURCE_SEMANTICS_INCOMPLETE");
+            });
+        assertThat(result.issues())
+            .extracting(issue -> issue.code())
+            .doesNotContain(
+                "SOURCE_FIELDS_UNVERIFIED",
+                "SOURCE_MACRO_DEPENDENCY_UNVERIFIED",
+                "SOURCE_DEPENDENCY_DYNAMIC",
+                "SOURCE_PACKAGE_MISSING"
+            );
+        assertThat(compatibility.importProjection()).isEqualTo(DbtArchiveInspectionContract.ImportProjectionCompatibility.IMPORTABLE);
+        assertThat(report.summary().discovered()).isEqualTo(20);
+        assertThat(report.summary().requiresMapping()).isEqualTo(20);
+        assertThat(report.summary().blocked()).isZero();
+    }
+
+    @Test
     void rejectsArchivesWithoutManifestOrLegacyInventory() throws Exception {
         assertCode(Map.of("README.md", "no dbt artifacts"));
     }

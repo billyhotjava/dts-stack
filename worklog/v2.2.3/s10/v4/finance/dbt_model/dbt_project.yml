@@ -4,14 +4,11 @@ config-version: 2
 profile: "dts"
 
 model-paths: ["models"]
-macro-paths: ["macros"]
 clean-targets: ["target", "dbt_packages"]
 
 models:
   finance_analytics:
-    +persist_docs:
-      relation: true
-      columns: true
+    +tags: ["domain:FINANCE"]
     stg:
       +materialized: view
       +tags: ["finance", "stg"]

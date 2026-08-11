@@ -2,7 +2,7 @@ version: 2
 
 sources:
   - name: "fin_ods"
-    schema: "public"
+    schema: "{{ env_var('DTS_FIN_ODS_SCHEMA', 'public') }}"
     description: "财务 ODS 源表。ODS 只承载入湖结果与原始口径，业务语义统一经 STG/DWD 收敛。"
     tables:
       - name: "own_fund"

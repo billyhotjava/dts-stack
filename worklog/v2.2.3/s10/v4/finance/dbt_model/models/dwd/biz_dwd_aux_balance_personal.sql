@@ -7,7 +7,7 @@ normalized AS (
   SELECT
     s.*,
     substring(s.subject_code from 1 for 4) AS subject_code_prefix,
-    coalesce(p.subject_category_code, '其他') AS subject_category
+    coalesce(p.subject_category_code, 'OTHER') AS subject_category_code
   FROM stg s
   LEFT JOIN {{ ref('dim_personal_subject_code_prefix') }} p
     ON p.prefix = substring(s.subject_code from 1 for 4)
@@ -41,7 +41,7 @@ SELECT
   bd.balance_direction_id,
   bd.label AS balance_direction_label,
 
-  d.subject_category,
+  d.subject_category_code,
   sc.subject_category_id,
   sc.label AS subject_category_label,
   sc.sort_order AS subject_category_sort,
@@ -51,4 +51,4 @@ FROM derived d
 LEFT JOIN {{ ref('dim_balance_direction') }} bd
   ON bd.code = d.balance_direction
 LEFT JOIN {{ ref('dim_personal_subject_category') }} sc
-  ON sc.code = d.subject_category
+  ON sc.code = d.subject_category_code

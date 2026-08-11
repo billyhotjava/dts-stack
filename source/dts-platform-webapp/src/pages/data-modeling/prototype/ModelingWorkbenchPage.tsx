@@ -407,6 +407,10 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 						: current.standardBindings.map((binding) =>
 								binding.fieldName === oldName ? { ...binding, fieldName: nextName } : binding,
 							),
+				timeSemanticsFields:
+					oldName === nextName
+						? current.timeSemanticsFields
+						: current.timeSemanticsFields.map((fieldName) => (fieldName === oldName ? nextName : fieldName)),
 			};
 		});
 	};
@@ -438,6 +442,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 			...draft,
 			fields,
 			standardBindings: draft.standardBindings.filter((binding) => fieldNames.has(binding.fieldName)),
+			timeSemanticsFields: draft.timeSemanticsFields.filter((fieldName) => fieldNames.has(fieldName)),
 		});
 		setFieldRowIds((current) => keepIndexes.map((index) => current[index] || crypto.randomUUID()));
 	};
@@ -451,6 +456,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 				...current,
 				fields: current.fields.filter((_, row) => row !== index),
 				standardBindings: current.standardBindings.filter((binding) => binding.fieldName !== fieldName),
+				timeSemanticsFields: current.timeSemanticsFields.filter((item) => item !== fieldName),
 			};
 		});
 	};
@@ -607,7 +613,11 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 								onAddFields={addFields}
 								onChange={(nextDraft) => {
 									if (savingRef.current) return;
-									setDraft(nextDraft);
+									setDraft(
+										isModelSpecDraft(nextDraft)
+											? { ...nextDraft, implementationIdempotencyKey: crypto.randomUUID() }
+											: nextDraft,
+									);
 									setValidationErrors({});
 								}}
 								onDeleteField={deleteField}

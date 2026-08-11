@@ -93,6 +93,7 @@ SELECT
   f.project_status_raw,
   f.project_status,
   ps.project_status_id,
+  ps.code AS project_status_code,
   ps.label AS project_status_label,
   ps.is_active AS project_is_active,
   ps.is_completed AS project_is_completed,
@@ -121,4 +122,4 @@ SELECT
   now() AS etl_time
 FROM final f
 LEFT JOIN {{ ref('dim_project_status') }} ps
-  ON ps.code = f.project_status
+  ON ps.raw_value = f.project_status
