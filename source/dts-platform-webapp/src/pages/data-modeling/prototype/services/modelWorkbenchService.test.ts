@@ -466,7 +466,7 @@ describe("model workbench draft validation", () => {
 		);
 	});
 
-	it("keeps dimensionProfile free of dimensionCode/reuseScope when saving a dimension table", async () => {
+	it("omits legacy dimension definition fields when saving a dimension table", async () => {
 		const base = {
 			...canonicalFactView(),
 			modelType: "DIMENSION" as const,
@@ -495,9 +495,15 @@ describe("model workbench draft validation", () => {
 		expect(updateModelSpec).toHaveBeenCalledWith(
 			base,
 			expect.objectContaining({
-				dimensionProfile: expect.objectContaining({ dimensionCode: null, reuseScope: null }),
+				dimensionProfile: expect.objectContaining({
+					hierarchies: [],
+					scdPolicy: { type: "TYPE1" },
+				}),
 			}),
 		);
+		const dimensionProfile = vi.mocked(updateModelSpec).mock.calls[0][1].dimensionProfile;
+		expect(dimensionProfile).not.toHaveProperty("dimensionCode");
+		expect(dimensionProfile).not.toHaveProperty("reuseScope");
 		expect(vi.mocked(updateModelSpec).mock.calls[0][1]).not.toHaveProperty("implementationPolicy");
 	});
 
