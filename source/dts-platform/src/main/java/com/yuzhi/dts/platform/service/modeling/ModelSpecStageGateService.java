@@ -197,7 +197,7 @@ public class ModelSpecStageGateService {
         )) {
             return gate;
         }
-        ModelGovernancePolicyPort.Policy policy = resolveGovernancePolicy(tenantId, view.planId());
+        ModelGovernancePolicyPort.Policy policy = resolveGovernancePolicy();
         if (!policy.available()) {
             LinkedHashMap<String, GateBlocker> unavailable = blockersWithoutGovernanceEvidence(gate);
             add(
@@ -205,8 +205,8 @@ public class ModelSpecStageGateService {
                 blocker(
                     view,
                     "MODEL_GOVERNANCE_POLICY_UNAVAILABLE",
-                    "planId",
-                    "当前数仓规划的发布治理策略不可用，请先修复规划策略",
+                    "governancePolicy",
+                    "平台全局模型发布治理策略不可用，请联系管理员检查系统初始化",
                     "standards"
                 )
             );
@@ -220,7 +220,7 @@ public class ModelSpecStageGateService {
                 view,
                 evidence.quality(),
                 "MODEL_SPEC_QUALITY_EVIDENCE",
-                "当前规划要求质量测试通过后才能发布",
+                "平台模型治理策略要求质量测试通过后才能发布",
                 "fields",
                 blockers
             );
@@ -228,7 +228,7 @@ public class ModelSpecStageGateService {
         return gateWithBlockers(gate, blockers);
     }
 
-    private ModelGovernancePolicyPort.Policy resolveGovernancePolicy(String tenantId, UUID planId) {
+    private ModelGovernancePolicyPort.Policy resolveGovernancePolicy() {
         if (governancePolicy == null) {
             return ModelGovernancePolicyPort.Policy.available(
                 ModelGovernancePolicyPort.StandardCoverage.ALL_FIELDS,
@@ -236,12 +236,12 @@ public class ModelSpecStageGateService {
             );
         }
         try {
-            ModelGovernancePolicyPort.Policy policy = governancePolicy.resolve(tenantId, planId);
+            ModelGovernancePolicyPort.Policy policy = governancePolicy.resolve();
             return policy == null
-                ? ModelGovernancePolicyPort.Policy.unavailable("WAREHOUSE_PLAN_POLICY_UNREADABLE")
+                ? ModelGovernancePolicyPort.Policy.unavailable("PLATFORM_MODEL_GOVERNANCE_POLICY_UNREADABLE")
                 : policy;
         } catch (RuntimeException unavailable) {
-            return ModelGovernancePolicyPort.Policy.unavailable("WAREHOUSE_PLAN_POLICY_UNREADABLE");
+            return ModelGovernancePolicyPort.Policy.unavailable("PLATFORM_MODEL_GOVERNANCE_POLICY_UNREADABLE");
         }
     }
 

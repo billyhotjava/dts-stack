@@ -1,14 +1,12 @@
 package com.yuzhi.dts.platform.service.modeling;
 
-import java.util.UUID;
-
 /**
- * Read-only projection of the warehouse-plan governance policy used by ModelSpec release gates.
- * The warehouse plan remains the policy owner.
+ * Read-only projection of the platform-global governance policy used by ModelSpec release gates.
+ * Model release governance is intentionally independent from the retired warehouse-plan workflow.
  */
 public interface ModelGovernancePolicyPort {
 
-    Policy resolve(String tenantId, UUID planId);
+    Policy resolve();
 
     enum StandardCoverage {
         NONE,

@@ -1,8 +1,8 @@
 [dts-build] === Pre-flight check ===
 [dts-build] Architecture: x86_64
 [dts-build] Docker API: 1.47, --platform supported: 1
-[dts-build] Available memory: 40137 MB
-[dts-build] Available disk: 208 GB
+[dts-build] Available memory: 40643 MB
+[dts-build] Available disk: 204 GB
 [dts-build] Estimated required disk: 12 GB
 [dts-build] Pruning dangling Docker resources...
 [dts-build] Layer cache: enabled — pass --no-cache for a clean-room release build
@@ -33,474 +33,473 @@ Already up to date.
 #6 DONE 0.0s
 
 #7 [internal] load build context
-#7 transferring context: 207.99kB 0.1s done
-#7 DONE 0.1s
+#7 transferring context: 105.35MB 1.1s done
+#7 DONE 1.1s
 
-#8 [builder 2/9] WORKDIR /app
+#8 [builder 4/9] COPY source/dts-session-core/package.json /dts-session-core/package.json
 #8 CACHED
 
-#9 [builder 3/9] COPY source/dts-platform-webapp/pnpm-lock.yaml source/dts-platform-webapp/package.json ./
+#9 [builder 5/9] COPY source/dts-session-core/src/ /dts-session-core/src/
 #9 CACHED
 
-#10 [builder 4/9] COPY source/dts-session-core/package.json /dts-session-core/package.json
+#10 [builder 6/9] RUN set -eux;     if [ -n "https://registry.npmmirror.com" ]; then         export npm_config_registry="https://registry.npmmirror.com";     fi;     if [ -n "" ]; then         export http_proxy="";         export https_proxy="";         export npm_config_proxy="${http_proxy}";         export npm_config_https_proxy="${https_proxy}";     fi;     npm install -g "pnpm@10.28.0";     pnpm --version;     unset npm_config_registry npm_config_proxy npm_config_https_proxy http_proxy https_proxy
 #10 CACHED
 
-#11 [builder 5/9] COPY source/dts-session-core/src/ /dts-session-core/src/
+#11 [builder 2/9] WORKDIR /app
 #11 CACHED
 
-#12 [builder 6/9] RUN set -eux;     if [ -n "https://registry.npmmirror.com" ]; then         export npm_config_registry="https://registry.npmmirror.com";     fi;     if [ -n "" ]; then         export http_proxy="";         export https_proxy="";         export npm_config_proxy="${http_proxy}";         export npm_config_https_proxy="${https_proxy}";     fi;     npm install -g "pnpm@10.28.0";     pnpm --version;     unset npm_config_registry npm_config_proxy npm_config_https_proxy http_proxy https_proxy
+#12 [builder 3/9] COPY source/dts-platform-webapp/pnpm-lock.yaml source/dts-platform-webapp/package.json ./
 #12 CACHED
 
 #13 [builder 7/9] RUN --mount=type=cache,target=/pnpm-store,sharing=locked     set -eux;     if [ -n "https://registry.npmmirror.com" ]; then         export npm_config_registry="https://registry.npmmirror.com";     fi;     if [ -n "" ]; then         export http_proxy="";         export https_proxy="";         export npm_config_proxy="${http_proxy}";         export npm_config_https_proxy="${https_proxy}";     fi;     pnpm config set store-dir "/pnpm-store" --global;     pnpm install --frozen-lockfile --ignore-scripts;     unset npm_config_registry npm_config_proxy npm_config_https_proxy http_proxy https_proxy
 #13 CACHED
 
 #14 [builder 8/9] COPY source/dts-platform-webapp/ ./
-#14 DONE 0.5s
+#14 DONE 0.4s
 
 #15 [builder 9/9] RUN pnpm "build"
-#15 1.125 
-#15 1.125 > slash-admin@2.2.3 build /app
-#15 1.125 > LEGACY_BROWSER_BUILD=1 VITE_CACHE_DIR=.vite-cache sh -c 'L=/tmp/tsc-$$.log; tsc >$L 2>&1 & t=$!; vite build & b=$!; wait $t; rt=$?; wait $b; rb=$?; [ $rt -eq 0 ] || { echo; echo "=== tsc 类型检查失败 ==="; cat $L; }; rm -f $L; exit $((rt|rb))'
-#15 1.125 
-#15 3.587 vite v6.3.3 building for production...
-#15 3.887 transforming...
-#15 102.5 ✓ 10588 modules transformed.
-#15 113.6 Browserslist: browsers data (caniuse-lite) is 16 months old. Please run:
-#15 113.6   npx update-browserslist-db@latest
-#15 113.6   Why you should do it regularly: https://github.com/browserslist/update-db#readme
-#15 203.3 rendering chunks...
-#15 207.7 [plugin vite:reporter] 
-#15 207.7 (!) /app/src/pages/governance/StandardPackageActions.tsx is dynamically imported by /app/src/routes/sections/dashboard/utils.tsx but also statically imported by /app/src/routes/sections/dashboard/dynamic-resolver.tsx, /app/src/routes/sections/dashboard/static-routes.tsx, dynamic import will not move module into another chunk.
-#15 207.7 
-#15 221.3 computing gzip size...
-#15 223.0 dist/index.html                                                  1.06 kB │ gzip:   0.56 kB
-#15 223.0 dist/assets/ic-logo-badge-CznoAOYk.svg                           4.45 kB │ gzip:   1.08 kB
-#15 223.0 dist/assets/tech-data-platform-C56bEMr9.svg                      5.63 kB │ gzip:   1.57 kB
-#15 223.0 dist/assets/tech-data-platform-light-D7wrD1Ue.svg                5.66 kB │ gzip:   1.58 kB
-#15 223.0 dist/assets/red-blur-DWnvL7od.png                               12.35 kB
-#15 223.0 dist/assets/cyan-blur-B8-Jipui.png                              17.32 kB
-#15 223.0 dist/assets/codicon-DCmgc-ay.ttf                                80.34 kB
-#15 223.0 dist/assets/character_1-0fQISY_w.png                         3,081.04 kB
-#15 223.0 dist/assets/character_2-CI-VpeLh.png                         3,509.51 kB
-#15 223.0 dist/assets/character_6-CSvYjFeV.png                         7,918.65 kB
-#15 223.0 dist/assets/ChartComponents-DQGYDVJU.css                         0.23 kB │ gzip:   0.12 kB
-#15 223.0 dist/assets/AccessWorkspacePage-ChZSPOfE.css                     0.89 kB │ gzip:   0.49 kB
-#15 223.0 dist/assets/screenRuntimeKeyframes-DZ1OlD3A.css                  0.93 kB │ gzip:   0.25 kB
-#15 223.0 dist/assets/AccessDefaultsPage-DGQwjuTp.css                      1.02 kB │ gzip:   0.53 kB
-#15 223.0 dist/assets/AccessPlanWizardPage-CWWIvlBH.css                    1.12 kB │ gzip:   0.45 kB
-#15 223.0 dist/assets/QualityRoutePage-6YN_vYTC.css                        2.45 kB │ gzip:   0.87 kB
-#15 223.0 dist/assets/AccessPlanDetailPage-zRTfMEel.css                    2.69 kB │ gzip:   0.79 kB
-#15 223.0 dist/assets/DashboardGrid-DsaH52PW.css                           3.21 kB │ gzip:   0.80 kB
-#15 223.0 dist/assets/modeling-workbench-Ccf4DvC9.css                      5.25 kB │ gzip:   1.33 kB
-#15 223.0 dist/assets/OrchestrationPage-C8Hj_Ukc.css                      12.73 kB │ gzip:   2.77 kB
-#15 223.0 dist/assets/ProjectCockpitPage-DABE33RE.css                     13.18 kB │ gzip:   2.73 kB
-#15 223.0 dist/assets/style-BZV40eAE.css                                  15.85 kB │ gzip:   2.66 kB
-#15 223.0 dist/assets/ComponentRenderer-oFWQqhS0.css                      22.60 kB │ gzip:   4.53 kB
-#15 223.0 dist/assets/data-modeling-CYOErY-s.css                          31.84 kB │ gzip:   6.48 kB
-#15 223.0 dist/assets/ScreenDesigner-MeIH3243.css                         47.26 kB │ gzip:   7.67 kB
-#15 223.0 dist/assets/SqlIdePage-CWCx4khD.css                            133.20 kB │ gzip:  21.12 kB
-#15 223.0 dist/assets/index-CSZavj37.css                                 221.33 kB │ gzip:  36.08 kB
-#15 223.0 dist/assets/tslib.es6-BaeAySrh.js                                0.12 kB │ gzip:   0.11 kB
-#15 223.0 dist/assets/use-search-params-CTvt1_ec.js                        0.12 kB │ gzip:   0.14 kB
-#15 223.0 dist/assets/index-Cv7lsdtq.js                                    0.13 kB │ gzip:   0.12 kB
-#15 223.0 dist/assets/directoryService-Bj1xKann.js                         0.14 kB │ gzip:   0.14 kB
-#15 223.0 dist/assets/resolveAnalyticsUrl-Cvd-bCXC.js                      0.14 kB │ gzip:   0.14 kB
-#15 223.0 dist/assets/goldenChainService-CCJ9pr0I.js                       0.17 kB │ gzip:   0.16 kB
-#15 223.0 dist/assets/connectorsService-dgDGlqi_.js                        0.21 kB │ gzip:   0.16 kB
-#15 223.0 dist/assets/transition-DqMgi7Fi.js                               0.21 kB │ gzip:   0.14 kB
-#15 223.0 dist/assets/accessSingleFlight-BTAzQwDJ.js                       0.24 kB │ gzip:   0.15 kB
-#15 223.0 dist/assets/roleService-B2r63177.js                              0.25 kB │ gzip:   0.21 kB
-#15 223.0 dist/assets/audit-CwX3Pe88.js                                    0.25 kB │ gzip:   0.20 kB
-#15 223.0 dist/assets/useDataModelingMenuGrant-BGPZ1PFg.js                 0.25 kB │ gzip:   0.21 kB
-#15 223.0 dist/assets/IndicatorCenterPage-5sZfzGdh.js                      0.28 kB │ gzip:   0.22 kB
-#15 223.0 dist/assets/QualityPage-Ix4r5W7i.js                              0.29 kB │ gzip:   0.24 kB
-#15 223.0 dist/assets/chart-BEBTEUdb.js                                    0.30 kB │ gzip:   0.22 kB
-#15 223.0 dist/assets/LegacyConnectionProfileRedirect-CLH5Jxhk.js          0.30 kB │ gzip:   0.23 kB
-#15 223.0 dist/assets/LegacySubjectAreasRedirect-BP0Rur1W.js               0.30 kB │ gzip:   0.23 kB
-#15 223.0 dist/assets/semanticAccess-DDe_yWrx.js                           0.30 kB │ gzip:   0.22 kB
-#15 223.0 dist/assets/jdbcDriversService-DQbgz95n.js                       0.33 kB │ gzip:   0.22 kB
-#15 223.0 dist/assets/LegacyAssetLedgerRedirect-B8CK20d1.js                0.35 kB │ gzip:   0.27 kB
-#15 223.0 dist/assets/IndicatorsPage-DoCLlj41.js                           0.36 kB │ gzip:   0.27 kB
-#15 223.0 dist/assets/page-header-Bsqx-X53.js                              0.36 kB │ gzip:   0.25 kB
-#15 223.0 dist/assets/reportsService-DaGCyDLo.js                           0.43 kB │ gzip:   0.24 kB
-#15 223.0 dist/assets/opsService-CqXEYOft.js                               0.44 kB │ gzip:   0.23 kB
-#15 223.0 dist/assets/CheckCircleOutlined-xF1T7Yij.js                      0.44 kB │ gzip:   0.32 kB
-#15 223.0 dist/assets/DeleteOutlined-CQ3ndIJ8.js                           0.44 kB │ gzip:   0.32 kB
-#15 223.0 dist/assets/FileTextOutlined-uJ0PZINf.js                         0.44 kB │ gzip:   0.32 kB
-#15 223.0 dist/assets/ArrowLeftOutlined-KojpodOt.js                        0.44 kB │ gzip:   0.32 kB
-#15 223.0 dist/assets/CloseCircleOutlined-Cw4qifOC.js                      0.44 kB │ gzip:   0.32 kB
-#15 223.0 dist/assets/AppstoreOutlined-B0mMf2Q3.js                         0.45 kB │ gzip:   0.32 kB
-#15 223.0 dist/assets/FolderOutlined-BW3UMsnC.js                           0.45 kB │ gzip:   0.32 kB
-#15 223.0 dist/assets/UploadOutlined-DY2dBuFa.js                           0.45 kB │ gzip:   0.32 kB
-#15 223.0 dist/assets/PlusOutlined-CFj7hZw0.js                             0.45 kB │ gzip:   0.32 kB
-#15 223.0 dist/assets/ReloadOutlined-BezKPy6I.js                           0.45 kB │ gzip:   0.32 kB
-#15 223.0 dist/assets/LinkOutlined-ARSrsmG_.js                             0.45 kB │ gzip:   0.32 kB
-#15 223.0 dist/assets/DatabaseOutlined-DPyPRvkU.js                         0.45 kB │ gzip:   0.32 kB
-#15 223.0 dist/assets/InboxOutlined-98LvdwTT.js                            0.45 kB │ gzip:   0.32 kB
-#15 223.0 dist/assets/EditOutlined-CXZ_SlhB.js                             0.45 kB │ gzip:   0.32 kB
-#15 223.0 dist/assets/WarningOutlined-HfOyAiWf.js                          0.45 kB │ gzip:   0.32 kB
-#15 223.0 dist/assets/SafetyCertificateOutlined-zKJpG2f_.js                0.45 kB │ gzip:   0.32 kB
-#15 223.0 dist/assets/SearchOutlined-kUmma6AI.js                           0.45 kB │ gzip:   0.32 kB
-#15 223.0 dist/assets/DownOutlined-CmR3Sa_R.js                             0.45 kB │ gzip:   0.32 kB
-#15 223.0 dist/assets/ExclamationCircleOutlined-NP_zuLzI.js                0.45 kB │ gzip:   0.32 kB
-#15 223.0 dist/assets/EyeOutlined-CxMZrcWf.js                              0.45 kB │ gzip:   0.32 kB
-#15 223.0 dist/assets/TableOutlined-_1dPkYDh.js                            0.45 kB │ gzip:   0.32 kB
-#15 223.0 dist/assets/FilterOutlined-CuFM_tT6.js                           0.45 kB │ gzip:   0.32 kB
-#15 223.0 dist/assets/relativeTime-COgGr2Wh.js                             0.45 kB │ gzip:   0.35 kB
-#15 223.0 dist/assets/LegacyAssetDetailRedirect-B7PlVejK.js                0.50 kB │ gzip:   0.33 kB
-#15 223.0 dist/assets/textUtils-CElZBn8x.js                                0.52 kB │ gzip:   0.22 kB
-#15 223.0 dist/assets/SubjectWorkspaceTabs-CBAieRYl.js                     0.52 kB │ gzip:   0.37 kB
-#15 223.0 dist/assets/TimeRangeSelect-B_Rst0Tu.js                          0.55 kB │ gzip:   0.37 kB
-#15 223.0 dist/assets/workbenchService-tEENBYOb.js                         0.56 kB │ gzip:   0.27 kB
-#15 223.0 dist/assets/dataMartApi-CkKLuhGx.js                              0.59 kB │ gzip:   0.30 kB
-#15 223.0 dist/assets/DimensionalModelingAssist-CIMFIuTx.js                0.63 kB │ gzip:   0.43 kB
-#15 223.0 dist/assets/ModelLifecycleArtifactsTable-Je1HSHt5.js             0.64 kB │ gzip:   0.45 kB
-#15 223.0 dist/assets/warehousePlanApi-BLLQ0v4J.js                         0.65 kB │ gzip:   0.33 kB
-#15 223.0 dist/assets/clipboard-N7lD7jN2.js                                0.67 kB │ gzip:   0.39 kB
-#15 223.0 dist/assets/assetEnumLabels-CUb-I3Ho.js                          0.67 kB │ gzip:   0.48 kB
-#15 223.0 dist/assets/format-CvfDmPlp.js                                   0.71 kB │ gzip:   0.35 kB
-#15 223.0 dist/assets/azcli-1IWB1ccx.js                                    0.71 kB │ gzip:   0.28 kB
-#15 223.0 dist/assets/modelingImportContextService-CPilZz2W.js             0.75 kB │ gzip:   0.46 kB
-#15 223.0 dist/assets/index-C148XJoK.js                                    0.75 kB │ gzip:   0.36 kB
-#15 223.0 dist/assets/indicatorDefinitionWorkflow-D9-mXNR8.js              0.76 kB │ gzip:   0.54 kB
-#15 223.0 dist/assets/LegacyDataIntegrationRedirect-DldQPGoI.js            0.79 kB │ gzip:   0.44 kB
-#15 223.0 dist/assets/empty-state-NLv5uXPr.js                              0.79 kB │ gzip:   0.42 kB
-#15 223.0 dist/assets/ClassificationTag-C2Iw3Jh8.js                        0.79 kB │ gzip:   0.57 kB
-#15 223.0 dist/assets/userDirectoryService--fkk7GLo.js                     0.80 kB │ gzip:   0.45 kB
-#15 223.0 dist/assets/dataSourcesService-DyUWPNWx.js                       0.81 kB │ gzip:   0.34 kB
-#15 223.0 dist/assets/GovernedAssetTagPanel-CHxzcPNS.js                    0.85 kB │ gzip:   0.59 kB
-#15 223.0 dist/assets/transformCreateAsyncRun.helpers-DXhw_wV9.js          0.87 kB │ gzip:   0.54 kB
-#15 223.0 dist/assets/errorCodeMessages-DND9GGg5.js                        0.88 kB │ gzip:   0.62 kB
-#15 223.0 dist/assets/input-CwML3cZj.js                                    0.88 kB │ gzip:   0.50 kB
-#15 223.0 dist/assets/LineagePage-DEprcDsj.js                              0.90 kB │ gzip:   0.46 kB
-#15 223.0 dist/assets/planningCatalogDomainService-BOp5Kv9v.js             0.90 kB │ gzip:   0.51 kB
-#15 223.0 dist/assets/QualityReportPage-CMxz8RQ5.js                        0.94 kB │ gzip:   0.48 kB
-#15 223.0 dist/assets/EmptyState-Q5cbdhdN.js                               0.95 kB │ gzip:   0.51 kB
-#15 223.0 dist/assets/ini-BvajGCUy.js                                      0.96 kB │ gzip:   0.49 kB
-#15 223.0 dist/assets/BizDomainSelect-b29_Ap04.js                          1.02 kB │ gzip:   0.64 kB
-#15 223.0 dist/assets/QualityRulesPage-9VTnVZiF.js                         1.02 kB │ gzip:   0.53 kB
-#15 223.0 dist/assets/sql-workbench-Cn2dSCDw.js                            1.02 kB │ gzip:   0.42 kB
-#15 223.0 dist/assets/sprint64GovernanceApi--khZUEkK.js                    1.11 kB │ gzip:   0.39 kB
-#15 223.0 dist/assets/assetPortalUx.helpers-o20hA519.js                    1.12 kB │ gzip:   0.74 kB
-#15 223.0 dist/assets/ConnectorDriverNotice-NfAZIae8.js                    1.17 kB │ gzip:   0.73 kB
-#15 223.0 dist/assets/DataArchitecturePage-X5gts2_W.js                     1.24 kB │ gzip:   0.68 kB
-#15 223.0 dist/assets/LineageImportPage-B3oS9Dk_.js                        1.25 kB │ gzip:   0.73 kB
-#15 223.0 dist/assets/catalogDomainService-C7s-nabD.js                     1.26 kB │ gzip:   0.53 kB
-#15 223.0 dist/assets/csp-C46ZqvIl.js                                      1.28 kB │ gzip:   0.49 kB
-#15 223.0 dist/assets/ConceptDimensionRecordDialog-C1liXTry.js             1.29 kB │ gzip:   0.82 kB
-#15 223.0 dist/assets/componentHierarchy-DS8woMvF.js                       1.30 kB │ gzip:   0.57 kB
-#15 223.0 dist/assets/CoreAssetsBlock-Cy1p_HIb.js                          1.31 kB │ gzip:   0.84 kB
-#15 223.0 dist/assets/javascript-BQqgCQDb.js                               1.32 kB │ gzip:   0.67 kB
-#15 223.0 dist/assets/KpiSecondary-BLbp-jy0.js                             1.43 kB │ gzip:   0.66 kB
-#15 223.0 dist/assets/planningContextPolicyService-IThnk4es.js             1.49 kB │ gzip:   0.95 kB
-#15 223.0 dist/assets/pla-CjnFlu4u.js                                      1.54 kB │ gzip:   0.60 kB
-#15 223.0 dist/assets/LegacyDataModelingRedirect-CE_aTb_C.js               1.58 kB │ gzip:   0.61 kB
-#15 223.0 dist/assets/ExternalRedirectPage-ChFCM9Mf.js                     1.59 kB │ gzip:   0.81 kB
-#15 223.0 dist/assets/SemanticModelingEmptyState-CceZ8uWl.js               1.60 kB │ gzip:   0.93 kB
-#15 223.0 dist/assets/fileTargetSchemaMapping-DG38NQr8.js                  1.62 kB │ gzip:   0.85 kB
-#15 223.0 dist/assets/scheme-Dhb-2j9p.js                                   1.63 kB │ gzip:   0.78 kB
-#15 223.0 dist/assets/catalogTagsApi-BGXaazTi.js                           1.64 kB │ gzip:   0.89 kB
-#15 223.0 dist/assets/ModelWorkbenchCreateMenu-BIN0M813.js                 1.65 kB │ gzip:   0.87 kB
-#15 223.0 dist/assets/flow9-Cac8vKd7.js                                    1.67 kB │ gzip:   0.81 kB
-#15 223.0 dist/assets/RecordDetailDrawer-DXXu6D_Y.js                       1.67 kB │ gzip:   0.93 kB
-#15 223.0 dist/assets/ScreenStrip-Dwvdik20.js                              1.67 kB │ gzip:   0.96 kB
-#15 223.0 dist/assets/TopReportsBlock-OwVS0qDZ.js                          1.69 kB │ gzip:   1.02 kB
-#15 223.0 dist/assets/sb-BYAiYHFx.js                                       1.69 kB │ gzip:   0.78 kB
-#15 223.0 dist/assets/bat-DPkNLes8.js                                      1.71 kB │ gzip:   0.83 kB
-#15 223.0 dist/assets/dockerfile-DLk6rpji.js                               1.73 kB │ gzip:   0.63 kB
-#15 223.0 dist/assets/redux-BFxtlG_c.js                                    1.82 kB │ gzip:   0.83 kB
-#15 223.0 dist/assets/console-page-07vEvJN3.js                             1.83 kB │ gzip:   0.69 kB
-#15 223.0 dist/assets/navigation-DxlgsNQG.js                               1.86 kB │ gzip:   0.95 kB
-#15 223.0 dist/assets/pascaligo-5jv8CcQD.js                                1.86 kB │ gzip:   0.87 kB
-#15 223.0 dist/assets/deviceMode-C8VXTHVy.js                               1.87 kB │ gzip:   0.95 kB
-#15 223.0 dist/assets/DomainMatrix-X5anmJmo.js                             1.88 kB │ gzip:   1.08 kB
-#15 223.0 dist/assets/classification-BBIEGF2A.js                           1.88 kB │ gzip:   0.86 kB
-#15 223.0 dist/assets/AssetTagFilter-RdZNqA85.js                           1.92 kB │ gzip:   1.13 kB
-#15 223.0 dist/assets/PublicCardPage-CYbsoXCv.js                           1.94 kB │ gzip:   0.89 kB
-#15 223.0 dist/assets/lua-D28Ae8-K.js                                      1.98 kB │ gzip:   0.89 kB
-#15 223.0 dist/assets/WorkbenchFilterBar-DDT51bZJ.js                       2.00 kB │ gzip:   0.85 kB
-#15 223.0 dist/assets/TaskSchedulingPage-B9hMytkp.js                       2.01 kB │ gzip:   1.04 kB
-#15 223.0 dist/assets/ModelStageGatePanel-BVDuHRR0.js                      2.03 kB │ gzip:   1.23 kB
-#15 223.0 dist/assets/CompactTable-BbzTZBHf.js                             2.03 kB │ gzip:   1.11 kB
-#15 223.0 dist/assets/cameligo-CGrWLZr3.js                                 2.05 kB │ gzip:   0.92 kB
-#15 223.0 dist/assets/DataModelingPage-grXZCjnc.js                         2.08 kB │ gzip:   0.97 kB
-#15 223.0 dist/assets/MyGrantsPage-BDMy32hq.js                             2.09 kB │ gzip:   1.01 kB
-#15 223.0 dist/assets/IndicatorCard-BcgW6oPX.js                            2.11 kB │ gzip:   1.12 kB
-#15 223.0 dist/assets/graphql-LQdxqEYJ.js                                  2.12 kB │ gzip:   0.99 kB
-#15 223.0 dist/assets/OpsAlertLogPage-1Arj4B28.js                          2.15 kB │ gzip:   1.11 kB
-#15 223.0 dist/assets/KpiRow-B9HFXl7x.js                                   2.19 kB │ gzip:   1.01 kB
-#15 223.0 dist/assets/AssetGovernanceOverview-CFXeNfkU.js                  2.25 kB │ gzip:   0.95 kB
-#15 223.0 dist/assets/objective-c-B1aVtJYH.js                              2.26 kB │ gzip:   1.02 kB
-#15 223.0 dist/assets/lexon-Canl7DCW.js                                    2.30 kB │ gzip:   0.88 kB
-#15 223.0 dist/assets/DataModelingSurface-Bsb5OWTq.js                      2.31 kB │ gzip:   0.95 kB
-#15 223.0 dist/assets/biLinkUrl-DSAz9CdH.js                                2.31 kB │ gzip:   0.88 kB
-#15 223.0 dist/assets/AssetDomainBars-jFFTkDTm.js                          2.36 kB │ gzip:   1.33 kB
-#15 223.0 dist/assets/useTableSort-CpC4dW70.js                             2.39 kB │ gzip:   1.11 kB
-#15 223.0 dist/assets/bicep-Corcdgou.js                                    2.40 kB │ gzip:   0.93 kB
-#15 223.0 dist/assets/sparql-KEyrF7De.js                                   2.41 kB │ gzip:   1.12 kB
-#15 223.0 dist/assets/AssetReconciliationPanel-BUIGCFoy.js                 2.44 kB │ gzip:   1.18 kB
-#15 223.0 dist/assets/mips-CdjsipkG.js                                     2.44 kB │ gzip:   1.03 kB
-#15 223.0 dist/assets/LineageColumnsPage-BvNjEjnT.js                       2.47 kB │ gzip:   1.36 kB
-#15 223.0 dist/assets/go-O9LJTZXk.js                                       2.52 kB │ gzip:   1.11 kB
-#15 223.0 dist/assets/AccessPlanReviewStep-DbDna7id.js                     2.59 kB │ gzip:   1.43 kB
-#15 223.0 dist/assets/LandingScheduleStep-BJcgdjaL.js                      2.60 kB │ gzip:   1.29 kB
-#15 223.0 dist/assets/GovernanceGapPanel-CcMw__CC.js                       2.61 kB │ gzip:   1.19 kB
-#15 223.0 dist/assets/sophia-RYC1BQQz.js                                   2.62 kB │ gzip:   1.17 kB
-#15 223.0 dist/assets/typespec-CzxlYoT_.js                                 2.66 kB │ gzip:   1.05 kB
-#15 223.0 dist/assets/AssetGovernanceDonut-9-oa5zEu.js                     2.67 kB │ gzip:   1.49 kB
-#15 223.0 dist/assets/m3-DPitgjJI.js                                       2.68 kB │ gzip:   1.28 kB
-#15 223.0 dist/assets/PermissionAuditPage-BeEG-lBm.js                      2.71 kB │ gzip:   1.30 kB
-#15 223.0 dist/assets/TokensPage-BB67Yuu9.js                               2.75 kB │ gzip:   1.45 kB
-#15 223.0 dist/assets/lineageContracts-0_pbnJiW.js                         2.77 kB │ gzip:   1.37 kB
-#15 223.0 dist/assets/xml-DymhlJWx.js                                      2.81 kB │ gzip:   1.17 kB
-#15 223.0 dist/assets/ErrorLayout-C6iW4V7U.js                              2.81 kB │ gzip:   0.96 kB
-#15 223.0 dist/assets/MyIndicatorDashboard-CuZkOOAt.js                     2.83 kB │ gzip:   1.37 kB
-#15 223.0 dist/assets/fsharp-fd1GTHhf.js                                   2.84 kB │ gzip:   1.28 kB
-#15 223.0 dist/assets/IndicatorStorePage-Dvtl7Jdg.js                       2.85 kB │ gzip:   1.46 kB
-#15 223.0 dist/assets/pascal-BhNW15KB.js                                   2.86 kB │ gzip:   1.35 kB
-#15 223.0 dist/assets/WorkbenchCustomizeDrawer-DL8uqRgJ.js                 2.86 kB │ gzip:   1.49 kB
-#15 223.0 dist/assets/shell-CsDZo4DB.js                                    2.93 kB │ gzip:   1.16 kB
-#15 223.0 dist/assets/GateEvidenceSummary-B-uYysei.js                      2.95 kB │ gzip:   1.54 kB
-#15 223.0 dist/assets/r-BIFz-_sK.js                                        2.99 kB │ gzip:   1.24 kB
-#15 223.0 dist/assets/AssetClassificationFactPanel-DERMFEB9.js             2.99 kB │ gzip:   1.59 kB
-#15 223.0 dist/assets/AssetLedgerToolbar-Co5_CVTt.js                       3.01 kB │ gzip:   1.43 kB
-#15 223.0 dist/assets/FileFieldMappingEditor-DBIuQ0hD.js                   3.01 kB │ gzip:   1.58 kB
-#15 223.0 dist/assets/qsharp-q7JyzKFN.js                                   3.05 kB │ gzip:   1.37 kB
-#15 223.0 dist/assets/PrototypePrimitives-B5xmPEB8.js                      3.05 kB │ gzip:   1.11 kB
-#15 223.0 dist/assets/PublicDashboardPage-BwAqlxEY.js                      3.08 kB │ gzip:   1.41 kB
-#15 223.0 dist/assets/java-SYsfObOQ.js                                     3.08 kB │ gzip:   1.36 kB
-#15 223.0 dist/assets/powershell-Bu_VLpJB.js                               3.13 kB │ gzip:   1.34 kB
-#15 223.0 dist/assets/assetPageShared-Cno8JkBg.js                          3.14 kB │ gzip:   1.56 kB
-#15 223.0 dist/assets/HelpCenterPage-BrIwCDwv.js                           3.14 kB │ gzip:   1.46 kB
-#15 223.0 dist/assets/LineageDiffPage-p5ycT05m.js                          3.18 kB │ gzip:   1.55 kB
-#15 223.0 dist/assets/LeaderOverviewPage-CZLb7pi5.js                       3.23 kB │ gzip:   1.63 kB
-#15 223.0 dist/assets/cypher-D84EuPTj.js                                   3.25 kB │ gzip:   1.40 kB
-#15 223.0 dist/assets/TableDetailPage-BQE9ssZp.js                          3.26 kB │ gzip:   1.50 kB
-#15 223.0 dist/assets/PageContainer-C98MKC2l.js                            3.27 kB │ gzip:   1.13 kB
-#15 223.0 dist/assets/ModelMaterializationStatus-C0uAoYt-.js               3.29 kB │ gzip:   1.52 kB
-#15 223.0 dist/assets/kotlin-qQ0MG-9I.js                                   3.30 kB │ gzip:   1.44 kB
-#15 223.0 dist/assets/screenRuntimeKeyframes-D0nExL8_.js                   3.31 kB │ gzip:   1.60 kB
-#15 223.0 dist/assets/ToolsPage-uZkIeXUN.js                                3.40 kB │ gzip:   1.73 kB
-#15 223.0 dist/assets/redis-CHOsPHWR.js                                    3.42 kB │ gzip:   1.44 kB
-#15 223.0 dist/assets/tcl-PloMZuKG.js                                      3.43 kB │ gzip:   1.33 kB
-#15 223.0 dist/assets/accessManagedFile-rhRjSo2a.js                        3.44 kB │ gzip:   1.21 kB
-#15 223.0 dist/assets/coffee-B7EJu28W.js                                   3.45 kB │ gzip:   1.26 kB
-#15 223.0 dist/assets/hcl-DxDQ3s82.js                                      3.45 kB │ gzip:   1.45 kB
-#15 223.0 dist/assets/Page404-DtHyIARz.js                                  3.56 kB │ gzip:   1.70 kB
-#15 223.0 dist/assets/navigation-Cy8xeKP9.js                               3.59 kB │ gzip:   1.70 kB
-#15 223.0 dist/assets/markdown-B811l8j2.js                                 3.65 kB │ gzip:   1.35 kB
-#15 223.0 dist/assets/DatabaseAccessStep-Bd2wS5SE.js                       3.65 kB │ gzip:   1.73 kB
-#15 223.0 dist/assets/WorkflowCenterPage-DCl7nl4i.js                       3.67 kB │ gzip:   1.73 kB
-#15 223.0 dist/assets/workbenchComponentRegistry-B2VzUR9s.js               3.68 kB │ gzip:   1.78 kB
-#15 223.0 dist/assets/MetricsPage-z5xymXwI.js                              3.69 kB │ gzip:   1.19 kB
-#15 223.0 dist/assets/restructuredtext-CghPJEOS.js                         3.75 kB │ gzip:   1.33 kB
-#15 223.0 dist/assets/FileClassificationIntake-l2BQIysq.js                 3.76 kB │ gzip:   1.84 kB
-#15 223.0 dist/assets/less-GGFNNJHn.js                                     3.76 kB │ gzip:   1.38 kB
-#15 223.0 dist/assets/TrashPage-BLVQMNFq.js                                3.77 kB │ gzip:   1.70 kB
-#15 223.0 dist/assets/apex-DnsZk_dE.js                                     3.81 kB │ gzip:   1.73 kB
-#15 223.0 dist/assets/SemanticVirtualDatasetsPage-C0Aqmm5c.js              3.86 kB │ gzip:   1.82 kB
-#15 223.0 dist/assets/AssetOwnershipPage-Buiwkh7s.js                       3.90 kB │ gzip:   1.75 kB
-#15 223.0 dist/assets/OpsBackfillPage-C4t8TREO.js                          3.94 kB │ gzip:   1.93 kB
-#15 223.0 dist/assets/AssetGrantPage-BKICxxxt.js                           3.98 kB │ gzip:   1.86 kB
-#15 223.0 dist/assets/ApiAccessStep-6c2wmP38.js                            4.02 kB │ gzip:   1.60 kB
-#15 223.0 dist/assets/rust-DMDD0SHb.js                                     4.02 kB │ gzip:   1.79 kB
-#15 223.0 dist/assets/DashboardsPage-qF2TXdfy.js                           4.07 kB │ gzip:   1.90 kB
-#15 223.0 dist/assets/SemanticExplorePage-COP3emuE.js                      4.07 kB │ gzip:   1.79 kB
-#15 223.0 dist/assets/Page403-C4f51brY.js                                  4.10 kB │ gzip:   2.00 kB
-#15 223.0 dist/assets/dart-D8lhlL1r.js                                     4.11 kB │ gzip:   1.61 kB
-#15 223.0 dist/assets/CollectionItemsPage-BXs-z6Qr.js                      4.14 kB │ gzip:   1.40 kB
-#15 223.0 dist/assets/GovernanceCenterPage-Biz2UHnX.js                     4.21 kB │ gzip:   2.10 kB
-#15 223.0 dist/assets/PlanningCatalogEditors-IrDpghv7.js                   4.22 kB │ gzip:   1.97 kB
-#15 223.0 dist/assets/liquid-tTcc_p4F.js                                   4.35 kB │ gzip:   1.86 kB
-#15 223.0 dist/assets/useScreenFontFaces-DUR6vmP1.js                       4.37 kB │ gzip:   1.66 kB
-#15 223.0 dist/assets/css-DQU6DXDx.js                                      4.37 kB │ gzip:   1.34 kB
-#15 223.0 dist/assets/csharp-BoL64M5l.js                                   4.38 kB │ gzip:   1.69 kB
-#15 223.0 dist/assets/yaml-dqtWhYQA.js                                     4.41 kB │ gzip:   1.72 kB
-#15 223.0 dist/assets/OverviewPage-Bh5iwTwe.js                             4.49 kB │ gzip:   2.05 kB
-#15 223.0 dist/assets/OpsLogCenterPage-CiW7K18p.js                         4.58 kB │ gzip:   2.28 kB
-#15 223.0 dist/assets/python-FL-FSTNy.js                                   4.59 kB │ gzip:   1.88 kB
-#15 223.0 dist/assets/IndicatorListPage-DPwA9bHB.js                        4.59 kB │ gzip:   2.15 kB
-#15 223.0 dist/assets/label-BYWTkynM.js                                    4.63 kB │ gzip:   1.97 kB
-#15 223.0 dist/assets/ModelFieldEditorTable-hnOOqG86.js                    4.64 kB │ gzip:   2.00 kB
-#15 223.0 dist/assets/pug-kFxLfcjb.js                                      4.69 kB │ gzip:   1.61 kB
-#15 223.0 dist/assets/LineageImpactPage-Dt3N9IcQ.js                        4.69 kB │ gzip:   2.19 kB
-#15 223.0 dist/assets/fileClassificationAdmission.helpers-COOFzhNJ.js      4.71 kB │ gzip:   1.75 kB
-#15 223.0 dist/assets/msdax-CYqgjx_P.js                                    4.77 kB │ gzip:   1.90 kB
-#15 223.0 dist/assets/swift-D7IUmUK8.js                                    4.77 kB │ gzip:   2.00 kB
-#15 223.0 dist/assets/AssetGovernanceWorkbenchDrawer-BXP9HENU.js           4.91 kB │ gzip:   2.29 kB
-#15 223.0 dist/assets/FieldDetailPage-zw7MjOkB.js                          4.96 kB │ gzip:   1.56 kB
-#15 223.0 dist/assets/AssetTagPanel-4XtG_tHe.js                            4.96 kB │ gzip:   2.43 kB
-#15 223.0 dist/assets/DeptSelect-rVhxSbdL.js                               4.97 kB │ gzip:   2.08 kB
-#15 223.0 dist/assets/CollectionsPage-Cx6sS6fH.js                          4.99 kB │ gzip:   1.72 kB
-#15 223.0 dist/assets/PlanningPolicyForm-Dhl3FmSj.js                       5.03 kB │ gzip:   2.08 kB
-#15 223.0 dist/assets/AssetLedgerDialogs-bIr-ZAlF.js                       5.03 kB │ gzip:   1.91 kB
-#15 223.0 dist/assets/CardDetailPage-BW1y_-Lz.js                           5.08 kB │ gzip:   1.81 kB
-#15 223.0 dist/assets/cpp-SEyurbux.js                                      5.16 kB │ gzip:   2.05 kB
-#15 223.0 dist/assets/DashboardDetailPage-D1keuxFz.js                      5.20 kB │ gzip:   2.28 kB
-#15 223.0 dist/assets/ecl-BO6FnfXk.js                                      5.20 kB │ gzip:   2.19 kB
-#15 223.0 dist/assets/mdx-BE8R0bpE.js                                      5.26 kB │ gzip:   1.65 kB
-#15 223.0 dist/assets/SearchPage-X06YVCH9.js                               5.40 kB │ gzip:   1.87 kB
-#15 223.0 dist/assets/html-CFivT0P-.js                                     5.41 kB │ gzip:   1.60 kB
-#15 223.0 dist/assets/AuditEvidencePage-DQdPSlKj.js                        5.42 kB │ gzip:   2.55 kB
-#15 223.0 dist/assets/JdbcDriversPage-DxX-opUQ.js                          5.42 kB │ gzip:   2.45 kB
-#15 223.0 dist/assets/OpenMetadataGovernanceTab-DX6S4OHv.js                5.52 kB │ gzip:   2.64 kB
-#15 223.0 dist/assets/DatabaseDetailPage-DBrMh0EK.js                       5.53 kB │ gzip:   2.15 kB
-#15 223.0 dist/assets/ModelsPage-DgTTa9PM.js                               5.54 kB │ gzip:   2.12 kB
-#15 223.0 dist/assets/ApiServicesPage-BpxfJbtt.js                          5.57 kB │ gzip:   2.46 kB
-#15 223.0 dist/assets/vb-BwAE3J76.js                                       5.65 kB │ gzip:   2.02 kB
-#15 223.0 dist/assets/installLabelLayout-BjL2HytR.js                       5.71 kB │ gzip:   2.34 kB
-#15 223.0 dist/assets/IndicatorTemplatePage-D3aeeh94.js                    5.75 kB │ gzip:   2.65 kB
-#15 223.0 dist/assets/ConnectionProfilesPage-DuLdO7LG.js                   5.78 kB │ gzip:   2.76 kB
-#15 223.0 dist/assets/typescript-DIKXOkfR.js                               5.80 kB │ gzip:   2.37 kB
-#15 223.0 dist/assets/twig-BfRIq3la.js                                     5.83 kB │ gzip:   1.48 kB
-#15 223.0 dist/assets/RelationshipGraphPage-DUhZAvSV.js                    5.93 kB │ gzip:   2.82 kB
-#15 223.0 dist/assets/MeasurementUnitsPage-C0T4bfM3.js                     5.97 kB │ gzip:   2.63 kB
-#15 223.0 dist/assets/ProfilePage-fHWx-5ia.js                              6.00 kB │ gzip:   2.47 kB
-#15 223.0 dist/assets/ConnectionProfileDetailPage-BZ4340L8.js              6.09 kB │ gzip:   2.63 kB
-#15 223.0 dist/assets/scss-CTwUZ5N7.js                                     6.27 kB │ gzip:   1.71 kB
-#15 223.0 dist/assets/DataProductsPage--JwZSR0x.js                         6.49 kB │ gzip:   2.62 kB
-#15 223.0 dist/assets/TaskAdmissionBasis-BVjbkhJJ.js                       6.53 kB │ gzip:   2.78 kB
-#15 223.0 dist/assets/Page500-DVXA0Msd.js                                  6.78 kB │ gzip:   2.37 kB
-#15 223.0 dist/assets/index-B6kA7BMe.js                                    6.82 kB │ gzip:   2.94 kB
-#15 223.0 dist/assets/ConformedDimensionCatalogCard--mwToazG.js            6.86 kB │ gzip:   3.01 kB
-#15 223.0 dist/assets/MetricLensPage-CXyi5iPk.js                           6.88 kB │ gzip:   2.26 kB
-#15 223.0 dist/assets/DataMartWorkspace-D6gssxRV.js                        6.95 kB │ gzip:   3.18 kB
-#15 223.0 dist/assets/julia-DQXNmw_w.js                                    7.01 kB │ gzip:   2.62 kB
-#15 223.0 dist/assets/ReleaseGovernancePage-Z_bcnMC1.js                    7.06 kB │ gzip:   3.25 kB
-#15 223.0 dist/assets/handlebars-BpsqPDZ9.js                               7.17 kB │ gzip:   1.81 kB
-#15 223.0 dist/assets/scala-Bqvq8jcR.js                                    7.18 kB │ gzip:   2.06 kB
-#15 223.0 dist/assets/EltConsolePage-CxtxJqrA.js                           7.20 kB │ gzip:   3.11 kB
-#15 223.0 dist/assets/wgsl-B_1kOXbF.js                                     7.21 kB │ gzip:   2.72 kB
-#15 223.0 dist/assets/st-C7iG7M4S.js                                       7.26 kB │ gzip:   2.21 kB
-#15 223.0 dist/assets/LineageGraphPage-BNiIBwk3.js                         7.29 kB │ gzip:   3.39 kB
-#15 223.0 dist/assets/OpsInstancesPage-CR8hqCRL.js                         7.31 kB │ gzip:   3.00 kB
-#15 223.0 dist/assets/BusinessConsumptionPage-6kOpMDBy.js                  7.37 kB │ gzip:   3.25 kB
-#15 223.0 dist/assets/AccessGovernancePanels-DouiMQNi.js                   7.44 kB │ gzip:   3.41 kB
-#15 223.0 dist/assets/systemverilog-DgMryOEJ.js                            7.46 kB │ gzip:   2.72 kB
-#15 223.0 dist/assets/DatasetDetailSupportTabs-CUItLD_O.js                 7.47 kB │ gzip:   2.82 kB
-#15 223.0 dist/assets/EChartsRuntime-D9zeCunI.js                           7.51 kB │ gzip:   3.02 kB
-#15 223.0 dist/assets/IndicatorDashboardPage-Chs4awso.js                   7.57 kB │ gzip:   3.12 kB
-#15 223.0 dist/assets/helpers-DtWA0IkT.js                                  7.64 kB │ gzip:   3.13 kB
-#15 223.0 dist/assets/postiats-CQpG440k.js                                 7.72 kB │ gzip:   2.40 kB
-#15 223.0 dist/assets/DashboardFilterBar-DeQcfFoL.js                       7.84 kB │ gzip:   3.18 kB
-#15 223.0 dist/assets/php-120yhfDK.js                                      7.89 kB │ gzip:   2.04 kB
-#15 223.0 dist/assets/ModelPublishDialog-CUa-QM5l.js                       7.98 kB │ gzip:   3.36 kB
-#15 223.0 dist/assets/ConnectorRegistryPage-CSHB275X.js                    8.03 kB │ gzip:   3.33 kB
-#15 223.0 dist/assets/perl-DlYyT36c.js                                     8.12 kB │ gzip:   3.10 kB
-#15 223.0 dist/assets/PlatformEventObservabilityPage-DULc0Lje.js           8.15 kB │ gzip:   3.18 kB
-#15 223.0 dist/assets/ruby-CYWGW-b1.js                                     8.36 kB │ gzip:   2.54 kB
-#15 223.0 dist/assets/PlanningPage-B4t3ULhP.js                             8.48 kB │ gzip:   3.66 kB
-#15 223.0 dist/assets/FileAccessStep-DtCqPnyW.js                           8.53 kB │ gzip:   3.92 kB
-#15 223.0 dist/assets/protobuf-IBS6jZEB.js                                 8.91 kB │ gzip:   2.04 kB
-#15 223.0 dist/assets/razor-CPa8h9KA.js                                    9.17 kB │ gzip:   2.50 kB
-#15 223.0 dist/assets/AssetActionMatrixPanel-tsz3LdmH.js                   9.27 kB │ gzip:   3.66 kB
-#15 223.0 dist/assets/IndicatorWizard-74OSg93D.js                          9.38 kB │ gzip:   3.95 kB
-#15 223.0 dist/assets/value-BAnORW8c.js                                    9.42 kB │ gzip:   4.01 kB
-#15 223.0 dist/assets/AccessDefaultsPage-q6snQDhB.js                       9.46 kB │ gzip:   3.54 kB
-#15 223.0 dist/assets/clojure-D9WOWImG.js                                  9.50 kB │ gzip:   3.57 kB
-#15 223.0 dist/assets/ingestion-CVnYAdsE.js                                9.54 kB │ gzip:   2.83 kB
-#15 223.0 dist/assets/Nl2SqlEvalPage-I_oOcvp3.js                           9.72 kB │ gzip:   3.02 kB
-#15 223.0 dist/assets/OrchestrationRunsTab-87jDkpqL.js                     9.78 kB │ gzip:   3.70 kB
-#15 223.0 dist/assets/HomePage-DWT9OEmS.js                                 9.80 kB │ gzip:   2.89 kB
-#15 223.0 dist/assets/ReportFactoryPage-C_X6-qAS.js                        9.84 kB │ gzip:   3.16 kB
-#15 223.0 dist/assets/StandardPackagePage-B67taXs3.js                      9.88 kB │ gzip:   4.20 kB
-#15 223.0 dist/assets/GlossaryPage-0eWYPFd6.js                             9.92 kB │ gzip:   3.87 kB
-#15 223.0 dist/assets/AccessWorkspacePage-B18niXr3.js                      9.97 kB │ gzip:   4.29 kB
-#15 223.0 dist/assets/elixir-BRjLKONM.js                                  10.12 kB │ gzip:   2.50 kB
-#15 223.0 dist/assets/sql-BdTr02Mf.js                                     10.16 kB │ gzip:   3.79 kB
-#15 223.0 dist/assets/ReverseModelingInspectionSteps-ByjxWyNO.js          10.21 kB │ gzip:   3.76 kB
-#15 223.0 dist/assets/MetadataManagementPage-B3X_CgY3.js                  10.24 kB │ gzip:   4.35 kB
-#15 223.0 dist/assets/DashboardEditorPage-DvgJY1R7.js                     10.48 kB │ gzip:   4.22 kB
-#15 223.0 dist/assets/ModelWorkbenchCatalogList-a5TURpXs.js               10.49 kB │ gzip:   4.17 kB
-#15 223.0 dist/assets/ScriptStudioPage-ifGo3Cig.js                        10.89 kB │ gzip:   3.70 kB
-#15 223.0 dist/assets/ChartRenderer-CRX1_oOJ.js                           11.00 kB │ gzip:   4.10 kB
-#15 223.0 dist/assets/ExploreSessionsPage-BIehFKMh.js                     11.07 kB │ gzip:   3.43 kB
-#15 223.0 dist/assets/mysql-BHd6q0vd.js                                   11.13 kB │ gzip:   4.01 kB
-#15 223.0 dist/assets/AssetOverviewPage-YjW_IYCv.js                       11.21 kB │ gzip:   4.54 kB
-#15 223.0 dist/assets/AssetTagsWorkspace-BFpLs6KL.js                      11.41 kB │ gzip:   4.44 kB
-#15 223.0 dist/assets/redshift-CBifECDb.js                                11.66 kB │ gzip:   4.30 kB
-#15 223.0 dist/assets/lineageShared-CctLgKi-.js                           11.80 kB │ gzip:   4.22 kB
-#15 223.0 dist/assets/ElementsPage-aSwGa8re.js                            11.86 kB │ gzip:   4.44 kB
-#15 223.0 dist/assets/AssetLedgerView-BO8UKVXu.js                         11.99 kB │ gzip:   5.12 kB
-#15 223.0 dist/assets/BiLinksPage-CsrfmrK0.js                             12.25 kB │ gzip:   4.69 kB
-#15 223.0 dist/assets/PlanningEditors-CbfZ5lr4.js                         12.37 kB │ gzip:   3.48 kB
-#15 223.0 dist/assets/data-security-SLwe_sDl.js                           12.48 kB │ gzip:   4.52 kB
-#15 223.0 dist/assets/DataSearchPage-BdaBOm89.js                          12.86 kB │ gzip:   4.72 kB
-#15 223.0 dist/assets/TemplatesPage-gvhudhHT.js                           12.89 kB │ gzip:   4.42 kB
-#15 223.0 dist/assets/StandardsPage-CRPAyv6Z.js                           13.08 kB │ gzip:   4.90 kB
-#15 223.0 dist/assets/DataProductsPage-3rIbqHYQ.js                        13.26 kB │ gzip:   4.57 kB
-#15 223.0 dist/assets/pgsql-Dy0bjov7.js                                   13.32 kB │ gzip:   4.46 kB
-#15 223.0 dist/assets/abap-CRCWOmpq.js                                    14.02 kB │ gzip:   5.27 kB
-#15 223.0 dist/assets/OpsOverviewPage-6aVy1O7l.js                         14.58 kB │ gzip:   4.78 kB
-#15 223.0 dist/assets/ReverseModelingPage-C_S7YABL.js                     14.75 kB │ gzip:   5.68 kB
-#15 223.0 dist/assets/ScreenExportPage-RU9hLtP_.js                        15.46 kB │ gzip:   5.71 kB
-#15 223.0 dist/assets/JourneyContextBar-nwNEXoik.js                       15.56 kB │ gzip:   6.04 kB
-#15 223.0 dist/assets/AccessPlanDetailPage-4gWJVRbP.js                    15.66 kB │ gzip:   6.20 kB
-#15 223.0 dist/assets/index-DLrTW36J.js                                   15.87 kB │ gzip:   6.32 kB
-#15 223.0 dist/assets/PublicScreenPage-EwDlTK2R.js                        16.04 kB │ gzip:   5.51 kB
-#15 223.0 dist/assets/ModelWorkbenchDialog-CIYG2ltW.js                    16.31 kB │ gzip:   6.14 kB
-#15 223.0 dist/assets/freemarker2-Cz-f2KEz.js                             16.49 kB │ gzip:   4.36 kB
-#15 223.0 dist/assets/powerquery-DdJtto1Z.js                              16.80 kB │ gzip:   4.81 kB
-#15 223.0 dist/assets/ModelingWorkbenchPage-DcHs2IwZ.js                   16.82 kB │ gzip:   6.61 kB
-#15 223.0 dist/assets/ScreenPreviewPage-S-r5A9cQ.js                       17.15 kB │ gzip:   5.90 kB
-#15 223.0 dist/assets/AssetLifecycleWorkbenchDrawer-D7sYtHZK.js           17.65 kB │ gzip:   6.41 kB
-#15 223.0 dist/assets/CardsPage-OxoMzJt9.js                               17.80 kB │ gzip:   6.40 kB
-#15 223.0 dist/assets/DatasetDetailPage-D-bNesXb.js                       17.88 kB │ gzip:   5.84 kB
-#15 223.0 dist/assets/solidity-CME5AdoB.js                                18.46 kB │ gzip:   4.41 kB
-#15 223.0 dist/assets/MetadataPage-UQb9kLUb.js                            18.65 kB │ gzip:   6.16 kB
-#15 223.0 dist/assets/SubjectAreasPage-CPWdRFBD.js                        19.06 kB │ gzip:   6.88 kB
-#15 223.0 dist/assets/DelayReasonMatrix-U9kLqqje.js                       19.39 kB │ gzip:   6.47 kB
-#15 223.0 dist/assets/papaparse.min-qcN5wq6v.js                           19.41 kB │ gzip:   7.10 kB
-#15 223.0 dist/assets/AccessPlanWizardPage-CuyG-ebn.js                    19.68 kB │ gzip:   6.86 kB
-#15 223.0 dist/assets/accessPlanPayload-CgsXReRl.js                       20.24 kB │ gzip:   6.88 kB
-#15 223.0 dist/assets/ExecutionHistoryTable-BbyoMWhA.js                   20.26 kB │ gzip:   7.24 kB
-#15 223.0 dist/assets/MetricsPage-DrHJaejR.js                             21.19 kB │ gzip:   7.85 kB
-#15 223.0 dist/assets/ConnectionProfileFormModal-BxcJR121.js              22.88 kB │ gzip:   8.43 kB
-#15 223.0 dist/assets/tsMode-BfEx0vRI.js                                  23.23 kB │ gzip:   6.57 kB
-#15 223.0 dist/assets/planningProjectionService-Cq6QKMy9.js               23.71 kB │ gzip:   7.93 kB
-#15 223.0 dist/assets/analyticsApi-DAFR-3Aa.js                            23.96 kB │ gzip:   5.59 kB
-#15 223.0 dist/assets/ReferenceCodesPage-Ck_ZtIx8.js                      25.74 kB │ gzip:   7.45 kB
-#15 223.0 dist/assets/DatasetAccessApprovalPage-DvUS2r4v.js               25.89 kB │ gzip:   8.83 kB
-#15 223.0 dist/assets/DataManagementWorkbenchPage-B_ygPVYW.js             27.64 kB │ gzip:   9.48 kB
-#15 223.0 dist/assets/ErrorNotice-DRYT1d4h.js                             30.29 kB │ gzip:  10.03 kB
-#15 223.0 dist/assets/SemanticCardEditorPage-DlG1XBa5.js                  30.64 kB │ gzip:  10.22 kB
-#15 223.0 dist/assets/ModelingWorkbenchEditor-DhAwXdcY.js                 31.70 kB │ gzip:   9.20 kB
-#15 223.0 dist/assets/cssMode-BxKi5DbP.js                                 32.48 kB │ gzip:   8.83 kB
-#15 223.0 dist/assets/htmlMode-DQzYKyAP.js                                33.03 kB │ gzip:   8.96 kB
-#15 223.0 dist/assets/upload-Bp39FuLL.js                                  39.19 kB │ gzip:  13.82 kB
-#15 223.1 dist/assets/jsonMode-Cyls6u15.js                                41.90 kB │ gzip:  12.17 kB
-#15 223.1 dist/assets/CardEditorRoutePage-DfkaHD30.js                     42.49 kB │ gzip:  11.37 kB
-#15 223.1 dist/assets/ProjectCockpitPage-J7FOc0e_.js                      44.34 kB │ gzip:  12.26 kB
-#15 223.1 dist/assets/QueryWorkbenchPage-BCQSh4pw.js                      49.04 kB │ gzip:  16.44 kB
-#15 223.1 dist/assets/index-CPhowcmr.js                                   67.83 kB │ gzip:  24.61 kB
-#15 223.1 dist/assets/DashboardGrid-DZUDmSSX.js                           77.57 kB │ gzip:  22.62 kB
-#15 223.1 dist/assets/QualityRoutePage-5M3V4XAa.js                        78.63 kB │ gzip:  22.83 kB
-#15 223.1 dist/assets/ScreensPage-BEJUoZum.js                             86.31 kB │ gzip:  26.28 kB
-#15 223.1 dist/assets/jszip.min-BLmKZz5C.js                               96.81 kB │ gzip:  29.95 kB
-#15 223.1 dist/assets/vendor-utils-B67rgrjt.js                           106.16 kB │ gzip:  36.56 kB
-#15 223.1 dist/assets/OrchestrationPage-CPJ-pNAe.js                      110.38 kB │ gzip:  30.02 kB
-#15 223.1 dist/assets/polyfills-CzyWvamL.js                              139.56 kB │ gzip:  52.02 kB
-#15 223.1 dist/assets/style-DTWglWhx.js                                  164.44 kB │ gzip:  52.79 kB
-#15 223.1 dist/assets/ScreenDesigner-BIQget7T.js                         206.12 kB │ gzip:  52.47 kB
-#15 223.1 dist/assets/vendor-core-DW30UbJ_.js                            225.54 kB │ gzip:  73.96 kB
-#15 223.1 dist/assets/index-_HgRqfIL.js                                  292.61 kB │ gzip:  75.82 kB
-#15 223.1 dist/assets/ComponentRenderer-BUXEoZAI.js                      306.83 kB │ gzip:  86.69 kB
-#15 223.1 dist/assets/ScreenDesignerPage-D4Mi-a7p.js                     322.54 kB │ gzip:  81.12 kB
-#15 223.1 dist/assets/DataPage-BsR3gkBw.js                               349.13 kB │ gzip: 119.03 kB
-#15 223.1 dist/assets/index-BnYBa3ez.js                                  360.86 kB │ gzip: 120.86 kB
-#15 223.1 dist/assets/index-CI_zvtVf.js                                  368.32 kB │ gzip: 121.42 kB
-#15 223.1 dist/assets/install-B3USO-QZ.js                                409.21 kB │ gzip: 139.49 kB
-#15 223.1 dist/assets/vendor-ui-D9T4lNQG.js                            1,338.88 kB │ gzip: 419.82 kB
-#15 223.1 dist/assets/index-Ca51V-xB.js                                1,353.96 kB │ gzip: 398.16 kB
-#15 223.1 
-#15 223.1 (!) Some chunks are larger than 1500 kB after minification. Consider:
-#15 223.1 - Using dynamic import() to code-split the application
-#15 223.1 - Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
-#15 223.1 - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
-#15 223.1 dist/assets/LineageGraph-D6OizKQP.js                         1,456.07 kB │ gzip: 435.02 kB
-#15 223.1 dist/assets/SqlIdePage-BFNXcQ8K.js                           3,579.70 kB │ gzip: 921.97 kB
-#15 223.1 ✓ built in 3m 39s
-#15 DONE 225.9s
+#15 1.422 
+#15 1.422 > slash-admin@2.2.3 build /app
+#15 1.422 > LEGACY_BROWSER_BUILD=1 VITE_CACHE_DIR=.vite-cache sh -c 'L=/tmp/tsc-$$.log; tsc >$L 2>&1 & t=$!; vite build & b=$!; wait $t; rt=$?; wait $b; rb=$?; [ $rt -eq 0 ] || { echo; echo "=== tsc 类型检查失败 ==="; cat $L; }; rm -f $L; exit $((rt|rb))'
+#15 1.422 
+#15 3.230 vite v6.3.3 building for production...
+#15 3.493 transforming...
+#15 103.0 ✓ 10587 modules transformed.
+#15 111.0 Browserslist: browsers data (caniuse-lite) is 16 months old. Please run:
+#15 111.0   npx update-browserslist-db@latest
+#15 111.0   Why you should do it regularly: https://github.com/browserslist/update-db#readme
+#15 225.8 rendering chunks...
+#15 227.9 [plugin vite:reporter] 
+#15 227.9 (!) /app/src/pages/governance/StandardPackageActions.tsx is dynamically imported by /app/src/routes/sections/dashboard/utils.tsx but also statically imported by /app/src/routes/sections/dashboard/dynamic-resolver.tsx, /app/src/routes/sections/dashboard/static-routes.tsx, dynamic import will not move module into another chunk.
+#15 227.9 
+#15 236.4 computing gzip size...
+#15 237.7 dist/index.html                                                  1.06 kB │ gzip:   0.56 kB
+#15 237.7 dist/assets/ic-logo-badge-CznoAOYk.svg                           4.45 kB │ gzip:   1.08 kB
+#15 237.7 dist/assets/tech-data-platform-C56bEMr9.svg                      5.63 kB │ gzip:   1.57 kB
+#15 237.7 dist/assets/tech-data-platform-light-D7wrD1Ue.svg                5.66 kB │ gzip:   1.58 kB
+#15 237.7 dist/assets/red-blur-DWnvL7od.png                               12.35 kB
+#15 237.7 dist/assets/cyan-blur-B8-Jipui.png                              17.32 kB
+#15 237.7 dist/assets/codicon-DCmgc-ay.ttf                                80.34 kB
+#15 237.7 dist/assets/character_1-0fQISY_w.png                         3,081.04 kB
+#15 237.7 dist/assets/character_2-CI-VpeLh.png                         3,509.51 kB
+#15 237.7 dist/assets/character_6-CSvYjFeV.png                         7,918.65 kB
+#15 237.7 dist/assets/ChartComponents-DQGYDVJU.css                         0.23 kB │ gzip:   0.12 kB
+#15 237.7 dist/assets/AccessWorkspacePage-ChZSPOfE.css                     0.89 kB │ gzip:   0.49 kB
+#15 237.7 dist/assets/screenRuntimeKeyframes-DZ1OlD3A.css                  0.93 kB │ gzip:   0.25 kB
+#15 237.7 dist/assets/AccessDefaultsPage-DGQwjuTp.css                      1.02 kB │ gzip:   0.53 kB
+#15 237.7 dist/assets/AccessPlanWizardPage-CWWIvlBH.css                    1.12 kB │ gzip:   0.45 kB
+#15 237.7 dist/assets/QualityRoutePage-6YN_vYTC.css                        2.45 kB │ gzip:   0.87 kB
+#15 237.7 dist/assets/AccessPlanDetailPage-zRTfMEel.css                    2.69 kB │ gzip:   0.79 kB
+#15 237.7 dist/assets/DashboardGrid-DsaH52PW.css                           3.21 kB │ gzip:   0.80 kB
+#15 237.7 dist/assets/modeling-workbench-Ccf4DvC9.css                      5.25 kB │ gzip:   1.33 kB
+#15 237.7 dist/assets/OrchestrationPage-C8Hj_Ukc.css                      12.73 kB │ gzip:   2.77 kB
+#15 237.7 dist/assets/ProjectCockpitPage-DABE33RE.css                     13.18 kB │ gzip:   2.73 kB
+#15 237.7 dist/assets/style-BZV40eAE.css                                  15.85 kB │ gzip:   2.66 kB
+#15 237.7 dist/assets/ComponentRenderer-oFWQqhS0.css                      22.60 kB │ gzip:   4.53 kB
+#15 237.7 dist/assets/data-modeling-DAFU1a24.css                          30.36 kB │ gzip:   6.30 kB
+#15 237.7 dist/assets/ScreenDesigner-MeIH3243.css                         47.26 kB │ gzip:   7.67 kB
+#15 237.7 dist/assets/SqlIdePage-CWCx4khD.css                            133.20 kB │ gzip:  21.12 kB
+#15 237.7 dist/assets/index-CSZavj37.css                                 221.33 kB │ gzip:  36.08 kB
+#15 237.7 dist/assets/tslib.es6-Bkhfpkg4.js                                0.12 kB │ gzip:   0.11 kB
+#15 237.7 dist/assets/use-search-params-CTvt1_ec.js                        0.12 kB │ gzip:   0.14 kB
+#15 237.7 dist/assets/index-Cv7lsdtq.js                                    0.13 kB │ gzip:   0.12 kB
+#15 237.7 dist/assets/directoryService-DtcJ-Z-q.js                         0.14 kB │ gzip:   0.14 kB
+#15 237.7 dist/assets/resolveAnalyticsUrl-Dvmfm-V8.js                      0.14 kB │ gzip:   0.14 kB
+#15 237.7 dist/assets/goldenChainService-CLCTdaqP.js                       0.17 kB │ gzip:   0.16 kB
+#15 237.7 dist/assets/connectorsService-Yx0ewKt0.js                        0.21 kB │ gzip:   0.16 kB
+#15 237.7 dist/assets/transition-DqMgi7Fi.js                               0.21 kB │ gzip:   0.14 kB
+#15 237.7 dist/assets/accessSingleFlight-BTAzQwDJ.js                       0.24 kB │ gzip:   0.15 kB
+#15 237.7 dist/assets/roleService-BQOIU4z7.js                              0.25 kB │ gzip:   0.21 kB
+#15 237.7 dist/assets/audit-Dit0IpaL.js                                    0.25 kB │ gzip:   0.19 kB
+#15 237.7 dist/assets/useDataModelingMenuGrant-DMyN4C2a.js                 0.25 kB │ gzip:   0.21 kB
+#15 237.7 dist/assets/IndicatorCenterPage-DsY-fCcM.js                      0.28 kB │ gzip:   0.22 kB
+#15 237.7 dist/assets/QualityPage-DFeSEjJ-.js                              0.29 kB │ gzip:   0.24 kB
+#15 237.7 dist/assets/chart-BtCwuLsr.js                                    0.30 kB │ gzip:   0.22 kB
+#15 237.7 dist/assets/LegacyConnectionProfileRedirect-gKgeM9CA.js          0.30 kB │ gzip:   0.23 kB
+#15 237.7 dist/assets/LegacySubjectAreasRedirect-DjE5qMhW.js               0.30 kB │ gzip:   0.23 kB
+#15 237.7 dist/assets/semanticAccess-DwsD9vSr.js                           0.30 kB │ gzip:   0.22 kB
+#15 237.7 dist/assets/jdbcDriversService-DbJIW9bS.js                       0.33 kB │ gzip:   0.22 kB
+#15 237.7 dist/assets/LegacyAssetLedgerRedirect-BxFaUu0p.js                0.35 kB │ gzip:   0.27 kB
+#15 237.7 dist/assets/IndicatorsPage-Ces3_Dxb.js                           0.36 kB │ gzip:   0.27 kB
+#15 237.7 dist/assets/page-header-Y9IzDKsu.js                              0.36 kB │ gzip:   0.25 kB
+#15 237.7 dist/assets/reportsService-eADOxswV.js                           0.43 kB │ gzip:   0.24 kB
+#15 237.7 dist/assets/opsService-CETmTJdT.js                               0.44 kB │ gzip:   0.23 kB
+#15 237.7 dist/assets/CheckCircleOutlined-DYBT-E9D.js                      0.44 kB │ gzip:   0.32 kB
+#15 237.7 dist/assets/DeleteOutlined-eMlrI5z9.js                           0.44 kB │ gzip:   0.32 kB
+#15 237.7 dist/assets/FileTextOutlined-Byv9TJnB.js                         0.44 kB │ gzip:   0.32 kB
+#15 237.7 dist/assets/ArrowLeftOutlined-uKsC3i93.js                        0.44 kB │ gzip:   0.32 kB
+#15 237.7 dist/assets/CloseCircleOutlined-BaTJOSI5.js                      0.44 kB │ gzip:   0.32 kB
+#15 237.7 dist/assets/AppstoreOutlined-DO3MZZ--.js                         0.45 kB │ gzip:   0.32 kB
+#15 237.7 dist/assets/FolderOutlined-CWQKNC8G.js                           0.45 kB │ gzip:   0.32 kB
+#15 237.7 dist/assets/warehousePlanApi---spIabK.js                         0.45 kB │ gzip:   0.27 kB
+#15 237.7 dist/assets/UploadOutlined-BvdjtiV6.js                           0.45 kB │ gzip:   0.32 kB
+#15 237.7 dist/assets/PlusOutlined-T0_21TEq.js                             0.45 kB │ gzip:   0.32 kB
+#15 237.7 dist/assets/ReloadOutlined-DZ0eqieZ.js                           0.45 kB │ gzip:   0.32 kB
+#15 237.7 dist/assets/LinkOutlined-yJ4IcbIU.js                             0.45 kB │ gzip:   0.32 kB
+#15 237.7 dist/assets/DatabaseOutlined-Bfxxj1Lm.js                         0.45 kB │ gzip:   0.32 kB
+#15 237.7 dist/assets/InboxOutlined-Befp261M.js                            0.45 kB │ gzip:   0.32 kB
+#15 237.7 dist/assets/EditOutlined-Boe5vs7E.js                             0.45 kB │ gzip:   0.32 kB
+#15 237.7 dist/assets/WarningOutlined-Bf-eK6rD.js                          0.45 kB │ gzip:   0.32 kB
+#15 237.7 dist/assets/SafetyCertificateOutlined-CeMsUoZD.js                0.45 kB │ gzip:   0.32 kB
+#15 237.7 dist/assets/SearchOutlined-DcL5_T26.js                           0.45 kB │ gzip:   0.32 kB
+#15 237.7 dist/assets/DownOutlined-0M6eOWy-.js                             0.45 kB │ gzip:   0.32 kB
+#15 237.7 dist/assets/ExclamationCircleOutlined-D0wZLOPr.js                0.45 kB │ gzip:   0.32 kB
+#15 237.7 dist/assets/EyeOutlined-I05pg0Ne.js                              0.45 kB │ gzip:   0.32 kB
+#15 237.7 dist/assets/TableOutlined-Dvwh9gAf.js                            0.45 kB │ gzip:   0.32 kB
+#15 237.7 dist/assets/FilterOutlined-9Nii_Avi.js                           0.45 kB │ gzip:   0.32 kB
+#15 237.7 dist/assets/relativeTime-COgGr2Wh.js                             0.45 kB │ gzip:   0.35 kB
+#15 237.7 dist/assets/LegacyAssetDetailRedirect-DAJ8WZ5W.js                0.50 kB │ gzip:   0.33 kB
+#15 237.7 dist/assets/textUtils-CElZBn8x.js                                0.52 kB │ gzip:   0.22 kB
+#15 237.7 dist/assets/SubjectWorkspaceTabs-DXFM-Sti.js                     0.52 kB │ gzip:   0.37 kB
+#15 237.7 dist/assets/TimeRangeSelect-2VX-cvZl.js                          0.55 kB │ gzip:   0.37 kB
+#15 237.7 dist/assets/workbenchService-BPE9bhvN.js                         0.56 kB │ gzip:   0.27 kB
+#15 237.7 dist/assets/planningContextPolicyService-C_WF5K4f.js             0.59 kB │ gzip:   0.42 kB
+#15 237.7 dist/assets/dataMartApi-BpEYzDUN.js                              0.59 kB │ gzip:   0.30 kB
+#15 237.7 dist/assets/DimensionalModelingAssist-COrQbC7G.js                0.63 kB │ gzip:   0.43 kB
+#15 237.7 dist/assets/ModelLifecycleArtifactsTable-BptEfxu7.js             0.64 kB │ gzip:   0.45 kB
+#15 237.7 dist/assets/clipboard-N7lD7jN2.js                                0.67 kB │ gzip:   0.39 kB
+#15 237.7 dist/assets/assetEnumLabels-CUb-I3Ho.js                          0.67 kB │ gzip:   0.48 kB
+#15 237.7 dist/assets/format-CvfDmPlp.js                                   0.71 kB │ gzip:   0.35 kB
+#15 237.7 dist/assets/azcli-1IWB1ccx.js                                    0.71 kB │ gzip:   0.28 kB
+#15 237.7 dist/assets/modelingImportContextService-aprv010Q.js             0.75 kB │ gzip:   0.45 kB
+#15 237.7 dist/assets/index-C148XJoK.js                                    0.75 kB │ gzip:   0.36 kB
+#15 237.7 dist/assets/indicatorDefinitionWorkflow-D9-mXNR8.js              0.76 kB │ gzip:   0.54 kB
+#15 237.7 dist/assets/LegacyDataIntegrationRedirect-BOJkAR8M.js            0.79 kB │ gzip:   0.44 kB
+#15 237.7 dist/assets/empty-state-CsG_YFY3.js                              0.79 kB │ gzip:   0.42 kB
+#15 237.7 dist/assets/ClassificationTag-B0nO0WRN.js                        0.79 kB │ gzip:   0.57 kB
+#15 237.7 dist/assets/userDirectoryService-DsdrLyeW.js                     0.80 kB │ gzip:   0.45 kB
+#15 237.7 dist/assets/dataSourcesService-CYbeUsJQ.js                       0.81 kB │ gzip:   0.34 kB
+#15 237.7 dist/assets/GovernedAssetTagPanel-zaqlHKHH.js                    0.85 kB │ gzip:   0.59 kB
+#15 237.7 dist/assets/transformCreateAsyncRun.helpers-DXhw_wV9.js          0.87 kB │ gzip:   0.54 kB
+#15 237.7 dist/assets/errorCodeMessages-DND9GGg5.js                        0.88 kB │ gzip:   0.62 kB
+#15 237.7 dist/assets/input-C0zwCc2A.js                                    0.88 kB │ gzip:   0.50 kB
+#15 237.7 dist/assets/LineagePage-2BK3GYiO.js                              0.90 kB │ gzip:   0.46 kB
+#15 237.7 dist/assets/planningCatalogDomainService-XX0R8haF.js             0.90 kB │ gzip:   0.51 kB
+#15 237.7 dist/assets/QualityReportPage-CDpHhQtj.js                        0.94 kB │ gzip:   0.47 kB
+#15 237.7 dist/assets/EmptyState-DjWTAp64.js                               0.95 kB │ gzip:   0.51 kB
+#15 237.7 dist/assets/ini-BvajGCUy.js                                      0.96 kB │ gzip:   0.49 kB
+#15 237.7 dist/assets/BizDomainSelect-LULWD1OS.js                          1.02 kB │ gzip:   0.63 kB
+#15 237.7 dist/assets/QualityRulesPage-C2Zi5mnS.js                         1.02 kB │ gzip:   0.53 kB
+#15 237.7 dist/assets/sql-workbench-DPlGzkaB.js                            1.02 kB │ gzip:   0.42 kB
+#15 237.7 dist/assets/DataArchitecturePage-8tvDbPXv.js                     1.05 kB │ gzip:   0.61 kB
+#15 237.7 dist/assets/sprint64GovernanceApi-BY93kFDw.js                    1.11 kB │ gzip:   0.40 kB
+#15 237.7 dist/assets/assetPortalUx.helpers-o20hA519.js                    1.12 kB │ gzip:   0.74 kB
+#15 237.7 dist/assets/ConnectorDriverNotice-Bn6Byrcl.js                    1.17 kB │ gzip:   0.73 kB
+#15 237.7 dist/assets/LineageImportPage-nhVrQ6Xp.js                        1.25 kB │ gzip:   0.73 kB
+#15 237.7 dist/assets/catalogDomainService-BaaTQHX8.js                     1.26 kB │ gzip:   0.53 kB
+#15 237.7 dist/assets/csp-C46ZqvIl.js                                      1.28 kB │ gzip:   0.49 kB
+#15 237.7 dist/assets/ConceptDimensionRecordDialog-Z3aU1nOP.js             1.29 kB │ gzip:   0.82 kB
+#15 237.7 dist/assets/componentHierarchy-DS8woMvF.js                       1.30 kB │ gzip:   0.57 kB
+#15 237.7 dist/assets/CoreAssetsBlock-DQYQTJOo.js                          1.31 kB │ gzip:   0.84 kB
+#15 237.7 dist/assets/javascript-DrbAJdsM.js                               1.32 kB │ gzip:   0.67 kB
+#15 237.7 dist/assets/KpiSecondary-iQbUTfOn.js                             1.43 kB │ gzip:   0.66 kB
+#15 237.7 dist/assets/pla-CjnFlu4u.js                                      1.54 kB │ gzip:   0.60 kB
+#15 237.7 dist/assets/LegacyDataModelingRedirect-bbwaI0nH.js               1.58 kB │ gzip:   0.61 kB
+#15 237.7 dist/assets/ExternalRedirectPage-CwzVpDbL.js                     1.59 kB │ gzip:   0.81 kB
+#15 237.7 dist/assets/SemanticModelingEmptyState-CkLpxSKt.js               1.60 kB │ gzip:   0.93 kB
+#15 237.7 dist/assets/fileTargetSchemaMapping-DG38NQr8.js                  1.62 kB │ gzip:   0.85 kB
+#15 237.7 dist/assets/scheme-Dhb-2j9p.js                                   1.63 kB │ gzip:   0.78 kB
+#15 237.7 dist/assets/catalogTagsApi-BQIwhaVa.js                           1.64 kB │ gzip:   0.89 kB
+#15 237.7 dist/assets/ModelWorkbenchCreateMenu-DmAOvoLK.js                 1.65 kB │ gzip:   0.86 kB
+#15 237.7 dist/assets/flow9-Cac8vKd7.js                                    1.67 kB │ gzip:   0.81 kB
+#15 237.7 dist/assets/RecordDetailDrawer-D5c6nNtz.js                       1.67 kB │ gzip:   0.93 kB
+#15 237.7 dist/assets/ScreenStrip-C0-0O_M0.js                              1.67 kB │ gzip:   0.96 kB
+#15 237.7 dist/assets/TopReportsBlock-CdX7dm16.js                          1.69 kB │ gzip:   1.02 kB
+#15 237.7 dist/assets/sb-BYAiYHFx.js                                       1.69 kB │ gzip:   0.78 kB
+#15 237.7 dist/assets/bat-DPkNLes8.js                                      1.71 kB │ gzip:   0.83 kB
+#15 237.7 dist/assets/dockerfile-DLk6rpji.js                               1.73 kB │ gzip:   0.63 kB
+#15 237.7 dist/assets/redux-BFxtlG_c.js                                    1.82 kB │ gzip:   0.83 kB
+#15 237.7 dist/assets/console-page-DTJezSbA.js                             1.83 kB │ gzip:   0.69 kB
+#15 237.7 dist/assets/pascaligo-5jv8CcQD.js                                1.86 kB │ gzip:   0.87 kB
+#15 237.7 dist/assets/deviceMode-DOQ1DmmT.js                               1.87 kB │ gzip:   0.95 kB
+#15 237.7 dist/assets/DomainMatrix-CIntUrYV.js                             1.88 kB │ gzip:   1.08 kB
+#15 237.7 dist/assets/classification-BBIEGF2A.js                           1.88 kB │ gzip:   0.86 kB
+#15 237.7 dist/assets/navigation-C-d-41Sx.js                               1.89 kB │ gzip:   0.95 kB
+#15 237.7 dist/assets/AssetTagFilter-CwRNDm4n.js                           1.92 kB │ gzip:   1.13 kB
+#15 237.7 dist/assets/PublicCardPage-BcUtr8G0.js                           1.94 kB │ gzip:   0.89 kB
+#15 237.7 dist/assets/lua-D28Ae8-K.js                                      1.98 kB │ gzip:   0.89 kB
+#15 237.7 dist/assets/WorkbenchFilterBar-B7XTBOg3.js                       2.00 kB │ gzip:   0.85 kB
+#15 237.7 dist/assets/TaskSchedulingPage-BKXl-jvO.js                       2.01 kB │ gzip:   1.04 kB
+#15 237.7 dist/assets/ModelStageGatePanel-CoiubLpx.js                      2.03 kB │ gzip:   1.23 kB
+#15 237.7 dist/assets/CompactTable-DCSCJNjQ.js                             2.03 kB │ gzip:   1.11 kB
+#15 237.7 dist/assets/DataModelingPage-sb-9JQyp.js                         2.04 kB │ gzip:   0.95 kB
+#15 237.7 dist/assets/cameligo-CGrWLZr3.js                                 2.05 kB │ gzip:   0.92 kB
+#15 237.7 dist/assets/MyGrantsPage-idEzGQe3.js                             2.09 kB │ gzip:   1.01 kB
+#15 237.7 dist/assets/IndicatorCard-DLaPuI4a.js                            2.11 kB │ gzip:   1.12 kB
+#15 237.7 dist/assets/graphql-LQdxqEYJ.js                                  2.12 kB │ gzip:   0.99 kB
+#15 237.7 dist/assets/OpsAlertLogPage-Z6JlLw6Y.js                          2.15 kB │ gzip:   1.11 kB
+#15 237.7 dist/assets/KpiRow-CIZUTXwQ.js                                   2.19 kB │ gzip:   1.01 kB
+#15 237.7 dist/assets/AssetGovernanceOverview-D5_SHYIH.js                  2.25 kB │ gzip:   0.95 kB
+#15 237.7 dist/assets/objective-c-B1aVtJYH.js                              2.26 kB │ gzip:   1.02 kB
+#15 237.7 dist/assets/DataModelingSurface-Ck4_Xq_W.js                      2.27 kB │ gzip:   0.93 kB
+#15 237.7 dist/assets/lexon-Canl7DCW.js                                    2.30 kB │ gzip:   0.88 kB
+#15 237.7 dist/assets/biLinkUrl-DwKfEf-A.js                                2.31 kB │ gzip:   0.89 kB
+#15 237.7 dist/assets/AssetDomainBars-DQQREgcr.js                          2.36 kB │ gzip:   1.33 kB
+#15 237.7 dist/assets/useTableSort-ChwcRXaa.js                             2.39 kB │ gzip:   1.11 kB
+#15 237.7 dist/assets/bicep-Corcdgou.js                                    2.40 kB │ gzip:   0.93 kB
+#15 237.7 dist/assets/sparql-KEyrF7De.js                                   2.41 kB │ gzip:   1.12 kB
+#15 237.7 dist/assets/AssetReconciliationPanel-DAko3-MP.js                 2.44 kB │ gzip:   1.18 kB
+#15 237.7 dist/assets/mips-CdjsipkG.js                                     2.44 kB │ gzip:   1.03 kB
+#15 237.7 dist/assets/LineageColumnsPage-B3lf20Za.js                       2.47 kB │ gzip:   1.36 kB
+#15 237.7 dist/assets/go-O9LJTZXk.js                                       2.52 kB │ gzip:   1.11 kB
+#15 237.7 dist/assets/AccessPlanReviewStep-LKh9r0ls.js                     2.59 kB │ gzip:   1.43 kB
+#15 237.7 dist/assets/LandingScheduleStep-1x3RZrPq.js                      2.60 kB │ gzip:   1.29 kB
+#15 237.7 dist/assets/GovernanceGapPanel-BcYd1HuE.js                       2.61 kB │ gzip:   1.19 kB
+#15 237.7 dist/assets/sophia-RYC1BQQz.js                                   2.62 kB │ gzip:   1.17 kB
+#15 237.7 dist/assets/typespec-CzxlYoT_.js                                 2.66 kB │ gzip:   1.05 kB
+#15 237.7 dist/assets/AssetGovernanceDonut-BfYV-VuT.js                     2.67 kB │ gzip:   1.50 kB
+#15 237.7 dist/assets/m3-DPitgjJI.js                                       2.68 kB │ gzip:   1.28 kB
+#15 237.7 dist/assets/PermissionAuditPage-Ch2JSQ1F.js                      2.71 kB │ gzip:   1.30 kB
+#15 237.7 dist/assets/TokensPage-C9l8-jac.js                               2.75 kB │ gzip:   1.45 kB
+#15 237.7 dist/assets/lineageContracts-0_pbnJiW.js                         2.77 kB │ gzip:   1.37 kB
+#15 237.7 dist/assets/xml-C6qqo8sC.js                                      2.81 kB │ gzip:   1.17 kB
+#15 237.7 dist/assets/ErrorLayout-Cp977WxR.js                              2.81 kB │ gzip:   0.96 kB
+#15 237.7 dist/assets/MyIndicatorDashboard-xqRIp7g0.js                     2.83 kB │ gzip:   1.37 kB
+#15 237.7 dist/assets/fsharp-fd1GTHhf.js                                   2.84 kB │ gzip:   1.28 kB
+#15 237.7 dist/assets/IndicatorStorePage-Br89xngj.js                       2.85 kB │ gzip:   1.46 kB
+#15 237.7 dist/assets/pascal-BhNW15KB.js                                   2.86 kB │ gzip:   1.35 kB
+#15 237.7 dist/assets/WorkbenchCustomizeDrawer-lPq1rW3k.js                 2.86 kB │ gzip:   1.49 kB
+#15 237.7 dist/assets/shell-CsDZo4DB.js                                    2.93 kB │ gzip:   1.16 kB
+#15 237.7 dist/assets/GateEvidenceSummary-CXu9rJN7.js                      2.95 kB │ gzip:   1.54 kB
+#15 237.7 dist/assets/r-BIFz-_sK.js                                        2.99 kB │ gzip:   1.24 kB
+#15 237.7 dist/assets/AssetClassificationFactPanel-CVNBuz5M.js             2.99 kB │ gzip:   1.59 kB
+#15 237.7 dist/assets/AssetLedgerToolbar-BWBF_Rg5.js                       3.01 kB │ gzip:   1.43 kB
+#15 237.7 dist/assets/FileFieldMappingEditor-CjZQQsqL.js                   3.01 kB │ gzip:   1.58 kB
+#15 237.7 dist/assets/qsharp-q7JyzKFN.js                                   3.05 kB │ gzip:   1.37 kB
+#15 237.7 dist/assets/PrototypePrimitives-B4VmHr4f.js                      3.05 kB │ gzip:   1.11 kB
+#15 237.7 dist/assets/PublicDashboardPage-CNKtE7fa.js                      3.08 kB │ gzip:   1.41 kB
+#15 237.7 dist/assets/java-SYsfObOQ.js                                     3.08 kB │ gzip:   1.36 kB
+#15 237.7 dist/assets/powershell-Bu_VLpJB.js                               3.13 kB │ gzip:   1.34 kB
+#15 237.7 dist/assets/assetPageShared-CO9llLWO.js                          3.14 kB │ gzip:   1.56 kB
+#15 237.7 dist/assets/HelpCenterPage-C3dfis2S.js                           3.14 kB │ gzip:   1.46 kB
+#15 237.7 dist/assets/LineageDiffPage-Hm0Blg-y.js                          3.18 kB │ gzip:   1.55 kB
+#15 237.7 dist/assets/LeaderOverviewPage-CvaM86ra.js                       3.23 kB │ gzip:   1.63 kB
+#15 237.7 dist/assets/cypher-D84EuPTj.js                                   3.25 kB │ gzip:   1.40 kB
+#15 237.7 dist/assets/TableDetailPage-ckAWC9c5.js                          3.26 kB │ gzip:   1.50 kB
+#15 237.7 dist/assets/PageContainer-DQY3Hwyr.js                            3.27 kB │ gzip:   1.13 kB
+#15 237.7 dist/assets/ModelMaterializationStatus-CE_DdYXi.js               3.29 kB │ gzip:   1.52 kB
+#15 237.7 dist/assets/kotlin-qQ0MG-9I.js                                   3.30 kB │ gzip:   1.44 kB
+#15 237.7 dist/assets/screenRuntimeKeyframes-Ba2H-cqC.js                   3.31 kB │ gzip:   1.60 kB
+#15 237.7 dist/assets/ToolsPage-DVaJfpQb.js                                3.40 kB │ gzip:   1.73 kB
+#15 237.7 dist/assets/redis-CHOsPHWR.js                                    3.42 kB │ gzip:   1.44 kB
+#15 237.7 dist/assets/tcl-PloMZuKG.js                                      3.43 kB │ gzip:   1.33 kB
+#15 237.7 dist/assets/navigation-CYYeE3JL.js                               3.44 kB │ gzip:   1.64 kB
+#15 237.7 dist/assets/accessManagedFile-rhRjSo2a.js                        3.44 kB │ gzip:   1.21 kB
+#15 237.7 dist/assets/coffee-B7EJu28W.js                                   3.45 kB │ gzip:   1.26 kB
+#15 237.7 dist/assets/hcl-DxDQ3s82.js                                      3.45 kB │ gzip:   1.45 kB
+#15 237.7 dist/assets/Page404-BIYd7Nbg.js                                  3.56 kB │ gzip:   1.70 kB
+#15 237.7 dist/assets/markdown-B811l8j2.js                                 3.65 kB │ gzip:   1.35 kB
+#15 237.7 dist/assets/DatabaseAccessStep-D2ASb9Vo.js                       3.65 kB │ gzip:   1.73 kB
+#15 237.7 dist/assets/WorkflowCenterPage-CwMUVlQx.js                       3.67 kB │ gzip:   1.73 kB
+#15 237.7 dist/assets/workbenchComponentRegistry-CW1p-ZOT.js               3.68 kB │ gzip:   1.78 kB
+#15 237.7 dist/assets/MetricsPage-Dx_8PYJ9.js                              3.69 kB │ gzip:   1.19 kB
+#15 237.7 dist/assets/PlanningCatalogEditors-Cy_uqu1l.js                   3.71 kB │ gzip:   1.74 kB
+#15 237.7 dist/assets/restructuredtext-CghPJEOS.js                         3.75 kB │ gzip:   1.33 kB
+#15 237.7 dist/assets/FileClassificationIntake-BR3js-jA.js                 3.76 kB │ gzip:   1.84 kB
+#15 237.7 dist/assets/less-GGFNNJHn.js                                     3.76 kB │ gzip:   1.38 kB
+#15 237.7 dist/assets/TrashPage-CeSehS5S.js                                3.77 kB │ gzip:   1.70 kB
+#15 237.7 dist/assets/apex-DnsZk_dE.js                                     3.81 kB │ gzip:   1.73 kB
+#15 237.7 dist/assets/SemanticVirtualDatasetsPage-DmaoxJtE.js              3.86 kB │ gzip:   1.82 kB
+#15 237.7 dist/assets/AssetOwnershipPage-Cz-QAVvd.js                       3.90 kB │ gzip:   1.75 kB
+#15 237.7 dist/assets/OpsBackfillPage-DeZIX_o8.js                          3.94 kB │ gzip:   1.93 kB
+#15 237.7 dist/assets/AssetGrantPage-76hUfMM4.js                           3.98 kB │ gzip:   1.86 kB
+#15 237.7 dist/assets/ApiAccessStep-Bw4gZjXL.js                            4.02 kB │ gzip:   1.60 kB
+#15 237.7 dist/assets/rust-DMDD0SHb.js                                     4.02 kB │ gzip:   1.79 kB
+#15 237.7 dist/assets/DashboardsPage-Coo0viGz.js                           4.07 kB │ gzip:   1.90 kB
+#15 237.7 dist/assets/SemanticExplorePage-C0MhW_fL.js                      4.07 kB │ gzip:   1.79 kB
+#15 237.7 dist/assets/Page403-Bbg7nGaY.js                                  4.10 kB │ gzip:   2.00 kB
+#15 237.7 dist/assets/dart-D8lhlL1r.js                                     4.11 kB │ gzip:   1.61 kB
+#15 237.7 dist/assets/CollectionItemsPage-Bk_gO4bo.js                      4.14 kB │ gzip:   1.40 kB
+#15 237.7 dist/assets/GovernanceCenterPage-Xvit3r1E.js                     4.21 kB │ gzip:   2.10 kB
+#15 237.7 dist/assets/liquid-CWsMBaa2.js                                   4.35 kB │ gzip:   1.87 kB
+#15 237.7 dist/assets/useScreenFontFaces-BBp_QHW9.js                       4.37 kB │ gzip:   1.66 kB
+#15 237.7 dist/assets/css-DQU6DXDx.js                                      4.37 kB │ gzip:   1.34 kB
+#15 237.7 dist/assets/csharp-BoL64M5l.js                                   4.38 kB │ gzip:   1.69 kB
+#15 237.7 dist/assets/yaml-DXHULcQy.js                                     4.41 kB │ gzip:   1.72 kB
+#15 237.7 dist/assets/OverviewPage-Cixmv5_-.js                             4.49 kB │ gzip:   2.05 kB
+#15 237.7 dist/assets/OpsLogCenterPage-fSg2lw3m.js                         4.58 kB │ gzip:   2.28 kB
+#15 237.7 dist/assets/python-CyPM3Er_.js                                   4.59 kB │ gzip:   1.89 kB
+#15 237.7 dist/assets/IndicatorListPage-CIDlB5ci.js                        4.59 kB │ gzip:   2.15 kB
+#15 237.7 dist/assets/label-BdCT1dDw.js                                    4.63 kB │ gzip:   1.97 kB
+#15 237.7 dist/assets/ModelFieldEditorTable-Bz8_YDnS.js                    4.64 kB │ gzip:   2.00 kB
+#15 237.7 dist/assets/pug-kFxLfcjb.js                                      4.69 kB │ gzip:   1.61 kB
+#15 237.7 dist/assets/LineageImpactPage-BXwxg_RN.js                        4.69 kB │ gzip:   2.18 kB
+#15 237.7 dist/assets/fileClassificationAdmission.helpers-COOFzhNJ.js      4.71 kB │ gzip:   1.75 kB
+#15 237.7 dist/assets/msdax-CYqgjx_P.js                                    4.77 kB │ gzip:   1.90 kB
+#15 237.7 dist/assets/swift-D7IUmUK8.js                                    4.77 kB │ gzip:   2.00 kB
+#15 237.7 dist/assets/AssetGovernanceWorkbenchDrawer-CtvHd0sQ.js           4.91 kB │ gzip:   2.30 kB
+#15 237.7 dist/assets/FieldDetailPage-B95CVhh4.js                          4.96 kB │ gzip:   1.56 kB
+#15 237.7 dist/assets/AssetTagPanel-D91zYVsS.js                            4.96 kB │ gzip:   2.43 kB
+#15 237.7 dist/assets/DeptSelect-CYVaooTX.js                               4.97 kB │ gzip:   2.08 kB
+#15 237.8 dist/assets/CollectionsPage-Dp2u4AQ1.js                          4.99 kB │ gzip:   1.71 kB
+#15 237.8 dist/assets/AssetLedgerDialogs-DoAWJm5F.js                       5.03 kB │ gzip:   1.91 kB
+#15 237.8 dist/assets/CardDetailPage-ClvrhN95.js                           5.08 kB │ gzip:   1.81 kB
+#15 237.8 dist/assets/cpp-SEyurbux.js                                      5.16 kB │ gzip:   2.05 kB
+#15 237.8 dist/assets/DashboardDetailPage-CraHX5FZ.js                      5.20 kB │ gzip:   2.27 kB
+#15 237.8 dist/assets/ecl-BO6FnfXk.js                                      5.20 kB │ gzip:   2.19 kB
+#15 237.8 dist/assets/mdx-CjiUvqXG.js                                      5.26 kB │ gzip:   1.66 kB
+#15 237.8 dist/assets/SearchPage-CTl10boy.js                               5.40 kB │ gzip:   1.87 kB
+#15 237.8 dist/assets/html-BltZ0-8k.js                                     5.41 kB │ gzip:   1.60 kB
+#15 237.8 dist/assets/AuditEvidencePage-Cr2xtNV6.js                        5.42 kB │ gzip:   2.55 kB
+#15 237.8 dist/assets/JdbcDriversPage-ELIgs_kH.js                          5.42 kB │ gzip:   2.45 kB
+#15 237.8 dist/assets/OpenMetadataGovernanceTab-BIkz579k.js                5.52 kB │ gzip:   2.64 kB
+#15 237.8 dist/assets/DatabaseDetailPage-B5rTbp9J.js                       5.53 kB │ gzip:   2.15 kB
+#15 237.8 dist/assets/ModelsPage-DbBLn8RZ.js                               5.54 kB │ gzip:   2.12 kB
+#15 237.8 dist/assets/ApiServicesPage-Cndob2-X.js                          5.57 kB │ gzip:   2.46 kB
+#15 237.8 dist/assets/vb-BwAE3J76.js                                       5.65 kB │ gzip:   2.02 kB
+#15 237.8 dist/assets/installLabelLayout-BjL2HytR.js                       5.71 kB │ gzip:   2.34 kB
+#15 237.8 dist/assets/IndicatorTemplatePage-DDdmLO2x.js                    5.75 kB │ gzip:   2.65 kB
+#15 237.8 dist/assets/ConnectionProfilesPage-DLXVORE3.js                   5.78 kB │ gzip:   2.76 kB
+#15 237.8 dist/assets/typescript-D0Ap08-D.js                               5.80 kB │ gzip:   2.38 kB
+#15 237.8 dist/assets/twig-BfRIq3la.js                                     5.83 kB │ gzip:   1.48 kB
+#15 237.8 dist/assets/RelationshipGraphPage-DogQtamn.js                    5.93 kB │ gzip:   2.82 kB
+#15 237.8 dist/assets/MeasurementUnitsPage-CU7onlPg.js                     5.97 kB │ gzip:   2.63 kB
+#15 237.8 dist/assets/ProfilePage-vLV6r_Y8.js                              6.00 kB │ gzip:   2.47 kB
+#15 237.8 dist/assets/ConnectionProfileDetailPage-BADPtH8m.js              6.09 kB │ gzip:   2.63 kB
+#15 237.8 dist/assets/scss-CTwUZ5N7.js                                     6.27 kB │ gzip:   1.71 kB
+#15 237.8 dist/assets/DataProductsPage-CUeNdoDr.js                         6.49 kB │ gzip:   2.62 kB
+#15 237.8 dist/assets/TaskAdmissionBasis-BWxqK-83.js                       6.53 kB │ gzip:   2.78 kB
+#15 237.8 dist/assets/Page500-DAktuhFZ.js                                  6.78 kB │ gzip:   2.37 kB
+#15 237.8 dist/assets/index-DxwAfLMQ.js                                    6.82 kB │ gzip:   2.93 kB
+#15 237.8 dist/assets/ConformedDimensionCatalogCard-G7RM2uG_.js            6.86 kB │ gzip:   3.01 kB
+#15 237.8 dist/assets/MetricLensPage-KfN6d_zH.js                           6.88 kB │ gzip:   2.26 kB
+#15 237.8 dist/assets/DataMartWorkspace-Bsl8_3GX.js                        6.95 kB │ gzip:   3.18 kB
+#15 237.8 dist/assets/julia-DQXNmw_w.js                                    7.01 kB │ gzip:   2.62 kB
+#15 237.8 dist/assets/ReleaseGovernancePage-DQrf93Dc.js                    7.06 kB │ gzip:   3.25 kB
+#15 237.8 dist/assets/handlebars-nq7f8K46.js                               7.17 kB │ gzip:   1.81 kB
+#15 237.8 dist/assets/scala-Bqvq8jcR.js                                    7.18 kB │ gzip:   2.06 kB
+#15 237.8 dist/assets/EltConsolePage-C3V5Eokf.js                           7.20 kB │ gzip:   3.10 kB
+#15 237.8 dist/assets/wgsl-B_1kOXbF.js                                     7.21 kB │ gzip:   2.72 kB
+#15 237.8 dist/assets/st-C7iG7M4S.js                                       7.26 kB │ gzip:   2.21 kB
+#15 237.8 dist/assets/LineageGraphPage-BwYxqVlj.js                         7.29 kB │ gzip:   3.39 kB
+#15 237.8 dist/assets/OpsInstancesPage-CwTLRuvP.js                         7.31 kB │ gzip:   3.00 kB
+#15 237.8 dist/assets/BusinessConsumptionPage-EjpYON6H.js                  7.37 kB │ gzip:   3.25 kB
+#15 237.8 dist/assets/AccessGovernancePanels-gZkABKuV.js                   7.44 kB │ gzip:   3.41 kB
+#15 237.8 dist/assets/systemverilog-DgMryOEJ.js                            7.46 kB │ gzip:   2.72 kB
+#15 237.8 dist/assets/DatasetDetailSupportTabs-DSo8WikB.js                 7.47 kB │ gzip:   2.82 kB
+#15 237.8 dist/assets/EChartsRuntime-Dz8aQlnP.js                           7.51 kB │ gzip:   3.03 kB
+#15 237.8 dist/assets/IndicatorDashboardPage-BK6QpERQ.js                   7.57 kB │ gzip:   3.12 kB
+#15 237.8 dist/assets/helpers-CItF8no1.js                                  7.64 kB │ gzip:   3.13 kB
+#15 237.8 dist/assets/postiats-CQpG440k.js                                 7.72 kB │ gzip:   2.40 kB
+#15 237.8 dist/assets/DashboardFilterBar-D-bu3az-.js                       7.84 kB │ gzip:   3.18 kB
+#15 237.8 dist/assets/php-120yhfDK.js                                      7.89 kB │ gzip:   2.04 kB
+#15 237.8 dist/assets/ModelPublishDialog-CWDEHnSG.js                       7.98 kB │ gzip:   3.36 kB
+#15 237.8 dist/assets/ConnectorRegistryPage-BvcAsViW.js                    8.03 kB │ gzip:   3.34 kB
+#15 237.8 dist/assets/perl-DlYyT36c.js                                     8.12 kB │ gzip:   3.10 kB
+#15 237.8 dist/assets/PlatformEventObservabilityPage-CigMV7Fp.js           8.15 kB │ gzip:   3.18 kB
+#15 237.8 dist/assets/PlanningPage-CdNqPMor.js                             8.19 kB │ gzip:   3.55 kB
+#15 237.8 dist/assets/ruby-CYWGW-b1.js                                     8.36 kB │ gzip:   2.54 kB
+#15 237.8 dist/assets/FileAccessStep-DVntQvuU.js                           8.53 kB │ gzip:   3.92 kB
+#15 237.8 dist/assets/protobuf-IBS6jZEB.js                                 8.91 kB │ gzip:   2.04 kB
+#15 237.8 dist/assets/razor-B9ECu7CE.js                                    9.17 kB │ gzip:   2.50 kB
+#15 237.8 dist/assets/AssetActionMatrixPanel-kw41TTyb.js                   9.27 kB │ gzip:   3.65 kB
+#15 237.8 dist/assets/IndicatorWizard-Djm9H7UT.js                          9.38 kB │ gzip:   3.95 kB
+#15 237.8 dist/assets/value-BAnORW8c.js                                    9.42 kB │ gzip:   4.01 kB
+#15 237.8 dist/assets/AccessDefaultsPage-DQsLQNpH.js                       9.46 kB │ gzip:   3.54 kB
+#15 237.8 dist/assets/clojure-D9WOWImG.js                                  9.50 kB │ gzip:   3.57 kB
+#15 237.8 dist/assets/ingestion-CRpgaN0C.js                                9.54 kB │ gzip:   2.83 kB
+#15 237.8 dist/assets/Nl2SqlEvalPage-DSdDkRPJ.js                           9.72 kB │ gzip:   3.02 kB
+#15 237.8 dist/assets/OrchestrationRunsTab-DnfiSUUX.js                     9.78 kB │ gzip:   3.70 kB
+#15 237.8 dist/assets/HomePage-BXt6B616.js                                 9.80 kB │ gzip:   2.89 kB
+#15 237.8 dist/assets/ReportFactoryPage-B5sC5xr7.js                        9.84 kB │ gzip:   3.16 kB
+#15 237.8 dist/assets/StandardPackagePage-BBBtgGd9.js                      9.88 kB │ gzip:   4.20 kB
+#15 237.8 dist/assets/GlossaryPage-BExqhOFM.js                             9.92 kB │ gzip:   3.87 kB
+#15 237.8 dist/assets/AccessWorkspacePage-C-1H3v-B.js                      9.97 kB │ gzip:   4.29 kB
+#15 237.8 dist/assets/elixir-BRjLKONM.js                                  10.12 kB │ gzip:   2.50 kB
+#15 237.8 dist/assets/sql-BdTr02Mf.js                                     10.16 kB │ gzip:   3.79 kB
+#15 237.8 dist/assets/MetadataManagementPage-DyGgvYOh.js                  10.24 kB │ gzip:   4.35 kB
+#15 237.8 dist/assets/ReverseModelingInspectionSteps-D4d12jN9.js          10.24 kB │ gzip:   3.77 kB
+#15 237.8 dist/assets/DashboardEditorPage-B4wyeN_x.js                     10.48 kB │ gzip:   4.22 kB
+#15 237.8 dist/assets/ModelWorkbenchCatalogList-DYX07870.js               10.49 kB │ gzip:   4.17 kB
+#15 237.8 dist/assets/ScriptStudioPage-CEkarKco.js                        10.89 kB │ gzip:   3.70 kB
+#15 237.8 dist/assets/ChartRenderer-CS67GLpI.js                           11.00 kB │ gzip:   4.10 kB
+#15 237.8 dist/assets/ExploreSessionsPage-p50B42MG.js                     11.07 kB │ gzip:   3.42 kB
+#15 237.8 dist/assets/mysql-BHd6q0vd.js                                   11.13 kB │ gzip:   4.01 kB
+#15 237.8 dist/assets/AssetOverviewPage-DStIjf-M.js                       11.21 kB │ gzip:   4.53 kB
+#15 237.8 dist/assets/AssetTagsWorkspace-l_Mc1PGU.js                      11.41 kB │ gzip:   4.44 kB
+#15 237.8 dist/assets/redshift-CBifECDb.js                                11.66 kB │ gzip:   4.30 kB
+#15 237.8 dist/assets/lineageShared-Di-sTdbt.js                           11.80 kB │ gzip:   4.22 kB
+#15 237.8 dist/assets/ElementsPage-6JTQgVYG.js                            11.86 kB │ gzip:   4.44 kB
+#15 237.8 dist/assets/AssetLedgerView-Cs-OpSfM.js                         11.99 kB │ gzip:   5.12 kB
+#15 237.8 dist/assets/BiLinksPage-ZrSXJMFW.js                             12.25 kB │ gzip:   4.69 kB
+#15 237.8 dist/assets/PlanningEditors-CPgVUtgv.js                         12.37 kB │ gzip:   3.48 kB
+#15 237.8 dist/assets/data-security-C2CfagqP.js                           12.48 kB │ gzip:   4.52 kB
+#15 237.8 dist/assets/DataSearchPage-C_Xgkz6X.js                          12.86 kB │ gzip:   4.71 kB
+#15 237.8 dist/assets/TemplatesPage-by99e4jV.js                           12.89 kB │ gzip:   4.42 kB
+#15 237.8 dist/assets/StandardsPage-B1pM7QHg.js                           13.11 kB │ gzip:   4.91 kB
+#15 237.8 dist/assets/DataProductsPage-CsIWNRzG.js                        13.26 kB │ gzip:   4.57 kB
+#15 237.8 dist/assets/pgsql-Dy0bjov7.js                                   13.32 kB │ gzip:   4.46 kB
+#15 237.8 dist/assets/abap-CRCWOmpq.js                                    14.02 kB │ gzip:   5.27 kB
+#15 237.8 dist/assets/OpsOverviewPage-CBD_UAM4.js                         14.58 kB │ gzip:   4.78 kB
+#15 237.8 dist/assets/ReverseModelingPage-Ip0PnsKF.js                     14.75 kB │ gzip:   5.67 kB
+#15 237.8 dist/assets/ScreenExportPage-BUAl3szS.js                        15.46 kB │ gzip:   5.71 kB
+#15 237.8 dist/assets/JourneyContextBar-DOXcGNHF.js                       15.56 kB │ gzip:   6.04 kB
+#15 237.8 dist/assets/AccessPlanDetailPage-Dik0FsEe.js                    15.66 kB │ gzip:   6.20 kB
+#15 237.8 dist/assets/index-DLrTW36J.js                                   15.87 kB │ gzip:   6.32 kB
+#15 237.8 dist/assets/PublicScreenPage-DmlBtQoJ.js                        16.04 kB │ gzip:   5.51 kB
+#15 237.8 dist/assets/ModelWorkbenchDialog-DxIhuDQ5.js                    16.31 kB │ gzip:   6.14 kB
+#15 237.8 dist/assets/freemarker2-CEJVFU4l.js                             16.49 kB │ gzip:   4.36 kB
+#15 237.8 dist/assets/powerquery-DdJtto1Z.js                              16.80 kB │ gzip:   4.81 kB
+#15 237.8 dist/assets/ModelingWorkbenchPage-CpzSnLwn.js                   16.82 kB │ gzip:   6.61 kB
+#15 237.8 dist/assets/ScreenPreviewPage-CgPzfELd.js                       17.15 kB │ gzip:   5.90 kB
+#15 237.8 dist/assets/AssetLifecycleWorkbenchDrawer-B5x0Bd2j.js           17.65 kB │ gzip:   6.41 kB
+#15 237.8 dist/assets/CardsPage-DIn188bC.js                               17.80 kB │ gzip:   6.40 kB
+#15 237.8 dist/assets/DatasetDetailPage-DnPKnyVB.js                       17.88 kB │ gzip:   5.85 kB
+#15 237.8 dist/assets/solidity-CME5AdoB.js                                18.46 kB │ gzip:   4.41 kB
+#15 237.8 dist/assets/MetadataPage-A3hO2q87.js                            18.65 kB │ gzip:   6.16 kB
+#15 237.8 dist/assets/SubjectAreasPage-Dq8BadFC.js                        19.06 kB │ gzip:   6.88 kB
+#15 237.8 dist/assets/DelayReasonMatrix-BcLRUeSm.js                       19.39 kB │ gzip:   6.47 kB
+#15 237.8 dist/assets/papaparse.min-qcN5wq6v.js                           19.41 kB │ gzip:   7.10 kB
+#15 237.8 dist/assets/AccessPlanWizardPage-BaJF5Gq2.js                    19.68 kB │ gzip:   6.86 kB
+#15 237.8 dist/assets/accessPlanPayload-CgsXReRl.js                       20.24 kB │ gzip:   6.88 kB
+#15 237.8 dist/assets/ExecutionHistoryTable-CjkWQc0m.js                   20.26 kB │ gzip:   7.24 kB
+#15 237.8 dist/assets/MetricsPage-CePzxW5o.js                             22.15 kB │ gzip:   8.11 kB
+#15 237.8 dist/assets/ConnectionProfileFormModal-DyeRmpOd.js              22.88 kB │ gzip:   8.43 kB
+#15 237.8 dist/assets/tsMode-C4tfHR4B.js                                  23.23 kB │ gzip:   6.57 kB
+#15 237.8 dist/assets/planningProjectionService-Cb1IQPDK.js               23.59 kB │ gzip:   7.83 kB
+#15 237.8 dist/assets/analyticsApi-D-SR0tgb.js                            23.96 kB │ gzip:   5.60 kB
+#15 237.8 dist/assets/ReferenceCodesPage-Ezxecayx.js                      25.74 kB │ gzip:   7.45 kB
+#15 237.8 dist/assets/DatasetAccessApprovalPage-Bq-EORUy.js               25.89 kB │ gzip:   8.83 kB
+#15 237.8 dist/assets/DataManagementWorkbenchPage-CIYk2otC.js             27.64 kB │ gzip:   9.48 kB
+#15 237.8 dist/assets/ErrorNotice-D3gwzrC-.js                             30.29 kB │ gzip:  10.03 kB
+#15 237.8 dist/assets/SemanticCardEditorPage-CBHpcxFv.js                  30.64 kB │ gzip:  10.23 kB
+#15 237.8 dist/assets/ModelingWorkbenchEditor-B1iyO4zF.js                 31.44 kB │ gzip:   9.09 kB
+#15 237.8 dist/assets/cssMode-CYHSRiGI.js                                 32.48 kB │ gzip:   8.83 kB
+#15 237.8 dist/assets/htmlMode-Cu-qRXqk.js                                33.03 kB │ gzip:   8.96 kB
+#15 237.8 dist/assets/upload-D1jaEpmH.js                                  39.19 kB │ gzip:  13.82 kB
+#15 237.8 dist/assets/jsonMode-V_l4sVy1.js                                41.90 kB │ gzip:  12.17 kB
+#15 237.8 dist/assets/CardEditorRoutePage-BqTjDqsk.js                     42.49 kB │ gzip:  11.37 kB
+#15 237.8 dist/assets/ProjectCockpitPage-CRH1gk9g.js                      44.34 kB │ gzip:  12.27 kB
+#15 237.8 dist/assets/QueryWorkbenchPage-CSli7kaL.js                      49.04 kB │ gzip:  16.44 kB
+#15 237.8 dist/assets/index-DfSh73lm.js                                   67.83 kB │ gzip:  24.61 kB
+#15 237.8 dist/assets/DashboardGrid-DZUDmSSX.js                           77.57 kB │ gzip:  22.62 kB
+#15 237.8 dist/assets/QualityRoutePage-D92nouUb.js                        78.63 kB │ gzip:  22.82 kB
+#15 237.8 dist/assets/ScreensPage-BlBSyh3b.js                             86.31 kB │ gzip:  26.29 kB
+#15 237.8 dist/assets/jszip.min-BLmKZz5C.js                               96.81 kB │ gzip:  29.95 kB
+#15 237.8 dist/assets/vendor-utils-B67rgrjt.js                           106.16 kB │ gzip:  36.56 kB
+#15 237.8 dist/assets/OrchestrationPage-DisWLgmn.js                      110.38 kB │ gzip:  30.02 kB
+#15 237.8 dist/assets/polyfills-CzyWvamL.js                              139.56 kB │ gzip:  52.02 kB
+#15 237.8 dist/assets/style-C34LG4Mq.js                                  164.44 kB │ gzip:  52.79 kB
+#15 237.8 dist/assets/ScreenDesigner-z_4omJjM.js                         206.12 kB │ gzip:  52.47 kB
+#15 237.8 dist/assets/vendor-core-DW30UbJ_.js                            225.54 kB │ gzip:  73.96 kB
+#15 237.8 dist/assets/index-_HgRqfIL.js                                  292.61 kB │ gzip:  75.82 kB
+#15 237.8 dist/assets/ComponentRenderer-89ZJfvF8.js                      306.83 kB │ gzip:  86.69 kB
+#15 237.8 dist/assets/ScreenDesignerPage-C3T-SYVz.js                     322.54 kB │ gzip:  81.13 kB
+#15 237.8 dist/assets/DataPage-DnbXWwHo.js                               349.13 kB │ gzip: 119.03 kB
+#15 237.8 dist/assets/index-dcdKVjU_.js                                  360.86 kB │ gzip: 120.86 kB
+#15 237.8 dist/assets/index-CI_zvtVf.js                                  368.32 kB │ gzip: 121.42 kB
+#15 237.8 dist/assets/install-B3USO-QZ.js                                409.21 kB │ gzip: 139.49 kB
+#15 237.8 dist/assets/vendor-ui-D9T4lNQG.js                            1,338.88 kB │ gzip: 419.82 kB
+#15 237.8 dist/assets/index-BFk9rMBk.js                                1,353.64 kB │ gzip: 397.98 kB
+#15 237.8 dist/assets/LineageGraph-BDYLQU4Z.js                         1,456.07 kB │ gzip: 435.02 kB
+#15 237.8 dist/assets/SqlIdePage-C5dFcXol.js                           3,579.70 kB │ gzip: 921.97 kB
+#15 237.8 
+#15 237.8 (!) Some chunks are larger than 1500 kB after minification. Consider:
+#15 237.8 - Using dynamic import() to code-split the application
+#15 237.8 - Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+#15 237.8 - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+#15 237.8 ✓ built in 3m 54s
+#15 DONE 240.4s
 
 #16 [runtime  2/11] RUN set -eux;     if [ -n "${APK_HTTP_PROXY:-}${APK_HTTPS_PROXY:-}" ]; then         export http_proxy="${APK_HTTP_PROXY:-${APK_HTTPS_PROXY:-}}";         export https_proxy="${APK_HTTPS_PROXY:-${APK_HTTP_PROXY:-}}";     fi;     if [ -n "${ALPINE_REPO_MAIN:-}" ] || [ -n "${ALPINE_REPO_COMMUNITY:-}" ]; then         : > /etc/apk/repositories;         if [ -n "${ALPINE_REPO_MAIN:-}" ]; then echo "${ALPINE_REPO_MAIN}" >> /etc/apk/repositories; fi;         if [ -n "${ALPINE_REPO_COMMUNITY:-}" ]; then echo "${ALPINE_REPO_COMMUNITY}" >> /etc/apk/repositories; fi;     fi;     apk update || true;     apk add --no-cache nginx gettext     || {          echo "[apk] fallback to Aliyun mirror";          echo "https://mirrors.aliyun.com/alpine/v3.20/main" > /etc/apk/repositories;          echo "https://mirrors.aliyun.com/alpine/v3.20/community" >> /etc/apk/repositories;          apk update;          apk add --no-cache nginx gettext;        };     unset http_proxy https_proxy;     rm -f /etc/nginx/http.d/default.conf /etc/nginx/conf.d/default.conf;     mkdir -p /usr/share/nginx/html
 #16 CACHED
@@ -509,22 +508,22 @@ Already up to date.
 #17 CACHED
 
 #18 [runtime  4/11] COPY --from=builder /app/dist ./
-#18 DONE 0.1s
+#18 DONE 0.2s
 
 #19 [runtime  5/11] RUN mkdir -p /opt/vendor-koal
-#19 DONE 0.4s
+#19 DONE 0.2s
 
 #20 [runtime  6/11] COPY --from=builder /app/public/vendor/ /opt/vendor-koal/
-#20 DONE 0.0s
+#20 DONE 0.1s
 
 #21 [runtime  7/11] RUN chmod -R a+rX /usr/share/nginx/html /opt/vendor-koal
-#21 DONE 0.8s
+#21 DONE 0.6s
 
 #22 [runtime  8/11] RUN set -eux;     if [ -d "/usr/share/nginx/html/vendor" ]; then       chmod -R a+rX "/usr/share/nginx/html/vendor";     fi;     find /usr/share/nginx/html -type f -name '*.js' -exec chmod a+r {} + || true
-#22 0.370 + '[' -d /usr/share/nginx/html/vendor ]
-#22 0.370 + chmod -R a+rX /usr/share/nginx/html/vendor
-#22 0.389 + find /usr/share/nginx/html -type f -name '*.js' -exec chmod a+r '{}' +
-#22 DONE 0.9s
+#22 0.318 + '[' -d /usr/share/nginx/html/vendor ]
+#22 0.318 + chmod -R a+rX /usr/share/nginx/html/vendor
+#22 0.329 + find /usr/share/nginx/html -type f -name '*.js' -exec chmod a+r '{}' +
+#22 DONE 0.7s
 
 #23 [runtime  9/11] COPY builds/dts-platform-webapp/nginx.conf.template /etc/nginx/http.d/default.conf.template
 #23 DONE 0.1s
@@ -533,12 +532,12 @@ Already up to date.
 #24 DONE 0.1s
 
 #25 [runtime 11/11] RUN chmod +x /docker-entrypoint.sh
-#25 DONE 0.3s
+#25 DONE 0.4s
 
 #26 exporting to image
 #26 exporting layers
 #26 exporting layers 0.5s done
-#26 writing image sha256:bf03f63b185ad4ec677ca1f408903c6d9c4ee05ac7003fec68966958db6a7a8c done
+#26 writing image sha256:ab5cfe902810392c8fda5ea7004af81855f66b245aa506a4af9c5e2c1342054d done
 #26 naming to docker.io/library/dts-platform-webapp:1.0.0 done
 #26 DONE 0.5s
 [dts-build] Skipping tar export for dts-platform-webapp:1.0.0 (--no-save)

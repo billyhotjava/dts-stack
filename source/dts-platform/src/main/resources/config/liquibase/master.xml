@@ -260,4 +260,6 @@
     <include file="config/liquibase/changelog/20260810_02_catalog_asset_semantics_projection.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260810_03_indicator_business_context_expand.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260810_04_modeling_planning_context_policy.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260811_01_platform_model_governance_policy.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260811_02_seed_platform_model_governance_policy.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

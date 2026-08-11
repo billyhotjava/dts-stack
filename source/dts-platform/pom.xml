@@ -678,6 +678,9 @@
                         <testInclude>**/service/modeling/DimensionDefinitionApplicationServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/MetadataStandardServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelSpecStageGateServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/JdbcModelGovernancePolicyAdapterTest.java</testInclude>
+                        <testInclude>**/service/modeling/PlatformModelGovernancePolicyLiquibaseTest.java</testInclude>
+                        <testInclude>**/service/modeling/PlatformModelGovernancePolicyPostgresTest.java</testInclude>
                         <testInclude>**/service/modeling/Sprint74ModelingLiquibaseTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelingDbtArtifactImportServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/StandardPackageApplyServiceTest.java</testInclude>

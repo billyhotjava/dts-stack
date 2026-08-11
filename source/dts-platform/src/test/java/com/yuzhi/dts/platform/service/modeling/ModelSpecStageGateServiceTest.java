@@ -617,7 +617,7 @@ class ModelSpecStageGateServiceTest {
         ModelGovernancePolicyPort governancePolicy = mock(ModelGovernancePolicyPort.class);
         when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(model);
         when(standards.evaluate("tenant-a", model)).thenReturn(StandardEvidence.CURRENT);
-        when(governancePolicy.resolve("tenant-a", model.planId())).thenReturn(
+        when(governancePolicy.resolve()).thenReturn(
             ModelGovernancePolicyPort.Policy.available(
                 ModelGovernancePolicyPort.StandardCoverage.KEY_AND_MEASURE,
                 ModelGovernancePolicyPort.QualityGate.ADVISORY
@@ -665,14 +665,14 @@ class ModelSpecStageGateServiceTest {
         ModelGovernancePolicyPort governancePolicy = mock(ModelGovernancePolicyPort.class);
         when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(model);
         when(standards.evaluate("tenant-a", model)).thenReturn(StandardEvidence.CURRENT);
-        when(governancePolicy.resolve("tenant-a", model.planId()))
+        when(governancePolicy.resolve())
             .thenReturn(
                 ModelGovernancePolicyPort.Policy.available(
                     ModelGovernancePolicyPort.StandardCoverage.ALL_FIELDS,
                     ModelGovernancePolicyPort.QualityGate.BLOCKING
                 )
             )
-            .thenReturn(ModelGovernancePolicyPort.Policy.unavailable("WAREHOUSE_PLAN_POLICY_UNREADABLE"));
+            .thenReturn(ModelGovernancePolicyPort.Policy.unavailable("PLATFORM_MODEL_GOVERNANCE_POLICY_UNREADABLE"));
 
         ModelSpecStageGateService gates = new ModelSpecStageGateService(
             modelSpecs,

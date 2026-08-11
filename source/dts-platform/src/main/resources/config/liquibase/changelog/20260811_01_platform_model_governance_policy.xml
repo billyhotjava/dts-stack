@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260811-01-platform-model-governance-policy" author="xiezm" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <not>
+                <tableExists tableName="modeling_platform_governance_policy"/>
+            </not>
+        </preConditions>
+        <comment>
+            Create the single platform-global owner for model release governance. The policy is
+            deliberately independent from tenant and warehouse-plan identities.
+        </comment>
+
+        <createTable tableName="modeling_platform_governance_policy">
+            <column name="policy_key" type="varchar(64)">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="standard_coverage" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="quality_gate" type="varchar(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="revision" type="int" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_modified_by" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamptz" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_modified_date" type="timestamptz" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE modeling_platform_governance_policy
+                ADD CONSTRAINT ck_platform_model_governance_policy_key
+                CHECK (policy_key = 'PLATFORM_DEFAULT');
+            ALTER TABLE modeling_platform_governance_policy
+                ADD CONSTRAINT ck_platform_model_governance_standard_coverage
+                CHECK (standard_coverage IN ('NONE', 'KEY_AND_MEASURE', 'ALL_FIELDS'));
+            ALTER TABLE modeling_platform_governance_policy
+                ADD CONSTRAINT ck_platform_model_governance_quality_gate
+                CHECK (quality_gate IN ('ADVISORY', 'BLOCKING'));
+            ALTER TABLE modeling_platform_governance_policy
+                ADD CONSTRAINT ck_platform_model_governance_revision
+                CHECK (revision >= 1);
+        ]]></sql>
+
+        <rollback>
+            <sql>DROP TABLE modeling_platform_governance_policy;</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
