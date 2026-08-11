@@ -114,4 +114,51 @@ describe("DataSearchPage", () => {
 		expect(mocks.listCatalogAssetsV2).toHaveBeenCalledWith(EMPTY_ASSET_QUERY);
 		expect(localStorage.getItem("catalog.search.form.v1")).toBe(savedQuery);
 	});
+
+	it("presents each result as a governed data asset instead of a technical search hit", async () => {
+		mocks.listDomains.mockResolvedValue({ content: [{ id: "domain-1", name: "项目管理域" }] });
+		mocks.listCatalogAssetsV2.mockResolvedValue({
+			content: [
+				{
+					id: "asset-1",
+					displayName: "项目任务快照",
+					description: "项目任务每日状态快照",
+					fqn: "source:finance/schema:public/table:project_task_snapshot",
+					type: "POSTGRESQL",
+					service: "项目管理库",
+					assetType: "DATASET",
+					domainId: "domain-1",
+					classification: "CONFIDENTIAL",
+					warehouseLayer: "DWD",
+					owner: "张三",
+					ownerDept: "D01",
+					governanceStatus: "GOVERNED",
+					lifecycleStatus: "ACTIVE",
+					columnCount: 12,
+					lastSyncedAt: "2026-08-12T01:02:03Z",
+					metadataSource: "dts-catalog",
+				},
+			],
+			page: 0,
+			size: 10,
+			total: 1,
+		});
+
+		await renderPage();
+		await act(async () => Promise.resolve());
+
+		const visibleText = container.textContent || "";
+		expect(visibleText).toContain("数据资产目录");
+		expect(visibleText).toContain("项目任务每日状态快照");
+		expect(visibleText).toContain("项目管理域");
+		expect(visibleText).toContain("张三（D01）");
+		expect(visibleText).toContain("明细层（DWD）");
+		expect(visibleText).toContain("机密");
+		expect(visibleText).toContain("已治理");
+		expect(visibleText).toContain("平台登记");
+		expect(visibleText).toContain("12 个字段");
+		expect(visibleText).not.toContain("CONFIDENTIAL");
+		expect(visibleText).not.toContain("GOVERNED");
+		expect(visibleText).not.toContain("dts-catalog");
+	});
 });

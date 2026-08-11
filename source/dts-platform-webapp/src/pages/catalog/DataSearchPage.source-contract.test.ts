@@ -112,3 +112,21 @@ test("the domain filter never echoes a raw id when the option list is not ready"
 	assert.match(SOURCE, /!options\.some\(\(option\) => option\.value === domain\)/);
 	assert.match(SOURCE, /options\.push\(\{ label: matched \? matched\.name : "主题域", value: domain \}\)/);
 });
+
+test("data search is presented as a governed data asset directory", () => {
+	assert.match(SOURCE, /<PageHeader title="数据资产目录"/);
+	assert.match(SOURCE, /识别资产的业务归属、治理状态和技术来源/);
+	assert.match(SOURCE, /主题域/);
+	assert.match(SOURCE, /责任归属/);
+	assert.match(SOURCE, /治理状态/);
+	assert.match(SOURCE, /平台登记/);
+	assert.doesNotMatch(SOURCE, /row\.source \|\| "assets-v2"/);
+	assert.doesNotMatch(SOURCE, /label: "应用台账筛选"/);
+});
+
+test("data search keeps only the source type filter supported by assets-v2", () => {
+	assert.match(SOURCE, /id="catalog-search-source-type"/);
+	assert.match(SOURCE, /assetType: datasetType/);
+	assert.doesNotMatch(SOURCE, /id="catalog-search-asset-type"/);
+	assert.doesNotMatch(SOURCE, /placeholder="请选择资产类型"/);
+});
