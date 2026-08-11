@@ -8,6 +8,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 const mocks = vi.hoisted(() => ({
 	listCatalogAssetsV2: vi.fn(),
 	listDomains: vi.fn(),
+	ledgerView: vi.fn(),
 }));
 
 vi.mock("@/api/platformApi", () => ({
@@ -24,7 +25,12 @@ vi.mock("@/components/empty-state", () => ({
 vi.mock("@/components/page-header", () => ({
 	PageHeader: ({ title }: { title: string }) => <h1>{title}</h1>,
 }));
-vi.mock("./assets/AssetLedgerView", () => ({ AssetLedgerView: () => null }));
+vi.mock("./assets/AssetLedgerView", () => ({
+	AssetLedgerView: (props: any) => {
+		mocks.ledgerView(props);
+		return <div data-testid="asset-directory-table">{props.records.map((row: any) => row.name).join("、")}</div>;
+	},
+}));
 vi.mock("./assets/AssetTagsWorkspace", () => ({ AssetTagsWorkspace: () => null }));
 
 import DataSearchPage from "./DataSearchPage";
@@ -115,7 +121,7 @@ describe("DataSearchPage", () => {
 		expect(localStorage.getItem("catalog.search.form.v1")).toBe(savedQuery);
 	});
 
-	it("presents each result as a governed data asset instead of a technical search hit", async () => {
+	it("normalizes assets-v2 rows for the single directory table", async () => {
 		mocks.listDomains.mockResolvedValue({ content: [{ id: "domain-1", name: "项目管理域" }] });
 		mocks.listCatalogAssetsV2.mockResolvedValue({
 			content: [
@@ -147,18 +153,23 @@ describe("DataSearchPage", () => {
 		await renderPage();
 		await act(async () => Promise.resolve());
 
-		const visibleText = container.textContent || "";
-		expect(visibleText).toContain("数据资产目录");
-		expect(visibleText).toContain("项目任务每日状态快照");
-		expect(visibleText).toContain("项目管理域");
-		expect(visibleText).toContain("张三（D01）");
-		expect(visibleText).toContain("明细层（DWD）");
-		expect(visibleText).toContain("机密");
-		expect(visibleText).toContain("已治理");
-		expect(visibleText).toContain("平台登记");
-		expect(visibleText).toContain("12 个字段");
-		expect(visibleText).not.toContain("CONFIDENTIAL");
-		expect(visibleText).not.toContain("GOVERNED");
-		expect(visibleText).not.toContain("dts-catalog");
+		const latestProps = mocks.ledgerView.mock.calls.at(-1)?.[0];
+		expect(latestProps).toMatchObject({ loading: false, page: 1, pageSize: 10, total: 1 });
+		expect(latestProps.records).toEqual([
+			expect.objectContaining({
+				id: "asset-1",
+				name: "项目任务快照",
+				description: "项目任务每日状态快照",
+				service: "项目管理库",
+				domainId: "domain-1",
+				classification: "CONFIDENTIAL",
+				warehouseLayer: "DWD",
+				updatedAt: "2026-08-12T01:02:03Z",
+			}),
+		]);
+		expect(container.textContent).toContain("数据资产目录");
+		expect(container.textContent).toContain("项目任务快照");
+		expect(container.textContent).not.toContain("资产名片");
+		expect(container.textContent).not.toContain("治理视图");
 	});
 });

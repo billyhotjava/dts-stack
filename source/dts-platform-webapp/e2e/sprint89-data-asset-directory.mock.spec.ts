@@ -95,7 +95,7 @@ test.describe("Sprint-89 data asset directory mock-API acceptance", () => {
 		await installIdentity(page);
 	});
 
-	test("shows business, governance and technical characteristics at desktop and narrow widths", async ({ page }) => {
+	test("shows one searchable selectable asset table and opens row detail", async ({ page }) => {
 		const unknownApiPaths: string[] = [];
 		await installApis(page, unknownApiPaths);
 		const errors = collectBrowserErrors(page);
@@ -103,18 +103,26 @@ test.describe("Sprint-89 data asset directory mock-API acceptance", () => {
 		await page.setViewportSize({ width: 1366, height: 768 });
 		await page.goto("/#/catalog/search");
 		await expect(page.getByRole("heading", { name: "数据资产目录" })).toBeVisible();
+		await expect(page.getByPlaceholder("搜索资产名称、业务说明或技术标识")).toHaveValue("");
+		await expect(page.getByText("资产名称", { exact: true })).toBeVisible();
+		await expect(page.getByText("数据源类型", { exact: true })).toBeVisible();
+		await expect(page.getByText("来源系统", { exact: true })).toBeVisible();
+		await expect(page.getByText("主题域", { exact: true })).toBeVisible();
+		await expect(page.getByText("项目任务快照", { exact: true })).toBeVisible();
 		await expect(page.getByText("项目任务每日状态快照", { exact: true })).toBeVisible();
 		await expect(page.getByText("项目管理域", { exact: true }).last()).toBeVisible();
 		await expect(page.getByText("张三（D01）", { exact: true })).toBeVisible();
-		await expect(page.getByText("明细层（DWD）", { exact: true })).toBeVisible();
-		await expect(page.getByText("治理状态：已治理", { exact: true })).toBeVisible();
-		await expect(page.getByText("平台登记", { exact: false })).toBeVisible();
-		await expect(page.locator("body")).not.toContainText("dts-catalog");
-		await expect(page.locator("body")).not.toContainText("CONFIDENTIAL");
+		await expect(page.getByText("明细层", { exact: true })).toBeVisible();
+		await expect(page.locator("body")).not.toContainText("资产名片");
+		await expect(page.locator("body")).not.toContainText("治理视图");
+		await expect(page.getByRole("button", { name: "治理资产" })).toHaveCount(0);
+		await expect(page.getByRole("button", { name: "申请权限" })).toHaveCount(0);
+
+		await page.getByRole("checkbox").nth(1).check();
+		await expect(page.getByRole("button", { name: "归域选中资产（1）" })).toBeEnabled();
 		await page.screenshot({ path: "/tmp/sprint89-data-asset-directory-1366x768.png", fullPage: true });
 
 		await page.setViewportSize({ width: 768, height: 900 });
-		await expect(page.getByText("责任归属", { exact: true })).toBeVisible();
 		const hasBodyOverflow = await page.evaluate(
 			() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
 		);
@@ -125,5 +133,8 @@ test.describe("Sprint-89 data asset directory mock-API acceptance", () => {
 		expect(errors.consoleErrors).toEqual([]);
 		expect(errors.pageErrors).toEqual([]);
 		expect(errors.requestFailures).toEqual([]);
+
+		await page.getByText("项目任务快照", { exact: true }).click();
+		await expect(page).toHaveURL(/#\/catalog\/datasets\/asset-1$/);
 	});
 });
