@@ -2,12 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
 	compileModelLifecycle,
 	createReleaseCandidate,
+	createReplacementReleaseCandidate,
 	getModelLifecycle,
 	getReleaseCandidateWorkbench,
 	lockReleaseCandidate,
 	publishReleaseCandidate,
 	type ReleaseCandidateEntryEvidence,
 	type ReleaseCandidateWorkbench,
+	refreshReleaseCandidate,
 	rematerializeReleaseCandidate,
 	retryReleaseCandidate,
 	startModelBuildIntent,
@@ -104,15 +106,17 @@ export function ModelPublishDialog({
 	);
 	const buildAction = workspace?.allowedActions.includes("CREATE_CANDIDATE")
 		? "CREATE_CANDIDATE"
-		: candidate &&
-				(workspace?.allowedActions.includes("REMATERIALIZE") ||
-					workspace?.allowedActions.includes("CREATE_REPLACEMENT_CANDIDATE"))
-			? "REMATERIALIZE"
-			: candidateScopeMatches && workspace?.allowedActions.includes("RETRY_BUILD")
-				? "RETRY_BUILD"
-				: candidateScopeMatches && workspace?.allowedActions.includes("START_BUILD")
-					? "START_BUILD"
-					: null;
+		: candidate && workspace?.allowedActions.includes("REFRESH_CANDIDATE")
+			? "REFRESH_AND_REPLACE"
+			: candidate && workspace?.allowedActions.includes("CREATE_REPLACEMENT_CANDIDATE")
+				? "CREATE_REPLACEMENT"
+				: candidate && workspace?.allowedActions.includes("REMATERIALIZE")
+					? "REMATERIALIZE"
+					: candidateScopeMatches && workspace?.allowedActions.includes("RETRY_BUILD")
+						? "RETRY_BUILD"
+						: candidateScopeMatches && workspace?.allowedActions.includes("START_BUILD")
+							? "START_BUILD"
+							: null;
 	const canBuild = Boolean(!selectionProblem && buildAction);
 	const canPublish = Boolean(
 		!batch && primary && candidateScopeMatches && workspace?.allowedActions.includes("PUBLISH"),
@@ -141,6 +145,18 @@ export function ModelPublishDialog({
 					entries,
 					reason: batch ? "从模型列表重新物化所选模型" : "从模型工作台重新物化",
 				});
+			} else if ((buildAction === "REFRESH_AND_REPLACE" || buildAction === "CREATE_REPLACEMENT") && candidate) {
+				const source =
+					buildAction === "REFRESH_AND_REPLACE"
+						? (await refreshReleaseCandidate(planId, candidate, crypto.randomUUID(), "模型已发生新修订，废弃旧候选"))
+								.candidate
+						: candidate;
+				const replacement = await createReplacementReleaseCandidate(planId, source, crypto.randomUUID(), {
+					environment,
+					entries,
+					reason: batch ? "从模型列表按新修订创建替代候选" : "从模型工作台按新修订创建替代候选",
+				});
+				await lockReleaseCandidate(planId, replacement.candidate, crypto.randomUUID(), "从模型工作台启动新修订构建");
 			} else if (buildAction === "RETRY_BUILD" && candidate) {
 				await retryReleaseCandidate(planId, candidate, crypto.randomUUID(), "从模型工作台重试构建");
 			} else if (candidate?.origin === "BATCH_WORKBENCH") {
@@ -265,15 +281,17 @@ export function ModelPublishDialog({
 								>
 									{busy === "build"
 										? "处理中…"
-										: buildAction === "REMATERIALIZE"
-											? "重新物化"
-											: buildAction === "RETRY_BUILD"
-												? "重试构建"
-												: buildAction === "START_BUILD"
-													? "开始构建"
-													: batch
-														? `创建并运行 ${selection.length} 个模型`
-														: "创建并运行"}
+										: buildAction === "REFRESH_AND_REPLACE" || buildAction === "CREATE_REPLACEMENT"
+											? "按新修订重新物化"
+											: buildAction === "REMATERIALIZE"
+												? "重新物化"
+												: buildAction === "RETRY_BUILD"
+													? "重试构建"
+													: buildAction === "START_BUILD"
+														? "开始构建"
+														: batch
+															? `创建并运行 ${selection.length} 个模型`
+															: "创建并运行"}
 								</Button>
 							</div>
 						</>
