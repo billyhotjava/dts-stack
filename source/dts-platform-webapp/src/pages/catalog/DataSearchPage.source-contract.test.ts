@@ -18,7 +18,7 @@ test("data search page consumes assets-v2 as the single data source", () => {
 test("data search keeps the shared asset filter cache and URL tag protocol", () => {
 	assert.match(SOURCE, /catalog\.asset\.filter\.v2/);
 	assert.doesNotMatch(SOURCE, /catalog\.asset\.filter\.v1/);
-	assert.match(SOURCE, /setAssetType\(typeof saved\?\.assetType/);
+	assert.match(SOURCE, /setDatasetType\(typeof saved\?\.assetType/);
 	assert.match(SOURCE, /setKeyword\(typeof saved\?\.keyword/);
 	assert.match(SOURCE, /useSearchParams/);
 	assert.match(SOURCE, /const selectedTagIds = useMemo\([\s\S]*?readTagIds\(searchParams\)/);
@@ -64,7 +64,7 @@ test("data search starts empty and saved conditions require explicit restoration
 	assert.doesNotMatch(SOURCE, /useState\(readStoredSearchForm\)/);
 	assert.match(SOURCE, /useState\(EMPTY_SEARCH_FORM\.keyword\)/);
 	assert.match(SOURCE, /useState<string \| undefined>\(EMPTY_SEARCH_FORM\.domain\)/);
-	assert.match(SOURCE, /useState<string \| undefined>\(EMPTY_SEARCH_FORM\.assetType\)/);
+	assert.doesNotMatch(SOURCE, /useState<string \| undefined>\(EMPTY_SEARCH_FORM\.assetType\)/);
 	assert.match(SOURCE, /useState<string \| undefined>\(EMPTY_SEARCH_FORM\.datasetType\)/);
 	assert.match(SOURCE, /useState<string \| undefined>\(EMPTY_SEARCH_FORM\.classification\)/);
 	assert.match(SOURCE, /useState<string \| undefined>\(EMPTY_SEARCH_FORM\.warehouseLayer\)/);
@@ -72,7 +72,6 @@ test("data search starts empty and saved conditions require explicit restoration
 	assert.match(SOURCE, /placeholder="请选择主题域"[\s\S]*?value=\{domain\}/);
 	assert.match(SOURCE, /placeholder="请选择密级"[\s\S]*?value=\{classification\}/);
 	assert.match(SOURCE, /placeholder="请选择分层"[\s\S]*?value=\{warehouseLayer\}/);
-	assert.match(SOURCE, /placeholder="请选择资产类型"[\s\S]*?value=\{assetType\}/);
 	assert.match(SOURCE, /placeholder="请选择数据源类型"[\s\S]*?value=\{datasetType\}/);
 });
 
@@ -104,6 +103,8 @@ test("data search consumes the same URL deep-link protocol as the retired ledger
 	assert.match(SOURCE, /setStaleFilter\(true\)/);
 	assert.match(SOURCE, /params\.set\("domain", domain\)/);
 	assert.match(SOURCE, /params\.set\("layer", warehouseLayer\)/);
+	assert.match(SOURCE, /params\.get\("datasetType"\) \|\| params\.get\("assetType"\)/);
+	assert.match(SOURCE, /params\.set\("datasetType", datasetType\)/);
 	assert.match(SOURCE, /setSearchParams\(params, \{ replace: true \}\)/);
 });
 

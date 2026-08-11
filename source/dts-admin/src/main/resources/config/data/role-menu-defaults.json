@@ -295,7 +295,7 @@
   },
   {
     "code": "sys.nav.portal.dataPortalSearch",
-    "title": "数据搜索",
+    "title": "数据资产目录",
     "route": "/catalog/search",
     "requiredRoles": []
   },

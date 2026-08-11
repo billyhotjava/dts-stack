@@ -1,4 +1,4 @@
-import { DownOutlined } from "@ant-design/icons";
+import { DatabaseOutlined, DownOutlined } from "@ant-design/icons";
 import { Alert, Button, Card, Dropdown, Input, Pagination, Segmented, Select, Tag } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
@@ -10,13 +10,19 @@ import { AssetTagFilter } from "@/components/catalog/tags/AssetTagFilter";
 import { readTagIds, writeTagIds } from "@/components/catalog/tags/catalogTagUrlState";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
+import { resolveAssetReadiness } from "./assetPortalUx.helpers";
 import { AssetLedgerView } from "./assets/AssetLedgerView";
 import { AssetTagsWorkspace } from "./assets/AssetTagsWorkspace";
+import { GOVERNANCE_STATUS_DICT, resolveEnumLabel } from "./assets/assetEnumLabels";
 import {
 	ASSET_PORTAL_V2_ENABLED,
 	type AssetRow,
 	classificationTagColor,
+	classificationText,
+	formatTime,
+	LAYER_META,
 	LEDGER_PAGE_SIZE,
+	normalizeLayer,
 } from "./assets/assetPageShared";
 import { buildAssetV2Query } from "./assets/assetV2Query";
 
@@ -28,6 +34,7 @@ type SearchRow = {
 	domainId?: string;
 	domain?: string;
 	owner?: string;
+	ownerDept?: string;
 	datasetName?: string;
 	assetType?: string;
 	assetKey?: string;
@@ -36,24 +43,59 @@ type SearchRow = {
 	datasetAssetTags?: CatalogTagDto[];
 	classification?: string;
 	warehouseLayer?: string;
+	description?: string;
+	service?: string;
+	governanceStatus?: string;
+	lifecycleStatus?: string;
+	matchStatus?: string;
+	columnCount?: number;
+	syncStatus?: string;
 	source?: string;
 	updatedAt?: string;
 };
 
-const TYPE_OPTIONS = [
-	{ label: "全部类型", value: "ALL" },
-	{ label: "资产", value: "ASSET" },
-	{ label: "数据集", value: "DATASET" },
-	{ label: "表", value: "TABLE" },
-	{ label: "字段", value: "COLUMN" },
-];
-
 const DATASET_TYPE_OPTIONS = [
-	{ label: "全部系统", value: "ALL" },
+	{ label: "全部数据源类型", value: "ALL" },
+	{ label: "PostgreSQL", value: "POSTGRESQL" },
+	{ label: "MySQL", value: "MYSQL" },
+	{ label: "Oracle", value: "ORACLE" },
+	{ label: "达梦", value: "DAMENG" },
 	{ label: "Hive", value: "HIVE" },
 	{ label: "JDBC", value: "JDBC" },
 	{ label: "文件", value: "FILE" },
 ];
+
+const ASSET_KIND_LABELS: Record<string, string> = {
+	ASSET: "数据资产",
+	DATASET: "数据集",
+	TABLE: "数据表",
+	COLUMN: "字段",
+};
+
+const DATA_SOURCE_TYPE_LABELS: Record<string, string> = {
+	POSTGRESQL: "PostgreSQL",
+	MYSQL: "MySQL",
+	ORACLE: "Oracle",
+	DAMENG: "达梦",
+	HIVE: "Hive",
+	JDBC: "JDBC",
+	FILE: "文件",
+};
+
+const METADATA_SOURCE_LABELS: Record<string, string> = {
+	"dts-catalog": "平台登记",
+	"openmetadata-cache": "自动采集",
+	"assets-v2": "统一目录",
+};
+
+const dataSourceTypeText = (value?: string) => {
+	const normalized = String(value || "")
+		.trim()
+		.toUpperCase();
+	return DATA_SOURCE_TYPE_LABELS[normalized] || value || "来源待识别";
+};
+
+const metadataSourceText = (value?: string) => METADATA_SOURCE_LABELS[String(value || "").toLowerCase()] || "统一目录";
 
 const CLASSIFICATION_OPTIONS = [
 	{ label: "全部密级", value: "ALL" },
@@ -80,7 +122,6 @@ const DATASET_FILTER_STORAGE_KEY = "catalog.asset.filter.v2";
 type StoredSearchForm = {
 	keyword: string;
 	domain: string | undefined;
-	assetType: string | undefined;
 	datasetType: string | undefined;
 	classification: string | undefined;
 	warehouseLayer: string | undefined;
@@ -89,7 +130,6 @@ type StoredSearchForm = {
 const EMPTY_SEARCH_FORM: StoredSearchForm = {
 	keyword: "",
 	domain: undefined,
-	assetType: undefined,
 	datasetType: undefined,
 	classification: undefined,
 	warehouseLayer: undefined,
@@ -101,16 +141,13 @@ function readStoredSearchForm(): StoredSearchForm {
 		const raw = localStorage.getItem(SEARCH_FORM_STORAGE_KEY);
 		if (!raw) return EMPTY_SEARCH_FORM;
 		const saved = JSON.parse(raw);
+		const savedSourceType = saved?.datasetType || saved?.assetType;
 		return {
 			keyword: typeof saved?.keyword === "string" ? saved.keyword : "",
 			domain: typeof saved?.domain === "string" && saved.domain && saved.domain !== "ALL" ? saved.domain : undefined,
-			assetType:
-				typeof saved?.assetType === "string" && saved.assetType && saved.assetType !== "ALL"
-					? saved.assetType
-					: undefined,
 			datasetType:
-				typeof saved?.datasetType === "string" && saved.datasetType && saved.datasetType !== "ALL"
-					? saved.datasetType
+				typeof savedSourceType === "string" && savedSourceType && savedSourceType !== "ALL"
+					? savedSourceType
 					: undefined,
 			classification:
 				typeof saved?.classification === "string" && saved.classification && saved.classification !== "ALL"
@@ -138,7 +175,6 @@ export default function DataSearchPage() {
 	const selectedTagIdsKey = effectiveSelectedTagIds.join("\u0000");
 	const [keyword, setKeyword] = useState(EMPTY_SEARCH_FORM.keyword);
 	const [domain, setDomain] = useState<string | undefined>(EMPTY_SEARCH_FORM.domain);
-	const [assetType, setAssetType] = useState<string | undefined>(EMPTY_SEARCH_FORM.assetType);
 	const [datasetType, setDatasetType] = useState<string | undefined>(EMPTY_SEARCH_FORM.datasetType);
 	const [classification, setClassification] = useState<string | undefined>(EMPTY_SEARCH_FORM.classification);
 	const [warehouseLayer, setWarehouseLayer] = useState<string | undefined>(EMPTY_SEARCH_FORM.warehouseLayer);
@@ -191,7 +227,6 @@ export default function DataSearchPage() {
 		const payload = {
 			keyword,
 			domain: domain || "",
-			assetType,
 			datasetType,
 			classification,
 			warehouseLayer,
@@ -214,7 +249,6 @@ export default function DataSearchPage() {
 			const saved = readStoredSearchForm();
 			setKeyword(saved.keyword);
 			setDomain(saved.domain);
-			setAssetType(saved.assetType);
 			setDatasetType(saved.datasetType);
 			setClassification(saved.classification);
 			setWarehouseLayer(saved.warehouseLayer);
@@ -234,7 +268,7 @@ export default function DataSearchPage() {
 			const saved = JSON.parse(raw);
 			setKeyword(typeof saved?.keyword === "string" ? saved.keyword : keyword);
 			setDomain(undefined);
-			setAssetType(typeof saved?.assetType === "string" && saved.assetType ? saved.assetType : "ALL");
+			setDatasetType(typeof saved?.assetType === "string" && saved.assetType ? saved.assetType : undefined);
 			setClassification(
 				typeof saved?.classification === "string" && saved.classification ? saved.classification : "ALL",
 			);
@@ -256,12 +290,20 @@ export default function DataSearchPage() {
 			assetKind: "ASSET",
 			domainId: item.domainId ? String(item.domainId) : undefined,
 			domain: item.domainName || undefined,
-			owner: item.owner || item.ownerDept || undefined,
+			owner: item.owner || undefined,
+			ownerDept: item.ownerDept || undefined,
 			assetType: item.assetType || item.grantAssetType || item.type || undefined,
 			assetKey: item.assetKey || item.fqn || undefined,
 			assetTags: Array.isArray(item.assetTags) ? item.assetTags : [],
 			classification: item.classification || undefined,
 			warehouseLayer: item.warehouseLayer || undefined,
+			description: item.description || undefined,
+			service: item.service || undefined,
+			governanceStatus: item.governanceStatus || undefined,
+			lifecycleStatus: item.lifecycleStatus || undefined,
+			matchStatus: item.matchStatus || undefined,
+			columnCount: Number.isFinite(Number(item.columnCount)) ? Number(item.columnCount) : undefined,
+			syncStatus: item.syncStatus || undefined,
 			source: item.metadataSource || "assets-v2",
 			updatedAt: item.lastSyncedAt || item.lastModifiedDate || item.createdDate || undefined,
 		}));
@@ -355,12 +397,7 @@ export default function DataSearchPage() {
 			setClassification(classificationParam);
 			merged = true;
 		}
-		const assetTypeParam = params.get("assetType");
-		if (assetTypeParam && assetTypeParam !== assetType) {
-			setAssetType(assetTypeParam);
-			merged = true;
-		}
-		const datasetTypeParam = params.get("datasetType");
+		const datasetTypeParam = params.get("datasetType") || params.get("assetType");
 		if (datasetTypeParam && datasetTypeParam !== datasetType) {
 			setDatasetType(datasetTypeParam);
 			merged = true;
@@ -382,7 +419,6 @@ export default function DataSearchPage() {
 		governanceFilter,
 		domain,
 		classification,
-		assetType,
 		datasetType,
 		unclassifiedFilter,
 		staleFilter,
@@ -390,14 +426,13 @@ export default function DataSearchPage() {
 	]);
 
 	// 与台账一致的 URL 回写：筛选选择后立即进入 URL（keyword 仍走本地缓存，避免每键重写）
-	const urlFilterKey = [domain || "ALL", assetType, datasetType, classification, warehouseLayer].join("\u0000");
+	const urlFilterKey = [domain || "ALL", datasetType, classification, warehouseLayer].join("\u0000");
 	// biome-ignore lint/correctness/useExhaustiveDependencies: 派生 key 聚合筛选状态，各状态已作为依赖
 	useEffect(() => {
 		const params = new URLSearchParams(searchParams);
 		if (domain && domain !== "ALL") params.set("domain", domain);
 		else params.delete("domain");
-		if (assetType && assetType !== "ALL") params.set("assetType", assetType);
-		else params.delete("assetType");
+		params.delete("assetType");
 		if (datasetType && datasetType !== "ALL") params.set("datasetType", datasetType);
 		else params.delete("datasetType");
 		if (classification && classification !== "ALL") params.set("classification", classification);
@@ -412,9 +447,14 @@ export default function DataSearchPage() {
 
 	return (
 		<div className="space-y-4">
-			<PageHeader title="数据资产门户 · 数据搜索" />
+			<div>
+				<PageHeader title="数据资产目录" />
+				<p className="mt-1 text-sm text-slate-500">
+					识别资产的业务归属、治理状态和技术来源，进入详情完成治理或申请使用。
+				</p>
+			</div>
 
-			<Card title="搜索条件">
+			<Card title="资产筛选">
 				{!ASSET_PORTAL_V2_ENABLED ? (
 					<Alert
 						className="mb-3"
@@ -433,7 +473,7 @@ export default function DataSearchPage() {
 						<Input.Search
 							id="catalog-search-keyword"
 							className="w-full"
-							placeholder="输入关键词"
+							placeholder="搜索资产名称、业务说明或技术标识"
 							value={keyword}
 							onChange={(event) => setKeyword(event.target.value)}
 							onSearch={() => void runSearch()}
@@ -483,25 +523,11 @@ export default function DataSearchPage() {
 						/>
 					</div>
 					<div className="min-w-0">
-						<label className={FILTER_LABEL_CLASS} htmlFor="catalog-search-asset-type">
-							资产类型
-						</label>
-						<Select
-							id="catalog-search-asset-type"
-							className="w-full"
-							allowClear
-							placeholder="请选择资产类型"
-							value={assetType}
-							onChange={(value) => setAssetType(value === "ALL" ? undefined : value)}
-							options={TYPE_OPTIONS}
-						/>
-					</div>
-					<div className="min-w-0">
-						<label className={FILTER_LABEL_CLASS} htmlFor="catalog-search-dataset-type">
+						<label className={FILTER_LABEL_CLASS} htmlFor="catalog-search-source-type">
 							数据源类型
 						</label>
 						<Select
-							id="catalog-search-dataset-type"
+							id="catalog-search-source-type"
 							className="w-full"
 							allowClear
 							placeholder="请选择数据源类型"
@@ -529,7 +555,7 @@ export default function DataSearchPage() {
 								{ type: "divider" },
 								{
 									key: "apply-ledger",
-									label: "应用台账筛选",
+									label: "应用资产清单筛选",
 									onClick: applyAssetFilters,
 								},
 							],
@@ -540,7 +566,7 @@ export default function DataSearchPage() {
 						</Button>
 					</Dropdown>
 					<Button type="primary" onClick={() => void runSearch()} loading={loading}>
-						搜索
+						筛选资产
 					</Button>
 				</div>
 			</Card>
@@ -548,7 +574,7 @@ export default function DataSearchPage() {
 			<Card
 				title={
 					<span className="flex flex-wrap items-center gap-3">
-						检索结果
+						资产目录
 						{searched ? (
 							<span className="text-xs font-normal text-slate-400">
 								共 {pageState.total} 条 · 第 {pageState.page} 页
@@ -562,8 +588,8 @@ export default function DataSearchPage() {
 							value={view}
 							onChange={(value) => setView(value as "card" | "table")}
 							options={[
-								{ label: "卡片", value: "card" },
-								{ label: "表格", value: "table" },
+								{ label: "资产名片", value: "card" },
+								{ label: "治理视图", value: "table" },
 							]}
 						/>
 					) : null
@@ -596,30 +622,83 @@ export default function DataSearchPage() {
 								onAssetChanged={() => void runSearch(pageState.page, pageState.size)}
 							/>
 						) : results.length ? (
-							<div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-								{results.map((row) => (
-									<Link
-										key={row.id}
-										to={`/catalog/datasets/${row.id}`}
-										className="cursor-pointer rounded-lg border border-slate-200 bg-white px-4 py-3 text-left transition-all hover:border-blue-300 hover:shadow-sm"
-									>
-										<div className="font-semibold text-sm text-slate-900">{row.name}</div>
-										<div className="mt-1 truncate font-mono text-xs text-slate-500">{row.assetKey || row.id}</div>
-										<div className="mt-2 flex flex-wrap gap-1">
-											<Tag style={{ fontSize: 10 }}>{row.type || "ASSET"}</Tag>
-											<Tag color={classificationTagColor(row.classification, "default")} style={{ fontSize: 10 }}>
-												{row.classification || "未定密"}
-											</Tag>
-											<Tag color={row.warehouseLayer ? "blue" : "default"} style={{ fontSize: 10 }}>
-												{row.warehouseLayer || "未分层"}
-											</Tag>
-											<Tag color="blue" style={{ fontSize: 10 }}>
-												{row.source || "assets-v2"}
-											</Tag>
-										</div>
-										<AssetTagChips tags={row.assetTags || []} variant="inline" />
-									</Link>
-								))}
+							<div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+								{results.map((row) => {
+									const readiness = resolveAssetReadiness(row);
+									const layer = LAYER_META[normalizeLayer(row.warehouseLayer)];
+									const domainName = row.domain || (row.domainId ? domainMap.get(row.domainId) : undefined);
+									const responsibility =
+										row.owner && row.ownerDept && row.owner !== row.ownerDept
+											? `${row.owner}（${row.ownerDept}）`
+											: row.owner || row.ownerDept || "待明确";
+									return (
+										<Link
+											key={row.id}
+											to={`/catalog/datasets/${row.id}`}
+											className="group cursor-pointer rounded-xl border border-slate-200 bg-white p-4 text-left transition-all hover:border-blue-300 hover:shadow-sm"
+										>
+											<div className="flex items-start justify-between gap-3">
+												<div className="min-w-0 flex-1">
+													<div className="flex flex-wrap items-center gap-2">
+														<DatabaseOutlined className="text-blue-500" />
+														<span className="truncate font-semibold text-slate-900 group-hover:text-blue-600">
+															{row.name}
+														</span>
+														<Tag>
+															{ASSET_KIND_LABELS[String(row.assetType || row.assetKind).toUpperCase()] || "数据资产"}
+														</Tag>
+													</div>
+													<div className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">
+														{row.description || "暂无业务说明"}
+													</div>
+												</div>
+												<Tag color={readiness.color}>{readiness.label}</Tag>
+											</div>
+
+											<div className="mt-3 grid grid-cols-1 gap-x-4 gap-y-2 rounded-lg bg-slate-50 px-3 py-2 text-xs sm:grid-cols-2">
+												<div className="min-w-0">
+													<span className="text-slate-400">主题域</span>
+													<div className="truncate font-medium text-slate-700">{domainName || "待归域"}</div>
+												</div>
+												<div className="min-w-0">
+													<span className="text-slate-400">责任归属</span>
+													<div className="truncate font-medium text-slate-700">{responsibility}</div>
+												</div>
+												<div className="min-w-0">
+													<span className="text-slate-400">数据分层</span>
+													<div className="truncate font-medium text-slate-700">
+														{layer.code ? `${layer.label}（${layer.code}）` : layer.label}
+													</div>
+												</div>
+												<div className="min-w-0">
+													<span className="text-slate-400">来源系统</span>
+													<div className="truncate font-medium text-slate-700">
+														{row.service || dataSourceTypeText(row.type)}
+													</div>
+												</div>
+											</div>
+
+											<div className="mt-3 flex flex-wrap items-center gap-1.5">
+												<Tag color={classificationTagColor(row.classification, "default")}>
+													密级：{classificationText(row.classification)}
+												</Tag>
+												<Tag color={row.governanceStatus === "GOVERNED" ? "green" : "gold"}>
+													治理状态：{resolveEnumLabel(GOVERNANCE_STATUS_DICT, row.governanceStatus)}
+												</Tag>
+												<Tag>{dataSourceTypeText(row.type)}</Tag>
+												{row.columnCount !== undefined ? <Tag>{row.columnCount} 个字段</Tag> : null}
+											</div>
+											<AssetTagChips tags={row.assetTags || []} variant="inline" />
+
+											<div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-slate-100 border-t pt-2 text-[11px] text-slate-400">
+												<span className="min-w-0 flex-1 truncate font-mono">{row.assetKey || row.id}</span>
+												<span className="shrink-0">
+													{metadataSourceText(row.source)} · 更新于 {formatTime(row.updatedAt)}
+												</span>
+											</div>
+										</Link>
+									);
+								})}
 							</div>
 						) : (
 							<EmptyState title="无匹配资产" description="调整关键词或筛选条件后重试。" />
