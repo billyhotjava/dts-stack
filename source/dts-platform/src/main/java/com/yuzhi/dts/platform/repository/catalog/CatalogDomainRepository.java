@@ -20,6 +20,8 @@ public interface CatalogDomainRepository extends JpaRepository<CatalogDomain, UU
 
     boolean existsByCodeIgnoreCase(String code);
 
+    boolean existsByParentId(UUID parentId);
+
     @Query("select d from CatalogDomain d where lower(d.code) in :codes")
     List<CatalogDomain> findByCodeLowerIn(@Param("codes") Collection<String> codes);
 

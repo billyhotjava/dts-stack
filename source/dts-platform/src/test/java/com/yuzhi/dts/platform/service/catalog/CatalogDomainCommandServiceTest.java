@@ -86,6 +86,24 @@ class CatalogDomainCommandServiceTest {
     }
 
     @Test
+    void deleteRejectsDomainWithChildrenWithoutDeleteOrSuccessAudit() {
+        UUID id = UUID.randomUUID();
+        CatalogDomain existing = domain(id, CatalogDomainAccessPolicy.PUBLIC);
+        when(domainRepository.findById(id)).thenReturn(Optional.of(existing));
+        when(domainRepository.existsByParentId(id)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.delete(id))
+            .isInstanceOfSatisfying(ResponseStatusException.class, exception -> {
+                assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+                assertThat(exception.getReason()).isEqualTo("Catalog domain has child domains and cannot be deleted");
+            });
+
+        verify(writeGuard).requireWriteAccess();
+        verify(domainRepository, never()).deleteById(id);
+        verify(auditService, never()).auditActionStrict("CATALOG_DOMAIN_DELETE", AuditStage.SUCCESS, id.toString(), null);
+    }
+
+    @Test
     void guardDenialStopsPersistenceBeforeAnyMutation() {
         doThrow(new ResponseStatusException(HttpStatus.FORBIDDEN, "denied"))
             .when(writeGuard)

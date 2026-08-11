@@ -84,6 +84,9 @@ public class CatalogDomainCommandService {
         writeGuard.requireWriteAccess();
         CatalogDomain domain = domainRepository.findById(id).orElseThrow();
         requireMaintainAccess(domain);
+        if (domainRepository.existsByParentId(id)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Catalog domain has child domains and cannot be deleted");
+        }
         domainRepository.deleteById(id);
         auditService.auditActionStrict("CATALOG_DOMAIN_DELETE", AuditStage.SUCCESS, id.toString(), null);
     }
