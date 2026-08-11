@@ -290,8 +290,8 @@ class CatalogAssetPortalTagFilterTest {
         when(extensionRepository.findFirstByOmAsset(mapped)).thenReturn(Optional.of(enabledExtension()));
         when(mappingRepository.findFirstByFqnIgnoreCase(mapped.getFqn())).thenReturn(Optional.of(mapping));
         when(datasetRepository.findById(mappedLegacy.getId())).thenReturn(Optional.of(mappedLegacy));
-        when(accessChecker.canRead(mappedLegacy)).thenReturn(true);
-        when(accessChecker.departmentAllowed(mappedLegacy, "D01")).thenReturn(true);
+        when(accessChecker.canRead(any(CatalogDataset.class))).thenReturn(true);
+        when(accessChecker.departmentAllowed(any(CatalogDataset.class), org.mockito.ArgumentMatchers.eq("D01"))).thenReturn(true);
         when(columnRepository.findByAssetOrderByOrdinalPositionAsc(mapped)).thenReturn(List.of());
         when(assetTagService.listAssetTags(List.of(ref))).thenReturn(Map.of(ref, List.of(tag)));
 

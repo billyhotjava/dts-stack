@@ -68,6 +68,7 @@ const toDatasetFromAssetV2Detail = (id: string, detail: any) => {
 		schema: asset.schema,
 		columnCount: asset.columnCount,
 		securityPolicyRefs: asset.securityPolicyRefs,
+		metadataSource: asset.metadataSource,
 		__fqn: asset.fqn,
 		__legacyDatasetId: asset.legacyDatasetId,
 		__columns: Array.isArray(detail?.columns) ? detail.columns : [],
@@ -172,11 +173,11 @@ export default function DatasetDetailPage() {
 				<Alert
 					type="info"
 					showIcon
-					message="该资产仅存在于旧版数据目录，尚未映射为治理资产。"
-					description="Tab 渲染统一以治理资产（assets-v2）为事实源；可前往资产台账查看映射后的资产，或联系数据管理员完成映射。"
+					message="该资产暂时无法打开治理详情。"
+					description="请返回数据搜索重新选择；如仍无法打开，请联系数据管理员检查资产同步状态。"
 				/>
-				<Button type="primary" onClick={() => router.push("/catalog/assets")}>
-					前往资产台账
+				<Button type="primary" onClick={() => router.push("/catalog/search")}>
+					返回数据搜索
 				</Button>
 			</div>
 		);
@@ -216,7 +217,7 @@ export default function DatasetDetailPage() {
 					<Button type="text" onClick={() => router.back()}>
 						← 返回
 					</Button>
-					<div className="min-w-0 flex-1">
+					<div className="min-w-48 flex-1">
 						<div className="text-xs text-slate-500">企业级资产工作台</div>
 						<h2 className="truncate text-xl font-bold text-slate-900">{dataset.name ?? "-"}</h2>
 					</div>
@@ -250,7 +251,7 @@ export default function DatasetDetailPage() {
 						密级与生命周期
 					</Button>
 				</div>
-				<div className="grid gap-3 md:grid-cols-4">
+				<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
 					<div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
 						<div className="text-xs text-slate-500">授权资产</div>
 						<div className="mt-1 truncate font-mono text-xs text-slate-800">

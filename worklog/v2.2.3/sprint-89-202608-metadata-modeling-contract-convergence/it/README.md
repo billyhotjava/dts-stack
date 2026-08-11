@@ -21,6 +21,13 @@
 - 前端：`modelingImportContextService.sprint89.test.ts` 1/1 通过；`pnpm build` 成功。
 - 本轮无数据库 migration；旧三参数来源读取和未分页客户端兼容行为有自动化断言。未执行部署或真实浏览器操作。
 
+## 补充自动化证据（2026-08-11：旧目录资产治理）
+
+- 后端：`CatalogAssetPortalServicePermissionParityTest,CatalogAssetPortalTagFilterTest` 共 28 tests，0 failures/errors/skipped；覆盖普通可读旧资产、拒绝越权读取、未分类旧资产治理入口、最小详情防泄露、映射资产权限和标签身份。
+- 前端：`DatasetDetailPage.source-contract.test.ts` 10/10 通过；`pnpm build`（`LEGACY_BROWSER_BUILD=1`）成功。
+- 本地 mock-API 浏览器冒烟：`/catalog/datasets/{legacyId}` 在 1366×768 和 768×900 均可打开统一详情并进入“治理责任”；保存请求命中 `PATCH /api/catalog/assets-v2/{legacyId}/governance`；窄屏标题宽 227px、状态卡宽 200px、无横向溢出；console/page/request failure 均为 0。
+- 截图生成于本地临时目录：`/tmp/sprint89-legacy-asset-detail-1366x768.png`、`/tmp/sprint89-legacy-asset-governance-768x900.png`。该证据使用本机构建和测试拦截数据，不替代部署环境、真实账号、真实旧资产或现场 Chrome 95 验收。
+
 ## IT-03 测试矩阵
 
 | 变化 | 预期级别 | 预期门禁 |

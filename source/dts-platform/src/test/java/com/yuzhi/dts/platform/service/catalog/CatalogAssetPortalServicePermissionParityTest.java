@@ -266,6 +266,30 @@ class CatalogAssetPortalServicePermissionParityTest {
     }
 
     @Test
+    void legacyAssetDetailDoesNotBypassConsumerPermission() {
+        UUID datasetId = UUID.fromString("2c2c2c2c-2c2c-2c2c-2c2c-2c2c2c2c2c2c");
+        CatalogDataset legacy = new CatalogDataset();
+        legacy.setId(datasetId);
+        legacy.setName("Restricted legacy orders");
+        legacy.setHiveDatabase("dwd");
+        legacy.setHiveTable("restricted_orders");
+        legacy.setEnabled(Boolean.TRUE);
+        legacy.setClassification("DATA_SECRET");
+        legacy.setOwnerDept("D02");
+        when(assetRepository.findById(datasetId)).thenReturn(Optional.empty());
+        when(datasetRepository.findById(datasetId)).thenReturn(Optional.of(legacy));
+        when(accessChecker.canRead(legacy)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.getAsset(datasetId, "D01"))
+            .isInstanceOfSatisfying(
+                ResponseStatusException.class,
+                ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND)
+            );
+
+        verifyNoInteractions(assetTagService, columnRepository);
+    }
+
+    @Test
     void governanceMaintainerGetsMinimalLegacyDetailBeforeClassification() {
         authenticate(AuthoritiesConstants.DEPT_DATA_OWNER, "D01");
         UUID datasetId = UUID.fromString("2b2b2b2b-2b2b-2b2b-2b2b-2b2b2b2b2b2b");

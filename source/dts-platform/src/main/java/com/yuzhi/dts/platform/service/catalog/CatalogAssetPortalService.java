@@ -519,9 +519,22 @@ public class CatalogAssetPortalService {
     }
 
     public AssetDetail getAsset(UUID id, String activeDept) {
-        OpenMetadataAssetCache asset = assetRepository
-            .findById(id)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "资产不存在"));
+        Optional<OpenMetadataAssetCache> assetOptional = assetRepository.findById(id);
+        if (assetOptional.isEmpty()) {
+            CatalogDataset legacy = datasetRepository
+                .findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "资产不存在"));
+            boolean consumerReadable = canRead(null, legacy, activeDept);
+            if (
+                !consumerReadable &&
+                (!isCatalogMaintainer() || !isVisible(null, legacy, activeDept, VisibilityScope.GOVERNANCE_INTAKE))
+            ) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "资产不存在或无权访问");
+            }
+            AssetSummary summary = hydrateAssetTags(List.of(toLegacySummary(legacy))).get(0);
+            return new AssetDetail(summary, List.of(), null, null);
+        }
+        OpenMetadataAssetCache asset = assetOptional.orElseThrow();
         CatalogAssetExtension extension = extensionRepository.findFirstByOmAsset(asset).orElse(null);
         CatalogAssetMapping mapping = mappingRepository.findFirstByFqnIgnoreCase(asset.getFqn()).orElse(null);
         CatalogDataset legacy = resolveContractLegacy(extension, mapping);

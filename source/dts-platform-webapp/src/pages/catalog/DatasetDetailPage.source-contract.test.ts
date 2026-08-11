@@ -23,7 +23,10 @@ test("dataset detail page consumes assets-v2 as the single source of truth", () 
 
 test("dataset detail page keeps asset identity separate from business description", () => {
 	assert.match(SOURCE, /__fqn: asset\.fqn/);
-	assert.match(SOURCE, /metadataSource: asset\.metadataSource/);
+	assert.match(
+		SOURCE,
+		/securityPolicyRefs: asset\.securityPolicyRefs,\s+metadataSource: asset\.metadataSource,\s+__fqn: asset\.fqn/,
+	);
 	assert.match(SOURCE, /const assetKey = String\(assetContract\?\.assetKey \|\| ""\)\.trim\(\)/);
 	assert.doesNotMatch(SOURCE, /assetContract\?\.assetKey \|\| dataset\.description \|\| "-"/);
 });
@@ -89,4 +92,10 @@ test("dataset detail visibly separates business, technical and security tags", (
 
 test("dataset detail page remains within the repository file-size convention", () => {
 	assert.ok(SOURCE.split(/\r?\n/).length - 1 <= 800, "DatasetDetailPage.tsx must stay at or below 800 lines");
+});
+
+test("dataset detail header remains readable inside a narrow content shell", () => {
+	assert.match(SOURCE, /className="min-w-48 flex-1"/);
+	assert.match(SOURCE, /className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"/);
+	assert.doesNotMatch(SOURCE, /className="grid gap-3 md:grid-cols-4"/);
 });
