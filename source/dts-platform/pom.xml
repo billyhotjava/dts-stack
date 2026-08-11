@@ -662,6 +662,7 @@
                         <testInclude>**/service/modeling/ModelPublicationReviewReconcilerTest.java</testInclude>
                         <testInclude>**/service/modeling/ReleaseDutyResolverTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelReleaseCandidateCancelLiquibaseTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelReleaseCandidateImplementationSnapshotLiquibaseTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelReleaseCandidateReplacementLiquibaseTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelReleaseCandidateServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelingDbtCompilerTest.java</testInclude>
