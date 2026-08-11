@@ -104,10 +104,10 @@ test.describe("Sprint-89 data asset directory mock-API acceptance", () => {
 		await page.goto("/#/catalog/search");
 		await expect(page.getByRole("heading", { name: "数据资产目录" })).toBeVisible();
 		await expect(page.getByPlaceholder("搜索资产名称、业务说明或技术标识")).toHaveValue("");
-		await expect(page.getByText("资产名称", { exact: true })).toBeVisible();
-		await expect(page.getByText("数据源类型", { exact: true })).toBeVisible();
-		await expect(page.getByText("来源系统", { exact: true })).toBeVisible();
-		await expect(page.getByText("主题域", { exact: true })).toBeVisible();
+		await expect(page.getByRole("columnheader", { name: "资产名称" })).toBeVisible();
+		await expect(page.getByRole("columnheader", { name: "数据源类型" })).toBeVisible();
+		await expect(page.getByRole("columnheader", { name: "来源系统" })).toBeVisible();
+		await expect(page.getByRole("columnheader", { name: "主题域" })).toBeVisible();
 		await expect(page.getByText("项目任务快照", { exact: true })).toBeVisible();
 		await expect(page.getByText("项目任务每日状态快照", { exact: true })).toBeVisible();
 		await expect(page.getByText("项目管理域", { exact: true }).last()).toBeVisible();
@@ -117,9 +117,6 @@ test.describe("Sprint-89 data asset directory mock-API acceptance", () => {
 		await expect(page.locator("body")).not.toContainText("治理视图");
 		await expect(page.getByRole("button", { name: "治理资产" })).toHaveCount(0);
 		await expect(page.getByRole("button", { name: "申请权限" })).toHaveCount(0);
-
-		await page.getByRole("checkbox").nth(1).check();
-		await expect(page.getByRole("button", { name: "归域选中资产（1）" })).toBeEnabled();
 		await page.screenshot({ path: "/tmp/sprint89-data-asset-directory-1366x768.png", fullPage: true });
 
 		await page.setViewportSize({ width: 768, height: 900 });
@@ -134,6 +131,10 @@ test.describe("Sprint-89 data asset directory mock-API acceptance", () => {
 		expect(errors.pageErrors).toEqual([]);
 		expect(errors.requestFailures).toEqual([]);
 
+		await page.getByRole("combobox", { name: "批量归域目标主题域" }).click();
+		await page.getByText("项目管理域", { exact: true }).last().click();
+		await page.getByRole("checkbox").nth(1).check();
+		await expect(page.getByRole("button", { name: "归域选中资产（1）" })).toBeEnabled();
 		await page.getByText("项目任务快照", { exact: true }).click();
 		await expect(page).toHaveURL(/#\/catalog\/datasets\/asset-1$/);
 	});

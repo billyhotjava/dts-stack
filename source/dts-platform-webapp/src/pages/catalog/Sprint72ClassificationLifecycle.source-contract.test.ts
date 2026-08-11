@@ -18,16 +18,17 @@ const SCREEN_SOURCE = readFileSync(
 );
 const API = readFileSync(new URL("../../api/platformApi.ts", import.meta.url), "utf8");
 
-test("Sprint-72 asset ledger explains immutable classification facts separately from tags", () => {
-	for (const label of ["有效密级", "最高来源", "待封存", "密级与生命周期"]) {
-		assert.match(LEDGER, new RegExp(label));
-	}
+test("Sprint-72 keeps immutable classification facts in asset detail instead of the directory table", () => {
 	for (const label of ["来源声明", "识别结果", "人工下限", "字段有效密级", "继承来源"]) {
 		assert.match(FACTS, new RegExp(label));
 	}
 	assert.match(FACTS, /数据标签与合规密级相互独立/);
 	assert.doesNotMatch(FACTS, /降低密级|降密原因/);
-	assert.match(SEARCH, /view === "table"/);
+	assert.match(DATASET_DETAIL, /AssetClassificationFactPanel/);
+	assert.match(DATASET_DETAIL, /AssetLifecycleWorkbenchDrawer/);
+	assert.match(LEDGER, /title: "密级"/);
+	assert.doesNotMatch(LEDGER, /getCatalogClassificationFacts|有效密级|最高来源|待封存/);
+	assert.doesNotMatch(SEARCH, /view === "table"|Segmented/);
 	assert.match(SEARCH, /records=\{assetRows\}/);
 });
 

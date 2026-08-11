@@ -2,8 +2,6 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-// Sprint-57 F4 拆分：表格布局常量移入共享层
-const ASSET_PAGE_SHARED = readFileSync(new URL("./assets/assetPageShared.tsx", import.meta.url), "utf8");
 const ASSET_LEDGER_VIEW = readFileSync(new URL("./assets/AssetLedgerView.tsx", import.meta.url), "utf8");
 const DATA_PRODUCTS_SOURCE = readFileSync(new URL("./DataProductsPage.tsx", import.meta.url), "utf8");
 const WORKBENCH_SOURCE = readFileSync(new URL("../workbench/index.tsx", import.meta.url), "utf8");
@@ -20,17 +18,11 @@ const DYNAMIC_RESOLVER = readFileSync(
 	"utf8",
 );
 
-test("Sprint-49 F2 keeps asset ledger table stable while exposing the consumption chain", () => {
-	assert.match(ASSET_PAGE_SHARED, /const ASSET_TABLE_SCROLL_X = 1440/);
-	assert.match(ASSET_PAGE_SHARED, /const ASSET_ACTION_COLUMN_WIDTH = 320/);
-	assert.match(ASSET_LEDGER_VIEW, /tableLayout="fixed"/);
+test("Sprint-49 F2 keeps the asset table stable and delegates consumption to detail", () => {
+	assert.match(ASSET_LEDGER_VIEW, /<CompactTable<AssetDirectoryRow>/);
 	assert.match(ASSET_LEDGER_VIEW, /className="catalog-assets-table"/);
-	assert.match(ASSET_LEDGER_VIEW, /className="catalog-assets-actions"/);
-	assert.match(ASSET_LEDGER_VIEW, /width: ASSET_ACTION_COLUMN_WIDTH/);
-	assert.match(ASSET_LEDGER_VIEW, /Dropdown/);
-	assert.match(ASSET_LEDGER_VIEW, /更多/);
-	assert.match(ASSET_LEDGER_VIEW, /router\.push\(`\/catalog\/data-products\?assetId=\$\{row\.id\}`\)/);
-	assert.match(ASSET_LEDGER_VIEW, /router\.push\(`\/services\/apis\?assetId=\$\{row\.id\}`\)/);
+	assert.match(ASSET_LEDGER_VIEW, /router\.push\(`\/catalog\/datasets\/\$\{row\.id\}`\)/);
+	assert.doesNotMatch(ASSET_LEDGER_VIEW, /Dropdown|更多|catalog\/data-products\?assetId|services\/apis\?assetId/);
 });
 
 test("Sprint-49 F2 data products always have an enterprise consumption handoff", () => {

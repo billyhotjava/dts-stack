@@ -28,12 +28,12 @@
 - 本地 mock-API 浏览器冒烟：`/catalog/datasets/{legacyId}` 在 1366×768 和 768×900 均可打开统一详情并进入“治理责任”；保存请求命中 `PATCH /api/catalog/assets-v2/{legacyId}/governance`；窄屏标题宽 227px、状态卡宽 200px、无横向溢出；console/page/request failure 均为 0。
 - 截图生成于本地临时目录：`/tmp/sprint89-legacy-asset-detail-1366x768.png`、`/tmp/sprint89-legacy-asset-governance-768x900.png`。该证据使用本机构建和测试拦截数据，不替代部署环境、真实账号、真实旧资产或现场 Chrome 95 验收。
 
-## 补充自动化证据（2026-08-12：数据资产目录表达）
+## 补充自动化证据（2026-08-12：数据资产目录简化重构）
 
-- 页面组件测试 `DataSearchPage.test.tsx` 3/3 通过；数据源、默认全量、深链、目录命名和资产特征展示契约 13/13 通过。
+- 页面组件与辅助函数测试 12/12 通过；目录职责、历史入口兼容、表格分页、批量动作、详情跳转和移除行内工作台的聚焦契约 18/18 通过。
 - `LEGACY_BROWSER_BUILD=1 pnpm build` 成功，完成 TypeScript 检查并生成兼容构建；既有动态/静态混合导入、caniuse 数据陈旧和大分块告警仍存在，本次未新增构建错误。
-- 本地 mock-API Playwright 冒烟 1/1 通过：`/catalog/search` 在 1366×768 与 768×900 均展示业务说明、主题域、责任归属、分层、密级、治理状态、来源和字段数；不显示 `dts-catalog`、`CONFIDENTIAL` 等内部值；窄屏无页面级横向溢出，console/page/request failure 和未处理 API 路径均为 0。
-- 截图：`/tmp/sprint89-data-asset-directory-1366x768.png`、`/tmp/sprint89-data-asset-directory-768x900.png`。该证据基于本机构建、系统 Chrome 和拦截数据，不替代菜单种子部署、真实账号/资产或现场 Chrome 95 验收。
+- 本地 mock-API Playwright 冒烟 1/1 通过：`/catalog/search` 默认以空筛选加载全部可见资产，仅保留紧凑搜索模块、可勾选 `CompactTable`、批量归域/标签关联与分页；无资产名片、治理指标、统计投影、行内治理/权限动作和抽屉工作台。选择批量归域目标与资产后动作可用，点击资产名称进入 `/catalog/datasets/{id}`。
+- 1366×768 与 768×900 均无页面级横向溢出，筛选控件不越界，console/page/request failure 和未处理 API 路径均为 0。截图：`/tmp/sprint89-data-asset-directory-1366x768.png`、`/tmp/sprint89-data-asset-directory-768x900.png`。该证据基于本机构建、系统 Chrome 和拦截数据，不替代部署环境、真实账号/资产或现场 Chrome 95 验收。
 
 ## IT-03 测试矩阵
 

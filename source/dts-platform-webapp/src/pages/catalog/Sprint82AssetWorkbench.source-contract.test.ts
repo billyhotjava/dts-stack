@@ -10,22 +10,17 @@ const TAG_MANAGEMENT = readFileSync(
 	"utf8",
 );
 
-test("Sprint-82 keeps the map summary-only and makes the ledger the tag workspace owner", () => {
+test("Sprint-82 keeps the map summary-only and makes the directory the tag workspace owner", () => {
 	assert.doesNotMatch(MAP, /TagManagementTab/);
 	assert.match(SEARCH_PAGE, /AssetTagsWorkspace/);
-	assert.match(SEARCH_PAGE, /tab.*catalog-tags/);
-	assert.match(SEARCH_PAGE, /标签工作台/);
+	assert.match(SEARCH_PAGE, /searchParams\.get\("tab"\) === "catalog-tags"/);
+	assert.match(SEARCH_PAGE, /return <AssetTagsWorkspace \/>/);
 });
 
-test("Sprint-82 keeps the ledger action column to the governance entry plus one navigation action", () => {
-	assert.match(LEDGER_VIEW, /AssetGovernanceWorkbenchDrawer/);
-	// C4：行级治理入口带图标，仍保持主按钮语义
-	assert.match(LEDGER_VIEW, /icon=\{<ToolOutlined \/>\}[\s\S]*?\s*治理资产/);
-	// Sprint-85 ADR-85-06 允许行级「申请权限」作为唯一导航型操作；仍禁止入口泛滥
-	assert.match(LEDGER_VIEW, />\s*申请权限\s*</);
-	assert.doesNotMatch(LEDGER_VIEW, />\s*详情\s*</);
-	assert.doesNotMatch(LEDGER_VIEW, />\s*更多\s*</);
-	assert.doesNotMatch(LEDGER_VIEW, /创建报表|生成数据产品|发布数据 API/);
+test("Sprint-82 removes row actions and uses the asset detail as the single workbench", () => {
+	assert.match(LEDGER_VIEW, /router\.push\(`\/catalog\/datasets\/\$\{row\.id\}`\)/);
+	assert.doesNotMatch(LEDGER_VIEW, /AssetGovernanceWorkbenchDrawer|ToolOutlined|title: "操作"/);
+	assert.doesNotMatch(LEDGER_VIEW, />\s*(治理资产|申请权限|详情|更多|创建报表|生成数据产品|发布数据 API)\s*</);
 });
 
 test("Sprint-82 exposes discoverable tag-to-asset journeys", () => {

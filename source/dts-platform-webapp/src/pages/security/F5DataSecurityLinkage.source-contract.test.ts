@@ -4,10 +4,14 @@ import test from "node:test";
 
 const SECURITY_SOURCE = readFileSync(new URL("./data-security.tsx", import.meta.url), "utf8");
 const ASSET_LEDGER_SOURCE = readFileSync(new URL("../catalog/assets/AssetLedgerView.tsx", import.meta.url), "utf8");
+const ASSET_DETAIL_SOURCE = readFileSync(new URL("../catalog/DatasetDetailPage.tsx", import.meta.url), "utf8");
 
-test("F5-T04 asset ledger links directly into dataset security binding", () => {
-	assert.match(ASSET_LEDGER_SOURCE, /\/security\/data-security\?tab=datasetSecurity&datasetId=\$\{row\.id\}/);
-	assert.match(ASSET_LEDGER_SOURCE, /分级分类|密级/);
+test("F5-T04 asset directory delegates security work to asset detail", () => {
+	assert.match(ASSET_LEDGER_SOURCE, /router\.push\(`\/catalog\/datasets\/\$\{row\.id\}`\)/);
+	assert.doesNotMatch(ASSET_LEDGER_SOURCE, /\/security\/data-security\?tab=datasetSecurity/);
+	assert.match(ASSET_DETAIL_SOURCE, /label: "密级事实"/);
+	assert.match(ASSET_DETAIL_SOURCE, /label: "权限申请"/);
+	assert.match(ASSET_DETAIL_SOURCE, /buildAssetGrantUrl/);
 });
 
 test("F5-T04 data-security page is deep-linkable to dataset security binding tab", () => {

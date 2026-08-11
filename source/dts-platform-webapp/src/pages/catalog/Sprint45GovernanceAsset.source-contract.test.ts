@@ -4,11 +4,8 @@ import test from "node:test";
 
 const GOVERNANCE_SOURCE = readFileSync(new URL("../governance/GovernanceCenterPage.tsx", import.meta.url), "utf8");
 const ASSETS_SOURCE = readFileSync(new URL("./DataSearchPage.tsx", import.meta.url), "utf8");
-// Sprint-57 F4 拆分：台账/地图视图组件化，行级动作断言并入组合源
-const ASSETS_COMBINED =
-	ASSETS_SOURCE +
-	readFileSync(new URL("./assets/AssetLedgerView.tsx", import.meta.url), "utf8") +
-	readFileSync(new URL("./AssetOverviewPage.tsx", import.meta.url), "utf8");
+const ASSET_TABLE_SOURCE = readFileSync(new URL("./assets/AssetLedgerView.tsx", import.meta.url), "utf8");
+const ASSET_DETAIL_SOURCE = readFileSync(new URL("./DatasetDetailPage.tsx", import.meta.url), "utf8");
 const PRODUCTS_SOURCE = readFileSync(new URL("./DataProductsPage.tsx", import.meta.url), "utf8");
 const APPROVAL_SOURCE = readFileSync(new URL("../security/DatasetAccessApprovalPage.tsx", import.meta.url), "utf8");
 const SECURITY_SOURCE = readFileSync(new URL("../security/data-security.tsx", import.meta.url), "utf8");
@@ -32,18 +29,15 @@ test("Sprint-45 governance center is a release-gate command page", () => {
 	assert.match(GOVERNANCE_SOURCE, /getGovernanceReleaseGate/);
 });
 
-test("Sprint-45 asset portal exposes consumption and governance actions per asset", () => {
-	for (const label of ["申请权限", "查看血缘", "创建报表", "生成数据产品", "发布数据 API", "处置缺口", "治理状态"]) {
-		assert.match(ASSETS_COMBINED, new RegExp(label));
+test("Sprint-45 asset directory delegates per-asset governance to the detail page", () => {
+	assert.match(ASSETS_SOURCE, /<AssetLedgerView/);
+	assert.match(ASSET_TABLE_SOURCE, /router\.push\(`\/catalog\/datasets\/\$\{row\.id\}`\)/);
+	assert.doesNotMatch(ASSET_TABLE_SOURCE, /title: "操作"|治理资产|申请权限/);
+	for (const label of ["治理责任", "质量与SLA", "血缘与影响", "权限申请", "密级与生命周期", "治理状态"]) {
+		assert.match(ASSET_DETAIL_SOURCE, new RegExp(label));
 	}
-	for (const route of [
-		"/security/dataset-access-approval",
-		"/bi/dashboards",
-		"/catalog/data-products",
-		"/services/apis",
-	]) {
-		assert.match(ASSETS_COMBINED, new RegExp(route));
-	}
+	assert.match(ASSET_DETAIL_SOURCE, /buildAssetGrantUrl/);
+	assert.match(ASSET_DETAIL_SOURCE, /AssetLifecycleWorkbenchDrawer/);
 });
 
 test("Sprint-45 catalog data product page owns the customer lifecycle wording", () => {

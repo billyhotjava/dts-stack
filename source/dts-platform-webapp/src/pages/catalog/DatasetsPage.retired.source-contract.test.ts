@@ -32,9 +32,10 @@ test("the ledger menu entry is removed from the portal seed", () => {
 	assert.doesNotMatch(MENU_SEED, /"title": "资产台账"/);
 });
 
-test("the search page hosts the ledger table view with governance actions", () => {
+test("the search page hosts one paginated asset directory table", () => {
 	assert.match(SEARCH, /<AssetLedgerView/);
 	assert.match(SEARCH, /records=\{assetRows\}/);
-	assert.match(SEARCH, /view === "table"/);
-	assert.match(SEARCH, /onAssetChanged=\{\(\) => void runSearch\(pageState\.page, pageState\.size\)\}/);
+	assert.match(SEARCH, /loading=\{loading\}/);
+	assert.match(SEARCH, /onAssetChanged=\{\(\) => void loadAssets\(urlFilters, pageState\.page, pageState\.size\)\}/);
+	assert.doesNotMatch(SEARCH, /view === "table"|Segmented|治理视图/);
 });
