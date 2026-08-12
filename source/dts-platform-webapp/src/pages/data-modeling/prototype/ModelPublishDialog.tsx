@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+	approveReleaseCandidateReview,
 	cancelReleaseCandidate,
 	compileModelLifecycle,
 	createReleaseCandidate,
@@ -9,12 +10,18 @@ import {
 	lockReleaseCandidate,
 	publishReleaseCandidate,
 	type ReleaseCandidateEntryEvidence,
+	type ReleaseCandidateLifecycleAction,
 	type ReleaseCandidateWorkbench,
 	refreshReleaseCandidate,
+	rejectReleaseCandidateReview,
 	rematerializeReleaseCandidate,
 	retryReleaseCandidate,
+	retryReleaseCandidateRegistration,
+	rollbackReleaseCandidate,
+	runReleaseCandidateQuality,
 	startModelBuildIntent,
 	startModelPublicationIntent,
+	submitReleaseCandidateReview,
 } from "@/api/modelSpecApi";
 import { type CompactColumns, CompactTable } from "@/components/table";
 import type { CanonicalModelSpecView, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
@@ -23,6 +30,31 @@ import { normalizeModelingRequestFailure } from "./services/planningProjectionSe
 
 const MAX_MATERIALIZATION_MODELS = 100;
 const COMPILE_CONCURRENCY = 5;
+
+type ReleaseWorkflowAction = Extract<
+	ReleaseCandidateLifecycleAction,
+	"RUN_QUALITY" | "SUBMIT_REVIEW" | "APPROVE" | "REJECT" | "PUBLISH" | "RETRY_REGISTRATION" | "ROLLBACK"
+>;
+
+const RELEASE_WORKFLOW_ACTIONS: ReleaseWorkflowAction[] = [
+	"RUN_QUALITY",
+	"SUBMIT_REVIEW",
+	"APPROVE",
+	"REJECT",
+	"PUBLISH",
+	"RETRY_REGISTRATION",
+	"ROLLBACK",
+];
+
+const RELEASE_ACTION_LABELS: Record<ReleaseWorkflowAction, string> = {
+	RUN_QUALITY: "提交上线",
+	SUBMIT_REVIEW: "提交发布评审",
+	APPROVE: "审核通过",
+	REJECT: "驳回",
+	PUBLISH: "发布上线",
+	RETRY_REGISTRATION: "重试发布登记",
+	ROLLBACK: "回滚发布",
+};
 
 const canonical = (model: ModelSpecView): model is CanonicalModelSpecView =>
 	model.compatibilityMode === "CANONICAL" && model.contractVersion === 2;
@@ -63,7 +95,8 @@ export function ModelPublishDialog({
 	const [environment, setEnvironment] = useState("dev");
 	const [reason, setReason] = useState("从模型工作台发布");
 	const [workspace, setWorkspace] = useState<ReleaseCandidateWorkbench | null>(null);
-	const [busy, setBusy] = useState<"load" | "build" | "publish" | "">("load");
+	const [busy, setBusy] = useState<"load" | "build" | "release" | "">("load");
+	const [activeReleaseAction, setActiveReleaseAction] = useState<ReleaseWorkflowAction | null>(null);
 	const [failure, setFailure] = useState<string>("");
 	const selection = useMemo(() => Array.from(new Map(models.map((model) => [model.id, model])).values()), [models]);
 	const selectedIds = useMemo(() => new Set(selection.map((model) => model.id)), [selection]);
@@ -121,8 +154,8 @@ export function ModelPublishDialog({
 								? "START_BUILD"
 								: null;
 	const canBuild = Boolean(!selectionProblem && buildAction);
-	const canPublish = Boolean(
-		!batch && primary && candidateScopeMatches && workspace?.allowedActions.includes("PUBLISH"),
+	const releaseActions = RELEASE_WORKFLOW_ACTIONS.filter(
+		(action) => candidateScopeMatches && workspace?.allowedActions.includes(action),
 	);
 	const entries = selection.map((model, sortOrder) => ({
 		modelSpecId: model.id,
@@ -185,20 +218,34 @@ export function ModelPublishDialog({
 			setBusy("");
 		}
 	};
-	const publish = async () => {
-		if (!primary || !canonical(primary) || !candidate || !canMaintain || !canPublish) return;
-		setBusy("publish");
+	const runReleaseAction = async (action: ReleaseWorkflowAction) => {
+		if (!primary || !canonical(primary) || !candidate || !releaseActions.includes(action)) return;
+		setBusy("release");
+		setActiveReleaseAction(action);
 		setFailure("");
 		try {
 			const publishReason = reason.trim() || "从模型工作台发布";
-			if (candidate.origin === "BATCH_WORKBENCH")
-				await publishReleaseCandidate(planId, candidate, crypto.randomUUID(), publishReason);
-			else await startModelPublicationIntent(primary.id, candidate, crypto.randomUUID(), publishReason);
+			const idempotencyKey = crypto.randomUUID();
+			if (action === "RUN_QUALITY" && candidate.origin === "SINGLE_MODEL_INTENT")
+				await startModelPublicationIntent(primary.id, candidate, idempotencyKey, publishReason);
+			else if (action === "RUN_QUALITY")
+				await runReleaseCandidateQuality(planId, candidate, idempotencyKey, publishReason);
+			else if (action === "SUBMIT_REVIEW")
+				await submitReleaseCandidateReview(planId, candidate, idempotencyKey, publishReason);
+			else if (action === "APPROVE")
+				await approveReleaseCandidateReview(planId, candidate, idempotencyKey, publishReason);
+			else if (action === "REJECT")
+				await rejectReleaseCandidateReview(planId, candidate, idempotencyKey, publishReason);
+			else if (action === "PUBLISH") await publishReleaseCandidate(planId, candidate, idempotencyKey, publishReason);
+			else if (action === "RETRY_REGISTRATION")
+				await retryReleaseCandidateRegistration(planId, candidate, idempotencyKey, publishReason);
+			else await rollbackReleaseCandidate(planId, candidate, idempotencyKey, publishReason);
 			await load();
 		} catch (error) {
-			setFailure(normalizeModelingRequestFailure(error, "发布意图未能启动。").message);
+			setFailure(normalizeModelingRequestFailure(error, `${RELEASE_ACTION_LABELS[action]}未能完成。`).message);
 		} finally {
 			setBusy("");
+			setActiveReleaseAction(null);
 		}
 	};
 	const evidenceColumns = useMemo<CompactColumns<ReleaseCandidateEntryEvidence>>(
@@ -223,18 +270,20 @@ export function ModelPublishDialog({
 	return (
 		<Modal onClose={onClose} title={batch ? "批量物化" : "发布与物化"} wide>
 			{!canMaintain ? (
-				<RequestState description="当前账号只有查看权限，不能启动构建或发布。" kind="permission" title="无发布权限" />
+				<RequestState
+					description="当前账号不能维护模型或创建物化候选；若服务端已授予发布职责，仍可执行下方开放的评审与发布动作。"
+					kind="permission"
+					title="模型维护受限"
+				/>
 			) : null}
 			<div className="dmx-publish-grid">
 				<nav>
 					<button className={tab === "materialize" ? "active" : ""} onClick={() => setTab("materialize")} type="button">
 						{batch ? "批量物化" : "生成物化任务"}
 					</button>
-					{batch ? null : (
-						<button className={tab === "publish" ? "active" : ""} onClick={() => setTab("publish")} type="button">
-							发布模型
-						</button>
-					)}
+					<button className={tab === "publish" ? "active" : ""} onClick={() => setTab("publish")} type="button">
+						{batch ? "批量发布流程" : "发布模型"}
+					</button>
 				</nav>
 				<section>
 					{failure ? (
@@ -312,10 +361,12 @@ export function ModelPublishDialog({
 						</>
 					) : (
 						<>
-							<h3>发布模型</h3>
-							<p className="dmx-capability-note">只有当前候选包含该模型并且服务端允许 PUBLISH 时才能提交发布。</p>
+							<h3>{batch ? "批量发布流程" : "发布模型"}</h3>
+							<p className="dmx-capability-note">
+								服务端根据候选状态与当前账号职责开放下一步动作；构建完成后依次经过质量检查、发布评审与上线登记。
+							</p>
 							<label>
-								<span>发布说明</span>
+								<span>操作说明</span>
 								<input onChange={(event) => setReason(event.target.value)} value={reason} />
 							</label>
 							<dl className="dmx-summary-list">
@@ -324,7 +375,10 @@ export function ModelPublishDialog({
 								<dt>在线就绪证据</dt>
 								<dd>{workspace?.evidence.map((item) => `${item.type}:${item.state}`).join("；") || "—"}</dd>
 								<dt>允许动作</dt>
-								<dd>{workspace?.allowedActions.join("、") || "—"}</dd>
+								<dd>
+									{releaseActions.map((action) => RELEASE_ACTION_LABELS[action]).join("、") ||
+										"等待服务端推进或当前职责无可执行动作"}
+								</dd>
 								<dt>主要阻断</dt>
 								<dd>
 									{workspace?.primaryBlocker
@@ -333,10 +387,21 @@ export function ModelPublishDialog({
 								</dd>
 							</dl>
 							<div className="dmx-dialog-actions">
-								<Button onClick={onClose}>取消</Button>
-								<Button disabled={!canMaintain || !canPublish || Boolean(busy)} onClick={() => void publish()} primary>
-									{busy === "publish" ? "发布中…" : "发布"}
+								<Button disabled={Boolean(busy)} onClick={() => void load()}>
+									刷新状态
 								</Button>
+								<Button onClick={onClose}>关闭</Button>
+								{releaseActions.map((action, index) => (
+									<Button
+										danger={action === "REJECT" || action === "ROLLBACK"}
+										disabled={Boolean(busy)}
+										key={action}
+										onClick={() => void runReleaseAction(action)}
+										primary={index === 0 && action !== "REJECT" && action !== "ROLLBACK"}
+									>
+										{busy === "release" && activeReleaseAction === action ? "处理中…" : RELEASE_ACTION_LABELS[action]}
+									</Button>
+								))}
 							</div>
 						</>
 					)}

@@ -747,7 +747,7 @@ export async function saveModelDraft(draft: ModelSpecDraft, context: ModelSaveCo
 		throw new Error("请先配置数据实现来源；日期维度可选择受控日期维度生成器，普通模型需关联物理来源或上游模型");
 	}
 	if (preparedDraft.implementationBase?.ownership === "DBT_MANAGED" && needsImplementationSave) {
-		throw new Error("DBT 管理的物理实现不能在基础信息中修改，请进入模型开发处理");
+		throw new Error("DBT 管理的物理实现不能在基础信息中修改，请进入高级 dbt 工作区处理");
 	}
 	let savedModel: CanonicalModelSpecView;
 	if (draft.base) savedModel = await updateModelSpec(draft.base, update);

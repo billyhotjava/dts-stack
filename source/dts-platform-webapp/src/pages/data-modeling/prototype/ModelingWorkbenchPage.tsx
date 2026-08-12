@@ -10,6 +10,7 @@ import { useUserInfo } from "@/store/userStore";
 import { dataModelingPath } from "../navigation";
 import type { DataModelingRoute } from "../types";
 
+import { AdvancedDbtWorkspace } from "./AdvancedDbtWorkspace";
 import { ConceptDimensionRecordDialog } from "./ConceptDimensionRecordDialog";
 import { isBlankModelField } from "./ModelFieldEditorTable";
 import { ModelingWorkbenchEditor } from "./ModelingWorkbenchEditor";
@@ -45,7 +46,7 @@ import { useConceptDimensionWorkflow } from "./useConceptDimensionWorkflow";
 import { useDataModelingMenuGrant } from "./useDataModelingMenuGrant";
 import { resolveWorkbenchEditorAccess } from "./workbenchEditorAccess";
 
-const DISCARD_PROMPT = "当前模型有未保存修改，确认放弃吗？";
+const DISCARD_PROMPT = "当前工作区有未保存修改，确认放弃吗？";
 
 const ownerIdOf = (userInfo: unknown) => {
 	if (!userInfo || typeof userInfo !== "object") return "";
@@ -104,6 +105,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const [selectedModelId, setSelectedModelId] = useState("");
 	const [selectedDimensionId, setSelectedDimensionId] = useState("");
 	const [dialog, setDialog] = useState<WorkbenchDialog>(null);
+	const [advancedDbtDirty, setAdvancedDbtDirty] = useState(false);
 	const [batchMaterializationModels, setBatchMaterializationModels] = useState<ModelSpecView[]>([]);
 	const [materializationRefreshKey, setMaterializationRefreshKey] = useState(0);
 	const [loading, setLoading] = useState(true);
@@ -121,14 +123,15 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const editorAccess = useMemo(() => resolveWorkbenchEditorAccess(canMaintain, draft), [canMaintain, draft]);
 	const dirty = draft !== null && cleanFingerprint !== null && modelDraftFingerprint(draft) !== cleanFingerprint;
 	const saveNeeded = dirty || modelDraftNeedsImplementationRecovery(draft);
+	const unsavedChanges = dirty || advancedDbtDirty;
 	const blocker = useBlocker(
 		useCallback<BlockerFunction>(
 			({ currentLocation, nextLocation }) =>
-				shouldBlockWorkbenchNavigation(dirty, currentLocation.pathname, nextLocation.pathname),
-			[dirty],
+				shouldBlockWorkbenchNavigation(unsavedChanges, currentLocation.pathname, nextLocation.pathname),
+			[unsavedChanges],
 		),
 	);
-	const confirmDiscard = useCallback(() => !dirty || window.confirm(DISCARD_PROMPT), [dirty]);
+	const confirmDiscard = useCallback(() => !unsavedChanges || window.confirm(DISCARD_PROMPT), [unsavedChanges]);
 	const replaceDraft = useCallback((nextDraft: ModelDraft | null) => {
 		setDraft(nextDraft);
 		setCleanFingerprint(nextDraft ? modelDraftFingerprint(nextDraft) : null);
@@ -231,14 +234,14 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	}, [load]);
 
 	useEffect(() => {
-		if (!dirty) return;
+		if (!unsavedChanges) return;
 		const handleBeforeUnload = (event: BeforeUnloadEvent) => {
 			event.preventDefault();
 			event.returnValue = "";
 		};
 		window.addEventListener("beforeunload", handleBeforeUnload);
 		return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-	}, [dirty]);
+	}, [unsavedChanges]);
 
 	useEffect(() => {
 		if (blocker.state !== "blocked") return;
@@ -600,6 +603,17 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 						</div>
 						{editorLoading ? (
 							<RequestState description="正在读取所选模型的版本与实现信息。" kind="loading" title="正在打开模型" />
+						) : dialog === "advanced" && selectedModel ? (
+							<AdvancedDbtWorkspace
+								canMaintain={canMaintain}
+								model={selectedModel}
+								onBack={() => {
+									if (!confirmDiscard()) return;
+									setAdvancedDbtDirty(false);
+									setDialog(null);
+								}}
+								onDirtyChange={setAdvancedDbtDirty}
+							/>
 						) : draft ? (
 							<ModelingWorkbenchEditor
 								canMaintain={canMaintain}
@@ -645,7 +659,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 							<RequestState description="未能打开模型，请返回模型列表重试。" kind="error" title="模型打开失败" />
 						)}
 					</section>
-					{selectedModel?.modelType === "FACT" ? (
+					{dialog !== "advanced" && selectedModel?.modelType === "FACT" ? (
 						<aside className="dmx-record-rail">
 							<Button disabled={saving || !selectedModel} onClick={() => setDialog("versions")}>
 								<GitBranch size={16} />
@@ -668,7 +682,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 			)}
 			<ModelWorkbenchDialog
 				canMaintain={canMaintain}
-				dialog={dialog}
+				dialog={dialog === "advanced" ? null : dialog}
 				model={selectedModel}
 				onClose={() => {
 					if (dialog === "publish") setMaterializationRefreshKey((current) => current + 1);

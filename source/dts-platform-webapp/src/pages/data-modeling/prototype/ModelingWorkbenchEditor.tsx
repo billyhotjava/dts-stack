@@ -736,9 +736,13 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 							<ShieldCheck size={15} />
 							质量规则
 						</Button>
-						<Button disabled={saving || !canWritePersisted} onClick={() => onDialog("advanced")}>
+						<Button
+							disabled={saving || dirty || !canWritePersisted}
+							onClick={() => onDialog("advanced")}
+							title={dirty ? "请先保存当前模型修改，再进入高级 dbt 工作区" : undefined}
+						>
 							<Settings2 size={15} />
-							模型开发
+							高级 dbt 工作区
 						</Button>
 						<Button disabled title="尚无模型导出服务端契约">
 							<Import size={15} />

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
 import { installSprint79ProductionReadOnlyBarrier } from "./support/sprint79ProductionReadOnly";
 
@@ -35,7 +35,10 @@ const seed = JSON.parse(
 	),
 ) as { portalNavSections: SeedNode[] };
 
-const storedAuth = JSON.parse(readFileSync(new URL("./.auth/user.json", import.meta.url), "utf8")) as StoredAuthState;
+const authStateUrl = new URL("./.auth/user.json", import.meta.url);
+const storedAuth = existsSync(authStateUrl)
+	? (JSON.parse(readFileSync(authStateUrl, "utf8")) as StoredAuthState)
+	: ({ cookies: [], origins: [] } satisfies StoredAuthState);
 const CONTROLLED_DATE_MODEL_ID = "10000000-0000-0000-0000-000000000001";
 const CONTROLLED_PLAN_ID = "20000000-0000-0000-0000-000000000001";
 const CONTROLLED_DOMAIN_ID = "30000000-0000-0000-0000-000000000001";
@@ -146,6 +149,30 @@ async function installLocalAuthenticatedState(page: Page) {
 	}, localEntries);
 }
 
+async function installMockAuthenticatedState(page: Page) {
+	await page.addInitScript(() => {
+		const now = String(Date.now());
+		localStorage.setItem(
+			"dts.platform.userStore",
+			JSON.stringify({
+				state: {
+					userInfo: {
+						username: "modeling-release-reviewer",
+						fullName: "建模发布验收员",
+						roles: ["ROLE_OP_ADMIN"],
+						permissions: ["modeling.manage"],
+						enabled: true,
+					},
+					userToken: { accessToken: "modeling-release-mock-token" },
+				},
+				version: 0,
+			}),
+		);
+		localStorage.setItem("dts.platform.session.loginTs", now);
+		localStorage.setItem("dts.platform.session.lastActivity", now);
+	});
+}
+
 async function installPlatformReadProxy(page: Page) {
 	const platformHost = process.env.E2E_PLATFORM_HOST?.trim();
 	if (!platformHost) throw new Error("E2E_PLATFORM_HOST is required for the local read-only regression");
@@ -178,6 +205,7 @@ async function installControlledMaterializationProxy(page: Page) {
 	const compileHeaders: Array<{ model: string; implementation: string }> = [];
 	const now = "2026-08-09T00:00:00Z";
 	const candidateId = "50000000-0000-0000-0000-000000000001";
+	let currentCandidate: Record<string, unknown> | null = null;
 	await page.route(
 		(url) => url.pathname.startsWith("/api/"),
 		async (route) => {
@@ -273,18 +301,19 @@ async function installControlledMaterializationProxy(page: Page) {
 				return;
 			}
 			if (pathname === `/api/modeling/model-specs/${CONTROLLED_DATE_MODEL_ID}/representations` && method === "GET") {
+				const technical = url.searchParams.get("representationScope") === "TECHNICAL";
 				await fulfill({
 					modelSpecId: CONTROLLED_DATE_MODEL_ID,
 					modelRevision: 2,
 					modelChecksum: controlledDateModel.checksum,
 					implementationRevision: 1,
 					implementationChecksum: "c".repeat(64),
-					ownershipMode: "DESIGNER_GENERATED",
-					representationScope: "BUSINESS",
-					visualizationCapability: "BUSINESS_VISUAL_EDIT",
+					ownershipMode: technical ? "DBT_MANAGED" : "DESIGNER_GENERATED",
+					representationScope: technical ? "TECHNICAL" : "BUSINESS",
+					visualizationCapability: technical ? "TECHNICAL_DBT_EDIT" : "BUSINESS_VISUAL_EDIT",
 					capabilityReasons: [],
 					visibleSections: [],
-					allowedActions: [],
+					allowedActions: technical ? ["OPEN_ADVANCED_DBT"] : [],
 					logicalModel: {},
 					dependencyProjection: [],
 					runtimeObservation: { driftStatus: "UNAVAILABLE", verified: false, relationExists: false },
@@ -303,9 +332,9 @@ async function installControlledMaterializationProxy(page: Page) {
 					implementation: {
 						id: "40000000-0000-0000-0000-000000000001",
 						modelSpecId,
-						planId: "controlled-plan",
+						planId: CONTROLLED_PLAN_ID,
 						revision: 2,
-						modelChecksum: "controlled-model-checksum",
+						modelChecksum: controlledDateModel.checksum,
 						ownership: "DESIGNER_GENERATED",
 						projectKey: "system-managed",
 						dbtUniqueId: `model.${modelSpecId}`,
@@ -327,12 +356,16 @@ async function installControlledMaterializationProxy(page: Page) {
 			if (workspaceMatch && method === "GET") {
 				await fulfill({
 					planId: decodeURIComponent(workspaceMatch[1]),
-					state: "EMPTY",
-					candidate: null,
+					state: currentCandidate ? "READY" : "EMPTY",
+					candidate: currentCandidate,
 					evidence: [],
 					entryEvidence: [],
 					primaryBlocker: null,
-					allowedActions: ["CREATE_CANDIDATE"],
+					allowedActions: currentCandidate
+						? currentCandidate.status === "BUILT"
+							? ["RUN_QUALITY"]
+							: []
+						: ["CREATE_CANDIDATE"],
 					etag: null,
 				});
 				return;
@@ -352,31 +385,32 @@ async function installControlledMaterializationProxy(page: Page) {
 				writeSequence.push("create-candidate");
 				const planId = decodeURIComponent(createMatch[1]);
 				const body = request.postDataJSON() as { environment?: string; entries?: Array<{ modelSpecId: string }> };
-				await fulfill({
-					candidate: {
-						id: candidateId,
+				currentCandidate = {
+					id: candidateId,
+					tenantId: "controlled-tenant",
+					planId,
+					environment: body.environment || "dev",
+					status: "DRAFT",
+					version: 1,
+					audit: { createdBy: "controlled-e2e", createdAt: now },
+					lastModifiedBy: "controlled-e2e",
+					lastModifiedAt: now,
+					entries: (body.entries || []).map((entry, index) => ({
+						id: `entry-${index + 1}`,
 						tenantId: "controlled-tenant",
+						candidateId,
 						planId,
-						environment: body.environment || "dev",
+						modelSpecId: entry.modelSpecId,
+						revision: 2,
+						checksum: controlledDateModel.checksum,
+						implementationMode: "DESIGNER_GENERATED",
 						status: "DRAFT",
-						version: 1,
-						audit: { createdBy: "controlled-e2e", createdAt: now },
-						lastModifiedBy: "controlled-e2e",
-						lastModifiedAt: now,
-						entries: (body.entries || []).map((entry, index) => ({
-							id: `entry-${index + 1}`,
-							tenantId: "controlled-tenant",
-							candidateId,
-							planId,
-							modelSpecId: entry.modelSpecId,
-							revision: 2,
-							checksum: "controlled-model-checksum",
-							implementationMode: "DESIGNER_GENERATED",
-							status: "DRAFT",
-							sortOrder: index,
-						})),
-						origin: "BATCH_WORKBENCH",
-					},
+						sortOrder: index,
+					})),
+					origin: "BATCH_WORKBENCH",
+				};
+				await fulfill({
+					candidate: currentCandidate,
 					replayed: false,
 					driftReasons: [],
 					allowedActions: ["START_BUILD"],
@@ -385,8 +419,28 @@ async function installControlledMaterializationProxy(page: Page) {
 			}
 			if (pathname.endsWith(`/release-candidates/${candidateId}/lock`) && method === "POST") {
 				writeSequence.push("lock-candidate");
+				currentCandidate = {
+					...(currentCandidate || {}),
+					status: "BUILT",
+					version: 2,
+				};
 				await fulfill({
-					candidate: { id: candidateId, version: 2 },
+					candidate: currentCandidate,
+					replayed: false,
+					driftReasons: [],
+					allowedActions: ["RUN_QUALITY"],
+				});
+				return;
+			}
+			if (pathname.endsWith(`/release-candidates/${candidateId}/quality`) && method === "POST") {
+				writeSequence.push("run-quality");
+				currentCandidate = {
+					...(currentCandidate || {}),
+					status: "QUALITY_RUNNING",
+					version: 3,
+				};
+				await fulfill({
+					candidate: currentCandidate,
 					replayed: false,
 					driftReasons: [],
 					allowedActions: [],
@@ -503,11 +557,11 @@ test("opens a draft from list management without reloading the workbench catalog
 	expect(consoleErrors, "console errors").toEqual([]);
 });
 
-test("compiles the saved date implementation before creating and locking its release candidate", async ({
+test("builds and submits a release candidate, then opens advanced dbt inside data modeling", async ({
 	page,
 }, testInfo) => {
 	await page.setViewportSize({ width: 1366, height: 768 });
-	await installLocalAuthenticatedState(page);
+	await installMockAuthenticatedState(page);
 	const controlled = await installControlledMaterializationProxy(page);
 	const consoleErrors: string[] = [];
 	const requestFailures: string[] = [];
@@ -519,6 +573,12 @@ test("compiles the saved date implementation before creating and locking its rel
 			`${request.method()} ${new URL(request.url()).pathname} ${request.failure()?.errorText || ""}`,
 		),
 	);
+	const expectedBackgroundReads = new Set([
+		"GET /api/modeling/warehouse-plans",
+		"GET /api/modeling/data-marts",
+		"GET /api/modeling/subject-domains",
+		`GET /api/modeling/plans/${CONTROLLED_PLAN_ID}/release-candidates/materializations`,
+	]);
 
 	await page.goto(`/#/data-modeling/dimensions/workbench?modelSpecId=${CONTROLLED_DATE_MODEL_ID}`);
 	await expect(page.locator("main.dmx-workbench-page h1")).toHaveText("维度建模", { timeout: 20_000 });
@@ -536,18 +596,42 @@ test("compiles the saved date implementation before creating and locking its rel
 	expect(controlled.compileHeaders).toHaveLength(1);
 	expect(controlled.compileHeaders[0].model).toMatch(/^"model-spec:/);
 	expect(controlled.compileHeaders[0].implementation).toMatch(/^"model-implementation:/);
-	expect(controlled.unexpectedReads).toEqual([]);
+	expect(controlled.unexpectedReads.filter((read) => !expectedBackgroundReads.has(read))).toEqual([]);
 	expect(controlled.unexpectedWrites).toEqual([]);
 	await expect(dialog).not.toContainText("MATERIALIZATION_ARTIFACT_MISSING");
+	await dialog.getByRole("button", { name: "发布模型" }).click();
+	const submitOnline = dialog.getByRole("button", { name: "提交上线" });
+	await expect(submitOnline).toBeEnabled();
+	await submitOnline.click();
+	await expect
+		.poll(() => controlled.writeSequence)
+		.toEqual(["compile", "create-candidate", "lock-candidate", "run-quality"]);
+	await expect(dialog).toContainText("QUALITY_RUNNING");
 	await page.screenshot({ path: testInfo.outputPath("materialization-build-desktop.png"), fullPage: true });
 
 	await page.setViewportSize({ width: 768, height: 900 });
-	await expect(dialog).toBeVisible();
-	const box = await dialog.boundingBox();
+	const narrowDialog = page.getByRole("dialog").filter({ hasText: "发布与物化" });
+	if (!(await narrowDialog.isVisible())) await page.getByRole("button", { name: "发布", exact: true }).click();
+	await expect(narrowDialog).toBeVisible();
+	await expect(narrowDialog).toContainText("QUALITY_RUNNING");
+	const box = await narrowDialog.boundingBox();
 	expect(box).not.toBeNull();
 	expect(box?.x || 0).toBeGreaterThanOrEqual(0);
 	expect((box?.x || 0) + (box?.width || 0)).toBeLessThanOrEqual(769);
 	await page.screenshot({ path: testInfo.outputPath("materialization-build-narrow.png"), fullPage: true });
+	await narrowDialog.getByRole("button", { name: "关闭" }).last().click();
+	await page.getByRole("button", { name: "高级 dbt 工作区" }).click();
+	const advancedWorkspace = page.locator('section[aria-label="高级 dbt 工作区"]');
+	await expect(advancedWorkspace).toBeVisible();
+	await expect(advancedWorkspace.getByRole("button", { name: "返回模型设计" })).toBeVisible();
+	await expect(advancedWorkspace.getByRole("button", { name: "创建高级草稿" })).toBeEnabled();
+	await expect(page.getByRole("dialog")).toHaveCount(0);
+	const pageWidths = await page.evaluate(() => ({
+		viewport: document.documentElement.clientWidth,
+		document: document.documentElement.scrollWidth,
+	}));
+	expect(pageWidths.document).toBeLessThanOrEqual(pageWidths.viewport + 1);
+	await page.screenshot({ path: testInfo.outputPath("advanced-dbt-workspace-narrow.png"), fullPage: true });
 	expect(requestFailures).toEqual([]);
 	expect(consoleErrors).toEqual([]);
 });

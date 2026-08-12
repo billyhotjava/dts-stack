@@ -1040,6 +1040,62 @@ export const publishReleaseCandidate = (
 		_skipErrorToast: true,
 	} as any);
 
+const runReleaseCandidateCommand = (
+	planId: string,
+	expected: ReleaseCandidateCasToken,
+	idempotencyKey: string,
+	reason: string,
+	suffix: string,
+) =>
+	api.post<ReleaseCandidateCommandResult>({
+		url: releaseCandidateItemUrl(planId, expected.id, suffix),
+		headers: releaseCandidateWriteHeaders(idempotencyKey, expected),
+		data: { reason },
+		_skipErrorToast: true,
+	} as any);
+
+export const runReleaseCandidateQuality = (
+	planId: string,
+	expected: ReleaseCandidateCasToken,
+	idempotencyKey: string,
+	reason: string,
+) => runReleaseCandidateCommand(planId, expected, idempotencyKey, reason, "/quality");
+
+export const submitReleaseCandidateReview = (
+	planId: string,
+	expected: ReleaseCandidateCasToken,
+	idempotencyKey: string,
+	reason: string,
+) => runReleaseCandidateCommand(planId, expected, idempotencyKey, reason, "/reviews");
+
+export const approveReleaseCandidateReview = (
+	planId: string,
+	expected: ReleaseCandidateCasToken,
+	idempotencyKey: string,
+	reason: string,
+) => runReleaseCandidateCommand(planId, expected, idempotencyKey, reason, "/reviews/approve");
+
+export const rejectReleaseCandidateReview = (
+	planId: string,
+	expected: ReleaseCandidateCasToken,
+	idempotencyKey: string,
+	reason: string,
+) => runReleaseCandidateCommand(planId, expected, idempotencyKey, reason, "/reviews/reject");
+
+export const retryReleaseCandidateRegistration = (
+	planId: string,
+	expected: ReleaseCandidateCasToken,
+	idempotencyKey: string,
+	reason: string,
+) => runReleaseCandidateCommand(planId, expected, idempotencyKey, reason, "/publication/retry");
+
+export const rollbackReleaseCandidate = (
+	planId: string,
+	expected: ReleaseCandidateCasToken,
+	idempotencyKey: string,
+	reason: string,
+) => runReleaseCandidateCommand(planId, expected, idempotencyKey, reason, "/rollback");
+
 export const refreshReleaseCandidate = (
 	planId: string,
 	expected: ReleaseCandidateCasToken,

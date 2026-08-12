@@ -402,7 +402,7 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 						<RotateCcw size={35} />
 					</div>
 					<h2>逆向建模</h2>
-					<p>导入外部 dbt 项目 ZIP，经检查与预览后生成可视化模型草稿和模型级高级 dbt 实现。</p>
+					<p>导入外部 dbt 项目 ZIP，经检查与预览后生成可视化模型草稿，并进入模型级高级 dbt 工作区。</p>
 					<Button
 						disabled={!canMaintain}
 						primary
@@ -759,7 +759,7 @@ function CompleteItemsTable({
 				key: "actions",
 				render: (_, { item }) =>
 					isAdvancedDbtImportResult(preview, item) && item.modelSpecId ? (
-						<Button onClick={() => item.modelSpecId && onOpenAdvanced(item.modelSpecId)}>进入高级 dbt 实现</Button>
+						<Button onClick={() => item.modelSpecId && onOpenAdvanced(item.modelSpecId)}>进入高级 dbt 工作区</Button>
 					) : (
 						"—"
 					),

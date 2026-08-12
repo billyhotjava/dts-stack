@@ -431,10 +431,42 @@ describe("release and materialization dispatch", () => {
 		);
 		await flush();
 		await act(async () => button("发布模型")?.click());
-		await act(async () => button("发布")?.click());
+		await act(async () => button("发布上线")?.click());
 
 		expect(apiMocks.publishCandidate).toHaveBeenCalledWith(model.planId, approved, "idem-1", "从模型工作台发布");
 		expect(apiMocks.startPublicationIntent).not.toHaveBeenCalled();
+	});
+
+	it("starts the strict single-model publication intent at the quality boundary", async () => {
+		const built = candidate("SINGLE_MODEL_INTENT", "BUILT");
+		apiMocks.getWorkbench.mockResolvedValue(workspace(["RUN_QUALITY"], built));
+		apiMocks.startPublicationIntent.mockResolvedValue({ candidateId: built.id });
+
+		await act(async () =>
+			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+		);
+		await flush();
+		await act(async () => button("发布模型")?.click());
+		await act(async () => button("提交上线")?.click());
+
+		expect(apiMocks.startPublicationIntent).toHaveBeenCalledWith(model.id, built, "idem-1", "从模型工作台发布");
+		expect(apiMocks.runQualityCandidate).not.toHaveBeenCalled();
+	});
+
+	it("allows a release reviewer to act from server duties without model-maintainer permission", async () => {
+		const reviewPending = candidate("BATCH_WORKBENCH", "REVIEW_PENDING");
+		apiMocks.getWorkbench.mockResolvedValue(workspace(["APPROVE", "REJECT"], reviewPending));
+		apiMocks.approveCandidate.mockResolvedValue({ candidate: reviewPending });
+
+		await act(async () =>
+			root.render(<ModelWorkbenchDialog canMaintain={false} dialog="publish" model={model} onClose={vi.fn()} />),
+		);
+		await flush();
+		await act(async () => button("发布模型")?.click());
+		expect(button("审核通过")?.disabled).toBe(false);
+		await act(async () => button("审核通过")?.click());
+
+		expect(apiMocks.approveCandidate).toHaveBeenCalledWith(model.planId, reviewPending, "idem-1", "从模型工作台发布");
 	});
 
 	it.each([
@@ -444,20 +476,23 @@ describe("release and materialization dispatch", () => {
 		["REVIEW_PENDING", "REJECT", "驳回", "rejectCandidate"],
 		["PARTIAL", "RETRY_REGISTRATION", "重试发布登记", "retryRegistrationCandidate"],
 		["PUBLISHED", "ROLLBACK", "回滚发布", "rollbackCandidate"],
-	] as const)("dispatches %s candidate action %s from the release workflow", async (status, action, label, mockName) => {
-		const current = candidate("BATCH_WORKBENCH", status);
-		apiMocks.getWorkbench.mockResolvedValue(workspace([action], current));
-		apiMocks[mockName].mockResolvedValue({ candidate: current });
+	] as const)(
+		"dispatches %s candidate action %s from the release workflow",
+		async (status, action, label, mockName) => {
+			const current = candidate("BATCH_WORKBENCH", status);
+			apiMocks.getWorkbench.mockResolvedValue(workspace([action], current));
+			apiMocks[mockName].mockResolvedValue({ candidate: current });
 
-		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
-		);
-		await flush();
-		await act(async () => button("发布模型")?.click());
-		await act(async () => button(label)?.click());
+			await act(async () =>
+				root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+			);
+			await flush();
+			await act(async () => button("发布模型")?.click());
+			await act(async () => button(label)?.click());
 
-		expect(apiMocks[mockName]).toHaveBeenCalledWith(model.planId, current, "idem-1", "从模型工作台发布");
-	});
+			expect(apiMocks[mockName]).toHaveBeenCalledWith(model.planId, current, "idem-1", "从模型工作台发布");
+		},
+	);
 });
 
 describe("stage gate dispatch", () => {
@@ -502,9 +537,7 @@ describe("stage gate dispatch", () => {
 
 describe("advanced dbt draft lifecycle", () => {
 	it("does not request the technical representation for a read-only account", async () => {
-		await act(async () =>
-			root.render(<AdvancedDbtWorkspace canMaintain={false} model={model} onBack={vi.fn()} />),
-		);
+		await act(async () => root.render(<AdvancedDbtWorkspace canMaintain={false} model={model} onBack={vi.fn()} />));
 		await flush();
 
 		expect(apiMocks.getRepresentation).not.toHaveBeenCalled();
@@ -539,9 +572,7 @@ describe("advanced dbt draft lifecycle", () => {
 			sourceBundle: { files: [{ path: "models/budget.sql", content: "select 1" }] },
 		});
 
-		await act(async () =>
-			root.render(<AdvancedDbtWorkspace canMaintain model={model} onBack={vi.fn()} />),
-		);
+		await act(async () => root.render(<AdvancedDbtWorkspace canMaintain model={model} onBack={vi.fn()} />));
 		await flush();
 
 		expect(apiMocks.getRepresentation).toHaveBeenCalledWith(model.id, {
@@ -602,9 +633,7 @@ describe("advanced dbt draft lifecycle", () => {
 			etag: "e4",
 		});
 
-		await act(async () =>
-			root.render(<AdvancedDbtWorkspace canMaintain model={model} onBack={vi.fn()} />),
-		);
+		await act(async () => root.render(<AdvancedDbtWorkspace canMaintain model={model} onBack={vi.fn()} />));
 		await flush();
 		expect(apiMocks.getRepresentation).toHaveBeenNthCalledWith(1, model.id, {
 			modelRevision: model.revision,

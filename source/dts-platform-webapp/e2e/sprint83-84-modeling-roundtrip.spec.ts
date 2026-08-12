@@ -495,8 +495,8 @@ test.describe("Sprint-83/84 authorized dbt visual roundtrip", () => {
 		);
 		await expect(page.locator(".dmx-toast")).toContainText("模型草稿已保存");
 
-		await page.getByRole("button", { name: "高级 dbt" }).click();
-		const advanced = page.getByRole("dialog", { name: "高级 dbt 实现" });
+		await page.getByRole("button", { name: "高级 dbt 工作区" }).click();
+		const advanced = page.locator('section[aria-label="高级 dbt 工作区"]');
 		await expect(advanced).toBeVisible();
 		const createDraft = advanced.getByRole("button", { name: "创建高级草稿" });
 		await expect(createDraft, "a newly imported ModelSpec must start a fresh audited dbt draft").toBeVisible();
@@ -550,14 +550,14 @@ test.describe("Sprint-83/84 authorized dbt visual roundtrip", () => {
 		expect(committedPins.implementationRevision).toBeGreaterThan(0);
 		expect(committedPins.implementationChecksum).not.toBe("");
 		await expect(advanced).toContainText("实现已提交", { timeout: 60_000 });
-		await advanced.getByRole("button", { name: "关闭" }).click();
+		await advanced.getByRole("button", { name: "返回模型设计" }).click();
 
 		await clickAndRequireSuccess(
 			page,
 			page.getByRole("button", { name: "刷新" }).last(),
 			(pathname, method) => pathname.endsWith(`/model-specs/${importedModelId}`) && method === "GET",
 		);
-		await page.getByRole("button", { name: "发布与物化" }).click();
+		await page.getByRole("button", { name: "发布", exact: true }).click();
 		let publishDialog = page.getByRole("dialog", { name: "发布与物化" });
 		await expect(publishDialog).toBeVisible();
 		await publishDialog.locator("label").filter({ hasText: "执行环境" }).locator("select").selectOption("test");
@@ -580,11 +580,11 @@ test.describe("Sprint-83/84 authorized dbt visual roundtrip", () => {
 		expect(String(candidateEntry?.implementationId || "")).toBe(pins.implementationId);
 		await waitForPublishAdmission(page);
 
-		await publishDialog.getByRole("button", { name: "关闭" }).click();
-		await page.getByRole("button", { name: "发布与物化" }).click();
+		await publishDialog.getByRole("button", { name: "关闭" }).last().click();
+		await page.getByRole("button", { name: "发布", exact: true }).click();
 		publishDialog = page.getByRole("dialog", { name: "发布与物化" });
 		await publishDialog.getByRole("button", { name: "发布模型" }).click();
-		const publish = publishDialog.getByRole("button", { name: "发布", exact: true });
+		const publish = publishDialog.getByRole("button", { name: "发布上线", exact: true });
 		await expect(publish, await publishDialog.innerText()).toBeEnabled();
 		const publishResponse = await clickAndRequireSuccess(
 			page,
@@ -598,7 +598,7 @@ test.describe("Sprint-83/84 authorized dbt visual roundtrip", () => {
 		).toBe(releaseCandidateId);
 		await waitForPublishedCandidate(page);
 		await waitForServingEvidence(page);
-		await publishDialog.getByRole("button", { name: "关闭" }).click();
+		await publishDialog.getByRole("button", { name: "关闭" }).last().click();
 
 		await clickAndRequireSuccess(
 			page,

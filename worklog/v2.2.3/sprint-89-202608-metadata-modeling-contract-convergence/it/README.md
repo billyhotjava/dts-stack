@@ -35,6 +35,14 @@
 - 本地 mock-API Playwright 冒烟 1/1 通过：`/catalog/search` 默认以空筛选加载全部可见资产，仅保留紧凑搜索模块、可勾选 `CompactTable`、批量归域/标签关联与分页；无资产名片、治理指标、统计投影、行内治理/权限动作和抽屉工作台。选择批量归域目标与资产后动作可用，点击资产名称进入 `/catalog/datasets/{id}`。
 - 1366×768 与 768×900 均无页面级横向溢出，筛选控件不越界，console/page/request failure 和未处理 API 路径均为 0。截图：`/tmp/sprint89-data-asset-directory-1366x768.png`、`/tmp/sprint89-data-asset-directory-768x900.png`。该证据基于本机构建、系统 Chrome 和拦截数据，不替代部署环境、真实账号/资产或现场 Chrome 95 验收。
 
+## 补充自动化证据（2026-08-12：模型发布闭环与高级 dbt 工作区）
+
+- 发布候选前端已接通服务端职责动作：`RUN_QUALITY`、`SUBMIT_REVIEW`、`APPROVE`、`REJECT`、`PUBLISH`、`RETRY_REGISTRATION`、`ROLLBACK`；按钮只按候选工作区 `allowedActions` 呈现，发布评审人无需模型维护权限即可执行其服务端职责。
+- 高级 dbt 从模型附加弹窗抽离为「数据建模 > 维度建模 > 模型工作台」内嵌工作区，不新增菜单或平行路由；保留逆向建模 `open=advanced` 直达、模型/实现修订钉住、文件保存、校验、提交及并发 ETag 保护，并增加未保存离开门禁。
+- 聚焦 Vitest：发布候选、建模编辑器、高级 dbt 契约和页面 owner 共 54/54 通过；`pnpm exec tsc --noEmit` 通过；`LEGACY_BROWSER_BUILD=1 pnpm build` 成功（既有 Browserslist 数据陈旧、混合导入与大分块告警仍存在）。
+- 本地 mock-API Playwright 1/1 通过：完成 compile → create candidate → lock/build → `POST /release-candidates/{id}/quality`，随后在同一数据建模页面打开高级 dbt 工作区；1366×768 发布弹窗与 768×900 发布/高级 dbt 页面无横向溢出，console/request failure 与意外写请求均为 0。
+- 截图：`/tmp/dts-modeling-workbench-results/modeling-workbench-regress-e19e4-ed-dbt-inside-data-modeling/materialization-build-desktop.png`、`materialization-build-narrow.png`、`advanced-dbt-workspace-narrow.png`。该证据使用本地开发服务、系统 Chrome 与受控 API，不替代部署环境、真实候选/职责账号或现场 Chrome 95 真机验收。
+
 ## IT-03 测试矩阵
 
 | 变化 | 预期级别 | 预期门禁 |

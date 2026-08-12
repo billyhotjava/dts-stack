@@ -29,7 +29,9 @@ describe("advanced dbt implementation draft contract", () => {
 		const editor = read("../pages/data-modeling/prototype/AdvancedDbtWorkspace.tsx");
 
 		expect(workbench).toContain("useDataModelingMenuGrant");
-		expect(workbench).toContain("disabled={!selectedModel || !canMaintain}");
+		expect(workbench).toMatch(/<AdvancedDbtWorkspace[\s\S]*canMaintain=\{canMaintain\}/);
+		expect(workbench).toContain("onDirtyChange={setAdvancedDbtDirty}");
+		expect(workbench).toContain("const unsavedChanges = dirty || advancedDbtDirty");
 		expect(workbench).toContain('import { AdvancedDbtWorkspace } from "./AdvancedDbtWorkspace"');
 		expect(workbench).toMatch(/dialog === "advanced"[\s\S]*<AdvancedDbtWorkspace/);
 		expect(dialogs).not.toContain("AdvancedDbtDialog");

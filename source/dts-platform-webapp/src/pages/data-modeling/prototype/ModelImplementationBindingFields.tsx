@@ -214,7 +214,7 @@ export function ModelImplementationBindingFields({
 					</select>
 					<small>
 						{dbtManaged
-							? "保存逻辑模型后，从“模型开发”创建并维护 dbt SQL；来源与上游关系仍在此处登记。"
+							? "保存逻辑模型后，从“高级 dbt 工作区”创建并维护 dbt SQL；来源与上游关系仍在此处登记。"
 							: "由平台根据来源、字段映射和目标配置生成实现。"}
 					</small>
 				</label>
@@ -234,7 +234,7 @@ export function ModelImplementationBindingFields({
 						))}
 					</select>
 					<ValidationMessage message={validationErrors.implementationInputMode} />
-					{dbtManaged ? <small>这里登记可追溯的来源关系；SQL/Jinja 在模型开发中维护。</small> : null}
+					{dbtManaged ? <small>这里登记可追溯的来源关系；SQL/Jinja 在高级 dbt 工作区维护。</small> : null}
 				</label>
 
 				{draft.implementationInputMode === "GENERATED" ? (

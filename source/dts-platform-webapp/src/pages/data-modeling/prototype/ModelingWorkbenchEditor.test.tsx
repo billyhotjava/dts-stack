@@ -420,9 +420,7 @@ describe("ModelingWorkbenchEditor", () => {
 			],
 		});
 		const baseProps = makeProps();
-		const props = await render(
-			makeProps({ draft, context: { ...baseProps.context, models: [dimension] } }),
-		);
+		const props = await render(makeProps({ draft, context: { ...baseProps.context, models: [dimension] } }));
 
 		const checkbox = container.querySelector<HTMLInputElement>('input[aria-label="引用维度模型 风险等级维度表"]');
 		expect(checkbox).not.toBeNull();
@@ -456,7 +454,7 @@ describe("ModelingWorkbenchEditor", () => {
 			"发布",
 			"日志",
 			"质量规则",
-			"模型开发",
+			"高级 dbt 工作区",
 			"导出",
 		])
 			expect(container.textContent).not.toContain(label);
@@ -550,7 +548,7 @@ describe("ModelingWorkbenchEditor", () => {
 		])
 			expect(container.textContent).not.toContain(label);
 
-		for (const label of ["保存", "提交", "刷新", "关联关系", "发布", "日志", "质量规则", "模型开发", "导出"])
+		for (const label of ["保存", "提交", "刷新", "关联关系", "发布", "日志", "质量规则", "高级 dbt 工作区", "导出"])
 			expect(button(label)).toBeDefined();
 		expect(container.textContent).not.toContain("物理预览");
 	});
@@ -619,7 +617,7 @@ describe("ModelingWorkbenchEditor", () => {
 		await render(makeProps({ saving: true, selectedModel }));
 
 		expect(container.querySelector("fieldset")).toHaveProperty("disabled", true);
-		for (const label of ["保存中…", "提交", "刷新", "关联关系", "发布", "日志", "质量规则", "模型开发", "导出"])
+		for (const label of ["保存中…", "提交", "刷新", "关联关系", "发布", "日志", "质量规则", "高级 dbt 工作区", "导出"])
 			expect(button(label)).toHaveProperty("disabled", true);
 	});
 
@@ -682,14 +680,14 @@ describe("ModelingWorkbenchEditor", () => {
 
 	it("disables unpublished actions and maps every supported toolbar dialog", async () => {
 		const unpublished = await render();
-		for (const label of ["提交", "关联关系", "发布", "日志", "质量规则", "模型开发", "导出"]) {
+		for (const label of ["提交", "关联关系", "发布", "日志", "质量规则", "高级 dbt 工作区", "导出"]) {
 			expect(button(label)).toHaveProperty("disabled", true);
 			act(() => button(label).click());
 		}
 		expect(unpublished.onDialog).not.toHaveBeenCalled();
 
 		const selectedModel = { id: "model-1", compatibilityMode: "CANONICAL" } as ModelSpecView;
-		const published = makeProps({ selectedModel });
+		const published = makeProps({ dirty: false, selectedModel });
 		await render(published);
 		for (const [label, dialog] of [
 			["提交", "gates"],
@@ -697,7 +695,7 @@ describe("ModelingWorkbenchEditor", () => {
 			["发布", "publish"],
 			["日志", "logs"],
 			["质量规则", "quality"],
-			["模型开发", "advanced"],
+			["高级 dbt 工作区", "advanced"],
 		] as const) {
 			act(() => button(label).click());
 			expect(published.onDialog).toHaveBeenLastCalledWith(dialog);

@@ -75,6 +75,7 @@ describe("prototype-owned data modeling frontend", () => {
 		vi.doMock("@/store/userStore", () => ({}));
 		vi.doMock("./navigation", () => ({}));
 		vi.doMock("./prototype/ModelFieldEditorTable", () => ({}));
+		vi.doMock("./prototype/AdvancedDbtWorkspace", () => ({}));
 		vi.doMock("./prototype/ModelingWorkbenchEditor", () => ({}));
 		vi.doMock("./prototype/ModelWorkbenchDialog", () => ({}));
 		vi.doMock("./prototype/modelWorkbenchPresentation", () => ({}));
@@ -137,7 +138,16 @@ describe("prototype-owned data modeling frontend", () => {
 		const implementationBinding = read("./prototype/ModelImplementationBindingFields.tsx");
 		const modelingLineCount = modeling.trimEnd().split("\n").length;
 
-		for (const label of ["数仓分层", "存储策略", "表名规则", "表中文名", "生命周期", "负责人", "质量规则", "模型开发"])
+		for (const label of [
+			"数仓分层",
+			"存储策略",
+			"表名规则",
+			"表中文名",
+			"生命周期",
+			"负责人",
+			"质量规则",
+			"高级 dbt 工作区",
+		])
 			expect(editor).toContain(label);
 		expect(editor).not.toContain("<span>业务分类</span>");
 		expect(fieldTable).toMatch(/"序号".*"字段名称".*"类型".*"字段显示名".*"主键".*"非空".*"维度属性编码"/s);
@@ -164,7 +174,9 @@ describe("prototype-owned data modeling frontend", () => {
 		);
 		expect(modeling).toMatch(/isConceptDimensionDraft/);
 		expect(modeling).toMatch(/conceptDimensionDraftFromView/);
-		expect(modeling).toMatch(/\{selectedModel\?\.modelType === "FACT" \? \(\s*<aside className="dmx-record-rail"/s);
+		expect(modeling).toMatch(
+			/\{dialog !== "advanced" && selectedModel\?\.modelType === "FACT" \? \(\s*<aside className="dmx-record-rail"/s,
+		);
 		expect(modeling).toContain('"beforeunload"');
 		expect(modeling).toMatch(/const blocker = useBlocker\(/);
 		expect(modeling).toContain("blocker.proceed()");
@@ -185,6 +197,7 @@ describe("prototype-owned data modeling frontend", () => {
 		const createMenu = read("./prototype/ModelWorkbenchCreateMenu.tsx");
 		const catalogActions = read("./prototype/useCatalogActions.ts");
 		const modelDialogs = read("./prototype/ModelWorkbenchDialog.tsx");
+		const advancedDbtWorkspace = read("./prototype/AdvancedDbtWorkspace.tsx");
 		const modelPublishDialog = read("./prototype/ModelPublishDialog.tsx");
 		const reverse = read("./prototype/ReverseModelingPage.tsx");
 		const tools = read("./prototype/ToolsPage.tsx");
@@ -231,15 +244,15 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(modeling).toMatch(
 			/getModelLifecycle|getModelRepresentation|implementationRevision|representationScope: "BUSINESS"|useDataModelingMenuGrant/,
 		);
-		expect(modelDialogs).toMatch(/representationScope: "TECHNICAL"|OPEN_ADVANCED_DBT|canMaintain/);
-		expect(modelDialogs).toMatch(/导入 dbt ZIP|intent=advanced/);
-		expect(modelDialogs).not.toMatch(/\/api\/etl\/dbt\/files|\/etl\/dbt\/files/);
+		expect(advancedDbtWorkspace).toMatch(/representationScope: "TECHNICAL"|OPEN_ADVANCED_DBT|canMaintain/);
+		expect(advancedDbtWorkspace).toMatch(/导入 dbt ZIP|intent=advanced/);
+		expect(`${modelDialogs}\n${advancedDbtWorkspace}`).not.toMatch(/\/api\/etl\/dbt\/files|\/etl\/dbt\/files/);
 		expect(modelPublishDialog).toMatch(/getModelLifecycle|compileModelLifecycle/);
 		expect(modelPublishDialog).toMatch(
 			/createReleaseCandidate|lockReleaseCandidate|retryReleaseCandidate|rematerializeReleaseCandidate|publishReleaseCandidate/,
 		);
 		expect(modelDialogs.trimEnd().split("\n").length).toBeLessThanOrEqual(850);
-		expect(modelDialogs).toMatch(/state: "COMMITTED"|创建新草稿/);
+		expect(advancedDbtWorkspace).toMatch(/state: "COMMITTED"|创建新草稿/);
 		expect(reverse).toMatch(/inspectDbtModelArchive|previewModelSpecImport|applyModelSpecImport/);
 		expect(reverse).toMatch(/retryModelSpecImport|forwardUndoModelSpecImport|renameMappings/);
 		expect(reverse).toMatch(/defaultImportConflictResolutions|key=\{mapping\._clientId\}/);
