@@ -6,6 +6,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import type { ModelSpecStageGate, ReleaseCandidate, ReleaseCandidateWorkbench } from "@/api/modelSpecApi";
 import type { ModelImplementationView } from "@/features/modeling/contracts/modelImplementationContract";
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
+import { AdvancedDbtWorkspace } from "./AdvancedDbtWorkspace";
 import { ModelPublishDialog } from "./ModelPublishDialog";
 import { ModelWorkbenchDialog } from "./ModelWorkbenchDialog";
 
@@ -33,7 +34,13 @@ const apiMocks = vi.hoisted(() => ({
 	createReplacementCandidate: vi.fn(),
 	getWorkbench: vi.fn(),
 	lockCandidate: vi.fn(),
+	runQualityCandidate: vi.fn(),
+	submitReviewCandidate: vi.fn(),
+	approveCandidate: vi.fn(),
+	rejectCandidate: vi.fn(),
 	publishCandidate: vi.fn(),
+	retryRegistrationCandidate: vi.fn(),
+	rollbackCandidate: vi.fn(),
 	refreshCandidate: vi.fn(),
 	retryCandidate: vi.fn(),
 	rematerializeCandidate: vi.fn(),
@@ -56,7 +63,13 @@ vi.mock("@/api/modelSpecApi", async (importOriginal) => ({
 	createReplacementReleaseCandidate: apiMocks.createReplacementCandidate,
 	getReleaseCandidateWorkbench: apiMocks.getWorkbench,
 	lockReleaseCandidate: apiMocks.lockCandidate,
+	runReleaseCandidateQuality: apiMocks.runQualityCandidate,
+	submitReleaseCandidateReview: apiMocks.submitReviewCandidate,
+	approveReleaseCandidateReview: apiMocks.approveCandidate,
+	rejectReleaseCandidateReview: apiMocks.rejectCandidate,
 	publishReleaseCandidate: apiMocks.publishCandidate,
+	retryReleaseCandidateRegistration: apiMocks.retryRegistrationCandidate,
+	rollbackReleaseCandidate: apiMocks.rollbackCandidate,
 	refreshReleaseCandidate: apiMocks.refreshCandidate,
 	retryReleaseCandidate: apiMocks.retryCandidate,
 	rematerializeReleaseCandidate: apiMocks.rematerializeCandidate,
@@ -423,6 +436,28 @@ describe("release and materialization dispatch", () => {
 		expect(apiMocks.publishCandidate).toHaveBeenCalledWith(model.planId, approved, "idem-1", "从模型工作台发布");
 		expect(apiMocks.startPublicationIntent).not.toHaveBeenCalled();
 	});
+
+	it.each([
+		["BUILT", "RUN_QUALITY", "提交上线", "runQualityCandidate"],
+		["QUALITY_PASSED", "SUBMIT_REVIEW", "提交发布评审", "submitReviewCandidate"],
+		["REVIEW_PENDING", "APPROVE", "审核通过", "approveCandidate"],
+		["REVIEW_PENDING", "REJECT", "驳回", "rejectCandidate"],
+		["PARTIAL", "RETRY_REGISTRATION", "重试发布登记", "retryRegistrationCandidate"],
+		["PUBLISHED", "ROLLBACK", "回滚发布", "rollbackCandidate"],
+	] as const)("dispatches %s candidate action %s from the release workflow", async (status, action, label, mockName) => {
+		const current = candidate("BATCH_WORKBENCH", status);
+		apiMocks.getWorkbench.mockResolvedValue(workspace([action], current));
+		apiMocks[mockName].mockResolvedValue({ candidate: current });
+
+		await act(async () =>
+			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+		);
+		await flush();
+		await act(async () => button("发布模型")?.click());
+		await act(async () => button(label)?.click());
+
+		expect(apiMocks[mockName]).toHaveBeenCalledWith(model.planId, current, "idem-1", "从模型工作台发布");
+	});
 });
 
 describe("stage gate dispatch", () => {
@@ -468,7 +503,7 @@ describe("stage gate dispatch", () => {
 describe("advanced dbt draft lifecycle", () => {
 	it("does not request the technical representation for a read-only account", async () => {
 		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain={false} dialog="advanced" model={model} onClose={vi.fn()} />),
+			root.render(<AdvancedDbtWorkspace canMaintain={false} model={model} onBack={vi.fn()} />),
 		);
 		await flush();
 
@@ -505,7 +540,7 @@ describe("advanced dbt draft lifecycle", () => {
 		});
 
 		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain dialog="advanced" model={model} onClose={vi.fn()} />),
+			root.render(<AdvancedDbtWorkspace canMaintain model={model} onBack={vi.fn()} />),
 		);
 		await flush();
 
@@ -568,7 +603,7 @@ describe("advanced dbt draft lifecycle", () => {
 		});
 
 		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain dialog="advanced" model={model} onClose={vi.fn()} />),
+			root.render(<AdvancedDbtWorkspace canMaintain model={model} onBack={vi.fn()} />),
 		);
 		await flush();
 		expect(apiMocks.getRepresentation).toHaveBeenNthCalledWith(1, model.id, {

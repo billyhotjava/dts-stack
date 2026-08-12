@@ -23,12 +23,18 @@ describe("advanced dbt implementation draft contract", () => {
 		expect(api).not.toContain("/etl/dbt/files");
 	});
 
-	it("keeps maintainer-only editing in the existing workbench with dirty and conflict states", () => {
+	it("keeps maintainer-only editing in the data-modeling workbench with dirty and conflict states", () => {
 		const workbench = read("../pages/data-modeling/prototype/ModelingWorkbenchPage.tsx");
-		const editor = read("../pages/data-modeling/prototype/ModelWorkbenchDialog.tsx");
+		const dialogs = read("../pages/data-modeling/prototype/ModelWorkbenchDialog.tsx");
+		const editor = read("../pages/data-modeling/prototype/AdvancedDbtWorkspace.tsx");
 
 		expect(workbench).toContain("useDataModelingMenuGrant");
 		expect(workbench).toContain("disabled={!selectedModel || !canMaintain}");
+		expect(workbench).toContain('import { AdvancedDbtWorkspace } from "./AdvancedDbtWorkspace"');
+		expect(workbench).toMatch(/dialog === "advanced"[\s\S]*<AdvancedDbtWorkspace/);
+		expect(dialogs).not.toContain("AdvancedDbtDialog");
+		expect(editor).not.toContain("<Modal");
+		expect(editor).toContain("返回模型设计");
 		expect(editor).toContain('representationScope: "TECHNICAL"');
 		expect(editor).toContain("if (!canMaintain)");
 		expect(editor).toContain('includes("OPEN_ADVANCED_DBT")');
@@ -40,6 +46,6 @@ describe("advanced dbt implementation draft contract", () => {
 		expect(editor).not.toContain("initialFiles");
 		expect(editor).not.toContain('path: "dbt_project.yml"');
 		expect(editor).not.toContain("model-paths: [models]");
-		expect(`${workbench}\n${editor}`).not.toContain("/api/etl/dbt/files");
+		expect(`${workbench}\n${dialogs}\n${editor}`).not.toContain("/api/etl/dbt/files");
 	});
 });
