@@ -530,13 +530,16 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		setRepresentation(null);
 		setRepresentationFailure("");
 		void getModelLifecycle(selectedModel.id)
-			.then(({ implementation }) =>
-				getModelRepresentation(selectedModel.id, {
+			.then(({ implementation }) => {
+				const exactImplementation =
+					implementation?.revision === selectedModel.revision &&
+					implementation.modelChecksum === selectedModel.checksum;
+				return getModelRepresentation(selectedModel.id, {
 					modelRevision: selectedModel.revision,
-					implementationRevision: implementation?.implementationRevision,
+					implementationRevision: exactImplementation ? implementation.implementationRevision : undefined,
 					representationScope: "BUSINESS",
-				}),
-			)
+				});
+			})
 			.then((value) => {
 				if (active) setRepresentation(value);
 			})

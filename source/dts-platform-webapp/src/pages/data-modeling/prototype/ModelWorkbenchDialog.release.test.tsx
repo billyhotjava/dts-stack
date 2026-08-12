@@ -476,6 +476,56 @@ describe("advanced dbt draft lifecycle", () => {
 		expect(container.textContent).toContain("无高级实现维护权限");
 	});
 
+	it("allows a new advanced draft from the prior implementation after the logical model advances", async () => {
+		const priorImplementation = {
+			...implementation,
+			revision: model.revision - 1,
+			modelChecksum: "prior-model-checksum",
+		};
+		apiMocks.getLifecycle.mockResolvedValue({ implementation: priorImplementation, artifacts: [], events: [] });
+		apiMocks.getRepresentation.mockResolvedValue({
+			allowedActions: ["OPEN_ADVANCED_DBT"],
+			capabilityReasons: [],
+			implementationRevision: null,
+			implementationChecksum: null,
+			ownershipMode: "DBT_MANAGED",
+		});
+		apiMocks.createDbtDraft.mockResolvedValue({
+			draftId: "draft-forward",
+			planId: model.planId,
+			modelSpecId: model.id,
+			baseModelRevision: model.revision,
+			baseModelChecksum: model.checksum,
+			baseImplementationRevision: priorImplementation.implementationRevision,
+			baseImplementationChecksum: priorImplementation.implementationChecksum,
+			state: "DRAFT",
+			etag: "e1",
+			expiresAt: "2026-08-04T00:00:00Z",
+			sourceBundle: { files: [{ path: "models/budget.sql", content: "select 1" }] },
+		});
+
+		await act(async () =>
+			root.render(<ModelWorkbenchDialog canMaintain dialog="advanced" model={model} onClose={vi.fn()} />),
+		);
+		await flush();
+
+		expect(apiMocks.getRepresentation).toHaveBeenCalledWith(model.id, {
+			modelRevision: model.revision,
+			representationScope: "TECHNICAL",
+		});
+		expect(button("创建高级草稿")?.disabled).toBe(false);
+		await act(async () => button("创建高级草稿")?.click());
+		await flush();
+		expect(apiMocks.createDbtDraft).toHaveBeenCalledWith(
+			model.id,
+			expect.objectContaining({
+				baseModelRevision: model.revision,
+				baseImplementationRevision: priorImplementation.implementationRevision,
+				baseImplementationChecksum: priorImplementation.implementationChecksum,
+			}),
+		);
+	});
+
 	it("locks a committed draft and offers a new draft instead of allowing further edits", async () => {
 		apiMocks.getRepresentation.mockResolvedValue({
 			allowedActions: ["OPEN_ADVANCED_DBT"],

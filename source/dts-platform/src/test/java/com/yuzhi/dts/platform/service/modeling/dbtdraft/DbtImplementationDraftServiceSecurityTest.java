@@ -250,6 +250,43 @@ class DbtImplementationDraftServiceSecurityTest {
     }
 
     @Test
+    void carriesThePriorImplementationBundleForwardAfterTheLogicalModelAdvances() {
+        String advancedModelChecksum = "f".repeat(64);
+        List<FileRow> files = List.of(
+            file("dbt_project.yml", "name: sprint83\nmodel-paths: [models]\n"),
+            file("models/orders.sql", "select 1\n"),
+            file("models/schema.yml", "version: 2\nmodels: []\n")
+        );
+        BundleSnapshot bundle = bundle(files, project());
+        ModelSpecView model = model(4, advancedModelChecksum);
+        when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model);
+        when(writeAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
+        TimelineView timeline = org.mockito.Mockito.mock(TimelineView.class);
+        ImplementationView implementation = baseImplementation();
+        when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(timeline);
+        when(timeline.implementation()).thenReturn(implementation);
+        when(representationEvidence.findExact(TENANT, MODEL_ID, 3, MODEL_CHECKSUM, 2, true))
+            .thenReturn(Optional.of(representation(bundle)));
+        when(repository.create(any())).thenAnswer(invocation -> draft(invocation.getArgument(0)));
+
+        var created = service.create(
+            TENANT,
+            ACTOR,
+            MODEL_ID,
+            new CreateDraftRequest(PLAN_ID, 4, advancedModelChecksum, 2, IMPLEMENTATION_CHECKSUM, "advance-83")
+        );
+
+        assertThat(created.baseModelRevision()).isEqualTo(4);
+        assertThat(created.baseModelChecksum()).isEqualTo(advancedModelChecksum);
+        assertThat(created.baseImplementationRevision()).isEqualTo(2);
+        assertThat(created.sourceBundle().sourceKind()).isEqualTo(SourceBundleKind.FROZEN_SOURCE_BUNDLE);
+        assertThat(created.sourceBundle().files())
+            .extracting(DbtImplementationDraftContract.BundleFileView::path)
+            .containsExactly("dbt_project.yml", "models/orders.sql", "models/schema.yml");
+        verify(representationEvidence).findExact(TENANT, MODEL_ID, 3, MODEL_CHECKSUM, 2, true);
+    }
+
+    @Test
     void reconstructsANonLosslessCanonicalProjectFromExactlyPinnedImportedArtifacts() {
         ModelSpecView model = model(3, MODEL_CHECKSUM);
         when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model);

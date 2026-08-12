@@ -156,7 +156,20 @@ public class ModelRepresentationService {
     }
 
     private ModelRepresentationView withoutImplementation(String tenantId, ModelSpecView model, RepresentationScope scope) {
-        if (evidencePort.findCurrentPin(tenantId, model.id()).isPresent()) {
+        boolean exactCurrentImplementationExists = evidencePort
+            .findCurrentPin(tenantId, model.id())
+            .flatMap(pin ->
+                evidencePort.findExact(
+                    tenantId,
+                    model.id(),
+                    model.revision(),
+                    model.checksum(),
+                    pin.implementationRevision(),
+                    scope == RepresentationScope.TECHNICAL
+                )
+            )
+            .isPresent();
+        if (exactCurrentImplementationExists) {
             throw new ModelRepresentationException(
                 "MODEL_REPRESENTATION_IMPLEMENTATION_PIN_REQUIRED",
                 "An implementation exists; its exact revision pin is required",

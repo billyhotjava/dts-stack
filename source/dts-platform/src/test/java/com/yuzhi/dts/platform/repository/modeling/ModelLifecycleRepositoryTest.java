@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -27,6 +28,56 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 class ModelLifecycleRepositoryTest {
+
+    @Test
+    void advancesImportedDbtImplementationFromAPriorLogicalRevisionUsingTheImplementationCasPins() {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        UUID modelId = UUID.fromString("30000000-0000-0000-0000-000000000084");
+        UUID planId = UUID.fromString("10000000-0000-0000-0000-000000000084");
+        UUID implementationId = UUID.fromString("60000000-0000-0000-0000-000000000084");
+        when(jdbcTemplate.queryForList(anyString(), eq(UUID.class), any(Object[].class)))
+            .thenReturn(List.of(modelId), List.of(implementationId));
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), any(Object[].class))).thenReturn(0);
+        ModelLifecycleRepository repository = new ModelLifecycleRepository(jdbcTemplate, new ObjectMapper());
+        ModelSpecView model = mock(ModelSpecView.class);
+        when(model.id()).thenReturn(modelId);
+        when(model.planId()).thenReturn(planId);
+        when(model.revision()).thenReturn(3);
+        when(model.checksum()).thenReturn("c".repeat(64));
+        when(model.status()).thenReturn(ModelStatus.DRAFT);
+        when(model.implementationMode()).thenReturn(ImplementationMode.DBT_MANAGED);
+        SaveImplementationCommand command = new SaveImplementationCommand(
+            InputMode.GENERATED,
+            List.of(new GeneratedInput("DBT", Map.of("projectKey", "pjm", "dbtUniqueId", "model.pjm.progress"))),
+            List.of(),
+            Map.of("targetPhysicalName", "progress", "loadStrategy", "FULL", "partitionFields", List.of()),
+            ImplementationMode.DBT_MANAGED,
+            "table",
+            "advance-84"
+        );
+
+        repository.saveImportedDbtImplementation(
+            "tenant-a",
+            "alice",
+            model,
+            ModelStatus.DRAFT,
+            "pjm",
+            "model.pjm.progress",
+            command,
+            1,
+            "b".repeat(64),
+            Instant.parse("2026-08-12T00:00:00Z")
+        );
+
+        ArgumentCaptor<String> lockSql = ArgumentCaptor.forClass(String.class);
+        verify(jdbcTemplate, times(2)).queryForList(lockSql.capture(), eq(UUID.class), any(Object[].class));
+        String implementationLock = lockSql.getAllValues().get(1);
+        assertThat(implementationLock)
+            .contains("implementation_revision = ?")
+            .contains("current_implementation_checksum = ?")
+            .doesNotContain("model_revision = ?")
+            .doesNotContain("model_checksum = ?");
+    }
 
     @Test
     void currentArtifactTypesIncludesImportedAndCompiledEvidenceForThePinnedImplementation() {

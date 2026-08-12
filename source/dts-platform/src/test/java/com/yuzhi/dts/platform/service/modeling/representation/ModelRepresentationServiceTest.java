@@ -265,11 +265,35 @@ class ModelRepresentationServiceTest {
         when(evidencePort.findCurrentPin(TENANT, MODEL_ID)).thenReturn(
             Optional.of(new ImplementationPin(IMPLEMENTATION_ID, 3, IMPLEMENTATION_CHECKSUM))
         );
+        when(evidencePort.findExact(TENANT, MODEL_ID, 2, MODEL_CHECKSUM, 3, false)).thenReturn(Optional.of(exactEvidence(false)));
 
         assertThatThrownBy(() -> service.get(TENANT, ACTOR, MODEL_ID, 2, null, RepresentationScope.BUSINESS, false))
             .isInstanceOf(ModelRepresentationException.class)
             .extracting("code")
             .isEqualTo("MODEL_REPRESENTATION_IMPLEMENTATION_PIN_REQUIRED");
+    }
+
+    @Test
+    void allowsAdvancedDraftWhenOnlyAPriorLogicalRevisionHasAnImplementation() {
+        when(modelSpecs.revision(TENANT, new ModelRevisionRef(MODEL_ID, 2))).thenReturn(model(ImplementationMode.DBT_MANAGED));
+        when(evidencePort.findCurrentPin(TENANT, MODEL_ID)).thenReturn(
+            Optional.of(new ImplementationPin(IMPLEMENTATION_ID, 3, IMPLEMENTATION_CHECKSUM))
+        );
+        when(evidencePort.findExact(TENANT, MODEL_ID, 2, MODEL_CHECKSUM, 3, true)).thenReturn(Optional.empty());
+
+        TechnicalModelRepresentationView view = (TechnicalModelRepresentationView) service.get(
+            TENANT,
+            ACTOR,
+            MODEL_ID,
+            2,
+            null,
+            RepresentationScope.TECHNICAL,
+            true
+        );
+
+        assertThat(view.implementationRevision()).isNull();
+        assertThat(view.visualizationCapability()).isEqualTo(VisualizationCapability.ADVANCED_DBT_IMPLEMENTATION);
+        assertThat(view.allowedActions()).containsExactly("OPEN_ADVANCED_DBT");
     }
 
     @Test

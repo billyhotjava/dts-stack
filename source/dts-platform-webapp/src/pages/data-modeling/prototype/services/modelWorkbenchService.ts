@@ -267,6 +267,11 @@ export function modelDraftFromView(
 ): ModelSpecDraft {
 	const implementationLoadStrategy = implementationText(implementation, "loadStrategy");
 	const generationStrategyType = generatedInput(implementation)?.generatorType || model.generationStrategy?.type || "";
+	const logicalInputMode = model.sourceRefs.length
+		? "PHYSICAL_ASSET"
+		: model.dependsOn.length
+			? "UPSTREAM_MODEL"
+			: null;
 	return {
 		createKind: modelKind(model),
 		base: model,
@@ -296,6 +301,7 @@ export function modelDraftFromView(
 		implementationMode: model.implementationMode,
 		implementationBase: implementation,
 		implementationInputMode:
+			logicalInputMode ||
 			implementation?.inputMode ||
 			(generationStrategyType === "DATE_DIMENSION"
 				? "GENERATED"

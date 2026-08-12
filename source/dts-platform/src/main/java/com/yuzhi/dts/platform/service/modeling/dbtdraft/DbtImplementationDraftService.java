@@ -879,15 +879,17 @@ public class DbtImplementationDraftService {
         }
         if (implementationRevision == null || implementationChecksum == null) throw sourceBundleUnavailable();
 
+        int sourceModelRevision = current.revision();
+        String sourceModelChecksum = current.modelChecksum();
         RepresentationEvidence evidence = representationEvidence
-            .findExact(tenantId, modelSpecId, modelRevision, modelChecksum, implementationRevision, true)
+            .findExact(tenantId, modelSpecId, sourceModelRevision, sourceModelChecksum, implementationRevision, true)
             .orElseThrow(DbtImplementationDraftService::sourceBundleUnavailable);
         ImplementationSnapshot snapshot = evidence.implementation();
         requireSourcePins(
             planId,
             modelSpecId,
-            modelRevision,
-            modelChecksum,
+            sourceModelRevision,
+            sourceModelChecksum,
             implementationRevision,
             implementationChecksum,
             current,
@@ -900,8 +902,8 @@ public class DbtImplementationDraftService {
                 snapshot,
                 evidence.artifacts(),
                 modelSpecId,
-                modelRevision,
-                modelChecksum,
+                sourceModelRevision,
+                sourceModelChecksum,
                 implementationRevision,
                 implementationChecksum
             );
@@ -920,8 +922,8 @@ public class DbtImplementationDraftService {
         ArtifactEvidence manifest = bundleManifest(
             evidence,
             modelSpecId,
-            modelRevision,
-            modelChecksum,
+            sourceModelRevision,
+            sourceModelChecksum,
             implementationRevision,
             implementationChecksum,
             expectedBundleChecksum

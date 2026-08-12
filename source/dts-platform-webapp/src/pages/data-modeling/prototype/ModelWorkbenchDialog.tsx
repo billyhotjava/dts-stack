@@ -258,6 +258,7 @@ function AdvancedDbtDialog({
 }) {
 	const navigate = useNavigate();
 	const [representation, setRepresentation] = useState<ModelRepresentationView | null>(null);
+	const [baseImplementation, setBaseImplementation] = useState<ModelLifecycleTimeline["implementation"]>(null);
 	const [draft, setDraft] = useState<DbtImplementationDraft | null>(null);
 	const [files, setFiles] = useState<DbtDraftFile[]>([]);
 	const [selectedPath, setSelectedPath] = useState("");
@@ -272,6 +273,7 @@ function AdvancedDbtDialog({
 		let active = true;
 		setFailure("");
 		setRepresentation(null);
+		setBaseImplementation(null);
 		if (!canMaintain) {
 			setBusy("");
 			return () => {
@@ -280,13 +282,16 @@ function AdvancedDbtDialog({
 		}
 		setBusy("load");
 		void getModelLifecycle(model.id)
-			.then(({ implementation }) =>
-				getModelRepresentation(model.id, {
+			.then(({ implementation }) => {
+				if (active) setBaseImplementation(implementation);
+				const exactImplementation =
+					implementation?.revision === model.revision && implementation.modelChecksum === model.checksum;
+				return getModelRepresentation(model.id, {
 					modelRevision: model.revision,
-					implementationRevision: implementation?.implementationRevision,
+					implementationRevision: exactImplementation ? implementation.implementationRevision : undefined,
 					representationScope: "TECHNICAL",
-				}),
-			)
+				});
+			})
 			.then((value) => {
 				if (active) setRepresentation(value);
 			})
@@ -328,8 +333,8 @@ function AdvancedDbtDialog({
 				planId: model.planId,
 				baseModelRevision: model.revision,
 				baseModelChecksum: model.checksum,
-				baseImplementationRevision: representation?.implementationRevision || null,
-				baseImplementationChecksum: representation?.implementationChecksum || null,
+				baseImplementationRevision: baseImplementation?.implementationRevision || null,
+				baseImplementationChecksum: baseImplementation?.implementationChecksum || null,
 				idempotencyKey: crypto.randomUUID(),
 			});
 			installDraft(created);
@@ -470,7 +475,13 @@ function AdvancedDbtDialog({
 						<dt>实现所有权</dt>
 						<dd>{representation?.ownershipMode || model.implementationMode}</dd>
 						<dt>实现修订</dt>
-						<dd>{representation?.implementationRevision ? `r${representation.implementationRevision}` : "尚无"}</dd>
+						<dd>
+							{representation?.implementationRevision
+								? `r${representation.implementationRevision}`
+								: baseImplementation?.implementationRevision
+									? `r${baseImplementation.implementationRevision}（上一逻辑版本）`
+									: "尚无"}
+						</dd>
 						<dt>能力限制</dt>
 						<dd>{representation?.capabilityReasons.join("；") || "无"}</dd>
 					</dl>

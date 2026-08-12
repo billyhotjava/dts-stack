@@ -334,7 +334,6 @@ public class ModelLifecycleRepository {
                     : """
                        and status = 'ACTIVE' and ownership = 'DBT_MANAGED'
                        and project_key = ? and dbt_unique_id = ?
-                       and model_revision = ? and model_checksum = ?
                        and implementation_revision = ? and current_implementation_checksum = ?
                       """
             ) +
@@ -347,8 +346,6 @@ public class ModelLifecycleRepository {
                     model.id(),
                     projectKey.trim(),
                     dbtUniqueId.trim(),
-                    model.revision(),
-                    model.checksum(),
                     expectedImplementationRevision,
                     expectedImplementationChecksum,
                 }

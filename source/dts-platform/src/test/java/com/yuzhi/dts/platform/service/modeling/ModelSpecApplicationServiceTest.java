@@ -229,7 +229,7 @@ class ModelSpecApplicationServiceTest {
             SUBJECT_DOMAIN_ID
         );
         when(repository.findByIdempotencyKey(TENANT, command.idempotencyKey())).thenReturn(Optional.empty());
-        when(repository.planHasCurrentDataMart(TENANT, PLAN_ID, DATA_MART_ID, DOMAIN_ID)).thenReturn(true);
+        when(repository.hasCurrentDataMartForDomain(TENANT, DATA_MART_ID, DOMAIN_ID)).thenReturn(true);
         when(repository.hasCurrentSubjectDomain(TENANT, SUBJECT_DOMAIN_ID, DATA_MART_ID)).thenReturn(false);
 
         assertThatThrownBy(() -> service.createImported(TENANT, ACTOR, MODEL_ID, command))
@@ -237,6 +237,32 @@ class ModelSpecApplicationServiceTest {
             .extracting(error -> ((ModelSpecException) error).code())
             .isEqualTo("MODEL_SPEC_SUBJECT_DOMAIN_CONTEXT_INVALID");
 
+        verify(repository, never()).insertV2(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void rejectsAnImportedApplicationWhoseDataMartDoesNotOwnTheModelDomain() {
+        UUID upstreamId = UUID.fromString("73000000-0000-0000-0000-000000000002");
+        CreateModelSpecCommand command = withBusinessContext(
+            derivedCommand(
+                "application-mart-mismatch",
+                "customer_application_wrong_mart",
+                ModelType.APPLICATION,
+                List.of(new ModelRevisionRef(upstreamId, 1))
+            ),
+            null,
+            DATA_MART_ID,
+            SUBJECT_DOMAIN_ID
+        );
+        when(repository.findByIdempotencyKey(TENANT, command.idempotencyKey())).thenReturn(Optional.empty());
+        when(repository.hasCurrentDataMartForDomain(TENANT, DATA_MART_ID, DOMAIN_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.createImported(TENANT, ACTOR, MODEL_ID, command))
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("MODEL_SPEC_DATA_MART_CONTEXT_INVALID");
+
+        verify(repository, never()).hasCurrentSubjectDomain(anyString(), any(), any());
         verify(repository, never()).insertV2(any(), any(), any(), any(), any(), any());
     }
 

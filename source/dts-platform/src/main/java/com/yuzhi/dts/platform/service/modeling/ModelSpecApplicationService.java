@@ -284,7 +284,7 @@ public class ModelSpecApplicationService {
 
         requireCanonicalWriteEnabled();
         validateWriteContext(serverTenantId, actorId, command.planId(), command.domainId());
-        validateDataMartContext(serverTenantId, command.planId(), command.domainId(), command.dataMartId());
+        validateDataMartContext(serverTenantId, command.domainId(), command.dataMartId());
         validateBusinessContext(
             serverTenantId,
             command.modelType(),
@@ -428,12 +428,7 @@ public class ModelSpecApplicationService {
         requireDimensionDefinitionRef(replacement);
         rejectIssues(ModelSpecContract.validateEditableView(replacement));
         requireUniqueDimensionVariant(serverTenantId, replacement, current.id());
-        validateDataMartContext(
-            serverTenantId,
-            replacement.planId(),
-            replacement.domainId(),
-            replacement.dataMartId()
-        );
+        validateDataMartContext(serverTenantId, replacement.domainId(), replacement.dataMartId());
         validateBusinessContext(
             serverTenantId,
             replacement.modelType(),
@@ -1162,14 +1157,14 @@ public class ModelSpecApplicationService {
         }
     }
 
-    private void validateDataMartContext(String tenantId, UUID planId, UUID domainId, UUID dataMartId) {
+    private void validateDataMartContext(String tenantId, UUID domainId, UUID dataMartId) {
         if (dataMartId == null) return;
-        if (!repository.planHasCurrentDataMart(tenantId, planId, dataMartId, domainId)) {
+        if (!repository.hasCurrentDataMartForDomain(tenantId, dataMartId, domainId)) {
             throw new ModelSpecException(
-                "MODEL_SPEC_DATA_MART_NOT_IN_PLAN",
-                "Select a confirmed data mart from the current warehouse planning baseline",
+                "MODEL_SPEC_DATA_MART_CONTEXT_INVALID",
+                "Select a current data mart whose business category owns the model data domain",
                 ModelSpecException.Kind.UNPROCESSABLE,
-                Map.of("planId", planId, "domainId", domainId, "dataMartId", dataMartId)
+                Map.of("domainId", domainId, "dataMartId", dataMartId)
             );
         }
     }

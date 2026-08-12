@@ -340,6 +340,33 @@ describe("model workbench draft preparation", () => {
 		});
 	});
 
+	it("loads the logical upstream relation instead of a generated DBT implementation input", () => {
+		const upstream = canonicalFactView();
+		const application = {
+			...canonicalFactView(),
+			id: "30000000-0000-0000-0000-000000000003",
+			modelType: "APPLICATION" as const,
+			layer: "ADS" as const,
+			warehouseLayerCode: "ADS",
+			implementationMode: "DBT_MANAGED" as const,
+			businessProcessId: null,
+			factShape: null,
+			timeSemantics: null,
+			sourceRefs: [],
+			dependsOn: [{ modelSpecId: upstream.id, revision: upstream.revision }],
+		};
+		const implementation = generatedImplementation(application, {
+			ownership: "DBT_MANAGED",
+			inputMode: "GENERATED",
+			inputs: [{ generatorType: "DBT_SQL", config: {} }],
+		});
+
+		expect(modelDraftFromView(application, implementation)).toMatchObject({
+			implementationInputMode: "UPSTREAM_MODEL",
+			dependsOn: application.dependsOn,
+		});
+	});
+
 	it("loads only the selected model lifecycle when opening a workbench draft", async () => {
 		const model = canonicalFactView();
 		const implementation = generatedImplementation(model);

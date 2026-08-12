@@ -116,6 +116,8 @@ export function modelDraftFingerprint(draft: ModelDraft): string {
 		factShape: draft.factShape,
 		timeSemanticsType: draft.timeSemanticsType,
 		timeSemanticsFields: draft.timeSemanticsFields,
+		dataMartId: draft.dataMartId,
+		subjectDomainId: draft.subjectDomainId,
 		consumptionScenario: draft.consumptionScenario,
 	});
 }

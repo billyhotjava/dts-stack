@@ -184,6 +184,12 @@ describe("dimension workbench presentation", () => {
 		expect(modelDraftFingerprint(makeDraft({ planId: "plan-a" }))).toBe(
 			modelDraftFingerprint(makeDraft({ planId: "plan-b" })),
 		);
+		expect(modelDraftFingerprint(makeDraft({ dataMartId: "mart-a" }))).not.toBe(
+			modelDraftFingerprint(makeDraft({ dataMartId: "mart-b" })),
+		);
+		expect(modelDraftFingerprint(makeDraft({ subjectDomainId: "subject-a" }))).not.toBe(
+			modelDraftFingerprint(makeDraft({ subjectDomainId: "subject-b" })),
+		);
 		expect(modelDraftFingerprint(makeConceptDraft({ name: "A" }))).not.toBe(
 			modelDraftFingerprint(makeConceptDraft({ name: "B" })),
 		);

@@ -915,6 +915,35 @@ public class ModelSpecRepository {
         return Boolean.TRUE.equals(exists);
     }
 
+    public boolean hasCurrentDataMartForDomain(String tenantId, UUID dataMartId, UUID domainId) {
+        Boolean exists = jdbcTemplate.queryForObject(
+            """
+            select exists (
+                select 1
+                  from modeling_data_mart m
+                  join modeling_data_mart_domain mart_category
+                    on mart_category.tenant_id = m.tenant_id
+                   and mart_category.data_mart_id = m.id
+                  join catalog_domain model_domain
+                    on model_domain.id = ?
+                 where m.tenant_id = ?
+                   and m.id = ?
+                   and m.status = 'CURRENT'
+                   and model_domain.lifecycle_status = 'ACTIVE'
+                   and (
+                       mart_category.domain_id = model_domain.id
+                       or mart_category.domain_id = model_domain.parent_id
+                   )
+            )
+            """,
+            Boolean.class,
+            domainId,
+            tenantId,
+            dataMartId
+        );
+        return Boolean.TRUE.equals(exists);
+    }
+
     public Optional<UUID> findActiveDimensionVariant(
         String tenantId,
         UUID planId,
