@@ -7,6 +7,8 @@
 WITH stg AS (
   SELECT * FROM {{ ref('stg_pm__budget_v2') }}
   WHERE project_no IS NOT NULL
+    AND budget_no IS NOT NULL
+    AND snapshot_date IS NOT NULL
 ),
 derived AS (
   SELECT
@@ -19,7 +21,7 @@ derived AS (
 )
 
 SELECT
-  concat('budget:', d.source_row_id) AS budget_id,
+  concat('budget:', to_char(d.snapshot_date, 'YYYYMMDD'), ':', d.budget_no) AS budget_id,
 
   d.source_row_id,
   d.source_table,
@@ -46,5 +48,6 @@ SELECT
        ELSE ROUND(d.executed_amount / d.budget_amount_f * 100, 2)
   END AS execution_rate_line,
 
-  now() AS etl_time
+  now() AS etl_time,
+  d.snapshot_date
 FROM derived d

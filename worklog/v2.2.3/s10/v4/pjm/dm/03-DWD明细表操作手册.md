@@ -166,10 +166,10 @@ FACT 的 `factShape` 和 `timeSemantics` 是服务端设计门禁必需项，但
 | 数据域 / 业务过程 | 财务管理域 / 预算执行快照 |
 | 模型名称 / 物理表名 | 预算执行明细 / `biz_dwd_budget_v2` |
 | 业务定义 | 统一记录每个预算编号当前预算、预付、账面成本、应付、已执行、剩余和超支状态，金额单位万元。 |
-| 模型粒度 | 一个预算编号在一个业务快照日一行。当前源仅有最新状态。 |
+| 模型粒度 | 一个预算编号在一个业务快照日一行。 |
 | 物化 / 加载 / 分区 | `table` / 全量 / 留空 |
 | 事实形态 | 目标为 `PERIODIC_SNAPSHOT` |
-| 时间语义 | 目标为 `SNAPSHOT_DATE`；当前缺少 `snapshot_date`，发布前需补源字段 |
+| 时间语义 | `SNAPSHOT_DATE`，绑定业务字段 `snapshot_date` |
 
 ### 7.2 字段角色检查
 
@@ -180,12 +180,12 @@ FACT 的 `factShape` 和 `timeSemantics` 是服务端设计门禁必需项，但
 | 业务 ATTRIBUTE | `project_no`、`subtopic`、`research_lab` |
 | MEASURE | `budget_amount`、`prepaid_amount`、`book_cost_amount`、`payable_amount`、`executed_amount`、`remaining_amount`、`overrun_amount`、`execution_rate_line` |
 | 状态 ATTRIBUTE | `is_overrun` |
-| TIME | 目标字段 `snapshot_date`；`source_imported_at` 仅为技术追溯，不充当业务 TIME |
+| TIME | `snapshot_date`；`source_imported_at` 仅为技术追溯，不充当业务 TIME |
 | ETL ATTRIBUTE | `etl_time` |
 
 必测字段：`budget_no` unique/not_null，`budget_id` unique/not_null，`project_no` not_null；金额口径与单位复核。
 
-在 `snapshot_date` 缺失时，可以保留现有全量“当前状态”物理表，但 FACT 设计门禁的时间语义没有可信业务字段，不能把它标记为完整的周期快照模型。
+`budget_no` 只在单个快照内唯一；跨期粒度和去重必须使用 `snapshot_date + budget_no`。`budget_id` 也应由这两个稳定业务字段生成，不再依赖易变的导入行 ID。
 
 ## 8. DWD 提交前总检查
 
@@ -198,4 +198,3 @@ FACT 的 `factShape` 和 `timeSemantics` 是服务端设计门禁必需项，但
 - [ ] 每个技术字段名为小写英文/数字/下划线，每个字段都有中文显示名。
 - [ ] `classification` 不作为普通业务字段偷偷丢入 FACT；分类分级走独立治理门禁。
 - [ ] 前四张事实的稳定业务键风险、预算快照日期缺口已登记，未被“通过测试”掩盖。
-

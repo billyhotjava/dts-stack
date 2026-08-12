@@ -364,7 +364,7 @@ CREATE TABLE ods_material_info_v2 (
     _dts_import_time         timestamp DEFAULT now()
 );
 
--- ─── 9. 预算执行台账表（来源: budget.xlsx，8个业务字段；科研经费"三本账"快照） ───
+-- ─── 9. 预算执行台账表（来源: budget.xlsx，9个业务字段；科研经费"三本账"快照） ───
 DROP TABLE IF EXISTS ods_budget_v2 CASCADE;
 CREATE TABLE ods_budget_v2 (
     id                       serial PRIMARY KEY,
@@ -376,6 +376,7 @@ CREATE TABLE ods_budget_v2 (
     prepaid_amount           varchar(500),   -- 预付账款（未验收未报销、无发票）
     book_cost_amount         varchar(500),   -- 账面成本（已验收有发票）
     payable_amount           varchar(500),   -- 应付账款（有发票暂未付款）
+    snapshot_date            date,           -- 业务快照日期（不得使用技术导入时间代替）
     _dts_source_system       varchar(500) DEFAULT 'excel',
     _dts_import_time         timestamp DEFAULT now()
 );

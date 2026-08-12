@@ -34,7 +34,7 @@
 | `ods_risk_info_v2.csv` / `.xlsx` | `ods_risk_info_v2` | 10 | 风险事实，1 条/项目 |
 | `ods_risk_measure_v2.csv` / `.xlsx` | `ods_risk_measure_v2` | 10 | 风险跟进措施，1 条/项目 |
 | `ods_material_info_v2.csv` / `.xlsx` | `ods_material_info_v2` | 10 | 重要物料，1 条/项目 |
-| `ods_budget_v2.csv` / `.xlsx` | `ods_budget_v2` | 25 | 预算执行台账快照，2~3 个子课题/项目（三本账，万元） |
+| `ods_budget_v2.csv` / `.xlsx` | `ods_budget_v2` | 25 | 预算执行台账快照，业务快照日 `2026-08-12`，2~3 个子课题/项目（三本账，万元） |
 
 ## 数据设计摘要
 

@@ -385,7 +385,7 @@ models:
                 severity: warn
 
   - name: biz_dwd_budget_v2
-    description: "预算事实表 — 三本账快照清洗；已执行=预付+账面+应付；派生剩余/超支"
+    description: "预算事实表 — 三本账按业务快照日清洗；已执行=预付+账面+应付；派生剩余/超支"
     columns:
       - name: budget_id
         tests:
@@ -396,14 +396,17 @@ models:
               config:
                 severity: warn
       - name: budget_no
-        description: "预算编号 — 全局唯一自然主键（源表保证）"
+        description: "预算编号 — 与 snapshot_date 组成跨期唯一粒度"
         tests:
-          - unique:
-              config:
-                severity: warn
           - not_null:
               config:
                 severity: warn
+      - name: snapshot_date
+        description: "业务快照日期"
+        tests:
+          - not_null:
+              config:
+                severity: error
       - name: project_no
         tests:
           - not_null:
@@ -448,8 +451,13 @@ models:
                 severity: warn
 
   - name: biz_dws_budget_v2
-    description: "预算域汇总（当前快照，无时间轴）— 按 project×research_lab 聚合三本账金额"
+    description: "预算域汇总 — 按 snapshot_date×project×research_lab 聚合三本账金额"
     columns:
+      - name: snapshot_date
+        tests:
+          - not_null:
+              config:
+                severity: error
       - name: project_no
         tests:
           - not_null:
@@ -470,7 +478,18 @@ models:
     description: "风险域KPI — 风险总数/高中低/释放率月度聚合"
 
   - name: biz_ads_budget_kpi_v2
-    description: "预算域KPI — 预算/预付/账面成本/应付/已执行/剩余/超支（当前快照单行）"
+    description: "预算域KPI — 预算/预付/账面成本/应付/已执行/剩余/超支（每个业务快照日一行）"
+    columns:
+      - name: snapshot_scope
+        tests:
+          - not_null:
+              config:
+                severity: error
+      - name: snapshot_date
+        tests:
+          - not_null:
+              config:
+                severity: error
 
   # ═══ ADS 二次指标 (derived) ═══
   - name: biz_ads_progress_derived_v2
@@ -483,7 +502,18 @@ models:
     description: "技术状态域二次指标 — 5个（签署率/整改率/I类占比/未签署率/健康分）"
 
   - name: biz_ads_budget_derived_v2
-    description: "预算域二次指标 — 5个（执行率/账面入账率/应付占比/剩余率/健康分）"
+    description: "预算域二次指标 — 5个（执行率/账面入账率/应付占比/剩余率/健康分），每个业务快照日一行"
+    columns:
+      - name: snapshot_scope
+        tests:
+          - not_null:
+              config:
+                severity: error
+      - name: snapshot_date
+        tests:
+          - not_null:
+              config:
+                severity: error
 
   - name: biz_ads_composite_derived_v2
     description: "综合域二次指标 — 2个（项目综合健康度/风险预警指数）"

@@ -8,6 +8,7 @@ SELECT
   'ods_budget_v2'::text AS source_table,
   COALESCE({{ nullif_placeholder("o._dts_source_system") }}, 'excel') AS source_system,
   o._dts_import_time AS imported_at,
+  o.snapshot_date AS snapshot_date,
 
   {{ nullif_placeholder("o.project_no") }} AS project_no,
   {{ nullif_placeholder("o.budget_no") }} AS budget_no,

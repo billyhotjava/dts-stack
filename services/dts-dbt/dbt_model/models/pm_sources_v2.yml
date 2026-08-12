@@ -42,4 +42,7 @@ sources:
 
       - name: "budget_v2"
         identifier: "ods_budget_v2"
-        description: "预算执行台账表 — 科研经费三本账快照（8个业务字段：预算/预付/账面成本/应付）"
+        description: "预算执行台账表 — 科研经费三本账快照（9个业务字段，含业务快照日期）"
+        columns:
+          - name: snapshot_date
+            description: "业务快照日期；不得使用 _dts_import_time 代替"

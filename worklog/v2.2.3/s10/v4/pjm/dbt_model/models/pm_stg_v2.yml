@@ -96,6 +96,12 @@ models:
           - not_null:
               config:
                 severity: warn
+      - name: snapshot_date
+        description: "业务快照日期"
+        tests:
+          - not_null:
+              config:
+                severity: error
       - name: budget_amount
         description: "预算金额（调整后），源值解析，不做单位换算"
       - name: prepaid_amount

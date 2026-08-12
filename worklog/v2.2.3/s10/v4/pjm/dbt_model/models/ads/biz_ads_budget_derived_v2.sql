@@ -1,9 +1,10 @@
 {{ config(materialized='table', tags=['project-management-v3', 'biz', 'ads', 'derived', 'budget']) }}
 
--- 预算域二次指标（当前快照，单行）
+-- 预算域二次指标（每个业务快照日一行）
 -- 依赖: biz_ads_budget_kpi_v2
 
 SELECT
+  k.snapshot_scope,
   -- pjm_budg_execution_rate: 预算执行率 = 已执行 / 预算 (预警 >90%, 红线 ≥100% 超支)
   CASE WHEN k.total_budget = 0 THEN 0
        ELSE ROUND(k.total_executed::numeric / k.total_budget::numeric * 100, 2)
@@ -40,6 +41,7 @@ SELECT
        THEN true ELSE false
   END AS warn_overrun,
 
-  CASE WHEN k.overrun_item_cnt > 0 THEN true ELSE false END AS warn_overrun_items
+  CASE WHEN k.overrun_item_cnt > 0 THEN true ELSE false END AS warn_overrun_items,
+  k.snapshot_date
 
 FROM {{ ref('biz_ads_budget_kpi_v2') }} k

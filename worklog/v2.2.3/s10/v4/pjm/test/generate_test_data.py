@@ -8,6 +8,7 @@ from openpyxl import Workbook
 
 
 TEST_DIR = Path(__file__).resolve().parent
+BUDGET_SNAPSHOT_DATE = date(2026, 8, 12)
 
 
 PROJECTS = [
@@ -653,6 +654,7 @@ CSV_SCHEMAS = {
         "prepaid_amount",
         "book_cost_amount",
         "payable_amount",
+        "snapshot_date",
     ],
 }
 
@@ -1222,6 +1224,7 @@ def build_budget_rows() -> list[dict[str, str]]:
                     "prepaid_amount": fmt_amount(prepaid),
                     "book_cost_amount": fmt_amount(book_cost),
                     "payable_amount": fmt_amount(payable),
+                    "snapshot_date": fmt(BUDGET_SNAPSHOT_DATE),
                 }
             )
     return rows

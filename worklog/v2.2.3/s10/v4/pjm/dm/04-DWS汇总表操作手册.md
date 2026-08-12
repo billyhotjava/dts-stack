@@ -104,15 +104,16 @@ MEASURE 字段：`total_risk_cnt`、`high_cnt`、`mid_cnt`、`low_cnt`、`releas
 | 数据域 | 财务管理域 |
 | 模型名称 | 预算执行汇总 |
 | 物理表名 | `biz_dws_budget_v2` |
-| 业务定义 | 按项目和研究室汇总当前预算、三本账执行、剩余和超支金额，金额单位万元。 |
-| 模型粒度 | 一个项目×研究室一行；当前状态，无时间轴。 |
-| KEY | `project_no`、`research_lab` |
+| 业务定义 | 按业务快照日、项目和研究室汇总预算、三本账执行、剩余和超支金额，金额单位万元。 |
+| 模型粒度 | 一个业务快照日×项目×研究室一行。 |
+| KEY | `snapshot_date`、`project_no`、`research_lab` |
+| TIME | `snapshot_date` |
 | 上游 | `biz_dwd_budget_v2` 固定修订 |
 | 物化 / 加载 / 分区 | `table` / 全量 / 留空 |
 
 MEASURE 字段：`item_cnt`、`budget_amount`、`prepaid_amount`、`book_cost_amount`、`payable_amount`、`executed_amount`、`remaining_amount`、`overrun_amount`、`overrun_item_cnt`。
 
-本表没有 `period_year/period_month`。日期筛选不能作用于它；需要趋势时先补 DWD 的业务快照日期，再设计新的月度 DWS，不能直接用 `_dts_import_time`。
+本表使用 DWD 的业务 `snapshot_date` 支持跨快照分析，仍不得直接使用 `_dts_import_time` 作为日期筛选口径。
 
 ## 8. DWS 验收清单
 
@@ -122,5 +123,4 @@ MEASURE 字段：`item_cnt`、`budget_amount`、`prepaid_amount`、`book_cost_am
 - [ ] 计数和金额字段标记 MEASURE，时间字段标记 TIME。
 - [ ] 百分比需要的分子/分母可从 DWS 重算。
 - [ ] 汇总表没有伪造业务过程绑定。
-- [ ] 预算表明确“当前状态、无时间轴、万元”三项限制。
-
+- [ ] 预算表明确“业务快照日、万元、不使用技术导入时间”三项口径。

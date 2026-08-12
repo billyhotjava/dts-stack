@@ -62,7 +62,7 @@ TRUNCATE TABLE ods_budget_v2 RESTART IDENTITY CASCADE;
 \copy ods_material_info_v2(project_no, subsystem, pbs_no, pbs_name, self_or_outsource, supplier_name, is_long_cycle, contract_negotiation_date, contract_negotiation_week, contract_delivery_date, contract_delivery_week, actual_delivery_date, actual_delivery_week, plan_inspect_date, plan_inspect_week, complete_inspect_date, complete_inspect_week, install_date, install_week, dept_owner, control_dept_owner, weekly_progress, affects_major_node, risk_level, risk_content, delay_impact, last_update_time, last_update_week, remark) FROM 'ods_material_info_v2.csv' WITH (FORMAT csv, HEADER true, NULL '')
 
 -- 10. 预算执行台账（DWD 三本账快照事实，金额单位万元）
-\copy ods_budget_v2(project_no, budget_no, subtopic, research_lab, budget_amount_adjusted, prepaid_amount, book_cost_amount, payable_amount) FROM 'ods_budget_v2.csv' WITH (FORMAT csv, HEADER true, NULL '')
+\copy ods_budget_v2(project_no, budget_no, subtopic, research_lab, budget_amount_adjusted, prepaid_amount, book_cost_amount, payable_amount, snapshot_date) FROM 'ods_budget_v2.csv' WITH (FORMAT csv, HEADER true, NULL '')
 
 -- 校验
 SELECT 'ods_project_subject_domain_v2' AS tbl, count(*) AS rows, count(DISTINCT project_no) AS projects FROM ods_project_subject_domain_v2

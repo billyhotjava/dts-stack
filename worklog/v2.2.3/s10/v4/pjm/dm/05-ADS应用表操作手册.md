@@ -29,8 +29,8 @@ ADS 是看板、接口和指标消费的输出契约。当前 PJM 有 10 张 ADS
 | `biz_ads_tech_state_kpi_v2` | 产品技术域 | `period_year + period_month` | `biz_dws_tech_state_monthly_v2` | 技术状态基础计数 |
 | `biz_ads_tech_state_derived_v2` | 产品技术域 | `period_year + period_month` | tech-state KPI | 5 个技术状态派生指标和预警 |
 | `biz_ads_risk_kpi_v2` | 研究项目域 | `period_year + period_month` | `biz_dws_risk_monthly_v2` | 风险总量、等级、释放率 |
-| `biz_ads_budget_kpi_v2` | 财务管理域 | 当前单行，目标 KEY `snapshot_scope` | `biz_dws_budget_v2` | 当前预算执行总量 |
-| `biz_ads_budget_derived_v2` | 财务管理域 | 当前单行，目标 KEY `snapshot_scope` | budget KPI | 5 个预算派生指标和预警 |
+| `biz_ads_budget_kpi_v2` | 财务管理域 | `snapshot_scope + snapshot_date` | `biz_dws_budget_v2` | 按业务快照日的预算执行总量 |
+| `biz_ads_budget_derived_v2` | 财务管理域 | `snapshot_scope + snapshot_date` | budget KPI | 按业务快照日的 5 个预算派生指标和预警 |
 | `biz_ads_composite_derived_v2` | 研究项目域 | `period_year + period_month` | progress KPI/derived、quality derived、tech derived | 综合健康与风险预警 |
 
 ## 4. 项目进度 ADS
@@ -98,13 +98,13 @@ DWS 有 `open_cat_environment`，当前 ADS KPI 没有输出该字段。上线�
 ### 8.1 `biz_ads_budget_kpi_v2`
 
 - 模型名称：预算执行基础指标。
-- 粒度：当前预算全局汇总一行，无业务时间轴。
+- 粒度：每个 `snapshot_scope + snapshot_date` 一行。
 - MEASURE：`item_cnt`、`total_budget`、`total_prepaid`、`total_book_cost`、`total_payable`、`total_executed`、`total_remaining`、`overrun_amount`、`overrun_item_cnt`，金额单位万元。
 
 ### 8.2 `biz_ads_budget_derived_v2`
 
 - 模型名称：预算执行派生指标。
-- 粒度：当前预算全局汇总一行，无业务时间轴。
+- 粒度：每个 `snapshot_scope + snapshot_date` 一行。
 - MEASURE：`pjm_budg_execution_rate`、`pjm_budg_book_rate`、`pjm_budg_payable_ratio`、`pjm_budg_remaining_rate`、`pjm_budg_health_score`。
 - ATTRIBUTE：`warn_overrun`、`warn_overrun_items`。
 
@@ -114,7 +114,7 @@ DWS 有 `open_cat_environment`，当前 ADS KPI 没有输出该字段。上线�
 'ALL'::text AS snapshot_scope
 ```
 
-并将 `snapshot_scope` 标为 KEY、非空、唯一。不要把金额或布尔预警字段错误标为 KEY。若将来增加业务快照日期，粒度应改为 `snapshot_scope + snapshot_date`。
+并将 `snapshot_scope` 标为 KEY、`snapshot_date` 标为 TIME，两者都非空且一同列入粒度键。唯一性作用于两字段组合，不要把金额或布尔预警字段错误标为 KEY。
 
 ## 9. 综合健康 ADS
 
@@ -152,4 +152,3 @@ DWS 有 `open_cat_environment`，当前 ADS KPI 没有输出该字段。上线�
 - [ ] 综合健康范围和权重已确认，没有暗示覆盖预算/全部风险指标。
 - [ ] ADS 不直接引用 ODS、STG，也不绑定业务过程。
 - [ ] 每个字段有中文显示名、标准/密级/权限证据符合当前规划发布策略。
-
