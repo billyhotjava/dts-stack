@@ -253,9 +253,7 @@ describe("prototype-owned data modeling frontend", () => {
 			/createReleaseCandidate|lockReleaseCandidate|retryReleaseCandidate|rematerializeReleaseCandidate|publishReleaseCandidate/,
 		);
 		expect(modelPublishDialog).toMatch(/getPlanExecutionWorkspace|ModelReleaseWorkflowPanel/);
-		expect(modelReleaseWorkflow).toMatch(
-			/候选发布流程|运行质量检查|发布评审|发布登记|上线就绪|等待独立发布审核人处理/,
-		);
+		expect(modelReleaseWorkflow).toMatch(/候选发布流程|运行质量检查|发布评审|发布登记|上线就绪|等待独立发布审核人处理/);
 		expect(modelReleaseWorkflow).toMatch(/PUBLISHED|ONLINE|latestRelation/);
 		expect(modelDialogs.trimEnd().split("\n").length).toBeLessThanOrEqual(850);
 		expect(advancedDbtWorkspace).toMatch(/state: "COMMITTED"|创建新草稿/);

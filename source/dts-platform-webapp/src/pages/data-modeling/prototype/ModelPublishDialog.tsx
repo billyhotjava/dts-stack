@@ -6,8 +6,10 @@ import {
 	createReleaseCandidate,
 	createReplacementReleaseCandidate,
 	getModelLifecycle,
+	getPlanExecutionWorkspace,
 	getReleaseCandidateWorkbench,
 	lockReleaseCandidate,
+	type PlanExecutionWorkspace,
 	publishReleaseCandidate,
 	type ReleaseCandidateEntryEvidence,
 	type ReleaseCandidateLifecycleAction,
@@ -25,6 +27,7 @@ import {
 } from "@/api/modelSpecApi";
 import { type CompactColumns, CompactTable } from "@/components/table";
 import type { CanonicalModelSpecView, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
+import { ModelReleaseWorkflowPanel } from "./ModelReleaseWorkflowPanel";
 import { Button, Modal, RequestState, Status } from "./PrototypePrimitives";
 import { normalizeModelingRequestFailure } from "./services/planningProjectionService";
 
@@ -47,7 +50,7 @@ const RELEASE_WORKFLOW_ACTIONS: ReleaseWorkflowAction[] = [
 ];
 
 const RELEASE_ACTION_LABELS: Record<ReleaseWorkflowAction, string> = {
-	RUN_QUALITY: "提交上线",
+	RUN_QUALITY: "运行质量检查",
 	SUBMIT_REVIEW: "提交发布评审",
 	APPROVE: "审核通过",
 	REJECT: "驳回",
@@ -95,6 +98,7 @@ export function ModelPublishDialog({
 	const [environment, setEnvironment] = useState("dev");
 	const [reason, setReason] = useState("从模型工作台发布");
 	const [workspace, setWorkspace] = useState<ReleaseCandidateWorkbench | null>(null);
+	const [executionWorkspace, setExecutionWorkspace] = useState<PlanExecutionWorkspace | null>(null);
 	const [busy, setBusy] = useState<"load" | "build" | "release" | "">("load");
 	const [activeReleaseAction, setActiveReleaseAction] = useState<ReleaseWorkflowAction | null>(null);
 	const [failure, setFailure] = useState<string>("");
@@ -122,7 +126,17 @@ export function ModelPublishDialog({
 		setBusy("load");
 		setFailure("");
 		try {
-			setWorkspace(await getReleaseCandidateWorkbench(planId));
+			const releaseWorkspace = await getReleaseCandidateWorkbench(planId);
+			setWorkspace(releaseWorkspace);
+			if (releaseWorkspace.candidate?.status === "PUBLISHED") {
+				try {
+					setExecutionWorkspace(await getPlanExecutionWorkspace(planId));
+				} catch {
+					setExecutionWorkspace(null);
+				}
+			} else {
+				setExecutionWorkspace(null);
+			}
 		} catch (error) {
 			setFailure(normalizeModelingRequestFailure(error, "发布候选读取失败。").message);
 		} finally {
@@ -157,6 +171,10 @@ export function ModelPublishDialog({
 	const releaseActions = RELEASE_WORKFLOW_ACTIONS.filter(
 		(action) => candidateScopeMatches && workspace?.allowedActions.includes(action),
 	);
+	const executionBinding =
+		executionWorkspace?.bindings.find((binding) => binding.environment === candidate?.environment) ||
+		executionWorkspace?.bindings[0] ||
+		null;
 	const entries = selection.map((model, sortOrder) => ({
 		modelSpecId: model.id,
 		sortOrder,
@@ -363,17 +381,21 @@ export function ModelPublishDialog({
 						<>
 							<h3>{batch ? "批量发布流程" : "发布模型"}</h3>
 							<p className="dmx-capability-note">
-								服务端根据候选状态与当前账号职责开放下一步动作；构建完成后依次经过质量检查、发布评审与上线登记。
+								构建、质量、评审、发布登记和上线就绪各自保留证据；发布登记完成不代表运行计划已经上线。
 							</p>
+							<ModelReleaseWorkflowPanel
+								binding={executionBinding}
+								candidate={candidate}
+								evidence={workspace?.evidence || []}
+								releaseActions={releaseActions}
+							/>
 							<label>
 								<span>操作说明</span>
 								<input onChange={(event) => setReason(event.target.value)} value={reason} />
 							</label>
-							<dl className="dmx-summary-list">
+							<dl className="dmx-summary-list dmx-summary-list--compact">
 								<dt>候选状态</dt>
 								<dd>{candidate?.status || "尚无候选"}</dd>
-								<dt>在线就绪证据</dt>
-								<dd>{workspace?.evidence.map((item) => `${item.type}:${item.state}`).join("；") || "—"}</dd>
 								<dt>允许动作</dt>
 								<dd>
 									{releaseActions.map((action) => RELEASE_ACTION_LABELS[action]).join("、") ||
