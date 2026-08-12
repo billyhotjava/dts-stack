@@ -3,7 +3,12 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ModelSpecStageGate, ReleaseCandidate, ReleaseCandidateWorkbench } from "@/api/modelSpecApi";
+import type {
+	ModelSpecStageGate,
+	PlanExecutionWorkspace,
+	ReleaseCandidate,
+	ReleaseCandidateWorkbench,
+} from "@/api/modelSpecApi";
 import type { ModelImplementationView } from "@/features/modeling/contracts/modelImplementationContract";
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { AdvancedDbtWorkspace } from "./AdvancedDbtWorkspace";
@@ -32,6 +37,7 @@ const apiMocks = vi.hoisted(() => ({
 	cancelCandidate: vi.fn(),
 	createCandidate: vi.fn(),
 	createReplacementCandidate: vi.fn(),
+	getExecutionWorkspace: vi.fn(),
 	getWorkbench: vi.fn(),
 	lockCandidate: vi.fn(),
 	runQualityCandidate: vi.fn(),
@@ -61,6 +67,7 @@ vi.mock("@/api/modelSpecApi", async (importOriginal) => ({
 	cancelReleaseCandidate: apiMocks.cancelCandidate,
 	createReleaseCandidate: apiMocks.createCandidate,
 	createReplacementReleaseCandidate: apiMocks.createReplacementCandidate,
+	getPlanExecutionWorkspace: apiMocks.getExecutionWorkspace,
 	getReleaseCandidateWorkbench: apiMocks.getWorkbench,
 	lockReleaseCandidate: apiMocks.lockCandidate,
 	runReleaseCandidateQuality: apiMocks.runQualityCandidate,
@@ -178,6 +185,11 @@ beforeEach(() => {
 	document.body.appendChild(container);
 	root = createRoot(container);
 	Object.values(apiMocks).forEach((mock) => mock.mockReset());
+	apiMocks.getExecutionWorkspace.mockResolvedValue({
+		planId: model.planId,
+		state: "NOT_DEPLOYED",
+		bindings: [],
+	} satisfies PlanExecutionWorkspace);
 	apiMocks.getLifecycle.mockResolvedValue({ implementation, artifacts: [], events: [] });
 	apiMocks.compileLifecycle.mockResolvedValue({ implementation, artifacts: [], event: {} });
 	vi.stubGlobal("crypto", { randomUUID: vi.fn(() => "idem-1") });
@@ -447,10 +459,119 @@ describe("release and materialization dispatch", () => {
 		);
 		await flush();
 		await act(async () => button("发布模型")?.click());
-		await act(async () => button("提交上线")?.click());
+		await act(async () => button("运行质量检查")?.click());
 
 		expect(apiMocks.startPublicationIntent).toHaveBeenCalledWith(model.id, built, "idem-1", "从模型工作台发布");
 		expect(apiMocks.runQualityCandidate).not.toHaveBeenCalled();
+	});
+
+	it("shows the governed handoff when another reviewer must act", async () => {
+		const reviewPending = {
+			...candidate("BATCH_WORKBENCH", "REVIEW_PENDING"),
+			audit: {
+				createdBy: "model-owner",
+				createdAt: "2026-08-12T01:00:00Z",
+				submittedBy: "model-owner",
+				submittedAt: "2026-08-12T01:10:00Z",
+				approvedBy: null,
+				approvedAt: null,
+				publishedBy: null,
+				publishedAt: null,
+			},
+		} as ReleaseCandidate;
+		apiMocks.getWorkbench.mockResolvedValue(workspace([], reviewPending));
+
+		await act(async () =>
+			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+		);
+		await flush();
+		await act(async () => button("发布模型")?.click());
+
+		expect(container.textContent).toContain("候选发布流程");
+		expect(container.textContent).toContain("质量检查");
+		expect(container.textContent).toContain("发布评审");
+		expect(container.textContent).toContain("发布登记");
+		expect(container.textContent).toContain("上线就绪");
+		expect(container.textContent).toContain("等待独立发布审核人处理");
+		expect(container.textContent).toContain("提交人：model-owner");
+	});
+
+	it("does not present a published candidate as online while its plan binding is deploying", async () => {
+		const published = {
+			...candidate("BATCH_WORKBENCH", "PUBLISHED"),
+			environment: "dev",
+			executionTargetKey: "postgres-primary",
+		} as ReleaseCandidate;
+		apiMocks.getWorkbench.mockResolvedValue(workspace(["ROLLBACK"], published));
+		apiMocks.getExecutionWorkspace.mockResolvedValue({
+			planId: model.planId,
+			state: "READY",
+			bindings: [
+				{
+					id: "binding-1",
+					version: 1,
+					environment: "dev",
+					state: "DEPLOYING",
+					deploymentStatus: "DEPLOYING",
+					scheduleMode: "MANUAL_ONLY",
+					desiredDeploymentChecksum: "desired",
+					airflowDagId: "dts_plan_dev",
+					airflowState: "NOT_REGISTERED",
+					latestOperationalRun: {},
+					latestRelation: { verified: true, exists: true },
+					allowedActions: [],
+				},
+			],
+		} as PlanExecutionWorkspace);
+
+		await act(async () =>
+			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+		);
+		await flush();
+		await act(async () => button("发布模型")?.click());
+
+		expect(apiMocks.getExecutionWorkspace).toHaveBeenCalledWith(model.planId);
+		expect(container.textContent).toContain("发布登记已完成");
+		expect(container.textContent).toContain("运行计划部署中");
+		expect(container.textContent).not.toContain("上线完成");
+	});
+
+	it("shows online completion only for an online binding with a healthy relation", async () => {
+		const published = {
+			...candidate("BATCH_WORKBENCH", "PUBLISHED"),
+			environment: "dev",
+		} as ReleaseCandidate;
+		apiMocks.getWorkbench.mockResolvedValue(workspace(["ROLLBACK"], published));
+		apiMocks.getExecutionWorkspace.mockResolvedValue({
+			planId: model.planId,
+			state: "READY",
+			bindings: [
+				{
+					id: "binding-1",
+					version: 2,
+					environment: "dev",
+					state: "ONLINE",
+					deploymentStatus: "ACTIVE",
+					scheduleMode: "MANUAL_ONLY",
+					desiredDeploymentChecksum: "deployed",
+					deployedChecksum: "deployed",
+					airflowDagId: "dts_plan_dev",
+					airflowState: "OBSERVED",
+					latestOperationalRun: {},
+					latestRelation: { verified: true, exists: true },
+					allowedActions: ["RUN_NOW"],
+				},
+			],
+		} as PlanExecutionWorkspace);
+
+		await act(async () =>
+			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+		);
+		await flush();
+		await act(async () => button("发布模型")?.click());
+
+		expect(container.textContent).toContain("上线完成");
+		expect(container.textContent).toContain("关系健康");
 	});
 
 	it("allows a release reviewer to act from server duties without model-maintainer permission", async () => {
@@ -470,7 +591,7 @@ describe("release and materialization dispatch", () => {
 	});
 
 	it.each([
-		["BUILT", "RUN_QUALITY", "提交上线", "runQualityCandidate"],
+		["BUILT", "RUN_QUALITY", "运行质量检查", "runQualityCandidate"],
 		["QUALITY_PASSED", "SUBMIT_REVIEW", "提交发布评审", "submitReviewCandidate"],
 		["REVIEW_PENDING", "APPROVE", "审核通过", "approveCandidate"],
 		["REVIEW_PENDING", "REJECT", "驳回", "rejectCandidate"],
