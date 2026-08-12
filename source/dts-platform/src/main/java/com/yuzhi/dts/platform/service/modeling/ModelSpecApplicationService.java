@@ -4,7 +4,6 @@ import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository;
 import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository;
 import com.yuzhi.dts.platform.repository.modeling.DimensionDefinitionRepository.StoredDimensionDefinition;
-import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.DomainBindingState;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.PlanState;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.StoredModelSpec;
 import com.yuzhi.dts.platform.service.audit.AuditService;
@@ -1438,11 +1437,6 @@ public class ModelSpecApplicationService {
                 ModelSpecException.Kind.FORBIDDEN
             );
         }
-        DomainBindingState binding = repository
-            .lockDomainBinding(tenantId, planId, domainId)
-            .orElseThrow(() -> domainNotConfirmed(domainId));
-        if (!"CONFIRMED".equals(binding.confirmationStatus())) throw domainNotConfirmed(domainId);
-
         DomainResolution resolution = domainResolution.resolve(domainId);
         if (resolution == null || resolution.status() == null) {
             throw new ModelSpecException(

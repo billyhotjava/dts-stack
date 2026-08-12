@@ -118,6 +118,12 @@ const valid = (modelType: ModelSpecType): FullModelSpecCommand => ({
 	implementationMode: "DESIGNER_GENERATED",
 	materialization: "table",
 	consumptionScenario: modelType === "APPLICATION" ? "operational reporting" : null,
+	...(modelType === "APPLICATION"
+		? {
+				dataMartId: "70000000-0000-0000-0000-000000000001",
+				subjectDomainId: "80000000-0000-0000-0000-000000000001",
+			}
+		: {}),
 	grain: { statement: "one row per record", keys: ["record_id"] },
 	factShape: modelType === "FACT" ? "TRANSACTION" : undefined,
 	timeSemantics: modelType === "FACT" ? { type: "EVENT_TIME", fields: ["event_time"] } : undefined,
@@ -194,7 +200,13 @@ const minimal = (modelType: ModelSpecType): FullModelSpecCommand => ({
 	...(modelType === "SUMMARY" || modelType === "APPLICATION"
 		? { dependsOn: [{ modelSpecId: "30000000-0000-0000-0000-000000000001", revision: 1 }] }
 		: {}),
-	...(modelType === "APPLICATION" ? { consumptionScenario: "operational reporting" } : {}),
+	...(modelType === "APPLICATION"
+		? {
+				consumptionScenario: "operational reporting",
+				dataMartId: "70000000-0000-0000-0000-000000000001",
+				subjectDomainId: "80000000-0000-0000-0000-000000000001",
+			}
+		: {}),
 	idempotencyKey: `minimal-${modelType.toLowerCase()}`,
 });
 
@@ -698,6 +710,16 @@ test("APPLICATION requires a consumption scenario and other model types reject o
 		validateModelSpecCreate({ ...minimal("FACT"), consumptionScenario: "   " } as unknown).map((item) => item.code),
 		[],
 	);
+});
+
+test("APPLICATION requires stable data mart and subject domain references", () => {
+	const application = minimal("APPLICATION");
+	assert.deepEqual(validateModelSpecCreate({ ...application, dataMartId: null }).map((item) => item.code), [
+		"MODEL_SPEC_DATA_MART_REQUIRED",
+	]);
+	assert.deepEqual(validateModelSpecCreate({ ...application, subjectDomainId: null }).map((item) => item.code), [
+		"MODEL_SPEC_SUBJECT_DOMAIN_REQUIRED",
+	]);
 });
 
 test("only FACT accepts optional business activity", () => {

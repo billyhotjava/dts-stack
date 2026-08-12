@@ -2,6 +2,7 @@ package com.yuzhi.dts.platform.service.modeling;
 
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationBuildRepository;
+import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationBuildRepository.CandidateBuildEntry;
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationBuildRepository.CandidateBuildScope;
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationDispatchRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationDispatchRepository.DispatchRecord;
@@ -20,6 +21,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.Tra
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -204,8 +206,11 @@ public class ModelMaterializationDispatchService {
 
             sourceAvailability.requireDispatchCurrent(dispatch.id());
 
-            ScopedCandidateProject project =
-                scopedProjects.prepareCandidate(toArtifacts(scope));
+            List<ModelMaterializationBuildRepository.BuildArtifact> pinnedDependencies =
+                builds.loadPinnedDependencyArtifacts(scope);
+            ScopedCandidateProject project = scopedProjects.prepareCandidate(
+                toArtifacts(scope, pinnedDependencies)
+            );
             ModelRuntimeSpecTokenCodec.IssuedToken runtimeToken =
                 runtimeToken(dispatch, now);
             if (!runtimeToken.expiresAt().isAfter(now)) {
@@ -550,12 +555,32 @@ public class ModelMaterializationDispatchService {
     }
 
     private static List<CandidateArtifactEntry> toArtifacts(
-        CandidateBuildScope scope
+        CandidateBuildScope scope,
+        List<ModelMaterializationBuildRepository.BuildArtifact> pinnedDependencies
     ) {
-        return scope
-            .entries()
-            .stream()
-            .map(entry ->
+        List<ModelMaterializationBuildRepository.BuildArtifact> dependencies =
+            pinnedDependencies == null ? List.of() : List.copyOf(pinnedDependencies);
+        List<CandidateArtifactEntry> entries = new ArrayList<>();
+        for (int index = 0; index < scope.entries().size(); index++) {
+            CandidateBuildEntry entry = scope.entries().get(index);
+            List<CandidateArtifact> artifacts = new ArrayList<>();
+            entry.artifacts().forEach(artifact -> artifacts.add(
+                new CandidateArtifact(
+                    artifact.path(),
+                    artifact.contentChecksum(),
+                    artifact.content()
+                )
+            ));
+            if (index == 0) {
+                dependencies.forEach(artifact -> artifacts.add(
+                    new CandidateArtifact(
+                        artifact.path(),
+                        artifact.contentChecksum(),
+                        artifact.content()
+                    )
+                ));
+            }
+            entries.add(
                 new CandidateArtifactEntry(
                     entry.modelSpecId(),
                     entry.modelRevision(),
@@ -563,20 +588,11 @@ public class ModelMaterializationDispatchService {
                     entry.implementationRevision(),
                     entry.implementationChecksum(),
                     entry.dbtUniqueId(),
-                    entry
-                        .artifacts()
-                        .stream()
-                        .map(artifact ->
-                            new CandidateArtifact(
-                                artifact.path(),
-                                artifact.contentChecksum(),
-                                artifact.content()
-                            )
-                        )
-                        .toList()
+                    List.copyOf(artifacts)
                 )
-            )
-            .toList();
+            );
+        }
+        return List.copyOf(entries);
     }
 
     public record DispatchResult(

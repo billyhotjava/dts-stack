@@ -602,7 +602,14 @@ public class DbtImplementationDraftService {
                 )
             ),
             List.of(),
-            Map.of(),
+            Map.of(
+                "targetPhysicalName",
+                target.name(),
+                "loadStrategy",
+                "incremental".equalsIgnoreCase(model.materialization()) ? "INCREMENTAL" : "FULL",
+                "partitionFields",
+                List.of()
+            ),
             ImplementationMode.DBT_MANAGED,
             model.materialization(),
             derivedCommitKey

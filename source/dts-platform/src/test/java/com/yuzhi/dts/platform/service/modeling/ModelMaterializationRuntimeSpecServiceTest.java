@@ -63,6 +63,8 @@ class ModelMaterializationRuntimeSpecServiceTest {
 
         assertThat(view.pipelineRunGroupId()).isEqualTo(DISPATCH_ID);
         assertThat(view.runPurpose()).isEqualTo("RELEASE_BUILD");
+        assertThat(view.selector())
+            .isEqualTo("+dim_customer +fct_invoice");
         assertThat(view.profileLeaseId()).isEqualTo(LEASE_ID);
         assertThat(view.runtimeProfileId())
             .isEqualTo(

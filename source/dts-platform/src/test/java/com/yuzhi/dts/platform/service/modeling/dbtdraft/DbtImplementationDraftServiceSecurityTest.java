@@ -542,6 +542,10 @@ class DbtImplementationDraftServiceSecurityTest {
             implementationCommand.capture()
         );
         assertThat(implementationCommand.getValue().idempotencyKey()).isEqualTo(derivedKey);
+        assertThat(implementationCommand.getValue().settings())
+            .containsEntry("targetPhysicalName", "orders")
+            .containsEntry("loadStrategy", "FULL")
+            .containsEntry("partitionFields", List.of());
         GeneratedInput generated = (GeneratedInput) implementationCommand.getValue().inputs().getFirst();
         assertThat(generated.config())
             .containsEntry("bundleChecksum", bundle.bundleChecksum())

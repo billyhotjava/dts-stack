@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+	cancelReleaseCandidate,
 	compileModelLifecycle,
 	createReleaseCandidate,
 	createReplacementReleaseCandidate,
@@ -110,13 +111,15 @@ export function ModelPublishDialog({
 			? "REFRESH_AND_REPLACE"
 			: candidate && workspace?.allowedActions.includes("CREATE_REPLACEMENT_CANDIDATE")
 				? "CREATE_REPLACEMENT"
-				: candidate && workspace?.allowedActions.includes("REMATERIALIZE")
-					? "REMATERIALIZE"
-					: candidateScopeMatches && workspace?.allowedActions.includes("RETRY_BUILD")
-						? "RETRY_BUILD"
-						: candidateScopeMatches && workspace?.allowedActions.includes("START_BUILD")
-							? "START_BUILD"
-							: null;
+				: candidate && !candidateScopeMatches && workspace?.allowedActions.includes("CANCEL_CANDIDATE")
+					? "CANCEL_AND_REPLACE"
+					: candidateScopeMatches && candidate && workspace?.allowedActions.includes("REMATERIALIZE")
+						? "REMATERIALIZE"
+						: candidateScopeMatches && workspace?.allowedActions.includes("RETRY_BUILD")
+							? "RETRY_BUILD"
+							: candidateScopeMatches && workspace?.allowedActions.includes("START_BUILD")
+								? "START_BUILD"
+								: null;
 	const canBuild = Boolean(!selectionProblem && buildAction);
 	const canPublish = Boolean(
 		!batch && primary && candidateScopeMatches && workspace?.allowedActions.includes("PUBLISH"),
@@ -145,6 +148,16 @@ export function ModelPublishDialog({
 					entries,
 					reason: batch ? "从模型列表重新物化所选模型" : "从模型工作台重新物化",
 				});
+			} else if (buildAction === "CANCEL_AND_REPLACE" && candidate) {
+				const cancelled = (
+					await cancelReleaseCandidate(planId, candidate, crypto.randomUUID(), "所选模型范围已变化，关闭旧候选")
+				).candidate;
+				const replacement = await createReplacementReleaseCandidate(planId, cancelled, crypto.randomUUID(), {
+					environment,
+					entries,
+					reason: batch ? "从模型列表按新范围创建替代候选" : "从模型工作台按新范围创建替代候选",
+				});
+				await lockReleaseCandidate(planId, replacement.candidate, crypto.randomUUID(), "从模型工作台启动新范围构建");
 			} else if ((buildAction === "REFRESH_AND_REPLACE" || buildAction === "CREATE_REPLACEMENT") && candidate) {
 				const source =
 					buildAction === "REFRESH_AND_REPLACE"
@@ -283,15 +296,17 @@ export function ModelPublishDialog({
 										? "处理中…"
 										: buildAction === "REFRESH_AND_REPLACE" || buildAction === "CREATE_REPLACEMENT"
 											? "按新修订重新物化"
-											: buildAction === "REMATERIALIZE"
-												? "重新物化"
-												: buildAction === "RETRY_BUILD"
-													? "重试构建"
-													: buildAction === "START_BUILD"
-														? "开始构建"
-														: batch
-															? `创建并运行 ${selection.length} 个模型`
-															: "创建并运行"}
+											: buildAction === "CANCEL_AND_REPLACE"
+												? "替换候选并物化"
+												: buildAction === "REMATERIALIZE"
+													? "重新物化"
+													: buildAction === "RETRY_BUILD"
+														? "重试构建"
+														: buildAction === "START_BUILD"
+															? "开始构建"
+															: batch
+																? `创建并运行 ${selection.length} 个模型`
+																: "创建并运行"}
 								</Button>
 							</div>
 						</>

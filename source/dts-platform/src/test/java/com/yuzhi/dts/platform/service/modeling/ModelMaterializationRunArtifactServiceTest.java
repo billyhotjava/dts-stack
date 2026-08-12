@@ -61,6 +61,8 @@ class ModelMaterializationRunArtifactServiceTest {
     private static final String BUNDLE = "a".repeat(64);
     private static final String UNIQUE_ID =
         "model.dts_test.model_30000000_0000_0000_0000_000000000003";
+    private static final String RELEASE_SCOPED_UNIQUE_ID =
+        "model.dts.model_30000000_0000_0000_0000_000000000003";
     private static final String SECOND_UNIQUE_ID =
         "model.dts_test.model_30000000_0000_0000_0000_000000000006";
     private static final Instant NOW =
@@ -255,6 +257,29 @@ class ModelMaterializationRunArtifactServiceTest {
             eq(AuditStage.SUCCESS),
             eq(GROUP_ID.toString()),
             any()
+        );
+    }
+
+    @Test
+    void acceptsReleaseScopedRuntimePackageWhenImmutableMetaMatches()
+        throws Exception {
+        writeArtifacts("success", "b".repeat(64));
+        replaceRuntimeUniqueId(RELEASE_SCOPED_UNIQUE_ID);
+
+        var result = service.syncAndProbe(
+            GROUP_ID,
+            new ModelMaterializationRunArtifactService.SyncProbeCommand(
+                "RELEASE_BUILD",
+                BUNDLE
+            )
+        );
+
+        assertThat(result.status()).isEqualTo("BUILT");
+        verify(runs).markDbtSucceeded(
+            GROUP_ID,
+            INVOCATION_ID,
+            1,
+            NOW
         );
     }
 
@@ -747,6 +772,32 @@ class ModelMaterializationRunArtifactServiceTest {
     }
 
     @Test
+    void dbtManagedManifestUsesPinnedColumnsWhenSchemaMetadataIsAbsent()
+        throws Exception {
+        when(builds.loadCandidateBuildScope("tenant-a", GROUP_ID))
+            .thenReturn(scope("DBT_MANAGED"));
+        writeArtifacts("success", "b".repeat(64));
+        removeManifestColumns();
+
+        var result = service.syncAndProbe(
+            GROUP_ID,
+            new ModelMaterializationRunArtifactService.SyncProbeCommand(
+                "RELEASE_BUILD",
+                BUNDLE
+            )
+        );
+
+        assertThat(result.status()).isEqualTo("BUILT");
+        ArgumentCaptor<PhysicalRelationInspector.RelationLocator> locator =
+            ArgumentCaptor.forClass(
+                PhysicalRelationInspector.RelationLocator.class
+            );
+        verify(inspector).observe(any(), locator.capture());
+        assertThat(locator.getValue().expectedColumns())
+            .containsExactly("project_id", "amount");
+    }
+
+    @Test
     void unsupportedAdapterFailsClosedWithoutInventingEvidence()
         throws Exception {
         writeArtifacts("success", "b".repeat(64));
@@ -1232,6 +1283,43 @@ class ModelMaterializationRunArtifactServiceTest {
         );
     }
 
+    private void replaceRuntimeUniqueId(String runtimeUniqueId)
+        throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        Path manifestPath = project.resolve("target/manifest.json");
+        var manifest = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(
+            manifestPath.toFile()
+        );
+        var nodes = (com.fasterxml.jackson.databind.node.ObjectNode) manifest.path(
+            "nodes"
+        );
+        var node = (com.fasterxml.jackson.databind.node.ObjectNode) nodes.remove(
+            UNIQUE_ID
+        );
+        node.put("unique_id", runtimeUniqueId);
+        nodes.set(runtimeUniqueId, node);
+        Files.writeString(
+            manifestPath,
+            mapper.writeValueAsString(manifest),
+            StandardCharsets.UTF_8
+        );
+
+        Path resultsPath = project.resolve("target/run_results.json");
+        var results = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(
+            resultsPath.toFile()
+        );
+        (
+            (com.fasterxml.jackson.databind.node.ObjectNode) results
+                .path("results")
+                .get(0)
+        ).put("unique_id", runtimeUniqueId);
+        Files.writeString(
+            resultsPath,
+            mapper.writeValueAsString(results),
+            StandardCharsets.UTF_8
+        );
+    }
+
     private void writeTwoEntryArtifacts() throws Exception {
         writeTwoEntryArtifacts("success", "success");
     }
@@ -1355,6 +1443,22 @@ class ModelMaterializationRunArtifactServiceTest {
         );
     }
 
+    private void removeManifestColumns() throws Exception {
+        Path manifestPath = project.resolve("target/manifest.json");
+        ObjectMapper mapper = new ObjectMapper();
+        var manifest = mapper.readTree(manifestPath.toFile());
+        (
+            (com.fasterxml.jackson.databind.node.ObjectNode) manifest
+                .path("nodes")
+                .path(UNIQUE_ID)
+        ).set("columns", mapper.createObjectNode());
+        Files.writeString(
+            manifestPath,
+            mapper.writeValueAsString(manifest),
+            StandardCharsets.UTF_8
+        );
+    }
+
     private static CandidateBuildScope scope() {
         return scope("DESIGNER_GENERATED");
     }
@@ -1382,7 +1486,8 @@ class ModelMaterializationRunArtifactServiceTest {
                     implementationMode,
                     UNIQUE_ID,
                     "dwd_finance",
-                    List.of()
+                    List.of(),
+                    List.of("project_id", "amount")
                 )
             )
         );
@@ -1410,7 +1515,8 @@ class ModelMaterializationRunArtifactServiceTest {
                     "DESIGNER_GENERATED",
                     SECOND_UNIQUE_ID,
                     "dwd_finance_summary",
-                    List.of()
+                    List.of(),
+                    List.of("project_id", "amount")
                 )
             )
         );

@@ -34,10 +34,7 @@ import org.yaml.snakeyaml.constructor.SafeConstructor;
 public class AdvancedDbtDraftStaticValidator {
 
     private static final String TEMP_PREFIX = "dts-dbt-draft-";
-    private static final Set<String> UNSUPPORTED_ISSUES = Set.of(
-        "DBT_SOURCE_PROJECT_DYNAMIC_REFERENCE",
-        "DBT_SOURCE_PROJECT_REF_UNRESOLVED"
-    );
+    private static final Set<String> UNSUPPORTED_ISSUES = Set.of("DBT_SOURCE_PROJECT_DYNAMIC_REFERENCE");
     private static final Set<String> YAML_HOOK_KEYS = Set.of(
         "on-run-start",
         "on-run-end",

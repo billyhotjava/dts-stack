@@ -171,6 +171,9 @@ public class ModelRepresentationService {
             new ProjectionTrust(false, false, true, false, false, false)
         );
         PreviewCapabilityProjection preview = new PreviewCapabilityProjection(false, decision.reasons());
+        List<String> allowedActions = scope == RepresentationScope.TECHNICAL
+            ? technicalActions(decision.capability())
+            : businessActions(decision.capability());
         RepresentationSemanticPayload payload = payload(
             scope,
             model,
@@ -178,7 +181,7 @@ public class ModelRepresentationService {
             decision.capability(),
             decision.reasons(),
             List.of("LOGICAL_MODEL"),
-            List.of(),
+            allowedActions,
             projection,
             null,
             null,

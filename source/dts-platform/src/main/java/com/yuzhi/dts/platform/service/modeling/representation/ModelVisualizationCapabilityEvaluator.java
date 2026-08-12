@@ -29,6 +29,9 @@ public class ModelVisualizationCapabilityEvaluator {
 
     public CapabilityDecision evaluate(RepresentationScope scope, ImplementationMode ownership, ProjectionTrust trust) {
         if (trust == null || !trust.implementationPresent()) {
+            if (scope == RepresentationScope.TECHNICAL && ownership == ImplementationMode.DBT_MANAGED) {
+                return new CapabilityDecision(VisualizationCapability.ADVANCED_DBT_IMPLEMENTATION, List.of());
+            }
             return blocked(CapabilityReason.MODEL_REPRESENTATION_NO_IMPLEMENTATION);
         }
 

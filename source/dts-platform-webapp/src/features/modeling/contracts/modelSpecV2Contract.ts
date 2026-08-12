@@ -9,6 +9,7 @@ export const MODEL_SPEC_CREATE_FIELDS = [
 	"dimensionDefinitionRef",
 	"idempotencyKey",
 	"dataMartId",
+	"subjectDomainId",
 	"variantCode",
 	"warehouseLayerCode",
 	"businessProcessId",
@@ -38,6 +39,7 @@ export const MODEL_SPEC_UPDATE_FIELDS = [
 	"generationStrategy",
 	"dimensionProfile",
 	"dataMartId",
+	"subjectDomainId",
 	"variantCode",
 	"implementationPolicy",
 	"warehouseLayerCode",
@@ -214,6 +216,7 @@ type CreateModelSpecBase = {
 	warehouseLayerCode?: string | null;
 	idempotencyKey: string;
 	dataMartId?: string | null;
+	subjectDomainId?: string | null;
 	variantCode?: string | null;
 	businessProcessId?: string | null;
 };
@@ -247,6 +250,7 @@ export type UpdateModelSpecCommand = {
 	generationStrategy?: ModelSpecGenerationStrategy | null;
 	dimensionProfile?: ModelSpecDimensionProfile | null;
 	dataMartId?: string | null;
+	subjectDomainId?: string | null;
 	variantCode?: string | null;
 	implementationPolicy?: ModelSpecImplementationPolicy | null;
 } & Partial<ModelSpecCollections>;
@@ -788,6 +792,14 @@ const validateModelSpecFull = (input: unknown): ModelSpecFieldIssue[] => {
 				"consumptionScenario",
 				"Consumption scenario belongs to APPLICATION models only",
 			),
+		);
+	}
+	if (command.modelType === "APPLICATION" && !isUuid(command.dataMartId)) {
+		issues.push(issue("MODEL_SPEC_DATA_MART_REQUIRED", "dataMartId", "APPLICATION requires a data mart"));
+	}
+	if (command.modelType === "APPLICATION" && !isUuid(command.subjectDomainId)) {
+		issues.push(
+			issue("MODEL_SPEC_SUBJECT_DOMAIN_REQUIRED", "subjectDomainId", "APPLICATION requires a subject domain"),
 		);
 	}
 	if (command.dimensionProfile != null && command.modelType !== "DIMENSION") {

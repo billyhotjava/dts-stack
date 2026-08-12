@@ -7,9 +7,11 @@ import {
 	listDimensionDefinitions,
 	updateDimensionDefinition,
 } from "@/api/dimensionDefinitionApi";
+import { listDataMarts } from "@/api/dataMartApi";
 import { saveModelImplementation } from "@/api/modelImplementationApi";
 import { listModelFieldStandardOptions } from "@/api/modelingStandardsApi";
-import { getModelLifecycle, listModelSpecs, updateModelSpec } from "@/api/modelSpecApi";
+import { createModelSpec, getModelLifecycle, listModelSpecs, updateModelSpec } from "@/api/modelSpecApi";
+import { listSubjectDomains } from "@/api/subjectDomainApi";
 import catalogDomainService from "@/api/services/catalogDomainService";
 import {
 	collectCurrentWarehousePlanSources,
@@ -41,6 +43,7 @@ vi.mock("@/api/dimensionDefinitionApi", () => ({
 	listDimensionDefinitions: vi.fn(),
 	updateDimensionDefinition: vi.fn(),
 }));
+vi.mock("@/api/dataMartApi", () => ({ listDataMarts: vi.fn() }));
 vi.mock("@/api/modelingStandardsApi", () => ({ listModelFieldStandardOptions: vi.fn() }));
 vi.mock("@/api/modelImplementationApi", () => ({ saveModelImplementation: vi.fn() }));
 vi.mock("@/api/modelSpecApi", () => ({
@@ -49,6 +52,7 @@ vi.mock("@/api/modelSpecApi", () => ({
 	updateModelSpec: vi.fn(),
 	createModelSpec: vi.fn(),
 }));
+vi.mock("@/api/subjectDomainApi", () => ({ listSubjectDomains: vi.fn() }));
 vi.mock("@/api/services/catalogDomainService", () => ({ default: { list: vi.fn() } }));
 vi.mock("@/api/services/modelingImportContextService", () => ({
 	collectCurrentWarehousePlanSources: vi.fn(),
@@ -211,6 +215,7 @@ const validDimensionDraft = (): ModelDraft => ({
 	dimensionDefinitionId: "dimension-1",
 	standardBindings: [],
 	warehouseLayerCode: "DWD",
+	implementationMode: "DESIGNER_GENERATED",
 	implementationBase: null,
 	implementationInputMode: "GENERATED",
 	generationStrategyType: "DATE_DIMENSION",
@@ -413,6 +418,17 @@ describe("model workbench draft validation", () => {
 		});
 	});
 
+	it("accepts a DBT-managed dimension whose constant SQL has no upstream", () => {
+		const draft = validDimensionDraft();
+		draft.implementationMode = "DBT_MANAGED";
+		draft.implementationInputMode = "GENERATED";
+		draft.generationStrategyType = "";
+		draft.sourceRefs = [];
+		draft.dependsOn = [];
+
+		expect(validateModelDraftInput(draft)).not.toHaveProperty("implementationInputMode");
+	});
+
 	it("updates a saved DRAFT definition with attributes instead of blocking the edit", async () => {
 		const draft = conceptDraft();
 		draft.definitionBase = { ...definitionView, status: "DRAFT" };
@@ -525,6 +541,8 @@ describe("model workbench draft validation", () => {
 		vi.mocked(listModelSpecs).mockResolvedValue([]);
 		vi.mocked(listDimensionDefinitions).mockResolvedValue([]);
 		vi.mocked(listModelFieldStandardOptions).mockResolvedValue([]);
+		vi.mocked(listDataMarts).mockResolvedValue([]);
+		vi.mocked(listSubjectDomains).mockResolvedValue([]);
 
 		const context = await loadModelWorkbenchContext();
 
@@ -532,9 +550,13 @@ describe("model workbench draft validation", () => {
 		expect(context.planId).toBe("plan-1");
 		expect(context.sources).toEqual([physicalSource]);
 		expect(context.dimensions).toEqual([]);
+		expect(context.dataMarts).toEqual([]);
+		expect(context.subjectDomains).toEqual([]);
 		expect(collectCurrentWarehousePlanSources).toHaveBeenCalledWith("plan-1");
 		expect(listWarehouseLayers).toHaveBeenCalledTimes(1);
 		expect(listDimensionDefinitions).toHaveBeenCalledWith({ offset: 0, limit: 100 });
+		expect(listDataMarts).toHaveBeenCalledWith({ status: "CURRENT", offset: 0, limit: 100 });
+		expect(listSubjectDomains).toHaveBeenCalledWith({ status: "CURRENT", offset: 0, limit: 100 });
 	});
 
 	it("carries the custom selection into the update command", async () => {
@@ -548,6 +570,43 @@ describe("model workbench draft validation", () => {
 		expect(updateModelSpec).toHaveBeenCalledWith(
 			base,
 			expect.objectContaining({ layer: "DWD", warehouseLayerCode: "FIN_DETAIL" }),
+		);
+	});
+
+	it("allows an incomplete FACT draft to be saved without invented business time semantics", async () => {
+		const base = canonicalFactView();
+		vi.mocked(updateModelSpec).mockResolvedValue(base);
+		const draft = modelDraftFromView(base) as ModelSpecDraft;
+		draft.timeSemanticsType = "";
+		draft.timeSemanticsFields = [];
+
+		await saveModelDraft(draft, { ownerId: "owner-1", dimensionDefinitions: [] });
+
+		expect(updateModelSpec).toHaveBeenCalledWith(base, expect.objectContaining({ timeSemantics: null }));
+	});
+
+	it("persists FACT dimension revision bindings independently of implementation inputs", async () => {
+		const base = canonicalFactView();
+		const dimension = {
+			...canonicalFactView(),
+			id: "30000000-0000-0000-0000-000000000099",
+			modelType: "DIMENSION" as const,
+			businessProcessId: null,
+			factShape: null,
+			timeSemantics: null,
+			name: "风险等级维度表",
+		};
+		vi.mocked(updateModelSpec).mockResolvedValue(base);
+		const draft = modelDraftFromView(base);
+		draft.dimensionRefs = [{ modelSpecId: dimension.id, revision: dimension.revision }];
+
+		await saveModelDraft(draft, { ownerId: "owner-1", dimensionDefinitions: [], models: [base, dimension] });
+
+		expect(updateModelSpec).toHaveBeenCalledWith(
+			base,
+			expect.objectContaining({
+				dimensionRefs: [{ modelSpecId: dimension.id, revision: dimension.revision }],
+			}),
 		);
 	});
 
@@ -786,5 +845,113 @@ describe("model workbench draft validation", () => {
 				inputs: [{ modelSpecId: upstream.id, revision: upstream.revision, checksum: upstream.checksum }],
 			}),
 		);
+	});
+
+	it("persists the APPLICATION data mart and subject domain selected in the editor", async () => {
+		const upstream = canonicalFactView();
+		const application = {
+			...canonicalFactView(),
+			id: "30000000-0000-0000-0000-000000000003",
+			modelType: "APPLICATION" as const,
+			layer: "ADS" as const,
+			warehouseLayerCode: "ADS",
+			businessProcessId: null,
+			factShape: null,
+			timeSemantics: null,
+			name: "技术状态月度指标",
+			implementationMode: "DBT_MANAGED" as const,
+			consumptionScenario: "技术状态月度看板",
+			sourceRefs: [],
+			dependsOn: [{ modelSpecId: upstream.id, revision: upstream.revision }],
+		};
+		const savedModel = { ...application, revision: 2, checksum: "f".repeat(64) };
+		vi.mocked(updateModelSpec).mockResolvedValue(savedModel);
+		const draft = {
+			...modelDraftFromView(application),
+			physicalName: "ads_tech_state_monthly",
+			dataMartId: "70000000-0000-0000-0000-000000000001",
+			subjectDomainId: "80000000-0000-0000-0000-000000000001",
+		};
+
+		await saveModelDraft(draft, { ownerId: "owner-1", dimensionDefinitions: [], models: [upstream, application] });
+
+		expect(updateModelSpec).toHaveBeenCalledWith(
+			application,
+			expect.objectContaining({
+				dataMartId: "70000000-0000-0000-0000-000000000001",
+				subjectDomainId: "80000000-0000-0000-0000-000000000001",
+			}),
+		);
+		expect(saveModelImplementation).not.toHaveBeenCalled();
+	});
+
+	it("creates a DBT-managed dimension model without inventing a designer implementation", async () => {
+		const initial = {
+			...canonicalFactView(),
+			modelType: "DIMENSION" as const,
+			businessProcessId: null,
+			factShape: null,
+			timeSemantics: null,
+			name: "节点完成状态维度表",
+			description: "统一节点完成状态口径",
+			dimensionDefinitionRef: { dimensionDefinitionId: definitionView.id, revision: definitionView.revision },
+			dimensionProfile: {
+				dimensionCode: null,
+				hierarchies: [],
+				scdPolicy: { type: "TYPE1" as const },
+				reuseScope: null,
+			},
+		};
+		const saved = {
+			...initial,
+			implementationMode: "DBT_MANAGED" as const,
+			revision: 2,
+			checksum: "f".repeat(64),
+		};
+		vi.mocked(createModelSpec).mockResolvedValue(initial);
+		vi.mocked(updateModelSpec).mockResolvedValue(saved);
+		const draft: ModelSpecDraft = {
+			...(validDimensionDraft() as ModelSpecDraft),
+			planId: initial.planId,
+			domainId: initial.domainId,
+			name: initial.name,
+			description: initial.description,
+			implementationMode: "DBT_MANAGED",
+			implementationInputMode: "PHYSICAL_ASSET",
+			generationStrategyType: "",
+			sourceRefs: [
+				{
+					kind: "TABLE",
+					ref: physicalSource.displayName || physicalSource.sourceId,
+					layer: "ODS",
+					role: "PRIMARY",
+					alias: null,
+					joinType: null,
+					joinExpression: null,
+					sortOrder: 0,
+					sourceBindingId: physicalSource.bindingId,
+					resolvedVersion: physicalSource.resolvedVersion || physicalSource.confirmedVersion,
+				},
+			],
+		};
+
+		const result = await saveModelDraft(draft, {
+			ownerId: "owner-1",
+			dimensionDefinitions: [definitionView],
+			models: [],
+		});
+
+		expect(createModelSpec).toHaveBeenCalledWith(
+			expect.objectContaining({
+				modelType: "DIMENSION",
+				dimensionDefinitionRef: { dimensionDefinitionId: definitionView.id, revision: definitionView.revision },
+			}),
+		);
+		expect(updateModelSpec).toHaveBeenCalledWith(
+			initial,
+			expect.objectContaining({ implementationMode: "DBT_MANAGED", sourceRefs: draft.sourceRefs }),
+		);
+		expect(saveModelImplementation).not.toHaveBeenCalled();
+		expect(result).toEqual({ model: saved, implementation: null });
 	});
 });

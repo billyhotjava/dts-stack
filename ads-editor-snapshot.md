@@ -1,0 +1,82 @@
+- generic [ref=f21e3]:
+  - generic:
+    - region "Notifications alt+T"
+  - generic [ref=f21e5]:
+    - navigation [ref=f21e6]:
+      - generic [ref=f21e7]:
+        - link "BI数智平台 机密 (Confidential)" [ref=f21e9] [cursor=pointer]:
+          - /url: "#/"
+          - generic [ref=f21e24]:
+            - generic [ref=f21e25]: BI数智平台
+            - generic [ref=f21e26]: 机密 (Confidential)
+        - button "收起" [ref=f21e27]
+      - separator [ref=f21e28]
+      - navigation [ref=f21e32]:
+        - list [ref=f21e36]:
+          - listitem [ref=f21e37]:
+            - generic [ref=f21e38]: 工作台
+        - generic [ref=f21e49]:
+          - separator [ref=f21e50]
+          - list [ref=f21e53]:
+            - listitem [ref=f21e54]:
+              - generic [ref=f21e55]: 数据集成
+        - generic [ref=f21e67]:
+          - separator [ref=f21e68]
+          - list [ref=f21e71]:
+            - listitem [ref=f21e72]:
+              - generic [ref=f21e73]: 数仓规划
+        - generic [ref=f21e84]:
+          - separator [ref=f21e85]
+          - list [ref=f21e88]:
+            - listitem [ref=f21e89]:
+              - generic [ref=f21e90]: 数据建模
+        - generic [ref=f21e100]:
+          - separator [ref=f21e101]
+          - list [ref=f21e104]:
+            - listitem [ref=f21e105]:
+              - generic [ref=f21e106]: 数据开发与运维
+        - generic [ref=f21e117]:
+          - separator [ref=f21e118]
+          - list [ref=f21e121]:
+            - listitem [ref=f21e122]:
+              - generic [ref=f21e123]: 数据治理
+        - generic [ref=f21e133]:
+          - separator [ref=f21e134]
+          - list [ref=f21e137]:
+            - listitem [ref=f21e138]:
+              - generic [ref=f21e139]: 数据分析与服务
+    - generic [ref=f21e150]:
+      - banner [ref=f21e151]:
+        - generic [ref=f21e152]:
+          - navigation "breadcrumb" [ref=f21e155]:
+            - list [ref=f21e156]:
+              - listitem [ref=f21e157]
+              - listitem [ref=f21e161]
+              - listitem [ref=f21e164]
+              - listitem [ref=f21e168]
+              - listitem [ref=f21e171]
+          - generic [ref=f21e173]:
+            - button "搜索页面与帮助" [ref=f21e174]:
+              - generic [ref=f21e175]: Ctrl / ⌘ K
+            - generic [ref=f21e177]:
+              - heading "全局搜索" [level=2] [ref=f21e178]
+              - paragraph [ref=f21e179]: 搜索有权限访问的页面和 DTS 帮助主题
+            - button "打开帮助" [ref=f21e180] [cursor=pointer]
+            - button [ref=f21e181] [cursor=pointer]
+      - main [ref=f21e182]:
+        - main [ref=f21e184]:
+          - generic [ref=f21e186]:
+            - generic [ref=f21e187]: 数据建模 / 维度建模
+            - heading "维度建模" [level=1] [ref=f21e188]
+            - paragraph [ref=f21e189]: 在一个工作区内完成对象选择、字段设计和交付检查。
+          - generic [ref=f21e9580]:
+            - generic [ref=f21e9581]:
+              - button "返回模型列表" [ref=f21e9582] [cursor=pointer]
+              - generic [ref=f21e9584]: ▤
+              - strong [ref=f21e9585]: E2E_PJM_20260812_技术状态基础指标
+              - generic [ref=f21e9586]: DRAFT · r2
+            - generic [ref=f21e9587]:
+              - generic [ref=f21e9588]
+              - region "物化状态" [ref=f21e9596]
+              - toolbar [ref=f21e9629]
+              - group [ref=f21e9670]

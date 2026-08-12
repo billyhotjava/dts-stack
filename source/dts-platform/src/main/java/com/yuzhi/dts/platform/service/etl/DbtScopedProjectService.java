@@ -30,6 +30,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import org.yaml.snakeyaml.LoaderOptions;
+import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.SafeConstructor;
 
 @Service
 public class DbtScopedProjectService {
@@ -89,7 +92,7 @@ public class DbtScopedProjectService {
             touchActiveMarker(stableProject);
             return new ScopedCandidateProject(
                 toExternalProjectDir(workspaceDir, stableProject),
-                String.join(" ", overlay.selectors()),
+                overlay.selectors().stream().map(selector -> "+" + selector).collect(java.util.stream.Collectors.joining(" ")),
                 digest.checksum(),
                 overlay.entries()
             );
@@ -408,10 +411,14 @@ public class DbtScopedProjectService {
         Path scopedProjectDir,
         CandidateOverlay overlay
     ) throws IOException {
-        Map<String, Path> workspaceNodes = indexResourceFiles(
-            workspaceDir.resolve("models"),
-            Set.of(".sql")
-        );
+        Map<String, Path> workspaceNodes = new LinkedHashMap<>();
+        for (Path modelRoot : modelRoots(workspaceDir)) {
+            Path relativeRoot = workspaceDir.relativize(modelRoot);
+            Path scopedModelRoot = scopedProjectDir.resolve(relativeRoot).normalize();
+            ensureInside(scopedProjectDir, scopedModelRoot);
+            Files.createDirectories(scopedModelRoot);
+            indexResourceFiles(modelRoot, Set.of(".sql")).forEach(workspaceNodes::putIfAbsent);
+        }
         Map<String, Path> seedsByName = indexResourceFiles(
             workspaceDir.resolve("seeds"),
             Set.of(".csv", ".tsv")
@@ -455,18 +462,44 @@ public class DbtScopedProjectService {
     }
 
     private void writeCandidateArtifacts(Path scopedProjectDir, CandidateOverlay overlay) throws IOException {
+        Map<String, CandidateArtifactEntry> entriesBySelector = new LinkedHashMap<>();
+        for (CandidateArtifactEntry entry : overlay.entries()) {
+            entriesBySelector.put(dbtSelector(entry.dbtUniqueId()), entry);
+        }
         for (CandidateArtifact artifact : overlay.artifactsByPath().values()) {
             Path target = scopedProjectDir.resolve(artifact.path()).normalize();
             ensureInside(scopedProjectDir, target);
             Files.createDirectories(target.getParent());
+            CandidateArtifactEntry identity = entriesBySelector.get(
+                sqlNodeName(artifact.path())
+            );
+            String content = identity == null
+                ? artifact.content()
+                : releaseIdentityConfig(identity) + artifact.content();
             Files.writeString(
                 target,
-                artifact.content(),
+                content,
                 StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE,
                 StandardOpenOption.TRUNCATE_EXISTING
             );
         }
+    }
+
+    private static String releaseIdentityConfig(
+        CandidateArtifactEntry entry
+    ) {
+        return (
+            "{{ config(meta={'modelSpecId': '%s', 'modelRevision': %d, " +
+            "'modelChecksum': '%s', 'implementationRevision': %d, " +
+            "'implementationChecksum': '%s'}) }}\n"
+        ).formatted(
+            entry.modelSpecId(),
+            entry.modelRevision(),
+            entry.modelChecksum(),
+            entry.implementationRevision(),
+            entry.implementationChecksum()
+        );
     }
 
     private BundleDigest digestDirectory(Path directory) throws IOException {
@@ -663,6 +696,72 @@ public class DbtScopedProjectService {
         return indexed;
     }
 
+    private List<Path> modelRoots(Path workspaceDir) {
+        Path projectFile = workspaceDir.resolve("dbt_project.yml");
+        LoaderOptions options = new LoaderOptions();
+        options.setAllowDuplicateKeys(false);
+        options.setAllowRecursiveKeys(false);
+        options.setMaxAliasesForCollections(0);
+        options.setNestingDepthLimit(16);
+        options.setCodePointLimit(256 * 1024);
+        try {
+            Object loaded = new Yaml(new SafeConstructor(options)).load(
+                Files.readString(projectFile, StandardCharsets.UTF_8)
+            );
+            Object configured = loaded instanceof Map<?, ?> root
+                ? root.get("model-paths")
+                : null;
+            List<?> values = configured instanceof List<?> list
+                ? list
+                : List.of("models");
+            List<Path> roots = new ArrayList<>();
+            for (Object value : values) {
+                if (!(value instanceof String raw) || !StringUtils.hasText(raw)) {
+                    throw new ScopedProjectException(
+                        "MATERIALIZATION_WORKSPACE_INVALID",
+                        "dbt model-paths must contain relative text paths"
+                    );
+                }
+                Path relative = Path.of(raw.trim()).normalize();
+                String normalized = relative.toString().replace('\\', '/');
+                if (
+                    relative.isAbsolute() ||
+                    normalized.equals("..") ||
+                    normalized.startsWith("../")
+                ) {
+                    throw new ScopedProjectException(
+                        "MATERIALIZATION_WORKSPACE_INVALID",
+                        "dbt model-paths cannot leave the project workspace"
+                    );
+                }
+                Path root = workspaceDir.resolve(relative).normalize();
+                ensureInside(workspaceDir, root);
+                if (!Files.isDirectory(root)) {
+                    throw new ScopedProjectException(
+                        "MATERIALIZATION_WORKSPACE_INVALID",
+                        "Configured dbt model path is unavailable: " + normalized
+                    );
+                }
+                roots.add(root);
+            }
+            if (roots.isEmpty()) {
+                throw new ScopedProjectException(
+                    "MATERIALIZATION_WORKSPACE_INVALID",
+                    "dbt model-paths cannot be empty"
+                );
+            }
+            return List.copyOf(roots);
+        } catch (ScopedProjectException failure) {
+            throw failure;
+        } catch (IOException | RuntimeException failure) {
+            throw new ScopedProjectException(
+                "MATERIALIZATION_WORKSPACE_INVALID",
+                "Unable to read dbt model-paths",
+                failure
+            );
+        }
+    }
+
     /**
      * Build the ref()/source() dependency text for a workspace model that is not registered in the
      * logical modeling DB (e.g. STG-layer views). Appends adjacent .yml/.yaml companion files so
@@ -812,26 +911,30 @@ public class DbtScopedProjectService {
         if (requiredSources == null || requiredSources.isEmpty()) {
             return;
         }
-        Path modelsDir = workspaceDir.resolve("models").normalize();
-        if (!Files.isDirectory(modelsDir)) {
-            return;
-        }
         Set<String> normalizedSources = requiredSources.stream().map(this::normalizeName).filter(StringUtils::hasText).collect(
             LinkedHashSet::new,
             Set::add,
             Set::addAll
         );
-        try (var walk = Files.walk(modelsDir)) {
-            for (Path file : walk.filter(Files::isRegularFile).toList()) {
-                String lower = file.toString().toLowerCase(Locale.ROOT);
-                if (!(lower.endsWith(".yml") || lower.endsWith(".yaml"))) {
-                    continue;
+        Set<String> remainingSources = new LinkedHashSet<>(normalizedSources);
+        for (Path modelsDir : modelRoots(workspaceDir)) {
+            try (var walk = Files.walk(modelsDir)) {
+                for (Path file : walk.filter(Files::isRegularFile).toList()) {
+                    String lower = file.toString().toLowerCase(Locale.ROOT);
+                    if (!(lower.endsWith(".yml") || lower.endsWith(".yaml"))) {
+                        continue;
+                    }
+                    String content = Files.readString(file, StandardCharsets.UTF_8);
+                    Set<String> definitions = remainingSources.stream()
+                        .filter(source -> containsRelevantSourceDefinition(content, Set.of(source)))
+                        .collect(LinkedHashSet::new, Set::add, Set::addAll);
+                    if (definitions.isEmpty()) {
+                        continue;
+                    }
+                    copyRelativeFile(workspaceDir, scopedProjectDir, file);
+                    remainingSources.removeAll(definitions);
+                    if (remainingSources.isEmpty()) return;
                 }
-                String content = Files.readString(file, StandardCharsets.UTF_8);
-                if (!containsRelevantSourceDefinition(content, normalizedSources)) {
-                    continue;
-                }
-                copyRelativeFile(workspaceDir, scopedProjectDir, file);
             }
         }
     }

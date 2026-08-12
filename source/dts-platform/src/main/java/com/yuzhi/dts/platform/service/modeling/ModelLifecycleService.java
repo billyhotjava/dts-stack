@@ -464,7 +464,10 @@ public class ModelLifecycleService {
         int artifactCount;
         if (owner.ownership() == ImplementationMode.DBT_MANAGED) {
             java.util.Set<String> importedTypes = lifecycle.currentArtifactTypes(tenantId, modelSpecId, owner);
-            if (!importedTypes.equals(java.util.Set.of("SQL", "SCHEMA"))) {
+            if (
+                !importedTypes.equals(java.util.Set.of("SQL", "SCHEMA")) &&
+                !importedTypes.equals(java.util.Set.of("SQL", "SCHEMA", "CONFIG"))
+            ) {
                 throw conflict(
                     "MODEL_DBT_IMPORT_REQUIRED",
                     "Current DBT-managed SQL and schema artifacts must be imported before compilation can pass"
@@ -472,6 +475,7 @@ public class ModelLifecycleService {
             }
             artifacts = List.of();
             artifactCount = importedTypes.size();
+            lifecycle.promoteImportedArtifactsToCompiled(tenantId, modelSpecId, owner, clock.instant());
         } else {
             artifacts = compiler.compile(tenantId, model, owner);
             lifecycle.saveArtifacts(tenantId, model, owner, idempotencyKey.trim(), artifacts, clock.instant());
@@ -753,6 +757,10 @@ public class ModelLifecycleService {
         String dbtUniqueId,
         SaveImplementationCommand command
     ) {
+        boolean executionSettingsValid = command != null && (
+            command.settings().isEmpty() ||
+            ModelImplementationExecutionPlanner.plan(model, command, dbtUniqueId).valid()
+        );
         if (
             model.implementationMode() != ImplementationMode.DBT_MANAGED ||
             projectKey == null ||
@@ -766,7 +774,7 @@ public class ModelLifecycleService {
             !(command.inputs().get(0) instanceof ModelLifecycleContract.GeneratedInput input) ||
             !"DBT".equals(input.generatorType()) ||
             !command.fieldMappings().isEmpty() ||
-            !command.settings().isEmpty() ||
+            !executionSettingsValid ||
             !Objects.equals(input.config().get("projectKey"), projectKey.trim()) ||
             !Objects.equals(input.config().get("dbtUniqueId"), dbtUniqueId.trim()) ||
             (

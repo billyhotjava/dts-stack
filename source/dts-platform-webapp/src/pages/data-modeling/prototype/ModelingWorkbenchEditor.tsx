@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { listBusinessProcessesApi, type Sprint64BusinessProcess } from "@/api/sprint64GovernanceApi";
+import type { WarehousePlanSourceBindingView } from "@/api/warehousePlanApi";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
 import type { ModelRepresentationView } from "@/features/modeling/contracts/modelRepresentationContract";
 import type { ModelSpecField, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
@@ -66,6 +67,7 @@ export type ModelingWorkbenchEditorProps = {
 	onUpdateField: (index: number, patch: Partial<ModelSpecField>) => void;
 	onDeleteField: (index: number) => void;
 	onStandardChange: (index: number, value: string) => void;
+	onSourcesChanged: (sources: WarehousePlanSourceBindingView[]) => void;
 };
 
 type DraftFormProps = Pick<
@@ -86,6 +88,7 @@ type DraftFormProps = Pick<
 	| "onUpdateField"
 	| "onDeleteField"
 	| "onStandardChange"
+	| "onSourcesChanged"
 >;
 
 type ConceptDimensionFormProps = Omit<DraftFormProps, "draft"> & { draft: ConceptDimensionDraft };
@@ -356,6 +359,7 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 				context={context}
 				draft={draft}
 				onChange={onChange}
+				onSourcesChanged={props.onSourcesChanged}
 				validationErrors={validationErrors}
 			/>
 			<FieldsPanel {...props} dimensionMode />
@@ -368,6 +372,7 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 	const config = MODEL_KIND_CONFIG[draft.createKind];
 	const patch = (next: Partial<ModelSpecDraft>) => onChange({ ...draft, ...next });
 	const factMode = draft.createKind === "fact";
+	const applicationMode = draft.createKind === "application";
 	const [processes, setProcesses] = useState<Sprint64BusinessProcess[]>([]);
 	const [processLoaded, setProcessLoaded] = useState(false);
 	const [processFailure, setProcessFailure] = useState("");
@@ -427,6 +432,14 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 	const missingPersistedDomain = Boolean(
 		draft.base && draft.domainId && !context.domains.some((item) => item.id === draft.domainId),
 	);
+	const dataMartOptions = context.dataMarts || [];
+	const subjectDomainOptions = (context.subjectDomains || []).filter((item) => item.martId === draft.dataMartId);
+	const missingPersistedDataMart = Boolean(
+		draft.dataMartId && !dataMartOptions.some((item) => item.id === draft.dataMartId),
+	);
+	const missingPersistedSubjectDomain = Boolean(
+		draft.subjectDomainId && !subjectDomainOptions.some((item) => item.id === draft.subjectDomainId),
+	);
 	return (
 		<>
 			<section className="dmx-editor-panel">
@@ -478,6 +491,53 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 							<ValidationMessage message={validationErrors.businessProcessId} />
 							{processFailure ? <ValidationMessage message={processFailure} /> : null}
 						</label>
+					) : null}
+					{applicationMode ? (
+						<>
+							<label>
+								<span className="required">数据集市</span>
+								<select
+									aria-label="数据集市"
+									onChange={(event) => patch({ dataMartId: event.target.value, subjectDomainId: "" })}
+									value={draft.dataMartId || ""}
+								>
+									<option value="">请选择数据集市</option>
+									{dataMartOptions.map((item) => (
+										<option key={item.id} value={item.id}>
+											{item.name} · {item.code}
+										</option>
+									))}
+									{missingPersistedDataMart ? (
+										<option disabled value={draft.dataMartId}>
+											已失效数据集市 · {draft.dataMartId}
+										</option>
+									) : null}
+								</select>
+								<ValidationMessage message={validationErrors.dataMartId} />
+							</label>
+							<label>
+								<span className="required">主题域</span>
+								<select
+									aria-label="主题域"
+									disabled={!draft.dataMartId}
+									onChange={(event) => patch({ subjectDomainId: event.target.value })}
+									value={draft.subjectDomainId || ""}
+								>
+									<option value="">{draft.dataMartId ? "请选择主题域" : "请先选择数据集市"}</option>
+									{subjectDomainOptions.map((item) => (
+										<option key={item.id} value={item.id}>
+											{item.name} · {item.code}
+										</option>
+									))}
+									{missingPersistedSubjectDomain ? (
+										<option disabled value={draft.subjectDomainId}>
+											已失效主题域 · {draft.subjectDomainId}
+										</option>
+									) : null}
+								</select>
+								<ValidationMessage message={validationErrors.subjectDomainId} />
+							</label>
+						</>
 					) : null}
 					<label>
 						<span>模型类型</span>
@@ -556,6 +616,7 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 				context={context}
 				draft={draft}
 				onChange={onChange}
+				onSourcesChanged={props.onSourcesChanged}
 				validationErrors={validationErrors}
 			/>
 			<FieldsPanel {...props} dimensionMode={false} />

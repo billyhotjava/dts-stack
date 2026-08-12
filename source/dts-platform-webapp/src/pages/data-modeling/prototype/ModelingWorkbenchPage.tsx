@@ -629,6 +629,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 								onRemoveBlankFields={removeBlankFields}
 								onSave={() => void save()}
 								onStandardChange={updateStandardBinding}
+								onSourcesChanged={(sources) => setContext((current) => (current ? { ...current, sources } : current))}
 								onUpdateField={updateField}
 								readOnly={editorAccess.readOnly}
 								representation={representation}

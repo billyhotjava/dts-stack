@@ -85,15 +85,34 @@ class DbtScopedProjectServiceTest {
         assertThat(projectDir.resolve(".dts-active")).isRegularFile();
         assertThat(replay.bundleChecksum()).isEqualTo(first.bundleChecksum());
         assertThat(replay.projectDir()).isEqualTo(first.projectDir());
-        assertThat(first.selector()).isEqualTo("model_30000000_0000_0000_0000_000000000001");
+        assertThat(first.selector()).isEqualTo("+model_30000000_0000_0000_0000_000000000001");
         assertThat(first.entries()).containsExactly(entry);
         assertThat(projectDir.resolve("dbt_project.yml")).isRegularFile();
         assertThat(projectDir.resolve("macros/dts_marker.sql")).isRegularFile();
         assertThat(projectDir.resolve("models/ods/sources.yml")).isRegularFile();
         assertThat(projectDir.resolve("models/dwd/upstream_finance.sql")).isRegularFile();
-        assertThat(projectDir.resolve(entry.artifacts().getFirst().path())).hasContent(
-            entry.artifacts().getFirst().content()
+        var modelArtifact = entry
+            .artifacts()
+            .stream()
+            .filter(artifact ->
+                Path.of(artifact.path())
+                    .getFileName()
+                    .toString()
+                    .equals(first.selector().substring(1) + ".sql")
+            )
+            .findFirst()
+            .orElseThrow();
+        String releaseSql = Files.readString(
+            projectDir.resolve(modelArtifact.path()),
+            StandardCharsets.UTF_8
         );
+        assertThat(releaseSql)
+            .contains(modelArtifact.content())
+            .contains("'modelSpecId': '" + entry.modelSpecId() + "'")
+            .contains("'modelRevision': " + entry.modelRevision())
+            .contains("'modelChecksum': '" + entry.modelChecksum() + "'")
+            .contains("'implementationRevision': " + entry.implementationRevision())
+            .contains("'implementationChecksum': '" + entry.implementationChecksum() + "'");
 
         Files.writeString(
             workspace.resolve("models/dwd/upstream_finance.sql"),
@@ -106,6 +125,52 @@ class DbtScopedProjectServiceTest {
 
         service.releaseCandidateProject(first.bundleChecksum());
         assertThat(projectDir.resolve(".dts-active")).doesNotExist();
+    }
+
+    @Test
+    void resolvesTechnicalDependenciesFromEveryConfiguredModelPath() throws Exception {
+        Files.writeString(
+            workspace.resolve("dbt_project.yml"),
+            "name: dts_test\nversion: 1.0.0\nconfig-version: 2\nprofile: dts_test\nmodel-paths: [models, dbt_model/models]\n",
+            StandardCharsets.UTF_8
+        );
+        Files.createDirectories(workspace.resolve("dbt_model/models/stg"));
+        Files.writeString(
+            workspace.resolve("dbt_model/models/stg/nested_upstream.sql"),
+            "select event_id from {{ source('pm_ods', 'events') }}\n",
+            StandardCharsets.UTF_8
+        );
+        Files.writeString(
+            workspace.resolve("dbt_model/models/pm_sources.yml"),
+            "version: 2\nsources:\n  - name: pm_ods\n    schema: public\n    tables:\n      - name: events\n",
+            StandardCharsets.UTF_8
+        );
+        Files.writeString(
+            workspace.resolve("models/ods/pm_sources.yml"),
+            "version: 2\nsources:\n  - name: pm_ods\n    schema: public\n    tables:\n      - name: events\n",
+            StandardCharsets.UTF_8
+        );
+        DbtScopedProjectService.CandidateArtifactEntry entry = candidateEntry();
+        String selectedPath = entry.artifacts().stream()
+            .filter(artifact -> Path.of(artifact.path()).getFileName().toString()
+                .equals("model_30000000_0000_0000_0000_000000000001.sql"))
+            .findFirst()
+            .orElseThrow()
+            .path();
+        DbtScopedProjectService.CandidateArtifact selected = artifact(
+            selectedPath,
+            "select * from {{ ref('nested_upstream') }}\n"
+        );
+
+        DbtScopedProjectService.ScopedCandidateProject prepared = service.prepareCandidate(
+            List.of(withArtifacts(entry, List.of(selected)))
+        );
+
+        Path projectDir = Path.of(prepared.projectDir());
+        assertThat(prepared.selector()).isEqualTo("+model_30000000_0000_0000_0000_000000000001");
+        assertThat(projectDir.resolve("dbt_model/models/stg/nested_upstream.sql")).isRegularFile();
+        assertThat(projectDir.resolve("models/ods/pm_sources.yml")).isRegularFile();
+        assertThat(projectDir.resolve("dbt_model/models/pm_sources.yml")).doesNotExist();
     }
 
     @Test

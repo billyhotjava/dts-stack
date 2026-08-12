@@ -188,7 +188,7 @@ public class ModelMaterializationRuntimeSpecService {
             runtime.dispatchId(),
             "RELEASE_BUILD",
             runtime.scopedBundleChecksum(),
-            runtime.selector(),
+            includeAncestors(runtime.selector()),
             lease.targetName(),
             lease.profileLeaseId(),
             lease.expiresAt(),
@@ -223,6 +223,14 @@ public class ModelMaterializationRuntimeSpecService {
             throw failure;
         }
         return view;
+    }
+
+    private static String includeAncestors(String selector) {
+        return java.util.Arrays
+            .stream(selector.trim().split("[,\\s]+"))
+            .filter(value -> !value.isBlank())
+            .map(value -> value.startsWith("+") ? value : "+" + value)
+            .collect(java.util.stream.Collectors.joining(" "));
     }
 
     private void auditRuntimeSpecConsumed(

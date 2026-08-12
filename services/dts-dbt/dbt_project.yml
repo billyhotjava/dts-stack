@@ -7,7 +7,7 @@ profile: "dts"
 on-run-start:
   - "{{ ensure_date_helpers() }}"
 
-model-paths: ["models"]
+model-paths: ["models", "dbt_model/models"]
 seed-paths: ["seeds"]
 macro-paths: ["macros"]
 log-path: "/opt/dbt-logs"

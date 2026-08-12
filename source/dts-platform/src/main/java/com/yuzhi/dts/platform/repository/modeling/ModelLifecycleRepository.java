@@ -16,6 +16,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.PhysicalAs
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.SaveImplementationCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.UpstreamModelInput;
 import com.yuzhi.dts.platform.service.modeling.ModelImplementationChecksumCodec;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationExecutionPlanner;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelStatus;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
@@ -836,7 +837,7 @@ public class ModelLifecycleRepository {
                    and a.dbt_unique_id = ?
                    and a.implementation_revision = ?
                    and ir.content_checksum = ?
-                   and a.status = 'COMPILED'
+                   and a.status in ('IMPORTED', 'COMPILED')
                 """,
                 String.class,
                 tenantId,
@@ -850,6 +851,46 @@ public class ModelLifecycleRepository {
                 implementation.implementationRevision(),
                 implementation.implementationChecksum()
             )
+        );
+    }
+
+    public int promoteImportedArtifactsToCompiled(
+        String tenantId,
+        UUID modelSpecId,
+        ImplementationView implementation,
+        Instant now
+    ) {
+        if (implementation == null || implementation.ownership() != ImplementationMode.DBT_MANAGED) return 0;
+        return jdbcTemplate.update(
+            """
+            update modeling_dbt_artifact a
+               set status = 'COMPILED', last_modified_date = ?
+              from modeling_model_spec s, modeling_model_implementation_revision ir
+             where s.id = a.model_spec_id and s.tenant_id = ?
+               and ir.tenant_id = s.tenant_id
+               and ir.implementation_id = ?
+               and ir.revision = a.implementation_revision
+               and a.model_spec_id = ?
+               and a.revision = ?
+               and a.model_checksum = ?
+               and a.ownership = ?
+               and a.project_key = ?
+               and a.dbt_unique_id = ?
+               and a.implementation_revision = ?
+               and ir.content_checksum = ?
+               and a.status = 'IMPORTED'
+            """,
+            Timestamp.from(now),
+            tenantId,
+            implementation.id(),
+            modelSpecId,
+            implementation.revision(),
+            implementation.modelChecksum(),
+            implementation.ownership().name(),
+            implementation.projectKey(),
+            implementation.dbtUniqueId(),
+            implementation.implementationRevision(),
+            implementation.implementationChecksum()
         );
     }
 
@@ -1179,6 +1220,10 @@ public class ModelLifecycleRepository {
         String dbtUniqueId,
         SaveImplementationCommand command
     ) {
+        boolean executionSettingsValid = command != null && (
+            command.settings().isEmpty() ||
+            ModelImplementationExecutionPlanner.plan(model, command, dbtUniqueId).valid()
+        );
         if (
             model == null ||
             expectedModelStatus == null ||
@@ -1195,7 +1240,7 @@ public class ModelLifecycleRepository {
             !(command.inputs().get(0) instanceof GeneratedInput input) ||
             !"DBT".equals(input.generatorType()) ||
             !command.fieldMappings().isEmpty() ||
-            !command.settings().isEmpty() ||
+            !executionSettingsValid ||
             !java.util.Objects.equals(input.config().get("projectKey"), projectKey.trim()) ||
             !java.util.Objects.equals(input.config().get("dbtUniqueId"), dbtUniqueId.trim())
         ) {

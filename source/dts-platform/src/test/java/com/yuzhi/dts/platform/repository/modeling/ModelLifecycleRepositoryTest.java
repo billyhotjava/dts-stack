@@ -29,6 +29,82 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class ModelLifecycleRepositoryTest {
 
     @Test
+    void currentArtifactTypesIncludesImportedAndCompiledEvidenceForThePinnedImplementation() {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        when(jdbcTemplate.queryForList(anyString(), eq(String.class), any(Object[].class)))
+            .thenReturn(List.of("SQL", "SCHEMA", "CONFIG"));
+        ModelLifecycleRepository repository = new ModelLifecycleRepository(jdbcTemplate, new ObjectMapper());
+        UUID modelId = UUID.fromString("30000000-0000-0000-0000-000000000083");
+        UUID planId = UUID.fromString("10000000-0000-0000-0000-000000000083");
+        ImplementationView implementation = new ImplementationView(
+            UUID.fromString("60000000-0000-0000-0000-000000000083"),
+            modelId,
+            planId,
+            2,
+            "a".repeat(64),
+            ImplementationMode.DBT_MANAGED,
+            "pjm",
+            "model.pjm.dim_completion_status_v2",
+            "ACTIVE",
+            1,
+            "b".repeat(64),
+            InputMode.GENERATED,
+            List.of(new GeneratedInput("DBT", Map.of())),
+            List.of(),
+            Map.of(),
+            "table"
+        );
+
+        assertThat(repository.currentArtifactTypes("tenant-a", modelId, implementation))
+            .containsExactlyInAnyOrder("SQL", "SCHEMA", "CONFIG");
+
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        verify(jdbcTemplate).queryForList(sql.capture(), eq(String.class), any(Object[].class));
+        assertThat(sql.getValue()).contains("a.status in ('IMPORTED', 'COMPILED')");
+    }
+
+    @Test
+    void promotesOnlyImportedArtifactsPinnedToTheCurrentDbtImplementation() {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        when(jdbcTemplate.update(anyString(), any(Object[].class))).thenReturn(3);
+        ModelLifecycleRepository repository = new ModelLifecycleRepository(jdbcTemplate, new ObjectMapper());
+        UUID modelId = UUID.fromString("30000000-0000-0000-0000-000000000083");
+        UUID planId = UUID.fromString("10000000-0000-0000-0000-000000000083");
+        ImplementationView implementation = new ImplementationView(
+            UUID.fromString("60000000-0000-0000-0000-000000000083"),
+            modelId,
+            planId,
+            2,
+            "a".repeat(64),
+            ImplementationMode.DBT_MANAGED,
+            "pjm",
+            "model.pjm.dim_completion_status_v2",
+            "ACTIVE",
+            1,
+            "b".repeat(64),
+            InputMode.GENERATED,
+            List.of(new GeneratedInput("DBT", Map.of())),
+            List.of(),
+            Map.of(),
+            "table"
+        );
+        Instant now = Instant.parse("2026-08-12T00:00:00Z");
+
+        assertThat(repository.promoteImportedArtifactsToCompiled("tenant-a", modelId, implementation, now)).isEqualTo(3);
+
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Object[]> arguments = ArgumentCaptor.forClass(Object[].class);
+        verify(jdbcTemplate).update(sql.capture(), arguments.capture());
+        assertThat(sql.getValue())
+            .contains("set status = 'COMPILED'")
+            .contains("last_modified_date = ?")
+            .contains("a.status = 'IMPORTED'")
+            .contains("ir.content_checksum = ?");
+        assertThat(sql.getValue().chars().filter(character -> character == '?').count())
+            .isEqualTo((long) arguments.getValue().length);
+    }
+
+    @Test
     void restoresImportedDbtHeadAgainstOldPinsAndAppendsANewRevision() {
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), any(Object[].class))).thenReturn(1);
@@ -46,7 +122,14 @@ class ModelLifecycleRepositoryTest {
             InputMode.GENERATED,
             List.of(new GeneratedInput("DBT", Map.of("projectKey", "finance", "dbtUniqueId", "model.finance.budget"))),
             List.of(),
-            Map.of(),
+            Map.of(
+                "targetPhysicalName",
+                "budget",
+                "loadStrategy",
+                "FULL",
+                "partitionFields",
+                List.of()
+            ),
             ImplementationMode.DBT_MANAGED,
             "table",
             "undo-83"

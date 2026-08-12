@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -191,9 +192,13 @@ public class ModelMaterializationRunArtifactService {
                 results
             );
             runInvocationId = invocationId;
-            Map<UUID, RelationLocator> locators =
+            ManifestValidation manifestValidation =
                 validateManifest(scope, manifest);
-            perModelRunResults = validateRunResults(scope, results);
+            perModelRunResults = validateRunResults(
+                scope,
+                results,
+                manifestValidation.runtimeUniqueIds()
+            );
             if (perModelRunResults.values().stream().anyMatch(status -> !"DBT_SUCCEEDED".equals(status))) {
                 throw failure(
                     "MODEL_DBT_BUILD_RESULT_FAILED",
@@ -206,7 +211,7 @@ public class ModelMaterializationRunArtifactService {
                     group,
                     scope,
                     invocationId,
-                    locators,
+                    manifestValidation.locators(),
                     now
                 );
             boolean artifactBoundaryCurrent = Boolean.TRUE.equals(transactions.execute(status -> {
@@ -693,7 +698,7 @@ public class ModelMaterializationRunArtifactService {
         }
     }
 
-    private static Map<UUID, RelationLocator> validateManifest(
+    private static ManifestValidation validateManifest(
         CandidateBuildScope scope,
         JsonNode manifest
     ) {
@@ -706,8 +711,14 @@ public class ModelMaterializationRunArtifactService {
         }
         Map<UUID, RelationLocator> locators =
             new LinkedHashMap<>();
+        Map<UUID, String> runtimeUniqueIds =
+            new LinkedHashMap<>();
         for (CandidateBuildEntry entry : scope.entries()) {
-            JsonNode node = nodes.path(entry.dbtUniqueId());
+            RuntimeManifestNode runtimeNode = requireRuntimeManifestNode(
+                nodes,
+                entry
+            );
+            JsonNode node = runtimeNode.node();
             JsonNode meta = node.path("config").path("meta");
             if (
                 node.isMissingNode() ||
@@ -740,6 +751,26 @@ public class ModelMaterializationRunArtifactService {
                 );
             }
             String alias = node.path("alias").asText("");
+            List<String> manifestColumns = expectedColumns(
+                node.path("columns")
+            );
+            List<String> pinnedColumns = entry.expectedColumns().isEmpty()
+                ? manifestColumns
+                : entry.expectedColumns();
+            if (
+                pinnedColumns.isEmpty() ||
+                (
+                    !manifestColumns.isEmpty() &&
+                    !Set.copyOf(manifestColumns).equals(
+                        Set.copyOf(pinnedColumns)
+                    )
+                )
+            ) {
+                throw failure(
+                    "MODEL_DBT_MANIFEST_COLUMNS_MISMATCH",
+                    "dbt manifest columns do not match the pinned model revision"
+                );
+            }
             if (
                 !entry.targetIdentifier().equals(alias) ||
                 !"model".equals(
@@ -763,7 +794,7 @@ public class ModelMaterializationRunArtifactService {
                             .path("materialized")
                             .asText("")
                     ),
-                    expectedColumns(node.path("columns")),
+                    pinnedColumns,
                     expectedColumnTypes(
                         node.path("columns"),
                         entry.implementationMode()
@@ -776,8 +807,55 @@ public class ModelMaterializationRunArtifactService {
                 );
             }
             locators.put(entry.modelSpecId(), locator);
+            runtimeUniqueIds.put(
+                entry.pipelineRunId(),
+                runtimeNode.uniqueId()
+            );
         }
-        return Map.copyOf(locators);
+        return new ManifestValidation(
+            Map.copyOf(locators),
+            Map.copyOf(runtimeUniqueIds)
+        );
+    }
+
+    private static RuntimeManifestNode requireRuntimeManifestNode(
+        JsonNode nodes,
+        CandidateBuildEntry entry
+    ) {
+        List<RuntimeManifestNode> matches = new ArrayList<>();
+        nodes.fields().forEachRemaining(candidate -> {
+            JsonNode node = candidate.getValue();
+            if (
+                "model".equals(node.path("resource_type").asText()) &&
+                entry
+                    .modelSpecId()
+                    .toString()
+                    .equals(
+                        node
+                            .path("config")
+                            .path("meta")
+                            .path("modelSpecId")
+                            .asText()
+                    ) &&
+                candidate
+                    .getKey()
+                    .equals(node.path("unique_id").asText())
+            ) {
+                matches.add(
+                    new RuntimeManifestNode(
+                        candidate.getKey(),
+                        node
+                    )
+                );
+            }
+        });
+        if (matches.size() != 1) {
+            throw failure(
+                "MODEL_DBT_MANIFEST_IDENTITY_MISMATCH",
+                "dbt manifest does not contain exactly one immutable model identity"
+            );
+        }
+        return matches.getFirst();
     }
 
     private List<ObservationWrite> observeRelations(
@@ -1115,7 +1193,8 @@ public class ModelMaterializationRunArtifactService {
 
     private static Map<UUID, String> validateRunResults(
         CandidateBuildScope scope,
-        JsonNode runResults
+        JsonNode runResults,
+        Map<UUID, String> runtimeUniqueIds
     ) {
         JsonNode resultNodes = runResults.path("results");
         if (!resultNodes.isArray()) {
@@ -1142,7 +1221,12 @@ public class ModelMaterializationRunArtifactService {
         }
         Map<UUID, String> perModel = new LinkedHashMap<>();
         for (CandidateBuildEntry entry : scope.entries()) {
-            String status = String.valueOf(statuses.get(entry.dbtUniqueId())).toLowerCase(Locale.ROOT);
+            String runtimeUniqueId = runtimeUniqueIds.get(
+                entry.pipelineRunId()
+            );
+            String status = String.valueOf(
+                statuses.get(runtimeUniqueId)
+            ).toLowerCase(Locale.ROOT);
             String persisted = switch (status) {
                 case "success" -> "DBT_SUCCEEDED";
                 case "skipped" -> "SKIPPED_DEPENDENCY_FAILED";
@@ -1247,6 +1331,16 @@ public class ModelMaterializationRunArtifactService {
     ) {}
 
     private record SuccessBoundary(boolean current, int modelCount) {}
+
+    private record ManifestValidation(
+        Map<UUID, RelationLocator> locators,
+        Map<UUID, String> runtimeUniqueIds
+    ) {}
+
+    private record RuntimeManifestNode(
+        String uniqueId,
+        JsonNode node
+    ) {}
 
     private static final class MachineAuditPersistenceException
         extends RuntimeException {

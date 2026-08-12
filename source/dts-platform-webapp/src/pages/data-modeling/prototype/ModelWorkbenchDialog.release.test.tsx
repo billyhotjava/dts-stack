@@ -28,6 +28,7 @@ beforeAll(() => {
 });
 
 const apiMocks = vi.hoisted(() => ({
+	cancelCandidate: vi.fn(),
 	createCandidate: vi.fn(),
 	createReplacementCandidate: vi.fn(),
 	getWorkbench: vi.fn(),
@@ -50,6 +51,7 @@ const apiMocks = vi.hoisted(() => ({
 
 vi.mock("@/api/modelSpecApi", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@/api/modelSpecApi")>()),
+	cancelReleaseCandidate: apiMocks.cancelCandidate,
 	createReleaseCandidate: apiMocks.createCandidate,
 	createReplacementReleaseCandidate: apiMocks.createReplacementCandidate,
 	getReleaseCandidateWorkbench: apiMocks.getWorkbench,
@@ -314,6 +316,47 @@ describe("release and materialization dispatch", () => {
 			expect.objectContaining({
 				entries: [{ modelSpecId: model.id, sortOrder: 0, selectedReason: "从模型工作台选择" }],
 			}),
+		);
+	});
+
+	it("cancels and replaces an unpublished built candidate when the selected scope changed", async () => {
+		const built = candidate("BATCH_WORKBENCH", "BUILT");
+		const cancelled = { ...built, status: "CANCELLED", version: 5 } as ReleaseCandidate;
+		const replacement = {
+			...candidate("BATCH_WORKBENCH"),
+			id: "30000000-0000-0000-0000-000000000002",
+			version: 1,
+			entries: [{ modelSpecId: secondModel.id }],
+		} as ReleaseCandidate;
+		apiMocks.getWorkbench.mockResolvedValue(workspace(["RUN_QUALITY", "CANCEL_CANDIDATE", "REMATERIALIZE"], built));
+		apiMocks.cancelCandidate.mockResolvedValue({ candidate: cancelled });
+		apiMocks.createReplacementCandidate.mockResolvedValue({ candidate: replacement });
+		apiMocks.lockCandidate.mockResolvedValue({ candidate: replacement });
+
+		await act(async () => root.render(<ModelPublishDialog canMaintain models={[secondModel]} onClose={vi.fn()} />));
+		await flush();
+		await act(async () => button("替换候选并物化")?.click());
+
+		expect(apiMocks.cancelCandidate).toHaveBeenCalledWith(
+			model.planId,
+			built,
+			"idem-1",
+			"所选模型范围已变化，关闭旧候选",
+		);
+		expect(apiMocks.createReplacementCandidate).toHaveBeenCalledWith(
+			model.planId,
+			cancelled,
+			"idem-1",
+			expect.objectContaining({
+				entries: [{ modelSpecId: secondModel.id, sortOrder: 0, selectedReason: "从模型工作台选择" }],
+			}),
+		);
+		expect(apiMocks.rematerializeCandidate).not.toHaveBeenCalled();
+		expect(apiMocks.lockCandidate).toHaveBeenCalledWith(
+			model.planId,
+			replacement,
+			"idem-1",
+			"从模型工作台启动新范围构建",
 		);
 	});
 

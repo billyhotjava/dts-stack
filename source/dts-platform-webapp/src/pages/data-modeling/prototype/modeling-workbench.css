@@ -83,6 +83,25 @@
 	color: var(--dmx-muted);
 }
 
+.dmx-source-inventory__heading,
+.dmx-source-inventory__row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.dmx-source-inventory {
+	display: grid;
+	gap: 16px;
+}
+
+.dmx-source-inventory__row {
+	padding: 10px 12px;
+	border: 1px solid #e2e8f0;
+	border-radius: 8px;
+}
+
 .dmx-workbench-editor__validation {
 	display: block;
 	color: var(--dmx-danger) !important;

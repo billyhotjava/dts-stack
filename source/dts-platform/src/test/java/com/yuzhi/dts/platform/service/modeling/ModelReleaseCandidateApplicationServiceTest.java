@@ -192,7 +192,11 @@ class ModelReleaseCandidateApplicationServiceTest {
         var view = service.workspace(TENANT, ACTOR, PLAN_ID);
 
         assertThat(view.entryEvidence()).containsExactly(entryEvidence);
-		assertThat(view.allowedActions()).containsExactly(WorkspaceAction.RUN_QUALITY, WorkspaceAction.REMATERIALIZE);
+        assertThat(view.allowedActions()).containsExactly(
+            WorkspaceAction.RUN_QUALITY,
+            WorkspaceAction.CANCEL_CANDIDATE,
+            WorkspaceAction.REMATERIALIZE
+        );
         assertThat(view.evidence())
             .filteredOn(summary ->
                 summary.type() == com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryEvidenceType.ARTIFACT ||

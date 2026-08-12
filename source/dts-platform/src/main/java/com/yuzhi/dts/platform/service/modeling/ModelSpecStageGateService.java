@@ -377,15 +377,18 @@ public class ModelSpecStageGateService {
                 implementation.materialization(),
                 "gate-input-evidence"
             );
-            ModelImplementationInputPolicy.ValidationResult inputValidation =
-                inputPolicy.validate(
-                tenantId,
-                view,
-                command
-            );
-            if (!inputValidation.valid()) {
-                blockerCode = inputValidation.code();
-            } else {
+            if (implementation.ownership() != ImplementationMode.DBT_MANAGED) {
+                ModelImplementationInputPolicy.ValidationResult inputValidation =
+                    inputPolicy.validate(
+                    tenantId,
+                    view,
+                    command
+                );
+                if (!inputValidation.valid()) {
+                    blockerCode = inputValidation.code();
+                }
+            }
+            if (blockerCode == null) {
                 ModelImplementationExecutionPlanner.ValidationResult execution =
                     ModelImplementationExecutionPlanner.plan(view, command, implementation.dbtUniqueId());
                 if (!execution.valid()) {
@@ -597,7 +600,7 @@ public class ModelSpecStageGateService {
         );
         boolean currentArtifacts = implementation != null && (
             implementation.ownership() == ImplementationMode.DBT_MANAGED
-                ? artifactTypes.equals(Set.of("SQL", "SCHEMA"))
+                ? artifactTypes.equals(Set.of("SQL", "SCHEMA")) || artifactTypes.equals(Set.of("SQL", "SCHEMA", "CONFIG"))
                 : artifactTypes.containsAll(Set.of("SQL", "SCHEMA", "TEST"))
         );
         EvidenceState build = currentArtifacts && passedCompile

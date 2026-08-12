@@ -147,6 +147,73 @@ class ModelSpecStageGateServiceTest {
     }
 
     @Test
+    void acceptsPersistedDbtManagedInputWhenItsExecutionSettingsPassTheUnifiedPlanner() {
+        ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
+        ModelSpecRepository repository = mock(ModelSpecRepository.class);
+        ModelLifecycleRepository lifecycle = mock(ModelLifecycleRepository.class);
+        DimensionProfile profile = new DimensionProfile(
+            "DIM_COMPLETION_STATUS",
+            List.of(),
+            new ScdPolicy(ScdType.TYPE1, null, null, null),
+            ReuseScope.PLAN
+        );
+        ModelSpecView model = withImplementationMode(
+            withDimensionDefinitionRef(
+                dimension(profile, List.of(), new GenerationStrategy("REFERENCE", "manual-dbt")),
+                1
+            ),
+            ImplementationMode.DBT_MANAGED
+        );
+        ImplementationView implementation = new ImplementationView(
+            UUID.randomUUID(),
+            model.id(),
+            model.planId(),
+            model.revision(),
+            model.checksum(),
+            ImplementationMode.DBT_MANAGED,
+            "pjm",
+            "model.pjm.dim_completion_status_v2",
+            "ACTIVE",
+            1,
+            "b".repeat(64),
+            ModelLifecycleContract.InputMode.GENERATED,
+            List.of(new ModelLifecycleContract.GeneratedInput("DBT", java.util.Map.of())),
+            List.of(),
+            java.util.Map.of(
+                "targetPhysicalName",
+                "dim_completion_status_v2",
+                "loadStrategy",
+                "FULL",
+                "partitionFields",
+                List.of()
+            ),
+            "table"
+        );
+        when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(model);
+        when(lifecycle.findImplementation("tenant-a", MODEL_ID)).thenReturn(Optional.of(implementation));
+        ModelImplementationInputPolicy inputPolicy = new ModelImplementationInputPolicy(
+            modelSpecs,
+            repository,
+            lifecycle,
+            mock(ModelSpecSourceValidationPort.class)
+        );
+        ModelSpecStageGateService gates = new ModelSpecStageGateService(
+            modelSpecs,
+            repository,
+            mock(ModelSpecStandardEvidencePort.class),
+            lifecycle,
+            null,
+            null,
+            null,
+            inputPolicy
+        );
+
+        assertThat(implementationGate(gates).blockers())
+            .extracting(ModelSpecStageGateService.GateBlocker::code)
+            .doesNotContain("MODEL_IMPLEMENTATION_INPUT_KIND_NOT_ALLOWED", "IMPLEMENTATION_TARGET_REQUIRED");
+    }
+
+    @Test
     void acceptsARevisionPinnedDimensionWithClosedKeysHierarchyScdAndGeneratedInput() {
         DimensionProfile profile = new DimensionProfile(
             "DIM_ORGANIZATION",
@@ -569,11 +636,19 @@ class ModelSpecStageGateServiceTest {
             .filter(gate -> gate.stage() == Stage.RELEASE_READY)
             .findFirst()
             .orElseThrow();
+        when(lifecycle.currentArtifactTypes("tenant-a", MODEL_ID, implementation)).thenReturn(Set.of("SQL", "SCHEMA", "CONFIG"));
+        GateView uiDraft = gates.evaluateAll("tenant-a", MODEL_ID).stream()
+            .filter(gate -> gate.stage() == Stage.RELEASE_READY)
+            .findFirst()
+            .orElseThrow();
 
         assertThat(polluted.blockers())
             .extracting(ModelSpecStageGateService.GateBlocker::code)
             .contains("MODEL_SPEC_BUILD_EVIDENCE_UNKNOWN");
         assertThat(exact.blockers())
+            .extracting(ModelSpecStageGateService.GateBlocker::code)
+            .doesNotContain("MODEL_SPEC_BUILD_EVIDENCE_UNKNOWN");
+        assertThat(uiDraft.blockers())
             .extracting(ModelSpecStageGateService.GateBlocker::code)
             .doesNotContain("MODEL_SPEC_BUILD_EVIDENCE_UNKNOWN");
     }

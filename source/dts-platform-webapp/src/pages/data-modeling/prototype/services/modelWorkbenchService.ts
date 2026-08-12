@@ -4,8 +4,10 @@ import {
 	listDimensionDefinitions,
 	updateDimensionDefinition,
 } from "@/api/dimensionDefinitionApi";
+import { listDataMarts } from "@/api/dataMartApi";
 import { saveModelImplementation } from "@/api/modelImplementationApi";
 import { listModelFieldStandardOptions, type ModelFieldStandardOption } from "@/api/modelingStandardsApi";
+import { listSubjectDomains } from "@/api/subjectDomainApi";
 import {
 	type CreateDimensionModelCommand,
 	createDimensionModel,
@@ -26,6 +28,7 @@ import type {
 	DimensionDefinitionReuseScope,
 	DimensionDefinitionView,
 } from "@/features/modeling/contracts/dimensionDefinitionContract";
+import type { DataMartView } from "@/features/modeling/contracts/dataMartContract";
 import type {
 	GeneratedImplementationInput,
 	ModelImplementationInput,
@@ -33,10 +36,12 @@ import type {
 	ModelImplementationView,
 	ModelImplementationWriteCommand,
 } from "@/features/modeling/contracts/modelImplementationContract";
+import type { SubjectDomainView } from "@/features/modeling/contracts/subjectDomainContract";
 import {
 	type CanonicalModelSpecView,
 	type ModelSpecFactShape,
 	type ModelSpecField,
+	type ModelSpecImplementationMode,
 	type ModelSpecLayer,
 	type ModelSpecLoadStrategy,
 	type ModelSpecRevisionRef,
@@ -70,6 +75,8 @@ export type ModelWorkbenchContext = {
 	models: ModelSpecView[];
 	dimensions: DimensionDefinitionView[];
 	standards: ModelFieldStandardOption[];
+	dataMarts: DataMartView[];
+	subjectDomains: SubjectDomainView[];
 	warehouseLayers: WarehouseLayerView[];
 	sources: WarehousePlanSourceBindingView[];
 };
@@ -105,16 +112,20 @@ export type ModelSpecDraft = {
 	dimensionDefinitionId: string;
 	standardBindings: ModelSpecStandardBinding[];
 	warehouseLayerCode: string;
+	implementationMode: ModelSpecImplementationMode;
 	implementationBase: ModelImplementationView | null;
 	implementationInputMode: ModelImplementationInputMode | "";
 	generationStrategyType: "" | "DATE_DIMENSION";
 	implementationIdempotencyKey: string;
 	sourceRefs: ModelSpecSourceRef[];
 	dependsOn: ModelSpecRevisionRef[];
+	dimensionRefs: ModelSpecRevisionRef[];
 	factShape: ModelSpecFactShape | "";
 	timeSemanticsType: ModelSpecTimeSemanticsType | "";
 	timeSemanticsFields: string[];
 	consumptionScenario: string;
+	dataMartId?: string;
+	subjectDomainId?: string;
 };
 
 export type ModelDraft = ConceptDimensionDraft | ModelSpecDraft;
@@ -150,7 +161,9 @@ export type ModelDraftErrorKey =
 	| "implementationInputMode"
 	| "factShape"
 	| "timeSemantics"
-	| "consumptionScenario";
+	| "consumptionScenario"
+	| "dataMartId"
+	| "subjectDomainId";
 
 export type ModelDraftValidationErrors = Partial<Record<ModelDraftErrorKey, string>>;
 
@@ -198,16 +211,20 @@ export function emptyModelDraft(kind: ModelCreateKind, context: ModelWorkbenchCo
 		dimensionDefinitionId: "",
 		standardBindings: [],
 		warehouseLayerCode: config.layer,
+		implementationMode: "DESIGNER_GENERATED",
 		implementationBase: null,
 		implementationInputMode: kind === "summary" || kind === "application" ? "UPSTREAM_MODEL" : "PHYSICAL_ASSET",
 		generationStrategyType: "",
 		implementationIdempotencyKey: crypto.randomUUID(),
 		sourceRefs: [],
 		dependsOn: [],
+		dimensionRefs: [],
 		factShape: kind === "fact" ? "TRANSACTION" : "",
 		timeSemanticsType: kind === "fact" ? "EVENT_TIME" : "",
 		timeSemanticsFields: [],
 		consumptionScenario: "",
+		dataMartId: "",
+		subjectDomainId: "",
 	};
 }
 
@@ -276,6 +293,7 @@ export function modelDraftFromView(
 		dimensionDefinitionId: model.dimensionDefinitionRef?.dimensionDefinitionId || "",
 		standardBindings: model.standardBindings.map((binding) => ({ ...binding })),
 		warehouseLayerCode: model.warehouseLayerCode || model.layer,
+		implementationMode: model.implementationMode,
 		implementationBase: implementation,
 		implementationInputMode:
 			implementation?.inputMode ||
@@ -292,10 +310,13 @@ export function modelDraftFromView(
 		implementationIdempotencyKey: crypto.randomUUID(),
 		sourceRefs: model.compatibilityMode === "CANONICAL" ? model.sourceRefs.map((source) => ({ ...source })) : [],
 		dependsOn: model.dependsOn.map((dependency) => ({ ...dependency })),
+		dimensionRefs: model.dimensionRefs.map((dimension) => ({ ...dimension })),
 		factShape: model.factShape || "",
 		timeSemanticsType: model.timeSemantics?.type || "",
 		timeSemanticsFields: [...(model.timeSemantics?.fields || [])],
 		consumptionScenario: model.consumptionScenario || "",
+		dataMartId: model.dataMartId || "",
+		subjectDomainId: model.subjectDomainId || "",
 	};
 }
 
@@ -306,11 +327,13 @@ export async function loadModelWorkbenchDraft(model: ModelSpecView): Promise<Mod
 
 export async function loadModelWorkbenchContext(): Promise<ModelWorkbenchContext> {
 	const planId = await resolveDefaultModelingContextId();
-	const [domains, models, dimensions, standards, warehouseLayers, sources] = await Promise.all([
+	const [domains, models, dimensions, standards, dataMarts, subjectDomains, warehouseLayers, sources] = await Promise.all([
 		catalogDomainService.list(),
 		listModelSpecs(),
 		listDimensionDefinitions({ offset: 0, limit: 100 }),
 		listModelFieldStandardOptions(),
+		listDataMarts({ status: "CURRENT", offset: 0, limit: 100 }),
+		listSubjectDomains({ status: "CURRENT", offset: 0, limit: 100 }),
 		listWarehouseLayers(),
 		planId ? collectCurrentWarehousePlanSources(planId) : Promise.resolve([]),
 	]);
@@ -320,6 +343,8 @@ export async function loadModelWorkbenchContext(): Promise<ModelWorkbenchContext
 		models: models.filter((model) => model.status !== "ARCHIVED"),
 		dimensions: dimensions.filter((definition) => definition.status !== "RETIRED"),
 		standards,
+		dataMarts,
+		subjectDomains,
 		warehouseLayers,
 		sources,
 	};
@@ -462,6 +487,12 @@ export function validateModelDraftInput(draft: ModelSpecDraft): ModelDraftValida
 	if (draft.createKind === "fact" && !draft.businessProcessId?.trim()) {
 		errors.businessProcessId = "请选择业务过程";
 	}
+	if (draft.createKind === "application" && !draft.dataMartId?.trim()) {
+		errors.dataMartId = "请选择数据集市";
+	}
+	if (draft.createKind === "application" && !draft.subjectDomainId?.trim()) {
+		errors.subjectDomainId = "请选择主题域";
+	}
 	if (!draft.implementationInputMode && !draft.base) {
 		errors.implementationInputMode = "请选择实现输入方式";
 	} else if (draft.implementationInputMode === "PHYSICAL_ASSET" && !draft.sourceRefs.length) {
@@ -470,15 +501,20 @@ export function validateModelDraftInput(draft: ModelSpecDraft): ModelDraftValida
 		errors.implementationInputMode = "请至少选择一个当前修订的上游模型";
 	} else if (
 		draft.implementationInputMode === "GENERATED" &&
-		(draft.createKind !== "dimension-table" || draft.generationStrategyType !== "DATE_DIMENSION")
+		(draft.createKind !== "dimension-table" ||
+			(draft.implementationMode === "DBT_MANAGED"
+				? Boolean(draft.generationStrategyType)
+				: draft.generationStrategyType !== "DATE_DIMENSION"))
 	) {
 		errors.implementationInputMode = "当前模型不支持所选生成器";
 	}
 	if (draft.createKind === "fact") {
 		if (!draft.factShape) errors.factShape = "请选择事实类型";
-		if (!draft.timeSemanticsType || !draft.timeSemanticsFields.length) {
+		const hasTimeSemanticsInput = Boolean(draft.timeSemanticsType) || draft.timeSemanticsFields.length > 0;
+		if (hasTimeSemanticsInput && (!draft.timeSemanticsType || !draft.timeSemanticsFields.length)) {
 			errors.timeSemantics = "请选择时间语义和至少一个时间字段";
 		} else if (
+			hasTimeSemanticsInput &&
 			draft.timeSemanticsFields.some(
 				(name) => !draft.fields.some((field) => field.name === name && field.role === "TIME"),
 			)
@@ -523,7 +559,7 @@ const buildUpdate = (draft: ModelSpecDraft): UpdateModelSpecCommand => {
 		warehouseLayerCode: draft.warehouseLayerCode,
 		name: draft.name.trim(),
 		description: draft.description.trim() || null,
-		implementationMode: base?.implementationMode || "DESIGNER_GENERATED",
+		implementationMode: base?.implementationMode || draft.implementationMode,
 		materialization: draft.materialization || null,
 		businessActivityRef: base?.businessActivityRef || null,
 		businessProcessId: config.modelType === "FACT" ? draft.businessProcessId?.trim() || null : null,
@@ -547,7 +583,8 @@ const buildUpdate = (draft: ModelSpecDraft): UpdateModelSpecCommand => {
 						scdPolicy: { type: draft.scdType },
 					}
 				: null,
-		dataMartId: base?.dataMartId || null,
+		dataMartId: config.modelType === "APPLICATION" ? draft.dataMartId?.trim() || null : null,
+		subjectDomainId: config.modelType === "APPLICATION" ? draft.subjectDomainId?.trim() || null : null,
 		variantCode: base?.variantCode || null,
 		fields: draft.fields.map((field) => ({
 			...field,
@@ -558,7 +595,7 @@ const buildUpdate = (draft: ModelSpecDraft): UpdateModelSpecCommand => {
 		})),
 		sourceRefs: draft.sourceRefs,
 		dependsOn: draft.dependsOn,
-		dimensionRefs: base?.dimensionRefs || [],
+		dimensionRefs: config.modelType === "FACT" ? draft.dimensionRefs : [],
 		metricRefs: base?.metricRefs || [],
 		standardBindings: draft.standardBindings.filter((binding) => updateFieldNames.has(binding.fieldName)),
 	};
@@ -628,6 +665,7 @@ const implementationInputs = (
 };
 
 const implementationNeedsSave = (draft: ModelSpecDraft): boolean => {
+	if (draft.implementationMode === "DBT_MANAGED") return false;
 	if (draft.implementationBase?.ownership === "DESIGNER_GENERATED") return true;
 	if (draft.implementationBase?.ownership === "DBT_MANAGED") {
 		return (
@@ -707,7 +745,7 @@ export async function saveModelDraft(draft: ModelSpecDraft, context: ModelSaveCo
 	}
 	let savedModel: CanonicalModelSpecView;
 	if (draft.base) savedModel = await updateModelSpec(draft.base, update);
-	else if (update.modelType === "DIMENSION") {
+	else if (update.modelType === "DIMENSION" && update.implementationMode === "DESIGNER_GENERATED") {
 		const definition = context.dimensionDefinitions.find((item) => item.id === preparedDraft.dimensionDefinitionId);
 		if (!definition) throw new Error("请选择一个维度");
 		const command: CreateDimensionModelCommand = {
@@ -735,16 +773,31 @@ export async function saveModelDraft(draft: ModelSpecDraft, context: ModelSaveCo
 		};
 		savedModel = (await createDimensionModel(command)).currentModelSpec;
 	} else {
-		const created = await createModelSpec({
+		const createBase = {
 			planId: preparedDraft.planId,
 			domainId: preparedDraft.domainId,
-			modelType: update.modelType,
 			name: preparedDraft.name.trim(),
 			description: preparedDraft.description.trim() || null,
 			warehouseLayerCode: update.warehouseLayerCode,
 			businessProcessId: update.modelType === "FACT" ? update.businessProcessId : null,
+			dataMartId: update.modelType === "APPLICATION" ? update.dataMartId : null,
+			subjectDomainId: update.modelType === "APPLICATION" ? update.subjectDomainId : null,
 			idempotencyKey: crypto.randomUUID(),
-		});
+		};
+		const created = await createModelSpec(
+			update.modelType === "DIMENSION"
+				? {
+						...createBase,
+						modelType: "DIMENSION",
+						dimensionDefinitionRef: {
+							dimensionDefinitionId: preparedDraft.dimensionDefinitionId,
+							revision:
+								context.dimensionDefinitions.find((item) => item.id === preparedDraft.dimensionDefinitionId)
+									?.revision || 1,
+						},
+					}
+				: { ...createBase, modelType: update.modelType },
+		);
 		savedModel = await updateModelSpec(created, update);
 	}
 	const implementation = resolvedImplementationInputs

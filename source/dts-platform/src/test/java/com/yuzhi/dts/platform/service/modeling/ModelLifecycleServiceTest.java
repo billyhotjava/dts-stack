@@ -762,6 +762,27 @@ class ModelLifecycleServiceTest {
             .isInstanceOf(ModelSpecException.class)
             .extracting(error -> ((ModelSpecException) error).code())
             .isEqualTo("MODEL_DBT_IMPORT_REQUIRED");
+
+        when(lifecycle.currentArtifactTypes("tenant-a", MODEL_ID, owner)).thenReturn(Set.of("SQL", "SCHEMA", "CONFIG"));
+        LifecycleEventView compiled = new LifecycleEventView(
+            UUID.randomUUID(), MODEL_ID, PLAN_ID, 7, CHECKSUM, EventType.COMPILE, "PASSED", "compile-ui-draft",
+            "alice", null, owner.dbtUniqueId(), Map.of("artifactCount", 3, "ownership", "DBT_MANAGED"), NOW
+        );
+        when(lifecycle.recordEvent(
+            eq("tenant-a"), eq("alice"), eq(model), eq(EventType.COMPILE), eq("PASSED"), eq("compile-ui-draft"),
+            nullable(String.class), eq(owner.dbtUniqueId()), any(Map.class), eq(owner), eq(NOW)
+        )).thenReturn(compiled);
+        when(lifecycle.listArtifacts("tenant-a", MODEL_ID, 7)).thenReturn(List.of());
+
+        assertThat(service.compile(
+            "tenant-a",
+            "alice",
+            MODEL_ID,
+            new ExpectedVersion(MODEL_ID, 7, CHECKSUM),
+            new ExpectedImplementationVersion(MODEL_ID, 1, CHECKSUM),
+            "compile-ui-draft"
+        ).event()).isEqualTo(compiled);
+        verify(lifecycle).promoteImportedArtifactsToCompiled("tenant-a", MODEL_ID, owner, NOW);
     }
 
     private static ModelSpecView canonicalDimension(

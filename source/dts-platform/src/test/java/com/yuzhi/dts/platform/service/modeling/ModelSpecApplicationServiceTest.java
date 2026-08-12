@@ -155,6 +155,20 @@ class ModelSpecApplicationServiceTest {
     }
 
     @Test
+    void createsAgainstAnAvailableGlobalDomainWithoutALegacyPlanDomainBinding() {
+        CreateModelSpecCommand command = command("global-domain-create", "customer_global_domain");
+        when(repository.findByIdempotencyKey(TENANT, command.idempotencyKey())).thenReturn(Optional.empty());
+        when(repository.insertV2(eq(TENANT), eq(ACTOR), eq(command), any(), anyString(), anyString())).thenReturn(1);
+
+        ModelSpecApplicationService.CreateResult result = service.create(TENANT, ACTOR, command);
+
+        assertThat(result.replayed()).isFalse();
+        assertThat(result.modelSpec().domainId()).isEqualTo(DOMAIN_ID);
+        verify(domainResolution).resolve(DOMAIN_ID);
+        verify(domainWriteAccess).canMaintain(DOMAIN_ID);
+    }
+
+    @Test
     void createsAnImportedModelWithTheIdCommittedByPreview() {
         UUID previewedId = UUID.fromString("30000000-0000-0000-0000-000000000070");
         CreateModelSpecCommand command = withBusinessContext(

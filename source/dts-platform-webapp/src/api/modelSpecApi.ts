@@ -1014,6 +1014,19 @@ export const retryReleaseCandidate = (
 		_skipErrorToast: true,
 	} as any);
 
+export const cancelReleaseCandidate = (
+	planId: string,
+	expected: ReleaseCandidateCasToken,
+	idempotencyKey: string,
+	reason: string,
+) =>
+	api.post<ReleaseCandidateCommandResult>({
+		url: releaseCandidateItemUrl(planId, expected.id, "/cancel"),
+		headers: releaseCandidateWriteHeaders(idempotencyKey, expected),
+		data: { reason },
+		_skipErrorToast: true,
+	} as any);
+
 export const publishReleaseCandidate = (
 	planId: string,
 	expected: ReleaseCandidateCasToken,

@@ -102,7 +102,7 @@ public final class ModelLifecycleContract {
             result.put(DRAFT, EnumSet.of(BUILDING, CANCELLED));
             result.put(BUILDING, EnumSet.of(BUILD_FAILED, BUILT));
             result.put(BUILD_FAILED, EnumSet.of(BUILDING, CANCELLED));
-            result.put(BUILT, EnumSet.of(BUILDING, QUALITY_RUNNING));
+            result.put(BUILT, EnumSet.of(BUILDING, QUALITY_RUNNING, CANCELLED));
             result.put(QUALITY_RUNNING, EnumSet.of(QUALITY_FAILED, QUALITY_PASSED));
             result.put(QUALITY_FAILED, EnumSet.of(QUALITY_RUNNING, CANCELLED));
             result.put(QUALITY_PASSED, EnumSet.of(REVIEW_PENDING));
@@ -126,7 +126,7 @@ public final class ModelLifecycleContract {
             result.put(DRAFT, List.of(DeliveryAction.START_BUILD, DeliveryAction.CANCEL_CANDIDATE));
             result.put(BUILDING, List.of());
             result.put(BUILD_FAILED, List.of(DeliveryAction.RETRY_BUILD, DeliveryAction.CANCEL_CANDIDATE));
-            result.put(BUILT, List.of(DeliveryAction.RUN_QUALITY));
+            result.put(BUILT, List.of(DeliveryAction.RUN_QUALITY, DeliveryAction.CANCEL_CANDIDATE));
             result.put(QUALITY_RUNNING, List.of());
             result.put(QUALITY_FAILED, List.of(DeliveryAction.RUN_QUALITY, DeliveryAction.CANCEL_CANDIDATE));
             result.put(QUALITY_PASSED, List.of(DeliveryAction.SUBMIT_REVIEW));

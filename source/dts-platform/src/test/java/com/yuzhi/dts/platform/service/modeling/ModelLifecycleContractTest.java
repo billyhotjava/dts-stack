@@ -62,13 +62,14 @@ class ModelLifecycleContractTest {
         assertThat(DeliveryStatus.canTransition(DeliveryStatus.BUILD_FAILED, DeliveryStatus.CANCELLED)).isTrue();
         assertThat(DeliveryStatus.canTransition(DeliveryStatus.QUALITY_FAILED, DeliveryStatus.CANCELLED)).isTrue();
         assertThat(DeliveryStatus.canTransition(DeliveryStatus.BUILDING, DeliveryStatus.CANCELLED)).isFalse();
-        assertThat(DeliveryStatus.canTransition(DeliveryStatus.BUILT, DeliveryStatus.CANCELLED)).isFalse();
+        assertThat(DeliveryStatus.canTransition(DeliveryStatus.BUILT, DeliveryStatus.CANCELLED)).isTrue();
         assertThat(DeliveryStatus.canTransition(DeliveryStatus.REVIEW_PENDING, DeliveryStatus.CANCELLED)).isFalse();
         assertThat(DeliveryStatus.canTransition(DeliveryStatus.CANCELLED, DeliveryStatus.DRAFT)).isFalse();
         assertThat(DeliveryStatus.canTransition(DeliveryStatus.CANCELLED, DeliveryStatus.STALE)).isFalse();
         assertThat(DeliveryStatus.DRAFT.allowedActions()).contains(DeliveryAction.CANCEL_CANDIDATE);
         assertThat(DeliveryStatus.BUILD_FAILED.allowedActions()).contains(DeliveryAction.CANCEL_CANDIDATE);
         assertThat(DeliveryStatus.QUALITY_FAILED.allowedActions()).contains(DeliveryAction.CANCEL_CANDIDATE);
+        assertThat(DeliveryStatus.BUILT.allowedActions()).contains(DeliveryAction.CANCEL_CANDIDATE);
         assertThat(DeliveryAction.CANCEL_CANDIDATE.requiredRole()).isEqualTo(DeliveryActorRole.MODEL_MAINTAINER);
     }
 

@@ -18,6 +18,9 @@ import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.Com
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.EntryView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.TransitionCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -52,6 +55,80 @@ class ModelMaterializationStartServiceTest {
     private ModelMaterializationAvailabilityAuditService availabilityAudit;
 
     private ModelMaterializationStartService service;
+
+    @Test
+    void executableCandidateBundleExcludesNonExecutableDbtMetadataArtifacts() throws IOException {
+        String source = Files.readString(
+            Path.of("src/main/java/com/yuzhi/dts/platform/repository/modeling/ModelMaterializationBuildRepository.java")
+        );
+        int from = source.indexOf("private List<ArtifactRow> loadArtifacts(");
+        int to = source.indexOf("private void validateInputs(", from);
+
+        assertThat(from).isGreaterThanOrEqualTo(0);
+        assertThat(to).isGreaterThan(from);
+        assertThat(source.substring(from, to))
+            .contains("a.artifact_type in ('SQL', 'TEST', 'STG_SQL')")
+            .contains("a.artifact_type = 'SCHEMA'")
+            .contains("lower(a.path) like '%.yml'")
+            .contains("lower(a.path) like '%.yaml'")
+            .doesNotContain("a.artifact_type in ('SQL', 'SCHEMA', 'TEST', 'STG_SQL')");
+
+        int dispatchFrom = source.indexOf("private CandidateBuildEntry loadCandidateBuildEntry(");
+        int dispatchTo = source.indexOf("private ExecutionTarget executionTarget()", dispatchFrom);
+        assertThat(dispatchFrom).isGreaterThanOrEqualTo(0);
+        assertThat(dispatchTo).isGreaterThan(dispatchFrom);
+        assertThat(source.substring(dispatchFrom, dispatchTo))
+            .contains("artifact_type in ('SQL', 'TEST', 'STG_SQL')")
+            .contains("artifact_type = 'SCHEMA'")
+            .contains("lower(path) like '%.yml'")
+            .contains("lower(path) like '%.yaml'")
+            .doesNotContain("artifact_type in ('SQL', 'SCHEMA', 'TEST', 'STG_SQL')");
+    }
+
+    @Test
+    void retryAcceptsOnlyReconciledFailureOrDeterministicLocalBlock() throws IOException {
+        String source = Files.readString(
+            Path.of("src/main/java/com/yuzhi/dts/platform/repository/modeling/ModelMaterializationBuildRepository.java")
+        );
+        int retryFrom = source.indexOf("public QueuedBuildGroup createRetryQueuedBuild(");
+        int retryTo = source.indexOf("public QueuedBuildGroup createRematerializationQueuedBuild(", retryFrom);
+
+        assertThat(retryFrom).isGreaterThanOrEqualTo(0);
+        assertThat(retryTo).isGreaterThan(retryFrom);
+        assertThat(source.substring(retryFrom, retryTo))
+            .contains("Set.of(\"FAILED\", \"BLOCKED\")")
+            .doesNotContain("UNKNOWN")
+            .doesNotContain("SUBMITTED");
+
+        int entriesFrom = source.indexOf("private List<RetryEntryRow> lockRetryEntries(");
+        int entriesTo = source.indexOf("private static void requireRetrySnapshotCurrent(", entriesFrom);
+        assertThat(entriesFrom).isGreaterThanOrEqualTo(0);
+        assertThat(entriesTo).isGreaterThan(entriesFrom);
+        assertThat(source.substring(entriesFrom, entriesTo))
+            .contains("'BLOCKED'")
+            .doesNotContain("'UNKNOWN'")
+            .doesNotContain("'SUBMITTED'");
+    }
+
+    @Test
+    void candidateBuildScopePinsLogicalColumnsFromTheExactModelRevision()
+        throws IOException {
+        String source = Files.readString(
+            Path.of("src/main/java/com/yuzhi/dts/platform/repository/modeling/ModelMaterializationBuildRepository.java")
+        );
+        int scopeFrom = source.indexOf("public CandidateBuildScope loadCandidateBuildScope(");
+        int scopeTo = source.indexOf("private List<BuildEntryRow> lockCurrentBuildEntries(", scopeFrom);
+
+        assertThat(scopeFrom).isGreaterThanOrEqualTo(0);
+        assertThat(scopeTo).isGreaterThan(scopeFrom);
+        assertThat(source.substring(scopeFrom, scopeTo))
+            .contains("join modeling_model_spec_revision sr")
+            .contains("sr.snapshot_json -> 'fields' as model_fields");
+        assertThat(source)
+            .contains("pinnedModelColumns(")
+            .contains("row.modelFieldsJson()")
+            .contains("row.modelSpecId()");
+    }
 
     @BeforeEach
     void setUp() {

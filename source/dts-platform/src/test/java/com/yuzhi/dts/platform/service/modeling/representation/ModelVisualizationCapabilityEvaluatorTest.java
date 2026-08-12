@@ -42,6 +42,13 @@ class ModelVisualizationCapabilityEvaluatorTest {
             Arguments.of(RepresentationScope.TECHNICAL, ImplementationMode.DBT_MANAGED, trusted, VisualizationCapability.ADVANCED_DBT_IMPLEMENTATION, null),
             Arguments.of(
                 RepresentationScope.TECHNICAL,
+                ImplementationMode.DBT_MANAGED,
+                new ModelVisualizationCapabilityEvaluator.ProjectionTrust(false, false, false, false, false, false),
+                VisualizationCapability.ADVANCED_DBT_IMPLEMENTATION,
+                null
+            ),
+            Arguments.of(
+                RepresentationScope.TECHNICAL,
                 ImplementationMode.DESIGNER_GENERATED,
                 trusted,
                 VisualizationCapability.BLOCKED,

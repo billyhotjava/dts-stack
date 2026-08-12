@@ -76,12 +76,14 @@ const makeDraft = (patch: Partial<ModelSpecDraft> = {}): ModelSpecDraft => ({
 	dimensionDefinitionId: "dimension-1",
 	standardBindings: [],
 	warehouseLayerCode: "DWD",
+	implementationMode: "DESIGNER_GENERATED",
 	implementationBase: null,
 	implementationInputMode: "",
 	generationStrategyType: "",
 	implementationIdempotencyKey: "implementation-draft-1",
 	sourceRefs: [],
 	dependsOn: [],
+	dimensionRefs: [],
 	factShape: "",
 	timeSemanticsType: "",
 	timeSemanticsFields: [],
@@ -122,6 +124,36 @@ const makeProps = (patch: Partial<ModelingWorkbenchEditorProps> = {}): ModelingW
 		models: [],
 		dimensions: [],
 		standards: [],
+		dataMarts: [
+			{
+				id: "mart-1",
+				code: "PJM_ANALYTICS",
+				name: "项目管理分析集市",
+				purpose: "项目管理分析",
+				ownerId: "owner-1",
+				businessCategoryIds: ["category-1"],
+				status: "CURRENT",
+				revision: 1,
+				checksum: "a".repeat(64),
+				usageCount: 0,
+				createdAt: "2026-08-12T00:00:00Z",
+				updatedAt: "2026-08-12T00:00:00Z",
+			},
+		],
+		subjectDomains: [
+			{
+				id: "subject-tech",
+				code: "TECH_STATE_ANALYSIS",
+				name: "技术状态主题",
+				purpose: "技术状态分析",
+				martId: "mart-1",
+				status: "CURRENT",
+				revision: 1,
+				checksum: "b".repeat(64),
+				createdAt: "2026-08-12T00:00:00Z",
+				updatedAt: "2026-08-12T00:00:00Z",
+			},
+		],
 		sources: [
 			{
 				bindingId: "50000000-0000-0000-0000-000000000001",
@@ -197,6 +229,7 @@ const makeProps = (patch: Partial<ModelingWorkbenchEditorProps> = {}): ModelingW
 	onUpdateField: vi.fn(),
 	onDeleteField: vi.fn(),
 	onStandardChange: vi.fn(),
+	onSourcesChanged: vi.fn(),
 	...patch,
 });
 
@@ -260,6 +293,54 @@ describe("ModelingWorkbenchEditor", () => {
 		);
 	});
 
+	it("lets a new model choose manual dbt SQL ownership while keeping source relationships editable", async () => {
+		const props = await render(makeProps({ draft: makeDraft({ implementationInputMode: "PHYSICAL_ASSET" }) }));
+		const ownership = container.querySelector<HTMLSelectElement>('select[aria-label="实现维护方式"]');
+		expect(ownership).not.toBeNull();
+
+		await act(async () => {
+			if (!ownership) return;
+			ownership.value = "DBT_MANAGED";
+			ownership.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+
+		expect(props.onChange).toHaveBeenCalledWith(expect.objectContaining({ implementationMode: "DBT_MANAGED" }));
+		await render(
+			makeProps({
+				draft: makeDraft({ implementationMode: "DBT_MANAGED", implementationInputMode: "PHYSICAL_ASSET" }),
+			}),
+		);
+		expect(container.querySelector<HTMLInputElement>('input[aria-label="选择来源 预算执行 ODS"]')).toHaveProperty(
+			"disabled",
+			false,
+		);
+	});
+
+	it("lets a manually maintained dimension declare that its SQL has no upstream", async () => {
+		const props = await render(
+			makeProps({
+				draft: makeDraft({
+					implementationMode: "DBT_MANAGED",
+					implementationInputMode: "GENERATED",
+					generationStrategyType: "",
+				}),
+			}),
+		);
+		const source = container.querySelector<HTMLSelectElement>('select[aria-label="实现输入方式"]');
+		expect(source).not.toBeNull();
+		expect(Array.from(source?.options || []).map((option) => option.textContent)).toContain("无上游（手工 SQL 生成）");
+		expect(container.textContent).toContain("当前 SQL 不读取物理来源或上游模型");
+
+		await act(async () => {
+			if (!source) return;
+			source.value = "PHYSICAL_ASSET";
+			source.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+		expect(props.onChange).toHaveBeenCalledWith(
+			expect.objectContaining({ implementationInputMode: "PHYSICAL_ASSET", generationStrategyType: "" }),
+		);
+	});
+
 	it("shows FACT semantics and APPLICATION consumption scenario in the unified form", async () => {
 		await render(
 			makeProps({
@@ -289,6 +370,70 @@ describe("ModelingWorkbenchEditor", () => {
 			}),
 		);
 		expect(container.textContent).toContain("应用场景");
+	});
+
+	it("lets an APPLICATION bind a current data mart and subject domain", async () => {
+		await render(
+			makeProps({
+				draft: makeDraft({
+					createKind: "application",
+					warehouseLayerCode: "ADS",
+					grainStatement: "一个技术状态月度指标一行",
+					implementationInputMode: "UPSTREAM_MODEL",
+					consumptionScenario: "技术状态月度看板",
+					dataMartId: "mart-1",
+					subjectDomainId: "subject-tech",
+				}),
+			}),
+		);
+
+		const dataMart = container.querySelector<HTMLSelectElement>('select[aria-label="数据集市"]');
+		const subjectDomain = container.querySelector<HTMLSelectElement>('select[aria-label="主题域"]');
+		expect(dataMart?.value).toBe("mart-1");
+		expect(subjectDomain?.value).toBe("subject-tech");
+		expect(subjectDomain?.textContent).toContain("技术状态主题 · TECH_STATE_ANALYSIS");
+	});
+
+	it("lets a FACT bind pinned dimension revisions independently of its physical source", async () => {
+		const dimension = {
+			id: "dimension-model-1",
+			domainId: "finance",
+			name: "风险等级维度表",
+			modelType: "DIMENSION",
+			layer: "DWD",
+			revision: 2,
+			compatibilityMode: "CANONICAL",
+		} as ModelSpecView;
+		const draft = makeDraft({
+			createKind: "fact",
+			implementationInputMode: "PHYSICAL_ASSET",
+			sourceRefs: [
+				{
+					kind: "TABLE",
+					layer: "ODS",
+					ref: "public.ods_budget_execution",
+					role: "PRIMARY",
+					sortOrder: 0,
+					sourceBindingId: "50000000-0000-0000-0000-000000000001",
+					resolvedVersion: "source-v1",
+				},
+			],
+		});
+		const baseProps = makeProps();
+		const props = await render(
+			makeProps({ draft, context: { ...baseProps.context, models: [dimension] } }),
+		);
+
+		const checkbox = container.querySelector<HTMLInputElement>('input[aria-label="引用维度模型 风险等级维度表"]');
+		expect(checkbox).not.toBeNull();
+		await act(async () => checkbox?.click());
+
+		expect(props.onChange).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				sourceRefs: draft.sourceRefs,
+				dimensionRefs: [{ modelSpecId: dimension.id, revision: dimension.revision }],
+			}),
+		);
 	});
 
 	it("renders the concept-dimension form without dimension-table fields or lifecycle actions", async () => {

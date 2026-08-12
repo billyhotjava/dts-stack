@@ -34,6 +34,20 @@ class AdvancedDbtDraftStaticValidatorBridgeTest {
     }
 
     @Test
+    void acceptsLiteralReferencesForResolutionByTheCanonicalCandidateBuilder() {
+        Map<String, String> files = new LinkedHashMap<>();
+        files.put("dbt_project.yml", "name: sprint83\nversion: 1.0\nmodel-paths: [models]\n");
+        files.put("models/orders.sql", "select * from {{ ref('shared_orders') }}\n");
+
+        AdvancedDbtDraftStaticValidator.ValidatedProject result = validator.validate(files);
+
+        assertThat(result.nodes()).extracting(AdvancedDbtDraftStaticValidator.ValidatedNode::dbtUniqueId)
+            .containsExactly("model.sprint83.orders");
+        assertThat(result.diagnostics()).extracting(AdvancedDbtDraftStaticValidator.StaticDiagnostic::code)
+            .contains("DBT_SOURCE_PROJECT_REF_UNRESOLVED");
+    }
+
+    @Test
     void rejectsDynamicReferencesAsUnsupportedInsteadOfRunningDbt() {
         Map<String, String> files = Map.of(
             "dbt_project.yml",

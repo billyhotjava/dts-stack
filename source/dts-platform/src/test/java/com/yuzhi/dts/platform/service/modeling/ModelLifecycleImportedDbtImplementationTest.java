@@ -126,6 +126,89 @@ class ModelLifecycleImportedDbtImplementationTest {
     }
 
     @Test
+    void acceptsConverterOwnedDbtPayloadWithValidatedExecutionSettings() {
+        Fixture fixture = fixture();
+        SaveImplementationCommand command = dbtCommandWithSettings(
+            Map.of(
+                "targetPhysicalName",
+                "dim_completion_status_v2",
+                "loadStrategy",
+                "FULL",
+                "partitionFields",
+                List.of()
+            )
+        );
+        ImplementationView saved = implementation(command);
+        when(
+            fixture.lifecycle().saveImportedDbtImplementation(
+                "tenant-a",
+                "alice",
+                fixture.model(),
+                ModelStatus.DRAFT,
+                "pjm",
+                "model.pjm.budget",
+                command,
+                0,
+                null,
+                NOW
+            )
+        ).thenReturn(Optional.of(saved));
+
+        ImplementationView result = fixture.service().saveImportedDbtImplementation(
+            "tenant-a",
+            "alice",
+            MODEL_ID,
+            new ExpectedVersion(MODEL_ID, 7, MODEL_CHECKSUM),
+            ModelStatus.DRAFT,
+            new ExpectedImplementationVersion(MODEL_ID, 0, null),
+            "pjm",
+            "model.pjm.budget",
+            command
+        );
+
+        assertThat(result.settings())
+            .containsEntry("targetPhysicalName", "dim_completion_status_v2")
+            .containsEntry("loadStrategy", "FULL");
+    }
+
+    @Test
+    void rejectsImportedDbtExecutionSettingsThatDoNotPassTheUnifiedPlanner() {
+        Fixture fixture = fixture();
+        SaveImplementationCommand command = dbtCommandWithSettings(
+            Map.of("targetPhysicalName", "dim_completion_status_v2")
+        );
+
+        assertThatThrownBy(() ->
+            fixture.service().saveImportedDbtImplementation(
+                "tenant-a",
+                "alice",
+                MODEL_ID,
+                new ExpectedVersion(MODEL_ID, 7, MODEL_CHECKSUM),
+                ModelStatus.DRAFT,
+                new ExpectedImplementationVersion(MODEL_ID, 0, null),
+                "pjm",
+                "model.pjm.budget",
+                command
+            )
+        )
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("MODEL_IMPORT_IMPLEMENTATION_INVALID");
+        verify(fixture.lifecycle(), never()).saveImportedDbtImplementation(
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            anyInt(),
+            any(),
+            any()
+        );
+    }
+
+    @Test
     void keepsTheNormalSaveClosedToDbtAndRejectsAnyNonDbtImportGenerator() {
         Fixture fixture = fixture();
         SaveImplementationCommand dbt = dbtCommand("DBT");
@@ -301,6 +384,32 @@ class ModelLifecycleImportedDbtImplementationTest {
             ImplementationMode.DBT_MANAGED,
             "table",
             "import-run:model.pjm.budget:impl"
+        );
+    }
+
+    private static SaveImplementationCommand dbtCommandWithSettings(Map<String, Object> settings) {
+        return new SaveImplementationCommand(
+            InputMode.GENERATED,
+            List.of(
+                new GeneratedInput(
+                    "DBT",
+                    Map.of(
+                        "projectKey",
+                        "pjm",
+                        "dbtUniqueId",
+                        "model.pjm.budget",
+                        "resourcePath",
+                        "models/dwd/budget.sql",
+                        "effectiveSqlChecksum",
+                        "c".repeat(64)
+                    )
+                )
+            ),
+            List.of(),
+            settings,
+            ImplementationMode.DBT_MANAGED,
+            "table",
+            "import-run:model.pjm.budget:impl-settings"
         );
     }
 

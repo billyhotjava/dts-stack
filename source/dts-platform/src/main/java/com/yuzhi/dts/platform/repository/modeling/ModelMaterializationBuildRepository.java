@@ -203,7 +203,12 @@ public class ModelMaterializationBuildRepository
         CandidateView candidate,
         Instant now
     ) {
-        return createSubsequentQueuedBuild(candidate, now, Set.of("FAILED"), "retry");
+        return createSubsequentQueuedBuild(
+            candidate,
+            now,
+            Set.of("FAILED", "BLOCKED"),
+            "retry"
+        );
     }
 
     @Transactional
@@ -710,7 +715,7 @@ public class ModelMaterializationBuildRepository
                and e.dependency_snapshot_checksum is not null
                and e.active_claim_key is not null
                and pr.status in (
-                    'FAILED', 'BUILT', 'DBT_SUCCEEDED',
+                    'FAILED', 'BLOCKED', 'BUILT', 'DBT_SUCCEEDED',
                     'SKIPPED_DEPENDENCY_FAILED'
                )
              order by e.sort_order, e.id
@@ -1024,7 +1029,8 @@ public class ModelMaterializationBuildRepository
                    e.target_identifier,
                    e.artifact_bundle_checksum as entry_artifact_checksum,
                    e.dependency_snapshot_checksum,
-                   c.execution_target_key
+                   c.execution_target_key,
+                   sr.snapshot_json -> 'fields' as model_fields
               from modeling_pipeline_run pr
               join modeling_model_release_candidate c
                 on c.tenant_id = pr.tenant_id
@@ -1032,6 +1038,11 @@ public class ModelMaterializationBuildRepository
               join modeling_model_release_candidate_entry e
                 on e.tenant_id = pr.tenant_id
                and e.id = pr.release_candidate_entry_id
+              join modeling_model_spec_revision sr
+                on sr.tenant_id = pr.tenant_id
+               and sr.model_spec_id = pr.model_spec_id
+               and sr.revision = pr.model_revision
+               and sr.content_checksum = pr.model_checksum
              where pr.tenant_id = ?
                and pr.pipeline_run_group_id = ?
                and pr.run_purpose = 'RELEASE_BUILD'
@@ -1054,7 +1065,8 @@ public class ModelMaterializationBuildRepository
                     row.getString("target_identifier"),
                     row.getString("entry_artifact_checksum"),
                     row.getString("dependency_snapshot_checksum"),
-                    row.getString("execution_target_key")
+                    row.getString("execution_target_key"),
+                    row.getString("model_fields")
                 ),
             tenantId.trim(),
             pipelineRunGroupId
@@ -1130,6 +1142,314 @@ public class ModelMaterializationBuildRepository
             first.executionTargetKey(),
             first.groupArtifactChecksum(),
             entries
+        );
+    }
+
+    /**
+     * Resolves logical ModelSpec dependencies outside the current candidate to immutable,
+     * revision-bound dbt proxy nodes. The latest observation in the same environment and
+     * execution target must still represent the exact pinned model and implementation.
+     */
+    @Transactional(readOnly = true)
+    public List<BuildArtifact> loadPinnedDependencyArtifacts(
+        CandidateBuildScope scope
+    ) {
+        if (scope == null || scope.entries().isEmpty()) {
+            throw new IllegalArgumentException("candidate build scope is required");
+        }
+        Map<UUID, CandidateBuildEntry> selected = new LinkedHashMap<>();
+        Map<String, UUID> selectorOwners = new LinkedHashMap<>();
+        for (CandidateBuildEntry entry : scope.entries()) {
+            selected.put(entry.modelSpecId(), entry);
+            selectorOwners.put(dbtSelector(entry.dbtUniqueId()), entry.modelSpecId());
+        }
+
+        Map<UUID, Integer> pinnedRevisions = new LinkedHashMap<>();
+        for (CandidateBuildEntry entry : scope.entries()) {
+            List<String> snapshots = jdbcTemplate.query(
+                """
+                select snapshot_json::text
+                  from modeling_model_spec_revision
+                 where tenant_id = ? and model_spec_id = ?
+                   and revision = ? and content_checksum = ?
+                """,
+                (row, rowNumber) -> row.getString(1),
+                scope.tenantId(),
+                entry.modelSpecId(),
+                entry.modelRevision(),
+                entry.modelChecksum()
+            );
+            if (snapshots.size() != 1) {
+                throw failure(
+                    "MODEL_UPSTREAM_PIN_STALE",
+                    "The selected model revision snapshot is unavailable",
+                    Kind.CONFLICT,
+                    Map.of("modelSpecId", entry.modelSpecId())
+                );
+            }
+            JsonNode snapshot = json(
+                snapshots.getFirst(),
+                "model snapshot",
+                entry.modelSpecId()
+            );
+            collectPinnedRevisionRefs(
+                snapshot.path("dependsOn"),
+                pinnedRevisions,
+                entry.modelSpecId()
+            );
+            collectPinnedRevisionRefs(
+                snapshot.path("dimensionRefs"),
+                pinnedRevisions,
+                entry.modelSpecId()
+            );
+        }
+
+        List<BuildArtifact> artifacts = new ArrayList<>();
+        pinnedRevisions.entrySet().stream()
+            .sorted(Map.Entry.comparingByKey())
+            .forEach(pin -> {
+                CandidateBuildEntry selectedUpstream = selected.get(pin.getKey());
+                if (selectedUpstream != null) {
+                    if (selectedUpstream.modelRevision() != pin.getValue()) {
+                        throw failure(
+                            "MODEL_UPSTREAM_PIN_CONFLICT",
+                            "A candidate model does not match its pinned upstream revision",
+                            Kind.CONFLICT,
+                            Map.of("modelSpecId", pin.getKey(), "revision", pin.getValue())
+                        );
+                    }
+                    return;
+                }
+                PinnedDependencyRow dependency = loadPinnedDependency(
+                    scope,
+                    pin.getKey(),
+                    pin.getValue()
+                );
+                String selector = dbtSelector(dependency.dbtUniqueId());
+                UUID existingOwner = selectorOwners.putIfAbsent(
+                    selector,
+                    dependency.modelSpecId()
+                );
+                if (
+                    existingOwner != null &&
+                    !existingOwner.equals(dependency.modelSpecId())
+                ) {
+                    throw failure(
+                        "MODEL_UPSTREAM_SELECTOR_CONFLICT",
+                        "Pinned logical models resolve to the same dbt selector",
+                        Kind.CONFLICT,
+                        Map.of("selector", selector)
+                    );
+                }
+                String content = pinnedDependencySql(dependency);
+                artifacts.add(
+                    new BuildArtifact(
+                        "models/.dts-pinned-dependencies/" + selector + ".sql",
+                        sha256(content),
+                        content
+                    )
+                );
+            });
+        return List.copyOf(artifacts);
+    }
+
+    private void collectPinnedRevisionRefs(
+        JsonNode refs,
+        Map<UUID, Integer> pinnedRevisions,
+        UUID downstreamModelSpecId
+    ) {
+        if (refs == null || refs.isMissingNode() || refs.isNull()) return;
+        if (!refs.isArray()) {
+            throw failure(
+                "MODEL_UPSTREAM_PIN_INVALID",
+                "Logical model dependencies are not a revision-ref array",
+                Kind.CONFLICT,
+                Map.of("modelSpecId", downstreamModelSpecId)
+            );
+        }
+        refs.forEach(ref -> {
+            UUID modelSpecId;
+            int revision = ref.path("revision").asInt(0);
+            try {
+                modelSpecId = UUID.fromString(
+                    ref.path("modelSpecId").asText("").trim()
+                );
+            } catch (RuntimeException invalid) {
+                throw failure(
+                    "MODEL_UPSTREAM_PIN_INVALID",
+                    "Logical model dependency contains an invalid ModelSpec id",
+                    Kind.CONFLICT,
+                    Map.of("modelSpecId", downstreamModelSpecId)
+                );
+            }
+            if (revision < 1) {
+                throw failure(
+                    "MODEL_UPSTREAM_PIN_INVALID",
+                    "Logical model dependency contains an invalid revision",
+                    Kind.CONFLICT,
+                    Map.of("modelSpecId", downstreamModelSpecId)
+                );
+            }
+            Integer existing = pinnedRevisions.putIfAbsent(
+                modelSpecId,
+                revision
+            );
+            if (existing != null && existing != revision) {
+                throw failure(
+                    "MODEL_UPSTREAM_PIN_CONFLICT",
+                    "Candidate entries pin different revisions of the same upstream model",
+                    Kind.CONFLICT,
+                    Map.of("modelSpecId", modelSpecId)
+                );
+            }
+        });
+    }
+
+    private PinnedDependencyRow loadPinnedDependency(
+        CandidateBuildScope scope,
+        UUID modelSpecId,
+        int revision
+    ) {
+        List<PinnedDependencyRow> rows = jdbcTemplate.query(
+            """
+            select sr.model_spec_id, sr.revision, sr.content_checksum,
+                   i.implementation_revision,
+                   i.current_implementation_checksum,
+                   i.dbt_unique_id,
+                   observed.model_revision as observed_model_revision,
+                   observed.model_checksum as observed_model_checksum,
+                   observed.implementation_revision as observed_implementation_revision,
+                   observed.implementation_checksum as observed_implementation_checksum,
+                   observed.adapter as observed_adapter,
+                   current_candidate.adapter as target_adapter,
+                   observed.database_name, observed.schema_name,
+                   observed.identifier, observed.verified,
+                   observed.relation_exists
+              from modeling_model_release_candidate current_candidate
+              join modeling_model_spec_revision sr
+                on sr.tenant_id = current_candidate.tenant_id
+               and sr.model_spec_id = ? and sr.revision = ?
+              join modeling_model_implementation i
+                on i.tenant_id = sr.tenant_id
+               and i.model_spec_id = sr.model_spec_id
+               and i.model_revision = sr.revision
+               and i.model_checksum = sr.content_checksum
+               and i.status = 'ACTIVE'
+              left join lateral (
+                    select observation.*
+                      from modeling_physical_relation_observation observation
+                      join modeling_model_release_candidate observed_candidate
+                        on observed_candidate.tenant_id = observation.tenant_id
+                       and observed_candidate.id = observation.release_candidate_id
+                     where observation.tenant_id = current_candidate.tenant_id
+                       and observation.model_spec_id = sr.model_spec_id
+                       and observation.run_purpose = 'RELEASE_BUILD'
+                       and observed_candidate.environment = current_candidate.environment
+                       and observed_candidate.execution_target_key = current_candidate.execution_target_key
+                     order by observation.observed_at desc,
+                              observation.created_date desc,
+                              observation.id desc
+                     limit 1
+              ) observed on true
+             where current_candidate.tenant_id = ?
+               and current_candidate.id = ?
+               and current_candidate.version = ?
+               and current_candidate.execution_target_key = ?
+            """,
+            (row, rowNumber) ->
+                new PinnedDependencyRow(
+                    row.getObject("model_spec_id", UUID.class),
+                    row.getInt("revision"),
+                    row.getString("content_checksum"),
+                    row.getInt("implementation_revision"),
+                    row.getString("current_implementation_checksum"),
+                    row.getString("dbt_unique_id"),
+                    row.getObject("observed_model_revision", Integer.class),
+                    row.getString("observed_model_checksum"),
+                    row.getObject("observed_implementation_revision", Integer.class),
+                    row.getString("observed_implementation_checksum"),
+                    row.getString("observed_adapter"),
+                    row.getString("target_adapter"),
+                    row.getString("database_name"),
+                    row.getString("schema_name"),
+                    row.getString("identifier"),
+                    row.getObject("verified", Boolean.class),
+                    row.getObject("relation_exists", Boolean.class)
+                ),
+            modelSpecId,
+            revision,
+            scope.tenantId(),
+            scope.candidateId(),
+            scope.candidateVersion(),
+            scope.executionTargetKey()
+        );
+        if (rows.size() != 1) {
+            throw failure(
+                "MODEL_UPSTREAM_PIN_STALE",
+                "The pinned upstream revision has no current active implementation",
+                Kind.CONFLICT,
+                Map.of("modelSpecId", modelSpecId, "revision", revision)
+            );
+        }
+        PinnedDependencyRow row = rows.getFirst();
+        if (row.observedModelRevision() == null) {
+            throw failure(
+                "MODEL_UPSTREAM_MATERIALIZATION_REQUIRED",
+                "The pinned upstream model has not been materialized in this environment",
+                Kind.UNPROCESSABLE,
+                Map.of("modelSpecId", modelSpecId, "revision", revision)
+            );
+        }
+        boolean exactObservation =
+            row.modelRevision() == row.observedModelRevision() &&
+            row.implementationRevision() == row.observedImplementationRevision() &&
+            row.modelChecksum().equals(row.observedModelChecksum()) &&
+            row.implementationChecksum().equals(row.observedImplementationChecksum()) &&
+            Boolean.TRUE.equals(row.verified()) &&
+            Boolean.TRUE.equals(row.relationExists()) &&
+            Objects.equals(row.targetAdapter(), row.observedAdapter());
+        if (!exactObservation) {
+            throw failure(
+                "MODEL_UPSTREAM_PIN_STALE",
+                "The latest upstream relation does not match the pinned model and implementation",
+                Kind.CONFLICT,
+                Map.of("modelSpecId", modelSpecId, "revision", revision)
+            );
+        }
+        if (
+            !CHECKSUM.matcher(row.modelChecksum()).matches() ||
+            !CHECKSUM.matcher(row.implementationChecksum()).matches() ||
+            row.dbtUniqueId() == null ||
+            !DBT_UNIQUE_ID.matcher(row.dbtUniqueId()).matches() ||
+            !IDENTIFIER.matcher(Objects.toString(row.databaseName(), "")).matches() ||
+            !IDENTIFIER.matcher(Objects.toString(row.schemaName(), "")).matches() ||
+            !IDENTIFIER.matcher(Objects.toString(row.identifier(), "")).matches()
+        ) {
+            throw failure(
+                "MODEL_UPSTREAM_RELATION_INVALID",
+                "The pinned upstream relation identity is invalid",
+                Kind.CONFLICT,
+                Map.of("modelSpecId", modelSpecId)
+            );
+        }
+        return row;
+    }
+
+    private static String pinnedDependencySql(PinnedDependencyRow row) {
+        return (
+            "{{ config(materialized='ephemeral', tags=['dts-pinned-dependency'], " +
+            "meta={'modelSpecId': '%s', 'modelRevision': %d, 'modelChecksum': '%s', " +
+            "'implementationRevision': %d, 'implementationChecksum': '%s'}) }}\n" +
+            "select * from \"%s\".\"%s\".\"%s\"\n"
+        ).formatted(
+            row.modelSpecId(),
+            row.modelRevision(),
+            row.modelChecksum(),
+            row.implementationRevision(),
+            row.implementationChecksum(),
+            row.databaseName(),
+            row.schemaName(),
+            row.identifier()
         );
     }
 
@@ -1280,6 +1600,16 @@ public class ModelMaterializationBuildRepository
              where s.tenant_id = ? and a.model_spec_id = ? and a.revision = ?
                and a.model_checksum = ? and a.implementation_revision = ?
                and a.ownership = ? and a.status = 'COMPILED'
+               and (
+                    a.artifact_type in ('SQL', 'TEST', 'STG_SQL')
+                    or (
+                        a.artifact_type = 'SCHEMA'
+                        and (
+                            lower(a.path) like '%.yml'
+                            or lower(a.path) like '%.yaml'
+                        )
+                    )
+               )
              order by a.artifact_key, a.id
             """,
             (result, rowNumber) ->
@@ -1594,6 +1924,16 @@ public class ModelMaterializationBuildRepository
              where model_spec_id = ? and revision = ?
                and model_checksum = ? and implementation_revision = ?
                and ownership = ? and status = 'COMPILED'
+               and (
+                    artifact_type in ('SQL', 'TEST', 'STG_SQL')
+                    or (
+                        artifact_type = 'SCHEMA'
+                        and (
+                            lower(path) like '%.yml'
+                            or lower(path) like '%.yaml'
+                        )
+                    )
+               )
              order by artifact_key, id
             """,
             (result, rowNumber) ->
@@ -1676,7 +2016,11 @@ public class ModelMaterializationBuildRepository
                         artifact.content()
                     )
                 )
-                .toList()
+                .toList(),
+            pinnedModelColumns(
+                row.modelFieldsJson(),
+                row.modelSpecId()
+            )
         );
     }
 
@@ -1725,6 +2069,46 @@ public class ModelMaterializationBuildRepository
                 Map.of("modelSpecId", modelSpecId)
             );
         }
+    }
+
+    private List<String> pinnedModelColumns(
+        String value,
+        UUID modelSpecId
+    ) {
+        JsonNode fields = json(value, "fields", modelSpecId);
+        if (!fields.isArray() || fields.isEmpty()) {
+            throw failure(
+                "MODEL_FIELD_CONTRACT_INVALID",
+                "Pinned model revision has no field contract",
+                Kind.CONFLICT,
+                Map.of("modelSpecId", modelSpecId)
+            );
+        }
+        List<String> columns = new ArrayList<>();
+        fields.forEach(field -> {
+            String name = field.path("name").asText("").trim();
+            if (!IDENTIFIER.matcher(name).matches()) {
+                throw failure(
+                    "MODEL_FIELD_CONTRACT_INVALID",
+                    "Pinned model revision contains an invalid field name",
+                    Kind.CONFLICT,
+                    Map.of("modelSpecId", modelSpecId)
+                );
+            }
+            columns.add(name);
+        });
+        if (
+            columns.size() > 1000 ||
+            Set.copyOf(columns).size() != columns.size()
+        ) {
+            throw failure(
+                "MODEL_FIELD_CONTRACT_INVALID",
+                "Pinned model revision field contract is invalid",
+                Kind.CONFLICT,
+                Map.of("modelSpecId", modelSpecId)
+            );
+        }
+        return List.copyOf(columns);
     }
 
     private String canonicalJson(String value, String name, UUID modelSpecId) {
@@ -1859,7 +2243,28 @@ public class ModelMaterializationBuildRepository
         String targetIdentifier,
         String entryArtifactChecksum,
         String dependencySnapshotChecksum,
-        String executionTargetKey
+        String executionTargetKey,
+        String modelFieldsJson
+    ) {}
+
+    private record PinnedDependencyRow(
+        UUID modelSpecId,
+        int modelRevision,
+        String modelChecksum,
+        int implementationRevision,
+        String implementationChecksum,
+        String dbtUniqueId,
+        Integer observedModelRevision,
+        String observedModelChecksum,
+        Integer observedImplementationRevision,
+        String observedImplementationChecksum,
+        String observedAdapter,
+        String targetAdapter,
+        String databaseName,
+        String schemaName,
+        String identifier,
+        Boolean verified,
+        Boolean relationExists
     ) {}
 
     private record ExecutionTarget(
@@ -1992,8 +2397,36 @@ public class ModelMaterializationBuildRepository
         String implementationMode,
         String dbtUniqueId,
         String targetIdentifier,
-        List<BuildArtifact> artifacts
+        List<BuildArtifact> artifacts,
+        List<String> expectedColumns
     ) {
+        public CandidateBuildEntry(
+            UUID pipelineRunId,
+            UUID modelSpecId,
+            int modelRevision,
+            String modelChecksum,
+            int implementationRevision,
+            String implementationChecksum,
+            String implementationMode,
+            String dbtUniqueId,
+            String targetIdentifier,
+            List<BuildArtifact> artifacts
+        ) {
+            this(
+                pipelineRunId,
+                modelSpecId,
+                modelRevision,
+                modelChecksum,
+                implementationRevision,
+                implementationChecksum,
+                implementationMode,
+                dbtUniqueId,
+                targetIdentifier,
+                artifacts,
+                List.of()
+            );
+        }
+
         public CandidateBuildEntry {
             if (
                 implementationMode == null ||
@@ -2007,6 +2440,9 @@ public class ModelMaterializationBuildRepository
             artifacts = artifacts == null
                 ? List.of()
                 : List.copyOf(artifacts);
+            expectedColumns = expectedColumns == null
+                ? List.of()
+                : List.copyOf(expectedColumns);
         }
     }
 

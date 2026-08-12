@@ -239,6 +239,27 @@ class ModelRepresentationServiceTest {
     }
 
     @Test
+    void technicalRepresentationAllowsAdvancedDbtDraftWhenManagedModelHasNoImplementation() {
+        ModelSpecView model = model(ImplementationMode.DBT_MANAGED);
+        when(modelSpecs.revision(TENANT, new ModelRevisionRef(MODEL_ID, 2))).thenReturn(model);
+        when(evidencePort.findCurrentPin(TENANT, MODEL_ID)).thenReturn(Optional.empty());
+
+        TechnicalModelRepresentationView view = (TechnicalModelRepresentationView) service.get(
+            TENANT,
+            ACTOR,
+            MODEL_ID,
+            2,
+            null,
+            RepresentationScope.TECHNICAL,
+            true
+        );
+
+        assertThat(view.implementationRevision()).isNull();
+        assertThat(view.visualizationCapability()).isEqualTo(VisualizationCapability.ADVANCED_DBT_IMPLEMENTATION);
+        assertThat(view.allowedActions()).containsExactly("OPEN_ADVANCED_DBT");
+    }
+
+    @Test
     void requiresAnExplicitImplementationPinWhenAnImplementationAlreadyExists() {
         when(modelSpecs.revision(TENANT, new ModelRevisionRef(MODEL_ID, 2))).thenReturn(model(ImplementationMode.DBT_MANAGED));
         when(evidencePort.findCurrentPin(TENANT, MODEL_ID)).thenReturn(

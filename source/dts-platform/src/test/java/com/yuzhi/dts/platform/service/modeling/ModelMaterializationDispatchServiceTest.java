@@ -232,6 +232,51 @@ class ModelMaterializationDispatchServiceTest {
     }
 
     @Test
+    void addsPinnedLogicalDependenciesToTheImmutableCandidateOverlay() {
+        Fixture fixture = fixture();
+        when(fixture.dispatches.claimNext(eq(NOW), eq(Duration.ofMinutes(2))))
+            .thenReturn(Optional.of(dispatch()));
+        CandidateBuildScope scope = scope();
+        BuildArtifact pinnedDependency = new BuildArtifact(
+            "models/.dts-pinned-dependencies/dim_status.sql",
+            "9".repeat(64),
+            "{{ config(materialized='ephemeral') }}\nselect * from \"biadmin\".\"public\".\"dim_status\"\n"
+        );
+        when(fixture.builds.loadCandidateBuildScope("tenant-a", GROUP_ID))
+            .thenReturn(scope);
+        when(fixture.builds.loadPinnedDependencyArtifacts(scope))
+            .thenReturn(List.of(pinnedDependency));
+        when(fixture.scoped.prepareCandidate(any())).thenReturn(
+            new DbtScopedProjectService.ScopedCandidateProject(
+                "/must-not-leave-platform",
+                "+dim_customer +fct_invoice",
+                SCOPED_CHECKSUM,
+                List.of()
+            )
+        );
+        when(fixture.tokens.issue(GROUP_ID, NOW)).thenReturn(
+            new ModelRuntimeSpecTokenCodec.IssuedToken(
+                "runtime-token",
+                "sha256:" + "c".repeat(64),
+                NOW.plus(Duration.ofMinutes(15))
+            )
+        );
+        when(fixture.gateway.submitReleaseBuild(any())).thenReturn(
+            DbtExecutionGateway.SubmissionResult.submitted(DAG_RUN_ID, false)
+        );
+
+        fixture.service.dispatchNext().orElseThrow();
+
+        ArgumentCaptor<List<DbtScopedProjectService.CandidateArtifactEntry>> entries =
+            ArgumentCaptor.forClass(List.class);
+        verify(fixture.scoped).prepareCandidate(entries.capture());
+        assertThat(entries.getValue())
+            .flatExtracting(DbtScopedProjectService.CandidateArtifactEntry::artifacts)
+            .extracting(DbtScopedProjectService.CandidateArtifact::path)
+            .contains(pinnedDependency.path());
+    }
+
+    @Test
     void scopedArtifactChecksumDriftBlocksBeforeAirflow() {
         Fixture fixture = fixture();
         when(
