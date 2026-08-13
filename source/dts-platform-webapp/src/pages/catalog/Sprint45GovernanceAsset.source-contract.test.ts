@@ -33,7 +33,7 @@ test("Sprint-45 asset directory delegates per-asset governance to the detail pag
 	assert.match(ASSETS_SOURCE, /<AssetLedgerView/);
 	assert.match(ASSET_TABLE_SOURCE, /router\.push\(`\/catalog\/datasets\/\$\{row\.id\}`\)/);
 	assert.doesNotMatch(ASSET_TABLE_SOURCE, /title: "操作"|治理资产|申请权限/);
-	for (const label of ["治理责任", "质量与SLA", "血缘与影响", "权限申请", "密级与生命周期", "治理状态"]) {
+	for (const label of ["治理信息", "质量与SLA", "血缘与影响", "权限申请", "密级与生命周期", "治理状态"]) {
 		assert.match(ASSET_DETAIL_SOURCE, new RegExp(label));
 	}
 	assert.match(ASSET_DETAIL_SOURCE, /buildAssetGrantUrl/);

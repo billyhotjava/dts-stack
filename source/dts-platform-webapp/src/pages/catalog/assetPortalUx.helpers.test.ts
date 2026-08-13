@@ -13,7 +13,7 @@ describe("assetPortalUx helpers", () => {
 
 		expect(readiness.state).toBe("BLOCKED");
 		expect(readiness.reasons).toContain("缺少密级");
-		expect(readiness.reasons).toContain("缺少主题域");
+		expect(readiness.reasons).toContain("缺少业务归属数据域");
 		expect(readiness.reasons).toContain("缺少归属部门");
 	});
 

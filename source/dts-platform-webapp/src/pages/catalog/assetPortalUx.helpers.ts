@@ -39,7 +39,7 @@ export function resolveAssetReadiness(asset: AssetReadinessInput): AssetReadines
 	const reasons: string[] = [];
 
 	if (!classification) reasons.push("缺少密级");
-	if (!asset.domain && !asset.domainId) reasons.push("缺少主题域");
+	if (!asset.domain && !asset.domainId) reasons.push("缺少业务归属数据域");
 	if (!asset.ownerDept && !asset.owner) reasons.push("缺少归属部门");
 
 	if (STALE_LIFECYCLE_STATUSES.has(lifecycleStatus)) {

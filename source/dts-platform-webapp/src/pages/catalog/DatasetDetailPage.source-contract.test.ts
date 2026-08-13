@@ -4,6 +4,7 @@ import test from "node:test";
 
 const SOURCE = readFileSync(new URL("./DatasetDetailPage.tsx", import.meta.url), "utf8");
 const SUPPORT_SOURCE = readFileSync(new URL("./DatasetDetailSupportTabs.tsx", import.meta.url), "utf8");
+const GOVERNANCE_SOURCE = readFileSync(new URL("./OpenMetadataGovernanceTab.tsx", import.meta.url), "utf8");
 
 test("dataset detail page consumes assets-v2 as the single source of truth", () => {
 	const firstAssetV2Read = SOURCE.indexOf("const detail = await getCatalogAssetV2(id)");
@@ -16,7 +17,7 @@ test("dataset detail page consumes assets-v2 as the single source of truth", () 
 	assert.match(SOURCE, /ADR-85-03：详情页以 assets-v2 为唯一事实源/);
 	assert.match(SOURCE, /setLegacyOnly\(true\)/);
 	assert.doesNotMatch(SOURCE, /__source/);
-	assert.match(SOURCE, /企业级资产工作台/);
+	assert.match(SOURCE, /数据资产详情/);
 	assert.match(SOURCE, /授权资产/);
 	assert.match(SOURCE, /字段契约/);
 });
@@ -44,7 +45,7 @@ test("dataset detail page can deep-link to remediation tabs", () => {
 
 test("dataset detail page exposes enterprise asset workbench tabs", () => {
 	assert.match(SOURCE, /label: "字段契约"/);
-	assert.match(SOURCE, /label: "治理责任"/);
+	assert.match(SOURCE, /label: "治理信息"/);
 	assert.match(SOURCE, /label: "质量与SLA"/);
 	assert.match(SOURCE, /label: "血缘与影响"/);
 	assert.match(SOURCE, /DatasetSchemaContractTab/);
@@ -69,14 +70,11 @@ test("dataset detail page uses SPA navigation for catalog internal actions", () 
 });
 
 test("dataset detail keeps business tags on the formal asset identity", () => {
-	assert.match(SOURCE, /AssetTagPanel/);
-	assert.match(
-		SOURCE,
-		/<AssetTagPanel assetType=\{grantAssetType\} assetKey=\{assetKey\} canEdit=\{assetContract\?\.canTag === true\}/,
-	);
-	assert.match(SOURCE, /hasFormalTagIdentity/);
+	assert.doesNotMatch(SOURCE, /<AssetTagPanel/);
+	assert.match(GOVERNANCE_SOURCE, /AssetTagPanel/);
+	assert.match(GOVERNANCE_SOURCE, /<AssetTagPanel assetType=\{assetType\} assetKey=\{assetKey\} canEdit=\{canTag\}/);
 	assert.match(SOURCE, /contractRequestSequence/);
-	assert.doesNotMatch(SOURCE, /<AssetTagPanel[^>]+assetKey=\{grantAssetId\}/);
+	assert.doesNotMatch(GOVERNANCE_SOURCE, /<AssetTagPanel[^>]+assetKey=\{grantAssetId\}/);
 	assert.doesNotMatch(
 		SOURCE,
 		/const grantAssetType = assetContract\?\.grantAssetType \|\| \(dataset\.__source[\s\S]*?"TABLE"\)/,
@@ -84,10 +82,22 @@ test("dataset detail keeps business tags on the formal asset identity", () => {
 });
 
 test("dataset detail visibly separates business, technical and security tags", () => {
-	assert.match(SOURCE, /业务数据标签/);
+	assert.match(GOVERNANCE_SOURCE, /业务数据标签/);
 	assert.match(SOURCE, /OpenMetadata 技术标签/);
 	assert.match(SOURCE, /密级/);
-	assert.doesNotMatch(SOURCE, /assetTags.*__tags|__tags.*assetTags/s);
+	assert.doesNotMatch(`${SOURCE}\n${GOVERNANCE_SOURCE}`, /assetTags.*__tags|__tags.*assetTags/s);
+});
+
+test("dataset detail makes the missing business data domain directly actionable", () => {
+	assert.match(SOURCE, /当前治理待办/);
+	assert.match(SOURCE, /完善治理信息/);
+	assert.match(SOURCE, /openGovernanceTab/);
+	assert.match(SOURCE, /业务归属数据域/);
+	assert.doesNotMatch(SOURCE, /缺少主题域/);
+	assert.match(GOVERNANCE_SOURCE, /label="业务归属数据域"/);
+	assert.match(GOVERNANCE_SOURCE, /name="domainId"/);
+	assert.match(GOVERNANCE_SOURCE, /updateCatalogAssetV2Governance/);
+	assert.match(GOVERNANCE_SOURCE, /不等同于数据建模中的主题域/);
 });
 
 test("dataset detail page remains within the repository file-size convention", () => {
@@ -96,6 +106,6 @@ test("dataset detail page remains within the repository file-size convention", (
 
 test("dataset detail header remains readable inside a narrow content shell", () => {
 	assert.match(SOURCE, /className="min-w-48 flex-1"/);
-	assert.match(SOURCE, /className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"/);
+	assert.match(SOURCE, /className="grid border-t border-slate-100 sm:grid-cols-2 lg:grid-cols-4"/);
 	assert.doesNotMatch(SOURCE, /className="grid gap-3 md:grid-cols-4"/);
 });

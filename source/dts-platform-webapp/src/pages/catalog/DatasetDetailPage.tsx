@@ -7,7 +7,7 @@ import {
 	getCatalogAssetV2SchemaContract,
 	getDataset,
 } from "@/api/platformApi";
-import { AssetTagPanel } from "@/components/catalog/tags/AssetTagPanel";
+import { useCatalogDomainOptions } from "@/hooks/useCatalogDomainOptions";
 import { useRouter } from "@/routes/hooks";
 import { buildAssetGrantUrl, resolveAssetReadiness } from "./assetPortalUx.helpers";
 import { AssetClassificationFactPanel } from "./assets/AssetClassificationFactPanel";
@@ -95,6 +95,12 @@ export default function DatasetDetailPage() {
 	const [lifecycleWorkbenchOpen, setLifecycleWorkbenchOpen] = useState(false);
 	const datasetRequestSequence = useRef(0);
 	const contractRequestSequence = useRef(0);
+	const {
+		options: domainOptions,
+		labelByKey: domainLabelByKey,
+		loading: domainLoading,
+		error: domainError,
+	} = useCatalogDomainOptions();
 
 	useEffect(() => {
 		const sequence = ++datasetRequestSequence.current;
@@ -186,12 +192,75 @@ export default function DatasetDetailPage() {
 		return <div className="p-8 text-slate-500">数据集不存在或无权访问。</div>;
 	}
 	const grantAssetType = String(assetContract?.grantAssetType || "").trim();
-	const grantAssetId = String(assetContract?.grantAssetId || assetContract?.assetKey || "-").trim();
 	const assetKey = String(assetContract?.assetKey || "").trim();
-	const hasFormalTagIdentity = Boolean(grantAssetType && assetKey);
-	const contractState = assetContract?.consumable === false ? "不可引用" : assetContract ? "可引用" : "合同读取中";
 	const schemaCount = schemaContract?.columnCount ?? dataset.columnCount ?? "-";
 	const schemaCountLabel = schemaCount === "-" ? "未同步" : `${schemaCount} 个字段`;
+	const domainId = String(assetContract?.domainId || dataset.domainId || "").trim();
+	const domainName = dataset.domainName || dataset.domain || domainLabelByKey[domainId] || "";
+	const readiness = resolveAssetReadiness({
+		classification: dataset.classification ?? assetContract?.classification,
+		domainId: dataset.domainId ?? assetContract?.domainId,
+		domain: domainName,
+		owner: dataset.owner ?? assetContract?.owner,
+		ownerDept: dataset.ownerDept ?? assetContract?.ownerDept,
+		lifecycleStatus: dataset.lifecycleStatus ?? assetContract?.lifecycleStatus,
+		governanceStatus: dataset.governanceStatus ?? assetContract?.governanceStatus,
+		matchStatus: dataset.matchStatus ?? assetContract?.matchStatus,
+		metadataSource: dataset.metadataSource ?? assetContract?.metadataSource,
+		legacyDatasetId: dataset.__legacyDatasetId ?? assetContract?.legacyDatasetId,
+	});
+	const contractReasons = Array.isArray(assetContract?.missingGovernanceFields)
+		? assetContract.missingGovernanceFields.map((field: unknown) => {
+				if (field === "domainId") return "缺少业务归属数据域";
+				if (field === "classification") return "缺少密级";
+				if (field === "owner" || field === "ownerDept") return "缺少归属部门";
+				return String(field);
+			})
+		: [];
+	const displayedReadiness =
+		assetContract?.consumable === false
+			? {
+					...readiness,
+					state: "BLOCKED" as const,
+					label: "不可引用",
+					color: "red",
+					reasons:
+						contractReasons.length > 0
+							? contractReasons
+							: readiness.reasons.length > 0
+								? readiness.reasons
+								: ["资产合同尚未满足引用条件"],
+				}
+			: readiness;
+	const lifecycleActionRequired = displayedReadiness.reasons.some(
+		(reason) => reason.includes("生命周期") || reason.includes("密级"),
+	);
+	const openGovernanceTab = () => {
+		setActiveTab("governance");
+		setSearchParams({ tab: "governance" });
+	};
+	const handleGovernanceChanged = (next: Record<string, any>) => {
+		setDataset(next);
+		setAssetContract((current) =>
+			current
+				? {
+						...current,
+						domainId: next.domainId,
+						warehouseLayer: next.warehouseLayer,
+						ownerDept: next.ownerDept,
+						owner: next.owner,
+						governanceStatus: next.governanceStatus,
+						securityPolicyRefs: next.securityPolicyRefs,
+					}
+				: current,
+		);
+		const sequence = ++contractRequestSequence.current;
+		void getCatalogAssetV2Contract(String(next.id || id))
+			.then((contract) => {
+				if (sequence === contractRequestSequence.current) setAssetContract(contract || null);
+			})
+			.catch(() => undefined);
+	};
 	const workbenchAsset: AssetRow = {
 		id: String(dataset.id || id),
 		name: String(dataset.name || "-"),
@@ -201,6 +270,8 @@ export default function DatasetDetailPage() {
 		lifecycleStatus: dataset.lifecycleStatus,
 		owner: dataset.owner,
 		ownerDept: dataset.ownerDept,
+		domainId,
+		domain: domainName,
 		governanceStatus: dataset.governanceStatus,
 		metadataSource: dataset.metadataSource,
 		legacyDatasetId: dataset.__legacyDatasetId,
@@ -212,81 +283,81 @@ export default function DatasetDetailPage() {
 
 	return (
 		<div className="space-y-4 p-4">
-			<div className="space-y-3 border-b border-slate-200 pb-4">
-				<div className="flex flex-wrap items-center gap-3">
-					<Button type="text" onClick={() => router.back()}>
-						← 返回
+			<section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+				<div className="flex flex-wrap items-start gap-3 px-4 py-4 sm:px-5">
+					<Button type="text" className="-ml-2" onClick={() => router.back()}>
+						← 返回数据资产目录
 					</Button>
 					<div className="min-w-48 flex-1">
-						<div className="text-xs text-slate-500">企业级资产工作台</div>
-						<h2 className="truncate text-xl font-bold text-slate-900">{dataset.name ?? "-"}</h2>
-					</div>
-					<Tag color={dataset.metadataSource === "openmetadata" ? "blue" : "default"}>
-						{dataset.metadataSource || "assets-v2"}
-					</Tag>
-					{dataset.warehouseLayer && (
-						<Tag
-							color={
-								dataset.warehouseLayer === "ODS"
-									? "default"
-									: dataset.warehouseLayer === "STG"
-										? "gold"
-										: dataset.warehouseLayer === "DWD"
-											? "blue"
-											: dataset.warehouseLayer === "DWS"
-												? "cyan"
-												: dataset.warehouseLayer === "ADS"
-													? "green"
-													: "default"
-							}
-						>
-							{dataset.warehouseLayer}
-						</Tag>
-					)}
-					<Button
-						disabled={!assetKey}
-						title={assetKey ? "查看密级事实、生命周期时间轴和审批记录" : "资产身份合同尚未就绪"}
-						onClick={() => setLifecycleWorkbenchOpen(true)}
-					>
-						密级与生命周期
-					</Button>
-				</div>
-				<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-					<div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-						<div className="text-xs text-slate-500">授权资产</div>
-						<div className="mt-1 truncate font-mono text-xs text-slate-800">
-							{grantAssetType}:{grantAssetId}
+						<div className="text-xs text-slate-500">数据资产详情</div>
+						<h2 className="mt-1 truncate text-xl font-semibold text-slate-900">{dataset.name ?? "-"}</h2>
+						<div className="mt-1 truncate font-mono text-xs text-slate-500">
+							{dataset.hiveDatabase && dataset.hiveTable
+								? `${dataset.hiveDatabase}.${dataset.hiveTable}`
+								: dataset.__fqn || "物理对象待同步"}
 						</div>
 					</div>
-					<div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-						<div className="text-xs text-slate-500">资产键</div>
-						<div className="mt-1 truncate font-mono text-xs text-slate-800">{assetKey}</div>
-					</div>
-					<div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-						<div className="text-xs text-slate-500">字段契约</div>
-						<div className="mt-1 text-sm font-semibold text-slate-900">{schemaCountLabel}</div>
-					</div>
-					<div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+					<Space size={[4, 4]} wrap>
+						<Tag color={dataset.metadataSource === "openmetadata" ? "blue" : "default"}>
+							{dataset.metadataSource || "assets-v2"}
+						</Tag>
+						{dataset.warehouseLayer ? <Tag>{dataset.warehouseLayer}</Tag> : null}
+						<Button
+							disabled={!assetKey}
+							title={assetKey ? "查看密级事实、生命周期时间轴和审批记录" : "资产身份合同尚未就绪"}
+							onClick={() => setLifecycleWorkbenchOpen(true)}
+						>
+							密级与生命周期
+						</Button>
+					</Space>
+				</div>
+				<div className="grid border-t border-slate-100 sm:grid-cols-2 lg:grid-cols-4">
+					<div className="border-b border-slate-100 px-5 py-3 sm:border-r lg:border-b-0">
 						<div className="text-xs text-slate-500">治理状态</div>
 						<div className="mt-1 flex items-center gap-2">
-							<Tag color={assetContract?.consumable === false ? "orange" : "green"}>{contractState}</Tag>
+							<Tag color={displayedReadiness.color}>{displayedReadiness.label}</Tag>
 							<span className="truncate text-xs text-slate-500">
-								{assetContract?.governanceStatus || dataset.governanceStatus || "-"}
+								{assetContract?.governanceStatus || dataset.governanceStatus || (contractLoading ? "读取中" : "-")}
 							</span>
 						</div>
 					</div>
+					<div className="border-b border-slate-100 px-5 py-3 lg:border-b-0 lg:border-r">
+						<div className="text-xs text-slate-500">业务归属数据域</div>
+						<div className="mt-1 truncate text-sm font-medium text-slate-900">{domainName || "待设置"}</div>
+					</div>
+					<div className="border-b border-slate-100 px-5 py-3 sm:border-r sm:border-b-0">
+						<div className="text-xs text-slate-500">治理责任人</div>
+						<div className="mt-1 truncate text-sm font-medium text-slate-900">
+							{dataset.owner || dataset.ownerDept || "待设置"}
+						</div>
+					</div>
+					<div className="px-5 py-3">
+						<div className="text-xs text-slate-500">字段契约</div>
+						<div className="mt-1 text-sm font-medium text-slate-900">{schemaCountLabel}</div>
+					</div>
 				</div>
-			</div>
-			{hasFormalTagIdentity ? (
-				<AssetTagPanel assetType={grantAssetType} assetKey={assetKey} canEdit={assetContract?.canTag === true} />
-			) : (
-				<Alert
-					type="info"
-					showIcon
-					message="业务数据标签暂不可维护"
-					description="资产身份合同尚未就绪，请先完成资产同步或映射。"
-				/>
-			)}
+				{displayedReadiness.state !== "READY" ? (
+					<div className="flex flex-wrap items-center gap-3 border-t border-amber-200 bg-amber-50 px-5 py-3">
+						<div className="min-w-52 flex-1">
+							<div className="text-sm font-semibold text-amber-950">当前治理待办</div>
+							<div className="mt-1 text-sm text-amber-900">
+								{displayedReadiness.reasons.length
+									? displayedReadiness.reasons.join("；")
+									: "请核验资产映射与治理信息。"}
+							</div>
+						</div>
+						<Button
+							type="primary"
+							onClick={() => {
+								if (lifecycleActionRequired) setLifecycleWorkbenchOpen(true);
+								else openGovernanceTab();
+							}}
+						>
+							{lifecycleActionRequired ? "处理密级与生命周期" : "完善治理信息"}
+						</Button>
+					</div>
+				) : null}
+			</section>
 			<Tabs
 				activeKey={activeTab}
 				onChange={(key) => {
@@ -301,9 +372,26 @@ export default function DatasetDetailPage() {
 						children: (
 							<DatasetOverviewTab
 								dataset={dataset}
+								domainName={domainName}
 								assetContract={assetContract}
 								schemaContract={schemaContract}
-								contractLoading={contractLoading}
+							/>
+						),
+					},
+					{
+						key: "governance",
+						label: "治理信息",
+						children: (
+							<OpenMetadataGovernanceTab
+								assetType={grantAssetType}
+								assetKey={assetKey}
+								canTag={assetContract?.canTag === true}
+								dataset={dataset}
+								domainOptions={domainOptions}
+								domainLoading={domainLoading}
+								domainError={domainError}
+								onChanged={handleGovernanceChanged}
+								onOpenLifecycle={() => setLifecycleWorkbenchOpen(true)}
 							/>
 						),
 					},
@@ -330,19 +418,6 @@ export default function DatasetDetailPage() {
 								columns={Array.isArray(schemaContract?.columns) ? schemaContract?.columns : dataset.__columns}
 							/>
 						),
-					},
-					{
-						key: "governance",
-						label: "治理责任",
-						children:
-							(
-								<OpenMetadataGovernanceTab
-									assetKey={assetKey}
-									dataset={dataset}
-									onChanged={setDataset}
-									onOpenLifecycle={() => setLifecycleWorkbenchOpen(true)}
-								/>
-							),
 					},
 					{
 						key: "quality-sla",
@@ -401,63 +476,24 @@ const resolveProfileSummary = (
 
 function DatasetOverviewTab({
 	dataset,
+	domainName,
 	assetContract,
 	schemaContract,
-	contractLoading,
 }: {
 	dataset: Record<string, any>;
+	domainName?: string;
 	assetContract?: Record<string, any> | null;
 	schemaContract?: Record<string, any> | null;
-	contractLoading?: boolean;
 }) {
-	const router = useRouter();
-	const asset = assetContract || dataset;
-	const readiness = resolveAssetReadiness({
-		classification: asset.classification,
-		domainId: asset.domainId,
-		domain: dataset.domainName ?? dataset.domain,
-		owner: asset.owner,
-		ownerDept: asset.ownerDept,
-		lifecycleStatus: asset.lifecycleStatus,
-		governanceStatus: asset.governanceStatus,
-		matchStatus: asset.matchStatus,
-		metadataSource: asset.metadataSource,
-		legacyDatasetId: asset.legacyDatasetId ?? dataset.__legacyDatasetId,
-	});
 	const missingFields = Array.isArray(assetContract?.missingGovernanceFields)
 		? assetContract?.missingGovernanceFields
 		: [];
 	const tags: any[] = Array.isArray(dataset.__tags) ? dataset.__tags : [];
 	const profile = resolveProfileSummary(dataset.__profileJson);
 
-	const governanceActions =
-		readiness.state === "BLOCKED" || readiness.state === "WARNING" ? (
-			<Space size={4} wrap>
-				<Button size="small" onClick={() => router.push("/governance/rules/catalog")}>
-					质量规则
-				</Button>
-				<Button size="small" onClick={() => router.push("/governance/asset-grants")}>
-					授权管理
-				</Button>
-			</Space>
-		) : null;
-
 	return (
 		<div className="space-y-3 py-2">
 			{dataset.metadataSource === "openmetadata" && <Tag color="blue">OpenMetadata主目录</Tag>}
-			<Alert
-				type={readiness.state === "BLOCKED" ? "warning" : readiness.state === "READY" ? "success" : "info"}
-				showIcon
-				message={`资产状态：${readiness.label}`}
-				description={
-					contractLoading
-						? "正在读取资产治理合同..."
-						: readiness.reasons.length
-							? readiness.reasons.join("；")
-							: "密级、主题域、归属部门和生命周期满足引用前置条件。"
-				}
-				action={governanceActions}
-			/>
 			<Descriptions bordered size="small" column={2}>
 				<Descriptions.Item label="仓库分层">{dataset.warehouseLayer ?? "-"}</Descriptions.Item>
 				<Descriptions.Item label="密级">{dataset.classification ?? "-"}</Descriptions.Item>
@@ -468,7 +504,9 @@ function DatasetOverviewTab({
 				<Descriptions.Item label="技术表">
 					{dataset.hiveDatabase && dataset.hiveTable ? `${dataset.hiveDatabase}.${dataset.hiveTable}` : "-"}
 				</Descriptions.Item>
-				<Descriptions.Item label="主题域">{dataset.domainName ?? dataset.domain ?? "-"}</Descriptions.Item>
+				<Descriptions.Item label="业务归属数据域">
+					{domainName || dataset.domainName || dataset.domain || "-"}
+				</Descriptions.Item>
 				<Descriptions.Item label="治理状态">{dataset.governanceStatus ?? "-"}</Descriptions.Item>
 				<Descriptions.Item label="映射状态">{dataset.matchStatus ?? "-"}</Descriptions.Item>
 				<Descriptions.Item label="字段合同">
@@ -676,7 +714,7 @@ function DatasetQualitySlaTab({
 					type="warning"
 					showIcon
 					message="未映射治理资产"
-					description="请先在治理责任页补齐映射、密级、主题域和负责人，再配置质量规则与 SLA。"
+					description="请先在治理信息页补齐映射、密级、业务归属数据域和负责人，再配置质量规则与 SLA。"
 				/>
 			)}
 		</div>

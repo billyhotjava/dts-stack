@@ -42,9 +42,9 @@ export function resolveAssetGovernanceTask(
 			target: "LIFECYCLE",
 		};
 	}
-	if (readiness.reasons.some((reason) => reason.includes("主题域") || reason.includes("归属部门"))) {
+	if (readiness.reasons.some((reason) => reason.includes("数据域") || reason.includes("归属部门"))) {
 		return {
-			title: "补齐治理责任",
+			title: "补齐治理归属",
 			description: readiness.reasons.join("；"),
 			actionLabel: "继续治理",
 			target: "DETAIL",
@@ -185,7 +185,7 @@ export function AssetGovernanceWorkbenchDrawer({
 										<Descriptions.Item label="数仓分层">
 											{LAYER_META[normalizeLayer(asset.warehouseLayer)].label}
 										</Descriptions.Item>
-										<Descriptions.Item label="主题域">{asset.domain || "未归域"}</Descriptions.Item>
+										<Descriptions.Item label="业务归属数据域">{asset.domain || "未归域"}</Descriptions.Item>
 										<Descriptions.Item label="有效密级">{classificationText(effectiveLevel)}</Descriptions.Item>
 										<Descriptions.Item label="负责人">{asset.owner || asset.ownerDept || "待补齐"}</Descriptions.Item>
 									</Descriptions>
@@ -194,7 +194,7 @@ export function AssetGovernanceWorkbenchDrawer({
 										<AssetTagChips tags={asset.assetTags || []} variant="inline" />
 									</div>
 									<Space size={[8, 8]} wrap>
-										<Button onClick={() => openDetail("governance")}>治理责任</Button>
+										<Button onClick={() => openDetail("governance")}>治理信息</Button>
 										<Button onClick={() => onOpenLifecycle(asset)}>密级与生命周期</Button>
 										<Button onClick={() => openDetail("quality-sla")}>质量与 SLA</Button>
 										<Button onClick={() => openDetail("lineage-impact")}>血缘与影响</Button>

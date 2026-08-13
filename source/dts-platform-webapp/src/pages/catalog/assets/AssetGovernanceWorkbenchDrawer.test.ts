@@ -44,7 +44,7 @@ describe("resolveAssetGovernanceTask", () => {
 			readyAsset({ domain: undefined, domainId: undefined, owner: undefined, ownerDept: undefined }),
 			classificationFact,
 		);
-		expect(task.title).toBe("补齐治理责任");
+		expect(task.title).toBe("补齐治理归属");
 		expect(task.detailTab).toBe("governance");
 	});
 

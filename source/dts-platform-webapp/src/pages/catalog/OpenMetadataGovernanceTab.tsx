@@ -1,4 +1,4 @@
-import { Alert, Button, Descriptions, Form, Input, message, Select, Tag } from "antd";
+import { Alert, Button, Collapse, Descriptions, Form, Input, message, Select, Tag } from "antd";
 import { useEffect, useState } from "react";
 import {
 	type ClassificationFactView,
@@ -6,6 +6,8 @@ import {
 	raiseCatalogClassificationManualFloor,
 	updateCatalogAssetV2Governance,
 } from "@/api/platformApi";
+import { AssetTagPanel } from "@/components/catalog/tags/AssetTagPanel";
+import type { CatalogDomainOption } from "@/hooks/useCatalogDomainOptions";
 import { classificationText } from "./assets/assetPageShared";
 
 const LEVELS = [
@@ -22,13 +24,28 @@ const LEVEL_RANK: Record<string, number> = {
 };
 
 type Props = {
+	assetType: string;
 	assetKey: string;
+	canTag: boolean;
 	dataset: Record<string, any>;
+	domainOptions: CatalogDomainOption[];
+	domainLoading: boolean;
+	domainError: unknown;
 	onChanged: (next: Record<string, any>) => void;
 	onOpenLifecycle: () => void;
 };
 
-export function OpenMetadataGovernanceTab({ assetKey, dataset, onChanged, onOpenLifecycle }: Props) {
+export function OpenMetadataGovernanceTab({
+	assetType,
+	assetKey,
+	canTag,
+	dataset,
+	domainOptions,
+	domainLoading,
+	domainError,
+	onChanged,
+	onOpenLifecycle,
+}: Props) {
 	const [form] = Form.useForm();
 	const [saving, setSaving] = useState(false);
 	const [raisingFloor, setRaisingFloor] = useState(false);
@@ -38,6 +55,7 @@ export function OpenMetadataGovernanceTab({ assetKey, dataset, onChanged, onOpen
 
 	useEffect(() => {
 		form.setFieldsValue({
+			domainId: dataset.domainId,
 			warehouseLayer: dataset.warehouseLayer,
 			ownerDept: dataset.ownerDept,
 			businessOwner: dataset.owner,
@@ -76,15 +94,19 @@ export function OpenMetadataGovernanceTab({ assetKey, dataset, onChanged, onOpen
 		try {
 			const detail: any = await updateCatalogAssetV2Governance(String(dataset.id), values);
 			const asset = detail?.asset || {};
+			const nextDomainId = asset.domainId ?? values.domainId ?? dataset.domainId;
+			const nextDomainName = domainOptions.find((option) => option.key === nextDomainId)?.name;
 			onChanged({
 				...dataset,
-				warehouseLayer: asset.warehouseLayer,
-				ownerDept: asset.ownerDept,
-				owner: asset.owner,
-				governanceStatus: asset.governanceStatus,
-				securityPolicyRefs: asset.securityPolicyRefs,
+				domainId: nextDomainId,
+				domainName: nextDomainName ?? dataset.domainName,
+				warehouseLayer: asset.warehouseLayer ?? values.warehouseLayer ?? dataset.warehouseLayer,
+				ownerDept: asset.ownerDept ?? values.ownerDept ?? dataset.ownerDept,
+				owner: asset.owner ?? values.businessOwner ?? dataset.owner,
+				governanceStatus: asset.governanceStatus ?? dataset.governanceStatus,
+				securityPolicyRefs: asset.securityPolicyRefs ?? values.securityPolicyRefs ?? dataset.securityPolicyRefs,
 			});
-			message.success("治理扩展已保存");
+			message.success("治理信息已保存");
 		} finally {
 			setSaving(false);
 		}
@@ -140,96 +162,144 @@ export function OpenMetadataGovernanceTab({ assetKey, dataset, onChanged, onOpen
 
 	return (
 		<div className="space-y-4 py-2">
-			<div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
-				<div>
-					<div className="font-semibold text-slate-900">不可降级密级事实</div>
+			<section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+				<div className="mb-4">
+					<h3 className="text-base font-semibold text-slate-900">治理归属</h3>
+					<p className="mt-1 text-sm text-slate-500">维护资产在目录中的业务归属、负责人和数仓分层。</p>
 				</div>
-				<Descriptions bordered size="small" column={2}>
-					<Descriptions.Item label="来源声明">{classificationText(fact?.declaredLevel)}</Descriptions.Item>
-					<Descriptions.Item label="当前有效密级">
-						<Tag color={effectiveLevel ? "orange" : "red"}>{classificationText(effectiveLevel)}</Tag>
-					</Descriptions.Item>
-					<Descriptions.Item label="当前人工下限">
-						{fact?.manualFloor ? classificationText(fact.manualFloor) : "未设置"}
-					</Descriptions.Item>
-					<Descriptions.Item label="快照版本">v{fact?.snapshotVersion ?? 0}</Descriptions.Item>
-				</Descriptions>
-				{fact ? null : (
+				{domainError ? (
 					<Alert
 						type="warning"
 						showIcon
-						message="密级事实暂不可用"
-						description="请先完成资产映射与密级封存；在事实加载成功前不能设置人工密级下限。"
+						className="mb-4"
+						message="业务归属数据域暂时无法加载"
+						description="请稍后刷新页面重试；其他治理信息仍可继续维护。"
 					/>
-				)}
-				<div className="grid gap-3 md:grid-cols-2">
-					<label className="space-y-1">
-						<span className="text-sm text-slate-700">人工密级下限</span>
-						<Select
-							className="w-full"
-							value={floorDraft || undefined}
-							placeholder="只能选择当前有效密级或更高级别"
-							disabled={!fact?.sealed || raisingFloor}
-							onChange={setFloorDraft}
-							options={LEVELS.map((option) => ({
-								...option,
-								disabled: (LEVEL_RANK[option.value] || 0) < (LEVEL_RANK[effectiveLevel] || 0),
-							}))}
-						/>
-					</label>
-					<label className="space-y-1">
-						<span className="text-sm text-slate-700">升密原因</span>
-						<Input.TextArea
-							rows={2}
-							maxLength={200}
-							showCount
-							value={floorReason}
-							placeholder="说明业务依据和影响范围，至少 5 个字符"
-							onChange={(event) => setFloorReason(event.target.value)}
-						/>
-					</label>
-				</div>
-				<Button
-					type="primary"
-					loading={raisingFloor}
-					disabled={!fact?.sealed || !floorDraft || floorDraft === fact?.manualFloor}
-					onClick={() => void raiseManualFloor()}
-				>
-					确认提升人工下限
-				</Button>
-			</div>
+				) : null}
+				<Form form={form} layout="vertical">
+					<div className="grid gap-x-4 md:grid-cols-2">
+						<Form.Item
+							label="业务归属数据域"
+							name="domainId"
+							extra="用于资产目录归属、检索筛选和治理统计；不等同于数据建模中的主题域。"
+						>
+							<Select
+								showSearch
+								optionFilterProp="label"
+								loading={domainLoading}
+								disabled={Boolean(domainError)}
+								placeholder="请选择资产所属数据域"
+								options={domainOptions.map((option) => ({ label: option.label, value: option.key }))}
+								notFoundContent={domainLoading ? "正在加载数据域..." : "暂无可用数据域"}
+							/>
+						</Form.Item>
+						<Form.Item label="业务负责人" name="businessOwner">
+							<Input allowClear placeholder="请输入业务负责人" />
+						</Form.Item>
+						<Form.Item label="归属部门" name="ownerDept">
+							<Input allowClear placeholder="请输入归属部门" />
+						</Form.Item>
+						<Form.Item label="仓库分层" name="warehouseLayer">
+							<Select
+								allowClear
+								placeholder="请选择数仓分层"
+								options={["SOURCE", "ODS", "STG", "DWD", "DIM", "DWS", "ADS"].map((value) => ({
+									label: value,
+									value,
+								}))}
+							/>
+						</Form.Item>
+					</div>
+					<Form.Item label="权限、脱敏与行过滤引用" name="securityPolicyRefs">
+						<Input.TextArea rows={3} placeholder="例如 grant:<id>, masking:<id>, row-filter:<id>，或 JSON 引用清单" />
+					</Form.Item>
+					<Button type="primary" onClick={() => void saveGovernance()} loading={saving}>
+						保存治理信息
+					</Button>
+				</Form>
+			</section>
+			{assetType && assetKey ? (
+				<AssetTagPanel assetType={assetType} assetKey={assetKey} canEdit={canTag} />
+			) : (
+				<Alert
+					type="info"
+					showIcon
+					message="业务数据标签暂不可维护"
+					description="资产身份合同尚未就绪，请先完成资产同步或映射。"
+				/>
+			)}
 			<Alert
-				type="warning"
+				type="info"
 				showIcon
-				message="生命周期状态只能通过审批动作改变"
-				description={`当前状态：${dataset.lifecycleStatus || "未设置"}。归档、临时销毁、恢复和永久销毁必须进入统一工作台审批。`}
-				action={<Button onClick={onOpenLifecycle}>打开密级与生命周期工作台</Button>}
+				message="生命周期变更需要审批"
+				description={`当前状态：${dataset.lifecycleStatus || "未设置"}。归档、临时销毁、恢复和永久销毁需进入统一工作台。`}
+				action={<Button onClick={onOpenLifecycle}>打开密级与生命周期</Button>}
 			/>
-			<Form form={form} layout="vertical">
-				<div className="grid gap-3 md:grid-cols-2">
-					<Form.Item label="仓库分层" name="warehouseLayer">
-						<Select
-							allowClear
-							options={["SOURCE", "ODS", "STG", "DWD", "DIM", "DWS", "ADS"].map((value) => ({
-								label: value,
-								value,
-							}))}
-						/>
-					</Form.Item>
-					<Form.Item label="归属部门" name="ownerDept">
-						<Input allowClear />
-					</Form.Item>
-					<Form.Item label="业务负责人" name="businessOwner">
-						<Input allowClear />
-					</Form.Item>
-				</div>
-				<Form.Item label="权限 / 脱敏 / 行过滤引用" name="securityPolicyRefs">
-					<Input.TextArea rows={4} placeholder="例如 grant:<id>, masking:<id>, row-filter:<id>，或 JSON 引用清单" />
-				</Form.Item>
-				<Button type="primary" onClick={() => void saveGovernance()} loading={saving}>
-					保存治理扩展
-				</Button>
-			</Form>
+			<Collapse
+				items={[
+					{
+						key: "classification-floor",
+						label: "高级治理：提升人工密级下限",
+						children: (
+							<div className="space-y-3">
+								<Descriptions bordered size="small" column={2}>
+									<Descriptions.Item label="来源声明">{classificationText(fact?.declaredLevel)}</Descriptions.Item>
+									<Descriptions.Item label="当前有效密级">
+										<Tag color={effectiveLevel ? "orange" : "red"}>{classificationText(effectiveLevel)}</Tag>
+									</Descriptions.Item>
+									<Descriptions.Item label="当前人工下限">
+										{fact?.manualFloor ? classificationText(fact.manualFloor) : "未设置"}
+									</Descriptions.Item>
+									<Descriptions.Item label="快照版本">v{fact?.snapshotVersion ?? 0}</Descriptions.Item>
+								</Descriptions>
+								{fact ? null : (
+									<Alert
+										type="warning"
+										showIcon
+										message="密级事实暂不可用"
+										description="请先完成资产映射与密级封存；在事实加载成功前不能设置人工密级下限。"
+									/>
+								)}
+								<div className="grid gap-3 md:grid-cols-2">
+									<div className="space-y-1">
+										<span className="text-sm text-slate-700">人工密级下限</span>
+										<Select
+											className="w-full"
+											value={floorDraft || undefined}
+											placeholder="只能选择当前有效密级或更高级别"
+											disabled={!fact?.sealed || raisingFloor}
+											onChange={setFloorDraft}
+											options={LEVELS.map((option) => ({
+												...option,
+												disabled: (LEVEL_RANK[option.value] || 0) < (LEVEL_RANK[effectiveLevel] || 0),
+											}))}
+										/>
+									</div>
+									<div className="space-y-1">
+										<span className="text-sm text-slate-700">升密原因</span>
+										<Input.TextArea
+											rows={2}
+											maxLength={200}
+											showCount
+											value={floorReason}
+											placeholder="说明业务依据和影响范围，至少 5 个字符"
+											onChange={(event) => setFloorReason(event.target.value)}
+										/>
+									</div>
+								</div>
+								<Button
+									type="primary"
+									loading={raisingFloor}
+									disabled={!fact?.sealed || !floorDraft || floorDraft === fact?.manualFloor}
+									onClick={() => void raiseManualFloor()}
+								>
+									确认提升人工下限
+								</Button>
+							</div>
+						),
+					},
+				]}
+			/>
 			{dataset.__legacyDatasetId ? (
 				<Alert type="info" showIcon message="质量运行、治理健康和关联指标已移到“质量与SLA”页。" />
 			) : (
