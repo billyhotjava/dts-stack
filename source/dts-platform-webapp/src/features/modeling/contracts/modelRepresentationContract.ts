@@ -12,6 +12,7 @@ export type ModelVisualizationCapability =
 	| "BUSINESS_VISUAL_EDIT"
 	| "BUSINESS_VISUAL_READ"
 	| "ADVANCED_DBT_IMPLEMENTATION"
+	| "DESIGNER_DBT_PREVIEW"
 	| "BLOCKED";
 
 export type PhysicalPreviewScope = "SERVING" | "CANDIDATE";

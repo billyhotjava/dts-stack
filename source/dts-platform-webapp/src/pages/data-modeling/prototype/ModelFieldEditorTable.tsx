@@ -21,6 +21,7 @@ export type ModelFieldEditorTableProps = {
 	onStandardChange: (index: number, value: string) => void;
 	canAssociate: boolean;
 	canOpenCode: boolean;
+	showCodeAction?: boolean;
 	onOpenCode: () => void;
 	onOpenAssociation: () => void;
 };
@@ -52,6 +53,7 @@ export function ModelFieldEditorTable({
 	onStandardChange,
 	canAssociate,
 	canOpenCode,
+	showCodeAction = true,
 	onOpenCode,
 	onOpenAssociation,
 }: ModelFieldEditorTableProps) {
@@ -228,9 +230,11 @@ export function ModelFieldEditorTable({
 	return (
 		<section aria-label="字段编辑器">
 			<div className="dmx-table-tools">
-				<Button disabled={!canOpenCode || readOnly} onClick={onOpenCode}>
-					代码模式
-				</Button>
+				{showCodeAction ? (
+					<Button disabled={!canOpenCode || readOnly} onClick={onOpenCode}>
+						代码模式
+					</Button>
+				) : null}
 				<Button
 					disabled={!canAssociate || readOnly}
 					onClick={onOpenAssociation}

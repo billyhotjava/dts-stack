@@ -39,6 +39,8 @@ export type DbtDraftValidation = {
 		path?: string | null;
 		modelUniqueId?: string | null;
 		message: string;
+		line?: number | null;
+		column?: number | null;
 	}>;
 	proposedStructure: Array<{
 		dbtUniqueId: string;

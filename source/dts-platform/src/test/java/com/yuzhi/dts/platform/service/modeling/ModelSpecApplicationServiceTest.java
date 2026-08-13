@@ -440,6 +440,37 @@ class ModelSpecApplicationServiceTest {
     }
 
     @Test
+    void transitionsOnlyDesignerOwnershipAndForwardsTheExactModelPins() {
+        ModelSpecView current = codec.toCreatedView(MODEL_ID, command("ownership-transition", "customer_detail"), NOW);
+        StoredModelSpec stored = stored(current, null, null);
+        ExpectedVersion expected = new ExpectedVersion(MODEL_ID, current.revision(), current.checksum());
+        when(compatibilityReader.get(TENANT, MODEL_ID)).thenReturn(current);
+        when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(stored));
+        when(compatibilityReader.read(stored)).thenReturn(current);
+        when(repository.compareAndSetV2(
+            eq(TENANT), eq(ACTOR), eq(current.revision()), eq(current.checksum()),
+            argThat(view -> view.implementationMode() == ImplementationMode.DBT_MANAGED), anyString()
+        )).thenReturn(1);
+
+        ModelSpecView transitioned = service.transitionToDbtManaged(TENANT, ACTOR, MODEL_ID, expected);
+
+        assertThat(transitioned.implementationMode()).isEqualTo(ImplementationMode.DBT_MANAGED);
+        assertThat(transitioned.revision()).isEqualTo(current.revision() + 1);
+        verify(repository).compareAndSetV2(
+            eq(TENANT), eq(ACTOR), eq(expected.revision()), eq(expected.checksum()),
+            argThat(view -> view.id().equals(MODEL_ID) && view.implementationMode() == ImplementationMode.DBT_MANAGED),
+            anyString()
+        );
+
+        when(compatibilityReader.get(TENANT, MODEL_ID)).thenReturn(transitioned);
+        assertThatThrownBy(() -> service.transitionToDbtManaged(
+            TENANT, ACTOR, MODEL_ID, new ExpectedVersion(MODEL_ID, transitioned.revision(), transitioned.checksum())
+        )).isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("MODEL_IMPLEMENTATION_DESIGNER_REQUIRED");
+    }
+
+    @Test
     void replaysTheImmutableCreateResponseAndRejectsKeyReuseWithDifferentContent() {
         CreateModelSpecCommand original = command("create-1", "customer_detail");
         ModelSpecView originalView = codec.toCreatedView(MODEL_ID, original, NOW);

@@ -25,7 +25,6 @@ import java.util.regex.Pattern;
 final class DbtCanonicalProjectReconstructor {
 
     private static final Pattern PROJECT_KEY = Pattern.compile("^[A-Za-z_][A-Za-z0-9_]{0,127}$");
-    private static final Set<String> MATERIALIZATIONS = Set.of("table", "view", "incremental", "ephemeral");
     private static final Set<String> ACCEPTED_STATUSES = Set.of("IMPORTED", "COMPILED");
     private static final List<String> STRUCTURED_TYPES = List.of("SCHEMA", "CONFIG", "DEPENDENCY");
 
@@ -41,7 +40,10 @@ final class DbtCanonicalProjectReconstructor {
         String projectKey = "dts_model_" + token;
         String modelName = "model_" + token;
         LinkedHashMap<String, String> files = new LinkedHashMap<>();
-        files.put("dbt_project.yml", projectFile(projectKey, List.of("models"), materialization));
+        files.put(
+            "dbt_project.yml",
+            CanonicalDbtProjectBundleAssembler.projectFile(projectKey, List.of("models"), materialization)
+        );
         files.put(
             "models/" + modelName + ".sql",
             "-- DTS canonical initialization; replace this placeholder before commit.\n" +
@@ -120,7 +122,14 @@ final class DbtCanonicalProjectReconstructor {
 
         List<String> modelPaths = sql.keySet().stream().map(DbtCanonicalProjectReconstructor::topDirectory).distinct().sorted().toList();
         LinkedHashMap<String, String> files = new LinkedHashMap<>();
-        files.put("dbt_project.yml", projectFile(implementation.projectKey(), modelPaths, implementation.materialization()));
+        files.put(
+            "dbt_project.yml",
+            CanonicalDbtProjectBundleAssembler.projectFile(
+                implementation.projectKey(),
+                modelPaths,
+                implementation.materialization()
+            )
+        );
         sql.forEach((path, artifact) -> files.put(path, artifact.artifactContent()));
         ObjectNode schemaRoot = objectMapper.createObjectNode();
         schemaRoot.put("version", 2);
@@ -167,24 +176,6 @@ final class DbtCanonicalProjectReconstructor {
         ) {
             throw unavailable();
         }
-    }
-
-    private static String projectFile(String projectKey, List<String> modelPaths, String materialization) {
-        if (!PROJECT_KEY.matcher(Objects.toString(projectKey, "")).matches() || modelPaths == null || modelPaths.isEmpty()) {
-            throw unavailable();
-        }
-        String normalizedMaterialization = Objects.toString(materialization, "").toLowerCase(Locale.ROOT);
-        if (!MATERIALIZATIONS.contains(normalizedMaterialization)) throw unavailable();
-        StringBuilder result = new StringBuilder()
-            .append("name: ").append(projectKey).append('\n')
-            .append("version: '1.0'\n")
-            .append("config-version: 2\n")
-            .append("model-paths:\n");
-        modelPaths.forEach(path -> result.append("  - ").append(path).append('\n'));
-        return result
-            .append("models:\n  ").append(projectKey).append(":\n    +materialized: ")
-            .append(normalizedMaterialization).append('\n')
-            .toString();
     }
 
     private JsonNode object(String content) {

@@ -479,6 +479,42 @@ public class ModelSpecApplicationService {
         return replacement;
     }
 
+    /**
+     * Appends the single canonical revision used when a visual implementation is explicitly
+     * handed over to dbt.  Keeping this small wrapper here ensures the ordinary update path
+     * (including its CAS, snapshot and validation rules) remains the sole ModelSpec writer.
+     */
+    @Transactional
+    public ModelSpecView transitionToDbtManaged(
+        String serverTenantId,
+        String actorId,
+        UUID modelSpecId,
+        ExpectedVersion expected
+    ) {
+        ModelSpecView current = get(serverTenantId, modelSpecId);
+        if (current.implementationMode() != ModelSpecContract.ImplementationMode.DESIGNER_GENERATED) {
+            throw new ModelSpecException(
+                "MODEL_IMPLEMENTATION_DESIGNER_REQUIRED",
+                "Only a designer-generated ModelSpec can be handed over to dbt",
+                ModelSpecException.Kind.CONFLICT
+            );
+        }
+        return update(
+            serverTenantId,
+            actorId,
+            modelSpecId,
+            expected,
+            new UpdateModelSpecCommand(
+                current.planId(), current.domainId(), current.modelType(), current.layer(), current.name(), current.description(),
+                ModelSpecContract.ImplementationMode.DBT_MANAGED, current.materialization(), current.businessActivityRef(),
+                current.consumptionScenario(), current.grain(), current.factShape(), current.timeSemantics(), current.fields(),
+                current.sourceRefs(), current.dependsOn(), current.dimensionRefs(), current.metricRefs(), current.standardBindings(),
+                current.generationStrategy(), current.dimensionProfile(), current.dataMartId(), current.variantCode(),
+                current.implementationPolicy(), current.warehouseLayerCode(), current.businessProcessId(), current.subjectDomainId()
+            )
+        );
+    }
+
     @Transactional
     public ReclassificationPreview previewReclassification(
         String serverTenantId,

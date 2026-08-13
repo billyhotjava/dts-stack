@@ -24,6 +24,7 @@ public final class ModelRepresentationContract {
     public enum VisualizationCapability {
         BUSINESS_VISUAL_EDIT,
         BUSINESS_VISUAL_READ,
+        DESIGNER_DBT_PREVIEW,
         ADVANCED_DBT_IMPLEMENTATION,
         BLOCKED,
     }

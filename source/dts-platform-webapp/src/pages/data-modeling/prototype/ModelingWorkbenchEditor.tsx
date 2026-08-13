@@ -6,7 +6,6 @@ import {
 	ListChecks,
 	RefreshCw,
 	Save,
-	Settings2,
 	ShieldCheck,
 	Upload,
 } from "lucide-react";
@@ -38,6 +37,12 @@ import {
 } from "./services/modelWorkbenchService";
 import { resolveBusinessProcessBinding } from "./services/planningContextPolicyService";
 import "./modeling-workbench.css";
+import {
+	isPersistedVisualReadOnly,
+	modelingCapabilityReasonsText,
+	resolveModelingModeAccess,
+	type ModelingWorkbenchView,
+} from "./modelingWorkbenchMode";
 
 export type ModelingWorkbenchEditorProps = {
 	draft: ModelDraft;
@@ -57,6 +62,8 @@ export type ModelingWorkbenchEditorProps = {
 	editorAccessMessage: string;
 	fieldRowIds: string[];
 	materializationRefreshKey?: number;
+	view: ModelingWorkbenchView;
+	onViewChange: (view: ModelingWorkbenchView) => void;
 	onChange: (draft: ModelDraft) => void;
 	onSave: () => void;
 	onConfirmDimension?: () => void;
@@ -89,6 +96,7 @@ type DraftFormProps = Pick<
 	| "onDeleteField"
 	| "onStandardChange"
 	| "onSourcesChanged"
+	| "onViewChange"
 >;
 
 type ConceptDimensionFormProps = Omit<DraftFormProps, "draft"> & { draft: ConceptDimensionDraft };
@@ -125,14 +133,15 @@ function FieldsPanel(props: ModelSpecFormProps & { dimensionMode: boolean }) {
 			<ModelFieldEditorTable
 				bindings={draft.standardBindings}
 				canAssociate={Boolean(selectedModel)}
-				canOpenCode={Boolean(selectedModel)}
+				canOpenCode={false}
+				showCodeAction={false}
 				dimensionMode={dimensionMode}
 				fieldRowIds={fieldRowIds}
 				fields={draft.fields}
 				onAddFields={onAddFields}
 				onDelete={onDeleteField}
 				onOpenAssociation={() => onDialog("association")}
-				onOpenCode={() => onDialog("advanced")}
+				onOpenCode={() => undefined}
 				onRemoveBlankFields={onRemoveBlankFields}
 				onStandardChange={onStandardChange}
 				onUpdate={onUpdateField}
@@ -640,11 +649,21 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 		onConfirmDimension,
 		onRefresh,
 		onDialog,
+		onViewChange,
 		materializationRefreshKey,
+		view,
 	} = props;
 	const conceptDimension = isConceptDimensionDraft(draft);
 	const persisted = Boolean(selectedModel);
-	const canWritePersisted = persisted && canMaintain && !readOnly;
+	const visualAccess = resolveModelingModeAccess({
+		view: "visual",
+		canMaintain,
+		allowedActions: representation?.allowedActions || [],
+		capabilityReasons: representation?.capabilityReasons || [],
+	});
+	const dbtVisualReadOnly = isPersistedVisualReadOnly(persisted, visualAccess.access);
+	const effectiveReadOnly = readOnly || dbtVisualReadOnly;
+	const canWritePersisted = persisted && canMaintain && !effectiveReadOnly;
 
 	return (
 		<div className="dmx-workbench-editor">
@@ -674,11 +693,29 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 				/>
 			) : null}
 			{editorAccessMessage ? <output className="dmx-editor-access-note">{editorAccessMessage}</output> : null}
+			{selectedModel ? (
+				<div aria-label="模型表现模式" className="dmx-workbench-mode-switch" role="group">
+					<Button className={view === "visual" ? "active" : ""} onClick={() => onViewChange("visual")} type="text">
+						可视化模式
+					</Button>
+					<Button className={view === "code" ? "active" : ""} onClick={() => onViewChange("code")} type="text">
+						代码模式
+					</Button>
+				</div>
+			) : null}
+			{dbtVisualReadOnly && selectedModel?.implementationMode === "DBT_MANAGED" ? (
+				<div className="dmx-capability-note">当前由代码维护 · 可视化只读。本模型由代码维护，请在代码模式修改实现。</div>
+			) : null}
+			{representation?.visualizationCapability === "BLOCKED" ? (
+				<div className="dmx-inline-error" role="alert">
+					{modelingCapabilityReasonsText(representation.capabilityReasons) || "当前可视化投影不可用，请在代码模式查看实现。"}
+				</div>
+			) : null}
 			<div className="dmx-editor-toolbar" role="toolbar">
 				<Button
 					disabled={
 						!canMaintain ||
-						readOnly ||
+						effectiveReadOnly ||
 						saving ||
 						!dirty ||
 						(conceptDimension && draft.definitionBase?.status != null && draft.definitionBase.status !== "DRAFT")
@@ -702,7 +739,7 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 				</Button>
 				{conceptDimension && draft.definitionBase?.status === "DRAFT" ? (
 					<Button
-						disabled={!canMaintain || readOnly || saving}
+						disabled={!canMaintain || effectiveReadOnly || saving}
 						onClick={onConfirmDimension}
 						title="确认后，该定义将成为维度表可绑定的当前定义"
 					>
@@ -736,14 +773,6 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 							<ShieldCheck size={15} />
 							质量规则
 						</Button>
-						<Button
-							disabled={saving || dirty || !canWritePersisted}
-							onClick={() => onDialog("advanced")}
-							title={dirty ? "请先保存当前模型修改，再进入高级 dbt 工作区" : undefined}
-						>
-							<Settings2 size={15} />
-							高级 dbt 工作区
-						</Button>
 						<Button disabled title="尚无模型导出服务端契约">
 							<Import size={15} />
 							导出
@@ -758,8 +787,8 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 			) : null}
 			<fieldset
 				className="dmx-editor-fieldset dmx-editor-scroll"
-				disabled={
-					readOnly ||
+					disabled={
+					effectiveReadOnly ||
 					saving ||
 					(conceptDimension && draft.definitionBase?.status != null && draft.definitionBase.status !== "DRAFT")
 				}

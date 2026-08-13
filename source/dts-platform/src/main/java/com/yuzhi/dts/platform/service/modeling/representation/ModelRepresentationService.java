@@ -479,9 +479,11 @@ public class ModelRepresentationService {
     }
 
     private static List<String> technicalActions(VisualizationCapability capability) {
-        return capability == VisualizationCapability.ADVANCED_DBT_IMPLEMENTATION
-            ? List.of("OPEN_ADVANCED_DBT")
-            : List.of();
+        return switch (capability) {
+            case ADVANCED_DBT_IMPLEMENTATION -> List.of("OPEN_ADVANCED_DBT");
+            case DESIGNER_DBT_PREVIEW -> List.of("OPEN_DBT_PREVIEW");
+            default -> List.of();
+        };
     }
 
     private static List<CapabilityReason> mergeReasons(

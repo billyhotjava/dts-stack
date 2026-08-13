@@ -1963,4 +1963,31 @@
 **执行顺序**: F1 →（F2/T01 → F2/T02 → F2/T03）∥（F3/T01 → F3/T02）→ F4/T01 → F4/T02 → F4/T03 → F4/T04 → F5；F0 并行补外部输入。F4/T01 会重写四个 `Lineage*Page.tsx`，必须排在 F2/T03、F3/T02 之后，避免同文件冲突。
 **关键决策**: 人工血缘复用既有表以 `relation_type='MANUAL'` 区分（不建新表）；删除=软失效置 `valid_to`，时间旅行须能查回；采集重跑不得覆盖人工 `VERIFIED` 结论（四个写入点统一走 `LineageVerificationGuard`）；「血缘导入」页升级为采集运营台，路由与菜单 key 不变、仅改 title；四页统一采用图谱页现有 URL 协议且其既有契约测试零回归；字段血缘置信度本期只做可筛选，不升级 SQL 解析器。
 **已知风险**: G0 三项 GAP——无运行实例/账号、无血缘样本链路、无 Chrome 95 环境，F2/T03、F3/T02、F5 在此之前不得置 READY；现网血缘规模未知导致 F4/T04 的性能目标暂不可判定（`assets/nfr-budget.md` 阈值待实测校准）；`pending-verification` 的部门鉴权能否下推到 SQL 未确认，可能退化为查询后过滤；`DELETE /catalog/lineage/{id}` 返回体由 Boolean 改为对象，需确认无第三方集成。
-**非目标**: 快照对比补全（节点/字段差异、预设区间、导出）、`LineageBackfillResource` 真实实现（现为纯文本桩）、字段血缘 AST 级解析、OpenLineage 接入配置向导——全部顺延 Sprint-91。
+**非目标**: 快照对比补全（节点/字段差异、预设区间、导出）、`LineageBackfillResource` 真实实现（现为纯文本桩）、字段血缘 AST 级解析、OpenLineage 接入配置向导——全部顺延后续独立 Sprint（编号待定）。
+
+## Sprint-91: 数据建模双模式工作台收敛 (202608)
+
+**目录**: `worklog/v2.2.3/sprint-91-202608-modeling-dual-mode-convergence`
+**时间盒**: 2026-08-13 ～ 2026-08-28
+**状态**: IN_PROGRESS（F1～F4 源码与聚焦自动化完成；真实登录/Chrome 95/事务 IT 与 F5 三角色发布待关闭）
+**类型**: Modeling Workflow / UI Productization / Lifecycle Repair
+**目标**: 建模人员在同一个模型工作台中，以可视化模式或代码模式维护同一份 ModelSpec；查看代码不隐式改变实现所有权，显式接管后继续共用版本、物化和发布链路。
+**依赖**: 复用现有模型工作台、representation capability、`ModelingDbtCompiler`、`DbtProjectBundleManifest`、`ModelingDbtArtifactImportService`、dbt draft、ModelLifecycle 与 release candidate；不恢复旧高级 SQL/dbt 文件页，不新增菜单、台账、parser、artifact 类型或发布控制面。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---|---|---:|---|
+| F0-交付基线与双模式样本 | P0 | 2 | IN_PROGRESS×1 / READY×1 |
+| F1-模型双模式工作台 | P0 | 3 | IN_PROGRESS×3 |
+| F2-可视化实现代码预览与接管 | P0 | 3 | IN_PROGRESS×3 |
+| F3-dbt实现可视只读投影 | P1 | 1 | IN_PROGRESS×1 |
+| F4-工程级代码编辑体验 | P1 | 2 | IN_PROGRESS×2 |
+| F5-统一发布回归与交付验收 | P0 | 2 | BLOCKED×2 |
+
+**统计**: IN_PROGRESS=10，READY=1，BLOCKED=2（共 13 Task）；自动化完成不等于 DONE。
+**剩余顺序**: **F0/T01 真实登录/样本 → F0/T02 真实库探针 → F2/F4 浏览器与事务 IT → 裁决既有 BUILT 取消语义 → F5 三角色发布/物理 ONLINE 验收**。
+**关键决策**: visual/code 是无副作用表现视图；预览为 3 个生成文件，接管 bundle 为确定性 `dbt_project.yml` + 3 文件，经既有 validator/freeze 后只落 `{SQL,SCHEMA,CONFIG}`；dbt 身份服务端派生且 transition 严格拒绝未知字段；接管本版本不可逆；代码模式不拥有第二套发布入口。
+**已知风险**: 需新建两个 DESIGNER + 一个 DBT 样本，并准备维护者/评审人/发布操作员三个独立 actor；登录与 Chrome 95 尚未执行（聚焦 build 已通过）；真实 PostgreSQL 失败注入、拒绝审计和旧候选 STALE 仍待验证；既有 release 回归暴露 `BUILT → CANCELLED` 状态机允许、旧测试期望禁止的语义冲突。
+
+**2026-08-13 架构复核**：首版三处「以为可复用、实际不可复用」已修订——①接管制品类型与 `compile()` 门禁冲突（接管后模型无法编译/物化/发布）；②回切的安全子集规则在现网不存在，且平台自生成的 SQL 必然被判定为复杂（回切移出范围）；③DESIGNER 的 TECHNICAL 表示恒为 BLOCKED，代码模式不可见（新增 F1/T03 后端能力扩展）。首版 `READY=5` 作废。详见 Sprint README「架构复核结论」与账本 #16～#23。
+
+**非目标**: `DBT_MANAGED → DESIGNER_GENERATED` 回切（移交 `assets/sprint-92-back-conversion-handoff.md`）；不加固/不下线旧 `convert-to-designer-generated`；不引入 Monaco worker；不做 YAML 智能补全。

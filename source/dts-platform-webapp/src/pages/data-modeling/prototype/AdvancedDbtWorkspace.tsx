@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import {
 	commitDbtImplementationDraft,
@@ -11,12 +11,28 @@ import {
 	validateDbtImplementationDraft,
 } from "@/api/dbtImplementationDraftApi";
 import { getModelRepresentation } from "@/api/modelRepresentationApi";
+import {
+	getDbtImplementationPreview,
+	transitionDbtOwnership,
+	validateDbtOwnershipTransition,
+	type DbtImplementationPreview,
+	type OwnershipTransitionResult,
+	type OwnershipTransitionValidation,
+} from "@/api/modelImplementationTransitionApi";
 import { getModelLifecycle, type ModelLifecycleTimeline } from "@/api/modelSpecApi";
 import type { ModelRepresentationView } from "@/features/modeling/contracts/modelRepresentationContract";
-import type { CanonicalModelSpecView, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
+import { toModelImplementationEtag } from "@/features/modeling/contracts/modelImplementationContract";
+import { toModelSpecEtag, type CanonicalModelSpecView, type ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { dataModelingPath } from "../navigation";
-import { Button, RequestState, Status } from "./PrototypePrimitives";
+import { Button, Modal, RequestState, Status } from "./PrototypePrimitives";
+import type { DbtEditorFocusLocation } from "./DbtCodeEditor";
+import { dbtDraftStatusLabel, isDbtDraftConflictStatus } from "./dbtCodeEditorContract";
 import { normalizeModelingRequestFailure } from "./services/planningProjectionService";
+import { newModelingIdempotencyKey } from "./modelingIdempotency";
+import { modelingCapabilityReasonsText, resolveModelingModeAccess } from "./modelingWorkbenchMode";
+import { ownershipTransitionSummary } from "./ownershipTransitionPresentation";
+
+const LazyDbtCodeEditor = lazy(() => import("./DbtCodeEditor").then((module) => ({ default: module.DbtCodeEditor })));
 
 const canonical = (model: ModelSpecView): model is CanonicalModelSpecView =>
 	model.compatibilityMode === "CANONICAL" && model.contractVersion === 2;
@@ -26,11 +42,13 @@ export function AdvancedDbtWorkspace({
 	onBack,
 	onDirtyChange,
 	canMaintain,
+	onTransitionSuccess,
 }: {
 	model: ModelSpecView;
 	onBack: () => void;
 	onDirtyChange?: (dirty: boolean) => void;
 	canMaintain: boolean;
+	onTransitionSuccess?: (result: OwnershipTransitionResult) => void;
 }) {
 	const navigate = useNavigate();
 	const [representation, setRepresentation] = useState<ModelRepresentationView | null>(null);
@@ -45,9 +63,20 @@ export function AdvancedDbtWorkspace({
 	const [conflict, setConflict] = useState(false);
 	const [busy, setBusy] = useState<"load" | "create" | "save" | "validate" | "commit" | "">("load");
 	const [failure, setFailure] = useState("");
+	const [preview, setPreview] = useState<DbtImplementationPreview | null>(null);
+	const [previewFailure, setPreviewFailure] = useState("");
+	const [previewAttempt, setPreviewAttempt] = useState(0);
+	const [transitioning, setTransitioning] = useState(false);
+	const [transitionValidation, setTransitionValidation] = useState<OwnershipTransitionValidation | null>(null);
+	const [transitionSuccess, setTransitionSuccess] = useState("");
+	const [previewExpandedPaths, setPreviewExpandedPaths] = useState<string[]>([]);
+	const [workspaceAttempt, setWorkspaceAttempt] = useState(0);
+	const [diagnosticFocus, setDiagnosticFocus] = useState<DbtEditorFocusLocation | null>(null);
 
 	useEffect(() => {
 		let active = true;
+		setPreview(null);
+		setPreviewFailure("");
 		setFailure("");
 		setRepresentation(null);
 		setBaseImplementation(null);
@@ -81,10 +110,92 @@ export function AdvancedDbtWorkspace({
 		return () => {
 			active = false;
 		};
-	}, [canMaintain, model.checksum, model.id, model.revision]);
+	}, [canMaintain, model.checksum, model.id, model.revision, workspaceAttempt]);
 
 	const canOpenAdvanced = Boolean(representation?.allowedActions.includes("OPEN_ADVANCED_DBT"));
-	const installDraft = (created: DbtImplementationDraft) => {
+	const canPreviewDesigner = Boolean(representation?.allowedActions.includes("OPEN_DBT_PREVIEW"));
+	const codeAccess = resolveModelingModeAccess({
+		view: "code",
+		canMaintain,
+		allowedActions: representation?.allowedActions || [],
+		capabilityReasons: representation?.capabilityReasons || [],
+	});
+	const designerGenerated = representation?.ownershipMode === "DESIGNER_GENERATED";
+	useEffect(() => {
+		if (!designerGenerated || !canPreviewDesigner || !representation?.implementationRevision) return;
+		let active = true;
+		void getDbtImplementationPreview(model.id, {
+			modelRevision: model.revision,
+			implementationRevision: representation.implementationRevision,
+		})
+			.then((value) => active && setPreview(value))
+			.catch((error) => active && setPreviewFailure(normalizeModelingRequestFailure(error, "生成代码预览读取失败。").message));
+		return () => {
+			active = false;
+		};
+	}, [canPreviewDesigner, designerGenerated, model.id, model.revision, previewAttempt, representation?.implementationRevision]);
+	const validateTakeOver = async () => {
+		if (!representation?.implementationRevision || !preview || transitioning) return;
+		setTransitioning(true);
+		setFailure("");
+		try {
+			const pins = {
+				modelRevision: model.revision,
+				implementationRevision: representation.implementationRevision,
+				modelEtag: toModelSpecEtag(model),
+				implementationEtag: toModelImplementationEtag({
+					modelSpecId: model.id,
+					implementationRevision: representation.implementationRevision,
+					implementationChecksum: representation.implementationChecksum || "",
+				}),
+			};
+			const validation = await validateDbtOwnershipTransition(model.id, pins);
+			if (!validation.allowed) throw new Error(validation.reasons.join("；") || "当前版本不能接管代码实现");
+			setTransitionValidation(validation);
+		} catch (error) {
+			setFailure(normalizeModelingRequestFailure(error, "接管代码实现失败。").message);
+		} finally {
+			setTransitioning(false);
+		}
+	};
+	const confirmTakeOver = async () => {
+		if (!representation?.implementationRevision || !transitionValidation || transitioning) return;
+		setTransitioning(true);
+		setFailure("");
+		try {
+			const result = await transitionDbtOwnership(model.id, {
+				modelRevision: model.revision,
+				implementationRevision: representation.implementationRevision,
+				modelEtag: toModelSpecEtag(model),
+				implementationEtag: toModelImplementationEtag({ modelSpecId: model.id, implementationRevision: representation.implementationRevision, implementationChecksum: representation.implementationChecksum || "" }),
+				previewChecksum: transitionValidation.previewChecksum,
+				idempotencyKey: newModelingIdempotencyKey(),
+			});
+			setTransitionValidation(null);
+			try {
+				installDraft(
+					await createDbtImplementationDraft(result.model.id, {
+						planId: result.model.planId,
+						baseModelRevision: result.model.revision,
+						baseModelChecksum: result.model.checksum,
+						baseImplementationRevision: result.implementation.implementationRevision,
+						baseImplementationChecksum: result.implementation.implementationChecksum,
+						idempotencyKey: newModelingIdempotencyKey(),
+					}),
+				);
+				setTransitionSuccess(`已接管并创建高级草稿：模型 r${result.model.revision}，实现 r${result.implementation.implementationRevision}。`);
+			} catch (draftError) {
+				setTransitionSuccess(`已接管：模型 r${result.model.revision}，实现 r${result.implementation.implementationRevision}。`);
+				setFailure(normalizeModelingRequestFailure(draftError, "接管已完成，但高级草稿创建失败，可重新创建。").message);
+			}
+			onTransitionSuccess?.(result);
+		} catch (error) {
+			setFailure(normalizeModelingRequestFailure(error, "接管代码实现失败。").message);
+		} finally {
+			setTransitioning(false);
+		}
+	};
+	function installDraft(created: DbtImplementationDraft) {
 		const sourceFiles = created.sourceBundle?.files.map(({ path, content }) => ({ path, content })) || [];
 		setDraft(created);
 		setFiles(sourceFiles);
@@ -93,10 +204,11 @@ export function AdvancedDbtWorkspace({
 		setConflict(false);
 		setCommit(null);
 		setValidation(null);
-	};
+		setDiagnosticFocus(null);
+	}
 	const recordFailure = (error: unknown, fallback: string) => {
 		const status = Number((error as { response?: { status?: unknown } } | null)?.response?.status ?? 0);
-		setConflict(status === 409);
+		setConflict(isDbtDraftConflictStatus(status));
 		setFailure(normalizeModelingRequestFailure(error, fallback).message);
 	};
 	const create = async () => {
@@ -114,7 +226,7 @@ export function AdvancedDbtWorkspace({
 					baseModelChecksum: model.checksum,
 					baseImplementationRevision: baseImplementation?.implementationRevision || null,
 					baseImplementationChecksum: baseImplementation?.implementationChecksum || null,
-					idempotencyKey: crypto.randomUUID(),
+					idempotencyKey: newModelingIdempotencyKey(),
 				}),
 			);
 		} catch (error) {
@@ -126,6 +238,7 @@ export function AdvancedDbtWorkspace({
 	const persist = async () => {
 		if (!canMaintain) throw new Error("当前账号无高级实现维护权限");
 		if (!draft) throw new Error("请先创建高级草稿");
+		if (conflict) throw new Error("草稿版本已冲突，请放弃本地修改并重新读取");
 		if (draft.state === "COMMITTED") throw new Error("已提交草稿不可继续编辑，请创建新草稿");
 		const saved = await saveDbtImplementationDraftFiles(model.id, draft.draftId, {
 			expectedEtag: draft.etag,
@@ -182,7 +295,7 @@ export function AdvancedDbtWorkspace({
 			const receipt = await commitDbtImplementationDraft(model.id, draft.draftId, {
 				expectedEtag: validation.etag,
 				validatedChecksum: validation.validatedChecksum,
-				idempotencyKey: crypto.randomUUID(),
+				idempotencyKey: newModelingIdempotencyKey(),
 			});
 			setCommit(receipt);
 			setDraft((current) => (current ? { ...current, state: "COMMITTED", etag: receipt.etag } : current));
@@ -208,7 +321,7 @@ export function AdvancedDbtWorkspace({
 			});
 			setRepresentation(latest);
 			if (!latest.allowedActions.includes("OPEN_ADVANCED_DBT"))
-				throw new Error(latest.capabilityReasons.join("；") || "当前表示不允许创建新的高级 dbt 草稿");
+				throw new Error(modelingCapabilityReasonsText(latest.capabilityReasons) || "当前表示不允许创建新的高级 dbt 草稿");
 			installDraft(
 				await createDbtImplementationDraft(model.id, {
 					planId: model.planId,
@@ -216,7 +329,7 @@ export function AdvancedDbtWorkspace({
 					baseModelChecksum,
 					baseImplementationRevision: latest.implementationRevision || null,
 					baseImplementationChecksum: latest.implementationChecksum || null,
-					idempotencyKey: crypto.randomUUID(),
+					idempotencyKey: newModelingIdempotencyKey(),
 				}),
 			);
 		} catch (error) {
@@ -228,6 +341,36 @@ export function AdvancedDbtWorkspace({
 
 	const selectedFile = files.find((file) => file.path === selectedPath) || null;
 	const draftCommitted = draft?.state === "COMMITTED" || Boolean(commit);
+	const draftWriteLocked = draftCommitted || conflict;
+	const draftStatus = draft
+		? dbtDraftStatusLabel({ conflict, dirty, committed: draftCommitted, validated: Boolean(validation) })
+		: busy === "load"
+			? "读取中"
+			: "准备中";
+	const diagnosticsFor = (path: string) => validation?.diagnostics.filter((item) => item.path === path) || [];
+	const focusDiagnostic = (item: DbtDraftValidation["diagnostics"][number]) => {
+		if (!item.path || !files.some((file) => file.path === item.path) || !Number.isInteger(item.line) || Number(item.line) < 1) return;
+		setSelectedPath(item.path);
+		setDiagnosticFocus((current) => ({
+			path: item.path as string,
+			line: Number(item.line),
+			column: Number.isInteger(item.column) && Number(item.column) > 0 ? Number(item.column) : 1,
+			token: (current?.token || 0) + 1,
+		}));
+	};
+	const resetConflictingDraft = () => {
+		setDraft(null);
+		setFiles([]);
+		setSelectedPath("");
+		setNewPath("");
+		setValidation(null);
+		setCommit(null);
+		setDirty(false);
+		setConflict(false);
+		setFailure("");
+		setDiagnosticFocus(null);
+		setWorkspaceAttempt((current) => current + 1);
+	};
 	useEffect(() => {
 		onDirtyChange?.(dirty && !draftCommitted);
 	}, [dirty, draftCommitted, onDirtyChange]);
@@ -241,6 +384,10 @@ export function AdvancedDbtWorkspace({
 		<section aria-label="高级 dbt 工作区" className="dmx-advanced-dbt-workspace">
 			<header className="dmx-advanced-dbt-header">
 				<div>
+					<div aria-label="模型表现模式" className="dmx-workbench-mode-switch" role="group">
+						<Button onClick={onBack} type="text">可视化模式</Button>
+						<Button className="active" type="text">代码模式</Button>
+					</div>
 					<Button className="dmx-table-action" onClick={onBack} type="link">
 						返回模型设计
 					</Button>
@@ -251,8 +398,8 @@ export function AdvancedDbtWorkspace({
 						</span>
 					</div>
 				</div>
-				<Status tone={draftCommitted ? "success" : dirty ? "warning" : "info"}>
-					{draftCommitted ? "实现已提交" : dirty ? "有未保存修改" : draft?.state || "准备中"}
+				<Status tone={conflict ? "danger" : draftCommitted ? "success" : dirty ? "warning" : "info"}>
+					{draftStatus}
 				</Status>
 			</header>
 			{!canMaintain ? (
@@ -268,14 +415,44 @@ export function AdvancedDbtWorkspace({
 				</div>
 			) : null}
 			{conflict ? (
-				<RequestState
-					description="草稿 ETag 已变化，为避免覆盖他人修改，请返回模型设计后重新进入工作区。"
-					kind="error"
-					title="检测到并发冲突"
-				/>
+				<div>
+					<RequestState
+						description="草稿 ETag 已变化，当前编辑器已锁定，不会继续覆盖远端版本。"
+						kind="error"
+						title="检测到并发冲突"
+					/>
+					<Button onClick={resetConflictingDraft}>放弃本地修改并重新读取</Button>
+				</div>
 			) : null}
-			{!canonical(model) ? (
+			{!canMaintain ? null : !canonical(model) ? (
 				<RequestState description="历史只读模型不能创建高级 dbt 草稿。" kind="empty" title="当前模型不可维护" />
+			) : representation && codeAccess.access === "BLOCKED" ? (
+				<RequestState description={codeAccess.reason} kind="permission" title="当前代码模式不可用" />
+			) : designerGenerated ? (
+				<div className="dmx-advanced-dbt-intro">
+					<p className="dmx-capability-note">以下三个文件由可视化模型生成，仅供预览；不会自动保存或转换。</p>
+					{preview?.files.map((file) => (
+						<details key={file.path} onToggle={(event) => {
+							const open = event.currentTarget.open;
+							setPreviewExpandedPaths((current) => open ? [...new Set([...current, file.path])] : current.filter((path) => path !== file.path));
+						}} open={file.nodeKind !== "STG"}>
+							<summary>{file.path}{file.nodeKind === "STG" ? " · 系统生成的中间节点" : ""}</summary>
+							{file.nodeKind !== "STG" || previewExpandedPaths.includes(file.path) ? (
+								<Suspense fallback={<textarea aria-label={`预览 ${file.path}`} disabled value={file.content} />}>
+									<LazyDbtCodeEditor content={file.content} diagnostics={[]} onChange={() => undefined} onSave={() => undefined} path={file.path} readOnly />
+								</Suspense>
+							) : null}
+						</details>
+					))}
+					{previewFailure ? (
+						<RequestState description={previewFailure} kind="error" onRetry={() => setPreviewAttempt((current) => current + 1)} title="生成代码预览读取失败" />
+					) : preview ? (
+						<Button disabled={!canMaintain || transitioning} onClick={() => void validateTakeOver()} primary>
+							{transitioning ? "接管中…" : "接管代码实现"}
+						</Button>
+					) : <RequestState description="正在读取三个生成文件。" kind="loading" title="生成代码预览" />}
+					{transitionSuccess ? <Status tone="success">{transitionSuccess}</Status> : null}
+				</div>
 			) : !draft ? (
 				<div className="dmx-advanced-dbt-intro">
 					<p className="dmx-capability-note">
@@ -298,7 +475,7 @@ export function AdvancedDbtWorkspace({
 									: "尚无"}
 						</dd>
 						<dt>能力限制</dt>
-						<dd>{representation?.capabilityReasons.join("；") || "无"}</dd>
+						<dd>{modelingCapabilityReasonsText(representation?.capabilityReasons || []) || "无"}</dd>
 					</dl>
 					<div className="dmx-dialog-actions">
 						<Button
@@ -314,7 +491,7 @@ export function AdvancedDbtWorkspace({
 							title={
 								canOpenAdvanced
 									? undefined
-									: representation?.capabilityReasons.join("；") || "当前表示不允许高级 dbt 实现"
+									: modelingCapabilityReasonsText(representation?.capabilityReasons || []) || "当前表示不允许高级 dbt 实现"
 							}
 						>
 							{busy === "create" ? "创建中…" : "创建高级草稿"}
@@ -329,15 +506,18 @@ export function AdvancedDbtWorkspace({
 							<Button
 								className={selectedPath === file.path ? "active" : ""}
 								key={file.path}
-								onClick={() => setSelectedPath(file.path)}
+								onClick={() => {
+									setSelectedPath(file.path);
+									setDiagnosticFocus(null);
+								}}
 								type="text"
-							>
-								{file.path}
+								>
+									{file.path}{diagnosticsFor(file.path).length ? ` · ${diagnosticsFor(file.path).length}` : ""}
 							</Button>
 						))}
 						<div>
 							<input
-								disabled={!canMaintain || draftCommitted}
+									disabled={!canMaintain || draftWriteLocked}
 								onChange={(event) => setNewPath(event.target.value)}
 								placeholder="models/example.sql"
 								value={newPath}
@@ -345,7 +525,7 @@ export function AdvancedDbtWorkspace({
 							<Button
 								disabled={
 									!canMaintain ||
-									draftCommitted ||
+										draftWriteLocked ||
 									!newPath.trim() ||
 									files.some((file) => file.path === newPath.trim())
 								}
@@ -370,7 +550,7 @@ export function AdvancedDbtWorkspace({
 									<strong>{selectedFile.path}</strong>
 									<Button
 										danger
-										disabled={!canMaintain || draftCommitted}
+										disabled={!canMaintain || draftWriteLocked}
 										onClick={() => {
 											setFiles((current) => current.filter((file) => file.path !== selectedFile.path));
 											setSelectedPath(files.find((file) => file.path !== selectedFile.path)?.path || "");
@@ -382,11 +562,12 @@ export function AdvancedDbtWorkspace({
 										删除文件
 									</Button>
 								</header>
-								<textarea
-									aria-label={`编辑 ${selectedFile.path}`}
-									disabled={!canMaintain || draftCommitted}
-									onChange={(event) => {
-										const content = event.target.value;
+								<Suspense fallback={<textarea aria-label={`编辑 ${selectedFile.path}`} disabled value={selectedFile.content} />}>
+									<LazyDbtCodeEditor
+										content={selectedFile.content}
+										diagnostics={diagnosticsFor(selectedFile.path)}
+										focusLocation={diagnosticFocus}
+										onChange={(content) => {
 										setFiles((current) =>
 											current.map((file) => (file.path === selectedFile.path ? { ...file, content } : file)),
 										);
@@ -394,8 +575,11 @@ export function AdvancedDbtWorkspace({
 										setCommit(null);
 										setDirty(true);
 									}}
-									value={selectedFile.content}
-								/>
+										onSave={() => void save()}
+										path={selectedFile.path}
+										readOnly={!canMaintain || draftWriteLocked}
+									/>
+								</Suspense>
 							</>
 						) : (
 							<RequestState description="选择已有文件或新增文件。" kind="empty" title="暂无选中文件" />
@@ -404,7 +588,7 @@ export function AdvancedDbtWorkspace({
 					<footer>
 						<span>
 							状态：
-							{conflict ? "CONFLICT" : dirty ? "DIRTY" : commit ? "COMMITTED" : validation ? "VALIDATED" : draft.state}{" "}
+								{draftStatus}{" "}
 							· 到期：{draft.expiresAt}
 						</span>
 						{draftCommitted ? (
@@ -413,14 +597,14 @@ export function AdvancedDbtWorkspace({
 							</Button>
 						) : (
 							<>
-								<Button disabled={!canMaintain || Boolean(busy)} onClick={() => void save()}>
+								<Button disabled={!canMaintain || conflict || Boolean(busy)} onClick={() => void save()}>
 									{busy === "save" ? "保存中…" : "保存文件"}
 								</Button>
-								<Button disabled={!canMaintain || Boolean(busy) || !files.length} onClick={() => void validate()}>
+								<Button disabled={!canMaintain || conflict || Boolean(busy) || !files.length} onClick={() => void validate()}>
 									{busy === "validate" ? "校验中…" : "校验"}
 								</Button>
 								<Button
-									disabled={!canMaintain || Boolean(busy) || !validation}
+									disabled={!canMaintain || conflict || Boolean(busy) || !validation}
 									onClick={() => void commitDraft()}
 									primary
 								>
@@ -439,6 +623,9 @@ export function AdvancedDbtWorkspace({
 										<b>{item.code}</b>
 										<span>{item.path || item.modelUniqueId || "—"}</span>
 										<p>{item.message}</p>
+										{item.path && Number.isInteger(item.line) && Number(item.line) > 0 ? (
+											<Button onClick={() => focusDiagnostic(item)} type="link">定位到第 {item.line} 行</Button>
+										) : null}
 									</div>
 								))
 							) : (
@@ -454,6 +641,21 @@ export function AdvancedDbtWorkspace({
 					) : null}
 				</div>
 			)}
+			{transitionValidation ? (
+				<TransitionConfirmation
+					onCancel={() => setTransitionValidation(null)}
+					onConfirm={() => void confirmTakeOver()}
+					summary={ownershipTransitionSummary(transitionValidation, model.revision, representation?.implementationRevision || 0)}
+					transitioning={transitioning}
+				/>
+			) : null}
 		</section>
 	);
+}
+
+function TransitionConfirmation({ summary, onCancel, onConfirm, transitioning }: { summary: ReturnType<typeof ownershipTransitionSummary>; onCancel: () => void; onConfirm: () => void; transitioning: boolean }) {
+	return <Modal footer={<><Button disabled={transitioning} onClick={onCancel}>取消</Button><Button disabled={transitioning} onClick={onConfirm} primary>{transitioning ? "接管中…" : "确认接管"}</Button></>} onClose={onCancel} title="确认接管代码实现">
+		<dl className="dmx-summary-list"><dt>维护方式</dt><dd>{summary.source} → {summary.target}</dd><dt>模型版本</dt><dd>{summary.modelRevision}</dd><dt>实现版本</dt><dd>{summary.implementationRevision}</dd><dt>预览校验和</dt><dd>{summary.previewChecksum}</dd></dl>
+		<p>{summary.reversibility}</p><p>{summary.publish}</p>
+	</Modal>;
 }

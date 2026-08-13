@@ -422,6 +422,27 @@ class ModelRepresentationServiceTest {
     }
 
     @Test
+    void designerOwnershipExposesPinnedReadOnlyDbtPreviewWithoutAdvancedWriteAction() {
+        when(modelSpecs.revision(TENANT, new ModelRevisionRef(MODEL_ID, 2))).thenReturn(model(ImplementationMode.DESIGNER_GENERATED));
+        RepresentationEvidence evidence = withOwnership(exactEvidence(true), ImplementationMode.DESIGNER_GENERATED);
+        when(evidencePort.findExact(TENANT, MODEL_ID, 2, MODEL_CHECKSUM, 3, true)).thenReturn(Optional.of(evidence));
+
+        TechnicalModelRepresentationView view = (TechnicalModelRepresentationView) service.get(
+            TENANT,
+            ACTOR,
+            MODEL_ID,
+            2,
+            3,
+            RepresentationScope.TECHNICAL,
+            true
+        );
+
+        assertThat(view.visualizationCapability()).isEqualTo(VisualizationCapability.DESIGNER_DBT_PREVIEW);
+        assertThat(view.allowedActions()).containsExactly("OPEN_DBT_PREVIEW");
+        assertThat(view.allowedActions()).doesNotContain("OPEN_ADVANCED_DBT");
+    }
+
+    @Test
     void nestedArbitraryNameNodesAreNotTrustedAsSchemaAndNeverLeakThroughReasons() throws Exception {
         when(modelSpecs.revision(TENANT, new ModelRevisionRef(MODEL_ID, 2))).thenReturn(model(ImplementationMode.DBT_MANAGED));
         RepresentationEvidence evidence = exactEvidence(false);

@@ -600,6 +600,26 @@ public class ModelLifecycleRepository {
         return changed == null ? 0 : changed;
     }
 
+    /** Dedicated forward CAS for the irreversible designer-to-dbt hand-over; ordinary writers stay unchanged. */
+    public int transitionDesignerImplementationToDbtManaged(
+        String tenantId, String actorId, ModelSpecView model, String projectKey, String dbtUniqueId,
+        SaveImplementationCommand command, int expectedModelRevision, String expectedModelChecksum,
+        int expectedImplementationRevision, String expectedImplementationChecksum, Instant now
+    ) {
+        if (command.ownership() != ImplementationMode.DBT_MANAGED) throw new IllegalArgumentException("Only DBT-managed ownership is allowed");
+        String inputs = implementationJson(command.inputs()); String mappings = implementationJson(command.fieldMappings());
+        String settings = implementationJson(command.settings()); String checksum = implementationChecksum(command);
+        Integer changed = jdbcTemplate.queryForObject("""
+            with locked_head as (select id from modeling_model_implementation where tenant_id = ? and model_spec_id = ? and model_revision = ? and model_checksum = ? and ownership = 'DESIGNER_GENERATED' and status = 'ACTIVE' and implementation_revision = ? and current_implementation_checksum = ? for update),
+            saved_head as (update modeling_model_implementation i set plan_id=?, model_revision=?, model_checksum=?, ownership='DBT_MANAGED', project_key=?, dbt_unique_id=?, status='ACTIVE', idempotency_key=?, implementation_revision=i.implementation_revision+1, current_implementation_checksum=?, input_mode=?, inputs_json=cast(? as jsonb), field_mappings_json=cast(? as jsonb), settings_json=cast(? as jsonb), materialization=?, last_modified_date=? from locked_head where i.id=locked_head.id returning i.tenant_id,i.id,i.implementation_revision,i.current_implementation_checksum,i.input_mode,i.inputs_json,i.field_mappings_json,i.settings_json,i.ownership,i.materialization),
+            inserted_revision as (insert into modeling_model_implementation_revision (id,tenant_id,implementation_id,revision,content_checksum,input_mode,inputs_json,field_mappings_json,settings_json,ownership,materialization,created_by,created_date) select ?,tenant_id,id,implementation_revision,current_implementation_checksum,input_mode,inputs_json,field_mappings_json,settings_json,ownership,materialization,?,? from saved_head returning 1)
+            select count(*)::int from saved_head
+            """, Integer.class, tenantId, model.id(), expectedModelRevision, expectedModelChecksum, expectedImplementationRevision, expectedImplementationChecksum,
+            model.planId(), model.revision(), model.checksum(), projectKey, dbtUniqueId, command.idempotencyKey(), checksum,
+            command.inputMode().name(), inputs, mappings, settings, command.materialization(), Timestamp.from(now), UUID.randomUUID(), actorId, Timestamp.from(now));
+        return changed == null ? 0 : changed;
+    }
+
     public void saveArtifacts(
         String tenantId,
         ModelSpecView model,

@@ -18,6 +18,7 @@ import { ModelPublishDialog } from "./ModelPublishDialog";
 import { ModelWorkbenchCatalogList } from "./ModelWorkbenchCatalogList";
 import { ModelWorkbenchDialog, type WorkbenchDialog } from "./ModelWorkbenchDialog";
 import { modelDraftFingerprint } from "./modelWorkbenchPresentation";
+import { normalizeWorkbenchView, type ModelingWorkbenchView } from "./modelingWorkbenchMode";
 import { Button, PageHeader, RequestState, Status, Toast, useTransientMessage } from "./PrototypePrimitives";
 import {
 	conceptDimensionDraftFromView,
@@ -78,7 +79,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const [searchParams, setSearchParams] = useSearchParams();
 	const requestedModelId = searchParams.get("modelSpecId") || "";
 	const requestedDimensionId = searchParams.get("dimensionDefinitionId") || "";
-	const requestedDialog = searchParams.get("open") || "";
+	const { view: requestedView, legacyAdvanced } = normalizeWorkbenchView(searchParams);
 	const requestedModelIdRef = useRef(requestedModelId);
 	const requestedDimensionIdRef = useRef(requestedDimensionId);
 	const searchParamsRef = useRef(searchParams);
@@ -479,10 +480,19 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	};
 	const selectedModel = draft && isModelSpecDraft(draft) ? draft.base : null;
 	useEffect(() => {
-		if (requestedDialog !== "advanced" || !requestedModelId || selectedModel?.id !== requestedModelId) return;
-		setDialog("advanced");
-		syncWorkbenchUrl((params) => params.delete("open"));
-	}, [requestedDialog, requestedModelId, selectedModel?.id, syncWorkbenchUrl]);
+		if (!legacyAdvanced || !requestedModelId || selectedModel?.id !== requestedModelId) return;
+		syncWorkbenchUrl((params) => {
+			params.set("view", "code");
+			params.delete("open");
+		});
+	}, [legacyAdvanced, requestedModelId, selectedModel?.id, syncWorkbenchUrl]);
+	const setWorkbenchView = (view: ModelingWorkbenchView, discardConfirmed = false) => {
+		if (view === requestedView || savingRef.current || (!discardConfirmed && !confirmDiscard())) return;
+		syncWorkbenchUrl((params) => {
+			params.set("view", view);
+			params.delete("open");
+		});
+	};
 	const refresh = () => {
 		if (!savingRef.current && confirmDiscard()) void load(selectedModelId || undefined);
 	};
@@ -504,6 +514,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 			params.delete("modelSpecId");
 			params.delete("dimensionDefinitionId");
 			params.delete("open");
+			params.delete("view");
 		});
 	};
 	const { goToGraph, removeModel, goToDimensionGraph, cloneDimension, removeDimension } = useCatalogActions({
@@ -603,16 +614,20 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 						</div>
 						{editorLoading ? (
 							<RequestState description="正在读取所选模型的版本与实现信息。" kind="loading" title="正在打开模型" />
-						) : dialog === "advanced" && selectedModel ? (
+						) : requestedView === "code" && selectedModel ? (
 							<AdvancedDbtWorkspace
 								canMaintain={canMaintain}
 								model={selectedModel}
 								onBack={() => {
 									if (!confirmDiscard()) return;
 									setAdvancedDbtDirty(false);
-									setDialog(null);
+									setWorkbenchView("visual", true);
 								}}
 								onDirtyChange={setAdvancedDbtDirty}
+								onTransitionSuccess={(result) => {
+									setAdvancedDbtDirty(false);
+									void load(result.model.id);
+								}}
 							/>
 						) : draft ? (
 							<ModelingWorkbenchEditor
@@ -627,6 +642,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 								failureMessage={failure?.message || ""}
 								fieldRowIds={fieldRowIds}
 								materializationRefreshKey={materializationRefreshKey}
+								onViewChange={setWorkbenchView}
 								onAddFields={addFields}
 								onChange={(nextDraft) => {
 									if (savingRef.current) return;
@@ -654,12 +670,13 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 								saving={saving}
 								selectedModel={selectedModel}
 								validationErrors={validationErrors}
+								view={requestedView}
 							/>
 						) : (
 							<RequestState description="未能打开模型，请返回模型列表重试。" kind="error" title="模型打开失败" />
 						)}
 					</section>
-					{dialog !== "advanced" && selectedModel?.modelType === "FACT" ? (
+					{requestedView !== "code" && selectedModel?.modelType === "FACT" ? (
 						<aside className="dmx-record-rail">
 							<Button disabled={saving || !selectedModel} onClick={() => setDialog("versions")}>
 								<GitBranch size={16} />
@@ -682,7 +699,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 			)}
 			<ModelWorkbenchDialog
 				canMaintain={canMaintain}
-				dialog={dialog === "advanced" ? null : dialog}
+				dialog={dialog}
 				model={selectedModel}
 				onClose={() => {
 					if (dialog === "publish") setMaterializationRefreshKey((current) => current + 1);

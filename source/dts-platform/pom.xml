@@ -558,6 +558,7 @@
                         <testInclude>**/repository/rollback/RollbackInvalidationRepositoryPostgresIT.java</testInclude>
                         <testInclude>**/service/modeling/ModelImplementationInputPolicyTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelImplementationExecutionPlannerTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelImplementationOwnershipTransitionServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/CanonicalModelLifecycleCompilerAdapterTest.java</testInclude>
                         <testInclude>**/service/modeling/DimensionModelApplicationServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/DimensionModelCreateRequestDecoderTest.java</testInclude>

@@ -30,6 +30,50 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class ModelLifecycleRepositoryTest {
 
     @Test
+    void designerToDbtTransitionLocksTheSourcePinsAndWritesTheTargetPins() {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), any(Object[].class))).thenReturn(1);
+        ModelLifecycleRepository repository = new ModelLifecycleRepository(jdbcTemplate, new ObjectMapper());
+        UUID modelId = UUID.fromString("30000000-0000-0000-0000-000000000091");
+        UUID planId = UUID.fromString("10000000-0000-0000-0000-000000000091");
+        ModelSpecView target = mock(ModelSpecView.class);
+        when(target.id()).thenReturn(modelId);
+        when(target.planId()).thenReturn(planId);
+        when(target.revision()).thenReturn(8);
+        when(target.checksum()).thenReturn("c".repeat(64));
+        SaveImplementationCommand command = new SaveImplementationCommand(
+            InputMode.GENERATED,
+            List.of(new GeneratedInput("DBT", Map.of("projectKey", "dts", "dbtUniqueId", "model.dts.model_91"))),
+            List.of(),
+            Map.of(),
+            ImplementationMode.DBT_MANAGED,
+            "table",
+            "transition-91"
+        );
+
+        assertThat(repository.transitionDesignerImplementationToDbtManaged(
+            "tenant-a", "alice", target, "dts", "model.dts.model_91", command,
+            7, "a".repeat(64), 3, "b".repeat(64), Instant.parse("2026-08-13T00:00:00Z")
+        )).isEqualTo(1);
+
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Object[]> arguments = ArgumentCaptor.forClass(Object[].class);
+        verify(jdbcTemplate).queryForObject(sql.capture(), eq(Integer.class), arguments.capture());
+        assertThat(sql.getValue())
+            .contains("model_revision = ? and model_checksum = ?")
+            .contains("ownership = 'DESIGNER_GENERATED'")
+            .contains("implementation_revision = ?")
+            .contains("ownership='DBT_MANAGED'")
+            .contains("insert into modeling_model_implementation_revision");
+        assertThat(sql.getValue().chars().filter(character -> character == '?').count())
+            .isEqualTo((long) arguments.getValue().length);
+        assertThat(arguments.getValue()).containsSequence(
+            "tenant-a", modelId, 7, "a".repeat(64), 3, "b".repeat(64),
+            planId, 8, "c".repeat(64), "dts", "model.dts.model_91"
+        );
+    }
+
+    @Test
     void advancesImportedDbtImplementationFromAPriorLogicalRevisionUsingTheImplementationCasPins() {
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         UUID modelId = UUID.fromString("30000000-0000-0000-0000-000000000084");

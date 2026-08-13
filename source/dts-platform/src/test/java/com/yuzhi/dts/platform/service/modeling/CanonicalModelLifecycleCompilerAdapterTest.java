@@ -20,6 +20,14 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceKind;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceRole;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.platform.service.modeling.dbtdraft.CanonicalDbtProjectBundleAssembler;
+import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtProjectBundleManifest;
+import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtProjectBundleManifest.BundleFile;
+import com.yuzhi.dts.platform.service.modeling.imports.checksum.ModelPackageChecksum;
+import com.yuzhi.dts.platform.service.modeling.imports.converter.AdvancedDbtDraftStaticValidator;
+import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -83,6 +91,49 @@ class CanonicalModelLifecycleCompilerAdapterTest {
             .contains("'revision':2")
             .contains("'implementationRevision':5")
             .contains("{{ ref('stg_model_30000000_0000_0000_0000_000000000001') }}");
+    }
+
+    @Test
+    void assemblesValidatesFreezesAndRestoresTheCanonicalFourFileProject() {
+        ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
+        ModelSpecView model = model(ImplementationMode.DESIGNER_GENERATED);
+        ImplementationView implementation = implementation(ImplementationMode.DESIGNER_GENERATED);
+        List<ModelLifecycleContract.ArtifactWrite> artifacts = new CanonicalModelLifecycleCompilerAdapter(modelSpecs, null)
+            .compile("tenant-a", model, implementation);
+        LinkedHashMap<String, String> generatedFiles = new LinkedHashMap<>();
+        artifacts.forEach(artifact -> generatedFiles.putIfAbsent(artifact.path(), artifact.content()));
+
+        Map<String, String> projectFiles = CanonicalDbtProjectBundleAssembler.assemble(
+            ModelImplementationExecutionPlanner.systemManagedDbtProjectKey(model),
+            implementation.materialization(),
+            generatedFiles
+        );
+        AdvancedDbtDraftStaticValidator.ValidatedProject validated = new AdvancedDbtDraftStaticValidator().validate(projectFiles);
+        List<BundleFile> bundleFiles = projectFiles
+            .entrySet()
+            .stream()
+            .map(entry -> bundleFile(entry.getKey(), entry.getValue()))
+            .toList();
+        DbtProjectBundleManifest.BundleSnapshot frozen = DbtProjectBundleManifest.freeze(
+            new ObjectMapper().findAndRegisterModules(),
+            bundleFiles,
+            validated
+        );
+        DbtProjectBundleManifest.RestoredBundle restored = DbtProjectBundleManifest.restore(
+            new ObjectMapper().findAndRegisterModules(),
+            frozen.manifest(),
+            frozen.bundleChecksum(),
+            frozen.projectChecksum()
+        );
+
+        assertThat(artifacts).extracting(ModelLifecycleContract.ArtifactWrite::artifactType)
+            .containsExactlyInAnyOrder("STG_SQL", "SQL", "SCHEMA", "TEST");
+        assertThat(generatedFiles).hasSize(3);
+        assertThat(projectFiles).hasSize(4).containsKey("dbt_project.yml");
+        assertThat(validated.projectKey()).isEqualTo("dts");
+        assertThat(frozen.fileCount()).isEqualTo(4);
+        assertThat(restored.files()).extracting(BundleFile::path)
+            .containsExactlyInAnyOrderElementsOf(projectFiles.keySet());
     }
 
     @Test
@@ -204,5 +255,10 @@ class CanonicalModelLifecycleCompilerAdapterTest {
             CompatibilityMode.CANONICAL,
             null
         );
+    }
+
+    private static BundleFile bundleFile(String path, String content) {
+        byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
+        return new BundleFile(path, content, ModelPackageChecksum.sha256(bytes), bytes.length);
     }
 }

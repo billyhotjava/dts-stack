@@ -40,19 +40,13 @@ class ModelVisualizationCapabilityEvaluatorTest {
             Arguments.of(RepresentationScope.BUSINESS, ImplementationMode.DESIGNER_GENERATED, trusted, VisualizationCapability.BUSINESS_VISUAL_EDIT, null),
             Arguments.of(RepresentationScope.BUSINESS, ImplementationMode.DBT_MANAGED, trusted, VisualizationCapability.BUSINESS_VISUAL_READ, null),
             Arguments.of(RepresentationScope.TECHNICAL, ImplementationMode.DBT_MANAGED, trusted, VisualizationCapability.ADVANCED_DBT_IMPLEMENTATION, null),
+            Arguments.of(RepresentationScope.TECHNICAL, ImplementationMode.DESIGNER_GENERATED, trusted, VisualizationCapability.DESIGNER_DBT_PREVIEW, null),
             Arguments.of(
                 RepresentationScope.TECHNICAL,
                 ImplementationMode.DBT_MANAGED,
                 new ModelVisualizationCapabilityEvaluator.ProjectionTrust(false, false, false, false, false, false),
                 VisualizationCapability.ADVANCED_DBT_IMPLEMENTATION,
                 null
-            ),
-            Arguments.of(
-                RepresentationScope.TECHNICAL,
-                ImplementationMode.DESIGNER_GENERATED,
-                trusted,
-                VisualizationCapability.BLOCKED,
-                CapabilityReason.MODEL_REPRESENTATION_ADVANCED_REQUIRES_DBT_MANAGED
             ),
             Arguments.of(
                 RepresentationScope.BUSINESS,

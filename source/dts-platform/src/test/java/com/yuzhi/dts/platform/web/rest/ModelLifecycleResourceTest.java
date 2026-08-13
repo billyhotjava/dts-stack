@@ -13,6 +13,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.yuzhi.dts.platform.security.session.PortalSessionInactivityFilter;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.CompileView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationOwnershipTransitionService;
+import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftRejectionAudit;
+import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService.ImplementationValidationView;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider.WarehousePlanActor;
@@ -49,6 +52,15 @@ class ModelLifecycleResourceTest {
 
     @MockBean
     private ModelLifecycleService service;
+
+    @MockBean
+    private ModelImplementationOwnershipTransitionService ownershipTransitions;
+
+    @MockBean
+    private DbtImplementationDraftRejectionAudit dbtImplementationDraftRejectionAudit;
+
+    @MockBean
+    private AuditService auditService;
 
     @MockBean
     private WarehousePlanActorProvider actorProvider;
@@ -108,6 +120,19 @@ class ModelLifecycleResourceTest {
         )
             .andExpect(status().isPreconditionRequired())
             .andExpect(jsonPath("$.code").value("MODEL_SPEC_IF_MATCH_REQUIRED"));
+    }
+
+    @Test
+    void ownershipTransitionRejectsClientSuppliedDbtIdentity() throws Exception {
+        mockMvc.perform(
+            post("/api/modeling/model-specs/{id}/implementation/ownership-transitions", MODEL_ID)
+                .header("If-Match", ETAG)
+                .header("If-Match-Implementation", IMPLEMENTATION_ETAG)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"targetOwnership\":\"DBT_MANAGED\",\"previewChecksum\":\"" + CHECKSUM + "\",\"idempotencyKey\":\"transition-7\",\"projectKey\":\"client\"}")
+        ).andExpect(status().isBadRequest());
+
+        verify(ownershipTransitions, never()).transition(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test

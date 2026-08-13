@@ -14,6 +14,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.UpstreamMo
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.TestEvidenceCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.TimelineView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationOwnershipTransitionService;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService.ImplementationValidationView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService.ExpectedImplementationVersion;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.ExpectedVersion;
@@ -37,6 +38,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -53,17 +55,56 @@ public class ModelLifecycleResource {
     );
 
     private final ModelLifecycleService service;
+    private final ModelImplementationOwnershipTransitionService ownershipTransitions;
     private final WarehousePlanActorProvider actorProvider;
     private final String tenantId;
 
     public ModelLifecycleResource(
         ModelLifecycleService service,
+        ModelImplementationOwnershipTransitionService ownershipTransitions,
         WarehousePlanActorProvider actorProvider,
         @Value("${dts.platform.modeling.default-tenant-id:default}") String tenantId
     ) {
         this.service = service;
+        this.ownershipTransitions = ownershipTransitions;
         this.actorProvider = actorProvider;
         this.tenantId = tenantId;
+    }
+
+    @GetMapping("/{id}/implementation/dbt-preview")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ApiResponse<ModelImplementationOwnershipTransitionService.Preview> dbtPreview(
+        @PathVariable UUID id, @RequestParam int modelRevision, @RequestParam int implementationRevision
+    ) {
+        return ApiResponses.ok(ownershipTransitions.preview(tenantId, id, modelRevision, implementationRevision));
+    }
+
+    @PostMapping("/{id}/implementation/ownership-transitions/validate")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ApiResponse<ModelImplementationOwnershipTransitionService.Validation> validateOwnershipTransition(
+        @PathVariable UUID id, @RequestHeader(value = "If-Match", required = false) String ifMatch,
+        @RequestHeader(value = "If-Match-Implementation", required = false) String implementationIfMatch,
+        @RequestBody Map<String, Object> request
+    ) {
+        requireFields(request, java.util.Set.of("targetOwnership"));
+        requireTarget(stringValue(request, "targetOwnership"));
+        return ApiResponses.ok(ownershipTransitions.validate(tenantId, id, expected(id, ifMatch), expectedImplementation(id, implementationIfMatch)));
+    }
+
+    @PostMapping("/{id}/implementation/ownership-transitions")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ApiResponse<ModelImplementationOwnershipTransitionService.Transition> ownershipTransition(
+        @PathVariable UUID id, @RequestHeader(value = "If-Match", required = false) String ifMatch,
+        @RequestHeader(value = "If-Match-Implementation", required = false) String implementationIfMatch,
+        @RequestBody Map<String, Object> request
+    ) {
+        requireFields(request, java.util.Set.of("targetOwnership", "previewChecksum", "idempotencyKey"));
+        requireTarget(stringValue(request, "targetOwnership"));
+        String previewChecksum = stringValue(request, "previewChecksum"); String idempotencyKey = stringValue(request, "idempotencyKey");
+        if (previewChecksum == null || previewChecksum.isBlank() || idempotencyKey == null || idempotencyKey.isBlank()) {
+            throw invalidInput("MODEL_IMPLEMENTATION_TRANSITION_INPUT_REQUIRED");
+        }
+        return ApiResponses.ok(ownershipTransitions.transition(tenantId, actorId(), id, expected(id, ifMatch), expectedImplementation(id, implementationIfMatch), previewChecksum, idempotencyKey));
     }
 
     @PutMapping("/{id}/implementation")
@@ -256,6 +297,20 @@ public class ModelLifecycleResource {
     private static ModelSpecException invalidInput(String code) {
         return new ModelSpecException(code, "Implementation input payload is invalid", ModelSpecException.Kind.UNPROCESSABLE);
     }
+
+    private static void requireTarget(String target) {
+        if (!"DBT_MANAGED".equals(target)) throw invalidInput("MODEL_IMPLEMENTATION_TRANSITION_TARGET_INVALID");
+    }
+    private static void requireFields(Map<String, Object> request, java.util.Set<String> allowed) {
+        if (request == null || !allowed.containsAll(request.keySet())) {
+            throw new ModelSpecException(
+                "MODEL_IMPLEMENTATION_TRANSITION_UNKNOWN_FIELD",
+                "Ownership transition payload contains an unknown field",
+                ModelSpecException.Kind.BAD_REQUEST
+            );
+        }
+    }
+    private static String stringValue(Map<String, Object> request, String field) { Object value = request == null ? null : request.get(field); return value instanceof String text ? text : null; }
 
     private static ModelSpecException invalidEtag() {
         return new ModelSpecException(

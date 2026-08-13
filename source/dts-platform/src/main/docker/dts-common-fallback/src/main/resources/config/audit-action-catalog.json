@@ -1275,6 +1275,12 @@
               "supportsFlow": false
             },
             {
+              "code": "MODEL_IMPLEMENTATION_OWNERSHIP_TRANSITION",
+              "display": "接管模型代码实现",
+              "phases": ["SUCCESS"],
+              "supportsFlow": false
+            },
+            {
               "code": "MODEL_IMPLEMENTATION_CLAIM",
               "display": "认领模型实现",
               "phases": [

@@ -345,6 +345,12 @@ public class AdvancedDbtDraftStaticValidator {
                         if (!MATERIALIZATIONS.contains(value)) unsupported(path, "unsupported materialization");
                     } else if ("tags".equals(key)) {
                         stringList();
+                    } else if ("alias".equals(key)) {
+                        stringLiteral();
+                    } else if ("unique_key".equals(key)) {
+                        stringList();
+                    } else if ("meta".equals(key)) {
+                        literalMap();
                     } else {
                         unsupported(path, "non-allowlisted config key");
                     }
@@ -356,6 +362,44 @@ public class AdvancedDbtDraftStaticValidator {
                     expect(',');
                     skipWhitespace();
                 }
+            }
+
+            private void literalMap() {
+                expect('{');
+                skipWhitespace();
+                int count = 0;
+                Set<String> keys = new HashSet<>();
+                if (peek('}')) {
+                    expect('}');
+                    return;
+                }
+                while (true) {
+                    String key = stringLiteral();
+                    if (!keys.add(key)) unsupported(path, "duplicate config metadata key");
+                    expect(':');
+                    literalScalar();
+                    if (++count > 32) unsupported(path, "too many config metadata entries");
+                    skipWhitespace();
+                    if (peek('}')) {
+                        expect('}');
+                        return;
+                    }
+                    expect(',');
+                    skipWhitespace();
+                }
+            }
+
+            private void literalScalar() {
+                skipWhitespace();
+                if (peek('\'') || peek('"')) {
+                    stringLiteral();
+                    return;
+                }
+                int start = cursor;
+                while (cursor < expression.length() && expression.charAt(cursor) >= '0' && expression.charAt(cursor) <= '9') {
+                    cursor++;
+                }
+                if (cursor == start || cursor - start > 19) unsupported(path, "non-literal config metadata value");
             }
 
             private void stringList() {

@@ -48,11 +48,12 @@ public class ModelVisualizationCapabilityEvaluator {
         if (projectionBlocked) return new CapabilityDecision(VisualizationCapability.BLOCKED, reasons);
 
         if (scope == RepresentationScope.TECHNICAL) {
-            if (ownership != ImplementationMode.DBT_MANAGED) {
-                reasons.add(CapabilityReason.MODEL_REPRESENTATION_ADVANCED_REQUIRES_DBT_MANAGED);
-                return new CapabilityDecision(VisualizationCapability.BLOCKED, reasons);
-            }
-            return new CapabilityDecision(VisualizationCapability.ADVANCED_DBT_IMPLEMENTATION, reasons);
+            return new CapabilityDecision(
+                ownership == ImplementationMode.DBT_MANAGED
+                    ? VisualizationCapability.ADVANCED_DBT_IMPLEMENTATION
+                    : VisualizationCapability.DESIGNER_DBT_PREVIEW,
+                reasons
+            );
         }
         VisualizationCapability capability = ownership == ImplementationMode.DESIGNER_GENERATED
             ? VisualizationCapability.BUSINESS_VISUAL_EDIT

@@ -48,6 +48,24 @@ class AdvancedDbtDraftStaticValidatorBridgeTest {
     }
 
     @Test
+    void acceptsTheLiteralOnlyConfigShapeEmittedByTheCanonicalModelingCompiler() {
+        Map<String, String> files = new LinkedHashMap<>();
+        files.put("dbt_project.yml", "name: dts\nversion: 1.0\nmodel-paths: [models]\n");
+        files.put(
+            "models/orders.sql",
+            "{{ config(materialized='incremental', alias='dwd_orders', unique_key=['order_id'], " +
+            "meta={'tenantId':'tenant-a','modelSpecId':'model-a','revision':2,'retentionDays':365}) }}\n" +
+            "select 1 as order_id\n"
+        );
+
+        AdvancedDbtDraftStaticValidator.ValidatedProject result = validator.validate(files);
+
+        assertThat(result.projectKey()).isEqualTo("dts");
+        assertThat(result.nodes()).extracting(AdvancedDbtDraftStaticValidator.ValidatedNode::dbtUniqueId)
+            .containsExactly("model.dts.orders");
+    }
+
+    @Test
     void rejectsDynamicReferencesAsUnsupportedInsteadOfRunningDbt() {
         Map<String, String> files = Map.of(
             "dbt_project.yml",
@@ -83,6 +101,14 @@ class AdvancedDbtDraftStaticValidatorBridgeTest {
             Arguments.of("models/orders.sql", "select '{{ modules.datetime.datetime.now() }}'"),
             Arguments.of("models/orders.sql", "select '{{ adapter.dispatch('macro_name')() }}'"),
             Arguments.of("models/orders.sql", "select '{{ var('runtime_relation') }}'"),
+            Arguments.of(
+                "models/orders.sql",
+                "{{ config(meta={'secret': env_var('DB_PASSWORD')}) }}\nselect 1"
+            ),
+            Arguments.of(
+                "models/orders.sql",
+                "{{ config(meta={'nested': {'value':'unsafe'}}) }}\nselect 1"
+            ),
             Arguments.of("models/orders.sql", "{{ config({pre_hook: 'delete from audit_log'}) }}\nselect 1"),
             Arguments.of("models/orders.sql", "select {{ context['run_query']('delete from audit_log') }}"),
             Arguments.of("models/orders.sql", "select {{ adapter['dispatch']('unsafe')() }}"),
