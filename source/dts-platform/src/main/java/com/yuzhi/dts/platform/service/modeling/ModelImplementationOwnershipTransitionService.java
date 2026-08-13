@@ -98,9 +98,10 @@ public class ModelImplementationOwnershipTransitionService {
         receipts.lockCommandKey(tenantId, id, "OWNERSHIP_TRANSITION", commandKey);
         var replay = receipts.find(tenantId, id, "OWNERSHIP_TRANSITION", commandKey);
         if (replay.isPresent()) {
-            if (!payloadHash.equals(replay.get().payloadHash())) throw conflict("MODEL_LIFECYCLE_IDEMPOTENCY_CONFLICT", "The idempotency key belongs to another request payload");
-            ModelSpecView replayModel = modelSpecs.revision(tenantId, new ModelSpecContract.ModelRevisionRef(id, replay.get().result().revision()));
-            return new Transition(transitionId(id, commandKey), replayModel, replay.get().result(), List.of("SQL", "SCHEMA", "CONFIG"), 3, 4, "DESIGNER_GENERATED", "DBT_MANAGED");
+            var receipt = replay.orElseThrow();
+            if (!payloadHash.equals(receipt.payloadHash())) throw conflict("MODEL_LIFECYCLE_IDEMPOTENCY_CONFLICT", "The idempotency key belongs to another request payload");
+            ModelSpecView replayModel = modelSpecs.revision(tenantId, new ModelSpecContract.ModelRevisionRef(id, receipt.result().revision()));
+            return new Transition(transitionId(id, commandKey), replayModel, receipt.result(), List.of("SQL", "SCHEMA", "CONFIG"), 3, 4, "DESIGNER_GENERATED", "DBT_MANAGED");
         }
         Prepared prepared = prepare(tenantId, id, modelPin, implementationPin);
         State before = prepared.state();
