@@ -12,7 +12,7 @@ import { createDatasetAccessRequest, getDatasetAccessWorkflowPreview } from "@/a
 import userDirectoryService, { type UserDirectoryEntry } from "@/api/services/userDirectoryService";
 import { useUserInfo } from "@/store/userStore";
 import { cn } from "@/utils";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { Check } from "lucide-react";
 
 export type DatasetAccessDialogAction = "query" | "preview";
 
@@ -237,7 +237,18 @@ export function DatasetAccessRequestDialog({ open, onOpenChange, dataset, defaul
 		} finally {
 			setSubmitting(false);
 		}
-	}, [dataset, canProxyApply, targetUser, canQuery, canPreview, validDays, reason, onOpenChange, resetForm, onSubmitted]);
+	}, [
+		dataset,
+		canProxyApply,
+		targetUser,
+		canQuery,
+		canPreview,
+		validDays,
+		reason,
+		onOpenChange,
+		resetForm,
+		onSubmitted,
+	]);
 
 	return (
 		<Dialog
@@ -292,7 +303,6 @@ export function DatasetAccessRequestDialog({ open, onOpenChange, dataset, defaul
 										{targetUser?.username
 											? `${targetUser.fullName || targetUser.displayName || targetUser.username} (${targetUser.username})`
 											: "选择用户"}
-										<ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
 									</Button>
 								</PopoverTrigger>
 								<PopoverContent className="w-[360px] p-0">
@@ -349,17 +359,11 @@ export function DatasetAccessRequestDialog({ open, onOpenChange, dataset, defaul
 						<Label>申请权限</Label>
 						<div className="flex flex-wrap items-center gap-4 text-sm">
 							<label className="flex items-center gap-2">
-								<Checkbox
-									checked={canQuery}
-									onCheckedChange={(v) => setCanQuery(Boolean(v))}
-								/>
+								<Checkbox checked={canQuery} onCheckedChange={(v) => setCanQuery(Boolean(v))} />
 								<span>查询</span>
 							</label>
 							<label className="flex items-center gap-2">
-								<Checkbox
-									checked={canPreview}
-									onCheckedChange={(v) => setCanPreview(Boolean(v))}
-								/>
+								<Checkbox checked={canPreview} onCheckedChange={(v) => setCanPreview(Boolean(v))} />
 								<span>预览</span>
 							</label>
 						</div>
@@ -391,7 +395,11 @@ export function DatasetAccessRequestDialog({ open, onOpenChange, dataset, defaul
 					<Button type="text" onClick={() => onOpenChange(false)} disabled={submitting}>
 						取消
 					</Button>
-					<Button type="primary" onClick={handleSubmit} disabled={submitting || !canProxyApply || !targetUser?.username}>
+					<Button
+						type="primary"
+						onClick={handleSubmit}
+						disabled={submitting || !canProxyApply || !targetUser?.username}
+					>
 						{submitting ? "提交中..." : "提交申请"}
 					</Button>
 				</DialogFooter>

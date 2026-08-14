@@ -31,7 +31,7 @@ import {
 	updateCatalogTag,
 	updateTagCategory,
 } from "@/api/catalogTagsApi";
-import { type CompactColumns, CompactTable } from "@/components/table";
+import { actionColumn, type CompactColumns, CompactTable } from "@/components/table";
 
 const DEFAULT_PAGE_SIZE = 10;
 const COLOR_PALETTE = ["#1677ff", "#13c2c2", "#52c41a", "#faad14", "#fa541c", "#722ed1", "#eb2f96", "#8c8c8c"] as const;
@@ -418,47 +418,35 @@ export function TagManagementTab({ canManage, onViewAssets, onAssociateAssets }:
 			key: "description",
 			render: (description) => description || "—",
 		},
-		{
-			title: "操作",
-			key: "actions",
-			dataIndex: "actions",
-			render: (_: unknown, tag: CatalogTagDto) => (
-				<Space size={4}>
-					{onViewAssets ? (
-						<Button type="link" size="small" onClick={() => onViewAssets(tag)}>
-							查看资产
-						</Button>
-					) : null}
-					{canManage ? (
-						<>
-							{onAssociateAssets ? (
-								<Button type="link" size="small" onClick={() => onAssociateAssets(tag)}>
-									关联资产
-								</Button>
-							) : null}
-							<Button type="link" size="small" aria-label={`编辑标签 ${tag.name}`} onClick={() => openTagEditor(tag)}>
-								编辑
-							</Button>
-							<Tooltip title={tag.builtin ? BUILTIN_TAG_DELETE_REASON : undefined}>
-								<span>
-									<Button
-										type="link"
-										size="small"
-										danger
-										aria-label={`删除标签 ${tag.name}`}
-										disabled={tag.builtin}
-										title={tag.builtin ? BUILTIN_TAG_DELETE_REASON : undefined}
-										onClick={() => confirmDeleteTag(tag)}
-									>
-										删除
-									</Button>
-								</span>
-							</Tooltip>
-						</>
-					) : null}
-				</Space>
-			),
-		},
+		actionColumn<CatalogTagDto>(
+			(tag) => [
+				{ key: "assets", label: "查看资产", hidden: !onViewAssets, onClick: () => onViewAssets?.(tag) },
+				{
+					key: "associate",
+					label: "关联资产",
+					hidden: !canManage || !onAssociateAssets,
+					onClick: () => onAssociateAssets?.(tag),
+				},
+				{
+					key: "edit",
+					label: "编辑",
+					hidden: !canManage,
+					ariaLabel: `编辑标签 ${tag.name}`,
+					onClick: () => openTagEditor(tag),
+				},
+				{
+					key: "delete",
+					label: "删除",
+					danger: true,
+					hidden: !canManage,
+					disabled: tag.builtin,
+					ariaLabel: `删除标签 ${tag.name}`,
+					tooltip: tag.builtin ? BUILTIN_TAG_DELETE_REASON : undefined,
+					onClick: () => confirmDeleteTag(tag),
+				},
+			],
+			{ maxActions: 4, fixed: false },
+		),
 	];
 
 	return (

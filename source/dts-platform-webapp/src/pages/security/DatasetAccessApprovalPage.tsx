@@ -15,7 +15,7 @@ import {
 } from "@/api/platformApi";
 import { PageHeader } from "@/components/page-header";
 import { DatasetAccessRequestDialog } from "@/components/security/DatasetAccessRequestDialog";
-import { CompactTable } from "@/components/table";
+import { actionColumn, CompactTable } from "@/components/table";
 import { useCatalogManageAccess } from "@/hooks/useModuleManageAccess";
 import { useRouter } from "@/routes/hooks";
 
@@ -296,27 +296,20 @@ export default function Page() {
 		},
 		{ title: "状态", dataIndex: "status", render: (v) => <Tag color={statusColor(v)}>{v || "-"}</Tag> },
 		{ title: "有效期", render: (_, record) => `${formatDate(record?.validFrom)} ~ ${formatDate(record?.validTo)}` },
-		{
-			title: "操作",
-			width: 210,
-			render: (_, record) => (
-				<Space>
-					<Button size="small" onClick={() => void openRequestDetail(record?.id)}>
-						详情
-					</Button>
-					{String(record?.status || "").toUpperCase() === "PENDING" ? (
-						<Button
-							size="small"
-							danger
-							onClick={() => void handleCancelRequest(record?.id)}
-							loading={cancellingRequestId === record?.id}
-						>
-							撤回
-						</Button>
-					) : null}
-				</Space>
-			),
-		},
+		actionColumn<AccessRequest>(
+			(record) => [
+				{ key: "detail", label: "详情", onClick: () => void openRequestDetail(record?.id) },
+				{
+					key: "cancel",
+					label: "撤回",
+					danger: true,
+					hidden: String(record?.status || "").toUpperCase() !== "PENDING",
+					loading: cancellingRequestId === record?.id,
+					onClick: () => void handleCancelRequest(record?.id),
+				},
+			],
+			{ width: 210, fixed: false },
+		),
 	];
 
 	const taskColumns: ColumnsType<TaskView> = [
@@ -330,27 +323,25 @@ export default function Page() {
 			render: (v) => <Tag color={statusColor(v)}>{v || "-"}</Tag>,
 		},
 		{ title: "创建时间", dataIndex: ["task", "createdDate"], render: (v) => formatDate(v) },
-		{
-			title: "操作",
-			render: (_, record) => (
-				<Space>
-					<Button size="small" onClick={() => void openRequestDetail(record?.request?.id)}>
-						详情
-					</Button>
-					<Button
-						size="small"
-						type="primary"
-						onClick={() => openDecision([record.task?.id], "approve")}
-						disabled={!canManage}
-					>
-						批准
-					</Button>
-					<Button size="small" danger onClick={() => openDecision([record.task?.id], "reject")} disabled={!canManage}>
-						驳回
-					</Button>
-				</Space>
-			),
-		},
+		actionColumn<TaskView>(
+			(record) => [
+				{ key: "detail", label: "详情", onClick: () => void openRequestDetail(record?.request?.id) },
+				{
+					key: "approve",
+					label: "批准",
+					disabled: !canManage,
+					onClick: () => openDecision([record.task?.id], "approve"),
+				},
+				{
+					key: "reject",
+					label: "驳回",
+					danger: true,
+					disabled: !canManage,
+					onClick: () => openDecision([record.task?.id], "reject"),
+				},
+			],
+			{ maxActions: 3, fixed: false },
+		),
 	];
 
 	const doneColumns: ColumnsType<TaskView> = [
@@ -360,14 +351,10 @@ export default function Page() {
 		{ title: "结果", dataIndex: ["task", "status"], render: (v) => <Tag color={statusColor(v)}>{v || "-"}</Tag> },
 		{ title: "审批时间", dataIndex: ["task", "decidedAt"], render: (v) => formatDate(v) },
 		{ title: "备注", dataIndex: ["task", "decisionNotes"], render: (v) => v || "-" },
-		{
-			title: "操作",
-			render: (_, record) => (
-				<Button size="small" onClick={() => void openRequestDetail(record?.request?.id)}>
-					详情
-				</Button>
-			),
-		},
+		actionColumn<TaskView>(
+			(record) => [{ key: "detail", label: "详情", onClick: () => void openRequestDetail(record?.request?.id) }],
+			{ fixed: false },
+		),
 	];
 
 	const pendingSelectedTaskIds = useMemo(

@@ -1,6 +1,7 @@
-import { DatabaseOutlined, FileTextOutlined, LinkOutlined, ReloadOutlined } from "@ant-design/icons";
+import { DatabaseOutlined, FileTextOutlined, LinkOutlined } from "@ant-design/icons";
 import { Alert, Button, Input, Select, Space, Tag, Tooltip, Typography } from "antd";
 import type { ColumnsType, TablePaginationConfig } from "antd/es/table";
+import type { FilterValue, SorterResult } from "antd/es/table/interface";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { ClassificationTag } from "@/analytics/pages/screens/components/ClassificationTag";
@@ -8,7 +9,7 @@ import { ingestionTaskAPI } from "@/api/ingestion";
 import dataSourcesService from "@/api/services/dataSourcesService";
 import { JourneyContextBar } from "@/components/journey";
 import { PageHeader } from "@/components/page-header";
-import { CompactTable } from "@/components/table";
+import { actionColumn, toSpringSort, CompactTable } from "@/components/table";
 import { formatTimestamp } from "@/utils/format";
 import styles from "./AccessWorkspace.module.css";
 import {
@@ -87,6 +88,21 @@ const syncModeLabel = (value: string) => {
 
 export const accessKeywordFromSearch = (search: string) => (new URLSearchParams(search).get("keyword") || "").trim();
 
+/** 列表默认排序，同时也是用户取消表头排序后的回退值。 */
+const DEFAULT_SORT = "lastModifiedDate,desc";
+
+/**
+ * 表头列 key → IngestionTask 实体字段。
+ * 服务端分页下只有当前页数据，排序必须由后端完成，因此仅暴露实体上真实存在的字段；
+ * 「来源 / 资源」「负责人 / 密级」「健康状态」由前端拼装派生，无法在后端排序，故不开放。
+ */
+export const ACCESS_SORT_FIELDS: Record<string, string> = {
+	name: "name",
+	syncMode: "syncMode",
+	lifecycle: "status",
+	lastRun: "lastExecutedAt",
+};
+
 export default function AccessWorkspace() {
 	const navigate = useNavigate();
 	const location = useLocation();
@@ -100,6 +116,7 @@ export default function AccessWorkspace() {
 	const [lifecycle, setLifecycle] = useState<AccessLifecycle | "all">("all");
 	const [health, setHealth] = useState<AccessHealth | "all">("all");
 	const [pagination, setPagination] = useState({ current: 1, pageSize: 10, total: 0 });
+	const [sort, setSort] = useState(DEFAULT_SORT);
 	const loadRequestIdRef = useRef(0);
 
 	const load = useCallback(async () => {
@@ -113,7 +130,7 @@ export default function AccessWorkspace() {
 				ingestionTaskAPI.getTasks({
 					page: pagination.current - 1,
 					size: pagination.pageSize,
-					sort: "lastModifiedDate,desc",
+					sort,
 					status,
 					sourceKind: kind === "overview" ? undefined : kind,
 					query: query.trim() || undefined,
@@ -136,7 +153,7 @@ export default function AccessWorkspace() {
 		} finally {
 			if (loadRequestIdRef.current === requestId) setLoading(false);
 		}
-	}, [health, kind, lifecycle, pagination.current, pagination.pageSize, query]);
+	}, [health, kind, lifecycle, pagination.current, pagination.pageSize, query, sort]);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: changing the route access kind must restart that workspace at page one.
 	useEffect(() => {
@@ -182,6 +199,7 @@ export default function AccessWorkspace() {
 			dataIndex: "name",
 			key: "name",
 			width: 220,
+			sorter: true,
 			render: (_, row) => (
 				<Button
 					className={styles.nameButton}
@@ -226,6 +244,7 @@ export default function AccessWorkspace() {
 			dataIndex: "syncMode",
 			key: "syncMode",
 			width: 110,
+			sorter: true,
 			render: syncModeLabel,
 		},
 		{
@@ -233,6 +252,7 @@ export default function AccessWorkspace() {
 			dataIndex: "lifecycle",
 			key: "lifecycle",
 			width: 105,
+			sorter: true,
 			render: renderLifecycleTag,
 		},
 		{
@@ -246,6 +266,8 @@ export default function AccessWorkspace() {
 			title: "最近运行",
 			key: "lastRun",
 			width: 165,
+			sorter: true,
+			defaultSortOrder: "descend",
 			render: (_, row) => (
 				<Space size={6}>
 					<Text>{row.lastExecutionStatus || "尚未运行"}</Text>
@@ -268,23 +290,25 @@ export default function AccessWorkspace() {
 				</Space>
 			),
 		},
-		{
-			title: "操作",
-			key: "actions",
-			fixed: "right",
-			width: 90,
-			render: (_, row) => (
-				<Button size="small" onClick={() => openDetail(row)} disabled={row.taskId == null}>
-					详情
-				</Button>
-			),
-		},
+		actionColumn<AccessWorkspaceRow>((row) => [
+			{ key: "detail", label: "详情", disabled: row.taskId == null, onClick: () => openDetail(row) },
+		]),
 	];
 
-	const onTableChange = (next: TablePaginationConfig) => {
+	const onTableChange = (
+		next: TablePaginationConfig,
+		_filters: Record<string, FilterValue | null>,
+		sorter: SorterResult<AccessWorkspaceRow> | SorterResult<AccessWorkspaceRow>[],
+	) => {
+		// 服务端分页：表头排序必须转成 Spring Data 的 sort 参数交给后端，
+		// 否则只会把当前页的 10 条重新排列。
+		const nextSort = toSpringSort(sorter, ACCESS_SORT_FIELDS, DEFAULT_SORT) ?? DEFAULT_SORT;
 		const nextPageSize = next.pageSize || 10;
+		// 换页长度或换排序都要回到第一页，否则会停在一个不存在的页码上。
+		const keepPage = nextPageSize === pagination.pageSize && nextSort === sort;
+		setSort(nextSort);
 		setPagination({
-			current: nextPageSize === pagination.pageSize ? next.current || 1 : 1,
+			current: keepPage ? next.current || 1 : 1,
 			pageSize: nextPageSize,
 			total: pagination.total,
 		});
@@ -339,7 +363,7 @@ export default function AccessWorkspace() {
 						options={HEALTH_OPTIONS}
 					/>
 					<span className={styles.toolbarSpacer} />
-					<Button icon={<ReloadOutlined />} onClick={() => void load()} disabled={loading}>
+					<Button onClick={() => void load()} disabled={loading}>
 						刷新
 					</Button>
 				</div>
@@ -353,7 +377,7 @@ export default function AccessWorkspace() {
 						pageSize: pagination.pageSize,
 						total: pagination.total,
 					}}
-					onChange={(next) => onTableChange(next)}
+					onChange={onTableChange}
 				/>
 			</section>
 		</div>

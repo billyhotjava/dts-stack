@@ -1,5 +1,5 @@
 import { Badge, Button, Card, Input, Modal, Segmented, Select, Space, Tabs, Tag, Tooltip, message } from "antd";
-import { CompactTable } from "@/components/table";
+import { actionColumn, CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/components/page-header";
@@ -368,16 +368,10 @@ export default function ScriptStudioPage() {
 			width: 100,
 			render: (v) => formatDuration(v),
 		},
-		{
-			title: "操作",
-			key: "actions",
+		actionColumn<ScriptRun>((row) => [{ key: "log", label: "查看日志", onClick: () => void openRunLog(row) }], {
 			width: 120,
-			render: (_, row) => (
-				<Button size="small" type="link" onClick={() => void openRunLog(row)}>
-					查看日志
-				</Button>
-			),
-		},
+			fixed: false,
+		}),
 	];
 
 	return (

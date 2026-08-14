@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { type CompactColumns, CompactTable } from "@/components/table";
+import { actionColumn, type CompactColumns, CompactTable } from "@/components/table";
 import type { ModelSpecField } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { Button, RequestState } from "./PrototypePrimitives";
 import type { ModelSpecDraft, ModelWorkbenchContext } from "./services/modelWorkbenchService";
@@ -214,16 +214,14 @@ export function ModelFieldEditorTable({
 				),
 			});
 		}
-		base.push({
-			title: "操作",
-			key: "actions",
-			width: 88,
-			render: (_, { index }) => (
-				<Button danger disabled={readOnly} onClick={() => onDelete(index)}>
-					删除
-				</Button>
+		base.push(
+			actionColumn<FieldRow>(
+				({ index }) => [
+					{ key: "delete", label: "删除", danger: true, disabled: readOnly, onClick: () => onDelete(index) },
+				],
+				{ fixed: false },
 			),
-		});
+		);
 		return base;
 	}, [bindings, dimensionMode, onDelete, onStandardChange, onUpdate, readOnly, showStandards, standards]);
 

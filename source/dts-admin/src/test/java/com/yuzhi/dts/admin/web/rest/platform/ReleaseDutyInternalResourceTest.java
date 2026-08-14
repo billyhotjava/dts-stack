@@ -105,6 +105,68 @@ class ReleaseDutyInternalResourceTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().getData().hasDuty()).isTrue();
+
+        var releaseOperator = resource.check(
+            "kc-alice",
+            "RELEASE_OPERATOR",
+            request
+        );
+        assertThat(releaseOperator.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(releaseOperator.getBody()).isNotNull();
+        assertThat(releaseOperator.getBody().getData().hasDuty()).isTrue();
+    }
+
+    @Test
+    void departmentDataOwnerHasScopedModelAndReleaseDuties() {
+        when(authenticator.authenticate(request, "dts-platform"))
+            .thenReturn(new Decision(true, "dts-platform", "accepted"));
+        when(
+            keycloakAuthService.obtainClientCredentialsToken(
+                "admin-cli",
+                "secret"
+            )
+        )
+            .thenReturn(
+                new TokenResponse(
+                    "management-token",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null
+                )
+            );
+        KeycloakUserDTO user = new KeycloakUserDTO();
+        user.setId("kc-dept-owner");
+        user.setUsername("dept-owner");
+        user.setEnabled(true);
+        when(keycloakAdminClient.findById("kc-dept-owner", "management-token"))
+            .thenReturn(Optional.of(user));
+        when(
+            keycloakAdminClient.listUserRealmRoles(
+                "kc-dept-owner",
+                "management-token"
+            )
+        )
+            .thenReturn(List.of("ROLE_DEPT_DATA_OWNER"));
+
+        var maintainer = resource.check(
+            "kc-dept-owner",
+            "MODEL_MAINTAINER",
+            request
+        );
+        var releaseOperator = resource.check(
+            "kc-dept-owner",
+            "RELEASE_OPERATOR",
+            request
+        );
+
+        assertThat(maintainer.getBody()).isNotNull();
+        assertThat(maintainer.getBody().getData().hasDuty()).isTrue();
+        assertThat(releaseOperator.getBody()).isNotNull();
+        assertThat(releaseOperator.getBody().getData().hasDuty()).isTrue();
     }
 
     @Test

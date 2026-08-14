@@ -1,22 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button, Progress, Space, Tag, Timeline, Typography } from "antd";
-import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
+import { actionColumn, appendDetailAction, CompactTable, RecordDetailDrawer } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { Activity, Clock3, DatabaseZap, ShieldCheck } from "lucide-react";
 import { useNavigate } from "react-router";
-import {
-	PlatformPageHero,
-	PlatformSectionCard,
-	PlatformSummaryCards,
-} from "@/components/console-page";
-import {
-	getSprint27EltConsole,
-	type Sprint27SourceStatus,
-} from "@/api/platformApi";
-import {
-	type IngestionExecutionObservabilityDTO,
-	type IngestionGovernanceOverviewDTO,
-} from "@/api/ingestion";
+import { PlatformPageHero, PlatformSectionCard, PlatformSummaryCards } from "@/components/console-page";
+import { getSprint27EltConsole, type Sprint27SourceStatus } from "@/api/platformApi";
+import { type IngestionExecutionObservabilityDTO, type IngestionGovernanceOverviewDTO } from "@/api/ingestion";
 
 type PipelineStage = {
 	key: string;
@@ -106,8 +96,8 @@ export default function EltConsolePage() {
 			const snapshot = await getSprint27EltConsole({ days: 7, hours: 24 });
 			setObservability((snapshot?.observability || FALLBACK_OBSERVABILITY) as IngestionExecutionObservabilityDTO);
 			setGovernance((snapshot?.governance || FALLBACK_GOVERNANCE) as IngestionGovernanceOverviewDTO);
-			setStages(Array.isArray(snapshot?.stages) ? snapshot.stages as PipelineStage[] : []);
-			setChainItems(Array.isArray(snapshot?.chainItems) ? snapshot.chainItems as ChainItem[] : []);
+			setStages(Array.isArray(snapshot?.stages) ? (snapshot.stages as PipelineStage[]) : []);
+			setChainItems(Array.isArray(snapshot?.chainItems) ? (snapshot.chainItems as ChainItem[]) : []);
 			setSources(snapshot?.sources || {});
 		} catch {
 			setObservability(FALLBACK_OBSERVABILITY);
@@ -124,26 +114,86 @@ export default function EltConsolePage() {
 		void loadSnapshot();
 	}, []);
 
-	const successRate = observability.successRate ?? (observability.total ? observability.success / observability.total : 0);
-	const timeoutRate = observability.timeoutRate ?? (observability.total ? observability.timeout / observability.total : 0);
+	const successRate =
+		observability.successRate ?? (observability.total ? observability.success / observability.total : 0);
+	const timeoutRate =
+		observability.timeoutRate ?? (observability.total ? observability.timeout / observability.total : 0);
 
 	const fallbackStages = useMemo<PipelineStage[]>(
 		() => [
-			{ key: "source", title: "数据接入", status: governance.running ? "processing" : "success", count: governance.running, path: "/foundation/data-sources" },
-			{ key: "queue", title: "队列调度", status: governance.queueLength ? "warning" : "success", count: governance.queueLength, path: "/explore/etl/orchestration" },
-			{ key: "transform", title: "加工转换", status: observability.running ? "processing" : "success", count: observability.running, path: "/data-modeling/dimensions/workbench" },
-			{ key: "quality", title: "质量校验", status: governance.blockedByPolicy ? "warning" : "success", count: governance.blockedByPolicy, path: "/governance/rules/runs" },
-			{ key: "lineage", title: "血缘影响", status: "default", count: observability.terminal, path: "/catalog/lineage/impact" },
+			{
+				key: "source",
+				title: "数据接入",
+				status: governance.running ? "processing" : "success",
+				count: governance.running,
+				path: "/foundation/data-sources",
+			},
+			{
+				key: "queue",
+				title: "队列调度",
+				status: governance.queueLength ? "warning" : "success",
+				count: governance.queueLength,
+				path: "/explore/etl/orchestration",
+			},
+			{
+				key: "transform",
+				title: "加工转换",
+				status: observability.running ? "processing" : "success",
+				count: observability.running,
+				path: "/data-modeling/dimensions/workbench",
+			},
+			{
+				key: "quality",
+				title: "质量校验",
+				status: governance.blockedByPolicy ? "warning" : "success",
+				count: governance.blockedByPolicy,
+				path: "/governance/rules/runs",
+			},
+			{
+				key: "lineage",
+				title: "血缘影响",
+				status: "default",
+				count: observability.terminal,
+				path: "/catalog/lineage/impact",
+			},
 		],
 		[governance, observability],
 	);
 
 	const fallbackChainItems = useMemo<ChainItem[]>(
 		() => [
-			{ key: "task", asset: "采集任务", stage: "接入", owner: "dts-ingestion", status: governance.running ? "processing" : "success", path: "/foundation/data-sources" },
-			{ key: "model", asset: "转换模型", stage: "加工", owner: "dts-platform", status: observability.failed ? "warning" : "success", path: "/data-modeling/dimensions/workbench" },
-			{ key: "metric", asset: "指标口径", stage: "消费", owner: "dts-metrics", status: "success", path: "/metrics/center" },
-			{ key: "bi", asset: "分析看板", stage: "发布", owner: "dts-analytics", status: "success", path: "/bi/project-cockpit" },
+			{
+				key: "task",
+				asset: "采集任务",
+				stage: "接入",
+				owner: "dts-ingestion",
+				status: governance.running ? "processing" : "success",
+				path: "/foundation/data-sources",
+			},
+			{
+				key: "model",
+				asset: "转换模型",
+				stage: "加工",
+				owner: "dts-platform",
+				status: observability.failed ? "warning" : "success",
+				path: "/data-modeling/dimensions/workbench",
+			},
+			{
+				key: "metric",
+				asset: "指标口径",
+				stage: "消费",
+				owner: "dts-metrics",
+				status: "success",
+				path: "/metrics/center",
+			},
+			{
+				key: "bi",
+				asset: "分析看板",
+				stage: "发布",
+				owner: "dts-analytics",
+				status: "success",
+				path: "/bi/project-cockpit",
+			},
 		],
 		[governance.running, observability.failed],
 	);
@@ -167,7 +217,7 @@ export default function EltConsolePage() {
 			value: `${observability.failed}/${observability.timeout}`,
 			note: `超时率 ${formatPercent(timeoutRate)}`,
 			icon: <ShieldCheck className="h-5 w-5" />,
-			tone: observability.failed || observability.timeout ? "warning" as const : "success" as const,
+			tone: observability.failed || observability.timeout ? ("warning" as const) : ("success" as const),
 		},
 		{
 			label: "平均耗时",
@@ -196,18 +246,10 @@ export default function EltConsolePage() {
 				return <Tag color={map[status].color}>{map[status].label}</Tag>;
 			},
 		},
-		{
-			title: "操作",
-			dataIndex: "action",
-			key: "action",
-			width: 160,
-			fixed: "right",
-			render: (_, record) => (
-				<Button type="link" size="small" onClick={() => openPlatformOrMetricsPath(navigate, record.path)}>
-					进入
-				</Button>
-			),
-		},
+		actionColumn<ChainItem>(
+			(record) => [{ key: "enter", label: "进入", onClick: () => openPlatformOrMetricsPath(navigate, record.path) }],
+			{ width: 160 },
+		),
 	];
 
 	const chainColumns = useMemo(
@@ -222,12 +264,8 @@ export default function EltConsolePage() {
 				title="ELT 控制台"
 				actions={
 					<Space wrap>
-						<Button onClick={() => navigate("/ops/events")}>
-							事件观测
-						</Button>
-						<Button onClick={() => navigate("/ops/release-governance")}>
-							发布治理
-						</Button>
+						<Button onClick={() => navigate("/ops/events")}>事件观测</Button>
+						<Button onClick={() => navigate("/ops/release-governance")}>发布治理</Button>
 						<Button loading={loading} onClick={() => void loadSnapshot()}>
 							刷新
 						</Button>
@@ -242,18 +280,29 @@ export default function EltConsolePage() {
 
 			<PlatformSectionCard title="数据源状态">
 				<Space wrap>
-					{Object.entries(sources).length ? Object.entries(sources).map(([key, source]) => (
-						<Tag key={key} color={source.status === "ERROR" ? "red" : source.status === "EMPTY" ? "default" : "green"}>
-							{key}: {source.status}
-						</Tag>
-					)) : <Typography.Text type="secondary">暂无后端数据源状态</Typography.Text>}
+					{Object.entries(sources).length ? (
+						Object.entries(sources).map(([key, source]) => (
+							<Tag
+								key={key}
+								color={source.status === "ERROR" ? "red" : source.status === "EMPTY" ? "default" : "green"}
+							>
+								{key}: {source.status}
+							</Tag>
+						))
+					) : (
+						<Typography.Text type="secondary">暂无后端数据源状态</Typography.Text>
+					)}
 				</Space>
 			</PlatformSectionCard>
 
 			<div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
 				<PlatformSectionCard
 					title="链路态势"
-					action={<Button size="small" onClick={() => navigate("/catalog/lineage/graph")}>血缘图谱</Button>}
+					action={
+						<Button size="small" onClick={() => navigate("/catalog/lineage/graph")}>
+							血缘图谱
+						</Button>
+					}
 				>
 					<div className="grid gap-3 md:grid-cols-5">
 						{(stages.length ? stages : fallbackStages).map((stage) => (
@@ -265,14 +314,26 @@ export default function EltConsolePage() {
 							>
 								<div className="mb-3 flex items-center justify-between gap-2">
 									<span className="text-sm font-medium text-foreground">{stage.title}</span>
-									<Tag color={stage.status === "warning" ? "orange" : stage.status === "processing" ? "blue" : stage.status === "success" ? "green" : "default"}>
+									<Tag
+										color={
+											stage.status === "warning"
+												? "orange"
+												: stage.status === "processing"
+													? "blue"
+													: stage.status === "success"
+														? "green"
+														: "default"
+										}
+									>
 										{stage.count}
 									</Tag>
 								</div>
 								<Progress
 									percent={stage.status === "warning" ? 68 : stage.status === "processing" ? 46 : 100}
 									showInfo={false}
-									status={stage.status === "warning" ? "exception" : stage.status === "processing" ? "active" : "success"}
+									status={
+										stage.status === "warning" ? "exception" : stage.status === "processing" ? "active" : "success"
+									}
 								/>
 							</button>
 						))}
@@ -281,7 +342,11 @@ export default function EltConsolePage() {
 
 				<PlatformSectionCard
 					title="运行诊断"
-					action={<Button size="small" onClick={() => navigate("/foundation/data-sources")}>任务列表</Button>}
+					action={
+						<Button size="small" onClick={() => navigate("/foundation/data-sources")}>
+							任务列表
+						</Button>
+					}
 				>
 					{observability.failureTop?.length ? (
 						<Timeline

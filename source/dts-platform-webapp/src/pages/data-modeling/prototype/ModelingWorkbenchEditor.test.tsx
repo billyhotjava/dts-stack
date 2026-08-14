@@ -238,8 +238,13 @@ async function render(props = makeProps()) {
 	return props;
 }
 
+// antd 会给“恰好两个汉字”的纯文字按钮自动插入空格（保存 → 保 存），比对前先去掉空白。
+const squash = (value: string | null | undefined) => (value ?? "").replace(/\s/g, "");
+
 function button(label: string) {
-	const match = Array.from(container.querySelectorAll("button")).find((item) => item.textContent?.trim() === label);
+	const match = Array.from(container.querySelectorAll("button")).find(
+		(item) => squash(item.textContent) === squash(label),
+	);
 	expect(match).toBeDefined();
 	return match as HTMLButtonElement;
 }
@@ -481,7 +486,7 @@ describe("ModelingWorkbenchEditor", () => {
 
 		expect(container.querySelector("fieldset")).not.toHaveProperty("disabled", true);
 		const saveButton = [...container.querySelectorAll("button")].find(
-			(item) => item.textContent?.includes("保存") && !item.textContent?.includes("保存中"),
+			(item) => squash(item.textContent).includes("保存") && !squash(item.textContent).includes("保存中"),
 		);
 		expect(saveButton).toBeDefined();
 		expect((saveButton as HTMLButtonElement).disabled).toBe(false);

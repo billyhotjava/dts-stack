@@ -263,4 +263,5 @@
     <include file="config/liquibase/changelog/20260811_01_platform_model_governance_policy.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260811_02_seed_platform_model_governance_policy.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260811_03_model_release_candidate_implementation_snapshot.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260814_01_model_release_candidate_self_service.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

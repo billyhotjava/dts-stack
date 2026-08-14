@@ -1,6 +1,6 @@
-import { } from "@ant-design/icons";
+import {} from "@ant-design/icons";
 import { Button, Card, Space, Spin, Tag, Typography } from "antd";
-import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
+import { actionColumn, appendDetailAction, CompactTable, RecordDetailDrawer } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
@@ -100,29 +100,23 @@ export default function SemanticExplorePage() {
 			width: 140,
 			render: (_value, record) => `${safeArray(record.metrics).length} / ${safeArray(record.dimensions).length}`,
 		},
-		{
-			title: "操作",
-			dataIndex: "actions",
-			key: "actions",
-			width: 280,
-			fixed: "right",
-			render: (_value, record) => (
-				<Space>
-					{canModel && (
-						<>
-							<Link to={`/bi/card/new?base=${encodeURIComponent(String(record.id ?? ""))}`}>
-								<Button type="primary" size="small">
-									新建卡片
-								</Button>
-							</Link>
-							<Link to={`/bi/virtual-datasets/new?base=${encodeURIComponent(String(record.id ?? ""))}`}>
-								<Button size="small">新建 VDS</Button>
-							</Link>
-						</>
-					)}
-				</Space>
-			),
-		},
+		actionColumn<SemanticModelMeta>(
+			(record) => [
+				{
+					key: "new-card",
+					label: "新建卡片",
+					hidden: !canModel,
+					href: `/bi/card/new?base=${encodeURIComponent(String(record.id ?? ""))}`,
+				},
+				{
+					key: "new-vds",
+					label: "新建 VDS",
+					hidden: !canModel,
+					href: `/bi/virtual-datasets/new?base=${encodeURIComponent(String(record.id ?? ""))}`,
+				},
+			],
+			{ width: 280 },
+		),
 	];
 
 	const modelColumns = useMemo(
@@ -142,9 +136,7 @@ export default function SemanticExplorePage() {
 						</Link>
 						{canModel && (
 							<Link to="/bi/card/new">
-								<Button type="primary">
-									新建语义卡片
-								</Button>
+								<Button type="primary">新建语义卡片</Button>
 							</Link>
 						)}
 					</Space>

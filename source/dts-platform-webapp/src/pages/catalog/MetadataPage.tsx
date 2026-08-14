@@ -18,7 +18,7 @@ import {
 	Tag,
 	Typography,
 } from "antd";
-import { CompactTable } from "@/components/table";
+import { actionColumn, CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { EmptyState } from "@/components/empty-state";
 import { useCatalogManageAccess } from "@/hooks/useModuleManageAccess";
@@ -367,10 +367,7 @@ export default function MetadataPage() {
 		setDiagLoading(true);
 		setDiagData(null);
 		try {
-			const sourceId =
-				run.integration === "JDBC"
-					? selectedPipeline?.sourceId || selectedPipeline?.id
-					: undefined;
+			const sourceId = run.integration === "JDBC" ? selectedPipeline?.sourceId || selectedPipeline?.id : undefined;
 			const resp: any = await getCatalogSyncRunDiagnostics(run.id, {
 				sourceId: sourceId || undefined,
 			});
@@ -563,8 +560,24 @@ export default function MetadataPage() {
 	};
 
 	const runColumns: ColumnsType<SyncRun> = [
-		{ title: "开始时间", dataIndex: "startedAt" , sorter: (a, b) => { const ta = a.startedAt ? new Date(a.startedAt as any).getTime() : 0; const tb = b.startedAt ? new Date(b.startedAt as any).getTime() : 0; return ta - tb; } },
-		{ title: "结束时间", dataIndex: "finishedAt" , sorter: (a, b) => { const ta = a.finishedAt ? new Date(a.finishedAt as any).getTime() : 0; const tb = b.finishedAt ? new Date(b.finishedAt as any).getTime() : 0; return ta - tb; } },
+		{
+			title: "开始时间",
+			dataIndex: "startedAt",
+			sorter: (a, b) => {
+				const ta = a.startedAt ? new Date(a.startedAt as any).getTime() : 0;
+				const tb = b.startedAt ? new Date(b.startedAt as any).getTime() : 0;
+				return ta - tb;
+			},
+		},
+		{
+			title: "结束时间",
+			dataIndex: "finishedAt",
+			sorter: (a, b) => {
+				const ta = a.finishedAt ? new Date(a.finishedAt as any).getTime() : 0;
+				const tb = b.finishedAt ? new Date(b.finishedAt as any).getTime() : 0;
+				return ta - tb;
+			},
+		},
 		{ title: "状态", dataIndex: "status", render: statusTag },
 		{ title: "发现表", dataIndex: "tablesDiscovered" },
 		{ title: "新增表", dataIndex: "tablesCreated" },
@@ -586,7 +599,7 @@ export default function MetadataPage() {
 	];
 
 	const columnColumns: ColumnsType<ColumnRow> = [
-		{ title: "字段", dataIndex: "name" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
+		{ title: "字段", dataIndex: "name", sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
 		{ title: "类型", dataIndex: "type" },
 		{
 			title: "状态",
@@ -603,7 +616,16 @@ export default function MetadataPage() {
 	];
 
 	const driftColumns: ColumnsType<SchemaDriftEvent> = [
-		{ title: "时间", dataIndex: "createdDate", render: (value) => value || "-" , sorter: (a, b) => { const ta = a.createdDate ? new Date(a.createdDate as any).getTime() : 0; const tb = b.createdDate ? new Date(b.createdDate as any).getTime() : 0; return ta - tb; } },
+		{
+			title: "时间",
+			dataIndex: "createdDate",
+			render: (value) => value || "-",
+			sorter: (a, b) => {
+				const ta = a.createdDate ? new Date(a.createdDate as any).getTime() : 0;
+				const tb = b.createdDate ? new Date(b.createdDate as any).getTime() : 0;
+				return ta - tb;
+			},
+		},
 		{
 			title: "对象",
 			render: (_, row) => {
@@ -618,25 +640,16 @@ export default function MetadataPage() {
 		{ title: "策略", dataIndex: "policyMode", render: (value) => driftPolicyTag(value) },
 		{ title: "工单", dataIndex: "ticketStatus", render: (value) => driftTicketTag(value) },
 		{ title: "责任人", dataIndex: "ticketAssignee", render: (value) => value || "-" },
-		{
-			title: "操作",
-			render: (_, row) => (
-				<Space size={4}>
-					<Button type="link" onClick={() => openDriftPolicyModal(row)}>
-						策略
-					</Button>
-					<Button type="link" onClick={() => openDriftTicketModal(row)}>
-						工单
-					</Button>
-				</Space>
-			),
-		},
+		actionColumn<SchemaDriftEvent>(
+			(row) => [
+				{ key: "policy", label: "策略", onClick: () => openDriftPolicyModal(row) },
+				{ key: "ticket", label: "工单", onClick: () => openDriftTicketModal(row) },
+			],
+			{ maxActions: 2, fixed: false },
+		),
 	];
 
-	const selectedSummary = useMemo(
-		() => tables.find((item) => item.fqn === selectedFqn) || null,
-		[tables, selectedFqn],
-	);
+	const selectedSummary = useMemo(() => tables.find((item) => item.fqn === selectedFqn) || null, [tables, selectedFqn]);
 	const latestRun = useMemo(() => {
 		if (!runs.length) return null;
 		return runs[0] || null;
@@ -679,216 +692,207 @@ export default function MetadataPage() {
 				}
 			>
 				<Space wrap>
-					<Tag>
-						Cron {syncConfig?.autoSyncCron ? syncConfig.autoSyncCron : "未配置"}
-					</Tag>
-					<Tag>
-						最近状态 {selectedPipeline?.status ? String(selectedPipeline.status) : "未知"}
-					</Tag>
+					<Tag>Cron {syncConfig?.autoSyncCron ? syncConfig.autoSyncCron : "未配置"}</Tag>
+					<Tag>最近状态 {selectedPipeline?.status ? String(selectedPipeline.status) : "未知"}</Tag>
 					<Tag>目标表数 {selectedPipeline?.tablesFound ?? 0}</Tag>
 				</Space>
 			</Card>
 
-
 			<Row gutter={[24, 24]} align="top">
 				<Col xs={24} xl={12}>
-					<Card
-						title="采集任务与触发"
-					>
+					<Card title="采集任务与触发">
 						<Spin spinning={loadingPipelines}>
 							<div className="space-y-4">
-							<Space className="mb-3" align="center">
-								<Text type="secondary">自动采集</Text>
-								<Switch
-									checked={Boolean(syncConfig?.autoSyncEnabled)}
-									loading={syncConfigUpdating}
-									disabled={!canManage}
-									onChange={handleAutoSyncToggle}
-									checkedChildren="开启"
-									unCheckedChildren="关闭"
-								/>
-								<Tag>{syncConfig?.autoSyncCron ? `Cron: ${syncConfig.autoSyncCron}` : "Cron 未配置"}</Tag>
-							</Space>
-							<Space className="w-full" direction="vertical" size={8}>
-								<Text type="secondary">自动采集 Cron</Text>
-								<Space.Compact className="w-full">
-									<Input
-										value={cronDraft}
-										onChange={(e) => setCronDraft(e.target.value)}
-										placeholder="例如：0 0 3 * * *"
-										disabled={!canManage || syncConfigUpdating}
-									/>
-									<Button
-										onClick={handleSyncCronSave}
+								<Space className="mb-3" align="center">
+									<Text type="secondary">自动采集</Text>
+									<Switch
+										checked={Boolean(syncConfig?.autoSyncEnabled)}
 										loading={syncConfigUpdating}
-										disabled={
-											!canManage ||
-											!cronDraft.trim() ||
-											cronDraft.trim() === String(syncConfig?.autoSyncCron || "").trim()
-										}
-									>
-										保存 Cron
-									</Button>
-								</Space.Compact>
-							</Space>
-							{syncConfig?.message ? (
-								<div className="mb-3 text-xs text-slate-500">{syncConfig.message}</div>
-							) : null}
-							{pipelines.length ? (
-								<Form form={form} layout="vertical">
-									<Form.Item label="选择采集任务">
-										<Select
-											value={selectedPipeline?.id}
-											onChange={(value) => setSelectedPipelineId(value)}
-											options={pipelines.map((item) => ({
-												label: `${item.name || "采集任务"} · ${item.source || ""}`.trim(),
-												value: item.id,
-											}))}
+										disabled={!canManage}
+										onChange={handleAutoSyncToggle}
+										checkedChildren="开启"
+										unCheckedChildren="关闭"
+									/>
+									<Tag>{syncConfig?.autoSyncCron ? `Cron: ${syncConfig.autoSyncCron}` : "Cron 未配置"}</Tag>
+								</Space>
+								<Space className="w-full" direction="vertical" size={8}>
+									<Text type="secondary">自动采集 Cron</Text>
+									<Space.Compact className="w-full">
+										<Input
+											value={cronDraft}
+											onChange={(e) => setCronDraft(e.target.value)}
+											placeholder="例如：0 0 3 * * *"
+											disabled={!canManage || syncConfigUpdating}
 										/>
-									</Form.Item>
-									<Form.Item name="reason" label="触发说明">
-										<Input placeholder="例如：测试同步" />
-									</Form.Item>
-									<Descriptions size="small" column={1} bordered>
-										<Descriptions.Item label="来源">{selectedPipeline?.source || "-"}</Descriptions.Item>
-										<Descriptions.Item label="调度策略">{selectedPipeline?.schedule || "-"}</Descriptions.Item>
-										<Descriptions.Item label="最近状态">{statusTag(selectedPipeline?.status)}</Descriptions.Item>
-										<Descriptions.Item label="最近发现表">{selectedPipeline?.tablesFound ?? "-"}</Descriptions.Item>
-									</Descriptions>
-									<div>
-										<div className="mb-1 text-xs text-slate-500">同步进度</div>
-										<Progress
-											percent={syncProgressPercent}
-											size="small"
-											status={syncInProgress ? "active" : "normal"}
-											format={() => (syncInProgress ? "运行中" : "空闲")}
-										/>
-									</div>
-									{latestRun ? (
-										<Space size={8} wrap className="mt-2">
-											<Tag color="green">新增 {latestRun.datasetsCreated ?? 0}</Tag>
-											<Tag color="blue">更新 {latestRun.datasetsUpdated ?? 0}</Tag>
-											<Tag color="red">失效 {latestRun.datasetsRemoved ?? 0}</Tag>
-										</Space>
-									) : null}
-									{selectedPipeline?.error ? (
-										<div className="mt-3 text-sm text-red-500">错误：{selectedPipeline.error}</div>
-									) : null}
-									{selectedPipeline?.logLines && selectedPipeline.logLines.length ? (
-										<div className="mt-3 rounded border bg-muted/20 p-3 text-xs text-muted-foreground">
-											<div className="mb-2 font-medium text-foreground">最近日志</div>
-											<ul className="list-disc space-y-1 pl-4">
-												{selectedPipeline.logLines.slice(0, 10).map((line, idx) => (
-													<li key={idx}>{line}</li>
-												))}
-											</ul>
+										<Button
+											onClick={handleSyncCronSave}
+											loading={syncConfigUpdating}
+											disabled={
+												!canManage ||
+												!cronDraft.trim() ||
+												cronDraft.trim() === String(syncConfig?.autoSyncCron || "").trim()
+											}
+										>
+											保存 Cron
+										</Button>
+									</Space.Compact>
+								</Space>
+								{syncConfig?.message ? <div className="mb-3 text-xs text-slate-500">{syncConfig.message}</div> : null}
+								{pipelines.length ? (
+									<Form form={form} layout="vertical">
+										<Form.Item label="选择采集任务">
+											<Select
+												value={selectedPipeline?.id}
+												onChange={(value) => setSelectedPipelineId(value)}
+												options={pipelines.map((item) => ({
+													label: `${item.name || "采集任务"} · ${item.source || ""}`.trim(),
+													value: item.id,
+												}))}
+											/>
+										</Form.Item>
+										<Form.Item name="reason" label="触发说明">
+											<Input placeholder="例如：测试同步" />
+										</Form.Item>
+										<Descriptions size="small" column={1} bordered>
+											<Descriptions.Item label="来源">{selectedPipeline?.source || "-"}</Descriptions.Item>
+											<Descriptions.Item label="调度策略">{selectedPipeline?.schedule || "-"}</Descriptions.Item>
+											<Descriptions.Item label="最近状态">{statusTag(selectedPipeline?.status)}</Descriptions.Item>
+											<Descriptions.Item label="最近发现表">{selectedPipeline?.tablesFound ?? "-"}</Descriptions.Item>
+										</Descriptions>
+										<div>
+											<div className="mb-1 text-xs text-slate-500">同步进度</div>
+											<Progress
+												percent={syncProgressPercent}
+												size="small"
+												status={syncInProgress ? "active" : "normal"}
+												format={() => (syncInProgress ? "运行中" : "空闲")}
+											/>
 										</div>
-									) : null}
-									<Space className="mt-4">
-										<Button type="primary" onClick={handleTrigger} disabled={!canManage}>
-											立即采集
-										</Button>
-										<Button onClick={() => selectedPipeline?.integration && loadRuns(selectedPipeline.integration)}>
-											刷新历史
-										</Button>
-									</Space>
-								</Form>
-							) : (
-								<EmptyState title="暂无采集任务" description="请先配置数据源或数据湖连接。" />
-							)}
+										{latestRun ? (
+											<Space size={8} wrap className="mt-2">
+												<Tag color="green">新增 {latestRun.datasetsCreated ?? 0}</Tag>
+												<Tag color="blue">更新 {latestRun.datasetsUpdated ?? 0}</Tag>
+												<Tag color="red">失效 {latestRun.datasetsRemoved ?? 0}</Tag>
+											</Space>
+										) : null}
+										{selectedPipeline?.error ? (
+											<div className="mt-3 text-sm text-red-500">错误：{selectedPipeline.error}</div>
+										) : null}
+										{selectedPipeline?.logLines && selectedPipeline.logLines.length ? (
+											<div className="mt-3 rounded border bg-muted/20 p-3 text-xs text-muted-foreground">
+												<div className="mb-2 font-medium text-foreground">最近日志</div>
+												<ul className="list-disc space-y-1 pl-4">
+													{selectedPipeline.logLines.slice(0, 10).map((line, idx) => (
+														<li key={idx}>{line}</li>
+													))}
+												</ul>
+											</div>
+										) : null}
+										<Space className="mt-4">
+											<Button type="primary" onClick={handleTrigger} disabled={!canManage}>
+												立即采集
+											</Button>
+											<Button onClick={() => selectedPipeline?.integration && loadRuns(selectedPipeline.integration)}>
+												刷新历史
+											</Button>
+										</Space>
+									</Form>
+								) : (
+									<EmptyState title="暂无采集任务" description="请先配置数据源或数据湖连接。" />
+								)}
 							</div>
 						</Spin>
 					</Card>
 				</Col>
 				<Col xs={24} xl={12}>
-					<Card
-						title="元数据结果预览"
-					>
+					<Card title="元数据结果预览">
 						<Spin spinning={loadingTables}>
 							<Space direction="vertical" className="w-full" size={12}>
-							<Space className="w-full" align="start">
-								<Input
-									placeholder="搜索表名或关键字"
-									value={keyword}
-									onChange={(e) => setKeyword(e.target.value)}
-									allowClear
-								/>
-								<Button onClick={() => void loadTables(keyword)}>搜索</Button>
-							</Space>
-							{tablePageMeta ? (
-								<Space direction="vertical" className="w-full" size={8}>
-									<Space size={8} wrap>
-										<Text type="secondary">数据来源</Text>
-										{metadataSourceTag(tablePageMeta.metadataSource)}
-									</Space>
-									{tablePageMeta.fallbackReason || tablePageMeta.message ? (
-										<Alert
-											type={tablePageMeta.metadataSource === "catalog" ? "warning" : "info"}
-											showIcon
-											message={tablePageMeta.fallbackReason || tablePageMeta.message}
-										/>
-									) : null}
+								<Space className="w-full" align="start">
+									<Input
+										placeholder="搜索表名或关键字"
+										value={keyword}
+										onChange={(e) => setKeyword(e.target.value)}
+										allowClear
+									/>
+									<Button onClick={() => void loadTables(keyword)}>搜索</Button>
 								</Space>
-							) : null}
-							{tables.length ? (
-								<>
-									<Form layout="vertical">
-										<Form.Item label="已发现表">
-											<Select
-												value={selectedFqn}
-												onChange={(value) => setSelectedFqn(value)}
-												options={tables.map((item) => ({
-													label:
-														[item.database, item.schema, item.name].filter(Boolean).join(".") ||
-														item.name ||
-														item.fqn ||
-														"-",
-													value: item.fqn,
-												}))}
-											/>
-										</Form.Item>
-									</Form>
-									<Descriptions size="small" bordered column={1}>
-										<Descriptions.Item label="详情来源">
-											{metadataSourceTag(tableDetail?.metadataSource || tablePageMeta?.metadataSource)}
-										</Descriptions.Item>
-										<Descriptions.Item label="FQN">{tableDetail?.fqn || selectedSummary?.fqn || "-"}</Descriptions.Item>
-										<Descriptions.Item label="服务">{selectedSummary?.service || "-"}</Descriptions.Item>
-										<Descriptions.Item label="库/Schema">
-											{[selectedSummary?.database, selectedSummary?.schema].filter(Boolean).join(".") || "-"}
-										</Descriptions.Item>
-										<Descriptions.Item label="表名">{selectedSummary?.name || "-"}</Descriptions.Item>
-										<Descriptions.Item label="描述">{selectedSummary?.description || "-"}</Descriptions.Item>
-										<Descriptions.Item label="字段数">{selectedSummary?.columnCount ?? "-"}</Descriptions.Item>
-									</Descriptions>
-									{tableDetail?.fallbackReason || tableDetail?.message ? (
-										<Alert
-											type={tableDetail?.metadataSource === "catalog" ? "warning" : "info"}
-											showIcon
-											message={tableDetail?.fallbackReason || tableDetail?.message}
-										/>
-									) : null}
-									{columnRows.length ? (
-										<Space size={6} className="mt-3 flex flex-wrap">
-											<Tag color="orange">草稿 {columnStatusStats.draft}</Tag>
-											<Tag color="green">正式 {columnStatusStats.active}</Tag>
-											{columnStatusStats.other ? <Tag>其他 {columnStatusStats.other}</Tag> : null}
+								{tablePageMeta ? (
+									<Space direction="vertical" className="w-full" size={8}>
+										<Space size={8} wrap>
+											<Text type="secondary">数据来源</Text>
+											{metadataSourceTag(tablePageMeta.metadataSource)}
 										</Space>
-									) : null}
-									<div>
-										<Text type="secondary">字段列表</Text>
-										<CompactTable
-											size="small"
-											pagination={false}
-											columns={columnColumns}
-											dataSource={columnRows}
-											rowKey={(row) => row.key}
-										/>
-									</div>
-								</>
-							) : (
-								<EmptyState title="暂无结构元数据" description="请先完成数据源结构采集或检查采集服务连接。" />
-							)}
+										{tablePageMeta.fallbackReason || tablePageMeta.message ? (
+											<Alert
+												type={tablePageMeta.metadataSource === "catalog" ? "warning" : "info"}
+												showIcon
+												message={tablePageMeta.fallbackReason || tablePageMeta.message}
+											/>
+										) : null}
+									</Space>
+								) : null}
+								{tables.length ? (
+									<>
+										<Form layout="vertical">
+											<Form.Item label="已发现表">
+												<Select
+													value={selectedFqn}
+													onChange={(value) => setSelectedFqn(value)}
+													options={tables.map((item) => ({
+														label:
+															[item.database, item.schema, item.name].filter(Boolean).join(".") ||
+															item.name ||
+															item.fqn ||
+															"-",
+														value: item.fqn,
+													}))}
+												/>
+											</Form.Item>
+										</Form>
+										<Descriptions size="small" bordered column={1}>
+											<Descriptions.Item label="详情来源">
+												{metadataSourceTag(tableDetail?.metadataSource || tablePageMeta?.metadataSource)}
+											</Descriptions.Item>
+											<Descriptions.Item label="FQN">
+												{tableDetail?.fqn || selectedSummary?.fqn || "-"}
+											</Descriptions.Item>
+											<Descriptions.Item label="服务">{selectedSummary?.service || "-"}</Descriptions.Item>
+											<Descriptions.Item label="库/Schema">
+												{[selectedSummary?.database, selectedSummary?.schema].filter(Boolean).join(".") || "-"}
+											</Descriptions.Item>
+											<Descriptions.Item label="表名">{selectedSummary?.name || "-"}</Descriptions.Item>
+											<Descriptions.Item label="描述">{selectedSummary?.description || "-"}</Descriptions.Item>
+											<Descriptions.Item label="字段数">{selectedSummary?.columnCount ?? "-"}</Descriptions.Item>
+										</Descriptions>
+										{tableDetail?.fallbackReason || tableDetail?.message ? (
+											<Alert
+												type={tableDetail?.metadataSource === "catalog" ? "warning" : "info"}
+												showIcon
+												message={tableDetail?.fallbackReason || tableDetail?.message}
+											/>
+										) : null}
+										{columnRows.length ? (
+											<Space size={6} className="mt-3 flex flex-wrap">
+												<Tag color="orange">草稿 {columnStatusStats.draft}</Tag>
+												<Tag color="green">正式 {columnStatusStats.active}</Tag>
+												{columnStatusStats.other ? <Tag>其他 {columnStatusStats.other}</Tag> : null}
+											</Space>
+										) : null}
+										<div>
+											<Text type="secondary">字段列表</Text>
+											<CompactTable
+												size="small"
+												pagination={false}
+												columns={columnColumns}
+												dataSource={columnRows}
+												rowKey={(row) => row.key}
+											/>
+										</div>
+									</>
+								) : (
+									<EmptyState title="暂无结构元数据" description="请先完成数据源结构采集或检查采集服务连接。" />
+								)}
 							</Space>
 						</Spin>
 					</Card>
@@ -897,7 +901,9 @@ export default function MetadataPage() {
 
 			<Card
 				title="采集历史"
-				extra={<Button onClick={() => selectedPipeline?.integration && loadRuns(selectedPipeline.integration)}>刷新</Button>}
+				extra={
+					<Button onClick={() => selectedPipeline?.integration && loadRuns(selectedPipeline.integration)}>刷新</Button>
+				}
 			>
 				<CompactTable
 					rowKey={(row) => row.id || `${row.startedAt}-${row.finishedAt}`}
@@ -997,11 +1003,7 @@ export default function MetadataPage() {
 			>
 				<Form form={driftForm} layout="vertical">
 					{driftActionType === "policy" ? (
-						<Form.Item
-							name="policyMode"
-							label="漂移策略"
-							rules={[{ required: true, message: "请选择策略" }]}
-						>
+						<Form.Item name="policyMode" label="漂移策略" rules={[{ required: true, message: "请选择策略" }]}>
 							<Select
 								options={[
 									{ label: "待审批", value: "REVIEW" },
@@ -1012,11 +1014,7 @@ export default function MetadataPage() {
 						</Form.Item>
 					) : (
 						<>
-							<Form.Item
-								name="ticketStatus"
-								label="工单状态"
-								rules={[{ required: true, message: "请选择工单状态" }]}
-							>
+							<Form.Item name="ticketStatus" label="工单状态" rules={[{ required: true, message: "请选择工单状态" }]}>
 								<Select
 									options={[
 										{ label: "待处理", value: "OPEN" },

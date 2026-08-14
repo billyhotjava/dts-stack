@@ -43,9 +43,13 @@ vi.mock("sonner", () => ({
 	toast: { error: toastError, success: vi.fn() },
 }));
 
-vi.mock("@/components/table", async () => {
+vi.mock("@/components/table", async (importOriginal) => {
 	const React = await import("react");
+	// 只桩掉 CompactTable（用于断言分页交互），actionColumn / RowActions 用真实实现，
+	// 这样行内操作按钮的统一渲染同样受本测试保护。
+	const actual = await importOriginal<typeof import("@/components/table")>();
 	return {
+		...actual,
 		CompactTable: ({ dataSource = [], columns = [], pagination }: any) =>
 			React.createElement(
 				"div",

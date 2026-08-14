@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Alert, Button, Card, Form, Input, List, Modal, Select, Space, Tag, Typography } from "antd";
-import { CompactTable } from "@/components/table";
+import { actionColumn, CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { } from "@ant-design/icons";
+import {} from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router";
 import { EmptyState } from "@/components/empty-state";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
@@ -466,7 +466,7 @@ export default function ReferenceCodesPage() {
 			})) as StructuredImportPreview;
 			setStructuredPreview(resp || null);
 			toast.success(
-				`预检完成：新增 ${resp?.createCount ?? 0}，更新 ${resp?.updateCount ?? 0}，冲突 ${resp?.conflictCount ?? 0}，错误 ${resp?.errorCount ?? 0}`
+				`预检完成：新增 ${resp?.createCount ?? 0}，更新 ${resp?.updateCount ?? 0}，冲突 ${resp?.conflictCount ?? 0}，错误 ${resp?.errorCount ?? 0}`,
 			);
 		} catch (err: any) {
 			toast.error(err?.message || "预检失败");
@@ -530,7 +530,9 @@ export default function ReferenceCodesPage() {
 		if (!activeDirectory?.codeTypeId) return;
 		setStructuredHistoryLoading(true);
 		try {
-			const rows = (await listStructuredReferenceCodeImportRuns(activeDirectory.codeTypeId)) as StructuredImportRunSummary[];
+			const rows = (await listStructuredReferenceCodeImportRuns(
+				activeDirectory.codeTypeId,
+			)) as StructuredImportRunSummary[];
 			const list = Array.isArray(rows) ? rows : [];
 			setStructuredHistory(list);
 			const targetRunId = focusRunId || list[0]?.runId;
@@ -550,7 +552,10 @@ export default function ReferenceCodesPage() {
 		if (!activeDirectory?.codeTypeId || !runId) return;
 		setStructuredHistoryDetailLoading(true);
 		try {
-			const detail = (await getStructuredReferenceCodeImportRun(activeDirectory.codeTypeId, runId)) as StructuredImportRunDetail;
+			const detail = (await getStructuredReferenceCodeImportRun(
+				activeDirectory.codeTypeId,
+				runId,
+			)) as StructuredImportRunDetail;
 			setStructuredHistoryDetail(detail || null);
 		} catch (err: any) {
 			toast.error(err?.message || "加载导入详情失败");
@@ -752,9 +757,7 @@ export default function ReferenceCodesPage() {
 		setSeedSyncing(true);
 		try {
 			const resp = (await syncReferenceCodeSeeds()) as any;
-			const summary = resp?.seedPath
-				? `已生成 ${resp?.rows ?? 0} 行，路径：${resp.seedPath}`
-				: "已更新 dbt Seeds";
+			const summary = resp?.seedPath ? `已生成 ${resp?.rows ?? 0} 行，路径：${resp.seedPath}` : "已更新 dbt Seeds";
 			toast.success(summary);
 		} catch (err: any) {
 			toast.error(err?.message || "更新 dbt Seeds 失败");
@@ -764,8 +767,18 @@ export default function ReferenceCodesPage() {
 	};
 
 	const columns: ColumnsType<ReferenceCodeDirectory> = [
-		{ title: "码表名称", dataIndex: "codeTypeName", render: (t) => <Text strong>{t}</Text> , sorter: (a, b) => (a.codeTypeName || "").localeCompare(b.codeTypeName || "") },
-		{ title: "码表编码", dataIndex: "codeTypeCode", render: (c) => <Tag>{c}</Tag> , sorter: (a, b) => (a.codeTypeCode || "").localeCompare(b.codeTypeCode || "") },
+		{
+			title: "码表名称",
+			dataIndex: "codeTypeName",
+			render: (t) => <Text strong>{t}</Text>,
+			sorter: (a, b) => (a.codeTypeName || "").localeCompare(b.codeTypeName || ""),
+		},
+		{
+			title: "码表编码",
+			dataIndex: "codeTypeCode",
+			render: (c) => <Tag>{c}</Tag>,
+			sorter: (a, b) => (a.codeTypeCode || "").localeCompare(b.codeTypeCode || ""),
+		},
 		{ title: "业务分类", dataIndex: "bizCatalog", render: (t) => t || "-" },
 		{ title: "数据类型", dataIndex: "dataType", render: (t) => t || "-" },
 		{ title: "码值数量", dataIndex: "itemCount", render: (t) => t ?? 0 },
@@ -778,34 +791,32 @@ export default function ReferenceCodesPage() {
 				return <Tag color={meta.color}>{meta.label}</Tag>;
 			},
 		},
-		{
-			title: "操作",
-			render: (_, row) => (
-				<Space>
-					<Button type="link" size="small" onClick={() => openItems(row)}>
-						明细管理
-					</Button>
-					<Button type="link" size="small" onClick={() => openMappings(row)}>
-						映射管理
-					</Button>
-					<Button type="link" size="small" onClick={() => openReferences(row)}>
-						引用关系
-					</Button>
-					<Button type="link" size="small" onClick={() => openModal(row)} disabled={!canManage}>
-						编辑
-					</Button>
-					<Button type="link" size="small" danger onClick={() => removeDirectory(row)} disabled={!canManage}>
-						删除
-					</Button>
-				</Space>
-			),
-		},
+		actionColumn<ReferenceCodeDirectory>(
+			(row) => [
+				{ key: "items", label: "明细管理", onClick: () => openItems(row) },
+				{ key: "mappings", label: "映射管理", onClick: () => openMappings(row) },
+				{ key: "references", label: "引用关系", onClick: () => openReferences(row) },
+				{ key: "edit", label: "编辑", disabled: !canManage, onClick: () => openModal(row) },
+				{ key: "delete", label: "删除", danger: true, disabled: !canManage, onClick: () => removeDirectory(row) },
+			],
+			{ maxActions: 5 },
+		),
 	];
 
 	const itemColumns: ColumnsType<ReferenceCodeItem> = useMemo(
 		() => [
-			{ title: "代码值", dataIndex: "codeValue", render: (t) => <Tag>{t}</Tag> , sorter: (a, b) => (a.codeValue || "").localeCompare(b.codeValue || "") },
-			{ title: "名称", dataIndex: "codeName", render: (t) => <Text strong>{t}</Text> , sorter: (a, b) => (a.codeName || "").localeCompare(b.codeName || "") },
+			{
+				title: "代码值",
+				dataIndex: "codeValue",
+				render: (t) => <Tag>{t}</Tag>,
+				sorter: (a, b) => (a.codeValue || "").localeCompare(b.codeValue || ""),
+			},
+			{
+				title: "名称",
+				dataIndex: "codeName",
+				render: (t) => <Text strong>{t}</Text>,
+				sorter: (a, b) => (a.codeName || "").localeCompare(b.codeName || ""),
+			},
 			{ title: "业务定义", dataIndex: "description", ellipsis: true, render: (t) => t || "-" },
 			{ title: "排序", dataIndex: "sortNum", render: (t) => (t == null ? "-" : t) },
 			{ title: "父级", dataIndex: "parentCode", render: (t) => t || "-" },
@@ -814,21 +825,15 @@ export default function ReferenceCodesPage() {
 				dataIndex: "isDefault",
 				render: (t) => <Tag color={t ? "blue" : "default"}>{t ? "是" : "否"}</Tag>,
 			},
-			{
-				title: "操作",
-				render: (_, row) => (
-					<Space>
-						<Button type="link" size="small" onClick={() => openItemModal(row)} disabled={!canManage}>
-							编辑
-						</Button>
-						<Button type="link" size="small" danger onClick={() => removeItem(row)} disabled={!canManage}>
-							删除
-						</Button>
-					</Space>
-				),
-			},
+			actionColumn<ReferenceCodeItem>(
+				(row) => [
+					{ key: "edit", label: "编辑", disabled: !canManage, onClick: () => openItemModal(row) },
+					{ key: "delete", label: "删除", danger: true, disabled: !canManage, onClick: () => removeItem(row) },
+				],
+				{ maxActions: 2 },
+			),
 		],
-		[items]
+		[items],
 	);
 
 	const mappingColumns: ColumnsType<ReferenceCodeMapping> = useMemo(
@@ -836,25 +841,25 @@ export default function ReferenceCodesPage() {
 			{ title: "源系统", dataIndex: "sourceSys", render: (t) => <Tag color="blue">{t}</Tag> },
 			{ title: "源代码", dataIndex: "srcCode", render: (t) => <Text className="font-mono text-xs">{t}</Text> },
 			{ title: "标准码值", dataIndex: "stdCode", render: (t) => <Tag>{t}</Tag> },
-			{
-				title: "操作",
-				render: (_, row) => (
-					<Space>
-						<Button type="link" size="small" onClick={() => openMappingModal(row)} disabled={!canManage}>
-							编辑
-						</Button>
-						<Button type="link" size="small" danger onClick={() => removeMapping(row)} disabled={!canManage}>
-							删除
-						</Button>
-					</Space>
-				),
-			},
+			actionColumn<ReferenceCodeMapping>(
+				(row) => [
+					{ key: "edit", label: "编辑", disabled: !canManage, onClick: () => openMappingModal(row) },
+					{ key: "delete", label: "删除", danger: true, disabled: !canManage, onClick: () => removeMapping(row) },
+				],
+				{ maxActions: 2 },
+			),
 		],
-		[mappings]
+		[mappings],
 	);
 
 	const conflictColumns: ColumnsType<Record<string, any>> = [
-		{ title: "码值", dataIndex: "codeValue", width: 160, render: (value) => value || "-" , sorter: (a, b) => (a.codeValue || "").localeCompare(b.codeValue || "") },
+		{
+			title: "码值",
+			dataIndex: "codeValue",
+			width: 160,
+			render: (value) => value || "-",
+			sorter: (a, b) => (a.codeValue || "").localeCompare(b.codeValue || ""),
+		},
 		{ title: "当前名称", dataIndex: "currentName", render: (value) => value || "-" },
 		{ title: "导入名称", dataIndex: "incomingName", render: (value) => value || "-" },
 		{ title: "原因", dataIndex: "reason", render: (value) => value || "-" },
@@ -862,44 +867,64 @@ export default function ReferenceCodesPage() {
 
 	const errorColumns: ColumnsType<Record<string, any>> = [
 		{ title: "行号", dataIndex: "line", width: 100, render: (value) => value ?? "-" },
-		{ title: "码值", dataIndex: "codeValue", width: 160, render: (value) => value || "-" , sorter: (a, b) => (a.codeValue || "").localeCompare(b.codeValue || "") },
+		{
+			title: "码值",
+			dataIndex: "codeValue",
+			width: 160,
+			render: (value) => value || "-",
+			sorter: (a, b) => (a.codeValue || "").localeCompare(b.codeValue || ""),
+		},
 		{ title: "原因", dataIndex: "reason", render: (value) => value || "-" },
 	];
 
 	const importRunColumns: ColumnsType<StructuredImportRunSummary> = [
-		{ title: "批次ID", dataIndex: "runId", width: 260, render: (value) => <Text className="font-mono text-xs">{value || "-"}</Text> },
+		{
+			title: "批次ID",
+			dataIndex: "runId",
+			width: 260,
+			render: (value) => <Text className="font-mono text-xs">{value || "-"}</Text>,
+		},
 		{ title: "状态", dataIndex: "status", width: 120, render: (value) => <Tag>{value || "-"}</Tag> },
 		{ title: "策略", dataIndex: "conflictPolicy", width: 100, render: (value) => value || "-" },
 		{ title: "新增", dataIndex: "createCount", width: 80, render: (value) => value ?? 0 },
 		{ title: "更新", dataIndex: "updateCount", width: 80, render: (value) => value ?? 0 },
 		{ title: "冲突", dataIndex: "conflictCount", width: 80, render: (value) => value ?? 0 },
 		{ title: "错误", dataIndex: "errorCount", width: 80, render: (value) => value ?? 0 },
-		{ title: "创建时间", dataIndex: "createdDate", width: 170, render: (value) => formatDateTime(value) , sorter: (a, b) => { const ta = a.createdDate ? new Date(a.createdDate as any).getTime() : 0; const tb = b.createdDate ? new Date(b.createdDate as any).getTime() : 0; return ta - tb; } },
 		{
-			title: "操作",
-			width: 180,
-			render: (_, row) => (
-				<Space>
-					<Button type="link" size="small" onClick={() => void loadStructuredHistoryDetail(row.runId)}>
-						查看
-					</Button>
-					<Button
-						type="link"
-						size="small"
-						danger
-						disabled={!canManage || !row.rollbackable}
-						onClick={() => void rollbackHistoryRun(row.runId)}
-					>
-						回滚
-					</Button>
-				</Space>
-			),
+			title: "创建时间",
+			dataIndex: "createdDate",
+			width: 170,
+			render: (value) => formatDateTime(value),
+			sorter: (a, b) => {
+				const ta = a.createdDate ? new Date(a.createdDate as any).getTime() : 0;
+				const tb = b.createdDate ? new Date(b.createdDate as any).getTime() : 0;
+				return ta - tb;
+			},
 		},
+		actionColumn<StructuredImportRunSummary>(
+			(row) => [
+				{ key: "view", label: "查看", onClick: () => void loadStructuredHistoryDetail(row.runId) },
+				{
+					key: "rollback",
+					label: "回滚",
+					danger: true,
+					disabled: !canManage || !row.rollbackable,
+					onClick: () => void rollbackHistoryRun(row.runId),
+				},
+			],
+			{ width: 180, fixed: false },
+		),
 	];
 
 	const importDiffColumns: ColumnsType<Record<string, any>> = [
 		{ title: "类型", dataIndex: "changeType", width: 100, render: (value) => <Tag>{value || "-"}</Tag> },
-		{ title: "码值", dataIndex: "codeValue", width: 160, render: (value) => <Text className="font-mono text-xs">{value || "-"}</Text> , sorter: (a, b) => (a.codeValue || "").localeCompare(b.codeValue || "") },
+		{
+			title: "码值",
+			dataIndex: "codeValue",
+			width: 160,
+			render: (value) => <Text className="font-mono text-xs">{value || "-"}</Text>,
+			sorter: (a, b) => (a.codeValue || "").localeCompare(b.codeValue || ""),
+		},
 		{
 			title: "变更前",
 			dataIndex: "before",
@@ -976,44 +1001,46 @@ export default function ReferenceCodesPage() {
 				}
 			>
 				<Card size="small" loading={opsOverviewLoading} bordered={false} bodyStyle={{ padding: 0 }}>
-				<Space wrap size={12}>
-					<Card size="small" title="统计窗口(h)" style={{ minWidth: 120 }}>
-						<Text strong>{opsOverview?.windowHours ?? "-"}</Text>
-					</Card>
-					<Card size="small" title="覆盖码表数" style={{ minWidth: 120 }}>
-						<Text strong>{opsOverview?.directoryCount ?? 0}</Text>
-					</Card>
-					<Card size="small" title="导入运行总数" style={{ minWidth: 140 }}>
-						<Text strong>{opsOverview?.totalRuns ?? 0}</Text>
-					</Card>
-					<Card size="small" title="成功执行" style={{ minWidth: 120 }}>
-						<Text strong>{opsOverview?.appliedRuns ?? 0}</Text>
-					</Card>
-					<Card size="small" title="已回滚" style={{ minWidth: 120 }}>
-						<Text strong>{opsOverview?.rolledBackRuns ?? 0}</Text>
-					</Card>
-					<Card size="small" title="冲突总数" style={{ minWidth: 120 }}>
-						<Text strong>{opsOverview?.conflictTotal ?? 0}</Text>
-					</Card>
-					<Card size="small" title="错误总数" style={{ minWidth: 120 }}>
-						<Text strong>{opsOverview?.errorTotal ?? 0}</Text>
-					</Card>
-					<Card size="small" title="查询耗时(ms)" style={{ minWidth: 140 }}>
-						<Text strong>{opsOverview?.queryCostMs ?? "-"}</Text>
-					</Card>
-				</Space>
-				<Space style={{ marginTop: 12 }}>
-					<Text type="secondary">失败分类 TopN：</Text>
-					{(opsOverview?.failureTop || []).length > 0 ? (
-						<Space wrap>
-							{(opsOverview?.failureTop || []).map((item) => (
-								<Tag key={`${item.category || "-"}-${item.count || 0}`}>{`${item.category || "-"}:${item.count || 0}`}</Tag>
-							))}
-						</Space>
-					) : (
-						<Text type="secondary">暂无失败分类</Text>
-					)}
-				</Space>
+					<Space wrap size={12}>
+						<Card size="small" title="统计窗口(h)" style={{ minWidth: 120 }}>
+							<Text strong>{opsOverview?.windowHours ?? "-"}</Text>
+						</Card>
+						<Card size="small" title="覆盖码表数" style={{ minWidth: 120 }}>
+							<Text strong>{opsOverview?.directoryCount ?? 0}</Text>
+						</Card>
+						<Card size="small" title="导入运行总数" style={{ minWidth: 140 }}>
+							<Text strong>{opsOverview?.totalRuns ?? 0}</Text>
+						</Card>
+						<Card size="small" title="成功执行" style={{ minWidth: 120 }}>
+							<Text strong>{opsOverview?.appliedRuns ?? 0}</Text>
+						</Card>
+						<Card size="small" title="已回滚" style={{ minWidth: 120 }}>
+							<Text strong>{opsOverview?.rolledBackRuns ?? 0}</Text>
+						</Card>
+						<Card size="small" title="冲突总数" style={{ minWidth: 120 }}>
+							<Text strong>{opsOverview?.conflictTotal ?? 0}</Text>
+						</Card>
+						<Card size="small" title="错误总数" style={{ minWidth: 120 }}>
+							<Text strong>{opsOverview?.errorTotal ?? 0}</Text>
+						</Card>
+						<Card size="small" title="查询耗时(ms)" style={{ minWidth: 140 }}>
+							<Text strong>{opsOverview?.queryCostMs ?? "-"}</Text>
+						</Card>
+					</Space>
+					<Space style={{ marginTop: 12 }}>
+						<Text type="secondary">失败分类 TopN：</Text>
+						{(opsOverview?.failureTop || []).length > 0 ? (
+							<Space wrap>
+								{(opsOverview?.failureTop || []).map((item) => (
+									<Tag
+										key={`${item.category || "-"}-${item.count || 0}`}
+									>{`${item.category || "-"}:${item.count || 0}`}</Tag>
+								))}
+							</Space>
+						) : (
+							<Text type="secondary">暂无失败分类</Text>
+						)}
+					</Space>
 				</Card>
 			</Card>
 
@@ -1093,18 +1120,10 @@ export default function ReferenceCodesPage() {
 					<Form.Item name="codeTypeId" label="码表ID">
 						<Input placeholder="例如：SEX_001（可不填，默认等同于码表编码）" />
 					</Form.Item>
-					<Form.Item
-						name="codeTypeCode"
-						label="码表编码"
-						rules={[{ required: true, message: "请输入码表编码" }]}
-					>
+					<Form.Item name="codeTypeCode" label="码表编码" rules={[{ required: true, message: "请输入码表编码" }]}>
 						<Input placeholder="例如：GENDER_CODE" />
 					</Form.Item>
-					<Form.Item
-						name="codeTypeName"
-						label="码表名称"
-						rules={[{ required: true, message: "请输入码表名称" }]}
-					>
+					<Form.Item name="codeTypeName" label="码表名称" rules={[{ required: true, message: "请输入码表名称" }]}>
 						<Input placeholder="例如：性别代码表" />
 					</Form.Item>
 					<Form.Item name="stdLevel" label="标准层级">
@@ -1137,9 +1156,7 @@ export default function ReferenceCodesPage() {
 			<Modal
 				open={itemsOpen}
 				title={
-					activeDirectory
-						? `码表明细 · ${activeDirectory.codeTypeName || activeDirectory.codeTypeCode}`
-						: "码表明细"
+					activeDirectory ? `码表明细 · ${activeDirectory.codeTypeName || activeDirectory.codeTypeCode}` : "码表明细"
 				}
 				onCancel={() => setItemsOpen(false)}
 				footer={null}
@@ -1208,11 +1225,7 @@ export default function ReferenceCodesPage() {
 				width={980}
 			>
 				<Space direction="vertical" className="w-full" size={12}>
-					<Alert
-						type="info"
-						showIcon
-						message="支持 CSV 多行格式（含表头）。建议先“预检”，确认冲突/错误后再执行。"
-					/>
+					<Alert type="info" showIcon message="支持 CSV 多行格式（含表头）。建议先“预检”，确认冲突/错误后再执行。" />
 					<Space>
 						<Select
 							value={structuredPolicy}
@@ -1230,7 +1243,12 @@ export default function ReferenceCodesPage() {
 						<Button type="primary" loading={structuredLoading} onClick={doStructuredApply} disabled={!canManage}>
 							执行导入
 						</Button>
-						<Button danger loading={structuredLoading} disabled={!canManage || !structuredRunId} onClick={doStructuredRollback}>
+						<Button
+							danger
+							loading={structuredLoading}
+							disabled={!canManage || !structuredRunId}
+							onClick={doStructuredRollback}
+						>
 							回滚最近执行
 						</Button>
 						<Button onClick={openStructuredHistory}>导入历史</Button>
@@ -1310,7 +1328,11 @@ export default function ReferenceCodesPage() {
 					/>
 					{structuredHistoryDetail ? (
 						<>
-							<Card size="small" title={`批次详情：${structuredHistoryDetail.runId || "-"}`} loading={structuredHistoryDetailLoading}>
+							<Card
+								size="small"
+								title={`批次详情：${structuredHistoryDetail.runId || "-"}`}
+								loading={structuredHistoryDetailLoading}
+							>
 								<Space wrap split={<span>|</span>}>
 									<Text>状态：{structuredHistoryDetail.status || "-"}</Text>
 									<Text>策略：{structuredHistoryDetail.conflictPolicy || "-"}</Text>
@@ -1337,9 +1359,7 @@ export default function ReferenceCodesPage() {
 			<Modal
 				open={mappingsOpen}
 				title={
-					activeDirectory
-						? `码表映射 · ${activeDirectory.codeTypeName || activeDirectory.codeTypeCode}`
-						: "码表映射"
+					activeDirectory ? `码表映射 · ${activeDirectory.codeTypeName || activeDirectory.codeTypeCode}` : "码表映射"
 				}
 				onCancel={() => setMappingsOpen(false)}
 				footer={null}

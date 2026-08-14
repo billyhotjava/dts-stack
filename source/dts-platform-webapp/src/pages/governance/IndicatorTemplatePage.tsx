@@ -1,20 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import {
-	Button,
-	Form,
-	Input,
-	Modal,
-	Space,
-	Tabs,
-	Tag,
-	Tooltip,
-	Typography,
-	Upload,
-} from "antd";
-import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
+import { Button, Form, Input, Modal, Space, Tabs, Tag, Typography, Upload } from "antd";
+import { actionColumn, appendDetailAction, CompactTable, RecordDetailDrawer } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { } from "@ant-design/icons";
+import {} from "@ant-design/icons";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import {
 	listIndicatorTemplates,
@@ -46,7 +35,7 @@ export default function Page() {
 		setLoading(true);
 		try {
 			const res: any = await listIndicatorTemplates(domain ? { domain } : undefined);
-			setTemplates(Array.isArray(res) ? res : res?.data ?? []);
+			setTemplates(Array.isArray(res) ? res : (res?.data ?? []));
 		} catch {
 			// interceptor handles error
 		} finally {
@@ -61,23 +50,25 @@ export default function Page() {
 	useEffect(() => {
 		getDomainTree()
 			.then((res: any) => {
-				const nodes: any[] = Array.isArray(res) ? res : res?.data ?? [];
+				const nodes: any[] = Array.isArray(res) ? res : (res?.data ?? []);
 				const flatten = (items: any[]): Array<{ key: string; label: string }> =>
-					items.flatMap((n) => [
-						{ key: n.code || "", label: n.name || n.code || "未知" },
-						...(n.children?.length ? flatten(n.children) : []),
-					]).filter((d) => d.key);
+					items
+						.flatMap((n) => [
+							{ key: n.code || "", label: n.name || n.code || "未知" },
+							...(n.children?.length ? flatten(n.children) : []),
+						])
+						.filter((d) => d.key);
 				setDomainTabs([{ key: "", label: "全部" }, ...flatten(nodes)]);
 			})
-			.catch(() => { /* keep default */ });
+			.catch(() => {
+				/* keep default */
+			});
 	}, []);
 
 	const handleImport = async (file: File) => {
 		try {
 			const result: any = await importIndicatorTemplates(file);
-			toast.success(
-				`导入完成：新增 ${result.created ?? 0}，更新 ${result.updated ?? 0}，跳过 ${result.skipped ?? 0}`
-			);
+			toast.success(`导入完成：新增 ${result.created ?? 0}，更新 ${result.updated ?? 0}，跳过 ${result.skipped ?? 0}`);
 			fetchList();
 		} catch {
 			// global interceptor handles
@@ -123,8 +114,14 @@ export default function Page() {
 				name: data.name,
 				domain: data.domain,
 				description: data.description,
-				blueprintJson: typeof data.blueprintJson === "string" ? data.blueprintJson : JSON.stringify(data.blueprintJson ?? data.blueprints, null, 2),
-				requiredFieldsJson: typeof data.requiredFieldsJson === "string" ? data.requiredFieldsJson : JSON.stringify(data.requiredFieldsJson ?? data.requiredFields, null, 2),
+				blueprintJson:
+					typeof data.blueprintJson === "string"
+						? data.blueprintJson
+						: JSON.stringify(data.blueprintJson ?? data.blueprints, null, 2),
+				requiredFieldsJson:
+					typeof data.requiredFieldsJson === "string"
+						? data.requiredFieldsJson
+						: JSON.stringify(data.requiredFieldsJson ?? data.requiredFields, null, 2),
 			});
 			setModalOpen(true);
 		} catch {
@@ -192,7 +189,7 @@ export default function Page() {
 			title: "领域",
 			dataIndex: "domain",
 			width: 100,
-			render: (v: string) => v ? <Tag color="default">{v}</Tag> : "-",
+			render: (v: string) => (v ? <Tag color="default">{v}</Tag> : "-"),
 		},
 		{
 			title: "蓝图数量",
@@ -201,7 +198,10 @@ export default function Page() {
 			align: "center",
 			render: (_: any, record: Template) => {
 				try {
-					const bp = typeof record.blueprintJson === "string" ? JSON.parse(record.blueprintJson) : (record.blueprintJson ?? record.blueprints);
+					const bp =
+						typeof record.blueprintJson === "string"
+							? JSON.parse(record.blueprintJson)
+							: (record.blueprintJson ?? record.blueprints);
 					return Array.isArray(bp) ? bp.length : "-";
 				} catch {
 					return "-";
@@ -213,47 +213,22 @@ export default function Page() {
 			dataIndex: "builtIn",
 			width: 80,
 			align: "center",
-			render: (v: boolean) => v ? <Tag color="geekblue">内置</Tag> : null,
+			render: (v: boolean) => (v ? <Tag color="geekblue">内置</Tag> : null),
 		},
-		{
-			title: "操作",
-			dataIndex: "actions",
-			key: "action",
-			width: 280,
-			fixed: "right",
-			render: (_: any, record: Template) => (
-				<Space size="small">
-					<Tooltip title="展开生成指标">
-						<Button
-							type="link"
-							size="small"
-							onClick={() => openWizard(record)}
-						>
-							展开
-						</Button>
-					</Tooltip>
-					{canManage && (
-						<Button
-							type="link"
-							size="small"
-							onClick={() => openEdit(record)}
-						>
-							编辑
-						</Button>
-					)}
-					{canManage && !record.builtIn && (
-						<Button
-							type="link"
-							size="small"
-							danger
-							onClick={() => handleDelete(record)}
-						>
-							删除
-						</Button>
-					)}
-				</Space>
-			),
-		},
+		actionColumn<Template>(
+			(record) => [
+				{ key: "expand", label: "展开", tooltip: "展开生成指标", onClick: () => openWizard(record) },
+				{ key: "edit", label: "编辑", hidden: !canManage, onClick: () => openEdit(record) },
+				{
+					key: "delete",
+					label: "删除",
+					danger: true,
+					hidden: !canManage || record.builtIn,
+					onClick: () => handleDelete(record),
+				},
+			],
+			{ width: 280 },
+		),
 	];
 
 	const columns = useMemo(
@@ -265,7 +240,9 @@ export default function Page() {
 	return (
 		<div style={{ padding: 24 }}>
 			<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-				<Typography.Title level={4} style={{ margin: 0 }}>指标模板管理</Typography.Title>
+				<Typography.Title level={4} style={{ margin: 0 }}>
+					指标模板管理
+				</Typography.Title>
 				{canManage && (
 					<Space>
 						<Button type="primary" onClick={openCreate}>
@@ -274,7 +251,10 @@ export default function Page() {
 						<Upload
 							accept=".json"
 							showUploadList={false}
-							beforeUpload={(file) => { handleImport(file); return false; }}
+							beforeUpload={(file) => {
+								handleImport(file);
+								return false;
+							}}
 						>
 							<Button>导入</Button>
 						</Upload>

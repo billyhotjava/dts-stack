@@ -1,4 +1,4 @@
-import { ArrowRight, FileArchive, GitBranch, ListChecks, ScrollText } from "lucide-react";
+import { FileArchive, GitBranch, ListChecks, ScrollText } from "lucide-react";
 import { useNavigate } from "react-router";
 import {
 	type DataModelingToolWorkflow,
@@ -37,9 +37,7 @@ export function ToolsPage({ route }: { route: DataModelingRoute }) {
 								</div>
 								<div className="dmx-tool-card__footer">
 									<Status tone="success">真实流程</Status>
-									<Button onClick={() => navigate(workflow.path)}>
-										进入流程 <ArrowRight size={14} />
-									</Button>
+									<Button onClick={() => navigate(workflow.path)}>进入流程</Button>
 								</div>
 							</article>
 						);

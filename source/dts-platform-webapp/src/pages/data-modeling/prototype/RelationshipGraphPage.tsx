@@ -1,4 +1,4 @@
-import { Focus, Minus, Plus, RefreshCw, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import {
@@ -133,7 +133,6 @@ export function RelationshipGraphPage({ route }: { route: DataModelingRoute }) {
 			<PageHeader
 				actions={
 					<Button disabled={loading} onClick={() => void load(planId, query)}>
-						<RefreshCw size={15} />
 						刷新数据
 					</Button>
 				}
@@ -164,17 +163,17 @@ export function RelationshipGraphPage({ route }: { route: DataModelingRoute }) {
 					disabled={!nodes.length}
 					onClick={() => setScale((value) => Math.max(0.6, value - 0.1))}
 				>
-					<Minus size={15} />
+					缩小
 				</Button>
 				<Button
 					aria-label="放大"
 					disabled={!nodes.length}
 					onClick={() => setScale((value) => Math.min(1.4, value + 0.1))}
 				>
-					<Plus size={15} />
+					放大
 				</Button>
 				<Button aria-label="适应画布" disabled={!nodes.length} onClick={() => setScale(1)}>
-					<Focus size={15} />
+					适应画布
 				</Button>
 			</div>
 			{loading ? (

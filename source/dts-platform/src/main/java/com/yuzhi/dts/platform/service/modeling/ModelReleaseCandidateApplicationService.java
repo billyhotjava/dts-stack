@@ -976,6 +976,7 @@ public class ModelReleaseCandidateApplicationService {
             )
             .map(action -> WorkspaceAction.valueOf(action.name()))
             .toList();
+        result = preferSelfServicePublication(result);
         if (
             candidate.status() == DeliveryStatus.BUILT &&
             duties.contains(DeliveryActorRole.MODEL_MAINTAINER)
@@ -1044,7 +1045,7 @@ public class ModelReleaseCandidateApplicationService {
                 buildEvidence(entries)
             );
         }
-        applyLifecycleEvidence(candidate.status(), summaries);
+        applyLifecycleEvidence(candidate, summaries);
         return Arrays
             .stream(DeliveryEvidenceType.values())
             .map(summaries::get)
@@ -1154,9 +1155,10 @@ public class ModelReleaseCandidateApplicationService {
     }
 
     private static void applyLifecycleEvidence(
-        DeliveryStatus status,
+        CandidateView candidate,
         Map<DeliveryEvidenceType, EvidenceSummaryView> summaries
     ) {
+        DeliveryStatus status = candidate.status();
         switch (status) {
             case QUALITY_RUNNING ->
                 summaries.put(
@@ -1195,11 +1197,19 @@ public class ModelReleaseCandidateApplicationService {
                         "Current review rejected the candidate"
                     )
                 );
-            case APPROVED, PUBLISHING, PARTIAL, PUBLISHED, ROLLED_BACK ->
+            case APPROVED ->
                 summaries.put(
                     DeliveryEvidenceType.REVIEW,
                     passed(DeliveryEvidenceType.REVIEW)
                 );
+            case PUBLISHING, PARTIAL, PUBLISHED, ROLLED_BACK -> {
+                if (candidate.audit().hasApproval()) {
+                    summaries.put(
+                        DeliveryEvidenceType.REVIEW,
+                        passed(DeliveryEvidenceType.REVIEW)
+                    );
+                }
+            }
             default -> {}
         }
         switch (status) {
@@ -1287,22 +1297,12 @@ public class ModelReleaseCandidateApplicationService {
     }
 
     private Access authorizeRead(String tenantId, String actorId, UUID planId) {
-        Access access = releaseAccess(tenantId, actorId, planId);
-        if (
-            access.duties().equals(Set.of(DeliveryActorRole.MODEL_MAINTAINER)) &&
-            !planAccess.canMaintain(access.tenantId(), access.planId(), access.actorId())
-        ) {
-            throw planForbidden();
-        }
-        return access;
+        return releaseAccess(tenantId, actorId, planId);
     }
 
     private Access authorizeMaintainer(String tenantId, String actorId, UUID planId) {
         Access access = releaseAccess(tenantId, actorId, planId);
-        if (
-            !access.duties().contains(DeliveryActorRole.MODEL_MAINTAINER) ||
-            !planAccess.canMaintain(access.tenantId(), access.planId(), access.actorId())
-        ) {
+        if (!access.duties().contains(DeliveryActorRole.MODEL_MAINTAINER)) {
             throw planForbidden();
         }
         return access;
@@ -1316,13 +1316,19 @@ public class ModelReleaseCandidateApplicationService {
         boolean receiptMatches =
             candidate.id().equals(receipt.candidateId()) &&
             receipt.eventType() == ModelReleaseCandidateContract.CommandEventType.STATUS_CHANGED &&
-            receipt.fromStatus() == DeliveryStatus.APPROVED &&
+            Set.of(
+                    DeliveryStatus.QUALITY_PASSED,
+                    DeliveryStatus.REVIEW_PENDING,
+                    DeliveryStatus.APPROVED
+                )
+                .contains(receipt.fromStatus()) &&
             receipt.toStatus() == DeliveryStatus.PUBLISHING &&
             access.actorId().equals(receipt.actorId());
-        boolean separated =
+        boolean separated = receipt.fromStatus() != DeliveryStatus.APPROVED || (
             candidate.audit().hasApproval() &&
             !access.actorId().equals(candidate.audit().submittedBy()) &&
-            !access.actorId().equals(candidate.audit().approvedBy());
+            !access.actorId().equals(candidate.audit().approvedBy())
+        );
         if (
             !receiptMatches ||
             !separated ||
@@ -1389,7 +1395,11 @@ public class ModelReleaseCandidateApplicationService {
         if (planId == null || duties == null || duties.isEmpty()) {
             throw planForbidden();
         }
-        return new Access(tenant, actor, planId, Set.copyOf(duties));
+        Access access = new Access(tenant, actor, planId, Set.copyOf(duties));
+        if (!planAccess.canMaintain(access.tenantId(), access.planId(), access.actorId())) {
+            throw planForbidden();
+        }
+        return access;
     }
 
     private ModelReleaseCandidateException planForbidden() {
@@ -1553,13 +1563,10 @@ public class ModelReleaseCandidateApplicationService {
 
     private CommandResult roleAware(CommandResult result, Access access) {
         CandidateView candidate = result.candidate();
-        return new CommandResult(
-            candidate,
-            result.replayed(),
-            result.driftReasons(),
-            candidate.entries().isEmpty()
-                ? List.of()
-                : candidate
+        List<DeliveryAction> allowedActions = candidate.entries().isEmpty()
+            ? List.of()
+            : preferSelfServicePublication(
+                candidate
                     .status()
                     .allowedActions()
                     .stream()
@@ -1577,7 +1584,24 @@ public class ModelReleaseCandidateApplicationService {
                             )
                     )
                     .toList()
+            );
+        return new CommandResult(
+            candidate,
+            result.replayed(),
+            result.driftReasons(),
+            allowedActions
         );
+    }
+
+    private static <T extends Enum<T>> List<T> preferSelfServicePublication(List<T> actions) {
+        boolean publishAvailable = actions.stream().anyMatch(action -> "PUBLISH".equals(action.name()));
+        if (!publishAvailable) return actions;
+        return actions
+            .stream()
+            .filter(action ->
+                !Set.of("SUBMIT_REVIEW", "APPROVE", "REJECT").contains(action.name())
+            )
+            .toList();
     }
 
     private List<WorkspaceAction> visibleActions(

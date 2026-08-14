@@ -850,6 +850,129 @@ class ModelReleaseCandidateApplicationServiceTest {
     }
 
     @Test
+    void dataOwnerWorkspacePrefersDirectPublishAfterQualityWithoutReviewActions() {
+        CandidateView qualityPassed = candidate(
+            DeliveryStatus.QUALITY_PASSED,
+            List.of(entry(DeliveryStatus.QUALITY_PASSED))
+        );
+        when(dutyResolver.currentDuties())
+            .thenReturn(
+                Set.of(
+                    DeliveryActorRole.MODEL_MAINTAINER,
+                    DeliveryActorRole.RELEASE_OPERATOR
+                )
+            );
+        when(repository.listForWorkbench(TENANT, PLAN_ID))
+            .thenReturn(List.of(qualityPassed));
+
+        var workspace = service.workspace(TENANT, ACTOR, PLAN_ID);
+
+        assertThat(workspace.allowedActions())
+            .containsExactly(WorkspaceAction.PUBLISH);
+    }
+
+    @Test
+    void dataOwnerCanDirectlyPublishOwnPendingCandidateWithoutApproval() {
+        DeliveryAuditView submitted = new DeliveryAuditView(
+            "creator",
+            NOW.minusSeconds(120),
+            ACTOR,
+            NOW.minusSeconds(60),
+            null,
+            null,
+            null,
+            null
+        );
+        CandidateView pending = candidate(
+            DeliveryStatus.REVIEW_PENDING,
+            List.of(entry(DeliveryStatus.REVIEW_PENDING)),
+            submitted
+        );
+        CandidateView publishing = candidate(
+            DeliveryStatus.PUBLISHING,
+            List.of(entry(DeliveryStatus.PUBLISHING)),
+            submitted
+        );
+        DeliveryAuditView publishedAudit = new DeliveryAuditView(
+            submitted.createdBy(),
+            submitted.createdAt(),
+            submitted.submittedBy(),
+            submitted.submittedAt(),
+            null,
+            null,
+            ACTOR,
+            NOW
+        );
+        CandidateView published = candidate(
+            DeliveryStatus.PUBLISHED,
+            List.of(entry(DeliveryStatus.PUBLISHED)),
+            publishedAudit
+        );
+        when(dutyResolver.currentDuties())
+            .thenReturn(
+                Set.of(
+                    DeliveryActorRole.MODEL_MAINTAINER,
+                    DeliveryActorRole.RELEASE_OPERATOR
+                )
+            );
+        when(repository.find(TENANT, CANDIDATE_ID))
+            .thenReturn(Optional.of(pending));
+        when(commands.transition(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), any()))
+            .thenReturn(new CommandResult(publishing, false, List.of()));
+        when(
+            publicationCoordinator.publish(
+                TENANT,
+                ACTOR,
+                publishing,
+                "direct-publish-key",
+                "data owner self-service release"
+            )
+        )
+            .thenReturn(new CommandResult(published, false, List.of()));
+
+        CommandResult result = service.publish(
+            TENANT,
+            ACTOR,
+            PLAN_ID,
+            CANDIDATE_ID,
+            4,
+            "direct-publish-key",
+            "data owner self-service release"
+        );
+
+        assertThat(result.candidate().status())
+            .isEqualTo(DeliveryStatus.PUBLISHED);
+        assertThat(result.candidate().audit().approvedBy()).isNull();
+        assertThat(result.candidate().audit().publishedBy()).isEqualTo(ACTOR);
+    }
+
+    @Test
+    void releaseOperatorCannotBypassWarehousePlanScope() {
+        when(planAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(false);
+        when(dutyResolver.currentDuties())
+            .thenReturn(Set.of(DeliveryActorRole.RELEASE_OPERATOR));
+
+        assertThatThrownBy(() ->
+            service.publish(
+                TENANT,
+                ACTOR,
+                PLAN_ID,
+                CANDIDATE_ID,
+                4,
+                "publish-key",
+                "attempt cross-department release"
+            )
+        )
+            .isInstanceOf(ModelReleaseCandidateException.class)
+            .satisfies(error ->
+                assertThat(((ModelReleaseCandidateException) error).kind())
+                    .isEqualTo(ModelReleaseCandidateException.Kind.FORBIDDEN)
+            );
+
+        verify(repository, never()).find(any(), any());
+    }
+
+    @Test
     void maintainerCannotExecuteReviewerCommandEvenWithPlanMaintenanceAccess() {
         DeliveryAuditView submitted = new DeliveryAuditView(
             "creator",

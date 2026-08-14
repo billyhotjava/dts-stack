@@ -431,6 +431,14 @@ public class IndicatorService {
         return IndicatorMapper.toDto(entity);
     }
 
+    IndicatorDto requireMutationAccess(UUID id, String activeDept) {
+        String trustedActiveDept = resolveTrustedActiveDept(activeDept);
+        GovIndicatorDefinition entity = repository.findById(id)
+            .orElseThrow(() -> new IndicatorNotFoundException("指标不存在: " + id));
+        requireMutationAccess(entity, trustedActiveDept);
+        return IndicatorMapper.toDto(entity);
+    }
+
     public void lockLifecycleGraphForUpdate() {
         repository.findAllForLifecycleUpdate();
     }
@@ -534,9 +542,7 @@ public class IndicatorService {
         String trustedActiveDept = resolveTrustedActiveDept(activeDept);
         GovIndicatorDefinition entity = repository.findByIdForUpdate(id)
             .orElseThrow(() -> new IndicatorNotFoundException("指标不存在: " + id));
-        if (!deptAllowed(entity, trustedActiveDept) || !levelAllowed(entity)) {
-            throw new org.springframework.security.access.AccessDeniedException("Access denied for indicator");
-        }
+        requireMutationAccess(entity, trustedActiveDept);
         IndicatorValidationResultDto result = new IndicatorValidationResultDto();
         result.setIndicatorId(id);
         Instant now = Instant.now();
@@ -597,9 +603,7 @@ public class IndicatorService {
         GovIndicatorDefinition entity = repository
             .findByIdForUpdate(id)
             .orElseThrow(() -> new IndicatorNotFoundException("指标不存在: " + id));
-        if (!deptAllowed(entity, trustedActiveDept) || !levelAllowed(entity)) {
-            throw new org.springframework.security.access.AccessDeniedException("Access denied for indicator");
-        }
+        requireMutationAccess(entity, trustedActiveDept);
         IndicatorDerivationValidationResult result = enforceDependencyAccess(
             derivationValidationService.validate(id),
             trustedActiveDept
@@ -942,10 +946,14 @@ public class IndicatorService {
             if (!STATUS_PUBLISHED.equals(normalizeStatus(entity.getStatus(), STATUS_DRAFT))) {
                 throw new IndicatorConflictException(label + "必须处于已发布状态: " + safeIndicatorCode(entity));
             }
-            if (!deptAllowed(entity, trustedActiveDept) || !levelAllowed(entity)) {
-                throw new org.springframework.security.access.AccessDeniedException(
-                    label + "不可访问: " + safeIndicatorCode(entity)
-                );
+            if (dependency) {
+                if (!deptAllowed(entity, trustedActiveDept) || !levelAllowed(entity)) {
+                    throw new org.springframework.security.access.AccessDeniedException(
+                        label + "不可访问: " + safeIndicatorCode(entity)
+                    );
+                }
+            } else {
+                requireMutationAccess(entity, trustedActiveDept);
             }
 
             List<String> dependencies = Boolean.TRUE.equals(entity.getIsDerived())
@@ -1204,6 +1212,20 @@ public class IndicatorService {
     }
 
     private void requireMutationAccess(GovIndicatorDefinition entity, String trustedActiveDept) {
+        boolean institutePrivileged = SecurityUtils.hasCurrentUserAnyOfAuthorities(
+            AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES
+        );
+        if (
+            !institutePrivileged &&
+            SecurityUtils.isAuthenticated() &&
+            (!StringUtils.hasText(trustedActiveDept) ||
+                isGlobalOrRoot(entity != null ? entity.getOwnerDept() : null) ||
+                !sameDepartment(entity != null ? entity.getOwnerDept() : null, trustedActiveDept))
+        ) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                "Access denied for indicator mutation outside the active department"
+            );
+        }
         if (!deptAllowed(entity, trustedActiveDept) || !levelAllowed(entity)) {
             throw new org.springframework.security.access.AccessDeniedException(
                 "Access denied for indicator mutation"

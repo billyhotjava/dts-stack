@@ -1,10 +1,4 @@
-import {
-	DatabaseOutlined,
-	ReloadOutlined,
-	SafetyCertificateOutlined,
-	TagOutlined,
-	WarningOutlined,
-} from "@ant-design/icons";
+import { DatabaseOutlined, SafetyCertificateOutlined, TagOutlined, WarningOutlined } from "@ant-design/icons";
 import { Alert, Button, Layout, Tooltip } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
@@ -196,11 +190,12 @@ export default function AssetOverviewPage() {
 							<Button
 								type="text"
 								size="small"
-								icon={<ReloadOutlined />}
 								aria-label="刷新统计"
 								loading={overviewLoading}
 								onClick={() => void loadOverview()}
-							/>
+							>
+								刷新
+							</Button>
 							<Button type="primary" size="small" data-testid="goto-search-table" onClick={() => drillToSearch()}>
 								在数据查询中查看 →
 							</Button>

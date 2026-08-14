@@ -1,26 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import {
-	Alert,
-	Button,
-	Card,
-	Form,
-	Input,
-	Modal,
-	Select,
-	Space,
-	Tag,
-} from "antd";
-import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
+import { Alert, Button, Card, Form, Input, Modal, Select, Tag } from "antd";
+import { actionColumn, appendDetailAction, CompactTable, RecordDetailDrawer } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { } from "@ant-design/icons";
+import {} from "@ant-design/icons";
 import { useSearchParams } from "react-router";
 import { PageHeader } from "@/components/page-header";
 import { JourneyContextBar } from "@/components/journey";
-import apiServicesService, {
-	type ApiServiceSummary,
-	type ApiServiceUpsert,
-} from "@/api/services/apiServicesService";
+import apiServicesService, { type ApiServiceSummary, type ApiServiceUpsert } from "@/api/services/apiServicesService";
 import { listDatasets } from "@/api/platformApi";
 
 const METHOD_OPTIONS = [
@@ -51,10 +38,7 @@ export default function Page() {
 	const [testModal, setTestModal] = useState(false);
 	const [detailRow, setDetailRow] = useState<ApiServiceSummary | null>(null);
 
-	const datasetOptions = useMemo(
-		() => datasets.map((item) => ({ label: item.name, value: item.id })),
-		[datasets],
-	);
+	const datasetOptions = useMemo(() => datasets.map((item) => ({ label: item.name, value: item.id })), [datasets]);
 
 	const loadServices = async () => {
 		setLoading(true);
@@ -139,40 +123,38 @@ export default function Page() {
 	};
 
 	const baseColumns: ColumnsType<ApiServiceSummary> = [
-		{ title: "名称", dataIndex: "name", render: (v) => v || "-" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
+		{
+			title: "名称",
+			dataIndex: "name",
+			render: (v) => v || "-",
+			sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
+		},
 		{ title: "方法", dataIndex: "method", width: 90, render: (v) => <Tag>{v || "-"}</Tag> },
 		{ title: "路径", dataIndex: "path", render: (v) => v || "-" },
 		{ title: "分类", dataIndex: "classification", width: 120, render: (v) => <Tag>{v || "-"}</Tag> },
 		{ title: "状态", dataIndex: "status", width: 120, render: (v) => <Tag>{v || "-"}</Tag> },
 		{ title: "近7日调用", dataIndex: "recentCalls", width: 120, render: (v) => v ?? 0 },
-		{
-			title: "操作",
-			dataIndex: "actions",
-			width: 320,
-			fixed: "right",
-			render: (_, record) => (
-				<Space>
-					<Button size="small" onClick={() => tryInvoke(record.id)}>
-						测试调用
-					</Button>
-					<Button size="small" disabled title="当前后端未开放启用接口，保存后按服务状态进入发布流程">
-						启用
-					</Button>
-					<Button size="small" onClick={() => openModal(record)}>
-						编辑
-					</Button>
-					<Button size="small" onClick={() => setDetailRow(record)}>
-						查看调用
-					</Button>
-					<Button size="small" disabled title="审计流水接口尚未接入，先在服务详情中核对发布状态和调用指标">
-						查看审计
-					</Button>
-					<Button size="small" danger onClick={() => disableService(record.id)}>
-						下线
-					</Button>
-				</Space>
-			),
-		},
+		actionColumn<ApiServiceSummary>(
+			(record) => [
+				{ key: "invoke", label: "测试调用", onClick: () => tryInvoke(record.id) },
+				{
+					key: "enable",
+					label: "启用",
+					disabled: true,
+					tooltip: "当前后端未开放启用接口，保存后按服务状态进入发布流程",
+				},
+				{ key: "edit", label: "编辑", onClick: () => openModal(record) },
+				{ key: "calls", label: "查看调用", onClick: () => setDetailRow(record) },
+				{
+					key: "audit",
+					label: "查看审计",
+					disabled: true,
+					tooltip: "审计流水接口尚未接入，先在服务详情中核对发布状态和调用指标",
+				},
+				{ key: "offline", label: "下线", danger: true, onClick: () => disableService(record.id) },
+			],
+			{ width: 320 },
+		),
 	];
 
 	const columns = useMemo(
@@ -245,13 +227,7 @@ export default function Page() {
 				</Form>
 			</Modal>
 
-			<Modal
-				open={testModal}
-				onCancel={() => setTestModal(false)}
-				footer={null}
-				title="API 测试结果"
-				width={720}
-			>
+			<Modal open={testModal} onCancel={() => setTestModal(false)} footer={null} title="API 测试结果" width={720}>
 				<pre className="whitespace-pre-wrap text-xs">{JSON.stringify(testResult, null, 2)}</pre>
 			</Modal>
 			<RecordDetailDrawer<ApiServiceSummary>

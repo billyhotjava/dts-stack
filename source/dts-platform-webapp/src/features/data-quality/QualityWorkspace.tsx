@@ -1,29 +1,8 @@
-import {
-	BarChartOutlined,
-	CheckSquareOutlined,
-	DashboardOutlined,
-	FileSearchOutlined,
-	FileTextOutlined,
-	ScheduleOutlined,
-	SettingOutlined,
-	TableOutlined,
-} from "@ant-design/icons";
 import { Button, Tag, Tooltip } from "antd";
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { QUALITY_ROUTE_SPECS, type QualityRouteKey, qualityPath, qualityPrimaryRoutesForOwner } from "./qualityRoutes";
 import "./quality-workspace.css";
-
-const PRIMARY_ICONS: Record<string, ReactNode> = {
-	overview: <DashboardOutlined />,
-	"rule-list": <CheckSquareOutlined />,
-	"rule-template": <FileSearchOutlined />,
-	"rule-by-table": <TableOutlined />,
-	"rule-by-template": <SettingOutlined />,
-	monitor: <ScheduleOutlined />,
-	"run-records": <BarChartOutlined />,
-	report: <FileTextOutlined />,
-};
 
 const PRIMARY_PARENT: Partial<Record<QualityRouteKey, QualityRouteKey>> = {
 	"rule-detail": "rule-list",
@@ -70,7 +49,6 @@ export function QualityWorkspace({ routeKey, children }: { routeKey: QualityRout
 							<Tooltip key={route.key} title={route.group} placement="right">
 								<Button
 									type={activeKey === route.key ? "primary" : "text"}
-									icon={PRIMARY_ICONS[route.key]}
 									onClick={() => navigate(qualityPath(route.key))}
 								>
 									{route.label}

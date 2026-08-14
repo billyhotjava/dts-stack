@@ -723,25 +723,30 @@ public final class ModelReleaseCandidateContract {
         if (audit.approvedAt() != null && (audit.submittedAt() == null || audit.approvedAt().isBefore(audit.submittedAt()))) {
             throw new IllegalArgumentException("approvedAt cannot be before submittedAt");
         }
-        if (audit.publishedAt() != null && (audit.approvedAt() == null || audit.publishedAt().isBefore(audit.approvedAt()))) {
-            throw new IllegalArgumentException("publishedAt cannot be before approvedAt");
+        Instant publicationPredecessor = audit.approvedAt() != null
+            ? audit.approvedAt()
+            : audit.submittedAt() != null
+                ? audit.submittedAt()
+                : audit.createdAt();
+        if (audit.publishedAt() != null && audit.publishedAt().isBefore(publicationPredecessor)) {
+            throw new IllegalArgumentException("publishedAt cannot be before the latest release checkpoint");
         }
         if (
             audit.submittedBy() != null &&
-            (audit.submittedBy().equals(audit.approvedBy()) || audit.submittedBy().equals(audit.publishedBy()))
+            audit.submittedBy().equals(audit.approvedBy())
         ) {
-            throw new IllegalArgumentException("submitter must be separated from approver and publisher");
+            throw new IllegalArgumentException("submitter must be separated from approver");
         }
     }
 
     private static void ensureAuditForStatus(DeliveryStatus status, DeliveryAuditView audit) {
         if (status == DeliveryStatus.STALE) return;
         boolean submittedRequired = switch (status) {
-            case REVIEW_PENDING, REJECTED, APPROVED, PUBLISHING, PARTIAL, PUBLISHED, ROLLED_BACK -> true;
+            case REVIEW_PENDING, REJECTED, APPROVED -> true;
             default -> false;
         };
         boolean approvedRequired = switch (status) {
-            case APPROVED, PUBLISHING, PARTIAL, PUBLISHED, ROLLED_BACK -> true;
+            case APPROVED -> true;
             default -> false;
         };
         boolean publishedRequired = switch (status) {

@@ -1,4 +1,4 @@
-import { Database, RefreshCw } from "lucide-react";
+import { Database } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getModelMaterializationStatuses, type ModelMaterializationStatus } from "@/api/modelSpecApi";
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
@@ -101,7 +101,6 @@ export function ModelMaterializationStatusCard({
 					<Status tone={presentation.tone}>{loading ? "读取中" : presentation.label}</Status>
 				</div>
 				<Button disabled={!canMaintain || loading} onClick={onOpen}>
-					<RefreshCw size={14} />
 					{presentation.key === "MATERIALIZED" || presentation.key === "STALE" ? "重新物化" : "物化"}
 				</Button>
 			</header>

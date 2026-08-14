@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Button, Card, Form, Input, Modal, Space, Tag, Typography, message } from "antd";
-import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
+import { actionColumn, appendDetailAction, CompactTable, RecordDetailDrawer } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { InboxOutlined } from "@ant-design/icons";
 import { Upload } from "@/components/upload";
@@ -158,35 +158,32 @@ export default function JdbcDriversPage() {
 				width: 180,
 				render: (value: string) => formatTime(value),
 			},
-			{
-				title: "操作",
-				dataIndex: "actions",
-				key: "action",
-				width: 220,
-				fixed: "right",
-				render: (_: any, record: InfraJdbcDriver) => (
-					<Space>
-						<Button size="small" onClick={() => setDetailRow(record)}>
-							查看详情
-						</Button>
-						<Button size="small" disabled title="当前驱动接口未开放独立校验动作，请通过上传校验和缺失状态判断">
-							校验
-						</Button>
-						<Button size="small" onClick={() => openEdit(record)}>
-							编辑
-						</Button>
-						<Button size="small" disabled title="当前驱动接口未开放启用动作，上传后自动进入可用目录">
-							启用
-						</Button>
-						<Button size="small" disabled title="当前驱动接口未开放禁用动作，可删除后重新上传">
-							禁用
-						</Button>
-						<Button size="small" danger onClick={() => handleDelete(record)}>
-							删除
-						</Button>
-					</Space>
-				),
-			},
+			actionColumn<InfraJdbcDriver>(
+				(record) => [
+					{ key: "detail", label: "查看详情", onClick: () => setDetailRow(record) },
+					{
+						key: "verify",
+						label: "校验",
+						disabled: true,
+						tooltip: "当前驱动接口未开放独立校验动作，请通过上传校验和缺失状态判断",
+					},
+					{ key: "edit", label: "编辑", onClick: () => openEdit(record) },
+					{
+						key: "enable",
+						label: "启用",
+						disabled: true,
+						tooltip: "当前驱动接口未开放启用动作，上传后自动进入可用目录",
+					},
+					{
+						key: "disable",
+						label: "禁用",
+						disabled: true,
+						tooltip: "当前驱动接口未开放禁用动作，可删除后重新上传",
+					},
+					{ key: "delete", label: "删除", danger: true, onClick: () => handleDelete(record) },
+				],
+				{ width: 220 },
+			),
 		],
 		[],
 	);

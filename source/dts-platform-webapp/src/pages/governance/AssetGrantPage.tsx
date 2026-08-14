@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { toast } from "sonner";
-import { Button, Card, DatePicker, Form, Input, Modal, Radio, Select, Space, Tag, Popconfirm } from "antd";
-import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
+import { Button, Card, DatePicker, Form, Input, Modal, Radio, Select, Space, Tag } from "antd";
+import { actionColumn, appendDetailAction, CompactTable, RecordDetailDrawer } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { listAssetGrants, createAssetGrant, deleteAssetGrant } from "@/api/platformApi";
 
@@ -56,7 +56,7 @@ export default function AssetGrantPage() {
 		if (!searchId) return;
 		setLoading(true);
 		try {
-			const resp = await listAssetGrants({ assetType: searchType, assetId: searchId }) as AssetGrant[];
+			const resp = (await listAssetGrants({ assetType: searchType, assetId: searchId })) as AssetGrant[];
 			setGrants(Array.isArray(resp) ? resp : []);
 		} catch {
 			/* global interceptor handles toast */
@@ -107,21 +107,42 @@ export default function AssetGrantPage() {
 	};
 
 	const baseColumns: ColumnsType<AssetGrant> = [
-		{ title: "被授权人类型", dataIndex: "granteeType", key: "granteeType", width: 100,
-			render: (v: string) => <Tag color={v === "USER" ? "blue" : v === "ROLE" ? "green" : "orange"}>{v}</Tag> },
+		{
+			title: "被授权人类型",
+			dataIndex: "granteeType",
+			key: "granteeType",
+			width: 100,
+			render: (v: string) => <Tag color={v === "USER" ? "blue" : v === "ROLE" ? "green" : "orange"}>{v}</Tag>,
+		},
 		{ title: "被授权人", dataIndex: "granteeId", key: "granteeId" },
-		{ title: "权限", dataIndex: "permission", key: "permission", width: 100,
-			render: (v: string) => <Tag color={v === "MANAGE" ? "red" : v === "EDIT" ? "orange" : "default"}>{v}</Tag> },
-		{ title: "有效期至", dataIndex: "validTo", key: "validTo", width: 180,
-			render: (v?: string) => v ? new Date(v).toLocaleDateString() : "永久" },
+		{
+			title: "权限",
+			dataIndex: "permission",
+			key: "permission",
+			width: 100,
+			render: (v: string) => <Tag color={v === "MANAGE" ? "red" : v === "EDIT" ? "orange" : "default"}>{v}</Tag>,
+		},
+		{
+			title: "有效期至",
+			dataIndex: "validTo",
+			key: "validTo",
+			width: 180,
+			render: (v?: string) => (v ? new Date(v).toLocaleDateString() : "永久"),
+		},
 		{ title: "授权者", dataIndex: "grantedBy", key: "grantedBy", width: 120 },
 		{ title: "原因", dataIndex: "grantReason", key: "grantReason", ellipsis: true },
-		{ title: "操作", dataIndex: "actions", key: "action", width: 160, fixed: "right",
-			render: (_: any, record: AssetGrant) => (
-				<Popconfirm title="确定要撤销此授权吗？" onConfirm={() => handleRevoke(record.id)}>
-					<Button type="link" size="small" danger>撤销</Button>
-				</Popconfirm>
-			)},
+		actionColumn<AssetGrant>(
+			(record) => [
+				{
+					key: "revoke",
+					label: "撤销",
+					danger: true,
+					confirm: "确定要撤销此授权吗？",
+					onClick: () => handleRevoke(record.id),
+				},
+			],
+			{ width: 160 },
+		),
 	];
 
 	const columns = useMemo(
@@ -134,13 +155,23 @@ export default function AssetGrantPage() {
 		<div className="space-y-4">
 			<Card title="资产授权管理">
 				<Space wrap className="mb-4">
-					<Select options={ASSET_TYPE_OPTIONS} value={searchType} onChange={setSearchType}
-						style={{ width: 140 }} />
-					<Input.Search placeholder="输入资产 ID" style={{ width: 220 }}
+					<Select options={ASSET_TYPE_OPTIONS} value={searchType} onChange={setSearchType} style={{ width: 140 }} />
+					<Input.Search
+						placeholder="输入资产 ID"
+						style={{ width: 220 }}
 						defaultValue={searchId}
-						onSearch={(v) => { setSearchId(v); }} />
+						onSearch={(v) => {
+							setSearchId(v);
+						}}
+					/>
 					{searchId && (
-						<Button type="primary" onClick={() => { form.resetFields(); setGrantModal(true); }}>
+						<Button
+							type="primary"
+							onClick={() => {
+								form.resetFields();
+								setGrantModal(true);
+							}}
+						>
 							+ 新建授权
 						</Button>
 					)}
@@ -148,16 +179,27 @@ export default function AssetGrantPage() {
 
 				{searchId && (
 					<CompactTable<AssetGrant>
-						rowKey="id" columns={columns} dataSource={grants}
-						loading={loading} size="small" pagination={false}
+						rowKey="id"
+						columns={columns}
+						dataSource={grants}
+						loading={loading}
+						size="small"
+						pagination={false}
 					/>
 				)}
 			</Card>
 
-			<Modal title="新建授权" open={grantModal} onCancel={() => setGrantModal(false)} onOk={handleCreate}
-				destroyOnClose>
+			<Modal
+				title="新建授权"
+				open={grantModal}
+				onCancel={() => setGrantModal(false)}
+				onOk={handleCreate}
+				destroyOnClose
+			>
 				<Form form={form} layout="vertical" className="pt-4">
-					<div className="mb-2 text-gray-500">资产: {searchType}:{searchId}</div>
+					<div className="mb-2 text-gray-500">
+						资产: {searchType}:{searchId}
+					</div>
 					<Form.Item name="granteeType" label="被授权人类型" rules={[{ required: true }]} initialValue="USER">
 						<Radio.Group options={GRANTEE_TYPE_OPTIONS} />
 					</Form.Item>

@@ -1233,12 +1233,14 @@ public class ModelReleaseCandidateService {
         Instant approvedAt = current.approvedAt();
         String publishedBy = current.publishedBy();
         Instant publishedAt = current.publishedAt();
+        boolean reviewedRelease = approvedAt != null;
         if (
             (target == DeliveryStatus.APPROVED ||
                 target == DeliveryStatus.REJECTED ||
-                target == DeliveryStatus.PUBLISHING ||
-                target == DeliveryStatus.PARTIAL ||
-                target == DeliveryStatus.PUBLISHED) &&
+                (reviewedRelease &&
+                    (target == DeliveryStatus.PUBLISHING ||
+                        target == DeliveryStatus.PARTIAL ||
+                        target == DeliveryStatus.PUBLISHED))) &&
             submittedBy != null &&
             submittedBy.equals(actorId)
         ) {
@@ -1248,17 +1250,11 @@ public class ModelReleaseCandidateService {
                 Kind.FORBIDDEN
             );
         }
-        if (target == DeliveryStatus.PUBLISHING && approvedAt == null) {
-            throw new ModelReleaseCandidateException(
-                "MODEL_RELEASE_CANDIDATE_APPROVAL_REQUIRED",
-                "Candidate must be approved before publishing",
-                Kind.UNPROCESSABLE
-            );
-        }
         if (
             (target == DeliveryStatus.PUBLISHING ||
                 target == DeliveryStatus.PARTIAL ||
                 target == DeliveryStatus.PUBLISHED) &&
+            reviewedRelease &&
             approvedBy != null &&
             approvedBy.equals(actorId)
         ) {

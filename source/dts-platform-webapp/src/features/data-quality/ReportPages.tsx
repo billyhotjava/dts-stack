@@ -1,4 +1,4 @@
-import { DownloadOutlined, EyeOutlined, FileAddOutlined, ReloadOutlined } from "@ant-design/icons";
+import { FileAddOutlined } from "@ant-design/icons";
 import { Alert, Button, Card, Form, Input, Radio, Select, Space, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -170,7 +170,6 @@ function LiveQualityReport({ preview = false }: { preview?: boolean }) {
 						[
 							<Button
 								key="preview"
-								icon={<EyeOutlined />}
 								onClick={() => navigate(`${qualityPath("report-preview")}?${searchParams.toString()}`)}
 							>
 								报告预览
@@ -205,10 +204,10 @@ function LiveQualityReport({ preview = false }: { preview?: boolean }) {
 						value={periodDays}
 						onChange={(event) => setPeriodDays(event.target.value)}
 					/>
-					<Button icon={<ReloadOutlined />} loading={loading} disabled={!datasetId} onClick={() => void load()}>
+					<Button loading={loading} disabled={!datasetId} onClick={() => void load()}>
 						刷新
 					</Button>
-					<Button icon={<DownloadOutlined />} disabled={!datasetId} onClick={exportReport}>
+					<Button disabled={!datasetId} onClick={exportReport}>
 						导出 Excel
 					</Button>
 				</Space>

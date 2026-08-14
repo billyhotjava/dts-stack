@@ -1,4 +1,4 @@
-import { ReloadOutlined, SearchOutlined } from "@ant-design/icons";
+import { SearchOutlined } from "@ant-design/icons";
 import { Alert, Button, Card, Descriptions, Input, Progress, Select, Space, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -100,7 +100,7 @@ export function RunListPage() {
 				title="运行记录"
 				description="检索手动、调度与试跑执行，进入运行详情核对指标和失败样本。"
 				actions={
-					<Button icon={<ReloadOutlined />} loading={loading} onClick={() => void load()}>
+					<Button loading={loading} onClick={() => void load()}>
 						刷新
 					</Button>
 				}
@@ -224,7 +224,7 @@ export function RunDetailPage() {
 					<Button key="back" onClick={() => navigate(qualityPath("run-records"))}>
 						返回运行记录
 					</Button>,
-					<Button key="reload" icon={<ReloadOutlined />} loading={loading} onClick={() => void load()}>
+					<Button key="reload" loading={loading} onClick={() => void load()}>
 						刷新
 					</Button>,
 				]}

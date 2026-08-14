@@ -616,6 +616,8 @@
                         <testInclude>**/service/governance/SqlRepairServiceTest.java</testInclude>
                         <testInclude>**/service/governance/MeasurementUnitApplicationServiceTest.java</testInclude>
                         <testInclude>**/service/governance/IndicatorServiceLifecycleTest.java</testInclude>
+                        <testInclude>**/service/governance/DimensionDepartmentScopeTest.java</testInclude>
+                        <testInclude>**/domain/governance/GovIndicatorDefinitionJsonMappingTest.java</testInclude>
                         <testInclude>**/service/governance/IndicatorBusinessContextContractTest.java</testInclude>
                         <testInclude>**/service/governance/IndicatorBusinessContextLiquibaseTest.java</testInclude>
                         <testInclude>**/service/governance/IndicatorContextMigrationServiceIT.java</testInclude>
@@ -665,6 +667,7 @@
                         <testInclude>**/service/modeling/ModelReleaseCandidateCancelLiquibaseTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelReleaseCandidateImplementationSnapshotLiquibaseTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelReleaseCandidateReplacementLiquibaseTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelReleaseSelfServiceLiquibaseTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelReleaseCandidateServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelingDbtCompilerTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelingCompilerContractTest.java</testInclude>
@@ -674,6 +677,7 @@
                         <testInclude>**/service/modeling/ModelContextMigrationServiceIT.java</testInclude>
                         <testInclude>**/service/modeling/ModelSpecReaderTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelSpecDomainWriteAccessAdapterTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelSpecPlanWriteAccessAdapterTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelingCatalogBoundaryArchitectureTest.java</testInclude>
                         <testInclude>**/service/modeling/JpaLegacyCodeSetMigrationAdapterTest.java</testInclude>
                         <testInclude>**/service/governance/ReferenceCodeSeedServiceMigrationTest.java</testInclude>

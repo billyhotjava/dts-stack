@@ -4,7 +4,7 @@ import { Button, Card, Descriptions, Drawer, message, Select, Space, Tag, Typogr
 import { useCallback, useEffect, useMemo, useState } from "react";
 import connectorsService, { type InfraConnector } from "@/api/services/connectorsService";
 import { PageHeader } from "@/components/page-header";
-import { CompactTable } from "@/components/table";
+import { actionColumn, CompactTable } from "@/components/table";
 import { useRouter } from "@/routes/hooks";
 import { formatTime } from "@/utils/textUtils";
 
@@ -271,26 +271,18 @@ export default function ConnectorRegistryPage() {
 				width: 150,
 				render: (value: string) => formatTime(value),
 			},
-			{
-				title: "操作",
-				key: "actions",
-				width: CONNECTOR_ACTION_COLUMN_WIDTH,
-				fixed: "right",
-				render: (_: unknown, record) => (
-					<Space size="small" className="connector-registry-actions">
-						<Button
-							size="small"
-							disabled={record.driver?.status === "MISSING"}
-							onClick={() => openDataSourceCreate(record.connectorKey)}
-						>
-							创建数据源
-						</Button>
-						<Button size="small" onClick={() => openConnectorDrawer(record, "config")}>
-							配置要求
-						</Button>
-					</Space>
-				),
-			},
+			actionColumn<InfraConnector>(
+				(record) => [
+					{
+						key: "create-source",
+						label: "创建数据源",
+						disabled: record.driver?.status === "MISSING",
+						onClick: () => openDataSourceCreate(record.connectorKey),
+					},
+					{ key: "config", label: "配置要求", onClick: () => openConnectorDrawer(record, "config") },
+				],
+				{ width: CONNECTOR_ACTION_COLUMN_WIDTH },
+			),
 		],
 		[openConnectorDrawer, openDataSourceCreate],
 	);

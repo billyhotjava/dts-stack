@@ -28,9 +28,12 @@ public final class AuthoritiesConstants {
     public static final String DEPT_LEADER = "ROLE_DEPT_LEADER";
     public static final String EMPLOYEE = "ROLE_EMPLOYEE";
 
-    // Modeling release duties are projections of existing organization roles, not new Keycloak roles.
+    // Interim customer-validation policy: existing data-admin roles project to release duties.
+    // Keep this centralized so the final customer-approved role model can replace the projection without
+    // changing lifecycle state or audit semantics.
     public static final String[] MODEL_MAINTAINERS = new String[] {
         INST_DATA_OWNER,
+        DEPT_DATA_OWNER,
         INST_LEADER,
         OP_ADMIN
     };
@@ -39,10 +42,13 @@ public final class AuthoritiesConstants {
         OP_ADMIN
     };
     public static final String[] MODEL_RELEASE_OPERATORS = new String[] {
+        INST_DATA_OWNER,
+        DEPT_DATA_OWNER,
         OP_ADMIN
     };
     public static final String[] MODEL_RELEASE_DUTIES = new String[] {
         INST_DATA_OWNER,
+        DEPT_DATA_OWNER,
         INST_LEADER,
         OP_ADMIN
     };

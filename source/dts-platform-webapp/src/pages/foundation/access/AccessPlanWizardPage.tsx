@@ -1,4 +1,3 @@
-import { ArrowLeftOutlined } from "@ant-design/icons";
 import { Alert, Button, Form, Space, Spin, Steps, Tag, Typography } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -239,11 +238,7 @@ export default function AccessPlanWizardPage() {
 			<div className={styles.shell}>
 				<PageHeader
 					title={`${editId ? "编辑" : "新建"} ${ACCESS_KIND_LABELS[kind]}计划`}
-					actions={
-						<Button icon={<ArrowLeftOutlined />} onClick={() => router.push(listPath)}>
-							返回列表
-						</Button>
-					}
+					actions={<Button onClick={() => router.push(listPath)}>返回列表</Button>}
 				/>
 				<div className={styles.contextBar}>
 					<div className={styles.contextMeta}>

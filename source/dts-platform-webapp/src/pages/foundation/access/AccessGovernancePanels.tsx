@@ -8,7 +8,7 @@ import {
 	ingestionTaskAPI,
 	type StagingErrorSummary,
 } from "@/api/ingestion";
-import { CompactTable } from "@/components/table";
+import { actionColumn, CompactTable } from "@/components/table";
 import { useRouter } from "@/routes/hooks";
 import { inferAccessKind } from "./accessPlanPayload";
 
@@ -169,26 +169,19 @@ export function AccessQualityPanel({
 			ellipsis: true,
 			render: (value) => (value == null ? "—" : typeof value === "string" ? value : JSON.stringify(value)),
 		},
-		{
-			title: "操作",
-			key: "actions",
-			fixed: "right",
-			width: 90,
-			render: (_, row) => (
-				<Button
-					type="link"
-					disabled={!businessColumns.length}
-					onClick={() => {
-						const column = businessColumns[0];
-						setEditingRow(row);
-						setEditingColumn(column);
-						setEditingValue(row[column] == null ? "" : String(row[column]));
-					}}
-				>
-					修正
-				</Button>
-			),
-		},
+		actionColumn<IngestionStagingRow>((row) => [
+			{
+				key: "fix",
+				label: "修正",
+				disabled: !businessColumns.length,
+				onClick: () => {
+					const column = businessColumns[0];
+					setEditingRow(row);
+					setEditingColumn(column);
+					setEditingValue(row[column] == null ? "" : String(row[column]));
+				},
+			},
+		]),
 	];
 
 	const submitCellUpdate = async () => {

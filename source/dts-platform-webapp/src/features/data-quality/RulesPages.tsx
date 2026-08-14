@@ -1,5 +1,4 @@
-import { DeleteOutlined, EditOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Button, Card, Descriptions, Input, Popconfirm, Space, Switch, Tag } from "antd";
+import { Button, Card, Descriptions, Input, Space, Switch, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
@@ -14,7 +13,7 @@ import {
 	triggerQualityDryRun,
 	triggerQualityRun,
 } from "@/api/platformApi";
-import { CompactTable } from "@/components/table";
+import { actionColumn, CompactTable } from "@/components/table";
 import { formatTime } from "@/utils/textUtils";
 import { ManagePermissionHint, QualityEmpty, QualityPageHeading, QualityStatus } from "./QualityShared";
 import { qualityPath } from "./qualityRoutes";
@@ -149,44 +148,40 @@ export function RuleListPage() {
 				/>
 			),
 		},
-		{
-			title: "操作",
-			width: 280,
-			fixed: "right",
-			render: (_, row) => (
-				<Space size={4}>
-					<Button
-						size="small"
-						onClick={() => void runAction(row, "dry-run")}
-						disabled={!canManage || !isExecutableQualityRule(row)}
-						loading={actingId === row.id}
-						title="仅启用、当前版本已发布且存在数据集绑定的规则可以试跑"
-					>
-						试跑
-					</Button>
-					<Button
-						size="small"
-						icon={<PlayCircleOutlined />}
-						onClick={() => void runAction(row, "run")}
-						disabled={!canManage || !isExecutableQualityRule(row)}
-						title="仅启用、当前版本已发布且存在数据集绑定的规则可以执行"
-					>
-						执行
-					</Button>
-					<Button
-						size="small"
-						icon={<EditOutlined />}
-						onClick={() => navigate(`${qualityPath("rule-detail", { ruleId: row.id })}/edit`)}
-						disabled={!canManage}
-					>
-						编辑
-					</Button>
-					<Popconfirm title="确认删除该规则？" onConfirm={() => void runAction(row, "delete")} disabled={!canManage}>
-						<Button size="small" danger icon={<DeleteOutlined />} disabled={!canManage} />
-					</Popconfirm>
-				</Space>
-			),
-		},
+		actionColumn<QualityRule>(
+			(row) => [
+				{
+					key: "dry-run",
+					label: "试跑",
+					disabled: !canManage || !isExecutableQualityRule(row),
+					loading: actingId === row.id,
+					tooltip: "仅启用、当前版本已发布且存在数据集绑定的规则可以试跑",
+					onClick: () => void runAction(row, "dry-run"),
+				},
+				{
+					key: "run",
+					label: "执行",
+					disabled: !canManage || !isExecutableQualityRule(row),
+					tooltip: "仅启用、当前版本已发布且存在数据集绑定的规则可以执行",
+					onClick: () => void runAction(row, "run"),
+				},
+				{
+					key: "edit",
+					label: "编辑",
+					disabled: !canManage,
+					onClick: () => navigate(`${qualityPath("rule-detail", { ruleId: row.id })}/edit`),
+				},
+				{
+					key: "delete",
+					label: "删除",
+					danger: true,
+					disabled: !canManage,
+					confirm: "确认删除该规则？",
+					onClick: () => void runAction(row, "delete"),
+				},
+			],
+			{ width: 280 },
+		),
 	];
 
 	return (
@@ -196,13 +191,12 @@ export function RuleListPage() {
 				description="维护规则启用状态与版本生命周期；只有已启用、当前版本已发布且存在数据集绑定的规则才能运行。"
 				actions={[
 					<ManagePermissionHint key="permission" canManage={canManage} />,
-					<Button key="reload" icon={<ReloadOutlined />} onClick={() => void load()}>
+					<Button key="reload" onClick={() => void load()}>
 						刷新
 					</Button>,
 					<Button
 						key="new"
 						type="primary"
-						icon={<PlusOutlined />}
 						disabled={!canManage || Boolean(datasetMessage)}
 						onClick={() => navigate(qualityPath("rule-editor"))}
 					>

@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.governance;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -557,6 +558,24 @@ class IndicatorServiceLifecycleTest {
             .hasMessageContaining("department");
 
         verify(indicatorRepository, never()).findById(any(UUID.class));
+    }
+
+    @Test
+    void departmentDataOwnerCannotMutateGlobalIndicatorWhileInstituteDataOwnerCan() {
+        GovIndicatorDefinition global = indicator(UUID.randomUUID(), "GLOBAL_GMV", "Global GMV", "DRAFT", "v1");
+        global.setOwnerDept("ROOT");
+        global.setDataLevel("DATA_INTERNAL");
+        when(indicatorRepository.findById(global.getId())).thenReturn(Optional.of(global));
+        when(organizationVisibilityService.isRoot("ROOT")).thenReturn(true);
+
+        authenticate(AuthoritiesConstants.DEPT_DATA_OWNER, "DEPT_A");
+        assertThatThrownBy(() -> service.requireMutationAccess(global.getId(), "DEPT_A"))
+            .isInstanceOf(AccessDeniedException.class)
+            .hasMessageContaining("outside the active department");
+
+        SecurityContextHolder.clearContext();
+        authenticate(AuthoritiesConstants.INST_DATA_OWNER, "ROOT");
+        assertThatCode(() -> service.requireMutationAccess(global.getId(), null)).doesNotThrowAnyException();
     }
 
     @Test

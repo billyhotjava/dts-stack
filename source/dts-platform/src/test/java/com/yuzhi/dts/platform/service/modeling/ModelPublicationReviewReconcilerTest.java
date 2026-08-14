@@ -159,6 +159,22 @@ class ModelPublicationReviewReconcilerTest {
     }
 
     @Test
+    void selfServicePublisherDoesNotEnterLegacyReviewReconciliation() {
+        when(candidates.find(TENANT, CANDIDATE_ID))
+            .thenReturn(Optional.of(candidate(DeliveryStatus.QUALITY_PASSED, 9, null)));
+        when(dutyDirectory.hasDuty(ACTOR, DeliveryActorRole.MODEL_MAINTAINER))
+            .thenReturn(true);
+        when(dutyDirectory.hasDuty(ACTOR, DeliveryActorRole.RELEASE_OPERATOR))
+            .thenReturn(true);
+
+        var result = reconciler.reconcile(work());
+
+        assertThat(result.outcome()).isEqualTo(ReconcileOutcome.IGNORED);
+        verify(planAccess, never()).canMaintain(any(), any(), any());
+        verify(commands, never()).transition(any(), any(), any(), any());
+    }
+
+    @Test
     void directoryFailureStopsWithoutFallingBackToTheRequestTimeRole() {
         when(candidates.find(TENANT, CANDIDATE_ID))
             .thenReturn(

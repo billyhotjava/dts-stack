@@ -1,7 +1,7 @@
-import { Archive, Download, Pencil, Plus, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { applyStandardPackageImport, previewStandardPackageImport } from "@/api/modelingStandardsApi";
-import { type CompactColumns, CompactTable } from "@/components/table";
+import { actionColumn, type CompactColumns, CompactTable } from "@/components/table";
 import type { DataModelingRoute } from "../types";
 import { Button, Modal, PageHeader, RequestState, Status, Toast, useTransientMessage } from "./PrototypePrimitives";
 import { normalizeModelingRequestFailure } from "./services/planningProjectionService";
@@ -109,6 +109,9 @@ export function StandardsPage({ route }: { route: DataModelingRoute }) {
 	const [failure, setFailure] = useState<{ kind: "permission" | "request"; message: string } | null>(null);
 	const [editorRow, setEditorRow] = useState<StandardsRow | "new" | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
+	// 归档动作原先封在行内组件 ArchiveAction 里各自持有 state，改用 RowActions 后上提到页面级。
+	const [archivingId, setArchivingId] = useState<string | null>(null);
+	const [archiveError, setArchiveError] = useState("");
 	const previousView = useRef(view);
 	const { message, show } = useTransientMessage();
 	const load = useCallback(async () => {
@@ -126,6 +129,23 @@ export function StandardsPage({ route }: { route: DataModelingRoute }) {
 			if (requestEpoch.current === epoch) setLoading(false);
 		}
 	}, [query, route.title, view]);
+	const archiveRow = useCallback(
+		async (row: StandardsRow) => {
+			if (!window.confirm(`确认归档“${row.name}”？`)) return;
+			setArchivingId(row.id);
+			setArchiveError("");
+			try {
+				await archiveStandardsRow(view, row);
+				show("标准对象已归档");
+				await load();
+			} catch (cause) {
+				setArchiveError(normalizeModelingRequestFailure(cause, "归档失败").message);
+			} finally {
+				setArchivingId(null);
+			}
+		},
+		[load, show, view],
+	);
 	useEffect(() => {
 		if (previousView.current !== view) {
 			setQuery("");
@@ -160,36 +180,27 @@ export function StandardsPage({ route }: { route: DataModelingRoute }) {
 			),
 			...(capability.edit || capability.archive
 				? [
-						{
-							title: "操作",
-							dataIndex: "actions",
-							render: (_: unknown, row: StandardsRow) => (
-								<div className="dmx-row-actions">
-									{capability.edit ? (
-										<Button
-											disabled={!canMaintain}
-											onClick={() => setEditorRow(row)}
-											title={canMaintain ? undefined : "当前账号无标准维护权限"}
-											type="link"
-										>
-											<Pencil size={14} />
-											编辑
-										</Button>
-									) : null}
-									{capability.archive ? (
-										<ArchiveAction
-											disabled={!canMaintain}
-											onComplete={async () => {
-												show("标准对象已归档");
-												await load();
-											}}
-											row={row}
-											view={view}
-										/>
-									) : null}
-								</div>
-							),
-						},
+						actionColumn<StandardsRow>(
+							(row) => [
+								{
+									key: "edit",
+									label: "编辑",
+									hidden: !capability.edit,
+									disabled: !canMaintain,
+									tooltip: canMaintain ? undefined : "当前账号无标准维护权限",
+									onClick: () => setEditorRow(row),
+								},
+								{
+									key: "archive",
+									label: archivingId === row.id ? "归档中…" : "归档",
+									hidden: !capability.archive,
+									disabled: !canMaintain || archivingId === row.id,
+									tooltip: archiveError || undefined,
+									onClick: () => void archiveRow(row),
+								},
+							],
+							{ maxActions: 2 },
+						),
 					]
 				: []),
 		],
@@ -206,7 +217,6 @@ export function StandardsPage({ route }: { route: DataModelingRoute }) {
 							onClick={() => setImportOpen(true)}
 							title={canMaintain ? undefined : "当前账号无标准维护权限"}
 						>
-							<Download size={15} />
 							导入标准包
 						</Button>
 						<Button
@@ -215,7 +225,6 @@ export function StandardsPage({ route }: { route: DataModelingRoute }) {
 							onClick={() => setEditorRow("new")}
 							title={canMaintain ? capability.disabledReason : "当前账号无标准维护权限"}
 						>
-							<Plus size={15} />
 							{page.action}
 						</Button>
 					</>
@@ -385,42 +394,6 @@ function StandardsEditor({
 				</div>
 			) : null}
 		</Modal>
-	);
-}
-
-function ArchiveAction({
-	view,
-	row,
-	onComplete,
-	disabled,
-}: {
-	view: StandardsView;
-	row: StandardsRow;
-	onComplete: () => Promise<void>;
-	disabled: boolean;
-}) {
-	const [busy, setBusy] = useState(false);
-	const [error, setError] = useState("");
-	const run = async () => {
-		if (!window.confirm(`确认归档“${row.name}”？`)) return;
-		setBusy(true);
-		setError("");
-		try {
-			await archiveStandardsRow(view, row);
-			await onComplete();
-		} catch (cause) {
-			setError(normalizeModelingRequestFailure(cause, "归档失败").message);
-		} finally {
-			setBusy(false);
-		}
-	};
-	return (
-		<span title={error || undefined}>
-			<Button disabled={disabled || busy} onClick={() => void run()} type="link">
-				<Archive size={14} />
-				{busy ? "归档中…" : "归档"}
-			</Button>
-		</span>
 	);
 }
 

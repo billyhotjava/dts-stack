@@ -1,4 +1,4 @@
-import { ArrowRight, BarChart3, Boxes, Database, GitBranch, Ruler, Sparkles } from "lucide-react";
+import { BarChart3, Boxes, Database, GitBranch, Ruler, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { type CompactColumns, CompactTable } from "@/components/table";
@@ -37,11 +37,7 @@ export function OverviewPage({ route }: { route: DataModelingRoute }) {
 	return (
 		<main className="dmx-page dmx-overview">
 			<PageHeader
-				actions={
-					<Button onClick={() => navigate(dataModelingPath("graphs", "models"))}>
-						查看全景关系 <ArrowRight size={15} />
-					</Button>
-				}
+				actions={<Button onClick={() => navigate(dataModelingPath("graphs", "models"))}>查看全景关系</Button>}
 				description={route.description}
 				title="建模概览"
 				trail="数据建模"
@@ -123,7 +119,7 @@ function OverviewContent({
 					<header>
 						<h2>最近模型</h2>
 						<Button onClick={() => navigate(dataModelingPath("dimensions", "workbench"))} type="link">
-							进入维度建模 <ArrowRight size={14} />
+							进入维度建模
 						</Button>
 					</header>
 					{projection.recentModels.length ? (

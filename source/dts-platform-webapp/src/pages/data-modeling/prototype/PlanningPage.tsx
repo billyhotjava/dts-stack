@@ -1,8 +1,17 @@
-import { Archive, Plus, RotateCw, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { deleteBusinessProcessApi, type Sprint64BusinessProcess } from "@/api/sprint64GovernanceApi";
 import { deleteWarehouseLayer, type WarehouseLayerView } from "@/api/warehouseLayerApi";
-import { type CompactColumns, CompactTable } from "@/components/table";
+import type { TablePaginationConfig } from "antd/es/table";
+import type { FilterValue, SorterResult } from "antd/es/table/interface";
+import {
+	actionColumnWidth,
+	type CompactColumns,
+	CompactTable,
+	compareCell,
+	type RowAction,
+	RowActions,
+} from "@/components/table";
 import { useArchitectureDictionaryWriteAccess } from "@/pages/data-architecture/useArchitectureDictionaryWriteAccess";
 import { useUserInfo } from "@/store/userStore";
 import type { DataModelingRoute } from "../types";
@@ -72,6 +81,8 @@ export function PlanningPage({ route, surface = "modeling", activeId = "", onAct
 	const [failure, setFailure] = useState<{ kind: "permission" | "request"; message: string } | null>(null);
 	const [query, setQuery] = useState("");
 	const [page, setPage] = useState(1);
+	const [pageSize, setPageSize] = useState(PAGE_SIZE);
+	const [sort, setSort] = useState<{ index: number; order: "ascend" | "descend" } | null>(null);
 	const previousView = useRef(route.view);
 	const [drawer, setDrawer] = useState<{
 		open: boolean;
@@ -123,18 +134,27 @@ export function PlanningPage({ route, surface = "modeling", activeId = "", onAct
 			row.cells.some((cell) => cell.toLocaleLowerCase().includes(normalized)),
 		);
 	}, [projection?.rows, query]);
-	const pageCount = Math.max(1, Math.ceil(visibleRows.length / PAGE_SIZE));
+
+	// 数仓分层按 layerGroup 分组展示，重排会打散分组，因此该视图不开放排序。
+	const groupedView = route.view === "layers";
+	const sortedRows = useMemo(() => {
+		if (groupedView || !sort) return visibleRows;
+		const direction = sort.order === "ascend" ? 1 : -1;
+		return [...visibleRows].sort((a, b) => direction * compareCell(a.cells[sort.index], b.cells[sort.index]));
+	}, [visibleRows, sort, groupedView]);
+
+	const pageCount = Math.max(1, Math.ceil(sortedRows.length / pageSize));
 	const currentPage = Math.min(page, pageCount);
-	const pageRows = visibleRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+	const pageRows = sortedRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
 	useEffect(() => {
 		if (page > pageCount) setPage(pageCount);
 	}, [page, pageCount]);
 	useEffect(() => {
 		if (!activeId) return;
-		const index = visibleRows.findIndex((row) => row.id === activeId);
-		if (index >= 0) setPage(Math.floor(index / PAGE_SIZE) + 1);
-	}, [activeId, visibleRows]);
+		const index = sortedRows.findIndex((row) => row.id === activeId);
+		if (index >= 0) setPage(Math.floor(index / pageSize) + 1);
+	}, [activeId, sortedRows, pageSize]);
 
 	const creatable = CREATABLE_VIEWS.has(route.view);
 	const hasActions = CREATABLE_VIEWS.has(route.view);
@@ -187,44 +207,52 @@ export function PlanningPage({ route, surface = "modeling", activeId = "", onAct
 		}
 	};
 
-	const renderActions = useCallback(
-		(row: PlanningProjectionRow) => {
+	const rowActions = useCallback(
+		(row: PlanningProjectionRow): RowAction[] => {
 			switch (route.view) {
 				case "business-domains":
 				case "business-categories":
 				case "domains":
 				case "marts":
 				case "subjects":
-					return <Button onClick={() => openRow(row)}>{canMaintain ? "编辑" : "查看"}</Button>;
+					return [{ key: "open", label: canMaintain ? "编辑" : "查看", onClick: () => openRow(row) }];
 				case "processes": {
 					const process = row.source as Sprint64BusinessProcess;
 					const retired = String(process.lifecycleStatus || "ACTIVE").toUpperCase() === "RETIRED";
-					return (
-						<div className="dmx-row-actions">
-							<Button onClick={() => openRow(row)}>{canMaintain ? "编辑" : "查看"}</Button>
-							<Button danger disabled={!canMaintain || retired} onClick={() => void deleteProcess(process)}>
-								<Archive size={14} /> {retired ? "已停用" : "停用"}
-							</Button>
-						</div>
-					);
+					return [
+						{ key: "open", label: canMaintain ? "编辑" : "查看", onClick: () => openRow(row) },
+						{
+							key: "retire",
+							label: retired ? "已停用" : "停用",
+							danger: true,
+							disabled: !canMaintain || retired,
+							onClick: () => void deleteProcess(process),
+						},
+					];
 				}
 				case "layers": {
 					const layer = asWarehouseLayer(row.source);
-					return (
-						<div className="dmx-row-actions">
-							<Button onClick={() => openRow(row)}>{layer?.builtin || !canMaintain ? "查看" : "编辑"}</Button>
-							{layer?.deletable ? (
-								<Button danger disabled={!canMaintain} onClick={() => void deleteLayer(layer)}>
-									<Archive size={14} /> 删除
-								</Button>
-							) : (
-								<span className="dmx-capability-note">内置</span>
-							)}
-						</div>
-					);
+					return [
+						{ key: "open", label: layer?.builtin || !canMaintain ? "查看" : "编辑", onClick: () => openRow(row) },
+						{
+							key: "delete",
+							label: "删除",
+							danger: true,
+							hidden: !layer?.deletable,
+							disabled: !canMaintain,
+							onClick: () => void deleteLayer(layer as WarehouseLayerView),
+						},
+						{
+							key: "builtin",
+							label: "内置",
+							disabled: true,
+							hidden: Boolean(layer?.deletable),
+							tooltip: "内置分层由平台维护，不可删除",
+						},
+					];
 				}
 				default:
-					return null;
+					return [];
 			}
 		},
 		[canMaintain, deleteLayer, deleteProcess, openRow, route.view],
@@ -285,6 +313,25 @@ export function PlanningPage({ route, surface = "modeling", activeId = "", onAct
 		return nodes;
 	}, [pageRows, route.view]);
 
+	const onTableChange = useCallback(
+		(
+			nextPagination: TablePaginationConfig,
+			_filters: Record<string, FilterValue | null>,
+			sorter: SorterResult<ProjectionTableRow> | SorterResult<ProjectionTableRow>[],
+		) => {
+			const first = Array.isArray(sorter) ? sorter.find((entry) => entry.order) : sorter;
+			const nextSort =
+				first?.order && first.columnKey != null ? { index: Number(first.columnKey), order: first.order } : null;
+			const nextSize = nextPagination.pageSize ?? PAGE_SIZE;
+			const sortChanged = nextSort?.index !== sort?.index || nextSort?.order !== sort?.order;
+			setSort(nextSort);
+			setPageSize(nextSize);
+			// 换每页条数或换排序都回到第一页，否则会停在一个不存在的页码上。
+			setPage(nextSize !== pageSize || sortChanged ? 1 : (nextPagination.current ?? 1));
+		},
+		[pageSize, sort],
+	);
+
 	const headerNames = projection?.headers || [];
 	const columns = useMemo<CompactColumns<ProjectionTableRow>>(() => {
 		const total = headerNames.length + (hasActions ? 1 : 0);
@@ -292,6 +339,10 @@ export function PlanningPage({ route, surface = "modeling", activeId = "", onAct
 			...headerNames.map((header, index) => ({
 				title: header,
 				dataIndex: index,
+				key: String(index),
+				// 受控分页：排序在 sortedRows 上做，交给 onChange 回传列下标。
+				sorter: !groupedView,
+				sortOrder: sort?.index === index ? sort.order : null,
 				onCell: (record: ProjectionTableRow) => (record.group ? { colSpan: index === 0 ? total : 0 } : {}),
 				render: (_: unknown, record: ProjectionTableRow) => {
 					if (record.group) return index === 0 ? record.group : null;
@@ -310,14 +361,16 @@ export function PlanningPage({ route, surface = "modeling", activeId = "", onAct
 						{
 							title: "操作",
 							dataIndex: "actions",
+							fixed: "right" as const,
+							width: actionColumnWidth(groupedView ? 2 : 1),
 							onCell: (record: ProjectionTableRow) => (record.group ? { colSpan: 0 } : {}),
 							render: (_: unknown, row: ProjectionTableRow) =>
-								row.group ? null : renderActions(row as PlanningProjectionRow),
+								row.group ? null : <RowActions items={rowActions(row as PlanningProjectionRow)} emptyText="内置" />,
 						},
 					]
 				: []),
 		];
-	}, [headerNames, hasActions, renderActions]);
+	}, [headerNames, hasActions, rowActions, groupedView, sort]);
 	return (
 		<main className="dmx-page">
 			<section className="dmx-planning-content">
@@ -325,7 +378,6 @@ export function PlanningPage({ route, surface = "modeling", activeId = "", onAct
 					actions={
 						<>
 							<Button disabled={loading} onClick={() => void load()}>
-								<RotateCw size={15} />
 								刷新
 							</Button>
 							{creatable && route.view === "business-domains" ? (
@@ -334,19 +386,18 @@ export function PlanningPage({ route, surface = "modeling", activeId = "", onAct
 										disabled={!canMaintain}
 										onClick={() => setDrawer({ open: true, editing: null, catalogView: "business-categories" })}
 									>
-										<Plus size={15} /> 新建业务分类
+										新建业务分类
 									</Button>
 									<Button
 										disabled={!canMaintain}
 										onClick={() => setDrawer({ open: true, editing: null, catalogView: "domains" })}
 										primary
 									>
-										<Plus size={15} /> 新建数据域
+										新建数据域
 									</Button>
 								</>
 							) : creatable ? (
 								<Button disabled={!canMaintain} primary onClick={() => setDrawer({ open: true, editing: null })}>
-									<Plus size={15} />
 									新建{route.title}
 								</Button>
 							) : null}
@@ -378,37 +429,23 @@ export function PlanningPage({ route, surface = "modeling", activeId = "", onAct
 											value={query}
 										/>
 									</label>
-									<span>
-										共 {visibleRows.length} 条，每页 {PAGE_SIZE} 条
-									</span>
 								</div>
 								<div className="dmx-table-scroll">
 									<CompactTable<ProjectionTableRow>
 										columns={columns}
 										dataSource={projectionTableRows}
-										pagination={false}
+										pagination={{
+											current: currentPage,
+											pageSize,
+											total: sortedRows.length,
+										}}
+										onChange={onTableChange}
 										rowClassName={(record) =>
 											record.group ? "dmx-table-group" : record.id === activeId ? "selected" : ""
 										}
 										rowKey="key"
 									/>
 								</div>
-								{visibleRows.length ? (
-									<nav aria-label={`${route.title}分页`} className="dmx-pagination">
-										<Button disabled={currentPage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
-											上一页
-										</Button>
-										<span>
-											第 {currentPage} / {pageCount} 页
-										</span>
-										<Button
-											disabled={currentPage >= pageCount}
-											onClick={() => setPage((value) => Math.min(pageCount, value + 1))}
-										>
-											下一页
-										</Button>
-									</nav>
-								) : null}
 								{!visibleRows.length ? (
 									<RequestState description="当前目录暂无记录。" kind="empty" title={`暂无${route.title}`} />
 								) : null}

@@ -1,24 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import {
-	Button,
-	Input,
-	Modal,
-	Select,
-	Space,
-	Tag,
-	Typography,
-} from "antd";
-import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
+import { Button, Input, Modal, Select, Space, Tag, Typography } from "antd";
+import { actionColumn, appendDetailAction, CompactTable, RecordDetailDrawer } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { SearchOutlined } from "@ant-design/icons";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
-import {
-	listIndicators,
-	deleteIndicator,
-	previewIndicatorSql,
-	generateAndRunIndicators,
-} from "@/api/platformApi";
+import { listIndicators, deleteIndicator, previewIndicatorSql, generateAndRunIndicators } from "@/api/platformApi";
 
 const DOMAIN_OPTIONS = [
 	{ label: "全部", value: "" },
@@ -185,7 +172,7 @@ export default function Page() {
 			title: "领域",
 			dataIndex: "domain",
 			width: 100,
-			render: (v: string) => v ? <Tag color={DOMAIN_COLORS[v] ?? "default"}>{v}</Tag> : "-",
+			render: (v: string) => (v ? <Tag color={DOMAIN_COLORS[v] ?? "default"}>{v}</Tag> : "-"),
 		},
 		{
 			title: "聚合方式",
@@ -205,45 +192,16 @@ export default function Page() {
 			title: "状态",
 			dataIndex: "status",
 			width: 100,
-			render: (v: string) => v ? <Tag color={STATUS_COLORS[v] ?? "default"}>{v}</Tag> : "-",
+			render: (v: string) => (v ? <Tag color={STATUS_COLORS[v] ?? "default"}>{v}</Tag> : "-"),
 		},
-		{
-			title: "操作",
-			dataIndex: "actions",
-			key: "action",
-			width: 320,
-			fixed: "right",
-			render: (_: any, record: Indicator) => (
-				<Space size="small">
-					<Button
-						type="link"
-						size="small"
-						onClick={() => handlePreviewSql(record)}
-					>
-						预览SQL
-					</Button>
-					{canManage && (
-						<Button
-							type="link"
-							size="small"
-							onClick={() => handleGenerate(record)}
-						>
-							生成
-						</Button>
-					)}
-					{canManage && (
-						<Button
-							type="link"
-							size="small"
-							danger
-							onClick={() => handleDelete(record)}
-						>
-							删除
-						</Button>
-					)}
-				</Space>
-			),
-		},
+		actionColumn<Indicator>(
+			(record) => [
+				{ key: "preview-sql", label: "预览SQL", onClick: () => handlePreviewSql(record) },
+				{ key: "generate", label: "生成", hidden: !canManage, onClick: () => handleGenerate(record) },
+				{ key: "delete", label: "删除", danger: true, hidden: !canManage, onClick: () => handleDelete(record) },
+			],
+			{ width: 320 },
+		),
 	];
 
 	const columns = useMemo(
@@ -255,7 +213,9 @@ export default function Page() {
 	return (
 		<div style={{ padding: 24 }}>
 			<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-				<Typography.Title level={4} style={{ margin: 0 }}>指标定义列表</Typography.Title>
+				<Typography.Title level={4} style={{ margin: 0 }}>
+					指标定义列表
+				</Typography.Title>
 				{canManage && (
 					<Button
 						type="primary"
@@ -307,13 +267,7 @@ export default function Page() {
 			/>
 
 			{/* SQL Preview Modal */}
-			<Modal
-				title="SQL 预览"
-				open={previewOpen}
-				onCancel={() => setPreviewOpen(false)}
-				footer={null}
-				width={720}
-			>
+			<Modal title="SQL 预览" open={previewOpen} onCancel={() => setPreviewOpen(false)} footer={null} width={720}>
 				<Input.TextArea value={previewSql} readOnly rows={18} style={{ fontFamily: "monospace" }} />
 			</Modal>
 			<RecordDetailDrawer<Indicator>

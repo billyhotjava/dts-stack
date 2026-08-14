@@ -128,6 +128,34 @@ class ModelPublicationIntentServiceTest {
     }
 
     @Test
+    void dataAdministratorCanPublishQualityPassedCandidateWithoutReview() {
+        when(dutyResolver.currentDuties())
+            .thenReturn(Set.of(
+                DeliveryActorRole.MODEL_MAINTAINER,
+                DeliveryActorRole.RELEASE_OPERATOR
+            ));
+        CandidateView passed = candidate(DeliveryStatus.QUALITY_PASSED, 9, CandidateOrigin.SINGLE_MODEL_INTENT);
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(passed));
+        when(planAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
+        when(candidateCommands.detectDrift(TENANT, passed)).thenReturn(List.of());
+
+        var result = service.start(
+            TENANT,
+            ACTOR,
+            MODEL_ID,
+            CANDIDATE_ID,
+            9,
+            "publish-intent-self-service",
+            "publish current model"
+        );
+
+        assertThat(result.outcome()).isEqualTo(PublicationOutcome.PUBLICATION_READY);
+        assertThat(result.nextHumanAction()).isEqualTo(NextHumanAction.PUBLISH);
+        verify(candidateCommands, never()).publicationRequested(any(), any(), any(), any());
+        verify(candidateCommands, never()).transition(any(), any(), any(), any());
+    }
+
+    @Test
     void replayReturnsTheCurrentProjectionInsteadOfTheOriginalQualitySnapshot() {
         when(dutyResolver.currentDuties())
             .thenReturn(Set.of(DeliveryActorRole.MODEL_MAINTAINER));

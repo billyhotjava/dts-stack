@@ -17,7 +17,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 /**
- * Advances QUALITY_PASSED to REVIEW_PENDING only after current authority and snapshot revalidation.
+ * Advances legacy review-bound QUALITY_PASSED candidates to REVIEW_PENDING after current authority
+ * and snapshot revalidation. Data-administrator self-service candidates stay publishable without review.
  *
  * <p>No user token is stored or replayed. Candidate CAS plus the deterministic command key gives
  * exactly-once state effect when multiple scheduler instances race.
@@ -122,6 +123,14 @@ public class ModelPublicationReviewReconciler {
                     item.candidateId(),
                     "MODEL_RELEASE_MAINTAINER_DUTY_REVOKED"
                 );
+            }
+            if (
+                dutyDirectory.hasDuty(
+                    requester,
+                    DeliveryActorRole.RELEASE_OPERATOR
+                )
+            ) {
+                return ignored(item.candidateId());
             }
         } catch (ReleaseDutyDirectoryUnavailableException unavailable) {
             return blocked(

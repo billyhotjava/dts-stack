@@ -2127,16 +2127,6 @@
 	min-width: 0;
 }
 
-.dmx-pagination {
-	display: flex;
-	align-items: center;
-	justify-content: flex-end;
-	gap: 10px;
-	padding: 12px 0;
-	color: var(--dmx-muted);
-	font-size: 12px;
-}
-
 .dmx-table tr.selected td {
 	background: #f2f6ff;
 }

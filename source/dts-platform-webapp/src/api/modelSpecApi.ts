@@ -676,6 +676,7 @@ export type ModelBuildIntentResult = {
 export type ModelPublicationOutcome =
 	| "QUALITY_RUNNING"
 	| "QUALITY_FAILED"
+	| "PUBLICATION_READY"
 	| "REVIEW_SUBMISSION_PENDING"
 	| "REVIEW_PENDING"
 	| "APPROVED"

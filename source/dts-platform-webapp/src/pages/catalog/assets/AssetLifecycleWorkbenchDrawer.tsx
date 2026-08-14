@@ -27,7 +27,7 @@ import {
 	retryCatalogLifecycleDestruction,
 	submitCatalogLifecycleAction,
 } from "@/api/platformApi";
-import { CompactTable } from "@/components/table";
+import { actionColumn, CompactTable } from "@/components/table";
 import { useRouter } from "@/routes/hooks";
 import type { AssetRow } from "./assetPageShared";
 import { classificationText, formatTime } from "./assetPageShared";
@@ -483,33 +483,34 @@ export function AssetLifecycleWorkbenchDrawer({ open, asset, classificationFact,
 											{ title: "申请人", dataIndex: "requester" },
 											{ title: "密级", dataIndex: "effectiveLevel", render: classificationText },
 											{ title: "申请时间", dataIndex: "createdAt", render: formatTime },
-											{
-												title: "操作",
-												render: (_, row) => (
-													<Space>
-														{["PENDING", "SECOND_APPROVAL_PENDING"].includes(row.status) ? (
-															<>
-																<Button
-																	size="small"
-																	type="primary"
-																	loading={actingId === row.id}
-																	onClick={() => void decide(row, "approve")}
-																>
-																	批准
-																</Button>
-																<Button size="small" onClick={() => void decide(row, "reject")}>
-																	驳回
-																</Button>
-															</>
-														) : null}
-														{row.actionType === "PERMANENT_DESTROY" && row.status === "FAILED" ? (
-															<Button danger size="small" onClick={() => void retryDestruction(row)}>
-																重试
-															</Button>
-														) : null}
-													</Space>
-												),
-											},
+											actionColumn<LifecycleActionView>(
+												(row) => {
+													const pending = ["PENDING", "SECOND_APPROVAL_PENDING"].includes(row.status);
+													return [
+														{
+															key: "approve",
+															label: "批准",
+															hidden: !pending,
+															loading: actingId === row.id,
+															onClick: () => void decide(row, "approve"),
+														},
+														{
+															key: "reject",
+															label: "驳回",
+															hidden: !pending,
+															onClick: () => void decide(row, "reject"),
+														},
+														{
+															key: "retry",
+															label: "重试",
+															danger: true,
+															hidden: !(row.actionType === "PERMANENT_DESTROY" && row.status === "FAILED"),
+															onClick: () => void retryDestruction(row),
+														},
+													];
+												},
+												{ maxActions: 2, fixed: false },
+											),
 										]}
 									/>
 									<div>

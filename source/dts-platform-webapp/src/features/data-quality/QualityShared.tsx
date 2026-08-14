@@ -1,4 +1,3 @@
-import { LockOutlined } from "@ant-design/icons";
 import { Alert, Button, Card, Empty, Space, Tag, Tooltip } from "antd";
 import type { ReactNode } from "react";
 import { UNAVAILABLE_CAPABILITIES } from "./qualityRoutes";
@@ -76,9 +75,7 @@ export function UnavailableCapability({
 	if (compact) {
 		return (
 			<Tooltip title={item.reason}>
-				<Button disabled icon={<LockOutlined />}>
-					{item.label}
-				</Button>
+				<Button disabled>{item.label}</Button>
 			</Tooltip>
 		);
 	}
@@ -88,11 +85,7 @@ export function UnavailableCapability({
 			showIcon
 			message={title || item.label}
 			description={item.reason}
-			action={
-				<Button disabled icon={<LockOutlined />}>
-					{item.label}
-				</Button>
-			}
+			action={<Button disabled>{item.label}</Button>}
 		/>
 	);
 }

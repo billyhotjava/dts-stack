@@ -1,6 +1,5 @@
 import {
 	DatabaseOutlined,
-	DownOutlined,
 	ExclamationCircleOutlined,
 	LinkOutlined,
 	SafetyCertificateOutlined,
@@ -359,9 +358,7 @@ export default function MetadataManagementPage() {
 									],
 								}}
 							>
-								<Button size="small">
-									更多 <DownOutlined />
-								</Button>
+								<Button size="small">更多</Button>
 							</Dropdown>
 						</>
 					) : null}
@@ -374,13 +371,7 @@ export default function MetadataManagementPage() {
 		<div className="space-y-4">
 			<PageHeader
 				title="元数据管理"
-				actions={
-					canManage ? (
-						<Button icon={<DatabaseOutlined />} onClick={() => router.push("/catalog/metadata")}>
-							数据源结构采集
-						</Button>
-					) : null
-				}
+				actions={canManage ? <Button onClick={() => router.push("/catalog/metadata")}>数据源结构采集</Button> : null}
 			/>
 			<div className="flex items-center gap-2 text-xs text-slate-500">
 				<Tooltip title="缺口统计仅覆盖当前筛选结果中的当前页数据；翻页或调整筛选后数字会随之变化。全量治理缺口请查看资产概览。">

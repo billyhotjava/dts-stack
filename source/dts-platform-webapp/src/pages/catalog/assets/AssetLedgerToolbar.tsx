@@ -1,4 +1,4 @@
-import { DownOutlined, FilterOutlined, SearchOutlined, TableOutlined } from "@ant-design/icons";
+import { SearchOutlined, TableOutlined } from "@ant-design/icons";
 import { Badge, Button, Card, Dropdown, Input, type MenuProps, Select, Space, Tag } from "antd";
 import { AssetTagFilter } from "@/components/catalog/tags/AssetTagFilter";
 import { CLASSIFICATION_OPTIONS, GOVERNANCE_OPTIONS, MATCH_OPTIONS, TYPE_OPTIONS } from "./assetPageShared";
@@ -84,9 +84,7 @@ export function AssetLedgerToolbar({
 						}}
 						trigger={["click"]}
 					>
-						<Button data-testid="asset-ops-menu">
-							同步与诊断 <DownOutlined />
-						</Button>
+						<Button data-testid="asset-ops-menu">同步与诊断</Button>
 					</Dropdown>
 				</Space>
 			}
@@ -101,7 +99,7 @@ export function AssetLedgerToolbar({
 					allowClear
 				/>
 				<Badge count={activeFilterCount} size="small">
-					<Button icon={<FilterOutlined />} onClick={onToggleFilters} data-testid="asset-filters-toggle">
+					<Button onClick={onToggleFilters} data-testid="asset-filters-toggle">
 						{filtersOpen ? "收起筛选" : "筛选"}
 					</Button>
 				</Badge>

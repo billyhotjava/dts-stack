@@ -1,9 +1,9 @@
-import { Alert, Button, Drawer, Form, Input, Modal, Select, Space, Tag, Typography } from "antd";
+import { Alert, Button, Drawer, Form, Input, Modal, Select, Tag, Typography } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { confirmDataMart, createDataMart, listDataMarts, retireDataMart, updateDataMart } from "@/api/dataMartApi";
 import { searchUsers, type UserDirectoryEntry } from "@/api/services/userDirectoryService";
-import { CompactTable } from "@/components/table";
+import { actionColumn, CompactTable } from "@/components/table";
 import type { DataMartView } from "@/features/modeling/contracts/dataMartContract";
 
 const { Text } = Typography;
@@ -243,39 +243,32 @@ export function DataMartWorkspace({ domainId, domainOptions, canManage }: Props)
 						dataIndex: "usageCount",
 						width: 90,
 					},
-					{
-						title: "操作",
-						key: "actions",
-						width: 210,
-						render: (_, item) => (
-							<Space size={4}>
-								<Button
-									type="link"
-									size="small"
-									disabled={!canManage || item.status === "RETIRED"}
-									onClick={() => openEdit(item)}
-								>
-									编辑
-								</Button>
-								{item.status === "DRAFT" ? (
-									<Button type="link" size="small" disabled={!canManage} onClick={() => transition(item, "confirm")}>
-										确认
-									</Button>
-								) : null}
-								{item.status === "CURRENT" ? (
-									<Button
-										danger
-										type="link"
-										size="small"
-										disabled={!canManage}
-										onClick={() => transition(item, "retire")}
-									>
-										退役
-									</Button>
-								) : null}
-							</Space>
-						),
-					},
+					actionColumn<DataMartView>(
+						(item) => [
+							{
+								key: "edit",
+								label: "编辑",
+								disabled: !canManage || item.status === "RETIRED",
+								onClick: () => openEdit(item),
+							},
+							{
+								key: "confirm",
+								label: "确认",
+								hidden: item.status !== "DRAFT",
+								disabled: !canManage,
+								onClick: () => transition(item, "confirm"),
+							},
+							{
+								key: "retire",
+								label: "退役",
+								danger: true,
+								hidden: item.status !== "CURRENT",
+								disabled: !canManage,
+								onClick: () => transition(item, "retire"),
+							},
+						],
+						{ width: 210, fixed: false },
+					),
 				]}
 			/>
 			<Drawer

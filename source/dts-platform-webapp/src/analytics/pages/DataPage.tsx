@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router";
 import {
 	analyticsApi,
 	type PlatformDataSourceItem,
@@ -10,7 +9,7 @@ import {
 import { PageSection } from "../components/PageContainer/PageContainer";
 import { PageHeader } from "@/components/page-header";
 import { Tag, Button, Input, Modal, message, Space, Tooltip } from "antd";
-import { CompactTable } from "@/components/table";
+import { actionColumn, CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import UploadedDataEditor from "../components/UploadedDataEditor";
 
@@ -54,10 +53,7 @@ export default function DataPage() {
 
 	const loadLakeData = useCallback(() => {
 		setLakeLoading(true);
-		Promise.all([
-			analyticsApi.listPlatformDataSources(),
-			analyticsApi.listDatabases(),
-		])
+		Promise.all([analyticsApi.listPlatformDataSources(), analyticsApi.listDatabases()])
 			.then(([sources, dbResp]) => {
 				setPlatformSources(sources ?? []);
 				const dbs = dbResp.data ?? [];
@@ -88,7 +84,10 @@ export default function DataPage() {
 	}, [dataLakeId]);
 
 	useEffect(() => {
-		analyticsApi.getCurrentUser().then(setCurrentUser).catch(() => {});
+		analyticsApi
+			.getCurrentUser()
+			.then(setCurrentUser)
+			.catch(() => {});
 		loadLakeData();
 	}, [loadLakeData]);
 
@@ -204,8 +203,7 @@ export default function DataPage() {
 				dataIndex: "type",
 				key: "type",
 				width: 120,
-				render: (type: string | undefined) =>
-					type ? <Tag>{type}</Tag> : "-",
+				render: (type: string | undefined) => (type ? <Tag>{type}</Tag> : "-"),
 			},
 			{
 				title: "连接地址",
@@ -214,9 +212,7 @@ export default function DataPage() {
 				ellipsis: true,
 				render: (url: string | undefined) => (
 					<Tooltip title={url}>
-						<span className="text-text-secondary text-[length:var(--font-size-sm)]">
-							{url ?? "-"}
-						</span>
+						<span className="text-text-secondary text-[length:var(--font-size-sm)]">{url ?? "-"}</span>
 					</Tooltip>
 				),
 			},
@@ -231,52 +227,43 @@ export default function DataPage() {
 					return <Tag color={color}>{status}</Tag>;
 				},
 			},
-			{
-				title: "操作",
-				key: "actions",
-				width: 360,
-				render: (_: unknown, row: DataLakeRow) => (
-					<Space size="small" wrap>
-						{isDataAdmin && (
-							<Button
-								type="link"
-								size="small"
-								loading={syncingId === row.id}
-								disabled={!row.analyticsDbId}
-								onClick={() => handleSync(row)}
-							>
-								同步元数据
-							</Button>
-						)}
-						{row.analyticsDbId ? (
-							<Link to={`/bi/data/${row.analyticsDbId}`}>
-								<Button type="link" size="small">
-									选择数据集
-								</Button>
-							</Link>
-						) : (
-							<Button type="link" size="small" disabled>
-								选择数据集
-							</Button>
-						)}
-						{row.analyticsDbId ? (
-							<Link to={`/bi/data/${row.analyticsDbId}`}>
-								<Button type="link" size="small">预览</Button>
-							</Link>
-						) : <Button type="link" size="small" disabled>预览</Button>}
-						{row.analyticsDbId ? (
-							<Link to={`/bi/questions/new?dbId=${row.analyticsDbId}`}>
-								<Button type="link" size="small">创建问题</Button>
-							</Link>
-						) : <Button type="link" size="small" disabled>创建问题</Button>}
-						{row.analyticsDbId ? (
-							<Link to={`/bi/dashboards/new?dbId=${row.analyticsDbId}`}>
-								<Button type="link" size="small">创建报表</Button>
-							</Link>
-						) : <Button type="link" size="small" disabled>创建报表</Button>}
-					</Space>
-				),
-			},
+			actionColumn<DataLakeRow>(
+				(row) => [
+					{
+						key: "sync",
+						label: "同步元数据",
+						hidden: !isDataAdmin,
+						loading: syncingId === row.id,
+						disabled: !row.analyticsDbId,
+						onClick: () => handleSync(row),
+					},
+					{
+						key: "select",
+						label: "选择数据集",
+						disabled: !row.analyticsDbId,
+						href: row.analyticsDbId ? `/bi/data/${row.analyticsDbId}` : undefined,
+					},
+					{
+						key: "preview",
+						label: "预览",
+						disabled: !row.analyticsDbId,
+						href: row.analyticsDbId ? `/bi/data/${row.analyticsDbId}` : undefined,
+					},
+					{
+						key: "question",
+						label: "创建问题",
+						disabled: !row.analyticsDbId,
+						href: row.analyticsDbId ? `/bi/questions/new?dbId=${row.analyticsDbId}` : undefined,
+					},
+					{
+						key: "dashboard",
+						label: "创建报表",
+						disabled: !row.analyticsDbId,
+						href: row.analyticsDbId ? `/bi/dashboards/new?dbId=${row.analyticsDbId}` : undefined,
+					},
+				],
+				{ width: 360, fixed: false },
+			),
 		],
 		[isDataAdmin, syncingId],
 	);
@@ -311,30 +298,18 @@ export default function DataPage() {
 				width: 180,
 				render: (v: string | undefined) => (v ? new Date(v).toLocaleString("zh-CN") : "-"),
 			},
-			{
-				title: "操作",
-				key: "actions",
-				width: 140,
-				render: (_: unknown, record: MyUploadItem) => (
-					<Space size="small">
-						{dataLakeId != null && (
-							<Link to={`/bi/data/${dataLakeId}`}>
-								<Button type="link" size="small">
-									查看
-								</Button>
-							</Link>
-						)}
-						<Button
-							type="link"
-							size="small"
-							danger
-							onClick={() => handleDeleteUpload(record)}
-						>
-							删除
-						</Button>
-					</Space>
-				),
-			},
+			actionColumn<MyUploadItem>(
+				(record) => [
+					{
+						key: "view",
+						label: "查看",
+						hidden: dataLakeId == null,
+						href: dataLakeId != null ? `/bi/data/${dataLakeId}` : undefined,
+					},
+					{ key: "delete", label: "删除", danger: true, onClick: () => handleDeleteUpload(record) },
+				],
+				{ width: 140, fixed: false },
+			),
 		],
 		[dataLakeId],
 	);
@@ -383,11 +358,7 @@ export default function DataPage() {
 							value={uploadsSearch}
 							onChange={(e) => setUploadsSearch(e.target.value)}
 						/>
-						<Button
-							type="primary"
-							disabled={dataLakeId == null}
-							onClick={() => setUploadModalOpen(true)}
-						>
+						<Button type="primary" disabled={dataLakeId == null} onClick={() => setUploadModalOpen(true)}>
 							上传 Excel/CSV
 						</Button>
 					</Space>
@@ -413,12 +384,7 @@ export default function DataPage() {
 				destroyOnClose
 				footer={null}
 			>
-				{dataLakeId != null && (
-					<UploadedDataEditor
-						databaseId={dataLakeId}
-						onComplete={handleUploadComplete}
-					/>
-				)}
+				{dataLakeId != null && <UploadedDataEditor databaseId={dataLakeId} onComplete={handleUploadComplete} />}
 			</Modal>
 		</div>
 	);

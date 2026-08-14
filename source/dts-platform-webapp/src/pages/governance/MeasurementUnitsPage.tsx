@@ -28,7 +28,7 @@ import {
 	type MeasurementUnitView,
 	updateMeasurementUnit,
 } from "@/api/platformApi";
-import { CompactTable } from "@/components/table";
+import { actionColumn, CompactTable } from "@/components/table";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 
 const { Text, Title } = Typography;
@@ -163,31 +163,26 @@ export default function MeasurementUnitsPage() {
 				<Tag color={value === "ACTIVE" ? "green" : "default"}>{value === "ACTIVE" ? "启用" : "停用"}</Tag>
 			),
 		},
-		{
-			title: "操作",
-			width: 270,
-			render: (_, unit) => (
-				<Space wrap>
-					<Button size="small" onClick={() => void openHistory(unit)}>
-						版本
-					</Button>
-					<Button size="small" onClick={() => void openReferences(unit)}>
-						引用
-					</Button>
-					<Button size="small" disabled={!canManage || unit.status !== "ACTIVE"} onClick={() => openEditor(unit)}>
-						编辑
-					</Button>
-					<Button
-						size="small"
-						danger
-						disabled={!canManage || unit.status !== "ACTIVE"}
-						onClick={() => deactivate(unit)}
-					>
-						停用
-					</Button>
-				</Space>
-			),
-		},
+		actionColumn<MeasurementUnitView>(
+			(unit) => [
+				{ key: "history", label: "版本", onClick: () => void openHistory(unit) },
+				{ key: "references", label: "引用", onClick: () => void openReferences(unit) },
+				{
+					key: "edit",
+					label: "编辑",
+					disabled: !canManage || unit.status !== "ACTIVE",
+					onClick: () => openEditor(unit),
+				},
+				{
+					key: "deactivate",
+					label: "停用",
+					danger: true,
+					disabled: !canManage || unit.status !== "ACTIVE",
+					onClick: () => deactivate(unit),
+				},
+			],
+			{ width: 270 },
+		),
 	];
 
 	return (

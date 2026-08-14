@@ -1,20 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import {
-	Alert,
-	Button,
-	Card,
-	Form,
-	Input,
-	Modal,
-	Select,
-	Space,
-	Tag,
-	Typography,
-} from "antd";
-import { CompactTable } from "@/components/table";
+import { Alert, Button, Card, Form, Input, Modal, Select, Tag, Typography } from "antd";
+import { actionColumn, CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { } from "@ant-design/icons";
+import {} from "@ant-design/icons";
 import { useSearchParams } from "react-router";
 import { PageHeader } from "@/components/page-header";
 import { JourneyContextBar } from "@/components/journey";
@@ -56,10 +45,7 @@ export default function Page() {
 	const [versionForm] = Form.useForm();
 	const [datasets, setDatasets] = useState<{ id: string; name: string }[]>([]);
 
-	const datasetOptions = useMemo(
-		() => datasets.map((item) => ({ label: item.name, value: item.id })),
-		[datasets],
-	);
+	const datasetOptions = useMemo(() => datasets.map((item) => ({ label: item.name, value: item.id })), [datasets]);
 
 	const loadProducts = async () => {
 		setLoading(true);
@@ -173,38 +159,38 @@ export default function Page() {
 	};
 
 	const columns: ColumnsType<DataProductSummary> = [
-		{ title: "名称", dataIndex: "name", render: (v) => v || "-" , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
+		{
+			title: "名称",
+			dataIndex: "name",
+			render: (v) => v || "-",
+			sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
+		},
 		{ title: "类型", dataIndex: "productType", render: (v) => v || "-" },
 		{ title: "状态", dataIndex: "status", render: (v) => <Tag>{v || "-"}</Tag> },
 		{ title: "版本", dataIndex: "currentVersion", width: 120, render: (v) => v || "-" },
 		{ title: "数据集", dataIndex: "datasets", render: (v: string[]) => (v?.length ? v.join(", ") : "-") },
-		{
-			title: "操作",
-			width: 260,
-			render: (_, record) => (
-				<Space>
-					<Button size="small" onClick={() => openDetail(record)}>查看来源资产</Button>
-					<Button size="small" onClick={() => openVersionModal(record)}>
-						配置消费方式
-					</Button>
-					<Button size="small" onClick={() => openVersionModal(record)}>
-						新增版本
-					</Button>
-					<Button size="small" disabled={record.status === "PUBLISHED"} title="通过版本配置保存发布状态">
-						发布
-					</Button>
-					<Button size="small" disabled={record.status !== "PUBLISHED"} title="当前后端未开放独立下线接口，请通过产品状态归档">
-						下线
-					</Button>
-					<Button size="small" onClick={() => openModal(record)}>
-						编辑
-					</Button>
-					<Button size="small" danger onClick={() => removeProduct(record.id)}>
-						删除
-					</Button>
-				</Space>
-			),
-		},
+		actionColumn<DataProductSummary>(
+			(record) => [
+				{ key: "source-asset", label: "查看来源资产", onClick: () => openDetail(record) },
+				{ key: "consume", label: "配置消费方式", onClick: () => openVersionModal(record) },
+				{ key: "new-version", label: "新增版本", onClick: () => openVersionModal(record) },
+				{
+					key: "publish",
+					label: "发布",
+					disabled: record.status === "PUBLISHED",
+					tooltip: "通过版本配置保存发布状态",
+				},
+				{
+					key: "offline",
+					label: "下线",
+					disabled: record.status !== "PUBLISHED",
+					tooltip: "当前后端未开放独立下线接口，请通过产品状态归档",
+				},
+				{ key: "edit", label: "编辑", onClick: () => openModal(record) },
+				{ key: "delete", label: "删除", danger: true, onClick: () => removeProduct(record.id) },
+			],
+			{ width: 260 },
+		),
 	];
 
 	return (

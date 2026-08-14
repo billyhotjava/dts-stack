@@ -1,5 +1,5 @@
-import { ArrowLeftOutlined, DownloadOutlined, InboxOutlined } from "@ant-design/icons";
-import { Button, Card, Popconfirm, Result, Space, Steps, Tabs, Tag, Typography, Upload } from "antd";
+import { InboxOutlined } from "@ant-design/icons";
+import { Button, Card, Result, Space, Steps, Tabs, Tag, Typography, Upload } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
@@ -15,7 +15,7 @@ import {
 } from "@/api/platformApi";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
-import { CompactTable } from "@/components/table";
+import { actionColumn, CompactTable } from "@/components/table";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import { buildStandardPackageReturnRoute, getStandardPackageSourceMeta } from "../governance/standardOwnerNavigation";
 
@@ -356,25 +356,21 @@ export default function StandardPackagePage() {
 			width: 170,
 			render: (value: string) => (value ? new Date(value).toLocaleString() : "-"),
 		},
-		{
-			title: "操作",
-			dataIndex: "action",
-			width: 100,
-			render: (_: unknown, record) =>
-				record.status === "APPLIED" ? (
-					<Popconfirm
-						title="回滚该次导入？"
-						description="将删除本次新增并还原被更新的记录。"
-						onConfirm={() => rollbackRun(record.id)}
-						okText="回滚"
-						cancelText="取消"
-					>
-						<Button type="link" size="small" danger disabled={!canManage}>
-							回滚
-						</Button>
-					</Popconfirm>
-				) : null,
-		},
+		actionColumn<RunRow>(
+			(record) => [
+				{
+					key: "rollback",
+					label: "回滚",
+					danger: true,
+					disabled: !canManage,
+					hidden: record.status !== "APPLIED",
+					confirm: "回滚该次导入？将删除本次新增并还原被更新的记录。",
+					confirmOkText: "回滚",
+					onClick: () => rollbackRun(record.id),
+				},
+			],
+			{ width: 100, fixed: false },
+		),
 	];
 
 	const applySummary = useMemo(() => {
@@ -418,7 +414,6 @@ export default function StandardPackagePage() {
 						</Upload.Dragger>
 						<Space>
 							<Button
-								icon={<DownloadOutlined />}
 								onClick={downloadTemplate}
 								loading={templateDownloading}
 								data-testid="standard-package-template-download"
@@ -572,7 +567,6 @@ export default function StandardPackagePage() {
 				actions={
 					sourceMeta && sourceReturnRoute ? (
 						<Button
-							icon={<ArrowLeftOutlined />}
 							onClick={() => navigate(sourceReturnRoute)}
 							data-testid={`standard-package-return-${sourceMeta.source}`}
 						>

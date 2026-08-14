@@ -72,7 +72,6 @@ function WorkbenchEntryCard({ definition }: WorkbenchEntryCardProps) {
 				<Button
 					type="primary"
 					size="small"
-					icon={<Icon size={14} aria-hidden="true" />}
 					data-testid={`workbench-entry-action-${definition.key}`}
 					onClick={() => definition.route && navigate(definition.route)}
 					disabled={!definition.route}

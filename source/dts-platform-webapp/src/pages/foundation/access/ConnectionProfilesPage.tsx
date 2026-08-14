@@ -1,11 +1,11 @@
-import { CheckCircleOutlined, CloseCircleOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
+import { CheckCircleOutlined, CloseCircleOutlined } from "@ant-design/icons";
 import { Alert, Button, Card, Input, Modal, message, Select, Space, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import dataSourcesService, { type ConnectionTestResult, type InfraDataSource } from "@/api/services/dataSourcesService";
 import { PageHeader } from "@/components/page-header";
-import { CompactTable } from "@/components/table";
+import { actionColumn, CompactTable } from "@/components/table";
 import { formatTime } from "@/utils/textUtils";
 import { isAdminManagedSource, isApiSourceType, isFileSource } from "../dataSources/helpers";
 import ConnectionProfileFormModal from "./ConnectionProfileFormModal";
@@ -187,38 +187,31 @@ export default function ConnectionProfilesPage() {
 			width: 170,
 			render: (value) => formatTime(value) || "—",
 		},
-		{
-			title: "操作",
-			key: "actions",
-			fixed: "right",
-			width: 235,
-			render: (_, record) => {
+		actionColumn<InfraDataSource>(
+			(record) => {
 				const managed = isAdminManagedSource(record);
-				return (
-					<Space size={4}>
-						<Button type="link" onClick={() => void handleTest(record)} loading={testingId === record.id}>
-							测试
-						</Button>
-						<Button type="link" onClick={() => navigate(`/foundation/connections/${record.id}`)}>
-							详情
-						</Button>
-						<Button
-							type="link"
-							disabled={managed}
-							onClick={() => {
-								setEditing(record);
-								setFormOpen(true);
-							}}
-						>
-							编辑
-						</Button>
-						<Button type="link" danger disabled={managed} onClick={() => handleDelete(record)}>
-							删除
-						</Button>
-					</Space>
-				);
+				return [
+					{
+						key: "test",
+						label: "测试",
+						loading: testingId === record.id,
+						onClick: () => void handleTest(record),
+					},
+					{ key: "detail", label: "详情", onClick: () => navigate(`/foundation/connections/${record.id}`) },
+					{
+						key: "edit",
+						label: "编辑",
+						disabled: managed,
+						onClick: () => {
+							setEditing(record);
+							setFormOpen(true);
+						},
+					},
+					{ key: "delete", label: "删除", danger: true, disabled: managed, onClick: () => handleDelete(record) },
+				];
 			},
-		},
+			{ width: 235 },
+		),
 	];
 
 	return (
@@ -227,10 +220,10 @@ export default function ConnectionProfilesPage() {
 				title="连接管理"
 				actions={
 					<Space>
-						<Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>
+						<Button onClick={() => void load()} loading={loading}>
 							刷新
 						</Button>
-						<Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+						<Button type="primary" onClick={openCreate}>
 							新建连接
 						</Button>
 					</Space>

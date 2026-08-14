@@ -1,20 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import {
-	Button,
-	Card,
-	Descriptions,
-	Form,
-	Input,
-	Modal,
-	Select,
-	Space,
-	Spin,
-	Tag,
-	Tabs,
-	Typography,
-} from "antd";
-import { CompactTable } from "@/components/table";
+import { Button, Card, Descriptions, Form, Input, Modal, Select, Space, Spin, Tag, Tabs, Typography } from "antd";
+import { actionColumn, CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { ExclamationCircleOutlined } from "@ant-design/icons";
 import reportsService, { type ReportLink } from "@/api/services/reportsService";
@@ -45,8 +32,26 @@ const datasetStatusTag = (value?: string | null) => {
 
 const reportClassificationTag = (value?: string | null) => {
 	const key = String(value || "").toUpperCase();
-	const color = key === "PUBLIC" ? "green" : key === "INTERNAL" ? "blue" : key === "SECRET" ? "orange" : key === "CONFIDENTIAL" ? "red" : "default";
-	const label = key === "PUBLIC" ? "公开" : key === "INTERNAL" ? "内部" : key === "SECRET" ? "秘密" : key === "CONFIDENTIAL" ? "机密" : value || "-";
+	const color =
+		key === "PUBLIC"
+			? "green"
+			: key === "INTERNAL"
+				? "blue"
+				: key === "SECRET"
+					? "orange"
+					: key === "CONFIDENTIAL"
+						? "red"
+						: "default";
+	const label =
+		key === "PUBLIC"
+			? "公开"
+			: key === "INTERNAL"
+				? "内部"
+				: key === "SECRET"
+					? "秘密"
+					: key === "CONFIDENTIAL"
+						? "机密"
+						: value || "-";
 	return <Tag color={color}>{label}</Tag>;
 };
 
@@ -128,9 +133,15 @@ export function QueryDatasetManager() {
 			const keyword = datasetKeyword.trim().toLowerCase();
 			const hitKeyword =
 				!keyword ||
-				String(item.name || "").toLowerCase().includes(keyword) ||
-				String(item.sourceDatasourceName || "").toLowerCase().includes(keyword) ||
-				String(item.ownerDept || "").toLowerCase().includes(keyword);
+				String(item.name || "")
+					.toLowerCase()
+					.includes(keyword) ||
+				String(item.sourceDatasourceName || "")
+					.toLowerCase()
+					.includes(keyword) ||
+				String(item.ownerDept || "")
+					.toLowerCase()
+					.includes(keyword);
 			const hitStatus = datasetStatus === "ALL" || String(item.status || "").toUpperCase() === datasetStatus;
 			return hitKeyword && hitStatus;
 		});
@@ -294,30 +305,22 @@ export function QueryDatasetManager() {
 			dataIndex: "changeSummary",
 			render: (value) => value || "-",
 		},
-		{
-			title: "操作",
-			key: "actions",
-			width: 220,
-			render: (_, record) => (
-				<Space size={8}>
-					<Button type="link" size="small" onClick={() => setPreviewVersion(record)}>
-						查看 SQL
-					</Button>
-					<Button
-						type="link"
-						size="small"
-						disabled={String(record.status || "").toUpperCase() === "PUBLISHED"}
-						loading={publishingVersionNo === record.versionNo}
-						onClick={() => {
-							if (!selectedDatasetId) return;
-							void handlePublish(selectedDatasetId, record.versionNo);
-						}}
-					>
-						发布
-					</Button>
-				</Space>
-			),
-		},
+		actionColumn<QueryDatasetVersion>(
+			(record) => [
+				{ key: "sql", label: "查看 SQL", onClick: () => setPreviewVersion(record) },
+				{
+					key: "publish",
+					label: "发布",
+					disabled: String(record.status || "").toUpperCase() === "PUBLISHED",
+					loading: publishingVersionNo === record.versionNo,
+					onClick: () => {
+						if (!selectedDatasetId) return;
+						void handlePublish(selectedDatasetId, record.versionNo);
+					},
+				},
+			],
+			{ width: 220, fixed: false },
+		),
 	];
 
 	const reportColumns: ColumnsType<ReportLink> = [
@@ -381,9 +384,7 @@ export function QueryDatasetManager() {
 							{ label: "ARCHIVED", value: "ARCHIVED" },
 						]}
 					/>
-					<Button onClick={() => void loadDatasets()}>
-						刷新数据集
-					</Button>
+					<Button onClick={() => void loadDatasets()}>刷新数据集</Button>
 				</Space>
 			</Card>
 
@@ -409,16 +410,10 @@ export function QueryDatasetManager() {
 					extra={
 						selectedDataset ? (
 							<Space>
-								<Button
-									type="primary"
-									onClick={openCreateVersion}
-								>
+								<Button type="primary" onClick={openCreateVersion}>
 									新建版本
 								</Button>
-								<Button
-									onClick={() => void handlePublish(selectedDataset.id)}
-									loading={publishingVersionNo === -1}
-								>
+								<Button onClick={() => void handlePublish(selectedDataset.id)} loading={publishingVersionNo === -1}>
 									发布最新版本
 								</Button>
 								<Button
@@ -499,11 +494,7 @@ export function QueryDatasetManager() {
 					<Form.Item label="变更说明" name="changeSummary">
 						<Input placeholder="例如：新增部门维度过滤逻辑" />
 					</Form.Item>
-					<Form.Item
-						label="SQL 文本"
-						name="sqlText"
-						rules={[{ required: true, message: "SQL 不能为空" }]}
-					>
+					<Form.Item label="SQL 文本" name="sqlText" rules={[{ required: true, message: "SQL 不能为空" }]}>
 						<TextArea rows={10} placeholder="请输入版本 SQL" />
 					</Form.Item>
 				</Form>

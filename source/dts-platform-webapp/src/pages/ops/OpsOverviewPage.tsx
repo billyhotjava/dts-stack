@@ -1,8 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import dayjs from "dayjs";
 import type { EChartsOption } from "echarts";
-import { Alert, Button, Card, Col, Empty, InputNumber, Row, Select, Space, Statistic, Tabs, Tag, Typography } from "antd";
-import { CompactTable } from "@/components/table";
+import {
+	Alert,
+	Button,
+	Card,
+	Col,
+	Empty,
+	InputNumber,
+	Row,
+	Select,
+	Space,
+	Statistic,
+	Tabs,
+	Tag,
+	Typography,
+} from "antd";
+import { actionColumn, CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { Chart } from "@/components/chart/chart";
 import { EmptyState } from "@/components/empty-state";
@@ -26,7 +40,12 @@ import {
 // ─── Dev-center table columns ────────────────────────────────────────
 const alertColumns: ColumnsType<OpsAlert> = [
 	{ title: "类型", dataIndex: "type", width: 120 },
-	{ title: "规则", dataIndex: "ruleName", render: (value) => value || "-" , sorter: (a, b) => (a.ruleName || "").localeCompare(b.ruleName || "") },
+	{
+		title: "规则",
+		dataIndex: "ruleName",
+		render: (value) => value || "-",
+		sorter: (a, b) => (a.ruleName || "").localeCompare(b.ruleName || ""),
+	},
 	{ title: "状态", dataIndex: "status", width: 120 },
 	{ title: "严重性", dataIndex: "severity", width: 120, render: (value) => value || "-" },
 	{ title: "描述", dataIndex: "message", render: (value) => value || "-" },
@@ -38,7 +57,13 @@ const topFailureColumns: ColumnsType<OpsDevCenterTopFailure> = [
 	{ title: "作业", dataIndex: "artifactName", render: (value) => value || "-" },
 	{ title: "总运行", dataIndex: "totalRuns", width: 110, align: "right" },
 	{ title: "失败数", dataIndex: "failedRuns", width: 110, align: "right" },
-	{ title: "失败率", dataIndex: "failureRate", width: 120, align: "right", render: (value) => (value == null ? "-" : `${value}%`) },
+	{
+		title: "失败率",
+		dataIndex: "failureRate",
+		width: 120,
+		align: "right",
+		render: (value) => (value == null ? "-" : `${value}%`),
+	},
 ];
 
 // ─── Ingestion observability table columns ───────────────────────────
@@ -375,7 +400,11 @@ export default function OpsOverviewPage() {
 				title="当前运行中 DAG"
 				size="small"
 				loading={dagCardsLoading}
-				extra={<Button size="small" onClick={() => void loadDagCards()}>刷新</Button>}
+				extra={
+					<Button size="small" onClick={() => void loadDagCards()}>
+						刷新
+					</Button>
+				}
 			>
 				{runningDags.length > 0 ? (
 					<CompactTable
@@ -396,31 +425,24 @@ export default function OpsOverviewPage() {
 								},
 								render: (v) => (v ? dayjs(v).format("MM-DD HH:mm:ss") : "-"),
 							},
-							{
-								title: "操作",
-								width: 80,
-								render: (_: unknown, r: ExternalRun) => {
-									const isDbt = r.dagId?.toLowerCase().includes("dbt") ?? false;
-									if (!isDbt) return null;
-									return (
-										<Button
-											type="link"
-											size="small"
-											onClick={() =>
-												openLogPreview({
-													entryKey: "AIRFLOW_DAG",
-													dagId: r.dagId,
-													dagRunId: r.externalRunId ?? undefined,
-													taskId: "dbt_run",
-													tryNumber: 1,
-												})
-											}
-										>
-											日志
-										</Button>
-									);
-								},
-							},
+							actionColumn<ExternalRun>(
+								(r) => [
+									{
+										key: "log",
+										label: "日志",
+										hidden: !(r.dagId?.toLowerCase().includes("dbt") ?? false),
+										onClick: () =>
+											openLogPreview({
+												entryKey: "AIRFLOW_DAG",
+												dagId: r.dagId,
+												dagRunId: r.externalRunId ?? undefined,
+												taskId: "dbt_run",
+												tryNumber: 1,
+											}),
+									},
+								],
+								{ width: 80, fixed: false },
+							),
 						]}
 					/>
 				) : (
@@ -428,11 +450,7 @@ export default function OpsOverviewPage() {
 				)}
 			</Card>
 
-			<Card
-				title="最近失败 DAG Run"
-				size="small"
-				loading={dagCardsLoading}
-			>
+			<Card title="最近失败 DAG Run" size="small" loading={dagCardsLoading}>
 				{failedDags.length > 0 ? (
 					<CompactTable
 						size="small"
@@ -457,31 +475,24 @@ export default function OpsOverviewPage() {
 								dataIndex: "durationMs",
 								render: (v) => (v != null ? `${(v / 1000).toFixed(1)}s` : "-"),
 							},
-							{
-								title: "操作",
-								width: 80,
-								render: (_: unknown, r: ExternalRun) => {
-									const isDbt = r.dagId?.toLowerCase().includes("dbt") ?? false;
-									if (!isDbt) return null;
-									return (
-										<Button
-											type="link"
-											size="small"
-											onClick={() =>
-												openLogPreview({
-													entryKey: "AIRFLOW_DAG",
-													dagId: r.dagId,
-													dagRunId: r.externalRunId ?? undefined,
-													taskId: "dbt_run",
-													tryNumber: 1,
-												})
-											}
-										>
-											日志
-										</Button>
-									);
-								},
-							},
+							actionColumn<ExternalRun>(
+								(r) => [
+									{
+										key: "log",
+										label: "日志",
+										hidden: !(r.dagId?.toLowerCase().includes("dbt") ?? false),
+										onClick: () =>
+											openLogPreview({
+												entryKey: "AIRFLOW_DAG",
+												dagId: r.dagId,
+												dagRunId: r.externalRunId ?? undefined,
+												taskId: "dbt_run",
+												tryNumber: 1,
+											}),
+									},
+								],
+								{ width: 80, fixed: false },
+							),
 						]}
 					/>
 				) : (
@@ -511,11 +522,7 @@ export default function OpsOverviewPage() {
 							]}
 							onChange={(value) => setGovernanceHours(value)}
 						/>
-						<Button
-							className="rounded-2xl"
-							onClick={() => void loadGovernanceOverview()}
-							loading={governanceLoading}
-						>
+						<Button className="rounded-2xl" onClick={() => void loadGovernanceOverview()} loading={governanceLoading}>
 							刷新治理
 						</Button>
 					</Space>
@@ -532,13 +539,27 @@ export default function OpsOverviewPage() {
 							/>
 						) : null}
 						<Row gutter={[16, 16]}>
-							<Col xs={12} md={6}><Statistic title="运行中" value={governanceOverview.running || 0} /></Col>
-							<Col xs={12} md={6}><Statistic title="排队中" value={governanceOverview.preparing || 0} /></Col>
-							<Col xs={12} md={6}><Statistic title="队列长度" value={governanceOverview.queueLength || 0} /></Col>
-							<Col xs={12} md={6}><Statistic title="策略拒绝数" value={governanceOverview.blockedByPolicy || 0} /></Col>
-							<Col xs={12} md={6}><Statistic title="平均耗时(秒)" value={governanceOverview.avgExecutionSeconds || 0} precision={2} /></Col>
-							<Col xs={12} md={6}><Statistic title="平均排队(秒)" value={governanceOverview.avgQueueWaitSeconds || 0} precision={2} /></Col>
-							<Col xs={12} md={6}><Statistic title="最长排队(秒)" value={governanceOverview.maxQueueWaitSeconds || 0} precision={2} /></Col>
+							<Col xs={12} md={6}>
+								<Statistic title="运行中" value={governanceOverview.running || 0} />
+							</Col>
+							<Col xs={12} md={6}>
+								<Statistic title="排队中" value={governanceOverview.preparing || 0} />
+							</Col>
+							<Col xs={12} md={6}>
+								<Statistic title="队列长度" value={governanceOverview.queueLength || 0} />
+							</Col>
+							<Col xs={12} md={6}>
+								<Statistic title="策略拒绝数" value={governanceOverview.blockedByPolicy || 0} />
+							</Col>
+							<Col xs={12} md={6}>
+								<Statistic title="平均耗时(秒)" value={governanceOverview.avgExecutionSeconds || 0} precision={2} />
+							</Col>
+							<Col xs={12} md={6}>
+								<Statistic title="平均排队(秒)" value={governanceOverview.avgQueueWaitSeconds || 0} precision={2} />
+							</Col>
+							<Col xs={12} md={6}>
+								<Statistic title="最长排队(秒)" value={governanceOverview.maxQueueWaitSeconds || 0} precision={2} />
+							</Col>
 						</Row>
 						<CompactTable
 							size="small"
@@ -566,11 +587,7 @@ export default function OpsOverviewPage() {
 				size="small"
 				title="执行可观测性"
 				extra={
-					<Button
-						className="rounded-2xl"
-						onClick={() => void loadObservability()}
-						loading={observabilityLoading}
-					>
+					<Button className="rounded-2xl" onClick={() => void loadObservability()} loading={observabilityLoading}>
 						刷新指标
 					</Button>
 				}
@@ -616,14 +633,30 @@ export default function OpsOverviewPage() {
 				{observability ? (
 					<Space direction="vertical" size={16} style={{ width: "100%" }}>
 						<Row gutter={[16, 16]}>
-							<Col xs={12} md={6}><Statistic title="总执行数" value={observability.total || 0} /></Col>
-							<Col xs={12} md={6}><Statistic title="成功率" value={observability.successRate || 0} suffix="%" precision={2} /></Col>
-							<Col xs={12} md={6}><Statistic title="超时率" value={observability.timeoutRate || 0} suffix="%" precision={2} /></Col>
-							<Col xs={12} md={6}><Statistic title="平均耗时(秒)" value={observability.avgDurationSeconds || 0} precision={2} /></Col>
-							<Col xs={12} md={6}><Statistic title="MTTR(秒)" value={observability.mttrSeconds || 0} precision={2} /></Col>
-							<Col xs={12} md={6}><Statistic title="运行中" value={observability.running || 0} /></Col>
-							<Col xs={12} md={6}><Statistic title="失败数" value={observability.failed || 0} /></Col>
-							<Col xs={12} md={6}><Statistic title="超时数" value={observability.timeout || 0} /></Col>
+							<Col xs={12} md={6}>
+								<Statistic title="总执行数" value={observability.total || 0} />
+							</Col>
+							<Col xs={12} md={6}>
+								<Statistic title="成功率" value={observability.successRate || 0} suffix="%" precision={2} />
+							</Col>
+							<Col xs={12} md={6}>
+								<Statistic title="超时率" value={observability.timeoutRate || 0} suffix="%" precision={2} />
+							</Col>
+							<Col xs={12} md={6}>
+								<Statistic title="平均耗时(秒)" value={observability.avgDurationSeconds || 0} precision={2} />
+							</Col>
+							<Col xs={12} md={6}>
+								<Statistic title="MTTR(秒)" value={observability.mttrSeconds || 0} precision={2} />
+							</Col>
+							<Col xs={12} md={6}>
+								<Statistic title="运行中" value={observability.running || 0} />
+							</Col>
+							<Col xs={12} md={6}>
+								<Statistic title="失败数" value={observability.failed || 0} />
+							</Col>
+							<Col xs={12} md={6}>
+								<Statistic title="超时数" value={observability.timeout || 0} />
+							</Col>
 						</Row>
 						<Row gutter={[16, 16]}>
 							<Col xs={24} lg={10}>
@@ -644,7 +677,13 @@ export default function OpsOverviewPage() {
 							<Col xs={24} lg={14}>
 								<Card size="small" title="日趋势">
 									{(observability.trend || []).length ? (
-										<CompactTable size="small" rowKey="day" pagination={false} columns={ingestionTrendColumns} dataSource={observability.trend} />
+										<CompactTable
+											size="small"
+											rowKey="day"
+											pagination={false}
+											columns={ingestionTrendColumns}
+											dataSource={observability.trend}
+										/>
 									) : (
 										<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前时间窗没有执行数据" />
 									)}

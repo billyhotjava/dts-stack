@@ -51,7 +51,7 @@ public class IndicatorReferenceService {
             throw new IndicatorRequestException("Invalid payload");
         }
         // Permission check for edit: reuse update rules in IndicatorService (maintainer endpoints are protected in controller).
-        IndicatorDto dto = indicatorService.get(indicatorId, activeDept);
+        IndicatorDto dto = indicatorService.requireMutationAccess(indicatorId, activeDept);
         GovIndicatorDefinition indicator = indicatorRepository
             .findById(indicatorId)
             .orElseThrow(() -> new IndicatorNotFoundException("指标不存在: " + indicatorId));
@@ -87,7 +87,7 @@ public class IndicatorReferenceService {
         if (request == null) {
             throw new IndicatorRequestException("Invalid payload");
         }
-        indicatorService.get(indicatorId, activeDept);
+        indicatorService.requireMutationAccess(indicatorId, activeDept);
         GovIndicatorDefinition indicator = indicatorRepository
             .findById(indicatorId)
             .orElseThrow(() -> new IndicatorNotFoundException("指标不存在: " + indicatorId));
@@ -117,7 +117,7 @@ public class IndicatorReferenceService {
     }
 
     public void delete(UUID indicatorId, UUID referenceId, String activeDept) {
-        indicatorService.get(indicatorId, activeDept);
+        indicatorService.requireMutationAccess(indicatorId, activeDept);
         GovIndicatorReference entity = referenceRepository
             .findById(referenceId)
             .orElseThrow(() -> new IndicatorNotFoundException("指标引用不存在: " + referenceId));

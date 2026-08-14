@@ -10,13 +10,29 @@ import org.junit.jupiter.api.Test;
 class ReleaseDutyResolverTest {
 
     @Test
-    void mapsInstituteDataOwnerToModelMaintainer() {
+    void mapsInstituteDataOwnerToMaintainerAndSelfServiceReleaseOperator() {
         assertThat(
             ReleaseDutyResolver.resolveAuthorities(
                 List.of(AuthoritiesConstants.INST_DATA_OWNER)
             )
         )
-            .containsExactly(DeliveryActorRole.MODEL_MAINTAINER);
+            .containsExactlyInAnyOrder(
+                DeliveryActorRole.MODEL_MAINTAINER,
+                DeliveryActorRole.RELEASE_OPERATOR
+            );
+    }
+
+    @Test
+    void mapsDepartmentDataOwnerToScopedMaintainerAndSelfServiceReleaseOperator() {
+        assertThat(
+            ReleaseDutyResolver.resolveAuthorities(
+                List.of(AuthoritiesConstants.DEPT_DATA_OWNER)
+            )
+        )
+            .containsExactlyInAnyOrder(
+                DeliveryActorRole.MODEL_MAINTAINER,
+                DeliveryActorRole.RELEASE_OPERATOR
+            );
     }
 
     @Test
@@ -33,14 +49,13 @@ class ReleaseDutyResolverTest {
     }
 
     @Test
-    void doesNotPromoteDepartmentOrUnrelatedPlatformRoles() {
+    void doesNotPromoteDepartmentLeadersOrUnrelatedPlatformRoles() {
         assertThat(
             ReleaseDutyResolver.resolveAuthorities(
                 List.of(
                     AuthoritiesConstants.ADMIN,
                     AuthoritiesConstants.AUTH_ADMIN,
                     AuthoritiesConstants.AUDITOR_ADMIN,
-                    AuthoritiesConstants.DEPT_DATA_OWNER,
                     AuthoritiesConstants.DEPT_LEADER
                 )
             )

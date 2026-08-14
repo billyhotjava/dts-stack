@@ -2,10 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button, Card, Descriptions, Divider, Drawer, Form, Input, List, Modal, Space, Spin, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { DownloadOutlined } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router";
 import { EmptyState } from "@/components/empty-state";
-import { CompactTable } from "@/components/table";
+import { actionColumn, CompactTable } from "@/components/table";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import {
 	createGlossaryTerm,
@@ -336,38 +335,41 @@ export default function GlossaryPage() {
 	};
 
 	const columns: ColumnsType<GlossaryTerm> = [
-		{ title: "术语名称", dataIndex: "name", render: (t) => <Text strong className="text-blue-600">{t}</Text> , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
-		{ title: "标准编码", dataIndex: "code", render: (c) => <Text className="font-mono text-xs">{c || "-"}</Text> , sorter: (a, b) => (a.code || "").localeCompare(b.code || "") },
+		{
+			title: "术语名称",
+			dataIndex: "name",
+			render: (t) => (
+				<Text strong className="text-blue-600">
+					{t}
+				</Text>
+			),
+			sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
+		},
+		{
+			title: "标准编码",
+			dataIndex: "code",
+			render: (c) => <Text className="font-mono text-xs">{c || "-"}</Text>,
+			sorter: (a, b) => (a.code || "").localeCompare(b.code || ""),
+		},
 		{ title: "口径定义", dataIndex: "definition", ellipsis: true, render: (t) => t || "-" },
 		{ title: "主题域", dataIndex: "domain", render: (t) => t || "-" },
 		{ title: "负责人", dataIndex: "owner", render: (t) => t || "-" },
-		{
-			title: "操作",
-			dataIndex: "actions",
-			width: 240,
-			fixed: "right",
-			render: (_, row) => (
-				<Space>
-					<Button
-						type="link"
-						size="small"
-						onClick={() => {
-							setDetailTerm(row);
-							setDetailOpen(true);
-							void loadDetailContext(row.id);
-						}}
-					>
-						详情
-					</Button>
-					<Button type="link" size="small" onClick={() => openModal(row)} disabled={!canManage}>
-						编辑
-					</Button>
-					<Button type="link" size="small" danger onClick={() => removeGlossary(row)} disabled={!canManage}>
-						删除
-					</Button>
-				</Space>
-			),
-		},
+		actionColumn<GlossaryTerm>(
+			(row) => [
+				{
+					key: "detail",
+					label: "详情",
+					onClick: () => {
+						setDetailTerm(row);
+						setDetailOpen(true);
+						void loadDetailContext(row.id);
+					},
+				},
+				{ key: "edit", label: "编辑", disabled: !canManage, onClick: () => openModal(row) },
+				{ key: "delete", label: "删除", danger: true, disabled: !canManage, onClick: () => removeGlossary(row) },
+			],
+			{ width: 240 },
+		),
 	];
 
 	return (
@@ -376,12 +378,7 @@ export default function GlossaryPage() {
 				title="业务术语"
 				extra={
 					<Space wrap>
-						<Button
-							className="rounded-2xl"
-							icon={<DownloadOutlined />}
-							data-testid="governance-glossary-export"
-							onClick={exportGlossaryCsv}
-						>
+						<Button className="rounded-2xl" data-testid="governance-glossary-export" onClick={exportGlossaryCsv}>
 							导出CSV
 						</Button>
 						<Button className="rounded-2xl" disabled>

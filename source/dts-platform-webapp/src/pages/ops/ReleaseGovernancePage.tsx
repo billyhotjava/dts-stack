@@ -6,7 +6,7 @@ import { useNavigate } from "react-router";
 import type { IngestionExecutionObservabilityDTO } from "@/api/ingestion";
 import { getSprint27ReleaseGovernance, type PlatformEventSummary, type Sprint27SourceStatus } from "@/api/platformApi";
 import { PlatformPageHero, PlatformSectionCard, PlatformSummaryCards } from "@/components/console-page";
-import { appendDetailAction, CompactTable, RecordDetailDrawer } from "@/components/table";
+import { actionColumn, appendDetailAction, CompactTable, RecordDetailDrawer } from "@/components/table";
 
 type GovernanceReleaseGate = {
 	windowDays?: number;
@@ -243,18 +243,10 @@ export default function ReleaseGovernancePage() {
 			width: 120,
 			render: (value) => <Tag color={value === "BLOCKER" ? "red" : "orange"}>{value}</Tag>,
 		},
-		{
-			title: "操作",
-			dataIndex: "action",
-			key: "action",
-			width: 160,
-			fixed: "right",
-			render: (_, record) => (
-				<Button type="link" size="small" onClick={() => openPlatformOrMetricsPath(navigate, record.path)}>
-					进入
-				</Button>
-			),
-		},
+		actionColumn<CheckRow>(
+			(record) => [{ key: "enter", label: "进入", onClick: () => openPlatformOrMetricsPath(navigate, record.path) }],
+			{ width: 160 },
+		),
 	];
 
 	const columns = useMemo(

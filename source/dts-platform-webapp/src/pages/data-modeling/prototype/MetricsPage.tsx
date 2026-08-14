@@ -1,8 +1,8 @@
-import { Archive, CheckCircle2, Plus, RefreshCw, Save, Search, Send, Trash2 } from "lucide-react";
+import { Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { listBusinessProcessesApi, type Sprint64BusinessProcess } from "@/api/sprint64GovernanceApi";
-import { type CompactColumns, CompactTable } from "@/components/table";
+import { actionColumn, type CompactColumns, CompactTable } from "@/components/table";
 import {
 	type IndicatorMetricSourceRef,
 	type IndicatorSourceType,
@@ -243,17 +243,9 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 				return <Status tone={status === "PUBLISHED" ? "success" : "warning"}>{status}</Status>;
 			},
 		},
-		{
-			title: "操作",
-			dataIndex: "actions",
-			fixed: "right",
-			width: 90,
-			render: (_value, row) => (
-				<Button className="dmx-table-action" onClick={() => choose(row)} type="link">
-					{canMaintain ? "编辑" : "查看"}
-				</Button>
-			),
-		},
+		actionColumn<IndicatorDefinition>((row) => [
+			{ key: "open", label: canMaintain ? "编辑" : "查看", onClick: () => choose(row) },
+		]),
 	];
 	const mutate = async (action: "save" | "validate" | "publish" | "archive") => {
 		if (!selected || !canMaintain) return;
@@ -310,7 +302,6 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 					!selected ? (
 						<>
 							<Button disabled={loading} onClick={() => void load(null)}>
-								<RefreshCw size={15} />
 								刷新
 							</Button>
 							<Button
@@ -325,7 +316,6 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 											: "当前 owner 不支持新建该对象"
 								}
 							>
-								<Plus size={15} />
 								新建{metricType}
 							</Button>
 						</>
@@ -356,15 +346,12 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 								返回指标列表
 							</Button>
 							<Button disabled={!canMaintain || Boolean(busy)} primary onClick={() => void mutate("save")}>
-								<Save size={15} />
 								{busy === "save" ? "保存中…" : "保存"}
 							</Button>
 							<Button disabled={!canMaintain || Boolean(busy) || !selected.id} onClick={() => void mutate("validate")}>
-								<CheckCircle2 size={15} />
 								{busy === "validate" ? "校验中…" : "校验"}
 							</Button>
 							<Button disabled={!canMaintain || Boolean(busy) || !selected.id} onClick={() => void mutate("publish")}>
-								<Send size={15} />
 								{busy === "publish" ? "发布中…" : "发布"}
 							</Button>
 							<Button
@@ -372,7 +359,6 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 								disabled={!canMaintain || Boolean(busy) || !selected.id}
 								onClick={() => void mutate("archive")}
 							>
-								<Archive size={15} />
 								归档
 							</Button>
 						</div>
@@ -671,12 +657,12 @@ export function MetricEditor({
 										value={ref.sourceVersion}
 									/>
 									<Button aria-label={`删除来源 ${index + 1}`} onClick={() => removeSourceRef(index)}>
-										<Trash2 size={15} />
+										删除
 									</Button>
 								</div>
 							))}
 							<Button className="dmx-source-ref-add" onClick={addSourceRef}>
-								<Plus size={14} /> 添加固定来源
+								添加固定来源
 							</Button>
 							<small>
 								{metricType === "ATOMIC"

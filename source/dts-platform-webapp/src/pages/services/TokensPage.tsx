@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Alert, Button, Card, Modal, Space, Tag, Typography } from "antd";
-import { CompactTable } from "@/components/table";
+import { Alert, Button, Card, Modal, Tag, Typography } from "antd";
+import { actionColumn, CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { } from "@ant-design/icons";
+import {} from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
 import { createToken, deleteToken, listMyTokens } from "@/api/platformApi";
 
@@ -80,23 +80,43 @@ export default function Page() {
 	const columns: ColumnsType<TokenInfo> = [
 		{ title: "令牌提示", dataIndex: "tokenHint", render: (v) => v || "-" },
 		{ title: "作用域", dataIndex: "scope", width: 140, render: (v) => v || "当前用户" },
-		{ title: "创建时间", dataIndex: "createdAt", render: (v) => formatDate(v) , sorter: (a, b) => { const ta = a.createdAt ? new Date(a.createdAt as any).getTime() : 0; const tb = b.createdAt ? new Date(b.createdAt as any).getTime() : 0; return ta - tb; } },
-		{ title: "有效期", dataIndex: "expiresAt", render: (v) => formatDate(v) , sorter: (a, b) => { const ta = a.expiresAt ? new Date(a.expiresAt as any).getTime() : 0; const tb = b.expiresAt ? new Date(b.expiresAt as any).getTime() : 0; return ta - tb; } },
-		{ title: "状态", dataIndex: "revoked", render: (v) => <Tag color={v ? "default" : "green"}>{v ? "已撤销" : "有效"}</Tag> },
 		{
-			title: "操作",
-			width: 180,
-			render: (_, record) => (
-				<Space>
-					<Button size="small" disabled title="审计流水接口尚未接入，先通过令牌创建时间和状态追溯">
-						查看审计
-					</Button>
-					<Button size="small" danger onClick={() => handleDelete(record.id)}>
-						撤销
-					</Button>
-				</Space>
-			),
+			title: "创建时间",
+			dataIndex: "createdAt",
+			render: (v) => formatDate(v),
+			sorter: (a, b) => {
+				const ta = a.createdAt ? new Date(a.createdAt as any).getTime() : 0;
+				const tb = b.createdAt ? new Date(b.createdAt as any).getTime() : 0;
+				return ta - tb;
+			},
 		},
+		{
+			title: "有效期",
+			dataIndex: "expiresAt",
+			render: (v) => formatDate(v),
+			sorter: (a, b) => {
+				const ta = a.expiresAt ? new Date(a.expiresAt as any).getTime() : 0;
+				const tb = b.expiresAt ? new Date(b.expiresAt as any).getTime() : 0;
+				return ta - tb;
+			},
+		},
+		{
+			title: "状态",
+			dataIndex: "revoked",
+			render: (v) => <Tag color={v ? "default" : "green"}>{v ? "已撤销" : "有效"}</Tag>,
+		},
+		actionColumn<TokenInfo>(
+			(record) => [
+				{
+					key: "audit",
+					label: "查看审计",
+					disabled: true,
+					tooltip: "审计流水接口尚未接入，先通过令牌创建时间和状态追溯",
+				},
+				{ key: "revoke", label: "撤销", danger: true, onClick: () => handleDelete(record.id) },
+			],
+			{ width: 180 },
+		),
 	];
 
 	return (

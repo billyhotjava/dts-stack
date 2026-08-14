@@ -1,4 +1,4 @@
-import { AppstoreOutlined, PlusOutlined, SearchOutlined } from "@ant-design/icons";
+import { SearchOutlined } from "@ant-design/icons";
 import { Alert, Button, Card, Col, Descriptions, Form, Input, Row, Select, Space, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -69,7 +69,7 @@ export function RulesByTablePage() {
 				title="按表配置"
 				description={`按 ${lakeName} 中的数据资产查看规则覆盖与异常情况，避免跨来源误绑定。`}
 				actions={
-					<Button type="primary" icon={<AppstoreOutlined />} onClick={() => navigate(qualityPath("batch-wizard"))}>
+					<Button type="primary" onClick={() => navigate(qualityPath("batch-wizard"))}>
 						批量配置
 					</Button>
 				}
@@ -204,7 +204,6 @@ export function TableQualityDetailPage() {
 					<Button
 						key="new"
 						type="primary"
-						icon={<PlusOutlined />}
 						disabled={!canManage || !loadedDatasetIsCurrent || loading || Boolean(loadError)}
 						onClick={() => navigate(`${qualityPath("rule-editor")}?datasetId=${encodeURIComponent(datasetId)}`)}
 					>

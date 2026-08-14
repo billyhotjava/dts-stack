@@ -205,6 +205,8 @@ public class ModelPublicationIntentService {
         CandidateView candidate,
         boolean replayed
     ) {
+        Set<DeliveryActorRole> duties = dutyResolver.currentDuties();
+        boolean canSelfPublish = duties != null && duties.contains(DeliveryActorRole.RELEASE_OPERATOR);
         Projection projection = switch (candidate.status()) {
             case QUALITY_RUNNING -> new Projection(
                 PublicationOutcome.QUALITY_RUNNING,
@@ -221,18 +223,32 @@ public class ModelPublicationIntentService {
                     "Quality failed; repair the model and retry quality explicitly"
                 )
             );
-            case QUALITY_PASSED -> new Projection(
-                PublicationOutcome.REVIEW_SUBMISSION_PENDING,
-                NextHumanAction.NONE,
-                OnlineReadiness.PROCESSING,
-                null
-            );
-            case REVIEW_PENDING -> new Projection(
-                PublicationOutcome.REVIEW_PENDING,
-                NextHumanAction.REVIEW,
-                OnlineReadiness.PROCESSING,
-                null
-            );
+            case QUALITY_PASSED -> canSelfPublish
+                ? new Projection(
+                    PublicationOutcome.PUBLICATION_READY,
+                    NextHumanAction.PUBLISH,
+                    OnlineReadiness.PROCESSING,
+                    null
+                )
+                : new Projection(
+                    PublicationOutcome.REVIEW_SUBMISSION_PENDING,
+                    NextHumanAction.NONE,
+                    OnlineReadiness.PROCESSING,
+                    null
+                );
+            case REVIEW_PENDING -> canSelfPublish
+                ? new Projection(
+                    PublicationOutcome.PUBLICATION_READY,
+                    NextHumanAction.PUBLISH,
+                    OnlineReadiness.PROCESSING,
+                    null
+                )
+                : new Projection(
+                    PublicationOutcome.REVIEW_PENDING,
+                    NextHumanAction.REVIEW,
+                    OnlineReadiness.PROCESSING,
+                    null
+                );
             case APPROVED -> new Projection(
                 PublicationOutcome.APPROVED,
                 NextHumanAction.PUBLISH,
@@ -330,6 +346,7 @@ public class ModelPublicationIntentService {
     public enum PublicationOutcome {
         QUALITY_RUNNING,
         QUALITY_FAILED,
+        PUBLICATION_READY,
         REVIEW_SUBMISSION_PENDING,
         REVIEW_PENDING,
         APPROVED,

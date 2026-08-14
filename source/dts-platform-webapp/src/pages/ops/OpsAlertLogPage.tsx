@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Card, Space, Tag, Typography } from "antd";
+import { Card, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useNavigate } from "react-router";
 import { PageHeader } from "@/components/page-header";
 import opsService, { type OpsAlert } from "@/api/services/opsService";
-import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
+import { actionColumn, appendDetailAction, CompactTable, RecordDetailDrawer } from "@/components/table";
 
 const { Text } = Typography;
 
@@ -32,44 +32,42 @@ export default function OpsAlertLogPage() {
 
 	const baseColumns: ColumnsType<OpsAlert> = [
 		{ title: "类型", dataIndex: "type", width: 120, render: (v) => <Tag>{v || "-"}</Tag> },
-		{ title: "规则", dataIndex: "ruleName", render: (v) => v || "-" , sorter: (a, b) => (a.ruleName || "").localeCompare(b.ruleName || "") },
+		{
+			title: "规则",
+			dataIndex: "ruleName",
+			render: (v) => v || "-",
+			sorter: (a, b) => (a.ruleName || "").localeCompare(b.ruleName || ""),
+		},
 		{ title: "状态", dataIndex: "status", width: 120, render: (v) => <Tag>{v || "-"}</Tag> },
 		{ title: "严重性", dataIndex: "severity", width: 120, render: (v) => <Tag>{v || "-"}</Tag> },
 		{ title: "描述", dataIndex: "message", render: (v) => <Text type="secondary">{v || "-"}</Text> },
-		{
-			title: "操作",
-			key: "actions",
-			width: 360,
-			fixed: "right",
-			render: (_: unknown, record) => (
-				<Space size="small" wrap>
-					<Button
-						type="link"
-						size="small"
-						onClick={() => navigate(`/governance/rules?ruleId=${encodeURIComponent(record.ruleId || record.ruleName || "")}`)}
-					>
-						查看质量规则
-					</Button>
-					<Button
-						type="link"
-						size="small"
-						onClick={() => navigate(`/foundation/data-sources?datasetId=${encodeURIComponent(record.datasetId || "")}`)}
-					>
-						查看数据源
-					</Button>
-					<Button
-						type="link"
-						size="small"
-						onClick={() => navigate(`/catalog/assets?datasetId=${encodeURIComponent(record.datasetId || "")}`)}
-					>
-						查看资产
-					</Button>
-					<Button type="link" size="small" disabled title="后端待办创建接口未接入，不能在前端伪造待办">
-						创建待办
-					</Button>
-				</Space>
-			),
-		},
+		actionColumn<OpsAlert>(
+			(record) => [
+				{
+					key: "rule",
+					label: "查看质量规则",
+					onClick: () =>
+						navigate(`/governance/rules?ruleId=${encodeURIComponent(record.ruleId || record.ruleName || "")}`),
+				},
+				{
+					key: "source",
+					label: "查看数据源",
+					onClick: () => navigate(`/foundation/data-sources?datasetId=${encodeURIComponent(record.datasetId || "")}`),
+				},
+				{
+					key: "asset",
+					label: "查看资产",
+					onClick: () => navigate(`/catalog/assets?datasetId=${encodeURIComponent(record.datasetId || "")}`),
+				},
+				{
+					key: "todo",
+					label: "创建待办",
+					disabled: true,
+					tooltip: "后端待办创建接口未接入，不能在前端伪造待办",
+				},
+			],
+			{ width: 360 },
+		),
 	];
 
 	const columns = useMemo(() => appendDetailAction(baseColumns, (row) => setDetailRow(row)), []);

@@ -1,4 +1,3 @@
-import { DownloadOutlined, ImportOutlined } from "@ant-design/icons";
 import { Button, Card, Space, Typography } from "antd";
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
@@ -47,7 +46,6 @@ export function StandardPackageActions({ source }: { source: StandardPackageSour
 				extra={
 					<Space wrap>
 						<Button
-							icon={<DownloadOutlined />}
 							onClick={() => void downloadTemplate()}
 							loading={downloading}
 							disabled={!canManage}
@@ -57,7 +55,6 @@ export function StandardPackageActions({ source }: { source: StandardPackageSour
 						</Button>
 						<Button
 							type="primary"
-							icon={<ImportOutlined />}
 							onClick={() => navigate(buildStandardPackageImportRoute(searchParams, source))}
 							disabled={!canManage}
 							data-testid={`governance-${source}-standard-package-import`}

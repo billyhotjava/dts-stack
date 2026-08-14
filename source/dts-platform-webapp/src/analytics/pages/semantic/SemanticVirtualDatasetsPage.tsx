@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { Button, Card, Popconfirm, Space, Tag } from "antd";
-import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
+import { Button, Card, Tag } from "antd";
+import { actionColumn, appendDetailAction, CompactTable, RecordDetailDrawer } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { } from "@ant-design/icons";
+import {} from "@ant-design/icons";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { useMenuStore } from "@/store/menuStore";
@@ -90,47 +90,39 @@ export default function SemanticVirtualDatasetsPage() {
 			width: 120,
 			render: (_value, record) => <Tag color="blue">{record.archived ? "archived" : "shared"}</Tag>,
 		},
-		{
-			title: "操作",
-			dataIndex: "actions",
-			key: "actions",
-			width: 320,
-			fixed: "right",
-			render: (_value, record) => (
-				<Space>
-					<Link to={`/bi/virtual-datasets/${encodeURIComponent(String(record.id ?? ""))}`}>
-						<Button size="small">
-							编辑
-						</Button>
-					</Link>
-					{canModel && (
-						<Link to={`/bi/card/new?vds=${encodeURIComponent(String(record.id ?? ""))}`}>
-							<Button size="small">生成卡片</Button>
-						</Link>
-					)}
-					{canPromote && record.id != null && (
-						<Popconfirm
-							title="生成提升到 dbt 的草案？"
-							onConfirm={async () => {
-								try {
-									setPromoteState({ state: "loading" });
-									const value = await analyticsApi.promoteSemanticVirtualDataset(record.id as number);
-									setPromoteState({ state: "loaded", value });
-									toast.success("已生成提升草案");
-								} catch (error) {
-									setPromoteState({ state: "error", error });
-									toast.error(error instanceof Error ? error.message : "提升失败");
-								}
-							}}
-						>
-							<Button size="small">
-								提升
-							</Button>
-						</Popconfirm>
-					)}
-				</Space>
-			),
-		},
+		actionColumn<SemanticVirtualDataset>(
+			(record) => [
+				{
+					key: "edit",
+					label: "编辑",
+					href: `/bi/virtual-datasets/${encodeURIComponent(String(record.id ?? ""))}`,
+				},
+				{
+					key: "new-card",
+					label: "生成卡片",
+					hidden: !canModel,
+					href: `/bi/card/new?vds=${encodeURIComponent(String(record.id ?? ""))}`,
+				},
+				{
+					key: "promote",
+					label: "提升",
+					hidden: !canPromote || record.id == null,
+					confirm: "生成提升到 dbt 的草案？",
+					onClick: async () => {
+						try {
+							setPromoteState({ state: "loading" });
+							const value = await analyticsApi.promoteSemanticVirtualDataset(record.id as number);
+							setPromoteState({ state: "loaded", value });
+							toast.success("已生成提升草案");
+						} catch (error) {
+							setPromoteState({ state: "error", error });
+							toast.error(error instanceof Error ? error.message : "提升失败");
+						}
+					},
+				},
+			],
+			{ width: 320 },
+		),
 	];
 
 	const columns = useMemo(
@@ -146,9 +138,7 @@ export default function SemanticVirtualDatasetsPage() {
 				actions={
 					canModel ? (
 						<Link to="/bi/virtual-datasets/new">
-							<Button type="primary">
-								新建虚拟数据集
-							</Button>
+							<Button type="primary">新建虚拟数据集</Button>
 						</Link>
 					) : undefined
 				}

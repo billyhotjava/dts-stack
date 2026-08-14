@@ -1,5 +1,5 @@
 import { Alert, Button, Modal, Space, Tabs, Tag } from "antd";
-import { CompactTable } from "@/components/table";
+import { actionColumn, CompactTable } from "@/components/table";
 import { GOVERNANCE_STATUS_DICT, LIFECYCLE_STATUS_DICT, resolveEnumLabel } from "./assetEnumLabels";
 import {
 	formatTime,
@@ -144,21 +144,17 @@ export function AssetLedgerDialogs({
 												</Space>
 											),
 										},
-										{
-											title: "操作",
-											width: 180,
-											fixed: "right",
-											render: (_, row) => (
-												<Space>
-													<Button size="small" onClick={() => onOpenGovernanceRemediation(row.id)}>
-														补治理字段
-													</Button>
-													<Button size="small" onClick={() => onNavigate(`/catalog/datasets/${row.id}`)}>
-														详情
-													</Button>
-												</Space>
-											),
-										},
+										actionColumn<GovernanceGapRow>(
+											(row) => [
+												{
+													key: "remediate",
+													label: "补治理字段",
+													onClick: () => onOpenGovernanceRemediation(row.id),
+												},
+												{ key: "detail", label: "详情", onClick: () => onNavigate(`/catalog/datasets/${row.id}`) },
+											],
+											{ width: 180 },
+										),
 									]}
 								/>
 							),
@@ -213,29 +209,23 @@ export function AssetLedgerDialogs({
 											width: 160,
 											render: (value) => value || "-",
 										},
-										{
-											title: "操作",
-											width: 220,
-											fixed: "right",
-											render: (_, row) => (
-												<Space>
-													<Button
-														size="small"
-														type="primary"
-														loading={remediationLoading === row.id}
-														onClick={() => onSyncLineage(row.id)}
-													>
-														同步血缘
-													</Button>
-													<Button size="small" onClick={() => onOpenGovernanceRemediation(row.id)}>
-														治理
-													</Button>
-													<Button size="small" onClick={() => onNavigate(`/catalog/datasets/${row.id}?tab=lineage`)}>
-														详情
-													</Button>
-												</Space>
-											),
-										},
+										actionColumn<LineageFailureRow>(
+											(row) => [
+												{
+													key: "sync-lineage",
+													label: "同步血缘",
+													loading: remediationLoading === row.id,
+													onClick: () => onSyncLineage(row.id),
+												},
+												{ key: "govern", label: "治理", onClick: () => onOpenGovernanceRemediation(row.id) },
+												{
+													key: "detail",
+													label: "详情",
+													onClick: () => onNavigate(`/catalog/datasets/${row.id}?tab=lineage`),
+												},
+											],
+											{ width: 220 },
+										),
 									]}
 								/>
 							),

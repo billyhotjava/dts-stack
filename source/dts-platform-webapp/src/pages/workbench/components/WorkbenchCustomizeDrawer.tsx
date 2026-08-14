@@ -1,5 +1,4 @@
 import { Button, Checkbox, Drawer, Empty, List, Space, Typography } from "antd";
-import { ArrowDown, ArrowUp, RotateCcw, Save, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { WorkbenchComponentDescriptor, WorkbenchPreferenceItem } from "@/api/services/workbenchService";
 import { moveWorkbenchPreferenceItem, normalizeWorkbenchPreferenceItems } from "../workbenchPersonalizationModel";
@@ -52,19 +51,14 @@ export function WorkbenchCustomizeDrawer({
 			destroyOnClose
 			footer={
 				<Space style={{ width: "100%", justifyContent: "space-between" }}>
-					<Button icon={<RotateCcw size={16} aria-hidden="true" />} onClick={onReset} disabled={saving}>
+					<Button onClick={onReset} disabled={saving}>
 						恢复默认
 					</Button>
 					<Space>
-						<Button icon={<X size={16} aria-hidden="true" />} onClick={onClose} disabled={saving}>
+						<Button onClick={onClose} disabled={saving}>
 							取消
 						</Button>
-						<Button
-							type="primary"
-							icon={<Save size={16} aria-hidden="true" />}
-							loading={saving}
-							onClick={() => onSave(draftItems)}
-						>
+						<Button type="primary" loading={saving} onClick={() => onSave(draftItems)}>
 							保存
 						</Button>
 					</Space>
@@ -91,7 +85,6 @@ export function WorkbenchCustomizeDrawer({
 										<Button
 											key="up"
 											size="small"
-											icon={<ArrowUp size={14} aria-hidden="true" />}
 											disabled={index === 0 || saving}
 											onClick={() => setDraftItems((prev) => moveWorkbenchPreferenceItem(prev, item.key, -1))}
 										>
@@ -100,7 +93,6 @@ export function WorkbenchCustomizeDrawer({
 										<Button
 											key="down"
 											size="small"
-											icon={<ArrowDown size={14} aria-hidden="true" />}
 											disabled={index === draftItems.length - 1 || saving}
 											onClick={() => setDraftItems((prev) => moveWorkbenchPreferenceItem(prev, item.key, 1))}
 										>

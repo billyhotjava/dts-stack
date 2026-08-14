@@ -1,4 +1,4 @@
-import { GitBranch, Import, Plus, RefreshCw, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
 	getModelMaterializationStatuses,
@@ -8,7 +8,7 @@ import {
 	type ModelWorkbenchCatalogPage,
 } from "@/api/modelSpecApi";
 import type { CatalogDomain } from "@/api/services/catalogDomainService";
-import { type CompactColumns, CompactTable } from "@/components/table";
+import { actionColumn, type CompactColumns, CompactTable } from "@/components/table";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
 import type { ModelSpecLayer, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { resolveMaterializationPresentation } from "./ModelMaterializationStatus";
@@ -367,80 +367,59 @@ export function ModelWorkbenchCatalogList({
 					return <Status tone={materialization.tone}>{materialization.label}</Status>;
 				},
 			},
-			{
-				title: "操作",
-				key: "actions",
-				width: 250,
-				render: (_, row) => (
-					<div className="dmx-row-actions">
-						<Button
-							className="dmx-table-action"
-							disabled={busy || !row.open}
-							onClick={row.open || undefined}
-							type="link"
-						>
-							{row.open ? (row.editable ? "编辑" : "查看") : "详情未加载"}
-						</Button>
-						{row.model ? (
-							<>
-								<Button
-									className="dmx-table-action"
-									disabled={busy}
-									onClick={() => onGoToGraphModel(row.model as ModelSpecView)}
-									type="link"
-								>
-									<GitBranch size={13} />
-									关系图
-								</Button>
-								<Button
-									className="dmx-table-action"
-									disabled={busy || !canMaintain}
-									onClick={() => onMaterialize([row.model as ModelSpecView])}
-									type="link"
-								>
-									{materializationByModel.has(row.model.id) ? "物化历史 / 再次物化" : "物化详情"}
-								</Button>
-								<Button
-									className="dmx-table-action"
-									disabled={busy || !canMaintain || row.model.compatibilityMode !== "CANONICAL"}
-									onClick={() => onRemoveModel(row.model as ModelSpecView)}
-									type="link"
-								>
-									删除
-								</Button>
-							</>
-						) : row.dimension ? (
-							<>
-								<Button
-									className="dmx-table-action"
-									disabled={busy}
-									onClick={() => onGoToGraphDimension(row.dimension as DimensionDefinitionView)}
-									type="link"
-								>
-									<GitBranch size={13} />
-									关系图
-								</Button>
-								<Button
-									className="dmx-table-action"
-									disabled={busy || !canMaintain}
-									onClick={() => onCloneDimension(row.dimension as DimensionDefinitionView)}
-									type="link"
-								>
-									克隆
-								</Button>
-								<Button
-									className="dmx-table-action"
-									disabled={busy || !canMaintain}
-									onClick={() => onRemoveDimension(row.dimension as DimensionDefinitionView)}
-									type="link"
-								>
-									{row.dimension.status === "DRAFT" ? "删除" : "退役"}
-								</Button>
-							</>
-						) : null}
-					</div>
-				),
-			},
+			actionColumn<CatalogRow>(
+				(row) => [
+					{
+						key: "open",
+						label: row.open ? (row.editable ? "编辑" : "查看") : "详情未加载",
+						disabled: busy || !row.open,
+						onClick: row.open || undefined,
+					},
+					{
+						key: "model-graph",
+						label: "关系图",
+						hidden: !row.model,
+						disabled: busy,
+						onClick: () => onGoToGraphModel(row.model as ModelSpecView),
+					},
+					{
+						key: "materialize",
+						label: row.model && materializationByModel.has(row.model.id) ? "物化历史 / 再次物化" : "物化详情",
+						hidden: !row.model,
+						disabled: busy || !canMaintain,
+						onClick: () => onMaterialize([row.model as ModelSpecView]),
+					},
+					{
+						key: "model-remove",
+						label: "删除",
+						hidden: !row.model,
+						disabled: busy || !canMaintain || row.model?.compatibilityMode !== "CANONICAL",
+						onClick: () => onRemoveModel(row.model as ModelSpecView),
+					},
+					{
+						key: "dimension-graph",
+						label: "关系图",
+						hidden: !!row.model || !row.dimension,
+						disabled: busy,
+						onClick: () => onGoToGraphDimension(row.dimension as DimensionDefinitionView),
+					},
+					{
+						key: "dimension-clone",
+						label: "克隆",
+						hidden: !!row.model || !row.dimension,
+						disabled: busy || !canMaintain,
+						onClick: () => onCloneDimension(row.dimension as DimensionDefinitionView),
+					},
+					{
+						key: "dimension-remove",
+						label: row.dimension?.status === "DRAFT" ? "删除" : "退役",
+						hidden: !!row.model || !row.dimension,
+						disabled: busy || !canMaintain,
+						onClick: () => onRemoveDimension(row.dimension as DimensionDefinitionView),
+					},
+				],
+				{ width: 250, fixed: false },
+			),
 		],
 		[
 			busy,
@@ -469,11 +448,9 @@ export function ModelWorkbenchCatalogList({
 				</div>
 				<div className="dmx-model-list-header-actions">
 					<Button disabled={busy || catalogLoading} onClick={onRefresh}>
-						<RefreshCw size={15} />
 						刷新
 					</Button>
 					<Button disabled={busy} onClick={onImport}>
-						<Import size={15} />
 						逆向建模
 					</Button>
 					<Button
@@ -482,7 +459,6 @@ export function ModelWorkbenchCatalogList({
 						primary
 						title={canMaintain ? "新建模型" : "当前账号无建模维护权限"}
 					>
-						<Plus size={15} />
 						新建模型
 					</Button>
 				</div>

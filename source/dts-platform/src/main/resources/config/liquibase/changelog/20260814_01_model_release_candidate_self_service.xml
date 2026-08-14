@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260814-01-model-release-candidate-self-service" author="xiezm" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="modeling_model_release_candidate"/>
+            <sqlCheck expectedResult="1">
+                SELECT count(*)
+                  FROM pg_constraint
+                 WHERE conname = 'ck_model_release_candidate_audit'
+                   AND conrelid = 'modeling_model_release_candidate'::regclass
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Permit institute data administrators and department-scoped data administrators to publish
+            quality-passed models directly while preserving actor, timestamp and optional legacy review evidence.
+        </comment>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE modeling_model_release_candidate
+                DROP CONSTRAINT ck_model_release_candidate_audit;
+            ALTER TABLE modeling_model_release_candidate
+                ADD CONSTRAINT ck_model_release_candidate_audit
+                CHECK (
+                    ((submitted_by IS NULL AND submitted_date IS NULL)
+                        OR (
+                            submitted_by IS NOT NULL
+                            AND btrim(submitted_by) <> ''
+                            AND submitted_by = btrim(submitted_by)
+                            AND submitted_date IS NOT NULL
+                        ))
+                    AND ((approved_by IS NULL AND approved_date IS NULL)
+                        OR (
+                            approved_by IS NOT NULL
+                            AND btrim(approved_by) <> ''
+                            AND approved_by = btrim(approved_by)
+                            AND approved_date IS NOT NULL
+                        ))
+                    AND ((published_by IS NULL AND published_date IS NULL)
+                        OR (
+                            published_by IS NOT NULL
+                            AND btrim(published_by) <> ''
+                            AND published_by = btrim(published_by)
+                            AND published_date IS NOT NULL
+                        ))
+                    AND last_modified_date >= created_date
+                    AND (submitted_date IS NULL OR submitted_date >= created_date)
+                    AND (approved_date IS NULL OR (submitted_date IS NOT NULL AND approved_date >= submitted_date))
+                    AND (published_date IS NULL OR published_date >= COALESCE(approved_date, submitted_date, created_date))
+                    AND (submitted_by IS NULL OR approved_by IS NULL OR btrim(submitted_by) <> btrim(approved_by))
+                    AND (submitted_date IS NULL OR last_modified_date >= submitted_date)
+                    AND (approved_date IS NULL OR last_modified_date >= approved_date)
+                    AND (published_date IS NULL OR last_modified_date >= published_date)
+                    AND (
+                        status = 'STALE'
+                        OR status NOT IN ('REVIEW_PENDING', 'REJECTED', 'APPROVED')
+                        OR submitted_date IS NOT NULL
+                    )
+                    AND (
+                        status = 'STALE'
+                        OR status NOT IN ('APPROVED')
+                        OR approved_date IS NOT NULL
+                    )
+                    AND (
+                        status = 'STALE'
+                        OR status NOT IN ('PARTIAL', 'PUBLISHED', 'ROLLED_BACK')
+                        OR published_date IS NOT NULL
+                    )
+                );
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    IF EXISTS (
+                        SELECT 1
+                          FROM modeling_model_release_candidate
+                         WHERE status <> 'STALE'
+                           AND status IN ('PUBLISHING', 'PARTIAL', 'PUBLISHED', 'ROLLED_BACK')
+                           AND (submitted_date IS NULL OR approved_date IS NULL)
+                    ) THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_MODEL_RELEASE_SELF_SERVICE_AUDIT_EXISTS';
+                    END IF;
+                END $$;
+            ]]></sql>
+            <sql splitStatements="true" endDelimiter=";"><![CDATA[
+                ALTER TABLE modeling_model_release_candidate
+                    DROP CONSTRAINT ck_model_release_candidate_audit;
+                ALTER TABLE modeling_model_release_candidate
+                    ADD CONSTRAINT ck_model_release_candidate_audit
+                    CHECK (
+                        ((submitted_by IS NULL AND submitted_date IS NULL)
+                            OR (submitted_by IS NOT NULL AND btrim(submitted_by) <> '' AND submitted_by = btrim(submitted_by) AND submitted_date IS NOT NULL))
+                        AND ((approved_by IS NULL AND approved_date IS NULL)
+                            OR (approved_by IS NOT NULL AND btrim(approved_by) <> '' AND approved_by = btrim(approved_by) AND approved_date IS NOT NULL))
+                        AND ((published_by IS NULL AND published_date IS NULL)
+                            OR (published_by IS NOT NULL AND btrim(published_by) <> '' AND published_by = btrim(published_by) AND published_date IS NOT NULL))
+                        AND last_modified_date >= created_date
+                        AND (submitted_date IS NULL OR submitted_date >= created_date)
+                        AND (approved_date IS NULL OR (submitted_date IS NOT NULL AND approved_date >= submitted_date))
+                        AND (published_date IS NULL OR (approved_date IS NOT NULL AND published_date >= approved_date))
+                        AND (submitted_by IS NULL OR approved_by IS NULL OR btrim(submitted_by) <> btrim(approved_by))
+                        AND (submitted_by IS NULL OR published_by IS NULL OR btrim(submitted_by) <> btrim(published_by))
+                        AND (submitted_date IS NULL OR last_modified_date >= submitted_date)
+                        AND (approved_date IS NULL OR last_modified_date >= approved_date)
+                        AND (published_date IS NULL OR last_modified_date >= published_date)
+                        AND (status = 'STALE' OR status NOT IN ('REVIEW_PENDING', 'REJECTED', 'APPROVED', 'PUBLISHING', 'PARTIAL', 'PUBLISHED', 'ROLLED_BACK') OR submitted_date IS NOT NULL)
+                        AND (status = 'STALE' OR status NOT IN ('APPROVED', 'PUBLISHING', 'PARTIAL', 'PUBLISHED', 'ROLLED_BACK') OR approved_date IS NOT NULL)
+                        AND (status = 'STALE' OR status NOT IN ('PARTIAL', 'PUBLISHED', 'ROLLED_BACK') OR published_date IS NOT NULL)
+                    );
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

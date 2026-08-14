@@ -53,6 +53,8 @@ class ModelLifecycleContractTest {
             .containsExactly(DeliveryAction.CREATE_REPLACEMENT_CANDIDATE);
         // F1-T02/T03 creates the replacement with a new candidate ID; this candidate remains terminal.
         assertThat(DeliveryStatus.canTransition(DeliveryStatus.QUALITY_PASSED, DeliveryStatus.PUBLISHED)).isFalse();
+        assertThat(DeliveryStatus.canTransition(DeliveryStatus.QUALITY_PASSED, DeliveryStatus.PUBLISHING)).isTrue();
+        assertThat(DeliveryStatus.canTransition(DeliveryStatus.REVIEW_PENDING, DeliveryStatus.PUBLISHING)).isTrue();
         assertThat(DeliveryStatus.canTransition(DeliveryStatus.PUBLISHED, DeliveryStatus.DRAFT)).isFalse();
     }
 
@@ -152,7 +154,11 @@ class ModelLifecycleContractTest {
         DeliveryView view = DeliveryView.forStatus(DeliveryStatus.REVIEW_PENDING, "REVIEW_PENDING", audit);
 
         assertThat(view.status()).isEqualTo(DeliveryStatus.REVIEW_PENDING);
-        assertThat(view.allowedActions()).containsExactly(DeliveryAction.APPROVE, DeliveryAction.REJECT);
+        assertThat(view.allowedActions()).containsExactly(
+            DeliveryAction.APPROVE,
+            DeliveryAction.REJECT,
+            DeliveryAction.PUBLISH
+        );
         assertThat(view.primaryBlockerCode()).isEqualTo("REVIEW_PENDING");
         assertThat(view.audit()).isEqualTo(audit);
         assertThat(DeliveryAction.APPROVE.requiredRole()).isEqualTo(DeliveryActorRole.RELEASE_REVIEWER);
@@ -191,6 +197,8 @@ class ModelLifecycleContractTest {
         );
         assertThat(DeliveryAction.APPROVE.isAllowedFor(DeliveryStatus.REVIEW_PENDING, DeliveryActorRole.RELEASE_REVIEWER, "approver", unsubmitted)).isFalse();
         assertThat(DeliveryAction.PUBLISH.isAllowedFor(DeliveryStatus.APPROVED, DeliveryActorRole.RELEASE_OPERATOR, "publisher", unsubmitted)).isFalse();
+        assertThat(DeliveryAction.PUBLISH.isAllowedFor(DeliveryStatus.QUALITY_PASSED, DeliveryActorRole.RELEASE_OPERATOR, "owner", unsubmitted)).isTrue();
+        assertThat(DeliveryAction.PUBLISH.isAllowedFor(DeliveryStatus.REVIEW_PENDING, DeliveryActorRole.RELEASE_OPERATOR, "submitter", audit)).isTrue();
 
         assertThatThrownBy(() -> new DeliveryView(DeliveryStatus.DRAFT, List.of(DeliveryAction.PUBLISH), "BLOCKED", audit))
             .isInstanceOf(IllegalArgumentException.class)

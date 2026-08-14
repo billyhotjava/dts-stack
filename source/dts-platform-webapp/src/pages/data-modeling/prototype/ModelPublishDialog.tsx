@@ -289,7 +289,7 @@ export function ModelPublishDialog({
 		<Modal onClose={onClose} title={batch ? "批量物化" : "发布与物化"} wide>
 			{!canMaintain ? (
 				<RequestState
-					description="当前账号不能维护模型或创建物化候选；若服务端已授予发布职责，仍可执行下方开放的评审与发布动作。"
+					description="当前账号不能维护所选数据范围；所级数据管理员可维护全局模型，部门数据管理员仅可维护所属部门模型。"
 					kind="permission"
 					title="模型维护受限"
 				/>
@@ -381,7 +381,7 @@ export function ModelPublishDialog({
 						<>
 							<h3>{batch ? "批量发布流程" : "发布模型"}</h3>
 							<p className="dmx-capability-note">
-								构建、质量、评审、发布登记和上线就绪各自保留证据；发布登记完成不代表运行计划已经上线。
+								构建和质量检查通过后，数据管理员可在职责范围内直接发布；旧候选仍兼容评审流程。发布登记完成不代表运行计划已经上线。
 							</p>
 							<ModelReleaseWorkflowPanel
 								binding={executionBinding}

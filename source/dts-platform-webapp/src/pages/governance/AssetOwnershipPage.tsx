@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button, Card, Input, Modal, Select, Space, Tag } from "antd";
-import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
+import { actionColumn, appendDetailAction, CompactTable, RecordDetailDrawer } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { listAssetOwnership, updateAssetOwnership, batchUpdateAssetOwnership } from "@/api/platformApi";
 import { getOrgTree } from "@/api/services/directoryService";
@@ -55,15 +55,21 @@ export default function AssetOwnershipPage() {
 			};
 			walk(Array.isArray(tree) ? tree : []);
 			setDepts(flat);
-		} catch { /* ignore */ }
+		} catch {
+			/* ignore */
+		}
 	}, []);
 
 	const loadData = useCallback(async () => {
 		setLoading(true);
 		try {
-			const resp = await listAssetOwnership({
-				assetType, ownerDeptCode, keyword: keyword || undefined, page, size,
-			}) as any;
+			const resp = (await listAssetOwnership({
+				assetType,
+				ownerDeptCode,
+				keyword: keyword || undefined,
+				page,
+				size,
+			})) as any;
 			const content = resp?.content ?? resp?.data ?? resp ?? [];
 			setItems(Array.isArray(content) ? content : []);
 			setTotal(resp?.totalElements ?? content.length ?? 0);
@@ -74,8 +80,12 @@ export default function AssetOwnershipPage() {
 		}
 	}, [assetType, ownerDeptCode, keyword, page, size]);
 
-	useEffect(() => { loadDepts(); }, [loadDepts]);
-	useEffect(() => { loadData(); }, [loadData]);
+	useEffect(() => {
+		loadDepts();
+	}, [loadDepts]);
+	useEffect(() => {
+		loadData();
+	}, [loadData]);
 
 	const handleEdit = async () => {
 		if (!editModal.record || !editDept) return;
@@ -103,24 +113,39 @@ export default function AssetOwnershipPage() {
 	};
 
 	const baseColumns: ColumnsType<AssetOwnership> = [
-		{ title: "资产 ID", dataIndex: "assetId", key: "assetId", ellipsis: true,
-			sorter: (a, b) => (a.assetId || "").localeCompare(b.assetId || "") },
-		{ title: "类型", dataIndex: "assetType", key: "assetType", width: 120,
-			render: (v: string) => <Tag>{v}</Tag> },
-		{ title: "所有者部门", dataIndex: "ownerDeptCode", key: "ownerDeptCode", width: 150,
+		{
+			title: "资产 ID",
+			dataIndex: "assetId",
+			key: "assetId",
+			ellipsis: true,
+			sorter: (a, b) => (a.assetId || "").localeCompare(b.assetId || ""),
+		},
+		{ title: "类型", dataIndex: "assetType", key: "assetType", width: 120, render: (v: string) => <Tag>{v}</Tag> },
+		{
+			title: "所有者部门",
+			dataIndex: "ownerDeptCode",
+			key: "ownerDeptCode",
+			width: 150,
 			render: (v: string) => {
-				const dept = depts.find(d => d.value === v);
+				const dept = depts.find((d) => d.value === v);
 				return dept ? dept.label : v;
-			}},
+			},
+		},
 		{ title: "来源", dataIndex: "sourceId", key: "sourceId", width: 120 },
 		{ title: "分配者", dataIndex: "assignedBy", key: "assignedBy", width: 120 },
-		{ title: "操作", dataIndex: "actions", key: "action", width: 160, fixed: "right",
-			render: (_: any, record: AssetOwnership) => (
-				<Button type="link" size="small" onClick={() => {
-					setEditDept(record.ownerDeptCode);
-					setEditModal({ open: true, record });
-				}}>编辑</Button>
-			)},
+		actionColumn<AssetOwnership>(
+			(record) => [
+				{
+					key: "edit",
+					label: "编辑",
+					onClick: () => {
+						setEditDept(record.ownerDeptCode);
+						setEditModal({ open: true, record });
+					},
+				},
+			],
+			{ width: 160 },
+		),
 	];
 
 	const columns = useMemo(
@@ -133,44 +158,88 @@ export default function AssetOwnershipPage() {
 		<div className="space-y-4">
 			<Card title="资产所有权管理">
 				<Space wrap className="mb-4">
-					<Select allowClear placeholder="资产类型" options={ASSET_TYPE_OPTIONS}
-						style={{ width: 140 }} value={assetType} onChange={setAssetType} />
-					<Select allowClear showSearch placeholder="部门" options={depts}
-						style={{ width: 180 }} value={ownerDeptCode} onChange={setOwnerDeptCode} />
-					<Input.Search placeholder="搜索资产..." allowClear style={{ width: 220 }}
-						onSearch={(v) => { setKeyword(v); setPage(0); }} />
+					<Select
+						allowClear
+						placeholder="资产类型"
+						options={ASSET_TYPE_OPTIONS}
+						style={{ width: 140 }}
+						value={assetType}
+						onChange={setAssetType}
+					/>
+					<Select
+						allowClear
+						showSearch
+						placeholder="部门"
+						options={depts}
+						style={{ width: 180 }}
+						value={ownerDeptCode}
+						onChange={setOwnerDeptCode}
+					/>
+					<Input.Search
+						placeholder="搜索资产..."
+						allowClear
+						style={{ width: 220 }}
+						onSearch={(v) => {
+							setKeyword(v);
+							setPage(0);
+						}}
+					/>
 					{selectedRowKeys.length > 0 && (
-						<Button type="primary" onClick={() => { setEditDept(""); setBatchModal(true); }}>
+						<Button
+							type="primary"
+							onClick={() => {
+								setEditDept("");
+								setBatchModal(true);
+							}}
+						>
 							批量更新 ({selectedRowKeys.length})
 						</Button>
 					)}
 				</Space>
 				<CompactTable<AssetOwnership>
-					rowKey="id" columns={columns} dataSource={items} loading={loading}
+					rowKey="id"
+					columns={columns}
+					dataSource={items}
+					loading={loading}
 					rowSelection={{ selectedRowKeys, onChange: (keys) => setSelectedRowKeys(keys as number[]) }}
 					pagination={{
-						current: page + 1, pageSize: size, total,
-						onChange: (p) => setPage(p - 1), showTotal: (t) => `共 ${t} 条`,
+						current: page + 1,
+						pageSize: size,
+						total,
+						onChange: (p) => setPage(p - 1),
+						showTotal: (t) => `共 ${t} 条`,
 					}}
 					size="small"
 				/>
 			</Card>
 
-			<Modal title="编辑所有权" open={editModal.open}
-				onCancel={() => setEditModal({ open: false })} onOk={handleEdit}>
+			<Modal title="编辑所有权" open={editModal.open} onCancel={() => setEditModal({ open: false })} onOk={handleEdit}>
 				<div className="py-4">
-					<div className="mb-2">资产: {editModal.record?.assetType}:{editModal.record?.assetId}</div>
-					<Select showSearch placeholder="选择部门" options={depts}
-						style={{ width: "100%" }} value={editDept} onChange={setEditDept} />
+					<div className="mb-2">
+						资产: {editModal.record?.assetType}:{editModal.record?.assetId}
+					</div>
+					<Select
+						showSearch
+						placeholder="选择部门"
+						options={depts}
+						style={{ width: "100%" }}
+						value={editDept}
+						onChange={setEditDept}
+					/>
 				</div>
 			</Modal>
 
-			<Modal title="批量更新所有权" open={batchModal}
-				onCancel={() => setBatchModal(false)} onOk={handleBatch}>
+			<Modal title="批量更新所有权" open={batchModal} onCancel={() => setBatchModal(false)} onOk={handleBatch}>
 				<div className="py-4">
 					<div className="mb-2">已选择 {selectedRowKeys.length} 个资产</div>
-					<Select showSearch placeholder="选择部门" options={depts}
-						style={{ width: "100%" }} value={editDept} onChange={setEditDept} />
+					<Select
+						showSearch
+						placeholder="选择部门"
+						options={depts}
+						style={{ width: "100%" }}
+						value={editDept}
+						onChange={setEditDept}
+					/>
 				</div>
 			</Modal>
 			<RecordDetailDrawer<AssetOwnership>

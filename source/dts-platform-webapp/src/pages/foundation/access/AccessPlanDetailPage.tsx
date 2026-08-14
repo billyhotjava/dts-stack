@@ -1,4 +1,3 @@
-import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Alert, Button, Descriptions, Empty, Modal, Space, Spin, Tabs, Tag, Tooltip } from "antd";
 import type { ColumnsType, TablePaginationConfig } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -466,11 +465,7 @@ export default function AccessPlanDetailPage() {
 			<div className={styles.page}>
 				<PageHeader
 					title="接入任务详情"
-					actions={
-						<Button icon={<ArrowLeftOutlined />} onClick={() => router.push("/foundation/data-sources")}>
-							返回接入概览
-						</Button>
-					}
+					actions={<Button onClick={() => router.push("/foundation/data-sources")}>返回接入概览</Button>}
 				/>
 				<Alert
 					type="error"
@@ -592,11 +587,7 @@ export default function AccessPlanDetailPage() {
 						<h2>接入变更记录</h2>
 						<p>仅查询当前任务的登记记录，不将变更状态解释为客户审批结论。</p>
 					</div>
-					<Button
-						icon={<ReloadOutlined />}
-						disabled={changesLoading}
-						onClick={() => void loadChanges(1, changesPagination.pageSize)}
-					>
+					<Button disabled={changesLoading} onClick={() => void loadChanges(1, changesPagination.pageSize)}>
 						刷新
 					</Button>
 				</div>
@@ -623,11 +614,8 @@ export default function AccessPlanDetailPage() {
 				title={task.name || "接入任务详情"}
 				actions={
 					<Space wrap>
-						<Button icon={<ArrowLeftOutlined />} onClick={() => router.push("/foundation/data-sources")}>
-							返回接入概览
-						</Button>
+						<Button onClick={() => router.push("/foundation/data-sources")}>返回接入概览</Button>
 						<Button
-							icon={<EditOutlined />}
 							disabled={taskDeleted || operation !== null}
 							onClick={() =>
 								router.push(
@@ -650,7 +638,6 @@ export default function AccessPlanDetailPage() {
 						</Tooltip>
 						<Button
 							danger
-							icon={<DeleteOutlined />}
 							loading={operation === "delete"}
 							disabled={taskDeleted || operation !== null}
 							onClick={handleDelete}
@@ -658,11 +645,7 @@ export default function AccessPlanDetailPage() {
 						>
 							删除计划
 						</Button>
-						<Button
-							icon={<ReloadOutlined />}
-							onClick={() => void loadDetail()}
-							disabled={loading || operation !== null}
-						>
+						<Button onClick={() => void loadDetail()} disabled={loading || operation !== null}>
 							刷新
 						</Button>
 					</Space>

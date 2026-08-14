@@ -32,17 +32,23 @@ import org.springframework.web.bind.annotation.RestController;
 public class ReleaseDutyInternalResource {
 
     private static final String PLATFORM_SERVICE = "dts-platform";
+    // Mirrors the platform's interim data-admin release projection; it does not create new realm roles.
     private static final Map<String, Set<String>> DUTY_ROLES = Map.of(
         "MODEL_MAINTAINER",
         Set.of(
             "ROLE_INST_DATA_OWNER",
+            "ROLE_DEPT_DATA_OWNER",
             "ROLE_INST_LEADER",
             "ROLE_OP_ADMIN"
         ),
         "RELEASE_REVIEWER",
         Set.of("ROLE_INST_LEADER", "ROLE_OP_ADMIN"),
         "RELEASE_OPERATOR",
-        Set.of("ROLE_OP_ADMIN")
+        Set.of(
+            "ROLE_INST_DATA_OWNER",
+            "ROLE_DEPT_DATA_OWNER",
+            "ROLE_OP_ADMIN"
+        )
     );
 
     private final AdminInboundServiceAuthenticator authenticator;

@@ -1122,6 +1122,65 @@ class ModelReleaseCandidateServiceTest {
     }
 
     @Test
+    void submitterCanPublishTheSameCandidateWithoutInventingApprovalEvidence() {
+        DeliveryAuditView submitted = new DeliveryAuditView(
+            "creator",
+            NOW.minusSeconds(60),
+            ACTOR,
+            NOW.minusSeconds(30),
+            null,
+            null,
+            null,
+            null
+        );
+        CandidateView pending = candidate(
+            DeliveryStatus.REVIEW_PENDING,
+            8,
+            submitted,
+            List.of(entry(DeliveryStatus.REVIEW_PENDING, 1, CHECKSUM))
+        );
+        when(repository.findCommandByIdempotencyKey(TENANT, "direct-publish-key"))
+            .thenReturn(Optional.empty());
+        when(repository.findByIdempotencyKey(TENANT, "direct-publish-key"))
+            .thenReturn(Optional.empty());
+        when(repository.find(TENANT, CANDIDATE_ID))
+            .thenReturn(Optional.of(pending));
+        when(repository.findCurrentModelReferences(TENANT, PLAN_ID, List.of(MODEL_ID)))
+            .thenReturn(Map.of(MODEL_ID, currentReference(1, CHECKSUM)));
+        when(retryDriftGate.detect(pending)).thenReturn(List.of());
+        when(
+            repository.transitionAndAppend(
+                any(),
+                anyInt(),
+                any(),
+                any(),
+                anyString(),
+                any(),
+                any()
+            )
+        )
+            .thenReturn(1);
+
+        CommandResult result = service.transition(
+            TENANT,
+            ACTOR,
+            CANDIDATE_ID,
+            new TransitionCommand(
+                8,
+                DeliveryStatus.PUBLISHING,
+                "direct-publish-key",
+                "data owner self-service release"
+            )
+        );
+
+        assertThat(result.candidate().status())
+            .isEqualTo(DeliveryStatus.PUBLISHING);
+        assertThat(result.candidate().audit().submittedBy()).isEqualTo(ACTOR);
+        assertThat(result.candidate().audit().approvedBy()).isNull();
+        assertThat(result.candidate().audit().publishedBy()).isNull();
+    }
+
+    @Test
     void submitterCannotRejectTheSameCandidate() {
         DeliveryAuditView submitted = new DeliveryAuditView(
             "creator",

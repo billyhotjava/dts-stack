@@ -1,20 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import {
-	Button,
-	Card,
-	Form,
-	Input,
-	InputNumber,
-	Modal,
-	Select,
-	Space,
-	Switch,
-	Tag,
-	Tooltip,
-	Typography,
-} from "antd";
-import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
+import { Button, Card, Form, Input, InputNumber, Modal, Select, Space, Switch, Tag, Typography } from "antd";
+import { actionColumn, appendDetailAction, CompactTable, RecordDetailDrawer } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { ExclamationCircleOutlined, SearchOutlined } from "@ant-design/icons";
 import { EmptyState } from "@/components/empty-state";
@@ -134,9 +121,25 @@ const toEditDefaults = (record: ReportLink): FormValues => ({
 const renderClassificationTag = (value?: string | null) => {
 	const key = String(value || "").toUpperCase();
 	const color =
-		key === "PUBLIC" ? "green" : key === "INTERNAL" ? "blue" : key === "SECRET" ? "orange" : key === "CONFIDENTIAL" ? "red" : "default";
+		key === "PUBLIC"
+			? "green"
+			: key === "INTERNAL"
+				? "blue"
+				: key === "SECRET"
+					? "orange"
+					: key === "CONFIDENTIAL"
+						? "red"
+						: "default";
 	const label =
-		key === "PUBLIC" ? "公开" : key === "INTERNAL" ? "内部" : key === "SECRET" ? "秘密" : key === "CONFIDENTIAL" ? "机密" : value || "-";
+		key === "PUBLIC"
+			? "公开"
+			: key === "INTERNAL"
+				? "内部"
+				: key === "SECRET"
+					? "秘密"
+					: key === "CONFIDENTIAL"
+						? "机密"
+						: value || "-";
 	return <Tag color={color}>{label}</Tag>;
 };
 
@@ -158,7 +161,13 @@ type Props = { embedded?: boolean };
 export default function Page({ embedded }: Props) {
 	const roles = useUserRoles();
 	const hasPurgePermission = useMemo(() => {
-		const normalized = new Set((roles || []).map((role) => String(role || "").trim().toUpperCase()));
+		const normalized = new Set(
+			(roles || []).map((role) =>
+				String(role || "")
+					.trim()
+					.toUpperCase(),
+			),
+		);
 		return normalized.has("ROLE_OP_ADMIN") || normalized.has("OPADMIN");
 	}, [roles]);
 	const [loading, setLoading] = useState(false);
@@ -430,41 +439,27 @@ export default function Page({ embedded }: Props) {
 				width: 180,
 				render: (value: string) => (value ? new Date(value).toLocaleString() : "-"),
 			},
-			{
-				title: "操作",
-				dataIndex: "actions",
-				key: "actions",
-				width: 280,
-				fixed: "right",
-				render: (_value, record) => (
-					<Space>
-						<Tooltip title="打开">
-							<Button type="link" onClick={() => handleOpen(record)} >打开</Button>
-						</Tooltip>
-						<Tooltip title="编辑">
-							<Button type="link" onClick={() => openEdit(record)} >编辑</Button>
-						</Tooltip>
-						<Tooltip title="停用">
-							<Button type="link" danger onClick={() => handleDisable(record)} >删除</Button>
-						</Tooltip>
-						{hasPurgePermission ? (
-							<Tooltip title="物理删除">
-								<Button type="link" danger onClick={() => handlePurge(record)}>
-									物理删除
-								</Button>
-							</Tooltip>
-						) : null}
-					</Space>
-				),
-			},
+			actionColumn<ReportLink>(
+				(record) => [
+					{ key: "open", label: "打开", tooltip: "打开", onClick: () => handleOpen(record) },
+					{ key: "edit", label: "编辑", tooltip: "编辑", onClick: () => openEdit(record) },
+					{ key: "disable", label: "删除", tooltip: "停用", danger: true, onClick: () => handleDisable(record) },
+					{
+						key: "purge",
+						label: "物理删除",
+						tooltip: "物理删除",
+						danger: true,
+						hidden: !hasPurgePermission,
+						onClick: () => handlePurge(record),
+					},
+				],
+				{ width: 280 },
+			),
 		],
 		[hasPurgePermission, queryDatasetMeta],
 	);
 
-	const columns = useMemo(
-		() => appendDetailAction(baseColumns, (row) => setDetailRow(row)),
-		[baseColumns],
-	);
+	const columns = useMemo(() => appendDetailAction(baseColumns, (row) => setDetailRow(row)), [baseColumns]);
 
 	return (
 		<div className="space-y-6">
@@ -476,9 +471,7 @@ export default function Page({ embedded }: Props) {
 							<Button type="primary" onClick={openCreate}>
 								新增 BI 链接
 							</Button>
-							<Button onClick={() => fetchList()}>
-								刷新
-							</Button>
+							<Button onClick={() => fetchList()}>刷新</Button>
 						</div>
 					}
 				/>
@@ -489,9 +482,7 @@ export default function Page({ embedded }: Props) {
 						<Button type="primary" onClick={openCreate}>
 							新增 BI 链接
 						</Button>
-						<Button onClick={() => fetchList()}>
-							刷新
-						</Button>
+						<Button onClick={() => fetchList()}>刷新</Button>
 					</div>
 				</div>
 			)}
@@ -548,11 +539,7 @@ export default function Page({ embedded }: Props) {
 				destroyOnClose
 			>
 				<Form layout="vertical" form={form}>
-					<Form.Item
-						name="title"
-						label="名称"
-						rules={[{ required: true, message: "请输入 BI 名称" }]}
-					>
+					<Form.Item name="title" label="名称" rules={[{ required: true, message: "请输入 BI 名称" }]}>
 						<Input placeholder="例如：经营驾驶舱 / 财务看板" />
 					</Form.Item>
 					<Form.Item
@@ -563,11 +550,7 @@ export default function Page({ embedded }: Props) {
 					>
 						<Input placeholder="例如：sales-monthly-report" />
 					</Form.Item>
-					<Form.Item
-						name="url"
-						label="访问地址"
-						rules={[{ required: true, message: "请输入访问地址" }]}
-					>
+					<Form.Item name="url" label="访问地址" rules={[{ required: true, message: "请输入访问地址" }]}>
 						<Input placeholder="例如：/bi/dashboards 或 https://bi.example.com/report/1" />
 					</Form.Item>
 					<Space size="large" className="w-full">
@@ -577,43 +560,29 @@ export default function Page({ embedded }: Props) {
 								placeholder="选择或输入 BI 引擎"
 								showSearch
 								filterOption={(input, option) =>
-									String(option?.label || "").toLowerCase().includes(input.toLowerCase())
+									String(option?.label || "")
+										.toLowerCase()
+										.includes(input.toLowerCase())
 								}
 							/>
 						</Form.Item>
-						<Form.Item
-							name="classification"
-							label="密级"
-							rules={[{ required: true, message: "请选择密级" }]}
-						>
+						<Form.Item name="classification" label="密级" rules={[{ required: true, message: "请选择密级" }]}>
 							<Select options={CLASSIFICATION_OPTIONS} />
 						</Form.Item>
 					</Space>
 					<Space size="large" className="w-full">
 						<Form.Item name="reportType" label="类型">
-							<Select
-								allowClear
-								options={REPORT_TYPES}
-								placeholder="可选"
-							/>
+							<Select allowClear options={REPORT_TYPES} placeholder="可选" />
 						</Form.Item>
 						<Form.Item name="sortOrder" label="排序">
 							<InputNumber min={0} placeholder="默认 0" className="w-full" />
 						</Form.Item>
 					</Space>
 					<Form.Item name="deptCodes" label="可见部门">
-						<Select
-							mode="tags"
-							placeholder="输入部门编码，回车确认"
-							tokenSeparators={[",", "，", " "]}
-						/>
+						<Select mode="tags" placeholder="输入部门编码，回车确认" tokenSeparators={[",", "，", " "]} />
 					</Form.Item>
 					<Form.Item name="roleCodes" label="可见角色">
-						<Select
-							mode="tags"
-							placeholder="输入角色编码，回车确认"
-							tokenSeparators={[",", "，", " "]}
-						/>
+						<Select mode="tags" placeholder="输入角色编码，回车确认" tokenSeparators={[",", "，", " "]} />
 					</Form.Item>
 					<Space size="large" className="w-full">
 						<Form.Item name="queryDatasetId" label="绑定数据集">

@@ -1,4 +1,4 @@
-import { Check, Play, RefreshCw, RotateCcw } from "lucide-react";
+import { Check, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import {
@@ -409,7 +409,7 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 						onClick={() => setStarted(true)}
 						title={canMaintain ? undefined : "当前账号无模型导入权限"}
 					>
-						<Play size={16} /> 快速开始
+						快速开始
 					</Button>
 					{!loading && !plans.length ? (
 						<p className="dmx-capability-note">可以先检查 dbt 包；生成导入预览前需初始化规划上下文。</p>
@@ -523,7 +523,7 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 						) : null}
 						{step === 3 && result?.status === "RUNNING" ? (
 							<Button disabled={!canMaintain || Boolean(busy)} primary onClick={() => void refreshResult()}>
-								<RefreshCw size={14} /> {busy === "refresh" ? "刷新中…" : "刷新结果"}
+								{busy === "refresh" ? "刷新中…" : "刷新结果"}
 							</Button>
 						) : null}
 						{step === 3 && result && ["PARTIAL", "FAILED", "BLOCKED"].includes(result.status) ? (

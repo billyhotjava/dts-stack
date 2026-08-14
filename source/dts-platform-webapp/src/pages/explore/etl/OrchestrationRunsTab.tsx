@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button, Card, Input, Select, Space, Tag, Tooltip, Typography } from "antd";
-import { CompactTable } from "@/components/table";
+import { actionColumn, CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
@@ -342,16 +342,10 @@ export default function OrchestrationRunsTab() {
 			width: 200,
 			render: (value) => formatDateTime(value),
 		},
-		{
-			title: "操作",
-			key: "actions",
-			width: 120,
-			render: (_, row) => (
-				<Button type="link" size="small" onClick={() => void handleTrigger(row.dagId)}>
-					立即触发
-				</Button>
-			),
-		},
+		actionColumn<AirflowJob>(
+			(row) => [{ key: "trigger", label: "立即触发", onClick: () => void handleTrigger(row.dagId) }],
+			{ width: 120, fixed: false },
+		),
 	];
 
 	const runColumns: ColumnsType<AirflowRun> = [
@@ -399,44 +393,31 @@ export default function OrchestrationRunsTab() {
 			width: 100,
 			render: (value) => formatDuration(value),
 		},
-		{
-			title: "操作",
-			key: "actions",
-			width: 180,
-			render: (_, row) => {
-				const isDbt = Boolean(selectedDagId?.toLowerCase().includes("dbt"));
-				return (
-					<Space size={0}>
-						<Button
-							type="link"
-							size="small"
-							onClick={() => void handleTrigger(selectedDagId || "", row.runId)}
-							disabled={!selectedDagId}
-						>
-							重跑
-						</Button>
-						{isDbt && row.runId && (
-							<Button
-								type="link"
-								size="small"
-								onClick={() =>
-									openLogPreview({
-										entryKey: "AIRFLOW_DAG",
-										dagId: selectedDagId ?? "",
-										dagRunId: row.runId,
-										taskId: "dbt_run",
-										tryNumber: 1,
-										title: `日志 — ${selectedDagId} / ${row.runId}`,
-									})
-								}
-							>
-								日志
-							</Button>
-						)}
-					</Space>
-				);
-			},
-		},
+		actionColumn<AirflowRun>(
+			(row) => [
+				{
+					key: "rerun",
+					label: "重跑",
+					disabled: !selectedDagId,
+					onClick: () => void handleTrigger(selectedDagId || "", row.runId),
+				},
+				{
+					key: "log",
+					label: "日志",
+					hidden: !(Boolean(selectedDagId?.toLowerCase().includes("dbt")) && row.runId),
+					onClick: () =>
+						openLogPreview({
+							entryKey: "AIRFLOW_DAG",
+							dagId: selectedDagId ?? "",
+							dagRunId: row.runId,
+							taskId: "dbt_run",
+							tryNumber: 1,
+							title: `日志 — ${selectedDagId} / ${row.runId}`,
+						}),
+				},
+			],
+			{ width: 180, fixed: false },
+		),
 	];
 
 	return (

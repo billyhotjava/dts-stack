@@ -1,4 +1,3 @@
-import { FileDown, GitBranch } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type BlockerFunction, useBlocker, useNavigate, useSearchParams } from "react-router";
 import { getModelRepresentation } from "@/api/modelRepresentationApi";
@@ -679,11 +678,9 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 					{requestedView !== "code" && selectedModel?.modelType === "FACT" ? (
 						<aside className="dmx-record-rail">
 							<Button disabled={saving || !selectedModel} onClick={() => setDialog("versions")}>
-								<GitBranch size={16} />
 								版本管理
 							</Button>
 							<Button disabled={saving || !selectedModel} onClick={() => setDialog("releases")}>
-								<FileDown size={16} />
 								发布记录
 							</Button>
 						</aside>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button, Card, Select, Space, Tag } from "antd";
-import { CompactTable } from "@/components/table";
+import { actionColumn, CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { CheckCircle2, RefreshCw, Shield, Workflow } from "lucide-react";
 import { PlatformSummaryCards } from "@/components/console-page";
@@ -122,35 +122,29 @@ export default function Page() {
 			width: 200,
 			render: (value) => formatDate(value),
 		},
-		{
-			title: "操作",
-			dataIndex: "action",
-			width: 160,
-			render: (_, record) => {
-				if (record.type === "ACCESS_APPROVAL") {
-					return (
-						<Button size="small" onClick={() => push("/security/dataset-access-approval")}>
-							前往审批
-						</Button>
-					);
-				}
-				if (record.type === "QUALITY") {
-					return (
-						<Button size="small" onClick={() => push("/governance/rules")}>
-							查看质量
-						</Button>
-					);
-				}
-				if (record.type === "SCHEMA_DRIFT") {
-					return (
-						<Button size="small" onClick={() => push("/catalog/assets")}>
-							查看详情
-						</Button>
-					);
-				}
-				return "-";
-			},
-		},
+		actionColumn<WorkbenchTodoItem>(
+			(record) => [
+				{
+					key: "approval",
+					label: "前往审批",
+					hidden: record.type !== "ACCESS_APPROVAL",
+					onClick: () => push("/security/dataset-access-approval"),
+				},
+				{
+					key: "quality",
+					label: "查看质量",
+					hidden: record.type !== "QUALITY",
+					onClick: () => push("/governance/rules"),
+				},
+				{
+					key: "drift",
+					label: "查看详情",
+					hidden: record.type !== "SCHEMA_DRIFT",
+					onClick: () => push("/catalog/assets"),
+				},
+			],
+			{ width: 160, fixed: false },
+		),
 	];
 
 	return (
@@ -161,7 +155,6 @@ export default function Page() {
 					<Space>
 						<Button onClick={() => push("/workbench")}>返回工作台</Button>
 						<Button type="primary" onClick={() => void loadTodos()}>
-							<RefreshCw className="h-4 w-4" />
 							刷新待办
 						</Button>
 					</Space>

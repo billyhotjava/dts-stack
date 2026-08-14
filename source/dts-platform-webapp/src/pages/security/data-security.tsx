@@ -1,23 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import Papa from "papaparse";
 import { toast } from "sonner";
-import {
-	Alert,
-	Button,
-	Card,
-	Descriptions,
-	Form,
-	Input,
-	Modal,
-	Select,
-	Space,
-	Tabs,
-	Tag,
-	Typography,
-} from "antd";
-import { CompactTable } from "@/components/table";
+import { Alert, Button, Card, Descriptions, Form, Input, Modal, Select, Space, Tabs, Tag, Typography } from "antd";
+import { actionColumn, CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
-import { } from "@ant-design/icons";
+import {} from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
 import { useRouter } from "@/routes/hooks";
 import { useSearchParams } from "react-router";
@@ -103,7 +90,9 @@ export default function Page() {
 	const [maskingModalOpen, setMaskingModalOpen] = useState(false);
 	const [editingMasking, setEditingMasking] = useState<MaskingRule | null>(null);
 	const [maskingForm] = Form.useForm<MaskingRule & { datasetId?: string }>();
-	const [selectedDataset, setSelectedDataset] = useState<string | undefined>(() => searchParams.get("datasetId") || undefined);
+	const [selectedDataset, setSelectedDataset] = useState<string | undefined>(
+		() => searchParams.get("datasetId") || undefined,
+	);
 	const [, setSecurityMapping] = useState<any>(null);
 	const [securityForm] = Form.useForm();
 	const [mappingValidation, setMappingValidation] = useState<MappingValidationResult | null>(null);
@@ -111,10 +100,7 @@ export default function Page() {
 	const [datasetLinkage, setDatasetLinkage] = useState<DatasetLinkage | null>(null);
 	const activeTab = searchParams.get("tab") || "classification";
 
-	const datasetOptions = useMemo(
-		() => datasets.map((item) => ({ label: item.name, value: item.id })),
-		[datasets],
-	);
+	const datasetOptions = useMemo(() => datasets.map((item) => ({ label: item.name, value: item.id })), [datasets]);
 
 	const notifySecurityLinkageChanged = () => {
 		const version = String(Date.now());
@@ -268,9 +254,7 @@ export default function Page() {
 		try {
 			const values = await mappingForm.validateFields();
 			if (editingMapping) {
-				setClassificationRows((prev) =>
-					prev.map((row) => (row === editingMapping ? { ...row, ...values } : row)),
-				);
+				setClassificationRows((prev) => prev.map((row) => (row === editingMapping ? { ...row, ...values } : row)));
 			} else {
 				setClassificationRows((prev) => [...prev, { ...values }]);
 			}
@@ -320,7 +304,11 @@ export default function Page() {
 	const handleExportMappingBatch = async () => {
 		try {
 			const result: any = await exportClassificationMapping();
-			const rows = Array.isArray(result) ? result : Array.isArray(result?.content) ? result.content : classificationRows;
+			const rows = Array.isArray(result)
+				? result
+				: Array.isArray(result?.content)
+					? result.content
+					: classificationRows;
 			downloadClassificationMappingCsv(rows as ClassificationRow[]);
 			toast.success("分类映射已导出");
 		} catch (error: any) {
@@ -453,39 +441,31 @@ export default function Page() {
 		{ title: "来源系统", dataIndex: "source", render: (v) => v || "-" },
 		{ title: "来源级别", dataIndex: "sourceLevel", render: (v) => v || "-" },
 		{ title: "平台级别", dataIndex: "platformLevel", render: (v) => <Tag>{v || "-"}</Tag> },
-		{
-			title: "操作",
-			render: (_, record) => (
-				<Space>
-					<Button size="small" onClick={() => openMappingModal(record)}>
-						编辑
-					</Button>
-					<Button size="small" danger onClick={() => deleteMappingRow(record)}>
-						删除
-					</Button>
-				</Space>
-			),
-		},
+		actionColumn<ClassificationRow>(
+			(record) => [
+				{ key: "edit", label: "编辑", onClick: () => openMappingModal(record) },
+				{ key: "delete", label: "删除", danger: true, onClick: () => deleteMappingRow(record) },
+			],
+			{ maxActions: 2, fixed: false },
+		),
 	];
 
 	const maskingColumns: ColumnsType<MaskingRule> = [
-		{ title: "数据集", dataIndex: ["dataset", "id"], render: (value) => datasets.find((d) => d.id === value)?.name || value || "-" },
+		{
+			title: "数据集",
+			dataIndex: ["dataset", "id"],
+			render: (value) => datasets.find((d) => d.id === value)?.name || value || "-",
+		},
 		{ title: "字段", dataIndex: "column", render: (v) => v || "-" },
 		{ title: "函数", dataIndex: "function", render: (v) => <Tag>{v || "-"}</Tag> },
 		{ title: "参数", dataIndex: "args", render: (v) => v || "-" },
-		{
-			title: "操作",
-			render: (_, record) => (
-				<Space>
-					<Button size="small" onClick={() => openMaskingModal(record)}>
-						编辑
-					</Button>
-					<Button size="small" danger onClick={() => removeMasking(record.id)}>
-						删除
-					</Button>
-				</Space>
-			),
-		},
+		actionColumn<MaskingRule>(
+			(record) => [
+				{ key: "edit", label: "编辑", onClick: () => openMaskingModal(record) },
+				{ key: "delete", label: "删除", danger: true, onClick: () => removeMasking(record.id) },
+			],
+			{ maxActions: 2, fixed: false },
+		),
 	];
 
 	return (
@@ -497,9 +477,7 @@ export default function Page() {
 						<Button type="primary" onClick={() => openMappingModal()}>
 							新建分级
 						</Button>
-						<Button onClick={setActiveDatasetSecurityTab}>
-							绑定资产
-						</Button>
+						<Button onClick={setActiveDatasetSecurityTab}>绑定资产</Button>
 						<Button disabled title="当前安全策略接口未开放例外申请，请通过权限审批提交临时访问申请">
 							申请例外
 						</Button>
@@ -515,65 +493,63 @@ export default function Page() {
 						{
 							key: "classification",
 							label: "分类映射",
-								children: (
-									<>
-										<Space className="mb-3">
-											<Button type="primary" onClick={() => openMappingModal()}>
-												新增映射
-											</Button>
+							children: (
+								<>
+									<Space className="mb-3">
+										<Button type="primary" onClick={() => openMappingModal()}>
+											新增映射
+										</Button>
 										<Button loading={validatingMapping} onClick={() => void runMappingValidation()}>
 											冲突预检
 										</Button>
-										<Button onClick={() => setMappingBatchModalOpen(true)}>
-											批量导入
-										</Button>
-										<Button onClick={() => void handleExportMappingBatch()}>
-											导出映射
-										</Button>
-											<Button
-												type="default"
-												disabled={!classificationDirty}
-												onClick={saveMappingAll}
-										>
+										<Button onClick={() => setMappingBatchModalOpen(true)}>批量导入</Button>
+										<Button onClick={() => void handleExportMappingBatch()}>导出映射</Button>
+										<Button type="default" disabled={!classificationDirty} onClick={saveMappingAll}>
 											保存映射
-											</Button>
+										</Button>
+									</Space>
+									{mappingValidation ? (
+										<Space direction="vertical" className="mb-3 w-full">
+											<Alert
+												type={
+													Array.isArray(mappingValidation.conflicts) && mappingValidation.conflicts.length > 0
+														? "error"
+														: "success"
+												}
+												showIcon
+												message={
+													Array.isArray(mappingValidation.conflicts) && mappingValidation.conflicts.length > 0
+														? `发现 ${mappingValidation.conflicts.length} 个冲突`
+														: "映射校验通过"
+												}
+												description={`标准化后映射条数：${Number(mappingValidation.normalizedCount || 0)}`}
+											/>
+											{Array.isArray(mappingValidation.conflicts) && mappingValidation.conflicts.length > 0 ? (
+												<div className="rounded border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+													{mappingValidation.conflicts.slice(0, 6).map((item, idx) => (
+														<div key={`conflict-${idx}`}>
+															{item.message || "映射冲突"}
+															{item.suggestion ? `；建议：${item.suggestion}` : ""}
+														</div>
+													))}
+												</div>
+											) : null}
+											{Array.isArray(mappingValidation.warnings) && mappingValidation.warnings.length > 0 ? (
+												<div className="rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
+													{mappingValidation.warnings.slice(0, 6).map((item, idx) => (
+														<div key={`warning-${idx}`}>
+															{item.message || "校验提示"}
+															{item.suggestion ? `；建议：${item.suggestion}` : ""}
+														</div>
+													))}
+												</div>
+											) : null}
 										</Space>
-										{mappingValidation ? (
-											<Space direction="vertical" className="mb-3 w-full">
-												<Alert
-													type={Array.isArray(mappingValidation.conflicts) && mappingValidation.conflicts.length > 0 ? "error" : "success"}
-													showIcon
-													message={
-														Array.isArray(mappingValidation.conflicts) && mappingValidation.conflicts.length > 0
-															? `发现 ${mappingValidation.conflicts.length} 个冲突`
-															: "映射校验通过"
-													}
-													description={`标准化后映射条数：${Number(mappingValidation.normalizedCount || 0)}`}
-												/>
-												{Array.isArray(mappingValidation.conflicts) && mappingValidation.conflicts.length > 0 ? (
-													<div className="rounded border border-red-200 bg-red-50 p-3 text-xs text-red-700">
-														{mappingValidation.conflicts.slice(0, 6).map((item, idx) => (
-															<div key={`conflict-${idx}`}>
-																{item.message || "映射冲突"}{item.suggestion ? `；建议：${item.suggestion}` : ""}
-															</div>
-														))}
-													</div>
-												) : null}
-												{Array.isArray(mappingValidation.warnings) && mappingValidation.warnings.length > 0 ? (
-													<div className="rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
-														{mappingValidation.warnings.slice(0, 6).map((item, idx) => (
-															<div key={`warning-${idx}`}>
-																{item.message || "校验提示"}{item.suggestion ? `；建议：${item.suggestion}` : ""}
-															</div>
-														))}
-													</div>
-												) : null}
-											</Space>
-										) : null}
-										<CompactTable
-											rowKey={(record, idx) => record.id || `new-${idx}`}
-											columns={classificationColumns}
-											dataSource={classificationRows}
+									) : null}
+									<CompactTable
+										rowKey={(record, idx) => record.id || `new-${idx}`}
+										columns={classificationColumns}
+										dataSource={classificationRows}
 										loading={loading}
 									/>
 								</>
@@ -616,52 +592,47 @@ export default function Page() {
 											保存
 										</Button>
 									</Space>
-										<Form form={securityForm} layout="vertical">
-											<Form.Item label="密级字段" name="dataLevelField">
-												<Input placeholder="例如 data_level" />
-											</Form.Item>
-											<Form.Item label="部门字段" name="deptField">
-												<Input placeholder="例如 owner_dept" />
-											</Form.Item>
-										</Form>
-										{selectedDataset && datasetLinkage ? (
-											<Space direction="vertical" className="w-full">
-												<Descriptions bordered size="small" column={1} title="密级与脱敏联动">
-													<Descriptions.Item label="当前密级">{datasetLinkage.classification || "-"}</Descriptions.Item>
-													<Descriptions.Item label="生效脱敏策略">
-														{Number(datasetLinkage.maskingRuleCount || 0)} 条
-													</Descriptions.Item>
-													<Descriptions.Item label="规则明细">
-														{Array.isArray(datasetLinkage.effectiveRules) && datasetLinkage.effectiveRules.length > 0
-															? datasetLinkage.effectiveRules
-																	.slice(0, 5)
-																	.map((rule) => `${rule.column || "-"} -> ${rule.function || "-"}`)
-																	.join("；")
-															: "未配置"}
-													</Descriptions.Item>
-												</Descriptions>
-												{datasetLinkage.conflict ? (
-													<Alert
-														type="warning"
-														showIcon
-														message="当前密级与脱敏策略不一致"
-														description={(datasetLinkage.suggestions || []).join("；") || "请补齐脱敏规则后重试。"}
-													/>
-												) : null}
-											</Space>
-										) : null}
-									</>
-								),
-							},
+									<Form form={securityForm} layout="vertical">
+										<Form.Item label="密级字段" name="dataLevelField">
+											<Input placeholder="例如 data_level" />
+										</Form.Item>
+										<Form.Item label="部门字段" name="deptField">
+											<Input placeholder="例如 owner_dept" />
+										</Form.Item>
+									</Form>
+									{selectedDataset && datasetLinkage ? (
+										<Space direction="vertical" className="w-full">
+											<Descriptions bordered size="small" column={1} title="密级与脱敏联动">
+												<Descriptions.Item label="当前密级">{datasetLinkage.classification || "-"}</Descriptions.Item>
+												<Descriptions.Item label="生效脱敏策略">
+													{Number(datasetLinkage.maskingRuleCount || 0)} 条
+												</Descriptions.Item>
+												<Descriptions.Item label="规则明细">
+													{Array.isArray(datasetLinkage.effectiveRules) && datasetLinkage.effectiveRules.length > 0
+														? datasetLinkage.effectiveRules
+																.slice(0, 5)
+																.map((rule) => `${rule.column || "-"} -> ${rule.function || "-"}`)
+																.join("；")
+														: "未配置"}
+												</Descriptions.Item>
+											</Descriptions>
+											{datasetLinkage.conflict ? (
+												<Alert
+													type="warning"
+													showIcon
+													message="当前密级与脱敏策略不一致"
+													description={(datasetLinkage.suggestions || []).join("；") || "请补齐脱敏规则后重试。"}
+												/>
+											) : null}
+										</Space>
+									) : null}
+								</>
+							),
+						},
 						{
 							key: "actionMatrix",
 							label: "操作权限矩阵",
-							children: (
-								<AssetActionMatrixPanel
-									datasets={datasets}
-									initialDatasetId={selectedDataset}
-								/>
-							),
+							children: <AssetActionMatrixPanel datasets={datasets} initialDatasetId={selectedDataset} />,
 						},
 					]}
 				/>

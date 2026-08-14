@@ -1,4 +1,3 @@
-import { PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Alert, Button, Card, Col, Progress, Row, Skeleton, Space, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useState } from "react";
@@ -69,16 +68,10 @@ export function OverviewPage() {
 				title="质量大盘"
 				description="以默认数据湖为边界，集中查看质量规则覆盖、运行健康度与待处理异常。"
 				actions={[
-					<Button key="reload" icon={<ReloadOutlined />} loading={loading} onClick={() => void load()}>
+					<Button key="reload" loading={loading} onClick={() => void load()}>
 						刷新
 					</Button>,
-					<Button
-						key="new"
-						type="primary"
-						icon={<PlusOutlined />}
-						disabled={!canManage}
-						onClick={() => navigate(qualityPath("rule-editor"))}
-					>
+					<Button key="new" type="primary" disabled={!canManage} onClick={() => navigate(qualityPath("rule-editor"))}>
 						新建规则
 					</Button>,
 				]}

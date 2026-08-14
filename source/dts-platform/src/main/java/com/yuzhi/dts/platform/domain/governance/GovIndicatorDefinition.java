@@ -10,6 +10,8 @@ import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "gov_indicator_definition")
@@ -44,6 +46,7 @@ public class GovIndicatorDefinition extends AbstractAuditingEntity<UUID> impleme
     @Column(name = "metric_group_code", length = 64)
     private String metricGroupCode;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "source_refs", columnDefinition = "jsonb")
     private String sourceRefs;
 
@@ -106,12 +109,14 @@ public class GovIndicatorDefinition extends AbstractAuditingEntity<UUID> impleme
     @Column(name = "static_filter", columnDefinition = "TEXT")
     private String staticFilter;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "dynamic_filter_config", columnDefinition = "jsonb")
     private String dynamicFilterConfig;
 
     @Column(name = "is_derived")
     private Boolean isDerived;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "dependency_indicators", columnDefinition = "jsonb")
     private String dependencyIndicators;
 
@@ -120,6 +125,7 @@ public class GovIndicatorDefinition extends AbstractAuditingEntity<UUID> impleme
 
     // --- 维度与粒度 ---
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "dimension_fields", columnDefinition = "jsonb")
     private String dimensionFields;
 
@@ -137,6 +143,7 @@ public class GovIndicatorDefinition extends AbstractAuditingEntity<UUID> impleme
     @Column(name = "source_table", length = 200)
     private String sourceTable;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "join_config", columnDefinition = "jsonb")
     private String joinConfig;
 

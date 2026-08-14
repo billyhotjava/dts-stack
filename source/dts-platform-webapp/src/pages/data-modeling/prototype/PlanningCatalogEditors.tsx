@@ -1,4 +1,3 @@
-import { Archive, Plus, Save } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "./PrototypePrimitives";
 import {
@@ -159,12 +158,11 @@ export function CatalogDomainForm({
 			) : null}
 			<div className="dmx-catalog-actions">
 				<Button disabled={!canMaintain || busy} primary onClick={() => void save()}>
-					{editing ? <Save size={15} /> : <Plus size={15} />}
 					{busy ? "处理中…" : editing ? `保存${label}` : `新建${label}`}
 				</Button>
 				{editing ? (
 					<Button danger disabled={!canMaintain || busy} onClick={() => void remove()}>
-						<Archive size={15} /> 删除
+						删除
 					</Button>
 				) : null}
 			</div>

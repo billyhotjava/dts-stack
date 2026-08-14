@@ -6,6 +6,9 @@ import { MemoryRouter } from "react-router";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DataModelingRoute } from "../types";
 
+// antd 会给“恰好两个汉字”的纯文字按钮自动插入空格（删除 → 删 除），断言前先去掉空白。
+const buttonText = (button: Element) => button.textContent?.replace(/\s/g, "") ?? "";
+
 const mocks = vi.hoisted(() => ({
 	loadPlanningProjection: vi.fn(),
 	createWarehouseLayer: vi.fn(),
@@ -194,7 +197,8 @@ describe("PlanningPage", () => {
 		}
 		expect(container.textContent).toContain("新建数仓分层");
 		expect(container.textContent).toContain("财务明细层");
-		expect(container.textContent).toContain("内置");
+		// antd 给两字中文按钮插空格（内置 → 内 置），断言前归一化
+		expect((container.textContent ?? "").replace(/\s/g, "")).toContain("内置");
 
 		await act(async () => {
 			(
@@ -280,7 +284,7 @@ describe("PlanningPage", () => {
 
 		const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
 		const deleteButton = [...container.querySelectorAll("button")].find((button) =>
-			button.textContent?.includes("删除"),
+			buttonText(button).includes("删除"),
 		) as HTMLButtonElement;
 		expect(deleteButton).toBeDefined();
 		await act(async () => deleteButton.click());
@@ -307,7 +311,7 @@ describe("PlanningPage", () => {
 		await renderPlanning(layerRoute());
 		vi.spyOn(window, "confirm").mockReturnValue(true);
 		const deleteButton = [...container.querySelectorAll("button")].find((button) =>
-			button.textContent?.includes("删除"),
+			buttonText(button).includes("删除"),
 		) as HTMLButtonElement;
 		await act(async () => deleteButton.click());
 
@@ -331,7 +335,7 @@ describe("PlanningPage", () => {
 		) as HTMLButtonElement;
 		expect(createButton.disabled).toBe(true);
 		const deleteButton = [...container.querySelectorAll("button")].find((button) =>
-			button.textContent?.includes("删除"),
+			buttonText(button).includes("删除"),
 		) as HTMLButtonElement;
 		expect(deleteButton.disabled).toBe(true);
 	});

@@ -1,5 +1,4 @@
-import { DeleteOutlined, EditOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Descriptions, Form, Input, InputNumber, Popconfirm, Select, Space, Switch } from "antd";
+import { Alert, Button, Card, Descriptions, Form, Input, InputNumber, Select, Space, Switch } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
@@ -14,7 +13,7 @@ import {
 	triggerQualityTask,
 	updateQualityTask,
 } from "@/api/platformApi";
-import { CompactTable } from "@/components/table";
+import { actionColumn, CompactTable } from "@/components/table";
 import { formatTime } from "@/utils/textUtils";
 import {
 	ManagePermissionHint,
@@ -132,35 +131,32 @@ export function MonitorListPage() {
 				/>
 			),
 		},
-		{
-			title: "操作",
-			width: 190,
-			fixed: "right",
-			render: (_, row) => (
-				<Space size={4}>
-					<Button
-						size="small"
-						icon={<PlayCircleOutlined />}
-						disabled={!canManage}
-						loading={actingId === row.id}
-						onClick={() => void act(row, "trigger")}
-					>
-						执行
-					</Button>
-					<Button
-						size="small"
-						icon={<EditOutlined />}
-						disabled={!canManage}
-						onClick={() => navigate(`${qualityPath("monitor-detail", { taskId: row.id })}/edit`)}
-					/>
-					{canDeleteTasks ? (
-						<Popconfirm title="确认删除该监控？" onConfirm={() => void act(row, "delete")}>
-							<Button size="small" danger icon={<DeleteOutlined />} />
-						</Popconfirm>
-					) : null}
-				</Space>
-			),
-		},
+		actionColumn<QualityTask>(
+			(row) => [
+				{
+					key: "trigger",
+					label: "执行",
+					disabled: !canManage,
+					loading: actingId === row.id,
+					onClick: () => void act(row, "trigger"),
+				},
+				{
+					key: "edit",
+					label: "编辑",
+					disabled: !canManage,
+					onClick: () => navigate(`${qualityPath("monitor-detail", { taskId: row.id })}/edit`),
+				},
+				{
+					key: "delete",
+					label: "删除",
+					danger: true,
+					hidden: !canDeleteTasks,
+					confirm: "确认删除该监控？",
+					onClick: () => void act(row, "delete"),
+				},
+			],
+			{ width: 190 },
+		),
 	];
 
 	return (
@@ -170,7 +166,7 @@ export function MonitorListPage() {
 				description="配置周期巡检、启停监控并按需立即执行。订阅通知和去噪策略不在现有合同内。"
 				actions={[
 					<ManagePermissionHint key="permission" canManage={canManage} />,
-					<Button key="reload" icon={<ReloadOutlined />} onClick={() => void load()}>
+					<Button key="reload" onClick={() => void load()}>
 						刷新
 					</Button>,
 					<Button key="noise" onClick={() => navigate(qualityPath("noise"))}>
@@ -179,7 +175,6 @@ export function MonitorListPage() {
 					<Button
 						key="new"
 						type="primary"
-						icon={<PlusOutlined />}
 						disabled={!canManage}
 						onClick={() => navigate(qualityPath("monitor-editor"))}
 					>
@@ -448,7 +443,6 @@ export function MonitorDetailPage() {
 					<Button
 						key="edit"
 						type="primary"
-						icon={<EditOutlined />}
 						disabled={!canManage || !loadedTaskIsCurrent || loading}
 						onClick={() => navigate(`${qualityPath("monitor-detail", { taskId })}/edit`)}
 					>
@@ -485,15 +479,12 @@ export function MonitorDetailPage() {
 							width: 110,
 							render: (value) => (value == null ? "-" : `${value} ms`),
 						},
-						{
-							title: "操作",
-							width: 100,
-							render: (_, row) => (
-								<Button type="link" onClick={() => navigate(qualityPath("run-detail", { runId: row.id }))}>
-									查看
-								</Button>
-							),
-						},
+						actionColumn<QualityRun>(
+							(row) => [
+								{ key: "view", label: "查看", onClick: () => navigate(qualityPath("run-detail", { runId: row.id })) },
+							],
+							{ width: 100, fixed: false },
+						),
 					]}
 				/>
 			</Card>

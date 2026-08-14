@@ -94,13 +94,15 @@ const stepIcon = (state: WorkflowStepState) => {
 const handoffText = (candidate: ReleaseCandidate | null, actions: ReleaseWorkflowAction[]) => {
 	if (!candidate) return "先完成物化构建，系统才会开放质量检查。";
 	if (actions.includes("RUN_QUALITY")) return "当前由模型维护者运行质量检查。";
+	if (actions.includes("PUBLISH") && !candidate.audit?.approvedBy)
+		return "质量检查已通过，数据管理员可在职责范围内直接发布，无需另行审批。";
 	if (actions.includes("SUBMIT_REVIEW")) return "质量已通过，请提交发布评审。";
 	if (candidate.status === "REVIEW_PENDING" && !actions.some((action) => action === "APPROVE" || action === "REJECT"))
 		return "等待独立发布审核人处理；提交人不能审核自己的候选。";
 	if (actions.includes("APPROVE") || actions.includes("REJECT")) return "当前由独立发布审核人通过或驳回。";
 	if (candidate.status === "APPROVED" && !actions.includes("PUBLISH"))
 		return "评审已通过，等待独立发布操作员登记上线。";
-	if (actions.includes("PUBLISH")) return "当前由独立发布操作员完成发布登记。";
+	if (actions.includes("PUBLISH")) return "评审已通过，当前由发布操作员完成发布登记。";
 	if (actions.includes("RETRY_REGISTRATION")) return "发布登记未完整提交，请由发布操作员重试登记或回滚。";
 	if (candidate.status === "PUBLISHED") return "发布登记已完成；上线状态继续以执行绑定和物理关系为准。";
 	if (candidate.status === "ROLLED_BACK") return "本次发布已回滚，可按新修订创建替代候选。";
@@ -136,10 +138,19 @@ export function ModelReleaseWorkflowPanel({
 	releaseActions: ReleaseWorkflowAction[];
 	binding: PlanExecutionBinding | null;
 }) {
+	const reviewRequired =
+		Boolean(candidate?.audit?.approvedBy) ||
+		candidate?.status === "APPROVED" ||
+		candidate?.status === "REJECTED" ||
+		(!releaseActions.includes("PUBLISH") &&
+			(candidate?.status === "REVIEW_PENDING" ||
+				releaseActions.some((action) => action === "SUBMIT_REVIEW" || action === "APPROVE" || action === "REJECT")));
 	const steps = [
 		{ key: "build" as const, label: "构建", state: stepState(candidate, "build", binding) },
 		{ key: "quality" as const, label: "质量检查", state: stepState(candidate, "quality", binding) },
-		{ key: "review" as const, label: "发布评审", state: stepState(candidate, "review", binding) },
+		...(reviewRequired
+			? [{ key: "review" as const, label: "发布评审", state: stepState(candidate, "review", binding) }]
+			: []),
 		{ key: "publication" as const, label: "发布登记", state: stepState(candidate, "publication", binding) },
 		{ key: "online" as const, label: "上线就绪", state: stepState(candidate, "online", binding) },
 	];
@@ -149,7 +160,7 @@ export function ModelReleaseWorkflowPanel({
 			<div className="dmx-release-workflow__heading">
 				<div>
 					<strong>候选发布流程</strong>
-					<span>服务端状态与职责决定下一步，页面不代替审核或推断上线成功。</span>
+					<span>数据管理员按职责范围自助发布；报表和数据服务访问仍单独授权。</span>
 				</div>
 				<Status
 					tone={candidate?.status === "PUBLISHED" ? "success" : candidate?.status === "PARTIAL" ? "danger" : "info"}

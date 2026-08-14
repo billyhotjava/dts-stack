@@ -46,6 +46,7 @@ public class DimensionItemService {
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> list(UUID dimensionId, String keyword, String activeDept) {
+        activeDept = resolveTrustedActiveDept(activeDept);
         GovDimensionDictionary dimension = dimensionRepository.findById(dimensionId).orElseThrow();
         ensureCanReadDimension(dimension, activeDept);
 
@@ -60,6 +61,7 @@ public class DimensionItemService {
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> tree(UUID dimensionId, String activeDept) {
+        activeDept = resolveTrustedActiveDept(activeDept);
         GovDimensionDictionary dimension = dimensionRepository.findById(dimensionId).orElseThrow();
         ensureCanReadDimension(dimension, activeDept);
 
@@ -89,6 +91,7 @@ public class DimensionItemService {
     }
 
     public Map<String, Object> create(UUID dimensionId, String activeDept, DimensionItemUpsertRequest request) {
+        activeDept = resolveTrustedActiveDept(activeDept);
         GovDimensionDictionary dimension = dimensionRepository.findById(dimensionId).orElseThrow();
         ensureCanManageDimension(dimension, activeDept);
         validateUpsert(dimension, null, request);
@@ -102,6 +105,7 @@ public class DimensionItemService {
     }
 
     public Map<String, Object> update(UUID dimensionId, UUID itemId, String activeDept, DimensionItemUpsertRequest request) {
+        activeDept = resolveTrustedActiveDept(activeDept);
         GovDimensionDictionary dimension = dimensionRepository.findById(dimensionId).orElseThrow();
         ensureCanManageDimension(dimension, activeDept);
         GovDimensionItem entity = itemRepository.findById(itemId).orElseThrow();
@@ -115,6 +119,7 @@ public class DimensionItemService {
     }
 
     public void delete(UUID dimensionId, UUID itemId, String activeDept) {
+        activeDept = resolveTrustedActiveDept(activeDept);
         GovDimensionDictionary dimension = dimensionRepository.findById(dimensionId).orElseThrow();
         ensureCanManageDimension(dimension, activeDept);
         GovDimensionItem entity = itemRepository.findById(itemId).orElseThrow();
@@ -130,6 +135,18 @@ public class DimensionItemService {
             throw new IllegalStateException("存在子节点，无法删除");
         }
         itemRepository.delete(entity);
+    }
+
+    private String resolveTrustedActiveDept(String requestedActiveDept) {
+        String requested = StringUtils.hasText(requestedActiveDept) ? requestedActiveDept.trim() : null;
+        String claimed = SecurityUtils.getCurrentUserDept().filter(StringUtils::hasText).map(String::trim).orElse(null);
+        if (SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES)) {
+            return requested != null ? requested : claimed;
+        }
+        if (requested != null && !DepartmentUtils.matches(requested, claimed)) {
+            throw new org.springframework.security.access.AccessDeniedException("Invalid department context");
+        }
+        return claimed;
     }
 
     private void apply(GovDimensionItem entity, GovDimensionDictionary dimension, DimensionItemUpsertRequest request) {
@@ -301,4 +318,3 @@ public class DimensionItemService {
 
     public record DimensionItemUpsertRequest(UUID parentId, String code, String name, String status, Integer sortOrder, String attributesJson, String notes) {}
 }
-

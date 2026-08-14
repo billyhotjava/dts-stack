@@ -8,7 +8,7 @@ import opsService, { type OpsInstance } from "@/api/services/opsService";
 import { buildJourneyUrl, JourneyContextBar, JourneyGateEvidenceSummary } from "@/components/journey";
 import { useLogPreview } from "@/components/log-preview/LogPreviewContext";
 import { PageHeader } from "@/components/page-header";
-import { appendDetailAction, CompactTable, RecordDetailDrawer } from "@/components/table";
+import { actionColumn, appendDetailAction, CompactTable, RecordDetailDrawer } from "@/components/table";
 
 const { Text } = Typography;
 
@@ -157,105 +157,84 @@ export default function OpsInstancesPage() {
 					<Text type="secondary">{record.message || "-"}</Text>
 				),
 		},
-		{
-			title: "操作",
-			dataIndex: "actions",
-			width: 420,
-			fixed: "right",
-			render: (_: unknown, record: OpsInstance) => {
+		actionColumn<OpsInstance>(
+			(record) => {
 				const isDbt =
 					record.entryKey === "DBT_RUN" || (record.entryKey === "AIRFLOW_DAG" && record.dagId?.includes("dbt"));
 				const failed = ["FAILED", "ERROR", "TIMED_OUT"].includes(String(record.status || "").toUpperCase());
-				return (
-					<Space size="small" wrap>
-						<Button type="link" size="small" onClick={() => navigate(journeyRoute(resolveSourceTaskPath(record)))}>
-							查看源任务
-						</Button>
-						<Button
-							type="link"
-							size="small"
-							onClick={() =>
-								navigate(
-									`/foundation/data-sources?keyword=${encodeURIComponent(record.artifactName || record.artifactId || "")}`,
-								)
-							}
-						>
-							查看数据源
-						</Button>
-						<Button
-							type="link"
-							size="small"
-							onClick={() =>
-								navigate(
-									`/catalog/assets?keyword=${encodeURIComponent(record.artifactName || record.artifactId || "")}`,
-								)
-							}
-						>
-							查看资产
-						</Button>
-						<Button
-							type="link"
-							size="small"
-							onClick={() =>
-								navigate(
-									journeyRoute(
-										`/ops/backfill?dagId=${encodeURIComponent(record.dagId || "")}&runId=${encodeURIComponent(record.externalRunId || record.id)}${modelSpecId ? `&modelSpecId=${encodeURIComponent(modelSpecId)}` : ""}`,
-									),
-								)
-							}
-						>
-							补数
-						</Button>
-						{isDbt && failed && modelRepairPath ? (
-							<Button
-								type="link"
-								size="small"
-								data-testid="ops-return-model-repair"
-								onClick={() => navigate(modelRepairPath)}
-							>
-								返回模型修复
-							</Button>
-						) : null}
-						{isDbt && record.externalRunId && (
-							<Button
-								type="link"
-								size="small"
-								onClick={() =>
-									openLogPreview({
-										entryKey: "AIRFLOW_DAG",
-										dagId: record.dagId,
-										dagRunId: record.externalRunId ?? undefined,
-										taskId: "dbt_run",
-										tryNumber: 1,
-									})
-								}
-							>
-								查看日志
-							</Button>
-						)}
-						<Button
-							type="link"
-							size="small"
-							onClick={() =>
-								navigate(
-									journeyRoute(
-										`/ops/logs?entryKey=${record.entryKey ?? ""}&runId=${record.externalRunId ?? record.id}`,
-									),
-								)
-							}
-						>
-							查看日志
-						</Button>
-						<Button type="link" size="small" disabled title="后端重试实例接口未接入，不能在前端伪造重试">
-							重试
-						</Button>
-						<Button type="link" size="small" danger disabled title="后端终止实例接口未接入，不能在前端伪造终止">
-							终止实例
-						</Button>
-					</Space>
-				);
+				const keyword = encodeURIComponent(record.artifactName || record.artifactId || "");
+				const runId = encodeURIComponent(record.externalRunId || record.id);
+				return [
+					{
+						key: "source-task",
+						label: "查看源任务",
+						onClick: () => navigate(journeyRoute(resolveSourceTaskPath(record))),
+					},
+					{
+						key: "data-source",
+						label: "查看数据源",
+						onClick: () => navigate(`/foundation/data-sources?keyword=${keyword}`),
+					},
+					{
+						key: "asset",
+						label: "查看资产",
+						onClick: () => navigate(`/catalog/assets?keyword=${keyword}`),
+					},
+					{
+						key: "backfill",
+						label: "补数",
+						onClick: () =>
+							navigate(
+								journeyRoute(
+									`/ops/backfill?dagId=${encodeURIComponent(record.dagId || "")}&runId=${runId}${modelSpecId ? `&modelSpecId=${encodeURIComponent(modelSpecId)}` : ""}`,
+								),
+							),
+					},
+					{
+						key: "model-repair",
+						label: "返回模型修复",
+						testId: "ops-return-model-repair",
+						hidden: !(isDbt && failed && modelRepairPath),
+						onClick: () => navigate(modelRepairPath as string),
+					},
+					{
+						key: "dbt-log",
+						label: "查看日志",
+						hidden: !(isDbt && record.externalRunId),
+						onClick: () =>
+							openLogPreview({
+								entryKey: "AIRFLOW_DAG",
+								dagId: record.dagId,
+								dagRunId: record.externalRunId ?? undefined,
+								taskId: "dbt_run",
+								tryNumber: 1,
+							}),
+					},
+					{
+						key: "log-center",
+						label: "查看日志",
+						onClick: () =>
+							navigate(
+								journeyRoute(`/ops/logs?entryKey=${record.entryKey ?? ""}&runId=${record.externalRunId ?? record.id}`),
+							),
+					},
+					{
+						key: "retry",
+						label: "重试",
+						disabled: true,
+						tooltip: "后端重试实例接口未接入，不能在前端伪造重试",
+					},
+					{
+						key: "abort",
+						label: "终止实例",
+						danger: true,
+						disabled: true,
+						tooltip: "后端终止实例接口未接入，不能在前端伪造终止",
+					},
+				];
 			},
-		},
+			{ width: 420 },
+		),
 	];
 
 	const columns = useMemo(
@@ -336,41 +315,32 @@ export default function OpsInstancesPage() {
 											width: 90,
 											render: (v) => v ?? 1,
 										},
-										{
-											title: "操作",
-											width: 160,
-											render: (_: unknown, ti: AirflowTaskInstance) => (
-												<Space size="small">
-													<Button
-														type="link"
-														size="small"
-														onClick={() =>
-															openLogPreview({
-																entryKey: "AIRFLOW_DAG",
-																dagId: record.dagId,
-																dagRunId: record.externalRunId ?? undefined,
-																taskId: ti.task_id,
-																tryNumber: ti.try_number ?? 1,
-																title: `${ti.task_id} — 第 ${ti.try_number ?? 1} 次`,
-															})
-														}
-													>
-														日志
-													</Button>
-													<Button
-														type="link"
-														size="small"
-														onClick={() =>
-															navigate(
-																`/ops/logs?entryKey=AIRFLOW_DAG&runId=${record.externalRunId ?? ""}&taskId=${ti.task_id}`,
-															)
-														}
-													>
-														日志中心
-													</Button>
-												</Space>
-											),
-										},
+										actionColumn<AirflowTaskInstance>(
+											(ti) => [
+												{
+													key: "log",
+													label: "日志",
+													onClick: () =>
+														openLogPreview({
+															entryKey: "AIRFLOW_DAG",
+															dagId: record.dagId,
+															dagRunId: record.externalRunId ?? undefined,
+															taskId: ti.task_id,
+															tryNumber: ti.try_number ?? 1,
+															title: `${ti.task_id} — 第 ${ti.try_number ?? 1} 次`,
+														}),
+												},
+												{
+													key: "log-center",
+													label: "日志中心",
+													onClick: () =>
+														navigate(
+															`/ops/logs?entryKey=AIRFLOW_DAG&runId=${record.externalRunId ?? ""}&taskId=${ti.task_id}`,
+														),
+												},
+											],
+											{ maxActions: 2, fixed: false },
+										),
 									]}
 								/>
 							);

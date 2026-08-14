@@ -47,13 +47,14 @@ public class DimensionService {
 
     @Transactional(readOnly = true)
     public Page<DimensionDto> list(String keyword, String status, Pageable pageable, String activeDept) {
+        String trustedActiveDept = resolveTrustedActiveDept(activeDept);
         List<GovDimensionDictionary> all = repository.findAll();
         List<GovDimensionDictionary> filtered = new ArrayList<>();
         for (GovDimensionDictionary dim : all) {
             if (dim == null) continue;
             if (!keywordMatches(dim, keyword)) continue;
             if (!statusMatches(dim, status)) continue;
-            if (!deptAllowed(dim, activeDept)) continue;
+            if (!deptAllowed(dim, trustedActiveDept)) continue;
             if (!levelAllowed(dim)) continue;
             filtered.add(dim);
         }
@@ -74,55 +75,87 @@ public class DimensionService {
 
     @Transactional(readOnly = true)
     public DimensionDto get(UUID id, String activeDept) {
+        String trustedActiveDept = resolveTrustedActiveDept(activeDept);
         GovDimensionDictionary entity = repository.findById(id).orElseThrow();
-        if (!deptAllowed(entity, activeDept) || !levelAllowed(entity)) {
+        if (!deptAllowed(entity, trustedActiveDept) || !levelAllowed(entity)) {
             throw new org.springframework.security.access.AccessDeniedException("Access denied for dimension");
         }
         return IndicatorMapper.toDto(entity);
     }
 
     public DimensionDto create(DimensionUpsertRequest request, String activeDept) {
+        String trustedActiveDept = resolveTrustedActiveDept(activeDept);
         GovDimensionDictionary entity = new GovDimensionDictionary();
         IndicatorMapper.apply(entity, request);
-        applyDefaults(entity, activeDept);
-        validateUpsert(entity, null, activeDept);
+        applyDefaults(entity, trustedActiveDept);
+        requireMutationAccess(entity, trustedActiveDept);
+        validateUpsert(entity, null, trustedActiveDept);
         return IndicatorMapper.toDto(repository.save(entity));
     }
 
     public DimensionDto update(UUID id, DimensionUpsertRequest request, String activeDept) {
+        String trustedActiveDept = resolveTrustedActiveDept(activeDept);
         GovDimensionDictionary entity = repository.findById(id).orElseThrow();
+        requireMutationAccess(entity, trustedActiveDept);
         IndicatorMapper.apply(entity, request);
-        applyDefaults(entity, activeDept);
-        validateUpsert(entity, id, activeDept);
+        applyDefaults(entity, trustedActiveDept);
+        requireMutationAccess(entity, trustedActiveDept);
+        validateUpsert(entity, id, trustedActiveDept);
         return IndicatorMapper.toDto(repository.save(entity));
     }
 
     public DimensionDto publish(UUID id, String activeDept) {
+        String trustedActiveDept = resolveTrustedActiveDept(activeDept);
         GovDimensionDictionary entity = repository.findById(id).orElseThrow();
-        if (!deptAllowed(entity, activeDept)) {
-            throw new org.springframework.security.access.AccessDeniedException("Invalid department context");
-        }
+        requireMutationAccess(entity, trustedActiveDept);
         entity.setStatus(STATUS_PUBLISHED);
-        applyDefaults(entity, activeDept);
+        applyDefaults(entity, trustedActiveDept);
         return IndicatorMapper.toDto(repository.save(entity));
     }
 
     public DimensionDto archive(UUID id, String activeDept) {
+        String trustedActiveDept = resolveTrustedActiveDept(activeDept);
         GovDimensionDictionary entity = repository.findById(id).orElseThrow();
-        if (!deptAllowed(entity, activeDept)) {
-            throw new org.springframework.security.access.AccessDeniedException("Invalid department context");
-        }
+        requireMutationAccess(entity, trustedActiveDept);
         entity.setStatus(STATUS_ARCHIVED);
-        applyDefaults(entity, activeDept);
+        applyDefaults(entity, trustedActiveDept);
         return IndicatorMapper.toDto(repository.save(entity));
     }
 
     public void delete(UUID id, String activeDept) {
+        String trustedActiveDept = resolveTrustedActiveDept(activeDept);
         GovDimensionDictionary entity = repository.findById(id).orElseThrow();
-        if (!deptAllowed(entity, activeDept)) {
+        requireMutationAccess(entity, trustedActiveDept);
+        repository.delete(entity);
+    }
+
+    private String resolveTrustedActiveDept(String requestedActiveDept) {
+        String requested = StringUtils.hasText(requestedActiveDept) ? requestedActiveDept.trim() : null;
+        String claimed = SecurityUtils.getCurrentUserDept().filter(StringUtils::hasText).map(String::trim).orElse(null);
+        if (SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES)) {
+            return requested != null ? requested : claimed;
+        }
+        if (requested != null && !DepartmentUtils.matches(requested, claimed)) {
             throw new org.springframework.security.access.AccessDeniedException("Invalid department context");
         }
-        repository.delete(entity);
+        return claimed;
+    }
+
+    private void requireMutationAccess(GovDimensionDictionary entity, String activeDept) {
+        if (SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES)) {
+            return;
+        }
+        if (
+            SecurityUtils.isAuthenticated() &&
+            (!StringUtils.hasText(activeDept) ||
+                isGlobalOrRoot(entity != null ? entity.getOwnerDept() : null) ||
+                !DepartmentUtils.matches(entity != null ? entity.getOwnerDept() : null, activeDept))
+        ) {
+            throw new org.springframework.security.access.AccessDeniedException("Invalid department context");
+        }
+        if (!deptAllowed(entity, activeDept) || !levelAllowed(entity)) {
+            throw new org.springframework.security.access.AccessDeniedException("Access denied for dimension mutation");
+        }
     }
 
     private void applyDefaults(GovDimensionDictionary entity, String activeDept) {

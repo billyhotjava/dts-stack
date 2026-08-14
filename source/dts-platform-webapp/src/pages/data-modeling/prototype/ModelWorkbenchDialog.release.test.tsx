@@ -465,7 +465,7 @@ describe("release and materialization dispatch", () => {
 		expect(apiMocks.runQualityCandidate).not.toHaveBeenCalled();
 	});
 
-	it("shows the governed handoff when another reviewer must act", async () => {
+	it("shows the data-owner self-service handoff without a review gate", async () => {
 		const reviewPending = {
 			...candidate("BATCH_WORKBENCH", "REVIEW_PENDING"),
 			audit: {
@@ -479,7 +479,7 @@ describe("release and materialization dispatch", () => {
 				publishedAt: null,
 			},
 		} as ReleaseCandidate;
-		apiMocks.getWorkbench.mockResolvedValue(workspace([], reviewPending));
+		apiMocks.getWorkbench.mockResolvedValue(workspace(["PUBLISH"], reviewPending));
 
 		await act(async () =>
 			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
@@ -489,11 +489,12 @@ describe("release and materialization dispatch", () => {
 
 		expect(container.textContent).toContain("候选发布流程");
 		expect(container.textContent).toContain("质量检查");
-		expect(container.textContent).toContain("发布评审");
 		expect(container.textContent).toContain("发布登记");
 		expect(container.textContent).toContain("上线就绪");
-		expect(container.textContent).toContain("等待独立发布审核人处理");
+		expect(container.textContent).toContain("无需另行审批");
+		expect(container.textContent).not.toContain("发布评审");
 		expect(container.textContent).toContain("提交人：model-owner");
+		expect(button("发布上线")?.disabled).toBe(false);
 	});
 
 	it("does not present a published candidate as online while its plan binding is deploying", async () => {

@@ -1,5 +1,4 @@
 import { Button, Empty, message, Skeleton, Space, Typography } from "antd";
-import { RefreshCw, RotateCcw, SlidersHorizontal } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Navigate, useSearchParams } from "react-router";
 import workbenchService, {
@@ -223,21 +222,13 @@ export default function WorkbenchPage() {
 							工作台
 						</Typography.Title>
 						<Space wrap>
-							<Button icon={<SlidersHorizontal size={16} aria-hidden="true" />} type="primary" onClick={openCustomize}>
+							<Button type="primary" onClick={openCustomize}>
 								自定义工作台
 							</Button>
-							<Button
-								icon={<RefreshCw size={16} aria-hidden="true" />}
-								loading={loading}
-								onClick={() => void loadPreferences()}
-							>
+							<Button loading={loading} onClick={() => void loadPreferences()}>
 								刷新
 							</Button>
-							<Button
-								icon={<RotateCcw size={16} aria-hidden="true" />}
-								loading={saving}
-								onClick={() => void handleReset()}
-							>
+							<Button loading={saving} onClick={() => void handleReset()}>
 								恢复默认
 							</Button>
 						</Space>
@@ -284,7 +275,7 @@ export default function WorkbenchPage() {
 			{isEmptyWorkbench && (
 				<div style={{ padding: 32 }}>
 					<Empty description="当前工作台未选择任何组件">
-						<Button type="primary" icon={<SlidersHorizontal size={16} aria-hidden="true" />} onClick={openCustomize}>
+						<Button type="primary" onClick={openCustomize}>
 							自定义工作台
 						</Button>
 					</Empty>

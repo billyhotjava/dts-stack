@@ -1,12 +1,5 @@
-import { Archive, CheckCircle2, Plus, Save } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import {
-	confirmDataMart,
-	createDataMart,
-	listDataMarts,
-	retireDataMart,
-	updateDataMart,
-} from "@/api/dataMartApi";
+import { confirmDataMart, createDataMart, listDataMarts, retireDataMart, updateDataMart } from "@/api/dataMartApi";
 import { createBusinessProcessApi } from "@/api/sprint64GovernanceApi";
 import {
 	confirmSubjectDomain,
@@ -129,7 +122,11 @@ export function BusinessProcessForm({
 				</label>
 				<label>
 					<span className="required">数据域</span>
-					<select disabled={!canMaintain || busy} onChange={(event) => setDomainId(event.target.value)} value={domainId}>
+					<select
+						disabled={!canMaintain || busy}
+						onChange={(event) => setDomainId(event.target.value)}
+						value={domainId}
+					>
 						<option value="">请选择</option>
 						{domains.map((item) => (
 							<option key={item.id} value={item.id}>
@@ -154,7 +151,6 @@ export function BusinessProcessForm({
 			) : null}
 			<div className="dmx-catalog-actions">
 				<Button disabled={!canMaintain || busy} primary onClick={() => void create()}>
-					<Plus size={15} />
 					{busy ? "处理中…" : "新建业务过程"}
 				</Button>
 			</div>
@@ -275,7 +271,6 @@ export function WarehouseLayerForm({
 			) : null}
 			<div className="dmx-catalog-actions">
 				<Button disabled={!canMaintain || busy} primary onClick={() => void create()}>
-					<Plus size={15} />
 					{busy ? "处理中…" : "新建数仓分层"}
 				</Button>
 			</div>
@@ -308,7 +303,9 @@ export function DataMartForm({
 		void listPlanningCatalogDomains()
 			.then((items) => {
 				if (active) {
-					const roots = items.filter((item) => !item.parentId).map((item) => ({ id: item.id, code: item.code, name: item.name }));
+					const roots = items
+						.filter((item) => !item.parentId)
+						.map((item) => ({ id: item.id, code: item.code, name: item.name }));
 					setCategories(roots);
 					setBusinessCategoryId((current) => current || roots[0]?.id || "");
 				}
@@ -432,17 +429,16 @@ export function DataMartForm({
 			) : null}
 			<div className="dmx-catalog-actions">
 				<Button disabled={!canMaintain || busy} primary onClick={() => void save()}>
-					{editing ? <Save size={15} /> : <Plus size={15} />}
 					{busy ? "处理中…" : editing ? "保存数据集市" : "新建数据集市"}
 				</Button>
 				{editing && editing.status === "DRAFT" ? (
 					<Button disabled={!canMaintain || busy} onClick={() => void confirmPublish()}>
-						<CheckCircle2 size={15} /> 确认发布
+						确认发布
 					</Button>
 				) : null}
 				{editing && editing.status === "CURRENT" ? (
 					<Button danger disabled={!canMaintain || busy} onClick={() => void retire()}>
-						<Archive size={15} /> 退役
+						退役
 					</Button>
 				) : null}
 			</div>
@@ -591,17 +587,16 @@ export function SubjectDomainForm({
 			) : null}
 			<div className="dmx-catalog-actions">
 				<Button disabled={!canMaintain || busy} primary onClick={() => void save()}>
-					{editing ? <Save size={15} /> : <Plus size={15} />}
 					{busy ? "处理中…" : editing ? "保存主题域" : "新建主题域"}
 				</Button>
 				{editing && editing.status === "DRAFT" ? (
 					<Button disabled={!canMaintain || busy} onClick={() => void confirmPublish()}>
-						<CheckCircle2 size={15} /> 确认发布
+						确认发布
 					</Button>
 				) : null}
 				{editing && editing.status === "CURRENT" ? (
 					<Button danger disabled={!canMaintain || busy} onClick={() => void retire()}>
-						<Archive size={15} /> 退役
+						退役
 					</Button>
 				) : null}
 			</div>

@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/page-header";
 import { JourneyContextBar, buildJourneyUrl } from "@/components/journey";
 import opsService, { type OpsBackfill } from "@/api/services/opsService";
 import { listAirflowJobs } from "@/api/platformApi";
-import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
+import { actionColumn, appendDetailAction, CompactTable, RecordDetailDrawer } from "@/components/table";
 
 const { RangePicker } = DatePicker;
 
@@ -31,10 +31,7 @@ export default function OpsBackfillPage() {
 	const [detailRow, setDetailRow] = useState<OpsBackfill | null>(null);
 	const [form] = Form.useForm();
 
-	const jobOptions = useMemo(
-		() => jobs.map((job) => ({ label: job.name || job.dagId, value: job.dagId })),
-		[jobs],
-	);
+	const jobOptions = useMemo(() => jobs.map((job) => ({ label: job.name || job.dagId, value: job.dagId })), [jobs]);
 
 	const loadBackfills = async () => {
 		setLoading(true);
@@ -88,42 +85,51 @@ export default function OpsBackfillPage() {
 
 	const baseColumns: ColumnsType<OpsBackfill> = [
 		{ title: "DAG", dataIndex: "dagId", render: (v) => v || "-" },
-		{ title: "日期范围", dataIndex: "dateFrom", render: (_, record) => `${record.dateFrom || "-"} ~ ${record.dateTo || "-"}` },
+		{
+			title: "日期范围",
+			dataIndex: "dateFrom",
+			render: (_, record) => `${record.dateFrom || "-"} ~ ${record.dateTo || "-"}`,
+		},
 		{ title: "状态", dataIndex: "status", render: (v) => <Tag>{v || "-"}</Tag> },
-		{ title: "触发时间", dataIndex: "triggeredAt", render: (v) => formatDate(v) , sorter: (a, b) => { const ta = a.triggeredAt ? new Date(a.triggeredAt as any).getTime() : 0; const tb = b.triggeredAt ? new Date(b.triggeredAt as any).getTime() : 0; return ta - tb; } },
+		{
+			title: "触发时间",
+			dataIndex: "triggeredAt",
+			render: (v) => formatDate(v),
+			sorter: (a, b) => {
+				const ta = a.triggeredAt ? new Date(a.triggeredAt as any).getTime() : 0;
+				const tb = b.triggeredAt ? new Date(b.triggeredAt as any).getTime() : 0;
+				return ta - tb;
+			},
+		},
 		{ title: "外部运行ID", dataIndex: "externalRunId", render: (v) => v || "-" },
 		{ title: "备注", dataIndex: "message", render: (v) => v || "-" },
-		{
-			title: "操作",
-			key: "actions",
-			width: 260,
-			fixed: "right",
-			render: (_: unknown, record) => (
-				<Space size="small" wrap>
-					<Button
-						type="link"
-						size="small"
-						onClick={() => navigate(journeyRoute(`/explore/etl/orchestration?dagId=${encodeURIComponent(record.dagId || "")}`))}
-					>
-						查看源任务
-					</Button>
-					<Button
-						type="link"
-						size="small"
-						onClick={() => navigate(journeyRoute(`/ops/instances?runId=${encodeURIComponent(record.externalRunId || record.id)}`))}
-					>
-						查看实例
-					</Button>
-					<Button
-						type="link"
-						size="small"
-						onClick={() => navigate(journeyRoute(`/ops/logs?entryKey=AIRFLOW_DAG&runId=${encodeURIComponent(record.externalRunId || record.id)}`))}
-					>
-						查看日志
-					</Button>
-				</Space>
-			),
-		},
+		actionColumn<OpsBackfill>(
+			(record) => [
+				{
+					key: "source-task",
+					label: "查看源任务",
+					onClick: () =>
+						navigate(journeyRoute(`/explore/etl/orchestration?dagId=${encodeURIComponent(record.dagId || "")}`)),
+				},
+				{
+					key: "instance",
+					label: "查看实例",
+					onClick: () =>
+						navigate(journeyRoute(`/ops/instances?runId=${encodeURIComponent(record.externalRunId || record.id)}`)),
+				},
+				{
+					key: "log",
+					label: "查看日志",
+					onClick: () =>
+						navigate(
+							journeyRoute(
+								`/ops/logs?entryKey=AIRFLOW_DAG&runId=${encodeURIComponent(record.externalRunId || record.id)}`,
+							),
+						),
+				},
+			],
+			{ width: 260 },
+		),
 	];
 
 	const columns = useMemo(() => appendDetailAction(baseColumns, (row) => setDetailRow(row)), []);
@@ -157,7 +163,12 @@ export default function OpsBackfillPage() {
 					message="影响说明"
 					description="补数会重新触发所选 DAG 的历史日期范围，请确认下游资产和报表可以接受重复刷新。"
 				/>
-				<CompactTable<OpsBackfill> rowKey={(record) => record.id} columns={columns} dataSource={records} loading={loading} />
+				<CompactTable<OpsBackfill>
+					rowKey={(record) => record.id}
+					columns={columns}
+					dataSource={records}
+					loading={loading}
+				/>
 			</Card>
 			<RecordDetailDrawer<OpsBackfill>
 				open={detailRow !== null}
@@ -176,12 +187,10 @@ export default function OpsBackfillPage() {
 				destroyOnClose
 			>
 				<Form form={form} layout="vertical">
-					<Form.Item label="任务 DAG" name="dagId" rules={[{ required: true, message: "请选择任务" }]}
-					>
+					<Form.Item label="任务 DAG" name="dagId" rules={[{ required: true, message: "请选择任务" }]}>
 						<Select options={jobOptions} showSearch optionFilterProp="label" />
 					</Form.Item>
-					<Form.Item label="日期范围" name="range" rules={[{ required: true, message: "请选择范围" }]}
-					>
+					<Form.Item label="日期范围" name="range" rules={[{ required: true, message: "请选择范围" }]}>
 						<RangePicker />
 					</Form.Item>
 					<Form.Item label="备注" name="note">

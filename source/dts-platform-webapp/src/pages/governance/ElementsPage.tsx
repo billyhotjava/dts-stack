@@ -1,4 +1,3 @@
-import { ArrowLeftOutlined } from "@ant-design/icons";
 import {
 	Alert,
 	Breadcrumb,
@@ -31,7 +30,7 @@ import {
 } from "@/api/platformApi";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
-import { CompactTable } from "@/components/table";
+import { actionColumn, CompactTable } from "@/components/table";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import { normalizeText } from "@/utils/textUtils";
 import { resolveStandardOwnerReturnTo } from "./standardOwnerNavigation";
@@ -311,41 +310,29 @@ export default function ElementsPage({ embedded = false }: ElementsPageProps = {
 			dataIndex: "securityLevel",
 			render: (s) => <Tag color={s === "SECRET" || s === "CONFIDENTIAL" ? "red" : "default"}>{s || "-"}</Tag>,
 		},
-		{
-			title: "操作",
-			render: (_, row) => (
-				<Space>
-					<Button
-						type="link"
-						size="small"
-						data-testid="governance-elements-view-references"
-						onClick={() => {
-							setDetailElement(row);
-							setDetailOpen(true);
-							void loadReferences(row.id);
-						}}
-					>
-						详情
-					</Button>
-					<Button type="link" size="small" onClick={() => openModal(row)} disabled={!canManage}>
-						编辑
-					</Button>
-					<Button type="link" size="small" danger onClick={() => removeElement(row)} disabled={!canManage}>
-						删除
-					</Button>
-				</Space>
-			),
-		},
+		actionColumn<MetadataStandard>(
+			(row) => [
+				{
+					key: "detail",
+					label: "详情",
+					testId: "governance-elements-view-references",
+					onClick: () => {
+						setDetailElement(row);
+						setDetailOpen(true);
+						void loadReferences(row.id);
+					},
+				},
+				{ key: "edit", label: "编辑", disabled: !canManage, onClick: () => openModal(row) },
+				{ key: "delete", label: "删除", danger: true, disabled: !canManage, onClick: () => removeElement(row) },
+			],
+			{ maxActions: 3 },
+		),
 	];
 
 	const content = data?.content ?? [];
 	const headerActions = (
 		<Space wrap>
-			{returnTarget ? (
-				<Button icon={<ArrowLeftOutlined />} onClick={() => navigate(returnTarget.href)}>
-					{returnTarget.label}
-				</Button>
-			) : null}
+			{returnTarget ? <Button onClick={() => navigate(returnTarget.href)}>{returnTarget.label}</Button> : null}
 			<Button type="primary" onClick={() => openModal()} disabled={!canManage} data-testid="governance-elements-create">
 				+ 新增数据元
 			</Button>

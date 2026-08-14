@@ -1,5 +1,4 @@
-import { DeleteOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Tag } from "antd";
+import { Button, Card, Form, Input, Modal, Select, Space, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
@@ -11,7 +10,7 @@ import {
 	previewTemplateSQL,
 	updateQualityTemplate,
 } from "@/api/platformApi";
-import { CompactTable } from "@/components/table";
+import { actionColumn, CompactTable } from "@/components/table";
 import { ManagePermissionHint, QualityEmpty, QualityPageHeading } from "./QualityShared";
 import { qualityPath } from "./qualityRoutes";
 import { displayName, type QualityTemplate, toList } from "./qualityTypes";
@@ -128,18 +127,20 @@ export function TemplateListPage() {
 		{ title: "默认严重性", dataIndex: "severityDefault", width: 130 },
 		{ title: "默认策略", dataIndex: "actionDefault", width: 120 },
 		{ title: "说明", dataIndex: "description", ellipsis: true },
-		{
-			title: "操作",
-			width: 100,
-			render: (_, row) =>
-				row.builtin ? (
-					<Tag>内置模板</Tag>
-				) : (
-					<Popconfirm title="确认删除该模板？" disabled={!canManage} onConfirm={() => void remove(row.id)}>
-						<Button size="small" danger disabled={!canManage} icon={<DeleteOutlined />} />
-					</Popconfirm>
-				),
-		},
+		actionColumn<QualityTemplate>(
+			(row) => [
+				{
+					key: "delete",
+					label: "删除",
+					danger: true,
+					hidden: row.builtin,
+					disabled: !canManage,
+					confirm: "确认删除该模板？",
+					onClick: () => void remove(row.id),
+				},
+			],
+			{ width: 100, fixed: false },
+		),
 	];
 
 	return (
@@ -149,10 +150,10 @@ export function TemplateListPage() {
 				description="沉淀可复用 SQL 检查模板，通过参数化预览验证后再生成质量规则。"
 				actions={[
 					<ManagePermissionHint key="permission" canManage={canManage} />,
-					<Button key="reload" icon={<ReloadOutlined />} onClick={() => void load()}>
+					<Button key="reload" onClick={() => void load()}>
 						刷新
 					</Button>,
-					<Button key="new" type="primary" icon={<PlusOutlined />} disabled={!canManage} onClick={() => setOpen(true)}>
+					<Button key="new" type="primary" disabled={!canManage} onClick={() => setOpen(true)}>
 						新建模板
 					</Button>,
 				]}

@@ -1,14 +1,3 @@
-import {
-	CheckCircle2,
-	FileDown,
-	Import,
-	Link2,
-	ListChecks,
-	RefreshCw,
-	Save,
-	ShieldCheck,
-	Upload,
-} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { listBusinessProcessesApi, type Sprint64BusinessProcess } from "@/api/sprint64GovernanceApi";
 import type { WarehousePlanSourceBindingView } from "@/api/warehousePlanApi";
@@ -708,7 +697,8 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 			) : null}
 			{representation?.visualizationCapability === "BLOCKED" ? (
 				<div className="dmx-inline-error" role="alert">
-					{modelingCapabilityReasonsText(representation.capabilityReasons) || "当前可视化投影不可用，请在代码模式查看实现。"}
+					{modelingCapabilityReasonsText(representation.capabilityReasons) ||
+						"当前可视化投影不可用，请在代码模式查看实现。"}
 				</div>
 			) : null}
 			<div className="dmx-editor-toolbar" role="toolbar">
@@ -734,7 +724,6 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 										: "保存模型草稿"
 					}
 				>
-					<Save size={15} />
 					{saving ? "保存中…" : "保存"}
 				</Button>
 				{conceptDimension && draft.definitionBase?.status === "DRAFT" ? (
@@ -743,38 +732,30 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 						onClick={onConfirmDimension}
 						title="确认后，该定义将成为维度表可绑定的当前定义"
 					>
-						<CheckCircle2 size={15} />
 						确认定义
 					</Button>
 				) : null}
 				{conceptDimension ? null : (
 					<>
 						<Button disabled={saving || !persisted} onClick={() => onDialog("gates")}>
-							<ListChecks size={15} />
 							提交
 						</Button>
 						<Button disabled={saving} onClick={onRefresh}>
-							<RefreshCw size={15} />
 							刷新
 						</Button>
 						<Button disabled={saving || !persisted} onClick={() => onDialog("association")}>
-							<Link2 size={15} />
 							关联关系
 						</Button>
 						<Button disabled={saving || !canWritePersisted} onClick={() => onDialog("publish")}>
-							<Upload size={15} />
 							发布
 						</Button>
 						<Button disabled={saving || !persisted} onClick={() => onDialog("logs")}>
-							<FileDown size={15} />
 							日志
 						</Button>
 						<Button disabled={saving || !persisted} onClick={() => onDialog("quality")}>
-							<ShieldCheck size={15} />
 							质量规则
 						</Button>
 						<Button disabled title="尚无模型导出服务端契约">
-							<Import size={15} />
 							导出
 						</Button>
 					</>
@@ -787,7 +768,7 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 			) : null}
 			<fieldset
 				className="dmx-editor-fieldset dmx-editor-scroll"
-					disabled={
+				disabled={
 					effectiveReadOnly ||
 					saving ||
 					(conceptDimension && draft.definitionBase?.status != null && draft.definitionBase.status !== "DRAFT")
