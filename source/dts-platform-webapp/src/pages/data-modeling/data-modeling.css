@@ -1339,11 +1339,30 @@
 	padding: 0;
 	border: 0;
 }
+.dmx-metric-editor > .dmx-editor-fieldset {
+	flex-basis: 320px;
+}
 .dmx-metric-section {
 	margin-bottom: 14px;
 	border: 1px solid var(--dmx-border);
 	border-radius: 5px;
 	background: #fff;
+}
+.dmx-metric-section--history {
+	max-height: 260px;
+	display: flex;
+	flex: 0 1 260px;
+	flex-direction: column;
+	overflow: hidden;
+}
+.dmx-metric-section--history > h3 {
+	flex: 0 0 auto;
+	margin-bottom: 0;
+}
+.dmx-metric-section--history > div {
+	min-height: 0;
+	flex: 1 1 auto;
+	overflow: auto;
 }
 .dmx-metric-section > div {
 	display: grid;

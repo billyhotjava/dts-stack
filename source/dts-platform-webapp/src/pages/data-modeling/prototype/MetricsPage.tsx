@@ -522,7 +522,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 							</section>
 						) : null}
 						{calculationHistory.length ? (
-							<section className="dmx-metric-section" aria-label="计算历史">
+							<section className="dmx-metric-section dmx-metric-section--history" aria-label="计算历史">
 								<h3>计算历史</h3>
 								<CompactTable
 									columns={historyColumns}
