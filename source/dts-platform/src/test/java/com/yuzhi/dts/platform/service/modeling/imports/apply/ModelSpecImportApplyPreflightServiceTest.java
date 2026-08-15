@@ -58,7 +58,7 @@ class ModelSpecImportApplyPreflightServiceTest {
     void setUp() {
         when(payloadCodec.isValid(anyString(), anyString())).thenReturn(true);
         when(repository.findPlan(TENANT, PLAN_ID)).thenReturn(Optional.of(plan()));
-        when(repository.findDomainBindings(TENANT, PLAN_ID)).thenReturn(List.of());
+        when(repository.findPlatformDomainBindings()).thenReturn(List.of());
         when(repository.findSourceBindings(TENANT, PLAN_ID)).thenReturn(List.of());
     }
 
@@ -86,7 +86,7 @@ class ModelSpecImportApplyPreflightServiceTest {
     @Test
     void missingFrozenTimestampOnlyMatchesNullCurrentTimestamp() {
         UUID domainId = UUID.fromString("10000000-0000-0000-0000-000000000005");
-        when(repository.findDomainBindings(TENANT, PLAN_ID)).thenReturn(
+        when(repository.findPlatformDomainBindings()).thenReturn(
             List.of(new DomainBindingSnapshot(domainId, "CONFIRMED", NOW))
         );
         StoredApplyPlan stored = stored(

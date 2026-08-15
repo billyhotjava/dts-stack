@@ -2,7 +2,7 @@
 
 ## 1. 当前 DWD 创建范围
 
-本批只把 5 张已存在 dbt 实现的事实表登记为 DTS“明细表（FACT）”。其余 5 张 ODS 见二期清单。
+本批把 10 张已存在 dbt 实现的事实表登记为 DTS“明细表（FACT）”。其中 5 张是核心业务事实，另外 5 张覆盖措施闭环和重要物料交付。
 
 | 模型名称 | 物理表名 | 数据域 | 业务过程 | 当前来源 |
 |---|---|---|---|---|
@@ -11,6 +11,11 @@
 | 技术状态更改明细 | `biz_dwd_tech_state_v2` | 产品技术域 | 技术状态更改 | `ods_tech_state_v2` 经 STG |
 | 项目风险明细 | `biz_dwd_risk_info_v2` | 研究项目域 | 项目风险处置 | `ods_risk_info_v2` 经 STG |
 | 预算执行明细 | `biz_dwd_budget_v2` | 财务管理域 | 预算执行快照 | `ods_budget_v2` 经 STG |
+| 项目跟进措施明细 | `biz_dwd_project_follow_up_v2` | 研究项目域 | 项目跟进闭环 | `ods_progress_measure_v2` 经 STG |
+| 质量措施明细 | `biz_dwd_quality_measure_v2` | 质量管理域 | 质量措施闭环 | `ods_quality_measure_v2` 经 STG |
+| 技术状态措施明细 | `biz_dwd_tech_state_measure_v2` | 产品技术域 | 技术状态措施闭环 | `ods_tech_state_measure_v2` 经 STG |
+| 风险措施明细 | `biz_dwd_risk_measure_v2` | 研究项目域 | 风险措施闭环 | `ods_risk_measure_v2` 经 STG |
+| 重要物料交付明细 | `biz_dwd_material_delivery_v2` | 物料供应域 | 重要物料交付跟踪 | `ods_material_info_v2` 经 STG |
 
 ## 2. 通用创建步骤
 
@@ -90,7 +95,7 @@ FACT 的 `factShape` 和 `timeSemantics` 是服务端设计门禁必需项，但
 | 业务 ATTRIBUTE | `project_no`、`subsystem`、`issue_name`、`dept`、`team_leader`、`dept_leader`、`issue_summary`、`zero_plan`、`current_progress`、`project_manager`、`filled_by` |
 | 状态/维度 ATTRIBUTE | 问题分类和归零状态的 raw/code/id/label、`zero_plan_synced*`、所有 `is_*`/`cat_*`、`has_zero_plan` |
 | TIME | `issue_date`、`zero_complete_date`、`last_update_time`、`state_as_of_date` 及年月/季度字段 |
-| MEASURE | `new_plan_count`、`pending_days` |
+| MEASURE | `new_plan_count`、`pending_days`、`aging_days` |
 | ETL ATTRIBUTE | `etl_time` |
 
 必测字段：`issue_id` unique/not_null，`project_no`/`issue_date`/`issue_month` not_null，状态和原因分类 accepted values。
@@ -187,7 +192,19 @@ FACT 的 `factShape` 和 `timeSemantics` 是服务端设计门禁必需项，但
 
 `budget_no` 只在单个快照内唯一；跨期粒度和去重必须使用 `snapshot_date + budget_no`。`budget_id` 也应由这两个稳定业务字段生成，不再依赖易变的导入行 ID。
 
-## 8. DWD 提交前总检查
+## 8. 措施闭环和物料交付明细
+
+| 物理表名 | 粒度/KEY | 事实形态 | 主要 TIME | 主要 MEASURE |
+|---|---|---|---|---|
+| `biz_dwd_project_follow_up_v2` | 一条项目节点跟进措施；`measure_id` | `ACCUMULATING_SNAPSHOT` | `plan_date`、`follow_up_date`、`final_closure_date`、`last_update_time` | `closure_days`、`pending_days` |
+| `biz_dwd_quality_measure_v2` | 一条质量问题跟进措施；`measure_id` | `ACCUMULATING_SNAPSHOT` | `issue_date`、`follow_up_date`、`final_closure_date`、`last_update_time` | `new_plan_count`、`closure_days`、`pending_days` |
+| `biz_dwd_tech_state_measure_v2` | 一条技术状态跟进措施；`measure_id` | `ACCUMULATING_SNAPSHOT` | `change_submit_date`、`follow_up_date`、`final_closure_date`、`last_update_time` | `new_plan_count`、`closure_days`、`pending_days` |
+| `biz_dwd_risk_measure_v2` | 一条风险跟进措施；`measure_id` | `ACCUMULATING_SNAPSHOT` | `risk_submit_date`、`follow_up_date`、`final_closure_date`、`last_update_time` | `new_plan_count`、`closure_days`、`pending_days` |
+| `biz_dwd_material_delivery_v2` | 一个项目下一项 PBS 物料；`material_delivery_id` | `ACCUMULATING_SNAPSHOT` | 合同交付、实际到货、检验、上装、最后更新时间 | `delivery_delay_days` |
+
+这 5 张表的标识由候选自然键确定性生成，当前测试数据已验证非空且无重复；这只支持测试环境全量物化。生产增量前必须重新画像真实数据，确认跨批次稳定性及物料多供应商/多批次场景，否则应先补源业务 ID。
+
+## 9. DWD 提交前总检查
 
 - [ ] 每张 FACT 绑定同一数据域内的真实业务过程稳定 ID。
 - [ ] 粒度说明回答“一行是什么”，KEY 字段与粒度键一一对应。
@@ -197,4 +214,4 @@ FACT 的 `factShape` 和 `timeSemantics` 是服务端设计门禁必需项，但
 - [ ] canonical 维度引用固定修订，alias 映射未被当作业务维度。
 - [ ] 每个技术字段名为小写英文/数字/下划线，每个字段都有中文显示名。
 - [ ] `classification` 不作为普通业务字段偷偷丢入 FACT；分类分级走独立治理门禁。
-- [ ] 前四张事实的稳定业务键风险、预算快照日期缺口已登记，未被“通过测试”掩盖。
+- [ ] 源业务 ID/候选自然键风险已登记；预算快照日期已使用业务字段，不再以技术导入时间替代。

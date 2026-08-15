@@ -6,10 +6,54 @@ import type {
 	ModelingImportDomainBinding,
 	ModelingImportSourceBinding,
 } from "@/api/services/modelingImportContextService";
+import type { Sprint64BusinessProcess } from "@/api/sprint64GovernanceApi";
 import { type CompactColumns, CompactTable } from "@/components/table";
+import type { DataMartView } from "@/features/modeling/contracts/dataMartContract";
+import type { SubjectDomainView } from "@/features/modeling/contracts/subjectDomainContract";
 import { Button, Status } from "./PrototypePrimitives";
 import { createRenameMapping, type RenameMapping } from "./services/modelImportUiState";
 import { candidateEligibility, inspectionSummary, packageProfileLabel } from "./services/reverseModelingInspection";
+
+const SECURITY_LEVEL_OPTIONS = [
+	{ value: "PUBLIC", label: "公开" },
+	{ value: "INTERNAL", label: "内部" },
+	{ value: "SECRET", label: "秘密" },
+	{ value: "CONFIDENTIAL", label: "机密" },
+];
+
+type ImportStandardBinding = NonNullable<ModelSpecImportSemanticOverride["standardBindings"]>[number];
+
+function hasBindingEvidence(binding: ImportStandardBinding): boolean {
+	return Object.entries(binding).some(
+		([key, value]) => key !== "fieldName" && value !== undefined && value !== null && value !== "",
+	);
+}
+
+export function applyModelSecurityLevel(
+	override: ModelSpecImportSemanticOverride,
+	fieldNames: string[],
+	securityLevel: string,
+): ModelSpecImportSemanticOverride {
+	const current = new Map((override.standardBindings || []).map((binding) => [binding.fieldName, binding]));
+	const targetFields = new Set(fieldNames.filter(Boolean));
+	const untouched = (override.standardBindings || []).filter((binding) => !targetFields.has(binding.fieldName));
+	const updated = fieldNames
+		.filter(Boolean)
+		.map((fieldName) => ({
+			...(current.get(fieldName) || { fieldName }),
+			securityLevel: securityLevel || undefined,
+		}))
+		.filter(hasBindingEvidence);
+	return { ...override, standardBindings: [...untouched, ...updated] };
+}
+
+export function modelSecurityLevel(override: ModelSpecImportSemanticOverride, fieldNames: string[]): string {
+	if (!fieldNames.length) return "";
+	const levels = fieldNames.map(
+		(fieldName) => override.standardBindings?.find((binding) => binding.fieldName === fieldName)?.securityLevel || "",
+	);
+	return levels.every((level) => level && level === levels[0]) ? levels[0] : "";
+}
 
 export function StrategyStep({ archive, onArchive }: { archive: File | null; onArchive: (file: File | null) => void }) {
 	return (
@@ -54,6 +98,9 @@ type ConfirmStepProps = {
 	sources: ModelingImportSourceBinding[];
 	sourceMappings: Record<string, string>;
 	onSourceMapping: (code: string, value: string) => void;
+	businessProcesses: Sprint64BusinessProcess[];
+	dataMarts: DataMartView[];
+	subjectDomains: SubjectDomainView[];
 	renameMappings: RenameMapping[];
 	onRenameMappings: (mappings: RenameMapping[]) => void;
 	semanticOverrides: Record<string, ModelSpecImportSemanticOverride>;
@@ -75,6 +122,9 @@ export function ConfirmStep(props: ConfirmStepProps) {
 		sources,
 		sourceMappings,
 		onSourceMapping,
+		businessProcesses,
+		dataMarts,
+		subjectDomains,
 		renameMappings,
 		onRenameMappings,
 		semanticOverrides,
@@ -243,12 +293,48 @@ export function ConfirmStep(props: ConfirmStepProps) {
 					</div>
 				))}
 			</section>
+			<label className="dmx-reverse-plan">
+				<span>批量确认发布密级</span>
+				<select
+					aria-label="批量确认导入模型发布密级"
+					onChange={(event) => {
+						const securityLevel = event.target.value;
+						if (!securityLevel) return;
+						inspection.package.models
+							.filter((model) => selected.includes(model.dbtUniqueId))
+							.forEach((model) => {
+								const override = semanticOverrides[model.dbtUniqueId] || { modelUniqueId: model.dbtUniqueId };
+								onSemanticOverride(
+									model.dbtUniqueId,
+									applyModelSecurityLevel(
+										override,
+										(model.columns || []).map((column) => column.name),
+										securityLevel,
+									),
+								);
+							});
+					}}
+					value=""
+				>
+					<option value="">请选择并应用到已选模型</option>
+					{SECURITY_LEVEL_OPTIONS.map((level) => (
+						<option key={level.value} value={level.value}>
+							{level.label}
+						</option>
+					))}
+				</select>
+				<small>这是当前操作者的显式治理确认，不会写回或篡改原始 dbt SQL。</small>
+			</label>
 			<ImportSemanticsTable
 				inspection={inspection}
 				onSelected={onSelected}
 				onSemanticOverride={onSemanticOverride}
 				selected={selected}
 				semanticOverrides={semanticOverrides}
+				businessProcesses={businessProcesses}
+				dataMarts={dataMarts}
+				domainMappings={domainMappings}
+				subjectDomains={subjectDomains}
 			/>
 		</>
 	);
@@ -260,12 +346,20 @@ function ImportSemanticsTable({
 	onSelected,
 	semanticOverrides,
 	onSemanticOverride,
+	businessProcesses,
+	dataMarts,
+	domainMappings,
+	subjectDomains,
 }: {
 	inspection: DbtArchiveInspection;
 	selected: string[];
 	onSelected: (ids: string[]) => void;
 	semanticOverrides: Record<string, ModelSpecImportSemanticOverride>;
 	onSemanticOverride: (id: string, value: ModelSpecImportSemanticOverride) => void;
+	businessProcesses: Sprint64BusinessProcess[];
+	dataMarts: DataMartView[];
+	domainMappings: Record<string, string>;
+	subjectDomains: SubjectDomainView[];
 }) {
 	const rows = useMemo(
 		() =>
@@ -416,21 +510,129 @@ function ImportSemanticsTable({
 				},
 			},
 			{
+				title: "发布密级",
+				key: "securityLevel",
+				render: (_, { model }) => {
+					const override = semanticOverrides[model.dbtUniqueId] || { modelUniqueId: model.dbtUniqueId };
+					const fieldNames = (model.columns || []).map((column) => column.name);
+					return (
+						<select
+							aria-label={`${model.dbtUniqueId} 发布密级`}
+							onChange={(event) =>
+								onSemanticOverride(model.dbtUniqueId, applyModelSecurityLevel(override, fieldNames, event.target.value))
+							}
+							value={modelSecurityLevel(override, fieldNames)}
+						>
+							<option value="">请确认</option>
+							{SECURITY_LEVEL_OPTIONS.map((level) => (
+								<option key={level.value} value={level.value}>
+									{level.label}
+								</option>
+							))}
+						</select>
+					);
+				},
+			},
+			{
+				title: "规划归属",
+				key: "planningContext",
+				render: (_, { model }) => {
+					const override = semanticOverrides[model.dbtUniqueId] || { modelUniqueId: model.dbtUniqueId };
+					const patch = (next: Partial<ModelSpecImportSemanticOverride>) =>
+						onSemanticOverride(model.dbtUniqueId, { ...override, ...next, modelUniqueId: model.dbtUniqueId });
+					const modelType = override.modelType || model.semantics?.modelType || "";
+					if (modelType === "FACT") {
+						const targetDomainId = domainMappings[model.semantics?.domainCode || ""] || "";
+						const options = businessProcesses.filter((process) => process.domainId === targetDomainId);
+						return (
+							<label>
+								<span>业务过程</span>
+								<select
+									aria-label={`${model.dbtUniqueId} 业务过程`}
+									onChange={(event) => patch({ businessProcessId: event.target.value || undefined })}
+									value={override.businessProcessId || ""}
+								>
+									<option value="">请选择</option>
+									{options.map((process) => (
+										<option key={process.id} value={process.id}>
+											{process.name} · {process.processId}
+										</option>
+									))}
+								</select>
+								{!targetDomainId ? (
+									<small>请先映射数据域</small>
+								) : !options.length ? (
+									<small>该数据域无已确认业务过程</small>
+								) : null}
+							</label>
+						);
+					}
+					if (modelType === "APPLICATION") {
+						const subjects = subjectDomains.filter((subject) => subject.martId === override.dataMartId);
+						return (
+							<div>
+								<select
+									aria-label={`${model.dbtUniqueId} 数据集市`}
+									onChange={(event) =>
+										patch({ dataMartId: event.target.value || undefined, subjectDomainId: undefined })
+									}
+									value={override.dataMartId || ""}
+								>
+									<option value="">请选择数据集市</option>
+									{dataMarts.map((mart) => (
+										<option key={mart.id} value={mart.id}>
+											{mart.name} · {mart.code}
+										</option>
+									))}
+								</select>
+								<select
+									aria-label={`${model.dbtUniqueId} 主题域`}
+									disabled={!override.dataMartId}
+									onChange={(event) => patch({ subjectDomainId: event.target.value || undefined })}
+									value={override.subjectDomainId || ""}
+								>
+									<option value="">请选择主题域</option>
+									{subjects.map((subject) => (
+										<option key={subject.id} value={subject.id}>
+											{subject.name} · {subject.code}
+										</option>
+									))}
+								</select>
+							</div>
+						);
+					}
+					return <small>由上游模型继承</small>;
+				},
+			},
+			{
 				title: "字段数",
 				key: "columns",
 				align: "right",
 				render: (_, { model }) => model.columns?.length || 0,
 			},
 		],
-		[inspection, onSelected, onSemanticOverride, selected, semanticOverrides],
+		[
+			businessProcesses,
+			dataMarts,
+			domainMappings,
+			inspection,
+			onSelected,
+			onSemanticOverride,
+			selected,
+			semanticOverrides,
+			subjectDomains,
+		],
 	);
 	return (
-		<CompactTable
-			className="dmx-import-semantics"
-			columns={columns}
-			dataSource={rows}
-			pagination={false}
-			rowKey="key"
-		/>
+		<section>
+			<p>发布密级由当前操作者显式确认；选择后应用到该模型全部字段，系统不会从测试数据或包名推断。</p>
+			<CompactTable
+				className="dmx-import-semantics"
+				columns={columns}
+				dataSource={rows}
+				pagination={false}
+				rowKey="key"
+			/>
+		</section>
 	);
 }

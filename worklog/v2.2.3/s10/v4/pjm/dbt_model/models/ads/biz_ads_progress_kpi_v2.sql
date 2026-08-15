@@ -1,12 +1,23 @@
 {{ config(materialized='table', tags=['project-management-v3', 'biz', 'ads', 'kpi']) }}
 
--- 进度域原始指标 ADS：对齐原始指标大表 #1-33
+-- 进度域原始指标 ADS：对齐原始指标大表 #1-33，并提供项目级看板计数
 -- 粒度: plan_month（跨项目聚合）
 -- 存储分子/分母，支持跨月 SUM 重算
 
 SELECT
   s.plan_year,
   s.plan_month,
+
+  -- 项目级看板计数：在月粒度内按稳定项目编号去重
+  COUNT(DISTINCT s.project_no) AS project_total_cnt,
+  COUNT(DISTINCT CASE
+    WHEN s.incomplete_cnt > 0 THEN s.project_no
+  END) AS project_active_cnt,
+  COUNT(DISTINCT CASE
+    WHEN (s.overdue_incomplete_unchanged_non_general_cnt
+        + s.overdue_incomplete_changed_non_general_cnt) > 0
+    THEN s.project_no
+  END) AS project_delay_cnt,
 
   -- #1-7 周期内基础计数
   SUM(s.total_cnt)                           AS total_cnt,

@@ -1840,6 +1840,83 @@ class ModelSpecApplicationServiceTest {
         verify(auditService, never()).auditAction(anyString(), any(), anyString(), any());
     }
 
+    @Test
+    void startsANewDraftRevisionWhenPublishedDbtSchemaAddsFields() {
+        CreateModelSpecCommand base = command("dbt-schema-revision", "progress_kpi");
+        CreateModelSpecCommand dbtManaged = new CreateModelSpecCommand(
+            base.planId(),
+            base.domainId(),
+            base.modelType(),
+            base.layer(),
+            base.name(),
+            base.description(),
+            ImplementationMode.DBT_MANAGED,
+            base.materialization(),
+            base.businessActivityRef(),
+            base.consumptionScenario(),
+            base.grain(),
+            base.factShape(),
+            base.timeSemantics(),
+            base.fields(),
+            base.sourceRefs(),
+            base.dependsOn(),
+            base.dimensionRefs(),
+            base.metricRefs(),
+            base.standardBindings(),
+            base.generationStrategy(),
+            base.idempotencyKey()
+        );
+        ModelSpecView created = codec.toCreatedView(MODEL_ID, dbtManaged, NOW);
+        ModelSpecView published = codec.toLifecycleView(created, ModelStatus.PUBLISHED, created.revision(), NOW);
+        when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(stored(published, null, null)));
+        when(compatibilityReader.read(any())).thenReturn(published);
+        when(
+            repository.compareAndSetPublishedToDraftV2(
+                eq(TENANT),
+                eq(ACTOR),
+                eq(published.revision()),
+                eq(published.checksum()),
+                any(),
+                anyString()
+            )
+        ).thenReturn(1);
+        List<ModelField> projected = List.of(
+            published.fields().get(0),
+            new ModelField(
+                "project_total_cnt",
+                "项目总数",
+                "bigint",
+                true,
+                null,
+                FieldRole.MEASURE,
+                null,
+                null,
+                false,
+                null
+            )
+        );
+
+        ModelSpecView draft = service.synchronizeDbtManagedFields(
+            TENANT,
+            ACTOR,
+            MODEL_ID,
+            new ExpectedVersion(MODEL_ID, published.revision(), published.checksum()),
+            projected
+        );
+
+        assertThat(draft.status()).isEqualTo(ModelStatus.DRAFT);
+        assertThat(draft.revision()).isEqualTo(2);
+        assertThat(draft.fields()).containsExactlyElementsOf(projected);
+        verify(repository).insertV2Revision(eq(TENANT), eq(ACTOR), eq(draft), anyString());
+        verify(repository, never()).updateV2RevisionLifecycle(any(), any(), any(), any(), anyString());
+        verify(auditService).auditAction(
+            eq("MODELING_MODEL_SPEC_DBT_SCHEMA_REVISION_CREATE"),
+            eq(AuditStage.SUCCESS),
+            eq(MODEL_ID.toString()),
+            any()
+        );
+    }
+
     private void assertCreateCode(String idempotencyKey, String code) {
         assertThatThrownBy(() -> service.create(TENANT, ACTOR, command(idempotencyKey, "customer_detail_" + idempotencyKey)))
             .isInstanceOf(ModelSpecException.class)

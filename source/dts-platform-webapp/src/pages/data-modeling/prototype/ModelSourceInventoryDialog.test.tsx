@@ -125,4 +125,64 @@ describe("ModelSourceInventoryDialog", () => {
 		]);
 		expect(onSourcesChanged).toHaveBeenCalledWith([confirmedSource]);
 	});
+
+	it("reconfirms a stale source with the observed versions advertised by the server", async () => {
+		const staleSource = {
+			...confirmedSource,
+			confirmedVersion: "schema-v1",
+			resolvedVersion: "schema-v2",
+			currentVersion: "schema-v2",
+			freshness: "STALE" as const,
+			changeImpact: "COMPATIBLE" as const,
+			diffSummary: { added: 0, removed: 1, changed: 0 },
+			changes: [{ field: "legacy_column", kind: "FIELD_REMOVED", impact: "COMPATIBLE" }],
+			allowedActions: ["RECONFIRM" as const, "EXCLUDE" as const],
+			reasonCode: "SOURCE_DRIFT_COMPATIBLE",
+			statusSummary: "来源结构已更新，当前模型未引用受影响字段",
+		};
+		mocks.getWarehousePlanSources.mockResolvedValueOnce({
+			bindings: [staleSource],
+			readiness: "BLOCKED",
+			issues: [{ code: "SOURCE_STALE", message: "The source changed", field: "bindings[0]" }],
+			version: 7,
+			etag: "sources:7",
+			checkedAt: "2026-08-15T00:00:00Z",
+		});
+		mocks.saveWarehousePlanSources.mockResolvedValueOnce({
+			bindings: [confirmedSource],
+			readiness: "READY",
+			issues: [],
+			version: 8,
+			etag: "sources:8",
+			checkedAt: "2026-08-15T00:01:00Z",
+		});
+		const onSourcesChanged = vi.fn();
+		await act(async () => {
+			root.render(<ModelSourceInventoryDialog onClose={vi.fn()} onSourcesChanged={onSourcesChanged} planId="plan-1" />);
+		});
+		await act(async () => undefined);
+
+		expect(container.textContent).toContain("来源结构已更新，当前模型未引用受影响字段");
+		expect(container.textContent).toContain("+0 / -1 / ~0");
+		const reconfirm = Array.from(container.querySelectorAll("button")).find((button) =>
+			button.textContent?.includes("采用新结构"),
+		);
+		expect(reconfirm).toBeDefined();
+		await act(async () => {
+			(reconfirm as HTMLButtonElement).click();
+		});
+		await act(async () => undefined);
+
+		expect(mocks.saveWarehousePlanSources).toHaveBeenCalledWith("plan-1", 7, [
+			{
+				bindingId: "binding-1",
+				confirmationStatus: "CONFIRMED",
+				exclusionReason: null,
+				action: "RECONFIRM",
+				expectedConfirmedVersion: "schema-v1",
+				expectedCurrentVersion: "schema-v2",
+			},
+		]);
+		expect(onSourcesChanged).toHaveBeenCalledWith([confirmedSource]);
+	});
 });

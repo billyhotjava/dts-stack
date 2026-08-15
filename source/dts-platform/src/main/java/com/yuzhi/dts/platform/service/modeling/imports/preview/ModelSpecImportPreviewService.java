@@ -130,6 +130,18 @@ public class ModelSpecImportPreviewService {
         "CONTACT_ADMIN",
         "NONE"
     );
+    private static final Set<String> MODEL_SPEC_SNAPSHOT_ENVELOPE_FIELDS = Set.of(
+        "contractVersion",
+        "id",
+        "status",
+        "revision",
+        "checksum",
+        "createdAt",
+        "updatedAt",
+        "compatibilityMode",
+        "legacyRefs",
+        "idempotencyKey"
+    );
     private static final Comparator<PreviewIssue> ISSUE_ORDER = Comparator.comparing(
         PreviewIssue::severity
     )
@@ -460,7 +472,7 @@ public class ModelSpecImportPreviewService {
 
     private ResolvedContext resolveContext(ValidatedInput input, PlanSnapshot plan, WarehousePlanActor actor) {
         List<ResolvedDomain> domains = repository
-            .findDomainBindings(serverTenantId, plan.id())
+            .findPlatformDomainBindings()
             .stream()
             .map(this::resolveDomain)
             .sorted(Comparator.comparing(domain -> domain.domainId().toString()))
@@ -721,7 +733,7 @@ public class ModelSpecImportPreviewService {
                 input.modelPackage().dbt() == null ? null : input.modelPackage().dbt().projectName(),
                 model,
                 true,
-                canonicalSources(model, bindings),
+                canonicalSources(model, bindings, input.sourceMappings()),
                 canonicalDependencies(dependencies, projectedDependencies, input.models()),
                 dimensionDefinitionRef,
                 input.standardBindings().getOrDefault(model.dbtUniqueId(), List.of()),
@@ -732,6 +744,7 @@ public class ModelSpecImportPreviewService {
         );
         addCanonicalIssues(model, canonical.issues(), issues);
         JsonNode proposedModelSpec = canonical.modelSpecProjection();
+        JsonNode incomingModelSpec = proposedModelSpec;
         JsonNode proposedImplementation = canonical.implementationProjection();
         String modelSpecChecksum = canonical.modelSpecChecksum();
 
@@ -741,8 +754,9 @@ public class ModelSpecImportPreviewService {
             .findOwnership(serverTenantId, projectKey, model.dbtUniqueId())
             .orElse(null);
         DriftDecision reconciliation = null;
+        JsonNode currentModelSpec = null;
         if (current != null && canonical.implementationChecksum() != null) {
-            JsonNode currentModelSpec = repository
+            currentModelSpec = repository
                 .findCurrentModelSpecSnapshot(serverTenantId, current.modelSpecId(), current.currentRevision())
                 .orElse(null);
             if (currentModelSpec == null) {
@@ -777,7 +791,6 @@ public class ModelSpecImportPreviewService {
                     )
                 );
                 proposedModelSpec = reconciliation.proposedModelSpec();
-                modelSpecChecksum = checksumModelSpecProjection(proposedModelSpec);
                 if (reconciliation.action() == DriftAction.CONFLICT) {
                     issues.add(
                         issue(
@@ -799,6 +812,17 @@ public class ModelSpecImportPreviewService {
                         )
                     );
                 }
+            }
+        }
+        proposedModelSpec = restoreDraftDimensionPins(current, proposedModelSpec, incomingModelSpec);
+        if (modelSpecChecksum != null) {
+            modelSpecChecksum = checksumModelSpecProjection(proposedModelSpec);
+            if (
+                current != null &&
+                currentModelSpec != null &&
+                equivalentIgnoringFieldOrder(currentModelSpec, proposedModelSpec)
+            ) {
+                modelSpecChecksum = current.currentChecksum();
             }
         }
         String expectedOwnership = canonical.modelSpecCommand().implementationMode().name();
@@ -889,7 +913,9 @@ public class ModelSpecImportPreviewService {
             action = Action.CREATE;
         } else if (reconciliation != null) {
             action = switch (reconciliation.action()) {
-                case SKIP -> Action.SKIP;
+                case SKIP -> modelChanged || implementationChanged || effectiveSqlChanged
+                    ? Action.UPDATE
+                    : Action.SKIP;
                 case UPDATE -> Action.UPDATE;
                 case CONFLICT -> CONFLICT;
                 case BLOCKED_REMAP -> BLOCKED;
@@ -995,7 +1021,11 @@ public class ModelSpecImportPreviewService {
             });
     }
 
-    private List<SourceTarget> canonicalSources(PackageModel model, List<ResolvedBinding> bindings) {
+    private List<SourceTarget> canonicalSources(
+        PackageModel model,
+        List<ResolvedBinding> bindings,
+        Map<String, String> sourceMappings
+    ) {
         return bindings
             .stream()
             .map(binding ->
@@ -1003,14 +1033,18 @@ public class ModelSpecImportPreviewService {
                     binding.bindingId(),
                     "DBT_NODE".equals(binding.sourceType()) ? "DBT_MODEL" : "TABLE",
                     binding.sourceId(),
-                    sourceLayer(model, binding),
+                    sourceLayer(model, binding, sourceMappings),
                     binding.resolvedVersion()
                 )
             )
             .toList();
     }
 
-    private static String sourceLayer(PackageModel model, ResolvedBinding binding) {
+    private static String sourceLayer(
+        PackageModel model,
+        ResolvedBinding binding,
+        Map<String, String> sourceMappings
+    ) {
         if (model.semantics() == null) {
             return null;
         }
@@ -1019,6 +1053,7 @@ public class ModelSpecImportPreviewService {
             .filter(ref ->
                 ref != null &&
                 (
+                    sameHint(sourceMappings.get(ref.ref()), binding.bindingId().toString()) ||
                     sameHint(ref.ref(), binding.sourceId()) ||
                     sameHint(ref.ref(), binding.objectName()) ||
                     sameHint(ref.ref(), binding.dbtUniqueId())
@@ -1821,6 +1856,55 @@ public class ModelSpecImportPreviewService {
         } catch (JsonProcessingException | IllegalArgumentException exception) {
             throw new IllegalStateException("Reconciled ModelSpec projection is invalid", exception);
         }
+    }
+
+    private static JsonNode restoreDraftDimensionPins(
+        ModelOwnershipSnapshot current,
+        JsonNode reconciled,
+        JsonNode incoming
+    ) {
+        if (
+            current == null ||
+            !"DRAFT".equals(current.currentModelStatus()) ||
+            reconciled == null ||
+            !reconciled.isObject() ||
+            incoming == null ||
+            !incoming.isObject()
+        ) {
+            return reconciled;
+        }
+        ObjectNode rebound = ((ObjectNode) reconciled).deepCopy();
+        boolean restored = false;
+        for (String field : List.of("dependsOn", "dimensionRefs")) {
+            JsonNode incomingRefs = incoming.get(field);
+            if (incomingRefs != null && incomingRefs.isArray()) {
+                rebound.set(field, incomingRefs.deepCopy());
+                restored = true;
+            }
+        }
+        return restored ? rebound : reconciled;
+    }
+
+    private boolean equivalentIgnoringFieldOrder(JsonNode current, JsonNode proposed) {
+        if (current == null || !current.isObject() || proposed == null || !proposed.isObject()) {
+            return false;
+        }
+        ObjectNode normalizedCurrent = comparableModelSpec(current);
+        ObjectNode normalizedProposed = comparableModelSpec(proposed);
+        return normalizedCurrent.equals(normalizedProposed);
+    }
+
+    private ObjectNode comparableModelSpec(JsonNode value) {
+        ObjectNode normalized = ((ObjectNode) value).deepCopy();
+        normalized.remove(MODEL_SPEC_SNAPSHOT_ENVELOPE_FIELDS);
+        JsonNode fields = normalized.get("fields");
+        if (fields != null && fields.isArray()) {
+            List<JsonNode> ordered = new ArrayList<>();
+            fields.forEach(field -> ordered.add(field.deepCopy()));
+            ordered.sort(Comparator.comparing(field -> field.path("name").asText("")));
+            normalized.set("fields", objectMapper.valueToTree(ordered));
+        }
+        return normalized;
     }
 
     private SourceLocator parseLocator(String locatorJson) {

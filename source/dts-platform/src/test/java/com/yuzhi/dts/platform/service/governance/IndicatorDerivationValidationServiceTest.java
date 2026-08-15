@@ -49,6 +49,23 @@ class IndicatorDerivationValidationServiceTest {
     }
 
     @Test
+    void stableMetricTypeOverridesStaleLegacyDerivedFlag() {
+        GovIndicatorDefinition target = indicator(targetId, "AVG_ORDER", "DRAFT", false);
+        target.setMetricType("DERIVED");
+        target.setDependencyIndicators("[\"GMV\"]");
+        target.setExpressionSql("{{metric:GMV}}");
+        GovIndicatorDefinition gmv = indicator(UUID.randomUUID(), "GMV", "PUBLISHED", false);
+
+        when(repository.findById(targetId)).thenReturn(Optional.of(target));
+        when(repository.findFirstByCodeIgnoreCase("GMV")).thenReturn(Optional.of(gmv));
+
+        IndicatorDerivationValidationResult result = service.validate(targetId);
+
+        assertThat(result.valid()).isTrue();
+        assertThat(result.issueCodes()).doesNotContain("DERIVATION_NOT_DERIVED");
+    }
+
+    @Test
     void reportsMissingUnpublishedAndCircularDependenciesAgainstGovernanceIndicators() {
         GovIndicatorDefinition target = indicator(targetId, "AVG_ORDER", "DRAFT", true);
         target.setDependencyIndicators("[\"DRAFT_METRIC\",\"MISSING\",\"CYCLE_A\"]");

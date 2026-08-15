@@ -559,7 +559,7 @@ export type ReleaseCandidateLifecycleAction =
 	| "REJECT"
 	| "CREATE_REPLACEMENT_CANDIDATE"
 	| "PUBLISH"
-	| "RETRY_REGISTRATION"
+	| "RETRY_PUBLICATION"
 	| "ROLLBACK";
 
 export type ReleaseCandidateWorkspaceAction =

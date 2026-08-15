@@ -87,7 +87,9 @@ describe("platform session management source contract", () => {
 		);
 		expect(dynamicResolverSource.includes("const directOverridePath =")).toBe(true);
 		expect(dynamicResolverSource.includes("if (directOverridePath)")).toBe(true);
-		expect(dynamicResolverSource.includes("return <>{Component(directOverridePath)}</>;")).toBe(true);
+		// 渲染已抽成 renderDashboardComponent（内部仍是 <>{Component(path)}</>），直连覆盖能力不变。
+		expect(dynamicResolverSource.includes("return renderDashboardComponent(directOverridePath, pathname);")).toBe(true);
+		expect(dynamicResolverSource.includes("{Component(componentPath)}")).toBe(true);
 	});
 
 	it("does not let stale auth responses clear a newer login session", () => {

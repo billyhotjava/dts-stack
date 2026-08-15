@@ -118,8 +118,29 @@ public final class DbtImplementationDraftContract {
         @NotBlank @Size(min = 64, max = 64) @jakarta.validation.constraints.Pattern(regexp = "^[0-9a-fA-F]{64}$") String baseModelChecksum,
         @Positive Integer baseImplementationRevision,
         @Size(min = 64, max = 64) @jakarta.validation.constraints.Pattern(regexp = "^[0-9a-fA-F]{64}$") String baseImplementationChecksum,
+        @Size(max = 63) @jakarta.validation.constraints.Pattern(regexp = "^[a-z][a-z0-9_]*$") String targetPhysicalName,
         @NotBlank @Size(max = 128) String idempotencyKey
-    ) {}
+    ) {
+        /** Compatibility constructor for callers that create a draft from an existing implementation. */
+        public CreateDraftRequest(
+            UUID planId,
+            int baseModelRevision,
+            String baseModelChecksum,
+            Integer baseImplementationRevision,
+            String baseImplementationChecksum,
+            String idempotencyKey
+        ) {
+            this(
+                planId,
+                baseModelRevision,
+                baseModelChecksum,
+                baseImplementationRevision,
+                baseImplementationChecksum,
+                null,
+                idempotencyKey
+            );
+        }
+    }
 
     public record SaveFilesRequest(
         @NotBlank @Size(max = 64) String expectedEtag,

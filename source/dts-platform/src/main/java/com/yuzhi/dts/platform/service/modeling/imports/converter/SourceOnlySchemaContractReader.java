@@ -36,6 +36,7 @@ final class SourceOnlySchemaContractReader {
     private static final int MAX_CONFIG_RULES = 1_000;
     private static final int MAX_TAGS = 64;
     private static final Set<String> MATERIALIZATIONS = Set.of("table", "view", "incremental", "ephemeral");
+    private static final Set<String> FIELD_ROLES = Set.of("KEY", "ATTRIBUTE", "TIME", "MEASURE");
     private static final Set<String> GLOBAL_DYNAMIC_KEYS = Set.of("vars", "dispatch", "on-run-start", "on-run-end");
     private static final Set<String> MODEL_HOOK_KEYS = Set.of("pre-hook", "post-hook");
 
@@ -209,6 +210,7 @@ final class SourceOnlySchemaContractReader {
         if (rawColumns.size() > MAX_COLUMNS_PER_MODEL) {
             throw error("SOURCE_PROJECT_TOO_LARGE", "单个 dbt schema model 的 column 数量超过安全上限");
         }
+        Map<String, String> fieldRoles = fieldRoles(model);
         List<Column> columns = new ArrayList<>();
         Set<String> names = new HashSet<>();
         for (Object rawColumn : rawColumns) {
@@ -229,12 +231,41 @@ final class SourceOnlySchemaContractReader {
                     columnName,
                     optionalPlainText(column.get("description"), 4_096),
                     dataType,
-                    null,
+                    fieldRoles.get(columnName),
                     stringTests(column.get("tests"))
                 )
             );
         }
+        if (!names.containsAll(fieldRoles.keySet().stream().map(fieldName -> fieldName.toLowerCase(Locale.ROOT)).toList())) {
+            throw error("SOURCE_PROJECT_SCHEMA_INVALID", "meta.dts.fieldRoles 引用了未声明的 column");
+        }
         return new ModelContract(name, true, List.copyOf(columns), null, configuration);
+    }
+
+    private static Map<String, String> fieldRoles(Map<?, ?> model) {
+        Map<?, ?> meta = optionalMap(model.get("meta"));
+        Map<?, ?> dts = meta == null ? null : optionalMap(meta.get("dts"));
+        if (dts == null) {
+            return Map.of();
+        }
+        Object value = dts.containsKey("fieldRoles") ? dts.get("fieldRoles") : dts.get("field_roles");
+        if (value == null) {
+            return Map.of();
+        }
+        Map<?, ?> rawRoles = optionalMap(value);
+        if (rawRoles == null || rawRoles.size() > MAX_COLUMNS_PER_MODEL) {
+            throw error("SOURCE_PROJECT_SCHEMA_INVALID", "meta.dts.fieldRoles 必须是有界字段角色对象");
+        }
+        Map<String, String> roles = new TreeMap<>();
+        for (Map.Entry<?, ?> entry : rawRoles.entrySet()) {
+            String fieldName = optionalLiteral(entry.getKey(), 256);
+            String role = optionalLiteral(entry.getValue(), 32);
+            role = role == null ? null : role.toUpperCase(Locale.ROOT);
+            if (fieldName == null || role == null || !FIELD_ROLES.contains(role) || roles.putIfAbsent(fieldName, role) != null) {
+                throw error("SOURCE_PROJECT_SCHEMA_INVALID", "meta.dts.fieldRoles 包含无效字段或角色");
+            }
+        }
+        return Map.copyOf(roles);
     }
 
     private static ModelConfiguration modelConfiguration(Map<?, ?> value, boolean projectTree) {

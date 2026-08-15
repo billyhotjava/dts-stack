@@ -5,6 +5,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { act } from "react-dom/test-utils";
 import type { WorkbenchRoleInfo } from "../hooks/useWorkbenchRole";
 import type { WorkbenchFilterState } from "./WorkbenchFilterBar";
+// jsdom + antd 的整树渲染在并行跑批下会超过 vitest 默认的 5s，
+// 这些用例本身很快，单跑 <1s，放宽文件级超时避免假红。
+vi.setConfig({ testTimeout: 20_000 });
 
 type MockState = {
 	role: WorkbenchRoleInfo;

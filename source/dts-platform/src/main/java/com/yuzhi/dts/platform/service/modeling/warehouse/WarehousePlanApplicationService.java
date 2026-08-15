@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
+import com.yuzhi.dts.platform.service.catalog.SchemaDriftConsumerReferenceReadPort;
 import com.yuzhi.dts.platform.service.catalog.SchemaDriftDetailsReader;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.BusinessScope;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CategoryBindingView;
@@ -81,6 +82,7 @@ public class WarehousePlanApplicationService {
     private final CatalogDomainResolutionPort catalogDomainResolutionPort;
     private final SourceReferenceResolver sourceReferenceResolver;
     private final AuditService auditService;
+    private final SchemaDriftConsumerReferenceReadPort driftConsumerReferences;
     private final SchemaDriftDetailsReader schemaDriftDetailsReader;
     private final TransactionOperations transactions;
     private final TransactionOperations withoutTransactions;
@@ -91,6 +93,7 @@ public class WarehousePlanApplicationService {
         CatalogDomainResolutionPort catalogDomainResolutionPort,
         SourceReferenceResolver sourceReferenceResolver,
         AuditService auditService,
+        SchemaDriftConsumerReferenceReadPort driftConsumerReferences,
         SchemaDriftDetailsReader schemaDriftDetailsReader,
         PlatformTransactionManager transactionManager
     ) {
@@ -99,6 +102,7 @@ public class WarehousePlanApplicationService {
         this.catalogDomainResolutionPort = catalogDomainResolutionPort;
         this.sourceReferenceResolver = sourceReferenceResolver;
         this.auditService = auditService;
+        this.driftConsumerReferences = driftConsumerReferences;
         this.schemaDriftDetailsReader = schemaDriftDetailsReader;
         this.transactions = new TransactionTemplate(transactionManager);
         TransactionTemplate nonTransactional = new TransactionTemplate(transactionManager);
@@ -2020,12 +2024,64 @@ public class WarehousePlanApplicationService {
         if (impact == SourceChangeImpact.NONE) {
             impact = SourceChangeImpact.REVIEW_REQUIRED;
         }
-        return new SourceDriftEvidence(
+        return reassessUnreferencedSourceChanges(
+            sourceType,
+            locator,
+            new SourceDriftEvidence(
             impact,
             new SourceDiffSummary(added, removed, changed),
             changes,
             eventIds
+            )
         );
+    }
+
+    private SourceDriftEvidence reassessUnreferencedSourceChanges(
+        SourceType sourceType,
+        SourceLocator locator,
+        SourceDriftEvidence evidence
+    ) {
+        if (
+            evidence.impact() == SourceChangeImpact.NONE ||
+            evidence.impact() == SourceChangeImpact.COMPATIBLE ||
+            evidence.changes().isEmpty() ||
+            locator == null ||
+            (sourceType != SourceType.CATALOG_TABLE && sourceType != SourceType.CONNECTION_TABLE)
+        ) {
+            return evidence;
+        }
+        Optional<Set<String>> referencedFields = driftConsumerReferences.findCurrentReferencedFields(
+            sourceType == SourceType.CATALOG_TABLE ? locator.assetId() : null,
+            sourceType == SourceType.CONNECTION_TABLE ? locator.connectionId() : null,
+            locator.namespace(),
+            locator.objectName()
+        );
+        if (referencedFields.isEmpty()) {
+            return evidence;
+        }
+        Set<String> normalizedReferences = referencedFields
+            .orElseThrow()
+            .stream()
+            .filter(field -> !isBlank(field))
+            .map(field -> field.trim().toLowerCase(java.util.Locale.ROOT))
+            .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        SourceChangeImpact reassessedImpact = SourceChangeImpact.NONE;
+        List<SourceSchemaChange> reassessedChanges = new ArrayList<>();
+        for (SourceSchemaChange change : evidence.changes()) {
+            String field = change.field();
+            SourceChangeImpact changeImpact = parseSourceChangeImpact(change.impact());
+            if (!isBlank(field) && !normalizedReferences.contains(field.trim().toLowerCase(java.util.Locale.ROOT))) {
+                changeImpact = SourceChangeImpact.COMPATIBLE;
+            }
+            reassessedImpact = higherSourceChangeImpact(reassessedImpact, changeImpact);
+            reassessedChanges.add(
+                new SourceSchemaChange(change.field(), change.kind(), change.before(), change.after(), changeImpact.name())
+            );
+        }
+        if (reassessedImpact == SourceChangeImpact.NONE) {
+            reassessedImpact = evidence.impact();
+        }
+        return new SourceDriftEvidence(reassessedImpact, evidence.summary(), reassessedChanges, evidence.eventIds());
     }
 
     private Optional<UUID> catalogDatasetId(SourceType sourceType, SourceLocator locator) {

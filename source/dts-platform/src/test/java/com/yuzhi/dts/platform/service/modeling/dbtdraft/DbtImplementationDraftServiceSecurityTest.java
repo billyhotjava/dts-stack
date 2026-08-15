@@ -30,6 +30,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelingDbtArtifactImportService.
 import com.yuzhi.dts.platform.service.modeling.ModelingDbtArtifactImportService.ImportCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelingDbtArtifactImportService.ImportResult;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.CommitDraftRequest;
+import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.CommitView;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.CreateDraftRequest;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.DraftException;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.DraftState;
@@ -323,6 +324,7 @@ class DbtImplementationDraftServiceSecurityTest {
 
     @Test
     void createsAnExplicitNonLosslessCanonicalProjectForTheFirstDbtImplementation() {
+        String targetPhysicalName = "biz_dwd_budget_account_v2";
         ModelSpecView model = model(3, MODEL_CHECKSUM);
         when(model.name()).thenReturn("预算科目");
         when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model);
@@ -330,14 +332,22 @@ class DbtImplementationDraftServiceSecurityTest {
         TimelineView timeline = org.mockito.Mockito.mock(TimelineView.class);
         when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(timeline);
         when(timeline.implementation()).thenReturn(null);
-        when(validator.validate(any())).thenReturn(initialProject());
+        when(validator.validate(any())).thenReturn(initialProject(targetPhysicalName));
         when(repository.create(any())).thenAnswer(invocation -> draft(invocation.getArgument(0)));
 
         var created = service.create(
             TENANT,
             ACTOR,
             MODEL_ID,
-            new CreateDraftRequest(PLAN_ID, 3, MODEL_CHECKSUM, null, null, "create-first-83")
+            new CreateDraftRequest(
+                PLAN_ID,
+                3,
+                MODEL_CHECKSUM,
+                null,
+                null,
+                targetPhysicalName,
+                "create-first-83"
+            )
         );
 
         assertThat(created.sourceBundle()).isNotNull();
@@ -345,8 +355,31 @@ class DbtImplementationDraftServiceSecurityTest {
         assertThat(created.sourceBundle().lossless()).isFalse();
         assertThat(created.sourceBundle().files())
             .extracting(DbtImplementationDraftContract.BundleFileView::path)
-            .contains("dbt_project.yml")
-            .anyMatch(path -> path.startsWith("models/") && path.endsWith(".sql"));
+            .contains("dbt_project.yml", "models/" + targetPhysicalName + ".sql");
+    }
+
+    @Test
+    void rejectsTheFirstDbtDraftWithoutAnExplicitTargetPhysicalName() {
+        ModelSpecView model = model(3, MODEL_CHECKSUM);
+        when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model);
+        when(writeAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
+        TimelineView timeline = org.mockito.Mockito.mock(TimelineView.class);
+        when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(timeline);
+        when(timeline.implementation()).thenReturn(null);
+
+        DraftException failure = assertFailure(
+            ErrorKind.BAD_REQUEST,
+            () ->
+                service.create(
+                    TENANT,
+                    ACTOR,
+                    MODEL_ID,
+                    new CreateDraftRequest(PLAN_ID, 3, MODEL_CHECKSUM, null, null, "create-first-without-target-83")
+                )
+        );
+
+        assertThat(failure.code()).isEqualTo("DBT_DRAFT_TARGET_PHYSICAL_NAME_REQUIRED");
+        verify(repository, never()).create(any());
     }
 
     @Test
@@ -537,7 +570,11 @@ class DbtImplementationDraftServiceSecurityTest {
         when(repository.listFiles(DRAFT_ID)).thenReturn(files);
         when(validator.validate(any())).thenReturn(project);
         ModelSpecView model = model(3, MODEL_CHECKSUM);
+        String synchronizedChecksum = "e".repeat(64);
+        ModelSpecView synchronizedModel = model(4, synchronizedChecksum);
         when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model);
+        when(modelSpecs.synchronizeDbtManagedFields(eq(TENANT), eq(ACTOR), eq(MODEL_ID), any(), any()))
+            .thenReturn(synchronizedModel);
         when(writeAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
         TimelineView timeline = org.mockito.Mockito.mock(TimelineView.class);
         when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(timeline);
@@ -556,13 +593,16 @@ class DbtImplementationDraftServiceSecurityTest {
         when(repository.completeCommit(any(), any(), any(), any(), any(), any(), any(), anyInt(), any(), anyInt(), any()))
             .thenReturn(committed);
 
-        service.commit(
+        CommitView receipt = service.commit(
             TENANT,
             ACTOR,
             MODEL_ID,
             DRAFT_ID,
             new CommitDraftRequest("etag", VALIDATED_CHECKSUM, "commit-83")
         );
+
+        assertThat(receipt.modelRevision()).isEqualTo(4);
+        assertThat(receipt.modelChecksum()).isEqualTo(synchronizedChecksum);
 
         ArgumentCaptor<SaveImplementationCommand> implementationCommand = ArgumentCaptor.forClass(
             SaveImplementationCommand.class
@@ -817,7 +857,8 @@ class DbtImplementationDraftServiceSecurityTest {
     }
 
     private ValidatedProject project() {
-        String schema = "{\"columns\":[],\"tests\":[]}";
+        String schema =
+            "{\"columns\":[{\"name\":\"order_id\",\"description\":\"Order identifier\",\"dataType\":\"bigint\",\"role\":\"KEY\",\"tests\":[\"not_null\"]}],\"tests\":[]}";
         ValidatedNode node = new ValidatedNode(
             "model.sprint83.orders",
             "orders",
@@ -834,8 +875,7 @@ class DbtImplementationDraftServiceSecurityTest {
         return new ValidatedProject(VALIDATED_CHECKSUM, PROJECT_CHECKSUM, "sprint83", List.of(node), List.of());
     }
 
-    private ValidatedProject initialProject() {
-        String name = "model_200000000000";
+    private ValidatedProject initialProject(String name) {
         String sql = "-- DTS canonical initialization; replace this placeholder before commit.\n" +
         "select 1 as _dts_placeholder where 1 = 0\n";
         String schema = "{\"columns\":[],\"tests\":[]}";

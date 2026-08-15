@@ -39,13 +39,17 @@ const canonical = (model: ModelSpecView): model is CanonicalModelSpecView =>
 
 export function AdvancedDbtWorkspace({
 	model,
+	initialTargetPhysicalName = "",
 	onBack,
+	onCommitSuccess,
 	onDirtyChange,
 	canMaintain,
 	onTransitionSuccess,
 }: {
 	model: ModelSpecView;
+	initialTargetPhysicalName?: string;
 	onBack: () => void;
+	onCommitSuccess?: (receipt: DbtDraftCommit) => void;
 	onDirtyChange?: (dirty: boolean) => void;
 	canMaintain: boolean;
 	onTransitionSuccess?: (result: OwnershipTransitionResult) => void;
@@ -53,6 +57,7 @@ export function AdvancedDbtWorkspace({
 	const navigate = useNavigate();
 	const [representation, setRepresentation] = useState<ModelRepresentationView | null>(null);
 	const [baseImplementation, setBaseImplementation] = useState<ModelLifecycleTimeline["implementation"]>(null);
+	const [targetPhysicalName, setTargetPhysicalName] = useState(initialTargetPhysicalName.trim());
 	const [draft, setDraft] = useState<DbtImplementationDraft | null>(null);
 	const [files, setFiles] = useState<DbtDraftFile[]>([]);
 	const [selectedPath, setSelectedPath] = useState("");
@@ -89,7 +94,11 @@ export function AdvancedDbtWorkspace({
 		setBusy("load");
 		void getModelLifecycle(model.id)
 			.then(({ implementation }) => {
-				if (active) setBaseImplementation(implementation);
+				if (active) {
+					setBaseImplementation(implementation);
+					const persistedName = implementation?.settings?.targetPhysicalName;
+					if (typeof persistedName === "string" && persistedName.trim()) setTargetPhysicalName(persistedName.trim());
+				}
 				const exactImplementation =
 					implementation?.revision === model.revision && implementation.modelChecksum === model.checksum;
 				return getModelRepresentation(model.id, {
@@ -111,6 +120,9 @@ export function AdvancedDbtWorkspace({
 			active = false;
 		};
 	}, [canMaintain, model.checksum, model.id, model.revision, workspaceAttempt]);
+	useEffect(() => {
+		setTargetPhysicalName(initialTargetPhysicalName.trim());
+	}, [initialTargetPhysicalName, model.id]);
 
 	const canOpenAdvanced = Boolean(representation?.allowedActions.includes("OPEN_ADVANCED_DBT"));
 	const canPreviewDesigner = Boolean(representation?.allowedActions.includes("OPEN_DBT_PREVIEW"));
@@ -213,6 +225,12 @@ export function AdvancedDbtWorkspace({
 	};
 	const create = async () => {
 		if (!canonical(model) || !canMaintain || !canOpenAdvanced) return;
+		const firstImplementation = !baseImplementation;
+		const normalizedTargetPhysicalName = targetPhysicalName.trim();
+		if (firstImplementation && !/^[a-z][a-z0-9_]{0,62}$/.test(normalizedTargetPhysicalName)) {
+			setFailure("请填写有效的目标物理表名：仅支持小写字母、数字和下划线，且必须以字母开头。");
+			return;
+		}
 		setBusy("create");
 		setFailure("");
 		setConflict(false);
@@ -226,6 +244,7 @@ export function AdvancedDbtWorkspace({
 					baseModelChecksum: model.checksum,
 					baseImplementationRevision: baseImplementation?.implementationRevision || null,
 					baseImplementationChecksum: baseImplementation?.implementationChecksum || null,
+					targetPhysicalName: firstImplementation ? normalizedTargetPhysicalName : null,
 					idempotencyKey: newModelingIdempotencyKey(),
 				}),
 			);
@@ -300,6 +319,7 @@ export function AdvancedDbtWorkspace({
 			setCommit(receipt);
 			setDraft((current) => (current ? { ...current, state: "COMMITTED", etag: receipt.etag } : current));
 			setDirty(false);
+			onCommitSuccess?.(receipt);
 		} catch (error) {
 			recordFailure(error, "dbt 实现提交失败。");
 		} finally {
@@ -477,6 +497,22 @@ export function AdvancedDbtWorkspace({
 						<dt>能力限制</dt>
 						<dd>{modelingCapabilityReasonsText(representation?.capabilityReasons || []) || "无"}</dd>
 					</dl>
+					{!baseImplementation ? (
+						<div className="dmx-form-grid">
+							<label className="dmx-form-field--wide">
+								<span className="required">目标物理表名</span>
+								<input
+									aria-label="目标物理表名"
+									disabled={Boolean(busy)}
+									maxLength={63}
+									onChange={(event) => setTargetPhysicalName(event.target.value)}
+									placeholder="例如 biz_dwd_project_follow_up_v2"
+									value={targetPhysicalName}
+								/>
+								<small>首次提交实现后，该名称由实现修订统一持久化，并用于物化目标关系。</small>
+							</label>
+						</div>
+					) : null}
 					<div className="dmx-dialog-actions">
 						<Button
 							disabled={!canMaintain || Boolean(busy)}
@@ -485,7 +521,12 @@ export function AdvancedDbtWorkspace({
 							导入 dbt ZIP
 						</Button>
 						<Button
-							disabled={!canMaintain || !canOpenAdvanced || Boolean(busy)}
+							disabled={
+								!canMaintain ||
+								!canOpenAdvanced ||
+								Boolean(busy) ||
+								(!baseImplementation && !/^[a-z][a-z0-9_]{0,62}$/.test(targetPhysicalName.trim()))
+							}
 							onClick={() => void create()}
 							primary
 							title={

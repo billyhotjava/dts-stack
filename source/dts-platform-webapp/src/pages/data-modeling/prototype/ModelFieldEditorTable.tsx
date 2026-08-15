@@ -5,6 +5,12 @@ import { Button, RequestState } from "./PrototypePrimitives";
 import type { ModelSpecDraft, ModelWorkbenchContext } from "./services/modelWorkbenchService";
 
 const DATA_TYPES = ["STRING", "BOOLEAN", "INT", "BIGINT", "DECIMAL", "DATE", "TIMESTAMP"];
+const SECURITY_LEVELS = [
+	{ value: "PUBLIC", label: "公开" },
+	{ value: "INTERNAL", label: "内部" },
+	{ value: "SECRET", label: "秘密" },
+	{ value: "CONFIDENTIAL", label: "机密" },
+];
 const IMPORT_UNAVAILABLE_REASON = "当前版本尚无字段级表结构导入契约";
 
 export type ModelFieldEditorTableProps = {
@@ -175,28 +181,52 @@ export function ModelFieldEditorTable({
 			});
 		}
 		if (showStandards) {
-			base.push({
-				title: "字段标准",
-				key: "standard",
-				render: (_, { field, index }) => {
-					const binding = bindings.find((item) => item.fieldName === field.name);
-					const standardValue = binding ? `${binding.standardElementId}@${binding.standardElementVersion}` : "";
-					return (
+			base.push(
+				{
+					title: "字段标准",
+					key: "standard",
+					render: (_, { field, index }) => {
+						const binding = bindings.find((item) => item.fieldName === field.name);
+						const standardValue =
+							binding?.standardElementId && binding.standardElementVersion
+								? `${binding.standardElementId}@${binding.standardElementVersion}`
+								: "";
+						return (
+							<select
+								disabled={readOnly || !field.name.trim()}
+								onChange={(event) => onStandardChange(index, event.target.value)}
+								value={standardValue}
+							>
+								<option value="">不绑定</option>
+								{standards.map((standard) => (
+									<option key={`${standard.id}@${standard.version}`} value={`${standard.id}@${standard.version}`}>
+										{standard.name} · {standard.code} · v{standard.version}
+									</option>
+								))}
+							</select>
+						);
+					},
+				},
+				{
+					title: "字段密级",
+					key: "securityLevel",
+					render: (_, { field, index }) => (
 						<select
+							aria-label={`字段 ${index + 1} 密级`}
 							disabled={readOnly || !field.name.trim()}
-							onChange={(event) => onStandardChange(index, event.target.value)}
-							value={standardValue}
+							onChange={(event) => onUpdate(index, { securityLevel: event.target.value || null })}
+							value={field.securityLevel || ""}
 						>
-							<option value="">不绑定</option>
-							{standards.map((standard) => (
-								<option key={`${standard.id}@${standard.version}`} value={`${standard.id}@${standard.version}`}>
-									{standard.name} · {standard.code} · v{standard.version}
+							<option value="">未设置</option>
+							{SECURITY_LEVELS.map((level) => (
+								<option key={level.value} value={level.value}>
+									{level.label}
 								</option>
 							))}
 						</select>
-					);
+					),
 				},
-			});
+			);
 		}
 		if (!dimensionMode) {
 			base.push({
@@ -263,6 +293,30 @@ export function ModelFieldEditorTable({
 				<Button disabled={readOnly} onClick={onRemoveBlankFields}>
 					移除空白字段
 				</Button>
+				{showStandards ? (
+					<label>
+						批量字段密级
+						<select
+							aria-label="批量设置字段密级"
+							disabled={readOnly}
+							onChange={(event) => {
+								const securityLevel = event.target.value;
+								if (!securityLevel) return;
+								fields.forEach((field, index) => {
+									if (field.name.trim()) onUpdate(index, { securityLevel });
+								});
+							}}
+							value=""
+						>
+							<option value="">请选择并应用到全部字段</option>
+							{SECURITY_LEVELS.map((level) => (
+								<option key={level.value} value={level.value}>
+									{level.label}
+								</option>
+							))}
+						</select>
+					</label>
+				) : null}
 				<Button className="right" onClick={() => setShowStandards((current) => !current)}>
 					字段显示设置
 				</Button>

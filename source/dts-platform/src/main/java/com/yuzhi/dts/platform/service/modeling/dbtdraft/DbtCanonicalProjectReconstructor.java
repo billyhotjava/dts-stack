@@ -25,6 +25,7 @@ import java.util.regex.Pattern;
 final class DbtCanonicalProjectReconstructor {
 
     private static final Pattern PROJECT_KEY = Pattern.compile("^[A-Za-z_][A-Za-z0-9_]{0,127}$");
+    private static final Pattern MODEL_NAME = Pattern.compile("^[A-Za-z_][A-Za-z0-9_]{0,127}$");
     private static final Set<String> ACCEPTED_STATUSES = Set.of("IMPORTED", "COMPILED");
     private static final List<String> STRUCTURED_TYPES = List.of("SCHEMA", "CONFIG", "DEPENDENCY");
 
@@ -34,11 +35,12 @@ final class DbtCanonicalProjectReconstructor {
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper is required");
     }
 
-    CanonicalProject initialize(UUID modelSpecId, String materialization) {
+    CanonicalProject initialize(UUID modelSpecId, String materialization, String targetPhysicalName) {
         if (modelSpecId == null) throw unavailable();
         String token = modelSpecId.toString().replace("-", "").substring(0, 12);
         String projectKey = "dts_model_" + token;
-        String modelName = "model_" + token;
+        String modelName = Objects.toString(targetPhysicalName, "").trim();
+        if (!modelName.matches("^[a-z][a-z0-9_]{0,62}$")) throw unavailable();
         LinkedHashMap<String, String> files = new LinkedHashMap<>();
         files.put(
             "dbt_project.yml",
@@ -131,6 +133,7 @@ final class DbtCanonicalProjectReconstructor {
             )
         );
         sql.forEach((path, artifact) -> files.put(path, artifact.artifactContent()));
+        addSameProjectDependencyStubs(implementation.projectKey(), modelNames, dependencies, files);
         ObjectNode schemaRoot = objectMapper.createObjectNode();
         schemaRoot.put("version", 2);
         schemaRoot.set("models", schemaModels);
@@ -140,6 +143,35 @@ final class DbtCanonicalProjectReconstructor {
             throw unavailable();
         }
         return canonical(implementation.projectKey(), files, dependencies);
+    }
+
+    private static void addSameProjectDependencyStubs(
+        String projectKey,
+        Set<String> representedModelNames,
+        Map<String, List<String>> dependencies,
+        Map<String, String> files
+    ) {
+        String sameProjectPrefix = "model." + projectKey + ".";
+        dependencies
+            .values()
+            .stream()
+            .flatMap(List::stream)
+            .distinct()
+            .sorted()
+            .forEach(dependency -> {
+                if (!dependency.startsWith(sameProjectPrefix)) return;
+                String modelName = dependency.substring(sameProjectPrefix.length());
+                if (representedModelNames.contains(modelName)) return;
+                if (!MODEL_NAME.matcher(modelName).matches()) throw unavailable();
+                String path = "models/dts_dependencies/" + modelName + ".sql";
+                if (files.containsKey(path)) throw unavailable();
+                files.put(
+                    path,
+                    "{{ config(materialized='ephemeral', tags=['dts-source-evidence-placeholder']) }}\n" +
+                        "-- Static dependency placeholder reconstructed from exact imported lineage evidence.\n" +
+                        "select 1 as _dts_dependency_placeholder where 1 = 0\n"
+                );
+            });
     }
 
     private CanonicalProject canonical(

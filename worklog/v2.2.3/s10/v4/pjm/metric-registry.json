@@ -205,7 +205,7 @@
       "frequency": "每日 01:00 刷新",
       "thresholds": null,
       "excelRef": "原始指标 #13+#14",
-      "dbtField": "biz_dws_progress_monthly_v2.overdue_incomplete_*_cnt"
+      "dbtField": "biz_ads_progress_kpi_v2.overdue_rate_numerator"
     },
     "pjm_prog_milestone_completion_rate": {
       "code": "pjm_prog_milestone_completion_rate",
@@ -298,7 +298,7 @@
         "rule": "<"
       },
       "excelRef": "二次指标 #6 pjm_prog_health_score",
-      "dbtField": "biz_ads_composite_derived_v2.prog_health_score"
+      "dbtField": "biz_ads_composite_derived_v2.pjm_prog_health_score"
     },
     "pjm_qual_new_issues": {
       "code": "pjm_qual_new_issues",
@@ -393,7 +393,7 @@
         "rule": "<"
       },
       "excelRef": "二次指标 #7 pjm_qual_zero_rate",
-      "dbtField": "biz_ads_quality_derived_v2.zero_rate"
+      "dbtField": "biz_ads_quality_derived_v2.pjm_qual_zero_rate"
     },
     "pjm_qual_remaining_ratio": {
       "code": "pjm_qual_remaining_ratio",
@@ -417,7 +417,7 @@
         "rule": ">"
       },
       "excelRef": "二次指标 #8 pjm_qual_remaining_ratio",
-      "dbtField": "biz_ads_quality_derived_v2.remaining_ratio"
+      "dbtField": "biz_ads_quality_derived_v2.pjm_qual_remaining_ratio"
     },
     "pjm_qual_plan_submit_rate": {
       "code": "pjm_qual_plan_submit_rate",
@@ -441,7 +441,7 @@
         "rule": "<"
       },
       "excelRef": "二次指标 #9 pjm_qual_plan_submit_rate",
-      "dbtField": "biz_ads_quality_derived_v2.plan_submit_rate"
+      "dbtField": "biz_ads_quality_derived_v2.pjm_qual_plan_submit_rate"
     },
     "pjm_qual_top1_count": {
       "code": "pjm_qual_top1_count",
@@ -455,13 +455,13 @@
       "unit": "个",
       "direction": "DOWN",
       "definition": "现存质量问题中数量最多的一个分类的问题数",
-      "formula": "MAX(各原因分类的现存问题数),含设计/工艺/管理/元器件/操作/外协外购/软件/其他",
+      "formula": "MAX(各原因分类的现存问题数)，含设计/工艺/管理/元器件/操作/外协外购/软件/环境/其他",
       "scope": "全量未归零质量问题",
       "sourceTable": "质量信息汇总表",
       "frequency": "每日 01:00 刷新",
       "thresholds": null,
       "excelRef": "原始指标 #41-#48",
-      "dbtField": "biz_dws_quality_monthly_v2.open_cat_*"
+      "dbtField": "biz_ads_quality_kpi_v2.top1_open_category_cnt"
     },
     "pjm_qual_health_score": {
       "code": "pjm_qual_health_score",
@@ -485,7 +485,7 @@
         "rule": "<"
       },
       "excelRef": "二次指标 #11 pjm_qual_health_score",
-      "dbtField": "biz_ads_composite_derived_v2.qual_health_score"
+      "dbtField": "biz_ads_composite_derived_v2.pjm_qual_health_score"
     },
     "pjm_tech_total_changes": {
       "code": "pjm_tech_total_changes",
@@ -506,7 +506,7 @@
       "frequency": "每日 01:00 刷新",
       "thresholds": null,
       "excelRef": "原始指标 #49+#50+#51",
-      "dbtField": "biz_dws_tech_state_monthly_v2.new_change_*_cnt"
+      "dbtField": "biz_ads_tech_state_kpi_v2.total_change_cnt"
     },
     "pjm_tech_reform_pending_i_ii": {
       "code": "pjm_tech_reform_pending_i_ii",
@@ -553,7 +553,7 @@
       "frequency": "每日 01:00 刷新",
       "thresholds": null,
       "excelRef": "原始指标 #63",
-      "dbtField": "biz_dws_tech_state_monthly_v2.order_unsigned_total"
+      "dbtField": "biz_ads_tech_state_kpi_v2.order_unsigned_total"
     },
     "pjm_tech_signature_rate": {
       "code": "pjm_tech_signature_rate",
@@ -577,7 +577,7 @@
         "rule": "<"
       },
       "excelRef": "二次指标 #12 pjm_tech_signature_rate",
-      "dbtField": "biz_ads_tech_state_kpi_v2.signature_rate"
+      "dbtField": "biz_ads_tech_state_derived_v2.pjm_tech_signature_rate"
     },
     "pjm_tech_reform_rate": {
       "code": "pjm_tech_reform_rate",
@@ -601,7 +601,7 @@
         "rule": "<"
       },
       "excelRef": "二次指标 #13 pjm_tech_reform_rate",
-      "dbtField": "biz_ads_tech_state_kpi_v2.reform_rate"
+      "dbtField": "biz_ads_tech_state_derived_v2.pjm_tech_reform_rate"
     },
     "pjm_tech_unsigned_ratio": {
       "code": "pjm_tech_unsigned_ratio",
@@ -625,7 +625,7 @@
         "rule": ">"
       },
       "excelRef": "二次指标 #15 pjm_tech_unsigned_ratio",
-      "dbtField": "biz_ads_tech_state_kpi_v2.unsigned_ratio"
+      "dbtField": "biz_ads_tech_state_derived_v2.pjm_tech_unsigned_ratio"
     },
     "pjm_tech_health_score": {
       "code": "pjm_tech_health_score",
@@ -649,7 +649,7 @@
         "rule": "<"
       },
       "excelRef": "二次指标 #16 pjm_tech_health_score",
-      "dbtField": "biz_ads_composite_derived_v2.tech_health_score"
+      "dbtField": "biz_ads_composite_derived_v2.pjm_tech_health_score"
     },
     "pjm_risk_total": {
       "code": "pjm_risk_total",
@@ -668,7 +668,7 @@
       "frequency": "每日 01:00 刷新",
       "thresholds": null,
       "excelRef": "(衍生)新增风险计数",
-      "dbtField": "biz_dws_risk_monthly_v2.total_cnt"
+      "dbtField": "biz_dws_risk_monthly_v2.total_risk_cnt"
     },
     "pjm_risk_high": {
       "code": "pjm_risk_high",
@@ -794,7 +794,7 @@
       "frequency": "每日 01:00 刷新",
       "thresholds": null,
       "excelRef": "(衍生)项目编号去重计数",
-      "dbtField": "COUNT(DISTINCT biz_dws_progress_monthly_v2.project_no)"
+      "dbtField": "biz_ads_progress_kpi_v2.project_total_cnt"
     },
     "pjm_project_active": {
       "code": "pjm_project_active",
@@ -814,7 +814,7 @@
       "frequency": "每日 01:00 刷新",
       "thresholds": null,
       "excelRef": "(衍生)有未完成的项目计数",
-      "dbtField": "COUNT(DISTINCT WHERE incomplete_cnt > 0)"
+      "dbtField": "biz_ads_progress_kpi_v2.project_active_cnt"
     },
     "pjm_project_delay": {
       "code": "pjm_project_delay",
@@ -834,7 +834,7 @@
       "frequency": "每日 01:00 刷新",
       "thresholds": null,
       "excelRef": "(衍生)有超期未完成的项目计数",
-      "dbtField": "COUNT(DISTINCT WHERE overdue_incomplete_*_cnt > 0)"
+      "dbtField": "biz_ads_progress_kpi_v2.project_delay_cnt"
     },
     "pjm_composite_health": {
       "code": "pjm_composite_health",
@@ -858,7 +858,7 @@
         "rule": "<"
       },
       "excelRef": "二次指标 #17 pjm_composite_health",
-      "dbtField": "biz_ads_composite_derived_v2.composite_health"
+      "dbtField": "biz_ads_composite_derived_v2.pjm_composite_health"
     },
     "pjm_risk_warning_index": {
       "code": "pjm_risk_warning_index",
@@ -882,7 +882,7 @@
         "rule": ">"
       },
       "excelRef": "二次指标 #18 pjm_risk_warning_index",
-      "dbtField": "biz_ads_composite_derived_v2.risk_warning_index"
+      "dbtField": "biz_ads_composite_derived_v2.pjm_risk_warning_index"
     },
     "pjm_qual_tech_zero": {
       "displayName": "已完成技术归零数",
@@ -1155,7 +1155,7 @@
       "frequency": "每日 01:00 刷新",
       "thresholds": null,
       "excelRef": "原始指标 #49",
-      "dbtField": "biz_dws_tech_state_monthly_v2.new_change_i_cnt",
+      "dbtField": "biz_dws_tech_state_monthly_v2.new_cat_i",
       "code": "pjm_tech_new_changes_i"
     },
     "pjm_tech_new_changes_ii": {
@@ -1176,7 +1176,7 @@
       "frequency": "每日 01:00 刷新",
       "thresholds": null,
       "excelRef": "原始指标 #50",
-      "dbtField": "biz_dws_tech_state_monthly_v2.new_change_ii_cnt",
+      "dbtField": "biz_dws_tech_state_monthly_v2.new_cat_ii",
       "code": "pjm_tech_new_changes_ii"
     },
     "pjm_tech_new_changes_iii": {
@@ -1197,7 +1197,7 @@
       "frequency": "每日 01:00 刷新",
       "thresholds": null,
       "excelRef": "原始指标 #51",
-      "dbtField": "biz_dws_tech_state_monthly_v2.new_change_iii_cnt",
+      "dbtField": "biz_dws_tech_state_monthly_v2.new_cat_iii",
       "code": "pjm_tech_new_changes_iii"
     },
     "pjm_tech_signed_total": {
@@ -1216,7 +1216,7 @@
       "frequency": "每日 01:00 刷新",
       "thresholds": null,
       "excelRef": "原始指标 #64",
-      "dbtField": "biz_dws_tech_state_monthly_v2.signed_total_cnt",
+      "dbtField": "biz_ads_tech_state_kpi_v2.file_signed_total",
       "code": "pjm_tech_signed_total"
     },
     "pjm_tech_reform_done_i_ii": {
@@ -1312,7 +1312,7 @@
       "frequency": "每日 01:00 刷新",
       "thresholds": null,
       "excelRef": "原始指标 #12 + #13",
-      "dbtField": "biz_dws_progress_monthly_v2.abnormal_pending_non_general_cnt + overdue_incomplete_unchanged_non_general_cnt",
+      "dbtField": "biz_ads_progress_kpi_v2.abnormal_rate_numerator",
       "code": "pjm_prog_abnormal_cnt"
     },
     "pjm_prog_delay_days": {
@@ -1354,11 +1354,13 @@
         "rule": ">"
       },
       "excelRef": "(派生)aging_days",
-      "dbtField": "biz_dwd_*.aging_days",
+      "dbtField": "biz_dwd_quality_issue_v2.aging_days",
       "code": "pjm_qual_aging_days"
     },
     "pjm_qual_count": {
       "displayName": "数量",
+      "indicatorEligible": false,
+      "bindingMode": "CONTEXTUAL_CHART_AGGREGATION",
       "legacyAliases": [],
       "domain": "综合",
       "category": "通用",
@@ -1384,14 +1386,14 @@
       "category": "基础",
       "unit": "项",
       "direction": "NEUTRAL",
-      "definition": "按责任科室统计物料采购情况(占位,数据源待接入)",
-      "formula": "待业务方提供口径",
-      "scope": "暂未接入实际数据源",
-      "sourceTable": "待定",
-      "frequency": "待定",
+      "definition": "按合同要求到货月份和责任科室统计重要物料条目数",
+      "formula": "SUM(重要物料条目数),按责任科室分组",
+      "scope": "受合同要求到货月份、责任科室和项目筛选控制",
+      "sourceTable": "重要物料交付指标应用表",
+      "frequency": "随物料入湖批次刷新",
       "thresholds": null,
-      "excelRef": "(待定)",
-      "dbtField": "(待接入)"
+      "excelRef": "物料供应扩展口径",
+      "dbtField": "biz_ads_material_delivery_kpi_v2.material_cnt"
     },
     "pjm_budg_total": {
       "code": "pjm_budg_total",
@@ -1403,7 +1405,7 @@
       "direction": "NEUTRAL",
       "definition": "调整后批复预算总额(时点快照)",
       "formula": "Σ 预算金额(调整后)",
-      "scope": "当前快照口径,不受时间筛选;受研究室/项目筛选控制",
+      "scope": "所选业务快照日，受日期/研究室/项目/子课题筛选控制；未选日期时取最新快照",
       "sourceTable": "预算执行台账表",
       "frequency": "随入湖批次刷新(时点快照)",
       "thresholds": null,
@@ -1420,7 +1422,7 @@
       "direction": "NEUTRAL",
       "definition": "已占用预算(三本账合计:预付+账面+应付)",
       "formula": "预付账款 + 账面成本 + 应付账款",
-      "scope": "当前快照口径,不受时间筛选;受研究室/项目筛选控制",
+      "scope": "所选业务快照日，受日期/研究室/项目/子课题筛选控制；未选日期时取最新快照",
       "sourceTable": "预算执行台账表",
       "frequency": "随入湖批次刷新(时点快照)",
       "thresholds": null,
@@ -1437,7 +1439,7 @@
       "direction": "NEUTRAL",
       "definition": "已验收、有发票的已确认支出",
       "formula": "Σ 账面成本(已验收有发票)",
-      "scope": "当前快照口径,不受时间筛选;受研究室/项目筛选控制",
+      "scope": "所选业务快照日，受日期/研究室/项目/子课题筛选控制；未选日期时取最新快照",
       "sourceTable": "预算执行台账表",
       "frequency": "随入湖批次刷新(时点快照)",
       "thresholds": null,
@@ -1454,7 +1456,7 @@
       "direction": "NEUTRAL",
       "definition": "已付款、未验收未报销、无发票的在途资金",
       "formula": "Σ 预付账款(未验收未报销无发票)",
-      "scope": "当前快照口径,不受时间筛选;受研究室/项目筛选控制",
+      "scope": "所选业务快照日，受日期/研究室/项目/子课题筛选控制；未选日期时取最新快照",
       "sourceTable": "预算执行台账表",
       "frequency": "随入湖批次刷新(时点快照)",
       "thresholds": null,
@@ -1471,7 +1473,7 @@
       "direction": "NEUTRAL",
       "definition": "有发票、暂未付款的已确认未付金额",
       "formula": "Σ 应付账款(有发票暂未付款)",
-      "scope": "当前快照口径,不受时间筛选;受研究室/项目筛选控制",
+      "scope": "所选业务快照日，受日期/研究室/项目/子课题筛选控制；未选日期时取最新快照",
       "sourceTable": "预算执行台账表",
       "frequency": "随入湖批次刷新(时点快照)",
       "thresholds": null,
@@ -1488,7 +1490,7 @@
       "direction": "NEUTRAL",
       "definition": "预算总额扣除已执行后的可用余额(可为负=超支)",
       "formula": "预算总额 − 已执行",
-      "scope": "当前快照口径,不受时间筛选;受研究室/项目筛选控制",
+      "scope": "所选业务快照日，受日期/研究室/项目/子课题筛选控制；未选日期时取最新快照",
       "sourceTable": "预算执行台账表",
       "frequency": "随入湖批次刷新(时点快照)",
       "thresholds": null,
@@ -1505,7 +1507,7 @@
       "direction": "NEUTRAL",
       "definition": "预算台账明细条目数",
       "formula": "COUNT(预算明细行)",
-      "scope": "当前快照口径,不受时间筛选;受研究室/项目筛选控制",
+      "scope": "所选业务快照日，受日期/研究室/项目/子课题筛选控制；未选日期时取最新快照",
       "sourceTable": "预算执行台账表",
       "frequency": "随入湖批次刷新(时点快照)",
       "thresholds": null,
@@ -1522,7 +1524,7 @@
       "direction": "NEUTRAL",
       "definition": "已执行占预算的比率,≥100% 即超支",
       "formula": "已执行 ÷ 预算总额 × 100%",
-      "scope": "当前快照口径,不受时间筛选;受研究室/项目筛选控制",
+      "scope": "所选业务快照日，受日期/研究室/项目/子课题筛选控制；未选日期时取最新快照",
       "sourceTable": "预算执行台账表",
       "frequency": "随入湖批次刷新(时点快照)",
       "thresholds": {
@@ -1543,7 +1545,7 @@
       "direction": "NEUTRAL",
       "definition": "已确认支出(账面成本)占预算的比率",
       "formula": "账面成本 ÷ 预算总额 × 100%",
-      "scope": "当前快照口径,不受时间筛选;受研究室/项目筛选控制",
+      "scope": "所选业务快照日，受日期/研究室/项目/子课题筛选控制；未选日期时取最新快照",
       "sourceTable": "预算执行台账表",
       "frequency": "随入湖批次刷新(时点快照)",
       "thresholds": null,
@@ -1560,7 +1562,7 @@
       "direction": "DOWN",
       "definition": "应付账款占已执行的比率,反映未付款压力",
       "formula": "应付账款 ÷ 已执行 × 100%",
-      "scope": "当前快照口径,不受时间筛选;受研究室/项目筛选控制",
+      "scope": "所选业务快照日，受日期/研究室/项目/子课题筛选控制；未选日期时取最新快照",
       "sourceTable": "预算执行台账表",
       "frequency": "随入湖批次刷新(时点快照)",
       "thresholds": {
@@ -1581,7 +1583,7 @@
       "direction": "DOWN",
       "definition": "单条预算已执行超出预算部分的合计",
       "formula": "Σ max(0, 单条已执行 − 单条预算)",
-      "scope": "当前快照口径,不受时间筛选;受研究室/项目筛选控制",
+      "scope": "所选业务快照日，受日期/研究室/项目/子课题筛选控制；未选日期时取最新快照",
       "sourceTable": "预算执行台账表",
       "frequency": "随入湖批次刷新(时点快照)",
       "thresholds": {
@@ -1602,7 +1604,7 @@
       "direction": "DOWN",
       "definition": "已执行超出预算的预算条目数",
       "formula": "COUNT(单条已执行 > 单条预算)",
-      "scope": "当前快照口径,不受时间筛选;受研究室/项目筛选控制",
+      "scope": "所选业务快照日，受日期/研究室/项目/子课题筛选控制；未选日期时取最新快照",
       "sourceTable": "预算执行台账表",
       "frequency": "随入湖批次刷新(时点快照)",
       "thresholds": {
@@ -1623,7 +1625,7 @@
       "direction": "UP",
       "definition": "综合超支控制与资金支付健康的预算评分(0-100)",
       "formula": "预算控制(无超支)×0.7 + 资金支付健康(应付占比低)×0.3",
-      "scope": "当前快照口径,不受时间筛选;受研究室/项目筛选控制",
+      "scope": "所选业务快照日，受日期/研究室/项目/子课题筛选控制；未选日期时取最新快照",
       "sourceTable": "预算执行台账表",
       "frequency": "随入湖批次刷新(时点快照)",
       "thresholds": {

@@ -1,22 +1,24 @@
 import { Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
+import { getModelSpecRevision, listModelSpecs } from "@/api/modelSpecApi";
 import { listBusinessProcessesApi, type Sprint64BusinessProcess } from "@/api/sprint64GovernanceApi";
 import { actionColumn, type CompactColumns, CompactTable } from "@/components/table";
-import {
-	type IndicatorMetricSourceRef,
-	type IndicatorSourceType,
-	parseIndicatorDependencyCodes,
-} from "@/features/modeling/indicators/indicatorDefinitionContract";
+import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
+import { parseIndicatorDependencyCodes } from "@/features/modeling/indicators/indicatorDefinitionContract";
 import type { DataModelingRoute } from "../types";
+import { MetricDefinitionBindingFields } from "./MetricDefinitionBindingFields";
 import { Button, PageHeader, RequestState, Status, Toast, useTransientMessage } from "./PrototypePrimitives";
 import {
 	archiveIndicatorDraft,
 	createIndicatorDraft,
 	filterIndicators,
+	type IndicatorCalculationBatch,
+	type IndicatorCalculationHistory,
 	type IndicatorDefinition,
 	type IndicatorEditValues,
 	loadIndicatorCatalog,
+	loadIndicatorCalculationHistory,
 	type MetricSelection,
 	type MetricType,
 	metricSelection,
@@ -24,6 +26,7 @@ import {
 	publishIndicatorDraft,
 	saveAndValidateIndicatorDraft,
 	saveIndicatorDraft,
+	submitIndicatorCalculation,
 	supportsIndicatorCreation,
 } from "./services/indicatorProjectionService";
 import { listPlanningCatalogDomains, type PlanningCatalogDomain } from "./services/planningCatalogDomainService";
@@ -56,6 +59,12 @@ const toForm = (selected: MetricSelection): IndicatorEditValues => ({
 	precisionScale: selected.precisionScale ?? 0,
 	aggregationType: selected.aggregationType || "",
 	measureField: selected.measureField || "",
+	expressionSql: selected.expressionSql || "",
+	sourceTable: selected.sourceTable || null,
+	sourceLayer: selected.sourceLayer || null,
+	targetLayer: selected.targetLayer || null,
+	targetModelName: selected.targetModelName || null,
+	dateColumn: selected.dateColumn || null,
 	dependencyCodes: parseIndicatorDependencyCodes(selected.dependencyIndicators),
 });
 
@@ -66,6 +75,20 @@ export function resolveMetricCatalogSelection(
 	if (!requestedIndicatorId) return null;
 	const target = rows.find((item) => item.id === requestedIndicatorId);
 	return target ? metricSelection(target) : null;
+}
+
+export function reconcileMetricBusinessProcessContext(
+	current: IndicatorEditValues,
+	processes: Sprint64BusinessProcess[],
+): IndicatorEditValues {
+	const currentMetricType = String(current.metricType || "").toUpperCase();
+	if (currentMetricType !== "ATOMIC") {
+		return current;
+	}
+	const binding = resolveBusinessProcessBinding(current.businessProcessId, processes);
+	const currentIsValid = binding.processes.some((item) => item.id === current.businessProcessId);
+	const nextId = binding.showSelector && currentIsValid ? String(current.businessProcessId) : binding.selectedId;
+	return (current.businessProcessId || null) === nextId ? current : { ...current, businessProcessId: nextId };
 }
 
 export function MetricsPage({ route }: { route: DataModelingRoute }) {
@@ -81,10 +104,14 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 	const [businessCategoryId, setBusinessCategoryId] = useState("");
 	const [architecture, setArchitecture] = useState<PlanningCatalogDomain[]>([]);
 	const [processes, setProcesses] = useState<Sprint64BusinessProcess[]>([]);
+	const [metricModels, setMetricModels] = useState<ModelSpecView[]>([]);
+	const [selectedCalculationIds, setSelectedCalculationIds] = useState<string[]>([]);
+	const [calculationBatch, setCalculationBatch] = useState<IndicatorCalculationBatch | null>(null);
+	const [calculationHistory, setCalculationHistory] = useState<IndicatorCalculationHistory[]>([]);
 	const [contextFailure, setContextFailure] = useState("");
 	const processEpoch = useRef(0);
 	const [loading, setLoading] = useState(true);
-	const [busy, setBusy] = useState<"save" | "validate" | "publish" | "archive" | "">("");
+	const [busy, setBusy] = useState<"save" | "validate" | "publish" | "archive" | "calculate" | "">("");
 	const [failure, setFailure] = useState<{ kind: "permission" | "request"; message: string } | null>(null);
 	const previousMetricType = useRef(metricType);
 	const { message, show } = useTransientMessage();
@@ -92,6 +119,46 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 		setSelected(next);
 		setValues(next ? toForm(next) : {});
 	}, []);
+	useEffect(() => {
+		let active = true;
+		void listModelSpecs()
+			.then((items) => {
+				if (active) {
+					setMetricModels((current) => [
+						...items,
+						...current.filter(
+							(existing) => !items.some((item) => item.id === existing.id && item.revision === existing.revision),
+						),
+					]);
+				}
+			})
+			.catch(() => {
+				if (active) setContextFailure("已发布模型读取失败；原子指标来源暂不可选择，请刷新后重试。");
+			});
+		return () => {
+			active = false;
+		};
+	}, []);
+	const pinnedModelSource = values.sourceRefs?.find((ref) => ref.sourceType === "SEMANTIC_MODEL_REVISION");
+	const pinnedModelRevision = String(pinnedModelSource?.sourceVersion || "").match(/^r([1-9][0-9]*)$/i)?.[1] || "";
+	useEffect(() => {
+		if (!pinnedModelSource?.sourceId || !pinnedModelRevision) return;
+		let active = true;
+		void getModelSpecRevision(pinnedModelSource.sourceId, Number(pinnedModelRevision))
+			.then((model) => {
+				if (!active) return;
+				setMetricModels((current) => [
+					...current.filter((item) => item.id !== model.id || item.revision !== model.revision),
+					model,
+				]);
+			})
+			.catch(() => {
+				if (active) setContextFailure("指标固定的模型版本读取失败；请确认该版本仍可访问后重试。");
+			});
+		return () => {
+			active = false;
+		};
+	}, [pinnedModelRevision, pinnedModelSource?.sourceId]);
 	const load = useCallback(
 		async (preferredIndicatorId?: string | null) => {
 			const epoch = ++requestEpoch.current;
@@ -154,25 +221,35 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 			});
 	}, [values.dataDomainId]);
 	useEffect(() => {
-		setValues((current) => {
-			const currentMetricType = String(current.metricType || "").toUpperCase();
-			if (currentMetricType !== "ATOMIC") {
-				return current.businessProcessId ? { ...current, businessProcessId: null } : current;
-			}
-			const binding = resolveBusinessProcessBinding(current.businessProcessId, processes);
-			const currentIsValid = binding.processes.some((item) => item.id === current.businessProcessId);
-			const nextId = binding.showSelector && currentIsValid ? String(current.businessProcessId) : binding.selectedId;
-			return (current.businessProcessId || null) === nextId ? current : { ...current, businessProcessId: nextId };
-		});
+		setValues((current) => reconcileMetricBusinessProcessContext(current, processes));
 	}, [processes]);
 	useEffect(() => {
 		if (previousMetricType.current !== metricType) {
 			setQuery("");
 			setDomain("");
 			setBusinessCategoryId("");
+			setSelectedCalculationIds([]);
+			setCalculationBatch(null);
 			previousMetricType.current = metricType;
 		}
 	}, [metricType]);
+	useEffect(() => {
+		if (!selected?.id || String(selected.status || "").toUpperCase() !== "PUBLISHED") {
+			setCalculationHistory([]);
+			return;
+		}
+		let active = true;
+		void loadIndicatorCalculationHistory(selected.id)
+			.then((items) => {
+				if (active) setCalculationHistory(items);
+			})
+			.catch(() => {
+				if (active) setCalculationHistory([]);
+			});
+		return () => {
+			active = false;
+		};
+	}, [selected?.id, selected?.status]);
 
 	const visible = useMemo(
 		() => filterIndicators(catalog, { type: metricType, domain, businessCategoryId, query }),
@@ -294,6 +371,41 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 			setBusy("");
 		}
 	};
+	const calculate = async (ids: string[]) => {
+		if (!canMaintain || !ids.length) return;
+		setBusy("calculate");
+		setFailure(null);
+		try {
+			const batch = await submitIndicatorCalculation(ids);
+			setCalculationBatch(batch);
+			show(`计算已完成：成功 ${batch.successCount} 项，失败 ${batch.failedCount} 项`);
+			if (selected?.id && ids.includes(selected.id)) {
+				setCalculationHistory(await loadIndicatorCalculationHistory(selected.id));
+			}
+		} catch (error) {
+			setFailure(normalizeIndicatorFailure(error));
+		} finally {
+			setBusy("");
+		}
+	};
+	const calculationColumns: CompactColumns<IndicatorCalculationBatch["items"][number]> = [
+		{ title: "指标编码", dataIndex: "code", width: 190, render: (value) => String(value || "—") },
+		{ title: "状态", dataIndex: "status", width: 100, render: (value) => <Status tone={value === "SUCCESS" ? "success" : "danger"}>{String(value)}</Status> },
+		{ title: "计算值", dataIndex: "value", width: 120, render: (value) => String(value ?? "—") },
+		{ title: "来源", dataIndex: "sourceMode", width: 120, render: (value) => value === "MODEL_FIELD" ? "模型字段" : value === "FORMULA" ? "受控公式" : "—" },
+		{ title: "物理实现", key: "implementation", width: 260, render: (_, row) => row.relation && row.field ? `${row.relation}.${row.field}` : "—" },
+		{ title: "错误", dataIndex: "errorMessage", width: 260, render: (value) => String(value || "—") },
+	];
+	const historyColumns: CompactColumns<IndicatorCalculationHistory> = [
+		{ title: "提交时间", dataIndex: "runAt", width: 190, render: (value) => String(value || "—") },
+		{ title: "状态", dataIndex: "status", width: 100, render: (value) => <Status tone={value === "SUCCESS" ? "success" : "danger"}>{String(value)}</Status> },
+		{ title: "计算值", dataIndex: "computedValue", width: 120, render: (value) => String(value ?? "—") },
+		{ title: "上次值", dataIndex: "previousValue", width: 120, render: (value) => String(value ?? "—") },
+		{ title: "处理行数", dataIndex: "rowsProcessed", width: 110, render: (value) => String(value ?? "—") },
+		{ title: "耗时(ms)", dataIndex: "durationMs", width: 110, render: (value) => String(value ?? "—") },
+		{ title: "请求号", dataIndex: "requestId", width: 300, render: (value) => String(value || "—") },
+		{ title: "错误", dataIndex: "errorMessage", width: 260, render: (value) => String(value || "—") },
+	];
 
 	return (
 		<main className="dmx-metrics-page">
@@ -355,6 +467,18 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 								{busy === "publish" ? "发布中…" : "发布"}
 							</Button>
 							<Button
+								disabled={
+									!canMaintain ||
+									Boolean(busy) ||
+									!selected.id ||
+									String(selected.status || "").toUpperCase() !== "PUBLISHED"
+								}
+								onClick={() => selected.id && void calculate([selected.id])}
+								primary
+							>
+								{busy === "calculate" ? "计算中…" : "提交计算"}
+							</Button>
+							<Button
 								danger
 								disabled={!canMaintain || Boolean(busy) || !selected.id}
 								onClick={() => void mutate("archive")}
@@ -380,9 +504,36 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 								dataDomains={dataDomains}
 								onChange={setValues}
 								processes={processes}
+								metricModels={metricModels}
+								indicators={catalog}
 								values={values}
 							/>
 						</fieldset>
+						{calculationBatch?.items.some((item) => item.indicatorId === selected.id) ? (
+							<section className="dmx-metric-section" aria-label="本次计算结果">
+								<h3>本次计算结果</h3>
+								<p className="dmx-capability-note">请求号：{calculationBatch.requestId}</p>
+								<CompactTable
+									columns={calculationColumns}
+									dataSource={calculationBatch.items.filter((item) => item.indicatorId === selected.id)}
+									pagination={false}
+									rowKey={(row) => `${row.indicatorId}-${row.runAt || calculationBatch.requestId}`}
+								/>
+							</section>
+						) : null}
+						{calculationHistory.length ? (
+							<section className="dmx-metric-section" aria-label="计算历史">
+								<h3>计算历史</h3>
+								<CompactTable
+									columns={historyColumns}
+									dataSource={calculationHistory}
+									pagination={{ pageSize: 5 }}
+									rowKey={(row) => row.id}
+								/>
+							</section>
+						) : String(selected.status || "").toUpperCase() === "PUBLISHED" ? (
+							<div className="dmx-capability-note">该指标尚无计算记录，可点击“提交计算”生成首条运行事实。</div>
+						) : null}
 					</section>
 				</div>
 			) : (
@@ -430,6 +581,13 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 									</option>
 								))}
 						</select>
+						<Button
+							disabled={!canMaintain || Boolean(busy) || !selectedCalculationIds.length}
+							onClick={() => void calculate(selectedCalculationIds)}
+							primary
+						>
+							{busy === "calculate" ? "计算中…" : `提交计算（${selectedCalculationIds.length}）`}
+						</Button>
 						<span>共 {visible.length} 条</span>
 					</div>
 					{visible.length ? (
@@ -439,6 +597,18 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 								columns={catalogColumns}
 								dataSource={visible}
 								pagination={{ pageSize: 10 }}
+								rowSelection={
+									canMaintain
+										? {
+											selectedRowKeys: selectedCalculationIds,
+											onChange: (keys) => setSelectedCalculationIds(keys.map(String)),
+											getCheckboxProps: (row) => ({
+												disabled: !row.id || String(row.status || "").toUpperCase() !== "PUBLISHED",
+												name: String(row.code || row.name || "indicator"),
+											}),
+										}
+										: undefined
+								}
 								rowKey={(row) => row.id || String(row.code)}
 								scroll={{ x: 1180 }}
 							/>
@@ -446,6 +616,20 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 					) : (
 						<RequestState description="请调整搜索或筛选条件后重试。" kind="empty" title={`暂无${metricType}`} />
 					)}
+					{calculationBatch ? (
+						<section className="dmx-metric-section" aria-label="批量计算结果">
+							<h3>批量计算结果</h3>
+							<p className="dmx-capability-note">
+								请求号：{calculationBatch.requestId}；成功 {calculationBatch.successCount} 项，失败 {calculationBatch.failedCount} 项。
+							</p>
+							<CompactTable
+								columns={calculationColumns}
+								dataSource={calculationBatch.items}
+								pagination={{ pageSize: 10 }}
+								rowKey={(row) => `${row.indicatorId}-${row.runAt || calculationBatch.requestId}`}
+							/>
+						</section>
+					) : null}
 				</section>
 			)}
 			<Toast message={message} />
@@ -460,6 +644,8 @@ export function MetricEditor({
 	businessCategories,
 	dataDomains,
 	processes,
+	metricModels = [],
+	indicators = [],
 }: {
 	values: IndicatorEditValues;
 	onChange: (values: IndicatorEditValues) => void;
@@ -467,32 +653,15 @@ export function MetricEditor({
 	businessCategories: PlanningCatalogDomain[];
 	dataDomains: PlanningCatalogDomain[];
 	processes: Sprint64BusinessProcess[];
+	metricModels?: ModelSpecView[];
+	indicators?: IndicatorDefinition[];
 }) {
 	const set = (key: keyof IndicatorEditValues, value: unknown) => onChange({ ...values, [key]: value });
 	const metricType = String(values.metricType || "ATOMIC").toUpperCase();
+	const selectedBusinessCategoryId = String(values.businessCategoryId || "");
 	const selectedDomainId = String(values.dataDomainId || "");
-	const availableDomains = dataDomains;
+	const availableDomains = dataDomains.filter((item) => item.parentId === selectedBusinessCategoryId);
 	const processBinding = resolveBusinessProcessBinding(values.businessProcessId, processes);
-	const sourceRefs = values.sourceRefs || [];
-	const sourceTypes: Array<{ value: IndicatorSourceType; label: string }> =
-		metricType === "ATOMIC"
-			? [
-					{ value: "SEMANTIC_MODEL_REVISION", label: "语义模型修订" },
-					{ value: "PHYSICAL_ASSET", label: "物理资产" },
-				]
-			: [{ value: "INDICATOR_VERSION", label: "指标版本" }];
-	const updateSourceRef = (index: number, patch: Partial<IndicatorMetricSourceRef>) =>
-		set(
-			"sourceRefs",
-			sourceRefs.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)),
-		);
-	const removeSourceRef = (index: number) =>
-		set(
-			"sourceRefs",
-			sourceRefs.filter((_, itemIndex) => itemIndex !== index),
-		);
-	const addSourceRef = () =>
-		set("sourceRefs", [...sourceRefs, { sourceType: sourceTypes[0].value, sourceId: "", sourceVersion: "" }]);
 	return (
 		<div className="dmx-metric-scroll">
 			<section className="dmx-metric-section">
@@ -514,8 +683,35 @@ export function MetricEditor({
 							value={{ ATOMIC: "原子指标", DERIVED: "派生指标", COMPOSITE: "复合指标" }[metricType] || metricType}
 						/>
 					</MetricField>
+					<MetricField label="业务分类" required>
+						<select
+							aria-label="业务分类"
+							onChange={(event) => {
+								const id = event.target.value;
+								const category = businessCategories.find((item) => item.id === id);
+								const currentDomain = dataDomains.find((item) => item.id === selectedDomainId && item.parentId === id);
+								onChange({
+									...values,
+									businessCategoryId: id || null,
+									category: category?.name || null,
+									dataDomainId: currentDomain?.id || null,
+									businessProcessId: currentDomain ? values.businessProcessId : null,
+									domain: currentDomain?.code || null,
+								});
+							}}
+							value={selectedBusinessCategoryId}
+						>
+							<option value="">请选择业务分类</option>
+							{businessCategories.map((item) => (
+								<option key={item.id} value={item.id}>
+									{item.name}（{item.code}）
+								</option>
+							))}
+						</select>
+					</MetricField>
 					<MetricField label="数据域" required={metricType !== "COMPOSITE"}>
 						<select
+							disabled={!selectedBusinessCategoryId}
 							onChange={(event) => {
 								const id = event.target.value;
 								const dataDomain = dataDomains.find((item) => item.id === id);
@@ -593,18 +789,12 @@ export function MetricEditor({
 					尚未提供独立业务表达式契约，因此此处只维护聚合、度量和依赖语义。
 				</p>
 				<div>
-					<MetricField label="聚合方式">
-						<input
-							onChange={(event) => set("aggregationType", event.target.value)}
-							value={String(values.aggregationType || "")}
-						/>
-					</MetricField>
-					<MetricField label="度量字段">
-						<input
-							onChange={(event) => set("measureField", event.target.value)}
-							value={String(values.measureField || "")}
-						/>
-					</MetricField>
+					<MetricDefinitionBindingFields
+						indicators={indicators}
+						models={metricModels}
+						onChange={onChange}
+						values={values}
+					/>
 					<MetricField label="数据单位">
 						<input onChange={(event) => set("unit", event.target.value)} value={String(values.unit || "")} />
 					</MetricField>
@@ -615,61 +805,6 @@ export function MetricEditor({
 							type="number"
 							value={Number(values.precisionScale || 0)}
 						/>
-					</MetricField>
-					<MetricField label="依赖指标" wide>
-						<input
-							onChange={(event) =>
-								set(
-									"dependencyCodes",
-									event.target.value
-										.split(",")
-										.map((item) => item.trim())
-										.filter(Boolean),
-								)
-							}
-							value={Array.isArray(values.dependencyCodes) ? values.dependencyCodes.join(", ") : ""}
-						/>
-					</MetricField>
-					<MetricField label="固定来源版本" required wide>
-						<div className="dmx-source-refs">
-							{sourceRefs.map((ref, index) => (
-								<div className="dmx-source-ref-row" key={`${ref.sourceType}-${index}`}>
-									<select
-										onChange={(event) =>
-											updateSourceRef(index, { sourceType: event.target.value as IndicatorSourceType })
-										}
-										value={ref.sourceType}
-									>
-										{sourceTypes.map((item) => (
-											<option key={item.value} value={item.value}>
-												{item.label}
-											</option>
-										))}
-									</select>
-									<input
-										onChange={(event) => updateSourceRef(index, { sourceId: event.target.value })}
-										placeholder="稳定 ID"
-										value={ref.sourceId}
-									/>
-									<input
-										onChange={(event) => updateSourceRef(index, { sourceVersion: event.target.value })}
-										placeholder="固定版本，如 r7 / v3"
-										value={ref.sourceVersion}
-									/>
-									<Button aria-label={`删除来源 ${index + 1}`} onClick={() => removeSourceRef(index)}>
-										删除
-									</Button>
-								</div>
-							))}
-							<Button className="dmx-source-ref-add" onClick={addSourceRef}>
-								添加固定来源
-							</Button>
-							<small>
-								{metricType === "ATOMIC"
-									? "原子指标绑定语义模型修订或物理资产；发布时至少一项。"
-									: "派生/复合指标只绑定已固定的上游指标版本。"}
-							</small>
-						</div>
 					</MetricField>
 				</div>
 			</section>

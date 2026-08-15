@@ -86,7 +86,10 @@ public class AccessChecker {
         if (dataset == null || action == null) {
             return false;
         }
-        if (isSuperAdmin()) {
+        if (
+            isSuperAdmin() ||
+            SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INST_DATA_OWNER)
+        ) {
             return true;
         }
         return actionPolicyEvaluator != null && actionPolicyEvaluator.canPerform(dataset, action);

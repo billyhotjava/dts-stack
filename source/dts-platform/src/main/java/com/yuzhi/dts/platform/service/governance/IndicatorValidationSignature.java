@@ -40,7 +40,7 @@ final class IndicatorValidationSignature {
         }
         DependencyInput dependencies = parseDependencies(entity.getDependencyIndicators(), objectMapper);
         StringBuilder input = new StringBuilder();
-        append(input, "derived", String.valueOf(Boolean.TRUE.equals(entity.getIsDerived())));
+        append(input, "derived", String.valueOf(IndicatorDefinitionSemantics.isDerivedLike(entity)));
         append(input, "datasetId", normalize(entity.getDatasetId()));
         append(input, "name", normalize(entity.getName()));
         append(input, "code", normalize(entity.getCode()));
@@ -111,7 +111,7 @@ final class IndicatorValidationSignature {
             append(
                 state,
                 "derived",
-                dependency != null ? String.valueOf(Boolean.TRUE.equals(dependency.getIsDerived())) : ""
+                dependency != null ? String.valueOf(IndicatorDefinitionSemantics.isDerivedLike(dependency)) : ""
             );
             append(state, "name", dependency != null ? normalize(dependency.getName()) : "");
             append(state, "domain", dependency != null ? normalizeLower(dependency.getDomain()) : "");

@@ -12,6 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -19,6 +20,7 @@ import static org.mockito.Mockito.when;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.IntegrationTest;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.SchemaDriftConsumerReferenceReadPort;
 import com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver.AccessContext;
 import com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver.ResolvedSource;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicationService.WarehousePlanException;
@@ -29,6 +31,8 @@ import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.S
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceInventoryView;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceLocator;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -57,6 +61,9 @@ class Sprint89WarehousePlanSourceApplicationServiceIT {
 
     @MockBean
     private AuditService auditService;
+
+    @MockBean
+    private SchemaDriftConsumerReferenceReadPort driftConsumerReferences;
 
     private String tenant;
     private UUID planId;
@@ -273,6 +280,15 @@ class Sprint89WarehousePlanSourceApplicationServiceIT {
         );
         when(sourceReferenceResolver.resolve(eq(CATALOG_TABLE), any(SourceLocator.class), any(AccessContext.class)))
             .thenReturn(ResolvedSource.available("orders", "schema-v2"));
+        when(
+            driftConsumerReferences.findCurrentReferencedFields(
+                eq(tableId),
+                nullable(UUID.class),
+                nullable(String.class),
+                nullable(String.class)
+            )
+        )
+            .thenReturn(Optional.of(Set.of("customer_id")));
 
         SourceInventoryView stale = service.getSources(tenant, planId, ACCESS, 0, 200, true);
 
@@ -311,6 +327,85 @@ class Sprint89WarehousePlanSourceApplicationServiceIT {
                 datasetId
             )
         ).isEqualTo("OPEN");
+    }
+
+    @Test
+    void reassessesUnreferencedBreakingFieldsAsCompatibleBeforeReconfirmation() {
+        SourceInventoryView saved = service.saveSources(
+            tenant,
+            planId,
+            1,
+            new SourceInventoryCommand(
+                List.of(
+                    new SourceBindingCommand(
+                        null,
+                        CATALOG_TABLE,
+                        new SourceLocator(tableId, null, null, null, null, null, null),
+                        CONFIRMED,
+                        null
+                    )
+                )
+            ),
+            ACCESS
+        );
+        UUID bindingId = saved.bindings().getFirst().bindingId();
+        seedCompatibleDrift();
+        jdbcTemplate.update(
+            """
+            update catalog_schema_drift_event
+               set added_count = 0, removed_count = 1,
+                   details_json = cast(? as text)
+             where dataset_id = ?
+            """,
+            "{\"contractVersion\":1,\"impactLevel\":\"BREAKING\",\"changes\":[{\"field\":\"legacy_column\",\"kind\":\"FIELD_REMOVED\",\"impact\":\"BREAKING\"}]}",
+            datasetId
+        );
+        when(sourceReferenceResolver.resolve(eq(CATALOG_TABLE), any(SourceLocator.class), any(AccessContext.class)))
+            .thenReturn(ResolvedSource.available("orders", "schema-v2"));
+        when(
+            driftConsumerReferences.findCurrentReferencedFields(
+                eq(tableId),
+                nullable(UUID.class),
+                nullable(String.class),
+                nullable(String.class)
+            )
+        )
+            .thenReturn(Optional.of(Set.of()));
+
+        SourceInventoryView stale = service.getSources(tenant, planId, ACCESS, 0, 200, true);
+
+        assertThat(stale.bindings().getFirst().changeImpact()).isEqualTo(COMPATIBLE);
+        assertThat(stale.bindings().getFirst().changes().getFirst().impact()).isEqualTo("COMPATIBLE");
+        assertThat(stale.bindings().getFirst().allowedActions()).containsExactly(RECONFIRM, EXCLUDE);
+        SourceInventoryView reconfirmed = service.saveSources(
+            tenant,
+            planId,
+            2,
+            new SourceInventoryCommand(
+                List.of(
+                    new SourceBindingCommand(
+                        bindingId,
+                        null,
+                        null,
+                        CONFIRMED,
+                        null,
+                        RECONFIRM,
+                        "schema-v1",
+                        "schema-v2"
+                    )
+                )
+            ),
+            ACCESS
+        );
+
+        assertThat(reconfirmed.bindings().getFirst().confirmedVersion()).isEqualTo("schema-v2");
+        assertThat(
+            jdbcTemplate.queryForObject(
+                "select ticket_status from catalog_schema_drift_event where dataset_id = ?",
+                String.class,
+                datasetId
+            )
+        ).isEqualTo("RESOLVED");
     }
 
     private void seedCompatibleDrift() {

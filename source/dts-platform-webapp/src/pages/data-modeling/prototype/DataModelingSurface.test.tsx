@@ -40,7 +40,6 @@ afterEach(async () => {
 describe("prototype-owned data-modeling surface routing", () => {
 	it.each([
 		["/data-modeling/home/workspace", "overview"],
-		["/data-modeling/planning/processes", "planning"],
 		["/data-modeling/standards/fields", "standards"],
 		["/data-modeling/dimensions/workbench", "workbench"],
 		["/data-modeling/dimensions/reverse", "reverse"],
@@ -50,5 +49,16 @@ describe("prototype-owned data-modeling surface routing", () => {
 	])("routes %s to the reviewed %s prototype workspace", async (path, expectedSurface) => {
 		await renderAt(path);
 		expect(container.querySelector(`[data-surface="${expectedSurface}"]`)).not.toBeNull();
+	});
+
+	// 数仓规划已迁出建模模块：/data-modeling/planning/* 统一重定向到 /data-architecture，
+	// 因此这些路径不再渲染 PlanningPage。
+	it.each([
+		["/data-modeling/planning/processes"],
+		["/data-modeling/planning/layers"],
+		["/data-modeling/planning/marts"],
+	])("redirects legacy planning route %s out of the modeling surface", async (path) => {
+		await renderAt(path);
+		expect(container.querySelector('[data-surface="planning"]')).toBeNull();
 	});
 });

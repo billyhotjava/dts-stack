@@ -232,6 +232,60 @@ class ModelBuildIntentServiceTest {
     }
 
     @Test
+    void publishedCandidateHistoryDoesNotBlockANewReadyModelBuildIntent() {
+        CandidateView published = candidate(
+            DeliveryStatus.PUBLISHED,
+            CandidateOrigin.BATCH_WORKBENCH
+        );
+        CandidateView draft = candidate(
+            DeliveryStatus.DRAFT,
+            CandidateOrigin.SINGLE_MODEL_INTENT
+        );
+        CandidateView building = candidate(
+            DeliveryStatus.BUILDING,
+            CandidateOrigin.SINGLE_MODEL_INTENT
+        );
+        QueuedBuildGroup group = group();
+        ModelSpecView model = model(ModelStatus.READY_TO_PUBLISH);
+        when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model);
+        when(candidates.listForWorkbench(TENANT, PLAN_ID)).thenReturn(List.of(published));
+        when(candidateCommands.createSingleModelIntent(eq(TENANT), eq(ACTOR), any()))
+            .thenReturn(new CommandResult(draft, false, List.of()));
+        when(
+            materializationStarts.startWithBuild(
+                TENANT,
+                ACTOR,
+                CANDIDATE_ID,
+                1,
+                ModelBuildIntentService.startCommandKey("next-model-key"),
+                "Build current model materialization"
+            )
+        )
+            .thenReturn(
+                new ModelMaterializationStartService.StartResult(
+                    new CommandResult(building, false, List.of()),
+                    group
+                )
+            );
+
+        ModelBuildIntentService.BuildIntentResult result = service.start(
+            TENANT,
+            ACTOR,
+            MODEL_ID,
+            new ExpectedVersion(MODEL_ID, 3, CHECKSUM),
+            new ModelBuildIntentService.BuildIntentCommand(
+                PLAN_ID,
+                "DEV",
+                "next-model-key"
+            )
+        );
+
+        assertThat(result.candidate()).isSameAs(building);
+        assertThat(result.replayed()).isFalse();
+        verify(candidateCommands).createSingleModelIntent(eq(TENANT), eq(ACTOR), any());
+    }
+
+    @Test
     void neverMutatesOrShrinksAnActiveBatchCandidate() {
         CandidateView batch = candidate(
             DeliveryStatus.DRAFT,
@@ -311,16 +365,27 @@ class ModelBuildIntentServiceTest {
             status == DeliveryStatus.DRAFT ? 1 : 2,
             "candidate-key",
             "b".repeat(64),
-            new DeliveryAuditView(
-                ACTOR,
-                NOW.minusSeconds(60),
-                null,
-                null,
-                null,
-                null,
-                null,
-                null
-            ),
+            status == DeliveryStatus.PUBLISHED
+                ? new DeliveryAuditView(
+                    ACTOR,
+                    NOW.minusSeconds(60),
+                    ACTOR,
+                    NOW.minusSeconds(30),
+                    null,
+                    null,
+                    ACTOR,
+                    NOW
+                )
+                : new DeliveryAuditView(
+                    ACTOR,
+                    NOW.minusSeconds(60),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null
+                ),
             ACTOR,
             NOW,
             List.of(

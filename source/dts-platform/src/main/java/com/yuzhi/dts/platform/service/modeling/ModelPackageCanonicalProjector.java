@@ -10,14 +10,18 @@ import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.SaveImplem
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.UpstreamModelInput;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.CreateModelSpecCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.DimensionDefinitionRef;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.DimensionProfile;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.FactShape;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.FieldRole;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.GenerationStrategy;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.Grain;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.Layer;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelField;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelRevisionRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ScdPolicy;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ScdType;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceKind;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceRole;
@@ -133,8 +137,8 @@ public class ModelPackageCanonicalProjector {
             dimensionRefs,
             List.of(),
             request.standardBindings(),
-            null,
-            null,
+            generationStrategy(modelType, model),
+            dimensionProfile(modelType, model),
             dimensionDefinitionRef,
             idempotencyKey(request),
             request.dataMartId(),
@@ -257,15 +261,41 @@ public class ModelPackageCanonicalProjector {
                     .map(source -> (ImplementationInput) new PhysicalAssetInput(source.sourceBindingId(), source.resolvedVersion()))
                     .toList();
             }
-            return new SaveImplementationCommand(
+            String materialization = safeMaterialization(request.model().materialization());
+            Map<String, Object> settings = Map.of(
+                "targetPhysicalName",
+                targetPhysicalName(request.model()),
+                "loadStrategy",
+                "incremental".equals(materialization) ? "INCREMENTAL" : "FULL",
+                "partitionFields",
+                List.of()
+            );
+            SaveImplementationCommand command = new SaveImplementationCommand(
                 inputMode,
                 inputs,
                 List.of(),
-                Map.of(),
+                settings,
                 modelCommand.implementationMode(),
-                request.model().materialization(),
+                materialization,
                 idempotencyKey(request) + ":impl"
             );
+            ModelImplementationExecutionPlanner.ValidationResult execution = ModelImplementationExecutionPlanner.plan(
+                modelCommand
+                    .fields()
+                    .stream()
+                    .filter(field -> field.role() == FieldRole.KEY)
+                    .map(ModelField::name)
+                    .toList(),
+                settings,
+                materialization,
+                request.model().dbtUniqueId(),
+                ModelImplementationExecutionPlanner.DEFAULT_ADAPTER
+            );
+            if (!execution.valid()) {
+                ModelImplementationExecutionPlanner.Blocker blocker = execution.blockers().getFirst();
+                issues.add(new CanonicalIssue(execution.code(), blocker.field(), blocker.message()));
+            }
+            return command;
         } catch (RuntimeException exception) {
             issues.add(
                 new CanonicalIssue(
@@ -294,10 +324,25 @@ public class ModelPackageCanonicalProjector {
                 issues.add(new CanonicalIssue("MODEL_SPEC_FIELD_INVALID", "fields." + column.name(), "Unsupported field data type"));
             }
             FieldRole role = fieldRole(column, model, issues);
-            boolean nullable = column.tests() == null || column.tests().stream().noneMatch("not_null"::equalsIgnoreCase);
-            result.add(new ModelField(column.name(), dataType, nullable, null, role, null));
+            boolean nullable = safe(column.tests()).stream().noneMatch(ModelPackageCanonicalProjector::isNotNullTest);
+            result.add(new ModelField(column.name(), displayName(column), dataType, nullable, null, role, null, null, false, null));
         }
         return List.copyOf(result);
+    }
+
+    private static boolean isNotNullTest(String test) {
+        if (test == null) {
+            return false;
+        }
+        String normalized = test.trim().toLowerCase(Locale.ROOT);
+        return "not_null".equals(normalized) || normalized.startsWith("not_null_");
+    }
+
+    private static String displayName(Column column) {
+        if (column.description() == null || column.description().isBlank()) {
+            return column.name();
+        }
+        return column.description().trim();
     }
 
     private static FieldRole fieldRole(Column column, PackageModel model, List<CanonicalIssue> issues) {
@@ -372,6 +417,30 @@ public class ModelPackageCanonicalProjector {
         return new TimeSemantics(type, model.semantics().timeSemantics().fields());
     }
 
+    private static GenerationStrategy generationStrategy(ModelType modelType, PackageModel model) {
+        if (modelType != ModelType.DIMENSION || model.semantics() == null) {
+            return null;
+        }
+        String strategy = model.semantics().dimensionStrategy();
+        if (strategy == null || strategy.isBlank()) {
+            return null;
+        }
+        return new GenerationStrategy(strategy, model.dbtUniqueId());
+    }
+
+    private static DimensionProfile dimensionProfile(ModelType modelType, PackageModel model) {
+        if (modelType != ModelType.DIMENSION || model.semantics() == null) {
+            return null;
+        }
+        String strategy = model.semantics().dimensionStrategy();
+        if (strategy == null || strategy.isBlank()) {
+            return null;
+        }
+        String normalized = strategy.trim().toUpperCase(Locale.ROOT).replace('-', '_');
+        ScdType scdType = normalized.contains("TYPE_2") || normalized.contains("TYPE2") ? ScdType.TYPE2 : ScdType.TYPE1;
+        return new DimensionProfile(null, List.of(), new ScdPolicy(scdType, null, null, null), null);
+    }
+
     private static String semantic(PackageModel model, String name) {
         if (model.semantics() == null) {
             return null;
@@ -407,7 +476,20 @@ public class ModelPackageCanonicalProjector {
 
     private static String normalizeDataType(String value) {
         String normalized = lower(value);
-        if (normalized == null || !DATA_TYPES.contains(normalized)) {
+        if (normalized == null) {
+            return null;
+        }
+        normalized = normalized.replaceAll("\\s+", " ");
+        if (normalized.startsWith("timestamp ")) {
+            normalized = "timestamp";
+        } else if (normalized.startsWith("character varying") || normalized.startsWith("varchar(")) {
+            normalized = "varchar";
+        } else if (normalized.startsWith("numeric(") || normalized.startsWith("decimal(")) {
+            normalized = "numeric";
+        } else if ("double precision".equals(normalized)) {
+            normalized = "double";
+        }
+        if (!DATA_TYPES.contains(normalized)) {
             return null;
         }
         return switch (normalized) {
@@ -421,6 +503,12 @@ public class ModelPackageCanonicalProjector {
     private static String safeMaterialization(String value) {
         String normalized = lower(value);
         return normalized != null && Set.of("table", "view", "incremental").contains(normalized) ? normalized : "table";
+    }
+
+    private static String targetPhysicalName(PackageModel model) {
+        Object configuredAlias = model.config() == null ? null : model.config().get("alias");
+        String alias = configuredAlias instanceof String value ? value.trim() : "";
+        return alias.isEmpty() ? java.util.Objects.toString(model.name(), "").trim() : alias;
     }
 
     private static <T> List<T> safe(List<T> values) {

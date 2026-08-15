@@ -1,0 +1,129 @@
+- generic [ref=f19e3]:
+  - generic:
+    - region "Notifications alt+T"
+  - generic [ref=f19e9]:
+    - navigation [ref=f19e10]:
+      - generic [ref=f19e11]:
+        - link "BI数智平台 机密 (Confidential)" [ref=f19e13] [cursor=pointer]:
+          - /url: "#/"
+          - generic [ref=f19e28]:
+            - generic [ref=f19e29]: BI数智平台
+            - generic [ref=f19e30]: 机密 (Confidential)
+        - button "收起" [ref=f19e31]
+      - separator [ref=f19e32]
+      - navigation [ref=f19e36]:
+        - list [ref=f19e40]:
+          - listitem [ref=f19e41]:
+            - generic [ref=f19e42]: 工作台
+        - generic [ref=f19e53]:
+          - separator [ref=f19e54]
+          - list [ref=f19e57]:
+            - listitem [ref=f19e58]:
+              - generic [ref=f19e59]: 数据集成
+        - generic [ref=f19e71]:
+          - separator [ref=f19e72]
+          - list [ref=f19e75]:
+            - listitem [ref=f19e76]:
+              - generic [ref=f19e77]: 数仓规划
+        - generic [ref=f19e88]:
+          - separator [ref=f19e89]
+          - list [ref=f19e92]:
+            - listitem [ref=f19e93]:
+              - generic [ref=f19e94]: 数据建模
+        - generic [ref=f19e104]:
+          - separator [ref=f19e105]
+          - list [ref=f19e108]:
+            - listitem [ref=f19e109]:
+              - generic [ref=f19e110]: 数据开发与运维
+        - generic [ref=f19e121]:
+          - separator [ref=f19e122]
+          - list [ref=f19e125]:
+            - listitem [ref=f19e126]:
+              - generic [ref=f19e127]: 数据治理
+        - generic [ref=f19e137]:
+          - separator [ref=f19e138]
+          - list [ref=f19e141]:
+            - listitem [ref=f19e142]:
+              - generic [ref=f19e143]: 数据分析与服务
+    - generic [ref=f19e154]:
+      - banner [ref=f19e155]:
+        - generic [ref=f19e156]:
+          - navigation "breadcrumb" [ref=f19e159]:
+            - list [ref=f19e160]:
+              - listitem [ref=f19e161]:
+                - button "数据建模" [ref=f19e162]
+              - listitem [ref=f19e165]
+              - listitem [ref=f19e168]:
+                - button "维度建模" [ref=f19e169]
+              - listitem [ref=f19e172]
+              - listitem [ref=f19e10131]:
+                - link "逆向建模" [disabled] [ref=f19e10132]
+          - generic [ref=f19e177]:
+            - button "搜索页面与帮助" [ref=f19e178]:
+              - generic [ref=f19e179]: Ctrl / ⌘ K
+            - generic [ref=f19e181]:
+              - heading "全局搜索" [level=2] [ref=f19e182]
+              - paragraph [ref=f19e183]: 搜索有权限访问的页面和 DTS 帮助主题
+            - button "打开帮助" [ref=f19e184] [cursor=pointer]
+            - button [ref=f19e185] [cursor=pointer]
+      - main [ref=f19e186]:
+        - main [ref=f19e10133]:
+          - generic [ref=f19e10135]:
+            - generic [ref=f19e10136]: 数据建模 / 维度建模
+            - heading "逆向建模" [level=1] [ref=f19e10137]
+            - paragraph [ref=f19e10138]: 导入外部 dbt 项目 ZIP，识别结构证据并生成可视化模型草稿。
+          - generic [ref=f19e10139]:
+            - generic [ref=f19e10140]:
+              - generic [ref=f19e10152]: "3"
+              - generic [ref=f19e10154]: "4"
+            - generic [ref=f19e10156]:
+              - generic [ref=f19e14352]:
+                - generic [ref=f19e14353]:
+                  - heading "导入预览" [level=3] [ref=f19e14354]
+                  - paragraph [ref=f19e14355]: 这是服务端预检查结果；应用后只生成或更新草稿，不自动发布和物化。
+                - generic [ref=f19e14356]: 可处理 1 / 3
+              - generic [ref=f19e14357]:
+                - generic [ref=f19e14358]: 新建 0
+                - generic [ref=f19e14359]: 更新 0
+                - generic [ref=f19e14360]: 跳过 1
+                - generic [ref=f19e14361]: 冲突 1
+                - generic [ref=f19e14362]: 阻断 1
+              - table [ref=f19e14369]:
+                - rowgroup [ref=f19e14371]:
+                  - row "对象 选择来源 动作 转换模式 冲突处理 原因与处理建议" [ref=f19e14372]:
+                    - columnheader "对象" [ref=f19e14373]
+                    - columnheader "选择来源" [ref=f19e14374]
+                    - columnheader "动作" [ref=f19e14375]
+                    - columnheader "转换模式" [ref=f19e14376]
+                    - columnheader "冲突处理" [ref=f19e14377]
+                    - columnheader "原因与处理建议" [ref=f19e14378]
+                - rowgroup [ref=f19e14379]:
+                  - row "model.pm_analytics_v3.dim_change_category_v2 用户选择 SKIP DBT_BACKED — —" [ref=f19e14380]:
+                    - cell "model.pm_analytics_v3.dim_change_category_v2" [ref=f19e14381]
+                    - cell "用户选择" [ref=f19e14382]
+                    - cell "SKIP" [ref=f19e14384]
+                    - cell "DBT_BACKED" [ref=f19e14386]
+                    - cell "—" [ref=f19e14387]
+                    - cell "—" [ref=f19e14388]
+                  - row "model.pm_analytics_v3.dim_signature_status_v2 用户选择 CONFLICT BLOCKED 保留当前 UNKNOWN/GENERAL · MODEL_IMPORT_MODEL_STATUS_READONLY：The existing model is not DRAFT and cannot be changed by import；处理建议：Create a new draft revision or retire the existing model before importing changes" [ref=f19e14390]:
+                    - cell "model.pm_analytics_v3.dim_signature_status_v2" [ref=f19e14391]
+                    - cell "用户选择" [ref=f19e14392]
+                    - cell "CONFLICT" [ref=f19e14394]
+                    - cell "BLOCKED" [ref=f19e14396]
+                    - cell "保留当前" [ref=f19e14397]:
+                      - combobox [ref=f19e14398]:
+                        - option "保留当前" [selected]
+                        - option "采用导入版本"
+                        - option "取消该对象"
+                    - cell "UNKNOWN/GENERAL · MODEL_IMPORT_MODEL_STATUS_READONLY：The existing model is not DRAFT and cannot be changed by import；处理建议：Create a new draft revision or retire the existing model before importing changes" [ref=f19e14399]
+                  - 'row "model.pm_analytics_v3.biz_dwd_tech_state_v2 不可应用 BLOCKED BLOCKED — UNKNOWN/GENERAL · MODEL_IMPORT_DEPENDENCY_BLOCKED：Canonical dependencies are not applicable: model.pm_analytics_v3.dim_signature_status_v2；处理建议：Resolve the upstream preview issues before applying this model" [ref=f19e14401]':
+                    - cell "model.pm_analytics_v3.biz_dwd_tech_state_v2" [ref=f19e14402]
+                    - cell "不可应用" [ref=f19e14403]
+                    - cell "BLOCKED" [ref=f19e14405]
+                    - cell "BLOCKED" [ref=f19e14407]
+                    - cell "—" [ref=f19e14408]
+                    - 'cell "UNKNOWN/GENERAL · MODEL_IMPORT_DEPENDENCY_BLOCKED：Canonical dependencies are not applicable: model.pm_analytics_v3.dim_signature_status_v2；处理建议：Resolve the upstream preview issues before applying this model" [ref=f19e14409]'
+            - generic [ref=f19e10174]:
+              - button "取 消" [ref=f19e10175] [cursor=pointer]
+              - button "上一步" [ref=f19e12230] [cursor=pointer]
+              - button "生成模型" [ref=f19e14411] [cursor=pointer]

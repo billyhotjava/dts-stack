@@ -18,6 +18,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecException;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.ExpectedVersion;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelField;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecPlanWriteAccessPort;
 import com.yuzhi.dts.platform.service.modeling.ModelingDbtArtifactImportService;
@@ -192,6 +193,7 @@ public class DbtImplementationDraftService {
             "idempotencyKey",
             128
         );
+        String targetPhysicalName = normalizedTargetPhysicalName(request.targetPhysicalName());
         String requestHash = requestHash(
             tenantId,
             actorId,
@@ -200,7 +202,8 @@ public class DbtImplementationDraftService {
             request.baseModelRevision(),
             modelChecksum,
             implementationRevision,
-            implementationChecksum
+            implementationChecksum,
+            targetPhysicalName
         );
         if (!writeAccess.canMaintain(tenantId, request.planId(), actorId)) {
             throw DbtImplementationDraftContract.forbidden(
@@ -227,6 +230,18 @@ public class DbtImplementationDraftService {
         }
         ImplementationView implementation = lifecycle.timeline(tenantId, modelSpecId).implementation();
         requireImplementationPin(modelSpecId, implementation, implementationRevision, implementationChecksum);
+        if (implementation == null && targetPhysicalName == null) {
+            throw DbtImplementationDraftContract.badRequest(
+                "DBT_DRAFT_TARGET_PHYSICAL_NAME_REQUIRED",
+                "The first dbt implementation requires a target physical name"
+            );
+        }
+        if (implementation != null && targetPhysicalName != null) {
+            throw DbtImplementationDraftContract.badRequest(
+                "DBT_DRAFT_TARGET_PHYSICAL_NAME_NOT_ALLOWED",
+                "An existing dbt implementation owns its target physical name"
+            );
+        }
         SourceBundleView sourceBundle = sourceBundle(
             tenantId,
             request.planId(),
@@ -236,7 +251,8 @@ public class DbtImplementationDraftService {
             implementationRevision,
             implementationChecksum,
             implementation,
-            model
+            model,
+            targetPhysicalName
         );
 
         String sourceBundleSnapshot = sourceBundleSnapshot(sourceBundle);
@@ -545,6 +561,7 @@ public class DbtImplementationDraftService {
         );
         ValidatedNode target = target(validated, baseImplementation);
         requireMaterialization(model, target);
+        List<ModelField> projectedFields = DbtModelFieldProjector.project(objectMapper, target.schema(), model.fields());
 
         Optional<DraftRow> claim = repository.claimCommit(
                 tenantId,
@@ -579,6 +596,15 @@ public class DbtImplementationDraftService {
             throw etagConflict(winner, expectedEtag);
         }
         DraftRow claimed = claim.orElseThrow();
+        if (!Objects.equals(model.fields(), projectedFields)) {
+            model = modelSpecs.synchronizeDbtManagedFields(
+                tenantId,
+                actorId,
+                modelSpecId,
+                new ExpectedVersion(modelSpecId, model.revision(), model.checksum()),
+                projectedFields
+            );
+        }
         ExpectedImplementationVersion expectedImplementation = new ExpectedImplementationVersion(
             modelSpecId,
             current.baseImplementationRevision() == null ? 0 : current.baseImplementationRevision(),
@@ -666,7 +692,7 @@ public class DbtImplementationDraftService {
             bundle.bundleChecksum(),
             correlationId
         );
-        return committedView(committed);
+        return committedView(committed, model);
     }
 
     private ModelSpecView requireEditableModel(String tenantId, String actorId, UUID modelSpecId, UUID planId) {
@@ -869,11 +895,12 @@ public class DbtImplementationDraftService {
         Integer implementationRevision,
         String implementationChecksum,
         ImplementationView current,
-        ModelSpecView model
+        ModelSpecView model,
+        String targetPhysicalName
     ) {
         if (current == null) {
             return freezeCanonical(
-                canonicalProjects.initialize(modelSpecId, model.materialization()),
+                canonicalProjects.initialize(modelSpecId, model.materialization(), targetPhysicalName),
                 SourceBundleKind.CANONICAL_INITIALIZATION
             );
         }
@@ -1227,14 +1254,22 @@ public class DbtImplementationDraftService {
     }
 
     private static CommitView committedView(DraftRow row) {
+        return committedView(row, row.baseModelRevision(), row.baseModelChecksum());
+    }
+
+    private static CommitView committedView(DraftRow row, ModelSpecView model) {
+        return committedView(row, model.revision(), model.checksum());
+    }
+
+    private static CommitView committedView(DraftRow row, int modelRevision, String modelChecksum) {
         if (row.implementationId() == null || row.implementationRevision() == null) {
             throw new IllegalStateException("Committed advanced dbt draft is missing its implementation receipt");
         }
         return new CommitView(
             row.id(),
             row.modelSpecId(),
-            row.baseModelRevision(),
-            row.baseModelChecksum(),
+            modelRevision,
+            modelChecksum,
             row.implementationId(),
             row.implementationRevision(),
             row.implementationChecksum(),
@@ -1251,21 +1286,35 @@ public class DbtImplementationDraftService {
         int modelRevision,
         String modelChecksum,
         Integer implementationRevision,
-        String implementationChecksum
+        String implementationChecksum,
+        String targetPhysicalName
     ) {
-        return ModelPackageChecksum.sha256Text(
-            String.join(
-                "\u0000",
-                tenantId,
-                actorId.trim(),
-                planId.toString(),
-                modelSpecId.toString(),
-                Integer.toString(modelRevision),
-                modelChecksum,
-                Objects.toString(implementationRevision, ""),
-                Objects.toString(implementationChecksum, "")
-            )
+        String base = String.join(
+            "\u0000",
+            tenantId,
+            actorId.trim(),
+            planId.toString(),
+            modelSpecId.toString(),
+            Integer.toString(modelRevision),
+            modelChecksum,
+            Objects.toString(implementationRevision, ""),
+            Objects.toString(implementationChecksum, "")
         );
+        return ModelPackageChecksum.sha256Text(
+            targetPhysicalName == null ? base : base + "\u0000" + targetPhysicalName
+        );
+    }
+
+    private static String normalizedTargetPhysicalName(String value) {
+        if (value == null || value.isBlank()) return null;
+        String normalized = value.trim();
+        if (!normalized.matches("^[a-z][a-z0-9_]{0,62}$")) {
+            throw DbtImplementationDraftContract.badRequest(
+                "DBT_DRAFT_TARGET_PHYSICAL_NAME_INVALID",
+                "Target physical name must use lower-case snake_case and contain at most 63 characters"
+            );
+        }
+        return normalized;
     }
 
     private static String nextEtag() {

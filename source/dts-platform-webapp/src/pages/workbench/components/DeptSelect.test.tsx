@@ -5,6 +5,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { act } from "react-dom/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkbenchRoleInfo } from "../hooks/useWorkbenchRole";
+// jsdom + antd 的整树渲染在并行跑批下会超过 vitest 默认的 5s，
+// 这些用例本身很快，单跑 <1s，放宽文件级超时避免假红。
+vi.setConfig({ testTimeout: 20_000 });
 
 type MockState = {
 	role: WorkbenchRoleInfo;
@@ -57,11 +60,7 @@ async function renderAndFlush(element: ReactElement): Promise<{ container: HTMLE
 		root.render(element);
 	});
 	await act(async () => {
-		await Promise.resolve();
-		await Promise.resolve();
-		await Promise.resolve();
-		await Promise.resolve();
-		await Promise.resolve();
+		for (let i = 0; i < 20; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
 	});
 	return {
 		container,

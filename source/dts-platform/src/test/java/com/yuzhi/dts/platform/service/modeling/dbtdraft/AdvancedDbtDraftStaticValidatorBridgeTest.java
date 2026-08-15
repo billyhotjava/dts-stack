@@ -48,6 +48,38 @@ class AdvancedDbtDraftStaticValidatorBridgeTest {
     }
 
     @Test
+    void preservesExplicitFieldRolesFromAnEnforcedSourceSchema() {
+        Map<String, String> files = new LinkedHashMap<>();
+        files.put("dbt_project.yml", "name: sprint83\nversion: 1.0\nmodel-paths: [models]\n");
+        files.put("models/orders.sql", "{{ config(materialized='table') }}\nselect 1 as project_total_cnt\n");
+        files.put(
+            "models/schema.yml",
+            """
+            version: 2
+            models:
+              - name: orders
+                config:
+                  contract:
+                    enforced: true
+                meta:
+                  dts:
+                    fieldRoles:
+                      project_total_cnt: MEASURE
+                columns:
+                  - name: project_total_cnt
+                    description: 项目总数
+                    data_type: bigint
+            """
+        );
+
+        AdvancedDbtDraftStaticValidator.ValidatedProject result = validator.validate(files);
+
+        assertThat(result.nodes().getFirst().schema())
+            .contains("\"name\":\"project_total_cnt\"")
+            .contains("\"role\":\"MEASURE\"");
+    }
+
+    @Test
     void acceptsTheLiteralOnlyConfigShapeEmittedByTheCanonicalModelingCompiler() {
         Map<String, String> files = new LinkedHashMap<>();
         files.put("dbt_project.yml", "name: dts\nversion: 1.0\nmodel-paths: [models]\n");

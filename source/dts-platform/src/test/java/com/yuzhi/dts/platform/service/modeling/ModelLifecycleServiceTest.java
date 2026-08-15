@@ -763,10 +763,12 @@ class ModelLifecycleServiceTest {
             .extracting(error -> ((ModelSpecException) error).code())
             .isEqualTo("MODEL_DBT_IMPORT_REQUIRED");
 
-        when(lifecycle.currentArtifactTypes("tenant-a", MODEL_ID, owner)).thenReturn(Set.of("SQL", "SCHEMA", "CONFIG"));
+        when(lifecycle.currentArtifactTypes("tenant-a", MODEL_ID, owner)).thenReturn(
+            Set.of("SQL", "SCHEMA", "CONFIG", "DEPENDENCY")
+        );
         LifecycleEventView compiled = new LifecycleEventView(
             UUID.randomUUID(), MODEL_ID, PLAN_ID, 7, CHECKSUM, EventType.COMPILE, "PASSED", "compile-ui-draft",
-            "alice", null, owner.dbtUniqueId(), Map.of("artifactCount", 3, "ownership", "DBT_MANAGED"), NOW
+            "alice", null, owner.dbtUniqueId(), Map.of("artifactCount", 4, "ownership", "DBT_MANAGED"), NOW
         );
         when(lifecycle.recordEvent(
             eq("tenant-a"), eq("alice"), eq(model), eq(EventType.COMPILE), eq("PASSED"), eq("compile-ui-draft"),

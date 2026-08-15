@@ -71,4 +71,30 @@ class AccessCheckerCanPerformTest {
         assertThat(checker.canPerform(dataset, AssetAction.DESTROY)).isTrue();
         verifyNoInteractions(actionPolicyEvaluator);
     }
+
+    @Test
+    void instituteDataOwnerCanMaintainAssetsWithoutPerAssetPolicyGrant() {
+        SecurityContextHolder
+            .getContext()
+            .setAuthentication(
+                new TestingAuthenticationToken("institute-owner", "n/a", AuthoritiesConstants.INST_DATA_OWNER)
+            );
+
+        assertThat(checker.canPerform(dataset, AssetAction.CREATE)).isTrue();
+        assertThat(checker.canPerform(dataset, AssetAction.UPDATE)).isTrue();
+        assertThat(checker.canPerform(dataset, AssetAction.ARCHIVE)).isTrue();
+        verifyNoInteractions(actionPolicyEvaluator);
+    }
+
+    @Test
+    void departmentDataOwnerStillUsesTheScopedPolicyMatrix() {
+        SecurityContextHolder
+            .getContext()
+            .setAuthentication(
+                new TestingAuthenticationToken("department-owner", "n/a", AuthoritiesConstants.DEPT_DATA_OWNER)
+            );
+        when(actionPolicyEvaluator.canPerform(dataset, AssetAction.UPDATE)).thenReturn(false);
+
+        assertThat(checker.canPerform(dataset, AssetAction.UPDATE)).isFalse();
+    }
 }

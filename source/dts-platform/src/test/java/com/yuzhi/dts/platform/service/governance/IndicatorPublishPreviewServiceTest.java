@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -26,6 +27,8 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.transaction.annotation.Transactional;
 
 class IndicatorPublishPreviewServiceTest {
 
@@ -182,6 +185,84 @@ class IndicatorPublishPreviewServiceTest {
 
         assertThat(payload).containsEntry("readyToPublish", true);
         verify(dbtGenerator).previewSql(indicatorId);
+    }
+
+    @Test
+    void pinnedDependencyVersionFailureIsVisibleInPublishPreview() {
+        UUID indicatorId = UUID.randomUUID();
+        GovIndicatorDefinition indicator = new GovIndicatorDefinition();
+        indicator.setId(indicatorId);
+        indicator.setCode("DERIVED_METRIC");
+        indicator.setName("Derived");
+        indicator.setStatus("DRAFT");
+        indicator.setMetricType("DERIVED");
+        indicator.setExpressionSql("{{metric:BASE}}");
+
+        when(indicatorService.get(indicatorId, "DEPT_A")).thenReturn(indicatorDto(indicatorId));
+        when(indicatorRepository.findById(indicatorId)).thenReturn(Optional.of(indicator));
+        doThrow(
+            new IndicatorConflictException(
+                "INDICATOR_DEPENDENCY_VERSION_NOT_PUBLISHED: 上游指标 BASE 的固定版本 v2 尚未发布"
+            )
+        )
+            .when(indicatorService)
+            .validateDefinitionForPublish(indicator);
+        when(indicatorService.validateDerivation(indicatorId, "DEPT_A"))
+            .thenReturn(new IndicatorDerivationValidationResult(true, "\"BASE\"", List.of(), List.of("BASE")));
+        when(referenceRepository.findByIndicatorOrderByCreatedDateAsc(indicator)).thenReturn(List.of());
+        when(versionRepository.findFirstByIndicatorAndStatusIgnoreCaseOrderByReleasedAtDescCreatedDateDesc(indicator, "PUBLISHED"))
+            .thenReturn(Optional.empty());
+
+        Map<String, Object> payload = service.preview(indicatorId, "DEPT_A");
+
+        assertThat(payload)
+            .containsEntry("readyToPublish", false)
+            .containsEntry("failureReasonCode", "INDICATOR_DEPENDENCY_VERSION_NOT_PUBLISHED");
+        verify(dbtGenerator, never()).previewSql(indicatorId);
+    }
+
+    @Test
+    void expectedDefinitionBlockersDoNotMarkThePublishPreviewTransactionRollbackOnly() throws Exception {
+        Transactional transaction = AnnotatedElementUtils.findMergedAnnotation(
+            IndicatorService.class.getDeclaredMethod("validateDefinitionForPublish", GovIndicatorDefinition.class),
+            Transactional.class
+        );
+
+        assertThat(transaction).isNotNull();
+        assertThat(transaction.readOnly()).isTrue();
+        assertThat(transaction.noRollbackFor())
+            .contains(IndicatorConflictException.class, IndicatorRequestException.class);
+    }
+
+    @Test
+    void modelBoundAtomicDefinitionDoesNotRequireLegacyDatasetSqlOrDbtArtifact() {
+        UUID indicatorId = UUID.randomUUID();
+        UUID modelId = UUID.randomUUID();
+        GovIndicatorDefinition indicator = new GovIndicatorDefinition();
+        indicator.setId(indicatorId);
+        indicator.setCode("TASK_TOTAL");
+        indicator.setName("任务总数");
+        indicator.setStatus("DRAFT");
+        indicator.setMetricType("ATOMIC");
+        indicator.setIsDerived(false);
+        indicator.setMeasureField("task_total");
+        indicator.setAggregationType("SUM");
+        indicator.setSourceRefs(
+            "[{\"sourceType\":\"SEMANTIC_MODEL_REVISION\",\"sourceId\":\"" + modelId + "\",\"sourceVersion\":\"r2\"}]"
+        );
+
+        when(indicatorService.get(indicatorId, "DEPT_A")).thenReturn(indicatorDto(indicatorId));
+        when(indicatorRepository.findById(indicatorId)).thenReturn(Optional.of(indicator));
+        when(indicatorService.validateComputeRule(indicatorId, "DEPT_A")).thenReturn(successfulValidation());
+        when(referenceRepository.findByIndicatorOrderByCreatedDateAsc(indicator)).thenReturn(List.of());
+        when(versionRepository.findFirstByIndicatorAndStatusIgnoreCaseOrderByReleasedAtDescCreatedDateDesc(indicator, "PUBLISHED"))
+            .thenReturn(Optional.empty());
+
+        Map<String, Object> payload = service.preview(indicatorId, "DEPT_A");
+
+        assertThat(payload).containsEntry("readyToPublish", true).containsEntry("datasetRequired", false);
+        verify(indicatorService).validateComputeRule(indicatorId, "DEPT_A");
+        verify(dbtGenerator, never()).previewSql(indicatorId);
     }
 
     private static GovIndicatorDefinition atomicIndicator(UUID indicatorId, UUID datasetId) {

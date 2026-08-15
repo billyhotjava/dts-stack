@@ -1,0 +1,2587 @@
+- generic [ref=f19e3]:
+  - generic:
+    - region "Notifications alt+T"
+  - generic [ref=f19e9]:
+    - navigation [ref=f19e10]:
+      - generic [ref=f19e11]:
+        - link "BI数智平台 机密 (Confidential)" [ref=f19e13] [cursor=pointer]:
+          - /url: "#/"
+          - generic [ref=f19e28]:
+            - generic [ref=f19e29]: BI数智平台
+            - generic [ref=f19e30]: 机密 (Confidential)
+        - button "收起" [ref=f19e31]
+      - separator [ref=f19e32]
+      - navigation [ref=f19e36]:
+        - list [ref=f19e40]:
+          - listitem [ref=f19e41]:
+            - generic [ref=f19e42]: 工作台
+        - generic [ref=f19e53]:
+          - separator [ref=f19e54]
+          - list [ref=f19e57]:
+            - listitem [ref=f19e58]:
+              - generic [ref=f19e59]: 数据集成
+        - generic [ref=f19e71]:
+          - separator [ref=f19e72]
+          - list [ref=f19e75]:
+            - listitem [ref=f19e76]:
+              - generic [ref=f19e77]: 数仓规划
+        - generic [ref=f19e88]:
+          - separator [ref=f19e89]
+          - list [ref=f19e92]:
+            - listitem [ref=f19e93]:
+              - generic [ref=f19e94]: 数据建模
+        - generic [ref=f19e104]:
+          - separator [ref=f19e105]
+          - list [ref=f19e108]:
+            - listitem [ref=f19e109]:
+              - generic [ref=f19e110]: 数据开发与运维
+        - generic [ref=f19e121]:
+          - separator [ref=f19e122]
+          - list [ref=f19e125]:
+            - listitem [ref=f19e126]:
+              - generic [ref=f19e127]: 数据治理
+        - generic [ref=f19e137]:
+          - separator [ref=f19e138]
+          - list [ref=f19e141]:
+            - listitem [ref=f19e142]:
+              - generic [ref=f19e143]: 数据分析与服务
+    - generic [ref=f19e154]:
+      - banner [ref=f19e155]:
+        - generic [ref=f19e156]:
+          - navigation "breadcrumb" [ref=f19e159]:
+            - list [ref=f19e160]:
+              - listitem [ref=f19e161]:
+                - button "数据建模" [ref=f19e162]
+              - listitem [ref=f19e165]
+              - listitem [ref=f19e168]:
+                - button "维度建模" [ref=f19e169]
+              - listitem [ref=f19e172]
+              - listitem [ref=f19e10131]:
+                - link "逆向建模" [disabled] [ref=f19e10132]
+          - generic [ref=f19e177]:
+            - button "搜索页面与帮助" [ref=f19e178]:
+              - generic [ref=f19e179]: Ctrl / ⌘ K
+            - generic [ref=f19e181]:
+              - heading "全局搜索" [level=2] [ref=f19e182]
+              - paragraph [ref=f19e183]: 搜索有权限访问的页面和 DTS 帮助主题
+            - button "打开帮助" [ref=f19e184] [cursor=pointer]
+            - button [ref=f19e185] [cursor=pointer]
+      - main [ref=f19e186]:
+        - main [ref=f19e10133]:
+          - generic [ref=f19e10135]:
+            - generic [ref=f19e10136]: 数据建模 / 维度建模
+            - heading "逆向建模" [level=1] [ref=f19e10137]
+            - paragraph [ref=f19e10138]: 导入外部 dbt 项目 ZIP，识别结构证据并生成可视化模型草稿。
+          - generic [ref=f19e10139]:
+            - generic [ref=f19e10140]:
+              - generic [ref=f19e10150]: "2"
+              - generic [ref=f19e10152]: "3"
+              - generic [ref=f19e10154]: "4"
+            - generic [ref=f19e10156]:
+              - generic [ref=f19e10182]:
+                - generic [ref=f19e10183]:
+                  - heading "检查报告与模型映射" [level=3] [ref=f19e10184]
+                  - paragraph [ref=f19e10185]: 检查、导入投影、物化能力分别判断；源项目包不会再被误报为数据库适配器不支持。
+                - generic [ref=f19e10186]: 制品完整包
+              - generic [ref=f19e10187]:
+                - generic [ref=f19e10188]:
+                  - generic [ref=f19e10189]: 包结构检查
+                  - strong [ref=f19e10190]: SUPPORTED
+                - generic [ref=f19e10191]:
+                  - generic [ref=f19e10192]: 导入投影
+                  - strong [ref=f19e10193]: IMPORTABLE
+                - generic [ref=f19e10194]:
+                  - generic [ref=f19e10195]: dbt 物化
+                  - strong [ref=f19e10196]: CERTIFIED
+              - generic [ref=f19e10197]:
+                - generic [ref=f19e10198]: 识别 43
+                - generic [ref=f19e10199]: 技术节点 168
+                - generic [ref=f19e10200]: 可导入 43
+                - generic [ref=f19e10201]: 待补充 0
+                - generic [ref=f19e10202]: 阻断 0
+              - generic [ref=f19e10203]:
+                - generic [ref=f19e10204]:
+                  - generic [ref=f19e10205]: IMPORT_PROJECTION
+                  - generic [ref=f19e10206]:
+                    - strong [ref=f19e10207]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e10208]: 处理建议：REUPLOAD
+                - generic [ref=f19e10209]:
+                  - generic [ref=f19e10210]: IMPORT_PROJECTION
+                  - generic [ref=f19e10211]:
+                    - strong [ref=f19e10212]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e10213]: 处理建议：REUPLOAD
+                - generic [ref=f19e10214]:
+                  - generic [ref=f19e10215]: IMPORT_PROJECTION
+                  - generic [ref=f19e10216]:
+                    - strong [ref=f19e10217]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e10218]: 处理建议：REUPLOAD
+                - generic [ref=f19e10219]:
+                  - generic [ref=f19e10220]: IMPORT_PROJECTION
+                  - generic [ref=f19e10221]:
+                    - strong [ref=f19e10222]: SQL_ARITHMETIC
+                    - text: ：模型不满足当前导入投影约束：SQL_ARITHMETIC
+                  - generic [ref=f19e10223]: 处理建议：REUPLOAD
+                - generic [ref=f19e10224]:
+                  - generic [ref=f19e10225]: IMPORT_PROJECTION
+                  - generic [ref=f19e10226]:
+                    - strong [ref=f19e10227]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e10228]: 处理建议：REUPLOAD
+                - generic [ref=f19e10229]:
+                  - generic [ref=f19e10230]: IMPORT_PROJECTION
+                  - generic [ref=f19e10231]:
+                    - strong [ref=f19e10232]: SQL_AGGREGATION
+                    - text: ：模型不满足当前导入投影约束：SQL_AGGREGATION
+                  - generic [ref=f19e10233]: 处理建议：REUPLOAD
+                - generic [ref=f19e10234]:
+                  - generic [ref=f19e10235]: IMPORT_PROJECTION
+                  - generic [ref=f19e10236]:
+                    - strong [ref=f19e10237]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e10238]: 处理建议：REUPLOAD
+                - generic [ref=f19e10239]:
+                  - generic [ref=f19e10240]: IMPORT_PROJECTION
+                  - generic [ref=f19e10241]:
+                    - strong [ref=f19e10242]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e10243]: 处理建议：REUPLOAD
+                - generic [ref=f19e10244]:
+                  - generic [ref=f19e10245]: IMPORT_PROJECTION
+                  - generic [ref=f19e10246]:
+                    - strong [ref=f19e10247]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e10248]: 处理建议：REUPLOAD
+                - generic [ref=f19e10249]:
+                  - generic [ref=f19e10250]: IMPORT_PROJECTION
+                  - generic [ref=f19e10251]:
+                    - strong [ref=f19e10252]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e10253]: 处理建议：REUPLOAD
+                - generic [ref=f19e10254]:
+                  - generic [ref=f19e10255]: IMPORT_PROJECTION
+                  - generic [ref=f19e10256]:
+                    - strong [ref=f19e10257]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e10258]: 处理建议：REUPLOAD
+                - generic [ref=f19e10259]:
+                  - generic [ref=f19e10260]: IMPORT_PROJECTION
+                  - generic [ref=f19e10261]:
+                    - strong [ref=f19e10262]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e10263]: 处理建议：REUPLOAD
+                - generic [ref=f19e10264]:
+                  - generic [ref=f19e10265]: IMPORT_PROJECTION
+                  - generic [ref=f19e10266]:
+                    - strong [ref=f19e10267]: SQL_ARITHMETIC
+                    - text: ：模型不满足当前导入投影约束：SQL_ARITHMETIC
+                  - generic [ref=f19e10268]: 处理建议：REUPLOAD
+                - generic [ref=f19e10269]:
+                  - generic [ref=f19e10270]: IMPORT_PROJECTION
+                  - generic [ref=f19e10271]:
+                    - strong [ref=f19e10272]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e10273]: 处理建议：REUPLOAD
+                - generic [ref=f19e10274]:
+                  - generic [ref=f19e10275]: IMPORT_PROJECTION
+                  - generic [ref=f19e10276]:
+                    - strong [ref=f19e10277]: SQL_AGGREGATION
+                    - text: ：模型不满足当前导入投影约束：SQL_AGGREGATION
+                  - generic [ref=f19e10278]: 处理建议：REUPLOAD
+                - generic [ref=f19e10279]:
+                  - generic [ref=f19e10280]: IMPORT_PROJECTION
+                  - generic [ref=f19e10281]:
+                    - strong [ref=f19e10282]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e10283]: 处理建议：REUPLOAD
+                - generic [ref=f19e10284]:
+                  - generic [ref=f19e10285]: IMPORT_PROJECTION
+                  - generic [ref=f19e10286]:
+                    - strong [ref=f19e10287]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e10288]: 处理建议：REUPLOAD
+                - generic [ref=f19e10289]:
+                  - generic [ref=f19e10290]: IMPORT_PROJECTION
+                  - generic [ref=f19e10291]:
+                    - strong [ref=f19e10292]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e10293]: 处理建议：REUPLOAD
+                - generic [ref=f19e10294]:
+                  - generic [ref=f19e10295]: IMPORT_PROJECTION
+                  - generic [ref=f19e10296]:
+                    - strong [ref=f19e10297]: SQL_ARITHMETIC
+                    - text: ：模型不满足当前导入投影约束：SQL_ARITHMETIC
+                  - generic [ref=f19e10298]: 处理建议：REUPLOAD
+                - generic [ref=f19e10299]:
+                  - generic [ref=f19e10300]: IMPORT_PROJECTION
+                  - generic [ref=f19e10301]:
+                    - strong [ref=f19e10302]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e10303]: 处理建议：REUPLOAD
+                - generic [ref=f19e10304]:
+                  - generic [ref=f19e10305]: IMPORT_PROJECTION
+                  - generic [ref=f19e10306]:
+                    - strong [ref=f19e10307]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e10308]: 处理建议：REUPLOAD
+                - generic [ref=f19e10309]:
+                  - generic [ref=f19e10310]: IMPORT_PROJECTION
+                  - generic [ref=f19e10311]:
+                    - strong [ref=f19e10312]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e10313]: 处理建议：REUPLOAD
+                - generic [ref=f19e10314]:
+                  - generic [ref=f19e10315]: IMPORT_PROJECTION
+                  - generic [ref=f19e10316]:
+                    - strong [ref=f19e10317]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e10318]: 处理建议：REUPLOAD
+                - generic [ref=f19e10319]:
+                  - generic [ref=f19e10320]: IMPORT_PROJECTION
+                  - generic [ref=f19e10321]:
+                    - strong [ref=f19e10322]: SQL_ARITHMETIC
+                    - text: ：模型不满足当前导入投影约束：SQL_ARITHMETIC
+                  - generic [ref=f19e10323]: 处理建议：REUPLOAD
+                - generic [ref=f19e10324]:
+                  - generic [ref=f19e10325]: IMPORT_PROJECTION
+                  - generic [ref=f19e10326]:
+                    - strong [ref=f19e10327]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e10328]: 处理建议：REUPLOAD
+                - generic [ref=f19e10329]:
+                  - generic [ref=f19e10330]: IMPORT_PROJECTION
+                  - generic [ref=f19e10331]:
+                    - strong [ref=f19e10332]: SQL_AGGREGATION
+                    - text: ：模型不满足当前导入投影约束：SQL_AGGREGATION
+                  - generic [ref=f19e10333]: 处理建议：REUPLOAD
+                - generic [ref=f19e10334]:
+                  - generic [ref=f19e10335]: IMPORT_PROJECTION
+                  - generic [ref=f19e10336]:
+                    - strong [ref=f19e10337]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e10338]: 处理建议：REUPLOAD
+                - generic [ref=f19e10339]:
+                  - generic [ref=f19e10340]: IMPORT_PROJECTION
+                  - generic [ref=f19e10341]:
+                    - strong [ref=f19e10342]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e10343]: 处理建议：REUPLOAD
+                - generic [ref=f19e10344]:
+                  - generic [ref=f19e10345]: IMPORT_PROJECTION
+                  - generic [ref=f19e10346]:
+                    - strong [ref=f19e10347]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e10348]: 处理建议：REUPLOAD
+                - generic [ref=f19e10349]:
+                  - generic [ref=f19e10350]: IMPORT_PROJECTION
+                  - generic [ref=f19e10351]:
+                    - strong [ref=f19e10352]: SQL_ARITHMETIC
+                    - text: ：模型不满足当前导入投影约束：SQL_ARITHMETIC
+                  - generic [ref=f19e10353]: 处理建议：REUPLOAD
+                - generic [ref=f19e10354]:
+                  - generic [ref=f19e10355]: IMPORT_PROJECTION
+                  - generic [ref=f19e10356]:
+                    - strong [ref=f19e10357]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e10358]: 处理建议：REUPLOAD
+                - generic [ref=f19e10359]:
+                  - generic [ref=f19e10360]: IMPORT_PROJECTION
+                  - generic [ref=f19e10361]:
+                    - strong [ref=f19e10362]: SQL_AGGREGATION
+                    - text: ：模型不满足当前导入投影约束：SQL_AGGREGATION
+                  - generic [ref=f19e10363]: 处理建议：REUPLOAD
+                - generic [ref=f19e10364]:
+                  - generic [ref=f19e10365]: IMPORT_PROJECTION
+                  - generic [ref=f19e10366]:
+                    - strong [ref=f19e10367]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e10368]: 处理建议：REUPLOAD
+                - generic [ref=f19e10369]:
+                  - generic [ref=f19e10370]: IMPORT_PROJECTION
+                  - generic [ref=f19e10371]:
+                    - strong [ref=f19e10372]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e10373]: 处理建议：REUPLOAD
+                - generic [ref=f19e10374]:
+                  - generic [ref=f19e10375]: IMPORT_PROJECTION
+                  - generic [ref=f19e10376]:
+                    - strong [ref=f19e10377]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e10378]: 处理建议：REUPLOAD
+                - generic [ref=f19e10379]:
+                  - generic [ref=f19e10380]: IMPORT_PROJECTION
+                  - generic [ref=f19e10381]:
+                    - strong [ref=f19e10382]: SQL_ARITHMETIC
+                    - text: ：模型不满足当前导入投影约束：SQL_ARITHMETIC
+                  - generic [ref=f19e10383]: 处理建议：REUPLOAD
+                - generic [ref=f19e10384]:
+                  - generic [ref=f19e10385]: IMPORT_PROJECTION
+                  - generic [ref=f19e10386]:
+                    - strong [ref=f19e10387]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e10388]: 处理建议：REUPLOAD
+                - generic [ref=f19e10389]:
+                  - generic [ref=f19e10390]: IMPORT_PROJECTION
+                  - generic [ref=f19e10391]:
+                    - strong [ref=f19e10392]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e10393]: 处理建议：REUPLOAD
+                - generic [ref=f19e10394]:
+                  - generic [ref=f19e10395]: IMPORT_PROJECTION
+                  - generic [ref=f19e10396]:
+                    - strong [ref=f19e10397]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e10398]: 处理建议：REUPLOAD
+                - generic [ref=f19e10399]:
+                  - generic [ref=f19e10400]: IMPORT_PROJECTION
+                  - generic [ref=f19e10401]:
+                    - strong [ref=f19e10402]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e10403]: 处理建议：REUPLOAD
+                - generic [ref=f19e10404]:
+                  - generic [ref=f19e10405]: IMPORT_PROJECTION
+                  - generic [ref=f19e10406]:
+                    - strong [ref=f19e10407]: SQL_ARITHMETIC
+                    - text: ：模型不满足当前导入投影约束：SQL_ARITHMETIC
+                  - generic [ref=f19e10408]: 处理建议：REUPLOAD
+                - generic [ref=f19e10409]:
+                  - generic [ref=f19e10410]: IMPORT_PROJECTION
+                  - generic [ref=f19e10411]:
+                    - strong [ref=f19e10412]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e10413]: 处理建议：REUPLOAD
+                - generic [ref=f19e10414]:
+                  - generic [ref=f19e10415]: IMPORT_PROJECTION
+                  - generic [ref=f19e10416]:
+                    - strong [ref=f19e10417]: SQL_AGGREGATION
+                    - text: ：模型不满足当前导入投影约束：SQL_AGGREGATION
+                  - generic [ref=f19e10418]: 处理建议：REUPLOAD
+                - generic [ref=f19e10419]:
+                  - generic [ref=f19e10420]: IMPORT_PROJECTION
+                  - generic [ref=f19e10421]:
+                    - strong [ref=f19e10422]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e10423]: 处理建议：REUPLOAD
+                - generic [ref=f19e10424]:
+                  - generic [ref=f19e10425]: IMPORT_PROJECTION
+                  - generic [ref=f19e10426]:
+                    - strong [ref=f19e10427]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e10428]: 处理建议：REUPLOAD
+                - generic [ref=f19e10429]:
+                  - generic [ref=f19e10430]: IMPORT_PROJECTION
+                  - generic [ref=f19e10431]:
+                    - strong [ref=f19e10432]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e10433]: 处理建议：REUPLOAD
+                - generic [ref=f19e10434]:
+                  - generic [ref=f19e10435]: IMPORT_PROJECTION
+                  - generic [ref=f19e10436]:
+                    - strong [ref=f19e10437]: SQL_AGGREGATION
+                    - text: ：模型不满足当前导入投影约束：SQL_AGGREGATION
+                  - generic [ref=f19e10438]: 处理建议：REUPLOAD
+                - generic [ref=f19e10439]:
+                  - generic [ref=f19e10440]: IMPORT_PROJECTION
+                  - generic [ref=f19e10441]:
+                    - strong [ref=f19e10442]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e10443]: 处理建议：REUPLOAD
+                - generic [ref=f19e10444]:
+                  - generic [ref=f19e10445]: IMPORT_PROJECTION
+                  - generic [ref=f19e10446]:
+                    - strong [ref=f19e10447]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e10448]: 处理建议：REUPLOAD
+                - generic [ref=f19e10449]:
+                  - generic [ref=f19e10450]: IMPORT_PROJECTION
+                  - generic [ref=f19e10451]:
+                    - strong [ref=f19e10452]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e10453]: 处理建议：REUPLOAD
+                - generic [ref=f19e10454]:
+                  - generic [ref=f19e10455]: IMPORT_PROJECTION
+                  - generic [ref=f19e10456]:
+                    - strong [ref=f19e10457]: SQL_ARITHMETIC
+                    - text: ：模型不满足当前导入投影约束：SQL_ARITHMETIC
+                  - generic [ref=f19e10458]: 处理建议：REUPLOAD
+                - generic [ref=f19e10459]:
+                  - generic [ref=f19e10460]: IMPORT_PROJECTION
+                  - generic [ref=f19e10461]:
+                    - strong [ref=f19e10462]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e10463]: 处理建议：REUPLOAD
+                - generic [ref=f19e10464]:
+                  - generic [ref=f19e10465]: IMPORT_PROJECTION
+                  - generic [ref=f19e10466]:
+                    - strong [ref=f19e10467]: SQL_AGGREGATION
+                    - text: ：模型不满足当前导入投影约束：SQL_AGGREGATION
+                  - generic [ref=f19e10468]: 处理建议：REUPLOAD
+                - generic [ref=f19e10469]:
+                  - generic [ref=f19e10470]: IMPORT_PROJECTION
+                  - generic [ref=f19e10471]:
+                    - strong [ref=f19e10472]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e10473]: 处理建议：REUPLOAD
+                - generic [ref=f19e10474]:
+                  - generic [ref=f19e10475]: IMPORT_PROJECTION
+                  - generic [ref=f19e10476]:
+                    - strong [ref=f19e10477]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e10478]: 处理建议：REUPLOAD
+                - generic [ref=f19e10479]:
+                  - generic [ref=f19e10480]: IMPORT_PROJECTION
+                  - generic [ref=f19e10481]:
+                    - strong [ref=f19e10482]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e10483]: 处理建议：REUPLOAD
+                - generic [ref=f19e10484]:
+                  - generic [ref=f19e10485]: IMPORT_PROJECTION
+                  - generic [ref=f19e10486]:
+                    - strong [ref=f19e10487]: SQL_ARITHMETIC
+                    - text: ：模型不满足当前导入投影约束：SQL_ARITHMETIC
+                  - generic [ref=f19e10488]: 处理建议：REUPLOAD
+                - generic [ref=f19e10489]:
+                  - generic [ref=f19e10490]: IMPORT_PROJECTION
+                  - generic [ref=f19e10491]:
+                    - strong [ref=f19e10492]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e10493]: 处理建议：REUPLOAD
+                - generic [ref=f19e10494]:
+                  - generic [ref=f19e10495]: IMPORT_PROJECTION
+                  - generic [ref=f19e10496]:
+                    - strong [ref=f19e10497]: SQL_AGGREGATION
+                    - text: ：模型不满足当前导入投影约束：SQL_AGGREGATION
+                  - generic [ref=f19e10498]: 处理建议：REUPLOAD
+                - generic [ref=f19e10499]:
+                  - generic [ref=f19e10500]: IMPORT_PROJECTION
+                  - generic [ref=f19e10501]:
+                    - strong [ref=f19e10502]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e10503]: 处理建议：REUPLOAD
+                - generic [ref=f19e10504]:
+                  - generic [ref=f19e10505]: IMPORT_PROJECTION
+                  - generic [ref=f19e10506]:
+                    - strong [ref=f19e10507]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e10508]: 处理建议：REUPLOAD
+                - generic [ref=f19e10509]:
+                  - generic [ref=f19e10510]: IMPORT_PROJECTION
+                  - generic [ref=f19e10511]:
+                    - strong [ref=f19e10512]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e10513]: 处理建议：REUPLOAD
+                - generic [ref=f19e10514]:
+                  - generic [ref=f19e10515]: IMPORT_PROJECTION
+                  - generic [ref=f19e10516]:
+                    - strong [ref=f19e10517]: SQL_ARITHMETIC
+                    - text: ：模型不满足当前导入投影约束：SQL_ARITHMETIC
+                  - generic [ref=f19e10518]: 处理建议：REUPLOAD
+                - generic [ref=f19e10519]:
+                  - generic [ref=f19e10520]: IMPORT_PROJECTION
+                  - generic [ref=f19e10521]:
+                    - strong [ref=f19e10522]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e10523]: 处理建议：REUPLOAD
+                - generic [ref=f19e10524]:
+                  - generic [ref=f19e10525]: IMPORT_PROJECTION
+                  - generic [ref=f19e10526]:
+                    - strong [ref=f19e10527]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e10528]: 处理建议：REUPLOAD
+                - generic [ref=f19e10529]:
+                  - generic [ref=f19e10530]: IMPORT_PROJECTION
+                  - generic [ref=f19e10531]:
+                    - strong [ref=f19e10532]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e10533]: 处理建议：REUPLOAD
+                - generic [ref=f19e10534]:
+                  - generic [ref=f19e10535]: IMPORT_PROJECTION
+                  - generic [ref=f19e10536]:
+                    - strong [ref=f19e10537]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e10538]: 处理建议：REUPLOAD
+                - generic [ref=f19e10539]:
+                  - generic [ref=f19e10540]: IMPORT_PROJECTION
+                  - generic [ref=f19e10541]:
+                    - strong [ref=f19e10542]: SQL_ARITHMETIC
+                    - text: ：模型不满足当前导入投影约束：SQL_ARITHMETIC
+                  - generic [ref=f19e10543]: 处理建议：REUPLOAD
+                - generic [ref=f19e10544]:
+                  - generic [ref=f19e10545]: IMPORT_PROJECTION
+                  - generic [ref=f19e10546]:
+                    - strong [ref=f19e10547]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e10548]: 处理建议：REUPLOAD
+                - generic [ref=f19e10549]:
+                  - generic [ref=f19e10550]: IMPORT_PROJECTION
+                  - generic [ref=f19e10551]:
+                    - strong [ref=f19e10552]: SQL_AGGREGATION
+                    - text: ：模型不满足当前导入投影约束：SQL_AGGREGATION
+                  - generic [ref=f19e10553]: 处理建议：REUPLOAD
+                - generic [ref=f19e10554]:
+                  - generic [ref=f19e10555]: IMPORT_PROJECTION
+                  - generic [ref=f19e10556]:
+                    - strong [ref=f19e10557]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e10558]: 处理建议：REUPLOAD
+                - generic [ref=f19e10559]:
+                  - generic [ref=f19e10560]: IMPORT_PROJECTION
+                  - generic [ref=f19e10561]:
+                    - strong [ref=f19e10562]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e10563]: 处理建议：REUPLOAD
+                - generic [ref=f19e10564]:
+                  - generic [ref=f19e10565]: IMPORT_PROJECTION
+                  - generic [ref=f19e10566]:
+                    - strong [ref=f19e10567]: SQL_ARITHMETIC
+                    - text: ：模型不满足当前导入投影约束：SQL_ARITHMETIC
+                  - generic [ref=f19e10568]: 处理建议：REUPLOAD
+                - generic [ref=f19e10569]:
+                  - generic [ref=f19e10570]: IMPORT_PROJECTION
+                  - generic [ref=f19e10571]:
+                    - strong [ref=f19e10572]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e10573]: 处理建议：REUPLOAD
+                - generic [ref=f19e10574]:
+                  - generic [ref=f19e10575]: IMPORT_PROJECTION
+                  - generic [ref=f19e10576]:
+                    - strong [ref=f19e10577]: SQL_AGGREGATION
+                    - text: ：模型不满足当前导入投影约束：SQL_AGGREGATION
+                  - generic [ref=f19e10578]: 处理建议：REUPLOAD
+                - generic [ref=f19e10579]:
+                  - generic [ref=f19e10580]: IMPORT_PROJECTION
+                  - generic [ref=f19e10581]:
+                    - strong [ref=f19e10582]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e10583]: 处理建议：REUPLOAD
+                - generic [ref=f19e10584]:
+                  - generic [ref=f19e10585]: IMPORT_PROJECTION
+                  - generic [ref=f19e10586]:
+                    - strong [ref=f19e10587]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e10588]: 处理建议：REUPLOAD
+                - generic [ref=f19e10589]:
+                  - generic [ref=f19e10590]: IMPORT_PROJECTION
+                  - generic [ref=f19e10591]:
+                    - strong [ref=f19e10592]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e10593]: 处理建议：REUPLOAD
+                - generic [ref=f19e10594]:
+                  - generic [ref=f19e10595]: IMPORT_PROJECTION
+                  - generic [ref=f19e10596]:
+                    - strong [ref=f19e10597]: SQL_ARITHMETIC
+                    - text: ：模型不满足当前导入投影约束：SQL_ARITHMETIC
+                  - generic [ref=f19e10598]: 处理建议：REUPLOAD
+                - generic [ref=f19e10599]:
+                  - generic [ref=f19e10600]: IMPORT_PROJECTION
+                  - generic [ref=f19e10601]:
+                    - strong [ref=f19e10602]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e10603]: 处理建议：REUPLOAD
+                - generic [ref=f19e10604]:
+                  - generic [ref=f19e10605]: IMPORT_PROJECTION
+                  - generic [ref=f19e10606]:
+                    - strong [ref=f19e10607]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e10608]: 处理建议：REUPLOAD
+                - generic [ref=f19e10609]:
+                  - generic [ref=f19e10610]: IMPORT_PROJECTION
+                  - generic [ref=f19e10611]:
+                    - strong [ref=f19e10612]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e10613]: 处理建议：REUPLOAD
+                - generic [ref=f19e10614]:
+                  - generic [ref=f19e10615]: IMPORT_PROJECTION
+                  - generic [ref=f19e10616]:
+                    - strong [ref=f19e10617]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e10618]: 处理建议：REUPLOAD
+                - generic [ref=f19e10619]:
+                  - generic [ref=f19e10620]: IMPORT_PROJECTION
+                  - generic [ref=f19e10621]:
+                    - strong [ref=f19e10622]: SQL_ARITHMETIC
+                    - text: ：模型不满足当前导入投影约束：SQL_ARITHMETIC
+                  - generic [ref=f19e10623]: 处理建议：REUPLOAD
+                - generic [ref=f19e10624]:
+                  - generic [ref=f19e10625]: IMPORT_PROJECTION
+                  - generic [ref=f19e10626]:
+                    - strong [ref=f19e10627]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e10628]: 处理建议：REUPLOAD
+                - generic [ref=f19e10629]:
+                  - generic [ref=f19e10630]: IMPORT_PROJECTION
+                  - generic [ref=f19e10631]:
+                    - strong [ref=f19e10632]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e10633]: 处理建议：REUPLOAD
+                - generic [ref=f19e10634]:
+                  - generic [ref=f19e10635]: IMPORT_PROJECTION
+                  - generic [ref=f19e10636]:
+                    - strong [ref=f19e10637]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e10638]: 处理建议：REUPLOAD
+                - generic [ref=f19e10639]:
+                  - generic [ref=f19e10640]: IMPORT_PROJECTION
+                  - generic [ref=f19e10641]:
+                    - strong [ref=f19e10642]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e10643]: 处理建议：REUPLOAD
+                - generic [ref=f19e10644]:
+                  - generic [ref=f19e10645]: IMPORT_PROJECTION
+                  - generic [ref=f19e10646]:
+                    - strong [ref=f19e10647]: SQL_ARITHMETIC
+                    - text: ：模型不满足当前导入投影约束：SQL_ARITHMETIC
+                  - generic [ref=f19e10648]: 处理建议：REUPLOAD
+                - generic [ref=f19e10649]:
+                  - generic [ref=f19e10650]: IMPORT_PROJECTION
+                  - generic [ref=f19e10651]:
+                    - strong [ref=f19e10652]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e10653]: 处理建议：REUPLOAD
+                - generic [ref=f19e10654]:
+                  - generic [ref=f19e10655]: IMPORT_PROJECTION
+                  - generic [ref=f19e10656]:
+                    - strong [ref=f19e10657]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e10658]: 处理建议：REUPLOAD
+                - generic [ref=f19e10659]:
+                  - generic [ref=f19e10660]: IMPORT_PROJECTION
+                  - generic [ref=f19e10661]:
+                    - strong [ref=f19e10662]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e10663]: 处理建议：REUPLOAD
+                - generic [ref=f19e10664]:
+                  - generic [ref=f19e10665]: IMPORT_PROJECTION
+                  - generic [ref=f19e10666]:
+                    - strong [ref=f19e10667]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e10668]: 处理建议：REUPLOAD
+                - generic [ref=f19e10669]:
+                  - generic [ref=f19e10670]: IMPORT_PROJECTION
+                  - generic [ref=f19e10671]:
+                    - strong [ref=f19e10672]: SQL_ARITHMETIC
+                    - text: ：模型不满足当前导入投影约束：SQL_ARITHMETIC
+                  - generic [ref=f19e10673]: 处理建议：REUPLOAD
+                - generic [ref=f19e10674]:
+                  - generic [ref=f19e10675]: IMPORT_PROJECTION
+                  - generic [ref=f19e10676]:
+                    - strong [ref=f19e10677]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e10678]: 处理建议：REUPLOAD
+                - generic [ref=f19e10679]:
+                  - generic [ref=f19e10680]: IMPORT_PROJECTION
+                  - generic [ref=f19e10681]:
+                    - strong [ref=f19e10682]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e10683]: 处理建议：REUPLOAD
+                - generic [ref=f19e10684]:
+                  - generic [ref=f19e10685]: IMPORT_PROJECTION
+                  - generic [ref=f19e10686]:
+                    - strong [ref=f19e10687]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e10688]: 处理建议：REUPLOAD
+                - generic [ref=f19e10689]:
+                  - generic [ref=f19e10690]: IMPORT_PROJECTION
+                  - generic [ref=f19e10691]:
+                    - strong [ref=f19e10692]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e10693]: 处理建议：REUPLOAD
+                - generic [ref=f19e10694]:
+                  - generic [ref=f19e10695]: IMPORT_PROJECTION
+                  - generic [ref=f19e10696]:
+                    - strong [ref=f19e10697]: SQL_ARITHMETIC
+                    - text: ：模型不满足当前导入投影约束：SQL_ARITHMETIC
+                  - generic [ref=f19e10698]: 处理建议：REUPLOAD
+                - generic [ref=f19e10699]:
+                  - generic [ref=f19e10700]: IMPORT_PROJECTION
+                  - generic [ref=f19e10701]:
+                    - strong [ref=f19e10702]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e10703]: 处理建议：REUPLOAD
+                - generic [ref=f19e10704]:
+                  - generic [ref=f19e10705]: IMPORT_PROJECTION
+                  - generic [ref=f19e10706]:
+                    - strong [ref=f19e10707]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e10708]: 处理建议：REUPLOAD
+                - generic [ref=f19e10709]:
+                  - generic [ref=f19e10710]: IMPORT_PROJECTION
+                  - generic [ref=f19e10711]:
+                    - strong [ref=f19e10712]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e10713]: 处理建议：REUPLOAD
+                - generic [ref=f19e10714]:
+                  - generic [ref=f19e10715]: IMPORT_PROJECTION
+                  - generic [ref=f19e10716]:
+                    - strong [ref=f19e10717]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e10718]: 处理建议：REUPLOAD
+                - generic [ref=f19e10719]:
+                  - generic [ref=f19e10720]: IMPORT_PROJECTION
+                  - generic [ref=f19e10721]:
+                    - strong [ref=f19e10722]: SQL_ARITHMETIC
+                    - text: ：模型不满足当前导入投影约束：SQL_ARITHMETIC
+                  - generic [ref=f19e10723]: 处理建议：REUPLOAD
+                - generic [ref=f19e10724]:
+                  - generic [ref=f19e10725]: IMPORT_PROJECTION
+                  - generic [ref=f19e10726]:
+                    - strong [ref=f19e10727]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e10728]: 处理建议：REUPLOAD
+                - generic [ref=f19e10729]:
+                  - generic [ref=f19e10730]: IMPORT_PROJECTION
+                  - generic [ref=f19e10731]:
+                    - strong [ref=f19e10732]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e10733]: 处理建议：REUPLOAD
+                - generic [ref=f19e10734]:
+                  - generic [ref=f19e10735]: IMPORT_PROJECTION
+                  - generic [ref=f19e10736]:
+                    - strong [ref=f19e10737]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e10738]: 处理建议：REUPLOAD
+                - generic [ref=f19e10739]:
+                  - generic [ref=f19e10740]: IMPORT_PROJECTION
+                  - generic [ref=f19e10741]:
+                    - strong [ref=f19e10742]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e10743]: 处理建议：REUPLOAD
+                - generic [ref=f19e10744]:
+                  - generic [ref=f19e10745]: IMPORT_PROJECTION
+                  - generic [ref=f19e10746]:
+                    - strong [ref=f19e10747]: SQL_ARITHMETIC
+                    - text: ：模型不满足当前导入投影约束：SQL_ARITHMETIC
+                  - generic [ref=f19e10748]: 处理建议：REUPLOAD
+                - generic [ref=f19e10749]:
+                  - generic [ref=f19e10750]: IMPORT_PROJECTION
+                  - generic [ref=f19e10751]:
+                    - strong [ref=f19e10752]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e10753]: 处理建议：REUPLOAD
+                - generic [ref=f19e10754]:
+                  - generic [ref=f19e10755]: IMPORT_PROJECTION
+                  - generic [ref=f19e10756]:
+                    - strong [ref=f19e10757]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e10758]: 处理建议：REUPLOAD
+                - generic [ref=f19e10759]:
+                  - generic [ref=f19e10760]: IMPORT_PROJECTION
+                  - generic [ref=f19e10761]:
+                    - strong [ref=f19e10762]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e10763]: 处理建议：REUPLOAD
+                - generic [ref=f19e10764]:
+                  - generic [ref=f19e10765]: IMPORT_PROJECTION
+                  - generic [ref=f19e10766]:
+                    - strong [ref=f19e10767]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e10768]: 处理建议：REUPLOAD
+                - generic [ref=f19e10769]:
+                  - generic [ref=f19e10770]: IMPORT_PROJECTION
+                  - generic [ref=f19e10771]:
+                    - strong [ref=f19e10772]: SQL_ARITHMETIC
+                    - text: ：模型不满足当前导入投影约束：SQL_ARITHMETIC
+                  - generic [ref=f19e10773]: 处理建议：REUPLOAD
+                - generic [ref=f19e10774]:
+                  - generic [ref=f19e10775]: IMPORT_PROJECTION
+                  - generic [ref=f19e10776]:
+                    - strong [ref=f19e10777]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e10778]: 处理建议：REUPLOAD
+                - generic [ref=f19e10779]:
+                  - generic [ref=f19e10780]: IMPORT_PROJECTION
+                  - generic [ref=f19e10781]:
+                    - strong [ref=f19e10782]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e10783]: 处理建议：REUPLOAD
+                - generic [ref=f19e10784]:
+                  - generic [ref=f19e10785]: IMPORT_PROJECTION
+                  - generic [ref=f19e10786]:
+                    - strong [ref=f19e10787]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e10788]: 处理建议：REUPLOAD
+                - generic [ref=f19e10789]:
+                  - generic [ref=f19e10790]: IMPORT_PROJECTION
+                  - generic [ref=f19e10791]:
+                    - strong [ref=f19e10792]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e10793]: 处理建议：REUPLOAD
+                - generic [ref=f19e10794]:
+                  - generic [ref=f19e10795]: IMPORT_PROJECTION
+                  - generic [ref=f19e10796]:
+                    - strong [ref=f19e10797]: SQL_ARITHMETIC
+                    - text: ：模型不满足当前导入投影约束：SQL_ARITHMETIC
+                  - generic [ref=f19e10798]: 处理建议：REUPLOAD
+                - generic [ref=f19e10799]:
+                  - generic [ref=f19e10800]: IMPORT_PROJECTION
+                  - generic [ref=f19e10801]:
+                    - strong [ref=f19e10802]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e10803]: 处理建议：REUPLOAD
+                - generic [ref=f19e10804]:
+                  - generic [ref=f19e10805]: IMPORT_PROJECTION
+                  - generic [ref=f19e10806]:
+                    - strong [ref=f19e10807]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e10808]: 处理建议：REUPLOAD
+                - generic [ref=f19e10809]:
+                  - generic [ref=f19e10810]: IMPORT_PROJECTION
+                  - generic [ref=f19e10811]:
+                    - strong [ref=f19e10812]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e10813]: 处理建议：REUPLOAD
+                - generic [ref=f19e10814]:
+                  - generic [ref=f19e10815]: IMPORT_PROJECTION
+                  - generic [ref=f19e10816]:
+                    - strong [ref=f19e10817]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e10818]: 处理建议：REUPLOAD
+                - generic [ref=f19e10819]:
+                  - generic [ref=f19e10820]: IMPORT_PROJECTION
+                  - generic [ref=f19e10821]:
+                    - strong [ref=f19e10822]: SQL_ARITHMETIC
+                    - text: ：模型不满足当前导入投影约束：SQL_ARITHMETIC
+                  - generic [ref=f19e10823]: 处理建议：REUPLOAD
+                - generic [ref=f19e10824]:
+                  - generic [ref=f19e10825]: IMPORT_PROJECTION
+                  - generic [ref=f19e10826]:
+                    - strong [ref=f19e10827]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e10828]: 处理建议：REUPLOAD
+                - generic [ref=f19e10829]:
+                  - generic [ref=f19e10830]: IMPORT_PROJECTION
+                  - generic [ref=f19e10831]:
+                    - strong [ref=f19e10832]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e10833]: 处理建议：REUPLOAD
+                - generic [ref=f19e10834]:
+                  - generic [ref=f19e10835]: IMPORT_PROJECTION
+                  - generic [ref=f19e10836]:
+                    - strong [ref=f19e10837]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e10838]: 处理建议：REUPLOAD
+                - generic [ref=f19e10839]:
+                  - generic [ref=f19e10840]: IMPORT_PROJECTION
+                  - generic [ref=f19e10841]:
+                    - strong [ref=f19e10842]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e10843]: 处理建议：REUPLOAD
+                - generic [ref=f19e10844]:
+                  - generic [ref=f19e10845]: IMPORT_PROJECTION
+                  - generic [ref=f19e10846]:
+                    - strong [ref=f19e10847]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e10848]: 处理建议：REUPLOAD
+                - generic [ref=f19e10849]:
+                  - generic [ref=f19e10850]: IMPORT_PROJECTION
+                  - generic [ref=f19e10851]:
+                    - strong [ref=f19e10852]: SQL_AGGREGATION
+                    - text: ：模型不满足当前导入投影约束：SQL_AGGREGATION
+                  - generic [ref=f19e10853]: 处理建议：REUPLOAD
+                - generic [ref=f19e10854]:
+                  - generic [ref=f19e10855]: IMPORT_PROJECTION
+                  - generic [ref=f19e10856]:
+                    - strong [ref=f19e10857]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e10858]: 处理建议：REUPLOAD
+                - generic [ref=f19e10859]:
+                  - generic [ref=f19e10860]: IMPORT_PROJECTION
+                  - generic [ref=f19e10861]:
+                    - strong [ref=f19e10862]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e10863]: 处理建议：REUPLOAD
+                - generic [ref=f19e10864]:
+                  - generic [ref=f19e10865]: IMPORT_PROJECTION
+                  - generic [ref=f19e10866]:
+                    - strong [ref=f19e10867]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e10868]: 处理建议：REUPLOAD
+                - generic [ref=f19e10869]:
+                  - generic [ref=f19e10870]: IMPORT_PROJECTION
+                  - generic [ref=f19e10871]:
+                    - strong [ref=f19e10872]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e10873]: 处理建议：REUPLOAD
+                - generic [ref=f19e10874]:
+                  - generic [ref=f19e10875]: IMPORT_PROJECTION
+                  - generic [ref=f19e10876]:
+                    - strong [ref=f19e10877]: SQL_AGGREGATION
+                    - text: ：模型不满足当前导入投影约束：SQL_AGGREGATION
+                  - generic [ref=f19e10878]: 处理建议：REUPLOAD
+                - generic [ref=f19e10879]:
+                  - generic [ref=f19e10880]: IMPORT_PROJECTION
+                  - generic [ref=f19e10881]:
+                    - strong [ref=f19e10882]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e10883]: 处理建议：REUPLOAD
+                - generic [ref=f19e10884]:
+                  - generic [ref=f19e10885]: IMPORT_PROJECTION
+                  - generic [ref=f19e10886]:
+                    - strong [ref=f19e10887]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e10888]: 处理建议：REUPLOAD
+                - generic [ref=f19e10889]:
+                  - generic [ref=f19e10890]: IMPORT_PROJECTION
+                  - generic [ref=f19e10891]:
+                    - strong [ref=f19e10892]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e10893]: 处理建议：REUPLOAD
+                - generic [ref=f19e10894]:
+                  - generic [ref=f19e10895]: IMPORT_PROJECTION
+                  - generic [ref=f19e10896]:
+                    - strong [ref=f19e10897]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e10898]: 处理建议：REUPLOAD
+                - generic [ref=f19e10899]:
+                  - generic [ref=f19e10900]: IMPORT_PROJECTION
+                  - generic [ref=f19e10901]:
+                    - strong [ref=f19e10902]: SQL_AGGREGATION
+                    - text: ：模型不满足当前导入投影约束：SQL_AGGREGATION
+                  - generic [ref=f19e10903]: 处理建议：REUPLOAD
+                - generic [ref=f19e10904]:
+                  - generic [ref=f19e10905]: IMPORT_PROJECTION
+                  - generic [ref=f19e10906]:
+                    - strong [ref=f19e10907]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e10908]: 处理建议：REUPLOAD
+                - generic [ref=f19e10909]:
+                  - generic [ref=f19e10910]: IMPORT_PROJECTION
+                  - generic [ref=f19e10911]:
+                    - strong [ref=f19e10912]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e10913]: 处理建议：REUPLOAD
+                - generic [ref=f19e10914]:
+                  - generic [ref=f19e10915]: IMPORT_PROJECTION
+                  - generic [ref=f19e10916]:
+                    - strong [ref=f19e10917]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e10918]: 处理建议：REUPLOAD
+                - generic [ref=f19e10919]:
+                  - generic [ref=f19e10920]: IMPORT_PROJECTION
+                  - generic [ref=f19e10921]:
+                    - strong [ref=f19e10922]: SQL_ARITHMETIC
+                    - text: ：模型不满足当前导入投影约束：SQL_ARITHMETIC
+                  - generic [ref=f19e10923]: 处理建议：REUPLOAD
+                - generic [ref=f19e10924]:
+                  - generic [ref=f19e10925]: IMPORT_PROJECTION
+                  - generic [ref=f19e10926]:
+                    - strong [ref=f19e10927]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e10928]: 处理建议：REUPLOAD
+                - generic [ref=f19e10929]:
+                  - generic [ref=f19e10930]: IMPORT_PROJECTION
+                  - generic [ref=f19e10931]:
+                    - strong [ref=f19e10932]: SQL_AGGREGATION
+                    - text: ：模型不满足当前导入投影约束：SQL_AGGREGATION
+                  - generic [ref=f19e10933]: 处理建议：REUPLOAD
+                - generic [ref=f19e10934]:
+                  - generic [ref=f19e10935]: IMPORT_PROJECTION
+                  - generic [ref=f19e10936]:
+                    - strong [ref=f19e10937]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e10938]: 处理建议：REUPLOAD
+                - generic [ref=f19e10939]:
+                  - generic [ref=f19e10940]: IMPORT_PROJECTION
+                  - generic [ref=f19e10941]:
+                    - strong [ref=f19e10942]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e10943]: 处理建议：REUPLOAD
+                - generic [ref=f19e10944]:
+                  - generic [ref=f19e10945]: IMPORT_PROJECTION
+                  - generic [ref=f19e10946]:
+                    - strong [ref=f19e10947]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e10948]: 处理建议：REUPLOAD
+                - generic [ref=f19e10949]:
+                  - generic [ref=f19e10950]: IMPORT_PROJECTION
+                  - generic [ref=f19e10951]:
+                    - strong [ref=f19e10952]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e10953]: 处理建议：REUPLOAD
+                - generic [ref=f19e10954]:
+                  - generic [ref=f19e10955]: IMPORT_PROJECTION
+                  - generic [ref=f19e10956]:
+                    - strong [ref=f19e10957]: SQL_AGGREGATION
+                    - text: ：模型不满足当前导入投影约束：SQL_AGGREGATION
+                  - generic [ref=f19e10958]: 处理建议：REUPLOAD
+                - generic [ref=f19e10959]:
+                  - generic [ref=f19e10960]: IMPORT_PROJECTION
+                  - generic [ref=f19e10961]:
+                    - strong [ref=f19e10962]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e10963]: 处理建议：REUPLOAD
+                - generic [ref=f19e10964]:
+                  - generic [ref=f19e10965]: IMPORT_PROJECTION
+                  - generic [ref=f19e10966]:
+                    - strong [ref=f19e10967]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e10968]: 处理建议：REUPLOAD
+                - generic [ref=f19e10969]:
+                  - generic [ref=f19e10970]: IMPORT_PROJECTION
+                  - generic [ref=f19e10971]:
+                    - strong [ref=f19e10972]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e10973]: 处理建议：REUPLOAD
+                - generic [ref=f19e10974]:
+                  - generic [ref=f19e10975]: IMPORT_PROJECTION
+                  - generic [ref=f19e10976]:
+                    - strong [ref=f19e10977]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e10978]: 处理建议：REUPLOAD
+                - generic [ref=f19e10979]:
+                  - generic [ref=f19e10980]: IMPORT_PROJECTION
+                  - generic [ref=f19e10981]:
+                    - strong [ref=f19e10982]: SQL_AGGREGATION
+                    - text: ：模型不满足当前导入投影约束：SQL_AGGREGATION
+                  - generic [ref=f19e10983]: 处理建议：REUPLOAD
+                - generic [ref=f19e10984]:
+                  - generic [ref=f19e10985]: IMPORT_PROJECTION
+                  - generic [ref=f19e10986]:
+                    - strong [ref=f19e10987]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e10988]: 处理建议：REUPLOAD
+                - generic [ref=f19e10989]:
+                  - generic [ref=f19e10990]: IMPORT_PROJECTION
+                  - generic [ref=f19e10991]:
+                    - strong [ref=f19e10992]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e10993]: 处理建议：REUPLOAD
+                - generic [ref=f19e10994]:
+                  - generic [ref=f19e10995]: IMPORT_PROJECTION
+                  - generic [ref=f19e10996]:
+                    - strong [ref=f19e10997]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e10998]: 处理建议：REUPLOAD
+                - generic [ref=f19e10999]:
+                  - generic [ref=f19e11000]: IMPORT_PROJECTION
+                  - generic [ref=f19e11001]:
+                    - strong [ref=f19e11002]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e11003]: 处理建议：REUPLOAD
+                - generic [ref=f19e11004]:
+                  - generic [ref=f19e11005]: IMPORT_PROJECTION
+                  - generic [ref=f19e11006]:
+                    - strong [ref=f19e11007]: SQL_AGGREGATION
+                    - text: ：模型不满足当前导入投影约束：SQL_AGGREGATION
+                  - generic [ref=f19e11008]: 处理建议：REUPLOAD
+                - generic [ref=f19e11009]:
+                  - generic [ref=f19e11010]: IMPORT_PROJECTION
+                  - generic [ref=f19e11011]:
+                    - strong [ref=f19e11012]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e11013]: 处理建议：REUPLOAD
+                - generic [ref=f19e11014]:
+                  - generic [ref=f19e11015]: IMPORT_PROJECTION
+                  - generic [ref=f19e11016]:
+                    - strong [ref=f19e11017]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e11018]: 处理建议：REUPLOAD
+                - generic [ref=f19e11019]:
+                  - generic [ref=f19e11020]: IMPORT_PROJECTION
+                  - generic [ref=f19e11021]:
+                    - strong [ref=f19e11022]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e11023]: 处理建议：REUPLOAD
+                - generic [ref=f19e11024]:
+                  - generic [ref=f19e11025]: IMPORT_PROJECTION
+                  - generic [ref=f19e11026]:
+                    - strong [ref=f19e11027]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e11028]: 处理建议：REUPLOAD
+                - generic [ref=f19e11029]:
+                  - generic [ref=f19e11030]: IMPORT_PROJECTION
+                  - generic [ref=f19e11031]:
+                    - strong [ref=f19e11032]: SQL_AGGREGATION
+                    - text: ：模型不满足当前导入投影约束：SQL_AGGREGATION
+                  - generic [ref=f19e11033]: 处理建议：REUPLOAD
+                - generic [ref=f19e11034]:
+                  - generic [ref=f19e11035]: IMPORT_PROJECTION
+                  - generic [ref=f19e11036]:
+                    - strong [ref=f19e11037]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e11038]: 处理建议：REUPLOAD
+                - generic [ref=f19e11039]:
+                  - generic [ref=f19e11040]: IMPORT_PROJECTION
+                  - generic [ref=f19e11041]:
+                    - strong [ref=f19e11042]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e11043]: 处理建议：REUPLOAD
+                - generic [ref=f19e11044]:
+                  - generic [ref=f19e11045]: IMPORT_PROJECTION
+                  - generic [ref=f19e11046]:
+                    - strong [ref=f19e11047]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e11048]: 处理建议：REUPLOAD
+                - generic [ref=f19e11049]:
+                  - generic [ref=f19e11050]: IMPORT_PROJECTION
+                  - generic [ref=f19e11051]:
+                    - strong [ref=f19e11052]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e11053]: 处理建议：REUPLOAD
+                - generic [ref=f19e11054]:
+                  - generic [ref=f19e11055]: IMPORT_PROJECTION
+                  - generic [ref=f19e11056]:
+                    - strong [ref=f19e11057]: SQL_AGGREGATION
+                    - text: ：模型不满足当前导入投影约束：SQL_AGGREGATION
+                  - generic [ref=f19e11058]: 处理建议：REUPLOAD
+                - generic [ref=f19e11059]:
+                  - generic [ref=f19e11060]: IMPORT_PROJECTION
+                  - generic [ref=f19e11061]:
+                    - strong [ref=f19e11062]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e11063]: 处理建议：REUPLOAD
+                - generic [ref=f19e11064]:
+                  - generic [ref=f19e11065]: IMPORT_PROJECTION
+                  - generic [ref=f19e11066]:
+                    - strong [ref=f19e11067]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e11068]: 处理建议：REUPLOAD
+                - generic [ref=f19e11069]:
+                  - generic [ref=f19e11070]: IMPORT_PROJECTION
+                  - generic [ref=f19e11071]:
+                    - strong [ref=f19e11072]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e11073]: 处理建议：REUPLOAD
+                - generic [ref=f19e11074]:
+                  - generic [ref=f19e11075]: IMPORT_PROJECTION
+                  - generic [ref=f19e11076]:
+                    - strong [ref=f19e11077]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e11078]: 处理建议：REUPLOAD
+                - generic [ref=f19e11079]:
+                  - generic [ref=f19e11080]: IMPORT_PROJECTION
+                  - generic [ref=f19e11081]:
+                    - strong [ref=f19e11082]: SQL_AGGREGATION
+                    - text: ：模型不满足当前导入投影约束：SQL_AGGREGATION
+                  - generic [ref=f19e11083]: 处理建议：REUPLOAD
+                - generic [ref=f19e11084]:
+                  - generic [ref=f19e11085]: IMPORT_PROJECTION
+                  - generic [ref=f19e11086]:
+                    - strong [ref=f19e11087]: SQL_CASE
+                    - text: ：模型不满足当前导入投影约束：SQL_CASE
+                  - generic [ref=f19e11088]: 处理建议：REUPLOAD
+                - generic [ref=f19e11089]:
+                  - generic [ref=f19e11090]: IMPORT_PROJECTION
+                  - generic [ref=f19e11091]:
+                    - strong [ref=f19e11092]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e11093]: 处理建议：REUPLOAD
+                - generic [ref=f19e11094]:
+                  - generic [ref=f19e11095]: IMPORT_PROJECTION
+                  - generic [ref=f19e11096]:
+                    - strong [ref=f19e11097]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e11098]: 处理建议：REUPLOAD
+                - generic [ref=f19e11099]:
+                  - generic [ref=f19e11100]: IMPORT_PROJECTION
+                  - generic [ref=f19e11101]:
+                    - strong [ref=f19e11102]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e11103]: 处理建议：REUPLOAD
+                - generic [ref=f19e11104]:
+                  - generic [ref=f19e11105]: IMPORT_PROJECTION
+                  - generic [ref=f19e11106]:
+                    - strong [ref=f19e11107]: SQL_VALUES
+                    - text: ：模型不满足当前导入投影约束：SQL_VALUES
+                  - generic [ref=f19e11108]: 处理建议：REUPLOAD
+                - generic [ref=f19e11109]:
+                  - generic [ref=f19e11110]: IMPORT_PROJECTION
+                  - generic [ref=f19e11111]:
+                    - strong [ref=f19e11112]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e11113]: 处理建议：REUPLOAD
+                - generic [ref=f19e11114]:
+                  - generic [ref=f19e11115]: IMPORT_PROJECTION
+                  - generic [ref=f19e11116]:
+                    - strong [ref=f19e11117]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e11118]: 处理建议：REUPLOAD
+                - generic [ref=f19e11119]:
+                  - generic [ref=f19e11120]: IMPORT_PROJECTION
+                  - generic [ref=f19e11121]:
+                    - strong [ref=f19e11122]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e11123]: 处理建议：REUPLOAD
+                - generic [ref=f19e11124]:
+                  - generic [ref=f19e11125]: IMPORT_PROJECTION
+                  - generic [ref=f19e11126]:
+                    - strong [ref=f19e11127]: SQL_VALUES
+                    - text: ：模型不满足当前导入投影约束：SQL_VALUES
+                  - generic [ref=f19e11128]: 处理建议：REUPLOAD
+                - generic [ref=f19e11129]:
+                  - generic [ref=f19e11130]: IMPORT_PROJECTION
+                  - generic [ref=f19e11131]:
+                    - strong [ref=f19e11132]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e11133]: 处理建议：REUPLOAD
+                - generic [ref=f19e11134]:
+                  - generic [ref=f19e11135]: IMPORT_PROJECTION
+                  - generic [ref=f19e11136]:
+                    - strong [ref=f19e11137]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e11138]: 处理建议：REUPLOAD
+                - generic [ref=f19e11139]:
+                  - generic [ref=f19e11140]: IMPORT_PROJECTION
+                  - generic [ref=f19e11141]:
+                    - strong [ref=f19e11142]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e11143]: 处理建议：REUPLOAD
+                - generic [ref=f19e11144]:
+                  - generic [ref=f19e11145]: IMPORT_PROJECTION
+                  - generic [ref=f19e11146]:
+                    - strong [ref=f19e11147]: SQL_VALUES
+                    - text: ：模型不满足当前导入投影约束：SQL_VALUES
+                  - generic [ref=f19e11148]: 处理建议：REUPLOAD
+                - generic [ref=f19e11149]:
+                  - generic [ref=f19e11150]: IMPORT_PROJECTION
+                  - generic [ref=f19e11151]:
+                    - strong [ref=f19e11152]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e11153]: 处理建议：REUPLOAD
+                - generic [ref=f19e11154]:
+                  - generic [ref=f19e11155]: IMPORT_PROJECTION
+                  - generic [ref=f19e11156]:
+                    - strong [ref=f19e11157]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e11158]: 处理建议：REUPLOAD
+                - generic [ref=f19e11159]:
+                  - generic [ref=f19e11160]: IMPORT_PROJECTION
+                  - generic [ref=f19e11161]:
+                    - strong [ref=f19e11162]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e11163]: 处理建议：REUPLOAD
+                - generic [ref=f19e11164]:
+                  - generic [ref=f19e11165]: IMPORT_PROJECTION
+                  - generic [ref=f19e11166]:
+                    - strong [ref=f19e11167]: SQL_VALUES
+                    - text: ：模型不满足当前导入投影约束：SQL_VALUES
+                  - generic [ref=f19e11168]: 处理建议：REUPLOAD
+                - generic [ref=f19e11169]:
+                  - generic [ref=f19e11170]: IMPORT_PROJECTION
+                  - generic [ref=f19e11171]:
+                    - strong [ref=f19e11172]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e11173]: 处理建议：REUPLOAD
+                - generic [ref=f19e11174]:
+                  - generic [ref=f19e11175]: IMPORT_PROJECTION
+                  - generic [ref=f19e11176]:
+                    - strong [ref=f19e11177]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e11178]: 处理建议：REUPLOAD
+                - generic [ref=f19e11179]:
+                  - generic [ref=f19e11180]: IMPORT_PROJECTION
+                  - generic [ref=f19e11181]:
+                    - strong [ref=f19e11182]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e11183]: 处理建议：REUPLOAD
+                - generic [ref=f19e11184]:
+                  - generic [ref=f19e11185]: IMPORT_PROJECTION
+                  - generic [ref=f19e11186]:
+                    - strong [ref=f19e11187]: SQL_VALUES
+                    - text: ：模型不满足当前导入投影约束：SQL_VALUES
+                  - generic [ref=f19e11188]: 处理建议：REUPLOAD
+                - generic [ref=f19e11189]:
+                  - generic [ref=f19e11190]: IMPORT_PROJECTION
+                  - generic [ref=f19e11191]:
+                    - strong [ref=f19e11192]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e11193]: 处理建议：REUPLOAD
+                - generic [ref=f19e11194]:
+                  - generic [ref=f19e11195]: IMPORT_PROJECTION
+                  - generic [ref=f19e11196]:
+                    - strong [ref=f19e11197]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e11198]: 处理建议：REUPLOAD
+                - generic [ref=f19e11199]:
+                  - generic [ref=f19e11200]: IMPORT_PROJECTION
+                  - generic [ref=f19e11201]:
+                    - strong [ref=f19e11202]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e11203]: 处理建议：REUPLOAD
+                - generic [ref=f19e11204]:
+                  - generic [ref=f19e11205]: IMPORT_PROJECTION
+                  - generic [ref=f19e11206]:
+                    - strong [ref=f19e11207]: SQL_VALUES
+                    - text: ：模型不满足当前导入投影约束：SQL_VALUES
+                  - generic [ref=f19e11208]: 处理建议：REUPLOAD
+                - generic [ref=f19e11209]:
+                  - generic [ref=f19e11210]: IMPORT_PROJECTION
+                  - generic [ref=f19e11211]:
+                    - strong [ref=f19e11212]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e11213]: 处理建议：REUPLOAD
+                - generic [ref=f19e11214]:
+                  - generic [ref=f19e11215]: IMPORT_PROJECTION
+                  - generic [ref=f19e11216]:
+                    - strong [ref=f19e11217]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e11218]: 处理建议：REUPLOAD
+                - generic [ref=f19e11219]:
+                  - generic [ref=f19e11220]: IMPORT_PROJECTION
+                  - generic [ref=f19e11221]:
+                    - strong [ref=f19e11222]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e11223]: 处理建议：REUPLOAD
+                - generic [ref=f19e11224]:
+                  - generic [ref=f19e11225]: IMPORT_PROJECTION
+                  - generic [ref=f19e11226]:
+                    - strong [ref=f19e11227]: SQL_VALUES
+                    - text: ：模型不满足当前导入投影约束：SQL_VALUES
+                  - generic [ref=f19e11228]: 处理建议：REUPLOAD
+                - generic [ref=f19e11229]:
+                  - generic [ref=f19e11230]: IMPORT_PROJECTION
+                  - generic [ref=f19e11231]:
+                    - strong [ref=f19e11232]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e11233]: 处理建议：REUPLOAD
+                - generic [ref=f19e11234]:
+                  - generic [ref=f19e11235]: IMPORT_PROJECTION
+                  - generic [ref=f19e11236]:
+                    - strong [ref=f19e11237]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e11238]: 处理建议：REUPLOAD
+                - generic [ref=f19e11239]:
+                  - generic [ref=f19e11240]: IMPORT_PROJECTION
+                  - generic [ref=f19e11241]:
+                    - strong [ref=f19e11242]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e11243]: 处理建议：REUPLOAD
+                - generic [ref=f19e11244]:
+                  - generic [ref=f19e11245]: IMPORT_PROJECTION
+                  - generic [ref=f19e11246]:
+                    - strong [ref=f19e11247]: SQL_VALUES
+                    - text: ：模型不满足当前导入投影约束：SQL_VALUES
+                  - generic [ref=f19e11248]: 处理建议：REUPLOAD
+                - generic [ref=f19e11249]:
+                  - generic [ref=f19e11250]: IMPORT_PROJECTION
+                  - generic [ref=f19e11251]:
+                    - strong [ref=f19e11252]: SQL_MACRO
+                    - text: ：模型不满足当前导入投影约束：SQL_MACRO
+                  - generic [ref=f19e11253]: 处理建议：REUPLOAD
+                - generic [ref=f19e11254]:
+                  - generic [ref=f19e11255]: IMPORT_PROJECTION
+                  - generic [ref=f19e11256]:
+                    - strong [ref=f19e11257]: SQL_CONSTANT
+                    - text: ：模型不满足当前导入投影约束：SQL_CONSTANT
+                  - generic [ref=f19e11258]: 处理建议：REUPLOAD
+                - generic [ref=f19e11259]:
+                  - generic [ref=f19e11260]: IMPORT_PROJECTION
+                  - generic [ref=f19e11261]:
+                    - strong [ref=f19e11262]: SQL_COMPLEX_EXPRESSION
+                    - text: ：模型不满足当前导入投影约束：SQL_COMPLEX_EXPRESSION
+                  - generic [ref=f19e11263]: 处理建议：REUPLOAD
+              - generic [ref=f19e11264]:
+                - generic [ref=f19e11265]:
+                  - generic [ref=f19e11266]: 规划上下文
+                  - combobox "规划上下文" [ref=f19e11267]:
+                    - option "请选择已确认的规划上下文"
+                    - option "平台默认建模上下文" [selected]
+                - generic [ref=f19e11268]:
+                  - generic [ref=f19e11269]: 数据域 FINANCE
+                  - combobox "数据域 FINANCE" [ref=f19e11270]:
+                    - option "请选择已确认数据域" [selected]
+                    - option "产品技术域"
+                    - option "物料供应域"
+                    - option "研究项目域"
+                    - option "财务管理域"
+                    - option "质量管理域"
+                - generic [ref=f19e11271]:
+                  - generic [ref=f19e11272]: 数据域 Domain_Prj
+                  - combobox "数据域 Domain_Prj" [ref=f19e11273]:
+                    - option "请选择已确认数据域" [selected]
+                    - option "产品技术域"
+                    - option "物料供应域"
+                    - option "研究项目域"
+                    - option "财务管理域"
+                    - option "质量管理域"
+                - generic [ref=f19e11274]:
+                  - generic [ref=f19e11275]: 数据域 MATERIAL_SUPPLY
+                  - combobox "数据域 MATERIAL_SUPPLY" [ref=f19e11276]:
+                    - option "请选择已确认数据域" [selected]
+                    - option "产品技术域"
+                    - option "物料供应域"
+                    - option "研究项目域"
+                    - option "财务管理域"
+                    - option "质量管理域"
+                - generic [ref=f19e11277]:
+                  - generic [ref=f19e11278]: 数据域 QUALITY
+                  - combobox "数据域 QUALITY" [ref=f19e11279]:
+                    - option "请选择已确认数据域" [selected]
+                    - option "产品技术域"
+                    - option "物料供应域"
+                    - option "研究项目域"
+                    - option "财务管理域"
+                    - option "质量管理域"
+                - generic [ref=f19e11280]:
+                  - generic [ref=f19e11281]: 数据域 PRODUCT_TECH
+                  - combobox "数据域 PRODUCT_TECH" [ref=f19e11282]:
+                    - option "请选择已确认数据域" [selected]
+                    - option "产品技术域"
+                    - option "物料供应域"
+                    - option "研究项目域"
+                    - option "财务管理域"
+                    - option "质量管理域"
+                - generic [ref=f19e11283]:
+                  - generic [ref=f19e11284]: 来源 source.pm_analytics_v3.pm_ods_v2.budget_v2
+                  - combobox "来源 source.pm_analytics_v3.pm_ods_v2.budget_v2" [ref=f19e11285]:
+                    - option "自动匹配（可能阻断）" [selected]
+                    - option "ods_material_info_v2"
+                    - option "s10_fin_budget_account"
+                    - option "s10_it_project"
+                    - option "s10_it_org"
+                    - option "ods_risk_measure_v2"
+                    - option "s10_it_task_snapshot"
+                    - option "ods_tech_state_v2"
+                    - option "s10_fin_budget_snapshot"
+                    - option "ods_quality_issue_v2"
+                    - option "ods_budget_v2"
+                    - option "ods_project_subject_domain_v2"
+                    - option "ods_tech_state_measure_v2"
+                    - option "ods_progress_measure_v2"
+                    - option "ods_quality_measure_v2"
+                    - option "s10_fin_cost_center"
+                    - option "ods_risk_info_v2"
+                - generic [ref=f19e11286]:
+                  - generic [ref=f19e11287]: 来源 source.pm_analytics_v3.pm_ods_v2.material_info_v2
+                  - combobox "来源 source.pm_analytics_v3.pm_ods_v2.material_info_v2" [ref=f19e11288]:
+                    - option "自动匹配（可能阻断）" [selected]
+                    - option "ods_material_info_v2"
+                    - option "s10_fin_budget_account"
+                    - option "s10_it_project"
+                    - option "s10_it_org"
+                    - option "ods_risk_measure_v2"
+                    - option "s10_it_task_snapshot"
+                    - option "ods_tech_state_v2"
+                    - option "s10_fin_budget_snapshot"
+                    - option "ods_quality_issue_v2"
+                    - option "ods_budget_v2"
+                    - option "ods_project_subject_domain_v2"
+                    - option "ods_tech_state_measure_v2"
+                    - option "ods_progress_measure_v2"
+                    - option "ods_quality_measure_v2"
+                    - option "s10_fin_cost_center"
+                    - option "ods_risk_info_v2"
+                - generic [ref=f19e11289]:
+                  - generic [ref=f19e11290]: 来源 source.pm_analytics_v3.pm_ods_v2.progress_measure_v2
+                  - combobox "来源 source.pm_analytics_v3.pm_ods_v2.progress_measure_v2" [ref=f19e11291]:
+                    - option "自动匹配（可能阻断）" [selected]
+                    - option "ods_material_info_v2"
+                    - option "s10_fin_budget_account"
+                    - option "s10_it_project"
+                    - option "s10_it_org"
+                    - option "ods_risk_measure_v2"
+                    - option "s10_it_task_snapshot"
+                    - option "ods_tech_state_v2"
+                    - option "s10_fin_budget_snapshot"
+                    - option "ods_quality_issue_v2"
+                    - option "ods_budget_v2"
+                    - option "ods_project_subject_domain_v2"
+                    - option "ods_tech_state_measure_v2"
+                    - option "ods_progress_measure_v2"
+                    - option "ods_quality_measure_v2"
+                    - option "s10_fin_cost_center"
+                    - option "ods_risk_info_v2"
+                - generic [ref=f19e11292]:
+                  - generic [ref=f19e11293]: 来源 source.pm_analytics_v3.pm_ods_v2.project_subject_domain_v2
+                  - combobox "来源 source.pm_analytics_v3.pm_ods_v2.project_subject_domain_v2" [ref=f19e11294]:
+                    - option "自动匹配（可能阻断）" [selected]
+                    - option "ods_material_info_v2"
+                    - option "s10_fin_budget_account"
+                    - option "s10_it_project"
+                    - option "s10_it_org"
+                    - option "ods_risk_measure_v2"
+                    - option "s10_it_task_snapshot"
+                    - option "ods_tech_state_v2"
+                    - option "s10_fin_budget_snapshot"
+                    - option "ods_quality_issue_v2"
+                    - option "ods_budget_v2"
+                    - option "ods_project_subject_domain_v2"
+                    - option "ods_tech_state_measure_v2"
+                    - option "ods_progress_measure_v2"
+                    - option "ods_quality_measure_v2"
+                    - option "s10_fin_cost_center"
+                    - option "ods_risk_info_v2"
+                - generic [ref=f19e11295]:
+                  - generic [ref=f19e11296]: 来源 source.pm_analytics_v3.pm_ods_v2.quality_issue_v2
+                  - combobox "来源 source.pm_analytics_v3.pm_ods_v2.quality_issue_v2" [ref=f19e11297]:
+                    - option "自动匹配（可能阻断）" [selected]
+                    - option "ods_material_info_v2"
+                    - option "s10_fin_budget_account"
+                    - option "s10_it_project"
+                    - option "s10_it_org"
+                    - option "ods_risk_measure_v2"
+                    - option "s10_it_task_snapshot"
+                    - option "ods_tech_state_v2"
+                    - option "s10_fin_budget_snapshot"
+                    - option "ods_quality_issue_v2"
+                    - option "ods_budget_v2"
+                    - option "ods_project_subject_domain_v2"
+                    - option "ods_tech_state_measure_v2"
+                    - option "ods_progress_measure_v2"
+                    - option "ods_quality_measure_v2"
+                    - option "s10_fin_cost_center"
+                    - option "ods_risk_info_v2"
+                - generic [ref=f19e11298]:
+                  - generic [ref=f19e11299]: 来源 source.pm_analytics_v3.pm_ods_v2.quality_measure_v2
+                  - combobox "来源 source.pm_analytics_v3.pm_ods_v2.quality_measure_v2" [ref=f19e11300]:
+                    - option "自动匹配（可能阻断）" [selected]
+                    - option "ods_material_info_v2"
+                    - option "s10_fin_budget_account"
+                    - option "s10_it_project"
+                    - option "s10_it_org"
+                    - option "ods_risk_measure_v2"
+                    - option "s10_it_task_snapshot"
+                    - option "ods_tech_state_v2"
+                    - option "s10_fin_budget_snapshot"
+                    - option "ods_quality_issue_v2"
+                    - option "ods_budget_v2"
+                    - option "ods_project_subject_domain_v2"
+                    - option "ods_tech_state_measure_v2"
+                    - option "ods_progress_measure_v2"
+                    - option "ods_quality_measure_v2"
+                    - option "s10_fin_cost_center"
+                    - option "ods_risk_info_v2"
+                - generic [ref=f19e11301]:
+                  - generic [ref=f19e11302]: 来源 source.pm_analytics_v3.pm_ods_v2.risk_info_v2
+                  - combobox "来源 source.pm_analytics_v3.pm_ods_v2.risk_info_v2" [ref=f19e11303]:
+                    - option "自动匹配（可能阻断）" [selected]
+                    - option "ods_material_info_v2"
+                    - option "s10_fin_budget_account"
+                    - option "s10_it_project"
+                    - option "s10_it_org"
+                    - option "ods_risk_measure_v2"
+                    - option "s10_it_task_snapshot"
+                    - option "ods_tech_state_v2"
+                    - option "s10_fin_budget_snapshot"
+                    - option "ods_quality_issue_v2"
+                    - option "ods_budget_v2"
+                    - option "ods_project_subject_domain_v2"
+                    - option "ods_tech_state_measure_v2"
+                    - option "ods_progress_measure_v2"
+                    - option "ods_quality_measure_v2"
+                    - option "s10_fin_cost_center"
+                    - option "ods_risk_info_v2"
+                - generic [ref=f19e11304]:
+                  - generic [ref=f19e11305]: 来源 source.pm_analytics_v3.pm_ods_v2.risk_measure_v2
+                  - combobox "来源 source.pm_analytics_v3.pm_ods_v2.risk_measure_v2" [ref=f19e11306]:
+                    - option "自动匹配（可能阻断）" [selected]
+                    - option "ods_material_info_v2"
+                    - option "s10_fin_budget_account"
+                    - option "s10_it_project"
+                    - option "s10_it_org"
+                    - option "ods_risk_measure_v2"
+                    - option "s10_it_task_snapshot"
+                    - option "ods_tech_state_v2"
+                    - option "s10_fin_budget_snapshot"
+                    - option "ods_quality_issue_v2"
+                    - option "ods_budget_v2"
+                    - option "ods_project_subject_domain_v2"
+                    - option "ods_tech_state_measure_v2"
+                    - option "ods_progress_measure_v2"
+                    - option "ods_quality_measure_v2"
+                    - option "s10_fin_cost_center"
+                    - option "ods_risk_info_v2"
+                - generic [ref=f19e11307]:
+                  - generic [ref=f19e11308]: 来源 source.pm_analytics_v3.pm_ods_v2.tech_state_measure_v2
+                  - combobox "来源 source.pm_analytics_v3.pm_ods_v2.tech_state_measure_v2" [ref=f19e11309]:
+                    - option "自动匹配（可能阻断）" [selected]
+                    - option "ods_material_info_v2"
+                    - option "s10_fin_budget_account"
+                    - option "s10_it_project"
+                    - option "s10_it_org"
+                    - option "ods_risk_measure_v2"
+                    - option "s10_it_task_snapshot"
+                    - option "ods_tech_state_v2"
+                    - option "s10_fin_budget_snapshot"
+                    - option "ods_quality_issue_v2"
+                    - option "ods_budget_v2"
+                    - option "ods_project_subject_domain_v2"
+                    - option "ods_tech_state_measure_v2"
+                    - option "ods_progress_measure_v2"
+                    - option "ods_quality_measure_v2"
+                    - option "s10_fin_cost_center"
+                    - option "ods_risk_info_v2"
+                - generic [ref=f19e11310]:
+                  - generic [ref=f19e11311]: 来源 source.pm_analytics_v3.pm_ods_v2.tech_state_v2
+                  - combobox "来源 source.pm_analytics_v3.pm_ods_v2.tech_state_v2" [ref=f19e11312]:
+                    - option "自动匹配（可能阻断）" [selected]
+                    - option "ods_material_info_v2"
+                    - option "s10_fin_budget_account"
+                    - option "s10_it_project"
+                    - option "s10_it_org"
+                    - option "ods_risk_measure_v2"
+                    - option "s10_it_task_snapshot"
+                    - option "ods_tech_state_v2"
+                    - option "s10_fin_budget_snapshot"
+                    - option "ods_quality_issue_v2"
+                    - option "ods_budget_v2"
+                    - option "ods_project_subject_domain_v2"
+                    - option "ods_tech_state_measure_v2"
+                    - option "ods_progress_measure_v2"
+                    - option "ods_quality_measure_v2"
+                    - option "s10_fin_cost_center"
+                    - option "ods_risk_info_v2"
+              - generic [ref=f19e11314]:
+                - generic [ref=f19e11315]:
+                  - strong [ref=f19e11316]: 重新导入重命名映射
+                  - paragraph [ref=f19e11317]: 只处理明确确认的 old unique_id → new unique_id。
+                - button "新增映射" [ref=f19e11318] [cursor=pointer]
+              - generic [ref=f19e11320]:
+                - generic [ref=f19e11321]: 批量确认发布密级
+                - combobox "批量确认导入模型发布密级" [ref=f19e11322]:
+                  - option "请选择并应用到已选模型" [selected]
+                  - option "公开"
+                  - option "内部"
+                  - option "秘密"
+                  - option "机密"
+                - generic [ref=f19e11323]: 这是当前操作者的显式治理确认，不会写回或篡改原始 dbt SQL。
+              - generic [ref=f19e11324]:
+                - paragraph [ref=f19e11325]: 发布密级由当前操作者显式确认；选择后应用到该模型全部字段，系统不会从测试数据或包名推断。
+                - table [ref=f19e11332]:
+                  - rowgroup [ref=f19e11335]:
+                    - row "选择 dbt 对象 业务名称 模型类型 目标分层 粒度说明 业务主键 发布密级 规划归属 字段数" [ref=f19e11336]:
+                      - columnheader "选择" [ref=f19e11337]
+                      - columnheader "dbt 对象" [ref=f19e11338]
+                      - columnheader "业务名称" [ref=f19e11339]
+                      - columnheader "模型类型" [ref=f19e11340]
+                      - columnheader "目标分层" [ref=f19e11341]
+                      - columnheader "粒度说明" [ref=f19e11342]
+                      - columnheader "业务主键" [ref=f19e11343]
+                      - columnheader "发布密级" [ref=f19e11344]
+                      - columnheader "规划归属" [ref=f19e11345]
+                      - columnheader "字段数" [ref=f19e11346]
+                  - rowgroup [ref=f19e11347]:
+                    - row "model.pm_analytics_v3.biz_ads_budget_derived_v2 可导入 SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION biz_ads_budget_derived_v2 应用表 ADS snapshot_scope + snapshot_date 唯一确定一行输出 snapshot_date,snapshot_scope 请确认 请选择数据集市 请选择主题域 9" [ref=f19e11348]:
+                      - cell [ref=f19e11349]:
+                        - checkbox [checked] [ref=f19e11350]
+                      - cell "model.pm_analytics_v3.biz_ads_budget_derived_v2 可导入 SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION" [ref=f19e11351]:
+                        - text: model.pm_analytics_v3.biz_ads_budget_derived_v2
+                        - generic [ref=f19e11352]: 可导入
+                        - text: SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_ads_budget_derived_v2" [ref=f19e11353]:
+                        - textbox [ref=f19e11354]: biz_ads_budget_derived_v2
+                      - cell "应用表" [ref=f19e11355]:
+                        - combobox [ref=f19e11356]
+                      - cell "ADS" [ref=f19e11357]:
+                        - combobox [ref=f19e11358]
+                      - cell "snapshot_scope + snapshot_date 唯一确定一行输出" [ref=f19e11359]:
+                        - textbox [ref=f19e11360]: snapshot_scope + snapshot_date 唯一确定一行输出
+                      - cell "snapshot_date,snapshot_scope" [ref=f19e11361]:
+                        - textbox "逗号分隔" [ref=f19e11362]: snapshot_date,snapshot_scope
+                      - cell "请确认" [ref=f19e11363]:
+                        - combobox "model.pm_analytics_v3.biz_ads_budget_derived_v2 发布密级" [ref=f19e11364]
+                      - cell "请选择数据集市 请选择主题域" [ref=f19e11365]:
+                        - generic [ref=f19e11366]
+                      - cell "9" [ref=f19e11369]
+                    - row "model.pm_analytics_v3.biz_ads_budget_kpi_v2 可导入 SQL_AGGREGATION、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION biz_ads_budget_kpi_v2 应用表 ADS snapshot_scope + snapshot_date 唯一确定一行输出 snapshot_date,snapshot_scope 请确认 请选择数据集市 请选择主题域 11" [ref=f19e11370]:
+                      - cell [ref=f19e11371]:
+                        - checkbox [checked] [ref=f19e11372]
+                      - cell "model.pm_analytics_v3.biz_ads_budget_kpi_v2 可导入 SQL_AGGREGATION、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION" [ref=f19e11373]:
+                        - text: model.pm_analytics_v3.biz_ads_budget_kpi_v2
+                        - generic [ref=f19e11374]: 可导入
+                        - text: SQL_AGGREGATION、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_ads_budget_kpi_v2" [ref=f19e11375]:
+                        - textbox [ref=f19e11376]: biz_ads_budget_kpi_v2
+                      - cell "应用表" [ref=f19e11377]:
+                        - combobox [ref=f19e11378]
+                      - cell "ADS" [ref=f19e11379]:
+                        - combobox [ref=f19e11380]
+                      - cell "snapshot_scope + snapshot_date 唯一确定一行输出" [ref=f19e11381]:
+                        - textbox [ref=f19e11382]: snapshot_scope + snapshot_date 唯一确定一行输出
+                      - cell "snapshot_date,snapshot_scope" [ref=f19e11383]:
+                        - textbox "逗号分隔" [ref=f19e11384]: snapshot_date,snapshot_scope
+                      - cell "请确认" [ref=f19e11385]:
+                        - combobox "model.pm_analytics_v3.biz_ads_budget_kpi_v2 发布密级" [ref=f19e11386]
+                      - cell "请选择数据集市 请选择主题域" [ref=f19e11387]:
+                        - generic [ref=f19e11388]
+                      - cell "11" [ref=f19e11391]
+                    - row "model.pm_analytics_v3.biz_ads_composite_derived_v2 可导入 SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION biz_ads_composite_derived_v2 应用表 ADS period_year + period_month 唯一确定一行输出 period_month,period_year 请确认 请选择数据集市 请选择主题域 9" [ref=f19e11392]:
+                      - cell [ref=f19e11393]:
+                        - checkbox [checked] [ref=f19e11394]
+                      - cell "model.pm_analytics_v3.biz_ads_composite_derived_v2 可导入 SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION" [ref=f19e11395]:
+                        - text: model.pm_analytics_v3.biz_ads_composite_derived_v2
+                        - generic [ref=f19e11396]: 可导入
+                        - text: SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_ads_composite_derived_v2" [ref=f19e11397]:
+                        - textbox [ref=f19e11398]: biz_ads_composite_derived_v2
+                      - cell "应用表" [ref=f19e11399]:
+                        - combobox [ref=f19e11400]
+                      - cell "ADS" [ref=f19e11401]:
+                        - combobox [ref=f19e11402]
+                      - cell "period_year + period_month 唯一确定一行输出" [ref=f19e11403]:
+                        - textbox [ref=f19e11404]: period_year + period_month 唯一确定一行输出
+                      - cell "period_month,period_year" [ref=f19e11405]:
+                        - textbox "逗号分隔" [ref=f19e11406]: period_month,period_year
+                      - cell "请确认" [ref=f19e11407]:
+                        - combobox "model.pm_analytics_v3.biz_ads_composite_derived_v2 发布密级" [ref=f19e11408]
+                      - cell "请选择数据集市 请选择主题域" [ref=f19e11409]:
+                        - generic [ref=f19e11410]
+                      - cell "9" [ref=f19e11413]
+                    - row "model.pm_analytics_v3.biz_ads_material_delivery_kpi_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION biz_ads_material_delivery_kpi_v2 应用表 ADS period_year + period_month + dept_owner 唯一确定一行输出 dept_owner,period_month,period_year 请确认 请选择数据集市 请选择主题域 15" [ref=f19e11414]:
+                      - cell [ref=f19e11415]:
+                        - checkbox [checked] [ref=f19e11416]
+                      - cell "model.pm_analytics_v3.biz_ads_material_delivery_kpi_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION" [ref=f19e11417]:
+                        - text: model.pm_analytics_v3.biz_ads_material_delivery_kpi_v2
+                        - generic [ref=f19e11418]: 可导入
+                        - text: SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_ads_material_delivery_kpi_v2" [ref=f19e11419]:
+                        - textbox [ref=f19e11420]: biz_ads_material_delivery_kpi_v2
+                      - cell "应用表" [ref=f19e11421]:
+                        - combobox [ref=f19e11422]
+                      - cell "ADS" [ref=f19e11423]:
+                        - combobox [ref=f19e11424]
+                      - cell "period_year + period_month + dept_owner 唯一确定一行输出" [ref=f19e11425]:
+                        - textbox [ref=f19e11426]: period_year + period_month + dept_owner 唯一确定一行输出
+                      - cell "dept_owner,period_month,period_year" [ref=f19e11427]:
+                        - textbox "逗号分隔" [ref=f19e11428]: dept_owner,period_month,period_year
+                      - cell "请确认" [ref=f19e11429]:
+                        - combobox "model.pm_analytics_v3.biz_ads_material_delivery_kpi_v2 发布密级" [ref=f19e11430]
+                      - cell "请选择数据集市 请选择主题域" [ref=f19e11431]:
+                        - generic [ref=f19e11432]
+                      - cell "15" [ref=f19e11435]
+                    - row "model.pm_analytics_v3.biz_ads_progress_derived_v2 可导入 SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION biz_ads_progress_derived_v2 应用表 ADS plan_year + plan_month 唯一确定一行输出 plan_month,plan_year 请确认 请选择数据集市 请选择主题域 11" [ref=f19e11436]:
+                      - cell [ref=f19e11437]:
+                        - checkbox [checked] [ref=f19e11438]
+                      - cell "model.pm_analytics_v3.biz_ads_progress_derived_v2 可导入 SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION" [ref=f19e11439]:
+                        - text: model.pm_analytics_v3.biz_ads_progress_derived_v2
+                        - generic [ref=f19e11440]: 可导入
+                        - text: SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_ads_progress_derived_v2" [ref=f19e11441]:
+                        - textbox [ref=f19e11442]: biz_ads_progress_derived_v2
+                      - cell "应用表" [ref=f19e11443]:
+                        - combobox [ref=f19e11444]
+                      - cell "ADS" [ref=f19e11445]:
+                        - combobox [ref=f19e11446]
+                      - cell "plan_year + plan_month 唯一确定一行输出" [ref=f19e11447]:
+                        - textbox [ref=f19e11448]: plan_year + plan_month 唯一确定一行输出
+                      - cell "plan_month,plan_year" [ref=f19e11449]:
+                        - textbox "逗号分隔" [ref=f19e11450]: plan_month,plan_year
+                      - cell "请确认" [ref=f19e11451]:
+                        - combobox "model.pm_analytics_v3.biz_ads_progress_derived_v2 发布密级" [ref=f19e11452]
+                      - cell "请选择数据集市 请选择主题域" [ref=f19e11453]:
+                        - generic [ref=f19e11454]
+                      - cell "11" [ref=f19e11457]
+                    - row "model.pm_analytics_v3.biz_ads_progress_kpi_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION biz_ads_progress_kpi_v2 应用表 ADS plan_year + plan_month 唯一确定一行输出 plan_month,plan_year 请确认 请选择数据集市 请选择主题域 38" [ref=f19e11458]:
+                      - cell [ref=f19e11459]:
+                        - checkbox [checked] [ref=f19e11460]
+                      - cell "model.pm_analytics_v3.biz_ads_progress_kpi_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION" [ref=f19e11461]:
+                        - text: model.pm_analytics_v3.biz_ads_progress_kpi_v2
+                        - generic [ref=f19e11462]: 可导入
+                        - text: SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_ads_progress_kpi_v2" [ref=f19e11463]:
+                        - textbox [ref=f19e11464]: biz_ads_progress_kpi_v2
+                      - cell "应用表" [ref=f19e11465]:
+                        - combobox [ref=f19e11466]
+                      - cell "ADS" [ref=f19e11467]:
+                        - combobox [ref=f19e11468]
+                      - cell "plan_year + plan_month 唯一确定一行输出" [ref=f19e11469]:
+                        - textbox [ref=f19e11470]: plan_year + plan_month 唯一确定一行输出
+                      - cell "plan_month,plan_year" [ref=f19e11471]:
+                        - textbox "逗号分隔" [ref=f19e11472]: plan_month,plan_year
+                      - cell "请确认" [ref=f19e11473]:
+                        - combobox "model.pm_analytics_v3.biz_ads_progress_kpi_v2 发布密级" [ref=f19e11474]
+                      - cell "请选择数据集市 请选择主题域" [ref=f19e11475]:
+                        - generic [ref=f19e11476]
+                      - cell "38" [ref=f19e11479]
+                    - row "model.pm_analytics_v3.biz_ads_project_follow_up_kpi_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION biz_ads_project_follow_up_kpi_v2 应用表 ADS period_year + period_month 唯一确定一行输出 period_month,period_year 请确认 请选择数据集市 请选择主题域 9" [ref=f19e11480]:
+                      - cell [ref=f19e11481]:
+                        - checkbox [checked] [ref=f19e11482]
+                      - cell "model.pm_analytics_v3.biz_ads_project_follow_up_kpi_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION" [ref=f19e11483]:
+                        - text: model.pm_analytics_v3.biz_ads_project_follow_up_kpi_v2
+                        - generic [ref=f19e11484]: 可导入
+                        - text: SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_ads_project_follow_up_kpi_v2" [ref=f19e11485]:
+                        - textbox [ref=f19e11486]: biz_ads_project_follow_up_kpi_v2
+                      - cell "应用表" [ref=f19e11487]:
+                        - combobox [ref=f19e11488]
+                      - cell "ADS" [ref=f19e11489]:
+                        - combobox [ref=f19e11490]
+                      - cell "period_year + period_month 唯一确定一行输出" [ref=f19e11491]:
+                        - textbox [ref=f19e11492]: period_year + period_month 唯一确定一行输出
+                      - cell "period_month,period_year" [ref=f19e11493]:
+                        - textbox "逗号分隔" [ref=f19e11494]: period_month,period_year
+                      - cell "请确认" [ref=f19e11495]:
+                        - combobox "model.pm_analytics_v3.biz_ads_project_follow_up_kpi_v2 发布密级" [ref=f19e11496]
+                      - cell "请选择数据集市 请选择主题域" [ref=f19e11497]:
+                        - generic [ref=f19e11498]
+                      - cell "9" [ref=f19e11501]
+                    - row "model.pm_analytics_v3.biz_ads_quality_derived_v2 可导入 SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION biz_ads_quality_derived_v2 应用表 ADS period_year + period_month 唯一确定一行输出 period_month,period_year 请确认 请选择数据集市 请选择主题域 9" [ref=f19e11502]:
+                      - cell [ref=f19e11503]:
+                        - checkbox [checked] [ref=f19e11504]
+                      - cell "model.pm_analytics_v3.biz_ads_quality_derived_v2 可导入 SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION" [ref=f19e11505]:
+                        - text: model.pm_analytics_v3.biz_ads_quality_derived_v2
+                        - generic [ref=f19e11506]: 可导入
+                        - text: SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_ads_quality_derived_v2" [ref=f19e11507]:
+                        - textbox [ref=f19e11508]: biz_ads_quality_derived_v2
+                      - cell "应用表" [ref=f19e11509]:
+                        - combobox [ref=f19e11510]
+                      - cell "ADS" [ref=f19e11511]:
+                        - combobox [ref=f19e11512]
+                      - cell "period_year + period_month 唯一确定一行输出" [ref=f19e11513]:
+                        - textbox [ref=f19e11514]: period_year + period_month 唯一确定一行输出
+                      - cell "period_month,period_year" [ref=f19e11515]:
+                        - textbox "逗号分隔" [ref=f19e11516]: period_month,period_year
+                      - cell "请确认" [ref=f19e11517]:
+                        - combobox "model.pm_analytics_v3.biz_ads_quality_derived_v2 发布密级" [ref=f19e11518]
+                      - cell "请选择数据集市 请选择主题域" [ref=f19e11519]:
+                        - generic [ref=f19e11520]
+                      - cell "9" [ref=f19e11523]
+                    - row "model.pm_analytics_v3.biz_ads_quality_kpi_v2 可导入 SQL_AGGREGATION、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION biz_ads_quality_kpi_v2 应用表 ADS period_year + period_month 唯一确定一行输出 period_month,period_year 请确认 请选择数据集市 请选择主题域 19" [ref=f19e11524]:
+                      - cell [ref=f19e11525]:
+                        - checkbox [checked] [ref=f19e11526]
+                      - cell "model.pm_analytics_v3.biz_ads_quality_kpi_v2 可导入 SQL_AGGREGATION、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION" [ref=f19e11527]:
+                        - text: model.pm_analytics_v3.biz_ads_quality_kpi_v2
+                        - generic [ref=f19e11528]: 可导入
+                        - text: SQL_AGGREGATION、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_ads_quality_kpi_v2" [ref=f19e11529]:
+                        - textbox [ref=f19e11530]: biz_ads_quality_kpi_v2
+                      - cell "应用表" [ref=f19e11531]:
+                        - combobox [ref=f19e11532]
+                      - cell "ADS" [ref=f19e11533]:
+                        - combobox [ref=f19e11534]
+                      - cell "period_year + period_month 唯一确定一行输出" [ref=f19e11535]:
+                        - textbox [ref=f19e11536]: period_year + period_month 唯一确定一行输出
+                      - cell "period_month,period_year" [ref=f19e11537]:
+                        - textbox "逗号分隔" [ref=f19e11538]: period_month,period_year
+                      - cell "请确认" [ref=f19e11539]:
+                        - combobox "model.pm_analytics_v3.biz_ads_quality_kpi_v2 发布密级" [ref=f19e11540]
+                      - cell "请选择数据集市 请选择主题域" [ref=f19e11541]:
+                        - generic [ref=f19e11542]
+                      - cell "19" [ref=f19e11545]
+                    - row "model.pm_analytics_v3.biz_ads_quality_measure_kpi_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION biz_ads_quality_measure_kpi_v2 应用表 ADS period_year + period_month 唯一确定一行输出 period_month,period_year 请确认 请选择数据集市 请选择主题域 9" [ref=f19e11546]:
+                      - cell [ref=f19e11547]:
+                        - checkbox [checked] [ref=f19e11548]
+                      - cell "model.pm_analytics_v3.biz_ads_quality_measure_kpi_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION" [ref=f19e11549]:
+                        - text: model.pm_analytics_v3.biz_ads_quality_measure_kpi_v2
+                        - generic [ref=f19e11550]: 可导入
+                        - text: SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_ads_quality_measure_kpi_v2" [ref=f19e11551]:
+                        - textbox [ref=f19e11552]: biz_ads_quality_measure_kpi_v2
+                      - cell "应用表" [ref=f19e11553]:
+                        - combobox [ref=f19e11554]
+                      - cell "ADS" [ref=f19e11555]:
+                        - combobox [ref=f19e11556]
+                      - cell "period_year + period_month 唯一确定一行输出" [ref=f19e11557]:
+                        - textbox [ref=f19e11558]: period_year + period_month 唯一确定一行输出
+                      - cell "period_month,period_year" [ref=f19e11559]:
+                        - textbox "逗号分隔" [ref=f19e11560]: period_month,period_year
+                      - cell "请确认" [ref=f19e11561]:
+                        - combobox "model.pm_analytics_v3.biz_ads_quality_measure_kpi_v2 发布密级" [ref=f19e11562]
+                      - cell "请选择数据集市 请选择主题域" [ref=f19e11563]:
+                        - generic [ref=f19e11564]
+                      - cell "9" [ref=f19e11567]
+                    - row "model.pm_analytics_v3.biz_ads_risk_kpi_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION biz_ads_risk_kpi_v2 应用表 ADS period_year + period_month 唯一确定一行输出 period_month,period_year 请确认 请选择数据集市 请选择主题域 9" [ref=f19e11568]:
+                      - cell [ref=f19e11569]:
+                        - checkbox [checked] [ref=f19e11570]
+                      - cell "model.pm_analytics_v3.biz_ads_risk_kpi_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION" [ref=f19e11571]:
+                        - text: model.pm_analytics_v3.biz_ads_risk_kpi_v2
+                        - generic [ref=f19e11572]: 可导入
+                        - text: SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_ads_risk_kpi_v2" [ref=f19e11573]:
+                        - textbox [ref=f19e11574]: biz_ads_risk_kpi_v2
+                      - cell "应用表" [ref=f19e11575]:
+                        - combobox [ref=f19e11576]
+                      - cell "ADS" [ref=f19e11577]:
+                        - combobox [ref=f19e11578]
+                      - cell "period_year + period_month 唯一确定一行输出" [ref=f19e11579]:
+                        - textbox [ref=f19e11580]: period_year + period_month 唯一确定一行输出
+                      - cell "period_month,period_year" [ref=f19e11581]:
+                        - textbox "逗号分隔" [ref=f19e11582]: period_month,period_year
+                      - cell "请确认" [ref=f19e11583]:
+                        - combobox "model.pm_analytics_v3.biz_ads_risk_kpi_v2 发布密级" [ref=f19e11584]
+                      - cell "请选择数据集市 请选择主题域" [ref=f19e11585]:
+                        - generic [ref=f19e11586]
+                      - cell "9" [ref=f19e11589]
+                    - row "model.pm_analytics_v3.biz_ads_risk_measure_kpi_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION biz_ads_risk_measure_kpi_v2 应用表 ADS period_year + period_month 唯一确定一行输出 period_month,period_year 请确认 请选择数据集市 请选择主题域 9" [ref=f19e11590]:
+                      - cell [ref=f19e11591]:
+                        - checkbox [checked] [ref=f19e11592]
+                      - cell "model.pm_analytics_v3.biz_ads_risk_measure_kpi_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION" [ref=f19e11593]:
+                        - text: model.pm_analytics_v3.biz_ads_risk_measure_kpi_v2
+                        - generic [ref=f19e11594]: 可导入
+                        - text: SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_ads_risk_measure_kpi_v2" [ref=f19e11595]:
+                        - textbox [ref=f19e11596]: biz_ads_risk_measure_kpi_v2
+                      - cell "应用表" [ref=f19e11597]:
+                        - combobox [ref=f19e11598]
+                      - cell "ADS" [ref=f19e11599]:
+                        - combobox [ref=f19e11600]
+                      - cell "period_year + period_month 唯一确定一行输出" [ref=f19e11601]:
+                        - textbox [ref=f19e11602]: period_year + period_month 唯一确定一行输出
+                      - cell "period_month,period_year" [ref=f19e11603]:
+                        - textbox "逗号分隔" [ref=f19e11604]: period_month,period_year
+                      - cell "请确认" [ref=f19e11605]:
+                        - combobox "model.pm_analytics_v3.biz_ads_risk_measure_kpi_v2 发布密级" [ref=f19e11606]
+                      - cell "请选择数据集市 请选择主题域" [ref=f19e11607]:
+                        - generic [ref=f19e11608]
+                      - cell "9" [ref=f19e11611]
+                    - row "model.pm_analytics_v3.biz_ads_tech_state_derived_v2 可导入 SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION biz_ads_tech_state_derived_v2 应用表 ADS period_year + period_month 唯一确定一行输出 period_month,period_year 请确认 请选择数据集市 请选择主题域 9" [ref=f19e11612]:
+                      - cell [ref=f19e11613]:
+                        - checkbox [checked] [ref=f19e11614]
+                      - cell "model.pm_analytics_v3.biz_ads_tech_state_derived_v2 可导入 SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION" [ref=f19e11615]:
+                        - text: model.pm_analytics_v3.biz_ads_tech_state_derived_v2
+                        - generic [ref=f19e11616]: 可导入
+                        - text: SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_ads_tech_state_derived_v2" [ref=f19e11617]:
+                        - textbox [ref=f19e11618]: biz_ads_tech_state_derived_v2
+                      - cell "应用表" [ref=f19e11619]:
+                        - combobox [ref=f19e11620]
+                      - cell "ADS" [ref=f19e11621]:
+                        - combobox [ref=f19e11622]
+                      - cell "period_year + period_month 唯一确定一行输出" [ref=f19e11623]:
+                        - textbox [ref=f19e11624]: period_year + period_month 唯一确定一行输出
+                      - cell "period_month,period_year" [ref=f19e11625]:
+                        - textbox "逗号分隔" [ref=f19e11626]: period_month,period_year
+                      - cell "请确认" [ref=f19e11627]:
+                        - combobox "model.pm_analytics_v3.biz_ads_tech_state_derived_v2 发布密级" [ref=f19e11628]
+                      - cell "请选择数据集市 请选择主题域" [ref=f19e11629]:
+                        - generic [ref=f19e11630]
+                      - cell "9" [ref=f19e11633]
+                    - row "model.pm_analytics_v3.biz_ads_tech_state_kpi_v2 可导入 SQL_AGGREGATION、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION biz_ads_tech_state_kpi_v2 应用表 ADS period_year + period_month 唯一确定一行输出 period_month,period_year 请确认 请选择数据集市 请选择主题域 22" [ref=f19e11634]:
+                      - cell [ref=f19e11635]:
+                        - checkbox [checked] [ref=f19e11636]
+                      - cell "model.pm_analytics_v3.biz_ads_tech_state_kpi_v2 可导入 SQL_AGGREGATION、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION" [ref=f19e11637]:
+                        - text: model.pm_analytics_v3.biz_ads_tech_state_kpi_v2
+                        - generic [ref=f19e11638]: 可导入
+                        - text: SQL_AGGREGATION、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_ads_tech_state_kpi_v2" [ref=f19e11639]:
+                        - textbox [ref=f19e11640]: biz_ads_tech_state_kpi_v2
+                      - cell "应用表" [ref=f19e11641]:
+                        - combobox [ref=f19e11642]
+                      - cell "ADS" [ref=f19e11643]:
+                        - combobox [ref=f19e11644]
+                      - cell "period_year + period_month 唯一确定一行输出" [ref=f19e11645]:
+                        - textbox [ref=f19e11646]: period_year + period_month 唯一确定一行输出
+                      - cell "period_month,period_year" [ref=f19e11647]:
+                        - textbox "逗号分隔" [ref=f19e11648]: period_month,period_year
+                      - cell "请确认" [ref=f19e11649]:
+                        - combobox "model.pm_analytics_v3.biz_ads_tech_state_kpi_v2 发布密级" [ref=f19e11650]
+                      - cell "请选择数据集市 请选择主题域" [ref=f19e11651]:
+                        - generic [ref=f19e11652]
+                      - cell "22" [ref=f19e11655]
+                    - row "model.pm_analytics_v3.biz_ads_tech_state_measure_kpi_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION biz_ads_tech_state_measure_kpi_v2 应用表 ADS period_year + period_month 唯一确定一行输出 period_month,period_year 请确认 请选择数据集市 请选择主题域 9" [ref=f19e11656]:
+                      - cell [ref=f19e11657]:
+                        - checkbox [checked] [ref=f19e11658]
+                      - cell "model.pm_analytics_v3.biz_ads_tech_state_measure_kpi_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION" [ref=f19e11659]:
+                        - text: model.pm_analytics_v3.biz_ads_tech_state_measure_kpi_v2
+                        - generic [ref=f19e11660]: 可导入
+                        - text: SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_ads_tech_state_measure_kpi_v2" [ref=f19e11661]:
+                        - textbox [ref=f19e11662]: biz_ads_tech_state_measure_kpi_v2
+                      - cell "应用表" [ref=f19e11663]:
+                        - combobox [ref=f19e11664]
+                      - cell "ADS" [ref=f19e11665]:
+                        - combobox [ref=f19e11666]
+                      - cell "period_year + period_month 唯一确定一行输出" [ref=f19e11667]:
+                        - textbox [ref=f19e11668]: period_year + period_month 唯一确定一行输出
+                      - cell "period_month,period_year" [ref=f19e11669]:
+                        - textbox "逗号分隔" [ref=f19e11670]: period_month,period_year
+                      - cell "请确认" [ref=f19e11671]:
+                        - combobox "model.pm_analytics_v3.biz_ads_tech_state_measure_kpi_v2 发布密级" [ref=f19e11672]
+                      - cell "请选择数据集市 请选择主题域" [ref=f19e11673]:
+                        - generic [ref=f19e11674]
+                      - cell "9" [ref=f19e11677]
+                    - row "model.pm_analytics_v3.biz_dwd_budget_v2 可导入 SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION biz_dwd_budget_v2 明细表 DWD 每行代表一个预算编号在一个业务快照日的执行状态 budget_id 请确认 业务过程 请选择 请先映射数据域 20" [ref=f19e11678]:
+                      - cell [ref=f19e11679]:
+                        - checkbox [checked] [ref=f19e11680]
+                      - cell "model.pm_analytics_v3.biz_dwd_budget_v2 可导入 SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION" [ref=f19e11681]:
+                        - text: model.pm_analytics_v3.biz_dwd_budget_v2
+                        - generic [ref=f19e11682]: 可导入
+                        - text: SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_dwd_budget_v2" [ref=f19e11683]:
+                        - textbox [ref=f19e11684]: biz_dwd_budget_v2
+                      - cell "明细表" [ref=f19e11685]:
+                        - combobox [ref=f19e11686]
+                      - cell "DWD" [ref=f19e11687]:
+                        - combobox [ref=f19e11688]
+                      - cell "每行代表一个预算编号在一个业务快照日的执行状态" [ref=f19e11689]:
+                        - textbox [ref=f19e11690]: 每行代表一个预算编号在一个业务快照日的执行状态
+                      - cell "budget_id" [ref=f19e11691]:
+                        - textbox "逗号分隔" [ref=f19e11692]: budget_id
+                      - cell "请确认" [ref=f19e11693]:
+                        - combobox "model.pm_analytics_v3.biz_dwd_budget_v2 发布密级" [ref=f19e11694]
+                      - cell "业务过程 请选择 请先映射数据域" [ref=f19e11695]:
+                        - generic [ref=f19e11696]
+                      - cell "20" [ref=f19e11698]
+                    - row "model.pm_analytics_v3.biz_dwd_material_delivery_v2 可导入 SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION biz_dwd_material_delivery_v2 明细表 DWD 每行代表一个项目下的一项 PBS 物料交付状态 material_delivery_id 请确认 业务过程 请选择 请先映射数据域 50" [ref=f19e11699]:
+                      - cell [ref=f19e11700]:
+                        - checkbox [checked] [ref=f19e11701]
+                      - cell "model.pm_analytics_v3.biz_dwd_material_delivery_v2 可导入 SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION" [ref=f19e11702]:
+                        - text: model.pm_analytics_v3.biz_dwd_material_delivery_v2
+                        - generic [ref=f19e11703]: 可导入
+                        - text: SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_dwd_material_delivery_v2" [ref=f19e11704]:
+                        - textbox [ref=f19e11705]: biz_dwd_material_delivery_v2
+                      - cell "明细表" [ref=f19e11706]:
+                        - combobox [ref=f19e11707]
+                      - cell "DWD" [ref=f19e11708]:
+                        - combobox [ref=f19e11709]
+                      - cell "每行代表一个项目下的一项 PBS 物料交付状态" [ref=f19e11710]:
+                        - textbox [ref=f19e11711]: 每行代表一个项目下的一项 PBS 物料交付状态
+                      - cell "material_delivery_id" [ref=f19e11712]:
+                        - textbox "逗号分隔" [ref=f19e11713]: material_delivery_id
+                      - cell "请确认" [ref=f19e11714]:
+                        - combobox "model.pm_analytics_v3.biz_dwd_material_delivery_v2 发布密级" [ref=f19e11715]
+                      - cell "业务过程 请选择 请先映射数据域" [ref=f19e11716]:
+                        - generic [ref=f19e11717]
+                      - cell "50" [ref=f19e11719]
+                    - row "model.pm_analytics_v3.biz_dwd_project_follow_up_v2 可导入 SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION biz_dwd_project_follow_up_v2 明细表 DWD 每行代表一个项目节点的一条跟进措施 measure_id 请确认 业务过程 请选择 请先映射数据域 36" [ref=f19e11720]:
+                      - cell [ref=f19e11721]:
+                        - checkbox [checked] [ref=f19e11722]
+                      - cell "model.pm_analytics_v3.biz_dwd_project_follow_up_v2 可导入 SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION" [ref=f19e11723]:
+                        - text: model.pm_analytics_v3.biz_dwd_project_follow_up_v2
+                        - generic [ref=f19e11724]: 可导入
+                        - text: SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_dwd_project_follow_up_v2" [ref=f19e11725]:
+                        - textbox [ref=f19e11726]: biz_dwd_project_follow_up_v2
+                      - cell "明细表" [ref=f19e11727]:
+                        - combobox [ref=f19e11728]
+                      - cell "DWD" [ref=f19e11729]:
+                        - combobox [ref=f19e11730]
+                      - cell "每行代表一个项目节点的一条跟进措施" [ref=f19e11731]:
+                        - textbox [ref=f19e11732]: 每行代表一个项目节点的一条跟进措施
+                      - cell "measure_id" [ref=f19e11733]:
+                        - textbox "逗号分隔" [ref=f19e11734]: measure_id
+                      - cell "请确认" [ref=f19e11735]:
+                        - combobox "model.pm_analytics_v3.biz_dwd_project_follow_up_v2 发布密级" [ref=f19e11736]
+                      - cell "业务过程 请选择 请先映射数据域" [ref=f19e11737]:
+                        - generic [ref=f19e11738]
+                      - cell "36" [ref=f19e11740]
+                    - row "model.pm_analytics_v3.biz_dwd_project_node_v2 可导入 SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION biz_dwd_project_node_v2 明细表 DWD 每行代表一个项目分任务节点及其计划日期 node_id 请确认 业务过程 请选择 请先映射数据域 77" [ref=f19e11741]:
+                      - cell [ref=f19e11742]:
+                        - checkbox [checked] [ref=f19e11743]
+                      - cell "model.pm_analytics_v3.biz_dwd_project_node_v2 可导入 SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION" [ref=f19e11744]:
+                        - text: model.pm_analytics_v3.biz_dwd_project_node_v2
+                        - generic [ref=f19e11745]: 可导入
+                        - text: SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_dwd_project_node_v2" [ref=f19e11746]:
+                        - textbox [ref=f19e11747]: biz_dwd_project_node_v2
+                      - cell "明细表" [ref=f19e11748]:
+                        - combobox [ref=f19e11749]
+                      - cell "DWD" [ref=f19e11750]:
+                        - combobox [ref=f19e11751]
+                      - cell "每行代表一个项目分任务节点及其计划日期" [ref=f19e11752]:
+                        - textbox [ref=f19e11753]: 每行代表一个项目分任务节点及其计划日期
+                      - cell "node_id" [ref=f19e11754]:
+                        - textbox "逗号分隔" [ref=f19e11755]: node_id
+                      - cell "请确认" [ref=f19e11756]:
+                        - combobox "model.pm_analytics_v3.biz_dwd_project_node_v2 发布密级" [ref=f19e11757]
+                      - cell "业务过程 请选择 请先映射数据域" [ref=f19e11758]:
+                        - generic [ref=f19e11759]
+                      - cell "77" [ref=f19e11761]
+                    - row "model.pm_analytics_v3.biz_dwd_quality_issue_v2 可导入 SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION biz_dwd_quality_issue_v2 明细表 DWD 每行代表一个项目下的一条质量问题 issue_id 请确认 业务过程 请选择 请先映射数据域 58" [ref=f19e11762]:
+                      - cell [ref=f19e11763]:
+                        - checkbox [checked] [ref=f19e11764]
+                      - cell "model.pm_analytics_v3.biz_dwd_quality_issue_v2 可导入 SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION" [ref=f19e11765]:
+                        - text: model.pm_analytics_v3.biz_dwd_quality_issue_v2
+                        - generic [ref=f19e11766]: 可导入
+                        - text: SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_dwd_quality_issue_v2" [ref=f19e11767]:
+                        - textbox [ref=f19e11768]: biz_dwd_quality_issue_v2
+                      - cell "明细表" [ref=f19e11769]:
+                        - combobox [ref=f19e11770]
+                      - cell "DWD" [ref=f19e11771]:
+                        - combobox [ref=f19e11772]
+                      - cell "每行代表一个项目下的一条质量问题" [ref=f19e11773]:
+                        - textbox [ref=f19e11774]: 每行代表一个项目下的一条质量问题
+                      - cell "issue_id" [ref=f19e11775]:
+                        - textbox "逗号分隔" [ref=f19e11776]: issue_id
+                      - cell "请确认" [ref=f19e11777]:
+                        - combobox "model.pm_analytics_v3.biz_dwd_quality_issue_v2 发布密级" [ref=f19e11778]
+                      - cell "业务过程 请选择 请先映射数据域" [ref=f19e11779]:
+                        - generic [ref=f19e11780]
+                      - cell "58" [ref=f19e11782]
+                    - row "model.pm_analytics_v3.biz_dwd_quality_measure_v2 可导入 SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION biz_dwd_quality_measure_v2 明细表 DWD 每行代表一条质量问题跟进措施 measure_id 请确认 业务过程 请选择 请先映射数据域 46" [ref=f19e11783]:
+                      - cell [ref=f19e11784]:
+                        - checkbox [checked] [ref=f19e11785]
+                      - cell "model.pm_analytics_v3.biz_dwd_quality_measure_v2 可导入 SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION" [ref=f19e11786]:
+                        - text: model.pm_analytics_v3.biz_dwd_quality_measure_v2
+                        - generic [ref=f19e11787]: 可导入
+                        - text: SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_dwd_quality_measure_v2" [ref=f19e11788]:
+                        - textbox [ref=f19e11789]: biz_dwd_quality_measure_v2
+                      - cell "明细表" [ref=f19e11790]:
+                        - combobox [ref=f19e11791]
+                      - cell "DWD" [ref=f19e11792]:
+                        - combobox [ref=f19e11793]
+                      - cell "每行代表一条质量问题跟进措施" [ref=f19e11794]:
+                        - textbox [ref=f19e11795]: 每行代表一条质量问题跟进措施
+                      - cell "measure_id" [ref=f19e11796]:
+                        - textbox "逗号分隔" [ref=f19e11797]: measure_id
+                      - cell "请确认" [ref=f19e11798]:
+                        - combobox "model.pm_analytics_v3.biz_dwd_quality_measure_v2 发布密级" [ref=f19e11799]
+                      - cell "业务过程 请选择 请先映射数据域" [ref=f19e11800]:
+                        - generic [ref=f19e11801]
+                      - cell "46" [ref=f19e11803]
+                    - row "model.pm_analytics_v3.biz_dwd_risk_info_v2 可导入 SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION biz_dwd_risk_info_v2 明细表 DWD 每行代表一个项目下的一条风险 risk_id 请确认 业务过程 请选择 请先映射数据域 65" [ref=f19e11804]:
+                      - cell [ref=f19e11805]:
+                        - checkbox [checked] [ref=f19e11806]
+                      - cell "model.pm_analytics_v3.biz_dwd_risk_info_v2 可导入 SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION" [ref=f19e11807]:
+                        - text: model.pm_analytics_v3.biz_dwd_risk_info_v2
+                        - generic [ref=f19e11808]: 可导入
+                        - text: SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_dwd_risk_info_v2" [ref=f19e11809]:
+                        - textbox [ref=f19e11810]: biz_dwd_risk_info_v2
+                      - cell "明细表" [ref=f19e11811]:
+                        - combobox [ref=f19e11812]
+                      - cell "DWD" [ref=f19e11813]:
+                        - combobox [ref=f19e11814]
+                      - cell "每行代表一个项目下的一条风险" [ref=f19e11815]:
+                        - textbox [ref=f19e11816]: 每行代表一个项目下的一条风险
+                      - cell "risk_id" [ref=f19e11817]:
+                        - textbox "逗号分隔" [ref=f19e11818]: risk_id
+                      - cell "请确认" [ref=f19e11819]:
+                        - combobox "model.pm_analytics_v3.biz_dwd_risk_info_v2 发布密级" [ref=f19e11820]
+                      - cell "业务过程 请选择 请先映射数据域" [ref=f19e11821]:
+                        - generic [ref=f19e11822]
+                      - cell "65" [ref=f19e11824]
+                    - row "model.pm_analytics_v3.biz_dwd_risk_measure_v2 可导入 SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION biz_dwd_risk_measure_v2 明细表 DWD 每行代表一条项目风险跟进措施 measure_id 请确认 业务过程 请选择 请先映射数据域 55" [ref=f19e11825]:
+                      - cell [ref=f19e11826]:
+                        - checkbox [checked] [ref=f19e11827]
+                      - cell "model.pm_analytics_v3.biz_dwd_risk_measure_v2 可导入 SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION" [ref=f19e11828]:
+                        - text: model.pm_analytics_v3.biz_dwd_risk_measure_v2
+                        - generic [ref=f19e11829]: 可导入
+                        - text: SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_dwd_risk_measure_v2" [ref=f19e11830]:
+                        - textbox [ref=f19e11831]: biz_dwd_risk_measure_v2
+                      - cell "明细表" [ref=f19e11832]:
+                        - combobox [ref=f19e11833]
+                      - cell "DWD" [ref=f19e11834]:
+                        - combobox [ref=f19e11835]
+                      - cell "每行代表一条项目风险跟进措施" [ref=f19e11836]:
+                        - textbox [ref=f19e11837]: 每行代表一条项目风险跟进措施
+                      - cell "measure_id" [ref=f19e11838]:
+                        - textbox "逗号分隔" [ref=f19e11839]: measure_id
+                      - cell "请确认" [ref=f19e11840]:
+                        - combobox "model.pm_analytics_v3.biz_dwd_risk_measure_v2 发布密级" [ref=f19e11841]
+                      - cell "业务过程 请选择 请先映射数据域" [ref=f19e11842]:
+                        - generic [ref=f19e11843]
+                      - cell "55" [ref=f19e11845]
+                    - row "model.pm_analytics_v3.biz_dwd_tech_state_measure_v2 可导入 SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION biz_dwd_tech_state_measure_v2 明细表 DWD 每行代表一条技术状态跟进措施 measure_id 请确认 业务过程 请选择 请先映射数据域 54" [ref=f19e11846]:
+                      - cell [ref=f19e11847]:
+                        - checkbox [checked] [ref=f19e11848]
+                      - cell "model.pm_analytics_v3.biz_dwd_tech_state_measure_v2 可导入 SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION" [ref=f19e11849]:
+                        - text: model.pm_analytics_v3.biz_dwd_tech_state_measure_v2
+                        - generic [ref=f19e11850]: 可导入
+                        - text: SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_dwd_tech_state_measure_v2" [ref=f19e11851]:
+                        - textbox [ref=f19e11852]: biz_dwd_tech_state_measure_v2
+                      - cell "明细表" [ref=f19e11853]:
+                        - combobox [ref=f19e11854]
+                      - cell "DWD" [ref=f19e11855]:
+                        - combobox [ref=f19e11856]
+                      - cell "每行代表一条技术状态跟进措施" [ref=f19e11857]:
+                        - textbox [ref=f19e11858]: 每行代表一条技术状态跟进措施
+                      - cell "measure_id" [ref=f19e11859]:
+                        - textbox "逗号分隔" [ref=f19e11860]: measure_id
+                      - cell "请确认" [ref=f19e11861]:
+                        - combobox "model.pm_analytics_v3.biz_dwd_tech_state_measure_v2 发布密级" [ref=f19e11862]
+                      - cell "业务过程 请选择 请先映射数据域" [ref=f19e11863]:
+                        - generic [ref=f19e11864]
+                      - cell "54" [ref=f19e11866]
+                    - row "model.pm_analytics_v3.biz_dwd_tech_state_v2 可导入 SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION biz_dwd_tech_state_v2 明细表 DWD 每行代表一个项目下的一项技术状态更改 tech_state_id 请确认 业务过程 请选择 请先映射数据域 67" [ref=f19e11867]:
+                      - cell [ref=f19e11868]:
+                        - checkbox [checked] [ref=f19e11869]
+                      - cell "model.pm_analytics_v3.biz_dwd_tech_state_v2 可导入 SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION" [ref=f19e11870]:
+                        - text: model.pm_analytics_v3.biz_dwd_tech_state_v2
+                        - generic [ref=f19e11871]: 可导入
+                        - text: SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_dwd_tech_state_v2" [ref=f19e11872]:
+                        - textbox [ref=f19e11873]: biz_dwd_tech_state_v2
+                      - cell "明细表" [ref=f19e11874]:
+                        - combobox [ref=f19e11875]
+                      - cell "DWD" [ref=f19e11876]:
+                        - combobox [ref=f19e11877]
+                      - cell "每行代表一个项目下的一项技术状态更改" [ref=f19e11878]:
+                        - textbox [ref=f19e11879]: 每行代表一个项目下的一项技术状态更改
+                      - cell "tech_state_id" [ref=f19e11880]:
+                        - textbox "逗号分隔" [ref=f19e11881]: tech_state_id
+                      - cell "请确认" [ref=f19e11882]:
+                        - combobox "model.pm_analytics_v3.biz_dwd_tech_state_v2 发布密级" [ref=f19e11883]
+                      - cell "业务过程 请选择 请先映射数据域" [ref=f19e11884]:
+                        - generic [ref=f19e11885]
+                      - cell "67" [ref=f19e11887]
+                    - row "model.pm_analytics_v3.biz_dws_budget_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION biz_dws_budget_v2 汇总表 DWS 每行代表一个业务快照日下项目与研究室的预算汇总 project_no,research_lab,snapshot_date 请确认 由上游模型继承 12" [ref=f19e11888]:
+                      - cell [ref=f19e11889]:
+                        - checkbox [checked] [ref=f19e11890]
+                      - cell "model.pm_analytics_v3.biz_dws_budget_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION" [ref=f19e11891]:
+                        - text: model.pm_analytics_v3.biz_dws_budget_v2
+                        - generic [ref=f19e11892]: 可导入
+                        - text: SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_dws_budget_v2" [ref=f19e11893]:
+                        - textbox [ref=f19e11894]: biz_dws_budget_v2
+                      - cell "汇总表" [ref=f19e11895]:
+                        - combobox [ref=f19e11896]
+                      - cell "DWS" [ref=f19e11897]:
+                        - combobox [ref=f19e11898]
+                      - cell "每行代表一个业务快照日下项目与研究室的预算汇总" [ref=f19e11899]:
+                        - textbox [ref=f19e11900]: 每行代表一个业务快照日下项目与研究室的预算汇总
+                      - cell "project_no,research_lab,snapshot_date" [ref=f19e11901]:
+                        - textbox "逗号分隔" [ref=f19e11902]: project_no,research_lab,snapshot_date
+                      - cell "请确认" [ref=f19e11903]:
+                        - combobox "model.pm_analytics_v3.biz_dws_budget_v2 发布密级" [ref=f19e11904]
+                      - cell "由上游模型继承" [ref=f19e11905]
+                      - cell "12" [ref=f19e11906]
+                    - row "model.pm_analytics_v3.biz_dws_material_delivery_monthly_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION biz_dws_material_delivery_monthly_v2 汇总表 DWS 每行代表项目责任部门在一个合同交付月份的物料汇总 dept_owner,period_month,project_no 请确认 由上游模型继承 14" [ref=f19e11907]:
+                      - cell [ref=f19e11908]:
+                        - checkbox [checked] [ref=f19e11909]
+                      - cell "model.pm_analytics_v3.biz_dws_material_delivery_monthly_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION" [ref=f19e11910]:
+                        - text: model.pm_analytics_v3.biz_dws_material_delivery_monthly_v2
+                        - generic [ref=f19e11911]: 可导入
+                        - text: SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_dws_material_delivery_monthly_v2" [ref=f19e11912]:
+                        - textbox [ref=f19e11913]: biz_dws_material_delivery_monthly_v2
+                      - cell "汇总表" [ref=f19e11914]:
+                        - combobox [ref=f19e11915]
+                      - cell "DWS" [ref=f19e11916]:
+                        - combobox [ref=f19e11917]
+                      - cell "每行代表项目责任部门在一个合同交付月份的物料汇总" [ref=f19e11918]:
+                        - textbox [ref=f19e11919]: 每行代表项目责任部门在一个合同交付月份的物料汇总
+                      - cell "dept_owner,period_month,project_no" [ref=f19e11920]:
+                        - textbox "逗号分隔" [ref=f19e11921]: dept_owner,period_month,project_no
+                      - cell "请确认" [ref=f19e11922]:
+                        - combobox "model.pm_analytics_v3.biz_dws_material_delivery_monthly_v2 发布密级" [ref=f19e11923]
+                      - cell "由上游模型继承" [ref=f19e11924]
+                      - cell "14" [ref=f19e11925]
+                    - row "model.pm_analytics_v3.biz_dws_progress_monthly_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION biz_dws_progress_monthly_v2 汇总表 DWS 每行代表一个项目在一个计划月份的进度汇总 plan_month,project_no 请确认 由上游模型继承 34" [ref=f19e11926]:
+                      - cell [ref=f19e11927]:
+                        - checkbox [checked] [ref=f19e11928]
+                      - cell "model.pm_analytics_v3.biz_dws_progress_monthly_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION" [ref=f19e11929]:
+                        - text: model.pm_analytics_v3.biz_dws_progress_monthly_v2
+                        - generic [ref=f19e11930]: 可导入
+                        - text: SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_ARITHMETIC、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_dws_progress_monthly_v2" [ref=f19e11931]:
+                        - textbox [ref=f19e11932]: biz_dws_progress_monthly_v2
+                      - cell "汇总表" [ref=f19e11933]:
+                        - combobox [ref=f19e11934]
+                      - cell "DWS" [ref=f19e11935]:
+                        - combobox [ref=f19e11936]
+                      - cell "每行代表一个项目在一个计划月份的进度汇总" [ref=f19e11937]:
+                        - textbox [ref=f19e11938]: 每行代表一个项目在一个计划月份的进度汇总
+                      - cell "plan_month,project_no" [ref=f19e11939]:
+                        - textbox "逗号分隔" [ref=f19e11940]: plan_month,project_no
+                      - cell "请确认" [ref=f19e11941]:
+                        - combobox "model.pm_analytics_v3.biz_dws_progress_monthly_v2 发布密级" [ref=f19e11942]
+                      - cell "由上游模型继承" [ref=f19e11943]
+                      - cell "34" [ref=f19e11944]
+                    - row "model.pm_analytics_v3.biz_dws_project_follow_up_monthly_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION biz_dws_project_follow_up_monthly_v2 汇总表 DWS 每行代表一个项目在一个跟进月份的措施汇总 period_month,project_no 请确认 由上游模型继承 9" [ref=f19e11945]:
+                      - cell [ref=f19e11946]:
+                        - checkbox [checked] [ref=f19e11947]
+                      - cell "model.pm_analytics_v3.biz_dws_project_follow_up_monthly_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION" [ref=f19e11948]:
+                        - text: model.pm_analytics_v3.biz_dws_project_follow_up_monthly_v2
+                        - generic [ref=f19e11949]: 可导入
+                        - text: SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_dws_project_follow_up_monthly_v2" [ref=f19e11950]:
+                        - textbox [ref=f19e11951]: biz_dws_project_follow_up_monthly_v2
+                      - cell "汇总表" [ref=f19e11952]:
+                        - combobox [ref=f19e11953]
+                      - cell "DWS" [ref=f19e11954]:
+                        - combobox [ref=f19e11955]
+                      - cell "每行代表一个项目在一个跟进月份的措施汇总" [ref=f19e11956]:
+                        - textbox [ref=f19e11957]: 每行代表一个项目在一个跟进月份的措施汇总
+                      - cell "period_month,project_no" [ref=f19e11958]:
+                        - textbox "逗号分隔" [ref=f19e11959]: period_month,project_no
+                      - cell "请确认" [ref=f19e11960]:
+                        - combobox "model.pm_analytics_v3.biz_dws_project_follow_up_monthly_v2 发布密级" [ref=f19e11961]
+                      - cell "由上游模型继承" [ref=f19e11962]
+                      - cell "9" [ref=f19e11963]
+                    - row "model.pm_analytics_v3.biz_dws_quality_measure_monthly_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION biz_dws_quality_measure_monthly_v2 汇总表 DWS 每行代表项目责任部门在一个跟进月份的质量措施汇总 dept,period_month,project_no 请确认 由上游模型继承 10" [ref=f19e11964]:
+                      - cell [ref=f19e11965]:
+                        - checkbox [checked] [ref=f19e11966]
+                      - cell "model.pm_analytics_v3.biz_dws_quality_measure_monthly_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION" [ref=f19e11967]:
+                        - text: model.pm_analytics_v3.biz_dws_quality_measure_monthly_v2
+                        - generic [ref=f19e11968]: 可导入
+                        - text: SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_dws_quality_measure_monthly_v2" [ref=f19e11969]:
+                        - textbox [ref=f19e11970]: biz_dws_quality_measure_monthly_v2
+                      - cell "汇总表" [ref=f19e11971]:
+                        - combobox [ref=f19e11972]
+                      - cell "DWS" [ref=f19e11973]:
+                        - combobox [ref=f19e11974]
+                      - cell "每行代表项目责任部门在一个跟进月份的质量措施汇总" [ref=f19e11975]:
+                        - textbox [ref=f19e11976]: 每行代表项目责任部门在一个跟进月份的质量措施汇总
+                      - cell "dept,period_month,project_no" [ref=f19e11977]:
+                        - textbox "逗号分隔" [ref=f19e11978]: dept,period_month,project_no
+                      - cell "请确认" [ref=f19e11979]:
+                        - combobox "model.pm_analytics_v3.biz_dws_quality_measure_monthly_v2 发布密级" [ref=f19e11980]
+                      - cell "由上游模型继承" [ref=f19e11981]
+                      - cell "10" [ref=f19e11982]
+                    - row "model.pm_analytics_v3.biz_dws_quality_monthly_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION biz_dws_quality_monthly_v2 汇总表 DWS 每行代表一个项目责任部门在一个问题发生月份的质量汇总 dept,period_month,project_no 请确认 由上游模型继承 29" [ref=f19e11983]:
+                      - cell [ref=f19e11984]:
+                        - checkbox [checked] [ref=f19e11985]
+                      - cell "model.pm_analytics_v3.biz_dws_quality_monthly_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION" [ref=f19e11986]:
+                        - text: model.pm_analytics_v3.biz_dws_quality_monthly_v2
+                        - generic [ref=f19e11987]: 可导入
+                        - text: SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_dws_quality_monthly_v2" [ref=f19e11988]:
+                        - textbox [ref=f19e11989]: biz_dws_quality_monthly_v2
+                      - cell "汇总表" [ref=f19e11990]:
+                        - combobox [ref=f19e11991]
+                      - cell "DWS" [ref=f19e11992]:
+                        - combobox [ref=f19e11993]
+                      - cell "每行代表一个项目责任部门在一个问题发生月份的质量汇总" [ref=f19e11994]:
+                        - textbox [ref=f19e11995]: 每行代表一个项目责任部门在一个问题发生月份的质量汇总
+                      - cell "dept,period_month,project_no" [ref=f19e11996]:
+                        - textbox "逗号分隔" [ref=f19e11997]: dept,period_month,project_no
+                      - cell "请确认" [ref=f19e11998]:
+                        - combobox "model.pm_analytics_v3.biz_dws_quality_monthly_v2 发布密级" [ref=f19e11999]
+                      - cell "由上游模型继承" [ref=f19e12000]
+                      - cell "29" [ref=f19e12001]
+                    - row "model.pm_analytics_v3.biz_dws_risk_measure_monthly_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION biz_dws_risk_measure_monthly_v2 汇总表 DWS 每行代表项目责任部门在一个跟进月份的风险措施汇总 dept,period_month,project_no 请确认 由上游模型继承 10" [ref=f19e12002]:
+                      - cell [ref=f19e12003]:
+                        - checkbox [checked] [ref=f19e12004]
+                      - cell "model.pm_analytics_v3.biz_dws_risk_measure_monthly_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION" [ref=f19e12005]:
+                        - text: model.pm_analytics_v3.biz_dws_risk_measure_monthly_v2
+                        - generic [ref=f19e12006]: 可导入
+                        - text: SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_dws_risk_measure_monthly_v2" [ref=f19e12007]:
+                        - textbox [ref=f19e12008]: biz_dws_risk_measure_monthly_v2
+                      - cell "汇总表" [ref=f19e12009]:
+                        - combobox [ref=f19e12010]
+                      - cell "DWS" [ref=f19e12011]:
+                        - combobox [ref=f19e12012]
+                      - cell "每行代表项目责任部门在一个跟进月份的风险措施汇总" [ref=f19e12013]:
+                        - textbox [ref=f19e12014]: 每行代表项目责任部门在一个跟进月份的风险措施汇总
+                      - cell "dept,period_month,project_no" [ref=f19e12015]:
+                        - textbox "逗号分隔" [ref=f19e12016]: dept,period_month,project_no
+                      - cell "请确认" [ref=f19e12017]:
+                        - combobox "model.pm_analytics_v3.biz_dws_risk_measure_monthly_v2 发布密级" [ref=f19e12018]
+                      - cell "由上游模型继承" [ref=f19e12019]
+                      - cell "10" [ref=f19e12020]
+                    - row "model.pm_analytics_v3.biz_dws_risk_monthly_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION biz_dws_risk_monthly_v2 汇总表 DWS 每行代表一个项目责任部门在一个风险提出月份的风险汇总 dept,period_month,project_no 请确认 由上游模型继承 16" [ref=f19e12021]:
+                      - cell [ref=f19e12022]:
+                        - checkbox [checked] [ref=f19e12023]
+                      - cell "model.pm_analytics_v3.biz_dws_risk_monthly_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION" [ref=f19e12024]:
+                        - text: model.pm_analytics_v3.biz_dws_risk_monthly_v2
+                        - generic [ref=f19e12025]: 可导入
+                        - text: SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_dws_risk_monthly_v2" [ref=f19e12026]:
+                        - textbox [ref=f19e12027]: biz_dws_risk_monthly_v2
+                      - cell "汇总表" [ref=f19e12028]:
+                        - combobox [ref=f19e12029]
+                      - cell "DWS" [ref=f19e12030]:
+                        - combobox [ref=f19e12031]
+                      - cell "每行代表一个项目责任部门在一个风险提出月份的风险汇总" [ref=f19e12032]:
+                        - textbox [ref=f19e12033]: 每行代表一个项目责任部门在一个风险提出月份的风险汇总
+                      - cell "dept,period_month,project_no" [ref=f19e12034]:
+                        - textbox "逗号分隔" [ref=f19e12035]: dept,period_month,project_no
+                      - cell "请确认" [ref=f19e12036]:
+                        - combobox "model.pm_analytics_v3.biz_dws_risk_monthly_v2 发布密级" [ref=f19e12037]
+                      - cell "由上游模型继承" [ref=f19e12038]
+                      - cell "16" [ref=f19e12039]
+                    - row "model.pm_analytics_v3.biz_dws_tech_state_measure_monthly_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION biz_dws_tech_state_measure_monthly_v2 汇总表 DWS 每行代表项目责任部门在一个跟进月份的技术状态措施汇总 dept,period_month,project_no 请确认 由上游模型继承 10" [ref=f19e12040]:
+                      - cell [ref=f19e12041]:
+                        - checkbox [checked] [ref=f19e12042]
+                      - cell "model.pm_analytics_v3.biz_dws_tech_state_measure_monthly_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION" [ref=f19e12043]:
+                        - text: model.pm_analytics_v3.biz_dws_tech_state_measure_monthly_v2
+                        - generic [ref=f19e12044]: 可导入
+                        - text: SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_dws_tech_state_measure_monthly_v2" [ref=f19e12045]:
+                        - textbox [ref=f19e12046]: biz_dws_tech_state_measure_monthly_v2
+                      - cell "汇总表" [ref=f19e12047]:
+                        - combobox [ref=f19e12048]
+                      - cell "DWS" [ref=f19e12049]:
+                        - combobox [ref=f19e12050]
+                      - cell "每行代表项目责任部门在一个跟进月份的技术状态措施汇总" [ref=f19e12051]:
+                        - textbox [ref=f19e12052]: 每行代表项目责任部门在一个跟进月份的技术状态措施汇总
+                      - cell "dept,period_month,project_no" [ref=f19e12053]:
+                        - textbox "逗号分隔" [ref=f19e12054]: dept,period_month,project_no
+                      - cell "请确认" [ref=f19e12055]:
+                        - combobox "model.pm_analytics_v3.biz_dws_tech_state_measure_monthly_v2 发布密级" [ref=f19e12056]
+                      - cell "由上游模型继承" [ref=f19e12057]
+                      - cell "10" [ref=f19e12058]
+                    - row "model.pm_analytics_v3.biz_dws_tech_state_monthly_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION biz_dws_tech_state_monthly_v2 汇总表 DWS 每行代表一个项目责任部门在一个更改提出月份的技术状态汇总 dept,period_month,project_no 请确认 由上游模型继承 24" [ref=f19e12059]:
+                      - cell [ref=f19e12060]:
+                        - checkbox [checked] [ref=f19e12061]
+                      - cell "model.pm_analytics_v3.biz_dws_tech_state_monthly_v2 可导入 SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION" [ref=f19e12062]:
+                        - text: model.pm_analytics_v3.biz_dws_tech_state_monthly_v2
+                        - generic [ref=f19e12063]: 可导入
+                        - text: SQL_AGGREGATION、SQL_CASE、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION
+                      - cell "biz_dws_tech_state_monthly_v2" [ref=f19e12064]:
+                        - textbox [ref=f19e12065]: biz_dws_tech_state_monthly_v2
+                      - cell "汇总表" [ref=f19e12066]:
+                        - combobox [ref=f19e12067]
+                      - cell "DWS" [ref=f19e12068]:
+                        - combobox [ref=f19e12069]
+                      - cell "每行代表一个项目责任部门在一个更改提出月份的技术状态汇总" [ref=f19e12070]:
+                        - textbox [ref=f19e12071]: 每行代表一个项目责任部门在一个更改提出月份的技术状态汇总
+                      - cell "dept,period_month,project_no" [ref=f19e12072]:
+                        - textbox "逗号分隔" [ref=f19e12073]: dept,period_month,project_no
+                      - cell "请确认" [ref=f19e12074]:
+                        - combobox "model.pm_analytics_v3.biz_dws_tech_state_monthly_v2 发布密级" [ref=f19e12075]
+                      - cell "由上游模型继承" [ref=f19e12076]
+                      - cell "24" [ref=f19e12077]
+                    - row "model.pm_analytics_v3.dim_change_category_v2 可导入 SQL_VALUES、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION dim_change_category_v2 维度表 DWD 每行一个技术更改类别 change_category_id 请确认 由上游模型继承 7" [ref=f19e12078]:
+                      - cell [ref=f19e12079]:
+                        - checkbox [checked] [ref=f19e12080]
+                      - cell "model.pm_analytics_v3.dim_change_category_v2 可导入 SQL_VALUES、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION" [ref=f19e12081]:
+                        - text: model.pm_analytics_v3.dim_change_category_v2
+                        - generic [ref=f19e12082]: 可导入
+                        - text: SQL_VALUES、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION
+                      - cell "dim_change_category_v2" [ref=f19e12083]:
+                        - textbox [ref=f19e12084]: dim_change_category_v2
+                      - cell "维度表" [ref=f19e12085]:
+                        - combobox [ref=f19e12086]
+                      - cell "DWD" [ref=f19e12087]:
+                        - combobox [ref=f19e12088]
+                      - cell "每行一个技术更改类别" [ref=f19e12089]:
+                        - textbox [ref=f19e12090]: 每行一个技术更改类别
+                      - cell "change_category_id" [ref=f19e12091]:
+                        - textbox "逗号分隔" [ref=f19e12092]: change_category_id
+                      - cell "请确认" [ref=f19e12093]:
+                        - combobox "model.pm_analytics_v3.dim_change_category_v2 发布密级" [ref=f19e12094]
+                      - cell "由上游模型继承" [ref=f19e12095]
+                      - cell "7" [ref=f19e12096]
+                    - row "model.pm_analytics_v3.dim_completion_status_v2 可导入 SQL_VALUES、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION dim_completion_status_v2 维度表 DWD 每行一个项目节点完成状态 completion_status_id 请确认 由上游模型继承 16" [ref=f19e12097]:
+                      - cell [ref=f19e12098]:
+                        - checkbox [checked] [ref=f19e12099]
+                      - cell "model.pm_analytics_v3.dim_completion_status_v2 可导入 SQL_VALUES、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION" [ref=f19e12100]:
+                        - text: model.pm_analytics_v3.dim_completion_status_v2
+                        - generic [ref=f19e12101]: 可导入
+                        - text: SQL_VALUES、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION
+                      - cell "dim_completion_status_v2" [ref=f19e12102]:
+                        - textbox [ref=f19e12103]: dim_completion_status_v2
+                      - cell "维度表" [ref=f19e12104]:
+                        - combobox [ref=f19e12105]
+                      - cell "DWD" [ref=f19e12106]:
+                        - combobox [ref=f19e12107]
+                      - cell "每行一个项目节点完成状态" [ref=f19e12108]:
+                        - textbox [ref=f19e12109]: 每行一个项目节点完成状态
+                      - cell "completion_status_id" [ref=f19e12110]:
+                        - textbox "逗号分隔" [ref=f19e12111]: completion_status_id
+                      - cell "请确认" [ref=f19e12112]:
+                        - combobox "model.pm_analytics_v3.dim_completion_status_v2 发布密级" [ref=f19e12113]
+                      - cell "由上游模型继承" [ref=f19e12114]
+                      - cell "16" [ref=f19e12115]
+                    - row "model.pm_analytics_v3.dim_node_type_v2 可导入 SQL_VALUES、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION dim_node_type_v2 维度表 DWD 每行一个项目节点类型 node_type_id 请确认 由上游模型继承 8" [ref=f19e12116]:
+                      - cell [ref=f19e12117]:
+                        - checkbox [checked] [ref=f19e12118]
+                      - cell "model.pm_analytics_v3.dim_node_type_v2 可导入 SQL_VALUES、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION" [ref=f19e12119]:
+                        - text: model.pm_analytics_v3.dim_node_type_v2
+                        - generic [ref=f19e12120]: 可导入
+                        - text: SQL_VALUES、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION
+                      - cell "dim_node_type_v2" [ref=f19e12121]:
+                        - textbox [ref=f19e12122]: dim_node_type_v2
+                      - cell "维度表" [ref=f19e12123]:
+                        - combobox [ref=f19e12124]
+                      - cell "DWD" [ref=f19e12125]:
+                        - combobox [ref=f19e12126]
+                      - cell "每行一个项目节点类型" [ref=f19e12127]:
+                        - textbox [ref=f19e12128]: 每行一个项目节点类型
+                      - cell "node_type_id" [ref=f19e12129]:
+                        - textbox "逗号分隔" [ref=f19e12130]: node_type_id
+                      - cell "请确认" [ref=f19e12131]:
+                        - combobox "model.pm_analytics_v3.dim_node_type_v2 发布密级" [ref=f19e12132]
+                      - cell "由上游模型继承" [ref=f19e12133]
+                      - cell "8" [ref=f19e12134]
+                    - row "model.pm_analytics_v3.dim_quality_category_v2 可导入 SQL_VALUES、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION dim_quality_category_v2 维度表 DWD 每行一个质量问题原因分类 quality_category_id 请确认 由上游模型继承 13" [ref=f19e12135]:
+                      - cell [ref=f19e12136]:
+                        - checkbox [checked] [ref=f19e12137]
+                      - cell "model.pm_analytics_v3.dim_quality_category_v2 可导入 SQL_VALUES、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION" [ref=f19e12138]:
+                        - text: model.pm_analytics_v3.dim_quality_category_v2
+                        - generic [ref=f19e12139]: 可导入
+                        - text: SQL_VALUES、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION
+                      - cell "dim_quality_category_v2" [ref=f19e12140]:
+                        - textbox [ref=f19e12141]: dim_quality_category_v2
+                      - cell "维度表" [ref=f19e12142]:
+                        - combobox [ref=f19e12143]
+                      - cell "DWD" [ref=f19e12144]:
+                        - combobox [ref=f19e12145]
+                      - cell "每行一个质量问题原因分类" [ref=f19e12146]:
+                        - textbox [ref=f19e12147]: 每行一个质量问题原因分类
+                      - cell "quality_category_id" [ref=f19e12148]:
+                        - textbox "逗号分隔" [ref=f19e12149]: quality_category_id
+                      - cell "请确认" [ref=f19e12150]:
+                        - combobox "model.pm_analytics_v3.dim_quality_category_v2 发布密级" [ref=f19e12151]
+                      - cell "由上游模型继承" [ref=f19e12152]
+                      - cell "13" [ref=f19e12153]
+                    - row "model.pm_analytics_v3.dim_quality_status_v2 可导入 SQL_VALUES、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION dim_quality_status_v2 维度表 DWD 每行一个质量归零状态 quality_status_id 请确认 由上游模型继承 8" [ref=f19e12154]:
+                      - cell [ref=f19e12155]:
+                        - checkbox [checked] [ref=f19e12156]
+                      - cell "model.pm_analytics_v3.dim_quality_status_v2 可导入 SQL_VALUES、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION" [ref=f19e12157]:
+                        - text: model.pm_analytics_v3.dim_quality_status_v2
+                        - generic [ref=f19e12158]: 可导入
+                        - text: SQL_VALUES、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION
+                      - cell "dim_quality_status_v2" [ref=f19e12159]:
+                        - textbox [ref=f19e12160]: dim_quality_status_v2
+                      - cell "维度表" [ref=f19e12161]:
+                        - combobox [ref=f19e12162]
+                      - cell "DWD" [ref=f19e12163]:
+                        - combobox [ref=f19e12164]
+                      - cell "每行一个质量归零状态" [ref=f19e12165]:
+                        - textbox [ref=f19e12166]: 每行一个质量归零状态
+                      - cell "quality_status_id" [ref=f19e12167]:
+                        - textbox "逗号分隔" [ref=f19e12168]: quality_status_id
+                      - cell "请确认" [ref=f19e12169]:
+                        - combobox "model.pm_analytics_v3.dim_quality_status_v2 发布密级" [ref=f19e12170]
+                      - cell "由上游模型继承" [ref=f19e12171]
+                      - cell "8" [ref=f19e12172]
+                    - row "model.pm_analytics_v3.dim_risk_category_v2 可导入 SQL_VALUES、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION dim_risk_category_v2 维度表 DWD 每行一个项目风险分类 risk_category_id 请确认 由上游模型继承 10" [ref=f19e12173]:
+                      - cell [ref=f19e12174]:
+                        - checkbox [checked] [ref=f19e12175]
+                      - cell "model.pm_analytics_v3.dim_risk_category_v2 可导入 SQL_VALUES、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION" [ref=f19e12176]:
+                        - text: model.pm_analytics_v3.dim_risk_category_v2
+                        - generic [ref=f19e12177]: 可导入
+                        - text: SQL_VALUES、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION
+                      - cell "dim_risk_category_v2" [ref=f19e12178]:
+                        - textbox [ref=f19e12179]: dim_risk_category_v2
+                      - cell "维度表" [ref=f19e12180]:
+                        - combobox [ref=f19e12181]
+                      - cell "DWD" [ref=f19e12182]:
+                        - combobox [ref=f19e12183]
+                      - cell "每行一个项目风险分类" [ref=f19e12184]:
+                        - textbox [ref=f19e12185]: 每行一个项目风险分类
+                      - cell "risk_category_id" [ref=f19e12186]:
+                        - textbox "逗号分隔" [ref=f19e12187]: risk_category_id
+                      - cell "请确认" [ref=f19e12188]:
+                        - combobox "model.pm_analytics_v3.dim_risk_category_v2 发布密级" [ref=f19e12189]
+                      - cell "由上游模型继承" [ref=f19e12190]
+                      - cell "10" [ref=f19e12191]
+                    - row "model.pm_analytics_v3.dim_risk_level_v2 可导入 SQL_VALUES、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION dim_risk_level_v2 维度表 DWD 每行一个项目风险等级 risk_level_id 请确认 由上游模型继承 7" [ref=f19e12192]:
+                      - cell [ref=f19e12193]:
+                        - checkbox [checked] [ref=f19e12194]
+                      - cell "model.pm_analytics_v3.dim_risk_level_v2 可导入 SQL_VALUES、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION" [ref=f19e12195]:
+                        - text: model.pm_analytics_v3.dim_risk_level_v2
+                        - generic [ref=f19e12196]: 可导入
+                        - text: SQL_VALUES、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION
+                      - cell "dim_risk_level_v2" [ref=f19e12197]:
+                        - textbox [ref=f19e12198]: dim_risk_level_v2
+                      - cell "维度表" [ref=f19e12199]:
+                        - combobox [ref=f19e12200]
+                      - cell "DWD" [ref=f19e12201]:
+                        - combobox [ref=f19e12202]
+                      - cell "每行一个项目风险等级" [ref=f19e12203]:
+                        - textbox [ref=f19e12204]: 每行一个项目风险等级
+                      - cell "risk_level_id" [ref=f19e12205]:
+                        - textbox "逗号分隔" [ref=f19e12206]: risk_level_id
+                      - cell "请确认" [ref=f19e12207]:
+                        - combobox "model.pm_analytics_v3.dim_risk_level_v2 发布密级" [ref=f19e12208]
+                      - cell "由上游模型继承" [ref=f19e12209]
+                      - cell "7" [ref=f19e12210]
+                    - row "model.pm_analytics_v3.dim_signature_status_v2 可导入 SQL_VALUES、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION dim_signature_status_v2 维度表 DWD 每行一个文件签署状态 signature_status_id 请确认 由上游模型继承 7" [ref=f19e12211]:
+                      - cell [ref=f19e12212]:
+                        - checkbox [checked] [ref=f19e12213]
+                      - cell "model.pm_analytics_v3.dim_signature_status_v2 可导入 SQL_VALUES、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION" [ref=f19e12214]:
+                        - text: model.pm_analytics_v3.dim_signature_status_v2
+                        - generic [ref=f19e12215]: 可导入
+                        - text: SQL_VALUES、SQL_MACRO、SQL_CONSTANT、SQL_COMPLEX_EXPRESSION
+                      - cell "dim_signature_status_v2" [ref=f19e12216]:
+                        - textbox [ref=f19e12217]: dim_signature_status_v2
+                      - cell "维度表" [ref=f19e12218]:
+                        - combobox [ref=f19e12219]
+                      - cell "DWD" [ref=f19e12220]:
+                        - combobox [ref=f19e12221]
+                      - cell "每行一个文件签署状态" [ref=f19e12222]:
+                        - textbox [ref=f19e12223]: 每行一个文件签署状态
+                      - cell "signature_status_id" [ref=f19e12224]:
+                        - textbox "逗号分隔" [ref=f19e12225]: signature_status_id
+                      - cell "请确认" [ref=f19e12226]:
+                        - combobox "model.pm_analytics_v3.dim_signature_status_v2 发布密级" [ref=f19e12227]
+                      - cell "由上游模型继承" [ref=f19e12228]
+                      - cell "7" [ref=f19e12229]
+            - generic [ref=f19e10174]:
+              - button "取 消" [ref=f19e10175] [cursor=pointer]
+              - button "上一步" [ref=f19e12230] [cursor=pointer]
+              - button "生成预览" [disabled] [ref=f19e12232]

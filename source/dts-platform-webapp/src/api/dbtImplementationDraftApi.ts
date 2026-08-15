@@ -74,6 +74,7 @@ export const createDbtImplementationDraft = (
 		baseModelChecksum: string;
 		baseImplementationRevision?: number | null;
 		baseImplementationChecksum?: string | null;
+		targetPhysicalName?: string | null;
 		idempotencyKey: string;
 	},
 ) => api.post<DbtImplementationDraft>({ url: basePath(modelSpecId), data: request, _skipErrorToast: true } as any);

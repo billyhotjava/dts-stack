@@ -18,6 +18,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.PhysicalAs
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.UpstreamModelInput;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelField;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.StandardBinding;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
@@ -112,6 +113,27 @@ public class ModelClassificationPublishGate {
                         "CLASSIFICATION_FIELD_LEVEL_INVALID",
                         "Model field has an invalid classification",
                         field.name()
+                    )
+                );
+            }
+        }
+        for (StandardBinding binding : model.standardBindings()) {
+            if (binding.securityLevel() == null || binding.securityLevel().isBlank()) {
+                continue;
+            }
+            try {
+                String level = SecurityLevelCatalog.requireDataLevel(binding.securityLevel()).code();
+                fieldLevels.merge(
+                    binding.fieldName(),
+                    level,
+                    (currentLevel, candidateLevel) -> SecurityLevelCatalog.maxDataCode(currentLevel, candidateLevel)
+                );
+            } catch (IllegalArgumentException invalid) {
+                blockers.add(
+                    new Blocker(
+                        "CLASSIFICATION_FIELD_LEVEL_INVALID",
+                        "Model field standard binding has an invalid classification",
+                        binding.fieldName()
                     )
                 );
             }

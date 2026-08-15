@@ -978,6 +978,18 @@ public class ModelReleaseCandidateApplicationService {
             .toList();
         result = preferSelfServicePublication(result);
         if (
+            candidate.status() == DeliveryStatus.PUBLISHED &&
+            duties.contains(DeliveryActorRole.MODEL_MAINTAINER)
+        ) {
+            return java.util.stream.Stream
+                .concat(
+                    java.util.stream.Stream.of(WorkspaceAction.CREATE_CANDIDATE),
+                    result.stream()
+                )
+                .distinct()
+                .toList();
+        }
+        if (
             candidate.status() == DeliveryStatus.BUILT &&
             duties.contains(DeliveryActorRole.MODEL_MAINTAINER)
         ) {
@@ -1482,7 +1494,11 @@ public class ModelReleaseCandidateApplicationService {
     }
 
     private static boolean isActive(CandidateView candidate) {
-        return candidate != null && !isReplacementSource(candidate.status());
+        return (
+            candidate != null &&
+            candidate.status() != DeliveryStatus.PUBLISHED &&
+            !isReplacementSource(candidate.status())
+        );
     }
 
     private static boolean isReplacementSource(DeliveryStatus status) {

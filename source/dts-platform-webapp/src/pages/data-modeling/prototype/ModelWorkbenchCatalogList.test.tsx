@@ -7,6 +7,9 @@ import type { DimensionDefinitionView } from "@/features/modeling/contracts/dime
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { ModelWorkbenchCatalogList } from "./ModelWorkbenchCatalogList";
 
+// 整树渲染在并行跑批下会超过 vitest 默认的 5s（单跑 <2s），放宽文件级超时避免假红。
+vi.setConfig({ testTimeout: 20_000 });
+
 beforeAll(() => {
 	if (!window.matchMedia) {
 		Object.defineProperty(window, "matchMedia", {

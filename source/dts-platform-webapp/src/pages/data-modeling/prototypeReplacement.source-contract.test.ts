@@ -138,17 +138,12 @@ describe("prototype-owned data modeling frontend", () => {
 		const implementationBinding = read("./prototype/ModelImplementationBindingFields.tsx");
 		const modelingLineCount = modeling.trimEnd().split("\n").length;
 
-		for (const label of [
-			"数仓分层",
-			"存储策略",
-			"表名规则",
-			"表中文名",
-			"生命周期",
-			"负责人",
-			"质量规则",
-			"高级 dbt 工作区",
-		])
+		for (const label of ["数仓分层", "存储策略", "表名规则", "表中文名", "生命周期", "负责人", "质量规则"])
 			expect(editor).toContain(label);
+		// Sprint-91 双模收敛后「高级 dbt 工作区」由 AdvancedDbtWorkspace 承载，
+		// 编辑器只在实现绑定区留入口提示。
+		expect(read("./prototype/AdvancedDbtWorkspace.tsx")).toContain("高级 dbt 工作区");
+		expect(implementationBinding).toContain("高级 dbt 工作区");
 		expect(editor).not.toContain("<span>业务分类</span>");
 		expect(fieldTable).toMatch(/"序号".*"字段名称".*"类型".*"字段显示名".*"主键".*"非空".*"维度属性编码"/s);
 		expect(fieldTable).not.toContain("安全等级");
@@ -174,8 +169,9 @@ describe("prototype-owned data modeling frontend", () => {
 		);
 		expect(modeling).toMatch(/isConceptDimensionDraft/);
 		expect(modeling).toMatch(/conceptDimensionDraftFromView/);
+		// Sprint-91：右侧记录栏的隐藏条件由 dialog 状态改为 URL 的 view 模式。
 		expect(modeling).toMatch(
-			/\{dialog !== "advanced" && selectedModel\?\.modelType === "FACT" \? \(\s*<aside className="dmx-record-rail"/s,
+			/\{requestedView !== "code" && selectedModel\?\.modelType === "FACT" \? \(\s*<aside className="dmx-record-rail"/s,
 		);
 		expect(modeling).toContain('"beforeunload"');
 		expect(modeling).toMatch(/const blocker = useBlocker\(/);
@@ -263,8 +259,11 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(reverse).toContain('item.action !== "BLOCKED"');
 		expect(reverse).toMatch(/conversionMode === "DBT_BACKED"|isAdvancedDbtImportResult/);
 		expect(reverse).toContain("open=advanced");
-		expect(modeling).toMatch(/searchParams\.get\("open"\)|requestedDialog/);
-		expect(modeling).toMatch(/setDialog\("advanced"\)/);
+		// 旧的 ?open=advanced 深链仍被支持，只是消费点收口到了 modelingWorkbenchMode。
+		expect(modeling).toMatch(/normalizeWorkbenchView/);
+		expect(read("./prototype/modelingWorkbenchMode.ts")).toMatch(/params\.get\("open"\) === "advanced"/);
+		// Sprint-91：进入代码模式改为写 URL 的 view 参数，不再有 dialog 状态。
+		expect(modeling).toMatch(/params\.set\("view", "code"\)/);
 		expect(reverse).toContain("useDataModelingMenuGrant");
 		expect(prototypeSource).not.toContain("useCatalogMaintainerAccess");
 		expect(standardsService).not.toContain("deleteGlossaryTerm");

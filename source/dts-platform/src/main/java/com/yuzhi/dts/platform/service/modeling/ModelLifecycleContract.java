@@ -106,7 +106,7 @@ public final class ModelLifecycleContract {
             result.put(QUALITY_RUNNING, EnumSet.of(QUALITY_FAILED, QUALITY_PASSED));
             result.put(QUALITY_FAILED, EnumSet.of(QUALITY_RUNNING, CANCELLED));
             result.put(QUALITY_PASSED, EnumSet.of(REVIEW_PENDING, PUBLISHING));
-            result.put(REVIEW_PENDING, EnumSet.of(REJECTED, APPROVED, PUBLISHING));
+            result.put(REVIEW_PENDING, EnumSet.of(REJECTED, APPROVED, PUBLISHING, CANCELLED));
             result.put(APPROVED, EnumSet.of(PUBLISHING));
             result.put(PUBLISHING, EnumSet.of(PARTIAL, PUBLISHED));
             result.put(PARTIAL, EnumSet.of(PUBLISHED, ROLLED_BACK));
@@ -130,7 +130,15 @@ public final class ModelLifecycleContract {
             result.put(QUALITY_RUNNING, List.of());
             result.put(QUALITY_FAILED, List.of(DeliveryAction.RUN_QUALITY, DeliveryAction.CANCEL_CANDIDATE));
             result.put(QUALITY_PASSED, List.of(DeliveryAction.SUBMIT_REVIEW, DeliveryAction.PUBLISH));
-            result.put(REVIEW_PENDING, List.of(DeliveryAction.APPROVE, DeliveryAction.REJECT, DeliveryAction.PUBLISH));
+            result.put(
+                REVIEW_PENDING,
+                List.of(
+                    DeliveryAction.APPROVE,
+                    DeliveryAction.REJECT,
+                    DeliveryAction.PUBLISH,
+                    DeliveryAction.CANCEL_CANDIDATE
+                )
+            );
             result.put(REJECTED, List.of(DeliveryAction.CREATE_REPLACEMENT_CANDIDATE));
             result.put(APPROVED, List.of(DeliveryAction.PUBLISH));
             result.put(PUBLISHING, List.of());

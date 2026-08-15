@@ -1179,6 +1179,8 @@ export const getIndicator = (id: string) => api.get({ url: `/governance/indicato
 export const createIndicator = (data: any) => api.post({ url: "/governance/indicators", data });
 export const createModelFieldIndicatorDraft = (data: any) =>
 	api.post({ url: "/governance/indicators/model-field-drafts", data });
+export const rebindModelFieldIndicatorDraft = (id: string, data: any) =>
+	api.put({ url: `/governance/indicators/model-field-drafts/${id}`, data });
 export const updateIndicator = (id: string, data: any) => api.put({ url: `/governance/indicators/${id}`, data });
 export const deleteIndicator = (id: string) => api.delete({ url: `/governance/indicators/${id}` });
 export const publishIndicator = (id: string) => api.post({ url: `/governance/indicators/${id}/publish` });
@@ -1188,6 +1190,8 @@ export const archiveIndicator = (id: string) => api.post({ url: `/governance/ind
 export const validateIndicator = (id: string) => api.post({ url: `/governance/indicators/${id}/validate` });
 export const validateIndicatorDerivation = (id: string) =>
 	api.post({ url: `/governance/indicators/${id}/derivation/validate` });
+export const calculateIndicators = (indicatorIds: string[]) =>
+	api.post({ url: "/governance/indicators/calculate", data: { indicatorIds } });
 export const getIndicatorDependencies = (params: any = {}) =>
 	api.get({ url: "/governance/indicators/dependencies", params });
 export const listIndicatorVersions = (id: string) => api.get({ url: `/governance/indicators/${id}/versions` });

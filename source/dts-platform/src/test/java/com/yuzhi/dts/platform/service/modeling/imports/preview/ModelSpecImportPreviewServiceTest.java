@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.service.modeling.ModelImplementationChecksumCodec;
 import com.yuzhi.dts.platform.service.modeling.ModelPackageCanonicalProjector;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.CreateModelSpecCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecSnapshotCodec;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
 import com.yuzhi.dts.platform.service.modeling.imports.ModelPackageFixtures;
@@ -20,6 +21,7 @@ import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportAppl
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyPlanContract.ApplyPlan;
 import com.yuzhi.dts.platform.service.modeling.imports.checksum.ModelPackageChecksum;
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract;
+import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.Column;
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.ConversionMode;
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.ConversionResult;
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.ModelPackage;
@@ -174,6 +176,25 @@ class ModelSpecImportPreviewServiceTest {
             assertThat(item.action()).isEqualTo(Action.CREATE);
             assertThat(item.sourceSnapshotJson()).contains("\"freshness\":\"CURRENT\"");
             assertThat(item.proposedImplementationJson()).doesNotContain("select budget_id");
+        });
+    }
+
+    @Test
+    void preservesSourceLayerFromExplicitPackageRelationMapping() {
+        stubCurrentContext("source-v1");
+        String packageSourceId = "source.pm_analytics_v3.pm_ods_v2.budget_v2";
+        ModelPackage modelPackage = packageWithSourceRef(packageForPreview(), packageSourceId, "ODS");
+
+        var response = service.preview(
+            request(modelPackage, Map.of(packageSourceId, BINDING_ID.toString()))
+        );
+
+        assertThat(response.items()).singleElement().satisfies(item -> {
+            assertThat(item.action()).isEqualTo(Action.CREATE);
+            assertThat(item.issues()).extracting("code").doesNotContain("MODEL_SPEC_SOURCE_INVALID");
+            assertThat(item.proposedModelSpec().path("sourceRefs")).singleElement().satisfies(source ->
+                assertThat(source.path("layer").asText()).isEqualTo("ODS")
+            );
         });
     }
 
@@ -355,6 +376,83 @@ class ModelSpecImportPreviewServiceTest {
     }
 
     @Test
+    void updatesWhenCanonicalProjectionChangesEvenIfTechnicalReconciliationSkips() throws Exception {
+        stubCurrentContext("source-v1");
+        ModelPackage modelPackage = dbtBackedPackage("select budget_id from source_budget");
+
+        service.preview(request(modelPackage));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<PersistedItem>> itemsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(repository).save(any(PersistedRun.class), itemsCaptor.capture());
+        PersistedItem created = itemsCaptor.getValue().getFirst();
+        var implementation = readTree(created.proposedImplementationJson());
+        var staleSnapshot = (com.fasterxml.jackson.databind.node.ObjectNode) readTree(created.proposedModelSpecJson());
+        ((com.fasterxml.jackson.databind.node.ObjectNode) staleSnapshot.withArray("fields").get(0)).put(
+                "dataType",
+                "text"
+            );
+        String staleChecksum = new ModelSpecSnapshotCodec(objectMapper).contentChecksum(
+            objectMapper.treeToValue(staleSnapshot, CreateModelSpecCommand.class)
+        );
+        assertThat(staleChecksum).isNotEqualTo(created.modelSpecChecksum());
+
+        UUID implementationId = UUID.fromString("50000000-0000-0000-0000-000000000070");
+        UUID modelSpecId = UUID.fromString("60000000-0000-0000-0000-000000000070");
+        String implementationChecksum = implementation.path("implementationChecksum").asText();
+        when(repository.findOwnership(TENANT, "pjm", "model.pjm.budget")).thenReturn(
+            Optional.of(
+                new ModelOwnershipSnapshot(
+                    implementationId,
+                    modelSpecId,
+                    PLAN_ID,
+                    1,
+                    staleChecksum,
+                    1,
+                    implementationChecksum,
+                    "DBT_MANAGED",
+                    "pjm",
+                    "model.pjm.budget",
+                    1,
+                    staleChecksum,
+                    "FACT",
+                    "DRAFT",
+                    null,
+                    null,
+                    implementation.path("effectiveSqlChecksum").asText()
+                )
+            )
+        );
+        when(repository.findCurrentModelSpecSnapshot(TENANT, modelSpecId, 1)).thenReturn(Optional.of(staleSnapshot));
+        when(repository.findLatestMergeCheckpoint(TENANT, PLAN_ID, modelSpecId, implementationId, "pjm", "model.pjm.budget"))
+            .thenReturn(
+                Optional.of(
+                    new MergeCheckpoint(
+                        TENANT,
+                        "pjm",
+                        "model.pjm.budget",
+                        implementationChecksum,
+                        1,
+                        implementationChecksum,
+                        1,
+                        staleChecksum
+                    )
+                )
+            );
+
+        var response = service.preview(request(modelPackage));
+
+        assertThat(response.items()).singleElement().extracting("action").isEqualTo(Action.UPDATE);
+        ArgumentCaptor<PersistedRun> runs = ArgumentCaptor.forClass(PersistedRun.class);
+        verify(repository, times(2)).save(runs.capture(), any());
+        ApplyPlan applyPlan = readValue(runs.getAllValues().getLast().applyPlanJson(), ApplyPlan.class);
+        assertThat(applyPlan.candidates()).singleElement().satisfies(candidate -> {
+            assertThat(candidate.targetRevision()).isEqualTo(2);
+            assertThat(candidate.targetImplementationRevision()).isEqualTo(1);
+        });
+    }
+
+    @Test
     void updatesWhenOnlyEffectiveSqlChecksumChanges() {
         stubCurrentContext("source-v1");
 
@@ -404,6 +502,287 @@ class ModelSpecImportPreviewServiceTest {
             assertThat(item.action()).isEqualTo(Action.CONFLICT);
             assertThat(item.issues()).extracting("code").contains("MODEL_IMPORT_MODEL_STATUS_READONLY");
         });
+    }
+
+    @Test
+    void skipsPublishedModelWhenOnlyFieldOrderDiffers() throws Exception {
+        stubCurrentContext("source-v1");
+        ModelPackage modelPackage = packageWithAdditionalColumn(
+            dbtBackedPackage("select budget_id, budget_name from source_budget")
+        );
+        service.preview(request(modelPackage));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<PersistedItem>> itemsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(repository).save(any(PersistedRun.class), itemsCaptor.capture());
+        PersistedItem created = itemsCaptor.getValue().getFirst();
+        var implementation = readTree(created.proposedImplementationJson());
+        var reorderedSnapshot = (com.fasterxml.jackson.databind.node.ObjectNode) readTree(created.proposedModelSpecJson());
+        var fields = reorderedSnapshot.withArray("fields");
+        List<com.fasterxml.jackson.databind.JsonNode> reversed = new java.util.ArrayList<>();
+        fields.forEach(field -> reversed.add(0, field.deepCopy()));
+        fields.removeAll();
+        reversed.forEach(fields::add);
+        String reorderedChecksum = new ModelSpecSnapshotCodec(objectMapper).contentChecksum(
+            objectMapper.treeToValue(reorderedSnapshot, CreateModelSpecCommand.class)
+        );
+        assertThat(reorderedChecksum).isNotEqualTo(created.modelSpecChecksum());
+
+        UUID implementationId = UUID.fromString("50000000-0000-0000-0000-000000000070");
+        UUID modelSpecId = UUID.fromString("60000000-0000-0000-0000-000000000070");
+        String implementationChecksum = implementation.path("implementationChecksum").asText();
+        when(repository.findOwnership(TENANT, "pjm", "model.pjm.budget")).thenReturn(
+            Optional.of(
+                new ModelOwnershipSnapshot(
+                    implementationId,
+                    modelSpecId,
+                    PLAN_ID,
+                    1,
+                    reorderedChecksum,
+                    1,
+                    implementationChecksum,
+                    "DBT_MANAGED",
+                    "pjm",
+                    "model.pjm.budget",
+                    1,
+                    reorderedChecksum,
+                    "FACT",
+                    "PUBLISHED",
+                    null,
+                    null,
+                    implementation.path("effectiveSqlChecksum").asText()
+                )
+            )
+        );
+        when(repository.findCurrentModelSpecSnapshot(TENANT, modelSpecId, 1)).thenReturn(Optional.of(reorderedSnapshot));
+        when(repository.findLatestMergeCheckpoint(TENANT, PLAN_ID, modelSpecId, implementationId, "pjm", "model.pjm.budget"))
+            .thenReturn(
+                Optional.of(
+                    new MergeCheckpoint(
+                        TENANT,
+                        "pjm",
+                        "model.pjm.budget",
+                        implementationChecksum,
+                        1,
+                        implementationChecksum,
+                        1,
+                        reorderedChecksum
+                    )
+                )
+            );
+
+        var response = service.preview(request(modelPackage));
+
+        assertThat(response.items()).singleElement().satisfies(item -> {
+            assertThat(item.action()).isEqualTo(Action.SKIP);
+            assertThat(item.issues()).extracting("code").doesNotContain("MODEL_IMPORT_MODEL_STATUS_READONLY");
+        });
+    }
+
+    @Test
+    void rebindsDraftFactToCurrentSelectedDimensionRevision() {
+        stubCurrentContext("source-v1");
+        UUID dimensionDefinitionId = UUID.fromString("70000000-0000-0000-0000-000000000070");
+        when(dimensionDefinitionResolver.resolveCurrent(TENANT, PLAN_ID, DOMAIN_ID, DIMENSION_CODE)).thenReturn(
+            Optional.of(
+                new DimensionDefinitionImportResolver.ResolvedDimensionDefinition(
+                    dimensionDefinitionId,
+                    1,
+                    DIMENSION_CODE,
+                    DOMAIN_ID
+                )
+            )
+        );
+        ModelPackage modelPackage = packageWithDimensionDependency();
+        when(repository.findOwnership(TENANT, "pjm", "model.pjm.budget_dimension")).thenReturn(Optional.empty());
+        service.preview(request(modelPackage));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<PersistedItem>> itemsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(repository).save(any(PersistedRun.class), itemsCaptor.capture());
+        PersistedItem dimension = itemsCaptor
+            .getValue()
+            .stream()
+            .filter(item -> "model.pjm.budget_dimension".equals(item.dbtUniqueId()))
+            .findFirst()
+            .orElseThrow();
+        PersistedItem fact = itemsCaptor
+            .getValue()
+            .stream()
+            .filter(item -> "model.pjm.budget".equals(item.dbtUniqueId()))
+            .findFirst()
+            .orElseThrow();
+        var dimensionImplementation = readTree(dimension.proposedImplementationJson());
+        var factImplementation = readTree(fact.proposedImplementationJson());
+        UUID dimensionImplementationId = UUID.fromString("51000000-0000-0000-0000-000000000070");
+        UUID factImplementationId = UUID.fromString("52000000-0000-0000-0000-000000000070");
+        UUID dimensionModelSpecId = UUID.fromString("61000000-0000-0000-0000-000000000070");
+        UUID factModelSpecId = UUID.fromString("62000000-0000-0000-0000-000000000070");
+        String dimensionImplementationChecksum = dimensionImplementation.path("implementationChecksum").asText();
+        String factImplementationChecksum = factImplementation.path("implementationChecksum").asText();
+        when(repository.findOwnership(TENANT, "pjm", "model.pjm.budget_dimension")).thenReturn(
+            Optional.of(
+                new ModelOwnershipSnapshot(
+                    dimensionImplementationId,
+                    dimensionModelSpecId,
+                    PLAN_ID,
+                    2,
+                    dimension.modelSpecChecksum(),
+                    1,
+                    dimensionImplementationChecksum,
+                    "DBT_MANAGED",
+                    "pjm",
+                    "model.pjm.budget_dimension",
+                    2,
+                    dimension.modelSpecChecksum(),
+                    "DIMENSION",
+                    "PUBLISHED",
+                    dimensionDefinitionId,
+                    1,
+                    dimensionImplementation.path("effectiveSqlChecksum").asText()
+                )
+            )
+        );
+        when(repository.findOwnership(TENANT, "pjm", "model.pjm.budget")).thenReturn(
+            Optional.of(
+                new ModelOwnershipSnapshot(
+                    factImplementationId,
+                    factModelSpecId,
+                    PLAN_ID,
+                    1,
+                    fact.modelSpecChecksum(),
+                    1,
+                    factImplementationChecksum,
+                    "DBT_MANAGED",
+                    "pjm",
+                    "model.pjm.budget",
+                    1,
+                    fact.modelSpecChecksum(),
+                    "FACT",
+                    "DRAFT",
+                    null,
+                    null,
+                    factImplementation.path("effectiveSqlChecksum").asText()
+                )
+            )
+        );
+        when(repository.findCurrentModelSpecSnapshot(TENANT, dimensionModelSpecId, 2)).thenReturn(
+            Optional.of(readTree(dimension.proposedModelSpecJson()))
+        );
+        when(repository.findCurrentModelSpecSnapshot(TENANT, factModelSpecId, 1)).thenReturn(
+            Optional.of(readTree(fact.proposedModelSpecJson()))
+        );
+        when(
+            repository.findLatestMergeCheckpoint(
+                TENANT,
+                PLAN_ID,
+                dimensionModelSpecId,
+                dimensionImplementationId,
+                "pjm",
+                "model.pjm.budget_dimension"
+            )
+        ).thenReturn(
+            Optional.of(
+                new MergeCheckpoint(
+                    TENANT,
+                    "pjm",
+                    "model.pjm.budget_dimension",
+                    dimensionImplementationChecksum,
+                    2,
+                    dimensionImplementationChecksum,
+                    2,
+                    dimension.modelSpecChecksum()
+                )
+            )
+        );
+        when(
+            repository.findLatestMergeCheckpoint(
+                TENANT,
+                PLAN_ID,
+                factModelSpecId,
+                factImplementationId,
+                "pjm",
+                "model.pjm.budget"
+            )
+        ).thenReturn(
+            Optional.of(
+                new MergeCheckpoint(
+                    TENANT,
+                    "pjm",
+                    "model.pjm.budget",
+                    factImplementationChecksum,
+                    1,
+                    factImplementationChecksum,
+                    1,
+                    fact.modelSpecChecksum()
+                )
+            )
+        );
+
+        var response = service.preview(request(modelPackage));
+
+        assertThat(response.items())
+            .filteredOn(item -> "model.pjm.budget_dimension".equals(item.dbtUniqueId()))
+            .singleElement()
+            .extracting("action")
+            .isEqualTo(Action.SKIP);
+        assertThat(response.items())
+            .filteredOn(item -> "model.pjm.budget".equals(item.dbtUniqueId()))
+            .singleElement()
+            .satisfies(item -> {
+                assertThat(item.action()).isEqualTo(Action.UPDATE);
+                var dimensionRefs = item.proposedModelSpec().path("dimensionRefs");
+                assertThat(dimensionRefs.size()).isEqualTo(1);
+                var ref = dimensionRefs.get(0);
+                assertThat(ref.path("modelSpecId").asText()).isEqualTo(dimensionModelSpecId.toString());
+                assertThat(ref.path("revision").asInt()).isEqualTo(2);
+            });
+    }
+
+    @Test
+    void restoresCurrentCanonicalUpstreamPinsForDraftReimports() throws ReflectiveOperationException {
+        UUID modelSpecId = UUID.fromString("62000000-0000-0000-0000-000000000071");
+        UUID upstreamModelSpecId = UUID.fromString("61000000-0000-0000-0000-000000000071");
+        ModelOwnershipSnapshot current = new ModelOwnershipSnapshot(
+            UUID.fromString("52000000-0000-0000-0000-000000000071"),
+            modelSpecId,
+            PLAN_ID,
+            1,
+            "a".repeat(64),
+            1,
+            "b".repeat(64),
+            "DBT_MANAGED",
+            "pjm",
+            "model.pjm.summary",
+            1,
+            "a".repeat(64),
+            "SUMMARY",
+            "DRAFT",
+            null,
+            null,
+            "c".repeat(64)
+        );
+        var reconciled = objectMapper.createObjectNode();
+        reconciled
+            .putArray("dependsOn")
+            .addObject()
+            .put("modelSpecId", upstreamModelSpecId.toString())
+            .put("revision", 1);
+        var incoming = reconciled.deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) incoming.withArray("dependsOn").get(0)).put("revision", 2);
+
+        var method = ModelSpecImportPreviewService.class.getDeclaredMethod(
+            "restoreDraftDimensionPins",
+            ModelOwnershipSnapshot.class,
+            com.fasterxml.jackson.databind.JsonNode.class,
+            com.fasterxml.jackson.databind.JsonNode.class
+        );
+        method.setAccessible(true);
+        var restored = (com.fasterxml.jackson.databind.JsonNode) method.invoke(null, current, reconciled, incoming);
+
+        assertThat(restored.path("dependsOn").get(0).path("modelSpecId").asText())
+            .isEqualTo(upstreamModelSpecId.toString());
+        assertThat(restored.path("dependsOn").get(0).path("revision").asInt()).isEqualTo(2);
     }
 
     @Test
@@ -515,7 +894,7 @@ class ModelSpecImportPreviewServiceTest {
     private void stubCurrentContext(String resolvedVersion, LifecycleStatus lifecycleStatus) {
         when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("actor-1", "dept-1"));
         when(repository.findPlan(TENANT, PLAN_ID)).thenReturn(Optional.of(plan(lifecycleStatus)));
-        when(repository.findDomainBindings(TENANT, PLAN_ID)).thenReturn(
+        when(repository.findPlatformDomainBindings()).thenReturn(
             List.of(new DomainBindingSnapshot(DOMAIN_ID, "CONFIRMED", NOW))
         );
         when(domainResolver.resolve(DOMAIN_ID)).thenReturn(
@@ -549,10 +928,14 @@ class ModelSpecImportPreviewServiceTest {
     }
 
     private PreviewRequest request(ModelPackage modelPackage) {
+        return request(modelPackage, Map.of());
+    }
+
+    private PreviewRequest request(ModelPackage modelPackage, Map<String, String> sourceMappings) {
         return new PreviewRequest(
             objectMapper.valueToTree(modelPackage),
             null,
-            new PreviewContext(PLAN_ID, Map.of(), Map.of()),
+            new PreviewContext(PLAN_ID, Map.of(), sourceMappings),
             List.of(),
             stableBusinessContexts(modelPackage),
             List.of()
@@ -650,6 +1033,54 @@ class ModelSpecImportPreviewServiceTest {
                 base.technicalNodes(),
                 List.of(previewModel),
                 List.of()
+            )
+        );
+    }
+
+    private static ModelPackage packageWithSourceRef(ModelPackage base, String ref, String layer) {
+        PackageModel source = base.models().getFirst();
+        SemanticMetadata semantics = source.semantics();
+        SemanticMetadata mappedSemantics = new SemanticMetadata(
+            semantics.modelType(),
+            semantics.layer(),
+            semantics.grain(),
+            semantics.factShape(),
+            semantics.timeSemantics(),
+            semantics.domainCode(),
+            List.of(new SourceRef("TABLE", ref, layer)),
+            semantics.consumptionScenarios(),
+            semantics.fieldRoles(),
+            semantics.dimensionStrategy(),
+            semantics.dimensionDefinitionCode(),
+            semantics.overrideSource(),
+            semantics.technicalOnly()
+        );
+        PackageModel mappedModel = new PackageModel(
+            source.dbtUniqueId(),
+            source.name(),
+            source.description(),
+            source.resourcePath(),
+            source.sql(),
+            source.materialization(),
+            source.config(),
+            source.tags(),
+            source.columns(),
+            source.tests(),
+            source.dependencies(),
+            mappedSemantics,
+            source.conversion()
+        );
+        return ModelPackageChecksum.withChecksum(
+            new ModelPackage(
+                base.schemaVersion(),
+                base.packageId(),
+                null,
+                base.dbt(),
+                base.defaults(),
+                base.sources(),
+                base.technicalNodes(),
+                List.of(mappedModel),
+                base.issues()
             )
         );
     }
@@ -757,6 +1188,104 @@ class ModelSpecImportPreviewServiceTest {
                 base.sources(),
                 base.technicalNodes(),
                 List.of(fact, blockedDimension),
+                base.issues()
+            )
+        );
+    }
+
+    private static ModelPackage packageWithDimensionDependency() {
+        ModelPackage base = dbtBackedPackage("select budget_id from source_budget");
+        PackageModel source = base.models().getFirst();
+        SemanticMetadata semantics = source.semantics();
+        SemanticMetadata dimensionSemantics = new SemanticMetadata(
+            "DIMENSION",
+            "DWD",
+            semantics.grain(),
+            null,
+            null,
+            semantics.domainCode(),
+            List.of(),
+            semantics.consumptionScenarios(),
+            semantics.fieldRoles(),
+            semantics.dimensionStrategy(),
+            DIMENSION_CODE,
+            semantics.overrideSource(),
+            false
+        );
+        PackageModel dimension = new PackageModel(
+            "model.pjm.budget_dimension",
+            "budget_dimension",
+            "预算维度",
+            "models/dwd/budget_dimension.sql",
+            source.sql(),
+            source.materialization(),
+            source.config(),
+            source.tags(),
+            source.columns(),
+            source.tests(),
+            List.of(),
+            dimensionSemantics,
+            source.conversion()
+        );
+        PackageModel fact = new PackageModel(
+            source.dbtUniqueId(),
+            source.name(),
+            source.description(),
+            source.resourcePath(),
+            source.sql(),
+            source.materialization(),
+            source.config(),
+            source.tags(),
+            source.columns(),
+            source.tests(),
+            List.of(dimension.dbtUniqueId()),
+            source.semantics(),
+            source.conversion()
+        );
+        return ModelPackageChecksum.withChecksum(
+            new ModelPackage(
+                base.schemaVersion(),
+                base.packageId(),
+                null,
+                base.dbt(),
+                base.defaults(),
+                base.sources(),
+                base.technicalNodes(),
+                List.of(fact, dimension),
+                base.issues()
+            )
+        );
+    }
+
+    private static ModelPackage packageWithAdditionalColumn(ModelPackage base) {
+        PackageModel source = base.models().getFirst();
+        List<Column> columns = new java.util.ArrayList<>(source.columns());
+        columns.add(new Column("budget_name", "预算名称", "varchar", "ATTRIBUTE", List.of()));
+        PackageModel expanded = new PackageModel(
+            source.dbtUniqueId(),
+            source.name(),
+            source.description(),
+            source.resourcePath(),
+            source.sql(),
+            source.materialization(),
+            source.config(),
+            source.tags(),
+            columns,
+            source.tests(),
+            source.dependencies(),
+            source.semantics(),
+            source.conversion()
+        );
+        return ModelPackageChecksum.withChecksum(
+            new ModelPackage(
+                base.schemaVersion(),
+                base.packageId(),
+                null,
+                base.dbt(),
+                base.defaults(),
+                base.sources(),
+                base.technicalNodes(),
+                List.of(expanded),
                 base.issues()
             )
         );

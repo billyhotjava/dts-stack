@@ -313,6 +313,9 @@ class CandidatePublicationCommitServiceTest {
 
         ArgumentCaptor<PlatformEventRequest> event = ArgumentCaptor.forClass(PlatformEventRequest.class);
         verify(outbox).publishInternal(event.capture());
+        assertThat(event.getValue().eventId())
+            .isEqualTo("model-release-candidate-retried:" + CANDIDATE_ID + ":v10")
+            .hasSizeLessThanOrEqualTo(80);
         assertThat(event.getValue().eventType())
             .isEqualTo("MODEL_RELEASE_CANDIDATE_PUBLICATION_RETRIED");
         assertThat(event.getValue().action()).isEqualTo("RETRY");

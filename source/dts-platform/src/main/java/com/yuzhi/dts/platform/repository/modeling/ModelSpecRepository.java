@@ -634,6 +634,81 @@ public class ModelSpecRepository {
     }
 
     /**
+     * Starts a new editable revision from the current published snapshot.
+     *
+     * <p>The immutable published revision row is deliberately left untouched.  Only the current
+     * head advances to the supplied DRAFT revision; the caller appends that new revision in the
+     * same transaction after this CAS succeeds.
+     */
+    public int compareAndSetPublishedToDraftV2(
+        String tenantId,
+        String actorId,
+        int expectedRevision,
+        String expectedChecksum,
+        ModelSpecView replacement,
+        String snapshot
+    ) {
+        if (
+            tenantId == null || tenantId.isBlank() ||
+            actorId == null || actorId.isBlank() ||
+            replacement == null || replacement.status() != ModelStatus.DRAFT ||
+            replacement.revision() != expectedRevision + 1 ||
+            snapshot == null || snapshot.isBlank()
+        ) {
+            throw new IllegalArgumentException("Invalid published-to-draft ModelSpec revision");
+        }
+        return jdbcTemplate.update(
+            """
+            update modeling_model_spec
+               set layer = ?, warehouse_layer_code = ?, model_type = ?, implementation_mode = ?, name = ?,
+                   grain_statement = ?, materialization = ?, business_activity_ref = ?, description = ?,
+                   consumption_scenario = ?, fact_shape = ?, grain_json = cast(? as jsonb),
+                   time_semantics = cast(? as jsonb), fields = cast(? as jsonb), source_refs = cast(? as jsonb),
+                   depends_on = cast(? as jsonb), dimension_refs = cast(? as jsonb), metric_refs = cast(? as jsonb),
+                   standard_bindings = cast(? as jsonb), generation_strategy = cast(? as jsonb),
+                   dimension_profile = cast(? as jsonb),
+                   data_mart_id = ?, variant_code = ?, business_process_id = ?, subject_domain_id = ?,
+                   status = 'DRAFT', current_checksum = ?, revision = ?, version = version + 1,
+                   last_modified_date = ?
+             where tenant_id = ? and id = ? and contract_version = 2
+               and revision = ? and current_checksum = ? and status = 'PUBLISHED'
+            """,
+            replacement.layer().name(),
+            replacement.warehouseLayerCode(),
+            replacement.modelType().name(),
+            replacement.implementationMode().name(),
+            replacement.name(),
+            replacement.grain() == null ? null : replacement.grain().statement(),
+            replacement.materialization(),
+            replacement.businessActivityRef(),
+            replacement.description(),
+            replacement.consumptionScenario(),
+            enumName(replacement.factShape()),
+            jsonOrNull(replacement.grain()),
+            jsonOrNull(replacement.timeSemantics()),
+            json(replacement.fields()),
+            json(replacement.sourceRefs()),
+            json(replacement.dependsOn()),
+            json(replacement.dimensionRefs()),
+            json(replacement.metricRefs()),
+            json(replacement.standardBindings()),
+            jsonOrNull(replacement.generationStrategy()),
+            jsonOrNull(replacement.dimensionProfile()),
+            replacement.dataMartId(),
+            replacement.variantCode(),
+            replacement.businessProcessId(),
+            replacement.subjectDomainId(),
+            replacement.checksum(),
+            replacement.revision(),
+            Timestamp.from(replacement.updatedAt()),
+            tenantId,
+            replacement.id(),
+            expectedRevision,
+            expectedChecksum
+        );
+    }
+
+    /**
      * Forward-undo-only append for a semantic no-op ModelSpec restore.
      *
      * <p>Ordinary updates intentionally remain idempotent and do not append a revision when the

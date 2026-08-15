@@ -128,6 +128,45 @@ public class IndicatorReferenceService {
         referenceRepository.delete(entity);
     }
 
+    public Map<String, Object> replaceModelFieldReference(
+        UUID indicatorId,
+        String activeDept,
+        ReferenceUpsertRequest request
+    ) {
+        if (
+            request == null ||
+            !"MODEL_SPEC_FIELD".equalsIgnoreCase(normalizeRefType(request.refType())) ||
+            !StringUtils.hasText(normalizeText(request.refTarget()))
+        ) {
+            throw new IndicatorRequestException("MODEL_SPEC_FIELD 引用不能为空");
+        }
+        IndicatorDto dto = indicatorService.requireMutationAccess(indicatorId, activeDept);
+        GovIndicatorDefinition indicator = indicatorRepository
+            .findById(indicatorId)
+            .orElseThrow(() -> new IndicatorNotFoundException("指标不存在: " + indicatorId));
+        List<GovIndicatorReference> managed = referenceRepository
+            .findByIndicatorOrderByCreatedDateAsc(indicator)
+            .stream()
+            .filter(reference -> "MODEL_SPEC_FIELD".equalsIgnoreCase(reference.getRefType()))
+            .toList();
+        GovIndicatorReference target = managed.isEmpty() ? new GovIndicatorReference() : managed.get(0);
+        managed.stream().skip(1).forEach(referenceRepository::delete);
+        target.setIndicator(indicator);
+        target.setRefType("MODEL_SPEC_FIELD");
+        target.setRefTarget(normalizeText(request.refTarget()));
+        target.setRefName(normalizeText(request.refName()));
+        target.setNotes(normalizeText(request.notes()));
+        GovIndicatorReference saved = referenceRepository.save(target);
+        return Map.of(
+            "indicatorId",
+            indicatorId.toString(),
+            "indicatorName",
+            dto != null && dto.getName() != null ? dto.getName() : "",
+            "reference",
+            toDto(saved)
+        );
+    }
+
     private void rejectManagedIndicatorReference(String refType) {
         if ("INDICATOR".equalsIgnoreCase(normalizeRefType(refType))) {
             throw new IndicatorConflictException("指标依赖引用由 dependencyIndicators 自动维护，不能手工修改");

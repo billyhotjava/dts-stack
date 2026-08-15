@@ -488,6 +488,80 @@ class IndicatorServiceLifecycleTest {
     }
 
     @Test
+    void publishRejectsDerivedMetricWhosePinnedVersionDoesNotExist() throws Exception {
+        UUID categoryId = UUID.randomUUID();
+        UUID domainId = UUID.randomUUID();
+        GovIndicatorDefinition dependency = indicator(UUID.randomUUID(), "GMV", "GMV", "PUBLISHED", "v2");
+        dependency.setBusinessCategoryId(categoryId);
+        dependency.setDataDomainId(domainId);
+        dependency.setMetricType("ATOMIC");
+        GovIndicatorDefinition draft = indicator(UUID.randomUUID(), "GMV_RATE", "GMV rate", "DRAFT", "v1");
+        draft.setBusinessCategoryId(categoryId);
+        draft.setDataDomainId(domainId);
+        draft.setMetricType("DERIVED");
+        draft.setIsDerived(false);
+        draft.setDependencyIndicators("[\"GMV\"]");
+        draft.setExpressionSql("{{metric:GMV}}");
+        draft.setSourceRefs(
+            objectMapper.writeValueAsString(
+                List.of(new MetricSourceRef(SourceType.INDICATOR_VERSION, dependency.getId().toString(), "v9"))
+            )
+        );
+
+        when(indicatorRepository.findByIdForUpdate(draft.getId())).thenReturn(Optional.of(draft));
+        when(indicatorRepository.findFirstByCodeIgnoreCase("GMV")).thenReturn(Optional.of(dependency));
+        when(businessContexts.domain(categoryId)).thenReturn(Optional.of(new DomainNode(categoryId, null, "ACTIVE")));
+        when(businessContexts.domain(domainId)).thenReturn(Optional.of(new DomainNode(domainId, categoryId, "ACTIVE")));
+        when(versionRepository.findByIndicatorAndVersion(dependency, "v9")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.publish(draft.getId(), null))
+            .isInstanceOf(IndicatorConflictException.class)
+            .hasMessageContaining("INDICATOR_DEPENDENCY_VERSION_NOT_PUBLISHED");
+
+        verify(derivationValidationService, never()).validate(draft.getId());
+        verify(indicatorRepository, never()).save(draft);
+    }
+
+    @Test
+    void publishAcceptsDerivedMetricPinnedToPublishedDependencyVersion() throws Exception {
+        UUID categoryId = UUID.randomUUID();
+        UUID domainId = UUID.randomUUID();
+        GovIndicatorDefinition dependency = indicator(UUID.randomUUID(), "GMV", "GMV", "PUBLISHED", "v2");
+        dependency.setBusinessCategoryId(categoryId);
+        dependency.setDataDomainId(domainId);
+        dependency.setMetricType("ATOMIC");
+        GovIndicatorVersion dependencyVersion = version(dependency, "v2", "PUBLISHED");
+        GovIndicatorDefinition draft = indicator(UUID.randomUUID(), "GMV_RATE", "GMV rate", "DRAFT", "v1");
+        draft.setBusinessCategoryId(categoryId);
+        draft.setDataDomainId(domainId);
+        draft.setMetricType("DERIVED");
+        draft.setIsDerived(false);
+        draft.setDependencyIndicators("[\"GMV\"]");
+        draft.setExpressionSql("{{metric:GMV}}");
+        draft.setSourceRefs(
+            objectMapper.writeValueAsString(
+                List.of(new MetricSourceRef(SourceType.INDICATOR_VERSION, dependency.getId().toString(), "v2"))
+            )
+        );
+
+        when(indicatorRepository.findByIdForUpdate(draft.getId())).thenReturn(Optional.of(draft));
+        when(indicatorRepository.findFirstByCodeIgnoreCase("GMV")).thenReturn(Optional.of(dependency));
+        when(businessContexts.domain(categoryId)).thenReturn(Optional.of(new DomainNode(categoryId, null, "ACTIVE")));
+        when(businessContexts.domain(domainId)).thenReturn(Optional.of(new DomainNode(domainId, categoryId, "ACTIVE")));
+        when(versionRepository.findByIndicatorAndVersion(dependency, "v2")).thenReturn(Optional.of(dependencyVersion));
+        when(versionRepository.findByIndicatorAndVersion(draft, "v1")).thenReturn(Optional.empty());
+        when(derivationValidationService.validate(draft.getId()))
+            .thenReturn(new IndicatorDerivationValidationResult(true, "\"GMV\"", List.of(), List.of("GMV")));
+
+        IndicatorDto published = service.publish(draft.getId(), null);
+
+        assertThat(published.getStatus()).isEqualTo("PUBLISHED");
+        assertThat(published.getMetricType()).isEqualTo("DERIVED");
+        assertThat(published.getIsDerived()).isTrue();
+        verify(derivationValidationService).validate(draft.getId());
+    }
+
+    @Test
     void updateRequiresMatchingLastModifiedPreconditionUnderRowLock() {
         GovIndicatorDefinition draft = indicator(UUID.randomUUID(), "GMV", "GMV", "DRAFT", "v1");
         when(indicatorRepository.findByIdForUpdate(draft.getId())).thenReturn(Optional.of(draft));
@@ -670,6 +744,28 @@ class IndicatorServiceLifecycleTest {
         verify(indicatorRepository).findByIdForUpdate(target.getId());
         verify(indicatorRepository, never()).findById(target.getId());
         verify(indicatorRepository).save(target);
+    }
+
+    @Test
+    void validatesPinnedModelFieldDefinitionWithoutLegacyDatasetOrSql() {
+        UUID modelId = UUID.randomUUID();
+        GovIndicatorDefinition target = indicator(UUID.randomUUID(), "TASK_TOTAL", "任务总数", "DRAFT", "v1");
+        target.setMetricType("ATOMIC");
+        target.setIsDerived(false);
+        target.setAggregationType("SUM");
+        target.setMeasureField("task_total");
+        target.setSourceRefs(
+            "[{\"sourceType\":\"SEMANTIC_MODEL_REVISION\",\"sourceId\":\"" + modelId + "\",\"sourceVersion\":\"r2\"}]"
+        );
+        GovIndicatorReference modelField = reference(target, "MODEL_SPEC_FIELD", modelId + "@2#task_total");
+        when(indicatorRepository.findByIdForUpdate(target.getId())).thenReturn(Optional.of(target));
+        when(referenceRepository.findByIndicatorOrderByCreatedDateAsc(target)).thenReturn(List.of(modelField));
+
+        var result = service.validateComputeRule(target.getId(), null);
+
+        assertThat(result.getStatus()).isEqualTo("SUCCESS");
+        assertThat(result.getMessage()).contains("模型字段");
+        assertThat(target.getLastValidationStatus()).isEqualTo("SUCCESS");
     }
 
     @Test

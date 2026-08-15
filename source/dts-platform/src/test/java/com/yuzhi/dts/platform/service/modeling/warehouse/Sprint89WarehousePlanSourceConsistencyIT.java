@@ -21,6 +21,7 @@ import static org.mockito.Mockito.when;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.IntegrationTest;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.SchemaDriftConsumerReferenceReadPort;
 import com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver.AccessContext;
 import com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver.ResolvedSource;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicationService.WarehousePlanException;
@@ -65,6 +66,9 @@ class Sprint89WarehousePlanSourceConsistencyIT {
 
     @MockBean
     private AuditService auditService;
+
+    @MockBean
+    private SchemaDriftConsumerReferenceReadPort driftConsumerReferences;
 
     private String tenant;
     private UUID planId;

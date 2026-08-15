@@ -544,6 +544,8 @@
                         <testInclude>**/service/modeling/SubjectDomainGovernanceLiquibaseTest.java</testInclude>
                         <testInclude>**/repository/modeling/ModelLifecycleRepositoryTest.java</testInclude>
                         <testInclude>**/repository/modeling/ModelSpecRepositoryForwardUndoTest.java</testInclude>
+                        <testInclude>**/repository/modeling/PlanExecutionHealthRepositoryTest.java</testInclude>
+                        <testInclude>**/repository/modeling/PlanOperationalRunRepositoryTest.java</testInclude>
                         <testInclude>**/service/modeling/imports/reconciliation/ModelSpecImportForwardRestorePostgresIT.java</testInclude>
                         <testInclude>**/repository/modeling/ModelLifecycleCommandReceiptRepositoryTest.java</testInclude>
                         <testInclude>**/repository/modeling/ModelImplementationCommandReceiptLiquibaseIT.java</testInclude>
@@ -616,6 +618,11 @@
                         <testInclude>**/service/governance/SqlRepairServiceTest.java</testInclude>
                         <testInclude>**/service/governance/MeasurementUnitApplicationServiceTest.java</testInclude>
                         <testInclude>**/service/governance/IndicatorServiceLifecycleTest.java</testInclude>
+                        <testInclude>**/service/governance/IndicatorDerivationValidationServiceTest.java</testInclude>
+                        <testInclude>**/service/governance/DbtIndicatorGeneratorDerivationTest.java</testInclude>
+                        <testInclude>**/service/governance/IndicatorPublishPreviewServiceTest.java</testInclude>
+                        <testInclude>**/service/governance/ModelFieldIndicatorDraftServiceTest.java</testInclude>
+                        <testInclude>**/service/governance/IndicatorReferenceServiceManagedDependencyTest.java</testInclude>
                         <testInclude>**/service/governance/DimensionDepartmentScopeTest.java</testInclude>
                         <testInclude>**/domain/governance/GovIndicatorDefinitionJsonMappingTest.java</testInclude>
                         <testInclude>**/service/governance/IndicatorBusinessContextContractTest.java</testInclude>
@@ -641,6 +648,7 @@
                         <testInclude>**/service/modeling/ModelBuildIntentServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelMaterializationDispatchServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelMaterializationRunArtifactServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/PlanOperationalRunArtifactServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/F4StrictAuditRollbackPostgresIT.java</testInclude>
                         <testInclude>**/service/modeling/ModelMaterializationRuntimeSpecServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelMaterializationSourceAvailabilityGuardTest.java</testInclude>
@@ -666,6 +674,7 @@
                         <testInclude>**/service/modeling/ReleaseDutyResolverTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelReleaseCandidateCancelLiquibaseTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelReleaseCandidateImplementationSnapshotLiquibaseTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelReleaseCandidatePublishedHistoryLiquibaseTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelReleaseCandidateReplacementLiquibaseTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelReleaseSelfServiceLiquibaseTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelReleaseCandidateServiceTest.java</testInclude>

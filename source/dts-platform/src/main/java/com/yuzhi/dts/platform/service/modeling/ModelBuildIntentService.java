@@ -253,6 +253,7 @@ public class ModelBuildIntentService {
 
     private static boolean isActive(CandidateView candidate) {
         return (
+            candidate.status() != DeliveryStatus.PUBLISHED &&
             candidate.status() != DeliveryStatus.REJECTED &&
             candidate.status() != DeliveryStatus.ROLLED_BACK &&
             candidate.status() != DeliveryStatus.CANCELLED &&

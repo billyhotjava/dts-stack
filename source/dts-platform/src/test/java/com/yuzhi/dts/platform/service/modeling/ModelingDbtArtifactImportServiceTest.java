@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 class ModelingDbtArtifactImportServiceTest {
@@ -67,6 +68,17 @@ class ModelingDbtArtifactImportServiceTest {
             eq(Boolean.class),
             any(Object[].class)
         );
+        ArgumentCaptor<String> ownershipQueries = ArgumentCaptor.forClass(String.class);
+        verify(jdbcTemplate, times(3)).queryForObject(
+            ownershipQueries.capture(),
+            eq(Boolean.class),
+            any(Object[].class)
+        );
+        assertThat(ownershipQueries.getAllValues())
+            .allMatch(sql ->
+                sql.contains("modeling_model_implementation") &&
+                !sql.contains("modeling_dbt_artifact")
+            );
         verify(jdbcTemplate, times(12)).update(
             contains("'IMPORTED'"),
             any(Object[].class)

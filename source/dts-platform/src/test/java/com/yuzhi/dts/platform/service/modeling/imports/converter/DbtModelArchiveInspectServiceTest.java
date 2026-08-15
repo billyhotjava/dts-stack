@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
@@ -44,6 +45,36 @@ class DbtModelArchiveInspectServiceTest {
 
         assertThat(result.dbt().projectName()).isEqualTo("target_pjm");
         assertThat(result.packageId()).startsWith("target-pjm-");
+    }
+
+    @Test
+    void acceptsStandardDbtMacroVolumeWithoutRelaxingTheBusinessGraphLimit() throws Exception {
+        ObjectMapper objectMapper = new ObjectMapper();
+        ObjectNode artifact = (ObjectNode) objectMapper.readTree(manifest());
+        ObjectNode macros = (ObjectNode) artifact.path("macros");
+        for (int index = 0; index < 600; index++) {
+            ObjectNode macro = objectMapper.createObjectNode();
+            macro.put("unique_id", "macro.dbt.generated_" + index);
+            macro.put("name", "generated_" + index);
+            macro.put("resource_type", "macro");
+            macro.put("package_name", "dbt");
+            macro.put("original_file_path", "macros/generated.sql");
+            ObjectNode dependsOn = objectMapper.createObjectNode();
+            dependsOn.putArray("nodes");
+            dependsOn.putArray("macros");
+            macro.set("depends_on", dependsOn);
+            macros.set("macro.dbt.generated_" + index, macro);
+        }
+        ((ObjectNode) macros.path("macro.dbt.generated_0").path("depends_on"))
+            .withArray("macros")
+            .add("macro.dbt.generated_1");
+        ((ObjectNode) macros.path("macro.dbt.generated_1").path("depends_on"))
+            .withArray("macros")
+            .add("macro.dbt.generated_0");
+
+        var result = service.inspect(archive(Map.of("target/manifest.json", objectMapper.writeValueAsString(artifact))));
+
+        assertThat(result.models()).singleElement().satisfies(model -> assertThat(model.dbtUniqueId()).isEqualTo("model.pjm.budget"));
     }
 
     @Test
@@ -259,13 +290,13 @@ class DbtModelArchiveInspectServiceTest {
         );
 
         assertThat(result.dbt().projectName()).isEqualTo("pm_analytics_v3");
-        assertThat(result.dbt().manifestVersion()).isEqualTo("source-project/v1");
-        assertThat(result.models()).hasSize(38);
+        assertThat(result.dbt().manifestVersion()).isEqualTo("v12");
+        assertThat(result.models()).hasSize(43);
         assertThat(result.technicalNodes())
             .extracting(node -> node.dbtUniqueId())
             .contains(
                 "model.pm_analytics_v3.stg_pm__budget_v2",
-                "macro.pm_analytics_v3.ensure_date_helpers"
+                "macro.pm_analytics_v3.parse_date_safe"
             );
         assertThat(result.sources())
             .extracting(source -> source.dbtUniqueId())
@@ -281,8 +312,7 @@ class DbtModelArchiveInspectServiceTest {
             });
         assertThat(result.issues())
             .extracting(issue -> issue.code())
-            .contains("DBT_SOURCE_PROJECT_STATIC_ANALYSIS", "SOURCE_SEMANTICS_INCOMPLETE")
-            .doesNotContain("LEGACY_MANIFEST_REQUIRED");
+            .doesNotContain("DBT_SOURCE_PROJECT_STATIC_ANALYSIS", "SOURCE_FIELDS_UNVERIFIED", "LEGACY_MANIFEST_REQUIRED");
     }
 
     @Test

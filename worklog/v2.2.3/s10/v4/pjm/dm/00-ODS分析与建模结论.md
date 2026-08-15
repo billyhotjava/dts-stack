@@ -18,14 +18,14 @@
 | 序号 | ODS 表 | 业务字段数 | 建议数据域 | 建议业务过程 | 当前 dbt 状态 |
 |---|---|---:|---|---|---|
 | 0 | `ods_project_subject_domain_v2` | 33 | 研究项目域 | 项目计划执行 | 已进入 STG→DWD→DWS→ADS |
-| 1 | `ods_progress_measure_v2` | 23 | 研究项目域 | 项目跟进闭环 | 仅注册 source，二期 |
+| 1 | `ods_progress_measure_v2` | 23 | 研究项目域 | 项目跟进闭环 | 已进入 STG→DWD→DWS→ADS |
 | 2 | `ods_quality_issue_v2` | 21 | 质量管理域 | 质量问题处置 | 已进入 STG→DWD→DWS→ADS |
-| 3 | `ods_quality_measure_v2` | 33 | 质量管理域 | 质量措施闭环 | 仅注册 source，二期 |
+| 3 | `ods_quality_measure_v2` | 33 | 质量管理域 | 质量措施闭环 | 已进入 STG→DWD→DWS→ADS |
 | 4 | `ods_tech_state_v2` | 33 | 产品技术域 | 技术状态更改 | 已进入 STG→DWD→DWS→ADS |
-| 5 | `ods_tech_state_measure_v2` | 41 | 产品技术域 | 技术状态措施闭环 | 仅注册 source，二期 |
+| 5 | `ods_tech_state_measure_v2` | 41 | 产品技术域 | 技术状态措施闭环 | 已进入 STG→DWD→DWS→ADS |
 | 6 | `ods_risk_info_v2` | 31 | 研究项目域 | 项目风险处置 | 已进入 STG→DWD→DWS→ADS |
-| 7 | `ods_risk_measure_v2` | 42 | 研究项目域 | 风险措施闭环 | 仅注册 source，二期 |
-| 8 | `ods_material_info_v2` | 29 | 物料供应域 | 重要物料交付跟踪 | 仅注册 source，二期 |
+| 7 | `ods_risk_measure_v2` | 42 | 研究项目域 | 风险措施闭环 | 已进入 STG→DWD→DWS→ADS |
+| 8 | `ods_material_info_v2` | 29 | 物料供应域 | 重要物料交付跟踪 | 已进入 STG→DWD→DWS→ADS |
 | 9 | `ods_budget_v2` | 9 | 财务管理域 | 预算执行快照 | 已进入 STG→DWD→DWS→ADS |
 
 “业务字段数”按 PostgreSQL 主 DDL 注释口径记录，不包含代理 `id`、`_dts_*` 落地元数据，也不包含 MySQL 测试源另加的 `classification`/`owner_dept`。
@@ -36,23 +36,21 @@
 
 ```text
 10 张 ODS source
-  ├─ 5 张当前主链来源
-  │    → 5 张 STG view
-  │    → 8 张 canonical 维度 + 10 张 alias 归一化辅助表
-  │    → 5 张 DWD FACT
-  │    → 5 张 DWS SUMMARY
-  │    → 10 张 ADS APPLICATION
-  └─ 5 张二期来源：仅登记 source，尚无 STG/DWD/DWS/ADS
+  → 10 张 STG view
+  → 8 张 canonical 维度 + 10 张 alias 归一化辅助表
+  → 10 张 DWD FACT
+  → 10 张 DWS SUMMARY
+  → 15 张 ADS APPLICATION
 ```
 
 当前主链表如下：
 
 | 层次 | 当前模型 |
 |---|---|
-| STG | `stg_pm__project_subject_domain_v2`、`stg_pm__quality_issue_v2`、`stg_pm__tech_state_v2`、`stg_pm__risk_info_v2`、`stg_pm__budget_v2` |
-| DWD FACT | `biz_dwd_project_node_v2`、`biz_dwd_quality_issue_v2`、`biz_dwd_tech_state_v2`、`biz_dwd_risk_info_v2`、`biz_dwd_budget_v2` |
-| DWS | `biz_dws_progress_monthly_v2`、`biz_dws_quality_monthly_v2`、`biz_dws_tech_state_monthly_v2`、`biz_dws_risk_monthly_v2`、`biz_dws_budget_v2` |
-| ADS | 进度 2 张、质量 2 张、技术状态 2 张、风险 1 张、预算 2 张、综合 1 张，共 10 张 |
+| STG | 10 张 ODS 各有一张同主题 `stg_pm__*` 标准化视图 |
+| DWD FACT | 原 5 张核心事实 + 项目跟进、质量措施、技术状态措施、风险措施、物料交付，共 10 张 |
+| DWS | 原 5 张主题汇总 + 4 张措施闭环月汇总 + 1 张物料交付月汇总，共 10 张 |
+| ADS | 原 10 张 KPI/派生应用 + 4 张措施闭环 KPI + 1 张物料交付 KPI，共 15 张 |
 
 ## 3. 分层职责
 
@@ -74,9 +72,14 @@
 | 质量问题 | 一个项目下的一条质量问题一行 | `issue_id=quality_issue:source_row_id` | 累积快照 | 问题发生、归零完成、最后更新时间 |
 | 技术状态 | 一个项目下的一项技术状态更改一行 | `tech_state_id=tech_state:source_row_id` | 累积快照 | 提出、签署、整改等里程碑日期 |
 | 项目风险 | 一个项目下的一条风险一行 | `risk_id=risk_info:source_row_id` | 累积快照 | 提出、计划释放、实际释放、最后更新时间 |
-| 预算明细 | 一个预算编号一行；自然粒度还包含项目、子课题、研究室 | `budget_id=budget:source_row_id`，`budget_no` 已确认全局唯一 | 周期快照 | 当前缺少业务快照日期 |
+| 预算明细 | 一个预算编号在一个业务快照日一行 | `snapshot_date + budget_no`，`budget_id` 由稳定业务粒度生成 | 周期快照 | 业务 `snapshot_date` |
+| 项目跟进措施 | 一个项目节点的一条跟进措施一行 | 测试数据候选键 `project_no + node_task + measure_title + follow_up_date` | 累积快照 | 计划、跟进、闭环、最后更新时间 |
+| 质量措施 | 一条质量问题跟进措施一行 | 测试数据候选键 `project_no + issue_name + measure_title + follow_up_date` | 累积快照 | 问题发生、跟进、闭环、最后更新时间 |
+| 技术状态措施 | 一条技术状态跟进措施一行 | 测试数据候选键 `project_no + tech_state_name + measure_title + follow_up_date` | 累积快照 | 更改提出、跟进、闭环、最后更新时间 |
+| 风险措施 | 一条项目风险跟进措施一行 | 测试数据候选键 `project_no + risk_name + measure_title + follow_up_date` | 累积快照 | 风险提出、跟进、闭环、最后更新时间 |
+| 物料交付 | 一个项目下的一项 PBS 物料交付状态一行 | 测试数据候选键 `project_no + pbs_no` | 累积快照 | 合同交付、实际到货、检验、上装、最后更新时间 |
 
-前四张事实表使用的 `source_row_id` 只保证本次落地行唯一，重新全量装载后可能变化。它可以维持当前全量表实现，但不能替代长期稳定业务主键。进入增量、历史快照或跨批次对账前，必须由源系统提供稳定 ID，或由业务负责人确认候选自然键唯一性。
+除预算外的源表普遍没有稳定业务 ID。当前核心事实仍保留来源行标识；新增措施/物料事实使用确定性候选自然键生成标识。现有测试数据已验证这些候选键非空且唯一，但单批 10 行样本不能证明生产数据长期唯一。进入增量、历史快照或跨批次对账前，仍必须由源系统提供稳定 ID，或由业务负责人基于生产画像冻结候选键。
 
 预算表已增加业务 `snapshot_date`，预算链按该字段组织快照粒度。`_dts_import_time` 仍只是技术入湖时间，不得作为业务会计期间或快照日期。
 
@@ -107,10 +110,7 @@ MySQL 客户源模拟表另有：
 
 ## 7. 当前必须显式登记的缺口
 
-1. 5 张措施/物料表尚未进入主链，见二期清单。
-2. 前四张核心事实表缺少稳定源业务 ID；当前只能安全地全量重建。
-3. 预算事实缺少业务快照日期，不能形成可信月度趋势。
-4. `model-governance.md` 要求 STG 保留 `source_file/source_sheet_name/source_batch_id/source_row_num`，当前 5 张 STG SQL 实际只输出 `source_row_id/source_table/source_system/imported_at`；发布前应统一口径或补齐字段。
-5. 部分 `ods-verify` 文档仍标记“待对齐”，但主 DDL 已包含对应字段；实施时以主 DDL、字段映射 CSV 和源样本三方复核结果为准，并更新过期核对状态。
-6. 两张预算 ADS 是单行结果且没有键字段，与 DTS“至少一个 KEY 字段”的设计门禁冲突；需先增加稳定常量键，例如 `snapshot_scope='ALL'`，再登记发布。
-7. 当前 8 张 canonical 维度均是枚举/状态维度；项目、组织、人员等仍以文本属性出现。在未接入权威主数据、稳定编码和维护责任人前，不得为了“有维度表”而从业务文本去重生成伪主数据。
+1. 除预算外的事实普遍缺少源系统稳定业务 ID；新增 5 张事实的候选键只通过当前测试样本，生产增量上线前仍需真实数据画像和责任人确认。
+2. `model-governance.md` 要求 STG 保留 `source_file/source_sheet_name/source_batch_id/source_row_num`；当前 10 张 STG 会尽量透传已有落地元数据，但源表未提供的字段不能伪造，发布证据需注明来源能力边界。
+3. 部分 `ods-verify` 文档仍标记“待对齐”，但主 DDL 已包含对应字段；实施时以主 DDL、字段映射 CSV 和源样本三方复核结果为准，并更新过期核对状态。
+4. 当前 8 张 canonical 维度均是枚举/状态维度；项目、组织、人员等仍以文本属性出现。在未接入权威主数据、稳定编码和维护责任人前，不得为了“有维度表”而从业务文本去重生成伪主数据。

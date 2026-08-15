@@ -299,15 +299,64 @@ export function validateIndicatorDefinition(values: IndicatorEditValues): string
 		.trim()
 		.toUpperCase();
 	if (metricType) {
-		if (!["ATOMIC", "DERIVED", "COMPOSITE"].includes(metricType)) issues.push("指标类型无效");
+		if (!["ATOMIC", "DERIVED", "COMPOSITE"].includes(metricType)) {
+			issues.push("指标类型无效");
+			return issues;
+		}
 		const groupCode = String(values.metricGroupCode ?? "").trim();
 		if (groupCode && !/^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(groupCode)) {
 			issues.push("指标分组编码必须是稳定 ASCII 编码");
 		}
-		for (const ref of values.sourceRefs ?? []) {
+		const sourceRefs = values.sourceRefs ?? [];
+		for (const ref of sourceRefs) {
 			if (!ref?.sourceType || !String(ref.sourceId || "").trim() || !String(ref.sourceVersion || "").trim()) {
 				issues.push("指标来源必须包含类型、稳定 ID 和固定版本");
 				break;
+			}
+		}
+		if (!String(values.businessCategoryId ?? "").trim()) issues.push("业务分类不能为空");
+		if (metricType === "ATOMIC") {
+			if (!String(values.dataDomainId ?? "").trim()) issues.push("原子指标必须选择数据域");
+			if (!String(values.businessProcessId ?? "").trim()) issues.push("原子指标必须选择业务过程");
+			if (!String(values.aggregationType ?? "").trim()) issues.push("原子指标必须选择聚合方式");
+			if (
+				String(values.aggregationType ?? "")
+					.trim()
+					.toUpperCase() === "DERIVED"
+			) {
+				issues.push("原子指标聚合方式不能为 DERIVED");
+			}
+			if (!String(values.measureField ?? "").trim()) issues.push("原子指标必须选择度量字段");
+			if (!sourceRefs.length) {
+				issues.push("原子指标必须绑定固定模型版本或物理资产");
+			} else if (sourceRefs.some((ref) => ref.sourceType === "INDICATOR_VERSION")) {
+				issues.push("原子指标来源不能是指标版本");
+			}
+			return issues;
+		}
+
+		const dependencies = cleanCodes(values.dependencyCodes ?? []);
+		const nonSelfDependencies = dependencies.filter((item) => item.toUpperCase() !== code.toUpperCase());
+		const minimumDependencies = metricType === "COMPOSITE" ? 2 : 1;
+		if (nonSelfDependencies.length < minimumDependencies) {
+			issues.push(
+				metricType === "COMPOSITE" ? "复合指标至少选择两个非自身依赖指标" : "派生指标至少选择一个非自身依赖指标",
+			);
+		}
+		if (metricType === "DERIVED" && !String(values.dataDomainId ?? "").trim()) {
+			issues.push("派生指标必须选择数据域");
+		}
+		if (!String(values.expressionSql ?? "").trim()) issues.push("派生/复合指标必须填写受控计算公式");
+		if (!String(values.targetModelName ?? "").trim()) issues.push("派生/复合指标必须选择实现模型");
+		if (!String(values.measureField ?? "").trim()) issues.push("派生/复合指标必须选择实现结果字段");
+		if (!sourceRefs.length) {
+			issues.push("派生/复合指标必须固定上游指标版本");
+		} else if (sourceRefs.some((ref) => ref.sourceType !== "INDICATOR_VERSION")) {
+			issues.push("派生/复合指标来源只能是固定指标版本");
+		} else {
+			const uniqueSourceIds = new Set(sourceRefs.map((ref) => String(ref.sourceId || "").trim()).filter(Boolean));
+			if (sourceRefs.length !== nonSelfDependencies.length || uniqueSourceIds.size !== nonSelfDependencies.length) {
+				issues.push("上游指标编码与固定指标版本必须一一对应");
 			}
 		}
 		return issues;
@@ -333,19 +382,25 @@ export function validateIndicatorDefinition(values: IndicatorEditValues): string
 }
 
 export function normalizeIndicatorEditValues(values: IndicatorEditValues): IndicatorEditValues {
-	if (!Object.hasOwn(values, "isDerived")) return { ...values };
-	if (values.isDerived) {
+	const explicitMetricType = String(values.metricType ?? "")
+		.trim()
+		.toUpperCase();
+	const hasStableMetricType = ["ATOMIC", "DERIVED", "COMPOSITE"].includes(explicitMetricType);
+	if (!hasStableMetricType && !Object.hasOwn(values, "isDerived")) return { ...values };
+	const derived = hasStableMetricType ? explicitMetricType !== "ATOMIC" : Boolean(values.isDerived);
+	if (derived) {
 		return {
 			...values,
+			isDerived: true,
 			aggregationType: "DERIVED",
 			datasetId: null,
-			measureField: null,
 			numeratorExpression: null,
 			denominatorExpression: null,
 		};
 	}
 	return {
 		...values,
+		isDerived: false,
 		aggregationType: String(values.aggregationType ?? "").toUpperCase() === "DERIVED" ? null : values.aggregationType,
 		dependencyCodes: [],
 	};

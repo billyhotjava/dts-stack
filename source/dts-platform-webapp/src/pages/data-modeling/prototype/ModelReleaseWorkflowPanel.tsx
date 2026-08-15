@@ -9,7 +9,7 @@ import { Status } from "./PrototypePrimitives";
 
 type ReleaseWorkflowAction = Extract<
 	ReleaseCandidateLifecycleAction,
-	"RUN_QUALITY" | "SUBMIT_REVIEW" | "APPROVE" | "REJECT" | "PUBLISH" | "RETRY_REGISTRATION" | "ROLLBACK"
+	"RUN_QUALITY" | "SUBMIT_REVIEW" | "APPROVE" | "REJECT" | "PUBLISH" | "RETRY_PUBLICATION" | "ROLLBACK"
 >;
 
 type WorkflowStepState = "waiting" | "active" | "passed" | "failed" | "rolled-back";
@@ -103,7 +103,7 @@ const handoffText = (candidate: ReleaseCandidate | null, actions: ReleaseWorkflo
 	if (candidate.status === "APPROVED" && !actions.includes("PUBLISH"))
 		return "评审已通过，等待独立发布操作员登记上线。";
 	if (actions.includes("PUBLISH")) return "评审已通过，当前由发布操作员完成发布登记。";
-	if (actions.includes("RETRY_REGISTRATION")) return "发布登记未完整提交，请由发布操作员重试登记或回滚。";
+	if (actions.includes("RETRY_PUBLICATION")) return "发布未完整提交，请重试发布或回滚。";
 	if (candidate.status === "PUBLISHED") return "发布登记已完成；上线状态继续以执行绑定和物理关系为准。";
 	if (candidate.status === "ROLLED_BACK") return "本次发布已回滚，可按新修订创建替代候选。";
 	return "服务端正在推进当前阶段，刷新后查看下一步。";

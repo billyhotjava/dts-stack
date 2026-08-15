@@ -341,6 +341,19 @@ def _validate_runtime_spec(runtime_spec: Any) -> dict[str, str]:
     return normalized
 
 
+def _operational_image_ref() -> str:
+    image_ref = _required_text(
+        os.getenv("DTS_DBT_RUNTIME_CERTIFICATION_IMAGE_REF", ""),
+        "operational dbt image",
+    )
+    if (
+        not _DIGEST_IMAGE.fullmatch(image_ref)
+        or not image_ref.endswith("@" + _EXPECTED_CERTIFIED_IMAGE_DIGEST)
+    ):
+        raise ValueError("operational dbt image is not certified")
+    return image_ref
+
+
 def _build_docker_command(
     runtime_spec: dict[str, Any],
     image: str,
@@ -786,7 +799,7 @@ def _dbt_build_task(**context: Any) -> None:
     image = (
         runtime["imageRef"]
         if runtime["runPurpose"] == "RELEASE_BUILD"
-        else os.getenv("DBT_IMAGE", "dts-dbt:1.10.0")
+        else _operational_image_ref()
     )
     command = _build_docker_command(
         runtime,

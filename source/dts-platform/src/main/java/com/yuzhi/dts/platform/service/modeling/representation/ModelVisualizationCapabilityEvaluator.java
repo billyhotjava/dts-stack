@@ -42,6 +42,17 @@ public class ModelVisualizationCapabilityEvaluator {
         if (!trust.dependenciesTrusted()) reasons.add(CapabilityReason.MODEL_REPRESENTATION_DEPENDENCIES_UNTRUSTED);
         if (trust.runtimeEvidenceStale()) reasons.add(CapabilityReason.MODEL_REPRESENTATION_RUNTIME_EVIDENCE_STALE);
 
+        // A DBT-managed implementation is the source that repairs incomplete field/dependency
+        // evidence. Keep exact artifact pins fail-closed, but never lock its code editor behind
+        // the business-projection trust that the editor itself is responsible for restoring.
+        if (
+            scope == RepresentationScope.TECHNICAL &&
+            ownership == ImplementationMode.DBT_MANAGED &&
+            trust.artifactPinsExact()
+        ) {
+            return new CapabilityDecision(VisualizationCapability.ADVANCED_DBT_IMPLEMENTATION, reasons);
+        }
+
         boolean projectionBlocked = reasons
             .stream()
             .anyMatch(reason -> reason != CapabilityReason.MODEL_REPRESENTATION_RUNTIME_EVIDENCE_STALE);

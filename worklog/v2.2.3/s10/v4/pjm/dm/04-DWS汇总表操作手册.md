@@ -10,7 +10,7 @@ DWS 是公共层的主题汇总，不是 ODS“汇总表”的简单搬运。每
 - 保存分子、分母和计数，避免只保存不可重算的百分比；
 - 不选择业务过程。业务过程已经由上游 FACT 固定，SUMMARY 页面也不展示该字段。
 
-当前 5 张 DWS 均为 `table` + 全量加载 + 无物理分区，操作手册按现有 dbt 实现登记，不擅自改为增量或分区表。
+当前 10 张 DWS 均为 `table` + 全量加载 + 无物理分区，操作手册按现有 dbt 实现登记，不擅自改为增量或分区表。
 
 ## 2. 通用创建步骤
 
@@ -115,9 +115,21 @@ MEASURE 字段：`item_cnt`、`budget_amount`、`prepaid_amount`、`book_cost_am
 
 本表使用 DWD 的业务 `snapshot_date` 支持跨快照分析，仍不得直接使用 `_dts_import_time` 作为日期筛选口径。
 
-## 8. DWS 验收清单
+## 8. 措施闭环与物料交付月度汇总
 
-- [ ] 5 张表的 KEY 与粒度一致，组合键唯一。
+| 物理表名 | 数据域 | 组合 KEY | 固定上游 | 主要输出 |
+|---|---|---|---|---|
+| `biz_dws_project_follow_up_monthly_v2` | 研究项目域 | `period_month + project_no` | `biz_dwd_project_follow_up_v2` | 措施、闭环、未闭环、平均闭环/待办天数 |
+| `biz_dws_quality_measure_monthly_v2` | 质量管理域 | `period_month + project_no + dept` | `biz_dwd_quality_measure_v2` | 措施、闭环、未闭环、超期和时长 |
+| `biz_dws_tech_state_measure_monthly_v2` | 产品技术域 | `period_month + project_no + dept` | `biz_dwd_tech_state_measure_v2` | 措施、闭环、未闭环、超期和时长 |
+| `biz_dws_risk_measure_monthly_v2` | 研究项目域 | `period_month + project_no + dept` | `biz_dwd_risk_measure_v2` | 措施、闭环、高风险未闭环和时长 |
+| `biz_dws_material_delivery_monthly_v2` | 物料供应域 | `period_month + project_no + dept_owner` | `biz_dwd_material_delivery_v2` | 物料、到货、逾期、检验、长周期高风险计数 |
+
+措施事实按跟进月份汇总；物料事实按合同要求交付月份汇总。没有业务日期的记录不得落入伪造月份，须在 DWD 数据质量结果中显式暴露。
+
+## 9. DWS 验收清单
+
+- [ ] 10 张表的 KEY 与粒度一致，组合键唯一。
 - [ ] 所有上游为同规划或已发布模型的固定修订，状态 CURRENT。
 - [ ] 没有直接引用 ODS 或 STG。
 - [ ] 计数和金额字段标记 MEASURE，时间字段标记 TIME。

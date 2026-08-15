@@ -7,6 +7,8 @@ import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.governance.DimensionService;
 import com.yuzhi.dts.platform.service.governance.IndicatorDashboardService;
 import com.yuzhi.dts.platform.service.governance.IndicatorConflictException;
+import com.yuzhi.dts.platform.service.governance.IndicatorCalculationService;
+import com.yuzhi.dts.platform.service.governance.IndicatorCalculationService.CalculationBatch;
 import com.yuzhi.dts.platform.service.governance.IndicatorDerivationValidationResult;
 import com.yuzhi.dts.platform.service.governance.IndicatorRequestException;
 import com.yuzhi.dts.platform.service.governance.IndicatorService;
@@ -70,6 +72,7 @@ public class GovernanceIndicatorResource {
     private final IndicatorObservabilityService indicatorObservabilityService;
     private final IndicatorTemplateService indicatorTemplates;
     private final IndicatorDashboardService indicatorDashboard;
+    private final IndicatorCalculationService indicatorCalculation;
     private final DbtIndicatorGenerator dbtGenerator;
     private final GovIndicatorSubscriptionRepository subscriptionRepo;
     private final AuditService audit;
@@ -83,6 +86,7 @@ public class GovernanceIndicatorResource {
         IndicatorObservabilityService indicatorObservabilityService,
         IndicatorTemplateService indicatorTemplates,
         IndicatorDashboardService indicatorDashboard,
+        IndicatorCalculationService indicatorCalculation,
         DbtIndicatorGenerator dbtGenerator,
         GovIndicatorSubscriptionRepository subscriptionRepo,
         AuditService audit,
@@ -95,6 +99,7 @@ public class GovernanceIndicatorResource {
         this.indicatorObservabilityService = indicatorObservabilityService;
         this.indicatorTemplates = indicatorTemplates;
         this.indicatorDashboard = indicatorDashboard;
+        this.indicatorCalculation = indicatorCalculation;
         this.dbtGenerator = dbtGenerator;
         this.subscriptionRepo = subscriptionRepo;
         this.audit = audit;
@@ -922,6 +927,46 @@ public class GovernanceIndicatorResource {
     }
 
     // dbt Generation -----------------------------------------------------------
+
+    @PostMapping("/indicators/calculate")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
+    public ApiResponse<CalculationBatch> calculateIndicators(
+        @RequestBody Map<String, Object> body,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        List<UUID> ids = parseCalculationIds(body);
+        indicators.validateGenerationAccess(ids, activeDept);
+        CalculationBatch result = indicatorCalculation.calculate(ids);
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("summary", "提交已发布指标计算");
+        detail.put("requestId", result.requestId());
+        detail.put("indicatorCount", ids.size());
+        detail.put("successCount", result.successCount());
+        detail.put("failedCount", result.failedCount());
+        audit.auditAction("GOV_INDICATOR_CALCULATE", AuditStage.SUCCESS, result.requestId(), detail);
+        return ApiResponses.ok(result);
+    }
+
+    private List<UUID> parseCalculationIds(Map<String, Object> body) {
+        Object raw = body != null ? body.get("indicatorIds") : null;
+        if (!(raw instanceof List<?> values) || values.isEmpty() || values.size() > 64) {
+            throw new IndicatorRequestException("indicatorIds 数量必须在 1 到 64 之间");
+        }
+        LinkedHashSet<UUID> ids = new LinkedHashSet<>();
+        for (Object value : values) {
+            if (!(value instanceof String text) || !StringUtils.hasText(text)) {
+                throw new IndicatorRequestException("indicatorIds 必须全部为有效 UUID");
+            }
+            try {
+                if (!ids.add(UUID.fromString(text.trim()))) {
+                    throw new IndicatorRequestException("indicatorIds 不允许重复");
+                }
+            } catch (IllegalArgumentException error) {
+                throw new IndicatorRequestException("indicatorIds 必须全部为有效 UUID", error);
+            }
+        }
+        return List.copyOf(ids);
+    }
 
     @PostMapping("/indicators/generate")
     @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)

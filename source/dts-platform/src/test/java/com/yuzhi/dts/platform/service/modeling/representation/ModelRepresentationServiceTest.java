@@ -443,6 +443,39 @@ class ModelRepresentationServiceTest {
     }
 
     @Test
+    void managedTechnicalRepresentationRemainsEditableWhileBusinessProjectionEvidenceIsIncomplete() {
+        when(modelSpecs.revision(TENANT, new ModelRevisionRef(MODEL_ID, 2))).thenReturn(model(ImplementationMode.DBT_MANAGED));
+        RepresentationEvidence evidence = exactEvidence(true);
+        ArtifactEvidence emptySchema = artifact("SCHEMA", "models/dwd/budget.sql#schema", "{\"columns\":[],\"tests\":[]}");
+        when(evidencePort.findExact(TENANT, MODEL_ID, 2, MODEL_CHECKSUM, 3, true)).thenReturn(
+            Optional.of(
+                new RepresentationEvidence(
+                    evidence.implementation(),
+                    List.of(evidence.artifacts().get(0), emptySchema),
+                    evidence.latestPublished(),
+                    evidence.serving(),
+                    null,
+                    evidence.projectionIssues()
+                )
+            )
+        );
+
+        TechnicalModelRepresentationView view = (TechnicalModelRepresentationView) service.get(
+            TENANT,
+            ACTOR,
+            MODEL_ID,
+            2,
+            3,
+            RepresentationScope.TECHNICAL,
+            true
+        );
+
+        assertThat(view.visualizationCapability()).isEqualTo(VisualizationCapability.ADVANCED_DBT_IMPLEMENTATION);
+        assertThat(view.allowedActions()).containsExactly("OPEN_ADVANCED_DBT");
+        assertThat(view.capabilityReasons()).contains(CapabilityReason.MODEL_REPRESENTATION_FIELDS_UNTRUSTED);
+    }
+
+    @Test
     void nestedArbitraryNameNodesAreNotTrustedAsSchemaAndNeverLeakThroughReasons() throws Exception {
         when(modelSpecs.revision(TENANT, new ModelRevisionRef(MODEL_ID, 2))).thenReturn(model(ImplementationMode.DBT_MANAGED));
         RepresentationEvidence evidence = exactEvidence(false);

@@ -602,6 +602,114 @@ class ModelMaterializationStartServiceIT {
     }
 
     @Test
+    void newSingleModelBuildReclaimsClaimLeftByStaleCandidate() {
+        Scope scope = scope("stale-claim-reclaim");
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+
+        transaction.executeWithoutResult(status -> {
+            seed(scope, true);
+            CandidateView building = starts
+                .start(
+                    scope.tenant(),
+                    "builder-a",
+                    scope.candidateId(),
+                    1,
+                    "stale-claim-first-start",
+                    "lock first candidate snapshot"
+                )
+                .candidate();
+            assertThat(
+                jdbcTemplate.update(
+                    "update modeling_model_release_candidate set status = 'STALE', version = version + 1, last_modified_date = current_timestamp where tenant_id = ? and id = ? and status = 'BUILDING' and version = ?",
+                    scope.tenant(),
+                    scope.candidateId(),
+                    building.version()
+                )
+            )
+                .isEqualTo(1);
+            assertThat(
+                jdbcTemplate.update(
+                    "update modeling_model_release_candidate_entry set status = 'STALE' where tenant_id = ? and candidate_id = ? and status = 'BUILDING'",
+                    scope.tenant(),
+                    scope.candidateId()
+                )
+            )
+                .isEqualTo(1);
+            assertThat(
+                jdbcTemplate.queryForObject(
+                    "select active_claim_key is not null from modeling_model_release_candidate_entry where tenant_id = ? and candidate_id = ?",
+                    Boolean.class,
+                    scope.tenant(),
+                    scope.candidateId()
+                )
+            )
+                .isTrue();
+
+            CandidateView replacement = candidateCommands
+                .createSingleModelIntent(
+                    scope.tenant(),
+                    "builder-a",
+                    new CreateCandidateCommand(
+                        scope.planId(),
+                        "PROD",
+                        List.of(
+                            new ScopeEntryCommand(
+                                scope.modelId(),
+                                0,
+                                "current revision"
+                            )
+                        ),
+                        "stale-claim-single-model-replacement",
+                        "create current single-model candidate"
+                    )
+                )
+                .candidate();
+
+            CandidateView replacementBuilding = starts
+                .start(
+                    scope.tenant(),
+                    "builder-a",
+                    replacement.id(),
+                    replacement.version(),
+                    "stale-claim-replacement-start",
+                    "build current single-model candidate"
+                )
+                .candidate();
+            assertThat(replacementBuilding.status())
+                .isEqualTo(DeliveryStatus.BUILDING);
+            assertThat(
+                jdbcTemplate.queryForList(
+                    "select candidate_id, active_claim_key from modeling_model_release_candidate_entry where tenant_id = ? and candidate_id in (?, ?)",
+                    scope.tenant(),
+                    scope.candidateId(),
+                    replacement.id()
+                )
+            )
+                .satisfies(rows -> {
+                    assertThat(rows).hasSize(2);
+                    assertThat(
+                        rows.stream()
+                            .filter(row -> scope.candidateId().equals(row.get("candidate_id")))
+                            .findFirst()
+                            .orElseThrow()
+                            .get("active_claim_key")
+                    )
+                        .isNull();
+                    assertThat(
+                        rows.stream()
+                            .filter(row -> replacement.id().equals(row.get("candidate_id")))
+                            .findFirst()
+                            .orElseThrow()
+                            .get("active_claim_key")
+                    )
+                        .asString()
+                        .matches("^[0-9a-f]{64}$");
+                });
+            status.setRollbackOnly();
+        });
+    }
+
+    @Test
     void missingArtifactRollsCandidateCommandAndRunsBackToDraft() {
         Scope scope = scope("atomic-rollback");
         TransactionTemplate transaction = new TransactionTemplate(transactionManager);
@@ -1907,12 +2015,12 @@ class ModelMaterializationStartServiceIT {
         jdbcTemplate.update(
             """
             insert into modeling_model_spec (
-                id, tenant_id, plan_id, layer, model_type,
+                id, tenant_id, plan_id, layer, warehouse_layer_code, model_type,
                 implementation_mode, name, status, revision, version, created_date,
                 last_modified_date, contract_version, domain_id, current_checksum,
                 idempotency_key, idempotency_request_hash, idempotency_response_snapshot
             ) values (
-                ?, ?, ?, 'DWD', 'FACT', 'DESIGNER_GENERATED',
+                ?, ?, ?, 'DWD', 'DWD', 'FACT', 'DESIGNER_GENERATED',
                 'Sprint 76 atomic model', 'DRAFT', 1, 1, current_timestamp,
                 current_timestamp, 2, ?, ?, ?, ?, cast('{}' as jsonb)
             )

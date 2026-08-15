@@ -107,7 +107,7 @@ describe("ModelFieldEditorTable", () => {
 		expect(container.textContent).not.toContain("字段作用");
 		expect(container.textContent).not.toContain("字段标准");
 		expect(container.textContent).not.toContain("允许为空");
-		expect(container.textContent).not.toContain("安全等级");
+		expect(container.textContent).not.toContain("字段密级");
 
 		changeCheckbox(0);
 		changeCheckbox(1);
@@ -115,11 +115,32 @@ describe("ModelFieldEditorTable", () => {
 		expect(nextProps.onUpdate).toHaveBeenNthCalledWith(2, 0, { nullable: false });
 	});
 
-	it("reveals field standards only through display settings", async () => {
-		await render();
+	it("reveals field governance and records explicit row and batch classifications", async () => {
+		const nextProps = await render();
 		expect(container.textContent).not.toContain("字段标准");
 		click("字段显示设置");
 		expect(container.textContent).toContain("字段标准");
+		expect(container.textContent).toContain("字段密级");
+
+		const rowLevel = container.querySelector<HTMLSelectElement>('select[aria-label="字段 1 密级"]');
+		expect(rowLevel).toBeDefined();
+		act(() => {
+			if (rowLevel) {
+				rowLevel.value = "INTERNAL";
+				rowLevel.dispatchEvent(new Event("change", { bubbles: true }));
+			}
+		});
+		expect(nextProps.onUpdate).toHaveBeenCalledWith(0, { securityLevel: "INTERNAL" });
+
+		const batchLevel = container.querySelector<HTMLSelectElement>('select[aria-label="批量设置字段密级"]');
+		expect(batchLevel).toBeDefined();
+		act(() => {
+			if (batchLevel) {
+				batchLevel.value = "SECRET";
+				batchLevel.dispatchEvent(new Event("change", { bubbles: true }));
+			}
+		});
+		expect(nextProps.onUpdate).toHaveBeenCalledWith(0, { securityLevel: "SECRET" });
 	});
 
 	it("opens code and persisted-model association, while import remains contract-disabled", async () => {

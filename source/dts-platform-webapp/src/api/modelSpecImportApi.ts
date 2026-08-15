@@ -168,6 +168,9 @@ export type ModelSpecImportPreviewRequest = {
 
 export type ModelSpecImportSemanticOverride = {
 	modelUniqueId: string;
+	businessProcessId?: string;
+	dataMartId?: string;
+	subjectDomainId?: string;
 	modelType?: string;
 	layer?: string;
 	businessName?: string;

@@ -9,7 +9,9 @@ import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.StoredMode
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.CreateModelSpecCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.FieldIssue;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.Layer;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelField;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelRevisionRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelStatus;
@@ -477,6 +479,135 @@ public class ModelSpecApplicationService {
         repository.insertV2Revision(serverTenantId, actorId, replacement, snapshot);
         audit("MODELING_MODEL_SPEC_UPDATE", serverTenantId, actorId, replacement);
         return replacement;
+    }
+
+    /**
+     * Synchronizes the canonical logical fields with one statically validated dbt model.
+     *
+     * <p>A schema-only implementation change keeps the current ModelSpec revision.  When the dbt
+     * contract changes fields, a published head starts a new DRAFT revision while its immutable
+     * published revision row remains available to existing release candidates and consumers.
+     */
+    @Transactional
+    public ModelSpecView synchronizeDbtManagedFields(
+        String serverTenantId,
+        String actorId,
+        UUID modelSpecId,
+        ExpectedVersion expected,
+        List<ModelField> fields
+    ) {
+        requireServerContext(serverTenantId, actorId);
+        requireCanonicalWriteEnabled();
+        if (modelSpecId == null) throw notFound(null);
+        if (expected == null || !modelSpecId.equals(expected.modelSpecId())) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_IF_MATCH_INVALID",
+                "A strong If-Match precondition for this ModelSpec is required",
+                expected == null ? ModelSpecException.Kind.PRECONDITION_REQUIRED : ModelSpecException.Kind.BAD_REQUEST
+            );
+        }
+
+        StoredModelSpec stored = repository.findCurrent(serverTenantId, modelSpecId).orElseThrow(() -> notFound(modelSpecId));
+        ModelSpecView current = compatibilityReader.read(stored);
+        validateWriteContext(serverTenantId, actorId, current.planId(), current.domainId());
+        requireExpected(current, expected);
+        if (ModelSpecContract.hasHistoricalTypeBoundaryViolation(current)) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_LEGACY_READONLY",
+                "Historical ModelSpec rows with non-canonical type boundaries are read-only",
+                ModelSpecException.Kind.CONFLICT
+            );
+        }
+        if (current.implementationMode() != ImplementationMode.DBT_MANAGED) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_DBT_MANAGED_REQUIRED",
+                "Only DBT-managed ModelSpecs can synchronize fields from a dbt contract",
+                ModelSpecException.Kind.CONFLICT
+            );
+        }
+        if (current.status() != ModelStatus.DRAFT && current.status() != ModelStatus.PUBLISHED) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_STATUS_READONLY",
+                "Only DRAFT or PUBLISHED DBT-managed ModelSpecs can synchronize fields",
+                ModelSpecException.Kind.CONFLICT,
+                Map.of("status", current.status())
+            );
+        }
+
+        List<ModelField> projectedFields = List.copyOf(fields == null ? List.of() : fields);
+        if (Objects.equals(current.fields(), projectedFields)) return current;
+        UpdateModelSpecCommand command = commandWithFields(current, projectedFields);
+        if (current.status() == ModelStatus.DRAFT) {
+            return update(serverTenantId, actorId, modelSpecId, expected, command);
+        }
+
+        command = resolveWarehouseLayerSelection(command);
+        rejectIssues(ModelSpecContract.validateUpdate(command));
+        Instant now = clock.instant();
+        ModelSpecView projected = codec.toUpdatedView(current, command, current.revision() + 1, now);
+        ModelSpecView replacement = codec.toLifecycleView(projected, ModelStatus.DRAFT, projected.revision(), now);
+        requireDimensionDefinitionRef(replacement);
+        rejectIssues(ModelSpecContract.validateEditableView(replacement));
+        requireUniqueDimensionVariant(serverTenantId, replacement, current.id());
+        validateDataMartContext(serverTenantId, replacement.domainId(), replacement.dataMartId());
+        validateBusinessContext(
+            serverTenantId,
+            replacement.modelType(),
+            replacement.domainId(),
+            replacement.dataMartId(),
+            replacement.businessProcessId(),
+            replacement.subjectDomainId()
+        );
+        validateSources(serverTenantId, actorId, command.planId(), command.sourceRefs());
+        validateDimensionDefinition(
+            serverTenantId,
+            replacement.modelType(),
+            replacement.dimensionDefinitionRef(),
+            replacement.dataMartId(),
+            replacement.fields(),
+            false,
+            false
+        );
+        validateReferences(
+            serverTenantId,
+            command.planId(),
+            modelSpecId,
+            command.modelType(),
+            command.dependsOn(),
+            command.dimensionRefs()
+        );
+        String snapshot = codec.write(replacement);
+        int updated;
+        try {
+            updated = repository.compareAndSetPublishedToDraftV2(
+                serverTenantId,
+                actorId,
+                current.revision(),
+                current.checksum(),
+                replacement,
+                snapshot
+            );
+        } catch (DataIntegrityViolationException exception) {
+            throw translateConstraint(exception);
+        }
+        if (updated == 0) {
+            StoredModelSpec latest = repository.findCurrent(serverTenantId, modelSpecId).orElseThrow(() -> notFound(modelSpecId));
+            throw revisionConflict(compatibilityReader.read(latest));
+        }
+        repository.insertV2Revision(serverTenantId, actorId, replacement, snapshot);
+        audit("MODELING_MODEL_SPEC_DBT_SCHEMA_REVISION_CREATE", serverTenantId, actorId, replacement);
+        return replacement;
+    }
+
+    private static UpdateModelSpecCommand commandWithFields(ModelSpecView current, List<ModelField> fields) {
+        return new UpdateModelSpecCommand(
+            current.planId(), current.domainId(), current.modelType(), current.layer(), current.name(), current.description(),
+            current.implementationMode(), current.materialization(), current.businessActivityRef(), current.consumptionScenario(),
+            current.grain(), current.factShape(), current.timeSemantics(), fields, current.sourceRefs(), current.dependsOn(),
+            current.dimensionRefs(), current.metricRefs(), current.standardBindings(), current.generationStrategy(),
+            current.dimensionProfile(), current.dataMartId(), current.variantCode(), current.implementationPolicy(),
+            current.warehouseLayerCode(), current.businessProcessId(), current.subjectDomainId()
+        );
     }
 
     /**

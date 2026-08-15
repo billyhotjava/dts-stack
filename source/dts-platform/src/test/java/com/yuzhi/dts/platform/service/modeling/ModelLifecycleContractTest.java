@@ -59,19 +59,20 @@ class ModelLifecycleContractTest {
     }
 
     @Test
-    void cancellationIsMaintainerOwnedTerminalAndOnlyAvailableBeforeReview() {
+    void cancellationIsMaintainerOwnedTerminalAndAvailableUntilPublicationStarts() {
         assertThat(DeliveryStatus.canTransition(DeliveryStatus.DRAFT, DeliveryStatus.CANCELLED)).isTrue();
         assertThat(DeliveryStatus.canTransition(DeliveryStatus.BUILD_FAILED, DeliveryStatus.CANCELLED)).isTrue();
         assertThat(DeliveryStatus.canTransition(DeliveryStatus.QUALITY_FAILED, DeliveryStatus.CANCELLED)).isTrue();
         assertThat(DeliveryStatus.canTransition(DeliveryStatus.BUILDING, DeliveryStatus.CANCELLED)).isFalse();
         assertThat(DeliveryStatus.canTransition(DeliveryStatus.BUILT, DeliveryStatus.CANCELLED)).isTrue();
-        assertThat(DeliveryStatus.canTransition(DeliveryStatus.REVIEW_PENDING, DeliveryStatus.CANCELLED)).isFalse();
+        assertThat(DeliveryStatus.canTransition(DeliveryStatus.REVIEW_PENDING, DeliveryStatus.CANCELLED)).isTrue();
         assertThat(DeliveryStatus.canTransition(DeliveryStatus.CANCELLED, DeliveryStatus.DRAFT)).isFalse();
         assertThat(DeliveryStatus.canTransition(DeliveryStatus.CANCELLED, DeliveryStatus.STALE)).isFalse();
         assertThat(DeliveryStatus.DRAFT.allowedActions()).contains(DeliveryAction.CANCEL_CANDIDATE);
         assertThat(DeliveryStatus.BUILD_FAILED.allowedActions()).contains(DeliveryAction.CANCEL_CANDIDATE);
         assertThat(DeliveryStatus.QUALITY_FAILED.allowedActions()).contains(DeliveryAction.CANCEL_CANDIDATE);
         assertThat(DeliveryStatus.BUILT.allowedActions()).contains(DeliveryAction.CANCEL_CANDIDATE);
+        assertThat(DeliveryStatus.REVIEW_PENDING.allowedActions()).contains(DeliveryAction.CANCEL_CANDIDATE);
         assertThat(DeliveryAction.CANCEL_CANDIDATE.requiredRole()).isEqualTo(DeliveryActorRole.MODEL_MAINTAINER);
     }
 
@@ -157,7 +158,8 @@ class ModelLifecycleContractTest {
         assertThat(view.allowedActions()).containsExactly(
             DeliveryAction.APPROVE,
             DeliveryAction.REJECT,
-            DeliveryAction.PUBLISH
+            DeliveryAction.PUBLISH,
+            DeliveryAction.CANCEL_CANDIDATE
         );
         assertThat(view.primaryBlockerCode()).isEqualTo("REVIEW_PENDING");
         assertThat(view.audit()).isEqualTo(audit);

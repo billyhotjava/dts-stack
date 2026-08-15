@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.modeling.imports.apply;
 
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.SaveImplementationCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService.ExpectedImplementationVersion;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService;
@@ -92,7 +93,11 @@ public class ModelSpecImportCandidateTransactionWorker {
         int artifactCount = 0;
         int implementationRevision = candidate.expectedImplementationRevision();
         String implementationChecksum = candidate.expectedImplementationChecksum();
-        boolean importedDbt = decoded.implementationCommand().ownership() == ImplementationMode.DBT_MANAGED;
+        var implementationCommand = implementationForCandidate(
+            decoded.implementationCommand(),
+            command.candidateIdempotencyKey()
+        );
+        boolean importedDbt = implementationCommand.ownership() == ImplementationMode.DBT_MANAGED;
         if (!"SKIP".equals(candidate.action()) && !"CANCEL".equals(candidate.action())) {
             ExpectedVersion modelVersion = new ExpectedVersion(model.id(), model.revision(), model.checksum());
             ExpectedImplementationVersion expectedImplementation = new ExpectedImplementationVersion(
@@ -111,7 +116,7 @@ public class ModelSpecImportCandidateTransactionWorker {
                     expectedImplementation,
                     decoded.projectKey(),
                     candidate.dbtUniqueId(),
-                    decoded.implementationCommand()
+                    implementationCommand
                 );
             } else {
                 implementation = lifecycle.saveImplementation(
@@ -122,7 +127,7 @@ public class ModelSpecImportCandidateTransactionWorker {
                     expectedImplementation,
                     decoded.projectKey(),
                     candidate.dbtUniqueId(),
-                    decoded.implementationCommand()
+                    implementationCommand
                 );
             }
             requireExpectedImplementation(candidate, implementation);
@@ -203,12 +208,31 @@ public class ModelSpecImportCandidateTransactionWorker {
         );
     }
 
+    private static SaveImplementationCommand implementationForCandidate(
+        SaveImplementationCommand command,
+        String candidateIdempotencyKey
+    ) {
+        return new SaveImplementationCommand(
+            command.inputMode(),
+            command.inputs(),
+            command.fieldMappings(),
+            command.settings(),
+            command.ownership(),
+            command.materialization(),
+            candidateIdempotencyKey + ":implementation"
+        );
+    }
+
     private static void requireExpectedModel(Candidate candidate, ModelSpecView model) {
+        boolean retainCurrent = "SKIP".equals(candidate.action()) || "CANCEL".equals(candidate.action());
+        boolean statusMismatch = retainCurrent
+            ? !Objects.equals(model.status().name(), candidate.expectedModelStatus())
+            : model.status() != ModelStatus.DRAFT;
         if (
             !Objects.equals(model.id(), candidate.targetModelSpecId()) ||
             model.revision() != candidate.targetRevision() ||
             !Objects.equals(model.checksum(), candidate.proposedModelSpecChecksum()) ||
-            model.status() != ModelStatus.DRAFT
+            statusMismatch
         ) {
             throw new IllegalStateException("Applied ModelSpec does not match the frozen preview pins");
         }

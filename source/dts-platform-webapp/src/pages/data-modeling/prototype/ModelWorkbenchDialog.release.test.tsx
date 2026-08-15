@@ -15,6 +15,19 @@ import { AdvancedDbtWorkspace } from "./AdvancedDbtWorkspace";
 import { ModelPublishDialog } from "./ModelPublishDialog";
 import { ModelWorkbenchDialog } from "./ModelWorkbenchDialog";
 
+// DbtCodeEditor 经 configureMonaco 运行时引入 monaco-editor，而该包只有 module 字段、
+// 没有 main/exports，vitest 的 node 解析会失败。本用例考的是草稿生命周期锁定，
+// 与编辑器内部无关，直接桩掉这个惰性加载的组件。
+vi.mock("./DbtCodeEditor", () => ({
+	// 用一个等价可观测的 textarea 顶替 Monaco：保留 aria-label 与只读态，
+	// 这样“已提交草稿不可再编辑”的断言依然成立。
+	DbtCodeEditor: ({ path, content, readOnly }: { path: string; content: string; readOnly: boolean }) => (
+		<textarea aria-label={`编辑 ${path}`} disabled={readOnly} readOnly={readOnly} value={content} onChange={() => {}} />
+	),
+	dbtEditorLanguage: "sql",
+	isDbtSaveShortcut: () => false,
+}));
+
 beforeAll(() => {
 	if (!window.matchMedia) {
 		Object.defineProperty(window, "matchMedia", {
@@ -38,6 +51,7 @@ const apiMocks = vi.hoisted(() => ({
 	createCandidate: vi.fn(),
 	createReplacementCandidate: vi.fn(),
 	getExecutionWorkspace: vi.fn(),
+	runExecutionNow: vi.fn(),
 	getWorkbench: vi.fn(),
 	lockCandidate: vi.fn(),
 	runQualityCandidate: vi.fn(),
@@ -68,6 +82,7 @@ vi.mock("@/api/modelSpecApi", async (importOriginal) => ({
 	createReleaseCandidate: apiMocks.createCandidate,
 	createReplacementReleaseCandidate: apiMocks.createReplacementCandidate,
 	getPlanExecutionWorkspace: apiMocks.getExecutionWorkspace,
+	runPlanExecutionNow: apiMocks.runExecutionNow,
 	getReleaseCandidateWorkbench: apiMocks.getWorkbench,
 	lockReleaseCandidate: apiMocks.lockCandidate,
 	runReleaseCandidateQuality: apiMocks.runQualityCandidate,
@@ -344,7 +359,7 @@ describe("release and materialization dispatch", () => {
 		);
 	});
 
-	it("cancels and replaces an unpublished built candidate when the selected scope changed", async () => {
+	it("cancels an unpublished candidate and creates a fresh candidate when the selected scope changed", async () => {
 		const built = candidate("BATCH_WORKBENCH", "BUILT");
 		const cancelled = { ...built, status: "CANCELLED", version: 5 } as ReleaseCandidate;
 		const replacement = {
@@ -355,7 +370,7 @@ describe("release and materialization dispatch", () => {
 		} as ReleaseCandidate;
 		apiMocks.getWorkbench.mockResolvedValue(workspace(["RUN_QUALITY", "CANCEL_CANDIDATE", "REMATERIALIZE"], built));
 		apiMocks.cancelCandidate.mockResolvedValue({ candidate: cancelled });
-		apiMocks.createReplacementCandidate.mockResolvedValue({ candidate: replacement });
+		apiMocks.createCandidate.mockResolvedValue({ candidate: replacement });
 		apiMocks.lockCandidate.mockResolvedValue({ candidate: replacement });
 
 		await act(async () => root.render(<ModelPublishDialog canMaintain models={[secondModel]} onClose={vi.fn()} />));
@@ -368,21 +383,56 @@ describe("release and materialization dispatch", () => {
 			"idem-1",
 			"所选模型范围已变化，关闭旧候选",
 		);
-		expect(apiMocks.createReplacementCandidate).toHaveBeenCalledWith(
+		expect(apiMocks.createCandidate).toHaveBeenCalledWith(
 			model.planId,
-			cancelled,
 			"idem-1",
 			expect.objectContaining({
 				entries: [{ modelSpecId: secondModel.id, sortOrder: 0, selectedReason: "从模型工作台选择" }],
 			}),
 		);
 		expect(apiMocks.rematerializeCandidate).not.toHaveBeenCalled();
+		expect(apiMocks.createReplacementCandidate).not.toHaveBeenCalled();
 		expect(apiMocks.lockCandidate).toHaveBeenCalledWith(
 			model.planId,
 			replacement,
 			"idem-1",
 			"从模型工作台启动新范围构建",
 		);
+	});
+
+	it("refreshes a drifted candidate and creates a fresh candidate when the selected scope is different", async () => {
+		const reviewPending = candidate("BATCH_WORKBENCH", "REVIEW_PENDING");
+		const stale = { ...reviewPending, status: "STALE", version: 5 } as ReleaseCandidate;
+		const created = {
+			...candidate("BATCH_WORKBENCH"),
+			id: "30000000-0000-0000-0000-000000000002",
+			version: 1,
+			entries: [{ modelSpecId: secondModel.id }],
+		} as ReleaseCandidate;
+		apiMocks.getWorkbench.mockResolvedValue(workspace(["REFRESH_CANDIDATE"], reviewPending));
+		apiMocks.refreshCandidate.mockResolvedValue({ candidate: stale });
+		apiMocks.createCandidate.mockResolvedValue({ candidate: created });
+		apiMocks.lockCandidate.mockResolvedValue({ candidate: created });
+
+		await act(async () => root.render(<ModelPublishDialog canMaintain models={[secondModel]} onClose={vi.fn()} />));
+		await flush();
+		await act(async () => button("按新范围重新物化")?.click());
+
+		expect(apiMocks.refreshCandidate).toHaveBeenCalledWith(
+			model.planId,
+			reviewPending,
+			"idem-1",
+			"模型已发生新修订，废弃旧候选",
+		);
+		expect(apiMocks.createCandidate).toHaveBeenCalledWith(
+			model.planId,
+			"idem-1",
+			expect.objectContaining({
+				entries: [{ modelSpecId: secondModel.id, sortOrder: 0, selectedReason: "从模型工作台选择" }],
+			}),
+		);
+		expect(apiMocks.createReplacementCandidate).not.toHaveBeenCalled();
+		expect(apiMocks.lockCandidate).toHaveBeenCalledWith(model.planId, created, "idem-1", "从模型工作台启动新范围构建");
 	});
 
 	it("supersedes a drifted review candidate and builds a replacement without reviewer approval", async () => {
@@ -575,6 +625,54 @@ describe("release and materialization dispatch", () => {
 		expect(container.textContent).toContain("关系健康");
 	});
 
+	it("lets the data owner run an online manual binding to produce operational relation evidence", async () => {
+		const published = {
+			...candidate("BATCH_WORKBENCH", "PUBLISHED"),
+			environment: "dev",
+		} as ReleaseCandidate;
+		apiMocks.getWorkbench.mockResolvedValue(workspace(["ROLLBACK"], published));
+		apiMocks.getExecutionWorkspace.mockResolvedValue({
+			planId: model.planId,
+			state: "READY",
+			bindings: [
+				{
+					id: "binding-1",
+					version: 1,
+					environment: "dev",
+					state: "ONLINE",
+					deploymentStatus: "ACTIVE",
+					scheduleMode: "MANUAL_ONLY",
+					desiredDeploymentChecksum: "deployed",
+					deployedChecksum: "deployed",
+					airflowDagId: "dts_plan_dev",
+					airflowState: "OBSERVED",
+					latestOperationalRun: {},
+					latestRelation: {},
+					allowedActions: ["RUN_NOW"],
+				},
+			],
+		} as PlanExecutionWorkspace);
+		apiMocks.runExecutionNow.mockResolvedValue({
+			pipelineRunGroupId: "run-group-1",
+			bindingId: "binding-1",
+			bindingVersion: 1,
+			triggerType: "MANUAL",
+			airflowDagId: "dts_plan_dev",
+			airflowRunId: "airflow-run-1",
+			status: "DISPATCHED",
+			replayed: false,
+		});
+
+		await act(async () =>
+			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+		);
+		await flush();
+		await act(async () => button("发布模型")?.click());
+		await act(async () => button("立即运行并核验")?.click());
+
+		expect(apiMocks.runExecutionNow).toHaveBeenCalledWith(model.planId, "binding-1", "idem-1");
+	});
+
 	it("allows a release reviewer to act from server duties without model-maintainer permission", async () => {
 		const reviewPending = candidate("BATCH_WORKBENCH", "REVIEW_PENDING");
 		apiMocks.getWorkbench.mockResolvedValue(workspace(["APPROVE", "REJECT"], reviewPending));
@@ -596,7 +694,7 @@ describe("release and materialization dispatch", () => {
 		["QUALITY_PASSED", "SUBMIT_REVIEW", "提交发布评审", "submitReviewCandidate"],
 		["REVIEW_PENDING", "APPROVE", "审核通过", "approveCandidate"],
 		["REVIEW_PENDING", "REJECT", "驳回", "rejectCandidate"],
-		["PARTIAL", "RETRY_REGISTRATION", "重试发布登记", "retryRegistrationCandidate"],
+		["PARTIAL", "RETRY_PUBLICATION", "重试发布", "retryRegistrationCandidate"],
 		["PUBLISHED", "ROLLBACK", "回滚发布", "rollbackCandidate"],
 	] as const)(
 		"dispatches %s candidate action %s from the release workflow",
@@ -714,6 +812,54 @@ describe("advanced dbt draft lifecycle", () => {
 		);
 	});
 
+	it("uses the explicit target physical name when creating the first dbt implementation", async () => {
+		apiMocks.getLifecycle.mockResolvedValue({ implementation: null, artifacts: [], events: [] });
+		apiMocks.getRepresentation.mockResolvedValue({
+			allowedActions: ["OPEN_ADVANCED_DBT"],
+			capabilityReasons: [],
+			implementationRevision: null,
+			implementationChecksum: null,
+			ownershipMode: "DBT_MANAGED",
+		});
+		apiMocks.createDbtDraft.mockResolvedValue({
+			draftId: "draft-first",
+			planId: model.planId,
+			modelSpecId: model.id,
+			baseModelRevision: model.revision,
+			baseModelChecksum: model.checksum,
+			state: "DRAFT",
+			etag: "e1",
+			expiresAt: "2026-08-04T00:00:00Z",
+			sourceBundle: { files: [{ path: "models/biz_dwd_project_follow_up_v2.sql", content: "select 1" }] },
+		});
+
+		await act(async () =>
+			root.render(
+				<AdvancedDbtWorkspace
+					canMaintain
+					initialTargetPhysicalName="biz_dwd_project_follow_up_v2"
+					model={model}
+					onBack={vi.fn()}
+				/>,
+			),
+		);
+		await flush();
+
+		const input = container.querySelector('input[aria-label="目标物理表名"]') as HTMLInputElement;
+		expect(input.value).toBe("biz_dwd_project_follow_up_v2");
+		expect(button("创建高级草稿")?.disabled).toBe(false);
+		await act(async () => button("创建高级草稿")?.click());
+		await flush();
+
+		expect(apiMocks.createDbtDraft).toHaveBeenCalledWith(
+			model.id,
+			expect.objectContaining({
+				baseImplementationRevision: null,
+				targetPhysicalName: "biz_dwd_project_follow_up_v2",
+			}),
+		);
+	});
+
 	it("locks a committed draft and offers a new draft instead of allowing further edits", async () => {
 		apiMocks.getRepresentation.mockResolvedValue({
 			allowedActions: ["OPEN_ADVANCED_DBT"],
@@ -773,7 +919,8 @@ describe("advanced dbt draft lifecycle", () => {
 		expect(
 			(container.querySelector('textarea[aria-label="编辑 models/budget.sql"]') as HTMLTextAreaElement).disabled,
 		).toBe(true);
-		expect(container.textContent).toContain("状态：COMMITTED");
+		// 草稿状态已从裸枚举改为本地化标签（dbtDraftStatusLabel）；JSX 换行会插入空白，先归一化。
+		expect((container.textContent ?? "").replace(/\s/g, "")).toContain("状态：实现已提交");
 		await act(async () => button("创建新草稿")?.click());
 		await flush();
 		expect(apiMocks.getRepresentation).toHaveBeenLastCalledWith(model.id, {

@@ -574,7 +574,7 @@ class ModelSpecStageGateServiceTest {
     }
 
     @Test
-    void dbtReleaseGateRequiresExactlyTheSqlAndSchemaArtifactSlots() {
+    void dbtReleaseGateAcceptsSupportedImportMetadataButRejectsUnknownArtifactSlots() {
         ModelSpecView model = withImplementationMode(releaseReadyFact(), ImplementationMode.DBT_MANAGED);
         ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
         ModelSpecRepository repository = mock(ModelSpecRepository.class);
@@ -641,6 +641,13 @@ class ModelSpecStageGateServiceTest {
             .filter(gate -> gate.stage() == Stage.RELEASE_READY)
             .findFirst()
             .orElseThrow();
+        when(lifecycle.currentArtifactTypes("tenant-a", MODEL_ID, implementation)).thenReturn(
+            Set.of("SQL", "SCHEMA", "CONFIG", "DEPENDENCY")
+        );
+        GateView importedPackage = gates.evaluateAll("tenant-a", MODEL_ID).stream()
+            .filter(gate -> gate.stage() == Stage.RELEASE_READY)
+            .findFirst()
+            .orElseThrow();
 
         assertThat(polluted.blockers())
             .extracting(ModelSpecStageGateService.GateBlocker::code)
@@ -649,6 +656,9 @@ class ModelSpecStageGateServiceTest {
             .extracting(ModelSpecStageGateService.GateBlocker::code)
             .doesNotContain("MODEL_SPEC_BUILD_EVIDENCE_UNKNOWN");
         assertThat(uiDraft.blockers())
+            .extracting(ModelSpecStageGateService.GateBlocker::code)
+            .doesNotContain("MODEL_SPEC_BUILD_EVIDENCE_UNKNOWN");
+        assertThat(importedPackage.blockers())
             .extracting(ModelSpecStageGateService.GateBlocker::code)
             .doesNotContain("MODEL_SPEC_BUILD_EVIDENCE_UNKNOWN");
     }

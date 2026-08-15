@@ -76,12 +76,26 @@ public class IndicatorPublishPreviewService {
         // Basic config checks
         List<Map<String, Object>> blockingIssues = new ArrayList<>();
         List<Map<String, Object>> warningIssues = new ArrayList<>();
-        boolean derived = Boolean.TRUE.equals(indicator.getIsDerived());
+        try {
+            indicatorService.validateDefinitionForPublish(indicator);
+        } catch (IndicatorConflictException | IndicatorRequestException error) {
+            blockingIssues.add(
+                issue(
+                    definitionIssueCode(error),
+                    "BLOCKER",
+                    safeText(error.getMessage(), "指标定义不完整"),
+                    "请修复指标归属、来源版本或依赖关系后重新预检"
+                )
+            );
+        }
+        boolean derived = IndicatorDefinitionSemantics.isDerivedLike(indicator);
+        boolean modelBoundAtomic = IndicatorDefinitionSemantics.isModelBoundAtomic(indicator);
         String datasetIdRaw = normalizeText(indicator.getDatasetId());
         UUID datasetId = parseUuid(datasetIdRaw);
-        payload.put("datasetRequired", !derived);
-        payload.put("datasetIdValid", derived || datasetId != null);
-        if (!derived && datasetId == null) {
+        payload.put("definitionSourceMode", modelBoundAtomic ? "MODEL_FIELD" : derived ? "INDICATOR_VERSION" : "LEGACY_DATASET_SQL");
+        payload.put("datasetRequired", !derived && !modelBoundAtomic);
+        payload.put("datasetIdValid", derived || modelBoundAtomic || datasetId != null);
+        if (!derived && !modelBoundAtomic && datasetId == null) {
             blockingIssues.add(
                 issue(
                     "IND_CFG_DATASET_ID_INVALID",
@@ -91,7 +105,7 @@ public class IndicatorPublishPreviewService {
                 )
             );
         }
-        if (!StringUtils.hasText(indicator.getExpressionSql())) {
+        if (!modelBoundAtomic && !StringUtils.hasText(indicator.getExpressionSql())) {
             blockingIssues.add(
                 issue(
                     derived ? "IND_CFG_DERIVATION_MISSING" : "IND_CFG_SQL_MISSING",
@@ -102,8 +116,10 @@ public class IndicatorPublishPreviewService {
             );
         }
 
-        CatalogDataset dataset = !derived && datasetId != null ? datasetRepository.findById(datasetId).orElse(null) : null;
-        if (!derived && datasetId != null && dataset == null) {
+        CatalogDataset dataset = !derived && !modelBoundAtomic && datasetId != null
+            ? datasetRepository.findById(datasetId).orElse(null)
+            : null;
+        if (!derived && !modelBoundAtomic && datasetId != null && dataset == null) {
             blockingIssues.add(issue("IND_CFG_DATASET_NOT_FOUND", "BLOCKER", "绑定的数据集不存在", "请重新绑定有效数据集"));
         }
         boolean datasetAccessible = dataset == null || datasetAccessible(dataset, trustedActiveDept);
@@ -197,7 +213,7 @@ public class IndicatorPublishPreviewService {
             }
         }
 
-        if (blockingIssues.isEmpty()) {
+        if (blockingIssues.isEmpty() && !modelBoundAtomic) {
             try {
                 dbtGenerator.previewSql(indicatorId);
             } catch (RuntimeException ex) {
@@ -239,6 +255,18 @@ public class IndicatorPublishPreviewService {
         payload.put("failureReasonCode", ready ? null : safeText(blockingIssues.get(0).get("code"), null));
         payload.put("issues", mergeIssues(blockingIssues, warningIssues));
         return payload;
+    }
+
+    private String definitionIssueCode(RuntimeException error) {
+        String message = error == null ? null : normalizeText(error.getMessage());
+        if (StringUtils.hasText(message)) {
+            int separator = message.indexOf(':');
+            String candidate = (separator > 0 ? message.substring(0, separator) : message).trim();
+            if (candidate.matches("[A-Z][A-Z0-9_]*")) {
+                return candidate;
+            }
+        }
+        return "IND_DEFINITION_INVALID";
     }
 
     private List<Map<String, Object>> checkReferences(List<GovIndicatorReference> refs) {

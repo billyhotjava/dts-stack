@@ -67,6 +67,10 @@ class ModelMaterializationStartServiceTest {
         assertThat(from).isGreaterThanOrEqualTo(0);
         assertThat(to).isGreaterThan(from);
         assertThat(source.substring(from, to))
+            .contains("a.status = 'COMPILED'")
+            .contains("a.status = 'IMPORTED'")
+            .contains("a.node_kind in ('STG', 'EPHEMERAL')")
+            .contains("lower(a.path) like 'models/%.sql'")
             .contains("a.artifact_type in ('SQL', 'TEST', 'STG_SQL')")
             .contains("a.artifact_type = 'SCHEMA'")
             .contains("lower(a.path) like '%.yml'")
@@ -78,6 +82,10 @@ class ModelMaterializationStartServiceTest {
         assertThat(dispatchFrom).isGreaterThanOrEqualTo(0);
         assertThat(dispatchTo).isGreaterThan(dispatchFrom);
         assertThat(source.substring(dispatchFrom, dispatchTo))
+            .contains("status = 'COMPILED'")
+            .contains("status = 'IMPORTED'")
+            .contains("node_kind in ('STG', 'EPHEMERAL')")
+            .contains("lower(path) like 'models/%.sql'")
             .contains("artifact_type in ('SQL', 'TEST', 'STG_SQL')")
             .contains("artifact_type = 'SCHEMA'")
             .contains("lower(path) like '%.yml'")

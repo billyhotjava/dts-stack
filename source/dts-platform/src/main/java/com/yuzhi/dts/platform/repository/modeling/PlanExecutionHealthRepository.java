@@ -48,8 +48,7 @@ public class PlanExecutionHealthRepository {
                    observation.verified as relation_verified,
                    observation.relation_exists,
                    observation.error_code as relation_error_code,
-                   observation.schema_name,
-                   observation.identifier,
+                   observation.relation_name,
                    observation.observed_at
               from modeling_plan_execution_binding b
               left join modeling_plan_execution_binding_entry e

@@ -72,6 +72,24 @@ class DbtIndicatorGeneratorDerivationTest {
     }
 
     @Test
+    void stableMetricTypeDrivesDerivedPreviewWhenLegacyFlagIsStale() {
+        UUID targetId = UUID.randomUUID();
+        GovIndicatorDefinition target = indicator(targetId, "GMV_COPY", "[]");
+        target.setMetricType("DERIVED");
+        target.setIsDerived(false);
+        target.setDependencyIndicators("[\"GMV\"]");
+        target.setExpressionSql("{{metric:GMV}}");
+        GovIndicatorDefinition gmv = indicator(UUID.randomUUID(), "GMV", "[]");
+
+        when(repository.findById(targetId)).thenReturn(Optional.of(target));
+        when(repository.findFirstByCodeIgnoreCase("GMV")).thenReturn(Optional.of(gmv));
+
+        assertThat(generator.previewSql(targetId).get("sql"))
+            .contains("{{ ref('ind_GMV') }} AS dep_0")
+            .contains("dep_0.GMV AS GMV_COPY");
+    }
+
+    @Test
     void refusesToJoinDependenciesWhoseDimensionsDoNotMatchTheTarget() {
         UUID targetId = UUID.randomUUID();
         GovIndicatorDefinition target = indicator(targetId, "AVG_ORDER", "[\"region_code\"]");

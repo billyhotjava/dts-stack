@@ -9,6 +9,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelPackageCanonicalProjector.De
 import com.yuzhi.dts.platform.service.modeling.ModelPackageCanonicalProjector.ProjectRequest;
 import com.yuzhi.dts.platform.service.modeling.ModelPackageCanonicalProjector.SourceTarget;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ScdType;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.StandardBinding;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecSnapshotCodec;
 import com.yuzhi.dts.platform.service.modeling.imports.ModelPackageFixtures;
@@ -16,6 +17,7 @@ import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageCont
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.PackageModel;
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.SemanticMetadata;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -166,6 +168,94 @@ class ModelPackageCanonicalProjectorTest {
         );
 
         assertThat(projection.modelSpecCommand().standardBindings()).containsExactly(binding);
+    }
+
+    @Test
+    void preservesPackageFieldLabelsAndStaticDimensionStrategy() {
+        PackageModel base = ModelPackageFixtures.validPackage().models().getFirst();
+        SemanticMetadata semantics = base.semantics();
+        PackageModel dimension = new PackageModel(
+            base.dbtUniqueId(),
+            base.name(),
+            base.description(),
+            base.resourcePath(),
+            base.sql(),
+            base.materialization(),
+            base.config(),
+            base.tags(),
+            List.of(new Column("budget_id", "预算标识", "timestamp without time zone", "KEY", List.of("not_null_budget_id"))),
+            base.tests(),
+            base.dependencies(),
+            new SemanticMetadata(
+                "DIMENSION",
+                "DWD",
+                semantics.grain(),
+                null,
+                null,
+                semantics.domainCode(),
+                semantics.sourceRefs(),
+                semantics.consumptionScenarios(),
+                semantics.fieldRoles(),
+                "STATIC_DBT_SQL_TYPE_1",
+                "dim_70000000000000000000000000000070",
+                semantics.overrideSource(),
+                false
+            ),
+            base.conversion()
+        );
+
+        var projection = projector.project(
+            request(
+                dimension,
+                List.of(),
+                new com.yuzhi.dts.platform.service.modeling.ModelSpecContract.DimensionDefinitionRef(
+                    UUID.fromString("70000000-0000-0000-0000-000000000070"),
+                    1
+                )
+            )
+        );
+
+        assertThat(projection.modelSpecCommand().fields().getFirst())
+            .extracting("dataType", "nullable", "displayName")
+            .containsExactly("timestamp", false, "预算标识");
+        assertThat(projection.modelSpecCommand().generationStrategy().type()).isEqualTo("STATIC_DBT_SQL_TYPE_1");
+        assertThat(projection.modelSpecCommand().dimensionProfile().scdPolicy().type()).isEqualTo(ScdType.TYPE1);
+    }
+
+    @Test
+    void projectsExecutableDbtTargetSettingsFromAliasWithModelNameFallback() {
+        PackageModel base = ModelPackageFixtures.validPackage().models().getFirst();
+
+        var fallback = projector.project(request(base, List.of(), null));
+
+        assertThat(fallback.implementationCommand().settings())
+            .containsEntry("targetPhysicalName", "budget")
+            .containsEntry("loadStrategy", "FULL")
+            .containsEntry("partitionFields", List.of());
+
+        PackageModel aliased = new PackageModel(
+            base.dbtUniqueId(),
+            base.name(),
+            base.description(),
+            base.resourcePath(),
+            base.sql(),
+            base.materialization(),
+            Map.of("materialized", "table", "alias", "biz_dwd_budget_v2"),
+            base.tags(),
+            base.columns(),
+            base.tests(),
+            base.dependencies(),
+            base.semantics(),
+            base.conversion()
+        );
+
+        var projection = projector.project(request(aliased, List.of(), null));
+
+        assertThat(projection.issues()).noneMatch(issue -> issue.code().startsWith("IMPLEMENTATION_"));
+        assertThat(projection.implementationCommand().settings())
+            .containsEntry("targetPhysicalName", "biz_dwd_budget_v2")
+            .containsEntry("loadStrategy", "FULL")
+            .containsEntry("partitionFields", List.of());
     }
 
     private static ProjectRequest request(

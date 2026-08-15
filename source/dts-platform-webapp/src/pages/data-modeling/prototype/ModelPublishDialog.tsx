@@ -20,6 +20,7 @@ import {
 	retryReleaseCandidate,
 	retryReleaseCandidateRegistration,
 	rollbackReleaseCandidate,
+	runPlanExecutionNow,
 	runReleaseCandidateQuality,
 	startModelBuildIntent,
 	startModelPublicationIntent,
@@ -34,9 +35,20 @@ import { normalizeModelingRequestFailure } from "./services/planningProjectionSe
 const MAX_MATERIALIZATION_MODELS = 100;
 const COMPILE_CONCURRENCY = 5;
 
+type MaterializationBuildAction =
+	| "CREATE_CANDIDATE"
+	| "REFRESH_AND_CREATE"
+	| "CREATE_AFTER_TERMINAL"
+	| "CANCEL_AND_CREATE"
+	| "REFRESH_AND_REPLACE"
+	| "CREATE_REPLACEMENT"
+	| "REMATERIALIZE"
+	| "RETRY_BUILD"
+	| "START_BUILD";
+
 type ReleaseWorkflowAction = Extract<
 	ReleaseCandidateLifecycleAction,
-	"RUN_QUALITY" | "SUBMIT_REVIEW" | "APPROVE" | "REJECT" | "PUBLISH" | "RETRY_REGISTRATION" | "ROLLBACK"
+	"RUN_QUALITY" | "SUBMIT_REVIEW" | "APPROVE" | "REJECT" | "PUBLISH" | "RETRY_PUBLICATION" | "ROLLBACK"
 >;
 
 const RELEASE_WORKFLOW_ACTIONS: ReleaseWorkflowAction[] = [
@@ -45,7 +57,7 @@ const RELEASE_WORKFLOW_ACTIONS: ReleaseWorkflowAction[] = [
 	"APPROVE",
 	"REJECT",
 	"PUBLISH",
-	"RETRY_REGISTRATION",
+	"RETRY_PUBLICATION",
 	"ROLLBACK",
 ];
 
@@ -55,7 +67,7 @@ const RELEASE_ACTION_LABELS: Record<ReleaseWorkflowAction, string> = {
 	APPROVE: "审核通过",
 	REJECT: "驳回",
 	PUBLISH: "发布上线",
-	RETRY_REGISTRATION: "重试发布登记",
+	RETRY_PUBLICATION: "重试发布",
 	ROLLBACK: "回滚发布",
 };
 
@@ -99,7 +111,7 @@ export function ModelPublishDialog({
 	const [reason, setReason] = useState("从模型工作台发布");
 	const [workspace, setWorkspace] = useState<ReleaseCandidateWorkbench | null>(null);
 	const [executionWorkspace, setExecutionWorkspace] = useState<PlanExecutionWorkspace | null>(null);
-	const [busy, setBusy] = useState<"load" | "build" | "release" | "">("load");
+	const [busy, setBusy] = useState<"load" | "build" | "release" | "run" | "">("load");
 	const [activeReleaseAction, setActiveReleaseAction] = useState<ReleaseWorkflowAction | null>(null);
 	const [failure, setFailure] = useState<string>("");
 	const selection = useMemo(() => Array.from(new Map(models.map((model) => [model.id, model])).values()), [models]);
@@ -152,14 +164,20 @@ export function ModelPublishDialog({
 			candidate.entries.length === selectedIds.size &&
 			candidate.entries.every((entry) => selectedIds.has(entry.modelSpecId)),
 	);
-	const buildAction = workspace?.allowedActions.includes("CREATE_CANDIDATE")
+	const buildAction: MaterializationBuildAction | null = workspace?.allowedActions.includes("CREATE_CANDIDATE")
 		? "CREATE_CANDIDATE"
-		: candidate && workspace?.allowedActions.includes("REFRESH_CANDIDATE")
-			? "REFRESH_AND_REPLACE"
-			: candidate && workspace?.allowedActions.includes("CREATE_REPLACEMENT_CANDIDATE")
-				? "CREATE_REPLACEMENT"
-				: candidate && !candidateScopeMatches && workspace?.allowedActions.includes("CANCEL_CANDIDATE")
-					? "CANCEL_AND_REPLACE"
+		: candidate && !candidateScopeMatches
+			? workspace?.allowedActions.includes("REFRESH_CANDIDATE")
+				? "REFRESH_AND_CREATE"
+				: workspace?.allowedActions.includes("CREATE_REPLACEMENT_CANDIDATE")
+					? "CREATE_AFTER_TERMINAL"
+					: workspace?.allowedActions.includes("CANCEL_CANDIDATE")
+						? "CANCEL_AND_CREATE"
+						: null
+			: candidate && workspace?.allowedActions.includes("REFRESH_CANDIDATE")
+				? "REFRESH_AND_REPLACE"
+				: candidate && workspace?.allowedActions.includes("CREATE_REPLACEMENT_CANDIDATE")
+					? "CREATE_REPLACEMENT"
 					: candidateScopeMatches && candidate && workspace?.allowedActions.includes("REMATERIALIZE")
 						? "REMATERIALIZE"
 						: candidateScopeMatches && workspace?.allowedActions.includes("RETRY_BUILD")
@@ -199,16 +217,22 @@ export function ModelPublishDialog({
 					entries,
 					reason: batch ? "从模型列表重新物化所选模型" : "从模型工作台重新物化",
 				});
-			} else if (buildAction === "CANCEL_AND_REPLACE" && candidate) {
-				const cancelled = (
-					await cancelReleaseCandidate(planId, candidate, crypto.randomUUID(), "所选模型范围已变化，关闭旧候选")
-				).candidate;
-				const replacement = await createReplacementReleaseCandidate(planId, cancelled, crypto.randomUUID(), {
+			} else if (
+				(buildAction === "REFRESH_AND_CREATE" ||
+					buildAction === "CREATE_AFTER_TERMINAL" ||
+					buildAction === "CANCEL_AND_CREATE") &&
+				candidate
+			) {
+				if (buildAction === "REFRESH_AND_CREATE")
+					await refreshReleaseCandidate(planId, candidate, crypto.randomUUID(), "模型已发生新修订，废弃旧候选");
+				else if (buildAction === "CANCEL_AND_CREATE")
+					await cancelReleaseCandidate(planId, candidate, crypto.randomUUID(), "所选模型范围已变化，关闭旧候选");
+				const created = await createReleaseCandidate(planId, crypto.randomUUID(), {
 					environment,
 					entries,
-					reason: batch ? "从模型列表按新范围创建替代候选" : "从模型工作台按新范围创建替代候选",
+					reason: batch ? "从模型列表按新范围创建候选" : "从模型工作台按新范围创建候选",
 				});
-				await lockReleaseCandidate(planId, replacement.candidate, crypto.randomUUID(), "从模型工作台启动新范围构建");
+				await lockReleaseCandidate(planId, created.candidate, crypto.randomUUID(), "从模型工作台启动新范围构建");
 			} else if ((buildAction === "REFRESH_AND_REPLACE" || buildAction === "CREATE_REPLACEMENT") && candidate) {
 				const source =
 					buildAction === "REFRESH_AND_REPLACE"
@@ -255,7 +279,7 @@ export function ModelPublishDialog({
 			else if (action === "REJECT")
 				await rejectReleaseCandidateReview(planId, candidate, idempotencyKey, publishReason);
 			else if (action === "PUBLISH") await publishReleaseCandidate(planId, candidate, idempotencyKey, publishReason);
-			else if (action === "RETRY_REGISTRATION")
+			else if (action === "RETRY_PUBLICATION")
 				await retryReleaseCandidateRegistration(planId, candidate, idempotencyKey, publishReason);
 			else await rollbackReleaseCandidate(planId, candidate, idempotencyKey, publishReason);
 			await load();
@@ -264,6 +288,19 @@ export function ModelPublishDialog({
 		} finally {
 			setBusy("");
 			setActiveReleaseAction(null);
+		}
+	};
+	const runOperationalBinding = async () => {
+		if (!planId || !executionBinding?.allowedActions.includes("RUN_NOW")) return;
+		setBusy("run");
+		setFailure("");
+		try {
+			await runPlanExecutionNow(planId, executionBinding.id, crypto.randomUUID());
+			await load();
+		} catch (error) {
+			setFailure(normalizeModelingRequestFailure(error, "运行计划未能启动。").message);
+		} finally {
+			setBusy("");
 		}
 	};
 	const evidenceColumns = useMemo<CompactColumns<ReleaseCandidateEntryEvidence>>(
@@ -363,17 +400,19 @@ export function ModelPublishDialog({
 										? "处理中…"
 										: buildAction === "REFRESH_AND_REPLACE" || buildAction === "CREATE_REPLACEMENT"
 											? "按新修订重新物化"
-											: buildAction === "CANCEL_AND_REPLACE"
-												? "替换候选并物化"
-												: buildAction === "REMATERIALIZE"
-													? "重新物化"
-													: buildAction === "RETRY_BUILD"
-														? "重试构建"
-														: buildAction === "START_BUILD"
-															? "开始构建"
-															: batch
-																? `创建并运行 ${selection.length} 个模型`
-																: "创建并运行"}
+											: buildAction === "REFRESH_AND_CREATE" || buildAction === "CREATE_AFTER_TERMINAL"
+												? "按新范围重新物化"
+												: buildAction === "CANCEL_AND_CREATE"
+													? "替换候选并物化"
+													: buildAction === "REMATERIALIZE"
+														? "重新物化"
+														: buildAction === "RETRY_BUILD"
+															? "重试构建"
+															: buildAction === "START_BUILD"
+																? "开始构建"
+																: batch
+																	? `创建并运行 ${selection.length} 个模型`
+																	: "创建并运行"}
 								</Button>
 							</div>
 						</>
@@ -413,6 +452,11 @@ export function ModelPublishDialog({
 									刷新状态
 								</Button>
 								<Button onClick={onClose}>关闭</Button>
+								{executionBinding?.allowedActions.includes("RUN_NOW") ? (
+									<Button disabled={Boolean(busy)} onClick={() => void runOperationalBinding()} primary>
+										{busy === "run" ? "运行中…" : "立即运行并核验"}
+									</Button>
+								) : null}
 								{releaseActions.map((action, index) => (
 									<Button
 										danger={action === "REJECT" || action === "ROLLBACK"}

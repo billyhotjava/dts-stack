@@ -261,6 +261,50 @@ class ModelMaterializationRunArtifactServiceTest {
     }
 
     @Test
+    void physicalColumnOrderDoesNotInventSchemaDrift()
+        throws Exception {
+        writeArtifacts("success", "b".repeat(64));
+        when(inspector.observe(any(), any())).thenReturn(
+            new PhysicalRelationObservation(
+                true,
+                ExpectedRelationType.TABLE,
+                List.of(
+                    new PhysicalColumn(
+                        1,
+                        "amount",
+                        "numeric(18,2)",
+                        true
+                    ),
+                    new PhysicalColumn(
+                        2,
+                        "project_id",
+                        "uuid",
+                        false
+                    )
+                ),
+                "f".repeat(64),
+                NOW,
+                null
+            )
+        );
+
+        var result = service.syncAndProbe(
+            GROUP_ID,
+            new ModelMaterializationRunArtifactService.SyncProbeCommand(
+                "RELEASE_BUILD",
+                BUNDLE
+            )
+        );
+
+        assertThat(result.status()).isEqualTo("BUILT");
+        verify(runs).markRelationsVerified(
+            GROUP_ID,
+            1,
+            NOW
+        );
+    }
+
+    @Test
     void acceptsReleaseScopedRuntimePackageWhenImmutableMetaMatches()
         throws Exception {
         writeArtifacts("success", "b".repeat(64));

@@ -186,6 +186,78 @@ class DbtModelPackageConverterTest {
             });
     }
 
+    @Test
+    void preservesCatalogOrdinalColumnOrderAndAppendsManifestOnlyColumns() throws Exception {
+        ObjectNode orderedManifest = manifestWithOrderedBudgetColumns(
+            "manifest_only",
+            "second_column",
+            "first_column",
+            "third_column"
+        );
+        ObjectNode catalog = (ObjectNode) objectMapper.readTree(
+            """
+            {
+              "nodes": {
+                "model.pjm.budget": {
+                  "columns": {
+                    "first_column": {"name": "first_column", "type": "text", "index": 3},
+                    "third_column": {"name": "third_column", "type": "text", "index": 1},
+                    "second_column": {"name": "second_column", "type": "text", "index": 2}
+                  }
+                }
+              }
+            }
+            """
+        );
+
+        var result = converter.convert(new DbtModelPackageConverter.ConversionRequest(
+            "pjm-budget-v1",
+            orderedManifest,
+            catalog,
+            null,
+            Map.of("model.pjm.budget", ModelPackageFixtures.completeSemantics()),
+            Set.of("model.pjm.budget"),
+            new Defaults(null, null)
+        ));
+
+        assertThat(result.models().getFirst().columns())
+            .extracting(column -> column.name())
+            .containsExactly("third_column", "second_column", "first_column", "manifest_only");
+    }
+
+    @Test
+    void preservesManifestDeclarationOrderWhenCatalogIsMissing() {
+        ObjectNode orderedManifest = manifestWithOrderedBudgetColumns(
+            "third_column",
+            "first_column",
+            "second_column"
+        );
+
+        var result = converter.convert(new DbtModelPackageConverter.ConversionRequest(
+            "pjm-budget-v1",
+            orderedManifest,
+            null,
+            null,
+            Map.of("model.pjm.budget", ModelPackageFixtures.completeSemantics()),
+            Set.of("model.pjm.budget"),
+            new Defaults(null, null)
+        ));
+
+        assertThat(result.models().getFirst().columns())
+            .extracting(column -> column.name())
+            .containsExactly("third_column", "first_column", "second_column");
+    }
+
+    private ObjectNode manifestWithOrderedBudgetColumns(String... names) {
+        ObjectNode result = (ObjectNode) manifest();
+        ObjectNode columns = objectMapper.createObjectNode();
+        for (String name : names) {
+            columns.putObject(name).put("name", name).put("data_type", "text");
+        }
+        ((ObjectNode) result.path("nodes").path("model.pjm.budget")).set("columns", columns);
+        return result;
+    }
+
     private JsonNode manifest() {
         return objectMapper.valueToTree(Map.of(
             "metadata",

@@ -28,6 +28,7 @@ public class DbtModelArchiveInspectService {
     static final long MAX_MANIFEST_BYTES = 16L * 1024 * 1024;
     static final long MAX_CATALOG_BYTES = 16L * 1024 * 1024;
     static final int MAX_GRAPH_NODES = 500;
+    static final int MAX_MACRO_NODES = 2_000;
     static final int MAX_GRAPH_EDGES = 10_000;
     static final int MAX_GRAPH_DEPTH = 128;
     static final int MAX_COLUMNS = 20_000;
@@ -191,12 +192,15 @@ public class DbtModelArchiveInspectService {
         JsonNode nodes = manifest.path("nodes");
         JsonNode sources = manifest.path("sources");
         JsonNode macros = manifest.path("macros");
-        int graphNodes = objectSize(nodes) + objectSize(sources) + objectSize(macros);
+        int graphNodes = objectSize(nodes) + objectSize(sources);
         if (graphNodes > MAX_GRAPH_NODES) {
             throw tooComplex("dbt 节点数量超过安全检查上限");
         }
+        if (objectSize(macros) > MAX_MACRO_NODES) {
+            throw tooComplex("dbt 宏数量超过安全检查上限");
+        }
 
-        Map<String, List<String>> graph = new HashMap<>();
+        Map<String, List<String>> businessGraph = new HashMap<>();
         int edges = 0;
         int columns = 0;
         long totalSqlBytes = 0;
@@ -213,7 +217,9 @@ public class DbtModelArchiveInspectService {
                 if (edges > MAX_GRAPH_EDGES) {
                     throw tooComplex("dbt 依赖数量超过安全检查上限");
                 }
-                graph.put(entry.getKey(), dependencies);
+                if (collection == nodes || collection == sources) {
+                    businessGraph.put(entry.getKey(), nodeDependencyIds(node));
+                }
                 columns += objectSize(node.path("columns"));
                 if (columns > MAX_COLUMNS) {
                     throw tooComplex("dbt 字段数量超过安全检查上限");
@@ -240,7 +246,7 @@ public class DbtModelArchiveInspectService {
                 throw tooComplex("dbt manifest/catalog 字段数量超过安全检查上限");
             }
         }
-        requireBoundedDepth(graph);
+        requireBoundedDepth(businessGraph);
     }
 
     private static int objectSize(JsonNode value) {
@@ -276,6 +282,20 @@ public class DbtModelArchiveInspectService {
                 }
             });
         }
+        return dependencies;
+    }
+
+    private static List<String> nodeDependencyIds(JsonNode node) {
+        List<String> dependencies = new ArrayList<>();
+        JsonNode values = node.path("depends_on").path("nodes");
+        if (!values.isArray()) {
+            return dependencies;
+        }
+        values.forEach(value -> {
+            if (value.isTextual() && !value.asText().isBlank()) {
+                dependencies.add(value.asText());
+            }
+        });
         return dependencies;
     }
 
@@ -342,8 +362,12 @@ public class DbtModelArchiveInspectService {
             );
         }
         try {
-            if (objectMapper.writeValueAsBytes(modelPackage).length > ModelPackageValidator.MAX_PACKAGE_BYTES) {
-                throw new ArchiveInspectionException("MODEL_IMPORT_ARCHIVE_TOO_LARGE", "转换后的模型包超过允许大小");
+            int convertedBytes = objectMapper.writeValueAsBytes(modelPackage).length;
+            if (convertedBytes > ModelPackageValidator.MAX_PACKAGE_BYTES) {
+                throw new ArchiveInspectionException(
+                    "MODEL_IMPORT_ARCHIVE_TOO_LARGE",
+                    "转换后的模型包为 " + convertedBytes + " bytes，超过允许大小 " + ModelPackageValidator.MAX_PACKAGE_BYTES + " bytes"
+                );
             }
         } catch (ArchiveInspectionException exception) {
             throw exception;

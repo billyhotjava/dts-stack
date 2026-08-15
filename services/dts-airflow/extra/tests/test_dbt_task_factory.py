@@ -560,6 +560,77 @@ class DbtTaskFactoryTest(unittest.TestCase):
         self.assertEqual(normalized["runPurpose"], "OPERATIONAL_RUN")
         self.assertNotIn("imageRef", normalized)
 
+    def test_operational_build_uses_platform_certified_image(self):
+        runtime = {
+            key: value
+            for key, value in self.runtime_spec().items()
+            if key not in self.factory._RUNTIME_CERTIFICATION_KEYS
+        }
+        runtime["runPurpose"] = "OPERATIONAL_RUN"
+        task_instance = mock.Mock()
+        task_instance.xcom_pull.return_value = runtime
+        command = ["docker", "run", "certified-image", "build"]
+        process = FakeProcess([0])
+
+        with (
+            mock.patch.dict(
+                os.environ,
+                {
+                    "DBT_IMAGE": "attacker.example/dbt:mutable",
+                    "DTS_DBT_RUNTIME_CERTIFICATION_IMAGE_REF": (
+                        "registry.example/dts-dbt@sha256:"
+                        "2f6dddb7237fdb7141f452b6d09da0379ef7569f2f82560473f304b265cbbd85"
+                    ),
+                },
+                clear=False,
+            ),
+            mock.patch.object(
+                self.factory,
+                "_platform_request",
+                return_value=self.lease_response(),
+            ),
+            mock.patch.object(
+                self.factory,
+                "_build_docker_command",
+                return_value=command,
+            ) as build,
+            mock.patch.object(
+                self.factory.subprocess,
+                "Popen",
+                return_value=process,
+            ),
+        ):
+            self.factory._dbt_build_task(ti=task_instance)
+
+        self.assertEqual(
+            build.call_args.kwargs["image"],
+            (
+                "registry.example/dts-dbt@sha256:"
+                "2f6dddb7237fdb7141f452b6d09da0379ef7569f2f82560473f304b265cbbd85"
+            ),
+        )
+
+    def test_operational_image_rejects_mutable_or_revoked_runtime(self):
+        for image_ref in (
+            "dts-dbt:1.10.0",
+            (
+                "registry.example/dts-dbt@sha256:"
+                "423926d8ce77a9bdce23db23501910843e9c7b17476b1c025320a3098e2d33f8"
+            ),
+        ):
+            with self.subTest(image_ref=image_ref):
+                with (
+                    mock.patch.dict(
+                        os.environ,
+                        {
+                            "DTS_DBT_RUNTIME_CERTIFICATION_IMAGE_REF": image_ref,
+                        },
+                        clear=False,
+                    ),
+                    self.assertRaisesRegex(ValueError, "not certified"),
+                ):
+                    self.factory._operational_image_ref()
+
     def test_short_build_does_not_send_an_unnecessary_lease_renewal(self):
         runtime = self.runtime_spec()
         task_instance = mock.Mock()

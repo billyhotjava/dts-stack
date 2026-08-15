@@ -52,7 +52,7 @@ final class IndicatorMapper {
         dto.setDenominatorExpression(entity.getDenominatorExpression());
         dto.setStaticFilter(entity.getStaticFilter());
         dto.setDynamicFilterConfig(entity.getDynamicFilterConfig());
-        dto.setIsDerived(entity.getIsDerived());
+        dto.setIsDerived(IndicatorDefinitionSemantics.isDerivedLike(entity));
         dto.setDependencyIndicators(entity.getDependencyIndicators());
         dto.setWindowFunction(entity.getWindowFunction());
         // 维度与粒度
@@ -183,7 +183,7 @@ final class IndicatorMapper {
         entity.setSourceRefs(writeSourceRefs(snapshot.getSourceRefs()));
     }
 
-    private static java.util.List<IndicatorBusinessContextContract.MetricSourceRef> readSourceRefs(String json) {
+    static java.util.List<IndicatorBusinessContextContract.MetricSourceRef> readSourceRefs(String json) {
         if (!StringUtils.hasText(json)) {
             return java.util.List.of();
         }

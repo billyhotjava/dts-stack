@@ -265,7 +265,7 @@ public class CandidatePublicationCommitService {
             new PlatformEventRequest(
                 (
                     publicationRetry
-                        ? "model-release-candidate-publication-retried:"
+                        ? "model-release-candidate-retried:"
                         : "model-release-candidate-published:"
                 ) +
                 candidate.id() +

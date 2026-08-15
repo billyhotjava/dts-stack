@@ -984,15 +984,13 @@ public class ModelMaterializationRunArtifactService {
                 )
             )
             .toList();
+        List<String> actualColumnNames = actualColumns
+            .stream()
+            .map(PhysicalColumn::name)
+            .toList();
         if (
-            !locator
-                .expectedColumns()
-                .equals(
-                    actualColumns
-                        .stream()
-                        .map(PhysicalColumn::name)
-                        .toList()
-                )
+            locator.expectedColumns().size() != actualColumnNames.size() ||
+            !Set.copyOf(locator.expectedColumns()).equals(Set.copyOf(actualColumnNames))
         ) {
             return "MODEL_PHYSICAL_RELATION_COLUMNS_MISMATCH";
         }

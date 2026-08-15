@@ -39,6 +39,7 @@ class GovernanceIndicatorGenerationGateTest {
         mock(IndicatorObservabilityService.class),
         mock(IndicatorTemplateService.class),
         mock(IndicatorDashboardService.class),
+        mock(IndicatorCalculationService.class),
         dbtGenerator,
         mock(GovIndicatorSubscriptionRepository.class),
         mock(AuditService.class),

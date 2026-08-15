@@ -47,7 +47,7 @@ public class IndicatorDerivationValidationService {
         List<Issue> issues = new ArrayList<>();
         List<String> dependencyCodes = parseDependencies(target.getDependencyIndicators(), issues);
 
-        if (!Boolean.TRUE.equals(target.getIsDerived())) {
+        if (!IndicatorDefinitionSemantics.isDerivedLike(target)) {
             addIssue(issues, "DERIVATION_NOT_DERIVED", "当前指标不是派生指标");
         }
         if (dependencyCodes.isEmpty()) {

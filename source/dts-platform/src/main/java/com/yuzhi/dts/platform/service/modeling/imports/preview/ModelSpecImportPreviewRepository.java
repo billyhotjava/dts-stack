@@ -112,6 +112,30 @@ public class ModelSpecImportPreviewRepository {
         );
     }
 
+    /**
+     * Returns the platform-global active data-domain dictionary used by current modeling flows.
+     * Root rows are business categories and are intentionally excluded. The legacy warehouse-plan
+     * binding table remains available for historical snapshots, but is no longer the source of
+     * truth for reverse-modeling domain selection.
+     */
+    public List<DomainBindingSnapshot> findPlatformDomainBindings() {
+        return jdbcTemplate.query(
+            """
+            select id as domain_id, 'CONFIRMED' as confirmation_status, last_modified_date as last_validated_at
+              from catalog_domain
+             where parent_id is not null
+               and lifecycle_status = 'ACTIVE'
+             order by id
+            """,
+            (row, rowNumber) ->
+                new DomainBindingSnapshot(
+                    row.getObject("domain_id", UUID.class),
+                    row.getString("confirmation_status"),
+                    instant(row.getTimestamp("last_validated_at"))
+                )
+        );
+    }
+
     public List<SourceBindingSnapshot> findSourceBindings(String tenantId, UUID planId) {
         return jdbcTemplate.query(
             """

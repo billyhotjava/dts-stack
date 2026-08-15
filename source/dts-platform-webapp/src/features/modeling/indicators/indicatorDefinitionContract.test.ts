@@ -185,6 +185,84 @@ test("definition preflight distinguishes atomic and derived requirements", () =>
 	);
 });
 
+test("stable metric type remains the single definition truth", () => {
+	assert.deepEqual(
+		validateIndicatorDefinition({
+			code: "TASK_TOTAL",
+			name: "任务总数",
+			metricType: "ATOMIC",
+			isDerived: true,
+		}),
+		[
+			"业务分类不能为空",
+			"原子指标必须选择数据域",
+			"原子指标必须选择业务过程",
+			"原子指标必须选择聚合方式",
+			"原子指标必须选择度量字段",
+			"原子指标必须绑定固定模型版本或物理资产",
+		],
+	);
+
+	assert.deepEqual(
+		validateIndicatorDefinition({
+			code: "BUDGET_RATE",
+			name: "预算执行率",
+			metricType: "DERIVED",
+			businessCategoryId: "category-1",
+			dataDomainId: "domain-1",
+			dependencyCodes: ["BUDGET_TOTAL"],
+			expressionSql: "{{metric:BUDGET_TOTAL}}",
+			targetModelName: "biz_ads_budget_derived_v2",
+			measureField: "budget_rate",
+			sourceRefs: [{ sourceType: "SEMANTIC_MODEL_REVISION", sourceId: "model-1", sourceVersion: "r2" }],
+		}),
+		["派生/复合指标来源只能是固定指标版本"],
+	);
+});
+
+test("derived definitions keep dependency codes and pinned indicator versions one to one", () => {
+	assert.deepEqual(
+		validateIndicatorDefinition({
+			code: "BUDGET_RATE",
+			name: "预算执行率",
+			metricType: "DERIVED",
+			businessCategoryId: "category-1",
+			dataDomainId: "domain-1",
+			dependencyCodes: ["BUDGET_TOTAL"],
+			expressionSql: "{{metric:BUDGET_TOTAL}}",
+			targetModelName: "biz_ads_budget_derived_v2",
+			measureField: "budget_rate",
+			sourceRefs: [
+				{ sourceType: "INDICATOR_VERSION", sourceId: "metric-1", sourceVersion: "v1" },
+				{ sourceType: "INDICATOR_VERSION", sourceId: "metric-1", sourceVersion: "v2" },
+			],
+		}),
+		["上游指标编码与固定指标版本必须一一对应"],
+	);
+});
+
+test("normalization derives the compatibility flag from stable metric type", () => {
+	assert.deepEqual(
+		normalizeIndicatorEditValues({
+			metricType: "DERIVED",
+			isDerived: false,
+			aggregationType: "SUM",
+			measureField: "amount",
+			dependencyCodes: ["BUDGET_TOTAL"],
+		}),
+		{
+			metricType: "DERIVED",
+			isDerived: true,
+			aggregationType: "DERIVED",
+			datasetId: null,
+			measureField: "amount",
+			numeratorExpression: null,
+			denominatorExpression: null,
+			dependencyCodes: ["BUDGET_TOTAL"],
+		},
+	);
+});
+
 test("collapsed scope fields stay untouched while an explicit dimension clear is serialized as null", () => {
 	const allValues = {
 		name: "成交金额（含税）",
@@ -307,7 +385,7 @@ test("business category remains independent from derived mode and aggregation ty
 			category: "客户增长",
 			aggregationType: "DERIVED",
 			datasetId: null,
-			measureField: null,
+			measureField: "amount",
 			numeratorExpression: null,
 			denominatorExpression: null,
 			dependencyCodes: ["GMV", "ORDER_COUNT"],

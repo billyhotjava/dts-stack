@@ -372,7 +372,11 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 				dimensionDefinitions,
 				models: context.models,
 			});
-			const savedDraft = modelDraftFromView(saved.model, saved.implementation);
+			const projectedDraft = modelDraftFromView(saved.model, saved.implementation);
+			const savedDraft =
+				saved.model.implementationMode === "DBT_MANAGED" && !saved.implementation
+					? { ...projectedDraft, physicalName: preparedDraft.physicalName }
+					: projectedDraft;
 			replaceDraft(savedDraft);
 			setContext((current) =>
 				current
@@ -616,12 +620,14 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 						) : requestedView === "code" && selectedModel ? (
 							<AdvancedDbtWorkspace
 								canMaintain={canMaintain}
+								initialTargetPhysicalName={draft && isModelSpecDraft(draft) ? draft.physicalName : ""}
 								model={selectedModel}
 								onBack={() => {
 									if (!confirmDiscard()) return;
 									setAdvancedDbtDirty(false);
 									setWorkbenchView("visual", true);
 								}}
+								onCommitSuccess={() => void load(selectedModel.id)}
 								onDirtyChange={setAdvancedDbtDirty}
 								onTransitionSuccess={(result) => {
 									setAdvancedDbtDirty(false);

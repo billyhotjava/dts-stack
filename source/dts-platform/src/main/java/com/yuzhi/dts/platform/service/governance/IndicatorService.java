@@ -24,6 +24,7 @@ import com.yuzhi.dts.platform.service.catalog.CodeAssetGrantWriter;
 import com.yuzhi.dts.platform.service.governance.IndicatorBusinessContextContract.BusinessContext;
 import com.yuzhi.dts.platform.service.governance.IndicatorBusinessContextContract.MetricSourceRef;
 import com.yuzhi.dts.platform.service.governance.IndicatorBusinessContextContract.MetricType;
+import com.yuzhi.dts.platform.service.governance.IndicatorBusinessContextContract.SourceType;
 import com.yuzhi.dts.platform.service.governance.IndicatorBusinessContextContract.ValidationIssue;
 import com.yuzhi.dts.platform.service.governance.dto.IndicatorDto;
 import com.yuzhi.dts.platform.service.governance.dto.IndicatorValidationResultDto;
@@ -408,12 +409,22 @@ public class IndicatorService {
             }
             if (derived != null) {
                 if (derived) {
-                    predicates.add(cb.equal(root.get("isDerived"), true));
+                    predicates.add(
+                        cb.or(
+                            cb.upper(root.get("metricType")).in(MetricType.DERIVED.name(), MetricType.COMPOSITE.name()),
+                            cb.and(cb.isNull(root.get("metricType")), cb.equal(root.get("isDerived"), true))
+                        )
+                    );
                 } else {
-                    predicates.add(cb.or(
-                        cb.equal(root.get("isDerived"), false),
-                        cb.isNull(root.get("isDerived"))
-                    ));
+                    predicates.add(
+                        cb.or(
+                            cb.equal(cb.upper(root.get("metricType")), MetricType.ATOMIC.name()),
+                            cb.and(
+                                cb.isNull(root.get("metricType")),
+                                cb.or(cb.equal(root.get("isDerived"), false), cb.isNull(root.get("isDerived")))
+                            )
+                        )
+                    );
                 }
             }
             return predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(new Predicate[0]));
@@ -550,6 +561,28 @@ public class IndicatorService {
 
         String signature = computeSignature(entity);
         result.setSignature(signature);
+
+        if (IndicatorDefinitionSemantics.isModelBoundAtomic(entity)) {
+            String expectedReference = IndicatorDefinitionSemantics.expectedModelFieldReferenceTarget(entity).orElse(null);
+            if (!StringUtils.hasText(entity.getAggregationType()) || "DERIVED".equalsIgnoreCase(entity.getAggregationType())) {
+                return persistValidation(entity, now, signature, result, "FAILED", "原子指标聚合方式无效", null);
+            }
+            if (!StringUtils.hasText(expectedReference)) {
+                return persistValidation(entity, now, signature, result, "FAILED", "模型字段来源版本或度量字段无效", null);
+            }
+            boolean exactReference = referenceRepository
+                .findByIndicatorOrderByCreatedDateAsc(entity)
+                .stream()
+                .anyMatch(reference ->
+                    reference != null &&
+                    "MODEL_SPEC_FIELD".equalsIgnoreCase(reference.getRefType()) &&
+                    expectedReference.equals(reference.getRefTarget())
+                );
+            if (!exactReference) {
+                return persistValidation(entity, now, signature, result, "FAILED", "模型字段固定版本引用缺失", null);
+            }
+            return persistValidation(entity, now, signature, result, "SUCCESS", "模型字段指标定义校验通过", null);
+        }
 
         if (!StringUtils.hasText(entity.getDatasetId())) {
             return persistValidation(entity, now, signature, result, "FAILED", "请先绑定数据集", null);
@@ -956,7 +989,7 @@ public class IndicatorService {
                 requireMutationAccess(entity, trustedActiveDept);
             }
 
-            List<String> dependencies = Boolean.TRUE.equals(entity.getIsDerived())
+            List<String> dependencies = IndicatorDefinitionSemantics.isDerivedLike(entity)
                 ? parseDependencyCodes(entity.getDependencyIndicators())
                 : List.of();
             if (dependencies.size() > MAX_DIRECT_GENERATION_DEPENDENCIES) {
@@ -1145,7 +1178,11 @@ public class IndicatorService {
         entity.setDenominatorExpression(snapshot.getDenominatorExpression());
         entity.setStaticFilter(snapshot.getStaticFilter());
         entity.setDynamicFilterConfig(snapshot.getDynamicFilterConfig());
-        entity.setIsDerived(snapshot.getIsDerived());
+        entity.setIsDerived(
+            StringUtils.hasText(snapshot.getMetricType())
+                ? !"ATOMIC".equalsIgnoreCase(snapshot.getMetricType())
+                : snapshot.getIsDerived()
+        );
         entity.setDependencyIndicators(snapshot.getDependencyIndicators());
         entity.setWindowFunction(snapshot.getWindowFunction());
         // 维度与粒度
@@ -1407,7 +1444,7 @@ public class IndicatorService {
             throw new IndicatorRequestException("Invalid indicator");
         }
         ensureBusinessContextDeliverable(entity);
-        if (Boolean.TRUE.equals(entity.getIsDerived())) {
+        if (IndicatorDefinitionSemantics.isDerivedLike(entity)) {
             IndicatorDerivationValidationResult result = validateDerivation(entity.getId(), activeDept);
             if (!result.valid()) {
                 String message = result
@@ -1416,6 +1453,13 @@ public class IndicatorService {
                     .map(IndicatorDerivationValidationResult.Issue::message)
                     .collect(java.util.stream.Collectors.joining("；"));
                 throw new IndicatorConflictException("发布校验未通过：" + safeMessage(message));
+            }
+            return;
+        }
+        if (IndicatorDefinitionSemantics.isModelBoundAtomic(entity)) {
+            IndicatorValidationResultDto result = validateComputeRule(entity.getId(), activeDept);
+            if (!"SUCCESS".equalsIgnoreCase(result.getStatus())) {
+                throw new IndicatorConflictException("发布校验未通过：" + safeMessage(result.getMessage()));
             }
             return;
         }
@@ -1626,10 +1670,7 @@ public class IndicatorService {
 
     private boolean derivedMatches(GovIndicatorDefinition indicator, Boolean derived) {
         if (derived == null) return true;
-        if (derived) {
-            return Boolean.TRUE.equals(indicator.getIsDerived());
-        }
-        return !Boolean.TRUE.equals(indicator.getIsDerived());
+        return derived == IndicatorDefinitionSemantics.isDerivedLike(indicator);
     }
 
     private void validateDomainCode(String domain) {
@@ -1760,17 +1801,81 @@ public class IndicatorService {
 
     private void ensureBusinessContextDeliverable(GovIndicatorDefinition entity) {
         BusinessContext target = businessContext(entity);
-        List<BusinessContext> upstream = parseDependencyCodes(entity.getDependencyIndicators())
+        List<String> dependencyCodes = parseDependencyCodes(entity.getDependencyIndicators());
+        List<GovIndicatorDefinition> upstreamIndicators = dependencyCodes
             .stream()
             .map(code -> repository.findFirstByCodeIgnoreCase(code).orElse(null))
             .filter(Objects::nonNull)
-            .map(this::businessContext)
             .toList();
+        List<BusinessContext> upstream = upstreamIndicators.stream().map(this::businessContext).toList();
         var result = IndicatorBusinessContextContract.validateDeliverable(target, upstream);
         if (!result.valid()) {
             throw new IndicatorConflictException(formatBusinessContextIssues(result.issues()));
         }
         validateBusinessContextReferences(target);
+        if (IndicatorDefinitionSemantics.isDerivedLike(entity)) {
+            validatePinnedIndicatorVersionSources(target, dependencyCodes, upstreamIndicators);
+        }
+    }
+
+    @Transactional(
+        readOnly = true,
+        noRollbackFor = { IndicatorConflictException.class, IndicatorRequestException.class }
+    )
+    void validateDefinitionForPublish(GovIndicatorDefinition entity) {
+        ensureBusinessContextDeliverable(entity);
+    }
+
+    private void validatePinnedIndicatorVersionSources(
+        BusinessContext target,
+        List<String> dependencyCodes,
+        List<GovIndicatorDefinition> upstreamIndicators
+    ) {
+        if (dependencyCodes.size() != upstreamIndicators.size()) {
+            throw new IndicatorConflictException(
+                "INDICATOR_DEPENDENCY_NOT_FOUND: 上游指标编码必须全部解析为稳定指标"
+            );
+        }
+        Map<UUID, MetricSourceRef> refsByIndicatorId = new LinkedHashMap<>();
+        for (MetricSourceRef ref : target.sourceRefs()) {
+            if (ref == null || ref.sourceType() != SourceType.INDICATOR_VERSION) {
+                continue;
+            }
+            UUID sourceId;
+            try {
+                sourceId = UUID.fromString(ref.sourceId().trim());
+            } catch (RuntimeException error) {
+                throw new IndicatorConflictException(
+                    "INDICATOR_DEPENDENCY_SOURCE_MISMATCH: 上游指标来源必须使用稳定指标 ID"
+                );
+            }
+            if (refsByIndicatorId.putIfAbsent(sourceId, ref) != null) {
+                throw new IndicatorConflictException(
+                    "INDICATOR_DEPENDENCY_SOURCE_MISMATCH: 每个上游指标只能固定一个版本"
+                );
+            }
+        }
+        Set<UUID> expectedIds = upstreamIndicators.stream().map(GovIndicatorDefinition::getId).collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        if (expectedIds.contains(null) || !expectedIds.equals(refsByIndicatorId.keySet())) {
+            throw new IndicatorConflictException(
+                "INDICATOR_DEPENDENCY_SOURCE_MISMATCH: dependencyIndicators 与固定指标版本来源必须完全一致"
+            );
+        }
+        for (GovIndicatorDefinition dependency : upstreamIndicators) {
+            MetricSourceRef ref = refsByIndicatorId.get(dependency.getId());
+            GovIndicatorVersion version = versionRepository
+                .findByIndicatorAndVersion(dependency, ref.sourceVersion().trim())
+                .orElse(null);
+            if (version == null || !STATUS_PUBLISHED.equals(normalizeStatus(version.getStatus(), STATUS_DRAFT))) {
+                throw new IndicatorConflictException(
+                    "INDICATOR_DEPENDENCY_VERSION_NOT_PUBLISHED: 上游指标 " +
+                    safeIndicatorCode(dependency) +
+                    " 的固定版本 " +
+                    ref.sourceVersion().trim() +
+                    " 尚未发布"
+                );
+            }
+        }
     }
 
     private void validateBusinessContextReferences(BusinessContext context) {

@@ -209,7 +209,7 @@ public class ModelSpecImportApplyPreflightService {
 
     private void requireDomainSnapshot(String tenantId, UUID planId, JsonNode expected) {
         Map<UUID, DomainBindingSnapshot> current = new HashMap<>();
-        previewRepository.findDomainBindings(tenantId, planId).forEach(item -> current.put(item.domainId(), item));
+        previewRepository.findPlatformDomainBindings().forEach(item -> current.put(item.domainId(), item));
         for (JsonNode node : expected) {
             UUID id = UUID.fromString(node.path("domainId").asText());
             DomainBindingSnapshot value = current.get(id);
@@ -218,7 +218,7 @@ public class ModelSpecImportApplyPreflightService {
                 !Objects.equals(value.confirmationStatus(), node.path("confirmationStatus").asText()) ||
                 !sameInstant(value.lastValidatedAt(), node.path("lastValidatedAt").asText(null))
             ) {
-                throw stale("Business category confirmation changed after preview");
+                throw stale("Platform data domain dictionary changed after preview");
             }
         }
     }

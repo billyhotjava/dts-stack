@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet
+        id="20260815-01-model-release-candidate-published-history"
+        author="codex"
+        dbms="postgresql"
+        runInTransaction="false">
+        <preConditions
+            onFail="HALT"
+            onError="HALT"
+            onFailMessage="Release candidate active-plan index must exist and non-published active candidates must be unique">
+            <tableExists tableName="modeling_model_release_candidate"/>
+            <indexExists indexName="uk_model_release_candidate_active_plan"/>
+            <sqlCheck expectedResult="0"><![CDATA[
+                SELECT count(*)
+                  FROM (
+                        SELECT tenant_id, plan_id
+                          FROM modeling_model_release_candidate
+                         WHERE status NOT IN ('REJECTED', 'ROLLED_BACK', 'STALE', 'CANCELLED', 'PUBLISHED')
+                         GROUP BY tenant_id, plan_id
+                        HAVING count(*) > 1
+                       ) duplicate_active_plan
+            ]]></sqlCheck>
+        </preConditions>
+        <comment>
+            Treat PUBLISHED release candidates as immutable delivery history rather than the active
+            plan slot. This lets the same warehouse plan deliver its next dependency-bounded scope
+            while retaining publication, rollback and operational-run evidence for earlier scopes.
+        </comment>
+
+        <sql splitStatements="false"><![CDATA[
+            CREATE UNIQUE INDEX CONCURRENTLY uk_model_release_candidate_active_plan_published_history
+                ON modeling_model_release_candidate (tenant_id, plan_id)
+                WHERE status NOT IN ('REJECTED', 'ROLLED_BACK', 'STALE', 'CANCELLED', 'PUBLISHED')
+        ]]></sql>
+        <sql splitStatements="false"><![CDATA[
+            DROP INDEX CONCURRENTLY uk_model_release_candidate_active_plan
+        ]]></sql>
+        <sql splitStatements="false"><![CDATA[
+            ALTER INDEX uk_model_release_candidate_active_plan_published_history
+                RENAME TO uk_model_release_candidate_active_plan
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    IF EXISTS (
+                        SELECT 1
+                          FROM modeling_model_release_candidate
+                         WHERE status NOT IN ('REJECTED', 'ROLLED_BACK', 'STALE', 'CANCELLED')
+                         GROUP BY tenant_id, plan_id
+                        HAVING count(*) > 1
+                    ) THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_PUBLISHED_CANDIDATE_HISTORY_HAS_NEXT_DELIVERY';
+                    END IF;
+                END $$
+            ]]></sql>
+            <sql splitStatements="false"><![CDATA[
+                CREATE UNIQUE INDEX CONCURRENTLY uk_model_release_candidate_active_plan_published_active
+                    ON modeling_model_release_candidate (tenant_id, plan_id)
+                    WHERE status NOT IN ('REJECTED', 'ROLLED_BACK', 'STALE', 'CANCELLED')
+            ]]></sql>
+            <sql splitStatements="false"><![CDATA[
+                DROP INDEX CONCURRENTLY uk_model_release_candidate_active_plan
+            ]]></sql>
+            <sql splitStatements="false"><![CDATA[
+                ALTER INDEX uk_model_release_candidate_active_plan_published_active
+                    RENAME TO uk_model_release_candidate_active_plan
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

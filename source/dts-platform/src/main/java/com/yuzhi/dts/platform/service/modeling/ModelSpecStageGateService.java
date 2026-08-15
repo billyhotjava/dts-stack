@@ -598,9 +598,11 @@ public class ModelSpecStageGateService {
             implementation.implementationChecksum(),
             ModelLifecycleContract.EventType.COMPILE
         );
+        Set<String> requiredDbtArtifactTypes = Set.of("SQL", "SCHEMA");
+        Set<String> supportedDbtArtifactTypes = Set.of("SQL", "SCHEMA", "CONFIG", "DEPENDENCY");
         boolean currentArtifacts = implementation != null && (
             implementation.ownership() == ImplementationMode.DBT_MANAGED
-                ? artifactTypes.equals(Set.of("SQL", "SCHEMA")) || artifactTypes.equals(Set.of("SQL", "SCHEMA", "CONFIG"))
+                ? artifactTypes.containsAll(requiredDbtArtifactTypes) && supportedDbtArtifactTypes.containsAll(artifactTypes)
                 : artifactTypes.containsAll(Set.of("SQL", "SCHEMA", "TEST"))
         );
         EvidenceState build = currentArtifacts && passedCompile

@@ -4,6 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.yuzhi.dts.platform.service.modeling.imports.ModelPackageFixtures;
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.ConversionMode;
+import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.Grain;
+import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.SemanticMetadata;
+import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.SourceRef;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class ModelConversionClassifierTest {
@@ -41,9 +46,72 @@ class ModelConversionClassifierTest {
             "MISSING_MODEL_TYPE",
             "MISSING_LAYER",
             "MISSING_GRAIN",
-            "MISSING_SOURCE",
-            "MISSING_CONSUMPTION_SCENARIO"
+            "MISSING_SOURCE"
         );
+    }
+
+    @Test
+    void factAndSummaryDoNotRequireApplicationConsumptionScenario() {
+        for (String modelType : List.of("FACT", "SUMMARY")) {
+            var result = classifier.classify(new ModelConversionClassifier.ClassificationInput(
+                "model",
+                "table",
+                "select id, sum(amount) as amount from source group by id",
+                semantics(modelType, List.of(new SourceRef("TABLE", "source.pjm.ledger", "ODS")), List.of(), null, null),
+                false
+            ));
+
+            assertThat(result.mode()).as(modelType).isEqualTo(ConversionMode.DBT_BACKED);
+            assertThat(result.reasonCodes()).as(modelType).doesNotContain("MISSING_CONSUMPTION_SCENARIO");
+        }
+    }
+
+    @Test
+    void applicationStillRequiresConsumptionScenario() {
+        var result = classifier.classify(new ModelConversionClassifier.ClassificationInput(
+            "model",
+            "table",
+            "select id from source",
+            semantics("APPLICATION", List.of(new SourceRef("TABLE", "source.pjm.ledger", "ODS")), List.of(), null, null),
+            false
+        ));
+
+        assertThat(result.mode()).isEqualTo(ConversionMode.BLOCKED);
+        assertThat(result.reasonCodes()).containsExactly("MISSING_CONSUMPTION_SCENARIO");
+    }
+
+    @Test
+    void governedStaticDimensionMayUseDbtSqlAsItsSourceProvenance() {
+        var result = classifier.classify(new ModelConversionClassifier.ClassificationInput(
+            "model",
+            "table",
+            "select * from (values ('high', '高')) as value(code, label)",
+            semantics(
+                "DIMENSION",
+                List.of(),
+                List.of("公共维度标准化与事实关联"),
+                "STATIC_DBT_SQL_TYPE_1",
+                "dim_1234567890abcdef1234567890abcdef"
+            ),
+            false
+        ));
+
+        assertThat(result.mode()).isEqualTo(ConversionMode.DBT_BACKED);
+        assertThat(result.reasonCodes()).doesNotContain("MISSING_SOURCE");
+    }
+
+    @Test
+    void sourceLessDimensionWithoutStableGenerationMetadataRemainsBlocked() {
+        var result = classifier.classify(new ModelConversionClassifier.ClassificationInput(
+            "model",
+            "table",
+            "select code from values_source",
+            semantics("DIMENSION", List.of(), List.of("公共维度消费"), null, null),
+            false
+        ));
+
+        assertThat(result.mode()).isEqualTo(ConversionMode.BLOCKED);
+        assertThat(result.reasonCodes()).containsExactly("MISSING_SOURCE");
     }
 
     @Test
@@ -152,5 +220,29 @@ class ModelConversionClassifierTest {
             assertThat(result.mode()).as(sql).isEqualTo(ConversionMode.DESIGNER_GENERATED);
             assertThat(result.reasonCodes()).as(sql).containsExactly("SAFE_SQL_SUBSET");
         }
+    }
+
+    private static SemanticMetadata semantics(
+        String modelType,
+        List<SourceRef> sourceRefs,
+        List<String> consumptionScenarios,
+        String dimensionStrategy,
+        String dimensionDefinitionCode
+    ) {
+        return new SemanticMetadata(
+            modelType,
+            "APPLICATION".equals(modelType) ? "ADS" : "DIMENSION".equals(modelType) || "FACT".equals(modelType) ? "DWD" : "DWS",
+            new Grain("每个业务键一行", List.of("id")),
+            "FACT".equals(modelType) ? "TRANSACTION" : null,
+            null,
+            "PROJECT_MANAGEMENT",
+            sourceRefs,
+            consumptionScenarios,
+            Map.of("id", "KEY"),
+            dimensionStrategy,
+            dimensionDefinitionCode,
+            "test#meta.dts",
+            false
+        );
     }
 }

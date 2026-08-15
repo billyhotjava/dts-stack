@@ -44,6 +44,20 @@ class ModelVisualizationCapabilityEvaluatorTest {
             Arguments.of(
                 RepresentationScope.TECHNICAL,
                 ImplementationMode.DBT_MANAGED,
+                new ModelVisualizationCapabilityEvaluator.ProjectionTrust(true, false, false, true, true, false),
+                VisualizationCapability.ADVANCED_DBT_IMPLEMENTATION,
+                CapabilityReason.MODEL_REPRESENTATION_FIELDS_UNTRUSTED
+            ),
+            Arguments.of(
+                RepresentationScope.TECHNICAL,
+                ImplementationMode.DBT_MANAGED,
+                new ModelVisualizationCapabilityEvaluator.ProjectionTrust(true, true, true, false, false, false),
+                VisualizationCapability.BLOCKED,
+                CapabilityReason.MODEL_REPRESENTATION_ARTIFACT_PIN_MISMATCH
+            ),
+            Arguments.of(
+                RepresentationScope.TECHNICAL,
+                ImplementationMode.DBT_MANAGED,
                 new ModelVisualizationCapabilityEvaluator.ProjectionTrust(false, false, false, false, false, false),
                 VisualizationCapability.ADVANCED_DBT_IMPLEMENTATION,
                 null

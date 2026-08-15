@@ -15,11 +15,16 @@ type PreflightApi = {
 };
 
 export async function runIndicatorPreflight(
-	indicator: Pick<IndicatorDefinition, "id" | "code" | "isDerived" | "dependencyIndicators" | "expressionSql">,
+	indicator: Pick<
+		IndicatorDefinition,
+		"id" | "code" | "metricType" | "isDerived" | "dependencyIndicators" | "expressionSql"
+	>,
 	api: PreflightApi,
 ): Promise<IndicatorPreflightResult> {
 	if (!indicator.id) throw new Error("请先保存指标草稿");
-	if (indicator.isDerived) return api.validateDerivation(indicator.id);
+	const metricType = String(indicator.metricType || "").toUpperCase();
+	const derived = metricType ? metricType !== "ATOMIC" : Boolean(indicator.isDerived);
+	if (derived) return api.validateDerivation(indicator.id);
 	const result = await api.validateAtomic(indicator.id);
 	const valid = String(result?.status ?? "").toUpperCase() === "SUCCESS";
 	return {

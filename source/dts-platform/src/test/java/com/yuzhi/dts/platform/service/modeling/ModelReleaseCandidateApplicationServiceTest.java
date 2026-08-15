@@ -423,6 +423,47 @@ class ModelReleaseCandidateApplicationServiceTest {
     }
 
     @Test
+    void publishedCandidateRemainsHistoryButAllowsTheNextDeliveryCandidate() {
+        CandidateView published = candidate(
+            DeliveryStatus.PUBLISHED,
+            List.of(entry(DeliveryStatus.PUBLISHED)),
+            new DeliveryAuditView(
+                ACTOR,
+                NOW.minusSeconds(60),
+                ACTOR,
+                NOW.minusSeconds(30),
+                null,
+                null,
+                ACTOR,
+                NOW
+            )
+        );
+        CandidateView draft = candidate(
+            DeliveryStatus.DRAFT,
+            List.of(entry(DeliveryStatus.DRAFT))
+        );
+        CreateCandidateCommand command = new CreateCandidateCommand(
+            PLAN_ID,
+            "dev",
+            List.of(new ScopeEntryCommand(MODEL_ID, 0, "next dependency layer")),
+            "next-candidate-key",
+            "deliver the next model scope"
+        );
+        when(repository.listForWorkbench(TENANT, PLAN_ID)).thenReturn(List.of(published));
+        when(commands.createBatchWithExpandedScope(TENANT, ACTOR, command, command.entries()))
+            .thenReturn(new CommandResult(draft, false, List.of()));
+
+        var workspace = service.workspace(TENANT, ACTOR, PLAN_ID);
+        var created = service.create(TENANT, ACTOR, PLAN_ID, command);
+
+        assertThat(workspace.candidate()).isSameAs(published);
+        assertThat(workspace.allowedActions()).contains(WorkspaceAction.CREATE_CANDIDATE);
+        assertThat(created.candidate()).isSameAs(draft);
+        verify(preflight).requireEligible(TENANT, command);
+        verify(commands).createBatchWithExpandedScope(TENANT, ACTOR, command, command.entries());
+    }
+
+    @Test
     void ordinaryCreateReplaysTheOriginalCommandBeforeRejectingAnActiveCandidate() {
         CandidateView active = candidate(DeliveryStatus.DRAFT, List.of());
         CreateCandidateCommand command = new CreateCandidateCommand(

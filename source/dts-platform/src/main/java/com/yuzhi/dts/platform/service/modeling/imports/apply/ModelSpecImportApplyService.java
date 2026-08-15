@@ -457,7 +457,8 @@ public class ModelSpecImportApplyService {
                 "Model import candidate failed; correlationId={}, attemptId={}, candidate={}",
                 correlationId,
                 attemptId,
-                candidate.dbtUniqueId()
+                candidate.dbtUniqueId(),
+                failure
             );
         }
         CandidateResult result = new CandidateResult(

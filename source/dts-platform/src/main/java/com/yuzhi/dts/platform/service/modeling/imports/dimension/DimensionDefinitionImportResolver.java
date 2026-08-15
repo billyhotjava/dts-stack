@@ -45,12 +45,7 @@ public class DimensionDefinitionImportResolver {
                 """
                 select d.id, d.revision, d.system_code, d.domain_id
                   from modeling_dimension_definition d
-                  join modeling_warehouse_plan_domain plan_domain
-                    on plan_domain.tenant_id = d.tenant_id
-                   and plan_domain.domain_id = d.domain_id
                  where d.tenant_id = ?
-                   and plan_domain.plan_id = ?
-                   and plan_domain.confirmation_status = 'CONFIRMED'
                    and d.domain_id = ?
                    and d.system_code = ?
                    and d.status = 'CURRENT'
@@ -61,9 +56,8 @@ public class DimensionDefinitionImportResolver {
                         row.getInt("revision"),
                         row.getString("system_code"),
                         row.getObject("domain_id", UUID.class)
-                    ),
+                ),
                 tenantId.trim(),
-                planId,
                 domainId,
                 systemCode
             )

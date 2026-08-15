@@ -25,9 +25,11 @@ import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageCont
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -134,7 +136,10 @@ public final class DbtModelPackageConverter {
                 continue;
             }
             String resourceType = firstNonBlank(text(node, "resource_type"), "model");
-            SemanticMetadata semantics = firstNonNull(overrides.get(uniqueId), semanticFromManifest(node));
+            SemanticMetadata semantics = withStructuralSourceRefs(
+                firstNonNull(overrides.get(uniqueId), semanticFromManifest(node)),
+                reachableSourceRefs(uniqueId, nodes, sources)
+            );
             SqlArtifact sql = sqlArtifact(node, request.projectRoot(), resourceType);
             String materialization = text(node.path("config"), "materialized");
             ConversionResult conversion = classifier.classify(
@@ -437,9 +442,9 @@ public final class DbtModelPackageConverter {
         List<ImportIssue> issues,
         boolean source
     ) {
-        Map<String, JsonNode> manifestColumns = objectFields(manifestNode.path("columns"));
+        Map<String, JsonNode> manifestColumns = orderedObjectFields(manifestNode.path("columns"));
         JsonNode catalogRoot = catalog == null ? null : catalog.path(source ? "sources" : "nodes").path(uniqueId);
-        Map<String, JsonNode> catalogColumns = catalogRoot == null ? Map.of() : objectFields(catalogRoot.path("columns"));
+        Map<String, JsonNode> catalogColumns = catalogRoot == null ? Map.of() : orderedObjectFields(catalogRoot.path("columns"));
         if (catalog != null) {
             for (String column : catalogColumns.keySet()) {
                 if (!manifestColumns.containsKey(column)) {
@@ -470,9 +475,7 @@ public final class DbtModelPackageConverter {
                 }
             }
         }
-        Set<String> names = new TreeSet<>();
-        names.addAll(manifestColumns.keySet());
-        names.addAll(catalogColumns.keySet());
+        List<String> names = orderedColumnNames(manifestColumns, catalogColumns);
         List<Column> result = new ArrayList<>();
         for (String name : names) {
             JsonNode manifestColumn = manifestColumns.get(name);
@@ -489,6 +492,26 @@ public final class DbtModelPackageConverter {
             );
         }
         return List.copyOf(result);
+    }
+
+    private static List<String> orderedColumnNames(
+        Map<String, JsonNode> manifestColumns,
+        Map<String, JsonNode> catalogColumns
+    ) {
+        LinkedHashSet<String> result = new LinkedHashSet<>();
+        catalogColumns
+            .entrySet()
+            .stream()
+            .sorted(Comparator.comparingInt(entry -> catalogColumnIndex(entry.getValue())))
+            .map(Map.Entry::getKey)
+            .forEach(result::add);
+        result.addAll(manifestColumns.keySet());
+        return List.copyOf(result);
+    }
+
+    private static int catalogColumnIndex(JsonNode column) {
+        int index = column == null ? -1 : column.path("index").asInt(-1);
+        return index > 0 ? index : Integer.MAX_VALUE;
     }
 
     private static List<String> testsForColumn(
@@ -556,7 +579,14 @@ public final class DbtModelPackageConverter {
     }
 
     private static String readProjectSql(Path projectRoot, String resourcePath) {
-        if (projectRoot == null || resourcePath == null || resourcePath.isBlank() || resourcePath.contains("\\") || resourcePath.startsWith("/")) {
+        if (
+            projectRoot == null ||
+            resourcePath == null ||
+            resourcePath.isBlank() ||
+            resourcePath.contains("\\") ||
+            resourcePath.startsWith("/") ||
+            !resourcePath.toLowerCase(Locale.ROOT).endsWith(".sql")
+        ) {
             return null;
         }
         try {
@@ -614,6 +644,65 @@ public final class DbtModelPackageConverter {
         }
         String resourcePath = text(node, "original_file_path");
         return semanticFrom(dts, resourcePath == null ? "manifest.meta.dts" : resourcePath + "#meta.dts");
+    }
+
+    private static List<SourceRef> reachableSourceRefs(
+        String startUniqueId,
+        Map<String, JsonNode> nodes,
+        Map<String, JsonNode> sources
+    ) {
+        Set<String> visited = new HashSet<>();
+        Set<String> reachable = new TreeSet<>();
+        ArrayDeque<String> pending = new ArrayDeque<>();
+        pending.add(startUniqueId);
+        while (!pending.isEmpty()) {
+            String current = pending.removeFirst();
+            if (!visited.add(current)) {
+                continue;
+            }
+            JsonNode node = nodes.get(current);
+            if (node == null) {
+                continue;
+            }
+            for (String dependency : strings(node.path("depends_on").path("nodes"))) {
+                if (sources.containsKey(dependency)) {
+                    reachable.add(dependency);
+                } else if (nodes.containsKey(dependency)) {
+                    pending.addLast(dependency);
+                }
+            }
+        }
+        return reachable.stream().map(sourceId -> new SourceRef("TABLE", sourceId, null)).toList();
+    }
+
+    private static SemanticMetadata withStructuralSourceRefs(SemanticMetadata semantics, List<SourceRef> structuralRefs) {
+        if (semantics == null || structuralRefs == null || structuralRefs.isEmpty()) {
+            return semantics;
+        }
+        Map<String, SourceRef> merged = new TreeMap<>();
+        structuralRefs.forEach(source -> merged.put(source.ref(), source));
+        if (semantics.sourceRefs() != null) {
+            semantics
+                .sourceRefs()
+                .stream()
+                .filter(source -> source != null && source.ref() != null && !source.ref().isBlank())
+                .forEach(source -> merged.put(source.ref(), source));
+        }
+        return new SemanticMetadata(
+            semantics.modelType(),
+            semantics.layer(),
+            semantics.grain(),
+            semantics.factShape(),
+            semantics.timeSemantics(),
+            semantics.domainCode(),
+            List.copyOf(merged.values()),
+            semantics.consumptionScenarios(),
+            semantics.fieldRoles(),
+            semantics.dimensionStrategy(),
+            semantics.dimensionDefinitionCode(),
+            semantics.overrideSource(),
+            semantics.technicalOnly()
+        );
     }
 
     private static Map<String, Object> normalizeMap(Map<?, ?> source) {
@@ -683,6 +772,15 @@ public final class DbtModelPackageConverter {
             return Map.of();
         }
         Map<String, JsonNode> result = new TreeMap<>();
+        node.fields().forEachRemaining(entry -> result.put(entry.getKey(), entry.getValue()));
+        return result;
+    }
+
+    private static Map<String, JsonNode> orderedObjectFields(JsonNode node) {
+        if (node == null || !node.isObject()) {
+            return Map.of();
+        }
+        Map<String, JsonNode> result = new LinkedHashMap<>();
         node.fields().forEachRemaining(entry -> result.put(entry.getKey(), entry.getValue()));
         return result;
     }

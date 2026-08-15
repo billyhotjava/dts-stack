@@ -13,6 +13,7 @@ describe("advanced dbt implementation draft contract", () => {
 		expect(api).toContain("/commit");
 		expect(api).toContain("baseModelRevision");
 		expect(api).toContain("baseImplementationRevision");
+		expect(api).toContain("targetPhysicalName");
 		expect(api).toContain("expectedEtag");
 		expect(api).toContain("sourceBundle");
 		expect(api).toContain("bundleChecksum");
@@ -33,9 +34,15 @@ describe("advanced dbt implementation draft contract", () => {
 		expect(workbench).toContain("onDirtyChange={setAdvancedDbtDirty}");
 		expect(workbench).toContain("const unsavedChanges = dirty || advancedDbtDirty");
 		expect(workbench).toContain('import { AdvancedDbtWorkspace } from "./AdvancedDbtWorkspace"');
-		expect(workbench).toMatch(/dialog === "advanced"[\s\S]*<AdvancedDbtWorkspace/);
+		// Sprint-91：高级 dbt 工作区的挂载条件由 dialog 状态改为 URL 的 view=code 模式。
+		expect(workbench).toMatch(/requestedView === "code" && selectedModel \? \(\s*<AdvancedDbtWorkspace/s);
 		expect(dialogs).not.toContain("AdvancedDbtDialog");
-		expect(editor).not.toContain("<Modal");
+		// 原断言禁止任何 <Modal>，本意是“工作区是内联页面而不是弹窗”。
+		// Sprint-91 用 TransitionConfirmation(Modal) 取代了 window.confirm，故改为表达真实意图：
+		// 工作区本体内联渲染，Modal 只用于接管确认。
+		expect(editor).toMatch(/<section aria-label="高级 dbt 工作区"/);
+		expect(editor.match(/<Modal/g) ?? []).toHaveLength(1);
+		expect(editor).toContain("TransitionConfirmation");
 		expect(editor).toContain("返回模型设计");
 		expect(editor).toContain('representationScope: "TECHNICAL"');
 		expect(editor).toContain("if (!canMaintain)");

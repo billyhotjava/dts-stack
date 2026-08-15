@@ -20,15 +20,61 @@ import com.yuzhi.dts.platform.service.catalog.CatalogClassificationBoundary.Clas
 import com.yuzhi.dts.platform.service.catalog.JpaCatalogSourceReferenceReadAdapter;
 import com.yuzhi.dts.platform.service.modeling.ModelClassificationPublishGate.Decision;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.GeneratedInput;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.PhysicalAssetInput;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelField;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.StandardBinding;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class ModelClassificationPublishGateTest {
+
+    @Test
+    void acceptsExplicitFieldClassificationFromAStandardBinding() {
+        String tenant = "tenant-a";
+        UUID modelId = UUID.randomUUID();
+        ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
+        ModelSpecRepository modelRepository = mock(ModelSpecRepository.class);
+        ModelLifecycleRepository lifecycleRepository = mock(ModelLifecycleRepository.class);
+        CatalogClassificationBoundary classifications = mock(CatalogClassificationBoundary.class);
+        ModelSpecView model = mock(ModelSpecView.class);
+        ModelField field = mock(ModelField.class);
+        ImplementationView implementation = mock(ImplementationView.class);
+        String checksum = "b".repeat(64);
+        when(modelSpecs.get(tenant, modelId)).thenReturn(model);
+        when(model.id()).thenReturn(modelId);
+        when(model.name()).thenReturn("classified_model");
+        when(model.revision()).thenReturn(3);
+        when(model.checksum()).thenReturn(checksum);
+        when(model.fields()).thenReturn(List.of(field));
+        when(field.name()).thenReturn("project_no");
+        when(model.standardBindings())
+            .thenReturn(List.of(new StandardBinding("project_no", null, null, null, null, null, null, "INTERNAL")));
+        when(lifecycleRepository.findImplementation(tenant, modelId)).thenReturn(Optional.of(implementation));
+        when(implementation.revision()).thenReturn(3);
+        when(implementation.modelChecksum()).thenReturn(checksum);
+        when(implementation.dbtUniqueId()).thenReturn("model.pjm.classified_model");
+        when(implementation.inputs()).thenReturn(List.of(new GeneratedInput("DBT_IMPORT", Map.of())));
+        ModelClassificationPublishGate gate = new ModelClassificationPublishGate(
+            modelSpecs,
+            modelRepository,
+            lifecycleRepository,
+            mock(JpaCatalogSourceReferenceReadAdapter.class),
+            classifications,
+            new ObjectMapper()
+        );
+
+        Decision decision = gate.evaluate(tenant, modelId, 3, checksum);
+
+        assertThat(decision.ready()).isTrue();
+        assertThat(decision.effectiveLevel()).isEqualTo("INTERNAL");
+        assertThat(decision.fieldLevels()).containsEntry("project_no", "INTERNAL");
+    }
 
     @Test
     void resolvesCatalogTableLocatorToParentDatasetClassificationSubject() {
@@ -78,6 +124,7 @@ class ModelClassificationPublishGateTest {
         when(model.revision()).thenReturn(2);
         when(model.checksum()).thenReturn(checksum);
         when(model.fields()).thenReturn(List.of());
+        when(model.standardBindings()).thenReturn(List.of());
         when(lifecycleRepository.findImplementation(tenant, modelId)).thenReturn(Optional.of(implementation));
         when(implementation.revision()).thenReturn(2);
         when(implementation.modelChecksum()).thenReturn(checksum);

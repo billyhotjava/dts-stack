@@ -4,6 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
+import type { ModelRepresentationView } from "@/features/modeling/contracts/modelRepresentationContract";
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 
 beforeAll(() => {
@@ -553,8 +554,10 @@ describe("ModelingWorkbenchEditor", () => {
 		])
 			expect(container.textContent).not.toContain(label);
 
-		for (const label of ["保存", "提交", "刷新", "关联关系", "发布", "日志", "质量规则", "高级 dbt 工作区", "导出"])
+		for (const label of ["保存", "提交", "刷新", "关联关系", "发布", "日志", "质量规则", "导出"])
 			expect(button(label)).toBeDefined();
+		// Sprint-91：工具栏的「高级 dbt 工作区」入口已下线，可视化/代码切换只在选中模型时出现。
+		expect(container.textContent).not.toContain("高级 dbt 工作区");
 		expect(container.textContent).not.toContain("物理预览");
 	});
 
@@ -622,7 +625,7 @@ describe("ModelingWorkbenchEditor", () => {
 		await render(makeProps({ saving: true, selectedModel }));
 
 		expect(container.querySelector("fieldset")).toHaveProperty("disabled", true);
-		for (const label of ["保存中…", "提交", "刷新", "关联关系", "发布", "日志", "质量规则", "高级 dbt 工作区", "导出"])
+		for (const label of ["保存中…", "提交", "刷新", "关联关系", "发布", "日志", "质量规则", "导出"])
 			expect(button(label)).toHaveProperty("disabled", true);
 	});
 
@@ -685,14 +688,22 @@ describe("ModelingWorkbenchEditor", () => {
 
 	it("disables unpublished actions and maps every supported toolbar dialog", async () => {
 		const unpublished = await render();
-		for (const label of ["提交", "关联关系", "发布", "日志", "质量规则", "高级 dbt 工作区", "导出"]) {
+		for (const label of ["提交", "关联关系", "发布", "日志", "质量规则", "导出"]) {
 			expect(button(label)).toHaveProperty("disabled", true);
 			act(() => button(label).click());
 		}
 		expect(unpublished.onDialog).not.toHaveBeenCalled();
 
 		const selectedModel = { id: "model-1", compatibilityMode: "CANONICAL" } as ModelSpecView;
-		const published = makeProps({ dirty: false, selectedModel });
+		// 已持久化模型的可视化编辑权限来自服务端 representation 的 allowedActions。
+		const published = makeProps({
+			dirty: false,
+			selectedModel,
+			representation: {
+				allowedActions: ["OPEN_VISUAL", "EDIT_VISUAL"],
+				capabilityReasons: [],
+			} as unknown as ModelRepresentationView,
+		});
 		await render(published);
 		for (const [label, dialog] of [
 			["提交", "gates"],
@@ -700,12 +711,32 @@ describe("ModelingWorkbenchEditor", () => {
 			["发布", "publish"],
 			["日志", "logs"],
 			["质量规则", "quality"],
-			["高级 dbt 工作区", "advanced"],
 		] as const) {
 			act(() => button(label).click());
 			expect(published.onDialog).toHaveBeenLastCalledWith(dialog);
 		}
 		expect(button("导出").title).toBe("尚无模型导出服务端契约");
+		// 选中模型时才出现的可视化/代码双模切换
+		expect(button("可视化模式")).toBeDefined();
+		expect(button("代码模式")).toBeDefined();
+
+		const codeManaged = makeProps({
+			dirty: false,
+			selectedModel: {
+				id: "model-2",
+				compatibilityMode: "CANONICAL",
+				implementationMode: "DBT_MANAGED",
+			} as ModelSpecView,
+			representation: {
+				allowedActions: ["OPEN_CODE", "EDIT_CODE"],
+				capabilityReasons: [],
+			} as unknown as ModelRepresentationView,
+		});
+		await render(codeManaged);
+		expect(button("保存")).toHaveProperty("disabled", true);
+		expect(button("发布")).toHaveProperty("disabled", false);
+		act(() => button("发布").click());
+		expect(codeManaged.onDialog).toHaveBeenLastCalledWith("publish");
 	});
 
 	it("keeps fact drafts on the explicit compatibility form", async () => {

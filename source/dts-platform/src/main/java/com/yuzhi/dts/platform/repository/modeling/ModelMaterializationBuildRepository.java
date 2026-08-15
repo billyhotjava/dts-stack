@@ -140,6 +140,8 @@ public class ModelMaterializationBuildRepository
             );
         }
 
+        releaseTerminalClaims(candidate, prepared);
+
         List<QueuedBuildRun> runs = new ArrayList<>();
         try {
             for (PreparedEntry entry : prepared) {
@@ -196,6 +198,35 @@ public class ModelMaterializationBuildRepository
             candidateArtifactChecksum,
             List.copyOf(runs)
         );
+    }
+
+    private void releaseTerminalClaims(
+        CandidateView candidate,
+        List<PreparedEntry> prepared
+    ) {
+        prepared
+            .stream()
+            .map(PreparedEntry::activeClaimKey)
+            .distinct()
+            .forEach(activeClaimKey ->
+                jdbcTemplate.update(
+                    """
+                    update modeling_model_release_candidate_entry e
+                       set active_claim_key = null
+                      from modeling_model_release_candidate c
+                     where c.tenant_id = e.tenant_id
+                       and c.id = e.candidate_id
+                       and e.tenant_id = ?
+                       and e.candidate_id <> ?
+                       and e.active_claim_key = ?
+                       and c.status in ('REJECTED', 'ROLLED_BACK', 'STALE', 'CANCELLED')
+                       and e.status = c.status
+                    """,
+                    candidate.tenantId(),
+                    candidate.id(),
+                    activeClaimKey
+                )
+            );
     }
 
     @Transactional
@@ -1599,7 +1630,15 @@ public class ModelMaterializationBuildRepository
               join modeling_model_spec s on s.id = a.model_spec_id
              where s.tenant_id = ? and a.model_spec_id = ? and a.revision = ?
                and a.model_checksum = ? and a.implementation_revision = ?
-               and a.ownership = ? and a.status = 'COMPILED'
+               and a.ownership = ?
+               and (
+                    a.status = 'COMPILED'
+                    or (
+                        a.status = 'IMPORTED'
+                        and a.node_kind in ('STG', 'EPHEMERAL')
+                        and lower(a.path) like 'models/%.sql'
+                    )
+               )
                and (
                     a.artifact_type in ('SQL', 'TEST', 'STG_SQL')
                     or (
@@ -1923,7 +1962,15 @@ public class ModelMaterializationBuildRepository
               from modeling_dbt_artifact
              where model_spec_id = ? and revision = ?
                and model_checksum = ? and implementation_revision = ?
-               and ownership = ? and status = 'COMPILED'
+               and ownership = ?
+               and (
+                    status = 'COMPILED'
+                    or (
+                        status = 'IMPORTED'
+                        and node_kind in ('STG', 'EPHEMERAL')
+                        and lower(path) like 'models/%.sql'
+                    )
+               )
                and (
                     artifact_type in ('SQL', 'TEST', 'STG_SQL')
                     or (

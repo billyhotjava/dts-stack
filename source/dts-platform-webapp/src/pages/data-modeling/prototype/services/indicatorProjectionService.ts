@@ -1,12 +1,17 @@
+import { getModelSpecRevision, listModelSpecs } from "@/api/modelSpecApi";
 import {
 	archiveIndicator,
+	calculateIndicators,
 	createIndicator,
+	createModelFieldIndicatorDraft,
 	getIndicator,
+	getIndicatorDetail,
 	getIndicatorPublishPreview,
 	listIndicators,
 	listIndicatorVersions,
 	publishIndicator,
 	publishIndicatorRevision,
+	rebindModelFieldIndicatorDraft,
 	updateIndicator,
 	validateIndicator,
 	validateIndicatorDerivation,
@@ -16,9 +21,11 @@ import {
 	buildIndicatorUpsertPayload,
 	type IndicatorDefinition,
 	type IndicatorEditValues,
+	type IndicatorUpsertPayload,
 	normalizeIndicatorEditValues,
 	validateIndicatorDefinition,
 } from "@/features/modeling/indicators/indicatorDefinitionContract";
+import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import {
 	type IndicatorPreflightResult,
 	publishIndicatorWithPreview,
@@ -32,6 +39,44 @@ export type MetricSelection = Omit<IndicatorDefinition, "code" | "name" | "domai
 	name: string;
 	domain: string;
 	isNew?: boolean;
+};
+
+export type IndicatorCalculationItem = {
+	indicatorId: string;
+	code?: string | null;
+	name?: string | null;
+	status: string;
+	value?: number | string | null;
+	previousValue?: number | string | null;
+	changeRate?: number | string | null;
+	rowsProcessed: number;
+	durationMs: number;
+	sourceMode?: string | null;
+	relation?: string | null;
+	field?: string | null;
+	errorMessage?: string | null;
+	runAt?: string | null;
+};
+
+export type IndicatorCalculationBatch = {
+	requestId: string;
+	submittedAt: string;
+	items: IndicatorCalculationItem[];
+	successCount: number;
+	failedCount: number;
+};
+
+export type IndicatorCalculationHistory = {
+	id: string;
+	runAt: string;
+	status: string;
+	computedValue?: number | string | null;
+	previousValue?: number | string | null;
+	changeRate?: number | string | null;
+	rowsProcessed?: number | null;
+	durationMs?: number | null;
+	requestId?: string | null;
+	errorMessage?: string | null;
 };
 
 type IndicatorPage = { content?: IndicatorDefinition[]; totalPages?: number };
@@ -66,6 +111,19 @@ export async function loadIndicatorCatalog(): Promise<IndicatorDefinition[]> {
 		current += 1;
 	} while (current < totalPages && current < 100);
 	return result;
+}
+
+export async function submitIndicatorCalculation(indicatorIds: string[]): Promise<IndicatorCalculationBatch> {
+	const payload = unwrap(await calculateIndicators(indicatorIds));
+	if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("指标计算服务未返回有效结果");
+	return payload as IndicatorCalculationBatch;
+}
+
+export async function loadIndicatorCalculationHistory(indicatorId: string): Promise<IndicatorCalculationHistory[]> {
+	const payload = unwrap(await getIndicatorDetail(indicatorId, { days: 90 }));
+	if (!payload || typeof payload !== "object" || Array.isArray(payload)) return [];
+	const history = (payload as { history?: unknown }).history;
+	return Array.isArray(history) ? (history as IndicatorCalculationHistory[]) : [];
 }
 
 export function classifyIndicator(row: Pick<IndicatorDefinition, "metricType" | "category" | "isDerived">): MetricType {
@@ -111,8 +169,7 @@ export const supportsIndicatorCreation = (type: MetricType) =>
 
 export function createIndicatorDraft(type: MetricType, domain = ""): MetricSelection {
 	const isDerived = type === "派生指标" || type === "复合指标";
-	const category =
-		type === "复合指标" ? "COMPOSITE" : type === "修饰词" ? "MODIFIER" : type === "时间周期" ? "TIME_PERIOD" : null;
+	const category = type === "修饰词" ? "MODIFIER" : type === "时间周期" ? "TIME_PERIOD" : null;
 	return {
 		code: "",
 		name: "",
@@ -143,6 +200,49 @@ const assertValid = (values: IndicatorEditValues) => {
 	if (issues.length) throw new Error(issues.join("；"));
 };
 
+type ModelFieldDraftRequest = {
+	indicator: IndicatorUpsertPayload;
+	modelSpecId: string;
+	modelRevision: number;
+	fieldName: string;
+	measurementUnitId: string | null;
+	measurementUnitVersion: number | null;
+};
+
+async function modelFieldDraftRequest(payload: IndicatorUpsertPayload): Promise<ModelFieldDraftRequest | null> {
+	const metricType = String(payload.metricType || "ATOMIC").toUpperCase();
+	const modelSource = payload.sourceRefs?.find((ref) => ref.sourceType === "SEMANTIC_MODEL_REVISION");
+	let model: ModelSpecView | undefined;
+	if (metricType === "ATOMIC") {
+		if (!modelSource) return null;
+		const revisionMatch = String(modelSource.sourceVersion || "").match(/^r([1-9][0-9]*)$/i);
+		if (!revisionMatch) throw new Error("来源模型修订格式无效，请重新选择模型");
+		model = await getModelSpecRevision(modelSource.sourceId, Number(revisionMatch[1]));
+	} else {
+		const targetModelName = String(payload.targetModelName || "");
+		if (!targetModelName || !payload.measureField) return null;
+		const candidates = (await listModelSpecs())
+			.filter((candidate) => candidate.name === targetModelName && candidate.status === "PUBLISHED")
+			.sort((left, right) => right.revision - left.revision);
+		model = candidates[0];
+		if (!model) throw new Error("实现模型已变化，请刷新后重新选择");
+	}
+	const fieldName = String(payload.measureField || "");
+	const field = model.fields.find((candidate) => candidate.name === fieldName && candidate.role === "MEASURE");
+	if (!field || (metricType === "ATOMIC" && model.id !== modelSource?.sourceId)) {
+		throw new Error("来源模型或度量字段已变化，请刷新后重新选择");
+	}
+	const binding = model.standardBindings.find((candidate) => candidate.fieldName === fieldName);
+	return {
+		indicator: payload,
+		modelSpecId: model.id,
+		modelRevision: model.revision,
+		fieldName,
+		measurementUnitId: binding?.measurementUnitId || null,
+		measurementUnitVersion: binding?.measurementUnitVersion || null,
+	};
+}
+
 export async function saveIndicatorDraft(
 	baseline: MetricSelection,
 	changes: IndicatorEditValues,
@@ -150,20 +250,19 @@ export async function saveIndicatorDraft(
 	const normalized = normalizeIndicatorEditValues(changes);
 	assertValid({ ...baseline, ...normalized });
 	if (!baseline.id) {
-		return metricSelection(indicator(await createIndicator(buildIndicatorUpsertPayload(baseline, normalized, []))));
+		const payload = buildIndicatorUpsertPayload(baseline, normalized, []);
+		const modelField = await modelFieldDraftRequest(payload);
+		if (modelField) return metricSelection(indicator(await createModelFieldIndicatorDraft(modelField)));
+		return metricSelection(indicator(await createIndicator(payload)));
 	}
 	const [latestRaw, versionsRaw] = await Promise.all([getIndicator(baseline.id), listIndicatorVersions(baseline.id)]);
 	const latest = indicator(latestRaw);
 	if (String(latest.status || "").toUpperCase() === "PUBLISHED")
 		throw new Error("已发布指标不可直接保存，请发布新版本");
-	return metricSelection(
-		indicator(
-			await updateIndicator(
-				baseline.id,
-				buildExistingIndicatorMutationPayload(baseline, latest, normalized, versions(versionsRaw)),
-			),
-		),
-	);
+	const payload = buildExistingIndicatorMutationPayload(baseline, latest, normalized, versions(versionsRaw));
+	const modelField = await modelFieldDraftRequest(payload);
+	if (modelField) return metricSelection(indicator(await rebindModelFieldIndicatorDraft(baseline.id, modelField)));
+	return metricSelection(indicator(await updateIndicator(baseline.id, payload)));
 }
 
 export const validateIndicatorDraft = (selected: MetricSelection): Promise<IndicatorPreflightResult> =>
@@ -190,6 +289,23 @@ export async function publishIndicatorDraft(
 	const [latestRaw, versionsRaw] = await Promise.all([getIndicator(baseline.id), listIndicatorVersions(baseline.id)]);
 	const latest = indicator(latestRaw);
 	const payload = buildExistingIndicatorMutationPayload(baseline, latest, normalized, versions(versionsRaw));
+	const modelField = await modelFieldDraftRequest(payload);
+	if (modelField) {
+		const saved = metricSelection(indicator(await rebindModelFieldIndicatorDraft(baseline.id, modelField)));
+		if (!saved.id) throw new Error("指标保存成功但服务端未返回标识");
+		return metricSelection(
+			indicator(
+				await publishIndicatorWithPreview(saved.id, {
+					getPublishPreview: (id) =>
+						getIndicatorPublishPreview(id) as Promise<{
+							readyToPublish?: boolean;
+							blockingIssues?: Array<{ code?: string; message?: string }>;
+						}>,
+					publish: (id) => publishIndicator(id),
+				}),
+			),
+		);
+	}
 	if (String(latest.status || "").toUpperCase() === "PUBLISHED") {
 		return metricSelection(indicator(await publishIndicatorRevision(baseline.id, payload)));
 	}

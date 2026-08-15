@@ -143,10 +143,21 @@ public final class ModelConversionClassifier {
         ) {
             missing.add("MISSING_GRAIN");
         }
-        if (semantics == null || semantics.sourceRefs() == null || semantics.sourceRefs().isEmpty()) {
+        boolean staticDimension = semantics != null &&
+        "DIMENSION".equalsIgnoreCase(semantics.modelType()) &&
+        !blank(semantics.dimensionStrategy()) &&
+        !blank(semantics.dimensionDefinitionCode());
+        if (
+            (semantics == null || semantics.sourceRefs() == null || semantics.sourceRefs().isEmpty()) &&
+            !staticDimension
+        ) {
             missing.add("MISSING_SOURCE");
         }
-        if (semantics == null || semantics.consumptionScenarios() == null || semantics.consumptionScenarios().isEmpty()) {
+        if (
+            semantics != null &&
+            "APPLICATION".equalsIgnoreCase(semantics.modelType()) &&
+            (semantics.consumptionScenarios() == null || semantics.consumptionScenarios().isEmpty())
+        ) {
             missing.add("MISSING_CONSUMPTION_SCENARIO");
         }
         return List.copyOf(missing);

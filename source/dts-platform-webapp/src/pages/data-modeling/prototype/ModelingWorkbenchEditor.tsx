@@ -652,7 +652,6 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 	});
 	const dbtVisualReadOnly = isPersistedVisualReadOnly(persisted, visualAccess.access);
 	const effectiveReadOnly = readOnly || dbtVisualReadOnly;
-	const canWritePersisted = persisted && canMaintain && !effectiveReadOnly;
 
 	return (
 		<div className="dmx-workbench-editor">
@@ -746,7 +745,7 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 						<Button disabled={saving || !persisted} onClick={() => onDialog("association")}>
 							关联关系
 						</Button>
-						<Button disabled={saving || !canWritePersisted} onClick={() => onDialog("publish")}>
+						<Button disabled={saving || !persisted || !canMaintain} onClick={() => onDialog("publish")}>
 							发布
 						</Button>
 						<Button disabled={saving || !persisted} onClick={() => onDialog("logs")}>

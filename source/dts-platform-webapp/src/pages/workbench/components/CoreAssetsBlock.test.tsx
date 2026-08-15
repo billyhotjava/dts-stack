@@ -89,10 +89,11 @@ describe("CoreAssetsBlock", () => {
 
 	it("renders_tag_colors_correctly_for_S1_through_S4", () => {
 		const { container, unmount } = render(<CoreAssetsBlock role="INST_LEADER" items={sample} loading={false} />);
+		// 密级配色由共享的 ClassificationTag 统一定义：S1=red / S2=gold / S3=blue / S4=default（无色板 class）
 		expect(container.querySelector(".ant-tag-red")).not.toBeNull();
-		expect(container.querySelector(".ant-tag-volcano")).not.toBeNull();
-		expect(container.querySelector(".ant-tag-orange")).not.toBeNull();
+		expect(container.querySelector(".ant-tag-gold")).not.toBeNull();
 		expect(container.querySelector(".ant-tag-blue")).not.toBeNull();
+		expect(container.querySelectorAll(".ant-tag-volcano, .ant-tag-orange")).toHaveLength(0);
 		unmount();
 	});
 

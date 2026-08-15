@@ -19,15 +19,14 @@ import {
 import {
 	listModelingImportContexts,
 	loadModelingImportContext,
+	type ModelingImportContext,
 	type ModelingImportContextHeader,
-	type ModelingImportDomainBinding,
-	type ModelingImportSourceBinding,
 } from "@/api/services/modelingImportContextService";
 import { type CompactColumns, CompactTable } from "@/components/table";
 import { dataModelingPath } from "../navigation";
 import type { DataModelingRoute } from "../types";
 import { Button, PageHeader, RequestState, Status } from "./PrototypePrimitives";
-import { ConfirmStep, StrategyStep } from "./ReverseModelingInspectionSteps";
+import { ConfirmStep, modelSecurityLevel, StrategyStep } from "./ReverseModelingInspectionSteps";
 import {
 	defaultImportConflictResolutions,
 	type RenameMapping,
@@ -40,9 +39,13 @@ import { useDataModelingMenuGrant } from "./useDataModelingMenuGrant";
 const steps = ["逆向策略", "确认模型信息", "生成模型", "完成"];
 
 type Failure = { kind: "permission" | "request"; message: string };
-type PlanContext = {
-	domains: ModelingImportDomainBinding[];
-	sources: ModelingImportSourceBinding[];
+type PlanContext = ModelingImportContext;
+const EMPTY_PLAN_CONTEXT: PlanContext = {
+	domains: [],
+	sources: [],
+	businessProcesses: [],
+	dataMarts: [],
+	subjectDomains: [],
 };
 const issueText = (
 	issues: Array<{
@@ -76,7 +79,7 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 	const [step, setStep] = useState(0);
 	const [plans, setPlans] = useState<ModelingImportContextHeader[]>([]);
 	const [planId, setPlanId] = useState("");
-	const [planContext, setPlanContext] = useState<PlanContext>({ domains: [], sources: [] });
+	const [planContext, setPlanContext] = useState<PlanContext>(EMPTY_PLAN_CONTEXT);
 	const [archive, setArchive] = useState<File | null>(null);
 	const [inspection, setInspection] = useState<DbtArchiveInspection | null>(null);
 	const [preview, setPreview] = useState<ModelSpecImportPreview | null>(null);
@@ -158,7 +161,7 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 
 	useEffect(() => {
 		if (!planId || !inspection) {
-			setPlanContext({ domains: [], sources: [] });
+			setPlanContext(EMPTY_PLAN_CONTEXT);
 			return;
 		}
 		const epoch = ++requestEpoch.current;
@@ -169,7 +172,7 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 			})
 			.catch((error) => {
 				if (requestEpoch.current !== epoch) return;
-				setPlanContext({ domains: [], sources: [] });
+				setPlanContext(EMPTY_PLAN_CONTEXT);
 				setFailure(normalizeModelingRequestFailure(error, "数据域或来源基线读取失败。"));
 			});
 	}, [inspection, planId]);
@@ -185,6 +188,21 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 			),
 		[inspection],
 	);
+	const importGovernanceReady = useMemo(() => {
+		if (!inspection) return false;
+		const byId = new Map(inspection.package.models.map((model) => [model.dbtUniqueId, model]));
+		return selected.every((uniqueId) => {
+			const model = byId.get(uniqueId);
+			const override = semanticOverrides[uniqueId];
+			if (!model || !override) return false;
+			const fieldNames = (model.columns || []).map((column) => column.name);
+			if (!modelSecurityLevel(override, fieldNames)) return false;
+			const modelType = override.modelType || model.semantics?.modelType || "";
+			if (modelType === "FACT" && !override.businessProcessId) return false;
+			if (modelType === "APPLICATION" && (!override.dataMartId || !override.subjectDomainId)) return false;
+			return true;
+		});
+	}, [inspection, selected, semanticOverrides]);
 	const hasRetryableResult = Boolean(
 		(result?.overallRun?.items || result?.items || []).some((item) =>
 			item.issues.some((issue) => issue.retryable === true),
@@ -455,6 +473,9 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 								semanticOverrides={semanticOverrides}
 								sourceMappings={sourceMappings}
 								sources={planContext.sources}
+								businessProcesses={planContext.businessProcesses}
+								dataMarts={planContext.dataMarts}
+								subjectDomains={planContext.subjectDomains}
 							/>
 						) : step === 2 && preview ? (
 							<GenerateStep
@@ -504,9 +525,15 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 									!planId ||
 									!selected.length ||
 									packageDomains.some((code) => !domainMappings[code]) ||
+									!importGovernanceReady ||
 									Boolean(busy)
 								}
 								primary
+								title={
+									importGovernanceReady
+										? undefined
+										: "请先为已选模型确认发布密级，并补齐明细表业务过程、应用表数据集市和主题域"
+								}
 								onClick={() => void createPreview()}
 							>
 								{busy === "preview" ? "正在预览…" : "生成预览"}

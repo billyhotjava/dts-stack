@@ -7,7 +7,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.GeneratedInput;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.InputMode;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.SaveImplementationCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService;
@@ -28,11 +30,100 @@ import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportAppl
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyPlanContract.Candidate;
 import com.yuzhi.dts.platform.service.modeling.imports.checksum.ModelPackageChecksum;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
 
 class ModelSpecImportCandidateTransactionWorkerTest {
+
+    @Test
+    void skipsPublishedModelWhenFrozenPinsMatch() {
+        ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
+        ModelLifecycleService lifecycle = mock(ModelLifecycleService.class);
+        ModelingDbtArtifactImportService artifactImports = mock(ModelingDbtArtifactImportService.class);
+        ModelSpecImportApplyCommandCodec commandCodec = mock(ModelSpecImportApplyCommandCodec.class);
+        ModelSpecImportApplyRepository repository = mock(ModelSpecImportApplyRepository.class);
+        ModelSpecImportCandidateTransactionWorker worker = new ModelSpecImportCandidateTransactionWorker(
+            modelSpecs,
+            lifecycle,
+            artifactImports,
+            commandCodec,
+            repository
+        );
+        UUID modelId = UUID.randomUUID();
+        String modelChecksum = "a".repeat(64);
+        String implementationChecksum = "b".repeat(64);
+        Candidate candidate = new Candidate(
+            "model.pjm.published_dimension",
+            modelId,
+            2,
+            1,
+            2,
+            modelChecksum,
+            "PUBLISHED",
+            1,
+            implementationChecksum,
+            modelChecksum,
+            implementationChecksum,
+            "SKIP",
+            "DBT_BACKED",
+            "{}",
+            "{}",
+            "{}",
+            "{}",
+            "{}",
+            "{}"
+        );
+        SaveImplementationCommand implementationCommand = new SaveImplementationCommand(
+            InputMode.GENERATED,
+            List.of(new GeneratedInput("DBT", Map.of("dbtUniqueId", candidate.dbtUniqueId()))),
+            List.of(),
+            Map.of(),
+            ImplementationMode.DBT_MANAGED,
+            "table",
+            "stable-model-import-key:impl"
+        );
+        when(commandCodec.decode(eq(candidate), eq("{}"), eq(Set.of()))).thenReturn(
+            new DecodedCandidate(
+                mock(CreateModelSpecCommand.class),
+                mock(UpdateModelSpecCommand.class),
+                implementationCommand,
+                "pjm",
+                List.of()
+            )
+        );
+        ModelSpecView model = mock(ModelSpecView.class);
+        when(model.id()).thenReturn(modelId);
+        when(model.revision()).thenReturn(2);
+        when(model.checksum()).thenReturn(modelChecksum);
+        when(model.status()).thenReturn(ModelStatus.PUBLISHED);
+        when(modelSpecs.get("tenant", modelId)).thenReturn(model);
+        when(repository.recordSuccess(any(), any(), any(), any(), any())).thenAnswer(invocation -> invocation.getArgument(4));
+
+        CandidateResult result = worker.execute(
+            new ModelSpecImportCandidateTransactionWorker.Execution(
+                "tenant",
+                "actor",
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                0,
+                candidate,
+                "{}",
+                "candidate-key",
+                "candidate-hash",
+                "owner-token",
+                Set.of()
+            )
+        );
+
+        assertThat(result.status()).isEqualTo(ResultStatus.SKIPPED);
+        assertThat(result.revision()).isEqualTo(2);
+        assertThat(result.modelChecksum()).isEqualTo(modelChecksum);
+        assertThat(result.implementationRevision()).isEqualTo(1);
+        assertThat(result.implementationChecksum()).isEqualTo(implementationChecksum);
+    }
 
     @Test
     void usesImportedDbtWriterAndArtifactsForDesignerRepresentableExternalSql() {
@@ -56,8 +147,15 @@ class ModelSpecImportCandidateTransactionWorkerTest {
         Candidate candidate = candidate(modelId, modelChecksum, implementationChecksum);
         CreateModelSpecCommand create = mock(CreateModelSpecCommand.class);
         UpdateModelSpecCommand update = mock(UpdateModelSpecCommand.class);
-        SaveImplementationCommand implementationCommand = mock(SaveImplementationCommand.class);
-        when(implementationCommand.ownership()).thenReturn(ImplementationMode.DBT_MANAGED);
+        SaveImplementationCommand implementationCommand = new SaveImplementationCommand(
+            InputMode.GENERATED,
+            List.of(new GeneratedInput("DBT", Map.of("dbtUniqueId", candidate.dbtUniqueId()))),
+            List.of(),
+            Map.of("targetPhysicalName", "simple", "loadStrategy", "FULL", "partitionFields", List.of()),
+            ImplementationMode.DBT_MANAGED,
+            "view",
+            "stable-model-import-key:impl"
+        );
         String sql = "select 1 as simple_key";
         ImportedArtifact artifact = new ImportedArtifact(
             candidate.dbtUniqueId(),
@@ -92,7 +190,7 @@ class ModelSpecImportCandidateTransactionWorkerTest {
                 any(),
                 eq("pjm"),
                 eq(candidate.dbtUniqueId()),
-                eq(implementationCommand)
+                any()
             )
         ).thenReturn(implementation);
         when(artifactImports.importArtifacts(any())).thenReturn(
@@ -127,6 +225,9 @@ class ModelSpecImportCandidateTransactionWorkerTest {
 
         assertThat(result.status()).isEqualTo(ResultStatus.CREATED);
         assertThat(result.artifactCount()).isEqualTo(1);
+        ArgumentCaptor<SaveImplementationCommand> implementationCaptor = ArgumentCaptor.forClass(
+            SaveImplementationCommand.class
+        );
         verify(lifecycle).saveImportedDbtImplementation(
             eq("tenant"),
             eq("actor"),
@@ -136,8 +237,13 @@ class ModelSpecImportCandidateTransactionWorkerTest {
             any(),
             eq("pjm"),
             eq(candidate.dbtUniqueId()),
-            eq(implementationCommand)
+            implementationCaptor.capture()
         );
+        assertThat(implementationCaptor.getValue())
+            .usingRecursiveComparison()
+            .ignoringFields("idempotencyKey")
+            .isEqualTo(implementationCommand);
+        assertThat(implementationCaptor.getValue().idempotencyKey()).isEqualTo("candidate-key:implementation");
         verify(artifactImports).importArtifacts(any());
     }
 

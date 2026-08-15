@@ -45,6 +45,36 @@ test("derived preflight uses the compiler-backed derivation endpoint and exposes
 	});
 });
 
+test("stable metric type overrides a stale isDerived compatibility flag", async () => {
+	let atomicValidationCalls = 0;
+	const result = await runIndicatorPreflight(
+		{
+			id: "avg-order-v2",
+			code: "AVG_ORDER_V2",
+			metricType: "DERIVED",
+			isDerived: false,
+			dependencyIndicators: '["GMV"]',
+			expressionSql: "{{metric:GMV}}",
+		},
+		{
+			validateAtomic: async () => {
+				atomicValidationCalls += 1;
+				return { status: "SUCCESS" };
+			},
+			validateDerivation: async () => ({
+				valid: true,
+				compiledExpression: '"GMV"',
+				issues: [],
+				dependencyCodes: ["GMV"],
+			}),
+		},
+	);
+
+	assert.equal(atomicValidationCalls, 0);
+	assert.equal(result.valid, true);
+	assert.equal(result.compiledExpression, '"GMV"');
+});
+
 test("derived preflight returns compiler failures without treating them as executable SQL", async () => {
 	const result = await runIndicatorPreflight(
 		{

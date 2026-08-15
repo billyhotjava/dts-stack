@@ -34,6 +34,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -146,9 +147,13 @@ public class PlanOperationalRunArtifactService {
             JsonNode manifest = readArtifact(project, "manifest.json");
             JsonNode results = readArtifact(project, "run_results.json");
             UUID invocationId = invocation(manifest, results);
-            Map<UUID, RelationLocator> locators =
+            ManifestValidation manifestValidation =
                 validateManifest(scope, manifest);
-            validateResults(scope, results);
+            validateResults(
+                scope,
+                results,
+                manifestValidation.runtimeUniqueIds()
+            );
             Instant now = clock.instant();
             int dbtSucceeded = runs.markDbtSucceeded(
                 groupId,
@@ -165,7 +170,7 @@ public class PlanOperationalRunArtifactService {
             List<ObservationWrite> evidence = observe(
                 scope,
                 invocationId,
-                locators,
+                manifestValidation.locators(),
                 now
             );
             observations.appendAll(evidence);
@@ -317,7 +322,7 @@ public class PlanOperationalRunArtifactService {
         }
     }
 
-    private static Map<UUID, RelationLocator> validateManifest(
+    private static ManifestValidation validateManifest(
         EvidenceScope scope,
         JsonNode manifest
     ) {
@@ -331,8 +336,14 @@ public class PlanOperationalRunArtifactService {
         }
         Map<UUID, RelationLocator> locators =
             new LinkedHashMap<>();
+        Map<UUID, String> runtimeUniqueIds =
+            new LinkedHashMap<>();
         for (EvidenceEntry entry : scope.entries()) {
-            JsonNode node = nodes.path(entry.dbtUniqueId());
+            RuntimeManifestNode runtimeNode = requireRuntimeManifestNode(
+                nodes,
+                entry
+            );
+            JsonNode node = runtimeNode.node();
             JsonNode meta = node.path("config").path("meta");
             if (
                 node.isMissingNode() ||
@@ -355,10 +366,7 @@ public class PlanOperationalRunArtifactService {
                         meta
                             .path("implementationChecksum")
                             .asText()
-                    ) ||
-                !entry
-                    .targetIdentifier()
-                    .equals(node.path("alias").asText())
+                    )
             ) {
                 throw failure(
                     "MODEL_DBT_MANIFEST_IDENTITY_MISMATCH",
@@ -366,21 +374,53 @@ public class PlanOperationalRunArtifactService {
                     Kind.CONFLICT
                 );
             }
+            String alias = node.path("alias").asText("");
             JsonNode columns = node.path("columns");
+            List<String> manifestColumns = expectedColumns(columns);
+            List<String> pinnedColumns = entry.expectedColumns().isEmpty()
+                ? manifestColumns
+                : entry.expectedColumns();
+            if (
+                pinnedColumns.isEmpty() ||
+                (
+                    !manifestColumns.isEmpty() &&
+                    !Set.copyOf(manifestColumns).equals(
+                        Set.copyOf(pinnedColumns)
+                    )
+                )
+            ) {
+                throw failure(
+                    "MODEL_DBT_MANIFEST_COLUMNS_MISMATCH",
+                    "dbt manifest columns do not match the pinned model revision",
+                    Kind.CONFLICT
+                );
+            }
+            if (
+                !entry.targetIdentifier().equals(alias) ||
+                !"model".equals(
+                    node.path("resource_type").asText()
+                )
+            ) {
+                throw failure(
+                    "MODEL_DBT_MANIFEST_LOCATOR_MISMATCH",
+                    "dbt manifest relation locator does not match the published model",
+                    Kind.CONFLICT
+                );
+            }
             try {
                 locators.put(
                     entry.modelSpecId(),
                     new RelationLocator(
                         node.path("database").asText(""),
                         node.path("schema").asText(""),
-                        entry.targetIdentifier(),
+                        alias,
                         expectedType(
                             node
                                 .path("config")
                                 .path("materialized")
                                 .asText("")
                         ),
-                        expectedColumns(columns),
+                        pinnedColumns,
                         expectedColumnTypes(
                             columns,
                             entry.implementationMode()
@@ -394,13 +434,62 @@ public class PlanOperationalRunArtifactService {
                     Kind.CONFLICT
                 );
             }
+            runtimeUniqueIds.put(
+                entry.pipelineRunId(),
+                runtimeNode.uniqueId()
+            );
         }
-        return Map.copyOf(locators);
+        return new ManifestValidation(
+            Map.copyOf(locators),
+            Map.copyOf(runtimeUniqueIds)
+        );
+    }
+
+    private static RuntimeManifestNode requireRuntimeManifestNode(
+        JsonNode nodes,
+        EvidenceEntry entry
+    ) {
+        List<RuntimeManifestNode> matches = new ArrayList<>();
+        nodes.fields().forEachRemaining(candidate -> {
+            JsonNode node = candidate.getValue();
+            if (
+                "model".equals(node.path("resource_type").asText()) &&
+                entry
+                    .modelSpecId()
+                    .toString()
+                    .equals(
+                        node
+                            .path("config")
+                            .path("meta")
+                            .path("modelSpecId")
+                            .asText()
+                    ) &&
+                candidate
+                    .getKey()
+                    .equals(node.path("unique_id").asText())
+            ) {
+                matches.add(
+                    new RuntimeManifestNode(
+                        candidate.getKey(),
+                        node
+                    )
+                );
+            }
+        });
+        if (matches.size() != 1) {
+            throw failure(
+                "MODEL_DBT_MANIFEST_IDENTITY_MISMATCH",
+                "dbt manifest does not contain exactly one immutable model identity",
+                Kind.CONFLICT
+            );
+        }
+        return matches.getFirst();
     }
 
     private static void validateResults(
         EvidenceScope scope,
-        JsonNode results
+        JsonNode results,
+        Map<UUID, String> runtimeUniqueIds
     ) {
         Map<String, String> statuses = new LinkedHashMap<>();
         for (JsonNode result : results.path("results")) {
@@ -411,7 +500,11 @@ public class PlanOperationalRunArtifactService {
         }
         for (EvidenceEntry entry : scope.entries()) {
             if (
-                !"success".equals(statuses.get(entry.dbtUniqueId()))
+                !"success".equals(
+                    statuses.get(
+                        runtimeUniqueIds.get(entry.pipelineRunId())
+                    )
+                )
             ) {
                 throw failure(
                     "MODEL_DBT_RUN_RESULT_FAILED",
@@ -547,15 +640,13 @@ public class PlanOperationalRunArtifactService {
                 )
             )
             .toList();
+        List<String> actualColumnNames = actual
+            .stream()
+            .map(PhysicalColumn::name)
+            .toList();
         if (
-            !locator
-                .expectedColumns()
-                .equals(
-                    actual
-                        .stream()
-                        .map(PhysicalColumn::name)
-                        .toList()
-                )
+            locator.expectedColumns().size() != actualColumnNames.size() ||
+            !Set.copyOf(locator.expectedColumns()).equals(Set.copyOf(actualColumnNames))
         ) {
             return "MODEL_PHYSICAL_RELATION_COLUMNS_MISMATCH";
         }
@@ -741,4 +832,14 @@ public class PlanOperationalRunArtifactService {
     ) {
         return new PlanExecutionException(code, message, kind);
     }
+
+    private record ManifestValidation(
+        Map<UUID, RelationLocator> locators,
+        Map<UUID, String> runtimeUniqueIds
+    ) {}
+
+    private record RuntimeManifestNode(
+        String uniqueId,
+        JsonNode node
+    ) {}
 }

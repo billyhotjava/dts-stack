@@ -3,6 +3,9 @@ package com.yuzhi.dts.platform.service.governance;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.service.governance.IndicatorReferenceService.ReferenceUpsertRequest;
+import com.yuzhi.dts.platform.service.governance.IndicatorBusinessContextContract.MetricSourceRef;
+import com.yuzhi.dts.platform.service.governance.IndicatorBusinessContextContract.MetricType;
+import com.yuzhi.dts.platform.service.governance.IndicatorBusinessContextContract.SourceType;
 import com.yuzhi.dts.platform.service.governance.dto.IndicatorDto;
 import com.yuzhi.dts.platform.service.governance.request.IndicatorUpsertRequest;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService;
@@ -10,6 +13,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecContract;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.CompatibilityMode;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.FieldRole;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelField;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelRevisionRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelStatus;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
@@ -43,6 +47,13 @@ public class ModelFieldIndicatorDraftService {
     }
 
     public IndicatorDto create(String serverTenantId, String activeDept, CreateDraftRequest request) {
+        PreparedDraft prepared = prepare(serverTenantId, request);
+        IndicatorDto created = indicators.create(prepared.indicator(), activeDept);
+        references.create(created.getId(), activeDept, prepared.reference());
+        return created;
+    }
+
+    private PreparedDraft prepare(String serverTenantId, CreateDraftRequest request) {
         if (
             request == null ||
             request.indicator() == null ||
@@ -52,7 +63,10 @@ public class ModelFieldIndicatorDraftService {
         ) {
             throw new IndicatorRequestException("指标草稿与模型字段锚点不能为空");
         }
-        ModelSpecView model = models.get(serverTenantId, request.modelSpecId());
+        ModelSpecView model = models.revision(
+            serverTenantId,
+            new ModelRevisionRef(request.modelSpecId(), request.modelRevision())
+        );
         validateModel(model, request);
         ModelField field = model
             .fields()
@@ -61,7 +75,7 @@ public class ModelFieldIndicatorDraftService {
             .findFirst()
             .orElseThrow(() -> new IndicatorRequestException("模型中不存在指定字段: " + request.fieldName()));
         if (field.role() != FieldRole.MEASURE) {
-            throw new IndicatorRequestException("只能从 MEASURE 度量字段创建原子指标");
+            throw new IndicatorRequestException("只能将指标绑定到 MEASURE 度量字段");
         }
         ModelSpecContract.StandardBinding binding = model
             .standardBindings()
@@ -79,18 +93,28 @@ public class ModelFieldIndicatorDraftService {
         }
 
         IndicatorUpsertRequest indicator = request.indicator();
-        indicator.setCategory("ATOMIC");
+        MetricType metricType = metricType(indicator);
+        indicator.setMetricType(metricType.name());
+        if (metricType == MetricType.ATOMIC) {
+            indicator.setSourceRefs(
+                java.util.List.of(
+                    new MetricSourceRef(SourceType.SEMANTIC_MODEL_REVISION, model.id().toString(), "r" + model.revision())
+                )
+            );
+        }
         indicator.setStatus("DRAFT");
         indicator.setVersion("v1");
         indicator.setMeasureField(field.name());
-        indicator.setIsDerived(false);
+        indicator.setIsDerived(metricType != MetricType.ATOMIC);
         indicator.setTargetModelName(model.name());
         indicator.setSourceLayer(model.layer().name());
         indicator.setTargetLayer(model.layer().name());
-        IndicatorDto created = indicators.create(indicator, activeDept);
-        references.create(
-            created.getId(),
-            activeDept,
+        indicator.setSourceTable(resolveSourceTable(model));
+        if (model.timeSemantics() != null && !model.timeSemantics().fields().isEmpty()) {
+            indicator.setDateColumn(model.timeSemantics().fields().get(0));
+        }
+        return new PreparedDraft(
+            indicator,
             new ReferenceUpsertRequest(
                 "MODEL_SPEC_FIELD",
                 model.id() + "@" + model.revision() + "#" + field.name(),
@@ -98,7 +122,39 @@ public class ModelFieldIndicatorDraftService {
                 referenceNotes(model, field, measurementUnitId, measurementUnitVersion)
             )
         );
-        return created;
+    }
+
+    private static MetricType metricType(IndicatorUpsertRequest indicator) {
+        if (indicator != null && StringUtils.hasText(indicator.getMetricType())) {
+            try {
+                return MetricType.valueOf(indicator.getMetricType().trim().toUpperCase(java.util.Locale.ROOT));
+            } catch (IllegalArgumentException ex) {
+                throw new IndicatorRequestException("指标类型无效: " + indicator.getMetricType());
+            }
+        }
+        return indicator != null && Boolean.TRUE.equals(indicator.getIsDerived())
+            ? MetricType.DERIVED
+            : MetricType.ATOMIC;
+    }
+
+    public IndicatorDto rebind(String serverTenantId, String activeDept, UUID indicatorId, CreateDraftRequest request) {
+        if (indicatorId == null) {
+            throw new IndicatorRequestException("指标标识不能为空");
+        }
+        PreparedDraft prepared = prepare(serverTenantId, request);
+        IndicatorDto current = indicators.requireMutationAccess(indicatorId, activeDept);
+        IndicatorDto saved = "PUBLISHED".equalsIgnoreCase(current.getStatus())
+            ? indicators.stageRevision(indicatorId, prepared.indicator(), activeDept)
+            : indicators.update(indicatorId, prepared.indicator(), activeDept);
+        references.replaceModelFieldReference(indicatorId, activeDept, prepared.reference());
+        return saved;
+    }
+
+    private static String resolveSourceTable(ModelSpecView model) {
+        if (model.implementationPolicy() != null && StringUtils.hasText(model.implementationPolicy().physicalName())) {
+            return model.implementationPolicy().physicalName();
+        }
+        return model.name();
     }
 
     private static void validateModel(ModelSpecView model, CreateDraftRequest request) {
@@ -148,4 +204,6 @@ public class ModelFieldIndicatorDraftService {
         UUID measurementUnitId,
         Integer measurementUnitVersion
     ) {}
+
+    private record PreparedDraft(IndicatorUpsertRequest indicator, ReferenceUpsertRequest reference) {}
 }

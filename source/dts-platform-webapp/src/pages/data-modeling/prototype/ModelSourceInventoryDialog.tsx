@@ -162,6 +162,28 @@ export function ModelSourceInventoryDialog({ planId, onClose, onSourcesChanged }
 		);
 	};
 
+	const reconfirm = (binding: WarehousePlanSourceBindingView) => {
+		if (!inventory) return;
+		if (!binding.confirmedVersion || !binding.currentVersion) {
+			setFailure("来源版本证据不完整，请重新加载后再试。");
+			return;
+		}
+		void save(
+			inventory.bindings.map((item) =>
+				item.bindingId === binding.bindingId
+					? {
+							bindingId: item.bindingId,
+							confirmationStatus: "CONFIRMED",
+							exclusionReason: null,
+							action: "RECONFIRM",
+							expectedConfirmedVersion: item.confirmedVersion,
+							expectedCurrentVersion: item.currentVersion,
+						}
+					: retainedBinding(item),
+			),
+		);
+	};
+
 	return (
 		<Modal
 			footer={
@@ -232,7 +254,16 @@ export function ModelSourceInventoryDialog({ planId, onClose, onSourcesChanged }
 						{inventory?.bindings.length ? (
 							inventory.bindings.map((binding) => (
 								<div className="dmx-source-inventory__row" key={binding.bindingId}>
-									<span>{binding.displayName || binding.sourceId || binding.bindingId}</span>
+									<div>
+										<span>{binding.displayName || binding.sourceId || binding.bindingId}</span>
+										{binding.statusSummary ? <small>{binding.statusSummary}</small> : null}
+										{binding.diffSummary &&
+										binding.diffSummary.added + binding.diffSummary.removed + binding.diffSummary.changed > 0 ? (
+											<small>
+												+{binding.diffSummary.added} / -{binding.diffSummary.removed} / ~{binding.diffSummary.changed}
+											</small>
+										) : null}
+									</div>
 									<Status
 										tone={
 											binding.confirmationStatus === "CONFIRMED" && binding.freshness === "CURRENT"
@@ -245,6 +276,11 @@ export function ModelSourceInventoryDialog({ planId, onClose, onSourcesChanged }
 									{binding.confirmationStatus === "CANDIDATE" ? (
 										<Button disabled={saving} onClick={() => confirm(binding.bindingId)}>
 											确认纳入
+										</Button>
+									) : null}
+									{binding.allowedActions?.includes("RECONFIRM") ? (
+										<Button disabled={saving} onClick={() => reconfirm(binding)}>
+											采用新结构
 										</Button>
 									) : null}
 								</div>

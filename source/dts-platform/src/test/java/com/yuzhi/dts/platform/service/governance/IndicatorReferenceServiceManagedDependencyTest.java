@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.service.governance;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -12,6 +13,7 @@ import com.yuzhi.dts.platform.domain.governance.GovIndicatorReference;
 import com.yuzhi.dts.platform.repository.governance.GovIndicatorDefinitionRepository;
 import com.yuzhi.dts.platform.repository.governance.GovIndicatorReferenceRepository;
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -95,5 +97,44 @@ class IndicatorReferenceServiceManagedDependencyTest {
             )
         )
             .isInstanceOf(IndicatorNotFoundException.class);
+    }
+
+    @Test
+    void replacesTheManagedModelFieldReferenceWithoutTouchingOtherReferences() {
+        UUID indicatorId = UUID.randomUUID();
+        GovIndicatorDefinition indicator = new GovIndicatorDefinition();
+        indicator.setId(indicatorId);
+        GovIndicatorReference first = reference(indicator, "MODEL_SPEC_FIELD", "old-model@1#amount");
+        GovIndicatorReference duplicate = reference(indicator, "MODEL_SPEC_FIELD", "other-model@2#amount");
+        GovIndicatorReference dataset = reference(indicator, "DATASET", "dataset-1");
+        when(indicatorRepository.findById(indicatorId)).thenReturn(Optional.of(indicator));
+        when(referenceRepository.findByIndicatorOrderByCreatedDateAsc(indicator)).thenReturn(List.of(first, dataset, duplicate));
+        when(referenceRepository.save(first)).thenReturn(first);
+
+        service.replaceModelFieldReference(
+            indicatorId,
+            "finance",
+            new IndicatorReferenceService.ReferenceUpsertRequest(
+                "MODEL_SPEC_FIELD",
+                "new-model@3#amount",
+                "new-model.amount",
+                "{}"
+            )
+        );
+
+        assertThat(first.getRefTarget()).isEqualTo("new-model@3#amount");
+        assertThat(first.getRefName()).isEqualTo("new-model.amount");
+        verify(referenceRepository).delete(duplicate);
+        verify(referenceRepository, never()).delete(dataset);
+        verify(referenceRepository).save(first);
+    }
+
+    private static GovIndicatorReference reference(GovIndicatorDefinition indicator, String type, String target) {
+        GovIndicatorReference reference = new GovIndicatorReference();
+        reference.setId(UUID.randomUUID());
+        reference.setIndicator(indicator);
+        reference.setRefType(type);
+        reference.setRefTarget(target);
+        return reference;
     }
 }

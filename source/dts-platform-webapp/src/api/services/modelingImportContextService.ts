@@ -1,3 +1,9 @@
+import type { DataMartView } from "@/features/modeling/contracts/dataMartContract";
+import type { SubjectDomainView } from "@/features/modeling/contracts/subjectDomainContract";
+import { listDataMarts } from "../dataMartApi";
+import { getDomainTree } from "../platformApi";
+import { listBusinessProcessesApi, type Sprint64BusinessProcess } from "../sprint64GovernanceApi";
+import { listSubjectDomains } from "../subjectDomainApi";
 import {
 	getWarehousePlanCategories,
 	getWarehousePlanSources,
@@ -18,7 +24,53 @@ export type ModelingImportSourceBinding = WarehousePlanSourceBindingView;
 export type ModelingImportContext = {
 	domains: ModelingImportDomainBinding[];
 	sources: ModelingImportSourceBinding[];
+	businessProcesses: Sprint64BusinessProcess[];
+	dataMarts: DataMartView[];
+	subjectDomains: SubjectDomainView[];
 };
+
+type CatalogDomainNode = {
+	id?: unknown;
+	code?: unknown;
+	name?: unknown;
+	lifecycleStatus?: unknown;
+	parentId?: unknown;
+	children?: unknown;
+};
+
+const text = (value: unknown): string => (value == null ? "" : String(value).trim());
+
+function activeCatalogDataDomains(raw: unknown): WarehousePlanCategoryBindingView[] {
+	const roots = Array.isArray(raw)
+		? raw
+		: raw && typeof raw === "object" && Array.isArray((raw as Record<string, unknown>).data)
+			? ((raw as Record<string, unknown>).data as unknown[])
+			: [];
+	const domains: WarehousePlanCategoryBindingView[] = [];
+	const visit = (nodes: unknown[], inheritedParentId: string | null) => {
+		for (const value of nodes) {
+			if (!value || typeof value !== "object") continue;
+			const node = value as CatalogDomainNode;
+			const domainId = text(node.id);
+			const code = text(node.code);
+			const name = text(node.name);
+			const parentId = text(node.parentId) || inheritedParentId;
+			const lifecycleStatus = text(node.lifecycleStatus).toUpperCase();
+			if (domainId && code && name && parentId && (!lifecycleStatus || lifecycleStatus === "ACTIVE")) {
+				domains.push({
+					domainId,
+					confirmationStatus: "CONFIRMED",
+					resolutionStatus: "AVAILABLE",
+					name,
+					code,
+				});
+			}
+			if (Array.isArray(node.children)) visit(node.children, domainId || parentId);
+		}
+	};
+	visit(roots, null);
+	return domains;
+}
 
 /**
  * Compatibility boundary for the current import API. Prototype pages consume a
@@ -66,15 +118,27 @@ export async function collectCurrentWarehousePlanSources(
 }
 
 export async function loadModelingImportContext(contextId: string): Promise<ModelingImportContext> {
-	if (!contextId) return { domains: [], sources: [] };
-	const [categories, sources] = await Promise.all([
+	if (!contextId) return { domains: [], sources: [], businessProcesses: [], dataMarts: [], subjectDomains: [] };
+	const [categories, catalogDomains, sources, dataMarts, subjectDomains] = await Promise.all([
 		getWarehousePlanCategories(contextId),
+		getDomainTree().catch(() => null),
 		collectCurrentWarehousePlanSources(contextId),
+		listDataMarts({ status: "CURRENT", offset: 0, limit: 100 }),
+		listSubjectDomains({ status: "CURRENT", offset: 0, limit: 100 }),
 	]);
+	const legacyDomains = categories.value.domainBindings.filter(
+		(item) => item.confirmationStatus === "CONFIRMED" && item.resolutionStatus === "AVAILABLE",
+	);
+	const globalDomains = activeCatalogDataDomains(catalogDomains);
+	const domains = globalDomains.length > 0 ? globalDomains : legacyDomains;
+	const businessProcesses = (await Promise.all(domains.map((domain) => listBusinessProcessesApi(domain.domainId))))
+		.flat()
+		.filter((process) => process.confirmed && String(process.lifecycleStatus || "ACTIVE").toUpperCase() !== "RETIRED");
 	return {
-		domains: categories.value.domainBindings.filter(
-			(item) => item.confirmationStatus === "CONFIRMED" && item.resolutionStatus === "AVAILABLE",
-		),
+		domains,
 		sources,
+		businessProcesses,
+		dataMarts,
+		subjectDomains,
 	};
 }

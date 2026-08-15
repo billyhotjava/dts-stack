@@ -277,7 +277,24 @@ public class PlanOperationalRunRepository {
                and a.implementation_revision =
                    pr.implementation_revision
                and a.ownership = i.ownership
-               and a.status = 'COMPILED'
+               and (
+                    a.status = 'COMPILED'
+                    or (
+                        a.status = 'IMPORTED'
+                        and a.node_kind in ('STG', 'EPHEMERAL')
+                        and lower(a.path) like 'models/%.sql'
+                    )
+               )
+               and (
+                    a.artifact_type in ('SQL', 'TEST', 'STG_SQL')
+                    or (
+                        a.artifact_type = 'SCHEMA'
+                        and (
+                            lower(a.path) like '%.yml'
+                            or lower(a.path) like '%.yaml'
+                        )
+                    )
+               )
              where d.id = ?
              order by pr.model_spec_id, a.artifact_key, a.id
             """,
@@ -713,7 +730,19 @@ public class PlanOperationalRunRepository {
                    pr.implementation_revision,
                    pr.implementation_checksum,
                    i.ownership as implementation_mode,
-                   i.dbt_unique_id, e.target_identifier
+                   i.dbt_unique_id, e.target_identifier,
+                   coalesce((
+                       select string_agg(
+                           field.value ->> 'name',
+                           chr(31) order by field.ordinality
+                       )
+                         from jsonb_array_elements(
+                             coalesce(
+                                 sr.snapshot_json -> 'fields',
+                                 '[]'::jsonb
+                             )
+                         ) with ordinality field(value, ordinality)
+                   ), '') as expected_columns
               from modeling_pipeline_run pr
               join modeling_operational_run_dispatch d
                 on d.tenant_id = pr.tenant_id
@@ -730,6 +759,11 @@ public class PlanOperationalRunRepository {
                    pr.implementation_revision
                and i.current_implementation_checksum =
                    pr.implementation_checksum
+              join modeling_model_spec_revision sr
+                on sr.tenant_id = pr.tenant_id
+               and sr.model_spec_id = pr.model_spec_id
+               and sr.revision = pr.model_revision
+               and sr.content_checksum = pr.model_checksum
              where pr.pipeline_run_group_id = ?
                and pr.run_purpose = 'OPERATIONAL_RUN'
              order by pr.model_spec_id, pr.id
@@ -744,7 +778,8 @@ public class PlanOperationalRunRepository {
                     row.getString("implementation_checksum"),
                     row.getString("implementation_mode"),
                     row.getString("dbt_unique_id"),
-                    row.getString("target_identifier")
+                    row.getString("target_identifier"),
+                    expectedColumns(row.getString("expected_columns"))
                 ),
             groupId
         );
@@ -1193,6 +1228,23 @@ public class PlanOperationalRunRepository {
         return value == null ? null : value.toInstant();
     }
 
+    private static List<String> expectedColumns(String value) {
+        if (value == null || value.isBlank()) return List.of();
+        List<String> columns = List.of(value.split("\u001f", -1));
+        if (
+            columns.size() > 1000 ||
+            columns.stream().anyMatch(String::isBlank) ||
+            columns.stream().distinct().count() != columns.size()
+        ) {
+            throw failure(
+                "MODEL_OPERATIONAL_RUN_SCOPE_INVALID",
+                "Pinned model field contract is invalid",
+                Kind.CONFLICT
+            );
+        }
+        return columns;
+    }
+
     private static PlanExecutionException failure(
         String code,
         String message,
@@ -1341,7 +1393,8 @@ public class PlanOperationalRunRepository {
         String implementationChecksum,
         String implementationMode,
         String dbtUniqueId,
-        String targetIdentifier
+        String targetIdentifier,
+        List<String> expectedColumns
     ) {}
 
     public record EvidenceScope(

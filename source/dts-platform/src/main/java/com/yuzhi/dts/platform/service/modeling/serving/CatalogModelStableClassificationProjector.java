@@ -40,7 +40,7 @@ public class CatalogModelStableClassificationProjector {
                 null,
                 null,
                 List.of(tableLevel),
-                "MODEL_PUBLICATION_PROJECTION",
+                "UPSTREAM_INHERITANCE",
                 triggerRef,
                 sha256(model.id() + ":" + model.revision() + ":asset:" + tableLevel),
                 "{\"sourceSubjectKey\":\"" + escape(sourceKey) + "\",\"modelRevision\":" + model.revision() + "}"
@@ -70,7 +70,7 @@ public class CatalogModelStableClassificationProjector {
                     null,
                     null,
                     inherited,
-                    "MODEL_PUBLICATION_PROJECTION",
+                    "UPSTREAM_INHERITANCE",
                     triggerRef,
                     sha256(model.id() + ":" + model.revision() + ":column:" + field.name() + ":" + inherited + ":" + declared),
                     "{\"sourceSubjectKey\":\"" + escape(sourceColumnKey) + "\",\"field\":\"" + escape(field.name()) + "\"}"

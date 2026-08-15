@@ -185,6 +185,7 @@ public class IndicatorDashboardService {
             row.put("alertReason", r.getAlertReason());
             row.put("rowsProcessed", r.getRowsProcessed());
             row.put("durationMs", r.getDurationMs());
+            row.put("requestId", r.getDbtRunId());
             row.put("errorMessage", r.getErrorMessage());
             history.add(row);
         }

@@ -1,32 +1,32 @@
 # dbt 导入、发布与验收手册
 
-## 1. 为什么本项目必须走逆向导入
+## 1. 两条路径必须得到同一套模型结果
 
-当前 PJM 的 STG、DWD、DWS、ADS SQL 已经存在于 dbt 项目中。DTS 模型工作台虽然能录入逻辑字段，但当前版本：
+当前 PJM 的 STG、DWD、DWS、ADS SQL 已经存在于 dbt 项目中。本次验收同时覆盖：
 
-- “从表/视图导入”按钮不可用；
-- 普通模型基础页没有物理来源/上游依赖编辑器；
-- 普通维度表只有日期维度生成器，没有静态字典来源选择器；
-- FACT 基础页不提供 `factShape` 和 `timeSemantics` 编辑控件。
+- 在模型工作台按依赖顺序逐个创建业务模型，并绑定同一 dbt 实现；
+- 在逆向建模中导入完整 dbt ZIP，由制品恢复模型、字段、依赖和实现。
 
-因此本项目的标准交付路径是“先完成规划和维度定义，再通过逆向建模导入 dbt ZIP，最后在模型工作台补治理语义并发布”。不能把一批无来源的手工草稿当作完整模型交付。
+两条路径必须收敛到相同的 43 个业务模型、20 个技术节点、依赖图、物理关系和资产。手工路径不是只填逻辑字段；没有实现绑定、上游修订和物理关系的草稿不计入交付。指标在业务模型上线后从指标工作台创建，不由 dbt 导入器代建。
 
 ## 2. Step 1：准备 dbt ZIP
 
-在 `dbt_model` 根目录执行源项目打包，确保 `dbt_project.yml` 位于 ZIP 根层：
+先在已验证测试库刷新 `target/manifest.json` 与 `target/catalog.json`，再在 `dbt_model` 根目录执行可复现打包脚本：
 
 ```bash
 cd worklog/v2.2.3/s10/v4/pjm/dbt_model
-zip -r /tmp/pjm-dbt-model-v2.zip dbt_project.yml models macros
+./scripts/build_import_zip.sh
 ```
 
 打包检查：
 
-- 包含 `dbt_project.yml`、`models/`、`macros/`。
+- 包含 `dbt_project.yml`、`models/`、`macros/`、`tests/`、`package-contract.yml`。
+- 必须包含与源码同一次解析生成的 `target/manifest.json` 和 `target/catalog.json`；缺少它们时，含宏、hook 和 `ref/source` 的项目不能按源码文本无损恢复。
+- 包含 `docs/metric-handbook.md` 和 `docs/metric-registry.json`，用于校验 77 个稳定代码。其中 76 个是可在指标工作台登记的指标定义，`pjm_qual_count` 是随图表分组变化的上下文辅助序列，不得伪造成独立指标；这些文件不是自动导入指标的承诺。
 - 不包含 `profiles.yml`、数据库密码、令牌、证书或 `.env`。
-- 不把 `target/index.html`、日志、`dbt_packages` 等无关大文件打入源项目包。
-- 5 张当前 STG、8 张 canonical 维度、10 张 alias、5 张 DWD、5 张 DWS、10 张 ADS 均在包内。
-- 5 张二期 ODS 只允许作为 source 出现，不选择成“已实现模型”。
+- 不把 `target/index.html`、`target/run_results.json`、日志、`dbt_packages` 等运行态或无关大文件打入包。
+- 10 张 STG、8 张 canonical 维度、10 张 alias、10 张 DWD、10 张 DWS、15 张 ADS 均在包内。
+- `package-contract.yml`、`manifest.json`、`catalog.json` 的模型、字段和测试数量一致；任何缺项都视为 ZIP 不完整。
 
 逆向建模的第一步只检查包，不执行其中 SQL 或宏。
 
@@ -34,7 +34,7 @@ zip -r /tmp/pjm-dbt-model-v2.zip dbt_project.yml models macros
 
 1. 登录 DTS，进入“数据建模 → 逆向建模”。
 2. 点击“快速开始”。
-3. 选择 `/tmp/pjm-dbt-model-v2.zip`。
+3. 选择 `worklog/v2.2.3/s10/v4/pjm/pjm-dbt-model.zip`。
 4. 点击“开始识别”。
 5. 查看三类结果：包结构检查、导入投影、dbt 物化。
 6. 记录“可导入、待补充、阻断、技术节点”数量；有阻断时先处理，不直接生成。
@@ -52,12 +52,13 @@ zip -r /tmp/pjm-dbt-model-v2.zip dbt_project.yml models macros
 | quality | 质量管理域 |
 | tech-state | 产品技术域 |
 | budget | 财务管理域 |
+| material | 物料供应域 |
 
 3. 将 10 张 dbt source 映射到 DTS 当前来源绑定。当前主链至少必须映射 5 张核心来源。
 4. 不使用表名猜测一个新数据域；映射目标必须是前一步已确认的数据域 ID。
 5. 重新导入时，只有确实发生 dbt `unique_id` 重命名才填写 old→new 映射。
 
-当前 dbt 项目没有完整的 DTS `domainCode`/业务语义元数据，页面可能无法自动出现全部域映射。此时要在导入预览中为每个业务模型明确类型、层次、粒度和业务键，并把缺失的领域语义登记为待补项，不能按默认值批量通过。
+当前 dbt 项目已在模型 `meta.dts` 中提供 `domainCode`、模型类型、层次、粒度、字段角色及模型类型专属语义。页面仍必须把稳定代码映射到目标环境中的真实规划对象；映射失败时不得按名称新建或按默认值批量通过。
 
 ## 5. Step 4：逐模型确认导入语义
 
@@ -72,21 +73,22 @@ zip -r /tmp/pjm-dbt-model-v2.zip dbt_project.yml models macros
 | `biz_dws_*` | SUMMARY / DWS；固定 DWD 上游 |
 | `biz_ads_*` | APPLICATION / ADS；固定 DWS/ADS 上游 |
 
-页面可补录的导入语义包括“业务名称、模型类型、目标分层、粒度说明、业务主键”。逐张对照 02～05 手册填写。
+页面可补录的导入语义包括“业务名称、模型类型、目标分层、粒度说明、业务主键、发布密级和规划归属”。逐张对照 02～05 手册填写。发布密级可以由有权操作者批量确认，但系统不得从测试数据、文件名或 ODS `classification` 字段推断。
 
-当前页面没有在语义覆盖表中提供业务过程、事实形态、时间语义和维度定义引用。如果包本身也没有这些语义，预览或后续 DESIGNED 门禁会阻断。处理方式是先补充经批准的 dbt/DTS 导入语义或使用既有服务端契约登记，再重新预览；不得为了生成模型把 FACT 改成 SUMMARY，或把维度表改成普通应用表。
+包内已经提供事实形态、时间语义和维度定义稳定代码。业务过程、数据集市、主题域和字段密级属于目标环境治理事实，必须在预览上下文中映射到现有对象或由有权操作者显式确认；不得为了绕过映射把 FACT 改成 SUMMARY、把 APPLICATION 改成普通汇总表，或把维度表改成普通应用表。
 
 ## 6. Step 5：生成预览并应用
 
 1. 只勾选本批确认的模型。
-2. 点击“生成预览”。
-3. 对每项查看 `CREATE/UPDATE/SKIP/CONFLICT/BLOCKED` 和 `DESIGNER_GENERATED/DBT_BACKED/BLOCKED`。
-4. 本项目已有 SQL 的业务模型应形成 `DBT_BACKED` 实现；出现 `DESIGNER_GENERATED` 时先确认是否丢失了 dbt 实现证据。
-5. 冲突项逐项选择保留当前或接受导入，不进行全局盲选。
-6. 预览无未解释阻断后点击“生成模型”。
-7. 生成只创建/更新草稿，不会自动发布和物化。
-8. 结果为 PARTIAL/FAILED/BLOCKED 时，只重试服务端标记为可重试的对象；语义错误必须修复后重新预览。
-9. 需要撤销时使用“前向撤销本次导入”，它追加恢复修订而不是删除历史。
+2. 为全部已选模型确认发布密级；为每张 FACT 选择同域已确认业务过程，为每张 APPLICATION 选择当前数据集市和所属主题域。
+3. 点击“生成预览”。
+4. 对每项查看 `CREATE/UPDATE/SKIP/CONFLICT/BLOCKED` 和 `DESIGNER_GENERATED/DBT_BACKED/BLOCKED`。
+5. 本项目已有 SQL 的业务模型应形成 `DBT_BACKED` 实现；出现 `DESIGNER_GENERATED` 时先确认是否丢失了 dbt 实现证据。
+6. 冲突项逐项选择保留当前或接受导入，不进行全局盲选。
+7. 预览无未解释阻断后点击“生成模型”。
+8. 生成只创建/更新草稿，不会自动发布和物化。
+9. 结果为 PARTIAL/FAILED/BLOCKED 时，只重试服务端标记为可重试的对象；语义错误必须修复后重新预览。
+10. 需要撤销时使用“前向撤销本次导入”，它追加恢复修订而不是删除历史。
 
 ## 7. Step 6：在模型工作台补录和核对
 
@@ -94,9 +96,9 @@ zip -r /tmp/pjm-dbt-model-v2.zip dbt_project.yml models macros
 
 1. 8 张 canonical 维度表；
 2. alias 技术辅助表；
-3. 5 张 DWD FACT；
-4. 5 张 DWS SUMMARY；
-5. 10 张 ADS APPLICATION。
+3. 10 张 DWD FACT；
+4. 10 张 DWS SUMMARY；
+5. 15 张 ADS APPLICATION。
 
 每个模型检查：
 
@@ -140,12 +142,12 @@ dbt test --profile dts
 
 执行前确认 profile 指向测试环境，不在不明目标直接运行。重点检查：
 
-- 5 张 STG 行级对应 ODS，日期/数字异常不会让全批失败；
+- 10 张 STG 行级对应 ODS，日期/数字异常不会让全批失败；
 - 8 张维度稳定 ID unique/not_null；
-- 5 张 DWD 主键、必要业务字段和 accepted values；
-- 5 张 DWS 组合粒度唯一、合计可与 DWD 对账；
-- 10 张 ADS 的比率单位、金额单位和分子/分母一致；
-- 预算单行 ADS 补键、质量环境类字段差异、稳定业务键和快照日期缺口已有结论。
+- 10 张 DWD 主键、必要业务字段和 accepted values；
+- 10 张 DWS 组合粒度唯一、合计可与 DWD 对账；
+- 15 张 ADS 的比率单位、金额单位和分子/分母一致；
+- 预算范围键、质量环境/TOP1 字段、候选自然键和业务快照日期已有明确结论。
 
 本地 `dbt run/test` 成功不自动成为 DTS 发布证据。DTS RELEASE_READY 要求构建和测试结果绑定同一 ModelSpec 修订、实现修订和校验和。
 
@@ -188,10 +190,11 @@ RELEASE_READY 主要证据：
 
 ## 12. 最终验收清单
 
-- [ ] 10 张 ODS source 全部可追溯，当前主链 5 张来源固定版本有效。
+- [ ] 10 张 ODS source 全部可追溯且固定版本有效。
 - [ ] 8 个维度定义和维度表绑定正确，alias 表不冒充业务维度。
-- [ ] 5 张 DWD、5 张 DWS、10 张 ADS 数量和依赖与本手册一致。
-- [ ] 二期 5 张来源没有被误标为已实现模型。
+- [ ] 10 张 DWD、10 张 DWS、15 张 ADS 数量和依赖与本手册一致。
+- [ ] 63 个 dbt 节点被正确分类为 43 个业务 ModelSpec 与 20 个技术节点。
+- [ ] 10 张 FACT 均绑定同域已确认业务过程；15 张 APPLICATION 均绑定当前数据集市和所属主题域。
 - [ ] DESIGNED、IMPLEMENTATION_READY、RELEASE_READY 分阶段证据均可查看。
 - [ ] 所有模型和实现证据属于当前修订/校验和。
 - [ ] 密级、权限和字段标准由有权流程确认。

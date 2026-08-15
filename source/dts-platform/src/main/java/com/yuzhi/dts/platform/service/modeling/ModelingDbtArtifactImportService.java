@@ -147,20 +147,9 @@ public class ModelingDbtArtifactImportService {
                   from modeling_model_implementation i
                  where i.tenant_id = ? and i.project_key = ? and i.dbt_unique_id = ?
                    and i.model_spec_id <> ?
-                union all
-                select 1
-                  from modeling_dbt_artifact a
-                  join modeling_model_spec s on s.id = a.model_spec_id
-                 where s.tenant_id = ? and a.ownership = 'DBT_MANAGED'
-                   and a.project_key = ? and a.dbt_unique_id = ?
-                   and a.model_spec_id <> ?
             )
             """,
             Boolean.class,
-            command.tenantId(),
-            command.projectKey(),
-            dbtUniqueId,
-            command.modelSpecId(),
             command.tenantId(),
             command.projectKey(),
             dbtUniqueId,

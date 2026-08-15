@@ -483,7 +483,7 @@ public class DbtIndicatorGenerator {
 			if (existing != null) {
 				throw new IllegalArgumentException("批量指标编码重复: " + code);
 			}
-			if (Boolean.TRUE.equals(def.getIsDerived()) && StringUtils.hasText(def.getDependencyIndicators())) {
+			if (IndicatorDefinitionSemantics.isDerivedLike(def) && StringUtils.hasText(def.getDependencyIndicators())) {
 				dependencies.put(id, parseDependencyCodes(def.getDependencyIndicators()));
 			} else {
 				dependencies.put(id, List.of());
@@ -532,7 +532,7 @@ public class DbtIndicatorGenerator {
 	// ── 内部渲染 ─────────────────────────────────────────────
 
 	private String renderSql(GovIndicatorDefinition def) {
-		if (Boolean.TRUE.equals(def.getIsDerived())) {
+		if (IndicatorDefinitionSemantics.isDerivedLike(def)) {
 			String rendered = renderDerivedSql(def);
 			validateRenderedArtifact("preview.sql", rendered);
 			return rendered;
@@ -633,7 +633,7 @@ public class DbtIndicatorGenerator {
 			case "YTD" -> WINDOW_TEMPLATE_YTD;
 			default -> throw new IllegalArgumentException("窗口函数不合法: " + wf);
 		};
-		String aggregation = Boolean.TRUE.equals(def.getIsDerived())
+		String aggregation = IndicatorDefinitionSemantics.isDerivedLike(def)
 			? "SUM"
 			: normalizeAggregation(def.getAggregationType());
 		Map<String, String> vars = buildVars(def, aggregation);
@@ -652,7 +652,7 @@ public class DbtIndicatorGenerator {
 	}
 
 	private Map<String, String> buildVars(GovIndicatorDefinition def, String aggregation) {
-		boolean derived = Boolean.TRUE.equals(def.getIsDerived());
+		boolean derived = IndicatorDefinitionSemantics.isDerivedLike(def);
 		String measureField = derived
 			? requireSqlIdentifier(def.getCode(), "指标编码")
 			: requireSqlIdentifier(def.getMeasureField(), "度量字段");

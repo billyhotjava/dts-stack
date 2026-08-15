@@ -2,7 +2,7 @@
 
 ## 1. ADS 规则
 
-ADS 是看板、接口和指标消费的输出契约。当前 PJM 有 10 张 ADS：5 张基础 KPI、4 张域内派生指标、1 张综合派生指标。
+ADS 是看板、接口和指标消费的输出契约。当前 PJM 有 15 张 ADS：10 张基础/闭环 KPI、4 张域内派生指标、1 张综合派生指标。
 
 创建 ADS 时选择“应用表”，目标分层为 ADS，不选择业务过程。每张表必须绑定固定修订的 DWS/ADS 上游，并声明输出粒度和字段契约。
 
@@ -16,7 +16,7 @@ ADS 是看板、接口和指标消费的输出契约。当前 PJM 有 10 张 ADS
 6. 通过 dbt 逆向导入建立 revision-pinned `dependsOn`。
 7. 保存后检查 DESIGNED；再完成构建、测试、质量、权限、密级和发布门禁。
 
-当前 10 张 ADS 均为 `table` + 全量加载 + 无分区，按现状登记。
+当前 15 张 ADS 均为 `table` + 全量加载 + 无分区，按现状登记。
 
 ## 3. ADS 模型总表
 
@@ -32,6 +32,11 @@ ADS 是看板、接口和指标消费的输出契约。当前 PJM 有 10 张 ADS
 | `biz_ads_budget_kpi_v2` | 财务管理域 | `snapshot_scope + snapshot_date` | `biz_dws_budget_v2` | 按业务快照日的预算执行总量 |
 | `biz_ads_budget_derived_v2` | 财务管理域 | `snapshot_scope + snapshot_date` | budget KPI | 按业务快照日的 5 个预算派生指标和预警 |
 | `biz_ads_composite_derived_v2` | 研究项目域 | `period_year + period_month` | progress KPI/derived、quality derived、tech derived | 综合健康与风险预警 |
+| `biz_ads_project_follow_up_kpi_v2` | 研究项目域 | `period_year + period_month` | `biz_dws_project_follow_up_monthly_v2` | 项目跟进措施闭环 |
+| `biz_ads_quality_measure_kpi_v2` | 质量管理域 | `period_year + period_month` | `biz_dws_quality_measure_monthly_v2` | 质量措施闭环 |
+| `biz_ads_tech_state_measure_kpi_v2` | 产品技术域 | `period_year + period_month` | `biz_dws_tech_state_measure_monthly_v2` | 技术状态措施闭环 |
+| `biz_ads_risk_measure_kpi_v2` | 研究项目域 | `period_year + period_month` | `biz_dws_risk_measure_monthly_v2` | 风险措施闭环 |
+| `biz_ads_material_delivery_kpi_v2` | 物料供应域 | `period_year + period_month + dept_owner` | `biz_dws_material_delivery_monthly_v2` | 物料采购与交付 |
 
 ## 4. 项目进度 ADS
 
@@ -40,7 +45,7 @@ ADS 是看板、接口和指标消费的输出契约。当前 PJM 有 10 张 ADS
 - 模型名称：项目进度基础指标。
 - 业务定义：跨项目汇总每月节点数量、完成、超期、风险和里程碑指标，保留分子/分母。
 - KEY/TIME：`plan_year`、`plan_month`。
-- MEASURE：DWS 的全部计数字段，以及 `completion_rate`、`on_time_rate`、`overdue_completion_rate`、`abnormal_rate_numerator`、`overdue_rate_numerator`、`abnormal_rate`、`overdue_rate`、`milestone_completion_rate`、`milestone_on_time_rate`、`milestone_overdue_rate`。
+- MEASURE：DWS 的全部计数字段，以及 `completion_rate`、`on_time_rate`、`overdue_completion_rate`、`abnormal_rate_numerator`、`overdue_rate_numerator`、`abnormal_rate`、`overdue_rate`、`milestone_completion_rate`、`milestone_on_time_rate`、`milestone_overdue_rate`。项目看板计数固定输出为 `project_total_cnt`、`project_active_cnt`、`project_delay_cnt`，不得在指标页面临时拼接 SQL。
 - 比率字段当前为 0～1 小数；中文显示名或指标元数据必须明确单位为“比例”，不能与 derived 表的 0～100 百分比混用。
 
 ### 4.2 `biz_ads_progress_derived_v2`
@@ -57,9 +62,9 @@ ADS 是看板、接口和指标消费的输出契约。当前 PJM 有 10 张 ADS
 
 - 模型名称：质量问题基础指标。
 - KEY/TIME：`period_year`、`period_month`。
-- MEASURE：`new_issue_cnt`、`open_issue_cnt`、`tech_zero_cnt`、`mgmt_zero_cnt`、`both_zero_cnt`、`zero_completed_cnt`、`no_zero_plan_cnt`、`open_cat_design`、`open_cat_process`、`open_cat_management`、`open_cat_component`、`open_cat_operation`、`open_cat_outsource`、`open_cat_software`、`open_cat_other`。
+- MEASURE：`new_issue_cnt`、`open_issue_cnt`、`tech_zero_cnt`、`mgmt_zero_cnt`、`both_zero_cnt`、`zero_completed_cnt`、`no_zero_plan_cnt`、`open_cat_design`、`open_cat_process`、`open_cat_management`、`open_cat_component`、`open_cat_operation`、`open_cat_outsource`、`open_cat_software`、`open_cat_environment`、`open_cat_other`、`top1_open_category_cnt`。
 
-DWS 有 `open_cat_environment`，当前 ADS KPI 没有输出该字段。上线前必须由质量负责人确认这是有意合并到“其他”，还是实现遗漏；在确认前登记为口径差异。
+ADS KPI 已透传 DWS 的 `open_cat_environment`，并以九类未完成归零问题的最大值输出 `top1_open_category_cnt`，供“TOP1 质量问题分类数量”指标直接绑定。不得将环境类问题静默合并到“其他”。
 
 ### 5.2 `biz_ads_quality_derived_v2`
 
@@ -108,13 +113,13 @@ DWS 有 `open_cat_environment`，当前 ADS KPI 没有输出该字段。上线�
 - MEASURE：`pjm_budg_execution_rate`、`pjm_budg_book_rate`、`pjm_budg_payable_ratio`、`pjm_budg_remaining_rate`、`pjm_budg_health_score`。
 - ATTRIBUTE：`warn_overrun`、`warn_overrun_items`。
 
-两张 SQL 当前都没有 KEY，而 DTS 模型草稿要求至少一个 KEY。发布前应在实现中增加稳定常量字段，例如：
+两张 SQL 已使用稳定常量范围键：
 
 ```sql
 'ALL'::text AS snapshot_scope
 ```
 
-并将 `snapshot_scope` 标为 KEY、`snapshot_date` 标为 TIME，两者都非空且一同列入粒度键。唯一性作用于两字段组合，不要把金额或布尔预警字段错误标为 KEY。
+`snapshot_scope` 标为 KEY、`snapshot_date` 标为 TIME，两者都非空且一同列入粒度键。唯一性作用于两字段组合，不要把金额或布尔预警字段错误标为 KEY。
 
 ## 9. 综合健康 ADS
 
@@ -129,7 +134,19 @@ DWS 有 `open_cat_environment`，当前 ADS KPI 没有输出该字段。上线�
 
 当前综合健康不包含预算健康和独立风险释放率。不得把它宣传为“全部业务域综合分”；如要纳入，应另行评审权重、缺失值和跨域月份对齐规则。
 
-## 10. 应用主题对应关系
+## 10. 措施闭环与物料交付 ADS
+
+| 物理表名 | 业务粒度 | 主要 MEASURE |
+|---|---|---|
+| `biz_ads_project_follow_up_kpi_v2` | 年月 | 措施数、闭环/未闭环数、闭环率、平均闭环/待办天数 |
+| `biz_ads_quality_measure_kpi_v2` | 年月 | 措施数、闭环/未闭环/超期数、闭环率和时长 |
+| `biz_ads_tech_state_measure_kpi_v2` | 年月 | 措施数、闭环/未闭环/超期数、闭环率和时长 |
+| `biz_ads_risk_measure_kpi_v2` | 年月 | 措施数、闭环/未闭环、高风险未闭环数、闭环率和时长 |
+| `biz_ads_material_delivery_kpi_v2` | 年月×责任部门 | 物料、到货、逾期、检验、长周期、高风险和平均延期天数 |
+
+这些表提供稳定指标输入，不代表逆向导入时自动创建指标。指标定义仍由 `metric-registry.json` 提供稳定编码和绑定依据，并在模型上线、资产可用后通过指标工作台登记。
+
+## 11. 应用主题对应关系
 
 | 主题域 | ADS |
 |---|---|
@@ -138,17 +155,18 @@ DWS 有 `open_cat_environment`，当前 ADS KPI 没有输出该字段。上线�
 | 技术状态主题 | tech-state KPI + derived |
 | 风险管控主题 | risk KPI |
 | 预算执行主题 | budget KPI + derived |
+| 物料交付主题 | material delivery KPI |
 | 项目综合健康主题 | composite derived |
 
 该表是规划建议。当前应用表基础页面不提供主题域绑定控件，必须以服务端实际关联为验收依据。
 
-## 11. ADS 验收清单
+## 12. ADS 验收清单
 
-- [ ] 10 张 ADS 的上游依赖都固定到正确修订。
+- [ ] 15 张 ADS 的上游依赖都固定到正确修订。
 - [ ] 月度表的年/月组合键唯一，预算单行表已补合法常量 KEY。
 - [ ] 比例（0～1）和百分比（0～100）单位在字段/指标定义中明确。
 - [ ] 金额单位统一为万元。
-- [ ] 质量环境类字段的 ADS 缺口已有业务结论。
+- [ ] 质量环境类字段与 TOP1 分类数量已由 ADS 输出并可直接绑定指标。
 - [ ] 综合健康范围和权重已确认，没有暗示覆盖预算/全部风险指标。
 - [ ] ADS 不直接引用 ODS、STG，也不绑定业务过程。
 - [ ] 每个字段有中文显示名、标准/密级/权限证据符合当前规划发布策略。
