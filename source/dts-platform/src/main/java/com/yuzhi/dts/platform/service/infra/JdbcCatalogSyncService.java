@@ -1819,6 +1819,11 @@ public class JdbcCatalogSyncService {
     ) {
         String datasetKey = CatalogAssetKey.dataset(dataset);
         String originRef = "jdbc:" + source.getId() + ":" + sourceTableRef;
+        String effectiveTableDeclaredLevel = SecurityLevelCatalog.maxDataCode(
+            tableDeclaredLevel,
+            dataset.getClassification(),
+            table.getClassification()
+        );
         List<String> columnLevels = new ArrayList<>();
         for (CatalogColumnSchema column : columns) {
             String columnRef = sourceTableRef + "." + column.getName();
@@ -1826,7 +1831,7 @@ public class JdbcCatalogSyncService {
                 props,
                 "columnClassifications",
                 columnRef,
-                tableDeclaredLevel
+                effectiveTableDeclaredLevel
             );
             if (!StringUtils.hasText(columnLevel)) {
                 continue;
@@ -1863,7 +1868,7 @@ public class JdbcCatalogSyncService {
             );
             columnLevels.add(columnLevel);
         }
-        if (!StringUtils.hasText(tableDeclaredLevel) && columnLevels.isEmpty()) {
+        if (!StringUtils.hasText(effectiveTableDeclaredLevel) && columnLevels.isEmpty()) {
             return new CatalogClassificationSnapshotResult(null);
         }
         var snapshot = classificationService.sealOrRaise(
@@ -1871,13 +1876,13 @@ public class JdbcCatalogSyncService {
                 "ASSET",
                 datasetKey,
                 "DATASET",
-                tableDeclaredLevel,
+                effectiveTableDeclaredLevel,
                 null,
                 null,
                 columnLevels,
                 "SOURCE_DECLARATION",
                 originRef,
-                sha256(originRef + ":" + tableDeclaredLevel + ":" + String.join(",", columnLevels)),
+                sha256(originRef + ":" + effectiveTableDeclaredLevel + ":" + String.join(",", columnLevels)),
                 toJson(
                     Map.of(
                         "sourceId",
@@ -1885,7 +1890,7 @@ public class JdbcCatalogSyncService {
                         "table",
                         sourceTableRef,
                         "tableDeclaredLevel",
-                        tableDeclaredLevel == null ? "" : tableDeclaredLevel,
+                        effectiveTableDeclaredLevel == null ? "" : effectiveTableDeclaredLevel,
                         "columnCount",
                         columns.size()
                     )

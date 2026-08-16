@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.modeling.serving;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
@@ -16,6 +17,7 @@ import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelServingContra
 import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelServingContract.SuccessfulPublicationCommand;
 import java.sql.ResultSet;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -29,6 +31,31 @@ class CatalogModelServingProjectionRepositoryTest {
     private static final String TENANT = "tenant-a";
     private static final UUID MODEL_ID = UUID.fromString("30000000-0000-0000-0000-000000000001");
     private static final Instant NOW = Instant.parse("2026-08-02T10:00:00Z");
+
+    @Test
+    @SuppressWarnings({ "unchecked", "rawtypes" })
+    void claimsOnlyDueServingRowsWithSkipLockedAndBoundedBatch() {
+        JdbcTemplate jdbc = org.mockito.Mockito.mock(JdbcTemplate.class);
+        CatalogModelServingProjectionRepository repository = new CatalogModelServingProjectionRepository(
+            jdbc,
+            new ObjectMapper().findAndRegisterModules()
+        );
+        when(jdbc.query(anyString(), any(RowMapper.class), any(Object[].class))).thenReturn(List.of());
+
+        repository.claimSyncCandidates(101, NOW, Duration.ofMinutes(2));
+
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Object[]> arguments = ArgumentCaptor.forClass(Object[].class);
+        verify(jdbc).query(sql.capture(), any(RowMapper.class), arguments.capture());
+        assertThat(sql.getValue())
+            .contains("for update skip locked")
+            .contains("serving_ref is not null")
+            .contains("sync_attempts < 5")
+            .contains("sync_status = 'SYNC_PENDING'")
+            .contains("sync_status = 'SYNC_FAILED'");
+        assertThat(arguments.getValue()[2]).isEqualTo(100);
+        assertThat(arguments.getValue()[3]).isEqualTo(Timestamp.from(NOW.plus(Duration.ofMinutes(2))));
+    }
 
     @Test
     @SuppressWarnings({ "unchecked", "rawtypes" })
@@ -49,6 +76,58 @@ class CatalogModelServingProjectionRepositoryTest {
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
         verify(jdbc).update(sql.capture(), any(Object[].class));
         assertThat(sql.getValue()).contains("latest_published_ref").doesNotContain("set serving_ref");
+    }
+
+    @Test
+    @SuppressWarnings({ "unchecked", "rawtypes" })
+    void republishingSameModelAndImplementationRevisionAdvancesCandidateWithoutOverwritingServing() {
+        JdbcTemplate jdbc = org.mockito.Mockito.mock(JdbcTemplate.class);
+        CatalogModelServingProjectionRepository repository = new CatalogModelServingProjectionRepository(
+            jdbc,
+            new ObjectMapper().findAndRegisterModules()
+        );
+        ModelServingProjection current = projectionWithSameRevisionFromPreviousCandidate();
+        when(jdbc.query(anyString(), any(RowMapper.class), any(Object[].class)))
+            .thenReturn(List.of(current));
+        when(jdbc.update(anyString(), any(Object[].class))).thenReturn(1);
+
+        var mutation = repository.projectLatestPublished(command());
+
+        assertThat(mutation.latestPublishedChanged()).isTrue();
+        assertThat(mutation.servingChanged()).isFalse();
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Object[]> arguments = ArgumentCaptor.forClass(Object[].class);
+        verify(jdbc).update(sql.capture(), arguments.capture());
+        assertThat(sql.getValue()).contains("latest_published_ref").doesNotContain("set serving_ref");
+        assertThat(arguments.getValue()[0].toString())
+            .contains(command().candidateId().toString())
+            .contains("\"candidateVersion\":12")
+            .contains("\"modelRevision\":5")
+            .contains("\"implementationRevision\":8");
+        assertThat(current.servingRef()).isEqualTo(projection().servingRef());
+    }
+
+    @Test
+    @SuppressWarnings({ "unchecked", "rawtypes" })
+    void republishingSameRevisionWithDifferentChecksumRemainsRejected() {
+        JdbcTemplate jdbc = org.mockito.Mockito.mock(JdbcTemplate.class);
+        CatalogModelServingProjectionRepository repository = new CatalogModelServingProjectionRepository(
+            jdbc,
+            new ObjectMapper().findAndRegisterModules()
+        );
+        when(jdbc.query(anyString(), any(RowMapper.class), any(Object[].class)))
+            .thenReturn(List.of(projectionWithSameRevisionFromPreviousCandidate()));
+
+        SuccessfulPublicationCommand conflicting = new SuccessfulPublicationCommand(
+            TENANT, MODEL_ID, 5, "f".repeat(64), 8, "e".repeat(64),
+            command().candidateId(), 12, command().catalogAssetType(), command().catalogAssetKey(),
+            command().sourceId(), command().adapter(), command().physicalAssetId(), NOW
+        );
+
+        assertThatThrownBy(() -> repository.projectLatestPublished(conflicting))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("CATALOG_MODEL_LATEST_PUBLISHED_CONFLICT");
+        verify(jdbc, never()).update(anyString(), any(Object[].class));
     }
 
     @Test
@@ -215,6 +294,20 @@ class CatalogModelServingProjectionRepositoryTest {
             UUID.fromString("20000000-0000-0000-0000-000000000002"), 12,
             null,
             null, NOW
+        );
+        return new ModelServingProjection(
+            old.tenantId(), old.modelSpecId(), old.catalogAssetType(), old.catalogAssetKey(),
+            latest, old.servingRef(), old.version(), old.syncStatus(), old.updatedAt()
+        );
+    }
+
+    private static ModelServingProjection projectionWithSameRevisionFromPreviousCandidate() {
+        ModelServingProjection old = projection();
+        PublishedRef latest = new PublishedRef(
+            MODEL_ID, 5, "d".repeat(64), 8, "e".repeat(64),
+            UUID.fromString("20000000-0000-0000-0000-000000000001"), 6,
+            2,
+            null, NOW.minusSeconds(60)
         );
         return new ModelServingProjection(
             old.tenantId(), old.modelSpecId(), old.catalogAssetType(), old.catalogAssetKey(),

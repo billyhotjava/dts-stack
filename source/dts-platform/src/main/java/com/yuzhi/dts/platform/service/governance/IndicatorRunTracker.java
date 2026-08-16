@@ -4,15 +4,21 @@ import com.yuzhi.dts.platform.domain.governance.GovIndicatorDefinition;
 import com.yuzhi.dts.platform.domain.governance.GovIndicatorRun;
 import com.yuzhi.dts.platform.repository.governance.GovIndicatorDefinitionRepository;
 import com.yuzhi.dts.platform.repository.governance.GovIndicatorRunRepository;
+import com.yuzhi.dts.platform.service.etl.DbtTargetConnectionFactory;
+import com.yuzhi.dts.platform.service.etl.DbtTargetConnectionFactory.RuntimeTarget;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.sql.Connection;
+import java.sql.DatabaseMetaData;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
-import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -21,19 +27,20 @@ import org.springframework.stereotype.Service;
 public class IndicatorRunTracker {
 
     private static final Logger LOG = LoggerFactory.getLogger(IndicatorRunTracker.class);
+    private static final int QUERY_TIMEOUT_SECONDS = 5;
 
     private final GovIndicatorDefinitionRepository indicatorRepo;
     private final GovIndicatorRunRepository runRepo;
-    private final DataSource dataSource;
+    private final DbtTargetConnectionFactory targets;
 
     public IndicatorRunTracker(
         GovIndicatorDefinitionRepository indicatorRepo,
         GovIndicatorRunRepository runRepo,
-        DataSource dataSource
+        DbtTargetConnectionFactory targets
     ) {
         this.indicatorRepo = indicatorRepo;
         this.runRepo = runRepo;
-        this.dataSource = dataSource;
+        this.targets = targets;
     }
 
     /**
@@ -57,33 +64,47 @@ public class IndicatorRunTracker {
         long start = System.currentTimeMillis();
 
         String targetTable = def.getTargetModelName();
-        String code = def.getCode();
-        // 校验表名和列名安全（只允许合法标识符）
-        if (!targetTable.matches("^[a-zA-Z_][a-zA-Z0-9_]*$")) return;
-        if (code == null || !code.matches("^[a-zA-Z_][a-zA-Z0-9_]*$")) return;
+        String measureField = hasText(def.getMeasureField()) ? def.getMeasureField().trim() : def.getCode();
 
         BigDecimal currentValue = null;
         int rowsProcessed = 0;
         String status = "SUCCESS";
         String errorMsg = null;
 
-        try (Connection conn = dataSource.getConnection()) {
-            // 查最新周期的聚合值
-            String sql = "SELECT " + code + " FROM " + targetTable
-                + " ORDER BY report_period DESC LIMIT 1";
-            try (PreparedStatement ps = conn.prepareStatement(sql);
-                 ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    currentValue = rs.getBigDecimal(1);
+        try {
+            requireIdentifier(targetTable, "target model");
+            requireIdentifier(measureField, "measure field");
+            RuntimeTarget target = targets.resolveRuntimeTarget();
+            String schema = target.schema();
+            requireIdentifier(schema, "target schema");
+            try (Connection conn = targets.open(target)) {
+                conn.setReadOnly(true);
+                DatabaseMetaData metadata = conn.getMetaData();
+                Map<String, String> physicalColumns = readPhysicalColumns(metadata, target, schema, targetTable);
+                String physicalMeasure = physicalColumn(physicalColumns, measureField)
+                    .orElseThrow(() -> new IllegalStateException("物理指标字段不存在: " + measureField));
+                List<String> orderColumns = resolveOrderColumns(def, physicalColumns);
+                String qualifiedTable = quote(metadata, schema) + "." + quote(metadata, targetTable);
+                String sql = "SELECT " + quote(metadata, physicalMeasure) + " FROM " + qualifiedTable +
+                    orderClause(metadata, orderColumns) + " LIMIT 1";
+                try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                    ps.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        if (rs.next()) {
+                            currentValue = rs.getBigDecimal(1);
+                        }
+                    }
                 }
-            }
 
-            // 查行数
-            String countSql = "SELECT count(*) FROM " + targetTable;
-            try (PreparedStatement ps = conn.prepareStatement(countSql);
-                 ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    rowsProcessed = rs.getInt(1);
+                // 查行数
+                String countSql = "SELECT count(*) FROM " + qualifiedTable;
+                try (PreparedStatement ps = conn.prepareStatement(countSql)) {
+                    ps.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        if (rs.next()) {
+                            rowsProcessed = rs.getInt(1);
+                        }
+                    }
                 }
             }
         } catch (Exception e) {
@@ -120,11 +141,120 @@ public class IndicatorRunTracker {
         run.setRowsProcessed(rowsProcessed);
         run.setDurationMs((int) duration);
         run.setDbtRunId(dbtRunId);
+        run.setErrorMessage(errorMsg);
         run.setAlertLevel(alertLevel);
         run.setAlertReason(alertReason);
         run.setThresholdHit(!"GREEN".equals(alertLevel));
 
         runRepo.save(run);
+    }
+
+    private Map<String, String> readPhysicalColumns(
+        DatabaseMetaData metadata,
+        RuntimeTarget target,
+        String schema,
+        String table
+    ) throws Exception {
+        Map<String, String> columns = readPhysicalColumnsForCatalog(metadata, target.database(), schema, table);
+        if (columns.isEmpty() && target.database() != null) {
+            columns = readPhysicalColumnsForCatalog(metadata, null, schema, table);
+        }
+        if (columns.isEmpty()) {
+            throw new IllegalStateException("物理指标表不存在或无字段: " + schema + "." + table);
+        }
+        return columns;
+    }
+
+    private Map<String, String> readPhysicalColumnsForCatalog(
+        DatabaseMetaData metadata,
+        String catalog,
+        String schema,
+        String table
+    ) throws Exception {
+        Map<String, String> columns = new LinkedHashMap<>();
+        try (ResultSet rows = metadata.getColumns(catalog, schema, table, null)) {
+            while (rows.next()) {
+                String name = rows.getString("COLUMN_NAME");
+                if (hasText(name)) {
+                    columns.putIfAbsent(name.toLowerCase(Locale.ROOT), name);
+                }
+            }
+        }
+        return columns;
+    }
+
+    private List<String> resolveOrderColumns(GovIndicatorDefinition def, Map<String, String> columns) {
+        List<String> requested = new ArrayList<>();
+        addIfPresent(requested, columns, def.getDateColumn());
+        if (!requested.isEmpty()) {
+            return List.copyOf(requested);
+        }
+        for (List<String> candidate : List.of(
+            List.of("report_period"),
+            List.of("snapshot_date"),
+            List.of("period_year", "period_month"),
+            List.of("plan_year", "plan_month"),
+            List.of("actual_date")
+        )) {
+            List<String> resolved = candidate.stream()
+                .map(name -> physicalColumn(columns, name).orElse(null))
+                .filter(java.util.Objects::nonNull)
+                .toList();
+            if (resolved.size() == candidate.size()) {
+                return resolved;
+            }
+        }
+        return List.of();
+    }
+
+    private void addIfPresent(List<String> target, Map<String, String> columns, String candidate) {
+        if (!hasText(candidate)) {
+            return;
+        }
+        requireIdentifier(candidate, "date column");
+        physicalColumn(columns, candidate).ifPresent(target::add);
+    }
+
+    private Optional<String> physicalColumn(Map<String, String> columns, String requested) {
+        if (!hasText(requested)) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(columns.get(requested.trim().toLowerCase(Locale.ROOT)));
+    }
+
+    private String orderClause(DatabaseMetaData metadata, List<String> columns) throws Exception {
+        if (columns.isEmpty()) {
+            return "";
+        }
+        return " ORDER BY " + columns.stream()
+            .map(column -> {
+                try {
+                    return quote(metadata, column) + " DESC";
+                } catch (Exception failure) {
+                    throw new IllegalStateException("无法引用指标周期字段", failure);
+                }
+            })
+            .collect(java.util.stream.Collectors.joining(", "));
+    }
+
+    private String quote(DatabaseMetaData metadata, String identifier) throws Exception {
+        requireIdentifier(identifier, "SQL identifier");
+        String quote = metadata.getIdentifierQuoteString();
+        if (quote == null || quote.isBlank()) {
+            return identifier;
+        }
+        String normalized = quote.trim();
+        return normalized + identifier.replace(normalized, normalized + normalized) + normalized;
+    }
+
+    private void requireIdentifier(String identifier, String label) {
+        if (!hasText(identifier) || !identifier.trim().matches("^[a-zA-Z_][a-zA-Z0-9_]*$")) {
+            throw new IllegalArgumentException(label + " is invalid");
+        }
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 
     // ---- T03: 预警判定 ----

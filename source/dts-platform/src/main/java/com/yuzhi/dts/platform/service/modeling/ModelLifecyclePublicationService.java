@@ -42,8 +42,15 @@ public class ModelLifecyclePublicationService {
         Instant now
     ) {
         if (!lifecycle.lockImplementation(tenantId, current.id(), implementation)) throw implementationConflict();
-        ModelSpecView published = codec.toLifecycleView(current, ModelStatus.PUBLISHED, current.revision(), now);
-        transition(tenantId, actorId, current, ModelStatus.DRAFT, published);
+        ModelSpecView published;
+        if (current.status() == ModelStatus.PUBLISHED) {
+            published = current;
+        } else if (current.status() == ModelStatus.DRAFT) {
+            published = codec.toLifecycleView(current, ModelStatus.PUBLISHED, current.revision(), now);
+            transition(tenantId, actorId, current, ModelStatus.DRAFT, published);
+        } else {
+            throw invalidStatus();
+        }
         LifecycleEventView release = lifecycle.recordEvent(
             tenantId,
             actorId,
@@ -122,6 +129,14 @@ public class ModelLifecyclePublicationService {
         return new ModelSpecException(
             "MODEL_IMPLEMENTATION_REVISION_CONFLICT",
             "Implementation revision changed before publication was committed",
+            ModelSpecException.Kind.CONFLICT
+        );
+    }
+
+    private static ModelSpecException invalidStatus() {
+        return new ModelSpecException(
+            "MODEL_RELEASE_STATUS_INVALID",
+            "Only draft or already published ModelSpecs can be released",
             ModelSpecException.Kind.CONFLICT
         );
     }

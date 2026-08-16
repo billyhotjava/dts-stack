@@ -12,6 +12,7 @@ import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelServingContra
 import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelServingContract.SuccessfulPublicationCommand;
 import com.yuzhi.dts.platform.service.modeling.serving.PhysicalPreviewContract.RelationEvidence;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -108,7 +109,10 @@ public class CatalogModelServingProjectionRepository {
             if (!samePublishedRevision(latest, published)) {
                 throw new IllegalStateException("CATALOG_MODEL_LATEST_PUBLISHED_CONFLICT");
             }
-            if (latest.candidateVersion() > published.candidateVersion()) {
+            if (
+                Objects.equals(latest.candidateId(), published.candidateId()) &&
+                latest.candidateVersion() > published.candidateVersion()
+            ) {
                 return new ProjectionMutation(false, false, version, "NO_CHANGE");
             }
             if (samePublishedGovernance(latest, published)) {
@@ -340,6 +344,52 @@ public class CatalogModelServingProjectionRepository {
             )
             .stream()
             .findFirst();
+    }
+
+    /**
+     * Atomically leases due serving projections without holding a database transaction across
+     * the downstream Analytics call. A crashed worker becomes claimable again after the lease.
+     */
+    @Transactional
+    public List<SyncCandidate> claimSyncCandidates(int requestedLimit, Instant now, Duration leaseDuration) {
+        Objects.requireNonNull(now, "now is required");
+        Objects.requireNonNull(leaseDuration, "leaseDuration is required");
+        int limit = Math.max(1, Math.min(requestedLimit, 100));
+        Instant leaseUntil = now.plus(leaseDuration);
+        return jdbcTemplate.query(
+            """
+            with claimable as (
+                select tenant_id, model_spec_id
+                  from modeling_catalog_model_serving_projection
+                 where serving_ref is not null
+                   and sync_attempts < 5
+                   and (
+                       (sync_status = 'SYNC_PENDING' and (next_sync_at is null or next_sync_at <= ?))
+                       or
+                       (sync_status = 'SYNC_FAILED' and next_sync_at is not null and next_sync_at <= ?)
+                   )
+                 order by updated_at, model_spec_id
+                 for update skip locked
+                 limit ?
+            )
+            update modeling_catalog_model_serving_projection projection
+               set next_sync_at = ?, updated_at = current_timestamp
+              from claimable
+             where projection.tenant_id = claimable.tenant_id
+               and projection.model_spec_id = claimable.model_spec_id
+            returning projection.tenant_id, projection.model_spec_id,
+                      projection.catalog_asset_type, projection.catalog_asset_key,
+                      projection.latest_published_ref::text,
+                      projection.serving_ref::text, projection.version,
+                      projection.sync_status, projection.sync_attempts,
+                      projection.updated_at
+            """,
+            (row, rowNumber) -> new SyncCandidate(mapProjection(row), row.getInt("sync_attempts")),
+            Timestamp.from(now),
+            Timestamp.from(now),
+            limit,
+            Timestamp.from(leaseUntil)
+        );
     }
 
     @Transactional
@@ -613,8 +663,7 @@ public class CatalogModelServingProjectionRepository {
             left.modelRevision() == right.modelRevision() &&
             Objects.equals(left.modelChecksum(), right.modelChecksum()) &&
             left.implementationRevision() == right.implementationRevision() &&
-            Objects.equals(left.implementationChecksum(), right.implementationChecksum()) &&
-            Objects.equals(left.candidateId(), right.candidateId());
+            Objects.equals(left.implementationChecksum(), right.implementationChecksum());
     }
 
     private static boolean sameServing(ServingRef left, ServingRef right) {
@@ -660,6 +709,8 @@ public class CatalogModelServingProjectionRepository {
     }
 
     private record PromotionEvidence(RelationEvidence relation, UUID physicalAssetId, UUID sourceId) {}
+
+    public record SyncCandidate(ModelServingProjection projection, int syncAttempts) {}
 
     public record ProjectionMutation(
         boolean latestPublishedChanged,

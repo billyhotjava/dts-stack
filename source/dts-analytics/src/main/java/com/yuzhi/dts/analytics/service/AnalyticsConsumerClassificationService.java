@@ -7,12 +7,14 @@ import com.yuzhi.dts.analytics.domain.AnalyticsDashboardCard;
 import com.yuzhi.dts.analytics.domain.AnalyticsDatabase;
 import com.yuzhi.dts.analytics.domain.AnalyticsMetric;
 import com.yuzhi.dts.analytics.domain.AnalyticsScreen;
+import com.yuzhi.dts.analytics.domain.AnalyticsSemanticModel;
 import com.yuzhi.dts.analytics.domain.AnalyticsTable;
 import com.yuzhi.dts.analytics.repository.AnalyticsCardRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsDashboardCardRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsDatabaseRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsMetricRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenRepository;
+import com.yuzhi.dts.analytics.repository.AnalyticsSemanticModelRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsTableRepository;
 import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import java.time.Instant;
@@ -38,6 +40,7 @@ public class AnalyticsConsumerClassificationService {
     private final AnalyticsScreenRepository screenRepository;
     private final AnalyticsTableRepository tableRepository;
     private final AnalyticsDatabaseRepository databaseRepository;
+    private final AnalyticsSemanticModelRepository semanticModelRepository;
     private final ObjectMapper objectMapper;
 
     public AnalyticsConsumerClassificationService(
@@ -48,6 +51,7 @@ public class AnalyticsConsumerClassificationService {
         AnalyticsScreenRepository screenRepository,
         AnalyticsTableRepository tableRepository,
         AnalyticsDatabaseRepository databaseRepository,
+        AnalyticsSemanticModelRepository semanticModelRepository,
         ObjectMapper objectMapper
     ) {
         this.client = client;
@@ -57,6 +61,7 @@ public class AnalyticsConsumerClassificationService {
         this.screenRepository = screenRepository;
         this.tableRepository = tableRepository;
         this.databaseRepository = databaseRepository;
+        this.semanticModelRepository = semanticModelRepository;
         this.objectMapper = objectMapper;
     }
 
@@ -362,8 +367,9 @@ public class AnalyticsConsumerClassificationService {
     private List<AnalyticsClassificationClient.SubjectRef> cardUpstreams(AnalyticsCard card) {
         Set<Long> tableIds = new LinkedHashSet<>();
         Set<Long> metricIds = new LinkedHashSet<>();
+        JsonNode query;
         try {
-            JsonNode query = objectMapper.readTree(card.getDatasetQueryJson());
+            query = objectMapper.readTree(card.getDatasetQueryJson());
             collectIds(query, tableIds, metricIds);
         } catch (Exception ex) {
             throw new IllegalArgumentException("Card dataset query cannot be parsed", ex);
@@ -379,10 +385,45 @@ public class AnalyticsConsumerClassificationService {
             deriveMetric(metric);
             upstreams.add(new AnalyticsClassificationClient.SubjectRef("ASSET", metricKey(metricId)));
         }
+        addSemanticModelUpstreams(query, upstreams);
         if (upstreams.isEmpty()) {
             upstreams.add(databaseSubject(card.getDatabaseId()));
         }
         return List.copyOf(upstreams);
+    }
+
+    private void addSemanticModelUpstreams(
+        JsonNode datasetQuery,
+        LinkedHashSet<AnalyticsClassificationClient.SubjectRef> upstreams
+    ) {
+        if (datasetQuery == null || !"semantic".equalsIgnoreCase(datasetQuery.path("type").asText())) {
+            return;
+        }
+        JsonNode semanticQuery = datasetQuery.path("semantic_query");
+        LinkedHashSet<String> modelNames = new LinkedHashSet<>();
+        addSemanticModelName(modelNames, semanticQuery.path("base"));
+        JsonNode joins = semanticQuery.path("joins");
+        if (joins.isArray()) {
+            joins.forEach(join -> addSemanticModelName(modelNames, join.path("to")));
+        }
+        if (modelNames.isEmpty()) {
+            throw new IllegalArgumentException("Semantic card requires a classified base model");
+        }
+        for (String modelName : modelNames) {
+            AnalyticsSemanticModel model = semanticModelRepository
+                .findByModelNameIgnoreCase(modelName)
+                .orElseThrow(() -> new IllegalArgumentException("Semantic model not found: " + modelName));
+            if (model.getTableId() == null) {
+                throw new IllegalArgumentException("Semantic model has no physical table binding: " + modelName);
+            }
+            upstreams.add(tableSubject(model.getTableId()));
+        }
+    }
+
+    private static void addSemanticModelName(Set<String> names, JsonNode node) {
+        if (node != null && node.isTextual() && StringUtils.hasText(node.asText())) {
+            names.add(node.asText().trim());
+        }
     }
 
     private ScreenSources screenSources(AnalyticsScreen screen) {

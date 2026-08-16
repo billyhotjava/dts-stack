@@ -139,6 +139,7 @@ class JdbcClassificationLifecycleIT {
         existingDataset.setSourceId(source.getId());
         existingDataset.setHiveDatabase("public");
         existingDataset.setHiveTable(tableName);
+        existingDataset.setClassification("INTERNAL");
         existingDataset.setEnabled(Boolean.FALSE);
         when(secretService.readSecrets(source)).thenReturn(Map.of("password", POSTGRES.getPassword()));
         when(
@@ -263,7 +264,6 @@ class JdbcClassificationLifecycleIT {
               "schemas":["public"],
               "tablePattern":"%s",
               "catalogCleanupStale":false,
-              "classification":"INTERNAL",
               "columnClassifications":{
                 "public.%s.identity_no":"SECRET"
               }

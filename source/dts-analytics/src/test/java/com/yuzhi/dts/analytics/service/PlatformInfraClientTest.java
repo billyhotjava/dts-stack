@@ -80,15 +80,36 @@ class PlatformInfraClientTest {
                         "id": "2b0fce68-0c78-41f4-9c63-0f6d1e9292e1",
                         "name": "Project dashboard lake",
                         "type": "POSTGRESQL",
-                        "jdbcUrl": "jdbc:postgresql://dts-pg:5432/biadmin",
-                        "description": "warehouse",
-                        "ownerDept": "metro",
                         "status": "ACTIVE",
                         "defaultSource": true,
                         "recommended": true
                       }
                     ]
                   }
+                }
+                """,
+                MediaType.APPLICATION_JSON
+            ));
+        server
+            .expect(requestTo("http://platform.test/api/infra/data-sources"))
+            .andExpect(method(GET))
+            .andExpect(header("X-DTS-Service", "dts-analytics"))
+            .andExpect(header("X-DTS-Service-Token", "analytics-secret"))
+            .andRespond(withSuccess(
+                """
+                {
+                  "status": 200,
+                  "data": [
+                    {
+                      "id": "2b0fce68-0c78-41f4-9c63-0f6d1e9292e1",
+                      "name": "Project dashboard lake",
+                      "type": "POSTGRESQL",
+                      "jdbcUrl": "jdbc:postgresql://dts-pg:5432/biadmin",
+                      "description": "warehouse",
+                      "ownerDept": "metro",
+                      "status": "ACTIVE"
+                    }
+                  ]
                 }
                 """,
                 MediaType.APPLICATION_JSON

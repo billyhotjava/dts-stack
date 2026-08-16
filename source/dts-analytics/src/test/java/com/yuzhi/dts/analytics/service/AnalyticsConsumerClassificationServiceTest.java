@@ -4,20 +4,27 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.analytics.domain.AnalyticsCard;
+import com.yuzhi.dts.analytics.domain.AnalyticsDatabase;
 import com.yuzhi.dts.analytics.domain.AnalyticsScreen;
+import com.yuzhi.dts.analytics.domain.AnalyticsSemanticModel;
+import com.yuzhi.dts.analytics.domain.AnalyticsTable;
 import com.yuzhi.dts.analytics.repository.AnalyticsCardRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsDashboardCardRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsDatabaseRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsMetricRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenRepository;
+import com.yuzhi.dts.analytics.repository.AnalyticsSemanticModelRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsTableRepository;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -26,6 +33,9 @@ class AnalyticsConsumerClassificationServiceTest {
 
     private AnalyticsClassificationClient client;
     private AnalyticsScreenRepository screenRepository;
+    private AnalyticsSemanticModelRepository semanticModelRepository;
+    private AnalyticsTableRepository tableRepository;
+    private AnalyticsDatabaseRepository databaseRepository;
     private ObjectMapper objectMapper;
     private AnalyticsConsumerClassificationService service;
 
@@ -33,6 +43,9 @@ class AnalyticsConsumerClassificationServiceTest {
     void setUp() {
         client = Mockito.mock(AnalyticsClassificationClient.class);
         screenRepository = Mockito.mock(AnalyticsScreenRepository.class);
+        semanticModelRepository = Mockito.mock(AnalyticsSemanticModelRepository.class);
+        tableRepository = Mockito.mock(AnalyticsTableRepository.class);
+        databaseRepository = Mockito.mock(AnalyticsDatabaseRepository.class);
         objectMapper = new ObjectMapper();
         service = new AnalyticsConsumerClassificationService(
             client,
@@ -40,9 +53,60 @@ class AnalyticsConsumerClassificationServiceTest {
             Mockito.mock(AnalyticsDashboardCardRepository.class),
             Mockito.mock(AnalyticsMetricRepository.class),
             screenRepository,
-            Mockito.mock(AnalyticsTableRepository.class),
-            Mockito.mock(AnalyticsDatabaseRepository.class),
+            tableRepository,
+            databaseRepository,
+            semanticModelRepository,
             objectMapper
+        );
+    }
+
+    @Test
+    void semantic_card_inherits_the_physical_table_classification_instead_of_database_fallback() {
+        AnalyticsCard card = new AnalyticsCard();
+        card.setId(42L);
+        card.setDatabaseId(1L);
+        card.setDatasetQueryJson("""
+            {
+              "database": 1,
+              "type": "semantic",
+              "semantic_query": {
+                "base": "model_spec_budget_kpi",
+                "joins": [],
+                "measures": ["model_spec_budget_kpi.pjm_budg_remaining"],
+                "dimensions": ["model_spec_budget_kpi.snapshot_date"]
+              }
+            }
+            """);
+
+        AnalyticsSemanticModel model = new AnalyticsSemanticModel();
+        model.setModelName("model_spec_budget_kpi");
+        model.setTableId(15L);
+        when(semanticModelRepository.findByModelNameIgnoreCase("model_spec_budget_kpi"))
+            .thenReturn(Optional.of(model));
+
+        AnalyticsTable table = new AnalyticsTable();
+        table.setId(15L);
+        table.setDatabaseId(1L);
+        table.setSchemaName("public");
+        table.setName("biz_ads_budget_kpi_v2");
+        when(tableRepository.findById(15L)).thenReturn(Optional.of(table));
+
+        AnalyticsDatabase database = new AnalyticsDatabase();
+        database.setId(1L);
+        database.setDetailsJson("{\"platformDataSourceId\":\"a0000000-0000-0000-0000-000000000001\"}");
+        when(databaseRepository.findById(1L)).thenReturn(Optional.of(database));
+
+        service.deriveCard(card);
+
+        verify(client).derive(
+            eq("CARD"),
+            eq("analytics-card:42"),
+            isNull(),
+            eq(List.of(new AnalyticsClassificationClient.SubjectRef(
+                "ASSET",
+                "source:a0000000-0000-0000-0000-000000000001/schema:public/table:biz_ads_budget_kpi_v2"
+            ))),
+            eq("dts-analytics:card:42")
         );
     }
 

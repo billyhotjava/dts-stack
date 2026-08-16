@@ -95,6 +95,7 @@ public class SemanticPublishResource {
         String tableName = textOrNull(body, "tableName");
         String schemaName = textOrNull(body, "schemaName");
         String dataSourceName = textOrNull(body, "dataSourceName");
+        String platformDataSourceId = textOrNull(body, "platformDataSourceId");
         String description = textOrNull(body, "description");
 
         if (tableName == null) {
@@ -115,7 +116,7 @@ public class SemanticPublishResource {
 
         LOG.info("[semantic-publish] modelName={} tableName={} schemaName={} dataSourceName={}", modelName, tableName, schemaName, dataSourceName);
 
-        AnalyticsDatabase database = resolveDatabase(dataSourceName);
+        AnalyticsDatabase database = resolveDatabase(dataSourceName, platformDataSourceId);
         if (database == null) {
             semanticAuditService.logFailure(
                 "SEMANTIC_CONTRACT_PUBLISH",
@@ -123,11 +124,16 @@ public class SemanticPublishResource {
                 null,
                 request,
                 modelName,
-                Map.of("dataSourceName", dataSourceName == null ? "" : dataSourceName, "tableName", tableName),
+                Map.of(
+                    "dataSourceName", dataSourceName == null ? "" : dataSourceName,
+                    "platformDataSourceId", platformDataSourceId == null ? "" : platformDataSourceId,
+                    "tableName", tableName
+                ),
                 "datasource not found"
             );
             return ResponseEntity.badRequest().body(Map.of(
-                "error", "No analytics database found for dataSourceName: " + dataSourceName,
+                "error", "No analytics database found for platformDataSourceId/dataSourceName: " +
+                    firstNonBlank(platformDataSourceId, dataSourceName, "unspecified"),
                 "hint", "Ensure the data source is registered in dts-analytics before publishing."
             ));
         }
@@ -201,20 +207,45 @@ public class SemanticPublishResource {
         return ResponseEntity.ok(summary);
     }
 
-    private AnalyticsDatabase resolveDatabase(String dataSourceName) {
+    private AnalyticsDatabase resolveDatabase(String dataSourceName, String platformDataSourceId) {
+        List<AnalyticsDatabase> databases = databaseRepository.findAll();
+        if (platformDataSourceId != null && !platformDataSourceId.isBlank()) {
+            return databases.stream()
+                .filter(database -> platformDataSourceId.equalsIgnoreCase(platformDataSourceId(database)))
+                .findFirst()
+                .orElse(null);
+        }
         if (dataSourceName == null || dataSourceName.isBlank()) {
-            return databaseRepository.findAll().stream()
+            return databases.stream()
                 .filter(db -> !db.isSample())
                 .findFirst()
                 .orElse(null);
         }
-        return databaseRepository.findAll().stream()
+        return databases.stream()
             .filter(db -> dataSourceName.equalsIgnoreCase(db.getName()))
             .findFirst()
-            .or(() -> databaseRepository.findAll().stream()
+            .or(() -> databases.stream()
                 .filter(db -> db.getName() != null && db.getName().toLowerCase().contains(dataSourceName.toLowerCase()))
                 .findFirst())
             .orElse(null);
+    }
+
+    private String platformDataSourceId(AnalyticsDatabase database) {
+        if (database == null || database.getDetailsJson() == null || database.getDetailsJson().isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode details = objectMapper.readTree(database.getDetailsJson());
+            return firstNonBlank(
+                textOrNull(details, "platformDataSourceId"),
+                textOrNull(details, "platform_data_source_id"),
+                textOrNull(details.path("platform"), "dataSourceId"),
+                textOrNull(details.path("platform"), "id")
+            );
+        } catch (Exception invalidDetails) {
+            LOG.warn("[semantic-publish] Invalid analytics database details id={}", database.getId());
+            return null;
+        }
     }
 
     private AnalyticsTable resolveOrCreateTable(Long databaseId, String schemaName, String tableName, String description) {

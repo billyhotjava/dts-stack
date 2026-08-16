@@ -603,7 +603,25 @@ class ModelMaterializationStartServiceIT {
 
     @Test
     void newSingleModelBuildReclaimsClaimLeftByStaleCandidate() {
-        Scope scope = scope("stale-claim-reclaim");
+        assertNewSingleModelBuildReclaimsClaimLeftByTerminalCandidate(
+            "stale-claim-reclaim",
+            DeliveryStatus.STALE
+        );
+    }
+
+    @Test
+    void newSingleModelBuildReclaimsClaimLeftByPublishedCandidate() {
+        assertNewSingleModelBuildReclaimsClaimLeftByTerminalCandidate(
+            "published-claim-reclaim",
+            DeliveryStatus.PUBLISHED
+        );
+    }
+
+    private void assertNewSingleModelBuildReclaimsClaimLeftByTerminalCandidate(
+        String scopeName,
+        DeliveryStatus terminalStatus
+    ) {
+        Scope scope = scope(scopeName);
         TransactionTemplate transaction = new TransactionTemplate(transactionManager);
 
         transaction.executeWithoutResult(status -> {
@@ -620,7 +638,21 @@ class ModelMaterializationStartServiceIT {
                 .candidate();
             assertThat(
                 jdbcTemplate.update(
-                    "update modeling_model_release_candidate set status = 'STALE', version = version + 1, last_modified_date = current_timestamp where tenant_id = ? and id = ? and status = 'BUILDING' and version = ?",
+                    """
+                    update modeling_model_release_candidate
+                       set status = ?,
+                           version = version + 1,
+                           published_by = case when ? = 'PUBLISHED' then 'builder-a' else published_by end,
+                           published_date = case when ? = 'PUBLISHED' then current_timestamp else published_date end,
+                           last_modified_date = current_timestamp
+                     where tenant_id = ?
+                       and id = ?
+                       and status = 'BUILDING'
+                       and version = ?
+                    """,
+                    terminalStatus.name(),
+                    terminalStatus.name(),
+                    terminalStatus.name(),
                     scope.tenant(),
                     scope.candidateId(),
                     building.version()
@@ -629,7 +661,8 @@ class ModelMaterializationStartServiceIT {
                 .isEqualTo(1);
             assertThat(
                 jdbcTemplate.update(
-                    "update modeling_model_release_candidate_entry set status = 'STALE' where tenant_id = ? and candidate_id = ? and status = 'BUILDING'",
+                    "update modeling_model_release_candidate_entry set status = ? where tenant_id = ? and candidate_id = ? and status = 'BUILDING'",
+                    terminalStatus.name(),
                     scope.tenant(),
                     scope.candidateId()
                 )
@@ -659,7 +692,7 @@ class ModelMaterializationStartServiceIT {
                                 "current revision"
                             )
                         ),
-                        "stale-claim-single-model-replacement",
+                        scopeName + "-single-model-replacement",
                         "create current single-model candidate"
                     )
                 )
@@ -671,7 +704,7 @@ class ModelMaterializationStartServiceIT {
                     "builder-a",
                     replacement.id(),
                     replacement.version(),
-                    "stale-claim-replacement-start",
+                    scopeName + "-replacement-start",
                     "build current single-model candidate"
                 )
                 .candidate();

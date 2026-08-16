@@ -265,4 +265,5 @@
     <include file="config/liquibase/changelog/20260811_03_model_release_candidate_implementation_snapshot.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260814_01_model_release_candidate_self_service.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260815_01_model_release_candidate_published_history.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260817_01_model_release_candidate_published_claim_release.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

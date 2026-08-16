@@ -51,6 +51,8 @@ const apiMocks = vi.hoisted(() => ({
 	createCandidate: vi.fn(),
 	createReplacementCandidate: vi.fn(),
 	getExecutionWorkspace: vi.fn(),
+	getMaterializationStatuses: vi.fn(),
+	repairExecutionBinding: vi.fn(),
 	runExecutionNow: vi.fn(),
 	getWorkbench: vi.fn(),
 	lockCandidate: vi.fn(),
@@ -82,6 +84,8 @@ vi.mock("@/api/modelSpecApi", async (importOriginal) => ({
 	createReleaseCandidate: apiMocks.createCandidate,
 	createReplacementReleaseCandidate: apiMocks.createReplacementCandidate,
 	getPlanExecutionWorkspace: apiMocks.getExecutionWorkspace,
+	getModelMaterializationStatuses: apiMocks.getMaterializationStatuses,
+	repairPlanExecutionBinding: apiMocks.repairExecutionBinding,
 	runPlanExecutionNow: apiMocks.runExecutionNow,
 	getReleaseCandidateWorkbench: apiMocks.getWorkbench,
 	lockReleaseCandidate: apiMocks.lockCandidate,
@@ -205,6 +209,7 @@ beforeEach(() => {
 		state: "NOT_DEPLOYED",
 		bindings: [],
 	} satisfies PlanExecutionWorkspace);
+	apiMocks.getMaterializationStatuses.mockResolvedValue([]);
 	apiMocks.getLifecycle.mockResolvedValue({ implementation, artifacts: [], events: [] });
 	apiMocks.compileLifecycle.mockResolvedValue({ implementation, artifacts: [], event: {} });
 	vi.stubGlobal("crypto", { randomUUID: vi.fn(() => "idem-1") });
@@ -357,6 +362,59 @@ describe("release and materialization dispatch", () => {
 				entries: [{ modelSpecId: model.id, sortOrder: 0, selectedReason: "从模型工作台选择" }],
 			}),
 		);
+	});
+
+	it("shows only the selected model materialization when the plan workspace points at another model", async () => {
+		const foreign = {
+			...candidate("BATCH_WORKBENCH", "PUBLISHED"),
+			version: 7,
+			entries: [{ modelSpecId: secondModel.id }],
+		} as ReleaseCandidate;
+		apiMocks.getWorkbench.mockResolvedValue({
+			...workspace(["CREATE_CANDIDATE", "ROLLBACK"], foreign),
+			entryEvidence: [
+				{
+					candidateEntryId: "foreign-entry",
+					modelSpecId: secondModel.id,
+					modelName: "其他计划模型",
+					modelRevision: 1,
+					targetRelation: "public.other_model",
+					runStatus: "BUILT",
+					relationState: "VERIFIED",
+				},
+			],
+		});
+		apiMocks.getMaterializationStatuses.mockResolvedValue([
+			{
+				modelSpecId: model.id,
+				candidateId: "selected-candidate",
+				candidateVersion: 8,
+				environment: "dev",
+				candidateStatus: "STALE",
+				candidateUpdatedAt: "2026-08-17T00:00:00Z",
+				currentImplementationRevision: 1,
+				evidence: {
+					candidateEntryId: "selected-entry",
+					modelSpecId: model.id,
+					modelName: model.name,
+					modelRevision: model.revision,
+					targetRelation: "public.dim_budget_date",
+					runStatus: "BUILT",
+					relationState: "VERIFIED",
+					attempt: 2,
+				},
+			},
+		]);
+
+		await act(async () =>
+			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+		);
+		await flush();
+
+		expect(apiMocks.getMaterializationStatuses).toHaveBeenCalledWith(model.planId, [model.id]);
+		expect(container.textContent).toContain("STALE · v8");
+		expect(container.textContent).toContain("public.dim_budget_date");
+		expect(container.textContent).not.toContain("public.other_model");
 	});
 
 	it("cancels an unpublished candidate and creates a fresh candidate when the selected scope changed", async () => {
@@ -671,6 +729,140 @@ describe("release and materialization dispatch", () => {
 		await act(async () => button("立即运行并核验")?.click());
 
 		expect(apiMocks.runExecutionNow).toHaveBeenCalledWith(model.planId, "binding-1", "idem-1");
+	});
+
+	it("keeps the published execution binding operable when a newer draft candidate occupies the plan workspace", async () => {
+		const draft = {
+			...candidate("BATCH_WORKBENCH", "DRAFT"),
+			environment: "dev",
+		} as ReleaseCandidate;
+		const publishedModel = { ...model, status: "PUBLISHED" } as ModelSpecView;
+		apiMocks.getWorkbench.mockResolvedValue(workspace(["START_BUILD"], draft));
+		apiMocks.getMaterializationStatuses.mockResolvedValue([
+			{
+				modelSpecId: model.id,
+				candidateId: "published-candidate",
+				candidateVersion: 8,
+				environment: "dev",
+				candidateStatus: "PUBLISHED",
+				candidateUpdatedAt: "2026-08-17T03:30:19Z",
+				currentImplementationRevision: 1,
+				evidence: {
+					candidateEntryId: "published-entry",
+					modelSpecId: model.id,
+					modelName: model.name,
+					modelRevision: model.revision,
+					targetRelation: "public.biz_ads_budget_kpi_v2",
+					runStatus: "BUILT",
+					relationState: "VERIFIED",
+				},
+			},
+		]);
+		apiMocks.getExecutionWorkspace.mockResolvedValue({
+			planId: model.planId,
+			state: "READY",
+			bindings: [
+				{
+					id: "binding-1",
+					version: 10,
+					environment: "dev",
+					state: "DEPLOYING",
+					deploymentStatus: "DEPLOYING",
+					scheduleMode: "MANUAL_ONLY",
+					desiredDeploymentChecksum: "desired",
+					deployedChecksum: "previous",
+					airflowDagId: "dts_plan_dev",
+					airflowState: "NOT_REGISTERED",
+					latestOperationalRun: {},
+					latestRelation: { verified: true, exists: true },
+					allowedActions: ["REPAIR_DEPLOYMENT"],
+				},
+			],
+		} as PlanExecutionWorkspace);
+		apiMocks.repairExecutionBinding.mockResolvedValue({
+			bindingId: "binding-1",
+			bindingVersion: 11,
+			deploymentStatus: "DEPLOYING",
+		});
+
+		await act(async () =>
+			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={publishedModel} onClose={vi.fn()} />),
+		);
+		await flush();
+
+		expect(apiMocks.getExecutionWorkspace).toHaveBeenCalledWith(model.planId);
+		expect(button("修复部署")?.disabled).toBe(false);
+		await act(async () => button("修复部署")?.click());
+
+		expect(apiMocks.repairExecutionBinding).toHaveBeenCalledWith(model.planId, "binding-1", 10);
+		expect(apiMocks.compileLifecycle).not.toHaveBeenCalled();
+		expect(apiMocks.createCandidate).not.toHaveBeenCalled();
+	});
+
+	it("runs an unchanged published model from its existing binding instead of creating another candidate", async () => {
+		const publishedModel = { ...model, status: "PUBLISHED" } as ModelSpecView;
+		apiMocks.getWorkbench.mockResolvedValue(workspace(["CREATE_CANDIDATE"], null));
+		apiMocks.getMaterializationStatuses.mockResolvedValue([
+			{
+				modelSpecId: model.id,
+				candidateId: "published-candidate",
+				candidateVersion: 8,
+				environment: "dev",
+				candidateStatus: "PUBLISHED",
+				candidateUpdatedAt: "2026-08-17T03:30:19Z",
+				currentImplementationRevision: 1,
+				evidence: {
+					candidateEntryId: "published-entry",
+					modelSpecId: model.id,
+					modelName: model.name,
+					modelRevision: model.revision,
+					targetRelation: "public.biz_ads_budget_kpi_v2",
+					runStatus: "BUILT",
+					relationState: "VERIFIED",
+				},
+			},
+		]);
+		apiMocks.getExecutionWorkspace.mockResolvedValue({
+			planId: model.planId,
+			state: "READY",
+			bindings: [
+				{
+					id: "binding-1",
+					version: 11,
+					environment: "dev",
+					state: "ONLINE",
+					deploymentStatus: "ACTIVE",
+					scheduleMode: "MANUAL_ONLY",
+					desiredDeploymentChecksum: "deployed",
+					deployedChecksum: "deployed",
+					airflowDagId: "dts_plan_dev",
+					airflowState: "OBSERVED",
+					latestOperationalRun: {},
+					latestRelation: { verified: true, exists: true },
+					allowedActions: ["RUN_NOW"],
+				},
+			],
+		} as PlanExecutionWorkspace);
+		apiMocks.runExecutionNow.mockResolvedValue({
+			pipelineRunGroupId: "run-group-2",
+			bindingId: "binding-1",
+			bindingVersion: 11,
+			triggerType: "MANUAL",
+			airflowDagId: "dts_plan_dev",
+			airflowRunId: "airflow-run-2",
+			status: "DISPATCHED",
+			replayed: false,
+		});
+
+		await act(async () =>
+			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={publishedModel} onClose={vi.fn()} />),
+		);
+		await flush();
+		await act(async () => button("再次运行并核验")?.click());
+
+		expect(apiMocks.runExecutionNow).toHaveBeenCalledWith(model.planId, "binding-1", "idem-1");
+		expect(apiMocks.compileLifecycle).not.toHaveBeenCalled();
+		expect(apiMocks.createCandidate).not.toHaveBeenCalled();
 	});
 
 	it("allows a release reviewer to act from server duties without model-maintainer permission", async () => {

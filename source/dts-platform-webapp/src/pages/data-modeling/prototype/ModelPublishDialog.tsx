@@ -6,9 +6,11 @@ import {
 	createReleaseCandidate,
 	createReplacementReleaseCandidate,
 	getModelLifecycle,
+	getModelMaterializationStatuses,
 	getPlanExecutionWorkspace,
 	getReleaseCandidateWorkbench,
 	lockReleaseCandidate,
+	type ModelMaterializationStatus,
 	type PlanExecutionWorkspace,
 	publishReleaseCandidate,
 	type ReleaseCandidateEntryEvidence,
@@ -17,6 +19,7 @@ import {
 	refreshReleaseCandidate,
 	rejectReleaseCandidateReview,
 	rematerializeReleaseCandidate,
+	repairPlanExecutionBinding,
 	retryReleaseCandidate,
 	retryReleaseCandidateRegistration,
 	rollbackReleaseCandidate,
@@ -110,6 +113,7 @@ export function ModelPublishDialog({
 	const [environment, setEnvironment] = useState("dev");
 	const [reason, setReason] = useState("从模型工作台发布");
 	const [workspace, setWorkspace] = useState<ReleaseCandidateWorkbench | null>(null);
+	const [materializations, setMaterializations] = useState<ModelMaterializationStatus[]>([]);
 	const [executionWorkspace, setExecutionWorkspace] = useState<PlanExecutionWorkspace | null>(null);
 	const [busy, setBusy] = useState<"load" | "build" | "release" | "run" | "">("load");
 	const [activeReleaseAction, setActiveReleaseAction] = useState<ReleaseWorkflowAction | null>(null);
@@ -138,9 +142,16 @@ export function ModelPublishDialog({
 		setBusy("load");
 		setFailure("");
 		try {
-			const releaseWorkspace = await getReleaseCandidateWorkbench(planId);
+			const [releaseWorkspace, selectedMaterializations] = await Promise.all([
+				getReleaseCandidateWorkbench(planId),
+				getModelMaterializationStatuses(planId, Array.from(selectedIds)),
+			]);
 			setWorkspace(releaseWorkspace);
-			if (releaseWorkspace.candidate?.status === "PUBLISHED") {
+			setMaterializations(selectedMaterializations);
+			if (
+				releaseWorkspace.candidate?.status === "PUBLISHED" ||
+				selectedMaterializations.some((item) => item.candidateStatus === "PUBLISHED")
+			) {
 				try {
 					setExecutionWorkspace(await getPlanExecutionWorkspace(planId));
 				} catch {
@@ -150,11 +161,12 @@ export function ModelPublishDialog({
 				setExecutionWorkspace(null);
 			}
 		} catch (error) {
+			setMaterializations([]);
 			setFailure(normalizeModelingRequestFailure(error, "发布候选读取失败。").message);
 		} finally {
 			setBusy("");
 		}
-	}, [planId]);
+	}, [planId, selectedIds]);
 	useEffect(() => {
 		void load();
 	}, [load]);
@@ -164,6 +176,17 @@ export function ModelPublishDialog({
 			candidate.entries.length === selectedIds.size &&
 			candidate.entries.every((entry) => selectedIds.has(entry.modelSpecId)),
 	);
+	const scopedCandidate = candidateScopeMatches ? candidate : null;
+	const selectedEvidence = candidateScopeMatches
+		? workspace?.entryEvidence || []
+		: materializations.map((item) => item.evidence);
+	const selectedCandidateSummary = candidateScopeMatches
+		? `${candidate?.status} · v${candidate?.version}`
+		: materializations.length === 1
+			? `${materializations[0].candidateStatus} · v${materializations[0].candidateVersion}`
+			: materializations.length > 1
+				? `${materializations.length} 个模型有历史物化`
+				: "所选模型尚无";
 	const buildAction: MaterializationBuildAction | null = workspace?.allowedActions.includes("CREATE_CANDIDATE")
 		? "CREATE_CANDIDATE"
 		: candidate && !candidateScopeMatches
@@ -185,14 +208,31 @@ export function ModelPublishDialog({
 							: candidateScopeMatches && workspace?.allowedActions.includes("START_BUILD")
 								? "START_BUILD"
 								: null;
-	const canBuild = Boolean(!selectionProblem && buildAction);
 	const releaseActions = RELEASE_WORKFLOW_ACTIONS.filter(
 		(action) => candidateScopeMatches && workspace?.allowedActions.includes(action),
 	);
-	const executionBinding =
-		executionWorkspace?.bindings.find((binding) => binding.environment === candidate?.environment) ||
-		executionWorkspace?.bindings[0] ||
-		null;
+	const publishedMaterialization = materializations.find((item) => item.candidateStatus === "PUBLISHED") || null;
+	const executionEnvironment =
+		(scopedCandidate?.status === "PUBLISHED" ? scopedCandidate.environment : publishedMaterialization?.environment) ||
+		environment;
+	const executionBinding = executionWorkspace
+		? executionWorkspace.bindings.find((binding) => binding.environment === executionEnvironment) ||
+			executionWorkspace.bindings[0] ||
+			null
+		: null;
+	const publishedSelection = Boolean(
+		publishedMaterialization &&
+			selection.length &&
+			selection.every((model) => canonical(model) && model.status === "PUBLISHED"),
+	);
+	const operationalAction = publishedSelection
+		? executionBinding?.allowedActions.includes("REPAIR_DEPLOYMENT")
+			? "REPAIR_DEPLOYMENT"
+			: executionBinding?.allowedActions.includes("RUN_NOW")
+				? "RUN_NOW"
+				: null
+		: null;
+	const canBuild = Boolean(!selectionProblem && (operationalAction || buildAction));
 	const entries = selection.map((model, sortOrder) => ({
 		modelSpecId: model.id,
 		sortOrder,
@@ -200,6 +240,14 @@ export function ModelPublishDialog({
 	}));
 	const build = async () => {
 		if (!canMaintain || !canBuild || !planId || !primary || !selection.every(canonical)) return;
+		if (operationalAction === "REPAIR_DEPLOYMENT") {
+			await repairOperationalBinding();
+			return;
+		}
+		if (operationalAction === "RUN_NOW") {
+			await runOperationalBinding();
+			return;
+		}
 		setBusy("build");
 		setFailure("");
 		try {
@@ -303,6 +351,19 @@ export function ModelPublishDialog({
 			setBusy("");
 		}
 	};
+	const repairOperationalBinding = async () => {
+		if (!planId || !executionBinding?.allowedActions.includes("REPAIR_DEPLOYMENT")) return;
+		setBusy("run");
+		setFailure("");
+		try {
+			await repairPlanExecutionBinding(planId, executionBinding.id, executionBinding.version);
+			await load();
+		} catch (error) {
+			setFailure(normalizeModelingRequestFailure(error, "运行计划部署修复未能启动。").message);
+		} finally {
+			setBusy("");
+		}
+	};
 	const evidenceColumns = useMemo<CompactColumns<ReleaseCandidateEntryEvidence>>(
 		() => [
 			{ title: "模型", dataIndex: "modelName" },
@@ -368,7 +429,7 @@ export function ModelPublishDialog({
 								<dt>物化方式</dt>
 								<dd>{batch ? "按各模型实现策略" : primary?.materialization || "由实现策略决定"}</dd>
 								<dt>当前候选</dt>
-								<dd>{candidate ? `${candidate.status} · v${candidate.version}` : "尚无"}</dd>
+								<dd>{selectedCandidateSummary}</dd>
 								<dt>主要阻断</dt>
 								<dd>
 									{workspace?.primaryBlocker
@@ -376,11 +437,11 @@ export function ModelPublishDialog({
 										: "无"}
 								</dd>
 							</dl>
-							{workspace?.entryEvidence.length ? (
+							{selectedEvidence.length ? (
 								<div className="dmx-table-scroll dmx-materialization-evidence">
 									<CompactTable<ReleaseCandidateEntryEvidence>
 										columns={evidenceColumns}
-										dataSource={workspace.entryEvidence}
+										dataSource={selectedEvidence}
 										pagination={false}
 										rowKey="candidateEntryId"
 									/>
@@ -396,23 +457,27 @@ export function ModelPublishDialog({
 									primary
 									title={canBuild ? undefined : workspace?.primaryBlocker?.message || "当前候选不允许启动构建"}
 								>
-									{busy === "build"
+									{busy === "build" || busy === "run"
 										? "处理中…"
-										: buildAction === "REFRESH_AND_REPLACE" || buildAction === "CREATE_REPLACEMENT"
-											? "按新修订重新物化"
-											: buildAction === "REFRESH_AND_CREATE" || buildAction === "CREATE_AFTER_TERMINAL"
-												? "按新范围重新物化"
-												: buildAction === "CANCEL_AND_CREATE"
-													? "替换候选并物化"
-													: buildAction === "REMATERIALIZE"
-														? "重新物化"
-														: buildAction === "RETRY_BUILD"
-															? "重试构建"
-															: buildAction === "START_BUILD"
-																? "开始构建"
-																: batch
-																	? `创建并运行 ${selection.length} 个模型`
-																	: "创建并运行"}
+										: operationalAction === "REPAIR_DEPLOYMENT"
+											? "修复部署"
+											: operationalAction === "RUN_NOW"
+												? "再次运行并核验"
+												: buildAction === "REFRESH_AND_REPLACE" || buildAction === "CREATE_REPLACEMENT"
+													? "按新修订重新物化"
+													: buildAction === "REFRESH_AND_CREATE" || buildAction === "CREATE_AFTER_TERMINAL"
+														? "按新范围重新物化"
+														: buildAction === "CANCEL_AND_CREATE"
+															? "替换候选并物化"
+															: buildAction === "REMATERIALIZE"
+																? "重新物化"
+																: buildAction === "RETRY_BUILD"
+																	? "重试构建"
+																	: buildAction === "START_BUILD"
+																		? "开始构建"
+																		: batch
+																			? `创建并运行 ${selection.length} 个模型`
+																			: "创建并运行"}
 								</Button>
 							</div>
 						</>
@@ -424,7 +489,7 @@ export function ModelPublishDialog({
 							</p>
 							<ModelReleaseWorkflowPanel
 								binding={executionBinding}
-								candidate={candidate}
+								candidate={scopedCandidate}
 								evidence={workspace?.evidence || []}
 								releaseActions={releaseActions}
 							/>
@@ -434,7 +499,7 @@ export function ModelPublishDialog({
 							</label>
 							<dl className="dmx-summary-list dmx-summary-list--compact">
 								<dt>候选状态</dt>
-								<dd>{candidate?.status || "尚无候选"}</dd>
+								<dd>{scopedCandidate?.status || "当前计划候选不包含所选模型"}</dd>
 								<dt>允许动作</dt>
 								<dd>
 									{releaseActions.map((action) => RELEASE_ACTION_LABELS[action]).join("、") ||
@@ -455,6 +520,11 @@ export function ModelPublishDialog({
 								{executionBinding?.allowedActions.includes("RUN_NOW") ? (
 									<Button disabled={Boolean(busy)} onClick={() => void runOperationalBinding()} primary>
 										{busy === "run" ? "运行中…" : "立即运行并核验"}
+									</Button>
+								) : null}
+								{executionBinding?.allowedActions.includes("REPAIR_DEPLOYMENT") ? (
+									<Button disabled={Boolean(busy)} onClick={() => void repairOperationalBinding()} primary>
+										{busy === "run" ? "处理中…" : "修复部署"}
 									</Button>
 								) : null}
 								{releaseActions.map((action, index) => (

@@ -151,7 +151,7 @@ class CandidatePublicationCommitServiceTest {
         when(codec.readView("{}")).thenReturn(draft);
         when(draft.id()).thenReturn(MODEL_ID);
         when(draft.planId()).thenReturn(PLAN_ID);
-        when(draft.status()).thenReturn(ModelStatus.DRAFT);
+        when(draft.status()).thenReturn(ModelStatus.PUBLISHED);
         when(draft.revision()).thenReturn(2);
         when(draft.checksum()).thenReturn("b".repeat(64));
         when(draft.implementationMode()).thenReturn(ImplementationMode.DBT_MANAGED);

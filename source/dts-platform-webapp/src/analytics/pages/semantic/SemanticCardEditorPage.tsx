@@ -765,6 +765,7 @@ export default function SemanticCardEditorPage() {
 										<div className="mb-1 text-xs text-secondary">基础模型</div>
 										<Select
 											showSearch
+											optionFilterProp="label"
 											style={{ width: "100%" }}
 											value={baseModelId || undefined}
 											onChange={(value) => {

@@ -165,7 +165,10 @@ public class CatalogAssetPortalService {
             );
             rows.addAll(result.content());
             total = result.total();
-            if (result.content().isEmpty() || rows.size() >= total) {
+            // AssetPage.total is a visibility estimate, not a paging cursor. It can equal the
+            // first 200-row window while later visible rows still exist, so only an empty page
+            // proves that the combined ledger has been exhausted.
+            if (result.content().isEmpty()) {
                 exhausted = true;
                 break;
             }

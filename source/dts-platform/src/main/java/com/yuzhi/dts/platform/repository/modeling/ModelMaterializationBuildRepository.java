@@ -219,7 +219,7 @@ public class ModelMaterializationBuildRepository
                        and e.tenant_id = ?
                        and e.candidate_id <> ?
                        and e.active_claim_key = ?
-                       and c.status in ('REJECTED', 'ROLLED_BACK', 'STALE', 'CANCELLED')
+                       and c.status in ('REJECTED', 'ROLLED_BACK', 'STALE', 'CANCELLED', 'PUBLISHED')
                        and e.status = c.status
                     """,
                     candidate.tenantId(),

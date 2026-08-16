@@ -471,7 +471,7 @@ public class CandidatePublicationCommitService {
         }
         ModelSpecView model = codec.readView(stored.currentSnapshot());
         if (
-            model.status() != ModelStatus.DRAFT ||
+            (model.status() != ModelStatus.DRAFT && model.status() != ModelStatus.PUBLISHED) ||
             !candidate.planId().equals(model.planId()) ||
             !observation.modelSpecId().equals(model.id()) ||
             model.revision() != observation.modelRevision() ||

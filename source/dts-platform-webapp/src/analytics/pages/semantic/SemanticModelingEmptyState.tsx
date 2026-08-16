@@ -1,5 +1,7 @@
 import { Button, Card, Empty, Space, Typography } from "antd";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
+
+const MODEL_WORKBENCH_PATH = "/data-modeling/dimensions/workbench";
 
 type Props = {
 	title?: string;
@@ -10,6 +12,8 @@ export default function SemanticModelingEmptyState({
 	title = "还没有可用于可视化建模的语义模型",
 	compact = false,
 }: Props) {
+	const navigate = useNavigate();
+
 	return (
 		<Card title={title}>
 			<div className="space-y-4">
@@ -26,9 +30,9 @@ export default function SemanticModelingEmptyState({
 				</div>
 
 				<Space wrap>
-					<Link to="/data-modeling/dimensions/workbench">
-						<Button type="primary">去模型工作台</Button>
-					</Link>
+					<Button type="primary" onClick={() => navigate(MODEL_WORKBENCH_PATH, { flushSync: true })}>
+						去模型工作台
+					</Button>
 					{!compact && (
 						<Link to="/bi/explore">
 							<Button>刷新语义探索</Button>

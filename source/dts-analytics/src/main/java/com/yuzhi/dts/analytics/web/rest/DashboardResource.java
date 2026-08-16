@@ -26,6 +26,7 @@ import com.yuzhi.dts.analytics.service.PublicLinkService;
 import com.yuzhi.dts.analytics.service.QueryExecutionFacade;
 import com.yuzhi.dts.analytics.service.AssetListFilterService;
 import com.yuzhi.dts.analytics.service.RevisionService;
+import com.yuzhi.dts.analytics.service.semantic.SemanticQueryService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import com.yuzhi.dts.analytics.web.support.PlatformContext;
 import jakarta.servlet.http.HttpServletRequest;
@@ -70,6 +71,7 @@ public class DashboardResource {
     private final AnalyticsTableRepository tableRepository;
     private final FieldValuesService fieldValuesService;
     private final QueryExecutionFacade queryExecutionFacade;
+    private final SemanticQueryService semanticQueryService;
     private final AssetListFilterService assetListFilterService;
     private final AnalyticsConsumerClassificationService classificationService;
     private final ObjectMapper objectMapper;
@@ -89,6 +91,7 @@ public class DashboardResource {
             AnalyticsTableRepository tableRepository,
             FieldValuesService fieldValuesService,
             QueryExecutionFacade queryExecutionFacade,
+            SemanticQueryService semanticQueryService,
             AssetListFilterService assetListFilterService,
             AnalyticsConsumerClassificationService classificationService,
             ObjectMapper objectMapper,
@@ -106,6 +109,7 @@ public class DashboardResource {
         this.tableRepository = tableRepository;
         this.fieldValuesService = fieldValuesService;
         this.queryExecutionFacade = queryExecutionFacade;
+        this.semanticQueryService = semanticQueryService;
         this.assetListFilterService = assetListFilterService;
         this.classificationService = classificationService;
         this.objectMapper = objectMapper;
@@ -770,6 +774,44 @@ public class DashboardResource {
 
         long startedMillis = System.currentTimeMillis();
         try {
+            if (isSemanticDatasetQuery(datasetQuery)) {
+                SemanticQueryService.SemanticExecutionResult semanticResult = semanticQueryService.executeForCard(
+                    extractSemanticQuery(datasetQuery),
+                    PlatformContext.from(request),
+                    MetabaseAuth.currentUser(sessionService, request).map(AnalyticsUser::getId).orElse(null)
+                );
+
+                Map<String, Object> jsonQuery = new LinkedHashMap<>();
+                jsonQuery.put("database", semanticResult.databaseId());
+                jsonQuery.put("type", "semantic");
+                jsonQuery.put("semantic_query", extractSemanticQuery(datasetQuery));
+                jsonQuery.put("security_applied", semanticResult.securityApplied());
+                jsonQuery.put("warnings", semanticResult.warnings());
+
+                Map<String, Object> data = new LinkedHashMap<>();
+                data.put("rows", semanticResult.datasetResult().rows());
+                data.put("cols", semanticResult.datasetResult().cols());
+                data.put("native_form", Map.of("query", semanticResult.sqlPreview()));
+                data.put("results_timezone", semanticResult.datasetResult().resultsTimezone());
+                data.put("results_metadata", Map.of(
+                    "columns",
+                    semanticResult.datasetResult().resultsMetadataColumns()
+                ));
+                data.put("insights", null);
+
+                Map<String, Object> response = new LinkedHashMap<>();
+                response.put("data", data);
+                response.put("database_id", semanticResult.databaseId());
+                response.put("started_at", java.time.OffsetDateTime.now());
+                response.put("json_query", jsonQuery);
+                response.put("status", "completed");
+                response.put("context", "question");
+                response.put("row_count", semanticResult.datasetResult().rows().size());
+                response.put("running_time", semanticResult.elapsedMs());
+                response.put("error", null);
+                return ResponseEntity.accepted().body(response);
+            }
+
             JsonNode mbqlOverride = null;
             if ("query".equalsIgnoreCase(datasetQuery.path("type").asText(null))) {
                 mbqlOverride = applyDashcardParametersToMbql(datasetQuery.get("query"), dashcard, body);
@@ -815,6 +857,8 @@ public class DashboardResource {
             return ResponseEntity.accepted().body(response);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(400).body(Map.of("error", e.getMessage()));
+        } catch (SemanticQueryService.SemanticAccessDeniedException e) {
+            return ResponseEntity.status(422).body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             Map<String, Object> error = new LinkedHashMap<>();
             error.put("status", "failed");
@@ -828,6 +872,21 @@ public class DashboardResource {
             response.put("via", List.of());
             return ResponseEntity.accepted().body(response);
         }
+    }
+
+    private boolean isSemanticDatasetQuery(JsonNode datasetQuery) {
+        if (datasetQuery == null || !datasetQuery.isObject()) {
+            return false;
+        }
+        return "semantic".equalsIgnoreCase(datasetQuery.path("type").asText(null)) || datasetQuery.has("semantic_query");
+    }
+
+    private JsonNode extractSemanticQuery(JsonNode datasetQuery) {
+        JsonNode semantic = datasetQuery == null ? null : datasetQuery.get("semantic_query");
+        if (semantic != null && semantic.isObject()) {
+            return semantic;
+        }
+        return datasetQuery;
     }
 
     private ResponseEntity<?> dashboardCardClassificationDenied(

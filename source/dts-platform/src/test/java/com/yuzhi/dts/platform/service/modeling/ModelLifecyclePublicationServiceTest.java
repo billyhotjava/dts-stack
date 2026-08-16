@@ -2,6 +2,7 @@ package com.yuzhi.dts.platform.service.modeling;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -67,6 +68,53 @@ class ModelLifecyclePublicationServiceTest {
         assertThat(result.model().revision()).isEqualTo(7);
         assertThat(result.release()).isSameAs(event);
         verify(codec).toLifecycleView(draft, ModelStatus.PUBLISHED, 7, now);
+    }
+
+    @Test
+    void recordsANewReleaseWithoutRepeatingTheLifecycleTransitionForAnAlreadyPublishedRevision() {
+        ModelSpecRepository modelSpecs = mock(ModelSpecRepository.class);
+        ModelLifecycleRepository lifecycle = mock(ModelLifecycleRepository.class);
+        ModelSpecSnapshotCodec codec = mock(ModelSpecSnapshotCodec.class);
+        ModelLifecyclePublicationService service = new ModelLifecyclePublicationService(modelSpecs, lifecycle, codec);
+        ModelSpecView published = model(ModelStatus.PUBLISHED);
+        LifecycleEventView event = event();
+        ImplementationView implementation = new ImplementationView(
+            UUID.randomUUID(),
+            published.id(),
+            published.planId(),
+            7,
+            "a".repeat(64),
+            com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode.DESIGNER_GENERATED,
+            "warehouse",
+            "model.warehouse.customer_detail",
+            "ACTIVE",
+            1,
+            "a".repeat(64),
+            com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.InputMode.GENERATED,
+            java.util.List.of(
+                new com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.GeneratedInput("DBT", java.util.Map.of())
+            ),
+            java.util.List.of(),
+            java.util.Map.of(),
+            "table"
+        );
+        Instant now = Instant.parse("2026-07-20T08:00:00Z");
+        when(lifecycle.lockImplementation("tenant-a", published.id(), implementation)).thenReturn(true);
+        when(lifecycle.recordEvent(
+            "tenant-a", "alice", published, EventType.RELEASE, "REGISTERING", "release-7", "approved", null,
+            Map.of("approvedRevision", 7), implementation, now
+        )).thenReturn(event);
+
+        ModelLifecyclePublicationService.Publication result = service.publish(
+            "tenant-a", "alice", published, implementation, new PublishCommand("approved", "release-7"), now
+        );
+
+        assertThat(result.model()).isSameAs(published);
+        assertThat(result.release()).isSameAs(event);
+        verify(codec, never()).toLifecycleView(published, ModelStatus.PUBLISHED, 7, now);
+        verify(modelSpecs, never()).compareAndSetLifecycle(
+            "tenant-a", "alice", 7, "a".repeat(64), ModelStatus.DRAFT, published
+        );
     }
 
     private static ModelSpecView model(ModelStatus status) {

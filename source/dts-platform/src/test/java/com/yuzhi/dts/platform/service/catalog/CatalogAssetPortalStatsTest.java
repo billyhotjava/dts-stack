@@ -2,8 +2,11 @@ package com.yuzhi.dts.platform.service.catalog;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -205,6 +208,26 @@ class CatalogAssetPortalStatsTest {
         CatalogAssetOverviewAggregator.AssetOverview overview = service.overview(queryOf(0, 200), ACTIVE_DEPT);
 
         assertThat(overview.scanned()).isEqualTo(2500);
+        assertThat(overview.truncated()).isFalse();
+    }
+
+    @Test
+    void overviewDoesNotStopAtAnEstimatedFirstPageTotal() {
+        givenOpenMetadataAssets(250);
+        givenLegacyAssets(0);
+        CatalogAssetPortalService.AssetPage first = service.listAssets(queryOf(0, 200), ACTIVE_DEPT);
+        CatalogAssetPortalService.AssetPage second = service.listAssets(queryOf(1, 200), ACTIVE_DEPT);
+        CatalogAssetPortalService.AssetPage empty = service.listAssets(queryOf(2, 200), ACTIVE_DEPT);
+        CatalogAssetPortalService spy = spy(service);
+        doReturn(new CatalogAssetPortalService.AssetPage(first.content(), 200, 0, 200, first.content().size(), first.metadataSource()))
+            .doReturn(second)
+            .doReturn(empty)
+            .when(spy)
+            .listAssets(any(CatalogAssetPortalService.AssetQuery.class), eq(ACTIVE_DEPT));
+
+        CatalogAssetOverviewAggregator.AssetOverview overview = spy.overview(queryOf(0, 200), ACTIVE_DEPT);
+
+        assertThat(overview.scanned()).isEqualTo(250);
         assertThat(overview.truncated()).isFalse();
     }
 

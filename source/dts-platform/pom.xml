@@ -624,6 +624,7 @@
                         <testInclude>**/service/governance/IndicatorPublishPreviewServiceTest.java</testInclude>
                         <testInclude>**/service/governance/ModelFieldIndicatorDraftServiceTest.java</testInclude>
                         <testInclude>**/service/governance/IndicatorReferenceServiceManagedDependencyTest.java</testInclude>
+                        <testInclude>**/service/governance/IndicatorRunTrackerTest.java</testInclude>
                         <testInclude>**/service/governance/DimensionDepartmentScopeTest.java</testInclude>
                         <testInclude>**/domain/governance/GovIndicatorDefinitionJsonMappingTest.java</testInclude>
                         <testInclude>**/service/governance/IndicatorBusinessContextContractTest.java</testInclude>
@@ -660,6 +661,7 @@
                         <testInclude>**/service/modeling/ModelReleaseCandidatePreflightServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/CandidatePublicationAdmissionServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/CandidatePublicationCommitServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelLifecyclePublicationServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelPublicationAssetObservationAdapterTest.java</testInclude>
                         <testInclude>**/service/modeling/CandidatePublicationCoordinatorTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelClassificationPublishGateTest.java</testInclude>

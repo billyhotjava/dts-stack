@@ -53,7 +53,16 @@ public class PlatformInfraClient {
 
     public List<DataSourceSummary> listDataSources() {
         try {
-            return listSelectableDataSources();
+            List<DataSourceSummary> selectable = listSelectableDataSources();
+            if (selectable.isEmpty()) {
+                return selectable;
+            }
+            try {
+                return enrichSelectableDataSources(selectable, listLegacyDataSources());
+            } catch (RuntimeException ex) {
+                LOG.warn("Platform data source metadata enrichment failed: {}; returning selectable summaries", ex.getMessage());
+                return selectable;
+            }
         } catch (HttpStatusCodeException ex) {
             LOG.warn(
                 "Platform data source selection failed status={} body={}; falling back to legacy list",
@@ -64,6 +73,22 @@ public class PlatformInfraClient {
             LOG.warn("Platform data source selection failed: {}; falling back to legacy list", ex.getMessage());
         }
         return listLegacyDataSources();
+    }
+
+    private List<DataSourceSummary> enrichSelectableDataSources(
+        List<DataSourceSummary> selectable,
+        List<DataSourceSummary> legacy
+    ) {
+        Map<String, DataSourceSummary> legacyById = new LinkedHashMap<>();
+        for (DataSourceSummary item : legacy) {
+            if (item != null && StringUtils.hasText(item.id())) {
+                legacyById.put(item.id(), item);
+            }
+        }
+        return selectable
+            .stream()
+            .map(item -> item != null && StringUtils.hasText(item.id()) ? legacyById.getOrDefault(item.id(), item) : item)
+            .toList();
     }
 
     private List<DataSourceSummary> listSelectableDataSources() {
