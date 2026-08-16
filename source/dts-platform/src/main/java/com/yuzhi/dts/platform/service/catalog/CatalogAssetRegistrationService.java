@@ -34,8 +34,12 @@ public class CatalogAssetRegistrationService {
         if (!decision.admitted()) {
             return new ObservationResult(false, decision.excluded(), decision.reasonCode(), null);
         }
-        RegistrationReceipt receipt = store.register(decision.plan(), now);
-        return new ObservationResult(true, false, null, receipt);
+        try {
+            RegistrationReceipt receipt = store.register(decision.plan(), now);
+            return new ObservationResult(true, false, null, receipt);
+        } catch (CatalogAssetSemanticConflictException conflict) {
+            return new ObservationResult(false, false, conflict.code(), null);
+        }
     }
 
     @Transactional

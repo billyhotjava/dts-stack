@@ -273,6 +273,7 @@ test("new modeling routes have one page owner and old URLs are compatibility red
 		"modeling/metric-workbench",
 		"modeling/semantic/metrics",
 		"modeling/semantic/publish",
+		"bi/metrics",
 	]) {
 		assert.match(
 			STATIC_ROUTES,

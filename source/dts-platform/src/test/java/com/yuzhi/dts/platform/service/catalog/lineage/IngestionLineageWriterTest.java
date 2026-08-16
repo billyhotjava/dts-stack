@@ -16,6 +16,10 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogLineageJobRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.CatalogClassificationPropagationJobService;
+import com.yuzhi.dts.platform.service.catalog.CatalogPhysicalDatasetObservationAdapter;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.EvidenceChannel;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.ProducerKind;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -46,6 +50,12 @@ class IngestionLineageWriterTest {
     @Mock
     private AuditService auditService;
 
+    @Mock
+    private CatalogClassificationPropagationJobService propagationJobService;
+
+    @Mock
+    private CatalogPhysicalDatasetObservationAdapter assetObservation;
+
     @Captor
     private ArgumentCaptor<CatalogDatasetLineage> lineageCaptor;
 
@@ -57,7 +67,9 @@ class IngestionLineageWriterTest {
             lineageJobRepository,
             mappingRepository,
             dataSourceRepository,
-            auditService
+            auditService,
+            propagationJobService,
+            assetObservation
         );
         UUID connectionId = UUID.randomUUID();
         InfraOdsTableMapping mapping = new InfraOdsTableMapping();
@@ -69,14 +81,6 @@ class IngestionLineageWriterTest {
         mapping.setOdsSchema("ods");
         mapping.setOdsTable("ods_api_crm_orders");
 
-        when(datasetRepository.findFirstBySourceIdAndHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(connectionId, "api:task-api-1", "orders"))
-            .thenReturn(Optional.empty());
-        when(datasetRepository.findFirstByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase("api:task-api-1", "orders"))
-            .thenReturn(Optional.empty());
-        when(datasetRepository.findFirstBySourceIdAndHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(connectionId, "ods", "ods_api_crm_orders"))
-            .thenReturn(Optional.empty());
-        when(datasetRepository.findFirstByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase("ods", "ods_api_crm_orders"))
-            .thenReturn(Optional.empty());
         when(datasetRepository.save(any(CatalogDataset.class))).thenAnswer(invocation -> {
             CatalogDataset dataset = invocation.getArgument(0);
             dataset.setId(UUID.randomUUID());
@@ -104,6 +108,14 @@ class IngestionLineageWriterTest {
         assertThat(result.created()).isEqualTo(1);
         assertThat(lineageCaptor.getValue().getRelationType()).isEqualTo(IngestionLineageWriter.RELATION_API);
         assertThat(lineageCaptor.getValue().getNotes()).contains("origin=API").contains("executionId=run-api-1");
+        verify(assetObservation, org.mockito.Mockito.times(2)).observe(
+            any(CatalogDataset.class),
+            org.mockito.ArgumentMatchers.argThat(observation ->
+                observation.evidenceChannel() == EvidenceChannel.INGESTION_EVENT &&
+                (observation.producerKind() == ProducerKind.SOURCE_SYSTEM ||
+                    observation.producerKind() == ProducerKind.INGESTION_JOB)
+            )
+        );
     }
 
     @Test
@@ -114,7 +126,9 @@ class IngestionLineageWriterTest {
             lineageJobRepository,
             mappingRepository,
             dataSourceRepository,
-            auditService
+            auditService,
+            propagationJobService,
+            assetObservation
         );
         InfraOdsTableMapping mapping = new InfraOdsTableMapping();
         mapping.setConnectionId(UUID.randomUUID());
@@ -133,5 +147,6 @@ class IngestionLineageWriterTest {
         assertThat(result.status()).isEqualTo("api-execution-unverified");
         verify(datasetRepository, never()).save(any());
         verify(lineageRepository, never()).save(any());
+        verify(assetObservation, never()).observe(any(), any());
     }
 }

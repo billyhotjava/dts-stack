@@ -20,6 +20,15 @@ import com.yuzhi.dts.platform.service.catalog.CatalogAssetGovernancePolicy;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
 import com.yuzhi.dts.platform.service.catalog.CatalogClassificationService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
+import com.yuzhi.dts.platform.service.catalog.CatalogPhysicalDatasetObservationAdapter;
+import com.yuzhi.dts.platform.service.catalog.CatalogPhysicalDatasetObservationAdapter.DatasetObservation;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.AssetRole;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.DiscoveryState;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.EvidenceChannel;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.EvidenceStatus;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.ProducerKind;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.RelationType;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.ServingHealth;
 import com.yuzhi.dts.platform.service.catalog.SchemaDriftConsumerReferenceReadPort;
 import com.yuzhi.dts.platform.service.catalog.SchemaDriftDetector;
 import com.yuzhi.dts.platform.service.infra.dto.SchemaDiscoverDtos.SchemaDiscoverColumnDto;
@@ -92,6 +101,7 @@ public class JdbcCatalogSyncService {
     private final CatalogClassificationService classificationService;
     private final CatalogColumnSyncService columnSyncService;
     private final SchemaDriftConsumerReferenceReadPort driftConsumerReferences;
+    private final CatalogPhysicalDatasetObservationAdapter assetObservation;
     private final TransactionTemplate sourceTransactions;
 
     public JdbcCatalogSyncService(
@@ -109,6 +119,7 @@ public class JdbcCatalogSyncService {
         CatalogClassificationService classificationService,
         CatalogColumnSyncService columnSyncService,
         SchemaDriftConsumerReferenceReadPort driftConsumerReferences,
+        CatalogPhysicalDatasetObservationAdapter assetObservation,
         PlatformTransactionManager transactionManager
     ) {
         this.infraDataSourceRepository = infraDataSourceRepository;
@@ -125,6 +136,7 @@ public class JdbcCatalogSyncService {
         this.classificationService = classificationService;
         this.columnSyncService = columnSyncService;
         this.driftConsumerReferences = driftConsumerReferences;
+        this.assetObservation = assetObservation;
         this.sourceTransactions = new TransactionTemplate(transactionManager);
         this.sourceTransactions.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -361,6 +373,17 @@ public class JdbcCatalogSyncService {
                             recordSchemaDrift(runId, "JDBC", savedDataset, normalizedSchema, tableName, drift);
                         }
                     }
+
+                    observeScannedDataset(
+                        savedDataset,
+                        table,
+                        columns,
+                        source,
+                        dbProduct,
+                        dbVersion,
+                        normalizedSchema,
+                        snapshotTime
+                    );
 
                     if (table.isView()) {
                         String viewDefinition = fetchViewDefinition(connection, dbProduct, resolvedCatalog, normalizedSchema, table.tableName());
@@ -835,6 +858,68 @@ public class JdbcCatalogSyncService {
         } catch (Exception ex) {
             return UUID.nameUUIDFromBytes(String.valueOf(raw).getBytes(StandardCharsets.UTF_8)).toString();
         }
+    }
+
+    private void observeScannedDataset(
+        CatalogDataset dataset,
+        TableMeta table,
+        List<ColumnMeta> columns,
+        InfraDataSource source,
+        String databaseProduct,
+        String databaseVersion,
+        String schema,
+        Instant observedAt
+    ) {
+        String schemaFingerprint = jdbcSchemaFingerprint(table, columns);
+        String locator = source.getId() + ":" + physicalTableName(schema, table.tableName());
+        String evidenceRef = "jdbc:" + sha256(locator) + ":schema:" + schemaFingerprint;
+        String layer = StringUtils.hasText(dataset.getWarehouseLayer()) ? dataset.getWarehouseLayer() : "SOURCE";
+        assetObservation.observe(
+            dataset,
+            new DatasetObservation(
+                table.isView() ? RelationType.VIEW : RelationType.TABLE,
+                null,
+                layer,
+                "DIM".equalsIgnoreCase(layer) ? AssetRole.DIMENSION_TABLE : AssetRole.RELATION,
+                ProducerKind.SOURCE_SYSTEM,
+                source.getId().toString(),
+                defaultIfBlank(databaseProduct, "JDBC") + ":" + defaultIfBlank(databaseVersion, "unknown"),
+                EvidenceChannel.SCANNER,
+                evidenceRef,
+                observedAt,
+                EvidenceStatus.ACTIVE,
+                DiscoveryState.VERIFIED,
+                null,
+                ServingHealth.HEALTHY
+            )
+        );
+    }
+
+    private String jdbcSchemaFingerprint(TableMeta table, List<ColumnMeta> columns) {
+        StringBuilder value = new StringBuilder();
+        value.append(defaultIfBlank(table.tableType(), "TABLE")).append('|').append(table.tableName());
+        List<ColumnMeta> ordered = columns == null
+            ? List.of()
+            : columns
+                .stream()
+                .sorted(
+                    Comparator
+                        .comparing((ColumnMeta column) -> column.ordinalPosition() == null ? Integer.MAX_VALUE : column.ordinalPosition())
+                        .thenComparing(ColumnMeta::name, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
+                )
+                .toList();
+        for (ColumnMeta column : ordered) {
+            value
+                .append('\n')
+                .append(defaultIfBlank(column.name(), ""))
+                .append('|')
+                .append(defaultIfBlank(column.nativeType(), column.dataType()))
+                .append('|')
+                .append(column.nullable())
+                .append('|')
+                .append(defaultIfBlank(column.defaultValue(), ""));
+        }
+        return sha256(value.toString());
     }
 
     private String normalizeDiscoverType(String value) {

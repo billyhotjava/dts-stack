@@ -292,6 +292,7 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
         return isPost(method, path, "/api/internal/asset-permission/check")
             || isPost(method, path, "/api/internal/asset-permission/batch-check")
             || isPost(method, path, "/api/internal/asset-permission/accessible-ids")
+            || isPost(method, path, "/api/internal/asset-permission/ownership")
             || isGet(method, path, "/api/internal/asset-permission/grants")
             || isPost(method, path, "/api/internal/asset-permission/grants")
             || isDelete(method, path, "/api/internal/asset-permission/grants/by-asset")

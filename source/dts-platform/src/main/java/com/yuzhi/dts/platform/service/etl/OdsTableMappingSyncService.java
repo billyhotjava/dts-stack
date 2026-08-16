@@ -138,7 +138,13 @@ public class OdsTableMappingSyncService {
             }
             InfraOdsTableMapping savedMapping = mappingRepository.save(entity);
             updated++;
-            IngestionLineageWriter.LineageWriteResult lineage = ingestionLineageWriter.writeAddaxLineage(savedMapping, observation);
+            IngestionLineageWriter.LineageObservation mappingObservation = observation.withSchemaFingerprint(
+                resolveSchemaFingerprint(payload, sourceRef, targetRef)
+            );
+            IngestionLineageWriter.LineageWriteResult lineage = ingestionLineageWriter.writeAddaxLineage(
+                savedMapping,
+                mappingObservation
+            );
             lineageCreated += lineage.created();
             lineageUpdated += lineage.updated();
             lineageSkipped += lineage.skipped();
@@ -224,6 +230,9 @@ public class OdsTableMappingSyncService {
         Instant snapshotTime = Instant.now();
         IngestionLineageWriter.LineageObservation effectiveObservation = observation;
         for (ApiLandingTarget target : targets) {
+            IngestionLineageWriter.LineageObservation targetObservation = effectiveObservation.withSchemaFingerprint(
+                normalize(target.payload().get("fieldSnapshotChecksum"))
+            );
             Optional<InfraOdsTableMapping> existing = mappingRepository.findFirstByConnectionIdAndStreamNameIgnoreCaseAndStreamNamespaceIgnoreCase(
                 connectionId,
                 target.resourceName(),
@@ -255,7 +264,7 @@ public class OdsTableMappingSyncService {
             if (table == null) {
                 return SyncResult.empty("API 目录表身份冲突");
             }
-            String evidenceTags = apiEvidenceTags(task, target, executionEvidence, effectiveObservation);
+            String evidenceTags = apiEvidenceTags(task, target, executionEvidence, targetObservation);
             dataset.setTags(evidenceTags);
             dataset.setEnabled(Boolean.TRUE);
             dataset = datasetRepository.save(dataset);
@@ -278,7 +287,7 @@ public class OdsTableMappingSyncService {
             updated++;
             IngestionLineageWriter.LineageWriteResult lineage = ingestionLineageWriter.writeIngestionLineage(
                 savedMapping,
-                effectiveObservation,
+                targetObservation,
                 IngestionLineageWriter.RELATION_API
             );
             lineageCreated += lineage.created();
@@ -418,6 +427,46 @@ public class OdsTableMappingSyncService {
         }
         Map<String, Object> value = readMap(raw);
         return value.isEmpty() ? List.of() : List.of(value);
+    }
+
+    private String resolveSchemaFingerprint(
+        Map<String, Object> payload,
+        TableRef source,
+        TableRef target
+    ) {
+        Map<String, Object> execution = readMap(payload == null ? null : payload.get("execution"));
+        for (Map<String, Object> snapshot : readObjectMaps(execution.get("schemaSnapshots"))) {
+            String fingerprint = normalize(snapshot.get("schemaFingerprint"));
+            if (!StringUtils.hasText(fingerprint)) {
+                continue;
+            }
+            TableRef snapshotSource = new TableRef(
+                normalize(snapshot.get("sourceSchema")),
+                normalize(snapshot.get("sourceTable"))
+            );
+            TableRef snapshotTarget = new TableRef(
+                normalize(snapshot.get("odsSchema")),
+                normalize(snapshot.get("odsTable"))
+            );
+            if (sameTableRef(source, snapshotSource) && sameTableRef(target, snapshotTarget)) {
+                return fingerprint;
+            }
+        }
+        return null;
+    }
+
+    private boolean sameTableRef(TableRef left, TableRef right) {
+        if (left == null || right == null || !StringUtils.hasText(left.name()) || !StringUtils.hasText(right.name())) {
+            return false;
+        }
+        boolean tableMatches = left.name().equalsIgnoreCase(right.name());
+        if (!tableMatches) {
+            return false;
+        }
+        if (!StringUtils.hasText(left.namespace()) || !StringUtils.hasText(right.namespace())) {
+            return true;
+        }
+        return left.namespace().equalsIgnoreCase(right.namespace());
     }
 
     private List<ApiLandingTarget> resolveApiLandingTargets(List<Map<String, Object>> targetTables, String executionId) {

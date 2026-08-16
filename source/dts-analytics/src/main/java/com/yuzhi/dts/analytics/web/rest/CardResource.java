@@ -12,6 +12,7 @@ import com.yuzhi.dts.analytics.service.ActivityService;
 import com.yuzhi.dts.analytics.service.AnalyticsClassificationClient;
 import com.yuzhi.dts.analytics.service.AnalyticsConsumerClassificationService;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
+import com.yuzhi.dts.analytics.service.AnalyticsAssetAccessRegistrar;
 import com.yuzhi.dts.analytics.service.DatasetQueryService;
 import com.yuzhi.dts.analytics.service.EntityIdGenerator;
 import com.yuzhi.dts.analytics.service.PublicLinkService;
@@ -71,6 +72,7 @@ public class CardResource {
     private final SemanticQueryService semanticQueryService;
     private final AnalyticsConsumerClassificationService classificationService;
     private final ObjectMapper objectMapper;
+    private final AnalyticsAssetAccessRegistrar assetAccessRegistrar;
 
     public CardResource(
             AnalyticsSessionService sessionService,
@@ -88,7 +90,8 @@ public class CardResource {
             AssetListFilterService assetListFilterService,
             SemanticQueryService semanticQueryService,
             AnalyticsConsumerClassificationService classificationService,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            AnalyticsAssetAccessRegistrar assetAccessRegistrar) {
         this.sessionService = sessionService;
         this.cardRepository = cardRepository;
         this.bookmarkRepository = bookmarkRepository;
@@ -105,6 +108,7 @@ public class CardResource {
         this.semanticQueryService = semanticQueryService;
         this.classificationService = classificationService;
         this.objectMapper = objectMapper;
+        this.assetAccessRegistrar = assetAccessRegistrar;
     }
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
@@ -178,6 +182,7 @@ public class CardResource {
         card = cardRepository.save(card);
         classificationService.deriveCard(card);
         revisionService.recordCardRevision(card, user.get().getId(), false);
+        assetAccessRegistrar.register("CARD", card.getId(), user.get(), request);
 
         List<Map<String, Object>> resultMetadata = computeResultMetadata(card, PlatformContext.from(request));
         return ResponseEntity.ok(toCardResponse(card, resultMetadata, false));

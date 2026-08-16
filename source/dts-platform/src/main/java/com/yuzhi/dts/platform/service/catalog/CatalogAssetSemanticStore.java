@@ -25,7 +25,25 @@ public interface CatalogAssetSemanticStore {
 
     ReconciliationReceipt reconcile(Instant now);
 
-    record RegistrationReceipt(boolean created, boolean evidenceCreated, long projectionVersion, Instant asOf) {}
+    record RegistrationReceipt(
+        boolean created,
+        boolean evidenceCreated,
+        long projectionVersion,
+        Instant asOf,
+        CatalogAssetType assetType,
+        String assetKey,
+        UUID resourceId
+    ) {
+        /** Compatibility constructor for callers created before identity was exposed in the receipt. */
+        public RegistrationReceipt(
+            boolean created,
+            boolean evidenceCreated,
+            long projectionVersion,
+            Instant asOf
+        ) {
+            this(created, evidenceCreated, projectionVersion, asOf, null, null, null);
+        }
+    }
 
     record ProjectionMutationReceipt(long projectionVersion, Instant asOf) {}
 

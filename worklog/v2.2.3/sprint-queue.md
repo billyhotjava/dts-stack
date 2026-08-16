@@ -1991,3 +1991,27 @@
 **2026-08-13 架构复核**：首版三处「以为可复用、实际不可复用」已修订——①接管制品类型与 `compile()` 门禁冲突（接管后模型无法编译/物化/发布）；②回切的安全子集规则在现网不存在，且平台自生成的 SQL 必然被判定为复杂（回切移出范围）；③DESIGNER 的 TECHNICAL 表示恒为 BLOCKED，代码模式不可见（新增 F1/T03 后端能力扩展）。首版 `READY=5` 作废。详见 Sprint README「架构复核结论」与账本 #16～#23。
 
 **非目标**: `DBT_MANAGED → DESIGNER_GENERATED` 回切（移交 `assets/sprint-92-back-conversion-handoff.md`）；不加固/不下线旧 `convert-to-designer-generated`；不引入 Monaco worker；不做 YAML 智能补全。
+
+## Sprint-93: 数据建模与数据治理证据闭环 (202608)
+
+**目录**: `worklog/v2.2.3/sprint-93-202608-modeling-governance-evidence-convergence`
+**时间盒**: 2026-08-17 ～ 2026-09-04
+**状态**: IN_PROGRESS（F0 已验证真实登录、现代 Chrome、受保护 API 与 normalization preview；隔离样本和 Chrome95 仍为 GAP）
+**类型**: Architecture Convergence / Governance Evidence / Compatibility Migration / UI Productization
+**目标**: 让 ModelSpec 从构建、物化、治理质量到发布后，继续在同一稳定资产身份下被资产概览、目录、元数据、血缘和质量消费；二次物化只增加候选/执行/观察历史，不重复创建模型或资产。
+**依赖**: 承接 Sprint-86/87 资产语义；复用 Sprint-88 概览 UI、Sprint-89 元数据来源契约、Sprint-90 血缘 owner、Sprint-91 统一发布；Sprint-92 已预留给 dbt 安全回切，本项不占用其范围。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---|---|---:|---|
+| F0-交付基线与事实对账 | P0 | 1 | IN_PROGRESS |
+| F1-物理资产登记与语义投影收敛 | P0 | 2 | DRAFT（T01 READY，T02 等 preview） |
+| F2-模型服务投影闭环 | P0 | 1 | READY |
+| F3-治理质量证据桥接 | P0 | 2 | DRAFT（T01 READY，T02 依赖 T01） |
+| F4-元数据与血缘证据贯通 | P0 | 1 | DRAFT（依赖 Sprint-89/90） |
+| F5-资产治理界面收敛 | P1 | 1 | BLOCKED（依赖 F1～F4 与浏览器基线） |
+| F6-发布安全与端到端验收 | P0 | 2 | BLOCKED（依赖目标环境） |
+
+**统计**: IN_PROGRESS Task=1，READY Task=3，DRAFT Task=3，BLOCKED Task=3（共 10 Task）。
+**执行顺序**: F0 → F1/T01 ∥ F2 ∥ F3/T01 → F1/T02 → F3/T02 → F4 → F5 → F6；编码全部结束后集中执行一次真实 E2E。
+**关键决策**: `CatalogAssetType + CatalogAssetKey` 仍是唯一资产身份；`CatalogAssetRegistrationService` 是稳定物理资产唯一 command boundary；工程质量与治理数据质量分离；发布命令只保存 rule/version/binding/run 引用和 checksum；OpenMetadata 故障不删除 DTS 资产；不新增菜单、页面、资产/血缘/质量/发布台账。
+**已知风险**: 本地 367 个目录资产对应 0 条语义投影，43 个 serving projection 全部 SYNC_PENDING，字段血缘为 0，117 条质量运行全部失败且只覆盖 1 个 dataset；存量 apply、UI 与最终验收在 F0 关闭前不得开始。

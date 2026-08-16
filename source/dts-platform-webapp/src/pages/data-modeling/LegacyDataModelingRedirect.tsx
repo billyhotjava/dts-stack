@@ -27,6 +27,7 @@ export function legacyDataModelingTarget(pathname: string, search: string, hash 
 		return "/data-modeling/planning/spaces";
 	}
 	if (pathname === "/modeling/semantic/subjects") return "/data-modeling/planning/subjects";
+	if (pathname === "/bi/metrics") return "/data-modeling/metrics/atomic";
 	if (pathname === "/modeling/metric-workbench" || pathname === "/modeling/semantic/metrics") {
 		return "/data-modeling/metrics/atomic";
 	}

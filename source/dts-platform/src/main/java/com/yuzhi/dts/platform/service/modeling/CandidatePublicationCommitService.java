@@ -54,6 +54,7 @@ public class CandidatePublicationCommitService {
     private final Clock clock;
     private final AuditService auditService;
     private final CatalogModelServingService catalogServing;
+    private final ModelPublicationAssetObservationAdapter assetObservation;
 
     @Autowired
     public CandidatePublicationCommitService(
@@ -67,7 +68,8 @@ public class CandidatePublicationCommitService {
         ModelReleaseCandidateService candidateCommands,
         ModelExecutionTargetCatalogResolver targetResolver,
         AuditService auditService,
-        CatalogModelServingService catalogServing
+        CatalogModelServingService catalogServing,
+        ModelPublicationAssetObservationAdapter assetObservation
     ) {
         this(
             evidence,
@@ -81,7 +83,8 @@ public class CandidatePublicationCommitService {
             targetResolver,
             Clock.systemUTC(),
             auditService,
-            catalogServing
+            catalogServing,
+            assetObservation
         );
     }
 
@@ -108,6 +111,7 @@ public class CandidatePublicationCommitService {
             candidateCommands,
             targetResolver,
             clock,
+            null,
             null,
             null
         );
@@ -138,6 +142,7 @@ public class CandidatePublicationCommitService {
             targetResolver,
             clock,
             auditService,
+            null,
             null
         );
     }
@@ -156,6 +161,38 @@ public class CandidatePublicationCommitService {
         AuditService auditService,
         CatalogModelServingService catalogServing
     ) {
+        this(
+            evidence,
+            modelSpecs,
+            lifecycle,
+            codec,
+            lifecyclePublication,
+            publications,
+            outbox,
+            candidateCommands,
+            targetResolver,
+            clock,
+            auditService,
+            catalogServing,
+            null
+        );
+    }
+
+    public CandidatePublicationCommitService(
+        CandidatePublicationEvidenceRepository evidence,
+        ModelSpecRepository modelSpecs,
+        ModelLifecycleRepository lifecycle,
+        ModelSpecSnapshotCodec codec,
+        ModelLifecyclePublicationService lifecyclePublication,
+        CandidatePublicationRepository publications,
+        PlatformEventOutboxService outbox,
+        ModelReleaseCandidateService candidateCommands,
+        ModelExecutionTargetCatalogResolver targetResolver,
+        Clock clock,
+        AuditService auditService,
+        CatalogModelServingService catalogServing,
+        ModelPublicationAssetObservationAdapter assetObservation
+    ) {
         this.evidence = evidence;
         this.modelSpecs = modelSpecs;
         this.lifecycle = lifecycle;
@@ -168,6 +205,7 @@ public class CandidatePublicationCommitService {
         this.clock = clock;
         this.auditService = auditService;
         this.catalogServing = catalogServing;
+        this.assetObservation = assetObservation;
     }
 
     @Transactional
@@ -247,6 +285,16 @@ public class CandidatePublicationCommitService {
                 actorId,
                 now
             );
+            if (assetObservation != null) {
+                assetObservation.observePublishedAsset(
+                    candidate,
+                    target,
+                    observation,
+                    published.model(),
+                    binding,
+                    now
+                );
+            }
             bindings.add(binding);
             if (catalogServing != null) {
                 ProjectionMutation serving = catalogServing.promoteSuccessfulServing(

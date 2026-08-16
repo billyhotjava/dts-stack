@@ -23,12 +23,23 @@ class CatalogAssetRegistrationServiceTest {
     @Test
     void routesAnAdmittedObservationThroughTheSingleStoreBoundary() {
         when(store.register(any(), eq(NOW)))
-            .thenReturn(new CatalogAssetSemanticStore.RegistrationReceipt(true, true, 1, NOW));
+            .thenReturn(
+                new CatalogAssetSemanticStore.RegistrationReceipt(
+                    true,
+                    true,
+                    1,
+                    NOW,
+                    CatalogAssetType.DATASET,
+                    validObservation().assetKey(),
+                    validObservation().resourceId()
+                )
+            );
 
         CatalogAssetRegistrationService.ObservationResult result = service.observe(validObservation());
 
         assertThat(result.admitted()).isTrue();
         assertThat(result.receipt().projectionVersion()).isEqualTo(1);
+        assertThat(result.receipt().assetKey()).isEqualTo(validObservation().assetKey());
         verify(store).register(argThat(plan -> plan.assetKey().equals(validObservation().assetKey())), eq(NOW));
     }
 
@@ -95,6 +106,24 @@ class CatalogAssetRegistrationServiceTest {
         assertThat(result.excluded()).isFalse();
         assertThat(result.reasonCode()).isEqualTo("LAYER_NORMALIZATION_REQUIRED");
         verifyNoInteractions(store);
+    }
+
+    @Test
+    void returnsStructuredRejectionForDurableIdentityConflict() {
+        when(store.register(any(), eq(NOW)))
+            .thenThrow(
+                new CatalogAssetSemanticConflictException(
+                    "CATALOG_ASSET_RESOURCE_ID_CONFLICT",
+                    "conflicting resource"
+                )
+            );
+
+        CatalogAssetRegistrationService.ObservationResult result = service.observe(validObservation());
+
+        assertThat(result.admitted()).isFalse();
+        assertThat(result.excluded()).isFalse();
+        assertThat(result.reasonCode()).isEqualTo("CATALOG_ASSET_RESOURCE_ID_CONFLICT");
+        assertThat(result.receipt()).isNull();
     }
 
     @Test

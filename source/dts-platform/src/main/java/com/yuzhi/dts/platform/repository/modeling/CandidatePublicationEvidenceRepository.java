@@ -45,7 +45,7 @@ public class CandidatePublicationEvidenceRepository {
                    e.artifact_bundle_checksum, e.dependency_snapshot_checksum,
                    pr.pipeline_run_group_id, pr.id as pipeline_run_id, pr.dbt_invocation_id,
                    o.adapter, o.database_name, o.schema_name, o.identifier,
-                   o.expected_type, o.actual_columns,
+                   o.actual_type as relation_type, o.actual_columns,
                    o.metadata_checksum, o.observed_at
               from modeling_model_release_candidate c
               join lateral (
@@ -76,7 +76,7 @@ public class CandidatePublicationEvidenceRepository {
               join lateral (
                     select observation.adapter, observation.database_name,
                            observation.schema_name, observation.identifier,
-                           observation.expected_type, observation.actual_columns,
+                           observation.actual_type, observation.actual_columns,
                            observation.metadata_checksum, observation.observed_at
                       from modeling_physical_relation_observation observation
                      where observation.tenant_id = c.tenant_id
@@ -123,7 +123,7 @@ public class CandidatePublicationEvidenceRepository {
                     row.getString("database_name"),
                     row.getString("schema_name"),
                     row.getString("identifier"),
-                    ExpectedRelationType.valueOf(row.getString("expected_type")),
+                    ExpectedRelationType.valueOf(row.getString("relation_type")),
                     readColumns(row.getString("actual_columns")),
                     row.getString("metadata_checksum"),
                     row.getTimestamp("observed_at").toInstant()

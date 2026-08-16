@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticStore;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticConflictException;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.*;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetType;
@@ -42,7 +43,38 @@ public class JdbcCatalogAssetSemanticStore implements CatalogAssetSemanticStore 
     public RegistrationReceipt register(RegistrationPlan plan, Instant now) {
         lock(plan.assetType(), plan.assetKey());
         Optional<BucketKey> previous = findBucket(plan.assetType(), plan.assetKey());
+        Optional<ProjectionRow> current = findProjection(plan.assetType(), plan.assetKey());
+        if (
+            current.isPresent() &&
+            current.orElseThrow().resourceId() != null &&
+            plan.resourceId() != null &&
+            !current.orElseThrow().resourceId().equals(plan.resourceId())
+        ) {
+            throw new CatalogAssetSemanticConflictException(
+                "CATALOG_ASSET_RESOURCE_ID_CONFLICT",
+                "Asset key is already bound to a different durable resource"
+            );
+        }
         boolean evidenceCreated = !evidenceExists(plan.evidence());
+
+        if (
+            current.isPresent() &&
+            !evidenceCreated &&
+            projectionMatches(current.orElseThrow(), plan) &&
+            producerMatches(plan) &&
+            evidenceMatches(plan.evidence())
+        ) {
+            ProjectionRow existing = current.orElseThrow();
+            return new RegistrationReceipt(
+                false,
+                false,
+                existing.version(),
+                existing.updatedAt(),
+                plan.assetType(),
+                plan.assetKey(),
+                existing.resourceId()
+            );
+        }
 
         ProjectionWriteResult projection = upsertProjection(plan, now);
         upsertProducer(plan, now);
@@ -57,7 +89,71 @@ public class JdbcCatalogAssetSemanticStore implements CatalogAssetSemanticStore 
         }
         markProjectionFresh(now);
         appendProcessedEvent(plan, projection.created() ? "ASSET_REGISTERED" : "ASSET_REFRESHED", now);
-        return new RegistrationReceipt(projection.created(), evidenceCreated, projection.version(), now);
+        UUID resolvedResourceId = plan.resourceId() != null
+            ? plan.resourceId()
+            : current.map(ProjectionRow::resourceId).orElse(null);
+        return new RegistrationReceipt(
+            projection.created(),
+            evidenceCreated,
+            projection.version(),
+            now,
+            plan.assetType(),
+            plan.assetKey(),
+            resolvedResourceId
+        );
+    }
+
+    private boolean projectionMatches(ProjectionRow current, RegistrationPlan plan) {
+        StatusAxes axes = plan.statusAxes();
+        ConsumptionEligibility eligibility = plan.eligibility();
+        return (
+            java.util.Objects.equals(current.resourceId(), plan.resourceId()) &&
+            current.relationType() == plan.relationType() &&
+            java.util.Objects.equals(current.domainId(), plan.domainId()) &&
+            java.util.Objects.equals(current.canonicalLayer(), plan.canonicalLayer()) &&
+            java.util.Objects.equals(current.legacyLayerCode(), plan.legacyLayerCode()) &&
+            current.assetRole() == plan.assetRole() &&
+            current.discovery() == axes.discovery() &&
+            current.governance() == axes.governance() &&
+            current.publication() == axes.publication() &&
+            current.serving() == axes.serving() &&
+            current.lifecycle() == axes.lifecycle() &&
+            java.util.Objects.equals(current.qualityGatePassed(), plan.qualityGatePassed()) &&
+            java.util.Objects.equals(current.permissionGatePassed(), plan.permissionGatePassed()) &&
+            current.eligibilityDecision() == eligibility.decision() &&
+            readReasonCodes(current.eligibilityReasons()).equals(eligibility.reasonCodes())
+        );
+    }
+
+    private boolean producerMatches(RegistrationPlan plan) {
+        return currentProducer(plan.assetType(), plan.assetKey())
+            .filter(current -> current.producerKind() == plan.producer().producerKind())
+            .filter(current -> current.producerId().equals(plan.producer().producerId()))
+            .filter(current -> java.util.Objects.equals(current.producerVersion(), plan.producer().producerVersion()))
+            .isPresent();
+    }
+
+    private boolean evidenceMatches(RegistrationEvidence evidence) {
+        Integer count = jdbc.queryForObject(
+            """
+            SELECT count(*)
+              FROM catalog_asset_registration_evidence
+             WHERE asset_type = ?
+               AND asset_key = ?
+               AND channel = ?
+               AND evidence_ref = ?
+               AND status = ?
+               AND last_observed_at >= ?
+            """,
+            Integer.class,
+            evidence.assetType().name(),
+            evidence.assetKey(),
+            evidence.channel().name(),
+            evidence.evidenceRef(),
+            evidence.status().name(),
+            Timestamp.from(evidence.lastObservedAt())
+        );
+        return count != null && count > 0;
     }
 
     @Override

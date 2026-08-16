@@ -104,7 +104,10 @@ public class PlatformPermissionFilter extends OncePerRequestFilter {
             return;
         }
 
-        PermissionResult result = permissionClient.check(username, roles, deptCode, asset.type, asset.id);
+        String action = actionFor(request.getMethod(), path);
+        PermissionResult result = "CARD".equals(asset.type) || "DASHBOARD".equals(asset.type)
+            ? permissionClient.authorize(username, roles, deptCode, asset.type, asset.id, action)
+            : permissionClient.check(username, roles, deptCode, asset.type, asset.id, null, null, action);
         if (!result.allowed()) {
             LOG.debug("Permission denied: user={} asset={}:{} reason={}", username, asset.type, asset.id, result.reason());
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
@@ -132,6 +135,30 @@ public class PlatformPermissionFilter extends OncePerRequestFilter {
         if (m.matches()) return new AssetRef("TABLE", m.group(1));
 
         return null;
+    }
+
+    static String actionFor(String method, String path) {
+        if ("GET".equals(method) || "HEAD".equals(method) || "OPTIONS".equals(method)) {
+            return "READ";
+        }
+        if (path.endsWith("/favorite")) {
+            return "READ";
+        }
+        if ("POST".equals(method)
+                && (path.contains("/query") || path.contains("/execute/") || path.endsWith("/copy"))) {
+            return "READ";
+        }
+        if ("DELETE".equals(method)
+                || path.endsWith("/public_link")
+                || path.endsWith("/persist")
+                || path.endsWith("/unpersist")
+                || path.endsWith("/refresh")) {
+            return "MANAGE";
+        }
+        if ("POST".equals(method) || "PUT".equals(method) || "PATCH".equals(method)) {
+            return "EDIT";
+        }
+        return "READ";
     }
 
     record AssetRef(String type, String id) {}

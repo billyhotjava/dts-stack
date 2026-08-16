@@ -1088,6 +1088,12 @@ public class CatalogAssetPortalService {
         if (extension == null && legacy == null) {
             return false;
         }
+        if (
+            (extension != null && Boolean.FALSE.equals(extension.getEnabled())) ||
+            (legacy != null && Boolean.FALSE.equals(legacy.getEnabled()))
+        ) {
+            return false;
+        }
         String subjectKey = classificationSubjectKey(extension, legacy);
         String sealedClassification = StringUtils.hasText(subjectKey)
             ? classificationService.resolve("ASSET", subjectKey).map(CatalogClassificationSnapshot::getEffectiveLevel).orElse(null)

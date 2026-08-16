@@ -8,6 +8,8 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogMaskingRuleRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogRowFilterRuleRepository;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionService;
+import com.yuzhi.dts.platform.service.permission.AssetAccessRegistrationService;
+import com.yuzhi.dts.platform.service.permission.AssetAccessRegistrationService.RegistrationCommand;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionService.AccessibleAssetsResult;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionService.AssetRef;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionService.GrantCommand;
@@ -29,6 +31,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
@@ -45,6 +48,7 @@ public class AssetPermissionInternalResource {
     private final CatalogRowFilterRuleRepository rowFilterRuleRepository;
     private final CatalogMaskingRuleRepository maskingRuleRepository;
     private final MeterRegistry meterRegistry;
+    private final AssetAccessRegistrationService registrationService;
 
     public AssetPermissionInternalResource(
         AssetPermissionService permissionService,
@@ -54,29 +58,52 @@ public class AssetPermissionInternalResource {
         CatalogMaskingRuleRepository maskingRuleRepository,
         MeterRegistry meterRegistry
     ) {
+        this(
+            permissionService,
+            auditService,
+            datasetRepository,
+            rowFilterRuleRepository,
+            maskingRuleRepository,
+            meterRegistry,
+            null
+        );
+    }
+
+    @Autowired
+    public AssetPermissionInternalResource(
+        AssetPermissionService permissionService,
+        AssetPermissionAuditService auditService,
+        CatalogDatasetRepository datasetRepository,
+        CatalogRowFilterRuleRepository rowFilterRuleRepository,
+        CatalogMaskingRuleRepository maskingRuleRepository,
+        MeterRegistry meterRegistry,
+        AssetAccessRegistrationService registrationService
+    ) {
         this.permissionService = permissionService;
         this.auditService = auditService;
         this.datasetRepository = datasetRepository;
         this.rowFilterRuleRepository = rowFilterRuleRepository;
         this.maskingRuleRepository = maskingRuleRepository;
         this.meterRegistry = meterRegistry;
+        this.registrationService = registrationService;
     }
 
     @PostMapping("/check")
     public ResponseEntity<CheckResponse> check(@RequestBody CheckRequest request) {
-        PermissionDecision result = permissionService.checkAction(
-            new PermissionCheckCommand(
-                request.username(),
-                request.userRoles(),
-                request.userDeptCode(),
-                request.userClassification(),
-                request.asset() != null ? request.asset().type() : null,
-                request.asset() != null ? request.asset().id() : null,
-                request.asset() != null ? request.asset().key() : null,
-                request.action(),
-                request.assetClassification()
-            )
+        PermissionCheckCommand command = new PermissionCheckCommand(
+            request.username(),
+            request.userRoles(),
+            request.userDeptCode(),
+            request.userClassification(),
+            request.asset() != null ? request.asset().type() : null,
+            request.asset() != null ? request.asset().id() : null,
+            request.asset() != null ? request.asset().key() : null,
+            request.action(),
+            request.assetClassification()
         );
+        PermissionDecision result = isAnalyticsAssetAuthorization(request)
+            ? permissionService.checkAuthorization(command)
+            : permissionService.checkAction(command);
         auditService.recordDecision(result, request.username(), currentActor());
         return ResponseEntity.ok(
             new CheckResponse(
@@ -278,6 +305,35 @@ public class AssetPermissionInternalResource {
         return ResponseEntity.ok(Map.of("deleted", deleted));
     }
 
+    @PostMapping("/ownership")
+    public ResponseEntity<?> registerOwnership(@RequestBody OwnershipRegistrationRequest request) {
+        if (!"service:dts-analytics".equalsIgnoreCase(currentActor()) || registrationService == null) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "analytics service required"));
+        }
+        String assetType = request != null ? request.assetType() : null;
+        if (!"CARD".equalsIgnoreCase(assetType) && !"DASHBOARD".equalsIgnoreCase(assetType)) {
+            return ResponseEntity.badRequest().body(Map.of("error", "CARD or DASHBOARD assetType required"));
+        }
+        var result = registrationService.register(
+            new RegistrationCommand(
+                request.assetType(),
+                request.assetId(),
+                request.ownerDeptCode(),
+                request.ownerUsername(),
+                request.assignedBy(),
+                request.sourceId()
+            )
+        );
+        return ResponseEntity.ok(
+            new OwnershipRegistrationResponse(
+                result.ownershipRegistered(),
+                result.creatorGrantRegistered(),
+                request.assetType().trim().toUpperCase(Locale.ROOT),
+                request.assetId()
+            )
+        );
+    }
+
     // --- Request/Response DTOs ---
 
     public record CheckRequest(
@@ -287,8 +343,21 @@ public class AssetPermissionInternalResource {
         String userClassification,
         String assetClassification,
         String action,
-        AssetRefDto asset
-    ) {}
+        AssetRefDto asset,
+        Boolean authorizationOnly
+    ) {
+        public CheckRequest(
+            String username,
+            List<String> userRoles,
+            String userDeptCode,
+            String userClassification,
+            String assetClassification,
+            String action,
+            AssetRefDto asset
+        ) {
+            this(username, userRoles, userDeptCode, userClassification, assetClassification, action, asset, false);
+        }
+    }
     public record BatchCheckRequest(
         String username,
         List<String> userRoles,
@@ -330,10 +399,34 @@ public class AssetPermissionInternalResource {
         String grantReason,
         String grantedBy
     ) {}
+    public record OwnershipRegistrationRequest(
+        String assetType,
+        String assetId,
+        String ownerDeptCode,
+        String ownerUsername,
+        String assignedBy,
+        String sourceId
+    ) {}
+    public record OwnershipRegistrationResponse(
+        boolean ownershipRegistered,
+        boolean creatorGrantRegistered,
+        String assetType,
+        String assetId
+    ) {}
 
     private String currentActor() {
         var authentication = SecurityContextHolder.getContext().getAuthentication();
         return authentication == null ? null : authentication.getName();
+    }
+
+    private boolean isAnalyticsAssetAuthorization(CheckRequest request) {
+        if (request == null || !Boolean.TRUE.equals(request.authorizationOnly()) || request.asset() == null) {
+            return false;
+        }
+        String actor = currentActor();
+        String type = request.asset().type();
+        return "service:dts-analytics".equalsIgnoreCase(actor)
+            && ("CARD".equalsIgnoreCase(type) || "DASHBOARD".equalsIgnoreCase(type));
     }
 
     private Optional<CatalogDataset> resolveDataset(AssetRefDto asset) {

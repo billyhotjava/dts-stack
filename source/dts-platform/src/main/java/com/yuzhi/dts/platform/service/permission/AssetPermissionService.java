@@ -279,6 +279,95 @@ public class AssetPermissionService {
         );
     }
 
+    /**
+     * Authorizes operations on an asset container without applying data-classification clearance.
+     * Classification remains a separate execution/export guard at the data consumer boundary.
+     */
+    public PermissionDecision checkAuthorization(PermissionCheckCommand command) {
+        if (command == null) {
+            return PermissionDecision.denied(
+                null, null, null, null, null, "READ", "request_required", "NOT_APPLIED", null
+            );
+        }
+        String assetType = normalizeAssetType(command.assetType());
+        String assetId = firstNonBlank(command.assetId(), command.assetKey());
+        String action = normalizeAction(command.action());
+        String requiredPermission = requiredPermission(action);
+        if (assetType == null || assetId == null) {
+            return PermissionDecision.denied(
+                assetType,
+                assetId,
+                command.assetKey(),
+                action,
+                null,
+                requiredPermission,
+                "asset_required",
+                "NOT_APPLIED",
+                null
+            );
+        }
+        if (requiredPermission == null) {
+            return PermissionDecision.denied(
+                assetType,
+                assetId,
+                command.assetKey(),
+                action,
+                null,
+                null,
+                "unsupported_action",
+                "NOT_APPLIED",
+                null
+            );
+        }
+
+        PermissionResult base = check(
+            command.username(),
+            command.userRoles(),
+            command.userDeptCode(),
+            assetType,
+            assetId,
+            command.userClassification(),
+            command.assetClassification()
+        );
+        if (!base.allowed()) {
+            return PermissionDecision.denied(
+                assetType,
+                assetId,
+                command.assetKey(),
+                action,
+                base.permission(),
+                requiredPermission,
+                base.reason(),
+                "NOT_APPLIED",
+                base.reason()
+            );
+        }
+        if (!permissionCovers(base.permission(), requiredPermission)) {
+            return PermissionDecision.denied(
+                assetType,
+                assetId,
+                command.assetKey(),
+                action,
+                base.permission(),
+                requiredPermission,
+                "insufficient_permission",
+                "NOT_APPLIED",
+                base.reason()
+            );
+        }
+        return PermissionDecision.allowed(
+            assetType,
+            assetId,
+            command.assetKey(),
+            action,
+            base.permission(),
+            requiredPermission,
+            base.reason(),
+            "NOT_APPLIED",
+            base.reason()
+        );
+    }
+
     public Map<String, PermissionResult> batchCheck(String username, List<String> roles, String deptCode,
                                                      List<AssetRef> assets) {
         return batchCheck(username, roles, deptCode, assets, null);

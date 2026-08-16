@@ -51,7 +51,6 @@ const DatabaseDetailPage = lazy(() => import("@/analytics/pages/DatabaseDetailPa
 const TableDetailPage = lazy(() => import("@/analytics/pages/TableDetailPage"));
 const FieldDetailPage = lazy(() => import("@/analytics/pages/FieldDetailPage"));
 const ModelsPage = lazy(() => import("@/analytics/pages/ModelsPage"));
-const MetricsPage = lazy(() => import("@/analytics/pages/MetricsPage"));
 const TrashPage = lazy(() => import("@/analytics/pages/TrashPage"));
 const CollectionsPage = lazy(() => import("@/analytics/pages/CollectionsPage"));
 const CollectionItemsPage = lazy(() => import("@/analytics/pages/CollectionItemsPage"));
@@ -835,7 +834,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "bi/metrics",
 		element: (
 			<S>
-				<MetricsPage />
+				<LegacyDataModelingRedirect />
 			</S>
 		),
 	},

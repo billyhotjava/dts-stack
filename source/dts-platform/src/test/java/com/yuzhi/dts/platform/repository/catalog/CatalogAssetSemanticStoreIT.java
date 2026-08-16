@@ -40,6 +40,7 @@ class CatalogAssetSemanticStoreIT {
         "config/liquibase/changelog/20260810_02_catalog_asset_semantics_projection.xml";
     private static final Pattern OWNED_SCHEMA = Pattern.compile("^s87_asset_semantics_[0-9a-f]{32}$");
     private static final Instant NOW = Instant.parse("2026-08-10T08:00:00Z");
+    private static final UUID RESOURCE_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
     @Container
     private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17.4")
@@ -101,12 +102,37 @@ class CatalogAssetSemanticStoreIT {
 
         assertThat(first.created()).isTrue();
         assertThat(first.evidenceCreated()).isTrue();
+        assertThat(first.assetType()).isEqualTo(CatalogAssetType.DATASET);
+        assertThat(first.assetKey()).isEqualTo(assetKey());
+        assertThat(first.resourceId()).isEqualTo(RESOURCE_ID);
         assertThat(repeated.created()).isFalse();
         assertThat(repeated.evidenceCreated()).isFalse();
+        assertThat(repeated.projectionVersion()).isEqualTo(first.projectionVersion());
         assertThat(jdbc.queryForObject("select count(*) from catalog_asset_semantic_projection", Long.class)).isEqualTo(1L);
         assertThat(jdbc.queryForObject("select count(*) from catalog_asset_producer_ref", Long.class)).isEqualTo(1L);
         assertThat(jdbc.queryForObject("select count(*) from catalog_asset_registration_evidence", Long.class)).isEqualTo(1L);
         assertThat(jdbc.queryForObject("select sum(asset_count) from catalog_asset_stats_projection", Long.class)).isEqualTo(1L);
+        assertThat(jdbc.queryForObject("select count(*) from catalog_asset_projection_event", Long.class)).isEqualTo(1L);
+    }
+
+    @Test
+    void rejectsTheSameAssetKeyWhenItPointsAtAnotherDurableResource() {
+        RegistrationPlan original = admittedPlan("scan-1", GovernanceReadiness.UNASSIGNED, null);
+        RegistrationPlan conflicting = admittedPlan(
+            "scan-2",
+            GovernanceReadiness.UNASSIGNED,
+            null,
+            UUID.fromString("33333333-3333-3333-3333-333333333333")
+        );
+        transaction.execute(status -> store.register(original, NOW));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+            transaction.execute(status -> store.register(conflicting, NOW.plusSeconds(30)))
+        )
+            .isInstanceOf(com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticConflictException.class)
+            .hasMessageContaining("different durable resource");
+        assertThat(jdbc.queryForObject("select count(*) from catalog_asset_semantic_projection", Long.class)).isEqualTo(1L);
+        assertThat(jdbc.queryForObject("select resource_id from catalog_asset_semantic_projection", UUID.class)).isEqualTo(RESOURCE_ID);
     }
 
     @Test
@@ -142,10 +168,19 @@ class CatalogAssetSemanticStoreIT {
     }
 
     private RegistrationPlan admittedPlan(String evidenceRef, GovernanceReadiness governance, UUID domain) {
+        return admittedPlan(evidenceRef, governance, domain, RESOURCE_ID);
+    }
+
+    private RegistrationPlan admittedPlan(
+        String evidenceRef,
+        GovernanceReadiness governance,
+        UUID domain,
+        UUID resourceId
+    ) {
         ObservationCommand command = new ObservationCommand(
             CatalogAssetType.DATASET,
             assetKey(),
-            UUID.fromString("11111111-1111-1111-1111-111111111111"),
+            resourceId,
             RelationType.TABLE,
             false,
             false,

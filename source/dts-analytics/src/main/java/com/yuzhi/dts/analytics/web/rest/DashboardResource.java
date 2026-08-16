@@ -18,6 +18,7 @@ import com.yuzhi.dts.analytics.repository.AnalyticsTableRepository;
 import com.yuzhi.dts.analytics.service.ActivityService;
 import com.yuzhi.dts.analytics.service.AnalyticsConsumerClassificationService;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
+import com.yuzhi.dts.analytics.service.AnalyticsAssetAccessRegistrar;
 import com.yuzhi.dts.analytics.service.DatasetQueryService;
 import com.yuzhi.dts.analytics.service.EntityIdGenerator;
 import com.yuzhi.dts.analytics.service.FieldValuesService;
@@ -72,6 +73,7 @@ public class DashboardResource {
     private final AssetListFilterService assetListFilterService;
     private final AnalyticsConsumerClassificationService classificationService;
     private final ObjectMapper objectMapper;
+    private final AnalyticsAssetAccessRegistrar assetAccessRegistrar;
 
     public DashboardResource(
             AnalyticsSessionService sessionService,
@@ -89,7 +91,8 @@ public class DashboardResource {
             QueryExecutionFacade queryExecutionFacade,
             AssetListFilterService assetListFilterService,
             AnalyticsConsumerClassificationService classificationService,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            AnalyticsAssetAccessRegistrar assetAccessRegistrar) {
         this.sessionService = sessionService;
         this.dashboardRepository = dashboardRepository;
         this.dashboardCardRepository = dashboardCardRepository;
@@ -106,6 +109,7 @@ public class DashboardResource {
         this.assetListFilterService = assetListFilterService;
         this.classificationService = classificationService;
         this.objectMapper = objectMapper;
+        this.assetAccessRegistrar = assetAccessRegistrar;
     }
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
@@ -156,6 +160,7 @@ public class DashboardResource {
 
         dashboard = dashboardRepository.save(dashboard);
         revisionService.recordDashboardRevision(dashboard, List.of(), user.get().getId(), false);
+        assetAccessRegistrar.register("DASHBOARD", dashboard.getId(), user.get(), request);
         return ResponseEntity.ok(toDashboardDetail(dashboard, List.of(), false));
     }
 
@@ -412,6 +417,7 @@ public class DashboardResource {
 
         List<AnalyticsDashboardCard> dashcards = dashboardCardRepository.findAllByDashboardIdOrderByIdAsc(copy.getId());
         classificationService.deriveDashboard(copy.getId());
+        assetAccessRegistrar.register("DASHBOARD", copy.getId(), user.get(), request);
         return ResponseEntity.ok(toDashboardDetail(copy, dashcards, false));
     }
 

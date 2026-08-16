@@ -38,7 +38,7 @@ import { getEffectiveLocale, type Locale } from "../../i18n";
 import SemanticFieldExplorer from "./SemanticFieldExplorer";
 import SemanticModelCanvas from "./SemanticModelCanvas";
 import SemanticModelingEmptyState from "./SemanticModelingEmptyState";
-import { hasSemanticModelingMenuAccess } from "./semanticAccess";
+import { canPromoteSemanticModel, hasSemanticModelingMenuAccess } from "./semanticAccess";
 import { buildSemanticJoinOptions } from "./semanticCanvas.helpers";
 
 type LoadState<T> = { state: "loading" } | { state: "loaded"; value: T } | { state: "error"; error: unknown };
@@ -164,15 +164,8 @@ export default function SemanticCardEditorPage() {
 	const params = useParams();
 	const menus = useMenuStore((state) => state.menus);
 	const roles = useUserRoles();
-	const roleSet = new Set(
-		(roles || []).map((role) =>
-			String(role || "")
-				.trim()
-				.toUpperCase(),
-		),
-	);
 	const canModel = useMemo(() => hasSemanticModelingMenuAccess(menus), [menus]);
-	const canPromote = roleSet.has("BI_DATA_ENGINEER") || roleSet.has("OP_ADMIN");
+	const canPromote = canPromoteSemanticModel(roles || []);
 	const isVirtualDatasetMode = location.pathname.includes("/virtual-datasets");
 	const recordId = params.id ? String(params.id) : null;
 	const vdsFromSearch = new URLSearchParams(location.search).get("vds");

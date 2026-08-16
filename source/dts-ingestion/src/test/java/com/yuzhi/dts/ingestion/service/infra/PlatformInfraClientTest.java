@@ -17,8 +17,11 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.yuzhi.dts.ingestion.domain.IngestionExecution;
+import com.yuzhi.dts.ingestion.domain.IngestionSchemaSnapshot;
 import com.yuzhi.dts.ingestion.domain.IngestionTask;
 import com.yuzhi.dts.ingestion.config.IngestionOutboundPlatformProperties;
+import com.yuzhi.dts.ingestion.repository.IngestionSchemaSnapshotRepository;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.time.Instant;
@@ -35,6 +38,9 @@ class PlatformInfraClientTest {
     private static final UUID DATA_SOURCE_ID = UUID.fromString("2b0fce68-0c78-41f4-9c63-0f6d1e9292e1");
 
     private final IngestionSettingsService settingsService = org.mockito.Mockito.mock(IngestionSettingsService.class);
+    private final IngestionSchemaSnapshotRepository schemaSnapshotRepository = org.mockito.Mockito.mock(
+        IngestionSchemaSnapshotRepository.class
+    );
 
     private static final String SUCCESS_BODY =
         """
@@ -54,7 +60,7 @@ class PlatformInfraClientTest {
         """;
 
     private PlatformInfraClient buildClient(IngestionOutboundPlatformProperties props) {
-        return new PlatformInfraClient(new RestTemplateBuilder(), settingsService, new ObjectMapper(), props);
+        return new PlatformInfraClient(new RestTemplateBuilder(), settingsService, new ObjectMapper(), props, schemaSnapshotRepository);
     }
 
     private MockRestServiceServer bindServer(PlatformInfraClient client) {
@@ -153,6 +159,13 @@ class PlatformInfraClientTest {
 
     @Test
     void syncIngestionExecutionLineageIncludesRowCountFacets() {
+        IngestionSchemaSnapshot snapshot = new IngestionSchemaSnapshot();
+        snapshot.setSourceSchema("erp");
+        snapshot.setSourceTable("orders");
+        snapshot.setOdsSchema("ods");
+        snapshot.setOdsTable("ods_orders");
+        snapshot.setSchemaFingerprint("schema-fingerprint-100");
+        when(schemaSnapshotRepository.findByExecution_IdOrderByCreatedDateDesc(100L)).thenReturn(List.of(snapshot));
         PlatformInfraClient client = buildClient(props("env-runtime-secret"));
         MockRestServiceServer server = bindServer(client);
         server
@@ -164,7 +177,9 @@ class PlatformInfraClientTest {
                 containsString("\"taskRevision\":\"2026-07-24T07:00:00Z\""),
                 containsString("\"executionSequence\":100"),
                 containsString("\"sourceTables\""),
-                containsString("\"targetTables\"")
+                containsString("\"targetTables\""),
+                containsString("\"schemaSnapshots\""),
+                containsString("\"schemaFingerprint\":\"schema-fingerprint-100\"")
             )))
             .andRespond(withSuccess("{\"status\":200}", MediaType.APPLICATION_JSON));
 

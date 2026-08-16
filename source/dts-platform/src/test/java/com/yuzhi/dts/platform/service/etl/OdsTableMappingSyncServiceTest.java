@@ -67,6 +67,9 @@ class OdsTableMappingSyncServiceTest {
     @Captor
     private ArgumentCaptor<com.yuzhi.dts.platform.domain.catalog.CatalogDataset> datasetCaptor;
 
+    @Captor
+    private ArgumentCaptor<IngestionLineageWriter.LineageObservation> observationCaptor;
+
     private OdsTableMappingSyncService service;
 
     @BeforeEach
@@ -112,6 +115,18 @@ class OdsTableMappingSyncServiceTest {
                     "writerType", "postgres",
                     "jdbcUrl", "jdbc:postgresql://dts-pg:5432/biadmin"
                 )
+            ),
+            "execution",
+            Map.of(
+                "schemaSnapshots",
+                List.of(
+                    Map.of(
+                        "sourceTable", "project_subject_domain",
+                        "odsSchema", "public",
+                        "odsTable", "ods_prj_prjtest2000",
+                        "schemaFingerprint", "schema-fingerprint-project-domain"
+                    )
+                )
             )
         );
 
@@ -120,6 +135,8 @@ class OdsTableMappingSyncServiceTest {
         assertThat(result.tables()).isEqualTo(1);
         assertThat(mappingCaptor.getValue().getOdsSchema()).isEqualTo("public");
         assertThat(mappingCaptor.getValue().getOdsTable()).isEqualTo("ods_prj_prjtest2000");
+        verify(ingestionLineageWriter).writeAddaxLineage(any(), observationCaptor.capture());
+        assertThat(observationCaptor.getValue().schemaFingerprint()).isEqualTo("schema-fingerprint-project-domain");
     }
 
     @Test
@@ -177,6 +194,12 @@ class OdsTableMappingSyncServiceTest {
             }),
             org.mockito.ArgumentMatchers.eq(CatalogColumnSyncService.STATUS_ACTIVE)
         );
+        verify(ingestionLineageWriter).writeIngestionLineage(
+            any(),
+            observationCaptor.capture(),
+            org.mockito.ArgumentMatchers.eq(IngestionLineageWriter.RELATION_API)
+        );
+        assertThat(observationCaptor.getValue().schemaFingerprint()).isEqualTo("sha256:fields-v1");
     }
 
     @Test

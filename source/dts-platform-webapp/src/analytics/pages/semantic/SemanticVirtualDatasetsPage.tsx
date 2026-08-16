@@ -11,7 +11,7 @@ import { useUserRoles } from "@/store/userStore";
 import { analyticsApi, type SemanticPromoteResult, type SemanticVirtualDataset } from "../../api/analyticsApi";
 import { ErrorNotice } from "../../components/ErrorNotice";
 import { getEffectiveLocale, type Locale } from "../../i18n";
-import { hasSemanticModelingMenuAccess } from "./semanticAccess";
+import { canPromoteSemanticModel, hasSemanticModelingMenuAccess } from "./semanticAccess";
 
 type LoadState<T> = { state: "loading" } | { state: "loaded"; value: T } | { state: "error"; error: unknown };
 
@@ -31,15 +31,8 @@ export default function SemanticVirtualDatasetsPage() {
 	const locale: Locale = useMemo(() => getEffectiveLocale(), []);
 	const menus = useMenuStore((state) => state.menus);
 	const roles = useUserRoles();
-	const roleSet = new Set(
-		(roles || []).map((role) =>
-			String(role || "")
-				.trim()
-				.toUpperCase(),
-		),
-	);
 	const canModel = useMemo(() => hasSemanticModelingMenuAccess(menus), [menus]);
-	const canPromote = roleSet.has("BI_DATA_ENGINEER") || roleSet.has("OP_ADMIN");
+	const canPromote = canPromoteSemanticModel(roles || []);
 	const [state, setState] = useState<LoadState<SemanticVirtualDataset[]>>({ state: "loading" });
 	const [promoteState, setPromoteState] = useState<LoadState<SemanticPromoteResult> | null>(null);
 	const [detailRow, setDetailRow] = useState<SemanticVirtualDataset | null>(null);

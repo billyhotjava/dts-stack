@@ -172,7 +172,8 @@ public class CandidatePublicationRepository {
             evidence.dbtUniqueId(),
             evidence.targetIdentifier(),
             evidence.artifactChecksum(),
-            evidence.dependencySnapshotChecksum()
+            evidence.dependencySnapshotChecksum(),
+            assetId
         );
     }
 
@@ -445,7 +446,8 @@ public class CandidatePublicationRepository {
                    release.details_json ->> 'dbtUniqueId' as dbt_unique_id,
                    release.details_json ->> 'targetIdentifier' as target_identifier,
                    release.details_json ->> 'artifactChecksum' as artifact_checksum,
-                   release.details_json ->> 'dependencySnapshotChecksum' as dependency_snapshot_checksum
+                   release.details_json ->> 'dependencySnapshotChecksum' as dependency_snapshot_checksum,
+                   cast(release.details_json ->> 'physicalAssetId' as uuid) as physical_asset_id
               from modeling_model_spec s
               join lateral (
                     select event.id, event.details_json
@@ -475,7 +477,8 @@ public class CandidatePublicationRepository {
                     row.getString("dbt_unique_id"),
                     row.getString("target_identifier"),
                     row.getString("artifact_checksum"),
-                    row.getString("dependency_snapshot_checksum")
+                    row.getString("dependency_snapshot_checksum"),
+                    row.getObject("physical_asset_id", UUID.class)
                 ),
             candidate.executionTargetKey(),
             candidate.environment(),
@@ -1122,6 +1125,29 @@ public class CandidatePublicationRepository {
         String dbtUniqueId,
         String targetIdentifier,
         String artifactChecksum,
-        String dependencySnapshotChecksum
-    ) {}
+        String dependencySnapshotChecksum,
+        UUID physicalAssetId
+    ) {
+        /** Compatibility constructor for tests and callers created before the physical asset receipt was exposed. */
+        public PublishedModelBinding(
+            UUID modelSpecId,
+            UUID releaseId,
+            int modelRevision,
+            String dbtUniqueId,
+            String targetIdentifier,
+            String artifactChecksum,
+            String dependencySnapshotChecksum
+        ) {
+            this(
+                modelSpecId,
+                releaseId,
+                modelRevision,
+                dbtUniqueId,
+                targetIdentifier,
+                artifactChecksum,
+                dependencySnapshotChecksum,
+                null
+            );
+        }
+    }
 }

@@ -25,7 +25,16 @@ import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
 import com.yuzhi.dts.platform.service.catalog.CatalogClassificationPropagationJobService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService.ColumnSpec;
+import com.yuzhi.dts.platform.service.catalog.CatalogPhysicalDatasetObservationAdapter;
+import com.yuzhi.dts.platform.service.catalog.CatalogPhysicalDatasetObservationAdapter.DatasetObservation;
 import com.yuzhi.dts.platform.service.catalog.CatalogPhysicalLocator;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.AssetRole;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.DiscoveryState;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.EvidenceChannel;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.EvidenceStatus;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.ProducerKind;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.RelationType;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.ServingHealth;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ArtifactWrite;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecReader;
@@ -72,6 +81,7 @@ public class DbtAssetSyncService {
     private final ModelSpecReader modelSpecReader;
     private final AuditService auditService;
     private final CatalogClassificationPropagationJobService propagationJobService;
+    private final CatalogPhysicalDatasetObservationAdapter assetObservation;
 
     public DbtAssetSyncService(
         ObjectMapper objectMapper,
@@ -88,7 +98,8 @@ public class DbtAssetSyncService {
         ModelLifecycleRepository lifecycleRepository,
         ModelSpecReader modelSpecReader,
         AuditService auditService,
-        CatalogClassificationPropagationJobService propagationJobService
+        CatalogClassificationPropagationJobService propagationJobService,
+        CatalogPhysicalDatasetObservationAdapter assetObservation
     ) {
         this.objectMapper = objectMapper;
         this.properties = properties;
@@ -105,6 +116,7 @@ public class DbtAssetSyncService {
         this.modelSpecReader = modelSpecReader;
         this.auditService = auditService;
         this.propagationJobService = propagationJobService;
+        this.assetObservation = assetObservation;
     }
 
     /**
@@ -225,6 +237,7 @@ public class DbtAssetSyncService {
                     stats
                 );
                 CatalogTableSchema table = ensureTable(dataset, meta.table);
+                observeMaterializedDataset(dataset, meta, controlledLayer, manifestEvidence);
                 datasetByUniqueId.put(entry.getKey(), dataset.getId());
                 tableByUniqueId.put(entry.getKey(), table);
             }
@@ -1498,6 +1511,64 @@ public class DbtAssetSyncService {
         } catch (IllegalArgumentException ignored) {
             return null;
         }
+    }
+
+    private void observeMaterializedDataset(
+        CatalogDataset dataset,
+        ModelMeta model,
+        String controlledLayer,
+        ManifestEvidence manifest
+    ) {
+        String invocationId = model != null && model.runEvidence != null
+            ? model.runEvidence.invocationId()
+            : null;
+        String generatedAt = model != null && model.runEvidence != null
+            ? model.runEvidence.generatedAt()
+            : null;
+        Instant observedAt = parseArtifactInstant(generatedAt);
+        String schemaFingerprint = sha256(
+            String.join(
+                "\n",
+                defaultIfBlank(model.uniqueId, "unknown"),
+                defaultIfBlank(model.schema, model.database),
+                defaultIfBlank(model.table, "unknown"),
+                defaultIfBlank(model.materialization, "table"),
+                defaultIfBlank(controlledLayer, ""),
+                defaultIfBlank(model.compiledCode, model.rawCode),
+                String.valueOf(model.columns)
+            )
+        );
+        String runIdentity = defaultIfBlank(invocationId, defaultIfBlank(manifest.invocationId(), "manifest"));
+        String evidenceRef =
+            "dbt:" +
+            sha256(model.uniqueId).substring(0, 24) +
+            ":run:" +
+            sha256(runIdentity).substring(0, 24) +
+            ":schema:" +
+            schemaFingerprint;
+        assetObservation.observe(
+            dataset,
+            new DatasetObservation(
+                dbtRelationType(model.materialization),
+                null,
+                controlledLayer,
+                "DIM".equalsIgnoreCase(controlledLayer) ? AssetRole.DIMENSION_TABLE : AssetRole.RELATION,
+                ProducerKind.DBT_MODEL,
+                model.uniqueId,
+                "run:" + runIdentity,
+                EvidenceChannel.DBT_SYNC,
+                evidenceRef,
+                observedAt == null ? Instant.now() : observedAt,
+                EvidenceStatus.ACTIVE,
+                DiscoveryState.VERIFIED,
+                null,
+                ServingHealth.HEALTHY
+            )
+        );
+    }
+
+    private RelationType dbtRelationType(String materialization) {
+        return "view".equalsIgnoreCase(materialization) ? RelationType.VIEW : RelationType.TABLE;
     }
 
     private String resolveDatasetType(DbtConfigService.DbtConfigView view) {

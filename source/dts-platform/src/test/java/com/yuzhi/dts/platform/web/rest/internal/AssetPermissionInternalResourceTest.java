@@ -19,12 +19,15 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 @ExtendWith(MockitoExtension.class)
 class AssetPermissionInternalResourceTest {
@@ -45,6 +48,60 @@ class AssetPermissionInternalResourceTest {
     private CatalogMaskingRuleRepository maskingRuleRepository;
 
     private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void analyticsServiceUsesAuthorizationOnlyForCardContainerOperations() {
+        SecurityContextHolder.getContext().setAuthentication(
+            new UsernamePasswordAuthenticationToken("service:dts-analytics", null, List.of())
+        );
+        when(permissionService.checkAuthorization(any()))
+            .thenReturn(
+                new PermissionDecision(
+                    true,
+                    "MANAGE",
+                    "inst_manage",
+                    "EDIT",
+                    "EDIT",
+                    "CARD",
+                    "42",
+                    null,
+                    "NOT_APPLIED",
+                    "inst_manage"
+                )
+            );
+        AssetPermissionInternalResource resource = new AssetPermissionInternalResource(
+            permissionService,
+            auditService,
+            datasetRepository,
+            rowFilterRuleRepository,
+            maskingRuleRepository,
+            meterRegistry
+        );
+
+        var response = resource.check(
+            new AssetPermissionInternalResource.CheckRequest(
+                "xiezm",
+                List.of("ROLE_INST_DATA_OWNER"),
+                "D01",
+                null,
+                null,
+                "EDIT",
+                new AssetPermissionInternalResource.AssetRefDto("CARD", "42", null),
+                true
+            )
+        );
+
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().allowed()).isTrue();
+        assertThat(response.getBody().classificationDecision()).isEqualTo("NOT_APPLIED");
+        verify(permissionService).checkAuthorization(any());
+        verify(permissionService, never()).checkAction(any());
+    }
 
     @Test
     void policyReturnsMaskingColumnsForDataset() {

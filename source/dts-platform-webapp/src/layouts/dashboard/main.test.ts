@@ -15,4 +15,29 @@ describe("dashboard route reachability", () => {
 
 		expect(isPathInMenuTree(menuPaths, "/data-modeling/dimensions/workbench")).toBe(false);
 	});
+
+	it("lets the canonical governed-indicator menu host the retired BI metrics route", () => {
+		const menuPaths = new Set(["/data-modeling/metrics/atomic"]);
+
+		expect(isPathInMenuTree(menuPaths, "/bi/metrics")).toBe(true);
+	});
+
+	it("does not expose the retired BI metrics route without indicator menu access", () => {
+		const menuPaths = new Set(["/bi/questions"]);
+
+		expect(isPathInMenuTree(menuPaths, "/bi/metrics")).toBe(false);
+	});
+
+	it("lets the analysis-card menu host its semantic create and edit routes", () => {
+		const menuPaths = new Set(["/bi/questions"]);
+
+		expect(isPathInMenuTree(menuPaths, "/bi/card/new")).toBe(true);
+		expect(isPathInMenuTree(menuPaths, "/bi/card/card-1/edit")).toBe(true);
+	});
+
+	it("does not expose semantic card editors without analysis-card menu access", () => {
+		const menuPaths = new Set(["/bi/dashboards"]);
+
+		expect(isPathInMenuTree(menuPaths, "/bi/card/new")).toBe(false);
+	});
 });

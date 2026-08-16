@@ -594,6 +594,7 @@
                         <testInclude>**/service/etl/DbtScopedProjectServiceRealCompileIT.java</testInclude>
                         <testInclude>**/service/etl/DbtDagServiceTest.java</testInclude>
                         <testInclude>**/service/etl/DbtAssetSyncServiceTest.java</testInclude>
+                        <testInclude>**/service/etl/OdsTableMappingSyncServiceTest.java</testInclude>
                         <testInclude>**/service/etl/AirflowDbtExecutionGatewayTest.java</testInclude>
                         <testInclude>**/service/etl/DbtConfigServiceTest.java</testInclude>
                         <testInclude>**/service/etl/DbtRuntimeProfile*.java</testInclude>
@@ -659,6 +660,7 @@
                         <testInclude>**/service/modeling/ModelReleaseCandidatePreflightServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/CandidatePublicationAdmissionServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/CandidatePublicationCommitServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelPublicationAssetObservationAdapterTest.java</testInclude>
                         <testInclude>**/service/modeling/CandidatePublicationCoordinatorTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelClassificationPublishGateTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelSpecSourceValidationAdapterTest.java</testInclude>
@@ -672,6 +674,9 @@
                         <testInclude>**/service/modeling/ModelPublicationRequestedLiquibaseTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelPublicationReviewReconcilerTest.java</testInclude>
                         <testInclude>**/service/modeling/ReleaseDutyResolverTest.java</testInclude>
+                        <testInclude>**/service/permission/AnalyticsAssetAuthorizationTest.java</testInclude>
+                        <testInclude>**/service/permission/AssetAccessRegistrationServiceTest.java</testInclude>
+                        <testInclude>**/web/rest/internal/AssetPermissionInternalResourceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelReleaseCandidateCancelLiquibaseTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelReleaseCandidateImplementationSnapshotLiquibaseTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelReleaseCandidatePublishedHistoryLiquibaseTest.java</testInclude>
@@ -772,6 +777,8 @@
                         <testInclude>**/service/catalog/CatalogAssetIdentityResolverTest.java</testInclude>
                         <testInclude>**/service/catalog/CatalogAssetSemantics*.java</testInclude>
                         <testInclude>**/service/catalog/CatalogAssetRegistrationServiceTest.java</testInclude>
+                        <testInclude>**/service/catalog/CatalogPhysicalDatasetObservationAdapterTest.java</testInclude>
+                        <testInclude>**/service/catalog/lineage/IngestionLineageWriterTest.java</testInclude>
                         <testInclude>**/service/catalog/CatalogAssetNormalizationMigrationServiceIT.java</testInclude>
                         <testInclude>**/service/catalog/CatalogColumnSyncServiceTest.java</testInclude>
                         <testInclude>**/service/catalog/SchemaDriftDetectorTest.java</testInclude>

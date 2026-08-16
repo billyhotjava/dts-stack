@@ -1,7 +1,6 @@
-import assert from "node:assert/strict";
-import test from "node:test";
 import type { MenuTree } from "#/entity";
-import { hasSemanticModelingMenuAccess } from "./semanticAccess";
+import { expect, test } from "vitest";
+import { canPromoteSemanticModel, hasSemanticModelingMenuAccess } from "./semanticAccess";
 
 test("semantic modeling access follows analytics card menu visibility", () => {
 	const menus: MenuTree[] = [
@@ -25,7 +24,7 @@ test("semantic modeling access follows analytics card menu visibility", () => {
 		},
 	];
 
-	assert.equal(hasSemanticModelingMenuAccess(menus), true);
+	expect(hasSemanticModelingMenuAccess(menus)).toBe(true);
 });
 
 test("semantic modeling access follows dedicated semantic routes when present", () => {
@@ -40,7 +39,7 @@ test("semantic modeling access follows dedicated semantic routes when present", 
 		},
 	];
 
-	assert.equal(hasSemanticModelingMenuAccess(menus), true);
+	expect(hasSemanticModelingMenuAccess(menus)).toBe(true);
 });
 
 test("semantic modeling access is denied without matching menus", () => {
@@ -55,5 +54,19 @@ test("semantic modeling access is denied without matching menus", () => {
 		},
 	];
 
-	assert.equal(hasSemanticModelingMenuAccess(menus), false);
+	expect(hasSemanticModelingMenuAccess(menus)).toBe(false);
+});
+
+test("institute and department data owners can promote semantic models without another approval role", () => {
+	expect(canPromoteSemanticModel(["ROLE_INST_DATA_OWNER"])).toBe(true);
+	expect(canPromoteSemanticModel(["ROLE_DEPT_DATA_OWNER"])).toBe(true);
+});
+
+test("existing engineering and operation roles retain semantic promotion access", () => {
+	expect(canPromoteSemanticModel(["ROLE_BI_DATA_ENGINEER"])).toBe(true);
+	expect(canPromoteSemanticModel(["OP_ADMIN"])).toBe(true);
+});
+
+test("ordinary report consumers cannot promote semantic models", () => {
+	expect(canPromoteSemanticModel(["ROLE_EMP"])).toBe(false);
 });

@@ -21,6 +21,9 @@ import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.catalog.CatalogAutoLineageService;
 import com.yuzhi.dts.platform.service.catalog.CatalogClassificationService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
+import com.yuzhi.dts.platform.service.catalog.CatalogPhysicalDatasetObservationAdapter;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.EvidenceChannel;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.ProducerKind;
 import com.yuzhi.dts.platform.service.modeling.GovernedStandardReadPort;
 import com.yuzhi.dts.platform.service.catalog.SchemaDriftDetector;
 import java.sql.Connection;
@@ -85,6 +88,9 @@ class JdbcClassificationLifecycleIT {
 
     @Mock
     private CatalogClassificationService classificationService;
+
+    @Mock
+    private CatalogPhysicalDatasetObservationAdapter assetObservation;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final String tableName = "s72_jdbc_classification";
@@ -210,6 +216,14 @@ class JdbcClassificationLifecycleIT {
         assertThat(savedDatasets.getAllValues().get(savedDatasets.getAllValues().size() - 1).getEnabled())
             .as("JDBC harvest must preserve the governed enabled flag")
             .isFalse();
+        org.mockito.Mockito.verify(assetObservation).observe(
+            org.mockito.ArgumentMatchers.same(existingDataset),
+            org.mockito.ArgumentMatchers.argThat(observation ->
+                observation.producerKind() == ProducerKind.SOURCE_SYSTEM &&
+                observation.evidenceChannel() == EvidenceChannel.SCANNER &&
+                observation.evidenceRef().contains(":schema:")
+            )
+        );
     }
 
     private JdbcCatalogSyncService service() {
@@ -230,6 +244,7 @@ class JdbcClassificationLifecycleIT {
             classificationService,
             new CatalogColumnSyncService(columnRepository, org.mockito.Mockito.mock(GovernedStandardReadPort.class)),
             (catalogTableId, connectionId, namespace, objectName) -> Optional.of(java.util.Set.of()),
+            assetObservation,
             transactionManager
         );
     }

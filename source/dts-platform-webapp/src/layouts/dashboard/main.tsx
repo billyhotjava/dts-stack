@@ -129,6 +129,8 @@ const ALWAYS_ALLOWED_PREFIXES = [
 
 const INTERNAL_ROUTE_HOSTS: Record<string, string[]> = {
 	"/data-architecture": ["/data-modeling/planning/spaces"],
+	"/bi/card": ["/bi/questions"],
+	"/bi/metrics": ["/data-modeling/metrics/atomic"],
 };
 
 /** Check if pathname is reachable from any menu path (exact or prefix match). */

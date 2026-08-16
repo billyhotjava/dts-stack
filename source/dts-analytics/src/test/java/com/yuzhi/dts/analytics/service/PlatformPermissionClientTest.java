@@ -3,6 +3,7 @@ package com.yuzhi.dts.analytics.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.http.HttpMethod.POST;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
@@ -101,6 +102,74 @@ class PlatformPermissionClientTest {
             client.check("ptrdemo", "ROLE_FLOWER", "D1", "DASHBOARD", "100");
 
         assertThat(cached.allowed()).isTrue();
+        server.verify();
+    }
+
+    @Test
+    void authorizeSeparatesAssetAdministrationFromClassificationEnforcement() {
+        PlatformPermissionClient client = buildClient(props());
+        MockRestServiceServer server = bindServer(client);
+        server
+            .expect(requestTo("http://platform.test/api/internal/asset-permission/check"))
+            .andExpect(method(POST))
+            .andExpect(content().json(
+                """
+                {
+                  "username": "xiezm",
+                  "userRoles": ["ROLE_INST_DATA_OWNER"],
+                  "userDeptCode": "D1",
+                  "action": "EDIT",
+                  "authorizationOnly": true,
+                  "asset": {"type": "CARD", "id": "42"}
+                }
+                """,
+                false
+            ))
+            .andRespond(withSuccess(
+                "{\"allowed\":true,\"permission\":\"MANAGE\",\"reason\":\"inst_manage\"}",
+                MediaType.APPLICATION_JSON
+            ));
+
+        PlatformPermissionClient.PermissionResult result = client.authorize(
+            "xiezm",
+            "ROLE_INST_DATA_OWNER",
+            "D1",
+            "CARD",
+            "42",
+            "EDIT"
+        );
+
+        assertThat(result.allowed()).isTrue();
+        server.verify();
+    }
+
+    @Test
+    void registersAssetOwnershipAndCreatorGrantThroughOnePlatformCommand() {
+        PlatformPermissionClient client = buildClient(props());
+        MockRestServiceServer server = bindServer(client);
+        server
+            .expect(requestTo("http://platform.test/api/internal/asset-permission/ownership"))
+            .andExpect(method(POST))
+            .andExpect(content().json(
+                """
+                {
+                  "assetType": "DASHBOARD",
+                  "assetId": "7",
+                  "ownerDeptCode": "D1",
+                  "ownerUsername": "xiezm",
+                  "assignedBy": "xiezm",
+                  "sourceId": "dts-analytics"
+                }
+                """,
+                true
+            ))
+            .andRespond(withSuccess(
+                "{\"ownershipRegistered\":true,\"creatorGrantRegistered\":true}",
+                MediaType.APPLICATION_JSON
+            ));
+
+        client.registerAssetAccess("DASHBOARD", "7", "D1", "xiezm");
+
         server.verify();
     }
 

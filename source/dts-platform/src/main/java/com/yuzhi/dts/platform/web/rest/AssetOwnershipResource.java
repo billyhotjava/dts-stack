@@ -3,6 +3,8 @@ package com.yuzhi.dts.platform.web.rest;
 import com.yuzhi.dts.platform.domain.permission.AssetOwnership;
 import com.yuzhi.dts.platform.repository.permission.AssetOwnershipRepository;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionAuditService;
+import com.yuzhi.dts.platform.service.permission.AssetAccessRegistrationService;
+import com.yuzhi.dts.platform.service.permission.AssetAccessRegistrationService.RegistrationCommand;
 import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -25,11 +27,14 @@ public class AssetOwnershipResource {
 
     private final AssetOwnershipRepository ownershipRepository;
     private final AssetPermissionAuditService auditService;
+    private final AssetAccessRegistrationService registrationService;
 
     public AssetOwnershipResource(AssetOwnershipRepository ownershipRepository,
-                                   AssetPermissionAuditService auditService) {
+                                   AssetPermissionAuditService auditService,
+                                   AssetAccessRegistrationService registrationService) {
         this.ownershipRepository = ownershipRepository;
         this.auditService = auditService;
+        this.registrationService = registrationService;
     }
 
     @GetMapping
@@ -89,19 +94,22 @@ public class AssetOwnershipResource {
     @PreAuthorize(INST_MANAGER_EXPRESSION)
     public ResponseEntity<AssetOwnership> create(@RequestBody CreateOwnershipRequest request) {
         if (request.assetType() == null || request.assetType().isBlank()
-                || request.assetId() == null || request.assetId().isBlank()) {
+                || request.assetId() == null || request.assetId().isBlank()
+                || request.ownerDeptCode() == null || request.ownerDeptCode().isBlank()) {
             return ResponseEntity.badRequest().build();
         }
-        // Upsert: if ownership already exists for this asset, update it
-        AssetOwnership ownership = ownershipRepository
-            .findByAssetTypeAndAssetId(request.assetType().trim(), request.assetId().trim())
-            .orElseGet(AssetOwnership::new);
-
-        ownership.setAssetType(request.assetType().trim());
-        ownership.setAssetId(request.assetId().trim());
-        ownership.setOwnerDeptCode(request.ownerDeptCode() != null ? request.ownerDeptCode().trim() : "");
-        ownership.setAssignedBy(request.assignedBy() != null ? request.assignedBy().trim() : "SYSTEM");
-        ownership = ownershipRepository.save(ownership);
+        AssetOwnership ownership = registrationService
+            .register(
+                new RegistrationCommand(
+                    request.assetType(),
+                    request.assetId(),
+                    request.ownerDeptCode(),
+                    null,
+                    request.assignedBy(),
+                    null
+                )
+            )
+            .ownership();
 
         log.info("Created/updated ownership: type={} id={} dept={}",
             ownership.getAssetType(), ownership.getAssetId(), ownership.getOwnerDeptCode());

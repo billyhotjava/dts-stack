@@ -23,6 +23,7 @@ describe("legacy data-modeling redirects", () => {
 			"/data-modeling/dimensions/workbench?model=demo#fields",
 		);
 		expect(legacyDataModelingTarget("/modeling/semantic-center/metrics", "")).toBe("/data-modeling/metrics/atomic");
+		expect(legacyDataModelingTarget("/bi/metrics", "")).toBe("/data-modeling/metrics/atomic");
 		expect(legacyDataModelingTarget("/bi/semantic-modeling", "")).toBe("/data-modeling/dimensions/workbench");
 	});
 

@@ -21,6 +21,9 @@ import com.yuzhi.dts.platform.repository.modeling.ModelLifecycleRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogClassificationPropagationJobService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
+import com.yuzhi.dts.platform.service.catalog.CatalogPhysicalDatasetObservationAdapter;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.EvidenceChannel;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.ProducerKind;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecReader;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract;
@@ -76,6 +79,9 @@ class DbtAssetSyncServiceTest {
 
     @Mock
     private CatalogClassificationPropagationJobService propagationJobService;
+
+    @Mock
+    private CatalogPhysicalDatasetObservationAdapter assetObservation;
 
     @TempDir
     Path tempDir;
@@ -243,6 +249,15 @@ class DbtAssetSyncServiceTest {
             any(),
             org.mockito.ArgumentMatchers.eq("DBT"),
             org.mockito.ArgumentMatchers.eq("dbt:model.dts.dwd_orders:run-classification")
+        );
+        verify(assetObservation).observe(
+            any(CatalogDataset.class),
+            org.mockito.ArgumentMatchers.argThat(observation ->
+                observation.producerKind() == ProducerKind.DBT_MODEL &&
+                observation.evidenceChannel() == EvidenceChannel.DBT_SYNC &&
+                "model.dts.dwd_orders".equals(observation.producerId()) &&
+                observation.evidenceRef().contains("schema:")
+            )
         );
     }
 
@@ -556,7 +571,8 @@ class DbtAssetSyncServiceTest {
             lifecycleRepository,
             modelSpecReader,
             auditService,
-            propagationJobService
+            propagationJobService,
+            assetObservation
         );
     }
 

@@ -50,6 +50,7 @@ class ServiceDependencyAuthenticationFilterTest {
     private static final String METRICS_ASSET_PERMISSION_POLICY_LEGACY = "/api/internal/asset-permission/policy";
     private static final String ANALYTICS_ASSET_PERMISSION_BATCH_CHECK = "/api/internal/asset-permission/batch-check";
     private static final String ANALYTICS_ASSET_PERMISSION_ACCESSIBLE_IDS = "/api/internal/asset-permission/accessible-ids";
+    private static final String ANALYTICS_ASSET_PERMISSION_OWNERSHIP = "/api/internal/asset-permission/ownership";
     private static final String INTERNAL_CAPABILITIES = "/api/internal/capabilities";
     private static final String INTERNAL_GLOSSARY_TERMS_RESOLVE = "/api/internal/glossary/terms/resolve";
     private static final String INTERNAL_DOMAINS_RESOLVE = "/api/internal/domains/resolve";
@@ -177,6 +178,7 @@ class ServiceDependencyAuthenticationFilterTest {
         assertAnalyticsCanAccessPost(ANALYTICS_ASSET_PERMISSION_CHECK);
         assertAnalyticsCanAccessPost(ANALYTICS_ASSET_PERMISSION_BATCH_CHECK);
         assertAnalyticsCanAccessPost(ANALYTICS_ASSET_PERMISSION_ACCESSIBLE_IDS);
+        assertAnalyticsCanAccessPost(ANALYTICS_ASSET_PERMISSION_OWNERSHIP);
     }
 
     @Test

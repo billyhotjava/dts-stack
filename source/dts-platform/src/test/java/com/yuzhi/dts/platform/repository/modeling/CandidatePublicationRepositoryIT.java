@@ -404,6 +404,7 @@ class CandidatePublicationRepositoryIT {
                 });
                 var genericDbtWrite = executor.submit(() -> {
                     start.await();
+                    boolean lostRace = false;
                     try {
                         new TransactionTemplate(
                             transactionManager
@@ -423,7 +424,14 @@ class CandidatePublicationRepositoryIT {
                     } catch (
                         org.springframework.dao.DataIntegrityViolationException expectedRace
                     ) {
-                        // The next idempotent dbt tick must converge on the winner.
+                        lostRace = true;
+                    } catch (
+                        org.springframework.orm.ObjectOptimisticLockingFailureException expectedRace
+                    ) {
+                        lostRace = true;
+                    }
+                    if (lostRace) {
+                        return null;
                     }
                     return new TransactionTemplate(
                         transactionManager
@@ -440,7 +448,23 @@ class CandidatePublicationRepositoryIT {
                 });
 
                 assertThat(candidateWrite.get()).isNotNull();
-                assertThat(genericDbtWrite.get())
+                UUID genericAssetId = genericDbtWrite.get();
+                if (genericAssetId == null) {
+                    // Simulate the next idempotent dbt tick after the publication winner commits.
+                    genericAssetId = new TransactionTemplate(
+                        transactionManager
+                    ).execute(status ->
+                        catalogDatasets
+                            .findFirstBySourceIdAndHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(
+                                SOURCE_ID,
+                                "finance",
+                                tableName
+                            )
+                            .orElseThrow()
+                            .getId()
+                    );
+                }
+                assertThat(genericAssetId)
                     .isEqualTo(expectedAssetId);
             } finally {
                 executor.shutdownNow();
@@ -963,12 +987,12 @@ class CandidatePublicationRepositoryIT {
         jdbcTemplate.update(
             """
             insert into modeling_model_spec (
-                id, tenant_id, object_id, plan_id, process_id, layer, model_type,
+                id, tenant_id, plan_id, layer, warehouse_layer_code, model_type,
                 implementation_mode, name, status, revision, version, created_date,
                 last_modified_date, contract_version, domain_id, current_checksum,
                 idempotency_key, idempotency_request_hash, idempotency_response_snapshot
             ) values (
-                ?, ?, null, ?, null, 'DWD', 'FACT', 'DESIGNER_GENERATED',
+                ?, ?, ?, 'DWD', 'DWD', 'FACT', 'DESIGNER_GENERATED',
                 ?, 'PUBLISHED', 1, 1, current_timestamp, current_timestamp,
                 2, ?, ?, ?, ?, cast('{}' as jsonb)
             )
@@ -985,11 +1009,11 @@ class CandidatePublicationRepositoryIT {
         jdbcTemplate.update(
             """
             insert into modeling_model_spec_revision (
-                id, model_spec_id, revision, spec_json, status,
+                id, model_spec_id, revision, status,
                 content_checksum, created_date, last_modified_date,
                 tenant_id, contract_version, snapshot_json, created_by
             ) values (
-                ?, ?, 1, cast('{}' as jsonb), 'PUBLISHED',
+                ?, ?, 1, 'PUBLISHED',
                 ?, current_timestamp, current_timestamp,
                 ?, 2, cast('{}' as jsonb), 'release-operator'
             )

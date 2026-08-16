@@ -92,7 +92,52 @@ public class PlatformPermissionClient {
         String assetClassification,
         String action
     ) {
-        String cacheKey = checkCacheKey(username, roles, deptCode, assetType, assetId, userClassification, assetClassification, action);
+        return checkInternal(
+            username,
+            roles,
+            deptCode,
+            assetType,
+            assetId,
+            userClassification,
+            assetClassification,
+            action,
+            false
+        );
+    }
+
+    public PermissionResult authorize(
+        String username,
+        String roles,
+        String deptCode,
+        String assetType,
+        String assetId,
+        String action
+    ) {
+        return checkInternal(username, roles, deptCode, assetType, assetId, null, null, action, true);
+    }
+
+    private PermissionResult checkInternal(
+        String username,
+        String roles,
+        String deptCode,
+        String assetType,
+        String assetId,
+        String userClassification,
+        String assetClassification,
+        String action,
+        boolean authorizationOnly
+    ) {
+        String cacheAction = authorizationOnly ? "AUTHORIZATION:" + action : action;
+        String cacheKey = checkCacheKey(
+            username,
+            roles,
+            deptCode,
+            assetType,
+            assetId,
+            userClassification,
+            assetClassification,
+            cacheAction
+        );
         PermissionResult cached = checkCache.getIfPresent(cacheKey);
         if (cached != null) {
             return cached;
@@ -107,6 +152,7 @@ public class PlatformPermissionClient {
             body.put("userClassification", userClassification);
             body.put("assetClassification", assetClassification);
             body.put("action", StringUtils.hasText(action) ? action.trim().toUpperCase() : "READ");
+            body.put("authorizationOnly", authorizationOnly);
             body.put("asset", Map.of("type", assetType, "id", assetId));
 
             ResponseEntity<Map> response = restTemplate.exchange(
@@ -317,6 +363,40 @@ public class PlatformPermissionClient {
         } catch (Exception ex) {
             LOG.warn("Upsert platform grant failed type={} id={} grantee={}: {}", assetType, assetId, granteeId, ex.getMessage());
             throw new PlatformPermissionException("upsert platform grant failed", ex);
+        }
+    }
+
+    public void registerAssetAccess(
+        String assetType,
+        String assetId,
+        String ownerDeptCode,
+        String ownerUsername
+    ) {
+        try {
+            URI uri = buildUri("/api/internal/asset-permission/ownership");
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("assetType", assetType);
+            body.put("assetId", assetId);
+            body.put("ownerDeptCode", ownerDeptCode);
+            body.put("ownerUsername", ownerUsername);
+            body.put("assignedBy", ownerUsername);
+            body.put("sourceId", "dts-analytics");
+            restTemplate.exchange(
+                uri,
+                HttpMethod.POST,
+                new HttpEntity<>(body, buildHeaders()),
+                Map.class
+            );
+            clearAllPermissionCaches();
+        } catch (Exception ex) {
+            LOG.warn(
+                "Register platform asset access failed type={} id={} owner={}: {}",
+                assetType,
+                assetId,
+                ownerUsername,
+                ex.getMessage()
+            );
+            throw new PlatformPermissionException("register platform asset access failed", ex);
         }
     }
 

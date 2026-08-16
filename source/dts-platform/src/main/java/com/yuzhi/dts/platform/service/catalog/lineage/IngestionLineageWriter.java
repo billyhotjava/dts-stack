@@ -14,7 +14,17 @@ import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetGovernancePolicy;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetObservationException;
 import com.yuzhi.dts.platform.service.catalog.CatalogClassificationPropagationJobService;
+import com.yuzhi.dts.platform.service.catalog.CatalogPhysicalDatasetObservationAdapter;
+import com.yuzhi.dts.platform.service.catalog.CatalogPhysicalDatasetObservationAdapter.DatasetObservation;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.AssetRole;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.DiscoveryState;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.EvidenceChannel;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.EvidenceStatus;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.ProducerKind;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.RelationType;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.ServingHealth;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -45,6 +55,7 @@ public class IngestionLineageWriter {
     private final InfraDataSourceRepository dataSourceRepository;
     private final AuditService auditService;
     private final CatalogClassificationPropagationJobService propagationJobService;
+    private final CatalogPhysicalDatasetObservationAdapter assetObservation;
 
     public IngestionLineageWriter(
         CatalogDatasetRepository datasetRepository,
@@ -53,7 +64,8 @@ public class IngestionLineageWriter {
         InfraOdsTableMappingRepository mappingRepository,
         InfraDataSourceRepository dataSourceRepository,
         AuditService auditService,
-        CatalogClassificationPropagationJobService propagationJobService
+        CatalogClassificationPropagationJobService propagationJobService,
+        CatalogPhysicalDatasetObservationAdapter assetObservation
     ) {
         this.datasetRepository = datasetRepository;
         this.lineageRepository = lineageRepository;
@@ -62,6 +74,7 @@ public class IngestionLineageWriter {
         this.dataSourceRepository = dataSourceRepository;
         this.auditService = auditService;
         this.propagationJobService = propagationJobService;
+        this.assetObservation = assetObservation;
     }
 
     @Transactional
@@ -140,6 +153,15 @@ public class IngestionLineageWriter {
         if (sourceDataset.dataset().getId().equals(odsDataset.dataset().getId())) {
             return LineageWriteResult.skipped("same-dataset");
         }
+        if (isVerifiedSuccessfulObservation(effectiveObservation)) {
+            observeIngestionAssets(
+                mapping,
+                sourceDataset.dataset(),
+                odsDataset.dataset(),
+                effectiveObservation,
+                effectiveOrigin
+            );
+        }
         CatalogLineageJob lineageJob = upsertIngestionJob(mapping, source, effectiveObservation, effectiveOrigin);
         Optional<CatalogDatasetLineage> existing = lineageRepository.findFirstByUpstreamDatasetIdAndDownstreamDatasetIdAndRelationTypeIgnoreCaseAndValidToIsNull(
             sourceDataset.dataset().getId(),
@@ -192,11 +214,82 @@ public class IngestionLineageWriter {
     }
 
     private boolean isVerifiedSuccessfulApiObservation(LineageObservation observation) {
+        return isVerifiedSuccessfulObservation(observation);
+    }
+
+    private boolean isVerifiedSuccessfulObservation(LineageObservation observation) {
         return (
             observation != null &&
             STATUS_VERIFIED.equalsIgnoreCase(observation.verificationStatus()) &&
             "SUCCESS".equalsIgnoreCase(observation.executionStatus()) &&
             StringUtils.hasText(observation.executionId())
+        );
+    }
+
+    private void observeIngestionAssets(
+        InfraOdsTableMapping mapping,
+        CatalogDataset sourceDataset,
+        CatalogDataset odsDataset,
+        LineageObservation observation,
+        String origin
+    ) {
+        Instant observedAt = observation.observedAt() == null ? Instant.now() : observation.observedAt();
+        String mappingId = mapping.getId() == null
+            ? safeKeyPart(physicalName(mapping.getStreamNamespace(), mapping.getStreamName()))
+            : mapping.getId().toString();
+        String evidenceBase =
+            "ingestion:" +
+            safeKeyPart(origin) +
+            ":mapping:" +
+            safeKeyPart(mappingId) +
+            ":execution:" +
+            safeKeyPart(observation.executionId()) +
+            ":schema:" +
+            safeKeyPart(defaultIfBlank(observation.schemaFingerprint(), "unknown"));
+        String producerVersion = defaultIfBlank(observation.batchId(), observation.executionId());
+        if (mapping.getConnectionId() == null) {
+            throw new CatalogAssetObservationException(
+                "INGESTION_SOURCE_ID_REQUIRED",
+                "Verified ingestion evidence requires a durable source connection identity"
+            );
+        }
+        assetObservation.observe(
+            sourceDataset,
+            new DatasetObservation(
+                RelationType.TABLE,
+                null,
+                LAYER_SOURCE,
+                AssetRole.RELATION,
+                ProducerKind.SOURCE_SYSTEM,
+                mapping.getConnectionId().toString(),
+                producerVersion,
+                EvidenceChannel.INGESTION_EVENT,
+                evidenceBase + ":role:source",
+                observedAt,
+                EvidenceStatus.ACTIVE,
+                DiscoveryState.VERIFIED,
+                null,
+                ServingHealth.HEALTHY
+            )
+        );
+        assetObservation.observe(
+            odsDataset,
+            new DatasetObservation(
+                RelationType.TABLE,
+                null,
+                LAYER_ODS,
+                AssetRole.RELATION,
+                ProducerKind.INGESTION_JOB,
+                mappingId,
+                producerVersion,
+                EvidenceChannel.INGESTION_EVENT,
+                evidenceBase + ":role:target",
+                observedAt,
+                EvidenceStatus.ACTIVE,
+                DiscoveryState.VERIFIED,
+                null,
+                ServingHealth.HEALTHY
+            )
         );
     }
 
@@ -582,6 +675,7 @@ public class IngestionLineageWriter {
         data.put("executionStatus", effective.executionStatus());
         data.put("executionId", effective.executionId());
         data.put("batchId", effective.batchId());
+        data.put("schemaFingerprint", effective.schemaFingerprint());
         data.values().removeIf(value -> value == null || !StringUtils.hasText(String.valueOf(value)));
         return data.toString();
     }
@@ -707,10 +801,21 @@ public class IngestionLineageWriter {
         String executionStatus,
         String executionId,
         String batchId,
-        Instant observedAt
+        Instant observedAt,
+        String schemaFingerprint
     ) {
+        public LineageObservation(
+            String verificationStatus,
+            String executionStatus,
+            String executionId,
+            String batchId,
+            Instant observedAt
+        ) {
+            this(verificationStatus, executionStatus, executionId, batchId, observedAt, null);
+        }
+
         public static LineageObservation declared() {
-            return new LineageObservation(STATUS_DECLARED, null, null, null, Instant.now());
+            return new LineageObservation(STATUS_DECLARED, null, null, null, Instant.now(), null);
         }
 
         public static LineageObservation fromExecution(String executionStatus, String executionId, String batchId, Instant observedAt) {
@@ -721,7 +826,19 @@ public class IngestionLineageWriter {
                 normalized,
                 StringUtils.hasText(executionId) ? executionId.trim() : null,
                 StringUtils.hasText(batchId) ? batchId.trim() : null,
-                observedAt == null ? Instant.now() : observedAt
+                observedAt == null ? Instant.now() : observedAt,
+                null
+            );
+        }
+
+        public LineageObservation withSchemaFingerprint(String fingerprint) {
+            return new LineageObservation(
+                verificationStatus,
+                executionStatus,
+                executionId,
+                batchId,
+                observedAt,
+                StringUtils.hasText(fingerprint) ? fingerprint.trim() : null
             );
         }
     }

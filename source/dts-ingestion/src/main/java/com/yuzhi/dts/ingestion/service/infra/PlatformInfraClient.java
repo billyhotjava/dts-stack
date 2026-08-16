@@ -4,7 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.ingestion.config.IngestionOutboundPlatformProperties;
 import com.yuzhi.dts.ingestion.domain.IngestionExecution;
+import com.yuzhi.dts.ingestion.domain.IngestionSchemaSnapshot;
 import com.yuzhi.dts.ingestion.domain.IngestionTask;
+import com.yuzhi.dts.ingestion.repository.IngestionSchemaSnapshotRepository;
 import com.yuzhi.dts.ingestion.service.etl.api.ApiConnectorTypes;
 import java.net.URI;
 import java.time.Duration;
@@ -39,17 +41,20 @@ public class PlatformInfraClient {
     private final IngestionSettingsService settingsService;
     private final ObjectMapper objectMapper;
     private final IngestionOutboundPlatformProperties outboundProps;
+    private final IngestionSchemaSnapshotRepository schemaSnapshotRepository;
 
     public PlatformInfraClient(
         RestTemplateBuilder builder,
         IngestionSettingsService settingsService,
         ObjectMapper objectMapper,
-        IngestionOutboundPlatformProperties outboundProps
+        IngestionOutboundPlatformProperties outboundProps,
+        IngestionSchemaSnapshotRepository schemaSnapshotRepository
     ) {
         this.restTemplate = builder.setConnectTimeout(Duration.ofSeconds(5)).setReadTimeout(Duration.ofSeconds(10)).build();
         this.settingsService = settingsService;
         this.objectMapper = objectMapper;
         this.outboundProps = outboundProps;
+        this.schemaSnapshotRepository = schemaSnapshotRepository;
     }
 
     public DataSourceDetail fetchDataSourceDetail(UUID id) {
@@ -278,6 +283,10 @@ public class PlatformInfraClient {
         }
         executionPayload.put("rowsRead", execution.getRowsRead());
         executionPayload.put("rowsWritten", execution.getRowsWritten());
+        List<Map<String, Object>> schemaSnapshots = schemaSnapshotEvidence(execution);
+        if (!schemaSnapshots.isEmpty()) {
+            executionPayload.put("schemaSnapshots", schemaSnapshots);
+        }
 
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("task", taskPayload);
@@ -301,6 +310,34 @@ public class PlatformInfraClient {
             LOG.warn("Platform ingestion lineage sync failed: {}", ex.getMessage());
         }
         return false;
+    }
+
+    private List<Map<String, Object>> schemaSnapshotEvidence(IngestionExecution execution) {
+        if (execution == null || execution.getId() == null) {
+            return List.of();
+        }
+        try {
+            return schemaSnapshotRepository.findByExecution_IdOrderByCreatedDateDesc(execution.getId())
+                .stream()
+                .map(this::toSchemaSnapshotEvidence)
+                .toList();
+        } catch (RuntimeException ex) {
+            // Lineage delivery must remain available while a historical deployment is
+            // being upgraded and the snapshot table is not ready yet.
+            LOG.warn("Ingestion schema snapshot evidence unavailable for execution={}: {}", execution.getId(), ex.getMessage());
+            return List.of();
+        }
+    }
+
+    private Map<String, Object> toSchemaSnapshotEvidence(IngestionSchemaSnapshot snapshot) {
+        Map<String, Object> evidence = new LinkedHashMap<>();
+        evidence.put("sourceSchema", snapshot.getSourceSchema());
+        evidence.put("sourceTable", snapshot.getSourceTable());
+        evidence.put("odsSchema", snapshot.getOdsSchema());
+        evidence.put("odsTable", snapshot.getOdsTable());
+        evidence.put("schemaFingerprint", snapshot.getSchemaFingerprint());
+        evidence.values().removeIf(value -> value == null);
+        return evidence;
     }
 
     public boolean emitIngestionOpenLineageEvent(IngestionTask task, IngestionExecution execution) {

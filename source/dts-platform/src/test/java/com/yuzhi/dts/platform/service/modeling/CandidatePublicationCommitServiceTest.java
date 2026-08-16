@@ -61,6 +61,7 @@ class CandidatePublicationCommitServiceTest {
     private static final UUID CANDIDATE_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
     private static final UUID MODEL_ID = UUID.fromString("30000000-0000-0000-0000-000000000001");
     private static final UUID RELEASE_ID = UUID.fromString("40000000-0000-0000-0000-000000000001");
+    private static final UUID PHYSICAL_ASSET_ID = UUID.fromString("41000000-0000-0000-0000-000000000001");
     private static final Instant NOW = Instant.parse("2026-07-28T12:00:00Z");
 
     @Mock
@@ -96,6 +97,9 @@ class CandidatePublicationCommitServiceTest {
     @Mock
     private CatalogModelServingService catalogServing;
 
+    @Mock
+    private ModelPublicationAssetObservationAdapter assetObservation;
+
     private CandidatePublicationCommitService service;
 
     @BeforeEach
@@ -112,7 +116,8 @@ class CandidatePublicationCommitServiceTest {
             targetResolver,
             Clock.fixed(NOW, ZoneOffset.UTC),
             auditService,
-            catalogServing
+            catalogServing,
+            assetObservation
         );
     }
 
@@ -133,7 +138,8 @@ class CandidatePublicationCommitServiceTest {
             observed.dbtUniqueId(),
             observed.targetIdentifier(),
             observed.artifactChecksum(),
-            observed.dependencySnapshotChecksum()
+            observed.dependencySnapshotChecksum(),
+            PHYSICAL_ASSET_ID
         );
         ResolvedCatalogTarget target = target();
 
@@ -210,6 +216,7 @@ class CandidatePublicationCommitServiceTest {
             lifecyclePublication,
             catalogServing,
             publicationRepository,
+            assetObservation,
             outbox,
             candidateCommands,
             auditService
@@ -236,6 +243,16 @@ class CandidatePublicationCommitServiceTest {
                 publishedModel,
                 release,
                 ACTOR,
+                NOW
+            );
+        order
+            .verify(assetObservation)
+            .observePublishedAsset(
+                publishing,
+                target,
+                observed,
+                publishedModel,
+                binding,
                 NOW
             );
         order
