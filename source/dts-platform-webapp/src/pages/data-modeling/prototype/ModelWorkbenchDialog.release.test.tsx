@@ -741,20 +741,20 @@ describe("release and materialization dispatch", () => {
 		apiMocks.getMaterializationStatuses.mockResolvedValue([
 			{
 				modelSpecId: model.id,
-				candidateId: "published-candidate",
-				candidateVersion: 8,
+				candidateId: draft.id,
+				candidateVersion: draft.version,
 				environment: "dev",
-				candidateStatus: "PUBLISHED",
-				candidateUpdatedAt: "2026-08-17T03:30:19Z",
+				candidateStatus: "DRAFT",
+				candidateUpdatedAt: "2026-08-17T04:07:03Z",
 				currentImplementationRevision: 1,
 				evidence: {
-					candidateEntryId: "published-entry",
+					candidateEntryId: draft.entries[0]?.id || "draft-entry",
 					modelSpecId: model.id,
 					modelName: model.name,
 					modelRevision: model.revision,
-					targetRelation: "public.biz_ads_budget_kpi_v2",
-					runStatus: "BUILT",
-					relationState: "VERIFIED",
+					targetRelation: null,
+					runStatus: null,
+					relationState: "NOT_STARTED",
 				},
 			},
 		]);

@@ -134,6 +134,9 @@ export function ModelPublishDialog({
 						? "批量物化只能选择同一规划下的模型。"
 						: "";
 	const planId = selectionProblem ? "" : primary?.planId || "";
+	const selectionIsPublished = Boolean(
+		selection.length && selection.every((model) => canonical(model) && model.status === "PUBLISHED"),
+	);
 	const load = useCallback(async () => {
 		if (!planId) {
 			setBusy("");
@@ -149,6 +152,7 @@ export function ModelPublishDialog({
 			setWorkspace(releaseWorkspace);
 			setMaterializations(selectedMaterializations);
 			if (
+				selectionIsPublished ||
 				releaseWorkspace.candidate?.status === "PUBLISHED" ||
 				selectedMaterializations.some((item) => item.candidateStatus === "PUBLISHED")
 			) {
@@ -166,7 +170,7 @@ export function ModelPublishDialog({
 		} finally {
 			setBusy("");
 		}
-	}, [planId, selectedIds]);
+	}, [planId, selectedIds, selectionIsPublished]);
 	useEffect(() => {
 		void load();
 	}, [load]);
@@ -220,11 +224,7 @@ export function ModelPublishDialog({
 			executionWorkspace.bindings[0] ||
 			null
 		: null;
-	const publishedSelection = Boolean(
-		publishedMaterialization &&
-			selection.length &&
-			selection.every((model) => canonical(model) && model.status === "PUBLISHED"),
-	);
+	const publishedSelection = Boolean(selectionIsPublished && executionBinding);
 	const operationalAction = publishedSelection
 		? executionBinding?.allowedActions.includes("REPAIR_DEPLOYMENT")
 			? "REPAIR_DEPLOYMENT"
