@@ -511,6 +511,11 @@ public class InfraManagementService {
         InfraDataSource entity = dataSourceRepository.findById(id).orElseThrow(EntityNotFoundException::new);
         ensureNotSystemManaged(entity.getType(), activeDeptHeader);
         ensureDeptScopeWritable(entity, activeDeptHeader);
+        List<CatalogDataset> linkedDatasets = datasetRepository.findBySourceIdAndEnabledTrueOrderByNameAscIdAsc(id);
+        linkedDatasets.forEach(dataset -> dataset.setEnabled(false));
+        if (!linkedDatasets.isEmpty()) {
+            datasetRepository.saveAll(linkedDatasets);
+        }
         dataSourceRepository.delete(entity);
     }
 

@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.config.InfraSecurityProperties;
+import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.infra.InfraConnector;
 import com.yuzhi.dts.platform.domain.service.InfraConnectionTestLog;
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
@@ -500,6 +501,39 @@ class InfraManagementServiceTest {
                 )
             )
             .hasMessageContaining("数据源连接已存在");
+    }
+
+    @Test
+    void deleteDataSource_disablesLinkedCatalogDatasetsBeforeDeletingSource() {
+        authenticateJwt(AuthoritiesConstants.INST_DATA_OWNER, Map.of());
+        UUID sourceId = UUID.randomUUID();
+        InfraDataSource source = new InfraDataSource();
+        source.setId(sourceId);
+        source.setName("临时验收数仓");
+        source.setType("POSTGRES");
+        source.setStatus("ACTIVE");
+
+        CatalogDataset first = new CatalogDataset();
+        first.setId(UUID.randomUUID());
+        first.setSourceId(sourceId);
+        first.setName("ads_budget_kpi");
+        first.setEnabled(true);
+        CatalogDataset second = new CatalogDataset();
+        second.setId(UUID.randomUUID());
+        second.setSourceId(sourceId);
+        second.setName("ads_progress_kpi");
+        second.setEnabled(true);
+
+        when(dataSourceRepository.findById(sourceId)).thenReturn(Optional.of(source));
+        when(datasetRepository.findBySourceIdAndEnabledTrueOrderByNameAscIdAsc(sourceId)).thenReturn(List.of(first, second));
+
+        service.deleteDataSource(sourceId, null);
+
+        assertThat(first.getEnabled()).isFalse();
+        assertThat(second.getEnabled()).isFalse();
+        var order = org.mockito.Mockito.inOrder(datasetRepository, dataSourceRepository);
+        order.verify(datasetRepository).saveAll(List.of(first, second));
+        order.verify(dataSourceRepository).delete(source);
     }
 
     private AdminInfraClient.AdminDataLakeConfig adminLake(UUID id) {
