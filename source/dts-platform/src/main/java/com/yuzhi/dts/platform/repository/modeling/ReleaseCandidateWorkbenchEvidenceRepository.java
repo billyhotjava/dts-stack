@@ -150,7 +150,8 @@ public class ReleaseCandidateWorkbenchEvidenceRepository
                            c.last_modified_date as candidate_updated_at,
                            row_number() over (
                                partition by e.model_spec_id
-                               order by c.created_date desc, c.last_modified_date desc, c.id desc
+                               order by case when c.status in ('CANCELLED', 'REJECTED') then 1 else 0 end,
+                                        c.created_date desc, c.last_modified_date desc, c.id desc
                            ) as candidate_rank
                       from modeling_model_release_candidate_entry e
                       join modeling_model_release_candidate c

@@ -58,6 +58,19 @@ class ModelMaterializationBatchContractTest {
             .contains("order by d.attempt desc");
     }
 
+    @Test
+    void latestStatusDoesNotLetAnAbandonedCandidateShadowDurableMaterializationEvidence() throws IOException {
+        String method = method(
+            "ReleaseCandidateWorkbenchEvidenceRepository.java",
+            "public List<ModelMaterializationStatusView> findLatest(",
+            "public List<MaterializationAttemptView> findHistory("
+        );
+
+        assertThat(method)
+            .contains("case when c.status in ('CANCELLED', 'REJECTED') then 1 else 0 end")
+            .contains("c.created_date desc, c.last_modified_date desc, c.id desc");
+    }
+
     private static String method(String file, String start, String end) throws IOException {
         String source = Files.readString(main(file));
         int from = source.indexOf(start);
