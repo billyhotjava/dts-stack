@@ -136,8 +136,40 @@ class ModelPublicationAssetObservationAdapterTest {
         assertThat(command.getValue().assetRole()).isEqualTo(AssetRole.DIMENSION_TABLE);
         assertThat(command.getValue().producerKind()).isEqualTo(ProducerKind.MODELING);
         assertThat(command.getValue().evidenceChannel()).isEqualTo(EvidenceChannel.MATERIALIZATION_OBSERVATION);
+        assertThat(command.getValue().statusAxes().governance()).isEqualTo(GovernanceReadiness.GOVERNED);
         assertThat(command.getValue().statusAxes().publication()).isEqualTo(PublicationState.PUBLISHED);
         assertThat(command.getValue().statusAxes().serving()).isEqualTo(ServingHealth.HEALTHY);
+    }
+
+    @Test
+    void promotesAnExistingIncompleteAssetWhenPublicationProvidesCompleteGovernanceFacts() {
+        when(assets.find(CatalogAssetType.DATASET, ASSET_KEY))
+            .thenReturn(Optional.of(existingSemantics(PHYSICAL_ASSET_ID)));
+        when(assets.observe(any()))
+            .thenReturn(
+                new CatalogAssetRegistrationService.ObservationResult(
+                    true,
+                    false,
+                    null,
+                    new RegistrationReceipt(
+                        true,
+                        true,
+                        2,
+                        NOW,
+                        CatalogAssetType.DATASET,
+                        ASSET_KEY,
+                        PHYSICAL_ASSET_ID
+                    )
+                )
+            );
+
+        adapter.observePublishedAsset(candidate, target, observation, model, binding, NOW);
+
+        ArgumentCaptor<ObservationCommand> command = ArgumentCaptor.forClass(ObservationCommand.class);
+        verify(assets).observe(command.capture());
+        assertThat(command.getValue().statusAxes().governance()).isEqualTo(GovernanceReadiness.GOVERNED);
+        assertThat(command.getValue().statusAxes().publication()).isEqualTo(PublicationState.PUBLISHED);
+        assertThat(command.getValue().statusAxes().lifecycle()).isEqualTo(LifecycleState.ACTIVE);
     }
 
     @Test

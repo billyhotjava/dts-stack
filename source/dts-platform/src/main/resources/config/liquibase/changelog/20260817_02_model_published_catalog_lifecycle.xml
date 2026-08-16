@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260817-02-model-published-catalog-lifecycle" author="xiezm" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="catalog_dataset"/>
+            <tableExists tableName="catalog_asset_semantic_projection"/>
+            <tableExists tableName="catalog_asset_stats_projection"/>
+            <tableExists tableName="catalog_asset_stats_projection_meta"/>
+            <tableExists tableName="modeling_model_lifecycle_event"/>
+        </preConditions>
+        <comment>
+            Keep publication and Catalog lifecycle as independent axes. A model-backed physical asset with
+            complete governance facts is ACTIVE and GOVERNED; PUBLISHED remains the publication-axis state.
+        </comment>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            WITH published_assets AS (
+                SELECT DISTINCT dataset.id
+                  FROM catalog_dataset dataset
+                  JOIN modeling_model_lifecycle_event event
+                    ON event.event_type = 'RELEASE'
+                   AND event.status = 'PUBLISHED'
+                   AND event.details_json ->> 'physicalAssetId' = dataset.id::text
+                 WHERE dataset.enabled = true
+                   AND dataset.lifecycle_status IN ('PUBLISHED', 'PENDING_GOVERNANCE')
+                   AND dataset.domain_id IS NOT NULL
+                   AND btrim(coalesce(dataset.classification, '')) <> ''
+                   AND (
+                       btrim(coalesce(dataset.owner, '')) <> ''
+                       OR btrim(coalesce(dataset.owner_dept, '')) <> ''
+                   )
+                   AND btrim(coalesce(dataset.warehouse_layer, '')) <> ''
+            )
+            UPDATE catalog_dataset dataset
+               SET lifecycle_status = 'ACTIVE',
+                   last_modified_by = 'liquibase:20260817-02',
+                   last_modified_date = CURRENT_TIMESTAMP
+              FROM published_assets published
+             WHERE dataset.id = published.id;
+
+            WITH governed_assets AS (
+                SELECT dataset.id
+                  FROM catalog_dataset dataset
+                 WHERE dataset.enabled = true
+                   AND dataset.lifecycle_status = 'ACTIVE'
+                   AND dataset.last_modified_by = 'liquibase:20260817-02'
+            )
+            UPDATE catalog_asset_semantic_projection projection
+               SET governance_readiness = 'GOVERNED',
+                   eligibility_decision = CASE
+                       WHEN projection.discovery_state = 'MISSING'
+                         OR projection.publication_state = 'WITHDRAWN'
+                         OR projection.serving_health = 'FAILED'
+                         OR projection.lifecycle_state = 'RETIRED'
+                         OR projection.quality_gate_passed = false
+                         OR projection.permission_gate_passed = false
+                           THEN 'BLOCKED'
+                       WHEN projection.discovery_state = 'VERIFIED'
+                         AND projection.publication_state = 'PUBLISHED'
+                         AND projection.serving_health = 'HEALTHY'
+                         AND projection.lifecycle_state = 'ACTIVE'
+                         AND projection.quality_gate_passed = true
+                         AND projection.permission_gate_passed = true
+                           THEN 'ELIGIBLE'
+                       ELSE 'CONDITIONAL'
+                   END,
+                   eligibility_reason_codes = coalesce(
+                       (
+                           SELECT jsonb_agg(reason.value ORDER BY reason.ordinality)
+                             FROM jsonb_array_elements_text(projection.eligibility_reason_codes)
+                                  WITH ORDINALITY AS reason(value, ordinality)
+                            WHERE reason.value <> 'GOVERNANCE_INCOMPLETE'
+                       ),
+                       '[]'::jsonb
+                   ),
+                   eligibility_evaluated_at = CURRENT_TIMESTAMP,
+                   projection_version = projection.projection_version + 1,
+                   updated_at = CURRENT_TIMESTAMP
+              FROM governed_assets governed
+             WHERE projection.asset_type = 'DATASET'
+               AND projection.resource_id = governed.id
+               AND projection.governance_readiness <> 'GOVERNED';
+
+            UPDATE catalog_asset_stats_projection_meta
+               SET state = 'REBUILDING', last_error = NULL
+             WHERE projection_name = 'GLOBAL';
+
+            DELETE FROM catalog_asset_stats_projection;
+
+            INSERT INTO catalog_asset_stats_projection(
+                domain_key, domain_id, warehouse_layer_key, asset_type, governance_readiness,
+                asset_count, as_of, projection_version
+            )
+            SELECT coalesce(domain_id::text, '__UNASSIGNED__'),
+                   domain_id,
+                   coalesce(canonical_layer, 'UNLAYERED'),
+                   asset_type,
+                   governance_readiness,
+                   count(*),
+                   CURRENT_TIMESTAMP,
+                   max(projection_version)
+              FROM catalog_asset_semantic_projection
+             GROUP BY domain_id, canonical_layer, asset_type, governance_readiness;
+
+            UPDATE catalog_asset_stats_projection_meta
+               SET state = 'FRESH',
+                   as_of = CURRENT_TIMESTAMP,
+                   last_reconciled_at = CURRENT_TIMESTAMP,
+                   projection_version = projection_version + 1,
+                   last_error = NULL
+             WHERE projection_name = 'GLOBAL';
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="true" endDelimiter=";"><![CDATA[
+                UPDATE catalog_asset_semantic_projection projection
+                   SET governance_readiness = 'INCOMPLETE',
+                       eligibility_decision = 'CONDITIONAL',
+                       eligibility_reason_codes = CASE
+                           WHEN projection.eligibility_reason_codes ? 'GOVERNANCE_INCOMPLETE'
+                               THEN projection.eligibility_reason_codes
+                           ELSE projection.eligibility_reason_codes || '["GOVERNANCE_INCOMPLETE"]'::jsonb
+                       END,
+                       eligibility_evaluated_at = CURRENT_TIMESTAMP,
+                       projection_version = projection.projection_version + 1,
+                       updated_at = CURRENT_TIMESTAMP
+                  FROM catalog_dataset dataset
+                 WHERE dataset.id = projection.resource_id
+                   AND dataset.last_modified_by = 'liquibase:20260817-02';
+
+                UPDATE catalog_dataset
+                   SET lifecycle_status = 'PENDING_GOVERNANCE',
+                       last_modified_by = 'liquibase:rollback-20260817-02',
+                       last_modified_date = CURRENT_TIMESTAMP
+                 WHERE last_modified_by = 'liquibase:20260817-02';
+
+                DELETE FROM catalog_asset_stats_projection;
+
+                INSERT INTO catalog_asset_stats_projection(
+                    domain_key, domain_id, warehouse_layer_key, asset_type, governance_readiness,
+                    asset_count, as_of, projection_version
+                )
+                SELECT coalesce(domain_id::text, '__UNASSIGNED__'),
+                       domain_id,
+                       coalesce(canonical_layer, 'UNLAYERED'),
+                       asset_type,
+                       governance_readiness,
+                       count(*),
+                       CURRENT_TIMESTAMP,
+                       max(projection_version)
+                  FROM catalog_asset_semantic_projection
+                 GROUP BY domain_id, canonical_layer, asset_type, governance_readiness;
+
+                UPDATE catalog_asset_stats_projection_meta
+                   SET state = 'FRESH',
+                       as_of = CURRENT_TIMESTAMP,
+                       last_reconciled_at = CURRENT_TIMESTAMP,
+                       projection_version = projection_version + 1,
+                       last_error = NULL
+                 WHERE projection_name = 'GLOBAL';
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -57,7 +57,7 @@ public class CatalogPublicationPolicyAdapter implements CatalogPublicationPolicy
         }
         CatalogDataset current = catalogs
             .findById(assetId)
-            .filter(asset -> Boolean.TRUE.equals(asset.getEnabled()) && "PUBLISHED".equalsIgnoreCase(asset.getLifecycleStatus()))
+            .filter(asset -> Boolean.TRUE.equals(asset.getEnabled()) && isPublishedCatalogAsset(asset))
             .orElse(null);
         if (current == null) {
             return new Decision(Status.PUBLISHED_ASSET_REQUIRED, Action.ARCHIVE, assetId, List.of());
@@ -99,7 +99,12 @@ public class CatalogPublicationPolicyAdapter implements CatalogPublicationPolicy
         dataset.setHiveTable(tableName);
         dataset.setEnabled(Boolean.TRUE);
         dataset.setExposedBy("VIEW");
-        dataset.setLifecycleStatus("PUBLISHED");
+        dataset.setLifecycleStatus(CatalogAssetLifecycleStatus.ACTIVE.name());
         return dataset;
+    }
+
+    private static boolean isPublishedCatalogAsset(CatalogDataset asset) {
+        String lifecycle = asset.getLifecycleStatus();
+        return CatalogAssetLifecycleStatus.ACTIVE.name().equalsIgnoreCase(lifecycle) || "PUBLISHED".equalsIgnoreCase(lifecycle);
     }
 }

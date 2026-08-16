@@ -62,9 +62,10 @@ public class CatalogPhysicalDatasetObservationAdapter {
             current.map(AssetSemanticsView::domainId).orElse(null),
             datasetDomainId(dataset)
         );
-        GovernanceReadiness governance = currentAxes == null
-            ? domainId == null ? GovernanceReadiness.UNASSIGNED : GovernanceReadiness.INCOMPLETE
-            : currentAxes.governance();
+        GovernanceReadiness governance = advanceGovernance(
+            currentAxes == null ? null : currentAxes.governance(),
+            observedGovernance(dataset)
+        );
         StatusAxes axes = new StatusAxes(
             firstNonNull(
                 observation.discovery(),
@@ -134,6 +135,29 @@ public class CatalogPhysicalDatasetObservationAdapter {
 
     private static UUID datasetDomainId(CatalogDataset dataset) {
         return dataset.getDomain() == null ? null : dataset.getDomain().getId();
+    }
+
+    private static GovernanceReadiness observedGovernance(CatalogDataset dataset) {
+        CatalogAssetGovernanceProfile profile = CatalogAssetGovernanceInspector.inspect(dataset);
+        if (profile.missingFields().isEmpty()) {
+            return GovernanceReadiness.GOVERNED;
+        }
+        return profile.missingFields().contains("domain")
+            ? GovernanceReadiness.UNASSIGNED
+            : GovernanceReadiness.INCOMPLETE;
+    }
+
+    private static GovernanceReadiness advanceGovernance(
+        GovernanceReadiness current,
+        GovernanceReadiness observed
+    ) {
+        if (current == GovernanceReadiness.GOVERNED || observed == GovernanceReadiness.GOVERNED) {
+            return GovernanceReadiness.GOVERNED;
+        }
+        if (current == GovernanceReadiness.INCOMPLETE || observed == GovernanceReadiness.INCOMPLETE) {
+            return GovernanceReadiness.INCOMPLETE;
+        }
+        return GovernanceReadiness.UNASSIGNED;
     }
 
     @SafeVarargs

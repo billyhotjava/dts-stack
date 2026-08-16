@@ -286,6 +286,13 @@ class CandidatePublicationRepositoryIT {
             ).isEqualTo(1);
             assertThat(
                 jdbcTemplate.queryForObject(
+                    "select lifecycle_status from catalog_dataset where id = ?",
+                    String.class,
+                    legacyAssetId
+                )
+            ).isEqualTo("ACTIVE");
+            assertThat(
+                jdbcTemplate.queryForObject(
                     "select source_id from catalog_dataset where id = ?",
                     UUID.class,
                     legacyAssetId
@@ -794,7 +801,7 @@ class CandidatePublicationRepositoryIT {
                 )
             )
                 .containsEntry("enabled", false)
-                .containsEntry("lifecycle_status", "ROLLED_BACK");
+                .containsEntry("lifecycle_status", "ARCHIVED");
             assertThat(
                 jdbcTemplate.queryForObject(
                     """

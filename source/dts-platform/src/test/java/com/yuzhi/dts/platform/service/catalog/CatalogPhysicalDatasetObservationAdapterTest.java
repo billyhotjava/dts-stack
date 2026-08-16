@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
+import com.yuzhi.dts.platform.domain.catalog.CatalogDomain;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetRegistrationService.ObservationResult;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticStore.AssetSemanticsView;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticStore.RegistrationReceipt;
@@ -81,6 +82,35 @@ class CatalogPhysicalDatasetObservationAdapterTest {
     }
 
     @Test
+    void promotesCompleteCatalogGovernanceWithoutChangingOtherAxes() {
+        CatalogDomain domain = new CatalogDomain();
+        domain.setId(DOMAIN_ID);
+        dataset.setDomain(domain);
+        dataset.setOwner("xiezm");
+        dataset.setClassification("L2");
+        dataset.setLifecycleStatus("ACTIVE");
+        when(assets.find(CatalogAssetType.DATASET, assetKey))
+            .thenReturn(Optional.of(existingSemantics(DATASET_ID, GovernanceReadiness.INCOMPLETE)));
+        when(assets.observe(any()))
+            .thenReturn(
+                new ObservationResult(
+                    true,
+                    false,
+                    null,
+                    new RegistrationReceipt(true, true, 8, NOW, CatalogAssetType.DATASET, assetKey, DATASET_ID)
+                )
+            );
+
+        adapter.observe(dataset, observation());
+
+        ArgumentCaptor<ObservationCommand> command = ArgumentCaptor.forClass(ObservationCommand.class);
+        verify(assets).observe(command.capture());
+        assertThat(command.getValue().statusAxes().governance()).isEqualTo(GovernanceReadiness.GOVERNED);
+        assertThat(command.getValue().statusAxes().publication()).isEqualTo(PublicationState.PUBLISHED);
+        assertThat(command.getValue().statusAxes().lifecycle()).isEqualTo(LifecycleState.DEPRECATED);
+    }
+
+    @Test
     void rejectsAConflictingDurableResourceBeforeWritingObservation() {
         when(assets.find(CatalogAssetType.DATASET, assetKey)).thenReturn(Optional.of(existingSemantics(UUID.randomUUID())));
 
@@ -141,6 +171,10 @@ class CatalogPhysicalDatasetObservationAdapterTest {
     }
 
     private AssetSemanticsView existingSemantics(UUID resourceId) {
+        return existingSemantics(resourceId, GovernanceReadiness.GOVERNED);
+    }
+
+    private AssetSemanticsView existingSemantics(UUID resourceId, GovernanceReadiness governance) {
         return new AssetSemanticsView(
             CatalogAssetType.DATASET,
             assetKey,
@@ -154,7 +188,7 @@ class CatalogPhysicalDatasetObservationAdapterTest {
             List.of(),
             new StatusAxes(
                 DiscoveryState.VERIFIED,
-                GovernanceReadiness.GOVERNED,
+                governance,
                 PublicationState.PUBLISHED,
                 ServingHealth.HEALTHY,
                 LifecycleState.DEPRECATED

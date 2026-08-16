@@ -216,12 +216,12 @@ public class CandidatePublicationRepository {
             """
             update catalog_dataset
                set enabled = false,
-                   lifecycle_status = 'ROLLED_BACK',
+                   lifecycle_status = 'ARCHIVED',
                    last_modified_by = ?,
                    last_modified_date = ?
              where id = ?
                and enabled = true
-               and lifecycle_status = 'PUBLISHED'
+               and lifecycle_status in ('ACTIVE', 'PUBLISHED', 'PENDING_GOVERNANCE')
             """,
             actor,
             Timestamp.from(now),
@@ -579,7 +579,7 @@ public class CandidatePublicationRepository {
                     last_modified_by, last_modified_date
                 ) values (
                     ?, ?, ?, 'jdbc', ?, ?, ?, ?, ?, ?, ?, ?, true,
-                    'VIEW', 'PUBLISHED', ?, ?, ?, ?, ?
+                    'VIEW', 'ACTIVE', ?, ?, ?, ?, ?
                 )
                 on conflict do nothing
                 """,
@@ -629,7 +629,7 @@ public class CandidatePublicationRepository {
                    warehouse_layer = ?,
                    enabled = true,
                    exposed_by = 'VIEW',
-                   lifecycle_status = 'PUBLISHED',
+                   lifecycle_status = 'ACTIVE',
                    snapshot_time = ?,
                    last_modified_by = ?,
                    last_modified_date = ?

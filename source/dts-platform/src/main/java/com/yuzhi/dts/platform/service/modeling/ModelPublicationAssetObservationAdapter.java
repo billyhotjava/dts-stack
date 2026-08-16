@@ -77,9 +77,16 @@ public class ModelPublicationAssetObservationAdapter {
             });
 
         StatusAxes existingAxes = current.map(AssetSemanticsView::statusAxes).orElse(null);
-        GovernanceReadiness governance = existingAxes == null
-            ? model.domainId() == null ? GovernanceReadiness.UNASSIGNED : GovernanceReadiness.INCOMPLETE
-            : existingAxes.governance();
+        String warehouseLayer = warehouseLayer(model);
+        GovernanceReadiness observedGovernance = model.domainId() == null
+            ? GovernanceReadiness.UNASSIGNED
+            : warehouseLayer == null || warehouseLayer.isBlank()
+                ? GovernanceReadiness.INCOMPLETE
+                : GovernanceReadiness.GOVERNED;
+        GovernanceReadiness governance = advanceGovernance(
+            existingAxes == null ? null : existingAxes.governance(),
+            observedGovernance
+        );
         LifecycleState lifecycle = existingAxes == null
             ? LifecycleState.ACTIVE
             : existingAxes.lifecycle();
@@ -97,7 +104,7 @@ public class ModelPublicationAssetObservationAdapter {
             false,
             false,
             domainId,
-            warehouseLayer(model),
+            warehouseLayer,
             model.modelType() == ModelType.DIMENSION ? AssetRole.DIMENSION_TABLE : AssetRole.RELATION,
             ProducerKind.MODELING,
             model.id().toString(),
@@ -176,6 +183,19 @@ public class ModelPublicationAssetObservationAdapter {
             return model.warehouseLayerCode();
         }
         return model.layer() == null ? null : model.layer().name();
+    }
+
+    private static GovernanceReadiness advanceGovernance(
+        GovernanceReadiness current,
+        GovernanceReadiness observed
+    ) {
+        if (current == GovernanceReadiness.GOVERNED || observed == GovernanceReadiness.GOVERNED) {
+            return GovernanceReadiness.GOVERNED;
+        }
+        if (current == GovernanceReadiness.INCOMPLETE || observed == GovernanceReadiness.INCOMPLETE) {
+            return GovernanceReadiness.INCOMPLETE;
+        }
+        return GovernanceReadiness.UNASSIGNED;
     }
 
     private static String producerVersion(CandidateView candidate, PublicationEntryEvidence observation) {
